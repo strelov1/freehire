@@ -14,7 +14,7 @@ func TestPlanMerges_ElectsTheVariantWithTheMostJobs(t *testing.T) {
 		{Slug: "domino-s", Name: "Domino's", JobCount: 1},
 		{Slug: "alfa-bank", Name: "Alfa Bank", JobCount: 1617},
 		{Slug: "al-fa-bank", Name: "Al Fa Bank", JobCount: 20},
-	}, nil, 0)
+	}, nil, 0, nil)
 
 	canon := map[string]string{}
 	for _, m := range got {
@@ -37,7 +37,7 @@ func TestPlanMerges_LabelsWhyEachAliasRetires(t *testing.T) {
 		{Slug: "ringcentral-inc", Name: "RingCentral, Inc.", JobCount: 2},
 		{Slug: "dollar-tree", Name: "Dollar Tree", JobCount: 22683},
 		{Slug: "dollartree", Name: "DollarTree", JobCount: 283},
-	}, nil, 0)
+	}, nil, 0, nil)
 
 	reasons := map[string]string{}
 	for _, m := range got {
@@ -57,7 +57,7 @@ func TestPlanMerges_RespectsAFrozenCanon(t *testing.T) {
 	got := planMerges([]company{
 		{Slug: "acme", Name: "Acme", JobCount: 3},
 		{Slug: "acme-inc", Name: "Acme Inc", JobCount: 900},
-	}, map[string]bool{"acme": true}, 0)
+	}, map[string]bool{"acme": true}, 0, nil)
 
 	if len(got) != 1 {
 		t.Fatalf("planned %d merges, want 1", len(got))
@@ -74,14 +74,14 @@ func TestPlanMerges_MinJobsBoundsTheWave(t *testing.T) {
 		{Slug: "small", Name: "Small", JobCount: 2},
 		{Slug: "small-inc", Name: "Small Inc", JobCount: 1},
 	}
-	got := planMerges(companies, nil, 1000)
+	got := planMerges(companies, nil, 1000, nil)
 	if len(got) != 1 || got[0].Canonical != "big" {
 		t.Fatalf("planned %v, want only the group whose combined jobs reach 1000", got)
 	}
 }
 
 func TestPlanMerges_IgnoresACompanyWithNoTwin(t *testing.T) {
-	if got := planMerges([]company{{Slug: "solo", Name: "Solo", JobCount: 5}}, nil, 0); len(got) != 0 {
+	if got := planMerges([]company{{Slug: "solo", Name: "Solo", JobCount: 5}}, nil, 0, nil); len(got) != 0 {
 		t.Errorf("planned %v, want nothing — a company with no other spelling is not a merge", got)
 	}
 }
@@ -93,9 +93,9 @@ func TestPlanMerges_IsDeterministic(t *testing.T) {
 		{Slug: "tie-a", Name: "Tie A", JobCount: 7},
 		{Slug: "tiea", Name: "TieA", JobCount: 7},
 	}
-	first := planMerges(companies, nil, 0)
+	first := planMerges(companies, nil, 0, nil)
 	for range 20 {
-		if !reflect.DeepEqual(planMerges(companies, nil, 0), first) {
+		if !reflect.DeepEqual(planMerges(companies, nil, 0, nil), first) {
 			t.Fatal("planMerges is not deterministic across runs")
 		}
 	}
@@ -115,7 +115,7 @@ func TestPlanMerges_CanonicalIsAFixedPointOfTheSlugRule(t *testing.T) {
 	got := planMerges([]company{
 		{Slug: "danaher-corporation", Name: "Danaher Corporation", JobCount: 900},
 		{Slug: "danaher", Name: "Danaher", JobCount: 714},
-	}, nil, 0)
+	}, nil, 0, nil)
 
 	if len(got) != 1 {
 		t.Fatalf("planned %d merges, want 1", len(got))
@@ -136,7 +136,7 @@ func TestPlanMerges_JobCountStillDecidesBetweenFixedPoints(t *testing.T) {
 	got := planMerges([]company{
 		{Slug: "dollartree", Name: "DollarTree", JobCount: 283},
 		{Slug: "dollar-tree", Name: "Dollar Tree", JobCount: 22683},
-	}, nil, 0)
+	}, nil, 0, nil)
 	if got[0].Canonical != "dollar-tree" {
 		t.Errorf("Canonical = %q, want dollar-tree", got[0].Canonical)
 	}
@@ -145,7 +145,7 @@ func TestPlanMerges_JobCountStillDecidesBetweenFixedPoints(t *testing.T) {
 	got = planMerges([]company{
 		{Slug: "dominos", Name: "Dominos", JobCount: 14396},
 		{Slug: "domino-s", Name: "Domino's", JobCount: 1},
-	}, nil, 0)
+	}, nil, 0, nil)
 	if got[0].Canonical != "dominos" {
 		t.Errorf("Canonical = %q, want dominos", got[0].Canonical)
 	}
@@ -157,7 +157,7 @@ func TestPlanMerges_FrozenCanonWinsEvenIfItCarriesAForm(t *testing.T) {
 	got := planMerges([]company{
 		{Slug: "acme-inc", Name: "Acme Inc", JobCount: 5},
 		{Slug: "acme", Name: "Acme", JobCount: 900},
-	}, map[string]bool{"acme-inc": true}, 0)
+	}, map[string]bool{"acme-inc": true}, 0, nil)
 	if got[0].Canonical != "acme-inc" {
 		t.Errorf("Canonical = %q, want acme-inc (frozen)", got[0].Canonical)
 	}
@@ -176,7 +176,7 @@ func TestPlanMerges_FallsBackToTheDerivedSlug(t *testing.T) {
 	got := planMerges([]company{
 		{Slug: "carnival-corporation", Name: "Carnival Corporation", JobCount: 300},
 		{Slug: "carnival-corporation-plc", Name: "Carnival Corporation plc", JobCount: 40},
-	}, nil, 0)
+	}, nil, 0, nil)
 
 	if len(got) != 1 {
 		t.Fatalf("planned %d merges, want 1", len(got))
@@ -208,7 +208,7 @@ func TestPlanMerges_PrefersTheSpellingTheNameIsWrittenIn(t *testing.T) {
 		got := planMerges([]company{
 			{Slug: "westerndigital", Name: "WesternDigital", JobCount: 400},
 			{Slug: "western-digital", Name: "Western Digital", JobCount: 126},
-		}, nil, 0)
+		}, nil, 0, nil)
 		if got[0].Canonical != "western-digital" {
 			t.Errorf("Canonical = %q, want western-digital — the employer writes two words",
 				got[0].Canonical)
@@ -221,7 +221,7 @@ func TestPlanMerges_PrefersTheSpellingTheNameIsWrittenIn(t *testing.T) {
 		got := planMerges([]company{
 			{Slug: "dominos", Name: "Dominos", JobCount: 14396},
 			{Slug: "domino-s", Name: "Domino's", JobCount: 1},
-		}, nil, 0)
+		}, nil, 0, nil)
 		if got[0].Canonical != "dominos" {
 			t.Errorf("Canonical = %q, want dominos", got[0].Canonical)
 		}
@@ -233,7 +233,7 @@ func TestPlanMerges_PrefersTheSpellingTheNameIsWrittenIn(t *testing.T) {
 		got := planMerges([]company{
 			{Slug: "alfa-bank", Name: "Alfa Bank", JobCount: 1617},
 			{Slug: "al-fa-bank", Name: "Al Fa Bank", JobCount: 20},
-		}, nil, 0)
+		}, nil, 0, nil)
 		if got[0].Canonical != "alfa-bank" {
 			t.Errorf("Canonical = %q, want alfa-bank", got[0].Canonical)
 		}
@@ -245,7 +245,7 @@ func TestPlanMerges_PrefersTheSpellingTheNameIsWrittenIn(t *testing.T) {
 		got := planMerges([]company{
 			{Slug: "kimberlyclark", Name: "KimberlyClark", JobCount: 300},
 			{Slug: "kimberly-clark", Name: "Kimberly-Clark", JobCount: 40},
-		}, nil, 0)
+		}, nil, 0, nil)
 		if got[0].Canonical != "kimberly-clark" {
 			t.Errorf("Canonical = %q, want kimberly-clark", got[0].Canonical)
 		}
@@ -257,7 +257,7 @@ func TestPlanMerges_PrefersTheSpellingTheNameIsWrittenIn(t *testing.T) {
 		got := planMerges([]company{
 			{Slug: "brinks", Name: "Brinks", JobCount: 200},
 			{Slug: "brink-s", Name: "Brink's", JobCount: 10},
-		}, nil, 0)
+		}, nil, 0, nil)
 		if got[0].Canonical != "brinks" {
 			t.Errorf("Canonical = %q, want brinks", got[0].Canonical)
 		}
@@ -269,7 +269,7 @@ func TestPlanMerges_PrefersTheSpellingTheNameIsWrittenIn(t *testing.T) {
 		got := planMerges([]company{
 			{Slug: "acehardware", Name: "AceHardware", JobCount: 500},
 			{Slug: "ace-hardware", Name: "Ace Hardware", JobCount: 90},
-		}, nil, 0)
+		}, nil, 0, nil)
 		if got[0].Canonical != "ace-hardware" {
 			t.Errorf("Canonical = %q, want ace-hardware", got[0].Canonical)
 		}
@@ -289,7 +289,7 @@ func TestPlanMerges_MultiWordNameWinsEvenWhenOnlyAFormedRowHasIt(t *testing.T) {
 	got := planMerges([]company{
 		{Slug: "publicstorage", Name: "PublicStorage", JobCount: 300},
 		{Slug: "public-storage-inc", Name: "Public Storage Inc", JobCount: 40},
-	}, nil, 0)
+	}, nil, 0, nil)
 
 	if got[0].Canonical != "public-storage" {
 		t.Errorf("Canonical = %q, want public-storage — the employer writes two words, and a "+
@@ -316,7 +316,7 @@ func TestPlanMerges_SeesASlugWhoseIndexCounterIsZero(t *testing.T) {
 	got := planMerges([]company{
 		{Slug: "jp-morgan-chase", Name: "JP Morgan Chase", JobCount: 0},
 		{Slug: "jpmorganchase", Name: "JPMorganChase", JobCount: 0},
-	}, nil, 0)
+	}, nil, 0, nil)
 
 	if len(got) != 1 {
 		t.Fatalf("planned %d merges, want 1 — a slug the search index has forgotten still has "+

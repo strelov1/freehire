@@ -69,7 +69,7 @@ type gmailMailbox struct {
 //
 // The query is gmailsync's to build: it owns the ATS vocabulary and the gate that keeps a
 // company-name search away from personal correspondence.
-func (m *gmailMailbox) Search(ctx context.Context, _ int64, company, role string, since, until time.Time) ([]mailrecall.Message, error) {
+func (m *gmailMailbox) Search(ctx context.Context, company, role string, since, until time.Time) ([]mailrecall.Message, error) {
 	found, err := m.searcher.Search(ctx, gmailsync.BuildRecallQuery(company, role, since, until), maxSearchResults)
 	if err != nil {
 		return nil, err

@@ -81,6 +81,12 @@ const (
 	// its parts, so it cannot be misread as a variant of hosttenantboard above: that one is UKG
 	// PRO Recruiting, a different product on different hosts with a different board shape.
 	modeHostCareers = "hostcareers"
+	// pathpair: board = the first TWO path segments, verbatim, no folding. werecruit serves every
+	// career site from one host under "<locale>/<tenant>/…" and the locale is REQUIRED and part
+	// of the board's identity — a tenant not configured for a locale answers it with an empty
+	// listing rather than an error, so unlike pathlocalepair's optional-and-dropped locale, there
+	// is nothing here to fold off.
+	modePathPair = "pathpair"
 )
 
 // atsBoards lists the supported multi-tenant ATS: a host (exact or subdomain-suffix match) →
@@ -125,6 +131,10 @@ var atsBoards = []struct{ host, source, mode string }{
 
 	// --- pathlocalepair: board = the two path segments after an optional leading locale ---
 	{"jobs.dayforcehcm.com", "dayforce", modePathLocalePair},
+
+	// --- pathpair: board = the first two path segments, verbatim (the leading one is a
+	// REQUIRED locale, not an optional one to fold off) ---
+	{"careers.werecruit.io", "werecruit", modePathPair},
 
 	// --- query: board = a named query parameter (see queryBoards) ---
 	{"recruitingbypaycor.com", "paycor", modeQuery},
@@ -172,6 +182,8 @@ var atsBoards = []struct{ host, source, mode string }{
 	{"teamtailor", "teamtailor", modeHost}, // <tenant>.teamtailor.com; custom-domain career sites are absent (not URL-derivable)
 	{"factorial", "factorial", modeHost},   // <tenant>.factorial.<tld>
 	{"factorialhr", "factorial", modeHost}, // the .com.br/.pt/… base-domain variant — ONE ingest adapter serves both, and it reports "factorial"
+	{"gr8people", "gr8people", modeHost},   // <tenant>.gr8people.com
+	{"workgr8", "gr8people", modeHost},     // the workgr8.com base-domain variant — same vendor, confirmed live (identical frontend + GraphQL schema); ONE ingest adapter serves both, reporting "gr8people"
 	// CatsOne's adapter fetches https://<board>/careers, so the board is the whole host, exactly
 	// as catsone.yml stores it. It was listed as a subdomain, which yields the bare label — a
 	// board no crawl can resolve. (Its custom-domain tenants, e.g. jobs.evoplay.com.ua, stay
@@ -474,6 +486,19 @@ func Recognize(rawURL string) (source, board, canonical string, ok bool) {
 			return "", "", "", false // bare host, locale-only, a tenant with no site, or machinery
 		}
 		board = strings.ToLower(segs[0] + "/" + segs[1])
+		u.RawQuery, u.Fragment = "", ""
+		u.Path = "/" + board
+		return src, board, u.String(), true
+
+	case modePathPair:
+		// werecruit: <host>/<locale>/<tenant>/… → board "<locale>/<tenant>". Both segments are
+		// required and neither is dropped — the locale is not optional here (see modePathPair's
+		// doc comment), so this is a plain two-segment capture, not a locale-detection step.
+		segs := strings.Split(strings.Trim(u.Path, "/"), "/")
+		if len(segs) < 2 || segs[0] == "" || segs[1] == "" {
+			return "", "", "", false // bare host or a locale with no tenant
+		}
+		board = segs[0] + "/" + segs[1]
 		u.RawQuery, u.Fragment = "", ""
 		u.Path = "/" + board
 		return src, board, u.String(), true

@@ -60,18 +60,29 @@ func run() int {
 		LeaseSeconds: dcfg.LeaseSeconds,
 		MaxAttempts:  dcfg.MaxAttempts,
 		CallTimeout:  dcfg.CallTimeout,
+		MaxPerRun:    dcfg.MaxPerRun,
 	}
 
-	stats, err := runner.Run(ctx, opt)
-	if err != nil {
-		log.Printf("search-drain: %v", err)
-		return 1
-	}
-
-	// Removals run after the pushes, in the same pass. Both waves touch the same index and
-	// are paused together by freehire-reindexw, so they belong to one worker rather than two
-	// units that would each need their own copy of that coupling. Indexing goes first so a
-	// fault in the newer path cannot delay the established one.
+	// Removals run BEFORE the pushes, and the order is the whole point. Both waves touch the
+	// same index and are paused together by freehire-reindexw, so they belong to one worker
+	// rather than two units that would each need their own copy of that coupling — but one
+	// worker means one of them goes second, and going second here is not a delay, it is
+	// starvation.
+	//
+	// This used to be the other way round, so "a fault in the newer path cannot delay the
+	// established one". The reasoning inverted in practice: the indexing pass drains until the
+	// queue is EMPTY, and on this fleet the queue need never be empty. Measured on prod
+	// 2026-09-06, after a 5h reindex had paused this unit: arrivals 2504/min against a drain of
+	// 2614/min, so the pass hovered at a 9-11k depth and did not return for over two hours.
+	// Type=oneshot means no second instance starts, so removals had not run once in that window
+	// and 134k closed postings stayed visible in search. Indexing was healthy throughout —
+	// failed=0, dead=0, 200k+ pushed. The established path did not fault; it simply never
+	// finished, which the old ordering had no answer for.
+	//
+	// Removals cannot starve pushes the same way: a wave is ONE index task for the whole batch,
+	// its queue is fed only by closures rather than by every content change, and its own
+	// CallTimeout plus dead-lettering bound a wave that goes wrong. What bounds each pass
+	// against the other is MaxPerRun (see config.SearchDrain).
 	deletions := searchdrain.DeletionRunner{
 		Store:   newDeletionStore(pool),
 		Deleter: facetDeleter{client: client},
@@ -79,6 +90,12 @@ func run() int {
 	del, err := deletions.Run(ctx, opt)
 	if err != nil {
 		log.Printf("search-drain: deletions: %v", err)
+		return 1
+	}
+
+	stats, err := runner.Run(ctx, opt)
+	if err != nil {
+		log.Printf("search-drain: %v", err)
 		return 1
 	}
 

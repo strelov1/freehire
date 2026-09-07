@@ -28,6 +28,15 @@ type Snapshot struct {
 	OpenJobs  int64 `json:"open_jobs"`
 	Companies int64 `json:"companies"`
 
+	// UniqueOpenJobs is the de-duplicated count Meilisearch's search index actually
+	// holds — what /jobs itself would show for an unfiltered query. OpenJobs above is
+	// deliberately NOT this: it is the wider "how big is the raw catalogue" figure,
+	// counting every open posting including reposts across boards. Passed in rather
+	// than derived here, like TelegramChannels below: it comes from a live Meilisearch
+	// call the worker makes once, not from ExactCounter, and reaching for it in
+	// Compute would put an unrelated dependency behind this function.
+	UniqueOpenJobs int64 `json:"unique_open_jobs"`
+
 	// Sources, ATSPlatforms and TelegramChannels describe reach rather than contents:
 	// what the crawler can read, whether or not each currently holds an open posting.
 	//
@@ -54,10 +63,10 @@ type ExactCounter interface {
 // The exact counts are a full scan, so this belongs in the scheduled worker and nowhere
 // near a request. Load is the read path.
 //
-// telegramChannels is passed in rather than read here: the channel list is not part of
-// the catalogue this measures, and reaching for it would put a second, unrelated query
-// behind Compute.
-func Compute(ctx context.Context, counts ExactCounter, telegramChannels int) (Snapshot, error) {
+// telegramChannels and uniqueOpenJobs are passed in rather than read here: neither is
+// part of the catalogue this measures — one is Meilisearch's channel config, the other
+// its index size — and reaching for either would put an unrelated query behind Compute.
+func Compute(ctx context.Context, counts ExactCounter, telegramChannels int, uniqueOpenJobs int64) (Snapshot, error) {
 	exact, err := counts.CountCatalogueScale(ctx)
 	if err != nil {
 		return Snapshot{}, fmt.Errorf("catalogstats: counting catalogue scale: %w", err)
@@ -66,6 +75,7 @@ func Compute(ctx context.Context, counts ExactCounter, telegramChannels int) (Sn
 	return Snapshot{
 		OpenJobs:         exact.OpenJobs,
 		Companies:        exact.Companies,
+		UniqueOpenJobs:   uniqueOpenJobs,
 		Sources:          Sources(),
 		ATSPlatforms:     ATSPlatforms(),
 		TelegramChannels: telegramChannels,

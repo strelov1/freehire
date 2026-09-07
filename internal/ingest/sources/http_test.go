@@ -352,10 +352,10 @@ func TestClientGetJSONSurfacesOversizedBodyAsTypedError(t *testing.T) {
 	}
 }
 
-// The text path caps tighter than the client does (maxTextBody, 2 MiB) and must name its
+// The text path caps tighter than the client does (maxTextBody) and must name its
 // own cut for the same reason: an adapter that slices markup for an embedded ATS link reads
 // a truncated page as a page that does not carry one, which is a different fact about a
-// different thing. do's 64 MiB cap can never fire for a 2 MiB read, so a bare io.LimitReader
+// different thing. do's 64 MiB cap can never fire for a text-path read, so a bare io.LimitReader
 // here left the truncation with no signal at all. The bytes read come back with the error —
 // cmd/harvest-boards' Common Crawl sweep is the one caller entitled to a prefix.
 func TestClientGetTextSurfacesATruncatedPageAsTypedError(t *testing.T) {
@@ -380,7 +380,7 @@ func TestClientGetTextSurfacesATruncatedPageAsTypedError(t *testing.T) {
 }
 
 // A page at exactly the text cap is complete, not truncated — the same inclusive boundary
-// the client's own cap keeps, so a 2 MiB page is not refused for being 2 MiB.
+// the client's own cap keeps, so a page the size of the cap is not refused for being it.
 func TestClientGetTextAcceptsAPageExactlyAtTheTextCap(t *testing.T) {
 	want := strings.Repeat("y", maxTextBody)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -393,6 +393,28 @@ func TestClientGetTextAcceptsAPageExactlyAtTheTextCap(t *testing.T) {
 	body, err := c.GetText(context.Background(), srv.URL)
 	if err != nil {
 		t.Fatalf("GetText: %v", err)
+	}
+	if body != want {
+		t.Errorf("body length = %d, want %d", len(body), len(want))
+	}
+}
+
+// Regression: Yandex Crowd's /vacancies page inlines every posting's full description in one
+// <script> tag and, by September 2026, had grown past GetText's 2 MiB link-probe cap
+// (maxTextBody) despite being a perfectly well-formed catalogue. GetLargeText exists exactly
+// for this shape — bounded only by the client's own default (maxResponseBody), not maxTextBody.
+func TestClientGetLargeTextAcceptsBodyPastTheTextCap(t *testing.T) {
+	want := strings.Repeat("y", maxTextBody+1)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(want))
+	}))
+	defer srv.Close()
+
+	c := &Client{httpClient: srv.Client(), maxRetries: 2}
+
+	body, err := c.GetLargeText(context.Background(), srv.URL)
+	if err != nil {
+		t.Fatalf("GetLargeText: %v", err)
 	}
 	if body != want {
 		t.Errorf("body length = %d, want %d", len(body), len(want))
@@ -418,5 +440,26 @@ func TestClientGetJSONAcceptsBodyExactlyAtCap(t *testing.T) {
 	}
 	if out.Content != "acme" {
 		t.Errorf("decoded content = %q, want %q", out.Content, "acme")
+	}
+}
+
+// yandexCrowdListingBytes is the size crowd.yandex.ru/vacancies had reached on 2026-09-07,
+// measured live. It is here as a regression floor, not as a target: that page renders its
+// whole listing inline, so it has no natural size, and it silently outgrew the previous
+// 2 MiB cap by 0.6% — enough to fail every crawl of the provider from 2026-09-06 with
+// "body exceeds 2097152 bytes" and to keep failing as the listing grew. If a future tightening
+// of maxTextBody drops below this, that provider breaks again the same way.
+const yandexCrowdListingBytes = 2_109_478
+
+func TestTextCapClearsTheListingPageThatOutgrewIt(t *testing.T) {
+	if maxTextBody <= yandexCrowdListingBytes {
+		t.Fatalf("maxTextBody = %d, must exceed the %d-byte page that broke the previous cap",
+			maxTextBody, yandexCrowdListingBytes)
+	}
+	// Headroom, not a snapshot: an inline listing only grows, and a cap that merely clears
+	// today's page buys one crawl before the next failure.
+	if maxTextBody < 2*yandexCrowdListingBytes {
+		t.Errorf("maxTextBody = %d leaves under 2x headroom over %d — a growing listing reaches it again",
+			maxTextBody, yandexCrowdListingBytes)
 	}
 }

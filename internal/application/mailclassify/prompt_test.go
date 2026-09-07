@@ -18,6 +18,25 @@ func TestSystemPromptDescribesEveryValidSignal(t *testing.T) {
 	}
 }
 
+// The body is bounded and the headers were not, which is a bound on the wrong half: an
+// address, a display name and a subject all arrive from whoever mailed the candidate, and
+// none of them is capped anywhere upstream. A message with a megabyte of Subject is a
+// megabyte of prompt — paid for per token, on every classification of that thread.
+//
+// The figure need not be exact. What must hold is that no field a sender controls reaches
+// the prompt at its own length.
+func TestUserPromptBoundsEveryFieldTheSenderControls(t *testing.T) {
+	huge := strings.Repeat("s", 50_000)
+	got := userPrompt(Input{FromName: huge, Subject: huge, Body: huge})
+
+	if len(got) > 4*maxBodyRunes {
+		t.Errorf("prompt is %d bytes from three %d-byte fields; nothing bounded the headers", len(got), len(huge))
+	}
+	if strings.Contains(got, huge) {
+		t.Error("a sender-controlled field reached the prompt at its own length")
+	}
+}
+
 // The reverse direction: every signal the prompt offers must survive Sanitize.
 func TestSystemPromptOffersNoUnknownSignal(t *testing.T) {
 	for _, line := range strings.Split(systemPrompt, "\n") {

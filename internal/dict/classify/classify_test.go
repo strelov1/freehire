@@ -1507,3 +1507,68 @@ func TestParse_ServiceSectors(t *testing.T) {
 		}
 	}
 }
+
+// TestParse_AnalystIsQualifiedOrNothing pins the replacement of the bare "analyst"
+// fall-through with the qualified forms the catalogue actually carries.
+//
+// The bare alias sat beside bare "manager" and was written as the same idea — a title with
+// no recognised function falls through — but the two are not symmetric in what they cost.
+// "manager" falls through to `management`, which is non-technical; "analyst" fell through
+// to `data_analytics`, which is technical, so an unrecognised analyst was declared a data
+// role. Measured on the open catalogue on 2026-09-06 that facet held 102,222 postings and
+// 77,086 of them (75%) carried no data, analytics or BI word at all: 13,748 were Board
+// Certified Behavior Analysts (school ABA therapists), the rest investment, purchasing,
+// risk, pricing, research and policy analysts. All 102,222 had is_tech = true, so every one
+// was eligible for the enrichment budget.
+//
+// The qualified entries below are the technical families the bare alias was hiding, with
+// their live counts. They resolve MORE precisely than it did, not less.
+func TestParse_AnalystIsQualifiedOrNothing(t *testing.T) {
+	cases := []struct{ title, wantCategory string }{
+		// The technical families, each replacing what the bare alias used to claim.
+		{"Test Analyst", "qa"}, // 524 live
+		{"Senior Cyber Threat Analyst - Assessment", "security"},           // 263 live
+		{"Cyber Analyst", "security"},                                      // 80 live
+		{"Network Analyst", "network_engineering"},                         // 256 live
+		{"Technical Analyst", "software_engineering"},                      // 605 live
+		{"Applications Analyst - Epic Ambulatory", "software_engineering"}, // 648 live
+		{"Application Analyst", "software_engineering"},
+		{"IT Analyst", "software_engineering"},         // 478 live
+		{"Technology Analyst", "software_engineering"}, // 344 live
+		{"Software Analyst", "software_engineering"},   // 70 live
+		{"Infrastructure Analyst", "devops"},           // 82 live
+		{"Cloud Analyst", "devops"},                    // 18 live
+
+		// Already resolved, and must stay resolved: the qualifier does the work.
+		{"Senior Data Analyst (Martech)", "data_analytics"},
+		{"BI Analyst", "data_analytics"},
+		{"Analytics Engineer, Supply Chain", "data_analytics"},
+		{"Аналитик данных", "data_analytics"},
+		{"Системный аналитик", "business_analysis"},
+		{"Финансовый аналитик", "finance"},
+		{"SOC Analyst L2", "security"},
+		{"Vulnerability Analyst", "security"},
+
+		// "credit analyst" CONTAINS "it analyst" as a substring. The word-boundary match
+		// is what stops 982 live credit analysts being called IT staff, so it is pinned.
+		{"Credit Analyst I", ""},
+
+		// The bare noun resolves to nothing in every sense the catalogue carries.
+		{"Analyst", ""},
+		{"Board Certified Behavior Analyst (BCBA)", ""},
+		{"Purchasing Analyst", ""},
+		{"Investment Analyst", ""},
+		{"Global Tax Analyst", ""},
+		{"Senior Policy Analyst (DES)", ""},
+		{"Risk Analyst", ""},
+		{"Parts Inventory Analyst", ""},
+		{"Catastrophe Modeling Analyst", ""},
+		{"Sourcing Analyst", ""},
+		{"Аналитик", ""},
+	}
+	for _, c := range cases {
+		if got := Parse(c.title).Category; got != c.wantCategory {
+			t.Errorf("Parse(%q).Category = %q, want %q", c.title, got, c.wantCategory)
+		}
+	}
+}

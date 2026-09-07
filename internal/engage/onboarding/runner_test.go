@@ -12,16 +12,17 @@ import (
 
 // fakeStore serves fixed candidate lists and records what was written back.
 type fakeStore struct {
-	welcome, advancedSearch, noAlert, openSource []int64
-	recorded                                     []db.RecordOnboardingEmailParams
-	listErr                                      error
-	recordErr                                    error
+	welcome, advancedSearch, noAlert, extension, openSource []int64
+	recorded                                                []db.RecordOnboardingEmailParams
+	listErr                                                 error
+	recordErr                                               error
 
 	// params captures what the runner asked for, so the tests can assert on the
 	// window and caps rather than trusting them.
 	welcomeParams        db.ListWelcomeCandidatesParams
 	advancedSearchParams db.ListAdvancedSearchCandidatesParams
 	noAlertParams        db.ListNoAlertCandidatesParams
+	extensionParams      db.ListExtensionCandidatesParams
 }
 
 func rows(ids []int64) []db.ListWelcomeCandidatesRow {
@@ -51,6 +52,15 @@ func (s *fakeStore) ListNoAlertCandidates(_ context.Context, arg db.ListNoAlertC
 	out := make([]db.ListNoAlertCandidatesRow, 0, len(s.noAlert))
 	for _, id := range s.noAlert {
 		out = append(out, db.ListNoAlertCandidatesRow{ID: id, Email: "user@example.test"})
+	}
+	return out, nil
+}
+
+func (s *fakeStore) ListExtensionCandidates(_ context.Context, arg db.ListExtensionCandidatesParams) ([]db.ListExtensionCandidatesRow, error) {
+	s.extensionParams = arg
+	out := make([]db.ListExtensionCandidatesRow, 0, len(s.extension))
+	for _, id := range s.extension {
+		out = append(out, db.ListExtensionCandidatesRow{ID: id, Email: "user@example.test"})
 	}
 	return out, nil
 }
@@ -234,9 +244,16 @@ func TestRun_LaterStepsArePacedFromTheGreeting(t *testing.T) {
 		t.Errorf("step delays must increase: advanced_search %d, no_alert %d",
 			cfg.AdvancedSearchAfterDays, cfg.NoAlertAfterDays)
 	}
-	if cfg.NoAlertAfterDays >= cfg.OpenSourceAfterDays {
-		t.Errorf("step delays must increase: no_alert %d, open_source %d",
-			cfg.NoAlertAfterDays, cfg.OpenSourceAfterDays)
+	if store.extensionParams.AfterDays != cfg.ExtensionAfterDays {
+		t.Fatalf("extension delay = %d, want %d", store.extensionParams.AfterDays, cfg.ExtensionAfterDays)
+	}
+	if cfg.NoAlertAfterDays >= cfg.ExtensionAfterDays {
+		t.Errorf("step delays must increase: no_alert %d, extension %d",
+			cfg.NoAlertAfterDays, cfg.ExtensionAfterDays)
+	}
+	if cfg.ExtensionAfterDays >= cfg.OpenSourceAfterDays {
+		t.Errorf("step delays must increase: extension %d, open_source %d",
+			cfg.ExtensionAfterDays, cfg.OpenSourceAfterDays)
 	}
 	if cfg.OpenSourceAfterDays >= cfg.WindowDays {
 		t.Errorf("open_source at day %d never fires inside a %d-day window",

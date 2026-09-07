@@ -18,7 +18,6 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/strelov1/freehire/internal/ingest/pipeline"
 	"github.com/strelov1/freehire/internal/job/job"
 	"github.com/strelov1/freehire/internal/job/jobderive"
 	"github.com/strelov1/freehire/internal/platform/db"
@@ -83,7 +82,7 @@ func TestSweepRowByRow_SkipsOneUnclosableRowWithoutBlockingTheRest(t *testing.T)
 	pool := testdb.Pool(t)
 	ctx := context.Background()
 	q := db.New(pool)
-	store := newDBStore(pool, 1, nil, nil, pipeline.HydrationRetryWindow, false)
+	store := newDBStore(pool, 1, nil, nil, defaultSeenPolicy())
 
 	if err := store.Save(ctx, sweepTestPosting("greenhouse", "acme:blocked", "Blocked Role")); err != nil {
 		t.Fatalf("save blocked job: %v", err)

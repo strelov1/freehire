@@ -13,8 +13,15 @@ func TestParse1C(t *testing.T) {
 		{"Программист 1С", "backend"},
 		{"1С-разработчик", "backend"},
 		{"1C Developer", "backend"},
-		{"Аналитик 1С", "data_analytics"}, // analyst wins over 1С→backend
-		{"Тестировщик 1С", "qa"},          // qa wins over 1С→backend
+		// A 1C analyst is a systems/business analyst on that platform — the fuller
+		// spellings the catalogue carries say so ("Системный аналитик 1С", "Аналитик
+		// 1С:ERP"). It read as data_analytics only because a bare "аналитик"
+		// fall-through used to claim every unrecognised analyst; that entry is gone
+		// and this one is explicit.
+		{"Аналитик 1С", "business_analysis"},
+		{"Аналитик 1С:ERP", "business_analysis"},
+		{"Системный аналитик 1С", "business_analysis"},
+		{"Тестировщик 1С", "qa"}, // qa wins over 1С→backend
 	}
 	for _, c := range cases {
 		if got := Parse(c.title).Category; got != c.wantCat {

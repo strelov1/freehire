@@ -40,6 +40,37 @@ mapfile -t PROVIDERS <<<"$providers"
 # timer on a 40-minute board only ever bought partial results. taleo was already on 3h
 # for the same reason and joins them so it shares the spread below.
 HEAVY="bamboohr icims paycom gupy mycareersfuture ukg careerplug jibe jazzhr vagas apple taleo"
+
+# SHARDED lists the providers generated as shard units further down instead of as one
+# timer here. They are heavy by definition — sharding is what a provider gets when even
+# the 3h HEAVY cadence could not finish it — so for the SLOT POOL they belong with HEAVY,
+# even though for SCHEDULING they are skipped by the `continue`s in the loop below.
+SHARDED="workday oracle paylocity eightfold join dayforce workstream"
+
+# Heavy for the POOL but not for the SCHEDULE. Measured 2026-09-07 from
+# freehire_worker_last_run_duration_seconds — the binary's own runtime, which is the only
+# figure that excludes the wait inside ingest-slot.sh: greenhouse 48min, apploi 46,
+# smartrecruiters 38, lamoda 20, trakstar 19, adp 16, teamtailor 15. Each holds a slot for
+# most of an hour, which is what starved the short tail; none was in HEAVY, so before this
+# they squatted the shared pool the split exists to protect.
+#
+# Deliberately NOT moved into HEAVY: that would also drop them to a 3h cadence, and
+# nothing measured here says their listings change slowly enough to justify that. The pool
+# and the schedule are separate decisions, and this list is the one that says so.
+HEAVY_POOL_ONLY="greenhouse apploi smartrecruiters lamoda trakstar adp teamtailor"
+
+# The roster ingest-slot.sh reads to decide which pool a run takes. Written here because
+# the list already lives here: a second copy kept in the slot script would drift from the
+# schedule silently, and a provider heavy in one file but not the other is exactly the
+# failure the split exists to prevent. Written BEFORE the timers, so a run that fires
+# mid-generation reads a complete roster rather than half of one.
+ROSTER=/opt/freehire/etc/ingest-heavy
+mkdir -p "$(dirname "$ROSTER")"
+# shellcheck disable=SC2086  # the three lists are space-separated words on purpose;
+# quoting them would print three lines, one per list, and the roster is one name per line.
+printf '%s\n' $HEAVY $SHARDED $HEAVY_POOL_ONLY | sort -u > "$ROSTER.tmp"
+mv "$ROSTER.tmp" "$ROSTER"
+
 hi=0
 for n in "${PROVIDERS[@]}"; do
   # workday (~6165 boards) 429-throttles too hard to finish in one 40-min run,

@@ -6,10 +6,11 @@
   import { sourceLabel } from '$lib/facets';
   import type { HealthStatus, IngestStatus, ProviderKind } from '$lib/types';
 
-  // The presentational half of the /status page: given the ingest-fleet rollup (or
-  // null when the API read failed), it renders the overall banner and the
-  // worst-first provider list. Kept separate from the route so it can be previewed
-  // and reasoned about without a live API. The route owns data loading + SEO.
+  // The presentational half of the /status page: given the status read (or null
+  // when the API read failed), it renders the site/API's own status, the
+  // ingest-fleet overall banner, and the worst-first provider list. Kept separate
+  // from the route so it can be previewed and reasoned about without a live API.
+  // The route owns data loading + SEO.
   let { status }: { status: IngestStatus | null } = $props();
 
   // Status → display metadata. Tone classes mirror RealityBadge's light/dark
@@ -38,6 +39,40 @@
     down: 'Major outage',
   };
 
+  // The site/API's own status is a separate concern from the ingest fleet above —
+  // one is "is freehire.me itself working", the other is "are the crawlers working".
+  const SITE_HEADLINE: Record<HealthStatus, string> = {
+    operational: 'API operational',
+    degraded: 'API degraded',
+    down: 'API down',
+  };
+  const nfPercent = new Intl.NumberFormat('en', { style: 'percent', maximumFractionDigits: 1 });
+
+  // The daily history strip: 90 tiles, oldest first, each either a recorded
+  // HealthStatus or null for "no sample recorded that day" — a gap must render
+  // as its own neutral treatment, never silently as "operational".
+  const HISTORY_DAYS = 90;
+  const NO_DATA_TILE_META = { label: 'No data', dot: 'bg-border' };
+
+  function utcDateString(d: Date): string {
+    return d.toISOString().slice(0, 10);
+  }
+
+  const historyTiles = $derived.by(() => {
+    const byDay = new Map((site?.history ?? []).map((h) => [h.day, h.status]));
+    // Anchored on the response's own generated_at (UTC) rather than the visitor's
+    // local clock, so "today" here always matches the day the backend last wrote —
+    // the two can disagree by up to a day if left to the browser's local timezone.
+    const anchor = status?.generated_at ? new Date(status.generated_at) : new Date();
+    const tiles: { day: string; status: HealthStatus | null }[] = [];
+    for (let i = HISTORY_DAYS - 1; i >= 0; i--) {
+      const d = new Date(Date.UTC(anchor.getUTCFullYear(), anchor.getUTCMonth(), anchor.getUTCDate() - i));
+      const day = utcDateString(d);
+      tiles.push({ day, status: byDay.get(day) ?? null });
+    }
+    return tiles;
+  });
+
   const SEVERITY: Record<HealthStatus, number> = { operational: 0, degraded: 1, down: 2 };
 
   // Human labels for the source-kind taxonomy the backend derives from adapter type.
@@ -60,6 +95,7 @@
     ),
   );
   const overall = $derived(status?.overall ?? null);
+  const site = $derived(status?.site ?? null);
 
   // Kind chips: only kinds present in the data, each with its live count.
   const kindCounts = $derived.by(() => {
@@ -88,6 +124,40 @@
     Status is unavailable right now. Try again in a moment.
   </div>
 {:else}
+  {#if site}
+    <!-- Site status: is freehire.me itself working, independent of the ingest fleet below. -->
+    <section class="mb-8">
+      <p class="mb-3 font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">// site status</p>
+      <div class="flex items-center gap-4 rounded-xl border p-5 sm:p-6 {STATUS_META[site.status].pill}">
+        <span class="inline-flex h-3 w-3 shrink-0 rounded-full {STATUS_META[site.status].dot}"></span>
+        <div>
+          <div class="text-lg font-semibold tracking-tight">{SITE_HEADLINE[site.status]}</div>
+          <div class="text-sm opacity-80">
+            Database {site.database} · {nfPercent.format(site.error_rate)} error rate over the last {site.window_minutes} min
+          </div>
+        </div>
+      </div>
+
+      <!-- Daily history strip: worst status observed each day, oldest first. A gap
+           (no sample recorded) renders as a distinct neutral tile, never as if the
+           day were operational. -->
+      <div class="mt-4 flex items-center justify-between text-xs text-muted-foreground">
+        <span>Last {HISTORY_DAYS} days</span>
+      </div>
+      <div class="mt-2 flex gap-0.5 overflow-x-auto pb-1">
+        {#each historyTiles as tile (tile.day)}
+          {@const meta = tile.status ? STATUS_META[tile.status] : NO_DATA_TILE_META}
+          <span
+            class="h-6 w-1.5 shrink-0 rounded-sm {meta.dot}"
+            title="{tile.day} — {tile.status ? meta.label : 'no data recorded'}"
+          ></span>
+        {/each}
+      </div>
+    </section>
+  {/if}
+
+  <p class="mb-3 font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">// ingest fleet status</p>
+
   <!-- Overall banner -->
   <div class="mb-10 flex items-center gap-4 rounded-xl border p-5 sm:p-6 {STATUS_META[overall].pill}">
     <span class="inline-flex h-3 w-3 shrink-0 rounded-full {STATUS_META[overall].dot}"></span>

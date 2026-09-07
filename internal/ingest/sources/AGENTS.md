@@ -238,6 +238,87 @@ Source ingest: the provider registry and its adapters, entry validation, the per
 - **A discovered risk, not this adapter's to fix: the index is a shared multi-tenant cluster with weak scoping.** An unfiltered query reads across every talentReef client, and one document surfaced during this research was clearly third-party-injected content unrelated to any real posting — evidence the cluster has been probed before. Irrelevant to correctness as long as every request here carries the `clientId` filter, but a reason never to build a request from unscoped input.
 - **No adapter-scale request volume was sent during this research** — unlike most other entries in this file, this one does NOT claim "no metering observed". Ship without a pacer (the default for an unmeasured provider) and watch the first real boards' `board_health` rows before onboarding many at once.
 
+**gr8people traps** (all verified live 2026-09-06, across `etrade.gr8people.com`,
+`ardene.gr8people.com` and `batesville.workgr8.com`):
+
+- **`gr8people.com` and `workgr8.com` are one vendor, not two.** Both career-site hosts serve the
+  byte-identical Next.js "app-career-site" bundle from the same asset CDN
+  (`assets.gr8people.com`), the same GraphQL schema, and the same session-token mechanism —
+  confirmed by running the identical query against a tenant on each domain and getting the same
+  response shape back. This is the Factorial/FactorialHR case (`factorial.go`,
+  `atsboard/board.go`'s `factorial`/`factorialhr` rows): one adapter, one provider key
+  (`gr8people`), `modeHost` on both domain labels.
+- **The board's session token comes from the tenant's OWN `/jobs` page, and it is tenant-scoped.**
+  A GET of `https://<host>/jobs` is server-rendered and its `__NEXT_DATA__` script embeds
+  `"token":"eyJ..."` (ES256 JWT, `iss: auth-service`, ~5h lifetime measured from `iat`/`exp`).
+  Decoding two tenants' tokens shows different `org` claims (`db63c8` for etrade, `0f3be7` for
+  ardene, `392f45` for batesville) — the token is NOT portable across hosts, so it must be minted
+  fresh per board, from that board's own host, never cached or shared.
+- **The search call is GraphQL, not REST**: `POST https://<host>/graphql`,
+  `Authorization: Bearer <token>`, operation `searchJobs` aliasing the schema's
+  `searchJobPostings(query, start, first, after, sort, filters)` field. The bundle actually ships
+  TWO backends behind the same alias — `searchJobPostings` (the vanilla path) and
+  `searchGoogleJobDiscovery` (gated by a `google-job-discovery` feature flag, `false` on every
+  tenant sampled) — this adapter reads the vanilla one only.
+- **The query already answers only what a real visitor sees, with an EMPTY filters object.**
+  Every posting returned across all three tenants was `status: "OPEN"`, `postType: "EXTERNAL"`
+  with `filters: {}` (no actual filter clause set) — unlike `jobappnetwork`'s shared Elasticsearch
+  proxy, there is no equivalent unscoped-read risk to guard against here, so the adapter never
+  sets a filter clause of its own.
+- **Pagination is Relay-style cursors (`after`/`endCursor`/`hasNextPage`), not an exact total to
+  chase.** `totalCount` is reported but the walk stops on `hasNextPage: false` or an empty `nodes`
+  page — confirmed by paging a 173-posting tenant end to end with no gaps or overlap. Passing an
+  EMPTY STRING as `after` on the first page is rejected by the platform's cursor decoder; the key
+  must be omitted entirely until a real cursor exists.
+- **`places.nodes[].name` is already a formatted "City, Region[, Postal], Country" string per
+  place** — there is no separate structured country-code field on the posting — so it is passed
+  through as free text (the `apploi`/`hrmdirect` posture) and `Countries` is left to the location
+  dictionary. `workplaceType` (`ON_SITE`/`REMOTE`/`HYBRID`) is a genuine closed enum, confirmed by
+  a validator function in the platform's own bundle, so it is a real structured work-mode signal
+  unlike the free-typed `positionType.name`.
+- **No adapter-scale request volume was sent during this research** — like jobappnetwork, this
+  entry does NOT claim "no metering observed". Ship without a pacer and watch `board_health`.
+
+**werecruit traps** (all verified live 2026-09-06, across `idiap`, `axiom-services`,
+`alcatel-submarine-networks` and `broadpeak`):
+
+- **The whole listing is embedded server-side, and there is no pagination to walk.** A GET of
+  `careers.werecruit.io/<locale>/<tenant>` is a classic server-rendered page (jQuery/Bootstrap, no
+  SPA framework) whose `<script>` block assigns `window.allOffers = [...]` — the tenant's ENTIRE
+  open-postings list. The bundled `offers-widget.js` confirms this is the whole dataset, not a
+  first page: it sets `this.allOffers = window.allOffers` once and every filter/paginate
+  operation afterward is a client-side `.slice()` over that in-memory array — no "load more"
+  request exists. The extraction takes the FIRST `window.allOffers =` match on the page — a page
+  carrying an earlier decoy occurrence (a comment, an unrelated inline snippet) would silently
+  decode the wrong value; not observed on any tenant sampled, and the same first-match posture
+  every regex-anchored embedded-token adapter in this file already takes (cornerstone, gr8people).
+- **The locale segment is load-bearing, not cosmetic — the Dayforce-culture trap on a new
+  platform.** `/fr/idiap` answers ZERO postings while `/en/idiap` answers four; IDIAP's site is
+  configured for `en-gb` only (its own `hreflang="en-gb"`/`x-default` tags, no alternate-language
+  link). Asking an unconfigured locale answers an empty listing, not an error — so the board
+  keeps the locale (`<locale>/<tenant>`) rather than folding it off.
+- **Unlike Dayforce, a multi-locale tenant does NOT slice its postings per locale — unioning is
+  unnecessary here.** `broadpeak` (configured for both en and fr) returns the exact SAME two
+  posting ids under either locale, each stating its own full `Languages` array. One valid locale
+  already gives the tenant's whole catalogue; there is no per-locale subset to union like
+  Dayforce's translations.
+- **`Address_State` is a two-letter ISO COUNTRY code, not a US state**, despite the field name —
+  confirmed `"FR"` on every French posting sampled and `"CH"` on IDIAP's, never a US abbreviation
+  on a non-US address. Read through `countryFromCode`.
+- **The listing carries no description at all.** Every field this adapter maps is on
+  `window.allOffers`; the body lives only on the posting's own page, in a server-rendered
+  `<div class="description rich-text …">` block (confirmed on an 88 KB detail page) — a plain
+  exact class-token match, distinct from an unrelated `description-blocks` div further down the
+  same page. Every board found is small (single digits to low tens of postings), so this is the
+  Factorial shape (hydrate every posting every crawl) rather than a `HydratingSource`.
+- **`TimeTranslated` ("Full time"/"Part time") is the platform's own schedule label** and maps
+  cleanly to `full_time`/`part_time` on every posting sampled; `TypeTranslated` (e.g. "Temporary
+  contract - 30 months") combines a contract-type enum with a duration into one free-text
+  sentence with no clean split observed, so it is left unmapped.
+- **No adapter-scale request volume was sent during this research** — like jobappnetwork and
+  gr8people, this entry does NOT claim "no metering observed". Ship without a pacer and watch
+  `board_health`.
+
 ## Limitations
 - The ingest sweep has a trade-off: a missed run can leave an orphan open until a future reconcile; the change window is sized wide enough to absorb a skipped cron.
 - Self-closing sources: a missed `removed` event from the feed can leave a vacancy open until the next reindex.

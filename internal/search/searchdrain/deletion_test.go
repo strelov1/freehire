@@ -222,3 +222,24 @@ func TestDeletionRunnerSkipsTheWaveWhenTheRunIsCancelled(t *testing.T) {
 		t.Errorf("completed %d entries, want 0 — the lease must retry them", len(store.completed))
 	}
 }
+
+// The removal pass honours the same bound as the indexing one, so a bounded run splits its
+// budget between the two rather than letting whichever goes first spend the whole process.
+func TestDeletionRunnerStopsAtMaxPerRun(t *testing.T) {
+	store := newFakeDeleteStore(10, 11, 12, 13, 14)
+	deleter := &fakeDeleter{}
+
+	opts := deleteOptions()
+	opts.BatchSize = 2
+	opts.MaxPerRun = 4
+	stats, err := DeletionRunner{Store: store, Deleter: deleter}.Run(context.Background(), opts)
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if stats.Deleted != 4 {
+		t.Fatalf("Deleted = %d, want 4 — the run took the whole queue", stats.Deleted)
+	}
+	if len(store.completed) != 4 {
+		t.Errorf("completed = %d, want 4", len(store.completed))
+	}
+}

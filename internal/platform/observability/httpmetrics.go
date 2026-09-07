@@ -126,10 +126,22 @@ func HTTPMetrics() fiber.Handler {
 			// CountErrors will record it once the ErrorHandler has chosen the status.
 			return err
 		}
-		httpRequests.WithLabelValues(methodLabel(c.Method()), strconv.Itoa(c.Response().StatusCode())).Inc()
-		httpRouteRequests.WithLabelValues(routeLabel(c)).Inc()
+		recordResponse(c)
 		return nil
 	}
+}
+
+// recordResponse tallies the response Fiber has just finished sending into
+// every consumer that reads per-response outcomes: the two Prometheus
+// counters above and the in-process request window ErrorRate reads. Shared
+// by HTTPMetrics and CountErrors, the normal-completion and error-handler
+// halves of the same accounting, so a future consumer needs one call site
+// updated instead of two kept in sync by hand.
+func recordResponse(c *fiber.Ctx) {
+	status := c.Response().StatusCode()
+	httpRequests.WithLabelValues(methodLabel(c.Method()), strconv.Itoa(status)).Inc()
+	httpRouteRequests.WithLabelValues(routeLabel(c)).Inc()
+	RecordRequest(status)
 }
 
 // CountErrors wraps the app's ErrorHandler so an error-derived response is counted with the
@@ -143,8 +155,7 @@ func HTTPMetrics() fiber.Handler {
 func CountErrors(next fiber.ErrorHandler) fiber.ErrorHandler {
 	return func(c *fiber.Ctx, err error) error {
 		rendered := next(c, err)
-		httpRequests.WithLabelValues(methodLabel(c.Method()), strconv.Itoa(c.Response().StatusCode())).Inc()
-		httpRouteRequests.WithLabelValues(routeLabel(c)).Inc()
+		recordResponse(c)
 		return rendered
 	}
 }

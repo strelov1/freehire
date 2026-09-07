@@ -6,6 +6,11 @@
 // --min-jobs bounds a wave to the groups big enough to matter, which is how the backlog is
 // taken in reviewed passes (1000, then 100, then 10, then 1) instead of one 333k-row leap.
 //
+// Most groups it finds by folding the NAME, which covers the two duplicate classes the rule
+// can reach. The pairs it cannot — one employer whose boards disagree on the name itself, like
+// "Exadel" beside "Exadel Inc (Website)" — come from the hand-written list in curated.go, and
+// that file argues why they are a list and not another rule.
+//
 // It does NOT touch the search index. A push to the facet index costs 90-180s regardless of
 // batch size, so feeding a wave through search_outbox would be tens of hours of pushes and the
 // shape that took the site down on 2026-08-05. The scheduled reindex picks the re-key up; until
@@ -107,7 +112,7 @@ func loadPlan(ctx context.Context, q *db.Queries, minJobs int) ([]merge, error) 
 	for _, slug := range canonical {
 		frozen[slug] = true
 	}
-	return planMerges(companies, frozen, minJobs), nil
+	return planMerges(companies, frozen, minJobs, curatedAliases), nil
 }
 
 // report prints the wave. It prints every group rather than a sample: a wave is bounded by
@@ -133,11 +138,11 @@ func report(plan []merge) {
 // store is the writer applyMerges drives, over the real queries.
 type store struct{ q *db.Queries }
 
-func (s *store) InsertAlias(ctx context.Context, a alias, canonical, foldedKey string) error {
+func (s *store) InsertAlias(ctx context.Context, a alias, canonical string) error {
 	_, err := s.q.InsertCompanySlugAlias(ctx, db.InsertCompanySlugAliasParams{
 		AliasSlug:     a.Slug,
 		CanonicalSlug: canonical,
-		FoldedKey:     foldedKey,
+		FoldedKey:     a.FoldedKey,
 		Reason:        a.Reason,
 	})
 	return err

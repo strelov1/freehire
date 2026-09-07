@@ -29,16 +29,6 @@ const (
 // Kinds is the canonical, ordered kind vocabulary.
 var Kinds = []string{KindApplied, KindEmployerReply, KindFollowUpSent, KindStageSet, KindInterviewScheduled}
 
-// ValidKind reports whether k is a known event kind.
-func ValidKind(k string) bool {
-	for _, kind := range Kinds {
-		if kind == k {
-			return true
-		}
-	}
-	return false
-}
-
 // The event sources, mirroring the three mail stores in internal/application/inbox plus the two ways
 // a candidate records something themselves.
 const (
@@ -69,16 +59,6 @@ var Sources = []string{SourceMailGmail, SourceMailHosted, SourceMailExternal, So
 // rather than a description. Spelling the three into a query would put the vocabulary in
 // two places, which is the failure the pin test next door already guards against.
 var MailSources = []string{SourceMailGmail, SourceMailHosted, SourceMailExternal}
-
-// ValidSource reports whether s is a known event source.
-func ValidSource(s string) bool {
-	for _, src := range Sources {
-		if src == s {
-			return true
-		}
-	}
-	return false
-}
 
 // TrustedForDayMath reports whether events from this source may enter timing
 // calculations.

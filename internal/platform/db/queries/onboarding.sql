@@ -75,6 +75,26 @@ WHERE u.email_verified
 ORDER BY u.created_at
 LIMIT sqlc.arg(max_rows)::int;
 
+-- name: ListExtensionCandidates :many
+-- Greeted a while ago: an introduction to the browser extension. Unconditional like
+-- advanced_search above, and for a stricter reason — nothing here records whether an
+-- account has already installed it, so "only those without it" is not a query this
+-- schema can answer.
+SELECT u.id, u.email
+FROM users u
+JOIN onboarding_emails w ON w.user_id = u.id AND w.step = 'welcome'
+LEFT JOIN notification_settings ns ON ns.user_id = u.id
+WHERE u.email_verified
+  AND u.created_at > now() - make_interval(days => sqlc.arg(window_days)::int)
+  AND w.sent_at < now() - make_interval(days => sqlc.arg(after_days)::int)
+  AND COALESCE(ns.enabled, true)
+  AND NOT EXISTS (
+      SELECT 1 FROM onboarding_emails oe
+      WHERE oe.user_id = u.id AND oe.step = 'extension'
+  )
+ORDER BY u.created_at
+LIMIT sqlc.arg(max_rows)::int;
+
 -- name: ListOpenSourceCandidates :many
 -- Everyone greeted and past the wait, whether or not they set up an alert: this
 -- step asks for a star and a Discord visit, which is worth asking of a browser as

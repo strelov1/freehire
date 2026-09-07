@@ -1,9 +1,8 @@
 <script lang="ts">
   // Brand marks (OAuth sign-in buttons, footer links, a company's own outbound
   // links), inlined because icon libraries (lucide) do not ship brand logos. Google
-  // and Chrome keep their official colors — theirs ARE four colors, and a monochrome
-  // silhouette of either is unrecognisable; every other mark follows the current text
-  // color so it adapts to the theme (and matches a muted footer or link-row treatment).
+  // keeps its official colors; every other mark follows the current text color so it
+  // adapts to the theme (and matches a muted footer or link-row treatment).
   //
   // `twitter` and `x` are the same mark — the stored field is still named `twitter`
   // in company_info, so accepting both saves every caller a rename.
@@ -29,21 +28,6 @@
       d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
     />
   </svg>
-{:else if provider === 'chrome'}
-  <!-- Keeps its official colours, for the reason Google's mark does: Chrome's logo IS its
-       four colours, and a currentColor silhouette of it is an unrecognisable ring.
-
-       Drawn as three pie sectors under a white disc and a blue one, rather than as a traced
-       path. The seams sit 120° apart at 90°, 210° and 330° (screen degrees, y down), which
-       is where the real mark puts them — red across the top, green bottom-left, yellow
-       bottom-right, and the seam between the last two pointing straight down. -->
-  <svg viewBox="0 0 24 24" class={className} aria-hidden="true">
-    <path fill="#EA4335" d="M12 12 L2.127 6.3 A11.4 11.4 0 0 1 21.873 6.3 Z" />
-    <path fill="#FBBC05" d="M12 12 L21.873 6.3 A11.4 11.4 0 0 1 12 23.4 Z" />
-    <path fill="#34A853" d="M12 12 L12 23.4 A11.4 11.4 0 0 1 2.127 6.3 Z" />
-    <circle cx="12" cy="12" r="5.7" fill="#fff" />
-    <circle cx="12" cy="12" r="4.6" fill="#4285F4" />
-  </svg>
 {:else if provider === 'github'}
   <svg viewBox="0 0 24 24" class={className} fill="currentColor" aria-hidden="true">
     <path
@@ -66,6 +50,15 @@
   <svg viewBox="0 0 24 24" class={className} fill="currentColor" aria-hidden="true">
     <path
       d="M12.152 6.896c-.948 0-2.415-1.078-3.96-1.04-2.04.027-3.91 1.183-4.961 3.014-2.117 3.675-.546 9.103 1.519 12.09 1.013 1.454 2.208 3.09 3.792 3.039 1.52-.06 2.09-.976 3.935-.976 1.831 0 2.35.976 3.96.947 1.637-.03 2.676-1.483 3.676-2.948 1.156-1.688 1.636-3.325 1.662-3.41-.037-.017-3.19-1.226-3.22-4.857-.03-3.034 2.479-4.487 2.59-4.548-1.42-2.088-3.629-2.32-4.406-2.37-2.003-.161-3.686 1.08-4.65 1.08zm3.415-3.06c.84-1.017 1.406-2.435 1.253-3.836-1.213.049-2.68.81-3.549 1.827-.778.9-1.457 2.34-1.278 3.72 1.348.104 2.734-.687 3.574-1.71z"
+    />
+  </svg>
+{:else if provider === 'chrome'}
+  <!-- The mark on "Add to Chrome". Monochrome like the rest, not Chrome's four
+       colours: it sits inside a filled brand button, where the coloured logo reads
+       as a pasted-in badge rather than as part of the control. -->
+  <svg viewBox="0 0 24 24" class={className} fill="currentColor" aria-hidden="true">
+    <path
+      d="M12 0C8.21 0 4.831 1.757 2.632 4.501l3.953 6.848A5.454 5.454 0 0 1 12 6.545h10.691A12 12 0 0 0 12 0zM1.931 5.47A11.943 11.943 0 0 0 0 12c0 6.012 4.42 10.991 10.189 11.864l3.953-6.847a5.45 5.45 0 0 1-6.865-2.29zm13.342 2.166a5.446 5.446 0 0 1 1.45 7.09l.002.001h-.002l-5.344 9.257c.206.01.413.016.621.016 6.627 0 12-5.373 12-12 0-1.54-.29-3.011-.818-4.364zM12 16.364a4.364 4.364 0 1 1 0-8.728 4.364 4.364 0 0 1 0 8.728Z"
     />
   </svg>
 {:else if provider === 'discord'}

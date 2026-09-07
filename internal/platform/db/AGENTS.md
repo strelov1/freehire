@@ -50,8 +50,19 @@ A pre-runner database baselines itself: an empty `schema_migrations` plus an exi
 as applied without executing it (`-baseline` forces this).
 
 A file that must run outside a transaction (e.g. `CREATE INDEX CONCURRENTLY`) opts out with
-`-- migrate: no-transaction` in its leading comment block — write those idempotently
-(`IF NOT EXISTS` / `IF EXISTS`).
+`-- migrate: no-transaction` **as the whole content of a comment line** in its leading
+comment block — a file that merely mentions the marker in a sentence is not opted out.
+Those files run one statement at a time, each in its own implicit transaction, so a
+statement that Postgres forbids inside a transaction block actually gets what the marker
+promises.
+
+Write them idempotently (`IF NOT EXISTS` / `IF EXISTS`): the record insert is not atomic
+with them, so a failure part-way leaves the file executed but unrecorded. `IF NOT EXISTS`
+used to be a hazard of its own on a CONCURRENTLY re-run — it steps silently over an index a
+timed-out build left at `indisvalid=f`, and the version is then recorded against an index
+nothing will use (`migrations/0118`, and the prod incident in `0126`/`0127`). The runner now
+checks, after a no-transaction file applies, whether any index THAT FILE NAMES is invalid,
+and fails without recording rather than stepping over it.
 
 ## Limitations
 - Historical parallel branches produced duplicate number prefixes (`0009_*`×2, `0034_*`×4, …). Harmless: initdb and the runner both order by full filename, and `schema_migrations.version` is the filename, not the number. New files take the next free number; never renumber old files (their versions are already recorded on migrated databases).

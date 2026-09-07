@@ -411,7 +411,7 @@ func Register(app *fiber.App, cfg Config) {
 	// Shared by /jobs/find and the link intake, which must agree on what a page is.
 	postingURLs := sources.NewPostingURLResolver(ingestClient)
 	jobsH := newJobsHandlers(queries, moderationSvc, postingURLs, cfg.Cache)
-	statsH := newStatsHandlers(queries, cfg.Cache)
+	statsH := newStatsHandlers(queries, cfg.Cache, cfg.Pool)
 	ogH := newOGHandlers(queries, cfg.Cache)
 	votesH := newVoteHandlers(queries, cfg.Pool)
 	communityH := newCommunityHandlers(queries)
@@ -799,7 +799,7 @@ func Register(app *fiber.App, cfg Config) {
 	billingH.register(api, mw)
 	// Mounted whatever billing is doing: sharing an invite link and counting who came is
 	// not a purchase, and a deployment that sells nothing can still have a referral page.
-	promoH.register(api, mw, cfg.Throttler)
+	promoH.register(api, mw)
 	plansH.register(api)
 	usageH.register(api, mw)
 

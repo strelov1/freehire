@@ -320,6 +320,28 @@ func TestRecallApplicationMail_ReportsAFailedModelCall(t *testing.T) {
 	}
 }
 
+// Google being unreachable is not our fault, and the person pressing the button needs to
+// be told which kind of failure it was. mailrecall.ErrSearch existed for exactly this and
+// had no consumer: the handler's `case err != nil` swept it into a 500 with a Sentry
+// capture, so somebody else's outage arrived in our error mail as a bug of ours.
+//
+// The neighbouring LinkRecalledMail already renders a Gmail failure as a logged 502, so
+// this was an exception inside its own file.
+func TestRecallApplicationMail_ReportsAFailedMailboxSearch(t *testing.T) {
+	pool := startPostgres(t)
+	fx := seedRecallFixture(t, pool)
+	box := &fakeMailbox{searchErr: errors.New("gmail: 503 backend error")}
+	app, iss := recallSearchApp(t, pool, &recallModel{reply: verdictsJSON(t, 1)}, box)
+
+	status, body := postRecall(t, app, iss, fx.userID, fx.slug)
+	if status != fiber.StatusBadGateway {
+		t.Fatalf("status %d, want 502 — a mailbox we could not read is not our fault", status)
+	}
+	if body.Error == "" {
+		t.Error("the failure carried no message")
+	}
+}
+
 // A deployment with no model configured reports the feature off rather than panicking.
 func TestRecallApplicationMail_ReportsTheFeatureOffWhenNoModelIsConfigured(t *testing.T) {
 	pool := startPostgres(t)
@@ -342,12 +364,16 @@ func (f *fakeMailboxes) For(context.Context, int64) mailrecall.Mailbox {
 }
 
 type fakeMailbox struct {
-	found    []mailrecall.Message
-	imported []string
-	store    func(providerID string) error
+	found     []mailrecall.Message
+	searchErr error
+	imported  []string
+	store     func(providerID string) error
 }
 
-func (m *fakeMailbox) Search(context.Context, int64, string, string, time.Time, time.Time) ([]mailrecall.Message, error) {
+func (m *fakeMailbox) Search(context.Context, string, string, time.Time, time.Time) ([]mailrecall.Message, error) {
+	if m.searchErr != nil {
+		return nil, m.searchErr
+	}
 	return m.found, nil
 }
 

@@ -31,7 +31,7 @@ export const OPEN_FAQ: FaqItem[] = [
   {
     question: 'What counts as an open job?',
     answer:
-      'A posting freehire has crawled and has not yet detected as closed. Roles are never silently deleted: when a vacancy stops appearing on its source board it is marked closed and leaves the open count, which is what the "removed" bars above track.',
+      'A posting freehire has crawled and has not yet detected as closed. Roles are never silently deleted: when a vacancy stops appearing on its source board it is marked closed and leaves the open count, which is what the "removed" bars above track. That count is not de-duplicated — the same role reposted across several boards counts once per posting — which is why it reads higher than the number of unique jobs you can actually browse.',
   },
   {
     question: 'Why publish all of this?',

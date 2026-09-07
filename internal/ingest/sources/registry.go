@@ -167,7 +167,10 @@ func All(c HTTPClient) map[string]Source {
 		NewApploi(c),
 		NewPaylocity(c),
 		NewJibe(c),
-		NewPhenom(c),
+		// Rate-paced (pacedPhenomGetter): all ~95 boards share Phenom People's platform
+		// infrastructure, and the run's own aggregate volume 403s a large fraction of them
+		// unpaced. See pacer.go.
+		NewPhenom(pacedPhenomGetter(c)),
 		NewAvature(c),
 		NewComeet(c),
 		NewCornerstone(c),
@@ -185,7 +188,9 @@ func All(c HTTPClient) map[string]Source {
 		NewPaycor(c),
 		NewLuxoft(c),
 		NewEPAM(c),
-		NewADP(c),
+		// Rate-paced (pacedADPGetter): all ~2,800 boards share one ADP host, and the run's own
+		// aggregate volume 429s most of them unpaced. See pacer.go.
+		NewADP(pacedADPGetter(c)),
 		NewITechArt(c),
 		NewVention(c),
 		// Detail hydration is rate-paced (pacedHTMLGetter) to hold the run's request rate
@@ -220,6 +225,11 @@ func All(c HTTPClient) map[string]Source {
 		NewSenior(c),
 		NewTrakstar(c),
 		NewFactorial(c),
+		// gr8people: another vendor served under two marketing domains (gr8people.com and
+		// workgr8.com — see atsboard's matching two rows), board = the tenant's whole host.
+		NewGr8People(c),
+		// werecruit: board = "<locale>/<tenant>", the locale is load-bearing (see AGENTS.md).
+		NewWerecruit(c),
 		NewZoho(c),
 		NewTraffit(c),
 		NewErecruiter(c),

@@ -87,6 +87,21 @@ decision for the measurements and its caveats.
   call, sensitive-keyword gate, never an agentic loop). A drafted answer is still checked
   against the field's own offered options (`matchOption`, shared with the deterministic
   path) before it is used.
+- **A geography/residency question (`geography.go`) parks before drafting too, for a
+  different reason than the sensitive gate.** `sensitiveTerms` (`sensitive.go`) parks a
+  question on POLICY grounds — compensation, EEO/demographic, work authorization/visa —
+  regardless of how confident a draft would be. `geographyTerms` exists because the
+  pipeline cannot VERIFY an answer: `candidateprofile` carries one free-text `location`
+  string, never a discrete country/state-of-residence fact matching a platform's own
+  enumerated dropdown options, so a drafted answer here would be invented, not reported.
+  Found live: a Garner Health Greenhouse posting's "Current State of Residence" (a
+  US-states-only dropdown) reached the drafter and was saved from a wrong submission only
+  because the candidate's non-US address happened to match none of the offered options —
+  `isGeographyLabel` makes that a designed park instead of an accident of one form's own
+  option list (`openspec/changes/add-auto-apply-eligibility-gate`). Checked in
+  `draftable` (`draft.go`) alongside `isSensitiveLabel`, before the drafter is ever
+  invoked; a geography-labeled field already resolvable from a known answer (e.g.
+  `location`) is unaffected and fills exactly as before.
 - **The sensitive-keyword gate (`sensitive.go`) runs before the model is ever called, and
   wins absolutely.** A question whose label matches — compensation, work authorization/visa
   sponsorship, or an EEO/demographic category — is never drafted, regardless of how

@@ -47,16 +47,21 @@ function noTxMarker() {
 
 /**
  * Mirrors hasNoTxMarker in the runner: the marker counts only in the LEADING comment
- * block — blank lines and `--` comments before the first statement. A marker further
- * down is prose about the mechanism, which several migrations contain, and treating it
- * as the opt-out would lint a transactional file as though it were not one.
+ * block — blank lines and `--` comments before the first statement — and only when it is
+ * the WHOLE content of its comment line. A marker further down, or named inside a
+ * sentence, is prose about the mechanism, which several migrations contain, and treating
+ * it as the opt-out would lint a transactional file as though it were not one.
+ *
+ * The whole-line rule is not a refinement: migrations/0126 opens by explaining that it
+ * carries "No `migrate: no-transaction` marker, so the two statements are one
+ * transaction", and a substring test read that sentence as the opt-out itself.
  */
 function isNoTx(file, marker) {
   for (const raw of readFileSync(file, 'utf8').split('\n')) {
     const line = raw.trim();
     if (line === '') continue;
     if (!line.startsWith('--')) return false;
-    if (line.includes(marker)) return true;
+    if (line.slice(2).trim() === marker) return true;
   }
   return false;
 }

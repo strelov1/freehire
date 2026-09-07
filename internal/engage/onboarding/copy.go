@@ -115,28 +115,69 @@ var specs = map[Step]spec{
 		},
 	},
 
+	// The extension letter claims only what the feature page claims — reads the page,
+	// scores it against the CV, fills the form. It is the one letter in the sequence
+	// about software the reader has to install, and an overstated sentence here is
+	// found out within a minute of installing it.
+	StepExtension: {
+		subject:   "A freehire panel on any job page",
+		preheader: "It reads the posting, scores it against your CV, and fills the form.",
+		heading:   "A side panel on any job page",
+		body: body("extension", `
+{{template "p" "One more thing worth knowing about: freehire has a browser extension, and it works on job pages that have nothing to do with us."}}
+{{template "p" "Open the side panel on a posting — Greenhouse, Lever, Workday, Ashby, or a career page nobody has heard of. It reads the page itself, scores the role against your CV, and fills the application form out of your profile. You read what it wrote and press Submit."}}
+{{template "lead" "The point is that it works where you already are."}}
+{{template "p" "It signs in with the same account, so it is your CV and your profile it fills from — nothing to set up a second time."}}
+{{template "icon-button" (mailIconLink .StoreURL "Add it to Chrome" .ChromeIcon)}}
+{{template "p-link" (mailTextLink "What it does, in more detail:" .ExtensionURL "see how the extension works")}}
+{{template "muted" "It is Chrome for now. If you are on Firefox or Safari, reply and say so — that is how I decide what to build next."}}`),
+		text: func(base string) string {
+			return "One more thing worth knowing about: freehire has a browser extension, and it works on job\n" +
+				"pages that have nothing to do with us.\n\n" +
+				"Open the side panel on a posting — Greenhouse, Lever, Workday, Ashby, or a career page\n" +
+				"nobody has heard of. It reads the page itself, scores the role against your CV, and fills\n" +
+				"the application form out of your profile. You read what it wrote and press Submit.\n\n" +
+				"The point is that it works where you already are.\n\n" +
+				"It signs in with the same account, so it is your CV and your profile it fills from —\n" +
+				"nothing to set up a second time.\n\n" +
+				"Add it to Chrome: " + storeURL + "\n\n" +
+				"What it does, in more detail: " + base + "/features/extension\n\n" +
+				"It is Chrome for now. If you are on Firefox or Safari, reply and say so — that is how I\n" +
+				"decide what to build next.\n\n" +
+				"— Ilya Strelov, building freehire\n" + linkedInURL + "\n"
+		},
+	},
+
 	StepOpenSource: {
-		subject:   "freehire is open source",
-		preheader: "Where the code lives, and where I hang out.",
-		heading:   "Why this thing is open",
+		subject:   "Open code, and one place to ask",
+		preheader: "freehire is open source — and the Discord is where the questions go.",
+		heading:   "Open code, one place to ask",
 		body: body("open_source", `
 {{template "p" "Some background you might not know: freehire is fully open source. Every parser, every dedup rule, the ranking — all of it is public. Nothing is hidden about how a job gets in, or why it sits where it sits."}}
 {{template "p" "I built it in the open because job search runs on trust, and “trust me” is a poor answer from a site that decides what you get to see."}}
-{{template "p" "If it has been useful, a star is how most people end up finding the project:"}}
-{{template "icon-button" (mailIconLink .RepoURL "Star it on GitHub" .GitHubIcon)}}
-{{template "p" "And the Discord is small enough that you will actually be heard — ask anything, or argue with where this is going."}}
+{{template "lead" "The Discord is where the rest of it happens."}}
+{{template "p" "It is the main place to ask anything — a filter that misbehaves, a board we don’t cover yet, a posting that smells fake, a feature you want. I read it and answer myself, and it is small enough that you will actually be heard."}}
+{{template "p" "It is also a community of job seekers sharing how the search actually goes: what got a reply and what got silence, a CV rewritten until it started landing interviews, whether a company is really hiring or just collecting CVs, what the offer came in at. That half I can’t build — it only exists because people show up."}}
 {{template "icon-button" (mailIconLink .DiscordURL "Join the Discord" .DiscordIcon)}}
-{{template "p" "Replying to this mail reaches me too."}}`),
+{{template "p-link" (mailTextLink "And if the project has been useful, a star is how most people end up finding it —" .RepoURL "star it on GitHub")}}
+{{template "muted" "Replying to this mail reaches me too."}}`),
 		text: func(string) string {
 			return "Some background you might not know: freehire is fully open source. Every parser, every dedup\n" +
 				"rule, the ranking — all of it is public. Nothing is hidden about how a job gets in, or why it\n" +
 				"sits where it sits.\n\n" +
 				"I built it in the open because job search runs on trust, and \"trust me\" is a poor answer from\n" +
 				"a site that decides what you get to see.\n\n" +
-				"If it has been useful, a star is how most people end up finding the project:\n" +
+				"The Discord is where the rest of it happens.\n\n" +
+				"It is the main place to ask anything — a filter that misbehaves, a board we don't cover yet,\n" +
+				"a posting that smells fake, a feature you want. I read it and answer myself, and it is small\n" +
+				"is small enough that you will actually be heard.\n\n" +
+				"It is also a community of job seekers sharing how the search actually goes: what got a reply\n" +
+				"and what got silence, a CV rewritten until it started landing interviews, whether a company\n" +
+				"is really hiring or just collecting CVs, what the offer came in at. That half I can't build —\n" +
+				"it only exists because people show up.\n\n" +
+				"Join the Discord: " + mailtpl.DiscordURL + "\n\n" +
+				"And if the project has been useful, a star is how most people end up finding it:\n" +
 				repoURL + "\n\n" +
-				"And the Discord is small enough that you will actually be heard:\n" +
-				discordURL + "\n\n" +
 				"Replying to this mail reaches me too.\n\n" +
 				"— Ilya Strelov, building freehire\n" + linkedInURL + "\n"
 		},

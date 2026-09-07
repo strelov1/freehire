@@ -23,7 +23,9 @@ type Drafter interface {
 // the empty-string case slipped through isSensitiveLabel's Contains checks), a kind a
 // free-text or single-choice answer actually fits (never a file — see resolveOne's file
 // case — and never a checkbox_group, which resolveOne's own Multi note already scopes
-// out), and not sensitive.
+// out), not sensitive, and not a geography/residency question (geography.go) — a
+// different reason to park (unverifiable, not off-limits) but the same outcome: never
+// reaches the model.
 func draftable(f MergedField) bool {
 	if !f.Required || f.Label == "" {
 		return false
@@ -33,7 +35,7 @@ func draftable(f MergedField) bool {
 	default:
 		return false
 	}
-	return !isSensitiveLabel(f.Label)
+	return !isSensitiveLabel(f.Label) && !isGeographyLabel(f.Label)
 }
 
 // ResolveWithDrafting runs the deterministic Resolve pass first, then offers the drafter

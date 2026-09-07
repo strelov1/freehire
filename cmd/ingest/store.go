@@ -33,14 +33,26 @@ type dbStore struct {
 	targetVersion int32
 	crawled       *crawledSet
 	tally         *writeTally
-	// hydrationWindow is how long a stored row with no description keeps being withheld from
-	// the seen-set so a hydrating adapter re-attempts its detail fetch. See ExistingExternalIDs
-	// and cmd/ingest's hydrationRetryWindowFor.
+	// seen decides what the seen-set withholds, and so what a hydrating adapter re-fetches.
+	seen seenPolicy
+}
+
+// seenPolicy gathers the three independent reasons a stored posting is offered to a hydrating
+// adapter for another detail fetch. They are one type because they are one decision made in one
+// place (ExistingExternalIDs), and because a constructor taking them apart would take seven
+// positional arguments, three of which are policy.
+type seenPolicy struct {
+	// hydrationWindow is how long a stored row with NO description keeps being withheld, so a
+	// detail fetch that failed on the first pass is retried. See cmd/ingest's
+	// hydrationRetryWindowFor.
 	hydrationWindow time.Duration
-	// refetchAll empties the seen-set for the whole run, so a hydrating adapter treats every
-	// listed posting as new and the pipeline re-WRITES it instead of only refreshing its
-	// liveness. See ExistingExternalIDs.
+	// refetchAll withholds EVERY row for the run, so a hydrating adapter treats every listed
+	// posting as new and the pipeline re-WRITES it instead of only refreshing its liveness. The
+	// repair path for an adapter fix that changes what the listing yields.
 	refetchAll bool
+	// bodies withholds a row whose stored BODY has gone stale, so an employer's later edit is
+	// re-read. Disabled unless BODY_REFRESH_DAYS is set — see bodyRefreshFor.
+	bodies bodyRefresh
 }
 
 // dbStore is the only non-test implementation of pipeline.Store, and it is expected to carry
@@ -57,15 +69,14 @@ var (
 	_ pipeline.SeenLookup = (*dbStore)(nil)
 )
 
-func newDBStore(pool *pgxpool.Pool, targetVersion int, crawled *crawledSet, tally *writeTally, hydrationWindow time.Duration, refetchAll bool) *dbStore {
+func newDBStore(pool *pgxpool.Pool, targetVersion int, crawled *crawledSet, tally *writeTally, seen seenPolicy) *dbStore {
 	return &dbStore{
-		pool:            pool,
-		q:               db.New(pool),
-		targetVersion:   int32(targetVersion),
-		crawled:         crawled,
-		tally:           tally,
-		hydrationWindow: hydrationWindow,
-		refetchAll:      refetchAll,
+		pool:          pool,
+		q:             db.New(pool),
+		targetVersion: int32(targetVersion),
+		crawled:       crawled,
+		tally:         tally,
+		seen:          seen,
 	}
 }
 
@@ -341,6 +352,13 @@ func (s *dbStore) Close(ctx context.Context, source, externalID string) error {
 // HydrationRetryWindow old, so the crawl re-attempts the detail fetch its first pass lost rather
 // than treating the body-less row as finished.
 //
+// A row whose stored BODY has gone stale is withheld too, so an employer's later edit reaches
+// the catalogue at all: without it, being stored is what stops a posting from ever being fetched
+// again, and a posting that gains a "this position is 100% on-site" paragraph keeps whatever we
+// read the day we first saw it (freehire#2555). Disabled unless BODY_REFRESH_DAYS is set, and
+// bounded by a slice even then — see bodyRefreshFor for both, and note that the disabled form
+// travels through these same parameters rather than a second query.
+//
 // refetchAll withholds EVERY row, which is the repair path for an adapter fix that changes what
 // the LISTING yields (a mis-read remote flag, a location built from the wrong place). Such a fix
 // reaches new postings on the next crawl and reaches stored ones never: a re-listed posting takes
@@ -349,14 +367,18 @@ func (s *dbStore) Close(ctx context.Context, source, externalID string) error {
 // path that could disagree with the crawl.
 func (s *dbStore) ExistingExternalIDs(ctx context.Context, source, board string) (map[string]bool, error) {
 	set := map[string]bool{}
-	if s.refetchAll {
+	if s.seen.refetchAll {
 		return set, nil
 	}
-	cutoff := pgtype.Timestamptz{Time: time.Now().Add(-s.hydrationWindow), Valid: true}
+	cutoff := pgtype.Timestamptz{Time: time.Now().Add(-s.seen.hydrationWindow), Valid: true}
+	bodyCutoff := pgtype.Timestamptz{Time: s.seen.bodies.cutoff, Valid: true}
 	if board == "" {
 		rows, err := s.q.ExistingExternalIDs(ctx, db.ExistingExternalIDsParams{
-			Source:          source,
-			HydrationCutoff: cutoff,
+			Source:            source,
+			HydrationCutoff:   cutoff,
+			BodyRefreshCutoff: bodyCutoff,
+			BodyRefreshSlices: s.seen.bodies.slices,
+			BodyRefreshSlot:   s.seen.bodies.slot,
 		})
 		if err != nil {
 			return nil, err
@@ -369,9 +391,12 @@ func (s *dbStore) ExistingExternalIDs(ctx context.Context, source, board string)
 	// The pattern is escaped by externalid.BoardPattern: a board name may contain LIKE syntax,
 	// and a third of the workday board names carry an underscore.
 	rows, err := s.q.ExistingExternalIDsByBoard(ctx, db.ExistingExternalIDsByBoardParams{
-		Source:          source,
-		Pattern:         externalid.BoardPattern(board),
-		HydrationCutoff: cutoff,
+		Source:            source,
+		Pattern:           externalid.BoardPattern(board),
+		HydrationCutoff:   cutoff,
+		BodyRefreshCutoff: bodyCutoff,
+		BodyRefreshSlices: s.seen.bodies.slices,
+		BodyRefreshSlot:   s.seen.bodies.slot,
 	})
 	if err != nil {
 		return nil, err

@@ -56,6 +56,7 @@ func (r DeletionRunner) Run(ctx context.Context, opt RunOptions) (DeletionStats,
 	_, err := outbox.RunBatch(ctx, claimFunc(r.Store.Claim), outbox.RunOptions{
 		BatchSize:    opt.BatchSize,
 		LeaseSeconds: opt.LeaseSeconds,
+		MaxPerRun:    opt.MaxPerRun,
 		OnWave: func(outbox.Stats) {
 			log.Printf("search-drain: progress deleted=%d failed=%d dead=%d",
 				rn.stats.Deleted, rn.stats.Failed, rn.stats.DeadLettered)

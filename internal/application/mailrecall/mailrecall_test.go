@@ -430,7 +430,7 @@ type fakeMailbox struct {
 	calls    int
 }
 
-func (m *fakeMailbox) Search(_ context.Context, _ int64, company, role string, since, until time.Time) ([]Message, error) {
+func (m *fakeMailbox) Search(_ context.Context, company, role string, since, until time.Time) ([]Message, error) {
 	m.calls++
 	m.company, m.role, m.since, m.until = company, role, since, until
 	return m.messages, m.err
@@ -526,6 +526,28 @@ func TestRecallReportsASearchFailure(t *testing.T) {
 	_, err := svcWithMailbox(&fakeStore{}, &fakeGen{}, box).Recall(context.Background(), 5, testApplication())
 	if !errors.Is(err, ErrSearch) {
 		t.Fatalf("got %v, want ErrSearch", err)
+	}
+}
+
+// body() is bounded and the headers were not, which is a bound on the wrong half: the
+// address, the display name and the subject all arrive from whoever mailed the candidate,
+// and this prompt carries a BATCH of them — so one crafted message inflates the run that
+// judges every other message beside it.
+//
+// The figure need not be exact. What must hold is that no field a sender controls reaches
+// the prompt at its own length.
+func TestUserPromptBoundsEveryFieldTheSenderControls(t *testing.T) {
+	huge := strings.Repeat("s", 50_000)
+	got := userPrompt(testApplication(), []Message{{
+		FromName: huge, FromAddr: huge, Subject: huge, BodyText: huge,
+		ReceivedAt: appliedAt,
+	}})
+
+	if len(got) > 5*maxBodyRunes {
+		t.Errorf("prompt is %d bytes from four %d-byte fields; nothing bounded the headers", len(got), len(huge))
+	}
+	if strings.Contains(got, huge) {
+		t.Error("a sender-controlled field reached the prompt at its own length")
 	}
 }
 

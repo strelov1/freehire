@@ -7,7 +7,10 @@ import (
 )
 
 // signature is the sign-off, appended to every campaign: these are letters from a
-// person, and the portrait is what makes that read as true rather than as a pose.
+// person, and the portrait and the profile link are what make that read as true
+// rather than as a pose. It matches the onboarding sequence's sign-off line for
+// line — a reader who gets both should be looking at the same person, not at two
+// slightly different ones.
 const signature = `
 <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin-top:22px;">
   <tr>
@@ -16,7 +19,10 @@ const signature = `
     </td>
     <td valign="middle">
       <div class="m-ink" style="font-size:14px;font-weight:600;color:#070707;">Ilya Strelov</div>
-      <div class="m-muted" style="font-size:13px;color:#505050;padding-top:2px;">building freehire</div>
+      <div class="m-muted" style="font-size:13px;color:#505050;padding-top:2px;">
+        building freehire ·
+        <a href="{{.LinkedInURL}}" class="m-muted" style="color:#505050;text-decoration:none;"><img src="{{.LinkedInIcon}}" width="14" height="14" alt="" class="m-logo" style="vertical-align:-2px;border:0;padding-right:4px;">LinkedIn</a>
+      </div>
     </td>
   </tr>
 </table>`
@@ -24,6 +30,10 @@ const signature = `
 // alertsPath is where a campaign sends someone to set a search up, matching the
 // onboarding sequence's own link so the two letters land on the same page.
 const alertsPath = "/my/notifications?utm_source=email"
+
+// linkedInURL is the profile in the sign-off, mirrored from the sequence: the
+// signature is the same person's, so it points at the same profile.
+const linkedInURL = "https://www.linkedin.com/in/istrelov/"
 
 func body(name, markup string) *template.Template {
 	return template.Must(mailtpl.Partials().New(name).Parse(markup + signature))
@@ -35,42 +45,45 @@ func body(name, markup string) *template.Template {
 // the worker's usage line. The two Product Hunt letters were dropped on 2026-09-01
 // for that reason; git holds them.
 var campaigns = map[string]Campaign{
-	// The September letter says nothing about "the market waking up", though the
-	// posting counts would look like evidence for it: what grew over the summer was
-	// this project's own coverage — more boards, more sources — and reading that as a
-	// market signal would be measuring the instrument. The figures below are only
-	// claims about the catalogue, which is all they can honestly be.
-	"hiring-season-september": {
-		Name:      "hiring-season-september",
-		Subject:   "Happy hiring season",
-		Preheader: "1 September — budgets reopen. Set your search up once.",
-		Heading:   "Happy hiring season",
-		body: body("hiring-season-september", `
-{{template "p" "Hi — it’s the 1st of September. In our line of work that is the real new year, so: happy hiring season."}}
-{{template "p" "You know how this month goes. Everyone is back at once, the good roles all surface in the same fortnight, and at some point on a Tuesday night you have twenty career pages open, hoping you have not already missed the one."}}
-{{template "lead" "You don’t have to do that part. Tell freehire what you’re after, once."}}
-{{template "p" "It watches the boards and pings you — email, Telegram or push, whichever you actually read. And you can tell it what you don’t want, which is the half nobody offers: the company you already applied to, the stack you’re done with, the “remote” that turns out to be three days in an office."}}
-{{template "button" (mailLink .AlertsURL "Set up your alert")}}
-{{template "p" "There are 3.2 million open jobs in there right now, from 326,000 companies — about half a million of them showed up last week. I won’t pretend that says anything about the market. It’s just what we’re carrying, and it’s a lot to go through by hand."}}
-{{template "muted" "And if it’s easier: hit reply and tell me what you’re looking for. I read every one of these myself, and it’s usually what I work on next."}}`),
-		text: func(base string) string {
-			return "Hi — it's the 1st of September. In our line of work that is the real new year, so:\n" +
-				"happy hiring season.\n\n" +
-				"You know how this month goes. Everyone is back at once, the good roles all surface in\n" +
-				"the same fortnight, and at some point on a Tuesday night you have twenty career pages\n" +
-				"open, hoping you have not already missed the one.\n\n" +
-				"You don't have to do that part. Tell freehire what you're after, once.\n\n" +
-				"It watches the boards and pings you — email, Telegram or push, whichever you actually\n" +
-				"read. And you can tell it what you don't want, which is the half nobody offers: the\n" +
-				"company you already applied to, the stack you're done with, the \"remote\" that turns\n" +
-				"out to be three days in an office.\n\n" +
-				"Set up your alert: " + base + alertsPath + "\n\n" +
-				"There are 3.2 million open jobs in there right now, from 326,000 companies — about half\n" +
-				"a million of them showed up last week. I won't pretend that says anything about the\n" +
-				"market. It's just what we're carrying, and it's a lot to go through by hand.\n\n" +
-				"And if it's easier: hit reply and tell me what you're looking for. I read every one of\n" +
-				"these myself, and it's usually what I work on next.\n\n" +
-				"— Ilya Strelov, building freehire\n"
+	// The Discord letter asks for one thing and links to one place. It could also
+	// have sold the alerts, the CV tools and the extension in the same breath — every
+	// campaign is tempted to — but a letter with four buttons is a letter nobody acts
+	// on, and what this one is for is the room filling up.
+	//
+	// It promises an answer from a person, and deliberately not a same-day one: a
+	// deadline in a letter is a promise about behaviour, and the letter keeps going out
+	// long after the week it was written in.
+	"discord-invite": {
+		Name:      "discord-invite",
+		Subject:   "There’s a Discord for this",
+		Preheader: "One room: ask me anything, and everyone else job hunting right now.",
+		Heading:   "There’s a Discord for this",
+		body: body("discord-invite", `
+{{template "p" "Hi — short one. freehire has a Discord, and I’d like you in it."}}
+{{template "p" "It is where the questions go now. A filter that misbehaves, a company board we don’t cover yet, a posting that smells fake, a feature you wish existed — ask there and I answer myself. The whole project is open source, so there is nothing about how it works that is off limits to ask."}}
+{{template "lead" "And it isn’t only me on the other end."}}
+{{template "p" "It is a community of job seekers, and what we do there is share how the search is actually going: what got a reply and what got silence, a CV rewritten until it started landing interviews, what a company’s interview loop really looks like, what the offer came in at. I share mine too — I am reading the same market you are."}}
+{{template "p" "That half I can’t build. Whether a company is really hiring or just collecting CVs, which recruiters answer and which never do — you only get that from other people running the same search. Job hunting alone is the worst way to do it, and that is really what the room is for."}}
+{{template "icon-button" (mailIconLink .DiscordURL "Join the Discord" .DiscordIcon)}}
+{{template "muted" "It’s free, it’s small, and lurking is fine. If you’d rather just tell me something, reply to this — I read every one."}}`),
+		text: func(string) string {
+			return "Hi — short one. freehire has a Discord, and I'd like you in it.\n\n" +
+				"It is where the questions go now. A filter that misbehaves, a company board we don't cover\n" +
+				"yet, a posting that smells fake, a feature you wish existed — ask there and I answer myself.\n" +
+				"The whole project is open source, so there is nothing about how it works that is off limits\n" +
+				"to ask.\n\n" +
+				"And it isn't only me on the other end.\n\n" +
+				"It is a community of job seekers, and what we do there is share how the search is actually\n" +
+				"going: what got a reply and what got silence, a CV rewritten until it started landing\n" +
+				"interviews, what a company's interview loop really looks like, what the offer came in at.\n" +
+				"I share mine too — I am reading the same market you are.\n\n" +
+				"That half I can't build. Whether a company is really hiring or just collecting CVs, which\n" +
+				"recruiters answer and which never do — you only get that from other people running the same\n" +
+				"search. Job hunting alone is the worst way to do it, and that is really what the room is for.\n\n" +
+				"Join the Discord: " + mailtpl.DiscordURL + "\n\n" +
+				"It's free, it's small, and lurking is fine. If you'd rather just tell me something, reply to\n" +
+				"this — I read every one.\n\n" +
+				"— Ilya Strelov, building freehire\n" + linkedInURL + "\n"
 		},
 	},
 }

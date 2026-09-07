@@ -217,6 +217,9 @@ var categoryTable = []aliasEntry{
 	// an estate, not a role, so it resolves with the other domain nouns down beside
 	// the bare "manager"/"analyst" fall-throughs. Search for it there.
 	{"cloud engineer", "devops"},
+	// The estate-facing analyst titles: 82 and 18 live postings.
+	{"infrastructure analyst", "devops"},
+	{"cloud analyst", "devops"},
 	{"system administrator", "devops"},
 	// The plural is the far more common surface form in prod titles ("Systems
 	// Administrator") and does not contain "system administrator" as a substring
@@ -322,6 +325,9 @@ var categoryTable = []aliasEntry{
 	{"sdet", "qa"},
 	{"тестировщик", "qa"},
 	{"тестирование", "qa"},
+	// 524 live postings. Reached only through the bare "analyst" fall-through before it
+	// was removed, which called them data analysts.
+	{"test analyst", "qa"},
 	// Hungarian, qualified only. The bare noun was admitted here for one day on the
 	// footing English's bare "tester" has, and a general-population board took it back:
 	// the first sample came from the platform's two IT categories, where every
@@ -382,6 +388,9 @@ var categoryTable = []aliasEntry{
 	{"grc", "security"},
 	{"vulnerability management", "security"},
 	{"vulnerability analyst", "security"},
+	// The analyst forms the bare fall-through used to claim: 263 and 80 live postings.
+	{"threat analyst", "security"},
+	{"cyber analyst", "security"},
 	// The security operations centre. Without this the title falls through to the
 	// bare "analyst" alias far below and lands in data_analytics.
 	{"soc analyst", "security"},
@@ -913,8 +922,26 @@ var categoryTable = []aliasEntry{
 	// manager title with no recognized function falls through to management.
 	{"manager", "management"},
 	{"менеджер", "management"},
-	{"analyst", "data_analytics"},
-	{"аналитик", "data_analytics"},
+	// There is deliberately NO bare "analyst"/"аналитик" here, and the asymmetry with
+	// the "manager" pair above is the point. Both were written as the same idea — a
+	// title with no recognised function falls through — but "manager" falls through to
+	// `management`, which is non-technical, while "analyst" fell through to
+	// `data_analytics`, which is not: an unrecognised analyst was thereby DECLARED a
+	// technical data role.
+	//
+	// Measured on the open catalogue on 2026-09-06, that facet held 102,222 postings and
+	// 77,086 of them (75%) carried no data, analytics or BI word at all. 13,748 were
+	// Board Certified Behavior Analysts — school ABA therapists — and the rest
+	// investment, purchasing, risk, pricing, research, policy and tax analysts. All
+	// 102,222 had is_tech = true, so all of them were eligible for the enrichment budget,
+	// and TechEvidence's veto shielded every one from the non-technical dictionary.
+	//
+	// The technical families it was hiding are named individually instead, each in its
+	// own block above and each resolving MORE precisely than this ever did: test,
+	// threat/cyber, network, technical, application(s), it, technology, software,
+	// infrastructure and cloud analysts, ~3.4k live postings between them. An analyst
+	// the dictionary cannot place now resolves to nothing, which is what the rest of
+	// this package does with a title it cannot read.
 	// software_engineering: the generic catch-all for a title classify.IsTech's
 	// techTitleTerms already confirms as software/IT work but that names no
 	// sub-discipline — "Software Engineer" and "Java Developer" do not say
@@ -1098,6 +1125,22 @@ var categoryTable = []aliasEntry{
 	{"cyber systems engineer", "security"},
 	{"software systems engineer", "software_engineering"},
 	{"it systems engineer", "software_engineering"},
+	// The generic technical analyst titles, ~2.2k live postings between them. They were
+	// reached only through the bare "analyst" fall-through, which called them data
+	// analysts; the software_engineering bucket is the same answer this file gives every
+	// title it confirms is IT work without naming a sub-discipline.
+	//
+	// "it analyst" is why the boundary match matters rather than a substring one: 982
+	// live "Credit Analyst" postings CONTAIN it, and a substring match would file every
+	// one of them as IT staff.
+	{"it analyst", "software_engineering"},
+	{"technology analyst", "software_engineering"},
+	{"technical analyst", "software_engineering"},
+	{"software analyst", "software_engineering"},
+	// Both surface forms: the plural does not contain the singular on a word boundary,
+	// and prod carries far more of the plural (healthcare's Epic/Cerner analysts).
+	{"application analyst", "software_engineering"},
+	{"applications analyst", "software_engineering"},
 	// The bare form closes the family. `software_engineering` and not `devops`: the
 	// population left after the four blind spellings is mixed between infrastructure
 	// and generalist software work, and the generic bucket is the honest answer where
@@ -1132,6 +1175,8 @@ var categoryTable = []aliasEntry{
 	{"network operations engineer", "devops"},
 	{"network specialist", "network_engineering"},
 	{"network technician", "network_engineering"},
+	// 256 live postings, previously read as data analysts.
+	{"network analyst", "network_engineering"},
 	{"it specialist", "support"},
 	{"it technician", "support"},
 	// The integration family. None of these contains "systems engineer" as consecutive
@@ -1413,6 +1458,14 @@ var categoryTable = []aliasEntry{
 	// signal is 1С ("Программист 1С", "1С-разработчик") reads as backend — server-side enterprise
 	// development. Bare tokens so any separator ("1С-разработчик", "разработчик 1С") matches.
 	{"1c", "backend"},
+	// "Аналитик 1С" is a systems/business analyst on the 1C platform, not a data one:
+	// of the 71 live postings the catalogue carries, the fuller spellings say so
+	// outright ("Системный аналитик 1С", "Senior Системный аналитик_1С", "Аналитик
+	// 1С:ERP"). It needs its own entry now that the bare "аналитик" fall-through is
+	// gone — without it the title drops through to the 1C rule below and reads as
+	// backend, which is the one thing it certainly is not.
+	{"аналитик 1с", "business_analysis"},
+	{"1с аналитик", "business_analysis"},
 	{"1с", "backend"},
 
 	// Russian software and administration, declared AFTER 1С for exactly the reason

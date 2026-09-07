@@ -37,3 +37,11 @@ overrides:
   # isomorphic-dompurify to 4.x, moves nothing: 4.1.0 declares the same
   # jsdom ^30.0.0 and dompurify ^3.4.12, and differs only in its Node engines.
   undici@<8.10.2: 8.10.2
+  # GHSA-px8p-9vwx-vf98 / CVE-2026-45820: fflate's unzipSync can loop forever
+  # parsing a malformed ZIP64 central-directory entry (missing extra-field tag
+  # 0x0001 after a 0xFFFFFFFF size sentinel). Reached transitively via
+  # satori > @shuding/opentype.js, which pins an exact "0.7.3" — satori itself
+  # only imports inflateSync (not unzipSync), so the vulnerable path is not
+  # actually reachable here, but there's no reason to keep a flagged version
+  # around when the override costs nothing.
+  fflate@<0.7.5: 0.7.5

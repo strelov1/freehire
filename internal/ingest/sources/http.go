@@ -80,6 +80,14 @@ type HeaderTextGetter interface {
 	GetTextWithHeaders(ctx context.Context, url string, headers map[string]string) (string, error)
 }
 
+// LargeTextGetter behaves like TextGetter but without its tighter maxTextBody cap, for the rare
+// adapter whose raw-body page is legitimately large because it inlines a whole feed rather than
+// carrying a link to scan for (e.g. Yandex Crowd's /vacancies page, which server-renders every
+// posting's full description into one <script> tag).
+type LargeTextGetter interface {
+	GetLargeText(ctx context.Context, url string) (string, error)
+}
+
 // JSONPoster sends a JSON request body and decodes the JSON response (platforms whose
 // listing API is POST-only, e.g. Workday).
 type JSONPoster interface {
@@ -122,6 +130,7 @@ type HTTPClient interface {
 	HTMLResolvedGetter
 	TextGetter
 	HeaderTextGetter
+	LargeTextGetter
 	JSONPoster
 	HeaderJSONGetter
 	HeaderJSONPoster
@@ -378,10 +387,21 @@ func (c *Client) GetXML(ctx context.Context, url string, v any) error {
 
 // maxTextBody caps the raw body GetText reads — tighter than the client's own
 // maxResponseBody, because these endpoints are markup a caller slices rather than a feed
-// that inlines every posting. Careers pages can be large, but the ATS link we scan for sits
-// in the markup, not megabytes of trailing content (the largest measured in production is
-// ~880 KB); the cap keeps a runaway page from ballooning memory.
-const maxTextBody = 2 << 20 // 2 MiB
+// that inlines every posting; the cap keeps a runaway page from ballooning memory.
+//
+// The ceiling is a measurement, and the previous one (2 MiB, "the largest measured in
+// production is ~880 KB") was outgrown rather than wrong. crowd.yandex.ru/vacancies renders
+// its whole listing into one page and reached 2,109,478 bytes on 2026-09-07 — 0.6% over,
+// enough to fail every crawl of that provider since 2026-09-06 and to keep failing as the
+// listing grows. A page that inlines its listing has no natural size, so the new figure
+// carries deliberate headroom rather than tracking the current largest: 8 MiB is 4x the
+// page that broke it and still 8x tighter than the feed cap, which is the distinction this
+// constant exists to draw.
+//
+// Growing past THIS one is reported, not silent (see GetText below), so the next page to
+// outgrow it says so with its size instead of returning short markup that reads like an
+// employer with no ATS link.
+const maxTextBody = 8 << 20 // 8 MiB
 
 // GetText fetches url and returns its raw response body as a string (capped at
 // maxTextBody). It serves adapters whose endpoint is a raw page they scan or slice
@@ -416,6 +436,24 @@ func (c *Client) GetTextWithHeaders(ctx context.Context, url string, headers map
 			// all. The bytes read so far are kept: io.ReadAll returns them with the error,
 			// and a caller that can use a prefix is entitled to the prefix.
 			b, err := io.ReadAll(newCappedReader(resp.Body, url, maxTextBody))
+			body = string(b)
+			return err
+		},
+	})
+	return body, err
+}
+
+// GetLargeText fetches url and returns its raw response body, like GetText but without the
+// maxTextBody cap — bounded only by the client's own default (bodyLimit, 64 MiB), for a page
+// that inlines a whole feed rather than a link a caller scans for.
+func (c *Client) GetLargeText(ctx context.Context, url string) (string, error) {
+	var body string
+	err := c.do(ctx, request{
+		method: http.MethodGet,
+		url:    url,
+		accept: "text/html",
+		decode: func(resp *http.Response) error {
+			b, err := io.ReadAll(resp.Body)
 			body = string(b)
 			return err
 		},

@@ -140,6 +140,41 @@ func TestInsertAcceptsResubmissionAfterRetirement(t *testing.T) {
 	}
 }
 
+// A retired board is never crawled again, so its board_health row could never clear the
+// normal way (a successful crawl) — Retire must delete it, or the provider shows as
+// permanently unhealthy on the public /status page forever.
+func TestRetireDeletesTheBoardsHealthRow(t *testing.T) {
+	pool := testdb.Pool(t)
+	repo := NewQueriesRepository(db.New(pool))
+	ctx := context.Background()
+	in := InsertInput{Provider: "lever", Board: "flaky", Company: "Flaky Co"}
+
+	b, err := NewInserter(repo, sources.Taxonomy()).Insert(ctx, in, StatusActive)
+	if err != nil {
+		t.Fatalf("Insert: %v", err)
+	}
+	if _, err := pool.Exec(ctx,
+		`INSERT INTO board_health (provider, board, region, consecutive_failures, cooldown_until)
+		 VALUES ($1, $2, $3, 20, now() + interval '1 day')`,
+		b.Provider, b.Board, b.Region); err != nil {
+		t.Fatalf("seed board_health: %v", err)
+	}
+
+	if found, err := repo.Retire(ctx, b.Provider, b.Board, b.Region); err != nil || !found {
+		t.Fatalf("Retire = %v,%v, want found", found, err)
+	}
+
+	var n int
+	if err := pool.QueryRow(ctx,
+		`SELECT count(*) FROM board_health WHERE provider = $1 AND board = $2 AND region = $3`,
+		b.Provider, b.Board, b.Region).Scan(&n); err != nil {
+		t.Fatalf("count board_health: %v", err)
+	}
+	if n != 0 {
+		t.Errorf("board_health rows remaining = %d, want 0 (Retire should have deleted it)", n)
+	}
+}
+
 func TestRenameCorrectsAPlaceholderCompany(t *testing.T) {
 	repo := newRepo(t)
 	ctx := context.Background()

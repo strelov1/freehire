@@ -99,11 +99,15 @@ func (h *inboxHandlers) RecallApplicationMail(c *fiber.Ctx) error {
 		// The verdict is the service's, so the in-process caller meets it too; the handler
 		// only chooses how to say it.
 		return fiber.NewError(fiber.StatusNotFound, "no application recorded for this job")
-	case errors.Is(err, mailrecall.ErrModel):
-		// The gateway let us down. Logged rather than reported, because classify() marks
-		// every *fiber.Error routine and Sentry would never see it — and a 502 nobody
-		// records is how "the model had a bad day" and "the model has been down since
-		// Tuesday" come to look identical.
+	case errors.Is(err, mailrecall.ErrModel), errors.Is(err, mailrecall.ErrSearch):
+		// Somebody else's outage: the gateway let us down, or Google did. Logged rather
+		// than reported, because classify() marks every *fiber.Error routine and Sentry
+		// would never see it — and a 502 nobody records is how "the model had a bad day"
+		// and "the model has been down since Tuesday" come to look identical.
+		//
+		// One branch for both because the sentence to the caller is the same one, and it
+		// is already this branch's message. The two sentinels stay separate upstream, where
+		// the distinction is between "we could not look" and "there was nothing to find".
 		log.Printf("mail-recall: user %d: %v", userID, err)
 		return fiber.NewError(fiber.StatusBadGateway, "could not search your mail right now")
 	case err != nil:

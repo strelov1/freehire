@@ -89,12 +89,27 @@ func (m *Mailer) Send(ctx context.Context, c Campaign, to string) error {
 type assets struct {
 	PortraitURL string
 	AlertsURL   string
+	DiscordIcon string
+	// DiscordURL is not derived from the origin, but it travels with the icon: a
+	// campaign that shows the mark and links somewhere else would be a broken invite,
+	// and keeping the pair in one struct is what stops the template from assembling
+	// them from two places.
+	DiscordURL string
+	// LinkedInIcon and LinkedInURL are the sign-off's, not a campaign's: every letter
+	// carries them, because the signature is part of the shell rather than of any one
+	// campaign's copy.
+	LinkedInIcon string
+	LinkedInURL  string
 }
 
 func (m *Mailer) assets() assets {
 	return assets{
-		PortraitURL: m.baseURL + "/ilya.jpg",
-		AlertsURL:   m.baseURL + alertsPath,
+		PortraitURL:  m.baseURL + "/ilya.jpg",
+		AlertsURL:    m.baseURL + alertsPath,
+		DiscordIcon:  m.baseURL + "/email-icon-discord.png",
+		DiscordURL:   mailtpl.DiscordURL,
+		LinkedInIcon: m.baseURL + "/email-icon-linkedin.png",
+		LinkedInURL:  linkedInURL,
 	}
 }
 

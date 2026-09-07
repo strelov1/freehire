@@ -76,7 +76,7 @@ func TestComputeCountsOnlyThePaginatedSet(t *testing.T) {
 		t.Fatalf("mark private: %v", err)
 	}
 
-	got, err := Compute(ctx, q, 7)
+	got, err := Compute(ctx, q, 7, 2)
 	if err != nil {
 		t.Fatalf("Compute: %v", err)
 	}
@@ -90,6 +90,9 @@ func TestComputeCountsOnlyThePaginatedSet(t *testing.T) {
 	}
 	if got.TelegramChannels != 7 {
 		t.Errorf("TelegramChannels = %d, want the 7 passed in", got.TelegramChannels)
+	}
+	if got.UniqueOpenJobs != 2 {
+		t.Errorf("UniqueOpenJobs = %d, want the 2 passed in", got.UniqueOpenJobs)
 	}
 	if got.Sources != Sources() || got.ATSPlatforms != ATSPlatforms() {
 		t.Errorf("Sources/ATSPlatforms = %d/%d, want the registry-derived %d/%d",
@@ -111,7 +114,7 @@ func TestComputeReadsBothCountsInOneStatement(t *testing.T) {
 
 	seedJob(t, q, "greenhouse", "acme:1", "acme")
 
-	got, err := Compute(ctx, q, 0)
+	got, err := Compute(ctx, q, 0, 0)
 	if err != nil {
 		t.Fatalf("Compute: %v", err)
 	}

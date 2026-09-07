@@ -6,6 +6,7 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/strelov1/freehire/internal/ingest/catalogstats"
 	"github.com/strelov1/freehire/internal/platform/cache"
@@ -14,7 +15,7 @@ import (
 
 // statsHandlers serves the public transparency and market-insights reads:
 // catalogue activity, member growth, engagement counts, the facet snapshot, the
-// insights rollups, and the ingest-fleet status. All are unauthenticated,
+// insights rollups, and the site/ingest-fleet status. All are unauthenticated,
 // aggregate-only reads — no record-level field or user identifier is exposed.
 type statsHandlers struct {
 	queries *db.Queries
@@ -25,10 +26,15 @@ type statsHandlers struct {
 	// to the estimate, which is the same path a cold or unreachable cache takes.
 	cache     cache.Cache
 	estimator catalogstats.Estimator
+
+	// pool backs the site-status database check (IngestStatus): the same live
+	// pool.Ping approach the /health handler uses, kept separate from it
+	// rather than shared because Health is mounted on *API, not statsHandlers.
+	pool *pgxpool.Pool
 }
 
-func newStatsHandlers(queries *db.Queries, c cache.Cache) *statsHandlers {
-	return &statsHandlers{queries: queries, cache: c, estimator: queries}
+func newStatsHandlers(queries *db.Queries, c cache.Cache, pool *pgxpool.Pool) *statsHandlers {
+	return &statsHandlers{queries: queries, cache: c, estimator: queries, pool: pool}
 }
 
 func (h *statsHandlers) register(api fiber.Router) {
@@ -160,19 +166,22 @@ func truncateToDate(t time.Time) time.Time {
 	return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, time.UTC)
 }
 
-// growthPoint is one point on the member-growth series: a UTC calendar date and
-// the cumulative member count as of that day.
+// growthPoint is one point on the member-growth series: a UTC calendar date, the
+// cumulative member count as of that day, and that day's own (non-cumulative)
+// new-signup count.
 type growthPoint struct {
 	Date  string `json:"date"`
 	Total int32  `json:"total"`
+	New   int32  `json:"new"`
 }
 
 // UserGrowth serves the public, unauthenticated member-growth time series: the
 // cumulative count of registered members per UTC day, from the first registration
-// through today. The dense, gap-free, monotonically non-decreasing series is
-// produced by the SQL query; this handler only maps rows to the wire envelope.
-// Aggregate-only — the query selects no user identifier, so no personal field can
-// leak here. An empty catalogue yields an empty series (200 with data: []).
+// through today, plus each day's own new-signup count. The dense, gap-free,
+// monotonically non-decreasing series is produced by the SQL query; this handler
+// only maps rows to the wire envelope. Aggregate-only — the query selects no user
+// identifier, so no personal field can leak here. An empty catalogue yields an
+// empty series (200 with data: []).
 func (h *statsHandlers) UserGrowth(c *fiber.Ctx) error {
 	rows, err := h.queries.ListUserGrowth(c.Context())
 	if err != nil {
@@ -181,7 +190,7 @@ func (h *statsHandlers) UserGrowth(c *fiber.Ctx) error {
 
 	points := make([]growthPoint, len(rows))
 	for i, r := range rows {
-		points[i] = growthPoint{Date: r.Day.Time.Format(dateLayout), Total: r.Total}
+		points[i] = growthPoint{Date: r.Day.Time.Format(dateLayout), Total: r.Total, New: r.New}
 	}
 
 	return c.JSON(fiber.Map{"data": points})
@@ -194,8 +203,8 @@ func (h *statsHandlers) UserGrowth(c *fiber.Ctx) error {
 // integer totals, so no per-user field can leak. An empty database yields all
 // zeros (200).
 // CatalogScale serves the catalogue-scale snapshot: how many open postings the
-// catalogue holds, from how many companies, across how many sources, ATS platforms and
-// Telegram channels.
+// catalogue holds (raw and de-duplicated), from how many companies, across how many
+// sources, ATS platforms and Telegram channels.
 //
 // It never fails. A cold cache (before the first rollup run), an unreachable one, and a
 // payload left by an older build all degrade to the approximate open-job count, and
@@ -207,6 +216,7 @@ func (h *statsHandlers) CatalogScale(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{
 		"data": fiber.Map{
 			"open_jobs":         result.OpenJobs,
+			"unique_open_jobs":  result.UniqueOpenJobs,
 			"companies":         result.Companies,
 			"sources":           result.Sources,
 			"ats_platforms":     result.ATSPlatforms,

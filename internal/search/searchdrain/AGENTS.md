@@ -20,8 +20,30 @@ Incremental facet-search indexing via the `search_outbox` queue, mirroring `inte
 ## The removal queue
 
 `search_delete_outbox` is the mirror of `search_outbox`: that one says "index this job", this
-one says "drop this job's document". `cmd/search-drain` drains both in one pass — indexing
-first, then removals.
+one says "drop this job's document". `cmd/search-drain` drains both in one pass — **removals
+first, then indexing**, and that order is load-bearing rather than incidental.
+
+It used to be the other way round, so that "a fault in the newer path cannot delay the
+established one". The reasoning inverted in practice, because each pass drains **until its
+queue is empty** and on this fleet the index queue need never be empty. Measured on prod
+2026-09-06, after a 5h `reindex` had paused this unit and left both queues five hours deep:
+arrivals into `search_outbox` ran at 2504/min against a drain of 2614/min, so the indexing
+pass hovered at a 9-11k depth and did not return for over two hours. `Type=oneshot` means no
+second instance starts, so removals had not run once in that window and **134k closed
+postings stayed visible in search**. Indexing was healthy throughout — `failed=0`, `dead=0`,
+200k+ pushed. Going second was not a delay, it was starvation, and nothing in the old
+ordering could end it.
+
+Removals cannot starve pushes symmetrically: a wave is ONE index task for the whole batch,
+the queue is fed only by closures rather than by every content change, and a wave that goes
+wrong is bounded by the same `CallTimeout` and dead-lettering as an index wave.
+
+**`SEARCH_DRAIN_MAX_PER_RUN` bounds how much of EITHER queue one run takes; 0 (the default)
+is unbounded.** It is the lever for handing the process back on a schedule rather than on
+exhaustion, and it is deliberately off by default: a cap is not free — the run ends, the
+timer waits its interval, and a new process pays startup again, so a cap set below the
+arrival rate turns a queue that was draining into one that grows. Set it against a measured
+arrival rate, and measure again after.
 
 It exists because nothing removed documents incrementally. `ClaimSearchOutboxBatch` filters
 `closed_at IS NULL`, so a job that closes is never claimed again and its document simply

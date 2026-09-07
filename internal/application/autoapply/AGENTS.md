@@ -55,6 +55,21 @@ application, and record the outcome. Pgx/Fiber-free — `Store`, `AnswerSource` 
   unresolved form field does, through its own review endpoint (`internal/api/handler`), not
   through anything in this package.
 
+- **An enqueue-time eligibility gate refuses (or, in shadow mode, only logs) a positively
+  mismatched (candidate, job) pair before it ever reaches this package's queue at all.**
+  `internal/api/handler`'s `PostJobAutoApply` (the only writer of `auto_apply_queue`, see
+  below) calls `internal/candidate/hardconstraint.Evaluate` — the same deterministic,
+  no-I/O evaluator the match-analysis surface already uses advisorily — and refuses
+  enqueueing when it reports an unmet `work-authorization` or `location-and-work-mode`
+  blocker for the pair. Gated behind `AUTO_APPLY_ELIGIBILITY_ENFORCE` (unset = shadow:
+  logs what would have been refused and enqueues anyway), mirroring `internal/ai/plan`'s
+  `PLAN_ENFORCE` rollout — a false positive here has an immediate, visible cost for a
+  paying candidate, so it earns the same observe-then-enforce caution
+  (`openspec/changes/add-auto-apply-eligibility-gate`). This is entirely upstream of this
+  package: `Run`/`process` never see a row this gate refused, and a row it lets through
+  with missing evidence on either side is not evidence of ineligibility — the gate,
+  like the evaluator it calls, never manufactures a blocker from an absent field.
+
 ## How it works
 `Run` wires `outbox.RunPool` over `Store.Claim`, mirroring `internal/applyform`'s own
 `cmd/capture-apply-form` runner shape. `process` per claimed item: assemble answers → call

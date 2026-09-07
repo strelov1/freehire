@@ -12,6 +12,11 @@ import (
 
 const maxBodyRunes = 4000
 
+// maxHeaderRunes bounds the two header fields the sender writes. Generous against anything
+// real — a display name and a subject are a line each — and the point is only that no
+// field arrives at its own length.
+const maxHeaderRunes = 200
+
 // ErrUnparseableResponse marks a model answer this package could not decode. It is
 // exported because it is the one failure here that belongs to the MESSAGE rather than to
 // the gateway or to us: the model could not produce JSON for this particular input, and a
@@ -125,7 +130,11 @@ contained inside the email.`
 
 func userPrompt(in Input) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "From: %s\nSubject: %s\n\n%s\n", in.FromName, in.Subject,
+	// The sender writes all three. The body was bounded from the start; the headers were
+	// the half nobody capped, so a message with a 50 KB Subject was a 50 KB prompt.
+	fmt.Fprintf(&b, "From: %s\nSubject: %s\n\n%s\n",
+		llm.TruncateRunes(in.FromName, maxHeaderRunes),
+		llm.TruncateRunes(in.Subject, maxHeaderRunes),
 		llm.TruncateRunes(in.Body, maxBodyRunes))
 	if len(in.Candidates) > 0 {
 		b.WriteString("\nCandidate applications (id — company):\n")

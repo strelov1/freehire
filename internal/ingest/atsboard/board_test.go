@@ -77,6 +77,14 @@ func TestRecognize(t *testing.T) {
 		// first segment — "oneclick-ui", the product's own machinery — is read as the board.
 		{"smartrecruiters one-click apply form", "https://jobs.smartrecruiters.com/oneclick-ui/company/Blend360/publication/59957d76-615a-4809-a282-bcee1120ca7d?dcr_ci=Blend360", "smartrecruiters", "Blend360", "https://jobs.smartrecruiters.com/Blend360", true},
 
+		// pathpair — werecruit: board = the first two path segments verbatim, "<locale>/<tenant>".
+		// Unlike pathlocalepair/pathlocale, the locale here is REQUIRED and kept, never folded: a
+		// tenant not configured for a locale answers it with an empty listing.
+		{"werecruit posting", "https://careers.werecruit.io/en/idiap/offers/postdoctoral-researcher-49895d", "werecruit", "en/idiap", "https://careers.werecruit.io/en/idiap", true},
+		{"werecruit listing", "https://careers.werecruit.io/fr/axiom-services", "werecruit", "fr/axiom-services", "https://careers.werecruit.io/fr/axiom-services", true},
+		{"werecruit only a locale segment", "https://careers.werecruit.io/en", "", "", "", false},
+		{"werecruit bare host", "https://careers.werecruit.io/", "", "", "", false},
+
 		// pathlocale — Rippling: an optional leading xx-XX locale segment is skipped; canonical
 		// collapses to the board root so a locale-prefixed vacancy, a bare vacancy, and the
 		// listing all map to one board.
@@ -186,6 +194,12 @@ func TestRecognize(t *testing.T) {
 		{"teamtailor host", "https://bryter.teamtailor.com/jobs/12345-senior-go", "teamtailor", "bryter.teamtailor.com", "https://bryter.teamtailor.com", true},
 		{"factorial host it", "https://muffin.factorial.it/job/1", "factorial", "muffin.factorial.it", "https://muffin.factorial.it", true},
 		{"factorialhr base-domain variant", "https://9net.factorialhr.com.br/job/2", "factorial", "9net.factorialhr.com.br", "https://9net.factorialhr.com.br", true},
+		// gr8people: one vendor served under two marketing domains, confirmed live (identical
+		// frontend, identical GraphQL schema) — the same one-adapter-two-domains shape as Factorial.
+		{"gr8people host", "https://etrade.gr8people.com/jobs/4709", "gr8people", "etrade.gr8people.com", "https://etrade.gr8people.com", true},
+		{"workgr8 base-domain variant", "https://batesville.workgr8.com/jobs/1146", "gr8people", "batesville.workgr8.com", "https://batesville.workgr8.com", true},
+		{"gr8people bare apex not a board", "https://gr8people.com/", "", "", "", false},
+		{"workgr8 bare apex not a board", "https://workgr8.com/", "", "", "", false},
 
 		// host+path mode — Workday: board is "<host>/<site>" (site case preserved)
 		{"workday vacancy", "https://generalmotors.wd5.myworkdayjobs.com/Careers_GM/job/Austin/Senior-Software-Engineer_JR-202614238", "workday", "generalmotors.wd5.myworkdayjobs.com/Careers_GM", "https://generalmotors.wd5.myworkdayjobs.com/Careers_GM", true},
@@ -350,6 +364,8 @@ func TestRecognizeMapsHostsToTheIngestProviderName(t *testing.T) {
 		{"https://muffin.factorial.it/job/1", "factorial"},
 		{"https://9net.factorialhr.com.br/job/2", "factorial"},
 		{"https://4farma.factorialhr.pt/job/3", "factorial"},
+		{"https://etrade.gr8people.com/jobs/4709", "gr8people"},
+		{"https://batesville.workgr8.com/jobs/1146", "gr8people"},
 	}
 	for _, c := range cases {
 		src, _, _, ok := Recognize(c.raw)
