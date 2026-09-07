@@ -303,10 +303,10 @@ func newSingleUseConnClient() *Client {
 // exactly what the 4dayweek adapter now does.
 const browserUserAgent = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36"
 
-// NewBrowserUAClient is NewClient with browserUserAgent — same guarded transport, same retry
-// budget, same everything else.
-func NewBrowserUAClient() *Client { return newBrowserUAClient() }
-
+// newBrowserUAClient is NewClient with browserUserAgent — same guarded transport, same retry
+// budget, same everything else. Unexported, unlike newCookieClient's and
+// newSingleUseConnClient's wrappers: those are exported because host tools reuse them, and
+// nothing outside this package needs this one.
 func newBrowserUAClient() *Client {
 	c := NewClient()
 	c.userAgent = browserUserAgent
