@@ -89,16 +89,16 @@ unit tests plus the function they drive; none of it needs Docker or Postgres.
 
 ## 3. Profile domain and moderation
 
-- [ ] 3.1 Profile service: create, read, update, with one profile per account and a
+- [x] 3.1 Profile service: create, read, update, with one profile per account and a
       company that must exist in `companies`; sentinels carry their HTTP mapping in
       comments, following `referral`'s convention
-- [ ] 3.2 Moderation: pending queue oldest-first, approve and reject recording the
+- [x] 3.2 Moderation: pending queue oldest-first, approve and reject recording the
       deciding moderator and time, and an approved `referral_offers` row surfaced as
       evidence but never as a gate
-- [ ] 3.3 Pause and resume without moderation, leaving confirmed bookings standing
-- [ ] 3.4 Withdrawal: cancel every confirmed future booking, notify each seeker, retain
+- [x] 3.3 Pause and resume without moderation, leaving confirmed bookings standing
+- [x] 3.4 Withdrawal: cancel every confirmed future booking, notify each seeker, retain
       past bookings as history
-- [ ] 3.5 Public directory: approved and unpaused only, narrowable by company, topic and
+- [x] 3.5 Public directory: approved and unpaused only, narrowable by company, topic and
       language, reporting unread parameters in `meta.ignored_params`
 
 ## 4. Booking domain

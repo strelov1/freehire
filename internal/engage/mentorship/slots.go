@@ -109,12 +109,13 @@ func Slots(req SlotRequest) (SlotResult, error) {
 // the fallback. It must never fall back to the MENTOR's zone: a visitor shown the
 // mentor's local times, labelled as their own, has no way to notice.
 //
-// "Local" is refused explicitly, and it is the reason this is not a bare LoadLocation.
-// Go accepts that name and returns the SERVER's zone — so a visitor would be served the
-// host's wall clock, labelled "Local", which is the same undetectable failure by a
-// different door. Every real IANA name either contains a slash or is "UTC".
+// The shape check is the reason this is not a bare LoadLocation, and it carries the same
+// argument validateMentorZone makes: Go resolves "Local" to the SERVER's zone, and "EST"
+// and "Factory" to things that are not a place. A visitor served the host's wall clock,
+// labelled as their own, has no way to notice. Requiring a slash — or exactly "UTC" —
+// admits the IANA names and nothing else.
 func resolveViewerZone(name string) (*time.Location, string) {
-	if name == "" || name == "Local" {
+	if name == "" {
 		return time.UTC, "UTC"
 	}
 	if name != "UTC" && !strings.Contains(name, "/") {

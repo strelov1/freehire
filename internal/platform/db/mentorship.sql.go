@@ -574,58 +574,40 @@ WHERE m.slug = $1 AND m.status = 'approved' AND NOT m.paused
 `
 
 type GetPublishedMentorBySlugRow struct {
-	ID                 int64              `json:"id"`
-	UserID             int64              `json:"user_id"`
-	CompanySlug        string             `json:"company_slug"`
-	Slug               string             `json:"slug"`
-	Headline           string             `json:"headline"`
-	Bio                string             `json:"bio"`
-	Topics             []string           `json:"topics"`
-	Languages          []string           `json:"languages"`
-	Timezone           string             `json:"timezone"`
-	SessionDurationMin int32              `json:"session_duration_min"`
-	BufferBeforeMin    int32              `json:"buffer_before_min"`
-	BufferAfterMin     int32              `json:"buffer_after_min"`
-	MinNoticeMin       int32              `json:"min_notice_min"`
-	HorizonDays        int32              `json:"horizon_days"`
-	MeetingUrl         string             `json:"meeting_url"`
-	Status             string             `json:"status"`
-	Paused             bool               `json:"paused"`
-	DecidedBy          pgtype.Int8        `json:"decided_by"`
-	DecidedAt          pgtype.Timestamptz `json:"decided_at"`
-	CreatedAt          pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
-	CompanyName        pgtype.Text        `json:"company_name"`
+	Mentor      Mentor      `json:"mentor"`
+	CompanyName pgtype.Text `json:"company_name"`
 }
 
 // The PUBLIC profile read. Predicated rather than filtered in the service: a pending,
 // rejected or paused profile must answer as though it does not exist, and putting that
 // rule anywhere but the query leaves a second reader free to forget it.
+// sqlc.embed keeps the mentor row as one db.Mentor instead of forty loose columns, so
+// the adapter maps it once rather than re-assembling it per query.
 func (q *Queries) GetPublishedMentorBySlug(ctx context.Context, slug string) (GetPublishedMentorBySlugRow, error) {
 	row := q.db.QueryRow(ctx, getPublishedMentorBySlug, slug)
 	var i GetPublishedMentorBySlugRow
 	err := row.Scan(
-		&i.ID,
-		&i.UserID,
-		&i.CompanySlug,
-		&i.Slug,
-		&i.Headline,
-		&i.Bio,
-		&i.Topics,
-		&i.Languages,
-		&i.Timezone,
-		&i.SessionDurationMin,
-		&i.BufferBeforeMin,
-		&i.BufferAfterMin,
-		&i.MinNoticeMin,
-		&i.HorizonDays,
-		&i.MeetingUrl,
-		&i.Status,
-		&i.Paused,
-		&i.DecidedBy,
-		&i.DecidedAt,
-		&i.CreatedAt,
-		&i.UpdatedAt,
+		&i.Mentor.ID,
+		&i.Mentor.UserID,
+		&i.Mentor.CompanySlug,
+		&i.Mentor.Slug,
+		&i.Mentor.Headline,
+		&i.Mentor.Bio,
+		&i.Mentor.Topics,
+		&i.Mentor.Languages,
+		&i.Mentor.Timezone,
+		&i.Mentor.SessionDurationMin,
+		&i.Mentor.BufferBeforeMin,
+		&i.Mentor.BufferAfterMin,
+		&i.Mentor.MinNoticeMin,
+		&i.Mentor.HorizonDays,
+		&i.Mentor.MeetingUrl,
+		&i.Mentor.Status,
+		&i.Mentor.Paused,
+		&i.Mentor.DecidedBy,
+		&i.Mentor.DecidedAt,
+		&i.Mentor.CreatedAt,
+		&i.Mentor.UpdatedAt,
 		&i.CompanyName,
 	)
 	return i, err
@@ -1003,29 +985,9 @@ LIMIT 500
 `
 
 type ListPendingMentorProfilesRow struct {
-	ID                       int64              `json:"id"`
-	UserID                   int64              `json:"user_id"`
-	CompanySlug              string             `json:"company_slug"`
-	Slug                     string             `json:"slug"`
-	Headline                 string             `json:"headline"`
-	Bio                      string             `json:"bio"`
-	Topics                   []string           `json:"topics"`
-	Languages                []string           `json:"languages"`
-	Timezone                 string             `json:"timezone"`
-	SessionDurationMin       int32              `json:"session_duration_min"`
-	BufferBeforeMin          int32              `json:"buffer_before_min"`
-	BufferAfterMin           int32              `json:"buffer_after_min"`
-	MinNoticeMin             int32              `json:"min_notice_min"`
-	HorizonDays              int32              `json:"horizon_days"`
-	MeetingUrl               string             `json:"meeting_url"`
-	Status                   string             `json:"status"`
-	Paused                   bool               `json:"paused"`
-	DecidedBy                pgtype.Int8        `json:"decided_by"`
-	DecidedAt                pgtype.Timestamptz `json:"decided_at"`
-	CreatedAt                pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt                pgtype.Timestamptz `json:"updated_at"`
-	CompanyName              pgtype.Text        `json:"company_name"`
-	HasApprovedReferralOffer bool               `json:"has_approved_referral_offer"`
+	Mentor                   Mentor      `json:"mentor"`
+	CompanyName              pgtype.Text `json:"company_name"`
+	HasApprovedReferralOffer bool        `json:"has_approved_referral_offer"`
 }
 
 // The moderation queue, oldest first. Carries whether the account also holds an APPROVED
@@ -1043,27 +1005,27 @@ func (q *Queries) ListPendingMentorProfiles(ctx context.Context) ([]ListPendingM
 	for rows.Next() {
 		var i ListPendingMentorProfilesRow
 		if err := rows.Scan(
-			&i.ID,
-			&i.UserID,
-			&i.CompanySlug,
-			&i.Slug,
-			&i.Headline,
-			&i.Bio,
-			&i.Topics,
-			&i.Languages,
-			&i.Timezone,
-			&i.SessionDurationMin,
-			&i.BufferBeforeMin,
-			&i.BufferAfterMin,
-			&i.MinNoticeMin,
-			&i.HorizonDays,
-			&i.MeetingUrl,
-			&i.Status,
-			&i.Paused,
-			&i.DecidedBy,
-			&i.DecidedAt,
-			&i.CreatedAt,
-			&i.UpdatedAt,
+			&i.Mentor.ID,
+			&i.Mentor.UserID,
+			&i.Mentor.CompanySlug,
+			&i.Mentor.Slug,
+			&i.Mentor.Headline,
+			&i.Mentor.Bio,
+			&i.Mentor.Topics,
+			&i.Mentor.Languages,
+			&i.Mentor.Timezone,
+			&i.Mentor.SessionDurationMin,
+			&i.Mentor.BufferBeforeMin,
+			&i.Mentor.BufferAfterMin,
+			&i.Mentor.MinNoticeMin,
+			&i.Mentor.HorizonDays,
+			&i.Mentor.MeetingUrl,
+			&i.Mentor.Status,
+			&i.Mentor.Paused,
+			&i.Mentor.DecidedBy,
+			&i.Mentor.DecidedAt,
+			&i.Mentor.CreatedAt,
+			&i.Mentor.UpdatedAt,
 			&i.CompanyName,
 			&i.HasApprovedReferralOffer,
 		); err != nil {
@@ -1109,30 +1071,10 @@ type ListPublishedMentorsParams struct {
 }
 
 type ListPublishedMentorsRow struct {
-	ID                 int64              `json:"id"`
-	UserID             int64              `json:"user_id"`
-	CompanySlug        string             `json:"company_slug"`
-	Slug               string             `json:"slug"`
-	Headline           string             `json:"headline"`
-	Bio                string             `json:"bio"`
-	Topics             []string           `json:"topics"`
-	Languages          []string           `json:"languages"`
-	Timezone           string             `json:"timezone"`
-	SessionDurationMin int32              `json:"session_duration_min"`
-	BufferBeforeMin    int32              `json:"buffer_before_min"`
-	BufferAfterMin     int32              `json:"buffer_after_min"`
-	MinNoticeMin       int32              `json:"min_notice_min"`
-	HorizonDays        int32              `json:"horizon_days"`
-	MeetingUrl         string             `json:"meeting_url"`
-	Status             string             `json:"status"`
-	Paused             bool               `json:"paused"`
-	DecidedBy          pgtype.Int8        `json:"decided_by"`
-	DecidedAt          pgtype.Timestamptz `json:"decided_at"`
-	CreatedAt          pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
-	CompanyName        pgtype.Text        `json:"company_name"`
-	RatingCount        int64              `json:"rating_count"`
-	RatingAvg          pgtype.Numeric     `json:"rating_avg"`
+	Mentor      Mentor         `json:"mentor"`
+	CompanyName pgtype.Text    `json:"company_name"`
+	RatingCount int64          `json:"rating_count"`
+	RatingAvg   pgtype.Numeric `json:"rating_avg"`
 }
 
 // The public directory. Every filter is optional and applied as "NULL means unfiltered",
@@ -1158,27 +1100,27 @@ func (q *Queries) ListPublishedMentors(ctx context.Context, arg ListPublishedMen
 	for rows.Next() {
 		var i ListPublishedMentorsRow
 		if err := rows.Scan(
-			&i.ID,
-			&i.UserID,
-			&i.CompanySlug,
-			&i.Slug,
-			&i.Headline,
-			&i.Bio,
-			&i.Topics,
-			&i.Languages,
-			&i.Timezone,
-			&i.SessionDurationMin,
-			&i.BufferBeforeMin,
-			&i.BufferAfterMin,
-			&i.MinNoticeMin,
-			&i.HorizonDays,
-			&i.MeetingUrl,
-			&i.Status,
-			&i.Paused,
-			&i.DecidedBy,
-			&i.DecidedAt,
-			&i.CreatedAt,
-			&i.UpdatedAt,
+			&i.Mentor.ID,
+			&i.Mentor.UserID,
+			&i.Mentor.CompanySlug,
+			&i.Mentor.Slug,
+			&i.Mentor.Headline,
+			&i.Mentor.Bio,
+			&i.Mentor.Topics,
+			&i.Mentor.Languages,
+			&i.Mentor.Timezone,
+			&i.Mentor.SessionDurationMin,
+			&i.Mentor.BufferBeforeMin,
+			&i.Mentor.BufferAfterMin,
+			&i.Mentor.MinNoticeMin,
+			&i.Mentor.HorizonDays,
+			&i.Mentor.MeetingUrl,
+			&i.Mentor.Status,
+			&i.Mentor.Paused,
+			&i.Mentor.DecidedBy,
+			&i.Mentor.DecidedAt,
+			&i.Mentor.CreatedAt,
+			&i.Mentor.UpdatedAt,
 			&i.CompanyName,
 			&i.RatingCount,
 			&i.RatingAvg,

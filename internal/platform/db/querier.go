@@ -2199,6 +2199,8 @@ type Querier interface {
 	// The PUBLIC profile read. Predicated rather than filtered in the service: a pending,
 	// rejected or paused profile must answer as though it does not exist, and putting that
 	// rule anywhere but the query leaves a second reader free to forget it.
+	// sqlc.embed keeps the mentor row as one db.Mentor instead of forty loose columns, so
+	// the adapter maps it once rather than re-assembling it per query.
 	GetPublishedMentorBySlug(ctx context.Context, slug string) (GetPublishedMentorBySlugRow, error)
 	// One offer by id — for the moderator's proof-CV view after role authorization.
 	GetReferralOffer(ctx context.Context, id uuid.UUID) (ReferralOffer, error)

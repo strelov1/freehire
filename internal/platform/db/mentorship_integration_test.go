@@ -411,10 +411,10 @@ func TestOnlyApprovedUnpausedMentorsArePublished(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListPublishedMentors: %v", err)
 	}
-	if len(listed) != 1 || listed[0].Slug != "approved-one" {
+	if len(listed) != 1 || listed[0].Mentor.Slug != "approved-one" {
 		var slugs []string
 		for _, m := range listed {
-			slugs = append(slugs, m.Slug)
+			slugs = append(slugs, m.Mentor.Slug)
 		}
 		t.Fatalf("directory holds %v, want only approved-one", slugs)
 	}
@@ -490,7 +490,7 @@ func TestDirectoryFiltersTreatNullAsUnfiltered(t *testing.T) {
 			}
 			found := 0
 			for _, m := range got {
-				if m.Slug == "filter-mentor" {
+				if m.Mentor.Slug == "filter-mentor" {
 					found++
 				}
 			}
@@ -555,6 +555,72 @@ func TestMentorshipUniquenessConstraints(t *testing.T) {
 		}
 		if summary.RatingCount != 1 {
 			t.Errorf("rating count = %d after two submissions, want 1", summary.RatingCount)
+		}
+	})
+}
+
+// The slug is the profile's public address and must survive an edit — a shared link that
+// 404s is the failure. The service has a unit test saying so, but that one exercises a
+// fake repository: the guarantee is that these two columns are not in the UPDATE at all,
+// and only a real one can show it.
+func TestUpdateMentorProfileLeavesTheSlugAndCompanyAlone(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	ctx := context.Background()
+
+	seedMentorshipCompany(t, pool, "stableco")
+	seedMentorshipCompany(t, pool, "othercorp")
+	user := seedMentorshipUser(t, pool, "mentor-stable@example.test")
+	mentor := seedMentor(t, q, user, "stableco", "stable-mentor")
+
+	updated, err := q.UpdateMentorProfile(ctx, UpdateMentorProfileParams{
+		ID: mentor.ID, UserID: user,
+		Headline: "Staff Engineer", Bio: "new bio",
+		Topics: []string{"interviewing"}, Languages: []string{"de"},
+		Timezone: "Europe/Lisbon", SessionDurationMin: 30,
+		BufferBeforeMin: 5, BufferAfterMin: 5, MinNoticeMin: 60, HorizonDays: 14,
+		MeetingUrl: "https://meet.example.test/new",
+	})
+	if err != nil {
+		t.Fatalf("UpdateMentorProfile: %v", err)
+	}
+
+	if updated.Slug != "stable-mentor" {
+		t.Errorf("slug = %q after an edit, want stable-mentor", updated.Slug)
+	}
+	if updated.CompanySlug != "stableco" {
+		t.Errorf("company = %q after an edit, want stableco", updated.CompanySlug)
+	}
+	if updated.Headline != "Staff Engineer" || updated.Timezone != "Europe/Lisbon" {
+		t.Errorf("the edit did not apply: headline=%q timezone=%q", updated.Headline, updated.Timezone)
+	}
+
+	t.Run("editing does not reset moderation", func(t *testing.T) {
+		approve(t, q, mentor.ID, user)
+		got, err := q.UpdateMentorProfile(ctx, UpdateMentorProfileParams{
+			ID: mentor.ID, UserID: user,
+			Headline: "Principal Engineer", Topics: []string{"career"}, Languages: []string{"en"},
+			Timezone: "Europe/Berlin", SessionDurationMin: 60, MinNoticeMin: 120, HorizonDays: 30,
+			MeetingUrl: "https://meet.example.test/new",
+		})
+		if err != nil {
+			t.Fatalf("UpdateMentorProfile: %v", err)
+		}
+		if got.Status != "approved" {
+			t.Errorf("status = %q after an edit, want approved — rewording a headline is "+
+				"not a new claim about where somebody works", got.Status)
+		}
+	})
+
+	t.Run("a stranger edits nothing", func(t *testing.T) {
+		stranger := seedMentorshipUser(t, pool, "stranger-stable@example.test")
+		if _, err := q.UpdateMentorProfile(ctx, UpdateMentorProfileParams{
+			ID: mentor.ID, UserID: stranger,
+			Headline: "Hijacked", Topics: []string{"x"}, Languages: []string{"x"},
+			Timezone: "UTC", SessionDurationMin: 60, MinNoticeMin: 0, HorizonDays: 1,
+			MeetingUrl: "https://meet.example.test/x",
+		}); err == nil {
+			t.Error("a stranger edited somebody else's profile")
 		}
 	})
 }

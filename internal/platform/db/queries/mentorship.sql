@@ -23,7 +23,9 @@ SELECT * FROM mentors WHERE id = $1;
 -- The PUBLIC profile read. Predicated rather than filtered in the service: a pending,
 -- rejected or paused profile must answer as though it does not exist, and putting that
 -- rule anywhere but the query leaves a second reader free to forget it.
-SELECT m.*, c.name AS company_name
+-- sqlc.embed keeps the mentor row as one db.Mentor instead of forty loose columns, so
+-- the adapter maps it once rather than re-assembling it per query.
+SELECT sqlc.embed(m), c.name AS company_name
 FROM mentors m
 LEFT JOIN companies c ON c.slug = m.company_slug
 WHERE m.slug = $1 AND m.status = 'approved' AND NOT m.paused;
@@ -73,7 +75,7 @@ RETURNING *;
 -- never a gate: nothing in this change approves a profile automatically.
 -- Capped at 500 for the same reason the referral queue is: a backlog deeper than that
 -- needs triage, not a longer page.
-SELECT m.*, c.name AS company_name,
+SELECT sqlc.embed(m), c.name AS company_name,
     EXISTS (
         SELECT 1 FROM referral_offers r
         WHERE r.user_id = m.user_id AND r.company_slug = m.company_slug
@@ -92,7 +94,7 @@ LIMIT 500;
 -- from that vocabulary too.
 -- Keyset pagination on (created_at, id) rather than OFFSET: the directory is browsed and
 -- an OFFSET page silently repeats or skips a row when a profile is approved mid-browse.
-SELECT m.*, c.name AS company_name,
+SELECT sqlc.embed(m), c.name AS company_name,
     COALESCE(r.rating_count, 0)::bigint AS rating_count,
     COALESCE(r.rating_avg, 0)::numeric  AS rating_avg
 FROM mentors m
