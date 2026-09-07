@@ -1045,7 +1045,7 @@ interface ProviderHealth {
  *  (`overall`). `database` is "up" or "down"; `error_rate` is the fraction of
  *  5xx responses over the trailing `window_minutes`, computed from the
  *  server's own recent traffic. */
-export interface SiteHealth {
+interface SiteHealth {
   status: HealthStatus;
   database: 'up' | 'down';
   error_rate: number;
