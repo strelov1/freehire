@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log"
+	"os"
 	"strconv"
 
 	"github.com/gofiber/fiber/v2"
@@ -11,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/strelov1/freehire/internal/ai/plan"
+	"github.com/strelov1/freehire/internal/candidate/hardconstraint"
 	"github.com/strelov1/freehire/internal/platform/db"
 )
 
@@ -71,6 +73,65 @@ func autoApplyQueuedResponse(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"data": fiber.Map{"status": autoApplyStatusQueued}})
 }
 
+// autoApplyEligibilityEnforce gates whether an eligibility mismatch (see
+// eligibilityBlocker) actually refuses enqueueing or only logs what would have been
+// refused. Ships OFF (shadow-only) by default, mirroring internal/ai/plan's PLAN_ENFORCE
+// rollout: a false positive here has an immediate, visible cost — a paying candidate who
+// cannot auto-apply to a job they are, in fact, eligible for — so it earns the same
+// observe-then-enforce caution before being flipped on.
+//
+// Reads os.Getenv on every call rather than memoizing: the read itself is a cheap map
+// lookup, and memoizing (e.g. via sync.OnceValue) would freeze whichever value the FIRST
+// call happened to see for the rest of the process — including a test binary, where
+// t.Setenv could then never make a later test see a different value.
+// See openspec/changes/add-auto-apply-eligibility-gate.
+func autoApplyEligibilityEnforce() bool {
+	return os.Getenv("AUTO_APPLY_ELIGIBILITY_ENFORCE") == "1"
+}
+
+// autoApplyEligibilityMismatchPrefix is what a caller sees when the eligibility gate
+// refuses to enqueue — distinct from a generic failure, naming the reason so the
+// candidate understands why (and does not read it as a transient error worth retrying).
+const autoApplyEligibilityMismatchPrefix = "this job's requirements do not match your profile: "
+
+// eligibilityBlocker reports the first unmet work-authorization or location-and-work-mode
+// blocker for the (userID, job) pair, reusing the same deterministic evaluator and input
+// assembly the match-analysis surface already uses (h.cv.match.jobBlockers) — see
+// internal/candidate/hardconstraint. Every other blocker category (experience, education,
+// certification, language) is irrelevant here: those bear on whether the candidate is a
+// good FIT, not on whether submitting the application would misrepresent them.
+//
+// Degrades to "no blocker" (never refuses) whenever the evaluation cannot be run at all —
+// no wired profile/résumé service, no profile, no structured résumé — the same
+// "never emit a false blocker" discipline hardconstraint itself follows: absence of
+// evidence is never treated as evidence of ineligibility.
+func (h *assistantHandlers) eligibilityBlocker(ctx context.Context, userID int64, job db.Job) (hardconstraint.Blocker, bool) {
+	if h.cv == nil || h.cv.match == nil || h.profile == nil || h.profile.userProfile == nil {
+		return hardconstraint.Blocker{}, false
+	}
+	profile, err := h.profile.userProfile.Get(ctx, userID)
+	if err != nil {
+		return hardconstraint.Blocker{}, false
+	}
+	return firstEligibilityBlocker(h.cv.match.jobBlockers(ctx, userID, job, profile))
+}
+
+// firstEligibilityBlocker is the pure decision this gate makes: the first unmet
+// work-authorization or location-and-work-mode entry among the blockers the evaluator
+// already computed. Split out from eligibilityBlocker so this filtering — the actual
+// policy — is unit-testable without a résumé store or a profile service.
+func firstEligibilityBlocker(blockers []hardconstraint.Blocker) (hardconstraint.Blocker, bool) {
+	for _, b := range blockers {
+		if b.Met {
+			continue
+		}
+		if b.Category == hardconstraint.CategoryWorkAuth || b.Category == hardconstraint.CategoryLocationWorkMode {
+			return b, true
+		}
+	}
+	return hardconstraint.Blocker{}, false
+}
+
 // PostJobAutoApply is the candidate-facing trigger auto-apply-tailored-resume and
 // auto-apply-inngest-orchestration both assumed would exist: it creates one durable
 // auto-apply attempt for the caller and the named job, starting the already-built
@@ -119,6 +180,26 @@ func (h *assistantHandlers) PostJobAutoApply(c *fiber.Ctx) error {
 		return err
 	} else if applied {
 		return fiber.NewError(fiber.StatusConflict, "already applied to this job")
+	}
+
+	// Eligibility gate (openspec/changes/add-auto-apply-eligibility-gate): refuse — or, in
+	// shadow mode, merely log — enqueueing a pair the candidate's own known
+	// work-authorization or location evidence positively conflicts with. Runs before the
+	// allowance charge, like every other gate in this handler, so a refused request costs
+	// nothing.
+	if b, mismatched := h.eligibilityBlocker(c.Context(), userID, job); mismatched {
+		enforced := autoApplyEligibilityEnforce()
+		// Logged in both modes — tagged by category — so the false-positive rate among
+		// Pro candidates can be read from shadow-mode logs before enforcement is flipped
+		// on, and stays observable afterward too (see design.md's Migration Plan).
+		verb := "would refuse"
+		if enforced {
+			verb = "refused"
+		}
+		log.Printf("auto-apply: eligibility gate %s user %d job %d (%s): %s", verb, userID, job.ID, b.Category, b.Reason)
+		if enforced {
+			return fiber.NewError(fiber.StatusConflict, autoApplyEligibilityMismatchPrefix+b.Reason)
+		}
 	}
 
 	// The allowance, and it replaces the plan-tier check this route used to make: free is
