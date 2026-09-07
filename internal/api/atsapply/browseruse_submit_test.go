@@ -44,12 +44,12 @@ func newFakeBrowserUseServer(t *testing.T, resultText string) (url string, calls
 		switch {
 		case r.Method == http.MethodPost && r.URL.Path == "/runs":
 			n++
-			w.Write([]byte(`{"id":"run-1","status":"queued"}`))
+			_, _ = w.Write([]byte(`{"id":"run-1","status":"queued"}`))
 		case r.URL.Path == "/runs/run-1/status":
-			w.Write([]byte(`{"status":"completed"}`))
+			_, _ = w.Write([]byte(`{"status":"completed"}`))
 		case r.URL.Path == "/runs/run-1":
 			encoded, _ := json.Marshal(resultText)
-			w.Write([]byte(`{"id":"run-1","status":"completed","result":` + string(encoded) + `,"totalCostUsd":"0.01"}`))
+			_, _ = w.Write([]byte(`{"id":"run-1","status":"completed","result":` + string(encoded) + `,"totalCostUsd":"0.01"}`))
 		default:
 			t.Fatalf("unexpected browser-use request: %s %s", r.Method, r.URL.Path)
 		}
@@ -135,7 +135,7 @@ func TestSubmit_BrowserUseFallback_ARunThatErrorsMidFlightIsUnconfirmedNotRetrya
 		switch {
 		case r.Method == http.MethodPost && r.URL.Path == "/runs":
 			calls++
-			w.Write([]byte(`{"id":"run-1","status":"queued"}`))
+			_, _ = w.Write([]byte(`{"id":"run-1","status":"queued"}`))
 		case r.URL.Path == "/runs/run-1/status":
 			// The run WAS created — the agent may already be on the live page — but the
 			// status poll itself now fails (a transport hiccup, or the caller's own
