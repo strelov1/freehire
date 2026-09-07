@@ -64,6 +64,15 @@ jobs:
           # GITHUB_TOKEN and the pull request would never get its checks.
           token: ${{ secrets.CONTRIBUTORS_TOKEN }}
 
+      # Before anything else, because everything that can go wrong with this job is a
+      # credential and the failure it replaces named the user rather than the missing
+      # permission. Cheap: one API call, no work done yet, nothing to undo.
+      - name: Check the token can write
+        if: steps.token.outputs.present == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.CONTRIBUTORS_TOKEN }}
+        run: .github/scripts/check-contributors-token.sh
+
       - name: Set up Node
         if: steps.token.outputs.present == 'true'
         uses: actions/setup-node@v7
