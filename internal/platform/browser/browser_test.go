@@ -109,3 +109,22 @@ func TestProxyIsRedactedInErrorText(t *testing.T) {
 		t.Errorf("password leaked into the error text: %v", err)
 	}
 }
+
+// LaunchOptions and LaunchOptionsThroughProxy("") must decide the same thing — they are one
+// launch with and without a proxy, not two. They reach chromedp by different lines, so the
+// flag set they share is what this pins; option values are opaque funcs and cannot be compared.
+func TestDirectLaunchDecidesExactlyTheStealthFlags(t *testing.T) {
+	viaProxyPath, err := launchFlags("")
+	if err != nil {
+		t.Fatalf("launchFlags: %v", err)
+	}
+	direct := stealthFlags()
+	if len(viaProxyPath) != len(direct) {
+		t.Fatalf("launchFlags(\"\") has %d flags, stealthFlags has %d", len(viaProxyPath), len(direct))
+	}
+	for _, want := range direct {
+		if !hasFlag(viaProxyPath, want) {
+			t.Errorf("launchFlags(\"\") is missing %s", rendered(want))
+		}
+	}
+}

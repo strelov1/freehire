@@ -61,7 +61,7 @@ func NewSession(ctx context.Context, proxyURL string, tabs int) (*Session, error
 	if tabs < 1 {
 		tabs = 1
 	}
-	opts, err := LaunchOptions(proxyURL)
+	opts, err := LaunchOptionsThroughProxy(proxyURL)
 	if err != nil {
 		return nil, err
 	}

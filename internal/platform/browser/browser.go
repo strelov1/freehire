@@ -97,18 +97,30 @@ func redactProxy(proxyURL string) string {
 	return u.String()
 }
 
-// LaunchOptions are the chromedp allocator options every caller in this repository launches
-// a browser with. Pass an empty proxyURL for a direct launch.
-func LaunchOptions(proxyURL string) ([]chromedp.ExecAllocatorOption, error) {
+// LaunchOptions are the chromedp allocator options for a browser that egresses directly.
+// It returns no error because the only thing that can fail is parsing a proxy URL, and there
+// is none — a caller that has nothing to configure should not have an error to ignore.
+func LaunchOptions() []chromedp.ExecAllocatorOption {
+	return optionsFor(stealthFlags())
+}
+
+// LaunchOptionsThroughProxy is LaunchOptions for a browser that egresses through proxyURL.
+// An empty proxyURL means direct, so this is also the shared implementation.
+func LaunchOptionsThroughProxy(proxyURL string) ([]chromedp.ExecAllocatorOption, error) {
 	flags, err := launchFlags(proxyURL)
 	if err != nil {
 		return nil, err
 	}
+	return optionsFor(flags), nil
+}
+
+// optionsFor turns the decided flag set into chromedp's options.
+func optionsFor(flags []flag) []chromedp.ExecAllocatorOption {
 	// len == cap on the package array's slice, so the first append copies rather than
 	// writing into chromedp's own defaults.
 	opts := chromedp.DefaultExecAllocatorOptions[:]
 	for _, f := range flags {
 		opts = append(opts, chromedp.Flag(f.name, f.value))
 	}
-	return opts, nil
+	return opts
 }

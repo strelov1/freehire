@@ -29,7 +29,7 @@
 
 ## 3. `api/atsapply` takes its flags from the shared home
 
-- [ ] 3.1 Make `stealthAllocatorOptions` delegate to `browser.LaunchOptions("")`, leaving
+- [x] 3.1 Make `stealthAllocatorOptions` delegate to `browser.LaunchOptions("")`, leaving
       `newBrowserSession`, the DOM scan, the fill and the screenshots untouched. Its existing
       tests must stay green without edits.
 
