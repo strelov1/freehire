@@ -188,6 +188,7 @@ linters:
         - operacional
         - indonesien
         - profissional
+        - educacional
 
 formatters:
   enable:
