@@ -65,16 +65,19 @@ LIMIT $1;
 -- dangerous one, because the next run would then see "role not granted" for an account that
 -- has it and re-grant on every pass.
 --
--- role_granted_at is passed NULL to say the role is not held: after a revocation, and after
--- Discord answers that the member is unknown to the guild. The stamp moves either way, so a
--- member who left does not pin the queue.
+-- The caller passes a BOOLEAN, not an instant, and the statement decides the instant. That is
+-- what keeps role_granted_at meaning what its column comment says — WHEN the role was granted
+-- — under an hourly run: COALESCE holds the instant a still-granted role already had, so a
+-- settled account is examined every hour without its grant time creeping forward and quietly
+-- becoming a second copy of synced_at.
+--
+-- granted=false clears it outright: after a revocation, and after Discord answers that the
+-- member is unknown to the guild. synced_at moves either way, so a member who left does not
+-- pin the front of the queue.
 UPDATE discord_links
-SET role_granted_at = sqlc.narg(role_granted_at),
+SET role_granted_at = CASE
+        WHEN sqlc.arg(granted)::boolean THEN COALESCE(role_granted_at, now())
+        ELSE NULL
+    END,
     synced_at       = now()
 WHERE user_id = sqlc.arg(user_id);
-
--- name: DeleteDiscordLinkForUser :exec
--- Erase one user's binding. Account deletion calls this alongside its other erasures; the
--- foreign key cascades, but deletion states what it erases explicitly rather than relying on
--- a constraint to mean it.
-DELETE FROM discord_links WHERE user_id = $1;

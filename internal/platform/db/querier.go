@@ -1216,10 +1216,6 @@ type Querier interface {
 	// took one away — a double release, or a release of a charge someone else already voided,
 	// removes nothing and returns 0.
 	DeleteDebit(ctx context.Context, arg DeleteDebitParams) (int64, error)
-	// Erase one user's binding. Account deletion calls this alongside its other erasures; the
-	// foreign key cascades, but deletion states what it erases explicitly rather than relying on
-	// a constraint to mean it.
-	DeleteDiscordLinkForUser(ctx context.Context, userID int64) error
 	DeleteEmailClassificationOutbox(ctx context.Context, id int64) error
 	// Consume the code (on success) or burn it (on too many attempts). Idempotent: deleting
 	// an absent code is a no-op, so a double submit cannot fail the request.
@@ -4883,9 +4879,15 @@ type Querier interface {
 	// dangerous one, because the next run would then see "role not granted" for an account that
 	// has it and re-grant on every pass.
 	//
-	// role_granted_at is passed NULL to say the role is not held: after a revocation, and after
-	// Discord answers that the member is unknown to the guild. The stamp moves either way, so a
-	// member who left does not pin the queue.
+	// The caller passes a BOOLEAN, not an instant, and the statement decides the instant. That is
+	// what keeps role_granted_at meaning what its column comment says — WHEN the role was granted
+	// — under an hourly run: COALESCE holds the instant a still-granted role already had, so a
+	// settled account is examined every hour without its grant time creeping forward and quietly
+	// becoming a second copy of synced_at.
+	//
+	// granted=false clears it outright: after a revocation, and after Discord answers that the
+	// member is unknown to the guild. synced_at moves either way, so a member who left does not
+	// pin the front of the queue.
 	SetDiscordRoleGranted(ctx context.Context, arg SetDiscordRoleGrantedParams) error
 	// Persist the resolved link + classification and stamp classified_at + model in one
 	// write. job_id/suggested_job_id/link_source/match_confidence are nullable — an

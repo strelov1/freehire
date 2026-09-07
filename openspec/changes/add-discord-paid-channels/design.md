@@ -75,14 +75,19 @@ an `Identity` and nothing else. It gets its own package.
 `cmd/billing-sync` is the obvious home and the layering guard forbids it: `billing` is
 layer 3, `discordlink` is layer 7. It is also the separation `billing-sync`'s own doc
 comment argues for between providers — a Discord outage must not stall payment
-reconciliation. `cmd/discord-sync`, hourly, `Type=oneshot`, bounded by
-`DISCORD_SYNC_MAX_PER_RUN` (default 500) read through `worker.EnvInt64`.
+reconciliation. `cmd/discord-sync`, hourly, `Type=oneshot`, bounded by `DISCORD_SYNC_MAX_PER_RUN`
+(default 500). An unreadable value falls back and logs rather than failing the run, the
+way `cmd/billing-sync` does and unlike the one-off backfills' `worker.EnvInt64`: those run
+once under an operator's eye, this runs unattended every hour, where failing hard would
+stop reconciling everybody's role over a typo in a batch size.
 
 ### Four REST calls, no library
 
 Token exchange, `GET /users/@me`, `PUT /guilds/{g}/members/{u}`, and
-`PUT`/`DELETE /guilds/{g}/members/{u}/roles/{r}`. All four go over
-`internal/platform/safehttp`. A Discord library (`disgoorg/disgo` is the healthy Go one)
+`PUT`/`DELETE /guilds/{g}/members/{u}/roles/{r}`. All four go over a plain `http.Client`,
+not `internal/platform/safehttp`: the host is a fixed vendor endpoint from operator
+configuration rather than user input, so there is no SSRF surface to guard — the same
+reasoning `internal/engage/socialdigest` records for the digest webhook. A Discord library (`disgoorg/disgo` is the healthy Go one)
 would bring a gateway client and a command framework we would never start, to wrap four
 URLs. Revisit if we ever want a bot that reads messages.
 
@@ -107,8 +112,10 @@ whereas a link that cannot be removed is the user's.
 
 ### Absent credentials mean absent feature
 
-Modelled exactly on `TelegramBotToken`: routes 404, the public config reports it disabled so
-the SPA omits the card, the worker exits 0 without opening the pool. This is what lets the
+Modelled on `TelegramBotToken`, with one difference: the routes are not MOUNTED, so they
+404, and the SPA reads that 404 rather than a flag in the public config. One decider, not
+two — a flag saying "on" beside unmounted routes would draw a card whose every button
+failed. The worker exits 0 without opening the pool. This is what lets the
 change merge and deploy before the Discord application exists.
 
 ## Risks / Trade-offs

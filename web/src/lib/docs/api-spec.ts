@@ -2419,6 +2419,25 @@ data: {"type":"result","stop_reason":"completed"}
         curl: `curl -X DELETE "${BASE_URL}/me/telegram" -b cookies.txt`,
         responseExample: `(204 No Content)`,
       },
+      // The Discord connect and callback routes are deliberately absent: both are browser
+      // redirects that end on /my/integrations, not JSON a client can call. These two are
+      // the JSON surface. Both 404 on a deployment with no Discord application configured.
+      {
+        method: 'GET',
+        path: '/me/discord',
+        auth: 'cookie',
+        summary: 'Your Discord link status, and whether the paid role is on it.',
+        curl: `curl "${BASE_URL}/me/discord" -b cookies.txt`,
+        responseExample: `{ "data": { "enabled": true, "linked": true, "role_granted": true } }`,
+      },
+      {
+        method: 'DELETE',
+        path: '/me/discord',
+        auth: 'cookie',
+        summary: 'Unlink your Discord account, giving up the paid role with it.',
+        curl: `curl -X DELETE "${BASE_URL}/me/discord" -b cookies.txt`,
+        responseExample: `{ "data": { "linked": false } }`,
+      },
       {
         method: 'GET',
         path: '/me/webhook',

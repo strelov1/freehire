@@ -2,8 +2,10 @@
 
 - [x] 1.1 Add migration `0144_discord_links.sql`: `discord_links` with `user_id` PK
       referencing `users(id)` ON DELETE CASCADE, `discord_user_id text NOT NULL UNIQUE`,
-      `linked_at timestamptz NOT NULL DEFAULT now()`, `role_granted_at timestamptz`.
-      Verify with `pnpm check:sql`.
+      `linked_at timestamptz NOT NULL DEFAULT now()`, `role_granted_at timestamptz`, and —
+      added during implementation — `synced_at timestamptz` with an index on
+      `(synced_at NULLS FIRST, user_id)`, which is what turns a bounded run into a rotating
+      queue. Verify with `pnpm check:sql`.
 - [x] 1.2 Add queries in `internal/platform/db/queries/discord_links.sql`: link (insert),
       unlink (delete by user), get by user, list a bounded page for reconciliation joined
       to `users.pro_until`/`ultra_until`, set and clear `role_granted_at`. Run `make sqlc`.
@@ -27,7 +29,9 @@
 - [x] 3.2 `discordlink.go`: the link type and the tier→role decision (any paying tier
       warrants the role; free does not), with unit tests.
 - [x] 3.3 `client.go`: token exchange, `GET /users/@me`, `PUT /guilds/{g}/members/{u}`,
-      `PUT`/`DELETE /guilds/{g}/members/{u}/roles/{r}` over `internal/platform/safehttp`.
+      `PUT`/`DELETE /guilds/{g}/members/{u}/roles/{r}` over a plain `http.Client` — the host
+      is operator configuration, not user input, so there is no SSRF surface for
+      `internal/platform/safehttp` to guard (the precedent `internal/engage/socialdigest` sets).
       Tests against `httptest` covering `204`, `404 Unknown Member` (an absence, not an
       error), `50013 Missing Permissions` (surfaced naming the role hierarchy), and `429`
       with `Retry-After`.
@@ -43,7 +47,10 @@
 - [x] 4.4 Sync-one: grant when paying and not recorded as granted, revoke when not paying
       and recorded as granted, do nothing otherwise; clear the grant record on
       `404 Unknown Member`. Unit tests for each branch, including that a repeat run over an
-      unchanged account writes nothing.
+      unchanged account makes no Discord call. Every row IS still stamped — that is what
+      rotates the queue — but `role_granted_at` holds the instant it already had
+      (`COALESCE` in the statement), so a settled account's grant time does not creep
+      forward hourly and become a second copy of `synced_at`.
 
 ## 5. HTTP routes
 
@@ -51,8 +58,10 @@
       Discord with `identify guilds.join` and the signed state cookie. 404 when the feature
       is unconfigured.
 - [x] 5.2 `GET /api/v1/me/discord/callback`: verify state, complete the link, redirect back
-      to `/my/integrations`. 409 on a conflicting binding; refuse a missing or mismatched
-      state without writing.
+      to `/my/integrations`. A conflicting binding redirects with its OWN marker rather than
+      returning 409 — this is a top-level navigation returning from Discord, and a JSON body
+      here is rendered into the address bar. Refuse a missing or mismatched state without
+      writing.
 - [x] 5.3 `DELETE /api/v1/me/discord` behind `RequireAuth`: unlink.
 - [x] 5.4 Report link status in whatever `/my/integrations` already reads, so the card can
       render connected/disconnected.
@@ -62,8 +71,11 @@
 ## 6. Worker
 
 - [x] 6.1 `cmd/discord-sync`: `worker.Main`, no-op without credentials, bounded by
-      `DISCORD_SYNC_MAX_PER_RUN` (default 500) via `worker.EnvInt64` so an unreadable value
-      fails the run naming the value.
+      `DISCORD_SYNC_MAX_PER_RUN` (default 500). An unreadable value falls back and names the
+      value in the log rather than failing the run — `worker.EnvInt64`'s hard failure is right
+      for a one-off backfill run under an operator's eye and wrong for an unattended hourly
+      worker, where it would stop reconciling everybody over a typo. `cmd/billing-sync` makes
+      the same choice.
 - [x] 6.2 Doc comment in the style of `cmd/billing-sync`: what it reconciles, why it is its
       own binary rather than a `billing-sync` pass, and what it needs.
 - [x] 6.3 Test the run loop over a fake service: the bound is honoured and a stopped run
@@ -93,3 +105,17 @@
 - [x] 9.1 `gofmt -l .` clean, `go vet ./...`, `go test ./...`,
       `go vet -tags=integration ./...`, `golangci-lint run`.
 - [x] 9.2 `go test -tags=integration ./...` for the packages this change touches.
+
+## 10. Landed alongside (not in the original proposal)
+
+- [x] 10.1 Refresh the community invite link, which had expired, in the four places carrying
+      it: `README.md`, `web/src/lib/socialLinks.ts`, `HeaderMenu.svelte`, and the Product Hunt
+      post. Requested during implementation; the old invite was dead.
+- [x] 10.2 State the members-only channels on the Pro and Ultra cards of `/pricing`, as one
+      shared `{#snippet}`. Absent from Free deliberately: that page has no ticks and crosses
+      because a cross would say "you cannot".
+- [x] 10.3 Add the Chrome brand mark to the extension page's "Add to Chrome" button
+      (`design-system`). Unrelated to Discord and kept in its own commit.
+- [x] 10.4 Document `GET`/`DELETE /me/discord` in `web/src/lib/docs/api-spec.ts` and
+      regenerate `docs/API.md`. The connect and callback routes stay out: they are browser
+      redirects, not JSON a client can call.

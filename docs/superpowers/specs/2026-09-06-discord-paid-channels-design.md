@@ -110,7 +110,9 @@ guard). It holds:
 
 - `discordlink.go` — the domain: what a link is, what tier warrants the role.
 - `client.go` — the four Discord REST calls (token exchange, `@me`, join guild,
-  grant/revoke role) over `internal/platform/safehttp`.
+  grant/revoke role) over a plain `http.Client`. (This document said `safehttp` when it was
+  written; implementation found the precedent `internal/engage/socialdigest` sets — the host
+  is operator configuration, not user input, so there is no SSRF surface to guard.)
 - `service.go` — link, unlink, sync-one.
 - `repository.go` — the sqlc-backed store.
 
@@ -143,7 +145,7 @@ Two steps no code performs, both recorded in `deploy/AGENTS.md`:
 | User leaves the guild themselves | Next sync gets `404 Unknown Member`. Not an error: clear `role_granted_at`, keep the row, move on. |
 | Discord `429` | Honour `Retry-After`; the run ends when its bound is reached and the next hour resumes. |
 | Subscription lapses at 03:00 | Role is gone within the hour, not instantly. Accepted. |
-| Another account already linked that Discord id | `409` with a message naming the conflict. |
+| Another account already linked that Discord id | Redirect back to Integrations with its own marker. Not a 409: the callback is a top-level navigation, and a JSON body there is rendered into the address bar. |
 
 ### Testing
 

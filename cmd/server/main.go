@@ -372,34 +372,24 @@ func main() {
 	}
 }
 
-// buildGmail wires the Connect-Gmail inbox from config: it needs the Google OAuth
-// client (reused from sign-in) and the 32-byte token-encryption key. Any piece
-// missing returns (nil, nil) — the feature stays off and the server runs unchanged.
-// buildDiscordLinker wires the paid-channel feature, or returns nil when it is not
-// configured — which is how the routes come to 404 and the SPA comes to omit the card. The
-// predicate lives in config so the server, the SPA and cmd/discord-sync cannot disagree
-// about whether the feature exists.
+// buildDiscordLinker adapts discordlink.NewFromSettings to what the handler config takes.
+//
 // It returns the INTERFACE, not *discordlink.Service, and that is load-bearing: a nil
 // *Service placed in an interface field is not a nil interface, so the handler's
 // "unconfigured means unmounted" check would read false and the routes would mount onto a
-// service that panics on first use.
+// service that panics on first use. That is the whole reason this wrapper exists rather than
+// the caller assigning the constructor's result straight into the field.
 func buildDiscordLinker(cfg config.Settings, pool *pgxpool.Pool) handler.DiscordLinker {
-	if !cfg.DiscordPaidAccessConfigured() {
+	svc, ok := discordlink.NewFromSettings(cfg, db.New(pool))
+	if !ok {
 		return nil
 	}
-	return discordlink.NewService(
-		discordlink.NewPostgresStore(db.New(pool)),
-		discordlink.NewClient(discordlink.ClientConfig{
-			ClientID:     cfg.DiscordClientID,
-			ClientSecret: cfg.DiscordClientSecret,
-			BotToken:     cfg.DiscordBotToken,
-			GuildID:      cfg.DiscordGuildID,
-			PaidRoleID:   cfg.DiscordPaidRoleID,
-		}),
-		time.Now,
-	)
+	return svc
 }
 
+// buildGmail wires the Connect-Gmail inbox from config: it needs the Google OAuth
+// client (reused from sign-in) and the 32-byte token-encryption key. Any piece
+// missing returns (nil, nil) — the feature stays off and the server runs unchanged.
 func buildGmail(cfg config.Settings) (*gmailsync.Connector, *tokencrypt.Cipher) {
 	g := cfg.OAuth["google"]
 	if g.ClientID == "" || g.ClientSecret == "" || len(cfg.GmailTokenKey) != 32 {

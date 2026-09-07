@@ -75,7 +75,7 @@ func TestDiscordLinkQueries(t *testing.T) {
 
 	t.Run("relinking the same account moves it and forgets the grant", func(t *testing.T) {
 		if err := q.SetDiscordRoleGranted(ctx, SetDiscordRoleGrantedParams{
-			UserID: paying, RoleGrantedAt: pgtype.Timestamptz{Time: time.Now(), Valid: true},
+			UserID: paying, Granted: true,
 		}); err != nil {
 			t.Fatalf("SetDiscordRoleGranted: %v", err)
 		}
@@ -90,6 +90,56 @@ func TestDiscordLinkQueries(t *testing.T) {
 		}
 		if got.RoleGrantedAt.Valid {
 			t.Error("a relink points at a different Discord account, which holds no role yet")
+		}
+	})
+
+	// The bug this guards: reconciliation stamps EVERY row it examines, including the settled
+	// ones that need no Discord call. If the stamp also rewrote role_granted_at, a paying
+	// account's grant time would creep forward every hour — the column would stop meaning
+	// "when the role was granted" and become a second, redundant copy of synced_at.
+	t.Run("re-recording a held role does not move when it was granted", func(t *testing.T) {
+		if err := q.SetDiscordRoleGranted(ctx, SetDiscordRoleGrantedParams{
+			UserID: paying, Granted: true,
+		}); err != nil {
+			t.Fatalf("first grant: %v", err)
+		}
+		first, err := q.GetDiscordLink(ctx, paying)
+		if err != nil {
+			t.Fatalf("GetDiscordLink: %v", err)
+		}
+		if !first.RoleGrantedAt.Valid {
+			t.Fatal("granting must record an instant")
+		}
+
+		if err := q.SetDiscordRoleGranted(ctx, SetDiscordRoleGrantedParams{
+			UserID: paying, Granted: true,
+		}); err != nil {
+			t.Fatalf("second grant: %v", err)
+		}
+		second, err := q.GetDiscordLink(ctx, paying)
+		if err != nil {
+			t.Fatalf("GetDiscordLink: %v", err)
+		}
+		if !second.RoleGrantedAt.Time.Equal(first.RoleGrantedAt.Time) {
+			t.Errorf("role_granted_at moved %v → %v on a re-record", first.RoleGrantedAt.Time, second.RoleGrantedAt.Time)
+		}
+		// The examination stamp DOES move — that is what rotates the queue.
+		if !second.SyncedAt.Time.After(first.SyncedAt.Time) {
+			t.Error("synced_at did not move, so the row would pin the front of the queue")
+		}
+
+		// And a revocation clears the grant outright.
+		if err := q.SetDiscordRoleGranted(ctx, SetDiscordRoleGrantedParams{
+			UserID: paying, Granted: false,
+		}); err != nil {
+			t.Fatalf("revoke: %v", err)
+		}
+		after, err := q.GetDiscordLink(ctx, paying)
+		if err != nil {
+			t.Fatalf("GetDiscordLink: %v", err)
+		}
+		if after.RoleGrantedAt.Valid {
+			t.Error("a revoked role must leave no grant instant behind")
 		}
 	})
 
@@ -111,7 +161,7 @@ func TestDiscordLinkQueries(t *testing.T) {
 		// Stamping the row it returned must move it to the back of the queue, so a bounded
 		// run that cannot reach everybody still reaches everybody eventually.
 		if err := q.SetDiscordRoleGranted(ctx, SetDiscordRoleGrantedParams{
-			UserID: first[0].UserID, RoleGrantedAt: pgtype.Timestamptz{},
+			UserID: first[0].UserID, Granted: false,
 		}); err != nil {
 			t.Fatalf("stamp: %v", err)
 		}

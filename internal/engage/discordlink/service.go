@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/strelov1/freehire/internal/ai/plan"
+	"github.com/strelov1/freehire/internal/platform/config"
+	"github.com/strelov1/freehire/internal/platform/db"
 )
 
 var (
@@ -70,6 +72,31 @@ func NewService(store Store, discord Discord, now func() time.Time) *Service {
 		now = time.Now
 	}
 	return &Service{store: store, discord: discord, now: now}
+}
+
+// NewFromSettings builds the production service, reporting false when the feature is not
+// configured. Both entrypoints — the server's route wiring and cmd/discord-sync — go through
+// it, so they cannot drift apart about which credentials the client gets or which clock it
+// reads.
+//
+// It returns a CONCRETE *Service and a separate bool rather than a nil interface, because a
+// nil *Service assigned into an interface field is not a nil interface: the caller that
+// stores this behind one has to see the bool to know there is nothing there.
+func NewFromSettings(cfg config.Settings, q *db.Queries) (*Service, bool) {
+	if !cfg.DiscordPaidAccessConfigured() {
+		return nil, false
+	}
+	return NewService(
+		NewPostgresStore(q),
+		NewClient(ClientConfig{
+			ClientID:     cfg.DiscordClientID,
+			ClientSecret: cfg.DiscordClientSecret,
+			BotToken:     cfg.DiscordBotToken,
+			GuildID:      cfg.DiscordGuildID,
+			PaidRoleID:   cfg.DiscordPaidRoleID,
+		}),
+		time.Now,
+	), true
 }
 
 // Status reports the account's binding, or ErrNotLinked.

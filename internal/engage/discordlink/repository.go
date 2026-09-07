@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/platform/pgerr"
@@ -104,12 +103,13 @@ func (s *PostgresStore) ListToSync(ctx context.Context, limit int32) ([]Candidat
 	return out, nil
 }
 
+// SetRoleGranted records whether the role is held and that the binding was just examined.
+//
+// It passes the fact, not an instant: the statement decides when, so a role that was already
+// granted keeps the instant it was granted at instead of having it pushed forward by every
+// hourly pass. See the query's own comment.
 func (s *PostgresStore) SetRoleGranted(ctx context.Context, userID int64, granted bool) error {
-	var at pgtype.Timestamptz
-	if granted {
-		at = pgtype.Timestamptz{Time: time.Now(), Valid: true}
-	}
 	return s.q.SetDiscordRoleGranted(ctx, db.SetDiscordRoleGrantedParams{
-		UserID: userID, RoleGrantedAt: at,
+		UserID: userID, Granted: granted,
 	})
 }

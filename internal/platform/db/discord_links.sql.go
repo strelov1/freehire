@@ -11,18 +11,6 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const deleteDiscordLinkForUser = `-- name: DeleteDiscordLinkForUser :exec
-DELETE FROM discord_links WHERE user_id = $1
-`
-
-// Erase one user's binding. Account deletion calls this alongside its other erasures; the
-// foreign key cascades, but deletion states what it erases explicitly rather than relying on
-// a constraint to mean it.
-func (q *Queries) DeleteDiscordLinkForUser(ctx context.Context, userID int64) error {
-	_, err := q.db.Exec(ctx, deleteDiscordLinkForUser, userID)
-	return err
-}
-
 const getDiscordLink = `-- name: GetDiscordLink :one
 SELECT user_id, discord_user_id, linked_at, role_granted_at, synced_at
 FROM discord_links
@@ -142,14 +130,17 @@ func (q *Queries) ListDiscordLinksToSync(ctx context.Context, limit int32) ([]Li
 
 const setDiscordRoleGranted = `-- name: SetDiscordRoleGranted :exec
 UPDATE discord_links
-SET role_granted_at = $1,
+SET role_granted_at = CASE
+        WHEN $1::boolean THEN COALESCE(role_granted_at, now())
+        ELSE NULL
+    END,
     synced_at       = now()
 WHERE user_id = $2
 `
 
 type SetDiscordRoleGrantedParams struct {
-	RoleGrantedAt pgtype.Timestamptz `json:"role_granted_at"`
-	UserID        int64              `json:"user_id"`
+	Granted bool  `json:"granted"`
+	UserID  int64 `json:"user_id"`
 }
 
 // Record the outcome of examining one binding: whether the role is now held, and that it was
@@ -161,11 +152,17 @@ type SetDiscordRoleGrantedParams struct {
 // dangerous one, because the next run would then see "role not granted" for an account that
 // has it and re-grant on every pass.
 //
-// role_granted_at is passed NULL to say the role is not held: after a revocation, and after
-// Discord answers that the member is unknown to the guild. The stamp moves either way, so a
-// member who left does not pin the queue.
+// The caller passes a BOOLEAN, not an instant, and the statement decides the instant. That is
+// what keeps role_granted_at meaning what its column comment says — WHEN the role was granted
+// — under an hourly run: COALESCE holds the instant a still-granted role already had, so a
+// settled account is examined every hour without its grant time creeping forward and quietly
+// becoming a second copy of synced_at.
+//
+// granted=false clears it outright: after a revocation, and after Discord answers that the
+// member is unknown to the guild. synced_at moves either way, so a member who left does not
+// pin the front of the queue.
 func (q *Queries) SetDiscordRoleGranted(ctx context.Context, arg SetDiscordRoleGrantedParams) error {
-	_, err := q.db.Exec(ctx, setDiscordRoleGranted, arg.RoleGrantedAt, arg.UserID)
+	_, err := q.db.Exec(ctx, setDiscordRoleGranted, arg.Granted, arg.UserID)
 	return err
 }
 

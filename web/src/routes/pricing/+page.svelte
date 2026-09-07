@@ -215,7 +215,19 @@
     </div>
   {/if}
 
-  <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+  <!-- The one thing on this page that is NOT a daily amount, so it cannot be a row in the
+     allowance lists: free does not get a smaller share of it, it gets none. It is rendered on
+     the paid cards and simply absent from the free one, because a crossed-out row would say
+     "you cannot" — the thing this page is built to never say. A snippet, so the two paid
+     cards cannot drift apart about how the one perk they share is worded. -->
+{#snippet discordPerk()}
+  <p class="flex items-baseline gap-2 text-sm">
+    <ProviderIcon provider="discord" class="size-4 shrink-0 translate-y-0.5" />
+    <span class="text-muted-foreground">Members-only channels on the community Discord.</span>
+  </p>
+{/snippet}
+
+<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
     <!-- Free -->
     <section class="flex flex-col gap-4 rounded-xl border border-border p-6">
       <div class="flex flex-col gap-1">
@@ -258,17 +270,7 @@
         {/each}
       </ul>
 
-      <!-- The one thing on this page that is NOT a daily amount, so it cannot be a row in
-           the list above: free does not get a smaller share of it, it does not get it. It
-           is stated on the paid cards and simply absent from the free one, because a
-           crossed-out row would say "you cannot" — which is the thing this page is built
-           to never say. -->
-      <p class="flex items-baseline gap-2 text-sm">
-        <ProviderIcon provider="discord" class="size-4 shrink-0 translate-y-0.5" />
-        <span class="text-muted-foreground">
-          Members-only channels on the community Discord.
-        </span>
-      </p>
+      {@render discordPerk()}
 
       {#if chosen}
         {#if isAuthenticated()}
@@ -356,13 +358,7 @@
           {/each}
         </ul>
 
-        <!-- The Discord line, for the reason the Pro card states. -->
-        <p class="flex items-baseline gap-2 text-sm">
-          <ProviderIcon provider="discord" class="size-4 shrink-0 translate-y-0.5" />
-          <span class="text-muted-foreground">
-            Members-only channels on the community Discord.
-          </span>
-        </p>
+        {@render discordPerk()}
 
         {#if isAuthenticated()}
           <button

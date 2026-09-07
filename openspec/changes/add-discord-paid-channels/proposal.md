@@ -48,5 +48,8 @@ webhook, which this does not touch.
   `deploy/AGENTS.md` and the systemd unit + timer under `deploy/`.
 - **External:** a Discord application with a bot must be created and invited to the
   guild by hand before any of this does anything on production.
-- **Dependencies:** none added. The four Discord REST calls go over
-  `internal/platform/safehttp`; no Discord library and no gateway connection.
+- **Dependencies:** none added. The four Discord REST calls go over a plain `http.Client`
+  — the host is a fixed vendor endpoint from operator configuration rather than user
+  input, so there is no SSRF surface for `internal/platform/safehttp` to guard, which is
+  the reasoning `internal/engage/socialdigest` already records for the digest webhook. No
+  Discord library and no gateway connection.

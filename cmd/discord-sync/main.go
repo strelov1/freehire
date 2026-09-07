@@ -27,7 +27,6 @@ import (
 	"log"
 	"os"
 	"strconv"
-	"time"
 
 	"github.com/strelov1/freehire/internal/engage/discordlink"
 	"github.com/strelov1/freehire/internal/platform/config"
@@ -64,17 +63,14 @@ func run() int {
 	}
 	defer cleanup()
 
-	svc := discordlink.NewService(
-		discordlink.NewPostgresStore(db.New(pool)),
-		discordlink.NewClient(discordlink.ClientConfig{
-			ClientID:     cfg.DiscordClientID,
-			ClientSecret: cfg.DiscordClientSecret,
-			BotToken:     cfg.DiscordBotToken,
-			GuildID:      cfg.DiscordGuildID,
-			PaidRoleID:   cfg.DiscordPaidRoleID,
-		}),
-		time.Now,
-	)
+	// The gate above already refused an unconfigured deployment, so this is necessarily true.
+	// Checked anyway rather than discarded: the day the two conditions drift apart, a
+	// discarded bool is a nil dereference and a checked one is a clean exit.
+	svc, ok := discordlink.NewFromSettings(cfg, db.New(pool))
+	if !ok {
+		log.Print("discord-sync: the configuration gate and the constructor disagree — nothing done")
+		return 1
+	}
 
 	stats, err := svc.Sync(ctx, maxPerRun())
 	if err != nil {

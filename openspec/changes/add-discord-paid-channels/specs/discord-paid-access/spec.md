@@ -21,8 +21,14 @@ be accepted, because a link changes what an account is rather than what it can r
 
 - **WHEN** the callback resolves a Discord user id already bound to a different freehire
   account
-- **THEN** the system refuses the link with HTTP 409 and a message naming the conflict, and
-  the existing binding is left untouched
+- **THEN** the system refuses the link, leaves the existing binding untouched, and returns
+  the browser to the integrations page carrying a marker distinct from the generic failure —
+  this conflict is the user's to resolve, and a message that read "try again" would leave
+  them retrying forever
+
+The refusal is a redirect rather than an HTTP 409 because the callback is a top-level
+navigation returning from Discord: a JSON error body here is rendered into the address bar
+and strands the user with no way forward.
 
 #### Scenario: An API key is presented instead of a session
 
@@ -103,9 +109,12 @@ guild — they were invited, and eviction is a moderation act rather than a bill
 ### Requirement: The feature is absent without credentials
 
 The system SHALL treat incomplete Discord credentials as the feature being switched off: the
-link routes SHALL respond 404, the public configuration SHALL report it disabled so the SPA
-omits the card, and the reconciliation worker SHALL exit successfully without opening a
-database connection.
+link routes SHALL NOT be mounted at all and so SHALL respond 404, the SPA SHALL omit the card,
+and the reconciliation worker SHALL exit successfully without opening a database connection.
+
+The SPA learns this from the 404 on the status route rather than from a flag in the public
+configuration. One decider, not two: a flag that said "on" while the routes were unmounted
+would draw a card whose every button failed.
 
 #### Scenario: No bot token configured
 
