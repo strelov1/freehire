@@ -1,6 +1,9 @@
 package hardconstraint
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func intp(v int) *int    { return &v }
 func boolp(v bool) *bool { return &v }
@@ -113,6 +116,54 @@ func TestCertificationCategory(t *testing.T) {
 		bs := Evaluate(JobRequirements{RequiredCertifications: []string{"pmp"}}, CVEvidence{})
 		if _, ok := find(bs, CategoryCertification); ok {
 			t.Error("certification must be skipped when the résumé carries no recognized certification")
+		}
+	})
+	// The two sides of one dictionary read it differently: the job resolved by word, the
+	// résumé by the WHOLE string. A résumé entry is almost never exactly an alias — it
+	// carries a year, an issuer or the acronym in brackets — so the credential the
+	// candidate holds resolved to nothing while a neighbouring entry resolved fine, which
+	// meant the len(held)==0 skip did not fire and they got a hard blocker and a 60 cap
+	// for a certification they hold. Each of these returned ("", false) from Canonical.
+	t.Run("a decorated résumé entry still meets the requirement", func(t *testing.T) {
+		cases := map[string]string{
+			"comptia-security-plus":   "CompTIA Security+ (2022)",
+			"cka":                     "Certified Kubernetes Administrator (CKA)",
+			"aws-solutions-architect": "AWS Certified Solutions Architect – Associate",
+		}
+		for required, held := range cases {
+			t.Run(held, func(t *testing.T) {
+				bs := Evaluate(
+					JobRequirements{RequiredCertifications: []string{required}},
+					// A second, plainly-resolving entry, so the both-sides-present skip
+					// cannot be what hides the defect.
+					CVEvidence{Certifications: []string{held, "CISSP"}},
+				)
+				b, ok := find(bs, CategoryCertification)
+				if !ok || !b.Met {
+					t.Fatalf("want met, got %+v ok=%v", b, ok)
+				}
+			})
+		}
+	})
+	// Reason and Action are rendered verbatim on the job page and go verbatim into all
+	// three stages of the analysis prompt, so the slug reached a person's eyes.
+	t.Run("the blocker names the credential, not its slug", func(t *testing.T) {
+		bs := Evaluate(
+			JobRequirements{RequiredCertifications: []string{"gcp-professional-cloud-architect"}},
+			CVEvidence{Certifications: []string{"CISSP"}},
+		)
+		b, ok := find(bs, CategoryCertification)
+		if !ok {
+			t.Fatal("want a certification blocker")
+		}
+		if strings.Contains(b.Reason, "gcp-professional-cloud-architect") {
+			t.Errorf("Reason carries the slug: %q", b.Reason)
+		}
+		if !strings.Contains(b.Reason, "Google Professional Cloud Architect") {
+			t.Errorf("Reason does not name the credential: %q", b.Reason)
+		}
+		if strings.Contains(b.Action, "gcp-professional-cloud-architect") {
+			t.Errorf("Action carries the slug: %q", b.Action)
 		}
 	})
 }
