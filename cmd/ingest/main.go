@@ -102,6 +102,16 @@ func run() int {
 		log.Printf("config: %v", err)
 		return 1
 	}
+	// Rewire the providers whose pages are served only to a client that ran JavaScript onto a
+	// headless browser (see sources.ApplyBrowserEgress). Nothing starts here: the browser is
+	// built on the first fetch, so a run for any other provider — which is almost every run,
+	// since this worker crawls one — never pays for a Chrome it will not use.
+	closeBrowser, err := sources.ApplyBrowserEgress(registry)
+	if err != nil {
+		log.Printf("config: %v", err)
+		return 1
+	}
+	defer closeBrowser()
 
 	// Resolved before the DB is touched, like every other config read here: a bad value should
 	// stop the run, not produce a quiet ordinary crawl where a repair was intended.

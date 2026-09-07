@@ -185,8 +185,13 @@ func ApplyProxyEgress(registry map[string]Source) error {
 // 251 KB of real HTML from a residential IP, so no JS challenge is involved. It is 403 from
 // the prod datacenter IP AND 403 through SOURCES_PROXY_URL, whose exit that edge classifies
 // as datacenter too — adding bayt here today would route it through an IP it already
-// refuses. It belongs here the day a genuinely residential pool exists, alongside echojobs
-// (Vercel's bot firewall, same measurement, same answer) and wantedkr.
+// refuses. It belongs here the day a genuinely residential pool exists, alongside wantedkr.
+//
+// echojobs used to be named here for the same reason and no longer is: measured 2026-09-07,
+// its obstacle is a JS challenge rather than an IP classification, and the EXISTING proxy
+// serves that challenge rather than refusing outright. What it needed was something to
+// execute the JavaScript, which is browserProviders — see browsertier.go. A fingerprint does
+// not help there; only a browser does.
 var proxiedFingerprintProviders = map[string]func(*fingerprintHTTP) Source{
 	"gulftalent": func(c *fingerprintHTTP) Source { return NewGulfTalent(c) },
 }

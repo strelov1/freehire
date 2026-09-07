@@ -35,25 +35,25 @@
 
 ## 4. `sources` — the browser-backed getter
 
-- [ ] 4.1 Write the failing integration test: a `browserClient` over a real session satisfies
+- [x] 01 Write the failing integration test: a `browserClient` over a real session satisfies
       `XMLGetter` + `HTMLGetter`, decoding XML and parsing HTML served by a local server.
-- [ ] 4.2 Implement it, mapping a non-2xx status to an error that NAMES the status, so a
+- [x] 02 Implement it, mapping a non-2xx status to an error that NAMES the status, so a
       caller can still tell `404` from `403`.
 
 ## 5. `echojobs` opts in
 
-- [ ] 5.1 Write the failing test for the registry: with a proxy configured, `echojobs`
+- [x] 01 Write the failing test for the registry: with a proxy configured, `echojobs`
       resolves to the browser-backed adapter; with none, it resolves to the plain one and no
       browser is constructed.
-- [ ] 5.2 Add `browserProviders` beside `proxiedProviders`, one entry, in the same shape, with
+- [x] 02 Add `browserProviders` beside `proxiedProviders`, one entry, in the same shape, with
       the doc stating the measured reason both halves are required.
 
 ## 6. A crawl that reads nothing of what it listed fails
 
-- [ ] 6.1 Write the failing test in `echojobs_test.go`: a sitemap yielding candidates whose
+- [x] 01 Write the failing test in `echojobs_test.go`: a sitemap yielding candidates whose
       every detail fetch fails returns an ERROR; a sitemap yielding no candidates at all
       still returns success with no jobs.
-- [ ] 6.2 Implement the guard in `FetchNew`, with the comment explaining that the pipeline
+- [x] 02 Implement the guard in `FetchNew`, with the comment explaining that the pipeline
       cannot make this call because a dropped posting never reaches it.
 
 ## 7. Ship

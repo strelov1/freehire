@@ -100,13 +100,19 @@ func echojobsJobHTML(fields string) string {
 // one shard (freshness-window cutoff, shard-failure partial results) wires its own.
 const echojobsShard1URL = "https://echojobs.io/sitemap-jobs/1.xml"
 
-// echojobsSingleShardRoutes builds the xmlRoutes for a fake carrying one shard with one
-// freshly-dated posting — the common setup most detail-mapping tests need, so they need not
-// each repeat the sitemap index/shard plumbing.
-func echojobsSingleShardRoutes(slug string) map[string]string {
+// echojobsSingleShardRoutes builds the xmlRoutes for a fake carrying one shard with the given
+// freshly-dated postings — the common setup most detail-mapping tests need, so they need not
+// each repeat the sitemap index/shard plumbing. Variadic so a test can list several postings,
+// or none at all (a source with genuinely nothing to offer).
+func echojobsSingleShardRoutes(slugs ...string) map[string]string {
+	now := time.Now().UTC().Format(time.RFC3339)
+	entries := make([]echojobsShardEntry, 0, len(slugs))
+	for _, slug := range slugs {
+		entries = append(entries, echojobsShardEntry{slug, now})
+	}
 	return map[string]string{
 		echojobsSitemapURL: echojobsSitemapIndexXML(echojobsShard1URL),
-		echojobsShard1URL:  echojobsShardXML(echojobsShardEntry{slug, time.Now().UTC().Format(time.RFC3339)}),
+		echojobsShard1URL:  echojobsShardXML(entries...),
 	}
 }
 
@@ -181,6 +187,10 @@ func TestEchojobsFetchNewSkipsDetailForSeenPosting(t *testing.T) {
 // A failed detail request drops just that posting: unlike the old list+detail split, the
 // sitemap carries no fields a list-only Job could fall back to, so there is nothing left to
 // ingest for it this run.
+//
+// And when the dropped posting was the ONLY candidate, the run also reports an error: it
+// listed something and read none of it. See the guard's own doc for why that is a board
+// failure rather than an empty success.
 func TestEchojobsFetchNewDetailFailureDropsPosting(t *testing.T) {
 	http := &echojobsFakeHTTP{
 		xmlRoutes: echojobsSingleShardRoutes("acme-swe"),
@@ -188,8 +198,8 @@ func TestEchojobsFetchNewDetailFailureDropsPosting(t *testing.T) {
 	}
 
 	jobs, err := echojobs{http: http}.FetchNew(context.Background(), CompanyEntry{}, func(string) bool { return false })
-	if err != nil {
-		t.Fatalf("FetchNew: %v", err)
+	if err == nil {
+		t.Fatal("want an error: every candidate was listed and none was read")
 	}
 	if len(jobs) != 0 {
 		t.Fatalf("want 0 jobs (detail failed, no list-only fallback), got %+v", jobs)
@@ -207,8 +217,8 @@ func TestEchojobsFetchNewMissingJSONLDDropsPosting(t *testing.T) {
 	}
 
 	jobs, err := echojobs{http: http}.FetchNew(context.Background(), CompanyEntry{}, func(string) bool { return false })
-	if err != nil {
-		t.Fatalf("FetchNew: %v", err)
+	if err == nil {
+		t.Fatal("want an error: the only candidate carried no JobPosting, so nothing was read")
 	}
 	if len(jobs) != 0 {
 		t.Fatalf("want 0 jobs, got %+v", jobs)
@@ -445,5 +455,64 @@ func TestEchojobsFetchHydratesEveryPosting(t *testing.T) {
 func TestEchojobsProvider(t *testing.T) {
 	if got := (echojobs{}).Provider(); got != "echojobs" {
 		t.Errorf("Provider() = %q, want echojobs", got)
+	}
+}
+
+// The guard that would have caught freehire#2588 on day two rather than after 19 days. A
+// dropped posting never reaches the pipeline, so a total outage and an empty crawl are
+// otherwise the same result: ingested=0, failed=0, exit 0, green unit.
+func TestEchojobsFetchNewFailsWhenEveryCandidateIsUnreadable(t *testing.T) {
+	http := &echojobsFakeHTTP{
+		xmlRoutes: echojobsSingleShardRoutes("acme-swe", "acme-sre", "acme-pm"),
+		htmlErr: map[string]bool{
+			echojobsJobURL("acme-swe"): true,
+			echojobsJobURL("acme-sre"): true,
+			echojobsJobURL("acme-pm"):  true,
+		},
+	}
+
+	jobs, err := echojobs{http: http}.FetchNew(context.Background(), CompanyEntry{}, func(string) bool { return false })
+	if err == nil {
+		t.Fatal("want an error when the sitemap listed postings and none could be read")
+	}
+	if len(jobs) != 0 {
+		t.Errorf("want no jobs alongside the error, got %+v", jobs)
+	}
+}
+
+// One unreadable posting among several readable ones is ordinary attrition, not an outage:
+// the run keeps what it got and reports success. Getting this wrong in the other direction
+// would fail a board every time a single page happened to be malformed.
+func TestEchojobsFetchNewToleratesSomeUnreadableCandidates(t *testing.T) {
+	http := &echojobsFakeHTTP{
+		xmlRoutes: echojobsSingleShardRoutes("acme-swe", "acme-broken"),
+		htmlRoutes: map[string]string{
+			echojobsJobURL("acme-swe"): echojobsJobHTML(`"title":"Engineer",` +
+				`"hiringOrganization":{"@type":"Organization","name":"Acme"},` +
+				`"description":"<p>Role.</p>"`),
+		},
+		htmlErr: map[string]bool{echojobsJobURL("acme-broken"): true},
+	}
+
+	jobs, err := echojobs{http: http}.FetchNew(context.Background(), CompanyEntry{}, func(string) bool { return false })
+	if err != nil {
+		t.Fatalf("FetchNew: %v", err)
+	}
+	if len(jobs) != 1 {
+		t.Fatalf("want the one readable posting, got %+v", jobs)
+	}
+}
+
+// A source that genuinely has nothing to offer still succeeds — there were no candidates, so
+// nothing was missed. The guard must not turn "quiet" into "broken".
+func TestEchojobsFetchNewSucceedsWithNoCandidatesAtAll(t *testing.T) {
+	http := &echojobsFakeHTTP{xmlRoutes: echojobsSingleShardRoutes()}
+
+	jobs, err := echojobs{http: http}.FetchNew(context.Background(), CompanyEntry{}, func(string) bool { return false })
+	if err != nil {
+		t.Fatalf("FetchNew: %v", err)
+	}
+	if len(jobs) != 0 {
+		t.Fatalf("want no jobs, got %+v", jobs)
 	}
 }
