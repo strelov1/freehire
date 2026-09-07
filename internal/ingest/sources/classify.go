@@ -2,7 +2,7 @@ package sources
 
 // Provider-kind taxonomy for the public status view. It reuses the adapter markers
 // that already exist for other purposes rather than inventing a parallel labelling:
-//   - an aggregator adapter crawls many companies (jobstash, justjoin, …);
+//   - an aggregator adapter crawls many companies (jobstash, nofluffjobs, …);
 //   - a boardless non-aggregator serves a single company — its own careers page
 //     (apple, google, sber, …);
 //   - anything with a per-tenant board is a multi-tenant ATS platform

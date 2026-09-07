@@ -36,7 +36,7 @@ import (
 //
 // Detail is the expensive fan-out (one request per posting over ~10k postings), so the adapter is
 // a HydratingSource: FetchNew fetches a posting's detail only when the catalogue does not already
-// have it, refreshing a seen posting's liveness without a detail request (see justjoin).
+// have it, refreshing a seen posting's liveness without a detail request (see nofluffjobs).
 //
 // The detail endpoint rate-limits under sustained load: a cold-start crawl that fetches all ~10k
 // details trips a 403 after a few hundred requests. So hydration is GRADUAL — the first 403 latches

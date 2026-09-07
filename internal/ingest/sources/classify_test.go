@@ -14,7 +14,7 @@ func TestProviderKind(t *testing.T) {
 		"apple":                     KindCompany,
 		"google":                    KindCompany,
 		"jobstash":                  KindAggregator,
-		"justjoin":                  KindAggregator,
+		"nofluffjobs":               KindAggregator,
 		"definitely-not-a-provider": KindOther,
 	}
 	reg := Taxonomy()

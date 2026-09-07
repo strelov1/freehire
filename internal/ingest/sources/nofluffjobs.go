@@ -14,10 +14,10 @@ import (
 	"github.com/strelov1/freehire/internal/dict/vocab"
 )
 
-// nofluffjobs adapts nofluffjobs.com, a Polish/CEE IT job board (the complement to justjoin).
+// nofluffjobs adapts nofluffjobs.com, a Polish/CEE IT job board.
 // Boardless (one public API, no per-tenant board) and multi-company, so it stays in the source
 // facet and takes each posting's company from the feed. The listing carries structured facets but
-// no description, so — like justjoin — the description is hydrated per posting from a detail
+// no description, so the description is hydrated per posting from a detail
 // endpoint, and only for postings not already ingested (HydratingSource.FetchNew).
 type nofluffjobs struct {
 	http nofluffjobsHTTP
