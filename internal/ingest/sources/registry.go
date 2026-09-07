@@ -131,9 +131,8 @@ func All(c HTTPClient) map[string]Source {
 		NewRecruitee(c),
 		NewSmartRecruiters(c),
 		NewISmartRecruit(c),
-		// Keka: Indian HR/ATS SaaS, board = subdomain; a per-org GUID resolved from the
-		// board's bootstrap page unlocks a single request for every open posting, fully
-		// detailed, from the platform's own embedded-jobs widget API.
+		// Keka: Indian HR/ATS SaaS, board = subdomain; one request to the platform's own
+		// job-listing API returns every open posting, fully detailed.
 		NewKeka(c),
 		NewGupy(c),
 		NewSolides(c),

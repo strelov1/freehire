@@ -12,7 +12,7 @@ func TestKekaProvider(t *testing.T) {
 	}
 }
 
-// Keka earns fullBoardListing because the embedded-jobs API returns the board's whole
+// Keka earns fullBoardListing because the jobs-active API returns the board's whole
 // open-postings array in one request.
 func TestKekaMarkers(t *testing.T) {
 	s := NewKeka(nil)
@@ -37,35 +37,19 @@ func TestKekaRegisteredInAll(t *testing.T) {
 	}
 }
 
-const kekaBootstrapHTML = `<!DOCTYPE html><html><body><script>
-fetch('/ats/documents/41f734d9-0db2-420a-b416-461b07fc97ac/careerportal/482c655a9a3c4c35b75766a5e369cda2.html')
-</script></body></html>`
-
-// A missing org GUID on the bootstrap page must abort the whole Fetch — the board's identity
-// cannot be resolved without it.
-func TestKekaFetchFailsWithoutAnOrgID(t *testing.T) {
-	fake := (&routedHTTP{}).route("/careers/", `<html><body>no fetch here</body></html>`)
-	if _, err := NewKeka(fake).Fetch(context.Background(), CompanyEntry{Board: "acme"}); err == nil {
-		t.Fatal("Fetch succeeded despite no resolvable org id")
-	}
-}
-
 // A listing fetch failure must abort the whole Fetch, never return a partial result as
 // success — the property TestKekaMarkers' fullBoardListing claim rests on.
 func TestKekaFetchPropagatesAListingError(t *testing.T) {
-	fake := (&routedHTTP{}).route("/careers/", kekaBootstrapHTML)
+	fake := &routedHTTP{}
 	if _, err := NewKeka(fake).Fetch(context.Background(), CompanyEntry{Board: "acme"}); err == nil {
 		t.Fatal("Fetch succeeded despite a listing error")
 	}
 }
 
 func TestKekaFetchListsPostings(t *testing.T) {
-	// routedHTTP matches the FIRST route whose match string is a substring of the requested
-	// URL, and "/careers/" is itself a substring of every other route below — so the specific
-	// routes must be registered first, or they'd never be reached.
 	fake := (&routedHTTP{}).
 		route("/careers/api/organization/default/careerportalinfo", `{"name": "Acme Technologies"}`).
-		route("/careers/api/embedjobs/default/active/41f734d9-0db2-420a-b416-461b07fc97ac", `[
+		route("/careers/api/jobs/default/active", `[
 			{"id": 160039, "title": "Sr. Solution Architect",
 			 "description": "<div>Do the work.</div>",
 			 "jobLocations": [{"city": "Hyderabad", "state": "TG", "countryName": "India"}],
@@ -74,8 +58,7 @@ func TestKekaFetchListsPostings(t *testing.T) {
 			 "description": "<div>Assist the team.</div>",
 			 "jobLocations": [],
 			 "jobType": 1, "publishedOn": "2026-05-01T00:00:00Z"}
-		]`).
-		route("/careers/", kekaBootstrapHTML)
+		]`)
 
 	jobs, err := NewKeka(fake).Fetch(context.Background(), CompanyEntry{
 		Company: "Acme", Provider: "keka", Board: "acme",
@@ -131,11 +114,10 @@ func TestKekaFetchListsPostings(t *testing.T) {
 // configured Company name stands in.
 func TestKekaFetchFallsBackToConfiguredCompanyNameOnInfoFailure(t *testing.T) {
 	fake := (&routedHTTP{}).
-		route("/careers/api/embedjobs/default/active/41f734d9-0db2-420a-b416-461b07fc97ac", `[
+		route("/careers/api/jobs/default/active", `[
 			{"id": 1, "title": "Engineer", "description": "<div>Work.</div>",
 			 "jobLocations": [], "jobType": 2, "publishedOn": "2026-01-01T00:00:00Z"}
-		]`).
-		route("/careers/", kekaBootstrapHTML)
+		]`)
 		// no careerportalinfo route: routedHTTP fails any unrouted URL
 
 	jobs, err := NewKeka(fake).Fetch(context.Background(), CompanyEntry{
