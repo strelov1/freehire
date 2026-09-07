@@ -131,6 +131,9 @@ func All(c HTTPClient) map[string]Source {
 		NewRecruitee(c),
 		NewSmartRecruiters(c),
 		NewISmartRecruit(c),
+		// Keka: Indian HR/ATS SaaS, board = subdomain; one request to the platform's own
+		// job-listing API returns every open posting, fully detailed.
+		NewKeka(c),
 		NewGupy(c),
 		NewSolides(c),
 		NewPersonio(c),
