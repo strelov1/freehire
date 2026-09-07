@@ -3358,12 +3358,17 @@ type Querier interface {
 	ListPushTokensForUser(ctx context.Context, userID int64) ([]UserPushToken, error)
 	// The session's most recent messages, newest first — the bounded counterpart of
 	// ListAssistantMessages, for rebuilding the model's own history every turn. Runner.trim()
-	// only ever keeps the tail (HistoryLimit, default 60) of what ListAssistantMessages
-	// returns; fetching and JSON-decoding the WHOLE transcript first, only to discard
-	// everything but the tail, cost time and memory proportional to total session length
-	// (autopilot runs, long-lived chat/tailoring sessions can accumulate hundreds of rows)
-	// instead of the fixed window actually used. The caller reverses these rows back to
-	// ascending seq order before handing them to trim()/Conversation().
+	// only ever keeps a bounded window of what ListAssistantMessages returns; fetching and
+	// JSON-decoding the WHOLE transcript first, only to discard everything but that window,
+	// cost time and memory proportional to total session length (autopilot runs, long-lived
+	// chat/tailoring sessions can accumulate hundreds of rows) instead of the bounded window
+	// actually used. The caller reverses these rows back to ascending seq order before
+	// handing them to trim()/Conversation().
+	//
+	// The LIMIT the caller passes is HistoryLimit PLUS one block (Runner.history), not
+	// HistoryLimit: trim cuts the window at a block boundary so the replayed prefix stays
+	// byte-identical between turns and the provider's prompt cache can hit it, and the widest
+	// window such a boundary leaves is just under one block past the limit.
 	ListRecentAssistantMessages(ctx context.Context, arg ListRecentAssistantMessagesParams) ([]AssistantMessage, error)
 	// Keyset continuation of the global feed: rows strictly older than the cursor.
 	ListRecentOpenThreadsAfter(ctx context.Context, arg ListRecentOpenThreadsAfterParams) ([]ListRecentOpenThreadsAfterRow, error)

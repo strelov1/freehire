@@ -137,6 +137,20 @@ func (r *Runner) With(m Model) *Runner {
 const (
 	defaultMaxSteps     = 8
 	defaultHistoryLimit = 60
+	// historyBlock caps how far the replayed window's OLDEST message moves at a time.
+	//
+	// A window of "the newest HistoryLimit messages" slides by one every turn, so the
+	// bytes the model is sent after the system prompt differ on every request. Prompt
+	// caching is a prefix match, so that costs the whole conversation at full price on
+	// every turn: measured on production the assistant read 30,848 input tokens a
+	// request and only 10,868 of them came from cache — the size of the static head
+	// (system prompt plus tool schemas), with the conversation itself never hit.
+	//
+	// Quantising the window's start to a multiple of the block keeps that prefix
+	// byte-identical for a block's worth of turns and breaks it once, rather than
+	// breaking it every turn. The cost is carrying up to one block of extra history —
+	// cached tokens, roughly a tenth the price of the uncached ones this avoids.
+	historyBlock = 20
 	// persistTimeout bounds one transcript write. The writes run on a context
 	// detached from the caller's, so they need a deadline of their own.
 	persistTimeout = 5 * time.Second
@@ -421,12 +435,18 @@ func (r *Runner) persist(ctx context.Context, sessionID uuid.UUID, msg Message) 
 // by its most recent messages.
 //
 // Fetches only the tail via RecentTranscript rather than the whole transcript via
-// Transcript — trim() below only ever keeps the last HistoryLimit messages anyway, so
-// fetching everything first paid a cost proportional to the session's total length
-// (autopilot runs and long-lived chats can accumulate hundreds of rows) on every single
-// turn, for a window whose size never changes.
+// Transcript — trim() below only ever keeps a bounded window anyway, so fetching
+// everything first paid a cost proportional to the session's total length (autopilot
+// runs and long-lived chats can accumulate hundreds of rows) on every single turn, for
+// a window whose size is bounded.
+//
+// It asks for HistoryLimit+historyBlock rows, not HistoryLimit: trim cuts at a block
+// boundary, and the widest window that boundary can leave is one block past the limit.
+// Fetching exactly HistoryLimit would silently cap the window at the limit again and
+// put the cut back on every turn — the fetch size is part of the cache fix, not an
+// optimisation beside it.
 func (r *Runner) history(ctx context.Context, sessionID uuid.UUID, system string) ([]llms.MessageContent, error) {
-	stored, err := r.store.RecentTranscript(ctx, sessionID, r.cfg.HistoryLimit)
+	stored, err := r.store.RecentTranscript(ctx, sessionID, r.cfg.HistoryLimit+historyBlock)
 	if err != nil {
 		return nil, err
 	}
@@ -441,21 +461,63 @@ func (r *Runner) history(ctx context.Context, sessionID uuid.UUID, system string
 	return append(out, msgs...), nil
 }
 
-// trim keeps the most recent limit messages, then drops any leading tool results
-// whose originating call was trimmed away. Providers reject a tool result that
-// answers no call in the conversation, so an orphan at the head would fail the
-// whole turn rather than merely losing context. It then closes any tool_use that
-// still has no matching tool_result — a turn that died after persisting the
-// calls but before their results leaves exactly that shape, and Bedrock rejects
-// the whole next turn for it.
+// trim keeps roughly the most recent limit messages, cutting at a block boundary
+// rather than at "newest limit" so the replayed prefix survives the provider's prompt
+// cache (see historyBlock). It then drops any leading tool results whose originating
+// call was cut away. Providers reject a tool result that answers no call in the
+// conversation, so an orphan at the head would fail the whole turn rather than merely
+// losing context. It finally closes any tool_use that still has no matching
+// tool_result — a turn that died after persisting the calls but before their results
+// leaves exactly that shape, and Bedrock rejects the whole next turn for it.
+//
+// The caller must hand it limit+historyBlock messages, which is the widest window a
+// block boundary can produce; fewer and the cut is a no-op and the window is whatever
+// arrived.
 func trim(msgs []Message, limit int) []Message {
-	if limit > 0 && len(msgs) > limit {
-		msgs = msgs[len(msgs)-limit:]
+	if limit > 0 && len(msgs) > 0 {
+		anchor := blockAnchor(int(msgs[len(msgs)-1].Seq), limit)
+		cut := 0
+		for cut < len(msgs) && int(msgs[cut].Seq) < anchor {
+			cut++
+		}
+		msgs = msgs[cut:]
 	}
 	for len(msgs) > 0 && msgs[0].Role == RoleTool {
 		msgs = msgs[1:]
 	}
 	return closeDanglingToolCalls(msgs)
+}
+
+// blockAnchor is the oldest seq the replayed window keeps: the start of the newest
+// `limit` messages, rounded DOWN to a multiple of the block. Rounding down is what makes
+// it stand still while newest advances, which is the whole point — the same anchor for a
+// block's worth of turns means the same replayed prefix for that many turns.
+//
+// A session shorter than the window answers 0, which keeps everything.
+func blockAnchor(newestSeq, limit int) int {
+	block := historyBlockFor(limit)
+	anchor := ((newestSeq - limit + 1) / block) * block
+	if anchor < 0 {
+		return 0
+	}
+	return anchor
+}
+
+// historyBlockFor is the block for a given window: a third of it, capped at
+// historyBlock. Proportional rather than fixed because the quantisation is paid for in
+// overshoot, and the overshoot has to stay a fraction of the window at ANY limit — a
+// flat block of 20 turns a 4-message window into a 20-message one, which is not a
+// caching tweak but a different bound. At the production limit of 60 this is the 20 the
+// constant names; at a limit of 3 or less it is 1, which is the old behaviour exactly.
+func historyBlockFor(limit int) int {
+	block := limit / 3
+	if block > historyBlock {
+		return historyBlock
+	}
+	if block < 1 {
+		return 1
+	}
+	return block
 }
 
 // closeDanglingToolCalls inserts synthetic error tool results for any assistant

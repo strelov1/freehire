@@ -709,3 +709,59 @@ func TestContinueWithEmptyTranscriptIsRefused(t *testing.T) {
 		t.Fatalf("Continue on empty session: %v, want ErrNothingToContinue", err)
 	}
 }
+
+// replayWindow is the transcript as the store hands it to trim on one turn: the
+// newest `fetch` messages, oldest first, with seq running up to maxSeq.
+func replayWindow(maxSeq, fetch int32) []Message {
+	start := maxSeq - fetch + 1
+	if start < 1 {
+		start = 1
+	}
+	out := make([]Message, 0, maxSeq-start+1)
+	for seq := start; seq <= maxSeq; seq++ {
+		out = append(out, Message{Seq: seq, Role: RoleUser, Content: json.RawMessage(`{"text":"x"}`)})
+	}
+	return out
+}
+
+// Prompt caching is a PREFIX match, so the oldest message in the replayed window
+// decides whether any of the history can be served from cache. A window that keeps
+// "the newest N" moves that head by one on every single turn, which is why the
+// assistant's measured cache-hit rate sat at the size of its static head (system
+// prompt plus tool schemas) and the conversation itself was re-read at full price
+// every turn.
+func TestReplayedHistoryHeadMovesInBlocksSoTheCacheSurvives(t *testing.T) {
+	const (
+		limit = 60
+		turns = 25
+	)
+
+	heads := make(map[int32]struct{})
+	for i := int32(0); i < turns; i++ {
+		got := trim(replayWindow(200+i, limit+historyBlock), limit)
+		if len(got) == 0 {
+			t.Fatalf("turn %d: empty window", i)
+		}
+		heads[got[0].Seq] = struct{}{}
+	}
+
+	// 25 turns span at most two block boundaries.
+	if len(heads) > 2 {
+		t.Fatalf("window head took %d distinct values over %d turns, want at most 2 — "+
+			"a head that moves every turn means the replayed history never caches", len(heads), turns)
+	}
+}
+
+// The block quantisation must not let the window grow without bound: it buys prefix
+// stability with up to one extra block of history, never more.
+func TestReplayedHistoryWindowStaysBounded(t *testing.T) {
+	const limit = 60
+
+	for i := int32(0); i < 200; i++ {
+		got := trim(replayWindow(200+i, limit+historyBlock), limit)
+		if len(got) < limit || len(got) >= limit+historyBlockFor(limit) {
+			t.Fatalf("maxSeq=%d: window is %d messages, want it in [%d, %d)",
+				200+i, len(got), limit, limit+historyBlockFor(limit))
+		}
+	}
+}
