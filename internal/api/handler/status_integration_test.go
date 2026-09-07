@@ -43,11 +43,16 @@ func TestIngestStatusEndpoint(t *testing.T) {
 		LastSuccess   *string `json:"last_success"`
 		IngestedTotal int     `json:"ingested_total"`
 	}
+	type historyEntry struct {
+		Day    string `json:"day"`
+		Status string `json:"status"`
+	}
 	type siteEntry struct {
-		Status        string  `json:"status"`
-		Database      string  `json:"database"`
-		ErrorRate     float64 `json:"error_rate"`
-		WindowMinutes int     `json:"window_minutes"`
+		Status        string         `json:"status"`
+		Database      string         `json:"database"`
+		ErrorRate     float64        `json:"error_rate"`
+		WindowMinutes int            `json:"window_minutes"`
+		History       []historyEntry `json:"history"`
 	}
 	type statusData struct {
 		Overall        string          `json:"overall"`
@@ -91,6 +96,30 @@ func TestIngestStatusEndpoint(t *testing.T) {
 	// operational, "up", and a zero error rate over the fixed window.
 	if emptyEnv.Data.Site.Status != "operational" || emptyEnv.Data.Site.Database != "up" || emptyEnv.Data.Site.ErrorRate != 0 || emptyEnv.Data.Site.WindowMinutes != 10 {
 		t.Errorf("site = %+v, want operational/up/0/10", emptyEnv.Data.Site)
+	}
+	if emptyEnv.Data.Site.History == nil || len(emptyEnv.Data.Site.History) != 0 {
+		t.Errorf("site.history = %v, want a non-nil empty slice (no samples recorded yet)", emptyEnv.Data.Site.History)
+	}
+
+	// --- Site status history: seed three days with a gap in between ------------
+	// today-2 is down, today-1 has NO row (never sampled), today is degraded.
+	// The gap day must be ABSENT from the response, not silently "operational".
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO site_status_daily (day, worst_severity) VALUES
+			(CURRENT_DATE - 2, 2),
+			(CURRENT_DATE, 1)`); err != nil {
+		t.Fatalf("seed site_status_daily: %v", err)
+	}
+	historyEnv, _ := get(t)
+	wantHistory := 2 // today-2 and today; today-1 is the gap and must be absent
+	if len(historyEnv.Data.Site.History) != wantHistory {
+		t.Fatalf("site.history = %+v, want %d entries (the gap day must be absent)", historyEnv.Data.Site.History, wantHistory)
+	}
+	if got := historyEnv.Data.Site.History[0].Status; got != "down" {
+		t.Errorf("history[0].status = %q, want down (today-2)", got)
+	}
+	if got := historyEnv.Data.Site.History[1].Status; got != "degraded" {
+		t.Errorf("history[1].status = %q, want degraded (today)", got)
 	}
 
 	// --- Seed boards in controlled states --------------------------------------

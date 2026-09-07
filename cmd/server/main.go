@@ -30,6 +30,7 @@ import (
 	"github.com/strelov1/freehire/internal/platform/cache"
 	"github.com/strelov1/freehire/internal/platform/config"
 	"github.com/strelov1/freehire/internal/platform/database"
+	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/platform/llm"
 	"github.com/strelov1/freehire/internal/platform/observability"
 	"github.com/strelov1/freehire/internal/platform/tokencrypt"
@@ -344,6 +345,11 @@ func main() {
 		InngestEventKey:             cfg.InngestEventKey,
 	})
 
+	// Site-status daily history sampler: no MeiliKey-style gate, since it has no
+	// external dependency to gate on (only the database, which is already
+	// required for the server to run at all).
+	handler.StartSiteStatusSampler(ctx, pool, db.New(pool), siteStatusSampleInterval)
+
 	// Run the server in a goroutine so main can wait for a shutdown signal.
 	// Fiber's Listen returns nil on graceful shutdown, so any error is fatal.
 	go func() {
@@ -381,6 +387,13 @@ func buildGmail(cfg config.Settings) (*gmailsync.Connector, *tokencrypt.Cipher) 
 	}
 	return gmailsync.NewConnector(g.ClientID, g.ClientSecret, cfg.FrontendOrigin), cipher
 }
+
+// siteStatusSampleInterval is how often the /status page's daily history
+// sampler (handler.StartSiteStatusSampler) records the site's current
+// status. Independent of siteErrorWindow's 10-minute rolling window
+// (internal/api/handler): sampling more often than the window changes lets
+// a brief spike inside one window get caught by more than one sample.
+const siteStatusSampleInterval = 5 * time.Minute
 
 // suggestRefreshInterval is how often the completion service reloads the phrases it
 // recognises. The dictionary behind it is rebuilt once a day by
