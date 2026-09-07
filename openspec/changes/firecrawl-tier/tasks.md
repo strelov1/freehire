@@ -38,5 +38,5 @@
 - [x] 0 Document the tier in `internal/ingest/sources/AGENTS.md` and the client in its own
       AGENTS.md; add the module-file row; record the measured 1% yield so the next person
       inherits the number and not just the switch.
-- [ ] 4.3 Open the PR on top of the browser-tier branch, stating that merging spends nothing
+- [x] 4.3 Open the PR on top of the browser-tier branch, stating that merging spends nothing
       and that three separate acts are needed before it does.
