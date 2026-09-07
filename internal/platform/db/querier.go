@@ -3414,12 +3414,14 @@ type Querier interface {
 	ListUserEmailThreadLinks(ctx context.Context, userID int64) ([]ListUserEmailThreadLinksRow, error)
 	// Dense cumulative member-growth series: one UTC calendar day per row from the
 	// first registration through today, each carrying the running total of members
-	// registered on or before that day. A daily generate_series builds the gap-free
-	// calendar (days with no new signups repeat the previous total), the LEFT JOIN
-	// attaches each day's new-signup count, and the window SUM makes it cumulative, so
-	// the series is monotonically non-decreasing. Aggregate only — no user identifier,
-	// email, or other personal field is selected. With no members the series is empty
-	// (min(day) is NULL, so generate_series yields no rows).
+	// registered on or before that day, plus that day's own (non-cumulative)
+	// new-signup count for the "new members per day" chart. A daily generate_series
+	// builds the gap-free calendar (days with no new signups repeat the previous
+	// total and carry new=0), the LEFT JOIN attaches each day's new-signup count, and
+	// the window SUM makes the running total cumulative, so it is monotonically
+	// non-decreasing. Aggregate only — no user identifier, email, or other personal
+	// field is selected. With no members the series is empty (min(day) is NULL, so
+	// generate_series yields no rows).
 	ListUserGrowth(ctx context.Context) ([]ListUserGrowthRow, error)
 	// Jobs the caller has analyzed, newest first, joined to the job for display. Powers
 	// the Tracking → AI fit tab. Includes closed jobs (surfaced with a badge). The four

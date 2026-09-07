@@ -27,13 +27,20 @@ async function buildPayload(fetchImpl: typeof fetch) {
   // One call for the whole scale strip instead of two list totals: the figures come
   // from a single published snapshot, so this page and /about cannot show numbers
   // measured at different moments.
-  const [scale, activity, facets, growth, engagement, github] = await Promise.allSettled([
+  //
+  // browsableJobs is a separate leg: it reads the search index's own total (limit 1,
+  // no filters), which is de-duplicated (aggregator/role/fuzzy suppression), unlike
+  // `open_jobs` above. It is what /jobs itself would show for zero filters, so this
+  // page and /jobs cannot quote two different "how many jobs" numbers without either
+  // being labelled for what it measures.
+  const [scale, activity, facets, growth, engagement, github, browsable] = await Promise.allSettled([
     api.catalogScale(),
     api.jobsActivity('day'),
     api.statsFacets(),
     api.userGrowth(),
     api.engagementStats(),
     githubStats(fetchImpl),
+    api.searchJobs(new URLSearchParams(), 1, 0),
   ]);
 
   const value = <T>(r: PromiseSettledResult<T>): T | null =>
@@ -50,6 +57,7 @@ async function buildPayload(fetchImpl: typeof fetch) {
   return {
     scale: {
       jobs: catalog?.open_jobs ?? null,
+      browsableJobs: value(browsable)?.total ?? null,
       companies: dbOnly(catalog?.companies),
       sources: catalog?.sources ?? null,
       telegramChannels: dbOnly(catalog?.telegram_channels),

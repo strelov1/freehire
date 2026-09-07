@@ -972,13 +972,15 @@ export interface ActivityPoint {
   removed: number;
 }
 
-/** One point on the member-growth series: the ISO date and the cumulative count of
- *  registered members as of that day. The backend returns a dense, gap-free series
- *  (days with no new signups repeat the running total), monotonically
- *  non-decreasing. */
+/** One point on the member-growth series: the ISO date, the cumulative count of
+ *  registered members as of that day, and that day's own (non-cumulative)
+ *  new-signup count. The backend returns a dense, gap-free series (days with no
+ *  new signups repeat the running total and carry `new: 0`); `total` is
+ *  monotonically non-decreasing. */
 export interface UserGrowthPoint {
   date: string;
   total: number;
+  new: number;
 }
 
 /** Aggregate engagement counts across all users: jobs saved, applications marked,

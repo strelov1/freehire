@@ -148,12 +148,12 @@ type statChip struct {
 func chips(s Stats) []statChip {
 	if !s.Exact {
 		return []statChip{
-			{value: "~" + groupThousands(s.OpenJobs), label: "open jobs, estimated"},
+			{value: "~" + groupThousands(s.OpenJobs), label: "postings tracked, estimated"},
 			{value: strconv.Itoa(s.Sources), label: "sources"},
 		}
 	}
 	return []statChip{
-		{value: groupThousands(s.OpenJobs), label: "open jobs"},
+		{value: groupThousands(s.OpenJobs), label: "postings tracked"},
 		{value: groupThousands(s.Companies), label: "companies"},
 		{value: strconv.Itoa(s.Sources), label: "sources"},
 	}

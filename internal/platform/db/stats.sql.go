@@ -141,7 +141,8 @@ WITH daily AS (
 )
 SELECT
     d::date AS day,
-    sum(COALESCE(daily.n, 0)) OVER (ORDER BY d)::int AS total
+    sum(COALESCE(daily.n, 0)) OVER (ORDER BY d)::int AS total,
+    COALESCE(daily.n, 0)::int AS new
 FROM generate_series(
     (SELECT min(day) FROM daily),
     (now() AT TIME ZONE 'UTC')::date,
@@ -154,16 +155,19 @@ ORDER BY d
 type ListUserGrowthRow struct {
 	Day   pgtype.Date `json:"day"`
 	Total int32       `json:"total"`
+	New   int32       `json:"new"`
 }
 
 // Dense cumulative member-growth series: one UTC calendar day per row from the
 // first registration through today, each carrying the running total of members
-// registered on or before that day. A daily generate_series builds the gap-free
-// calendar (days with no new signups repeat the previous total), the LEFT JOIN
-// attaches each day's new-signup count, and the window SUM makes it cumulative, so
-// the series is monotonically non-decreasing. Aggregate only — no user identifier,
-// email, or other personal field is selected. With no members the series is empty
-// (min(day) is NULL, so generate_series yields no rows).
+// registered on or before that day, plus that day's own (non-cumulative)
+// new-signup count for the "new members per day" chart. A daily generate_series
+// builds the gap-free calendar (days with no new signups repeat the previous
+// total and carry new=0), the LEFT JOIN attaches each day's new-signup count, and
+// the window SUM makes the running total cumulative, so it is monotonically
+// non-decreasing. Aggregate only — no user identifier, email, or other personal
+// field is selected. With no members the series is empty (min(day) is NULL, so
+// generate_series yields no rows).
 func (q *Queries) ListUserGrowth(ctx context.Context) ([]ListUserGrowthRow, error) {
 	rows, err := q.db.Query(ctx, listUserGrowth)
 	if err != nil {
@@ -173,7 +177,7 @@ func (q *Queries) ListUserGrowth(ctx context.Context) ([]ListUserGrowthRow, erro
 	items := []ListUserGrowthRow{}
 	for rows.Next() {
 		var i ListUserGrowthRow
-		if err := rows.Scan(&i.Day, &i.Total); err != nil {
+		if err := rows.Scan(&i.Day, &i.Total, &i.New); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

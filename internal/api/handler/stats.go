@@ -166,19 +166,22 @@ func truncateToDate(t time.Time) time.Time {
 	return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, time.UTC)
 }
 
-// growthPoint is one point on the member-growth series: a UTC calendar date and
-// the cumulative member count as of that day.
+// growthPoint is one point on the member-growth series: a UTC calendar date, the
+// cumulative member count as of that day, and that day's own (non-cumulative)
+// new-signup count.
 type growthPoint struct {
 	Date  string `json:"date"`
 	Total int32  `json:"total"`
+	New   int32  `json:"new"`
 }
 
 // UserGrowth serves the public, unauthenticated member-growth time series: the
 // cumulative count of registered members per UTC day, from the first registration
-// through today. The dense, gap-free, monotonically non-decreasing series is
-// produced by the SQL query; this handler only maps rows to the wire envelope.
-// Aggregate-only — the query selects no user identifier, so no personal field can
-// leak here. An empty catalogue yields an empty series (200 with data: []).
+// through today, plus each day's own new-signup count. The dense, gap-free,
+// monotonically non-decreasing series is produced by the SQL query; this handler
+// only maps rows to the wire envelope. Aggregate-only — the query selects no user
+// identifier, so no personal field can leak here. An empty catalogue yields an
+// empty series (200 with data: []).
 func (h *statsHandlers) UserGrowth(c *fiber.Ctx) error {
 	rows, err := h.queries.ListUserGrowth(c.Context())
 	if err != nil {
@@ -187,7 +190,7 @@ func (h *statsHandlers) UserGrowth(c *fiber.Ctx) error {
 
 	points := make([]growthPoint, len(rows))
 	for i, r := range rows {
-		points[i] = growthPoint{Date: r.Day.Time.Format(dateLayout), Total: r.Total}
+		points[i] = growthPoint{Date: r.Day.Time.Format(dateLayout), Total: r.Total, New: r.New}
 	}
 
 	return c.JSON(fiber.Map{"data": points})
