@@ -27,12 +27,16 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// noTxMarker, placed in a migration's leading comment block, opts the file out
-// of the per-migration transaction. Needed for statements Postgres forbids
-// inside a transaction block (CREATE INDEX CONCURRENTLY, DROP INDEX
-// CONCURRENTLY). The applied-record insert then runs outside any transaction
-// too, so a failure can leave the file executed but unrecorded — re-running is
-// safe only if such files are written idempotently (IF NOT EXISTS / IF EXISTS).
+// noTxMarker, placed as the WHOLE content of a comment line in a migration's leading
+// comment block, opts the file out of the per-migration transaction. Needed for statements
+// Postgres forbids inside a transaction block (CREATE INDEX CONCURRENTLY, DROP INDEX
+// CONCURRENTLY).
+//
+// The file is then executed one statement at a time (see splitStatements) — a whole file in
+// one Exec would still be one implicit transaction, which is not what the marker promises.
+// The applied-record insert runs outside any transaction too, so a failure can leave the
+// file executed but unrecorded — re-running is safe only if such files are written
+// idempotently (IF NOT EXISTS / IF EXISTS).
 const noTxMarker = "migrate: no-transaction"
 
 // advisoryLockKey serializes concurrent migrate runs (e.g. a deploy racing a cron-triggered
@@ -108,8 +112,17 @@ func Load(dir string) ([]Migration, error) {
 	return migs, nil
 }
 
-// hasNoTxMarker reports whether the marker appears in the file's leading
-// comment block (blank lines and -- comments before the first statement).
+// hasNoTxMarker reports whether the file DECLARES the marker in its leading comment block
+// (blank lines and -- comments before the first statement).
+//
+// The marker must be the whole content of its comment line. It is an instruction, not a
+// topic: with strings.Contains, migrations/0126 — whose header says "No `migrate:
+// no-transaction` marker, so the two statements are one transaction" — was opted out by the
+// sentence explaining that it must not be. It survived only by accident, because a
+// multi-statement simple query is one implicit transaction anyway.
+//
+// scripts/check-migrations.mjs repeats this rule; the two must agree, or squawk lints a
+// file under a premise the runner does not share.
 func hasNoTxMarker(sql string) bool {
 	for _, line := range strings.Split(sql, "\n") {
 		line = strings.TrimSpace(line)
@@ -119,7 +132,131 @@ func hasNoTxMarker(sql string) bool {
 		if !strings.HasPrefix(line, "--") {
 			return false
 		}
-		if strings.Contains(line, noTxMarker) {
+		if strings.TrimSpace(strings.TrimPrefix(line, "--")) == noTxMarker {
+			return true
+		}
+	}
+	return false
+}
+
+// splitStatements cuts a migration into its top-level statements, on semicolons that are
+// not inside a string, a dollar-quoted body, a quoted identifier, or a comment. Whitespace
+// and comments are carried with the statement that follows them; a trailing fragment
+// containing no statement is dropped.
+//
+// It exists because the no-transaction marker did not mean what its files said. The runner
+// sent the whole file to one Exec, and pgx forces the simple protocol when a query carries
+// no arguments (conn.go), which Postgres executes as ONE implicit transaction — so the
+// marker cancelled only the runner's own BEGIN/COMMIT and bought nothing else.
+// migrations/0135 states a guarantee it was not getting: "Two ALTER TABLE statements,
+// deliberately NOT in one transaction: NOT VALID + VALIDATE CONSTRAINT in one transaction
+// holds ACCESS EXCLUSIVE for the whole scan."
+//
+// This is a splitter, not a parser: it needs to find statement boundaries, not to
+// understand SQL. The four quoting forms below are the only ones in which a semicolon can
+// hide.
+func splitStatements(sql string) []string {
+	var (
+		out   []string
+		start int
+	)
+	for i := 0; i < len(sql); i++ {
+		switch {
+		case strings.HasPrefix(sql[i:], "--"):
+			if end := strings.IndexByte(sql[i:], '\n'); end >= 0 {
+				i += end
+			} else {
+				i = len(sql)
+			}
+		case strings.HasPrefix(sql[i:], "/*"):
+			// Postgres nests block comments, so this counts depth rather than
+			// stopping at the first close.
+			depth, j := 1, i+2
+			for j < len(sql) && depth > 0 {
+				switch {
+				case strings.HasPrefix(sql[j:], "/*"):
+					depth++
+					j += 2
+				case strings.HasPrefix(sql[j:], "*/"):
+					depth--
+					j += 2
+				default:
+					j++
+				}
+			}
+			i = j - 1
+		case sql[i] == '\'':
+			i = closeQuoted(sql, i, '\'')
+		case sql[i] == '"':
+			i = closeQuoted(sql, i, '"')
+		case sql[i] == '$':
+			if tag, after, ok := dollarTag(sql, i); ok {
+				if end := strings.Index(sql[after:], tag); end >= 0 {
+					i = after + end + len(tag) - 1
+				} else {
+					i = len(sql)
+				}
+			}
+		case sql[i] == ';':
+			if s := sql[start:i]; strings.TrimSpace(s) != "" {
+				out = append(out, s)
+			}
+			start = i + 1
+		}
+	}
+	if tail := sql[min(start, len(sql)):]; hasStatement(tail) {
+		out = append(out, tail)
+	}
+	return out
+}
+
+// closeQuoted returns the index of the closing quote for the literal or identifier opening
+// at i. A doubled quote is an escaped one and does not close.
+func closeQuoted(sql string, i int, quote byte) int {
+	for j := i + 1; j < len(sql); j++ {
+		if sql[j] != quote {
+			continue
+		}
+		if j+1 < len(sql) && sql[j+1] == quote {
+			j++
+			continue
+		}
+		return j
+	}
+	return len(sql)
+}
+
+// dollarTag reads a dollar-quote opener at i ($$ or $tag$), returning the tag to look for
+// and the index just past the opener. A '$' that opens no tag (a positional parameter, or
+// a '$' inside an identifier) reports ok=false.
+func dollarTag(sql string, i int) (tag string, after int, ok bool) {
+	for j := i + 1; j < len(sql); j++ {
+		c := sql[j]
+		if c == '$' {
+			return sql[i : j+1], j + 1, true
+		}
+		if !tagByte(c, j == i+1) {
+			return "", 0, false
+		}
+	}
+	return "", 0, false
+}
+
+// tagByte reports whether c may appear in a dollar-quote tag. A tag may not START with a
+// digit, which is what separates $1 (a positional parameter) from $t1$ (a tag).
+func tagByte(c byte, first bool) bool {
+	if c == '_' || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') {
+		return true
+	}
+	return !first && c >= '0' && c <= '9'
+}
+
+// hasStatement reports whether a trailing fragment carries anything but whitespace and
+// comments — a file's closing commentary is not a statement to execute.
+func hasStatement(fragment string) bool {
+	for _, line := range strings.Split(fragment, "\n") {
+		line = strings.TrimSpace(line)
+		if line != "" && !strings.HasPrefix(line, "--") {
 			return true
 		}
 	}
@@ -244,13 +381,7 @@ func (r *Runner) Run(ctx context.Context, migs []Migration, forceBaseline bool) 
 // opted out of transactions.
 func applyOne(ctx context.Context, conn *pgxpool.Conn, m Migration) error {
 	if m.NoTx {
-		if _, err := conn.Exec(ctx, m.SQL); err != nil {
-			return fmt.Errorf("apply %s: %w", m.Version, err)
-		}
-		if _, err := conn.Exec(ctx, "INSERT INTO public.schema_migrations (version) VALUES ($1)", m.Version); err != nil {
-			return fmt.Errorf("record %s: %w", m.Version, err)
-		}
-		return nil
+		return applyNoTx(ctx, conn, m)
 	}
 
 	tx, err := conn.Begin(ctx)
@@ -269,6 +400,107 @@ func applyOne(ctx context.Context, conn *pgxpool.Conn, m Migration) error {
 		return fmt.Errorf("commit %s: %w", m.Version, err)
 	}
 	return nil
+}
+
+// applyNoTx executes a no-transaction migration one statement at a time and records it.
+//
+// One statement per Exec is what makes the marker mean what its files say: a whole file in
+// one Exec goes out on the simple protocol (pgx forces it when there are no arguments) and
+// Postgres runs a multi-statement simple query as ONE implicit transaction, so the marker
+// cancelled only this runner's own BEGIN/COMMIT. Each statement still gets an implicit
+// transaction of its own, which is the point — that is what a CONCURRENTLY statement needs
+// and what keeps 0135's NOT VALID and VALIDATE CONSTRAINT from sharing an ACCESS EXCLUSIVE
+// lock across the whole scan.
+//
+// A failure part-way leaves the file executed-but-unrecorded, which is why these files must
+// be written idempotently (IF NOT EXISTS / IF EXISTS) — the same contract as before, now
+// with a finer failure granularity.
+func applyNoTx(ctx context.Context, conn *pgxpool.Conn, m Migration) error {
+	for _, stmt := range splitStatements(m.SQL) {
+		if _, err := conn.Exec(ctx, stmt); err != nil {
+			return fmt.Errorf("apply %s: %w", m.Version, err)
+		}
+	}
+
+	// A successful CREATE INDEX CONCURRENTLY is not proof of a usable index. It waits on
+	// virtual transaction locks and old snapshots with an ordinary wait, which lockTimeout
+	// aborts with 55P03, leaving the index at indisvalid=f. The FIRST run fails loudly and
+	// records nothing. The SECOND is the trap: `IF NOT EXISTS` sees the carcass, does
+	// nothing, succeeds, and the version is recorded against an index that will never be
+	// used. migrations/0126 and 0127 record that happening on 2026-09-03.
+	//
+	// So the check cannot be before-and-after — on the re-run the carcass is present in
+	// BOTH snapshots. It asks instead whether any index THIS FILE NAMES is invalid, which
+	// is also what keeps somebody else's older carcass from failing every run forever.
+	broke, err := invalidIndexesNamedIn(ctx, conn, m.SQL)
+	if err != nil {
+		return fmt.Errorf("read index validity after %s: %w", m.Version, err)
+	}
+	if len(broke) > 0 {
+		return fmt.Errorf("apply %s: %s left invalid (indisvalid=f) — DROP INDEX and re-run; the version was NOT recorded",
+			m.Version, strings.Join(broke, ", "))
+	}
+
+	if _, err := conn.Exec(ctx, "INSERT INTO public.schema_migrations (version) VALUES ($1)", m.Version); err != nil {
+		return fmt.Errorf("record %s: %w", m.Version, err)
+	}
+	return nil
+}
+
+// invalidIndexesNamedIn returns the invalid indexes whose name appears as a word in sql,
+// sorted. Matching on the file's own text is coarse but exact where it matters: a
+// CONCURRENTLY file names the index it builds, and no other file's carcass is named here.
+func invalidIndexesNamedIn(ctx context.Context, conn *pgxpool.Conn, sql string) ([]string, error) {
+	rows, err := conn.Query(ctx,
+		`SELECT c.relname FROM pg_index i JOIN pg_class c ON c.oid = i.indexrelid WHERE NOT i.indisvalid`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	lower := strings.ToLower(sql)
+	var out []string
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			return nil, err
+		}
+		if namesIdentifier(lower, strings.ToLower(name)) {
+			out = append(out, name)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	sort.Strings(out)
+	return out, nil
+}
+
+// namesIdentifier reports whether sql mentions name as a whole identifier, so a short index
+// name is not matched inside a longer one.
+func namesIdentifier(sql, name string) bool {
+	for i := 0; ; {
+		j := strings.Index(sql[i:], name)
+		if j < 0 {
+			return false
+		}
+		j += i
+		if !identifierByte(byteAt(sql, j-1)) && !identifierByte(byteAt(sql, j+len(name))) {
+			return true
+		}
+		i = j + 1
+	}
+}
+
+func byteAt(s string, i int) byte {
+	if i < 0 || i >= len(s) {
+		return ' '
+	}
+	return s[i]
+}
+
+func identifierByte(c byte) bool {
+	return c == '_' || c == '$' || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9')
 }
 
 // appliedVersions reads the recorded versions.
