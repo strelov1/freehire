@@ -200,11 +200,24 @@ deliberate: it ships and deploys before the Discord application exists.
    consent URL and again in the token exchange, and Discord refuses the exchange otherwise.
 3. **Invite the bot** to the community server with `Manage Roles` and `Create Invite`. The
    second is what `guilds.join` needs to add a consenting user.
+
+   **A bot already on the server may still hold nothing.** An invite generated without
+   permissions puts the bot in the member list with a role that grants none, and the server
+   then looks correctly set up. Open the invite URL again with the permissions ticked —
+   Discord recognises the existing membership and UPDATES the permissions rather than adding
+   the bot twice. The 2026-09-07 setup hit exactly this: the bot had been on the server since
+   the retired contribution bot, with an empty role, and every API call answered `50013`.
 4. **Create the role**, e.g. `Paid`, and note its id (Developer Mode → right-click → Copy ID).
-5. **Drag the bot's own role ABOVE the paid role** in Server Settings → Roles. A bot cannot
+5. **Put the bot's own role ABOVE the paid role** in Server Settings → Roles. A bot cannot
    manage a role positioned above its own. This is the single most common failure of every
    role-granting bot, it fails silently from the site's side, and skipping it means every
    grant is refused with `50013` while everything else looks correct.
+
+   A role created through the API lands at the bottom of the list, already below the bot, so
+   this step is only needed when the role was made by hand. Watch for a TIE: two roles at the
+   same position order ambiguously, and the fix is to give the bot's role the higher number
+   explicitly. **Verify by doing, not by looking** — grant the role to any member (the bot
+   itself will do) and check for `204`, then remove it again.
 6. **Gate the channels**: on each members-only channel, deny `View Channel` to `@everyone`
    and allow it to `Paid`.
 7. **Set the five values** in `/opt/freehire/.env`: `DISCORD_CLIENT_ID`,
