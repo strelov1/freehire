@@ -79,6 +79,24 @@ export function contributorGroups(snapshot: ContributorsSnapshot): ContributorGr
   };
 }
 
+const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+
+/** What a person contributed, in the page's own words.
+ *
+ *  Only what they actually did: naming a kind they have none of would read as an
+ *  absence — "0 issues opened" beside someone's first merged pull request is a scolding,
+ *  not a summary. */
+export function contributionSummary(entry: ContributorEntry): string {
+  const parts = [];
+  if (entry.mergedPullRequests > 0) {
+    parts.push(plural(entry.mergedPullRequests, 'merged pull request', 'merged pull requests'));
+  }
+  if (entry.openedIssues > 0) {
+    parts.push(`${plural(entry.openedIssues, 'issue', 'issues')} opened`);
+  }
+  return parts.join(' · ');
+}
+
 /** The one person a profile page and its social card are about, or null.
  *
  *  Resolved through the same rules the showcase renders, never against the raw

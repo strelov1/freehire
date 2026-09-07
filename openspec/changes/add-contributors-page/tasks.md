@@ -23,18 +23,18 @@
 
 ## 3. The showcase page
 
-- [ ] 3.1 Add `web/src/routes/contributors/+page.server.ts` loading the snapshot through the rules module, and `+page.svelte` rendering the maintainer group and the contributor group separately.
-- [ ] 3.2 Render each contributor entry with avatar, login, a summary of their contribution, and a link to `/contributors/<login>` on this site.
-- [ ] 3.3 Add the page's own metadata and the site-wide OG card, following the existing pages' pattern.
-- [ ] 3.4 Verify the page renders correctly with the real snapshot: no bots present, maintainer separated, newest contributor first.
+- [x] 3.1 Add `web/src/routes/contributors/+page.server.ts` loading the snapshot through the rules module, and `+page.svelte` rendering the maintainer group and the contributor group separately.
+- [x] 3.2 Render each contributor entry with avatar, login, a summary of their contribution, and a link to `/contributors/<login>` on this site.
+- [x] 3.3 Add the page's own metadata and the site-wide OG card, following the existing pages' pattern.
+- [x] 3.4 Verify the page renders correctly with the real snapshot: no bots present, maintainer separated, newest contributor first.
 
 ## 4. The profile page
 
-- [ ] 4.1 Add `web/src/routes/contributors/[login]/+page.server.ts` resolving the login against the snapshot by exact match, returning 404 when absent.
-- [ ] 4.2 Add `+page.svelte` showing avatar, GitHub profile link, first-contribution date, merged-PR count, opened-issue count, and the recent merged pull requests with title, number, merge date, and link.
-- [ ] 4.3 Render the empty-pull-request case (an issues-only contributor) without an empty section that reads as broken.
-- [ ] 4.4 Add X and LinkedIn share actions carrying this page's own URL.
-- [ ] 4.5 Verify an unknown login returns 404 and a known one renders their pull requests.
+- [x] 4.1 Add `web/src/routes/contributors/[login]/+page.server.ts` resolving the login against the snapshot by exact match, returning 404 when absent.
+- [x] 4.2 Add `+page.svelte` showing avatar, GitHub profile link, first-contribution date, merged-PR count, opened-issue count, and the recent merged pull requests with title, number, merge date, and link.
+- [x] 4.3 Render the empty-pull-request case (an issues-only contributor) without an empty section that reads as broken.
+- [x] 4.4 Add X and LinkedIn share actions carrying this page's own URL.
+- [x] 4.5 Verify an unknown login returns 404 and a known one renders their pull requests.
 
 ## 5. The per-contributor OG card
 

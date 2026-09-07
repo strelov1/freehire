@@ -34,6 +34,16 @@ const SNAPSHOT_PATH = fileURLToPath(new URL('../src/lib/data/contributors.json',
  *  about the file changes shape when a second maintainer appears. */
 export const RECENT_PULL_REQUEST_LIMIT = 20;
 
+/** Widens a person's contribution span to include this moment.
+ *
+ *  The span covers both kinds of contribution. An issue filed after someone's last
+ *  merged pull request is still them being here recently, and recency is what the page's
+ *  ordering reads. */
+function dateSeen(entry, at) {
+  if (!entry.firstContributionAt || at < entry.firstContributionAt) entry.firstContributionAt = at;
+  if (!entry.lastContributionAt || at > entry.lastContributionAt) entry.lastContributionAt = at;
+}
+
 /** Turns collected pull requests and issues into one entry per person.
  *
  *  Keyed by the lowercased login, because the same person arrives from three endpoints
@@ -70,14 +80,6 @@ export function assembleEntries({ pullRequests, issues, admins, excluded = [] })
       byLogin.set(key, entry);
     }
     return entry;
-  };
-
-  // The dates span both kinds of contribution. An issue filed after someone's last
-  // merged pull request is still them being here recently, and recency is what the
-  // page's ordering reads.
-  const dateSeen = (entry, at) => {
-    if (!entry.firstContributionAt || at < entry.firstContributionAt) entry.firstContributionAt = at;
-    if (!entry.lastContributionAt || at > entry.lastContributionAt) entry.lastContributionAt = at;
   };
 
   for (const request of pullRequests) {
@@ -214,7 +216,7 @@ async function pageAll(token, query, read) {
   let cursor = null;
 
   for (;;) {
-    // eslint-disable-next-line no-await-in-loop -- each page's cursor comes from the last
+    // Sequential by necessity: each page's cursor comes from the one before it.
     const data = await graphql(token, query, { ...REPO, cursor });
     const connection = read(data.repository);
 

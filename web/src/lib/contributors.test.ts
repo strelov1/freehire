@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { contributorGroups, findContributor } from './contributors';
+import { contributionSummary, contributorGroups, findContributor } from './contributors';
 import type { ContributorEntry, ContributorsSnapshot } from './contributors';
 import committed from './data/contributors.json';
 
@@ -127,7 +127,7 @@ describe('contributorGroups', () => {
     );
 
     expect(logins(groups.contributors)).toEqual(['reporter']);
-    expect(groups.contributors[0].recentPullRequests).toEqual([]);
+    expect(groups.contributors[0]?.recentPullRequests).toEqual([]);
   });
 
   // The collector reaches accounts through several queries, so an entry can survive with
@@ -154,6 +154,37 @@ describe('contributorGroups', () => {
 // bot filter written against the obvious signal alone would put GitHub's second-largest
 // contributor to this repository on a page about people, and every fixture in this file
 // would still be green.
+describe('contributionSummary', () => {
+  it('names merged pull requests when that is all there is', () => {
+    expect(contributionSummary(person({ mergedPullRequests: 8, openedIssues: 0 }))).toBe(
+      '8 merged pull requests',
+    );
+  });
+
+  it('names opened issues when there is no merged code', () => {
+    expect(contributionSummary(person({ mergedPullRequests: 0, openedIssues: 3 }))).toBe(
+      '3 issues opened',
+    );
+  });
+
+  it('names both when there are both', () => {
+    expect(contributionSummary(person({ mergedPullRequests: 8, openedIssues: 3 }))).toBe(
+      '8 merged pull requests · 3 issues opened',
+    );
+  });
+
+  // Someone's first contribution is the one most likely to be read by them, and "1
+  // merged pull requests" is a careless way to greet it.
+  it('reads naturally for a single contribution of each kind', () => {
+    expect(contributionSummary(person({ mergedPullRequests: 1, openedIssues: 0 }))).toBe(
+      '1 merged pull request',
+    );
+    expect(contributionSummary(person({ mergedPullRequests: 0, openedIssues: 1 }))).toBe(
+      '1 issue opened',
+    );
+  });
+});
+
 describe('the committed snapshot', () => {
   const snapshotOnDisk = committed as ContributorsSnapshot;
 
