@@ -11,7 +11,14 @@ import (
 
 // wantapply adapts the Wantapply job aggregator (wantapply.com). The .com host sits behind a WAF
 // that 403s non-browser clients, so this adapter crawls the .cy mirror, which serves identical
-// content (same backend — sitemap lastmod matches to the millisecond) without the WAF. Wantapply
+// content (same backend — sitemap lastmod matches to the millisecond) without the WAF.
+//
+// The mirroring holds for PAGES and not for the SITEMAPS, which is worth stating because the
+// difference is most of the catalogue. Measured 2026-09-07: .cy enumerates ~605 vacancies and
+// .com enumerates 2 755, yet five vacancies absent from the .cy sitemap all answered 200 on .cy.
+// So .cy can serve the whole catalogue; it just does not advertise it. NewWantapplyViaHostedSitemap
+// reads the fuller enumeration from .com and still fetches every page from .cy — one metered
+// request for the sitemap, and the 2 755 pages free. Wantapply
 // is a directApply aggregator (many employers, no per-tenant board), so the adapter is boardless
 // and stays in the source facet, taking each posting's company from the JSON-LD. Its sitemap
 // enumerates every vacancy as a single-segment slug page and each page server-renders a schema.org
@@ -21,6 +28,15 @@ import (
 // pipeline's unseen-sweep is the close signal (a vacancy that drops out of the sitemap is closed).
 type wantapply struct {
 	http wantapplyHTTP
+	// sitemap is where the enumeration comes from; it is s.http for the ordinary construction
+	// and a different transport when the fuller .com sitemap is used.
+	sitemap XMLGetter
+	// sitemapURL and sitemapHost describe that enumeration: the URL to read and the host its
+	// entries must carry. detailHost is where the pages are actually fetched from, which is not
+	// the same when the two differ.
+	sitemapURL  string
+	sitemapHost string
+	detailHost  string
 }
 
 // wantapplyHTTP is the transport wantapply needs: the XML sitemap plus HTML detail pages.
@@ -49,8 +65,32 @@ var wantapplyReserved = map[string]struct{}{
 	"privacy-policy": {}, "terms-of-service": {},
 }
 
-// NewWantapply builds the Wantapply adapter over the given HTTP client.
-func NewWantapply(c wantapplyHTTP) Source { return wantapply{http: c} }
+// NewWantapply builds the Wantapply adapter over the given HTTP client: sitemap and pages both
+// from the .cy mirror.
+func NewWantapply(c wantapplyHTTP) Source {
+	return wantapply{
+		http:        c,
+		sitemap:     c,
+		sitemapURL:  wantapplySitemapURL,
+		sitemapHost: wantapplyHostname,
+		detailHost:  wantapplyHost,
+	}
+}
+
+// NewWantapplyViaHostedSitemap reads the enumeration from sitemapURL through a separate
+// transport — the .com sitemap, which needs the hosted tier — while still fetching every page
+// through c, the ordinary proxied client on .cy. See the type doc for why that is worth doing:
+// the two hosts mirror each other's PAGES, so the only thing the metered request buys is the
+// list, and it buys 2 154 vacancies the .cy sitemap never mentions.
+func NewWantapplyViaHostedSitemap(c wantapplyHTTP, sitemap XMLGetter, sitemapURL, sitemapHost string) Source {
+	return wantapply{
+		http:        c,
+		sitemap:     sitemap,
+		sitemapURL:  sitemapURL,
+		sitemapHost: sitemapHost,
+		detailHost:  wantapplyHost,
+	}
+}
 
 func (wantapply) Provider() string { return "wantapply" }
 
@@ -100,19 +140,38 @@ func (s wantapply) FetchNew(ctx context.Context, _ CompanyEntry, seen func(exter
 // crawl reads the sitemap and returns every vacancy candidate (reserved pages, /company/*, and
 // /jobs/* excluded) — the shared enumeration behind Fetch and FetchNew.
 func (s wantapply) crawl(ctx context.Context) ([]wantapplyVacancy, error) {
-	sitemap, err := getSitemap(ctx, s.http, wantapplySitemapURL)
+	sitemap, err := getSitemap(ctx, s.sitemap, s.sitemapURL)
 	if err != nil {
 		return nil, fmt.Errorf("wantapply: sitemap: %w", err)
 	}
 	var out []wantapplyVacancy
 	for _, entry := range sitemap.URLs {
-		// Use the sitemap's canonical loc as the URL rather than rebuilding it from the slug —
-		// the slug is url.Parse-decoded, so reconstruction could diverge from the real page.
-		if slug := wantapplyVacancySlug(entry.Loc); slug != "" {
-			out = append(out, wantapplyVacancy{slug: slug, url: entry.Loc})
+		slug := wantapplyVacancySlugOn(entry.Loc, s.sitemapHost)
+		if slug == "" {
+			continue
 		}
+		// The PATH is taken from the sitemap's own loc rather than rebuilt from the slug — the
+		// slug is url.Parse-decoded, so reconstruction could diverge from the real page. Only
+		// the host is swapped, and only when the enumeration came from the other mirror.
+		out = append(out, wantapplyVacancy{slug: slug, url: s.detailURL(entry.Loc)})
 	}
 	return out, nil
+}
+
+// detailURL points a sitemap entry at the host the pages are fetched from, keeping its path
+// byte for byte. When the sitemap and the pages come from the same host this returns loc
+// unchanged, which is the ordinary case.
+func (s wantapply) detailURL(loc string) string {
+	u, err := url.Parse(loc)
+	if err != nil {
+		return loc
+	}
+	base, err := url.Parse(s.detailHost)
+	if err != nil {
+		return loc
+	}
+	u.Scheme, u.Host = base.Scheme, base.Host
+	return u.String()
 }
 
 // detail fetches one vacancy page and maps its JobPosting ld+json to a Job, returning ok=false
@@ -183,12 +242,18 @@ func wantapplyDescription(root *html.Node) string {
 	return sanitizeHTML(body)
 }
 
-// wantapplyVacancySlug returns the vacancy slug for a sitemap loc that is a single-segment,
-// non-reserved page on the wantapply.cy host, or "" for the root, a reserved static page, a
-// multi-segment path (/company/*, /jobs/*), or an unparseable/foreign URL.
+// wantapplyVacancySlug returns the vacancy slug for a sitemap loc on the default (.cy) host.
 func wantapplyVacancySlug(loc string) string {
+	return wantapplyVacancySlugOn(loc, wantapplyHostname)
+}
+
+// wantapplyVacancySlugOn returns the vacancy slug for a sitemap loc that is a single-segment,
+// non-reserved page on host, or "" for the root, a reserved static page, a multi-segment path
+// (/company/*, /jobs/*), or an unparseable/foreign URL. The host is a parameter because the
+// enumeration may come from the .com mirror while the pages are read from .cy.
+func wantapplyVacancySlugOn(loc, host string) string {
 	u, err := url.Parse(strings.TrimSpace(loc))
-	if err != nil || u.Hostname() != wantapplyHostname {
+	if err != nil || u.Hostname() != host {
 		return ""
 	}
 	seg := strings.Trim(u.Path, "/")

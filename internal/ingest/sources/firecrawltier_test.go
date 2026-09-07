@@ -36,7 +36,7 @@ func TestFirecrawlClientSatisfiesBothAdaptersTransports(t *testing.T) {
 }
 
 func TestHostedTierCarriesTheTwoUnreachableProviders(t *testing.T) {
-	for _, name := range []string{"bayt", "gulftalent"} {
+	for _, name := range []string{"bayt", "gulftalent", "wantapply"} {
 		if _, ok := firecrawlProviders[name]; !ok {
 			t.Errorf("%s is not in firecrawlProviders", name)
 		}
@@ -135,5 +135,42 @@ func TestApplyFirecrawlEgressRejectsAnUnparseableBudget(t *testing.T) {
 	registry := map[string]Source{"bayt": NewBayt(NewClient())}
 	if err := ApplyFirecrawlEgress(registry); err == nil {
 		t.Error("want an error for an unparseable page budget, got nil")
+	}
+}
+
+// wantapply is the mixed-tier case: only its sitemap is hosted, so it must still be rewired
+// (the enumeration changes) while keeping a free transport for the pages. Without a key it
+// keeps whatever ApplyProxyEgress gave it, exactly as today.
+func TestHostedTierRewiresWantapplyForItsSitemapOnly(t *testing.T) {
+	t.Setenv("SOURCES_PROXY_URL", "http://user:pass@proxy.invalid:8080")
+	t.Setenv("FIRECRAWL_API_KEY", "test-key")
+
+	registry := map[string]Source{"wantapply": NewWantapply(NewClient())}
+	if err := ApplyProxyEgress(registry); err != nil {
+		t.Fatalf("ApplyProxyEgress: %v", err)
+	}
+	viaProxy := registry["wantapply"]
+	if err := ApplyFirecrawlEgress(registry); err != nil {
+		t.Fatalf("ApplyFirecrawlEgress: %v", err)
+	}
+	if registry["wantapply"] == viaProxy {
+		t.Error("wantapply was not rewired onto the fuller .com enumeration")
+	}
+}
+
+func TestWantapplyKeepsItsProxyTransportWithoutAKey(t *testing.T) {
+	t.Setenv("SOURCES_PROXY_URL", "http://user:pass@proxy.invalid:8080")
+	t.Setenv("FIRECRAWL_API_KEY", "")
+
+	registry := map[string]Source{"wantapply": NewWantapply(NewClient())}
+	if err := ApplyProxyEgress(registry); err != nil {
+		t.Fatalf("ApplyProxyEgress: %v", err)
+	}
+	viaProxy := registry["wantapply"]
+	if err := ApplyFirecrawlEgress(registry); err != nil {
+		t.Fatalf("ApplyFirecrawlEgress: %v", err)
+	}
+	if registry["wantapply"] != viaProxy {
+		t.Error("wantapply lost its proxied transport with no hosted key configured")
 	}
 }

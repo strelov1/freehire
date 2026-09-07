@@ -6,6 +6,7 @@ import (
 	"encoding/xml"
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -23,20 +24,40 @@ import (
 // run". This one answers "no address we can obtain is served at all" — and it is the only one
 // that costs money per page, so nothing lands here that either of the others can reach.
 //
-// Measured 2026-09-07, both providers: 403 from the production datacenter IP and 403 through
-// SOURCES_PROXY_URL, whose exit their edge classifies as datacenter too; served normally by
-// the hosted API. The browser tier does not help, because the refusal comes before any
-// challenge is offered.
+// Measured 2026-09-07 for bayt and gulftalent: 403 from the production datacenter IP and 403
+// through SOURCES_PROXY_URL, whose exit their edge classifies as datacenter too; served
+// normally by the hosted API. The browser tier does not help, because the refusal comes before
+// any challenge is offered.
 //
-// What is behind those walls is thin, and whoever changes this should know the number rather
-// than rediscover it: run through this repository's own classify.IsTech, bayt's IT category
-// passed 0 of 33 titles and gulftalent's postings 5 of 400 (1.25%). They are project managers,
-// professors, chefs and hotel electricians. This tier was built with that measured and
-// accepted, which is why every guard below exists.
-var firecrawlProviders = map[string]func(*firecrawlClient) Source{
-	"bayt":       func(c *firecrawlClient) Source { return NewBayt(c) },
-	"gulftalent": func(c *firecrawlClient) Source { return NewGulfTalent(c) },
+// What is behind those two walls is thin, and whoever changes this should know the number
+// rather than rediscover it: run through this repository's own classify.IsTech, bayt's IT
+// category passed 0 of 33 titles and gulftalent's postings 5 of 400 (1.25%). They are project
+// managers, professors, chefs and hotel electricians. That was measured and accepted, which is
+// why every guard below exists.
+//
+// A build function receives BOTH transports, because the useful shape is not always "everything
+// through the hosted client". wantapply is the case that proved it, and it is a different shape
+// from the other two: its pages are perfectly reachable on the free .cy mirror, and only the
+// ENUMERATION is missing there — .cy's sitemap lists ~605 vacancies where .com's lists 2 755,
+// and five vacancies absent from the former all answered 200 on the latter's host. So one
+// metered request buys the list and the 2 755 pages stay free. Its yield is also the best of
+// the three by a distance: 636 of 2 753 titles (23%) pass classify.IsTech.
+var firecrawlProviders = map[string]func(hosted *firecrawlClient, direct HTTPClient) Source{
+	"bayt":       func(hosted *firecrawlClient, _ HTTPClient) Source { return NewBayt(hosted) },
+	"gulftalent": func(hosted *firecrawlClient, _ HTTPClient) Source { return NewGulfTalent(hosted) },
+	// Only the enumeration is hosted: .com lists 2 755 vacancies where .cy lists ~605, and every
+	// one of them is readable on .cy. See NewWantapplyViaHostedSitemap.
+	"wantapply": func(hosted *firecrawlClient, direct HTTPClient) Source {
+		return NewWantapplyViaHostedSitemap(direct, hosted, wantapplyComSitemapURL, wantapplyComHostname)
+	},
 }
+
+const (
+	// wantapplyComSitemapURL is the fuller enumeration; wantapplyComHostname is the host its
+	// entries carry, which is not the host the pages are fetched from.
+	wantapplyComSitemapURL = "https://wantapply.com/sitemap.xml"
+	wantapplyComHostname   = "wantapply.com"
+)
 
 // defaultFirecrawlBudget is how many pages one run may fetch when nothing says otherwise.
 // Deliberately small against a site listing 60 000 postings: the difference between a bounded
@@ -129,12 +150,20 @@ func ApplyFirecrawlEgress(registry map[string]Source) error {
 	if err != nil {
 		return fmt.Errorf("sources: hosted tier: %w", err)
 	}
+	// The free transport a mixed-tier provider keeps for the bulk of its work. It is the proxied
+	// client when a proxy is configured, since the providers here are refused on the direct IP.
+	direct := HTTPClient(NewClient())
+	if raw := strings.TrimSpace(os.Getenv("SOURCES_PROXY_URL")); raw != "" {
+		if u, err := url.Parse(raw); err == nil && u.Host != "" {
+			direct = NewProxyClient(u)
+		}
+	}
 	// One client for the whole run, so the budget counts across every provider in it: what is
 	// being protected is the account, and no single adapter can know what the others spent.
 	c := &firecrawlClient{api: api}
 	for name, build := range firecrawlProviders {
 		if _, ok := registry[name]; ok {
-			registry[name] = build(c)
+			registry[name] = build(c, direct)
 		}
 	}
 	return nil
