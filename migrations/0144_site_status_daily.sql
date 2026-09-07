@@ -12,6 +12,8 @@
 -- gets a row when a sample actually ran.
 CREATE TABLE public.site_status_daily (
     day            date        PRIMARY KEY,
-    worst_severity smallint    NOT NULL,
+    -- squawk-ignore prefer-bigint-over-smallint
+    worst_severity smallint    NOT NULL, -- only ever 0/1/2 (see the table comment above);
+                                          -- bigint buys no headroom a fixed 3-value column can use.
     updated_at     timestamptz NOT NULL DEFAULT now()
 );
