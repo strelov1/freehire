@@ -74,24 +74,22 @@ func IsDataCorrupted(err error) bool {
 	return errors.As(err, &pgErr) && pgErr.Code == codeDataCorrupted
 }
 
-// IsExclusionViolation reports whether err is (or wraps) an EXCLUDE-constraint violation
-// (SQLSTATE 23P01) — a row that overlaps one already there, on whatever operator the
-// constraint names.
-//
-// It has its own SQLSTATE, distinct from a unique violation's 23505, and that is the
-// trap: an EXCLUDE constraint is the natural way to say "these two cannot overlap", and
-// a caller that reaches for IsUniqueViolation because that is the familiar one will not
-// match it. The first user here is mentorship's no-double-booking guarantee, where the
-// violation is an ORDINARY outcome — somebody else took the hour — and must become a
-// domain error rather than a 500.
-func IsExclusionViolation(err error) bool {
-	var pgErr *pgconn.PgError
-	return errors.As(err, &pgErr) && pgErr.Code == codeExclusionViolation
-}
-
 // ExclusionViolationConstraint reports the name of the violated constraint when err is
-// (or wraps) an EXCLUDE violation, so a table carrying more than one can map each to its
-// own meaning. ok is false for anything else.
+// (or wraps) an EXCLUDE-constraint violation — a row that overlaps one already there, on
+// whatever operator the constraint names. ok is false for anything else.
+//
+// SQLSTATE 23P01, and that is the trap this exists for: an EXCLUDE constraint is the
+// natural way to say "these two cannot overlap", and its violation is NOT a unique
+// violation's 23505. A caller reaching for IsUniqueViolation, because that is the
+// familiar one, will not match it — and the refusal reaches the handler unclassified.
+// The first user is mentorship's no-double-booking guarantee, where the violation is an
+// ORDINARY outcome (somebody else took the hour) that must become a domain error rather
+// than a 500.
+//
+// There is deliberately no bare IsExclusionViolation beside it. Every caller so far has
+// to know WHICH constraint fired before it can say what happened, so a boolean would be
+// an answer nobody can act on — and the dead-code guard caught it as unreachable the
+// moment it was written for symmetry with the classifiers above.
 func ExclusionViolationConstraint(err error) (name string, ok bool) {
 	var pgErr *pgconn.PgError
 	if !errors.As(err, &pgErr) || pgErr.Code != codeExclusionViolation {
