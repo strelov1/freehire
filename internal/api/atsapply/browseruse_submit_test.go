@@ -128,9 +128,14 @@ func TestSubmit_BrowserUseFallback_ShadowModeNeverCallsBrowserUse(t *testing.T) 
 // not an ordinary retryable error, exactly like an unconfirmed chromedp submission. The
 // caller's own context deadline (RunOptions.CallTimeout) is the realistic trigger in
 // production, since it is shorter than this executor's own internal Wait timeout.
+//
+// It must also not let the run's cost vanish from the spend guard: CreateRun already
+// started billable work, so the executor separately fetches the run's cost-so-far
+// (recordSpendBestEffort) once Wait itself has given up — the /runs/run-1 handler below is
+// that read, distinct from the /runs/run-1/status poll Wait itself fails on.
 func TestSubmit_BrowserUseFallback_ARunThatErrorsMidFlightIsUnconfirmedNotRetryable(t *testing.T) {
 	t.Setenv("AUTO_APPLY_BROWSERUSE_ENFORCE", "1")
-	calls := 0
+	calls, resultCalls := 0, 0
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case r.Method == http.MethodPost && r.URL.Path == "/runs":
@@ -141,14 +146,21 @@ func TestSubmit_BrowserUseFallback_ARunThatErrorsMidFlightIsUnconfirmedNotRetrya
 			// status poll itself now fails (a transport hiccup, or the caller's own
 			// context deadline firing, which Wait surfaces the same way).
 			w.WriteHeader(http.StatusInternalServerError)
+		case r.URL.Path == "/runs/run-1":
+			// recordSpendBestEffort's own read, made with a fresh context after Wait has
+			// already failed — the run is still genuinely in flight from the API's own
+			// point of view, cost included.
+			resultCalls++
+			_, _ = w.Write([]byte(`{"id":"run-1","status":"running","totalCostUsd":"0.05"}`))
 		default:
 			t.Fatalf("unexpected browser-use request: %s %s", r.Method, r.URL.Path)
 		}
 	}))
 	t.Cleanup(srv.Close)
 
+	executor := newTestBrowserUseExecutor(srv.URL)
 	c := (&Client{fetchers: map[string]applyform.Fetcher{"ashby": fakeAshbyFetcher{}}}).
-		WithBrowserUse(newTestBrowserUseExecutor(srv.URL))
+		WithBrowserUse(executor)
 
 	result, err := c.Submit(context.Background(), autoapply.Claimed{Provider: "ashby"}, map[string]string{"email": "ada@example.com"})
 	if err != nil {
@@ -159,6 +171,12 @@ func TestSubmit_BrowserUseFallback_ARunThatErrorsMidFlightIsUnconfirmedNotRetrya
 	}
 	if calls != 1 {
 		t.Errorf("browser-use run-creation calls = %d, want exactly 1", calls)
+	}
+	if resultCalls != 1 {
+		t.Errorf("browser-use result-fetch calls = %d, want exactly 1 — the run's cost must still be looked up after Wait fails", resultCalls)
+	}
+	if executor.spend.spentUSD != 0.05 {
+		t.Errorf("spend.spentUSD = %v, want 0.05 — the run's cost must reach the spend guard even though Wait itself failed", executor.spend.spentUSD)
 	}
 }
 
