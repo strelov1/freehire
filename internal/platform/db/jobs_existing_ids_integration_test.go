@@ -22,6 +22,17 @@ func farFuture() pgtype.Timestamptz {
 	return pgtype.Timestamptz{Time: time.Now().Add(24 * time.Hour), Valid: true}
 }
 
+// bodyRefreshOff is how cmd/ingest expresses "do not re-read stale bodies": a slot no row can
+// hash to, since the predicate computes abs(hashtext(external_id)) % slices and that is never
+// negative. The divisor still has to be positive — a modulus of zero raises rather than
+// disabling anything, which is deliberate: a caller that forgets these parameters should fail
+// loudly rather than quietly withhold or quietly keep every row.
+const bodyRefreshOffSlot = -1
+
+func bodyRefreshOff() (pgtype.Timestamptz, int64, int64) {
+	return pgtype.Timestamptz{Time: time.Now(), Valid: true}, 1, bodyRefreshOffSlot
+}
+
 func TestExistingExternalIDsScopedToProvider(t *testing.T) {
 	pool := startPostgres(t)
 	q := New(pool)
@@ -40,9 +51,13 @@ func TestExistingExternalIDsScopedToProvider(t *testing.T) {
 		t.Fatalf("upsert lever: %v", err)
 	}
 
+	offCutoff, offSlices, offSlot := bodyRefreshOff()
 	rows, err := q.ExistingExternalIDs(ctx, ExistingExternalIDsParams{
-		Source:          "greenhouse",
-		HydrationCutoff: farFuture(),
+		Source:            "greenhouse",
+		HydrationCutoff:   farFuture(),
+		BodyRefreshCutoff: offCutoff,
+		BodyRefreshSlices: offSlices,
+		BodyRefreshSlot:   offSlot,
 	})
 	if err != nil {
 		t.Fatalf("ExistingExternalIDs: %v", err)
@@ -95,10 +110,14 @@ func TestExistingExternalIDsScopedToBoard(t *testing.T) {
 		{"dollartreeca", []string{"dollartreeca:3"}, "dollartreeca:3"},
 		{"Capital_One", []string{"Capital_One:4"}, "Capital_One:4"},
 	} {
+		offCutoff, offSlices, offSlot := bodyRefreshOff()
 		rows, err := q.ExistingExternalIDsByBoard(ctx, ExistingExternalIDsByBoardParams{
-			Source:          "workday",
-			Pattern:         externalid.BoardPattern(tc.board),
-			HydrationCutoff: farFuture(),
+			Source:            "workday",
+			Pattern:           externalid.BoardPattern(tc.board),
+			HydrationCutoff:   farFuture(),
+			BodyRefreshCutoff: offCutoff,
+			BodyRefreshSlices: offSlices,
+			BodyRefreshSlot:   offSlot,
 		})
 		if err != nil {
 			t.Fatalf("ExistingExternalIDsByBoard(%s): %v", tc.board, err)
@@ -137,10 +156,14 @@ func TestExistingExternalIDsWithholdsUnhydratedRowsUntilCutoff(t *testing.T) {
 		}
 	}
 
+	offCutoff, offSlices, offSlot := bodyRefreshOff()
 	// Cutoff in the past: both rows are newer, so the body-less one is withheld for retry.
 	rows, err := q.ExistingExternalIDs(ctx, ExistingExternalIDsParams{
-		Source:          "greenhouse",
-		HydrationCutoff: pgtype.Timestamptz{Time: time.Now().Add(-time.Hour), Valid: true},
+		Source:            "greenhouse",
+		HydrationCutoff:   pgtype.Timestamptz{Time: time.Now().Add(-time.Hour), Valid: true},
+		BodyRefreshCutoff: offCutoff,
+		BodyRefreshSlices: offSlices,
+		BodyRefreshSlot:   offSlot,
 	})
 	if err != nil {
 		t.Fatalf("ExistingExternalIDs (fresh): %v", err)
@@ -152,8 +175,11 @@ func TestExistingExternalIDsWithholdsUnhydratedRowsUntilCutoff(t *testing.T) {
 
 	// Cutoff in the future: the body-less row has outlived its retry window and is seen again.
 	rows, err = q.ExistingExternalIDs(ctx, ExistingExternalIDsParams{
-		Source:          "greenhouse",
-		HydrationCutoff: farFuture(),
+		Source:            "greenhouse",
+		HydrationCutoff:   farFuture(),
+		BodyRefreshCutoff: offCutoff,
+		BodyRefreshSlices: offSlices,
+		BodyRefreshSlot:   offSlot,
 	})
 	if err != nil {
 		t.Fatalf("ExistingExternalIDs (aged out): %v", err)
@@ -182,10 +208,14 @@ func TestExistingExternalIDsByBoardWithholdsUnhydratedRows(t *testing.T) {
 		}
 	}
 
+	offCutoff, offSlices, offSlot := bodyRefreshOff()
 	rows, err := q.ExistingExternalIDsByBoard(ctx, ExistingExternalIDsByBoardParams{
-		Source:          "workday",
-		Pattern:         externalid.BoardPattern("acme"),
-		HydrationCutoff: pgtype.Timestamptz{Time: time.Now().Add(-time.Hour), Valid: true},
+		Source:            "workday",
+		Pattern:           externalid.BoardPattern("acme"),
+		HydrationCutoff:   pgtype.Timestamptz{Time: time.Now().Add(-time.Hour), Valid: true},
+		BodyRefreshCutoff: offCutoff,
+		BodyRefreshSlices: offSlices,
+		BodyRefreshSlot:   offSlot,
 	})
 	if err != nil {
 		t.Fatalf("ExistingExternalIDsByBoard: %v", err)
@@ -213,4 +243,141 @@ func seenBoardIDs(rows []ExistingExternalIDsByBoardRow) []string {
 	}
 	slices.Sort(ids)
 	return ids
+}
+
+// A stored body goes stale when the employer edits their posting after we captured it, and the
+// crawl must re-read it — otherwise being stored is what stops a posting from ever being fetched
+// again (freehire#2555: NVIDIA added "this position is 100% on-site" after our snapshot). The
+// row is withheld only when BOTH arms agree: its body is older than the cutoff AND it falls in
+// the run's slice.
+func TestExistingExternalIDsWithholdsStaleBodiesInSlot(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	ctx := context.Background()
+	truncate(t, pool)
+
+	for _, ext := range []string{"acme:stale", "acme:fresh"} {
+		if _, err := ingestUpsert(ctx, q, ingestParams(ext, "Engineer")); err != nil {
+			t.Fatalf("upsert %s: %v", ext, err)
+		}
+	}
+	// UpsertJob stamps hydrated_at = now(), so age one row by hand rather than waiting.
+	if _, err := pool.Exec(ctx,
+		`UPDATE jobs SET hydrated_at = now() - interval '90 days' WHERE external_id = 'acme:stale'`,
+	); err != nil {
+		t.Fatalf("age acme:stale: %v", err)
+	}
+
+	// One slice means every row is in the run's slot, so only the age arm decides.
+	rows, err := q.ExistingExternalIDs(ctx, ExistingExternalIDsParams{
+		Source:            "greenhouse",
+		HydrationCutoff:   farFuture(),
+		BodyRefreshCutoff: pgtype.Timestamptz{Time: time.Now().AddDate(0, 0, -45), Valid: true},
+		BodyRefreshSlices: 1,
+		BodyRefreshSlot:   0,
+	})
+	if err != nil {
+		t.Fatalf("ExistingExternalIDs (refresh on): %v", err)
+	}
+	if ids := seenIDs(rows); !slices.Equal(ids, []string{"acme:fresh"}) {
+		t.Errorf("ids = %v, want [acme:fresh] (the stale body is withheld for a re-read)", ids)
+	}
+
+	// The same catalogue with the feature disabled: nothing is withheld, which is what every
+	// deployment sees until an operator sets BODY_REFRESH_DAYS.
+	offCutoff, offSlices, offSlot := bodyRefreshOff()
+	rows, err = q.ExistingExternalIDs(ctx, ExistingExternalIDsParams{
+		Source:            "greenhouse",
+		HydrationCutoff:   farFuture(),
+		BodyRefreshCutoff: offCutoff,
+		BodyRefreshSlices: offSlices,
+		BodyRefreshSlot:   offSlot,
+	})
+	if err != nil {
+		t.Fatalf("ExistingExternalIDs (refresh off): %v", err)
+	}
+	if ids := seenIDs(rows); !slices.Equal(ids, []string{"acme:fresh", "acme:stale"}) {
+		t.Errorf("disabled: ids = %v, want both (no row is ever withheld)", ids)
+	}
+}
+
+// A NULL hydrated_at is every row written before migration 0144. It reads as stale rather than
+// as fresh, so the backlog is re-read instead of being invisible — and the slice is what keeps
+// that backlog from arriving in one run.
+func TestExistingExternalIDsTreatsNullHydratedAtAsStale(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	ctx := context.Background()
+	truncate(t, pool)
+
+	if _, err := ingestUpsert(ctx, q, ingestParams("acme:legacy", "Engineer")); err != nil {
+		t.Fatalf("upsert: %v", err)
+	}
+	if _, err := pool.Exec(ctx, `UPDATE jobs SET hydrated_at = NULL`); err != nil {
+		t.Fatalf("clear hydrated_at: %v", err)
+	}
+
+	rows, err := q.ExistingExternalIDs(ctx, ExistingExternalIDsParams{
+		Source:            "greenhouse",
+		HydrationCutoff:   farFuture(),
+		BodyRefreshCutoff: pgtype.Timestamptz{Time: time.Now().AddDate(0, 0, -45), Valid: true},
+		BodyRefreshSlices: 1,
+		BodyRefreshSlot:   0,
+	})
+	if err != nil {
+		t.Fatalf("ExistingExternalIDs: %v", err)
+	}
+	if ids := seenIDs(rows); len(ids) != 0 {
+		t.Errorf("ids = %v, want none (a never-hydrated row is stale, not fresh)", ids)
+	}
+}
+
+// The slice is the cost bound: a run takes one slot, and a stale row outside it stays seen. The
+// test asserts the partition rather than which slot a given id lands in — hashtext's values are
+// not ours to predict — by walking every slot and requiring each row to be withheld by exactly
+// one of them.
+func TestExistingExternalIDsSlicesStaleRowsAcrossRuns(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	ctx := context.Background()
+	truncate(t, pool)
+
+	const sliceCount = 4
+	want := []string{"acme:1", "acme:2", "acme:3", "acme:4", "acme:5", "acme:6"}
+	for _, ext := range want {
+		if _, err := ingestUpsert(ctx, q, ingestParams(ext, "Engineer")); err != nil {
+			t.Fatalf("upsert %s: %v", ext, err)
+		}
+	}
+	if _, err := pool.Exec(ctx, `UPDATE jobs SET hydrated_at = now() - interval '90 days'`); err != nil {
+		t.Fatalf("age rows: %v", err)
+	}
+
+	withheldIn := map[string]int{}
+	for slot := int64(0); slot < sliceCount; slot++ {
+		rows, err := q.ExistingExternalIDs(ctx, ExistingExternalIDsParams{
+			Source:            "greenhouse",
+			HydrationCutoff:   farFuture(),
+			BodyRefreshCutoff: pgtype.Timestamptz{Time: time.Now().AddDate(0, 0, -45), Valid: true},
+			BodyRefreshSlices: sliceCount,
+			BodyRefreshSlot:   slot,
+		})
+		if err != nil {
+			t.Fatalf("ExistingExternalIDs(slot %d): %v", slot, err)
+		}
+		seen := map[string]bool{}
+		for _, r := range rows {
+			seen[r.ExternalID] = true
+		}
+		for _, ext := range want {
+			if !seen[ext] {
+				withheldIn[ext]++
+			}
+		}
+	}
+	for _, ext := range want {
+		if withheldIn[ext] != 1 {
+			t.Errorf("%s was withheld by %d of %d slots, want exactly 1", ext, withheldIn[ext], sliceCount)
+		}
+	}
 }

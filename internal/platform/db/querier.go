@@ -1679,6 +1679,17 @@ type Querier interface {
 	// hydration_cutoff, which re-offers it for detail exactly as if it were new; past the cutoff it
 	// counts as seen again, so a posting the source genuinely publishes with no body stops costing
 	// a detail request every crawl forever.
+	//
+	// A row whose stored BODY has gone stale is withheld too, so the crawl re-reads a posting the
+	// employer has since edited — the one way an edit reaches a catalogue where being stored is
+	// what stops a posting from ever being fetched again. Stale means hydrated_at older than
+	// body_refresh_cutoff, NULL (never checked) included. body_refresh_slot bounds the cost: a
+	// posting belongs to one slot for its life (hashtext is deterministic within a database), so a
+	// run re-reads roughly 1/body_refresh_slices of the stale rows instead of facing a hydrating
+	// provider's whole catalogue at once — 1.27M postings on workday. A slot of -1 never matches
+	// any row, which is how the caller expresses "disabled" without a second query.
+	//
+	// hashtext is cast to bigint before abs(): abs() of int4's most negative value raises.
 	ExistingExternalIDs(ctx context.Context, arg ExistingExternalIDsParams) ([]ExistingExternalIDsRow, error)
 	// Seen-set of ONE board of a multi-board provider. The lookup runs once per crawled board, so a
 	// provider-wide read is unaffordable where the provider is large: on workday it returns 1.27M ids
@@ -1691,8 +1702,9 @@ type Querier interface {
 	// The caller passes an escaped pattern (externalid.BoardPattern) — a board name may contain LIKE
 	// syntax, and an unescaped underscore would match a sibling board.
 	//
-	// hydration_cutoff withholds a still-body-less row from the seen-set so its detail is retried;
-	// see ExistingExternalIDs for why.
+	// hydration_cutoff withholds a still-body-less row from the seen-set so its detail is retried,
+	// and the body_refresh_* arm withholds one whose stored body has gone stale so an employer's
+	// edit is re-read; see ExistingExternalIDs for both.
 	ExistingExternalIDsByBoard(ctx context.Context, arg ExistingExternalIDsByBoardParams) ([]ExistingExternalIDsByBoardRow, error)
 	// Record a failed attempt: bump attempts, store the error, and dead-letter (set
 	// failed_at) once the applicable bound is reached. The lease (claimed_at) is
@@ -4488,6 +4500,13 @@ type Querier interface {
 	// fuller row is only ever needed to BUILD a search document, which by construction this branch
 	// never does. TouchJob, the hydrating-source sibling, returns company_slug alone for the same
 	// reason.
+	// hydrated_at IS stamped, unlike updated_at, and the two say different things on purpose:
+	// updated_at means "content last changed", hydrated_at means "last written from a body we had
+	// just fetched". Reaching this statement at all means the crawl carried a body — an adapter
+	// that cannot fetch a posting's detail drops the posting rather than writing a body-less row
+	// (echojobs.FetchNew, workday.detail) — and that the body was identical to the stored one,
+	// which is precisely the case a staleness check over updated_at would misread as never-read.
+	// Like last_seen_at it is in no index, so the update stays heap-only.
 	RefreshUnchangedJob(ctx context.Context, arg RefreshUnchangedJobParams) (RefreshUnchangedJobRow, error)
 	// Dismiss a suggestion without linking.
 	RejectEmailLink(ctx context.Context, arg RejectEmailLinkParams) (int64, error)

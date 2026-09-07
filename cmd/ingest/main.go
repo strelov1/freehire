@@ -122,6 +122,16 @@ func run() int {
 	if refetchAll {
 		log.Printf("ingest: INGEST_REFETCH_ALL — every listed posting is treated as new, so stored rows are re-written, not just refreshed")
 	}
+	bodies, err := bodyRefreshFor(os.Getenv("BODY_REFRESH_DAYS"), os.Getenv("BODY_REFRESH_SLICE"), time.Now())
+	if err != nil {
+		log.Printf("config: %v", err)
+		return 1
+	}
+	if bodies.enabled() {
+		log.Printf("ingest: re-reading stored bodies older than %s, slice %d of %d",
+			bodies.cutoff.Format(time.DateOnly), bodies.slot, bodies.slices)
+	}
+	seen := seenPolicy{hydrationWindow: hydrationWindow, refetchAll: refetchAll, bodies: bodies}
 
 	ctx, _, pool, cleanup, err := worker.Bootstrap(context.Background())
 	if err != nil {
@@ -175,7 +185,7 @@ func run() int {
 	// tally records which of the two writes each persisted posting took, so the run says how far
 	// the cheap path actually reached rather than leaving it to be assumed (see writeTally).
 	tally := newWriteTally()
-	store := newDBStore(pool, enrich.Version, crawled, tally, hydrationWindow, refetchAll)
+	store := newDBStore(pool, enrich.Version, crawled, tally, seen)
 	runner := pipeline.Runner{
 		Registry:    registry,
 		Store:       store,
@@ -459,6 +469,76 @@ func hydrationRetryWindowFor(env string) (time.Duration, error) {
 		return 0, fmt.Errorf("HYDRATION_RETRY_DAYS must be a positive number of days, got %q", env)
 	}
 	return time.Duration(days) * 24 * time.Hour, nil
+}
+
+// bodyRefresh is the resolved "re-read a stale body" policy: how old a stored body may be
+// before a hydrating crawl fetches it again, and which slice of the catalogue this run takes.
+// See dbStore.ExistingExternalIDs and migration 0144.
+type bodyRefresh struct {
+	// cutoff is the age boundary: a row hydrated before it is stale. Meaningless while
+	// disabled, since slot then matches nothing.
+	cutoff time.Time
+	// slices is how many runs a full sweep of the catalogue takes; always positive, because
+	// it is a modulus.
+	slices int64
+	// slot is the slice this run takes, or bodyRefreshDisabledSlot.
+	slot int64
+}
+
+// bodyRefreshDisabledSlot is a slot no row can hash to: the predicate computes
+// abs(hashtext(external_id)) % slices, which is never negative. Disabling the feature is
+// therefore a parameter value rather than a second query, so there is one predicate to reason
+// about and no branch that could disagree with the other.
+const bodyRefreshDisabledSlot = -1
+
+// bodyRefreshDefaultSlices is how many runs a full sweep takes when BODY_REFRESH_SLICE is unset.
+const bodyRefreshDefaultSlices = 30
+
+func (b bodyRefresh) enabled() bool { return b.slot != bodyRefreshDisabledSlot }
+
+// bodyRefreshFor resolves BODY_REFRESH_DAYS and BODY_REFRESH_SLICE.
+//
+// It exists because a hydrating adapter fetches a posting's detail only while the catalogue
+// does not already hold it: once stored, a posting's body is never read again, so an employer
+// editing their own posting — adding "this position is 100% on-site", moving the location,
+// stating a salary — reaches us never (freehire#2555). BODY_REFRESH_DAYS is how old a stored
+// body may get before the next crawl re-reads it.
+//
+// Unset means disabled, and that is the shipped default: turning this on costs one detail
+// request per re-read posting against a host whose crawl fleet is already its own bottleneck,
+// so it is enabled deliberately, one provider at a time, with the cost watched. A set value
+// must be a positive number of days — an unparseable one fails the run rather than quietly
+// crawling as before, which is the same contract every other hand-set knob here has.
+//
+// BODY_REFRESH_SLICE bounds one run: a posting belongs to one slice for its whole life, and a
+// run takes the slice named by the day of the year, so a full sweep takes SLICE days and no
+// single run faces a provider's entire catalogue (1.27M postings on workday). Setting it
+// without BODY_REFRESH_DAYS is an error rather than a no-op: a knob that silently does nothing
+// reads exactly like a refresh that found nothing to refresh.
+func bodyRefreshFor(days, slice string, now time.Time) (bodyRefresh, error) {
+	if days == "" {
+		if slice != "" {
+			return bodyRefresh{}, fmt.Errorf("BODY_REFRESH_SLICE=%q has no effect without BODY_REFRESH_DAYS", slice)
+		}
+		return bodyRefresh{slices: 1, slot: bodyRefreshDisabledSlot}, nil
+	}
+	n, err := strconv.Atoi(days)
+	if err != nil || n <= 0 {
+		return bodyRefresh{}, fmt.Errorf("BODY_REFRESH_DAYS must be a positive number of days, got %q", days)
+	}
+	slices := int64(bodyRefreshDefaultSlices)
+	if slice != "" {
+		s, err := strconv.Atoi(slice)
+		if err != nil || s <= 0 {
+			return bodyRefresh{}, fmt.Errorf("BODY_REFRESH_SLICE must be a positive number of runs, got %q", slice)
+		}
+		slices = int64(s)
+	}
+	return bodyRefresh{
+		cutoff: now.AddDate(0, 0, -n),
+		slices: slices,
+		slot:   int64(now.YearDay()) % slices,
+	}, nil
 }
 
 // refetchAllFor resolves INGEST_REFETCH_ALL, the repair switch that empties the seen-set so a
