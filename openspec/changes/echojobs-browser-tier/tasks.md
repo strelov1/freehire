@@ -1,13 +1,13 @@
 ## 1. `platform/browser` — the launch flags
 
-- [ ] 1.1 Write the failing test for `LaunchOptions`: the stealth pair is present; an empty
+- [x] 1.1 Write the failing test for `LaunchOptions`: the stealth pair is present; an empty
       proxy adds no proxy flag; a proxy URL carrying credentials yields a `ProxyServer` with
       the scheme and host and with **neither the username nor the password anywhere in the
       option set** (a credential in argv is readable by any process on the host).
-- [ ] 1.2 Add `internal/platform/browser/browser.go` with `LaunchOptions`, documenting that
+- [x] 1.2 Add `internal/platform/browser/browser.go` with `LaunchOptions`, documenting that
       this is the single home for the stealth flags and naming the 2026-09-02 measurement
       the pair came from.
-- [ ] 1.3 Register `browser` in the `platform` block in
+- [x] 1.3 Register `browser` in the `platform` block in
       `internal/platform/arch/layering/blocks.go`, with the comment saying why it is transport
       (the `aigateway` precedent) rather than an ingest or api package.
 
