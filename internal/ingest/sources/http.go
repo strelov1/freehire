@@ -80,6 +80,14 @@ type HeaderTextGetter interface {
 	GetTextWithHeaders(ctx context.Context, url string, headers map[string]string) (string, error)
 }
 
+// LargeTextGetter behaves like TextGetter but without its tighter maxTextBody cap, for the rare
+// adapter whose raw-body page is legitimately large because it inlines a whole feed rather than
+// carrying a link to scan for (e.g. Yandex Crowd's /vacancies page, which server-renders every
+// posting's full description into one <script> tag).
+type LargeTextGetter interface {
+	GetLargeText(ctx context.Context, url string) (string, error)
+}
+
 // JSONPoster sends a JSON request body and decodes the JSON response (platforms whose
 // listing API is POST-only, e.g. Workday).
 type JSONPoster interface {
@@ -122,6 +130,7 @@ type HTTPClient interface {
 	HTMLResolvedGetter
 	TextGetter
 	HeaderTextGetter
+	LargeTextGetter
 	JSONPoster
 	HeaderJSONGetter
 	HeaderJSONPoster
@@ -416,6 +425,24 @@ func (c *Client) GetTextWithHeaders(ctx context.Context, url string, headers map
 			// all. The bytes read so far are kept: io.ReadAll returns them with the error,
 			// and a caller that can use a prefix is entitled to the prefix.
 			b, err := io.ReadAll(newCappedReader(resp.Body, url, maxTextBody))
+			body = string(b)
+			return err
+		},
+	})
+	return body, err
+}
+
+// GetLargeText fetches url and returns its raw response body, like GetText but without the
+// maxTextBody cap — bounded only by the client's own default (bodyLimit, 64 MiB), for a page
+// that inlines a whole feed rather than a link a caller scans for.
+func (c *Client) GetLargeText(ctx context.Context, url string) (string, error) {
+	var body string
+	err := c.do(ctx, request{
+		method: http.MethodGet,
+		url:    url,
+		accept: "text/html",
+		decode: func(resp *http.Response) error {
+			b, err := io.ReadAll(resp.Body)
 			body = string(b)
 			return err
 		},

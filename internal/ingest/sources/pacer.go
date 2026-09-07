@@ -206,6 +206,34 @@ func pacedSeekPoster(c JSONPoster) JSONPoster {
 	}
 }
 
+// Eightfold rate-limits an IP to ~290 requests per window (see eightfold.go), and its crawl
+// egresses through the single shared proxy IP alongside a dozen other providers
+// (proxiedProviders) — so its own concurrency cap (eightfoldDetailWorkers) and retry backoff
+// are not enough on their own; the aggregate request START rate needs its own ceiling,
+// independent of how many boards run in parallel. September 2026: unpaced, ~44 of ~95 boards
+// were failing their LISTING call (both list-API generations 403ing), the shape of a window
+// already spent by the run's own volume rather than a hard IP blocklist (a direct request
+// elsewhere in the same run succeeds). The interval below is deliberately conservative — as
+// cautious as vagas's, the gentlest existing pace on this shared proxy — because the true
+// per-window budget eightfold enforces, and how much of it the other proxied providers'
+// concurrent traffic already spends, are both unmeasured. Tune from observed convergence
+// (the board_health unhealthy count for this provider), downward while boards still fail
+// their listing call and upward only while none do.
+const (
+	eightfoldRequestInterval = time.Second // ~1 req/s
+	eightfoldRequestBurst    = 1
+)
+
+// pacedEightfoldGetter wraps a getter with a fresh limiter shared across one registry build,
+// so every board's listing pages and detail fan-out in a run compete for the same token
+// bucket — both paths hit the same rate-limited edge.
+func pacedEightfoldGetter(c JSONGetter) JSONGetter {
+	return rateLimitedJSONGetter{
+		inner:   c,
+		limiter: rate.NewLimiter(rate.Every(eightfoldRequestInterval), eightfoldRequestBurst),
+	}
+}
+
 // concurrencyLimitedJSONGetter bounds how many GetJSON calls are in flight at once via a shared
 // semaphore, independent of the pipeline's board-worker pool. Unlike a rate limiter — which caps
 // the request START rate but lets slow requests pile up concurrently — this caps simultaneous

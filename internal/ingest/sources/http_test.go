@@ -399,6 +399,28 @@ func TestClientGetTextAcceptsAPageExactlyAtTheTextCap(t *testing.T) {
 	}
 }
 
+// Regression: Yandex Crowd's /vacancies page inlines every posting's full description in one
+// <script> tag and, by September 2026, had grown past GetText's 2 MiB link-probe cap
+// (maxTextBody) despite being a perfectly well-formed catalogue. GetLargeText exists exactly
+// for this shape — bounded only by the client's own default (maxResponseBody), not maxTextBody.
+func TestClientGetLargeTextAcceptsBodyPastTheTextCap(t *testing.T) {
+	want := strings.Repeat("y", maxTextBody+1)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(want))
+	}))
+	defer srv.Close()
+
+	c := &Client{httpClient: srv.Client(), maxRetries: 2}
+
+	body, err := c.GetLargeText(context.Background(), srv.URL)
+	if err != nil {
+		t.Fatalf("GetLargeText: %v", err)
+	}
+	if body != want {
+		t.Errorf("body length = %d, want %d", len(body), len(want))
+	}
+}
+
 // The cap is inclusive: a body of exactly maxBody bytes is complete, not truncated.
 func TestClientGetJSONAcceptsBodyExactlyAtCap(t *testing.T) {
 	body := `{"content":"acme"}`
