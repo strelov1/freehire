@@ -49,15 +49,16 @@ func TestRecentFeedStream_ReplaysBacklogThenLivePublish(t *testing.T) {
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	app.Get("/api/v1/feed/recent", h.StreamRecentJobs)
 
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	ln, err := (&net.ListenConfig{}).Listen(ctx, "tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatalf("listen: %v", err)
 	}
 	go func() { _ = app.Listener(ln) }()
 	t.Cleanup(func() { _ = app.Shutdown() })
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet,
 		fmt.Sprintf("http://%s/api/v1/feed/recent", ln.Addr().String()), nil)
 	if err != nil {
@@ -100,7 +101,7 @@ func TestRecentFeedStream_NilBroadcasterIsServiceUnavailable(t *testing.T) {
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	app.Get("/api/v1/feed/recent", h.StreamRecentJobs)
 
-	req := httptest.NewRequest(fiber.MethodGet, "/api/v1/feed/recent", nil)
+	req := httptest.NewRequestWithContext(context.Background(), fiber.MethodGet, "/api/v1/feed/recent", nil)
 	resp, err := app.Test(req, 5000)
 	if err != nil {
 		t.Fatalf("request: %v", err)
