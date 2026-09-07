@@ -8,5 +8,5 @@ export const SOCIAL_LINKS: { provider: string; label: string; href: string }[] =
   { provider: 'github', label: 'GitHub', href: GITHUB_URL },
   { provider: 'linkedin', label: 'LinkedIn', href: 'https://linkedin.com/company/freehire-dev/' },
   { provider: 'telegram', label: 'Telegram', href: 'https://t.me/freehiredev' },
-  { provider: 'discord', label: 'Discord', href: 'https://discord.gg/sYnZksswR' },
+  { provider: 'discord', label: 'Discord', href: 'https://discord.gg/Cghjh3dA5N' },
 ];

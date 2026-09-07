@@ -86,10 +86,11 @@ func Samples(baseURL string) ([]Sample, error) {
 // renderers is the list of mails. Each drives the real notifier through the capture
 // sender, so a sample is what production would send, not a hand-written copy of it.
 var renderers = []func(string) (Sample, error){
-	hiringSeasonSample,
+	discordInviteSample,
 	welcomeSample,
 	advancedSearchSample,
 	noAlertSample,
+	extensionSample,
 	openSourceSample,
 	verificationSample,
 	passwordResetSample,
@@ -157,9 +158,9 @@ func campaignSample(name, title, campaignName, baseURL string) (Sample, error) {
 	})
 }
 
-func hiringSeasonSample(baseURL string) (Sample, error) {
-	return campaignSample("campaign-hiring-season-september", "Campaigns / Hiring season: September",
-		"hiring-season-september", baseURL)
+func discordInviteSample(baseURL string) (Sample, error) {
+	return campaignSample("campaign-discord-invite", "Campaigns / Discord invite",
+		"discord-invite", baseURL)
 }
 
 // The signup sequence. Its Sender takes a Reply-To, which capture also satisfies —
@@ -183,8 +184,12 @@ func noAlertSample(baseURL string) (Sample, error) {
 	return onboardingSample("onboarding-no-alert", "Onboarding / 3 · No alert yet", onboarding.StepNoAlert, baseURL)
 }
 
+func extensionSample(baseURL string) (Sample, error) {
+	return onboardingSample("onboarding-extension", "Onboarding / 4 · Browser extension", onboarding.StepExtension, baseURL)
+}
+
 func openSourceSample(baseURL string) (Sample, error) {
-	return onboardingSample("onboarding-open-source", "Onboarding / 4 · Open source", onboarding.StepOpenSource, baseURL)
+	return onboardingSample("onboarding-open-source", "Onboarding / 5 · Open source", onboarding.StepOpenSource, baseURL)
 }
 
 func verificationSample(baseURL string) (Sample, error) {
