@@ -1174,6 +1174,11 @@ type Querier interface {
 	// but deletion states what it erases explicitly rather than relying on a constraint to
 	// mean it.
 	DeleteBillingEventsForUser(ctx context.Context, userID pgtype.Int8) error
+	// Drop a board's health row entirely, for a board just retired from the catalog: it will
+	// never be crawled again, so no cooldown or failure count of its own could ever clear the
+	// normal way (a successful crawl), and leaving the row would show it as permanently
+	// unhealthy on the public /status page (ProviderHealthRollup, ListUnhealthyBoards) forever.
+	DeleteBoardHealth(ctx context.Context, arg DeleteBoardHealthParams) (int64, error)
 	// Remove a submission once triage has resolved its (provider, board) and inserted the
 	// corresponding boards row.
 	DeleteBoardSubmission(ctx context.Context, id int64) (int64, error)
@@ -1696,6 +1701,17 @@ type Querier interface {
 	// hydration_cutoff, which re-offers it for detail exactly as if it were new; past the cutoff it
 	// counts as seen again, so a posting the source genuinely publishes with no body stops costing
 	// a detail request every crawl forever.
+	//
+	// A row whose stored BODY has gone stale is withheld too, so the crawl re-reads a posting the
+	// employer has since edited — the one way an edit reaches a catalogue where being stored is
+	// what stops a posting from ever being fetched again. Stale means hydrated_at older than
+	// body_refresh_cutoff, NULL (never checked) included. body_refresh_slot bounds the cost: a
+	// posting belongs to one slot for its life (hashtext is deterministic within a database), so a
+	// run re-reads roughly 1/body_refresh_slices of the stale rows instead of facing a hydrating
+	// provider's whole catalogue at once — 1.27M postings on workday. A slot of -1 never matches
+	// any row, which is how the caller expresses "disabled" without a second query.
+	//
+	// hashtext is cast to bigint before abs(): abs() of int4's most negative value raises.
 	ExistingExternalIDs(ctx context.Context, arg ExistingExternalIDsParams) ([]ExistingExternalIDsRow, error)
 	// Seen-set of ONE board of a multi-board provider. The lookup runs once per crawled board, so a
 	// provider-wide read is unaffordable where the provider is large: on workday it returns 1.27M ids
@@ -1708,8 +1724,9 @@ type Querier interface {
 	// The caller passes an escaped pattern (externalid.BoardPattern) — a board name may contain LIKE
 	// syntax, and an unescaped underscore would match a sibling board.
 	//
-	// hydration_cutoff withholds a still-body-less row from the seen-set so its detail is retried;
-	// see ExistingExternalIDs for why.
+	// hydration_cutoff withholds a still-body-less row from the seen-set so its detail is retried,
+	// and the body_refresh_* arm withholds one whose stored body has gone stale so an employer's
+	// edit is re-read; see ExistingExternalIDs for both.
 	ExistingExternalIDsByBoard(ctx context.Context, arg ExistingExternalIDsByBoardParams) ([]ExistingExternalIDsByBoardRow, error)
 	// Record a failed attempt: bump attempts, store the error, and dead-letter (set
 	// failed_at) once the applicable bound is reached. The lease (claimed_at) is
@@ -2548,15 +2565,15 @@ type Querier interface {
 	// fail.
 	//
 	// The day in progress is EXCLUDED, and that predicate is the point of this query
-	// rather than a refinement of it. A plain max(day) reads TODAY: the 02:30 UTC rollup
-	// reaches past midnight into the log it is rotating and lands a few dozen rows on the
-	// current day, so by 13:00 UTC — when the digest runs — the freshest day is a stub
-	// whose best posting has one view. Nothing clears MinPageUniques, the run reports a
-	// quiet day and exits 0, and the completed day beside it is never published, because
-	// tomorrow's max(day) is fresher still. Measured on 2026-09-06: day 09-05 held 207020
-	// rows and 38 postings above the floor, day 09-06 held 34 rows and a maximum of one
-	// view; three digests had been lost this way. The failure is invisible from outside —
-	// a silent exit 0 is indistinguishable from a genuinely quiet day.
+	// rather than a refinement of it. A plain max(day) reads TODAY: that same run reaches
+	// past midnight into the log it is rotating and lands a few dozen rows on the current
+	// day, so by 13:00 UTC — when the digest runs — the freshest day is a stub whose best
+	// posting has one view. Nothing clears MinPageUniques, the run reports a quiet day and
+	// exits 0, and the completed day beside it is never published, because tomorrow's
+	// max(day) is fresher still. Measured on 2026-09-06: day 09-05 held 207020 rows and 38
+	// postings above the floor, day 09-06 held 34 rows and a maximum of one view; three
+	// digests had been lost this way, and a silent exit 0 is indistinguishable from a
+	// genuinely quiet day.
 	//
 	// The boundary is UTC because the column is: internal/application/viewlog/aggregate.go
 	// buckets each access-log record by rec.Time.UTC(). A bare CURRENT_DATE would follow
@@ -2952,6 +2969,11 @@ type Querier interface {
 	// structured columns (see migration 0135) rather than the lexicographic free-text column
 	// 0047 originally indexed — period_sort.go's Go-side re-sort no longer exists.
 	ListExperienceEmployments(ctx context.Context, userID int64) ([]ListExperienceEmploymentsRow, error)
+	// Greeted a while ago: an introduction to the browser extension. Unconditional like
+	// advanced_search above, and for a stricter reason — nothing here records whether an
+	// account has already installed it, so "only those without it" is not a query this
+	// schema can answer.
+	ListExtensionCandidates(ctx context.Context, arg ListExtensionCandidatesParams) ([]ListExtensionCandidatesRow, error)
 	// The whole snapshot, ordered by facet then count DESC so the reader can take the
 	// top-N per facet without re-sorting. Aggregate only — per-value counts, no
 	// record-level data.
@@ -3431,12 +3453,14 @@ type Querier interface {
 	ListUserEmailThreadLinks(ctx context.Context, userID int64) ([]ListUserEmailThreadLinksRow, error)
 	// Dense cumulative member-growth series: one UTC calendar day per row from the
 	// first registration through today, each carrying the running total of members
-	// registered on or before that day. A daily generate_series builds the gap-free
-	// calendar (days with no new signups repeat the previous total), the LEFT JOIN
-	// attaches each day's new-signup count, and the window SUM makes it cumulative, so
-	// the series is monotonically non-decreasing. Aggregate only — no user identifier,
-	// email, or other personal field is selected. With no members the series is empty
-	// (min(day) is NULL, so generate_series yields no rows).
+	// registered on or before that day, plus that day's own (non-cumulative)
+	// new-signup count for the "new members per day" chart. A daily generate_series
+	// builds the gap-free calendar (days with no new signups repeat the previous
+	// total and carry new=0), the LEFT JOIN attaches each day's new-signup count, and
+	// the window SUM makes the running total cumulative, so it is monotonically
+	// non-decreasing. Aggregate only — no user identifier, email, or other personal
+	// field is selected. With no members the series is empty (min(day) is NULL, so
+	// generate_series yields no rows).
 	ListUserGrowth(ctx context.Context) ([]ListUserGrowthRow, error)
 	// Jobs the caller has analyzed, newest first, joined to the job for display. Powers
 	// the Tracking → AI fit tab. Includes closed jobs (surfaced with a badge). The four
@@ -4307,6 +4331,15 @@ type Querier interface {
 	// so a failed entry is never reprocessed within the same run. Mirrors
 	// RecordEnrichmentFailure.
 	RecordSemanticFailure(ctx context.Context, arg RecordSemanticFailureParams) (RecordSemanticFailureRow, error)
+	// Upserts today's worst-severity-so-far. GREATEST against the stored value so a
+	// later good sample can never erase an earlier bad one recorded the same day.
+	//
+	// "Today" is (now() AT TIME ZONE 'utc')::date, not a bare CURRENT_DATE: the rest
+	// of this feature buckets by a UTC calendar day (Go's time.Now().UTC(), the
+	// frontend's UTC-anchored history strip), and a bare CURRENT_DATE follows the
+	// session's timezone instead — the same divergence social_digest.sql already
+	// documents and avoids for the same reason.
+	RecordSiteStatusSample(ctx context.Context, worstSeverity int16) error
 	// Record that a batch of (subscription, job) pairs matched, one round trip for
 	// however many pairs one query's search hits produced across every subscription that
 	// shares it — a popular query with many subscribers no longer costs one sequential
@@ -4505,6 +4538,13 @@ type Querier interface {
 	// fuller row is only ever needed to BUILD a search document, which by construction this branch
 	// never does. TouchJob, the hydrating-source sibling, returns company_slug alone for the same
 	// reason.
+	// hydrated_at IS stamped, unlike updated_at, and the two say different things on purpose:
+	// updated_at means "content last changed", hydrated_at means "last written from a body we had
+	// just fetched". Reaching this statement at all means the crawl carried a body — an adapter
+	// that cannot fetch a posting's detail drops the posting rather than writing a body-less row
+	// (echojobs.FetchNew, workday.detail) — and that the body was identical to the stored one,
+	// which is precisely the case a staleness check over updated_at would misread as never-read.
+	// Like last_seen_at it is in no index, so the update stays heap-only.
 	RefreshUnchangedJob(ctx context.Context, arg RefreshUnchangedJobParams) (RefreshUnchangedJobRow, error)
 	// Dismiss a suggestion without linking.
 	RejectEmailLink(ctx context.Context, arg RejectEmailLinkParams) (int64, error)
@@ -4656,6 +4696,30 @@ type Querier interface {
 	// Withdraw a live claim. Scoped to a non-retracted row so a second retraction affects
 	// nothing and surfaces as not-found, rather than silently re-stamping the date.
 	RetractGhostReport(ctx context.Context, arg RetractGhostReportParams) (GhostReport, error)
+	// Step 1 of recording a meeting: retract the live `interview_scheduled` event when the
+	// meeting has moved to a DIFFERENT application since it was written.
+	//
+	// UpsertApplicationInterview used to argue this could not happen — "an invitation belongs
+	// to one application, so the application under a given meeting cannot move" — and that
+	// premise is false. ListCalendarMatchCandidates reaches a meeting's identifier through
+	// `emails.application_id`, and LinkEmailToJob rewrites that column; it is reachable from
+	// POST /me/emails/:id/link and from the assistant's inbox_link tool. docs/agents/mail-stack.md
+	// records one company auto-collecting 23 acknowledgements belonging to 23 other employers,
+	// so mis-links are a documented, real condition, not a hypothetical one.
+	//
+	// The damage was two-sided. The old event could not be corrected (RetractSupersededEmailEvent
+	// is scoped to kind = 'employer_reply'), and the RIGHT one was never created either, because
+	// the interview's source_ref never changed and the upsert's DO NOTHING therefore fired
+	// against the correct application too. A month view drew the meeting under the right
+	// employer and "Interview scheduled" under the wrong one, with the right application showing
+	// no interview at all. migrations/0062 already states the rule this broke: retracted_at is
+	// "Set when a link correction moves the fact to another employer".
+	//
+	// Separate from the upsert, and run first, for the same snapshot reason
+	// RetractSupersededEmailEvent documents: data-modifying CTEs all read the pre-statement
+	// snapshot, so an insert folded in beside this would still conflict with the row being
+	// retracted and silently record nothing.
+	RetractMovedInterviewEvent(ctx context.Context, arg RetractMovedInterviewEventParams) (int64, error)
 	// Step 1 of reconciling one email with the ledger: retract the live event when the
 	// message is no longer linked, or is now linked to a different application.
 	//
@@ -5075,6 +5139,12 @@ type Querier interface {
 	// username means another account already holds it. The caller resolves either
 	// case by re-reading GetUsernameByUser.
 	SetUsernameIfAbsent(ctx context.Context, arg SetUsernameIfAbsentParams) (int64, error)
+	// The trailing 90 UTC calendar days of recorded daily status (today and the 89
+	// days before it), oldest first. A day with no row (never sampled) is simply
+	// absent — the caller must not treat that as "operational". The `>` against a
+	// 90-day interval (rather than `>=` against 89) reads the same as "trailing 90
+	// days" everywhere else this feature says it.
+	SiteStatusHistory(ctx context.Context) ([]SiteStatusHistoryRow, error)
 	// ---------------------------------------------------------------------------
 	// Skill demand history (the personal GET /me/market-pulse read)
 	// ---------------------------------------------------------------------------

@@ -30,6 +30,20 @@ Fiber HTTP handlers: feature handler structs, route registration, auth surface, 
   after `key`/`cookie`). It also carries the two rate-limit pieces: `outboundFetch`
   (throttles endpoints that fetch a caller-supplied URL) and `throttler` (backs the
   per-route limiters features build in their own `register`).
+- **A limiter is mounted AFTER the authentication gate, or it is keyed by IP — never
+  documented as one and mounted as the other.** `ratelimit.KeyByUserOrIP` reads the user id
+  a gate left in locals, and Fiber runs a route's handlers in registration order, so
+  `api.Get(path, limiter, mw.optional, h)` computes the key before anything has resolved a
+  caller: the `:user:` branch is unreachable and every signed-in caller shares their IP's
+  bucket. The three public read limiters shipped like that and nothing noticed, because
+  their tests mounted the key function on a bare `fiber.App` — where the order under test
+  is the test's, not the route's. So a limiter's test drives the route as `register`
+  actually mounts it (`public_read_limit_test.go`), and the choice of key follows the
+  mount: `publicread`/`agentsearch`/`suggest` are `KeyByIP` because their routes are
+  public reads and putting `OptionalAuth` in front of them would place an API-key database
+  lookup — which answers 503 on failure — ahead of the throttle on the hottest endpoints
+  in the product. Every `KeyByUserOrIP` limiter that remains (photo, promo, jd-resolve,
+  match analysis, mail recall, …) mounts its gate first.
 - Services shared across features (résumé store, profile, plan, CV store/renderer,
   conversation store, match analyzer, contribution, moderation, the LLM spend resolver)
   are built once in `Register` and passed to each constructor; single-feature services are

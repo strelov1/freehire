@@ -29,6 +29,29 @@ func (q *Queries) ClearProviderCooldowns(ctx context.Context, provider string) (
 	return result.RowsAffected(), nil
 }
 
+const deleteBoardHealth = `-- name: DeleteBoardHealth :execrows
+DELETE FROM board_health
+WHERE provider = $1 AND board = $2 AND region = $3
+`
+
+type DeleteBoardHealthParams struct {
+	Provider string `json:"provider"`
+	Board    string `json:"board"`
+	Region   string `json:"region"`
+}
+
+// Drop a board's health row entirely, for a board just retired from the catalog: it will
+// never be crawled again, so no cooldown or failure count of its own could ever clear the
+// normal way (a successful crawl), and leaving the row would show it as permanently
+// unhealthy on the public /status page (ProviderHealthRollup, ListUnhealthyBoards) forever.
+func (q *Queries) DeleteBoardHealth(ctx context.Context, arg DeleteBoardHealthParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteBoardHealth, arg.Provider, arg.Board, arg.Region)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const getBoardCooldown = `-- name: GetBoardCooldown :one
 SELECT cooldown_until
 FROM board_health

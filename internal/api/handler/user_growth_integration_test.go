@@ -31,6 +31,7 @@ func TestUserGrowthEndpoint(t *testing.T) {
 	type point struct {
 		Date  string `json:"date"`
 		Total int    `json:"total"`
+		New   int    `json:"new"`
 	}
 	type envelope struct {
 		Data []point `json:"data"`
@@ -79,10 +80,10 @@ func TestUserGrowthEndpoint(t *testing.T) {
 		t.Fatal("seeded series is empty")
 	}
 
-	byDate := map[string]int{}
+	byDate := map[string]point{}
 	prev := 0
 	for i, p := range series {
-		byDate[p.Date] = p.Total
+		byDate[p.Date] = p
 		if p.Total < prev {
 			t.Errorf("series not monotonic at %s: %d < previous %d", p.Date, p.Total, prev)
 		}
@@ -92,16 +93,27 @@ func TestUserGrowthEndpoint(t *testing.T) {
 		}
 	}
 
-	if got := byDate["2026-01-05"]; got != 2 {
+	if got := byDate["2026-01-05"].Total; got != 2 {
 		t.Errorf("2026-01-05 total = %d, want 2", got)
 	}
-	if got := byDate["2026-01-07"]; got != 2 { // gap day repeats the running total
+	if got := byDate["2026-01-07"].Total; got != 2 { // gap day repeats the running total
 		t.Errorf("2026-01-07 total = %d, want 2 (flat gap day)", got)
 	}
-	if got := byDate["2026-01-10"]; got != 5 {
+	if got := byDate["2026-01-10"].Total; got != 5 {
 		t.Errorf("2026-01-10 total = %d, want 5", got)
 	}
 	if last := series[len(series)-1].Total; last != 5 {
 		t.Errorf("final total = %d, want 5 (all seeded members)", last)
+	}
+
+	// --- New-signups-per-day (non-cumulative) -----------------------------------
+	if got := byDate["2026-01-05"].New; got != 2 {
+		t.Errorf("2026-01-05 new = %d, want 2", got)
+	}
+	if got := byDate["2026-01-07"].New; got != 0 { // gap day: no new signups
+		t.Errorf("2026-01-07 new = %d, want 0 (gap day)", got)
+	}
+	if got := byDate["2026-01-10"].New; got != 3 {
+		t.Errorf("2026-01-10 new = %d, want 3", got)
 	}
 }

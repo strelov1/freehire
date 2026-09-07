@@ -10,6 +10,8 @@ import (
 	"context"
 	"testing"
 	"time"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // seedApplication records an application the real way, so the row under test hangs off
@@ -271,6 +273,80 @@ func TestUpsertApplicationInterview_NotesTheSchedulingOnceInTheLedger(t *testing
 	// itself is in August 2026; this row must not be.
 	if occurred.After(time.Now().Add(time.Minute)) {
 		t.Errorf("the ledger event is dated %v, in the future — occurred_at means when it happened", occurred)
+	}
+}
+
+// A meeting CAN move between applications, which the upsert used to argue it could not.
+// Its identifier reaches the application through emails.application_id, and LinkEmailToJob
+// rewrites that column — reachable from POST /me/emails/:id/link and from the assistant's
+// inbox_link tool. A mis-link is documented as real: docs/agents/mail-stack.md records one
+// company auto-collecting 23 acknowledgements belonging to 23 other employers.
+//
+// The old behaviour was wrong twice over. The stale event could not be corrected
+// (RetractSupersededEmailEvent is scoped to kind = 'employer_reply'), and the correct event
+// was never created either, because source_ref does not change and the upsert's DO NOTHING
+// therefore fired against the right application too. One month view showed the meeting
+// under the right employer and "Interview scheduled" under the wrong one.
+func TestInterviewEventFollowsTheApplicationWhenTheLinkIsCorrected(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	ctx := context.Background()
+
+	user := seedResponseUser(t, q, "iv-relink@example.test", true)
+	_, wrongApp := seedApplication(t, q, user, "iv-relink-wrong", "wrongco")
+	_, rightApp := seedApplication(t, q, user, "iv-relink-right", "derq")
+	const uid = "relink@ashbyhq.com"
+
+	record := func(appID int64) {
+		t.Helper()
+		if _, err := q.RetractMovedInterviewEvent(ctx, RetractMovedInterviewEventParams{
+			UserID: user, IcalUid: uid, ApplicationID: pgtype.Int8{Int64: appID, Valid: true},
+		}); err != nil {
+			t.Fatalf("retract: %v", err)
+		}
+		if _, err := q.UpsertApplicationInterview(ctx, UpsertApplicationInterviewParams{
+			UserID: user, ApplicationID: appID, IcalUid: uid,
+			StartsAt: ts(time.Date(2026, 8, 13, 9, 0, 0, 0, time.UTC)), Status: "confirmed",
+			Source: "calendar_google", EventSource: "calendar_google",
+		}); err != nil {
+			t.Fatalf("upsert: %v", err)
+		}
+	}
+
+	record(wrongApp)
+	record(wrongApp) // a re-sync of an unmoved meeting must change nothing
+	record(rightApp) // the link correction
+
+	live := func(appID int64) int {
+		t.Helper()
+		var n int
+		if err := q.db.QueryRow(ctx,
+			`SELECT count(*) FROM application_events
+			  WHERE user_id = $1 AND kind = 'interview_scheduled'
+			    AND application_id = $2 AND retracted_at IS NULL`, user, appID).Scan(&n); err != nil {
+			t.Fatalf("count live events: %v", err)
+		}
+		return n
+	}
+
+	if got := live(rightApp); got != 1 {
+		t.Errorf("the corrected application has %d live interview_scheduled events, want 1", got)
+	}
+	if got := live(wrongApp); got != 0 {
+		t.Errorf("the former application kept %d live interview_scheduled events, want 0", got)
+	}
+	// The retraction marks; it never deletes. migrations/0062 defines retracted_at as
+	// "Set when a link correction moves the fact to another employer", and the row stays
+	// as the record that the correction happened.
+	var retracted int
+	if err := q.db.QueryRow(ctx,
+		`SELECT count(*) FROM application_events
+		  WHERE user_id = $1 AND kind = 'interview_scheduled' AND retracted_at IS NOT NULL`,
+		user).Scan(&retracted); err != nil {
+		t.Fatalf("count retracted: %v", err)
+	}
+	if retracted != 1 {
+		t.Errorf("%d retracted events, want exactly the one the correction superseded", retracted)
 	}
 }
 

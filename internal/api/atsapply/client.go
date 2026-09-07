@@ -191,7 +191,7 @@ func (c *Client) Submit(ctx context.Context, claimed autoapply.Claimed, answers 
 		defer cleanup()
 	}
 
-	confirmed, err := fillAndSubmit(browserCtx, claimed.JobURL, plan)
+	confirmed, err := fillAndSubmit(browserCtx, plan)
 	if err != nil {
 		// A fill action failing, or the board EXPLICITLY refusing the submit click
 		// (SUBMIT_REFUSED_MARKERS in fill.go), both mean no submission happened — safe

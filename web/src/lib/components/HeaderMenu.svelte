@@ -37,7 +37,7 @@
   // Same invite link as the footer's socials row (Footer.svelte) — no shared
   // constant exists for it yet, so it's kept inline here like GITHUB_URL's
   // counterpart in Footer.
-  const DISCORD_URL = 'https://discord.gg/sYnZksswR';
+  const DISCORD_URL = 'https://discord.gg/Cghjh3dA5N';
 
   // The single menu absorbs the site nav, the signed-in account items, the theme
   // toggle, and the auth action — the header's only control besides search.

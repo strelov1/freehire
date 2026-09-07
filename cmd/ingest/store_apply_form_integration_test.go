@@ -14,7 +14,6 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/strelov1/freehire/internal/ingest/applyform"
-	"github.com/strelov1/freehire/internal/ingest/pipeline"
 	"github.com/strelov1/freehire/internal/job/job"
 	"github.com/strelov1/freehire/internal/job/jobderive"
 	"github.com/strelov1/freehire/internal/platform/db"
@@ -86,7 +85,7 @@ func queuedCaptures(t *testing.T, pool *pgxpool.Pool, jobID int64) int {
 func TestSaveWithApplyForm_PersistsTheFormWithTheJob(t *testing.T) {
 	pool := testdb.Pool(t)
 	ctx := context.Background()
-	store := newDBStore(pool, 1, nil, nil, pipeline.HydrationRetryWindow, false)
+	store := newDBStore(pool, 1, nil, nil, defaultSeenPolicy())
 	form := applyform.Form{
 		Provider: "recruitee",
 		Fields: []applyform.Field{
@@ -125,7 +124,7 @@ func TestSaveWithApplyForm_PersistsTheFormWithTheJob(t *testing.T) {
 func TestSaveWithApplyForm_ReCrawlReplacesTheForm(t *testing.T) {
 	pool := testdb.Pool(t)
 	ctx := context.Background()
-	store := newDBStore(pool, 1, nil, nil, pipeline.HydrationRetryWindow, false)
+	store := newDBStore(pool, 1, nil, nil, defaultSeenPolicy())
 	posting := recruiteePosting("acme:2", "Platform Engineer")
 
 	for _, label := range []string{"Old question", "New question"} {
@@ -149,7 +148,7 @@ func TestSaveWithApplyForm_ReCrawlReplacesTheForm(t *testing.T) {
 func TestSave_WithoutAFormStoresNone(t *testing.T) {
 	pool := testdb.Pool(t)
 	ctx := context.Background()
-	store := newDBStore(pool, 1, nil, nil, pipeline.HydrationRetryWindow, false)
+	store := newDBStore(pool, 1, nil, nil, defaultSeenPolicy())
 	if err := store.Save(ctx, recruiteePosting("acme:3", "Data Engineer")); err != nil {
 		t.Fatalf("Save: %v", err)
 	}
@@ -198,7 +197,7 @@ func capturesFor(t *testing.T, pool *pgxpool.Pool, source, externalID string) in
 func TestSave_QueuesACaptureForAProviderThatNeedsARequest(t *testing.T) {
 	pool := testdb.Pool(t)
 	ctx := context.Background()
-	store := newDBStore(pool, 1, nil, nil, pipeline.HydrationRetryWindow, false)
+	store := newDBStore(pool, 1, nil, nil, defaultSeenPolicy())
 
 	if err := store.Save(ctx, greenhousePosting("stripe:900001", "Backend Engineer")); err != nil {
 		t.Fatalf("Save: %v", err)
@@ -214,7 +213,7 @@ func TestSave_QueuesACaptureForAProviderThatNeedsARequest(t *testing.T) {
 func TestSave_DoesNotRequeueAnAlreadyCapturedPosting(t *testing.T) {
 	pool := testdb.Pool(t)
 	ctx := context.Background()
-	store := newDBStore(pool, 1, nil, nil, pipeline.HydrationRetryWindow, false)
+	store := newDBStore(pool, 1, nil, nil, defaultSeenPolicy())
 	posting := greenhousePosting("stripe:900002", "Platform Engineer")
 
 	if err := store.Save(ctx, posting); err != nil {
@@ -243,7 +242,7 @@ func TestSave_DoesNotRequeueAnAlreadyCapturedPosting(t *testing.T) {
 func TestSave_NeverQueuesAProviderWithoutAFetcher(t *testing.T) {
 	pool := testdb.Pool(t)
 	ctx := context.Background()
-	store := newDBStore(pool, 1, nil, nil, pipeline.HydrationRetryWindow, false)
+	store := newDBStore(pool, 1, nil, nil, defaultSeenPolicy())
 
 	j, err := job.New(job.Draft{
 		Input: jobderive.Input{

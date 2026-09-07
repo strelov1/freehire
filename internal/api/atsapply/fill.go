@@ -57,7 +57,7 @@ var submitRefusedMarkers = []string{
 // This is the least-verified part of the package — see design.md's Testing section and
 // task 7.1: correctness here rests on the 2026-09-02 spike's single live posting and the
 // reference implementation's own measured rules, not on this package's own live testing.
-func fillAndSubmit(ctx context.Context, jobURL string, plan Plan) (bool, error) {
+func fillAndSubmit(ctx context.Context, plan Plan) (bool, error) {
 	for _, f := range plan.Fields {
 		if err := fillOne(ctx, f); err != nil {
 			return false, fmt.Errorf("fill %q: %w", f.ID, err)
@@ -148,7 +148,7 @@ func fieldSelector(id string) string {
 // moment earlier or later would have hit the ordinary ctx.Done() branch instead, and this
 // must report identically either way. Found by code review: this check did not exist, so a
 // deadline firing mid-call surfaced as a plain retryable error.
-func classifyPollError(ctx context.Context, err error) (unconfirmed bool) {
+func pollEndedByDeadline(ctx context.Context) bool {
 	return ctx.Err() != nil
 }
 
@@ -160,11 +160,13 @@ func verifySubmission(parent context.Context) (bool, error) {
 	ctx, cancel := context.WithTimeout(parent, submitVerifyTimeout)
 	defer cancel()
 
-	deadline := time.Now().Add(submitVerifyTimeout)
-	for time.Now().Before(deadline) {
+	// One deadline, the context's. The loop used to carry a second time.Now()-based one
+	// computed from the same timeout, which could never be the binding limit — ctx is
+	// derived from it above and cancels first or together.
+	for ctx.Err() == nil {
 		var bodyText string
 		if err := chromedp.Run(ctx, chromedp.Text("body", &bodyText, chromedp.ByQuery)); err != nil {
-			if classifyPollError(ctx, err) {
+			if pollEndedByDeadline(ctx) {
 				return false, nil
 			}
 			return false, err

@@ -26,6 +26,16 @@ already publishes.
   so whether its freshest complete day is yesterday or the day before depends on when
   logrotate runs on the host — an assumption that would fail by silently publishing a
   stale list. Past `StaleAfterDays` it returns `ErrStaleViewData` rather than a day.
+
+  **Two places decide the day, and this is only the second.** What "latest" means is
+  settled in SQL: `LatestJobViewDay` excludes the day in PROGRESS (`WHERE day < (now()
+  AT TIME ZONE 'utc')::date`), because the 02:30 run reaches past midnight and lands a
+  few dozen rows on the current day — so a plain `max(day)` reads a stub whose best
+  posting has one view. Nothing clears `MinPageUniques`, the run reports a quiet day
+  and exits 0, and the finished day beside it is lost for good. That cost three digests
+  before it was found, and a silent exit 0 is indistinguishable from a quiet day. A
+  rollup holding only the day in progress therefore reports NO data, which arrives here
+  as `ErrNoViewData` and exits non-zero: loud once on a fresh host beats silent daily.
 - `Service.Build` / `Service.Dispatch` — assemble, then deliver. Every publisher is
   attempted even after one fails, and the failures are joined: a Discord outage must
   not cost the day everywhere, and the log should name every channel that broke.

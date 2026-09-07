@@ -16,11 +16,13 @@ import (
 // `available`, which still resolve. Identity is the vacancy's URL path (a stable slug such as
 // "support/finteh_chat"); the float `id` is a positional index and is ignored.
 type yandexcrowd struct {
-	http TextGetter
+	http LargeTextGetter
 }
 
-// NewYandexCrowd builds the Yandex Crowd adapter over the given HTTP client.
-func NewYandexCrowd(c TextGetter) Source { return yandexcrowd{http: c} }
+// NewYandexCrowd builds the Yandex Crowd adapter over the given HTTP client. It needs
+// GetLargeText, not GetText: the listing inlines every posting's full description, and by
+// September 2026 that page had grown past GetText's 2 MiB link-probe cap.
+func NewYandexCrowd(c LargeTextGetter) Source { return yandexcrowd{http: c} }
 
 func (yandexcrowd) Provider() string { return "yandexcrowd" }
 
@@ -54,7 +56,7 @@ type yandexCrowdVacancy struct {
 }
 
 func (y yandexcrowd) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
-	body, err := y.http.GetText(ctx, yandexCrowdListURL)
+	body, err := y.http.GetLargeText(ctx, yandexCrowdListURL)
 	if err != nil {
 		return nil, fmt.Errorf("yandexcrowd: listing: %w", err)
 	}

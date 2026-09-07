@@ -141,9 +141,21 @@ single shared budget would have to be sized for the expensive endpoint, and
 would then throttle the cheap ones far harder than their cost justifies.
 
 Each budget SHALL be namespaced separately, so exhausting one leaves the other
-untouched, and SHALL identify an authenticated caller by user rather than by
-address — not to grant a larger allowance, which this change does not do, but so
-that callers sharing an egress address do not share an allowance.
+untouched, and SHALL identify a caller by source address.
+
+This once said "by user rather than by address … so that callers sharing an egress
+address do not share an allowance". That was never how it behaved. Fiber runs a route's
+handlers in registration order, and every public read mounts its limiter before the
+optional-auth gate or without a gate at all, so the user branch read a value nothing had
+written and the key was always the address. Moving the gate would have fixed three of ten
+routes and put a database lookup ahead of throttling on the hottest reads on the site;
+naming what actually happens is the smaller answer, and the cost — colleagues behind one
+office NAT sharing a budget — is one this endpoint has always carried.
+
+#### Scenario: A signed-in caller is budgeted by address like any other
+
+- **WHEN** two signed-in callers read a public endpoint from the same source address
+- **THEN** they draw on the same budget
 
 #### Scenario: Exhausting the agent search budget leaves ordinary search available
 

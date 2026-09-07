@@ -1,6 +1,10 @@
 package main
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/strelov1/freehire/internal/dict/normalize"
+)
 
 // TestCuratedAliasesAreWellFormed is the guard that replaces reviewing the list by eye. Every
 // property here is one a wrong entry would break silently: the plan would still print, --apply
@@ -23,7 +27,12 @@ func TestCuratedAliasesAreWellFormed(t *testing.T) {
 			t.Errorf("%q -> %q, but %q is itself retiring: the registry resolves one hop, so "+
 				"%q would land on a slug with no jobs", aliasSlug, canon, canon, aliasSlug)
 		}
-		if !curatedCanonIsFixedPoint(canon) {
+		// A canon has to survive the slug rule unchanged. Every future posting from the
+		// surviving board derives its slug through CompanySlug, so a canon the rule would
+		// rewrite could never be reached by an ordinary crawl — the company would depend on
+		// an alias row forever to name itself. The same requirement is why electCanonical
+		// derives the canon from a name rather than reusing a stored slug.
+		if normalize.CompanySlug(canon) != canon {
 			t.Errorf("canonical %q is not a fixed point of CompanySlug: every future posting "+
 				"derives a different slug, so the company could never name itself", canon)
 		}

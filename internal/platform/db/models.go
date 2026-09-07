@@ -326,7 +326,7 @@ type CompanyFeedbackReport struct {
 type CompanySlugAlias struct {
 	AliasSlug     string `json:"alias_slug"`
 	CanonicalSlug string `json:"canonical_slug"`
-	// alias_slug with hyphens removed (normalize.CompanyKey), so a spelling never merged before still resolves to the canon its folded form already owns.
+	// normalize.CompanyKey of the alias company NAME — which strips a trailing legal form before folding, so it is NOT simply alias_slug with the hyphens removed. Ingest folds the name its source sends and looks the result up here, which is how a spelling never merged before still resolves to the canon its folded form already owns. Rows written by a CURATED merge deliberately carry keys that differ within one group: such a group is defined by its members NOT sharing a fold.
 	FoldedKey string `json:"folded_key"`
 	// legal_form (a pure normalize.CompanySlug strip) or spelling (a job-count election at merge time). Recorded so one class of merge can be reversed without the other.
 	Reason    string             `json:"reason"`
@@ -714,12 +714,13 @@ type Job struct {
 	SalaryCurrencySource  string             `json:"salary_currency_source"`
 	SalaryPeriodSource    string             `json:"salary_period_source"`
 	// company_slug with hyphens removed. Maintained by every write path that sets company_slug (enforced by a test); exists so the aggregator-suppression pass can filter on a column the planner can estimate instead of an expression it cannot.
-	CompanySlugFolded     pgtype.Text `json:"company_slug_folded"`
-	DuplicateOfAggregator pgtype.Int8 `json:"duplicate_of_aggregator"`
-	DuplicateOfRole       pgtype.Int8 `json:"duplicate_of_role"`
-	DuplicateOfFuzzy      pgtype.Int8 `json:"duplicate_of_fuzzy"`
-	RequiresClearance     pgtype.Bool `json:"requires_clearance"`
-	RequirementsDerived   []byte      `json:"requirements_derived"`
+	CompanySlugFolded     pgtype.Text        `json:"company_slug_folded"`
+	DuplicateOfAggregator pgtype.Int8        `json:"duplicate_of_aggregator"`
+	DuplicateOfRole       pgtype.Int8        `json:"duplicate_of_role"`
+	DuplicateOfFuzzy      pgtype.Int8        `json:"duplicate_of_fuzzy"`
+	RequiresClearance     pgtype.Bool        `json:"requires_clearance"`
+	RequirementsDerived   []byte             `json:"requirements_derived"`
+	HydratedAt            pgtype.Timestamptz `json:"hydrated_at"`
 }
 
 type JobDailyStat struct {
@@ -1034,6 +1035,12 @@ type SemanticOutbox struct {
 	LastError   string             `json:"last_error"`
 	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 	JobPostedAt pgtype.Timestamptz `json:"job_posted_at"`
+}
+
+type SiteStatusDaily struct {
+	Day           pgtype.Date        `json:"day"`
+	WorstSeverity int16              `json:"worst_severity"`
+	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
 }
 
 // Ledger of published daily social digests. Unique on (day, channel, job_id): the publish-once check reads the (day, channel) prefix, the quarantine scans a day RANGE across all channels — [digest day - 7, digest day), the upper bound exclusive so that a digest cannot quarantine itself. Written only after a channel publishes successfully; a dry run never writes here.

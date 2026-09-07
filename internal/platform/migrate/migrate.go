@@ -20,6 +20,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 
@@ -198,13 +199,15 @@ func splitStatements(sql string) []string {
 				}
 			}
 		case sql[i] == ';':
-			if s := sql[start:i]; strings.TrimSpace(s) != "" {
+			if s := sql[start:i]; hasStatement(s) {
 				out = append(out, s)
 			}
 			start = i + 1
 		}
 	}
-	if tail := sql[min(start, len(sql)):]; hasStatement(tail) {
+	// start never passes len(sql): the ';' branch is the only writer and runs at an index
+	// inside the string.
+	if tail := sql[start:]; hasStatement(tail) {
 		out = append(out, tail)
 	}
 	return out
@@ -251,8 +254,9 @@ func tagByte(c byte, first bool) bool {
 	return !first && c >= '0' && c <= '9'
 }
 
-// hasStatement reports whether a trailing fragment carries anything but whitespace and
-// comments — a file's closing commentary is not a statement to execute.
+// hasStatement reports whether a fragment carries anything but whitespace and comments.
+// A file's closing commentary is not a statement to execute, and neither is a stray
+// semicolon after a comment — one rule, asked in both places splitStatements cuts.
 func hasStatement(fragment string) bool {
 	for _, line := range strings.Split(fragment, "\n") {
 		line = strings.TrimSpace(line)
@@ -458,14 +462,13 @@ func invalidIndexesNamedIn(ctx context.Context, conn *pgxpool.Conn, sql string) 
 	}
 	defer rows.Close()
 
-	lower := strings.ToLower(sql)
 	var out []string
 	for rows.Next() {
 		var name string
 		if err := rows.Scan(&name); err != nil {
 			return nil, err
 		}
-		if namesIdentifier(lower, strings.ToLower(name)) {
+		if namesIdentifier(sql, name) {
 			out = append(out, name)
 		}
 	}
@@ -477,30 +480,15 @@ func invalidIndexesNamedIn(ctx context.Context, conn *pgxpool.Conn, sql string) 
 }
 
 // namesIdentifier reports whether sql mentions name as a whole identifier, so a short index
-// name is not matched inside a longer one.
+// name is not matched inside a longer one. Case-insensitive because Postgres folds an
+// unquoted identifier to lower case and a migration may spell it either way.
+//
+// A compiled regexp per call, deliberately: this runs once per invalid index per
+// no-transaction migration, so a handful of times a year. The literal-scan rule that
+// applies to the dictionary hot paths does not apply here, and reaching for it would trade
+// three lines for twenty to save nothing measurable.
 func namesIdentifier(sql, name string) bool {
-	for i := 0; ; {
-		j := strings.Index(sql[i:], name)
-		if j < 0 {
-			return false
-		}
-		j += i
-		if !identifierByte(byteAt(sql, j-1)) && !identifierByte(byteAt(sql, j+len(name))) {
-			return true
-		}
-		i = j + 1
-	}
-}
-
-func byteAt(s string, i int) byte {
-	if i < 0 || i >= len(s) {
-		return ' '
-	}
-	return s[i]
-}
-
-func identifierByte(c byte) bool {
-	return c == '_' || c == '$' || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9')
+	return regexp.MustCompile(`(?i)\b` + regexp.QuoteMeta(name) + `\b`).MatchString(sql)
 }
 
 // appliedVersions reads the recorded versions.

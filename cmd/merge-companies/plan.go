@@ -47,11 +47,15 @@ type alias struct {
 	JobCount  int
 }
 
-// merge is one folded group's decision.
+// merge is one group's decision.
 type merge struct {
 	Canonical string
-	FoldedKey string
-	Aliases   []alias
+	// GroupKey is what the members were grouped BY, and only sometimes a folded key: for a
+	// folded group it is normalize.CompanyKey of the shared name, for a curated one it is
+	// curatedGroupKey's sentinel. Nothing is stored from it — the alias carries the key the
+	// registry reads — so its whole remaining job is to sort the plan into a stable order.
+	GroupKey string
+	Aliases  []alias
 	// Jobs is the group's combined open jobs — what --min-jobs bounds a wave by, and the
 	// figure that says how much of the catalogue a wave moves.
 	Jobs int
@@ -98,13 +102,13 @@ func planMerges(companies []company, frozen map[string]bool, minJobs int, curate
 			continue
 		}
 		key := normalize.CompanyKey(c.Name)
+		if key == "" {
+			continue
+		}
 		// Two canons folding the same way would make the result depend on slice order, so the
 		// smaller slug wins and the outcome is stable. It is a mistake either way — the guard
 		// in curated_test.go rejects one canon retiring into another — but a deterministic
 		// plan is what makes a dry run worth reading.
-		if key == "" {
-			continue
-		}
 		if prev, ok := curatedFold[key]; !ok || c.Slug < prev {
 			curatedFold[key] = c.Slug
 		}
@@ -122,14 +126,23 @@ func planMerges(companies []company, frozen map[string]bool, minJobs int, curate
 			continue
 		}
 		// A curated member joins its canon's group; the canon joins its own; and so does
-		// anything the RULE would have grouped with the canon.
-		if canon, ok := curated[c.Slug]; ok {
-			key = curatedGroupKey(canon)
-			curatedWinner[key] = canon
-		} else if canons[c.Slug] {
-			key = curatedGroupKey(c.Slug)
-			curatedWinner[key] = c.Slug
-		} else if canon, ok := curatedFold[key]; ok {
+		// anything the RULE would have grouped with the canon. Three ways in, one canon out,
+		// and the key and the winner are set together — they have to agree, and setting them
+		// per branch is how they would come to disagree.
+		var canon string
+		switch named, isMember := curated[c.Slug]; {
+		case isMember:
+			// Comma-ok rather than a non-empty test: "the list names this slug" is the
+			// question, and an entry with an empty canon is a malformed list — which
+			// TestCuratedAliasesAreWellFormed rejects — not a slug the list stays silent
+			// about. Reading it as silence would hide the malformed entry here instead.
+			canon = named
+		case canons[c.Slug]:
+			canon = c.Slug
+		default:
+			canon = curatedFold[key] // "" unless a curated canon owns this fold
+		}
+		if canon != "" {
 			key = curatedGroupKey(canon)
 			curatedWinner[key] = canon
 		}
@@ -160,7 +173,7 @@ func planMerges(companies []company, frozen map[string]bool, minJobs int, curate
 		if !isCuratedGroup {
 			winner = electCanonical(members, frozen)
 		}
-		m := merge{Canonical: winner, FoldedKey: key}
+		m := merge{Canonical: winner, GroupKey: key}
 		for _, c := range members {
 			m.Jobs += c.JobCount
 			if c.Slug == winner {
@@ -184,7 +197,7 @@ func planMerges(companies []company, frozen map[string]bool, minJobs int, curate
 		}
 		out = append(out, m)
 	}
-	slices.SortFunc(out, func(a, b merge) int { return cmp.Compare(a.FoldedKey, b.FoldedKey) })
+	slices.SortFunc(out, func(a, b merge) int { return cmp.Compare(a.GroupKey, b.GroupKey) })
 	return out
 }
 

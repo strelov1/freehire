@@ -93,14 +93,14 @@ func TestVerifyExchangeAndRevoke(t *testing.T) {
 	if claims.Subject != "apple-subject" {
 		t.Fatal(claims.Subject)
 	}
-	grant, err := client.Exchange(context.Background(), "good", "me.freehire.mobile", nonce, "apple-subject")
+	refreshToken, err := client.Exchange(context.Background(), "good", "me.freehire.mobile", nonce, "apple-subject")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if grant.RefreshToken != "refresh-secret" {
+	if refreshToken != "refresh-secret" {
 		t.Fatal("refresh token missing")
 	}
-	if err = client.Revoke(context.Background(), grant.RefreshToken, grant.ClientID); err != nil {
+	if err = client.Revoke(context.Background(), refreshToken, "me.freehire.mobile"); err != nil {
 		t.Fatal(err)
 	}
 	if _, err = client.Verify(context.Background(), raw, "wrong"); err == nil {

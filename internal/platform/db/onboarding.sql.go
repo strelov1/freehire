@@ -61,6 +61,58 @@ func (q *Queries) ListAdvancedSearchCandidates(ctx context.Context, arg ListAdva
 	return items, nil
 }
 
+const listExtensionCandidates = `-- name: ListExtensionCandidates :many
+SELECT u.id, u.email
+FROM users u
+JOIN onboarding_emails w ON w.user_id = u.id AND w.step = 'welcome'
+LEFT JOIN notification_settings ns ON ns.user_id = u.id
+WHERE u.email_verified
+  AND u.created_at > now() - make_interval(days => $1::int)
+  AND w.sent_at < now() - make_interval(days => $2::int)
+  AND COALESCE(ns.enabled, true)
+  AND NOT EXISTS (
+      SELECT 1 FROM onboarding_emails oe
+      WHERE oe.user_id = u.id AND oe.step = 'extension'
+  )
+ORDER BY u.created_at
+LIMIT $3::int
+`
+
+type ListExtensionCandidatesParams struct {
+	WindowDays int32 `json:"window_days"`
+	AfterDays  int32 `json:"after_days"`
+	MaxRows    int32 `json:"max_rows"`
+}
+
+type ListExtensionCandidatesRow struct {
+	ID    int64  `json:"id"`
+	Email string `json:"email"`
+}
+
+// Greeted a while ago: an introduction to the browser extension. Unconditional like
+// advanced_search above, and for a stricter reason — nothing here records whether an
+// account has already installed it, so "only those without it" is not a query this
+// schema can answer.
+func (q *Queries) ListExtensionCandidates(ctx context.Context, arg ListExtensionCandidatesParams) ([]ListExtensionCandidatesRow, error) {
+	rows, err := q.db.Query(ctx, listExtensionCandidates, arg.WindowDays, arg.AfterDays, arg.MaxRows)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListExtensionCandidatesRow{}
+	for rows.Next() {
+		var i ListExtensionCandidatesRow
+		if err := rows.Scan(&i.ID, &i.Email); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listNoAlertCandidates = `-- name: ListNoAlertCandidates :many
 SELECT u.id, u.email
 FROM users u

@@ -163,9 +163,7 @@ func ScanLine(text string) []string { return scan(text, true) }
 // space-delimited word boundaries (the leaf package does its own boundary check to avoid a
 // dependency), so "PMP" resolves but "pmp" inside another token does not.
 //
-// bareAcronyms admits the single-word aliases of a proseAmbiguous entry. A multi-word
-// alias is never ambiguous — nobody writes "certified information systems auditor" by
-// accident — so the distinction needs no second list to drift from the first.
+// bareAcronyms admits the single-word aliases of a proseAmbiguous entry — see the loop.
 func scan(text string, bareAcronyms bool) []string {
 	norm := normalize(text)
 	if norm == "" {
@@ -174,8 +172,13 @@ func scan(text string, bareAcronyms bool) []string {
 	padded := " " + norm + " "
 	var out []string
 	for _, e := range table {
+		// A prose-ambiguous entry is read only from an alias that SPELLS the credential
+		// out, because its bare acronym is a word the text may be using for something
+		// else. Multi-word is the test: nobody writes "certified public accountant" by
+		// accident, so this needs no second list to drift from the first.
+		speltOutOnly := e.proseAmbiguous && !bareAcronyms
 		for _, a := range e.aliases {
-			if e.proseAmbiguous && !bareAcronyms && !strings.Contains(a, " ") {
+			if speltOutOnly && !strings.Contains(a, " ") {
 				continue
 			}
 			if strings.Contains(padded, " "+a+" ") {

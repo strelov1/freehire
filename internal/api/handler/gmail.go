@@ -16,6 +16,7 @@ import (
 	"github.com/strelov1/freehire/internal/application/inbox"
 	"github.com/strelov1/freehire/internal/application/jobtracking"
 	"github.com/strelov1/freehire/internal/application/mailrecall"
+	"github.com/strelov1/freehire/internal/engage/reminder"
 	"github.com/strelov1/freehire/internal/identity/accounts"
 	"github.com/strelov1/freehire/internal/identity/auth"
 	"github.com/strelov1/freehire/internal/identity/auth/oauth"
@@ -40,10 +41,6 @@ type inboxHandlers struct {
 	frontendOrigin string
 	cookieSecure   bool
 	mailDomain     string
-	// tracking records an application reconstructed from mail. The mail surface
-	// borrows the tracking use case rather than writing its own apply, so the
-	// applied_count guarantee stays in one place (see CreateApplicationFromEmail).
-	tracking *jobtracking.Service
 	// inbox holds the mail use cases these handlers render. The in-app assistant's
 	// mail tools call the same service, so a rule can never hold for one reader and
 	// not the other.
@@ -98,11 +95,19 @@ func (t trackingApplications) MarkAppliedAt(ctx context.Context, userID int64, s
 }
 
 func newInboxHandlers(queries *db.Queries, pool *pgxpool.Pool, gmailConnector *gmailsync.Connector, gmailCipher *tokencrypt.Cipher, frontendOrigin string, cookieSecure bool, mailDomain string) *inboxHandlers {
-	tracking := jobtracking.New(jobtracking.NewQueriesRepository(queries, pool))
+	// WithReminders, like every other construction of this service. Without it the
+	// "and now cancels" half of jobtracking's saved-job reminder contract was a no-op on
+	// the mail path — commit e27aaf14 added the port in user_jobs.go and did not reach
+	// here. The consequence was bounded (reminder.Runner.validate re-reads
+	// still_actionable and cancels on firing) but it is a rule stated in one place and
+	// enforced in one of two.
+	tracking := jobtracking.New(
+		jobtracking.NewQueriesRepository(queries, pool),
+		jobtracking.WithReminders(reminder.New(reminder.NewQueriesRepository(queries))),
+	)
 	return &inboxHandlers{
 		queries:        queries,
 		pool:           pool,
-		tracking:       tracking,
 		inbox:          inbox.New(queries, trackingApplications{tracking}, inbox.WithIngester(inbox.NewQueriesIngester(pool, queries))),
 		timeline:       apptimeline.New(queries),
 		gmailConnector: gmailConnector,

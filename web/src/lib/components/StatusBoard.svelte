@@ -48,6 +48,31 @@
   };
   const nfPercent = new Intl.NumberFormat('en', { style: 'percent', maximumFractionDigits: 1 });
 
+  // The daily history strip: 90 tiles, oldest first, each either a recorded
+  // HealthStatus or null for "no sample recorded that day" — a gap must render
+  // as its own neutral treatment, never silently as "operational".
+  const HISTORY_DAYS = 90;
+  const NO_DATA_TILE_META = { label: 'No data', dot: 'bg-border' };
+
+  function utcDateString(d: Date): string {
+    return d.toISOString().slice(0, 10);
+  }
+
+  const historyTiles = $derived.by(() => {
+    const byDay = new Map((site?.history ?? []).map((h) => [h.day, h.status]));
+    // Anchored on the response's own generated_at (UTC) rather than the visitor's
+    // local clock, so "today" here always matches the day the backend last wrote —
+    // the two can disagree by up to a day if left to the browser's local timezone.
+    const anchor = status?.generated_at ? new Date(status.generated_at) : new Date();
+    const tiles: { day: string; status: HealthStatus | null }[] = [];
+    for (let i = HISTORY_DAYS - 1; i >= 0; i--) {
+      const d = new Date(Date.UTC(anchor.getUTCFullYear(), anchor.getUTCMonth(), anchor.getUTCDate() - i));
+      const day = utcDateString(d);
+      tiles.push({ day, status: byDay.get(day) ?? null });
+    }
+    return tiles;
+  });
+
   const SEVERITY: Record<HealthStatus, number> = { operational: 0, degraded: 1, down: 2 };
 
   // Human labels for the source-kind taxonomy the backend derives from adapter type.
@@ -111,6 +136,22 @@
             Database {site.database} · {nfPercent.format(site.error_rate)} error rate over the last {site.window_minutes} min
           </div>
         </div>
+      </div>
+
+      <!-- Daily history strip: worst status observed each day, oldest first. A gap
+           (no sample recorded) renders as a distinct neutral tile, never as if the
+           day were operational. -->
+      <div class="mt-4 flex items-center justify-between text-xs text-muted-foreground">
+        <span>Last {HISTORY_DAYS} days</span>
+      </div>
+      <div class="mt-2 flex gap-0.5 overflow-x-auto pb-1">
+        {#each historyTiles as tile (tile.day)}
+          {@const meta = tile.status ? STATUS_META[tile.status] : NO_DATA_TILE_META}
+          <span
+            class="h-6 w-1.5 shrink-0 rounded-sm {meta.dot}"
+            title="{tile.day} — {tile.status ? meta.label : 'no data recorded'}"
+          ></span>
+        {/each}
       </div>
     </section>
   {/if}

@@ -162,6 +162,17 @@ func Derive(in Input) Derived {
 	if workMode == "" {
 		workMode = location.WorkModeFromDescription(in.Description)
 	}
+	// A description may CONTRADICT the result of that chain, not merely fill its gaps. It is
+	// the one place prose outranks a structured signal, and only for this one question: an ATS
+	// "remote" is routinely a requisition's location bucket rather than a work arrangement —
+	// NVIDIA publishes a whole "US, TX, Remote" location with remoteType unset, for a role its
+	// body calls 100% on-site (freehire#2555) — while a sentence denying remote work is the
+	// employer writing about the arrangement itself. Only "remote" is ever overruled, and only
+	// to "onsite": a denial of remote says nothing against hybrid, and location.RemoteContradicted
+	// deliberately answers that one question rather than proposing a mode of its own.
+	if workMode == "remote" && location.RemoteContradicted(in.Description) {
+		workMode = "onsite"
+	}
 	class := classify.Parse(in.Title)
 	// Seniority precedence: structured source signal → title dictionary → description
 	// phrase. Each lower source only fills a grade the higher ones left empty.

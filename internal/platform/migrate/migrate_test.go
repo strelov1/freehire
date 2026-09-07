@@ -175,6 +175,13 @@ func TestSplitStatementsRespectsQuotingAndComments(t *testing.T) {
 			"SELECT 1;\n-- done\n",
 			[]string{"SELECT 1"},
 		},
+		// The same rule, asked at the other place a statement can end. It used to be
+		// two rules — TrimSpace here and hasStatement on the tail — which would have
+		// sent a bare comment to the server as a statement.
+		"comment-only segment before a semicolon yields nothing": {
+			"-- a note;\n-- and another\n;\nSELECT 1;",
+			[]string{"SELECT 1"},
+		},
 	}
 	for name, c := range cases {
 		t.Run(name, func(t *testing.T) {

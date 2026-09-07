@@ -12,6 +12,15 @@ import (
 // after 8 measured short. Carrying it over unchanged keeps this change about the MECHANISM
 // — a LIMIT instead of a flock semaphore — rather than quietly re-tuning throughput at the
 // same time.
+//
+// SEAM, measured 2026-09-07 and not built here: one flat cap is not enough, and the
+// script this replaces now splits it. The fleet's problem was never total work — a full
+// sweep costs ~11 slot-hours against 10 of capacity — but RESIDENCY: four of the ten were
+// permanently held by 25-65 minute crawls, and the ~130 short runs an hour, worth 0.4
+// slot-hours together, could not get in edgewise. 42% of cycles were skipped while
+// average utilisation sat near half, and skipping the cheap ones relieved nothing.
+// ingest-slot.sh reserves 4 of the 10 for a named heavy roster; whoever finishes this
+// cutover needs the equivalent here, or the tail starves again the day the script goes.
 const DefaultCap = 10
 
 // DefaultGrace is how long past its own timeout a claim may live before it is treated as

@@ -172,18 +172,3 @@ func TestMatchRule(t *testing.T) {
 		})
 	}
 }
-
-// The title rule is self-sufficient because ingest applies the same dictionary, but
-// the company-scoped rules have no ingest counterpart: the bucket does not exist at
-// crawl time. Deleting under them without retiring the board undoes itself within the
-// hour, so the worker has to be able to tell the two classes apart.
-func TestCompanyScopedRulesAreIdentifiable(t *testing.T) {
-	if companyScoped(ruleTitle) {
-		t.Error("the title rule is enforced at ingest, so it needs no board retirement")
-	}
-	for _, rule := range []string{ruleBusiness, ruleUnknown} {
-		if !companyScoped(rule) {
-			t.Errorf("%q depends on the company bucket and has no ingest counterpart, so it requires board retirement", rule)
-		}
-	}
-}

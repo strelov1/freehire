@@ -207,7 +207,16 @@ func (r *QueriesRepository) Retire(ctx context.Context, provider, board, region 
 	if err != nil {
 		return false, err
 	}
-	return n > 0, nil
+	if n == 0 {
+		return false, nil
+	}
+	// A retired board is never crawled again, so its board_health row could never clear
+	// the normal way (a successful crawl) — left in place it shows as permanently
+	// unhealthy on the public /status page. The catalog retirement above already
+	// persisted regardless of what happens here; a failure just surfaces to the caller
+	// as found=true, err!=nil rather than silently leaving stale health behind.
+	_, err = r.q.DeleteBoardHealth(ctx, db.DeleteBoardHealthParams{Provider: provider, Board: board, Region: region})
+	return true, err
 }
 
 func (r *QueriesRepository) Rename(ctx context.Context, provider, board, region, company string) (bool, error) {

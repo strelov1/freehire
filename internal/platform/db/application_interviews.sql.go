@@ -212,6 +212,59 @@ func (q *Queries) RecordGrantScopes(ctx context.Context, arg RecordGrantScopesPa
 	return err
 }
 
+const retractMovedInterviewEvent = `-- name: RetractMovedInterviewEvent :execrows
+UPDATE application_events ae
+SET retracted_at = now()
+FROM application_interviews ai
+WHERE ai.user_id        = $1
+  AND ai.ical_uid       = $2
+  AND ae.user_id        = ai.user_id
+  AND ae.kind           = 'interview_scheduled'
+  AND ae.source_ref     = ai.id
+  AND ae.retracted_at IS NULL
+  -- Only when it actually moved. A re-sync of an unmoved meeting must leave the ledger
+  -- alone: the scheduling happened once, and re-recording it would date the same fact
+  -- twice.
+  AND ae.application_id IS DISTINCT FROM $3
+`
+
+type RetractMovedInterviewEventParams struct {
+	UserID        int64       `json:"user_id"`
+	IcalUid       string      `json:"ical_uid"`
+	ApplicationID pgtype.Int8 `json:"application_id"`
+}
+
+// Step 1 of recording a meeting: retract the live `interview_scheduled` event when the
+// meeting has moved to a DIFFERENT application since it was written.
+//
+// UpsertApplicationInterview used to argue this could not happen — "an invitation belongs
+// to one application, so the application under a given meeting cannot move" — and that
+// premise is false. ListCalendarMatchCandidates reaches a meeting's identifier through
+// `emails.application_id`, and LinkEmailToJob rewrites that column; it is reachable from
+// POST /me/emails/:id/link and from the assistant's inbox_link tool. docs/agents/mail-stack.md
+// records one company auto-collecting 23 acknowledgements belonging to 23 other employers,
+// so mis-links are a documented, real condition, not a hypothetical one.
+//
+// The damage was two-sided. The old event could not be corrected (RetractSupersededEmailEvent
+// is scoped to kind = 'employer_reply'), and the RIGHT one was never created either, because
+// the interview's source_ref never changed and the upsert's DO NOTHING therefore fired
+// against the correct application too. A month view drew the meeting under the right
+// employer and "Interview scheduled" under the wrong one, with the right application showing
+// no interview at all. migrations/0062 already states the rule this broke: retracted_at is
+// "Set when a link correction moves the fact to another employer".
+//
+// Separate from the upsert, and run first, for the same snapshot reason
+// RetractSupersededEmailEvent documents: data-modifying CTEs all read the pre-statement
+// snapshot, so an insert folded in beside this would still conflict with the row being
+// retracted and silently record nothing.
+func (q *Queries) RetractMovedInterviewEvent(ctx context.Context, arg RetractMovedInterviewEventParams) (int64, error) {
+	result, err := q.db.Exec(ctx, retractMovedInterviewEvent, arg.UserID, arg.IcalUid, arg.ApplicationID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const upsertApplicationInterview = `-- name: UpsertApplicationInterview :one
 WITH saved AS (
     INSERT INTO application_interviews (
@@ -243,12 +296,17 @@ WITH saved AS (
     SELECT s.user_id, s.application_id, a.job_id, a.company_slug,
            'interview_scheduled', '', now(), $11::text, s.id
       FROM saved s JOIN applications a ON a.id = s.application_id
-     WHERE s.status = 'confirmed' 
-    -- DO NOTHING rather than a correction. An interview is only ever attached by the
-    -- invitation's own identifier, and an invitation belongs to one application — so the
-    -- application under a given meeting cannot move, and there is nothing to correct.
-    -- Were a weaker tier ever added, this would need the retract-and-re-record treatment
-    -- the mail reconcile uses; it is not a DO NOTHING that would still be right.
+     WHERE s.status = 'confirmed'
+    -- DO NOTHING is right only because RetractMovedInterviewEvent ran first. A re-sync of
+    -- an unmoved meeting must add no second event — the scheduling happened once — and the
+    -- source_ref does not change when a meeting is rescheduled, so this conflict is exactly
+    -- that case.
+    --
+    -- It used to be justified by "the application under a given meeting cannot move", which
+    -- was false: the identifier reaches the application through emails.application_id, a
+    -- column a link correction rewrites. That made this DO NOTHING suppress the CORRECT
+    -- event too. The retract above is what removes the stale row from this partial index,
+    -- so the corrected event can be written.
     ON CONFLICT (user_id, kind, source_ref) WHERE source_ref IS NOT NULL AND retracted_at IS NULL
     DO NOTHING
 )

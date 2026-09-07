@@ -265,7 +265,7 @@ INSERT INTO jobs (
     public_slug, countries, regions, cities, work_mode, skills, seniority, category, is_tech, requires_clearance,
     posting_language, employment_type, education_level, english_level, experience_years_min,
     salary_min_source, salary_max_source, salary_currency_source, salary_period_source,
-    content_hash, role_fingerprint, requirements_derived
+    content_hash, role_fingerprint, requirements_derived, hydrated_at
 ) VALUES (
     sqlc.arg(source), sqlc.arg(external_id), sqlc.arg(url), sqlc.arg(title),
     sqlc.arg(company), sqlc.arg(company_slug), replace(sqlc.arg(company_slug), '-', ''), sqlc.arg(location), sqlc.arg(remote),
@@ -280,7 +280,10 @@ INSERT INTO jobs (
     -- (internal/job/reqextract), derived from the same description the dictionary
     -- facets above are. COALESCE keeps the column NOT NULL when a posting yields
     -- none: an empty array and "never processed" are the same fact here.
-    COALESCE(sqlc.arg(requirements_derived)::jsonb, '[]'::jsonb)
+    COALESCE(sqlc.arg(requirements_derived)::jsonb, '[]'::jsonb),
+    -- A first ingest reads the posting's body, so the row starts out freshly hydrated. NULL
+    -- is reserved for the rows that predate the column (see 0144), which read as stale.
+    now()
 )
 -- public_slug is deliberately NOT in the DO UPDATE SET: the slug is minted once
 -- at insert and is the row's stable public identity. Re-ingest of the same
@@ -356,6 +359,11 @@ ON CONFLICT (source, external_id) DO UPDATE SET
     -- conditional or every re-ingest would invalidate the list for nothing.
     similar_computed_at = CASE WHEN jobs.company_slug IS DISTINCT FROM EXCLUDED.company_slug
                                THEN NULL ELSE jobs.similar_computed_at END,
+    -- The write carried a body, so the row's stored text is as fresh as this crawl. See the
+    -- column's migration (0144) for why this is not updated_at, and RefreshUnchangedJob for
+    -- the other half: a body that came back byte-identical takes that statement, and stamps
+    -- it there.
+    hydrated_at  = now(),
     updated_at   = now()
 RETURNING sqlc.embed(jobs),
     NOT COALESCE((SELECT existed FROM existing), false) AS inserted,
@@ -447,8 +455,16 @@ WHERE source = sqlc.arg(source) AND company = '' AND external_id LIKE sqlc.arg(b
 -- fuller row is only ever needed to BUILD a search document, which by construction this branch
 -- never does. TouchJob, the hydrating-source sibling, returns company_slug alone for the same
 -- reason.
+-- hydrated_at IS stamped, unlike updated_at, and the two say different things on purpose:
+-- updated_at means "content last changed", hydrated_at means "last written from a body we had
+-- just fetched". Reaching this statement at all means the crawl carried a body — an adapter
+-- that cannot fetch a posting's detail drops the posting rather than writing a body-less row
+-- (echojobs.FetchNew, workday.detail) — and that the body was identical to the stored one,
+-- which is precisely the case a staleness check over updated_at would misread as never-read.
+-- Like last_seen_at it is in no index, so the update stays heap-only.
 UPDATE jobs
-SET last_seen_at = now()
+SET last_seen_at = now(),
+    hydrated_at  = now()
 WHERE source = sqlc.arg(source)
   AND external_id = sqlc.arg(external_id)
   AND content_hash = sqlc.arg(content_hash)
@@ -1518,9 +1534,23 @@ SELECT count(*) FROM closed;
 -- hydration_cutoff, which re-offers it for detail exactly as if it were new; past the cutoff it
 -- counts as seen again, so a posting the source genuinely publishes with no body stops costing
 -- a detail request every crawl forever.
+--
+-- A row whose stored BODY has gone stale is withheld too, so the crawl re-reads a posting the
+-- employer has since edited — the one way an edit reaches a catalogue where being stored is
+-- what stops a posting from ever being fetched again. Stale means hydrated_at older than
+-- body_refresh_cutoff, NULL (never checked) included. body_refresh_slot bounds the cost: a
+-- posting belongs to one slot for its life (hashtext is deterministic within a database), so a
+-- run re-reads roughly 1/body_refresh_slices of the stale rows instead of facing a hydrating
+-- provider's whole catalogue at once — 1.27M postings on workday. A slot of -1 never matches
+-- any row, which is how the caller expresses "disabled" without a second query.
+--
+-- hashtext is cast to bigint before abs(): abs() of int4's most negative value raises.
 SELECT external_id, is_tech FROM jobs
 WHERE source = sqlc.arg(source)
-  AND (description <> '' OR created_at < sqlc.arg(hydration_cutoff));
+  AND (description <> '' OR created_at < sqlc.arg(hydration_cutoff))
+  AND (hydrated_at >= sqlc.arg(body_refresh_cutoff)
+       OR abs(hashtext(external_id)::bigint) % sqlc.arg(body_refresh_slices)::bigint
+          <> sqlc.arg(body_refresh_slot)::bigint);
 
 -- name: ExistingExternalIDsByBoard :many
 -- Seen-set of ONE board of a multi-board provider. The lookup runs once per crawled board, so a
@@ -1534,12 +1564,16 @@ WHERE source = sqlc.arg(source)
 -- The caller passes an escaped pattern (externalid.BoardPattern) — a board name may contain LIKE
 -- syntax, and an unescaped underscore would match a sibling board.
 --
--- hydration_cutoff withholds a still-body-less row from the seen-set so its detail is retried;
--- see ExistingExternalIDs for why.
+-- hydration_cutoff withholds a still-body-less row from the seen-set so its detail is retried,
+-- and the body_refresh_* arm withholds one whose stored body has gone stale so an employer's
+-- edit is re-read; see ExistingExternalIDs for both.
 SELECT external_id, is_tech FROM jobs
 WHERE source = sqlc.arg(source)
   AND external_id LIKE sqlc.arg(pattern)
-  AND (description <> '' OR created_at < sqlc.arg(hydration_cutoff));
+  AND (description <> '' OR created_at < sqlc.arg(hydration_cutoff))
+  AND (hydrated_at >= sqlc.arg(body_refresh_cutoff)
+       OR abs(hashtext(external_id)::bigint) % sqlc.arg(body_refresh_slices)::bigint
+          <> sqlc.arg(body_refresh_slot)::bigint);
 
 -- name: TouchJob :one
 -- Liveness refresh for a hydrating source's already-ingested posting (see source-ingest): the

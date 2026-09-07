@@ -25,7 +25,7 @@
   // are aggregators and 30 are single-company career feeds, so the label was counting
   // things it did not describe. It is live now, so it also stops going stale.
   const figures = $derived([
-    { value: compact(stats.jobs, '3.3M+'), label: 'open jobs' },
+    { value: compact(stats.jobs, '3.3M+'), label: 'postings tracked' },
     { value: compact(stats.companies, '290K+'), label: 'companies' },
     { value: stats.sources == null ? '220+' : String(stats.sources), label: 'sources' },
     { value: '100%', label: 'open source' },
