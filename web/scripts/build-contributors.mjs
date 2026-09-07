@@ -138,13 +138,28 @@ export function assertUsable(entries) {
  *  varies between runs of identical data makes every run a commit, and (since the host
  *  deploys a green main) a daily production deploy of nothing.
  *
- *  Two things follow from that. People are sorted by login rather than left in the order
- *  GitHub happened to page them in. And the file carries NO collected-at stamp: when the
- *  data last changed is already recorded, exactly and unforgeably, by the commit that
- *  changed it — a field restating that would cost the entire commit-only-on-change
- *  design in exchange for a worse copy of it. */
+ *  Three things follow from that.
+ *
+ *  People are sorted by login rather than left in the order GitHub happened to page
+ *  them in.
+ *
+ *  That sort compares lowercased logins code-unit by code-unit, NOT with
+ *  `localeCompare`, whose answer depends on the runtime's locale and ICU data — a laptop
+ *  and a CI runner can disagree about the same two logins, and every disagreement is a
+ *  commit of data that did not change. Lowercased first because comparing the raw
+ *  strings puts every capitalised login ahead of every lowercase one, which would group
+ *  the page by capitalisation for no reason.
+ *
+ *  And the file carries NO collected-at stamp: when the data last changed is already
+ *  recorded, exactly and unforgeably, by the commit that changed it — a field restating
+ *  that would cost the entire commit-only-on-change design in exchange for a worse copy
+ *  of it. */
 export function serializeSnapshot(entries) {
-  const people = [...entries].sort((a, b) => a.login.localeCompare(b.login));
+  const people = [...entries].sort((a, b) => {
+    const [x, y] = [a.login.toLowerCase(), b.login.toLowerCase()];
+    if (x === y) return 0;
+    return x < y ? -1 : 1;
+  });
 
   return `${JSON.stringify({ people }, null, 2)}\n`;
 }

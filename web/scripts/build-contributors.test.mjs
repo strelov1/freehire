@@ -214,4 +214,30 @@ describe('serializeSnapshot', () => {
   it('ends with a newline so the committed file is a well-formed text file', () => {
     expect(serializeSnapshot([]).endsWith('\n')).toBe(true);
   });
+
+  // Ordered by the lowercased login compared code-unit by code-unit, NOT by
+  // localeCompare. localeCompare's answer depends on the runtime's locale and ICU data,
+  // so a laptop and a CI runner can disagree about the same two logins — and every
+  // disagreement is a commit, and a deploy, of data that did not change. The whole
+  // commit-only-on-change design needs this comparison to be a property of the strings
+  // and of nothing else.
+  //
+  // The fixture is chosen to fail under raw code-unit order too: `Bea` sorts before
+  // `ada` on the raw strings, because every uppercase letter precedes every lowercase
+  // one, which would group the page's logins by capitalisation for no reason.
+  it('orders people by lowercased login, independent of locale', () => {
+    const entries = ['cy', 'Bea', 'ada'].map((login, i) =>
+      assembleEntries({
+        pullRequests: [pr(login, i + 1, '2026-01-01T00:00:00Z')],
+        issues: [],
+        admins: [],
+      }).at(0),
+    );
+
+    expect(JSON.parse(serializeSnapshot(entries)).people.map((p) => p.login)).toEqual([
+      'ada',
+      'Bea',
+      'cy',
+    ]);
+  });
 });
