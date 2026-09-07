@@ -58,6 +58,43 @@ func TestResolve_AppliesTheDOMToAnswerKeyAlias(t *testing.T) {
 	}
 }
 
+// Ashby names its standard identity controls "_systemfield_name" / "_systemfield_email"
+// rather than Greenhouse's ids — measured live 2026-09-07 against a Singular posting, which
+// parked with "no known answer source" for both despite the candidate's name and email
+// already being known.
+func TestResolve_AppliesTheAshbySystemFieldAliases(t *testing.T) {
+	fields := []MergedField{
+		{ID: "_systemfield_name", Kind: "text", Required: true},
+		{ID: "_systemfield_email", Kind: "text", Required: true},
+	}
+	answers := map[string]string{"full_name": "Ada Lovelace", "email": "ada@example.test"}
+
+	plan := Resolve(fields, answers, false)
+
+	if len(plan.Unmapped) != 0 {
+		t.Fatalf("unmapped = %+v, want both Ashby system fields resolved", plan.Unmapped)
+	}
+	if len(plan.Fields) != 2 || plan.Fields[0].Value != "Ada Lovelace" || plan.Fields[1].Value != "ada@example.test" {
+		t.Fatalf("plan.Fields = %+v, want _systemfield_name=Ada Lovelace and _systemfield_email=ada@example.test", plan.Fields)
+	}
+}
+
+// Ashby's LinkedIn question carries a random uuid id rather than "linkedin" — the id
+// answerKeyFor already covers — so only the label rule can match it.
+func TestResolve_MatchesLinkedInByLabelWhenTheIDIsOpaque(t *testing.T) {
+	fields := []MergedField{{ID: "6810b294-be01-4bf4-bd4a-d056ddd0d6da", Label: "LinkedIn ", Kind: "text", Required: true}}
+	answers := map[string]string{"linkedin": "https://linkedin.com/in/ada"}
+
+	plan := Resolve(fields, answers, false)
+
+	if len(plan.Unmapped) != 0 {
+		t.Fatalf("unmapped = %+v, want the LinkedIn field resolved via its label", plan.Unmapped)
+	}
+	if len(plan.Fields) != 1 || plan.Fields[0].Value != "https://linkedin.com/in/ada" {
+		t.Fatalf("plan.Fields = %+v, want the LinkedIn field filled from the linkedin answer", plan.Fields)
+	}
+}
+
 // A select/checkbox field's answer must match one of the platform's own offered options —
 // never a value the widget does not offer, per the "never guess" rule the whole design rests
 // on.
