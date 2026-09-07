@@ -12,28 +12,29 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
-	"os"
-	"os/exec"
 	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
 )
 
-// requireChrome skips unless a browser chromedp can launch is on this machine.
+// requireChrome skips unless a browser can actually be LAUNCHED here, which is a different
+// question from whether one is installed and the difference is not academic: GitHub's runners
+// ship Chrome and then refuse to start it without --no-sandbox. Asking the narrower question
+// (is the binary on PATH?) made this suite fail there for an environment reason.
+//
+// So the guard starts a real session and skips on the error. Production launch options are
+// deliberately NOT relaxed to make this pass — adding --no-sandbox to the shared flags would
+// weaken the sandbox for auto-apply's browser too, to fix a constraint that belongs to CI.
 func requireChrome(t *testing.T) {
 	t.Helper()
-	for _, name := range []string{"google-chrome", "google-chrome-stable", "chromium", "chromium-browser"} {
-		if _, err := exec.LookPath(name); err == nil {
-			return
-		}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	s, err := NewSession(ctx, "", 1)
+	if err != nil {
+		t.Skipf("no launchable chrome here; skipping browser session test: %v", err)
 	}
-	// chromedp finds the macOS app bundle without it being on PATH, so look for it directly
-	// rather than shelling out — one syscall, and nothing to get wrong about quoting.
-	if _, err := os.Stat("/Applications/Google Chrome.app"); err == nil {
-		return
-	}
-	t.Skip("chrome not installed; skipping browser session test")
+	s.Close()
 }
 
 // challengeServer is the smallest thing shaped like the real obstacle: a site that serves its
