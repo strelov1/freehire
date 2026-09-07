@@ -254,9 +254,15 @@ func classify(resp *http.Response, out any) (wait time.Duration, rateLimited boo
 	case de.Code == codeUnknownMember || resp.StatusCode == http.StatusNotFound:
 		return 0, false, ErrUnknownMember
 	case de.Code == codeMissingPermissions:
+		// Two different causes, fixed in two different places, and Discord reports both with
+		// this one code. Naming only the hierarchy sent the first person to hit this into the
+		// role list to reorder roles that were already correct — the bot had simply been
+		// invited with no permissions at all. Both are named, in the order they are checked.
 		return 0, false, fmt.Errorf(
-			"%w: check that the bot's own role is positioned above the paid role in "+
-				"Server Settings → Roles — a bot cannot manage a role above its own",
+			"%w: the bot needs the Manage Roles permission on the server (re-invite it with "+
+				"that permission if its own role grants nothing), AND its role must sit above "+
+				"the paid role in Server Settings → Roles — a bot cannot manage a role above "+
+				"its own",
 			ErrMissingPermissions)
 	default:
 		return 0, false, fmt.Errorf("discord: %s: %s", resp.Status, strings.TrimSpace(string(raw)))

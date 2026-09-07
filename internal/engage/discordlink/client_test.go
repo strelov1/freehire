@@ -158,7 +158,12 @@ func TestUnknownMemberIsATypedAbsence(t *testing.T) {
 // the bot's own in the server's list. Discord answers 50013, which on its own reads as a
 // generic permission problem — the error must name the cause or every report of it starts
 // with an hour of guessing.
-func TestMissingPermissionsNamesTheRoleHierarchy(t *testing.T) {
+// Discord answers 50013 for BOTH ways a bot can be unable to move a role, and they are
+// fixed in different places: the bot may hold no Manage Roles permission at all, or it may
+// hold it while its own role sits below the one it is asked to manage. Naming only the
+// second sent the first reader of this error to the role list to reorder roles that were
+// already in the right order — the real cause was an invite that granted nothing.
+func TestMissingPermissionsNamesBothCauses(t *testing.T) {
 	c := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
 		_, _ = io.WriteString(w, `{"message":"Missing Permissions","code":50013}`)
@@ -168,8 +173,10 @@ func TestMissingPermissionsNamesTheRoleHierarchy(t *testing.T) {
 	if !errors.Is(err, ErrMissingPermissions) {
 		t.Fatalf("error = %v, want ErrMissingPermissions", err)
 	}
-	if !strings.Contains(err.Error(), "above") {
-		t.Errorf("error %q does not mention the role hierarchy", err)
+	for _, want := range []string{"Manage Roles", "above"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error %q does not mention %q", err, want)
+		}
 	}
 }
 

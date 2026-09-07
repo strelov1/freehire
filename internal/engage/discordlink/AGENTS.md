@@ -45,10 +45,13 @@ from operator configuration, not user input — the same reasoning
 - **`ErrUnknownMember` is an absence, not a failure.** Leaving a server is an ordinary thing
   to do. Counting it as a failure turns the hourly run red for it and buries the failures that
   matter.
-- **`50013 Missing Permissions` almost always means the role hierarchy** — the bot's own role
-  must sit ABOVE the paid role in Server Settings → Roles, or Discord refuses every grant.
-  The client's error names that cause, because on its own the code reads as a generic
-  permission problem and costs an hour of guessing.
+- **`50013 Missing Permissions` has TWO causes and Discord reports both with the one code.**
+  Either the bot holds no `Manage Roles` permission at all — an invite generated without it
+  grants the bot a role with nothing on it — or it holds the permission while its own role
+  sits BELOW the paid role in Server Settings → Roles, and a bot cannot manage a role above
+  its own. The client's error names both, in that order. It named only the hierarchy at
+  first, and on the very first real setup that sent the operator to reorder roles that were
+  already correct; the invite was the problem.
 - **Unlink deletes the binding even when the revoke fails.** A user must always be able to
   undo a link they made; an orphaned role is an operator's problem, a link that will not go
   away is theirs, every time they open the page.
