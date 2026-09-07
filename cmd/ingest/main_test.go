@@ -254,6 +254,70 @@ func TestHydrationRetryWindowFor(t *testing.T) {
 	}
 }
 
+func TestBodyRefreshFor(t *testing.T) {
+	// 2026-09-06 is day 249 of the year; 249 % 30 = 9.
+	now := time.Date(2026, 9, 6, 12, 0, 0, 0, time.UTC)
+	cases := []struct {
+		name       string
+		days       string
+		slice      string
+		wantOn     bool
+		wantSlot   int64
+		wantSlices int64
+		wantErr    bool
+	}{
+		{name: "unset is disabled", wantSlot: bodyRefreshDisabledSlot, wantSlices: 1},
+		{name: "enabled with the default slice", days: "45", wantOn: true, wantSlot: 9, wantSlices: 30},
+		{name: "enabled with a custom slice", days: "45", slice: "10", wantOn: true, wantSlot: 9, wantSlices: 10},
+		{name: "one slice re-reads every stale row", days: "45", slice: "1", wantOn: true, wantSlot: 0, wantSlices: 1},
+		{name: "days not a number", days: "six weeks", wantErr: true},
+		{name: "days zero", days: "0", wantErr: true},
+		{name: "days negative", days: "-1", wantErr: true},
+		{name: "slice not a number", days: "45", slice: "half", wantErr: true},
+		{name: "slice zero", days: "45", slice: "0", wantErr: true},
+		// A slice set without days is a knob that would silently do nothing, which reads
+		// exactly like a refresh that found nothing to refresh.
+		{name: "slice without days", slice: "10", wantErr: true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := bodyRefreshFor(tc.days, tc.slice, now)
+			if (err != nil) != tc.wantErr {
+				t.Fatalf("bodyRefreshFor(%q, %q) err = %v, wantErr %v", tc.days, tc.slice, err, tc.wantErr)
+			}
+			if tc.wantErr {
+				return
+			}
+			if got.enabled() != tc.wantOn {
+				t.Errorf("enabled() = %v, want %v", got.enabled(), tc.wantOn)
+			}
+			if got.slot != tc.wantSlot {
+				t.Errorf("slot = %d, want %d", got.slot, tc.wantSlot)
+			}
+			if got.slices != tc.wantSlices {
+				t.Errorf("slices = %d, want %d", got.slices, tc.wantSlices)
+			}
+		})
+	}
+}
+
+// The disabled form must make the SQL arm a no-op through the ordinary parameters rather than
+// through a second query: a slot no row can hash to. Every other value it carries is then
+// irrelevant, which is the point.
+func TestBodyRefreshDisabledSlotMatchesNoRow(t *testing.T) {
+	off, err := bodyRefreshFor("", "", time.Now())
+	if err != nil {
+		t.Fatalf("bodyRefreshFor: %v", err)
+	}
+	if off.slices < 1 {
+		t.Errorf("slices = %d, want a positive divisor even when disabled (a zero modulus raises)", off.slices)
+	}
+	// abs(hashtext(x)) % slices is never negative, so a negative slot cannot be matched.
+	if off.slot >= 0 {
+		t.Errorf("slot = %d, want a negative slot so no row is ever withheld", off.slot)
+	}
+}
+
 // INGEST_REFETCH_ALL empties the seen-set so a crawl re-writes the provider's stored rows —
 // the only way an adapter fix reaches postings ingested before it, since a re-listed posting
 // otherwise takes the content-less refresh path. Anything but the two accepted spellings is a
@@ -280,5 +344,16 @@ func TestRefetchAllFor(t *testing.T) {
 		if err == nil && got != tc.want {
 			t.Errorf("%s: refetchAllFor(%q) = %v, want %v", tc.name, tc.env, got, tc.want)
 		}
+	}
+}
+
+// defaultSeenPolicy is the seen-set policy a deployment with no knobs set gets: retry a
+// body-less row inside the default window, re-fetch nothing else. It is what the store
+// integration tests construct, so a test asserting a WRITE never accidentally asserts a
+// re-fetch policy as well.
+func defaultSeenPolicy() seenPolicy {
+	return seenPolicy{
+		hydrationWindow: pipeline.HydrationRetryWindow,
+		bodies:          bodyRefresh{slices: 1, slot: bodyRefreshDisabledSlot},
 	}
 }

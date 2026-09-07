@@ -33,9 +33,9 @@ func unchangedParams() RefreshUnchangedJobParams {
 	}
 }
 
-// seedForRefresh ingests one open posting carrying the given cities and back-dates its liveness
-// and change stamps, so a refresh that touches either is visible as a move rather than as two
-// equal timestamps.
+// seedForRefresh ingests one open posting carrying the given cities and back-dates its liveness,
+// change and hydration stamps, so a refresh that touches any of them is visible as a move rather
+// than as two equal timestamps.
 func seedForRefresh(t *testing.T, pool *pgxpool.Pool, q *Queries, cities []string) Job {
 	t.Helper()
 	ctx := context.Background()
@@ -47,7 +47,9 @@ func seedForRefresh(t *testing.T, pool *pgxpool.Pool, q *Queries, cities []strin
 		t.Fatalf("seed upsert: %v", err)
 	}
 	if _, err := pool.Exec(ctx,
-		`UPDATE jobs SET last_seen_at = now() - interval '10 days', updated_at = now() - interval '10 days'
+		`UPDATE jobs SET last_seen_at = now() - interval '10 days',
+		                updated_at   = now() - interval '10 days',
+		                hydrated_at  = now() - interval '10 days'
 		 WHERE source = 'greenhouse' AND external_id = 'acme:1'`,
 	); err != nil {
 		t.Fatalf("back-date stamps: %v", err)
@@ -70,7 +72,11 @@ func readBack(t *testing.T, q *Queries) Job {
 	return got
 }
 
-func TestRefreshUnchangedJobWritesOnlyLastSeenAt(t *testing.T) {
+// The cheap write is allowed exactly two columns, and the test is written as "everything else
+// is untouched" rather than "these two moved", so a column added to jobs later is covered
+// without editing it. Both are deliberately outside every index, which is what keeps this
+// update heap-only — the whole reason the cheap path exists.
+func TestRefreshUnchangedJobWritesOnlyLivenessAndHydration(t *testing.T) {
 	pool := startPostgres(t)
 	q := New(pool)
 	ctx := context.Background()
@@ -101,12 +107,19 @@ func TestRefreshUnchangedJobWritesOnlyLastSeenAt(t *testing.T) {
 		t.Errorf("updated_at = %v, want unchanged %v", got.UpdatedAt.Time, before.UpdatedAt.Time)
 	}
 
-	// Nothing else moved either. Compared as whole rows with the one column the query is allowed
+	// The body was re-read and came back identical, which is exactly the case a staleness check
+	// over updated_at would misread as "never checked" — see migration 0144.
+	if !got.HydratedAt.Time.After(before.HydratedAt.Time) {
+		t.Errorf("hydrated_at = %v, want advanced from %v", got.HydratedAt.Time, before.HydratedAt.Time)
+	}
+
+	// Nothing else moved either. Compared as whole rows with the two columns the query is allowed
 	// to write zeroed, so a column added to jobs later is covered without editing this.
 	a, b := before, got
 	a.LastSeenAt, b.LastSeenAt = pgtype.Timestamptz{}, pgtype.Timestamptz{}
+	a.HydratedAt, b.HydratedAt = pgtype.Timestamptz{}, pgtype.Timestamptz{}
 	if !reflect.DeepEqual(a, b) {
-		t.Errorf("row changed beyond last_seen_at:\n before = %+v\n after  = %+v", a, b)
+		t.Errorf("row changed beyond last_seen_at and hydrated_at:\n before = %+v\n after  = %+v", a, b)
 	}
 }
 

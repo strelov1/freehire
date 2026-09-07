@@ -1,0 +1,26 @@
+-- jobs.hydrated_at: when this row was last WRITTEN FROM A BODY WE HAD JUST FETCHED.
+--
+-- It exists so a hydrating crawl can tell a stored body's age. A hydrating adapter fetches
+-- detail only for a posting the catalogue does not already have; a posting we hold takes the
+-- liveness-only path and its body is never read again, so an employer's later edit — a
+-- clarification, a location change — reaches us never (freehire#2555 is one: NVIDIA added
+-- "this position is 100% on-site" after our snapshot, and our copy still says remote).
+--
+-- updated_at cannot answer the question. RefreshUnchangedJob deliberately leaves it alone so
+-- it means "content last changed", and the common case for a re-read is a body that came back
+-- byte-identical — which takes exactly that path. A staleness predicate over updated_at would
+-- therefore leave such a row looking stale forever and re-fetch it on every crawl.
+--
+-- Written by both ingest write paths (UpsertJob, RefreshUnchangedJob) and NOT by TouchJob,
+-- which is the path that fetches nothing. NULL — every row predating this column — reads as
+-- "never checked", i.e. stale; that needs no backfill, because cmd/ingest spreads the resulting
+-- backlog across runs by external_id slot (BODY_REFRESH_SLICE).
+--
+-- Deliberately unindexed. It is read only inside the per-board seen-set query, which is already
+-- an index scan over (source, external_id) whose rows are then filtered; an index here would be
+-- maintained by every ingest write to earn nothing.
+--
+-- A nullable ADD COLUMN with no default is catalogue-only in PostgreSQL 11+, so this does not
+-- rewrite the 8M-row table and needs no CONCURRENTLY split.
+ALTER TABLE public.jobs
+    ADD COLUMN IF NOT EXISTS hydrated_at timestamptz;

@@ -209,6 +209,71 @@ func TestDerive_StructuredBeatsDescription(t *testing.T) {
 	}
 }
 
+// The contradiction tier sits ABOVE the precedence chain: a description that explicitly
+// denies remote work overrules a remote work mode whichever source produced it. See
+// location.RemoteContradicted.
+func TestDerive_DescriptionContradictsLocationRemote(t *testing.T) {
+	got := Derive(Input{
+		Title:      "Senior Structural Test Engineer",
+		Company:    "NVIDIA",
+		Source:     "workday",
+		ExternalID: "board:1",
+		// The employer's own Workday location bucket, with remoteType unset (freehire#2555).
+		Location: "US, TX, Remote",
+		Description: "This position is 100% on-site based at either our Dallas or Houston " +
+			"Contract Manufacturing (CM) facility.",
+	})
+	if got.WorkMode != "onsite" {
+		t.Errorf("WorkMode = %q, want onsite (description contradicts the location's remote)", got.WorkMode)
+	}
+}
+
+func TestDerive_DescriptionContradictsStructuredRemote(t *testing.T) {
+	got := Derive(Input{
+		Title:       "Executive Assistant",
+		Company:     "Acme",
+		Source:      "paycor",
+		ExternalID:  "board:1",
+		Location:    "Mentor, OH",
+		WorkMode:    "remote", // the ATS's own field, and wrong
+		Description: "Onsite - not a remote position. Join our team supporting leadership.",
+	})
+	if got.WorkMode != "onsite" {
+		t.Errorf("WorkMode = %q, want onsite (description contradicts the ATS remote flag)", got.WorkMode)
+	}
+}
+
+// Only a remote result is ever overruled. "Not a remote position" is a true statement about a
+// hybrid job, so reading it as onsite would replace a right answer with a wrong one.
+func TestDerive_DenialLeavesHybridAlone(t *testing.T) {
+	got := Derive(Input{
+		Title:       "Dev",
+		Company:     "Acme",
+		Source:      "greenhouse",
+		ExternalID:  "board:1",
+		Location:    "Berlin",
+		WorkMode:    "hybrid",
+		Description: "This is not a remote position; you will be in the office three days a week.",
+	})
+	if got.WorkMode != "hybrid" {
+		t.Errorf("WorkMode = %q, want hybrid (a denial of remote says nothing against hybrid)", got.WorkMode)
+	}
+}
+
+func TestDerive_GenuineRemoteSurvives(t *testing.T) {
+	got := Derive(Input{
+		Title:       "Dev",
+		Company:     "Acme",
+		Source:      "greenhouse",
+		ExternalID:  "board:1",
+		Location:    "Remote - Germany",
+		Description: "Collaborate with a remote team; we are fully remote across the EU.",
+	})
+	if got.WorkMode != "remote" {
+		t.Errorf("WorkMode = %q, want remote (no denial in the description)", got.WorkMode)
+	}
+}
+
 func TestDerive_NoisyDescriptionYieldsNoWorkMode(t *testing.T) {
 	got := Derive(Input{
 		Title:       "Dev",
