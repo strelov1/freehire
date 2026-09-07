@@ -1,7 +1,5 @@
 package main
 
-import "github.com/strelov1/freehire/internal/dict/normalize"
-
 // curatedAliases records slugs a human has decided are one employer where
 // normalize.CompanyKey cannot reach that conclusion on its own. Key is the slug retiring,
 // value is the slug that survives.
@@ -111,14 +109,3 @@ func curatedCanons(aliases map[string]string) map[string]bool {
 // normalize.CompanyKey can never emit, so a curated group can never collide with a folded
 // one — CompanyKey strips everything but letters and digits.
 func curatedGroupKey(canon string) string { return "\x00curated\x1e" + canon }
-
-// curatedCanonIsFixedPoint reports whether a canonical slug survives the slug rule unchanged.
-//
-// It has to. Every future posting from the surviving board derives its slug through
-// CompanySlug, so a canon the rule would rewrite could never be reached by an ordinary
-// crawl — the company would depend on an alias row forever to name itself. The same
-// requirement is why electCanonical derives the canon from a name rather than reusing a
-// stored slug.
-func curatedCanonIsFixedPoint(canon string) bool {
-	return normalize.CompanySlug(canon) == canon
-}

@@ -98,13 +98,13 @@ func planMerges(companies []company, frozen map[string]bool, minJobs int, curate
 			continue
 		}
 		key := normalize.CompanyKey(c.Name)
+		if key == "" {
+			continue
+		}
 		// Two canons folding the same way would make the result depend on slice order, so the
 		// smaller slug wins and the outcome is stable. It is a mistake either way — the guard
 		// in curated_test.go rejects one canon retiring into another — but a deterministic
 		// plan is what makes a dry run worth reading.
-		if key == "" {
-			continue
-		}
 		if prev, ok := curatedFold[key]; !ok || c.Slug < prev {
 			curatedFold[key] = c.Slug
 		}
@@ -122,14 +122,19 @@ func planMerges(companies []company, frozen map[string]bool, minJobs int, curate
 			continue
 		}
 		// A curated member joins its canon's group; the canon joins its own; and so does
-		// anything the RULE would have grouped with the canon.
-		if canon, ok := curated[c.Slug]; ok {
-			key = curatedGroupKey(canon)
-			curatedWinner[key] = canon
-		} else if canons[c.Slug] {
-			key = curatedGroupKey(c.Slug)
-			curatedWinner[key] = c.Slug
-		} else if canon, ok := curatedFold[key]; ok {
+		// anything the RULE would have grouped with the canon. Three ways in, one canon out,
+		// and the key and the winner are set together — they have to agree, and setting them
+		// per branch is how they would come to disagree.
+		var canon string
+		switch {
+		case curated[c.Slug] != "":
+			canon = curated[c.Slug]
+		case canons[c.Slug]:
+			canon = c.Slug
+		default:
+			canon = curatedFold[key] // "" unless a curated canon owns this fold
+		}
+		if canon != "" {
 			key = curatedGroupKey(canon)
 			curatedWinner[key] = canon
 		}
