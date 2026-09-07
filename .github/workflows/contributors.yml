@@ -30,9 +30,21 @@ name: contributors
 # is created, skips the whole job rather than failing a scheduled run every night with
 # an error nobody can act on.
 
+# THE SCHEDULE IS OFF UNTIL CONTRIBUTORS_TOKEN CAN WRITE. It is not off because the
+# cadence was wrong — 04:20 UTC is deliberate, clear of the nightly pg_dump window that
+# starts at 03:00, so a deploy this triggers does not queue behind it. Restoring it is
+# uncommenting these two lines.
+#
+# It is off because the token in the secret currently has read access only, so every
+# nightly run would fail and mail a failure nobody can act on except by fixing the
+# token. A job that fails every night stops being read, and then it is not a signal at
+# all — which costs more than the days of staleness this saves.
+#
+# The preflight check below reports the token's real state in one API call, so the way
+# to find out whether this can come back is to run it by hand and read the first step.
 on:
-  schedule:
-    - cron: '20 4 * * *'
+  # schedule:
+  #   - cron: '20 4 * * *'
   workflow_dispatch:
 
 permissions:

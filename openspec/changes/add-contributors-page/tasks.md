@@ -59,7 +59,9 @@
 - [x] 7.4 Trigger the workflow manually (`workflow_dispatch`) — which is what showed the push to main is rejected: main requires three checks and enforces them on admins.
 - [x] 7.5 Rework it to push a branch and open a pull request with auto-merge, carrying `CONTRIBUTORS_TOKEN` rather than `GITHUB_TOKEN` — a branch pushed with the latter triggers no checks, so its pull request could never merge.
 - [x] 7.6 Skip every step when the secret is absent, so a fork and a not-yet-configured repository are a clean no-op rather than a nightly failure.
-- [ ] 7.7 Create the fine-grained `CONTRIBUTORS_TOKEN` secret, then trigger the workflow twice: the first run opens a pull request, the second finds nothing to do.
+- [x] 7.7 Add a preflight that probes a real write and names the missing permission, after four runs whose only symptom was a 403 naming the account.
+- [x] 7.8 Comment out the schedule while the token cannot write, so a job that would fail every night does not become unread mail. Manual dispatch still works, and the preflight reports the token's state in one API call.
+- [ ] 7.9 Give `CONTRIBUTORS_TOKEN` **Contents: Read and write** (it currently reads only), uncomment the schedule, then trigger the workflow twice: the first run opens a pull request, the second finds nothing to do.
 
 ## 8. Verification
 
