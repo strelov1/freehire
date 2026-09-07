@@ -105,6 +105,37 @@ func TestListAutoApplyBlockedCandidates_OnlyBlockedRows(t *testing.T) {
 	}
 }
 
+// A row can carry both blocked_at and failed_at (a lease-timeout race between a
+// park and a fail — see AutoApplyQueueMetrics' own comment, metrics.sql), and the
+// dead-letter marker must win: this attempt is a failed nudge, never also a
+// blocked one.
+func TestListAutoApplyBlockedCandidates_ExcludesRowsAlsoFailed(t *testing.T) {
+	pool := testdb.Pool(t)
+	queries := db.New(pool)
+	ctx := context.Background()
+
+	userID := seedNudgeIntegrationUser(t, pool, "blocked-and-failed@example.test")
+	jobID := seedClosedJob(t, pool, "blocked-and-failed-job")
+	seedNotificationSettings(t, pool, userID, []string{"push"})
+	seedAutoApplyQueueEntry(t, pool, userID, jobID, true, true)
+
+	blocked, err := queries.ListAutoApplyBlockedCandidates(ctx, 7)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(blocked) != 0 {
+		t.Errorf("blocked rows = %d, want 0 (failed_at wins over blocked_at)", len(blocked))
+	}
+
+	failed, err := queries.ListAutoApplyFailedCandidates(ctx, 7)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(failed) != 1 {
+		t.Errorf("failed rows = %d, want 1", len(failed))
+	}
+}
+
 func TestListAutoApplyFailedCandidates_OnlyFailedRows(t *testing.T) {
 	pool := testdb.Pool(t)
 	queries := db.New(pool)

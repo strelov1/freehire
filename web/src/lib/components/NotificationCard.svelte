@@ -1,6 +1,17 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
-  import { Search, Clock, Target, Archive, MessageCircle, FileText, Bell } from '@lucide/svelte';
+  import {
+    Search,
+    Clock,
+    Target,
+    Archive,
+    MessageCircle,
+    FileText,
+    Bell,
+    CheckCircle2,
+    AlertTriangle,
+    XCircle,
+  } from '@lucide/svelte';
   import { notificationCenter } from '$lib/notificationCenter.svelte';
   import { notificationTarget } from '$lib/notificationTarget';
   import { timeAgo } from '$lib/utils';
@@ -22,6 +33,9 @@
     nudge_follow_up: MessageCircle,
     nudge_interview_prep: Target,
     nudge_job_closed: Archive,
+    nudge_auto_apply_submitted: CheckCircle2,
+    nudge_auto_apply_blocked: AlertTriangle,
+    nudge_auto_apply_failed: XCircle,
     auto_apply_tailor_ready: FileText,
     auto_apply_ready_for_review: FileText,
   };

@@ -211,3 +211,20 @@ inert to every other reader if the code is rolled back (nothing else queries
 ## Open Questions
 
 (none — all decisions above were confirmed during design review)
+
+## Post-implementation fixes (code review)
+
+Two corrections landed after the initial implementation, found by code review
+against code this design didn't originally account for:
+
+- **Blocked/failed are made mutually exclusive.** `AutoApplyQueueMetrics`
+  (`metrics.sql`) already documents that a row can carry both `blocked_at` and
+  `failed_at` (a lease-timeout race between a park and a fail) and that the
+  dead-letter marker wins. `ListAutoApplyBlockedCandidates` now excludes rows
+  where `failed_at IS NOT NULL`, matching that precedent — otherwise the same
+  attempt could be matched as both a blocked and a failed nudge.
+- **The failed-nudge copy no longer says "after retrying".** `failed_at` is also
+  set by `Runner.deadLetterImmediately` (an unconfirmed submission, or a
+  submission that went through but couldn't be durably recorded) — both
+  first-attempt outcomes with zero retries. The copy across all channels now says
+  the attempt "won't try again" instead of asserting a retry happened.

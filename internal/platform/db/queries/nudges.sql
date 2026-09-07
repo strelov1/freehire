@@ -75,16 +75,26 @@ WHERE ev.kind = 'applied'
 -- any row once it is set) — so this can never re-observe a second, different
 -- transition for the same row. Bounded to a recency window on blocked_at for the
 -- same first-deploy reason as the other candidate scans.
+--
+-- failed_at IS NULL: a row can carry both markers (a lease-timeout race between a
+-- park and a fail can land both on the same row — see AutoApplyQueueMetrics'
+-- own comment, metrics.sql), and the dead-letter marker wins there, so it wins
+-- here too — one nudge per attempt, not two contradictory ones.
 SELECT q.user_id, q.job_id, q.blocked_at
 FROM auto_apply_queue q
 JOIN notification_settings ns ON ns.user_id = q.user_id AND ns.enabled
 WHERE q.blocked_at IS NOT NULL
+  AND q.failed_at IS NULL
   AND q.blocked_at > now() - make_interval(days => sqlc.arg(window_days)::int);
 
 -- name: ListAutoApplyFailedCandidates :many
--- Queue entries cmd/auto-apply dead-lettered after exhausting retries. Same
--- write-once guarantee as blocked, via failed_at. Bounded to a recency window on
--- failed_at for the same first-deploy reason as the other candidate scans.
+-- Queue entries cmd/auto-apply dead-lettered: attempts exhausted the retry budget,
+-- or (Runner.deadLetterImmediately) the very first attempt already made the
+-- question moot — an unconfirmed submission or a lost post-submit record are both
+-- too risky to retry, not merely tried and failed. Same write-once guarantee as
+-- blocked, via failed_at; wins over blocked_at where a row carries both (see
+-- ListAutoApplyBlockedCandidates). Bounded to a recency window on failed_at for
+-- the same first-deploy reason as the other candidate scans.
 SELECT q.user_id, q.job_id, q.failed_at
 FROM auto_apply_queue q
 JOIN notification_settings ns ON ns.user_id = q.user_id AND ns.enabled

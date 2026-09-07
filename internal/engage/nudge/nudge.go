@@ -51,6 +51,10 @@ const (
 	// triggering condition can never lapse between MATCH and DELIVER (an applied
 	// event, a blocked_at, a failed_at are all permanent once written), so
 	// Runner.actionable treats all three as unconditionally actionable.
+	// ListAutoApplyBlockedCandidates/ListAutoApplyFailedCandidates already make
+	// Blocked and Failed mutually exclusive (failed_at wins on a row carrying
+	// both, mirroring AutoApplyQueueMetrics), so a single attempt is never matched
+	// as both kinds at once.
 	KindAutoApplySubmitted = "auto_apply_submitted"
 	KindAutoApplyBlocked   = "auto_apply_blocked"
 	KindAutoApplyFailed    = "auto_apply_failed"

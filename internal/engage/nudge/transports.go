@@ -110,7 +110,7 @@ func (n *TelegramNotifier) batchHeadline(kind string, count int) string {
 	case KindAutoApplyBlocked:
 		return fmt.Sprintf("⚠️ Auto-apply couldn't finish <b>%d</b> applications — a required question needs your own answer.", count)
 	case KindAutoApplyFailed:
-		return fmt.Sprintf("Auto-apply couldn't submit <b>%d</b> applications after retrying.", count)
+		return fmt.Sprintf("Auto-apply couldn't submit <b>%d</b> applications, and won't try again.", count)
 	default:
 		return fmt.Sprintf("<b>%d</b> updates on jobs you are tracking.", count)
 	}
@@ -181,7 +181,7 @@ func (n *TelegramNotifier) renderOne(m Message) string {
 			title, company, trackingURL)
 	case KindAutoApplyFailed:
 		return fmt.Sprintf(
-			"Auto-apply couldn't submit <b>%s</b> at <b>%s</b> after retrying.\n<a href=\"%s\">Open your tracking board →</a>",
+			"Auto-apply couldn't submit <b>%s</b> at <b>%s</b>, and won't try again.\n<a href=\"%s\">Open your tracking board →</a>",
 			title, company, trackingURL)
 	default:
 		return fmt.Sprintf("<b>%s</b> at <b>%s</b>: <a href=\"%s\">Open your tracking board →</a>", title, company, trackingURL)
@@ -314,7 +314,7 @@ func (n *EmailNotifier) batchCopy(kind string, count int) (subject, head, pre, l
 		return fmt.Sprintf("Couldn't submit: %d applications", count),
 			fmt.Sprintf("%d applications couldn't be submitted", count),
 			fmt.Sprintf("Auto-apply couldn't submit %d applications", count),
-			"Auto-apply couldn't submit these applications after retrying."
+			"Auto-apply couldn't submit these applications, and won't try again."
 	default:
 		return fmt.Sprintf("%d updates on jobs you are tracking", count),
 			"An update on your applications",
@@ -383,7 +383,7 @@ var bodies = template.Must(mailtpl.Partials().New("nudge").Parse(`
 
 {{define "auto_apply_failed"}}{{template "job-row" .Job}}
 <div style="height:18px;"></div>
-{{template "p" "Auto-apply couldn't submit this application after retrying."}}
+{{template "p" "Auto-apply couldn't submit this application, and won't try again."}}
 {{template "button" (mailLink .URL .CTA)}}{{end}}
 `))
 
@@ -432,7 +432,7 @@ func (n *EmailNotifier) render(m Message) (subject, htmlBody, textBody string) {
 	case KindAutoApplyFailed:
 		block, head, pre = "auto_apply_failed", "Auto-apply couldn't submit this application", "Auto-apply couldn't submit this application"
 		subject = fmt.Sprintf("Couldn't submit: %s at %s", m.JobTitle, m.Company)
-		textBody = fmt.Sprintf("Auto-apply couldn't submit %s at %s after retrying.\n\nOpen your tracking board: %s\n",
+		textBody = fmt.Sprintf("Auto-apply couldn't submit %s at %s, and won't try again.\n\nOpen your tracking board: %s\n",
 			m.JobTitle, m.Company, trackingURL)
 	default:
 		block, head, pre = "plain", fmt.Sprintf("%s at %s", m.JobTitle, m.Company), "An update on a job you are tracking"

@@ -783,6 +783,9 @@ export type NotificationKind =
   | 'nudge_follow_up'
   | 'nudge_interview_prep'
   | 'nudge_job_closed'
+  | 'nudge_auto_apply_submitted'
+  | 'nudge_auto_apply_blocked'
+  | 'nudge_auto_apply_failed'
   | 'auto_apply_tailor_ready'
   | 'auto_apply_ready_for_review';
 

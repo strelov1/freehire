@@ -2750,10 +2750,19 @@ type Querier interface {
 	// any row once it is set) — so this can never re-observe a second, different
 	// transition for the same row. Bounded to a recency window on blocked_at for the
 	// same first-deploy reason as the other candidate scans.
+	//
+	// failed_at IS NULL: a row can carry both markers (a lease-timeout race between a
+	// park and a fail can land both on the same row — see AutoApplyQueueMetrics'
+	// own comment, metrics.sql), and the dead-letter marker wins there, so it wins
+	// here too — one nudge per attempt, not two contradictory ones.
 	ListAutoApplyBlockedCandidates(ctx context.Context, windowDays int32) ([]ListAutoApplyBlockedCandidatesRow, error)
-	// Queue entries cmd/auto-apply dead-lettered after exhausting retries. Same
-	// write-once guarantee as blocked, via failed_at. Bounded to a recency window on
-	// failed_at for the same first-deploy reason as the other candidate scans.
+	// Queue entries cmd/auto-apply dead-lettered: attempts exhausted the retry budget,
+	// or (Runner.deadLetterImmediately) the very first attempt already made the
+	// question moot — an unconfirmed submission or a lost post-submit record are both
+	// too risky to retry, not merely tried and failed. Same write-once guarantee as
+	// blocked, via failed_at; wins over blocked_at where a row carries both (see
+	// ListAutoApplyBlockedCandidates). Bounded to a recency window on failed_at for
+	// the same first-deploy reason as the other candidate scans.
 	ListAutoApplyFailedCandidates(ctx context.Context, windowDays int32) ([]ListAutoApplyFailedCandidatesRow, error)
 	// application_events rows auto-apply itself wrote on a successful, unattended
 	// submission (kind='applied', source='auto_apply' — distinct from a candidate's

@@ -43,3 +43,9 @@
 - [x] 7.1 `gofmt -l .`, `go vet ./...`, `go test ./...`.
 - [x] 7.2 `go vet -tags=integration ./...`; run the full tagged suite for `internal/engage/nudge`, `internal/platform/db`, and `cmd/auto-apply`.
 - [x] 7.3 `golangci-lint run`.
+
+## 8. Code-review fixes
+
+- [x] 8.1 Make `ListAutoApplyBlockedCandidates` exclude rows where `failed_at IS NOT NULL` (dead-letter wins over blocked, matching `AutoApplyQueueMetrics`'s own precedent) — add a regression integration test for a row carrying both markers.
+- [x] 8.2 Fix `KindAutoApplyFailed` copy (`push.go`, `transports.go`) to not assert "after retrying" — `Runner.deadLetterImmediately` can set `failed_at` on the first attempt.
+- [x] 8.3 Add the three new nudge kinds to `web/src/lib/types.ts`'s `NotificationKind`, `NotificationCard.svelte`'s `KIND_ICON`, and `notificationTarget.ts` (route to the tracking board, matching the Go-side channels) — the original claim that "no frontend changes are needed" was wrong; `KIND_ICON` is a `Record<NotificationKind, ...>` so a missing entry breaks the notification bell's icon render for these kinds.

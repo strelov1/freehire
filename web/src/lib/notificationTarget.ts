@@ -14,7 +14,10 @@ export type NotificationTarget =
 /** A card with no `public_slug` and no `jobs` snapshot has nothing to open.
  *  `nudge_follow_up`/`nudge_interview_prep` point at the tracking board on web —
  *  matching the existing Telegram/email link target for those two kinds — even
- *  though the row itself always carries a slug. `auto_apply_tailor_ready` points
+ *  though the row itself always carries a slug. The three auto-apply outcome
+ *  kinds (`nudge_auto_apply_submitted`/`blocked`/`failed`) follow the same rule,
+ *  for the same reason: internal/engage/nudge's transports.go/push.go point all
+ *  three at the tracking board too, never a per-job deep link. `auto_apply_tailor_ready` points
  *  at the tailoring workspace, not the job page — `/tailor/[slug]` idempotently
  *  resolves the same tailored CV a fresh tailoring bootstrap would (see
  *  openspec/changes/auto-apply-tailored-resume), so no CV id needs to travel with
@@ -29,7 +32,13 @@ export function notificationTarget(
   item: Pick<NotificationItem, 'kind' | 'public_slug'> & Partial<Pick<NotificationItem, 'id' | 'jobs'>>,
 ): NotificationTarget {
   if (item.public_slug) {
-    if (item.kind === 'nudge_follow_up' || item.kind === 'nudge_interview_prep') {
+    if (
+      item.kind === 'nudge_follow_up' ||
+      item.kind === 'nudge_interview_prep' ||
+      item.kind === 'nudge_auto_apply_submitted' ||
+      item.kind === 'nudge_auto_apply_blocked' ||
+      item.kind === 'nudge_auto_apply_failed'
+    ) {
       return { kind: 'tracking' };
     }
     if (item.kind === 'auto_apply_tailor_ready') {
