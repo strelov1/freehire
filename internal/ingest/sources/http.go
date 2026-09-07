@@ -378,10 +378,21 @@ func (c *Client) GetXML(ctx context.Context, url string, v any) error {
 
 // maxTextBody caps the raw body GetText reads — tighter than the client's own
 // maxResponseBody, because these endpoints are markup a caller slices rather than a feed
-// that inlines every posting. Careers pages can be large, but the ATS link we scan for sits
-// in the markup, not megabytes of trailing content (the largest measured in production is
-// ~880 KB); the cap keeps a runaway page from ballooning memory.
-const maxTextBody = 2 << 20 // 2 MiB
+// that inlines every posting; the cap keeps a runaway page from ballooning memory.
+//
+// The ceiling is a measurement, and the previous one (2 MiB, "the largest measured in
+// production is ~880 KB") was outgrown rather than wrong. crowd.yandex.ru/vacancies renders
+// its whole listing into one page and reached 2,109,478 bytes on 2026-09-07 — 0.6% over,
+// enough to fail every crawl of that provider since 2026-09-06 and to keep failing as the
+// listing grows. A page that inlines its listing has no natural size, so the new figure
+// carries deliberate headroom rather than tracking the current largest: 8 MiB is 4x the
+// page that broke it and still 8x tighter than the feed cap, which is the distinction this
+// constant exists to draw.
+//
+// Growing past THIS one is reported, not silent (see GetText below), so the next page to
+// outgrow it says so with its size instead of returning short markup that reads like an
+// employer with no ATS link.
+const maxTextBody = 8 << 20 // 8 MiB
 
 // GetText fetches url and returns its raw response body as a string (capped at
 // maxTextBody). It serves adapters whose endpoint is a raw page they scan or slice
