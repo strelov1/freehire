@@ -33,11 +33,7 @@
   import { ensureAccountSetupLoaded, setupOutstanding } from '$lib/accountSetup.svelte';
   import { ProviderIcon } from '$lib/ui';
   import { NAV } from '$lib/siteNav';
-
-  // Same invite link as the footer's socials row (Footer.svelte) — no shared
-  // constant exists for it yet, so it's kept inline here like GITHUB_URL's
-  // counterpart in Footer.
-  const DISCORD_URL = 'https://discord.gg/Cghjh3dA5N';
+  import { DISCORD_URL } from '$lib/socialLinks';
 
   // The single menu absorbs the site nav, the signed-in account items, the theme
   // toggle, and the auth action — the header's only control besides search.
@@ -223,8 +219,7 @@
   <GithubStars class="hidden sm:inline-flex" />
 
   <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- external Discord invite, not an internal route -->
-  <a
-    href={DISCORD_URL}
+  <a href={DISCORD_URL}
     target="_blank"
     rel="noreferrer"
     aria-label="freehire on Discord"
@@ -407,8 +402,7 @@
       <div class="shrink-0 border-t border-border p-2 sm:hidden">
         <GithubStars variant="row" class={cn(rowBase, 'text-muted-foreground')} />
         <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- external Discord invite, not an internal route -->
-        <a
-          href={DISCORD_URL}
+        <a href={DISCORD_URL}
           target="_blank"
           rel="noreferrer"
           role="menuitem"

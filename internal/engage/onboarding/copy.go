@@ -18,33 +18,11 @@ type spec struct {
 	text func(baseURL string) string
 }
 
-// signature is the sign-off every mail in the sequence ends with. It is appended
-// once, in body(), rather than pasted into three templates: it is a property of the
-// sequence — these are letters from a person — not of any one letter.
-//
-// The portrait is a plain <img> with a border-radius rather than a pre-cut circular
-// PNG: Outlook ignores the radius and shows a square, which is a fine degradation,
-// while transparency there renders as a black box in the corners. The alt text is
-// the name, so an images-off client still shows who is writing.
-const signature = `
-<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin-top:22px;">
-  <tr>
-    <td width="52" valign="top" style="width:52px;padding-right:12px;">
-      <img src="{{.PortraitURL}}" width="44" height="44" alt="Ilya" style="display:block;border:0;border-radius:22px;">
-    </td>
-    <td valign="middle">
-      <div class="m-ink" style="font-size:14px;font-weight:600;color:#070707;">Ilya Strelov</div>
-      <div class="m-muted" style="font-size:13px;color:#505050;padding-top:2px;">
-        building freehire ·
-        <a href="{{.LinkedInURL}}" class="m-muted" style="color:#505050;text-decoration:none;"><img src="{{.LinkedInIcon}}" width="14" height="14" alt="" class="m-logo" style="vertical-align:-2px;border:0;padding-right:4px;">LinkedIn</a>
-      </div>
-    </td>
-  </tr>
-</table>`
-
-// body parses one mail's markup with the sign-off appended.
+// body parses one mail's markup with the shell's sign-off appended. It is appended
+// here rather than pasted into five templates: these are letters from a person, so
+// the signature is a property of the sequence, not of any one letter.
 func body(name, markup string) *template.Template {
-	return template.Must(mailtpl.Partials().New(name).Parse(markup + signature))
+	return template.Must(mailtpl.Partials().New(name).Parse(markup + "\n" + `{{template "signature" .}}`))
 }
 
 // specs is the sequence. Runner selects by Step; nothing else indexes this map.
@@ -70,7 +48,7 @@ var specs = map[Step]spec{
 				"I read every reply myself. If we don't cover your search well yet, tell me — that is usually\n" +
 				"what I work on next.\n\n" +
 				"Set up a job alert: " + base + "/my/notifications\n\n" +
-				"— Ilya Strelov, building freehire\n" + linkedInURL + "\n"
+				"— Ilya Strelov, building freehire\n" + mailtpl.LinkedInURL + "\n"
 		},
 	},
 
@@ -92,7 +70,7 @@ var specs = map[Step]spec{
 				"Save the search once, and freehire keeps running it for you — Telegram, email or push,\n" +
 				"your choice.\n\n" +
 				"See how the filters work: " + base + "/features/advanced-search\n\n" +
-				"— Ilya Strelov, building freehire\n" + linkedInURL + "\n"
+				"— Ilya Strelov, building freehire\n" + mailtpl.LinkedInURL + "\n"
 		},
 	},
 
@@ -111,7 +89,7 @@ var specs = map[Step]spec{
 				"whether we cover it well — and if we don't, I'd rather you knew now than checked an empty page\n" +
 				"for a week.\n\n" +
 				"Set up an alert: " + base + "/my/notifications\n\n" +
-				"— Ilya Strelov, building freehire\n" + linkedInURL + "\n"
+				"— Ilya Strelov, building freehire\n" + mailtpl.LinkedInURL + "\n"
 		},
 	},
 
@@ -144,7 +122,7 @@ var specs = map[Step]spec{
 				"What it does, in more detail: " + base + "/features/extension\n\n" +
 				"It is Chrome for now. If you are on Firefox or Safari, reply and say so — that is how I\n" +
 				"decide what to build next.\n\n" +
-				"— Ilya Strelov, building freehire\n" + linkedInURL + "\n"
+				"— Ilya Strelov, building freehire\n" + mailtpl.LinkedInURL + "\n"
 		},
 	},
 
@@ -170,7 +148,7 @@ var specs = map[Step]spec{
 				"The Discord is where the rest of it happens.\n\n" +
 				"It is the main place to ask anything — a filter that misbehaves, a board we don't cover yet,\n" +
 				"a posting that smells fake, a feature you want. I read it and answer myself, and it is small\n" +
-				"is small enough that you will actually be heard.\n\n" +
+				"enough that you will actually be heard.\n\n" +
 				"It is also a community of job seekers sharing how the search actually goes: what got a reply\n" +
 				"and what got silence, a CV rewritten until it started landing interviews, whether a company\n" +
 				"is really hiring or just collecting CVs, what the offer came in at. That half I can't build —\n" +
@@ -179,7 +157,7 @@ var specs = map[Step]spec{
 				"And if the project has been useful, a star is how most people end up finding it:\n" +
 				repoURL + "\n\n" +
 				"Replying to this mail reaches me too.\n\n" +
-				"— Ilya Strelov, building freehire\n" + linkedInURL + "\n"
+				"— Ilya Strelov, building freehire\n" + mailtpl.LinkedInURL + "\n"
 		},
 	},
 }
