@@ -1216,6 +1216,10 @@ type Querier interface {
 	// took one away — a double release, or a release of a charge someone else already voided,
 	// removes nothing and returns 0.
 	DeleteDebit(ctx context.Context, arg DeleteDebitParams) (int64, error)
+	// Erase one user's binding. Account deletion calls this alongside its other erasures; the
+	// foreign key cascades, but deletion states what it erases explicitly rather than relying on
+	// a constraint to mean it.
+	DeleteDiscordLinkForUser(ctx context.Context, userID int64) error
 	DeleteEmailClassificationOutbox(ctx context.Context, id int64) error
 	// Consume the code (on success) or burn it (on too many attempts). Idempotent: deleting
 	// an absent code is a no-op, so a double submit cannot fail the request.
@@ -1912,6 +1916,9 @@ type Querier interface {
 	// language stamp is checked against the VACANCY, not the caller's profile, unlike
 	// GetUserJobAnalysis.
 	GetCoverLetter(ctx context.Context, arg GetCoverLetterParams) (GetCoverLetterRow, error)
+	// One account's binding, for the integrations surface and for the unlink path. No rows means
+	// not linked, which every caller reports as a state rather than as an error.
+	GetDiscordLink(ctx context.Context, userID int64) (DiscordLink, error)
 	GetEmail(ctx context.Context, arg GetEmailParams) (GetEmailRow, error)
 	// The outstanding code for a purpose. No row means nothing was issued or it was consumed;
 	// the caller treats pgx.ErrNoRows as "request a new code". Expiry and the attempt ceiling
@@ -2556,6 +2563,20 @@ type Querier interface {
 	// returns exactly one row — NULL for an empty catalogue — rather than the
 	// no-rows error a bare LIMIT 1 SELECT would give sqlc's :one on an empty table.
 	LatestOpenJobAddedAt(ctx context.Context) (pgtype.Timestamptz, error)
+	// Bind a Discord account to a freehire account, or move an existing binding to a different
+	// Discord account.
+	//
+	// ON CONFLICT on the user, not on the Discord account, and the difference is the whole
+	// point. Re-linking your OWN account to a different Discord identity is an ordinary thing to
+	// do — you changed Discord accounts — and it replaces the binding. Naming a Discord account
+	// that SOMEBODY ELSE holds is the case the unique index on discord_user_id refuses (23505),
+	// because letting it through would put the paid role on a second person for one
+	// subscription. The caller reports that refusal as a conflict rather than retrying it.
+	//
+	// The grant and the sync stamp are cleared on a move: they describe the account being left
+	// behind, which still holds the role until the caller revokes it there. Keeping them would
+	// make reconciliation believe the NEW account already has what it has not been given.
+	LinkDiscordAccount(ctx context.Context, arg LinkDiscordAccountParams) (DiscordLink, error)
 	// Manually link (or relink) an email to a chosen application, overriding any
 	// auto-link or suggestion.
 	LinkEmailToJob(ctx context.Context, arg LinkEmailToJobParams) (int64, error)
@@ -2846,6 +2867,19 @@ type Querier interface {
 	// by a caller-supplied limit and served by the (user_id, created_at DESC) index. The handler
 	// resolves each debit's ref to a human label (the job/CV it named).
 	ListCreditLedger(ctx context.Context, arg ListCreditLedgerParams) ([]ListCreditLedgerRow, error)
+	// The next page of bindings to reconcile, each with the plan that decides its role.
+	//
+	// The plan comes back WITH the link, in one read, because resolving it separately would be
+	// one query per account and could straddle a billing sync — an account that renewed
+	// mid-page would be read as paying by one query and free by another.
+	//
+	// ORDER BY synced_at NULLS FIRST makes this a rotating queue. The bound exists to keep a run
+	// inside its timer, and with any fixed ordering the accounts past the bound would simply
+	// never be examined; ordering by least-recently-examined means a bounded run that cannot
+	// reach everybody still reaches everybody over successive runs, and a run that stops early
+	// loses nothing because there is no cursor to lose. user_id breaks ties so the order is
+	// total and two runs cannot interleave over the same row.
+	ListDiscordLinksToSync(ctx context.Context, limit int32) ([]ListDiscordLinksToSyncRow, error)
 	// Every public_slug the user has hidden (dismissed). Used by the SPA to exclude
 	// hidden jobs from the browse feed client-side, mirroring ListSavedJobSlugs —
 	// cross-referenced in the browser, never joined into ListJobs/SearchJobs. Bounded
@@ -4840,6 +4874,19 @@ type Querier interface {
 	// only widens reach, never produces a false match, so it can stay eventually
 	// consistent.
 	SetCompanyIndustries(ctx context.Context, arg SetCompanyIndustriesParams) (int64, error)
+	// Record the outcome of examining one binding: whether the role is now held, and that it was
+	// examined just now.
+	//
+	// ONE statement for both, because they are one fact. Written separately, a process that died
+	// between them would either grant the role and leave the row at the front of the queue
+	// forever, or stamp the row as done while forgetting what it did — and the second is the
+	// dangerous one, because the next run would then see "role not granted" for an account that
+	// has it and re-grant on every pass.
+	//
+	// role_granted_at is passed NULL to say the role is not held: after a revocation, and after
+	// Discord answers that the member is unknown to the guild. The stamp moves either way, so a
+	// member who left does not pin the queue.
+	SetDiscordRoleGranted(ctx context.Context, arg SetDiscordRoleGrantedParams) error
 	// Persist the resolved link + classification and stamp classified_at + model in one
 	// write. job_id/suggested_job_id/link_source/match_confidence are nullable — an
 	// unlinked or suggestion-only email leaves job_id NULL.
@@ -5259,6 +5306,12 @@ type Querier interface {
 	// treats that as "already not dismissed", never as a failure. This is the undo
 	// path for a swipe-left decision.
 	UndismissJob(ctx context.Context, arg UndismissJobParams) (UndismissJobRow, error)
+	// Remove a binding, reporting how many rows went.
+	//
+	// The count is what lets the unlink route be idempotent without first reading: 0 means there
+	// was nothing to remove, and that is a success, not a 404. A user who double-clicks
+	// "Disconnect" must not see a failure for having got what they asked for.
+	UnlinkDiscordAccount(ctx context.Context, userID int64) (int64, error)
 	// Clear an email's application link (leaves the classified status intact).
 	UnlinkEmail(ctx context.Context, arg UnlinkEmailParams) (int64, error)
 	// Clear a job's saved mark without deleting the interaction row, so view and

@@ -435,6 +435,17 @@ type CvTracerLink struct {
 	CreatedAt       pgtype.Timestamptz `json:"created_at"`
 }
 
+// One freehire account bound to one Discord account, so cmd/discord-sync can keep the paid role in step with the subscription. Holds no token: the OAuth access token is used inside the callback request and never stored.
+type DiscordLink struct {
+	UserID        int64              `json:"user_id"`
+	DiscordUserID string             `json:"discord_user_id"`
+	LinkedAt      pgtype.Timestamptz `json:"linked_at"`
+	// When the paid role was last granted, or NULL when the role is not currently held. It exists so reconciliation can tell "never granted" from "granted, now due for revocation" without asking Discord about every account on every run.
+	RoleGrantedAt pgtype.Timestamptz `json:"role_granted_at"`
+	// When reconciliation last examined this row, or NULL if never. Reconciliation orders by it NULLS FIRST, which turns a bounded run into a rotating queue: a run that cannot reach everybody still reaches everybody over successive runs, with no cursor to store and nothing to reset when a run stops early.
+	SyncedAt pgtype.Timestamptz `json:"synced_at"`
+}
+
 type Email struct {
 	ID                  int64              `json:"id"`
 	UserID              int64              `json:"user_id"`
