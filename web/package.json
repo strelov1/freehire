@@ -65,7 +65,7 @@
     "satori": "^0.33.4",
     "satori-html": "^0.3.2",
     "shiki": "^4.4.3",
-    "simple-icons": "^16.28.0",
+    "simple-icons": "^16.29.0",
     "svelte-dnd-action": "^0.9.79",
     "three": "^0.185.1",
     "workbox-window": "^7.4.1"
