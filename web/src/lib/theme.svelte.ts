@@ -2,22 +2,22 @@
 // localStorage under `hire.theme`. Defaults to `light` regardless of the OS
 // preference; `dark` only applies once the user explicitly toggles it. The
 // root layout calls `initTheme()` on mount; components read `themeStore` and
-// call `setMode(...)`. SSR-safe: every browser API is guarded by `browser`, so
-// importing this module on the server (via the header menu) never touches
-// window/localStorage. A no-FOUC inline script in app.html applies the class
-// before paint (see task 4.2).
+// call `setMode(...)`. SSR-safe: every browser API is guarded, so importing this
+// module on the server (via the header menu) never touches window/localStorage.
+// A no-FOUC inline script in app.html applies the class before paint (see task 4.2).
+//
+// The storage IO lives in $lib/themeStorage rather than here, and the split is not
+// cosmetic: `themeStore` is constructed at module scope, so anything that throws on
+// the way to it takes the whole module down — and the root layout imports this module.
+// That is what an unguarded read of `localStorage` did to visitors browsing with site
+// data blocked. The runes in this file put it beyond the plain-Node vitest env, so the
+// part that can throw now sits in a file that env can reach, with a test for it.
 
 import { browser } from '$app/environment';
 
-const STORAGE_KEY = 'hire.theme';
+import { readStoredTheme, writeStoredTheme, type ThemeMode } from '$lib/themeStorage';
 
-export type ThemeMode = 'light' | 'dark';
-
-function readStored(): ThemeMode {
-  if (!browser) return 'light';
-  const raw = localStorage.getItem(STORAGE_KEY);
-  return raw === 'dark' ? 'dark' : 'light';
-}
+export type { ThemeMode };
 
 function apply(mode: ThemeMode) {
   if (!browser) return;
@@ -25,19 +25,13 @@ function apply(mode: ThemeMode) {
 }
 
 class ThemeStore {
-  mode = $state<ThemeMode>(readStored());
+  mode = $state<ThemeMode>(readStoredTheme());
 
   isDark = $derived(this.mode === 'dark');
 
   setMode(next: ThemeMode) {
     this.mode = next;
-    if (browser) {
-      try {
-        localStorage.setItem(STORAGE_KEY, next);
-      } catch {
-        // best-effort: private mode / quota
-      }
-    }
+    writeStoredTheme(next);
     apply(next);
   }
 
@@ -49,10 +43,10 @@ class ThemeStore {
 export const themeStore = new ThemeStore();
 
 /** Re-apply the stored theme. Browser-only (called from the layout's onMount) —
- *  the singleton may have been first constructed on the server, where it
- *  defaults to `light` without reading storage. */
+ *  the singleton may have been first constructed on the server, where storage is
+ *  unreachable and the mode falls back to `light`. */
 export function initTheme() {
   if (!browser) return;
-  themeStore.mode = readStored();
+  themeStore.mode = readStoredTheme();
   apply(themeStore.mode);
 }
