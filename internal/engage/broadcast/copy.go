@@ -28,10 +28,12 @@ var campaigns = map[string]Campaign{
 	// deadline in a letter is a promise about behaviour, and the letter keeps going out
 	// long after the week it was written in.
 	"discord-invite": {
+		// Name is the ledger key and stays "discord-invite" whatever the subject line
+		// says: renaming it would mail the whole list a second time.
 		Name:      "discord-invite",
-		Subject:   "There’s a Discord for this",
-		Preheader: "One room: ask me anything, and everyone else job hunting right now.",
-		Heading:   "There’s a Discord for this",
+		Subject:   "Join a community of job seekers",
+		Preheader: "A room of people job hunting right now — and me, answering.",
+		Heading:   "Join a community of job seekers",
 		body: body("discord-invite", `
 {{template "p" "Hi — short one. freehire has a Discord, and I’d like you in it."}}
 {{template "p" "It is where the questions go now. A filter that misbehaves, a company board we don’t cover yet, a posting that smells fake, a feature you wish existed — ask there and I answer myself. The whole project is open source, so there is nothing about how it works that is off limits to ask."}}
