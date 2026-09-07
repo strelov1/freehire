@@ -58,9 +58,9 @@
 
 ## 7. Ship
 
-- [ ] 7.1 `gofmt -w`, `go vet ./...`, `go test ./...`, `go vet -tags=integration ./...`;
+- [x] 7.1 `gofmt -w`, `go vet ./...`, `go test ./...`, `go vet -tags=integration ./...`;
       `go test -tags=integration` for the packages touched.
-- [ ] 7.2 Document the tier in `internal/ingest/sources/AGENTS.md` and the new package in
+- [x] 7.2 Document the tier in `internal/ingest/sources/AGENTS.md` and the new package in
       `internal/platform/AGENTS.md`; add the module-file row for `platform/browser`.
-- [ ] 7.3 Open the PR referencing freehire#2588; state that enabling it on prod is a separate
+- [x] 7.3 Open the PR referencing freehire#2588; state that enabling it on prod is a separate
       step and that the 84 605 closed rows stay closed.

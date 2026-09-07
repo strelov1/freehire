@@ -322,3 +322,49 @@ Source ingest: the provider registry and its adapters, entry validation, the per
 ## Limitations
 - The ingest sweep has a trade-off: a missed run can leave an orphan open until a future reconcile; the change window is sized wide enough to absorb a skipped cron.
 - Self-closing sources: a missed `removed` event from the feed can leave a vacancy open until the next reindex.
+
+## The browser tier
+
+A provider whose pages are served only to a client that ran JavaScript is crawled through a
+headless browser instead of an HTTP client. `browserProviders` (browsertier.go) is the
+per-provider opt-in, the same shape `proxiedProviders` has, and `ApplyBrowserEgress` rewires
+them — one entry today, `echojobs`.
+
+**It requires a proxy and refuses to run without one.** Measured 2026-09-07 against echojobs,
+all four combinations: from the prod datacenter IP a plain GET *and* a headless browser both
+get `403 x-vercel-mitigated: deny`, so no challenge is offered and there is nothing for a
+browser to solve; through `SOURCES_PROXY_URL` a plain GET gets the challenge and the browser
+passes it. Neither half works alone. Without a proxy the provider stays on the plain client
+and fails as it would have anyway, which is the honest outcome.
+
+**Nothing launches at wiring time.** The session is built on the first fetch, so an ingest run
+for any other provider — which is almost every run, since `cmd/ingest` crawls one — never pays
+for a Chrome it will not use.
+
+**The tier must stay disjoint from the proxy tiers**, and a test enforces it: both rewire the
+same registry entry and `cmd/ingest` applies them in sequence, so a provider in both would
+silently get whichever ran last. A browser-tier provider needs no `proxiedProviders` entry —
+its session egresses through `SOURCES_PROXY_URL` itself.
+
+`browserClient` implements exactly `XMLGetter` + `HTMLGetter`, which is `echojobsHTTP`, so the
+adapter reads browser-fetched bytes without knowing it — **not one line of echojobs' parsing
+changed**. Its errors are `*StatusError`, the same type the plain client produces, which is
+load-bearing rather than tidy: `detailUnreadable` and `isRateLimited` match on that type, so a
+browser-fetched 404 still means "this posting is gone".
+
+See [internal/platform/browser/AGENTS.md](../../platform/browser/AGENTS.md) for the traps on
+the browser side — chiefly that the `HeadlessChrome` user agent is refused outright, and that
+retrying a refused request is what holds a rate-limit-flavoured wall UP.
+
+## A crawl that reads nothing of what it listed must fail
+
+`echojobs` published `ingested=0 failed=0`, exit 0, green unit, every four hours for 19 days
+while its pages sat behind a bot wall (freehire#2588). A dropped posting never reaches the
+pipeline — `Stats` counts `saveOne` failures, not candidates an adapter discarded — so from
+every side but the adapter's, a total outage and a source with nothing to offer are the same
+result.
+
+So a hydrating adapter that listed candidates and read **none** of them returns an error.
+There is deliberately no threshold: "some candidates, none read" is the whole signal, and how
+many consecutive failures matter is `board_health`'s question. No candidates at all still
+succeeds — a quiet source is not a broken one.

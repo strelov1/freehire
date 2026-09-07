@@ -161,6 +161,7 @@ Each is self-contained and can be read independently.
 | **Cron worker plumbing** (Main/Bootstrap, exit codes, heartbeat, corruption-tolerant scans) | [internal/platform/worker/AGENTS.md](internal/platform/worker/AGENTS.md) |
 | **Host configuration** (systemd units and timers, operator scripts, the two-file env split) | [deploy/AGENTS.md](deploy/AGENTS.md) |
 | **LLM client** (provider-agnostic wrapper, schema cache, streaming, attribution tags) | [internal/platform/llm/AGENTS.md](internal/platform/llm/AGENTS.md) |
+| **Headless browser** (launching Chrome, in-page fetch, the stealth flags' single home) | [internal/platform/browser/AGENTS.md](internal/platform/browser/AGENTS.md) |
 | **Sentry error tracking** (backend, workers, frontend — env-gated) | [internal/platform/observability/AGENTS.md](internal/platform/observability/AGENTS.md) |
 | **`internal/dict`** — the block itself: what it is, what it may import | [internal/dict/AGENTS.md](internal/dict/AGENTS.md) |
 | **Company names** (real display names for slug-named companies) | [internal/dict/companyname/AGENTS.md](internal/dict/companyname/AGENTS.md) |

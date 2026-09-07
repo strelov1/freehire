@@ -21,13 +21,15 @@ in two different blocks. It goes in `platform`.
 
 `platform/browser` owns two things:
 
-- **`LaunchOptions(proxyURL string)`** — the stealth flags. Today that is `headless` plus
-  `disable-blink-features=AutomationControlled`, the pair the 2026-09-02 auto-apply spike
-  measured against `bot.sannysoft.com`, plus the proxy server when one is given.
+- **`LaunchOptions()` / `LaunchOptionsThroughProxy(url)`** — the stealth flags. Today that is
+  `headless` plus `disable-blink-features=AutomationControlled`, the pair the 2026-09-02
+  auto-apply spike measured against `bot.sannysoft.com`, plus the proxy server when one is
+  given. Two functions rather than one with an ignorable error: only the proxy parse can
+  fail, so a caller with no proxy is handed no error to swallow.
 - **`Session`** — a running browser, its proxy authentication, and `Fetch`.
 
 `api/atsapply` keeps its `newBrowserSession`, its DOM scanning, its filling and its
-screenshots. Only `stealthAllocatorOptions` becomes a call into `LaunchOptions("")`.
+screenshots. Only `stealthAllocatorOptions` becomes a call into `LaunchOptions()`.
 
 The split is on purpose. What must not be duplicated is the *knowledge of how to look like a
 real browser*, because that is the part a future anti-bot fix will touch, and two copies mean
@@ -41,7 +43,9 @@ abstraction over nothing.
 `Session.Fetch(ctx, url)` returns `(status int, body []byte, err error)`. Under it:
 
 1. On a tab's first use, navigate to the site's origin once and wait for the challenge to
-   clear. ~7.7s, paid once per tab.
+   clear — by watching the main document's status, not by re-requesting. Paid once per tab;
+   measured at 3.9s end to end. See "What live verification changed" for why the first
+   implementation of this step was wrong.
 2. Every request after that is `fetch(url, {credentials:"include"})` evaluated in that page,
    awaited, returning status and body.
 
@@ -54,6 +58,41 @@ does that without paying for a render.
 `Fetch` returns the status rather than an error for a non-2xx, because the caller needs to
 tell `404` (the posting is gone — the only reading the job lifecycle accepts as gone) from
 `403`/`429` (we are blocked — never a reason to close anything).
+
+## What live verification changed
+
+Two things were wrong after the unit tests were green, and only running against the real wall
+from the production host found them. Both are recorded here because the obvious
+implementation falls into each.
+
+**The user agent decided everything.** A hand-rolled probe cleared in eight seconds while the
+packaged session sat refused for twenty — identical flags, identical proxy, identical tab
+structure. The probe set a desktop user agent; the package did not, so Chrome announced
+`HeadlessChrome`. Against that the site did not serve a challenge at all, it simply refused,
+and a browser cannot solve a challenge it is never given. No launch flag removes that string,
+so the session reads the running browser's own agent and rewrites that one word — read rather
+than written as a literal, so it never claims a Chrome version the binary is not.
+
+This changes `api/atsapply` too, since it shares the launch path: its browser now presents a
+non-headless agent where it previously presented a headless one. That is strictly more
+browser-like and consistent with what its stealth flags were already for, but it is a
+behaviour change to a production feature and is called out rather than slipped in.
+
+**Retrying a refused request keeps the wall up.** The first implementation polled by re-issuing
+the request every 250ms until it stopped being refused. It never cleared: the obstacle is a
+rate-limit-flavoured `429`, so a burst of refused fetches is exactly what holds it. What works
+is to navigate once and watch — the challenge answers the document with a refusal and then
+reloads itself, so the main document turning 2xx is the wall lifting. No extra request, no
+site-specific marker, and a ceiling rather than a delay: 3.9s end to end where the
+fixed-sleep probe took 11s.
+
+Clearance latches on ANY document response succeeding rather than the last one, because a
+challenge page can pull in frames of its own and a frame refused after the real page landed
+would read as the wall going back up. The statuses seen ride the timeout error — which is how
+the user-agent cause was found rather than guessed.
+
+Verified end to end against live echojobs.io through the real adapter: 59 476 postings listed
+from the sitemap, five hydrated with real titles, companies, locations and skills, in 12.9s.
 
 ## Concurrency
 
