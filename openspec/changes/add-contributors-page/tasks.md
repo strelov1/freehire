@@ -53,10 +53,13 @@
 
 ## 7. The scheduled workflow
 
-- [x] 7.1 Add `.github/workflows/contributors.yml` running daily on a cron with `contents: write`, executing `node web/scripts/build-contributors.mjs`.
-- [x] 7.2 Commit the result only when `git diff --quiet` reports a change, so an unchanged collection produces no commit and no deployment.
-- [x] 7.3 Keep every `run:` block to a single command so actionlint's shellcheck pass stays clean; verify with actionlint locally.
-- [ ] 7.4 Trigger the workflow manually (`workflow_dispatch`) once and confirm it produces no commit against the snapshot committed in 2.8.
+- [x] 7.1 Add `.github/workflows/contributors.yml` running daily on a cron, executing `node web/scripts/build-contributors.mjs`.
+- [x] 7.2 Act only when `git diff --quiet` reports a change, so an unchanged collection produces nothing at all.
+- [x] 7.3 Keep every `run:` block to a single command so actionlint's shellcheck pass stays clean; put the logic in `.github/scripts/*.sh`, which the repo already shellchecks. Verify with actionlint and shellcheck locally.
+- [x] 7.4 Trigger the workflow manually (`workflow_dispatch`) — which is what showed the push to main is rejected: main requires three checks and enforces them on admins.
+- [x] 7.5 Rework it to push a branch and open a pull request with auto-merge, carrying `CONTRIBUTORS_TOKEN` rather than `GITHUB_TOKEN` — a branch pushed with the latter triggers no checks, so its pull request could never merge.
+- [x] 7.6 Skip every step when the secret is absent, so a fork and a not-yet-configured repository are a clean no-op rather than a nightly failure.
+- [ ] 7.7 Create the fine-grained `CONTRIBUTORS_TOKEN` secret, then trigger the workflow twice: the first run opens a pull request, the second finds nothing to do.
 
 ## 8. Verification
 

@@ -47,12 +47,30 @@ unlike root `scripts/` — sits beside a test runner. `web/` runs vitest.
 
 ## Decisions
 
-### The snapshot is a committed JSON file, collected by a scheduled Action
+### The snapshot is a committed JSON file, refreshed by a scheduled Action
 
 **Chosen:** `.github/workflows/contributors.yml` runs daily, executes
-`node web/scripts/build-contributors.mjs`, and commits `web/src/lib/data/contributors.json` when
-it differs. The workflow's own `GITHUB_TOKEN` carries a 5000-requests-per-hour budget and
-`contents: write` permission for the commit.
+`node web/scripts/build-contributors.mjs`, and — when the file differs — pushes one branch
+and opens a pull request with auto-merge enabled.
+
+**It opens a pull request rather than pushing, and that was not the first design.** The
+first version pushed to main and the first real run said otherwise: main requires three
+green checks and enforces them on administrators too, so a direct push is rejected for
+everyone, workflow or human. Nothing in the code showed this; only running it did.
+
+**Which also decides the credential.** A branch pushed with the workflow's own
+`GITHUB_TOKEN` triggers no workflows — GitHub blocks that to stop a workflow looping on
+itself — so the pull request would sit with its three required checks permanently
+"expected" and unmergeable by anyone, `enforce_admins` being on. The push therefore
+carries `CONTRIBUTORS_TOKEN`, a fine-grained personal access token scoped to this
+repository alone (contents and pull-requests, write). That is a standing credential, and
+it is the price of the page staying current without a human remembering to refresh it.
+
+Without the secret the job is a clean no-op rather than a nightly failure: a fork, or
+this repository before the token exists, skips every step.
+
+One branch is reused rather than one per run, so a second day's change updates the open
+pull request instead of leaving a trail of stale ones.
 
 **Alternatives considered:**
 
@@ -129,9 +147,16 @@ failure mode: forgetting to add someone shows them, which is the state they were
 
 ## Risks / Trade-offs
 
-- **A daily commit triggers the host's autodeploy poller** → The workflow commits only when
-  the collected data differs. With eleven contributors that is a handful of commits a month,
-  each of them a real change worth deploying.
+- **A daily merge triggers the host's autodeploy poller** → The workflow opens a pull
+  request only when the collected data differs. With sixteen contributors that is a handful
+  of merges a month, each of them a real change worth deploying. What makes "differs"
+  trustworthy is that the file is a function of the data and nothing else, above.
+- **`CONTRIBUTORS_TOKEN` is a standing credential with write access to this repository** →
+  Fine-grained and scoped to this repository and to two permissions, so it is not an
+  account-wide token; and the only thing it is used for is a branch nothing else writes. It
+  is still the largest cost of this design, and the alternative it buys against is a page
+  that goes stale whenever nobody remembers to refresh it. Revoking it stops the refresh
+  and breaks nothing else — the job goes back to a no-op.
 - **A partial collection would silently shrink the published list** → The script fails the
   run on any incomplete page rather than writing what it has; the workflow's commit step
   never runs, and the previous snapshot keeps serving.

@@ -4,49 +4,68 @@ name: contributors
 # read. Runs here rather than at request time because the pages need per-person pull
 # request lists, and assembling those needs roughly thirty API calls: far past the 60
 # an unauthenticated IP gets in an hour, a budget the site already spends on the header
-# star badge and /open. This job's own GITHUB_TOKEN carries 5000/hour.
+# star badge and /open.
 #
-# COMMITS ONLY WHEN THE DATA CHANGED. The host polls this repository every ten minutes
-# and deploys a green main, so an unconditional daily commit would be a daily production
-# deploy that changed nothing. `git diff --quiet` is what keeps the deploys to the days
-# a contributor actually did something.
+# IT OPENS A PULL REQUEST; IT DOES NOT PUSH TO MAIN. The first version pushed, and the
+# first real run is what said otherwise: main requires three green checks and enforces
+# them on admins too, so a direct push is rejected for everyone, workflow or human.
+#
+# Which is also why this cannot use the workflow's own GITHUB_TOKEN. A branch pushed
+# with it triggers no workflows — GitHub blocks that to stop a workflow looping on
+# itself — so the pull request would sit with its three required checks forever
+# "expected", unmergeable by anyone. CONTRIBUTORS_TOKEN is a fine-grained personal
+# access token scoped to this repository (contents + pull-requests, write), and a push
+# carrying it runs CI like any other.
+#
+# ONE BRANCH, REUSED. A dated branch per run would leave a trail of stale pull requests
+# every time a day's collection changed nothing anyone merged. Pushing the same branch
+# updates the open pull request in place instead.
 #
 # A run that could not finish its collection fails instead of committing what it has:
 # the script exits non-zero on any API error and refuses outright to write a snapshot
 # with no humans in it. The committed file then keeps serving, which is the right
 # outcome — a stale list of real people beats a fresh empty one.
 #
-# WORTH KNOWING ABOUT THE PUSH: a commit pushed with the workflow's own GITHUB_TOKEN
-# does not trigger other workflows — GitHub blocks that to stop a workflow looping on
-# itself. So the CI run this repository's auto-deploy gate looks for never appears for
-# this commit, and the snapshot reaches production on the next ordinary commit rather
-# than on its own. That is the intended trade: the alternative is a personal access
-# token stored as a secret, which is a standing credential with write access to main in
-# exchange for a page being current a day sooner. If the gate ever needs to treat these
-# commits as deployable, that belongs in the gate, not in a token kept here.
+# WITHOUT THE SECRET THIS IS A CLEAN NO-OP. A fork, or this repository before the token
+# is created, skips the whole job rather than failing a scheduled run every night with
+# an error nobody can act on.
 
 on:
   schedule:
-    # 04:20 UTC: clear of the nightly pg_dump window (from 03:00 UTC) that DDL
-    # migrations have to dodge, so a deploy this triggers does not queue behind it.
     - cron: '20 4 * * *'
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: contributors
   cancel-in-progress: false
 
+env:
+  BRANCH: chore/refresh-contributors
+  SNAPSHOT: web/src/lib/data/contributors.json
+
 jobs:
   collect:
     runs-on: ubuntu-latest
     steps:
+      - name: Check the token is configured
+        id: token
+        env:
+          CONTRIBUTORS_TOKEN: ${{ secrets.CONTRIBUTORS_TOKEN }}
+        run: '[ -n "$CONTRIBUTORS_TOKEN" ] && echo "present=true" >> "$GITHUB_OUTPUT" || echo "present=false" >> "$GITHUB_OUTPUT"'
+
       - name: Checkout
+        if: steps.token.outputs.present == 'true'
         uses: actions/checkout@v7
+        with:
+          # The token the later push carries. Without it the push would go out as
+          # GITHUB_TOKEN and the pull request would never get its checks.
+          token: ${{ secrets.CONTRIBUTORS_TOKEN }}
 
       - name: Set up Node
+        if: steps.token.outputs.present == 'true'
         uses: actions/setup-node@v7
         with:
           node-version: 22
@@ -55,22 +74,27 @@ jobs:
       # plain .mjs rather than TypeScript. Its assembly is unit-tested in the web
       # package (scripts/build-contributors.test.mjs); what runs here is the fetching.
       - name: Collect contributors
+        if: steps.token.outputs.present == 'true'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: node web/scripts/build-contributors.mjs
 
-      # `git diff --quiet` exits 1 when the file changed, which is the signal to commit.
-      # Everything hangs off that one comparison, so the collector writes its people in
-      # a stable order — otherwise the same data would serialise differently every run
-      # and every run would commit.
-      - name: Commit when the data changed
-        run: |
-          if git diff --quiet -- web/src/lib/data/contributors.json; then
-            echo 'No change in the contributor data. Nothing to commit.'
-            exit 0
-          fi
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add web/src/lib/data/contributors.json
-          git commit -m 'Refresh the contributor snapshot'
-          git push
+      - name: Stop here when nothing changed
+        if: steps.token.outputs.present == 'true'
+        id: changed
+        run: 'git diff --quiet -- "$SNAPSHOT" && echo "any=false" >> "$GITHUB_OUTPUT" || echo "any=true" >> "$GITHUB_OUTPUT"'
+
+      - name: Commit the refreshed snapshot
+        if: steps.changed.outputs.any == 'true'
+        run: .github/scripts/commit-contributors.sh
+
+      # `gh pr create` fails when one is already open for the branch, which is the
+      # ordinary case on a second change before the first merged — so the branch is
+      # asked about first and the pull request is only opened when there is none.
+      # Auto-merge does the rest: the three required checks run because the push
+      # carried a real token, and a green run merges it without anyone looking.
+      - name: Open or update the pull request
+        if: steps.changed.outputs.any == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.CONTRIBUTORS_TOKEN }}
+        run: .github/scripts/open-contributors-pr.sh
