@@ -39,6 +39,9 @@ func TestRetireBoardsNamesEveryRegionOfABoard(t *testing.T) {
 			t.Errorf("retired %+v, want only the dead board", got)
 		}
 	}
+	if len(cat.healthDeleted) != 2 {
+		t.Errorf("healthDeleted = %+v, want a board_health delete for both regional rows", cat.healthDeleted)
+	}
 }
 
 // The one-way door: a provider with no live board is never crawled again, and the

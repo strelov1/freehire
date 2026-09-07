@@ -18,6 +18,9 @@ type fakeCatalog struct {
 	listErr error
 	// retired records every (provider, board, region) the run retired, in order.
 	retired []db.RetireBoardParams
+	// healthDeleted records every (provider, board, region) whose board_health row the
+	// run deleted, in order.
+	healthDeleted []db.DeleteBoardHealthParams
 }
 
 func (f *fakeCatalog) ListLiveBoards(context.Context) ([]db.ListLiveBoardsRow, error) {
@@ -26,6 +29,11 @@ func (f *fakeCatalog) ListLiveBoards(context.Context) ([]db.ListLiveBoardsRow, e
 
 func (f *fakeCatalog) RetireBoard(_ context.Context, arg db.RetireBoardParams) (int64, error) {
 	f.retired = append(f.retired, arg)
+	return 1, nil
+}
+
+func (f *fakeCatalog) DeleteBoardHealth(_ context.Context, arg db.DeleteBoardHealthParams) (int64, error) {
+	f.healthDeleted = append(f.healthDeleted, arg)
 	return 1, nil
 }
 
