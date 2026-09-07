@@ -326,7 +326,7 @@ type CompanyFeedbackReport struct {
 type CompanySlugAlias struct {
 	AliasSlug     string `json:"alias_slug"`
 	CanonicalSlug string `json:"canonical_slug"`
-	// alias_slug with hyphens removed (normalize.CompanyKey), so a spelling never merged before still resolves to the canon its folded form already owns.
+	// normalize.CompanyKey of the alias company NAME — which strips a trailing legal form before folding, so it is NOT simply alias_slug with the hyphens removed. Ingest folds the name its source sends and looks the result up here, which is how a spelling never merged before still resolves to the canon its folded form already owns. Rows written by a CURATED merge deliberately carry keys that differ within one group: such a group is defined by its members NOT sharing a fold.
 	FoldedKey string `json:"folded_key"`
 	// legal_form (a pure normalize.CompanySlug strip) or spelling (a job-count election at merge time). Recorded so one class of merge can be reversed without the other.
 	Reason    string             `json:"reason"`

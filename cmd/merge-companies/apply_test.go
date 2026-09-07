@@ -50,7 +50,7 @@ func (f *fakeStore) RekeyChunk(_ context.Context, aliasSlug, canonical string, c
 func plan() []merge {
 	return []merge{{
 		Canonical: "dollar-tree",
-		FoldedKey: "dollartree",
+		GroupKey:  "dollartree",
 		Jobs:      22966,
 		Aliases: []alias{{
 			Slug: "dollartree", Reason: reasonSpelling, FoldedKey: "dollartree", JobCount: 283,
@@ -68,7 +68,7 @@ func TestApplyMerges_WritesEachAliasOwnFoldedKey(t *testing.T) {
 	store := newFakeStore(map[string]int{"exadel-inc-website": 50, "exadelinc": 1})
 	curated := []merge{{
 		Canonical: "exadel",
-		FoldedKey: curatedGroupKey("exadel"),
+		GroupKey:  curatedGroupKey("exadel"),
 		Jobs:      150,
 		Aliases: []alias{
 			{Slug: "exadel-inc-website", Reason: reasonSpelling, FoldedKey: "exadelincwebsite", JobCount: 50},

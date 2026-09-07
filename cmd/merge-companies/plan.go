@@ -47,11 +47,15 @@ type alias struct {
 	JobCount  int
 }
 
-// merge is one folded group's decision.
+// merge is one group's decision.
 type merge struct {
 	Canonical string
-	FoldedKey string
-	Aliases   []alias
+	// GroupKey is what the members were grouped BY, and only sometimes a folded key: for a
+	// folded group it is normalize.CompanyKey of the shared name, for a curated one it is
+	// curatedGroupKey's sentinel. Nothing is stored from it — the alias carries the key the
+	// registry reads — so its whole remaining job is to sort the plan into a stable order.
+	GroupKey string
+	Aliases  []alias
 	// Jobs is the group's combined open jobs — what --min-jobs bounds a wave by, and the
 	// figure that says how much of the catalogue a wave moves.
 	Jobs int
@@ -126,9 +130,13 @@ func planMerges(companies []company, frozen map[string]bool, minJobs int, curate
 		// and the key and the winner are set together — they have to agree, and setting them
 		// per branch is how they would come to disagree.
 		var canon string
-		switch {
-		case curated[c.Slug] != "":
-			canon = curated[c.Slug]
+		switch named, isMember := curated[c.Slug]; {
+		case isMember:
+			// Comma-ok rather than a non-empty test: "the list names this slug" is the
+			// question, and an entry with an empty canon is a malformed list — which
+			// TestCuratedAliasesAreWellFormed rejects — not a slug the list stays silent
+			// about. Reading it as silence would hide the malformed entry here instead.
+			canon = named
 		case canons[c.Slug]:
 			canon = c.Slug
 		default:
@@ -165,7 +173,7 @@ func planMerges(companies []company, frozen map[string]bool, minJobs int, curate
 		if !isCuratedGroup {
 			winner = electCanonical(members, frozen)
 		}
-		m := merge{Canonical: winner, FoldedKey: key}
+		m := merge{Canonical: winner, GroupKey: key}
 		for _, c := range members {
 			m.Jobs += c.JobCount
 			if c.Slug == winner {
@@ -189,7 +197,7 @@ func planMerges(companies []company, frozen map[string]bool, minJobs int, curate
 		}
 		out = append(out, m)
 	}
-	slices.SortFunc(out, func(a, b merge) int { return cmp.Compare(a.FoldedKey, b.FoldedKey) })
+	slices.SortFunc(out, func(a, b merge) int { return cmp.Compare(a.GroupKey, b.GroupKey) })
 	return out
 }
 
