@@ -72,6 +72,18 @@ func TestDBStore_Submit(t *testing.T) {
 			t.Error("applied_at is null, want it set")
 		}
 
+		// internal/engage/nudge's auto-apply-submitted MATCH scan keys on this exact
+		// (kind, source) pair — see add-auto-apply-outcome-notifications.
+		var eventSource string
+		if err := pool.QueryRow(ctx,
+			"SELECT source FROM application_events WHERE user_id = $1 AND job_id = $2 AND kind = 'applied'",
+			user, job).Scan(&eventSource); err != nil {
+			t.Fatalf("applied event not recorded: %v", err)
+		}
+		if eventSource != "auto_apply" {
+			t.Errorf("applied event source = %q, want %q", eventSource, "auto_apply")
+		}
+
 		var queueRows int
 		if err := pool.QueryRow(ctx, "SELECT count(*) FROM auto_apply_queue WHERE id = $1", queueID).Scan(&queueRows); err != nil {
 			t.Fatal(err)

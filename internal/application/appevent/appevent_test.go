@@ -11,6 +11,10 @@ func TestOnlyObservedSourcesAreTrustedForDayMath(t *testing.T) {
 		SourceUser:           false,
 		SourceAssistant:      false,
 		SourceSystem:         false,
+		// Auto-apply's own timestamp is precise and real-time, but it is the platform
+		// acting on the candidate's behalf, not an employer-side or calendar-observed
+		// timing fact — same category as SourceSystem, not the mail/calendar pair.
+		SourceAutoApply: false,
 	}
 	if len(trusted) != len(Sources) {
 		t.Fatalf("the vocabulary has %d sources but this test pins %d — a new source needs a verdict here", len(Sources), len(trusted))

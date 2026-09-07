@@ -82,6 +82,12 @@ func renderNudgeBatch(kind string, ms []Message) (title, body string) {
 		return "🎯 Interviews coming up", fmt.Sprintf("You're interviewing for %d roles.", len(ms))
 	case KindJobClosed:
 		return "📪 Jobs closed", fmt.Sprintf("%d jobs you were tracking were closed.", len(ms))
+	case KindAutoApplySubmitted:
+		return "🎉 Applications submitted", fmt.Sprintf("Auto-apply submitted %d applications for you.", len(ms))
+	case KindAutoApplyBlocked:
+		return "⚠️ Needs your attention", fmt.Sprintf("Auto-apply couldn't finish %d applications — a required question needs your own answer.", len(ms))
+	case KindAutoApplyFailed:
+		return "Auto-apply couldn't submit", fmt.Sprintf("Auto-apply couldn't submit %d applications, and won't try again.", len(ms))
 	default:
 		return "🔔 Jobs you're tracking", fmt.Sprintf("%d updates on jobs you are tracking.", len(ms))
 	}
@@ -97,6 +103,12 @@ func renderNudge(m Message) (title, body string) {
 		return "🎯 Interview coming up", fmt.Sprintf("You're interviewing for %s at %s.", m.JobTitle, m.Company)
 	case KindJobClosed:
 		return "📪 Job closed", fmt.Sprintf("%s at %s was closed.", m.JobTitle, m.Company)
+	case KindAutoApplySubmitted:
+		return "🎉 Application submitted", fmt.Sprintf("Auto-apply submitted your application to %s at %s.", m.JobTitle, m.Company)
+	case KindAutoApplyBlocked:
+		return "⚠️ Needs your attention", fmt.Sprintf("Auto-apply couldn't finish %s at %s — a required question needs your own answer.", m.JobTitle, m.Company)
+	case KindAutoApplyFailed:
+		return "Auto-apply couldn't submit", fmt.Sprintf("Auto-apply couldn't submit %s at %s, and won't try again.", m.JobTitle, m.Company)
 	default:
 		return "🔔 A job you're tracking", fmt.Sprintf("%s at %s", m.JobTitle, m.Company)
 	}

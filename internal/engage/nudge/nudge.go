@@ -40,11 +40,24 @@ import (
 )
 
 // Nudge kinds. Also the CHECK constraint on application_nudges.kind (migrations
-// 0083, widened by 0084).
+// 0083, widened by 0084 and 0144).
 const (
 	KindFollowUp      = "follow_up"
 	KindInterviewPrep = "interview_prep"
 	KindJobClosed     = "job_closed"
+	// KindAutoApplySubmitted, KindAutoApplyBlocked and KindAutoApplyFailed report an
+	// unattended auto-apply attempt's own terminal outcome — see
+	// add-auto-apply-outcome-notifications. Unlike the three kinds above, their
+	// triggering condition can never lapse between MATCH and DELIVER (an applied
+	// event, a blocked_at, a failed_at are all permanent once written), so
+	// Runner.actionable treats all three as unconditionally actionable.
+	// ListAutoApplyBlockedCandidates/ListAutoApplyFailedCandidates already make
+	// Blocked and Failed mutually exclusive (failed_at wins on a row carrying
+	// both, mirroring AutoApplyQueueMetrics), so a single attempt is never matched
+	// as both kinds at once.
+	KindAutoApplySubmitted = "auto_apply_submitted"
+	KindAutoApplyBlocked   = "auto_apply_blocked"
+	KindAutoApplyFailed    = "auto_apply_failed"
 )
 
 // Message is the display shape of one nudge, rendered by a Notifier into a
@@ -106,6 +119,12 @@ type Store interface {
 	ListFollowUpCandidates(ctx context.Context, windowDays int32) ([]db.ListFollowUpCandidatesRow, error)
 	ListInterviewPrepCandidates(ctx context.Context, windowDays int32) ([]db.ListInterviewPrepCandidatesRow, error)
 	ListJobClosedCandidates(ctx context.Context, windowDays int32) ([]db.ListJobClosedCandidatesRow, error)
+	// ListAutoApplySubmittedCandidates, ListAutoApplyBlockedCandidates and
+	// ListAutoApplyFailedCandidates back the three KindAutoApply* MATCH loops. See
+	// add-auto-apply-outcome-notifications.
+	ListAutoApplySubmittedCandidates(ctx context.Context, windowDays int32) ([]db.ListAutoApplySubmittedCandidatesRow, error)
+	ListAutoApplyBlockedCandidates(ctx context.Context, windowDays int32) ([]db.ListAutoApplyBlockedCandidatesRow, error)
+	ListAutoApplyFailedCandidates(ctx context.Context, windowDays int32) ([]db.ListAutoApplyFailedCandidatesRow, error)
 	RecordNudge(ctx context.Context, arg db.RecordNudgeParams) (int64, error)
 	// TrackJob is jobtracking's own stage-set write (upserts applications.stage and
 	// emits the paired application_events row in one statement, only when the stage
@@ -141,6 +160,11 @@ type Config struct {
 	InterviewPrepWindowDays int32
 	// JobClosedWindowDays is the same bound on ListJobClosedCandidates' closed_at.
 	JobClosedWindowDays int32
+	// AutoApplyOutcomeWindowDays is the same first-deploy bound shared by all three
+	// ListAutoApply*Candidates queries (on occurred_at/blocked_at/failed_at
+	// respectively) — one field rather than three, since all three read the same
+	// kind of "recent terminal transition" rather than distinct silence windows.
+	AutoApplyOutcomeWindowDays int32
 	// LeaseSeconds is the delivery lease: a claimed-but-unfinished nudge is
 	// reclaimable after this, which doubles as the crash reaper.
 	LeaseSeconds int32
@@ -161,13 +185,14 @@ type Config struct {
 // internal/engage/notify.
 func DefaultConfig() Config {
 	return Config{
-		FollowUpWindowDays:      30,
-		InterviewPrepWindowDays: 7,
-		JobClosedWindowDays:     7,
-		LeaseSeconds:            600,
-		ClaimBatch:              500,
-		MaxAttempts:             5,
-		SnapshotCap:             200,
+		FollowUpWindowDays:         30,
+		InterviewPrepWindowDays:    7,
+		JobClosedWindowDays:        7,
+		AutoApplyOutcomeWindowDays: 7,
+		LeaseSeconds:               600,
+		ClaimBatch:                 500,
+		MaxAttempts:                5,
+		SnapshotCap:                200,
 	}
 }
 
@@ -326,6 +351,54 @@ func (r *Runner) match(ctx context.Context, stats *Stats) error {
 			return fmt.Errorf("auto-expire job-closed application: %w", err)
 		}
 	}
+
+	submitted, err := r.store.ListAutoApplySubmittedCandidates(ctx, r.cfg.AutoApplyOutcomeWindowDays)
+	if err != nil {
+		return fmt.Errorf("list auto-apply-submitted candidates: %w", err)
+	}
+	for _, s := range submitted {
+		if !s.JobID.Valid || !s.OccurredAt.Valid {
+			continue // defensive: the query's WHERE clause already guarantees both are set
+		}
+		affected, err := r.store.RecordNudge(ctx, db.RecordNudgeParams{
+			UserID: s.UserID, JobID: s.JobID.Int64, Kind: KindAutoApplySubmitted,
+			EpisodeKey: s.OccurredAt,
+		})
+		if err != nil {
+			return fmt.Errorf("record auto-apply-submitted nudge: %w", err)
+		}
+		stats.Matched += int(affected)
+	}
+
+	blocked, err := r.store.ListAutoApplyBlockedCandidates(ctx, r.cfg.AutoApplyOutcomeWindowDays)
+	if err != nil {
+		return fmt.Errorf("list auto-apply-blocked candidates: %w", err)
+	}
+	for _, b := range blocked {
+		affected, err := r.store.RecordNudge(ctx, db.RecordNudgeParams{
+			UserID: b.UserID, JobID: b.JobID, Kind: KindAutoApplyBlocked,
+			EpisodeKey: b.BlockedAt,
+		})
+		if err != nil {
+			return fmt.Errorf("record auto-apply-blocked nudge: %w", err)
+		}
+		stats.Matched += int(affected)
+	}
+
+	failed, err := r.store.ListAutoApplyFailedCandidates(ctx, r.cfg.AutoApplyOutcomeWindowDays)
+	if err != nil {
+		return fmt.Errorf("list auto-apply-failed candidates: %w", err)
+	}
+	for _, f := range failed {
+		affected, err := r.store.RecordNudge(ctx, db.RecordNudgeParams{
+			UserID: f.UserID, JobID: f.JobID, Kind: KindAutoApplyFailed,
+			EpisodeKey: f.FailedAt,
+		})
+		if err != nil {
+			return fmt.Errorf("record auto-apply-failed nudge: %w", err)
+		}
+		stats.Matched += int(affected)
+	}
 	return nil
 }
 
@@ -465,6 +538,8 @@ func (r *Runner) deliverBatch(ctx context.Context, b *batch, stats *Stats) {
 // or another) and their own live condition; job-closed needs the opposite — the
 // job stays closed once closed, so it only needs the application to still be in a
 // stage that accrues silence (a settled one no longer cares that the listing shut).
+// The three auto-apply outcome kinds need no re-derivation at all: their condition
+// cannot lapse once matched.
 func (r *Runner) actionable(info db.GetNudgeForDeliveryRow) bool {
 	if !info.NotificationsEnabled {
 		return false
@@ -491,6 +566,11 @@ func (r *Runner) actionable(info db.GetNudgeForDeliveryRow) bool {
 		}
 		_, active := silence.ThresholdDays(stage)
 		return active
+	case KindAutoApplySubmitted, KindAutoApplyBlocked, KindAutoApplyFailed:
+		// Permanent once matched — an applied event, a blocked_at, a failed_at never
+		// lapse the way silence or an interview stage can, so there is nothing here to
+		// re-derive. The NotificationsEnabled gate above already applies.
+		return true
 	default:
 		return false
 	}

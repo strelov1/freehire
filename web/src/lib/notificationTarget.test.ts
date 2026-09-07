@@ -54,6 +54,16 @@ describe('notificationTarget', () => {
     });
   });
 
+  // The three auto-apply outcome kinds follow the same rule as follow-up/interview-prep:
+  // the Go side (transports.go/push.go) points all three at the tracking board, never a
+  // per-job deep link, so web must agree.
+  it.each(['nudge_auto_apply_submitted', 'nudge_auto_apply_blocked', 'nudge_auto_apply_failed'] as const)(
+    'sends a %s nudge to the tracking board, not the job',
+    (kind) => {
+      expect(notificationTarget({ kind, public_slug: 'acme-go-engineer' })).toEqual({ kind: 'tracking' });
+    },
+  );
+
   // A nudge always carries a slug in practice, but the function is slug-first: no
   // slug means nothing to open, even for a kind that would otherwise route to the
   // tracking board.

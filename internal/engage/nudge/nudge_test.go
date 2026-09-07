@@ -20,11 +20,14 @@ type fakeStore struct {
 	// unlinkedTelegram records the user ids a delivery forgot the Telegram chat for.
 	unlinkedTelegram []int64
 
-	followUp      []db.ListFollowUpCandidatesRow
-	interviewPrep []db.ListInterviewPrepCandidatesRow
-	jobClosed     []db.ListJobClosedCandidatesRow
-	recorded      []db.RecordNudgeParams
-	tracked       []db.TrackJobParams
+	followUp        []db.ListFollowUpCandidatesRow
+	interviewPrep   []db.ListInterviewPrepCandidatesRow
+	jobClosed       []db.ListJobClosedCandidatesRow
+	autoApplySubmit []db.ListAutoApplySubmittedCandidatesRow
+	autoApplyBlock  []db.ListAutoApplyBlockedCandidatesRow
+	autoApplyFail   []db.ListAutoApplyFailedCandidatesRow
+	recorded        []db.RecordNudgeParams
+	tracked         []db.TrackJobParams
 
 	due []int64
 	row db.GetNudgeForDeliveryRow
@@ -49,6 +52,15 @@ func (s *fakeStore) ListInterviewPrepCandidates(context.Context, int32) ([]db.Li
 }
 func (s *fakeStore) ListJobClosedCandidates(context.Context, int32) ([]db.ListJobClosedCandidatesRow, error) {
 	return s.jobClosed, nil
+}
+func (s *fakeStore) ListAutoApplySubmittedCandidates(context.Context, int32) ([]db.ListAutoApplySubmittedCandidatesRow, error) {
+	return s.autoApplySubmit, nil
+}
+func (s *fakeStore) ListAutoApplyBlockedCandidates(context.Context, int32) ([]db.ListAutoApplyBlockedCandidatesRow, error) {
+	return s.autoApplyBlock, nil
+}
+func (s *fakeStore) ListAutoApplyFailedCandidates(context.Context, int32) ([]db.ListAutoApplyFailedCandidatesRow, error) {
+	return s.autoApplyFail, nil
 }
 func (s *fakeStore) RecordNudge(_ context.Context, arg db.RecordNudgeParams) (int64, error) {
 	for _, r := range s.recorded {
@@ -638,6 +650,26 @@ func TestActionable_FailsClosedWhenApplicationGone(t *testing.T) {
 			}
 			if r.actionable(row) {
 				t.Errorf("actionable() = true for an untracked application, want false (fail closed)")
+			}
+		})
+	}
+}
+
+// The three auto-apply outcome kinds are the deliberate opposite of
+// TestActionable_FailsClosedWhenApplicationGone above: their condition cannot lapse,
+// so actionable() ignores stage/job-open/application-existence entirely and answers
+// only off the NotificationsEnabled gate.
+func TestActionable_AutoApplyOutcomeKinds_IgnoreEverythingButNotificationsEnabled(t *testing.T) {
+	for _, kind := range []string{KindAutoApplySubmitted, KindAutoApplyBlocked, KindAutoApplyFailed} {
+		t.Run(kind, func(t *testing.T) {
+			r := newRunner(&fakeStore{}, &fakeNotifier{})
+			row := untrackedRow(kind) // no tracked application, job closed — still actionable
+			if !r.actionable(row) {
+				t.Errorf("actionable() = false for %s with notifications enabled, want true", kind)
+			}
+			row.NotificationsEnabled = false
+			if r.actionable(row) {
+				t.Errorf("actionable() = true for %s with notifications disabled, want false", kind)
 			}
 		})
 	}

@@ -2,6 +2,7 @@ package nudge
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/strelov1/freehire/internal/platform/db"
@@ -119,6 +120,65 @@ func TestPushNotifier_JobClosed_RendersTitleBodyAndSlug(t *testing.T) {
 	}
 	if got.data["slug"] != "go-dev-acme" {
 		t.Errorf("data[slug] = %q, want %q", got.data["slug"], "go-dev-acme")
+	}
+}
+
+func TestPushNotifier_AutoApplyOutcomeKinds_SingleAndBatch(t *testing.T) {
+	cases := []struct {
+		kind      string
+		wantTitle string
+	}{
+		{KindAutoApplySubmitted, "🎉 Application submitted"},
+		{KindAutoApplyBlocked, "⚠️ Needs your attention"},
+		{KindAutoApplyFailed, "Auto-apply couldn't submit"},
+	}
+	for _, c := range cases {
+		t.Run(c.kind+"/single", func(t *testing.T) {
+			lister := &fakePushTokenLister{tokens: map[int64][]db.UserPushToken{42: {{Token: "tok-1"}}}}
+			transport := &fakePushTransport{}
+			n := NewPushNotifier(lister, transport)
+
+			msg := Message{Kind: c.kind, JobTitle: "Go Dev", Company: "Acme", Slug: "go-dev-acme"}
+			if err := n.Send(context.Background(), "push", "42", msg.Kind, []Message{msg}); err != nil {
+				t.Fatal(err)
+			}
+			if len(transport.sent) != 1 {
+				t.Fatalf("sent = %d, want 1", len(transport.sent))
+			}
+			got := transport.sent[0]
+			if got.title != c.wantTitle {
+				t.Errorf("title = %q, want %q", got.title, c.wantTitle)
+			}
+			if !strings.Contains(got.body, "Go Dev") || !strings.Contains(got.body, "Acme") {
+				t.Errorf("body = %q, want the job title and company", got.body)
+			}
+			if got.data["slug"] != "go-dev-acme" {
+				t.Errorf("data[slug] = %q, want %q", got.data["slug"], "go-dev-acme")
+			}
+		})
+		t.Run(c.kind+"/batch", func(t *testing.T) {
+			lister := &fakePushTokenLister{tokens: map[int64][]db.UserPushToken{42: {{Token: "tok-1"}}}}
+			transport := &fakePushTransport{}
+			n := NewPushNotifier(lister, transport)
+
+			ms := []Message{
+				{Kind: c.kind, JobTitle: "Go Dev", Company: "Acme", Slug: "go-dev-acme"},
+				{Kind: c.kind, JobTitle: "Rust Dev", Company: "Beta", Slug: "rust-dev-beta"},
+			}
+			if err := n.Send(context.Background(), "push", "42", c.kind, ms); err != nil {
+				t.Fatal(err)
+			}
+			if len(transport.sent) != 1 {
+				t.Fatalf("sent = %d, want 1", len(transport.sent))
+			}
+			if !strings.Contains(transport.sent[0].body, "2") {
+				t.Errorf("body = %q, want the batch count", transport.sent[0].body)
+			}
+			// A batch names no single job, so no deep link is carried.
+			if transport.sent[0].data != nil {
+				t.Errorf("data = %v, want nil for a multi-job batch", transport.sent[0].data)
+			}
+		})
 	}
 }
 
