@@ -13,7 +13,6 @@
   const model = $derived(buildSignupsChart(points));
   const ticks = $derived(pickTickIndices(model.bars.length));
   const topY = $derived(model.height - model.baselineY);
-  const pad = $derived((model.width - model.slot * model.bars.length) / 2);
 
   let hovered = $state<number | null>(null);
   let tipX = $state(0);
@@ -25,7 +24,7 @@
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
     if (rect.width === 0 || model.bars.length === 0) return;
     const vbX = ((e.clientX - rect.left) / rect.width) * model.width;
-    const i = Math.floor((vbX - pad) / model.slot);
+    const i = Math.floor((vbX - model.pad) / model.slot);
     hovered = Math.min(Math.max(i, 0), model.bars.length - 1);
     tipX = e.clientX - rect.left;
     tipY = e.clientY - rect.top;
@@ -65,21 +64,21 @@
       <svg viewBox="0 0 {model.width} {model.height + 22}" class="w-full">
         <!-- y-axis max reference line + label -->
         <line
-          x1={pad}
+          x1={model.pad}
           y1={topY}
-          x2={model.width - pad}
+          x2={model.width - model.pad}
           y2={topY}
           class="stroke-border"
           stroke-dasharray="2 3"
         />
-        <text x={pad} y={topY - 4} class="fill-muted-foreground" font-size="11">
+        <text x={model.pad} y={topY - 4} class="fill-muted-foreground" font-size="11">
           {formatCount(model.max)}
         </text>
 
         {#if hovered !== null && hoveredBar}
           <!-- highlight the focused slot -->
           <rect
-            x={pad + hovered * model.slot}
+            x={model.pad + hovered * model.slot}
             y={topY}
             width={model.slot}
             height={model.baselineY - topY}
@@ -88,7 +87,7 @@
         {/if}
 
         {#each model.bars as bar (bar.date)}
-          <rect x={bar.x} y={bar.y} width={model.barW} height={bar.h} class="fill-sky-500" />
+          <rect x={bar.x} y={bar.y} width={model.barW} height={bar.h} class="fill-primary" />
         {/each}
 
         <!-- baseline -->
@@ -125,7 +124,7 @@
         >
           <div class="mb-1 font-medium text-foreground">{fullDate(hoveredBar.date)}</div>
           <div class="flex items-center gap-1.5 text-muted-foreground">
-            <span class="inline-block h-2 w-2 rounded-sm bg-sky-500"></span>
+            <span class="inline-block h-2 w-2 rounded-sm bg-primary"></span>
             New members <span class="ml-auto font-medium text-foreground"
               >{hoveredBar.new.toLocaleString()}</span
             >

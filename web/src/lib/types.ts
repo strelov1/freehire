@@ -1003,15 +1003,18 @@ export interface EngagementStats {
  *
  *  Every surface that quotes catalogue scale reads this, so two pages rendered from
  *  the same response cannot disagree. `open_jobs` and `companies` are exact counts over
- *  the set the public listings paginate; `sources`, `ats_platforms` and
- *  `telegram_channels` describe reach — what the crawler can read, whether or not each
- *  currently holds an open posting.
+ *  the set the public listings paginate; `unique_open_jobs` is the de-duplicated count
+ *  Meilisearch's index actually holds — what /jobs itself would show unfiltered, and
+ *  reads far lower than `open_jobs` since that one counts every repost across boards.
+ *  `sources`, `ats_platforms` and `telegram_channels` describe reach — what the crawler
+ *  can read, whether or not each currently holds an open posting.
  *
  *  `exact` is false when the backend had no published snapshot and fell back to an
  *  approximate open-job count. On that path only `open_jobs`, `sources` and
  *  `ats_platforms` are meaningful; the rest are zero. */
 export interface CatalogScale {
   open_jobs: number;
+  unique_open_jobs: number;
   companies: number;
   sources: number;
   ats_platforms: number;

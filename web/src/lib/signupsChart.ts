@@ -32,12 +32,17 @@ export interface SignupsChartModel {
   barW: number;
   /** Width of one day's slot — the hover highlight spans it. */
   slot: number;
+  /** Left/right margin reserved around the plot area — where the y-axis
+   *  reference line and hover math anchor. */
+  pad: number;
 }
 
 const WIDTH = 960;
 const PLOT_H = 240;
 const PAD = 16;
-/** Fraction of a day's slot the bar occupies (the rest is the gap between bars). */
+/** Fraction of a day's slot the bar occupies (the rest is the gap between bars).
+ *  Wider than activityChart.ts's 0.34: that chart fits two bars per slot, so each
+ *  stays narrow; this one draws a single bar per slot and can afford more of it. */
 const BAR_FRACTION = 0.6;
 
 /** Build the bar model for `points`. An empty series yields an empty bar list but
@@ -52,6 +57,7 @@ export function buildSignupsChart(points: UserGrowthPoint[]): SignupsChartModel 
     max: 1,
     barW: 0,
     slot: 0,
+    pad: PAD,
   };
   if (points.length === 0) {
     return { ...frame, bars: [] };

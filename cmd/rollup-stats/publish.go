@@ -9,6 +9,7 @@ import (
 	"github.com/strelov1/freehire/internal/ingest/catalogstats"
 	"github.com/strelov1/freehire/internal/ingest/telegram"
 	"github.com/strelov1/freehire/internal/platform/cache"
+	"github.com/strelov1/freehire/internal/search/search"
 )
 
 // publishSnapshot measures the catalogue and publishes the figures every public surface
@@ -21,8 +22,8 @@ import (
 // The error is returned rather than acted on: the rollups are this worker's primary job
 // and have already committed by the time this runs, so whether a failed snapshot should
 // fail the run is the caller's decision, and the caller's answer is no.
-func publishSnapshot(ctx context.Context, counts catalogstats.ExactCounter, c cache.Cache, telegramChannels int) error {
-	snapshot, err := catalogstats.Compute(ctx, counts, telegramChannels)
+func publishSnapshot(ctx context.Context, counts catalogstats.ExactCounter, c cache.Cache, telegramChannels int, uniqueOpenJobs int64) error {
+	snapshot, err := catalogstats.Compute(ctx, counts, telegramChannels, uniqueOpenJobs)
 	if err != nil {
 		return err
 	}
@@ -53,4 +54,18 @@ func configuredTelegramChannels(ctx context.Context, q telegram.ChannelLister) (
 		return 0, err
 	}
 	return len(cfg.Channels), nil
+}
+
+// uniqueOpenJobs reads Meilisearch's own count of de-duplicated open postings: an
+// unfiltered, one-hit search, whose `Total` is Meilisearch's estimated total for the
+// query — the same field `/jobs/search` itself returns for zero filters. catalogstats
+// takes the count rather than finding it itself: a live index isn't part of the
+// catalogue Compute measures from Postgres, and reaching for Meilisearch there would
+// put an unrelated dependency (and a second failure mode) behind it.
+func uniqueOpenJobs(ctx context.Context, client *search.Client) (int64, error) {
+	res, err := client.Search(ctx, search.SearchParams{Limit: 1})
+	if err != nil {
+		return 0, err
+	}
+	return res.Total, nil
 }

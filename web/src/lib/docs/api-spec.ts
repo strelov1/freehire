@@ -3156,10 +3156,10 @@ data: {"type":"result","stop_reason":"completed"}
         method: 'GET',
         path: '/stats/user-growth',
         auth: 'none',
-        summary: 'Cumulative member growth per UTC day.',
+        summary: 'Cumulative member growth per UTC day, plus each day\'s own new-signup count.',
         description: 'Aggregate-only — no user identifier is exposed.',
         curl: `curl "${BASE_URL}/stats/user-growth"`,
-        responseExample: `{ "data": [ { "day": "2026-07-27", "total": 12840 } ] }`,
+        responseExample: `{ "data": [ { "date": "2026-07-27", "total": 12840, "new": 37 } ] }`,
       },
       {
         method: 'GET',

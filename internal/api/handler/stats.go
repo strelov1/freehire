@@ -203,8 +203,8 @@ func (h *statsHandlers) UserGrowth(c *fiber.Ctx) error {
 // integer totals, so no per-user field can leak. An empty database yields all
 // zeros (200).
 // CatalogScale serves the catalogue-scale snapshot: how many open postings the
-// catalogue holds, from how many companies, across how many sources, ATS platforms and
-// Telegram channels.
+// catalogue holds (raw and de-duplicated), from how many companies, across how many
+// sources, ATS platforms and Telegram channels.
 //
 // It never fails. A cold cache (before the first rollup run), an unreachable one, and a
 // payload left by an older build all degrade to the approximate open-job count, and
@@ -216,6 +216,7 @@ func (h *statsHandlers) CatalogScale(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{
 		"data": fiber.Map{
 			"open_jobs":         result.OpenJobs,
+			"unique_open_jobs":  result.UniqueOpenJobs,
 			"companies":         result.Companies,
 			"sources":           result.Sources,
 			"ats_platforms":     result.ATSPlatforms,

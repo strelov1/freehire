@@ -25,7 +25,7 @@ func TestPublishSnapshotStoresAReadableSnapshot(t *testing.T) {
 	ctx := context.Background()
 	counts := stubCounter{row: db.CountCatalogueScaleRow{OpenJobs: 3_300_658, Companies: 294_282}}
 
-	if err := publishSnapshot(ctx, counts, c, 95); err != nil {
+	if err := publishSnapshot(ctx, counts, c, 95, 2_075_865); err != nil {
 		t.Fatalf("publishSnapshot: %v", err)
 	}
 
@@ -39,6 +39,9 @@ func TestPublishSnapshotStoresAReadableSnapshot(t *testing.T) {
 	if got.TelegramChannels != 95 {
 		t.Errorf("TelegramChannels = %d, want the 95 passed in", got.TelegramChannels)
 	}
+	if got.UniqueOpenJobs != 2_075_865 {
+		t.Errorf("UniqueOpenJobs = %d, want the 2075865 passed in", got.UniqueOpenJobs)
+	}
 }
 
 // The rollups are this worker's primary job and commit in their own transaction. A
@@ -49,7 +52,7 @@ func TestPublishSnapshotReportsFailureWithoutPanicking(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("counting fails", func(t *testing.T) {
-		err := publishSnapshot(ctx, stubCounter{err: errors.New("scan failed")}, cache.NewMemory(), 95)
+		err := publishSnapshot(ctx, stubCounter{err: errors.New("scan failed")}, cache.NewMemory(), 95, 2_075_865)
 		if err == nil {
 			t.Error("publishSnapshot returned nil when the count failed — the caller has nothing to log")
 		}
@@ -57,7 +60,7 @@ func TestPublishSnapshotReportsFailureWithoutPanicking(t *testing.T) {
 
 	t.Run("storing fails", func(t *testing.T) {
 		counts := stubCounter{row: db.CountCatalogueScaleRow{OpenJobs: 1, Companies: 1}}
-		err := publishSnapshot(ctx, counts, unwritableCache{}, 95)
+		err := publishSnapshot(ctx, counts, unwritableCache{}, 95, 2_075_865)
 		if err == nil {
 			t.Error("publishSnapshot returned nil when the store failed")
 		}

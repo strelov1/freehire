@@ -26,21 +26,16 @@ async function buildPayload(fetchImpl: typeof fetch) {
   const api = serverApi(fetchImpl);
   // One call for the whole scale strip instead of two list totals: the figures come
   // from a single published snapshot, so this page and /about cannot show numbers
-  // measured at different moments.
-  //
-  // browsableJobs is a separate leg: it reads the search index's own total (limit 1,
-  // no filters), which is de-duplicated (aggregator/role/fuzzy suppression), unlike
-  // `open_jobs` above. It is what /jobs itself would show for zero filters, so this
-  // page and /jobs cannot quote two different "how many jobs" numbers without either
-  // being labelled for what it measures.
-  const [scale, activity, facets, growth, engagement, github, browsable] = await Promise.allSettled([
+  // measured at different moments. That snapshot also carries `unique_open_jobs` —
+  // Meilisearch's own de-duplicated count, computed once by cmd/rollup-stats rather
+  // than a live search call here, so this leg never counts on the request path.
+  const [scale, activity, facets, growth, engagement, github] = await Promise.allSettled([
     api.catalogScale(),
     api.jobsActivity('day'),
     api.statsFacets(),
     api.userGrowth(),
     api.engagementStats(),
     githubStats(fetchImpl),
-    api.searchJobs(new URLSearchParams(), 1, 0),
   ]);
 
   const value = <T>(r: PromiseSettledResult<T>): T | null =>
@@ -48,16 +43,16 @@ async function buildPayload(fetchImpl: typeof fetch) {
 
   const catalog = value(scale);
   // A degraded snapshot carries the approximate job count and the registry figures;
-  // the counts that exist only in the database come back as zero. Map those to null
-  // rather than passing the zero on: "we could not measure this" and "we measured
-  // zero" must not look the same to a renderer, or a page ends up printing a figure
-  // nobody stands behind.
+  // the counts that exist only in the database (or, for unique_open_jobs, only in
+  // Meilisearch) come back as zero. Map those to null rather than passing the zero
+  // on: "we could not measure this" and "we measured zero" must not look the same to
+  // a renderer, or a page ends up printing a figure nobody stands behind.
   const dbOnly = (n: number | undefined) => (catalog?.exact && n != null ? n : null);
 
   return {
     scale: {
       jobs: catalog?.open_jobs ?? null,
-      browsableJobs: value(browsable)?.total ?? null,
+      browsableJobs: dbOnly(catalog?.unique_open_jobs),
       companies: dbOnly(catalog?.companies),
       sources: catalog?.sources ?? null,
       telegramChannels: dbOnly(catalog?.telegram_channels),

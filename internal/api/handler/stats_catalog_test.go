@@ -29,6 +29,7 @@ func catalogApp(c cache.Cache, est catalogstats.Estimator) *fiber.App {
 func publishedSnapshot() catalogstats.Snapshot {
 	return catalogstats.Snapshot{
 		OpenJobs:         3_300_658,
+		UniqueOpenJobs:   2_075_865,
 		Companies:        294_282,
 		Sources:          227,
 		ATSPlatforms:     93,
@@ -62,6 +63,7 @@ func TestCatalogScale_ServesThePublishedSnapshot(t *testing.T) {
 
 	for field, want := range map[string]float64{
 		"open_jobs":         3_300_658,
+		"unique_open_jobs":  2_075_865,
 		"companies":         294_282,
 		"sources":           227,
 		"ats_platforms":     93,
