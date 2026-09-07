@@ -200,6 +200,7 @@ func draftFrom(r linksource.Resolved) job.Draft {
 			Location:    r.Job.Location,
 			Description: r.Job.Description,
 			WorkMode:    r.Job.WorkMode,
+			IsTechHint:  r.Job.IsTechHint,
 		},
 		URL:      r.Job.URL,
 		Remote:   r.Job.Remote,

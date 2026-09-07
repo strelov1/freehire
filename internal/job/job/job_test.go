@@ -482,6 +482,41 @@ func TestUpsertParams_CheapWriteMatchKeyCoversEveryColumnItWrites(t *testing.T) 
 	}
 }
 
+// TestUpsertParams_IsTechHintMovesIsTechIndependentlyOfContentHash is the focused
+// counterpart TestUpsertParams_CheapWriteMatchKeyCoversEveryColumnItWrites's generic
+// per-field walk cannot exercise for IsTechHint: fullDraft's Category ("backend") and
+// Title ("Senior Go Developer") already saturate TechEvidence, so toggling IsTechHint
+// there moves no column and the generic subtest returns before ever reaching
+// matchKeyHeld. This test uses a title and category that resolve neither tech nor
+// non-tech on their own (mirroring issue #2601's Profession postings), so IsTechHint is
+// the only source of is_tech evidence — proving directly that it moves is_tech without
+// moving content_hash, and that matchKeyHeld correctly reports the row as changed.
+func TestUpsertParams_IsTechHintMovesIsTechIndependentlyOfContentHash(t *testing.T) {
+	draft := func(hint bool) job.Draft {
+		return job.Draft{Input: jobderive.Input{
+			Source: "profession", ExternalID: "itdev:1",
+			Title: "Windows rendszermérnök", Company: "Acme",
+			IsTechHint: hint,
+		}}
+	}
+
+	unhinted := mustParams(t, draft(false))
+	hinted := mustParams(t, draft(true))
+
+	if unhinted.IsTech.Valid {
+		t.Fatalf("unhinted IsTech = %+v, want unknown — the fixture's title/category must resolve neither tech nor non-tech on their own", unhinted.IsTech)
+	}
+	if !hinted.IsTech.Valid || !hinted.IsTech.Bool {
+		t.Fatalf("hinted IsTech = %+v, want true", hinted.IsTech)
+	}
+	if unhinted.ContentHash != hinted.ContentHash {
+		t.Fatalf("ContentHash moved with IsTechHint alone: %q vs %q — the fixture must hold every hashed field constant", unhinted.ContentHash.String, hinted.ContentHash.String)
+	}
+	if matchKeyHeld(unhinted, hinted) {
+		t.Error("matchKeyHeld held across an IsTechHint-driven is_tech change with an unchanged content_hash — RefreshUnchangedJob would wrongly skip this row")
+	}
+}
+
 // matchKeyHeld reports whether two params agree on everything RefreshUnchangedJob matches on,
 // i.e. whether the cheap path would treat b as an unchanged re-ingest of a.
 func matchKeyHeld(a, b db.UpsertJobParams) bool {

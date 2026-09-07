@@ -161,6 +161,19 @@ consistent with how those two precedents are run.
 5. Verify via the issue's own repro steps (the five named `itdev`/`itops`
    external IDs should now appear in `GET /api/v1/jobs/search?source=profession`).
 
-No rollback complexity: the backfill only ever sets `is_tech` from unknown to
-`true` on rows scoped to two boards (`IS DISTINCT FROM`-guarded, safe to
-re-run), and the search-side change only ever widens what is included.
+The code and backfill are individually harmless to roll back: the backfill only
+ever sets `is_tech` from unknown to `true` on rows scoped to two boards
+(`IS DISTINCT FROM`-guarded, safe to re-run), so reverting the code alone
+leaves those rows exactly as correct as they were, just no longer eligible
+for the search carve-out.
+
+Rolling back the CODE after the widened `CategoryUnresolved` has already let
+the incremental search-drain (`cmd/search-drain/indexer.go:110`) or a full
+reindex admit additional jobs is NOT itself a no-op, though: that drain only
+skips a `CategoryUnresolved` row, it never deletes one already indexed (see
+`indexer.go`'s own comment), so those jobs stay live in Meilisearch under the
+old, narrower rule until something removes them. A rollback that must also
+remove them needs a full `make reindex` on the reverted code (which is what
+`splitJobs` in `cmd/reindex/main.go` uses to delete a row that no longer
+qualifies) — the same reconciliation the Migration Plan's step 4 already runs to admit
+them, run again in the other direction.

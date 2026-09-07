@@ -62,6 +62,10 @@ until the next enrichment cycle.
   match key, widened to include `is_tech`) and `cmd/ingest/store.go`
 - `cmd/backfill-derive/main.go` (`deriveRow`), so its routine re-derivation
   pass does not silently undo this fix on the rows it reaches
+- `internal/platform/db/queries/companies.sql` (`RefreshCompanyFacets`'s
+  hand-duplicated copy of the category-unresolved exclusion, kept in step)
+- `internal/ingest/linkimport/linkimport.go` (`draftFrom`), so a pasted
+  Profession itdev/itops URL gets the same signal the crawl path does
 - A new one-off backfill command (`cmd/backfill-profession-it-tech`)
 - Operationally: a full `make reindex` must run after the backfill, the same
   requirement `backfill-clearance` and `backfill-company-type-hint` carry,

@@ -649,12 +649,19 @@ WITH oj AS MATERIALIZED (
       -- residual is small and self-limiting: such a company reaches the sitemap, and
       -- its page answers noindex off the same search that excluded the row.
       AND description <> ''
-      -- search.CategoryUnresolved: the column answers, or the enrichment does — and
-      -- "other" is the classifier declining, not an answer. This is the predicate that
-      -- excluded almost everything in the sample, the dictionaries being deliberately
-      -- dict-only: a Samara kindergarten's vacancy resolves to no tech category, so
-      -- nobody can find it and its employer is not a page worth handing a crawler.
-      AND (category <> '' OR COALESCE(enrichment->>'category', '') NOT IN ('', 'other'))
+      -- search.CategoryUnresolved: the column answers, or the enrichment does, or
+      -- is_tech is confidently true (a confirmed-technical job — e.g. Profession's
+      -- dedicated itdev/itops boards, issue #2601 — is never the undifferentiated
+      -- bulk this predicate exists to keep out, even lacking a specific category) —
+      -- and "other" is the classifier declining, not an answer. This is the predicate
+      -- that excluded almost everything in the sample, the dictionaries being
+      -- deliberately dict-only: a Samara kindergarten's vacancy resolves to no tech
+      -- category and no is_tech, so nobody can find it and its employer is not a page
+      -- worth handing a crawler. Keep this in step with search.CategoryUnresolved
+      -- (internal/search/search/document.go) — a company whose only open jobs are
+      -- confirmed-technical-but-uncategorized would otherwise show 0 open jobs here
+      -- while those same jobs are live in search.
+      AND (category <> '' OR COALESCE(enrichment->>'category', '') NOT IN ('', 'other') OR is_tech IS TRUE)
 ),
 counts AS (
     SELECT company_slug, count(*) AS cnt FROM oj GROUP BY company_slug
