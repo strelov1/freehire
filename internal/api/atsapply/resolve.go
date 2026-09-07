@@ -32,7 +32,12 @@ func (p Plan) FullyResolved() bool {
 // answers map (internal/candidateprofile.Profile.Fields()). Greenhouse happens to name its
 // own standard identity fields (first_name, last_name, email, phone) the same as the answer
 // keys already, so most of this map is the identity case; candidate-location is the one
-// alias the 2026-09-02 spike measured.
+// alias the 2026-09-02 spike measured. Ashby names its standard name/email controls
+// "_systemfield_name" / "_systemfield_email" (internal/ingest/applyform/ashby.go's own
+// vocabulary) rather than Greenhouse's ids — measured live 2026-09-07: a Singular posting on
+// Ashby parked with "no known answer source" for both, even though the candidate's name and
+// email were already known. "_systemfield_resume" needs no entry here — isResumeField below
+// matches it by label ("Resume") already.
 //
 // NOT covered here, deliberately: "country" has no answer key at all — the candidate
 // profile carries one combined `location` string, not a separate country. On Greenhouse,
@@ -57,6 +62,8 @@ var answerKeyFor = map[string]string{
 	"notice_period":           "notice_period",
 	"willing_to_relocate":     "willing_to_relocate",
 	"age_18_or_older":         "age_18_or_older",
+	"_systemfield_name":       "full_name",
+	"_systemfield_email":      "email",
 }
 
 // Resolve matches every merged field against the candidate's known answers. A required
@@ -107,6 +114,10 @@ var labelAnswerKeyFor = []struct {
 	keywords  []string // ALL must appear (case-insensitive) for the rule to fire
 }{
 	{"visa_sponsorship_needed", []string{"visa", "sponsor"}},
+	// Measured live 2026-09-07: a Singular posting on Ashby asks for LinkedIn as a custom
+	// question carrying a random uuid id (not the "linkedin" id answerKeyFor already
+	// covers), so only a label rule can match it.
+	{"linkedin", []string{"linkedin"}},
 }
 
 // matchLabelAnswerKey returns the answer key a field's label matches, if any.
