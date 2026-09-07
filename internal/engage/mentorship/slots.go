@@ -1,0 +1,105 @@
+package mentorship
+
+import (
+	"errors"
+	"fmt"
+	"time"
+)
+
+// ErrNoMentorZone → 500. A mentor row reached the engine without the IANA zone that
+// alone gives their stored hours a meaning. It is a broken row rather than a bad
+// request, and guessing a zone would silently move every slot.
+var ErrNoMentorZone = errors.New("mentorship: the mentor has no timezone")
+
+// SlotRequest is everything the slot engine needs and nothing it could fetch itself.
+// Now is injected rather than read from the clock, which is what makes the whole
+// pipeline a pure function: the same request always yields the same slots, so a cached
+// window and the re-derivation a booking runs cannot disagree.
+type SlotRequest struct {
+	// Rules is the mentor's availability, weekly rules and dated overrides together.
+	Rules []Rule
+	// MentorZone resolves the rules' wall-clock times into instants.
+	MentorZone *time.Location
+	// Params is the session shape and the bounds on when it may be booked.
+	Params SessionParams
+	// Busy is the mentor's occupied time — confirmed bookings, and the calendar's
+	// free/busy intervals once that sync exists. Buffers are applied here, not by the
+	// caller.
+	Busy []Interval
+	// From and To bound the window asked about, before the horizon narrows it.
+	From time.Time
+	To   time.Time
+	// Now is the instant the notice period and the horizon are measured from.
+	Now time.Time
+	// ViewerZone is the IANA name the slots are expressed in. Unknown or absent falls
+	// back to UTC, and SlotResult.Zone reports what was actually used.
+	ViewerZone string
+}
+
+// SlotResult is the offerable slots and the zone they are expressed in. Each slot's
+// times carry that zone as their location, so the same value reads as local wall-clock
+// time and compares as an absolute instant — the API needs both and there is only one
+// field.
+type SlotResult struct {
+	Slots []Interval
+	Zone  string
+}
+
+// Slots is the engine's whole pipeline: expand the schedule, subtract busy time and
+// buffers, slice into sessions, drop what the notice period and the horizon forbid, and
+// express the rest in the viewer's zone.
+//
+// A window that is empty, backwards, or entirely in the past is not an error — it is a
+// question with no slots as its answer. Only a request that could never yield a slot for
+// anyone is refused: unusable session parameters, or a mentor with no zone.
+func Slots(req SlotRequest) (SlotResult, error) {
+	if req.MentorZone == nil {
+		return SlotResult{}, ErrNoMentorZone
+	}
+	if err := req.Params.Validate(); err != nil {
+		return SlotResult{}, fmt.Errorf("slot request: %w", err)
+	}
+	params := req.Params
+
+	viewerZone, zoneName := resolveViewerZone(req.ViewerZone)
+
+	earliest := req.Now.Add(params.MinimumNotice)
+	latest := req.Now.Add(params.Horizon)
+
+	// The window never reaches into the past, and never past the horizon. The far end
+	// carries one session's slack because the horizon bounds when a slot may BEGIN, so
+	// a slot starting exactly on it is offerable and must survive to be sliced.
+	w := Interval{Start: req.From, End: req.To}
+	if w.Start.Before(req.Now) {
+		w.Start = req.Now
+	}
+	if limit := latest.Add(params.Duration); w.End.After(limit) {
+		w.End = limit
+	}
+
+	free := subtractBusy(expandSchedule(req.Rules, req.MentorZone, w), req.Busy, params)
+
+	var slots []Interval
+	for _, s := range sliceSlots(free, params) {
+		if s.Start.Before(earliest) || s.Start.After(latest) {
+			continue
+		}
+		slots = append(slots, Interval{Start: s.Start.In(viewerZone), End: s.End.In(viewerZone)})
+	}
+
+	return SlotResult{Slots: slots, Zone: zoneName}, nil
+}
+
+// resolveViewerZone turns an IANA name into a zone, falling back to UTC and reporting
+// the fallback. It must never fall back to the MENTOR's zone: a visitor shown the
+// mentor's local times, labelled as their own, has no way to notice.
+func resolveViewerZone(name string) (*time.Location, string) {
+	if name == "" {
+		return time.UTC, "UTC"
+	}
+	loc, err := time.LoadLocation(name)
+	if err != nil {
+		return time.UTC, "UTC"
+	}
+	return loc, name
+}
