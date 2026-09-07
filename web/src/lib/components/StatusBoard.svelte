@@ -4,6 +4,7 @@
   // other surface uses: a provider must not be "WhatJobs" on the filter panel and
   // "Whatjobs" here.
   import { sourceLabel } from '$lib/facets';
+  import { Tabs } from '$lib/ui';
   import type { HealthStatus, IngestStatus, ProviderKind } from '$lib/types';
 
   // The presentational half of the /status page: given the status read (or null
@@ -88,6 +89,15 @@
 
   const nf = new Intl.NumberFormat('en');
 
+  // The site/API and the ingest fleet are different concerns (see SITE_HEADLINE's
+  // comment above) — tabs keep them from competing for the same screen instead of
+  // stacking sections a visitor has to scroll past to reach the one they want.
+  const SECTION_TABS = [
+    { value: 'site', label: 'Site status' },
+    { value: 'fleet', label: 'Ingest fleet' },
+  ];
+  let activeSection = $state<'site' | 'fleet'>('site');
+
   // Worst-first, then alphabetical — problem providers surface at the top.
   const providers = $derived(
     [...(status?.providers ?? [])].sort(
@@ -124,143 +134,150 @@
     Status is unavailable right now. Try again in a moment.
   </div>
 {:else}
-  {#if site}
-    <!-- Site status: is freehire.me itself working, independent of the ingest fleet below. -->
-    <section class="mb-8">
-      <p class="mb-3 font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">// site status</p>
-      <div class="flex items-center gap-4 rounded-xl border p-5 sm:p-6 {STATUS_META[site.status].pill}">
-        <span class="inline-flex h-3 w-3 shrink-0 rounded-full {STATUS_META[site.status].dot}"></span>
+  <Tabs tabs={SECTION_TABS} bind:value={activeSection}>
+    {#if activeSection === 'site'}
+      {#if site}
+        <!-- Site status: is freehire.me itself working, independent of the ingest fleet tab. -->
+        <div class="flex items-center gap-4 rounded-xl border p-5 sm:p-6 {STATUS_META[site.status].pill}">
+          <span class="inline-flex h-3 w-3 shrink-0 rounded-full {STATUS_META[site.status].dot}"></span>
+          <div>
+            <div class="text-lg font-semibold tracking-tight">{SITE_HEADLINE[site.status]}</div>
+            <div class="text-sm opacity-80">
+              Database {site.database} · {nfPercent.format(site.error_rate)} error rate over the last {site.window_minutes} min
+            </div>
+          </div>
+        </div>
+
+        <!-- Daily history strip: worst status observed each day, oldest first. A gap
+             (no sample recorded) renders as a distinct neutral tile, never as if the
+             day were operational. -->
+        <div class="mt-4 rounded-xl border border-border p-4 sm:p-5">
+          <p class="text-xs text-muted-foreground">Last {HISTORY_DAYS} days</p>
+          <!-- flex-1 tiles (not a fixed width) so all 90 always fit the container —
+               a fixed width overflows on anything narrower than a wide desktop, and
+               the resulting horizontal scroll defaults to showing the OLDEST (gray)
+               end, hiding the recent, colorful end a visitor actually wants to see. -->
+          <div class="mt-3 flex h-7 gap-px">
+            {#each historyTiles as tile (tile.day)}
+              {@const meta = tile.status ? STATUS_META[tile.status] : NO_DATA_TILE_META}
+              <span
+                class="flex-1 rounded-sm {meta.dot}"
+                title="{tile.day} — {tile.status ? meta.label : 'no data recorded'}"
+              ></span>
+            {/each}
+          </div>
+        </div>
+      {:else}
+        <p class="rounded-xl border border-border p-8 text-center text-muted-foreground">
+          Site status is unavailable right now.
+        </p>
+      {/if}
+    {:else}
+      <!-- Overall banner -->
+      <div class="flex items-center gap-4 rounded-xl border p-5 sm:p-6 {STATUS_META[overall].pill}">
+        <span class="inline-flex h-3 w-3 shrink-0 rounded-full {STATUS_META[overall].dot}"></span>
         <div>
-          <div class="text-lg font-semibold tracking-tight">{SITE_HEADLINE[site.status]}</div>
+          <div class="text-lg font-semibold tracking-tight">{OVERALL_HEADLINE[overall]}</div>
           <div class="text-sm opacity-80">
-            Database {site.database} · {nfPercent.format(site.error_rate)} error rate over the last {site.window_minutes} min
+            {providers.length} provider{providers.length === 1 ? '' : 's'} monitored
           </div>
         </div>
       </div>
 
-      <!-- Daily history strip: worst status observed each day, oldest first. A gap
-           (no sample recorded) renders as a distinct neutral tile, never as if the
-           day were operational. -->
-      <div class="mt-4 flex items-center justify-between text-xs text-muted-foreground">
-        <span>Last {HISTORY_DAYS} days</span>
-      </div>
-      <div class="mt-2 flex gap-0.5 overflow-x-auto pb-1">
-        {#each historyTiles as tile (tile.day)}
-          {@const meta = tile.status ? STATUS_META[tile.status] : NO_DATA_TILE_META}
-          <span
-            class="h-6 w-1.5 shrink-0 rounded-sm {meta.dot}"
-            title="{tile.day} — {tile.status ? meta.label : 'no data recorded'}"
-          ></span>
-        {/each}
-      </div>
-    </section>
-  {/if}
-
-  <p class="mb-3 font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">// ingest fleet status</p>
-
-  <!-- Overall banner -->
-  <div class="mb-10 flex items-center gap-4 rounded-xl border p-5 sm:p-6 {STATUS_META[overall].pill}">
-    <span class="inline-flex h-3 w-3 shrink-0 rounded-full {STATUS_META[overall].dot}"></span>
-    <div>
-      <div class="text-lg font-semibold tracking-tight">{OVERALL_HEADLINE[overall]}</div>
-      <div class="text-sm opacity-80">
-        {providers.length} provider{providers.length === 1 ? '' : 's'} monitored
-      </div>
-    </div>
-  </div>
-
-  <!-- Provider list -->
-  <section>
-    <div class="flex items-baseline justify-between">
-      <p class="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">// providers</p>
-      <!-- A raw JSON API endpoint, not a SvelteKit page route — there is nothing
-           for resolve() to map, so the internal-navigation rule doesn't apply. -->
-      <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -->
-      <a href="/api/v1/status" class="font-mono text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline">
-        /status ↗
-      </a>
-    </div>
-
-    {#if providers.length === 0}
-      <p class="mt-6 text-sm text-muted-foreground">No providers have run yet.</p>
-    {:else}
-      <label class="mt-6 block">
-        <span class="sr-only">Filter providers by name</span>
-        <input
-          type="search"
-          bind:value={query}
-          placeholder="Filter providers…"
-          autocomplete="off"
-          class="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none placeholder:text-muted-foreground focus:border-foreground"
-        />
-      </label>
-
-      {#if kindCounts.length > 1}
-        <div class="mt-3 flex flex-wrap gap-2">
-          <button
-            type="button"
-            onclick={() => (kind = 'all')}
-            class="rounded-full border px-3 py-1 text-xs font-medium transition-colors {kind === 'all'
-              ? 'border-foreground bg-foreground text-background'
-              : 'border-border text-muted-foreground hover:text-foreground'}"
-          >
-            All {nf.format(providers.length)}
-          </button>
-          {#each kindCounts as kc (kc.kind)}
-            <button
-              type="button"
-              onclick={() => (kind = kc.kind)}
-              class="rounded-full border px-3 py-1 text-xs font-medium transition-colors {kind === kc.kind
-                ? 'border-foreground bg-foreground text-background'
-                : 'border-border text-muted-foreground hover:text-foreground'}"
-            >
-              {KIND_LABEL[kc.kind]} {nf.format(kc.count)}
-            </button>
-          {/each}
+      <!-- Provider list -->
+      <section class="mt-6">
+        <div class="flex items-baseline justify-between">
+          <p class="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">// providers</p>
+          <!-- A raw JSON API endpoint, not a SvelteKit page route — there is nothing
+               for resolve() to map, so the internal-navigation rule doesn't apply. -->
+          <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -->
+          <a href="/api/v1/status" class="font-mono text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline">
+            /status ↗
+          </a>
         </div>
-      {/if}
 
-      {#if filtered.length === 0}
-        <p class="mt-6 text-sm text-muted-foreground">
-          No providers match “{query.trim()}”.
-        </p>
-      {:else}
-        <ul class="mt-4 divide-y divide-border overflow-hidden rounded-xl border border-border">
-          {#each filtered as p (p.provider)}
-          {@const meta = STATUS_META[p.status]}
-          <li class="flex flex-wrap items-center gap-x-4 gap-y-1 bg-background p-4 sm:p-5">
-            <span class="h-2.5 w-2.5 shrink-0 rounded-full {meta.dot}"></span>
-            <div class="min-w-0 flex-1">
-              <div class="flex items-center gap-2">
-                <span class="font-medium">{sourceLabel(p.provider)}</span>
-                <span class="font-mono text-[10px] uppercase tracking-wide text-muted-foreground">
-                  {KIND_LABEL[p.kind]}
-                </span>
-              </div>
-              <div class="text-sm text-muted-foreground">
-                {nf.format(p.healthy_boards)} / {nf.format(p.total_boards)} boards healthy{#if p.cooled_boards > 0}<span
-                    class="text-warning-strong"
-                  >
-                    · {nf.format(p.cooled_boards)} in cooldown</span
-                  >{/if}
-              </div>
-            </div>
-            <div class="flex flex-col items-end gap-1">
-              <span
-                class="inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-medium {meta.pill}"
+        {#if providers.length === 0}
+          <p class="mt-6 text-sm text-muted-foreground">No providers have run yet.</p>
+        {:else}
+          <label class="mt-6 block">
+            <span class="sr-only">Filter providers by name</span>
+            <input
+              type="search"
+              bind:value={query}
+              placeholder="Filter providers…"
+              autocomplete="off"
+              class="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none placeholder:text-muted-foreground focus:border-foreground"
+            />
+          </label>
+
+          {#if kindCounts.length > 1}
+            <div class="mt-3 flex flex-wrap gap-2">
+              <button
+                type="button"
+                onclick={() => (kind = 'all')}
+                class="rounded-full border px-3 py-1 text-xs font-medium transition-colors {kind === 'all'
+                  ? 'border-foreground bg-foreground text-background'
+                  : 'border-border text-muted-foreground hover:text-foreground'}"
               >
-                {meta.label}
-              </span>
-              {#if p.last_run}
-                <span class="text-xs text-muted-foreground" title={p.last_run}>
-                  ran {timeAgo(p.last_run)}
-                </span>
-              {/if}
+                All {nf.format(providers.length)}
+              </button>
+              {#each kindCounts as kc (kc.kind)}
+                <button
+                  type="button"
+                  onclick={() => (kind = kc.kind)}
+                  class="rounded-full border px-3 py-1 text-xs font-medium transition-colors {kind === kc.kind
+                    ? 'border-foreground bg-foreground text-background'
+                    : 'border-border text-muted-foreground hover:text-foreground'}"
+                >
+                  {KIND_LABEL[kc.kind]} {nf.format(kc.count)}
+                </button>
+              {/each}
             </div>
-          </li>
-          {/each}
-        </ul>
-      {/if}
+          {/if}
+
+          {#if filtered.length === 0}
+            <p class="mt-6 text-sm text-muted-foreground">
+              No providers match “{query.trim()}”.
+            </p>
+          {:else}
+            <ul class="mt-4 divide-y divide-border overflow-hidden rounded-xl border border-border">
+              {#each filtered as p (p.provider)}
+              {@const meta = STATUS_META[p.status]}
+              <li class="flex flex-wrap items-center gap-x-4 gap-y-1 bg-background p-4 sm:p-5">
+                <span class="h-2.5 w-2.5 shrink-0 rounded-full {meta.dot}"></span>
+                <div class="min-w-0 flex-1">
+                  <div class="flex items-center gap-2">
+                    <span class="font-medium">{sourceLabel(p.provider)}</span>
+                    <span class="font-mono text-[10px] uppercase tracking-wide text-muted-foreground">
+                      {KIND_LABEL[p.kind]}
+                    </span>
+                  </div>
+                  <div class="text-sm text-muted-foreground">
+                    {nf.format(p.healthy_boards)} / {nf.format(p.total_boards)} boards healthy{#if p.cooled_boards > 0}<span
+                        class="text-warning-strong"
+                      >
+                        · {nf.format(p.cooled_boards)} in cooldown</span
+                      >{/if}
+                  </div>
+                </div>
+                <div class="flex flex-col items-end gap-1">
+                  <span
+                    class="inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-medium {meta.pill}"
+                  >
+                    {meta.label}
+                  </span>
+                  {#if p.last_run}
+                    <span class="text-xs text-muted-foreground" title={p.last_run}>
+                      ran {timeAgo(p.last_run)}
+                    </span>
+                  {/if}
+                </div>
+              </li>
+              {/each}
+            </ul>
+          {/if}
+        {/if}
+      </section>
     {/if}
-  </section>
+  </Tabs>
 {/if}
