@@ -112,6 +112,13 @@ func run() int {
 		return 1
 	}
 	defer closeBrowser()
+	// LAST, and the order is load-bearing: the hosted tier deliberately takes gulftalent off
+	// the fingerprint transport, which ApplyProxyEgress above wired. See ApplyFirecrawlEgress.
+	// A no-op without FIRECRAWL_API_KEY, so this cannot spend anything on an ordinary run.
+	if err := sources.ApplyFirecrawlEgress(registry); err != nil {
+		log.Printf("config: %v", err)
+		return 1
+	}
 
 	// Resolved before the DB is touched, like every other config read here: a bad value should
 	// stop the run, not produce a quiet ordinary crawl where a repair was intended.

@@ -10,13 +10,18 @@ func TestBrowserTierCarriesEchojobs(t *testing.T) {
 	}
 }
 
-// The browser tier and the plain proxy tier must be DISJOINT. Both rewire the same registry
-// entry and cmd/ingest applies them in sequence, so a provider in both would silently get
-// whichever ran last — a wiring bug with no symptom except a provider that quietly stopped
-// using the transport somebody chose for it.
+// The browser tier and the proxy tiers must be DISJOINT. Both rewire the same registry entry
+// and cmd/ingest applies them in sequence, so a provider in both would silently get whichever
+// ran last — a wiring bug with no symptom except a provider that quietly stopped using the
+// transport somebody chose for it.
 //
 // A browser-tier provider does not need proxiedProviders anyway: ApplyBrowserEgress builds
 // its session over SOURCES_PROXY_URL itself, so the browser IS the proxied transport.
+//
+// The HOSTED tier is the documented exception and is checked separately (see
+// TestHostedTierDeliberatelyOverridesTheFingerprintTierForGulftalent): it may take a provider
+// off another tier, because for its two providers every other transport is measured as
+// refused. A rule with a stated exception beats a rule quietly broken.
 func TestBrowserTierAndProxyTierAreDisjoint(t *testing.T) {
 	for name := range browserProviders {
 		if _, ok := proxiedProviders[name]; ok {
