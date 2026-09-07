@@ -43,6 +43,21 @@ func Partials() *template.Template {
 // hugging its label, and align= on the cell is the only right-alignment Outlook
 // honours reliably.
 var partials = template.Must(template.New("partials").Funcs(funcs).Parse(`
+{{define "signature"}}<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin-top:22px;">
+  <tr>
+    <td width="52" valign="top" style="width:52px;padding-right:12px;">
+      <img src="{{.PortraitURL}}" width="44" height="44" alt="Ilya" style="display:block;border:0;border-radius:22px;">
+    </td>
+    <td valign="middle">
+      <div class="m-ink" style="font-size:14px;font-weight:600;color:` + colorInk + `;">Ilya Strelov</div>
+      <div class="m-muted" style="font-size:13px;color:` + colorMuted + `;padding-top:2px;">
+        building freehire ·
+        <a href="{{.LinkedInURL}}" class="m-muted" style="color:` + colorMuted + `;text-decoration:none;"><img src="{{.LinkedInIcon}}" width="14" height="14" alt="" class="m-logo" style="vertical-align:-2px;border:0;padding-right:4px;">LinkedIn</a>
+      </div>
+    </td>
+  </tr>
+</table>{{end}}
+
 {{define "p"}}<p class="m-ink" style="margin:0 0 14px 0;font-size:15px;line-height:1.6;color:` + colorInk + `;">{{.}}</p>{{end}}
 
 {{define "muted"}}<p class="m-muted" style="margin:0 0 14px 0;font-size:14px;line-height:1.6;color:` + colorMuted + `;">{{.}}</p>{{end}}
@@ -94,6 +109,11 @@ type IconLink struct {
 	Label   string
 	IconURL string
 }
+
+// LinkedInURL is the profile the sign-off points at. It lives beside DiscordURL for
+// the same reason: the letters that carry the signature are from one person, and two
+// copies of his profile are two things that can disagree.
+const LinkedInURL = "https://www.linkedin.com/in/istrelov/"
 
 // TextLink is the argument to "p-link": a sentence that ends in a link.
 //

@@ -131,10 +131,10 @@ func TestPending_SendsNothing(t *testing.T) {
 // previews render against a relative base, and a hard-coded https://freehire.me
 // would show the production host there while still looking right.
 //
-// The assertion is run over every registered campaign, and it is a negative for the
-// bodies, because a campaign is allowed to link only outward — this is what the
-// Discord letter does. What is never allowed is naming the production origin, in
-// either body. The plain-text one is checked as closely as the HTML: it is the copy
+// Every registered campaign is checked, and the body assertion is a negative: a
+// campaign may link only outward, as the Discord letter does, so requiring a link
+// back would fail an honest letter. What is never allowed is naming the production
+// origin. The plain-text body is checked as closely as the HTML — it is the copy
 // most likely to be written by hand and the least likely to be looked at.
 func TestSend_LinksBackThroughTheConfiguredOrigin(t *testing.T) {
 	for _, name := range broadcast.Names() {
@@ -152,19 +152,11 @@ func TestSend_LinksBackThroughTheConfiguredOrigin(t *testing.T) {
 		if strings.Contains(sent.html, "https://freehire.me") || strings.Contains(sent.text, "https://freehire.me") {
 			t.Errorf("%s: a body spells the production origin out instead of taking it from the Mailer", c.Name)
 		}
-	}
-
-	sender := &fakeSender{}
-	m := broadcast.NewMailer(sender, "notifications@freehire.me", "ilya@example.test", "https://preview.test")
-	c := campaign(t, "discord-invite")
-	if err := m.Send(context.Background(), c, "someone@example.com"); err != nil {
-		t.Fatalf("Send %s: %v", c.Name, err)
-	}
-	sent := sender.sent[0]
-	if !strings.Contains(sent.from, "Ilya") {
-		t.Errorf("from = %q, want a person's name", sent.from)
-	}
-	if strings.TrimSpace(sent.text) == "" {
-		t.Error("the campaign has no plain-text body")
+		if !strings.Contains(sent.from, "Ilya") {
+			t.Errorf("%s: from = %q, want a person's name", c.Name, sent.from)
+		}
+		if strings.TrimSpace(sent.text) == "" {
+			t.Errorf("%s: the campaign has no plain-text body", c.Name)
+		}
 	}
 }
