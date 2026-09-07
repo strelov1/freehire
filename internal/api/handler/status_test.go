@@ -128,3 +128,46 @@ func TestFleetStatus(t *testing.T) {
 		})
 	}
 }
+
+func TestDeriveSiteStatus(t *testing.T) {
+	cases := []struct {
+		name          string
+		dbUp          bool
+		errorRate     float64
+		totalRequests int64
+		want          providerStatus
+	}{
+		{
+			name: "db down is down regardless of error rate", dbUp: false, errorRate: 0, totalRequests: 1000,
+			want: statusDown,
+		},
+		{
+			name: "db up with no errors and enough traffic is operational", dbUp: true, errorRate: 0, totalRequests: 1000,
+			want: statusOperational,
+		},
+		{
+			name: "db up but too little traffic to trust the error rate is operational", dbUp: true, errorRate: 1, totalRequests: 5,
+			want: statusOperational,
+		},
+		{
+			name: "a small error rate over enough traffic is degraded", dbUp: true, errorRate: 0.05, totalRequests: 1000,
+			want: statusDegraded,
+		},
+		{
+			name: "exactly the degraded threshold is still operational", dbUp: true, errorRate: siteDegradedErrorRate, totalRequests: 1000,
+			want: statusOperational,
+		},
+		{
+			name: "half the requests failing is down even though the db itself answers", dbUp: true, errorRate: 0.5, totalRequests: 1000,
+			want: statusDown,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := deriveSiteStatus(tc.dbUp, tc.errorRate, tc.totalRequests); got != tc.want {
+				t.Errorf("deriveSiteStatus(%v, %v, %v) = %q, want %q", tc.dbUp, tc.errorRate, tc.totalRequests, got, tc.want)
+			}
+		})
+	}
+}

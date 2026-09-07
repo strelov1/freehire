@@ -623,7 +623,8 @@ export function createApi(
     return requestData<CatalogScale>(`/api/v1/stats/catalog`);
   }
 
-  /** The public ingest-fleet status: a per-provider health rollup with a derived
+  /** The public status read: the site/API's own live status (`site`), plus a
+   *  per-provider ingest-fleet health rollup with a derived
    *  operational/degraded/down verdict and an overall status. Sanitized
    *  (no error text or board identifiers), aggregate-only, unauthenticated. */
   async function ingestStatus(): Promise<IngestStatus> {
