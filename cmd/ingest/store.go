@@ -170,6 +170,18 @@ func clustersByRole(w written) bool {
 	return w.inserted && !w.duplicateOf.Valid
 }
 
+// needsRecentFeed reports whether a persisted write should be surfaced on the homepage's
+// live "recently added" feed (openspec/changes/add-homepage-recent-jobs-feed): the same
+// eligibility needsIndex/the search-outbox enqueue already apply — new or changed content,
+// not deduped into a role repost, not already marked a duplicate — plus tech evidence,
+// since the feed is IT-only by design and jobderive.deriveIsTech already ran before this
+// write. isTech.Valid is required, not just isTech.Bool: an unresolved verdict (NULL) is
+// not the same as a confirmed non-tech role, but this feed treats both as "not eligible yet"
+// rather than guessing.
+func needsRecentFeed(w written, deduped bool, isTech pgtype.Bool) bool {
+	return needsIndex(w) && !deduped && !w.duplicateOf.Valid && isTech.Valid && isTech.Bool
+}
+
 // Save persists a posting whose adapter yielded no application form — every provider but
 // Recruitee.
 func (s *dbStore) Save(ctx context.Context, j job.Job) error {
@@ -263,6 +275,17 @@ func (s *dbStore) save(ctx context.Context, j job.Job, form *applyform.Form) err
 	if needsIndex(saved) && !deduped && !saved.duplicateOf.Valid {
 		if err := qtx.EnqueueSearchOutbox(ctx, saved.id); err != nil {
 			return fmt.Errorf("enqueue search outbox: %w", err)
+		}
+	}
+
+	// Queue this write for the homepage's live "recently added" feed, atomically with
+	// the row it announces — see needsRecentFeed for the eligibility this mirrors from
+	// the search-index gate above, plus the IT-only restriction. cmd/tg-extract is
+	// deliberately not wired into this outbox either, matching its exclusion from
+	// search_outbox (see openspec/changes/add-homepage-recent-jobs-feed/design.md).
+	if needsRecentFeed(saved, deduped, params.IsTech) {
+		if err := qtx.EnqueueRecentFeedOutbox(ctx, saved.id); err != nil {
+			return fmt.Errorf("enqueue recent feed outbox: %w", err)
 		}
 	}
 

@@ -10,6 +10,19 @@ import (
 	"github.com/strelov1/freehire/internal/platform/db"
 )
 
+// NormalizedRoleTitle returns a job title reduced to the same normalized form
+// RoleFingerprint applies to a title before hashing it — visible text only,
+// lowercased, whitespace-collapsed, trailing location/qualifier clause stripped
+// — but without folding in the company slug or description that make
+// RoleFingerprint identify one company's OWN reposts of a role. Two different
+// companies' postings of "the same role", however differently worded, normalize
+// to the same string here, which is what cross-company aggregation (see
+// internal/job/recentfeed) needs and RoleFingerprint — scoped to one company by
+// design — cannot provide.
+func NormalizedRoleTitle(title string) string {
+	return normalizeRoleText(stripTrailingClause(title))
+}
+
 // RoleFingerprint returns a deterministic hex fingerprint of a job's ROLE IDENTITY —
 // company, normalized title, and normalized description — deliberately excluding
 // every volatile field (posted_at, url, public_slug, source, external_id, location).

@@ -420,6 +420,16 @@ type Querier interface {
 	// lease predicate reclaims entries whose worker died (stale claimed_at), so no
 	// separate reaper process is needed.
 	ClaimEnrichmentBatch(ctx context.Context, arg ClaimEnrichmentBatchParams) ([]ClaimEnrichmentBatchRow, error)
+	// Claim-and-delete a bounded batch, oldest first, joined to jobs for the fields the
+	// feed displays. Unlike search_outbox/enrichment_outbox there is no lease: a claimed
+	// row is deleted outright in the same statement, because a cosmetic feed has nothing
+	// to retry and nothing to reconcile if the connection holding it dies mid-drain — the
+	// row is simply gone either way, and the next poll tick picks up whatever else queued.
+	//
+	// FOR UPDATE SKIP LOCKED on the id-selecting subquery lets concurrent callers (there is
+	// normally only one poller, but this keeps the statement safe if that ever changes)
+	// take disjoint rows instead of blocking on each other.
+	ClaimRecentFeedOutboxBatch(ctx context.Context, batchSize int32) ([]ClaimRecentFeedOutboxBatchRow, error)
 	// Claim a batch of live, unleased removals by stamping claimed_at.
 	//
 	// Deliberately has NO `EXISTS (SELECT 1 FROM jobs ...)` guard, unlike
@@ -1598,6 +1608,13 @@ type Querier interface {
 	// Queues a successfully-sent Expo ticket for a later receipt check — the
 	// send response itself does not say whether the push was actually delivered.
 	EnqueuePushTicket(ctx context.Context, arg EnqueuePushTicketParams) error
+	// Queue a job for the homepage's live "recently added" feed. Called by cmd/ingest
+	// inside the same transaction as the job's upsert, only for a canonical, non-duplicate,
+	// IT/tech posting (see cmd/ingest/store.go). ON CONFLICT keeps at most one live entry
+	// per job — this is a pure transit queue with no lease/retry bookkeeping, drained
+	// within seconds by the poller in internal/job/recentfeed, so there is nothing to
+	// reconcile beyond "don't queue the same job twice while it's still pending".
+	EnqueueRecentFeedOutbox(ctx context.Context, jobID int64) error
 	// Queue a job for the live facet index. Called by cmd/ingest inside the same
 	// transaction as the job's upsert, only when the write inserted or changed indexed
 	// content (mirrors the gate the old inline SubmitJobs push used). ON CONFLICT keeps

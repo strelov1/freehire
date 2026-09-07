@@ -940,6 +940,11 @@ type RecentAuthProof struct {
 	ConsumedAt   pgtype.Timestamptz `json:"consumed_at"`
 }
 
+type RecentFeedOutbox struct {
+	JobID     int64              `json:"job_id"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+}
+
 type ReferralOffer struct {
 	UserID         int64              `json:"user_id"`
 	CompanySlug    string             `json:"company_slug"`

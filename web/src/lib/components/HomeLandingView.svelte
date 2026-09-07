@@ -4,6 +4,7 @@
   import { ArrowRight } from '@lucide/svelte';
   import FilterModal from './filters/FilterModal.svelte';
   import HeaderSearch from './HeaderSearch.svelte';
+  import RecentJobsFeed from './RecentJobsFeed.svelte';
   import { ROLE_PLACEHOLDER } from '$lib/placeholderRoles';
   import { api } from '$lib/api';
   import { browseQuery, planForSuggestion } from '$lib/browseTarget';
@@ -289,6 +290,8 @@
     </div>
   </section>
 {/if}
+
+<RecentJobsFeed />
 
 <!-- The two places freehire runs that are not a web page. Side by side because they
      are the same offer twice — the catalogue where you already work — and stacking

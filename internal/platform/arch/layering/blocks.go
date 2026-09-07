@@ -131,6 +131,13 @@ var blocks = map[string][]string{
 		"applydate", "collections", "ghost", "ghostreport", "job", "jobdedup",
 		"jobderive", "jobfacts", "jobhash", "jobreality", "jobview", "liveness",
 		"outboundurl", "privatejob",
+		// recentfeed polls recent_feed_outbox and groups the batch by
+		// jobhash.NormalizedRoleTitle for the homepage's live "recently added"
+		// feed. It lives here rather than in api because grouping recently
+		// ingested postings by role is a fact about postings, not a transport
+		// concern - api (layer 8) imports it to start the poller and serve the
+		// SSE endpoint, the same relationship it has with jobview.
+		"recentfeed",
 		// reqextract reads a posting's requirements out of its own description markup
 		// and returns them in the enrichment contract's shape, so it takes enrich the
 		// way jobview does — the block below it, not the model.

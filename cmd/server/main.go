@@ -26,10 +26,12 @@ import (
 	appleauth "github.com/strelov1/freehire/internal/identity/auth/apple"
 	"github.com/strelov1/freehire/internal/identity/auth/oauth"
 	"github.com/strelov1/freehire/internal/identity/billing"
+	"github.com/strelov1/freehire/internal/job/recentfeed"
 	"github.com/strelov1/freehire/internal/platform/blobstore"
 	"github.com/strelov1/freehire/internal/platform/cache"
 	"github.com/strelov1/freehire/internal/platform/config"
 	"github.com/strelov1/freehire/internal/platform/database"
+	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/platform/llm"
 	"github.com/strelov1/freehire/internal/platform/observability"
 	"github.com/strelov1/freehire/internal/platform/tokencrypt"
@@ -290,6 +292,15 @@ func main() {
 	// than inline in the handler registration.
 	planConfig := plan.ConfigFromEnv()
 
+	// The homepage's live "recently added jobs" feed: an in-process poller drains
+	// recent_feed_outbox (populated by cmd/ingest) and publishes grouped entries to
+	// a Broadcaster the SSE handler subscribes to. Always on — unlike Search/Blob/LLM
+	// above, it needs no external credential, just the pool every other route already
+	// has. See openspec/changes/add-homepage-recent-jobs-feed.
+	recentFeedBroadcaster := recentfeed.NewBroadcaster(recentFeedRingBufferSize)
+	recentFeedPoller := recentfeed.NewPoller(db.New(pool), recentFeedBroadcaster, recentFeedBatchSize)
+	go recentFeedPoller.Run(ctx, recentFeedPollInterval)
+
 	handler.Register(app, handler.Config{
 		Pool:                        pool,
 		Throttler:                   throttler,
@@ -342,6 +353,8 @@ func main() {
 		AutoApplyOrchestratorSecret: cfg.AutoApplyOrchestratorSecret,
 		InngestEventAPIURL:          cfg.InngestEventAPIURL,
 		InngestEventKey:             cfg.InngestEventKey,
+
+		RecentJobsFeed: recentFeedBroadcaster,
 	})
 
 	// Run the server in a goroutine so main can wait for a shutdown signal.
@@ -381,6 +394,22 @@ func buildGmail(cfg config.Settings) (*gmailsync.Connector, *tokencrypt.Cipher) 
 	}
 	return gmailsync.NewConnector(g.ClientID, g.ClientSecret, cfg.FrontendOrigin), cipher
 }
+
+// recentFeedRingBufferSize bounds how many entries a new SSE connection to the
+// homepage's live feed replays as backlog. Small on purpose — it exists so a
+// connection never starts on a visibly empty feed, not to be a scrollable history.
+const recentFeedRingBufferSize = 15
+
+// recentFeedPollInterval is how often the poller drains recent_feed_outbox. A
+// few seconds of latency is an accepted trade for reusing the outbox+poll
+// pattern instead of Postgres LISTEN/NOTIFY or Redis pub/sub — see
+// openspec/changes/add-homepage-recent-jobs-feed/design.md.
+const recentFeedPollInterval = 10 * time.Second
+
+// recentFeedBatchSize caps one poll tick's claim, so a large burst (e.g. an
+// INGEST_REFETCH_ALL=1 repair run) degrades to "the feed is a tick behind"
+// rather than one tick doing unbounded work.
+const recentFeedBatchSize = 500
 
 // suggestRefreshInterval is how often the completion service reloads the phrases it
 // recognises. The dictionary behind it is rebuilt once a day by

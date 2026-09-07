@@ -486,6 +486,12 @@ export function createApi(
     return `${baseUrl}/api/v1/jobs/${slug}/match-analysis/stream`;
   }
 
+  /** The same-origin URL for the homepage's live "recently added jobs" SSE feed
+   *  (public, no cookie needed — see openspec/changes/add-homepage-recent-jobs-feed). */
+  function recentJobsFeedUrl(): string {
+    return `${baseUrl}/api/v1/feed/recent`;
+  }
+
   /** Full-text search over jobs. `facets` carries the query text and any facet
    *  filters (built by the caller); pagination is appended here. Results are the
    *  same Job wire shape as listJobs, so views render them with the same
@@ -2384,6 +2390,7 @@ export function createApi(
     getMatchAnalysis,
     runMatchAnalysis,
     matchAnalysisStreamUrl,
+    recentJobsFeedUrl,
     searchJobs,
     suggest,
     interpretSearch,

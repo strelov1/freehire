@@ -55,6 +55,7 @@ import (
 	"github.com/strelov1/freehire/internal/ingest/screeninganswers"
 	"github.com/strelov1/freehire/internal/ingest/sources"
 	"github.com/strelov1/freehire/internal/job/privatejob"
+	"github.com/strelov1/freehire/internal/job/recentfeed"
 	"github.com/strelov1/freehire/internal/platform/blobstore"
 	"github.com/strelov1/freehire/internal/platform/cache"
 	"github.com/strelov1/freehire/internal/platform/db"
@@ -363,6 +364,11 @@ type Config struct {
 	// exactly as it is today.
 	InngestEventAPIURL string
 	InngestEventKey    string
+	// RecentJobsFeed backs the homepage's live "recently added jobs" SSE feed
+	// (internal/job/recentfeed). cmd/server owns the Poller that publishes into it;
+	// this handler only subscribes. Nil disables the route with a 503 rather than
+	// serving a feed that will never receive anything.
+	RecentJobsFeed *recentfeed.Broadcaster
 }
 
 // Register wires all routes onto the application from cfg. Auth is same-origin
@@ -406,6 +412,7 @@ func Register(app *fiber.App, cfg Config) {
 	postingURLs := sources.NewPostingURLResolver(ingestClient)
 	jobsH := newJobsHandlers(queries, moderationSvc, postingURLs, cfg.Cache)
 	statsH := newStatsHandlers(queries, cfg.Cache, cfg.Pool)
+	recentFeedH := newRecentFeedHandlers(cfg.RecentJobsFeed, cfg.Throttler)
 	ogH := newOGHandlers(queries, cfg.Cache)
 	votesH := newVoteHandlers(queries, cfg.Pool)
 	communityH := newCommunityHandlers(queries)
@@ -745,6 +752,8 @@ func Register(app *fiber.App, cfg Config) {
 	// Public catalogue-activity, member-growth, engagement, facet-snapshot, and
 	// ingest-status reads (see statsHandlers).
 	statsH.register(api)
+	// The homepage's live "recently added jobs" SSE feed (see recentFeedHandlers).
+	recentFeedH.register(api)
 	// The /open and /about pages' OG preview cards (see ogHandlers) — reads the
 	// same snapshot statsH.CatalogScale serves.
 	ogH.register(api)
