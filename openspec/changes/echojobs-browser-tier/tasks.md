@@ -13,17 +13,17 @@
 
 ## 2. `platform/browser` — the session
 
-- [ ] 2.1 Write the failing integration test (`//go:build integration`, needs Chrome) against
+- [x] 2.1 Write the failing integration test (`//go:build integration`, needs Chrome) against
       a local `httptest` server with three routes: one plain `200`, one that serves its real
       body only after a JS-set cookie (the smallest thing shaped like a challenge), and one
       `404`. Assert: the challenged route is read, the `404` is reported **as 404 rather than
       as an error**, and a second fetch on the same tab pays no second clearance.
-- [ ] 2.2 Implement `Session`: launch via `LaunchOptions`, answer `Fetch.authRequired` over
+- [x] 2.2 Implement `Session`: launch via `LaunchOptions`, answer `Fetch.authRequired` over
       CDP with the proxy credentials, `Clear(ctx, origin)` to obtain clearance, and
       `Fetch(ctx, url) (status int, body []byte, err error)` evaluating an awaited in-page
       `fetch` — with the doc saying why the cookie cannot simply be handed to `net/http`
       (measured: it still gets the checkpoint).
-- [ ] 2.3 Add the tab pool: N tabs, each clearing on first use, `chromedp` serialising one
+- [x] 2.3 Add the tab pool: N tabs, each clearing on first use, `chromedp` serialising one
       request per tab. Document that whether clearance is shared across tabs is unmeasured
       and that the design does not depend on the answer.
 
