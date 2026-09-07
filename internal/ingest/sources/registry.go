@@ -223,6 +223,8 @@ func All(c HTTPClient) map[string]Source {
 		// gr8people: another vendor served under two marketing domains (gr8people.com and
 		// workgr8.com — see atsboard's matching two rows), board = the tenant's whole host.
 		NewGr8People(c),
+		// werecruit: board = "<locale>/<tenant>", the locale is load-bearing (see AGENTS.md).
+		NewWerecruit(c),
 		NewZoho(c),
 		NewTraffit(c),
 		NewErecruiter(c),

@@ -77,6 +77,14 @@ func TestRecognize(t *testing.T) {
 		// first segment — "oneclick-ui", the product's own machinery — is read as the board.
 		{"smartrecruiters one-click apply form", "https://jobs.smartrecruiters.com/oneclick-ui/company/Blend360/publication/59957d76-615a-4809-a282-bcee1120ca7d?dcr_ci=Blend360", "smartrecruiters", "Blend360", "https://jobs.smartrecruiters.com/Blend360", true},
 
+		// pathpair — werecruit: board = the first two path segments verbatim, "<locale>/<tenant>".
+		// Unlike pathlocalepair/pathlocale, the locale here is REQUIRED and kept, never folded: a
+		// tenant not configured for a locale answers it with an empty listing.
+		{"werecruit posting", "https://careers.werecruit.io/en/idiap/offers/postdoctoral-researcher-49895d", "werecruit", "en/idiap", "https://careers.werecruit.io/en/idiap", true},
+		{"werecruit listing", "https://careers.werecruit.io/fr/axiom-services", "werecruit", "fr/axiom-services", "https://careers.werecruit.io/fr/axiom-services", true},
+		{"werecruit only a locale segment", "https://careers.werecruit.io/en", "", "", "", false},
+		{"werecruit bare host", "https://careers.werecruit.io/", "", "", "", false},
+
 		// pathlocale — Rippling: an optional leading xx-XX locale segment is skipped; canonical
 		// collapses to the board root so a locale-prefixed vacancy, a bare vacancy, and the
 		// listing all map to one board.
