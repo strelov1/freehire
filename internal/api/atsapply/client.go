@@ -82,11 +82,12 @@ type Client struct {
 	cvs      CVReader
 	renderer cv.Renderer
 	// browserUse executes an already-resolved Plan through the browser-use cloud agent
-	// for a provider fillProviders excludes (Ashby, Workable, Recruitee — see
-	// browseruse_fill.go). Nil is the unconfigured deployment, the same convention every
-	// other optional dependency here follows: a form that would otherwise route to this
-	// backend simply parks with reasonSubmissionNotImplemented, exactly as it did before
-	// this capability existed. See openspec/changes/add-browseruse-atsapply-fallback.
+	// for a provider fillProviders excludes (Ashby, Workable — see browseruse_fill.go;
+	// Recruitee is excluded there for a structural reason, not a policy one). Nil is the
+	// unconfigured deployment, the same convention every other optional dependency here
+	// follows: a form that would otherwise route to this backend simply parks with
+	// reasonSubmissionNotImplemented, exactly as it did before this capability existed.
+	// See openspec/changes/add-browseruse-atsapply-fallback.
 	browserUse *BrowserUseExecutor
 }
 
@@ -190,7 +191,7 @@ func (c *Client) Submit(ctx context.Context, claimed autoapply.Claimed, answers 
 
 	if !fillProviders[claimed.Provider] {
 		// browser-use fallback (openspec/changes/add-browseruse-atsapply-fallback): for
-		// Ashby/Workable/Recruitee, whose schema-only Reconcile already produced this
+		// Ashby/Workable, whose schema-only Reconcile already produced this
 		// fully-resolved plan, execute it through the cloud agent instead of parking —
 		// unless the plan needs a résumé upload (out of scope for this backend) or the
 		// daily spend guard refuses, either of which falls through to the same park this

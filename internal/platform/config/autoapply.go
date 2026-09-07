@@ -29,11 +29,13 @@ type AutoApply struct {
 	Concurrency  int           // how many attempts run at once
 	MaxPerRun    int           // how much of the queue one run takes; 0 is unbounded
 	CallTimeout  time.Duration // bounds a single attempt's browser session
-	// BrowserUseAPIKey authenticates the browser-use.com cloud fallback (Ashby/Workable/
-	// Recruitee only — see internal/api/atsapply/browseruse_fill.go). Empty disables the
+	// BrowserUseAPIKey authenticates the browser-use.com cloud fallback (Ashby/Workable
+	// only — Recruitee has no registered applyform.Fetcher and never reaches this
+	// executor; see internal/api/atsapply/browseruse_fill.go). Empty disables the
 	// fallback entirely: those providers park exactly as they did before it existed. Its
-	// own enforce flag, per-run cost cap and daily spend cap
-	// (AUTO_APPLY_BROWSERUSE_ENFORCE/_MAX_COST_USD/_DAILY_CAP_USD) are read directly by
+	// own enforce flag, per-run cost cap and per-process-run spend cap (the latter is NOT
+	// a calendar-day cap — a fresh one is built on every cmd/auto-apply invocation)
+	// (AUTO_APPLY_BROWSERUSE_ENFORCE/_MAX_COST_USD/_RUN_CAP_USD) are read directly by
 	// that package rather than threaded through here, matching AUTO_APPLY_ELIGIBILITY_ENFORCE's
 	// own plain-env-read convention in internal/api/handler.
 	BrowserUseAPIKey string

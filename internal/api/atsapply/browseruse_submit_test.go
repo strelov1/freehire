@@ -123,6 +123,45 @@ func TestSubmit_BrowserUseFallback_ShadowModeNeverCallsBrowserUse(t *testing.T) 
 	}
 }
 
+// A run that was created (so it may already be interacting with the live employer form)
+// but then errors mid-flight — found by code review: this must map to StatusUnconfirmed,
+// not an ordinary retryable error, exactly like an unconfirmed chromedp submission. The
+// caller's own context deadline (RunOptions.CallTimeout) is the realistic trigger in
+// production, since it is shorter than this executor's own internal Wait timeout.
+func TestSubmit_BrowserUseFallback_ARunThatErrorsMidFlightIsUnconfirmedNotRetryable(t *testing.T) {
+	t.Setenv("AUTO_APPLY_BROWSERUSE_ENFORCE", "1")
+	calls := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodPost && r.URL.Path == "/runs":
+			calls++
+			w.Write([]byte(`{"id":"run-1","status":"queued"}`))
+		case r.URL.Path == "/runs/run-1/status":
+			// The run WAS created — the agent may already be on the live page — but the
+			// status poll itself now fails (a transport hiccup, or the caller's own
+			// context deadline firing, which Wait surfaces the same way).
+			w.WriteHeader(http.StatusInternalServerError)
+		default:
+			t.Fatalf("unexpected browser-use request: %s %s", r.Method, r.URL.Path)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	c := (&Client{fetchers: map[string]applyform.Fetcher{"ashby": fakeAshbyFetcher{}}}).
+		WithBrowserUse(newTestBrowserUseExecutor(srv.URL))
+
+	result, err := c.Submit(context.Background(), autoapply.Claimed{Provider: "ashby"}, map[string]string{"email": "ada@example.com"})
+	if err != nil {
+		t.Fatalf("Submit: %v, want a nil error paired with StatusUnconfirmed — never a plain retryable error once a run has been created", err)
+	}
+	if result.Status != autoapply.StatusUnconfirmed {
+		t.Fatalf("result = %+v, want unconfirmed", result)
+	}
+	if calls != 1 {
+		t.Errorf("browser-use run-creation calls = %d, want exactly 1", calls)
+	}
+}
+
 func TestSubmit_BrowserUseFallback_UnconfiguredClientParksAsBefore(t *testing.T) {
 	t.Setenv("AUTO_APPLY_BROWSERUSE_ENFORCE", "1")
 	// No WithBrowserUse call at all — c.browserUse stays nil.

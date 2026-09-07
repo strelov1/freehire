@@ -115,8 +115,8 @@ func TestBrowserUseEligible(t *testing.T) {
 	}
 }
 
-func TestDailySpendGuard_AllowsUntilLimitThenShadowLogsInsteadOfRefusing(t *testing.T) {
-	g := &dailySpendGuard{limitUSD: 1.0}
+func TestRunSpendGuard_AllowsUntilLimitThenShadowLogsInsteadOfRefusing(t *testing.T) {
+	g := &runSpendGuard{limitUSD: 1.0}
 	g.record(0.5)
 	if !g.allow(false) {
 		t.Fatal("want allowed below the limit")
@@ -130,8 +130,8 @@ func TestDailySpendGuard_AllowsUntilLimitThenShadowLogsInsteadOfRefusing(t *test
 	}
 }
 
-func TestDailySpendGuard_UnlimitedWhenZero(t *testing.T) {
-	g := &dailySpendGuard{limitUSD: 0}
+func TestRunSpendGuard_UnlimitedWhenZero(t *testing.T) {
+	g := &runSpendGuard{limitUSD: 0}
 	g.record(1000)
 	if !g.allow(true) {
 		t.Error("want a zero limit to mean unlimited, even enforced")
