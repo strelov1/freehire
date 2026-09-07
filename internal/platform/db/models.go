@@ -849,6 +849,7 @@ type Mentor struct {
 	UserID      int64    `json:"user_id"`
 	CompanySlug string   `json:"company_slug"`
 	Slug        string   `json:"slug"`
+	DisplayName string   `json:"display_name"`
 	Headline    string   `json:"headline"`
 	Bio         string   `json:"bio"`
 	Topics      []string `json:"topics"`

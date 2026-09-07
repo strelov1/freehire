@@ -190,6 +190,7 @@ func (h *mentorshipHandlers) ReviewSession(c *fiber.Ctx) error {
 type profileRequest struct {
 	CompanySlug         string   `json:"company_slug"`
 	Slug                string   `json:"slug"`
+	Name                string   `json:"name"`
 	Headline            string   `json:"headline"`
 	Bio                 string   `json:"bio"`
 	Topics              []string `json:"topics"`
@@ -208,6 +209,7 @@ func (r profileRequest) toInput(userID int64) mentorship.ProfileInput {
 		UserID:      userID,
 		CompanySlug: r.CompanySlug,
 		Slug:        r.Slug,
+		DisplayName: r.Name,
 		Headline:    r.Headline,
 		Bio:         r.Bio,
 		Topics:      r.Topics,

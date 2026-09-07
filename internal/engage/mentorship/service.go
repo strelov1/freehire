@@ -78,7 +78,9 @@ type Repository interface {
 	ListPendingProfiles(ctx context.Context) ([]PendingProfile, error)
 	ListPublishedProfiles(ctx context.Context, f DirectoryFilter) ([]Profile, error)
 	CancelFutureBookings(ctx context.Context, mentorID, cancelledBy int64, reason string) ([]Booking, error)
-	DeleteProfile(ctx context.Context, id, userID int64) error
+	// WithdrawProfile marks a profile withdrawn. It must NOT delete the row — bookings
+	// and reviews cascade off it, and the past is history both parties keep.
+	WithdrawProfile(ctx context.Context, userID int64) error
 
 	ListAvailability(ctx context.Context, mentorID int64) ([]Rule, error)
 	ReplaceWeeklyAvailability(ctx context.Context, mentorID int64, rules []Rule) error
@@ -105,10 +107,11 @@ type Repository interface {
 
 	UpsertReview(ctx context.Context, review Review, seekerID int64) (Review, error)
 
-	// ListBookingsDueForReminder is the confirmed sessions starting within the offset that
-	// have not been reminded at it. Sessions already begun are excluded by the query: a
-	// reminder arriving after its session is worse than none.
-	ListBookingsDueForReminder(ctx context.Context, offset time.Duration, limit int32) ([]Booking, error)
+	// ListBookingsDueForReminder is the confirmed sessions starting between `floor` and
+	// `offset` from now that have not been reminded at this offset. Sessions already begun
+	// are excluded by the query: a reminder arriving after its session is worse than none.
+	// The floor is what stops the 24-hour reminder firing for a session three hours away.
+	ListBookingsDueForReminder(ctx context.Context, offset, floor time.Duration, limit int32) ([]Booking, error)
 	// ClaimReminder records one reminder as sent and reports whether THIS caller won it.
 	// It is the claim, not the record — a caller that sends before checking sends twice.
 	ClaimReminder(ctx context.Context, bookingID uuid.UUID, offset time.Duration) (bool, error)

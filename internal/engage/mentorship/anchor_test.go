@@ -86,6 +86,54 @@ func TestEverySlotStartsOnTheMentorsGridWhateverTheMinute(t *testing.T) {
 	}
 }
 
+// The same property, reached the way an HTTP request reaches it: with From = now.
+//
+// This is the test the earlier fix needed and did not have. Every case above supplies a
+// window starting at MIDNIGHT, which is already on the grid — so they held while the real
+// endpoint, which defaults `from` to the current instant, anchored the grid to whatever
+// minute the request arrived on. A fix verified only against the caller you wrote the
+// test for is not verified.
+func TestTheGridHoldsWhenTheWindowStartsAtTheRequestInstant(t *testing.T) {
+	zone := berlin(t)
+
+	for _, minute := range []int{0, 1, 17, 30, 33, 47, 59} {
+		now := time.Date(2026, time.September, 8, 18, minute, 0, 0, zone)
+		req := eveningMentor(t, now)
+		// What handler.slotWindow does when the caller names no window.
+		req.From = now
+		req.To = now.AddDate(0, 0, 30)
+
+		got := mustSlots(t, req)
+
+		if len(got.Slots) == 0 {
+			t.Fatalf("at 18:%02d the mentor offers nothing at all", minute)
+		}
+		for _, s := range got.Slots {
+			if s.Start.Minute() != 0 {
+				t.Fatalf("at 18:%02d a slot starts at %s — the grid moved with the request",
+					minute, s.Start.Format("15:04"))
+			}
+		}
+	}
+}
+
+// And the whole day's grid is reachable from a mid-day request: asking at 18:33 must
+// still offer 19:00, 20:00 and 21:00 — not a grid rebased on 18:33.
+func TestAMidSessionRequestOffersTheRestOfTheMentorsEvening(t *testing.T) {
+	zone := berlin(t)
+	now := time.Date(2026, time.September, 8, 18, 33, 0, 0, zone)
+
+	req := eveningMentor(t, now)
+	req.From = now
+	req.To = now.AddDate(0, 0, 1)
+
+	got := mustSlots(t, req)
+
+	if clocks := slotClocks(got.Slots); !slices.Equal(clocks, []string{"19:00", "20:00", "21:00"}) {
+		t.Errorf("asking at 18:33 offers %v, want 19:00 20:00 21:00", clocks)
+	}
+}
+
 // Nothing stops a mentor writing overlapping availability — the schema has no exclusion
 // constraint on it, and "Mon–Fri 09:00–17:00 plus Tue 16:00–19:00" is an ordinary thing
 // to type. Left unmerged, each range anchors its own grid and the same hour is offered

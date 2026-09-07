@@ -45,6 +45,7 @@ func seedMentor(t *testing.T, q *Queries, userID int64, company, slug string) Me
 		UserID:             userID,
 		CompanySlug:        company,
 		Slug:               slug,
+		DisplayName:        "Jane " + slug,
 		Headline:           "Senior Engineer",
 		Bio:                "",
 		Topics:             []string{"career", "system-design"},
@@ -138,6 +139,126 @@ func TestMentorBookingsCannotOverlap(t *testing.T) {
 		other := seedMentor(t, q, otherUser, "acme", "overlap-mentor-2")
 		if _, err := book(t, q, other.ID, alice, at(18)); err != nil {
 			t.Errorf("a different mentor's booking at the same hour was refused: %v", err)
+		}
+	})
+}
+
+// A booking must come back carrying BOTH parties' addresses and the mentor's zone,
+// because the confirmation it triggers has to reach two people in two timezones.
+//
+// This is here rather than in the domain package on purpose: the fake repository used by
+// the unit tests filled these fields itself, so it described what the SQL was assumed to
+// do rather than what it does. The real insert returns mentor_bookings' own columns and
+// nothing else, and a notifier skips an empty address — so the confirmation reached
+// nobody, silently, and every unit test stayed green.
+func TestAWrittenBookingCarriesBothPartiesContactDetails(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	ctx := context.Background()
+
+	seedMentorshipCompany(t, pool, "contactco")
+	mentorUser := seedMentorshipUser(t, pool, "mentor-contact@example.test")
+	seeker := seedMentorshipUser(t, pool, "seeker-contact@example.test")
+	mentor := seedMentor(t, q, mentorUser, "contactco", "contact-mentor")
+
+	created, err := book(t, q, mentor.ID, seeker, time.Now().UTC().Add(72*time.Hour))
+	if err != nil {
+		t.Fatalf("book: %v", err)
+	}
+
+	// What the adapter does after the insert, and what this test exists to hold.
+	got, err := q.GetMentorBooking(ctx, created.ID)
+	if err != nil {
+		t.Fatalf("GetMentorBooking: %v", err)
+	}
+
+	for _, tc := range []struct{ field, got string }{
+		{"mentor_email", got.MentorEmail},
+		{"seeker_email", got.SeekerEmail},
+		{"mentor_timezone", got.MentorTimezone},
+		{"mentor_slug", got.MentorSlug},
+	} {
+		if tc.got == "" {
+			t.Errorf("%s is empty — the confirmation would reach nobody", tc.field)
+		}
+	}
+	if got.MentorEmail == got.SeekerEmail {
+		t.Error("both parties resolved to one address")
+	}
+	if got.MentorUserID != mentorUser {
+		t.Errorf("mentor_user_id = %d, want %d", got.MentorUserID, mentorUser)
+	}
+}
+
+// Withdrawal must keep the past. mentor_bookings and mentor_reviews reference the profile
+// ON DELETE CASCADE, so deleting the row would erase every session that ever happened —
+// which is the opposite of what the spec requires.
+//
+// This is here and not in the domain package because the cascade is the thing under test,
+// and a fake repository has no cascades to model.
+func TestWithdrawalKeepsTheHistory(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	ctx := context.Background()
+
+	seedMentorshipCompany(t, pool, "leaveco")
+	mentorUser := seedMentorshipUser(t, pool, "mentor-leave@example.test")
+	seeker := seedMentorshipUser(t, pool, "seeker-leave@example.test")
+	mentor := seedMentor(t, q, mentorUser, "leaveco", "leaving-mentor")
+	approve(t, q, mentor.ID, mentorUser)
+
+	past, err := book(t, q, mentor.ID, seeker, time.Now().UTC().Add(-72*time.Hour))
+	if err != nil {
+		t.Fatalf("book: %v", err)
+	}
+	if _, err := q.UpsertMentorReview(ctx, UpsertMentorReviewParams{
+		BookingID: past.ID, MentorID: mentor.ID, SeekerUserID: seeker, Rating: 5,
+	}); err != nil {
+		t.Fatalf("UpsertMentorReview: %v", err)
+	}
+
+	rows, err := q.WithdrawMentorProfile(ctx, mentorUser)
+	if err != nil {
+		t.Fatalf("WithdrawMentorProfile: %v", err)
+	}
+	if rows != 1 {
+		t.Fatalf("withdrawal affected %d rows, want 1", rows)
+	}
+
+	t.Run("the past session survives", func(t *testing.T) {
+		if _, err := q.GetMentorBooking(ctx, past.ID); err != nil {
+			t.Errorf("the completed session is gone: %v", err)
+		}
+	})
+
+	t.Run("its review survives", func(t *testing.T) {
+		if _, err := q.GetMentorReviewForBooking(ctx, past.ID); err != nil {
+			t.Errorf("the review is gone: %v", err)
+		}
+	})
+
+	t.Run("the mentor is no longer public", func(t *testing.T) {
+		if _, err := q.GetPublishedMentorBySlug(ctx, "leaving-mentor"); err == nil {
+			t.Error("a withdrawn mentor is still publicly readable")
+		}
+		listed, err := q.ListPublishedMentors(ctx, ListPublishedMentorsParams{
+			CompanySlug: pgtype.Text{String: "leaveco", Valid: true}, RowLimit: 50,
+		})
+		if err != nil {
+			t.Fatalf("ListPublishedMentors: %v", err)
+		}
+		if len(listed) != 0 {
+			t.Errorf("a withdrawn mentor is still in the directory (%d rows)", len(listed))
+		}
+	})
+
+	t.Run("a second withdrawal matches nothing", func(t *testing.T) {
+		rows, err := q.WithdrawMentorProfile(ctx, mentorUser)
+		if err != nil {
+			t.Fatalf("WithdrawMentorProfile: %v", err)
+		}
+		if rows != 0 {
+			t.Errorf("a second withdrawal affected %d rows, want 0", rows)
 		}
 	})
 }
@@ -507,7 +628,7 @@ func TestMentorshipUniquenessConstraints(t *testing.T) {
 	t.Run("a second profile for one account is refused", func(t *testing.T) {
 		if _, err := q.CreateMentorProfile(ctx, CreateMentorProfileParams{
 			UserID: mentorUser, CompanySlug: "uniqueco", Slug: "unique-mentor-again",
-			Headline: "Also me", Timezone: "Europe/Berlin",
+			DisplayName: "Also Me", Headline: "Also me", Timezone: "Europe/Berlin",
 			SessionDurationMin: 30, HorizonDays: 30, MeetingUrl: "https://meet.example.test/z",
 		}); err == nil {
 			t.Error("an account holds two mentor profiles")
@@ -518,7 +639,7 @@ func TestMentorshipUniquenessConstraints(t *testing.T) {
 		other := seedMentorshipUser(t, pool, "mentor-nocompany@example.test")
 		if _, err := q.CreateMentorProfile(ctx, CreateMentorProfileParams{
 			UserID: other, CompanySlug: "no-such-company", Slug: "orphan-mentor",
-			Headline: "Nobody", Timezone: "Europe/Berlin",
+			DisplayName: "Nobody", Headline: "Nobody", Timezone: "Europe/Berlin",
 			SessionDurationMin: 30, HorizonDays: 30, MeetingUrl: "https://meet.example.test/z",
 		}); err == nil {
 			t.Error("a profile was created for a company the catalogue does not carry")
@@ -564,8 +685,8 @@ func TestUpdateMentorProfileLeavesTheSlugAndCompanyAlone(t *testing.T) {
 	mentor := seedMentor(t, q, user, "stableco", "stable-mentor")
 
 	updated, err := q.UpdateMentorProfile(ctx, UpdateMentorProfileParams{
-		UserID:   user,
-		Headline: "Staff Engineer", Bio: "new bio",
+		UserID:      user,
+		DisplayName: "Jane Renamed", Headline: "Staff Engineer", Bio: "new bio",
 		Topics: []string{"interviewing"}, Languages: []string{"de"},
 		Timezone: "Europe/Lisbon", SessionDurationMin: 30,
 		BufferBeforeMin: 5, BufferAfterMin: 5, MinNoticeMin: 60, HorizonDays: 14,
@@ -588,8 +709,9 @@ func TestUpdateMentorProfileLeavesTheSlugAndCompanyAlone(t *testing.T) {
 	t.Run("editing does not reset moderation", func(t *testing.T) {
 		approve(t, q, mentor.ID, user)
 		got, err := q.UpdateMentorProfile(ctx, UpdateMentorProfileParams{
-			UserID:   user,
-			Headline: "Principal Engineer", Topics: []string{"career"}, Languages: []string{"en"},
+			UserID:      user,
+			DisplayName: "Jane Doe", Headline: "Principal Engineer",
+			Topics: []string{"career"}, Languages: []string{"en"},
 			Timezone: "Europe/Berlin", SessionDurationMin: 60, MinNoticeMin: 120, HorizonDays: 30,
 			MeetingUrl: "https://meet.example.test/new",
 		})
@@ -605,8 +727,9 @@ func TestUpdateMentorProfileLeavesTheSlugAndCompanyAlone(t *testing.T) {
 	t.Run("a stranger edits nothing", func(t *testing.T) {
 		stranger := seedMentorshipUser(t, pool, "stranger-stable@example.test")
 		if _, err := q.UpdateMentorProfile(ctx, UpdateMentorProfileParams{
-			UserID:   stranger,
-			Headline: "Hijacked", Topics: []string{"x"}, Languages: []string{"x"},
+			UserID:      stranger,
+			DisplayName: "Hijacked", Headline: "Hijacked",
+			Topics: []string{"x"}, Languages: []string{"x"},
 			Timezone: "UTC", SessionDurationMin: 60, MinNoticeMin: 0, HorizonDays: 1,
 			MeetingUrl: "https://meet.example.test/x",
 		}); err == nil {

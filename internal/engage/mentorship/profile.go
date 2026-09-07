@@ -18,6 +18,11 @@ const (
 	StatusPending  = "pending"
 	StatusApproved = "approved"
 	StatusRejected = "rejected"
+	// StatusWithdrawn is a mentor who has left. The row SURVIVES it: bookings and reviews
+	// reference the profile ON DELETE CASCADE, so deleting would erase every session that
+	// ever happened — and a session belongs to both people who were in it, not to whether
+	// the mentor is still here.
+	StatusWithdrawn = "withdrawn"
 )
 
 // The sentinels the profile use cases raise, each carrying the HTTP status the handler's
@@ -53,7 +58,10 @@ type Profile struct {
 	// Slug is the profile's public address. It is COPIED from the account's username at
 	// creation rather than following it, because a username change would otherwise 404
 	// every link anybody has shared.
-	Slug        string
+	Slug string
+	// DisplayName is the name the public sees. Required, and the reason this profile is
+	// not a referral offer: a referral is anonymous by design, a mentor is chosen.
+	DisplayName string
 	Headline    string
 	Bio         string
 	Topics      []string
@@ -91,6 +99,7 @@ type ProfileInput struct {
 	UserID      int64
 	CompanySlug string
 	Slug        string
+	DisplayName string
 	Headline    string
 	Bio         string
 	Topics      []string
@@ -185,12 +194,17 @@ func (s *Service) Directory(ctx context.Context, f DirectoryFilter) ([]Profile, 
 // dead-code guard found the method unreachable before a caller was written, which was the
 // moment to remove it rather than find it a caller.
 
-// Withdraw removes a mentor's profile.
+// Withdraw takes a mentor off the marketplace.
 //
-// The order is load-bearing and is the same shape referral's withdrawal uses: cancel the
-// future bookings and tell their seekers FIRST, delete the profile second. The profile
-// row is what those bookings hang off — ON DELETE CASCADE would take them with it, and
-// nobody would ever learn their session was gone.
+// It MARKS the profile withdrawn rather than deleting it. Bookings and reviews reference
+// the profile row ON DELETE CASCADE, so a delete would erase every session that ever
+// happened — and the spec requires the opposite: "SHALL retain past bookings as history
+// rather than deleting them". A session that took place belongs to both people who were
+// in it, not to whether the mentor is still here.
+//
+// The order is still load-bearing, and is the same shape referral's withdrawal uses:
+// cancel the future bookings and tell their seekers FIRST. A seeker who learns their
+// session is off from an empty calendar has been told by nobody.
 //
 // Notification failure does not fail the withdrawal. By the time it could, the
 // cancellations have already committed; refusing here would strand a mentor who cannot
@@ -207,12 +221,15 @@ func (s *Service) Withdraw(ctx context.Context, userID int64) error {
 	}
 	s.notifyCancelled(ctx, cancelled, CancelledByMentor, reasonMentorWithdrew)
 
-	return s.repo.DeleteProfile(ctx, profile.ID, userID)
+	return s.repo.WithdrawProfile(ctx, userID)
 }
 
 // validateProfile checks what the database cannot. `creating` gates the fields an edit
 // does not carry.
 func validateProfile(in ProfileInput, creating bool) error {
+	if strings.TrimSpace(in.DisplayName) == "" {
+		return fmt.Errorf("%w: a name is required", ErrInvalidProfile)
+	}
 	if strings.TrimSpace(in.Headline) == "" {
 		return fmt.Errorf("%w: a headline is required", ErrInvalidProfile)
 	}
@@ -283,6 +300,7 @@ func validateMeetingURL(raw string) error {
 // normaliseProfile trims what a form leaves ragged, so two profiles that differ only in
 // whitespace are the same profile.
 func normaliseProfile(in ProfileInput) ProfileInput {
+	in.DisplayName = strings.TrimSpace(in.DisplayName)
 	in.Headline = strings.TrimSpace(in.Headline)
 	in.Bio = strings.TrimSpace(in.Bio)
 	in.MeetingURL = strings.TrimSpace(in.MeetingURL)

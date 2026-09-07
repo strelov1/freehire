@@ -14,6 +14,31 @@ import (
 // offset in minutes rather than on an enum, adding a third costs no migration.
 var ReminderOffsets = []time.Duration{24 * time.Hour, time.Hour}
 
+// reminderWindow is how wide each offset's firing window is.
+//
+// A reminder is due when the session starts between `offset - reminderWindow` and
+// `offset` from now. Without the lower bound the 24-hour reminder fires for a session
+// three hours away and calls it "in 24 hours" — wrong about the one fact it exists to
+// state.
+//
+// An hour, against a worker scheduled every ten minutes: wide enough that a few missed
+// firings still catch the window, narrow enough that "in 24 hours" is true to within an
+// hour. Widening it trades accuracy for tolerance; the two are the only things this
+// number balances.
+//
+// A session booked closer than an offset simply never gets that reminder, and that is
+// right: there was never 24 hours' notice to give. It still gets the 1-hour one.
+const reminderWindow = time.Hour
+
+// reminderFloor is the bottom of one offset's window, never below zero — the 1-hour
+// reminder's window is (0, 1h], not (0h-1h, 1h].
+func reminderFloor(offset time.Duration) time.Duration {
+	if floor := offset - reminderWindow; floor > 0 {
+		return floor
+	}
+	return 0
+}
+
 // ReminderStats is what one run did.
 type ReminderStats struct {
 	// Sent counts reminders actually delivered.
@@ -54,7 +79,7 @@ func (s *Service) SendDueReminders(ctx context.Context, maxPerRun int32) (Remind
 	}
 
 	for _, offset := range ReminderOffsets {
-		due, err := s.repo.ListBookingsDueForReminder(ctx, offset, maxPerRun)
+		due, err := s.repo.ListBookingsDueForReminder(ctx, offset, reminderFloor(offset), maxPerRun)
 		if err != nil {
 			return stats, fmt.Errorf("mentorship: reading the %v reminders: %w", offset, err)
 		}

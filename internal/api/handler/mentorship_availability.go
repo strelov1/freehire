@@ -25,6 +25,9 @@ type availabilityRuleRequest struct {
 }
 
 type availabilityRuleResponse struct {
+	// ID is what the delete route needs. A rule rendered without one is a row the cabinet
+	// can display and never remove.
+	ID      int64   `json:"id"`
 	Weekday *int    `json:"weekday"`
 	Date    *string `json:"date"`
 	Start   string  `json:"start"`
@@ -76,6 +79,7 @@ func (r availabilityRuleRequest) toRule() (mentorship.Rule, error) {
 
 func toAvailabilityResponse(rule mentorship.Rule) availabilityRuleResponse {
 	out := availabilityRuleResponse{
+		ID:      rule.ID(),
 		Start:   rule.Start().String(),
 		End:     rule.End().String(),
 		Closure: rule.IsClosure(),

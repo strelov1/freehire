@@ -1089,6 +1089,12 @@ type Querier interface {
 	// two confirmed bookings cannot share an instant, so a lost race raises a constraint
 	// violation here; the repository maps it to the SAME "no longer available" error a stale
 	// page gets, because to the client a race and a stale tab are the same event.
+	//
+	// RETURNING gives the booking's own columns and nothing else. The adapter re-reads
+	// through GetMentorBooking before returning, because the confirmation this write exists to
+	// trigger has to reach BOTH parties in BOTH timezones, and none of that is on this table.
+	// Without the re-read the confirmation reaches nobody — silently, since a notifier skips
+	// an empty address.
 	CreateMentorBooking(ctx context.Context, arg CreateMentorBookingParams) (MentorBooking, error)
 	// Submit a mentor profile. Starts pending, awaiting a human moderator — nothing else
 	// makes it public, including an approved referral_offers row for the same company.
@@ -1399,10 +1405,6 @@ type Querier interface {
 	DeleteMailbox(ctx context.Context, userID int64) error
 	// The mentor_id guard scopes the delete to the owner's own schedule.
 	DeleteMentorAvailabilityRule(ctx context.Context, arg DeleteMentorAvailabilityRuleParams) (int64, error)
-	// Withdrawal. The owner guard scopes it to the caller. Future bookings must be cancelled
-	// and their seekers notified BEFORE this runs — the ON DELETE CASCADE would otherwise
-	// take the booking rows with it and nobody would ever be told.
-	DeleteMentorProfile(ctx context.Context, arg DeleteMentorProfileParams) (int64, error)
 	// Clears the recurring week, leaving dated overrides alone. The cabinet edits the week as
 	// a whole — a schedule is a shape, not a list of rows a user reasons about individually —
 	// so a save is this followed by inserts, inside one transaction.
@@ -5922,6 +5924,17 @@ type Querier interface {
 	// Whether a user has a stored original résumé — the check before attaching an 'original'
 	// CV to a request, so a seeker cannot request with a résumé they never uploaded.
 	UserHasResume(ctx context.Context, id int64) (bool, error)
+	// Withdrawal marks the profile rather than deleting it, and that is the whole point:
+	// mentor_bookings and mentor_reviews reference this row ON DELETE CASCADE, so a DELETE
+	// would take every session and rating with it. A session that happened is history both
+	// parties are entitled to — not an artefact of the mentor still being on the platform.
+	//
+	// Future bookings must still be cancelled and their seekers notified before this runs;
+	// what changes is that the PAST survives.
+	//
+	// The owner guard scopes it to the caller, and the status guard makes a second withdrawal
+	// match no row.
+	WithdrawMentorProfile(ctx context.Context, userID int64) (int64, error)
 }
 
 var _ Querier = (*Queries)(nil)

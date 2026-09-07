@@ -4,10 +4,10 @@
 -- UNIQUE (user_id) rejects a second profile; the FK on company_slug rejects a company
 -- the catalogue does not carry. The repository maps both violations to domain errors.
 INSERT INTO mentors (
-    user_id, company_slug, slug, headline, bio, topics, languages, timezone,
+    user_id, company_slug, slug, display_name, headline, bio, topics, languages, timezone,
     session_duration_min, buffer_before_min, buffer_after_min, min_notice_min,
     horizon_days, meeting_url
-) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
 RETURNING *;
 
 -- name: GetMentorByUserID :one
@@ -36,7 +36,8 @@ WHERE m.slug = $1 AND m.status = 'approved' AND NOT m.paused;
 -- revealing that the profile exists. Editing does NOT reset moderation: a mentor
 -- rewording their headline should not vanish from the directory for a day.
 UPDATE mentors
-SET headline = sqlc.arg(headline),
+SET display_name = sqlc.arg(display_name),
+    headline = sqlc.arg(headline),
     bio = sqlc.arg(bio),
     topics = sqlc.arg(topics),
     languages = sqlc.arg(languages),
@@ -117,11 +118,20 @@ WHERE m.status = 'approved' AND NOT m.paused
 ORDER BY m.created_at DESC, m.id DESC
 LIMIT sqlc.arg(row_limit);
 
--- name: DeleteMentorProfile :execrows
--- Withdrawal. The owner guard scopes it to the caller. Future bookings must be cancelled
--- and their seekers notified BEFORE this runs — the ON DELETE CASCADE would otherwise
--- take the booking rows with it and nobody would ever be told.
-DELETE FROM mentors WHERE id = $1 AND user_id = $2;
+-- name: WithdrawMentorProfile :execrows
+-- Withdrawal marks the profile rather than deleting it, and that is the whole point:
+-- mentor_bookings and mentor_reviews reference this row ON DELETE CASCADE, so a DELETE
+-- would take every session and rating with it. A session that happened is history both
+-- parties are entitled to — not an artefact of the mentor still being on the platform.
+--
+-- Future bookings must still be cancelled and their seekers notified before this runs;
+-- what changes is that the PAST survives.
+--
+-- The owner guard scopes it to the caller, and the status guard makes a second withdrawal
+-- match no row.
+UPDATE mentors
+SET status = 'withdrawn', paused = true, updated_at = now()
+WHERE user_id = $1 AND status <> 'withdrawn';
 
 -- name: ListMentorAvailability :many
 -- Every availability row for a mentor, both shapes. The slot engine wants all of them at
@@ -152,6 +162,12 @@ DELETE FROM mentor_availability WHERE mentor_id = $1 AND weekday IS NOT NULL;
 -- two confirmed bookings cannot share an instant, so a lost race raises a constraint
 -- violation here; the repository maps it to the SAME "no longer available" error a stale
 -- page gets, because to the client a race and a stale tab are the same event.
+--
+-- RETURNING gives the booking's own columns and nothing else. The adapter re-reads
+-- through GetMentorBooking before returning, because the confirmation this write exists to
+-- trigger has to reach BOTH parties in BOTH timezones, and none of that is on this table.
+-- Without the re-read the confirmation reaches nobody — silently, since a notifier skips
+-- an empty address.
 INSERT INTO mentor_bookings (
     mentor_id, seeker_user_id, starts_at, ends_at, job_id, note, seeker_timezone, meeting_url
 ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
@@ -265,6 +281,12 @@ JOIN users mu ON mu.id = m.user_id
 WHERE b.status = 'confirmed'
   AND b.starts_at > now()
   AND b.starts_at <= now() + make_interval(mins => sqlc.arg(offset_minutes)::int)
+  -- The LOWER bound, and it is not decoration: without it the 24-hour reminder fires for
+  -- a session three hours away and calls it "in 24 hours". The window is the span between
+  -- this offset and the next one down, so each reminder goes out once, roughly when it
+  -- says. The caller passes the tighter offset — 60 for the 24-hour reminder, 0 for the
+  -- 1-hour one — because it knows the list; the query cannot.
+  AND b.starts_at > now() + make_interval(mins => sqlc.arg(floor_minutes)::int)
   AND NOT EXISTS (
       SELECT 1 FROM mentor_booking_reminders r
       WHERE r.booking_id = b.id AND r.offset_minutes = sqlc.arg(offset_minutes)::int

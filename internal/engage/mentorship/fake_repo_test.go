@@ -37,7 +37,7 @@ type fakeRepo struct {
 	// offering a slot and the insert reaching the database — the lost race.
 	createBookingErr error
 
-	deleted               bool
+	withdrawn             bool
 	cancelledBeforeDelete int
 }
 
@@ -72,6 +72,7 @@ func (r *fakeRepo) CreateProfile(_ context.Context, in ProfileInput) (Profile, e
 		UserID:      in.UserID,
 		CompanySlug: in.CompanySlug,
 		Slug:        in.Slug,
+		DisplayName: in.DisplayName,
 		Headline:    in.Headline,
 		Bio:         in.Bio,
 		Topics:      in.Topics,
@@ -115,6 +116,7 @@ func (r *fakeRepo) UpdateProfile(_ context.Context, in ProfileInput) (Profile, e
 	}
 	p := r.profiles[id]
 	// Mirrors the SQL: the slug and the company are not in the UPDATE at all.
+	p.DisplayName = in.DisplayName
 	p.Headline = in.Headline
 	p.Bio = in.Bio
 	p.Topics = in.Topics
@@ -189,14 +191,21 @@ func (r *fakeRepo) CancelFutureBookings(_ context.Context, mentorID, cancelledBy
 	return bookings, nil
 }
 
-func (r *fakeRepo) DeleteProfile(_ context.Context, id, userID int64) error {
-	p, ok := r.profiles[id]
-	if !ok || p.UserID != userID {
+// WithdrawProfile marks rather than deletes, exactly as the SQL does — the bookings and
+// reviews map below survive it, which is the behaviour under test.
+func (r *fakeRepo) WithdrawProfile(_ context.Context, userID int64) error {
+	id, ok := r.byUser[userID]
+	if !ok {
 		return ErrProfileNotFound
 	}
-	delete(r.profiles, id)
-	delete(r.byUser, userID)
-	r.deleted = true
+	p := r.profiles[id]
+	if p.Status == StatusWithdrawn {
+		return ErrProfileNotFound
+	}
+	p.Status = StatusWithdrawn
+	p.Paused = true
+	r.profiles[id] = p
+	r.withdrawn = true
 	return nil
 }
 
@@ -253,12 +262,21 @@ func (r *fakeRepo) CreateBooking(_ context.Context, row BookingRow) (Booking, er
 		}
 	}
 
+	// The mentor's own columns are filled here because the real adapter fills them too —
+	// by RE-READING after the insert, since the INSERT returns mentor_bookings' columns
+	// only. That difference once cost every booking its confirmation and no unit test
+	// noticed, because this fake filled them and the adapter did not. What holds the two
+	// together now is TestAWrittenBookingCarriesBothPartiesContactDetails, against a real
+	// Postgres; this fake describes the contract, it cannot prove it.
 	mentor := r.profiles[row.MentorID]
 	booking := Booking{
 		ID:             uuid.New(),
 		MentorID:       row.MentorID,
 		MentorUserID:   mentor.UserID,
 		MentorSlug:     mentor.Slug,
+		MentorHeadline: mentor.Headline,
+		MentorEmail:    "mentor@fake.test",
+		SeekerEmail:    "seeker@fake.test",
 		SeekerUserID:   row.SeekerUserID,
 		StartsAt:       row.StartsAt,
 		EndsAt:         row.EndsAt,
@@ -324,7 +342,7 @@ func (r *fakeRepo) UpsertReview(_ context.Context, review Review, _ int64) (Revi
 
 // ListBookingsDueForReminder mirrors the query's three predicates: confirmed, not yet
 // started, and within the offset. The "not already reminded" one is the claim's job.
-func (r *fakeRepo) ListBookingsDueForReminder(_ context.Context, offset time.Duration, _ int32) ([]Booking, error) {
+func (r *fakeRepo) ListBookingsDueForReminder(_ context.Context, offset, floor time.Duration, _ int32) ([]Booking, error) {
 	if r.listDueErr != nil {
 		return nil, r.listDueErr
 	}
@@ -334,6 +352,11 @@ func (r *fakeRepo) ListBookingsDueForReminder(_ context.Context, offset time.Dur
 			continue
 		}
 		if b.StartsAt.After(reminderNow.Add(offset)) {
+			continue
+		}
+		// The floor, mirroring the query: this offset's window starts where the next one
+		// down ends.
+		if !b.StartsAt.After(reminderNow.Add(floor)) {
 			continue
 		}
 		if r.remindersSent[reminderKey{b.ID, offset}] {

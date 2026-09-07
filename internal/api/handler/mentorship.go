@@ -81,7 +81,10 @@ func (h *mentorshipHandlers) registerPublic(api fiber.Router, mw middleware) {
 // mentorResponse is the public shape of a mentor. user_id is not in it: it is ownership,
 // internal, and nothing public needs it.
 type mentorResponse struct {
-	Slug        string   `json:"slug"`
+	Slug string `json:"slug"`
+	// Name is what makes this a person rather than a role. A directory of headlines is
+	// the anonymous referral pool with extra steps.
+	Name        string   `json:"name"`
 	CompanySlug string   `json:"company_slug"`
 	CompanyName string   `json:"company_name"`
 	Headline    string   `json:"headline"`
@@ -104,7 +107,8 @@ type mentorResponse struct {
 // into somebody else's session. A booked seeker gets it on their booking.
 func toMentorResponse(p mentorship.Profile) mentorResponse {
 	return mentorResponse{
-		Slug: p.Slug, CompanySlug: p.CompanySlug, CompanyName: p.CompanyName,
+		Slug: p.Slug, Name: p.DisplayName,
+		CompanySlug: p.CompanySlug, CompanyName: p.CompanyName,
 		Headline: p.Headline, Bio: p.Bio, Topics: p.Topics, Languages: p.Languages,
 		Timezone:       p.Timezone,
 		SessionMinutes: int(p.Session.Duration / time.Minute),

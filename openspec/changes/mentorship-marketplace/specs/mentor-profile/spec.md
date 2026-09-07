@@ -21,14 +21,29 @@ a headline, a biography, a topic list, a language list, and the session paramete
 
 ### Requirement: A mentor profile is public and named
 
-A published mentor profile SHALL show the mentor's display name, avatar, headline,
-company and topics to any visitor, signed in or not. A mentor profile SHALL NOT be
-anonymised in the manner of a referral offer.
+A published mentor profile SHALL show the mentor's display name, headline, company and
+topics to any visitor, signed in or not. A mentor profile SHALL NOT be anonymised in the
+manner of a referral offer.
+
+The display name SHALL be a field of the PROFILE, not read from the account: `users`
+carries no name at all — only an address and a username, and a username is an address
+rather than a name.
+
+An avatar is NOT part of this requirement. Serving one means a public image endpoint
+with its own caching, sizing and abuse surface, and the account's stored headshot is a
+CV photo a mentor may not want here. It belongs with the screens that display it; until
+then a profile is named but not pictured, which is enough to stop it being anonymous.
 
 #### Scenario: An anonymous visitor reads a published profile
 
 - **WHEN** a signed-out visitor opens an approved mentor's public URL
-- **THEN** the response carries the mentor's name, avatar, headline, company and topics
+- **THEN** the response carries the mentor's name, headline, company and topics
+
+#### Scenario: A profile without a name is refused
+
+- **WHEN** a profile is submitted with an empty or whitespace-only display name
+- **THEN** the submission is refused
+- **AND** no profile row is written
 
 #### Scenario: A pending profile is not publicly readable
 
@@ -127,9 +142,21 @@ A mentor SHALL be able to withdraw their profile. Withdrawal SHALL cancel every
 confirmed future booking and notify each affected seeker, and SHALL retain past
 bookings as history rather than deleting them.
 
+The profile row SHALL be MARKED withdrawn rather than deleted. Bookings and reviews
+reference it with `ON DELETE CASCADE`, so a delete would erase every session that ever
+happened — the opposite of what this requirement asks for. A withdrawn profile SHALL
+leave the directory and the public read, exactly as a paused one does.
+
 #### Scenario: Withdrawal cancels the future and keeps the past
 
 - **WHEN** a mentor with one past completed booking and two confirmed future bookings
   withdraws their profile
 - **THEN** both future bookings become cancelled and both seekers are notified
 - **AND** the completed booking is still readable in each party's history
+- **AND** its review is still readable
+
+#### Scenario: A withdrawn profile is no longer public
+
+- **WHEN** a mentor withdraws
+- **THEN** their profile is absent from the directory and from the public read
+- **AND** a second withdrawal changes nothing

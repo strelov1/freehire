@@ -17,6 +17,7 @@ func validInput() ProfileInput {
 		UserID:      7,
 		CompanySlug: "acme",
 		Slug:        "jane-doe",
+		DisplayName: "Jane Doe",
 		Headline:    "Senior Backend Engineer",
 		Bio:         "Ten years of Go and Postgres.",
 		Topics:      []string{"career", "system-design"},
@@ -86,6 +87,10 @@ func TestSubmitProfileRefusesWhatCannotYieldASchedule(t *testing.T) {
 		want   error
 	}{
 		{"no company", func(in *ProfileInput) { in.CompanySlug = "" }, ErrInvalidProfile},
+		// A profile without a name is the anonymous referral offer with extra steps, and
+		// this marketplace's whole premise is that a mentor is chosen.
+		{"no name", func(in *ProfileInput) { in.DisplayName = "" }, ErrInvalidProfile},
+		{"a name of only spaces", func(in *ProfileInput) { in.DisplayName = "   " }, ErrInvalidProfile},
 		{"no headline", func(in *ProfileInput) { in.Headline = "" }, ErrInvalidProfile},
 		{"a headline of only spaces", func(in *ProfileInput) { in.Headline = "   " }, ErrInvalidProfile},
 		{"no topics", func(in *ProfileInput) { in.Topics = nil }, ErrInvalidProfile},
@@ -308,8 +313,8 @@ func TestWithdrawalCancelsFutureBookingsAndNotifiesEachSeeker(t *testing.T) {
 		t.Errorf("notified %d seekers, want 2 — a session cancelled without telling anybody "+
 			"is worse than one not cancelled", len(notifier.cancelled))
 	}
-	if !repo.deleted {
-		t.Error("the profile was not deleted")
+	if !repo.withdrawn {
+		t.Error("the profile was not withdrawn")
 	}
 	if repo.cancelledBeforeDelete != 2 {
 		t.Errorf("%d bookings were cancelled before the delete, want 2 — the ON DELETE "+
@@ -333,8 +338,8 @@ func TestWithdrawalSurvivesAFailedNotification(t *testing.T) {
 	if err := svc.Withdraw(context.Background(), validInput().UserID); err != nil {
 		t.Errorf("Withdraw: %v — a delivery failure must not block a withdrawal", err)
 	}
-	if !repo.deleted {
-		t.Error("the profile survived a withdrawal whose notification failed")
+	if !repo.withdrawn {
+		t.Error("the profile was not withdrawn after a failed notification")
 	}
 }
 
@@ -348,8 +353,8 @@ func TestWithdrawalByAStrangerRemovesNothing(t *testing.T) {
 	if err := svc.Withdraw(context.Background(), 4242); !errors.Is(err, ErrProfileNotFound) {
 		t.Errorf("error = %v, want ErrProfileNotFound", err)
 	}
-	if repo.deleted {
-		t.Error("a stranger deleted somebody else's profile")
+	if repo.withdrawn {
+		t.Error("a stranger withdrew somebody else's profile")
 	}
 }
 

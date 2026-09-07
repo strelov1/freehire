@@ -157,6 +157,28 @@ The system SHALL remind both parties 24 hours and 1 hour before a confirmed sess
 Each reminder SHALL be sent at most once per booking per offset, so that repeating the
 worker sends nothing twice. A cancelled booking SHALL receive no further reminders.
 
+Each offset SHALL fire only within a bounded window ending at that offset. A session
+booked closer than an offset SHALL receive no reminder for it: there was never that much
+notice to give, and sending one anyway would tell somebody their session starts "in 24
+hours" when it starts in three.
+
+A reminder whose DELIVERY fails SHALL be retried on a later run rather than counted as
+sent. This weakens "at most once" to "at most once per successful delivery, and at least
+one attempt per run until one succeeds" — chosen because the two failures are not equal:
+a missing reminder costs somebody the session, a duplicate costs them a duplicate.
+
+#### Scenario: A session booked inside an offset gets no reminder for that offset
+
+- **WHEN** a session three hours away is examined for the 24-hour reminder
+- **THEN** no 24-hour reminder is sent
+- **AND** it still receives its 1-hour reminder when that window arrives
+
+#### Scenario: A failed delivery is retried
+
+- **WHEN** a reminder is claimed and its delivery fails
+- **THEN** the claim is released
+- **AND** a later run sends it, and does not send it again afterwards
+
 #### Scenario: Re-running the reminder worker sends nothing twice
 
 - **WHEN** the reminder worker runs, sends the 24-hour reminder, and then runs again

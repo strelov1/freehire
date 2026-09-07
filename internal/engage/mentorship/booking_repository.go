@@ -35,7 +35,8 @@ func (r *QueriesRepository) ListAvailability(ctx context.Context, mentorID int64
 		if !ok {
 			continue
 		}
-		out = append(out, rule)
+		// Labelled with its row, or the cabinet can show an override and never delete it.
+		out = append(out, rule.withID(row.ID))
 	}
 	return out, nil
 }
@@ -139,6 +140,18 @@ func (r *QueriesRepository) CreateBooking(ctx context.Context, row BookingRow) (
 			return Booking{}, ErrSlotUnavailable
 		}
 		return Booking{}, err
+	}
+
+	// Re-read, exactly as the cancellation path does and for the same reason: the INSERT
+	// returns this table's columns only, and the confirmation this write exists to trigger
+	// has to reach BOTH parties in BOTH of their timezones — none of which is on
+	// mentor_bookings. Returning the bare inserted row sends the confirmation to two empty
+	// addresses, which a notifier skips, so it reaches nobody and says nothing.
+	//
+	// A failed re-read falls back to the inserted row: the booking is real and committed,
+	// and losing its confirmation beats losing the hour.
+	if full, found, err := r.BookingByID(ctx, uuid.UUID(created.ID.Bytes)); err == nil && found {
+		return full, nil
 	}
 	return bookingFromRow(created), nil
 }
@@ -250,9 +263,10 @@ func (r *QueriesRepository) UpsertReview(ctx context.Context, review Review, see
 // ListBookingsDueForReminder is the reminder worker's page. The query carries the three
 // predicates that matter — confirmed, not yet started, not already reminded at this offset
 // — so nothing here re-derives them.
-func (r *QueriesRepository) ListBookingsDueForReminder(ctx context.Context, offset time.Duration, limit int32) ([]Booking, error) {
+func (r *QueriesRepository) ListBookingsDueForReminder(ctx context.Context, offset, floor time.Duration, limit int32) ([]Booking, error) {
 	rows, err := r.q.ListBookingsDueForReminder(ctx, db.ListBookingsDueForReminderParams{
 		OffsetMinutes: int32(offset / time.Minute),
+		FloorMinutes:  int32(floor / time.Minute),
 		RowLimit:      limit,
 	})
 	if err != nil {

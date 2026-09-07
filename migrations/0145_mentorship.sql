@@ -41,6 +41,12 @@ CREATE TABLE public.mentors (
     user_id              bigint      NOT NULL UNIQUE REFERENCES public.users(id) ON DELETE CASCADE,
     company_slug         text        NOT NULL REFERENCES public.companies(slug) ON DELETE CASCADE,
     slug                 text        NOT NULL UNIQUE,
+    -- The name the public sees. On the PROFILE rather than read from the account,
+    -- because `users` carries no name at all — only an email and a username, and a
+    -- username is an address rather than a name. This is also the column that makes a
+    -- mentor the opposite of a referrer: a referral offer is anonymous on purpose, a
+    -- mentor is chosen and therefore has a face.
+    display_name         text        NOT NULL,
     headline             text        NOT NULL,
     bio                  text        NOT NULL DEFAULT '',
     topics               text[]      NOT NULL DEFAULT '{}',
@@ -69,7 +75,12 @@ CREATE TABLE public.mentors (
     created_at           timestamptz NOT NULL DEFAULT now(),
     updated_at           timestamptz NOT NULL DEFAULT now(),
 
-    CONSTRAINT mentors_status_check CHECK (status IN ('pending', 'approved', 'rejected')),
+    -- 'withdrawn' is how a mentor LEAVES, and the row survives it. Deleting the row
+    -- instead would take every booking and review with it through the ON DELETE CASCADEs
+    -- below — and a session that happened is history both parties are entitled to, not an
+    -- artefact of the mentor still being on the platform.
+    CONSTRAINT mentors_status_check
+        CHECK (status IN ('pending', 'approved', 'rejected', 'withdrawn')),
     -- The same bounds internal/engage/mentorship's SessionParams.Validate enforces. Both
     -- exist deliberately: the Go check gives a caller a reason, this one holds for any
     -- writer a later change adds.
@@ -77,7 +88,8 @@ CREATE TABLE public.mentors (
     CONSTRAINT mentors_buffers_check  CHECK (buffer_before_min >= 0 AND buffer_after_min >= 0),
     CONSTRAINT mentors_notice_check   CHECK (min_notice_min >= 0),
     CONSTRAINT mentors_horizon_check  CHECK (horizon_days > 0),
-    CONSTRAINT mentors_slug_check     CHECK (slug <> '')
+    CONSTRAINT mentors_slug_check     CHECK (slug <> ''),
+    CONSTRAINT mentors_name_check     CHECK (display_name <> '')
 );
 
 COMMENT ON TABLE public.mentors IS
@@ -98,6 +110,11 @@ COMMENT ON COLUMN public.mentors.paused IS
 CREATE INDEX mentors_company_published_idx
     ON public.mentors (company_slug)
     WHERE status = 'approved' AND NOT paused;
+
+-- One profile per account, and a withdrawn one still holds the slot: coming back is not
+-- in scope, and a second profile for an account that already has history would give one
+-- person two identities in the same directory.
+
 
 -- The moderation queue: pending profiles, oldest first, the same shape
 -- referral_offers_pending_created_at_idx has.

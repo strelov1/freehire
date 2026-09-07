@@ -130,11 +130,25 @@ func (d Date) Weekday() time.Weekday {
 // carrying both a weekday and a date — the row the database CHECK rejects — cannot be
 // built here at all.
 type Rule struct {
+	// id is the stored row's identifier, and is zero for a rule the caller just built.
+	// The cabinet needs it to delete one override without touching the rest, and a rule
+	// returned without it is a rule the UI can render and never remove.
+	id      int64
 	dated   bool
 	weekday time.Weekday
 	date    Date
 	start   TimeOfDay
 	end     TimeOfDay
+}
+
+// ID is the stored row's identifier, or zero for a rule that has not been read from one.
+func (r Rule) ID() int64 { return r.id }
+
+// withID labels a rule with the row it came from. Unexported: an id is something the
+// repository knows and a caller cannot invent.
+func (r Rule) withID(id int64) Rule {
+	r.id = id
+	return r
 }
 
 // NewWeeklyRule builds a recurring rule. Its span must be non-empty: a weekly row

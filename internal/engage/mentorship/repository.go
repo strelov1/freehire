@@ -51,6 +51,7 @@ func (r *QueriesRepository) CreateProfile(ctx context.Context, in ProfileInput) 
 		UserID:             in.UserID,
 		CompanySlug:        in.CompanySlug,
 		Slug:               in.Slug,
+		DisplayName:        in.DisplayName,
 		Headline:           in.Headline,
 		Bio:                in.Bio,
 		Topics:             in.Topics,
@@ -127,6 +128,7 @@ func (r *QueriesRepository) PublishedProfileBySlug(ctx context.Context, slug str
 func (r *QueriesRepository) UpdateProfile(ctx context.Context, in ProfileInput) (Profile, error) {
 	row, err := r.q.UpdateMentorProfile(ctx, db.UpdateMentorProfileParams{
 		UserID:             in.UserID,
+		DisplayName:        in.DisplayName,
 		Headline:           in.Headline,
 		Bio:                in.Bio,
 		Topics:             in.Topics,
@@ -240,10 +242,12 @@ func (r *QueriesRepository) CancelFutureBookings(ctx context.Context, mentorID, 
 	return out, nil
 }
 
-// DeleteProfile removes the profile. The owner guard is in the statement; zero rows means
-// no profile of that caller's.
-func (r *QueriesRepository) DeleteProfile(ctx context.Context, id, userID int64) error {
-	rows, err := r.q.DeleteMentorProfile(ctx, db.DeleteMentorProfileParams{ID: id, UserID: userID})
+// WithdrawProfile marks the profile withdrawn. It does NOT delete the row: bookings and
+// reviews reference it ON DELETE CASCADE, so deleting would erase the history this
+// feature promises to keep. Zero rows means no profile of that caller's, or one already
+// withdrawn.
+func (r *QueriesRepository) WithdrawProfile(ctx context.Context, userID int64) error {
+	rows, err := r.q.WithdrawMentorProfile(ctx, userID)
 	if err != nil {
 		return err
 	}
@@ -259,6 +263,7 @@ func profileFromRow(row db.Mentor) Profile {
 		UserID:      row.UserID,
 		CompanySlug: row.CompanySlug,
 		Slug:        row.Slug,
+		DisplayName: row.DisplayName,
 		Headline:    row.Headline,
 		Bio:         row.Bio,
 		Topics:      row.Topics,

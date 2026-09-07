@@ -183,6 +183,12 @@ type CreateMentorBookingParams struct {
 // two confirmed bookings cannot share an instant, so a lost race raises a constraint
 // violation here; the repository maps it to the SAME "no longer available" error a stale
 // page gets, because to the client a race and a stale tab are the same event.
+//
+// RETURNING gives the booking's own columns and nothing else. The adapter re-reads
+// through GetMentorBooking before returning, because the confirmation this write exists to
+// trigger has to reach BOTH parties in BOTH timezones, and none of that is on this table.
+// Without the re-read the confirmation reaches nobody — silently, since a notifier skips
+// an empty address.
 func (q *Queries) CreateMentorBooking(ctx context.Context, arg CreateMentorBookingParams) (MentorBooking, error) {
 	row := q.db.QueryRow(ctx, createMentorBooking,
 		arg.MentorID,
@@ -216,17 +222,18 @@ func (q *Queries) CreateMentorBooking(ctx context.Context, arg CreateMentorBooki
 
 const createMentorProfile = `-- name: CreateMentorProfile :one
 INSERT INTO mentors (
-    user_id, company_slug, slug, headline, bio, topics, languages, timezone,
+    user_id, company_slug, slug, display_name, headline, bio, topics, languages, timezone,
     session_duration_min, buffer_before_min, buffer_after_min, min_notice_min,
     horizon_days, meeting_url
-) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
-RETURNING id, user_id, company_slug, slug, headline, bio, topics, languages, timezone, session_duration_min, buffer_before_min, buffer_after_min, min_notice_min, horizon_days, meeting_url, status, paused, decided_by, decided_at, created_at, updated_at
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+RETURNING id, user_id, company_slug, slug, display_name, headline, bio, topics, languages, timezone, session_duration_min, buffer_before_min, buffer_after_min, min_notice_min, horizon_days, meeting_url, status, paused, decided_by, decided_at, created_at, updated_at
 `
 
 type CreateMentorProfileParams struct {
 	UserID             int64    `json:"user_id"`
 	CompanySlug        string   `json:"company_slug"`
 	Slug               string   `json:"slug"`
+	DisplayName        string   `json:"display_name"`
 	Headline           string   `json:"headline"`
 	Bio                string   `json:"bio"`
 	Topics             []string `json:"topics"`
@@ -249,6 +256,7 @@ func (q *Queries) CreateMentorProfile(ctx context.Context, arg CreateMentorProfi
 		arg.UserID,
 		arg.CompanySlug,
 		arg.Slug,
+		arg.DisplayName,
 		arg.Headline,
 		arg.Bio,
 		arg.Topics,
@@ -267,6 +275,7 @@ func (q *Queries) CreateMentorProfile(ctx context.Context, arg CreateMentorProfi
 		&i.UserID,
 		&i.CompanySlug,
 		&i.Slug,
+		&i.DisplayName,
 		&i.Headline,
 		&i.Bio,
 		&i.Topics,
@@ -293,7 +302,7 @@ UPDATE mentors
 SET status = $1, decided_by = $2,
     decided_at = now(), updated_at = now()
 WHERE id = $3 AND status = 'pending'
-RETURNING id, user_id, company_slug, slug, headline, bio, topics, languages, timezone, session_duration_min, buffer_before_min, buffer_after_min, min_notice_min, horizon_days, meeting_url, status, paused, decided_by, decided_at, created_at, updated_at
+RETURNING id, user_id, company_slug, slug, display_name, headline, bio, topics, languages, timezone, session_duration_min, buffer_before_min, buffer_after_min, min_notice_min, horizon_days, meeting_url, status, paused, decided_by, decided_at, created_at, updated_at
 `
 
 type DecideMentorProfileParams struct {
@@ -313,6 +322,7 @@ func (q *Queries) DecideMentorProfile(ctx context.Context, arg DecideMentorProfi
 		&i.UserID,
 		&i.CompanySlug,
 		&i.Slug,
+		&i.DisplayName,
 		&i.Headline,
 		&i.Bio,
 		&i.Topics,
@@ -346,26 +356,6 @@ type DeleteMentorAvailabilityRuleParams struct {
 // The mentor_id guard scopes the delete to the owner's own schedule.
 func (q *Queries) DeleteMentorAvailabilityRule(ctx context.Context, arg DeleteMentorAvailabilityRuleParams) (int64, error) {
 	result, err := q.db.Exec(ctx, deleteMentorAvailabilityRule, arg.ID, arg.MentorID)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
-}
-
-const deleteMentorProfile = `-- name: DeleteMentorProfile :execrows
-DELETE FROM mentors WHERE id = $1 AND user_id = $2
-`
-
-type DeleteMentorProfileParams struct {
-	ID     int64 `json:"id"`
-	UserID int64 `json:"user_id"`
-}
-
-// Withdrawal. The owner guard scopes it to the caller. Future bookings must be cancelled
-// and their seekers notified BEFORE this runs — the ON DELETE CASCADE would otherwise
-// take the booking rows with it and nobody would ever be told.
-func (q *Queries) DeleteMentorProfile(ctx context.Context, arg DeleteMentorProfileParams) (int64, error) {
-	result, err := q.db.Exec(ctx, deleteMentorProfile, arg.ID, arg.UserID)
 	if err != nil {
 		return 0, err
 	}
@@ -464,7 +454,7 @@ func (q *Queries) GetMentorBooking(ctx context.Context, id pgtype.UUID) (GetMent
 }
 
 const getMentorByID = `-- name: GetMentorByID :one
-SELECT id, user_id, company_slug, slug, headline, bio, topics, languages, timezone, session_duration_min, buffer_before_min, buffer_after_min, min_notice_min, horizon_days, meeting_url, status, paused, decided_by, decided_at, created_at, updated_at FROM mentors WHERE id = $1
+SELECT id, user_id, company_slug, slug, display_name, headline, bio, topics, languages, timezone, session_duration_min, buffer_before_min, buffer_after_min, min_notice_min, horizon_days, meeting_url, status, paused, decided_by, decided_at, created_at, updated_at FROM mentors WHERE id = $1
 `
 
 // By primary key, for the paths that already hold one (booking, moderation).
@@ -476,6 +466,7 @@ func (q *Queries) GetMentorByID(ctx context.Context, id int64) (Mentor, error) {
 		&i.UserID,
 		&i.CompanySlug,
 		&i.Slug,
+		&i.DisplayName,
 		&i.Headline,
 		&i.Bio,
 		&i.Topics,
@@ -498,7 +489,7 @@ func (q *Queries) GetMentorByID(ctx context.Context, id int64) (Mentor, error) {
 }
 
 const getMentorByUserID = `-- name: GetMentorByUserID :one
-SELECT id, user_id, company_slug, slug, headline, bio, topics, languages, timezone, session_duration_min, buffer_before_min, buffer_after_min, min_notice_min, horizon_days, meeting_url, status, paused, decided_by, decided_at, created_at, updated_at FROM mentors WHERE user_id = $1
+SELECT id, user_id, company_slug, slug, display_name, headline, bio, topics, languages, timezone, session_duration_min, buffer_before_min, buffer_after_min, min_notice_min, horizon_days, meeting_url, status, paused, decided_by, decided_at, created_at, updated_at FROM mentors WHERE user_id = $1
 `
 
 // The owner's own profile, whatever its status — the mentor cabinet reads this, and a
@@ -511,6 +502,7 @@ func (q *Queries) GetMentorByUserID(ctx context.Context, userID int64) (Mentor, 
 		&i.UserID,
 		&i.CompanySlug,
 		&i.Slug,
+		&i.DisplayName,
 		&i.Headline,
 		&i.Bio,
 		&i.Topics,
@@ -574,7 +566,7 @@ func (q *Queries) GetMentorReviewSummary(ctx context.Context, mentorID int64) (G
 }
 
 const getPublishedMentorBySlug = `-- name: GetPublishedMentorBySlug :one
-SELECT m.id, m.user_id, m.company_slug, m.slug, m.headline, m.bio, m.topics, m.languages, m.timezone, m.session_duration_min, m.buffer_before_min, m.buffer_after_min, m.min_notice_min, m.horizon_days, m.meeting_url, m.status, m.paused, m.decided_by, m.decided_at, m.created_at, m.updated_at, c.name AS company_name
+SELECT m.id, m.user_id, m.company_slug, m.slug, m.display_name, m.headline, m.bio, m.topics, m.languages, m.timezone, m.session_duration_min, m.buffer_before_min, m.buffer_after_min, m.min_notice_min, m.horizon_days, m.meeting_url, m.status, m.paused, m.decided_by, m.decided_at, m.created_at, m.updated_at, c.name AS company_name
 FROM mentors m
 LEFT JOIN companies c ON c.slug = m.company_slug
 WHERE m.slug = $1 AND m.status = 'approved' AND NOT m.paused
@@ -598,6 +590,7 @@ func (q *Queries) GetPublishedMentorBySlug(ctx context.Context, slug string) (Ge
 		&i.Mentor.UserID,
 		&i.Mentor.CompanySlug,
 		&i.Mentor.Slug,
+		&i.Mentor.DisplayName,
 		&i.Mentor.Headline,
 		&i.Mentor.Bio,
 		&i.Mentor.Topics,
@@ -753,16 +746,23 @@ JOIN users mu ON mu.id = m.user_id
 WHERE b.status = 'confirmed'
   AND b.starts_at > now()
   AND b.starts_at <= now() + make_interval(mins => $1::int)
+  -- The LOWER bound, and it is not decoration: without it the 24-hour reminder fires for
+  -- a session three hours away and calls it "in 24 hours". The window is the span between
+  -- this offset and the next one down, so each reminder goes out once, roughly when it
+  -- says. The caller passes the tighter offset — 60 for the 24-hour reminder, 0 for the
+  -- 1-hour one — because it knows the list; the query cannot.
+  AND b.starts_at > now() + make_interval(mins => $2::int)
   AND NOT EXISTS (
       SELECT 1 FROM mentor_booking_reminders r
       WHERE r.booking_id = b.id AND r.offset_minutes = $1::int
   )
 ORDER BY b.starts_at
-LIMIT $2
+LIMIT $3
 `
 
 type ListBookingsDueForReminderParams struct {
 	OffsetMinutes int32 `json:"offset_minutes"`
+	FloorMinutes  int32 `json:"floor_minutes"`
 	RowLimit      int32 `json:"row_limit"`
 }
 
@@ -784,7 +784,7 @@ type ListBookingsDueForReminderRow struct {
 // The NOT EXISTS makes the read idempotent alongside the insert below; the composite key
 // makes the WRITE idempotent, and both are needed because two runs can overlap.
 func (q *Queries) ListBookingsDueForReminder(ctx context.Context, arg ListBookingsDueForReminderParams) ([]ListBookingsDueForReminderRow, error) {
-	rows, err := q.db.Query(ctx, listBookingsDueForReminder, arg.OffsetMinutes, arg.RowLimit)
+	rows, err := q.db.Query(ctx, listBookingsDueForReminder, arg.OffsetMinutes, arg.FloorMinutes, arg.RowLimit)
 	if err != nil {
 		return nil, err
 	}
@@ -946,7 +946,7 @@ func (q *Queries) ListMentorBusyIntervals(ctx context.Context, arg ListMentorBus
 }
 
 const listPendingMentorProfiles = `-- name: ListPendingMentorProfiles :many
-SELECT m.id, m.user_id, m.company_slug, m.slug, m.headline, m.bio, m.topics, m.languages, m.timezone, m.session_duration_min, m.buffer_before_min, m.buffer_after_min, m.min_notice_min, m.horizon_days, m.meeting_url, m.status, m.paused, m.decided_by, m.decided_at, m.created_at, m.updated_at, c.name AS company_name,
+SELECT m.id, m.user_id, m.company_slug, m.slug, m.display_name, m.headline, m.bio, m.topics, m.languages, m.timezone, m.session_duration_min, m.buffer_before_min, m.buffer_after_min, m.min_notice_min, m.horizon_days, m.meeting_url, m.status, m.paused, m.decided_by, m.decided_at, m.created_at, m.updated_at, c.name AS company_name,
     EXISTS (
         SELECT 1 FROM referral_offers r
         WHERE r.user_id = m.user_id AND r.company_slug = m.company_slug
@@ -984,6 +984,7 @@ func (q *Queries) ListPendingMentorProfiles(ctx context.Context) ([]ListPendingM
 			&i.Mentor.UserID,
 			&i.Mentor.CompanySlug,
 			&i.Mentor.Slug,
+			&i.Mentor.DisplayName,
 			&i.Mentor.Headline,
 			&i.Mentor.Bio,
 			&i.Mentor.Topics,
@@ -1015,7 +1016,7 @@ func (q *Queries) ListPendingMentorProfiles(ctx context.Context) ([]ListPendingM
 }
 
 const listPublishedMentors = `-- name: ListPublishedMentors :many
-SELECT m.id, m.user_id, m.company_slug, m.slug, m.headline, m.bio, m.topics, m.languages, m.timezone, m.session_duration_min, m.buffer_before_min, m.buffer_after_min, m.min_notice_min, m.horizon_days, m.meeting_url, m.status, m.paused, m.decided_by, m.decided_at, m.created_at, m.updated_at, c.name AS company_name,
+SELECT m.id, m.user_id, m.company_slug, m.slug, m.display_name, m.headline, m.bio, m.topics, m.languages, m.timezone, m.session_duration_min, m.buffer_before_min, m.buffer_after_min, m.min_notice_min, m.horizon_days, m.meeting_url, m.status, m.paused, m.decided_by, m.decided_at, m.created_at, m.updated_at, c.name AS company_name,
     COALESCE(r.rating_count, 0)::bigint AS rating_count,
     COALESCE(r.rating_avg, 0)::numeric  AS rating_avg
 FROM mentors m
@@ -1079,6 +1080,7 @@ func (q *Queries) ListPublishedMentors(ctx context.Context, arg ListPublishedMen
 			&i.Mentor.UserID,
 			&i.Mentor.CompanySlug,
 			&i.Mentor.Slug,
+			&i.Mentor.DisplayName,
 			&i.Mentor.Headline,
 			&i.Mentor.Bio,
 			&i.Mentor.Topics,
@@ -1136,7 +1138,7 @@ const setMentorPaused = `-- name: SetMentorPaused :one
 UPDATE mentors
 SET paused = $1, updated_at = now()
 WHERE user_id = $2
-RETURNING id, user_id, company_slug, slug, headline, bio, topics, languages, timezone, session_duration_min, buffer_before_min, buffer_after_min, min_notice_min, horizon_days, meeting_url, status, paused, decided_by, decided_at, created_at, updated_at
+RETURNING id, user_id, company_slug, slug, display_name, headline, bio, topics, languages, timezone, session_duration_min, buffer_before_min, buffer_after_min, min_notice_min, horizon_days, meeting_url, status, paused, decided_by, decided_at, created_at, updated_at
 `
 
 type SetMentorPausedParams struct {
@@ -1154,6 +1156,7 @@ func (q *Queries) SetMentorPaused(ctx context.Context, arg SetMentorPausedParams
 		&i.UserID,
 		&i.CompanySlug,
 		&i.Slug,
+		&i.DisplayName,
 		&i.Headline,
 		&i.Bio,
 		&i.Topics,
@@ -1177,23 +1180,25 @@ func (q *Queries) SetMentorPaused(ctx context.Context, arg SetMentorPausedParams
 
 const updateMentorProfile = `-- name: UpdateMentorProfile :one
 UPDATE mentors
-SET headline = $1,
-    bio = $2,
-    topics = $3,
-    languages = $4,
-    timezone = $5,
-    session_duration_min = $6,
-    buffer_before_min = $7,
-    buffer_after_min = $8,
-    min_notice_min = $9,
-    horizon_days = $10,
-    meeting_url = $11,
+SET display_name = $1,
+    headline = $2,
+    bio = $3,
+    topics = $4,
+    languages = $5,
+    timezone = $6,
+    session_duration_min = $7,
+    buffer_before_min = $8,
+    buffer_after_min = $9,
+    min_notice_min = $10,
+    horizon_days = $11,
+    meeting_url = $12,
     updated_at = now()
-WHERE user_id = $12
-RETURNING id, user_id, company_slug, slug, headline, bio, topics, languages, timezone, session_duration_min, buffer_before_min, buffer_after_min, min_notice_min, horizon_days, meeting_url, status, paused, decided_by, decided_at, created_at, updated_at
+WHERE user_id = $13
+RETURNING id, user_id, company_slug, slug, display_name, headline, bio, topics, languages, timezone, session_duration_min, buffer_before_min, buffer_after_min, min_notice_min, horizon_days, meeting_url, status, paused, decided_by, decided_at, created_at, updated_at
 `
 
 type UpdateMentorProfileParams struct {
+	DisplayName        string   `json:"display_name"`
 	Headline           string   `json:"headline"`
 	Bio                string   `json:"bio"`
 	Topics             []string `json:"topics"`
@@ -1217,6 +1222,7 @@ type UpdateMentorProfileParams struct {
 // for a value the owner's identity already determines.
 func (q *Queries) UpdateMentorProfile(ctx context.Context, arg UpdateMentorProfileParams) (Mentor, error) {
 	row := q.db.QueryRow(ctx, updateMentorProfile,
+		arg.DisplayName,
 		arg.Headline,
 		arg.Bio,
 		arg.Topics,
@@ -1236,6 +1242,7 @@ func (q *Queries) UpdateMentorProfile(ctx context.Context, arg UpdateMentorProfi
 		&i.UserID,
 		&i.CompanySlug,
 		&i.Slug,
+		&i.DisplayName,
 		&i.Headline,
 		&i.Bio,
 		&i.Topics,
@@ -1295,4 +1302,28 @@ func (q *Queries) UpsertMentorReview(ctx context.Context, arg UpsertMentorReview
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const withdrawMentorProfile = `-- name: WithdrawMentorProfile :execrows
+UPDATE mentors
+SET status = 'withdrawn', paused = true, updated_at = now()
+WHERE user_id = $1 AND status <> 'withdrawn'
+`
+
+// Withdrawal marks the profile rather than deleting it, and that is the whole point:
+// mentor_bookings and mentor_reviews reference this row ON DELETE CASCADE, so a DELETE
+// would take every session and rating with it. A session that happened is history both
+// parties are entitled to — not an artefact of the mentor still being on the platform.
+//
+// Future bookings must still be cancelled and their seekers notified before this runs;
+// what changes is that the PAST survives.
+//
+// The owner guard scopes it to the caller, and the status guard makes a second withdrawal
+// match no row.
+func (q *Queries) WithdrawMentorProfile(ctx context.Context, userID int64) (int64, error) {
+	result, err := q.db.Exec(ctx, withdrawMentorProfile, userID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }

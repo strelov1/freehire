@@ -71,17 +71,26 @@ func Slots(req SlotRequest) (SlotResult, error) {
 	// carries one session's slack because the horizon bounds when a slot may BEGIN, so
 	// a slot starting exactly on it is offerable and must survive to be sliced.
 	//
-	// The NEAR end is clamped to the START OF TODAY in the mentor's zone, never to `now`
-	// itself. Clamping to `now` would move the anchor the slicing counts from: a mentor
-	// who stated 18:00 would be offered 18:33 to a visitor arriving at 18:33, a different
-	// grid every minute. Three things break at once — the mentor's stated hours are not
-	// what is offered; the cache key (mentor, window, viewer zone) carries no `now`, so a
-	// cached grid belongs to a different minute than the request it answers; and the
-	// re-derivation a booking runs uses a later `now`, so the slot the seeker clicked has
-	// ceased to exist by the time they submit it, refused for a reason they cannot see.
-	// Slots already past are dropped by the notice filter below, which is the right place
-	// for it.
-	w := Interval{Start: req.From, End: req.To}
+	// The NEAR end is always moved DOWN to a day boundary in the mentor's zone, never left
+	// at an arbitrary instant. sliceSlots anchors its grid to each free range's start, and
+	// a range starting at 18:33 produces 18:33, 19:33, 20:33 for a mentor who stated
+	// 18:00 — a different grid every minute.
+	//
+	// Down, not "up to today when it is earlier": the caller that matters here is the HTTP
+	// endpoint, which defaults `from` to the current instant. That is AFTER the start of
+	// today, so a clamp that only raised an earlier bound left it exactly where the damage
+	// is. The first version of this fix did that and was verified against a test supplying
+	// midnight, which is already on the grid.
+	//
+	// Three things break when the grid moves: the mentor's stated hours are not what is
+	// offered; the cache key (mentor, window, viewer zone) carries no `now`, so a cached
+	// grid answers for a different minute; and the re-derivation a booking runs uses a
+	// later `now`, so the slot the seeker clicked has ceased to exist by the time they
+	// submit it — refused for a reason nobody can see.
+	//
+	// Widening the window backwards costs nothing: the notice filter below drops every
+	// slot already past, which is the right place for it.
+	w := Interval{Start: startOfDayIn(req.From, req.MentorZone), End: req.To}
 	if today := startOfDayIn(req.Now, req.MentorZone); w.Start.Before(today) {
 		w.Start = today
 	}
