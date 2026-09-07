@@ -1,6 +1,9 @@
 package recentfeed
 
-import "testing"
+import (
+	"fmt"
+	"testing"
+)
 
 func TestGroup_SingleJobProducesSingleEntry(t *testing.T) {
 	entries := Group([]Posting{
@@ -100,5 +103,74 @@ func TestGroup_CosmeticTitleVariationStillClusters(t *testing.T) {
 func TestGroup_EmptyBatchProducesNoEntries(t *testing.T) {
 	if entries := Group(nil); len(entries) != 0 {
 		t.Errorf("got %d entries for an empty batch, want 0", len(entries))
+	}
+}
+
+// One company posting many DIFFERENT roles at once (e.g. a mass hiring push) must
+// not flood the feed with one card per posting — it should collapse the same way a
+// same-role burst across companies does, just keyed the other way round.
+func TestGroup_CompanyBurstOfDifferentRolesAggregates(t *testing.T) {
+	postings := make([]Posting, AggregationThreshold)
+	for i := range postings {
+		postings[i] = Posting{
+			Title:       fmt.Sprintf("Role %d", i),
+			CompanyName: "Amyx, Inc.",
+			JobSlug:     fmt.Sprintf("slug-%d", i),
+		}
+	}
+	entries := Group(postings)
+	if len(entries) != 1 {
+		t.Fatalf("got %d entries, want 1 company-aggregated entry: %+v", len(entries), entries)
+	}
+	e := entries[0]
+	if e.Kind != KindCompanyAggregate {
+		t.Errorf("Kind = %q, want %q", e.Kind, KindCompanyAggregate)
+	}
+	if e.CompanyName != "Amyx, Inc." {
+		t.Errorf("CompanyName = %q, want %q", e.CompanyName, "Amyx, Inc.")
+	}
+	if e.Count != AggregationThreshold {
+		t.Errorf("Count = %d, want %d", e.Count, AggregationThreshold)
+	}
+}
+
+func TestGroup_BelowThresholdCompanyBurstStaysIndividual(t *testing.T) {
+	postings := make([]Posting, AggregationThreshold-1)
+	for i := range postings {
+		postings[i] = Posting{
+			Title:       fmt.Sprintf("Role %d", i),
+			CompanyName: "Amyx, Inc.",
+			JobSlug:     fmt.Sprintf("slug-%d", i),
+		}
+	}
+	entries := Group(postings)
+	if len(entries) != len(postings) {
+		t.Fatalf("got %d entries, want %d (one per posting, below threshold)", len(entries), len(postings))
+	}
+	for _, e := range entries {
+		if e.Kind != KindSingle {
+			t.Errorf("Kind = %q, want %q for a below-threshold company burst", e.Kind, KindSingle)
+		}
+	}
+}
+
+// A burst that already qualifies as a role-aggregate (same role, many companies)
+// must not also be counted toward company aggregation — each posting belongs to
+// exactly one entry.
+func TestGroup_RoleAggregateTakesPrecedenceOverCompanyAggregate(t *testing.T) {
+	postings := make([]Posting, AggregationThreshold)
+	for i := range postings {
+		postings[i] = Posting{
+			Title:       "Senior Backend Engineer",
+			CompanyName: fmt.Sprintf("Company %d", i),
+			JobSlug:     fmt.Sprintf("slug-%d", i),
+		}
+	}
+	entries := Group(postings)
+	if len(entries) != 1 {
+		t.Fatalf("got %d entries, want 1 role-aggregated entry: %+v", len(entries), entries)
+	}
+	if entries[0].Kind != KindAggregate {
+		t.Errorf("Kind = %q, want %q", entries[0].Kind, KindAggregate)
 	}
 }

@@ -1,8 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { aggregateLabel, pushFeedEntry, type RecentFeedEvent } from './recentFeed';
+import { aggregateLabel, companyAggregateLabel, pushFeedEntry, type RecentFeedEvent } from './recentFeed';
 
 function event(overrides: Partial<RecentFeedEvent> = {}): RecentFeedEvent {
-  return { kind: 'single', title: 'Senior Backend Engineer', company_name: 'Acme', ...overrides };
+  return {
+    kind: 'single',
+    title: 'Senior Backend Engineer',
+    company_name: 'Acme',
+    produced_at: '2026-01-01T00:00:00Z',
+    ...overrides,
+  };
 }
 
 describe('pushFeedEntry', () => {
@@ -36,5 +42,17 @@ describe('aggregateLabel', () => {
 
     expect(label).toContain('12');
     expect(label).toContain('other');
+  });
+});
+
+describe('companyAggregateLabel', () => {
+  // The mirror image of aggregateLabel: same company, many different roles.
+  // Nothing here should read as "N more of the one role shown" — there is no
+  // single featured role for this card.
+  it('states the count of new roles from the company', () => {
+    const label = companyAggregateLabel({ count: 6 });
+
+    expect(label).toContain('6');
+    expect(label).toContain('role');
   });
 });

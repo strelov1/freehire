@@ -61,7 +61,12 @@ func (p *Poller) Poll(ctx context.Context) error {
 	for i, r := range rows {
 		postings[i] = Posting{Title: r.Title, CompanyName: r.Company, JobSlug: r.PublicSlug}
 	}
+	// Stamped once, here, rather than inside Group: Group stays a pure function
+	// of its input, and every entry from one poll tick reports the same
+	// instant regardless of how long grouping itself took.
+	now := time.Now()
 	for _, e := range Group(postings) {
+		e.ProducedAt = now
 		p.broadcaster.Publish(e)
 	}
 	return nil

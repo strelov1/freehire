@@ -11,6 +11,7 @@ import (
 	"context"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
@@ -74,6 +75,9 @@ func TestPoller_PollDrainsOutboxAndPublishesEntries(t *testing.T) {
 	}
 	if backlog[0].Kind != KindSingle {
 		t.Errorf("Kind = %q, want %q for a single claimed job", backlog[0].Kind, KindSingle)
+	}
+	if backlog[0].ProducedAt.IsZero() || time.Since(backlog[0].ProducedAt) > time.Minute {
+		t.Errorf("ProducedAt = %v, want stamped to roughly now", backlog[0].ProducedAt)
 	}
 
 	if n := outboxRowCount(t, pool, jobID); n != 0 {
