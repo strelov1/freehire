@@ -13,7 +13,13 @@
 //
 // Adding a mail: write a renderer and list it in `renderers`. Nothing else needs
 // to change — the contact sheet, the Storybook gallery and the staleness test all
-// read that list.
+// read that list, and TestEveryRendererIsRegistered reads the package's own source
+// so a renderer left out of the slice fails rather than disappearing.
+//
+// What no test here can see is a mail that has no renderer AT ALL — a notifier
+// somewhere in engage that nobody wrote a sample for. The set is a human
+// judgement about what the product sends, so "every outgoing mail" above is an
+// intent, not a checked invariant.
 package mailpreview
 
 import (

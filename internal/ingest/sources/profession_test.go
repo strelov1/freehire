@@ -495,47 +495,6 @@ func (r *professionRecorder) GetXML(ctx context.Context, url string, v any) erro
 	return r.routedHTTP.GetXML(ctx, url, v)
 }
 
-// professionGeneralFixture wires the general category's sitemap around four postings that
-// each exercise one arm of the filter, and routes a page for all four — so a posting the
-// prefilter should have withheld would be fetched and stored rather than quietly failing.
-func professionGeneralFixture() *professionRecorder {
-	routed := (&routedHTTP{}).
-		route("sitemap-listings-index-hu.xml", professionSitemapIndexXML).
-		route("sitemap-listings-education-hu.xml", professionCategorySitemapXML(
-			// The slug names the role and the title confirms it.
-			"https://www.profession.hu/allas/rendszergazda-acme-kft-gyor-2990001",
-			// Neither the slug nor the role is technical.
-			"https://www.profession.hu/allas/ertekesitesi-tanacsado-acme-kft-budapest-2990100",
-			// The bare operator noun, which is a machinist here. The dictionary holds
-			// only its qualified forms, so the slug never matches.
-			"https://www.profession.hu/allas/gepesz-uzemelteto-acme-kft-2990101",
-			// The slug carries a technical term from the EMPLOYER's name, not the role.
-			// This is what the title check is for.
-			"https://www.profession.hu/allas/ertekesitesi-munkatars-devops-solutions-kft-2990102",
-		)).
-		route("-2990001", professionPostingHTML(professionPostingOpts{
-			title: "Rendszergazda", company: "ACME Kft.",
-			addressLine: "9024 Győr, Práter utca 9.",
-			sections:    [][3]string{{"tasks", "Feladatok", "<ul><li>Linux szerverek üzemeltetése</li></ul>"}},
-		})).
-		route("-2990100", professionPostingHTML(professionPostingOpts{
-			title: "Értékesítési tanácsadó", company: "ACME Kft.",
-			addressLine: "Budapest",
-			sections:    [][3]string{{"tasks", "Feladatok", "<ul><li>Ügyfelek felkeresése</li></ul>"}},
-		})).
-		route("-2990101", professionPostingHTML(professionPostingOpts{
-			title: "Gépész üzemeltető", company: "ACME Kft.",
-			addressLine: "Debrecen",
-			sections:    [][3]string{{"tasks", "Feladatok", "<ul><li>Gépsorok kezelése</li></ul>"}},
-		})).
-		route("-2990102", professionPostingHTML(professionPostingOpts{
-			title: "Értékesítési munkatárs", company: "DevOps Solutions Kft.",
-			addressLine: "Budapest",
-			sections:    [][3]string{{"tasks", "Feladatok", "<ul><li>Új ügyfelek szerzése</li></ul>"}},
-		}))
-	return &professionRecorder{routedHTTP: routed}
-}
-
 func professionGeneralEntry() CompanyEntry {
 	return CompanyEntry{
 		Company:  "Profession.hu — education",

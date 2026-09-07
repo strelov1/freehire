@@ -248,6 +248,66 @@ jobs:
       - name: Check for dead code and unused dependencies
         run: pnpm check:dead
 
+  # The same question as the job above, asked of the Go half — which nothing asked until
+  # now. knip covers the three JS packages; `unused` in golangci-lint sees one package at
+  # a time and counts a call from anywhere as a use. Neither can answer "is this function
+  # reachable from any binary or any test", which is what `deadcode` answers by building
+  # the whole call graph. Two of the three backend review passes ran it by hand, and each
+  # time it named something real.
+  #
+  # `-tags=integration,llmlive` IS THE JOB. Without them the analysis never parses the
+  # build-tagged test files — 187 of them across 20 packages — and reports functions that
+  # only those tests reach as dead: internal/platform/testdb's whole container helper, for
+  # one. That is a guard that lies, and the reader's correct response to a lying guard is
+  # to stop reading it. .golangci.yml's run.build-tags carries the same argument for
+  # depguard.
+  #
+  # `-test` for the mirror-image reason: without it every function whose only callers are
+  # tests is "dead". The cost is that a function ONLY its own test calls stays invisible
+  # here — that one needs a reviewer, and this job is not the reason to stop looking.
+  #
+  # `go install` at a pinned version rather than a downloaded release, like actionlint
+  # above: the module proxy verifies the checksum against the transparency log, so the pin
+  # is the whole supply-chain story. Its own job rather than a step on `backend` because it
+  # runs in parallel with the integration suite instead of extending it, and because
+  # "dead-code-go" names what failed without opening the log.
+  dead-code-go:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      # AFTER Setup Go, and that ordering is not cosmetic: `go install` builds deadcode
+      # with whatever toolchain is on PATH, and go/types inside the binary refuses a
+      # module whose go directive is newer than that. Built by an older Go it does not
+      # report zero findings — it reports "package requires newer Go version" for most of
+      # the repository, which this step would read as findings.
+      - name: Install deadcode
+        run: go install golang.org/x/tools/cmd/deadcode@v0.49.0
+
+      # deadcode exits 0 whatever it finds — it is a reporter, not a linter — so the
+      # verdict is whether it printed anything. There is no allowlist: the repository has
+      # no entry for one today, and an empty allowlist file is an invitation to append
+      # rather than to delete. A finding that must survive needs a reason a reviewer can
+      # read, which is what the pull request is for.
+      - name: Report unreachable Go functions
+        run: |
+          report=$(deadcode -test -tags=integration,llmlive ./...)
+          if [ -n "$report" ]; then
+            echo "$report"
+            echo
+            echo 'Unreachable from every binary and every test. Delete it, or make the'
+            echo 'caller that justifies it real.'
+            exit 1
+          fi
+          echo 'No unreachable functions.'
+
   # internal/platform/db is generated and committed. Nothing compared the two until now,
   # so a query edited without `make sqlc` shipped the old Go and every job stayed green —
   # the same class of gap the design-system `check:dist` step exists for.
