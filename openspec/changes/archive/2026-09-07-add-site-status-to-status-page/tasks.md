@@ -81,4 +81,8 @@
       stopped container) and re-ran the full test suite — see design.md's
       "Code review outcome" section for the fixes and the points
       deliberately left as already-reasoned trade-offs.
-- [ ] 5.4 Finish the branch, archive and sync the OpenSpec change.
+- [x] 5.4 Finish the branch, archive and sync the OpenSpec change. Merged
+      as #2559, deployed to prod via `release.sh` (blue/green flip to
+      blue), and verified live: `GET /api/v1/status` carries the `site`
+      object, `/status` renders the new section, and no 5xx responses
+      followed the flip.
