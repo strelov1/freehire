@@ -16,12 +16,14 @@
   // to the store that already owns its fact — the search profile, the screening answers,
   // the candidate-owned résumé overlay, the survey — so a failure in one cannot corrupt
   // another, and no store here exists only to serve this page.
+  import { onDestroy } from 'svelte';
   import { goto } from '$app/navigation';
   import { page } from '$app/state';
   import { ArrowLeft, ArrowRight, LoaderCircle, X } from '@lucide/svelte';
   import { api, ApiError } from '$lib/api';
   import { completeOnboarding, isAuthenticated } from '$lib/auth.svelte';
   import { onboardingGate } from '$lib/onboardingGate.svelte';
+  import { nextResumePollDelayMs, type CvParseState } from '$lib/onboardingResumeWait';
   import { ORDERED_STEPS, plannedSteps, type OnboardingAnswered, type StepKind } from '$lib/onboardingSteps';
   import { persistStep, type SaveDeps, type WizardAnswers } from '$lib/onboardingSave';
   import { splitProfileLinks, type ProfileLinks } from '$lib/profileLinks';
@@ -29,7 +31,7 @@
   import { safeRedirect } from '$lib/safeRedirect';
   import { signinUrl } from '$lib/signin';
   import { focusTrap } from '$lib/actions/focusTrap';
-  import type { CandidateContacts, DerivedLocation, LocationPreferences } from '$lib/types';
+  import type { CandidateContacts, DerivedLocation, LocationPreferences, ResumeMeta } from '$lib/types';
   import type { MergedFacets } from '$lib/onboardingImport';
   import ChallengeStep from '$lib/components/onboarding/ChallengeStep.svelte';
   import ConfirmStep from '$lib/components/onboarding/ConfirmStep.svelte';
@@ -230,11 +232,12 @@
       saving = false;
       return;
     }
-    // A CV uploaded on the first step is parsed in the background, so what it yields is not
-    // readable until after the step is left. Re-reading here is what lets the experience and
-    // links steps open pre-filled for the account this whole wizard exists for — a brand new
-    // one, which had no résumé at all when the page first loaded.
-    if (kind === 'cv') await refreshFromResume();
+    // An account that arrived here with a CV already stored gets one wait started on its
+    // behalf, since nothing was uploaded on this run to start one. A run that DID upload is
+    // already waiting (CvStep calls onCvUploaded the moment the upload lands, which is
+    // seconds earlier than this), and must not be restarted — that would throw away a
+    // backoff already several steps in.
+    if (kind === 'cv' && cvParse !== 'waiting') void waitForResumeStructure();
     saving = false;
     if (isLast) await leave();
     else index += 1;
@@ -254,14 +257,17 @@
 
   /** Re-read the résumé and take anything it now offers that the candidate has not answered
    *  themselves. Best-effort and non-destructive: a value the candidate set always wins, and
-   *  a parse still in flight simply yields nothing rather than blocking the wizard. */
-  async function refreshFromResume() {
+   *  a parse still in flight simply yields nothing rather than blocking the wizard.
+   *
+   *  Returns what the server said about the résumé, so the caller can tell a parse that is
+   *  still running from one that has landed or given up. Null when the read itself failed. */
+  async function refreshFromResume(): Promise<ResumeMeta | null> {
     const resume = await api.getResume().catch(() => null);
-    if (!resume) return;
+    if (!resume) return null;
     contacts = resume.contacts ?? contacts;
     derivedTotalYears = resume.structured?.total_years ?? derivedTotalYears;
     const storedLinks = resume.contacts?.links ?? resume.structured?.links ?? [];
-    if (storedLinks.length === 0) return;
+    if (storedLinks.length === 0) return resume;
     const found = splitProfileLinks(storedLinks);
     // Fill only the boxes the candidate has left empty, and keep every link we did not
     // recognise so a round trip cannot lose one.
@@ -271,7 +277,65 @@
       other: [...new Set([...links.other, ...found.other])],
     };
     linksPrefilled = linksPrefilled || links.linkedin !== '' || links.github !== '';
+    return resume;
   }
+
+  /** Whether the CV's background parse is still being waited on, and how it ended.
+   *  'failed' is shown to the candidate — a CV we could not read is the one case where the
+   *  empty link boxes in front of them are our doing and not theirs. */
+  let cvParse = $state<CvParseState>('idle');
+  // Supersedes an in-flight wait: bumped by a newer upload and by leaving the page, so a
+  // resolved poll can tell whether it is still the one anybody is waiting for.
+  let waitToken = 0;
+
+  /** Keep asking for the CV's structured parse until it lands, filling in what it offers
+   *  each time round.
+   *
+   *  Runs in the BACKGROUND on purpose. The parse takes seconds and the candidate has steps
+   *  to answer meanwhile, so blocking Continue on it would trade an empty box for a spinner
+   *  and make an optional step feel mandatory. A link that arrives late still lands: every
+   *  step reads `links` live, and refreshFromResume never touches a box already typed in.
+   *
+   *  `structure_pending` is deliberately NOT the signal read here. The server sets it for a
+   *  parse that FAILED as well as one still running (see resume.go's GetResume), so waiting
+   *  on it would wait forever for the third of uploads whose extraction times out. The
+   *  three-valued `parse_status` is what tells those apart. */
+  async function waitForResumeStructure() {
+    const token = ++waitToken;
+    cvParse = 'waiting';
+    for (let attempt = 0; ; attempt++) {
+      // oxlint-disable-next-line no-await-in-loop -- a backoff poll IS sequential: each read decides whether there is a next one, so there is no set of promises to run together
+      const resume = await refreshFromResume();
+      if (token !== waitToken) return; // a newer upload, or the wizard is gone
+      // Storage off, or nothing stored: there is no parse to wait for and never will be.
+      if (resume && (!resume.enabled || !resume.present)) {
+        cvParse = 'idle';
+        return;
+      }
+      if (resume && resume.parse_status !== 'pending') {
+        cvParse = resume.parse_status === 'failed' ? 'failed' : 'idle';
+        return;
+      }
+      // A read that failed outright (resume === null) is treated as still pending: one
+      // dropped request during a wizard is far likelier than a parse that finished in the
+      // same instant, and the table below bounds the retrying either way.
+      const delay = nextResumePollDelayMs(attempt);
+      if (delay === null) {
+        cvParse = 'idle';
+        return;
+      }
+      // oxlint-disable-next-line no-await-in-loop -- the wait between reads is the point; running these together would be no backoff at all
+      await new Promise((resolve) => setTimeout(resolve, delay));
+      if (token !== waitToken) return;
+    }
+  }
+
+  // Stop waiting when the wizard goes away. Without this the loop outlives the page for up
+  // to a minute, re-reading a résumé for a wizard nobody is looking at — and, after a
+  // sign-out, for an account that is no longer the caller.
+  onDestroy(() => {
+    waitToken++;
+  });
 
   function back() {
     if (index > 0) index -= 1;
@@ -380,6 +444,8 @@
               {onExtracted}
               onDerivedLocation={(loc) => (importedLocation = loc)}
               {onLinkedInUrl}
+              onCvUploaded={() => void waitForResumeStructure()}
+              onAdvance={() => void advance()}
             />
           {:else if currentKind === 'confirm'}
             <ConfirmStep
@@ -387,6 +453,7 @@
               {seniorities}
               {links}
               {linksPrefilled}
+              {cvParse}
               onSpecializationsChange={(next) => (specializations = next)}
               onSenioritiesChange={(next) => (seniorities = next)}
               onLinksChange={(next) => (links = next)}

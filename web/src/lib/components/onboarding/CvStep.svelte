@@ -30,9 +30,17 @@
      *  the extract endpoint returns facets only, and the links a résumé carries reach the
      *  wizard through GET /me/resume instead. */
     onLinkedInUrl: (url: string) => void;
+    /** A CV has just been stored, so its background parse has just started. Fired from here
+     *  rather than from the wizard's Continue because the two are seconds apart, and those
+     *  are seconds of a wait the candidate would otherwise spend on the next step for
+     *  nothing. */
+    onCvUploaded: () => void;
+    /** Leave this step for the next one, saving it the way Continue would. */
+    onAdvance: () => void;
   }
 
-  let { staged, onExtracted, onDerivedLocation, onLinkedInUrl }: Props = $props();
+  let { staged, onExtracted, onDerivedLocation, onLinkedInUrl, onCvUploaded, onAdvance }: Props =
+    $props();
 
   let cvState = $state<'idle' | 'parsing' | 'error'>('idle');
   let cvError = $state<string | null>(null);
@@ -62,6 +70,18 @@
     return 'Filled in what we found — review on the next step.';
   }
 
+  // Whether an import should carry the candidate onward by itself. It should when the note it
+  // would leave behind says nothing they need to act on: "review on the next step" is a
+  // promise best kept by going there, and staying put after a successful import reads as the
+  // upload not having registered.
+  //
+  // The two notes that DO say something — an import that recognised nothing, and one whose
+  // roles the specialization cap trimmed — keep the candidate here to read them. Both are
+  // about this step, and neither survives the screen it was written for.
+  function shouldAdvanceAfter(merged: MergedFacets): boolean {
+    return merged.resolved && merged.specializationsDropped === 0;
+  }
+
   async function onCvFile(e: Event) {
     const input = e.target as HTMLInputElement;
     const file = input.files?.[0];
@@ -79,10 +99,15 @@
       // next steps.
       resumeStore.noteUpload();
       if (gen !== cvGen) return; // superseded by another pick or a page reset
+      // The CV is stored by now, so its structured parse is already running server-side.
+      // Telling the wizard here rather than on Continue is what gives that parse the seconds
+      // it needs before the links step asks for its result.
+      onCvUploaded();
       const merged = mergeFacets(staged, cv);
       onExtracted(merged);
       cvState = 'idle';
       cvNote = importNote(merged, 'that CV');
+      if (shouldAdvanceAfter(merged)) onAdvance();
     } catch (err) {
       track('cv_upload', {
         ok: false,
@@ -122,6 +147,10 @@
       onLinkedInUrl(url);
       liState = 'idle';
       liNote = importNote(merged, 'that profile');
+      // The same rule as the upload above, deliberately: the two entry points are co-equal
+      // and leave the same note, so one of them moving on while the other sits still would
+      // make that one sentence mean two different things.
+      if (shouldAdvanceAfter(merged)) onAdvance();
     } catch (err) {
       track('linkedin_import', { ok: false, origin: 'onboarding_gate' });
       if (gen !== liGen) return;

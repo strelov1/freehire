@@ -15,6 +15,7 @@
   import SeniorityPills from '$lib/components/profile/SeniorityPills.svelte';
   import { MAX_SPECIALIZATIONS } from '$lib/profileLimits';
   import ProfileLinksFields from './ProfileLinksFields.svelte';
+  import type { CvParseState } from '$lib/onboardingResumeWait';
   import type { ProfileLinks } from '$lib/profileLinks';
 
   interface Props {
@@ -24,6 +25,9 @@
     /** True when at least one link arrived from the CV or the LinkedIn import rather than
      *  being typed here — the only reason to explain where the text came from. */
     linksPrefilled: boolean;
+    /** Where the CV's background parse has got to. Passed straight through to the link
+     *  fields, since those are the boxes that parse fills. */
+    cvParse: CvParseState;
     onSpecializationsChange: (next: string[]) => void;
     onSenioritiesChange: (next: string[]) => void;
     onLinksChange: (next: ProfileLinks) => void;
@@ -34,6 +38,7 @@
     seniorities,
     links,
     linksPrefilled,
+    cvParse,
     onSpecializationsChange,
     onSenioritiesChange,
     onLinksChange,
@@ -176,5 +181,5 @@
 <SeniorityPills selected={seniorities} onToggle={toggleSeniority} />
 
 <div class="mt-6">
-  <ProfileLinksFields value={links} onChange={onLinksChange} prefilled={linksPrefilled} />
+  <ProfileLinksFields value={links} onChange={onLinksChange} prefilled={linksPrefilled} {cvParse} />
 </div>
