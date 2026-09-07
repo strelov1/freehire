@@ -64,16 +64,16 @@ describe('jobCtaPlan', () => {
     });
   });
 
-  it('makes a startable auto-apply the primary CTA', () => {
+  it('makes a startable auto-apply the primary CTA and names the plan it needs', () => {
     expect(plan('idle')).toEqual({
-      autoApply: { label: 'Auto-apply', primary: true, disabled: false },
+      autoApply: { label: 'Auto-apply', primary: true, pro: true, disabled: false },
       external: { label: 'Show origin', primary: false },
     });
   });
 
   it('keeps a standing attempt quiet and the apply button demoted', () => {
     expect(plan('queued')).toEqual({
-      autoApply: { label: 'Auto-apply queued', primary: false, disabled: true },
+      autoApply: { label: 'Auto-apply queued', primary: false, pro: false, disabled: true },
       external: { label: 'Show origin', primary: false },
     });
   });
@@ -83,18 +83,18 @@ describe('jobCtaPlan', () => {
   // the identical situation.
   it('leaves the apply button alone for a reader who already applied by hand', () => {
     expect(plan('applied')).toEqual({
-      autoApply: { label: 'Already applied', primary: false, disabled: true },
+      autoApply: { label: 'Already applied', primary: false, pro: false, disabled: true },
       external: { label: 'Apply', primary: true },
     });
   });
 
   it('promotes the apply button back when auto-apply will not act', () => {
     expect(plan('declined')).toEqual({
-      autoApply: { label: 'Auto-apply declined', primary: false, disabled: true },
+      autoApply: { label: 'Auto-apply declined', primary: false, pro: false, disabled: true },
       external: { label: 'Apply', primary: true },
     });
     expect(plan('failed')).toEqual({
-      autoApply: { label: "Auto-apply couldn't complete", primary: false, disabled: true },
+      autoApply: { label: "Auto-apply couldn't complete", primary: false, pro: false, disabled: true },
       external: { label: 'Apply', primary: true },
     });
   });
@@ -117,6 +117,15 @@ describe('jobCtaPlan', () => {
       const p = plan(kind);
       const hasPrimary = Boolean(p.autoApply?.primary) || p.external.primary;
       expect(hasPrimary, `state ${kind}`).toBe(kind !== 'queued');
+    }
+  });
+
+  // The Pro marker states a requirement of the action. On a button nobody can press it
+  // would state it about nothing.
+  it('marks Pro only on a button that can be pressed', () => {
+    for (const kind of kinds) {
+      const { autoApply } = plan(kind);
+      if (autoApply?.pro) expect(autoApply.disabled, `state ${kind}`).toBe(false);
     }
   });
 });
