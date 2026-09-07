@@ -272,6 +272,7 @@ func (e *BrowserUseExecutor) submit(ctx context.Context, plan Plan, merged []Mer
 		// (RunOptions.CallTimeout) is the far more likely trigger in practice than this
 		// executor's own longer internal timeout, since the outer context cancels first.
 		log.Printf("atsapply: browser-use run %s errored mid-flight, treating as unconfirmed: %v", runID, err)
+		e.recordSpendBestEffort(runID)
 		return autoapply.SidecarResult{Status: autoapply.StatusUnconfirmed}, true, nil
 	}
 	e.spend.record(res.TotalCostUSD)
@@ -294,4 +295,25 @@ func (e *BrowserUseExecutor) submit(ctx context.Context, plan Plan, merged []Mer
 	default:
 		return autoapply.SidecarResult{Status: autoapply.StatusUnconfirmed}, true, nil
 	}
+}
+
+// recordSpendBestEffort fetches and records a run's cost after Wait itself failed to
+// return one — CreateRun already started billable work, so that cost must not simply
+// vanish from the guard's running total. Found by code review alongside the mid-flight
+// Wait-failure case just above: before this existed, a run that errored out of Wait spent
+// real money that this executor's own spend guard never learned about. Uses a context of
+// its own rather than the one Wait failed on: that one is very likely already dead (an
+// expired call-timeout is the common reason Wait fails at all), and this read is worth a
+// short, separate budget of its own. Best-effort: a failure here is logged and swallowed
+// rather than propagated, since the run's outcome (StatusUnconfirmed) is already decided
+// and does not depend on knowing its cost.
+func (e *BrowserUseExecutor) recordSpendBestEffort(runID string) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	res, err := e.client.GetResult(ctx, runID)
+	if err != nil {
+		log.Printf("atsapply: browser-use could not fetch cost for run %s after a wait failure: %v", runID, err)
+		return
+	}
+	e.spend.record(res.TotalCostUSD)
 }
