@@ -195,21 +195,23 @@ func (c *Client) do(req *http.Request, out any) error {
 		req.Body = io.NopCloser(bytes.NewReader(body))
 	}
 
-	for attempt := 0; ; attempt++ {
-		wait, rateLimited, err := c.attempt(req, out)
-		if !rateLimited || attempt > 0 {
-			return err
-		}
-		select {
-		case <-time.After(wait):
-		case <-req.Context().Done():
-			return req.Context().Err()
-		}
-		req = req.Clone(req.Context())
-		if body != nil {
-			req.Body = io.NopCloser(bytes.NewReader(body))
-		}
+	wait, rateLimited, err := c.attempt(req, out)
+	if !rateLimited {
+		return err
 	}
+
+	select {
+	case <-time.After(wait):
+	case <-req.Context().Done():
+		return req.Context().Err()
+	}
+
+	retry := req.Clone(req.Context())
+	if body != nil {
+		retry.Body = io.NopCloser(bytes.NewReader(body))
+	}
+	_, _, err = c.attempt(retry, out)
+	return err
 }
 
 // attempt is one round trip. It exists so the response body is closed in the same function

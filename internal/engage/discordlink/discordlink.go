@@ -57,10 +57,11 @@ const (
 // verified every account against Discord would cost one request per subscriber per hour to
 // find nothing.
 func Reconcile(tier plan.Tier, roleGranted bool) Action {
+	warrants := WarrantsPaidRole(tier)
 	switch {
-	case WarrantsPaidRole(tier) && !roleGranted:
+	case warrants && !roleGranted:
 		return ActionGrant
-	case !WarrantsPaidRole(tier) && roleGranted:
+	case !warrants && roleGranted:
 		return ActionRevoke
 	default:
 		return ActionNone

@@ -172,63 +172,58 @@ func (s *Service) Sync(ctx context.Context, limit int32) (Stats, error) {
 		}
 		stats.Examined++
 
-		switch Reconcile(plan.TierOf(c.ProUntil, c.UltraUntil, now), c.RoleGranted) {
-		case ActionGrant:
-			if s.apply(ctx, c, true, &stats) {
-				stats.Granted++
-			}
-		case ActionRevoke:
-			if s.apply(ctx, c, false, &stats) {
-				stats.Revoked++
-			}
-		case ActionNone:
-			// Nothing to do on Discord. The row is still stamped, so the queue rotates and a
-			// bounded run reaches everybody over successive runs.
-			if err := s.store.SetRoleGranted(ctx, c.UserID, c.RoleGranted); err != nil {
-				log.Printf("discordlink: stamping user %d failed: %v", c.UserID, err)
-				stats.Failed++
-			}
+		action := Reconcile(plan.TierOf(c.ProUntil, c.UltraUntil, now), c.RoleGranted)
+		granted, err := s.moveRole(ctx, c, action)
+		failed := err != nil
+		if failed {
+			log.Printf("discordlink: %s for user %d failed: %v", action, c.UserID, err)
+		}
+
+		// EVERY path stamps the row, including the one that did nothing and the one that
+		// failed: the stamp is what moves a binding to the back of the reconciliation queue,
+		// and a row left unstamped pins the front of it and starves everybody behind the
+		// per-run bound. What differs is the value — a failure records the row as it stood,
+		// so the next run tries again.
+		if err := s.store.SetRoleGranted(ctx, c.UserID, granted); err != nil {
+			log.Printf("discordlink: stamping user %d failed: %v", c.UserID, err)
+			failed = true
+		}
+
+		switch {
+		case failed:
+			// At most one per candidate, however many of its steps went wrong.
+			stats.Failed++
+		case action == ActionGrant && granted:
+			stats.Granted++
+		case action == ActionRevoke:
+			stats.Revoked++
 		}
 	}
 	return stats, nil
 }
 
-// apply moves one role and records the outcome, reporting whether the role actually moved.
+// moveRole performs one action on Discord and reports what the stored record should now say.
 //
-// ErrUnknownMember is success with a different meaning: the person is not in the guild, so
-// the role is not held, which is exactly what recording "not granted" says. Anything else is
-// a failure that leaves the record untouched, so the next run tries again.
-func (s *Service) apply(ctx context.Context, c Candidate, grant bool, stats *Stats) bool {
+// ErrUnknownMember is not a failure: the person has left the server, so the role is not held,
+// which is exactly what recording "not granted" says. Any other error leaves the record as it
+// stood, so the next run tries the same thing again.
+func (s *Service) moveRole(ctx context.Context, c Candidate, action Action) (bool, error) {
 	var err error
-	if grant {
+	switch action {
+	case ActionGrant:
 		err = s.discord.GrantPaidRole(ctx, c.DiscordUserID)
-	} else {
+	case ActionRevoke:
 		err = s.discord.RevokePaidRole(ctx, c.DiscordUserID)
+	case ActionNone:
+		return c.RoleGranted, nil
 	}
 
-	granted := grant
-	if errors.Is(err, ErrUnknownMember) {
-		granted, err = false, nil
+	switch {
+	case errors.Is(err, ErrUnknownMember):
+		return false, nil
+	case err != nil:
+		return c.RoleGranted, err
+	default:
+		return action == ActionGrant, nil
 	}
-	if err != nil {
-		log.Printf("discordlink: %s for user %d failed: %v", actionWord(grant), c.UserID, err)
-		stats.Failed++
-		if stampErr := s.store.SetRoleGranted(ctx, c.UserID, c.RoleGranted); stampErr != nil {
-			log.Printf("discordlink: stamping user %d failed: %v", c.UserID, stampErr)
-		}
-		return false
-	}
-	if err := s.store.SetRoleGranted(ctx, c.UserID, granted); err != nil {
-		log.Printf("discordlink: recording the role for user %d failed: %v", c.UserID, err)
-		stats.Failed++
-		return false
-	}
-	return granted == grant
-}
-
-func actionWord(grant bool) string {
-	if grant {
-		return "granting the role"
-	}
-	return "revoking the role"
 }

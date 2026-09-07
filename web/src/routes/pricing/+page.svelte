@@ -5,6 +5,7 @@
   import { formatMinorUnits } from '$lib/money';
   import { isAuthenticated } from '$lib/auth.svelte';
   import Seo from '$lib/components/Seo.svelte';
+  import { ProviderIcon } from '$lib/ui';
   import type { PlanTierAllowance, PublicPrice } from '$lib/types';
   import type { PageData } from './$types';
 
@@ -257,6 +258,18 @@
         {/each}
       </ul>
 
+      <!-- The one thing on this page that is NOT a daily amount, so it cannot be a row in
+           the list above: free does not get a smaller share of it, it does not get it. It
+           is stated on the paid cards and simply absent from the free one, because a
+           crossed-out row would say "you cannot" — which is the thing this page is built
+           to never say. -->
+      <p class="flex items-baseline gap-2 text-sm">
+        <ProviderIcon provider="discord" class="size-4 shrink-0 translate-y-0.5" />
+        <span class="text-muted-foreground">
+          Members-only channels on the community Discord.
+        </span>
+      </p>
+
       {#if chosen}
         {#if isAuthenticated()}
           <div class="mt-auto flex flex-col gap-2">
@@ -342,6 +355,14 @@
             </li>
           {/each}
         </ul>
+
+        <!-- The Discord line, for the reason the Pro card states. -->
+        <p class="flex items-baseline gap-2 text-sm">
+          <ProviderIcon provider="discord" class="size-4 shrink-0 translate-y-0.5" />
+          <span class="text-muted-foreground">
+            Members-only channels on the community Discord.
+          </span>
+        </p>
 
         {#if isAuthenticated()}
           <button

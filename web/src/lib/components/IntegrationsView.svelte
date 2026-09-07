@@ -3,7 +3,8 @@
   import { page } from '$app/state';
   import { replaceState } from '$app/navigation';
   import { api, ApiError } from '$lib/api';
-  import type { DiscordStatus, GmailStatus } from '$lib/api';
+  import type { GmailStatus } from '$lib/api';
+  import type { DiscordStatus } from '$lib/types';
   import { notifications } from '$lib/notifications.svelte';
   import { onRouterReady } from '$lib/routerReady';
   import { Badge, Button, ConfirmDialog, ProviderIcon } from '$lib/ui';
