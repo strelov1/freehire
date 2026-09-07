@@ -150,6 +150,9 @@ func (r *APIReader) ListEvents(ctx context.Context, from, to time.Time) ([]Meeti
 			// day to show it on.
 			continue
 		}
+		// No Cancelled here: this is the live branch, reached only when the cancelled
+		// branch above did not `continue`, so the expression it used to carry
+		// (it.Status == "cancelled") was provably always false.
 		out = append(out, Meeting{
 			UID:        it.ICalUID,
 			ProviderID: it.ID,
@@ -157,7 +160,6 @@ func (r *APIReader) ListEvents(ctx context.Context, from, to time.Time) ([]Meeti
 			StartsAt:   start,
 			EndsAt:     it.End.parse(),
 			JoinURL:    it.HangoutLink,
-			Cancelled:  it.Status == "cancelled",
 		})
 	}
 	return out, nil
