@@ -73,11 +73,19 @@ unit tests plus the function they drive; none of it needs Docker or Postgres.
       constraint by hand: overlapping bookings rejected, back-to-back accepted, a
       cancellation freeing its slot, both availability CHECKs, the review and reminder
       keys, and one profile per account
-- [ ] 2.5 Write the sqlc queries (profile CRUD and moderation, availability CRUD,
-      booking write and lists, reminder claim, review upsert) and run `make sqlc`
-- [ ] 2.6 Integration test the `EXCLUDE` constraint directly: two concurrent inserts for
+- [x] 2.5 Write the sqlc queries (profile CRUD and moderation, availability CRUD,
+      booking write and lists, reminder claim, review upsert) and run `make sqlc` — 28
+      methods. Two shapes worth noting: the publication predicate (`approved AND NOT
+      paused`) lives in the QUERIES, not in the service, so the directory and the
+      vacancy-page check cannot disagree about what "has a mentor" means; and
+      `CancelMentorBooking` packs all three guards — confirmed, not yet started, and the
+      canceller is one of the two parties — into one statement, so a stranger's attempt
+      is indistinguishable from a booking that does not exist
+- [x] 2.6 Integration test the `EXCLUDE` constraint directly: two concurrent inserts for
       one slot leave exactly one confirmed row, and a cancelled row does not block its
-      own time
+      own time — plus the cancellation guards, the reminder claim's idempotency, the
+      late-reminder suppression, the publication predicate and the directory's
+      "NULL means unfiltered" filters
 
 ## 3. Profile domain and moderation
 
