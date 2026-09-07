@@ -8,6 +8,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/platform/pgconv"
@@ -26,16 +27,21 @@ const (
 	constraintProfileSlug       = "mentors_slug_key"
 )
 
-// QueriesRepository is the production Repository over sqlc-generated *db.Queries. Every
-// write here is a single statement, so no transaction wrapper is needed; the guards live
-// in the SQL and are translated into the package's sentinels below.
+// QueriesRepository is the production Repository over sqlc-generated *db.Queries.
+//
+// Almost every write here is a single statement, so the guards live in the SQL and are
+// translated into this package's sentinels rather than wrapped in a transaction. The one
+// exception is replacing the recurring week — a delete plus a set of inserts that is one
+// edit from the mentor's point of view — which is why the pool is held alongside the
+// queries.
 type QueriesRepository struct {
-	q *db.Queries
+	q    *db.Queries
+	pool *pgxpool.Pool
 }
 
 // NewQueriesRepository constructs a QueriesRepository.
-func NewQueriesRepository(q *db.Queries) *QueriesRepository {
-	return &QueriesRepository{q: q}
+func NewQueriesRepository(q *db.Queries, pool *pgxpool.Pool) *QueriesRepository {
+	return &QueriesRepository{q: q, pool: pool}
 }
 
 // CreateProfile inserts a profile, translating each constraint the database can refuse it

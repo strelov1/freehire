@@ -3,6 +3,8 @@ package mentorship
 import (
 	"context"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 // fakeRepo is an in-memory Repository. It exists so the service's rules can be tested
@@ -17,9 +19,16 @@ type fakeRepo struct {
 	approvedReferralOffers map[referralKey]bool
 	futureBookings         map[int64][]Booking
 
+	availability map[int64][]Rule
+	bookings     map[uuid.UUID]Booking
+	reviews      map[uuid.UUID]Review
+
 	// createErr forces CreateProfile to fail, standing in for a constraint violation the
 	// adapter has already translated into a domain error.
 	createErr error
+	// createBookingErr stands in for the EXCLUDE constraint firing between the engine
+	// offering a slot and the insert reaching the database — the lost race.
+	createBookingErr error
 
 	deleted               bool
 	cancelledBeforeDelete int
@@ -36,6 +45,9 @@ func newFakeRepo() *fakeRepo {
 		byUser:                 map[int64]int64{},
 		approvedReferralOffers: map[referralKey]bool{},
 		futureBookings:         map[int64][]Booking{},
+		availability:           map[int64][]Rule{},
+		bookings:               map[uuid.UUID]Booking{},
+		reviews:                map[uuid.UUID]Review{},
 	}
 }
 
@@ -189,6 +201,128 @@ func (r *fakeRepo) DeleteProfile(_ context.Context, id, userID int64) error {
 	return nil
 }
 
+func (r *fakeRepo) ListAvailability(_ context.Context, mentorID int64) ([]Rule, error) {
+	return r.availability[mentorID], nil
+}
+
+func (r *fakeRepo) ReplaceWeeklyAvailability(_ context.Context, mentorID int64, rules []Rule) error {
+	var kept []Rule
+	for _, rule := range r.availability[mentorID] {
+		if rule.IsDated() {
+			kept = append(kept, rule)
+		}
+	}
+	r.availability[mentorID] = append(kept, rules...)
+	return nil
+}
+
+func (r *fakeRepo) AddAvailabilityRule(_ context.Context, mentorID int64, rule Rule) error {
+	r.availability[mentorID] = append(r.availability[mentorID], rule)
+	return nil
+}
+
+func (r *fakeRepo) DeleteAvailabilityRule(_ context.Context, _, _ int64) error { return nil }
+
+// ListBusy mirrors what the query does: this mentor's CONFIRMED bookings overlapping the
+// window, on half-open bounds, with no buffers applied.
+func (r *fakeRepo) ListBusy(_ context.Context, mentorID int64, from, to time.Time) ([]Interval, error) {
+	var out []Interval
+	for _, b := range r.bookings {
+		if b.MentorID != mentorID || b.Status != BookingConfirmed {
+			continue
+		}
+		if b.StartsAt.Before(to) && b.EndsAt.After(from) {
+			out = append(out, Interval{Start: b.StartsAt, End: b.EndsAt})
+		}
+	}
+	return out, nil
+}
+
+func (r *fakeRepo) CreateBooking(_ context.Context, row BookingRow) (Booking, error) {
+	if r.createBookingErr != nil {
+		return Booking{}, r.createBookingErr
+	}
+	// Stands in for the EXCLUDE constraint: a confirmed booking of this mentor cannot
+	// overlap another.
+	candidate := Interval{Start: row.StartsAt, End: row.EndsAt}
+	for _, b := range r.bookings {
+		if b.MentorID != row.MentorID || b.Status != BookingConfirmed {
+			continue
+		}
+		if candidate.Overlaps(Interval{Start: b.StartsAt, End: b.EndsAt}) {
+			return Booking{}, ErrSlotUnavailable
+		}
+	}
+
+	mentor := r.profiles[row.MentorID]
+	booking := Booking{
+		ID:             uuid.New(),
+		MentorID:       row.MentorID,
+		MentorUserID:   mentor.UserID,
+		MentorSlug:     mentor.Slug,
+		SeekerUserID:   row.SeekerUserID,
+		StartsAt:       row.StartsAt,
+		EndsAt:         row.EndsAt,
+		Status:         BookingConfirmed,
+		JobID:          row.JobID,
+		Note:           row.Note,
+		SeekerTimezone: row.SeekerTimezone,
+		MentorTimezone: mentor.Timezone,
+		MeetingURL:     row.MeetingURL,
+	}
+	r.bookings[booking.ID] = booking
+	return booking, nil
+}
+
+func (r *fakeRepo) BookingByID(_ context.Context, id uuid.UUID) (Booking, bool, error) {
+	b, ok := r.bookings[id]
+	return b, ok, nil
+}
+
+// CancelBooking mirrors the statement's three guards, including that a stranger gets the
+// same answer as a booking that does not exist.
+func (r *fakeRepo) CancelBooking(_ context.Context, id uuid.UUID, actorID int64, reason string) (Booking, error) {
+	b, ok := r.bookings[id]
+	if !ok {
+		return Booking{}, ErrBookingNotFound
+	}
+	if actorID != b.SeekerUserID && actorID != b.MentorUserID {
+		return Booking{}, ErrBookingNotFound
+	}
+	if b.Status != BookingConfirmed {
+		return Booking{}, ErrBookingNotCancellable
+	}
+	b.Status = BookingCancelled
+	_ = reason
+	r.bookings[id] = b
+	return b, nil
+}
+
+func (r *fakeRepo) ListBookingsBySeeker(_ context.Context, seekerID int64, _ int32) ([]Booking, error) {
+	var out []Booking
+	for _, b := range r.bookings {
+		if b.SeekerUserID == seekerID {
+			out = append(out, b)
+		}
+	}
+	return out, nil
+}
+
+func (r *fakeRepo) ListBookingsByMentor(_ context.Context, mentorID int64, _ int32) ([]Booking, error) {
+	var out []Booking
+	for _, b := range r.bookings {
+		if b.MentorID == mentorID {
+			out = append(out, b)
+		}
+	}
+	return out, nil
+}
+
+func (r *fakeRepo) UpsertReview(_ context.Context, review Review, _ int64) (Review, error) {
+	r.reviews[review.BookingID] = review
+	return review, nil
+}
+
 func contains(haystack []string, needle string) bool {
 	for _, s := range haystack {
 		if s == needle {
@@ -200,16 +334,22 @@ func contains(haystack []string, needle string) bool {
 
 // fakeNotifier records what would have been delivered, and can be made to fail.
 type fakeNotifier struct {
-	err       error
-	cancelled []Booking
+	err         error
+	confirmed   []Booking
+	cancelled   []Booking
+	cancelledBy []CancelledBy
 }
 
-func (n *fakeNotifier) BookingCancelled(_ context.Context, b Booking, _ CancelledBy, _ string) error {
+func (n *fakeNotifier) BookingCancelled(_ context.Context, b Booking, by CancelledBy, _ string) error {
 	n.cancelled = append(n.cancelled, b)
+	n.cancelledBy = append(n.cancelledBy, by)
 	return n.err
 }
 
-func (n *fakeNotifier) BookingConfirmed(_ context.Context, _ Booking) error { return n.err }
+func (n *fakeNotifier) BookingConfirmed(_ context.Context, b Booking) error {
+	n.confirmed = append(n.confirmed, b)
+	return n.err
+}
 
 func (n *fakeNotifier) BookingReminder(_ context.Context, _ Booking, _ time.Duration) error {
 	return n.err

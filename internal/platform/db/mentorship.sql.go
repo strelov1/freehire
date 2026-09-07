@@ -397,33 +397,20 @@ func (q *Queries) DeleteMentorWeeklyAvailability(ctx context.Context, mentorID i
 }
 
 const getMentorBooking = `-- name: GetMentorBooking :one
-SELECT b.id, b.mentor_id, b.seeker_user_id, b.starts_at, b.ends_at, b.status, b.job_id, b.note, b.seeker_timezone, b.meeting_url, b.cancelled_at, b.cancelled_by, b.cancel_reason, b.created_at, m.slug AS mentor_slug, m.user_id AS mentor_user_id, m.timezone AS mentor_timezone,
-       m.company_slug, m.headline
+SELECT b.id, b.mentor_id, b.seeker_user_id, b.starts_at, b.ends_at, b.status, b.job_id, b.note, b.seeker_timezone, b.meeting_url, b.cancelled_at, b.cancelled_by, b.cancel_reason, b.created_at, m.slug AS mentor_slug, m.user_id AS mentor_user_id,
+       m.timezone AS mentor_timezone, m.company_slug, m.headline
 FROM mentor_bookings b
 JOIN mentors m ON m.id = b.mentor_id
 WHERE b.id = $1
 `
 
 type GetMentorBookingRow struct {
-	ID             pgtype.UUID        `json:"id"`
-	MentorID       int64              `json:"mentor_id"`
-	SeekerUserID   int64              `json:"seeker_user_id"`
-	StartsAt       pgtype.Timestamptz `json:"starts_at"`
-	EndsAt         pgtype.Timestamptz `json:"ends_at"`
-	Status         string             `json:"status"`
-	JobID          pgtype.Int8        `json:"job_id"`
-	Note           string             `json:"note"`
-	SeekerTimezone string             `json:"seeker_timezone"`
-	MeetingUrl     string             `json:"meeting_url"`
-	CancelledAt    pgtype.Timestamptz `json:"cancelled_at"`
-	CancelledBy    pgtype.Int8        `json:"cancelled_by"`
-	CancelReason   string             `json:"cancel_reason"`
-	CreatedAt      pgtype.Timestamptz `json:"created_at"`
-	MentorSlug     string             `json:"mentor_slug"`
-	MentorUserID   int64              `json:"mentor_user_id"`
-	MentorTimezone string             `json:"mentor_timezone"`
-	CompanySlug    string             `json:"company_slug"`
-	Headline       string             `json:"headline"`
+	MentorBooking  MentorBooking `json:"mentor_booking"`
+	MentorSlug     string        `json:"mentor_slug"`
+	MentorUserID   int64         `json:"mentor_user_id"`
+	MentorTimezone string        `json:"mentor_timezone"`
+	CompanySlug    string        `json:"company_slug"`
+	Headline       string        `json:"headline"`
 }
 
 // One booking with what both parties' views need. Authorisation is the caller's job: this
@@ -433,20 +420,20 @@ func (q *Queries) GetMentorBooking(ctx context.Context, id pgtype.UUID) (GetMent
 	row := q.db.QueryRow(ctx, getMentorBooking, id)
 	var i GetMentorBookingRow
 	err := row.Scan(
-		&i.ID,
-		&i.MentorID,
-		&i.SeekerUserID,
-		&i.StartsAt,
-		&i.EndsAt,
-		&i.Status,
-		&i.JobID,
-		&i.Note,
-		&i.SeekerTimezone,
-		&i.MeetingUrl,
-		&i.CancelledAt,
-		&i.CancelledBy,
-		&i.CancelReason,
-		&i.CreatedAt,
+		&i.MentorBooking.ID,
+		&i.MentorBooking.MentorID,
+		&i.MentorBooking.SeekerUserID,
+		&i.MentorBooking.StartsAt,
+		&i.MentorBooking.EndsAt,
+		&i.MentorBooking.Status,
+		&i.MentorBooking.JobID,
+		&i.MentorBooking.Note,
+		&i.MentorBooking.SeekerTimezone,
+		&i.MentorBooking.MeetingUrl,
+		&i.MentorBooking.CancelledAt,
+		&i.MentorBooking.CancelledBy,
+		&i.MentorBooking.CancelReason,
+		&i.MentorBooking.CreatedAt,
 		&i.MentorSlug,
 		&i.MentorUserID,
 		&i.MentorTimezone,
@@ -628,21 +615,8 @@ type ListBookingsByMentorParams struct {
 }
 
 type ListBookingsByMentorRow struct {
-	ID             pgtype.UUID        `json:"id"`
-	MentorID       int64              `json:"mentor_id"`
-	SeekerUserID   int64              `json:"seeker_user_id"`
-	StartsAt       pgtype.Timestamptz `json:"starts_at"`
-	EndsAt         pgtype.Timestamptz `json:"ends_at"`
-	Status         string             `json:"status"`
-	JobID          pgtype.Int8        `json:"job_id"`
-	Note           string             `json:"note"`
-	SeekerTimezone string             `json:"seeker_timezone"`
-	MeetingUrl     string             `json:"meeting_url"`
-	CancelledAt    pgtype.Timestamptz `json:"cancelled_at"`
-	CancelledBy    pgtype.Int8        `json:"cancelled_by"`
-	CancelReason   string             `json:"cancel_reason"`
-	CreatedAt      pgtype.Timestamptz `json:"created_at"`
-	SeekerEmail    string             `json:"seeker_email"`
+	MentorBooking MentorBooking `json:"mentor_booking"`
+	SeekerEmail   string        `json:"seeker_email"`
 }
 
 // The mentor's own sessions. Carries the seeker's email so the cabinet can show who is
@@ -657,20 +631,20 @@ func (q *Queries) ListBookingsByMentor(ctx context.Context, arg ListBookingsByMe
 	for rows.Next() {
 		var i ListBookingsByMentorRow
 		if err := rows.Scan(
-			&i.ID,
-			&i.MentorID,
-			&i.SeekerUserID,
-			&i.StartsAt,
-			&i.EndsAt,
-			&i.Status,
-			&i.JobID,
-			&i.Note,
-			&i.SeekerTimezone,
-			&i.MeetingUrl,
-			&i.CancelledAt,
-			&i.CancelledBy,
-			&i.CancelReason,
-			&i.CreatedAt,
+			&i.MentorBooking.ID,
+			&i.MentorBooking.MentorID,
+			&i.MentorBooking.SeekerUserID,
+			&i.MentorBooking.StartsAt,
+			&i.MentorBooking.EndsAt,
+			&i.MentorBooking.Status,
+			&i.MentorBooking.JobID,
+			&i.MentorBooking.Note,
+			&i.MentorBooking.SeekerTimezone,
+			&i.MentorBooking.MeetingUrl,
+			&i.MentorBooking.CancelledAt,
+			&i.MentorBooking.CancelledBy,
+			&i.MentorBooking.CancelReason,
+			&i.MentorBooking.CreatedAt,
 			&i.SeekerEmail,
 		); err != nil {
 			return nil, err
@@ -684,7 +658,8 @@ func (q *Queries) ListBookingsByMentor(ctx context.Context, arg ListBookingsByMe
 }
 
 const listBookingsBySeeker = `-- name: ListBookingsBySeeker :many
-SELECT b.id, b.mentor_id, b.seeker_user_id, b.starts_at, b.ends_at, b.status, b.job_id, b.note, b.seeker_timezone, b.meeting_url, b.cancelled_at, b.cancelled_by, b.cancel_reason, b.created_at, m.slug AS mentor_slug, m.headline, m.company_slug, c.name AS company_name
+SELECT b.id, b.mentor_id, b.seeker_user_id, b.starts_at, b.ends_at, b.status, b.job_id, b.note, b.seeker_timezone, b.meeting_url, b.cancelled_at, b.cancelled_by, b.cancel_reason, b.created_at, m.slug AS mentor_slug, m.headline, m.company_slug,
+       c.name AS company_name
 FROM mentor_bookings b
 JOIN mentors m ON m.id = b.mentor_id
 LEFT JOIN companies c ON c.slug = m.company_slug
@@ -699,24 +674,11 @@ type ListBookingsBySeekerParams struct {
 }
 
 type ListBookingsBySeekerRow struct {
-	ID             pgtype.UUID        `json:"id"`
-	MentorID       int64              `json:"mentor_id"`
-	SeekerUserID   int64              `json:"seeker_user_id"`
-	StartsAt       pgtype.Timestamptz `json:"starts_at"`
-	EndsAt         pgtype.Timestamptz `json:"ends_at"`
-	Status         string             `json:"status"`
-	JobID          pgtype.Int8        `json:"job_id"`
-	Note           string             `json:"note"`
-	SeekerTimezone string             `json:"seeker_timezone"`
-	MeetingUrl     string             `json:"meeting_url"`
-	CancelledAt    pgtype.Timestamptz `json:"cancelled_at"`
-	CancelledBy    pgtype.Int8        `json:"cancelled_by"`
-	CancelReason   string             `json:"cancel_reason"`
-	CreatedAt      pgtype.Timestamptz `json:"created_at"`
-	MentorSlug     string             `json:"mentor_slug"`
-	Headline       string             `json:"headline"`
-	CompanySlug    string             `json:"company_slug"`
-	CompanyName    pgtype.Text        `json:"company_name"`
+	MentorBooking MentorBooking `json:"mentor_booking"`
+	MentorSlug    string        `json:"mentor_slug"`
+	Headline      string        `json:"headline"`
+	CompanySlug   string        `json:"company_slug"`
+	CompanyName   pgtype.Text   `json:"company_name"`
 }
 
 // The seeker's own sessions, newest first. Upcoming and past are split by the caller
@@ -731,20 +693,20 @@ func (q *Queries) ListBookingsBySeeker(ctx context.Context, arg ListBookingsBySe
 	for rows.Next() {
 		var i ListBookingsBySeekerRow
 		if err := rows.Scan(
-			&i.ID,
-			&i.MentorID,
-			&i.SeekerUserID,
-			&i.StartsAt,
-			&i.EndsAt,
-			&i.Status,
-			&i.JobID,
-			&i.Note,
-			&i.SeekerTimezone,
-			&i.MeetingUrl,
-			&i.CancelledAt,
-			&i.CancelledBy,
-			&i.CancelReason,
-			&i.CreatedAt,
+			&i.MentorBooking.ID,
+			&i.MentorBooking.MentorID,
+			&i.MentorBooking.SeekerUserID,
+			&i.MentorBooking.StartsAt,
+			&i.MentorBooking.EndsAt,
+			&i.MentorBooking.Status,
+			&i.MentorBooking.JobID,
+			&i.MentorBooking.Note,
+			&i.MentorBooking.SeekerTimezone,
+			&i.MentorBooking.MeetingUrl,
+			&i.MentorBooking.CancelledAt,
+			&i.MentorBooking.CancelledBy,
+			&i.MentorBooking.CancelReason,
+			&i.MentorBooking.CreatedAt,
 			&i.MentorSlug,
 			&i.Headline,
 			&i.CompanySlug,
@@ -783,25 +745,12 @@ type ListBookingsDueForReminderParams struct {
 }
 
 type ListBookingsDueForReminderRow struct {
-	ID             pgtype.UUID        `json:"id"`
-	MentorID       int64              `json:"mentor_id"`
-	SeekerUserID   int64              `json:"seeker_user_id"`
-	StartsAt       pgtype.Timestamptz `json:"starts_at"`
-	EndsAt         pgtype.Timestamptz `json:"ends_at"`
-	Status         string             `json:"status"`
-	JobID          pgtype.Int8        `json:"job_id"`
-	Note           string             `json:"note"`
-	SeekerTimezone string             `json:"seeker_timezone"`
-	MeetingUrl     string             `json:"meeting_url"`
-	CancelledAt    pgtype.Timestamptz `json:"cancelled_at"`
-	CancelledBy    pgtype.Int8        `json:"cancelled_by"`
-	CancelReason   string             `json:"cancel_reason"`
-	CreatedAt      pgtype.Timestamptz `json:"created_at"`
-	MentorTimezone string             `json:"mentor_timezone"`
-	MentorUserID   int64              `json:"mentor_user_id"`
-	MentorSlug     string             `json:"mentor_slug"`
-	Headline       string             `json:"headline"`
-	SeekerEmail    string             `json:"seeker_email"`
+	MentorBooking  MentorBooking `json:"mentor_booking"`
+	MentorTimezone string        `json:"mentor_timezone"`
+	MentorUserID   int64         `json:"mentor_user_id"`
+	MentorSlug     string        `json:"mentor_slug"`
+	Headline       string        `json:"headline"`
+	SeekerEmail    string        `json:"seeker_email"`
 }
 
 // The reminder worker's page: confirmed sessions starting within the offset and not yet
@@ -820,20 +769,20 @@ func (q *Queries) ListBookingsDueForReminder(ctx context.Context, arg ListBookin
 	for rows.Next() {
 		var i ListBookingsDueForReminderRow
 		if err := rows.Scan(
-			&i.ID,
-			&i.MentorID,
-			&i.SeekerUserID,
-			&i.StartsAt,
-			&i.EndsAt,
-			&i.Status,
-			&i.JobID,
-			&i.Note,
-			&i.SeekerTimezone,
-			&i.MeetingUrl,
-			&i.CancelledAt,
-			&i.CancelledBy,
-			&i.CancelReason,
-			&i.CreatedAt,
+			&i.MentorBooking.ID,
+			&i.MentorBooking.MentorID,
+			&i.MentorBooking.SeekerUserID,
+			&i.MentorBooking.StartsAt,
+			&i.MentorBooking.EndsAt,
+			&i.MentorBooking.Status,
+			&i.MentorBooking.JobID,
+			&i.MentorBooking.Note,
+			&i.MentorBooking.SeekerTimezone,
+			&i.MentorBooking.MeetingUrl,
+			&i.MentorBooking.CancelledAt,
+			&i.MentorBooking.CancelledBy,
+			&i.MentorBooking.CancelReason,
+			&i.MentorBooking.CreatedAt,
 			&i.MentorTimezone,
 			&i.MentorUserID,
 			&i.MentorSlug,

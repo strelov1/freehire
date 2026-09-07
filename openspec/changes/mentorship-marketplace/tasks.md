@@ -103,16 +103,20 @@ unit tests plus the function they drive; none of it needs Docker or Postgres.
 
 ## 4. Booking domain
 
-- [ ] 4.1 Booking creation: authenticated only, never one's own profile, re-deriving the
+- [x] 4.1 Booking creation: authenticated only, never one's own profile, re-deriving the
       slot at write time and refusing with a named reason
-- [ ] 4.2 Map the `EXCLUDE` violation to the same "no longer available" sentinel a stale
-      page gets, so a race and a stale tab are indistinguishable to the client
-- [ ] 4.3 Random booking identifiers, and the `job_id` reference that outlives its vacancy
-- [ ] 4.4 Cancellation by either party before the start, recording who and when,
+- [x] 4.2 Map the `EXCLUDE` violation to the same "no longer available" sentinel a stale
+      page gets, so a race and a stale tab are indistinguishable to the client. Note the
+      trap this uncovered: an EXCLUDE violation is SQLSTATE **23P01**, not a unique
+      violation's 23505, so `pgerr.IsUniqueViolation` does not match it and the refusal
+      would have surfaced as a 500. `pgerr` gained `IsExclusionViolation` and
+      `ExclusionViolationConstraint`
+- [x] 4.3 Random booking identifiers, and the `job_id` reference that outlives its vacancy
+- [x] 4.4 Cancellation by either party before the start, recording who and when,
       refusing a past or already-cancelled booking, and refusing a stranger without
       revealing whether the booking exists
-- [ ] 4.5 Per-party session lists, split upcoming and past, each readable only by its owner
-- [ ] 4.6 Completion and review: one review per completed booking, seeker only, editable
+- [x] 4.5 Per-party session lists, split upcoming and past, each readable only by its owner
+- [x] 4.6 Completion and review: one review per completed booking, seeker only, editable
       without duplicating, never for a cancelled session; aggregate rating and count on
       the profile
 

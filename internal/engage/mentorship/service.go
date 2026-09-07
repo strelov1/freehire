@@ -73,6 +73,45 @@ type Repository interface {
 	CompanyHasPublishedProfile(ctx context.Context, companySlug string) (bool, error)
 	CancelFutureBookings(ctx context.Context, mentorID, cancelledBy int64, reason string) ([]Booking, error)
 	DeleteProfile(ctx context.Context, id, userID int64) error
+
+	ListAvailability(ctx context.Context, mentorID int64) ([]Rule, error)
+	ReplaceWeeklyAvailability(ctx context.Context, mentorID int64, rules []Rule) error
+	AddAvailabilityRule(ctx context.Context, mentorID int64, rule Rule) error
+	DeleteAvailabilityRule(ctx context.Context, ruleID, mentorID int64) error
+
+	// ListBusy is the mentor's occupied time in a window: their confirmed bookings and,
+	// once that sync exists, their calendar's free/busy intervals. Buffers are NOT applied
+	// here — the slot engine widens these, because the buffers belong to the mentor and
+	// may change between two reads of the same booking.
+	ListBusy(ctx context.Context, mentorID int64, from, to time.Time) ([]Interval, error)
+
+	// CreateBooking writes a confirmed booking. The adapter translates the EXCLUDE
+	// constraint's violation into ErrSlotUnavailable — the same sentinel a stale page
+	// gets, because to a seeker a lost race and a stale tab are one event.
+	CreateBooking(ctx context.Context, row BookingRow) (Booking, error)
+	BookingByID(ctx context.Context, id uuid.UUID) (Booking, bool, error)
+	// CancelBooking carries its three guards in the statement: confirmed, not yet begun,
+	// and the actor is one of the two parties. A no-row result is ErrBookingNotFound, so a
+	// stranger cannot learn that the booking exists.
+	CancelBooking(ctx context.Context, id uuid.UUID, actorID int64, reason string) (Booking, error)
+	ListBookingsBySeeker(ctx context.Context, seekerID int64, limit int32) ([]Booking, error)
+	ListBookingsByMentor(ctx context.Context, mentorID int64, limit int32) ([]Booking, error)
+
+	UpsertReview(ctx context.Context, review Review, seekerID int64) (Review, error)
+}
+
+// BookingRow is what the service asks the repository to write. It is separate from
+// Booking because the service supplies neither the id nor the status: the first is the
+// database's random UUID and the second is always `confirmed` at creation.
+type BookingRow struct {
+	MentorID       int64
+	SeekerUserID   int64
+	StartsAt       time.Time
+	EndsAt         time.Time
+	JobID          int64
+	Note           string
+	SeekerTimezone string
+	MeetingURL     string
 }
 
 // Notifier delivers what a booking's two parties must be told. Every method is
@@ -127,8 +166,15 @@ func (s *Service) notifyCancelled(ctx context.Context, bookings []Booking, by Ca
 	}
 	for _, b := range bookings {
 		if err := s.notifier.BookingCancelled(ctx, b, by, reason); err != nil {
-			log.Printf("mentorship: notifying seeker %d of cancelled booking %s: %v",
-				b.SeekerUserID, b.ID, err)
+			logDeliveryFailure("cancellation", b, err)
 		}
 	}
+}
+
+// logDeliveryFailure records a message that did not go out. Every caller of it has
+// already committed something, so this is the whole response: the alternative is failing
+// an operation that succeeded because a mail server was briefly down.
+func logDeliveryFailure(kind string, b Booking, err error) {
+	log.Printf("mentorship: sending the %s for booking %s (mentor %d, seeker %d): %v",
+		kind, b.ID, b.MentorID, b.SeekerUserID, err)
 }

@@ -627,7 +627,7 @@ func TestUpdateMentorProfileLeavesTheSlugAndCompanyAlone(t *testing.T) {
 
 func containsBooking(rows []ListBookingsDueForReminderRow, id pgtype.UUID) bool {
 	for _, r := range rows {
-		if r.ID == id {
+		if r.MentorBooking.ID == id {
 			return true
 		}
 	}
