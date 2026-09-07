@@ -2,9 +2,36 @@ package sources
 
 import (
 	"context"
+	"encoding/xml"
+	"fmt"
 	"strings"
 	"testing"
+
+	"golang.org/x/net/html"
 )
+
+// wantapplyFake serves the sitemap and the vacancy pages the tests wire. An unrouted URL is an
+// error, so a test that asks for a page it did not set up fails loudly.
+type wantapplyFake struct {
+	xml  map[string]string
+	html map[string]string
+}
+
+func (f *wantapplyFake) GetXML(_ context.Context, url string, v any) error {
+	body, ok := f.xml[url]
+	if !ok {
+		return fmt.Errorf("wantapplyFake: no xml route for %s", url)
+	}
+	return xml.Unmarshal([]byte(body), v)
+}
+
+func (f *wantapplyFake) GetHTML(_ context.Context, url string) (*html.Node, error) {
+	body, ok := f.html[url]
+	if !ok {
+		return nil, fmt.Errorf("wantapplyFake: no html route for %s", url)
+	}
+	return html.Parse(strings.NewReader(body))
+}
 
 func TestWantapplyVacancySlug(t *testing.T) {
 	cases := map[string]string{
@@ -301,5 +328,65 @@ func TestWantapplyRegisteredInAll(t *testing.T) {
 	reg := All(NewClient())
 	if _, ok := reg["wantapply"]; !ok {
 		t.Error("wantapply not registered in sources.All")
+	}
+}
+
+// The .com and .cy hosts are mirrors of one backend — verified 2026-09-07: five vacancies the
+// .cy sitemap does not list all return 200 on .cy. What differs is only what each SITEMAP
+// enumerates: .cy lists ~605 vacancies, .com lists 2 755.
+//
+// So the enumeration may come from .com while the pages are still read from .cy, which is the
+// whole point: the sitemap is one metered request, the 2 755 pages are free.
+func TestWantapplyRewritesSitemapHostToTheDetailHost(t *testing.T) {
+	sitemap := `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+<url><loc>https://wantapply.com/senior-ios-engineer-at-opal</loc></url>
+<url><loc>https://wantapply.com/company/opal</loc></url>
+<url><loc>https://wantapply.com/sign-in</loc></url>
+</urlset>`
+	page := `<html><body><script type="application/ld+json">{"@context":"https://schema.org","@type":"JobPosting",
+"title":"Senior iOS Engineer","hiringOrganization":{"@type":"Organization","name":"Opal"},
+"description":"<p>Build things.</p>"}</script></body></html>`
+
+	http := &wantapplyFake{
+		xml:  map[string]string{"https://wantapply.com/sitemap.xml": sitemap},
+		html: map[string]string{"https://wantapply.cy/senior-ios-engineer-at-opal": page},
+	}
+	s := NewWantapplyViaHostedSitemap(http, http, "https://wantapply.com/sitemap.xml", "wantapply.com")
+
+	jobs, err := s.Fetch(context.Background(), CompanyEntry{})
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	if len(jobs) != 1 {
+		t.Fatalf("want 1 vacancy (company/ and sign-in are not vacancies), got %d: %+v", len(jobs), jobs)
+	}
+	if jobs[0].URL != "https://wantapply.cy/senior-ios-engineer-at-opal" {
+		t.Errorf("URL = %q, want the .cy host with the sitemap's path", jobs[0].URL)
+	}
+	if jobs[0].Company != "Opal" {
+		t.Errorf("Company = %q", jobs[0].Company)
+	}
+}
+
+// The default construction is unchanged: both the sitemap and the pages come from .cy.
+func TestWantapplyDefaultStaysOnTheFreeHost(t *testing.T) {
+	sitemap := `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+<url><loc>https://wantapply.cy/dev-at-acme</loc></url>
+</urlset>`
+	page := `<html><body><script type="application/ld+json">{"@context":"https://schema.org","@type":"JobPosting",
+"title":"Dev","hiringOrganization":{"@type":"Organization","name":"Acme"},"description":"<p>Body.</p>"}</script></body></html>`
+	http := &wantapplyFake{
+		xml:  map[string]string{"https://wantapply.cy/sitemap.xml": sitemap},
+		html: map[string]string{"https://wantapply.cy/dev-at-acme": page},
+	}
+
+	jobs, err := NewWantapply(http).Fetch(context.Background(), CompanyEntry{})
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	if len(jobs) != 1 || jobs[0].URL != "https://wantapply.cy/dev-at-acme" {
+		t.Fatalf("want the .cy vacancy unchanged, got %+v", jobs)
 	}
 }
