@@ -44,6 +44,12 @@ for display names, and [internal/job/collections](../../internal/job/collections
   the retiring spelling folding to a key no row holds: the merge reports success, the 301
   works, and the next crawl of that board mints the duplicate again. Pinned by
   `TestApplyMerges_WritesEachAliasOwnFoldedKey`.
+- **It folds the NAME, not the slug**, and 0112's comment said otherwise until migration 0144
+  corrected it. `CompanyKey` strips a trailing legal form before folding, so "Sun Technologies,
+  Inc." keys at `suntechnologies` while its stored slug folds to `suntechnologiesinc`. The name
+  is the correct side: ingest folds the name its SOURCE sends, so a key built from the slug
+  would be one no crawl ever asks for. The rows a curated merge writes are the visible
+  consequence — keys that differ within one group, which is what such a group IS, not corruption.
 - **The canon freezes at first merge.** `InsertCompanySlugAlias` is `ON CONFLICT DO NOTHING`
   and the worker holds elected slugs out of a later election. A re-election would move a URL
   that has already been redirecting and indexing.
@@ -83,9 +89,18 @@ prefix pairs differing by a trailing number (measured 2026-09-06 across 447,148 
 `Intel`/`intel471`, `Four Seasons`/`Four Seasons Certified Home Health Agency`,
 `SpaceX`/`SpaceXAI` and `Blend`/`Blend360` are different employers. A wrong merge costs more
 than a missed one, since the alias is what the 301 reads. So the NAME proposes and the
-POSTINGS decide: an entry is confirmed by counting distinct job titles the two slugs share
-among their open postings, and the count is recorded beside it. `blend`/`blend-360` scored 10
-against a floor of 20 and was left out — on the same evidence the name alone got wrong.
+POSTINGS decide: an entry is confirmed by the ROLES the two slugs share among their open
+postings, read as a share of the SMALLER side, and the count is recorded beside it.
+`blend`/`blend-360` scored 10 against `blend`'s own 87 open postings — barely a tenth of the
+smaller side — and was left out, on the same evidence the name alone got wrong.
+
+Roles and not raw titles, because a posting syndicated twice is "General Counsel" on one board
+and "General Counsel - Remote" on the other, which an equality on the title scores at zero. A
+share and not an absolute, because a duplicate of nine postings can never reach a fixed floor
+however completely it duplicates. And a shared DOMAIN outranks both: `micro1` posting from
+`req.micro1.ai` beside a feed calling the employer "micro1 AI" is the employer naming itself.
+The worked query lives in `curated.go`; it approximates the role fold rather than reproducing
+`jobhash.RoleKey`, and says so.
 
 The invariants (canonical slug is a fixed point of `CompanySlug`, no entry points at a slug
 that is itself retiring) are enforced by `TestCuratedAliasesAreWellFormed`, not by review.
@@ -94,7 +109,9 @@ that is itself retiring) are enforced by `TestCuratedAliasesAreWellFormed`, not 
 covers both classes in one pass), elects the highest `job_count` variant, and records the rest
 as aliases. A curated group overrides that grouping: its canon is the one the list names, not
 the one an election reaches — Sopra Steria's artefact board carries 1,336 open jobs against the
-real company's 337, so an election would retire the company into its own artefact. It reports by default; `--apply` writes and `--min-jobs` bounds a wave so the plan
+real company's 337, so an election would retire the company into its own artefact.
+
+It reports by default; `--apply` writes and `--min-jobs` bounds a wave so the plan
 stays short enough to read. Jobs move in chunks whose statement selects rows still carrying the
 retired slug, so an updated row leaves the set — the loop ends on its own, a re-run moves
 nothing, and an interrupted wave resumes. The alias row is written BEFORE its jobs move: a run

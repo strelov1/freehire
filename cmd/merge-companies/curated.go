@@ -28,18 +28,24 @@ package main
 // counting the roles the two slugs share among their open postings, and the count is recorded
 // beside it.
 //
-// Read the overlap as a SHARE of the smaller side, not as an absolute. Twenty was the floor
-// when this list was seeded and it is a sound one against a large duplicate — `blend` /
-// `blend-360` scored 10 and was left out on exactly that evidence, which is what the name
-// alone got wrong. It says nothing at all about a small one: `micro1-ai` carries nine
-// postings in total, so twenty was never reachable and the absolute number would have
-// rejected a pair the domain settles outright.
+// Read the overlap as a SHARE of the SMALLER side, not as an absolute. `blend` / `blend-360`
+// is the rejection that shape is for: 10 shared against blend's own 87 open postings — the
+// smaller side, and barely a tenth of it — while the name alone said they were one employer.
+// The absolute says nothing at all about a small duplicate: `micro1-ai` carries nine postings
+// in total, so a floor of twenty was unreachable no matter how completely it duplicated the
+// other side, and it would have rejected a pair the domain settles outright.
 //
 // Compare roles, not raw titles. The same posting syndicated twice is "General Counsel" on
 // one board and "General Counsel - Remote" on the other, and an equality on the title scores
 // that pair at ZERO — micro1's did, across 76 legal postings on one side and 9 on the other.
-// Strip the trailing clause first; it is the same normalisation jobhash.RoleKey applies for
-// the same reason.
+// Strip the trailing clause first, which is why the query below splits on " - ".
+//
+// That split is a cheap STAND-IN for jobhash.RoleKey, not the same normalisation: RoleKey also
+// unwraps parentheses and KEEPS the words inside, so "Data Engineer (Semi Senior)" stays
+// distinct from "Data Engineer" there and collapses onto it here. It is deliberately the
+// looser of the two — this query is scoped to two slugs and read by a person deciding one
+// entry, where over-counting shows up as a pair that does not survive the eye. Reach for
+// RoleKey's exact fold only if that ever stops being true.
 //
 // A shared DOMAIN outranks both. If the surviving slug's postings link to the employer's own
 // site and the retiring name reads as that domain (micro1's `req.micro1.ai` beside a board
@@ -58,13 +64,26 @@ package main
 // hold — canonical slug is a fixed point of the slug rule, and no entry points at a slug
 // that is itself retiring — are enforced by TestCuratedAliasesAreWellFormed, not by review.
 var curatedAliases = map[string]string{
-	// Exadel runs two Greenhouse boards under different display names, plus two stray
-	// artefacts. 110 shared open titles between the first pair — about half of each side's
-	// catalogue. Found because both spellings reached the same daily digest, where the
-	// per-company cap read them as two employers.
+	// Exadel runs two Greenhouse boards under different display names. 110 shared open titles
+	// between this pair — about half of each side's catalogue. Found because both spellings
+	// reached the same daily digest, where the per-company cap read them as two employers.
 	"exadel-inc-website": "exadel",
-	"exadelinc":          "exadel",
-	"exadel-1":           "exadel",
+
+	// Two aggregator spellings of the same employer, and the WEAKEST entries in this file —
+	// recorded as such rather than dressed up. `exadelinc` is one whatjobs-pl posting and
+	// `exadel-1` is two from aijobs; neither is a Greenhouse board of Exadel's, so neither
+	// inherits the proof above, and a side of one or two postings can never reach an overlap
+	// count in the first place.
+	//
+	// What is left is the name: "exadelinc" is "Exadel Inc" with the spaces gone, and
+	// "Exadel 1" is an aggregator's numbering. That is the reasoning this file otherwise
+	// calls unsafe — and it is admitted here only because the cost is bounded on both sides.
+	// Three postings cannot bend a company page, and if the judgement is wrong the damage is
+	// three postings filed under a neighbour, not a 301 pointing a real employer's URL
+	// somewhere else. Do not read these two as licence to add a pair on the name alone where
+	// the counts are large enough to be measured.
+	"exadelinc": "exadel",
+	"exadel-1":  "exadel",
 
 	// micro1 posts from its own domain (req.micro1.ai, 336 open postings); the duplicate is an
 	// Adzuna feed calling the employer "micro1 AI" — the domain read as a name — with 9 legal
