@@ -135,6 +135,16 @@ func TestRecognize(t *testing.T) {
 		{"paycor malformed client id is not a board", "https://recruitingbypaycor.com/career/CareerHome.action?clientId=not-a-board", "", "", "", false},
 		{"paycor truncated client id is not a board", "https://recruitingbypaycor.com/career/JobIntroduction.action?clientId=4028f88b24c330a2&id=1", "", "", "", false},
 
+		// icims — board IS the host (like subdomain/host modes), so the canonical collapses to
+		// the bare host: the classic "careers-<slug>.icims.com" host folds to the bare slug
+		// (matching icims.yml's usual shape); any other *.icims.com host, including one that
+		// merely looks like the classic shape without the "careers-" prefix, is itself the board.
+		{"icims classic vacancy", "https://careers-here.icims.com/jobs/81319/lead-agentic-ai-engineer/login", "icims", "here", "https://careers-here.icims.com", true},
+		{"icims classic board listing", "https://careers-here.icims.com/jobs/search", "icims", "here", "https://careers-here.icims.com", true},
+		{"icims vanity host without the careers- prefix", "https://uscareers-lennox.icims.com/jobs/54590/ux-designer/candidate", "icims", "uscareers-lennox.icims.com", "https://uscareers-lennox.icims.com", true},
+		{"icims bare apex is not a board", "https://www.icims.com/", "", "", "", false},
+		{"icims host outside icims.com is not recognized", "https://icims.example.com/jobs", "", "", "", false},
+
 		// hosttenant — UKG Ready: the host selects the environment the tenant is hosted in and is
 		// not derivable from the tenant id, so the board carries both. The ".careers" suffix is
 		// what proves the segment names a career site; the SPA's own REST API lives under the same
