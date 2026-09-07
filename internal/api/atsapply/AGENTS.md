@@ -30,12 +30,21 @@ process, called only via `Client.WithBrowserUse`. Scope is deliberately narrow:
   arrives free with the ingest crawl and is written directly), so `Client.fetchSchema`
   already parks a Recruitee attempt with `errNoSchemaFetcher` before `Submit` ever reaches
   a `Plan` to hand this executor.
-- **Only an already fully-resolved `Plan`** (`Plan.FullyResolved()`), and **never one
-  containing a résumé/file field** (`browserUseEligible`) — this backend is handed exact
-  field values to type, never a CV file, and never a decision about what to answer. Every
+- **Only an already fully-resolved `Plan`** (`Plan.FullyResolved()`) — this backend is
+  handed exact field values to type and never a decision about what to answer. Every
   invariant `resolve.go`/`draft.go`/`sensitive.go`/`geography.go` already enforce (never
   guess, sensitive-keyword gate, geography park) stays entirely upstream of this backend,
-  unchanged and unbypassed — it only ever executes what they already decided.
+  unchanged and unbypassed — it only ever executes what they already decided. **A résumé
+  field no longer disqualifies a plan** (`resolve.go`'s own invariant guarantees any
+  `Kind=="file"` field reaching a fully-resolved `Plan` IS the approved résumé, never an
+  arbitrary upload — see `resolveOne`): `attachResumeIfPresent` uploads the same rendered
+  PDF `Client.attachApprovedResume` already produces for the Greenhouse path into a fresh,
+  per-attempt browser-use workspace (`CreateWorkspace`/`RequestFileUpload`/`UploadFile`,
+  deleted again once the run ends — a résumé is candidate PII and outlives no attempt it
+  was rendered for), and `buildTask` points the agent at it by field id/label rather than
+  printing the local temp path a cloud VM could never read. The agent still never decides
+  WHICH file to use or what a field's value is — it only attaches the one file this backend
+  already resolved and already rendered.
 - **Confirmation is a strict marker, never inferred from narrative text.** `buildTask`
   requires the agent's report to end in exactly one of `CONFIRMED: <text>` / `UNCONFIRMED`
   / `PARKED: <reason>`; `parseOutcome` treats anything else — including a marker not on the

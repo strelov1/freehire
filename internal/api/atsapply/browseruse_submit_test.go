@@ -3,11 +3,15 @@ package atsapply
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
+	"github.com/google/uuid"
+
 	"github.com/strelov1/freehire/internal/application/autoapply"
+	"github.com/strelov1/freehire/internal/candidate/cv"
 	"github.com/strelov1/freehire/internal/ingest/applyform"
 	"github.com/strelov1/freehire/internal/platform/browseruse"
 )
@@ -32,6 +36,104 @@ func (fakeAshbyFetcherWithCustomQuestion) Fetch(ctx context.Context, c applyform
 		{ID: "email", Label: "Email", Type: applyform.TypeText, Required: true},
 		{ID: "custom_1", Label: "Why do you want to work here?", Type: applyform.TypeText, Required: true},
 	}}, nil
+}
+
+// fakeAshbyFetcherWithResume adds Ashby's own résumé field (real id/label convention —
+// see internal/ingest/applyform/ashby.go and internal/ingest/applyform/ashby_test.go's own
+// fixture) to the minimal schema, so the resulting plan needs a rendered CV to resolve.
+type fakeAshbyFetcherWithResume struct{}
+
+func (fakeAshbyFetcherWithResume) Fetch(ctx context.Context, c applyform.Claimed) (applyform.Form, error) {
+	return applyform.Form{Provider: "ashby", Fields: []applyform.Field{
+		{ID: "email", Label: "Email", Type: applyform.TypeText, Required: true},
+		{ID: "_systemfield_resume", Label: "Resume", Type: applyform.TypeFile, Required: true},
+	}}, nil
+}
+
+// newFakeBrowserUseServerWithWorkspace extends newFakeBrowserUseServer's shape with the
+// workspace/file-upload endpoints attachResumeIfPresent calls, and captures the run
+// creation body plus the uploaded file's bytes so a test can assert on both.
+func newFakeBrowserUseServerWithWorkspace(t *testing.T, resultText string) (url string, runBody *map[string]any, uploadedBytes *[]byte, workspaceDeleted *bool) {
+	t.Helper()
+	runBody = &map[string]any{}
+	uploadedBytes = &[]byte{}
+	workspaceDeleted = new(bool)
+	var uploadServerURL string
+	mux := http.NewServeMux()
+	mux.HandleFunc("/workspaces", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Fatalf("unexpected method for /workspaces: %s", r.Method)
+		}
+		_, _ = w.Write([]byte(`{"id":"ws-1","archived":false,"createdAt":"2026-09-07T00:00:00Z","updatedAt":"2026-09-07T00:00:00Z"}`))
+	})
+	mux.HandleFunc("/workspaces/ws-1", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodDelete {
+			t.Fatalf("unexpected method for /workspaces/ws-1: %s", r.Method)
+		}
+		*workspaceDeleted = true
+		w.WriteHeader(http.StatusNoContent)
+	})
+	mux.HandleFunc("/workspaces/ws-1/files/upload", func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"files":[{"id":"file-1","name":"resume.pdf","storedName":"resume.pdf","path":"uploads/resume.pdf","willOverride":false,"uploadUrl":"` + uploadServerURL + `"}]}`))
+	})
+	mux.HandleFunc("/upload-target", func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		*uploadedBytes = b
+		w.WriteHeader(http.StatusOK)
+	})
+	mux.HandleFunc("/runs", func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewDecoder(r.Body).Decode(runBody)
+		_, _ = w.Write([]byte(`{"id":"run-1","status":"queued"}`))
+	})
+	mux.HandleFunc("/runs/run-1/status", func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"status":"completed"}`))
+	})
+	mux.HandleFunc("/runs/run-1", func(w http.ResponseWriter, r *http.Request) {
+		encoded, _ := json.Marshal(resultText)
+		_, _ = w.Write([]byte(`{"id":"run-1","status":"completed","result":` + string(encoded) + `,"totalCostUsd":"0.01"}`))
+	})
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+	uploadServerURL = srv.URL + "/upload-target"
+	return srv.URL, runBody, uploadedBytes, workspaceDeleted
+}
+
+// A résumé/CV field no longer disqualifies Ashby/Workable from the browser-use fallback:
+// the rendered PDF (attachApprovedResume — the same rendering the chromedp/Greenhouse path
+// already uses) is uploaded into a fresh browser-use workspace and attached to the run,
+// which is then deleted once the run is done.
+func TestSubmit_BrowserUseFallback_UploadsAndAttachesTheApprovedResume(t *testing.T) {
+	t.Setenv("AUTO_APPLY_BROWSERUSE_ENFORCE", "1")
+	url, runBody, uploadedBytes, workspaceDeleted := newFakeBrowserUseServerWithWorkspace(t, "All done.\nCONFIRMED: Thanks for applying!")
+
+	c := (&Client{
+		fetchers: map[string]applyform.Fetcher{"ashby": fakeAshbyFetcherWithResume{}},
+		cvs:      fakeCVReader{rec: cv.Record{}},
+		renderer: fakeCVRenderer{pdf: []byte("%PDF-1.4 fake resume")},
+	}).WithBrowserUse(newTestBrowserUseExecutor(url))
+
+	result, err := c.Submit(context.Background(), autoapply.Claimed{
+		Provider: "ashby", JobURL: "https://jobs.ashbyhq.com/example/123", TailoredCVID: uuid.New(),
+	}, map[string]string{"email": "ada@example.com"})
+	if err != nil {
+		t.Fatalf("Submit: %v", err)
+	}
+	if result.Status != autoapply.StatusApplied {
+		t.Fatalf("result = %+v, want applied", result)
+	}
+	if (*runBody)["workspaceId"] != "ws-1" {
+		t.Errorf("run body workspaceId = %v, want ws-1", (*runBody)["workspaceId"])
+	}
+	ids, _ := (*runBody)["attachedFileIds"].([]any)
+	if len(ids) != 1 || ids[0] != "file-1" {
+		t.Errorf("run body attachedFileIds = %v, want [file-1]", (*runBody)["attachedFileIds"])
+	}
+	if string(*uploadedBytes) != "%PDF-1.4 fake resume" {
+		t.Errorf("uploaded bytes = %q, want the rendered PDF's own bytes", *uploadedBytes)
+	}
+	if !*workspaceDeleted {
+		t.Error("workspace was never deleted after the run — a résumé must not outlive its one attempt")
+	}
 }
 
 // newFakeBrowserUseServer starts an httptest.Server implementing just enough of the v4

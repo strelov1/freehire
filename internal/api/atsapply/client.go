@@ -193,10 +193,18 @@ func (c *Client) Submit(ctx context.Context, claimed autoapply.Claimed, answers 
 		// browser-use fallback (openspec/changes/add-browseruse-atsapply-fallback): for
 		// Ashby/Workable, whose schema-only Reconcile already produced this
 		// fully-resolved plan, execute it through the cloud agent instead of parking —
-		// unless the plan needs a résumé upload (out of scope for this backend) or the
-		// daily spend guard refuses, either of which falls through to the same park this
-		// provider has always gotten.
+		// unless the daily spend guard refuses, which falls through to the same park this
+		// provider has always gotten. A résumé field renders the same way the Greenhouse
+		// path does (attachApprovedResume) before reaching the executor, which uploads
+		// those same bytes into browser-use's own workspace rather than a local path.
 		if c.browserUse != nil && browserUseEligible(claimed.Provider, plan) {
+			cleanup, parked := c.attachApprovedResume(ctx, claimed, &plan)
+			if parked != nil {
+				return *parked, nil
+			}
+			if cleanup != nil {
+				defer cleanup()
+			}
 			if !browserUseEnforce() {
 				log.Printf("atsapply: browser-use fallback would attempt job %d (%s) — shadow mode, still parking", claimed.JobID, claimed.Provider)
 			} else if result, handled, err := c.browserUse.submit(ctx, plan, merged, claimed.JobURL); handled {
