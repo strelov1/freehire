@@ -102,11 +102,7 @@ func (h *telegramHandlers) LinkTelegram(c *fiber.Ctx) error {
 	if !h.telegramEnabled() {
 		return fiber.NewError(fiber.StatusServiceUnavailable, "telegram notifications are not configured")
 	}
-	token, err := h.telegramLinks.Issue(userID)
-	if err != nil {
-		return err
-	}
-	url := "https://t.me/" + h.telegramBotUsername + "?start=" + token
+	url := "https://t.me/" + h.telegramBotUsername + "?start=" + h.telegramLinks.Issue(userID)
 	return c.JSON(fiber.Map{"data": fiber.Map{"url": url}})
 }
 

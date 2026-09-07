@@ -2,7 +2,6 @@ package atsapply
 
 import (
 	"context"
-	"errors"
 	"testing"
 	"time"
 )
@@ -15,32 +14,34 @@ import (
 // path in internal/autoapply's runner, risking a second real submit click on a form whose
 // first click may already have gone through — precisely what StatusUnconfirmed exists to
 // prevent.
-func TestClassifyPollError_ADeadlineFiringMidCallIsUnconfirmedNotAnError(t *testing.T) {
+func TestPollEndedByDeadline_ADeadlineFiringMidCallIsUnconfirmedNotAnError(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond)
 	defer cancel()
 	<-ctx.Done() // the deadline has now fired, same as it firing while chromedp.Run was in flight
 
-	if !classifyPollError(ctx, errors.New("context deadline exceeded")) {
+	if !pollEndedByDeadline(ctx) {
 		t.Error("want a context-deadline error classified as unconfirmed (not a real failure)")
 	}
 }
 
-func TestClassifyPollError_ACancelledParentIsUnconfirmedNotAnError(t *testing.T) {
+func TestPollEndedByDeadline_ACancelledParentIsUnconfirmedNotAnError(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	if !classifyPollError(ctx, errors.New("context canceled")) {
+	if !pollEndedByDeadline(ctx) {
 		t.Error("want a cancelled-context error classified as unconfirmed (not a real failure)")
 	}
 }
 
 // An ordinary chromedp failure — the target element genuinely not found, say — with a
-// still-live context must stay a real, reportable error.
-func TestClassifyPollError_AnOrdinaryFailureOnALiveContextIsARealError(t *testing.T) {
+// still-live context must stay a real, reportable error. The error value never decided
+// this: the question is only whether the deadline fired, which is why the parameter is
+// gone and the name now says what is asked.
+func TestPollEndedByDeadline_AnOrdinaryFailureOnALiveContextIsARealError(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Hour)
 	defer cancel()
 
-	if classifyPollError(ctx, errors.New("no node found for selector")) {
+	if pollEndedByDeadline(ctx) {
 		t.Error("want an ordinary failure on a live context classified as a real error, not unconfirmed")
 	}
 }
