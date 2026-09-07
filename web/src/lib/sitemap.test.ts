@@ -3,6 +3,7 @@ import {
   SITEMAP_CHUNK,
   STATIC_PATHS,
   collectionPaths,
+  contributorPaths,
   blogPaths,
   roleLandingPaths,
   skillGlossaryPaths,
@@ -77,6 +78,27 @@ describe('collectionPaths', () => {
     expect(paths).toContain('/collections/yc'); // company collection
     expect(paths).toContain('/collections/remote-worldwide'); // filter collection
     expect(new Set(paths).size).toBe(paths.length);
+  });
+});
+
+describe('contributorPaths', () => {
+  // Each profile is a page a person is meant to share and be found by, so each needs
+  // its own sitemap entry rather than riding on the showcase's.
+  it('maps every shown contributor to their /contributors/:login profile path', () => {
+    const paths = contributorPaths();
+
+    expect(paths).toContain('/contributors/strelov1');
+    expect(new Set(paths).size).toBe(paths.length);
+  });
+
+  // The showcase does not list bots, so the sitemap must not offer crawlers a page
+  // that 404s.
+  it('offers no path the showcase would not serve', () => {
+    expect(contributorPaths().some((p) => p.includes('bot'))).toBe(false);
+  });
+
+  it('does not carry the showcase itself, which is a static path', () => {
+    expect(contributorPaths()).not.toContain('/contributors');
   });
 });
 

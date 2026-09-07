@@ -81,6 +81,22 @@ type Client struct {
 	// treats that as a render-failure park rather than a panic.
 	cvs      CVReader
 	renderer cv.Renderer
+	// browserUse executes an already-resolved Plan through the browser-use cloud agent
+	// for a provider fillProviders excludes (Ashby, Workable — see browseruse_fill.go;
+	// Recruitee is excluded there for a structural reason, not a policy one). Nil is the
+	// unconfigured deployment, the same convention every other optional dependency here
+	// follows: a form that would otherwise route to this backend simply parks with
+	// reasonSubmissionNotImplemented, exactly as it did before this capability existed.
+	// See openspec/changes/add-browseruse-atsapply-fallback.
+	browserUse *BrowserUseExecutor
+}
+
+// WithBrowserUse attaches the browser-use fallback executor, returning c for chaining.
+// Separate from NewClient's constructor so adding this optional dependency never touches
+// NewClient's existing positional signature or any of its other call sites.
+func (c *Client) WithBrowserUse(executor *BrowserUseExecutor) *Client {
+	c.browserUse = executor
+	return c
 }
 
 // CVReader resolves one owned CV record for rendering. *cv.Store satisfies it directly;
@@ -174,6 +190,19 @@ func (c *Client) Submit(ctx context.Context, claimed autoapply.Claimed, answers 
 	}
 
 	if !fillProviders[claimed.Provider] {
+		// browser-use fallback (openspec/changes/add-browseruse-atsapply-fallback): for
+		// Ashby/Workable, whose schema-only Reconcile already produced this
+		// fully-resolved plan, execute it through the cloud agent instead of parking —
+		// unless the plan needs a résumé upload (out of scope for this backend) or the
+		// daily spend guard refuses, either of which falls through to the same park this
+		// provider has always gotten.
+		if c.browserUse != nil && browserUseEligible(claimed.Provider, plan) {
+			if !browserUseEnforce() {
+				log.Printf("atsapply: browser-use fallback would attempt job %d (%s) — shadow mode, still parking", claimed.JobID, claimed.Provider)
+			} else if result, handled, err := c.browserUse.submit(ctx, plan, merged, claimed.JobURL); handled {
+				return result, err
+			}
+		}
 		// Fill/submit is only wired for Greenhouse so far — see fill.go. A form for
 		// another provider that DID fully resolve still parks rather than being
 		// submitted through a path never built or verified.

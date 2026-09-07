@@ -87,6 +87,13 @@ const (
 	// listing rather than an error, so unlike pathlocalepair's optional-and-dropped locale, there
 	// is nothing here to fold off.
 	modePathPair = "pathpair"
+	// icims: board = a bare iCIMS slug OR a full vanity host, mirroring the ingest adapter's own
+	// split (internal/ingest/sources/icims.go, icimsVanity/icimsHost): the classic two-label
+	// shape "careers-<slug>.icims.com" folds to the bare slug, and every other *.icims.com host
+	// (a client's own vanity subdomain, e.g. uscareers-lennox.icims.com) IS the board, kept
+	// whole — the same "board contains a dot" signal the adapter itself reads to tell the two
+	// apart, so there is nothing for the recognizer to decide beyond matching that one shape.
+	modeICIMS = "icims"
 )
 
 // atsBoards lists the supported multi-tenant ATS: a host (exact or subdomain-suffix match) →
@@ -138,6 +145,9 @@ var atsBoards = []struct{ host, source, mode string }{
 
 	// --- query: board = a named query parameter (see queryBoards) ---
 	{"recruitingbypaycor.com", "paycor", modeQuery},
+
+	// --- icims: board = bare slug (classic "careers-<slug>" host) or the whole vanity host ---
+	{"icims.com", "icims", modeICIMS},
 
 	// --- subdomain: board = leftmost DNS label under the apex ---
 	{"recruitee.com", "recruitee", modeSubdomain},
@@ -524,6 +534,14 @@ func Recognize(rawURL string) (source, board, canonical string, ok bool) {
 		u.RawQuery, u.Fragment = "", ""
 		return src, board, u.String(), true
 
+	case modeICIMS:
+		board = icimsBoardFromHost(host)
+		if board == "" {
+			return "", "", "", false
+		}
+		u.RawQuery, u.Fragment, u.Path = "", "", ""
+		return src, board, u.String(), true
+
 	case modePathLocale:
 		// Rippling: skip a leading xx-XX locale segment (ats.rippling.com/en-GB/<board>/…),
 		// which the board API omits, and collapse the canonical to the board root so a
@@ -607,6 +625,24 @@ func matchHost(host string) (source, mode, apex string, ok bool) {
 		}
 	}
 	return "", "", "", false
+}
+
+// icimsBoardFromHost derives an iCIMS board from a *.icims.com host, mirroring the ingest
+// adapter's own icimsVanity/icimsHost split: the classic two-label "careers-<slug>.icims.com"
+// shape (the platform's own default hostname) folds to the bare slug, matching how icims.yml
+// already stores most boards; any other *.icims.com host — including one that merely LOOKS like
+// the classic shape but doesn't carry the "careers-" prefix (e.g. uscareers-lennox.icims.com,
+// a client's own vanity choice) — is itself the board, kept whole. Returns "" for the bare apex
+// or a host outside icims.com entirely.
+func icimsBoardFromHost(host string) string {
+	if !strings.HasSuffix(host, ".icims.com") {
+		return ""
+	}
+	label := strings.TrimSuffix(host, ".icims.com")
+	if slug, ok := strings.CutPrefix(label, "careers-"); ok && slug != "" && !strings.Contains(label, ".") {
+		return slug
+	}
+	return host
 }
 
 // subdomainChain returns every DNS label of host under apex:

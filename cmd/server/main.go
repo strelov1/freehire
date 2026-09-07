@@ -13,6 +13,8 @@ import (
 	"github.com/gofiber/fiber/v2/middleware/logger"
 	"github.com/gofiber/fiber/v2/middleware/recover"
 
+	"github.com/jackc/pgx/v5/pgxpool"
+
 	"github.com/strelov1/freehire/internal/ai/llmkey"
 	"github.com/strelov1/freehire/internal/ai/plan"
 	"github.com/strelov1/freehire/internal/ai/speech"
@@ -23,6 +25,7 @@ import (
 	"github.com/strelov1/freehire/internal/candidate/cv"
 	"github.com/strelov1/freehire/internal/candidate/matchanalysis"
 	"github.com/strelov1/freehire/internal/candidate/pii"
+	"github.com/strelov1/freehire/internal/engage/discordlink"
 	appleauth "github.com/strelov1/freehire/internal/identity/auth/apple"
 	"github.com/strelov1/freehire/internal/identity/auth/oauth"
 	"github.com/strelov1/freehire/internal/identity/billing"
@@ -338,6 +341,9 @@ func main() {
 		TelegramBotToken:      cfg.TelegramBotToken,
 		TelegramBotUsername:   cfg.TelegramBotUsername,
 		TelegramWebhookSecret: cfg.TelegramWebhookSecret,
+
+		DiscordLinker:   buildDiscordLinker(cfg, pool),
+		DiscordClientID: cfg.DiscordClientID,
 		// Billing reads its own environment: the credentials are the provider's, nothing
 		// else in the fleet needs them, and an absent one means the subsystem is simply off.
 		Billing:     billing.ConfigFromEnv(),
@@ -381,6 +387,21 @@ func main() {
 	if err := app.ShutdownWithTimeout(10 * time.Second); err != nil {
 		log.Printf("shutdown: %v", err)
 	}
+}
+
+// buildDiscordLinker adapts discordlink.NewFromSettings to what the handler config takes.
+//
+// It returns the INTERFACE, not *discordlink.Service, and that is load-bearing: a nil
+// *Service placed in an interface field is not a nil interface, so the handler's
+// "unconfigured means unmounted" check would read false and the routes would mount onto a
+// service that panics on first use. That is the whole reason this wrapper exists rather than
+// the caller assigning the constructor's result straight into the field.
+func buildDiscordLinker(cfg config.Settings, pool *pgxpool.Pool) handler.DiscordLinker {
+	svc, ok := discordlink.NewFromSettings(cfg, db.New(pool))
+	if !ok {
+		return nil
+	}
+	return svc
 }
 
 // buildGmail wires the Connect-Gmail inbox from config: it needs the Google OAuth

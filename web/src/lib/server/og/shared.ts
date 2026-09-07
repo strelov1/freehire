@@ -34,19 +34,31 @@ function monogram(name: string): string {
   return (first.charAt(0) + (words[1] ?? '').charAt(0)).toUpperCase();
 }
 
-/** A square logo tile at `size`px: the resolved logo image, or a monogram tile
- *  derived from `name` when `logo` is null. Radius and monogram font scale with
- *  the size (at 72px this matches the original job-card tile: radius 14, font 30). */
-export function logoBox(logo: string | null, name: string, size: number): string {
-  const radius = Math.round(size / 5);
+/** A logo tile at `size`px: the resolved image, or a monogram tile derived from `name`
+ *  when `logo` is null. Radius and monogram font scale with the size (at 72px this
+ *  matches the original job-card tile: radius 14, font 30).
+ *
+ *  `shape` carries the same distinction the design system's Avatar makes: a rounded
+ *  `tile` is an entity's mark, a `circle` is a person. A card about a person that
+ *  squares them off reads as a company logo. */
+export function logoBox(
+  logo: string | null,
+  name: string,
+  size: number,
+  shape: 'tile' | 'circle' = 'tile',
+): string {
+  const radius = shape === 'circle' ? '50%' : `${Math.round(size / 5)}px`;
   if (logo) {
     // satori reads image dimensions from style, not the width/height HTML attributes.
-    return `<img src="${esc(logo)}" style="width:${size}px;height:${size}px;border-radius:${radius}px;object-fit:contain" />`;
+    // A person's avatar is cropped to fill its circle; an entity's mark is fitted
+    // inside its tile, because a logo cropped at the edges is a broken logo.
+    const fit = shape === 'circle' ? 'cover' : 'contain';
+    return `<img src="${esc(logo)}" style="width:${size}px;height:${size}px;border-radius:${radius};object-fit:${fit}" />`;
   }
   const font = Math.round(size * 0.42);
   return (
     `<div style="display:flex;align-items:center;justify-content:center;width:${size}px;height:${size}px;` +
-    `border-radius:${radius}px;background:#f4f4f4;color:#525252;font-size:${font}px;font-weight:700">` +
+    `border-radius:${radius};background:#f4f4f4;color:#525252;font-size:${font}px;font-weight:700">` +
     `${esc(monogram(name))}</div>`
   );
 }

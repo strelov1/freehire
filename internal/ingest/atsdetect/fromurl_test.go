@@ -90,16 +90,19 @@ func TestFromURL(t *testing.T) {
 			url:      "https://www.paycomonline.net/v4/ats/web.php/portal/3b4555a93baac45919556b5f901f7b83/jobs/383852?utm_source=Role",
 			provider: "paycom", board: "3b4555a93baac45919556b5f901f7b83", ok: true,
 		},
-		// iCIMS: board is the tenant in careers-<board>.icims.com.
+		// iCIMS moved into the shared atsboard table (the reward it used to guard against no
+		// longer exists), so both shapes reach FromURL through the delegation at its top —
+		// see TestRecognize in atsboard for the full coverage, this is just a smoke test that
+		// the delegation still wires through.
 		{
 			name:     "icims careers prefix",
 			url:      "https://careers-hcsgcorp.icims.com/jobs/704470/dietary-aide/job",
 			provider: "icims", board: "hcsgcorp", ok: true,
 		},
 		{
-			name: "icims subdomain without careers prefix is not harvestable",
-			url:  "https://uk-external-novelis.icims.com/jobs/49037/mechanical-day-technician",
-			ok:   false,
+			name:     "icims vanity host without careers prefix",
+			url:      "https://uk-external-novelis.icims.com/jobs/49037/mechanical-day-technician",
+			provider: "icims", board: "uk-external-novelis.icims.com", ok: true,
 		},
 		// Oracle: board is host + the candidate-experience site name.
 		{
@@ -225,14 +228,16 @@ func TestFromURL(t *testing.T) {
 // FromURL delegates to atsboard.Recognize and keeps only the five shapes atsboard deliberately
 // excludes. That exclusion is load-bearing, not an oversight: atsboard is the accept-set for
 // internal/ingest/contribution, which PAYS for onboarded boards, so moving one of these in is a
-// money-affecting decision that needs its own proposal — not a tidy-up.
+// money-affecting decision that needs its own proposal — not a tidy-up. (iCIMS was a sixth here
+// until the contribution reward was retired entirely — nothing pays for an onboarded board any
+// more, so the risk this split exists to guard against no longer applies to it. It moved into
+// atsboard's shared table and is covered by that package's own TestRecognize instead.)
 //
 // So the two sets must stay disjoint in both directions. If a shape here starts being recognised
 // by the shared table, this package's case for it is dead code silently shadowed by the
 // delegation above it; and the widening happened without anyone arguing for it.
 func TestLocalShapesStayOutsideTheSharedTable(t *testing.T) {
 	local := map[string]string{
-		"icims":  "https://careers-acme.icims.com/jobs/1234/engineer/job",
 		"oracle": "https://eeho.fa.us2.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX_1/job/1234",
 		"taleo":  "https://valero.taleo.net/careersection/2/jobsearch.ftl",
 		"neogov": "https://www.governmentjobs.com/careers/cityofboise/jobs/4567",

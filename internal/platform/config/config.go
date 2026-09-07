@@ -238,7 +238,31 @@ type Settings struct {
 	// this worker fleet: an unset value means the channel is not configured, not that
 	// the run failed. A webhook URL is itself the credential and does not expire,
 	// which is why this channel needs nothing else here.
+	//
+	// Unrelated to the five values below despite the shared name. This one posts INTO a
+	// public channel and holds no bot; those authenticate a bot that manages a role.
+	// Neither may switch the other on.
 	DiscordDigestWebhookURL string
+
+	// Discord paid channels (internal/engage/discordlink): the bot that keeps the paid
+	// role on the community server in step with the subscription, and the OAuth app a
+	// user links their Discord account through.
+	//
+	// Optional as a SET: every one of the five is load-bearing, so any missing value means
+	// the feature is off — the link routes 404, the SPA omits the card, and cmd/discord-sync
+	// is a no-op that never opens the pool (see DiscordPaidAccessConfigured). A deployment
+	// holding four of five would otherwise start an OAuth flow it cannot finish, and fail
+	// somewhere the user can see rather than never offering it.
+	//
+	// The guild and role ids are configuration rather than discovery: the bot could list
+	// the guilds it is in and the roles it can manage, but "the one called Paid" is a name
+	// an admin can rename, and a feature that silently followed a rename would grant access
+	// to whatever the name landed on.
+	DiscordClientID     string
+	DiscordClientSecret string
+	DiscordBotToken     string
+	DiscordGuildID      string
+	DiscordPaidRoleID   string
 
 	// OnboardingReplyTo is the human inbox that answers the founder signup sequence
 	// (internal/engage/onboarding). Those mails ask a question, so an unset value disables
@@ -427,6 +451,12 @@ func Load() Settings {
 		NotifyEmailFrom: os.Getenv("NOTIFY_EMAIL_FROM"),
 
 		DiscordDigestWebhookURL: os.Getenv("DISCORD_DIGEST_WEBHOOK_URL"),
+
+		DiscordClientID:     os.Getenv("DISCORD_CLIENT_ID"),
+		DiscordClientSecret: os.Getenv("DISCORD_CLIENT_SECRET"),
+		DiscordBotToken:     os.Getenv("DISCORD_BOT_TOKEN"),
+		DiscordGuildID:      os.Getenv("DISCORD_GUILD_ID"),
+		DiscordPaidRoleID:   os.Getenv("DISCORD_PAID_ROLE_ID"),
 
 		OnboardingReplyTo: os.Getenv("ONBOARDING_REPLY_TO"),
 

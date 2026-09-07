@@ -321,10 +321,16 @@
             <div class="font-mono text-xs uppercase tracking-wide text-muted-foreground">forks</div>
           </div>
           {#if gh.contributors != null}
-            <div>
-              <div class="text-3xl font-semibold tabular-nums">{nf.format(gh.contributors)}</div>
+            <!-- The one figure here that is about people rather than the repository, so
+                 it leads to their pages on this site rather than to GitHub's graph.
+                 Guarded by the same `!= null` as before: a degraded GitHub leg drops the
+                 figure entirely rather than rendering a link with nothing behind it. -->
+            <a href={resolve('/contributors')} class="group">
+              <div class="text-3xl font-semibold tabular-nums group-hover:underline">
+                {nf.format(gh.contributors)}
+              </div>
               <div class="font-mono text-xs uppercase tracking-wide text-muted-foreground">contributors</div>
-            </div>
+            </a>
           {/if}
           {#if gh.license}
             <div>

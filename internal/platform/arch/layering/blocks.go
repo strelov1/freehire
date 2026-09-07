@@ -44,7 +44,13 @@ var blocks = map[string][]string{
 		// sit in different blocks (ai/speech and api/realtime), so anywhere else it would be
 		// an upward edge for one of them.
 		"aigateway",
-		"arch", "arch/layering", "backfillpage", "blobstore", "cache", "config", "database", "db",
+		"arch", "arch/layering", "backfillpage", "blobstore",
+		// browseruse is the HTTP half of talking to the browser-use.com cloud agent API —
+		// create/poll/fetch one run — and knows nothing about ATS forms or resolved
+		// application plans, the same "transport, not domain" category as llm and
+		// aigateway. Its one caller sits in api/atsapply.
+		"browseruse",
+		"cache", "config", "database", "db",
 		"externalid", "flexjson", "htmltext", "isoweek", "linktoken", "llm", "llmschema", "migrate",
 		"modroot", "observability", "outbox", "pgconv", "pgerr", "safehttp", "stringset", "testdb",
 		"tokencrypt",
@@ -169,8 +175,12 @@ var blocks = map[string][]string{
 	// same shape as broadcast and notify, differing only in that its audience is the
 	// public rather than an account. It reads the catalogue (job) and the view rollup
 	// (application), both below it.
+	// discordlink is here rather than beside billing for the same reason: what it does is
+	// outbound engagement (a role on a community server), and it reaches identity/billing
+	// only to ask which tier an account holds. Placing it in identity would invert that —
+	// billing would import a community integration — and the guard would say so.
 	"engage": {
-		"broadcast", "community", "companyfeedback", "emailnotify",
+		"broadcast", "community", "companyfeedback", "discordlink", "emailnotify",
 		"mailpreview", "notify", "nudge", "onboarding", "pushnotify", "referral",
 		"reminder", "report", "socialdigest", "subscription", "telegramnotify", "vote",
 		"webhooknotify",

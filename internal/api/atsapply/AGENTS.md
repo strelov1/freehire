@@ -14,6 +14,47 @@ at the cost of no second language, process, or deploy artifact. See
 `openspec/changes/auto-apply-worker/design.md`'s "chromedp, not a Python/Patchright sidecar"
 decision for the measurements and its caveats.
 
+**A second, narrower backend exists for two providers chromedp cannot fill/submit for at
+all: Ashby and Workable, via the browser-use.com cloud agent API** (`browseruse_fill.go`,
+`openspec/changes/add-browseruse-atsapply-fallback`). This does not reopen the decision
+above — it is a plain HTTP client (`internal/platform/browseruse`), no second language or
+process, called only via `Client.WithBrowserUse`. Scope is deliberately narrow:
+- **Only Ashby and Workable** (`browserUseProviders`) — Greenhouse already has a fill path
+  and never reaches this branch; a white-label (unrecognized-layout) Greenhouse posting has
+  no `MergedField` schema to build a `Plan` from in the first place, since chromedp's own
+  DOM scan is what failed there; a captcha-protected posting (Lever, or
+  `reasonCaptchaProtected`) is never routed here — that would be an attempt to bypass a
+  platform's bot protection, not this backend's purpose. **Recruitee is absent for a
+  structural reason found during implementation, not a policy one**:
+  `internal/ingest/applyform.Fetchers` has no registered `Fetcher` for it at all (its form
+  arrives free with the ingest crawl and is written directly), so `Client.fetchSchema`
+  already parks a Recruitee attempt with `errNoSchemaFetcher` before `Submit` ever reaches
+  a `Plan` to hand this executor.
+- **Only an already fully-resolved `Plan`** (`Plan.FullyResolved()`), and **never one
+  containing a résumé/file field** (`browserUseEligible`) — this backend is handed exact
+  field values to type, never a CV file, and never a decision about what to answer. Every
+  invariant `resolve.go`/`draft.go`/`sensitive.go`/`geography.go` already enforce (never
+  guess, sensitive-keyword gate, geography park) stays entirely upstream of this backend,
+  unchanged and unbypassed — it only ever executes what they already decided.
+- **Confirmation is a strict marker, never inferred from narrative text.** `buildTask`
+  requires the agent's report to end in exactly one of `CONFIRMED: <text>` / `UNCONFIRMED`
+  / `PARKED: <reason>`; `parseOutcome` treats anything else — including a marker not on the
+  report's own last line — as unconfirmed, the same "ambiguous means not confirmed" rule
+  chromedp's own `fillAndSubmit` already follows for `StatusUnconfirmed`.
+- **Ships OFF by default** (`AUTO_APPLY_BROWSERUSE_ENFORCE`, a plain per-call env read, not
+  memoized — memoizing would freeze whichever value the first call saw for the rest of the
+  process, breaking `t.Setenv`-based tests the same way `add-auto-apply-eligibility-gate`'s
+  earlier `sync.OnceValue` mistake did). Unset/shadow logs what would have been attempted
+  and still parks — no execution ever runs in shadow mode, so there is no cost to observe
+  beyond the log line's own count. A separate `runSpendGuard`
+  (`AUTO_APPLY_BROWSERUSE_RUN_CAP_USD`) bounds aggregate spend, on top of the v4 API's own
+  hard per-run `maxCostUsd` cap — but despite the name, this is a **per cmd/auto-apply
+  process invocation** cap, not a calendar-day one (a fresh guard is built on every
+  invocation; nothing persists spend across runs), and it is a soft, best-effort check
+  (concurrent executions can both pass it before either records its cost), not a hard
+  ledger. Found by code review: treat the daily-sounding framing with that in mind until
+  it grows persisted state.
+
 ## Always true
 - **The DOM decides what exists; required is the union of DOM and API.** A field the API
   declares but the DOM never renders is dropped (filling it would write into a control that

@@ -23,11 +23,14 @@ import (
 // Delegating also means an ATS added to atsboard is immediately visible to the harvest tools,
 // which was the standing cost of the split.
 //
-// What stays here are the six shapes atsboard deliberately EXCLUDES. That exclusion is not an
+// What stays here are the five shapes atsboard deliberately EXCLUDES. That exclusion is not an
 // oversight to correct: atsboard is the accept-set for internal/ingest/contribution, which PAYS for
 // onboarded boards, so widening it is a money-affecting decision that needs its own proposal.
-// These six are harvest-only, and the harvest path validates every candidate against the
-// platform's API before committing it.
+// These five are harvest-only, and the harvest path validates every candidate against the
+// platform's API before committing it. iCIMS used to be a sixth: it joined atsboard once the
+// board-contribution reward itself was retired (nothing pays for an onboarded board any more,
+// so the risk this split was guarding against no longer applies), and its local case here
+// became dead code shadowed by the delegation above — see TestLocalShapesStayOutsideTheSharedTable.
 func FromURL(rawurl string) (provider, board string, ok bool) {
 	if src, brd, _, found := atsboard.Recognize(rawurl); found {
 		return src, brd, true
@@ -44,14 +47,6 @@ func FromURL(rawurl string) (provider, board string, ok bool) {
 	segs := pathSegments(u.Path)
 
 	switch {
-	case strings.HasSuffix(host, ".icims.com"):
-		// Our icims adapter builds the host "careers-<board>.icims.com", so only a
-		// careers-prefixed subdomain yields a crawlable board.
-		if sub := subdomain(host, ".icims.com"); sub != "" {
-			if tenant := strings.TrimPrefix(sub, "careers-"); tenant != sub && tenant != "" {
-				return "icims", tenant, true
-			}
-		}
 	case strings.HasSuffix(host, ".oraclecloud.com"):
 		if site := segAfter(segs, "sites"); site != "" {
 			return "oracle", host + "/" + site, true
@@ -97,17 +92,6 @@ func pathSegments(p string) []string {
 		}
 	}
 	return out
-}
-
-// subdomain returns the leftmost label of host once suffix is removed, or "" when the
-// remainder is empty or itself multi-label (a shape our subdomain-keyed adapters don't
-// crawl).
-func subdomain(host, suffix string) string {
-	sub := strings.TrimSuffix(host, suffix)
-	if sub == "" || strings.Contains(sub, ".") {
-		return ""
-	}
-	return sub
 }
 
 // segAfter returns the path segment following the first occurrence of key, or "" when

@@ -123,9 +123,20 @@
       boundary is now exactly 90 days (confirmed `today-90` excluded,
       `today-89` included against a real Postgres), and the full
       integration suite re-ran green.
-- [ ] 6.5 PR, merge, deploy via `release.sh`, verify live (`GET
-      /api/v1/status` carries `site.history`, `/status` renders the tile
-      row, no unexpected 5xx after the flip). Note: history will be empty on
-      first deploy until the sampler has run a few times — this is expected
-      per the "absent days are absent" design decision, not a bug to chase.
-- [ ] 6.6 Finish the branch, archive and sync the OpenSpec change.
+- [x] 6.5 Merged as #2572. First manual deploy attempts (and the fleet's own
+      autodeploy retries) hit an unrelated blocker: `0144_jobs_hydrated_at.sql`
+      (a different, already-merged migration) kept failing on a Postgres
+      lock timeout — not a bug, but the nightly 03:00 UTC `pg_dump` backup
+      holding ACCESS SHARE locks across every table for its ~2.5h run,
+      compounded by a long-running `cmd/reindex` query on `jobs`. Also found
+      and fixed, separately: `freehire-autodeploy.timer` had been stopped
+      (by systemd, cause unclear — not this session's doing) and was no
+      longer retrying on its own 10-minute cadence; restarted it
+      (`systemctl start freehire-autodeploy.timer`). Once the backup
+      finished, autodeploy's own next tick deployed cleanly. Verified live:
+      `GET /api/v1/status` carries `site.history` (1 entry, today,
+      `operational` — expected on a fresh deploy per the "absent days are
+      absent" design), `/status` renders the strip, active color flipped to
+      blue, zero 5xx from the new color in the 10 minutes after the flip.
+- [x] 6.6 Finish the branch, archive and sync the OpenSpec change (this
+      commit).

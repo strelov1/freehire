@@ -104,8 +104,9 @@ type rendered struct {
 	subject, html, text string
 }
 
-// content is what the body templates render from: the absolute URLs that cannot be
-// baked into the prose because they depend on the site origin.
+// content is what the body templates render from: every URL a letter points at,
+// whether it is built from the site origin (and so cannot be baked into the prose)
+// or is one of the fixed outward links this package holds as constants.
 type content struct {
 	AlertsURL         string
 	AdvancedSearchURL string

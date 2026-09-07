@@ -1,6 +1,6 @@
 {
   "Alert": 1,
-  "Avatar": 0,
+  "Avatar": 2,
   "Badge": 18,
   "BrandMark": 2,
   "Button": 72,
@@ -17,8 +17,8 @@
   "NoticeDialog": 0,
   "NumberedGrid": 6,
   "Pager": 0,
-  "ProviderIcon": 13,
-  "SectionLabel": 16,
+  "ProviderIcon": 14,
+  "SectionLabel": 18,
   "SettingRow": 3,
   "Skeleton": 2,
   "Table": 8,

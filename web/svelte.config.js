@@ -86,18 +86,28 @@ export default {
         // this pins where an image could go if that ever regresses.
         //
         // The list is exhaustive by inspection, not by habit: the only browser-side
-        // <img> sinks are CompanyLogo.svelte (the logo proxy) and TemplateGallery.svelte
-        // (same-origin /cv-previews/*.svg). OG cards render server-side and are never
-        // fetched under our own CSP, and job descriptions carry no images at all — the
-        // ingest sanitizer strips them (internal/sources/sanitize.go). `data:` is here
-        // for the handful of Tailwind utilities that inline an SVG.
+        // <img> sinks are CompanyLogo.svelte (the logo proxy), TemplateGallery.svelte
+        // (same-origin /cv-previews/*.svg) and the /contributors pages (GitHub avatars).
+        // OG cards render server-side and are never fetched under our own CSP, and job
+        // descriptions carry no images at all — the ingest sanitizer strips them
+        // (internal/sources/sanitize.go). `data:` is here for the handful of Tailwind
+        // utilities that inline an SVG.
         // api.producthunt.com serves the Product Hunt "featured" badge embedded in
         // the footer (Footer.svelte) — a single static SVG per theme.
+        // avatars.githubusercontent.com is GitHub's avatar CDN, read by the contributor
+        // showcase and profile pages. Adding a host here widens what the assistant's
+        // markdown could point an <img> at if the sanitizer ever regressed, so it is
+        // worth naming why this one is acceptable: it is a static image CDN on a path
+        // shape we do not control and it accepts no query we could smuggle data through,
+        // which is the same argument the logo proxy and the badge host already sit on.
+        // Left off, every avatar on those pages silently falls back to initials — the
+        // page still renders, so nothing fails loudly.
         'img-src': [
           'self',
           'data:',
           'https://logo.freehire.me',
           'https://api.producthunt.com',
+          'https://avatars.githubusercontent.com',
         ],
         // Pinning img-src deliberately stopped there: connect-src was considered as
         // part of the same hardening and left out, because getting it wrong fails

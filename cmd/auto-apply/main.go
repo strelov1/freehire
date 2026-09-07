@@ -21,6 +21,7 @@ import (
 	"github.com/strelov1/freehire/internal/ingest/screeninganswers"
 	"github.com/strelov1/freehire/internal/ingest/sources"
 	"github.com/strelov1/freehire/internal/platform/blobstore"
+	"github.com/strelov1/freehire/internal/platform/browseruse"
 	"github.com/strelov1/freehire/internal/platform/config"
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/platform/llm"
@@ -115,6 +116,14 @@ func run() int {
 	// platforms' own public job-board APIs, so its user agent, timeouts and size caps are
 	// exactly right here too.
 	sidecar := atsapply.NewClient(sources.NewClient(), llmClient, llmKeyResolver, atoms, cvStore, cvRenderer)
+	// browser-use fallback (openspec/changes/add-browseruse-atsapply-fallback): empty key
+	// leaves sidecar exactly as it was before this capability existed — Ashby/Workable/
+	// Recruitee still park with reasonSubmissionNotImplemented. Its own enforce flag and
+	// cost caps are read directly by internal/api/atsapply, not threaded through here.
+	if acfg.BrowserUseAPIKey != "" {
+		buClient := browseruse.New(acfg.BrowserUseAPIKey, "", nil)
+		sidecar = sidecar.WithBrowserUse(atsapply.NewBrowserUseExecutor(buClient))
+	}
 
 	store := newDBStore(pool)
 	stats, err := autoapply.Run(ctx, store, answers, sidecar, autoapply.RunOptions{

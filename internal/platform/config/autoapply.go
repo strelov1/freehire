@@ -1,6 +1,9 @@
 package config
 
-import "time"
+import (
+	"os"
+	"time"
+)
 
 // AutoApply holds the tuning knobs for the unattended application-submission worker
 // (cmd/auto-apply). Unlike ApplyForm's fetch (one HTTP call to a public JSON API), one
@@ -10,7 +13,9 @@ import "time"
 //
 // No sidecar address here: internal/atsapply drives the browser in-process (see design.md's
 // "chromedp, not a Python/Patchright sidecar" decision) — there is no second process to
-// address.
+// address. BrowserUseAPIKey is not an exception to that: it is a credential for a cloud
+// REST API called via plain Go HTTP (openspec/changes/add-browseruse-atsapply-fallback),
+// not a second local process either.
 //
 // No drafting-specific knobs either: question drafting (openspec/changes/
 // auto-apply-llm-drafting) rides the same LLM_*/LLM_ADMIN_* environment every other
@@ -24,6 +29,16 @@ type AutoApply struct {
 	Concurrency  int           // how many attempts run at once
 	MaxPerRun    int           // how much of the queue one run takes; 0 is unbounded
 	CallTimeout  time.Duration // bounds a single attempt's browser session
+	// BrowserUseAPIKey authenticates the browser-use.com cloud fallback (Ashby/Workable
+	// only — Recruitee has no registered applyform.Fetcher and never reaches this
+	// executor; see internal/api/atsapply/browseruse_fill.go). Empty disables the
+	// fallback entirely: those providers park exactly as they did before it existed. Its
+	// own enforce flag, per-run cost cap and per-process-run spend cap (the latter is NOT
+	// a calendar-day cap — a fresh one is built on every cmd/auto-apply invocation)
+	// (AUTO_APPLY_BROWSERUSE_ENFORCE/_MAX_COST_USD/_RUN_CAP_USD) are read directly by
+	// that package rather than threaded through here, matching AUTO_APPLY_ELIGIBILITY_ENFORCE's
+	// own plain-env-read convention in internal/api/handler.
+	BrowserUseAPIKey string
 }
 
 // LoadAutoApply reads the worker's tuning from the environment, all optional with
@@ -38,6 +53,8 @@ func LoadAutoApply() AutoApply {
 		Concurrency:  envInt("AUTO_APPLY_CONCURRENCY", 2),
 		MaxPerRun:    envInt("AUTO_APPLY_MAX_PER_RUN", 200),
 		CallTimeout:  time.Duration(envInt("AUTO_APPLY_CALL_TIMEOUT_SECONDS", 120)) * time.Second,
+
+		BrowserUseAPIKey: os.Getenv("AUTO_APPLY_BROWSERUSE_API_KEY"),
 	}
 	if a.BatchSize < 1 {
 		a.BatchSize = 1
