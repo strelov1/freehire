@@ -44,23 +44,40 @@ const (
 	suggestPerMinute = 1200
 )
 
-// publicReadLimiter throttles the cheap public reads as one shared budget.
+// All three below are keyed by IP, and deliberately: on a PUBLIC read there is no
+// authenticated caller to key by.
 //
-// Keyed by user-or-IP rather than by IP alone. Not to grant an authenticated
-// caller a larger allowance — the ceiling is identical either way — but so that
-// callers sharing an egress address do not share an allowance.
+// They used to ask for user-or-IP and say so, and the branch was dead. Fiber runs a
+// route's handlers in registration order, and every public read registers its limiter
+// BEFORE the optional-auth gate (jobs.go, companies.go, search.go) or without a gate at
+// all (geo.go, suggest.go) — there is no group-level auth, handler.go builds /api/v1 with
+// no .Use. So `auth.UserID` read a local nothing had written yet and the key was always
+// the IP form. Fifty signed-in colleagues behind one office NAT already shared one budget;
+// the comment claiming otherwise was the only thing that changed.
+//
+// Moving the gate in front would have fixed three of the ten routes and put a database
+// lookup ahead of throttling on the hottest reads on the site — OptionalAuth answers 503
+// when a Bearer-key lookup fails, so it is not free — against a host where crawlers are
+// most of the traffic. Deleting the unreachable branch is the smaller answer, and the
+// allowance was never per-user in production anyway.
+//
+// The tests below mount the gate FIRST, so an authenticated caller really is
+// authenticated when the limiter runs. That is what makes them a guard: they fail if
+// anyone reintroduces a user-keyed budget here, whatever the ordering.
+
+// publicReadLimiter throttles the cheap public reads as one shared budget.
 func publicReadLimiter(throttler ratelimit.Throttler) fiber.Handler {
-	return ratelimit.Middleware(throttler, ratelimit.KeyByUserOrIP("publicread"), publicReadsPerMinute, time.Minute)
+	return ratelimit.Middleware(throttler, ratelimit.KeyByIP("publicread"), publicReadsPerMinute, time.Minute)
 }
 
 // agentSearchLimiter throttles the full-description search on its own budget, so
 // exhausting it leaves the ordinary search endpoints serving.
 func agentSearchLimiter(throttler ratelimit.Throttler) fiber.Handler {
-	return ratelimit.Middleware(throttler, ratelimit.KeyByUserOrIP("agentsearch"), agentSearchPerMinute, time.Minute)
+	return ratelimit.Middleware(throttler, ratelimit.KeyByIP("agentsearch"), agentSearchPerMinute, time.Minute)
 }
 
 // suggestLimiter throttles the search box's completions on their own budget, so a
 // visitor typing quickly cannot exhaust the allowance the rest of the site reads on.
 func suggestLimiter(throttler ratelimit.Throttler) fiber.Handler {
-	return ratelimit.Middleware(throttler, ratelimit.KeyByUserOrIP("suggest"), suggestPerMinute, time.Minute)
+	return ratelimit.Middleware(throttler, ratelimit.KeyByIP("suggest"), suggestPerMinute, time.Minute)
 }

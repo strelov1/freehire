@@ -50,14 +50,20 @@ func newPromoHandlers(svc *promo.Service) *promoHandlers {
 	return &promoHandlers{promo: svc}
 }
 
-func (h *promoHandlers) register(api fiber.Router, mw middleware, throttler ratelimit.Throttler) {
+// register mounts the referral and promo routes.
+//
+// It takes no separate Throttler: mw already carries the same one (handler.go builds the
+// bundle with cfg.Throttler and passed cfg.Throttler here as well), and this was the only
+// register of 47 with a third parameter. internal/api/handler/AGENTS.md says the bundle
+// field exists for exactly this.
+func (h *promoHandlers) register(api fiber.Router, mw middleware) {
 	// Cookie only, like the rest of /me. A link that decides who gets credited for a
 	// referral is minted for a browser session, not for a script holding a key.
 	api.Get("/me/invite", mw.cookie, h.Invite)
 
-	perAccount := ratelimit.Middleware(throttler,
+	perAccount := ratelimit.Middleware(mw.throttler,
 		ratelimit.KeyByUserOrIP("promo"), promoPreviewPerMinute, time.Minute)
-	perAddress := ratelimit.Middleware(throttler,
+	perAddress := ratelimit.Middleware(mw.throttler,
 		ratelimit.KeyByIP("promoaddr"), promoPreviewPerAddressPerMinute, time.Minute)
 
 	api.Post("/me/promo/preview", mw.cookie, perAccount, perAddress, h.PreviewCode)

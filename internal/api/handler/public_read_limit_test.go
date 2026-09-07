@@ -10,6 +10,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 
 	"github.com/strelov1/freehire/internal/api/ratelimit"
+	"github.com/strelov1/freehire/internal/identity/auth"
 )
 
 // TestPublicReadBudgets_ClearTheMeasuredLivePeaks guards the numbers themselves.
@@ -51,6 +52,51 @@ func (o *oneShotThrottler) Allow(_ context.Context, key string, limit int, windo
 	}
 	o.seen[key] = true
 	return ratelimit.Decision{Allowed: true, Limit: limit, Remaining: limit - 1, ResetAfter: window}, nil
+}
+
+// A public read is budgeted per IP even for a signed-in caller — the decision this
+// records, in place of a comment that claimed the opposite while the code did this.
+//
+// The gate is mounted FIRST here, unlike production, so an authenticated caller really is
+// authenticated by the time the limiter runs. That is what makes this a guard rather than
+// a description: with a user-keyed budget it fails whatever the mounting order, and the
+// defect it replaces was precisely a claim that only held in one order.
+//
+// The cost is stated rather than hidden: colleagues behind one office NAT share the
+// allowance. They always did — every public read registers its limiter before the
+// optional-auth gate, or has no gate at all, so `auth.UserID` never saw a user here.
+func TestPublicReadLimiter_BudgetsBySourceAddressEvenForASignedInCaller(t *testing.T) {
+	th := newOneShotThrottler()
+
+	app := fiber.New(fiber.Config{ProxyHeader: fiber.HeaderXForwardedFor})
+	signIn := func(id int64) fiber.Handler {
+		return func(c *fiber.Ctx) error {
+			c.Locals(auth.LocalsUserID, id)
+			return c.Next()
+		}
+	}
+	ok := func(c *fiber.Ctx) error { return c.SendStatus(fiber.StatusOK) }
+	// Gate before limiter, so the limiter sees a real authenticated caller.
+	app.Get("/one", signIn(101), publicReadLimiter(th), ok)
+	app.Get("/two", signIn(202), publicReadLimiter(th), ok)
+
+	get := func(path string) int {
+		req := httptest.NewRequestWithContext(context.Background(), fiber.MethodGet, path, nil)
+		req.Header.Set(fiber.HeaderXForwardedFor, "203.0.113.42")
+		resp, err := app.Test(req)
+		if err != nil {
+			t.Fatalf("GET %s: %v", path, err)
+		}
+		defer resp.Body.Close()
+		return resp.StatusCode
+	}
+
+	if got := get("/one"); got != fiber.StatusOK {
+		t.Fatalf("first read = %d, want 200", got)
+	}
+	if got := get("/two"); got != fiber.StatusTooManyRequests {
+		t.Errorf("a different signed-in user on the same address = %d, want 429 — the public read budget is per address", got)
+	}
 }
 
 // TestPublicReadLimiters_DoNotShareABudget pins that the two classes are keyed
