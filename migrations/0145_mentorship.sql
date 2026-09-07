@@ -105,6 +105,19 @@ CREATE INDEX mentors_pending_created_at_idx
     ON public.mentors (created_at)
     WHERE status = 'pending';
 
+-- EVERY foreign key pointing at users must be indexed on THIS side. Postgres indexes the
+-- referenced side only, so an unindexed reference turns each DELETE FROM users into a
+-- sequential scan of this table — one per constraint. That is what made account deletion
+-- outlive the proxy's read timeout in production once already, and
+-- TestEveryUserForeignKeyIsIndexed is what caught these three.
+--
+-- Partial, because decided_by is NULL for every profile a moderator has not yet reached,
+-- and the FK check looks for a match — which NULL never is. The index carries only the
+-- rows that can answer.
+CREATE INDEX mentors_decided_by_idx
+    ON public.mentors (decided_by)
+    WHERE decided_by IS NOT NULL;
+
 -- mentor_availability — one table, two row shapes, exactly as cal.com models it.
 --
 -- A WEEKLY row names a weekday and recurs. A DATED row names one calendar date and
@@ -260,6 +273,13 @@ CREATE INDEX mentor_bookings_upcoming_idx
     ON public.mentor_bookings (starts_at)
     WHERE status = 'confirmed';
 
+-- The third user-referencing column, indexed for account deletion like the other two.
+-- Partial for the same reason as mentors.decided_by: a live booking has nobody who
+-- cancelled it, so most rows are NULL and none of them can match.
+CREATE INDEX mentor_bookings_cancelled_by_idx
+    ON public.mentor_bookings (cancelled_by)
+    WHERE cancelled_by IS NOT NULL;
+
 -- mentor_busy_intervals — the cache of a mentor's occupied time read from their own
 -- calendar. CREATED EMPTY AND LEFT EMPTY by this change: the Google free/busy sync is a
 -- separate follow-up, and only the seam belongs here.
@@ -316,6 +336,11 @@ COMMENT ON TABLE public.mentor_reviews IS
 
 -- The aggregate the public profile shows.
 CREATE INDEX mentor_reviews_mentor_idx ON public.mentor_reviews (mentor_id);
+
+-- Account deletion again. NOT partial, unlike the other two: every review has a seeker,
+-- so a predicate would exclude nothing and only cost a reader the question of why it is
+-- there.
+CREATE INDEX mentor_reviews_seeker_idx ON public.mentor_reviews (seeker_user_id);
 
 -- mentor_booking_reminders — what has already been sent, so cmd/mentorship-remind is
 -- idempotent per (booking, offset).
