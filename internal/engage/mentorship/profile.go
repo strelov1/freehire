@@ -69,8 +69,11 @@ type Profile struct {
 	CreatedAt   time.Time
 }
 
-// Published reports whether this profile is one the public may see.
-func (p Profile) Published() bool { return p.Status == StatusApproved && !p.Paused }
+// There is no Published() helper on this type, and that is deliberate. The publication
+// predicate lives in the SQL, where the directory, the public read and every other reader
+// share one copy of it — a Go method saying the same thing would be a second copy, free to
+// drift, and the first caller to reach for it would be a reader that should have been a
+// query.
 
 // PendingProfile is a queue entry: the profile plus what the moderator needs beside it.
 type PendingProfile struct {
@@ -193,12 +196,9 @@ func (s *Service) Directory(ctx context.Context, f DirectoryFilter) ([]Profile, 
 // cancellations have already committed; refusing here would strand a mentor who cannot
 // leave and sessions that are already cancelled.
 func (s *Service) Withdraw(ctx context.Context, userID int64) error {
-	profile, found, err := s.repo.ProfileByUser(ctx, userID)
+	profile, err := s.ownProfile(ctx, userID)
 	if err != nil {
 		return err
-	}
-	if !found {
-		return ErrProfileNotFound
 	}
 
 	cancelled, err := s.repo.CancelFutureBookings(ctx, profile.ID, userID, reasonMentorWithdrew)

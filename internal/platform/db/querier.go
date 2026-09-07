@@ -5654,6 +5654,9 @@ type Querier interface {
 	// foreign id updates zero rows and the repository reports "not found" rather than
 	// revealing that the profile exists. Editing does NOT reset moderation: a mentor
 	// rewording their headline should not vanish from the directory for a day.
+	// Keyed on user_id ALONE, which UNIQUE (user_id) makes a single row. Taking an id as well
+	// would mean the caller reading the profile first just to learn one, which is a round trip
+	// for a value the owner's identity already determines.
 	UpdateMentorProfile(ctx context.Context, arg UpdateMentorProfileParams) (Mentor, error)
 	// Overwrite a saved search's name and/or query, scoped to its owner, bumping
 	// updated_at. Partial update: a NULL param leaves that column unchanged (COALESCE),

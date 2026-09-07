@@ -179,19 +179,17 @@ func (r *QueriesRepository) CancelBooking(ctx context.Context, id uuid.UUID, act
 	}
 
 	// The statement returns the booking's own columns and nothing else, while the
-	// cancellation notice has to address BOTH parties in BOTH zones. The second read is
-	// what fetches them — one query on a path that has just written, not a per-message
-	// lookup.
-	booking := bookingFromRow(row)
+	// cancellation notice has to address BOTH parties in BOTH zones. The re-read supplies
+	// them, and is the whole answer rather than a source of fields to copy across: the
+	// UPDATE has committed, so it reads back the same row with more of it.
+	//
+	// A failed re-read falls back to what the statement returned — a correct booking that
+	// nobody can be notified about, which beats failing a cancellation that has already
+	// happened.
 	if full, found, err := r.BookingByID(ctx, id); err == nil && found {
-		booking.MentorUserID = full.MentorUserID
-		booking.MentorSlug = full.MentorSlug
-		booking.MentorTimezone = full.MentorTimezone
-		booking.MentorHeadline = full.MentorHeadline
-		booking.MentorEmail = full.MentorEmail
-		booking.SeekerEmail = full.SeekerEmail
+		return full, nil
 	}
-	return booking, nil
+	return bookingFromRow(row), nil
 }
 
 // ListBookingsBySeeker is one seeker's own sessions.

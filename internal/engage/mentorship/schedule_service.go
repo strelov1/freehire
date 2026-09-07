@@ -52,24 +52,18 @@ func (s *Service) slotsFor(ctx context.Context, mentor Profile, from, to time.Ti
 
 // MyAvailability is the owner's whole schedule.
 func (s *Service) MyAvailability(ctx context.Context, userID int64) ([]Rule, error) {
-	profile, found, err := s.repo.ProfileByUser(ctx, userID)
+	profile, err := s.ownProfile(ctx, userID)
 	if err != nil {
 		return nil, err
-	}
-	if !found {
-		return nil, ErrProfileNotFound
 	}
 	return s.repo.ListAvailability(ctx, profile.ID)
 }
 
 // ReplaceWeeklySchedule swaps the recurring week, leaving dated overrides alone.
 func (s *Service) ReplaceWeeklySchedule(ctx context.Context, userID int64, rules []Rule) error {
-	profile, found, err := s.repo.ProfileByUser(ctx, userID)
+	profile, err := s.ownProfile(ctx, userID)
 	if err != nil {
 		return err
-	}
-	if !found {
-		return ErrProfileNotFound
 	}
 	return s.repo.ReplaceWeeklyAvailability(ctx, profile.ID, rules)
 }
@@ -79,24 +73,33 @@ func (s *Service) AddOverride(ctx context.Context, userID int64, rule Rule) erro
 	if !rule.IsDated() {
 		return fmt.Errorf("%w: an override names a date", ErrInvalidSpan)
 	}
-	profile, found, err := s.repo.ProfileByUser(ctx, userID)
+	profile, err := s.ownProfile(ctx, userID)
 	if err != nil {
 		return err
-	}
-	if !found {
-		return ErrProfileNotFound
 	}
 	return s.repo.AddAvailabilityRule(ctx, profile.ID, rule)
 }
 
 // DeleteAvailabilityRule removes one row of the caller's own schedule.
 func (s *Service) DeleteAvailabilityRule(ctx context.Context, userID, ruleID int64) error {
-	profile, found, err := s.repo.ProfileByUser(ctx, userID)
+	profile, err := s.ownProfile(ctx, userID)
 	if err != nil {
 		return err
 	}
-	if !found {
-		return ErrProfileNotFound
-	}
 	return s.repo.DeleteAvailabilityRule(ctx, ruleID, profile.ID)
+}
+
+// ownProfile is the caller's own mentor profile, or ErrProfileNotFound. Every cabinet
+// operation starts here: an account with no profile and one that does not exist are the
+// same answer, and writing that out at each call site is how one of them eventually says
+// something else.
+func (s *Service) ownProfile(ctx context.Context, userID int64) (Profile, error) {
+	profile, found, err := s.repo.ProfileByUser(ctx, userID)
+	if err != nil {
+		return Profile{}, err
+	}
+	if !found {
+		return Profile{}, ErrProfileNotFound
+	}
+	return profile, nil
 }

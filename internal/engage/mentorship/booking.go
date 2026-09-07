@@ -157,12 +157,9 @@ func (s *Service) MySessions(ctx context.Context, seekerID int64, limit int32) (
 
 // MentorSessions is the mentor's own list of who is coming.
 func (s *Service) MentorSessions(ctx context.Context, userID int64, limit int32) ([]Booking, error) {
-	profile, found, err := s.repo.ProfileByUser(ctx, userID)
+	profile, err := s.ownProfile(ctx, userID)
 	if err != nil {
 		return nil, err
-	}
-	if !found {
-		return nil, ErrProfileNotFound
 	}
 	return s.repo.ListBookingsByMentor(ctx, profile.ID, pageSize(limit))
 }

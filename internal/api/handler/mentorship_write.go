@@ -81,7 +81,7 @@ func (h *mentorshipHandlers) ListMySessions(c *fiber.Ctx) error {
 	if err != nil {
 		return mentorshipError(err)
 	}
-	return c.JSON(fiber.Map{"data": bookingList(bookings), "meta": fiber.Map{"count": len(bookings)}})
+	return c.JSON(fiber.Map{"data": seekerBookingList(bookings), "meta": fiber.Map{"count": len(bookings)}})
 }
 
 // ListMentorBookings is the mentor's own list of who is coming. It carries each seeker's
@@ -95,22 +95,34 @@ func (h *mentorshipHandlers) ListMentorBookings(c *fiber.Ctx) error {
 	if err != nil {
 		return mentorshipError(err)
 	}
+	return c.JSON(fiber.Map{
+		"data": mentorBookingList(bookings),
+		"meta": fiber.Map{"count": len(bookings)},
+	})
+}
 
+// seekerBookingList and mentorBookingList differ by one field, and are two functions
+// rather than one with a flag. The field is somebody's email address: a caller that has
+// to pass `true` to withhold it is a caller that can pass `false` by mistake, and the
+// mistake is silent.
+func seekerBookingList(bookings []mentorship.Booking) []bookingResponse {
+	now := time.Now()
+	out := make([]bookingResponse, 0, len(bookings))
+	for _, b := range bookings {
+		out = append(out, toBookingResponse(b, now))
+	}
+	return out
+}
+
+// mentorBookingList additionally names who is coming — the mentor is meeting this person,
+// so their identity is not a leak.
+func mentorBookingList(bookings []mentorship.Booking) []bookingResponse {
 	now := time.Now()
 	out := make([]bookingResponse, 0, len(bookings))
 	for _, b := range bookings {
 		row := toBookingResponse(b, now)
 		row.SeekerEmail = b.SeekerEmail
 		out = append(out, row)
-	}
-	return c.JSON(fiber.Map{"data": out, "meta": fiber.Map{"count": len(out)}})
-}
-
-func bookingList(bookings []mentorship.Booking) []bookingResponse {
-	now := time.Now()
-	out := make([]bookingResponse, 0, len(bookings))
-	for _, b := range bookings {
-		out = append(out, toBookingResponse(b, now))
 	}
 	return out
 }

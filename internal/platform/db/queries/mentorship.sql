@@ -48,7 +48,10 @@ SET headline = sqlc.arg(headline),
     horizon_days = sqlc.arg(horizon_days),
     meeting_url = sqlc.arg(meeting_url),
     updated_at = now()
-WHERE id = sqlc.arg(id) AND user_id = sqlc.arg(user_id)
+-- Keyed on user_id ALONE, which UNIQUE (user_id) makes a single row. Taking an id as well
+-- would mean the caller reading the profile first just to learn one, which is a round trip
+-- for a value the owner's identity already determines.
+WHERE user_id = sqlc.arg(user_id)
 RETURNING *;
 
 -- name: SetMentorPaused :one
@@ -56,7 +59,7 @@ RETURNING *;
 -- need no moderator, and neither may alter what the moderator decided.
 UPDATE mentors
 SET paused = sqlc.arg(paused), updated_at = now()
-WHERE id = sqlc.arg(id) AND user_id = sqlc.arg(user_id)
+WHERE user_id = sqlc.arg(user_id)
 RETURNING *;
 
 -- name: DecideMentorProfile :one

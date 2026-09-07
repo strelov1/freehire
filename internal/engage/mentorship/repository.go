@@ -125,16 +125,7 @@ func (r *QueriesRepository) PublishedProfileBySlug(ctx context.Context, slug str
 // reported as "not found" rather than "not yours" — an endpoint must not confirm that
 // somebody else's profile exists.
 func (r *QueriesRepository) UpdateProfile(ctx context.Context, in ProfileInput) (Profile, error) {
-	current, found, err := r.ProfileByUser(ctx, in.UserID)
-	if err != nil {
-		return Profile{}, err
-	}
-	if !found {
-		return Profile{}, ErrProfileNotFound
-	}
-
 	row, err := r.q.UpdateMentorProfile(ctx, db.UpdateMentorProfileParams{
-		ID:                 current.ID,
 		UserID:             in.UserID,
 		Headline:           in.Headline,
 		Bio:                in.Bio,
@@ -159,16 +150,8 @@ func (r *QueriesRepository) UpdateProfile(ctx context.Context, in ProfileInput) 
 
 // SetPaused flips the mentor's own switch.
 func (r *QueriesRepository) SetPaused(ctx context.Context, userID int64, paused bool) (Profile, error) {
-	current, found, err := r.ProfileByUser(ctx, userID)
-	if err != nil {
-		return Profile{}, err
-	}
-	if !found {
-		return Profile{}, ErrProfileNotFound
-	}
-
 	row, err := r.q.SetMentorPaused(ctx, db.SetMentorPausedParams{
-		ID: current.ID, UserID: userID, Paused: paused,
+		UserID: userID, Paused: paused,
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Profile{}, ErrProfileNotFound

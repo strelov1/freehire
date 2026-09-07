@@ -399,7 +399,7 @@ func TestOnlyApprovedUnpausedMentorsArePublished(t *testing.T) {
 	approve(t, q, approvedMentor.ID, moderator)
 	approve(t, q, pausedMentor.ID, moderator)
 	if _, err := q.SetMentorPaused(ctx, SetMentorPausedParams{
-		ID: pausedMentor.ID, UserID: pausedUser, Paused: true,
+		UserID: pausedUser, Paused: true,
 	}); err != nil {
 		t.Fatalf("SetMentorPaused: %v", err)
 	}
@@ -564,7 +564,7 @@ func TestUpdateMentorProfileLeavesTheSlugAndCompanyAlone(t *testing.T) {
 	mentor := seedMentor(t, q, user, "stableco", "stable-mentor")
 
 	updated, err := q.UpdateMentorProfile(ctx, UpdateMentorProfileParams{
-		ID: mentor.ID, UserID: user,
+		UserID:   user,
 		Headline: "Staff Engineer", Bio: "new bio",
 		Topics: []string{"interviewing"}, Languages: []string{"de"},
 		Timezone: "Europe/Lisbon", SessionDurationMin: 30,
@@ -588,7 +588,7 @@ func TestUpdateMentorProfileLeavesTheSlugAndCompanyAlone(t *testing.T) {
 	t.Run("editing does not reset moderation", func(t *testing.T) {
 		approve(t, q, mentor.ID, user)
 		got, err := q.UpdateMentorProfile(ctx, UpdateMentorProfileParams{
-			ID: mentor.ID, UserID: user,
+			UserID:   user,
 			Headline: "Principal Engineer", Topics: []string{"career"}, Languages: []string{"en"},
 			Timezone: "Europe/Berlin", SessionDurationMin: 60, MinNoticeMin: 120, HorizonDays: 30,
 			MeetingUrl: "https://meet.example.test/new",
@@ -605,7 +605,7 @@ func TestUpdateMentorProfileLeavesTheSlugAndCompanyAlone(t *testing.T) {
 	t.Run("a stranger edits nothing", func(t *testing.T) {
 		stranger := seedMentorshipUser(t, pool, "stranger-stable@example.test")
 		if _, err := q.UpdateMentorProfile(ctx, UpdateMentorProfileParams{
-			ID: mentor.ID, UserID: stranger,
+			UserID:   stranger,
 			Headline: "Hijacked", Topics: []string{"x"}, Languages: []string{"x"},
 			Timezone: "UTC", SessionDurationMin: 60, MinNoticeMin: 0, HorizonDays: 1,
 			MeetingUrl: "https://meet.example.test/x",

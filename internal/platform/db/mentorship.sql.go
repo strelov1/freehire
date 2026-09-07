@@ -1135,20 +1135,19 @@ func (q *Queries) RecordReminderSent(ctx context.Context, arg RecordReminderSent
 const setMentorPaused = `-- name: SetMentorPaused :one
 UPDATE mentors
 SET paused = $1, updated_at = now()
-WHERE id = $2 AND user_id = $3
+WHERE user_id = $2
 RETURNING id, user_id, company_slug, slug, headline, bio, topics, languages, timezone, session_duration_min, buffer_before_min, buffer_after_min, min_notice_min, horizon_days, meeting_url, status, paused, decided_by, decided_at, created_at, updated_at
 `
 
 type SetMentorPausedParams struct {
 	Paused bool  `json:"paused"`
-	ID     int64 `json:"id"`
 	UserID int64 `json:"user_id"`
 }
 
 // The mentor's own switch. Deliberately independent of status: pausing and resuming
 // need no moderator, and neither may alter what the moderator decided.
 func (q *Queries) SetMentorPaused(ctx context.Context, arg SetMentorPausedParams) (Mentor, error) {
-	row := q.db.QueryRow(ctx, setMentorPaused, arg.Paused, arg.ID, arg.UserID)
+	row := q.db.QueryRow(ctx, setMentorPaused, arg.Paused, arg.UserID)
 	var i Mentor
 	err := row.Scan(
 		&i.ID,
@@ -1190,7 +1189,7 @@ SET headline = $1,
     horizon_days = $10,
     meeting_url = $11,
     updated_at = now()
-WHERE id = $12 AND user_id = $13
+WHERE user_id = $12
 RETURNING id, user_id, company_slug, slug, headline, bio, topics, languages, timezone, session_duration_min, buffer_before_min, buffer_after_min, min_notice_min, horizon_days, meeting_url, status, paused, decided_by, decided_at, created_at, updated_at
 `
 
@@ -1206,7 +1205,6 @@ type UpdateMentorProfileParams struct {
 	MinNoticeMin       int32    `json:"min_notice_min"`
 	HorizonDays        int32    `json:"horizon_days"`
 	MeetingUrl         string   `json:"meeting_url"`
-	ID                 int64    `json:"id"`
 	UserID             int64    `json:"user_id"`
 }
 
@@ -1214,6 +1212,9 @@ type UpdateMentorProfileParams struct {
 // foreign id updates zero rows and the repository reports "not found" rather than
 // revealing that the profile exists. Editing does NOT reset moderation: a mentor
 // rewording their headline should not vanish from the directory for a day.
+// Keyed on user_id ALONE, which UNIQUE (user_id) makes a single row. Taking an id as well
+// would mean the caller reading the profile first just to learn one, which is a round trip
+// for a value the owner's identity already determines.
 func (q *Queries) UpdateMentorProfile(ctx context.Context, arg UpdateMentorProfileParams) (Mentor, error) {
 	row := q.db.QueryRow(ctx, updateMentorProfile,
 		arg.Headline,
@@ -1227,7 +1228,6 @@ func (q *Queries) UpdateMentorProfile(ctx context.Context, arg UpdateMentorProfi
 		arg.MinNoticeMin,
 		arg.HorizonDays,
 		arg.MeetingUrl,
-		arg.ID,
 		arg.UserID,
 	)
 	var i Mentor
