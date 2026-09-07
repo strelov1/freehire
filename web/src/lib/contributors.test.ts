@@ -20,7 +20,7 @@ function person(over: Partial<ContributorEntry> = {}): ContributorEntry {
 }
 
 function snapshot(people: ContributorEntry[]): ContributorsSnapshot {
-  return { generatedAt: '2026-09-07T00:00:00Z', people };
+  return { people };
 }
 
 const logins = (entries: ContributorEntry[]) => entries.map((e) => e.login);

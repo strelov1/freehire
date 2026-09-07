@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { RECENT_PULL_REQUEST_LIMIT, assembleEntries, serializeSnapshot } from './build-contributors.mjs';
+import {
+  RECENT_PULL_REQUEST_LIMIT,
+  assembleEntries,
+  assertUsable,
+  serializeSnapshot,
+} from './build-contributors.mjs';
 
 const author = (login, over = {}) => ({
   login,
@@ -132,6 +137,38 @@ describe('assembleEntries', () => {
   });
 });
 
+describe('assertUsable', () => {
+  // A collection yielding nobody is a failed measurement, not an empty repository —
+  // the same rule the suggestion-dictionary rebuild follows before it swaps an index.
+  // Every failure this guards against is silent: a renamed GraphQL field, a query that
+  // starts returning an empty connection, a token that reads nothing. The script exits
+  // non-zero, writes nothing, and the previously committed snapshot keeps serving; the
+  // alternative is a green run that empties the page.
+  it('refuses a collection that found nobody', () => {
+    expect(() => assertUsable([])).toThrow(/no human contributors/);
+  });
+
+  it('refuses a collection with no human in it', () => {
+    const onlyBots = assembleEntries({
+      pullRequests: [pr('dependabot', 1, '2026-01-01T00:00:00Z', { author: { accountType: 'Bot' } })],
+      issues: [],
+      admins: [],
+    });
+
+    expect(() => assertUsable(onlyBots)).toThrow(/no human contributors/);
+  });
+
+  it('accepts a collection with at least one human', () => {
+    const found = assembleEntries({
+      pullRequests: [pr('aleganza', 1, '2026-01-01T00:00:00Z')],
+      issues: [],
+      admins: [],
+    });
+
+    expect(() => assertUsable(found)).not.toThrow();
+  });
+});
+
 describe('serializeSnapshot', () => {
   // The workflow decides whether to commit by asking git whether the file changed, so
   // an unchanged collection has to produce byte-identical output. Object key order in
@@ -148,7 +185,6 @@ describe('serializeSnapshot', () => {
           issues: [],
           admins: [],
         }),
-        '2026-09-07T00:00:00Z',
       );
 
     const written = collected(['bea', 'ada', 'cy']);
@@ -157,13 +193,25 @@ describe('serializeSnapshot', () => {
     expect(JSON.parse(written).people.map((p) => p.login)).toEqual(['ada', 'bea', 'cy']);
   });
 
-  it('records when the snapshot was taken', () => {
-    const written = JSON.parse(serializeSnapshot([], '2026-09-07T00:00:00Z'));
+  // THE FILE CARRIES NO TIMESTAMP, AND THAT IS THE POINT. The workflow decides whether
+  // to commit by asking git whether this file changed; a collected-at stamp changes on
+  // every run, so it would make every run a commit — and, since the host deploys a green
+  // main, a daily production deploy of nothing. When the data last changed is already
+  // recorded by the commit that changed it, exactly and unforgeably.
+  it('carries nothing that changes between runs of identical data', () => {
+    const entries = assembleEntries({
+      pullRequests: [pr('aleganza', 1, '2026-01-01T00:00:00Z')],
+      issues: [],
+      admins: [],
+    });
 
-    expect(written).toEqual({ generatedAt: '2026-09-07T00:00:00Z', people: [] });
+    expect(serializeSnapshot(entries)).toBe(serializeSnapshot(entries));
+    expect(JSON.parse(serializeSnapshot(entries))).toEqual({
+      people: [expect.objectContaining({ login: 'aleganza' })],
+    });
   });
 
   it('ends with a newline so the committed file is a well-formed text file', () => {
-    expect(serializeSnapshot([], '2026-09-07T00:00:00Z').endsWith('\n')).toBe(true);
+    expect(serializeSnapshot([]).endsWith('\n')).toBe(true);
   });
 });

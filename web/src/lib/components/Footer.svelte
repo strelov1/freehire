@@ -58,6 +58,9 @@
         { label: 'Open', href: resolve('/open') },
         { label: 'For companies', href: resolve('/for-companies') },
         { label: 'Contribute', href: resolve('/contribute') },
+        // Next to Contribute rather than under Resources: the two are one thought —
+        // here is how to help, and here is everyone who did.
+        { label: 'Contributors', href: resolve('/contributors') },
         { label: 'Submit a job', href: resolve('/submit') },
         { label: 'Status', href: resolve('/status') },
         { label: 'Support', href: resolve('/support') },

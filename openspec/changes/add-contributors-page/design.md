@@ -82,6 +82,19 @@ most recent merged pull requests. Twenty is what a profile page can show without
 scroll, and the rule is uniform — no special case for the maintainer, so nothing about the
 file changes shape when a second maintainer appears.
 
+### The snapshot file is a function of the data and nothing else
+
+The whole commit-only-on-change design rests on `git diff --quiet`, so anything in the
+file that varies between runs of identical data makes every run a commit — and, since
+the host deploys a green main, a daily production deploy of nothing.
+
+Two consequences. People are sorted by login rather than left in the order GitHub paged
+them. And the file carries **no collected-at timestamp**. The first draft had one, and it
+would have defeated the design on the very first scheduled run while looking correct in
+every test: a timestamp is exactly the kind of field nobody re-reads. What it would have
+recorded — when the data last changed — is already recorded by the commit that changed
+it, exactly and unforgeably.
+
 ### Rules live in `web/src/lib/contributors.ts`, collection lives in the script
 
 The script does I/O: paginate, map fields, cap at twenty, write. Its assembly is unit-tested

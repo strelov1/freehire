@@ -112,17 +112,41 @@ export function assembleEntries({ pullRequests, issues, admins, excluded = [] })
   return [...byLogin.values()];
 }
 
+/** Throws unless the collection found at least one human.
+ *
+ *  A collection yielding nobody is a failed measurement, not an empty repository — the
+ *  same rule the suggestion-dictionary rebuild follows before it swaps an index. Every
+ *  failure this guards against is silent: a renamed GraphQL field, a connection that
+ *  starts coming back empty, a token that can read nothing. Without it the run writes an
+ *  empty file, the workflow commits it, and the page goes blank on a green build.
+ *
+ *  Humans specifically, because a snapshot of nothing but bots renders as an empty page
+ *  once the display rules have had their say. */
+export function assertUsable(entries) {
+  const humans = entries.filter((e) => e.accountType !== 'Bot' && !e.login.endsWith('[bot]'));
+  if (humans.length === 0) {
+    throw new Error(
+      `collection found no human contributors (${entries.length} entries in total) — refusing to write a snapshot that would empty the page`,
+    );
+  }
+}
+
 /** The snapshot as it is written to disk.
  *
- *  People are sorted by login rather than left in collection order, because the
- *  workflow decides whether to commit by asking git whether the file changed. Insertion
- *  order here follows whatever order GitHub happened to page the results in, so an
- *  unchanged collection would otherwise produce a different file — a commit, and a
- *  deploy, every single day for nothing. */
-export function serializeSnapshot(entries, generatedAt) {
+ *  EVERYTHING HERE IS A FUNCTION OF THE DATA AND NOTHING ELSE, because the workflow
+ *  decides whether to commit by asking git whether this file changed — so anything that
+ *  varies between runs of identical data makes every run a commit, and (since the host
+ *  deploys a green main) a daily production deploy of nothing.
+ *
+ *  Two things follow from that. People are sorted by login rather than left in the order
+ *  GitHub happened to page them in. And the file carries NO collected-at stamp: when the
+ *  data last changed is already recorded, exactly and unforgeably, by the commit that
+ *  changed it — a field restating that would cost the entire commit-only-on-change
+ *  design in exchange for a worse copy of it. */
+export function serializeSnapshot(entries) {
   const people = [...entries].sort((a, b) => a.login.localeCompare(b.login));
 
-  return `${JSON.stringify({ generatedAt, people }, null, 2)}\n`;
+  return `${JSON.stringify({ people }, null, 2)}\n`;
 }
 
 // ---------------------------------------------------------------------------
@@ -259,7 +283,9 @@ async function main() {
     excluded: EXCLUDED_LOGINS,
   });
 
-  await writeFile(SNAPSHOT_PATH, serializeSnapshot(entries, new Date().toISOString()));
+  assertUsable(entries);
+
+  await writeFile(SNAPSHOT_PATH, serializeSnapshot(entries));
 
   console.log(
     `contributors: ${entries.length} people from ${merged.length} merged pull requests and ${issues.length} issues`,

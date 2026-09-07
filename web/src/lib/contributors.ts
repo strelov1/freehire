@@ -7,8 +7,9 @@
 // nightly job nobody watches is a rule nobody can trust. Here it is unit-tested
 // against fixtures with no network anywhere.
 
-/** One merged pull request, as a profile page lists it. */
-export interface ContributorPullRequest {
+/** One merged pull request, as a profile page lists it. Not exported: it is reached
+ *  through `ContributorEntry.recentPullRequests`, and nothing names it directly. */
+interface ContributorPullRequest {
   number: number;
   title: string;
   /** ISO-8601 instant the pull request was merged. */
@@ -38,9 +39,13 @@ export interface ContributorEntry {
   recentPullRequests: ContributorPullRequest[];
 }
 
-/** The committed snapshot: everyone the collector found, and when it looked. */
+/** The committed snapshot: everyone the collector found.
+ *
+ *  Deliberately carries no collected-at stamp. The workflow that rewrites this file
+ *  commits only when it changed, and it asks git that question — so a field that varied
+ *  between runs of identical data would make every run a commit and every commit a
+ *  deploy. When the data last changed is what the commit itself records. */
 export interface ContributorsSnapshot {
-  generatedAt: string;
   people: ContributorEntry[];
 }
 

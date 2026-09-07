@@ -4,6 +4,9 @@
 // company chunks). Each chunk is one keyset page fetched by cursor.
 
 import { collectionSlugs } from './collections';
+import { contributorGroups } from './contributors';
+import type { ContributorsSnapshot } from './contributors';
+import contributorsSnapshot from './data/contributors.json';
 
 // Must equal the backend's companySitemapChunk — the page size the offsets are
 // computed with — so each sub-sitemap holds exactly one index page. Well under the
@@ -56,6 +59,9 @@ export const STATIC_PATHS = [
   '/cli',
   '/chatgpt',
   '/contribute',
+  // The contributor showcase. The per-person profiles are NOT here — they come from
+  // the committed snapshot via contributorPaths(), the same way collections do.
+  '/contributors',
   '/status',
   // Named as the App Store listing's Support URL, so it must resolve and stay
   // indexable — a 404 there is a rejection.
@@ -71,6 +77,19 @@ export const STATIC_PATHS = [
  *  STATIC_PATHS rather than needing their own chunked file. */
 export function collectionPaths(): string[] {
   return collectionSlugs().map((slug) => `/collections/${slug}`);
+}
+
+/** The per-contributor profile pages (`/contributors/:login`), one per person the
+ *  showcase actually lists.
+ *
+ *  Derived through the same rules the showcase renders, not from the raw snapshot: a
+ *  bot's profile 404s, so offering crawlers a path to one would be pointing them at a
+ *  page we know does not exist. Each profile is its own indexable page because it is
+ *  the page a person shares and is found by. */
+export function contributorPaths(): string[] {
+  const { maintainers, contributors } = contributorGroups(contributorsSnapshot as ContributorsSnapshot);
+
+  return [...maintainers, ...contributors].map((entry) => `/contributors/${entry.login}`);
 }
 
 /** Sitemap entries for the blog: the index (`/blog`) plus one per published post,

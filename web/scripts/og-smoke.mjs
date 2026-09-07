@@ -106,6 +106,42 @@ const companyFixtures = {
   companyZeroJobs: [company({ name: 'Dormant Inc', tagline: 'Nothing open right now' }), 0],
 };
 
+// A contributor entry; per-fixture overrides tweak the fields the contributor card
+// reads. Only the counts, the login, the role and the first-contribution date reach
+// the card — the pull-request list is a page concern, not a card one.
+function contributor(overrides = {}) {
+  return {
+    login: 'aleganza',
+    id: 1,
+    avatarUrl: 'https://avatars.githubusercontent.com/u/1',
+    accountType: 'User',
+    role: 'contributor',
+    firstContributionAt: '2026-07-15T00:00:00Z',
+    lastContributionAt: '2026-08-30T00:00:00Z',
+    mergedPullRequests: 8,
+    openedIssues: 3,
+    recentPullRequests: [],
+    ...overrides,
+  };
+}
+
+// The degradation cases the contributor card handles. Every one renders with a null
+// avatar, which is also the fallback path — satori cannot fetch a remote image, so a
+// contributor whose avatar could not be resolved must still produce a valid PNG.
+const contributorFixtures = {
+  contributorBoth: contributor(),
+  contributorCodeOnly: contributor({ login: 'andrewsakhno', mergedPullRequests: 7, openedIssues: 0 }),
+  contributorIssuesOnly: contributor({ login: 'joedeveloper', mergedPullRequests: 0, openedIssues: 1 }),
+  contributorFirstEver: contributor({ login: 'spoddub', mergedPullRequests: 1, openedIssues: 0 }),
+  contributorMaintainer: contributor({
+    login: 'strelov1',
+    role: 'maintainer',
+    mergedPullRequests: 2236,
+    openedIssues: 89,
+  }),
+  contributorLongLogin: contributor({ login: 'a-very-long-github-login-indeed-yes', openedIssues: 0 }),
+};
+
 async function main() {
   const vite = await createOgVite();
 
@@ -113,6 +149,7 @@ async function main() {
   try {
     const { renderCardPng, renderMarkupPng } = await vite.ssrLoadModule('/src/lib/server/og/render.ts');
     const { buildCompanyCard } = await vite.ssrLoadModule('/src/lib/server/og/company.ts');
+    const { buildContributorCard } = await vite.ssrLoadModule('/src/lib/server/og/contributor.ts');
     const fonts = await loadFonts();
     await mkdir(outDir, { recursive: true });
 
@@ -129,6 +166,11 @@ async function main() {
 
     for (const [name, [entity, openJobs]] of Object.entries(companyFixtures)) {
       const markup = buildCompanyCard(entity, { logo: null, openJobs });
+      await assertPng(name, Buffer.from(await renderMarkupPng(markup, fonts)));
+    }
+
+    for (const [name, entry] of Object.entries(contributorFixtures)) {
+      const markup = buildContributorCard(entry, { avatar: null });
       await assertPng(name, Buffer.from(await renderMarkupPng(markup, fonts)));
     }
   } finally {

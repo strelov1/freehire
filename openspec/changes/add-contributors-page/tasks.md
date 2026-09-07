@@ -38,29 +38,29 @@
 
 ## 5. The per-contributor OG card
 
-- [ ] 5.1 Add `web/src/lib/server/og/contributor.ts` building the card markup from a contributor entry, reusing the brand primitives in `shared.ts` and escaping every interpolated value; keep to satori's flexbox-only constraint.
-- [ ] 5.2 Add `web/src/routes/contributors/[login]/og.png/+server.ts` rendering it, mirroring the company card endpoint's structure and cache headers.
-- [ ] 5.3 Degrade to the shared monogram when the avatar cannot be fetched, and confirm the response is still 200 with a valid PNG.
-- [ ] 5.4 Return 404 with no image for a login absent from the snapshot.
-- [ ] 5.5 Point the profile page's Open Graph and Twitter image metadata at its own card.
-- [ ] 5.6 Extend the existing OG render smoke test to cover the contributor card.
+- [x] 5.1 Add `web/src/lib/server/og/contributor.ts` building the card markup from a contributor entry, reusing the brand primitives in `shared.ts` and escaping every interpolated value; keep to satori's flexbox-only constraint.
+- [x] 5.2 Add `web/src/routes/contributors/[login]/og.png/+server.ts` rendering it, mirroring the company card endpoint's structure and cache headers.
+- [x] 5.3 Degrade to the shared monogram when the avatar cannot be fetched, and confirm the response is still 200 with a valid PNG.
+- [x] 5.4 Return 404 with no image for a login absent from the snapshot.
+- [x] 5.5 Point the profile page's Open Graph and Twitter image metadata at its own card.
+- [x] 5.6 Extend the existing OG render smoke test to cover the contributor card.
 
 ## 6. Wiring and discoverability
 
-- [ ] 6.1 Make the `/open` page's contributor count link to `/contributors` instead of GitHub, keeping the existing fallback when the GitHub leg degraded.
-- [ ] 6.2 Add `/contributors` and every `/contributors/<login>` to `web/src/routes/sitemap-pages.xml/+server.ts`.
-- [ ] 6.3 Add a `/contributors` link to the site chrome so the page is reachable without knowing the URL.
+- [x] 6.1 Make the `/open` page's contributor count link to `/contributors` instead of GitHub, keeping the existing fallback when the GitHub leg degraded.
+- [x] 6.2 Add `/contributors` and every `/contributors/<login>` to `web/src/routes/sitemap-pages.xml/+server.ts`.
+- [x] 6.3 Add a `/contributors` link to the site chrome so the page is reachable without knowing the URL.
 
 ## 7. The scheduled workflow
 
-- [ ] 7.1 Add `.github/workflows/contributors.yml` running daily on a cron with `contents: write`, executing `node web/scripts/build-contributors.mjs`.
-- [ ] 7.2 Commit the result only when `git diff --quiet` reports a change, so an unchanged collection produces no commit and no deployment.
-- [ ] 7.3 Keep every `run:` block to a single command so actionlint's shellcheck pass stays clean; verify with actionlint locally.
+- [x] 7.1 Add `.github/workflows/contributors.yml` running daily on a cron with `contents: write`, executing `node web/scripts/build-contributors.mjs`.
+- [x] 7.2 Commit the result only when `git diff --quiet` reports a change, so an unchanged collection produces no commit and no deployment.
+- [x] 7.3 Keep every `run:` block to a single command so actionlint's shellcheck pass stays clean; verify with actionlint locally.
 - [ ] 7.4 Trigger the workflow manually (`workflow_dispatch`) once and confirm it produces no commit against the snapshot committed in 2.8.
 
 ## 8. Verification
 
-- [ ] 8.1 `pnpm --dir web lint`, `pnpm --dir web test`, and `pnpm --dir web build` all pass.
-- [ ] 8.2 `pnpm check:dead` reports no new findings for the added files.
-- [ ] 8.3 `pnpm check:links` passes.
-- [ ] 8.4 Open `/contributors`, one profile, and its `og.png` in a real browser and confirm the card previews correctly.
+- [x] 8.1 `pnpm --dir web lint`, `pnpm --dir web test`, and `pnpm --dir web build` all pass.
+- [x] 8.2 `pnpm check:dead` reports no new findings for the added files.
+- [x] 8.3 `pnpm check:links` passes.
+- [x] 8.4 Open `/contributors`, one profile, and its `og.png` in a real browser and confirm the card previews correctly.

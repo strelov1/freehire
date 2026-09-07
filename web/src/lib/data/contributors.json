@@ -1,5 +1,4 @@
 {
-  "generatedAt": "2026-09-07T03:52:49.344Z",
   "people": [
     {
       "login": "111100001",
@@ -12,6 +11,86 @@
       "mergedPullRequests": 0,
       "openedIssues": 1,
       "recentPullRequests": []
+    },
+    {
+      "login": "HafizMMoaz",
+      "id": 103947442,
+      "avatarUrl": "https://avatars.githubusercontent.com/u/103947442?u=c9f758c94f081f84700d0280af0f3ec6bdf0fc7c&v=4",
+      "accountType": "User",
+      "role": "contributor",
+      "firstContributionAt": "2026-08-11T02:05:14Z",
+      "lastContributionAt": "2026-08-11T03:38:51Z",
+      "mergedPullRequests": 5,
+      "openedIssues": 0,
+      "recentPullRequests": [
+        {
+          "number": 1719,
+          "title": "feat(sources): add Remotli source adapter",
+          "mergedAt": "2026-08-11T03:38:51Z",
+          "url": "https://github.com/strelov1/freehire/pull/1719"
+        },
+        {
+          "number": 1717,
+          "title": "feat(sources): add NoDesk source adapter",
+          "mergedAt": "2026-08-11T02:39:00Z",
+          "url": "https://github.com/strelov1/freehire/pull/1717"
+        },
+        {
+          "number": 1720,
+          "title": "feat(sources): add The Muse source adapter",
+          "mergedAt": "2026-08-11T02:38:50Z",
+          "url": "https://github.com/strelov1/freehire/pull/1720"
+        },
+        {
+          "number": 1724,
+          "title": "feat(sources): add SolidJobs source adapter (IT division)",
+          "mergedAt": "2026-08-11T02:38:47Z",
+          "url": "https://github.com/strelov1/freehire/pull/1724"
+        },
+        {
+          "number": 1718,
+          "title": "feat(sources): add Cryptocurrency Jobs source adapter",
+          "mergedAt": "2026-08-11T02:05:14Z",
+          "url": "https://github.com/strelov1/freehire/pull/1718"
+        }
+      ]
+    },
+    {
+      "login": "Klavaro66",
+      "id": 57226205,
+      "avatarUrl": "https://avatars.githubusercontent.com/u/57226205?v=4",
+      "accountType": "User",
+      "role": "contributor",
+      "firstContributionAt": "2026-09-02T21:28:39Z",
+      "lastContributionAt": "2026-09-06T15:50:58Z",
+      "mergedPullRequests": 0,
+      "openedIssues": 4,
+      "recentPullRequests": []
+    },
+    {
+      "login": "ManishModak",
+      "id": 111450082,
+      "avatarUrl": "https://avatars.githubusercontent.com/u/111450082?u=1e7123cd6313a8520038d82f3c9233c1251a5a12&v=4",
+      "accountType": "User",
+      "role": "contributor",
+      "firstContributionAt": "2026-08-08T22:48:59Z",
+      "lastContributionAt": "2026-08-11T11:56:36Z",
+      "mergedPullRequests": 2,
+      "openedIssues": 0,
+      "recentPullRequests": [
+        {
+          "number": 1748,
+          "title": "feat(auth): add mobile auth v2 (verifier-bound OAuth, native Apple, recent auth & connected identities)",
+          "mergedAt": "2026-08-11T11:56:36Z",
+          "url": "https://github.com/strelov1/freehire/pull/1748"
+        },
+        {
+          "number": 1657,
+          "title": "feat(auth): harden session contracts, recovery atomicity & throttling for mobile foundation",
+          "mergedAt": "2026-08-08T22:48:59Z",
+          "url": "https://github.com/strelov1/freehire/pull/1657"
+        }
+      ]
     },
     {
       "login": "aleganza",
@@ -275,49 +354,6 @@
       ]
     },
     {
-      "login": "HafizMMoaz",
-      "id": 103947442,
-      "avatarUrl": "https://avatars.githubusercontent.com/u/103947442?u=c9f758c94f081f84700d0280af0f3ec6bdf0fc7c&v=4",
-      "accountType": "User",
-      "role": "contributor",
-      "firstContributionAt": "2026-08-11T02:05:14Z",
-      "lastContributionAt": "2026-08-11T03:38:51Z",
-      "mergedPullRequests": 5,
-      "openedIssues": 0,
-      "recentPullRequests": [
-        {
-          "number": 1719,
-          "title": "feat(sources): add Remotli source adapter",
-          "mergedAt": "2026-08-11T03:38:51Z",
-          "url": "https://github.com/strelov1/freehire/pull/1719"
-        },
-        {
-          "number": 1717,
-          "title": "feat(sources): add NoDesk source adapter",
-          "mergedAt": "2026-08-11T02:39:00Z",
-          "url": "https://github.com/strelov1/freehire/pull/1717"
-        },
-        {
-          "number": 1720,
-          "title": "feat(sources): add The Muse source adapter",
-          "mergedAt": "2026-08-11T02:38:50Z",
-          "url": "https://github.com/strelov1/freehire/pull/1720"
-        },
-        {
-          "number": 1724,
-          "title": "feat(sources): add SolidJobs source adapter (IT division)",
-          "mergedAt": "2026-08-11T02:38:47Z",
-          "url": "https://github.com/strelov1/freehire/pull/1724"
-        },
-        {
-          "number": 1718,
-          "title": "feat(sources): add Cryptocurrency Jobs source adapter",
-          "mergedAt": "2026-08-11T02:05:14Z",
-          "url": "https://github.com/strelov1/freehire/pull/1718"
-        }
-      ]
-    },
-    {
       "login": "infinitelife102",
       "id": 246451738,
       "avatarUrl": "https://avatars.githubusercontent.com/u/246451738?u=26e931097b0a1ddc8b8b6416e0c62d51509aecae&v=4",
@@ -340,43 +376,6 @@
       "mergedPullRequests": 0,
       "openedIssues": 1,
       "recentPullRequests": []
-    },
-    {
-      "login": "Klavaro66",
-      "id": 57226205,
-      "avatarUrl": "https://avatars.githubusercontent.com/u/57226205?v=4",
-      "accountType": "User",
-      "role": "contributor",
-      "firstContributionAt": "2026-09-02T21:28:39Z",
-      "lastContributionAt": "2026-09-06T15:50:58Z",
-      "mergedPullRequests": 0,
-      "openedIssues": 4,
-      "recentPullRequests": []
-    },
-    {
-      "login": "ManishModak",
-      "id": 111450082,
-      "avatarUrl": "https://avatars.githubusercontent.com/u/111450082?u=1e7123cd6313a8520038d82f3c9233c1251a5a12&v=4",
-      "accountType": "User",
-      "role": "contributor",
-      "firstContributionAt": "2026-08-08T22:48:59Z",
-      "lastContributionAt": "2026-08-11T11:56:36Z",
-      "mergedPullRequests": 2,
-      "openedIssues": 0,
-      "recentPullRequests": [
-        {
-          "number": 1748,
-          "title": "feat(auth): add mobile auth v2 (verifier-bound OAuth, native Apple, recent auth & connected identities)",
-          "mergedAt": "2026-08-11T11:56:36Z",
-          "url": "https://github.com/strelov1/freehire/pull/1748"
-        },
-        {
-          "number": 1657,
-          "title": "feat(auth): harden session contracts, recovery atomicity & throttling for mobile foundation",
-          "mergedAt": "2026-08-08T22:48:59Z",
-          "url": "https://github.com/strelov1/freehire/pull/1657"
-        }
-      ]
     },
     {
       "login": "meminens",

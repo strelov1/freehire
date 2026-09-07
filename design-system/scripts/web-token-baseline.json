@@ -92,6 +92,7 @@
   "web/src/lib/server/og/brand.ts": 4,
   "web/src/lib/server/og/card.ts": 3,
   "web/src/lib/server/og/company.ts": 3,
+  "web/src/lib/server/og/contributor.ts": 3,
   "web/src/lib/server/og/shared.ts": 7,
   "web/src/lib/skillPulseFormat.ts": 2,
   "web/src/lib/tailor/ArtifactPanel.svelte": 1,
