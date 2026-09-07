@@ -47,49 +47,49 @@
 
 ## 5. HTTP routes
 
-- [ ] 5.1 `GET /api/v1/me/discord/connect` behind `RequireAuth` (cookie only): redirect to
+- [x] 5.1 `GET /api/v1/me/discord/connect` behind `RequireAuth` (cookie only): redirect to
       Discord with `identify guilds.join` and the signed state cookie. 404 when the feature
       is unconfigured.
-- [ ] 5.2 `GET /api/v1/me/discord/callback`: verify state, complete the link, redirect back
+- [x] 5.2 `GET /api/v1/me/discord/callback`: verify state, complete the link, redirect back
       to `/my/integrations`. 409 on a conflicting binding; refuse a missing or mismatched
       state without writing.
-- [ ] 5.3 `DELETE /api/v1/me/discord` behind `RequireAuth`: unlink.
-- [ ] 5.4 Report link status in whatever `/my/integrations` already reads, so the card can
+- [x] 5.3 `DELETE /api/v1/me/discord` behind `RequireAuth`: unlink.
+- [x] 5.4 Report link status in whatever `/my/integrations` already reads, so the card can
       render connected/disconnected.
-- [ ] 5.5 Integration-tagged handler tests: happy path, API key refused with 401, conflicting
+- [x] 5.5 Integration-tagged handler tests: happy path, API key refused with 401, conflicting
       binding, bad state, and all three routes 404 when unconfigured.
 
 ## 6. Worker
 
-- [ ] 6.1 `cmd/discord-sync`: `worker.Main`, no-op without credentials, bounded by
+- [x] 6.1 `cmd/discord-sync`: `worker.Main`, no-op without credentials, bounded by
       `DISCORD_SYNC_MAX_PER_RUN` (default 500) via `worker.EnvInt64` so an unreadable value
       fails the run naming the value.
-- [ ] 6.2 Doc comment in the style of `cmd/billing-sync`: what it reconciles, why it is its
+- [x] 6.2 Doc comment in the style of `cmd/billing-sync`: what it reconciles, why it is its
       own binary rather than a `billing-sync` pass, and what it needs.
-- [ ] 6.3 Test the run loop over a fake service: the bound is honoured and a stopped run
+- [x] 6.3 Test the run loop over a fake service: the bound is honoured and a stopped run
       leaves the rest for the next one.
 
 ## 7. Web
 
-- [ ] 7.1 Add the Discord card to `web/src/lib/components/IntegrationsView.svelte` following
+- [x] 7.1 Add the Discord card to `web/src/lib/components/IntegrationsView.svelte` following
       the Telegram card: connect, connected badge, disconnect, error text. Hidden when the
       feature is off.
-- [ ] 7.2 Add the client calls to the integrations store beside the Telegram ones.
-- [ ] 7.3 Run `pnpm --dir web lint` and the web tests.
+- [x] 7.2 Add the client calls to the integrations store beside the Telegram ones.
+- [x] 7.3 Run `pnpm --dir web lint` and the web tests.
 
 ## 8. Operations and documentation
 
-- [ ] 8.1 Add the systemd unit and hourly timer for `discord-sync` under `deploy/`, and note
+- [x] 8.1 Add the systemd unit and hourly timer for `discord-sync` under `deploy/`, and note
       in `deploy/AGENTS.md` that they must be copied to the host by hand.
-- [ ] 8.2 Document the manual Discord setup in `deploy/AGENTS.md`: create the application and
+- [x] 8.2 Document the manual Discord setup in `deploy/AGENTS.md`: create the application and
       bot, invite with `Manage Roles`, create `Paid`, **drag the bot's role above `Paid`**,
       set the closed channels' permissions.
-- [ ] 8.3 Add `internal/engage/discordlink/AGENTS.md` and its row in the module table in
+- [x] 8.3 Add `internal/engage/discordlink/AGENTS.md` and its row in the module table in
       `CLAUDE.md`; add the worker's entry to the worker-gotchas list. Verify with
       `pnpm check:links`.
 
 ## 9. Verification
 
-- [ ] 9.1 `gofmt -l .` clean, `go vet ./...`, `go test ./...`,
+- [x] 9.1 `gofmt -l .` clean, `go vet ./...`, `go test ./...`,
       `go vet -tags=integration ./...`, `golangci-lint run`.
-- [ ] 9.2 `go test -tags=integration ./...` for the packages this change touches.
+- [x] 9.2 `go test -tags=integration ./...` for the packages this change touches.

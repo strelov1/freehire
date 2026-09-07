@@ -5,7 +5,7 @@ Date: 2026-09-06
 ## Problem
 
 `freehire.me` sells Pro ($5) and Ultra ($19). The community Discord
-(`discord.gg/sYnZksswR`) is entirely public, so a subscription buys nothing there.
+(`discord.gg/Cghjh3dA5N`) is entirely public, so a subscription buys nothing there.
 We want a set of channels only paying subscribers can see, with access that appears
 when they pay and disappears when they stop.
 

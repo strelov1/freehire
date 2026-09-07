@@ -59,6 +59,7 @@ import type {
   UserProfile,
   Subscription,
   TelegramStatus,
+  DiscordStatus,
   Submission,
   SubmissionInput,
   PrefillResult,
@@ -1703,6 +1704,22 @@ export function createApi(
     await call('/api/v1/me/telegram', { method: 'DELETE' });
   }
 
+  /**
+   * Whether this user has linked a Discord account for the paid channels.
+   *
+   * Throws a 404 when the deployment has no Discord application configured — the routes are
+   * not mounted at all then. Callers hide the card on that, rather than showing an error for
+   * a feature that simply is not offered here.
+   */
+  async function discordStatus(): Promise<DiscordStatus> {
+    return requestData<DiscordStatus>('/api/v1/me/discord');
+  }
+
+  /** Disconnect the user's Discord account, giving up the paid role with it. */
+  async function discordUnlink(): Promise<void> {
+    await call('/api/v1/me/discord', { method: 'DELETE' });
+  }
+
   /** Submit a vacancy for moderation. Returns the pending submission. */
   async function submitJob(input: SubmissionInput): Promise<Submission> {
     return requestData<Submission>('/api/v1/submissions', jsonBody('POST', input));
@@ -2546,6 +2563,8 @@ export function createApi(
     resolveReport,
     dismissReport,
     gmailStatus,
+    discordStatus,
+    discordUnlink,
     disconnectGmail,
     syncGmail,
     mailboxStatus,

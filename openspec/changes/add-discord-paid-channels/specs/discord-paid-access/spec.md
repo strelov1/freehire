@@ -128,4 +128,6 @@ early SHALL leave the remaining accounts for the next run without losing work.
 #### Scenario: The bound is set to an unreadable value
 
 - **WHEN** the per-run bound is set but cannot be parsed as a positive integer
-- **THEN** the run fails and names the value, rather than silently falling back to a default
+- **THEN** the run keeps the default, names the offending value in its log, and continues
+  reconciling — a typo in a batch size must not stop everybody's role from being reconciled
+  for as long as nobody reads systemctl

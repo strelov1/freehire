@@ -323,6 +323,12 @@ type Config struct {
 	TelegramBotToken      string
 	TelegramBotUsername   string
 	TelegramWebhookSecret string
+	// DiscordLinker enables the paid Discord channels: linking an account, and the role
+	// that follows the subscription. Nil = the feature is off and its routes are not
+	// registered at all, so they 404 rather than reporting a feature that half exists.
+	// DiscordClientID builds the consent URL; it is only read when the linker is present.
+	DiscordLinker   DiscordLinker
+	DiscordClientID string
 	// GmailConnector + GmailCipher enable the Connect-Gmail inbox. Both nil = the
 	// feature is off (connect routes unregistered, inbox empty).
 	GmailConnector *gmailsync.Connector
@@ -536,6 +542,7 @@ func Register(app *fiber.App, cfg Config) {
 	cvH.llm = llmBinding{client: cfg.LLM, keys: llmKeys}
 	telegramH := newTelegramHandlers(queries, cfg.JWTSecret, cfg.TelegramBotToken, cfg.TelegramBotUsername, cfg.TelegramWebhookSecret, cfg.FrontendOrigin, contributionsH.intake)
 	inboxH := newInboxHandlers(queries, cfg.Pool, cfg.GmailConnector, cfg.GmailCipher, cfg.FrontendOrigin, cfg.CookieSecure, cfg.MailboxDomain)
+	discordH := newDiscordHandlers(cfg.DiscordLinker, cfg.DiscordClientID, cfg.FrontendOrigin, cfg.CookieSecure)
 	// The pull direction is wired only where there is a model to ask. Left nil, its endpoint
 	// reports the feature off — the same way an unconfigured deployment reports every other
 	// model-backed surface off, rather than failing at the first press.
@@ -835,5 +842,9 @@ func Register(app *fiber.App, cfg Config) {
 
 	// Telegram linking + the inbound bot webhook (see telegramHandlers).
 	telegramH.register(api, mw)
+
+	// Discord linking for the paid channels. Registers nothing when the feature is
+	// unconfigured (see discordHandlers).
+	discordH.register(api, mw)
 
 }

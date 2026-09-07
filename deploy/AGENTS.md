@@ -186,6 +186,37 @@ a scheduled Dependabot run made every deploy stop, silently, at exit 0.
   committed. The findings that came with them were all style-level and are suppressed
   inline with the reason beside them — none was a defect.
 
+## The Discord paid channels are configured by hand
+
+`cmd/discord-sync` and the link routes manage exactly ONE role. Which channels that role
+opens, and whether the bot may move it at all, are set in Discord's own UI and exist nowhere
+in this repository. Until every step below is done, the feature is inert — which is
+deliberate: it ships and deploys before the Discord application exists.
+
+1. **Create the application and its bot** at `discord.com/developers/applications`. Note the
+   client id and client secret (the OAuth pair) and the bot token — three different values.
+2. **Add the redirect URI** `https://freehire.me/api/v1/me/discord/callback` to the
+   application's OAuth2 settings. It must match byte for byte: the same string is sent in the
+   consent URL and again in the token exchange, and Discord refuses the exchange otherwise.
+3. **Invite the bot** to the community server with `Manage Roles` and `Create Invite`. The
+   second is what `guilds.join` needs to add a consenting user.
+4. **Create the role**, e.g. `Paid`, and note its id (Developer Mode → right-click → Copy ID).
+5. **Drag the bot's own role ABOVE the paid role** in Server Settings → Roles. A bot cannot
+   manage a role positioned above its own. This is the single most common failure of every
+   role-granting bot, it fails silently from the site's side, and skipping it means every
+   grant is refused with `50013` while everything else looks correct.
+6. **Gate the channels**: on each members-only channel, deny `View Channel` to `@everyone`
+   and allow it to `Paid`.
+7. **Set the five values** in `/opt/freehire/.env`: `DISCORD_CLIENT_ID`,
+   `DISCORD_CLIENT_SECRET`, `DISCORD_BOT_TOKEN`, `DISCORD_GUILD_ID`, `DISCORD_PAID_ROLE_ID`.
+   Any one missing means the feature stays off — that is also the rollback.
+8. **Install the unit and timer** (`freehire-discord-sync.service` / `.timer`), like every
+   other unit here: copying them to the host is a manual step, `release.sh` never touches
+   units.
+
+Then verify with one real account: connect on `/my/integrations`, confirm the role and the
+channel, cancel the subscription, and confirm the role is gone after the next run.
+
 ## The asset attic
 
 `/opt/freehire/asset-attic/_app/immutable/` holds the client chunks of recent builds, and
