@@ -4639,6 +4639,30 @@ type Querier interface {
 	// Withdraw a live claim. Scoped to a non-retracted row so a second retraction affects
 	// nothing and surfaces as not-found, rather than silently re-stamping the date.
 	RetractGhostReport(ctx context.Context, arg RetractGhostReportParams) (GhostReport, error)
+	// Step 1 of recording a meeting: retract the live `interview_scheduled` event when the
+	// meeting has moved to a DIFFERENT application since it was written.
+	//
+	// UpsertApplicationInterview used to argue this could not happen — "an invitation belongs
+	// to one application, so the application under a given meeting cannot move" — and that
+	// premise is false. ListCalendarMatchCandidates reaches a meeting's identifier through
+	// `emails.application_id`, and LinkEmailToJob rewrites that column; it is reachable from
+	// POST /me/emails/:id/link and from the assistant's inbox_link tool. docs/agents/mail-stack.md
+	// records one company auto-collecting 23 acknowledgements belonging to 23 other employers,
+	// so mis-links are a documented, real condition, not a hypothetical one.
+	//
+	// The damage was two-sided. The old event could not be corrected (RetractSupersededEmailEvent
+	// is scoped to kind = 'employer_reply'), and the RIGHT one was never created either, because
+	// the interview's source_ref never changed and the upsert's DO NOTHING therefore fired
+	// against the correct application too. A month view drew the meeting under the right
+	// employer and "Interview scheduled" under the wrong one, with the right application showing
+	// no interview at all. migrations/0062 already states the rule this broke: retracted_at is
+	// "Set when a link correction moves the fact to another employer".
+	//
+	// Separate from the upsert, and run first, for the same snapshot reason
+	// RetractSupersededEmailEvent documents: data-modifying CTEs all read the pre-statement
+	// snapshot, so an insert folded in beside this would still conflict with the row being
+	// retracted and silently record nothing.
+	RetractMovedInterviewEvent(ctx context.Context, arg RetractMovedInterviewEventParams) (int64, error)
 	// Step 1 of reconciling one email with the ledger: retract the live event when the
 	// message is no longer linked, or is now linked to a different application.
 	//
