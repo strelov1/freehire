@@ -147,6 +147,21 @@ func (r *routedHTTP) GetText(_ context.Context, url string) (string, error) {
 	return "", fmt.Errorf("routedHTTP: no route for %s", url)
 }
 
+func (r *routedHTTP) GetLargeText(_ context.Context, url string) (string, error) {
+	r.mu.Lock()
+	r.calls++
+	r.mu.Unlock()
+	if err := r.routedErr(url); err != nil {
+		return "", err
+	}
+	for _, rt := range r.routes {
+		if strings.Contains(url, rt.match) {
+			return rt.body, nil
+		}
+	}
+	return "", fmt.Errorf("routedHTTP: no route for %s", url)
+}
+
 func (r *routedHTTP) decode(url string, unmarshal func([]byte, any) error, v any) error {
 	r.mu.Lock()
 	r.calls++

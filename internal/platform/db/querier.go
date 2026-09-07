@@ -1164,6 +1164,11 @@ type Querier interface {
 	// but deletion states what it erases explicitly rather than relying on a constraint to
 	// mean it.
 	DeleteBillingEventsForUser(ctx context.Context, userID pgtype.Int8) error
+	// Drop a board's health row entirely, for a board just retired from the catalog: it will
+	// never be crawled again, so no cooldown or failure count of its own could ever clear the
+	// normal way (a successful crawl), and leaving the row would show it as permanently
+	// unhealthy on the public /status page (ProviderHealthRollup, ListUnhealthyBoards) forever.
+	DeleteBoardHealth(ctx context.Context, arg DeleteBoardHealthParams) (int64, error)
 	// Remove a submission once triage has resolved its (provider, board) and inserted the
 	// corresponding boards row.
 	DeleteBoardSubmission(ctx context.Context, id int64) (int64, error)

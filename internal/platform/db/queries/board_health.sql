@@ -40,6 +40,14 @@ UPDATE board_health
 SET cooldown_until = $4
 WHERE provider = $1 AND board = $2 AND region = $3;
 
+-- name: DeleteBoardHealth :execrows
+-- Drop a board's health row entirely, for a board just retired from the catalog: it will
+-- never be crawled again, so no cooldown or failure count of its own could ever clear the
+-- normal way (a successful crawl), and leaving the row would show it as permanently
+-- unhealthy on the public /status page (ProviderHealthRollup, ListUnhealthyBoards) forever.
+DELETE FROM board_health
+WHERE provider = $1 AND board = $2 AND region = $3;
+
 -- name: ListUnhealthyBoards :many
 -- The worst $1 boards currently failing or cooled down, worst first — the source of the
 -- per-run summary log. Every row also carries the FULL unhealthy count: count(*) OVER () is

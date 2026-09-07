@@ -11,6 +11,10 @@ import (
 // boardRetirer is the write cmd/prune needs from the catalog.
 type boardRetirer interface {
 	RetireBoard(ctx context.Context, arg db.RetireBoardParams) (int64, error)
+	// DeleteBoardHealth drops a retired board's health row — see the query's own doc
+	// comment: left in place it would show as permanently unhealthy on /status forever,
+	// since a retired board is never crawled again to clear it the normal way.
+	DeleteBoardHealth(ctx context.Context, arg db.DeleteBoardHealthParams) (int64, error)
 }
 
 // retireBoards flips the named boards to status='retired' in the catalog — the status
@@ -58,6 +62,14 @@ func retireBoards(ctx context.Context, q boardRetirer, brd boards, retire []boar
 				return retired, heldNames, fmt.Errorf("prune: retire %s/%s: %w", k.Provider, k.Board, err)
 			}
 			retired += int(n)
+			if n == 0 {
+				continue
+			}
+			if _, err := q.DeleteBoardHealth(ctx, db.DeleteBoardHealthParams{
+				Provider: k.Provider, Board: k.Board, Region: region,
+			}); err != nil {
+				return retired, heldNames, fmt.Errorf("prune: delete board_health %s/%s: %w", k.Provider, k.Board, err)
+			}
 		}
 	}
 	return retired, heldNames, nil
