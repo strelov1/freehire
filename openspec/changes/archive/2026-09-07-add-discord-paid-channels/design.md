@@ -1,7 +1,7 @@
 ## Context
 
 The brainstormed design this change implements is
-[docs/superpowers/specs/2026-09-06-discord-paid-channels-design.md](../../../docs/superpowers/specs/2026-09-06-discord-paid-channels-design.md);
+[docs/superpowers/specs/2026-09-06-discord-paid-channels-design.md](../../../../docs/superpowers/specs/2026-09-06-discord-paid-channels-design.md);
 this document records the decisions that shape the code.
 
 Current state: the community Discord (`discord.gg/Cghjh3dA5N`) is public. The only Discord
