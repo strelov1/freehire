@@ -24,6 +24,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"github.com/strelov1/freehire/internal/ingest/catalogstats"
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/platform/isoweek"
 	"github.com/strelov1/freehire/internal/platform/worker"
@@ -129,12 +130,24 @@ func publish(ctx context.Context, redisURL, meiliURL, meiliKey string, q *db.Que
 	// Same tolerance as the channel count: no MEILI_MASTER_KEY, or an unreachable
 	// Meilisearch, costs this one figure rather than the snapshot. Unlike
 	// cmd/rollup-facets, Meilisearch is not this worker's job — the rollups above are —
-	// so a missing key is not fatal here.
-	var unique int64
+	// so a missing key is not fatal here. Unlike the channel count, though, a failure
+	// here keeps the PREVIOUSLY published figure (resolveUniqueOpenJobs) rather than
+	// falling back to zero: a bare zero would misrepresent a transient outage as "no
+	// unique jobs," which is a worse-labelled number than a slightly stale real one.
+	previous := catalogstats.Load(ctx, c, q).UniqueOpenJobs
+	unique := previous
 	if meiliKey == "" {
-		log.Print("rollup-stats: MEILI_MASTER_KEY not set, publishing without the unique-jobs count")
-	} else if unique, err = uniqueOpenJobs(ctx, search.NewClient(meiliURL, meiliKey)); err != nil {
-		log.Printf("rollup-stats: unique-jobs count unavailable, publishing without it: %v", err)
+		log.Print("rollup-stats: MEILI_MASTER_KEY not set, keeping the last published unique-jobs count")
+	} else {
+		// Bounded so a stalled Meilisearch response cannot hold this run open
+		// indefinitely — the SDK's own HTTP client has no overall request timeout.
+		mctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+		fresh, ferr := uniqueOpenJobs(mctx, search.NewClient(meiliURL, meiliKey))
+		cancel()
+		if ferr != nil {
+			log.Printf("rollup-stats: unique-jobs count unavailable, keeping the last published figure: %v", ferr)
+		}
+		unique = resolveUniqueOpenJobs(previous, fresh, ferr)
 	}
 
 	if err := publishSnapshot(ctx, q, c, channels, unique); err != nil {

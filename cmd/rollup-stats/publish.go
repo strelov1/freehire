@@ -69,3 +69,16 @@ func uniqueOpenJobs(ctx context.Context, client *search.Client) (int64, error) {
 	}
 	return res.Total, nil
 }
+
+// resolveUniqueOpenJobs decides the figure this run publishes: fresh when this
+// run's Meilisearch call succeeded, otherwise previous — the figure already
+// published by an earlier run. A transient outage must not overwrite a real count
+// with a bare zero, which would read as "no unique jobs" rather than "not measured
+// this run"; see uniqueOpenJobs' call site for the same reasoning Load already
+// applies to the whole snapshot.
+func resolveUniqueOpenJobs(previous, fresh int64, err error) int64 {
+	if err != nil {
+		return previous
+	}
+	return fresh
+}

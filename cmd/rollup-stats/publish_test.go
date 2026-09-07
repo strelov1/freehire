@@ -67,6 +67,25 @@ func TestPublishSnapshotReportsFailureWithoutPanicking(t *testing.T) {
 	})
 }
 
+// A transient Meilisearch outage on one run must not overwrite a real,
+// previously-published unique-jobs count with a bare zero: that would read as "no
+// unique jobs" rather than "not measured this run" — the same "stale but exact
+// beats fresh but wrong" trade-off catalogstats.Load already makes for the whole
+// snapshot (see load.go's snapshotTTL comment).
+func TestResolveUniqueOpenJobsKeepsThePreviousFigureOnFailure(t *testing.T) {
+	got := resolveUniqueOpenJobs(2_075_865, 0, errors.New("meilisearch unreachable"))
+	if got != 2_075_865 {
+		t.Errorf("resolveUniqueOpenJobs = %d, want the previous 2075865 kept on failure", got)
+	}
+}
+
+func TestResolveUniqueOpenJobsUsesTheFreshFigureOnSuccess(t *testing.T) {
+	got := resolveUniqueOpenJobs(2_075_865, 2_080_000, nil)
+	if got != 2_080_000 {
+		t.Errorf("resolveUniqueOpenJobs = %d, want the fresh 2080000 on success", got)
+	}
+}
+
 type failingEstimator struct{}
 
 func (failingEstimator) EstimateOpenJobs(context.Context) (int64, error) {
