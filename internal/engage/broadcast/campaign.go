@@ -84,20 +84,15 @@ func (m *Mailer) Send(ctx context.Context, c Campaign, to string) error {
 	return m.sender.SendWithReplyTo(ctx, m.from, m.replyTo, to, c.Subject, html, c.text(m.baseURL))
 }
 
-// assets are the absolute image URLs the templates need; they depend on the origin
-// and so cannot be baked into the copy.
+// assets is what the campaign templates render from: the image URLs, which depend on
+// the origin and so cannot be baked into the copy, and the two outward links that
+// ride beside their marks. Each link sits next to its own icon here because a
+// campaign showing one mark and linking somewhere else is the mistake worth making
+// impossible.
 type assets struct {
-	PortraitURL string
-	AlertsURL   string
-	DiscordIcon string
-	// DiscordURL is not derived from the origin, but it travels with the icon: a
-	// campaign that shows the mark and links somewhere else would be a broken invite,
-	// and keeping the pair in one struct is what stops the template from assembling
-	// them from two places.
-	DiscordURL string
-	// LinkedInIcon and LinkedInURL are the sign-off's, not a campaign's: every letter
-	// carries them, because the signature is part of the shell rather than of any one
-	// campaign's copy.
+	PortraitURL  string
+	DiscordIcon  string
+	DiscordURL   string
 	LinkedInIcon string
 	LinkedInURL  string
 }
@@ -105,11 +100,10 @@ type assets struct {
 func (m *Mailer) assets() assets {
 	return assets{
 		PortraitURL:  m.baseURL + "/ilya.jpg",
-		AlertsURL:    m.baseURL + alertsPath,
 		DiscordIcon:  m.baseURL + "/email-icon-discord.png",
 		DiscordURL:   mailtpl.DiscordURL,
 		LinkedInIcon: m.baseURL + "/email-icon-linkedin.png",
-		LinkedInURL:  linkedInURL,
+		LinkedInURL:  mailtpl.LinkedInURL,
 	}
 }
 

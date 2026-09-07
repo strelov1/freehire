@@ -1,0 +1,76 @@
+name: contributors
+
+# Refreshes web/src/lib/data/contributors.json — the snapshot the /contributors pages
+# read. Runs here rather than at request time because the pages need per-person pull
+# request lists, and assembling those needs roughly thirty API calls: far past the 60
+# an unauthenticated IP gets in an hour, a budget the site already spends on the header
+# star badge and /open. This job's own GITHUB_TOKEN carries 5000/hour.
+#
+# COMMITS ONLY WHEN THE DATA CHANGED. The host polls this repository every ten minutes
+# and deploys a green main, so an unconditional daily commit would be a daily production
+# deploy that changed nothing. `git diff --quiet` is what keeps the deploys to the days
+# a contributor actually did something.
+#
+# A run that could not finish its collection fails instead of committing what it has:
+# the script exits non-zero on any API error and refuses outright to write a snapshot
+# with no humans in it. The committed file then keeps serving, which is the right
+# outcome — a stale list of real people beats a fresh empty one.
+#
+# WORTH KNOWING ABOUT THE PUSH: a commit pushed with the workflow's own GITHUB_TOKEN
+# does not trigger other workflows — GitHub blocks that to stop a workflow looping on
+# itself. So the CI run this repository's auto-deploy gate looks for never appears for
+# this commit, and the snapshot reaches production on the next ordinary commit rather
+# than on its own. That is the intended trade: the alternative is a personal access
+# token stored as a secret, which is a standing credential with write access to main in
+# exchange for a page being current a day sooner. If the gate ever needs to treat these
+# commits as deployable, that belongs in the gate, not in a token kept here.
+
+on:
+  schedule:
+    # 04:20 UTC: clear of the nightly pg_dump window (from 03:00 UTC) that DDL
+    # migrations have to dodge, so a deploy this triggers does not queue behind it.
+    - cron: '20 4 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: contributors
+  cancel-in-progress: false
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      # No install step: the collector uses only Node built-ins, which is why it is a
+      # plain .mjs rather than TypeScript. Its assembly is unit-tested in the web
+      # package (scripts/build-contributors.test.mjs); what runs here is the fetching.
+      - name: Collect contributors
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node web/scripts/build-contributors.mjs
+
+      # `git diff --quiet` exits 1 when the file changed, which is the signal to commit.
+      # Everything hangs off that one comparison, so the collector writes its people in
+      # a stable order — otherwise the same data would serialise differently every run
+      # and every run would commit.
+      - name: Commit when the data changed
+        run: |
+          if git diff --quiet -- web/src/lib/data/contributors.json; then
+            echo 'No change in the contributor data. Nothing to commit.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add web/src/lib/data/contributors.json
+          git commit -m 'Refresh the contributor snapshot'
+          git push

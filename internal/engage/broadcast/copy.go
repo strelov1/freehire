@@ -6,37 +6,11 @@ import (
 	"github.com/strelov1/freehire/internal/application/mailtpl"
 )
 
-// signature is the sign-off, appended to every campaign: these are letters from a
-// person, and the portrait and the profile link are what make that read as true
-// rather than as a pose. It matches the onboarding sequence's sign-off line for
-// line — a reader who gets both should be looking at the same person, not at two
-// slightly different ones.
-const signature = `
-<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin-top:22px;">
-  <tr>
-    <td width="52" valign="top" style="width:52px;padding-right:12px;">
-      <img src="{{.PortraitURL}}" width="44" height="44" alt="Ilya" style="display:block;border:0;border-radius:22px;">
-    </td>
-    <td valign="middle">
-      <div class="m-ink" style="font-size:14px;font-weight:600;color:#070707;">Ilya Strelov</div>
-      <div class="m-muted" style="font-size:13px;color:#505050;padding-top:2px;">
-        building freehire ·
-        <a href="{{.LinkedInURL}}" class="m-muted" style="color:#505050;text-decoration:none;"><img src="{{.LinkedInIcon}}" width="14" height="14" alt="" class="m-logo" style="vertical-align:-2px;border:0;padding-right:4px;">LinkedIn</a>
-      </div>
-    </td>
-  </tr>
-</table>`
-
-// alertsPath is where a campaign sends someone to set a search up, matching the
-// onboarding sequence's own link so the two letters land on the same page.
-const alertsPath = "/my/notifications?utm_source=email"
-
-// linkedInURL is the profile in the sign-off, mirrored from the sequence: the
-// signature is the same person's, so it points at the same profile.
-const linkedInURL = "https://www.linkedin.com/in/istrelov/"
-
+// body parses one campaign's markup with the shell's sign-off appended: a campaign
+// is a letter from the same person the sequence's letters are from, and the two
+// signatures were byte-identical copies until the shell took the block.
 func body(name, markup string) *template.Template {
-	return template.Must(mailtpl.Partials().New(name).Parse(markup + signature))
+	return template.Must(mailtpl.Partials().New(name).Parse(markup + "\n" + `{{template "signature" .}}`))
 }
 
 // campaigns is the registry. A campaign is removed once it has been sent: the ledger
@@ -83,7 +57,7 @@ var campaigns = map[string]Campaign{
 				"Join the Discord: " + mailtpl.DiscordURL + "\n\n" +
 				"It's free, it's small, and lurking is fine. If you'd rather just tell me something, reply to\n" +
 				"this — I read every one.\n\n" +
-				"— Ilya Strelov, building freehire\n" + linkedInURL + "\n"
+				"— Ilya Strelov, building freehire\n" + mailtpl.LinkedInURL + "\n"
 		},
 	},
 }
