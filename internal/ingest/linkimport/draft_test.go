@@ -61,6 +61,7 @@ func TestDraftFrom_CarriesIdentityAndContent(t *testing.T) {
 			Description: "We use Go.",
 			Remote:      true,
 			WorkMode:    "remote",
+			IsTechHint:  true,
 		},
 	})
 
@@ -75,5 +76,11 @@ func TestDraftFrom_CarriesIdentityAndContent(t *testing.T) {
 	}
 	if d.URL != "https://boards.greenhouse.io/acme/jobs/3" || !d.Remote {
 		t.Errorf("url/remote = %q/%v", d.URL, d.Remote)
+	}
+	// A resolved link can carry a source's structured "confirmed technical" signal
+	// (e.g. a Profession itdev/itops URL pasted in) the same way the crawl path does
+	// (internal/ingest/pipeline.normalizeJob) — issue #2601.
+	if !d.IsTechHint {
+		t.Error("IsTechHint = false, want true — draftFrom must forward it like the crawl path does")
 	}
 }

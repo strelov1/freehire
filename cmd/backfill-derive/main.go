@@ -73,6 +73,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/strelov1/freehire/internal/dict/normalize"
+	"github.com/strelov1/freehire/internal/ingest/sources"
 	"github.com/strelov1/freehire/internal/job/jobderive"
 	"github.com/strelov1/freehire/internal/job/jobhash"
 	"github.com/strelov1/freehire/internal/platform/db"
@@ -170,6 +171,11 @@ func deriveRow(j db.Job, canon map[string]string) (params db.UpdateJobDerivedPar
 		Location:    j.Location,
 		Description: j.Description,
 		WorkMode:    j.WorkMode, // preserves a set work_mode (jobderive precedence)
+		// Recovers the ingest-time IsTechHint from the stored row, which never re-crawls
+		// to learn it fresh: without this, a Profession itdev/itops row whose title the
+		// dictionary cannot resolve would have is_tech silently rederived back to
+		// unknown on every pass (issue #2601).
+		IsTechHint: sources.ProfessionConfirmsTech(j.Source, j.ExternalID),
 	})
 	// jobderive is pure, so it re-derives the spelling the SOURCE used. Resolving through the
 	// alias registry here is what stops a backfill silently undoing every merge — and it must

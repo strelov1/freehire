@@ -5,6 +5,7 @@ import (
 
 	"github.com/strelov1/freehire/internal/job/jobhash"
 	"github.com/strelov1/freehire/internal/platform/db"
+	"github.com/strelov1/freehire/internal/platform/pgconv"
 )
 
 // TestDeriveRow_ResolvesThroughTheAliasRegistry guards the merges against this worker.
@@ -55,6 +56,45 @@ func TestDeriveRow_FingerprintFollowsTheCanonicalSlug(t *testing.T) {
 		t.Errorf("RoleFingerprint was computed from the unresolved slug")
 	}
 }
+
+// TestDeriveRow_PreservesProfessionITTechHint guards against a real regression the
+// review after issue #2601 caught: deriveRow re-derives is_tech via jobderive.Derive
+// with no IsTechHint set, so a Profession itdev/itops row whose is_tech was set true
+// by the ingest-time hint (or by cmd/backfill-profession-it-tech) would be silently
+// recomputed back to unknown the next time this routine ~15h pass touches it — undoing
+// the fix for exactly the rows it exists to reach. The board is recoverable from the
+// stored external_id's namespace prefix (internal/platform/externalid.Namespace),
+// which is all deriveRow has: it never re-crawls.
+func TestDeriveRow_PreservesProfessionITTechHint(t *testing.T) {
+	job := db.Job{
+		ID: 1, Title: "Windows rendszermérnök", Company: "Acme",
+		Source: "profession", ExternalID: "itdev:1",
+	}
+
+	params, _, _ := deriveRow(job, nil)
+
+	want := pgconv.Bool(boolp(true))
+	if params.IsTech != want {
+		t.Errorf("IsTech = %+v, want %+v (confirmed by the Profession itdev board, not resolvable by title alone)", params.IsTech, want)
+	}
+}
+
+// TestDeriveRow_DoesNotConfuseAnotherSourceForProfessionsITBoards guards the other
+// direction: the external_id prefix alone must not be trusted without the source too.
+func TestDeriveRow_DoesNotConfuseAnotherSourceForProfessionsITBoards(t *testing.T) {
+	job := db.Job{
+		ID: 1, Title: "Windows rendszermérnök", Company: "Acme",
+		Source: "greenhouse", ExternalID: "itdev:1",
+	}
+
+	params, _, _ := deriveRow(job, nil)
+
+	if params.IsTech.Valid {
+		t.Errorf("IsTech = %+v, want unknown — the external_id prefix coincides with a Profession board name but the source does not match", params.IsTech)
+	}
+}
+
+func boolp(b bool) *bool { return &b }
 
 // TestDeriveRow_WithNoRegistryIsUnchanged: an empty registry must leave the derivation exactly
 // as it was, so the guard cannot alter a catalogue that has never been merged.

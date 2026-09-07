@@ -200,6 +200,7 @@ func draftFrom(r linksource.Resolved) job.Draft {
 			Location:    r.Job.Location,
 			Description: r.Job.Description,
 			WorkMode:    r.Job.WorkMode,
+			IsTechHint:  r.Job.IsTechHint,
 		},
 		URL:      r.Job.URL,
 		Remote:   r.Job.Remote,
@@ -292,11 +293,12 @@ func (im *Importer) unindex(ctx context.Context, id int64) {
 // posting rather than silently no-op on an unchanged hash. The Meili upsert is idempotent.
 // A build or push failure is logged and swallowed — the job is already persisted and the
 // batch reindex reconciles. A non-canonical repost, a closed job, one whose category
-// neither the title dictionary nor the LLM ever resolved (search.CategoryUnresolved), or one
-// with no posting body at all (search.DescriptionMissing) is never made searchable, matching
-// cmd/reindex/cmd/search-drain. The category case is common here specifically: an import is a
-// fresh URL, so enrichment has usually not run yet — the job becomes searchable once the next
-// full reindex re-evaluates it with a category.
+// neither the title dictionary nor the LLM ever resolved AND whose is_tech is not
+// confidently true (search.CategoryUnresolved), or one with no posting body at all
+// (search.DescriptionMissing) is never made searchable, matching cmd/reindex/cmd/search-drain.
+// The category case is common here specifically: an import is a fresh URL, so enrichment has
+// usually not run yet — the job becomes searchable once the next full reindex re-evaluates it
+// with a category, or immediately if is_tech is already confidently true.
 func (im *Importer) index(ctx context.Context, saved db.UpsertJobRow) {
 	if im.idx == nil || saved.Job.DuplicateOf.Valid || saved.Job.ClosedAt.Valid ||
 		search.CategoryUnresolved(saved.Job) || search.DescriptionMissing(saved.Job) {

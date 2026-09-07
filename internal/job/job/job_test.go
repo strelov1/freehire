@@ -474,11 +474,46 @@ func TestUpsertParams_CheapWriteMatchKeyCoversEveryColumnItWrites(t *testing.T) 
 			}
 			if matchKeyHeld(baseParams, got) {
 				t.Errorf("Input.%s moved %v but left RefreshUnchangedJob's match key "+
-					"(content_hash, cities, salary_*_source, english_level) unchanged: an "+
+					"(content_hash, cities, salary_*_source, english_level, is_tech) unchanged: an "+
 					"unchanged re-ingest would skip the row and leave those columns stale",
 					field.Name, moved)
 			}
 		})
+	}
+}
+
+// TestUpsertParams_IsTechHintMovesIsTechIndependentlyOfContentHash is the focused
+// counterpart TestUpsertParams_CheapWriteMatchKeyCoversEveryColumnItWrites's generic
+// per-field walk cannot exercise for IsTechHint: fullDraft's Category ("backend") and
+// Title ("Senior Go Developer") already saturate TechEvidence, so toggling IsTechHint
+// there moves no column and the generic subtest returns before ever reaching
+// matchKeyHeld. This test uses a title and category that resolve neither tech nor
+// non-tech on their own (mirroring issue #2601's Profession postings), so IsTechHint is
+// the only source of is_tech evidence — proving directly that it moves is_tech without
+// moving content_hash, and that matchKeyHeld correctly reports the row as changed.
+func TestUpsertParams_IsTechHintMovesIsTechIndependentlyOfContentHash(t *testing.T) {
+	draft := func(hint bool) job.Draft {
+		return job.Draft{Input: jobderive.Input{
+			Source: "profession", ExternalID: "itdev:1",
+			Title: "Windows rendszermérnök", Company: "Acme",
+			IsTechHint: hint,
+		}}
+	}
+
+	unhinted := mustParams(t, draft(false))
+	hinted := mustParams(t, draft(true))
+
+	if unhinted.IsTech.Valid {
+		t.Fatalf("unhinted IsTech = %+v, want unknown — the fixture's title/category must resolve neither tech nor non-tech on their own", unhinted.IsTech)
+	}
+	if !hinted.IsTech.Valid || !hinted.IsTech.Bool {
+		t.Fatalf("hinted IsTech = %+v, want true", hinted.IsTech)
+	}
+	if unhinted.ContentHash != hinted.ContentHash {
+		t.Fatalf("ContentHash moved with IsTechHint alone: %q vs %q — the fixture must hold every hashed field constant", unhinted.ContentHash.String, hinted.ContentHash.String)
+	}
+	if matchKeyHeld(unhinted, hinted) {
+		t.Error("matchKeyHeld held across an IsTechHint-driven is_tech change with an unchanged content_hash — RefreshUnchangedJob would wrongly skip this row")
 	}
 }
 
@@ -491,7 +526,8 @@ func matchKeyHeld(a, b db.UpsertJobParams) bool {
 		a.SalaryMaxSource == b.SalaryMaxSource &&
 		a.SalaryCurrencySource == b.SalaryCurrencySource &&
 		a.SalaryPeriodSource == b.SalaryPeriodSource &&
-		a.EnglishLevel == b.EnglishLevel
+		a.EnglishLevel == b.EnglishLevel &&
+		a.IsTech == b.IsTech
 }
 
 // fullDraft populates every jobderive.Input field, including the optional structured signals,
@@ -515,6 +551,7 @@ func fullDraft() job.Draft {
 			EmploymentType:     "full_time",
 			Skills:             []string{"go"},
 			ExperienceYearsMin: &years,
+			IsTechHint:         true,
 		},
 		URL:      "https://acme.example/jobs/1",
 		Remote:   true,
@@ -546,6 +583,8 @@ func mutateInput(d job.Draft, i int) (job.Draft, bool) {
 			n = *v + 1
 		}
 		f.Set(reflect.ValueOf(&n))
+	case bool:
+		f.SetBool(!v)
 	default:
 		return d, false
 	}

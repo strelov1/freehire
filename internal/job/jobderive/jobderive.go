@@ -69,6 +69,17 @@ type Input struct {
 	SalaryMax      *int
 	SalaryCurrency string
 	SalaryPeriod   string
+	// IsTechHint is the caller's structured signal that a posting is confirmed
+	// technical — e.g. a source that crawls only a platform's own dedicated IT
+	// category board, rather than a general-population board the title
+	// dictionary must judge on its own. Unlike Category it asserts IT-ness
+	// without naming a subcategory, so it feeds is_tech directly. It obeys the
+	// same contract as the scalars above: a fact the source states, never a
+	// heuristic an adapter infers from free text. When true it takes
+	// precedence over BOTH the tech and non-tech title/category evidence
+	// below — a source that crawled a posting specifically because it filed
+	// it as IT is more authoritative than a generic dictionary.
+	IsTechHint bool
 }
 
 // Derived is the set of facets computed from an Input.
@@ -194,7 +205,7 @@ func Derive(in Input) Derived {
 	if category == "" {
 		category = classify.NonTechFromDescription(in.Description)
 	}
-	isTech := deriveIsTech(category, in.Title)
+	isTech := deriveIsTech(category, in.Title, in.IsTechHint)
 	// Employment-type precedence: structured source signal (an ATS timeType /
 	// typeOfEmployment enum) → free-text description parse. The source's own value wins.
 	employmentType := in.EmploymentType
@@ -270,7 +281,10 @@ func deriveRequiresClearance(desc string) *bool {
 }
 
 // deriveIsTech computes the tri-state is_tech signal from the already-resolved
-// category and the raw title. Technical evidence wins and is checked first: a
+// category, the raw title, and an optional structured source hint. The hint,
+// when true, wins outright — ahead of both the tech and non-tech evidence below
+// — since it is a fact the source stated about its own crawl scope, not a
+// heuristic. Absent a hint, technical evidence wins and is checked first: a
 // recognized technical category OR a confident software/IT title (classify.IsTech)
 // yields true; otherwise a known non-technical category or a confident non-tech
 // title yields false; otherwise the signal is unknown (nil), never coerced, so the
@@ -280,8 +294,8 @@ func deriveRequiresClearance(desc string) *bool {
 // "…Engineer" matches the non-tech detector only where its discipline is named
 // outright — "mechanical engineer", "civil engineer" and the rest of that anchored
 // family — so "Drainage Engineer" still matches neither detector and stays unknown.
-func deriveIsTech(category, title string) *bool {
-	if TechEvidence(category, title) {
+func deriveIsTech(category, title string, sourceHint bool) *bool {
+	if sourceHint || TechEvidence(category, title) {
 		t := true
 		return &t
 	}

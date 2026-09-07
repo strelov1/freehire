@@ -133,6 +133,7 @@ func persist(ctx context.Context, qtx *db.Queries, p db.UpsertJobParams) (writte
 		SalaryCurrencySource: p.SalaryCurrencySource,
 		SalaryPeriodSource:   p.SalaryPeriodSource,
 		EnglishLevel:         p.EnglishLevel,
+		IsTech:               p.IsTech,
 	})
 	if err == nil {
 		return cheapWrite(cheap), nil

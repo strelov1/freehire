@@ -160,6 +160,9 @@ func TestRefreshUnchangedJobMatchesNothingWhenTheRowWouldChange(t *testing.T) {
 	movedSalary := unchangedParams()
 	movedSalary.SalaryMinSource = pgtype.Int4{Int32: 90000, Valid: true}
 
+	movedIsTech := unchangedParams()
+	movedIsTech.IsTech = pgtype.Bool{Bool: true, Valid: true}
+
 	absent := unchangedParams()
 	absent.ExternalID = "acme:never-ingested"
 
@@ -175,6 +178,9 @@ func TestRefreshUnchangedJobMatchesNothingWhenTheRowWouldChange(t *testing.T) {
 		// TestUpsertParams_CheapWriteMatchKeyCoversEveryColumnItWrites.
 		"structured cities moved": {params: movedCities},
 		"structured salary moved": {params: movedSalary},
+		// A source's structured IsTechHint (issue #2601) can flip is_tech while every hashed
+		// field stays put — see TestUpsertParams_CheapWriteMatchKeyCoversEveryColumnItWrites.
+		"structured is_tech moved": {params: movedIsTech},
 		// A closed row must reach UpsertJob, which is what reopens it. Refreshing its liveness
 		// here would leave it closed forever while the unseen sweep kept seeing it.
 		"row is closed": {params: unchangedParams(), closed: true},

@@ -98,6 +98,11 @@ func TestCategoryUnresolved(t *testing.T) {
 		{"dict empty, LLM also says other", db.Job{Enrichment: []byte(`{"category":"other"}`)}, true},
 		{"dict empty, LLM found a real category", db.Job{Enrichment: []byte(`{"category":"hardware"}`)}, false},
 		{"dict empty, malformed enrichment JSON", db.Job{Enrichment: []byte(`not json`)}, true},
+		{"dict empty, no enrichment, is_tech unknown", db.Job{IsTech: pgtype.Bool{}}, true},
+		{"dict empty, no enrichment, is_tech false", db.Job{IsTech: pgtype.Bool{Valid: true, Bool: false}}, true},
+		{"dict empty, no enrichment, is_tech true → confirmed technical, stays searchable", db.Job{IsTech: pgtype.Bool{Valid: true, Bool: true}}, false},
+		{"dict empty, LLM also says other, is_tech true → still stays searchable", db.Job{Enrichment: []byte(`{"category":"other"}`), IsTech: pgtype.Bool{Valid: true, Bool: true}}, false},
+		{"dict resolved category wins even with is_tech false", db.Job{Category: "backend", IsTech: pgtype.Bool{Valid: true, Bool: false}}, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
