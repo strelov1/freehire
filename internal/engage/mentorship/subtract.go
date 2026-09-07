@@ -50,10 +50,16 @@ func widen(busy []Interval, margin time.Duration) []Interval {
 	return out
 }
 
-// mergeOverlapping collapses busy ranges that overlap or touch into single ranges, so
-// the subtraction below walks a sorted, disjoint list and can stop early. Touching
-// ranges merge as well as overlapping ones: two blocks that meet at an instant leave no
-// free time between them, and keeping them apart would emit a zero-width gap.
+// mergeOverlapping collapses ranges that overlap or touch into single ranges, sorted
+// ascending. It serves two callers with the same need for different reasons: the busy
+// set, so the subtraction below walks a disjoint list and can stop early; and the FREE
+// set in expandSchedule, where overlapping ranges would each anchor their own slot grid
+// and offer the same hour twice.
+//
+// Touching ranges merge as well as overlapping ones. Not because keeping them apart
+// would emit a zero-width gap — subtractOne already guards that — but because two blocks
+// that meet at an instant are one block, and saying so once is cheaper than deciding it
+// again at every use.
 //
 // Empty ranges are dropped first, and dropping them AFTER widening is what makes both
 // cases right: a zero-width busy range with buffers has become a real block and must
@@ -87,11 +93,18 @@ func mergeOverlapping(ranges []Interval) []Interval {
 }
 
 // subtractOne removes a sorted, disjoint set of blocked ranges from one free range,
-// returning what is left. Empty remnants are dropped, so a free range wholly covered
-// yields nothing.
+// returning what is left. No remnant it emits is ever empty — a free range wholly
+// covered yields nothing at all — which is the invariant every downstream step relies on
+// and which TestSubtractBusyNeverEmitsAnEmptyRange holds.
 func subtractOne(free Interval, blocked []Interval) []Interval {
 	var out []Interval
 	cursor := free.Start
+
+	keep := func(iv Interval) {
+		if !iv.IsEmpty() {
+			out = append(out, iv)
+		}
+	}
 
 	for _, b := range blocked {
 		if !b.End.After(cursor) {
@@ -100,16 +113,12 @@ func subtractOne(free Interval, blocked []Interval) []Interval {
 		if !b.Start.Before(free.End) {
 			break
 		}
-		if b.Start.After(cursor) {
-			out = append(out, Interval{Start: cursor, End: b.Start})
-		}
+		keep(Interval{Start: cursor, End: b.Start})
 		if b.End.After(cursor) {
 			cursor = b.End
 		}
 	}
 
-	if cursor.Before(free.End) {
-		out = append(out, Interval{Start: cursor, End: free.End})
-	}
+	keep(Interval{Start: cursor, End: free.End})
 	return out
 }

@@ -89,6 +89,39 @@ func (d Date) Parts() (int, time.Month, int) { return d.year, d.month, d.day }
 // String renders ISO-8601, so a test failure reads as a date.
 func (d Date) String() string { return fmt.Sprintf("%04d-%02d-%02d", d.year, int(d.month), d.day) }
 
+// next is the following calendar date.
+//
+// The arithmetic goes through UTC deliberately, and this is not a detail. Doing it in a
+// real zone means asking for a midnight, and three live zones — America/Santiago,
+// America/Havana, Atlantic/Azores — move their clocks AT midnight, so once a year that
+// midnight does not exist. Go normalises such a time BACKWARDS, to 23:00 on the previous
+// date, and a cursor built that way stops advancing: the walk spins forever on an
+// unauthenticated endpoint. UTC has no transitions, so every midnight in it is real.
+func (d Date) next() Date {
+	at := time.Date(d.year, d.month, d.day+1, 0, 0, 0, 0, time.UTC)
+	return Date{year: at.Year(), month: at.Month(), day: at.Day()}
+}
+
+// after reports whether this date falls later than the other. Compared component-wise
+// rather than as instants, because a date is not an instant and turning it into one is
+// what the zone hazard above lives in.
+func (d Date) after(other Date) bool {
+	if d.year != other.year {
+		return d.year > other.year
+	}
+	if d.month != other.month {
+		return d.month > other.month
+	}
+	return d.day > other.day
+}
+
+// Weekday is the day of the week this date falls on. Read in UTC for the reason next
+// gives: the weekday of a calendar date is the same in every zone, and asking a real
+// zone for it would mean naming a wall-clock time that might not exist.
+func (d Date) Weekday() time.Weekday {
+	return time.Date(d.year, d.month, d.day, 0, 0, 0, 0, time.UTC).Weekday()
+}
+
 // Rule is one row of a mentor's availability, in one of two shapes: WEEKLY, naming a
 // weekday that recurs, or DATED, naming one calendar date that replaces whatever the
 // weekly rules say for it.

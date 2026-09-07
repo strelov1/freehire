@@ -1,9 +1,6 @@
 package mentorship
 
-import (
-	"slices"
-	"time"
-)
+import "time"
 
 // expandSchedule turns a mentor's whole availability — recurring rules and dated
 // overrides together — into ordered ranges of absolute time covering the window.
@@ -39,14 +36,17 @@ func expandSchedule(rules []Rule, zone *time.Location, w Interval) []Interval {
 		if !r.IsDated() || closed[r.Date()] {
 			continue
 		}
-		day := startOfDate(r.Date(), zone)
-		if iv := clip(resolve(day, r.Start(), r.End(), zone), w); !iv.IsEmpty() {
+		if iv := clip(resolve(r.Date(), r.Start(), r.End(), zone), w); !iv.IsEmpty() {
 			out = append(out, iv)
 		}
 	}
 
-	slices.SortFunc(out, compareIntervals)
-	return out
+	// Overlapping free ranges are merged, not concatenated. Nothing stops a mentor from
+	// writing "Mon–Fri 09:00–17:00" and "Tue 16:00–19:00", or the same row twice, and
+	// the schema has no exclusion constraint that would. Left overlapping, the slicer
+	// would anchor a grid to each range independently and emit the same hour more than
+	// once — cal.com merges for the same reason (mergeOverlappingDateRanges).
+	return mergeOverlapping(out)
 }
 
 // overriddenDates reports which dates carry any override at all, and which carry a
@@ -73,12 +73,6 @@ func overriddenDates(rules []Rule) (overridden, closed map[Date]bool) {
 func dateOf(at time.Time, zone *time.Location) Date {
 	year, month, day := at.In(zone).Date()
 	return Date{year: year, month: month, day: day}
-}
-
-// startOfDate is midnight on a calendar date in the given zone.
-func startOfDate(d Date, zone *time.Location) time.Time {
-	year, month, day := d.Parts()
-	return time.Date(year, month, day, 0, 0, 0, 0, zone)
 }
 
 // compareIntervals orders ranges ascending, breaking a tie on the end so the order is

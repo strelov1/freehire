@@ -156,6 +156,25 @@ func TestAZeroWidthBusyRangeTakesNothingWithoutBuffers(t *testing.T) {
 	assertSpans(t, subtractBusy(free, busy, noBuffers(t)), "09:00–17:00")
 }
 
+// The invariant every downstream step leans on. Today only sliceSlots consumes this, and
+// it happens to drop empty ranges itself; a second consumer would have no reason to.
+func TestSubtractBusyNeverEmitsAnEmptyRange(t *testing.T) {
+	free := []Interval{span(9, 0, 17, 0), span(18, 0, 20, 0)}
+	busy := []Interval{
+		span(9, 0, 10, 0),  // flush with a free range's start
+		span(16, 0, 17, 0), // flush with its end
+		span(12, 0, 12, 0), // zero width, mid-range
+		span(18, 0, 20, 0), // covers a whole free range
+		span(21, 0, 22, 0), // entirely outside
+	}
+
+	for i, iv := range subtractBusy(free, busy, noBuffers(t)) {
+		if iv.IsEmpty() {
+			t.Errorf("range %d is empty: %v", i, utcHours([]Interval{iv}))
+		}
+	}
+}
+
 func TestSubtractBusyReturnsRangesInOrder(t *testing.T) {
 	free := []Interval{span(14, 0, 16, 0), span(9, 0, 11, 0)}
 

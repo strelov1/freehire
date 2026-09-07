@@ -843,6 +843,93 @@ type Mailbox struct {
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
 }
 
+// One moderated, publicly named mentor profile per account, bound to one company in the catalogue. The opposite number of referral_offers, which keeps its insider anonymous: a referral is a favour asked of a stranger, a mentor is chosen.
+type Mentor struct {
+	ID          int64    `json:"id"`
+	UserID      int64    `json:"user_id"`
+	CompanySlug string   `json:"company_slug"`
+	Slug        string   `json:"slug"`
+	Headline    string   `json:"headline"`
+	Bio         string   `json:"bio"`
+	Topics      []string `json:"topics"`
+	Languages   []string `json:"languages"`
+	// IANA zone name. It alone gives mentor_availability's zoneless times a meaning, so a row without a resolvable one has no schedule at all rather than a UTC one.
+	Timezone           string `json:"timezone"`
+	SessionDurationMin int32  `json:"session_duration_min"`
+	BufferBeforeMin    int32  `json:"buffer_before_min"`
+	BufferAfterMin     int32  `json:"buffer_after_min"`
+	MinNoticeMin       int32  `json:"min_notice_min"`
+	HorizonDays        int32  `json:"horizon_days"`
+	MeetingUrl         string `json:"meeting_url"`
+	Status             string `json:"status"`
+	// The mentor's own switch, independent of the moderator's status. A paused profile leaves the directory and offers no slots; its confirmed bookings stand.
+	Paused    bool               `json:"paused"`
+	DecidedBy pgtype.Int8        `json:"decided_by"`
+	DecidedAt pgtype.Timestamptz `json:"decided_at"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+}
+
+// A mentor's availability in two row shapes: weekly (weekday set) and dated override (on_date set). A dated row replaces its whole date; an empty dated row closes it.
+type MentorAvailability struct {
+	ID       int64       `json:"id"`
+	MentorID int64       `json:"mentor_id"`
+	Weekday  pgtype.Int2 `json:"weekday"`
+	OnDate   pgtype.Date `json:"on_date"`
+	// Wall-clock time with no zone and no date. Resolved through mentors.timezone, per date. Storing an instant here would move every slot by an hour for half the year.
+	StartTime pgtype.Time        `json:"start_time"`
+	EndTime   pgtype.Time        `json:"end_time"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+}
+
+// One booked mentorship session. Two confirmed rows for one mentor cannot overlap — the mentor_bookings_no_overlap EXCLUDE constraint, not the service, guarantees it.
+type MentorBooking struct {
+	ID           pgtype.UUID        `json:"id"`
+	MentorID     int64              `json:"mentor_id"`
+	SeekerUserID int64              `json:"seeker_user_id"`
+	StartsAt     pgtype.Timestamptz `json:"starts_at"`
+	EndsAt       pgtype.Timestamptz `json:"ends_at"`
+	Status       string             `json:"status"`
+	// The vacancy the seeker came from, as context. ON DELETE SET NULL: the booking outlives the posting, the same seam referral_requests.job_id carries.
+	JobID          pgtype.Int8        `json:"job_id"`
+	Note           string             `json:"note"`
+	SeekerTimezone string             `json:"seeker_timezone"`
+	MeetingUrl     string             `json:"meeting_url"`
+	CancelledAt    pgtype.Timestamptz `json:"cancelled_at"`
+	CancelledBy    pgtype.Int8        `json:"cancelled_by"`
+	CancelReason   string             `json:"cancel_reason"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+}
+
+// One row per reminder actually sent. The composite key is the idempotency guard: re-running the reminder worker inserts a duplicate key and sends nothing.
+type MentorBookingReminder struct {
+	BookingID     pgtype.UUID        `json:"booking_id"`
+	OffsetMinutes int32              `json:"offset_minutes"`
+	SentAt        pgtype.Timestamptz `json:"sent_at"`
+}
+
+// Occupied time read from a mentor's own calendar, as bare intervals. Deliberately carries no title, attendee or link: the schema is what stops a reader mistake from persisting somebody's dentist appointment. Empty until the calendar sync ships.
+type MentorBusyInterval struct {
+	ID         int64              `json:"id"`
+	MentorID   int64              `json:"mentor_id"`
+	StartsAt   pgtype.Timestamptz `json:"starts_at"`
+	EndsAt     pgtype.Timestamptz `json:"ends_at"`
+	Source     string             `json:"source"`
+	ExternalID string             `json:"external_id"`
+	SyncedAt   pgtype.Timestamptz `json:"synced_at"`
+}
+
+// One review per completed session, keyed by the booking so a second submission is an update rather than a duplicate.
+type MentorReview struct {
+	BookingID    pgtype.UUID        `json:"booking_id"`
+	MentorID     int64              `json:"mentor_id"`
+	SeekerUserID int64              `json:"seeker_user_id"`
+	Rating       int16              `json:"rating"`
+	Comment      string             `json:"comment"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
+}
+
 type NotificationSetting struct {
 	UserID          int64              `json:"user_id"`
 	Enabled         bool               `json:"enabled"`

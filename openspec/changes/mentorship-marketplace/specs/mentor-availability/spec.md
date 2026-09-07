@@ -59,11 +59,22 @@ their future availability accordingly and SHALL NOT move any already-confirmed b
 - **THEN** slot generation completes without error
 - **AND** every emitted slot is a real instant in that zone
 
+#### Scenario: A zone whose clocks move at midnight
+
+- **WHEN** the mentor's zone moves its clocks at midnight, so that one date's 00:00 does
+  not exist — `America/Santiago`, `America/Havana` and `Atlantic/Azores` each do this
+  once a year
+- **THEN** slot generation over a window spanning that date terminates
+- **AND** a dated override for that date resolves onto that date, not the one before it
+
 #### Scenario: A local time that occurs twice on the transition day
 
 - **WHEN** an availability window covers a local time that the mentor's zone repeats on
   the autumn transition date
-- **THEN** each such wall-clock time yields exactly one slot, not two
+- **THEN** no absolute instant is offered more than once
+- **AND** neither occurrence is withheld — both are real hours the mentor stated
+- **AND** consequently two slots may carry the same wall-clock label, distinguished only
+  by their UTC offset, which the slot response SHALL carry for every slot
 
 #### Scenario: Changing the timezone leaves booked sessions alone
 
@@ -95,6 +106,21 @@ another begins SHALL NOT be a conflict.
 
 - **WHEN** a mentor's session is 60 minutes and a free interval is 45 minutes long
 - **THEN** that interval offers no slot
+
+#### Scenario: The slot grid is anchored to the schedule, not to the moment of the request
+
+- **WHEN** the same window is requested at 18:00, at 18:30 and at 18:33, of a mentor
+  available from 18:00 with hour-long sessions
+- **THEN** every offered slot begins on the mentor's own hourly grid — 18:00, 19:00,
+  20:00 — and never at 18:33
+- **AND** only the notice period decides which of those slots are withheld
+
+#### Scenario: Overlapping availability offers each hour once
+
+- **WHEN** a mentor's rules overlap — the same row written twice, or a weekly evening
+  crossing a dated override
+- **THEN** each bookable hour is offered exactly once
+- **AND** the slots are still in ascending order
 
 #### Scenario: Back-to-back sessions do not conflict
 

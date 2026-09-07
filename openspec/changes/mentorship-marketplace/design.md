@@ -169,17 +169,28 @@ grounds specific to this host: crawlers are most of its traffic, and a public UR
 computes a month of slots per hit is exactly what they will hit hardest. This is not
 premature optimisation; it is the known load profile.
 
-### `job_id` gets a `NOT VALID` foreign key, validated separately
+### `job_id` gets an ordinary foreign key, added in its own statement
 
 `mentor_bookings.job_id` references `jobs`, which holds ~11M rows. `ALTER TABLE ... ADD
 CONSTRAINT ... FOREIGN KEY` takes a `SHARE ROW EXCLUSIVE` lock on **both** tables,
-blocking writes to `jobs` for the duration — and this host already has migrations fail
+blocking writes to `jobs` while it is held — and this host already has migrations fail
 with `55P03` against the nightly dump and the similar-jobs worker.
 
-The constraint is therefore added `NOT VALID` (a brief lock, no scan) and validated in
-a following statement, which takes only `SHARE UPDATE EXCLUSIVE`. The new table is
-empty, so validation is instant. squawk will flag the pattern; the suppression carries
-this reason beside it.
+An earlier draft of this document proposed adding it `NOT VALID` and validating
+separately. **That is the wrong tool here, and writing the migration is what showed
+it.** `NOT VALID` skips the scan of the *referencing* table — which in this change is
+empty and free to scan — and takes exactly the same lock on `jobs` either way. The
+trick pays when your own table is large, not when the referenced one is.
+
+What actually bounds the risk is already in place: the migration runner sets
+`SET lock_timeout = '5s'` session-wide, so a statement queued behind the nightly
+`pg_dump` **fails** instead of parking the site's writes behind it. The remaining
+mitigation is scheduling — deploy outside the 03:00 UTC dump window. The constraint is
+still its own statement rather than inline in `CREATE TABLE`, so that if it is the thing
+that times out, the failure names it.
+
+There is precedent for the reference itself: `referral_requests.job_id` already carries
+one, with the same `ON DELETE SET NULL` seam.
 
 ### Booking messages are transactional and bypass the notification rule
 
@@ -232,9 +243,11 @@ check, and it is not a gate.
   zone; the two pathological wall-clock cases are explicit tests; the pure function makes
   them cheap to write and to keep.
 
-- **The FK to `jobs` can fail the migration with `55P03`.** → `NOT VALID` plus a separate
-  `VALIDATE`. Deploy outside the 03:00 UTC dump window regardless; the repository's
-  existing guidance on stopping the similar-jobs worker applies to anything touching `jobs`.
+- **The FK to `jobs` can fail the migration with `55P03`.** → The runner's 5-second
+  `lock_timeout` turns that into a failed migration rather than a stalled site. Deploy
+  outside the 03:00 UTC dump window; the repository's existing guidance on stopping the
+  similar-jobs worker applies to anything touching `jobs`. `NOT VALID` does *not* help
+  here — see the decision above.
 
 - **A migration number collision.** → Three files already collided on `0144` in `main`.
   Take the next free number immediately before opening the PR, and re-check after any

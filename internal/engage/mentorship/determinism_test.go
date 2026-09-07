@@ -69,8 +69,19 @@ func slotKeys(slots []Interval) []string {
 }
 
 // The determinism the spec requires: the same request twice is the same answer. It is
-// what lets a cached window and the re-derivation a booking runs agree, and it is not
-// free in Go — the override pass builds maps, and ranging a map is deliberately random.
+// what lets a cached window and the re-derivation a booking runs agree.
+//
+// Be honest about what this holds and what it does not. Today it CANNOT fail: the only
+// maps in the package (override.go) are membership sets whose iteration order never
+// reaches the output, and mutation testing confirms it — removing either of the two
+// upstream sorts leaves this green, because mergeOverlapping and subtractBusy re-sort
+// downstream. Ordering is held by the per-stage tests in expand_test, override_test and
+// anchor_test, each of which asserts its own stage's output order.
+//
+// What this guards is the future: the moment somebody ranges one of those maps to build
+// output rather than to look a key up, slots start arriving in a different order per
+// call. That is a bug which reproduces on nobody's machine and looks, in production,
+// like "the slots move around sometimes".
 func TestSlotsAreDeterministicAcrossRepeatedCalls(t *testing.T) {
 	req := awkwardRequest(t)
 

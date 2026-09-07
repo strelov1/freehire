@@ -27,18 +27,52 @@ unit tests plus the function they drive; none of it needs Docker or Postgres.
       cover a slot inside the notice period, a window wider than the horizon, and the
       fallback
 - [x] 1.8 Assert the whole pipeline is deterministic: same inputs, same slots, twice
+- [x] 1.9 Act on the group-1 review. Four defects it found, all now fixed with a test
+      that fails without the fix (each verified by mutation):
+      **(a)** the day cursor was an instant built at midnight, which does not exist once
+      a year in `America/Santiago`, `America/Havana` and `Atlantic/Azores` — Go
+      normalises it backwards and the walk never advanced, an infinite loop on an
+      unauthenticated endpoint. The cursor is now a `Date`, stepped in UTC, which
+      removes the class rather than the instance and deletes `startOfDay`/`nextDay`/
+      `startOfDate` outright.
+      **(b)** dated overrides landed on the previous date in those same zones — same
+      root cause, fixed by the same change.
+      **(c)** the window's near end was clamped to `now`, which moved the slot grid
+      every minute (18:33, 19:33, …) against a decision design.md, tasks.md and the
+      package comments all state. Clamped to the start of the mentor's day instead.
+      **(d)** overlapping or duplicate availability rules emitted duplicate, unsorted
+      slots — `expandSchedule` now merges free ranges.
+      Also: `"Local"` as a viewer zone returned the SERVER's clock labelled `"Local"`;
+      `Slots` returned a nil slice that would marshal as `null`; `subtractOne` could emit
+      zero-width remnants; and two comments claimed things that were not load-bearing.
+- [ ] 1.10 Add `_ "time/tzdata"` to `cmd/server` (~450 KB). The runtime image
+      (`debian:stable-slim`) does ship the zone database — verified — so nothing is
+      broken today; the point is that this is the first feature to hard-depend on it,
+      and if the base image ever changes every mentor zone silently becomes UTC, which
+      is indistinguishable from correct behaviour in the response. Belongs with the HTTP
+      layer, group 7.
 
 ## 2. Schema and generated queries
 
-- [ ] 2.1 Write the migration (claim the number immediately before opening the PR):
+- [x] 2.1 Write the migration (claim the number immediately before opening the PR):
       `CREATE EXTENSION IF NOT EXISTS btree_gist`, then `mentors`,
       `mentor_availability`, `mentor_bookings`, `mentor_busy_intervals`,
-      `mentor_reviews`, with every `CHECK` the specs require
-- [ ] 2.2 Add the `EXCLUDE USING gist` non-overlap constraint on `mentor_bookings`,
+      `mentor_reviews`, with every `CHECK` the specs require — plus
+      `mentor_booking_reminders`, whose composite key IS the reminder worker's
+      idempotency (task 6.2) and which would otherwise need a second migration
+- [x] 2.2 Add the `EXCLUDE USING gist` non-overlap constraint on `mentor_bookings`,
       predicated on `status = 'confirmed'`
-- [ ] 2.3 Add the `jobs` foreign key as `NOT VALID` plus a separate `VALIDATE
-      CONSTRAINT`, with the squawk suppression carrying the `55P03` reason beside it
-- [ ] 2.4 Run `pnpm check:sql` and confirm the migration passes both squawk passes
+- [x] 2.3 Add the `jobs` foreign key in its own statement. NOT `NOT VALID`: that skips
+      the scan of the referencing table (empty here) and takes the same lock on `jobs`
+      regardless — see the corrected decision in design.md. The runner's 5s
+      `lock_timeout` is what bounds the `55P03` risk
+- [x] 2.4 Run `pnpm check:sql` and confirm the migration passes both squawk passes —
+      done, 0 issues, with per-column `prefer-bigint-over-int` suppressions carrying
+      their argument beside them
+- [x] 2.4a Apply the whole migration history to a throwaway Postgres and probe every
+      constraint by hand: overlapping bookings rejected, back-to-back accepted, a
+      cancellation freeing its slot, both availability CHECKs, the review and reminder
+      keys, and one profile per account
 - [ ] 2.5 Write the sqlc queries (profile CRUD and moderation, availability CRUD,
       booking write and lists, reminder claim, review upsert) and run `make sqlc`
 - [ ] 2.6 Integration test the `EXCLUDE` constraint directly: two concurrent inserts for
