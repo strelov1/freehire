@@ -54,6 +54,28 @@ const djinniSingleHTML = `<html><head>
 </script>
 </head><body></body></html>`
 
+// djinniApplicantAreaHTML carries the two applicant-area shapes the country-only reading missed.
+// Djinni states a posting's candidate residence rule in applicantLocationRequirements, and about
+// a third of the live listing states it as a macro-REGION with a null country ("Countries of
+// Europe or Ukraine" renders as addressRegion "Europe"). Reading only addressCountry left those
+// postings geography-less, which handed the facet to the LLM's enrichment guess and published a
+// Europe-only role as open worldwide. The second posting states an alpha-3 country code, which a
+// free-text location line does not resolve — only the structured Countries field does.
+const djinniApplicantAreaHTML = `<html><head>
+<script type="application/ld+json">
+[{"@context":"https://schema.org/","@type":"JobPosting",
+"title":"Senior .NET Developer","url":"https://djinni.co/jobs/846790-senior-net/","identifier":846790,
+"jobLocationType":"TELECOMMUTE",
+"hiringOrganization":{"@type":"Organization","name":"Devart"},
+"applicantLocationRequirements":{"@type":"AdministrativeArea","address":{"@type":"PostalAddress","addressCountry":null,"addressRegion":"Europe"}}},
+{"@context":"https://schema.org/","@type":"JobPosting",
+"title":"QA Engineer","url":"https://djinni.co/jobs/846791-qa/","identifier":846791,
+"jobLocationType":"TELECOMMUTE",
+"hiringOrganization":{"@type":"Organization","name":"Beta"},
+"applicantLocationRequirements":{"@type":"AdministrativeArea","address":{"@type":"PostalAddress","addressCountry":"POL"}}}]
+</script>
+</head><body></body></html>`
+
 const djinniEmptyHTML = `<html><head></head><body></body></html>`
 
 func init() { djinniPageDelay = 0 } // don't pace the crawl in unit tests
@@ -147,6 +169,32 @@ func TestDjinniFetchMapsListingArray(t *testing.T) {
 	}
 	if j.PostedAt == nil {
 		t.Errorf("PostedAt = nil, want the zone-less datePosted parsed")
+	}
+}
+
+// TestDjinniMapsApplicantArea is the regression guard for the "remote worldwide" misreport: a
+// posting whose applicant area names only a macro-region must carry that region into the location
+// line (where the dictionary resolves "Europe" to the eu region), and one whose area names a
+// country must carry it as a structured country code — an alpha-3 that the free-text line alone
+// would not resolve. Geography left empty here is not neutral: the served facet then falls back
+// to the LLM's guess, which reads "work from any part of the world" out of a benefits paragraph.
+func TestDjinniMapsApplicantArea(t *testing.T) {
+	fake := &djinniPagedHTTP{bodies: map[int]string{1: djinniApplicantAreaHTML}}
+	jobs, err := NewDjinni(fake).Fetch(context.Background(), CompanyEntry{Provider: "djinni"})
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	if len(jobs) != 2 {
+		t.Fatalf("got %d jobs, want 2", len(jobs))
+	}
+	if got := jobs[0].Location; got != "Europe" {
+		t.Errorf("region-only posting: Location = %q, want the addressRegion", got)
+	}
+	if got := jobs[0].Countries; len(got) != 0 {
+		t.Errorf("region-only posting: Countries = %v, want none — a region is not a country", got)
+	}
+	if got := jobs[1].Countries; len(got) != 1 || got[0] != "pl" {
+		t.Errorf("country posting: Countries = %v, want [pl] from the alpha-3 code", got)
 	}
 }
 

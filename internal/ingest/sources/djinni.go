@@ -96,7 +96,8 @@ func (s djinni) Fetch(ctx context.Context, _ CompanyEntry) ([]Job, error) {
 
 // djinniPosting is one schema.org JobPosting from the listing. identifier is a bare integer;
 // jobLocationType (TELECOMMUTE/ON_SITE) is the work-arrangement signal; the applicant location
-// requirement carries only a country.
+// requirement carries the candidate-residence rule Djinni renders as "Countries where we consider
+// candidates", as EITHER a country or a macro-region — see toJob.
 type djinniPosting struct {
 	Title              string `json:"title"`
 	Description        string `json:"description"`
@@ -111,23 +112,43 @@ type djinniPosting struct {
 	ApplicantLocationRequirements struct {
 		Address struct {
 			AddressCountry string `json:"addressCountry"`
+			AddressRegion  string `json:"addressRegion"`
 		} `json:"address"`
 	} `json:"applicantLocationRequirements"`
 }
 
 // toJob maps a posting to a Job, returning ok=false for a posting with no identifier (no dedup
 // key), no url (no canonical address), or no company (which would break the company slug).
+//
+// The applicant area states one of three things, and each must be carried differently. A country
+// ("UA", and sometimes the alpha-3 "POL") goes into the structured Countries field, since an
+// alpha-3 code resolves through NormalizeCountry but not through the free-text location line. A
+// macro-region with a null country ("Europe", which Djinni renders as "Countries of Europe or
+// Ukraine") has no structured field to go into, so it rides the location line, where the
+// dictionary resolves it to the eu region. An ABSENT applicant area is Djinni's "Worldwide", and
+// the bare-remote line correctly lands in the global bucket.
+//
+// Leaving a stated area unread is not neutral: the served facet falls back to the enrichment
+// guess whenever the dictionary pins nothing (see internal/job/jobview.geoFacet), and the LLM
+// reads "work ... from any part of the world" out of a benefits paragraph, publishing a
+// Europe-only role as open worldwide (1012 open postings at the time of the fix).
 func (p djinniPosting) toJob() (Job, bool) {
 	if p.Identifier == 0 || p.URL == "" || p.HiringOrganization.Name == "" {
 		return Job{}, false
 	}
 	remote := strings.EqualFold(p.JobLocationType, "TELECOMMUTE")
+	addr := p.ApplicantLocationRequirements.Address
+	loc := addr.AddressCountry
+	if loc == "" {
+		loc = addr.AddressRegion
+	}
 	return Job{
 		ExternalID:     strconv.FormatInt(p.Identifier, 10),
 		URL:            p.URL,
 		Title:          p.Title,
 		Company:        p.HiringOrganization.Name,
-		Location:       p.ApplicantLocationRequirements.Address.AddressCountry,
+		Location:       loc,
+		Countries:      countryFromCode(addr.AddressCountry),
 		Description:    sanitizeHTML(plainTextToHTML(p.Description)),
 		Remote:         remote,
 		WorkMode:       workModeFromRemote(remote),
