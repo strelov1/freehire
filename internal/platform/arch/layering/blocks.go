@@ -44,7 +44,13 @@ var blocks = map[string][]string{
 		// sit in different blocks (ai/speech and api/realtime), so anywhere else it would be
 		// an upward edge for one of them.
 		"aigateway",
-		"arch", "arch/layering", "backfillpage", "blobstore", "cache", "config", "database", "db",
+		"arch", "arch/layering", "backfillpage", "blobstore",
+		// browseruse is the HTTP half of talking to the browser-use.com cloud agent API —
+		// create/poll/fetch one run — and knows nothing about ATS forms or resolved
+		// application plans, the same "transport, not domain" category as llm and
+		// aigateway. Its one caller sits in api/atsapply.
+		"browseruse",
+		"cache", "config", "database", "db",
 		"externalid", "flexjson", "htmltext", "isoweek", "linktoken", "llm", "llmschema", "migrate",
 		"modroot", "observability", "outbox", "pgconv", "pgerr", "safehttp", "stringset", "testdb",
 		"tokencrypt",
