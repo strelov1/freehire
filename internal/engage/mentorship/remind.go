@@ -18,9 +18,8 @@ var ReminderOffsets = []time.Duration{24 * time.Hour, time.Hour}
 type ReminderStats struct {
 	// Sent counts reminders actually delivered.
 	Sent int
-	// Failed counts the ones claimed but not delivered. They are NOT retried: the claim
-	// has committed, and the alternative — releasing it — is how a mail server that fails
-	// intermittently sends the same reminder every few minutes.
+	// Failed counts the ones claimed but not delivered. Their claim is RELEASED, so the
+	// next run tries again — see the argument in SendDueReminders.
 	Failed int
 }
 
@@ -35,8 +34,16 @@ type ReminderStats struct {
 // both win it. Losing it means somebody else is sending that reminder; sending anyway is
 // the one outcome worse than not sending at all.
 //
-// A delivery failure is counted and stepped over. Failing to READ the work is different —
-// nothing was attempted, and the run says so rather than reporting a quiet success.
+// A DELIVERY FAILURE RELEASES THE CLAIM, so the next run tries again. Holding it would
+// mean a mail server down for one run loses that reminder permanently, and the two
+// failures are not equal: a missing "your session starts in an hour" costs somebody the
+// session, while a duplicate costs them a duplicate. The release is safe in the shape
+// that matters — the transport reported an error, so the message almost certainly did
+// not go out — and the worst case it admits is one repeated reminder against a server
+// that fails after accepting.
+//
+// Failing to READ the work is different again: nothing was attempted, and the run says so
+// rather than reporting a quiet success.
 func (s *Service) SendDueReminders(ctx context.Context, maxPerRun int32) (ReminderStats, error) {
 	var stats ReminderStats
 
@@ -65,6 +72,12 @@ func (s *Service) SendDueReminders(ctx context.Context, maxPerRun int32) (Remind
 			if err := s.notifier.BookingReminder(ctx, booking, offset); err != nil {
 				stats.Failed++
 				logDeliveryFailure("reminder", booking, err)
+				// Give the claim back so the next run retries. A release that itself
+				// fails leaves the reminder claimed and unsent — the outcome this whole
+				// branch exists to avoid — so it is logged loudly rather than swallowed.
+				if err := s.repo.ReleaseReminderClaim(ctx, booking.ID, offset); err != nil {
+					logDeliveryFailure("reminder claim release", booking, err)
+				}
 				continue
 			}
 			stats.Sent++

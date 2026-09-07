@@ -292,6 +292,17 @@ func (r *QueriesRepository) ClaimReminder(ctx context.Context, bookingID uuid.UU
 	return rows == 1, nil
 }
 
+// ReleaseReminderClaim deletes the claim so the next run may take it again. It is only
+// ever called after a delivery that failed, and a delete that matches nothing — because a
+// concurrent run already succeeded — is not an error.
+func (r *QueriesRepository) ReleaseReminderClaim(ctx context.Context, bookingID uuid.UUID, offset time.Duration) error {
+	_, err := r.q.DeleteReminderClaim(ctx, db.DeleteReminderClaimParams{
+		BookingID:     pgtype.UUID{Bytes: bookingID, Valid: true},
+		OffsetMinutes: int32(offset / time.Minute),
+	})
+	return err
+}
+
 // availabilityParams turns a domain rule into the row's two shapes: a weekly rule sets
 // weekday and leaves on_date NULL, a dated one the reverse. The CHECK rejects anything
 // else, and the domain type cannot build it.

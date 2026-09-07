@@ -318,7 +318,7 @@ func (h *mentorshipHandlers) ListPendingMentorProfiles(c *fiber.Ctx) error {
 	out := make([]queueRow, 0, len(pending))
 	for _, p := range pending {
 		out = append(out, queueRow{
-			mentorResponse:           toOwnMentorResponse(p.Profile),
+			mentorResponse:           toModeratorMentorResponse(p.Profile),
 			ID:                       p.ID,
 			HasApprovedReferralOffer: p.HasApprovedReferralOffer,
 		})
@@ -349,5 +349,5 @@ func (h *mentorshipHandlers) DecideMentorProfile(c *fiber.Ctx) error {
 	if err != nil {
 		return mentorshipError(err)
 	}
-	return c.JSON(fiber.Map{"data": toOwnMentorResponse(profile)})
+	return c.JSON(fiber.Map{"data": toModeratorMentorResponse(profile)})
 }

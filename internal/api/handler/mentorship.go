@@ -112,13 +112,25 @@ func toMentorResponse(p mentorship.Profile) mentorResponse {
 	}
 }
 
-// toOwnMentorResponse is the same profile as its OWNER sees it: with the moderation
-// status, the pause switch and the meeting link they configured.
+// toOwnMentorResponse is the profile as its OWNER sees it: with the moderation status,
+// the pause switch and the meeting link they configured.
 func toOwnMentorResponse(p mentorship.Profile) mentorResponse {
+	out := toModeratorMentorResponse(p)
+	out.MeetingURL = p.MeetingURL
+	return out
+}
+
+// toModeratorMentorResponse is the profile as a MODERATOR sees it: everything the owner
+// sees except the meeting link.
+//
+// The link is a live room, and deciding whether somebody may mentor does not require the
+// address of the room they meet in. A moderator is trusted, which is exactly why this is
+// worth being deliberate about: the reason they hold no link is that they have no use for
+// one, not that they are suspected of anything.
+func toModeratorMentorResponse(p mentorship.Profile) mentorResponse {
 	out := toMentorResponse(p)
 	out.Status = p.Status
 	out.Paused = p.Paused
-	out.MeetingURL = p.MeetingURL
 	return out
 }
 

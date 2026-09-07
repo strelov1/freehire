@@ -59,10 +59,12 @@ refer them, and that flow already exists.
   **every** notification, with no per-kind override. That rule must now say what it
   actually means: it governs notifications the *system* originates about a user's
   activity (saved-job reminders, follow-up and interview-prep nudges). It SHALL NOT
-  govern transactional messages about a commitment the user made themselves — a booking
-  confirmation, a cancellation, or a reminder for a session they booked. A user who
-  silenced nudges still turns up to the meeting they scheduled, and the mentor's time
-  is not wasted. This is a clarification of scope, not a new override.
+  govern transactional messages about a session the user is A PARTY TO — a booking
+  confirmation, a cancellation, or a pre-session reminder — and that covers BOTH sides.
+  "A commitment the user made themselves" would have been the wrong test: a mentor did
+  not make the booking, the seeker did, and the mentor is the party holding an hour for
+  it. A user who silenced nudges still turns up to the meeting, and neither side's time
+  is wasted. This is a clarification of scope, not a new override.
 
 ## Impact
 

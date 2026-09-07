@@ -73,6 +73,29 @@ timezone, and a snapshot of the meeting link as it stood when the booking was ma
 - **WHEN** a mentor changes their meeting link after a booking is confirmed
 - **THEN** the existing booking keeps the link it was made with
 
+### Requirement: A booking is readable only by its two parties
+
+Every read of one booking — its details, its meeting link, its note — SHALL be authorised
+against the caller: the seeker who made it or the mentor it was made with, and nobody
+else. A caller who is neither SHALL receive the same answer as one naming a booking that
+does not exist.
+
+This is stated separately from the identifier below because they are different defences
+and neither substitutes for the other: a random identifier makes bookings unenumerable,
+and authorisation makes a leaked or guessed one useless.
+
+#### Scenario: A stranger holding a valid identifier is refused
+
+- **WHEN** an authenticated account that is neither party requests a booking by its
+  identifier
+- **THEN** the request is refused as not found
+- **AND** the response reveals nothing about whether that booking exists
+
+#### Scenario: Either party may read their own session
+
+- **WHEN** the seeker, and separately the mentor, request the booking
+- **THEN** each receives it, including the meeting link
+
 ### Requirement: A booking identifier is not guessable
 
 A booking SHALL be identified by a random identifier rather than a sequential one,

@@ -144,6 +144,63 @@ func TestOneFailedReminderDoesNotStopTheRun(t *testing.T) {
 	}
 }
 
+// A failed delivery gives its claim back, so the next run tries again. Holding it would
+// mean a mail server down for one run loses that reminder permanently — and the two
+// failures are not equal: a missing reminder costs somebody the session, a duplicate
+// costs them a duplicate.
+func TestAFailedDeliveryIsRetriedOnTheNextRun(t *testing.T) {
+	repo := newFakeRepo()
+	notifier := &fakeNotifier{err: errors.New("smtp is down")}
+	booking := remindableBooking(t, 3*time.Hour)
+	repo.bookings[booking.ID] = booking
+	svc := reminderService(repo, notifier)
+
+	first, err := svc.SendDueReminders(context.Background(), 100)
+	if err != nil {
+		t.Fatalf("first run: %v", err)
+	}
+	if first.Failed != 1 || first.Sent != 0 {
+		t.Fatalf("first run sent=%d failed=%d, want 0 and 1", first.Sent, first.Failed)
+	}
+
+	// The mail server comes back.
+	notifier.err = nil
+	second, err := svc.SendDueReminders(context.Background(), 100)
+	if err != nil {
+		t.Fatalf("second run: %v", err)
+	}
+	if second.Sent != 1 {
+		t.Errorf("second run sent %d, want 1 — the failed reminder was not retried", second.Sent)
+	}
+
+	// And having now succeeded, it is not sent a third time.
+	third, err := svc.SendDueReminders(context.Background(), 100)
+	if err != nil {
+		t.Fatalf("third run: %v", err)
+	}
+	if third.Sent != 0 {
+		t.Errorf("third run sent %d, want 0", third.Sent)
+	}
+}
+
+// A release that itself fails leaves the reminder claimed and unsent. The run must not
+// fail over it — the other sessions still need theirs — but it is the outcome the release
+// exists to avoid, so it is logged rather than swallowed.
+func TestAFailedReleaseDoesNotFailTheRun(t *testing.T) {
+	repo := newFakeRepo()
+	repo.releaseErr = errors.New("connection reset")
+	notifier := &fakeNotifier{err: errors.New("smtp is down")}
+	repo.bookings[uuid.New()] = remindableBooking(t, 3*time.Hour)
+
+	stats, err := reminderService(repo, notifier).SendDueReminders(context.Background(), 100)
+	if err != nil {
+		t.Errorf("SendDueReminders: %v — a failed release is not a run failure", err)
+	}
+	if stats.Failed != 1 {
+		t.Errorf("failed = %d, want 1", stats.Failed)
+	}
+}
+
 // Failing to READ the work is different from failing to deliver it: nothing was attempted,
 // and the run must say so rather than reporting a quiet success.
 func TestAFailureToReadTheWorkFailsTheRun(t *testing.T) {

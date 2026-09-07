@@ -8,12 +8,15 @@ system originates about a user's activity — saved-job reminders, follow-up nud
 interview-prep nudges — and there SHALL be no per-notification-kind, per-stage, or
 per-job override of it.
 
-The rule SHALL NOT govern a transactional message about a commitment the user made
-themselves and which another person is holding time for: a mentorship booking
-confirmation, its cancellation, and its pre-session reminders. Those SHALL be
-delivered regardless of the rule. This is a boundary on what the rule covers, not an
-override inside it — a user who silenced nudges must still turn up to the session they
-booked, or the mentor's held time is wasted and the marketplace's core promise breaks.
+The rule SHALL NOT govern a transactional message about a mentorship session the user is
+A PARTY TO — its confirmation, its cancellation, and its pre-session reminders — and this
+SHALL apply to both the seeker and the mentor. Those SHALL be delivered regardless of the
+rule.
+
+The test is participation, not authorship: a mentor did not make the booking, the seeker
+did, and the mentor is the party holding an hour for it. This is a boundary on what the
+rule covers, not an override inside it — a user who silenced nudges must still turn up to
+the session, or somebody's held time is wasted and the marketplace's core promise breaks.
 
 #### Scenario: Enabling notifications turns on all three kinds
 

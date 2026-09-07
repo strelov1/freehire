@@ -112,6 +112,9 @@ type Repository interface {
 	// ClaimReminder records one reminder as sent and reports whether THIS caller won it.
 	// It is the claim, not the record — a caller that sends before checking sends twice.
 	ClaimReminder(ctx context.Context, bookingID uuid.UUID, offset time.Duration) (bool, error)
+	// ReleaseReminderClaim gives a claim back after a failed delivery, so the next run
+	// retries rather than skipping the reminder forever.
+	ReleaseReminderClaim(ctx context.Context, bookingID uuid.UUID, offset time.Duration) error
 }
 
 // BookingRow is what the service asks the repository to write. It is separate from

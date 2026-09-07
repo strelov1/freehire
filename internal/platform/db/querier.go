@@ -1429,6 +1429,12 @@ type Querier interface {
 	// repository maps to ErrOfferNotFound. Hard delete frees the UNIQUE (user_id,
 	// company_slug) so the member can offer again later (fresh proof, fresh moderation).
 	DeleteReferralOffer(ctx context.Context, arg DeleteReferralOfferParams) (int64, error)
+	// Give a claim back after a delivery that failed, so the next run retries instead of
+	// skipping the reminder forever. Holding it would mean a mail server down for one run
+	// loses that reminder permanently — and a missing "your session starts in an hour" costs
+	// somebody the session, while a duplicate costs them a duplicate.
+	// Deleting nothing is not an error: a concurrent run may already have succeeded.
+	DeleteReminderClaim(ctx context.Context, arg DeleteReminderClaimParams) (int64, error)
 	// Forget the providers that are no longer eligible — every board retired, or the adapter
 	// gone. This is the sweep gen-ingest-timers.sh promised in its header and never had: under
 	// it, a provider's timer survived forever and kept crawling nothing (careerspage ran empty

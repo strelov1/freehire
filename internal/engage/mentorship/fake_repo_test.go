@@ -28,6 +28,7 @@ type fakeRepo struct {
 	// claimAlwaysLost stands in for a concurrent run winning every claim.
 	claimAlwaysLost bool
 	listDueErr      error
+	releaseErr      error
 
 	// createErr forces CreateProfile to fail, standing in for a constraint violation the
 	// adapter has already translated into a domain error.
@@ -354,6 +355,15 @@ func (r *fakeRepo) ClaimReminder(_ context.Context, bookingID uuid.UUID, offset 
 	r.remindersSent[key] = true
 	r.claimed++
 	return true, nil
+}
+
+func (r *fakeRepo) ReleaseReminderClaim(_ context.Context, bookingID uuid.UUID, offset time.Duration) error {
+	if r.releaseErr != nil {
+		return r.releaseErr
+	}
+	delete(r.remindersSent, reminderKey{bookingID, offset})
+	r.claimed--
+	return nil
 }
 
 type reminderKey struct {

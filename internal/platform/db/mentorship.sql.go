@@ -387,6 +387,28 @@ func (q *Queries) DeleteMentorWeeklyAvailability(ctx context.Context, mentorID i
 	return result.RowsAffected(), nil
 }
 
+const deleteReminderClaim = `-- name: DeleteReminderClaim :execrows
+DELETE FROM mentor_booking_reminders WHERE booking_id = $1 AND offset_minutes = $2
+`
+
+type DeleteReminderClaimParams struct {
+	BookingID     pgtype.UUID `json:"booking_id"`
+	OffsetMinutes int32       `json:"offset_minutes"`
+}
+
+// Give a claim back after a delivery that failed, so the next run retries instead of
+// skipping the reminder forever. Holding it would mean a mail server down for one run
+// loses that reminder permanently — and a missing "your session starts in an hour" costs
+// somebody the session, while a duplicate costs them a duplicate.
+// Deleting nothing is not an error: a concurrent run may already have succeeded.
+func (q *Queries) DeleteReminderClaim(ctx context.Context, arg DeleteReminderClaimParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteReminderClaim, arg.BookingID, arg.OffsetMinutes)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const getMentorBooking = `-- name: GetMentorBooking :one
 SELECT b.id, b.mentor_id, b.seeker_user_id, b.starts_at, b.ends_at, b.status, b.job_id, b.note, b.seeker_timezone, b.meeting_url, b.cancelled_at, b.cancelled_by, b.cancel_reason, b.created_at, m.slug AS mentor_slug, m.user_id AS mentor_user_id,
        m.timezone AS mentor_timezone, m.company_slug, m.headline,

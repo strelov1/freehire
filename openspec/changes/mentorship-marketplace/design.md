@@ -13,7 +13,11 @@ Two nearby things exist and must not be confused with what this builds:
   the schema enforces it (`application_interviews.application_id NOT NULL`). Mentor
   busy-time cannot come from there. What is reusable is the Google grant
   (`gmailsync.CalendarScope`, read-only) and the Calendar HTTP client, in a later change.
-- `internal/application/ical` already renders `.ics`, and is reused as-is.
+- `internal/application/ical` PARSES `.ics` — `UID`, `unfold`, `splitProperty` — for the
+  calendar sync and the mail reader. It does not write one, and producing an iCalendar
+  object shares no code with consuming one, so the generator is new and lives in
+  `internal/engage/mentorship`. (An earlier draft of this document said it was reused;
+  that was wrong, and writing the code is what showed it.)
 
 `cal.com` was read (shallow clone at `/Users/i_strelov/Projects/cal.com`, read-only, never
 built or executed) as the reference implementation of scheduling. Its data model and
@@ -264,9 +268,14 @@ check, and it is not a gate.
 ## Migration Plan
 
 1. One migration file, number claimed immediately before the PR opens:
-   `CREATE EXTENSION IF NOT EXISTS btree_gist`; the five tables; the `EXCLUDE`
-   constraint; the `jobs` FK as `NOT VALID` followed by `VALIDATE CONSTRAINT`.
-   Deploy outside the 03:00 UTC dump window.
+   `CREATE EXTENSION IF NOT EXISTS btree_gist`; **six** tables — `mentors`,
+   `mentor_availability`, `mentor_bookings`, `mentor_busy_intervals`, `mentor_reviews`,
+   and `mentor_booking_reminders`, whose composite key IS the reminder worker's
+   idempotency; the `EXCLUDE` constraint; and the `jobs` foreign key as an ORDINARY
+   constraint in its own statement — **not** `NOT VALID`, for the reason the decision
+   above gives. Deploy outside the 03:00 UTC dump window.
+   Every column referencing `users` is indexed on this side, or `DELETE FROM users`
+   sequentially scans each of these tables once per constraint.
 2. `make sqlc` after the queries land; the pre-commit hook and CI both regenerate and
    diff, so a query edited without regenerating cannot ship.
 3. Add `internal/engage/mentorship` to `internal/platform/arch/layering/blocks.go`

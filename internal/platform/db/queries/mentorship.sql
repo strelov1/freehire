@@ -277,6 +277,14 @@ INSERT INTO mentor_booking_reminders (booking_id, offset_minutes)
 VALUES ($1, $2)
 ON CONFLICT DO NOTHING;
 
+-- name: DeleteReminderClaim :execrows
+-- Give a claim back after a delivery that failed, so the next run retries instead of
+-- skipping the reminder forever. Holding it would mean a mail server down for one run
+-- loses that reminder permanently — and a missing "your session starts in an hour" costs
+-- somebody the session, while a duplicate costs them a duplicate.
+-- Deleting nothing is not an error: a concurrent run may already have succeeded.
+DELETE FROM mentor_booking_reminders WHERE booking_id = $1 AND offset_minutes = $2;
+
 -- name: UpsertMentorReview :one
 -- One review per booking, editable. booking_id is the primary key, so a second submission
 -- is an update by construction rather than by a service check — which is also why the
