@@ -8,6 +8,7 @@
   //
   // A link the classifier did not recognise is neither shown nor lost: it rides along in
   // `other` and is written back untouched.
+  import type { CvParseState } from '$lib/onboardingResumeWait';
   import type { ProfileLinks } from '$lib/profileLinks';
 
   interface Props {
@@ -16,15 +17,27 @@
     /** True when at least one of the two arrived from the CV rather than being typed, which
      *  is the only reason to explain where the text came from. */
     prefilled: boolean;
+    /** Where the CV's background parse has got to. These two boxes are the only place in the
+     *  wizard where that parse is visible as an absence, so they are where it is explained:
+     *  an empty box under a CV still being read means something different from an empty box
+     *  under a CV we could not read, and both differ from a CV that simply listed no links. */
+    cvParse: CvParseState;
   }
 
-  let { value, onChange, prefilled }: Props = $props();
+  let { value, onChange, prefilled, cvParse }: Props = $props();
 </script>
 
 <div class="mb-2 flex min-h-6 items-center justify-between gap-2">
   <span class="text-sm font-medium">Profile links</span>
-  {#if prefilled}
+  <!-- One slot, and the states are ordered by what the candidate can act on. A link already
+       found needs no caveat about the parse it came from; a failed parse is worth saying even
+       once something has been found, because the rest of it is not coming. -->
+  {#if cvParse === 'failed'}
+    <span class="text-xs text-muted-foreground">Couldn't read your CV — add them here</span>
+  {:else if prefilled}
     <span class="text-xs text-muted-foreground">Found on your CV</span>
+  {:else if cvParse === 'waiting'}
+    <span class="text-xs text-muted-foreground">Still reading your CV…</span>
   {/if}
 </div>
 <div class="flex flex-col gap-2">
