@@ -103,6 +103,14 @@ type Repository interface {
 	ListBookingsByMentor(ctx context.Context, mentorID int64, limit int32) ([]Booking, error)
 
 	UpsertReview(ctx context.Context, review Review, seekerID int64) (Review, error)
+
+	// ListBookingsDueForReminder is the confirmed sessions starting within the offset that
+	// have not been reminded at it. Sessions already begun are excluded by the query: a
+	// reminder arriving after its session is worse than none.
+	ListBookingsDueForReminder(ctx context.Context, offset time.Duration, limit int32) ([]Booking, error)
+	// ClaimReminder records one reminder as sent and reports whether THIS caller won it.
+	// It is the claim, not the record — a caller that sends before checking sends twice.
+	ClaimReminder(ctx context.Context, bookingID uuid.UUID, offset time.Duration) (bool, error)
 }
 
 // BookingRow is what the service asks the repository to write. It is separate from

@@ -19,9 +19,15 @@ type fakeRepo struct {
 	approvedReferralOffers map[referralKey]bool
 	futureBookings         map[int64][]Booking
 
-	availability map[int64][]Rule
-	bookings     map[uuid.UUID]Booking
-	reviews      map[uuid.UUID]Review
+	availability  map[int64][]Rule
+	bookings      map[uuid.UUID]Booking
+	reviews       map[uuid.UUID]Review
+	remindersSent map[reminderKey]bool
+	claimed       int
+
+	// claimAlwaysLost stands in for a concurrent run winning every claim.
+	claimAlwaysLost bool
+	listDueErr      error
 
 	// createErr forces CreateProfile to fail, standing in for a constraint violation the
 	// adapter has already translated into a domain error.
@@ -48,6 +54,7 @@ func newFakeRepo() *fakeRepo {
 		availability:           map[int64][]Rule{},
 		bookings:               map[uuid.UUID]Booking{},
 		reviews:                map[uuid.UUID]Review{},
+		remindersSent:          map[reminderKey]bool{},
 	}
 }
 
@@ -323,6 +330,46 @@ func (r *fakeRepo) UpsertReview(_ context.Context, review Review, _ int64) (Revi
 	return review, nil
 }
 
+// ListBookingsDueForReminder mirrors the query's three predicates: confirmed, not yet
+// started, and within the offset. The "not already reminded" one is the claim's job.
+func (r *fakeRepo) ListBookingsDueForReminder(_ context.Context, offset time.Duration, _ int32) ([]Booking, error) {
+	if r.listDueErr != nil {
+		return nil, r.listDueErr
+	}
+	var out []Booking
+	for _, b := range r.bookings {
+		if b.Status != BookingConfirmed || !b.StartsAt.After(reminderNow) {
+			continue
+		}
+		if b.StartsAt.After(reminderNow.Add(offset)) {
+			continue
+		}
+		if r.remindersSent[reminderKey{b.ID, offset}] {
+			continue
+		}
+		out = append(out, b)
+	}
+	return out, nil
+}
+
+func (r *fakeRepo) ClaimReminder(_ context.Context, bookingID uuid.UUID, offset time.Duration) (bool, error) {
+	if r.claimAlwaysLost {
+		return false, nil
+	}
+	key := reminderKey{bookingID, offset}
+	if r.remindersSent[key] {
+		return false, nil
+	}
+	r.remindersSent[key] = true
+	r.claimed++
+	return true, nil
+}
+
+type reminderKey struct {
+	booking uuid.UUID
+	offset  time.Duration
+}
+
 func contains(haystack []string, needle string) bool {
 	for _, s := range haystack {
 		if s == needle {
@@ -338,6 +385,7 @@ type fakeNotifier struct {
 	confirmed   []Booking
 	cancelled   []Booking
 	cancelledBy []CancelledBy
+	reminders   []time.Duration
 }
 
 func (n *fakeNotifier) BookingCancelled(_ context.Context, b Booking, by CancelledBy, _ string) error {
@@ -351,6 +399,10 @@ func (n *fakeNotifier) BookingConfirmed(_ context.Context, b Booking) error {
 	return n.err
 }
 
-func (n *fakeNotifier) BookingReminder(_ context.Context, _ Booking, _ time.Duration) error {
-	return n.err
+func (n *fakeNotifier) BookingReminder(_ context.Context, _ Booking, before time.Duration) error {
+	if n.err != nil {
+		return n.err
+	}
+	n.reminders = append(n.reminders, before)
+	return nil
 }

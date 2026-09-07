@@ -1,0 +1,24 @@
+[Unit]
+Description=timer: freehire-mentorship-remind every 10 minutes
+[Timer]
+# Ten minutes is the reminder's worst-case lateness, and that is what the interval has to
+# be chosen against rather than "often enough". The 1-hour reminder is the tight one: fired
+# up to ten minutes late it still arrives with fifty minutes' notice, which is the point of
+# it. Anything much wider starts eating into that; anything much tighter spends runs on a
+# window that has not moved.
+#
+# Stacking is not a hazard here — Type=oneshot will not start a second instance while the
+# first is active — and neither is a run overlapping the next window: the claim is a
+# composite primary key, so a reminder cannot go out twice however the runs interleave.
+OnBootSec=5min
+OnUnitActiveSec=10min
+# Persistent=false, unlike billing-sync and discord-sync, and deliberately.
+#
+# Those two reconcile STATE, so replaying a missed window can only correct it. This sends
+# MESSAGES about a moment that has passed. A host down for two hours would, on boot, fire
+# reminders for sessions that have already started — which is the one outcome this worker's
+# query goes out of its way to prevent. Missing a reminder is a smaller failure than
+# sending one late.
+Persistent=false
+[Install]
+WantedBy=timers.target

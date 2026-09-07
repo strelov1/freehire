@@ -138,13 +138,23 @@ unit tests plus the function they drive; none of it needs Docker or Postgres.
 
 ## 6. Reminder worker
 
-- [ ] 6.1 `cmd/mentorship-remind`: run-once-and-exit, needs `DATABASE_URL`, a clean
-      no-op without a mail transport, non-zero exit on failure
-- [ ] 6.2 Send 24h and 1h reminders idempotently per `(booking, offset)`; tests cover a
+- [x] 6.1 `cmd/mentorship-remind`: run-once-and-exit, needs `DATABASE_URL`, a clean
+      no-op without a mail transport, non-zero exit on failure. The no-op must not open
+      the pool at all — claiming a reminder it could not deliver would mark it sent
+      forever
+- [x] 6.2 Send 24h and 1h reminders idempotently per `(booking, offset)`; tests cover a
       re-run sending nothing twice, a cancellation stopping a pending reminder, and a
-      missed window not firing late
-- [ ] 6.3 Write the systemd unit and timer into `deploy/`, and note in the change that
-      it must be copied to the host by hand — `release.sh` never touches a unit
+      missed window not firing late. The CLAIM happens before the send: a worker that
+      sends first and records afterwards sends twice whenever the second step fails
+- [x] 6.3 Write the systemd unit and timer into `deploy/`. Two host facts they carry:
+      the unit reads `/opt/freehire/.env.notify` as well as `.env`, because the mail
+      credentials live only there and a worker missing them soft-skips silently forever;
+      and the timer is `Persistent=false`, unlike the reconciling workers, because a
+      replayed window would fire reminders for sessions that have already started
+- [ ] 6.4 On deploy: build the binary on the host (`release.sh` builds the API, not every
+      command in `cmd/`) and copy the unit and timer across by hand — `release.sh` never
+      touches a unit. Until both are done the feature works and reminders simply never
+      fire
 
 ## 7. HTTP layer
 

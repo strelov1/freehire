@@ -249,6 +249,49 @@ func (r *QueriesRepository) UpsertReview(ctx context.Context, review Review, see
 	}, nil
 }
 
+// ListBookingsDueForReminder is the reminder worker's page. The query carries the three
+// predicates that matter — confirmed, not yet started, not already reminded at this offset
+// — so nothing here re-derives them.
+func (r *QueriesRepository) ListBookingsDueForReminder(ctx context.Context, offset time.Duration, limit int32) ([]Booking, error) {
+	rows, err := r.q.ListBookingsDueForReminder(ctx, db.ListBookingsDueForReminderParams{
+		OffsetMinutes: int32(offset / time.Minute),
+		RowLimit:      limit,
+	})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]Booking, 0, len(rows))
+	for _, row := range rows {
+		booking := bookingFromRow(row.MentorBooking)
+		booking.MentorUserID = row.MentorUserID
+		booking.MentorSlug = row.MentorSlug
+		booking.MentorTimezone = row.MentorTimezone
+		booking.MentorHeadline = row.Headline
+		booking.MentorEmail = row.MentorEmail
+		booking.SeekerEmail = row.SeekerEmail
+		// The mentor's CURRENT link, not the booking's snapshot. A reminder is read minutes
+		// before the session, so a corrected link is the useful one — the opposite trade
+		// from the invitation, which must not be rewritten after somebody has filed it.
+		booking.MeetingURL = row.MentorMeetingUrl
+		out = append(out, booking)
+	}
+	return out, nil
+}
+
+// ClaimReminder records one reminder as sent and reports whether THIS caller won it. The
+// insert is ON CONFLICT DO NOTHING against a composite primary key, so two concurrent runs
+// cannot both come back true — which is the entire idempotency guarantee.
+func (r *QueriesRepository) ClaimReminder(ctx context.Context, bookingID uuid.UUID, offset time.Duration) (bool, error) {
+	rows, err := r.q.RecordReminderSent(ctx, db.RecordReminderSentParams{
+		BookingID:     pgtype.UUID{Bytes: bookingID, Valid: true},
+		OffsetMinutes: int32(offset / time.Minute),
+	})
+	if err != nil {
+		return false, err
+	}
+	return rows == 1, nil
+}
+
 // availabilityParams turns a domain rule into the row's two shapes: a weekly rule sets
 // weekday and leaves on_date NULL, a dated one the reverse. The CHECK rejects anything
 // else, and the domain type cannot build it.
