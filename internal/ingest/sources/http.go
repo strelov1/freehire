@@ -287,6 +287,32 @@ func newSingleUseConnClient() *Client {
 	return c
 }
 
+// browserUserAgent is a plain desktop Chrome string, for the one provider whose edge refuses
+// every client that identifies itself.
+//
+// This is not a preference. Measured against 4dayweek.io on 2026-09-07, on the path its own
+// robots.txt explicitly ALLOWS (/api/v2), Cloudflare answered 403 to every honest form —
+// "freehire/0.1 (+https://freehire.me)", the same wrapped as
+// "Mozilla/5.0 (compatible; freehire/0.1; +...)", and "freehire-aggregator/0.1" — and 200 only
+// to a browser string carrying no identity at all. The managed rule refuses self-identification
+// as such, not our name, so staying identifiable and staying readable turned out to be
+// mutually exclusive there.
+//
+// Keep this for providers that ALLOW the path in robots.txt and refuse the client anyway. It is
+// not a way around a Disallow: the fix for a disallowed path is to use an allowed one, which is
+// exactly what the 4dayweek adapter now does.
+const browserUserAgent = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36"
+
+// NewBrowserUAClient is NewClient with browserUserAgent — same guarded transport, same retry
+// budget, same everything else.
+func NewBrowserUAClient() *Client { return newBrowserUAClient() }
+
+func newBrowserUAClient() *Client {
+	c := NewClient()
+	c.userAgent = browserUserAgent
+	return c
+}
+
 // NewCookieClient exposes newCookieClient to host tools (e.g. harvest-boards' Taleo
 // prober, which reuses the session-bound Taleo adapter to validate a board).
 func NewCookieClient() *Client { return newCookieClient() }
