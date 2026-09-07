@@ -11,7 +11,11 @@ ON CONFLICT (job_id) DO NOTHING;
 
 -- name: ClaimRecentFeedOutboxBatch :many
 -- Claim-and-delete a bounded batch, oldest first, joined to jobs for the fields the
--- feed displays. Unlike search_outbox/enrichment_outbox there is no lease: a claimed
+-- feed displays. company_slug rides along beside company: recentfeed.Group buckets a
+-- same-company burst by the slug (the canonical company key — see AGENTS.md, "Company
+-- key: normalize.CompanySlug") so two spellings of one employer's name still collapse,
+-- while company (the display name) is what a card actually renders. Unlike
+-- search_outbox/enrichment_outbox there is no lease: a claimed
 -- row is deleted outright in the same statement, because a cosmetic feed has nothing
 -- to retry and nothing to reconcile if the connection holding it dies mid-drain — the
 -- row is simply gone either way, and the next poll tick picks up whatever else queued.
@@ -30,6 +34,6 @@ WITH claimed AS (
     )
     RETURNING job_id
 )
-SELECT j.id AS job_id, j.title, j.company, j.public_slug
+SELECT j.id AS job_id, j.title, j.company, j.company_slug, j.public_slug
 FROM claimed c
 JOIN jobs j ON j.id = c.job_id;

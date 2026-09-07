@@ -23,19 +23,23 @@
   let entries = $state<RecentFeedEntry[]>([]);
   let nextId = 0;
 
-  // Ticks once a second so the "N ago" label on each card advances live
-  // instead of freezing at whatever it read on arrival. `tick` itself is
-  // never read for its value — only its change — which is what makes every
-  // ago() call in the template below re-run on each tick.
-  let tick = $state(0);
+  // A millisecond clock, ticked once a second so the "N ago" label on each
+  // card advances live instead of freezing at whatever it read on arrival.
+  // Reading `now` from ago() below — called from the template — is what
+  // makes that call re-run on every tick; no separate signal needed.
+  let now = $state(Date.now());
   $effect(() => {
-    const interval = setInterval(() => (tick += 1), 1000);
+    const interval = setInterval(() => (now = Date.now()), 1000);
     return () => clearInterval(interval);
   });
 
   function ago(entry: RecentFeedEntry): string {
-    void tick;
-    return timeAgo(entry.produced_at, 'short');
+    const producedMs = Date.parse(entry.produced_at);
+    if (Number.isNaN(producedMs)) return '';
+    // Clamp a produced_at that reads as being in the client's future (clock
+    // skew between this browser and the server) to `now`, so the newest card
+    // never renders as "in 2 seconds" instead of "just now".
+    return timeAgo(new Date(Math.min(producedMs, now)).toISOString());
   }
 
   function headline(entry: RecentFeedEntry): string {

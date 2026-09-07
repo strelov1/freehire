@@ -13,6 +13,11 @@ const AggregationThreshold = 5
 type Posting struct {
 	Title       string
 	CompanyName string
+	// CompanySlug is the canonical company identity Group's company-aggregation
+	// pass keys on — never CompanyName, which is free text and varies in
+	// spelling/punctuation for one employer (see AGENTS.md, "Company key:
+	// normalize.CompanySlug", and docs/agents/company-identity.md).
+	CompanySlug string
 	JobSlug     string
 }
 
@@ -23,10 +28,11 @@ type Posting struct {
 //     AggregationThreshold — the same role posted by several different
 //     companies — collapses into one KindAggregate entry naming a
 //     representative posting. Everything else is left over for pass 2.
-//  2. Bucket what's left by CompanyName. A bucket at or above
-//     AggregationThreshold — one company posting several different roles at
-//     once, a mass hiring push — collapses into one KindCompanyAggregate
-//     entry. Everything still left over becomes a KindSingle entry.
+//  2. Bucket what's left by CompanySlug (never CompanyName — see Posting).
+//     A bucket at or above AggregationThreshold — one company posting several
+//     different roles at once, a mass hiring push — collapses into one
+//     KindCompanyAggregate entry. Everything still left over becomes a
+//     KindSingle entry.
 //
 // Buckets in each pass are emitted in first-seen order. Because pass 2 only
 // ever sees postings pass 1 did not already aggregate, the result partitions
@@ -41,7 +47,7 @@ func Group(postings []Posting) []Entry {
 		return jobhash.NormalizedRoleTitle(p.Title)
 	})
 	companyAggregates, leftover := aggregateBy(leftover, KindCompanyAggregate, func(p Posting) string {
-		return p.CompanyName
+		return p.CompanySlug
 	})
 
 	entries := make([]Entry, 0, len(postings))

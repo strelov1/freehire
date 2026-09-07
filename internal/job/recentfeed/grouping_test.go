@@ -115,6 +115,7 @@ func TestGroup_CompanyBurstOfDifferentRolesAggregates(t *testing.T) {
 		postings[i] = Posting{
 			Title:       fmt.Sprintf("Role %d", i),
 			CompanyName: "Amyx, Inc.",
+			CompanySlug: "amyx",
 			JobSlug:     fmt.Sprintf("slug-%d", i),
 		}
 	}
@@ -140,6 +141,7 @@ func TestGroup_BelowThresholdCompanyBurstStaysIndividual(t *testing.T) {
 		postings[i] = Posting{
 			Title:       fmt.Sprintf("Role %d", i),
 			CompanyName: "Amyx, Inc.",
+			CompanySlug: "amyx",
 			JobSlug:     fmt.Sprintf("slug-%d", i),
 		}
 	}
@@ -151,6 +153,34 @@ func TestGroup_BelowThresholdCompanyBurstStaysIndividual(t *testing.T) {
 		if e.Kind != KindSingle {
 			t.Errorf("Kind = %q, want %q for a below-threshold company burst", e.Kind, KindSingle)
 		}
+	}
+}
+
+// The company key is CompanySlug, not the free-text CompanyName — two spellings
+// of one employer ("Acme, Inc." vs "Acme Inc", the exact reason
+// company_slug/company_slug_aliases exist — see docs/agents/company-identity.md)
+// must still collapse into one card, and a genuinely different company sharing
+// no slug must never merge with it just because of a coincidental name.
+func TestGroup_CompanyBurstCollapsesDespiteNameSpellingVariants(t *testing.T) {
+	postings := make([]Posting, AggregationThreshold)
+	for i := range postings {
+		name := "Acme, Inc."
+		if i%2 == 0 {
+			name = "Acme Inc"
+		}
+		postings[i] = Posting{
+			Title:       fmt.Sprintf("Role %d", i),
+			CompanyName: name,
+			CompanySlug: "acme",
+			JobSlug:     fmt.Sprintf("slug-%d", i),
+		}
+	}
+	entries := Group(postings)
+	if len(entries) != 1 {
+		t.Fatalf("got %d entries, want 1 (same company_slug must collapse despite differing display names): %+v", len(entries), entries)
+	}
+	if entries[0].Kind != KindCompanyAggregate {
+		t.Errorf("Kind = %q, want %q", entries[0].Kind, KindCompanyAggregate)
 	}
 }
 
