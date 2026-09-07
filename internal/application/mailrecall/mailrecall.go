@@ -400,14 +400,16 @@ func userPrompt(app Application, messages []Message) string {
 		// bounded from the start; the headers were the half nobody capped.
 		fmt.Fprintf(&b, "\n%s %d\nFrom: %s <%s>\nDate: %s\nSubject: %s\n\n%s\n",
 			delimiter, i+1,
-			llm.TruncateRunes(m.FromName, maxHeaderRunes),
-			llm.TruncateRunes(m.FromAddr, maxHeaderRunes),
+			boundedHeader(m.FromName), boundedHeader(m.FromAddr),
 			m.ReceivedAt.Format(time.DateOnly),
-			llm.TruncateRunes(m.Subject, maxHeaderRunes),
-			body(m))
+			boundedHeader(m.Subject), body(m))
 	}
 	return b.String()
 }
+
+// boundedHeader caps one header field. See maxHeaderRunes for why the headers need it as
+// much as the body does.
+func boundedHeader(s string) string { return llm.TruncateRunes(s, maxHeaderRunes) }
 
 // body renders one message for the prompt: the readable part, bounded, with any line
 // forging the batch delimiter neutralised.
