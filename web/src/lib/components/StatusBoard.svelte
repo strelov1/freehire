@@ -4,7 +4,7 @@
   // other surface uses: a provider must not be "WhatJobs" on the filter panel and
   // "Whatjobs" here.
   import { sourceLabel } from '$lib/facets';
-  import { Tabs } from '$lib/ui';
+  import { TabStrip, tabStripId } from '$lib/ui';
   import type { HealthStatus, IngestStatus, ProviderKind } from '$lib/types';
 
   // The presentational half of the /status page: given the status read (or null
@@ -92,10 +92,14 @@
   // The site/API and the ingest fleet are different concerns (see SITE_HEADLINE's
   // comment above) — tabs keep them from competing for the same screen instead of
   // stacking sections a visitor has to scroll past to reach the one they want.
+  // TabStrip (the underline style every /my/* section nav already uses), not the
+  // pill/segmented Tabs primitive — this page reads as part of the same product,
+  // not a different widget kit bolted on.
   const SECTION_TABS = [
-    { value: 'site', label: 'Site status' },
-    { value: 'fleet', label: 'Ingest fleet' },
-  ];
+    { id: 'site', label: 'Site status' },
+    { id: 'fleet', label: 'Ingest fleet' },
+  ] as const;
+  const SECTION_PANEL_ID = 'status-section-panel';
   let activeSection = $state<'site' | 'fleet'>('site');
 
   // Worst-first, then alphabetical — problem providers surface at the top.
@@ -134,14 +138,27 @@
     Status is unavailable right now. Try again in a moment.
   </div>
 {:else}
-  <Tabs tabs={SECTION_TABS} bind:value={activeSection}>
+  <TabStrip
+    tabs={SECTION_TABS}
+    active={activeSection}
+    onSelect={(id) => (activeSection = id)}
+    label="Status sections"
+    panelId={SECTION_PANEL_ID}
+  />
+
+  <div
+    id={SECTION_PANEL_ID}
+    role="tabpanel"
+    aria-labelledby={tabStripId(SECTION_PANEL_ID, activeSection)}
+    class="mt-6"
+  >
     {#if activeSection === 'site'}
       {#if site}
         <!-- Site status: is freehire.me itself working, independent of the ingest fleet tab. -->
-        <div class="flex items-center gap-4 rounded-xl border p-5 sm:p-6 {STATUS_META[site.status].pill}">
-          <span class="inline-flex h-3 w-3 shrink-0 rounded-full {STATUS_META[site.status].dot}"></span>
+        <div class="flex items-center gap-3 rounded-lg border p-4 {STATUS_META[site.status].pill}">
+          <span class="inline-flex h-2.5 w-2.5 shrink-0 rounded-full {STATUS_META[site.status].dot}"></span>
           <div>
-            <div class="text-lg font-semibold tracking-tight">{SITE_HEADLINE[site.status]}</div>
+            <div class="text-base font-semibold tracking-tight">{SITE_HEADLINE[site.status]}</div>
             <div class="text-sm opacity-80">
               Database {site.database} · {nfPercent.format(site.error_rate)} error rate over the last {site.window_minutes} min
             </div>
@@ -174,10 +191,10 @@
       {/if}
     {:else}
       <!-- Overall banner -->
-      <div class="flex items-center gap-4 rounded-xl border p-5 sm:p-6 {STATUS_META[overall].pill}">
-        <span class="inline-flex h-3 w-3 shrink-0 rounded-full {STATUS_META[overall].dot}"></span>
+      <div class="flex items-center gap-3 rounded-lg border p-4 {STATUS_META[overall].pill}">
+        <span class="inline-flex h-2.5 w-2.5 shrink-0 rounded-full {STATUS_META[overall].dot}"></span>
         <div>
-          <div class="text-lg font-semibold tracking-tight">{OVERALL_HEADLINE[overall]}</div>
+          <div class="text-base font-semibold tracking-tight">{OVERALL_HEADLINE[overall]}</div>
           <div class="text-sm opacity-80">
             {providers.length} provider{providers.length === 1 ? '' : 's'} monitored
           </div>
@@ -279,5 +296,5 @@
         {/if}
       </section>
     {/if}
-  </Tabs>
+  </div>
 {/if}
