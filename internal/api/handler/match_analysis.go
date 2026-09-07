@@ -321,7 +321,7 @@ func (h *matchHandlers) buildAnalysisInput(c *fiber.Ctx, job db.Job, userID int6
 // Binding is a network call, so a streaming caller makes it before its headers go out —
 // afterwards it would stall a stream the client is already reading.
 func (h *matchHandlers) boundAnalyzer(ctx context.Context, userID int64) *matchanalysis.Analyzer {
-	return h.matchAnalysis.As(h.llm.bind(ctx, userID, llm.Feature(tagMatchAnalysis)))
+	return h.matchAnalysis.As(h.llm.caller(ctx, userID, llm.Feature(tagMatchAnalysis)))
 }
 
 // autopilotAnalysis is one autopilot run's fit analysis: the cold-start fill the run's first

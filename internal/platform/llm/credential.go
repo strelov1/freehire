@@ -53,6 +53,43 @@ func stamp(req *http.Request, dims []Dimension) {
 // carries; see the constants in internal/api/handler/user_llm.go.
 func Feature(value string) Dimension { return Dimension{Name: "feature", Value: value} }
 
+// Caller is WHO a call spends as: a gateway credential, the callback that clears it when
+// the gateway says it no longer knows it, and the dimensions the spend is filed under.
+//
+// It exists because the shape it replaces invited one specific mistake, and prod paid for
+// it. Attribution used to travel as a whole *Client, so a component holding a client
+// configured for its OWN work had that client replaced wholesale by one built for
+// attribution alone — and every setting the entrypoint had chosen went with it, the
+// timeout above all. The structured-résumé extraction declared a 120s budget
+// (resumeExtractLLMTimeout) and ran every signed-in user's call on the 90s default,
+// which is long enough to fail on a long CV and leave the candidate with no banked
+// experience, no fit analysis, and no explanation for either.
+//
+// A Caller carries who, never how. There is no client inside it to substitute, so a call
+// site cannot make that trade again — not by mistake and not on purpose.
+type Caller struct {
+	secret    string
+	onRefused func()
+	dims      []Dimension
+}
+
+// NewCaller names who a call spends as. The zero Caller is the service's own credential
+// with no dimensions, which is what an unconfigured deployment and a background job both
+// want — see AsCaller, which returns the receiver untouched for it.
+func NewCaller(secret string, onRefused func(), dims ...Dimension) Caller {
+	return Caller{secret: secret, onRefused: onRefused, dims: dims}
+}
+
+// AsCaller returns this client spending as `caller` and keeping everything else it was
+// built with — the timeout most of all.
+//
+// This is how a component that already holds a correctly configured client takes on a
+// caller's identity. Handing it somebody else's client instead is the mistake Caller's own
+// comment records; there is no longer a signature that accepts one.
+func (c *Client) AsCaller(caller Caller) *Client {
+	return c.As(caller.secret, caller.onRefused, caller.dims...)
+}
+
 // As returns a client that spends under a given credential and labels its calls.
 //
 // An empty secret keeps the client's own credential — attribution fails open, and a call

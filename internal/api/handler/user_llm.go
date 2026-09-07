@@ -37,6 +37,16 @@ type llmBinding struct {
 }
 
 // bind returns the client one call should travel on. See llmkey.Bind: it cannot fail.
+//
+// Only for a caller building something out of this client. A component that ALREADY holds a
+// client — an extractor, an analyzer, a recall service — takes `caller` below instead, so its
+// own configuration survives being attributed to a person. See llm.Caller.
 func (b llmBinding) bind(ctx context.Context, userID int64, dims ...llm.Dimension) *llm.Client {
 	return llmkey.Bind(ctx, b.keys, b.client, userID, dims...)
+}
+
+// caller returns who one call spends as, for a component to apply to its own client. See
+// llmkey.Caller: like bind, it cannot fail.
+func (b llmBinding) caller(ctx context.Context, userID int64, dims ...llm.Dimension) llm.Caller {
+	return llmkey.Caller(ctx, b.keys, userID, dims...)
 }

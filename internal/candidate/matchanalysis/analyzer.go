@@ -36,15 +36,20 @@ type Analyzer struct {
 
 // NewAnalyzer wraps an llm.Client; client may be nil (LLM unconfigured), in which case the
 // analysis degrades to a no-op.
-// As returns an analyzer that runs on a different client, so one analysis can be spent
-// under the caller's own gateway credential. The analyzer is one field, so cloning it per
-// request costs nothing beside the model calls it is about to make. Nil-safe both ways.
-func (a *Analyzer) As(client *llm.Client) *Analyzer {
-	if a == nil || client == nil {
+// As returns an analyzer spending as `caller`, so one analysis is billed to the candidate's
+// own gateway credential. The analyzer is one field, so cloning it per request costs nothing
+// beside the model calls it is about to make. Nil-safe.
+//
+// It takes a caller and not a client so the chain keeps the per-stage timeout it was built
+// with (matchAnalysisLLMTimeout). That figure happens to equal the client default today, so
+// the shape this replaces cost nothing here — it cost the résumé extraction beside it, and
+// would have cost this one the day somebody changed the number. See llm.Caller.
+func (a *Analyzer) As(caller llm.Caller) *Analyzer {
+	if a == nil {
 		return a
 	}
 	clone := *a
-	clone.client = client
+	clone.client = a.client.AsCaller(caller)
 
 	return &clone
 }
@@ -465,6 +470,22 @@ const maxStructuredRunes = 3000
 // does not name never reaches the prompt, including one that does not exist yet. Deleting known
 // contact keys would have sent every future addition to the model until somebody remembered to
 // extend the list.
+// HasCandidateContext reports whether there is enough banked work history for the chain to
+// reason over. False means AnalyzeStream will decline and produce nothing.
+//
+// Exported so a caller can tell the two reasons an analysis came back empty apart, and say
+// which one it was. They are the same silence and completely different situations: a
+// deployment with no gateway is nothing the candidate did, while an unreadable CV is
+// something only they can fix — and until this existed both rendered as "analysis
+// unavailable", which sent a candidate whose CV had failed to parse looking for a fault on
+// our side of a screen that said their CV was present.
+//
+// One predicate, one owner: whether the chain can run is this package's rule, and a caller
+// re-deriving it from the same field would be a second copy free to drift.
+func HasCandidateContext(candidate resumeextract.Professional) bool {
+	return candidateContext(candidate) != ""
+}
+
 func candidateContext(candidate resumeextract.Professional) string {
 	if len(candidate.Experience) == 0 {
 		return ""

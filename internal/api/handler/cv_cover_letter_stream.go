@@ -60,7 +60,7 @@ func (h *cvHandlers) StreamCVCoverLetter(c *fiber.Ctx) error {
 	// carries the write deadline sseStream needs; the hub is cloned because the writer
 	// outlives the request that owns its scope.
 	band := coverLetterBand(c)
-	client := h.llm.bind(c.Context(), userID, llm.Feature(tagCoverLetter))
+	caller := h.llm.caller(c.Context(), userID, llm.Feature(tagCoverLetter))
 	conn := c.Context().Conn()
 	var hub *sentry.Hub
 	if reqHub := sentryfiber.GetHubFromContext(c); reqHub != nil {
@@ -104,7 +104,7 @@ func (h *cvHandlers) StreamCVCoverLetter(c *fiber.Ctx) error {
 		// The chain's own first emit opens a stage before it makes any network call, so it IS
 		// the early first byte this endpoint exists for — nothing needs to be written ahead of
 		// it, and writing one would send `select` twice.
-		letter, err := drafter.draftStream(ctx, client, userID, jobID, band, func(stage string, done bool) {
+		letter, err := drafter.draftStream(ctx, caller, userID, jobID, band, func(stage string, done bool) {
 			stream.event("stage", letterStageEvent{Stage: stage, Done: done})
 		})
 		if err == nil && letter != nil {
@@ -113,7 +113,7 @@ func (h *cvHandlers) StreamCVCoverLetter(c *fiber.Ctx) error {
 				Present: true,
 				Letter:  letter,
 				Cited:   citedAtomsOf(ctx, drafter.bank, userID, letter.Cited),
-				Model:   modelIDOf(client),
+				Model:   h.letter.chain.ModelID(),
 			})
 			return
 		}

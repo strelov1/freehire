@@ -65,16 +65,16 @@ func (d letterDrafter) ready() bool {
 // caller reads as "release whatever was charged and say so". Every other failure comes back
 // as an error, so a caller can never overwrite a stored letter with an empty one.
 func (d letterDrafter) draft(
-	ctx context.Context, client *llm.Client, userID, jobID int64, band coverletter.Band,
+	ctx context.Context, caller llm.Caller, userID, jobID int64, band coverletter.Band,
 ) (*coverletter.Letter, error) {
-	return d.draftStream(ctx, client, userID, jobID, band, func(string, bool) {})
+	return d.draftStream(ctx, caller, userID, jobID, band, func(string, bool) {})
 }
 
 // draftStream is draft with progress. The streaming endpoint needs it because the chain takes
 // minutes and a silent response is one a proxy closes at sixty seconds; every other caller
 // takes the no-op above.
 func (d letterDrafter) draftStream(
-	ctx context.Context, client *llm.Client, userID, jobID int64, band coverletter.Band, emit coverletter.Emit,
+	ctx context.Context, caller llm.Caller, userID, jobID int64, band coverletter.Band, emit coverletter.Emit,
 ) (*coverletter.Letter, error) {
 	job, err := d.jobs.GetJob(ctx, jobID)
 	if err != nil {
@@ -108,7 +108,12 @@ func (d letterDrafter) draftStream(
 
 	// The atoms go in UNFILTERED: the provenance gate lives inside Draft so that no caller can
 	// apply a weaker one, or forget to apply it at all.
-	letter, err := d.chain.As(client).DraftStream(ctx, coverletter.Input{
+	// Bound once, and the same bound chain both writes the letter and names the model it was
+	// written with. Reading the id off a separately bound client is what let the stamp and the
+	// writer drift apart in principle — they were the same model only because both happened to
+	// come from the same configuration.
+	chain := d.chain.As(caller)
+	letter, err := chain.DraftStream(ctx, coverletter.Input{
 		Context:         tailoring,
 		Candidate:       candidate,
 		Atoms:           atoms,
@@ -118,7 +123,7 @@ func (d letterDrafter) draftStream(
 	if err != nil || letter == nil {
 		return nil, err
 	}
-	if err := d.letters.Save(ctx, userID, jobID, *letter, modelIDOf(client)); err != nil {
+	if err := d.letters.Save(ctx, userID, jobID, *letter, chain.ModelID()); err != nil {
 		return nil, err
 	}
 	return letter, nil
@@ -241,14 +246,4 @@ func citedAtomsOf(ctx context.Context, bank letterBankPort, userID int64, ids []
 		out = append(out, citedAtom{ID: id.String(), Claim: claims[id]})
 	}
 	return out
-}
-
-// modelIDOf names the model a draft is stamped with. Empty on a deployment with no gateway,
-// which Stored.Stale then reads as "matches" — a letter cannot be stale against a model that
-// does not exist.
-func modelIDOf(client *llm.Client) string {
-	if client == nil {
-		return ""
-	}
-	return client.ModelID()
 }

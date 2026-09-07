@@ -55,14 +55,28 @@ type Analyzer struct {
 
 func NewAnalyzer(client *llm.Client) *Analyzer { return &Analyzer{client: client} }
 
-// As returns an analyzer running on a different client, so one draft can be spent under the
-// caller's own gateway credential. Nil-safe both ways, mirroring atscheck.Analyzer.As.
-func (a *Analyzer) As(client *llm.Client) *Analyzer {
-	if a == nil || client == nil {
+// ModelID returns the underlying model id, so a caller can stamp a stored draft with the
+// model that wrote it and later ask whether that is still the model it would get. Empty on a
+// nil analyzer or an unconfigured client, which reads as "no model" at both ends. Mirrors
+// resumeextract.Extractor.ModelID.
+func (a *Analyzer) ModelID() string {
+	if a == nil {
+		return ""
+	}
+	return a.client.ModelID()
+}
+
+// As returns an analyzer spending as `caller`, so one draft is billed to the candidate's own
+// gateway credential. Nil-safe, mirroring atscheck.Analyzer.As.
+//
+// It takes a caller and not a client so this analyzer keeps whatever it was built with; see
+// llm.Caller for what the shape it replaces cost.
+func (a *Analyzer) As(caller llm.Caller) *Analyzer {
+	if a == nil {
 		return a
 	}
 	clone := *a
-	clone.client = client
+	clone.client = a.client.AsCaller(caller)
 	return &clone
 }
 

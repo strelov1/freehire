@@ -183,7 +183,24 @@ func (h *matchHandlers) StreamMatchAnalysis(c *fiber.Ctx) error {
 			return
 		}
 		if analysis == nil {
-			stream.event("stream_error", map[string]string{"message": "analysis unavailable"})
+			// Two situations produce the same silence, and only one of them is the
+			// candidate's to act on. A deployment with no gateway owes them nothing but an
+			// apology; a CV whose background parse failed leaves no banked experience for
+			// the chain to reason over, and only they can fix that by uploading it again.
+			//
+			// Saying "analysis unavailable" for both is what this replaces. The stream had
+			// already told them has_cv=true — their file IS stored — so the message read as a
+			// fault on our side of a screen that said everything was fine, and there was
+			// nothing in the log either: this branch was the one path here that recorded
+			// nothing at all.
+			msg := "analysis unavailable"
+			reason := "no analysis produced"
+			if !matchanalysis.HasCandidateContext(req.Input.StructuredResume) {
+				msg = "We couldn't read your CV, so there's nothing to compare this job against. Try uploading it again."
+				reason = "no banked experience — the CV's background parse produced none"
+			}
+			log.Printf("matchanalysis: stream EMPTY user=%d job=%d dur=%s events=%d: %s", userID, job.ID, time.Since(start).Round(time.Millisecond), events, reason)
+			stream.event("stream_error", map[string]string{"message": msg})
 			return
 		}
 		log.Printf("matchanalysis: stream DONE user=%d job=%d dur=%s events=%d overall=%d", userID, job.ID, time.Since(start).Round(time.Millisecond), events, analysis.OverallScore)

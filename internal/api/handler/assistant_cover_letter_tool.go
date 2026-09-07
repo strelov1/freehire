@@ -62,8 +62,8 @@ func (h *assistantHandlers) coverLetterDraftTool(jobID int64) assistant.Tool {
 				return nil, errors.New("the candidate has used today's cover-letter allowance; " +
 					"tell them it resets tomorrow, or that Pro lifts the limit")
 			}
-			client := llmkey.Bind(ctx, h.keys, h.llm, userID, llm.Feature(tagCoverLetter))
-			letter, err := drafter.draft(ctx, client, userID, jobID, toolBand(in.Band))
+			caller := llmkey.Caller(ctx, h.keys, userID, llm.Feature(tagCoverLetter))
+			letter, err := drafter.draft(ctx, caller, userID, jobID, toolBand(in.Band))
 			if err != nil || letter == nil {
 				// Every failing path gives the charge back, so it is given back once here.
 				releaseLetterCharge(h.plans, userID, charge)
