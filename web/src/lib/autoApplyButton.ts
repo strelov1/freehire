@@ -49,10 +49,7 @@ export function autoApplyButtonState(
 }
 
 /** What the job page's two call-to-action buttons look like, given the auto-apply state.
- *  Never two loud buttons at once, and one wherever the reader still has something to do.
- *  Carries no Pro marker: `autoApplyButtonState` already gates the whole button on Pro, so
- *  by the time any of these states renders at all the requirement is already met — a badge
- *  naming it here would state a fact about nothing left to decide. */
+ *  Never two loud buttons at once, and one wherever the reader still has something to do. */
 export type JobCtaPlan = {
   /** `null` where auto-apply cannot drive the posting's ATS, or the caller is not Pro: no
    *  button is rendered either way — see autoApplyButtonState's own `hidden` doc comment. */
@@ -60,6 +57,8 @@ export type JobCtaPlan = {
     label: string;
     /** Carries the brand fill — the page's primary call to action. */
     primary: boolean;
+    /** Renders the `Pro` marker naming the plan the action requires. */
+    pro: boolean;
     disabled: boolean;
   } | null;
   /** The link out to the posting's own site. Demoted to an outline `Show origin` while
@@ -68,10 +67,11 @@ export type JobCtaPlan = {
 };
 
 /** A rendered-but-unpressable auto-apply button: it reports where the attempt stands and
- *  takes no brand fill. */
+ *  takes neither the brand fill nor the `Pro` marker. */
 const quiet = (label: string): NonNullable<JobCtaPlan['autoApply']> => ({
   label,
   primary: false,
+  pro: false,
   disabled: true,
 });
 
@@ -93,14 +93,17 @@ const apply = { label: 'Apply', primary: true } as const;
  *  differently from an identical Lever one for a reader in the identical situation, which
  *  is an artefact of routing the question through the auto-apply state machine rather than
  *  a decision anybody made. `queued` is the one state that genuinely leaves no primary CTA,
- *  and it is genuinely auto-apply's own. */
+ *  and it is genuinely auto-apply's own.
+ *
+ *  `pro` rides only the clickable state for the same reason the brand fill does: a marker
+ *  naming what an action requires says nothing on a button nobody can press. */
 export function jobCtaPlan(state: AutoApplyButtonState): JobCtaPlan {
   switch (state.kind) {
     case 'hidden':
       return { autoApply: null, external: apply };
     case 'idle':
       return {
-        autoApply: { label: 'Auto-apply', primary: true, disabled: false },
+        autoApply: { label: 'Auto-apply', primary: true, pro: true, disabled: false },
         external: showOrigin,
       };
     case 'queued':

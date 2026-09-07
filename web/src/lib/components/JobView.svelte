@@ -384,9 +384,13 @@
      button only starts the tailor-then-review sequence. What it says and how loud it is
      both come from the CTA plan; the only thing decided here is that a submission already
      in flight also disables it, which is a fact about THIS component's request rather than
-     about the posting. No `Pro` marker: only a Pro (or above) caller ever sees this button
-     at all (autoApplyState above), so labelling the requirement here would state a fact
-     about nothing left to decide. -->
+     about the posting.
+     The `Pro` marker is a span, not the `Badge` primitive: Badge's variants carry their own
+     background and foreground, none of which read as a plan marker on `bg-brand`. It takes
+     the PAGE's `foreground` for its fill and `background` for its text — near-black on
+     white in the light theme, near-white on black in the dark one — so it stays the highest
+     contrast thing on a brand-green button in either. A tint of the button's own foreground
+     was the first try and it dissolved into the fill. -->
 {#snippet autoApplyCta(size: 'md' | 'lg', className: string)}
   {#if cta.autoApply}
     {@const autoApply = cta.autoApply}
@@ -398,6 +402,13 @@
       class={className}
     >
       {autoApply.label}
+      {#if autoApply.pro}
+        <span
+          class="rounded-sm bg-foreground px-1.5 py-0.5 text-xs font-semibold uppercase leading-none tracking-wide text-background"
+        >
+          Pro
+        </span>
+      {/if}
     </Button>
   {/if}
 {/snippet}
@@ -963,6 +974,12 @@
           <CheckCircle2 class="size-4 shrink-0" aria-hidden="true" /> We're preparing a tailored CV — you'll get
           a notification to review it.
         </span>
+        <a
+          href={resolve('/my/tracking/[id]', { id: job.public_slug })}
+          class="text-sm font-medium text-brand-strong underline underline-offset-4"
+        >
+          Track progress →
+        </a>
       </div>
     {/if}
     {#if autoApplyError}
