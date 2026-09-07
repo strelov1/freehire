@@ -5,9 +5,13 @@ import (
 	"fmt"
 )
 
-// ripplingBaseURL is the Rippling public ATS board API root.
+// ripplingBaseURL is the Rippling public ATS board API root. The `ats.rippling.com`
+// host is the live one and a superset: it serves every board the legacy
+// `api.rippling.com/platform/api/ats/v1` host did, plus boards created on Rippling's
+// newer ATS (e.g. `whitehatgaming`) that the legacy host answers 404 for. The path
+// shape and JSON are identical across both, so this is a host swap and nothing more.
 const (
-	ripplingBaseURL = "https://api.rippling.com/platform/api/ats/v1/board"
+	ripplingBaseURL = "https://ats.rippling.com/api/v1/board"
 )
 
 // rippling adapts the Rippling public ATS board API. Its list endpoint carries no
