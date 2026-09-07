@@ -161,6 +161,41 @@ func TestResolveWithDrafting_ADrafterErrorPropagates(t *testing.T) {
 	}
 }
 
+func TestResolveWithDrafting_NeverDraftsAGeographyField(t *testing.T) {
+	fields := []MergedField{{ID: "question_9", Label: "Current State of Residence", Kind: "select", Required: true}}
+	drafter := &fakeDrafter{answer: "should never be used", ok: true}
+
+	plan, err := ResolveWithDrafting(context.Background(), fields, map[string]string{}, drafter, GroundingContext{}, false)
+	if err != nil {
+		t.Fatalf("ResolveWithDrafting: %v", err)
+	}
+	if len(drafter.calls) != 0 {
+		t.Fatalf("Draft calls = %v, want none — a geography field must never reach the drafter", drafter.calls)
+	}
+	if len(plan.Unmapped) != 1 || plan.Unmapped[0].ID != "question_9" {
+		t.Fatalf("unmapped = %+v, want the geography field parked", plan.Unmapped)
+	}
+}
+
+func TestResolveWithDrafting_AGeographyFieldAlreadyMappedByIDIsStillFilled(t *testing.T) {
+	// A geography-labeled field that already resolves deterministically (e.g. the
+	// candidate's known "location" answer) is filled exactly as before this rule
+	// existed — the park check only ever applies to what Resolve left unmapped.
+	fields := []MergedField{{ID: "location", Label: "Current State of Residence", Kind: "text", Required: true}}
+	drafter := &fakeDrafter{answer: "should never be used", ok: true}
+
+	plan, err := ResolveWithDrafting(context.Background(), fields, map[string]string{"location": "Florianópolis, Brazil"}, drafter, GroundingContext{}, false)
+	if err != nil {
+		t.Fatalf("ResolveWithDrafting: %v", err)
+	}
+	if len(drafter.calls) != 0 {
+		t.Errorf("Draft calls = %v, want none — the field already resolved deterministically", drafter.calls)
+	}
+	if len(plan.Fields) != 1 || plan.Fields[0].Value != "Florianópolis, Brazil" {
+		t.Fatalf("plan.Fields = %+v, want the known location answer", plan.Fields)
+	}
+}
+
 // Found by code review: isSensitiveLabel("") is unconditionally false (an empty string
 // contains no keyword), so a DOM-only field the platform's schema never labeled — exactly
 // the shape reconcile.go's own test cites an EEOC/demographic field as the canonical

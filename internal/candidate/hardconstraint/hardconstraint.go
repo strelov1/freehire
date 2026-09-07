@@ -4,10 +4,19 @@
 // internal/candidate/jobmatch and internal/dict/classify: a category is judged only when BOTH
 // sides carry data, so a missing field is skipped, never a false blocker.
 //
-// The blockers are advisory. They surface on the profile-match bar, cap the
-// server-owned overall_score in the LLM fit analysis (a ceiling the model cannot
-// exceed), and feed anti-hallucination guardrails into the tailor — but they
-// never hide or downrank a job.
+// The blockers are advisory at every call site that reads them for a human to act on.
+// They surface on the profile-match bar, cap the server-owned overall_score in the LLM
+// fit analysis (a ceiling the model cannot exceed), and feed anti-hallucination
+// guardrails into the tailor — but they never hide or downrank a job at any of those
+// sites.
+//
+// One caller reads them differently: internal/api/handler's auto-apply enqueue gate
+// (openspec/changes/add-auto-apply-eligibility-gate) treats an unmet work-authorization
+// or location-and-work-mode entry as a reason to refuse an UNATTENDED submission outright
+// — there is no human in that loop to see an advisory warning and decide for themselves.
+// This is a property of that caller's stakes, not a second meaning for Evaluate's output:
+// the package itself, its "never emit a false blocker" discipline, and every other
+// caller's advisory-only treatment are unchanged.
 package hardconstraint
 
 import (
