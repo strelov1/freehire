@@ -126,6 +126,22 @@ func (s echojobs) FetchNew(ctx context.Context, _ CompanyEntry, seen func(extern
 	if n := dropped.Load(); n > 0 {
 		log.Printf("echojobs: dropped %d/%d candidate postings this run (detail fetch failed or carried no usable JobPosting)", n, len(postings))
 	}
+	// A run that listed postings and read NONE of them is a board failure, not an empty crawl.
+	//
+	// This is the guard freehire#2588 was missing. A dropped posting never reaches the pipeline
+	// — Stats counts saveOne failures, not candidates an adapter discarded — so from every side
+	// but this one, a total outage and a source with nothing to offer produce the same line:
+	// ingested=0, failed=0, exit 0, green unit. echojobs published that line every four hours
+	// for 19 days while its pages were behind a bot firewall, and nothing anywhere noticed.
+	//
+	// Only FetchNew knows it walked the sitemap and came back empty-handed, so only FetchNew
+	// can say so. There is deliberately no threshold: "some candidates, none read" is the whole
+	// signal, and how many consecutive failures matter is board_health's question, not this
+	// function's. The converse is left alone on purpose — no candidates at all is a quiet
+	// source, not a broken one.
+	if len(postings) > 0 && len(jobs) == 0 {
+		return nil, fmt.Errorf("echojobs: listed %d postings and read none of them", len(postings))
+	}
 	return jobs, nil
 }
 

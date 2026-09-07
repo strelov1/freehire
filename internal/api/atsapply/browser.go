@@ -8,19 +8,20 @@ import (
 	"time"
 
 	"github.com/chromedp/chromedp"
+
+	"github.com/strelov1/freehire/internal/platform/browser"
 )
 
-// stealthAllocatorOptions are the launch options the 2026-09-02 spike measured against
-// bot.sannysoft.com: headless, plus disable-blink-features=AutomationControlled, which
-// alone flipped navigator.webdriver from true to false — matching what Patchright achieved,
-// at zero extra dependency. See design.md's "chromedp, not a Python/Patchright sidecar"
-// decision for the full comparison and its caveats (untested against real ATS bot-detection,
-// datacenter IP reputation unaddressed either way).
+// stealthAllocatorOptions are this package's launch options. The flags themselves live in
+// platform/browser, which is their single home in the repository: ingest also launches a
+// browser now (for a source behind a JavaScript challenge), and two copies of the flags would
+// mean the next anti-bot fix lands in one and silently not the other.
+//
+// What that package documents, and what still holds here: the pair is what the 2026-09-02
+// spike measured against bot.sannysoft.com, and it is not a claim of undetectability — see
+// design.md's "chromedp, not a Python/Patchright sidecar" decision for the caveats.
 func stealthAllocatorOptions() []chromedp.ExecAllocatorOption {
-	return append(chromedp.DefaultExecAllocatorOptions[:],
-		chromedp.Flag("headless", true),
-		chromedp.Flag("disable-blink-features", "AutomationControlled"),
-	)
+	return browser.LaunchOptions()
 }
 
 // pageLoadTimeout bounds how long a single navigation+render may take before this package

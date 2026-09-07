@@ -45,6 +45,19 @@ var blocks = map[string][]string{
 		// an upward edge for one of them.
 		"aigateway",
 		"arch", "arch/layering", "backfillpage", "blobstore",
+		// browser is the same "transport, not domain" category one step lower down: how this
+		// repository LAUNCHES a local headless Chrome and fetches a URL through one. It is
+		// not browseruse below, which is an HTTP client for somebody else's hosted browser —
+		// this one is a process on our own host. It is here rather than in either caller
+		// because it has two, in different blocks: api/atsapply (fills an application form)
+		// and ingest/sources (reads a source gated behind a JavaScript challenge), so in
+		// either one it would be an upward edge for the other.
+		"browser",
+		// firecrawl is the browseruse category, not the browser one, and the distinction is
+		// economic rather than technical: it is an HTTP client for a METERED third-party
+		// scraping API, where platform/browser launches a free process on our own host. Its
+		// caller is ingest/sources, for the two providers that refuse every address we own.
+		"firecrawl",
 		// browseruse is the HTTP half of talking to the browser-use.com cloud agent API —
 		// create/poll/fetch one run — and knows nothing about ATS forms or resolved
 		// application plans, the same "transport, not domain" category as llm and
