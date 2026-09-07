@@ -43,7 +43,7 @@ func TestCreateRun_HappyPath(t *testing.T) {
 
 func TestCreateRun_NonEmptyIDRequired(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte(`{"id":"","status":"queued"}`))
+		_, _ = w.Write([]byte(`{"id":"","status":"queued"}`))
 	}))
 	defer srv.Close()
 
@@ -110,15 +110,15 @@ func TestDoJSON_NonSuccessStatusIsAnError(t *testing.T) {
 func TestWait_ReturnsResultOnceTerminal(t *testing.T) {
 	calls := 0
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch {
-		case r.URL.Path == "/runs/run-123/status":
+		switch r.URL.Path {
+		case "/runs/run-123/status":
 			calls++
 			if calls < 3 {
 				_, _ = w.Write([]byte(`{"status":"running"}`))
 			} else {
 				_, _ = w.Write([]byte(`{"status":"completed"}`))
 			}
-		case r.URL.Path == "/runs/run-123":
+		case "/runs/run-123":
 			_, _ = w.Write([]byte(`{"id":"run-123","status":"completed","result":"CONFIRMED: ok","totalCostUsd":"0.01"}`))
 		default:
 			t.Fatalf("unexpected path: %s", r.URL.Path)
