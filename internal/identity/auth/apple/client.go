@@ -73,11 +73,6 @@ func (c Claims) VerifiedEmail() (string, bool) {
 	return c.Email, verified && c.Email != ""
 }
 
-type Grant struct {
-	Subject, ClientID, RefreshToken string
-	Claims                          Claims
-}
-
 type jwk struct{ Kty, Use, Kid, Alg, N, E string }
 type cachedKeys struct {
 	keys    map[string]*rsa.PublicKey
@@ -134,7 +129,6 @@ func New(cfg Config) (*Client, error) {
 	return &Client{cfg: cfg, key: key, now: time.Now}, nil
 }
 
-func (c *Client) Enabled() bool       { return c != nil }
 func (c *Client) ClientIDs() []string { return append([]string(nil), c.cfg.ClientIDs...) }
 
 func (c *Client) clientAllowed(aud string) bool {
@@ -327,33 +321,38 @@ func (c *Client) postForm(ctx context.Context, endpoint string, form url.Values,
 	return resp.StatusCode, nil
 }
 
-func (c *Client) Exchange(ctx context.Context, code, clientID, expectedNonce, submittedSubject string) (Grant, error) {
+// Exchange trades an authorization code for the refresh token that keeps custody of the
+// Apple identity, verifying the returned id token against the nonce, the subject the
+// caller submitted, and the client id.
+//
+// It returns the token alone. It used to return a Grant carrying Subject, ClientID and
+// Claims beside it, and nothing outside this package ever read any of the three — the
+// caller (handler.exchangeApple) takes the refresh token and gets the identity from its
+// own Verify, because the identity has to be established BEFORE the exchange to decide
+// whether to attempt one at all.
+func (c *Client) Exchange(ctx context.Context, code, clientID, expectedNonce, submittedSubject string) (string, error) {
 	if code == "" || submittedSubject == "" {
-		return Grant{}, ErrExchange
+		return "", ErrExchange
 	}
 	secret, err := c.clientSecret(clientID)
 	if err != nil {
-		return Grant{}, err
+		return "", err
 	}
 	var tr tokenResponse
 	status, err := c.postForm(ctx, c.cfg.TokenURL, url.Values{"grant_type": {"authorization_code"}, "code": {code}, "client_id": {clientID}, "client_secret": {secret}}, &tr)
 	if err != nil || status != http.StatusOK || tr.Error != "" || tr.IDToken == "" || tr.RefreshToken == "" {
-		return Grant{}, ErrExchange
+		return "", ErrExchange
 	}
 	claims, err := c.Verify(ctx, tr.IDToken, expectedNonce)
 	if err != nil || claims.Subject != submittedSubject {
-		return Grant{}, ErrExchange
+		return "", ErrExchange
 	}
-	audOK := false
 	for _, aud := range claims.Audience {
 		if aud == clientID {
-			audOK = true
+			return tr.RefreshToken, nil
 		}
 	}
-	if !audOK {
-		return Grant{}, ErrExchange
-	}
-	return Grant{Subject: claims.Subject, ClientID: clientID, RefreshToken: tr.RefreshToken, Claims: claims}, nil
+	return "", ErrExchange
 }
 
 func (c *Client) Revoke(ctx context.Context, refreshToken, clientID string) error {

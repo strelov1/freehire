@@ -23,8 +23,10 @@ type plan struct {
 	byRule   map[string]int
 	bySource map[string]int
 	samples  []string
-	// refused counts rows a company-scoped rule matched but the guard turned down,
-	// per reason. They are not deletions and not errors: they are the guard working.
+	// refused counts rows a guard turned down, per reason. They are not deletions and
+	// not errors: they are the guard working. Today the only live refusal is the source
+	// gate (main.go) — "the company-scoped rules" is what this said, and matchRule
+	// structurally cannot reach those on a crawled board anyway.
 	refused map[string]int
 	// matched is every row the rule matched, including those past the cap, so the
 	// report can say how much of the work this run is doing.

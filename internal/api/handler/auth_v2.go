@@ -433,16 +433,16 @@ func (h *authHandlers) AppleExchangeV2(c *fiber.Ctx) error {
 			return authError(401, "reauth_session_mismatch", "session changed")
 		}
 	}
-	grant, err := h.appleNative.Exchange(c.Context(), in.AuthorizationCode, clientID, attempt.NonceChallenge, claims.Subject)
+	refreshToken, err := h.appleNative.Exchange(c.Context(), in.AuthorizationCode, clientID, attempt.NonceChallenge, claims.Subject)
 	if err != nil {
 		return authError(401, "apple_exchange_failed", "Apple sign-in failed")
 	}
-	compensationID, err := h.mobileAuth.CreateAppleCompensation(c.Context(), h.appleGrantKeys, claims.Subject, clientID, grant.RefreshToken)
+	compensationID, err := h.mobileAuth.CreateAppleCompensation(c.Context(), h.appleGrantKeys, claims.Subject, clientID, refreshToken)
 	if err != nil {
 		// If durable custody is unavailable, revoke while the only plaintext copy
 		// is still in memory. Joining errors preserves the operational failure
 		// without ever including the token value.
-		if revokeErr := h.appleNative.Revoke(c.Context(), grant.RefreshToken, clientID); revokeErr != nil {
+		if revokeErr := h.appleNative.Revoke(c.Context(), refreshToken, clientID); revokeErr != nil {
 			return errors.Join(err, revokeErr)
 		}
 		return err

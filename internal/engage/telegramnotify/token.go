@@ -39,8 +39,12 @@ func NewLinkTokens(secret string, ttl time.Duration) *LinkTokens {
 
 // Issue returns a deep-link token for userID, expiring after the configured TTL.
 // The result is base64url (no padding) so it is safe as a Telegram start param.
-func (l *LinkTokens) Issue(userID int64) (string, error) {
-	return l.tokens.Issue(userID), nil
+//
+// It returns no error, because there was never one to return: linktoken.Tokens.Issue
+// cannot fail, and the second result was hard-coded nil. The shape was parity with
+// discordbot.DiscordLinkTokens, removed from main in 937ed92f.
+func (l *LinkTokens) Issue(userID int64) string {
+	return l.tokens.Issue(userID)
 }
 
 // Parse verifies a token's signature and expiry and returns its user id.
