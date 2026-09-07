@@ -192,15 +192,23 @@ SHALL say which zone it used.
 
 Because the slot endpoint is public and this host serves mostly crawler traffic, the
 system SHALL cache a computed window and SHALL rate-limit the endpoint. The cache key
-SHALL include the mentor, the window and the viewer's timezone. Writing a booking,
-cancelling one, or editing availability or session parameters SHALL invalidate that
-mentor's cached windows.
+SHALL include the mentor, the window and the viewer's timezone.
 
-#### Scenario: A booking invalidates the cache immediately
+Staleness SHALL be bounded by a short expiry rather than by explicit invalidation, and
+the booking path SHALL NOT read the cache. A booking would otherwise have to invalidate
+every cached window overlapping it in every viewer's timezone — a set the writer cannot
+enumerate — and the shared cache interface offers no deletion. The consequence is stated
+rather than hidden: a taken hour MAY be offered for up to the expiry, and the seeker who
+takes it receives the ordinary "no longer available" refusal.
+
+#### Scenario: A booked slot may be offered briefly, and refuses when taken
 
 - **WHEN** a slot window has been cached
 - **AND** a booking is confirmed inside it
-- **THEN** the next request for that window does not offer the booked slot
+- **THEN** a request for that window MAY still offer the booked slot until the entry
+  expires
+- **AND** an attempt to book it is refused as unavailable, because the booking path
+  re-derives from the live schedule rather than reading the cache
 
 #### Scenario: Two viewers in different zones do not share a cache entry
 

@@ -158,15 +158,25 @@ unit tests plus the function they drive; none of it needs Docker or Postgres.
 
 ## 7. HTTP layer
 
-- [ ] 7.1 Public routes: mentor directory, mentor profile, slot listing — no auth
-- [ ] 7.2 Slot cache in Redis keyed by `(mentor, window, viewer timezone)`, invalidated
-      on booking, cancellation and any availability or session-parameter edit;
-      degrading to direct computation when the cache is unreachable
-- [ ] 7.3 Rate limit the slot endpoint, on the real route
-- [ ] 7.4 Authenticated routes: book, cancel, my sessions, review; mentor cabinet routes
+- [x] 7.1 Public routes: mentor directory, mentor profile, slot listing — no auth. They
+      live in their own `registerPublic`, because the public-read-limiter guard drives
+      every GET a register mounts and requires the limiter FIRST — which the cabinet
+      routes cannot satisfy, since auth must run before them
+- [x] 7.2 Slot cache keyed by `(mentor, window, viewer timezone)`, degrading to direct
+      computation when the cache is unreachable. **NOT invalidated explicitly** — the
+      shared cache interface has no deletion, and a booking would have to invalidate
+      every overlapping window in every viewer's zone, a set the writer cannot
+      enumerate. A one-minute expiry bounds the staleness and the booking path does not
+      read the cache, so a taken hour may be offered for up to a minute and is refused
+      the moment somebody takes it. The spec now says this rather than the invalidation
+      it originally asked for
+- [x] 7.3 Rate limit the slot endpoint, on the real route — its own budget, below the
+      shared public-read one, so a robot walking a calendar cannot exhaust what the rest
+      of the site reads on
+- [x] 7.4 Authenticated routes: book, cancel, my sessions, review; mentor cabinet routes
       for profile and availability
-- [ ] 7.5 Moderator routes behind the existing moderator gate, beside the referral queue
-- [ ] 7.6 One error switch mapping every domain sentinel to its status, following
+- [x] 7.5 Moderator routes behind the existing moderator gate, beside the referral queue
+- [x] 7.6 One error switch mapping every domain sentinel to its status, following
       `internal/api/handler/referrals.go`
 
 ## 8. Frontend

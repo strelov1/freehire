@@ -6,6 +6,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
+	"github.com/strelov1/freehire/internal/platform/cache"
 )
 
 // Directory page bounds. The default is what an unbounded request gets; the maximum is
@@ -144,6 +146,9 @@ type Notifier interface {
 
 // Config tunes a Service.
 type Config struct {
+	// Cache stores computed slot windows. Nil disables caching without disabling the
+	// endpoint — a read never fails because a cache is unavailable.
+	Cache cache.Cache
 	// Notifier delivers confirmations, cancellations and reminders. Nil is a deployment
 	// with no channel configured — the feature works and nobody is told, which is how it
 	// ships before the mail path is wired and how it is rolled back.
@@ -156,6 +161,7 @@ type Config struct {
 type Service struct {
 	repo     Repository
 	notifier Notifier
+	cache    cache.Cache
 	now      func() time.Time
 }
 
@@ -166,7 +172,7 @@ func New(repo Repository, cfg Config) *Service {
 	if now == nil {
 		now = time.Now
 	}
-	return &Service{repo: repo, notifier: cfg.Notifier, now: now}
+	return &Service{repo: repo, notifier: cfg.Notifier, cache: cfg.Cache, now: now}
 }
 
 // notifyCancelled tells each seeker their session is off, best-effort. Failures are
