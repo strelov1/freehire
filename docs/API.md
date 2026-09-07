@@ -4410,7 +4410,7 @@ curl "https://freehire.me/api/v1/stats/facets"
 
 **Auth:** Public
 
-Cumulative member growth per UTC day.
+Cumulative member growth per UTC day, plus each day's own new-signup count.
 
 Aggregate-only — no user identifier is exposed.
 
@@ -4419,7 +4419,7 @@ curl "https://freehire.me/api/v1/stats/user-growth"
 ```
 
 ```json
-{ "data": [ { "day": "2026-07-27", "total": 12840 } ] }
+{ "data": [ { "date": "2026-07-27", "total": 12840, "new": 37 } ] }
 ```
 
 ### `GET /stats/engagement`

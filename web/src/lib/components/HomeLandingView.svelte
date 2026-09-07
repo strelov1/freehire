@@ -116,7 +116,7 @@
 
   const figures = $derived(
     [
-      figure(scale?.open_jobs, 'open jobs'),
+      figure(scale?.open_jobs, 'postings tracked'),
       figure(scale?.companies, 'companies'),
       figure(scale?.sources, 'sources'),
       figure(scale?.ats_platforms, 'ATS platforms'),

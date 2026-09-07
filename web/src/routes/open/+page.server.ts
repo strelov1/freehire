@@ -26,7 +26,9 @@ async function buildPayload(fetchImpl: typeof fetch) {
   const api = serverApi(fetchImpl);
   // One call for the whole scale strip instead of two list totals: the figures come
   // from a single published snapshot, so this page and /about cannot show numbers
-  // measured at different moments.
+  // measured at different moments. That snapshot also carries `unique_open_jobs` —
+  // Meilisearch's own de-duplicated count, computed once by cmd/rollup-stats rather
+  // than a live search call here, so this leg never counts on the request path.
   const [scale, activity, facets, growth, engagement, github] = await Promise.allSettled([
     api.catalogScale(),
     api.jobsActivity('day'),
@@ -41,15 +43,16 @@ async function buildPayload(fetchImpl: typeof fetch) {
 
   const catalog = value(scale);
   // A degraded snapshot carries the approximate job count and the registry figures;
-  // the counts that exist only in the database come back as zero. Map those to null
-  // rather than passing the zero on: "we could not measure this" and "we measured
-  // zero" must not look the same to a renderer, or a page ends up printing a figure
-  // nobody stands behind.
+  // the counts that exist only in the database (or, for unique_open_jobs, only in
+  // Meilisearch) come back as zero. Map those to null rather than passing the zero
+  // on: "we could not measure this" and "we measured zero" must not look the same to
+  // a renderer, or a page ends up printing a figure nobody stands behind.
   const dbOnly = (n: number | undefined) => (catalog?.exact && n != null ? n : null);
 
   return {
     scale: {
       jobs: catalog?.open_jobs ?? null,
+      browsableJobs: dbOnly(catalog?.unique_open_jobs),
       companies: dbOnly(catalog?.companies),
       sources: catalog?.sources ?? null,
       telegramChannels: dbOnly(catalog?.telegram_channels),

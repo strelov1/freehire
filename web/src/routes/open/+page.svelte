@@ -1,8 +1,10 @@
 <script lang="ts">
   import { page } from '$app/state';
+  import { resolve } from '$app/paths';
   import Seo from '$lib/components/Seo.svelte';
   import ActivityBars from '$lib/components/ActivityBars.svelte';
   import GrowthArea from '$lib/components/GrowthArea.svelte';
+  import SignupsBars from '$lib/components/SignupsBars.svelte';
   import { OPEN_FAQ } from '$lib/openFaq';
   import { breadcrumbJsonLd, datasetJsonLd, faqPageJsonLd, jsonLdScript } from '$lib/seo';
   import { SENIORITY_LABELS, WORK_MODE_LABELS } from '$lib/labels';
@@ -99,7 +101,12 @@
   // a real "0 companies".
   const stats = $derived(
     [
-      { value: fmt(data.scale.jobs, null), label: 'open jobs', href: '/api/v1/jobs' },
+      { value: fmt(data.scale.jobs, null), label: 'postings tracked', href: '/api/v1/jobs' },
+      {
+        value: fmt(data.scale.browsableJobs, null),
+        label: 'unique jobs to browse',
+        href: resolve('/jobs'),
+      },
       { value: fmt(data.scale.companies, null), label: 'companies', href: '/api/v1/companies' },
       { value: fmt(data.scale.sources, null), label: 'sources', href: '/api/v1/stats/catalog' },
       {
@@ -189,7 +196,7 @@
   <!-- A. Catalogue scale -->
   <section class="mb-14">
     <p class="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">// the catalogue</p>
-    <dl class="mt-6 grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-4">
+    <dl class="mt-6 grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-3 lg:grid-cols-5">
       {#each stats as s (s.label)}
         <div class="bg-background p-5 sm:p-6">
           <dt class="font-mono text-xs uppercase tracking-wide text-muted-foreground">{s.label}</dt>
@@ -232,6 +239,11 @@
       Cumulative registered members over time. Early days — and that's the point of showing it.
     </p>
     <GrowthArea points={data.growth} />
+    <h3 class="mt-8 text-base font-semibold tracking-tight">New members per day</h3>
+    <p class="mb-6 mt-1 text-sm text-muted-foreground">
+      Same series, not cumulative — how many people signed up on each day.
+    </p>
+    <SignupsBars points={data.growth} />
   </section>
 
   <!-- Engagement -->
