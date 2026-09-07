@@ -6,6 +6,7 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/strelov1/freehire/internal/ingest/catalogstats"
 	"github.com/strelov1/freehire/internal/platform/cache"
@@ -14,7 +15,7 @@ import (
 
 // statsHandlers serves the public transparency and market-insights reads:
 // catalogue activity, member growth, engagement counts, the facet snapshot, the
-// insights rollups, and the ingest-fleet status. All are unauthenticated,
+// insights rollups, and the site/ingest-fleet status. All are unauthenticated,
 // aggregate-only reads — no record-level field or user identifier is exposed.
 type statsHandlers struct {
 	queries *db.Queries
@@ -25,10 +26,15 @@ type statsHandlers struct {
 	// to the estimate, which is the same path a cold or unreachable cache takes.
 	cache     cache.Cache
 	estimator catalogstats.Estimator
+
+	// pool backs the site-status database check (IngestStatus): the same live
+	// pool.Ping approach the /health handler uses, kept separate from it
+	// rather than shared because Health is mounted on *API, not statsHandlers.
+	pool *pgxpool.Pool
 }
 
-func newStatsHandlers(queries *db.Queries, c cache.Cache) *statsHandlers {
-	return &statsHandlers{queries: queries, cache: c, estimator: queries}
+func newStatsHandlers(queries *db.Queries, c cache.Cache, pool *pgxpool.Pool) *statsHandlers {
+	return &statsHandlers{queries: queries, cache: c, estimator: queries, pool: pool}
 }
 
 func (h *statsHandlers) register(api fiber.Router) {

@@ -7,6 +7,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/strelov1/freehire/internal/ingest/sources"
+	"github.com/strelov1/freehire/internal/platform/observability"
 )
 
 // providerStatus is the public health verdict for a provider (and the fleet):
@@ -32,6 +33,51 @@ const (
 	// successFreshness: a provider with no success within this window reads down.
 	successFreshness = 48 * time.Hour
 )
+
+// Site-status derivation thresholds and window. Mirrors the provider
+// thresholds above: a minimum-traffic guard so a couple of unlucky requests
+// right after a deploy can't read as an outage, then two error-fraction
+// thresholds over the in-process rolling window (see
+// internal/platform/observability.ErrorRate).
+const (
+	// siteErrorWindow is the trailing duration ErrorRate is computed over.
+	siteErrorWindow = 10 * time.Minute
+	// minSiteRequestsForSignal: below this many requests in the window, the
+	// error fraction is not trusted — too little data to distinguish a real
+	// problem from a couple of unlucky requests.
+	minSiteRequestsForSignal = 20
+	// siteDegradedErrorRate: above this fraction (and below siteDownErrorRate)
+	// reads degraded.
+	siteDegradedErrorRate = 0.02
+	// siteDownErrorRate: at or above this fraction reads down even though the
+	// database itself answers.
+	siteDownErrorRate = 0.5
+)
+
+// deriveSiteStatus maps the site's own live signals to its status:
+//   - down    when the database is unreachable, regardless of error rate;
+//   - operational when the database is up and there isn't enough traffic in
+//     the window to trust the error fraction;
+//   - down    when the database is up but the error fraction is at or above
+//     siteDownErrorRate;
+//   - degraded when the error fraction exceeds siteDegradedErrorRate;
+//   - operational otherwise.
+func deriveSiteStatus(dbUp bool, errorRate float64, totalRequests int64) providerStatus {
+	if !dbUp {
+		return statusDown
+	}
+	if totalRequests < minSiteRequestsForSignal {
+		return statusOperational
+	}
+	switch {
+	case errorRate >= siteDownErrorRate:
+		return statusDown
+	case errorRate > siteDegradedErrorRate:
+		return statusDegraded
+	default:
+		return statusOperational
+	}
+}
 
 // providerRollup is the derivation input for one provider: only the facts the
 // status policy needs (board totals and last-success instant), decoupled from the
@@ -105,16 +151,59 @@ type statusProvider struct {
 	IngestedTotal int64          `json:"ingested_total"`
 }
 
-// IngestStatus serves the public, unauthenticated ingest-fleet status: a
-// per-provider health rollup over board_health with a derived operational/
-// degraded/down status per provider and an overall fleet status, plus
-// last_job_added_at — the created_at of the most recently added open, public
-// job, a live signal that the pipeline is actually writing rows (independent
-// of per-provider crawl health). Sanitized by construction — the DTO carries
-// no error text or board identifier — so no internal detail can leak. An
-// empty fleet yields overall "operational" with no providers and a null
-// last_job_added_at.
+// siteHealth is the public, sanitized verdict for the site/API itself —
+// independent of the ingest fleet's own status (`overall`). database is
+// "up" or "down", the wire encoding health.go's Health handler already
+// uses. error_rate is the fraction of 5xx responses over the trailing
+// window_minutes, computed from the process's own recent traffic (see
+// internal/platform/observability.ErrorRate) — never from an external
+// Prometheus query.
+type siteHealth struct {
+	Status        providerStatus `json:"status"`
+	Database      string         `json:"database"`
+	ErrorRate     float64        `json:"error_rate"`
+	WindowMinutes int            `json:"window_minutes"`
+}
+
+// IngestStatus serves the public, unauthenticated status read: the site/API's
+// own live status (siteHealth), plus a per-provider health rollup over
+// board_health with a derived operational/degraded/down status per provider
+// and an overall fleet status, plus last_job_added_at — the created_at of the
+// most recently added open, public job, a live signal that the pipeline is
+// actually writing rows (independent of per-provider crawl health).
+// Sanitized by construction — the DTO carries no error text or board
+// identifier — so no internal detail can leak. An empty fleet yields overall
+// "operational" with no providers and a null last_job_added_at.
+//
+// The database is checked FIRST and the ingest-fleet queries are skipped
+// entirely when it fails: they would only fail the same way (the fleet
+// rollup and the site check share the one pool), and reporting a 500 with no
+// body in exactly the outage this endpoint exists to surface would defeat
+// the point of adding a site-status section at all. That short-circuit
+// reports overall "operational" with no providers — the same "no data"
+// value an empty rollup already gets — rather than "down": a database
+// outage means the fleet's health is UNKNOWN, not that it has failed, and
+// only site.status should carry the database's own honest "down" verdict.
 func (h *statsHandlers) IngestStatus(c *fiber.Ctx) error {
+	now := time.Now().UTC()
+	errorRate, totalRequests := observability.ErrorRate(siteErrorWindow)
+	dbUp := h.pool.Ping(c.Context()) == nil
+	site := siteHealth{
+		Status:        deriveSiteStatus(dbUp, errorRate, totalRequests),
+		Database:      dbStatusLabel(dbUp),
+		ErrorRate:     errorRate,
+		WindowMinutes: int(siteErrorWindow / time.Minute),
+	}
+	if !dbUp {
+		// overall reads "operational" here — the same "no data" convention
+		// fleetStatus already uses for a genuinely empty rollup (see its own
+		// comment) — rather than "down": a database hiccup means the ingest
+		// fleet's health is UNKNOWN for this request, not that it failed. site
+		// carries the honest "down" verdict for the database itself; conflating
+		// the two would report a fleet outage that may not exist.
+		return statusResponse(c, now, statusOperational, nil, []statusProvider{}, site)
+	}
+
 	rows, err := h.queries.ProviderHealthRollup(c.Context())
 	if err != nil {
 		return err
@@ -124,7 +213,6 @@ func (h *statsHandlers) IngestStatus(c *fiber.Ctx) error {
 		return err
 	}
 
-	now := time.Now().UTC()
 	// One registry per request to classify each provider by adapter kind (ATS /
 	// aggregator / company page). Taxonomy, not a crawl registry — this host holds
 	// no ingest credentials.
@@ -150,14 +238,32 @@ func (h *statsHandlers) IngestStatus(c *fiber.Ctx) error {
 		}
 	}
 
+	return statusResponse(c, now, fleetStatus(rolls, now), isoOrNil(lastJobAddedAt), providers, site)
+}
+
+// statusResponse renders the /api/v1/status envelope shared by the healthy
+// path and the database-down short-circuit above, so the two agree on shape
+// by construction rather than by two hand-kept copies of the same map.
+func statusResponse(c *fiber.Ctx, now time.Time, overall providerStatus, lastJobAddedAt *string, providers []statusProvider, site siteHealth) error {
 	return c.JSON(fiber.Map{
 		"data": fiber.Map{
-			"overall":           fleetStatus(rolls, now),
+			"overall":           overall,
 			"generated_at":      now.Format(time.RFC3339),
-			"last_job_added_at": isoOrNil(lastJobAddedAt),
+			"last_job_added_at": lastJobAddedAt,
 			"providers":         providers,
+			"site":              site,
 		},
 	})
+}
+
+// dbStatusLabel renders a database-availability bool as the wire string
+// health.go's Health handler already uses ("up"/"down"), so the two
+// endpoints agree on vocabulary.
+func dbStatusLabel(up bool) string {
+	if up {
+		return "up"
+	}
+	return "down"
 }
 
 // tsTime unwraps a nullable timestamp to a time.Time, using the zero value for

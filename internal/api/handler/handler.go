@@ -405,7 +405,7 @@ func Register(app *fiber.App, cfg Config) {
 	// Shared by /jobs/find and the link intake, which must agree on what a page is.
 	postingURLs := sources.NewPostingURLResolver(ingestClient)
 	jobsH := newJobsHandlers(queries, moderationSvc, postingURLs, cfg.Cache)
-	statsH := newStatsHandlers(queries, cfg.Cache)
+	statsH := newStatsHandlers(queries, cfg.Cache, cfg.Pool)
 	ogH := newOGHandlers(queries, cfg.Cache)
 	votesH := newVoteHandlers(queries, cfg.Pool)
 	communityH := newCommunityHandlers(queries)

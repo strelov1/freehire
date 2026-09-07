@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/recover"
@@ -293,5 +294,64 @@ func TestMethodLabelBoundsClientSuppliedValues(t *testing.T) {
 			t.Errorf("methodLabel(%q) = %q, want \"other\" — an unknown method must not become "+
 				"its own series", m, got)
 		}
+	}
+}
+
+// TestHTTPMetricsFeedsTheRequestWindow pins the wiring the /api/v1/status site-health section
+// depends on: a normally-completed response must reach the in-process request window, not just
+// the Prometheus counters above.
+func TestHTTPMetricsFeedsTheRequestWindow(t *testing.T) {
+	site.mu.Lock()
+	site.buckets = nil
+	site.mu.Unlock()
+
+	app := fiber.New()
+	app.Use(HTTPMetrics())
+	app.Get("/ok", func(c *fiber.Ctx) error { return c.SendString("fine") })
+	app.Get("/boom", func(c *fiber.Ctx) error { return c.SendStatus(fiber.StatusInternalServerError) })
+
+	for range 3 {
+		resp, err := app.Test(httptest.NewRequestWithContext(t.Context(), fiber.MethodGet, "/ok", nil))
+		if err != nil {
+			t.Fatalf("GET /ok: %v", err)
+		}
+		resp.Body.Close()
+	}
+	resp, err := app.Test(httptest.NewRequestWithContext(t.Context(), fiber.MethodGet, "/boom", nil))
+	if err != nil {
+		t.Fatalf("GET /boom: %v", err)
+	}
+	resp.Body.Close()
+
+	rate, total := ErrorRate(time.Hour)
+	if total != 4 {
+		t.Fatalf("total = %d, want 4", total)
+	}
+	if want := 0.25; rate != want {
+		t.Errorf("rate = %v, want %v (1 of 4 responses was 5xx)", rate, want)
+	}
+}
+
+// TestCountErrorsFeedsTheRequestWindow covers the other half of the split: a response rendered
+// by the ErrorHandler (panic or handler error) must also reach the request window, the same way
+// it already reaches the Prometheus counters (see TestHTTPMetricsCountsAPanicAs500).
+func TestCountErrorsFeedsTheRequestWindow(t *testing.T) {
+	site.mu.Lock()
+	site.buckets = nil
+	site.mu.Unlock()
+
+	app := fiber.New(fiber.Config{ErrorHandler: CountErrors(fiber.DefaultErrorHandler)})
+	app.Use(HTTPMetrics())
+	app.Get("/fail", func(c *fiber.Ctx) error { return fiber.NewError(fiber.StatusInternalServerError, "no") })
+
+	resp, err := app.Test(httptest.NewRequestWithContext(t.Context(), fiber.MethodGet, "/fail", nil))
+	if err != nil {
+		t.Fatalf("GET /fail: %v", err)
+	}
+	resp.Body.Close()
+
+	rate, total := ErrorRate(time.Hour)
+	if total != 1 || rate != 1 {
+		t.Errorf("ErrorRate() = (%v, %v), want (1, 1) — the sole request was a 5xx rendered by the ErrorHandler", rate, total)
 	}
 }

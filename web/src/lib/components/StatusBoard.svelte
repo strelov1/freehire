@@ -6,10 +6,11 @@
   import { sourceLabel } from '$lib/facets';
   import type { HealthStatus, IngestStatus, ProviderKind } from '$lib/types';
 
-  // The presentational half of the /status page: given the ingest-fleet rollup (or
-  // null when the API read failed), it renders the overall banner and the
-  // worst-first provider list. Kept separate from the route so it can be previewed
-  // and reasoned about without a live API. The route owns data loading + SEO.
+  // The presentational half of the /status page: given the status read (or null
+  // when the API read failed), it renders the site/API's own status, the
+  // ingest-fleet overall banner, and the worst-first provider list. Kept separate
+  // from the route so it can be previewed and reasoned about without a live API.
+  // The route owns data loading + SEO.
   let { status }: { status: IngestStatus | null } = $props();
 
   // Status → display metadata. Tone classes mirror RealityBadge's light/dark
@@ -38,6 +39,15 @@
     down: 'Major outage',
   };
 
+  // The site/API's own status is a separate concern from the ingest fleet above —
+  // one is "is freehire.me itself working", the other is "are the crawlers working".
+  const SITE_HEADLINE: Record<HealthStatus, string> = {
+    operational: 'API operational',
+    degraded: 'API degraded',
+    down: 'API down',
+  };
+  const nfPercent = new Intl.NumberFormat('en', { style: 'percent', maximumFractionDigits: 1 });
+
   const SEVERITY: Record<HealthStatus, number> = { operational: 0, degraded: 1, down: 2 };
 
   // Human labels for the source-kind taxonomy the backend derives from adapter type.
@@ -60,6 +70,7 @@
     ),
   );
   const overall = $derived(status?.overall ?? null);
+  const site = $derived(status?.site ?? null);
 
   // Kind chips: only kinds present in the data, each with its live count.
   const kindCounts = $derived.by(() => {
@@ -88,6 +99,24 @@
     Status is unavailable right now. Try again in a moment.
   </div>
 {:else}
+  {#if site}
+    <!-- Site status: is freehire.me itself working, independent of the ingest fleet below. -->
+    <section class="mb-8">
+      <p class="mb-3 font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">// site status</p>
+      <div class="flex items-center gap-4 rounded-xl border p-5 sm:p-6 {STATUS_META[site.status].pill}">
+        <span class="inline-flex h-3 w-3 shrink-0 rounded-full {STATUS_META[site.status].dot}"></span>
+        <div>
+          <div class="text-lg font-semibold tracking-tight">{SITE_HEADLINE[site.status]}</div>
+          <div class="text-sm opacity-80">
+            Database {site.database} · {nfPercent.format(site.error_rate)} error rate over the last {site.window_minutes} min
+          </div>
+        </div>
+      </div>
+    </section>
+  {/if}
+
+  <p class="mb-3 font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">// ingest fleet status</p>
+
   <!-- Overall banner -->
   <div class="mb-10 flex items-center gap-4 rounded-xl border p-5 sm:p-6 {STATUS_META[overall].pill}">
     <span class="inline-flex h-3 w-3 shrink-0 rounded-full {STATUS_META[overall].dot}"></span>

@@ -1041,12 +1041,25 @@ interface ProviderHealth {
   ingested_total: number;
 }
 
-/** The public ingest-fleet status: the overall (worst-provider) verdict, the
- *  generation timestamp, and one entry per provider. */
+/** The site/API's own live health, independent of the ingest fleet's status
+ *  (`overall`). `database` is "up" or "down"; `error_rate` is the fraction of
+ *  5xx responses over the trailing `window_minutes`, computed from the
+ *  server's own recent traffic. */
+export interface SiteHealth {
+  status: HealthStatus;
+  database: 'up' | 'down';
+  error_rate: number;
+  window_minutes: number;
+}
+
+/** The public status read: the site/API's own live status, plus the
+ *  ingest-fleet overall (worst-provider) verdict, the generation timestamp,
+ *  and one entry per provider. */
 export interface IngestStatus {
   overall: HealthStatus;
   generated_at: string;
   providers: ProviderHealth[];
+  site: SiteHealth;
 }
 
 /** An API key as returned by the management endpoints — metadata only; the

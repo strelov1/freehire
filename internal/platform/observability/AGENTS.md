@@ -97,3 +97,17 @@ Prometheus scrapes BOTH colours unconditionally with a `color` label — the sta
 reads `down`, which is how you tell which slot is cold. That is also why every dashboard query
 aggregates (`sum by (...)`) rather than reading a raw series: a release flips which colour carries
 the traffic. The scrape job, the firewall rules and the alert rules live in `freehire-ops`.
+
+## In-process request window
+
+`requestwindow.go` is NOT part of the Prometheus/Sentry surface above — it is plain in-process
+state (`RecordRequest`/`ErrorRate`), unrelated to `/metrics`, external scraping, or cardinality.
+It exists only so `internal/api/handler`'s public `/api/v1/status` can answer "what fraction of
+this process's own recent responses were 5xx" without a round-trip to Prometheus (which would
+also mean a cross-repo dependency on `freehire-ops`'s scrape config for a status-page nicety).
+Fed from the same two call sites as the counters above (`HTTPMetrics`/`CountErrors`, via the
+shared `recordResponse`), but resets on every deploy and is per-process rather than fleet-wide —
+correct for its one purpose ("is the process answering right now healthy"), wrong for anything
+resembling a historical or fleet-wide uptime figure. Bucketed per minute and pruned on every
+write AND every read (`maxBucketAge`, independent of any caller's query window), so memory stays
+bounded even if `/api/v1/status` goes unpolled for a while.
