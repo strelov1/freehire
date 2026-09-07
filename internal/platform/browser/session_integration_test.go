@@ -12,6 +12,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"os/exec"
 	"strings"
 	"sync/atomic"
@@ -27,11 +28,10 @@ func requireChrome(t *testing.T) {
 			return
 		}
 	}
-	// chromedp finds the macOS app bundle without it being on PATH.
-	if _, err := exec.LookPath("open"); err == nil {
-		if _, err := exec.Command("test", "-d", "/Applications/Google Chrome.app").Output(); err == nil {
-			return
-		}
+	// chromedp finds the macOS app bundle without it being on PATH, so look for it directly
+	// rather than shelling out — one syscall, and nothing to get wrong about quoting.
+	if _, err := os.Stat("/Applications/Google Chrome.app"); err == nil {
+		return
 	}
 	t.Skip("chrome not installed; skipping browser session test")
 }
