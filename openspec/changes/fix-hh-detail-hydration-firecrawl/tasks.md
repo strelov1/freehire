@@ -77,16 +77,30 @@
       `ApplyFirecrawlEgress`-`direct`-parameter deviation (task 2.1) is
       real and sound, ran the full verification suite itself (all green),
       and confirmed all markdown links resolve.
-- [ ] 4.5 Open PR; do not merge until task 5 (deploy-side prerequisites) is
-      acknowledged, since merging without raising the Firecrawl budget on prod
-      reproduces the same "hh: detail ... failed" symptom via
-      `ErrBudgetSpent` instead of the CAPTCHA.
+- [x] 4.5 Opened PR #2662, CI green (all checks passed), merged (squash) to
+      main as 146e51fe. User explicitly directed proceeding to deploy and
+      verify (task 5) immediately after — the merge/deploy gate was
+      acknowledged and crossed deliberately, not skipped.
 
 ## 5. Deploy-side (outside this repo, host2 — manual, AFTER code deploys)
 
+**Status as of 2026-09-08 17:40 UTC**: code merged (#2662, `146e51fe`) and will
+reach prod on the next `freehire-autodeploy` cycle. Checked the live account
+(`GET /v1/team/credit-usage`): it is currently on Firecrawl's **Free plan —
+1000 credits/month, 891 remaining this period** (resets 2026-09-29), nowhere
+near hh's measured volume. User's explicit decision: **wait on the plan
+upgrade** rather than raise `FIRECRAWL_MAX_PAGES_PER_RUN` or run a live
+verification now — until the plan is upgraded, `hh` will keep hydrating
+almost entirely list-only in practice (the existing shared 25-page/run cap
+exhausts almost immediately once `hh` starts drawing on it too), which is a
+safe, low-cost holding state: no behavior regression, no meaningful spend,
+and `bayt`/`gulftalent`'s own small allocation isn't starved either. Resume
+5.1-5.4 once the plan is upgraded.
+
 - [ ] 5.1 Confirm/upgrade the Firecrawl account plan for the added volume (see
       design.md's cost math — recommend at least the 1M-credit/mo "Scale"
-      tier for headroom until hh's steady-state rate is known).
+      tier for headroom until hh's steady-state rate is known). **Requires the
+      Firecrawl web dashboard (billing) — outside SSH/API reach.**
 - [ ] 5.2 Raise `FIRECRAWL_MAX_PAGES_PER_RUN` in `/opt/freehire/.env` (recommend
       2000; see design.md Decision 4) and restart/allow the next
       `freehire-ingest@hh` timer firing to pick it up.
