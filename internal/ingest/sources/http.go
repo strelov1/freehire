@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -717,6 +718,14 @@ func (c *Client) do(ctx context.Context, r request) error {
 			err := r.decode(resp)
 			resp.Body.Close()
 			if err != nil {
+				// An exactly-empty body is Go's json/xml decoders' own signal for "no
+				// content at all" — indistinguishable from a dropped connection, and
+				// never returned for a malformed-but-present body — so it gets the same
+				// retry chance a 5xx does instead of failing the request outright.
+				if errors.Is(err, io.EOF) {
+					lastErr = fmt.Errorf("sources: decode %s: %w", r.url, err)
+					continue
+				}
 				return fmt.Errorf("sources: decode %s: %w", r.url, err)
 			}
 			return nil
