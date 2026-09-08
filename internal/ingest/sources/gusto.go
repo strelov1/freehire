@@ -104,7 +104,8 @@ type gustoPosting struct {
 	// salary is the pay line as the board renders it ("$70,000 - $90,000 per year"), empty
 	// when the employer states no pay; applySalary is what turns it into the structured fields.
 	salary string
-	// employmentType is Gusto's own label ("Full time"), not yet mapped onto the vocabulary.
+	// employmentType is Gusto's own label ("Full time"); gustoEmploymentType maps it onto
+	// the freehire vocabulary.
 	employmentType string
 }
 
