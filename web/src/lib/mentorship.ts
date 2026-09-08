@@ -11,6 +11,7 @@ import type {
   MentorProfileSuggestions,
   MentorSession,
   MentorSlot,
+  OwnMentorProfile,
 } from './types';
 
 /** The mentor directory's whole vocabulary, one single-valued filter each.
@@ -249,6 +250,32 @@ export function seedFormFromSuggestions(
     company_slug: suggestions.company_slug ?? base.company_slug,
     topics: suggestions.topics ?? base.topics,
     languages: suggestions.languages ?? base.languages,
+  };
+}
+
+/** Renders the owner's own profile read back as the whole-object write body every save
+ *  of it takes. Read back rather than defaulted, buffer/notice/horizon included, so a
+ *  save that only touches one field (a headline correction from the profile form, a
+ *  timezone change from the schedule page's session settings) never silently resets
+ *  parameters that screen does not show — the same reasoning `blank()`'s hardcoded
+ *  defaults exist to protect once a profile is created. */
+export function profileInputFromProfile(p: OwnMentorProfile): MentorProfileInput {
+  return {
+    company_slug: p.company_slug,
+    slug: p.slug,
+    name: p.name,
+    headline: p.headline,
+    bio: p.bio,
+    topics: p.topics,
+    languages: p.languages,
+    timezone: p.timezone,
+    session_minutes: p.session_minutes,
+    buffer_before_minutes: p.buffer_before_minutes ?? 0,
+    buffer_after_minutes: p.buffer_after_minutes ?? 0,
+    notice_minutes: p.notice_minutes ?? 120,
+    horizon_days: p.horizon_days ?? 30,
+    meeting_url: p.meeting_url,
+    show_photo: p.show_photo,
   };
 }
 

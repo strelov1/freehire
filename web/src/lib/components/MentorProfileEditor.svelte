@@ -1,7 +1,8 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { resolve } from '$app/paths';
   import { api } from '$lib/api';
-  import { browserTimezone, seedFormFromSuggestions } from '$lib/mentorship';
+  import { browserTimezone, profileInputFromProfile, seedFormFromSuggestions } from '$lib/mentorship';
   import { errorMessage } from '$lib/utils';
   import { Badge, Button, Card, Input } from '$lib/ui';
   import TokenInput from '$lib/components/facets/TokenInput.svelte';
@@ -34,30 +35,7 @@
     };
   }
 
-  function fromProfile(p: OwnMentorProfile): MentorProfileInput {
-    return {
-      company_slug: p.company_slug,
-      slug: p.slug,
-      name: p.name,
-      headline: p.headline,
-      bio: p.bio,
-      topics: p.topics,
-      languages: p.languages,
-      timezone: p.timezone,
-      session_minutes: p.session_minutes,
-      // Read back rather than defaulted. The owner's read carries these precisely so an
-      // edit re-submits what the mentor chose — a whole-object PUT that filled them from
-      // defaults would silently reset the buffers of anyone who corrected their headline.
-      buffer_before_minutes: p.buffer_before_minutes ?? 0,
-      buffer_after_minutes: p.buffer_after_minutes ?? 0,
-      notice_minutes: p.notice_minutes ?? 120,
-      horizon_days: p.horizon_days ?? 30,
-      meeting_url: p.meeting_url,
-      show_photo: p.show_photo,
-    };
-  }
-
-  let form = $state<MentorProfileInput>(profile ? fromProfile(profile) : blank());
+  let form = $state<MentorProfileInput>(profile ? profileInputFromProfile(profile) : blank());
   let saving = $state(false);
   let error = $state('');
 
@@ -166,6 +144,12 @@
     </p>
   {/if}
 
+  {#if profile}
+    <p class="text-muted-foreground text-sm">
+      Your timezone and session length live on the <a class="underline" href={resolve('/my/mentorship/schedule')}>schedule page</a> now, alongside when you're free.
+    </p>
+  {/if}
+
   <div class="grid gap-3 sm:grid-cols-2">
     <label class="text-sm">
       <span class="text-muted-foreground">Your name, as seekers will see it</span>
@@ -223,23 +207,6 @@
           placeholder="Type a language, press Enter"
         />
       </div>
-    </label>
-
-    <label class="text-sm">
-      <span class="text-muted-foreground">Your timezone</span>
-      <Input
-        bind:value={form.timezone}
-        class="mt-1 w-full"
-      />
-    </label>
-
-    <label class="text-sm">
-      <span class="text-muted-foreground">Session length, minutes</span>
-      <input
-        type="number"
-        bind:value={form.session_minutes}
-        class="border-input bg-background mt-1 w-full rounded-md border px-3 py-2 text-sm"
-      />
     </label>
 
     <label class="text-sm sm:col-span-2">
