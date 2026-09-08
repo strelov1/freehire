@@ -223,6 +223,65 @@ func TestHHFetchNewHydratesOnlyNew(t *testing.T) {
 	}
 }
 
+// hhListingOnlyFake serves only the search/listing page, one vacancy on page 0 and an empty
+// page thereafter (so crawl() stops after confirming the end). A detail request reaching it is
+// a wiring bug (listing and detail must be on separate getters), so it records what it saw
+// rather than silently answering it.
+type hhListingOnlyFake struct {
+	hits []string
+}
+
+func (f *hhListingOnlyFake) GetHTML(_ context.Context, u string) (*html.Node, error) {
+	f.hits = append(f.hits, u)
+	pu, err := url.Parse(u)
+	if err != nil {
+		return nil, err
+	}
+	if pu.Query().Get("page") != "0" {
+		return html.Parse(strings.NewReader(hhSearchHTML(nil)))
+	}
+	return html.Parse(strings.NewReader(hhSearchHTML([]hhVacancy{hhVac(101, "New role", "Co")})))
+}
+
+// hhDetailOnlyFake serves only vacancy detail pages, recording which URLs it was asked for.
+type hhDetailOnlyFake struct {
+	hits []string
+}
+
+func (f *hhDetailOnlyFake) GetHTML(_ context.Context, u string) (*html.Node, error) {
+	f.hits = append(f.hits, u)
+	return html.Parse(strings.NewReader(hhDetailHTML("<p>Full body.</p>")))
+}
+
+func TestHHWithDetailGetterSplitsListingAndDetailTransports(t *testing.T) {
+	listing := &hhListingOnlyFake{}
+	detail := &hhDetailOnlyFake{}
+	seen := func(string) bool { return false }
+
+	jobs, err := NewHHWithDetailGetter(listing, detail).(HydratingSource).
+		FetchNew(context.Background(), CompanyEntry{Board: "96"}, seen)
+	if err != nil {
+		t.Fatalf("FetchNew: %v", err)
+	}
+	if len(jobs) != 1 {
+		t.Fatalf("len(jobs) = %d, want 1", len(jobs))
+	}
+	if !strings.Contains(jobs[0].Description, "Full body") {
+		t.Errorf("job not hydrated from the detail getter: %q", jobs[0].Description)
+	}
+	for _, u := range listing.hits {
+		if !strings.Contains(u, "/search/vacancy") {
+			t.Errorf("listing getter received a non-listing request: %q (all hits = %v)", u, listing.hits)
+		}
+	}
+	if len(listing.hits) == 0 {
+		t.Error("listing getter received no requests")
+	}
+	if len(detail.hits) != 1 || !strings.Contains(detail.hits[0], "/vacancy/101") {
+		t.Errorf("detail getter hits = %v, want exactly one /vacancy/101 request", detail.hits)
+	}
+}
+
 func TestHHPaginatesAndStops(t *testing.T) {
 	full := make([]hhVacancy, hhPageSize)
 	for i := range full {

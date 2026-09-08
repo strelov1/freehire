@@ -392,3 +392,15 @@ fingerprint transport exactly as before.
 Neither adapter changed: `baytHTTP` is `HTMLGetter` and `gulftalentHTTP` is `XMLGetter` +
 `HTMLGetter`, and a test asserts the hosted client satisfies both. What is wrong with these
 providers is the address a request leaves from, not how the response is read.
+
+**`hh` is a different shape: only detail hydration is hosted, not the whole crawl** (like
+`wantapply`, whose sitemap enumeration is hosted while the pages it lists stay free). hh's
+listing (`hh.ru/search/vacancy`) works fine on the plain direct IP — measured 2026-09-08 — while
+its detail pages (`hh.ru/vacancy/<id>`) redirect through the proxy to an interactive DDoS-Guard
+image CAPTCHA (`/account/captcha`) that no transport this repository controls can solve. So `hh`
+is removed from `proxiedProviders` entirely (proxy.go) and its `firecrawlProviders` build
+function hands `NewHHWithDetailGetter` a fresh, always-unproxied `NewClient()` for listing and
+the hosted client for detail — deliberately NOT the `direct` parameter `ApplyFirecrawlEgress`
+passes in, since that value is the PROXIED client whenever `SOURCES_PROXY_URL` is set for any
+other provider (eightfold, djinni, 2gis, …), which would put hh's listing right back on the
+proxy this exists to stop using.
