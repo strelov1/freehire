@@ -12,6 +12,7 @@ import { writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import { createServer } from 'vite';
+import { renderFilterSectionLines } from './renderFilterSection.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const webRoot = resolve(here, '..');
@@ -105,46 +106,6 @@ function renderEndpoint(ep, auths) {
   return out.join('\n');
 }
 
-function renderFilters(filters) {
-  const { FILTER_FACETS, FILTER_EXTRAS, FILTER_MODIFIERS, RECIPES } = filters;
-  const out = [];
-  out.push('## Filtering jobs');
-  out.push('');
-  out.push(
-    'These parameters apply to `GET /jobs/search` and `GET /jobs/facets`. Combine ' +
-      'any of them with full-text `q`.',
-  );
-  out.push('');
-  for (const m of FILTER_MODIFIERS) out.push(`- ${m}`);
-  out.push('');
-  out.push('### Facets');
-  out.push('');
-  out.push('Every facet below supports repeat-OR, `_mode=and`, and `_exclude` as described above.');
-  out.push('');
-  out.push(
-    table(
-      ['Param', 'Filter', 'Values'],
-      FILTER_FACETS.map((f) => [`\`${f.param}\``, f.label, f.values]),
-    ),
-  );
-  out.push('');
-  out.push('### Numeric & boolean filters');
-  out.push('');
-  out.push(
-    table(
-      ['Param', 'Filter', 'Values'],
-      FILTER_EXTRAS.map((f) => [`\`${f.param}\``, f.label, f.values]),
-    ),
-  );
-  out.push('');
-  out.push('### Recipes');
-  out.push('');
-  for (const r of RECIPES) {
-    out.push(`- **${r.title}** — \`${r.query}\``);
-  }
-  return out.join('\n');
-}
-
 // Pure: (spec, filters) -> Markdown string. Deterministic, no IO.
 export function renderMarkdown(spec, filters) {
   const { BASE_URL, OVERVIEW, GROUPS, AUTH_LABELS } = spec;
@@ -181,7 +142,7 @@ export function renderMarkdown(spec, filters) {
   }
 
   // Filters.
-  out.push(renderFilters(filters));
+  out.push(...renderFilterSectionLines(filters));
   out.push('');
 
   // Endpoint groups.

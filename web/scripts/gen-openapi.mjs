@@ -16,6 +16,7 @@ import { writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import { loadDocsModules } from './gen-api-docs.mjs';
+import { renderFilterSectionLines } from './renderFilterSection.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const webRoot = resolve(here, '..');
@@ -219,21 +220,12 @@ function operationFor(ep) {
   return op;
 }
 
-// A "Param | Filter | Values" Markdown table — the shape both filter tables
-// below share.
-function filterTableLines(rows) {
-  const lines = ['| Param | Filter | Values |', '| --- | --- | --- |'];
-  for (const f of rows) lines.push(`| \`${f.param}\` | ${f.label} | ${f.values} |`);
-  return lines;
-}
-
 // Overview + Filtering content has no natural per-operation home (it is
 // cross-cutting: the response envelope, the global pagination rule, the error
 // table, the auth model, and the filter vocabulary apply across many
 // endpoints). It becomes Markdown in info.description instead — Scalar builds
 // a navigable sidebar and search index from its headings.
 function buildDescription(overview, filters) {
-  const { FILTER_FACETS, FILTER_EXTRAS, FILTER_MODIFIERS, RECIPES } = filters;
   const out = [];
   for (const section of overview) {
     out.push(`## ${section.title}`);
@@ -250,26 +242,7 @@ function buildDescription(overview, filters) {
     }
   }
 
-  out.push('## Filtering jobs');
-  out.push('');
-  out.push(
-    'These parameters apply to `GET /jobs/search` and `GET /jobs/facets`. Combine ' +
-      'any of them with full-text `q`.',
-  );
-  out.push('');
-  for (const m of FILTER_MODIFIERS) out.push(`- ${m}`);
-  out.push('');
-  out.push('### Facets');
-  out.push('');
-  out.push(...filterTableLines(FILTER_FACETS));
-  out.push('');
-  out.push('### Numeric & boolean filters');
-  out.push('');
-  out.push(...filterTableLines(FILTER_EXTRAS));
-  out.push('');
-  out.push('### Recipes');
-  out.push('');
-  for (const r of RECIPES) out.push(`- **${r.title}** — \`${r.query}\``);
+  out.push(...renderFilterSectionLines(filters));
 
   return out.join('\n').trimEnd();
 }
@@ -280,11 +253,21 @@ export function renderOpenApi(spec, filters) {
 
   const paths = {};
   const tags = [];
+  const seenOperationIds = new Set();
   for (const group of GROUPS) {
     tags.push({ name: group.title, description: group.intro });
     for (const ep of group.endpoints) {
+      const method = ep.method.toLowerCase();
       paths[ep.path] ??= {};
-      paths[ep.path][ep.method.toLowerCase()] = { ...operationFor(ep), tags: [group.title] };
+      if (paths[ep.path][method]) {
+        throw new Error(`Duplicate endpoint "${ep.method} ${ep.path}" — two GROUPS declare the same method+path.`);
+      }
+      const op = { ...operationFor(ep), tags: [group.title] };
+      if (seenOperationIds.has(op.operationId)) {
+        throw new Error(`Duplicate operationId "${op.operationId}" for "${ep.method} ${ep.path}" — add a case to operationId() in gen-openapi.mjs to disambiguate.`);
+      }
+      seenOperationIds.add(op.operationId);
+      paths[ep.path][method] = op;
     }
   }
 

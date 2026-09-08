@@ -6,6 +6,7 @@
 
 import { loadDocsModules } from './gen-api-docs.mjs';
 import { renderOpenApi } from './gen-openapi.mjs';
+import { buildDeprecatedFixture } from './deprecatedFixture.mjs';
 
 const checks = [];
 function assert(name, cond) {
@@ -106,29 +107,7 @@ async function main() {
 
   // Deprecated marking, exercised on a synthetic fixture (no shipped endpoint
   // currently qualifies — see openspec/changes/migrate-api-docs-scalar/tasks.md).
-  const deprecatedFixture = {
-    BASE_URL: spec.BASE_URL,
-    OVERVIEW: spec.OVERVIEW,
-    AUTH_LABELS: spec.AUTH_LABELS,
-    GROUPS: [
-      {
-        title: 'Fixture',
-        intro: 'Synthetic group for the deprecated-endpoint smoke check.',
-        endpoints: [
-          {
-            method: 'GET',
-            path: '/fixture/{id}',
-            auth: 'none',
-            summary: 'A fixture endpoint.',
-            deprecated: { since: '2026-09-08', replacement: 'GET /fixture/v2/{id}' },
-            pathParams: [{ name: 'id', type: 'integer', description: 'Fixture id.' }],
-            curl: `curl "${spec.BASE_URL}/fixture/1"`,
-          },
-        ],
-      },
-    ],
-  };
-  const d = renderOpenApi(deprecatedFixture, filters);
+  const d = renderOpenApi(buildDeprecatedFixture(spec), filters);
   const fixtureOp = d.paths['/fixture/{id}'].get;
   assert('deprecated operation is marked', fixtureOp.deprecated === true);
   assert('deprecated note names the replacement', fixtureOp.description.includes('GET /fixture/v2/{id}'));

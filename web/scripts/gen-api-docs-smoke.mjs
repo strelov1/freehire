@@ -6,6 +6,7 @@
 //   node scripts/gen-api-docs-smoke.mjs   # asserts; exits non-zero on failure
 
 import { loadDocsModules, renderMarkdown } from './gen-api-docs.mjs';
+import { buildDeprecatedFixture } from './deprecatedFixture.mjs';
 
 const checks = [];
 function assert(name, cond) {
@@ -49,28 +50,7 @@ async function main() {
   // Deprecated endpoints render a note naming the replacement. No shipped endpoint
   // currently carries `deprecated`, so this exercises the mechanism on a synthetic
   // fixture rather than the real spec.
-  const deprecatedFixture = {
-    BASE_URL: spec.BASE_URL,
-    OVERVIEW: [],
-    AUTH_LABELS: spec.AUTH_LABELS,
-    GROUPS: [
-      {
-        title: 'Fixture',
-        intro: 'Synthetic group for the deprecated-endpoint smoke check.',
-        endpoints: [
-          {
-            method: 'GET',
-            path: '/fixture/{id}',
-            auth: 'none',
-            summary: 'A fixture endpoint.',
-            deprecated: { since: '2026-09-08', replacement: 'GET /fixture/v2/{id}' },
-            curl: `curl "${spec.BASE_URL}/fixture/1"`,
-          },
-        ],
-      },
-    ],
-  };
-  const d = renderMarkdown(deprecatedFixture, filters);
+  const d = renderMarkdown(buildDeprecatedFixture(spec), filters);
   assert('deprecated endpoint is marked', d.includes('**Deprecated'));
   assert('deprecated note names the replacement', d.includes('GET /fixture/v2/{id}'));
   assert('deprecated note names the since date', d.includes('2026-09-08'));
