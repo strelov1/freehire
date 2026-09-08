@@ -80,6 +80,7 @@ func (r *fakeRepo) CreateProfile(_ context.Context, in ProfileInput) (Profile, e
 		Timezone:    in.Timezone,
 		Session:     in.Session,
 		MeetingURL:  in.MeetingURL,
+		ShowPhoto:   in.ShowPhoto,
 		Status:      StatusPending,
 	}
 	r.profiles[p.ID] = p
@@ -124,6 +125,7 @@ func (r *fakeRepo) UpdateProfile(_ context.Context, in ProfileInput) (Profile, e
 	p.Timezone = in.Timezone
 	p.Session = in.Session
 	p.MeetingURL = in.MeetingURL
+	p.ShowPhoto = in.ShowPhoto
 	r.profiles[id] = p
 	return p, nil
 }

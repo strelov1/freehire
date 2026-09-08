@@ -249,6 +249,9 @@ type profileRequest struct {
 	NoticeMinutes       int      `json:"notice_minutes"`
 	HorizonDays         int      `json:"horizon_days"`
 	MeetingURL          string   `json:"meeting_url"`
+	// ShowPhoto is the mentor's own opt-in to publish their account's CV headshot. Off
+	// by default; see mentorship.Profile.ShowPhoto.
+	ShowPhoto bool `json:"show_photo"`
 }
 
 func (r profileRequest) toInput(userID int64) mentorship.ProfileInput {
@@ -270,6 +273,7 @@ func (r profileRequest) toInput(userID int64) mentorship.ProfileInput {
 			Horizon:       time.Duration(r.HorizonDays) * 24 * time.Hour,
 		},
 		MeetingURL: r.MeetingURL,
+		ShowPhoto:  r.ShowPhoto,
 	}
 }
 

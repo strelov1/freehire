@@ -63,6 +63,7 @@ func (r *QueriesRepository) CreateProfile(ctx context.Context, in ProfileInput) 
 		MinNoticeMin:       minutesOf(in.Session.MinimumNotice),
 		HorizonDays:        daysOf(in.Session.Horizon),
 		MeetingUrl:         in.MeetingURL,
+		ShowPhoto:          in.ShowPhoto,
 	})
 	if err != nil {
 		if name, ok := pgerr.UniqueViolationConstraint(err); ok {
@@ -142,6 +143,7 @@ func (r *QueriesRepository) UpdateProfile(ctx context.Context, in ProfileInput) 
 		MinNoticeMin:       minutesOf(in.Session.MinimumNotice),
 		HorizonDays:        daysOf(in.Session.Horizon),
 		MeetingUrl:         in.MeetingURL,
+		ShowPhoto:          in.ShowPhoto,
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Profile{}, ErrProfileNotFound
@@ -279,6 +281,7 @@ func profileFromRow(row db.Mentor) Profile {
 			Horizon:       time.Duration(row.HorizonDays) * 24 * time.Hour,
 		},
 		MeetingURL: row.MeetingUrl,
+		ShowPhoto:  row.ShowPhoto,
 		Status:     row.Status,
 		Paused:     row.Paused,
 		DecidedBy:  row.DecidedBy.Int64,
