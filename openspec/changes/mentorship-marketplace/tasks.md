@@ -245,12 +245,41 @@ unit tests plus the function they drive; none of it needs Docker or Postgres.
       reaches the mentor alone, so its absence identifies the reader. Indirect, and
       therefore tested rather than assumed.
 
+- [x] 8.8 Act on the two-axis review. Five findings fixed:
+      **(a)** `MentorBlock` sat INSIDE the company page's `{#if referralAvailable}`, so a
+      company with a mentor and no referral offer showed nothing — both reviewers found
+      it independently. They are different people volunteering different things and now
+      have independent conditions.
+      **(b)** the mentor's PAST sessions were dropped from the cabinet; the seeker's were
+      not. **(c)** withdrawal had a route and no control, so the capability
+      `mentor-profile` requires was unreachable from a browser. **(d)** fifteen form
+      controls repeated the same class string instead of using the `Input` primitive the
+      design system tracks adoption of. **(e)** two Monday-first weekday lists, one in
+      `mentorship.ts` claiming to own the convention and one in the calendar component —
+      now one list with a test that spells the header.
+      Also: `web/AGENTS.md` records the new surface, and `errorMessage`/`browserTimezone`
+      replaced nine and five hand-rolled copies.
+
+      **Not fixed, and why.** A booking can record the vacancy the seeker came from
+      (`mentor-booking`: "SHALL be able to record the vacancy the seeker was reading"),
+      and the frontend cannot supply it: the public `Job` wire shape carries
+      `public_slug` and `external_id` and NO numeric id — the internal one is deliberately
+      not exposed. Passing `job_id` would mean publishing it. The seam is on the backend:
+      the booking endpoint would take a slug and resolve it. Left for that change rather
+      than worked around here.
+
+      A review cannot be pre-filled for editing: `bookingResponse` carries no review, so
+      the form always opens blank. The PUT still replaces rather than duplicates, which is
+      what the spec requires; showing the current value needs the read to widen.
+
 ## 9. Verification
 
-- [ ] 9.1 `gofmt -l .` prints nothing; `go vet ./...`, `go test ./...`,
+- [x] 9.1 `gofmt -l .` prints nothing; `go vet ./...`, `go test ./...`,
       `go vet -tags=integration ./...` all pass
-- [ ] 9.2 `go test -tags=integration ./...` passes with Docker available
-- [ ] 9.3 `pnpm --dir web lint` and the web test suite pass; `pnpm check:links` passes
+- [x] 9.2 `go test -tags=integration ./...` passes with Docker available — `db` and
+      `handler` both green against a real Postgres
+- [x] 9.3 `pnpm --dir web lint` and the web test suite pass (1751); `pnpm check:links`
+      passes (328 links)
 - [x] 9.4 Write `internal/engage/mentorship/AGENTS.md` covering what is always true here:
       the empty-override trick, the zone-resolution order, the `EXCLUDE` constraint and
       why the application still re-derives, the transactional-notification boundary,
@@ -258,4 +287,6 @@ unit tests plus the function they drive; none of it needs Docker or Postgres.
       module table and `internal/engage/AGENTS.md`; `deploy/AGENTS.md`'s "five workers
       that send mail" and "billing-sync is the first addition" both said something now
       false and are corrected
-- [ ] 9.5 Re-check the migration number against `main` after the final rebase
+- [x] 9.5 Re-check the migration number against `main` after the final rebase — `0145`
+      landed with the backend and is on `main`; the frontend change adds no migration,
+      so there is nothing left to collide

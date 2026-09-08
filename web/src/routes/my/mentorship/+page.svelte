@@ -52,6 +52,10 @@
           {timezone}
           empty="Nobody has booked yet."
         />
+        {#if data.bookings.past.length > 0}
+          <h3 class="text-muted-foreground mt-2 text-sm">Past</h3>
+          <MentorSessionList sessions={data.bookings.past} {timezone} empty="Nothing yet." />
+        {/if}
       {/if}
     </section>
 

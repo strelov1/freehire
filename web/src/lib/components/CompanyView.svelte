@@ -35,12 +35,17 @@
 
 <CompanyHeader {company} {slug} />
 
-{#if referralAvailable}
-  <div class="mt-4">
+<!-- Two independent conditions, not one. A company can have a mentor and no referral
+     offer: they are different people volunteering different things, and nesting the
+     mentorship block inside the referral gate hid it from exactly the companies that
+     had only the newer of the two. MentorBlock renders nothing on its own when there
+     is no mentor, so it needs no gate here. -->
+<div class="mt-4 flex flex-col gap-4">
+  {#if referralAvailable}
     <ReferralBlock companySlug={slug} companyName={company.name} />
-    <MentorBlock companySlug={slug} companyName={company.name} />
-  </div>
-{/if}
+  {/if}
+  <MentorBlock companySlug={slug} companyName={company.name} />
+</div>
 
 <!-- Company facts + About sit atop the jobs sidebar on desktop (passed into JobsView
      as `sidebarTop`); the sidebar is hidden on mobile, so mirror them here as cards

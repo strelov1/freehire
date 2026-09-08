@@ -204,6 +204,12 @@ export function monthGrid(month: string): string[][] {
   return weeks;
 }
 
+/** Read one field out of an `Intl` parts list. Shared by the two callers below rather
+ *  than spelled twice — they format different things and read them the same way. */
+function part(parts: Intl.DateTimeFormatPart[], type: string): string {
+  return parts.find((p) => p.type === type)?.value ?? '';
+}
+
 /** The zone this browser believes it is in, falling back to UTC where `Intl` is absent —
  *  which is the SSR pass, since the server cannot know the viewer's zone at all.
  *
@@ -230,8 +236,7 @@ export function todayIn(timezone: string, now: Date = new Date()): string {
     month: '2-digit',
     day: '2-digit',
   }).formatToParts(now);
-  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? '';
-  return `${get('year')}-${get('month')}-${get('day')}`;
+  return `${part(parts, 'year')}-${part(parts, 'month')}-${part(parts, 'day')}`;
 }
 
 // ---- the mentor's own schedule ------------------------------------------------------
@@ -250,6 +255,13 @@ const WEEKDAY_NAMES = [
   'Friday',
   'Saturday',
 ];
+
+/** The three-letter column heading for a STORED weekday number, for a grid too narrow to
+ *  spell the day out. Here rather than in the calendar component, because the module says
+ *  it owns this convention and a second list in a component makes that untrue. */
+export function weekdayShortLabel(weekday: number): string {
+  return weekdayLabel(weekday).slice(0, 3);
+}
 
 /** The name of a STORED weekday number (0 = Sunday). */
 export function weekdayLabel(weekday: number): string {
@@ -308,14 +320,13 @@ export function formatInstantIn(
     hour12: false,
     timeZoneName: 'longOffset',
   }).formatToParts(new Date(instant));
-  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? '';
   return {
-    day: `${get('year')}-${get('month')}-${get('day')}`,
-    time: `${get('hour')}:${get('minute')}`,
+    day: `${part(parts, 'year')}-${part(parts, 'month')}-${part(parts, 'day')}`,
+    time: `${part(parts, 'hour')}:${part(parts, 'minute')}`,
     // `longOffset` spells it "GMT+09:00"; the sign and the digits are the part worth
     // showing, and UTC comes back as "+00:00" rather than blank so the label never
     // looks like a missing value.
-    offset: get('timeZoneName').replace('GMT', '') || '+00:00',
+    offset: part(parts, 'timeZoneName').replace('GMT', '') || '+00:00',
   };
 }
 

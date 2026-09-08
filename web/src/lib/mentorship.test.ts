@@ -16,14 +16,13 @@ import {
   mentorFiltersToQuery,
   slotLocalDay,
   slotLocalTime,
-} from './mentorship';
-import {
   canReview,
   formatInstantIn,
   isCancellable,
   splitAvailability,
   weekdayLabel,
   weekdayOrder,
+  weekdayShortLabel,
 } from './mentorship';
 import type { Mentor, MentorAvailabilityRule, MentorSession, MentorSlot } from './types';
 
@@ -449,6 +448,21 @@ describe('weekdays, stored and displayed', () => {
 
   test('the display order runs Monday to Sunday, in storage numbers', () => {
     expect(weekdayOrder()).toEqual([1, 2, 3, 4, 5, 6, 0]);
+  });
+
+  // The calendar's column headings come from here rather than from a second list in the
+  // component. This asserts the headings a Monday-first grid actually draws, so the two
+  // cannot drift into disagreeing about which column is which.
+  test('the short labels spell the calendar header', () => {
+    expect(weekdayOrder().map(weekdayShortLabel)).toEqual([
+      'Mon',
+      'Tue',
+      'Wed',
+      'Thu',
+      'Fri',
+      'Sat',
+      'Sun',
+    ]);
   });
 
   // The two together: reading the display order through the labels must spell the week,

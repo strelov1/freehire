@@ -4,7 +4,7 @@
   import { api } from '$lib/api';
   import { errorMessage } from '$lib/utils';
   import { browserTimezone, canReview, formatInstantIn, isCancellable } from '$lib/mentorship';
-  import { Badge, Button, Card } from '$lib/ui';
+  import { Badge, Button, Card, Input } from '$lib/ui';
   import type { PageData } from './$types';
 
   let { data }: { data: PageData } = $props();
@@ -155,10 +155,10 @@
         </p>
         <label class="block text-sm">
           <span class="text-muted-foreground">Reason (optional)</span>
-          <input
+          <Input
             bind:value={reason}
-            maxlength="500"
-            class="border-input bg-background mt-1 w-full rounded-md border px-3 py-2 text-sm"
+            maxlength={500}
+            class="mt-1 w-full"
           />
         </label>
         <div class="flex gap-2">

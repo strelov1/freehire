@@ -808,6 +808,13 @@ export function createApi(
     );
   }
 
+  /** Withdraw. Every confirmed future booking is cancelled and each seeker told; past
+   *  bookings are retained as history. The row is MARKED, not deleted — bookings and
+   *  reviews cascade off it, so a delete would erase every session that ever happened. */
+  async function withdrawMentorProfile(): Promise<void> {
+    await call('/api/v1/me/mentorship/profile', { method: 'DELETE' });
+  }
+
   async function myMentorAvailability(): Promise<MentorAvailabilityRule[]> {
     return requestData<MentorAvailabilityRule[]>('/api/v1/me/mentorship/availability');
   }
@@ -2624,6 +2631,7 @@ export function createApi(
     createMentorProfile,
     updateMentorProfile,
     pauseMentorProfile,
+    withdrawMentorProfile,
     myMentorAvailability,
     replaceWeeklyAvailability,
     addAvailabilityOverride,

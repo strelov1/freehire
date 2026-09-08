@@ -17,6 +17,8 @@
     slotLocalTime,
     slotWindowForMonth,
     todayIn,
+    weekdayOrder,
+    weekdayShortLabel,
     withSearchParams,
   } from '$lib/mentorship';
   import type { Mentor, MentorSlot } from '$lib/types';
@@ -127,9 +129,12 @@
     }
   }
 
-  $effect(() => {
-    void load(slotWindowForMonth(month));
-  });
+  // One name for "ask again for the month on screen", said once rather than at each of
+  // the four places that need it: first render, the timer, the tab regaining focus, and a
+  // booking that was refused because the hour had gone.
+  const reload = () => void load(slotWindowForMonth(month));
+
+  $effect(reload);
 
   // Re-ask on the two occasions the shown hours can have gone stale without this tab
   // noticing: time simply passing, and the visitor coming back to a page they left open.
@@ -137,9 +142,9 @@
   // with a reason — but the refusal is a worse way to learn it than the slot quietly
   // leaving the list.
   onMount(() => {
-    const timer = setInterval(() => void load(slotWindowForMonth(month)), REFRESH_MS);
+    const timer = setInterval(reload, REFRESH_MS);
     const onVisible = () => {
-      if (document.visibilityState === 'visible') void load(slotWindowForMonth(month));
+      if (document.visibilityState === 'visible') reload();
     };
     document.addEventListener('visibilitychange', onVisible);
     window.addEventListener('popstate', reseedFromAddressBar);
@@ -189,13 +194,14 @@
       // availability inside the minute the slot cache holds. Re-ask rather than leaving a
       // list that still offers it.
       bookingError = errorMessage(e, 'That hour could not be booked.');
-      void load(slotWindowForMonth(month));
+      reload();
     } finally {
       booking = false;
     }
   }
 
-  const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  // From the module that owns the Monday-first order, not a second list beside it.
+  const WEEKDAYS = weekdayOrder().map(weekdayShortLabel);
   const monthLabel = $derived(
     new Intl.DateTimeFormat('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(
       new Date(`${month}-01T00:00:00Z`),

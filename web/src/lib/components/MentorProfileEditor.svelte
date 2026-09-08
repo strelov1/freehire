@@ -2,7 +2,7 @@
   import { api } from '$lib/api';
   import { browserTimezone } from '$lib/mentorship';
   import { errorMessage } from '$lib/utils';
-  import { Badge, Button, Card } from '$lib/ui';
+  import { Badge, Button, Card, Input } from '$lib/ui';
   import type { MentorProfileInput, OwnMentorProfile } from '$lib/types';
 
   let { profile = $bindable() }: { profile: OwnMentorProfile | null } = $props();
@@ -78,6 +78,28 @@
     }
   }
 
+  // Withdrawal is destructive in a way pausing is not: it cancels every confirmed future
+  // booking and tells each seeker. So it asks first, and says what it will do.
+  let withdrawing = $state(false);
+  let confirmingWithdrawal = $state(false);
+
+  async function withdraw() {
+    withdrawing = true;
+    error = '';
+    try {
+      await api.withdrawMentorProfile();
+      // The profile is MARKED withdrawn, not deleted — past sessions and their reviews
+      // hang off the row. Dropping it from local state simply returns this screen to the
+      // "offer to mentor" state.
+      profile = null;
+      confirmingWithdrawal = false;
+    } catch (e) {
+      error = errorMessage(e, 'The profile could not be withdrawn.');
+    } finally {
+      withdrawing = false;
+    }
+  }
+
   async function togglePause() {
     if (!profile) return;
     saving = true;
@@ -119,9 +141,9 @@
   <div class="grid gap-3 sm:grid-cols-2">
     <label class="text-sm">
       <span class="text-muted-foreground">Your name, as seekers will see it</span>
-      <input
+      <Input
         bind:value={form.name}
-        class="border-input bg-background mt-1 w-full rounded-md border px-3 py-2 text-sm"
+        class="mt-1 w-full"
       />
     </label>
 
@@ -145,33 +167,33 @@
 
     <label class="text-sm">
       <span class="text-muted-foreground">Headline</span>
-      <input
+      <Input
         bind:value={form.headline}
-        class="border-input bg-background mt-1 w-full rounded-md border px-3 py-2 text-sm"
+        class="mt-1 w-full"
       />
     </label>
 
     <label class="text-sm">
       <span class="text-muted-foreground">Topics, comma separated</span>
-      <input
+      <Input
         bind:value={topicsText}
-        class="border-input bg-background mt-1 w-full rounded-md border px-3 py-2 text-sm"
+        class="mt-1 w-full"
       />
     </label>
 
     <label class="text-sm">
       <span class="text-muted-foreground">Languages, comma separated</span>
-      <input
+      <Input
         bind:value={languagesText}
-        class="border-input bg-background mt-1 w-full rounded-md border px-3 py-2 text-sm"
+        class="mt-1 w-full"
       />
     </label>
 
     <label class="text-sm">
       <span class="text-muted-foreground">Your timezone</span>
-      <input
+      <Input
         bind:value={form.timezone}
-        class="border-input bg-background mt-1 w-full rounded-md border px-3 py-2 text-sm"
+        class="mt-1 w-full"
       />
     </label>
 
@@ -188,9 +210,9 @@
       <span class="text-muted-foreground">
         Meeting link — a room you own. Only booked seekers ever see it.
       </span>
-      <input
+      <Input
         bind:value={form.meeting_url}
-        class="border-input bg-background mt-1 w-full rounded-md border px-3 py-2 text-sm"
+        class="mt-1 w-full"
       />
     </label>
 
@@ -209,6 +231,34 @@
       {saving ? 'Saving…' : profile ? 'Save changes' : 'Submit for review'}
     </Button>
   </div>
+
+  {#if profile}
+    <div class="border-t pt-4">
+      {#if confirmingWithdrawal}
+        <p class="text-sm font-medium">Withdraw your profile?</p>
+        <p class="text-muted-foreground mt-1 text-sm">
+          Every confirmed session still ahead is cancelled and each person told. Sessions
+          that already happened stay in your history.
+        </p>
+        <div class="mt-3 flex gap-2">
+          <Button variant="destructive" disabled={withdrawing} onclick={withdraw}>
+            {withdrawing ? 'Withdrawing…' : 'Withdraw'}
+          </Button>
+          <Button
+            variant="ghost"
+            disabled={withdrawing}
+            onclick={() => (confirmingWithdrawal = false)}
+          >
+            Keep it
+          </Button>
+        </div>
+      {:else}
+        <Button variant="ghost" size="sm" onclick={() => (confirmingWithdrawal = true)}>
+          Withdraw profile
+        </Button>
+      {/if}
+    </div>
+  {/if}
 
   {#if error}
     <p class="text-destructive text-sm">{error}</p>

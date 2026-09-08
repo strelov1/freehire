@@ -67,6 +67,32 @@ production; in dev the Vite proxy (`web/vite.config.ts`) forwards `/api` to the 
   in the module graph of every job and company page while only the few visitors who actually
   ask for a referral open it. The block itself stays server-rendered — deferring it too would
   push the description down after hydration and trade the CLS the page currently has at zero.
+- **Mentorship** (`/mentors`, `/mentors/[slug]`, `/my/mentorship`): the arithmetic lives in
+  `web/src/lib/mentorship.ts`, the same split `matchAnalysis.ts` holds — pure, `$app`-free,
+  unit-tested. **Nothing in the slot path constructs a `Date`.** A slot arrives with
+  `local_start` already resolved in the viewer's zone, so parsing it re-interprets it against
+  the browser's: Tokyo's 16th at 01:00 is still the 15th in UTC, and the slot files under the
+  day before the one offered. The month grid is integer arithmetic for the same reason. A
+  BOOKING is the opposite case — it carries only instants, so the zone is applied here. Every
+  slot renders its `utc_offset`, because on the autumn transition two slots share a wall clock
+  and differ only there. The profile page is server-rendered and its SLOTS are not: the server
+  cannot know the viewer's zone, and rendering them in UTC then swapping after hydration shows
+  one set of hours and silently replaces it. Booker state is `?month`/`?date`/`?slot`, held in
+  the component and only MIRRORED to the address bar — `page.url` lags a shallow
+  `replaceState` (see `urlSynced.svelte.ts`), so deriving from it moves the URL and not the
+  screen. That URL is also what survives the sign-in bounce, which is why the sign-in link is
+  built from `location.search` rather than `promptSignIn()`.
+- **`MentorBlock` asks from the browser, not from `load`.** It answers "does this company have
+  a mentor?" out of the DIRECTORY narrowed to that company — never a second endpoint, which
+  would be a second copy of the publication predicate. It runs client-side because the job page
+  is the busiest surface here and roughly three quarters of this host's traffic is crawlers: a
+  server-side call would spend an API request on every bot fetch to answer a question no bot
+  acts on. It renders nothing when there is no mentor, so callers need no gate of their own.
+- **`color-scheme` is declared in `app.css`**, light by default and dark under `.dark`. The
+  menu a native `<select>` opens is drawn by the OS, and without this it follows the OS
+  setting rather than the site's — a visitor whose machine is dark got a black dropdown over a
+  white page. There is no way to style a native menu; `color-scheme` is the whole API, and it
+  also covers scrollbars, form-control focus rings and date pickers.
 - **Filters**: the companies FilterModal uses `COMPANY_FACETS` from `web/src/lib/facets.ts`,
   including a "Remote hiring" pill that reuses the shared `REGION` vocabulary for the
   `remote_regions` overlap facet.
