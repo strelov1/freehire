@@ -87,13 +87,14 @@ func TestEncodeBatch_successGeneration(t *testing.T) {
 	if genBody["output"] != `{"seniority":"senior"}` {
 		t.Errorf("output = %v, want raw response", genBody["output"])
 	}
-	// usage tokens are present.
-	usage, _ := genBody["usage"].(map[string]any)
+	// usage tokens are present, as Langfuse's exclusive buckets. No total is sent —
+	// Langfuse derives it, and a total of our own could disagree with its own parts.
+	usage, _ := genBody["usageDetails"].(map[string]any)
 	if usage == nil {
-		t.Fatal("usage missing on a generation that reported tokens")
+		t.Fatal("usageDetails missing on a generation that reported tokens")
 	}
-	if usage["input"].(float64) != 1200 || usage["output"].(float64) != 40 || usage["total"].(float64) != 1240 {
-		t.Errorf("usage = %v, want 1200/40/1240", usage)
+	if usage["input"].(float64) != 1200 || usage["output"].(float64) != 40 {
+		t.Errorf("usageDetails = %v, want input 1200 and output 40", usage)
 	}
 	// metadata attributes the workload.
 	meta, _ := genBody["metadata"].(map[string]any)
@@ -104,6 +105,108 @@ func TestEncodeBatch_successGeneration(t *testing.T) {
 	if genBody["traceId"] == nil || genBody["traceId"] == "" {
 		t.Error("generation has no traceId")
 	}
+}
+
+// Langfuse counts every key of usageDetails as its own non-overlapping bucket, so the
+// plain input bucket must EXCLUDE what the cache served. The provider reports the two
+// overlapping (prompt_tokens includes the cached ones), and sending them through
+// unadjusted would bill the cached prefix twice — at the full input rate as well as the
+// cache-read one, which is the direction that makes a model look more expensive than it
+// is.
+func TestEncodeBatchSplitsCachedTokensIntoTheirOwnBucket(t *testing.T) {
+	start := time.Date(2026, 7, 1, 12, 0, 0, 0, time.UTC)
+	g := Generation{
+		Model:  "deepseek-v4-flash",
+		System: "system prompt",
+		User:   "user prompt",
+		Output: `{"ok":true}`,
+		Usage:  &Usage{Input: 1200, Output: 40, CachedInput: 900, Total: 1240},
+		Start:  start,
+		End:    start.Add(time.Second),
+		Source: "assistant",
+	}
+
+	batch := decodeBatch(t, mustEncode(t, g))
+	details := usageDetailsOf(t, batch)
+
+	if details["input"] != float64(300) {
+		t.Errorf("input bucket = %v, want 300 (1200 reported minus 900 cached)", details["input"])
+	}
+	if details["input_cached_tokens"] != float64(900) {
+		t.Errorf("input_cached_tokens = %v, want 900", details["input_cached_tokens"])
+	}
+	if details["output"] != float64(40) {
+		t.Errorf("output = %v, want 40", details["output"])
+	}
+}
+
+// A provider that named no cached count leaves the whole prompt in the plain bucket, and
+// no cached bucket is sent at all — an explicit zero would assert a cache miss we did not
+// measure.
+func TestEncodeBatchOmitsTheCachedBucketWhenNoneWasReported(t *testing.T) {
+	start := time.Date(2026, 7, 1, 12, 0, 0, 0, time.UTC)
+	g := Generation{
+		Model:  "m",
+		Output: "{}",
+		Usage:  &Usage{Input: 1200, Output: 40, Total: 1240},
+		Start:  start,
+		End:    start.Add(time.Second),
+		Source: "enrich",
+	}
+
+	details := usageDetailsOf(t, decodeBatch(t, mustEncode(t, g)))
+	if details["input"] != float64(1200) {
+		t.Errorf("input bucket = %v, want the full 1200 when nothing was cached", details["input"])
+	}
+	if _, ok := details["input_cached_tokens"]; ok {
+		t.Errorf("cached bucket present as %v, want it absent", details["input_cached_tokens"])
+	}
+}
+
+// A cached count that exceeds the reported prompt total is not arithmetic we can trust.
+// Subtracting would produce a negative bucket, which Langfuse would take at face value,
+// so the reading is passed through whole and unsplit rather than turned into a number
+// nobody measured.
+func TestEncodeBatchLeavesTheInputWholeWhenCachedExceedsIt(t *testing.T) {
+	start := time.Date(2026, 7, 1, 12, 0, 0, 0, time.UTC)
+	g := Generation{
+		Model:  "m",
+		Output: "{}",
+		Usage:  &Usage{Input: 100, Output: 5, CachedInput: 900, Total: 105},
+		Start:  start,
+		End:    start.Add(time.Second),
+		Source: "enrich",
+	}
+
+	details := usageDetailsOf(t, decodeBatch(t, mustEncode(t, g)))
+	if details["input"] != float64(100) {
+		t.Errorf("input bucket = %v, want the reported 100 left whole", details["input"])
+	}
+	if _, ok := details["input_cached_tokens"]; ok {
+		t.Errorf("cached bucket present as %v, want it absent on an impossible reading", details["input_cached_tokens"])
+	}
+}
+
+func mustEncode(t *testing.T, g Generation) []byte {
+	t.Helper()
+	body, err := encodeBatch([]Generation{g})
+	if err != nil {
+		t.Fatalf("encodeBatch: %v", err)
+	}
+	return body
+}
+
+func usageDetailsOf(t *testing.T, batch []map[string]any) map[string]any {
+	t.Helper()
+	genBody, _ := findEvent(t, batch, "generation-create")["body"].(map[string]any)
+	if genBody == nil {
+		t.Fatal("generation event has no body object")
+	}
+	details, _ := genBody["usageDetails"].(map[string]any)
+	if details == nil {
+		t.Fatalf("generation carries no usageDetails: %v", genBody)
+	}
+	return details
 }
 
 func TestEncodeBatch_errorGenerationOmitsUsage(t *testing.T) {
@@ -133,8 +236,8 @@ func TestEncodeBatch_errorGenerationOmitsUsage(t *testing.T) {
 		t.Errorf("statusMessage = %v, want %q", genBody["statusMessage"], errTest.Error())
 	}
 	// usage must be omitted when the model reported no tokens, not sent as zeros.
-	if _, ok := genBody["usage"]; ok {
-		t.Errorf("usage present on a call with no tokens, want omitted: %v", genBody["usage"])
+	if _, ok := genBody["usageDetails"]; ok {
+		t.Errorf("usageDetails present on a call with no tokens, want omitted: %v", genBody["usageDetails"])
 	}
 }
 
