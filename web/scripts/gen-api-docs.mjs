@@ -60,6 +60,10 @@ function renderEndpoint(ep, auths) {
   out.push(`### \`${ep.method} ${ep.path}\``);
   out.push('');
   out.push(`**Auth:** ${auths[ep.auth]}`);
+  if (ep.deprecated) {
+    out.push('');
+    out.push(`**Deprecated** since ${ep.deprecated.since} — use \`${ep.deprecated.replacement}\` instead.`);
+  }
   out.push('');
   out.push(ep.summary);
   if (ep.description) {
