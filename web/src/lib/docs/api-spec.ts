@@ -39,6 +39,10 @@ export interface Endpoint {
   /** Marks the endpoint that carries the full job-search filter vocabulary, so
    *  the renderer can inject the shared filter table after its own params. */
   filterable?: boolean;
+  /** Present when the endpoint is superseded but still served — both renderers
+   *  mark it and name the replacement, rather than the caller learning only
+   *  from prose. */
+  deprecated?: { since: string; replacement: string };
   pathParams?: Param[];
   query?: Param[];
   body?: Param[];

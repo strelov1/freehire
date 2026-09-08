@@ -1,7 +1,7 @@
 {
   "Alert": 1,
   "Avatar": 2,
-  "Badge": 26,
+  "Badge": 25,
   "BrandMark": 2,
   "Button": 79,
   "Card": 13,
@@ -21,7 +21,7 @@
   "SectionLabel": 18,
   "SettingRow": 3,
   "Skeleton": 3,
-  "Table": 8,
+  "Table": 7,
   "Tabs": 0,
   "TabStrip": 11,
   "Tooltip": 2
