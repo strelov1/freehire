@@ -2,6 +2,8 @@ package sources
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"net/url"
 	"reflect"
 	"strings"
@@ -218,6 +220,56 @@ func TestTeamtailorStopsWhenPageYieldsNoNewLinks(t *testing.T) {
 	}
 	if len(jobs) != 1 {
 		t.Fatalf("got %d jobs, want 1 (de-duplicated, no runaway loop)", len(jobs))
+	}
+}
+
+// A later-page listing failure must fail the whole crawl, not return the pages gathered so
+// far — this is the fullBoardListing bar (source.go), and the exact assumption that let a
+// real board (tantor.teamtailor.com, live-probed 2026-09) get silently truncated at
+// ttMaxPages before this change.
+func TestTeamtailorFetchFailsOnALaterPageError(t *testing.T) {
+	fake := (&routedHTTP{}).
+		route("page=1", ttListingHTML("https://b/jobs/1-a")).
+		routeErr("page=2", errors.New("boom"))
+
+	if _, err := NewTeamtailor(fake).Fetch(context.Background(), CompanyEntry{Board: "b"}); err == nil {
+		t.Fatal("Fetch succeeded despite page 2 failing — a later-page failure must not be treated as the board's natural end")
+	}
+}
+
+// ttEndlessListingFake serves a fresh, never-empty listing page for any page requested, so
+// the walk can only stop by reaching ttMaxPages — mirrors taleo_test.go's taleoEndlessFake
+// for the shared "the cap must not be a silent success" contract.
+type ttEndlessListingFake struct{ calls int }
+
+func (f *ttEndlessListingFake) GetHTML(_ context.Context, rawURL string) (*html.Node, error) {
+	f.calls++
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return nil, err
+	}
+	body := ttListingHTML(fmt.Sprintf("https://b/jobs/%s-x", u.Query().Get("page")))
+	return html.Parse(strings.NewReader(body))
+}
+
+// A listing still yielding new links past ttMaxPages is a truncated walk, not a genuinely
+// exhausted one, and must fail rather than silently return the links gathered so far — the
+// same partial-success shape that forced freehire#2337's revert.
+func TestTeamtailorFetchFailsWhenListingExceedsThePageCap(t *testing.T) {
+	fake := &ttEndlessListingFake{}
+
+	_, err := NewTeamtailor(fake).Fetch(context.Background(), CompanyEntry{Board: "b"})
+	if err == nil {
+		t.Fatal("Fetch succeeded despite the listing still yielding new links past ttMaxPages — a truncated walk must not be returned as a partial success")
+	}
+	if fake.calls != ttMaxPages {
+		t.Errorf("calls = %d, want exactly %d (one per page up to the cap)", fake.calls, ttMaxPages)
+	}
+}
+
+func TestTeamtailorIsFullBoardListing(t *testing.T) {
+	if !FullBoardListingProviders(All(nil))["teamtailor"] {
+		t.Error("FullBoardListingProviders(All(nil)) should include teamtailor")
 	}
 }
 

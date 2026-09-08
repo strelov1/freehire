@@ -24,10 +24,23 @@ func NewTeamtailor(c HTMLGetter) Source { return teamtailor{http: c} }
 
 func (teamtailor) Provider() string { return "teamtailor" }
 
-// ttMaxPages bounds listing pagination so a board that never returns an empty page
-// cannot loop forever.
+// fullBoardListing: jobURLs proves completeness by paginating to a genuinely empty page,
+// and now treats a later-page failure or reaching the ttMaxPages safety ceiling as a hard
+// Fetch failure rather than a partial success. See the fullBoardListing interface for the
+// bar, and ttMaxPages's own comment for the real-board truncation this closes.
+func (teamtailor) fullBoardListing() {}
+
+// ttMaxPages bounds listing pagination so a board that never returns an empty page cannot
+// loop forever. It is a safety ceiling, not a real-world board size: found by code review
+// (openspec/changes/teamtailor-listing-cap-fix) that the previous value, 100, was actively
+// truncating real boards — a live probe of tantor.teamtailor.com found pages 100 and 101
+// still full (21 links each) and the board's true end only past page 120, meaning the crawl
+// was silently dropping roughly a fifth of that board's live postings, not a hypothetical.
+// 1000 is a wide multiple over that measurement, and reaching it is now a hard failure
+// (jobURLs), never a silent partial success — see fullBoardListing's own bar (source.go)
+// for why a reachable ceiling must fail loudly rather than truncate quietly.
 const (
-	ttMaxPages = 100
+	ttMaxPages = 1000
 )
 
 func (t teamtailor) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
@@ -78,6 +91,13 @@ func (t teamtailor) FetchNew(ctx context.Context, e CompanyEntry, seen func(exte
 
 // jobURLs enumerates every posting URL on a board — the listing walk shared by Fetch and
 // FetchNew, which differ only in what they do with the result.
+//
+// Every failure to prove the walk reached the board's real end is a hard error, never a
+// partial result — a page fetch failing past page 1, and running out the whole ttMaxPages
+// ceiling without ever seeing an empty page, both fail the crawl. This is the
+// fullBoardListing bar (source.go): the 2026 measurement that found ttMaxPages=100 quietly
+// truncating a real board is exactly the shape of bug that bar exists to catch structurally
+// rather than trust to a comment.
 func (t teamtailor) jobURLs(ctx context.Context, e CompanyEntry) ([]string, error) {
 	// base carries the scheme+host; relative job hrefs resolve against it (an absolute
 	// href resolves to itself), so it is parsed once rather than per listing page.
@@ -105,10 +125,10 @@ func (t teamtailor) jobURLs(ctx context.Context, e CompanyEntry) ([]string, erro
 			}
 		}
 		if err != nil {
-			if page == 1 {
-				return nil, fmt.Errorf("teamtailor: listing %s: %w", e.Board, err)
-			}
-			break // a later page failing ends enumeration with the jobs gathered so far
+			// A later page failing is no longer treated as "the board must have ended
+			// here" — that assumption is exactly what let ttMaxPages's truncation go
+			// unnoticed. An unproven end fails the whole crawl instead.
+			return nil, fmt.Errorf("teamtailor: listing %s page %d: %w", e.Board, page, err)
 		}
 		// Stop on the first page that adds no new links: an empty page, or a board that
 		// serves the same page for any ?page=N (de-dup turns the repeat into zero new).
@@ -121,10 +141,13 @@ func (t teamtailor) jobURLs(ctx context.Context, e CompanyEntry) ([]string, erro
 			}
 		}
 		if newLinks == 0 {
-			break
+			return urls, nil
 		}
 	}
-	return urls, nil
+	// The loop ran out ttMaxPages without ever seeing an empty page — the board is not
+	// proven to have ended, so this is not "here is what we found," it is a failure.
+	return nil, fmt.Errorf("teamtailor: listing %s: reached the %d-page safety ceiling without finding the board's end",
+		e.Board, ttMaxPages)
 }
 
 // detail fetches one job page and maps its JobPosting ld+json to a Job, returning ok=false
