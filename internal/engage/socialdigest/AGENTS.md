@@ -65,11 +65,32 @@ already publishes.
   publisher list rather than present and disabled — the same degradation as the rest
   of this worker fleet.
 
+## The LinkedIn channel
+
+Posts to our own company page through the Community Management API's Posts endpoint
+(`POST /rest/posts`, author `urn:li:organization:{id}`). Three things about it have
+no counterpart in the Discord publisher:
+
+- **Its credential expires.** A Discord webhook URL is static configuration; a
+  LinkedIn access token lasts 60 days, so this publisher takes a `TokenSource`
+  rather than a string and reads the token per publish. Everything about minting,
+  storing and renewing it is [linkedinauth](../linkedinauth/AGENTS.md); this file
+  knows only that a string arrives or an error does.
+- **The text format reserves characters, and they must be escaped even as plain
+  text.** `\ | { } @ [ ] ( ) < > # * _ ~` — a bare `(` in `Senior C++ (Remote)` is a
+  syntax error in LinkedIn's `little` format and the API refuses the whole post with
+  a 400. The URL is deliberately NOT escaped: a backslash inside a link publishes
+  verbatim and breaks it.
+- **Over the 3000-character limit the list is trimmed by WHOLE POSTINGS**, where the
+  Discord publisher truncates by runes. Discord carries its links inside markdown;
+  here every URL is bare text on its own line, and a cut mid-string would publish a
+  link that goes nowhere.
+
+`linkedInAPIVersion` is a dated commitment, not a detail: LinkedIn sunsets a version
+about a year after it ships, and a request naming a retired one is refused. Review
+it before 2027-08.
+
 ## Not here
 
-A LinkedIn publisher. Its Community Management API access request is filed and
-awaiting review; until it clears there is no organization URN and no token, so the
-code would ship and never run. The `Publisher` seam and the channel-keyed ledger
-exist so that adding it is one file. Note that its access token lasts 60 days, so
-that change owes a refresh worker as well — a Discord webhook URL never expires,
-which is most of why Discord went first.
+A second social network. The `Publisher` seam and the channel-keyed ledger are what
+make the next one a file rather than a schema change.

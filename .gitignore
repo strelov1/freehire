@@ -58,6 +58,8 @@ hire
 /hire-api
 /hydrate-adzuna-description
 /import-company-industries
+/linkedin-auth
+/linkedin-token-refresh
 /ingest
 /ingest-scheduler
 /liveness

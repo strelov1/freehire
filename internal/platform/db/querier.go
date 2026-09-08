@@ -2308,6 +2308,10 @@ type Querier interface {
 	// list yet (never backfilled) comes back with a NULL/nil similar_job_ids, not an
 	// error — the handler treats "not backfilled yet" and "computed empty" the same.
 	GetSimilarJobIDs(ctx context.Context, id int64) ([]int64, error)
+	// The credential one channel publishes with. No rows means the channel has never been signed
+	// in, which every caller reports as "not configured" rather than as an error — the same
+	// degradation as an unset webhook URL.
+	GetSocialToken(ctx context.Context, channel string) (SocialToken, error)
 	// Which customer to ask the provider about for this account. NULL means the account has
 	// never transacted, which is the same answer the provider gives for an id it does not know.
 	GetStripeCustomerID(ctx context.Context, id int64) (pgtype.Text, error)
@@ -4929,6 +4933,18 @@ type Querier interface {
 	// derived catalogue re-keys through SyncCompaniesFromJobs + DeleteOrphanCompanies.
 	// The name guard keeps a re-run from overwriting a name that is no longer a slug.
 	RenameSlugCompany(ctx context.Context, arg RenameSlugCompanyParams) (int64, error)
+	// Write back what a refresh-token exchange returned.
+	//
+	// obtained_at is deliberately NOT touched: the refresh token's clock keeps running from the
+	// original sign-in, and a renewal that reset it would hide the one date that says when a
+	// person must sign in again.
+	//
+	// The refresh token is overwritten rather than preserved, because LinkedIn returns it on every
+	// exchange and a provider that rotates it would otherwise leave us holding a dead one. It is
+	// guarded on the row still existing (execrows), so a renewal racing a re-sign-in reports zero
+	// rather than silently writing over a fresher grant... which it cannot do anyway, the WHERE
+	// naming the access token this renewal was issued against.
+	RenewSocialToken(ctx context.Context, arg RenewSocialTokenParams) (int64, error)
 	// The whole schedule as an operator reads it: every eligible provider, its override if it
 	// has one, and what its runs have actually been doing. Aggregated per provider rather than
 	// per shard, because the question this answers is "is anything not running?" and 24
@@ -5549,6 +5565,12 @@ type Querier interface {
 	// self-corrects on the next real change, so this is accepted over threading the exact
 	// embedded hash through a nullable text[] per batch.
 	StampSemanticEmbeddedBatch(ctx context.Context, arg StampSemanticEmbeddedBatchParams) error
+	// Record the credential a person has just signed in for.
+	//
+	// obtained_at moves and refreshed_at is cleared, because both describe THIS grant: the
+	// refresh token's 365-day life is measured from the sign-in and is not extended by a renewal,
+	// so a stale obtained_at would make the warning arrive after the deadline it is warning about.
+	StoreSocialToken(ctx context.Context, arg StoreSocialTokenParams) error
 	// Record one message as belonging to a job the caller named, as a SUGGESTION they still
 	// confirm. It is the only write the recall path makes.
 	//

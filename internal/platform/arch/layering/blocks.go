@@ -201,7 +201,7 @@ var blocks = map[string][]string{
 	// billing would import a community integration — and the guard would say so.
 	"engage": {
 		"broadcast", "community", "companyfeedback", "discordlink", "emailnotify",
-		"mailpreview", "mentorship", "notify", "nudge", "onboarding", "pushnotify",
+		"linkedinauth", "mailpreview", "mentorship", "notify", "nudge", "onboarding", "pushnotify",
 		"referral", "reminder", "report", "socialdigest", "subscription",
 		"telegramnotify", "vote", "webhooknotify",
 	},
