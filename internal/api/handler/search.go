@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"errors"
 	"log"
 	"slices"
 	"time"
@@ -161,7 +162,7 @@ func (h *searchHandlers) matchVector(c *fiber.Ctx) []float32 {
 // view...], "meta": {total, limit, offset}} — results carry public_slug and never
 // the internal id.
 func (h *searchHandlers) SearchJobs(c *fiber.Ctx) error {
-	res, limit, offset, err := h.runJobSearch(c)
+	res, limit, offset, dropped, err := h.runJobSearch(c)
 	if err != nil {
 		return err
 	}
@@ -172,42 +173,67 @@ func (h *searchHandlers) SearchJobs(c *fiber.Ctx) error {
 	}
 	h.attachGhost(c, res.Hits, views)
 
-	return listResponseWithIgnored(c, views, res.Total, limit, offset, ignoredParams(c, searchParams))
+	ignored := search.SortAndCap(append(dropped, ignoredParams(c, searchParams)...))
+	return listResponseWithIgnored(c, views, res.Total, limit, offset, ignored)
 }
 
 // runJobSearch performs the request handling shared by both job-search endpoints:
 // the availability check, the pagination-window guard, and the index query. It is
 // the single place the query is built, so the public and agent search endpoints
 // cannot drift. The availability and deep-pagination guards return a fiber *Error
-// the caller can return directly; on success it returns the raw hits and the
-// applied limit/offset.
-func (h *searchHandlers) runJobSearch(c *fiber.Ctx) (search.SearchResult, int, int, error) {
+// the caller can return directly; on success it returns the raw hits, the applied
+// limit/offset, and any filter params dropped by the degrade below (nil in the
+// ordinary case — see its own comment).
+func (h *searchHandlers) runJobSearch(c *fiber.Ctx) (search.SearchResult, int, int, []search.UnknownParam, error) {
 	if h.search == nil {
-		return search.SearchResult{}, 0, 0, fiber.NewError(fiber.StatusServiceUnavailable, "search is not available")
+		return search.SearchResult{}, 0, 0, nil, fiber.NewError(fiber.StatusServiceUnavailable, "search is not available")
 	}
 
 	limit, offset := pageParams(c)
 	if offset+limit > maxSearchWindow {
-		return search.SearchResult{}, 0, 0, fiber.NewError(fiber.StatusBadRequest, "pagination too deep")
+		return search.SearchResult{}, 0, 0, nil, fiber.NewError(fiber.StatusBadRequest, "pagination too deep")
 	}
 
 	vector := h.matchVector(c)
+	sort := searchSort(c, vector != nil)
+	filter := buildSearchFilter(c)
 	res, err := h.search.Search(c.Context(), search.SearchParams{
 		Query:  c.Query("q"),
-		Filter: buildSearchFilter(c),
-		Sort:   searchSort(c, vector != nil),
+		Filter: filter,
+		Sort:   sort,
 		Vector: vector,
 		Limit:  limit,
 		Offset: offset,
 	})
+
+	var dropped []search.UnknownParam
 	if err != nil {
-		// RenderError renders a generic 500; returning the error keeps the
-		// Meilisearch failure cause visible to logging instead of swallowing it.
-		return search.SearchResult{}, 0, 0, err
+		// Degrade, not fail, when the filter itself is why Meilisearch refused the
+		// query — the deploy window a filterable attribute is declared in code
+		// before the live index catches up (AGENTS.md's "Adding a filterable
+		// attribute") is the realistic trigger, not a malformed client value
+		// (every facet/scalar value is already escaped before it reaches a filter
+		// expression — see search.quote). filter == nil means there is nothing to
+		// blame — retrying an unchanged query would just fail again identically.
+		if filter == nil || !errors.Is(err, search.ErrBadQuery) {
+			// RenderError renders a generic 500 (or 400 for ErrBadQuery); returning
+			// the error keeps the failure cause visible to logging instead of
+			// swallowing it.
+			return search.SearchResult{}, 0, 0, nil, err
+		}
+		res, err = h.search.Search(c.Context(), search.SearchParams{
+			Query: c.Query("q"), Sort: sort, Vector: vector, Limit: limit, Offset: offset,
+		})
+		if err != nil {
+			return search.SearchResult{}, 0, 0, nil, err
+		}
+		// Which single param Meilisearch minded is not knowable from its own
+		// error, so every active filter param is reported rather than a guess.
+		dropped = search.ActiveFilterParams(queryValues(c))
 	}
 
 	h.recordQuery(c.Query("q"))
-	return res, limit, offset, nil
+	return res, limit, offset, dropped, nil
 }
 
 // recordQuery notes what the catalogue was asked for, so the suggestion dictionary can

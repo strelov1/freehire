@@ -54,6 +54,30 @@ func UnknownParams(v url.Values, alsoKnown []string) []UnknownParam {
 	return unknownAgainst(v, knownParams(alsoKnown))
 }
 
+// ActiveFilterParams reports which of v's query params ARE part of the jobs filter
+// vocabulary (every facet, its `_exclude`/`_mode` conventions, and the scalar filters) and
+// were actually present in the request — the mirror image of UnknownParams, which reports
+// the ones that are NOT. Backed by the same knownParams list as UnknownParams so the two
+// can never drift into disagreeing about what the vocabulary is.
+//
+// It exists for the one case a filter param this package DOES recognize still could not be
+// applied: Meilisearch rejecting the assembled filter during the deploy window a filterable
+// attribute is declared in code before the live index catches up (see AGENTS.md's "Adding a
+// filterable attribute"). The caller degrades by dropping the whole dynamic filter and
+// reports every param this returns — Meilisearch's own rejection does not reliably name
+// which single one it minded, so nothing here guesses at one. DidYouMean is never set: every
+// entry is, by construction, already-recognized vocabulary, not a typo to correct.
+func ActiveFilterParams(v url.Values) []UnknownParam {
+	known := knownParams(nil)
+	var out []UnknownParam
+	for param := range v {
+		if param != "" && known[param] {
+			out = append(out, UnknownParam{Param: param})
+		}
+	}
+	return SortAndCap(out)
+}
+
 // UnknownCompanyParams is UnknownParams for the company search, whose filter
 // (CompanyFilterFromValues) reads a different vocabulary: its own facet list,
 // and none of the `_exclude` / `_mode` conventions the jobs filter honours. A
