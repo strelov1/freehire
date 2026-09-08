@@ -34,6 +34,24 @@ export const accountNav = [
   // Employee referrals: request a referral, offer to refer (moderated), and — for
   // referrers — manage incoming requests. Open to every signed-in user.
   { href: '/my/referrals', label: 'Referrals' },
+  // Booked mentorship sessions, upcoming and past. Beside referrals because it is the
+  // same insider seen from the other end — but NOT folded into it: a referral offer is
+  // anonymous on purpose and a mentor is named, which is the whole difference between
+  // the two features.
+  //
+  // Beta-only while the marketplace has no supply: mentors are onboarded by hand, and a
+  // section that opens on an empty directory reads as a broken feature rather than a new
+  // one. Drop the flag once there are mentors to show.
+  { href: '/my/mentorship', label: 'Mentorship', betaOnly: true },
+  // Talent Network membership: appear in the public, anonymised catalogue recruiters
+  // browse. One toggle. It sits in the nav because the page owns the ONLY control that
+  // puts somebody in the catalogue — the feature previously shipped with a working page
+  // and no way to reach it, which is indistinguishable from not having shipped.
+  //
+  // `betaOnly` while the feature settles. Hiding the entry is an affordance, not the
+  // gate: the server refuses a JOIN from outside the group, which is what actually keeps
+  // the catalogue to the beta population. Leaving is never refused.
+  { href: '/my/talent-network', label: 'Talent Network', betaOnly: true },
   // The notification center: delivery history, saved-search alerts, and the
   // account-level reminder/nudge settings, as three tabs of one section.
   { href: '/my/notifications', label: 'Notifications' },

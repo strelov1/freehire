@@ -118,6 +118,14 @@ func run() int {
 	// platforms' own public job-board APIs, so its user agent, timeouts and size caps are
 	// exactly right here too.
 	sidecar := atsapply.NewClient(sources.NewClient(), llmClient, llmKeyResolver, atoms, letters, cvStore, cvRenderer)
+	// Stored-form fallback (openspec/changes/atsapply-recruitee-stored-schema): lets a
+	// provider with no live schema fetcher (today: Recruitee) reach field resolution
+	// instead of parking before it ever runs, by reading the form cmd/capture-apply-form
+	// (or, for Recruitee, the ingest crawl itself) already captured into apply_forms. The
+	// same reader NewPreviewClient below already uses for its own, differently-ordered
+	// purpose — see fetchSchema's own comment for why Client does NOT mirror
+	// PreviewClient's storage-first order.
+	sidecar = sidecar.WithStoredFormReader(&dbApplyFormReader{q: queries})
 	// browser-use fallback (openspec/changes/add-browseruse-atsapply-fallback): empty key
 	// leaves sidecar exactly as it was before this capability existed — Ashby/Workable/
 	// Recruitee still park with reasonSubmissionNotImplemented. Its own enforce flag and

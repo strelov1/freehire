@@ -101,6 +101,18 @@ type mentorResponse struct {
 	Status         string  `json:"status,omitempty"`
 	Paused         bool    `json:"paused,omitempty"`
 	MeetingURL     string  `json:"meeting_url,omitempty"`
+
+	// The rest of the session parameters, for the OWNER alone. Pointers rather than plain
+	// ints because a zero buffer is a real setting, and `omitempty` cannot tell "no buffer"
+	// from "not your profile" — it would drop both.
+	//
+	// They are here because the cabinet edits the profile as a whole object: without them
+	// a mentor who corrects their headline re-submits the DEFAULT buffers and notice, and
+	// silently loses whatever they had chosen. Nothing public reads them.
+	BufferBeforeMinutes *int `json:"buffer_before_minutes,omitempty"`
+	BufferAfterMinutes  *int `json:"buffer_after_minutes,omitempty"`
+	NoticeMinutes       *int `json:"notice_minutes,omitempty"`
+	HorizonDays         *int `json:"horizon_days,omitempty"`
 }
 
 // toMentorResponse renders a profile for the PUBLIC. The meeting link is deliberately
@@ -122,8 +134,18 @@ func toMentorResponse(p mentorship.Profile) mentorResponse {
 func toOwnMentorResponse(p mentorship.Profile) mentorResponse {
 	out := toModeratorMentorResponse(p)
 	out.MeetingURL = p.MeetingURL
+	// The parameters the cabinet edits. Read back so a mentor correcting one field
+	// re-submits what they actually chose rather than this endpoint's defaults.
+	out.BufferBeforeMinutes = minutesOf(p.Session.BufferBefore)
+	out.BufferAfterMinutes = minutesOf(p.Session.BufferAfter)
+	out.NoticeMinutes = minutesOf(p.Session.MinimumNotice)
+	out.HorizonDays = intPtr(int(p.Session.Horizon / (24 * time.Hour)))
 	return out
 }
+
+func minutesOf(d time.Duration) *int { return intPtr(int(d / time.Minute)) }
+
+func intPtr(v int) *int { return &v }
 
 // toModeratorMentorResponse is the profile as a MODERATOR sees it: everything the owner
 // sees except the meeting link.

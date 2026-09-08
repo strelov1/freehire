@@ -223,6 +223,65 @@ func TestHHFetchNewHydratesOnlyNew(t *testing.T) {
 	}
 }
 
+// hhListingOnlyFake serves only the search/listing page, one vacancy on page 0 and an empty
+// page thereafter (so crawl() stops after confirming the end). A detail request reaching it is
+// a wiring bug (listing and detail must be on separate getters), so it records what it saw
+// rather than silently answering it.
+type hhListingOnlyFake struct {
+	hits []string
+}
+
+func (f *hhListingOnlyFake) GetHTML(_ context.Context, u string) (*html.Node, error) {
+	f.hits = append(f.hits, u)
+	pu, err := url.Parse(u)
+	if err != nil {
+		return nil, err
+	}
+	if pu.Query().Get("page") != "0" {
+		return html.Parse(strings.NewReader(hhSearchHTML(nil)))
+	}
+	return html.Parse(strings.NewReader(hhSearchHTML([]hhVacancy{hhVac(101, "New role", "Co")})))
+}
+
+// hhDetailOnlyFake serves only vacancy detail pages, recording which URLs it was asked for.
+type hhDetailOnlyFake struct {
+	hits []string
+}
+
+func (f *hhDetailOnlyFake) GetHTML(_ context.Context, u string) (*html.Node, error) {
+	f.hits = append(f.hits, u)
+	return html.Parse(strings.NewReader(hhDetailHTML("<p>Full body.</p>")))
+}
+
+func TestHHWithDetailGetterSplitsListingAndDetailTransports(t *testing.T) {
+	listing := &hhListingOnlyFake{}
+	detail := &hhDetailOnlyFake{}
+	seen := func(string) bool { return false }
+
+	jobs, err := NewHHWithDetailGetter(listing, detail).(HydratingSource).
+		FetchNew(context.Background(), CompanyEntry{Board: "96"}, seen)
+	if err != nil {
+		t.Fatalf("FetchNew: %v", err)
+	}
+	if len(jobs) != 1 {
+		t.Fatalf("len(jobs) = %d, want 1", len(jobs))
+	}
+	if !strings.Contains(jobs[0].Description, "Full body") {
+		t.Errorf("job not hydrated from the detail getter: %q", jobs[0].Description)
+	}
+	for _, u := range listing.hits {
+		if !strings.Contains(u, "/search/vacancy") {
+			t.Errorf("listing getter received a non-listing request: %q (all hits = %v)", u, listing.hits)
+		}
+	}
+	if len(listing.hits) == 0 {
+		t.Error("listing getter received no requests")
+	}
+	if len(detail.hits) != 1 || !strings.Contains(detail.hits[0], "/vacancy/101") {
+		t.Errorf("detail getter hits = %v, want exactly one /vacancy/101 request", detail.hits)
+	}
+}
+
 func TestHHPaginatesAndStops(t *testing.T) {
 	full := make([]hhVacancy, hhPageSize)
 	for i := range full {
@@ -263,5 +322,50 @@ func TestHHProviderRegisteredAndAggregator(t *testing.T) {
 	}
 	if !slices.Contains(AggregatorProviders(All(nil)), "hh") {
 		t.Error("AggregatorProviders() should include hh (multi-company aggregator)")
+	}
+}
+
+// hh deliberately does NOT earn fullBoardListing: hh.ru's own search UI caps a query's reachable
+// depth at ~2000 results independent of a role's true count (confirmed live against a
+// currently-configured board, see crawl's own comment in hhru.go), so treating that cap as a hard
+// Fetch failure would fail a busy board's crawl on every run rather than surface a genuine
+// truncation.
+func TestHHNotRegisteredAsFullBoardListing(t *testing.T) {
+	if _, ok := NewHH(nil).(fullBoardListing); ok {
+		t.Error("hh should NOT implement the fullBoardListing marker (see hhru.go's own note)")
+	}
+	if FullBoardListingProviders(All(nil))["hh"] {
+		t.Error("FullBoardListingProviders(All(nil)) should not include hh")
+	}
+}
+
+// hhEndlessFake serves a fresh vacancy on every page requested, so it never yields a genuinely
+// empty page.
+type hhEndlessFake struct{ calls int }
+
+func (f *hhEndlessFake) GetHTML(_ context.Context, u string) (*html.Node, error) {
+	f.calls++
+	pu, err := url.Parse(u)
+	if err != nil {
+		return nil, err
+	}
+	page, _ := strconv.Atoi(pu.Query().Get("page"))
+	return html.Parse(strings.NewReader(hhSearchHTML([]hhVacancy{hhVac(int64(10000+page), "T", "Co")})))
+}
+
+// A role busy enough to exhaust hhMaxPages without a genuinely empty page is NOT a Fetch failure
+// — that is hh.ru's own search depth cap, not evidence of a truncated crawl (see crawl's comment
+// in hhru.go). The walk returns everything gathered up to the cap as an ordinary success.
+func TestHHFetchSucceedsWhenARoleExhaustsThePageCap(t *testing.T) {
+	fake := &hhEndlessFake{}
+	jobs, err := NewHH(fake).Fetch(context.Background(), CompanyEntry{Board: "96"})
+	if err != nil {
+		t.Fatalf("Fetch: %v, want a plain success capped at hhMaxPages", err)
+	}
+	if fake.calls != hhMaxPages {
+		t.Errorf("got %d listing calls, want exactly %d (the cap, no more)", fake.calls, hhMaxPages)
+	}
+	if len(jobs) != hhMaxPages {
+		t.Errorf("got %d jobs, want %d (one new vacancy per page up to the cap)", len(jobs), hhMaxPages)
 	}
 }

@@ -2,11 +2,14 @@ package sources
 
 import (
 	"context"
+	"fmt"
 	"net/url"
 	"slices"
 	"strconv"
 	"strings"
 	"testing"
+
+	"golang.org/x/net/html"
 )
 
 // The board and posting the fixtures use. Workstream keys a board by the eight hex characters
@@ -391,5 +394,79 @@ func TestWorkstreamPageURL(t *testing.T) {
 		if got := workstreamPageURL(u, 3); got != want {
 			t.Errorf("workstreamPageURL(%q, 3) = %q, want %q", base, got, want)
 		}
+	}
+}
+
+// workstreamDuplicateThenNewFake serves the SAME card on page 1 and page 2 (simulating a page
+// whose every card is already-listed), then a genuinely new card on page 3, then an empty page —
+// with totalPages left unstated (0) so only the raw-page-emptiness proof is exercised. If the
+// walk stopped on "no NEWLY-KEPT cards" rather than "the raw page has no cards", it would end at
+// page 2 and never reach page 3's posting.
+type workstreamDuplicateThenNewFake struct{ calls int }
+
+func (f *workstreamDuplicateThenNewFake) GetHTML(_ context.Context, u string) (*html.Node, error) {
+	f.calls++
+	base := "https://www.workstream.us/j/" + workstreamTestBoard + "/positions"
+	first := workstreamCardHTML("/j/"+workstreamTestBoard+"/moxies/pickering/line-cook-11111111", "Line Cook", "Addr", "")
+	second := workstreamCardHTML("/j/"+workstreamTestBoard+"/moxies/pickering/prep-cook-22222222", "Prep Cook", "Addr", "")
+	var body string
+	switch {
+	case strings.Contains(u, "page=2"):
+		body = workstreamListingHTML(base, 0, first) // same card again: duplicate-only page
+	case strings.Contains(u, "page=3"):
+		body = workstreamListingHTML(base, 0, second) // a genuinely new card
+	case strings.Contains(u, "page="):
+		body = workstreamListingHTML(base, 0) // empty: the listing is exhausted
+	default:
+		body = workstreamListingHTML(base, 0, first) // page 1 (no explicit page param)
+	}
+	return html.Parse(strings.NewReader(body))
+}
+
+func TestWorkstreamListReachesAPostingPastADuplicateOnlyPage(t *testing.T) {
+	fake := &workstreamDuplicateThenNewFake{}
+	postings, err := workstream{http: fake}.list(context.Background(), workstreamEntry())
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	ids := map[string]bool{}
+	for _, p := range postings {
+		ids[p.id] = true
+	}
+	if !ids["11111111"] || !ids["22222222"] {
+		t.Errorf("got posting ids %v, want both (the walk must not stop at the duplicate-only page 2)", ids)
+	}
+}
+
+func TestWorkstreamRegisteredAsFullBoardListing(t *testing.T) {
+	if _, ok := NewWorkstream(nil).(fullBoardListing); !ok {
+		t.Error("workstream should implement the fullBoardListing marker")
+	}
+	if !FullBoardListingProviders(All(nil))["workstream"] {
+		t.Error("FullBoardListingProviders(All(nil)) should include workstream")
+	}
+}
+
+// workstreamEndlessFake serves a fresh listing card on every page and states totalPages=0 (out
+// of range, so unstated), so it never proves completeness — used to prove the page-cap ceiling
+// fails loudly rather than succeeding partially. Mirrors taleoEndlessFake / gustoEndlessFake.
+type workstreamEndlessFake struct{ calls int }
+
+func (f *workstreamEndlessFake) GetHTML(_ context.Context, u string) (*html.Node, error) {
+	f.calls++
+	base := "https://www.workstream.us/j/" + workstreamTestBoard + "/positions"
+	href := fmt.Sprintf("/j/%s/moxies/pickering/line-cook-%08x", workstreamTestBoard, f.calls)
+	body := workstreamListingHTML(base, 0, workstreamCardHTML(href, "Line Cook", "Addr", ""))
+	return html.Parse(strings.NewReader(body))
+}
+
+func TestWorkstreamListFailsWhenListingExceedsThePageCap(t *testing.T) {
+	fake := &workstreamEndlessFake{}
+	_, err := workstream{http: fake}.list(context.Background(), workstreamEntry())
+	if err == nil {
+		t.Fatal("expected reaching the page cap to fail the walk")
+	}
+	if fake.calls != workstreamMaxPages {
+		t.Errorf("got %d listing calls, want exactly %d (the cap, no more)", fake.calls, workstreamMaxPages)
 	}
 }

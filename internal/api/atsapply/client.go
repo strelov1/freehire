@@ -94,6 +94,12 @@ type Client struct {
 	// reasonSubmissionNotImplemented, exactly as it did before this capability existed.
 	// See openspec/changes/add-browseruse-atsapply-fallback.
 	browserUse *BrowserUseExecutor
+	// forms reads a job's previously-captured application form — the same StoredFormReader
+	// PreviewClient already uses, wired here too so fetchSchema can reach it for a
+	// provider with no live fetcher (today: Recruitee). Nil is the unconfigured
+	// deployment: fetchSchema then behaves exactly as it did before this capability
+	// existed. See openspec/changes/atsapply-recruitee-stored-schema.
+	forms StoredFormReader
 }
 
 // WithBrowserUse attaches the browser-use fallback executor, returning c for chaining.
@@ -101,6 +107,16 @@ type Client struct {
 // NewClient's existing positional signature or any of its other call sites.
 func (c *Client) WithBrowserUse(executor *BrowserUseExecutor) *Client {
 	c.browserUse = executor
+	return c
+}
+
+// WithStoredFormReader attaches the stored-form fallback fetchSchema reads before giving
+// up on a provider with no live fetcher, returning c for chaining — the same
+// "optional dependency via a setter, not a NewClient parameter" shape WithBrowserUse
+// already established, for the same reason: this never touches NewClient's existing
+// positional signature or any of its other call sites.
+func (c *Client) WithStoredFormReader(forms StoredFormReader) *Client {
+	c.forms = forms
 	return c
 }
 
@@ -371,10 +387,25 @@ func (c *Client) renderResumeToTempFile(ctx context.Context, claimed autoapply.C
 }
 
 // fetchSchema reuses internal/applyform's own per-provider fetcher rather than
-// re-implementing Greenhouse/Ashby's API calls or Lever's page parse.
+// re-implementing Greenhouse/Ashby's API calls or Lever's page parse, live-fetching
+// whenever a fetcher is registered for the provider — deliberately NOT the storage-first
+// order PreviewClient.schemaFor uses for its own, cheaper purpose. apply_forms holds a
+// captured row for every provider cmd/capture-apply-form drains (Greenhouse, Ashby,
+// Workable, Lever — not only Recruitee, whose form arrives free with the crawl instead),
+// so preferring storage here too would risk a real submission reading a row captured for
+// the job page's own display, possibly stale, instead of a fresh fetch, for postings that
+// never needed this fallback at all. c.forms is therefore only ever reached as a fallback,
+// for the one case a live fetch cannot answer: no fetcher registered for the provider.
 func (c *Client) fetchSchema(ctx context.Context, claimed autoapply.Claimed) (applyform.Form, error) {
 	fetcher, ok := c.fetchers[claimed.Provider]
 	if !ok {
+		if c.forms != nil {
+			if form, storedOK, err := c.forms.GetStoredForm(ctx, claimed.JobID); err != nil {
+				return applyform.Form{}, err
+			} else if storedOK {
+				return form, nil
+			}
+		}
 		return applyform.Form{}, fmt.Errorf("%w: %q", errNoSchemaFetcher, claimed.Provider)
 	}
 	return fetcher.Fetch(ctx, applyform.Claimed{

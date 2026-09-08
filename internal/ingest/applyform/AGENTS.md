@@ -15,11 +15,14 @@ on the job page. Providers: greenhouse, ashby, workable, lever. Queue drain is
   thing is `FieldType`, the kind of control (form.go:27-54), and it follows the dict-only
   rule: a word the dictionary does not know yields no type, with `RawType` kept alongside
   so nothing is lost.
-- **The store exists for a consumer not yet built** — the one that fills a form rather than
-  describing it. display.go is the only reader today and wants almost none of it: the
-  question text plus one word about the answer. It drops hidden/info/demographic/consent
-  controls and folds the standard fields (name, email, CV) into one `basics` line, keyed on
-  the identifiers our own mappers produce, not on labels (display.go:51-90, 120-166).
+- **The store now has the consumer it was built for**: `internal/api/atsapply`'s auto-apply
+  submission path reads a captured form to resolve and fill it, and — for a provider with no
+  live schema fetcher (Recruitee) — `Client.fetchSchema`'s stored-form fallback reads it as
+  the ONLY source (`openspec/changes/atsapply-recruitee-stored-schema`). display.go remains a
+  second, display-only reader wanting almost none of the row: the question text plus one word
+  about the answer. It drops hidden/info/demographic/consent controls and folds the standard
+  fields (name, email, CV) into one `basics` line, keyed on the identifiers our own mappers
+  produce, not on labels (display.go:51-90, 120-166).
 - **One registry map sits behind both gate and drain.** `fetcherFor` (fetch.go:78-83) backs
   both the ingest enqueue gate (`NeedsRequestCapture`, fetch.go:70-73) and the worker's
   fetcher set, so the two cannot drift into a queue full of undrainable work; a test holds

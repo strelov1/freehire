@@ -24,12 +24,25 @@ import (
 // Caveat/seam: HH-Lux-InitialState is a frontend detail (the client-hydration state), not a
 // documented API, so a hh.ru frontend change can move the vacancy list within it. The public
 // render must carry the data somewhere; today it is this template.
+//
+// Listing and detail are two separate transports (http, detailHTTP) because they don't need the
+// same one: hh.ru's detail pages sit behind DDoS-Guard in a way the listing page does not (see
+// firecrawltier.go's hh entry). With FIRECRAWL_API_KEY configured, ApplyFirecrawlEgress rewires
+// detail onto Firecrawl while listing stays on a plain, unproxied client; without a key (e.g.
+// local/dev), NewHH gives both fields the same caller-supplied client, exactly as before this
+// split existed.
 type hh struct {
-	http HTMLGetter
+	http       HTMLGetter // listing (search) pages
+	detailHTTP HTMLGetter // per-vacancy detail pages
 }
 
-// NewHH builds the hh.ru adapter over the shared HTML-getter client.
-func NewHH(c HTMLGetter) Source { return hh{http: c} }
+// NewHH builds the hh.ru adapter over one shared HTML-getter client for both listing and detail.
+func NewHH(c HTMLGetter) Source { return NewHHWithDetailGetter(c, c) }
+
+// NewHHWithDetailGetter builds the hh.ru adapter with listing and detail on separate transports.
+func NewHHWithDetailGetter(listing, detail HTMLGetter) Source {
+	return hh{http: listing, detailHTTP: detail}
+}
 
 func (hh) Provider() string { return "hh" }
 
@@ -38,6 +51,11 @@ func (hh) Provider() string { return "hh" }
 // ATS copy over the hh.ru re-listing. Unlike the boardless aggregators hh still requires a board
 // (professional_role id) to bound the crawl, so it is not boardless.
 func (hh) aggregator() {}
+
+// hh deliberately does NOT implement fullBoardListing. hh.ru's own search UI caps a query's
+// reachable depth at ~2000 results independent of a role's true count — see crawl's own comment
+// for the live 2026-09-08 confirmation against a currently-configured board — so this adapter
+// cannot structurally prove it reached a busy board's real end the way the marker requires.
 
 const (
 	hhSearchURL  = "https://hh.ru/search/vacancy"
@@ -141,25 +159,28 @@ func (s hh) FetchNew(ctx context.Context, e CompanyEntry, seen func(externalID s
 // crawl pages the search listing, decoding each page's embedded state, until a page yields no new
 // vacancy or the depth cap is hit — the shared list walk behind Fetch and FetchNew. Promoted (ad)
 // vacancies are skipped: they are injected across searches regardless of the role filter, so each
-// role crawl keeps only genuine matches. A first-page failure is a board-level error; a later page
-// failing ends the walk with the postings gathered so far, so a partial crawl survives a hiccup.
+// role crawl keeps only genuine matches. A later page failing to fetch or decode is now a hard
+// Fetch failure (matching the other hand-rolled adapters — a mid-crawl request failure is not
+// evidence of anything). Reaching hhMaxPages, however, is deliberately NOT a hard failure here,
+// unlike the sibling adapters in this batch: hh.ru's OWN search UI caps a query's reachable depth
+// at ~2000 results (hhMaxPages == 2000/hhPageSize) regardless of how many more a role's true
+// count is, so a busy role can legitimately exhaust the cap on every run. Confirmed live
+// 2026-09-08 against a currently-configured board (professional_role 96): hh.ru's own paging
+// state reports totalResults=6657 for the 7-day window while capping its own lastPage at index
+// 19 — the exact ceiling hhMaxPages encodes. Treating that as a Fetch failure would fail this
+// board's crawl on every run, not surface a genuine truncation; hh therefore does NOT earn the
+// fullBoardListing marker (see its own note below) and keeps the original soft return here.
 func (s hh) crawl(ctx context.Context, e CompanyEntry) ([]hhVacancy, error) {
 	var out []hhVacancy
 	seen := map[int64]bool{}
 	for page := 0; page < hhMaxPages; page++ {
 		root, err := s.http.GetHTML(ctx, s.searchURL(e.Board, page))
 		if err != nil {
-			if page == 0 {
-				return nil, fmt.Errorf("hh: search role %q page %d: %w", e.Board, page, err)
-			}
-			break
+			return nil, fmt.Errorf("hh: search role %q page %d: %w", e.Board, page, err)
 		}
 		st, ok := hhStateOf(root)
 		if !ok {
-			if page == 0 {
-				return nil, fmt.Errorf("hh: search role %q page %d: no %s state", e.Board, page, hhStateID)
-			}
-			break
+			return nil, fmt.Errorf("hh: search role %q page %d: no %s state", e.Board, page, hhStateID)
 		}
 		added := 0
 		for _, v := range st.VacancySearchResult.Vacancies {
@@ -290,7 +311,7 @@ func hhEmploymentType(t string) string {
 // detail fetches the vacancy page and returns its sanitized JobPosting description, ok=false on a
 // failed request or a page with no JobPosting ld+json so the caller falls back to the list-only job.
 func (s hh) detail(ctx context.Context, vacancyURL string) (string, bool) {
-	root, err := s.http.GetHTML(ctx, vacancyURL)
+	root, err := s.detailHTTP.GetHTML(ctx, vacancyURL)
 	if err != nil {
 		return "", false
 	}

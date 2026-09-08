@@ -98,6 +98,24 @@ worker keeping up*. The notify pair exists because a starved subscription produc
 failure to notice: `notify` reported `delivered=1 failed=0` for weeks while 1.14M matches
 sat undelivered (2026-09-04, see [docs/agents/notifications.md](../../../docs/agents/notifications.md)).
 An oldest-pending age climbing past a few passes is the signal; `failed` never moved.
+
+**Per gateway, by `cmd/llm-probe`** — `freehire_llm_probe_{attempts,ok,slowest_seconds}`
+labelled by `model`. This answers *is the provider serving*, which nothing else asked.
+Three times in the week to 2026-09-08 a provider behind the gateway stopped serving while
+the gateway went on reporting it `active`: Cerebras on an empty wallet (402), then two Z.ai
+accounts — one rate-limited under a Fair Usage Policy (429), one with a revoked key (401).
+Each was found by a person noticing a broken feature, and the last cost about half a day
+with the fit analysis failing 55% of real users' requests before anyone read a log.
+Reachability was never the question; what the provider ANSWERED was.
+The success rate is deliberately NOT published — a rate over three probes is not a rate, so
+the numerator and denominator go out separately and the alert divides them over its own
+window. `slowest_seconds` carries the distinction that took hours to reach by hand: a
+gateway that refuses answers in milliseconds, one that is deliberating burns the whole
+budget, and no error-string parsing is needed to tell them apart.
+It probes the ALIAS, not individual keys — only the gateway host holds the raw keys (the
+admin API returns them masked), so a run anywhere else cannot name which key is dead. It
+can say what share of requests through the alias are served at all, which on 2026-09-08 was
+23%.
 `email_classification_outbox` was added for the same reason and is the worse version of it:
 `cmd/classify-mail` dead-lettered all 2726 queued messages over five weeks and then logged
 `done failed=0 dead-lettered=0` on every run afterwards — accurate, because a dead entry is

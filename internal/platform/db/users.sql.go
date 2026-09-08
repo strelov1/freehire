@@ -8,7 +8,6 @@ package db
 import (
 	"context"
 
-	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -132,69 +131,90 @@ func (q *Queries) DeleteUser(ctx context.Context, id int64) error {
 	return err
 }
 
-const getTalentNetworkProfileByPublicID = `-- name: GetTalentNetworkProfileByPublicID :one
-SELECT u.talent_network_visibility,
+const getTalentNetworkMemberByHandle = `-- name: GetTalentNetworkMemberByHandle :one
+SELECT u.talent_handle,
+       u.timezone,
+       COALESCE(u.resume_cities, '{}')::text[] AS cities,
        u.resume_structured,
-       u.photo_object_key,
-       p.specializations,
-       p.skills
+       u.resume_structured_uploaded_at,
+       COALESCE(p.specializations, '{}')::text[] AS specializations
 FROM users u
 LEFT JOIN user_profiles p ON p.user_id = u.id
-WHERE u.talent_network_public_id = $1
+WHERE u.talent_handle = $1::text
+  AND u.talent_network_visibility <> 'off'
+  AND u.resume_uploaded_at IS NOT NULL
+  AND u.resume_structured_uploaded_at = u.resume_uploaded_at
 `
 
-type GetTalentNetworkProfileByPublicIDRow struct {
-	TalentNetworkVisibility string      `json:"talent_network_visibility"`
-	ResumeStructured        []byte      `json:"resume_structured"`
-	PhotoObjectKey          pgtype.Text `json:"photo_object_key"`
-	Specializations         []string    `json:"specializations"`
-	Skills                  []string    `json:"skills"`
+type GetTalentNetworkMemberByHandleRow struct {
+	TalentHandle               pgtype.Text        `json:"talent_handle"`
+	Timezone                   pgtype.Text        `json:"timezone"`
+	Cities                     []string           `json:"cities"`
+	ResumeStructured           []byte             `json:"resume_structured"`
+	ResumeStructuredUploadedAt pgtype.Timestamptz `json:"resume_structured_uploaded_at"`
+	Specializations            []string           `json:"specializations"`
 }
 
-// Everything the public Talent Network page needs to render, keyed by the opaque
-// talent_network_public_id (never users.id, which would leak signup order/row count).
-// Mirrors the users + user_profiles composition GetProfile/toProfileResponse already
-// use for the owner-facing profile read (internal/api/handler/me_profile.go), via a LEFT
-// JOIN because a candidate can enable visibility before ever saving a profile (design
-// decision: "Missing/empty CV does not block enabling the toggle").
+// One member's card, by the handle in the public URL. Same predicate as the list, so a
+// handle nobody holds, a member who has left, and one whose extract has gone stale all
+// come back as pgx.ErrNoRows — which the handler renders as the one 404. Deciding it
+// here rather than in the caller is deliberate: three ways to be absent and one way to
+// say so is a rule that cannot be half-applied.
 //
-// Deliberately does NOT filter on talent_network_visibility: the design mandates an
-// identical 404 for a disabled profile and a nonexistent id, so the caller — not this
-// query — is the one place that decides that, from the visibility value it gets back
-// alongside everything else.
-func (q *Queries) GetTalentNetworkProfileByPublicID(ctx context.Context, talentNetworkPublicID uuid.UUID) (GetTalentNetworkProfileByPublicIDRow, error) {
-	row := q.db.QueryRow(ctx, getTalentNetworkProfileByPublicID, talentNetworkPublicID)
-	var i GetTalentNetworkProfileByPublicIDRow
+// Read against the DATABASE, never the snapshot the list is served from. A candidate who
+// leaves must stop resolving immediately, not when the snapshot next refreshes.
+// The ::text cast is load-bearing, not decoration: talent_handle is nullable, so without
+// it sqlc types the argument as pgtype.Text and every caller has to wrap a plain string
+// it already knows is present.
+func (q *Queries) GetTalentNetworkMemberByHandle(ctx context.Context, handle string) (GetTalentNetworkMemberByHandleRow, error) {
+	row := q.db.QueryRow(ctx, getTalentNetworkMemberByHandle, handle)
+	var i GetTalentNetworkMemberByHandleRow
 	err := row.Scan(
-		&i.TalentNetworkVisibility,
+		&i.TalentHandle,
+		&i.Timezone,
+		&i.Cities,
 		&i.ResumeStructured,
-		&i.PhotoObjectKey,
+		&i.ResumeStructuredUploadedAt,
 		&i.Specializations,
-		&i.Skills,
 	)
 	return i, err
 }
 
 const getTalentNetworkVisibility = `-- name: GetTalentNetworkVisibility :one
-SELECT talent_network_visibility, talent_network_public_id
+SELECT talent_network_visibility,
+       talent_handle,
+       (talent_network_visibility <> 'off'
+        AND talent_handle IS NOT NULL
+        AND resume_uploaded_at IS NOT NULL
+        AND resume_structured_uploaded_at = resume_uploaded_at)::boolean AS listed
 FROM users
 WHERE id = $1
 `
 
 type GetTalentNetworkVisibilityRow struct {
-	TalentNetworkVisibility string    `json:"talent_network_visibility"`
-	TalentNetworkPublicID   uuid.UUID `json:"talent_network_public_id"`
+	TalentNetworkVisibility string      `json:"talent_network_visibility"`
+	TalentHandle            pgtype.Text `json:"talent_handle"`
+	Listed                  bool        `json:"listed"`
 }
 
 // The caller's own Talent Network opt-in state, for the owner-facing settings toggle.
-// talent_network_public_id rides along so the settings page can render the resulting
-// public URL the moment a non-'off' mode is selected, without a second round-trip.
-// Every row has both — 'off' and a freshly-minted uuid are the column defaults — so
-// there is no "not set yet" case to special-case.
+// talent_handle rides along so the page can render the public URL without a second
+// round-trip. It is NULL until the first join — a non-member has no card to link to —
+// unlike the visibility, which every row carries because 'off' is the column default.
+//
+// `listed` answers the question the settings page actually has to ask: not "am I a
+// member" but "does a visitor see me". They come apart, and the gap is a live trap — a
+// candidate who joins before uploading a CV is a member with a handle whose card 404s,
+// so a page reading membership alone tells them their profile is up when it is not.
+//
+// It repeats ListTalentNetworkMembers' predicate, which is a duplication worth naming:
+// the two must be changed together. It is not shared because the catalogue's version
+// selects rows and this one describes one row, and a caller cannot ask the first
+// "and what about me".
 func (q *Queries) GetTalentNetworkVisibility(ctx context.Context, id int64) (GetTalentNetworkVisibilityRow, error) {
 	row := q.db.QueryRow(ctx, getTalentNetworkVisibility, id)
 	var i GetTalentNetworkVisibilityRow
-	err := row.Scan(&i.TalentNetworkVisibility, &i.TalentNetworkPublicID)
+	err := row.Scan(&i.TalentNetworkVisibility, &i.TalentHandle, &i.Listed)
 	return i, err
 }
 
@@ -490,6 +510,27 @@ func (q *Queries) GetUserResumeStructured(ctx context.Context, id int64) (GetUse
 	return i, err
 }
 
+const getUserResumeStructuredOnly = `-- name: GetUserResumeStructuredOnly :one
+SELECT resume_structured
+FROM users
+WHERE id = $1
+`
+
+// Just the structured résumé, with none of the provenance stamps and none of the
+// contacts GetUserResumeStructured returns beside it.
+//
+// It exists so the Talent Network's handle mint can read one job title without also
+// holding the candidate's phone number and email in memory. The stamp is deliberately
+// not applied here: a handle derived from a slightly stale title is still a fine
+// handle — it is frozen at mint and opaque afterwards — whereas refusing to mint over
+// an in-flight extraction would block the join itself.
+func (q *Queries) GetUserResumeStructuredOnly(ctx context.Context, id int64) ([]byte, error) {
+	row := q.db.QueryRow(ctx, getUserResumeStructuredOnly, id)
+	var resume_structured []byte
+	err := row.Scan(&resume_structured)
+	return resume_structured, err
+}
+
 const getUserRole = `-- name: GetUserRole :one
 SELECT role
 FROM users
@@ -542,6 +583,133 @@ func (q *Queries) GetUsernameByUser(ctx context.Context, id int64) (GetUsernameB
 	var i GetUsernameByUserRow
 	err := row.Scan(&i.Username, &i.UsernameUpdatedAt)
 	return i, err
+}
+
+const isBetaTester = `-- name: IsBetaTester :one
+SELECT beta_tester
+FROM users
+WHERE id = $1
+`
+
+// Whether the account is in the beta group, on its own. GetUserByID answers it too, but
+// carries nine other columns a gate has no use for — and a gate that reads a whole user
+// row invites somebody to branch on a second field from it later.
+func (q *Queries) IsBetaTester(ctx context.Context, id int64) (bool, error) {
+	row := q.db.QueryRow(ctx, isBetaTester, id)
+	var beta_tester bool
+	err := row.Scan(&beta_tester)
+	return beta_tester, err
+}
+
+const listMembersMissingTalentHandle = `-- name: ListMembersMissingTalentHandle :many
+SELECT id
+FROM users
+WHERE talent_network_visibility <> 'off'
+  AND talent_handle IS NULL
+ORDER BY id
+`
+
+// The members who joined before handles existed, and so have no public address.
+//
+// Migration 0148 rewrote every 'public' row to 'anonymous' but could not mint a handle —
+// minting reads a job title through a Go dictionary, which SQL cannot do — so those
+// accounts, and any that were already 'anonymous', are members the catalogue cannot list
+// and whose card 404s. cmd/backfill-talent-handle walks this list once and closes it.
+//
+// No stamp gate here, unlike the catalogue's own read: a member whose CV extract is stale
+// still needs an address for when it catches up, and withholding one would make the
+// backfill's own result depend on when it happened to run.
+func (q *Queries) ListMembersMissingTalentHandle(ctx context.Context) ([]int64, error) {
+	rows, err := q.db.Query(ctx, listMembersMissingTalentHandle)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []int64{}
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listTalentNetworkMembers = `-- name: ListTalentNetworkMembers :many
+SELECT u.talent_handle,
+       u.timezone,
+       COALESCE(u.resume_cities, '{}')::text[] AS cities,
+       u.resume_structured,
+       u.resume_structured_uploaded_at,
+       COALESCE(p.specializations, '{}')::text[] AS specializations
+FROM users u
+LEFT JOIN user_profiles p ON p.user_id = u.id
+WHERE u.talent_network_visibility <> 'off'
+  AND u.talent_handle IS NOT NULL
+  AND u.resume_uploaded_at IS NOT NULL
+  AND u.resume_structured_uploaded_at = u.resume_uploaded_at
+ORDER BY u.resume_structured_uploaded_at DESC, u.talent_handle DESC
+`
+
+type ListTalentNetworkMembersRow struct {
+	TalentHandle               pgtype.Text        `json:"talent_handle"`
+	Timezone                   pgtype.Text        `json:"timezone"`
+	Cities                     []string           `json:"cities"`
+	ResumeStructured           []byte             `json:"resume_structured"`
+	ResumeStructuredUploadedAt pgtype.Timestamptz `json:"resume_structured_uploaded_at"`
+	Specializations            []string           `json:"specializations"`
+}
+
+// Every member the public catalogue may show, in one read. The caller projects each row
+// through talentnetwork.ProjectCard and holds the result as a snapshot — see that
+// package's doc for why the whole set is read at once rather than filtered in SQL: the
+// category and seniority a card is filtered by do not exist as columns, they are derived
+// from the job title by a dictionary that changes weekly.
+//
+// The predicate is the membership rule and nothing else:
+//
+//   - not 'off' — the candidate asked to be found;
+//   - a minted handle — without one there is no URL to link the card to, so a row in
+//     this state is mid-join, not a member;
+//   - the stamp gate (resume_structured_uploaded_at = resume_uploaded_at, both set) —
+//     the same "this structure still describes the CV on file" rule the rest of the
+//     product applies. Without it most cards would be somebody's previous CV.
+//
+// LEFT JOIN, because a candidate can join before ever saving a profile: a missing
+// user_profiles row is empty facets, not a missing member.
+//
+// Ordered here rather than by the caller so the snapshot arrives sorted, and TOTALLY:
+// two members sharing a timestamp would otherwise order arbitrarily, and an arbitrary
+// order across pages silently drops some people and repeats others.
+func (q *Queries) ListTalentNetworkMembers(ctx context.Context) ([]ListTalentNetworkMembersRow, error) {
+	rows, err := q.db.Query(ctx, listTalentNetworkMembers)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListTalentNetworkMembersRow{}
+	for rows.Next() {
+		var i ListTalentNetworkMembersRow
+		if err := rows.Scan(
+			&i.TalentHandle,
+			&i.Timezone,
+			&i.Cities,
+			&i.ResumeStructured,
+			&i.ResumeStructuredUploadedAt,
+			&i.Specializations,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listUserBlobKeys = `-- name: ListUserBlobKeys :many
@@ -703,6 +871,37 @@ func (q *Queries) SeizeUnverifiedAccount(ctx context.Context, id int64) (int32, 
 	return token_version, err
 }
 
+const setTalentHandleIfUnset = `-- name: SetTalentHandleIfUnset :execrows
+UPDATE users
+SET talent_handle = $2
+WHERE id = $1
+  AND talent_handle IS NULL
+`
+
+type SetTalentHandleIfUnsetParams struct {
+	ID           int64       `json:"id"`
+	TalentHandle pgtype.Text `json:"talent_handle"`
+}
+
+// Claims a freshly minted catalogue handle for a candidate who does not have one yet.
+//
+// The `talent_handle IS NULL` predicate is the whole mechanism, and it does two jobs.
+// It makes the mint idempotent — a member who leaves and rejoins keeps the handle they
+// already shared, and a second concurrent join claims nothing — and it makes the
+// statement's own result the answer: 0 rows means somebody already has one, which the
+// caller reads rather than re-querying and racing again.
+//
+// A collision with ANOTHER account's handle surfaces as a unique-violation from
+// users_talent_handle_key (migration 0150), not as 0 rows. The caller mints a new suffix
+// and retries — the same shape internal/identity/accounts uses to allocate a username.
+func (q *Queries) SetTalentHandleIfUnset(ctx context.Context, arg SetTalentHandleIfUnsetParams) (int64, error) {
+	result, err := q.db.Exec(ctx, setTalentHandleIfUnset, arg.ID, arg.TalentHandle)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const setTalentNetworkVisibility = `-- name: SetTalentNetworkVisibility :exec
 UPDATE users
 SET talent_network_visibility = $2
@@ -714,10 +913,14 @@ type SetTalentNetworkVisibilityParams struct {
 	TalentNetworkVisibility string `json:"talent_network_visibility"`
 }
 
-// Owner-scoped write of the caller's Talent Network visibility. Does not touch
-// talent_network_public_id: the public URL stays stable across mode changes
-// (including a round trip through 'off'), so a candidate who already shared it once
-// never has to reshare a new one.
+// Owner-scoped write of the caller's Talent Network membership ('off' or 'anonymous'
+// since migration 0148). Does not touch talent_handle: the public URL stays stable
+// across a round trip through 'off', so a candidate who already shared it once — or who
+// leaves and rejoins — never has to reshare a new one.
+//
+// The value is NOT validated here. Its authority is the CHECK constraint on the column;
+// the handler mirrors that set for a cheap 400, and this statement is the third place
+// the vocabulary would have to be repeated for no gain.
 func (q *Queries) SetTalentNetworkVisibility(ctx context.Context, arg SetTalentNetworkVisibilityParams) error {
 	_, err := q.db.Exec(ctx, setTalentNetworkVisibility, arg.ID, arg.TalentNetworkVisibility)
 	return err

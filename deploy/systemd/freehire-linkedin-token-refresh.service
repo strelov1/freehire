@@ -1,0 +1,21 @@
+[Unit]
+Description=freehire worker: keep the digest's LinkedIn credential alive
+After=network.target postgresql.service
+[Service]
+Type=oneshot
+User=freehire
+WorkingDirectory=/opt/freehire/src/hire-current
+EnvironmentFile=/opt/freehire/.env
+# Trivial weights. A run reads one row and, on all but a handful of days a year, does nothing
+# else — it must never be why a request waits.
+CPUWeight=20
+IOWeight=20
+# A run with no LINKEDIN_* in the environment exits 0 without opening the pool, so a host that
+# has not adopted the channel runs this timer harmlessly. That is also the rollback: unset
+# LINKEDIN_CLIENT_ID.
+#
+# A NON-ZERO exit here means the credential is already dead and the LinkedIn channel is not
+# publishing. A credential that is merely running out does NOT fail the unit — it publishes
+# freehire_social_token_expires_in_seconds instead, because a unit that goes red daily for a
+# fortnight teaches an operator to ignore exactly the thing it is trying to say.
+ExecStart=/opt/freehire/src/hire-current/linkedin-token-refresh

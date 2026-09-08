@@ -7,6 +7,8 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"golang.org/x/net/html"
 )
 
 // edjoinTestBoard is the job type sources/edjoin.yml crawls: EDJOIN's own technology facet.
@@ -299,15 +301,86 @@ func TestEdjoinListPageFailures(t *testing.T) {
 	if _, err := NewEdjoin(&routedHTTP{}).(edjoin).list(context.Background(), edjoinEntry()); err == nil {
 		t.Error("a failing first page should fail the board")
 	}
-	// A later page failing ends the walk with what was already gathered.
+	// A later page failing now fails the whole walk too: totalRecords (99) says more pages
+	// remain, so returning only page 1's posting would be an unproven partial result.
 	row := edjoinRowJSON(edjoinTestRow{id: 1, title: "IT Specialist", district: "Madera Unified"})
 	fixture := (&routedHTTP{}).route("page=1", edjoinListingJSON(99, row))
-	postings, err := NewEdjoin(fixture).(edjoin).list(context.Background(), edjoinEntry())
+	if _, err := NewEdjoin(fixture).(edjoin).list(context.Background(), edjoinEntry()); err == nil {
+		t.Error("a failing later page should fail the board when totalRecords is not yet reached")
+	}
+}
+
+func TestEdjoinRegisteredAsFullBoardListing(t *testing.T) {
+	if _, ok := NewEdjoin(nil).(fullBoardListing); !ok {
+		t.Error("edjoin should implement the fullBoardListing marker")
+	}
+	if !FullBoardListingProviders(All(nil))["edjoin"] {
+		t.Error("FullBoardListingProviders(All(nil)) should include edjoin")
+	}
+}
+
+// edjoinEndlessFake serves a fresh row on every page and states no usable total (0), so it never
+// proves completeness — used to prove the page-cap ceiling fails loudly rather than succeeding
+// partially. Mirrors taleoEndlessFake / gustoEndlessFake.
+type edjoinEndlessFake struct{ calls int }
+
+func (f *edjoinEndlessFake) GetJSON(_ context.Context, _ string, v any) error {
+	f.calls++
+	row := edjoinRowJSON(edjoinTestRow{id: 9000000 + f.calls, title: "IT Specialist", district: "Endless USD"})
+	return json.Unmarshal([]byte(edjoinListingJSON(0, row)), v)
+}
+
+func (f *edjoinEndlessFake) GetHTML(_ context.Context, _ string) (*html.Node, error) {
+	return nil, fmt.Errorf("edjoinEndlessFake: GetHTML not needed for this test")
+}
+
+// edjoinDuplicateThenNewFake serves the SAME row on its first two calls (simulating a page whose
+// every row is already-seen, e.g. from a postingDate sort tie spanning a page boundary), then a
+// genuinely new row, then an empty page. If the walk stopped on "no NEWLY-KEPT rows" rather than
+// "the raw page has no rows", it would end on the second call and never reach the third row.
+type edjoinDuplicateThenNewFake struct{ calls int }
+
+func (f *edjoinDuplicateThenNewFake) GetJSON(_ context.Context, _ string, v any) error {
+	f.calls++
+	switch f.calls {
+	case 1, 2:
+		row := edjoinRowJSON(edjoinTestRow{id: 1, title: "IT Specialist", district: "Madera Unified"})
+		return json.Unmarshal([]byte(edjoinListingJSON(0, row)), v)
+	case 3:
+		row := edjoinRowJSON(edjoinTestRow{id: 3, title: "Network Admin", district: "Madera Unified"})
+		return json.Unmarshal([]byte(edjoinListingJSON(0, row)), v)
+	default:
+		return json.Unmarshal([]byte(edjoinListingJSON(0)), v)
+	}
+}
+
+func (f *edjoinDuplicateThenNewFake) GetHTML(_ context.Context, _ string) (*html.Node, error) {
+	return nil, fmt.Errorf("edjoinDuplicateThenNewFake: GetHTML not needed for this test")
+}
+
+func TestEdjoinListReachesAPostingPastADuplicateOnlyPage(t *testing.T) {
+	fake := &edjoinDuplicateThenNewFake{}
+	postings, err := NewEdjoin(fake).(edjoin).list(context.Background(), edjoinEntry())
 	if err != nil {
 		t.Fatalf("list: %v", err)
 	}
-	if len(postings) != 1 {
-		t.Errorf("got %d postings, want page 1's to survive page 2 failing", len(postings))
+	ids := map[int]bool{}
+	for _, p := range postings {
+		ids[p.PostingID] = true
+	}
+	if !ids[1] || !ids[3] {
+		t.Errorf("got posting ids %v, want both 1 and 3 (the walk must not stop at the duplicate-only page 2)", ids)
+	}
+}
+
+func TestEdjoinListFailsWhenListingExceedsThePageCap(t *testing.T) {
+	fake := &edjoinEndlessFake{}
+	_, err := NewEdjoin(fake).(edjoin).list(context.Background(), edjoinEntry())
+	if err == nil {
+		t.Fatal("expected reaching the page cap to fail the walk")
+	}
+	if fake.calls != edjoinMaxPages {
+		t.Errorf("got %d listing calls, want exactly %d (the cap, no more)", fake.calls, edjoinMaxPages)
 	}
 }
 

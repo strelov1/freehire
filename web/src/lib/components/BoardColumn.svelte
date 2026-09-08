@@ -16,10 +16,10 @@
     id: BoardColumnId;
     label: string;
     items: BoardItem[];
-    // Set while the board is filtered by a search. The zone is handed the matching rows
-    // only, and svelte-dnd-action answers a drop with the array it was given — so a drop
-    // during a search would write the visible subset back as the whole column and lose
-    // every row the query hid.
+    // Set while the board is filtered — by search text or the "needs attention" toggle.
+    // The zone is handed the matching rows only, and svelte-dnd-action answers a drop
+    // with the array it was given — so a drop while filtered would write the visible
+    // subset back as the whole column and lose every row the filter hid.
     dragDisabled?: boolean;
     onconsider: (id: BoardColumnId, items: BoardItem[]) => void;
     onfinalize: (id: BoardColumnId, items: BoardItem[]) => void;

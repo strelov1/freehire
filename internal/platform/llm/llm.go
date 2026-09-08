@@ -83,6 +83,17 @@ func (c *Client) ModelID() string {
 	return c.modelID
 }
 
+// Timeout reports the per-call bound this client was built with, so a caller that varies it
+// per call site can derive the new one FROM the configured value rather than restating it.
+// A second copy of the number in a second package is a second answer, free to drift from the
+// one the entrypoint actually chose. Zero on a nil client.
+func (c *Client) Timeout() time.Duration {
+	if c == nil {
+		return 0
+	}
+	return c.timeout
+}
+
 // WithTimeout returns a shallow copy of the client with a different per-call timeout,
 // so a slow use case (a reasoning-heavy multi-stage analysis) can allow longer calls
 // without raising the shared client's default for everyone. Nil-safe.
@@ -395,7 +406,12 @@ func UsageFrom(choice *llms.ContentChoice) *Usage {
 	if !ok1 && !ok2 && !ok3 {
 		return nil
 	}
-	return &Usage{Input: in, Output: out, Total: total}
+	// The cached count never decides whether there is a usage to report: a provider
+	// that named it and nothing else told us nothing about the call's size, and a
+	// zero Input invented from it would read as a free request.
+	cached, _ := intFrom(choice.GenerationInfo["PromptCachedTokens"])
+
+	return &Usage{Input: in, Output: out, CachedInput: cached, Total: total}
 }
 
 // intFrom coerces a GenerationInfo value (int, int64, or float64 depending on the

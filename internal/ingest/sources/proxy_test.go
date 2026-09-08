@@ -45,6 +45,24 @@ func TestApplyProxyEgressRewiresProxiedProviderOnly(t *testing.T) {
 	}
 }
 
+// hh's detail pages are captcha-walled through the proxy (DDoS-Guard) while working fine on the
+// direct IP; detail hydration moved to the Firecrawl tier instead (firecrawltier.go), so hh no
+// longer belongs in proxiedProviders at all — not even for listing, which was measured working
+// directly.
+func TestApplyProxyEgressLeavesHHOnTheDirectClient(t *testing.T) {
+	t.Setenv("SOURCES_PROXY_URL", "http://user:pass@proxy.example:8080")
+
+	registry := All(NewClient())
+	before := registry["hh"]
+
+	if err := ApplyProxyEgress(registry); err != nil {
+		t.Fatalf("valid proxy: %v", err)
+	}
+	if registry["hh"] != before {
+		t.Error("hh must stay on the direct client; it is no longer a proxied provider")
+	}
+}
+
 func TestApplyProxyEgressInvalidURLFailsWithoutLeakingCreds(t *testing.T) {
 	// A control character makes url.Parse fail; the password must not surface in the error.
 	t.Setenv("SOURCES_PROXY_URL", "http://user:sup3rsecret@proxy.example:8080/\x7f")

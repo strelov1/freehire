@@ -217,13 +217,17 @@ func publicReadRoutes(t *testing.T, throttler ratelimit.Throttler) (map[string]*
 		// slot endpoint has its own, because it COMPUTES per request and must not be able
 		// to exhaust what the rest of the site reads on.
 		"mentorshipHandlers": mount((&mentorshipHandlers{}).registerPublic),
+		// The public Talent Network catalogue. Zero-valued like the rest: a route
+		// reached past its limiter nil-dereferences into recover, which is the
+		// assertion, rather than needing a real catalogue behind it.
+		"talentCatalogHandlers": mount((&talentCatalogHandlers{}).register),
 	}, iss
 }
 
 // publicReadLimiterFuncs are the constructors whose use makes a register this guard's
 // business. They are the package's only public-read limiters; every other limiter here
 // guards a write, an auth route or an LLM spend, and is keyed by its own rules.
-var publicReadLimiterFuncs = []string{"publicReadLimiter", "agentSearchLimiter", "suggestLimiter"}
+var publicReadLimiterFuncs = []string{"publicReadLimiter", "agentSearchLimiter", "suggestLimiter", "talentCatalogLimiter"}
 
 // TestPublicReadLimiters_EveryMountingRegisterIsDriven derives the scope of the guard
 // below from the package's own source, instead of trusting publicReadRoutes' hand-written

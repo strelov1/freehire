@@ -1,0 +1,16 @@
+[Unit]
+Description=timer: freehire-linkedin-token-refresh daily
+[Timer]
+# Daily, and that is generous: the renewal window is a fortnight wide, so this can miss
+# thirteen consecutive days and still renew in time. Anything tighter would spend a token
+# exchange on a credential that has not moved.
+#
+# 05:20 UTC — before freehire-social-digest's own run, so a credential renewed this morning is
+# the one the digest publishes with rather than one that expires between the two.
+OnCalendar=*-*-* 05:20:00
+# Persistent=true: a missed window is not a gap in a graph, it is a credential drifting toward
+# expiry unattended, and the work is idempotent — a replayed run on a healthy token does
+# nothing at all.
+Persistent=true
+[Install]
+WantedBy=timers.target
