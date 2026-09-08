@@ -18,6 +18,7 @@ import {
   Inbox,
   Link2,
   Handshake,
+  GraduationCap,
   Coins,
   Gift,
   ShieldCheck,
@@ -34,6 +35,9 @@ export const accountNavIcons: Record<AccountNavItem['href'], LucideIcon> = {
   '/my/assistant': Bot,
   '/my/cvs': ScrollText,
   '/my/referrals': Handshake,
+  // Not the handshake beside it: a referral is a hand-off between two people, mentorship
+  // is somebody teaching. The two sections sit together and must not read as one.
+  '/my/mentorship': GraduationCap,
   '/my/talent-network': Radar,
   '/my/tracking': LayoutList,
   '/my/lists': ListPlus,

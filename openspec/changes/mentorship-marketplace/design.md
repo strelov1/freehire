@@ -257,6 +257,26 @@ check, and it is not a gate.
   Take the next free number immediately before opening the PR, and re-check after any
   rebase; ordering resolves alphabetically and there is no gate.
 
+- **What the Google follow-up actually costs**, measured rather than assumed, so the next
+  change does not re-derive it. A Meet link cannot be minted on its own, and `cal.com` has
+  no trick here: their `googlevideo` app stores an EMPTY credential (`key: {}`), declares
+  `dependencies: ["google-calendar"]`, and the link arrives as `hangoutLink` in the reply to
+  creating a calendar event with `conferenceDataVersion: 1`. So a per-meeting link requires
+  calendar WRITE, and the two halves of the sync differ in price: free/busy needs only the
+  `calendar.readonly` this service already holds, while the link needs a second scope —
+  `calendar.events` suffices, narrower than the full `auth/calendar` cal.com takes. Both are
+  SENSITIVE rather than restricted, and the heavier class is already carried by
+  `gmail.readonly`, so this adds no new tier of verification.
+  **The write must be its own consent, not a widening of the existing one**: `calsync` asks
+  CANDIDATES for read-only calendar access to find their interviews, and broadening that
+  constant would hand write access over every one of those calendars to people who connected
+  it for something else entirely. The connection row already records what a grant covers and
+  `calsync` filters on it, so two grants need no new machinery.
+  `mentor_bookings.meeting_url` is already a per-booking snapshot, so a per-meeting link
+  needs no schema change either. A video provider with its own create-meeting API (Zoom's
+  `join_url`, or Jitsi, which needs no account at all) reaches the same outcome without
+  Google — worth weighing before the consent work.
+
 - **A mentor's public slots leak their private calendar's shape** once Google sync
   lands. → Inherent to any booking page and accepted by every product in this category.
   Mitigated by storing only `(start, end)` with no title or attendee, by the booking
