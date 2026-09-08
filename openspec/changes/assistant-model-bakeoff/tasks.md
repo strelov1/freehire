@@ -39,7 +39,7 @@
 - [x] 4.1 Add the case fixture shape (a CV, a vacancy, the expected binding) and its
       loader, with the loader failing loudly on an unreadable or empty case set. Unit test
       the failure path.
-- [ ] 4.2 Export the profile fixture (CV, structured résumé, experience atoms) from
+- [x] 4.2 Export the profile fixture (CV, structured résumé, experience atoms) from
       production into `testdata/` once, and record in the change how it was captured.
 - [x] 4.3 Add the seed helper that loads a case fixture into a fresh database. Verify by
       seeding and reading back through the same queries the tools use.

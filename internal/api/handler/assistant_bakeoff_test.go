@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -398,6 +399,54 @@ func TestLoadBakeoffCasesRefusesAPostingWithNoDescription(t *testing.T) {
 	raw := []byte(`{"cases":[{"id":"hollow","vacancy":{"title":"Engineer","description":""}}]}`)
 	if _, err := loadBakeoffCasesFrom(raw, "inline"); err == nil {
 		t.Error("a posting with no description loaded cleanly")
+	}
+}
+
+// The profile fixture is deliberately absent from this repository, so a test that needs it
+// SKIPS rather than fails. The distinction is the whole point of errMissingBakeoffProfile:
+// CI and anyone else's checkout have no business failing over a file they are not supposed
+// to have, while a bake-off run without it must stop, since it would measure nothing.
+func TestLoadBakeoffProfileReadsTheLocalFixtureWhenItIsThere(t *testing.T) {
+	profile, err := loadBakeoffProfile(bakeoffProfileFixture)
+	if errors.Is(err, errMissingBakeoffProfile) {
+		t.Skipf("no local profile fixture; build it before running the bake-off")
+	}
+	if err != nil {
+		t.Fatalf("loadBakeoffProfile: %v", err)
+	}
+	if len(profile.CV) == 0 {
+		t.Error("the profile carries no CV document to tailor")
+	}
+	if profile.Captured == "" {
+		t.Error("the profile carries no capture date")
+	}
+}
+
+// A missing fixture is reported as its own kind of failure, not as a parse error, so the
+// caller can tell "you have not built this yet" from "what you built is wrong".
+func TestLoadBakeoffProfileReportsAnAbsentFixtureDistinctly(t *testing.T) {
+	_, err := loadBakeoffProfile(filepath.Join("testdata", "no-such-profile.json"))
+	if !errors.Is(err, errMissingBakeoffProfile) {
+		t.Errorf("error %v does not wrap errMissingBakeoffProfile", err)
+	}
+}
+
+// A CV with no employment history gives the tailoring run nothing to reframe. Every model
+// would finish in a round or two with nothing to say, and the report would call that a tie.
+func TestLoadBakeoffProfileRefusesACVWithNoHistory(t *testing.T) {
+	raw := []byte(`{"captured":"2026-09-08","cv":{"summary":"hello"},"experience":{"employments":[{"id":"1"}]}}`)
+	if _, err := loadBakeoffProfileFrom(raw, "inline"); err == nil {
+		t.Error("a CV with no experience loaded cleanly")
+	}
+}
+
+// The experience bank is where the evidence comes from, and cv_edit refuses a bullet with no
+// evidence_id. An empty bank does not make the run produce worse CVs — it makes every edit
+// bounce, which measures the gate rather than the model.
+func TestLoadBakeoffProfileRefusesAnEmptyExperienceBank(t *testing.T) {
+	raw := []byte(`{"captured":"2026-09-08","cv":{"experience":[{"company":"Acme"}]},"experience":{"employments":[]}}`)
+	if _, err := loadBakeoffProfileFrom(raw, "inline"); err == nil {
+		t.Error("an empty experience bank loaded cleanly")
 	}
 }
 

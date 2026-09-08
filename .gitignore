@@ -198,8 +198,13 @@ extension/*.zip
 .pnpm-store/
 .tmp-containers/
 
-# The model bake-off's profile fixture: a real CV, a real experience bank. This repository
-# is public and a CV is a name, an address and an employment history, so the fixture stays
-# local and is rebuilt from the account it belongs to. The postings it is run against ARE
-# committed — they are already public. See internal/api/handler/assistant_bakeoff.go.
-/internal/api/handler/testdata/bakeoff-profile.json
+# The model bake-off's profile fixtures: a real CV, a real experience bank. This repository
+# is public and a CV is a name, a phone number, an address and an employment history, so
+# they stay local and are rebuilt from the account they belong to. The postings the bake-off
+# runs against ARE committed — they are already public.
+#
+# The pattern is a PREFIX, not two filenames. Naming each file meant the second one
+# (bakeoff-resume.json) landed untracked-but-visible until somebody noticed, and the next
+# one would too. See internal/api/handler/assistant_bakeoff.go.
+/internal/api/handler/testdata/bakeoff-profile*.json
+/internal/api/handler/testdata/bakeoff-resume*.json

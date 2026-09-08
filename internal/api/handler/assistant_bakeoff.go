@@ -213,6 +213,85 @@ type bakeoffPriceTable struct {
 	Rates    bakeoffPrices
 }
 
+// bakeoffProfileFixture is the candidate the bake-off tailors: their CV document and their
+// experience bank. It is NOT in this repository and must not be — freehire is public, and a
+// CV is a name, a phone number, an address and an employment history. .gitignore holds a
+// prefix rule for it.
+//
+// Build it locally from the account it belongs to. The experience bank is readable with an
+// ordinary API key; the CV document is not, because /me/resume is cookie-only (see
+// resume.go) and no key of any scope reaches it — export that half from the browser session
+// or from the PDF, into the `cv` field, in internal/candidate/cv's Document shape.
+//
+//	{"captured":"YYYY-MM-DD", "cv":{…cv.Document…}, "experience":{…/me/experience…}}
+//
+// The profile is real rather than invented because a synthetic CV meets the provenance gate
+// differently from one a person actually wrote, and that gate is most of what a tailoring
+// run is doing.
+const bakeoffProfileFixture = "testdata/bakeoff-profile.json"
+
+// errMissingBakeoffProfile marks the fixture's ABSENCE, which is a different failure from
+// its contents being wrong. Nothing in this repository ships the file, so a test that wants
+// it skips on this error while a bake-off run stops on it — a run without a profile would
+// tailor nothing and report a tie.
+var errMissingBakeoffProfile = errors.New("bake-off profile fixture not built")
+
+// bakeoffProfile is the candidate every candidate model is run as.
+type bakeoffProfile struct {
+	Captured string `json:"captured"`
+	// CV is the document verbatim, held raw because it is inserted into cvs.data as JSONB
+	// and never read field-by-field here. Re-modelling internal/candidate/cv's Document
+	// would be a second copy of a shape that is already the product's.
+	CV json.RawMessage `json:"cv"`
+	// Experience is the bank as /me/experience returns it: the evidence a tailored bullet
+	// must cite.
+	Experience struct {
+		Employments []json.RawMessage `json:"employments"`
+		Unplaced    []json.RawMessage `json:"unplaced"`
+	} `json:"experience"`
+}
+
+// loadBakeoffProfile reads the local profile fixture.
+func loadBakeoffProfile(path string) (bakeoffProfile, error) {
+	raw, err := os.ReadFile(filepath.FromSlash(path))
+	if errors.Is(err, os.ErrNotExist) {
+		return bakeoffProfile{}, fmt.Errorf("%w: %s — see the comment on bakeoffProfileFixture", errMissingBakeoffProfile, path)
+	}
+	if err != nil {
+		return bakeoffProfile{}, fmt.Errorf("bake-off profile: reading %s: %w", path, err)
+	}
+	return loadBakeoffProfileFrom(raw, path)
+}
+
+// loadBakeoffProfileFrom validates a profile that has already been read.
+//
+// It refuses two hollow shapes, both of which would produce a report full of ties rather
+// than a visible failure. A CV with no employment history gives the run nothing to reframe,
+// so every model finishes in a round or two with nothing to say. An empty experience bank
+// leaves every edit bouncing off the provenance gate — cv_edit refuses a bullet with no
+// evidence_id — which measures the gate rather than the model.
+func loadBakeoffProfileFrom(raw []byte, origin string) (bakeoffProfile, error) {
+	var p bakeoffProfile
+	if err := json.Unmarshal(raw, &p); err != nil {
+		return bakeoffProfile{}, fmt.Errorf("bake-off profile: parsing %s: %w", origin, err)
+	}
+
+	var doc struct {
+		Experience []json.RawMessage `json:"experience"`
+	}
+	if err := json.Unmarshal(p.CV, &doc); err != nil {
+		return bakeoffProfile{}, fmt.Errorf("bake-off profile: %s carries no readable cv document: %w", origin, err)
+	}
+	if len(doc.Experience) == 0 {
+		return bakeoffProfile{}, fmt.Errorf("bake-off profile: %s cv has no employment history to reframe", origin)
+	}
+	if len(p.Experience.Employments) == 0 {
+		return bakeoffProfile{}, fmt.Errorf("bake-off profile: %s carries an empty experience bank, so every edit would bounce off the provenance gate", origin)
+	}
+
+	return p, nil
+}
+
 // bakeoffCaseFixture is the committed case set: real postings the profile-match sort put in
 // front of the profile the cases are run against, captured with
 //
