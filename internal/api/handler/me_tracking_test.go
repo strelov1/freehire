@@ -9,7 +9,9 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 
+	"github.com/strelov1/freehire/internal/application/jobtracking"
 	"github.com/strelov1/freehire/internal/identity/auth"
+	"github.com/strelov1/freehire/internal/job/jobview"
 )
 
 // meJobsApp mounts the my-jobs listing behind RequireAuth on a handler with no
@@ -54,5 +56,24 @@ func TestListMyJobs_UnknownFilter(t *testing.T) {
 	app, token := meJobsApp(t)
 	if got := getMeTracking(t, app, "/me/tracking?filter=bogus", token); got != fiber.StatusBadRequest {
 		t.Errorf("status = %d, want 400", got)
+	}
+}
+
+// An unconfigured search dependency (h.search == nil) must leave every card's ghost
+// signal untouched rather than panicking — the same "unconfigured deployment" degrade
+// every other optional dependency in this package already follows. Needs no database:
+// the nil check is the first thing attachGhostToTrackedCards does.
+func TestAttachGhostToTrackedCards_NilSearchIsANoOp(t *testing.T) {
+	h := &trackingHandlers{search: nil, queries: nil}
+	card := &jobview.Card{}
+	tracked := []jobtracking.TrackedJob{{
+		Interaction: jobtracking.Interaction{JobID: 1},
+		Job:         card,
+	}}
+
+	h.attachGhostToTrackedCards(context.Background(), tracked)
+
+	if card.Ghost != nil {
+		t.Errorf("Ghost = %+v, want nil — no search/queries configured", card.Ghost)
 	}
 }

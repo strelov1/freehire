@@ -25,6 +25,11 @@ type trackingHandlers struct {
 	tracking *jobtracking.Service
 	reminder *reminder.Service
 	search   searcher
+	// queries backs the tracker's own ghost-signal attach step (me_tracking.go), the
+	// same reason jobsHandlers/searchHandlers each hold one: ghostEvidenceFor and
+	// ListJobGhostStamps need it directly, not through the tracking service (which
+	// stays search/ghost-agnostic — see openspec/changes/tracker-ghost-badge).
+	queries *db.Queries
 }
 
 func newTrackingHandlers(queries *db.Queries, pool *pgxpool.Pool, search searcher) *trackingHandlers {
@@ -37,6 +42,7 @@ func newTrackingHandlers(queries *db.Queries, pool *pgxpool.Pool, search searche
 		tracking: jobtracking.New(jobtracking.NewQueriesRepository(queries, pool), jobtracking.WithReminders(rem)),
 		reminder: rem,
 		search:   search,
+		queries:  queries,
 	}
 }
 
