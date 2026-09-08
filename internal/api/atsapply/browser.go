@@ -169,15 +169,74 @@ func classifyUnscannableForm(pageHTML string) unscannableFormReason {
 	return reasonUnrecognizedLayout
 }
 
-// hasRecaptchaMarker reports whether pageHTML contains "recaptcha" anywhere at all, a
-// deliberately unscoped substring search rather than one parsed against a specific element
-// (an injected iframe, or the script tag loading reCAPTCHA's API — both reference
-// "recaptcha" in a URL, which is what a real challenge actually leaves behind). Scoping the
-// search to those elements specifically would need DOM parsing this classification path is
-// meant to avoid (see classifyUnscannableForm's doc comment); an ordinary application page
-// mentioning the word incidentally is not a realistic false-positive risk in practice, and
-// either outcome still only ever produces a safe park (see design.md's Risks) — at most a
-// less specific Reason string, never a wrong fill/submit.
+// recaptchaChallengeFrames are the iframes Google injects for the image-grid challenge —
+// the one part of reCAPTCHA that is only ever in the DOM because a human is being asked to
+// solve something. Both URL shapes, classic and Enterprise.
+var recaptchaChallengeFrames = []string{
+	"recaptcha/api2/bframe",
+	"recaptcha/enterprise/bframe",
+}
+
+// recaptchaInvisibleBadge is the "protected by reCAPTCHA" corner badge. An invisible,
+// score-based reCAPTCHA renders it INSTEAD of asking anything, so it is the positive
+// evidence that a page's reCAPTCHA is one nobody has to pass.
+const recaptchaInvisibleBadge = "grecaptcha-badge"
+
+// recaptchaWidgetMarkers are the footprints of a reCAPTCHA widget being mounted at all: the
+// checkbox/badge iframe, and the widget element's own class before the script replaces it.
+// Matched with the class's delimiter attached so `g-recaptcha-response` — the hidden token
+// field EVERY reCAPTCHA page carries, invisible ones included — is not read as a widget.
+var recaptchaWidgetMarkers = []string{
+	"recaptcha/api2/anchor",
+	"recaptcha/enterprise/anchor",
+	`g-recaptcha"`,
+	`g-recaptcha'`,
+	"g-recaptcha ",
+}
+
+// hasRecaptchaMarker reports whether pageHTML carries a reCAPTCHA CHALLENGE — something a
+// candidate would have to pass — as opposed to merely loading reCAPTCHA at all.
+//
+// The distinction is the whole point of this function, and it is not a nicety. EVERY
+// vanilla job-boards.greenhouse.io posting ships an invisible, score-based reCAPTCHA
+// Enterprise. The earlier unscoped `strings.Contains(html, "recaptcha")` therefore matched
+// every Greenhouse posting there is, and through previewGreenhouse's own check that parked
+// the ONE provider this package can actually fill — before a single application was ever
+// attempted (freehire, 2026-09-08: 5 of the 10 entries the queue had ever held, all of them
+// on pages whose form scans fine in under two seconds).
+//
+// Presence of a widget cannot be the test, which is what a first attempt at this fix
+// assumed and a capture of the live DOM disproved: an invisible reCAPTCHA mounts an anchor
+// iframe too. What actually separates the two:
+//
+//   - a bframe iframe is the image-grid challenge itself, and is in the DOM only when one
+//     is genuinely being posed — decisive on its own;
+//   - otherwise, the corner badge means the page's reCAPTCHA is the invisible kind, which
+//     asks nothing;
+//   - otherwise, a mounted widget with no badge is a checkbox the candidate must tick.
+//
+// A page gated by a different vendor's challenge is unaffected either way: its form's own
+// selector never appears, so it still parks as reasonUnrecognizedLayout.
 func hasRecaptchaMarker(pageHTML string) bool {
-	return strings.Contains(strings.ToLower(pageHTML), "recaptcha")
+	lower := strings.ToLower(pageHTML)
+	if containsAny(lower, recaptchaChallengeFrames) {
+		return true
+	}
+	if strings.Contains(lower, recaptchaInvisibleBadge) {
+		return false
+	}
+	return containsAny(lower, recaptchaWidgetMarkers)
+}
+
+// containsAny reports whether s contains any of markers. Literal scans rather than one
+// regexp alternation, for the reason internal/dict/skilltag documents for its own
+// dictionary: alternation over a page-sized string is a fraction of the speed, and this
+// runs on every scanned posting.
+func containsAny(s string, markers []string) bool {
+	for _, marker := range markers {
+		if strings.Contains(s, marker) {
+			return true
+		}
+	}
+	return false
 }
