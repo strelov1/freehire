@@ -64,6 +64,19 @@ export default defineConfig({
       injectRegister: null,
       workbox: {
         navigateFallback: null,
+        // /docs/api dynamically imports @scalar/api-reference (Vue-based),
+        // several MB once bundled — a docs-reference library, not part of the
+        // app shell, not worth precaching for offline use like the rest of the
+        // client bundle. Its chunk gets a content-hashed filename that isn't
+        // predictable across builds, so this excludes it by SIZE instead of by
+        // name: nothing this large belongs in the app-shell precache regardless
+        // of what it turns out to be. The raised ceiling keeps a build from
+        // hard-failing on a chunk this size; manifestTransforms is what
+        // actually keeps it out of the precached set.
+        maximumFileSizeToCacheInBytes: 6 * 1024 * 1024,
+        manifestTransforms: [
+          (entries) => ({ manifest: entries.filter((e) => (e.size ?? 0) < 1024 * 1024) }),
+        ],
       },
       manifest: {
         // Name/description echo the WebSite JSON-LD copy in src/lib/seo.ts
