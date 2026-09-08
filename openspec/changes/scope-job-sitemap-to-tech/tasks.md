@@ -52,6 +52,22 @@
 - [x] 4.1 `gofmt -l .` prints nothing; `go vet ./...`; `go test ./...`;
       `go vet -tags=integration ./...`.
 - [x] 4.2 `go test -tags=integration ./internal/search/search/` (needs Docker; testcontainers).
-- [ ] 4.3 After deploy, confirm on prod that `/sitemap.xml` lists 68 job sub-sitemaps, that the
-      first and last both return a non-empty `<urlset>`, and that a retired offset
-      (e.g. `?offset=1000000`) returns an empty `<urlset>` rather than an error.
+- [x] 4.3 After deploy, confirm on prod that `/sitemap.xml` lists the expected number of job
+      sub-sitemaps, that the first and last both return a non-empty `<urlset>`, and that a
+      retired offset (e.g. `?offset=1000000`) returns an empty `<urlset>` rather than an error.
+
+      Verified 2026-09-08 on aa9748e0e. `/sitemap.xml` lists **68** job sub-sitemaps (offsets
+      0…670,000) and an unchanged 23 company ones; `?offset=670000` returns the 162-URL tail,
+      so the filtered population is 670,162 and `ceil(670162/10000) = 68` matches the index.
+      `?offset=680000`, `?offset=1000000` and `?offset=2000000` each return HTTP 200 with a
+      valid, empty `<urlset>`. 30 URLs sampled from `?offset=300000` are `is_tech = tech`,
+      30/30, and include `stale` postings — the class the filter deliberately keeps. A
+      `non_tech` posting's page still answers 200 with its own canonical and no `noindex`, and
+      1,298,098 `non_tech` postings remain searchable, which is the "sitemap scope only" claim.
+
+      One trap worth recording for the next person who verifies a sitemap change: the first
+      read of every sub-sitemap returned the PRE-deploy body. `xmlResponse` sets
+      `cache-control: public, max-age=3600`, so Cloudflare serves the old file for up to an
+      hour and a retired offset looks like it is still full. Add a cache-busting query
+      parameter (the route reads only `offset`) and check `cf-cache-status: MISS` before
+      believing any of it.
