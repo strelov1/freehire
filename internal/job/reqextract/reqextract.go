@@ -143,8 +143,12 @@ var requiredHeadings = []string{
 	// tbank.ru sample closingHeadings' "my predlagaem" cites: 683 real headings.
 	"trebovaniia",
 	// Russian: "Мы ждем от вас" — "what we expect from you", the same shape as "what we
-	// expect" above. 631 real headings in the same sample.
+	// expect" above. 631 real headings in the same sample. Two spellings, because
+	// go-unidecode transliterates the accented "ё" (U+0451) to "io", not "e": "Мы ждём от
+	// вас" normalizes to "my zhdiom ot vas", while the common informal spelling without
+	// the dots, "Мы ждем от вас", normalizes to "my zhdem ot vas". Real postings use both.
 	"my zhdem ot vas",
+	"my zhdiom ot vas",
 }
 
 // Derive returns the requirements a posting's description states as a list under a

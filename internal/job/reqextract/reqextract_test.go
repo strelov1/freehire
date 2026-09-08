@@ -235,6 +235,15 @@ func TestDerive(t *testing.T) {
 			html: `<h3>Требования</h3><p>Опыт работы с Go от 3 лет</p><p>Знание Postgres</p>`,
 			want: nil,
 		},
+		// go-unidecode transliterates the accented ё to "io", not "e", so the
+		// grammatically correct spelling normalizes differently from the common
+		// informal one ("Мы ждем от вас", already covered above without the dots).
+		// Found on review (CodeRabbit) — both spellings appear in real postings.
+		{
+			name: "a Russian heading with the accented ё normalizes and matches too",
+			html: `<h3>Мы ждём от вас</h3><ul><li>Опыт работы с Go от 3 лет</li></ul>`,
+			want: []enrich.Requirement{req("Опыт работы с Go от 3 лет")},
+		},
 	}
 
 	for _, tt := range tests {
