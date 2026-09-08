@@ -158,10 +158,23 @@ unit tests plus the function they drive; none of it needs Docker or Postgres.
       credentials live only there and a worker missing them soft-skips silently forever;
       and the timer is `Persistent=false`, unlike the reconciling workers, because a
       replayed window would fire reminders for sessions that have already started
-- [ ] 6.4 On deploy: build the binary on the host (`release.sh` builds the API, not every
-      command in `cmd/`) and copy the unit and timer across by hand — `release.sh` never
-      touches a unit. Until both are done the feature works and reminders simply never
-      fire
+- [x] 6.4 On deploy: build the binary on the host and copy the unit and timer across by
+      hand — `release.sh` never touches a unit. Done 2026-09-08, and the first half turned
+      out to be a THIRD step nobody had written down: `release.sh` does build worker
+      binaries, but from a hard-coded list, and a command missing from it is simply never
+      built. `mentorship-remind` is on that list now, with the note the list keeps beside
+      every other entry.
+
+      The unit and timer are in `/etc/systemd/system/`, the timer is enabled and firing
+      every 10 minutes, and one run was taken by hand first: `sent=0 failed=0`, exit 0.
+      That figure is ambiguous on its own — a run with no mail credentials reports the
+      same — so `.env.notify` was checked to carry `NOTIFY_EMAIL_FROM` and `AWS_REGION`
+      before the timer was enabled. It does; `sent=0` means nobody was due.
+
+      `deploy/bin/release.sh` was re-synced from the host in the same pass. It had already
+      drifted before this change (missing `discord-sync` and both `linkedin-*` workers),
+      so a repo copy that gained only this entry would still have described a host it does
+      not match.
 
 ## 7. HTTP layer
 
