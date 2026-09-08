@@ -3264,7 +3264,7 @@
           "200": {
             "description": "Success",
             "content": {
-              "application/json": {
+              "text/event-stream": {
                 "schema": {
                   "type": "string"
                 },

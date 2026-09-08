@@ -149,9 +149,18 @@ function requestBodyFor(ep) {
 // Every documented endpoint has exactly one example response today (no status
 // code is modeled in the source data), so it is always keyed 200 — an SSE
 // stream included, since streaming does not change the HTTP status.
+// An SSE frame opens with either a `data:` line (no named event) or an
+// `event:` line naming the kind before its `data:` line — checking only for
+// a leading `data:` misses the second shape (e.g.
+// POST /assistant/sessions/{id}/messages, whose frames are `event: <kind>`
+// then `data: {...}`).
+function isSseExample(responseExample) {
+  return /^(data|event):/.test(responseExample.trimStart());
+}
+
 function responsesFor(ep) {
   if (!ep.responseExample) return { 200: { description: 'Success' } };
-  const isSse = ep.responseExample.trimStart().startsWith('data:');
+  const isSse = isSseExample(ep.responseExample);
   const mediaType = isSse ? 'text/event-stream' : 'application/json';
   return {
     200: {

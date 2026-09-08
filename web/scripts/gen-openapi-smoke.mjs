@@ -74,6 +74,20 @@ async function main() {
   assert('SSE endpoint uses text/event-stream', 'text/event-stream' in (stream.responses?.['200']?.content ?? {}));
   assert('SSE endpoint has no application/json response', !('application/json' in (stream.responses?.['200']?.content ?? {})));
 
+  // A second, differently-shaped SSE endpoint: its example opens with a named
+  // `event:` frame before the `data:` line, not `data:` first — the shape that
+  // slipped past a naive "starts with data:" check (code review finding).
+  const assistantStream = a.paths['/assistant/sessions/{id}/messages']?.post;
+  assert('named-event SSE endpoint found', Boolean(assistantStream));
+  assert(
+    'named-event SSE endpoint uses text/event-stream',
+    'text/event-stream' in (assistantStream.responses?.['200']?.content ?? {}),
+  );
+  assert(
+    'named-event SSE endpoint has no application/json response',
+    !('application/json' in (assistantStream.responses?.['200']?.content ?? {})),
+  );
+
   // Deprecated marking, exercised on a synthetic fixture (no shipped endpoint
   // currently qualifies — see openspec/changes/migrate-api-docs-scalar/tasks.md).
   const deprecatedFixture = {
