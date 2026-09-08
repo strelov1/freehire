@@ -48,6 +48,9 @@ type genConfig struct {
 	schemaName  string
 	schema      llmschema.Schema
 	schemaAsked bool
+	// reasoning is how much the model should deliberate over this call; see
+	// WithReasoning. The zero value sends nothing.
+	reasoning ReasoningEffort
 }
 
 func newGenConfig(opts []GenOption) genConfig {
