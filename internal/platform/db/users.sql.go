@@ -569,6 +569,44 @@ func (q *Queries) GetUsernameByUser(ctx context.Context, id int64) (GetUsernameB
 	return i, err
 }
 
+const listMembersMissingTalentHandle = `-- name: ListMembersMissingTalentHandle :many
+SELECT id
+FROM users
+WHERE talent_network_visibility <> 'off'
+  AND talent_handle IS NULL
+ORDER BY id
+`
+
+// The members who joined before handles existed, and so have no public address.
+//
+// Migration 0146 rewrote every 'public' row to 'anonymous' but could not mint a handle —
+// minting reads a job title through a Go dictionary, which SQL cannot do — so those
+// accounts, and any that were already 'anonymous', are members the catalogue cannot list
+// and whose card 404s. cmd/backfill-talent-handle walks this list once and closes it.
+//
+// No stamp gate here, unlike the catalogue's own read: a member whose CV extract is stale
+// still needs an address for when it catches up, and withholding one would make the
+// backfill's own result depend on when it happened to run.
+func (q *Queries) ListMembersMissingTalentHandle(ctx context.Context) ([]int64, error) {
+	rows, err := q.db.Query(ctx, listMembersMissingTalentHandle)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []int64{}
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listTalentNetworkMembers = `-- name: ListTalentNetworkMembers :many
 SELECT u.talent_handle,
        u.timezone,
@@ -822,7 +860,7 @@ type SetTalentHandleIfUnsetParams struct {
 // caller reads rather than re-querying and racing again.
 //
 // A collision with ANOTHER account's handle surfaces as a unique-violation from
-// users_talent_handle_key (migration 0147), not as 0 rows. The caller mints a new suffix
+// users_talent_handle_key (migration 0148), not as 0 rows. The caller mints a new suffix
 // and retries — the same shape internal/identity/accounts uses to allocate a username.
 func (q *Queries) SetTalentHandleIfUnset(ctx context.Context, arg SetTalentHandleIfUnsetParams) (int64, error) {
 	result, err := q.db.Exec(ctx, setTalentHandleIfUnset, arg.ID, arg.TalentHandle)
@@ -844,7 +882,7 @@ type SetTalentNetworkVisibilityParams struct {
 }
 
 // Owner-scoped write of the caller's Talent Network membership ('off' or 'anonymous'
-// since migration 0145). Does not touch talent_handle: the public URL stays stable
+// since migration 0146). Does not touch talent_handle: the public URL stays stable
 // across a round trip through 'off', so a candidate who already shared it once — or who
 // leaves and rejoins — never has to reshare a new one.
 //

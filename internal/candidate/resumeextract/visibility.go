@@ -86,7 +86,7 @@ func (s Structured) Anonymous() Professional {
 }
 
 // There was a Public projection here — Professional plus the candidate's name — for the
-// third visibility mode. Migration 0145 retired that mode: the product no longer asks a
+// third visibility mode. Migration 0146 retired that mode: the product no longer asks a
 // candidate how much of themselves to disclose, so no caller can select a name-bearing
 // projection any more. It is deleted rather than kept "in case": a projection nothing may
 // reach is not a seam, it is one careless call away from publishing a name on a page that

@@ -124,9 +124,16 @@ func canonicalSkills(tokens []string) []string {
 //
 // Every field here survives the same rule ProjectCard enforces. Cities are the NORMALISED
 // extraction (users.resume_cities), not the free-text location inside the CV, which
-// carries values like "Austria, Klagenfurt 9020"; specializations are facets the
-// candidate picked from a closed list; the timezone is an IANA zone. None of them can
-// carry a sentence.
+// carries values like "Austria, Klagenfurt 9020"; the timezone is an IANA zone;
+// specializations are drawn from vocab.CategoryValues by the profile form. None of the
+// three can carry a sentence.
+//
+// Specializations are NOT a duplicate of Card.Category, and the difference is the useful
+// part. Category is derived from what the candidate has DONE — the title of their most
+// recent role, through classify. Specializations are what they SAY they want, ticked from
+// the same closed vocabulary on their own profile. A backend engineer whose profile says
+// `ml_ai` is somebody a recruiter wants to find, and the two fields disagreeing is the
+// only way that shows.
 type CatalogueMember struct {
 	Handle string        `json:"handle"`
 	Card   CandidateCard `json:"card"`

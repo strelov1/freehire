@@ -136,7 +136,7 @@ func TestGetTalentNetwork_DefaultsToOff(t *testing.T) {
 	}
 }
 
-// "public" was the third visibility mode until migration 0145 retired it. It gets its own
+// "public" was the third visibility mode until migration 0146 retired it. It gets its own
 // test rather than a row in RejectsInvalidValue's table because it is the one invalid
 // value that a stale client — an old tab, a cached bundle — will actually send, and
 // because the CHECK constraint would reject it anyway: the handler's job is to turn that
@@ -240,6 +240,28 @@ func TestPutTalentNetwork_RejoiningKeepsTheHandle(t *testing.T) {
 	}
 	if store.claimCalls != 0 {
 		t.Errorf("claimed a handle %d times for an account that already had one", store.claimCalls)
+	}
+}
+
+// The handle is frozen at mint, and a change of discipline is the loudest reason it
+// might drift: the base comes from the current role's category. It must not — the URL
+// somebody shared has to keep working after they change jobs.
+func TestPutTalentNetwork_ChangingJobsKeepsTheHandle(t *testing.T) {
+	store := &fakeTalentNetworkStore{visibility: "off", structured: []byte(backendResumeJSON)}
+	app, token := talentNetworkApp(t, store)
+
+	minted := putTalentNetworkOK(t, app, token, "anonymous").Handle
+	if !strings.HasPrefix(minted, "backend-") {
+		t.Fatalf("handle = %q, want it minted from the backend role", minted)
+	}
+
+	// A new CV whose current role is a different discipline entirely.
+	store.structured = []byte(`{"experience":[{"title":"Lead Data Engineer","current":true}]}`)
+	if got := putTalentNetworkOK(t, app, token, "off").Handle; got != minted {
+		t.Errorf("handle after leaving = %q, want %q", got, minted)
+	}
+	if got := putTalentNetworkOK(t, app, token, "anonymous").Handle; got != minted {
+		t.Errorf("handle after rejoining with a new discipline = %q, want the original %q", got, minted)
 	}
 }
 

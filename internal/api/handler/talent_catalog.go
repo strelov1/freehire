@@ -63,10 +63,15 @@ func (h *talentCatalogHandlers) Get(c *fiber.Ctx) error {
 		return err
 	}
 
-	// A card is a person, and a cache of one outlives their decision to leave. Short,
-	// and marked so a crawler that finds the JSON does not keep it either — the page's
-	// own noindex covers the HTML, this covers the endpoint behind it.
-	c.Set("Cache-Control", "public, max-age=60")
+	// A card is a person, and a cache of one outlives their decision to leave.
+	//
+	// `private`, not `public`, even though the response carries no session and no
+	// personal data in the ordinary sense: `public` is the directive that authorises a
+	// SHARED cache — a CDN, a corporate proxy — to hold and re-serve it. This route
+	// promises that leaving takes effect on the next request, and an intermediary
+	// holding a departed member's card for a minute is exactly that promise broken by
+	// somebody we cannot ask to stop.
+	c.Set("Cache-Control", "private, max-age=60")
 	c.Set("X-Robots-Tag", "noindex")
 	return c.JSON(fiber.Map{"data": member})
 }

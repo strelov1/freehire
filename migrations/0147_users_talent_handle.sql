@@ -16,10 +16,10 @@
 -- and the runner's default transaction around a single instantaneous statement costs
 -- nothing. Contrast 0085's uuid column, whose volatile default forced a full rewrite.
 --
--- Uniqueness is a separate file (0147), because CREATE INDEX CONCURRENTLY cannot run
+-- Uniqueness is a separate file (0148), because CREATE INDEX CONCURRENTLY cannot run
 -- inside a transaction and this one may.
 --
--- Applied to a fresh volume by initdb after 0145; on an existing prod volume run this
+-- Applied to a fresh volume by initdb after 0146; on an existing prod volume run this
 -- manually (SET ROLE hire) BEFORE deploying the code that reads it.
 
 ALTER TABLE public.users

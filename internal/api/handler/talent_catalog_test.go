@@ -238,8 +238,10 @@ func TestTalentCatalogGet_ServesAMemberByHandle(t *testing.T) {
 	if got := resp.Header.Get("X-Robots-Tag"); got != "noindex" {
 		t.Errorf("X-Robots-Tag = %q, want noindex — a card is a person, and a cached one outlives their leaving", got)
 	}
-	if resp.Header.Get("Cache-Control") == "" {
-		t.Error("no Cache-Control on a card")
+	// `private` and not `public`: a shared cache holding a departed member's card is
+	// this route's own promise — 404 on the next request — broken by an intermediary.
+	if got := resp.Header.Get("Cache-Control"); !strings.HasPrefix(got, "private") {
+		t.Errorf("Cache-Control = %q, want it to start with private", got)
 	}
 	forbidSubstrings(t, talentNetworkReadBody(t, resp), "Ada Lovelace", "Analytical Engines")
 }

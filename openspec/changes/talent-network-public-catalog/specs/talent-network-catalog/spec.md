@@ -83,9 +83,17 @@ does.
 
 ### Requirement: The catalogue is filtered on facets, not on text
 
-The catalogue SHALL be filterable by category, seniority, skills, timezone region, city
-and years of experience. Every filter SHALL take values from a closed vocabulary or a
-number; the catalogue SHALL NOT accept a free-text query.
+The catalogue SHALL be filterable by specialization, category, seniority, skills,
+timezone region, city and years of experience. Every filter SHALL take values from a
+closed vocabulary or a number; the catalogue SHALL NOT accept a free-text query.
+
+Specialization and category are different questions over the same vocabulary:
+specialization is what the candidate ticked on their own profile — where they want to go
+— while category is derived from their most recent job title, which is where they have
+been. The listing surface SHALL offer a control for SPECIALIZATION, seniority, timezone
+region and years; `categories`, `skills` and `cities` are URL and API filters with no
+control in this change, because two rows over one 48-value vocabulary is 96 chips on a
+screen and specialization is the one a recruiter is asking about.
 
 There is no language filter, because there is no language data — see the withholding rule
 above. A filter over a field the card does not carry would be a filter nobody could act
@@ -118,6 +126,13 @@ silently widening the answer, matching the rule the rest of this API follows.
 - **WHEN** a request carries a parameter the catalogue does not understand
 - **THEN** the parameter is named in `meta.ignored_params`
 - **AND** the answer is the same as it would have been without it
+
+#### Scenario: Specialization and category disagree
+
+- **WHEN** a member's most recent role resolves to `backend` and their profile declares
+  `ml_ai`
+- **THEN** filtering by specialization `ml_ai` returns them
+- **AND** filtering by category `ml_ai` does not
 
 #### Scenario: A member with no timezone, under a timezone filter
 

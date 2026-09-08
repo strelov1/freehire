@@ -6,8 +6,11 @@
   import { CATEGORY_LABELS, SENIORITY_LABELS, titleCase } from '$lib/labels';
   import {
     DEFAULT_LIMIT,
+    TIMEZONE_REGIONS,
+    YEAR_THRESHOLDS,
     talentFilterSearch,
     talentPageSearch,
+    talentYearsSearch,
     type TalentFilterKey,
     type TalentQuery,
   } from '$lib/talentQuery';
@@ -49,10 +52,11 @@
   /** One filter row: every value in the vocabulary, each with the href that toggles it.
    *
    *  Toggling rather than replacing is what makes a row behave like a set, which is how it
-   *  reads: clicking a second discipline adds it, clicking a selected one removes it. */
-  // `labels` is an EXCEPTION table, not a full dictionary — SENIORITY_LABELS carries one
-  // entry — so an absent value falls through to titleCase, the same fallback facets.ts
-  // and insights.ts use. Reading it as complete renders chips as bare slugs.
+   *  reads: clicking a second value adds it, clicking a selected one removes it.
+   *
+   *  `labels` is an EXCEPTION table, not a full dictionary — SENIORITY_LABELS carries one
+   *  entry — so an absent value falls through to titleCase, the same fallback facets.ts
+   *  and insights.ts use. Reading it as complete renders chips as bare slugs. */
   function options(
     q: TalentQuery,
     key: TalentFilterKey,
@@ -77,17 +81,45 @@
   const seniorityOptions = $derived(
     options(query, 'seniorities', SENIORITY_VALUES, SENIORITY_LABELS, query.seniorities ?? []),
   );
-  // The whole vocabulary is offered rather than the categories present today: a filter row
-  // that shrank as members left would make the catalogue look like it had never covered
-  // those disciplines.
-  const categoryOptions = $derived(
-    options(query, 'categories', CATEGORY_VALUES, CATEGORY_LABELS, query.categories ?? []),
+
+  // The discipline row filters on SPECIALIZATIONS — what the candidate ticked on their own
+  // profile — not on the category derived from their job titles. Two rows over the same
+  // 48-value vocabulary would be 96 chips on one screen, and of the two this is the one a
+  // recruiter is actually asking about: where somebody wants to go, not where they have
+  // been. Where they have been is on the card, and `categories` stays a URL/API filter.
+  const specializationOptions = $derived(
+    options(
+      query,
+      'specializations',
+      CATEGORY_VALUES,
+      CATEGORY_LABELS,
+      query.specializations ?? [],
+    ),
+  );
+
+  const timezoneOptions = $derived(
+    options(query, 'tz', TIMEZONE_REGIONS, {}, query.tz ?? []),
+  );
+
+  // Years is a THRESHOLD, not a set: "at least this much". So the row is single-select —
+  // clicking the active one clears it — rather than the toggle-into-a-set the others use.
+  const yearOptions = $derived(
+    YEAR_THRESHOLDS.map((years) => {
+      const selected = query.minYears === years;
+      const search = talentYearsSearch(query, selected ? undefined : years);
+      return {
+        value: String(years),
+        label: `${years}+ years`,
+        href: search ? `${resolve('/talent')}?${search}` : resolve('/talent'),
+        selected,
+      };
+    }),
   );
 </script>
 
 <Seo
   title="Talent Network — freehire"
-  description="Anonymous profiles of candidates open to being approached. Filter by discipline, seniority, skills and timezone."
+  description="Anonymous profiles of candidates open to being approached. Filter by discipline, seniority, timezone and experience."
 />
 
 <div class="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 py-8">
@@ -99,26 +131,60 @@
     </p>
   </header>
 
-  <section class="flex flex-col gap-3" aria-label="Filters">
-    <!-- The Chip primitive is display-only — no href, no selected state — so the anchor
-    wraps it and the variant carries the selection. Wrapping rather than widening a shared
-    component for one listing's filter row; `primary` already reads as "on". -->
-    <div class="flex flex-wrap gap-1.5">
-      {#each seniorityOptions as option (option.value)}
-        <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- built by options() from resolve('/talent') plus a filter query; the rule cannot see through the appended search string -->
-        <a href={option.href}>
-          <Chip variant={option.selected ? 'primary' : 'default'}>{option.label}</Chip>
-        </a>
-      {/each}
+  <!-- The Chip primitive is display-only — no href, no selected state — so the anchor wraps
+  it and the variant carries the selection. Wrapping rather than widening a shared component
+  for one listing's filter rows; `primary` already reads as "on". -->
+  <section class="flex flex-col gap-4" aria-label="Filters">
+    <div class="flex flex-col gap-1.5">
+      <h2 class="text-xs font-medium text-muted-foreground">Open to</h2>
+      <div class="flex flex-wrap gap-1.5">
+        {#each specializationOptions as option (option.value)}
+          <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- built by options() from resolve('/talent') plus a filter query; the rule cannot see through the appended search string -->
+          <a href={option.href}>
+            <Chip variant={option.selected ? 'primary' : 'default'}>{option.label}</Chip>
+          </a>
+        {/each}
+      </div>
     </div>
-    <div class="flex flex-wrap gap-1.5">
-      {#each categoryOptions as option (option.value)}
-        <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- same as the seniority row above: resolve('/talent') plus a query string -->
-        <a href={option.href}>
-          <Chip variant={option.selected ? 'primary' : 'default'}>{option.label}</Chip>
-        </a>
-      {/each}
+
+    <div class="flex flex-wrap gap-x-8 gap-y-4">
+      <div class="flex flex-col gap-1.5">
+        <h2 class="text-xs font-medium text-muted-foreground">Grade</h2>
+        <div class="flex flex-wrap gap-1.5">
+          {#each seniorityOptions as option (option.value)}
+            <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- same as the row above: resolve('/talent') plus a query string -->
+            <a href={option.href}>
+              <Chip variant={option.selected ? 'primary' : 'default'}>{option.label}</Chip>
+            </a>
+          {/each}
+        </div>
+      </div>
+
+      <div class="flex flex-col gap-1.5">
+        <h2 class="text-xs font-medium text-muted-foreground">Experience</h2>
+        <div class="flex flex-wrap gap-1.5">
+          {#each yearOptions as option (option.value)}
+            <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- resolve('/talent') plus a query string -->
+            <a href={option.href}>
+              <Chip variant={option.selected ? 'primary' : 'default'}>{option.label}</Chip>
+            </a>
+          {/each}
+        </div>
+      </div>
+
+      <div class="flex flex-col gap-1.5">
+        <h2 class="text-xs font-medium text-muted-foreground">Timezone</h2>
+        <div class="flex flex-wrap gap-1.5">
+          {#each timezoneOptions as option (option.value)}
+            <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- resolve('/talent') plus a query string -->
+            <a href={option.href}>
+              <Chip variant={option.selected ? 'primary' : 'default'}>{option.label}</Chip>
+            </a>
+          {/each}
+        </div>
+      </div>
     </div>
+
     {#if query.tz?.length}
       <!-- Stated rather than left to be discovered: a timezone filter drops everyone whose
       zone is unknown, which otherwise reads as a small talent pool rather than a missing

@@ -1,6 +1,6 @@
 -- migrate: no-transaction
 --
--- Uniqueness for users.talent_handle (0146), and the index that serves the public
+-- Uniqueness for users.talent_handle (0147), and the index that serves the public
 -- card route's `WHERE talent_handle = $1`. Same shape 0086/0118 established: a bare
 -- unique index built CONCURRENTLY, not a named UNIQUE table constraint — a constraint
 -- cannot be added concurrently, and adding it plainly would scan and lock `users`,

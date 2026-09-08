@@ -34,6 +34,13 @@ export const DEFAULT_LIMIT = 24;
 /** internal/candidate/talentnetwork/query.go: maxFilterTerms. */
 export const MAX_FILTER_TERMS = 25;
 
+/** internal/candidate/talentnetwork/query.go: maxYears. Mirrored EXACTLY, not narrowed
+ *  to something that looks sensible: a bound tighter here than there drops a filter the
+ *  API would have read, and the visitor sees a wider catalogue than their own chips
+ *  claim — with nothing in meta.ignored_params to explain it, because the API never saw
+ *  the parameter. */
+export const MAX_YEARS = 60;
+
 /** The widest OFFSET the API's int32 argument can carry. */
 export const MAX_OFFSET = 2_147_483_647;
 
@@ -63,7 +70,7 @@ export function readTalentQuery(params: URLSearchParams): TalentQuery {
   const specializations = terms(params.get('specializations'));
   if (specializations) query.specializations = specializations;
 
-  const minYears = boundedInt(params.get('min_years'), 0, 60);
+  const minYears = boundedInt(params.get('min_years'), 0, MAX_YEARS);
   if (minYears !== undefined) query.minYears = minYears;
 
   const limit = boundedInt(params.get('limit'), 1, MAX_LIMIT);
@@ -96,6 +103,24 @@ export function writeTalentQuery(query: TalentQuery): string {
   return params.toString();
 }
 
+/** The IANA timezone regions a candidate can actually be in. Antarctica and the
+ *  single-city oddities are left out: the row is a control, not a census, and a chip
+ *  nobody will ever match is a chip in the way of the ones they will. */
+export const TIMEZONE_REGIONS = [
+  'Africa',
+  'America',
+  'Asia',
+  'Atlantic',
+  'Australia',
+  'Europe',
+  'Indian',
+  'Pacific',
+] as const;
+
+/** The experience thresholds the row offers. Round numbers a person thinks in, not an
+ *  even split of the range — "at least five years" is a thing somebody means. */
+export const YEAR_THRESHOLDS = [2, 5, 8, 12] as const;
+
 /** Which filters can be narrowed by a control on the page. */
 export type TalentFilterKey = keyof Pick<
   TalentQuery,
@@ -109,6 +134,18 @@ export type TalentFilterKey = keyof Pick<
 /** The search string for the same query at a different offset, for the pager's links. */
 export function talentPageSearch(query: TalentQuery, offset: number): string {
   return writeTalentQuery({ ...query, offset });
+}
+
+/** The search string for the same query at a different minimum-experience threshold.
+ *
+ *  Separate from talentFilterSearch because years is a THRESHOLD, not a set: there is one
+ *  value or none, so the control is single-select and `undefined` clears it. Paging resets
+ *  for the same reason a filter change resets it. */
+export function talentYearsSearch(query: TalentQuery, years: number | undefined): string {
+  const { minYears: _cleared, ...rest } = query;
+  const next: TalentQuery = { ...rest, offset: 0 };
+  if (years !== undefined) next.minYears = years;
+  return writeTalentQuery(next);
 }
 
 /** The search string for the same query with one filter's values replaced. An empty list

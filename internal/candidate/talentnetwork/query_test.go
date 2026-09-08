@@ -65,6 +65,9 @@ func TestQueryFromValues_ReportsUnreadableValues(t *testing.T) {
 		"limit=1000":     "limit",
 		"offset=-1":      "offset",
 		"min_years=-3":   "min_years",
+		// Above the ceiling. Reported rather than served: an empty catalogue would tell
+		// the caller nothing, and their filter really was not read.
+		"min_years=100": "min_years",
 	}
 	for raw, want := range cases {
 		t.Run(raw, func(t *testing.T) {

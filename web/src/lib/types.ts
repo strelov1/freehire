@@ -1236,7 +1236,7 @@ export interface UserProfile {
 }
 
 /** Talent Network membership: in, or not. Two values, not three — `public` was retired
- *  with the mode picker itself (migration 0145), because the product should answer how
+ *  with the mode picker itself (migration 0146), because the product should answer how
  *  much of a candidate to disclose rather than ask them. Mirrors the CHECK constraint on
  *  `users.talent_network_visibility`. */
 export type TalentNetworkVisibility = 'off' | 'anonymous';

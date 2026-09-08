@@ -27,6 +27,12 @@ const (
 	// clamp target: a request for more is reported as unread and served the default,
 	// because silently clamping hands a caller a page they mistake for the whole result.
 	maxLimit = 100
+
+	// maxYears bounds min_years. A ceiling rather than "any non-negative integer",
+	// because the point of the bound is to REPORT: `min_years=100` names no candidate
+	// alive, and answering it with an empty catalogue tells the caller nothing, while
+	// naming it in meta.ignored_params tells them their filter was not read.
+	maxYears = 60
 )
 
 // Param names, in one place so KnownParams and QueryFromValues cannot drift. A param
@@ -74,7 +80,7 @@ func QueryFromValues(v url.Values) (Query, []string) {
 		Specializations: terms(v.Get(paramSpecializations)),
 	}
 
-	q.MinYears, unread = boundedInt(v, paramMinYears, 0, math.MaxInt32, 0, unread)
+	q.MinYears, unread = boundedInt(v, paramMinYears, 0, maxYears, 0, unread)
 	q.Limit, unread = boundedInt(v, paramLimit, 1, maxLimit, defaultLimit, unread)
 	q.Offset, unread = boundedInt(v, paramOffset, 0, math.MaxInt32, 0, unread)
 

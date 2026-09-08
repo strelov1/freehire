@@ -3,6 +3,7 @@
   import { resolve } from '$app/paths';
   import { countryLabel, skillLabel } from '$lib/facets';
   import type { CatalogueMember } from '$lib/generated/contracts';
+  import { CATEGORY_LABELS, titleCase } from '$lib/labels';
   import { talentHeading, talentPlace } from '$lib/talentCard';
   import { Card, Chip, CountryFlag } from '$lib/ui';
 
@@ -71,6 +72,18 @@
           <CountryFlag code={country} label={countryLabel(country)} />
         {/if}
       </div>
+    {/if}
+
+    {#if member.specializations.length}
+      <!-- What they said they are OPEN TO, which is the row the catalogue filters on. It
+      sits above the skills because it is the forward-looking half of the card: the skills
+      and roles below say where somebody has been. -->
+      <p class="text-sm text-muted-foreground">
+        Open to
+        <span class="text-foreground">
+          {member.specializations.map((s) => CATEGORY_LABELS[s] ?? titleCase(s)).join(', ')}
+        </span>
+      </p>
     {/if}
 
     {#if shownSkills.length}

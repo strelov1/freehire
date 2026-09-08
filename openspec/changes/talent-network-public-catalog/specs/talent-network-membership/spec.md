@@ -45,8 +45,16 @@ what is disclosed about a person, never remove them from a network they chose to
 
 - **WHEN** the migration runs against an account whose value is `public`
 - **THEN** the account's value becomes `anonymous`
-- **AND** the account appears in the catalogue under the public projection, with its name
-  and employers withheld
+
+#### Scenario: A member who joined before handles existed
+
+- **WHEN** an account is a member and has no handle — because it joined before the column
+  existed, or because the migration rewrote it from the retired state
+- **THEN** it is absent from the catalogue and its card answers 404 until a handle is
+  minted, since a member with no address is one the catalogue cannot link to
+- **AND** a one-off backfill mints one for every such account, after which they appear
+  under the public projection
+- **AND** the backfill is idempotent: a re-run mints nothing
 
 #### Scenario: The database refuses the retired value
 
