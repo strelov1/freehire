@@ -75,7 +75,6 @@ func (s neogov) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 		if err != nil {
 			return nil, fmt.Errorf("neogov: parse %s: %w", e.Board, err)
 		}
-		added := 0
 		for _, j := range pageJobs {
 			if seen[j.ExternalID] {
 				continue
@@ -83,11 +82,13 @@ func (s neogov) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 			seen[j.ExternalID] = true
 			j.Company = e.Company
 			jobs = append(jobs, j)
-			added++
 		}
-		// A genuinely empty page, or having reached the source's own declared total, both
-		// prove completeness on their own — the two proofs the fullBoardListing bar admits.
-		if added == 0 || (total > 0 && len(jobs) >= total) {
+		// A genuinely empty RAW page, or having reached the source's own declared total, both
+		// prove completeness on their own — the two proofs the fullBoardListing bar admits. The
+		// raw page count (before cross-page dedup), not the count of newly-added items, is what
+		// proves emptiness: a page that is entirely already-seen duplicates is non-empty, and
+		// stopping on that would let an unseen posting beyond it go unreached.
+		if len(pageJobs) == 0 || (total > 0 && len(jobs) >= total) {
 			done = true
 			break
 		}

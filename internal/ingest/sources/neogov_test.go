@@ -231,6 +231,61 @@ func (f *neogovEndlessFake) GetTextWithHeaders(_ context.Context, url string, _ 
 	</li>`, id, id), nil
 }
 
+// neogovCardHTML renders one bare listing card, for building small page fixtures by hand.
+func neogovCardHTML(id, href, title string) string {
+	return `<li class="list-item" data-job-id="` + id + `">
+	  <h3><a class="item-details-link" href="` + href + `">` + title + `</a></h3>
+	  <ul class="list-meta"><li>Remote</li></ul>
+	  <div class="list-entry">Snippet.</div>
+	</li>`
+}
+
+// neogovDuplicateThenNewFake serves page 1 and page 2 as the SAME non-empty card (simulating a
+// page whose every row is already-seen, e.g. from a sort tie spanning a page boundary), then page
+// 3 with a genuinely new posting, then an empty page. If the walk stopped on "no NEW postings"
+// rather than "no postings at all", it would end at page 2 and never reach page 3's posting.
+type neogovDuplicateThenNewFake struct{ pages [][]string }
+
+func (f *neogovDuplicateThenNewFake) GetTextWithHeaders(_ context.Context, url string, _ map[string]string) (string, error) {
+	if !strings.Contains(url, "careers/home/index") {
+		return "", nil
+	}
+	page := 1
+	if strings.Contains(url, "page=2") {
+		page = 2
+	} else if strings.Contains(url, "page=3") {
+		page = 3
+	} else if strings.Contains(url, "page=4") {
+		page = 4
+	}
+	if page > len(f.pages) {
+		return `<ul class="list-items"></ul>`, nil
+	}
+	return `<ul class="list-items">` + strings.Join(f.pages[page-1], "") + `</ul>`, nil
+}
+
+func TestNeogovFetchReachesAPostingPastADuplicateOnlyPage(t *testing.T) {
+	first := neogovCardHTML("1", "/careers/schooljobs.com/cochisecollege/jobs/1/role-a", "Role A")
+	third := neogovCardHTML("3", "/careers/schooljobs.com/cochisecollege/jobs/3/role-c", "Role C")
+	fake := &neogovDuplicateThenNewFake{pages: [][]string{
+		{first}, // page 1: one posting
+		{first}, // page 2: the SAME posting again (duplicate-only, non-empty)
+		{third}, // page 3: a genuinely new posting
+	}}
+	jobs, err := neogov{http: fake}.Fetch(context.Background(),
+		CompanyEntry{Company: "Cochise College", Board: "schooljobs.com/cochisecollege"})
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	ids := map[string]bool{}
+	for _, j := range jobs {
+		ids[j.ExternalID] = true
+	}
+	if !ids["1"] || !ids["3"] {
+		t.Errorf("got job ids %v, want both 1 and 3 (the walk must not stop at the duplicate-only page 2)", ids)
+	}
+}
+
 func TestNeogovFetchFailsWhenListingExceedsThePageCap(t *testing.T) {
 	fake := &neogovEndlessFake{}
 	_, err := neogov{http: fake}.Fetch(context.Background(),

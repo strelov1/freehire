@@ -69,15 +69,16 @@ func (s peopleforce) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 		if err != nil {
 			return nil, fmt.Errorf("peopleforce: listing %s page %d: %w", e.Board, page, err)
 		}
-		added := 0
-		for _, c := range peopleforceListings(base, root) {
+		pageCards := peopleforceListings(base, root)
+		for _, c := range pageCards {
 			if _, ok := seen[c.URL]; !ok {
 				seen[c.URL] = struct{}{}
 				cards = append(cards, c)
-				added++
 			}
 		}
-		if added == 0 {
+		// The raw card count, not the count of newly-kept ones, proves a page empty: a page whose
+		// cards are all already-listed duplicates is not itself proof the board has no more pages.
+		if len(pageCards) == 0 {
 			done = true
 			break
 		}
@@ -93,8 +94,12 @@ func (s peopleforce) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	}), nil
 }
 
-// detail fetches one job's detail page and maps it to a Job, returning ok=false when the fetch
-// fails or the URL carries no native id, so the caller skips just that posting.
+// detail fetches one job's detail page and maps it to a Job. A URL carrying no native id is a
+// plain drop (ok=false) — it could never have been stored, so no close can reach it. A page the
+// platform answers 404/410 for is dropped too: that is the platform's own evidence the posting is
+// gone. Everything else the fetch could fail with comes back as an unreadableDetail marker
+// instead, since this crawl is now trusted (fullBoardListing) for the sweep's board-scoped close,
+// and a plain drop here would be indistinguishable from the posting having been taken down.
 func (s peopleforce) detail(ctx context.Context, e CompanyEntry, c peopleforceListing) (Job, bool) {
 	id := peopleforceJobID(c.URL)
 	if id == "" {
@@ -102,6 +107,9 @@ func (s peopleforce) detail(ctx context.Context, e CompanyEntry, c peopleforceLi
 	}
 	root, err := s.http.GetHTML(ctx, c.URL)
 	if err != nil {
+		if detailUnreadable(err) {
+			return unreadableDetail(id, c.URL, e.Company), true
+		}
 		return Job{}, false
 	}
 

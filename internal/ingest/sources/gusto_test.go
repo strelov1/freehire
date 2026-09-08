@@ -307,6 +307,47 @@ func TestGustoFetchFailsOnALaterPageError(t *testing.T) {
 	}
 }
 
+// gustoDuplicateThenNewFake serves the SAME card on page 1 and page 2 (simulating a page whose
+// every card is already-listed), then a genuinely new card on page 3, then an empty page. If the
+// walk stopped on "no NEWLY-KEPT cards" rather than "the raw page has no cards", it would end at
+// page 2 and never reach page 3's posting.
+type gustoDuplicateThenNewFake struct{ calls int }
+
+func (f *gustoDuplicateThenNewFake) GetHTML(_ context.Context, u string) (*html.Node, error) {
+	f.calls++
+	first := gustoListingItemHTML(gustoTestPosting, "Senior Go Engineer", "Austin, TX", "Full time")
+	second := gustoListingItemHTML(
+		"/postings/acme-robotics-platform-engineer-49dbe1c8-53cc-49db-8ebf-158f754d4284",
+		"Platform Engineer", "Austin, TX", "Full time")
+	var body string
+	switch {
+	case strings.Contains(u, "page=1"):
+		body = gustoBoardHTML(first)
+	case strings.Contains(u, "page=2"):
+		body = gustoBoardHTML(first) // same card again: duplicate-only page
+	case strings.Contains(u, "page=3"):
+		body = gustoBoardHTML(second) // a genuinely new card
+	default:
+		body = gustoBoardHTML() // empty: the listing is exhausted
+	}
+	return html.Parse(strings.NewReader(body))
+}
+
+func TestGustoListReachesAPostingPastADuplicateOnlyPage(t *testing.T) {
+	fake := &gustoDuplicateThenNewFake{}
+	postings, err := gusto{http: fake}.list(context.Background(), gustoEntry())
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	ids := map[string]bool{}
+	for _, p := range postings {
+		ids[p.id] = true
+	}
+	if !ids[gustoTestID] || !ids["49dbe1c8-53cc-49db-8ebf-158f754d4284"] {
+		t.Errorf("got posting ids %v, want both (the walk must not stop at the duplicate-only page 2)", ids)
+	}
+}
+
 func TestGustoFetchFailsWhenListingExceedsThePageCap(t *testing.T) {
 	// A listing that never returns an empty page cannot prove it reached the board's end, so
 	// reaching gustoMaxPages must fail the Fetch rather than silently returning what was gathered.

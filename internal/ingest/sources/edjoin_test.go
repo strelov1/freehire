@@ -334,6 +334,45 @@ func (f *edjoinEndlessFake) GetHTML(_ context.Context, _ string) (*html.Node, er
 	return nil, fmt.Errorf("edjoinEndlessFake: GetHTML not needed for this test")
 }
 
+// edjoinDuplicateThenNewFake serves the SAME row on its first two calls (simulating a page whose
+// every row is already-seen, e.g. from a postingDate sort tie spanning a page boundary), then a
+// genuinely new row, then an empty page. If the walk stopped on "no NEWLY-KEPT rows" rather than
+// "the raw page has no rows", it would end on the second call and never reach the third row.
+type edjoinDuplicateThenNewFake struct{ calls int }
+
+func (f *edjoinDuplicateThenNewFake) GetJSON(_ context.Context, _ string, v any) error {
+	f.calls++
+	switch f.calls {
+	case 1, 2:
+		row := edjoinRowJSON(edjoinTestRow{id: 1, title: "IT Specialist", district: "Madera Unified"})
+		return json.Unmarshal([]byte(edjoinListingJSON(0, row)), v)
+	case 3:
+		row := edjoinRowJSON(edjoinTestRow{id: 3, title: "Network Admin", district: "Madera Unified"})
+		return json.Unmarshal([]byte(edjoinListingJSON(0, row)), v)
+	default:
+		return json.Unmarshal([]byte(edjoinListingJSON(0)), v)
+	}
+}
+
+func (f *edjoinDuplicateThenNewFake) GetHTML(_ context.Context, _ string) (*html.Node, error) {
+	return nil, fmt.Errorf("edjoinDuplicateThenNewFake: GetHTML not needed for this test")
+}
+
+func TestEdjoinListReachesAPostingPastADuplicateOnlyPage(t *testing.T) {
+	fake := &edjoinDuplicateThenNewFake{}
+	postings, err := NewEdjoin(fake).(edjoin).list(context.Background(), edjoinEntry())
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	ids := map[int]bool{}
+	for _, p := range postings {
+		ids[p.PostingID] = true
+	}
+	if !ids[1] || !ids[3] {
+		t.Errorf("got posting ids %v, want both 1 and 3 (the walk must not stop at the duplicate-only page 2)", ids)
+	}
+}
+
 func TestEdjoinListFailsWhenListingExceedsThePageCap(t *testing.T) {
 	fake := &edjoinEndlessFake{}
 	_, err := NewEdjoin(fake).(edjoin).list(context.Background(), edjoinEntry())

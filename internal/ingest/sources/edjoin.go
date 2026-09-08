@@ -185,16 +185,17 @@ func (s edjoin) list(ctx context.Context, e CompanyEntry) ([]edjoinPosting, erro
 		if page == 1 {
 			total = resp.TotalRecords
 		}
-		added := 0
 		for _, p := range resp.Data {
 			if p.PostingID == 0 || strings.TrimSpace(p.DistrictName) == "" || listed[p.PostingID] {
 				continue
 			}
 			listed[p.PostingID] = true
 			out = append(out, p)
-			added++
 		}
-		if added == 0 || (total > 0 && len(out) >= total) {
+		// The raw row count (before dedup/filtering), not the count of newly-kept rows, proves a
+		// page empty: a page whose rows are all duplicates or unusable is not itself proof the
+		// index has no more postings beyond it.
+		if len(resp.Data) == 0 || (total > 0 && len(out) >= total) {
 			done = true
 			break
 		}

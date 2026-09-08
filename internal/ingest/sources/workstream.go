@@ -160,11 +160,10 @@ func (s workstream) FetchNew(ctx context.Context, e CompanyEntry, seen func(exte
 // list walks a board's positions listing and returns every posting it advertises. It restates the
 // shared crawlPagedLinks loop because it needs each card's whole row — title, address, pay and
 // employment type — and not just its link, and because page 1 is already in hand from resolving
-// the listing URL. Every page failing, a stated page count that the walk never confirms with a
-// genuinely empty page, and reaching workstreamMaxPages with NO stated count are all now hard
-// Fetch failures rather than a partial success — see the fullBoardListing interface (source.go)
-// for the bar: a declared page count reached, or a genuinely empty page, is the proof this walk
-// must produce.
+// the listing URL. Reaching a valid, in-range stated page count is itself proof of completeness
+// (done is seeded from stated below); without one, only a genuinely empty page proves it. Every
+// page failing, and reaching workstreamMaxPages without either proof, are hard Fetch failures
+// rather than a partial success — see the fullBoardListing interface (source.go) for the bar.
 func (s workstream) list(ctx context.Context, e CompanyEntry) ([]workstreamPosting, error) {
 	root, base, err := s.listing(ctx, e)
 	if err != nil {
@@ -184,16 +183,17 @@ func (s workstream) list(ctx context.Context, e CompanyEntry) ([]workstreamPosti
 				return nil, fmt.Errorf("workstream: listing %s page %d: %w", e.Board, page, err)
 			}
 		}
-		added := 0
-		for _, p := range workstreamListing(root) {
+		cards := workstreamListing(root)
+		for _, p := range cards {
 			if listed[p.id] {
 				continue
 			}
 			listed[p.id] = true
 			out = append(out, p)
-			added++
 		}
-		if added == 0 {
+		// The raw card count, not the count of newly-kept ones, proves a page empty: a page whose
+		// cards are all already-listed duplicates is not itself proof the board has no more pages.
+		if len(cards) == 0 {
 			done = true
 			break // an empty page: the listing is exhausted
 		}

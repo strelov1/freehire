@@ -161,16 +161,17 @@ func (s gusto) list(ctx context.Context, e CompanyEntry) ([]gustoPosting, error)
 		if err != nil {
 			return nil, fmt.Errorf("gusto: listing board %s page %d: %w", e.Board, page, err)
 		}
-		added := 0
-		for _, p := range gustoListing(root) {
+		cards := gustoListing(root)
+		for _, p := range cards {
 			if listed[p.id] {
 				continue
 			}
 			listed[p.id] = true
 			out = append(out, p)
-			added++
 		}
-		if added == 0 {
+		// The raw card count, not the count of newly-kept ones, proves a page empty: a page whose
+		// cards are all already-listed duplicates is not itself proof the board has no more pages.
+		if len(cards) == 0 {
 			done = true
 			break // an empty page: the listing is exhausted
 		}
