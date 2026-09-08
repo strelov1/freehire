@@ -69,6 +69,10 @@ type Profile struct {
 	Timezone    string
 	Session     SessionParams
 	MeetingURL  string
+	// ShowPhoto is the mentor's own opt-in to serve their account's stored CV headshot
+	// on their public directory card and profile page. Off by default: the account
+	// headshot is a job-search photo a mentor may not want reused here without asking.
+	ShowPhoto   bool
 	Status      string
 	Paused      bool
 	DecidedBy   int64
@@ -107,6 +111,7 @@ type ProfileInput struct {
 	Timezone    string
 	Session     SessionParams
 	MeetingURL  string
+	ShowPhoto   bool
 }
 
 // DirectoryFilter narrows the public directory. An empty field means unfiltered, matching

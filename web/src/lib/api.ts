@@ -49,6 +49,7 @@ import type {
   Mentor,
   MentorAvailabilityRule,
   MentorProfileInput,
+  MentorProfileSuggestions,
   MentorSession,
   MentorSessions,
   MentorSlot,
@@ -795,6 +796,14 @@ export function createApi(
       if (e instanceof ApiError && e.status === 404) return null;
       throw e;
     }
+  }
+
+  /** Best-effort prefill for the create form, from the candidate's résumé, user
+   *  profile, account and experience bank — never from the mentor profile itself. Only
+   *  the create form calls it, and only before a profile exists; a failure here must
+   *  not block rendering the (then blank) form. */
+  async function mentorProfileSuggestions(): Promise<MentorProfileSuggestions> {
+    return requestData<MentorProfileSuggestions>('/api/v1/me/mentorship/profile/suggestions');
   }
 
   async function createMentorProfile(body: MentorProfileInput): Promise<OwnMentorProfile> {
@@ -2650,6 +2659,7 @@ export function createApi(
     cancelMySession,
     reviewMySession,
     myMentorProfile,
+    mentorProfileSuggestions,
     createMentorProfile,
     updateMentorProfile,
     pauseMentorProfile,

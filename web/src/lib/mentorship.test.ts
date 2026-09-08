@@ -6,6 +6,7 @@ import {
   emptyMentorFilters,
   monthGrid,
   monthOf,
+  seedFormFromSuggestions,
   slotWindowForMonth,
   todayIn,
   withSearchParams,
@@ -24,7 +25,14 @@ import {
   weekdayOrder,
   weekdayShortLabel,
 } from './mentorship';
-import type { Mentor, MentorAvailabilityRule, MentorSession, MentorSlot } from './types';
+import type {
+  Mentor,
+  MentorAvailabilityRule,
+  MentorProfileInput,
+  MentorProfileSuggestions,
+  MentorSession,
+  MentorSlot,
+} from './types';
 
 function rule(over: Partial<MentorAvailabilityRule> = {}): MentorAvailabilityRule {
   return { id: 1, weekday: 1, date: null, start: '18:00', end: '21:00', closure: false, ...over };
@@ -69,6 +77,7 @@ function mentor(over: Partial<Mentor> = {}): Mentor {
     session_minutes: 60,
     rating_count: 0,
     rating_avg: 0,
+    show_photo: false,
     ...over,
   };
 }
@@ -541,5 +550,69 @@ describe('writing the booker state back to the query', () => {
     const current = new URLSearchParams('month=2026-10');
     withSearchParams(current, { date: '2026-10-15' });
     expect(current.toString()).toBe('month=2026-10');
+  });
+});
+
+describe('seedFormFromSuggestions', () => {
+  function blankForm(): MentorProfileInput {
+    return {
+      company_slug: '',
+      slug: '',
+      name: '',
+      headline: '',
+      bio: '',
+      topics: [],
+      languages: [],
+      timezone: 'Europe/Amsterdam',
+      session_minutes: 60,
+      buffer_before_minutes: 0,
+      buffer_after_minutes: 15,
+      notice_minutes: 120,
+      horizon_days: 30,
+      meeting_url: '',
+      show_photo: false,
+    };
+  }
+
+  test('a present field overrides the blank default', () => {
+    const suggestions: MentorProfileSuggestions = {
+      name: 'Jane Doe',
+      headline: 'Staff Engineer',
+      bio: 'Ten years of Go.',
+      timezone: 'Europe/Berlin',
+      company_slug: 'acme',
+      topics: ['backend', 'career'],
+      languages: ['English', 'German'],
+    };
+    const { form, topicsText, languagesText } = seedFormFromSuggestions(blankForm(), suggestions);
+
+    expect(form.name).toBe('Jane Doe');
+    expect(form.headline).toBe('Staff Engineer');
+    expect(form.bio).toBe('Ten years of Go.');
+    expect(form.timezone).toBe('Europe/Berlin');
+    expect(form.company_slug).toBe('acme');
+    expect(topicsText).toBe('backend, career');
+    expect(languagesText).toBe('English, German');
+  });
+
+  test('an absent field keeps the blank default, including the browser timezone', () => {
+    const { form, topicsText, languagesText } = seedFormFromSuggestions(blankForm(), {});
+
+    expect(form.name).toBe('');
+    expect(form.company_slug).toBe('');
+    expect(form.timezone).toBe('Europe/Amsterdam');
+    expect(topicsText).toBe('');
+    expect(languagesText).toBe('');
+  });
+
+  test('every other field is left exactly as the blank form set it', () => {
+    const { form } = seedFormFromSuggestions(blankForm(), { name: 'Jane Doe' });
+
+    expect(form.session_minutes).toBe(60);
+    expect(form.buffer_after_minutes).toBe(15);
+    expect(form.notice_minutes).toBe(120);
+    expect(form.horizon_days).toBe(30);
+    expect(form.meeting_url).toBe('');
+    expect(form.slug).toBe('');
   });
 });

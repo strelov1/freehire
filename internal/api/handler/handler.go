@@ -710,7 +710,15 @@ func Register(app *fiber.App, cfg Config) {
 	mentorshipH := newMentorshipHandlers(mentorship.New(
 		mentorship.NewQueriesRepository(queries, cfg.Pool),
 		mentorship.Config{Notifier: mentorshipNotifier, Cache: cfg.Cache},
-	))
+	), photoStore)
+	// The mentor-profile create form's prefill. Composed from four unrelated blocks'
+	// own services (résumé, user profile, account, experience bank) plus the company
+	// catalog — never from mentorship itself, see the mentor-profile-prefill spec.
+	mentorSuggestionsH := newMentorSuggestionsHandlers(
+		resumeStore, profileSvc,
+		accounts.New(accounts.NewQueriesRepository(queries, cfg.Pool), authHasher{}),
+		bank, queries,
+	)
 
 	// Allow the canonical frontend origin plus every served domain's https apex,
 	// so a cross-origin (non-credentialed) read works from either domain during a
@@ -831,6 +839,7 @@ func Register(app *fiber.App, cfg Config) {
 
 	// The mentorship marketplace (see mentorshipHandlers).
 	mentorshipH.register(api, mw)
+	mentorSuggestionsH.register(api, mw)
 
 	// Job reports + review queue (see reportHandlers).
 	reportsH.register(api, mw)
