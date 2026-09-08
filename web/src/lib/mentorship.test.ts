@@ -6,6 +6,7 @@ import {
   emptyMentorFilters,
   monthGrid,
   monthOf,
+  profileInputFromProfile,
   seedFormFromSuggestions,
   slotWindowForMonth,
   todayIn,
@@ -32,6 +33,7 @@ import type {
   MentorProfileSuggestions,
   MentorSession,
   MentorSlot,
+  OwnMentorProfile,
 } from './types';
 
 function rule(over: Partial<MentorAvailabilityRule> = {}): MentorAvailabilityRule {
@@ -614,5 +616,75 @@ describe('seedFormFromSuggestions', () => {
     expect(form.horizon_days).toBe(30);
     expect(form.meeting_url).toBe('');
     expect(form.slug).toBe('');
+  });
+});
+
+describe('profileInputFromProfile', () => {
+  function ownProfile(over: Partial<OwnMentorProfile> = {}): OwnMentorProfile {
+    return {
+      slug: 'jane-doe',
+      name: 'Jane Doe',
+      company_slug: 'acme',
+      company_name: 'Acme',
+      headline: 'Staff Engineer',
+      bio: 'Ten years of Go.',
+      topics: ['backend'],
+      languages: ['English'],
+      timezone: 'Europe/Berlin',
+      session_minutes: 45,
+      rating_count: 3,
+      rating_avg: 4.7,
+      show_photo: true,
+      status: 'approved',
+      paused: false,
+      meeting_url: 'https://meet.example.test/jane',
+      buffer_before_minutes: 5,
+      buffer_after_minutes: 10,
+      notice_minutes: 60,
+      horizon_days: 14,
+      ...over,
+    };
+  }
+
+  test('every editable field carries over unchanged', () => {
+    const input = profileInputFromProfile(ownProfile());
+
+    expect(input).toEqual({
+      company_slug: 'acme',
+      slug: 'jane-doe',
+      name: 'Jane Doe',
+      headline: 'Staff Engineer',
+      bio: 'Ten years of Go.',
+      topics: ['backend'],
+      languages: ['English'],
+      timezone: 'Europe/Berlin',
+      session_minutes: 45,
+      buffer_before_minutes: 5,
+      buffer_after_minutes: 10,
+      notice_minutes: 60,
+      horizon_days: 14,
+      meeting_url: 'https://meet.example.test/jane',
+      show_photo: true,
+    });
+  });
+
+  // The owner's read carries the session parameters precisely so a re-submit (from
+  // either the profile form or the schedule page's session settings) never silently
+  // resets a buffer/notice/horizon the mentor already has, even though nothing in
+  // either screen lets them edit these three directly yet.
+  test('an absent optional session parameter falls back to its stored default', () => {
+    const input = profileInputFromProfile(
+      ownProfile({
+        buffer_before_minutes: undefined,
+        buffer_after_minutes: undefined,
+        notice_minutes: undefined,
+        horizon_days: undefined,
+      }),
+    );
+
+    expect(input.buffer_before_minutes).toBe(0);
+    expect(input.buffer_after_minutes).toBe(0);
+    expect(input.notice_minutes).toBe(120);
+    expect(input.horizon_days).toBe(30);
   });
 });
