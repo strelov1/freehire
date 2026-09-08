@@ -7,8 +7,13 @@ import (
 	"time"
 
 	"github.com/strelov1/freehire/internal/ai/assistant"
+	"github.com/strelov1/freehire/internal/candidate/atscheck"
+	"github.com/strelov1/freehire/internal/candidate/cvmatch"
 	"github.com/strelov1/freehire/internal/platform/llm"
 )
+
+func matchOf(overall int) *cvmatch.Score { return &cvmatch.Score{Overall: overall} }
+func deltaOf(change int) *atscheck.Delta { return &atscheck.Delta{Change: change} }
 
 // The tally's two sources are deliberate: rounds and tool outcomes are visible in the
 // stream a client sees, while token counts are not — the runner emits one usage event per
@@ -146,6 +151,104 @@ func TestCacheVerdictIsInconclusiveWhenNoRoundReportedTokens(t *testing.T) {
 	tally := &bakeoffTally{Rounds: 5, RoundsWithoutUsage: 5}
 	if v := tally.cacheVerdict(); v.State != cacheInconclusive {
 		t.Errorf("State = %q, want %q when nothing was measured", v.State, cacheInconclusive)
+	}
+}
+
+func rate(v float64) *float64 { return &v }
+
+// nearly compares dollars without inviting a float-equality flake into a money assertion.
+func nearly(t *testing.T, got, want float64, what string) {
+	t.Helper()
+	if diff := got - want; diff > 1e-9 || diff < -1e-9 {
+		t.Errorf("%s = %.9f, want %.9f", what, got, want)
+	}
+}
+
+// The cache-read rate is the whole point of measuring cached tokens: it is where a model
+// that caches the replayed prefix stops costing what its input rate says.
+func TestBakeoffCostPricesCachedTokensAtTheCacheRate(t *testing.T) {
+	prices := bakeoffPrices{"deepseek/deepseek-v4-flash-0731": {
+		Input: 0.05, Output: 0.16, CacheRead: rate(0.013),
+	}}
+	tally := bakeoffTally{Rounds: 3, Input: 1_000_000, CachedInput: 800_000, Output: 100_000}
+
+	cost := prices.cost("deepseek/deepseek-v4-flash-0731", tally)
+	if !cost.Known {
+		t.Fatal("cost unknown for a model the table names")
+	}
+	// 200k fresh input at 0.05, 800k cached at 0.013, 100k output at 0.16.
+	nearly(t, cost.USD, 0.2*0.05+0.8*0.013+0.1*0.16, "USD")
+}
+
+// A table that names no cache rate is not a table naming zero. A provider without a
+// prompt-cache discount charges its ordinary input rate for those tokens, and defaulting
+// the unnamed rate to zero would hand it the cheapest possible run in the ranking.
+func TestBakeoffCostChargesTheInputRateWhenNoCacheRateIsNamed(t *testing.T) {
+	prices := bakeoffPrices{"m": {Input: 1, Output: 2}}
+	tally := bakeoffTally{Rounds: 3, Input: 1_000_000, CachedInput: 900_000, Output: 0}
+
+	nearly(t, prices.cost("m", tally).USD, 1.0, "USD")
+}
+
+// A model the table does not name is reported without a cost. Zero would rank it first.
+func TestBakeoffCostIsUnknownForAModelTheTableDoesNotName(t *testing.T) {
+	cost := bakeoffPrices{}.cost("who/knows", bakeoffTally{Rounds: 2, Input: 1_000_000})
+
+	if cost.Known {
+		t.Errorf("cost reported as known: %+v", cost)
+	}
+	if cost.USD != 0 {
+		t.Errorf("USD = %v, want 0 alongside Known=false", cost.USD)
+	}
+}
+
+// Rounds whose provider reported nothing are rounds we were not billed for in this sum but
+// were billed for in reality. The figure is a floor, and the row says so rather than
+// passing an undercount off as the price.
+func TestBakeoffCostIsAFloorWhenSomeRoundsReportedNoTokens(t *testing.T) {
+	prices := bakeoffPrices{"m": {Input: 1, Output: 1}}
+	cost := prices.cost("m", bakeoffTally{Rounds: 4, RoundsWithoutUsage: 2, Input: 1_000_000})
+
+	if !cost.Floor {
+		t.Error("Floor = false on a run with unmeasured rounds")
+	}
+}
+
+// The same impossible reading usageBuckets refuses to split is refused here: subtracting
+// would price a negative number of fresh tokens and make the run look like a refund.
+func TestBakeoffCostChargesTheWholeInputWhenCachedExceedsIt(t *testing.T) {
+	prices := bakeoffPrices{"m": {Input: 1, Output: 0, CacheRead: rate(0)}}
+	cost := prices.cost("m", bakeoffTally{Rounds: 2, Input: 100_000, CachedInput: 900_000})
+
+	nearly(t, cost.USD, 0.1, "USD")
+}
+
+// The ranking is on the deterministic scores, ATS breaking a tie on match. Nothing here
+// consults a model: what is good is read from the CVs the report carries.
+func TestBakeoffRankingOrdersOnMatchThenAtsDelta(t *testing.T) {
+	rows := []bakeoffRow{
+		{Model: "c", Match: matchOf(70), ATS: deltaOf(9)},
+		{Model: "a", Match: matchOf(88), ATS: deltaOf(1)},
+		{Model: "b", Match: matchOf(88), ATS: deltaOf(4)},
+	}
+	rankBakeoffRows(rows)
+
+	if got := []string{rows[0].Model, rows[1].Model, rows[2].Model}; got[0] != "b" || got[1] != "a" || got[2] != "c" {
+		t.Errorf("order = %v, want [b a c]", got)
+	}
+}
+
+// A run that never finished has no score, and an absent score is not a low one. Sorting it
+// as zero would say the model tried and did badly, when it did not get to try.
+func TestBakeoffRankingPutsFailedRunsLastWithoutScoringThemZero(t *testing.T) {
+	rows := []bakeoffRow{
+		{Model: "failed", Failure: "context deadline exceeded"},
+		{Model: "poor", Match: matchOf(3)},
+	}
+	rankBakeoffRows(rows)
+
+	if rows[0].Model != "poor" || rows[1].Model != "failed" {
+		t.Errorf("order = [%s %s], want [poor failed]", rows[0].Model, rows[1].Model)
 	}
 }
 

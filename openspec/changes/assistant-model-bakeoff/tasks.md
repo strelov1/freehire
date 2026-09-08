@@ -20,10 +20,10 @@
       labelled "no cache observed"; a run with any non-zero count reports the total and
       its share of input tokens. Unit test both, plus the boundary of a single non-zero
       round.
-- [ ] 2.3 Implement cost from the price table: cached input priced at the cache-read rate
+- [x] 2.3 Implement cost from the price table: cached input priced at the cache-read rate
       where the table names one, and a model absent from the table reported with unknown
       cost rather than zero. Unit test each branch.
-- [ ] 2.4 Implement the ranking: order rows on `cvmatch` overall, with the ATS delta as
+- [x] 2.4 Implement the ranking: order rows on `cvmatch` overall, with the ATS delta as
       the secondary key, and carry a failed run to the bottom rather than treating its
       absent score as a low one. Unit test the ordering and the failed-run placement.
 

@@ -1,10 +1,13 @@
 package handler
 
 import (
+	"sort"
 	"strings"
 	"time"
 
 	"github.com/strelov1/freehire/internal/ai/assistant"
+	"github.com/strelov1/freehire/internal/candidate/atscheck"
+	"github.com/strelov1/freehire/internal/candidate/cvmatch"
 	"github.com/strelov1/freehire/internal/platform/llm"
 )
 
@@ -131,6 +134,114 @@ func (t *bakeoffTally) cacheVerdict() cacheReading {
 	default:
 		return cacheReading{State: cacheNotObserved}
 	}
+}
+
+// bakeoffRates is one model's prices, in dollars per MILLION tokens, as the gateway's
+// own catalogue states them.
+type bakeoffRates struct {
+	Input  float64
+	Output float64
+	// CacheRead is what a cached input token costs. Absent is not zero: a free model's
+	// genuine zero and a catalogue that names no cache rate are different facts, and
+	// treating the second as the first would hand a provider with no cache discount at
+	// all the cheapest possible run in the ranking.
+	CacheRead *float64
+}
+
+// bakeoffPrices is the checked-in price table, keyed by the gateway's model id.
+type bakeoffPrices map[string]bakeoffRates
+
+// bakeoffCost is what a run cost, or the honest absence of that figure.
+type bakeoffCost struct {
+	// Known is false when the table does not name the model. The cost is then reported
+	// as absent — a zero would sort it first, which is the one place a missing price
+	// must never land.
+	Known bool
+	USD   float64
+	// Floor is set when some rounds reported no tokens: those calls were billed in
+	// reality and are missing from this sum, so the true figure is higher.
+	Floor bool
+}
+
+// cost prices a run.
+//
+// Cached tokens are charged at the cache-read rate when the catalogue names one and at the
+// ordinary input rate when it does not — which is what a provider without a prompt-cache
+// discount actually charges for them.
+func (p bakeoffPrices) cost(model string, t bakeoffTally) bakeoffCost {
+	rates, ok := p[model]
+	if !ok {
+		return bakeoffCost{}
+	}
+
+	// The same impossible reading usageBuckets refuses to split: subtracting would price a
+	// negative number of fresh tokens and turn the run into a refund.
+	cached := t.CachedInput
+	if cached < 0 || cached > t.Input {
+		cached = 0
+	}
+	cachedRate := rates.Input
+	if rates.CacheRead != nil {
+		cachedRate = *rates.CacheRead
+	}
+
+	const perMillion = 1_000_000.0
+	usd := (float64(t.Input-cached)*rates.Input +
+		float64(cached)*cachedRate +
+		float64(t.Output)*rates.Output) / perMillion
+
+	return bakeoffCost{Known: true, USD: usd, Floor: t.RoundsWithoutUsage > 0}
+}
+
+// bakeoffRow is one (model, case) result: what the run cost, and what it produced.
+type bakeoffRow struct {
+	Model   string
+	Case    string
+	Vacancy string
+	Tally   bakeoffTally
+	Cost    bakeoffCost
+
+	// Match and ATS are the deterministic quality scores, nil on a run that did not
+	// complete. TailoredCV is the document itself — the report carries it so the CVs
+	// can be read and compared without re-running anything, because whether one is any
+	// good is a judgement no number here makes.
+	Match      *cvmatch.Score
+	ATS        *atscheck.Delta
+	TailoredCV string
+
+	// Failure is the reason a run did not complete, empty when it did.
+	Failure string
+}
+
+// rankBakeoffRows orders rows best-first on the deterministic scores: match overall, with
+// the ATS delta breaking a tie.
+//
+// A run that did not complete sorts last and is NOT scored zero. An absent score says the
+// model never got to try; a zero would say it tried and did badly, and the two would rank
+// a crashed run below a bad one for the wrong reason.
+func rankBakeoffRows(rows []bakeoffRow) {
+	sort.SliceStable(rows, func(i, j int) bool {
+		a, b := rows[i], rows[j]
+		if (a.Match == nil) != (b.Match == nil) {
+			return b.Match == nil
+		}
+		if a.Match == nil {
+			return false
+		}
+		if a.Match.Overall != b.Match.Overall {
+			return a.Match.Overall > b.Match.Overall
+		}
+		return atsChange(a.ATS) > atsChange(b.ATS)
+	})
+}
+
+// atsChange reads a delta's move, treating an absent delta as no move rather than as a
+// fall — the ATS report is a second opinion, and its absence is not evidence against a CV.
+func atsChange(d *atscheck.Delta) int {
+	if d == nil {
+		return 0
+	}
+	return d.Change
 }
 
 // classifyToolFailure sorts a failed tool result into whose failure it was.
