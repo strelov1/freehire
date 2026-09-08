@@ -67,8 +67,16 @@
 - [x] 4.3 Ran `simplify` skill pass on the diff — already clean and
       idiomatic, matches project conventions (dense narrative comments,
       per-file test fakes); no changes needed.
-- [ ] 4.4 Request code review (`superpowers:requesting-code-review`); address
-      feedback per `superpowers:receiving-code-review`.
+- [x] 4.4 Requested code review (commit b6bf0c76 vs base a3d79c13).
+      Assessment: "Ready to merge: with fixes" — no Critical/Important
+      issues. Two Minor doc-comment issues fixed (commit 87076c7d):
+      `hhru.go`'s type comment pointed at the wrong file for the
+      DDoS-Guard rationale (registry.go → firecrawltier.go), and
+      overclaimed the split as unconditional when it only holds with
+      `FIRECRAWL_API_KEY` set. Reviewer independently verified the
+      `ApplyFirecrawlEgress`-`direct`-parameter deviation (task 2.1) is
+      real and sound, ran the full verification suite itself (all green),
+      and confirmed all markdown links resolve.
 - [ ] 4.5 Open PR; do not merge until task 5 (deploy-side prerequisites) is
       acknowledged, since merging without raising the Firecrawl budget on prod
       reproduces the same "hh: detail ... failed" symptom via
