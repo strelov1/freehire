@@ -13,17 +13,17 @@ symmetric: `TestEveryPackageInTheRepoIsAssignedToABlock` fails on a package with
 entry, and `TestBlockTableNamesNoPackageThatDoesNotExist` (`repo_test.go:137`) fails
 on an entry with no package. Neither half can ship alone.
 
-- [ ] 2.1 Define the four groups (`alerts`, `activity`, `news`, `essential`) as a closed vocabulary in `internal/engage/emailprefs`, with `essential` rejected by the minter — an essential mail must have no link to mint
-- [ ] 2.2 `Mint(userID int64, group Group) string` — `base64url(userID "." group "." HMAC-SHA256)`, keyed by the JWT secret under the fixed salt `"email-prefs-v1"`
-- [ ] 2.3 `Parse(token string) (int64, Group, error)` — constant-time signature comparison; distinct sentinel errors for malformed, bad-signature, and unknown-group, all rendered identically by the caller
-- [ ] 2.4 Table test: a minted token round-trips; a token with a flipped user id, a flipped group, a truncated signature, or a signature from a different secret is refused; a token minted under the JWT secret alone (no salt) is refused
-- [ ] 2.5 Add `emailprefs` to the `engage` block in `internal/platform/arch/layering/blocks.go`, then confirm both halves of the guard and `depguard`: `go test ./internal/platform/arch/layering/` and `golangci-lint run`
+- [x] 2.1 Define the four groups (`alerts`, `activity`, `news`, `essential`) as a closed vocabulary in `internal/engage/emailprefs`, with `essential` rejected by the minter — an essential mail must have no link to mint
+- [x] 2.2 `Mint(userID int64, group Group) (string, error)` — `<id>.<group>.<base64url(HMAC-SHA256)>`, keyed by the JWT secret under the fixed salt `"email-prefs-v1"`. Only the signature is base64: the other two parts are already URL-unreserved, so an outer encoding would add a decode step and hide nothing. Mint returns an error rather than a bare string, so refusing to mint for `essential` is enforced by the type
+- [x] 2.3 `Parse(token string) (int64, Group, error)` — constant-time comparison; ONE `ErrInvalidToken` sentinel with the cause wrapped as context, so a log can tell a rotated secret from junk traffic while the response stays generic. Mint refuses with a separate `ErrCannotMint`: a mint failure is our bug, a parse failure is a stranger's junk, and one sentinel for both would page nobody or page everybody
+- [x] 2.4 Table test: a minted token round-trips (including `MaxInt64`); a flipped user id, flipped group, truncated signature, non-base64 signature, or signature from another secret is refused; a signature over the *unsalted* secret is refused; a real session token does not parse here and a token from here does not parse as a session; `Mint` is deterministic, which is the only thing that pins the never-expires property the legal argument rests on
+- [x] 2.5 Add `emailprefs` to the `engage` block in `internal/platform/arch/layering/blocks.go`, then confirm both halves of the guard and `depguard`: `go test ./internal/platform/arch/layering/` and `golangci-lint run`
 
 ## 3. Schema
 
-- [ ] 3.1 Add the migration (take the next free number, re-check against `origin/main` at PR time — `main` has held three `0144` files at once): `ALTER TABLE public.notification_settings ADD COLUMN alerts_email_enabled boolean NOT NULL DEFAULT true, ADD COLUMN news_email_enabled boolean NOT NULL DEFAULT true;`
-- [ ] 3.2 `pnpm check:sql` passes on the added file
-- [ ] 3.3 `make sqlc` — `migrations/` is sqlc's schema source, so the migration alone moves the generated code. No query needs editing: `GetNotificationSettings` (`SELECT *`) and `UpsertNotificationSettings` (`RETURNING *`) pick the columns up on the read side by themselves, and the upsert's `ON CONFLICT DO UPDATE SET` names its columns explicitly — leaving the two new ones out of that list is what makes them survive a write from the authenticated settings page, so adding them there would be the bug, not the fix. The narrow writer for the group switches lands in task 8, with its caller.
+- [x] 3.1 Add the migration (take the next free number, re-check against `origin/main` at PR time — `main` has held three `0144` files at once): `ALTER TABLE public.notification_settings ADD COLUMN alerts_email_enabled boolean NOT NULL DEFAULT true, ADD COLUMN news_email_enabled boolean NOT NULL DEFAULT true;`
+- [x] 3.2 `pnpm check:sql` passes on the added file
+- [x] 3.3 `make sqlc` — `migrations/` is sqlc's schema source, so the migration alone moves the generated code. No query needs editing: `GetNotificationSettings` (`SELECT *`) and `UpsertNotificationSettings` (`RETURNING *`) pick the columns up on the read side by themselves, and the upsert's `ON CONFLICT DO UPDATE SET` names its columns explicitly — leaving the two new ones out of that list is what makes them survive a write from the authenticated settings page, so adding them there would be the bug, not the fix. The narrow writer for the group switches lands in task 8, with its caller.
 
 ## 4. Transport: one send path
 
@@ -56,16 +56,23 @@ on an entry with no package. Neither half can ship alone.
 
 ## 8. Public endpoints
 
-- [ ] 8.1 `GET /api/v1/email-prefs?t=` returns `{"data": {email, alerts_enabled, activity_enabled, news_enabled, searches:[{id,name,active}]}}` — no session issued, no other account field present
-- [ ] 8.2 `PATCH /api/v1/email-prefs?t=` writes the three group switches and per-subscription `active` flags; it may only deactivate a subscription, never create or reactivate one it was not given
-- [ ] 8.3 `POST /api/v1/email-prefs/one-click?t=` accepts the `List-Unsubscribe=One-Click` form body, turns off only the token's group, and returns 200 on a repeat
-- [ ] 8.4 An invalid, tampered, or deleted-account token yields one generic failure across all three routes — assert no address or saved-search name appears in any of those responses
-- [ ] 8.5 Register the three routes on the public group with a rate limiter, following the existing public-route limiter setup
-- [ ] 8.6 Integration tests for all of the above (these live behind `//go:build integration`)
+The token is a never-expiring bearer credential and nginx logs query strings
+(`deploy/nginx/snippets/freehire-app.conf:14`), so it rides in the URL only where
+it has no alternative — see the risk entry in `design.md`.
+
+- [ ] 8.1 `GET /api/v1/email-prefs?t=` returns `{"data": {email, alerts_enabled, activity_enabled, news_enabled, searches:[{id,name,active}]}}` — no session issued, no other account field present. The query is unavoidable here: a link in an email has nowhere else to carry it
+- [ ] 8.2 `PATCH /api/v1/email-prefs` writes the three group switches and per-subscription `active` flags; it may only deactivate a subscription, never create or reactivate one it was not given. **The token goes in the body, not the query** — this call has a body already, so there is no reason to log the credential
+- [ ] 8.3 `POST /api/v1/email-prefs/one-click?t=` accepts the `List-Unsubscribe=One-Click` form body, turns off only the token's group, and returns 200 on a repeat. The token must stay in the query here: RFC 8058 fixes the body, so the URL is the only place Gmail can carry it — task 12.x switches the access log off for this path instead
+- [ ] 8.4 Add the narrow group-switch writer to `queries/reminders.sql` (INSERT … ON CONFLICT DO UPDATE SET only the two group columns) and `make sqlc`. Deliberately NOT folded into `UpsertNotificationSettings`, which is a full replace: routing both writers through it would make the authenticated settings page clobber a choice made from an unsubscribe link, and vice versa
+- [ ] 8.5 Iterate `emailprefs.SilenceableGroups()` for "unsubscribe from everything" — never a hand-written `{alerts, activity, news}`, which is the list-checked-against-a-list trap the AST guard exists for
+- [ ] 8.6 An invalid, tampered, or deleted-account token yields one generic failure across all three routes — assert no address or saved-search name appears in any of those responses. `Parse` succeeding proves only that we minted the token, never that the account still exists, so the lookup is the caller's job. Decide deliberately whether to equalise the timing: a deleted-account refusal costs a database round-trip and a bad-signature refusal returns at once
+- [ ] 8.7 Register the three routes on the public group with a rate limiter, following the existing public-route limiter setup
+- [ ] 8.8 Integration tests for all of the above (these live behind `//go:build integration`)
 
 ## 9. The public page
 
-- [ ] 9.1 `web/src/routes/unsubscribe/+page.svelte` — public, `noindex`, three group switches, the saved-search list under alerts, and "Unsubscribe from everything"
+- [ ] 9.1 `web/src/routes/unsubscribe/+page.svelte` — public, `noindex`, one switch per `emailprefs.SilenceableGroups()` entry, the saved-search list under alerts, and "Unsubscribe from everything"
+- [ ] 9.5 Strip `?t=` from the address bar after the first read, so the token does not travel on into history, a screenshot, or a pasted URL. Use `onRouterReady` — `replaceState` inside `onMount` throws only in a production build, where the error is also unreadable
 - [ ] 9.2 A one-click POST's confirmation view names the group that was turned off and links to the full page
 - [ ] 9.3 Invalid-token state renders a generic message with no account detail
 - [ ] 9.4 `pnpm --dir web lint` and `pnpm --dir web test` (a fresh worktree needs `svelte-kit sync` first, or all web tests fail)
@@ -84,7 +91,8 @@ on an entry with no package. Neither half can ship alone.
 
 - [ ] 12.1 Full local suite: `gofmt -l .` silent, `go vet ./...`, `go test ./...`, `go vet -tags=integration ./...`, `go test -tags=integration ./internal/engage/... ./internal/api/handler/`
 - [ ] 12.2 Open the PR; re-check the migration number against `origin/main` first
-- [ ] 12.3 Deploy the migration, then the code; confirm with `release.sh`
-- [ ] 12.4 Send one real mail to a live address and verify in Gmail: the client shows its own Unsubscribe control, the footer link opens the page without a session, and one click turns off only that group
-- [ ] 12.5 Reply to the complainant with his own preference link
-- [ ] 12.6 A week later, read SES complaint/bounce rates and Gmail Postmaster spam rate; record whether one-click should widen to all non-essential mail
+- [ ] 12.3 Turn the access log off for the unsubscribe location in `deploy/nginx/snippets/freehire-app.conf` (the file already does this twice, so the shape exists) — the one-click POST has no way to keep its token out of the URL, so this is the only place left to keep a never-expiring credential out of a bulk store. **Nothing in `deploy/` deploys itself**: copy it to the host and reload nginx, then confirm with `./deploy/check-drift.sh`
+- [ ] 12.4 Deploy the migration, then the code; confirm with `release.sh`
+- [ ] 12.5 Send one real mail to a live address and verify in Gmail: the client shows its own Unsubscribe control, the footer link opens the page without a session, and one click turns off only that group
+- [ ] 12.6 Reply to the complainant with his own preference link
+- [ ] 12.7 A week later, read SES complaint/bounce rates and Gmail Postmaster spam rate; record whether one-click should widen to all non-essential mail

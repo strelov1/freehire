@@ -5,36 +5,71 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"errors"
+	"math"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/strelov1/freehire/internal/engage/emailprefs"
+	"github.com/strelov1/freehire/internal/identity/auth"
 )
 
 const secret = "test-signing-secret"
 
-// mintableGroups are the three a link may name. essential is deliberately absent:
-// an essential mail carries no unsubscribe affordance, so a token for it would be a
-// link to a switch that does not exist.
-var mintableGroups = []emailprefs.Group{
-	emailprefs.GroupAlerts,
-	emailprefs.GroupActivity,
-	emailprefs.GroupNews,
-}
-
+// The vocabulary is read from the package, never copied here. A hand-written
+// {alerts, activity, news} in the test would agree with a hand-written one in the
+// code by construction, which proves they match and not that either is complete —
+// a fourth group would round-trip untested and the suite would stay green.
 func TestRoundTrip(t *testing.T) {
 	s := emailprefs.NewSigner(secret)
-	for _, g := range mintableGroups {
-		token, err := s.Mint(42, g)
-		if err != nil {
-			t.Fatalf("Mint(42, %q): %v", g, err)
+	// MaxInt64 pins the width: a future narrowing to int32 fails here rather than
+	// silently truncating one unlucky account's id into somebody else's.
+	for _, id := range []int64{1, 42, math.MaxInt64} {
+		for _, g := range emailprefs.SilenceableGroups() {
+			token, err := s.Mint(id, g)
+			if err != nil {
+				t.Fatalf("Mint(%d, %q): %v", id, g, err)
+			}
+			userID, group, err := s.Parse(token)
+			if err != nil {
+				t.Fatalf("Parse(Mint(%d, %q)): %v", id, g, err)
+			}
+			if userID != id || group != g {
+				t.Errorf("round trip gave (%d, %q), want (%d, %q)", userID, group, id, g)
+			}
 		}
-		userID, group, err := s.Parse(token)
-		if err != nil {
-			t.Fatalf("Parse(Mint(42, %q)): %v", g, err)
-		}
-		if userID != 42 || group != g {
-			t.Errorf("round trip gave (%d, %q), want (42, %q)", userID, group, g)
+	}
+}
+
+// The whole legal argument rests on the link still working when someone finds the
+// mail months later: CAN-SPAM requires the opt-out to work for at least 30 days
+// after a send, and an unsubscribe link that has expired is a failed unsubscribe.
+//
+// Today that holds only because nobody wrote a clock into the payload, which would
+// survive a well-meant future patch that added one. Determinism is the property no
+// expiring or nonce-carrying implementation can fake.
+func TestMintIsDeterministicSoTheLinkNeverExpires(t *testing.T) {
+	s := emailprefs.NewSigner(secret)
+	first, err := s.Mint(42, emailprefs.GroupNews)
+	if err != nil {
+		t.Fatalf("Mint: %v", err)
+	}
+	second, err := s.Mint(42, emailprefs.GroupNews)
+	if err != nil {
+		t.Fatalf("Mint: %v", err)
+	}
+	if first != second {
+		t.Errorf("Mint is not deterministic: %q then %q — the token has grown a clock or a nonce", first, second)
+	}
+}
+
+// The payload is "<id>.<group>", so the split is unambiguous only while no group
+// name carries the separator. A future Group("news.weekly") would make two
+// different pairs sign the same string.
+func TestNoGroupNameCarriesTheSeparator(t *testing.T) {
+	for _, g := range append(emailprefs.SilenceableGroups(), emailprefs.GroupEssential) {
+		if strings.Contains(string(g), ".") {
+			t.Errorf("group %q carries the payload separator; the signed payload is no longer unambiguous", g)
 		}
 	}
 }
@@ -43,17 +78,57 @@ func TestRoundTrip(t *testing.T) {
 // Refusing here rather than at render time makes the mistake impossible to ship.
 func TestEssentialCannotBeMinted(t *testing.T) {
 	s := emailprefs.NewSigner(secret)
-	if _, err := s.Mint(42, emailprefs.GroupEssential); err == nil {
-		t.Fatal("Mint(_, essential) returned no error; an essential mail must have no unsubscribe token")
+	if _, err := s.Mint(42, emailprefs.GroupEssential); !errors.Is(err, emailprefs.ErrCannotMint) {
+		t.Fatalf("Mint(_, essential) gave %v; an essential mail must have no unsubscribe token", err)
 	}
 }
 
 func TestMintRejectsANonPositiveUserID(t *testing.T) {
 	s := emailprefs.NewSigner(secret)
 	for _, id := range []int64{0, -1} {
-		if _, err := s.Mint(id, emailprefs.GroupNews); err == nil {
-			t.Errorf("Mint(%d, news) returned no error; a token must name a real account", id)
+		if _, err := s.Mint(id, emailprefs.GroupNews); !errors.Is(err, emailprefs.ErrCannotMint) {
+			t.Errorf("Mint(%d, news) gave %v; a token must name a real account", id, err)
 		}
+	}
+}
+
+// A mint failure means OUR code asked for a link it may not have — a bug worth
+// paging someone over. A parse failure means a stranger sent junk. A caller
+// matching one sentinel must not catch the other, or the page never fires.
+func TestMintAndParseFailuresDoNotShareASentinel(t *testing.T) {
+	s := emailprefs.NewSigner(secret)
+	_, mintErr := s.Mint(42, emailprefs.GroupEssential)
+	if errors.Is(mintErr, emailprefs.ErrInvalidToken) {
+		t.Error("a Mint failure matches ErrInvalidToken; a bug in our own code would read as routine junk traffic")
+	}
+	_, _, parseErr := s.Parse("garbage")
+	if errors.Is(parseErr, emailprefs.ErrCannotMint) {
+		t.Error("a Parse failure matches ErrCannotMint; a stranger's junk would page someone")
+	}
+}
+
+// The property the design actually claims is mutual: a session token and an
+// unsubscribe token must never verify against each other's verifier. The salt is
+// what guarantees it; this pins it in both directions rather than trusting that the
+// two formats happen not to collide. engage (layer 7) may import identity (3).
+func TestSessionAndUnsubscribeTokensNeverCrossVerify(t *testing.T) {
+	session := auth.NewIssuer(secret, time.Hour)
+	prefs := emailprefs.NewSigner(secret)
+
+	sessionToken, err := session.Issue(42, 1)
+	if err != nil {
+		t.Fatalf("Issue: %v", err)
+	}
+	if _, _, err := prefs.Parse(sessionToken); err == nil {
+		t.Error("a session token parsed as an unsubscribe token; the two keys are not separated")
+	}
+
+	prefsToken, err := prefs.Mint(42, emailprefs.GroupNews)
+	if err != nil {
+		t.Fatalf("Mint: %v", err)
+	}
+	if _, _, err := session.Parse(prefsToken); err == nil {
+		t.Error("an unsubscribe token parsed as a session token; holding one would grant a session")
 	}
 }
 
