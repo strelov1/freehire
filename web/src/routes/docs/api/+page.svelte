@@ -4,7 +4,6 @@
   // identical config (minus how the spec reaches each side — see scalarConfig.ts).
   // Scalar owns all navigation/search/try-it inside #scalar-app; this file only supplies
   // the page's SEO metadata and the design-system theme mapping around it.
-  import { onMount } from 'svelte';
   import { page } from '$app/state';
   import Seo from '$lib/components/Seo.svelte';
   import { scalarConfigFromUrl } from '$lib/docs/scalarConfig';
@@ -28,20 +27,27 @@
   );
 
   // Scalar tracks its own light/dark state independently of the site's `.dark`
-  // class on <html> — left alone, it never follows the site's theme toggle at
-  // all. `forceDarkModeState` at mount picks the state that matches paint (the
-  // no-FOUC inline script has already set the class by the time this runs);
-  // `updateConfiguration` keeps it in sync with every later toggle.
+  // class on <html>, and reads `forceDarkModeState` only once at setup — not
+  // reactively (@scalar/use-hooks' useColorMode destructures it from its opts
+  // at call time, with no watch on later changes), so `updateConfiguration()`
+  // alone cannot change it after mount despite otherwise updating the merged
+  // config. A full destroy-and-recreate on every theme change is the only way
+  // Scalar's own color mode actually follows the site's toggle.
   const darkModeState = $derived(themeStore.isDark ? 'dark' : 'light');
 
   let instance: ApiReferenceInstance | undefined;
-  onMount(async () => {
-    const { createApiReference } = await import('@scalar/api-reference');
-    instance = createApiReference('#scalar-app', { ...scalarConfigFromUrl(), forceDarkModeState: darkModeState });
-  });
-
   $effect(() => {
-    instance?.updateConfiguration({ ...instance.getConfiguration(), forceDarkModeState: darkModeState });
+    const forceDarkModeState = darkModeState;
+    let cancelled = false;
+    void (async () => {
+      const { createApiReference } = await import('@scalar/api-reference');
+      if (cancelled) return;
+      instance?.destroy();
+      instance = createApiReference('#scalar-app', { ...scalarConfigFromUrl(), forceDarkModeState });
+    })();
+    return () => {
+      cancelled = true;
+    };
   });
 </script>
 
@@ -64,13 +70,15 @@
      static snapshot) so it tracks the site's light/dark toggle automatically —
      see openspec/changes/migrate-api-docs-scalar/design.md, Decision 6.
 
-     Targets `.light-mode`/`.dark-mode` directly, not `#scalar-app` itself:
-     Scalar re-declares these variables on many individual descendants tagged
-     with those classes (sidebar, request cards, ...), each shadowing an
-     ancestor's value for its own subtree — an override placed only on
-     `#scalar-app` would be shadowed the same way and never actually apply. */
-  #scalar-app :global(.light-mode),
-  #scalar-app :global(.dark-mode) {
+     Targets `.light-mode`/`.dark-mode` unscoped, not `#scalar-app` or any
+     selector requiring them as its descendant: Scalar's `useColorMode` applies
+     the mode class to `document.body` — an ANCESTOR of #scalar-app, which a
+     descendant-only selector can never match — and separately re-declares the
+     same variables on individual components (request/response example cards)
+     that carry their own literal copy of the class. Both need the override,
+     so the selector matches the class wherever it appears. */
+  :global(.light-mode),
+  :global(.dark-mode) {
     --scalar-background-1: var(--background) !important;
     --scalar-background-2: var(--secondary) !important;
     --scalar-background-3: var(--muted) !important;
