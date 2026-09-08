@@ -1,6 +1,11 @@
 allowBuilds:
   '@sentry/cli': false
   core-js: false
+  # Pulled in transitively by @scalar/api-reference (Vue-based). Its postinstall only
+  # writes a Vue-2-vs-3 compatibility shim; Scalar's own build already targets Vue 3
+  # directly, and the reference renders and themes correctly with the script skipped
+  # (verified in a real browser, light and dark).
+  vue-demi: false
 # pnpm 11 structural config — not a workspace definition (no packages: list).
 # strictDepBuilds: false lets install proceed when @sentry/cli and core-js
 # build scripts are skipped. @sentry/cli is only needed for source-map upload

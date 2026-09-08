@@ -1,13 +1,13 @@
-// Server-only load: Shiki-highlight the landing page's JSON code blocks. Keeping
-// this in `+page.server.ts` (not a universal `+page.ts`) means the Shiki
-// dependency never reaches the client bundle.
-import { OVERVIEW } from '$lib/docs/api-spec';
-import { highlight } from '$lib/docs/highlight';
+// Server-rendered fragment for the Scalar API reference — plain JSON in, HTML
+// string out, no fetch (the generated spec is imported directly). The client
+// hydrates this same fragment with the same config in +page.svelte, so the two
+// never disagree about what the spec says.
+import { renderApiReferenceToString } from '@scalar/server-side-rendering';
+import spec from '../../../../static/api-reference.openapi.json' with { type: 'json' };
+import { scalarConfigFromContent } from '$lib/docs/scalarConfig';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async () => {
-  const overviewHtml = await Promise.all(
-    OVERVIEW.map((o) => (o.code ? highlight(o.code, 'json') : Promise.resolve(null))),
-  );
-  return { overviewHtml };
+  const scalarHtml = await renderApiReferenceToString(scalarConfigFromContent(spec));
+  return { scalarHtml };
 };

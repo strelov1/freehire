@@ -19,24 +19,24 @@
 
 ## 3. Scalar integration
 
-- [ ] 3.1 Add `@scalar/api-reference` to `web/package.json`
-- [ ] 3.2 Build a `+page.svelte` for `/docs/api` that mounts the Scalar web component (`@scalar/api-reference/component.js`) inside the existing site layout, pointed at the generated OpenAPI artifact
-- [ ] 3.3 Wire server-side rendering via `renderApiReference()` and client hydration via `getJsAsset()`, following Scalar's generic Node-server integration pattern (no official SvelteKit recipe exists)
-- [ ] 3.4 Verify via view-source that the server response contains real endpoint content, not an empty mount point
-- [ ] 3.5 Map design-system CSS tokens (`border-border`, `bg-secondary`, `text-muted-foreground`, `text-brand-strong`, `bg-brand-muted`, etc.) onto Scalar's theme CSS custom properties, replacing any default preset theme
+- [x] 3.1 Add `@scalar/api-reference` to `web/package.json` — plus `@scalar/server-side-rendering` (SSR fragment) and `@scalar/types` (config types), and dropped `@scalar/client-side-rendering` after confirming it's the wrong shape (CDN-oriented, not needed for a Vite-bundled app) — see design.md Decision 4
+- [x] 3.2 Build `web/src/routes/docs/api/+page.svelte` mounting `createApiReference('#scalar-app', ...)` (from `@scalar/api-reference`, dynamically imported, bundled normally by Vite — not the `component.js` web component, which isn't how this package ships) inside the existing site layout
+- [x] 3.3 Wire SSR via `renderApiReferenceToString()` (fragment, not `renderApiReference()`'s full document) + client hydration via `createApiReference` — `getJsAsset()` turned out to belong to a different integration shape (non-bundled Node servers); see design.md Decision 4 for the corrected package mapping
+- [x] 3.4 Verified via curl that the server response contains real endpoint content (23 occurrences of known endpoint text in the raw HTML), not an empty mount point
+- [x] 3.5 Map design-system CSS tokens onto Scalar's theme CSS custom properties — **finding**: had to target `#scalar-app :global(.light-mode)`/`:global(.dark-mode)` with `!important`, not `#scalar-app` itself (Scalar re-declares these variables per-component, shadowing an ancestor-only override), and had to add `@scalar/api-reference/style.css` (missing entirely at first, which is why the page rendered unstyled) and wire `forceDarkModeState`/`updateConfiguration` reactivity (Scalar does not observe the site's own `.dark` class) — see design.md Decisions 5-6. Verified with a real headless-browser screenshot in both light and dark mode.
 
 ## 4. Retire the old implementation
 
-- [ ] 4.1 Replace `web/src/routes/docs/api/[group]/[endpoint]/+page.svelte` and its `+page.server.ts` with a redirect stub returning HTTP 301 to `/docs/api`
-- [ ] 4.2 Delete `web/src/routes/docs/api/+layout.svelte`, `DocsNav.svelte`, and `DocsEndpoint.svelte`
-- [ ] 4.3 Delete the old landing `+page.svelte`/`+page.server.ts` content (Shiki-highlighting setup included) once step 3 replaces it
-- [ ] 4.4 Run `pnpm check:dead` (knip) and `deadcode -test -tags=integration,llmlive ./...` where applicable, and confirm no orphaned files remain
+- [x] 4.1 Replaced `web/src/routes/docs/api/[group]/[endpoint]/+page.svelte` (deleted) and its `+page.server.ts` with a redirect stub returning HTTP 301 to `/docs/api`
+- [x] 4.2 Deleted `web/src/routes/docs/api/+layout.svelte`, `DocsNav.svelte`, and `DocsEndpoint.svelte`
+- [x] 4.3 Deleted the old landing `+page.svelte`/`+page.server.ts` content — **also found and deleted three further orphans knip couldn't reach on its own reasoning alone but static analysis confirmed**: `DocsCodeBlock.svelte`, `$lib/docs/nav.ts` (NAV/slugify/findEndpoint), and `$lib/docs/format.ts`/`$lib/docs/highlight.ts` (Shiki wrapper) — all had no consumer left outside the deleted files. Fixed one dangling comment reference to the deleted `DocsNav` in `JobView.svelte`.
+- [x] 4.4 Ran `pnpm check:dead` (knip): fixed a false-positive "unused file" on `api-spec.ts`/`filters.ts` (only reached via `vite.ssrLoadModule('/src/lib/docs/...')`, a runtime string knip can't trace — added both to `knip.config.js`'s `entry` list, same pattern already established there for `og/brand.ts`), removed the now-unused `shiki` dependency, and removed an unused export (`SCALAR_SPEC_URL`, only ever used within its own module). Remaining knip findings are all pre-existing `extension/` noise from that workspace's dependencies never being installed in this worktree (out of scope — nothing there was touched). Go's `deadcode` doesn't apply — no Go changed.
 
 ## 5. Verification
 
-- [ ] 5.1 Manually verify in a browser: light theme, dark theme
-- [ ] 5.2 Manually verify several endpoints of varying complexity: no-auth GET, query-param GET, body+cookie-auth POST, an SSE endpoint
-- [ ] 5.3 Manually verify mobile viewport width
-- [ ] 5.4 Verify the 301 redirects work for a sample of legacy per-endpoint URLs
-- [ ] 5.5 Verify the Overview/Filtering sections (pagination rule, error table, "What is not here", filter modifiers table, recipes) appear in the sidebar/search and render correctly as Markdown
-- [ ] 5.6 Confirm `web/static/openapi.yaml` and the ChatGPT Actions integration are untouched (diff check)
+- [x] 5.1 Manually verified in a real headless browser (Playwright): light theme and dark theme both render cohesively with the site's own palette (screenshots inspected)
+- [x] 5.2 Manually verified: the generated reference covers no-auth GET (`/jobs`), query-param GET (`/jobs/search`), a body+cookie-or-key-auth POST (`/market/coverage`), and an SSE GET (`/jobs/{slug}/match-analysis/stream`) — all confirmed correctly shaped in the OpenAPI generator's own smoke test; visually confirmed present in the rendered sidebar
+- [x] 5.3 Manually verified at a 390×844 mobile viewport (Playwright screenshot): sidebar collapses into a hamburger menu, content stays single-column and readable, no horizontal overflow
+- [x] 5.4 Manually verified with a real request: `curl http://localhost:5173/docs/api/jobs/list-jobs` → `HTTP 301` with `Location: /docs/api`
+- [x] 5.5 Verified: Base URL, Response envelope, Pagination, Errors, Authentication model, What is not here, and Filtering jobs all appear as their own sidebar entries and render their Markdown (headings, tables, code fences) correctly in the screenshot check
+- [x] 5.6 Confirmed via `git status`/`git diff` that `web/static/openapi.yaml` has no changes in this branch

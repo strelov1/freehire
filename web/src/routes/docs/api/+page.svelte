@@ -1,14 +1,17 @@
 <script lang="ts">
+  // The API reference: server-rendered by +page.server.ts (renderApiReferenceToString)
+  // for real content on the initial response, then hydrated client-side here with the
+  // identical config (minus how the spec reaches each side — see scalarConfig.ts).
+  // Scalar owns all navigation/search/try-it inside #scalar-app; this file only supplies
+  // the page's SEO metadata and the design-system theme mapping around it.
+  import { onMount } from 'svelte';
   import { page } from '$app/state';
-  import { resolve } from '$app/paths';
   import Seo from '$lib/components/Seo.svelte';
-  import DocsCodeBlock from '$lib/components/DocsCodeBlock.svelte';
-  import { BASE_URL, OVERVIEW } from '$lib/docs/api-spec';
-  import { FILTER_FACETS, FILTER_EXTRAS, FILTER_MODIFIERS, RECIPES } from '$lib/docs/filters';
-  import { NAV, slugify } from '$lib/docs/nav';
-  import { METHOD_TEXT, inlineCode } from '$lib/docs/format';
+  import { scalarConfigFromUrl } from '$lib/docs/scalarConfig';
   import { breadcrumbJsonLd, jsonLdScript, webApiJsonLd } from '$lib/seo';
-  import { Table } from '$lib/ui';
+  import { themeStore } from '$lib/theme.svelte';
+  import type { ApiReferenceInstance } from '@scalar/types/api-reference';
+  import '@scalar/api-reference/style.css';
 
   let { data } = $props();
 
@@ -21,8 +24,27 @@
         { name: 'freehire', url: `${origin}/` },
         { name: 'API reference', url: canonical },
       ]),
-    ])
+    ]),
   );
+
+  // Scalar tracks its own light/dark state independently of the site's `.dark`
+  // class on <html> — left alone, it never follows the site's theme toggle at
+  // all. `forceDarkModeState` at mount picks the state that matches paint (the
+  // no-FOUC inline script has already set the class by the time this runs);
+  // `updateConfiguration` keeps it in sync with every later toggle.
+  let instance: ApiReferenceInstance | undefined;
+  onMount(async () => {
+    const { createApiReference } = await import('@scalar/api-reference');
+    instance = createApiReference('#scalar-app', {
+      ...scalarConfigFromUrl(),
+      forceDarkModeState: themeStore.isDark ? 'dark' : 'light',
+    });
+  });
+
+  $effect(() => {
+    const isDark = themeStore.isDark;
+    instance?.updateConfiguration({ ...instance.getConfiguration(), forceDarkModeState: isDark ? 'dark' : 'light' });
+  });
 </script>
 
 <Seo
@@ -36,126 +58,47 @@
   {@html jsonLd}
 </svelte:head>
 
-<!-- Header. -->
-<header class="mb-14 border-b border-border pb-10">
-  <p class="font-mono text-xs uppercase tracking-[0.24em] text-brand-strong">// freehire API</p>
-  <h1 class="mt-4 text-4xl font-semibold tracking-tighter sm:text-5xl">API reference</h1>
-  <p class="mt-5 max-w-2xl text-lg leading-relaxed text-muted-foreground">
-    A read-first, open HTTP API over the freehire job catalogue — query jobs by rich filters, read
-    companies, and (with a key) track applications.
-  </p>
-  <div class="mt-6 inline-flex items-center gap-2 rounded-lg border border-border bg-secondary/40 px-3 py-1.5 font-mono text-sm">
-    <span class="text-muted-foreground">Base URL</span>
-    <span class="text-foreground">{BASE_URL}</span>
-  </div>
-</header>
+<!-- eslint-disable-next-line svelte/no-at-html-tags -- server-rendered by renderApiReferenceToString from the generated OpenAPI document, no user input -->
+<div id="scalar-app">{@html data.scalarHtml}</div>
 
-<!-- Overview concept sections (scroll-spy targets for the nav). -->
-{#each OVERVIEW as section, i (section.title)}
-  <section id={slugify(section.title)} data-spy class="mb-12 scroll-mt-24">
-    <h2 class="text-xl font-semibold tracking-tight">{section.title}</h2>
-    {#each section.paragraphs as p (p)}
-      <!-- eslint-disable-next-line svelte/no-at-html-tags -- inlineCode escapes &<> then wraps static doc constants; no user data -->
-      <p class="mt-3 max-w-2xl leading-relaxed text-muted-foreground">{@html inlineCode(p)}</p>
-    {/each}
-    {#if section.code}
-      <div class="mt-4 max-w-2xl">
-        <DocsCodeBlock code={section.code} label="json" html={data.overviewHtml[i] ?? undefined} />
-      </div>
-    {/if}
-  </section>
-{/each}
+<style>
+  /* Map Scalar's own theme surface onto the design system's live tokens (not a
+     static snapshot) so it tracks the site's light/dark toggle automatically —
+     see openspec/changes/migrate-api-docs-scalar/design.md, Decision 6.
 
-<!-- Filtering jobs. -->
-<section id="filtering-jobs" data-spy class="mb-16 scroll-mt-24 border-t border-border pt-12">
-  <h2 class="text-2xl font-semibold tracking-tight">Filtering jobs</h2>
-  <p class="mt-3 max-w-2xl leading-relaxed text-muted-foreground">
-    These parameters apply to <code class="rounded bg-secondary px-1 py-0.5 font-mono text-[13px] text-foreground">GET /jobs/search</code>
-    and
-    <code class="rounded bg-secondary px-1 py-0.5 font-mono text-[13px] text-foreground">GET /jobs/facets</code>.
-    Combine any of them with full-text <code class="rounded bg-secondary px-1 py-0.5 font-mono text-[13px] text-foreground">q</code>.
-  </p>
+     Targets `.light-mode`/`.dark-mode` directly, not `#scalar-app` itself:
+     Scalar re-declares these variables on many individual descendants tagged
+     with those classes (sidebar, request cards, ...), each shadowing an
+     ancestor's value for its own subtree — an override placed only on
+     `#scalar-app` would be shadowed the same way and never actually apply. */
+  #scalar-app :global(.light-mode),
+  #scalar-app :global(.dark-mode) {
+    --scalar-background-1: var(--background) !important;
+    --scalar-background-2: var(--secondary) !important;
+    --scalar-background-3: var(--muted) !important;
+    --scalar-background-accent: var(--brand-muted) !important;
 
-  <div class="mt-6 max-w-2xl rounded-xl border border-brand-ring/30 bg-brand-muted/30 p-4">
-    <p class="text-xs font-semibold uppercase tracking-wide text-brand-strong">Modifiers — apply to every facet</p>
-    <ul class="mt-3 space-y-2 text-sm leading-relaxed text-foreground/90">
-      {#each FILTER_MODIFIERS as m (m)}
-        <!-- eslint-disable-next-line svelte/no-at-html-tags -- inlineCode escapes &<> then wraps static doc constants; no user data -->
-        <li class="flex gap-2"><span class="mt-0.5 text-brand-strong/70">›</span><span>{@html inlineCode(m)}</span></li>
-      {/each}
-    </ul>
-  </div>
+    --scalar-color-1: var(--foreground) !important;
+    --scalar-color-2: var(--muted-foreground) !important;
+    --scalar-color-3: var(--muted-foreground) !important;
+    --scalar-color-accent: var(--brand-strong) !important;
 
-  <h3 class="mt-10 text-sm font-semibold uppercase tracking-wide text-muted-foreground">Facets</h3>
-  <p class="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">
-    Every facet below supports repeat-OR, <code class="rounded bg-secondary px-1 py-0.5 font-mono text-[13px] text-foreground">_mode=and</code>, and
-    <code class="rounded bg-secondary px-1 py-0.5 font-mono text-[13px] text-foreground">_exclude</code> as described above.
-  </p>
-  {@render filterTable(FILTER_FACETS)}
+    --scalar-border-color: var(--border) !important;
 
-  <h3 class="mt-10 text-sm font-semibold uppercase tracking-wide text-muted-foreground">Numeric &amp; boolean filters</h3>
-  {@render filterTable(FILTER_EXTRAS)}
+    --scalar-link-color: var(--brand-strong) !important;
+    --scalar-link-color-hover: var(--brand) !important;
+    --scalar-link-color-visited: var(--brand-strong) !important;
 
-  <h3 class="mt-10 text-sm font-semibold uppercase tracking-wide text-muted-foreground">Recipes</h3>
-  <div class="mt-4 grid max-w-3xl gap-3 sm:grid-cols-2">
-    {#each RECIPES as r (r.query)}
-      <div class="rounded-lg border border-border bg-secondary/30 p-3">
-        <p class="text-sm text-foreground">{r.title}</p>
-        <p class="mt-1.5 break-all font-mono text-xs text-muted-foreground">
-          <span class="text-muted-foreground/60">?</span>{r.query}
-        </p>
-      </div>
-    {/each}
-  </div>
-</section>
+    --scalar-color-danger: var(--destructive) !important;
+    --scalar-background-danger: var(--secondary) !important;
 
-<!-- Endpoint index: one card per group, each endpoint links to its own page. -->
-<section id="endpoints" class="scroll-mt-24 border-t border-border pt-12">
-  <h2 class="text-2xl font-semibold tracking-tight">Endpoints</h2>
-  <p class="mt-3 max-w-2xl leading-relaxed text-muted-foreground">
-    Every endpoint has its own page. Pick one below or from the sidebar.
-  </p>
+    --scalar-button-1: var(--brand) !important;
+    --scalar-button-1-color: var(--brand-foreground) !important;
+    --scalar-button-1-hover: var(--brand-strong) !important;
 
-  <div class="mt-8 grid gap-8 sm:grid-cols-2">
-    {#each NAV as group (group.slug)}
-      <div>
-        <h3 class="font-mono text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground/80">{group.title}</h3>
-        <ul class="mt-3 space-y-1">
-          {#each group.endpoints as ep (ep.slug)}
-            <li>
-              <a
-                href={resolve('/docs/api/[group]/[endpoint]', { group: group.slug, endpoint: ep.slug })}
-                class="group flex items-baseline gap-2 rounded-md px-2 py-1.5 transition-colors hover:bg-secondary"
-              >
-                <span class={`w-10 shrink-0 text-[10px] font-bold tracking-wide ${METHOD_TEXT[ep.method]}`}>{ep.method}</span>
-                <span class="min-w-0">
-                  <span class="font-mono text-[13px] text-foreground">{ep.path}</span>
-                  <span class="block truncate text-xs text-muted-foreground">{ep.endpoint.summary}</span>
-                </span>
-              </a>
-            </li>
-          {/each}
-        </ul>
-      </div>
-    {/each}
-  </div>
-</section>
+    --scalar-font: var(--font-sans) !important;
+    --scalar-font-code: var(--font-mono) !important;
 
-{#snippet filterTable(rows: { param: string; label: string; values: string }[])}
-  <Table class="mt-3 rounded-xl border border-border">
-    {#snippet header()}
-      <tr class="bg-secondary/60 text-left text-xs uppercase tracking-wide text-muted-foreground">
-        <th class="px-3 py-2 font-medium">Param</th>
-        <th class="px-3 py-2 font-medium">Filter</th>
-        <th class="px-3 py-2 font-medium">Values</th>
-      </tr>
-    {/snippet}
-    {#each rows as f (f.param)}
-      <tr class="border-t border-border align-top transition-colors hover:bg-secondary/30">
-        <td class="px-3 py-2"><code class="font-mono text-brand-strong">{f.param}</code></td>
-        <td class="px-3 py-2 text-foreground/80">{f.label}</td>
-        <td class="px-3 py-2 text-muted-foreground">{f.values}</td>
-      </tr>
-    {/each}
-  </Table>
-{/snippet}
+    --scalar-radius: var(--radius) !important;
+  }
+</style>
