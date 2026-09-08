@@ -3455,6 +3455,35 @@ data: {"type":"result","stop_reason":"completed"}
       },
       {
         method: 'GET',
+        path: '/talent/facets',
+        auth: 'none',
+        summary: 'How many members stand behind each filter value.',
+        description:
+          'Takes the same filters as the list and answers with the count of members ' +
+          'behind every value of every facet, plus the total behind the filter itself. ' +
+          'Same shape as the job-search facet endpoint, so one control renders either.\n\n' +
+          'Each facet is counted with its OWN selection removed, while every other ' +
+          'filter still applies — otherwise picking one skill makes every other skill ' +
+          'read zero and the control silently becomes single-select.\n\n' +
+          'A value nobody carries is absent rather than reported as zero. A value ' +
+          'carried by fewer members than the floor is offered with its number withheld: ' +
+          'the option stays usable, and the number does not become a way to name ' +
+          'somebody. Counts describe the filter you sent and never the whole membership.',
+        curl: `curl "${BASE_URL}/talent/facets?categories=backend"`,
+        responseExample: `{
+  "data": {
+    "total": 3,
+    "facets": {
+      "categories": { "backend": 3 },
+      "skills": { "go": 3, "kubernetes": 2, "postgresql": 0 },
+      "tz": { "Europe": 2 }
+    },
+    "stats": {}
+  }
+}`,
+      },
+      {
+        method: 'GET',
         path: '/talent/{handle}',
         auth: 'none',
         summary: 'One member’s public card.',

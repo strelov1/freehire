@@ -1769,6 +1769,15 @@ export function createApi(
     return toSlice(page, page.meta.offset);
   }
 
+  /** The catalogue's facet distribution under a filter: how many members sit behind each
+   *  value of each facet, so a filter pane can show the number beside every option.
+   *
+   *  A count arrives NEGATIVE when the endpoint holds it back below its small-count floor;
+   *  `reportedCount` in facets.ts is what turns that into "no number". */
+  async function talentFacets(search: string): Promise<FacetCounts> {
+    return requestData<FacetCounts>(`/api/v1/talent/facets${search ? `?${search}` : ''}`);
+  }
+
   /** One member's public card, by their minted catalogue handle. A member who has left,
    *  a handle nobody holds, and a string that could not be a handle all answer the same
    *  404 — the caller must not try to tell them apart. */
@@ -2759,6 +2768,7 @@ export function createApi(
     getTalentNetwork,
     setTalentNetworkVisibility,
     listTalent,
+    talentFacets,
     getTalentCard,
     deleteAccount,
     extractResumeProfile,

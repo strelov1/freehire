@@ -143,8 +143,11 @@ export interface RailEntry {
   facetParam?: string;
 }
 
-/** One pane of the company modal's rail: the FacetSections it stacks, in order. */
-export interface CompanyRailGroup {
+/** One pane of a filter modal's rail: the FacetSections it stacks, in order. Named for the
+ *  shape rather than for its first caller — the company and Talent Network rails are both
+ *  built from it, and a third consumer of a type called CompanyRailGroup reads as a
+ *  mistake. */
+export interface RailGroup {
   key: string;
   label: string;
   params: string[];
@@ -156,7 +159,22 @@ export interface CompanyRailGroup {
 //
 // A COMPANY_FACETS param missing here is unreachable in the UI, not merely
 // ungrouped, so companyRailGroups.test.ts asserts the two sets match.
-export const COMPANY_RAIL_GROUPS: CompanyRailGroup[] = [
+/** The Talent Network catalogue's rail. Same shape as the company one — a presentation
+ *  grouping over TALENT_FACETS, with each param staying a distinct query param.
+ *
+ *  Specialization leads because it is the question a recruiter arrives with; the derived
+ *  category sits beside it in its own pane rather than folded in, because the two ask
+ *  different things of the same vocabulary and one pane would suggest they are the same
+ *  filter spelled twice. */
+export const TALENT_RAIL_GROUPS: RailGroup[] = [
+  { key: 'specializations', label: 'Open to', params: ['specializations'] },
+  { key: 'skills', label: 'Skills', params: ['skills'] },
+  { key: 'seniorities', label: 'Grade', params: ['seniorities'] },
+  { key: 'categories', label: 'Has worked in', params: ['categories'] },
+  { key: 'location', label: 'Location', params: ['tz', 'cities'] },
+];
+
+export const COMPANY_RAIL_GROUPS: RailGroup[] = [
   { key: 'collections', label: 'Collection', params: ['collections'] },
   { key: 'region', label: 'Region', params: ['regions', 'remote_regions'] },
   { key: 'countries', label: 'Country', params: ['countries'] },

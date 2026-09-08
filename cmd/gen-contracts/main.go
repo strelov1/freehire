@@ -17,6 +17,7 @@ import (
 	"github.com/strelov1/freehire/internal/application/appevent"
 	"github.com/strelov1/freehire/internal/application/mailclassify"
 	"github.com/strelov1/freehire/internal/application/userjob"
+	"github.com/strelov1/freehire/internal/candidate/talentnetwork"
 	"github.com/strelov1/freehire/internal/dict/classify"
 	"github.com/strelov1/freehire/internal/dict/industrytag"
 	"github.com/strelov1/freehire/internal/dict/location"
@@ -410,6 +411,12 @@ func genVocab() string {
 	b.WriteString(emitVocab("Relocation", "RELOCATION_VALUES", vocab.RelocationValues))
 	b.WriteString(emitVocab("EnglishLevel", "ENGLISH_LEVEL_VALUES", vocab.EnglishLevelValues))
 	b.WriteString(emitVocab("CompanyType", "COMPANY_TYPE_VALUES", vocab.CompanyTypeValues))
+	// Not a dictionary but a wire vocabulary all the same: the Talent Network catalogue's
+	// filter params. Generated because the API and the filter panes are in different
+	// languages, and a param the panes offer but the API does not read is invisible — the
+	// API reports it as ignored and WIDENS, so the visitor is shown more candidates than
+	// their own chips claim.
+	b.WriteString(emitVocab("TalentFacetParam", "TALENT_FACET_PARAMS", talentnetwork.FacetParams()))
 	// The company feedback category vocabulary (internal/engage/companyfeedback), generated
 	// so the review form's category picker can't drift from the DB CHECK constraint.
 	b.WriteString(emitVocab("CompanyFeedbackType", "COMPANY_FEEDBACK_TYPE_VALUES", vocab.CompanyFeedbackTypeValues))

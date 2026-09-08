@@ -4825,6 +4825,36 @@ curl "https://freehire.me/api/v1/talent?categories=backend&min_years=5"
 }
 ```
 
+### `GET /talent/facets`
+
+**Auth:** Public
+
+How many members stand behind each filter value.
+
+Takes the same filters as the list and answers with the count of members behind every value of every facet, plus the total behind the filter itself. Same shape as the job-search facet endpoint, so one control renders either.
+
+Each facet is counted with its OWN selection removed, while every other filter still applies — otherwise picking one skill makes every other skill read zero and the control silently becomes single-select.
+
+A value nobody carries is absent rather than reported as zero. A value carried by fewer members than the floor is offered with its number withheld: the option stays usable, and the number does not become a way to name somebody. Counts describe the filter you sent and never the whole membership.
+
+```bash
+curl "https://freehire.me/api/v1/talent/facets?categories=backend"
+```
+
+```json
+{
+  "data": {
+    "total": 3,
+    "facets": {
+      "categories": { "backend": 3 },
+      "skills": { "go": 3, "kubernetes": 2, "postgresql": 0 },
+      "tz": { "Europe": 2 }
+    },
+    "stats": {}
+  }
+}
+```
+
 ### `GET /talent/{handle}`
 
 **Auth:** Public
