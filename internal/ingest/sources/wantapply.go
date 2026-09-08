@@ -3,8 +3,10 @@ package sources
 import (
 	"context"
 	"fmt"
+	"log"
 	"net/url"
 	"strings"
+	"sync/atomic"
 
 	"golang.org/x/net/html"
 )
@@ -108,33 +110,57 @@ type wantapplyVacancy struct {
 // Fetch is the list-only fallback (used when the pipeline cannot supply a seen set): it fetches
 // detail for every current vacancy. FetchNew is the hydrating path ingest prefers.
 func (s wantapply) Fetch(ctx context.Context, _ CompanyEntry) ([]Job, error) {
-	vacancies, err := s.crawl(ctx)
-	if err != nil {
-		return nil, err
-	}
-	return fetchDetails(vacancies, wantapplyDetailWorkers, func(v wantapplyVacancy) (Job, bool) {
-		return s.detail(ctx, v)
-	}), nil
+	jobs, _, err := s.fetchCounting(ctx, func(string) bool { return false })
+	return jobs, err
 }
 
 // FetchNew fetches detail only for a vacancy the catalogue does not already have — seen reports
 // whether a slug is already ingested. A seen vacancy yields a liveness-refresh job (no detail
 // request) so the pipeline refreshes its last-seen/open state WITHOUT rewriting the content
-// hydrated when it was new; an unseen vacancy is hydrated from its detail page. Detail fetches
-// run under a bounded worker pool, and a single vacancy's detail failure is isolated.
+// hydrated when it was new; an unseen vacancy is hydrated from its detail page.
 func (s wantapply) FetchNew(ctx context.Context, _ CompanyEntry, seen func(externalID string) bool) ([]Job, error) {
+	jobs, _, err := s.fetchCounting(ctx, seen)
+	return jobs, err
+}
+
+// fetchCounting is the shared body, returning how many vacancies were DROPPED alongside the
+// jobs. Both entry points discard the count after it is logged; the tests read it.
+//
+// The count exists because a dropped vacancy never reaches the pipeline — Stats counts saveOne
+// failures, not candidates an adapter discarded — so a crawl that enumerated thousands and read
+// almost none is indistinguishable from a small source. That is not hypothetical here: when the
+// enumeration moved to the .com sitemap the list went from ~605 vacancies to 2 755 and the
+// catalogue did not move, with nothing anywhere saying where the rest went.
+func (s wantapply) fetchCounting(ctx context.Context, seen func(string) bool) ([]Job, int64, error) {
 	vacancies, err := s.crawl(ctx)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
-	return fetchDetails(vacancies, wantapplyDetailWorkers, func(v wantapplyVacancy) (Job, bool) {
+	var dropped atomic.Int64
+	jobs := fetchDetails(vacancies, wantapplyDetailWorkers, func(v wantapplyVacancy) (Job, bool) {
 		if seen(v.slug) {
 			// Already ingested: refresh liveness only, no detail request. Just the identity
 			// fields the pipeline's touch needs (ExternalID); content is left untouched.
 			return Job{ExternalID: v.slug, URL: v.url, SeenRefresh: true}, true
 		}
-		return s.detail(ctx, v)
-	}), nil
+		job, ok := s.detail(ctx, v)
+		if !ok {
+			dropped.Add(1)
+		}
+		return job, ok
+	})
+	n := dropped.Load()
+	if n > 0 {
+		log.Printf("wantapply: dropped %d/%d enumerated vacancies this run (detail fetch failed or carried no usable JobPosting)",
+			n, len(vacancies))
+	}
+	// The same guard echojobs carries, for the same reason: only this function knows it walked
+	// the sitemap and came back empty-handed, so only it can say so. No candidates at all still
+	// succeeds — a quiet source is not a broken one.
+	if len(vacancies) > 0 && len(jobs) == 0 {
+		return nil, n, fmt.Errorf("wantapply: enumerated %d vacancies and read none of them", len(vacancies))
+	}
+	return jobs, n, nil
 }
 
 // crawl reads the sitemap and returns every vacancy candidate (reserved pages, /company/*, and

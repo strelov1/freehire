@@ -1,8 +1,0 @@
-[Unit]
-Description=timer ingest wantedkr
-[Timer]
-OnCalendar=*:27:00
-Persistent=true
-RandomizedDelaySec=180
-[Install]
-WantedBy=timers.target

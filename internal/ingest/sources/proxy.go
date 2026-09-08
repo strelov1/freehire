@@ -88,10 +88,6 @@ var proxiedProviders = map[string]func(HTTPClient) Source{
 	// browser User-Agent, so it is IP reputation, not a bot tell), while the residential
 	// proxy IP is served 200. NewEnlizt takes an HTMLGetter, which HTTPClient satisfies.
 	"enlizt": func(c HTTPClient) Source { return NewEnlizt(c) },
-	// wanted.co.kr's job API 403s the prod datacenter IP (again 403 with a browser UA, so
-	// IP-level), while the residential proxy IP is served the full JSON 200. NewWantedKR
-	// takes a JSONGetter, which HTTPClient satisfies.
-	"wantedkr": func(c HTTPClient) Source { return NewWantedKR(c) },
 }
 
 // refusalRetryProviders is the second, weaker opt-in: providers that crawl on the DIRECT IP
@@ -191,7 +187,9 @@ func ApplyProxyEgress(registry map[string]Source) error {
 // below. Without FIRECRAWL_API_KEY that override does not happen and gulftalent keeps the
 // fingerprint transport exactly as before — refused, but unchanged.
 //
-// wantedkr is the one still genuinely waiting for a residential pool.
+// Nothing is waiting for a residential pool any more: wantedkr was the last entry that
+// wanted one, and it was retired on 2026-09-07 rather than kept as a permanently failing
+// provider (403 from every address, robots.txt itself unreadable behind the same block).
 //
 // echojobs used to be named here for the same reason and no longer is: measured 2026-09-07,
 // its obstacle is a JS challenge rather than an IP classification, and the EXISTING proxy

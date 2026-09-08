@@ -17,7 +17,7 @@ import (
 // entry's board. Its public search API is IP-blocklisted from datacenter egress, so the crawl
 // reads the server-rendered search page and decodes the vacancy list from its embedded
 // client-hydration state (a <template id="HH-Lux-InitialState"> JSON blob). The list carries every
-// field except the description, which — like justjoin/nofluffjobs — is hydrated per posting from
+// field except the description, which — like nofluffjobs — is hydrated per posting from
 // the vacancy page's JobPosting ld+json, and only for postings the catalogue does not already have
 // (HydratingSource.FetchNew). Multi-company, board-based.
 //
