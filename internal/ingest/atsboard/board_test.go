@@ -305,6 +305,21 @@ func TestRecognize(t *testing.T) {
 		// "help". Before this guard was wired into modeSubdomain, both resolved as false boards.
 		{"recruitee platform app host not a tenant", "https://app.recruitee.com/", "", "", "", false},
 		{"bamboohr platform help host not a tenant", "https://help.bamboohr.com/s/article/x", "", "", "", false},
+		// "embed" READS like platform machinery and is not: embed.bamboohr.com is the board of a
+		// company actually called Embed, serving live postings, and BambooHR's widget is a PATH on
+		// each tenant's own host (<board>.bamboohr.com/jobs/embed2.php) rather than a host of its
+		// own. Pinned because adding "embed" to platformLabels on that misreading would silently
+		// drop a real board — a guard whose name sounds like machinery needs the host checked, not
+		// assumed (2026-09-08).
+		{"bamboohr tenant named like machinery still resolves", "https://embed.bamboohr.com/careers/605", "bamboohr", "embed", "https://embed.bamboohr.com", true},
+		// Greenhouse's AI-screening opt-out form is one shared endpoint, identical for every
+		// customer, and its URL sits in the markup of a career page whose employer board may be
+		// named nowhere else. Read as a path board it yields "ai_opt_out_request" — the SAME board
+		// for two unrelated employers, which is the tell. It carries no board behind it either:
+		// the segment after it is the platform's "job_post", so skipping (reservedSegments) would
+		// only move the false board one segment along.
+		{"greenhouse ai opt-out form carries no board", "http://app4.greenhouse.io/ai_opt_out_request/job_post/6178374004/ai_opt_out", "", "", "", false},
+		{"greenhouse ai opt-out form bare", "https://my.greenhouse.io/ai_opt_out_request", "", "", "", false},
 		{"unknown host", "https://example.com/careers/1", "", "", "", false},
 		{"not http", "ftp://acme.recruitee.com", "", "", "", false},
 		{"garbage", "not a url", "", "", "", false},
