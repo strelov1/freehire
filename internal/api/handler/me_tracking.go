@@ -1,12 +1,16 @@
 package handler
 
 import (
+	"context"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
 
 	"github.com/strelov1/freehire/internal/application/autoapply"
+	"github.com/strelov1/freehire/internal/application/jobtracking"
 	"github.com/strelov1/freehire/internal/job/jobview"
+	"github.com/strelov1/freehire/internal/platform/db"
+	"github.com/strelov1/freehire/internal/search/search"
 )
 
 // myJobResponse is one item of the my-jobs listing: the job in the shared
@@ -98,6 +102,7 @@ func (h *trackingHandlers) ListTrackedJobs(c *fiber.Ctx) error {
 		}
 		items = append(items, item)
 	}
+	h.attachGhostToTrackedCards(c.Context(), listing.Items)
 
 	return c.JSON(fiber.Map{
 		"data": items,
@@ -115,6 +120,73 @@ func (h *trackingHandlers) ListTrackedJobs(c *fiber.Ctx) error {
 			},
 		},
 	})
+}
+
+// attachGhostToTrackedCards attaches each tracked job's ghost signal to its already-built
+// card, mutating tracked[i].Job in place — the same *jobview.Card pointer ListTrackedJobs
+// already copied into its own myJobResponse items, so no second pass over items is needed.
+//
+// Best-effort throughout, the same discipline ghostEvidenceFor/attachGhost already
+// establish for the other two listings: a lookup failure leaves every affected card's
+// ghost signal off rather than failing the whole tracking read.
+//
+// The reality class comes from Meilisearch, never recomputed from a job's description —
+// this listing's own query deliberately never reads one (TestMeasureBoardLoad), and
+// jobview.ClassifyReality needs it. See openspec/changes/tracker-ghost-badge.
+func (h *trackingHandlers) attachGhostToTrackedCards(ctx context.Context, tracked []jobtracking.TrackedJob) {
+	if h.search == nil || h.queries == nil {
+		return
+	}
+	ids := make([]int64, 0, len(tracked))
+	for _, it := range tracked {
+		if it.Job != nil {
+			ids = append(ids, it.JobID)
+		}
+	}
+	if len(ids) == 0 {
+		return
+	}
+
+	stampRows, err := h.queries.ListJobGhostStamps(ctx, ids)
+	if err != nil {
+		logGhostLookup(ctx, "tracker absence stamps", len(ids), err)
+		return
+	}
+	stamps := make(map[int64]db.ListJobGhostStampsRow, len(stampRows))
+	for _, r := range stampRows {
+		stamps[r.ID] = r
+	}
+	evidence := ghostEvidenceFor(ctx, h.queries, ids)
+
+	// A Search failure degrades to an empty reality map rather than returning early: the
+	// ghost signal may still fire off ATS-absence or outcome evidence alone, and losing
+	// those too over one degraded input would throw away more than the failure itself did.
+	reality := make(map[int64]string, len(ids))
+	if res, err := h.search.Search(ctx, search.SearchParams{Filter: search.In("id", ids), Limit: len(ids)}); err != nil {
+		logGhostLookup(ctx, "tracker reality class", len(ids), err)
+	} else {
+		for _, hit := range res.Hits {
+			if hit.Reality != nil {
+				reality[hit.ID] = hit.Reality.Class
+			}
+		}
+	}
+
+	now := time.Now()
+	for _, it := range tracked {
+		if it.Job == nil {
+			continue
+		}
+		row := stamps[it.JobID]
+		it.Job.Ghost = jobview.ClassifyGhost(jobview.GhostInput{
+			Now:          now,
+			Closed:       row.ClosedAt.Valid,
+			RealityClass: reality[it.JobID],
+			ATSAbsentAt:  row.AtsAbsentAt.Time,
+			HasATSAbsent: row.AtsAbsentAt.Valid,
+			Evidence:     evidence[it.JobID],
+		})
+	}
 }
 
 // TrackingPipeline returns the authenticated caller's application-pipeline snapshot:
