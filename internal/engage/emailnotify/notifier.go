@@ -147,10 +147,7 @@ func (n *Notifier) renderText(d notify.Digest, rows []mailtpl.Job, more int, vie
 		fmt.Fprintf(&b, "\n+ %d more at %s\n", more, viewAllURL)
 	}
 	b.WriteString("\nManage your alerts: " + n.manageURL() + "\n")
-	// The plain-text alternative carries the way out too. A reader who sees only
-	// this body has the same right to leave as one whose client renders HTML, and a
-	// spam scorer reads both.
-	b.WriteString("Unsubscribe: " + unsubscribeURL + "\n")
+	b.WriteString(emailprefs.TextFooter(unsubscribeURL))
 	return b.String()
 }
 

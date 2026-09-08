@@ -85,7 +85,7 @@ func (p *ChannelPinger) PingReferrer(ctx context.Context, r Recipient, cabinetUR
 			UnsubscribeURL: unsubscribe,
 		})
 		textBody := "A job seeker asked for a referral. View the request in your inbox: " + cabinetURL +
-			"\n\nUnsubscribe: " + unsubscribe + "\n"
+			"\n" + emailprefs.TextFooter(unsubscribe)
 		if err := p.email.Send(ctx, emailnotify.Message{
 			From: p.from, To: r.Email, Subject: "New referral request on freehire",
 			HTML: htmlBody, Text: textBody,

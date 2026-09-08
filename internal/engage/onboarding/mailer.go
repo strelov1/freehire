@@ -150,7 +150,7 @@ func (m *Mailer) render(step Step, unsubscribe string) (rendered, error) {
 		Footer:         "You’re getting this because you signed up for freehire.",
 		UnsubscribeURL: unsubscribe,
 	})
-	text := spec.text(m.baseURL) + "\nUnsubscribe: " + unsubscribe + "\n"
+	text := spec.text(m.baseURL) + emailprefs.TextFooter(unsubscribe)
 	return rendered{subject: spec.subject, html: html, text: text}, nil
 }
 

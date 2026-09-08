@@ -234,8 +234,8 @@ func (n *EmailNotifier) sendOne(ctx context.Context, dest string, m ReminderMess
 		UnsubscribeURL: unsubscribe,
 	})
 
-	textBody := fmt.Sprintf("You saved %s at %s and haven't applied yet.\n\nOpen the job: %s\n\nUnsubscribe: %s\n",
-		m.JobTitle, m.Company, url, unsubscribe)
+	textBody := fmt.Sprintf("You saved %s at %s and haven't applied yet.\n\nOpen the job: %s\n",
+		m.JobTitle, m.Company, url) + emailprefs.TextFooter(unsubscribe)
 	subject := fmt.Sprintf("Reminder: %s at %s", m.JobTitle, m.Company)
 	return n.sender.Send(ctx, emailnotify.Message{
 		From: n.from, To: dest, Subject: subject, HTML: htmlBody, Text: textBody,
@@ -271,7 +271,7 @@ func (n *EmailNotifier) sendBatch(ctx context.Context, dest string, ms []Reminde
 	subject := fmt.Sprintf("Reminder: %d saved jobs", len(ms))
 	return n.sender.Send(ctx, emailnotify.Message{
 		From: n.from, To: dest, Subject: subject, HTML: htmlBody,
-		Text:  n.renderBatchText(shown, more, reason) + "\nUnsubscribe: " + unsubscribe + "\n",
+		Text:  n.renderBatchText(shown, more, reason) + emailprefs.TextFooter(unsubscribe),
 		Group: emailprefs.GroupActivity, UnsubscribeURL: unsubscribe,
 	})
 }

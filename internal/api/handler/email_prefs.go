@@ -96,23 +96,36 @@ func (h *emailPrefsHandlers) Patch(c *fiber.Ctx) error {
 	if err := c.BodyParser(&body); err != nil {
 		return fiber.NewError(fiber.StatusBadRequest, "invalid body")
 	}
-	// Read the current state first, so an absent switch keeps its stored value
-	// rather than defaulting to false. This also validates the token before
-	// anything is written.
-	current, err := h.prefs.Load(c.Context(), body.Token)
+	err := applyPatch(body,
+		func() (emailprefs.Prefs, error) { return h.prefs.Load(c.Context(), body.Token) },
+		func(in emailprefs.Update) error { return h.prefs.Save(c.Context(), body.Token, in) })
 	if err != nil {
 		return renderTokenError(err)
 	}
-	in := emailprefs.Update{
+	return h.respondWithState(c, body.Token)
+}
+
+// applyPatch is the patch semantics both write routes share: read the stored state
+// first so an ABSENT switch keeps its value rather than defaulting to false, then
+// write. The two routes differ only in how they establish the user, which is what
+// the two closures carry.
+//
+// Reading first is also what validates the caller before anything is written.
+func applyPatch(
+	body emailPrefsUpdateRequest,
+	load func() (emailprefs.Prefs, error),
+	save func(emailprefs.Update) error,
+) error {
+	current, err := load()
+	if err != nil {
+		return err
+	}
+	return save(emailprefs.Update{
 		Alerts:             boolOr(body.Alerts, current.Alerts),
 		Activity:           boolOr(body.Activity, current.Activity),
 		News:               boolOr(body.News, current.News),
 		DeactivateSearches: body.DeactivateSearches,
-	}
-	if err := h.prefs.Save(c.Context(), body.Token, in); err != nil {
-		return renderTokenError(err)
-	}
-	return h.respondWithState(c, body.Token)
+	})
 }
 
 // OneClick is the RFC 8058 target a mail client POSTs to with no confirmation
@@ -180,20 +193,13 @@ func (h *emailPrefsHandlers) PatchMine(c *fiber.Ctx) error {
 	if err := c.BodyParser(&body); err != nil {
 		return fiber.NewError(fiber.StatusBadRequest, "invalid body")
 	}
-	current, err := h.prefs.LoadFor(c.Context(), userID)
-	if err != nil {
+	load := func() (emailprefs.Prefs, error) { return h.prefs.LoadFor(c.Context(), userID) }
+	if err := applyPatch(body, load, func(in emailprefs.Update) error {
+		return h.prefs.SaveFor(c.Context(), userID, in)
+	}); err != nil {
 		return err
 	}
-	in := emailprefs.Update{
-		Alerts:             boolOr(body.Alerts, current.Alerts),
-		Activity:           boolOr(body.Activity, current.Activity),
-		News:               boolOr(body.News, current.News),
-		DeactivateSearches: body.DeactivateSearches,
-	}
-	if err := h.prefs.SaveFor(c.Context(), userID, in); err != nil {
-		return err
-	}
-	prefs, err := h.prefs.LoadFor(c.Context(), userID)
+	prefs, err := load()
 	if err != nil {
 		return err
 	}

@@ -91,7 +91,7 @@ func (m *Mailer) Send(ctx context.Context, c Campaign, userID int64, to string) 
 	})
 	return m.sender.Send(ctx, emailnotify.Message{
 		From: m.from, To: to, ReplyTo: m.replyTo, Subject: c.Subject,
-		HTML: html, Text: c.text(m.baseURL) + "\nUnsubscribe: " + unsubscribe + "\n",
+		HTML: html, Text: c.text(m.baseURL) + emailprefs.TextFooter(unsubscribe),
 		Group: emailprefs.GroupNews, UnsubscribeURL: unsubscribe,
 	})
 }

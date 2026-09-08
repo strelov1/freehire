@@ -49,6 +49,17 @@ func NewLinks(secret, origin string) *Links {
 // access log — and the mitigations live with the endpoint and the page: the write
 // calls take it in a body, and the page strips it from the address bar after the
 // first read.
+// TextFooter is the unsubscribe line a plain-text body ends with.
+//
+// One author, because it had reached seven hand-written copies across the senders
+// and two of them already disagreed about the leading newlines. A reader whose
+// client shows only the text alternative has the same right to leave as one whose
+// client renders HTML, and a spam scorer reads both — so this line going missing
+// from one sender is a real cost, not a cosmetic one.
+func TextFooter(unsubscribeURL string) string {
+	return "\nUnsubscribe: " + unsubscribeURL + "\n"
+}
+
 func (l *Links) For(userID int64, g Group) (string, error) {
 	if l.signer == nil {
 		return "", fmt.Errorf("%w: no usable signing secret (JWT_SECRET must be at least %d bytes)", ErrCannotMint, minSecretLen)

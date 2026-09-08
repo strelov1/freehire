@@ -232,7 +232,7 @@ func (n *EmailNotifier) Send(ctx context.Context, _ string, dest, kind string, m
 	}
 	return n.sender.Send(ctx, emailnotify.Message{
 		From: n.from, To: dest, Subject: subject, HTML: htmlBody,
-		Text:  textBody + "\nUnsubscribe: " + unsubscribe + "\n",
+		Text:  textBody + emailprefs.TextFooter(unsubscribe),
 		Group: emailprefs.GroupActivity, UnsubscribeURL: unsubscribe,
 	})
 }

@@ -113,7 +113,7 @@ func (m *MailNotifier) NotifyDecision(ctx context.Context, d Decision) error {
 	})
 	return m.sender.Send(ctx, emailnotify.Message{
 		From: m.from, To: d.Email, Subject: subject, HTML: html,
-		Text:  textBody(mail) + "\nUnsubscribe: " + unsubscribe + "\n",
+		Text:  textBody(mail) + emailprefs.TextFooter(unsubscribe),
 		Group: emailprefs.GroupActivity, UnsubscribeURL: unsubscribe,
 	})
 }
