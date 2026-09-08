@@ -213,6 +213,37 @@ func TestDerive(t *testing.T) {
 			html: `<p>About us</p><p>Requirements:</p><ul><li>Go</li></ul>`,
 			want: []enrich.Requirement{req("Go")},
 		},
+		// Russian: "Требования" (requirements) and "Мы предлагаем" (we offer, closing) —
+		// both real headings measured against a live tbank.ru sample. This case shows
+		// the vocabulary firing when the posting DOES use a list; the next case is the
+		// honest counter-example the same sample surfaced.
+		{
+			name: "a Russian requirements heading followed by a list yields its items",
+			html: `<h3>Требования</h3><ul><li>Опыт работы с Go от 3 лет</li></ul>
+			       <h3>Мы предлагаем</h3><ul><li>ДМС</li></ul>`,
+			want: []enrich.Requirement{req("Опыт работы с Go от 3 лет")},
+		},
+		// The real, measured tbank.ru shape: every one of 683 "Требования" headings
+		// sampled is followed by <p> paragraphs, never a <ul>. The vocabulary now
+		// recognizes the heading, but Derive still yields nothing — the first
+		// paragraph closes the section as prose before any list is ever found. See
+		// reqextract/AGENTS.md's Limitations: closing this gap needs Derive to read a
+		// <p>-per-item section too, a structural change this vocabulary addition does
+		// not attempt.
+		{
+			name: "a Russian requirements heading followed by paragraphs (the real tbank.ru shape) yields nothing yet",
+			html: `<h3>Требования</h3><p>Опыт работы с Go от 3 лет</p><p>Знание Postgres</p>`,
+			want: nil,
+		},
+		// go-unidecode transliterates the accented ё to "io", not "e", so the
+		// grammatically correct spelling normalizes differently from the common
+		// informal one ("Мы ждем от вас", already covered above without the dots).
+		// Found on review (CodeRabbit) — both spellings appear in real postings.
+		{
+			name: "a Russian heading with the accented ё normalizes and matches too",
+			html: `<h3>Мы ждём от вас</h3><ul><li>Опыт работы с Go от 3 лет</li></ul>`,
+			want: []enrich.Requirement{req("Опыт работы с Go от 3 лет")},
+		},
 	}
 
 	for _, tt := range tests {

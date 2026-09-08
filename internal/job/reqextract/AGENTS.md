@@ -140,11 +140,27 @@ cannot detect.
 
 ## Limitations
 
-- **Latin-alphabet headings, mostly English.** `normalizeHeading` transliterates before
-  matching (the same fold `normalize.Slug` applies), so an accented heading is spelled
-  once in the vocabulary — `Előnyt jelent` is entered as `elonyt jelent`, not as the
-  `el nyt jelent` a plain ASCII filter would have produced. Hungarian is in; more
-  languages are an additive change to the three vocabularies.
+- **Latin-alphabet headings, mostly English — Hungarian and Russian are in.**
+  `normalizeHeading` transliterates before matching (the same fold `normalize.Slug`
+  applies, via `unidecode.Unidecode`), so an accented or non-Latin heading is spelled
+  once in the vocabulary — `Előnyt jelent` is entered as `elonyt jelent`, and
+  `Требования` as `trebovaniia`, never the mangled ASCII a plain filter would have
+  produced. More languages are an additive change to the three vocabularies — **but
+  measure against real postings first**, not just against `unidecode`'s own output: the
+  Russian entries were added after counting real headings across 500 live `tbank.ru`
+  postings (`git log` this file for the exact counts), which is also what surfaced the
+  next limitation.
+- **A requirements section stated as `<p>`-per-item, not a `<ul>`/`<ol>` list, yields
+  nothing — regardless of language.** `Derive`'s walk (reqextract.go) only reads items
+  out of `atom.Ul`/`atom.Ol`; a `<p>` long enough to fail `isHeadingCandidate` closes the
+  open section as prose (the same rule that keeps a benefits list two paragraphs down
+  from being read as requirements) before any list is found. Measured live: every one of
+  683 real `Требования` headings sampled from `tbank.ru` is followed by a run of `<p>`
+  paragraphs, never a list — so the Russian vocabulary addition above extracts nothing
+  from that specific source today, even though the heading now matches. Closing this
+  needs `Derive` to recognize a `<p>`-per-item section as a list-shaped one, which is a
+  change to the walk itself, not to a vocabulary — a different, larger problem than the
+  language gap it was found alongside.
 - **No clustering.** Near-duplicate phrasings ("excellent written and verbal
   communication skills" vs "strong written and verbal communication skills") are stored
   as stated. Real, but a different problem.
