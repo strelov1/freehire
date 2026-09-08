@@ -61,6 +61,9 @@ func talentCatalogApp(store talentnetwork.Store) *fiber.App {
 	h := newTalentCatalogHandlers(talentnetwork.NewCatalogue(store, time.Minute, time.Now))
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	app.Get("/talent", h.List)
+	// Registered before the parametrised route, exactly as `register` does — a test that
+	// mounted them the other way round would pass while the real router 404s.
+	app.Get("/talent/facets", h.Facets)
 	app.Get("/talent/:handle", h.Get)
 	return app
 }
@@ -269,5 +272,77 @@ func TestTalentCatalogGet_AbsentMalformedAndUnknownAnswerTheSame(t *testing.T) {
 		if bodies[i] != bodies[0] {
 			t.Errorf("404 bodies differ:\n%s\n%s", bodies[0], bodies[i])
 		}
+	}
+}
+
+func decodeFacets(t *testing.T, resp *http.Response) talentnetwork.Counts {
+	t.Helper()
+	var out struct {
+		Data talentnetwork.Counts `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		t.Fatalf("decode facets: %v", err)
+	}
+	return out.Data
+}
+
+func TestTalentFacets_ServesCountsToAnonymousVisitors(t *testing.T) {
+	app := talentCatalogApp(twoMemberStore())
+
+	resp := doTalent(t, app, "/talent/facets")
+	defer resp.Body.Close()
+	if resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+	got := decodeFacets(t, resp)
+	if got.Total != 2 {
+		t.Errorf("total = %d, want 2", got.Total)
+	}
+	if _, ok := got.Facets["categories"]; !ok {
+		t.Error("no category counts")
+	}
+}
+
+// The route order is the trap: `/talent/:handle` registered first would swallow this and
+// answer an honest 404, which reads as "facets are broken" rather than "the route was
+// shadowed".
+func TestTalentFacets_IsNotSwallowedByTheHandleRoute(t *testing.T) {
+	app := talentCatalogApp(twoMemberStore())
+
+	resp := doTalent(t, app, "/talent/facets")
+	defer resp.Body.Close()
+	if resp.StatusCode == fiber.StatusNotFound {
+		t.Fatal("/talent/facets answered 404 — the parametrised handle route shadowed it")
+	}
+}
+
+// Counts carry no more than a card does: they are numbers over dictionary values, and the
+// employer names seeded into the fixture must not reach them either.
+func TestTalentFacets_LeakNothingFromTheCV(t *testing.T) {
+	app := talentCatalogApp(twoMemberStore())
+
+	resp := doTalent(t, app, "/talent/facets")
+	defer resp.Body.Close()
+	forbidSubstrings(t, talentNetworkReadBody(t, resp),
+		"Ada Lovelace", "ada@example.com", "Analytical Engines", "Acme")
+}
+
+func TestTalentFacets_ReportsParamsItDidNotRead(t *testing.T) {
+	app := talentCatalogApp(twoMemberStore())
+
+	resp := doTalent(t, app, "/talent/facets?countries=de")
+	defer resp.Body.Close()
+	var out struct {
+		Meta struct {
+			IgnoredParams []struct {
+				Param string `json:"param"`
+			} `json:"ignored_params"`
+		} `json:"meta"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(out.Meta.IgnoredParams) != 1 || out.Meta.IgnoredParams[0].Param != "countries" {
+		t.Errorf("ignored_params = %+v, want [countries]", out.Meta.IgnoredParams)
 	}
 }

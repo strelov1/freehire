@@ -50,12 +50,27 @@ const (
 	paramOffset          = "offset"
 )
 
-// KnownParams is every query param the catalogue reads, for the ignored-params report.
-func KnownParams() []string {
+// FacetParams is every param that selects a SET of dictionary values — the ones a filter
+// pane offers and Facets counts. min_years is not one (it is a threshold), and neither is
+// paging.
+//
+// It is the SOURCE the browser's own list is generated from (cmd/gen-contracts emits it as
+// TALENT_FACET_PARAMS), because the two ends of this feature are in different languages and
+// a param the UI offers but the API does not read is not an error anywhere: the API reports
+// it in meta.ignored_params and WIDENS, so the visitor sees more candidates than their own
+// filter chips claim. Generating one end from the other is what makes that undetectable
+// case impossible rather than merely tested for.
+func FacetParams() []string {
 	return []string{
-		paramCategories, paramSeniorities, paramSkills, paramTimezoneRegions,
-		paramCities, paramSpecializations, paramMinYears, paramLimit, paramOffset,
+		paramCategories, paramSeniorities, paramSkills,
+		paramTimezoneRegions, paramCities, paramSpecializations,
 	}
+}
+
+// KnownParams is every query param the catalogue reads, for the ignored-params report:
+// the facets, plus the threshold and the paging that are not facets.
+func KnownParams() []string {
+	return append(FacetParams(), paramMinYears, paramLimit, paramOffset)
 }
 
 // QueryFromValues reads a catalogue query out of URL parameters, and reports the params

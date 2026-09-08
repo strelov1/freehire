@@ -30,14 +30,18 @@
   const extraSkills = $derived(Math.max(0, card.skills.length - SHOWN_SKILLS));
 </script>
 
-<Card class="flex gap-4 p-5">
+<!-- Density and hover match JobRow: the two lists sit on the same chrome and a visitor
+     moves between them, so a card that breathed differently would read as a different
+     product. The hover states are on the CARD rather than only on the heading link,
+     because the whole row is what a pointer aims at. -->
+<Card class="flex gap-4 p-4 transition hover:border-brand hover:bg-accent">
   <div
     class="mt-0.5 flex size-11 shrink-0 items-center justify-center rounded-full bg-secondary text-muted-foreground"
   >
     <User class="size-5" aria-hidden="true" />
   </div>
 
-  <div class="flex min-w-0 flex-1 flex-col gap-3">
+  <div class="flex min-w-0 flex-1 flex-col gap-2">
     <div class="flex flex-wrap items-baseline justify-between gap-2">
       <h2 class="text-base font-semibold">
         <!-- The whole heading is the link, so the target is large and the link text says
