@@ -410,6 +410,14 @@ func runBakeoffPass(
 
 	turnClient, flush := bakeoffGateway(t, model)
 	defer flush()
+	// The deadline production gives a turn, not llm.DefaultTimeout.
+	//
+	// They differ by a factor of two — 180s against 90s — and the gap is not academic: the
+	// first full bake-off (2026-09-08) had every flagship run die on `llm: chat: context
+	// deadline exceeded` after two rounds, so all three rows reported the BASE CV, unedited,
+	// and scored identically to the other candidate's. A bake-off run under a deadline the
+	// product does not use measures the test rig.
+	turn := turnClient.WithTimeout(assistantLLMTimeout)
 
 	pool := startPostgres(t)
 	iss := auth.NewIssuer("test-secret", time.Hour)
@@ -423,7 +431,7 @@ func runBakeoffPass(
 		// The tally is per RUN, and the model wrapper closes over it, so the harness is
 		// rebuilt per case rather than reused.
 		tally := &bakeoffTally{}
-		h, app := newAutopilotHarness(t, pool, iss, &countingModel{inner: turnClient, tally: tally}, nil,
+		h, app := newAutopilotHarness(t, pool, iss, &countingModel{inner: turn, tally: tally}, nil,
 			withFitClient(fitClient), withRenderedCVScoring(renderer, extract), withTrackingTools(pool, db.New(pool)))
 
 		sess, cvID, _ := seedBakeoffCase(t, pool, h, userID, c, string(profile.CV))
