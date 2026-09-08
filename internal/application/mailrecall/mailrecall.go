@@ -210,8 +210,18 @@ func New(store Store, client *llm.Client) *Service { return &Service{store: stor
 
 // As returns a copy running on the caller's own gateway credential, so a recall is billed
 // to the person who pressed the button rather than to the service. It is a clone because
-// the credential is per-user and the store is not — the same seam matchanalysis, atscheck
-// and resumeextract carry.
+// the credential is per-user and the store is not.
+//
+// This one still takes a whole generator where matchanalysis, atscheck, coverletter and
+// resumeextract now take an llm.Caller, and deliberately: those four hold an *llm.Client
+// they were CONFIGURED with, so replacing it wholesale threw that configuration away — the
+// bug llm.Caller records. This service holds `gen`, a two-method consumer interface with no
+// configuration in it at all, so there is nothing here for a substitution to lose. Giving it
+// a caller instead would mean widening that interface to carry a rebind, which is a test seam
+// paying for a hazard it does not have.
+//
+// The hazard would arrive the day this service is built from a client with a timeout of its
+// own. Give it an llm.Caller then, and let `gen` grow the method to apply one.
 func (s *Service) As(client *llm.Client) *Service {
 	if s == nil || client == nil {
 		return s

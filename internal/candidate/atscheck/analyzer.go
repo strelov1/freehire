@@ -27,14 +27,17 @@ type Analyzer struct {
 }
 
 // NewAnalyzer wraps an llm.Client. client may be nil (LLM unconfigured).
-// As returns an analyzer that runs on a different client, so one review can be spent
-// under the caller's own gateway credential. Nil-safe both ways.
-func (a *Analyzer) As(client *llm.Client) *Analyzer {
-	if a == nil || client == nil {
+// As returns an analyzer spending as `caller`, so one review is billed to the candidate's
+// own gateway credential. Nil-safe.
+//
+// It takes a caller and not a client so this analyzer keeps whatever it was built with; see
+// llm.Caller for what the shape it replaces cost.
+func (a *Analyzer) As(caller llm.Caller) *Analyzer {
+	if a == nil {
 		return a
 	}
 	clone := *a
-	clone.client = client
+	clone.client = a.client.AsCaller(caller)
 
 	return &clone
 }

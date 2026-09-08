@@ -56,14 +56,6 @@ func TestCoverLetterRefSeparatesJobsAndAttempts(t *testing.T) {
 	}
 }
 
-// An unconfigured deployment must not be reported as a letter written by a nameless model:
-// Stale compares this against the stored stamp, and "" == "" reads as "matches".
-func TestModelIDOfIsEmptyWithoutAGateway(t *testing.T) {
-	if got := modelIDOf(nil); got != "" {
-		t.Errorf("model = %q, want empty when no gateway is configured", got)
-	}
-}
-
 // A drafter missing any dependency must refuse in its caller's own vocabulary rather than
 // panic inside it - on the tool's path that panic lands in a detached goroutine where no
 // error path is listening.

@@ -343,7 +343,7 @@ func (h *resumeHandlers) extractStructuredResume(userID int64, text string, uplo
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), resumeExtractLLMTimeout+30*time.Second)
 	defer cancel()
-	extractor := h.structuredExtractor.As(h.llm.bind(ctx, userID, llm.Feature(tagCVExtract)))
+	extractor := h.structuredExtractor.As(h.llm.caller(ctx, userID, llm.Feature(tagCVExtract)))
 	st, err := extractor.Extract(ctx, text)
 	if err != nil {
 		log.Printf("resume structured: user %d: %v", userID, err)

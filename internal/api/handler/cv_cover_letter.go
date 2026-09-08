@@ -51,7 +51,7 @@ func (h *cvHandlers) GetCVCoverLetter(c *fiber.Ctx) error {
 	}
 	return c.JSON(fiber.Map{"data": coverLetterResponse{
 		Present: true,
-		Stale:   stored.Stale(modelIDOf(h.llm.client), job.PostingLanguage),
+		Stale:   stored.Stale(h.letter.chain.ModelID(), job.PostingLanguage),
 		Letter:  &stored.Letter,
 		Cited:   citedAtomsOf(c.Context(), h.letter.bank, userID, stored.Cited),
 		Model:   stored.Model,
@@ -79,8 +79,8 @@ func (h *cvHandlers) DraftCVCoverLetter(c *fiber.Ctx) error {
 		return refuse(c, decision)
 	}
 
-	client := h.llm.bind(c.Context(), userID, llm.Feature(tagCoverLetter))
-	letter, err := drafter.draft(c.Context(), client, userID, jobID, coverLetterBand(c))
+	caller := h.llm.caller(c.Context(), userID, llm.Feature(tagCoverLetter))
+	letter, err := drafter.draft(c.Context(), caller, userID, jobID, coverLetterBand(c))
 	if err != nil || letter == nil {
 		// Every failing path gives the charge back, so it is given back once here rather than
 		// in each branch — a candidate must never pay for a letter they did not get.
@@ -104,7 +104,7 @@ func (h *cvHandlers) DraftCVCoverLetter(c *fiber.Ctx) error {
 		Present: true,
 		Letter:  letter,
 		Cited:   citedAtomsOf(c.Context(), h.letter.bank, userID, letter.Cited),
-		Model:   modelIDOf(client),
+		Model:   h.letter.chain.ModelID(),
 	}})
 }
 
