@@ -197,3 +197,9 @@ extension/*.zip
 /web/test-results/
 .pnpm-store/
 .tmp-containers/
+
+# The model bake-off's profile fixture: a real CV, a real experience bank. This repository
+# is public and a CV is a name, an address and an employment history, so the fixture stays
+# local and is rebuilt from the account it belongs to. The postings it is run against ARE
+# committed — they are already public. See internal/api/handler/assistant_bakeoff.go.
+/internal/api/handler/testdata/bakeoff-profile.json
