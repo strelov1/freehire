@@ -112,5 +112,15 @@ the SQL does not return), a withdrawal that erased history (a fake has no cascad
 paused mentor served from cache. Anything that is a property of the SCHEMA belongs in
 `internal/platform/db/mentorship_integration_test.go`.
 
+There is a THIRD layer, and it exists because the first two leave a gap between them.
+`internal/platform/db`'s tests call the generated query directly: they prove the columns
+come back, not that anything reads them. The fake proves the domain struct is filled,
+because it fills it. A field the query SELECTS and the mapping forgets is invisible to
+both — which is how a seeker's session list shipped naming nobody, while the
+single-session read set the same field and looked right. `repository_integration_test.go`
+drives `QueriesRepository` against a real Postgres, so it sees the seam itself. A test
+written for that defect in `internal/platform/db` passes with the fix removed; this one
+does not, and that difference is the whole reason the file is here.
+
 Run the slot-engine tests with `-count=1`: the layering guard next door reports `ok
 (cached)` on a package it has never seen, and the habit is worth keeping here too.

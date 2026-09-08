@@ -2,9 +2,13 @@ package sources
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"slices"
 	"strings"
 	"testing"
+
+	"golang.org/x/net/html"
 )
 
 // peopleforceListingHTML is a PeopleForce careers listing page: server-rendered job cards, each
@@ -177,6 +181,88 @@ func TestPeopleForceListingErrorIsBoardError(t *testing.T) {
 	}
 }
 
+// PeopleForce's detail page is its ONLY source for a posting and is re-fetched on every run (no
+// HydratingSource), so a dropped one leaves a live vacancy missing from a crawl that reported no
+// failure — which the sweep would read as the posting having gone. Now that peopleforce carries
+// the fullBoardListing marker, that silent drop is exactly what the marker's promise forbids: a
+// failed-but-not-gone detail request must yield an unreadableDetail marker instead.
+func TestPeopleForceUnreadableDetailIsMarkedNotDropped(t *testing.T) {
+	fake := (&routedHTTP{}).
+		route("?page=1", peopleforceListingHTML(
+			[2]string{"100-brand-leader", "Brand Leader"},
+			[2]string{"200-ops-manager", "Ops Manager"})).
+		route("?page=2", emptyPeopleforceListingHTML).
+		routeErr("/careers/v/200-ops-manager", errors.New("connection reset by peer")).
+		route("/careers/v/100-brand-leader", peopleforceDetailHTML("Full-time", "Remote"))
+
+	jobs, err := NewPeopleForce(fake).Fetch(context.Background(), CompanyEntry{
+		Company: "Acme", Provider: "peopleforce", Board: "acme",
+	})
+	if err != nil {
+		t.Fatalf("Fetch should not abort the board on one unreadable detail: %v", err)
+	}
+	read := readPostings(jobs)
+	if len(read) != 1 || read[0].ExternalID != "100" {
+		t.Fatalf("read = %v, want only the posting whose detail answered", read)
+	}
+	markers := unreadableMarkers(jobs)
+	if len(markers) != 1 || markers[0].ExternalID != "200" {
+		t.Fatalf("unreadable markers = %v, want one for the posting whose detail did not", markers)
+	}
+	if markers[0].Company != "Acme" {
+		t.Errorf("marker Company = %q, want the ENTRY's employer", markers[0].Company)
+	}
+}
+
+// The other half of the distinction: 404 is the platform's own answer that the posting is gone,
+// so the crawl drops it rather than marking it unreadable.
+func TestPeopleForceGoneDetailDropsThePosting(t *testing.T) {
+	fake := (&routedHTTP{}).
+		route("?page=1", peopleforceListingHTML(
+			[2]string{"100-brand-leader", "Brand Leader"},
+			[2]string{"200-ops-manager", "Ops Manager"})).
+		route("?page=2", emptyPeopleforceListingHTML).
+		routeErr("/careers/v/200-ops-manager", &StatusError{Method: "GET", Code: 404, URL: "https://acme.peopleforce.io/careers/v/200-ops-manager"}).
+		route("/careers/v/100-brand-leader", peopleforceDetailHTML("Full-time", "Remote"))
+
+	jobs, err := NewPeopleForce(fake).Fetch(context.Background(), CompanyEntry{
+		Company: "Acme", Provider: "peopleforce", Board: "acme",
+	})
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	if len(jobs) != 1 || jobs[0].ExternalID != "100" {
+		t.Fatalf("got %v, want only the posting whose detail answered — the 404'd one dropped, not marked", jobs)
+	}
+}
+
+// A page whose every card is already-listed (e.g. a re-served page) must not end the walk early:
+// only a genuinely empty page proves the board's end. If the walk stopped on "no NEWLY-KEPT
+// cards" rather than "the raw page has no cards", it would end at page 2 and never reach page 3.
+func TestPeopleForceFetchReachesAPostingPastADuplicateOnlyPage(t *testing.T) {
+	fake := (&routedHTTP{}).
+		route("?page=1", peopleforceListingHTML([2]string{"100-brand-leader", "Brand Leader"})).
+		route("?page=2", peopleforceListingHTML([2]string{"100-brand-leader", "Brand Leader"})). // duplicate
+		route("?page=3", peopleforceListingHTML([2]string{"200-ops-manager", "Ops Manager"})).   // new
+		route("?page=4", emptyPeopleforceListingHTML).
+		route("/careers/v/100-brand-leader", peopleforceDetailHTML("Full-time", "Remote")).
+		route("/careers/v/200-ops-manager", peopleforceDetailHTML("Full-time", "Remote"))
+
+	jobs, err := NewPeopleForce(fake).Fetch(context.Background(), CompanyEntry{
+		Company: "Acme", Provider: "peopleforce", Board: "acme",
+	})
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	ids := map[string]bool{}
+	for _, j := range jobs {
+		ids[j.ExternalID] = true
+	}
+	if !ids["100"] || !ids["200"] {
+		t.Errorf("got job ids %v, want both 100 and 200 (the walk must not stop at the duplicate-only page 2)", ids)
+	}
+}
+
 func TestPeopleForceRegisteredInAll(t *testing.T) {
 	s, ok := All(nil)["peopleforce"]
 	if !ok {
@@ -187,5 +273,36 @@ func TestPeopleForceRegisteredInAll(t *testing.T) {
 	}
 	if !slices.Contains(FilterableProviders(), "peopleforce") {
 		t.Error("FilterableProviders() should include peopleforce (board-based)")
+	}
+}
+
+func TestPeopleForceRegisteredAsFullBoardListing(t *testing.T) {
+	if _, ok := NewPeopleForce(nil).(fullBoardListing); !ok {
+		t.Error("peopleforce should implement the fullBoardListing marker")
+	}
+	if !FullBoardListingProviders(All(nil))["peopleforce"] {
+		t.Error("FullBoardListingProviders(All(nil)) should include peopleforce")
+	}
+}
+
+// peopleforceEndlessFake serves a fresh job card on every page, so it never yields a genuinely
+// empty page — used to prove the page-cap ceiling fails loudly rather than succeeding partially.
+// Mirrors taleoEndlessFake / gustoEndlessFake.
+type peopleforceEndlessFake struct{ calls int }
+
+func (f *peopleforceEndlessFake) GetHTML(_ context.Context, _ string) (*html.Node, error) {
+	f.calls++
+	id := fmt.Sprintf("%d-endless-role", f.calls)
+	return html.Parse(strings.NewReader(peopleforceListingHTML([2]string{id, "Role"})))
+}
+
+func TestPeopleForceFetchFailsWhenListingExceedsThePageCap(t *testing.T) {
+	fake := &peopleforceEndlessFake{}
+	_, err := NewPeopleForce(fake).Fetch(context.Background(), CompanyEntry{Board: "acme"})
+	if err == nil {
+		t.Fatal("expected reaching the page cap to fail the Fetch")
+	}
+	if fake.calls != peopleforceMaxPages {
+		t.Errorf("got %d listing calls, want exactly %d (the cap, no more)", fake.calls, peopleforceMaxPages)
 	}
 }

@@ -50,6 +50,11 @@ func NewGusto(c gustoHTTP) Source { return gusto{http: c} }
 
 func (gusto) Provider() string { return "gusto" }
 
+// fullBoardListing: list proves completeness by paginating to a genuinely empty page, and treats
+// a page failure or reaching gustoMaxPages as a hard Fetch failure. See the fullBoardListing
+// interface (source.go) for the bar.
+func (gusto) fullBoardListing() {}
+
 const (
 	gustoBaseURL = "https://jobs.gusto.com"
 	// gustoMaxPages caps the per-board pagination. The listing serves 25 postings a page and
@@ -104,7 +109,8 @@ type gustoPosting struct {
 	// salary is the pay line as the board renders it ("$70,000 - $90,000 per year"), empty
 	// when the employer states no pay; applySalary is what turns it into the structured fields.
 	salary string
-	// employmentType is Gusto's own label ("Full time"), not yet mapped onto the vocabulary.
+	// employmentType is Gusto's own label ("Full time"); gustoEmploymentType maps it onto
+	// the freehire vocabulary.
 	employmentType string
 }
 
@@ -141,34 +147,38 @@ func (s gusto) FetchNew(ctx context.Context, e CompanyEntry, seen func(externalI
 	}), nil
 }
 
-// list walks a board's paginated listing and returns every posting it advertises. The FIRST page
-// failing is a board-level error; a later page failing ends the walk with what was gathered, so a
-// mid-listing hiccup costs a page rather than the board. It restates the shared crawlPagedLinks
-// loop because it needs each item's whole listing row — title, location, pay and employment type
-// — and not just its link.
+// list walks a board's paginated listing and returns every posting it advertises. It restates the
+// shared crawlPagedLinks loop because it needs each item's whole listing row — title, location,
+// pay and employment type — and not just its link. Every page failing, and reaching gustoMaxPages
+// without a genuinely empty page, are now hard Fetch failures rather than a partial success — the
+// empty page is the only proof of completeness this walk has. See the fullBoardListing interface
+// (source.go) for the bar.
 func (s gusto) list(ctx context.Context, e CompanyEntry) ([]gustoPosting, error) {
 	var out []gustoPosting
 	listed := make(map[string]bool)
+	done := false
 	for page := 1; page <= gustoMaxPages; page++ {
 		root, err := s.http.GetHTML(ctx, gustoBoardURL(e.Board, page))
 		if err != nil {
-			if page == 1 {
-				return nil, fmt.Errorf("gusto: listing board %s: %w", e.Board, err)
-			}
-			break // a later page failing just ends pagination; page 1's postings still ingest
+			return nil, fmt.Errorf("gusto: listing board %s page %d: %w", e.Board, page, err)
 		}
-		added := 0
-		for _, p := range gustoListing(root) {
+		cards := gustoListing(root)
+		for _, p := range cards {
 			if listed[p.id] {
 				continue
 			}
 			listed[p.id] = true
 			out = append(out, p)
-			added++
 		}
-		if added == 0 {
+		// The raw card count, not the count of newly-kept ones, proves a page empty: a page whose
+		// cards are all already-listed duplicates is not itself proof the board has no more pages.
+		if len(cards) == 0 {
+			done = true
 			break // an empty page: the listing is exhausted
 		}
+	}
+	if !done {
+		return nil, fmt.Errorf("gusto: listing board %s: reached the %d-page safety ceiling without finding the board's end", e.Board, gustoMaxPages)
 	}
 	return out, nil
 }

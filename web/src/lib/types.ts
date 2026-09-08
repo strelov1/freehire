@@ -1235,33 +1235,25 @@ export interface UserProfile {
   updated_at: string | null;
 }
 
-/** The three Talent Network visibility modes: hidden, discoverable under the candidate's
- *  own name, or discoverable with name and current employer masked. Mirrors the Postgres
- *  enum backing `users.talent_network_visibility` (see internal/handler/me_talent_network.go). */
-export type TalentNetworkVisibility = 'off' | 'public' | 'anonymous';
+/** Talent Network membership: in, or not. Two values, not three — `public` was retired
+ *  with the mode picker itself (migration 0148), because the product should answer how
+ *  much of a candidate to disclose rather than ask them. Mirrors the CHECK constraint on
+ *  `users.talent_network_visibility`. */
+export type TalentNetworkVisibility = 'off' | 'anonymous';
 
-/** The caller's own Talent Network setting. `talent_network_public_id` rides along even
- *  when visibility is "off", so the settings UI can preview the shareable URL before the
- *  candidate turns it on. */
+/** The caller's own Talent Network membership.
+ *
+ *  `talent_handle` is ABSENT until the first join: it is minted then and kept forever
+ *  after, so an empty one means "not a member yet", never "waiting for one". A surface
+ *  reading it must show no link rather than build one that would 404. */
 export interface TalentNetworkSetting {
   talent_network_visibility: TalentNetworkVisibility;
-  talent_network_public_id: string;
-}
-
-/** The public, unauthenticated Talent Network profile page's payload
- *  (`GET /talent-network/:publicID`, internal/handler/talent_network_profile.go). Mirrors
- *  UserProfile's split between facets and CV, but nests the CV under `cv` instead of
- *  flattening it — `Professional` already has its own `skills`, which would otherwise
- *  collide with the top-level facet of the same name. `full_name` is present only in
- *  "public" mode; the backend omits the key entirely in "anonymous" mode rather than
- *  sending an empty string, so there is nothing to accidentally render. Any current-role
- *  employer masking in `cv.experience` is applied server-side — this type does not
- *  distinguish it. */
-export interface TalentNetworkProfile {
-  full_name?: string;
-  specializations: string[];
-  skills: string[];
-  cv: Professional;
+  talent_handle?: string;
+  /** Whether a visitor can actually SEE them — not the same as membership. A candidate
+   *  who joins before uploading a CV is a member, holds a handle, and is still excluded
+   *  from the catalogue by the stamp gate, so their card 404s. Any surface that offers
+   *  "view your public profile" must read this and not `talent_network_visibility`. */
+  listed: boolean;
 }
 
 /** A notification subscription on a saved search. */
@@ -1579,4 +1571,165 @@ export interface ApiSuggestionPart {
    *  applied as the free-text query instead. */
   slug?: string;
   text: string;
+}
+
+/** One mentor as the PUBLIC routes return them — the directory row and the profile read
+ *  are the same wire struct (`mentorResponse` in internal/api/handler/mentorship.go).
+ *
+ *  Deliberately named, unlike a referral offer: a directory of faceless cards gives a
+ *  seeker nothing to choose between. There is no avatar yet, and the mentor-profile spec
+ *  argues why rather than leaving the requirement half-met.
+ *
+ *  `meeting_url` is absent here on purpose — it is a live room, so only a booked party
+ *  receives it, on their own booking. The owner's and moderator's routes add `status`,
+ *  `paused` and (for the owner alone) `meeting_url` to this same struct. */
+export interface Mentor {
+  slug: string;
+  name: string;
+  company_slug: string;
+  company_name: string;
+  headline: string;
+  bio: string;
+  topics: string[];
+  languages: string[];
+  /** The mentor's own IANA zone. What a VIEWER sees is decided per request by the slot
+   *  endpoint, which reports the zone it actually used — never assume this one. */
+  timezone: string;
+  /** What is being booked. An hour and twenty minutes are different offers, so this
+   *  belongs on the card and not only on the profile. */
+  session_minutes: number;
+  rating_count: number;
+  rating_avg: number;
+}
+
+/** One offerable hour, carrying three views of the same moment on purpose.
+ *
+ *  `starts_at`/`ends_at` are the absolute instant — what actually gets booked.
+ *  `local_start`/`local_end` are RFC 3339 in the VIEWER's zone — what a person reads.
+ *  `utc_offset` is the only thing telling apart the two slots that share a wall-clock
+ *  label on the autumn daylight-saving transition; render it, or one October evening
+ *  shows "02:00" twice with no way to choose between them.
+ *
+ *  Never re-derive the local fields from `starts_at` in the browser. The server already
+ *  did that arithmetic against its own zone database, and a second answer computed here
+ *  differs by exactly one hour twice a year — the kind of wrong that looks right. */
+export interface MentorSlot {
+  starts_at: string;
+  ends_at: string;
+  local_start: string;
+  local_end: string;
+  utc_offset: string;
+}
+
+/** The slot endpoint's answer. `timezone` is the zone the server ACTUALLY used, which may
+ *  not be the one asked for: an unrecognised name falls back to UTC. A client that assumes
+ *  its own request was honoured cannot tell a correct time from a wrong one. */
+export interface MentorSlots {
+  slots: MentorSlot[];
+  timezone: string;
+}
+
+/** One booked session, as a PARTY to it sees it.
+ *
+ *  Unlike a slot this carries only the absolute instants — there is no `local_start`, so
+ *  the viewer's zone is applied in the browser. That is not the trap the slot rule warns
+ *  about: an instant ending in `Z` is unambiguous, while a slot's label was already
+ *  resolved server-side and re-resolving it is what moves it.
+ *
+ *  `meeting_url` is present here and absent from the public profile: it is a live room,
+ *  and only the two people meeting in it have any business holding the address.
+ *  `seeker_email` reaches the MENTOR only — a seeker does not need their own back. */
+export interface MentorSession {
+  /** Random, not sequential: a booking is read by two accounts, and a countable id would
+   *  make any single authorisation slip enumerable. */
+  id: string;
+  mentor_slug: string;
+  headline: string;
+  starts_at: string;
+  ends_at: string;
+  status: string;
+  note: string;
+  meeting_url: string;
+  seeker_email?: string;
+  /** Ended and not cancelled — the state a review becomes possible in. Decided by the
+   *  server against one clock, not re-derived here. */
+  completed: boolean;
+}
+
+/** A party's sessions, split by the server against ONE clock for the whole list, so a
+ *  session starting mid-read cannot land in both halves or in neither. A cancelled
+ *  session is PAST whatever its start says: nobody is going to it. */
+export interface MentorSessions {
+  upcoming: MentorSession[];
+  past: MentorSession[];
+}
+
+/** One availability row. Exactly one of `weekday` and `date` is set — the schema enforces
+ *  it — so the pair is how a rule says which kind it is.
+ *
+ *  `weekday` is Go's `time.Weekday`: **0 is SUNDAY**, not Monday. That is the storage
+ *  order and it is not the order the calendar draws in; `weekdayOrder` maps between them.
+ *
+ *  `start`/`end` are `HH:MM`, and `24:00` is a valid end — it is how a mentor is available
+ *  until midnight without the row spilling onto the next date.
+ *
+ *  `closure` marks the trick a raw start/end cannot express: a dated row whose start
+ *  equals its end CLOSES that date, beating every other rule on it. Render it as "away",
+ *  never as "10:00–10:00". */
+export interface MentorAvailabilityRule {
+  /** What the delete route needs. A rule rendered without one can be shown and never
+   *  removed. */
+  id: number;
+  weekday?: number | null;
+  date?: string | null;
+  start: string;
+  end: string;
+  closure: boolean;
+}
+
+/** The mentor's own profile: the public shape plus what only its owner sees. */
+export interface OwnMentorProfile extends Mentor {
+  status: string;
+  paused: boolean;
+  meeting_url: string;
+  /** The rest of the session parameters, sent to the OWNER alone so the cabinet's
+   *  whole-object save re-submits what the mentor chose rather than the form's defaults.
+   *  Optional because nothing public carries them. */
+  buffer_before_minutes?: number;
+  buffer_after_minutes?: number;
+  notice_minutes?: number;
+  horizon_days?: number;
+}
+
+/** One profile awaiting a moderator. The moderator's view of a mentor — status and pause,
+ *  but no meeting link: deciding whether somebody may mentor does not require the address
+ *  of the room they meet in. */
+export interface PendingMentorProfile extends Mentor {
+  /** The numeric row id the decide route takes — not the public slug. */
+  id: number;
+  status: string;
+  paused: boolean;
+  /** Evidence for the human deciding: this account is already an approved referrer for
+   *  the same company. Corroboration, never a gate — an approved offer does not approve
+   *  a mentor profile, and the spec says so outright. */
+  has_approved_referral_offer: boolean;
+}
+
+/** What a mentor submits. Whole-object on both create and update: the endpoint takes the
+ *  same body either way, and a partial one would clear what it omits. */
+export interface MentorProfileInput {
+  company_slug: string;
+  slug: string;
+  name: string;
+  headline: string;
+  bio: string;
+  topics: string[];
+  languages: string[];
+  timezone: string;
+  session_minutes: number;
+  buffer_before_minutes: number;
+  buffer_after_minutes: number;
+  notice_minutes: number;
+  horizon_days: number;
+  meeting_url: string;
 }

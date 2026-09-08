@@ -145,6 +145,13 @@ var blocks = map[string][]string{
 		// whose digests are its most likely future reader, because it states what a
 		// candidate IS — engage is layer 7 and may import this, but not the reverse.
 		"survey",
+		// talentnetwork is the public catalogue of candidates who opted into being found:
+		// membership, the minted handle, the projection snapshot and the filters over it.
+		// It sits here and not in engage — which is where the recruiter-facing half will
+		// go — because what it publishes is a projection of the candidate's own CV, and
+		// candidate is the block that owns what a candidate is made of. engage is layer 7
+		// and may import this; the reverse would be the inversion the guard exists to stop.
+		"talentnetwork",
 	},
 	"job": {
 		"applydate", "collections", "ghost", "ghostreport", "job", "jobdedup",
@@ -194,7 +201,7 @@ var blocks = map[string][]string{
 	// billing would import a community integration — and the guard would say so.
 	"engage": {
 		"broadcast", "community", "companyfeedback", "discordlink", "emailnotify",
-		"mailpreview", "mentorship", "notify", "nudge", "onboarding", "pushnotify",
+		"linkedinauth", "mailpreview", "mentorship", "notify", "nudge", "onboarding", "pushnotify",
 		"referral", "reminder", "report", "socialdigest", "subscription",
 		"telegramnotify", "vote", "webhooknotify",
 	},

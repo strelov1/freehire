@@ -349,7 +349,11 @@ func stage2SystemPrompt(language string) string {
 	b.WriteString("- \"title_alignment\": does the candidate's current/target title match this role's title?\n")
 	b.WriteString("- \"experience_relevance\": how relevant is their domain and role-type experience?\n")
 	b.WriteString("- \"seniority_fit\": does their level match the role's seniority?\n")
-	b.WriteString("- \"skills_coverage\": consistent with the provided deterministic skills match.\n")
+	b.WriteString("- \"skills_coverage\": consistent with the provided deterministic skills match. ")
+	// The audit knew this and the recruiter did not, so the recruiter over-scored and the
+	// audit spent a whole model call putting it back. See evidenceStrengthRule.
+	b.WriteString(evidenceStrengthRule())
+	b.WriteString("\n")
 	b.WriteString("- \"company_context\": fit with the company's stage/industry (from the company info).\n")
 	b.WriteString("- \"location_fit\": can the candidate actually take the role given the job's location/work ")
 	b.WriteString("mode and their location preferences (accepted work modes, remote reach, base, relocation)? ")
@@ -377,11 +381,10 @@ func stage3SystemPrompt(language string) string {
 	b.WriteString("Return ONLY a JSON object in the SAME shape as the verdict you are given.\n\n")
 	b.WriteString("Challenge it against the CV evidence: lower any inflated dimension score, remove ")
 	b.WriteString("strengths the CV does not actually support, and surface gaps that were glossed over. ")
-	b.WriteString("For any requirement marked \"required\", treat weak evidence as thin support: a ")
-	b.WriteString("\"synonym-only\" match, or a \"covered\" match graded \"keyword\" strength (a bare ")
-	b.WriteString("mention rather than a metric-, scope-, or responsibility-backed one), is adjacent ")
-	b.WriteString("exposure, not direct ownership — it may earn partial credit but must not by itself ")
-	b.WriteString("sustain a high skills_coverage score. ")
+	// The same rule the recruiter now scores under. It stays here because the audit must
+	// still CHECK it, not because the audit is the only stage that knows it.
+	b.WriteString(evidenceStrengthRule())
+	b.WriteString(" ")
 	b.WriteString("Keep what is well-supported. Return the corrected verdict with the same keys ")
 	b.WriteString("(title_alignment, experience_relevance, seniority_fit, skills_coverage, ")
 	b.WriteString("company_context, location_fit, strengths, gaps, recommendation). ")

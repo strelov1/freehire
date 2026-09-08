@@ -26,6 +26,7 @@ import {
   RELOCATION_LABELS, AI_ARCHETYPE_LABELS, ROLE_TYPE_LABELS, titleCase,
 } from './labels';
 import { COLLECTIONS } from './collections';
+import { TIMEZONE_REGIONS } from './talentFacetModel';
 import { backerBadges } from './backers';
 import { api } from './api';
 
@@ -217,6 +218,24 @@ export function collapseCities(rows: { value: string; country: string }[]): Face
 // catalog (the skilltag dictionary is the source of truth). The fallback title-cases the
 // slug the way companyLabel does, so a value that outlived a dictionary edit still reads
 // as words rather than as data.
+/** Display label for a normalised city slug: `new-york` reads as `New York`.
+ *
+ *  Title-casing the slug rather than looking the city up: `users.resume_cities` stores
+ *  the normalisation, and the dictionary's own spellings (internal/dict/location's
+ *  CityMatch.Name) are reachable only through a search API keyed by query text, not by
+ *  slug. THE SEAM: a city whose real name is not its title-cased slug — 's-Hertogenbosch,
+ *  Rio de Janeiro — is spelled wrong here, and fixing it means exposing a slug lookup
+ *  from that dictionary rather than adding a second list of exceptions.
+ *
+ *  Worth having anyway: without it a card reads "berlin" beside the timezone's own
+ *  "Berlin", which looks like a bug in the half that is correct. */
+export function cityLabel(slug: string): string {
+  return slug
+    .split('-')
+    .map((part) => (part ? part.charAt(0).toUpperCase() + part.slice(1) : part))
+    .join(' ');
+}
+
 export function skillLabel(slug: string): string {
   return (SKILL_LABELS as Record<string, string>)[slug] ?? titleCase(slug.replace(/-/g, '_'));
 }
@@ -246,6 +265,18 @@ export function uniqueByValue(opts: FacetOption[]): FacetOption[] {
   return opts.filter((o) => (seen.has(o.value) ? false : seen.add(o.value)));
 }
 
+/** Read one value's count out of a distribution for DISPLAY.
+ *
+ *  A count arrives NEGATIVE when the endpoint holds a value's number back — the Talent
+ *  Network withholds counts below a small floor (internal/candidate/talentnetwork's
+ *  CountWithheld) so a single member cannot be identified by arithmetic across panes.
+ *  Undefined means "show the option, no number"; rendering the sentinel as 0 would instead
+ *  claim nobody carries a value the list is about to show somebody for. Endpoints that
+ *  withhold nothing never emit a negative, so this is inert for them. */
+export function reportedCount(n: number): number | undefined {
+  return n < 0 ? undefined : n;
+}
+
 /** Build select options for a dynamic facet from its live distribution (value →
  *  count) plus any already-selected values (so a selection absent from the current
  *  distribution stays listed and removable), labelled via dynamicLabel and sorted
@@ -254,7 +285,7 @@ export function uniqueByValue(opts: FacetOption[]): FacetOption[] {
 export function dynamicOptions(param: string, dist: Record<string, number>, selected: string[]): FacetOption[] {
   const keys = new Set<string>([...Object.keys(dist), ...selected]);
   return [...keys]
-    .map((value) => ({ value, label: dynamicLabel(param, value), count: dist[value] ?? 0 }))
+    .map((value) => ({ value, label: dynamicLabel(param, value), count: reportedCount(dist[value] ?? 0) }))
     .sort((a, b) => (b.count ?? 0) - (a.count ?? 0) || a.label.localeCompare(b.label));
 }
 
@@ -329,6 +360,13 @@ const EMPLOYMENT: FacetOption[] = options(EMPLOYMENT_TYPE_VALUES, EMPLOYMENT_LAB
 const RELOCATION: FacetOption[] = options(RELOCATION_VALUES, RELOCATION_LABELS);
 const ENGLISH: FacetOption[] = options(ENGLISH_LEVEL_VALUES, ENGLISH_LEVEL_LABELS);
 const CATEGORY: FacetOption[] = options(CATEGORY_VALUES, CATEGORY_LABELS);
+
+// IANA timezone REGIONS — the part before the slash. What a recruiter asking "can we
+// overlap for a call" means is a continent, not a city's zone; there are dozens of zones
+// per region. The list is the regions a candidate can actually be in: Antarctica and the
+// single-city oddities are left out, because a chip nobody will ever match is a chip in
+// the way of the ones they will.
+const TIMEZONE_REGION: FacetOption[] = TIMEZONE_REGIONS.map((r) => ({ value: r, label: r }));
 
 // The category facet options, exported for reuse outside the filter panel (the search
 // profile's specialization picker) so the same labels/order are shared, not duplicated.
@@ -563,6 +601,30 @@ const YC_BATCH: FacetOption[] = (() => {
     ['Winter', 'Spring', 'Summer', 'Fall'].map((s) => ({ value: `${s} ${y}`, label: `${s} ${y}` })),
   );
 })();
+/** The Talent Network catalogue's facets.
+ *
+ *  All include-only — the catalogue endpoint has no `_exclude` and no AND/OR mode — so
+ *  every entry sets `excludable: false` and none carries `hasAndOr`.
+ *
+ *  Skills and city are `dynamic`: their options come from the live facet distribution
+ *  (`/talent/facets`) rather than a static list, which is what makes them searchable and
+ *  what puts a count beside each value. A closed vocabulary offered as pills and an open
+ *  one offered as a searched select are not two styles of the same control — thousands of
+ *  skills as pills is the wrong control, and a skill offered without a count cannot be
+ *  told apart from one nobody carries.
+ *
+ *  `specializations` and `categories` share the category vocabulary and ask different
+ *  questions of it: what a candidate SAYS they want, and what their most recent title
+ *  resolves to. Both are selects rather than pills because 48 values is a wall. */
+export const TALENT_FACETS: FacetDef[] = [
+  { param: 'specializations', label: 'Open to', control: 'select', options: CATEGORY, excludable: false, placeholder: 'Search disciplines' },
+  { param: 'categories', label: 'Has worked in', control: 'select', options: CATEGORY, excludable: false, placeholder: 'Search disciplines' },
+  { param: 'seniorities', label: 'Grade', control: 'pills', options: SENIORITY, excludable: false },
+  { param: 'skills', label: 'Skills', control: 'select', dynamic: true, excludable: false, placeholder: 'Search skills', techIcons: true },
+  { param: 'tz', label: 'Timezone', control: 'pills', options: TIMEZONE_REGION, excludable: false },
+  { param: 'cities', label: 'City', control: 'select', dynamic: true, excludable: false, placeholder: 'Search cities' },
+];
+
 export const COMPANY_FACETS: FacetDef[] = [
   { param: 'collections', label: 'Collection', control: 'pills', options: COLLECTION, excludable: false },
   { param: 'regions', label: 'Region', control: 'pills', options: REGION, excludable: false },

@@ -4734,7 +4734,7 @@ curl -X POST "https://freehire.me/api/v1/referrals/offers/b71e…/decide" \
 
 ## Talent Network
 
-A candidate-controlled public profile page, shareable by URL. The visibility setting lives on `users`, distinct from `user_profiles`.
+A public, anonymised catalogue of candidates who opted into being found. Membership is a single toggle on `users`, distinct from `user_profiles`; a member is addressed by a minted handle, never by their account id or username. Every string a public response carries is a value a dictionary resolved, a number or a date — never text copied from a CV — so no name, employer, institution or free-text field appears anywhere in it.
 
 ### `GET /me/talent-network`
 
@@ -4742,63 +4742,147 @@ A candidate-controlled public profile page, shareable by URL. The visibility set
 
 Your current Talent Network visibility and shareable id.
 
-A caller who has never touched the setting reads `"off"` — the column default, not a sentinel. `talent_network_public_id` rides along even when visibility is off, so the client can render the shareable URL a candidate would get before they turn it on.
+A caller who has never touched the setting reads `"off"` — the column default, not a sentinel. `talent_handle` is absent until the first time they join: it is minted then, and kept forever after, so leaving and rejoining never changes the URL somebody already shared.
 
 ```bash
 curl "https://freehire.me/api/v1/me/talent-network" -H "Authorization: Bearer $FREEHIRE_API_KEY"
 ```
 
 ```json
-{ "data": { "talent_network_visibility": "public", "talent_network_public_id": "5b1e2b7a-9c3d-4e21-8f0a-1234567890ab" } }
+{ "data": { "talent_network_visibility": "anonymous", "talent_handle": "backend-7f2a" } }
 ```
 
 ### `PUT /me/talent-network`
 
 **Auth:** Session only
 
-Set your Talent Network visibility.
+Join or leave the Talent Network.
+
+Two states, not three: `public` was retired with the mode picker itself, and a request asking for it is a 400. Joining for the first time mints the handle the public catalogue addresses you by.
 
 **Body**
 
 | Name | Type | Required | Description |
 | --- | --- | --- | --- |
-| `visibility` | string | yes | One of `off`, `public`, `anonymous`. (e.g. `public`) |
+| `visibility` | string | yes | Either `off` or `anonymous`. (e.g. `anonymous`) |
 
 ```bash
 curl -X PUT "https://freehire.me/api/v1/me/talent-network" \
   -H 'Content-Type: application/json' -b cookies.txt \
-  -d '{"visibility":"public"}'
+  -d '{"visibility":"anonymous"}'
 ```
 
 ```json
-{ "data": { "talent_network_visibility": "public", "talent_network_public_id": "5b1e2b7a-9c3d-4e21-8f0a-1234567890ab" } }
+{ "data": { "talent_network_visibility": "anonymous", "talent_handle": "backend-7f2a" } }
 ```
 
-### `GET /talent-network/{publicID}`
+### `GET /talent`
 
 **Auth:** Public
 
-The public, shareable Talent Network profile page.
+The public catalogue of members, filtered and paged.
 
-A hidden (`off`) profile and a nonexistent id answer an identical 404 — the route never lets a caller distinguish the two. `full_name` is present only in `public` mode; `anonymous` omits it entirely.
+Every filter takes values from a closed vocabulary or a number; there is no free-text search, because a card carries no free text to search. Values within one filter are OR, different filters narrow together, and an absent filter is identical to an empty one. A parameter this endpoint does not read — including one it recognises but cannot parse, like `min_years=lots` — is named in `meta.ignored_params` rather than silently widening the answer. Rate-limited by IP on its own budget.
 
-**Path parameters**
+**Query parameters**
 
 | Name | Type | Required | Description |
 | --- | --- | --- | --- |
-| `publicID` | string (uuid) | yes | The candidate’s `talent_network_public_id`. (e.g. `5b1e2b7a-9c3d-4e21-8f0a-1234567890ab`) |
+| `categories` | string | no | Comma-separated role categories. (e.g. `backend,devops`) |
+| `seniorities` | string | no | Comma-separated seniority levels. (e.g. `senior`) |
+| `skills` | string | no | Comma-separated canonical skills. (e.g. `go,postgresql`) |
+| `tz` | string | no | Comma-separated IANA timezone regions. A member with no timezone is excluded when this is set. (e.g. `Europe`) |
+| `cities` | string | no | Comma-separated normalised cities. (e.g. `berlin`) |
+| `specializations` | string | no | Comma-separated curated specialisations. (e.g. `platform`) |
+| `min_years` | integer | no | Least total years of experience. (e.g. `5`) |
+| `limit` | integer | no | Page size, 1–100. Defaults to 24. (e.g. `24`) |
+| `offset` | integer | no | Rows to skip. (e.g. `0`) |
 
 ```bash
-curl "https://freehire.me/api/v1/talent-network/5b1e2b7a-9c3d-4e21-8f0a-1234567890ab"
+curl "https://freehire.me/api/v1/talent?categories=backend&min_years=5"
+```
+
+```json
+{
+  "data": [
+    {
+      "handle": "backend-7f2a",
+      "card": {
+        "seniority": "senior",
+        "category": "backend",
+        "total_years": 8,
+        "skills": ["go", "postgresql"],
+        "roles": [{ "seniority": "senior", "category": "backend", "start": { "year": 2024 }, "current": true, "stack": ["go"] }]
+      },
+      "timezone": "Europe/Berlin",
+      "timezone_region": "Europe",
+      "cities": ["berlin"],
+      "specializations": ["platform"],
+      "updated_at": "2026-09-01T12:00:00Z"
+    }
+  ],
+  "meta": { "total": 1, "limit": 24, "offset": 0 }
+}
+```
+
+### `GET /talent/facets`
+
+**Auth:** Public
+
+How many members stand behind each filter value.
+
+Takes the same filters as the list and answers with the count of members behind every value of every facet, plus the total behind the filter itself. Same shape as the job-search facet endpoint, so one control renders either.
+
+Each facet is counted with its OWN selection removed, while every other filter still applies — otherwise picking one skill makes every other skill read zero and the control silently becomes single-select.
+
+A value nobody carries is absent rather than reported as zero. A value carried by fewer members than the floor is offered with its number withheld: the option stays usable, and the number does not become a way to name somebody. Counts describe the filter you sent and never the whole membership.
+
+```bash
+curl "https://freehire.me/api/v1/talent/facets?categories=backend"
 ```
 
 ```json
 {
   "data": {
-    "full_name": "Jane Doe",
-    "specializations": ["backend"],
-    "skills": ["go", "postgresql"],
-    "cv": { "...": "..." }
+    "total": 3,
+    "facets": {
+      "categories": { "backend": 3 },
+      "skills": { "go": 3, "kubernetes": 2, "postgresql": 0 },
+      "tz": { "Europe": 2 }
+    },
+    "stats": {}
+  }
+}
+```
+
+### `GET /talent/{handle}`
+
+**Auth:** Public
+
+One member’s public card.
+
+Four ways of being absent — a member who left, one whose CV extract has gone stale, a handle nobody holds, and a string that could not be a handle — all answer the same 404, so the route cannot be used to ask whether an account exists. An account’s `username` is not an address here. Membership is re-read from the database on every request, so leaving takes effect immediately rather than when a cache expires.
+
+**Path parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `handle` | string | yes | The member’s minted catalogue handle. (e.g. `backend-7f2a`) |
+
+```bash
+curl "https://freehire.me/api/v1/talent/backend-7f2a"
+```
+
+```json
+{
+  "data": {
+    "handle": "backend-7f2a",
+    "card": { "seniority": "senior", "category": "backend", "total_years": 8, "skills": ["go"], "roles": [] },
+    "timezone": "Europe/Berlin",
+    "timezone_region": "Europe",
+    "cities": ["berlin"],
+    "specializations": [],
+    "updated_at": "2026-09-01T12:00:00Z"
   }
 }
 ```

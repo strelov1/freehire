@@ -29,7 +29,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/strelov1/freehire/internal/engage/linkedinauth"
 	"github.com/strelov1/freehire/internal/engage/socialdigest"
+	"github.com/strelov1/freehire/internal/platform/config"
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/platform/worker"
 )
@@ -60,7 +62,10 @@ func run() int {
 	}
 	defer cleanup()
 
-	publishers := configuredPublishers(cfg.DiscordDigestWebhookURL, cfg.FrontendOrigin)
+	// The LinkedIn channel reads its credential from the database on every publish, so the
+	// token store is built from the pool this run already holds. A renewal that landed an hour
+	// ago is therefore picked up without a restart.
+	publishers := configuredPublishers(cfg, linkedinauth.NewPostgresStore(db.New(pool)))
 	if len(publishers) == 0 {
 		// Not a failure. A deployment with no channel configured is a deployment that
 		// has not turned this on, and it should look like nothing rather than like a
@@ -132,10 +137,20 @@ func parseDay(s string) (time.Time, error) {
 // configuredPublishers builds one publisher per configured channel. A channel whose
 // credential is absent is simply not in the list — there is no "disabled" state to
 // represent, and no error to report for a feature nobody turned on.
-func configuredPublishers(discordWebhook, origin string) []socialdigest.Publisher {
+//
+// The two channels answer "am I configured?" differently, and the difference is the shape of
+// their credentials. Discord's is a static webhook URL, so its presence is the whole answer.
+// LinkedIn's is an OAuth application whose access token EXPIRES and lives in the database, so
+// configuration means the application and the company page — never the token. Requiring a
+// stored token here would silently drop the channel from the run that was supposed to report
+// it needed signing in.
+func configuredPublishers(cfg config.Settings, tokens socialdigest.TokenSource) []socialdigest.Publisher {
 	var out []socialdigest.Publisher
-	if discordWebhook != "" {
-		out = append(out, socialdigest.NewDiscordPublisher(discordWebhook, origin))
+	if cfg.DiscordDigestWebhookURL != "" {
+		out = append(out, socialdigest.NewDiscordPublisher(cfg.DiscordDigestWebhookURL, cfg.FrontendOrigin))
+	}
+	if cfg.LinkedInDigestConfigured() && tokens != nil {
+		out = append(out, socialdigest.NewLinkedInPublisher(tokens, cfg.LinkedInOrganizationURN(), cfg.FrontendOrigin))
 	}
 	return out
 }

@@ -1,0 +1,95 @@
+<script lang="ts">
+  import { Radar } from '@lucide/svelte';
+  import { resolve } from '$app/paths';
+  import { api } from '$lib/api';
+  import { currentUser } from '$lib/auth.svelte';
+  import type { TalentNetworkVisibility } from '$lib/types';
+  import { Button, Card } from '$lib/ui';
+
+  // The invitation into the Talent Network, on the profile page.
+  //
+  // It is here because this is where a candidate finishes describing themselves, which is
+  // the moment "be found without applying" is worth offering. The nav entry is the other
+  // way in; the feature previously shipped with neither, which is indistinguishable from
+  // not having shipped.
+  //
+  // Read-only: it states where the candidate stands and links to the control. Joining is
+  // a decision, and a decision belongs on the page that explains what it publishes.
+
+  // Hidden entirely outside the beta group, not shown-and-disabled: an invitation into
+  // something you cannot join is worse than no invitation. The real gate is the server's
+  // refusal of the join; this only keeps the offer honest.
+  const beta = $derived(currentUser()?.beta_tester ?? false);
+
+  let status = $state<'loading' | 'error' | 'ready'>('loading');
+  let visibility = $state<TalentNetworkVisibility>('off');
+  let handle = $state('');
+  // See the settings page: membership does not mean a visitor can see them.
+  let listed = $state(false);
+
+  const isMember = $derived(visibility !== 'off');
+
+  $effect(() => {
+    if (!beta) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const setting = await api.getTalentNetwork();
+        if (cancelled) return;
+        visibility = setting.talent_network_visibility;
+        handle = setting.talent_handle ?? '';
+        listed = setting.listed;
+        status = 'ready';
+      } catch {
+        // A failed read hides the block rather than showing an error. It is an
+        // invitation, not something the page owes the candidate — a red box here would
+        // be noise on a page they came to for something else.
+        if (cancelled) return;
+        status = 'error';
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  });
+</script>
+
+{#if beta && status === 'ready'}
+  <Card class="flex flex-wrap items-center justify-between gap-4 p-5">
+    <div class="flex min-w-0 items-start gap-3">
+      <Radar class="mt-0.5 size-5 shrink-0 text-muted-foreground" aria-hidden="true" />
+      <div class="flex min-w-0 flex-col gap-0.5">
+        <span class="text-sm font-medium text-foreground">
+          {isMember ? "You're in the Talent Network" : 'Get found without applying'}
+        </span>
+        <span class="text-sm text-muted-foreground">
+          {#if !isMember}
+            Appear in a public catalogue — your skills and experience, never your name,
+            employer or contacts.
+          {:else if listed}
+            Your anonymous profile is in the public catalogue.
+          {:else}
+            You're in, but not shown yet — your profile needs a CV we have finished
+            reading.
+          {/if}
+        </span>
+      </div>
+    </div>
+
+    <div class="flex shrink-0 gap-2">
+      {#if isMember && listed && handle}
+        <Button
+          variant="ghost"
+          href={resolve('/talent/[handle]', { handle })}
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          View
+        </Button>
+      {/if}
+      <Button variant={isMember ? 'secondary' : 'primary'} href={resolve('/my/talent-network')}>
+        {isMember ? 'Manage' : 'Join'}
+      </Button>
+    </div>
+  </Card>
+{/if}
