@@ -50,3 +50,15 @@ overrides:
   # actually reachable here, but there's no reason to keep a flagged version
   # around when the override costs nothing.
   fflate@<0.7.5: 0.7.5
+  # SNYK-JS-AI-16734889: the `ai` SDK's provider fetch path is vulnerable to
+  # SSRF. Reached transitively via @scalar/api-reference's bundled "Ask AI"
+  # feature (@scalar/agent-chat pins an exact "6.0.33", not a range) — a
+  # feature this app never configures a backend for and never exposes, but
+  # the vulnerable code still ships in the client bundle regardless.
+  ai@<6.0.203: 6.0.203
+  # SNYK-JS-AISDKPROVIDERUTILS-16734888 (SSRF) and
+  # SNYK-JS-AISDKPROVIDERUTILS-16735288 (unbounded resource allocation), both
+  # in @ai-sdk/provider-utils, reached the same way via @scalar/agent-chat's
+  # exact "@ai-sdk/vue": "3.0.33" pin. 4.0.33 is the lowest version fixing
+  # both (4.0.29 and 4.0.33 respectively).
+  '@ai-sdk/provider-utils@<4.0.33': 4.0.33
