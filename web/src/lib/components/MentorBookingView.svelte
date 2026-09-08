@@ -37,13 +37,24 @@
   let loading = $state(true);
   let failed = $state(false);
 
-  // The URL is the state, exactly as cal.com does it: ?month, ?date and ?slot. That is what
-  // survives the sign-in redirect a signed-out seeker is about to take — a slot held only in
-  // this tab's memory does not, and recovering it from sessionStorage is a second mechanism
-  // to debug on somebody else's browser.
-  const month = $derived(page.url.searchParams.get('month') || monthOf(todayIn(zone)));
-  const selectedDay = $derived(page.url.searchParams.get('date') ?? '');
-  const selectedSlot = $derived(page.url.searchParams.get('slot') ?? '');
+  // ?month, ?date and ?slot, exactly as cal.com does it. That is what survives the sign-in
+  // redirect a signed-out seeker is about to take — a slot held only in this tab's memory
+  // does not, and recovering it from sessionStorage is a second mechanism to debug on
+  // somebody else's browser.
+  //
+  // But the selection is held HERE and only mirrored to the address bar, rather than being
+  // read back out of it. `page.url` lags a shallow `replaceState` (urlSynced.svelte.ts
+  // records the same thing), so deriving from it means the address updates and the screen
+  // does not — the control ends up describing a day the page is not showing.
+  let selection = $state({
+    month: page.url.searchParams.get('month') ?? '',
+    date: page.url.searchParams.get('date') ?? '',
+    slot: page.url.searchParams.get('slot') ?? '',
+  });
+
+  const month = $derived(selection.month || monthOf(todayIn(zone)));
+  const selectedDay = $derived(selection.date);
+  const selectedSlot = $derived(selection.slot);
 
   const byDay = $derived(groupSlotsByLocalDay(slots));
   const open = $derived(daysWithSlots(slots));
@@ -57,8 +68,13 @@
   //
   // Only ever called from an event handler. In `onMount` this throws — and only in a
   // production build, where the explanatory message is compiled out.
-  function setParams(next: Record<string, string | null>) {
-    const query = withSearchParams(page.url.searchParams, next);
+  function setParams(next: { month?: string; date?: string | null; slot?: string | null }) {
+    selection = {
+      month: next.month ?? selection.month,
+      date: next.date === undefined ? selection.date : (next.date ?? ''),
+      slot: next.slot === undefined ? selection.slot : (next.slot ?? ''),
+    };
+    const query = withSearchParams(page.url.searchParams, selection);
     // eslint-disable-next-line svelte/no-navigation-without-resolve -- in-place query write to the current pathname; there is no route to resolve
     replaceState(page.url.pathname + (query ? `?${query}` : ''), {});
   }
@@ -69,6 +85,17 @@
   const pickSlot = (slot: MentorSlot) => setParams({ slot: slot.starts_at });
   const stepMonth = (delta: number) =>
     setParams({ month: addMonths(month, delta), date: null, slot: null });
+
+  // Browser back/forward over our own shallow entries. Read the address bar rather than
+  // `page.url`, which lags exactly here — the same reason urlSynced.svelte.ts does.
+  function reseedFromAddressBar() {
+    const params = new URLSearchParams(location.search);
+    selection = {
+      month: params.get('month') ?? '',
+      date: params.get('date') ?? '',
+      slot: params.get('slot') ?? '',
+    };
+  }
 
   let inflight: AbortController | null = null;
 
@@ -112,9 +139,11 @@
       if (document.visibilityState === 'visible') void load(slotWindowForMonth(month));
     };
     document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('popstate', reseedFromAddressBar);
     return () => {
       clearInterval(timer);
       document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('popstate', reseedFromAddressBar);
       inflight?.abort();
     };
   });
