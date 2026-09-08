@@ -1,7 +1,11 @@
 package handler
 
 import (
+	"encoding/json"
+	"errors"
+	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -191,6 +195,110 @@ func (p bakeoffPrices) cost(model string, t bakeoffTally) bakeoffCost {
 		float64(t.Output)*rates.Output) / perMillion
 
 	return bakeoffCost{Known: true, USD: usd, Floor: t.RoundsWithoutUsage > 0}
+}
+
+// bakeoffPriceTable is a dated capture of the gateway's own model catalogue.
+//
+// The date is not decoration. A price is only true on a day, and a report that cannot say
+// when its prices were read cannot be told from one read this morning. Prices are read
+// from the catalogue and never written by hand for the reason this table's first capture
+// demonstrated: the catalogue quoted deepseek-v4-flash-0731 at $0.14/$0.28 per million
+// while every secondhand summary of it said $0.05/$0.16. A hard-coded figure would have
+// been wrong on the day it was typed and silent about it ever after.
+type bakeoffPriceTable struct {
+	Captured string
+	Source   string
+	Rates    bakeoffPrices
+}
+
+// bakeoffPriceFixture is the committed capture. Refresh it — and only then re-read a
+// report's figures — with:
+//
+//	curl -sS 'https://openrouter.ai/api/v1/models' | jq --arg d "$(date -u +%Y-%m-%d)" '{
+//	  captured: $d,
+//	  source: "https://openrouter.ai/api/v1/models",
+//	  data: [ .data[] | select(.id | IN($ARGS.positional[])) | {id, name, context_length, pricing} ]
+//	}' --args <model-id>... > internal/api/handler/testdata/openrouter-prices.json
+//
+// It is trimmed to the candidates on purpose: the whole catalogue is hundreds of models
+// whose churn would land in every diff, and a model absent from the table is already
+// reported with an unknown cost rather than a wrong one.
+const bakeoffPriceFixture = "testdata/openrouter-prices.json"
+
+// catalogueCapture is the wire shape of the committed fixture: the gateway's own model
+// entries, unaltered, wrapped in the two facts the gateway does not supply — when they
+// were read and from where.
+type catalogueCapture struct {
+	Captured string `json:"captured"`
+	Source   string `json:"source"`
+	Data     []struct {
+		ID      string `json:"id"`
+		Pricing struct {
+			// The catalogue quotes dollars per TOKEN, as strings. A string is not
+			// JSON-number sloppiness: these are values like 0.000000028, and reading
+			// them as text is how the exact quote survives to be parsed once, here.
+			Prompt     string `json:"prompt"`
+			Completion string `json:"completion"`
+			// InputCacheRead is a pointer because its ABSENCE is the fact that matters:
+			// a provider quoting no cache rate and one quoting zero are different, and
+			// only the second means a cached token is free.
+			InputCacheRead *string `json:"input_cache_read"`
+		} `json:"pricing"`
+	} `json:"data"`
+}
+
+// parseBakeoffPrices reads a capture into the per-million rates everything downstream uses.
+//
+// It refuses rather than degrades on three shapes, all of which would otherwise reach a
+// report looking like an answer: a capture naming no model (a failed capture, not an empty
+// catalogue — the rule cmd/build-suggestions follows when it will not swap in an empty
+// dictionary), a capture with no date, and a rate that will not parse. The last is named
+// rather than skipped: a model dropped from the table is indistinguishable downstream from
+// one the catalogue never listed, and would be reported with an unknown cost — which hides
+// the typo instead of showing it.
+func parseBakeoffPrices(raw []byte) (bakeoffPriceTable, error) {
+	var capture catalogueCapture
+	if err := json.Unmarshal(raw, &capture); err != nil {
+		return bakeoffPriceTable{}, fmt.Errorf("price capture: %w", err)
+	}
+	if capture.Captured == "" {
+		return bakeoffPriceTable{}, errors.New("price capture: no capture date, so its age cannot be reported")
+	}
+	if len(capture.Data) == 0 {
+		return bakeoffPriceTable{}, errors.New("price capture: names no model, which is a failed capture rather than an empty catalogue")
+	}
+
+	rates := make(bakeoffPrices, len(capture.Data))
+	for _, m := range capture.Data {
+		in, err := perMillion(m.Pricing.Prompt)
+		if err != nil {
+			return bakeoffPriceTable{}, fmt.Errorf("price capture: %s prompt rate: %w", m.ID, err)
+		}
+		out, err := perMillion(m.Pricing.Completion)
+		if err != nil {
+			return bakeoffPriceTable{}, fmt.Errorf("price capture: %s completion rate: %w", m.ID, err)
+		}
+		r := bakeoffRates{Input: in, Output: out}
+		if m.Pricing.InputCacheRead != nil {
+			cache, err := perMillion(*m.Pricing.InputCacheRead)
+			if err != nil {
+				return bakeoffPriceTable{}, fmt.Errorf("price capture: %s cache-read rate: %w", m.ID, err)
+			}
+			r.CacheRead = &cache
+		}
+		rates[m.ID] = r
+	}
+
+	return bakeoffPriceTable{Captured: capture.Captured, Source: capture.Source, Rates: rates}, nil
+}
+
+// perMillion turns the catalogue's dollars-per-token string into dollars per million.
+func perMillion(quoted string) (float64, error) {
+	v, err := strconv.ParseFloat(strings.TrimSpace(quoted), 64)
+	if err != nil {
+		return 0, fmt.Errorf("%q is not a rate", quoted)
+	}
+	return v * 1_000_000, nil
 }
 
 // bakeoffRow is one (model, case) result: what the run cost, and what it produced.

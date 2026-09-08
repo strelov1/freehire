@@ -29,10 +29,10 @@
 
 ## 3. The price table
 
-- [ ] 3.1 Add the generator that reads the gateway's model catalogue and writes the price
+- [x] 3.1 Add the generator that reads the gateway's model catalogue and writes the price
       table with its capture date. Unit test the parse against a recorded catalogue
       fixture, including a model with no cache-read price.
-- [ ] 3.2 Commit the generated table and document how to refresh it.
+- [x] 3.2 Commit the generated table and document how to refresh it.
 
 ## 4. Fixtures
 

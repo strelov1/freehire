@@ -2,6 +2,8 @@ package handler
 
 import (
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -250,6 +252,89 @@ func TestBakeoffRankingPutsFailedRunsLastWithoutScoringThemZero(t *testing.T) {
 	if rows[0].Model != "poor" || rows[1].Model != "failed" {
 		t.Errorf("order = [%s %s], want [poor failed]", rows[0].Model, rows[1].Model)
 	}
+}
+
+// The catalogue quotes dollars per TOKEN in strings; everything downstream reasons in
+// dollars per million, because that is the unit a person compares models in.
+func TestParseBakeoffPricesConvertsPerTokenStringsToPerMillion(t *testing.T) {
+	table := mustParsePrices(t)
+
+	got, ok := table.Rates["deepseek/deepseek-v4-flash-0731"]
+	if !ok {
+		t.Fatalf("model missing from the parsed table: %v", table.Rates)
+	}
+	nearly(t, got.Input, 0.14, "input per million")
+	nearly(t, got.Output, 0.28, "output per million")
+	if got.CacheRead == nil {
+		t.Fatal("cache-read rate absent for a model the catalogue prices")
+	}
+	nearly(t, *got.CacheRead, 0.028, "cache read per million")
+}
+
+// The distinction the whole price table turns on, and the fixture holds both halves of it:
+// a free model's input really is zero, and its cache-read rate is genuinely unquoted. A
+// parser that defaulted the missing one to zero could not tell them apart, and would price
+// a cached token at nothing for every provider that offers no discount.
+func TestParseBakeoffPricesKeepsAnUnquotedCacheRateAbsentNotZero(t *testing.T) {
+	got := mustParsePrices(t).Rates["google/gemma-4-31b-it:free"]
+
+	if got.Input != 0 || got.Output != 0 {
+		t.Errorf("a free model's quoted zeros were lost: %+v", got)
+	}
+	if got.CacheRead != nil {
+		t.Errorf("CacheRead = %v, want nil — the catalogue quotes none", *got.CacheRead)
+	}
+}
+
+// The capture date travels with the table because a price is only true on a day. A report
+// that cannot say when its prices were read cannot be told from one read this morning.
+func TestParseBakeoffPricesCarriesTheCaptureDate(t *testing.T) {
+	if d := mustParsePrices(t).Captured; d == "" {
+		t.Error("the parsed table carries no capture date")
+	}
+}
+
+// A capture naming no model is a failed capture, not an empty catalogue — the same rule
+// cmd/build-suggestions follows when it refuses to swap in an empty dictionary.
+func TestParseBakeoffPricesRefusesACaptureWithNoModels(t *testing.T) {
+	if _, err := parseBakeoffPrices([]byte(`{"captured":"2026-09-08","data":[]}`)); err == nil {
+		t.Error("an empty capture parsed cleanly")
+	}
+}
+
+// A table whose age is unknown would be reported as though it were current.
+func TestParseBakeoffPricesRefusesACaptureWithNoDate(t *testing.T) {
+	raw := []byte(`{"data":[{"id":"m","pricing":{"prompt":"0.000001","completion":"0.000002"}}]}`)
+	if _, err := parseBakeoffPrices(raw); err == nil {
+		t.Error("a capture with no date parsed cleanly")
+	}
+}
+
+// A price that does not parse is named rather than skipped: a model silently dropped from
+// the table reads downstream as one the catalogue never listed, and is reported with an
+// unknown cost instead of the wrong one — which hides the typo rather than showing it.
+func TestParseBakeoffPricesNamesTheModelWhoseRateWillNotParse(t *testing.T) {
+	raw := []byte(`{"captured":"2026-09-08","data":[{"id":"broken/model","pricing":{"prompt":"tuppence","completion":"0.000002"}}]}`)
+	_, err := parseBakeoffPrices(raw)
+	if err == nil {
+		t.Fatal("an unparseable rate was accepted")
+	}
+	if !strings.Contains(err.Error(), "broken/model") {
+		t.Errorf("error %q does not name the offending model", err)
+	}
+}
+
+func mustParsePrices(t *testing.T) bakeoffPriceTable {
+	t.Helper()
+	raw, err := os.ReadFile(filepath.FromSlash(bakeoffPriceFixture))
+	if err != nil {
+		t.Fatalf("reading the price fixture: %v", err)
+	}
+	table, err := parseBakeoffPrices(raw)
+	if err != nil {
+		t.Fatalf("parseBakeoffPrices: %v", err)
+	}
+	return table
 }
 
 // The prefixes the classifier keys on belong to internal/ai/assistant, not here. Asserting
