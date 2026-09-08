@@ -36,7 +36,6 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 	"github.com/tmc/langchaingo/llms"
-	"github.com/tmc/langchaingo/llms/openai"
 
 	"github.com/strelov1/freehire/internal/ai/assistant"
 	"github.com/strelov1/freehire/internal/candidate/atscheck"
@@ -92,17 +91,6 @@ func (m *countingModel) Chat(ctx context.Context, msgs []llms.MessageContent, to
 	return choice, err
 }
 
-// pinnedFitModel is the fit chain's model, carrying the id it was built for.
-//
-// The pin is the point. Swapping the fit model alongside the turn model would measure two
-// models at once and attribute the difference to one, so the bake-off asserts before every
-// pass that this is still the model LLM_MODEL named — which is what fails if a later edit
-// moves the construction inside the candidate loop.
-type pinnedFitModel struct {
-	llms.Model
-	id string
-}
-
 // bakeoffGateway builds one turn client against the configured gateway, for the named model.
 // *llm.Client is what assistant.Model wants, so this is the value the runner drives.
 func bakeoffGateway(t *testing.T, model string) (*llm.Client, func()) {
@@ -128,27 +116,6 @@ func bakeoffSettings(t *testing.T, model string) llm.Settings {
 		t.Skip("LLM_BASE_URL/LLM_API_KEY/LLM_MODEL not set")
 	}
 	return s
-}
-
-// bakeoffFitModel builds the raw langchaingo model the harness wraps for the fit chain.
-//
-// A raw model rather than an *llm.Client because newAutopilotHarness takes an llms.Model and
-// wraps it in llm.NewWithModel itself — which lands on llm.DefaultTimeout, the same 90s per
-// stage matchAnalysisLLMTimeout gives the chain in production. The bake-off's fit analysis
-// therefore runs under the deadline the product runs it under, which is the only version of
-// it worth measuring against.
-func bakeoffFitModel(t *testing.T, model string) llms.Model {
-	t.Helper()
-	s := bakeoffSettings(t, model)
-	m, err := openai.New(
-		openai.WithBaseURL(s.BaseURL),
-		openai.WithToken(s.APIKey),
-		openai.WithModel(s.Model),
-	)
-	if err != nil {
-		t.Fatalf("fit model %q: %v", model, err)
-	}
-	return m
 }
 
 // bakeoffCandidates reads the models to compare. Absent, the bake-off skips rather than
@@ -379,18 +346,27 @@ func TestBakeoffRunsEveryCandidateOverEveryCase(t *testing.T) {
 	}
 
 	// The fit model is built ONCE, outside the candidate loop, and pinned.
+	// Built through llm.NewClient, never through the harness's plain wrapper: the wrapper
+	// installs no HTTP transport, and `reasoning_effort` is written by one — so Stage 1's
+	// llm.ReasoningNone is silently dropped and the stage blows its deadline on every
+	// analysis. See withFitClient.
+	//
+	// WithTimeout matches what production gives the chain, so the analysis the bake-off runs
+	// against is the one the product runs.
 	fitID := os.Getenv("LLM_MODEL")
-	fitM := &pinnedFitModel{Model: bakeoffFitModel(t, fitID), id: fitID}
+	fitBase, flushFit := bakeoffGateway(t, fitID)
+	defer flushFit()
+	fitClient := fitBase.WithTimeout(matchAnalysisLLMTimeout)
 
 	var rows []bakeoffRow
 	for _, model := range candidates {
 		// The assertion task 5.2 asks for, made where it can actually fail: if a later edit
 		// rebinds the fit chain to the candidate, this is what stops the run rather than
 		// letting it publish two models measured as one.
-		if fitM.id != fitID {
-			t.Fatalf("the fit model moved to %q while measuring %q; only the turn model may vary", fitM.id, model)
+		if got := fitClient.ModelID(); got != fitID {
+			t.Fatalf("the fit model moved to %q while measuring %q; only the turn model may vary", got, model)
 		}
-		rows = append(rows, runBakeoffPass(t, model, set, profile, prices, fitM, renderer, extract)...)
+		rows = append(rows, runBakeoffPass(t, model, set, profile, prices, fitClient, renderer, extract)...)
 	}
 
 	rankBakeoffRows(rows)
@@ -426,7 +402,7 @@ func runBakeoffPass(
 	set bakeoffCaseSet,
 	profile bakeoffProfile,
 	prices bakeoffPriceTable,
-	fitM *pinnedFitModel,
+	fitClient *llm.Client,
 	renderer cv.Renderer,
 	extract func([]byte) (string, error),
 ) []bakeoffRow {
@@ -447,8 +423,8 @@ func runBakeoffPass(
 		// The tally is per RUN, and the model wrapper closes over it, so the harness is
 		// rebuilt per case rather than reused.
 		tally := &bakeoffTally{}
-		h, app := newAutopilotHarness(t, pool, iss, &countingModel{inner: turnClient, tally: tally}, fitM,
-			withRenderedCVScoring(renderer, extract), withTrackingTools(pool, db.New(pool)))
+		h, app := newAutopilotHarness(t, pool, iss, &countingModel{inner: turnClient, tally: tally}, nil,
+			withFitClient(fitClient), withRenderedCVScoring(renderer, extract), withTrackingTools(pool, db.New(pool)))
 
 		sess, cvID, _ := seedBakeoffCase(t, pool, h, userID, c, string(profile.CV))
 
