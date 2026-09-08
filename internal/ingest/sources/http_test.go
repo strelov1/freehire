@@ -277,6 +277,83 @@ func TestClientRetriesOn429ThenSucceeds(t *testing.T) {
 	}
 }
 
+func TestClientRetriesOnEmptyBodyThenSucceeds(t *testing.T) {
+	// A 2xx with a genuinely empty body decodes as io.EOF — the same shape a dropped
+	// connection produces — so it must be retried like a 5xx rather than failing outright.
+	var attempts int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attempts++
+		if attempts < 2 {
+			return // 200 with no body written at all
+		}
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	}))
+	defer srv.Close()
+
+	c := &Client{httpClient: srv.Client(), maxRetries: 2}
+
+	var out struct {
+		OK bool `json:"ok"`
+	}
+	if err := c.GetJSON(context.Background(), srv.URL, &out); err != nil {
+		t.Fatalf("GetJSON: %v", err)
+	}
+	if !out.OK {
+		t.Error("expected ok=true after an empty-body retry")
+	}
+	if attempts != 2 {
+		t.Errorf("attempts = %d, want 2 (empty body then 200)", attempts)
+	}
+}
+
+func TestClientEmptyBodyExhaustsRetryBudget(t *testing.T) {
+	var attempts int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attempts++ // every attempt answers 200 with no body
+	}))
+	defer srv.Close()
+
+	c := &Client{httpClient: srv.Client(), maxRetries: 2}
+
+	var out struct {
+		OK bool `json:"ok"`
+	}
+	err := c.GetJSON(context.Background(), srv.URL, &out)
+	if err == nil {
+		t.Fatal("expected error when every attempt returns an empty body")
+	}
+	if attempts != 3 {
+		t.Errorf("attempts = %d, want 3 (maxRetries=2 + initial)", attempts)
+	}
+	if !strings.Contains(err.Error(), srv.URL) {
+		t.Errorf("error %q does not name the URL %q", err.Error(), srv.URL)
+	}
+}
+
+func TestClientMalformedBodyIsNotRetried(t *testing.T) {
+	// A non-empty but malformed body is a real, persistent parse failure (e.g. a genuine XML
+	// syntax error) — never the "dropped mid-stream" shape an empty body is, so it must fail
+	// immediately rather than spending the retry budget on a document that will not change.
+	var attempts int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attempts++
+		_, _ = w.Write([]byte(`{"ok": tru`)) // present, non-empty, invalid JSON
+	}))
+	defer srv.Close()
+
+	c := &Client{httpClient: srv.Client(), maxRetries: 2}
+
+	var out struct {
+		OK bool `json:"ok"`
+	}
+	if err := c.GetJSON(context.Background(), srv.URL, &out); err == nil {
+		t.Fatal("expected error on a malformed body")
+	}
+	if attempts != 1 {
+		t.Errorf("attempts = %d, want 1 (malformed body must not be retried)", attempts)
+	}
+}
+
 func TestClientGetHTMLSurfacesWAFChallengeAsTypedError(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// AWS-WAF Challenge action: a 202 carrying the challenge marker header and a
