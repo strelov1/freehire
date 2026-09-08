@@ -271,6 +271,11 @@ func Derive(descriptionHTML string) []enrich.Requirement {
 						pendingHasProse = true
 					}
 				}
+				// textOf already read every descendant of n, so a nested
+				// <strong>/<b>/<div> inside this block must not be visited
+				// again by the walk below — that would buffer its (shorter)
+				// text a second time as its own entry.
+				return
 			}
 		}
 		for c := n.FirstChild; c != nil; c = c.NextSibling {

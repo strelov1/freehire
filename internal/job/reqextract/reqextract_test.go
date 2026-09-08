@@ -284,6 +284,16 @@ func TestDerive(t *testing.T) {
 			html: `<h3>Requirements</h3><p>Owns delivery end to end</p><p>Comfortable leading design discussions</p><table><tr><td>Grade</td><td>Senior</td></tr></table>`,
 			want: []enrich.Requirement{req("Owns delivery end to end"), req("Comfortable leading design discussions")},
 		},
+		{
+			name: "a nested <strong>/<b> inside a buffered paragraph item is not read a second time",
+			html: `<h3>Requirements</h3>` +
+				`<p>You need <strong>five years of Python experience</strong> and strong leadership skills to succeed here</p>` +
+				`<p>Comfortable working independently on distributed systems</p>`,
+			want: []enrich.Requirement{
+				req("You need five years of Python experience and strong leadership skills to succeed here"),
+				req("Comfortable working independently on distributed systems"),
+			},
+		},
 	}
 
 	for _, tt := range tests {
