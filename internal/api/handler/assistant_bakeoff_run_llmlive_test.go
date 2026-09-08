@@ -45,6 +45,7 @@ import (
 	"github.com/strelov1/freehire/internal/candidate/resume"
 	"github.com/strelov1/freehire/internal/dict/skilltag"
 	"github.com/strelov1/freehire/internal/identity/auth"
+	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/platform/llm"
 	"github.com/strelov1/freehire/internal/platform/modroot"
 )
@@ -447,7 +448,7 @@ func runBakeoffPass(
 		// rebuilt per case rather than reused.
 		tally := &bakeoffTally{}
 		h, app := newAutopilotHarness(t, pool, iss, &countingModel{inner: turnClient, tally: tally}, fitM,
-			withRenderedCVScoring(renderer, extract))
+			withRenderedCVScoring(renderer, extract), withTrackingTools(pool, db.New(pool)))
 
 		sess, cvID, _ := seedBakeoffCase(t, pool, h, userID, c, string(profile.CV))
 

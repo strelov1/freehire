@@ -25,6 +25,7 @@ import (
 	"github.com/tmc/langchaingo/llms"
 
 	"github.com/strelov1/freehire/internal/ai/assistant"
+	"github.com/strelov1/freehire/internal/application/jobtracking"
 	"github.com/strelov1/freehire/internal/candidate/cv"
 	"github.com/strelov1/freehire/internal/candidate/cvedit"
 	"github.com/strelov1/freehire/internal/candidate/experience"
@@ -42,6 +43,27 @@ import (
 // test is ABOUT, and the one caller wanting more is the bake-off. Adding a sixth parameter
 // would edit six call sites to say nil for something none of them has an opinion on.
 type autopilotOption func(*assistantHandlers)
+
+// withTrackingTools wires the tracking surface the tool registry offers to EVERY preset,
+// the tailoring autopilot included (see assistantHandlers.registry).
+//
+// It matters to a live run and to nothing else: a scripted stand-in never calls a tool it
+// was not scripted to call, while a real model reaches for save_job and my_jobs mid-run and
+// gets "job tracking is not available". That refusal costs a round, and rounds are the
+// bake-off's primary measurement — the transcript is replayed into each one.
+//
+// The search surface has no equivalent option: it needs a Meilisearch, which this harness
+// does not stand. A bake-off therefore measures models whose search_jobs refuses. Every
+// candidate faces the same refusal, so the rows stay comparable to each other; they are not
+// comparable to production, and a report read as though they were would overstate how many
+// rounds a turn takes.
+func withTrackingTools(pool *pgxpool.Pool, queries *db.Queries) autopilotOption {
+	return func(h *assistantHandlers) {
+		h.tracking = &trackingHandlers{
+			tracking: jobtracking.New(jobtracking.NewQueriesRepository(queries, pool)),
+		}
+	}
+}
 
 // withRenderedCVScoring wires the CV toolchain the deterministic scores read.
 //
