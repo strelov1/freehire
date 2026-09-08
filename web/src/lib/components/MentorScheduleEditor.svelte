@@ -32,10 +32,11 @@
     saving = true;
     error = '';
     try {
-      const saved = await api.replaceWeeklyAvailability(draft);
-      // The reply is the whole schedule, weekly rows and dated ones together, so it
-      // replaces the local copy rather than being merged into it.
-      rules = saved;
+      await api.replaceWeeklyAvailability(draft);
+      // The PUT answers 204, so the stored rows come from a re-read rather than from the
+      // reply. They are worth having: a new row's id is assigned by the server and is what
+      // the delete route takes, so a locally-built list would show rows nothing can remove.
+      rules = await api.myMentorAvailability();
       editingWeek = false;
     } catch (e) {
       error = errorMessage(e, 'The week could not be saved.');

@@ -826,11 +826,12 @@ export function createApi(
    *  bookable at hours they just removed. Dated overrides are untouched. */
   async function replaceWeeklyAvailability(
     rules: { weekday: number; start: string; end: string }[],
-  ): Promise<MentorAvailabilityRule[]> {
-    return requestData<MentorAvailabilityRule[]>(
-      '/api/v1/me/mentorship/availability/weekly',
-      jsonBody('PUT', { rules }),
-    );
+  ): Promise<void> {
+    // 204 No Content, so there is nothing to unwrap — `requestData` here would parse an
+    // empty body, throw, and report a write that actually succeeded as a failure. Callers
+    // that need the stored rows (their server-assigned ids, which the delete route takes)
+    // re-read `myMentorAvailability` afterwards.
+    await call('/api/v1/me/mentorship/availability/weekly', jsonBody('PUT', { rules }));
   }
 
   /** Add a dated exception. An equal start and end CLOSES that date, beating every other
