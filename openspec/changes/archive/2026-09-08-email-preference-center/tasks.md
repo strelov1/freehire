@@ -97,14 +97,14 @@ cannot honour.
 
 - [x] 11.1 `Message.validate` refuses an unset group, a silenceable mail with no URL, and an essential mail with one (`emailnotify/client.go`)
 - [x] 11.2 Four tests in `client_test.go` cover it, including that SES is never called for a refused message
-- [ ] 11.3 Verify by mutation once the endpoints land: drop the `Group` from one sender, confirm its own package's tests fail rather than the mail going out unguarded
+- [x] 11.3 Verify by mutation once the endpoints land: drop the `Group` from one sender, confirm its own package's tests fail rather than the mail going out unguarded
 
 ## 12. Ship
 
-- [ ] 12.1 Full local suite: `gofmt -l .` silent, `go vet ./...`, `go test ./...`, `go vet -tags=integration ./...`, `go test -tags=integration ./internal/engage/... ./internal/api/handler/`
-- [ ] 12.2 Open the PR; re-check the migration number against `origin/main` first
-- [ ] 12.3 Turn the access log off for the unsubscribe location in `deploy/nginx/snippets/freehire-app.conf` (the file already does this twice, so the shape exists) — the one-click POST has no way to keep its token out of the URL, so this is the only place left to keep a never-expiring credential out of a bulk store. **Nothing in `deploy/` deploys itself**: copy it to the host and reload nginx, then confirm with `./deploy/check-drift.sh`
-- [ ] 12.4 Deploy the migration, then the code; confirm with `release.sh`
-- [ ] 12.5 Send one real mail to a live address and verify in Gmail: the client shows its own Unsubscribe control, the footer link opens the page without a session, and one click turns off only that group
+- [x] 12.1 Full local suite: `gofmt -l .` silent, `go vet ./...`, `go test ./...`, `go vet -tags=integration ./...`, `go test -tags=integration ./internal/engage/... ./internal/api/handler/`
+- [x] 12.2 Open the PR; re-check the migration number against `origin/main` first
+- [x] 12.3 Keep the token out of the access log — done, but NOT by turning the log off. `access_log off` drops the whole line, which blinds us on a public unauthenticated endpoint, and the problem is one FIELD. A `combined_purpose_no_query` format logs `$uri` (arguments already stripped) in the same field positions, so `internal/viewlog` and `web-metrics.sh` read it unchanged. Applied to the host, `nginx -t` passed, reloaded, and the logged line verified token-free. The two nginx files this needed — `freehire-api.conf` and `conf.d/freehire-logformat.conf` — existed ONLY on the machine; they are in `deploy/` now and `check-drift.sh` watches all three
+- [x] 12.4 Deploy the migration, then the code; confirm with `release.sh`
+- [x] 12.5 Send one real mail to a live address and verify in Gmail: the client shows its own Unsubscribe control, the footer link opens the page without a session, and one click turns off only that group
 - [ ] 12.6 Reply to the complainant with his own preference link
 - [ ] 12.7 A week later, read SES complaint/bounce rates and Gmail Postmaster spam rate; record whether one-click should widen to all non-essential mail
