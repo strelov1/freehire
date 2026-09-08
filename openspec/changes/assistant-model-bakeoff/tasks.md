@@ -13,10 +13,10 @@
 
 ## 2. The report's pure core
 
-- [ ] 2.1 Introduce the report row type and the run tally it is computed from (rounds,
+- [x] 2.1 Introduce the report row type and the run tally it is computed from (rounds,
       decode failures, token counts, first-token latency, terminal stop reason). Unit
       test the tally over a scripted sequence of events.
-- [ ] 2.2 Implement the cache verdict: a run whose rounds all report zero cached tokens is
+- [x] 2.2 Implement the cache verdict: a run whose rounds all report zero cached tokens is
       labelled "no cache observed"; a run with any non-zero count reports the total and
       its share of input tokens. Unit test both, plus the boundary of a single non-zero
       round.
