@@ -20,6 +20,7 @@
 - [x] 4.3 Scenario test: an orphaned application (`Job == nil`) is skipped without panicking and without being included in the id batch sent to `search.In`/`ListJobGhostStamps`. (`.../nothing_panics_when_every_card_is_orphaned`, plus the filter-content assertion in the first subtest)
 - [x] 4.4 Scenario test: `h.search == nil` leaves every card's `ghost` nil, and the response still succeeds. (`TestAttachGhostToTrackedCards_NilSearchIsANoOp`, plain unit test — no DB needed since the nil check is the first thing the method does)
 - [x] 4.5 Scenario test: a `Search` error degrades to every card's `ghost` computed with `RealityClass = ""` rather than failing `ListTrackedJobs`. (`.../a_search_error_degrades_rather_than_failing`)
+- [x] 4.6 Scenario test: a `Search` error does NOT suppress a signal whose non-reality criteria (ATS absence + user reports) already converge on their own — proves the degrade narrows evidence rather than blanket-omitting `ghost`. Found on review (CodeRabbit): the spec's original wording implied every lookup failure omits `ghost` unconditionally, which was inaccurate for this case. (`.../evidence-only_criteria_still_converge_when_Search_fails`)
 - [x] 4.6 Run `go vet -tags=integration ./...` and the full test suite for `internal/job/jobview`, `internal/search/search`, and `internal/api/handler`; run `TestMeasureBoardLoad` (`-tags=integration`) and confirm the payload-ceiling assertion still passes.
 
 ## 5. Wrap-up

@@ -62,11 +62,20 @@ silence derivation would clear the marker at the moment it matters most.
 - **THEN** its card's `ghost` field carries that level and the criteria that produced it,
   the same shape the job's own detail page would show
 
-#### Scenario: A ghost-signal lookup failure never fails the listing
+#### Scenario: A ghost-stamp lookup failure never fails the listing
 
-- **WHEN** the listing's own rows resolve successfully but the ghost signal's own lookup
-  fails
-- **THEN** the response is still `200`, with every card's `ghost` field simply omitted
+- **WHEN** the listing's own rows resolve successfully but the ghost signal's absence-stamp
+  lookup fails
+- **THEN** the response is still `200`, with every card's `ghost` field omitted
+
+#### Scenario: A reality-class lookup failure narrows the ghost signal rather than suppressing it
+
+- **WHEN** the listing's own rows resolve successfully but the ghost signal's Meilisearch
+  reality-class lookup fails
+- **THEN** the response is still `200`; a card's `ghost` field is omitted only when the
+  reality criterion was needed for enough evidence to converge — a job whose non-reality
+  criteria (ATS absence, silent applications, user reports) already converge on their own
+  still carries the signal, without the reality criterion among those listed
 
 #### Scenario: The full posting is one read away
 

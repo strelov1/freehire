@@ -89,6 +89,38 @@ func TestAttachGhostToTrackedCards(t *testing.T) {
 		}
 	})
 
+	// Reality is not the only route to a ghost signal: two non-reality criteria (here
+	// ats_absent + user_reports) converge on their own, so a Search failure that makes the
+	// reality criterion unreachable does not have to suppress the signal — it just narrows
+	// which criteria could have contributed. This is the "evidence-only convergence" case
+	// the plain "a search error degrades rather than failing" test above does not cover
+	// (there, only one non-reality criterion was seeded, so it correctly stayed nil).
+	t.Run("evidence-only criteria still converge when Search fails", func(t *testing.T) {
+		var reporterID int64
+		if err := pool.QueryRow(context.Background(),
+			`INSERT INTO users (email) VALUES ('ghost-reporter@example.test') RETURNING id`).Scan(&reporterID); err != nil {
+			t.Fatalf("seed reporter: %v", err)
+		}
+		reportedJobID := seedGhostJob(t, pool, "ghost-reported", &now)
+		if _, err := pool.Exec(context.Background(),
+			`INSERT INTO ghost_reports (user_id, job_id, applied_on) VALUES ($1, $2, $3)`,
+			reporterID, reportedJobID, now.AddDate(0, 0, -30)); err != nil {
+			t.Fatalf("seed ghost report: %v", err)
+		}
+
+		items := []jobtracking.TrackedJob{
+			{Interaction: jobtracking.Interaction{JobID: reportedJobID}, Job: &jobview.Card{}},
+		}
+		fake := &fakeSearcher{err: errors.New("meilisearch unavailable")}
+		h := &trackingHandlers{search: fake, queries: queries}
+
+		h.attachGhostToTrackedCards(ctx, items)
+
+		if items[0].Job.Ghost == nil {
+			t.Fatal("Ghost = nil, want a signal from ats_absent + user_reports converging without reality")
+		}
+	})
+
 	t.Run("nothing panics when every card is orphaned", func(t *testing.T) {
 		items := []jobtracking.TrackedJob{{Interaction: jobtracking.Interaction{JobID: 123}, Job: nil}}
 		fake := &fakeSearcher{}

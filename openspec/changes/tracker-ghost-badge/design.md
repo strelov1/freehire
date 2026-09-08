@@ -18,7 +18,7 @@ The tracker (`ListTrackedJobs`, `internal/api/handler/me_tracking.go`) has neith
 **Goals:**
 - A tracked job's card carries the same `ghost` signal the job's own detail page and the other two listings already show, computed the same way (`jobview.ClassifyGhost`), never a bespoke derivation.
 - No new read of a job's description anywhere in this path — `TestMeasureBoardLoad` stays green with no changes.
-- Best-effort: a lookup failure (search unavailable, a query error) degrades to omitting `ghost` from the affected cards, exactly like `ghostEvidenceFor`'s own established discipline — never a failed listing request.
+- Best-effort: a lookup failure never fails the listing request. A `ListJobGhostStamps` failure aborts the whole attach pass, omitting `ghost` from every affected card; a `Search` (reality-class) failure only narrows the evidence — the reality criterion becomes unreachable, but a job whose other criteria (ATS absence, silent applications, user reports) already converge on their own still carries the signal. See Decisions.
 - Bounded cost: one Meilisearch query and the two existing ghost-evidence queries per page, not per row.
 
 **Non-Goals:**

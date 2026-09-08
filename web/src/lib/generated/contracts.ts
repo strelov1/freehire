@@ -123,6 +123,15 @@ export interface Card {
    * listing's payload.
    */
   blurb?: string;
+  /**
+   * Ghost is the ghost-job signal, mirroring Job.Ghost exactly — computed at read time
+   * by ClassifyGhost, never stored, and never a bare accusation: the level plus the
+   * criteria that fired. Omitted (nil) when there is nothing to say. Unlike Job, Card
+   * carries no Reality field: no listing surface in this app serves Reality on a card
+   * today, only the detail page does — Reality is only ever an internal ingredient of
+   * ClassifyGhost here, the same convention the other two listings already follow.
+   */
+  ghost?: Ghost;
 }
 
 //////////

@@ -23,5 +23,5 @@ The tracked-jobs listing (`GET /me/tracking`) never shows the ghost-job badge, e
 - `internal/search/search/filter.go`: new `In(attr string, ids []int64) string`, mirroring `NotIn`.
 - `internal/api/handler/user_jobs.go`: `trackingHandlers` gains a `queries *db.Queries` field (already threaded through the constructor, just never stored), matching `jobsHandlers`/`searchHandlers`.
 - `internal/api/handler/me_tracking.go`: `ListTrackedJobs` gains a ghost-attach pass over the page's cards.
-- No migration, no new query beyond what `ghostEvidenceFor`/`ListJobGhostStamps` already run for other surfaces.
+- No migration or new database query — `ghostEvidenceFor`/`ListJobGhostStamps` are already-shared helpers. The tracking path does add one new Meilisearch lookup, to read each page's already-computed reality classes.
 - No change to the listing's own SQL — it still reads only the card's columns; `TestMeasureBoardLoad` (`internal/api/handler/me_tracking_load_measure_test.go`) is unaffected, since nothing here adds a description read.
