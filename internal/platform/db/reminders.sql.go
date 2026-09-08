@@ -108,7 +108,7 @@ func (q *Queries) ClaimDueReminders(ctx context.Context, arg ClaimDueRemindersPa
 }
 
 const getNotificationSettings = `-- name: GetNotificationSettings :one
-SELECT user_id, enabled, channels, updated_at, digest_frequency, digest_time, quiet_hours_start, quiet_hours_end FROM notification_settings WHERE user_id = $1
+SELECT user_id, enabled, channels, updated_at, digest_frequency, digest_time, quiet_hours_start, quiet_hours_end, alerts_email_enabled, news_email_enabled FROM notification_settings WHERE user_id = $1
 `
 
 // The caller's notification rule, shared by saved-job reminders and both
@@ -127,6 +127,8 @@ func (q *Queries) GetNotificationSettings(ctx context.Context, userID int64) (No
 		&i.DigestTime,
 		&i.QuietHoursStart,
 		&i.QuietHoursEnd,
+		&i.AlertsEmailEnabled,
+		&i.NewsEmailEnabled,
 	)
 	return i, err
 }
@@ -361,7 +363,7 @@ ON CONFLICT (user_id) DO UPDATE
       quiet_hours_start  = EXCLUDED.quiet_hours_start,
       quiet_hours_end    = EXCLUDED.quiet_hours_end,
       updated_at         = now()
-RETURNING user_id, enabled, channels, updated_at, digest_frequency, digest_time, quiet_hours_start, quiet_hours_end
+RETURNING user_id, enabled, channels, updated_at, digest_frequency, digest_time, quiet_hours_start, quiet_hours_end, alerts_email_enabled, news_email_enabled
 `
 
 type UpsertNotificationSettingsParams struct {
@@ -398,6 +400,8 @@ func (q *Queries) UpsertNotificationSettings(ctx context.Context, arg UpsertNoti
 		&i.DigestTime,
 		&i.QuietHoursStart,
 		&i.QuietHoursEnd,
+		&i.AlertsEmailEnabled,
+		&i.NewsEmailEnabled,
 	)
 	return i, err
 }

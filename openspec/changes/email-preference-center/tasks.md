@@ -23,7 +23,7 @@ on an entry with no package. Neither half can ship alone.
 
 - [ ] 3.1 Add the migration (take the next free number, re-check against `origin/main` at PR time — `main` has held three `0144` files at once): `ALTER TABLE public.notification_settings ADD COLUMN alerts_email_enabled boolean NOT NULL DEFAULT true, ADD COLUMN news_email_enabled boolean NOT NULL DEFAULT true;`
 - [ ] 3.2 `pnpm check:sql` passes on the added file
-- [ ] 3.3 Extend the `notification_settings` read/write queries in `internal/platform/db/queries/reminders.sql` to carry both columns, then `make sqlc` — never hand-edit `internal/platform/db/*.sql.go`
+- [ ] 3.3 `make sqlc` — `migrations/` is sqlc's schema source, so the migration alone moves the generated code. No query needs editing: `GetNotificationSettings` (`SELECT *`) and `UpsertNotificationSettings` (`RETURNING *`) pick the columns up on the read side by themselves, and the upsert's `ON CONFLICT DO UPDATE SET` names its columns explicitly — leaving the two new ones out of that list is what makes them survive a write from the authenticated settings page, so adding them there would be the bug, not the fix. The narrow writer for the group switches lands in task 8, with its caller.
 
 ## 4. Transport: one send path
 
