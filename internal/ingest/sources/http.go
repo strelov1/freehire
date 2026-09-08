@@ -718,15 +718,16 @@ func (c *Client) do(ctx context.Context, r request) error {
 			err := r.decode(resp)
 			resp.Body.Close()
 			if err != nil {
+				decodeErr := fmt.Errorf("sources: decode %s: %w", r.url, err)
 				// An exactly-empty body is Go's json/xml decoders' own signal for "no
 				// content at all" — indistinguishable from a dropped connection, and
 				// never returned for a malformed-but-present body — so it gets the same
 				// retry chance a 5xx does instead of failing the request outright.
 				if errors.Is(err, io.EOF) {
-					lastErr = fmt.Errorf("sources: decode %s: %w", r.url, err)
+					lastErr = decodeErr
 					continue
 				}
-				return fmt.Errorf("sources: decode %s: %w", r.url, err)
+				return decodeErr
 			}
 			return nil
 		case resp.StatusCode == http.StatusTooManyRequests:
