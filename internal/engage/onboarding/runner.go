@@ -190,7 +190,7 @@ func (r *Runner) candidates(ctx context.Context, step Step) ([]recipient, error)
 // worth risking deliverability for every other mail the product sends. Re-arming is
 // a manual DELETE.
 func (r *Runner) deliver(ctx context.Context, step Step, rec recipient) bool {
-	sendErr := r.mailer.Send(ctx, step, rec.email)
+	sendErr := r.mailer.Send(ctx, step, rec.userID, rec.email)
 
 	var errText string
 	if sendErr != nil {

@@ -113,14 +113,26 @@ type Body struct {
 	// Footer is the fine print under the card: why this person is receiving this.
 	// Optional.
 	Footer template.HTML
-	// Essential marks a mail the recipient cannot turn off — a verification or
-	// password-reset code, sent because they just asked for it. Those mails get no
-	// notification-settings link, because there is no setting that would stop them
-	// and offering one invites a click that changes nothing.
+	// UnsubscribeURL is where this recipient turns THIS kind of mail off, without
+	// signing in. Set on every non-essential mail; empty on an essential one — a
+	// verification or password-reset code, sent because they just asked for it, for
+	// which there is no setting that would stop them and offering one invites a
+	// click that changes nothing.
 	//
-	// Everything else is a notification and gets the link. The default is therefore
-	// the safe one: a new mail that forgets to think about this is opt-out-able.
-	Essential bool
+	// This replaced a separate Essential bool. Two fields answering one question can
+	// disagree, and a mail marked essential while carrying a link, or the reverse,
+	// had no defined meaning. One field cannot contradict itself.
+	//
+	// The shell renders it and does not build it. Signing the token needs
+	// internal/engage/emailprefs, which sits a layer above this package — and the
+	// constraint produces the right design anyway, since the same URL has to reach
+	// the List-Unsubscribe header too, and one caller minting it once is what keeps
+	// the header and the footer from disagreeing.
+	//
+	// This field is not what ENFORCES the rule: a mail that reaches the transport
+	// silenceable and linkless is refused there, which also covers the mails that
+	// build their own HTML and never touch this shell.
+	UnsubscribeURL string
 }
 
 // Scheme selects how the mail responds to the reader's colour preference.
@@ -327,7 +339,7 @@ var shell = template.Must(template.New("shell").Parse(`<!DOCTYPE html>
       <tr><td class="m-muted" style="padding:16px 8px 0 8px;font-size:12px;line-height:1.6;color:` + colorMuted + `;">
         <a href="{{.SiteURL}}" class="m-muted" style="color:` + colorMuted + `;text-decoration:none;">freehire.me</a> — job search without the noise.
         <br><a href="` + DiscordURL + `" class="m-muted" style="color:` + colorMuted + `;text-decoration:underline;">Job hunting with us on Discord</a>
-        {{if not .Body.Essential}}<br><a href="{{.SettingsURL}}" class="m-muted" style="color:` + colorMuted + `;text-decoration:underline;">Turn off these notifications</a>{{end}}
+        {{if .Body.UnsubscribeURL}}<br><a href="{{.Body.UnsubscribeURL}}" class="m-muted" style="color:` + colorMuted + `;text-decoration:underline;">Unsubscribe</a> · <a href="{{.SettingsURL}}" class="m-muted" style="color:` + colorMuted + `;text-decoration:underline;">Manage settings</a>{{end}}
       </td></tr>
 
     </table>

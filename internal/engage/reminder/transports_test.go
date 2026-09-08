@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/strelov1/freehire/internal/engage/emailnotify"
+	"github.com/strelov1/freehire/internal/engage/emailprefs"
 	"github.com/strelov1/freehire/internal/engage/notify"
 	"github.com/strelov1/freehire/internal/engage/telegramnotify"
 )
@@ -15,15 +17,16 @@ type captureSender struct {
 	from, to, subject, html, text string
 }
 
-func (s *captureSender) Send(_ context.Context, from, to, subject, html, text string) error {
+func (s *captureSender) Send(_ context.Context, m emailnotify.Message) error {
+	from, to, subject, html, text := m.From, m.To, m.Subject, m.HTML, m.Text
 	s.from, s.to, s.subject, s.html, s.text = from, to, subject, html, text
 	return nil
 }
 
 func TestEmailNotifier_RendersSubjectAndOnPlatformLink(t *testing.T) {
 	sender := &captureSender{}
-	n := NewEmailNotifier(sender, "jobs@freehire.me", "https://freehire.me/")
-	msg := ReminderMessage{JobTitle: "Go Dev", Company: "Acme", Slug: "go-dev-acme", URL: "https://ats/x"}
+	n := NewEmailNotifier(sender, "jobs@freehire.me", "https://freehire.me/", testLinks())
+	msg := ReminderMessage{UserID: testUserID, JobTitle: "Go Dev", Company: "Acme", Slug: "go-dev-acme", URL: "https://ats/x"}
 
 	if err := n.Send(context.Background(), "email", "u@x.com", []ReminderMessage{msg}); err != nil {
 		t.Fatalf("Send: %v", err)
@@ -49,8 +52,8 @@ func TestEmailNotifier_RendersSubjectAndOnPlatformLink(t *testing.T) {
 
 func TestEmailNotifier_EscapesUserData(t *testing.T) {
 	sender := &captureSender{}
-	n := NewEmailNotifier(sender, "jobs@freehire.me", "https://freehire.me")
-	msg := ReminderMessage{JobTitle: "<script>x</script>", Company: "Acme", Slug: "s", URL: "u"}
+	n := NewEmailNotifier(sender, "jobs@freehire.me", "https://freehire.me", testLinks())
+	msg := ReminderMessage{UserID: testUserID, JobTitle: "<script>x</script>", Company: "Acme", Slug: "s", URL: "u"}
 
 	if err := n.Send(context.Background(), "email", "u@x.com", []ReminderMessage{msg}); err != nil {
 		t.Fatalf("Send: %v", err)
@@ -84,14 +87,14 @@ func batchOf(n int) []ReminderMessage {
 	ms := make([]ReminderMessage, n)
 	for i := range ms {
 		id := strconv.Itoa(i)
-		ms[i] = ReminderMessage{JobTitle: "Job " + id, Company: "Company " + id, Slug: "job-" + id}
+		ms[i] = ReminderMessage{UserID: testUserID, JobTitle: "Job " + id, Company: "Company " + id, Slug: "job-" + id}
 	}
 	return ms
 }
 
 func TestEmailNotifier_BatchListsEveryJobUnderTheListLimit(t *testing.T) {
 	sender := &captureSender{}
-	n := NewEmailNotifier(sender, "jobs@freehire.me", "https://freehire.me")
+	n := NewEmailNotifier(sender, "jobs@freehire.me", "https://freehire.me", testLinks())
 
 	if err := n.Send(context.Background(), "email", "u@x.com", batchOf(4)); err != nil {
 		t.Fatalf("Send: %v", err)
@@ -113,7 +116,7 @@ func TestEmailNotifier_BatchListsEveryJobUnderTheListLimit(t *testing.T) {
 // notify.ListLimit and counts the rest, while the record behind it holds them all.
 func TestEmailNotifier_BatchOverTheListLimitCountsTheRest(t *testing.T) {
 	sender := &captureSender{}
-	n := NewEmailNotifier(sender, "jobs@freehire.me", "https://freehire.me")
+	n := NewEmailNotifier(sender, "jobs@freehire.me", "https://freehire.me", testLinks())
 
 	size := notify.ListLimit + 5
 	if err := n.Send(context.Background(), "email", "u@x.com", batchOf(size)); err != nil {
@@ -157,3 +160,13 @@ func TestTelegramNotifier_BatchStaysUnderTheMessageLimit(t *testing.T) {
 		t.Errorf("rendered %d UTF-16 units, want at most %d", got, telegramnotify.MaxMessageLen)
 	}
 }
+
+// testLinks signs the unsubscribe URLs these mails carry. The secret only has to
+// clear emailprefs' length floor - nothing here verifies a token.
+func testLinks() *emailprefs.Links {
+	return emailprefs.NewLinks("mail-test-secret-padded-to-32-byte", "https://freehire.me")
+}
+
+// testUserID is whose mail these samples are. Any positive id will do: the token
+// only has to be mintable.
+const testUserID int64 = 7

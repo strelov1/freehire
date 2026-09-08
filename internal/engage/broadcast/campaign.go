@@ -19,12 +19,13 @@ import (
 
 	"github.com/strelov1/freehire/internal/application/mailtpl"
 	"github.com/strelov1/freehire/internal/engage/emailnotify"
+	"github.com/strelov1/freehire/internal/engage/emailprefs"
 )
 
 // Sender delivers one rendered message with a Reply-To, as internal/engage/onboarding does:
 // a campaign is signed by a person and invites an answer.
 type Sender interface {
-	SendWithReplyTo(ctx context.Context, from, replyTo, to, subject, htmlBody, textBody string) error
+	Send(ctx context.Context, m emailnotify.Message) error
 }
 
 // senderName is the display name in the recipient's message list.
@@ -53,12 +54,13 @@ type Mailer struct {
 	replyTo string
 	baseURL string
 	layout  *mailtpl.Layout
+	links   *emailprefs.Links
 }
 
 // NewMailer builds a Mailer. replyTo is the human inbox that answers; as with the
 // onboarding sequence, a campaign signed by a person and answerable by nobody is
 // worse than no campaign, so the caller is expected to require it.
-func NewMailer(sender Sender, from, replyTo, baseURL string) *Mailer {
+func NewMailer(sender Sender, from, replyTo, baseURL string, links *emailprefs.Links) *Mailer {
 	base := strings.TrimRight(baseURL, "/")
 	return &Mailer{
 		sender:  sender,
@@ -66,22 +68,32 @@ func NewMailer(sender Sender, from, replyTo, baseURL string) *Mailer {
 		replyTo: replyTo,
 		baseURL: base,
 		layout:  mailtpl.New(base),
+		links:   links,
 	}
 }
 
-// Send delivers one campaign to one address.
-func (m *Mailer) Send(ctx context.Context, c Campaign, to string) error {
+// Send delivers one campaign to one recipient.
+func (m *Mailer) Send(ctx context.Context, c Campaign, userID int64, to string) error {
 	var body bytes.Buffer
 	if err := c.body.Execute(&body, m.assets()); err != nil {
 		return fmt.Errorf("broadcast: rendering %s: %w", c.Name, err)
 	}
+	unsubscribe, err := m.links.For(userID, emailprefs.GroupNews)
+	if err != nil {
+		return fmt.Errorf("broadcast: unsubscribe link for user %d: %w", userID, err)
+	}
 	html := m.layout.Render(mailtpl.Body{
-		Preheader: c.Preheader,
-		Heading:   c.Heading,
-		Content:   template.HTML(body.String()), //nolint:gosec // trusted templates over package constants; no user data reaches them
-		Footer:    "You’re getting this because you signed up for freehire.",
+		Preheader:      c.Preheader,
+		Heading:        c.Heading,
+		Content:        template.HTML(body.String()), //nolint:gosec // trusted templates over package constants; no user data reaches them
+		Footer:         "You’re getting this because you signed up for freehire.",
+		UnsubscribeURL: unsubscribe,
 	})
-	return m.sender.SendWithReplyTo(ctx, m.from, m.replyTo, to, c.Subject, html, c.text(m.baseURL))
+	return m.sender.Send(ctx, emailnotify.Message{
+		From: m.from, To: to, ReplyTo: m.replyTo, Subject: c.Subject,
+		HTML: html, Text: c.text(m.baseURL) + "\nUnsubscribe: " + unsubscribe + "\n",
+		Group: emailprefs.GroupNews, UnsubscribeURL: unsubscribe,
+	})
 }
 
 // assets is what the campaign templates render from: the image URLs, which depend on

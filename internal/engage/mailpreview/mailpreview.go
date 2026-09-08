@@ -29,6 +29,7 @@ import (
 	"github.com/strelov1/freehire/internal/application/mailtpl"
 	"github.com/strelov1/freehire/internal/engage/broadcast"
 	"github.com/strelov1/freehire/internal/engage/emailnotify"
+	"github.com/strelov1/freehire/internal/engage/emailprefs"
 	"github.com/strelov1/freehire/internal/engage/notify"
 	"github.com/strelov1/freehire/internal/engage/nudge"
 	"github.com/strelov1/freehire/internal/engage/onboarding"
@@ -105,24 +106,39 @@ var renderers = []func(string) (Sample, error){
 	reportDismissedSample,
 }
 
-// capture is a Sender that keeps the last message instead of delivering it. It
-// satisfies every mail package's sender interface — they all declare the same
-// method, locally, to avoid depending on the AWS graph.
+// capture is a Sender that keeps the last message instead of delivering it. One
+// method now satisfies every mail package's sender interface, because they all name
+// the same emailnotify.Message.
+//
+// It deliberately does NOT call Message.validate: a preview renders what a sender
+// produced, and refusing to render a mail with no way out of it would hide the very
+// mistake a reviewer opened the contact sheet to see.
 type capture struct {
 	subject, html, text string
 }
 
-func (c *capture) Send(_ context.Context, _, _, subject, htmlBody, textBody string) error {
-	c.subject, c.html, c.text = subject, htmlBody, textBody
+func (c *capture) Send(_ context.Context, m emailnotify.Message) error {
+	c.subject, c.html, c.text = m.Subject, m.HTML, m.Text
 	return nil
 }
 
-// SendWithReplyTo satisfies onboarding.Sender. The Reply-To is discarded here — a
-// preview shows the mail, and the header is asserted by the runner's own tests.
-func (c *capture) SendWithReplyTo(_ context.Context, _, _, _, subject, htmlBody, textBody string) error {
-	c.subject, c.html, c.text = subject, htmlBody, textBody
-	return nil
+// previewSecret signs the unsubscribe links in a preview. It is a fixed string and
+// not a secret: these mails are never sent, and a preview whose token changed on
+// every run would make the committed files differ from themselves and fail the
+// staleness test for no reason. It is long enough to clear emailprefs' own floor,
+// which exists so a worker started without JWT_SECRET fails closed rather than
+// mailing dead links.
+const previewSecret = "mail-preview-not-a-real-secret-000"
+
+// previewLinks is the signer every sample passes to its notifier, so the footer's
+// Unsubscribe link renders exactly as production would draw it.
+func previewLinks(baseURL string) *emailprefs.Links {
+	return emailprefs.NewLinks(previewSecret, baseURL)
 }
+
+// previewUserID is the account every sample is addressed to. Fixed for the same
+// reason the secret is: a varying id would produce a varying token.
+const previewUserID int64 = 1
 
 // sample runs send against a fresh capture and packages what it produced, together
 // with the two pinned-scheme variants the contact sheet toggles between.
@@ -153,8 +169,8 @@ func campaignSample(name, title, campaignName, baseURL string) (Sample, error) {
 		if !ok {
 			return fmt.Errorf("campaign %q is not registered", campaignName)
 		}
-		return broadcast.NewMailer(c, "notifications@freehire.me", "ilya@freehire.me", baseURL).
-			Send(context.Background(), campaign, "someone@example.com")
+		return broadcast.NewMailer(c, "notifications@freehire.me", "ilya@freehire.me", baseURL, previewLinks(baseURL)).
+			Send(context.Background(), campaign, previewUserID, "someone@example.com")
 	})
 }
 
@@ -167,8 +183,8 @@ func discordInviteSample(baseURL string) (Sample, error) {
 // these are the only mails that ask for an answer.
 func onboardingSample(name, title string, step onboarding.Step, baseURL string) (Sample, error) {
 	return sample(name, title, func(c *capture) error {
-		return onboarding.NewMailer(c, "notifications@freehire.me", "ilya@freehire.me", baseURL).
-			Send(context.Background(), step, "someone@example.com")
+		return onboarding.NewMailer(c, "notifications@freehire.me", "ilya@freehire.me", baseURL, previewLinks(baseURL)).
+			Send(context.Background(), step, previewUserID, "someone@example.com")
 	})
 }
 
@@ -212,6 +228,7 @@ func passwordResetSample(baseURL string) (Sample, error) {
 func digestSample(baseURL string) (Sample, error) {
 	return sample("subscription-digest", "Alerts / Subscription digest", func(c *capture) error {
 		d := notify.Digest{
+			UserID:          previewUserID,
 			SavedSearchName: "Senior Go, remote in Europe",
 			Total:           14,
 			Jobs: []notify.DigestJob{
@@ -222,15 +239,16 @@ func digestSample(baseURL string) (Sample, error) {
 					SalaryMin: 90000, SalaryMax: 110000, SalaryCurrency: "USD", SalaryPeriod: "year"},
 			},
 		}
-		return emailnotify.NewNotifier(c, "alerts@freehire.me", baseURL).
+		return emailnotify.NewNotifier(c, "alerts@freehire.me", baseURL, previewLinks(baseURL)).
 			Send(context.Background(), notify.ChannelEmail, "someone@example.com", d)
 	})
 }
 
 func savedJobReminderSample(baseURL string) (Sample, error) {
 	return sample("saved-job-reminder", "Tracking / Saved-job reminder", func(c *capture) error {
-		return reminder.NewEmailNotifier(c, "alerts@freehire.me", baseURL).
+		return reminder.NewEmailNotifier(c, "alerts@freehire.me", baseURL, previewLinks(baseURL)).
 			Send(context.Background(), notify.ChannelEmail, "someone@example.com", []reminder.ReminderMessage{{
+				UserID:   previewUserID,
 				JobTitle: "Senior Backend Engineer (Go)",
 				Company:  "Fingerprint",
 				Slug:     "senior-backend-engineer-go-fingerprint",
@@ -242,19 +260,20 @@ func savedJobReminderSample(baseURL string) (Sample, error) {
 // worth looking at: the single-job mail above is now the special case.
 func savedJobReminderBatchSample(baseURL string) (Sample, error) {
 	return sample("saved-job-reminder-batch", "Tracking / Saved-job reminders (batch)", func(c *capture) error {
-		return reminder.NewEmailNotifier(c, "alerts@freehire.me", baseURL).
+		return reminder.NewEmailNotifier(c, "alerts@freehire.me", baseURL, previewLinks(baseURL)).
 			Send(context.Background(), notify.ChannelEmail, "someone@example.com", []reminder.ReminderMessage{
-				{JobTitle: "Senior Backend Engineer (Go)", Company: "Fingerprint", Slug: "senior-backend-engineer-go-fingerprint"},
-				{JobTitle: "Staff Platform Engineer", Company: "Vercel", Slug: "staff-platform-engineer-vercel"},
-				{JobTitle: "Site Reliability Engineer", Company: "Datadog", Slug: "site-reliability-engineer-datadog"},
+				{UserID: previewUserID, JobTitle: "Senior Backend Engineer (Go)", Company: "Fingerprint", Slug: "senior-backend-engineer-go-fingerprint"},
+				{UserID: previewUserID, JobTitle: "Staff Platform Engineer", Company: "Vercel", Slug: "staff-platform-engineer-vercel"},
+				{UserID: previewUserID, JobTitle: "Site Reliability Engineer", Company: "Datadog", Slug: "site-reliability-engineer-datadog"},
 			})
 	})
 }
 
 func followUpNudgeSample(baseURL string) (Sample, error) {
 	return sample("nudge-follow-up", "Tracking / Nudge: follow up", func(c *capture) error {
-		return nudge.NewEmailNotifier(c, "alerts@freehire.me", baseURL).
+		return nudge.NewEmailNotifier(c, "alerts@freehire.me", baseURL, previewLinks(baseURL)).
 			Send(context.Background(), notify.ChannelEmail, "someone@example.com", nudge.KindFollowUp, []nudge.Message{{
+				UserID:     previewUserID,
 				Kind:       nudge.KindFollowUp,
 				JobTitle:   "Staff Engineer, Platform",
 				Company:    "Speechify",
@@ -269,19 +288,20 @@ func followUpNudgeSample(baseURL string) (Sample, error) {
 // special case.
 func followUpNudgeBatchSample(baseURL string) (Sample, error) {
 	return sample("nudge-follow-up-batch", "Tracking / Nudge: follow up (batch)", func(c *capture) error {
-		return nudge.NewEmailNotifier(c, "alerts@freehire.me", baseURL).
+		return nudge.NewEmailNotifier(c, "alerts@freehire.me", baseURL, previewLinks(baseURL)).
 			Send(context.Background(), notify.ChannelEmail, "someone@example.com", nudge.KindFollowUp, []nudge.Message{
-				{Kind: nudge.KindFollowUp, JobTitle: "Staff Engineer, Platform", Company: "Speechify", Slug: "staff-engineer-platform-speechify", DaysSilent: 12},
-				{Kind: nudge.KindFollowUp, JobTitle: "Backend Engineer", Company: "Monzo", Slug: "backend-engineer-monzo", DaysSilent: 24},
-				{Kind: nudge.KindFollowUp, JobTitle: "Infrastructure Engineer", Company: "Grafana Labs", Slug: "infrastructure-engineer-grafana-labs", DaysSilent: 31},
+				{UserID: previewUserID, Kind: nudge.KindFollowUp, JobTitle: "Staff Engineer, Platform", Company: "Speechify", Slug: "staff-engineer-platform-speechify", DaysSilent: 12},
+				{UserID: previewUserID, Kind: nudge.KindFollowUp, JobTitle: "Backend Engineer", Company: "Monzo", Slug: "backend-engineer-monzo", DaysSilent: 24},
+				{UserID: previewUserID, Kind: nudge.KindFollowUp, JobTitle: "Infrastructure Engineer", Company: "Grafana Labs", Slug: "infrastructure-engineer-grafana-labs", DaysSilent: 31},
 			})
 	})
 }
 
 func jobClosedNudgeSample(baseURL string) (Sample, error) {
 	return sample("nudge-job-closed", "Tracking / Nudge: job closed", func(c *capture) error {
-		return nudge.NewEmailNotifier(c, "alerts@freehire.me", baseURL).
+		return nudge.NewEmailNotifier(c, "alerts@freehire.me", baseURL, previewLinks(baseURL)).
 			Send(context.Background(), notify.ChannelEmail, "someone@example.com", nudge.KindJobClosed, []nudge.Message{{
+				UserID:   previewUserID,
 				Kind:     nudge.KindJobClosed,
 				JobTitle: "Go Developer — Payments",
 				Company:  "Avenga",
@@ -292,7 +312,7 @@ func jobClosedNudgeSample(baseURL string) (Sample, error) {
 
 func referralRequestSample(baseURL string) (Sample, error) {
 	return sample("referral-request", "Referrals / New request", func(c *capture) error {
-		return referral.NewChannelPinger(c, "hi@freehire.me", nil, baseURL).
+		return referral.NewChannelPinger(c, "hi@freehire.me", nil, baseURL, previewLinks(baseURL)).
 			PingReferrer(context.Background(),
 				referral.Recipient{UserID: 1, Email: "someone@example.com"},
 				baseURL+"/my/referrals/inbox")
@@ -303,8 +323,9 @@ func referralRequestSample(baseURL string) (Sample, error) {
 // version of this mail.
 func reportRemovedSample(baseURL string) (Sample, error) {
 	return sample("report-job-removed", "Moderation / Report: job removed", func(c *capture) error {
-		return report.NewMailNotifier(c, "hi@freehire.me", baseURL).
+		return report.NewMailNotifier(c, "hi@freehire.me", baseURL, previewLinks(baseURL)).
 			NotifyDecision(context.Background(), report.Decision{
+				UserID:    previewUserID,
 				Email:     "someone@example.com",
 				JobTitle:  "Go Developer — Payments",
 				JobSlug:   "go-developer-payments-avenga",
@@ -318,8 +339,9 @@ func reportRemovedSample(baseURL string) (Sample, error) {
 
 func reportDismissedSample(baseURL string) (Sample, error) {
 	return sample("report-dismissed", "Moderation / Report: no change", func(c *capture) error {
-		return report.NewMailNotifier(c, "hi@freehire.me", baseURL).
+		return report.NewMailNotifier(c, "hi@freehire.me", baseURL, previewLinks(baseURL)).
 			NotifyDecision(context.Background(), report.Decision{
+				UserID:   previewUserID,
 				Email:    "someone@example.com",
 				JobTitle: "Staff Engineer, Platform",
 				JobSlug:  "staff-engineer-platform-speechify",

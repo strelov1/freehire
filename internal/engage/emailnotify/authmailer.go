@@ -6,6 +6,7 @@ import (
 	"html/template"
 
 	"github.com/strelov1/freehire/internal/application/mailtpl"
+	"github.com/strelov1/freehire/internal/engage/emailprefs"
 )
 
 // AuthMailer renders and sends the two transactional account mails: the sign-up
@@ -58,7 +59,6 @@ func (m *AuthMailer) SendVerificationCode(ctx context.Context, email, code strin
 		Preheader: "Your freehire confirmation code",
 		Heading:   "Confirm your email address",
 		Footer:    "If you did not create a freehire account, ignore this message — an account is never created without the code.",
-		Essential: true,
 	},
 		"Confirm your email address with this code: "+code+
 			"\nIt expires in 15 minutes. If you did not create an account, ignore this message.")
@@ -70,7 +70,6 @@ func (m *AuthMailer) SendPasswordResetCode(ctx context.Context, email, code stri
 		Preheader: "Your freehire password-reset code",
 		Heading:   "Reset your password",
 		Footer:    "If this was not you, ignore this message — your password has not changed.",
-		Essential: true,
 	},
 		"Use this code to set a new password: "+code+
 			"\nIt expires in 15 minutes. If this was not you, ignore this message — your password has not changed.")
@@ -84,5 +83,15 @@ func (m *AuthMailer) send(ctx context.Context, email, subject string, tpl *templ
 		return err
 	}
 	body.Content = template.HTML(content.String()) //nolint:gosec // rendered by the trusted template above, which escaped the code in context
-	return m.sender.Send(ctx, m.from, email, subject, m.layout.Render(body), text)
+	// GroupEssential and no unsubscribe URL, and the transport enforces the pair: a
+	// code somebody asked for thirty seconds ago has no setting that would stop it,
+	// and offering one invites a click that changes nothing.
+	return m.sender.Send(ctx, Message{
+		From:    m.from,
+		To:      email,
+		Subject: subject,
+		HTML:    m.layout.Render(body),
+		Text:    text,
+		Group:   emailprefs.GroupEssential,
+	})
 }

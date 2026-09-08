@@ -12,6 +12,7 @@ import (
 
 	"github.com/strelov1/freehire/internal/application/mailtpl"
 	"github.com/strelov1/freehire/internal/engage/emailnotify"
+	"github.com/strelov1/freehire/internal/engage/emailprefs"
 	"github.com/strelov1/freehire/internal/engage/notify"
 	"github.com/strelov1/freehire/internal/engage/telegramnotify"
 )
@@ -151,13 +152,20 @@ type EmailNotifier struct {
 	from       string
 	jobBaseURL string
 	layout     *mailtpl.Layout
+	links      *emailprefs.Links
 }
 
 // NewEmailNotifier builds an EmailNotifier sending from `from` through sender, with
-// the job link rooted at jobBaseURL.
-func NewEmailNotifier(sender emailnotify.Sender, from, jobBaseURL string) *EmailNotifier {
+// the job link rooted at jobBaseURL and unsubscribe links signed by links.
+func NewEmailNotifier(sender emailnotify.Sender, from, jobBaseURL string, links *emailprefs.Links) *EmailNotifier {
 	base := strings.TrimRight(jobBaseURL, "/")
-	return &EmailNotifier{sender: sender, from: emailnotify.From(senderName, from), jobBaseURL: base, layout: mailtpl.New(base)}
+	return &EmailNotifier{
+		sender:     sender,
+		from:       emailnotify.From(senderName, from),
+		jobBaseURL: base,
+		layout:     mailtpl.New(base),
+		links:      links,
+	}
 }
 
 // emailData is what the body template renders. Every field is emitted in an
@@ -199,35 +207,45 @@ func (n *EmailNotifier) Send(ctx context.Context, _ string, dest string, ms []Re
 	if len(ms) == 0 {
 		return nil
 	}
-	if len(ms) == 1 {
-		return n.sendOne(ctx, dest, ms[0])
+	// Every message in a batch belongs to the same account — the engine groups by
+	// user before it gets here — so the first one names the recipient.
+	unsubscribe, err := n.links.For(ms[0].UserID, emailprefs.GroupActivity)
+	if err != nil {
+		return fmt.Errorf("reminder: unsubscribe link for user %d: %w", ms[0].UserID, err)
 	}
-	return n.sendBatch(ctx, dest, ms)
+	if len(ms) == 1 {
+		return n.sendOne(ctx, dest, ms[0], unsubscribe)
+	}
+	return n.sendBatch(ctx, dest, ms, unsubscribe)
 }
 
 // sendOne is the pre-grouping mail, kept verbatim.
-func (n *EmailNotifier) sendOne(ctx context.Context, dest string, m ReminderMessage) error {
+func (n *EmailNotifier) sendOne(ctx context.Context, dest string, m ReminderMessage, unsubscribe string) error {
 	url := n.jobURL(m)
 	var content bytes.Buffer
 	if err := oneTemplate.Execute(&content, mailtpl.NewJob(m.JobTitle, m.Company, "", url)); err != nil {
 		return err
 	}
 	htmlBody := n.layout.Render(mailtpl.Body{
-		Preheader: "A job you saved is still open",
-		Heading:   "Still interested?",
-		Content:   template.HTML(content.String()), //nolint:gosec // rendered by the trusted template above, which escaped both fields in context
-		Footer:    "You’re getting this because you saved this job on freehire.",
+		Preheader:      "A job you saved is still open",
+		Heading:        "Still interested?",
+		Content:        template.HTML(content.String()), //nolint:gosec // rendered by the trusted template above, which escaped both fields in context
+		Footer:         "You’re getting this because you saved this job on freehire.",
+		UnsubscribeURL: unsubscribe,
 	})
 
-	textBody := fmt.Sprintf("You saved %s at %s and haven't applied yet.\n\nOpen the job: %s\n",
-		m.JobTitle, m.Company, url)
+	textBody := fmt.Sprintf("You saved %s at %s and haven't applied yet.\n\nOpen the job: %s\n\nUnsubscribe: %s\n",
+		m.JobTitle, m.Company, url, unsubscribe)
 	subject := fmt.Sprintf("Reminder: %s at %s", m.JobTitle, m.Company)
-	return n.sender.Send(ctx, n.from, dest, subject, htmlBody, textBody)
+	return n.sender.Send(ctx, emailnotify.Message{
+		From: n.from, To: dest, Subject: subject, HTML: htmlBody, Text: textBody,
+		Group: emailprefs.GroupActivity, UnsubscribeURL: unsubscribe,
+	})
 }
 
 // sendBatch is the multi-reminder mail: the same job rows a digest draws, one
 // sentence saying why they arrived together, and one action.
-func (n *EmailNotifier) sendBatch(ctx context.Context, dest string, ms []ReminderMessage) error {
+func (n *EmailNotifier) sendBatch(ctx context.Context, dest string, ms []ReminderMessage, unsubscribe string) error {
 	shown, more := notify.Listed(ms)
 	rows := make([]mailtpl.Job, 0, len(shown))
 	for _, m := range shown {
@@ -243,14 +261,19 @@ func (n *EmailNotifier) sendBatch(ctx context.Context, dest string, ms []Reminde
 		return err
 	}
 	htmlBody := n.layout.Render(mailtpl.Body{
-		Preheader: fmt.Sprintf("%d jobs you saved are still open", len(ms)),
-		Heading:   fmt.Sprintf("%d saved jobs are still open", len(ms)),
-		Content:   template.HTML(content.String()), //nolint:gosec // rendered by the trusted template above, which escaped every field in context
-		Footer:    "You’re getting this because you saved these jobs on freehire.",
+		Preheader:      fmt.Sprintf("%d jobs you saved are still open", len(ms)),
+		Heading:        fmt.Sprintf("%d saved jobs are still open", len(ms)),
+		Content:        template.HTML(content.String()), //nolint:gosec // rendered by the trusted template above, which escaped every field in context
+		Footer:         "You’re getting this because you saved these jobs on freehire.",
+		UnsubscribeURL: unsubscribe,
 	})
 
 	subject := fmt.Sprintf("Reminder: %d saved jobs", len(ms))
-	return n.sender.Send(ctx, n.from, dest, subject, htmlBody, n.renderBatchText(shown, more, reason))
+	return n.sender.Send(ctx, emailnotify.Message{
+		From: n.from, To: dest, Subject: subject, HTML: htmlBody,
+		Text:  n.renderBatchText(shown, more, reason) + "\nUnsubscribe: " + unsubscribe + "\n",
+		Group: emailprefs.GroupActivity, UnsubscribeURL: unsubscribe,
+	})
 }
 
 // savedURL is the saved-jobs list, tagged with an email UTM source.

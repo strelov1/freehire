@@ -3,19 +3,27 @@ package report
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"html/template"
 	"net/mail"
 	"strings"
 	"unicode/utf8"
 
 	"github.com/strelov1/freehire/internal/application/mailtpl"
+	"github.com/strelov1/freehire/internal/engage/emailnotify"
+	"github.com/strelov1/freehire/internal/engage/emailprefs"
 )
 
 // EmailSender is the slice of the SES transport the notifier needs; *emailnotify.Client
-// satisfies it. Declared here rather than imported so this package does not depend on the
-// AWS dependency graph (the referral.ChannelPinger precedent).
+// satisfies it. The interface stays declared here — a consumer owns its own seam — but it
+// now names emailnotify.Message, so the import this package used to avoid is back.
+//
+// That is the price of one message type. Every mail in the product now goes out through
+// one Send so that one check can refuse a silenceable mail carrying no way out of it, and
+// a private copy of the message shape per sender would put that check back to being per
+// sender, which is where it was missing in the first place.
 type EmailSender interface {
-	Send(ctx context.Context, from, to, subject, htmlBody, textBody string) error
+	Send(ctx context.Context, m emailnotify.Message) error
 }
 
 // Compile-time proof that MailNotifier satisfies the seam the use cases depend on.
@@ -30,13 +38,20 @@ type MailNotifier struct {
 	from    string
 	baseURL string
 	layout  *mailtpl.Layout
+	links   *emailprefs.Links
 }
 
 // NewMailNotifier builds a MailNotifier sending from `from` through sender. baseURL is the
-// site origin the reported job is linked under.
-func NewMailNotifier(sender EmailSender, from, baseURL string) *MailNotifier {
+// site origin the reported job is linked under; links signs the unsubscribe URL.
+func NewMailNotifier(sender EmailSender, from, baseURL string, links *emailprefs.Links) *MailNotifier {
 	base := strings.TrimRight(baseURL, "/")
-	return &MailNotifier{sender: sender, from: senderFrom(from), baseURL: base, layout: mailtpl.New(base)}
+	return &MailNotifier{
+		sender:  sender,
+		from:    senderFrom(from),
+		baseURL: base,
+		layout:  mailtpl.New(base),
+		links:   links,
+	}
 }
 
 // senderFrom puts the product's name on the From header. It is spelled out here
@@ -85,13 +100,22 @@ func (m *MailNotifier) NotifyDecision(ctx context.Context, d Decision) error {
 	if err := noticeHTML.Execute(&content, mail); err != nil {
 		return err
 	}
+	unsubscribe, err := m.links.For(d.UserID, emailprefs.GroupActivity)
+	if err != nil {
+		return fmt.Errorf("report: unsubscribe link for user %d: %w", d.UserID, err)
+	}
 	html := m.layout.Render(mailtpl.Body{
-		Preheader: subject,
-		Heading:   heading,
-		Content:   template.HTML(content.String()), //nolint:gosec // rendered by the trusted template above, which escaped the reporter's own words in context
-		Footer:    "You’re getting this because you reported a listing on freehire.",
+		Preheader:      subject,
+		Heading:        heading,
+		Content:        template.HTML(content.String()), //nolint:gosec // rendered by the trusted template above, which escaped the reporter's own words in context
+		Footer:         "You’re getting this because you reported a listing on freehire.",
+		UnsubscribeURL: unsubscribe,
 	})
-	return m.sender.Send(ctx, m.from, d.Email, subject, html, textBody(mail))
+	return m.sender.Send(ctx, emailnotify.Message{
+		From: m.from, To: d.Email, Subject: subject, HTML: html,
+		Text:  textBody(mail) + "\nUnsubscribe: " + unsubscribe + "\n",
+		Group: emailprefs.GroupActivity, UnsubscribeURL: unsubscribe,
+	})
 }
 
 // compose picks the subject, the shell heading, and the prose for one outcome.

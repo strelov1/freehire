@@ -2,16 +2,12 @@ package emailnotify
 
 import (
 	"bytes"
-	"context"
 	"encoding/base64"
 	"fmt"
 	"mime"
 	"mime/multipart"
 	"net/textproto"
 	"time"
-
-	"github.com/aws/aws-sdk-go-v2/service/sesv2"
-	"github.com/aws/aws-sdk-go-v2/service/sesv2/types"
 )
 
 // Attachment is one file carried by an email.
@@ -26,17 +22,8 @@ type Attachment struct {
 	Content     []byte
 }
 
-// AttachmentSender is the transport for an email that carries files. It is separate from
-// Sender rather than replacing it: almost every mail this product sends is body-only, and
-// SES bills and validates a raw message differently from a simple one.
-type AttachmentSender interface {
-	SendWithAttachments(ctx context.Context, from, to, subject, htmlBody, textBody string, attachments []Attachment) error
-}
-
-// Compile-time guarantee that Client is an AttachmentSender.
-var _ AttachmentSender = (*Client)(nil)
-
-// SendWithAttachments delivers one email carrying files, via SES's raw-message path.
+// buildRawMessage assembles the RFC 5322 message SES sends verbatim, for a message
+// carrying files.
 //
 // The structure is multipart/mixed wrapping a multipart/alternative body plus one part
 // per attachment. That nesting is not decoration: putting the text and HTML alternatives
@@ -48,44 +35,38 @@ var _ AttachmentSender = (*Client)(nil)
 // survive quoted-printable, but base64 is what keeps a long unfolded line, a CRLF, or a
 // non-ASCII name from being rewritten in transit — and a rewritten `.ics` is one no
 // client will parse.
-func (c *Client) SendWithAttachments(ctx context.Context, from, to, subject, htmlBody, textBody string, attachments []Attachment) error {
-	raw, err := buildRawMessage(from, to, subject, htmlBody, textBody, attachments)
-	if err != nil {
-		return err
-	}
-	in := &sesv2.SendEmailInput{
-		Content: &types.EmailContent{Raw: &types.RawMessage{Data: raw}},
-	}
-	if _, err := c.ses.SendEmail(ctx, in); err != nil {
-		return fmt.Errorf("emailnotify: ses raw send to %s: %w", to, err)
-	}
-	return nil
-}
-
-// buildRawMessage assembles the RFC 5322 message SES sends verbatim.
-func buildRawMessage(from, to, subject, htmlBody, textBody string, attachments []Attachment) ([]byte, error) {
+func buildRawMessage(m Message) ([]byte, error) {
 	var buf bytes.Buffer
 	mixed := multipart.NewWriter(&buf)
 
 	// The subject is encoded rather than written raw: a header is ASCII, and a non-ASCII
 	// subject line reaching a server unencoded is either rejected or mangled.
 	headers := []string{
-		"From: " + from,
-		"To: " + to,
-		"Subject: " + mime.QEncoding.Encode("utf-8", subject),
+		"From: " + m.From,
+		"To: " + m.To,
+		"Subject: " + mime.QEncoding.Encode("utf-8", m.Subject),
 		"Date: " + time.Now().Format(time.RFC1123Z),
 		"MIME-Version: 1.0",
 		"Content-Type: multipart/mixed; boundary=" + mixed.Boundary(),
+	}
+	if m.ReplyTo != "" {
+		headers = append(headers, "Reply-To: "+m.ReplyTo)
+	}
+	// The same pair the simple path sends, spelled once in unsubscribeHeaders and
+	// rendered into wire form here. A raw message is assembled by hand, so this is
+	// the one place the two paths could have drifted apart.
+	for _, h := range m.unsubscribeHeaders() {
+		headers = append(headers, *h.Name+": "+*h.Value)
 	}
 	for _, h := range headers {
 		buf.WriteString(h + "\r\n")
 	}
 	buf.WriteString("\r\n")
 
-	if err := writeAlternativeBody(mixed, htmlBody, textBody); err != nil {
+	if err := writeAlternativeBody(mixed, m.HTML, m.Text); err != nil {
 		return nil, err
 	}
-	for _, a := range attachments {
+	for _, a := range m.Attachments {
 		if err := writeAttachment(mixed, a); err != nil {
 			return nil, err
 		}

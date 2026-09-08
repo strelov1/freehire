@@ -36,6 +36,7 @@ import (
 	"github.com/strelov1/freehire/internal/candidate/talentnetwork"
 	"github.com/strelov1/freehire/internal/engage/companyfeedback"
 	"github.com/strelov1/freehire/internal/engage/emailnotify"
+	"github.com/strelov1/freehire/internal/engage/emailprefs"
 	"github.com/strelov1/freehire/internal/engage/mentorship"
 	"github.com/strelov1/freehire/internal/engage/referral"
 	"github.com/strelov1/freehire/internal/engage/report"
@@ -661,11 +662,14 @@ func Register(app *fiber.App, cfg Config) {
 	// concrete pointer never hides behind a non-nil interface (see the search note above);
 	// a referrer with no reachable channel still sees the request in-cabinet.
 	var referralEmail referral.EmailSender
-	// The same client, held as its CONCRETE type as well, because mentorship needs the
-	// attachment path a bare Sender does not expose — a calendar invitation is only an
-	// invitation when it is an attachment. A typed nil must not hide behind a non-nil
-	// interface here either, which is why this is its own pointer rather than a type
-	// assertion on referralEmail.
+	// mailLinks signs the unsubscribe URL every non-essential mail carries. One
+	// instance for every sender the API composes, so the token in a footer is the
+	// same shape wherever it was minted.
+	mailLinks := emailprefs.NewLinks(cfg.JWTSecret, cfg.FrontendOrigin)
+	// The same client, held as its CONCRETE type as well, because mentorship is
+	// composed separately below. A typed nil must not hide behind a non-nil interface
+	// here either, which is why this is its own pointer rather than a type assertion
+	// on referralEmail.
 	var mailClient *emailnotify.Client
 	if cfg.AWSRegion != "" && cfg.NotifyEmailFrom != "" {
 		if ec, err := emailnotify.NewClient(context.Background(), cfg.AWSRegion); err != nil {
@@ -683,7 +687,7 @@ func Register(app *fiber.App, cfg Config) {
 			// And it tells a reporter what a moderator decided about their report.
 			// Without it the queue still decides reports — each decision simply
 			// reports that nobody was notified.
-			reportsH.report.WithNotifier(report.NewMailNotifier(ec, cfg.NotifyEmailFrom, cfg.FrontendOrigin))
+			reportsH.report.WithNotifier(report.NewMailNotifier(ec, cfg.NotifyEmailFrom, cfg.FrontendOrigin, mailLinks))
 		}
 	} else {
 		log.Print("accounts: AWS_REGION/NOTIFY_EMAIL_FROM unset — email verification and password reset are unavailable")
@@ -692,7 +696,7 @@ func Register(app *fiber.App, cfg Config) {
 	if telegramH.telegramBot != nil {
 		referralTelegram = telegramH.telegramBot
 	}
-	referralPinger := referral.NewChannelPinger(referralEmail, cfg.NotifyEmailFrom, referralTelegram, cfg.FrontendOrigin)
+	referralPinger := referral.NewChannelPinger(referralEmail, cfg.NotifyEmailFrom, referralTelegram, cfg.FrontendOrigin, mailLinks)
 	referralCabinetURL := strings.TrimRight(cfg.FrontendOrigin, "/") + "/my/referrals?tab=incoming"
 	referralSvc := referral.New(referral.NewQueriesRepository(queries), referralPinger, cfg.Blob,
 		referral.Config{CabinetURL: referralCabinetURL})

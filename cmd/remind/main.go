@@ -20,6 +20,7 @@ import (
 	"log"
 
 	"github.com/strelov1/freehire/internal/engage/emailnotify"
+	"github.com/strelov1/freehire/internal/engage/emailprefs"
 	"github.com/strelov1/freehire/internal/engage/notify"
 	"github.com/strelov1/freehire/internal/engage/pushnotify"
 	"github.com/strelov1/freehire/internal/engage/reminder"
@@ -56,7 +57,7 @@ func run() int {
 		if ses, err := emailnotify.NewClient(ctx, cfg.AWSRegion); err != nil {
 			log.Printf("remind: email channel disabled: %v", err)
 		} else {
-			router[notify.ChannelEmail] = reminder.NewEmailNotifier(ses, cfg.NotifyEmailFrom, cfg.FrontendOrigin)
+			router[notify.ChannelEmail] = reminder.NewEmailNotifier(ses, cfg.NotifyEmailFrom, cfg.FrontendOrigin, emailprefs.NewLinks(cfg.JWTSecret, cfg.FrontendOrigin))
 		}
 	}
 	// Push needs no server-held credential (Expo's relay holds the APNs/FCM

@@ -25,14 +25,14 @@ import (
 
 	"github.com/strelov1/freehire/internal/application/mailtpl"
 	"github.com/strelov1/freehire/internal/engage/emailnotify"
+	"github.com/strelov1/freehire/internal/engage/emailprefs"
 )
 
-// Sender delivers one rendered message with a Reply-To. It is a narrower contract
-// than emailnotify.Sender, which has no Reply-To — the difference is the point of
-// this feature, so it gets its own seam rather than widening the shared one.
-// *emailnotify.Client satisfies it.
+// Sender delivers one rendered message. The Reply-To this sequence needs used to
+// justify its own transport method; it is now a field on the one Message, so this is
+// the ordinary seam and not a narrower one. *emailnotify.Client satisfies it.
 type Sender interface {
-	SendWithReplyTo(ctx context.Context, from, replyTo, to, subject, htmlBody, textBody string) error
+	Send(ctx context.Context, m emailnotify.Message) error
 }
 
 // Step names one mail in the sequence. The values are the ledger's `step` column
@@ -68,13 +68,14 @@ type Mailer struct {
 	replyTo string
 	baseURL string
 	layout  *mailtpl.Layout
+	links   *emailprefs.Links
 }
 
 // NewMailer builds a Mailer. `from` is the verified sending address; `replyTo` is
 // the human inbox that answers — without it these mails ask for a reply that would
 // land in an unattended mailbox, so a blank value is a configuration error the
 // caller is expected to catch, not something this type papers over.
-func NewMailer(sender Sender, from, replyTo, baseURL string) *Mailer {
+func NewMailer(sender Sender, from, replyTo, baseURL string, links *emailprefs.Links) *Mailer {
 	base := strings.TrimRight(baseURL, "/")
 	return &Mailer{
 		sender:  sender,
@@ -82,6 +83,7 @@ func NewMailer(sender Sender, from, replyTo, baseURL string) *Mailer {
 		replyTo: replyTo,
 		baseURL: base,
 		layout:  mailtpl.New(base),
+		links:   links,
 	}
 }
 
@@ -90,13 +92,21 @@ func NewMailer(sender Sender, from, replyTo, baseURL string) *Mailer {
 // would set up a reply to a company that no one intends to answer.
 const senderName = "Ilya from freehire"
 
-// Send delivers one step to one address.
-func (m *Mailer) Send(ctx context.Context, step Step, to string) error {
-	mail, err := m.render(step)
+// Send delivers one step to one recipient.
+func (m *Mailer) Send(ctx context.Context, step Step, userID int64, to string) error {
+	unsubscribe, err := m.links.For(userID, emailprefs.GroupNews)
+	if err != nil {
+		return fmt.Errorf("onboarding: unsubscribe link for user %d: %w", userID, err)
+	}
+	mail, err := m.render(step, unsubscribe)
 	if err != nil {
 		return err
 	}
-	return m.sender.SendWithReplyTo(ctx, m.from, m.replyTo, to, mail.subject, mail.html, mail.text)
+	return m.sender.Send(ctx, emailnotify.Message{
+		From: m.from, To: to, ReplyTo: m.replyTo, Subject: mail.subject,
+		HTML: mail.html, Text: mail.text,
+		Group: emailprefs.GroupNews, UnsubscribeURL: unsubscribe,
+	})
 }
 
 // rendered is one mail's three parts.
@@ -122,7 +132,7 @@ type content struct {
 	LinkedInURL       string
 }
 
-func (m *Mailer) render(step Step) (rendered, error) {
+func (m *Mailer) render(step Step, unsubscribe string) (rendered, error) {
 	spec, ok := specs[step]
 	if !ok {
 		return rendered{}, fmt.Errorf("onboarding: unknown step %q", step)
@@ -134,12 +144,14 @@ func (m *Mailer) render(step Step) (rendered, error) {
 	}
 
 	html := m.layout.Render(mailtpl.Body{
-		Preheader: spec.preheader,
-		Heading:   spec.heading,
-		Content:   template.HTML(body.String()), //nolint:gosec // trusted templates over package constants; no user data reaches them
-		Footer:    "You’re getting this because you signed up for freehire.",
+		Preheader:      spec.preheader,
+		Heading:        spec.heading,
+		Content:        template.HTML(body.String()), //nolint:gosec // trusted templates over package constants; no user data reaches them
+		Footer:         "You’re getting this because you signed up for freehire.",
+		UnsubscribeURL: unsubscribe,
 	})
-	return rendered{subject: spec.subject, html: html, text: spec.text(m.baseURL)}, nil
+	text := spec.text(m.baseURL) + "\nUnsubscribe: " + unsubscribe + "\n"
+	return rendered{subject: spec.subject, html: html, text: text}, nil
 }
 
 func (m *Mailer) content() content {

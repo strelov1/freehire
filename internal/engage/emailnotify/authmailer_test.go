@@ -5,21 +5,26 @@ import (
 	"errors"
 	"strings"
 	"testing"
+
+	"github.com/strelov1/freehire/internal/engage/emailprefs"
 )
 
 // recordingSender captures the last rendered message instead of touching SES.
 type recordingSender struct {
 	from, to, subject, html, text string
+	group                         emailprefs.Group
+	unsubscribeURL                string
 	err                           error
 	sends                         int
 }
 
-func (r *recordingSender) Send(_ context.Context, from, to, subject, htmlBody, textBody string) error {
+func (r *recordingSender) Send(_ context.Context, m Message) error {
 	if r.err != nil {
 		return r.err
 	}
 	r.sends++
-	r.from, r.to, r.subject, r.html, r.text = from, to, subject, htmlBody, textBody
+	r.from, r.to, r.subject, r.html, r.text = m.From, m.To, m.Subject, m.HTML, m.Text
+	r.group, r.unsubscribeURL = m.Group, m.UnsubscribeURL
 	return nil
 }
 
