@@ -165,18 +165,27 @@ func (c *Client) As(secret string, onRefused func(), dims ...Dimension) *Client 
 // Schema-bound models build on top of it, so a tagged client's schema calls are tagged
 // too.
 func (c *Client) transport() http.RoundTripper {
-	if len(c.dims) == 0 && c.fallbackKey == "" {
-		return httputil.DefaultTransport
+	// next is langchaingo's own transport, which stamps the library's User-Agent. The
+	// gateway already groups spend by that, so replacing it outright would lose an axis we
+	// get for nothing.
+	next := httputil.DefaultTransport
+	if len(c.dims) > 0 || c.fallbackKey != "" {
+		next = &attribution{
+			dims:      c.dims,
+			fallback:  c.fallbackKey,
+			onRefused: c.onRefused,
+			next:      next,
+		}
 	}
-	return &attribution{
-		dims:      c.dims,
-		fallback:  c.fallbackKey,
-		onRefused: c.onRefused,
-		// next is langchaingo's own transport, which stamps the library's User-Agent.
-		// The gateway already groups spend by that, so replacing it outright would lose
-		// an axis we get for nothing.
-		next: httputil.DefaultTransport,
-	}
+	// The reasoning rewrite goes on unconditionally, because what it writes is decided per
+	// CALL rather than per client: a client cannot know at build time whether some later
+	// call will ask for it, and a transport installed only on the clients that happen to
+	// carry tags would make WithReasoning silently do nothing on the ones that do not.
+	// It costs a context lookup on a call that does not ask.
+	//
+	// Outside the attribution stamp so the body is rewritten once: a credential retry
+	// re-sends the rewritten body rather than rewriting a second time.
+	return &reasoningInjector{next: next}
 }
 
 // attribution stamps the feature tags onto an outgoing call and rescues one whose

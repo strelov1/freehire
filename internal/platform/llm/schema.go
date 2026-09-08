@@ -48,6 +48,9 @@ type genConfig struct {
 	schemaName  string
 	schema      llmschema.Schema
 	schemaAsked bool
+	// reasoning is how much the model should deliberate over this call; see
+	// WithReasoning. The zero value sends nothing.
+	reasoning ReasoningEffort
 }
 
 func newGenConfig(opts []GenOption) genConfig {
@@ -249,6 +252,12 @@ func withResponseFormat(body, format json.RawMessage) (json.RawMessage, error) {
 	fields := map[string]json.RawMessage{}
 	if err := json.Unmarshal(body, &fields); err != nil {
 		return body, nil //nolint:nilerr // not a JSON object: not ours to rewrite
+	}
+	// A literal `null` unmarshals into a map WITHOUT error and sets it to nil, so the error
+	// above does not catch it and the write below would panic. Same guard, same reason, as
+	// withReasoningEffort — see its comment for where such a panic would land.
+	if fields == nil {
+		return body, nil
 	}
 
 	fields["response_format"] = format
