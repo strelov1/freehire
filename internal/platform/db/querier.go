@@ -2205,6 +2205,10 @@ type Querier interface {
 	// rule anywhere but the query leaves a second reader free to forget it.
 	// sqlc.embed keeps the mentor row as one db.Mentor instead of forty loose columns, so
 	// the adapter maps it once rather than re-assembling it per query.
+	// The rating aggregate is joined here as well as in the directory, because the profile is
+	// where somebody decides whether to book: "SHALL show the aggregate rating and the count
+	// it rests on". Without it the card in the list carries a rating the page it links to
+	// does not.
 	GetPublishedMentorBySlug(ctx context.Context, slug string) (GetPublishedMentorBySlugRow, error)
 	// One offer by id — for the moderator's proof-CV view after role authorization.
 	GetReferralOffer(ctx context.Context, id uuid.UUID) (ReferralOffer, error)

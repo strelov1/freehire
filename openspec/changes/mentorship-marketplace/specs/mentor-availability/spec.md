@@ -218,5 +218,15 @@ takes it receives the ordinary "no longer available" refusal.
 
 #### Scenario: An unreachable cache degrades rather than fails
 
-- **WHEN** the cache is unavailable
+- **WHEN** the cache is unavailable, whether reading or writing
 - **THEN** slots are computed directly and the response is correct
+
+#### Scenario: Pausing takes effect before the cache expires
+
+- **WHEN** a mentor's window has been cached and the mentor then pauses
+- **THEN** the next request for that window answers as though the mentor does not exist
+- **AND** it does not serve the cached slots
+
+The publication check SHALL therefore run BEFORE the cache is consulted. The cache exists
+to save the slot computation, not the profile read — and a pause button that appears to do
+nothing for a minute is used at exactly the moment that matters.

@@ -6,19 +6,13 @@ import (
 	"time"
 )
 
-// MentorSlots is the public slot read: a published mentor's offerable hours in a window,
-// expressed in the viewer's zone.
+// There is deliberately no uncached MentorSlots beside CachedMentorSlots.
 //
-// It refuses an unpublished mentor the same way every other public read does — as though
-// they do not exist — so a paused mentor's calendar cannot be walked by anybody who
-// remembers their address.
-func (s *Service) MentorSlots(ctx context.Context, slug string, from, to time.Time, viewerZone string) (SlotResult, error) {
-	mentor, err := s.PublicProfile(ctx, slug)
-	if err != nil {
-		return SlotResult{}, err
-	}
-	return s.slotsFor(ctx, mentor, from, to, viewerZone)
-}
+// It existed, and the dead-code guard found it unreachable the moment the publication
+// check moved ahead of the cache — because that is where the "look the mentor up, then
+// compute" pair now lives, and one entry point cannot drift from another. A second
+// public read would be a second place to forget that a paused mentor answers as though
+// they do not exist.
 
 // slotsFor assembles the engine's inputs and runs it.
 func (s *Service) slotsFor(ctx context.Context, mentor Profile, from, to time.Time, viewerZone string) (SlotResult, error) {

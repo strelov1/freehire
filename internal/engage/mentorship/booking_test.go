@@ -333,6 +333,64 @@ func TestAStrangerCannotCancel(t *testing.T) {
 	}
 }
 
+// A booking is readable only by its two parties. The random identifier makes bookings
+// unenumerable; this makes a leaked or guessed one useless. Neither substitutes for the
+// other, which is why the spec states them as separate requirements.
+func TestOnlyThePartiesToASessionMayReadIt(t *testing.T) {
+	repo := newFakeRepo()
+	notifier := &fakeNotifier{}
+	mentor := bookableMentor(t, repo)
+	svc := bookingService(repo, notifier)
+
+	const seeker = 42
+	booking, err := svc.Book(context.Background(), BookingInput{
+		MentorSlug: mentor.Slug, SeekerUserID: seeker,
+		StartsAt: tuesdayAt(t, 18), SeekerTimezone: "Asia/Tokyo",
+	})
+	if err != nil {
+		t.Fatalf("Book: %v", err)
+	}
+
+	t.Run("the seeker may", func(t *testing.T) {
+		got, err := svc.Session(context.Background(), booking.ID, seeker)
+		if err != nil {
+			t.Fatalf("Session: %v", err)
+		}
+		if got.ID != booking.ID {
+			t.Error("a different booking came back")
+		}
+		if got.MeetingURL == "" {
+			t.Error("the seeker's own booking carries no meeting link")
+		}
+	})
+
+	t.Run("the mentor may", func(t *testing.T) {
+		if _, err := svc.Session(context.Background(), booking.ID, mentor.UserID); err != nil {
+			t.Errorf("Session: %v", err)
+		}
+	})
+
+	// The same answer a booking that does not exist gets — a stranger must not learn that
+	// somebody else's session is real.
+	t.Run("a stranger may not", func(t *testing.T) {
+		if _, err := svc.Session(context.Background(), booking.ID, 4242); !errors.Is(err, ErrBookingNotFound) {
+			t.Errorf("error = %v, want ErrBookingNotFound", err)
+		}
+	})
+
+	t.Run("an unknown id answers the same way", func(t *testing.T) {
+		if _, err := svc.Session(context.Background(), uuid.New(), seeker); !errors.Is(err, ErrBookingNotFound) {
+			t.Errorf("error = %v, want ErrBookingNotFound", err)
+		}
+	})
+
+	t.Run("an unauthenticated caller is refused", func(t *testing.T) {
+		if _, err := svc.Session(context.Background(), booking.ID, 0); !errors.Is(err, ErrNotAuthenticated) {
+			t.Errorf("error = %v, want ErrNotAuthenticated", err)
+		}
+	})
+}
+
 // Completion is not a decision anybody makes; it is "confirmed, and the end has passed".
 func TestASessionIsCompleteOnceItsEndHasPassed(t *testing.T) {
 	start := time.Date(2026, time.September, 8, 18, 0, 0, 0, time.UTC)

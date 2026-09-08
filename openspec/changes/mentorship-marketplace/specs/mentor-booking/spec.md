@@ -235,7 +235,18 @@ The system SHALL give a seeker a list of the sessions they booked and a mentor a
 of the sessions booked with them, each split into upcoming and past, and each readable
 only by that party.
 
+The split SHALL be made against ONE clock for the whole list, so a session starting
+between two reads cannot appear in both halves or in neither. A cancelled session SHALL
+be past whatever its start time says: nobody is going to it.
+
 #### Scenario: A seeker's list holds only their own bookings
 
 - **WHEN** a signed-in seeker lists their sessions
 - **THEN** every entry is a booking they made
+
+#### Scenario: A cancelled future session is past, not upcoming
+
+- **WHEN** a party lists their sessions and one confirmed future session has been
+  cancelled
+- **THEN** it appears under past
+- **AND** the still-confirmed future sessions appear under upcoming

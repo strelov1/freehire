@@ -566,15 +566,23 @@ func (q *Queries) GetMentorReviewSummary(ctx context.Context, mentorID int64) (G
 }
 
 const getPublishedMentorBySlug = `-- name: GetPublishedMentorBySlug :one
-SELECT m.id, m.user_id, m.company_slug, m.slug, m.display_name, m.headline, m.bio, m.topics, m.languages, m.timezone, m.session_duration_min, m.buffer_before_min, m.buffer_after_min, m.min_notice_min, m.horizon_days, m.meeting_url, m.status, m.paused, m.decided_by, m.decided_at, m.created_at, m.updated_at, c.name AS company_name
+SELECT m.id, m.user_id, m.company_slug, m.slug, m.display_name, m.headline, m.bio, m.topics, m.languages, m.timezone, m.session_duration_min, m.buffer_before_min, m.buffer_after_min, m.min_notice_min, m.horizon_days, m.meeting_url, m.status, m.paused, m.decided_by, m.decided_at, m.created_at, m.updated_at, c.name AS company_name,
+    COALESCE(r.rating_count, 0)::bigint AS rating_count,
+    COALESCE(r.rating_avg, 0)::numeric  AS rating_avg
 FROM mentors m
 LEFT JOIN companies c ON c.slug = m.company_slug
+LEFT JOIN (
+    SELECT mentor_id, count(*) AS rating_count, avg(rating) AS rating_avg
+    FROM mentor_reviews GROUP BY mentor_id
+) r ON r.mentor_id = m.id
 WHERE m.slug = $1 AND m.status = 'approved' AND NOT m.paused
 `
 
 type GetPublishedMentorBySlugRow struct {
-	Mentor      Mentor      `json:"mentor"`
-	CompanyName pgtype.Text `json:"company_name"`
+	Mentor      Mentor         `json:"mentor"`
+	CompanyName pgtype.Text    `json:"company_name"`
+	RatingCount int64          `json:"rating_count"`
+	RatingAvg   pgtype.Numeric `json:"rating_avg"`
 }
 
 // The PUBLIC profile read. Predicated rather than filtered in the service: a pending,
@@ -582,6 +590,10 @@ type GetPublishedMentorBySlugRow struct {
 // rule anywhere but the query leaves a second reader free to forget it.
 // sqlc.embed keeps the mentor row as one db.Mentor instead of forty loose columns, so
 // the adapter maps it once rather than re-assembling it per query.
+// The rating aggregate is joined here as well as in the directory, because the profile is
+// where somebody decides whether to book: "SHALL show the aggregate rating and the count
+// it rests on". Without it the card in the list carries a rating the page it links to
+// does not.
 func (q *Queries) GetPublishedMentorBySlug(ctx context.Context, slug string) (GetPublishedMentorBySlugRow, error) {
 	row := q.db.QueryRow(ctx, getPublishedMentorBySlug, slug)
 	var i GetPublishedMentorBySlugRow
@@ -609,6 +621,8 @@ func (q *Queries) GetPublishedMentorBySlug(ctx context.Context, slug string) (Ge
 		&i.Mentor.CreatedAt,
 		&i.Mentor.UpdatedAt,
 		&i.CompanyName,
+		&i.RatingCount,
+		&i.RatingAvg,
 	)
 	return i, err
 }

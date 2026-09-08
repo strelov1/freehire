@@ -54,8 +54,17 @@ type cachedSlots struct {
 // A cache that is down or misbehaving degrades to computing directly. A read never fails
 // because a cache is unavailable — the same rule catalogstats follows.
 func (s *Service) CachedMentorSlots(ctx context.Context, slug string, from, to time.Time, viewerZone string) (SlotResult, error) {
+	// The publication check runs BEFORE the cache, always. Reading the cache first would
+	// mean a mentor who pauses stays bookable until their entries expire — the pause
+	// button would appear to do nothing for a minute, which is exactly when somebody uses
+	// it. The check is one indexed read; the cache is here to save the slot COMPUTATION,
+	// which is the expensive half.
+	mentor, err := s.PublicProfile(ctx, slug)
+	if err != nil {
+		return SlotResult{}, err
+	}
 	if s.cache == nil {
-		return s.MentorSlots(ctx, slug, from, to, viewerZone)
+		return s.slotsFor(ctx, mentor, from, to, viewerZone)
 	}
 
 	key := slotCacheKey(slug, viewerZone, from, to)
@@ -67,7 +76,7 @@ func (s *Service) CachedMentorSlots(ctx context.Context, slug string, from, to t
 		log.Printf("mentorship: reading the slot cache for %s: %v", slug, err)
 	}
 
-	result, err := s.MentorSlots(ctx, slug, from, to, viewerZone)
+	result, err := s.slotsFor(ctx, mentor, from, to, viewerZone)
 	if err != nil {
 		return result, err
 	}

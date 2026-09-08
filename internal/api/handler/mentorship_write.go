@@ -81,7 +81,8 @@ func (h *mentorshipHandlers) ListMySessions(c *fiber.Ctx) error {
 	if err != nil {
 		return mentorshipError(err)
 	}
-	return c.JSON(fiber.Map{"data": seekerBookingList(bookings), "meta": fiber.Map{"count": len(bookings)}})
+	sessions := seekerBookingList(bookings)
+	return c.JSON(fiber.Map{"data": sessions, "meta": fiber.Map{"count": sessions.total()}})
 }
 
 // ListMentorBookings is the mentor's own list of who is coming. It carries each seeker's
@@ -95,36 +96,82 @@ func (h *mentorshipHandlers) ListMentorBookings(c *fiber.Ctx) error {
 	if err != nil {
 		return mentorshipError(err)
 	}
-	return c.JSON(fiber.Map{
-		"data": mentorBookingList(bookings),
-		"meta": fiber.Map{"count": len(bookings)},
-	})
+	sessions := mentorBookingList(bookings)
+	return c.JSON(fiber.Map{"data": sessions, "meta": fiber.Map{"count": sessions.total()}})
 }
+
+// splitSessions is the wire shape both session lists take: "each split into upcoming and
+// past", per the spec. Split HERE rather than by two queries against two clocks, so the
+// halves cannot disagree about which side of now a session sits on — a session starting
+// between two reads would otherwise appear in both, or in neither.
+//
+// Both slices are non-nil: a nil one marshals to `null`, and a client that gets null for
+// "no past sessions" has to special-case it.
+type splitSessions struct {
+	Upcoming []bookingResponse `json:"upcoming"`
+	Past     []bookingResponse `json:"past"`
+}
+
+func (s splitSessions) total() int { return len(s.Upcoming) + len(s.Past) }
 
 // seekerBookingList and mentorBookingList differ by one field, and are two functions
 // rather than one with a flag. The field is somebody's email address: a caller that has
 // to pass `true` to withhold it is a caller that can pass `false` by mistake, and the
 // mistake is silent.
-func seekerBookingList(bookings []mentorship.Booking) []bookingResponse {
-	now := time.Now()
-	out := make([]bookingResponse, 0, len(bookings))
-	for _, b := range bookings {
-		out = append(out, toBookingResponse(b, now))
-	}
-	return out
+func seekerBookingList(bookings []mentorship.Booking) splitSessions {
+	return splitBookings(bookings, false)
 }
 
 // mentorBookingList additionally names who is coming — the mentor is meeting this person,
 // so their identity is not a leak.
-func mentorBookingList(bookings []mentorship.Booking) []bookingResponse {
+func mentorBookingList(bookings []mentorship.Booking) splitSessions {
+	return splitBookings(bookings, true)
+}
+
+// splitBookings renders one party's sessions into the two halves, against ONE clock for
+// the whole list.
+func splitBookings(bookings []mentorship.Booking, nameTheSeeker bool) splitSessions {
 	now := time.Now()
-	out := make([]bookingResponse, 0, len(bookings))
+	out := splitSessions{Upcoming: []bookingResponse{}, Past: []bookingResponse{}}
 	for _, b := range bookings {
 		row := toBookingResponse(b, now)
-		row.SeekerEmail = b.SeekerEmail
-		out = append(out, row)
+		if nameTheSeeker {
+			row.SeekerEmail = b.SeekerEmail
+		}
+		// "Upcoming" is still-to-happen AND still on: a cancelled session is behind you
+		// whatever its clock says, because nobody is going to it.
+		if b.Status == mentorship.BookingConfirmed && b.StartsAt.After(now) {
+			out.Upcoming = append(out.Upcoming, row)
+			continue
+		}
+		out.Past = append(out.Past, row)
 	}
 	return out
+}
+
+// GetSession reads one session. Either party may; anybody else gets the 404 a session
+// that does not exist gets, so the route cannot be used to confirm one is real.
+func (h *mentorshipHandlers) GetSession(c *fiber.Ctx) error {
+	userID, err := requireUserID(c)
+	if err != nil {
+		return err
+	}
+	id, err := bookingIDParam(c)
+	if err != nil {
+		return err
+	}
+
+	booking, err := h.mentorship.Session(c.Context(), id, userID)
+	if err != nil {
+		return mentorshipError(err)
+	}
+
+	row := toBookingResponse(booking, time.Now())
+	// The mentor sees who is coming; the seeker does not need their own address back.
+	if userID == booking.MentorUserID {
+		row.SeekerEmail = booking.SeekerEmail
+	}
+	return c.JSON(fiber.Map{"data": row})
 }
 
 type cancelRequest struct {

@@ -37,6 +37,7 @@ func (h *mentorshipHandlers) register(api fiber.Router, mw middleware) {
 	// The seeker's side.
 	api.Post("/mentors/:slug/bookings", mw.key, h.BookSession)
 	api.Get("/me/mentorship/sessions", mw.key, h.ListMySessions)
+	api.Get("/me/mentorship/sessions/:id", mw.key, h.GetSession)
 	api.Post("/me/mentorship/sessions/:id/cancel", mw.key, h.CancelSession)
 	api.Put("/me/mentorship/sessions/:id/review", mw.key, h.ReviewSession)
 

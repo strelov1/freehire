@@ -25,9 +25,19 @@ SELECT * FROM mentors WHERE id = $1;
 -- rule anywhere but the query leaves a second reader free to forget it.
 -- sqlc.embed keeps the mentor row as one db.Mentor instead of forty loose columns, so
 -- the adapter maps it once rather than re-assembling it per query.
-SELECT sqlc.embed(m), c.name AS company_name
+-- The rating aggregate is joined here as well as in the directory, because the profile is
+-- where somebody decides whether to book: "SHALL show the aggregate rating and the count
+-- it rests on". Without it the card in the list carries a rating the page it links to
+-- does not.
+SELECT sqlc.embed(m), c.name AS company_name,
+    COALESCE(r.rating_count, 0)::bigint AS rating_count,
+    COALESCE(r.rating_avg, 0)::numeric  AS rating_avg
 FROM mentors m
 LEFT JOIN companies c ON c.slug = m.company_slug
+LEFT JOIN (
+    SELECT mentor_id, count(*) AS rating_count, avg(rating) AS rating_avg
+    FROM mentor_reviews GROUP BY mentor_id
+) r ON r.mentor_id = m.id
 WHERE m.slug = $1 AND m.status = 'approved' AND NOT m.paused;
 
 -- name: UpdateMentorProfile :one

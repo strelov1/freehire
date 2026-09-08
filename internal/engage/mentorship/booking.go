@@ -149,6 +149,26 @@ func (s *Service) Cancel(ctx context.Context, bookingID uuid.UUID, actorID int64
 	return booking, nil
 }
 
+// Session is one booking, readable ONLY by its two parties.
+//
+// A random identifier makes bookings unenumerable; this makes a leaked or guessed one
+// useless. They are different defences and neither substitutes for the other. A caller
+// who is neither party gets the same answer as one naming a booking that does not exist,
+// so the endpoint never confirms that somebody else's session is real.
+func (s *Service) Session(ctx context.Context, bookingID uuid.UUID, callerID int64) (Booking, error) {
+	if callerID == 0 {
+		return Booking{}, ErrNotAuthenticated
+	}
+	booking, found, err := s.repo.BookingByID(ctx, bookingID)
+	if err != nil {
+		return Booking{}, err
+	}
+	if !found || (booking.SeekerUserID != callerID && booking.MentorUserID != callerID) {
+		return Booking{}, ErrBookingNotFound
+	}
+	return booking, nil
+}
+
 // MySessions is the seeker's own bookings; MentorSessions the mentor's. Each is readable
 // only by that party, which the queries enforce by keying on the caller.
 func (s *Service) MySessions(ctx context.Context, seekerID int64, limit int32) ([]Booking, error) {

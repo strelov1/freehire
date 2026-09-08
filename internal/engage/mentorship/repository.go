@@ -119,6 +119,8 @@ func (r *QueriesRepository) PublishedProfileBySlug(ctx context.Context, slug str
 	}
 	profile := profileFromRow(row.Mentor)
 	profile.CompanyName = pgconv.TextString(row.CompanyName)
+	profile.RatingCount = row.RatingCount
+	profile.RatingAvg = numericFloat(row.RatingAvg)
 	return profile, true, nil
 }
 
