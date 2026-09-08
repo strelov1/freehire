@@ -225,7 +225,9 @@ func (a *Analyzer) AnalyzeStream(ctx context.Context, in Input, emit func(Event)
 // JSON parsing — a single re-try recovers it, mirroring the enrichment worker), and a
 // TIMEOUT (a stage that burns its whole budget is hung, not slow; prod showed the retry
 // answering in seconds). A connection error, or a caller who has gone away, is returned
-// immediately. Two attempts of matchAnalysisLLMTimeout bound the worst case per stage.
+// immediately. Two attempts of matchAnalysisLLMTimeout bound the worst case for the stages
+// that get two — see attemptsForStage, which gives the adversarial audit one, because there
+// the retry only ever repeated the failure.
 const stageAttempts = 2
 
 // streamStage runs one streaming JSON call, forwarding reasoning deltas as thinking
@@ -246,7 +248,8 @@ func (a *Analyzer) streamStage(ctx context.Context, stage int, system, user stri
 	seed.Set(dst)
 
 	var parseErr error
-	for attempt := 1; attempt <= stageAttempts; attempt++ {
+	attempts := attemptsForStage(stage)
+	for attempt := 1; attempt <= attempts; attempt++ {
 		raw, err := a.client.GenerateJSONStream(ctx, system, user, func(t string) {
 			emit(Event{Kind: EventThinking, Stage: stage, Thinking: t})
 		}, stageGenOptions(stage)...)
@@ -256,7 +259,7 @@ func (a *Analyzer) streamStage(ctx context.Context, stage int, system, user stri
 			// while the very next attempt answered in seconds — so failing here throws away
 			// an analysis that was one retry away. A caller who went away is final: nobody
 			// is left to read a second answer, and it would only spend tokens.
-			if errors.Is(err, context.DeadlineExceeded) && ctx.Err() == nil && attempt < stageAttempts {
+			if errors.Is(err, context.DeadlineExceeded) && ctx.Err() == nil && attempt < attempts {
 				log.Printf("matchanalysis: stage %d timed out, retrying: %v", stage, err)
 				continue
 			}
@@ -267,7 +270,7 @@ func (a *Analyzer) streamStage(ctx context.Context, stage int, system, user stri
 			return nil
 		}
 		parseErr = fmt.Errorf("parse: %w", parseErr)
-		if attempt < stageAttempts {
+		if attempt < attempts {
 			log.Printf("matchanalysis: stage %d parse failed, retrying: %v", stage, parseErr)
 		}
 	}
