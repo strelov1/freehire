@@ -584,29 +584,29 @@ describe('seedFormFromSuggestions', () => {
       topics: ['backend', 'career'],
       languages: ['English', 'German'],
     };
-    const { form, topicsText, languagesText } = seedFormFromSuggestions(blankForm(), suggestions);
+    const form = seedFormFromSuggestions(blankForm(), suggestions);
 
     expect(form.name).toBe('Jane Doe');
     expect(form.headline).toBe('Staff Engineer');
     expect(form.bio).toBe('Ten years of Go.');
     expect(form.timezone).toBe('Europe/Berlin');
     expect(form.company_slug).toBe('acme');
-    expect(topicsText).toBe('backend, career');
-    expect(languagesText).toBe('English, German');
+    expect(form.topics).toEqual(['backend', 'career']);
+    expect(form.languages).toEqual(['English', 'German']);
   });
 
   test('an absent field keeps the blank default, including the browser timezone', () => {
-    const { form, topicsText, languagesText } = seedFormFromSuggestions(blankForm(), {});
+    const form = seedFormFromSuggestions(blankForm(), {});
 
     expect(form.name).toBe('');
     expect(form.company_slug).toBe('');
     expect(form.timezone).toBe('Europe/Amsterdam');
-    expect(topicsText).toBe('');
-    expect(languagesText).toBe('');
+    expect(form.topics).toEqual([]);
+    expect(form.languages).toEqual([]);
   });
 
   test('every other field is left exactly as the blank form set it', () => {
-    const { form } = seedFormFromSuggestions(blankForm(), { name: 'Jane Doe' });
+    const form = seedFormFromSuggestions(blankForm(), { name: 'Jane Doe' });
 
     expect(form.session_minutes).toBe(60);
     expect(form.buffer_after_minutes).toBe(15);

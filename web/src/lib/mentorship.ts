@@ -239,18 +239,16 @@ export function browserTimezone(): string {
 export function seedFormFromSuggestions(
   base: MentorProfileInput,
   suggestions: MentorProfileSuggestions,
-): { form: MentorProfileInput; topicsText: string; languagesText: string } {
+): MentorProfileInput {
   return {
-    form: {
-      ...base,
-      name: suggestions.name ?? base.name,
-      headline: suggestions.headline ?? base.headline,
-      bio: suggestions.bio ?? base.bio,
-      timezone: suggestions.timezone ?? base.timezone,
-      company_slug: suggestions.company_slug ?? base.company_slug,
-    },
-    topicsText: (suggestions.topics ?? []).join(', '),
-    languagesText: (suggestions.languages ?? []).join(', '),
+    ...base,
+    name: suggestions.name ?? base.name,
+    headline: suggestions.headline ?? base.headline,
+    bio: suggestions.bio ?? base.bio,
+    timezone: suggestions.timezone ?? base.timezone,
+    company_slug: suggestions.company_slug ?? base.company_slug,
+    topics: suggestions.topics ?? base.topics,
+    languages: suggestions.languages ?? base.languages,
   };
 }
 

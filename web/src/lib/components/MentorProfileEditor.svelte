@@ -4,6 +4,7 @@
   import { browserTimezone, seedFormFromSuggestions } from '$lib/mentorship';
   import { errorMessage } from '$lib/utils';
   import { Badge, Button, Card, Input } from '$lib/ui';
+  import TokenInput from '$lib/components/facets/TokenInput.svelte';
   import type { MentorProfileInput, OwnMentorProfile } from '$lib/types';
 
   let { profile = $bindable() }: { profile: OwnMentorProfile | null } = $props();
@@ -57,8 +58,6 @@
   }
 
   let form = $state<MentorProfileInput>(profile ? fromProfile(profile) : blank());
-  let topicsText = $state(profile ? profile.topics.join(', ') : '');
-  let languagesText = $state(profile ? profile.languages.join(', ') : '');
   let saving = $state(false);
   let error = $state('');
 
@@ -70,28 +69,36 @@
     onMount(async () => {
       try {
         const suggestions = await api.mentorProfileSuggestions();
-        const seeded = seedFormFromSuggestions(form, suggestions);
-        form = seeded.form;
-        topicsText = seeded.topicsText;
-        languagesText = seeded.languagesText;
+        form = seedFormFromSuggestions(form, suggestions);
       } catch {
         // Best-effort: the form already has its ordinary blank defaults.
       }
     });
   }
 
-  const list = (text: string) =>
-    text
-      .split(',')
-      .map((s) => s.trim())
-      .filter(Boolean);
+  // Chip helpers for the two open-vocabulary lists. A duplicate (exact string match) is
+  // simply not added again rather than shown twice — the backend also dedupes on save,
+  // but a chip that visibly repeats itself while typing reads as broken.
+  function addTopic(value: string) {
+    const v = value.trim();
+    if (v && !form.topics.includes(v)) form.topics = [...form.topics, v];
+  }
+  function removeTopic(value: string) {
+    form.topics = form.topics.filter((t) => t !== value);
+  }
+  function addLanguage(value: string) {
+    const v = value.trim();
+    if (v && !form.languages.includes(v)) form.languages = [...form.languages, v];
+  }
+  function removeLanguage(value: string) {
+    form.languages = form.languages.filter((l) => l !== value);
+  }
 
   async function save() {
     saving = true;
     error = '';
     try {
-      const body = { ...form, topics: list(topicsText), languages: list(languagesText) };
-      profile = profile ? await api.updateMentorProfile(body) : await api.createMentorProfile(body);
+      profile = profile ? await api.updateMentorProfile(form) : await api.createMentorProfile(form);
     } catch (e) {
       error = errorMessage(e, 'The profile could not be saved.');
     } finally {
@@ -195,19 +202,27 @@
     </label>
 
     <label class="text-sm">
-      <span class="text-muted-foreground">Topics, comma separated</span>
-      <Input
-        bind:value={topicsText}
-        class="mt-1 w-full"
-      />
+      <span class="text-muted-foreground">Topics</span>
+      <div class="mt-1">
+        <TokenInput
+          tokens={form.topics}
+          onAdd={addTopic}
+          onRemove={removeTopic}
+          placeholder="Type a topic, press Enter"
+        />
+      </div>
     </label>
 
     <label class="text-sm">
-      <span class="text-muted-foreground">Languages, comma separated</span>
-      <Input
-        bind:value={languagesText}
-        class="mt-1 w-full"
-      />
+      <span class="text-muted-foreground">Languages</span>
+      <div class="mt-1">
+        <TokenInput
+          tokens={form.languages}
+          onAdd={addLanguage}
+          onRemove={removeLanguage}
+          placeholder="Type a language, press Enter"
+        />
+      </div>
     </label>
 
     <label class="text-sm">
