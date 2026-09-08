@@ -41,7 +41,7 @@
       the failure path.
 - [ ] 4.2 Export the profile fixture (CV, structured résumé, experience atoms) from
       production into `testdata/` once, and record in the change how it was captured.
-- [ ] 4.3 Add the seed helper that loads a case fixture into a fresh database. Verify by
+- [x] 4.3 Add the seed helper that loads a case fixture into a fresh database. Verify by
       seeding and reading back through the same queries the tools use.
 
 ## 5. The bake-off

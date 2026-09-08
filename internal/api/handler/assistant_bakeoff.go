@@ -213,14 +213,24 @@ type bakeoffPriceTable struct {
 	Rates    bakeoffPrices
 }
 
-// bakeoffCaseFixture is the committed case set: real postings from this catalogue's own
-// public API, captured with
+// bakeoffCaseFixture is the committed case set: real postings the profile-match sort put in
+// front of the profile the cases are run against, captured with
 //
-//	curl -sS 'https://freehire.me/api/v1/jobs/<slug>'
+//	freehire auth login                                     # once
+//	curl -H "Authorization: Bearer <key>" \
+//	  'https://freehire.me/api/v1/jobs/search?sort=match&limit=8'   # pick slugs
+//	curl -sS 'https://freehire.me/api/v1/jobs/<slug>'               # the FULL posting
 //
-// and kept whole. They are real rather than written because a synthetic vacancy states
-// requirements somebody invented to be answerable, and a run over those measures how well
-// a model answers a question built to be answered.
+// Two details are load-bearing. They are real rather than written, because a synthetic
+// vacancy states requirements somebody invented to be answerable, and a run over those
+// measures how well a model answers a question built to be answered. And they are the ones
+// this profile actually matches, because tailoring a backend CV against a posting it has no
+// business answering measures refusal, not skill.
+//
+// The full posting comes from the DETAIL endpoint, never from the search hit: the list
+// truncates a description at about a thousand characters, and every posting arriving at
+// suspiciously the same length is the signature of that — a shorter measurement wearing the
+// same case id.
 const bakeoffCaseFixture = "testdata/bakeoff-cases.json"
 
 // bakeoffVacancy is the posting a case tailors against, in the columns the seed needs.
