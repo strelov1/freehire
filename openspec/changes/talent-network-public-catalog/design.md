@@ -53,13 +53,20 @@ emits is either a value resolved by a dictionary (`internal/dict/classify` for
 seniority and category, `internal/dict/skilltag` for skills and stack) or a formatted
 date; everything else is an integer.
 
-Kept: `total_years`, `languages`, dictionary-resolved `skills`, `certifications`,
-education `degree` and `year`, and per role: the classified seniority/category pair, the
-period, and the dictionary-resolved stack.
+Kept: `total_years`, dictionary-resolved `skills`, and per role the classified
+seniority/category pair, the period, and the dictionary-resolved stack.
 
 Withheld: `full_name`, `headline`, `location`, `email`, `phone`, `links`, `summary`,
-every experience entry's `company`, `location`, `summary` and `highlights`, every
-education entry's `institution`, and `projects` entirely.
+every experience entry's `company`, `location`, `summary` and `highlights`, and
+`projects` entirely.
+
+**Also withheld, and this is a cost the rule imposes rather than a choice: `languages`,
+`certifications` and `education`.** All three are free text, and no dictionary this block
+can reach resolves them. `vocab.EducationLevelValues` exists, but the text→level resolver
+lives in `internal/job/jobfacts` — block `job`, layer 5 — which `candidate` may not
+import. Serving them means first moving that dictionary down into `dict`, which is its
+own change. Recorded here rather than quietly dropped: the fuller picture is what the
+approved-recruiter tier is for.
 
 *Alternative considered — reuse `Anonymous()`.* Rejected. It masks the `company` column of
 current roles and nothing else, which is right for a page the candidate hands to one

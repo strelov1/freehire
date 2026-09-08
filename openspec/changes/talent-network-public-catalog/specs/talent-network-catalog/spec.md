@@ -36,18 +36,26 @@ response.
 
 The public projection SHALL therefore withhold: the candidate's name, photo, email, phone,
 links, free-text location, headline, summary; every experience entry's employer name,
-location, summary and highlights; every education entry's institution; and projects
-entirely.
+location, summary and highlights; projects entirely; and — because no dictionary reachable
+from this block resolves them — languages, certifications and education.
 
-The public projection SHALL carry: total years of experience, languages,
-dictionary-resolved skills, certifications, education degree and year, and per role — the
-seniority and category its title resolves to, the period, and the dictionary-resolved
-stack.
+The public projection SHALL carry: total years of experience, dictionary-resolved skills,
+and per role the seniority and category its title resolves to, the period, and the
+dictionary-resolved stack.
 
 Withholding *every* employer name, not only the current one, is the point. A candidate's
 stated fear is their current employer noticing, and a work history that names the previous
 three employers alongside a city and a seniority identifies a person as surely as a name
 does.
+
+#### Scenario: A CV field that names the employer
+
+- **WHEN** a member's CV names their employer in exactly one place — the `company`
+  column, the CV summary, a role's summary or highlights, the job title, the headline, a
+  project's name or highlights, the institution, the degree line, the free-text location,
+  a certification, a language entry, or a skill token
+- **THEN** that name appears nowhere in the marshalled card, for every one of those
+  places taken separately
 
 #### Scenario: A CV whose prose names the employer
 
@@ -75,9 +83,13 @@ does.
 
 ### Requirement: The catalogue is filtered on facets, not on text
 
-The catalogue SHALL be filterable by category, seniority, skills, timezone region, city,
-years of experience and language. Every filter SHALL take values from a closed vocabulary
-or a number; the catalogue SHALL NOT accept a free-text query.
+The catalogue SHALL be filterable by category, seniority, skills, timezone region, city
+and years of experience. Every filter SHALL take values from a closed vocabulary or a
+number; the catalogue SHALL NOT accept a free-text query.
+
+There is no language filter, because there is no language data — see the withholding rule
+above. A filter over a field the card does not carry would be a filter nobody could act
+on.
 
 A filter that is absent SHALL be treated identically to one that is present and empty.
 Multiple values within one filter SHALL match a member carrying ANY of them; different
@@ -116,8 +128,8 @@ silently widening the answer, matching the rule the rest of this API follows.
 ### Requirement: The order is total and paging never drops or repeats a member
 
 The catalogue SHALL be ordered by the freshness of the member's structured extract,
-descending, tie-broken by the member's opaque public id. Paging SHALL report the total
-behind the same predicate as the page.
+descending, tie-broken by the member's handle. Paging SHALL report the total behind the
+same predicate as the page.
 
 #### Scenario: Two members sharing a timestamp
 

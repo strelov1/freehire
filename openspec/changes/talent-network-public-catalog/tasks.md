@@ -39,20 +39,21 @@ REFACTOR → simplify → review → only then `[x]`.
 
 ## 2. The public projection
 
-- [ ] 2.1 `Structured.Catalog()` in `internal/candidate/resumeextract/visibility.go`. A
-      whitelist per design.md: `total_years`, `languages`, dictionary-resolved `skills`,
-      `certifications`, education `degree`+`year`, and per role the classified
-      seniority/category, the period, and the dictionary-resolved stack. Nothing else.
-      `resumeextract` is layer 4 and `dict` is layer 2, so `classify` and `skilltag` are
-      importable — confirm against `internal/platform/arch/layering/blocks.go` rather than
-      assuming.
-- [ ] 2.2 The invariant test, and it is the point of this change: over a fixture CV whose
+- [x] 2.1 `talentnetwork.ProjectCard(resumeextract.Structured) Card`. Placed in
+      `talentnetwork`, NOT beside `Anonymous()` in `resumeextract`: the rule it encodes
+      belongs to the catalogue, and `resumeextract`'s own projections are what this change
+      is retiring. A whitelist per design.md: `total_years`, dictionary-resolved `skills`,
+      and per role the classified seniority/category, the period and the resolved stack.
+      **REVISED while implementing:** languages, certifications and education are OUT —
+      all three are free text and the only text→level dictionary lives in
+      `internal/job/jobfacts`, block `job`, layer 5, which `candidate` may not import.
+- [x] 2.2 The invariant test, and it is the point of this change: over a fixture CV whose
       prose, titles, project names and institution all carry a distinctive employer token,
       assert that token appears **nowhere** in the marshalled `Catalog()` output. Cover
       separately: an employer named only in `summary`; only in a role's `highlights`; only
       in a title (`"Backend Engineer @ X"`); only in a project `name`; only in an
       education `institution`.
-- [ ] 2.3 A title that resolves to neither category nor seniority still yields a role
+- [x] 2.3 A title that resolves to neither category nor seniority still yields a role
       entry carrying its period and stack. A skill outside the dictionary is dropped while
       its resolved neighbours survive.
 - [ ] 2.4 Delete `Structured.Public()`, its `Public` struct, and the handler branch that
