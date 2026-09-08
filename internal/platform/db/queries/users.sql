@@ -412,7 +412,22 @@ WHERE id = $1;
 -- talent_handle rides along so the page can render the public URL without a second
 -- round-trip. It is NULL until the first join — a non-member has no card to link to —
 -- unlike the visibility, which every row carries because 'off' is the column default.
-SELECT talent_network_visibility, talent_handle
+--
+-- `listed` answers the question the settings page actually has to ask: not "am I a
+-- member" but "does a visitor see me". They come apart, and the gap is a live trap — a
+-- candidate who joins before uploading a CV is a member with a handle whose card 404s,
+-- so a page reading membership alone tells them their profile is up when it is not.
+--
+-- It repeats ListTalentNetworkMembers' predicate, which is a duplication worth naming:
+-- the two must be changed together. It is not shared because the catalogue's version
+-- selects rows and this one describes one row, and a caller cannot ask the first
+-- "and what about me".
+SELECT talent_network_visibility,
+       talent_handle,
+       (talent_network_visibility <> 'off'
+        AND talent_handle IS NOT NULL
+        AND resume_uploaded_at IS NOT NULL
+        AND resume_structured_uploaded_at = resume_uploaded_at)::boolean AS listed
 FROM users
 WHERE id = $1;
 

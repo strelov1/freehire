@@ -1,4 +1,5 @@
 import type { CatalogueMember } from '$lib/generated/contracts';
+import { cityLabel } from '$lib/facets';
 import { CATEGORY_LABELS, SENIORITY_LABELS, titleCase } from '$lib/labels';
 import { countryOfTimezone } from '$lib/timezoneCountry';
 
@@ -47,6 +48,6 @@ export function talentPlace(member: CatalogueMember): TalentPlace {
   return {
     country: countryOfTimezone(member.timezone),
     zone: member.timezone?.split('/').pop()?.replace(/_/g, ' '),
-    place: member.cities.join(', '),
+    place: member.cities.map(cityLabel).join(', '),
   };
 }

@@ -2,6 +2,7 @@
   import { Clock, MapPin, User } from '@lucide/svelte';
   import Seo from '$lib/components/Seo.svelte';
   import { countryLabel, skillLabel } from '$lib/facets';
+  import { CATEGORY_LABELS, titleCase } from '$lib/labels';
   import { talentHeading, talentPlace } from '$lib/talentCard';
   import { Card, Chip, CountryFlag } from '$lib/ui';
   import type { PageData } from './$types';
@@ -76,6 +77,21 @@
       </div>
     </div>
   </div>
+
+  {#if member.specializations.length}
+    <!-- What they said they are OPEN TO, which is the row the catalogue filters on, and
+    the forward-looking half of the page: the skills and roles below say where somebody
+    has been. It is on the list card too — a detail page showing less than the row that
+    led to it reads as a page that failed to load. -->
+    <section class="flex flex-col gap-2">
+      <h2 class="text-sm font-medium">Open to</h2>
+      <div class="flex flex-wrap gap-1.5">
+        {#each member.specializations as spec (spec)}
+          <Chip variant="secondary">{CATEGORY_LABELS[spec] ?? titleCase(spec)}</Chip>
+        {/each}
+      </div>
+    </section>
+  {/if}
 
   {#if card.skills.length}
     <section class="flex flex-col gap-2">

@@ -109,6 +109,30 @@ An account that has never joined SHALL have no handle.
 - **WHEN** a candidate joins and their most recent title resolves to no category
 - **THEN** a handle is still minted, on a neutral base
 
+### Requirement: The member's own surfaces say whether a visitor can see them
+
+Membership and being VISIBLE are different facts, and they come apart in the most
+ordinary way there is: a candidate joins before uploading a CV. They are a member, they
+hold a handle, and the catalogue's stamp gate still excludes them — so their card 404s.
+
+Every surface that reports a candidate's Talent Network standing SHALL read whether they
+are LISTED, not whether they are a member. It SHALL NOT offer a link to their public card
+unless that card exists.
+
+#### Scenario: A member with no readable CV
+
+- **WHEN** a candidate joins before uploading a CV, or while its extraction is still
+  running
+- **THEN** their standing reads as in the network but not yet shown, and says what is
+  missing
+- **AND** no link to their public card is offered, because it would answer 404
+
+#### Scenario: A member whose CV is readable
+
+- **WHEN** a member's structured extract matches the CV on file
+- **THEN** their standing reads as appearing in the catalogue
+- **AND** a link to their own public card is offered
+
 ### Requirement: The control is reachable without a direct URL
 
 The Talent Network SHALL be reachable from the account navigation, and the account's

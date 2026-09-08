@@ -18,6 +18,8 @@
   let status = $state<'loading' | 'error' | 'ready'>('loading');
   let visibility = $state<TalentNetworkVisibility>('off');
   let handle = $state('');
+  // See the settings page: membership does not mean a visitor can see them.
+  let listed = $state(false);
 
   const isMember = $derived(visibility !== 'off');
 
@@ -29,6 +31,7 @@
         if (cancelled) return;
         visibility = setting.talent_network_visibility;
         handle = setting.talent_handle ?? '';
+        listed = setting.listed;
         status = 'ready';
       } catch {
         // A failed read hides the block rather than showing an error. It is an
@@ -53,15 +56,21 @@
           {isMember ? "You're in the Talent Network" : 'Get found without applying'}
         </span>
         <span class="text-sm text-muted-foreground">
-          {isMember
-            ? 'Your anonymous profile is in the public catalogue.'
-            : 'Appear in a public catalogue — your skills and experience, never your name, employer or contacts.'}
+          {#if !isMember}
+            Appear in a public catalogue — your skills and experience, never your name,
+            employer or contacts.
+          {:else if listed}
+            Your anonymous profile is in the public catalogue.
+          {:else}
+            You're in, but not shown yet — your profile needs a CV we have finished
+            reading.
+          {/if}
         </span>
       </div>
     </div>
 
     <div class="flex shrink-0 gap-2">
-      {#if isMember && handle}
+      {#if isMember && listed && handle}
         <Button
           variant="ghost"
           href={resolve('/talent/[handle]', { handle })}

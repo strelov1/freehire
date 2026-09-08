@@ -60,7 +60,9 @@ describe('talentPlace', () => {
     expect(talentPlace(member()).place).toBe('');
   });
 
-  it('joins several cities', () => {
-    expect(talentPlace(member({ cities: ['berlin', 'lisbon'] })).place).toBe('berlin, lisbon');
+  // Labelled, not raw. Without this a card reads "berlin" beside the timezone's own
+  // "Berlin", which looks like a bug in the half that is correct.
+  it('labels the normalised city slugs', () => {
+    expect(talentPlace(member({ cities: ['berlin', 'new-york'] })).place).toBe('Berlin, New York');
   });
 });

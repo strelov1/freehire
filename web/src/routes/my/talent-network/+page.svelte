@@ -15,6 +15,9 @@
   let status = $state<'loading' | 'error' | 'ready'>('loading');
   let visibility = $state<TalentNetworkVisibility>('off');
   let handle = $state('');
+  // Whether a VISITOR can see them, which membership alone does not answer: a candidate
+  // who joins before uploading a CV is a member with a handle whose card still 404s.
+  let listed = $state(false);
   // Disables the control while a change is in flight, so a fast double-click cannot race
   // two PUTs.
   let saving = $state(false);
@@ -30,6 +33,7 @@
         if (cancelled) return;
         visibility = setting.talent_network_visibility;
         handle = setting.talent_handle ?? '';
+        listed = setting.listed;
         status = 'ready';
       } catch {
         if (cancelled) return;
@@ -53,6 +57,7 @@
       const setting = await api.setTalentNetworkVisibility(next);
       visibility = setting.talent_network_visibility;
       handle = setting.talent_handle ?? '';
+      listed = setting.listed;
     } catch (e) {
       visibility = previous;
       saveError =
@@ -94,9 +99,17 @@
             {isMember ? "You're in the Talent Network" : 'Join the Talent Network'}
           </span>
           <span class="text-xs text-muted-foreground">
-            {isMember
-              ? 'Your profile appears in the public catalogue.'
-              : 'Nobody can find you here yet.'}
+            <!-- Three states, not two. Saying "your profile appears in the catalogue" to a
+            member the stamp gate excludes is a page telling somebody their profile is up
+            while the link beside it 404s. -->
+            {#if !isMember}
+              Nobody can find you here yet.
+            {:else if listed}
+              Your profile appears in the public catalogue.
+            {:else}
+              You're in — but your profile is not shown yet. Upload a CV, or give us a
+              moment to finish reading the one you just uploaded.
+            {/if}
           </span>
         </div>
         <Button
@@ -108,7 +121,9 @@
         </Button>
       </div>
 
-      {#if isMember && handle}
+      <!-- The link appears only when the page is actually there. `handle` alone is not
+           enough: it is minted on joining, before the CV that makes a card exist. -->
+      {#if isMember && listed && handle}
         <!-- Opens the real page in a new tab, so a candidate sees exactly what a visitor
              would. No raw URL and no copy action — the address bar has both once there. -->
         <div>

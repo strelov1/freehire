@@ -31,6 +31,11 @@ type fakeTalentNetworkStore struct {
 	handle string
 	// structured is the raw resume_structured JSON the mint reads a job title out of.
 	structured []byte
+	// listed mirrors the query's own column: whether a VISITOR can see them. It is
+	// SEPARATE from visibility on purpose — the two come apart, and a fake that derived
+	// one from the other could not model the state that shipped a page saying "your
+	// profile appears in the catalogue" beside a link that 404s.
+	listed     bool
 	getErr     error
 	setErr     error
 	setCalls   int
@@ -47,6 +52,7 @@ func (f *fakeTalentNetworkStore) GetTalentNetworkVisibility(context.Context, int
 	return db.GetTalentNetworkVisibilityRow{
 		TalentNetworkVisibility: f.visibility,
 		TalentHandle:            pgtype.Text{String: f.handle, Valid: f.handle != ""},
+		Listed:                  f.listed,
 	}, nil
 }
 
@@ -262,6 +268,36 @@ func TestPutTalentNetwork_ChangingJobsKeepsTheHandle(t *testing.T) {
 	}
 	if got := putTalentNetworkOK(t, app, token, "anonymous").Handle; got != minted {
 		t.Errorf("handle after rejoining with a new discipline = %q, want the original %q", got, minted)
+	}
+}
+
+// Membership and being SEEN are different questions, and they come apart in the most
+// ordinary way there is: somebody joins before uploading a CV. They are a member, they
+// hold a handle, and the stamp gate still keeps them out of the catalogue — so their card
+// 404s.
+//
+// A live run found this: the settings page read membership, said "your profile appears in
+// the public catalogue", and offered a link to a 404. Neither the unit tests nor two
+// reviewers caught it, because the fake let those two facts be set independently and no
+// test had ever crossed them.
+func TestPutTalentNetwork_ReportsWhetherAVisitorCanActuallySeeThem(t *testing.T) {
+	// A member the stamp gate excludes: joined, handle minted, no readable CV.
+	unlisted := &fakeTalentNetworkStore{visibility: "off", listed: false}
+	app, token := talentNetworkApp(t, unlisted)
+
+	got := putTalentNetworkOK(t, app, token, "anonymous")
+	if got.Handle == "" {
+		t.Fatal("no handle minted")
+	}
+	if got.Listed {
+		t.Error("listed = true for a member with no readable CV — this is the field that stops the page promising a card that 404s")
+	}
+
+	// And a member the gate admits.
+	listed := &fakeTalentNetworkStore{visibility: "off", listed: true, structured: []byte(backendResumeJSON)}
+	app2, token2 := talentNetworkApp(t, listed)
+	if !putTalentNetworkOK(t, app2, token2, "anonymous").Listed {
+		t.Error("listed = false for a member whose CV is readable")
 	}
 }
 

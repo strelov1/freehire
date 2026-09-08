@@ -64,12 +64,23 @@ func (h *talentNetworkHandlers) register(api fiber.Router, mw middleware) {
 type talentNetworkResponse struct {
 	Visibility string `json:"talent_network_visibility"`
 	Handle     string `json:"talent_handle,omitempty"`
+
+	// Listed says whether a VISITOR can actually see them, which is not the same question
+	// as membership and comes apart in an ordinary way: a candidate who joins before
+	// uploading a CV is a member, holds a handle, and is still excluded from the
+	// catalogue by the stamp gate — so their card 404s.
+	//
+	// The settings page needs this and not the membership flag, or it tells somebody
+	// their profile is up while linking them to a 404. It is the field that stops the
+	// page from lying.
+	Listed bool `json:"listed"`
 }
 
 func toTalentNetworkResponse(row db.GetTalentNetworkVisibilityRow) talentNetworkResponse {
 	return talentNetworkResponse{
 		Visibility: row.TalentNetworkVisibility,
 		Handle:     row.TalentHandle.String,
+		Listed:     row.Listed,
 	}
 }
 

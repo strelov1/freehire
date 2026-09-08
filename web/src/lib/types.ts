@@ -1249,6 +1249,11 @@ export type TalentNetworkVisibility = 'off' | 'anonymous';
 export interface TalentNetworkSetting {
   talent_network_visibility: TalentNetworkVisibility;
   talent_handle?: string;
+  /** Whether a visitor can actually SEE them — not the same as membership. A candidate
+   *  who joins before uploading a CV is a member, holds a handle, and is still excluded
+   *  from the catalogue by the stamp gate, so their card 404s. Any surface that offers
+   *  "view your public profile" must read this and not `talent_network_visibility`. */
+  listed: boolean;
 }
 
 /** A notification subscription on a saved search. */
