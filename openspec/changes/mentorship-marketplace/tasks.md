@@ -45,7 +45,7 @@ unit tests plus the function they drive; none of it needs Docker or Postgres.
       Also: `"Local"` as a viewer zone returned the SERVER's clock labelled `"Local"`;
       `Slots` returned a nil slice that would marshal as `null`; `subtractOne` could emit
       zero-width remnants; and two comments claimed things that were not load-bearing.
-- [ ] 1.10 Add `_ "time/tzdata"` to `cmd/server` (~450 KB). The runtime image
+- [x] 1.10 Add `_ "time/tzdata"` to `cmd/server` (~450 KB). The runtime image
       (`debian:stable-slim`) does ship the zone database — verified — so nothing is
       broken today; the point is that this is the first feature to hard-depend on it,
       and if the base image ever changes every mentor zone silently becomes UTC, which
@@ -133,8 +133,15 @@ unit tests plus the function they drive; none of it needs Docker or Postgres.
       a file to download, and no client offers "add to calendar" for it
 - [x] 5.2 Cancellation notice to both parties, carrying a CANCEL invitation with the SAME
       UID — a different one adds a second event instead of removing the first
-- [ ] 5.3 Assert in test that booking messages are delivered with the account
-      notification rule disabled, and that saved-job reminders and nudges still are not
+- [x] 5.3 Assert in test that booking messages are delivered with the account
+      notification rule disabled, and that saved-job reminders and nudges still are not.
+      In `internal/platform/db/mentorship_integration_test.go`, because both halves are
+      properties of the SQL and a fake repository would record the assumption instead:
+      one account with the rule EXPLICITLY off (an absent row is the never-configured
+      default, which is enabled, and would prove nothing), whose session still appears on
+      `ListBookingsDueForReminder` while `GetReminderForDelivery` and
+      `GetNudgeForDelivery` both still report the rule off. It fails the day somebody
+      joins `notification_settings` into the booking-reminder page.
 
 ## 6. Reminder worker
 

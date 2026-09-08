@@ -746,3 +746,104 @@ func containsBooking(rows []ListBookingsDueForReminderRow, id pgtype.UUID) bool 
 	}
 	return false
 }
+
+// The account notification rule governs what the system ORIGINATES about a user's
+// activity. It does not govern a session the user is a party to — see the
+// notification-settings delta. Both halves of that boundary meet in one account with the
+// rule explicitly off: their mentorship session is still due for its reminder, and their
+// saved-job reminder and their nudge still report the rule as off, which is the flag both
+// workers cancel-and-skip on.
+//
+// It lives here rather than in the domain package because both halves are properties of
+// the SQL. A fake repository would have to decide the answer itself, which records the
+// assumption rather than the behaviour — the trap three of this feature's defects hid in.
+// It fails the day somebody joins notification_settings into the booking-reminder page.
+func TestASilencedAccountStillHearsAboutItsOwnSession(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	ctx := context.Background()
+
+	seedMentorshipCompany(t, pool, "acme")
+	mentorUser := seedMentorshipUser(t, pool, "mentor-silenced@example.test")
+	seeker := seedMentorshipUser(t, pool, "seeker-silenced@example.test")
+	mentor := seedMentor(t, q, mentorUser, "acme", "silenced-mentor")
+
+	// Off EXPLICITLY, not merely absent: an absent row is the never-configured default,
+	// which is enabled, and would prove nothing about a user who opted out.
+	for _, user := range []int64{seeker, mentorUser} {
+		if _, err := q.UpsertNotificationSettings(ctx, UpsertNotificationSettingsParams{
+			UserID:          user,
+			Enabled:         false,
+			Channels:        []string{},
+			DigestFrequency: "instant",
+		}); err != nil {
+			t.Fatalf("silence user %d: %v", user, err)
+		}
+	}
+
+	// Inside the 1-hour reminder's window, which is (now, now+60m].
+	booking, err := book(t, q, mentor.ID, seeker, time.Now().Add(40*time.Minute))
+	if err != nil {
+		t.Fatalf("book: %v", err)
+	}
+
+	t.Run("the session is still due for its reminder", func(t *testing.T) {
+		due, err := q.ListBookingsDueForReminder(ctx, ListBookingsDueForReminderParams{
+			OffsetMinutes: 60, FloorMinutes: 0, RowLimit: 50,
+		})
+		if err != nil {
+			t.Fatalf("ListBookingsDueForReminder: %v", err)
+		}
+		found := false
+		for _, row := range due {
+			if row.MentorBooking.ID == booking.ID {
+				found = true
+				// Both addresses, because the reminder goes to both parties and both
+				// of them silenced the rule.
+				if row.SeekerEmail == "" || row.MentorEmail == "" {
+					t.Errorf("a due reminder carries seeker=%q mentor=%q; both are needed",
+						row.SeekerEmail, row.MentorEmail)
+				}
+			}
+		}
+		if !found {
+			t.Error("a silenced account's own session was withheld from the reminder page")
+		}
+	})
+
+	jobID := insertJob(t, pool, "silenced-notifications")
+
+	t.Run("their saved-job reminder still reads the rule as off", func(t *testing.T) {
+		var reminderID int64
+		if err := pool.QueryRow(ctx,
+			`INSERT INTO job_reminders (user_id, job_id, fire_at, channels)
+			 VALUES ($1, $2, now(), ARRAY['email']) RETURNING id`,
+			seeker, jobID).Scan(&reminderID); err != nil {
+			t.Fatalf("insert reminder: %v", err)
+		}
+		row, err := q.GetReminderForDelivery(ctx, reminderID)
+		if err != nil {
+			t.Fatalf("GetReminderForDelivery: %v", err)
+		}
+		if row.NotificationsEnabled {
+			t.Error("a silenced account's saved-job reminder reported the rule as enabled")
+		}
+	})
+
+	t.Run("their nudge still reads the rule as off", func(t *testing.T) {
+		var nudgeID int64
+		if err := pool.QueryRow(ctx,
+			`INSERT INTO application_nudges (user_id, job_id, kind, episode_key)
+			 VALUES ($1, $2, 'follow_up', now()) RETURNING id`,
+			seeker, jobID).Scan(&nudgeID); err != nil {
+			t.Fatalf("insert nudge: %v", err)
+		}
+		row, err := q.GetNudgeForDelivery(ctx, nudgeID)
+		if err != nil {
+			t.Fatalf("GetNudgeForDelivery: %v", err)
+		}
+		if row.NotificationsEnabled {
+			t.Error("a silenced account's nudge reported the rule as enabled")
+		}
+	})
+}

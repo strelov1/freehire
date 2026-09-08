@@ -113,10 +113,10 @@ Grep `web/` for an existing implementation before designing any of these.
 `deploy/systemd/freehire-mentorship-remind.{service,timer}` are copied across by hand.
 Until both are done the feature works and reminders simply never fire.
 
-**Two small backend items**: `_ "time/tzdata"` in `cmd/server` (task 1.10 — the runtime
-image does ship the zone database today, so nothing is broken; the point is that this is
-the first feature to hard-depend on it), and a test asserting booking messages are
-delivered while the account notification rule is off (task 5.3).
+**The backend is finished.** The two items this file used to list as outstanding — the
+`_ "time/tzdata"` import in `cmd/server` (task 1.10) and the test that a silenced account
+still hears about its own session (task 5.3) — are done. Everything left below is the
+frontend and the two manual deploy steps.
 
 **Not in scope, seams named and empty**: payments, and the Google Calendar free/busy sync
 (`mentor_busy_intervals` exists and stays empty until that change).
