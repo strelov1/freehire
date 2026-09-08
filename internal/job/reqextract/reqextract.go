@@ -171,8 +171,44 @@ func Derive(descriptionHTML string) []enrich.Requirement {
 	// priority is the section currently open: the priority of the last recognized
 	// heading, or "" when none is. Three things close a section, and between them they
 	// are what stops a benefits list two elements down from being read as requirements:
-	// taking its list, an unrecognized structural heading, and prose.
+	// taking its list, an unrecognized structural heading, and a table.
 	priority := ""
+	// pending buffers candidate item texts collected since the section opened, while
+	// no list has been found yet: a text block too long to be a heading candidate
+	// (real prose, by isHeadingCandidate's own length test) and a short inline text
+	// block the heading vocabulary does not recognize (a lead-in, a spacer, or — if
+	// enough of these accumulate — one of the section's own short items). Their fate
+	// is decided later, never at the paragraph itself: reaching a list either
+	// discards them (prose was heading somewhere else) or is simply cleared in front
+	// of it (a lead-in was never content); reaching the section's natural end with
+	// two or more of them commits them as the section's items — a posting that
+	// states each requirement as its own paragraph rather than under a <ul>, which is
+	// not hypothetical: every "Требования" heading sampled from a large real source
+	// (tbank.ru, 2026-09, 25/25 postings) is followed by exactly this shape, 3 to 10
+	// paragraphs long, never a list. pendingHasProse marks whether any buffered entry
+	// was the too-long kind, which is what a list found afterward is read by — see
+	// that case below.
+	var pending []string
+	var pendingHasProse bool
+
+	resetPending := func() {
+		pending = nil
+		pendingHasProse = false
+	}
+
+	// flushPending commits the buffered paragraphs to found under the given priority
+	// when there are two or more of them — a real p-per-item section, not the single
+	// ambiguous sentence "a matching heading with prose after it yields nothing"
+	// tests for. Called whenever a section's fate is decided outside the list case:
+	// a real heading transition, a table, or the end of the document.
+	flushPending := func(forPriority string) {
+		if len(pending) >= 2 {
+			for _, text := range pending {
+				found = append(found, enrich.Requirement{Text: text, Priority: forPriority})
+			}
+		}
+		resetPending()
+	}
 
 	var walk func(*xhtml.Node)
 	walk = func(n *xhtml.Node) {
@@ -185,23 +221,56 @@ func Derive(descriptionHTML string) []enrich.Requirement {
 			case wrapsAList(n):
 
 			case isHeadingCandidate(n):
-				priority, _ = headingDecision(n, priority)
-				return // the heading's own text is never an item
+				next, recognized := headingDecision(n, priority)
+				if recognized {
+					flushPending(priority)
+					priority = next
+					return // the heading's own text is never an item
+				}
+				// Not recognized: buffered, not discarded outright — see pending's
+				// own comment for why a run of these may still become items.
+				if priority != "" {
+					if text := textOf(n); text != "" {
+						pending = append(pending, text)
+					}
+				}
+				return
 
 			case priority != "" && (n.DataAtom == atom.Ul || n.DataAtom == atom.Ol):
+				if pendingHasProse {
+					// Real prose, not a lead-in, preceded this list: the list
+					// belongs to whatever comes after it, not to this section —
+					// "prose after the heading closes the section even when a
+					// list follows" is the tested case this guards.
+					resetPending()
+					priority = ""
+					return
+				}
+				resetPending() // any buffered lead-in lines were never content
 				for _, text := range listItems(n) {
 					found = append(found, enrich.Requirement{Text: text, Priority: priority})
 				}
 				priority = "" // only the FIRST list after a heading is the section's
 				return        // nested lists were consumed by listItems
 
-			// Content, not a lead-in. A text block reaching this case has already
-			// failed isHeadingCandidate, so it is one too long to be a title — prose.
-			// Whatever list follows prose or a table is no longer the heading's, and
-			// this is what keeps "Requirements" over a paragraph from claiming the
-			// benefits list further down.
-			case isTextBlock(n), n.DataAtom == atom.Table:
+			case n.DataAtom == atom.Table:
+				flushPending(priority)
 				priority = ""
+
+			// Reached only when isHeadingCandidate already failed it on length — too
+			// long to be a title, so a genuine paragraph. Buffered rather than
+			// closing the section immediately: it may be this section's own first
+			// item (the tbank.ru shape above) rather than prose explaining the
+			// section away, and the two cannot be told apart from one paragraph
+			// alone — only from what follows it (more paragraphs, a list, or the
+			// section's end).
+			case isTextBlock(n):
+				if priority != "" {
+					if text := textOf(n); text != "" {
+						pending = append(pending, text)
+						pendingHasProse = true
+					}
+				}
 			}
 		}
 		for c := n.FirstChild; c != nil; c = c.NextSibling {
@@ -209,6 +278,7 @@ func Derive(descriptionHTML string) []enrich.Requirement {
 		}
 	}
 	walk(doc)
+	flushPending(priority)
 
 	return enrich.BoundRequirements(found)
 }

@@ -224,16 +224,13 @@ func TestDerive(t *testing.T) {
 			want: []enrich.Requirement{req("Опыт работы с Go от 3 лет")},
 		},
 		// The real, measured tbank.ru shape: every one of 683 "Требования" headings
-		// sampled is followed by <p> paragraphs, never a <ul>. The vocabulary now
-		// recognizes the heading, but Derive still yields nothing — the first
-		// paragraph closes the section as prose before any list is ever found. See
-		// reqextract/AGENTS.md's Limitations: closing this gap needs Derive to read a
-		// <p>-per-item section too, a structural change this vocabulary addition does
-		// not attempt.
+		// sampled is followed by <p> paragraphs, never a <ul> — and Derive now reads
+		// them: see the p-per-item mechanism this file's later cases exercise
+		// directly.
 		{
-			name: "a Russian requirements heading followed by paragraphs (the real tbank.ru shape) yields nothing yet",
+			name: "a Russian requirements heading followed by paragraphs (the real tbank.ru shape) yields its items",
 			html: `<h3>Требования</h3><p>Опыт работы с Go от 3 лет</p><p>Знание Postgres</p>`,
-			want: nil,
+			want: []enrich.Requirement{req("Опыт работы с Go от 3 лет"), req("Знание Postgres")},
 		},
 		// go-unidecode transliterates the accented ё to "io", not "e", so the
 		// grammatically correct spelling normalizes differently from the common
@@ -243,6 +240,49 @@ func TestDerive(t *testing.T) {
 			name: "a Russian heading with the accented ё normalizes and matches too",
 			html: `<h3>Мы ждём от вас</h3><ul><li>Опыт работы с Go от 3 лет</li></ul>`,
 			want: []enrich.Requirement{req("Опыт работы с Go от 3 лет")},
+		},
+		// The p-per-item mechanism's own boundary cases, isolated from the Russian
+		// vocabulary above so each tests exactly one behavior.
+		{
+			name: "exactly two paragraph items commit",
+			html: `<h3>Requirements</h3><p>Five years of backend experience</p><p>Comfortable with distributed systems</p>`,
+			want: []enrich.Requirement{req("Five years of backend experience"), req("Comfortable with distributed systems")},
+		},
+		{
+			name: "exactly one short unmatched paragraph, nothing else, yields nothing",
+			html: `<h3>Requirements</h3><p>A single short line</p>`,
+			want: nil,
+		},
+		{
+			name: "a mix of short and long paragraph items all commit",
+			html: `<h3>Requirements</h3><p>Owns delivery end to end</p>` +
+				`<p>Five or more years of experience shipping production backend systems at scale</p>` +
+				`<p>Comfortable leading design discussions</p>`,
+			want: []enrich.Requirement{
+				req("Owns delivery end to end"),
+				req("Five or more years of experience shipping production backend systems at scale"),
+				req("Comfortable leading design discussions"),
+			},
+		},
+		{
+			name: "a preferred section made of paragraphs, not a list, still yields",
+			html: `<h3>Nice to have</h3><p>Experience with Kubernetes in production</p><p>Contributed to an open-source project before</p>`,
+			want: []enrich.Requirement{pref("Experience with Kubernetes in production"), pref("Contributed to an open-source project before")},
+		},
+		{
+			name: "a paragraph-shaped section under a non-vocabulary heading is not read as requirements",
+			html: `<h3>What we offer</h3><p>Competitive salary and equity</p><p>Flexible remote-first culture</p><p>Annual learning budget</p>`,
+			want: nil,
+		},
+		{
+			name: "a paragraph-per-item section with no trailing heading still commits at document end",
+			html: `<h3>Requirements</h3><p>Owns delivery end to end</p><p>Comfortable leading design discussions</p>`,
+			want: []enrich.Requirement{req("Owns delivery end to end"), req("Comfortable leading design discussions")},
+		},
+		{
+			name: "a paragraph run closed by a table still commits — the table is unrelated content, not part of the section's own items",
+			html: `<h3>Requirements</h3><p>Owns delivery end to end</p><p>Comfortable leading design discussions</p><table><tr><td>Grade</td><td>Senior</td></tr></table>`,
+			want: []enrich.Requirement{req("Owns delivery end to end"), req("Comfortable leading design discussions")},
 		},
 	}
 
