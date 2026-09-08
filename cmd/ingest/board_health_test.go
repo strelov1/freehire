@@ -113,6 +113,19 @@ func TestChronicBoardsSummaryHandlesNeverSucceeded(t *testing.T) {
 	}
 }
 
+// A board name repeated across regions (Adzuna-shaped) must keep its region in the line — a
+// curator cannot otherwise tell "chronic in gb, healthy in us" from "chronic everywhere", which
+// is the exact ambiguity cmd/close-chronic-boards refuses to act on.
+func TestChronicBoardsSummaryKeepsRegion(t *testing.T) {
+	now := time.Date(2026, 9, 8, 12, 0, 0, 0, time.UTC)
+	row := chronicRow("adzuna", "it-jobs", now.Add(-61*24*time.Hour), false)
+	row.Region = "gb"
+	got := chronicBoardsSummary([]db.ListChronicBoardsRow{row}, 1, now)
+	if !strings.Contains(got, "adzuna/it-jobs/gb(days=61)") {
+		t.Errorf("summary lost the region slice: %s", got)
+	}
+}
+
 // A boardless provider's chronic record has no board id to append — the line must read
 // "provider(days=N)", not "provider/(days=N)" with a dangling separator.
 func TestChronicBoardsSummaryOmitsSlashForBoardlessProvider(t *testing.T) {

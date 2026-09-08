@@ -956,6 +956,18 @@ type Querier interface {
 	// Read-only companion to BackfillBoardCompany, for --dry-run: how many rows a board's backfill
 	// would touch without writing anything.
 	CountBlankCompanyByBoard(ctx context.Context, arg CountBlankCompanyByBoardParams) (int64, error)
+	// How many board_health rows exist for one (provider, board) name across every region it has
+	// ever been seen under. More than one means the name is REGION-AMBIGUOUS — the `boards`
+	// catalog allows one board name to repeat under a provider, distinguished only by region (e.g.
+	// Adzuna's "it-jobs" once per country, internal/ingest/sources/adzuna.go), but
+	// jobs.external_id carries no region dimension at all (externalid.Namespace(board, id)), so a
+	// board-scoped `external_id LIKE '<board>:%'` close cannot tell one region's postings from
+	// another's. The ordinary per-run sweep already refuses to board-scope such a name
+	// (pipeline.ambiguousRegionBoards); the chronic-board safety net (cmd/close-chronic-boards)
+	// makes the same check against board_health directly, since it has no crawl-run board list to
+	// consult and does not need one — board_health's own composite key already records every
+	// region a board name has ever been crawled under.
+	CountBoardHealthRegions(ctx context.Context, arg CountBoardHealthRegionsParams) (int64, error)
 	// How many people a campaign would reach right now. Read before sending: a campaign
 	// is irreversible and goes to everyone, so the number is worth seeing first.
 	CountBroadcastCandidates(ctx context.Context, campaign string) (int64, error)

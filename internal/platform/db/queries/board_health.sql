@@ -84,6 +84,20 @@ WHERE (last_success_at IS NOT NULL AND last_success_at < now() - sqlc.arg(age_wi
 ORDER BY coalesce(last_success_at, first_seen_at), provider, board, region
 LIMIT sqlc.arg(max_boards);
 
+-- name: CountBoardHealthRegions :one
+-- How many board_health rows exist for one (provider, board) name across every region it has
+-- ever been seen under. More than one means the name is REGION-AMBIGUOUS — the `boards`
+-- catalog allows one board name to repeat under a provider, distinguished only by region (e.g.
+-- Adzuna's "it-jobs" once per country, internal/ingest/sources/adzuna.go), but
+-- jobs.external_id carries no region dimension at all (externalid.Namespace(board, id)), so a
+-- board-scoped `external_id LIKE '<board>:%'` close cannot tell one region's postings from
+-- another's. The ordinary per-run sweep already refuses to board-scope such a name
+-- (pipeline.ambiguousRegionBoards); the chronic-board safety net (cmd/close-chronic-boards)
+-- makes the same check against board_health directly, since it has no crawl-run board list to
+-- consult and does not need one — board_health's own composite key already records every
+-- region a board name has ever been crawled under.
+SELECT count(*) FROM board_health WHERE provider = sqlc.arg(provider) AND board = sqlc.arg(board);
+
 -- name: ListCooledBoards :many
 -- Up to $2 (board, region) pairs currently in an active cooldown for a provider,
 -- soonest-to-expire first — the recovery probe's candidates. The ordering rotates the sample as

@@ -206,11 +206,14 @@ func logChronicBoards(ctx context.Context, q *db.Queries) {
 }
 
 // chronicBoardsSummary renders the chronic-board line: each named board as
-// "provider/board(days=N)" — or just "provider(days=N)" for a boardless provider's own
-// record — where N is days since the board's evidence anchor: last_success_at for a board
+// "provider/board[/region](days=N)" — or just "provider(days=N)" for a boardless provider's
+// own record — where N is days since the board's evidence anchor: last_success_at for a board
 // that has succeeded at least once, first_seen_at for one that never has (see
-// ingest-board-health spec). Plus how many the cap left out, same convention as
-// unhealthyBoardsSummary.
+// ingest-board-health spec). The region matters here specifically: a board name repeated
+// across regions (e.g. Adzuna's "it-jobs" once per country) can be chronic in one and healthy
+// in another, and without the region a curator reading this line cannot tell which — the exact
+// ambiguity cmd/close-chronic-boards refuses to act on (isRegionAmbiguous). Same
+// region-appending and cap/total convention as unhealthyBoardsSummary.
 func chronicBoardsSummary(rows []db.ListChronicBoardsRow, total int64, now time.Time) string {
 	parts := make([]string, 0, len(rows))
 	for _, r := range rows {
@@ -222,6 +225,9 @@ func chronicBoardsSummary(rows []db.ListChronicBoardsRow, total int64, now time.
 		id := r.Provider
 		if r.Board != "" {
 			id += "/" + r.Board
+		}
+		if r.Region != "" {
+			id += "/" + r.Region
 		}
 		parts = append(parts, fmt.Sprintf("%s(days=%d)", id, days))
 	}

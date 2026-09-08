@@ -51,6 +51,36 @@ a permanently broken board's jobs open forever without it.
 - **THEN** that provider's open jobs are closed, since the provider has no finer
   board grain to scope to
 
+### Requirement: A region-ambiguous board name is never board-scoped by the safety net
+
+A board name that is registered under more than one region for its provider (e.g. a
+per-country board such as Adzuna's `it-jobs`) SHALL NOT be closed by the board-scoped
+path of the safety-net pass, even when the specific `(provider, board, region)` health
+record that triggered the pass is itself past the closure window. A job's stored
+identity carries no region, so a board-scoped close cannot distinguish one region's
+postings from another's, and closing by board name alone risks closing a healthy
+region's jobs alongside the genuinely chronic one — the same hazard the ordinary
+unseen sweep's board scope already refuses for the same reason. Such a board SHALL be
+skipped and reported as skipped, not silently dropped, so an operator reading the run
+can see that a region-ambiguous board needs a decision the automated pass could not
+safely make on its own. A boardless provider's own health record is never
+region-ambiguous in this sense, since it already stands for the whole provider with
+no board-name collision possible.
+
+#### Scenario: A board chronic in one region but healthy in another is skipped
+
+- **WHEN** the safety-net pass runs and a board name is chronic past the closure
+  window under one region but has a recent successful crawl under a different region
+  for the same provider
+- **THEN** that board's jobs are not closed, and the run reports it as skipped for
+  being region-ambiguous
+
+#### Scenario: An unambiguous board name closes normally
+
+- **WHEN** the safety-net pass runs and a chronic board name is registered under only
+  one region for its provider
+- **THEN** that board's open jobs are closed as usual
+
 ### Requirement: A safety-net close carries its own mechanism label
 
 A job closed by the chronic-board safety net SHALL record a close reason distinct

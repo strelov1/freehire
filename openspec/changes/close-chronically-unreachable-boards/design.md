@@ -93,6 +93,24 @@ failure, not one run's Stats). For a boardless provider's chronic record
 `ingest-board-health`'s existing note that a boardless health record already stands
 for the whole provider. Both paths write `closed_reason = 'board_unreachable'`.
 
+**5a. Region-ambiguous board names are refused, not board-scoped.** `board_health`'s
+primary key is `(provider, board, region)` specifically because a board id like
+Adzuna's `it-jobs` repeats once per country (`internal/ingest/sources/adzuna.go`),
+and `jobs.external_id` has no region dimension at all — the same fact
+`CloseUnseenJobsForBoard`'s existing caller already accounts for via
+`pipeline.ambiguousRegionBoards`/`AmbiguousBoardNames`, which refuses to board-scope
+an ambiguous name and falls back to the company scope instead. This worker has no
+crawl-run board list to compute that check against (and does not need one):
+`CountBoardHealthRegions(provider, board)` asks `board_health` directly — more than
+one row for the same `(provider, board)` means the name is ambiguous — before
+`closeOrCountOneBoard` is ever called for a `board != ''` row. An ambiguous board is
+skipped and counted separately in the report (`boardsSkippedAmbiguous`), never
+silently merged into "processed" or "closed", so a curator reading the log can see it
+needs a by-hand decision rather than assuming the pass covered it. This was caught in
+review, not anticipated in the original design — the LIKE-pattern reuse in Decision 5
+above copied the SQL shape from `CloseUnseenJobsForBoard` without also copying the
+safety check that makes that shape sound.
+
 **6. Chronic reporting reuses `ListUnhealthyBoards`'s consumer, adds a second
 section.** The per-run log summary (`cmd/ingest/main.go`'s unhealthy-boards line) and
 the `/status`-page-adjacent operator query both gain a chronic count/list alongside
@@ -118,6 +136,16 @@ surface — same log line shape, one more labeled group.
   orphaned behavior" — now the `boards` table per `AGENTS.md`) and orthogonal to this
   change; a board actively retired already has its own close path via the ordinary
   ingest-sweep-adjacent retirement flow.
+- **[Risk] A region-ambiguous board name that stays permanently split (one region dead,
+  another alive) never gets auto-closed by this safety net at all** (Decision 5a) — it
+  is reported as skipped on every run, indefinitely, rather than resolved. →
+  Mitigation: deliberate, same bias as the ordinary sweep's own refusal to
+  board-scope such a name; this is a genuinely rare shape (one board_health-tracked
+  provider, Adzuna, as of this writing) and the chronic-report line names it
+  specifically so a curator can close the dead region's postings by hand if it
+  matters enough to act on before the board name naturally stops being ambiguous
+  (the dead region's `board_health` row could also be deleted by hand, which removes
+  the ambiguity and lets a later run close it normally).
 
 ## Migration Plan
 

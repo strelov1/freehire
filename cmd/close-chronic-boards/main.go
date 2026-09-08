@@ -65,7 +65,7 @@ func run() int {
 	if *apply {
 		verb = "closed"
 	}
-	log.Printf("close-chronic-boards: %d chronic board(s), %s %d job(s) total",
-		report.boardsProcessed, verb, report.jobsAffected)
+	log.Printf("close-chronic-boards: %d chronic board(s) (%d skipped as region-ambiguous), %s %d job(s) total",
+		report.boardsProcessed, report.boardsSkippedAmbiguous, verb, report.jobsAffected)
 	return 0
 }

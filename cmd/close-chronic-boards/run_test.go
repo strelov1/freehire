@@ -8,7 +8,11 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"log"
+	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -50,13 +54,20 @@ func ingestParams(externalID, title string) db.UpsertJobParams {
 
 func seedChronicBoard(t *testing.T, pool *pgxpool.Pool, provider, board string, daysSinceSuccess int) {
 	t.Helper()
+	seedBoardHealthRegion(t, pool, provider, board, "", daysSinceSuccess)
+}
+
+// seedBoardHealthRegion is seedChronicBoard with an explicit region, for the region-ambiguity
+// tests: Adzuna-shaped providers register the same board name once per country.
+func seedBoardHealthRegion(t *testing.T, pool *pgxpool.Pool, provider, board, region string, daysSinceSuccess int) {
+	t.Helper()
 	lastSuccess := time.Now().Add(-time.Duration(daysSinceSuccess) * 24 * time.Hour)
 	_, err := pool.Exec(context.Background(),
 		`INSERT INTO board_health (provider, board, region, consecutive_failures, first_seen_at, last_success_at)
-		 VALUES ($1, $2, '', 20, now() - interval '500 days', $3)`,
-		provider, board, lastSuccess)
+		 VALUES ($1, $2, $3, 20, now() - interval '500 days', $4)`,
+		provider, board, region, lastSuccess)
 	if err != nil {
-		t.Fatalf("seed chronic board %s/%s: %v", provider, board, err)
+		t.Fatalf("seed chronic board %s/%s/%s: %v", provider, board, region, err)
 	}
 }
 
@@ -180,5 +191,126 @@ func TestCloseChronicBoardsHandlesBoardlessProvider(t *testing.T) {
 	}
 	if !after.ClosedAt.Valid || after.ClosedReason != "board_unreachable" {
 		t.Fatalf("uber job = %+v, want closed with reason board_unreachable", after)
+	}
+}
+
+// TestCloseChronicBoardsSkipsRegionAmbiguousBoardNames mirrors
+// TestBoardHealth_RegionDisambiguates (cmd/ingest): Adzuna registers the same board name once
+// per country, so "it-jobs" is chronic in gb while still crawling fine in us. jobs.external_id
+// carries no region dimension, so a board-scoped close on the name "it-jobs" cannot tell gb's
+// postings from us's — the worker must refuse to touch it at all, the same way the ordinary
+// sweep's ambiguousRegionBoards falls back rather than risk closing a healthy region's jobs.
+func TestCloseChronicBoardsSkipsRegionAmbiguousBoardNames(t *testing.T) {
+	pool := startPostgres(t)
+	q := db.New(pool)
+	ctx := context.Background()
+	truncate(t, pool)
+
+	seedBoardHealthRegion(t, pool, "adzuna", "it-jobs", "gb", 61) // chronic
+	seedBoardHealthRegion(t, pool, "adzuna", "it-jobs", "us", 0)  // healthy, crawled today
+	job, err := q.UpsertJob(ctx, ingestParams(externalid.Namespace("it-jobs", "1"), "Ambiguous board job"))
+	if err != nil {
+		t.Fatalf("upsert: %v", err)
+	}
+
+	report, err := closeChronicBoards(ctx, q, 60, 100, true)
+	if err != nil {
+		t.Fatalf("closeChronicBoards: %v", err)
+	}
+	if report.boardsSkippedAmbiguous != 1 {
+		t.Fatalf("report = %+v, want 1 board skipped as region-ambiguous", report)
+	}
+	if report.jobsAffected != 0 {
+		t.Fatalf("report = %+v, want 0 jobs affected — the ambiguous board must not be touched", report)
+	}
+
+	after, err := q.GetJob(ctx, job.Job.ID)
+	if err != nil {
+		t.Fatalf("get job: %v", err)
+	}
+	if after.ClosedAt.Valid {
+		t.Fatal("a region-ambiguous board's job must stay open — closing it risks a healthy region's postings")
+	}
+}
+
+// The dry-run count path must refuse the same way: a report naming a job count for an
+// ambiguous board would mix two regions' postings into one misleading number.
+func TestCloseChronicBoardsDryRunSkipsRegionAmbiguousBoardNames(t *testing.T) {
+	pool := startPostgres(t)
+	q := db.New(pool)
+	ctx := context.Background()
+	truncate(t, pool)
+
+	seedBoardHealthRegion(t, pool, "adzuna", "it-jobs", "gb", 61)
+	seedBoardHealthRegion(t, pool, "adzuna", "it-jobs", "us", 0)
+	if _, err := q.UpsertJob(ctx, ingestParams(externalid.Namespace("it-jobs", "1"), "Ambiguous board job")); err != nil {
+		t.Fatalf("upsert: %v", err)
+	}
+
+	report, err := closeChronicBoards(ctx, q, 60, 100, false)
+	if err != nil {
+		t.Fatalf("closeChronicBoards (dry run): %v", err)
+	}
+	if report.boardsSkippedAmbiguous != 1 || report.jobsAffected != 0 {
+		t.Fatalf("report = %+v, want 1 board skipped and 0 jobs counted", report)
+	}
+}
+
+func captureLog(t *testing.T) *bytes.Buffer {
+	t.Helper()
+	var buf bytes.Buffer
+	flags := log.Flags()
+	log.SetOutput(&buf)
+	log.SetFlags(0)
+	t.Cleanup(func() {
+		log.SetOutput(os.Stderr)
+		log.SetFlags(flags)
+	})
+	return &buf
+}
+
+// TestCloseChronicBoardsLogsWhenTheCapTruncates pins that a run bound by maxBoards says so: a
+// run at exactly the cap must not look identical to one with many more chronic boards behind
+// it, since maxChronicBoardsPerRun's own comment (main.go) argues that case would itself be
+// worth a human noticing.
+func TestCloseChronicBoardsLogsWhenTheCapTruncates(t *testing.T) {
+	pool := startPostgres(t)
+	q := db.New(pool)
+	ctx := context.Background()
+	truncate(t, pool)
+
+	seedChronicBoard(t, pool, "greenhouse", "dead-board-1", 61)
+	seedChronicBoard(t, pool, "greenhouse", "dead-board-2", 61)
+	seedChronicBoard(t, pool, "greenhouse", "dead-board-3", 61)
+
+	logs := captureLog(t)
+	report, err := closeChronicBoards(ctx, q, 60, 2, false) // cap of 2 against 3 chronic boards
+	if err != nil {
+		t.Fatalf("closeChronicBoards: %v", err)
+	}
+	if report.boardsProcessed != 2 {
+		t.Fatalf("boardsProcessed = %d, want 2 (bound by the cap)", report.boardsProcessed)
+	}
+	if !strings.Contains(logs.String(), "1 more chronic board") {
+		t.Errorf("log did not report the truncation: %s", logs.String())
+	}
+}
+
+// A run that is NOT truncated (fewer chronic boards than the cap) must not print a false "more
+// boards exist" line.
+func TestCloseChronicBoardsDoesNotLogTruncationWhenNotCapped(t *testing.T) {
+	pool := startPostgres(t)
+	q := db.New(pool)
+	ctx := context.Background()
+	truncate(t, pool)
+
+	seedChronicBoard(t, pool, "greenhouse", "dead-board", 61)
+
+	logs := captureLog(t)
+	if _, err := closeChronicBoards(ctx, q, 60, 100, false); err != nil {
+		t.Fatalf("closeChronicBoards: %v", err)
+	}
+	if strings.Contains(logs.String(), "more chronic board") {
+		t.Errorf("log falsely reported truncation with no cap hit: %s", logs.String())
 	}
 }

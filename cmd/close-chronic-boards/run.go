@@ -18,10 +18,12 @@ import (
 const maxChronicBoardsPerRun = 10000
 
 // chronicBoardsReport summarizes one pass: how many chronic boards were found past the closure
-// window, and how many jobs were (or, without --apply, would be) closed across all of them.
+// window, how many of those were skipped as region-ambiguous (see closeOrCountOneBoard), and
+// how many jobs were (or, without --apply, would be) closed across the rest.
 type chronicBoardsReport struct {
-	boardsProcessed int
-	jobsAffected    int64
+	boardsProcessed        int
+	boardsSkippedAmbiguous int
+	jobsAffected           int64
 }
 
 // closeChronicBoards lists the boards (or boardless providers) that board_health proves have
@@ -41,6 +43,18 @@ func closeChronicBoards(ctx context.Context, q *db.Queries, closeWindowDays int6
 
 	report := chronicBoardsReport{boardsProcessed: len(rows)}
 	for _, r := range rows {
+		ambiguous, err := isRegionAmbiguous(ctx, q, r)
+		if err != nil {
+			return report, err
+		}
+		if ambiguous {
+			report.boardsSkippedAmbiguous++
+			log.Printf("close-chronic-boards: skipping %s/%s — its board name is region-ambiguous "+
+				"(board_health holds it under more than one region, and jobs.external_id carries no "+
+				"region), so a board-scoped close could close a healthy region's jobs alongside this one",
+				r.Provider, r.Board)
+			continue
+		}
 		n, err := closeOrCountOneBoard(ctx, q, r, apply)
 		if err != nil {
 			return report, err
@@ -48,7 +62,28 @@ func closeChronicBoards(ctx context.Context, q *db.Queries, closeWindowDays int6
 		report.jobsAffected += n
 		logChronicBoardAction(r, n, apply)
 	}
+	if len(rows) > 0 && rows[0].Total > int64(len(rows)) {
+		log.Printf("close-chronic-boards: %d more chronic board(s) exist beyond the %d this run processed (maxChronicBoardsPerRun cap)",
+			rows[0].Total-int64(len(rows)), len(rows))
+	}
 	return report, nil
+}
+
+// isRegionAmbiguous reports whether r's board name is registered under more than one region
+// for its provider (see CountBoardHealthRegions) — the same hazard the ordinary sweep's
+// ambiguousRegionBoards guards against, checked directly against board_health since this
+// worker has no crawl-run board list to consult. A boardless provider's own record (board ==
+// "") is never ambiguous in this sense: it already IS the whole provider, with no board-name
+// collision possible.
+func isRegionAmbiguous(ctx context.Context, q *db.Queries, r db.ListChronicBoardsRow) (bool, error) {
+	if r.Board == "" {
+		return false, nil
+	}
+	regions, err := q.CountBoardHealthRegions(ctx, db.CountBoardHealthRegionsParams{Provider: r.Provider, Board: r.Board})
+	if err != nil {
+		return false, err
+	}
+	return regions > 1, nil
 }
 
 func closeOrCountOneBoard(ctx context.Context, q *db.Queries, r db.ListChronicBoardsRow, apply bool) (int64, error) {
