@@ -1,3 +1,19 @@
+> **SUPERSEDED — read this first.**
+>
+> This change is archived as history, not as a description of the code. The surface it
+> specifies no longer exists: the tri-state visibility it introduced was collapsed to a
+> two-state membership by migration 0145, and the per-candidate page it served at
+> `/talent-network/<uuid>` was replaced by the public catalogue at `/talent`.
+>
+> What is true today is in `openspec/specs/talent-network-membership` and
+> `openspec/specs/talent-network-catalog`, from the `talent-network-public-catalog`
+> change. Its tasks below are left as they were written — rewriting a completed change's
+> record to match later code turns history into a second, quieter copy of the specs.
+>
+> One thing in it was never true even then: task 2's overlay panel
+> (`TalentNetworkPanel.svelte`) was built as a page under `/my/talent-network` instead,
+> and the task list was ticked without being corrected.
+
 ## Why
 
 The talent-network-profile-visibility change (still open as PR #1727, not

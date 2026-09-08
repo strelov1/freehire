@@ -142,18 +142,22 @@ REFACTOR → simplify → review → only then `[x]`.
       it may import.
 - [x] 6.2 Update the module table in the root `CLAUDE.md`/`AGENTS.md` with the new package,
       and check `pnpm check:links` passes — the table is the map an agent follows.
-- [ ] 6.3 Reconcile the two stale changes: `talent-network-profile-visibility` and
-      `talent-network-entry-redesign` both read `[x]` while describing a surface that no
-      longer exists (the overlay panel became `/my/talent-network`). Correct the record,
-      then archive and sync them so `openspec/specs/` finally holds the Talent Network's
-      behaviour.
+- [x] 6.3 Both stale changes archived with a SUPERSEDED banner naming what replaced them
+      and what was never true even then (the overlay panel that shipped as a page).
+      Archived `--skip-specs` deliberately: syncing their specs would write the retired
+      tri-state into `openspec/specs/` only for this change to overwrite it, and a spec
+      that is wrong for a day is a spec somebody reads. This change's own specs are what
+      land there when it is archived. Their task lists are left as written — rewriting a
+      completed change's record to match later code turns history into a quieter, second
+      copy of the specs.
 
 ## 7. Verification
 
-- [ ] 7.1 `gofmt -l .` prints nothing; `go build ./...`, `go vet ./...`, `go test ./...`
-      pass; `go vet -tags=integration ./...` passes before any push.
-- [ ] 7.2 `pnpm --dir web check`, `pnpm --dir web lint`, `pnpm --dir web build` pass. In a
-      fresh worktree run `pnpm --dir web exec svelte-kit sync` first or every test fails.
+- [x] 7.1 `gofmt -l .` prints nothing; `go build ./...`, `go vet ./...`, `go test ./...`
+      and `go vet -tags=integration ./...` all pass.
+- [x] 7.2 `pnpm --dir web check` (0 errors), `lint`, `build` and the full vitest suite
+      (1707 tests) pass. The fresh worktree did need `svelte-kit sync` first — without it
+      even `gen:api-docs` fails, with a "Tsconfig not found" that names neither.
 - [ ] 7.3 Manual browser pass against a running app: join from `/my/profile`, see yourself
       appear in `/talent` as a visitor in a logged-out window, confirm no employer name is
       anywhere on the page or in the API response, leave, and confirm the card 404s
