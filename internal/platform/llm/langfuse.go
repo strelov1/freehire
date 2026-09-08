@@ -185,10 +185,22 @@ type Generation struct {
 }
 
 // Usage is the token accounting for a single call.
+//
+// CachedInput is the part of Input the provider served from its prompt cache. It is the
+// figure that decides what a replayed conversation actually costs — the assistant sends
+// its whole transcript every round, so a provider that caches the prefix and one that
+// does not differ by far more than their per-token prices suggest.
+//
+// Zero does not mean "no cache". langchaingo writes the underlying key from a
+// zero-valued struct, so a provider that reports nothing and one that hit nothing both
+// arrive as zero, and this layer cannot tell them apart. A caller that needs the
+// distinction draws it across a run — every round of a run reporting zero against a
+// prefix that should have been warm is evidence about the provider; one call is not.
 type Usage struct {
-	Input  int
-	Output int
-	Total  int
+	Input       int
+	Output      int
+	CachedInput int
+	Total       int
 }
 
 // encodeBatch renders generations as a Langfuse ingestion request body. Each
@@ -220,6 +232,32 @@ func encodeBatch(gens []Generation) ([]byte, error) {
 	return json.Marshal(ingestionRequest{Batch: events})
 }
 
+// usageBuckets renders a Usage as Langfuse's usageDetails, whose contract is that every
+// key is a separate NON-OVERLAPPING bucket: each token is counted under exactly one.
+//
+// The provider does not report them that way. An OpenAI-shaped `prompt_tokens` counts the
+// cached prefix inside itself, so copying both figures across would bill that prefix
+// twice — once at the full input rate and once at the cache-read rate. The subtraction
+// here is the whole reason this is not a field-by-field copy.
+//
+// No total is sent: Langfuse derives it from the buckets, and a total we computed
+// ourselves would be a fourth number free to disagree with the three it was built from.
+func usageBuckets(u Usage) map[string]int {
+	// A cached count larger than the prompt it is part of is not a reading we can split —
+	// the subtraction would yield a negative bucket, which Langfuse would price as
+	// written. Pass the prompt through whole instead: an unsplit measurement is worse
+	// than a split one and far better than an invented one.
+	if u.CachedInput <= 0 || u.CachedInput > u.Input {
+		return map[string]int{"input": u.Input, "output": u.Output}
+	}
+
+	return map[string]int{
+		"input":               u.Input - u.CachedInput,
+		"input_cached_tokens": u.CachedInput,
+		"output":              u.Output,
+	}
+}
+
 // rfc3339 formats a time as the UTC RFC3339 timestamp Langfuse expects.
 func rfc3339(t time.Time) string { return t.UTC().Format(time.RFC3339Nano) }
 
@@ -238,12 +276,7 @@ func newGenerationBody(g Generation, traceID string) generationBody {
 		Metadata:  map[string]string{"source": g.Source},
 	}
 	if g.Usage != nil {
-		b.Usage = &usageBody{
-			Input:  g.Usage.Input,
-			Output: g.Usage.Output,
-			Total:  g.Usage.Total,
-			Unit:   "TOKENS",
-		}
+		b.UsageDetails = usageBuckets(*g.Usage)
 	}
 	if g.Err != nil {
 		b.Level = "ERROR"
@@ -280,7 +313,7 @@ type generationBody struct {
 	Model         string            `json:"model"`
 	Input         []chatMessage     `json:"input"`
 	Output        string            `json:"output"`
-	Usage         *usageBody        `json:"usage,omitempty"`
+	UsageDetails  map[string]int    `json:"usageDetails,omitempty"`
 	Level         string            `json:"level"`
 	StatusMessage string            `json:"statusMessage,omitempty"`
 	Metadata      map[string]string `json:"metadata"`
@@ -290,11 +323,4 @@ type generationBody struct {
 type chatMessage struct {
 	Role    string `json:"role"`
 	Content string `json:"content"`
-}
-
-type usageBody struct {
-	Input  int    `json:"input"`
-	Output int    `json:"output"`
-	Total  int    `json:"total"`
-	Unit   string `json:"unit"`
 }

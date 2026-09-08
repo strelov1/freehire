@@ -226,6 +226,7 @@ func run() int {
 	// Surface which boards are failing / cooled without grepping logs — one line
 	// naming them, their failure count, and when they next become eligible.
 	logUnhealthyBoards(ctx, db.New(pool))
+	logChronicBoards(ctx, db.New(pool))
 
 	total := runStats.Total()
 	log.Printf("ingest done: provider=%s providers=%d ingested=%d failed=%d skipped=%d rejected=%d unreadable=%d",

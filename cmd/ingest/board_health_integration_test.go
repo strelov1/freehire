@@ -14,6 +14,7 @@ import (
 
 	"github.com/strelov1/freehire/internal/platform/testdb"
 
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/strelov1/freehire/internal/platform/db"
@@ -210,5 +211,70 @@ func TestBoardHealth_ListUnhealthyBoardsCapsRowsNotCount(t *testing.T) {
 	got := unhealthyBoardsSummary(rows, rows[0].Total, time.Now())
 	if !strings.Contains(got, "5 unhealthy board(s), worst 2") || !strings.Contains(got, "3 more") {
 		t.Errorf("summary = %q, want it to report 5 total, name 2, and admit 3 more", got)
+	}
+}
+
+// TestBoardHealth_ChronicIsDistinctFromMerelyCooling pins the end-to-end separation
+// (openspec change close-chronically-unreachable-boards, issue #2017; ingest-board-health
+// spec, "The unhealthy-board summary distinguishes chronic boards"): a board that has been
+// failing for only a few days shows up as unhealthy but is not yet chronic, while a board
+// whose last success was well past the chronic window is both.
+func TestBoardHealth_ChronicIsDistinctFromMerelyCooling(t *testing.T) {
+	pool := startPostgres(t)
+	ctx := context.Background()
+	h := newBoardHealth(pool)
+
+	// A board that started failing recently — real API, so its last_success_at/first_seen_at
+	// land within the last few seconds, nowhere near the 30-day chronic window.
+	for i := 0; i < 3; i++ {
+		if err := h.RecordFailure(ctx, "paylocity", "recently-broken", "", "boom"); err != nil {
+			t.Fatalf("RecordFailure recently-broken: %v", err)
+		}
+	}
+
+	// A board that succeeded once, long enough ago to be chronic, then kept failing.
+	if err := h.RecordSuccess(ctx, "paylocity", "long-dead", "", 1); err != nil {
+		t.Fatalf("RecordSuccess long-dead: %v", err)
+	}
+	if _, err := pool.Exec(ctx,
+		"UPDATE board_health SET last_success_at = now() - interval '41 days' WHERE provider = 'paylocity' AND board = 'long-dead'"); err != nil {
+		t.Fatalf("backdate long-dead: %v", err)
+	}
+	for i := 0; i < 3; i++ {
+		if err := h.RecordFailure(ctx, "paylocity", "long-dead", "", "boom"); err != nil {
+			t.Fatalf("RecordFailure long-dead: %v", err)
+		}
+	}
+
+	q := db.New(pool)
+	unhealthy, err := q.ListUnhealthyBoards(ctx, unhealthyBoardsCap)
+	if err != nil {
+		t.Fatalf("ListUnhealthyBoards: %v", err)
+	}
+	if len(unhealthy) != 2 {
+		t.Fatalf("unhealthy boards = %d, want 2 (both are failing)", len(unhealthy))
+	}
+
+	chronic, err := q.ListChronicBoards(ctx, db.ListChronicBoardsParams{
+		AgeWindow: pgtype.Interval{Days: chronicBoardWindowDaysDefault, Valid: true},
+		MaxBoards: chronicBoardsCap,
+	})
+	if err != nil {
+		t.Fatalf("ListChronicBoards: %v", err)
+	}
+	if len(chronic) != 1 || chronic[0].Board != "long-dead" {
+		t.Fatalf("chronic boards = %v, want exactly [long-dead]", chronic)
+	}
+
+	unhealthySummary := unhealthyBoardsSummary(unhealthy, unhealthy[0].Total, time.Now())
+	chronicSummary := chronicBoardsSummary(chronic, chronic[0].Total, time.Now())
+	if !strings.Contains(unhealthySummary, "recently-broken") || !strings.Contains(unhealthySummary, "long-dead") {
+		t.Errorf("unhealthy summary should name both boards: %s", unhealthySummary)
+	}
+	if strings.Contains(chronicSummary, "recently-broken") {
+		t.Errorf("chronic summary must not include the merely-cooling board: %s", chronicSummary)
+	}
+	if !strings.Contains(chronicSummary, "long-dead") {
+		t.Errorf("chronic summary must include the chronic board: %s", chronicSummary)
 	}
 }

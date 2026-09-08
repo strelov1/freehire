@@ -213,6 +213,10 @@ func publicReadRoutes(t *testing.T, throttler ratelimit.Throttler) (map[string]*
 		"searchHandlers":    mount((&searchHandlers{}).register),
 		"suggestHandlers":   mount((&suggestHandlers{}).register),
 		"geoHandlers":       mount(newGeoHandlers().register),
+		// The mentor directory and profile read on the shared public-read budget; the
+		// slot endpoint has its own, because it COMPUTES per request and must not be able
+		// to exhaust what the rest of the site reads on.
+		"mentorshipHandlers": mount((&mentorshipHandlers{}).registerPublic),
 		// The public Talent Network catalogue. Zero-valued like the rest: a route
 		// reached past its limiter nil-dereferences into recover, which is the
 		// assertion, rather than needing a real catalogue behind it.

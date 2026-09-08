@@ -1,0 +1,44 @@
+{
+  "captured": "2026-09-08",
+  "source": "https://openrouter.ai/api/v1/models",
+  "data": [
+    {
+      "id": "inception/mercury-2.5-preview",
+      "name": "Inception: Mercury 2.5 Preview",
+      "context_length": 260000,
+      "pricing": {
+        "prompt": "0.00000004",
+        "completion": "0.00000015",
+        "input_cache_read": "0.000000004"
+      }
+    },
+    {
+      "id": "deepseek/deepseek-v4-flash-0731",
+      "name": "DeepSeek: DeepSeek V4 Flash 0731",
+      "context_length": 1310720,
+      "pricing": {
+        "prompt": "0.00000014",
+        "completion": "0.00000028",
+        "input_cache_read": "0.000000028"
+      }
+    },
+    {
+      "id": "google/gemma-4-31b-it:free",
+      "name": "Google: Gemma 4 31B (free)",
+      "context_length": 262144,
+      "pricing": {
+        "prompt": "0",
+        "completion": "0"
+      }
+    },
+    {
+      "id": "nvidia/nemotron-3-super-120b-a12b:free",
+      "name": "NVIDIA: Nemotron 3 Super (free)",
+      "context_length": 262144,
+      "pricing": {
+        "prompt": "0",
+        "completion": "0"
+      }
+    }
+  ]
+}

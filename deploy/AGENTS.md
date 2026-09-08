@@ -145,18 +145,18 @@ a scheduled Dependabot run made every deploy stop, silently, at exit 0.
   the next Stripe sync overwrites it, which is exactly the confusion the split removed.
 
 - **A new worker needs its binary built on the host.** `release.sh` builds the API, not
-  every command in `cmd/`. `billing-sync` is the first addition since that was last true;
-  build it where the other worker binaries live before enabling the timer, or the unit
-  fails on a missing executable every hour.
+  every command in `cmd/`. `billing-sync` and `mentorship-remind` are the additions since
+  that was last true; build each where the other worker binaries live before enabling its
+  timer, or the unit fails on a missing executable every time it fires.
 - **The environment is split across two files, and the split is a trap.** Every unit reads
   `/opt/freehire/.env`; the mail credentials (`NOTIFY_EMAIL_FROM` plus the SES keys) live
   ONLY in `/opt/freehire/.env.notify`. A worker that sends mail and reads just the first
   loses its email channel — and does not fail, because "channel not configured" is a
-  deliberate soft-skip. **The five workers that send mail are `notify`, `nudge`, `remind`,
-  `broadcast` and `onboarding`**, and each must read both files. `remind` and `nudge` did
-  not, from the day they shipped until 2026-09-01: 244 email reminders piled up unsent
-  across 43 people while every run exited 0 with `failed=0`. Neither env file is in git and
-  neither should be.
+  deliberate soft-skip. **The six workers that send mail are `notify`, `nudge`, `remind`,
+  `broadcast`, `onboarding` and `mentorship-remind`**, and each must read both files.
+  `remind` and `nudge` did not, from the day they shipped until 2026-09-01: 244 email
+  reminders piled up unsent across 43 people while every run exited 0 with `failed=0`.
+  Neither env file is in git and neither should be.
 - **A `.d/` drop-in beside a unit is how the host adds to it**, and both spellings are in
   use here: `mail.conf` adds the env file above, `10-timeout.conf` and
   `10-skip-if-reindexing.conf` adjust one setting. A drop-in's directives apply after the

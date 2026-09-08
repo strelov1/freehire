@@ -1,0 +1,24 @@
+[Unit]
+Description=freehire worker: remind both parties before a booked mentorship session
+After=network.target postgresql.service
+[Service]
+Type=oneshot
+User=freehire
+WorkingDirectory=/opt/freehire/src/hire-current
+EnvironmentFile=/opt/freehire/.env
+# The mail credentials live ONLY here, not in the shared .env above — see the two-file
+# split in deploy/AGENTS.md. A worker that sends mail and reads just the first file loses
+# its email channel and DOES NOT FAIL, because "no transport configured" is a deliberate
+# soft-skip. For this worker that is the worst possible failure mode: every run would exit
+# 0 having reminded nobody, indefinitely, with nothing in the journal to say so.
+EnvironmentFile=/opt/freehire/.env.notify
+# Low weights: almost every run finds nothing due, and the ones that do send a handful of
+# emails. This must never be why a request waits. Same reasoning as
+# freehire-discord-sync and freehire-billing-sync.
+CPUWeight=20
+IOWeight=20
+# A run with no NOTIFY_EMAIL_FROM or AWS_REGION exits 0 WITHOUT opening the pool — not
+# merely without sending. That distinction is load-bearing: claiming a reminder it could
+# not deliver would mark it sent forever, so an unconfigured host must touch nothing.
+# It is also the rollback: unset NOTIFY_EMAIL_FROM.
+ExecStart=/opt/freehire/src/hire-current/mentorship-remind

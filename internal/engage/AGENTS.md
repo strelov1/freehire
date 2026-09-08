@@ -1,6 +1,6 @@
 # internal/engage
 
-Reaching the user: notifications on every channel, digests and reminders, onboarding, broadcasts, referrals, community and moderation-adjacent surfaces.
+Reaching the user: notifications on every channel, digests and reminders, onboarding, broadcasts, referrals, mentorship, community and moderation-adjacent surfaces.
 
 **Layer 7 of 8.**
 
@@ -16,4 +16,4 @@ reports the whole graph at once, including imports that exist only in test files
 
 ## Packages
 
-`broadcast` `community` `companyfeedback` `emailnotify` `mailpreview` `notify` `nudge` `onboarding` `pushnotify` `referral` `reminder` `report` `socialdigest` `subscription` `telegramnotify` `vote` `webhooknotify`
+`broadcast` `community` `companyfeedback` `discordlink` `emailnotify` `mailpreview` `mentorship` `notify` `nudge` `onboarding` `pushnotify` `referral` `reminder` `report` `socialdigest` `subscription` `telegramnotify` `vote` `webhooknotify`

@@ -294,11 +294,23 @@ type Querier interface {
 	// names the meeting by its iCalUID; a deleted one is documented to carry just the
 	// provider's own `id`, which is why that is stored alongside.
 	CancelApplicationInterview(ctx context.Context, arg CancelApplicationInterviewParams) (int64, error)
+	// Withdrawal and any other wholesale removal: cancel every future confirmed session at
+	// once, RETURNING enough to notify each seeker. Their notifications are sent after this
+	// commits — a booking cancelled without its seeker being told is worse than one not
+	// cancelled.
+	CancelFutureBookingsForMentor(ctx context.Context, arg CancelFutureBookingsForMentorParams) ([]CancelFutureBookingsForMentorRow, error)
 	// Cancel the pending reminder for one (user, job): the eager cleanup wired into
 	// apply and unsave (there is no per-job manual control any more — the shared
 	// notification_settings toggle is the only control). Idempotent — no pending row
 	// affects 0 rows and is never an error. Cancelled rows are retained as history.
 	CancelJobReminder(ctx context.Context, arg CancelJobReminderParams) (int64, error)
+	// Cancel before the session starts. Three guards in one statement, all load-bearing:
+	// status='confirmed' makes a second cancellation match no row; starts_at > now() refuses
+	// a session already begun; and cancelled_by must be the mentor's account or the seeker's,
+	// which is what stops a stranger cancelling somebody else's meeting. A no-row result is
+	// reported as "not found" without saying which guard failed — a stranger must not learn
+	// that the booking exists.
+	CancelMentorBooking(ctx context.Context, arg CancelMentorBookingParams) (MentorBooking, error)
 	// Lazy cancellation at fire time: the worker's re-check found the triggering
 	// condition no longer holds (a reply arrived, the stage moved on, the job closed,
 	// or notifications were disabled since MATCH) — cancel instead of sending.
@@ -622,6 +634,38 @@ type Querier interface {
 	// that no longer exists). Candidate contacts are intentionally kept: they are
 	// owner-edited identity, not an extract artifact.
 	ClearUserResume(ctx context.Context, id int64) error
+	// The chronic-board safety net (openspec change close-chronically-unreachable-boards, issue
+	// #2017), board-scoped: closes every open job of ONE board that board_health.ListChronicBoards
+	// has already proven unreachable for the closure window — no per-run cutoff, because the
+	// evidence here is weeks of accumulated failure, not one run's coverage. Reuses
+	// CloseUnseenJobsForBoard's board_pattern scoping so a same-provider sibling board is never
+	// touched.
+	//
+	// closed_reason is 'board_unreachable', distinct from the ordinary sweep's 'unseen', so a job
+	// closed here is never conflated with one the per-run sweep closed with actual run coverage —
+	// see job-lifecycle spec, "every close records the mechanism".
+	//
+	// The EXISTS clause RE-VALIDATES board_health's current state within this same statement,
+	// against the identical chronic predicate ListChronicBoards used to select the row in the
+	// first place (caught in review, PR #2641/CodeRabbit): the caller reads chronic boards, then
+	// closes them, as two separate round trips, and a board can recover — a real crawl can
+	// succeed, calling RecordBoardSuccess — in the gap between the two. Re-checking here rather
+	// than trusting what the caller read earlier closes that window: if the board's last_success_at
+	// has moved since the caller's read, this EXISTS is false and the UPDATE matches nothing,
+	// exactly as if the caller had re-read board_health immediately before closing.
+	//
+	// The search_delete_outbox CTE is copied verbatim from CloseUnseenJobs: the enqueue must ride
+	// this statement to stay atomic with the close and exact.
+	//
+	// :one rather than :execrows because the CTE moves the row count out of the command tag.
+	CloseChronicBoardJobs(ctx context.Context, arg CloseChronicBoardJobsParams) (int64, error)
+	// The chronic-board safety net's source-scoped sibling, for a BOARDLESS provider's chronic
+	// record (board = '', see ingest-board-health spec): such a record already stands for the
+	// provider's whole crawl, so closing "this board's jobs" means the whole provider's open jobs,
+	// by source alone — mirrors CloseUnseenJobsBySource but with no per-run cutoff, for the same
+	// reason CloseChronicBoardJobs has none. Carries the same board_health re-validation EXISTS
+	// clause as CloseChronicBoardJobs, and for the same reason.
+	CloseChronicProviderJobs(ctx context.Context, arg CloseChronicProviderJobsParams) (int64, error)
 	// Moderator close: the thread leaves the open listing and rejects new replies.
 	CloseCommunityThread(ctx context.Context, id int64) error
 	//
@@ -922,6 +966,18 @@ type Querier interface {
 	// Read-only companion to BackfillBoardCompany, for --dry-run: how many rows a board's backfill
 	// would touch without writing anything.
 	CountBlankCompanyByBoard(ctx context.Context, arg CountBlankCompanyByBoardParams) (int64, error)
+	// How many board_health rows exist for one (provider, board) name across every region it has
+	// ever been seen under. More than one means the name is REGION-AMBIGUOUS — the `boards`
+	// catalog allows one board name to repeat under a provider, distinguished only by region (e.g.
+	// Adzuna's "it-jobs" once per country, internal/ingest/sources/adzuna.go), but
+	// jobs.external_id carries no region dimension at all (externalid.Namespace(board, id)), so a
+	// board-scoped `external_id LIKE '<board>:%'` close cannot tell one region's postings from
+	// another's. The ordinary per-run sweep already refuses to board-scope such a name
+	// (pipeline.ambiguousRegionBoards); the chronic-board safety net (cmd/close-chronic-boards)
+	// makes the same check against board_health directly, since it has no crawl-run board list to
+	// consult and does not need one — board_health's own composite key already records every
+	// region a board name has ever been crawled under.
+	CountBoardHealthRegions(ctx context.Context, arg CountBoardHealthRegionsParams) (int64, error)
 	// How many people a campaign would reach right now. Read before sending: a campaign
 	// is irreversible and goes to everyone, so the number is worth seeing first.
 	CountBroadcastCandidates(ctx context.Context, campaign string) (int64, error)
@@ -937,6 +993,14 @@ type Querier interface {
 	// The predicate is the one the public listings apply, so the totals describe exactly the
 	// set a visitor can page through.
 	CountCatalogueScale(ctx context.Context) (CountCatalogueScaleRow, error)
+	// What CloseChronicBoardJobs would close, for the safety-net worker's dry-run report — same
+	// predicate (including the board_health re-validation, so a dry run cannot report a count for
+	// a board that has already recovered), no write, mirroring CountExpiredTracerClicks alongside
+	// DeleteExpiredTracerClicks.
+	CountChronicBoardJobs(ctx context.Context, arg CountChronicBoardJobsParams) (int64, error)
+	// What CloseChronicProviderJobs would close, for the safety-net worker's dry-run report. Same
+	// board_health re-validation as its close counterpart.
+	CountChronicProviderJobs(ctx context.Context, arg CountChronicProviderJobsParams) (int64, error)
 	// Total companies matching the same optional name + facet filters as ListCompanies,
 	// so search/filter pagination reports the filtered total. Keep this WHERE identical
 	// to ListCompanies (including the job_count > 0 hiring scope).
@@ -1069,6 +1133,26 @@ type Querier interface {
 	// Create a job list for a user. The UNIQUE (user_id, name) constraint rejects a
 	// duplicate name (surfaced by the repository as a unique-violation). Returns the row.
 	CreateJobList(ctx context.Context, arg CreateJobListParams) (JobList, error)
+	// One availability row, weekly or dated. Which shape it is comes from which of weekday
+	// and on_date is non-NULL; the mentor_availability_shape_check CHECK rejects a row that
+	// sets both or neither, and the Go type cannot construct one either way.
+	CreateMentorAvailabilityRule(ctx context.Context, arg CreateMentorAvailabilityRuleParams) (MentorAvailability, error)
+	// Book a session. The mentor_bookings_no_overlap EXCLUDE constraint is what guarantees
+	// two confirmed bookings cannot share an instant, so a lost race raises a constraint
+	// violation here; the repository maps it to the SAME "no longer available" error a stale
+	// page gets, because to the client a race and a stale tab are the same event.
+	//
+	// RETURNING gives the booking's own columns and nothing else. The adapter re-reads
+	// through GetMentorBooking before returning, because the confirmation this write exists to
+	// trigger has to reach BOTH parties in BOTH timezones, and none of that is on this table.
+	// Without the re-read the confirmation reaches nobody — silently, since a notifier skips
+	// an empty address.
+	CreateMentorBooking(ctx context.Context, arg CreateMentorBookingParams) (MentorBooking, error)
+	// Submit a mentor profile. Starts pending, awaiting a human moderator — nothing else
+	// makes it public, including an approved referral_offers row for the same company.
+	// UNIQUE (user_id) rejects a second profile; the FK on company_slug rejects a company
+	// the catalogue does not carry. The repository maps both violations to domain errors.
+	CreateMentorProfile(ctx context.Context, arg CreateMentorProfileParams) (Mentor, error)
 	// Record a member's offer to refer into a company. The UNIQUE (user_id, company_slug)
 	// constraint rejects a second offer for the same company; the repository maps that unique
 	// violation to a domain "already offered" error. Starts pending, awaiting moderation.
@@ -1117,6 +1201,10 @@ type Querier interface {
 	// Whether the caller already spent points on this (feature, ref). True means the action
 	// is a recompute/resume and must not be charged again (idempotency by ref).
 	DebitExists(ctx context.Context, arg DebitExistsParams) (bool, error)
+	// Approve or reject a pending profile, recording the moderator and the time. The
+	// status='pending' guard makes a second decision match no row, which the repository
+	// maps to "not pending" — the same shape DecideReferralOffer uses.
+	DecideMentorProfile(ctx context.Context, arg DecideMentorProfileParams) (Mentor, error)
 	// Approve or reject a pending offer, recording the deciding moderator and time. The
 	// status='pending' guard makes the decision idempotent-safe: a second decision on an
 	// already-decided offer matches no row (the repository maps that to "not pending").
@@ -1367,6 +1455,12 @@ type Querier interface {
 	// (cmd/prune) — this query is for the two soft paths cascade doesn't reach.
 	DeleteJobSemanticChunks(ctx context.Context, jobIds []int64) error
 	DeleteMailbox(ctx context.Context, userID int64) error
+	// The mentor_id guard scopes the delete to the owner's own schedule.
+	DeleteMentorAvailabilityRule(ctx context.Context, arg DeleteMentorAvailabilityRuleParams) (int64, error)
+	// Clears the recurring week, leaving dated overrides alone. The cabinet edits the week as
+	// a whole — a schedule is a shape, not a list of rows a user reasons about individually —
+	// so a save is this followed by inserts, inside one transaction.
+	DeleteMentorWeeklyAvailability(ctx context.Context, mentorID int64) (int64, error)
 	// Remove a notification recorded for a delivery that then failed, so the
 	// history holds a row for a digest if and only if the digest went out. Only the
 	// record-before-send path (subscription digests) can need this.
@@ -1389,6 +1483,12 @@ type Querier interface {
 	// repository maps to ErrOfferNotFound. Hard delete frees the UNIQUE (user_id,
 	// company_slug) so the member can offer again later (fresh proof, fresh moderation).
 	DeleteReferralOffer(ctx context.Context, arg DeleteReferralOfferParams) (int64, error)
+	// Give a claim back after a delivery that failed, so the next run retries instead of
+	// skipping the reminder forever. Holding it would mean a mail server down for one run
+	// loses that reminder permanently — and a missing "your session starts in an hour" costs
+	// somebody the session, while a duplicate costs them a duplicate.
+	// Deleting nothing is not an error: a concurrent run may already have succeeded.
+	DeleteReminderClaim(ctx context.Context, arg DeleteReminderClaimParams) (int64, error)
 	// Forget the providers that are no longer eligible — every board retired, or the adapter
 	// gone. This is the sweep gen-ingest-timers.sh promised in its header and never had: under
 	// it, a provider's timer survived forever and kept crawling nothing (careerspage ran empty
@@ -2090,6 +2190,21 @@ type Querier interface {
 	// selected — it is retired in favor of the derived <users.username>@<domain> address
 	// (see the add-username-claim change) and no longer read by any caller.
 	GetMailboxByUser(ctx context.Context, userID int64) (GetMailboxByUserRow, error)
+	// One booking with what both parties' views need. Authorisation is the caller's job: this
+	// returns the row for any id, and every caller must check the reader is its mentor or its
+	// seeker before rendering it.
+	GetMentorBooking(ctx context.Context, id pgtype.UUID) (GetMentorBookingRow, error)
+	// By primary key, for the paths that already hold one (booking, moderation).
+	GetMentorByID(ctx context.Context, id int64) (Mentor, error)
+	// The owner's own profile, whatever its status — the mentor cabinet reads this, and a
+	// pending or rejected profile must still be visible to the person who submitted it.
+	GetMentorByUserID(ctx context.Context, userID int64) (Mentor, error)
+	// The seeker's own review of one session, for rendering the edit form.
+	GetMentorReviewForBooking(ctx context.Context, bookingID pgtype.UUID) (MentorReview, error)
+	// The aggregate the public profile shows. Returns zeroes rather than NULLs for a mentor
+	// nobody has reviewed, so the caller renders "no reviews yet" from a count of 0 instead
+	// of from a null it has to remember to check.
+	GetMentorReviewSummary(ctx context.Context, mentorID int64) (GetMentorReviewSummaryRow, error)
 	// The caller's own feedback in one category on a company, for the edit form's
 	// prefill and for Upsert to tell an edit from a genuinely new review. No row
 	// when they have not left one in that category yet. Not filtered by status:
@@ -2137,6 +2252,16 @@ type Querier interface {
 	// the list's display fields; owner columns (user_id) are never selected. A NULL slug
 	// never equals the param, so private lists are unreachable. No row → 404.
 	GetPublicJobListBySlug(ctx context.Context, publicSlug pgtype.Text) (GetPublicJobListBySlugRow, error)
+	// The PUBLIC profile read. Predicated rather than filtered in the service: a pending,
+	// rejected or paused profile must answer as though it does not exist, and putting that
+	// rule anywhere but the query leaves a second reader free to forget it.
+	// sqlc.embed keeps the mentor row as one db.Mentor instead of forty loose columns, so
+	// the adapter maps it once rather than re-assembling it per query.
+	// The rating aggregate is joined here as well as in the directory, because the profile is
+	// where somebody decides whether to book: "SHALL show the aggregate rating and the count
+	// it rests on". Without it the card in the list carries a rating the page it links to
+	// does not.
+	GetPublishedMentorBySlug(ctx context.Context, slug string) (GetPublishedMentorBySlugRow, error)
 	// One offer by id — for the moderator's proof-CV view after role authorization.
 	GetReferralOffer(ctx context.Context, id uuid.UUID) (ReferralOffer, error)
 	// One referral request by id — for authorized CV access and marking, after the caller is
@@ -2786,6 +2911,19 @@ type Querier interface {
 	// One user's crowdsourced boards, newest first — half of the "my contributions" list
 	// (board_submissions holds the other half, the unclassified-URL rows).
 	ListBoardsBySubmitter(ctx context.Context, submittedBy pgtype.Int8) ([]Board, error)
+	// The mentor's own sessions. Carries the seeker's email so the cabinet can show who is
+	// coming; the mentor is meeting this person, so their identity is not a leak.
+	ListBookingsByMentor(ctx context.Context, arg ListBookingsByMentorParams) ([]ListBookingsByMentorRow, error)
+	// The seeker's own sessions, newest first. Upcoming and past are split by the caller
+	// against one clock rather than by two queries against two.
+	ListBookingsBySeeker(ctx context.Context, arg ListBookingsBySeekerParams) ([]ListBookingsBySeekerRow, error)
+	// The reminder worker's page: confirmed sessions starting within the offset and not yet
+	// reminded at it.
+	// starts_at > now() is what stops a late run firing "your session starts in an hour"
+	// after the session — silence is better than that message arriving afterwards.
+	// The NOT EXISTS makes the read idempotent alongside the insert below; the composite key
+	// makes the WRITE idempotent, and both are needed because two runs can overlap.
+	ListBookingsDueForReminder(ctx context.Context, arg ListBookingsDueForReminderParams) ([]ListBookingsDueForReminderRow, error)
 	// Audience reader and ledger writer for one-off campaigns (internal/engage/broadcast).
 	// Everyone who can be mailed and has not received this campaign yet.
 	//
@@ -2828,6 +2966,21 @@ type Querier interface {
 	// Every slug already elected canonical. The merge worker holds these out of a new election,
 	// which is what "frozen" means in practice.
 	ListCanonicalCompanySlugs(ctx context.Context) ([]string, error)
+	// The boards that have proven unreachable for at least `age_window`, not merely cooled down from
+	// a recent run of failures (openspec change close-chronically-unreachable-boards, issue #2017).
+	// A board that has succeeded at least once is measured from last_success_at; one that never has
+	// is measured from first_seen_at instead, since last_error_at is overwritten every failed run
+	// and cannot answer "how long has this been broken". Called with two different windows: a
+	// shorter one for the operator-facing chronic report, a longer one that gates the safety-net
+	// close (see job-lifecycle spec) — one query, no duplicated threshold logic between the two.
+	// Ordered oldest-evidence-first, so both callers see the worst boards first without a second
+	// sort. max_boards mirrors ListUnhealthyBoards's cap (see cmd/ingest's unhealthyBoardsCap,
+	// freehire 2026-08-14 incident): the per-run report passes a small one, the safety-net closer
+	// passes a generous one large enough that a real chronic backlog is never silently truncated —
+	// the two callers' needs differ, so one query with a caller-supplied cap serves both rather
+	// than duplicating the threshold logic across an uncapped and a capped variant. total is the
+	// FULL count before the cap, same convention as ListUnhealthyBoards.Total.
+	ListChronicBoards(ctx context.Context, arg ListChronicBoardsParams) ([]ListChronicBoardsRow, error)
 	// Catalog page: companies with their job counts, most active first. The job count
 	// is read from the denormalized companies.job_count column (maintained by
 	// cmd/recount-companies), so this read does not join jobs. Ordered by job_count
@@ -3315,6 +3468,19 @@ type Querier interface {
 	// still needs an address for when it catches up, and withholding one would make the
 	// backfill's own result depend on when it happened to run.
 	ListMembersMissingTalentHandle(ctx context.Context) ([]int64, error)
+	// Every availability row for a mentor, both shapes. The slot engine wants all of them at
+	// once — an override only means anything beside the weekly rules it replaces — so this
+	// deliberately does not filter by window.
+	ListMentorAvailability(ctx context.Context, mentorID int64) ([]MentorAvailability, error)
+	// The busy set the slot engine subtracts: this mentor's CONFIRMED bookings overlapping
+	// the window. Buffers are NOT applied here — the engine widens these, because the buffers
+	// are the mentor's and may change between two reads of the same booking.
+	// Half-open on both sides, matching the EXCLUDE constraint and Interval.Overlaps: a
+	// booking that merely abuts the window is not in it.
+	ListMentorBusyBookings(ctx context.Context, arg ListMentorBusyBookingsParams) ([]ListMentorBusyBookingsRow, error)
+	// The other half of the busy set: intervals read from the mentor's own calendar. Empty
+	// until that sync ships, and carries only the bounds — no title, no attendee.
+	ListMentorBusyIntervals(ctx context.Context, arg ListMentorBusyIntervalsParams) ([]ListMentorBusyIntervalsRow, error)
 	// All of the caller's own feedback on a company, across every category they've
 	// reviewed it under — the write dialog's "which categories have I already
 	// used" read. Not filtered by status, same reasoning as GetMyCompanyFeedback.
@@ -3359,6 +3525,12 @@ type Querier interface {
 	// not ask at all when the page is already full. It handed the same window to both until
 	// 2026-09-06, which returned up to 2*limit rows and skipped a window per page.
 	ListOrphanedApplications(ctx context.Context, arg ListOrphanedApplicationsParams) ([]ListOrphanedApplicationsRow, error)
+	// The moderation queue, oldest first. Carries whether the account also holds an APPROVED
+	// referral offer for the same company — corroborating evidence for the human deciding,
+	// never a gate: nothing in this change approves a profile automatically.
+	// Capped at 500 for the same reason the referral queue is: a backlog deeper than that
+	// needs triage, not a longer page.
+	ListPendingMentorProfiles(ctx context.Context) ([]ListPendingMentorProfilesRow, error)
 	// The moderator queue: offers awaiting a decision, oldest first, with display name.
 	// Capped at 500 as a runaway-growth guard — far above any plausible backlog; a
 	// queue that deep needs bulk triage, not a longer page.
@@ -3373,6 +3545,16 @@ type Querier interface {
 	// guard — far above any plausible backlog; a queue that deep needs bulk triage,
 	// not a longer page.
 	ListPendingSubmissions(ctx context.Context) ([]ListPendingSubmissionsRow, error)
+	// The public directory. Every filter is optional and applied as "NULL means unfiltered",
+	// which keeps one query instead of a builder; the endpoint reports any parameter it did
+	// NOT read in meta.ignored_params, so a filter that vanishes from this list must vanish
+	// from that vocabulary too.
+	// One page, no cursor. A keyset predicate was written here and no caller could reach it —
+	// DirectoryFilter carries no cursor and the handler emits none — so it was an unreachable
+	// branch pretending to be a feature. When the directory needs a second page it comes back
+	// as keyset on (created_at, id) rather than OFFSET, because an OFFSET page silently
+	// repeats or skips a row when a profile is approved mid-browse.
+	ListPublishedMentors(ctx context.Context, arg ListPublishedMentorsParams) ([]ListPublishedMentorsRow, error)
 	// The caller's own registered devices, for a test send or a future delivery.
 	ListPushTokensForUser(ctx context.Context, userID int64) ([]UserPushToken, error)
 	// The session's most recent messages, newest first — the bounded counterpart of
@@ -4436,6 +4618,10 @@ type Querier interface {
 	// once attempts reach the max. claimed_at is left in place — its expiry gates the
 	// retry to a later pass and doubles as the crash reaper, mirroring subscription_matches.
 	RecordReminderDeliveryFailure(ctx context.Context, arg RecordReminderDeliveryFailureParams) error
+	// Claim one reminder. ON CONFLICT DO NOTHING means a concurrent run inserts nothing and
+	// gets zero rows back — so this is the CLAIM, and a caller that sends before checking the
+	// row count sends twice. Send after this returns 1, never before.
+	RecordReminderSent(ctx context.Context, arg RecordReminderSentParams) (int64, error)
 	// Store how a run ended and release its claim, so the row is claimable again at its next
 	// due time. Clearing claimed_at here is what keeps the reclaim window for genuinely stuck
 	// runs rather than for every run that took a while.
@@ -5153,6 +5339,9 @@ type Querier interface {
 	// rewritten, so a re-run writes nothing and produces no dead tuples. It also means the
 	// backfill needs no record of which rows it has visited.
 	SetJobsRequirementsDerived(ctx context.Context, arg SetJobsRequirementsDerivedParams) (int64, error)
+	// The mentor's own switch. Deliberately independent of status: pausing and resuming
+	// need no moderator, and neither may alter what the moderator decided.
+	SetMentorPaused(ctx context.Context, arg SetMentorPausedParams) (Mentor, error)
 	// Pro GIVEN rather than sold: support's manual grant. No provider sync touches it, which is
 	// the whole reason it is separate — before migration 0135 a hand-set value lived in the
 	// column the Stripe sync overwrites, and the next webhook silently undid it.
@@ -5627,6 +5816,14 @@ type Querier interface {
 	// Reopening a closed posting is the re-create (same-URL UpsertManualJob) path's job, so a
 	// content edit never resurrects a job the sweep/liveness worker closed.
 	UpdateManualJob(ctx context.Context, arg UpdateManualJobParams) (Job, error)
+	// The mentor edits their own profile. The user_id guard scopes it to the owner, so a
+	// foreign id updates zero rows and the repository reports "not found" rather than
+	// revealing that the profile exists. Editing does NOT reset moderation: a mentor
+	// rewording their headline should not vanish from the directory for a day.
+	// Keyed on user_id ALONE, which UNIQUE (user_id) makes a single row. Taking an id as well
+	// would mean the caller reading the profile first just to learn one, which is a round trip
+	// for a value the owner's identity already determines.
+	UpdateMentorProfile(ctx context.Context, arg UpdateMentorProfileParams) (Mentor, error)
 	// Overwrite a saved search's name and/or query, scoped to its owner, bumping
 	// updated_at. Partial update: a NULL param leaves that column unchanged (COALESCE),
 	// so the caller can rename, overwrite the filters, or both in one call. An empty
@@ -5810,6 +6007,10 @@ type Querier interface {
 	// it via SetJobEnrichment's overlay). The conflict reopens a previously closed posting
 	// (closed_at = NULL) since the moderator is re-asserting it.
 	UpsertManualJob(ctx context.Context, arg UpsertManualJobParams) (Job, error)
+	// One review per booking, editable. booking_id is the primary key, so a second submission
+	// is an update by construction rather than by a service check — which is also why the
+	// review count cannot drift from the number of reviewed sessions.
+	UpsertMentorReview(ctx context.Context, arg UpsertMentorReviewParams) (MentorReview, error)
 	// Create or replace the caller's notification rule in one statement, including the
 	// delivery-timing fields (digest frequency/time, quiet hours) alongside the
 	// enable/channels gate — one account-level settings row, one write path. Returns
@@ -5887,6 +6088,17 @@ type Querier interface {
 	// Whether a user has a stored original résumé — the check before attaching an 'original'
 	// CV to a request, so a seeker cannot request with a résumé they never uploaded.
 	UserHasResume(ctx context.Context, id int64) (bool, error)
+	// Withdrawal marks the profile rather than deleting it, and that is the whole point:
+	// mentor_bookings and mentor_reviews reference this row ON DELETE CASCADE, so a DELETE
+	// would take every session and rating with it. A session that happened is history both
+	// parties are entitled to — not an artefact of the mentor still being on the platform.
+	//
+	// Future bookings must still be cancelled and their seekers notified before this runs;
+	// what changes is that the PAST survives.
+	//
+	// The owner guard scopes it to the caller, and the status guard makes a second withdrawal
+	// match no row.
+	WithdrawMentorProfile(ctx context.Context, userID int64) (int64, error)
 }
 
 var _ Querier = (*Queries)(nil)

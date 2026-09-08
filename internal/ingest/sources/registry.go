@@ -182,7 +182,6 @@ func All(c HTTPClient) map[string]Source {
 		NewWPYoast(c),
 		NewBreezy(c),
 		NewJoin(pacedJoinGetter(c)),
-		NewGlobalPayments(c),
 		NewRapyd(c),
 		NewCareerPlug(c),
 		NewHRMDirect(c),
@@ -281,7 +280,6 @@ func All(c HTTPClient) map[string]Source {
 		// GeekHunter: Brazilian tech-recruitment ATS, board = company slug; listing and detail
 		// both come from parsing the page's own schema.org ld+json blocks.
 		NewGeekHunter(c),
-		NewWantedKR(c),
 		NewMyCareersFuture(c),
 		NewWorkingNomads(c),
 		NewPowerToFly(c),
@@ -291,7 +289,6 @@ func All(c HTTPClient) map[string]Source {
 		NewRemotli(c),
 		NewLandingJobs(c),
 		NewTheMuse(c),
-		NewJustJoin(c),
 		NewNoFluffJobs(c),
 		NewWantapply(c),
 		NewInfoJobs(c),

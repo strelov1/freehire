@@ -29,6 +29,33 @@ func (q *Queries) ClearProviderCooldowns(ctx context.Context, provider string) (
 	return result.RowsAffected(), nil
 }
 
+const countBoardHealthRegions = `-- name: CountBoardHealthRegions :one
+SELECT count(*) FROM board_health WHERE provider = $1 AND board = $2
+`
+
+type CountBoardHealthRegionsParams struct {
+	Provider string `json:"provider"`
+	Board    string `json:"board"`
+}
+
+// How many board_health rows exist for one (provider, board) name across every region it has
+// ever been seen under. More than one means the name is REGION-AMBIGUOUS — the `boards`
+// catalog allows one board name to repeat under a provider, distinguished only by region (e.g.
+// Adzuna's "it-jobs" once per country, internal/ingest/sources/adzuna.go), but
+// jobs.external_id carries no region dimension at all (externalid.Namespace(board, id)), so a
+// board-scoped `external_id LIKE '<board>:%'` close cannot tell one region's postings from
+// another's. The ordinary per-run sweep already refuses to board-scope such a name
+// (pipeline.ambiguousRegionBoards); the chronic-board safety net (cmd/close-chronic-boards)
+// makes the same check against board_health directly, since it has no crawl-run board list to
+// consult and does not need one — board_health's own composite key already records every
+// region a board name has ever been crawled under.
+func (q *Queries) CountBoardHealthRegions(ctx context.Context, arg CountBoardHealthRegionsParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countBoardHealthRegions, arg.Provider, arg.Board)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const deleteBoardHealth = `-- name: DeleteBoardHealth :execrows
 DELETE FROM board_health
 WHERE provider = $1 AND board = $2 AND region = $3
@@ -73,6 +100,79 @@ func (q *Queries) GetBoardCooldown(ctx context.Context, arg GetBoardCooldownPara
 	var cooldown_until pgtype.Timestamptz
 	err := row.Scan(&cooldown_until)
 	return cooldown_until, err
+}
+
+const listChronicBoards = `-- name: ListChronicBoards :many
+SELECT provider, board, region, consecutive_failures, cooldown_until, last_error, last_error_at,
+       last_success_at, first_seen_at, count(*) OVER () AS total
+FROM board_health
+WHERE (last_success_at IS NOT NULL AND last_success_at < now() - $1::interval)
+   OR (last_success_at IS NULL AND first_seen_at < now() - $1::interval)
+ORDER BY coalesce(last_success_at, first_seen_at), provider, board, region
+LIMIT $2
+`
+
+type ListChronicBoardsParams struct {
+	AgeWindow pgtype.Interval `json:"age_window"`
+	MaxBoards int32           `json:"max_boards"`
+}
+
+type ListChronicBoardsRow struct {
+	Provider            string             `json:"provider"`
+	Board               string             `json:"board"`
+	Region              string             `json:"region"`
+	ConsecutiveFailures int32              `json:"consecutive_failures"`
+	CooldownUntil       pgtype.Timestamptz `json:"cooldown_until"`
+	LastError           pgtype.Text        `json:"last_error"`
+	LastErrorAt         pgtype.Timestamptz `json:"last_error_at"`
+	LastSuccessAt       pgtype.Timestamptz `json:"last_success_at"`
+	FirstSeenAt         pgtype.Timestamptz `json:"first_seen_at"`
+	Total               int64              `json:"total"`
+}
+
+// The boards that have proven unreachable for at least `age_window`, not merely cooled down from
+// a recent run of failures (openspec change close-chronically-unreachable-boards, issue #2017).
+// A board that has succeeded at least once is measured from last_success_at; one that never has
+// is measured from first_seen_at instead, since last_error_at is overwritten every failed run
+// and cannot answer "how long has this been broken". Called with two different windows: a
+// shorter one for the operator-facing chronic report, a longer one that gates the safety-net
+// close (see job-lifecycle spec) — one query, no duplicated threshold logic between the two.
+// Ordered oldest-evidence-first, so both callers see the worst boards first without a second
+// sort. max_boards mirrors ListUnhealthyBoards's cap (see cmd/ingest's unhealthyBoardsCap,
+// freehire 2026-08-14 incident): the per-run report passes a small one, the safety-net closer
+// passes a generous one large enough that a real chronic backlog is never silently truncated —
+// the two callers' needs differ, so one query with a caller-supplied cap serves both rather
+// than duplicating the threshold logic across an uncapped and a capped variant. total is the
+// FULL count before the cap, same convention as ListUnhealthyBoards.Total.
+func (q *Queries) ListChronicBoards(ctx context.Context, arg ListChronicBoardsParams) ([]ListChronicBoardsRow, error) {
+	rows, err := q.db.Query(ctx, listChronicBoards, arg.AgeWindow, arg.MaxBoards)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListChronicBoardsRow{}
+	for rows.Next() {
+		var i ListChronicBoardsRow
+		if err := rows.Scan(
+			&i.Provider,
+			&i.Board,
+			&i.Region,
+			&i.ConsecutiveFailures,
+			&i.CooldownUntil,
+			&i.LastError,
+			&i.LastErrorAt,
+			&i.LastSuccessAt,
+			&i.FirstSeenAt,
+			&i.Total,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listCooledBoards = `-- name: ListCooledBoards :many
