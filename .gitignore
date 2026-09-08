@@ -63,6 +63,7 @@ hire
 /ingest
 /ingest-scheduler
 /liveness
+/llm-probe
 /mail-ingest
 /mail-preview
 /mentorship-remind
