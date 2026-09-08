@@ -96,6 +96,34 @@ func (s *Service) Load(ctx context.Context, token string) (Prefs, error) {
 	if err != nil {
 		return Prefs{}, err
 	}
+	return s.withSearches(ctx, userID, prefs)
+}
+
+// LoadFor is Load for a caller the session already identified, so the signed-in
+// settings page shows exactly what the emailed link would.
+//
+// The two entry points differ only in how the user is established. Sharing the rest
+// is what stops the two views drifting into disagreeing about the same three
+// booleans — which, on a preference page, reads as the product losing a setting.
+func (s *Service) LoadFor(ctx context.Context, userID int64) (Prefs, error) {
+	row, err := s.store.GetEmailPrefs(ctx, userID)
+	if err != nil {
+		return Prefs{}, fmt.Errorf("emailprefs: reading preferences: %w", err)
+	}
+	return s.withSearches(ctx, userID, Prefs{
+		Email:    row.Email,
+		Alerts:   row.AlertsEnabled,
+		Activity: row.ActivityEnabled,
+		News:     row.NewsEnabled,
+	})
+}
+
+// SaveFor is Save for a caller the session already identified.
+func (s *Service) SaveFor(ctx context.Context, userID int64, in Update) error {
+	return s.apply(ctx, userID, in)
+}
+
+func (s *Service) withSearches(ctx context.Context, userID int64, prefs Prefs) (Prefs, error) {
 	rows, err := s.store.ListUserEmailSubscriptions(ctx, userID)
 	if err != nil {
 		return Prefs{}, fmt.Errorf("emailprefs: reading subscriptions: %w", err)
@@ -117,6 +145,11 @@ func (s *Service) Save(ctx context.Context, token string, in Update) error {
 	if err != nil {
 		return err
 	}
+	return s.apply(ctx, userID, in)
+}
+
+// apply is the write both entry points share.
+func (s *Service) apply(ctx context.Context, userID int64, in Update) error {
 	if err := s.store.SetEmailGroupSwitches(ctx, db.SetEmailGroupSwitchesParams{
 		UserID:             userID,
 		AlertsEmailEnabled: in.Alerts,

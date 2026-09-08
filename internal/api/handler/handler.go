@@ -747,16 +747,6 @@ func Register(app *fiber.App, cfg Config) {
 
 	api := app.Group("/api/v1")
 
-	// The email preference centre. Unauthenticated on purpose — a person holding one
-	// of our mails must be able to turn it off without an account — so the signed
-	// token in the link stands in for a session, and the routes are throttled like
-	// every other public one. 30/minute is generous for a human tapping switches on
-	// one page and mean for anyone walking the id space; forging a token needs the
-	// signing secret, so the limiter bounds nuisance rather than forgery.
-	emailPrefsH := newEmailPrefsHandlers(emailprefs.NewService(queries, cfg.JWTSecret))
-	emailPrefsH.register(api, ratelimit.Middleware(
-		cfg.Throttler, ratelimit.KeyByIP("email-prefs"), 30, time.Minute))
-
 	// optionalAuth attaches the caller when signed in (cookie or key) but never
 	// rejects, so these public detail reads can overlay the caller's own vote
 	// (my_vote) while staying open to anonymous visitors.
@@ -772,6 +762,20 @@ func Register(app *fiber.App, cfg Config) {
 	// browser-convenience surfaces below — key management, saved searches, the CV
 	// builder, the inbox, subscriptions — where a leaked API key must not act.
 	cookieAuth := auth.RequireAuth(a.issuer, a.queries)
+
+	// The email preference centre. Its three public routes are unauthenticated on
+	// purpose — a person holding one of our mails must be able to turn it off
+	// without an account — so the signed token in the link stands in for a session,
+	// and they are throttled like every other public route. 30/minute is generous
+	// for somebody tapping switches on one page and mean for anyone walking the id
+	// space; forging a token needs the signing secret, so the limiter bounds
+	// nuisance rather than forgery. The two /me routes beside them are the same
+	// switches for a caller the cookie already identified.
+	emailPrefsH := newEmailPrefsHandlers(emailprefs.NewService(queries, cfg.JWTSecret))
+	emailPrefsH.register(api,
+		ratelimit.Middleware(cfg.Throttler, ratelimit.KeyByIP("email-prefs"), 30, time.Minute),
+		cookieAuth)
+
 	requireModerator := auth.RequireRole(a.queries, "moderator")
 	mw := middleware{
 		optional:       optionalAuth,

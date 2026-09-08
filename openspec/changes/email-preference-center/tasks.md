@@ -60,27 +60,27 @@ The token is a never-expiring bearer credential and nginx logs query strings
 (`deploy/nginx/snippets/freehire-app.conf:14`), so it rides in the URL only where
 it has no alternative — see the risk entry in `design.md`.
 
-- [ ] 8.1 `GET /api/v1/email-prefs?t=` returns `{"data": {email, alerts_enabled, activity_enabled, news_enabled, searches:[{id,name,active}]}}` — no session issued, no other account field present. The query is unavoidable here: a link in an email has nowhere else to carry it
-- [ ] 8.2 `PATCH /api/v1/email-prefs` writes the three group switches and per-subscription `active` flags; it may only deactivate a subscription, never create or reactivate one it was not given. **The token goes in the body, not the query** — this call has a body already, so there is no reason to log the credential
-- [ ] 8.3 `POST /api/v1/email-prefs/one-click?t=` accepts the `List-Unsubscribe=One-Click` form body, turns off only the token's group, and returns 200 on a repeat. The token must stay in the query here: RFC 8058 fixes the body, so the URL is the only place Gmail can carry it — task 12.x switches the access log off for this path instead
-- [ ] 8.4 Add the narrow group-switch writer to `queries/reminders.sql` (INSERT … ON CONFLICT DO UPDATE SET only the two group columns) and `make sqlc`. Deliberately NOT folded into `UpsertNotificationSettings`, which is a full replace: routing both writers through it would make the authenticated settings page clobber a choice made from an unsubscribe link, and vice versa
-- [ ] 8.5 Iterate `emailprefs.SilenceableGroups()` for "unsubscribe from everything" — never a hand-written `{alerts, activity, news}`, which is the list-checked-against-a-list trap the AST guard exists for
-- [ ] 8.6 An invalid, tampered, or deleted-account token yields one generic failure across all three routes — assert no address or saved-search name appears in any of those responses. `Parse` succeeding proves only that we minted the token, never that the account still exists, so the lookup is the caller's job. Decide deliberately whether to equalise the timing: a deleted-account refusal costs a database round-trip and a bad-signature refusal returns at once
-- [ ] 8.7 Register the three routes on the public group with a rate limiter, following the existing public-route limiter setup
-- [ ] 8.8 Integration tests for all of the above (these live behind `//go:build integration`)
+- [x] 8.1 `GET /api/v1/email-prefs?t=` returns `{"data": {email, alerts_enabled, activity_enabled, news_enabled, searches:[{id,name,active}]}}` — no session issued, no other account field present. The query is unavoidable here: a link in an email has nowhere else to carry it
+- [x] 8.2 `PATCH /api/v1/email-prefs` writes the three group switches and per-subscription `active` flags; it may only deactivate a subscription, never create or reactivate one it was not given. **The token goes in the body, not the query** — this call has a body already, so there is no reason to log the credential
+- [x] 8.3 `POST /api/v1/email-prefs/one-click?t=` accepts the `List-Unsubscribe=One-Click` form body, turns off only the token's group, and returns 200 on a repeat. The token must stay in the query here: RFC 8058 fixes the body, so the URL is the only place Gmail can carry it — task 12.x switches the access log off for this path instead
+- [x] 8.4 Add the narrow group-switch writer to `queries/reminders.sql` (INSERT … ON CONFLICT DO UPDATE SET only the two group columns) and `make sqlc`. Deliberately NOT folded into `UpsertNotificationSettings`, which is a full replace: routing both writers through it would make the authenticated settings page clobber a choice made from an unsubscribe link, and vice versa
+- [x] 8.5 Iterate `emailprefs.SilenceableGroups()` for "unsubscribe from everything" — never a hand-written `{alerts, activity, news}`, which is the list-checked-against-a-list trap the AST guard exists for
+- [x] 8.6 An invalid, tampered, or deleted-account token yields one generic failure across all three routes — assert no address or saved-search name appears in any of those responses. `Parse` succeeding proves only that we minted the token, never that the account still exists, so the lookup is the caller's job. Decide deliberately whether to equalise the timing: a deleted-account refusal costs a database round-trip and a bad-signature refusal returns at once
+- [x] 8.7 Register the three routes on the public group with a rate limiter, following the existing public-route limiter setup
+- [x] 8.8 Integration tests for all of the above (these live behind `//go:build integration`)
 
 ## 9. The public page
 
-- [ ] 9.1 `web/src/routes/unsubscribe/+page.svelte` — public, `noindex`, one switch per `emailprefs.SilenceableGroups()` entry, the saved-search list under alerts, and "Unsubscribe from everything"
-- [ ] 9.5 Strip `?t=` from the address bar after the first read, so the token does not travel on into history, a screenshot, or a pasted URL. Use `onRouterReady` — `replaceState` inside `onMount` throws only in a production build, where the error is also unreadable
-- [ ] 9.2 A one-click POST's confirmation view names the group that was turned off and links to the full page
-- [ ] 9.3 Invalid-token state renders a generic message with no account detail
-- [ ] 9.4 `pnpm --dir web lint` and `pnpm --dir web test` (a fresh worktree needs `svelte-kit sync` first, or all web tests fail)
+- [x] 9.1 `web/src/routes/unsubscribe/+page.svelte` — public, `noindex`, one switch per `emailprefs.SilenceableGroups()` entry, the saved-search list under alerts, and "Unsubscribe from everything"
+- [x] 9.5 Strip `?t=` from the address bar after the first read, so the token does not travel on into history, a screenshot, or a pasted URL. Use `onRouterReady` — `replaceState` inside `onMount` throws only in a production build, where the error is also unreadable
+- [x] 9.2 A one-click POST's confirmation view names the group that was turned off and links to the full page
+- [x] 9.3 Invalid-token state renders a generic message with no account detail
+- [x] 9.4 `pnpm --dir web lint` and `pnpm --dir web test` (a fresh worktree needs `svelte-kit sync` first, or all web tests fail)
 
 ## 10. The authenticated page keeps parity
 
-- [ ] 10.1 `ReminderSettings.svelte` gains the `alerts` and `news` switches beside the existing one, so the signed-in view shows the same three preferences
-- [ ] 10.2 The authenticated settings endpoint reads and writes both new columns
+- [x] 10.1 `ReminderSettings.svelte` gains the `alerts` and `news` switches beside the existing one, so the signed-in view shows the same three preferences
+- [x] 10.2 The authenticated settings endpoint reads and writes both new columns
 
 ## 11. The guard
 

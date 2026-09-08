@@ -36,10 +36,19 @@ func newEmailPrefsHandlers(svc *emailprefs.Service) *emailPrefsHandlers {
 //   - POST (one-click) has no choice: RFC 8058 fixes the body to
 //     `List-Unsubscribe=One-Click`, so the URL Gmail was handed is the only place
 //     left. The access log is switched off for that path on the host instead.
-func (h *emailPrefsHandlers) register(api fiber.Router, limiter fiber.Handler) {
+//
+// The two /me routes are the same three switches for somebody who IS signed in, so
+// the account's own settings page shows and writes exactly what the emailed link
+// would. They share the service rather than the endpoint because only the way the
+// user is established differs — and two views that disagreed about one boolean would
+// read as the product losing a setting.
+func (h *emailPrefsHandlers) register(api fiber.Router, limiter fiber.Handler, cookie fiber.Handler) {
 	api.Get("/email-prefs", limiter, h.Get)
 	api.Patch("/email-prefs", limiter, h.Patch)
 	api.Post("/email-prefs/one-click", limiter, h.OneClick)
+
+	api.Get("/me/email-groups", cookie, h.GetMine)
+	api.Patch("/me/email-groups", cookie, h.PatchMine)
 }
 
 // emailPrefsResponse is the wire shape of the page's state. It carries the address
@@ -130,6 +139,13 @@ func (h *emailPrefsHandlers) respondWithState(c *fiber.Ctx, token string) error 
 	if err != nil {
 		return renderTokenError(err)
 	}
+	return c.JSON(fiber.Map{"data": toEmailPrefsResponse(prefs)})
+}
+
+// toEmailPrefsResponse projects the domain shape onto the wire one. Both the
+// token-opened and the signed-in routes answer through it, so the two views cannot
+// drift apart in what they report.
+func toEmailPrefsResponse(prefs emailprefs.Prefs) emailPrefsResponse {
 	out := emailPrefsResponse{
 		Email: prefs.Email, Alerts: prefs.Alerts, Activity: prefs.Activity, News: prefs.News,
 		Searches: make([]emailPrefsSearchResponse, 0, len(prefs.Searches)),
@@ -137,7 +153,51 @@ func (h *emailPrefsHandlers) respondWithState(c *fiber.Ctx, token string) error 
 	for _, s := range prefs.Searches {
 		out.Searches = append(out.Searches, emailPrefsSearchResponse{ID: s.ID, Name: s.Name, Active: s.Active})
 	}
-	return c.JSON(fiber.Map{"data": out})
+	return out
+}
+
+// GetMine is the signed-in view of the same three switches.
+func (h *emailPrefsHandlers) GetMine(c *fiber.Ctx) error {
+	userID, err := requireUserID(c)
+	if err != nil {
+		return err
+	}
+	prefs, err := h.prefs.LoadFor(c.Context(), userID)
+	if err != nil {
+		return err
+	}
+	return c.JSON(fiber.Map{"data": toEmailPrefsResponse(prefs)})
+}
+
+// PatchMine writes them for a signed-in caller. Same patch semantics as the public
+// route: an absent switch keeps its stored value.
+func (h *emailPrefsHandlers) PatchMine(c *fiber.Ctx) error {
+	userID, err := requireUserID(c)
+	if err != nil {
+		return err
+	}
+	var body emailPrefsUpdateRequest
+	if err := c.BodyParser(&body); err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, "invalid body")
+	}
+	current, err := h.prefs.LoadFor(c.Context(), userID)
+	if err != nil {
+		return err
+	}
+	in := emailprefs.Update{
+		Alerts:             boolOr(body.Alerts, current.Alerts),
+		Activity:           boolOr(body.Activity, current.Activity),
+		News:               boolOr(body.News, current.News),
+		DeactivateSearches: body.DeactivateSearches,
+	}
+	if err := h.prefs.SaveFor(c.Context(), userID, in); err != nil {
+		return err
+	}
+	prefs, err := h.prefs.LoadFor(c.Context(), userID)
+	if err != nil {
+		return err
+	}
+	return c.JSON(fiber.Map{"data": toEmailPrefsResponse(prefs)})
 }
 
 // renderTokenError maps every refusal to ONE response. A caller here is

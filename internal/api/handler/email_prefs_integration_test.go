@@ -36,9 +36,13 @@ const prefsSecret = "email-prefs-integration-secret-32b"
 func newEmailPrefsApp(queries *db.Queries) *fiber.App {
 	h := newEmailPrefsHandlers(emailprefs.NewService(queries, prefsSecret))
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	// A no-op limiter: throttling is registered in handler.go and is not what these
-	// cases are about.
-	h.register(app.Group("/api/v1"), func(c *fiber.Ctx) error { return c.Next() })
+	// A no-op limiter and a cookie gate that refuses everyone: throttling is
+	// registered in handler.go, and these cases exercise the token-opened routes,
+	// not the signed-in ones.
+	noop := func(c *fiber.Ctx) error { return c.Next() }
+	h.register(app.Group("/api/v1"), noop, func(c *fiber.Ctx) error {
+		return fiber.NewError(fiber.StatusUnauthorized, "unauthorized")
+	})
 	return app
 }
 
