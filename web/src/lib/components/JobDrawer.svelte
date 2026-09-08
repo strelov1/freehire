@@ -465,7 +465,23 @@
                (below, on the Emails tab), placed here instead because this is the tab a
                fresh mount always opens on and a pending decision is the primary reason to
                open this drawer at all. -->
-          {#if autoApplyBanner?.kind === 'pending_review'}
+          {#if autoApplyBanner?.kind === 'tailoring'}
+            <div class="rounded-md border border-border bg-muted/30 px-3 py-2">
+              <p class="text-sm text-muted-foreground">Auto-apply is preparing a tailored CV for this job.</p>
+            </div>
+          {:else if autoApplyBanner?.kind === 'approved'}
+            <div class="flex flex-col gap-2 rounded-md border border-border bg-muted/30 px-3 py-2">
+              <p class="text-sm font-medium">Auto-apply approved this application — it's queued for automatic submission.</p>
+              {#if hasPosting && item.job}
+                <a
+                  href={resolve('/tailor/[slug]', { slug: item.job.public_slug })}
+                  class="w-fit text-xs underline-offset-2 hover:underline"
+                >
+                  View tailored CV
+                </a>
+              {/if}
+            </div>
+          {:else if autoApplyBanner?.kind === 'pending_review'}
             <div class="flex flex-col gap-2 rounded-md border border-warning/50 bg-warning-muted/40 px-3 py-2">
               <p class="text-sm font-medium">Auto-apply tailored a CV for this job and is ready to send it.</p>
               {#if autoApply?.resolved_preview?.fields.length}

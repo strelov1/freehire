@@ -12,21 +12,28 @@ export function autoApplyNeedsReviewBadge(status?: string | null): boolean {
 }
 
 export type AutoApplyReviewBanner =
+  | { kind: 'tailoring' }
   | { kind: 'pending_review' }
+  | { kind: 'approved' }
   | { kind: 'blocked' }
   | { kind: 'declined' }
   | { kind: 'failed' }
   | null;
 
-/** Decides which drawer banner variant to render, or null for `tailoring`/`approved` —
- *  states with nothing yet for the candidate to see or decide. `pending_review` is the one
- *  actionable variant (approve/decline); `blocked`/`declined`/`failed` are read-only, and
- *  the drawer's own copy for them must never imply a retry is possible — no retry path
- *  exists anywhere in the backend for any of the three. */
+/** Decides which drawer banner variant to render, or null when there is no live attempt at
+ *  all. `pending_review` is the one actionable variant (approve/decline); `tailoring` and
+ *  `approved` are read-only progress indicators — nothing to decide yet, or the decision is
+ *  already made — and `blocked`/`declined`/`failed` are read-only terminal states, whose
+ *  drawer copy must never imply a retry is possible — no retry path exists anywhere in the
+ *  backend for any of the three. */
 export function autoApplyReviewBanner(status?: string | null): AutoApplyReviewBanner {
   switch (status) {
+    case 'tailoring':
+      return { kind: 'tailoring' };
     case 'pending_review':
       return { kind: 'pending_review' };
+    case 'approved':
+      return { kind: 'approved' };
     case 'blocked':
       return { kind: 'blocked' };
     case 'declined':

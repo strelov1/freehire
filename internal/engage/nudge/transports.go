@@ -153,11 +153,13 @@ func batchDestination(kind string) (path, label string) {
 	return "/my/tracking", "Open your tracking board"
 }
 
-// renderOne is the single-nudge body, kept per kind and unchanged, because a batch
-// of one must be indistinguishable from what shipped before grouping.
+// renderOne is the single-nudge body, kept as its own function per kind because a
+// batch of one must render identically to a real single-message send — never a
+// one-item batch headline — regardless of how each kind's own wording evolves.
 func (n *TelegramNotifier) renderOne(m Message) string {
 	title, company := html.EscapeString(m.JobTitle), html.EscapeString(m.Company)
 	trackingURL, jobURL := n.origin+"/my/tracking", n.origin+"/jobs/"+m.Slug
+	applicationURL := n.origin + "/my/tracking/" + m.Slug
 	switch m.Kind {
 	case KindFollowUp:
 		return fmt.Sprintf(
@@ -173,16 +175,16 @@ func (n *TelegramNotifier) renderOne(m Message) string {
 			title, company, jobURL)
 	case KindAutoApplySubmitted:
 		return fmt.Sprintf(
-			"🎉 Auto-apply submitted your application to <b>%s</b> at <b>%s</b>.\n<a href=\"%s\">Open your tracking board →</a>",
-			title, company, trackingURL)
+			"🎉 Auto-apply submitted your application to <b>%s</b> at <b>%s</b>.\n<a href=\"%s\">Open your application →</a>",
+			title, company, applicationURL)
 	case KindAutoApplyBlocked:
 		return fmt.Sprintf(
-			"⚠️ Auto-apply couldn't finish <b>%s</b> at <b>%s</b> — a required question needs your own answer.\n<a href=\"%s\">Open your tracking board →</a>",
-			title, company, trackingURL)
+			"⚠️ Auto-apply couldn't finish <b>%s</b> at <b>%s</b> — a required question needs your own answer.\n<a href=\"%s\">Open your application →</a>",
+			title, company, applicationURL)
 	case KindAutoApplyFailed:
 		return fmt.Sprintf(
-			"Auto-apply couldn't submit <b>%s</b> at <b>%s</b>, and won't try again.\n<a href=\"%s\">Open your tracking board →</a>",
-			title, company, trackingURL)
+			"Auto-apply couldn't submit <b>%s</b> at <b>%s</b>, and won't try again.\n<a href=\"%s\">Open your application →</a>",
+			title, company, applicationURL)
 	default:
 		return fmt.Sprintf("<b>%s</b> at <b>%s</b>: <a href=\"%s\">Open your tracking board →</a>", title, company, trackingURL)
 	}
@@ -390,6 +392,7 @@ var bodies = template.Must(mailtpl.Partials().New("nudge").Parse(`
 func (n *EmailNotifier) render(m Message) (subject, htmlBody, textBody string) {
 	trackingURL := n.origin + "/my/tracking?utm_source=email"
 	jobURL := n.origin + "/jobs/" + m.Slug + "?utm_source=email"
+	applicationURL := n.origin + "/my/tracking/" + m.Slug + "?utm_source=email"
 
 	// block names the body template; head and pre are the shell's heading and the
 	// inbox preview line.
@@ -422,18 +425,21 @@ func (n *EmailNotifier) render(m Message) (subject, htmlBody, textBody string) {
 	case KindAutoApplySubmitted:
 		block, head, pre = "auto_apply_submitted", "Application submitted", "Auto-apply submitted your application"
 		subject = fmt.Sprintf("Submitted: %s at %s", m.JobTitle, m.Company)
-		textBody = fmt.Sprintf("Auto-apply submitted your application to %s at %s.\n\nOpen your tracking board: %s\n",
-			m.JobTitle, m.Company, trackingURL)
+		data.URL, data.CTA = applicationURL, "Open your application"
+		textBody = fmt.Sprintf("Auto-apply submitted your application to %s at %s.\n\nOpen your application: %s\n",
+			m.JobTitle, m.Company, data.URL)
 	case KindAutoApplyBlocked:
 		block, head, pre = "auto_apply_blocked", "Needs your attention", "Auto-apply couldn't finish this application"
 		subject = fmt.Sprintf("Needs your attention: %s at %s", m.JobTitle, m.Company)
-		textBody = fmt.Sprintf("Auto-apply couldn't finish %s at %s — a required question needs your own answer.\n\nOpen your tracking board: %s\n",
-			m.JobTitle, m.Company, trackingURL)
+		data.URL, data.CTA = applicationURL, "Open your application"
+		textBody = fmt.Sprintf("Auto-apply couldn't finish %s at %s — a required question needs your own answer.\n\nOpen your application: %s\n",
+			m.JobTitle, m.Company, data.URL)
 	case KindAutoApplyFailed:
 		block, head, pre = "auto_apply_failed", "Auto-apply couldn't submit this application", "Auto-apply couldn't submit this application"
 		subject = fmt.Sprintf("Couldn't submit: %s at %s", m.JobTitle, m.Company)
-		textBody = fmt.Sprintf("Auto-apply couldn't submit %s at %s, and won't try again.\n\nOpen your tracking board: %s\n",
-			m.JobTitle, m.Company, trackingURL)
+		data.URL, data.CTA = applicationURL, "Open your application"
+		textBody = fmt.Sprintf("Auto-apply couldn't submit %s at %s, and won't try again.\n\nOpen your application: %s\n",
+			m.JobTitle, m.Company, data.URL)
 	default:
 		block, head, pre = "plain", fmt.Sprintf("%s at %s", m.JobTitle, m.Company), "An update on a job you are tracking"
 		subject = fmt.Sprintf("%s at %s", m.JobTitle, m.Company)
