@@ -634,6 +634,38 @@ type Querier interface {
 	// that no longer exists). Candidate contacts are intentionally kept: they are
 	// owner-edited identity, not an extract artifact.
 	ClearUserResume(ctx context.Context, id int64) error
+	// The chronic-board safety net (openspec change close-chronically-unreachable-boards, issue
+	// #2017), board-scoped: closes every open job of ONE board that board_health.ListChronicBoards
+	// has already proven unreachable for the closure window — no per-run cutoff, because the
+	// evidence here is weeks of accumulated failure, not one run's coverage. Reuses
+	// CloseUnseenJobsForBoard's board_pattern scoping so a same-provider sibling board is never
+	// touched.
+	//
+	// closed_reason is 'board_unreachable', distinct from the ordinary sweep's 'unseen', so a job
+	// closed here is never conflated with one the per-run sweep closed with actual run coverage —
+	// see job-lifecycle spec, "every close records the mechanism".
+	//
+	// The EXISTS clause RE-VALIDATES board_health's current state within this same statement,
+	// against the identical chronic predicate ListChronicBoards used to select the row in the
+	// first place (caught in review, PR #2641/CodeRabbit): the caller reads chronic boards, then
+	// closes them, as two separate round trips, and a board can recover — a real crawl can
+	// succeed, calling RecordBoardSuccess — in the gap between the two. Re-checking here rather
+	// than trusting what the caller read earlier closes that window: if the board's last_success_at
+	// has moved since the caller's read, this EXISTS is false and the UPDATE matches nothing,
+	// exactly as if the caller had re-read board_health immediately before closing.
+	//
+	// The search_delete_outbox CTE is copied verbatim from CloseUnseenJobs: the enqueue must ride
+	// this statement to stay atomic with the close and exact.
+	//
+	// :one rather than :execrows because the CTE moves the row count out of the command tag.
+	CloseChronicBoardJobs(ctx context.Context, arg CloseChronicBoardJobsParams) (int64, error)
+	// The chronic-board safety net's source-scoped sibling, for a BOARDLESS provider's chronic
+	// record (board = '', see ingest-board-health spec): such a record already stands for the
+	// provider's whole crawl, so closing "this board's jobs" means the whole provider's open jobs,
+	// by source alone — mirrors CloseUnseenJobsBySource but with no per-run cutoff, for the same
+	// reason CloseChronicBoardJobs has none. Carries the same board_health re-validation EXISTS
+	// clause as CloseChronicBoardJobs, and for the same reason.
+	CloseChronicProviderJobs(ctx context.Context, arg CloseChronicProviderJobsParams) (int64, error)
 	// Moderator close: the thread leaves the open listing and rejects new replies.
 	CloseCommunityThread(ctx context.Context, id int64) error
 	//
@@ -934,6 +966,18 @@ type Querier interface {
 	// Read-only companion to BackfillBoardCompany, for --dry-run: how many rows a board's backfill
 	// would touch without writing anything.
 	CountBlankCompanyByBoard(ctx context.Context, arg CountBlankCompanyByBoardParams) (int64, error)
+	// How many board_health rows exist for one (provider, board) name across every region it has
+	// ever been seen under. More than one means the name is REGION-AMBIGUOUS — the `boards`
+	// catalog allows one board name to repeat under a provider, distinguished only by region (e.g.
+	// Adzuna's "it-jobs" once per country, internal/ingest/sources/adzuna.go), but
+	// jobs.external_id carries no region dimension at all (externalid.Namespace(board, id)), so a
+	// board-scoped `external_id LIKE '<board>:%'` close cannot tell one region's postings from
+	// another's. The ordinary per-run sweep already refuses to board-scope such a name
+	// (pipeline.ambiguousRegionBoards); the chronic-board safety net (cmd/close-chronic-boards)
+	// makes the same check against board_health directly, since it has no crawl-run board list to
+	// consult and does not need one — board_health's own composite key already records every
+	// region a board name has ever been crawled under.
+	CountBoardHealthRegions(ctx context.Context, arg CountBoardHealthRegionsParams) (int64, error)
 	// How many people a campaign would reach right now. Read before sending: a campaign
 	// is irreversible and goes to everyone, so the number is worth seeing first.
 	CountBroadcastCandidates(ctx context.Context, campaign string) (int64, error)
@@ -949,6 +993,14 @@ type Querier interface {
 	// The predicate is the one the public listings apply, so the totals describe exactly the
 	// set a visitor can page through.
 	CountCatalogueScale(ctx context.Context) (CountCatalogueScaleRow, error)
+	// What CloseChronicBoardJobs would close, for the safety-net worker's dry-run report — same
+	// predicate (including the board_health re-validation, so a dry run cannot report a count for
+	// a board that has already recovered), no write, mirroring CountExpiredTracerClicks alongside
+	// DeleteExpiredTracerClicks.
+	CountChronicBoardJobs(ctx context.Context, arg CountChronicBoardJobsParams) (int64, error)
+	// What CloseChronicProviderJobs would close, for the safety-net worker's dry-run report. Same
+	// board_health re-validation as its close counterpart.
+	CountChronicProviderJobs(ctx context.Context, arg CountChronicProviderJobsParams) (int64, error)
 	// Total companies matching the same optional name + facet filters as ListCompanies,
 	// so search/filter pagination reports the filtered total. Keep this WHERE identical
 	// to ListCompanies (including the job_count > 0 hiring scope).
@@ -2906,6 +2958,21 @@ type Querier interface {
 	// Every slug already elected canonical. The merge worker holds these out of a new election,
 	// which is what "frozen" means in practice.
 	ListCanonicalCompanySlugs(ctx context.Context) ([]string, error)
+	// The boards that have proven unreachable for at least `age_window`, not merely cooled down from
+	// a recent run of failures (openspec change close-chronically-unreachable-boards, issue #2017).
+	// A board that has succeeded at least once is measured from last_success_at; one that never has
+	// is measured from first_seen_at instead, since last_error_at is overwritten every failed run
+	// and cannot answer "how long has this been broken". Called with two different windows: a
+	// shorter one for the operator-facing chronic report, a longer one that gates the safety-net
+	// close (see job-lifecycle spec) — one query, no duplicated threshold logic between the two.
+	// Ordered oldest-evidence-first, so both callers see the worst boards first without a second
+	// sort. max_boards mirrors ListUnhealthyBoards's cap (see cmd/ingest's unhealthyBoardsCap,
+	// freehire 2026-08-14 incident): the per-run report passes a small one, the safety-net closer
+	// passes a generous one large enough that a real chronic backlog is never silently truncated —
+	// the two callers' needs differ, so one query with a caller-supplied cap serves both rather
+	// than duplicating the threshold logic across an uncapped and a capped variant. total is the
+	// FULL count before the cap, same convention as ListUnhealthyBoards.Total.
+	ListChronicBoards(ctx context.Context, arg ListChronicBoardsParams) ([]ListChronicBoardsRow, error)
 	// Catalog page: companies with their job counts, most active first. The job count
 	// is read from the denormalized companies.job_count column (maintained by
 	// cmd/recount-companies), so this read does not join jobs. Ordered by job_count
