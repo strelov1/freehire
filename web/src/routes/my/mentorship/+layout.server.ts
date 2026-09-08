@@ -1,3 +1,4 @@
+import { requireMentorshipAccess } from '$lib/server/mentorshipGate';
 import { serverApi } from '$lib/server/api';
 import type { LayoutServerLoad } from './$types';
 
@@ -12,7 +13,13 @@ import type { LayoutServerLoad } from './$types';
 // A caller who is not a mentor gets `profile: null` — the ordinary answer, not a failure,
 // which is why `myMentorProfile` turns the 404 into null rather than leaving every caller
 // to catch it.
-export const load: LayoutServerLoad = async ({ fetch, request }) => {
+export const load: LayoutServerLoad = async ({ fetch, request, parent }) => {
+  // The beta gate for the whole section, here rather than on each pane: a tab hidden
+  // from the strip is still a reachable address, which is how two of them answered 500
+  // to a visitor who simply typed one.
+  const { user } = await parent();
+  requireMentorshipAccess(user);
+
   const api = serverApi(fetch, request.headers.get('cookie'));
   return { profile: await api.myMentorProfile() };
 };

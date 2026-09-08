@@ -1,3 +1,4 @@
+import { requireMentorshipAccess } from '$lib/server/mentorshipGate';
 import { serverApi } from '$lib/server/api';
 import { mentorFilterOptions, mentorFiltersFromParams, mentorFiltersToParams } from '$lib/mentorship';
 import type { PageServerLoad } from './$types';
@@ -17,7 +18,12 @@ import type { PageServerLoad } from './$types';
 // Filtering itself stays on the endpoint rather than being redone here. The publication
 // predicate — approved, unpaused, not withdrawn — lives in one place on purpose, and a
 // second copy in the browser is the drift the mentor-profile spec warns about.
-export const load: PageServerLoad = async ({ url, fetch }) => {
+export const load: PageServerLoad = async ({ url, fetch , parent }) => {
+  // Beta-gated, and a 404 rather than a 403: while the marketplace is unreleased the
+  // honest answer is that this page is not there, and a 403 would advertise it to
+  // every crawler that found the URL.
+  requireMentorshipAccess((await parent()).user);
+
   const filters = mentorFiltersFromParams(url.searchParams);
   const params = mentorFiltersToParams(filters);
   const api = serverApi(fetch);

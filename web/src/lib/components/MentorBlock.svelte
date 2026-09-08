@@ -1,6 +1,7 @@
 <script lang="ts">
   import { GraduationCap } from '@lucide/svelte';
   import { resolve } from '$app/paths';
+  import { page } from '$app/state';
   import { api } from '$lib/api';
   import { mentorFiltersToQuery } from '$lib/mentorship';
   import type { Mentor } from '$lib/types';
@@ -28,8 +29,14 @@
   );
   const directoryHref = $derived(`${resolve('/mentors')}?${companyFilter}`);
 
+  // The same beta gate the routes hold, on the entry point: a block that leads somewhere
+  // answering 404 is worse than no block. The routes are what actually close the door —
+  // this only stops offering it, which is why the predicate is duplicated deliberately
+  // rather than trusted here.
+  const inBeta = $derived(Boolean(page.data.user?.beta_tester));
+
   $effect(() => {
-    if (!companySlug) return;
+    if (!companySlug || !inBeta) return;
     let live = true;
     // Failure is silence. This block is an extra route to something, not the page's
     // subject, and a vacancy must not show an error because an aside could not load.
@@ -45,7 +52,7 @@
   });
 </script>
 
-{#if mentors.length > 0}
+{#if inBeta && mentors.length > 0}
   <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- resolve() applied to the /mentors path; the rule can't see through the appended query -->
   <a href={directoryHref} class="border-border hover:bg-muted/50 flex items-center gap-3 rounded-lg border p-3 text-sm transition-colors">
     <GraduationCap class="text-muted-foreground size-5 shrink-0" />

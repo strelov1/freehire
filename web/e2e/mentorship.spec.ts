@@ -45,10 +45,12 @@ async function register(context: BrowserContext, email: string) {
   });
   expect(response.ok(), `register ${email}: ${response.status()}`).toBe(true);
 
-  // Past the first-run wizard. It is a modal over every /my page for a brand-new account,
-  // and it is not what this test is about — a mentor who has already been using the site
-  // is the situation being exercised. Setup, the same class as seeding the company.
-  sql(`UPDATE users SET onboarding_completed_at = now() WHERE email = '${email}'`);
+  // Past the first-run wizard, and into the beta. The marketplace ships gated: every
+  // route it owns answers 404 to an account without the flag, so a test account without
+  // it would exercise the gate rather than the feature.
+  sql(
+    `UPDATE users SET onboarding_completed_at = now(), beta_tester = true WHERE email = '${email}'`,
+  );
 }
 
 

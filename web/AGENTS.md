@@ -67,6 +67,14 @@ production; in dev the Vite proxy (`web/vite.config.ts`) forwards `/api` to the 
   in the module graph of every job and company page while only the few visitors who actually
   ask for a referral open it. The block itself stays server-rendered — deferring it too would
   push the description down after hydration and trade the CLS the page currently has at zero.
+- **Mentorship ships behind `users.beta_tester`, WHOLE.** Every route it owns — the public
+  directory, a mentor's page, and all four cabinet tabs — answers **404** to anybody
+  without the flag, and `MentorBlock` renders nothing. The predicate is
+  `$lib/server/mentorshipGate`, stated once so the beta ends in one edit. Gating only the
+  cabinet was considered and rejected: it would leave a visitor able to BOOK from a public
+  profile and then unable to find the session again or cancel it, and the hour a mentor is
+  holding is real. 404 rather than 403 — while the feature is unreleased the honest answer
+  is that the page is not there, and a 403 advertises it to every crawler that finds the URL.
 - **Mentorship** (`/mentors`, `/mentors/[slug]`, `/my/mentorship`): the arithmetic lives in
   `web/src/lib/mentorship.ts`, the same split `matchAnalysis.ts` holds — pure, `$app`-free,
   unit-tested. **Nothing in the slot path constructs a `Date`.** A slot arrives with
