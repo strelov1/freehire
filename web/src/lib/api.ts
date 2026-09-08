@@ -41,10 +41,14 @@ import type {
   FacetCounts,
   ListMeta,
   Mentor,
+  MentorAvailabilityRule,
+  MentorProfileInput,
   MentorSession,
   MentorSessions,
   MentorSlot,
   MentorSlots,
+  OwnMentorProfile,
+  PendingMentorProfile,
   MyJob,
   MyJobCounts,
   PipelineStats,
@@ -755,11 +759,113 @@ export function createApi(
     return requestData<MentorSession>(`/api/v1/me/mentorship/sessions/${id}`);
   }
 
+  /** The seeker's rating of a completed session.
+   *
+   *  PUT, not POST: there is one review per session and a second submission REPLACES the
+   *  first. The mentor's review count does not move on an edit. */
+  async function reviewMySession(id: string, rating: number, comment: string): Promise<void> {
+    await call(
+      `/api/v1/me/mentorship/sessions/${id}/review`,
+      jsonBody('PUT', { rating, comment }),
+    );
+  }
+
   /** Cancel, as either party, before the start. Frees the hour and tells the other side. */
   async function cancelMySession(id: string, reason: string): Promise<MentorSession> {
     return requestData<MentorSession>(
       `/api/v1/me/mentorship/sessions/${id}/cancel`,
       jsonBody('POST', { reason }),
+    );
+  }
+
+  // --- The mentor's own cabinet ----------------------------------------------
+
+  /** The caller's mentor profile, or null when they have none. A 404 here is the ordinary
+   *  answer for "not a mentor", not a failure, so it is turned into null rather than left
+   *  for every caller to catch. */
+  async function myMentorProfile(): Promise<OwnMentorProfile | null> {
+    try {
+      return await requestData<OwnMentorProfile>('/api/v1/me/mentorship/profile');
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 404) return null;
+      throw e;
+    }
+  }
+
+  async function createMentorProfile(body: MentorProfileInput): Promise<OwnMentorProfile> {
+    return requestData<OwnMentorProfile>('/api/v1/me/mentorship/profile', jsonBody('POST', body));
+  }
+
+  async function updateMentorProfile(body: MentorProfileInput): Promise<OwnMentorProfile> {
+    return requestData<OwnMentorProfile>('/api/v1/me/mentorship/profile', jsonBody('PUT', body));
+  }
+
+  /** Leave the directory without moderation, keeping confirmed bookings standing. */
+  async function pauseMentorProfile(paused: boolean): Promise<OwnMentorProfile> {
+    return requestData<OwnMentorProfile>(
+      '/api/v1/me/mentorship/profile/pause',
+      jsonBody('POST', { paused }),
+    );
+  }
+
+  async function myMentorAvailability(): Promise<MentorAvailabilityRule[]> {
+    return requestData<MentorAvailabilityRule[]>('/api/v1/me/mentorship/availability');
+  }
+
+  /** Swap the WHOLE recurring week in one call.
+   *
+   *  Whole-week and not per-row on purpose: a schedule is a shape a mentor reasons about
+   *  all at once, and the replacement is one transaction — a half-applied edit leaves them
+   *  bookable at hours they just removed. Dated overrides are untouched. */
+  async function replaceWeeklyAvailability(
+    rules: { weekday: number; start: string; end: string }[],
+  ): Promise<MentorAvailabilityRule[]> {
+    return requestData<MentorAvailabilityRule[]>(
+      '/api/v1/me/mentorship/availability/weekly',
+      jsonBody('PUT', { rules }),
+    );
+  }
+
+  /** Add a dated exception. An equal start and end CLOSES that date, beating every other
+   *  rule on it — that is how "I am away on the 16th" is one insert rather than a rewrite
+   *  of the weekly schedule. */
+  async function addAvailabilityOverride(
+    date: string,
+    start: string,
+    end: string,
+  ): Promise<MentorAvailabilityRule> {
+    return requestData<MentorAvailabilityRule>(
+      '/api/v1/me/mentorship/availability/overrides',
+      jsonBody('POST', { date, start, end }),
+    );
+  }
+
+  async function deleteAvailabilityRule(id: number): Promise<void> {
+    await call(`/api/v1/me/mentorship/availability/${id}`, { method: 'DELETE' });
+  }
+
+  /** The sessions booked WITH the caller, as a mentor. Carries each seeker's address —
+   *  the mentor is meeting this person, so their identity is not a leak. */
+  async function myMentorBookings(): Promise<MentorSessions> {
+    return requestData<MentorSessions>('/api/v1/me/mentorship/bookings');
+  }
+
+  // --- Mentor moderation (behind the moderator gate) -------------------------
+
+  /** The pending queue, oldest first. */
+  async function listPendingMentorProfiles(): Promise<PendingMentorProfile[]> {
+    return requestData<PendingMentorProfile[]>('/api/v1/mentorship/profiles');
+  }
+
+  /** Approve or reject one profile. Approval is what puts it in the public directory;
+   *  nothing else infers it, including an approved referral offer for the same company. */
+  async function decideMentorProfile(
+    id: number,
+    status: 'approved' | 'rejected',
+  ): Promise<PendingMentorProfile> {
+    return requestData<PendingMentorProfile>(
+      `/api/v1/mentorship/profiles/${id}/decide`,
+      jsonBody('POST', { status }),
     );
   }
 
@@ -2513,6 +2619,18 @@ export function createApi(
     listMySessions,
     getMySession,
     cancelMySession,
+    reviewMySession,
+    myMentorProfile,
+    createMentorProfile,
+    updateMentorProfile,
+    pauseMentorProfile,
+    myMentorAvailability,
+    replaceWeeklyAvailability,
+    addAvailabilityOverride,
+    deleteAvailabilityRule,
+    myMentorBookings,
+    listPendingMentorProfiles,
+    decideMentorProfile,
     searchCities,
     insightsRoles,
     insightsSkills,

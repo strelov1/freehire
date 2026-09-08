@@ -214,14 +214,36 @@ unit tests plus the function they drive; none of it needs Docker or Postgres.
       focus — 60s because the endpoint caches a window for a minute, so a faster poll
       spends the rate limit for an identical answer. No reservation system, unlike
       cal.com: the `EXCLUDE` constraint refuses the second booking outright.
-- [ ] 8.3 Booking confirmation and cancellation flows, and the seeker's session list
-- [ ] 8.4 Mentor cabinet under `/my/`: profile editing, weekly schedule, date overrides,
-      and the mentor's own session list
-- [ ] 8.5 Moderation queue screen beside the referral queue
-- [ ] 8.6 Entry point from the vacancy and company pages, rendered only where the
-      company has an approved unpaused mentor — placement coordinated with the open
-      `job-page-cta-hierarchy` change
-- [ ] 8.7 Review submission after a completed session
+- [x] 8.3 Booking confirmation and cancellation flows, and the seeker's session list.
+      The chosen hour lives in the URL, so the sign-in bounce returns to it — and the
+      sign-in link is built from `location.search`, not `promptSignIn()`, which reads
+      `page.url` and would hand back a returnTo missing the very slot it is carried for.
+      A booked session carries only its instants, so the zone is applied in the browser;
+      that is not the slot trap, and the comment says why. The cancel control is hidden
+      rather than shown-and-refused, tested on both sides of the start instant.
+- [x] 8.4 Mentor cabinet under `/my/`: profile editing, weekly schedule, date overrides,
+      and the mentor's own session list. One `/my/mentorship` section for both sides of
+      the marketplace; the offer-to-mentor form appears only when asked for. The week is
+      edited and saved whole, mirroring the endpoint. **A backend gap surfaced here and
+      was fixed rather than worked around**: the owner's read did not carry the buffers,
+      notice or horizon, so a whole-object save after correcting a headline silently
+      reset them to the form's defaults. `toOwnMentorResponse` now returns them, as
+      pointers — `omitempty` cannot tell a zero buffer from a field that is not yours.
+- [x] 8.5 Moderation queue screen beside the referral queue — a fifth tab of the existing
+      hub, mirrored in `?tab=` like the rest. The approved referral offer is rendered as
+      evidence and nothing acts on it, which is what the spec means by "never a gate".
+- [x] 8.6 Entry point from the vacancy and company pages, rendered only where the
+      company has an approved unpaused mentor. Asked from the DIRECTORY narrowed to that
+      company, never a separate "has a mentor?" endpoint — a second way to ask is a
+      second copy of the publication predicate. Asked in the BROWSER, not in `load`:
+      the job page is the busiest surface here and about three quarters of this host's
+      traffic is crawlers, so a server-side call would spend a request on every bot fetch
+      to answer a question no bot acts on. Placed beside the referral block rather than
+      as a fourth button, since `job-page-cta-hierarchy`
+- [x] 8.7 Review submission after a completed session. Offered only to the SEEKER, and
+      the wire never says which party is reading — what it says is that `seeker_email`
+      reaches the mentor alone, so its absence identifies the reader. Indirect, and
+      therefore tested rather than assumed.
 
 ## 9. Verification
 

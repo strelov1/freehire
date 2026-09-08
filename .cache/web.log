@@ -321,3 +321,117 @@ Error: Not found: /manifest.webmanifest
 1:01:33 AM [vite] (ssr) page reload src/lib/i18n/shell.ts
 1:01:41 AM [vite] (client) hmr update /src/app.css, /src/routes/my/+layout.svelte
 1:01:41 AM [vite] (ssr) page reload src/lib/i18n/shell.ts
+1:10:49 AM [vite] (client) hmr update /src/app.css
+1:10:50 AM [vite] (ssr) page reload src/lib/types.ts
+1:10:54 AM [vite] (client) hmr update /src/app.css
+1:10:54 AM [vite] (ssr) page reload src/lib/mentorship.test.ts
+1:11:07 AM [vite] (client) hmr update /src/app.css
+1:11:07 AM [vite] (ssr) page reload src/lib/mentorship.test.ts
+1:11:21 AM [vite] (client) hmr update /src/app.css, /src/lib/components/MentorsView.svelte, /src/lib/components/MentorBookingView.svelte, /src/routes/my/mentorship/sessions/[id]/+page.svelte, /src/lib/components/MentorSessionList.svelte
+1:11:21 AM [vite] (ssr) page reload src/lib/mentorship.ts
+1:11:32 AM [vite] (client) hmr update /src/app.css, /src/lib/components/MentorsView.svelte, /src/lib/components/MentorBookingView.svelte, /src/routes/my/mentorship/sessions/[id]/+page.svelte, /src/lib/components/MentorSessionList.svelte
+1:11:32 AM [vite] (ssr) page reload src/lib/mentorship.ts
+1:11:42 AM [vite] (client) hmr update /src/app.css, /src/lib/components/MentorsView.svelte, /src/lib/components/MentorBookingView.svelte, /src/routes/my/mentorship/sessions/[id]/+page.svelte, /src/lib/components/MentorSessionList.svelte
+1:11:42 AM [vite] (ssr) page reload src/lib/mentorship.ts
+1:11:43 AM [vite] (client) hmr update /src/app.css, /src/lib/components/MentorsView.svelte, /src/lib/components/MentorBookingView.svelte, /src/routes/my/mentorship/sessions/[id]/+page.svelte, /src/lib/components/MentorSessionList.svelte
+1:11:43 AM [vite] (ssr) page reload src/lib/mentorship.ts
+1:11:58 AM [vite] (client) hmr update /src/routes/+layout.svelte, /src/lib/components/EmailVerificationBanner.svelte, /src/lib/components/HeaderMenu.svelte, /src/lib/components/HeaderSearch.svelte, /src/lib/components/NotificationBell.svelte, /src/lib/components/filters/FilterModal.svelte, /src/lib/components/filters/AiFilterButton.svelte, /src/lib/components/SavedSearches.svelte, /src/lib/components/filters/SaveSearchAlert.svelte, /src/routes/signin/+page.svelte, /src/routes/onboarding/+page.svelte and 23 more
+1:11:58 AM [vite] (ssr) page reload src/lib/api.ts
+1:12:03 AM [vite] (client) hmr update /src/routes/+layout.svelte, /src/lib/components/EmailVerificationBanner.svelte, /src/lib/components/HeaderMenu.svelte, /src/lib/components/HeaderSearch.svelte, /src/lib/components/NotificationBell.svelte, /src/lib/components/filters/FilterModal.svelte, /src/lib/components/filters/AiFilterButton.svelte, /src/lib/components/SavedSearches.svelte, /src/lib/components/filters/SaveSearchAlert.svelte, /src/routes/signin/+page.svelte, /src/routes/onboarding/+page.svelte and 23 more
+1:12:03 AM [vite] (ssr) page reload src/lib/api.ts
+1:12:07 AM [vite] (client) hmr update /src/routes/+layout.svelte, /src/lib/components/EmailVerificationBanner.svelte, /src/lib/components/HeaderMenu.svelte, /src/lib/components/HeaderSearch.svelte, /src/lib/components/NotificationBell.svelte, /src/lib/components/filters/FilterModal.svelte, /src/lib/components/filters/AiFilterButton.svelte, /src/lib/components/SavedSearches.svelte, /src/lib/components/filters/SaveSearchAlert.svelte, /src/routes/signin/+page.svelte, /src/routes/onboarding/+page.svelte and 23 more
+1:12:07 AM [vite] (ssr) page reload src/lib/api.ts
+1:12:14 AM [vite] (client) hmr update /src/app.css
+1:12:14 AM [vite] (ssr) page reload src/lib/types.ts
+1:12:18 AM [vite] (client) hmr update /src/routes/+layout.svelte, /src/lib/components/EmailVerificationBanner.svelte, /src/lib/components/HeaderMenu.svelte, /src/lib/components/HeaderSearch.svelte, /src/lib/components/NotificationBell.svelte, /src/lib/components/filters/FilterModal.svelte, /src/lib/components/filters/AiFilterButton.svelte, /src/lib/components/SavedSearches.svelte, /src/lib/components/filters/SaveSearchAlert.svelte, /src/routes/signin/+page.svelte, /src/routes/onboarding/+page.svelte and 23 more
+1:12:18 AM [vite] (ssr) page reload src/lib/api.ts
+1:13:27 AM [vite] (client) hmr update /src/app.css, /src/routes/my/+layout.svelte
+1:13:27 AM [vite] (ssr) page reload src/lib/accountNavIcons.ts
+1:13:31 AM [vite] (client) hmr update /src/app.css, /src/routes/my/+layout.svelte
+1:13:31 AM [vite] (ssr) page reload src/lib/accountNavIcons.ts
+Error: Not found: /apply/aadhaar
+    at resolve (/Users/i_strelov/Projects/hire/.claude/worktrees/mentorship-frontend/web/node_modules/.pnpm/@sveltejs+kit@2.70.3_@opentelemetry+api@1.9.1_@sveltejs+vite-plugin-svelte@7.2.0_svelte_9ea6b7e7f12532fbfa075473c3f5887a/node_modules/@sveltejs/kit/src/runtime/server/respond.js?v=c92f4a77:716:13)
+    at /Users/i_strelov/Projects/hire/.claude/worktrees/mentorship-frontend/web/node_modules/.pnpm/@sveltejs+kit@2.70.3_@opentelemetry+api@1.9.1_@sveltejs+vite-plugin-svelte@7.2.0_svelte_9ea6b7e7f12532fbfa075473c3f5887a/node_modules/@sveltejs/kit/src/runtime/server/respond.js?v=c92f4a77:469:11
+    at AsyncLocalStorage.run (node:internal/async_local_storage/async_hooks:91:14)
+    at with_request_store (file:///Users/i_strelov/Projects/hire/.claude/worktrees/mentorship-frontend/web/node_modules/.pnpm/@sveltejs+kit@2.70.3_@opentelemetry+api@1.9.1_@sveltejs+vite-plugin-svelte@7.2.0_svelte_9ea6b7e7f12532fbfa075473c3f5887a/node_modules/@sveltejs/kit/src/exports/internal/event.js:77:20)
+    at fn (/Users/i_strelov/Projects/hire/.claude/worktrees/mentorship-frontend/web/node_modules/.pnpm/@sveltejs+kit@2.70.3_@opentelemetry+api@1.9.1_@sveltejs+vite-plugin-svelte@7.2.0_svelte_9ea6b7e7f12532fbfa075473c3f5887a/node_modules/@sveltejs/kit/src/runtime/server/respond.js?v=c92f4a77:468:17)
+    at record_span (/Users/i_strelov/Projects/hire/.claude/worktrees/mentorship-frontend/web/node_modules/.pnpm/@sveltejs+kit@2.70.3_@opentelemetry+api@1.9.1_@sveltejs+vite-plugin-svelte@7.2.0_svelte_9ea6b7e7f12532fbfa075473c3f5887a/node_modules/@sveltejs/kit/src/runtime/telemetry/record_span.js?v=c92f4a77:9:10)
+    at resolve (/Users/i_strelov/Projects/hire/.claude/worktrees/mentorship-frontend/web/node_modules/.pnpm/@sveltejs+kit@2.70.3_@opentelemetry+api@1.9.1_@sveltejs+vite-plugin-svelte@7.2.0_svelte_9ea6b7e7f12532fbfa075473c3f5887a/node_modules/@sveltejs/kit/src/runtime/server/respond.js?v=c92f4a77:460:15)
+    at resolve (file:///Users/i_strelov/Projects/hire/.claude/worktrees/mentorship-frontend/web/node_modules/.pnpm/@sveltejs+kit@2.70.3_@opentelemetry+api@1.9.1_@sveltejs+vite-plugin-svelte@7.2.0_svelte_9ea6b7e7f12532fbfa075473c3f5887a/node_modules/@sveltejs/kit/src/exports/hooks/sequence.js:133:12)
+    at attribution (/Users/i_strelov/Projects/hire/.claude/worktrees/mentorship-frontend/web/src/hooks.server.ts:139:26)
+    at file:///Users/i_strelov/Projects/hire/.claude/worktrees/mentorship-frontend/web/node_modules/.pnpm/@sveltejs+kit@2.70.3_@opentelemetry+api@1.9.1_@sveltejs+vite-plugin-svelte@7.2.0_svelte_9ea6b7e7f12532fbfa075473c3f5887a/node_modules/@sveltejs/kit/src/exports/hooks/sequence.js:103:7
+1:18:11 AM [vite] (ssr) page reload src/lib/components/MentorProfileEditor.svelte
+1:18:17 AM [vite] (client) hmr update /src/app.css
+1:18:17 AM [vite] (ssr) page reload src/lib/types.ts
+1:18:25 AM [vite] (client) hmr update /src/app.css
+1:18:25 AM [vite] (ssr) page reload src/routes/my/mentorship/+page.server.ts
+1:18:39 AM [vite-plugin-svelte] src/routes/my/mentorship/+page.svelte:17:23 This reference only captures the initial value of `data`. Did you mean to reference it inside a derived instead?
+https://svelte.dev/e/state_referenced_locally
+1:18:39 AM [vite-plugin-svelte] src/routes/my/mentorship/+page.svelte:18:28 This reference only captures the initial value of `data`. Did you mean to reference it inside a derived instead?
+https://svelte.dev/e/state_referenced_locally
+1:18:39 AM [vite] (client) hmr update /src/routes/my/mentorship/+page.svelte, /src/app.css
+1:18:39 AM [vite] (ssr) page reload src/routes/my/mentorship/+page.svelte
+1:18:39 AM [vite-plugin-svelte] src/routes/my/mentorship/+page.svelte:17:23 This reference only captures the initial value of `data`. Did you mean to reference it inside a derived instead?
+https://svelte.dev/e/state_referenced_locally
+1:18:39 AM [vite-plugin-svelte] src/routes/my/mentorship/+page.svelte:18:28 This reference only captures the initial value of `data`. Did you mean to reference it inside a derived instead?
+https://svelte.dev/e/state_referenced_locally
+1:18:45 AM [vite] (client) page reload .svelte-kit/generated/client/nodes/0.js
+1:18:45 AM [vite] (client) page reload .svelte-kit/generated/client/nodes/1.js
+1:18:45 AM [vite] (client) page reload .svelte-kit/generated/client/nodes/3.js
+1:18:45 AM [vite] (client) page reload .svelte-kit/generated/client/nodes/10.js
+1:18:45 AM [vite] (client) page reload .svelte-kit/generated/client/nodes/60.js
+1:18:45 AM [vite] (client) page reload .svelte-kit/generated/client/nodes/61.js
+1:18:45 AM [vite] (client) page reload .svelte-kit/generated/client/nodes/82.js
+1:18:45 AM [vite] (client) page reload .svelte-kit/generated/client/nodes/83.js
+1:18:45 AM [vite] (client) page reload .svelte-kit/generated/client/nodes/112.js
+1:18:45 AM [vite] (client) page reload .svelte-kit/generated/client/nodes/121.js
+1:18:45 AM [vite] (client) page reload .svelte-kit/generated/client/app.js
+1:18:45 AM [vite] (client) page reload .svelte-kit/generated/client/matchers.js
+1:18:45 AM [vite] (ssr) page reload .svelte-kit/generated/shared/error-template.js
+1:18:45 AM [vite] (ssr) page reload .svelte-kit/generated/server/internal.js
+1:18:45 AM [vite] (client) page reload .svelte-kit/generated/root.js
+1:18:45 AM [vite] (ssr) page reload .svelte-kit/generated/root.js
+1:18:45 AM [vite] (ssr) page reload .svelte-kit/generated/root.svelte
+Error: Not found: /manifest.webmanifest
+    at resolve (/Users/i_strelov/Projects/hire/.claude/worktrees/mentorship-frontend/web/node_modules/.pnpm/@sveltejs+kit@2.70.3_@opentelemetry+api@1.9.1_@sveltejs+vite-plugin-svelte@7.2.0_svelte_9ea6b7e7f12532fbfa075473c3f5887a/node_modules/@sveltejs/kit/src/runtime/server/respond.js?v=c92f4a77:716:13)
+    at /Users/i_strelov/Projects/hire/.claude/worktrees/mentorship-frontend/web/node_modules/.pnpm/@sveltejs+kit@2.70.3_@opentelemetry+api@1.9.1_@sveltejs+vite-plugin-svelte@7.2.0_svelte_9ea6b7e7f12532fbfa075473c3f5887a/node_modules/@sveltejs/kit/src/runtime/server/respond.js?v=c92f4a77:469:11
+    at AsyncLocalStorage.run (node:internal/async_local_storage/async_hooks:91:14)
+    at with_request_store (file:///Users/i_strelov/Projects/hire/.claude/worktrees/mentorship-frontend/web/node_modules/.pnpm/@sveltejs+kit@2.70.3_@opentelemetry+api@1.9.1_@sveltejs+vite-plugin-svelte@7.2.0_svelte_9ea6b7e7f12532fbfa075473c3f5887a/node_modules/@sveltejs/kit/src/exports/internal/event.js:77:20)
+    at fn (/Users/i_strelov/Projects/hire/.claude/worktrees/mentorship-frontend/web/node_modules/.pnpm/@sveltejs+kit@2.70.3_@opentelemetry+api@1.9.1_@sveltejs+vite-plugin-svelte@7.2.0_svelte_9ea6b7e7f12532fbfa075473c3f5887a/node_modules/@sveltejs/kit/src/runtime/server/respond.js?v=c92f4a77:468:17)
+    at record_span (/Users/i_strelov/Projects/hire/.claude/worktrees/mentorship-frontend/web/node_modules/.pnpm/@sveltejs+kit@2.70.3_@opentelemetry+api@1.9.1_@sveltejs+vite-plugin-svelte@7.2.0_svelte_9ea6b7e7f12532fbfa075473c3f5887a/node_modules/@sveltejs/kit/src/runtime/telemetry/record_span.js?v=c92f4a77:9:10)
+    at resolve (/Users/i_strelov/Projects/hire/.claude/worktrees/mentorship-frontend/web/node_modules/.pnpm/@sveltejs+kit@2.70.3_@opentelemetry+api@1.9.1_@sveltejs+vite-plugin-svelte@7.2.0_svelte_9ea6b7e7f12532fbfa075473c3f5887a/node_modules/@sveltejs/kit/src/runtime/server/respond.js?v=c92f4a77:460:15)
+    at resolve (file:///Users/i_strelov/Projects/hire/.claude/worktrees/mentorship-frontend/web/node_modules/.pnpm/@sveltejs+kit@2.70.3_@opentelemetry+api@1.9.1_@sveltejs+vite-plugin-svelte@7.2.0_svelte_9ea6b7e7f12532fbfa075473c3f5887a/node_modules/@sveltejs/kit/src/exports/hooks/sequence.js:133:12)
+    at attribution (/Users/i_strelov/Projects/hire/.claude/worktrees/mentorship-frontend/web/src/hooks.server.ts:139:26)
+    at file:///Users/i_strelov/Projects/hire/.claude/worktrees/mentorship-frontend/web/node_modules/.pnpm/@sveltejs+kit@2.70.3_@opentelemetry+api@1.9.1_@sveltejs+vite-plugin-svelte@7.2.0_svelte_9ea6b7e7f12532fbfa075473c3f5887a/node_modules/@sveltejs/kit/src/exports/hooks/sequence.js:103:7
+1:19:41 AM [vite] (client) hmr update /src/lib/components/MentorScheduleEditor.svelte, /src/app.css
+1:19:41 AM [vite] (ssr) page reload src/lib/components/MentorScheduleEditor.svelte
+1:21:23 AM [vite] (client) hmr update /src/app.css
+1:21:23 AM [vite] (ssr) page reload src/lib/types.ts
+1:21:30 AM [vite] (client) hmr update /src/routes/+layout.svelte, /src/lib/components/EmailVerificationBanner.svelte, /src/lib/components/HeaderMenu.svelte, /src/lib/components/HeaderSearch.svelte, /src/lib/components/NotificationBell.svelte, /src/lib/components/filters/FilterModal.svelte, /src/lib/components/filters/AiFilterButton.svelte, /src/lib/components/SavedSearches.svelte, /src/lib/components/filters/SaveSearchAlert.svelte, /src/routes/signin/+page.svelte, /src/routes/onboarding/+page.svelte and 25 more
+1:21:30 AM [vite] (ssr) page reload src/lib/api.ts
+1:21:35 AM [vite] (client) hmr update /src/routes/+layout.svelte, /src/lib/components/EmailVerificationBanner.svelte, /src/lib/components/HeaderMenu.svelte, /src/lib/components/HeaderSearch.svelte, /src/lib/components/NotificationBell.svelte, /src/lib/components/filters/FilterModal.svelte, /src/lib/components/filters/AiFilterButton.svelte, /src/lib/components/SavedSearches.svelte, /src/lib/components/filters/SaveSearchAlert.svelte, /src/routes/signin/+page.svelte, /src/routes/onboarding/+page.svelte and 25 more
+1:21:35 AM [vite] (ssr) page reload src/lib/api.ts
+1:22:17 AM [vite] (client) hmr update /src/app.css
+1:22:17 AM [vite] (ssr) page reload src/lib/components/ModerationView.svelte
+1:23:35 AM [vite] (client) hmr update /src/app.css
+1:23:35 AM [vite] (ssr) page reload src/lib/mentorship.test.ts
+1:23:43 AM [vite] (client) hmr update /src/app.css
+1:23:43 AM [vite] (ssr) page reload src/lib/mentorship.test.ts
+1:23:54 AM [vite] (client) hmr update /src/app.css, /src/lib/components/MentorsView.svelte, /src/lib/components/MentorBookingView.svelte, /src/routes/my/mentorship/sessions/[id]/+page.svelte, /src/lib/components/MentorSessionList.svelte, /src/lib/components/MentorScheduleEditor.svelte
+1:23:54 AM [vite] (ssr) page reload src/lib/mentorship.ts
+1:24:02 AM [vite] (client) hmr update /src/routes/my/mentorship/sessions/[id]/+page.svelte, /src/app.css
+1:24:02 AM [vite] (ssr) page reload src/routes/my/mentorship/sessions/[id]/+page.svelte
+1:24:09 AM [vite] (client) hmr update /src/routes/my/mentorship/sessions/[id]/+page.svelte, /src/app.css
+1:24:09 AM [vite] (ssr) page reload src/routes/my/mentorship/sessions/[id]/+page.svelte
+1:24:17 AM [vite] (client) hmr update /src/routes/my/mentorship/sessions/[id]/+page.svelte, /src/app.css
+1:24:17 AM [vite] (ssr) page reload src/routes/my/mentorship/sessions/[id]/+page.svelte
+1:24:23 AM [vite] (client) hmr update /src/routes/+layout.svelte, /src/lib/components/EmailVerificationBanner.svelte, /src/lib/components/HeaderMenu.svelte, /src/lib/components/HeaderSearch.svelte, /src/lib/components/NotificationBell.svelte, /src/lib/components/filters/FilterModal.svelte, /src/lib/components/filters/AiFilterButton.svelte, /src/lib/components/SavedSearches.svelte, /src/lib/components/filters/SaveSearchAlert.svelte, /src/routes/signin/+page.svelte, /src/routes/onboarding/+page.svelte and 25 more
+1:24:23 AM [vite] (ssr) page reload src/lib/api.ts
+1:26:04 AM [vite] (client) hmr update /src/app.css
+1:26:04 AM [vite] (ssr) page reload src/lib/components/JobView.svelte
+1:26:04 AM [vite] (client) hmr update /src/app.css
+1:26:04 AM [vite] (ssr) page reload src/lib/components/CompanyView.svelte
+1:26:54 AM [vite] (client) hmr update /src/app.css
+1:28:12 AM [vite] (client) hmr update /src/app.css
+1:28:17 AM [vite] (client) hmr update /src/app.css
+1:28:21 AM [vite] (client) hmr update /src/app.css

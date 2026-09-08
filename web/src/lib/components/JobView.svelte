@@ -42,6 +42,7 @@
   import GhostChecklist from './GhostChecklist.svelte';
   import RealityBadge from './RealityBadge.svelte';
   import ReferralBlock from './ReferralBlock.svelte';
+  import MentorBlock from './MentorBlock.svelte';
   import ReportDialog from './ReportDialog.svelte';
   import SkillChip from './SkillChip.svelte';
   import VoteControl from './VoteControl.svelte';
@@ -743,6 +744,13 @@
 
     {#if job.referral_available && job.company_slug}
       <ReferralBlock companySlug={job.company_slug} companyName={job.company} />
+    {/if}
+
+    <!-- Beside the referral block rather than a fourth button of its own: the two are the
+         same insider seen from different ends, and this page's CTA hierarchy is the
+         subject of its own open change. -->
+    {#if job.company_slug}
+      <MentorBlock companySlug={job.company_slug} companyName={job.company} />
     {/if}
   </header>
 

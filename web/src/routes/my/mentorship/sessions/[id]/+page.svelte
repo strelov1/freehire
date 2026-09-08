@@ -2,7 +2,7 @@
   import { invalidateAll } from '$app/navigation';
   import { resolve } from '$app/paths';
   import { api } from '$lib/api';
-  import { formatInstantIn, isCancellable } from '$lib/mentorship';
+  import { canReview, formatInstantIn, isCancellable } from '$lib/mentorship';
   import { Badge, Button, Card } from '$lib/ui';
   import type { PageData } from './$types';
 
@@ -23,6 +23,31 @@
   let cancelling = $state(false);
   let cancelError = $state('');
   let confirming = $state(false);
+
+  // The review form appears only for the seeker of a session that actually happened.
+  const reviewable = $derived(canReview(session));
+  let rating = $state(5);
+  let comment = $state('');
+  let reviewing = $state(false);
+  let reviewError = $state('');
+  let reviewed = $state(false);
+
+  async function submitReview() {
+    reviewing = true;
+    reviewError = '';
+    try {
+      await api.reviewMySession(session.id, rating, comment);
+      // PUT, so a second submission replaces the first rather than adding one — the
+      // mentor's review count does not move. Nothing to re-read: the session itself is
+      // unchanged by the review.
+      reviewed = true;
+    } catch (e) {
+      reviewError =
+        e instanceof Error && e.message ? e.message : 'The review could not be saved.';
+    } finally {
+      reviewing = false;
+    }
+  }
 
   async function cancel() {
     cancelling = true;
@@ -83,6 +108,45 @@
       </p>
     {/if}
   </Card>
+
+  {#if reviewable}
+    <Card class="flex flex-col gap-3 p-4">
+      <p class="text-sm font-medium">How was it?</p>
+      {#if reviewed}
+        <p class="text-muted-foreground text-sm">
+          Saved. Sending it again replaces this one rather than adding another.
+        </p>
+      {/if}
+      <label class="text-sm">
+        <span class="text-muted-foreground">Rating</span>
+        <select
+          bind:value={rating}
+          class="border-input bg-background mt-1 block h-9 rounded-md border px-2 text-sm"
+        >
+          {#each [5, 4, 3, 2, 1] as value (value)}
+            <option {value}>{value}</option>
+          {/each}
+        </select>
+      </label>
+      <label class="text-sm">
+        <span class="text-muted-foreground">Comment (optional)</span>
+        <textarea
+          bind:value={comment}
+          rows="3"
+          maxlength="1000"
+          class="border-input bg-background mt-1 w-full rounded-md border px-3 py-2 text-sm"
+        ></textarea>
+      </label>
+      <div>
+        <Button disabled={reviewing} onclick={submitReview}>
+          {reviewing ? 'Saving…' : reviewed ? 'Update the review' : 'Leave a review'}
+        </Button>
+      </div>
+      {#if reviewError}
+        <p class="text-destructive text-sm">{reviewError}</p>
+      {/if}
+    </Card>
+  {/if}
 
   {#if cancellable}
     {#if confirming}

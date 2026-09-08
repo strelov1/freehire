@@ -17,8 +17,19 @@ import {
   slotLocalDay,
   slotLocalTime,
 } from './mentorship';
-import { formatInstantIn, isCancellable } from './mentorship';
-import type { Mentor, MentorSession, MentorSlot } from './types';
+import {
+  canReview,
+  formatInstantIn,
+  isCancellable,
+  splitAvailability,
+  weekdayLabel,
+  weekdayOrder,
+} from './mentorship';
+import type { Mentor, MentorAvailabilityRule, MentorSession, MentorSlot } from './types';
+
+function rule(over: Partial<MentorAvailabilityRule> = {}): MentorAvailabilityRule {
+  return { id: 1, weekday: 1, date: null, start: '18:00', end: '21:00', closure: false, ...over };
+}
 
 function session(over: Partial<MentorSession> = {}): MentorSession {
   return {
@@ -398,6 +409,93 @@ describe('whether a session can still be cancelled', () => {
   // button and the endpoint could disagree.
   test('the start instant itself is too late', () => {
     expect(isCancellable(session({ starts_at: '2026-10-15T12:00:00Z' }), now)).toBe(false);
+  });
+});
+
+describe('who may leave a review', () => {
+  // Only the SEEKER of a completed session. The wire never says which party is reading:
+  // what it says is that the seeker's address reaches the MENTOR alone, so its presence
+  // is how the two are told apart. Indirect, and worth a test for exactly that reason.
+  test('the seeker of a finished session may', () => {
+    expect(canReview(session({ completed: true }))).toBe(true);
+  });
+
+  test('the mentor of the same session may not', () => {
+    expect(canReview(session({ completed: true, seeker_email: 'seeker@example.test' }))).toBe(
+      false,
+    );
+  });
+
+  // `completed` is already "confirmed AND ended", so a cancelled session is never
+  // completed — the check does not need to repeat the status, and this pins that down.
+  test('a session that has not finished may not be reviewed', () => {
+    expect(canReview(session({ completed: false }))).toBe(false);
+  });
+
+  test('a cancelled session may not', () => {
+    expect(canReview(session({ status: 'cancelled', completed: false }))).toBe(false);
+  });
+});
+
+describe('weekdays, stored and displayed', () => {
+  // The one place the two conventions meet. Storage is Go's time.Weekday, where 0 is
+  // SUNDAY; the calendar draws Monday first. Getting this backwards shifts a mentor's
+  // whole week by a day and looks like they typed it wrong.
+  test('storage numbers name the right days', () => {
+    expect(weekdayLabel(0)).toBe('Sunday');
+    expect(weekdayLabel(1)).toBe('Monday');
+    expect(weekdayLabel(6)).toBe('Saturday');
+  });
+
+  test('the display order runs Monday to Sunday, in storage numbers', () => {
+    expect(weekdayOrder()).toEqual([1, 2, 3, 4, 5, 6, 0]);
+  });
+
+  // The two together: reading the display order through the labels must spell the week,
+  // which is the assertion that fails if either side is fixed without the other.
+  test('the order and the labels agree', () => {
+    expect(weekdayOrder().map(weekdayLabel)).toEqual([
+      'Monday',
+      'Tuesday',
+      'Wednesday',
+      'Thursday',
+      'Friday',
+      'Saturday',
+      'Sunday',
+    ]);
+  });
+});
+
+describe('splitting availability into a week and its exceptions', () => {
+  test('a rule is weekly or dated, and lands in exactly one half', () => {
+    const split = splitAvailability([
+      rule({ id: 1, weekday: 1 }),
+      rule({ id: 2, weekday: null, date: '2026-10-16' }),
+    ]);
+    expect(split.weekly.map((r) => r.id)).toEqual([1]);
+    expect(split.dated.map((r) => r.id)).toEqual([2]);
+  });
+
+  // Weekly rules come back in the DISPLAY order, so a mentor reads their week as a week.
+  test('weekly rules are ordered Monday first, then by start time', () => {
+    const split = splitAvailability([
+      rule({ id: 1, weekday: 0, start: '09:00' }),
+      rule({ id: 2, weekday: 1, start: '18:00' }),
+      rule({ id: 3, weekday: 1, start: '09:00' }),
+    ]);
+    expect(split.weekly.map((r) => r.id)).toEqual([3, 2, 1]);
+  });
+
+  test('dated rules are ordered by date', () => {
+    const split = splitAvailability([
+      rule({ id: 1, weekday: null, date: '2026-11-02' }),
+      rule({ id: 2, weekday: null, date: '2026-10-16' }),
+    ]);
+    expect(split.dated.map((r) => r.id)).toEqual([2, 1]);
+  });
+
+  test('an empty schedule splits into two empty halves', () => {
+    expect(splitAvailability([])).toEqual({ weekly: [], dated: [] });
   });
 });
 

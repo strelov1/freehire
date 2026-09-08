@@ -1671,3 +1671,73 @@ export interface MentorSessions {
   upcoming: MentorSession[];
   past: MentorSession[];
 }
+
+/** One availability row. Exactly one of `weekday` and `date` is set — the schema enforces
+ *  it — so the pair is how a rule says which kind it is.
+ *
+ *  `weekday` is Go's `time.Weekday`: **0 is SUNDAY**, not Monday. That is the storage
+ *  order and it is not the order the calendar draws in; `weekdayOrder` maps between them.
+ *
+ *  `start`/`end` are `HH:MM`, and `24:00` is a valid end — it is how a mentor is available
+ *  until midnight without the row spilling onto the next date.
+ *
+ *  `closure` marks the trick a raw start/end cannot express: a dated row whose start
+ *  equals its end CLOSES that date, beating every other rule on it. Render it as "away",
+ *  never as "10:00–10:00". */
+export interface MentorAvailabilityRule {
+  /** What the delete route needs. A rule rendered without one can be shown and never
+   *  removed. */
+  id: number;
+  weekday?: number | null;
+  date?: string | null;
+  start: string;
+  end: string;
+  closure: boolean;
+}
+
+/** The mentor's own profile: the public shape plus what only its owner sees. */
+export interface OwnMentorProfile extends Mentor {
+  status: string;
+  paused: boolean;
+  meeting_url: string;
+  /** The rest of the session parameters, sent to the OWNER alone so the cabinet's
+   *  whole-object save re-submits what the mentor chose rather than the form's defaults.
+   *  Optional because nothing public carries them. */
+  buffer_before_minutes?: number;
+  buffer_after_minutes?: number;
+  notice_minutes?: number;
+  horizon_days?: number;
+}
+
+/** One profile awaiting a moderator. The moderator's view of a mentor — status and pause,
+ *  but no meeting link: deciding whether somebody may mentor does not require the address
+ *  of the room they meet in. */
+export interface PendingMentorProfile extends Mentor {
+  /** The numeric row id the decide route takes — not the public slug. */
+  id: number;
+  status: string;
+  paused: boolean;
+  /** Evidence for the human deciding: this account is already an approved referrer for
+   *  the same company. Corroboration, never a gate — an approved offer does not approve
+   *  a mentor profile, and the spec says so outright. */
+  has_approved_referral_offer: boolean;
+}
+
+/** What a mentor submits. Whole-object on both create and update: the endpoint takes the
+ *  same body either way, and a partial one would clear what it omits. */
+export interface MentorProfileInput {
+  company_slug: string;
+  slug: string;
+  name: string;
+  headline: string;
+  bio: string;
+  topics: string[];
+  languages: string[];
+  timezone: string;
+  session_minutes: number;
+  buffer_before_minutes: number;
+  buffer_after_minutes: number;
+  notice_minutes: number;
+  horizon_days: number;
+  meeting_url: string;
+}

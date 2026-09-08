@@ -4,7 +4,7 @@
 // without a browser. Mirrors the split companyFacetModel.ts holds for the company
 // catalogue and matchAnalysis.ts for the analysis stream.
 
-import type { Mentor, MentorSession, MentorSlot } from './types';
+import type { Mentor, MentorAvailabilityRule, MentorSession, MentorSlot } from './types';
 
 /** The mentor directory's whole vocabulary, one single-valued filter each.
  *
@@ -224,6 +224,56 @@ export function todayIn(timezone: string, now: Date = new Date()): string {
   return `${get('year')}-${get('month')}-${get('day')}`;
 }
 
+// ---- the mentor's own schedule ------------------------------------------------------
+//
+// Two conventions meet here and they disagree. A stored `weekday` is Go's `time.Weekday`,
+// where 0 is SUNDAY; the calendar draws Monday first. Both are correct in their own place,
+// so neither is "fixed" — they are mapped, once, below. Getting it backwards shifts a
+// mentor's whole week by a day, which reads as though they typed it wrong.
+
+const WEEKDAY_NAMES = [
+  'Sunday',
+  'Monday',
+  'Tuesday',
+  'Wednesday',
+  'Thursday',
+  'Friday',
+  'Saturday',
+];
+
+/** The name of a STORED weekday number (0 = Sunday). */
+export function weekdayLabel(weekday: number): string {
+  return WEEKDAY_NAMES[weekday] ?? '';
+}
+
+/** The stored weekday numbers in DISPLAY order — Monday first, Sunday last. */
+export function weekdayOrder(): number[] {
+  return [1, 2, 3, 4, 5, 6, 0];
+}
+
+/** A schedule split the way a mentor reads it: the recurring week, and the exceptions to
+ *  it. A rule carries a weekday or a date and never both, so the split is total.
+ *
+ *  The week comes back in display order rather than storage order, and the dates in
+ *  chronological order — the endpoint promises neither. */
+export function splitAvailability(rules: MentorAvailabilityRule[]): {
+  weekly: MentorAvailabilityRule[];
+  dated: MentorAvailabilityRule[];
+} {
+  const position = new Map(weekdayOrder().map((weekday, index) => [weekday, index]));
+  const weekly = rules
+    .filter((r) => r.weekday != null)
+    .sort(
+      (a, b) =>
+        (position.get(a.weekday as number) ?? 0) - (position.get(b.weekday as number) ?? 0) ||
+        a.start.localeCompare(b.start),
+    );
+  const dated = rules
+    .filter((r) => r.date != null)
+    .sort((a, b) => (a.date ?? '').localeCompare(b.date ?? ''));
+  return { weekly, dated };
+}
+
 // ---- a booked session ---------------------------------------------------------------
 
 /** An absolute instant read in a named zone: the day it falls on, the wall clock, and the
@@ -267,6 +317,19 @@ export function formatInstantIn(
  *  that is the one moment where the control and the endpoint could otherwise disagree. */
 export function isCancellable(s: MentorSession, now: Date = new Date()): boolean {
   return s.status === 'confirmed' && Date.parse(s.starts_at) > now.getTime();
+}
+
+/** Whether to offer the review form.
+ *
+ *  Only the SEEKER of a completed session may review, and the wire never states which
+ *  party is reading. What it does state is that `seeker_email` reaches the MENTOR alone —
+ *  a seeker does not need their own address back — so its ABSENCE is how the reader is
+ *  identified. Indirect, and therefore tested rather than assumed.
+ *
+ *  `completed` already means "confirmed and ended", so a cancelled session can never be
+ *  completed and the status does not need repeating here. */
+export function canReview(s: MentorSession): boolean {
+  return s.completed && !s.seeker_email;
 }
 
 /** The query string that results from setting some keys and clearing others.

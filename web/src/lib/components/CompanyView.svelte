@@ -7,6 +7,7 @@
   import CompanyAbout from './CompanyAbout.svelte';
   import CompanyFacts from './CompanyFacts.svelte';
   import ReferralBlock from './ReferralBlock.svelte';
+  import MentorBlock from './MentorBlock.svelte';
 
   // Both the company entity and its first page of jobs are server-rendered (route
   // `load`), so the header AND the job rows — with their /jobs/<slug> links — are in
@@ -37,6 +38,7 @@
 {#if referralAvailable}
   <div class="mt-4">
     <ReferralBlock companySlug={slug} companyName={company.name} />
+    <MentorBlock companySlug={slug} companyName={company.name} />
   </div>
 {/if}
 
