@@ -32,7 +32,8 @@
     MENTORSHIP_TABS.map((tab) => ({ ...tab, icon: ICONS[tab.id], href: resolve(tab.href) })),
   );
 
-  // Stated once, for the whole section: every instant on every pane is read in this zone.
+  // For the subtitle only. Each pane resolves the zone itself — it is a pure call, and
+  // threading it down through context would cost more indirection than the repeat.
   const timezone = browserTimezone();
 </script>
 

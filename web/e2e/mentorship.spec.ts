@@ -31,7 +31,8 @@ function sql(statement: string): string {
   ).trim();
 }
 
-/** A fresh account. The address is unique per run: these tests write, and a re-run must
+/** A fresh account, onboarded and inside the beta — all three, which is why the name
+ *  says so. The address is unique per run: these tests write, and a re-run must
  *  not collide with what the last one left.
  *
  *  Registered through the API rather than the form, deliberately. The session cookie lands
@@ -39,7 +40,7 @@ function sql(statement: string): string {
  *  everything after this is a real signed-in browser. The sign-in screen is somebody
  *  else's subject, and driving it here would make this test fail for reasons that have
  *  nothing to do with mentorship. The pr-smoke job in CI mints its user the same way. */
-async function register(context: BrowserContext, email: string) {
+async function registerBetaUser(context: BrowserContext, email: string) {
   const response = await context.request.post('/api/v1/auth/register', {
     data: { email, password: 'e2e-password-not-a-secret' },
   });
@@ -52,7 +53,6 @@ async function register(context: BrowserContext, email: string) {
     `UPDATE users SET onboarding_completed_at = now(), beta_tester = true WHERE email = '${email}'`,
   );
 }
-
 
 /** Open a page and wait until its Svelte handlers are actually attached.
  *
@@ -88,7 +88,7 @@ test('a mentor publishes a profile and somebody else books an hour of it', async
   const mentor = await mentorContext.newPage();
 
   await test.step('the mentor publishes a profile', async () => {
-    await register(mentorContext, mentorEmail);
+    await registerBetaUser(mentorContext, mentorEmail);
     await open(mentor, '/my/mentorship/profile');
 
     await mentor.getByLabel('Your name, as seekers will see it').fill(displayName);
@@ -144,7 +144,7 @@ test('a mentor publishes a profile and somebody else books an hour of it', async
   const seeker = await seekerContext.newPage();
 
   await test.step('a different person books an hour', async () => {
-    await register(seekerContext, seekerEmail);
+    await registerBetaUser(seekerContext, seekerEmail);
     await open(seeker, `/mentors/${slug}`);
 
     // Whichever day the calendar offers, rather than a date computed here: the offerable

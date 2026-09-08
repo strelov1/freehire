@@ -272,6 +272,40 @@ unit tests plus the function they drive; none of it needs Docker or Postgres.
       the form always opens blank. The PUT still replaces rather than duplicates, which is
       what the spec requires; showing the current value needs the read to widen.
 
+- [x] 8.9 Ship the whole surface behind `users.beta_tester`, and record which spec
+      scenarios that DEFERS. Every route the feature owns — the public directory, a
+      mentor's page, and all four cabinet tabs — answers 404 without the flag, and
+      `MentorBlock` renders nothing. The predicate is `web/src/lib/server/mentorshipGate`.
+
+      **Three spec scenarios are therefore not true in a browser today.** They are
+      deferrals, not violations: every one of them still holds at the API layer, which is
+      untouched and public, and they become true again when the flag is dropped. Named
+      here so the change cannot archive with specs describing a marketplace nobody can
+      reach:
+      - `mentor-profile`: "A published mentor profile SHALL show ... to any visitor, signed
+        in or not" — and its "An anonymous visitor reads a published profile" scenario.
+      - `mentor-profile`: "WHEN a visitor opens a vacancy whose `company_slug` has at least
+        one approved, unpaused mentor THEN the page offers a route to that company's
+        mentors".
+      - `mentor-availability`: "The slot listing SHALL be readable without authentication."
+
+      Not a spec requirement — a product decision taken while the marketplace has no
+      supply: mentors are onboarded by hand, and a directory that opens empty reads as a
+      broken feature rather than an unlaunched one. Gating only the CABINET was considered
+      and rejected: it would leave somebody able to book from a public profile and then
+      unable to find the session again or cancel it, and the hour a mentor is holding is
+      real. 404 rather than 403 because a 403 advertises a door.
+
+      **Dropping the beta is three edits**, and the gate's own comment lists them:
+      `mentorshipGate.ts`, `inBeta` in `MentorBlock.svelte`, `betaOnly` in `accountNav.ts`.
+
+- [x] 8.10 A seeker's session list names the mentor by HEADLINE, not by name — a wire
+      gap, recorded rather than worked around, in the same class as 8.8's `job_id`.
+      `bookingResponse` carries `headline` and `mentor_slug` and no display name, so the
+      list reads "Principal Engineer" where `mentor-profile` says "The display name SHALL
+      be a field of the PROFILE". Fixing it means widening the booking read; until then
+      the mentor is identified but not named on that one surface.
+
 ## 9. Verification
 
 - [x] 9.1 `gofmt -l .` prints nothing; `go vet ./...`, `go test ./...`,

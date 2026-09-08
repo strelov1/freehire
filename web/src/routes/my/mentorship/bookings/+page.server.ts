@@ -1,4 +1,4 @@
-import { redirect } from '@sveltejs/kit';
+import { requireMentorProfile } from '$lib/server/mentorshipGate';
 import { serverApi } from '$lib/server/api';
 import type { PageServerLoad } from './$types';
 
@@ -9,8 +9,7 @@ import type { PageServerLoad } from './$types';
 // note. A hidden tab is not a closed door, and this one answered 500 to anybody who
 // walked through it.
 export const load: PageServerLoad = async ({ fetch, request, parent }) => {
-  const { profile } = await parent();
-  if (!profile) redirect(303, '/my/mentorship');
+  requireMentorProfile((await parent()).profile);
 
   const api = serverApi(fetch, request.headers.get('cookie'));
   return { bookings: await api.myMentorBookings() };
