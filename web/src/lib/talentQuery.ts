@@ -39,10 +39,10 @@ export const MAX_FILTER_TERMS = 25;
  *  API would have read, and the visitor sees a wider catalogue than their own chips
  *  claim — with nothing in meta.ignored_params to explain it, because the API never saw
  *  the parameter. */
-export const MAX_YEARS = 60;
+const MAX_YEARS = 60;
 
 /** The widest OFFSET the API's int32 argument can carry. */
-export const MAX_OFFSET = 2_147_483_647;
+const MAX_OFFSET = 2_147_483_647;
 
 /** Read a catalogue query out of URL parameters.
  *

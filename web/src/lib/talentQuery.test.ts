@@ -53,6 +53,11 @@ describe('readTalentQuery', () => {
     expect(read('limit=12abc').limit).toBeUndefined();
     expect(read('offset=-1').offset).toBeUndefined();
     expect(read('min_years=lots').minYears).toBeUndefined();
+    // The ceiling mirrors the Go one exactly. A tighter bound here would drop a filter
+    // the API would have read, and the visitor would see a wider catalogue than their
+    // own chips claim, with nothing in meta.ignored_params to explain it.
+    expect(read('min_years=60').minYears).toBe(60);
+    expect(read('min_years=61').minYears).toBeUndefined();
   });
 });
 
