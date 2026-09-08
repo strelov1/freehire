@@ -121,10 +121,19 @@ Settings first, binary second.
 **A hand patch must send the COMPLETE `sortableAttributes` list.** Meili replaces that
 setting wholesale rather than merging it, so a patch naming only the new attribute silently
 drops `posted_at` — and `posted_at` is what the feed's DEFAULT ordering uses, so the blast
-radius is every caller, not just the one who picked the new sort. There is no operator
-script for this: `EnsureIndex` runs only in tests, and settings otherwise reach production
-when `cmd/reindex` swaps a freshly built index in. Read the setting back afterwards; a 200
-on the patch only means the task was accepted.
+radius is every caller, not just the one who picked the new sort. `EnsureIndex` runs only
+in tests, and settings otherwise reach production when `cmd/reindex` swaps a freshly built
+index in. Read the setting back afterwards; a 200 on the patch only means the task was
+accepted.
+
+**`cmd/search-settings-drift` is the read side of this hazard.** It cannot fix the
+ordering — settings-before-binary is still a human decision, made when a deploy and a
+reindex are sequenced — but it means a gap is found on its own five-minute schedule rather
+than by a caller hitting the 500 first: `Client.SettingsDrift` fetches the live jobs and
+companies indexes' settings and diffs them against `facetSettings()`/`companySettings()`,
+publishing what it finds (`freehire_search_settings_drift_count`) via the node_exporter
+textfile collector. It only reports the hazardous direction — a live index still declaring
+something this binary no longer asks for is never drift, per the note above.
 
 `view_count` (the "Most viewed" ordering) is the easy case of this and worth contrasting
 with the match embedder below: the counter rides the embedded job projection, so it is
