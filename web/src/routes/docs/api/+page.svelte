@@ -32,18 +32,16 @@
   // all. `forceDarkModeState` at mount picks the state that matches paint (the
   // no-FOUC inline script has already set the class by the time this runs);
   // `updateConfiguration` keeps it in sync with every later toggle.
+  const darkModeState = $derived(themeStore.isDark ? 'dark' : 'light');
+
   let instance: ApiReferenceInstance | undefined;
   onMount(async () => {
     const { createApiReference } = await import('@scalar/api-reference');
-    instance = createApiReference('#scalar-app', {
-      ...scalarConfigFromUrl(),
-      forceDarkModeState: themeStore.isDark ? 'dark' : 'light',
-    });
+    instance = createApiReference('#scalar-app', { ...scalarConfigFromUrl(), forceDarkModeState: darkModeState });
   });
 
   $effect(() => {
-    const isDark = themeStore.isDark;
-    instance?.updateConfiguration({ ...instance.getConfiguration(), forceDarkModeState: isDark ? 'dark' : 'light' });
+    instance?.updateConfiguration({ ...instance.getConfiguration(), forceDarkModeState: darkModeState });
   });
 </script>
 

@@ -146,9 +146,6 @@ function requestBodyFor(ep) {
   return { required: required.length > 0, content: { [mediaType]: { schema } } };
 }
 
-// Every documented endpoint has exactly one example response today (no status
-// code is modeled in the source data), so it is always keyed 200 — an SSE
-// stream included, since streaming does not change the HTTP status.
 // An SSE frame opens with either a `data:` line (no named event) or an
 // `event:` line naming the kind before its `data:` line — checking only for
 // a leading `data:` misses the second shape (e.g.
@@ -158,6 +155,9 @@ function isSseExample(responseExample) {
   return /^(data|event):/.test(responseExample.trimStart());
 }
 
+// Every documented endpoint has exactly one example response today (no status
+// code is modeled in the source data), so it is always keyed 200 — an SSE
+// stream included, since streaming does not change the HTTP status.
 function responsesFor(ep) {
   if (!ep.responseExample) return { 200: { description: 'Success' } };
   const isSse = isSseExample(ep.responseExample);
@@ -204,6 +204,14 @@ function operationFor(ep) {
   return op;
 }
 
+// A "Param | Filter | Values" Markdown table — the shape both filter tables
+// below share.
+function filterTableLines(rows) {
+  const lines = ['| Param | Filter | Values |', '| --- | --- | --- |'];
+  for (const f of rows) lines.push(`| \`${f.param}\` | ${f.label} | ${f.values} |`);
+  return lines;
+}
+
 // Overview + Filtering content has no natural per-operation home (it is
 // cross-cutting: the response envelope, the global pagination rule, the error
 // table, the auth model, and the filter vocabulary apply across many
@@ -238,15 +246,11 @@ function buildDescription(overview, filters) {
   out.push('');
   out.push('### Facets');
   out.push('');
-  out.push('| Param | Filter | Values |');
-  out.push('| --- | --- | --- |');
-  for (const f of FILTER_FACETS) out.push(`| \`${f.param}\` | ${f.label} | ${f.values} |`);
+  out.push(...filterTableLines(FILTER_FACETS));
   out.push('');
   out.push('### Numeric & boolean filters');
   out.push('');
-  out.push('| Param | Filter | Values |');
-  out.push('| --- | --- | --- |');
-  for (const f of FILTER_EXTRAS) out.push(`| \`${f.param}\` | ${f.label} | ${f.values} |`);
+  out.push(...filterTableLines(FILTER_EXTRAS));
   out.push('');
   out.push('### Recipes');
   out.push('');
