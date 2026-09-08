@@ -49,10 +49,10 @@ on an entry with no package. Neither half can ship alone.
 
 ## 7. Honour the switches at selection time
 
-- [ ] 7.1 `queries/broadcast.sql` and `queries/onboarding.sql`: move from `COALESCE(ns.enabled, true)` to `COALESCE(ns.news_email_enabled, true)` — this is the split that stops a person losing their nudges when they decline campaigns
-- [ ] 7.2 The digest selection gains `COALESCE(ns.alerts_email_enabled, true)`
-- [ ] 7.3 Leave the six `JOIN ... AND ns.enabled` nudge predicates untouched; add a test pinning that a missing rule row still means no nudges and yes campaigns
-- [ ] 7.4 `make sqlc`, then integration tests over the changed queries
+- [x] 7.1 `queries/broadcast.sql` and `queries/onboarding.sql`: move from `COALESCE(ns.enabled, true)` to `COALESCE(ns.news_email_enabled, true)` — this is the split that stops a person losing their nudges when they decline campaigns
+- [x] 7.2 The digest selection gains `COALESCE(ns.alerts_email_enabled, true)`
+- [x] 7.3 Leave the six `JOIN ... AND ns.enabled` nudge predicates untouched; add a test pinning that a missing rule row still means no nudges and yes campaigns
+- [x] 7.4 `make sqlc`, then integration tests over the changed queries
 
 ## 8. Public endpoints
 

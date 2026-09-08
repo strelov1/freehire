@@ -209,3 +209,24 @@ UPDATE subscription_matches
 SET claimed_at = NULL
 WHERE subscription_id = sqlc.arg(subscription_id)
   AND job_id = ANY(sqlc.arg(job_ids)::bigint[]);
+
+-- name: ListUserEmailSubscriptions :many
+-- The account's email digest subscriptions, named, for the public preference page.
+-- Email only: the page is reached from an email and may only govern email, so
+-- listing a Telegram subscription there would offer a control the page must not
+-- have.
+SELECT s.id, s.active, ss.name
+FROM subscriptions s
+JOIN saved_searches ss ON ss.id = s.saved_search_id
+WHERE s.user_id = $1 AND s.channel = 'email'
+ORDER BY ss.name;
+
+-- name: DeactivateEmailSubscription :execrows
+-- Turn ONE email digest off, scoped to its owner. Deactivate only — it cannot
+-- create a subscription and cannot turn one back on, so a leaked link can silence
+-- somebody but never sign them up for anything. Returns the affected row count; 0
+-- means it was already off, or is not this account's, and the caller treats both
+-- the same rather than revealing which.
+UPDATE subscriptions
+SET active = false
+WHERE id = sqlc.arg(id) AND user_id = sqlc.arg(user_id) AND channel = 'email' AND active;

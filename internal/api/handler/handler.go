@@ -746,6 +746,17 @@ func Register(app *fiber.App, cfg Config) {
 	app.Get("/cv/:token", tracerLimiter, auth.OptionalCookieAuth(a.issuer, queries), tracerH.Redirect)
 
 	api := app.Group("/api/v1")
+
+	// The email preference centre. Unauthenticated on purpose — a person holding one
+	// of our mails must be able to turn it off without an account — so the signed
+	// token in the link stands in for a session, and the routes are throttled like
+	// every other public one. 30/minute is generous for a human tapping switches on
+	// one page and mean for anyone walking the id space; forging a token needs the
+	// signing secret, so the limiter bounds nuisance rather than forgery.
+	emailPrefsH := newEmailPrefsHandlers(emailprefs.NewService(queries, cfg.JWTSecret))
+	emailPrefsH.register(api, ratelimit.Middleware(
+		cfg.Throttler, ratelimit.KeyByIP("email-prefs"), 30, time.Minute))
+
 	// optionalAuth attaches the caller when signed in (cookie or key) but never
 	// rejects, so these public detail reads can overlay the caller's own vote
 	// (my_vote) while staying open to anonymous visitors.

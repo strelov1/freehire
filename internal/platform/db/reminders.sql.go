@@ -107,6 +107,42 @@ func (q *Queries) ClaimDueReminders(ctx context.Context, arg ClaimDueRemindersPa
 	return items, nil
 }
 
+const getEmailPrefs = `-- name: GetEmailPrefs :one
+SELECT u.email,
+       COALESCE(ns.enabled, false)             AS activity_enabled,
+       COALESCE(ns.alerts_email_enabled, true) AS alerts_enabled,
+       COALESCE(ns.news_email_enabled, true)   AS news_enabled
+FROM users u
+LEFT JOIN notification_settings ns ON ns.user_id = u.id
+WHERE u.id = $1
+`
+
+type GetEmailPrefsRow struct {
+	Email           string `json:"email"`
+	ActivityEnabled bool   `json:"activity_enabled"`
+	AlertsEnabled   bool   `json:"alerts_enabled"`
+	NewsEnabled     bool   `json:"news_enabled"`
+}
+
+// Everything the public preference page may show, and nothing else: the address the
+// mail went to and the three group switches.
+//
+// Reads through a LEFT JOIN because most accounts have no rule row. The COALESCE
+// defaults are the same ones the delivery queries apply, so what this page shows is
+// what those queries would do — a page that disagreed with the sender would be worse
+// than no page.
+func (q *Queries) GetEmailPrefs(ctx context.Context, id int64) (GetEmailPrefsRow, error) {
+	row := q.db.QueryRow(ctx, getEmailPrefs, id)
+	var i GetEmailPrefsRow
+	err := row.Scan(
+		&i.Email,
+		&i.ActivityEnabled,
+		&i.AlertsEnabled,
+		&i.NewsEnabled,
+	)
+	return i, err
+}
+
 const getNotificationSettings = `-- name: GetNotificationSettings :one
 SELECT user_id, enabled, channels, updated_at, digest_frequency, digest_time, quiet_hours_start, quiet_hours_end, alerts_email_enabled, news_email_enabled FROM notification_settings WHERE user_id = $1
 `
@@ -293,6 +329,62 @@ WHERE id = $1
 // instead of waiting out the lease.
 func (q *Queries) ReleaseReminderClaim(ctx context.Context, id int64) error {
 	_, err := q.db.Exec(ctx, releaseReminderClaim, id)
+	return err
+}
+
+const setActivityEnabled = `-- name: SetActivityEnabled :exec
+INSERT INTO notification_settings (user_id, enabled, updated_at)
+VALUES ($1, $2, now())
+ON CONFLICT (user_id) DO UPDATE
+  SET enabled    = EXCLUDED.enabled,
+      updated_at = now()
+`
+
+type SetActivityEnabledParams struct {
+	UserID  int64 `json:"user_id"`
+	Enabled bool  `json:"enabled"`
+}
+
+// Turn the activity group on or off for one account. Separate from
+// SetEmailGroupSwitches so the public page's "unsubscribe from everything" can reach
+// it without also being able to turn it ON by accident: the two callers pass
+// different values and neither writes the other's columns.
+func (q *Queries) SetActivityEnabled(ctx context.Context, arg SetActivityEnabledParams) error {
+	_, err := q.db.Exec(ctx, setActivityEnabled, arg.UserID, arg.Enabled)
+	return err
+}
+
+const setEmailGroupSwitches = `-- name: SetEmailGroupSwitches :exec
+INSERT INTO notification_settings (user_id, alerts_email_enabled, news_email_enabled, updated_at)
+VALUES ($1, $2, $3, now())
+ON CONFLICT (user_id) DO UPDATE
+  SET alerts_email_enabled = EXCLUDED.alerts_email_enabled,
+      news_email_enabled   = EXCLUDED.news_email_enabled,
+      updated_at           = now()
+`
+
+type SetEmailGroupSwitchesParams struct {
+	UserID             int64 `json:"user_id"`
+	AlertsEmailEnabled bool  `json:"alerts_email_enabled"`
+	NewsEmailEnabled   bool  `json:"news_email_enabled"`
+}
+
+// Turn the alerts and news groups on or off for one account, without touching
+// anything else in the rule.
+//
+// Deliberately NOT folded into UpsertNotificationSettings. That one is a full
+// replace: it names every column in its DO UPDATE SET, so routing both writers
+// through it would make a save from the authenticated settings page overwrite a
+// choice somebody made from an unsubscribe link, and the reverse. Two writers with
+// two scopes cannot clobber each other.
+//
+// The INSERT branch matters as much as the UPDATE one: most accounts have no
+// notification_settings row at all, because the only thing that used to create it
+// was a page behind the login. `enabled` takes its column default (false) on that
+// path rather than being written here, so declining campaigns from a mail cannot
+// silently opt somebody INTO lifecycle mail they never asked for.
+func (q *Queries) SetEmailGroupSwitches(ctx context.Context, arg SetEmailGroupSwitchesParams) error {
+	_, err := q.db.Exec(ctx, setEmailGroupSwitches, arg.UserID, arg.AlertsEmailEnabled, arg.NewsEmailEnabled)
 	return err
 }
 

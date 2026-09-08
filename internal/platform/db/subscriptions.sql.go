@@ -132,6 +132,30 @@ func (q *Queries) CreateSubscription(ctx context.Context, arg CreateSubscription
 	return i, err
 }
 
+const deactivateEmailSubscription = `-- name: DeactivateEmailSubscription :execrows
+UPDATE subscriptions
+SET active = false
+WHERE id = $1 AND user_id = $2 AND channel = 'email' AND active
+`
+
+type DeactivateEmailSubscriptionParams struct {
+	ID     int64 `json:"id"`
+	UserID int64 `json:"user_id"`
+}
+
+// Turn ONE email digest off, scoped to its owner. Deactivate only — it cannot
+// create a subscription and cannot turn one back on, so a leaked link can silence
+// somebody but never sign them up for anything. Returns the affected row count; 0
+// means it was already off, or is not this account's, and the caller treats both
+// the same rather than revealing which.
+func (q *Queries) DeactivateEmailSubscription(ctx context.Context, arg DeactivateEmailSubscriptionParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deactivateEmailSubscription, arg.ID, arg.UserID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const deleteSubscription = `-- name: DeleteSubscription :execrows
 DELETE FROM subscriptions
 WHERE id = $1 AND user_id = $2
@@ -395,6 +419,44 @@ func (q *Queries) ListSubscriptions(ctx context.Context, userID int64) ([]ListSu
 			&i.SavedSearchName,
 			&i.SavedSearchQuery,
 		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listUserEmailSubscriptions = `-- name: ListUserEmailSubscriptions :many
+SELECT s.id, s.active, ss.name
+FROM subscriptions s
+JOIN saved_searches ss ON ss.id = s.saved_search_id
+WHERE s.user_id = $1 AND s.channel = 'email'
+ORDER BY ss.name
+`
+
+type ListUserEmailSubscriptionsRow struct {
+	ID     int64  `json:"id"`
+	Active bool   `json:"active"`
+	Name   string `json:"name"`
+}
+
+// The account's email digest subscriptions, named, for the public preference page.
+// Email only: the page is reached from an email and may only govern email, so
+// listing a Telegram subscription there would offer a control the page must not
+// have.
+func (q *Queries) ListUserEmailSubscriptions(ctx context.Context, userID int64) ([]ListUserEmailSubscriptionsRow, error) {
+	rows, err := q.db.Query(ctx, listUserEmailSubscriptions, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListUserEmailSubscriptionsRow{}
+	for rows.Next() {
+		var i ListUserEmailSubscriptionsRow
+		if err := rows.Scan(&i.ID, &i.Active, &i.Name); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

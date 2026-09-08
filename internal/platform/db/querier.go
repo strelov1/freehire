@@ -1198,6 +1198,12 @@ type Querier interface {
 	// Link a provider identity to an account (first OAuth sign-in). The composite
 	// primary key rejects a duplicate identity.
 	CreateUserIdentity(ctx context.Context, arg CreateUserIdentityParams) error
+	// Turn ONE email digest off, scoped to its owner. Deactivate only — it cannot
+	// create a subscription and cannot turn one back on, so a leaked link can silence
+	// somebody but never sign them up for anything. Returns the affected row count; 0
+	// means it was already off, or is not this account's, and the caller treats both
+	// the same rather than revealing which.
+	DeactivateEmailSubscription(ctx context.Context, arg DeactivateEmailSubscriptionParams) (int64, error)
 	// Whether the caller already spent points on this (feature, ref). True means the action
 	// is a recompute/resume and must not be charged again (idempotency by ref).
 	DebitExists(ctx context.Context, arg DebitExistsParams) (bool, error)
@@ -2090,6 +2096,14 @@ type Querier interface {
 	// until somebody links it. This is the one lookup that turns the id a caller pressed into
 	// the row every linking path works on, immediately after the import stored it.
 	GetEmailIDByExternalID(ctx context.Context, arg GetEmailIDByExternalIDParams) (int64, error)
+	// Everything the public preference page may show, and nothing else: the address the
+	// mail went to and the three group switches.
+	//
+	// Reads through a LEFT JOIN because most accounts have no rule row. The COALESCE
+	// defaults are the same ones the delivery queries apply, so what this page shows is
+	// what those queries would do — a page that disagreed with the sender would be worse
+	// than no page.
+	GetEmailPrefs(ctx context.Context, id int64) (GetEmailPrefsRow, error)
 	// Aggregate interaction counts for the public engagement endpoint. Aggregate-only:
 	// every column is a scalar total, so no user identifier or row-level field is
 	// selected. saved / applied are user_jobs interaction-row totals across all users.
@@ -3799,6 +3813,11 @@ type Querier interface {
 	// the bucket forever. Empty keys are filtered out so a caller never asks storage to
 	// delete "".
 	ListUserBlobKeys(ctx context.Context, id int64) ([]pgtype.Text, error)
+	// The account's email digest subscriptions, named, for the public preference page.
+	// Email only: the page is reached from an email and may only govern email, so
+	// listing a Telegram subscription there would offer a control the page must not
+	// have.
+	ListUserEmailSubscriptions(ctx context.Context, userID int64) ([]ListUserEmailSubscriptionsRow, error)
 	// Existing thread→application links for the caller, so the matcher can continue a
 	// thread already attached to an application.
 	ListUserEmailThreadLinks(ctx context.Context, userID int64) ([]ListUserEmailThreadLinksRow, error)
@@ -5222,6 +5241,11 @@ type Querier interface {
 	SelectStaleRegisteredCandidates(ctx context.Context, arg SelectStaleRegisteredCandidatesParams) ([]SelectStaleRegisteredCandidatesRow, error)
 	// Same shape and same reasoning as SearchOutboxMetrics.
 	SemanticOutboxMetrics(ctx context.Context) (SemanticOutboxMetricsRow, error)
+	// Turn the activity group on or off for one account. Separate from
+	// SetEmailGroupSwitches so the public page's "unsubscribe from everything" can reach
+	// it without also being able to turn it ON by accident: the two callers pass
+	// different values and neither writes the other's columns.
+	SetActivityEnabled(ctx context.Context, arg SetActivityEnabledParams) error
 	// Name a session from its first user message. Applied only while the label is still unset,
 	// so a long conversation keeps the name it was born with. Owner-scoped for the same
 	// reason TouchAssistantSession is.
@@ -5337,6 +5361,21 @@ type Querier interface {
 	// transaction, so the employer_reply event went with it and the company started reading
 	// as silent in the reply-rate rollup.
 	SetEmailClassification(ctx context.Context, arg SetEmailClassificationParams) error
+	// Turn the alerts and news groups on or off for one account, without touching
+	// anything else in the rule.
+	//
+	// Deliberately NOT folded into UpsertNotificationSettings. That one is a full
+	// replace: it names every column in its DO UPDATE SET, so routing both writers
+	// through it would make a save from the authenticated settings page overwrite a
+	// choice somebody made from an unsubscribe link, and the reverse. Two writers with
+	// two scopes cannot clobber each other.
+	//
+	// The INSERT branch matters as much as the UPDATE one: most accounts have no
+	// notification_settings row at all, because the only thing that used to create it
+	// was a page behind the login. `enabled` takes its column default (false) on that
+	// path rather than being written here, so declining campaigns from a mail cannot
+	// silently opt somebody INTO lifecycle mail they never asked for.
+	SetEmailGroupSwitches(ctx context.Context, arg SetEmailGroupSwitchesParams) error
 	// cmd/backfill-experience-dates' write: the four structured columns, each filled only
 	// when still NULL — the same per-boundary independence FillExperienceEmploymentBlanks
 	// uses, so a boundary an ordinary write path already populated is never clobbered by a
