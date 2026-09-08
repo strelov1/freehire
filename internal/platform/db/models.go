@@ -1152,6 +1152,19 @@ type SocialDigestPost struct {
 	PublishedAt pgtype.Timestamptz `json:"published_at"`
 }
 
+// The expiring credential a social publisher posts with, one row per channel. Written by cmd/linkedin-auth (a person signs in) and cmd/linkedin-token-refresh (a worker renews). Read by cmd/social-digest. Plaintext on purpose: this is our own service credential, of the same sensitivity as the webhook URL in .env, not a user's.
+type SocialToken struct {
+	Channel         string             `json:"channel"`
+	AccessToken     string             `json:"access_token"`
+	AccessExpiresAt pgtype.Timestamptz `json:"access_expires_at"`
+	// NULL is the expected case: LinkedIn issues programmatic refresh tokens only to approved Marketing Developer Platform partners. With no refresh token the renewal worker warns ahead of expiry instead of renewing, and a person re-runs the sign-in.
+	RefreshToken     pgtype.Text        `json:"refresh_token"`
+	RefreshExpiresAt pgtype.Timestamptz `json:"refresh_expires_at"`
+	Scope            string             `json:"scope"`
+	ObtainedAt       pgtype.Timestamptz `json:"obtained_at"`
+	RefreshedAt      pgtype.Timestamptz `json:"refreshed_at"`
+}
+
 type Subscription struct {
 	ID               int64              `json:"id"`
 	UserID           int64              `json:"user_id"`
