@@ -248,9 +248,14 @@ func (a *Analyzer) streamStage(ctx context.Context, stage int, system, user stri
 	seed.Set(dst)
 
 	var parseErr error
+	// The audit is allowed longer than the stages a reader is blocked on — see
+	// timeoutForStage. The clone is three fields; it costs nothing beside the call it is
+	// about to make, and it leaves a.client's own bound alone for the next stage.
+	client := a.client.WithTimeout(timeoutForStage(stage, a.client.Timeout()))
+
 	attempts := attemptsForStage(stage)
 	for attempt := 1; attempt <= attempts; attempt++ {
-		raw, err := a.client.GenerateJSONStream(ctx, system, user, func(t string) {
+		raw, err := client.GenerateJSONStream(ctx, system, user, func(t string) {
 			emit(Event{Kind: EventThinking, Stage: stage, Thinking: t})
 		}, stageGenOptions(stage)...)
 		if err != nil {

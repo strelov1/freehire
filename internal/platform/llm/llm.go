@@ -83,6 +83,17 @@ func (c *Client) ModelID() string {
 	return c.modelID
 }
 
+// Timeout reports the per-call bound this client was built with, so a caller that varies it
+// per call site can derive the new one FROM the configured value rather than restating it.
+// A second copy of the number in a second package is a second answer, free to drift from the
+// one the entrypoint actually chose. Zero on a nil client.
+func (c *Client) Timeout() time.Duration {
+	if c == nil {
+		return 0
+	}
+	return c.timeout
+}
+
 // WithTimeout returns a shallow copy of the client with a different per-call timeout,
 // so a slow use case (a reasoning-heavy multi-stage analysis) can allow longer calls
 // without raising the shared client's default for everyone. Nil-safe.
