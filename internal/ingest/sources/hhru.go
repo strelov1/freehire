@@ -24,12 +24,25 @@ import (
 // Caveat/seam: HH-Lux-InitialState is a frontend detail (the client-hydration state), not a
 // documented API, so a hh.ru frontend change can move the vacancy list within it. The public
 // render must carry the data somewhere; today it is this template.
+//
+// Listing and detail are two separate transports (http, detailHTTP) because they don't need the
+// same one: hh.ru's detail pages sit behind DDoS-Guard in a way the listing page does not (see
+// firecrawltier.go's hh entry). With FIRECRAWL_API_KEY configured, ApplyFirecrawlEgress rewires
+// detail onto Firecrawl while listing stays on a plain, unproxied client; without a key (e.g.
+// local/dev), NewHH gives both fields the same caller-supplied client, exactly as before this
+// split existed.
 type hh struct {
-	http HTMLGetter
+	http       HTMLGetter // listing (search) pages
+	detailHTTP HTMLGetter // per-vacancy detail pages
 }
 
-// NewHH builds the hh.ru adapter over the shared HTML-getter client.
-func NewHH(c HTMLGetter) Source { return hh{http: c} }
+// NewHH builds the hh.ru adapter over one shared HTML-getter client for both listing and detail.
+func NewHH(c HTMLGetter) Source { return NewHHWithDetailGetter(c, c) }
+
+// NewHHWithDetailGetter builds the hh.ru adapter with listing and detail on separate transports.
+func NewHHWithDetailGetter(listing, detail HTMLGetter) Source {
+	return hh{http: listing, detailHTTP: detail}
+}
 
 func (hh) Provider() string { return "hh" }
 
@@ -290,7 +303,7 @@ func hhEmploymentType(t string) string {
 // detail fetches the vacancy page and returns its sanitized JobPosting description, ok=false on a
 // failed request or a page with no JobPosting ld+json so the caller falls back to the list-only job.
 func (s hh) detail(ctx context.Context, vacancyURL string) (string, bool) {
-	root, err := s.http.GetHTML(ctx, vacancyURL)
+	root, err := s.detailHTTP.GetHTML(ctx, vacancyURL)
 	if err != nil {
 		return "", false
 	}
