@@ -22,7 +22,7 @@ const (
 var (
 	// ErrNotAuthenticated → 401. Slots are public; booking one is not.
 	ErrNotAuthenticated = errors.New("mentorship: sign in to book a session")
-	// ErrCannotBookYourself → 400.
+	// ErrCannotBookYourself → 422.
 	ErrCannotBookYourself = errors.New("mentorship: you cannot book your own session")
 	// ErrSlotUnavailable → 409. THE one answer for every ordinary way a booking fails to
 	// land: the hour was taken, the schedule changed, the notice period elapsed, the
@@ -37,7 +37,7 @@ var (
 	ErrBookingNotCancellable = errors.New("mentorship: this session can no longer be cancelled")
 	// ErrSessionNotCompleted → 409. A review of a session that has not happened.
 	ErrSessionNotCompleted = errors.New("mentorship: this session has not taken place")
-	// ErrInvalidReview → 400.
+	// ErrInvalidReview → 422.
 	ErrInvalidReview = errors.New("mentorship: invalid review")
 )
 

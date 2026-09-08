@@ -9,17 +9,23 @@ import (
 // The sentinels the schedule value types raise. Each carries its HTTP mapping here, in
 // the manner of internal/engage/referral: the handler's error switch is the only place
 // that maps them, and a sentinel without a mapping is a sentinel nobody can answer.
+//
+// 422 rather than 400 throughout, and the distinction is not pedantry: 400 is a request
+// the server could not read, and every one of these arrived on a body that parsed
+// perfectly. What is wrong is what the VALUES say — a weekday of 9, a span that runs
+// backwards — and a client told "bad request" looks for a malformed payload it will not
+// find.
 var (
-	// ErrInvalidTimeOfDay → 400. A stored availability time outside 00:00–24:00.
+	// ErrInvalidTimeOfDay → 422. A stored availability time outside 00:00–24:00.
 	ErrInvalidTimeOfDay = errors.New("mentorship: not a time of day")
-	// ErrInvalidDate → 400. A calendar date that does not exist.
+	// ErrInvalidDate → 422. A calendar date that does not exist.
 	ErrInvalidDate = errors.New("mentorship: not a calendar date")
-	// ErrInvalidWeekday → 400. A weekday outside Sunday..Saturday.
+	// ErrInvalidWeekday → 422. A weekday outside Sunday..Saturday.
 	ErrInvalidWeekday = errors.New("mentorship: not a weekday")
-	// ErrInvalidSpan → 400. An availability span that runs backwards, or an empty one
+	// ErrInvalidSpan → 422. An availability span that runs backwards, or an empty one
 	// where emptiness means nothing (a weekly rule).
 	ErrInvalidSpan = errors.New("mentorship: not an availability span")
-	// ErrInvalidSessionParams → 400. Session figures that cannot yield a slot.
+	// ErrInvalidSessionParams → 422. Session figures that cannot yield a slot.
 	ErrInvalidSessionParams = errors.New("mentorship: session parameters cannot yield a slot")
 )
 

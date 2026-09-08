@@ -106,8 +106,11 @@ LIMIT 500;
 -- which keeps one query instead of a builder; the endpoint reports any parameter it did
 -- NOT read in meta.ignored_params, so a filter that vanishes from this list must vanish
 -- from that vocabulary too.
--- Keyset pagination on (created_at, id) rather than OFFSET: the directory is browsed and
--- an OFFSET page silently repeats or skips a row when a profile is approved mid-browse.
+-- One page, no cursor. A keyset predicate was written here and no caller could reach it —
+-- DirectoryFilter carries no cursor and the handler emits none — so it was an unreachable
+-- branch pretending to be a feature. When the directory needs a second page it comes back
+-- as keyset on (created_at, id) rather than OFFSET, because an OFFSET page silently
+-- repeats or skips a row when a profile is approved mid-browse.
 SELECT sqlc.embed(m), c.name AS company_name,
     COALESCE(r.rating_count, 0)::bigint AS rating_count,
     COALESCE(r.rating_avg, 0)::numeric  AS rating_avg
@@ -121,10 +124,6 @@ WHERE m.status = 'approved' AND NOT m.paused
   AND (sqlc.narg(company_slug)::text IS NULL OR m.company_slug = sqlc.narg(company_slug)::text)
   AND (sqlc.narg(topic)::text IS NULL OR sqlc.narg(topic)::text = ANY (m.topics))
   AND (sqlc.narg(language)::text IS NULL OR sqlc.narg(language)::text = ANY (m.languages))
-  AND (
-      sqlc.narg(before_created_at)::timestamptz IS NULL
-      OR (m.created_at, m.id) < (sqlc.narg(before_created_at)::timestamptz, sqlc.narg(before_id)::bigint)
-  )
 ORDER BY m.created_at DESC, m.id DESC
 LIMIT sqlc.arg(row_limit);
 

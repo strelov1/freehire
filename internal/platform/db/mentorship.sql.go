@@ -1043,21 +1043,15 @@ WHERE m.status = 'approved' AND NOT m.paused
   AND ($1::text IS NULL OR m.company_slug = $1::text)
   AND ($2::text IS NULL OR $2::text = ANY (m.topics))
   AND ($3::text IS NULL OR $3::text = ANY (m.languages))
-  AND (
-      $4::timestamptz IS NULL
-      OR (m.created_at, m.id) < ($4::timestamptz, $5::bigint)
-  )
 ORDER BY m.created_at DESC, m.id DESC
-LIMIT $6
+LIMIT $4
 `
 
 type ListPublishedMentorsParams struct {
-	CompanySlug     pgtype.Text        `json:"company_slug"`
-	Topic           pgtype.Text        `json:"topic"`
-	Language        pgtype.Text        `json:"language"`
-	BeforeCreatedAt pgtype.Timestamptz `json:"before_created_at"`
-	BeforeID        pgtype.Int8        `json:"before_id"`
-	RowLimit        int32              `json:"row_limit"`
+	CompanySlug pgtype.Text `json:"company_slug"`
+	Topic       pgtype.Text `json:"topic"`
+	Language    pgtype.Text `json:"language"`
+	RowLimit    int32       `json:"row_limit"`
 }
 
 type ListPublishedMentorsRow struct {
@@ -1071,15 +1065,16 @@ type ListPublishedMentorsRow struct {
 // which keeps one query instead of a builder; the endpoint reports any parameter it did
 // NOT read in meta.ignored_params, so a filter that vanishes from this list must vanish
 // from that vocabulary too.
-// Keyset pagination on (created_at, id) rather than OFFSET: the directory is browsed and
-// an OFFSET page silently repeats or skips a row when a profile is approved mid-browse.
+// One page, no cursor. A keyset predicate was written here and no caller could reach it —
+// DirectoryFilter carries no cursor and the handler emits none — so it was an unreachable
+// branch pretending to be a feature. When the directory needs a second page it comes back
+// as keyset on (created_at, id) rather than OFFSET, because an OFFSET page silently
+// repeats or skips a row when a profile is approved mid-browse.
 func (q *Queries) ListPublishedMentors(ctx context.Context, arg ListPublishedMentorsParams) ([]ListPublishedMentorsRow, error) {
 	rows, err := q.db.Query(ctx, listPublishedMentors,
 		arg.CompanySlug,
 		arg.Topic,
 		arg.Language,
-		arg.BeforeCreatedAt,
-		arg.BeforeID,
 		arg.RowLimit,
 	)
 	if err != nil {

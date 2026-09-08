@@ -199,8 +199,11 @@ unit tests plus the function they drive; none of it needs Docker or Postgres.
       `go vet -tags=integration ./...` all pass
 - [ ] 9.2 `go test -tags=integration ./...` passes with Docker available
 - [ ] 9.3 `pnpm --dir web lint` and the web test suite pass; `pnpm check:links` passes
-- [ ] 9.4 Write `internal/engage/mentorship/AGENTS.md` covering what is always true here:
+- [x] 9.4 Write `internal/engage/mentorship/AGENTS.md` covering what is always true here:
       the empty-override trick, the zone-resolution order, the `EXCLUDE` constraint and
       why the application still re-derives, the transactional-notification boundary,
-      and the two named-but-unbuilt seams (money, Google sync)
+      and the two named-but-unbuilt seams (money, Google sync). Linked from `CLAUDE.md`'s
+      module table and `internal/engage/AGENTS.md`; `deploy/AGENTS.md`'s "five workers
+      that send mail" and "billing-sync is the first addition" both said something now
+      false and are corrected
 - [ ] 9.5 Re-check the migration number against `main` after the final rebase

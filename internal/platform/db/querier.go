@@ -3435,8 +3435,11 @@ type Querier interface {
 	// which keeps one query instead of a builder; the endpoint reports any parameter it did
 	// NOT read in meta.ignored_params, so a filter that vanishes from this list must vanish
 	// from that vocabulary too.
-	// Keyset pagination on (created_at, id) rather than OFFSET: the directory is browsed and
-	// an OFFSET page silently repeats or skips a row when a profile is approved mid-browse.
+	// One page, no cursor. A keyset predicate was written here and no caller could reach it —
+	// DirectoryFilter carries no cursor and the handler emits none — so it was an unreachable
+	// branch pretending to be a feature. When the directory needs a second page it comes back
+	// as keyset on (created_at, id) rather than OFFSET, because an OFFSET page silently
+	// repeats or skips a row when a profile is approved mid-browse.
 	ListPublishedMentors(ctx context.Context, arg ListPublishedMentorsParams) ([]ListPublishedMentorsRow, error)
 	// The caller's own registered devices, for a test send or a future delivery.
 	ListPushTokensForUser(ctx context.Context, userID int64) ([]UserPushToken, error)

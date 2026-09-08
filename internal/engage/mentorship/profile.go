@@ -28,7 +28,7 @@ const (
 // The sentinels the profile use cases raise, each carrying the HTTP status the handler's
 // one error switch maps it to — the convention internal/engage/referral established.
 var (
-	// ErrInvalidProfile → 400. A submission that could never yield a working profile.
+	// ErrInvalidProfile → 422. A submission that could never yield a working profile.
 	ErrInvalidProfile = errors.New("mentorship: invalid profile")
 	// ErrProfileNotFound → 404. No profile, or one belonging to somebody else — the two
 	// are deliberately the same answer, so an endpoint never confirms that a profile
