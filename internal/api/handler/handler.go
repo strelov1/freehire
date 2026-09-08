@@ -666,6 +666,12 @@ func Register(app *fiber.App, cfg Config) {
 	// instance for every sender the API composes, so the token in a footer is the
 	// same shape wherever it was minted.
 	mailLinks := emailprefs.NewLinks(cfg.JWTSecret, cfg.FrontendOrigin)
+	// mailPrefs both serves the preference routes and answers "has this account
+	// turned that group off" for the two senders with no selection query to gate —
+	// the report notice and the referral ping, which go out on a request path. One
+	// instance, so the switch the footer offers and the switch the sender consults
+	// are the same switch.
+	mailPrefs := emailprefs.NewService(queries, cfg.JWTSecret)
 	// The same client, held as its CONCRETE type as well, because mentorship is
 	// composed separately below. A typed nil must not hide behind a non-nil interface
 	// here either, which is why this is its own pointer rather than a type assertion
@@ -687,7 +693,7 @@ func Register(app *fiber.App, cfg Config) {
 			// And it tells a reporter what a moderator decided about their report.
 			// Without it the queue still decides reports — each decision simply
 			// reports that nobody was notified.
-			reportsH.report.WithNotifier(report.NewMailNotifier(ec, cfg.NotifyEmailFrom, cfg.FrontendOrigin, mailLinks))
+			reportsH.report.WithNotifier(report.NewMailNotifier(ec, cfg.NotifyEmailFrom, cfg.FrontendOrigin, mailLinks, mailPrefs))
 		}
 	} else {
 		log.Print("accounts: AWS_REGION/NOTIFY_EMAIL_FROM unset — email verification and password reset are unavailable")
@@ -696,7 +702,7 @@ func Register(app *fiber.App, cfg Config) {
 	if telegramH.telegramBot != nil {
 		referralTelegram = telegramH.telegramBot
 	}
-	referralPinger := referral.NewChannelPinger(referralEmail, cfg.NotifyEmailFrom, referralTelegram, cfg.FrontendOrigin, mailLinks)
+	referralPinger := referral.NewChannelPinger(referralEmail, cfg.NotifyEmailFrom, referralTelegram, cfg.FrontendOrigin, mailLinks, mailPrefs)
 	referralCabinetURL := strings.TrimRight(cfg.FrontendOrigin, "/") + "/my/referrals?tab=incoming"
 	referralSvc := referral.New(referral.NewQueriesRepository(queries), referralPinger, cfg.Blob,
 		referral.Config{CabinetURL: referralCabinetURL})
@@ -763,19 +769,6 @@ func Register(app *fiber.App, cfg Config) {
 	// builder, the inbox, subscriptions — where a leaked API key must not act.
 	cookieAuth := auth.RequireAuth(a.issuer, a.queries)
 
-	// The email preference centre. Its three public routes are unauthenticated on
-	// purpose — a person holding one of our mails must be able to turn it off
-	// without an account — so the signed token in the link stands in for a session,
-	// and they are throttled like every other public route. 30/minute is generous
-	// for somebody tapping switches on one page and mean for anyone walking the id
-	// space; forging a token needs the signing secret, so the limiter bounds
-	// nuisance rather than forgery. The two /me routes beside them are the same
-	// switches for a caller the cookie already identified.
-	emailPrefsH := newEmailPrefsHandlers(emailprefs.NewService(queries, cfg.JWTSecret))
-	emailPrefsH.register(api,
-		ratelimit.Middleware(cfg.Throttler, ratelimit.KeyByIP("email-prefs"), 30, time.Minute),
-		cookieAuth)
-
 	requireModerator := auth.RequireRole(a.queries, "moderator")
 	mw := middleware{
 		optional:       optionalAuth,
@@ -788,6 +781,13 @@ func Register(app *fiber.App, cfg Config) {
 		outboundFetch:  contributionLimiter(cfg.Throttler),
 		throttler:      cfg.Throttler,
 	}
+
+	// The email preference centre. Its three public routes are unauthenticated on
+	// purpose — a person holding one of our mails must be able to turn it off
+	// without an account — so the signed token in the link stands in for a session.
+	// The two /me routes beside them are the same switches for a caller the cookie
+	// already identified.
+	newEmailPrefsHandlers(mailPrefs).register(api, mw)
 
 	// Job search surfaces first: their literal /jobs/* routes must precede the
 	// /jobs/:slug param route so they are not read as slugs (see searchHandlers).

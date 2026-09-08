@@ -40,12 +40,24 @@ var _ Pinger = (*ChannelPinger)(nil)
 // deliberately minimal — "you have a new referral request" plus a link to the cabinet inbox,
 // where the seeker's contact and CV live behind authorization — so nothing leaks over the
 // channel itself.
+// Silencer answers whether an account has turned a group of mail off.
+// *emailprefs.Service satisfies it.
+//
+// A referral ping has no selection query to gate — it is sent on the request path of
+// the person asking — so the check is here rather than in SQL. It governs the EMAIL
+// channel only: the Telegram ping is something the referrer connected themselves and
+// turns off where they connected it.
+type Silencer interface {
+	Silenced(ctx context.Context, userID int64, g emailprefs.Group) bool
+}
+
 type ChannelPinger struct {
-	email  EmailSender
-	from   string
-	tg     TelegramSender
-	layout *mailtpl.Layout
-	links  *emailprefs.Links
+	email    EmailSender
+	from     string
+	tg       TelegramSender
+	layout   *mailtpl.Layout
+	links    *emailprefs.Links
+	silenced Silencer
 }
 
 // NewChannelPinger builds a ChannelPinger. A nil email sender disables the email channel
@@ -53,8 +65,15 @@ type ChannelPinger struct {
 // enabled channel still sees the request in-cabinet. baseURL is the site origin the mail's
 // branded shell links back to — the cabinet link itself arrives per-call, because it points
 // at one specific request.
-func NewChannelPinger(email EmailSender, from string, tg TelegramSender, baseURL string, links *emailprefs.Links) *ChannelPinger {
-	return &ChannelPinger{email: email, from: from, tg: tg, layout: mailtpl.New(baseURL), links: links}
+func NewChannelPinger(email EmailSender, from string, tg TelegramSender, baseURL string, links *emailprefs.Links, silenced Silencer) *ChannelPinger {
+	return &ChannelPinger{
+		email:    email,
+		from:     from,
+		tg:       tg,
+		layout:   mailtpl.New(baseURL),
+		links:    links,
+		silenced: silenced,
+	}
 }
 
 // PingReferrer sends the notice over every enabled channel the recipient can receive, joining
@@ -63,7 +82,11 @@ func (p *ChannelPinger) PingReferrer(ctx context.Context, r Recipient, cabinetUR
 	link := html.EscapeString(cabinetURL)
 	var errs []error
 
-	if p.email != nil && r.Email != "" {
+	// Honour the switch this mail's own footer offers. Email only — the Telegram
+	// branch below is a channel the referrer connected themselves.
+	emailSilenced := p.silenced != nil && p.silenced.Silenced(ctx, r.UserID, emailprefs.GroupActivity)
+
+	if p.email != nil && r.Email != "" && !emailSilenced {
 		var content bytes.Buffer
 		// Trusted template, data escaped in context: a failure here is a template bug,
 		// caught by the golden previews.

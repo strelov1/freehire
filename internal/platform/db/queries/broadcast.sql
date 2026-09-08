@@ -18,7 +18,7 @@
 -- declining letters from the founder also stopped somebody's application
 -- follow-up reminders, and an account with no settings row could not decline at
 -- all, because the only thing that creates the row is a page behind the login.
--- Migration 0152 split the two.
+-- Migration 0153 split the two.
 SELECT u.id, u.email
 FROM users u
 LEFT JOIN notification_settings ns ON ns.user_id = u.id

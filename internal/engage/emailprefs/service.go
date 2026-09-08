@@ -123,6 +123,37 @@ func (s *Service) SaveFor(ctx context.Context, userID int64, in Update) error {
 	return s.apply(ctx, userID, in)
 }
 
+// Silenced reports whether this account has turned g off.
+//
+// It exists for the two mails that have no selection query to gate: a report
+// outcome and a referral ping are sent straight from a request path, so there is no
+// "who do we mail" list for the predicate to live in. Everything queue-driven is
+// gated in SQL instead, which is the better place — a delivery path added later
+// inherits it rather than having to remember.
+//
+// A read failure returns false, so a database hiccup delays nobody's mail. That is
+// the right direction to fail for a notice somebody is waiting on, and it is
+// bounded: the worst case is one mail somebody had asked us not to send, which the
+// link in its own footer then stops for good.
+func (s *Service) Silenced(ctx context.Context, userID int64, g Group) bool {
+	// The row only, not LoadFor: this answers one boolean and has no use for the
+	// account's saved searches.
+	row, err := s.store.GetEmailPrefs(ctx, userID)
+	if err != nil {
+		return false
+	}
+	switch g {
+	case GroupAlerts:
+		return !row.AlertsEnabled
+	case GroupActivity:
+		return !row.ActivityEnabled
+	case GroupNews:
+		return !row.NewsEnabled
+	default:
+		return false
+	}
+}
+
 func (s *Service) withSearches(ctx context.Context, userID int64, prefs Prefs) (Prefs, error) {
 	rows, err := s.store.ListUserEmailSubscriptions(ctx, userID)
 	if err != nil {

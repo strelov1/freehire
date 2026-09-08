@@ -345,7 +345,7 @@ type ListActiveSubscriptionsRow struct {
 // LEFT JOIN with COALESCE(..., true): a missing notification_settings row means the
 // account never opened the settings page, which is not the same as opting out. Same
 // reading as broadcast.sql and onboarding.sql, and the opposite of nudges.sql's
-// inner join — see migration 0152 for why one column could not answer both.
+// inner join — see migration 0153 for why one column could not answer both.
 func (q *Queries) ListActiveSubscriptions(ctx context.Context) ([]ListActiveSubscriptionsRow, error) {
 	rows, err := q.db.Query(ctx, listActiveSubscriptions)
 	if err != nil {

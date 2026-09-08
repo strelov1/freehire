@@ -33,24 +33,38 @@ var _ ReporterNotifier = (*MailNotifier)(nil)
 // three outcomes a reporter can receive — the job was removed, the report was acted on with
 // the listing left up, or nothing changed — because "we reviewed it" alone tells them
 // nothing they could not have assumed from silence.
+// Silencer answers whether an account has turned a group of mail off.
+// *emailprefs.Service satisfies it.
+//
+// This notice has no selection query to gate — a moderator decides, and the mail
+// goes out on that request path — so the check is here rather than in SQL, where
+// every queue-driven sender's gate lives. Without it the footer would advertise an
+// unsubscribe control this mail does not honour, which is worse than not offering
+// one.
+type Silencer interface {
+	Silenced(ctx context.Context, userID int64, g emailprefs.Group) bool
+}
+
 type MailNotifier struct {
-	sender  EmailSender
-	from    string
-	baseURL string
-	layout  *mailtpl.Layout
-	links   *emailprefs.Links
+	sender   EmailSender
+	from     string
+	baseURL  string
+	layout   *mailtpl.Layout
+	links    *emailprefs.Links
+	silenced Silencer
 }
 
 // NewMailNotifier builds a MailNotifier sending from `from` through sender. baseURL is the
 // site origin the reported job is linked under; links signs the unsubscribe URL.
-func NewMailNotifier(sender EmailSender, from, baseURL string, links *emailprefs.Links) *MailNotifier {
+func NewMailNotifier(sender EmailSender, from, baseURL string, links *emailprefs.Links, silenced Silencer) *MailNotifier {
 	base := strings.TrimRight(baseURL, "/")
 	return &MailNotifier{
-		sender:  sender,
-		from:    senderFrom(from),
-		baseURL: base,
-		layout:  mailtpl.New(base),
-		links:   links,
+		sender:   sender,
+		from:     senderFrom(from),
+		baseURL:  base,
+		layout:   mailtpl.New(base),
+		links:    links,
+		silenced: silenced,
 	}
 }
 
@@ -94,6 +108,12 @@ var noticeHTML = template.Must(mailtpl.Partials().New("notice").Parse(`
 // NotifyDecision renders the outcome and sends it. A transport failure is returned as-is:
 // this type does not decide what a failed notice means, the use case does.
 func (m *MailNotifier) NotifyDecision(ctx context.Context, d Decision) error {
+	// Honour the switch this mail's own footer offers. Returning nil rather than an
+	// error: not sending because somebody asked us not to is a success, and the use
+	// case above records "notified: false", which is the truth.
+	if m.silenced != nil && m.silenced.Silenced(ctx, d.UserID, emailprefs.GroupActivity) {
+		return nil
+	}
 	subject, heading, mail := m.compose(d)
 
 	var content bytes.Buffer

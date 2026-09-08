@@ -51,7 +51,7 @@ WHERE id = $1 AND user_id = $2;
 -- LEFT JOIN with COALESCE(..., true): a missing notification_settings row means the
 -- account never opened the settings page, which is not the same as opting out. Same
 -- reading as broadcast.sql and onboarding.sql, and the opposite of nudges.sql's
--- inner join — see migration 0152 for why one column could not answer both.
+-- inner join — see migration 0153 for why one column could not answer both.
 SELECT s.id, s.user_id, s.channel, s.destination, s.start_at, ss.query
 FROM subscriptions s
 JOIN saved_searches ss ON ss.id = s.saved_search_id

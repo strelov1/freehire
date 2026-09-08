@@ -60,7 +60,7 @@ func TestReferralEndpoints(t *testing.T) {
 		// A nil blob store stands in for a deployment without object storage: withdrawing
 		// then has no proof object to erase, which is the same path these cases exercise.
 		referral: referral.New(referral.NewQueriesRepository(queries),
-			referral.NewChannelPinger(nil, "", nil, "", emailprefs.NewLinks("referral-test-secret-padded-to-32b", "")), nil, referral.Config{}),
+			referral.NewChannelPinger(nil, "", nil, "", emailprefs.NewLinks("referral-test-secret-padded-to-32b", ""), nil), nil, referral.Config{}),
 	}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	requireMod := auth.RequireRole(queries, "moderator")

@@ -1,6 +1,6 @@
 //go:build integration
 
-// Integration tests for the three email-group gates that migration 0152 split apart.
+// Integration tests for the three email-group gates that migration 0153 split apart.
 // They are SQL semantics — three predicates that read the same table two opposite
 // ways on purpose — so nothing short of a real Postgres can check them. Run with:
 // go test -tags=integration ./internal/platform/db/
@@ -14,7 +14,7 @@
 //	news      news_email_enabled    COALESCE(..., true)   DO send
 //	alerts    alerts_email_enabled  COALESCE(..., true)   DO send
 //
-// Before 0152 the first two shared one column, so declining campaigns also stopped
+// Before 0153 the first two shared one column, so declining campaigns also stopped
 // somebody's application reminders — and an account with no row could not decline
 // campaigns at all, because the only thing that creates the row is a page behind the
 // login. That is what a subscriber wrote in about.
@@ -94,7 +94,7 @@ func TestNewsGate_IsIndependentOfTheActivityFlag(t *testing.T) {
 		t.Error("an account that declined campaigns still received one")
 	}
 	if !got[declinedActivity] {
-		t.Error("declining lifecycle mail stopped a campaign; that is the coupling 0152 removed")
+		t.Error("declining lifecycle mail stopped a campaign; that is the coupling 0153 removed")
 	}
 }
 
@@ -135,7 +135,7 @@ func TestActivityGate_StillOptsInByRowAndIgnoresTheNewsSwitch(t *testing.T) {
 		t.Error("an account with no settings row received lifecycle mail; that gate is opt-in and must stay so")
 	}
 	if !got[newsOffOnly] {
-		t.Error("declining campaigns silenced lifecycle mail; that is the coupling 0152 removed, in the other direction")
+		t.Error("declining campaigns silenced lifecycle mail; that is the coupling 0153 removed, in the other direction")
 	}
 	if !got[activityOn] {
 		t.Error("an account that enabled notifications did not pass the gate")

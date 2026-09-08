@@ -40,15 +40,6 @@ func NewLinks(secret, origin string) *Links {
 	return l
 }
 
-// For returns the preference URL for one recipient and one group of mail. It fails
-// for a group nobody may turn off, which is what stops an essential mail acquiring a
-// link it cannot honour.
-//
-// The token rides in the query because a link in an email has nowhere else to carry
-// it. That is a real cost — nginx logs query strings, so the token reaches the
-// access log — and the mitigations live with the endpoint and the page: the write
-// calls take it in a body, and the page strips it from the address bar after the
-// first read.
 // TextFooter is the unsubscribe line a plain-text body ends with.
 //
 // One author, because it had reached seven hand-written copies across the senders
@@ -60,6 +51,15 @@ func TextFooter(unsubscribeURL string) string {
 	return "\nUnsubscribe: " + unsubscribeURL + "\n"
 }
 
+// For returns the preference URL for one recipient and one group of mail. It fails
+// for a group nobody may turn off, which is what stops an essential mail acquiring a
+// link it cannot honour.
+//
+// The token rides in the query because a link in an email has nowhere else to carry
+// it. That is a real cost — nginx logs query strings, so the token reaches the
+// access log — and the mitigations live with the endpoint and the page: the write
+// calls take it in a body, and the page strips it from the address bar after the
+// first read.
 func (l *Links) For(userID int64, g Group) (string, error) {
 	if l.signer == nil {
 		return "", fmt.Errorf("%w: no usable signing secret (JWT_SECRET must be at least %d bytes)", ErrCannotMint, minSecretLen)

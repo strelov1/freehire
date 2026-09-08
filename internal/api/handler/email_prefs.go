@@ -2,9 +2,12 @@ package handler
 
 import (
 	"errors"
+	"net/url"
+	"time"
 
 	"github.com/gofiber/fiber/v2"
 
+	"github.com/strelov1/freehire/internal/api/ratelimit"
 	"github.com/strelov1/freehire/internal/engage/emailprefs"
 )
 
@@ -42,13 +45,20 @@ func newEmailPrefsHandlers(svc *emailprefs.Service) *emailPrefsHandlers {
 // would. They share the service rather than the endpoint because only the way the
 // user is established differs — and two views that disagreed about one boolean would
 // read as the product losing a setting.
-func (h *emailPrefsHandlers) register(api fiber.Router, limiter fiber.Handler, cookie fiber.Handler) {
+//
+// The limiter is built here from the shared throttler, the way every other feature
+// handler that needs one does it. 30/minute is generous for somebody tapping
+// switches on one page and mean for anyone walking the id space; forging a token
+// needs the signing secret, so this bounds nuisance rather than forgery.
+func (h *emailPrefsHandlers) register(api fiber.Router, mw middleware) {
+	limiter := ratelimit.Middleware(mw.throttler, ratelimit.KeyByIP("email-prefs"), 30, time.Minute)
+
 	api.Get("/email-prefs", limiter, h.Get)
 	api.Patch("/email-prefs", limiter, h.Patch)
 	api.Post("/email-prefs/one-click", limiter, h.OneClick)
 
-	api.Get("/me/email-groups", cookie, h.GetMine)
-	api.Patch("/me/email-groups", cookie, h.PatchMine)
+	api.Get("/me/email-groups", mw.cookie, h.GetMine)
+	api.Patch("/me/email-groups", mw.cookie, h.PatchMine)
 }
 
 // emailPrefsResponse is the wire shape of the page's state. It carries the address
@@ -132,15 +142,19 @@ func applyPatch(
 // screen. It turns off only the group the token names, and answers 200 on a repeat
 // so a retrying client reports success rather than an error.
 func (h *emailPrefsHandlers) OneClick(c *fiber.Ctx) error {
-	group, err := h.prefs.OneClick(c.Context(), c.Query("t"))
+	token := c.Query("t")
+	group, err := h.prefs.OneClick(c.Context(), token)
 	if err != nil {
 		return renderTokenError(err)
 	}
 	// The response names what was turned off and points at the full page, so
-	// somebody who meant "all of it" is one click from it.
+	// somebody who meant "all of it" is one click from it. The link carries the
+	// SAME token: without it the page has no way to know whose preferences to
+	// open, and the "one click from the rest" would land on "this link is no
+	// longer valid".
 	return c.JSON(fiber.Map{"data": fiber.Map{
 		"unsubscribed_from": string(group),
-		"manage_url":        emailprefs.Path,
+		"manage_url":        emailprefs.Path + "?t=" + url.QueryEscape(token),
 	}})
 }
 

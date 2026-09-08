@@ -109,7 +109,7 @@ func (q *Queries) ClaimDueReminders(ctx context.Context, arg ClaimDueRemindersPa
 
 const getEmailPrefs = `-- name: GetEmailPrefs :one
 SELECT u.email,
-       COALESCE(ns.enabled, false)             AS activity_enabled,
+       COALESCE(ns.enabled, true)              AS activity_enabled,
        COALESCE(ns.alerts_email_enabled, true) AS alerts_enabled,
        COALESCE(ns.news_email_enabled, true)   AS news_enabled
 FROM users u
@@ -128,9 +128,20 @@ type GetEmailPrefsRow struct {
 // mail went to and the three group switches.
 //
 // Reads through a LEFT JOIN because most accounts have no rule row. The COALESCE
-// defaults are the same ones the delivery queries apply, so what this page shows is
+// defaults are the same ones the DELIVERY queries apply, so what this page shows is
 // what those queries would do — a page that disagreed with the sender would be worse
 // than no page.
+//
+// `enabled` coalesces to TRUE, matching GetReminderForDelivery above and the
+// notification-settings requirement that a never-configured account is enabled. It
+// read FALSE for a while, which had two costs and the second was the real one: the
+// page told somebody their notifications were off while they were receiving saved-job
+// reminders, and every save then wrote that false back — so one click on a CAMPAIGN's
+// unsubscribe button silently turned their reminders off. That is the coupling this
+// whole change exists to break, reintroduced in the other direction.
+//
+// The nudge queries coalesce the other way, and that is not a contradiction: their
+// MATCH step already inner-joins an enabled row, so a nudge cannot exist without one.
 func (q *Queries) GetEmailPrefs(ctx context.Context, id int64) (GetEmailPrefsRow, error) {
 	row := q.db.QueryRow(ctx, getEmailPrefs, id)
 	var i GetEmailPrefsRow
@@ -355,8 +366,8 @@ func (q *Queries) SetActivityEnabled(ctx context.Context, arg SetActivityEnabled
 }
 
 const setEmailGroupSwitches = `-- name: SetEmailGroupSwitches :exec
-INSERT INTO notification_settings (user_id, alerts_email_enabled, news_email_enabled, updated_at)
-VALUES ($1, $2, $3, now())
+INSERT INTO notification_settings (user_id, enabled, alerts_email_enabled, news_email_enabled, updated_at)
+VALUES ($1, true, $2, $3, now())
 ON CONFLICT (user_id) DO UPDATE
   SET alerts_email_enabled = EXCLUDED.alerts_email_enabled,
       news_email_enabled   = EXCLUDED.news_email_enabled,
@@ -378,11 +389,16 @@ type SetEmailGroupSwitchesParams struct {
 // choice somebody made from an unsubscribe link, and the reverse. Two writers with
 // two scopes cannot clobber each other.
 //
-// The INSERT branch matters as much as the UPDATE one: most accounts have no
-// notification_settings row at all, because the only thing that used to create it
-// was a page behind the login. `enabled` takes its column default (false) on that
-// path rather than being written here, so declining campaigns from a mail cannot
-// silently opt somebody INTO lifecycle mail they never asked for.
+// The INSERT branch matters as much as the UPDATE one, and it is where this was
+// wrong once. Most accounts have no notification_settings row at all, because the
+// only thing that used to create it was a page behind the login — and the
+// never-configured state is ENABLED for lifecycle mail (GetReminderForDelivery
+// coalesces to true). Letting `enabled` fall to its COLUMN default of false on
+// insert therefore turned somebody's saved-job reminders off the moment they
+// declined a campaign, which is exactly the coupling migration 0153 removed.
+//
+// So the insert writes the never-configured default explicitly. A row created by
+// this statement leaves the account receiving precisely what it received before.
 func (q *Queries) SetEmailGroupSwitches(ctx context.Context, arg SetEmailGroupSwitchesParams) error {
 	_, err := q.db.Exec(ctx, setEmailGroupSwitches, arg.UserID, arg.AlertsEmailEnabled, arg.NewsEmailEnabled)
 	return err

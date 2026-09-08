@@ -312,7 +312,7 @@ func jobClosedNudgeSample(baseURL string) (Sample, error) {
 
 func referralRequestSample(baseURL string) (Sample, error) {
 	return sample("referral-request", "Referrals / New request", func(c *capture) error {
-		return referral.NewChannelPinger(c, "hi@freehire.me", nil, baseURL, previewLinks(baseURL)).
+		return referral.NewChannelPinger(c, "hi@freehire.me", nil, baseURL, previewLinks(baseURL), nil).
 			PingReferrer(context.Background(),
 				referral.Recipient{UserID: 1, Email: "someone@example.com"},
 				baseURL+"/my/referrals/inbox")
@@ -323,7 +323,7 @@ func referralRequestSample(baseURL string) (Sample, error) {
 // version of this mail.
 func reportRemovedSample(baseURL string) (Sample, error) {
 	return sample("report-job-removed", "Moderation / Report: job removed", func(c *capture) error {
-		return report.NewMailNotifier(c, "hi@freehire.me", baseURL, previewLinks(baseURL)).
+		return report.NewMailNotifier(c, "hi@freehire.me", baseURL, previewLinks(baseURL), nil).
 			NotifyDecision(context.Background(), report.Decision{
 				UserID:    previewUserID,
 				Email:     "someone@example.com",
@@ -339,7 +339,7 @@ func reportRemovedSample(baseURL string) (Sample, error) {
 
 func reportDismissedSample(baseURL string) (Sample, error) {
 	return sample("report-dismissed", "Moderation / Report: no change", func(c *capture) error {
-		return report.NewMailNotifier(c, "hi@freehire.me", baseURL, previewLinks(baseURL)).
+		return report.NewMailNotifier(c, "hi@freehire.me", baseURL, previewLinks(baseURL), nil).
 			NotifyDecision(context.Background(), report.Decision{
 				UserID:   previewUserID,
 				Email:    "someone@example.com",

@@ -26,10 +26,15 @@ declined.
 - **THEN** the rendered footer contains no unsubscribe link and no link to notification settings
 - **AND** the outgoing message carries no `List-Unsubscribe` header
 
-#### Scenario: A new mail cannot ship without a way out of it
+#### Scenario: A mail with no way out of it is refused rather than sent
 
-- **WHEN** the test suite runs against a module in which some mail is rendered without either being marked essential or being given an unsubscribe URL
-- **THEN** a guard test fails, naming the offending call site
+- **WHEN** a message reaches the transport naming no group, or naming a silenceable group while carrying no unsubscribe URL
+- **THEN** the send is refused and the mail does not go out
+
+#### Scenario: An essential mail carrying an unsubscribe URL is refused too
+
+- **WHEN** a message reaches the transport marked essential but carrying an unsubscribe URL
+- **THEN** the send is refused, because that link would be an offer nobody can honour
 
 ### Requirement: Unsubscribe links are signed and name one user and one group
 
@@ -141,9 +146,11 @@ offer the full preference page.
 
 Every mail the system sends SHALL belong to exactly one of four groups, and the
 group SHALL decide which switch silences it. `alerts` covers saved-search digests.
-`activity` covers saved-job reminders, lifecycle nudges, and reports about the
-recipient's own activity. `news` covers one-off campaigns, the onboarding sequence,
-and referral pings. `essential` covers address verification and password reset, and
+`activity` covers saved-job reminders, lifecycle nudges, reports about the
+recipient's own activity, and referral pings — somebody asking this person for
+something because they offered to be asked is about them, not about us. `news`
+covers one-off campaigns and the onboarding sequence: the mail the product sends on
+its own initiative. `essential` covers address verification and password reset, and
 SHALL NOT be silenceable.
 
 #### Scenario: Turning off news does not stop activity mail

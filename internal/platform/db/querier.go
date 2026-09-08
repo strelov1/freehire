@@ -2100,9 +2100,20 @@ type Querier interface {
 	// mail went to and the three group switches.
 	//
 	// Reads through a LEFT JOIN because most accounts have no rule row. The COALESCE
-	// defaults are the same ones the delivery queries apply, so what this page shows is
+	// defaults are the same ones the DELIVERY queries apply, so what this page shows is
 	// what those queries would do — a page that disagreed with the sender would be worse
 	// than no page.
+	//
+	// `enabled` coalesces to TRUE, matching GetReminderForDelivery above and the
+	// notification-settings requirement that a never-configured account is enabled. It
+	// read FALSE for a while, which had two costs and the second was the real one: the
+	// page told somebody their notifications were off while they were receiving saved-job
+	// reminders, and every save then wrote that false back — so one click on a CAMPAIGN's
+	// unsubscribe button silently turned their reminders off. That is the coupling this
+	// whole change exists to break, reintroduced in the other direction.
+	//
+	// The nudge queries coalesce the other way, and that is not a contradiction: their
+	// MATCH step already inner-joins an enabled row, so a nudge cannot exist without one.
 	GetEmailPrefs(ctx context.Context, id int64) (GetEmailPrefsRow, error)
 	// Aggregate interaction counts for the public engagement endpoint. Aggregate-only:
 	// every column is a scalar total, so no user identifier or row-level field is
@@ -2825,7 +2836,7 @@ type Querier interface {
 	// LEFT JOIN with COALESCE(..., true): a missing notification_settings row means the
 	// account never opened the settings page, which is not the same as opting out. Same
 	// reading as broadcast.sql and onboarding.sql, and the opposite of nudges.sql's
-	// inner join — see migration 0152 for why one column could not answer both.
+	// inner join — see migration 0153 for why one column could not answer both.
 	ListActiveSubscriptions(ctx context.Context) ([]ListActiveSubscriptionsRow, error)
 	// The channels cmd/tg-ingest crawls and cmd/tg-extract reads a kind from. Ordered by
 	// name so a run's channel order is stable and its log diffable.
@@ -2987,7 +2998,7 @@ type Querier interface {
 	// declining letters from the founder also stopped somebody's application
 	// follow-up reminders, and an account with no settings row could not decline at
 	// all, because the only thing that creates the row is a page behind the login.
-	// Migration 0152 split the two.
+	// Migration 0153 split the two.
 	ListBroadcastCandidates(ctx context.Context, arg ListBroadcastCandidatesParams) ([]ListBroadcastCandidatesRow, error)
 	// The feed, newest first.
 	ListCVRevisions(ctx context.Context, arg ListCVRevisionsParams) ([]CvRevision, error)
@@ -3911,7 +3922,7 @@ type Querier interface {
 	//     declining the founder's letters also stopped somebody's application
 	//     reminders — and an account with no settings row could not decline either
 	//     one, because the page that creates the row is behind the login. Migration
-	//     0152 split them; the unsubscribe link writes this column without a session.
+	//     0153 split them; the unsubscribe link writes this column without a session.
 	// Verified accounts inside the window that have not been greeted yet. This is the
 	// only step with no waiting period: it goes out on the next pass after signup.
 	ListWelcomeCandidates(ctx context.Context, arg ListWelcomeCandidatesParams) ([]ListWelcomeCandidatesRow, error)
@@ -5370,11 +5381,16 @@ type Querier interface {
 	// choice somebody made from an unsubscribe link, and the reverse. Two writers with
 	// two scopes cannot clobber each other.
 	//
-	// The INSERT branch matters as much as the UPDATE one: most accounts have no
-	// notification_settings row at all, because the only thing that used to create it
-	// was a page behind the login. `enabled` takes its column default (false) on that
-	// path rather than being written here, so declining campaigns from a mail cannot
-	// silently opt somebody INTO lifecycle mail they never asked for.
+	// The INSERT branch matters as much as the UPDATE one, and it is where this was
+	// wrong once. Most accounts have no notification_settings row at all, because the
+	// only thing that used to create it was a page behind the login — and the
+	// never-configured state is ENABLED for lifecycle mail (GetReminderForDelivery
+	// coalesces to true). Letting `enabled` fall to its COLUMN default of false on
+	// insert therefore turned somebody's saved-job reminders off the moment they
+	// declined a campaign, which is exactly the coupling migration 0153 removed.
+	//
+	// So the insert writes the never-configured default explicitly. A row created by
+	// this statement leaves the account receiving precisely what it received before.
 	SetEmailGroupSwitches(ctx context.Context, arg SetEmailGroupSwitchesParams) error
 	// cmd/backfill-experience-dates' write: the four structured columns, each filled only
 	// when still NULL — the same per-boundary independence FillExperienceEmploymentBlanks

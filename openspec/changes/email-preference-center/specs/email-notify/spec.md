@@ -23,7 +23,8 @@ match retry/dead-letter bookkeeping applies.
 #### Scenario: A non-essential mail carries the unsubscribe headers
 
 - **WHEN** the notifier sends any mail not marked essential
-- **THEN** the SES call carries a `List-Unsubscribe` header holding the recipient's own unsubscribe URL and a `mailto:` alternative, and a `List-Unsubscribe-Post: List-Unsubscribe=One-Click` header
+- **THEN** the SES call carries a `List-Unsubscribe` header holding the recipient's own unsubscribe URL, and a `List-Unsubscribe-Post: List-Unsubscribe=One-Click` header
+- **AND** no `mailto:` alternative, which is optional in RFC 8058 and is what Gmail and Yahoo do not ask of a bulk sender — an advertised address that bounces is worse than an absent one
 
 #### Scenario: Essential mail carries no unsubscribe headers
 

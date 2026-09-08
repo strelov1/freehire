@@ -36,12 +36,14 @@ const prefsSecret = "email-prefs-integration-secret-32b"
 func newEmailPrefsApp(queries *db.Queries) *fiber.App {
 	h := newEmailPrefsHandlers(emailprefs.NewService(queries, prefsSecret))
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	// A no-op limiter and a cookie gate that refuses everyone: throttling is
-	// registered in handler.go, and these cases exercise the token-opened routes,
-	// not the signed-in ones.
-	noop := func(c *fiber.Ctx) error { return c.Next() }
-	h.register(app.Group("/api/v1"), noop, func(c *fiber.Ctx) error {
-		return fiber.NewError(fiber.StatusUnauthorized, "unauthorized")
+	// A cookie gate that refuses everyone: these cases exercise the token-opened
+	// routes, not the signed-in ones. The throttler is nil because register builds
+	// its limiter from it and ratelimit tolerates that — throttling is not what is
+	// under test here.
+	h.register(app.Group("/api/v1"), middleware{
+		cookie: func(c *fiber.Ctx) error {
+			return fiber.NewError(fiber.StatusUnauthorized, "unauthorized")
+		},
 	})
 	return app
 }
@@ -155,9 +157,12 @@ func TestEmailPrefs_ReadsWithoutASession(t *testing.T) {
 	if got.Data.Email != "reader@example.test" {
 		t.Errorf("email = %q", got.Data.Email)
 	}
-	// An account with no settings row: alerts and news default on, activity off.
-	if !got.Data.Alerts || !got.Data.News || got.Data.Activity {
-		t.Errorf("defaults for an account with no settings row = %+v; want alerts+news on, activity off", got.Data)
+	// An account with no settings row has all three on, because that is what the
+	// delivery queries do with it: GetReminderForDelivery coalesces a missing row to
+	// enabled, and the campaign and digest gates coalesce to true. A page that showed
+	// anything else would be describing mail the sender does not agree about.
+	if !got.Data.Alerts || !got.Data.News || !got.Data.Activity {
+		t.Errorf("defaults for an account with no settings row = %+v; want all three on", got.Data)
 	}
 	if len(got.Data.Searches) != 2 {
 		t.Fatalf("searches = %+v, want the two email subscriptions", got.Data.Searches)
@@ -191,8 +196,8 @@ func TestEmailPrefs_PartialWriteLeavesTheOtherSwitchesAlone(t *testing.T) {
 	if !got.Data.Alerts {
 		t.Error("alerts was not in the body and must keep its stored value")
 	}
-	if got.Data.Activity {
-		t.Error("activity was not in the body and must keep its stored value (off)")
+	if !got.Data.Activity {
+		t.Error("activity was not in the body and must keep its stored value — on, for a never-configured account")
 	}
 }
 
@@ -290,6 +295,58 @@ func TestEmailPrefs_OneClickStopsOnlyItsOwnGroup(t *testing.T) {
 	}
 	if !got.Data.Alerts {
 		t.Error("one click on a campaign silenced the job alerts; it must stop only its own group")
+	}
+}
+
+// The case a green suite missed once: an account with NO settings row is receiving
+// saved-job reminders — GetReminderForDelivery coalesces a missing row to enabled —
+// and one click on a CAMPAIGN's unsubscribe button used to create that row with
+// enabled at its column default of false, silently turning the reminders off.
+//
+// That is the coupling migration 0153 exists to break, reintroduced in the other
+// direction. The earlier one-click test seeded the same state and passed, because it
+// never looked at the field next to the one it was changing.
+func TestEmailPrefs_OneClickOnNewsLeavesAnUnconfiguredAccountsRemindersOn(t *testing.T) {
+	pool := startPostgres(t)
+	queries := db.New(pool)
+	app := newEmailPrefsApp(queries)
+	userID := seedPrefsUser(t, pool, "unconfigured@example.test")
+
+	// Precondition: no settings row at all, which is the state most accounts are in.
+	var rows int
+	if err := pool.QueryRow(context.Background(),
+		`SELECT count(*) FROM notification_settings WHERE user_id = $1`, userID).Scan(&rows); err != nil {
+		t.Fatalf("count settings: %v", err)
+	}
+	if rows != 0 {
+		t.Fatalf("the fixture already has a settings row; this case is about not having one")
+	}
+
+	res, body := doPrefs(t, app, http.MethodPost,
+		"/api/v1/email-prefs/one-click?t="+mintPrefsToken(t, userID, emailprefs.GroupNews),
+		"List-Unsubscribe=One-Click")
+	if res.Status != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", res.Status, body)
+	}
+
+	var enabled bool
+	if err := pool.QueryRow(context.Background(),
+		`SELECT enabled FROM notification_settings WHERE user_id = $1`, userID).Scan(&enabled); err != nil {
+		t.Fatalf("read settings after one-click: %v", err)
+	}
+	if !enabled {
+		t.Error("declining a campaign turned this account's saved-job reminders off")
+	}
+
+	// And the page must say so, rather than reporting the column default.
+	_, body = doPrefs(t, app, http.MethodGet,
+		"/api/v1/email-prefs?t="+mintPrefsToken(t, userID, emailprefs.GroupAlerts), "")
+	var got prefsResp
+	if err := json.Unmarshal([]byte(body), &got); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if !got.Data.Activity {
+		t.Error("the page reports notifications off for an account that is receiving reminders")
 	}
 }
 

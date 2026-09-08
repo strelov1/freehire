@@ -16,7 +16,7 @@
 --     declining the founder's letters also stopped somebody's application
 --     reminders — and an account with no settings row could not decline either
 --     one, because the page that creates the row is behind the login. Migration
---     0152 split them; the unsubscribe link writes this column without a session.
+--     0153 split them; the unsubscribe link writes this column without a session.
 
 -- name: ListWelcomeCandidates :many
 -- Verified accounts inside the window that have not been greeted yet. This is the

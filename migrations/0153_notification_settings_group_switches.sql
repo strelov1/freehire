@@ -50,8 +50,13 @@
 -- this takes ACCESS EXCLUSIVE for an instant and the runner's default transaction
 -- costs nothing. Both columns go in ONE statement so that instant is taken once.
 --
--- Applied to a fresh volume by initdb after 0151; on an existing prod volume run it
+-- Applied to a fresh volume by initdb after 0152; on an existing prod volume run it
 -- manually (SET ROLE hire) BEFORE deploying the code that reads it.
+--
+-- Numbered 0153 and not 0152: main took 0152 while this branch was being written.
+-- The runner orders by filename, nothing gates a collision, and main has held three
+-- files on one number before — so the number is re-checked against origin/main at
+-- PR time rather than at the moment the file is created.
 
 ALTER TABLE public.notification_settings
     ADD COLUMN alerts_email_enabled boolean NOT NULL DEFAULT true,

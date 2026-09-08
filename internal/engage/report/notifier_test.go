@@ -30,7 +30,7 @@ func (s *fakeSender) Send(_ context.Context, m emailnotify.Message) error {
 func notice(t *testing.T, d report.Decision) *fakeSender {
 	t.Helper()
 	sender := &fakeSender{}
-	n := report.NewMailNotifier(sender, "hi@freehire.me", "https://freehire.me", testLinks())
+	n := report.NewMailNotifier(sender, "hi@freehire.me", "https://freehire.me", testLinks(), nil)
 	if err := n.NotifyDecision(context.Background(), d); err != nil {
 		t.Fatalf("NotifyDecision: %v", err)
 	}
@@ -197,7 +197,7 @@ func TestNotice_TruncationKeepsValidUTF8(t *testing.T) {
 
 func TestNotice_PropagatesTransportFailure(t *testing.T) {
 	sender := &fakeSender{err: errors.New("ses is down")}
-	n := report.NewMailNotifier(sender, "hi@freehire.me", "https://freehire.me", testLinks())
+	n := report.NewMailNotifier(sender, "hi@freehire.me", "https://freehire.me", testLinks(), nil)
 	if err := n.NotifyDecision(context.Background(), reported()); err == nil {
 		t.Fatal("a transport failure must reach the caller, which decides what it means")
 	}
