@@ -2219,23 +2219,10 @@ type Querier interface {
 	// it sqlc types the argument as pgtype.Text and every caller has to wrap a plain string
 	// it already knows is present.
 	GetTalentNetworkMemberByHandle(ctx context.Context, handle string) (GetTalentNetworkMemberByHandleRow, error)
-	// Everything the public Talent Network page needs to render, keyed by the opaque
-	// talent_network_public_id (never users.id, which would leak signup order/row count).
-	// Mirrors the users + user_profiles composition GetProfile/toProfileResponse already
-	// use for the owner-facing profile read (internal/api/handler/me_profile.go), via a LEFT
-	// JOIN because a candidate can enable visibility before ever saving a profile (design
-	// decision: "Missing/empty CV does not block enabling the toggle").
-	//
-	// Deliberately does NOT filter on talent_network_visibility: the design mandates an
-	// identical 404 for a disabled profile and a nonexistent id, so the caller — not this
-	// query — is the one place that decides that, from the visibility value it gets back
-	// alongside everything else.
-	GetTalentNetworkProfileByPublicID(ctx context.Context, talentNetworkPublicID uuid.UUID) (GetTalentNetworkProfileByPublicIDRow, error)
 	// The caller's own Talent Network opt-in state, for the owner-facing settings toggle.
-	// talent_network_public_id rides along so the settings page can render the resulting
-	// public URL the moment the toggle goes on, without a second round-trip. Every row has
-	// both — 'off' and a freshly-minted uuid are the column defaults — so there is no
-	// "not set yet" case to special-case.
+	// talent_handle rides along so the page can render the public URL without a second
+	// round-trip. It is NULL until the first join — a non-member has no card to link to —
+	// unlike the visibility, which every row carries because 'off' is the column default.
 	GetTalentNetworkVisibility(ctx context.Context, id int64) (GetTalentNetworkVisibilityRow, error)
 	// The caller's linked Telegram chat (link-status endpoint + delivery resolution).
 	GetTelegramLink(ctx context.Context, userID int64) (TelegramLink, error)
@@ -5237,9 +5224,9 @@ type Querier interface {
 	// and retries — the same shape internal/identity/accounts uses to allocate a username.
 	SetTalentHandleIfUnset(ctx context.Context, arg SetTalentHandleIfUnsetParams) (int64, error)
 	// Owner-scoped write of the caller's Talent Network membership ('off' or 'anonymous'
-	// since migration 0145). Does not touch talent_network_public_id: the public URL stays
-	// stable across a round trip through 'off', so a candidate who already shared it once —
-	// or who leaves and rejoins — never has to reshare a new one.
+	// since migration 0145). Does not touch talent_handle: the public URL stays stable
+	// across a round trip through 'off', so a candidate who already shared it once — or who
+	// leaves and rejoins — never has to reshare a new one.
 	//
 	// The value is NOT validated here. Its authority is the CHECK constraint on the column;
 	// the handler mirrors that set for a cheap 400, and this statement is the third place

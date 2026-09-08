@@ -8,7 +8,6 @@ package db
 import (
 	"context"
 
-	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -181,70 +180,25 @@ func (q *Queries) GetTalentNetworkMemberByHandle(ctx context.Context, handle str
 	return i, err
 }
 
-const getTalentNetworkProfileByPublicID = `-- name: GetTalentNetworkProfileByPublicID :one
-SELECT u.talent_network_visibility,
-       u.resume_structured,
-       u.photo_object_key,
-       p.specializations,
-       p.skills
-FROM users u
-LEFT JOIN user_profiles p ON p.user_id = u.id
-WHERE u.talent_network_public_id = $1
-`
-
-type GetTalentNetworkProfileByPublicIDRow struct {
-	TalentNetworkVisibility string      `json:"talent_network_visibility"`
-	ResumeStructured        []byte      `json:"resume_structured"`
-	PhotoObjectKey          pgtype.Text `json:"photo_object_key"`
-	Specializations         []string    `json:"specializations"`
-	Skills                  []string    `json:"skills"`
-}
-
-// Everything the public Talent Network page needs to render, keyed by the opaque
-// talent_network_public_id (never users.id, which would leak signup order/row count).
-// Mirrors the users + user_profiles composition GetProfile/toProfileResponse already
-// use for the owner-facing profile read (internal/api/handler/me_profile.go), via a LEFT
-// JOIN because a candidate can enable visibility before ever saving a profile (design
-// decision: "Missing/empty CV does not block enabling the toggle").
-//
-// Deliberately does NOT filter on talent_network_visibility: the design mandates an
-// identical 404 for a disabled profile and a nonexistent id, so the caller — not this
-// query — is the one place that decides that, from the visibility value it gets back
-// alongside everything else.
-func (q *Queries) GetTalentNetworkProfileByPublicID(ctx context.Context, talentNetworkPublicID uuid.UUID) (GetTalentNetworkProfileByPublicIDRow, error) {
-	row := q.db.QueryRow(ctx, getTalentNetworkProfileByPublicID, talentNetworkPublicID)
-	var i GetTalentNetworkProfileByPublicIDRow
-	err := row.Scan(
-		&i.TalentNetworkVisibility,
-		&i.ResumeStructured,
-		&i.PhotoObjectKey,
-		&i.Specializations,
-		&i.Skills,
-	)
-	return i, err
-}
-
 const getTalentNetworkVisibility = `-- name: GetTalentNetworkVisibility :one
-SELECT talent_network_visibility, talent_network_public_id, talent_handle
+SELECT talent_network_visibility, talent_handle
 FROM users
 WHERE id = $1
 `
 
 type GetTalentNetworkVisibilityRow struct {
 	TalentNetworkVisibility string      `json:"talent_network_visibility"`
-	TalentNetworkPublicID   uuid.UUID   `json:"talent_network_public_id"`
 	TalentHandle            pgtype.Text `json:"talent_handle"`
 }
 
 // The caller's own Talent Network opt-in state, for the owner-facing settings toggle.
-// talent_network_public_id rides along so the settings page can render the resulting
-// public URL the moment the toggle goes on, without a second round-trip. Every row has
-// both — 'off' and a freshly-minted uuid are the column defaults — so there is no
-// "not set yet" case to special-case.
+// talent_handle rides along so the page can render the public URL without a second
+// round-trip. It is NULL until the first join — a non-member has no card to link to —
+// unlike the visibility, which every row carries because 'off' is the column default.
 func (q *Queries) GetTalentNetworkVisibility(ctx context.Context, id int64) (GetTalentNetworkVisibilityRow, error) {
 	row := q.db.QueryRow(ctx, getTalentNetworkVisibility, id)
 	var i GetTalentNetworkVisibilityRow
-	err := row.Scan(&i.TalentNetworkVisibility, &i.TalentNetworkPublicID, &i.TalentHandle)
+	err := row.Scan(&i.TalentNetworkVisibility, &i.TalentHandle)
 	return i, err
 }
 
@@ -890,9 +844,9 @@ type SetTalentNetworkVisibilityParams struct {
 }
 
 // Owner-scoped write of the caller's Talent Network membership ('off' or 'anonymous'
-// since migration 0145). Does not touch talent_network_public_id: the public URL stays
-// stable across a round trip through 'off', so a candidate who already shared it once —
-// or who leaves and rejoins — never has to reshare a new one.
+// since migration 0145). Does not touch talent_handle: the public URL stays stable
+// across a round trip through 'off', so a candidate who already shared it once — or who
+// leaves and rejoins — never has to reshare a new one.
 //
 // The value is NOT validated here. Its authority is the CHECK constraint on the column;
 // the handler mirrors that set for a cheap 400, and this statement is the third place

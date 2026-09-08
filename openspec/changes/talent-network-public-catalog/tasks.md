@@ -33,7 +33,7 @@ REFACTOR → simplify → review → only then `[x]`.
 - [x] 1.7 Wire minting into `PutVisibility`: minted on the first join only, never
       recomputed. Tests — leaving and rejoining keeps the handle; a new CV in a different
       category keeps the handle; the minted handle never contains the account's `username`.
-- [ ] 1.8 Retire `talent_network_public_id`: drop the column and every read of it once the
+- [x] 1.8 Retire `talent_network_public_id`: drop the column and every read of it once the
       handle serves the route (task 4.2 and 5.3). Two public identifiers for one page is a
       drift, not a fallback.
 
@@ -112,35 +112,35 @@ REFACTOR → simplify → review → only then `[x]`.
 
 ## 5. The web surface
 
-- [ ] 5.1 Port from `/Users/i_strelov/Projects/freehire-recruit/web/src/lib/`:
+- [x] 5.1 Port from `/Users/i_strelov/Projects/freehire-recruit/web/src/lib/`:
       `timezoneCountry.ts` (+ its test — it carries the six renamed tzdata aliases,
       including `Asia/Calcutta`, the largest single group), `candidateQuery.ts` (+ test),
       `CandidateCard.svelte`. Adapt each to this repo's `$lib/ui` and the catalogue's
       narrower card, and keep the tests.
-- [ ] 5.2 `web/src/routes/talent/` — the list. Filters read from and write back to
+- [x] 5.2 `web/src/routes/talent/` — the list. Filters read from and write back to
       `page.url`, never to local state; paging as real `<a href>` links, not the design
       system's `Pager` (its own doc comment says it does not touch the URL). Empty state
       and skeleton from the design system.
-- [ ] 5.3 Replace `web/src/routes/talent-network/[publicId]/` with `web/src/routes/talent/[handle]/`:
+- [x] 5.3 Replace `web/src/routes/talent-network/[publicId]/` with `web/src/routes/talent/[handle]/`:
       the catalogue card — no name, no company names, no prose. Its `+page.server.ts` keeps
       the 404-on-non-member behaviour. The old route goes; nothing has linked to it.
-- [ ] 5.4 `web/src/routes/my/talent-network/+page.svelte`: the three-option picker becomes
+- [x] 5.4 `web/src/routes/my/talent-network/+page.svelte`: the three-option picker becomes
       one toggle. Keep the echoed-value behaviour (trust the PUT response, not the click)
       and keep the "a link you have shared cannot be unshared" warning.
-- [ ] 5.5 Add `{ href: '/my/talent-network', label: 'Talent Network' }` to
+- [x] 5.5 Add `{ href: '/my/talent-network', label: 'Talent Network' }` to
       `web/src/lib/accountNav.ts` with its icon in `accountNavIcons.ts`, and the invitation
       block on `/my/profile` — non-member sees what joining publishes and withholds, member
       sees their state and a link to their own card. **Without this task the catalogue can
       never have members.**
-- [ ] 5.6 SEO: the list page indexable, the card page `noindex`. Verify the card is not
+- [x] 5.6 SEO: the list page indexable, the card page `noindex`. Verify the card is not
       under `my/+layout.svelte`'s blanket `noindex` by accident — it must carry its own.
 
 ## 6. Documentation and housekeeping
 
-- [ ] 6.1 `internal/candidate/talentnetwork/AGENTS.md`: what the package is, the projection
+- [x] 6.1 `internal/candidate/talentnetwork/AGENTS.md`: what the package is, the projection
       rule (dictionary terms, numbers and dates only), the snapshot and its seam, and what
       it may import.
-- [ ] 6.2 Update the module table in the root `CLAUDE.md`/`AGENTS.md` with the new package,
+- [x] 6.2 Update the module table in the root `CLAUDE.md`/`AGENTS.md` with the new package,
       and check `pnpm check:links` passes — the table is the map an agent follows.
 - [ ] 6.3 Reconcile the two stale changes: `talent-network-profile-visibility` and
       `talent-network-entry-redesign` both read `[x]` while describing a surface that no

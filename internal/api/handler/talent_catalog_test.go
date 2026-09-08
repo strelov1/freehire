@@ -3,8 +3,10 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -61,6 +63,27 @@ func talentCatalogApp(store talentnetwork.Store) *fiber.App {
 	app.Get("/talent", h.List)
 	app.Get("/talent/:handle", h.Get)
 	return app
+}
+
+// readBody and forbidSubstrings moved here from talent_network_profile_test.go when that
+// route was retired. forbidSubstrings is the shape most of these assertions take: the
+// interesting claim about a public response is what is ABSENT from it.
+func talentNetworkReadBody(t *testing.T, resp *http.Response) string {
+	t.Helper()
+	b, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("read body: %v", err)
+	}
+	return string(b)
+}
+
+func forbidSubstrings(t *testing.T, body string, forbidden ...string) {
+	t.Helper()
+	for _, s := range forbidden {
+		if strings.Contains(body, s) {
+			t.Errorf("body must not contain %q: %s", s, body)
+		}
+	}
 }
 
 func doTalent(t *testing.T, app *fiber.App, target string) *http.Response {

@@ -72,14 +72,12 @@ func (h *talentNetworkHandlers) register(api fiber.Router, mw middleware) {
 // it is empty, rather than inventing a placeholder link that resolves to a 404.
 type talentNetworkResponse struct {
 	Visibility string `json:"talent_network_visibility"`
-	PublicID   string `json:"talent_network_public_id"`
 	Handle     string `json:"talent_handle,omitempty"`
 }
 
 func toTalentNetworkResponse(row db.GetTalentNetworkVisibilityRow) talentNetworkResponse {
 	return talentNetworkResponse{
 		Visibility: row.TalentNetworkVisibility,
-		PublicID:   row.TalentNetworkPublicID.String(),
 		Handle:     row.TalentHandle.String,
 	}
 }

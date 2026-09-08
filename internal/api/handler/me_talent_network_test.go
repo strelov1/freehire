@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v2"
-	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 
@@ -28,7 +27,6 @@ var errUniqueViolationStub error = &pgconn.PgError{Code: "23505", ConstraintName
 // exercise the handlers' request parsing and validation without a database.
 type fakeTalentNetworkStore struct {
 	visibility string
-	publicID   uuid.UUID
 	// handle is the stored talent_handle; empty means the account has never joined.
 	handle string
 	// structured is the raw resume_structured JSON the mint reads a job title out of.
@@ -48,7 +46,6 @@ func (f *fakeTalentNetworkStore) GetTalentNetworkVisibility(context.Context, int
 	}
 	return db.GetTalentNetworkVisibilityRow{
 		TalentNetworkVisibility: f.visibility,
-		TalentNetworkPublicID:   f.publicID,
 		TalentHandle:            pgtype.Text{String: f.handle, Valid: f.handle != ""},
 	}, nil
 }
@@ -116,8 +113,7 @@ func doTalentNetwork(t *testing.T, app *fiber.App, method, body, token string) *
 }
 
 func TestGetTalentNetwork_DefaultsToOff(t *testing.T) {
-	id := uuid.New()
-	store := &fakeTalentNetworkStore{visibility: "off", publicID: id}
+	store := &fakeTalentNetworkStore{visibility: "off"}
 	app, token := talentNetworkApp(t, store)
 	resp := doTalentNetwork(t, app, fiber.MethodGet, "", token)
 	defer resp.Body.Close()
@@ -133,8 +129,10 @@ func TestGetTalentNetwork_DefaultsToOff(t *testing.T) {
 	if got.Data.Visibility != "off" {
 		t.Errorf("visibility = %q, want off", got.Data.Visibility)
 	}
-	if got.Data.PublicID != id.String() {
-		t.Errorf("public_id = %q, want %q", got.Data.PublicID, id.String())
+	// A non-member has no handle at all: it is minted on the first join, so an empty
+	// one here means "not yet", never "waiting for one".
+	if got.Data.Handle != "" {
+		t.Errorf("handle = %q, want empty for an account that never joined", got.Data.Handle)
 	}
 }
 
@@ -144,7 +142,7 @@ func TestGetTalentNetwork_DefaultsToOff(t *testing.T) {
 // because the CHECK constraint would reject it anyway: the handler's job is to turn that
 // into a 400 rather than a 500 from the database.
 func TestPutTalentNetwork_RejectsRetiredPublicValue(t *testing.T) {
-	store := &fakeTalentNetworkStore{visibility: "off", publicID: uuid.New()}
+	store := &fakeTalentNetworkStore{visibility: "off"}
 	app, token := talentNetworkApp(t, store)
 
 	resp := doTalentNetwork(t, app, fiber.MethodPut, `{"visibility":"public"}`, token)
@@ -161,7 +159,7 @@ func TestPutTalentNetwork_RejectsRetiredPublicValue(t *testing.T) {
 }
 
 func TestPutTalentNetwork_AnonymousRoundTrips(t *testing.T) {
-	store := &fakeTalentNetworkStore{visibility: "off", publicID: uuid.New()}
+	store := &fakeTalentNetworkStore{visibility: "off"}
 	app, token := talentNetworkApp(t, store)
 
 	putResp := doTalentNetwork(t, app, fiber.MethodPut, `{"visibility":"anonymous"}`, token)
@@ -187,7 +185,7 @@ func TestPutTalentNetwork_RejectsInvalidValue(t *testing.T) {
 	cases := []string{`{"visibility":"invalid"}`, `{"visibility":""}`, `{}`}
 	for _, body := range cases {
 		t.Run(body, func(t *testing.T) {
-			store := &fakeTalentNetworkStore{visibility: "off", publicID: uuid.New()}
+			store := &fakeTalentNetworkStore{visibility: "off"}
 			app, token := talentNetworkApp(t, store)
 			resp := doTalentNetwork(t, app, fiber.MethodPut, body, token)
 			defer resp.Body.Close()
@@ -213,7 +211,7 @@ const backendResumeJSON = `{
 }`
 
 func TestPutTalentNetwork_MintsAHandleOnFirstJoin(t *testing.T) {
-	store := &fakeTalentNetworkStore{visibility: "off", publicID: uuid.New(), structured: []byte(backendResumeJSON)}
+	store := &fakeTalentNetworkStore{visibility: "off", structured: []byte(backendResumeJSON)}
 	app, token := talentNetworkApp(t, store)
 
 	got := putTalentNetworkOK(t, app, token, "anonymous")
@@ -231,7 +229,7 @@ func TestPutTalentNetwork_MintsAHandleOnFirstJoin(t *testing.T) {
 // The handle is the URL somebody has already shared. Leaving the network must not burn
 // it, and rejoining must not mint a second one.
 func TestPutTalentNetwork_RejoiningKeepsTheHandle(t *testing.T) {
-	store := &fakeTalentNetworkStore{visibility: "anonymous", publicID: uuid.New(), handle: "backend-7f2a"}
+	store := &fakeTalentNetworkStore{visibility: "anonymous", handle: "backend-7f2a"}
 	app, token := talentNetworkApp(t, store)
 
 	if got := putTalentNetworkOK(t, app, token, "off"); got.Handle != "backend-7f2a" {
@@ -248,7 +246,7 @@ func TestPutTalentNetwork_RejoiningKeepsTheHandle(t *testing.T) {
 // The account username is derived from the email's local part, so it is usually the
 // person's name. It must never end up in the URL of the page that withholds it.
 func TestPutTalentNetwork_HandleNeverCarriesTheName(t *testing.T) {
-	store := &fakeTalentNetworkStore{visibility: "off", publicID: uuid.New(), structured: []byte(backendResumeJSON)}
+	store := &fakeTalentNetworkStore{visibility: "off", structured: []byte(backendResumeJSON)}
 	app, token := talentNetworkApp(t, store)
 
 	got := putTalentNetworkOK(t, app, token, "anonymous")
@@ -261,7 +259,7 @@ func TestPutTalentNetwork_HandleNeverCarriesTheName(t *testing.T) {
 
 func TestPutTalentNetwork_RetriesAHandleCollision(t *testing.T) {
 	store := &fakeTalentNetworkStore{
-		visibility: "off", publicID: uuid.New(),
+		visibility:     "off",
 		structured:     []byte(backendResumeJSON),
 		claimConflicts: 2,
 	}
@@ -279,7 +277,7 @@ func TestPutTalentNetwork_RetriesAHandleCollision(t *testing.T) {
 // A candidate can join before uploading anything. Refusing the join because there is no
 // title to read would gate membership on the CV pipeline.
 func TestPutTalentNetwork_MintsOverAnEmptyCV(t *testing.T) {
-	store := &fakeTalentNetworkStore{visibility: "off", publicID: uuid.New()}
+	store := &fakeTalentNetworkStore{visibility: "off"}
 	app, token := talentNetworkApp(t, store)
 
 	got := putTalentNetworkOK(t, app, token, "anonymous")
@@ -291,7 +289,7 @@ func TestPutTalentNetwork_MintsOverAnEmptyCV(t *testing.T) {
 // Turning the toggle OFF must not mint anything for an account that never joined —
 // otherwise every stray request would burn a handle.
 func TestPutTalentNetwork_LeavingDoesNotMint(t *testing.T) {
-	store := &fakeTalentNetworkStore{visibility: "off", publicID: uuid.New(), structured: []byte(backendResumeJSON)}
+	store := &fakeTalentNetworkStore{visibility: "off", structured: []byte(backendResumeJSON)}
 	app, token := talentNetworkApp(t, store)
 
 	got := putTalentNetworkOK(t, app, token, "off")
@@ -318,7 +316,7 @@ func putTalentNetworkOK(t *testing.T, app *fiber.App, token, visibility string) 
 }
 
 func TestTalentNetwork_RequiresAuth(t *testing.T) {
-	store := &fakeTalentNetworkStore{visibility: "off", publicID: uuid.New()}
+	store := &fakeTalentNetworkStore{visibility: "off"}
 	app, _ := talentNetworkApp(t, store)
 
 	getResp := doTalentNetwork(t, app, fiber.MethodGet, "", "")

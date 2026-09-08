@@ -409,11 +409,10 @@ WHERE id = $1;
 
 -- name: GetTalentNetworkVisibility :one
 -- The caller's own Talent Network opt-in state, for the owner-facing settings toggle.
--- talent_network_public_id rides along so the settings page can render the resulting
--- public URL the moment the toggle goes on, without a second round-trip. Every row has
--- both — 'off' and a freshly-minted uuid are the column defaults — so there is no
--- "not set yet" case to special-case.
-SELECT talent_network_visibility, talent_network_public_id, talent_handle
+-- talent_handle rides along so the page can render the public URL without a second
+-- round-trip. It is NULL until the first join — a non-member has no card to link to —
+-- unlike the visibility, which every row carries because 'off' is the column default.
+SELECT talent_network_visibility, talent_handle
 FROM users
 WHERE id = $1;
 
@@ -436,9 +435,9 @@ WHERE id = $1
 
 -- name: SetTalentNetworkVisibility :exec
 -- Owner-scoped write of the caller's Talent Network membership ('off' or 'anonymous'
--- since migration 0145). Does not touch talent_network_public_id: the public URL stays
--- stable across a round trip through 'off', so a candidate who already shared it once —
--- or who leaves and rejoins — never has to reshare a new one.
+-- since migration 0145). Does not touch talent_handle: the public URL stays stable
+-- across a round trip through 'off', so a candidate who already shared it once — or who
+-- leaves and rejoins — never has to reshare a new one.
 --
 -- The value is NOT validated here. Its authority is the CHECK constraint on the column;
 -- the handler mirrors that set for a cheap 400, and this statement is the third place
@@ -507,27 +506,6 @@ WHERE u.talent_handle = sqlc.arg(handle)::text
   AND u.talent_network_visibility <> 'off'
   AND u.resume_uploaded_at IS NOT NULL
   AND u.resume_structured_uploaded_at = u.resume_uploaded_at;
-
--- name: GetTalentNetworkProfileByPublicID :one
--- Everything the public Talent Network page needs to render, keyed by the opaque
--- talent_network_public_id (never users.id, which would leak signup order/row count).
--- Mirrors the users + user_profiles composition GetProfile/toProfileResponse already
--- use for the owner-facing profile read (internal/api/handler/me_profile.go), via a LEFT
--- JOIN because a candidate can enable visibility before ever saving a profile (design
--- decision: "Missing/empty CV does not block enabling the toggle").
---
--- Deliberately does NOT filter on talent_network_visibility: the design mandates an
--- identical 404 for a disabled profile and a nonexistent id, so the caller — not this
--- query — is the one place that decides that, from the visibility value it gets back
--- alongside everything else.
-SELECT u.talent_network_visibility,
-       u.resume_structured,
-       u.photo_object_key,
-       p.specializations,
-       p.skills
-FROM users u
-LEFT JOIN user_profiles p ON p.user_id = u.id
-WHERE u.talent_network_public_id = $1;
 
 -- name: GetUserExperienceRequireContext :one
 -- Whether interactive atom creates require a non-empty context. Kept off /auth/me on

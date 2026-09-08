@@ -191,6 +191,7 @@ Each is self-contained and can be read independently.
 | **ATS-readiness score** (deterministic CV score, de-identified LLM review, delta) | [internal/candidate/atscheck/AGENTS.md](internal/candidate/atscheck/AGENTS.md) |
 | **Experience bank** (durable employments + evidence atoms, provenance, retrieval) | [internal/candidate/experience/AGENTS.md](internal/candidate/experience/AGENTS.md) |
 | **Résumé identity** (one stored CV per user, contact-block layers) | [internal/candidate/resume/AGENTS.md](internal/candidate/resume/AGENTS.md) |
+| **Talent Network** (the public anonymous catalogue: the dictionary-only projection, the minted handle, the snapshot) | [internal/candidate/talentnetwork/AGENTS.md](internal/candidate/talentnetwork/AGENTS.md) |
 | **Structured CV** (LLM parse of stored CV, stamp-and-compare) | [internal/candidate/resumeextract/AGENTS.md](internal/candidate/resumeextract/AGENTS.md) |
 | **PII masking** (fail-closed CV→LLM redaction, reversible placeholders) | [internal/candidate/pii/AGENTS.md](internal/candidate/pii/AGENTS.md) |
 | **Cover letters** (three-stage chain, the provenance gate, the vacancy's language, the audit floor) | [internal/candidate/coverletter/AGENTS.md](internal/candidate/coverletter/AGENTS.md) |

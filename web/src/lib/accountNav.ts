@@ -34,6 +34,11 @@ export const accountNav = [
   // Employee referrals: request a referral, offer to refer (moderated), and — for
   // referrers — manage incoming requests. Open to every signed-in user.
   { href: '/my/referrals', label: 'Referrals' },
+  // Talent Network membership: appear in the public, anonymised catalogue recruiters
+  // browse. One toggle. It sits in the nav because the page owns the ONLY control that
+  // puts somebody in the catalogue — the feature previously shipped with a working page
+  // and no way to reach it, which is indistinguishable from not having shipped.
+  { href: '/my/talent-network', label: 'Talent Network' },
   // The notification center: delivery history, saved-search alerts, and the
   // account-level reminder/nudge settings, as three tabs of one section.
   { href: '/my/notifications', label: 'Notifications' },

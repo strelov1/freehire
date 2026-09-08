@@ -23,6 +23,7 @@ import {
   ShieldCheck,
   TrendingUp,
   Plug,
+  Radar,
   Webhook,
 } from '@lucide/svelte';
 import type { LucideIcon } from '@lucide/svelte';
@@ -33,6 +34,7 @@ export const accountNavIcons: Record<AccountNavItem['href'], LucideIcon> = {
   '/my/assistant': Bot,
   '/my/cvs': ScrollText,
   '/my/referrals': Handshake,
+  '/my/talent-network': Radar,
   '/my/tracking': LayoutList,
   '/my/lists': ListPlus,
   '/my/activity': Activity,
