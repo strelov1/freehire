@@ -217,6 +217,24 @@ export function collapseCities(rows: { value: string; country: string }[]): Face
 // catalog (the skilltag dictionary is the source of truth). The fallback title-cases the
 // slug the way companyLabel does, so a value that outlived a dictionary edit still reads
 // as words rather than as data.
+/** Display label for a normalised city slug: `new-york` reads as `New York`.
+ *
+ *  Title-casing the slug rather than looking the city up: `users.resume_cities` stores
+ *  the normalisation, and the dictionary's own spellings (internal/dict/location's
+ *  CityMatch.Name) are reachable only through a search API keyed by query text, not by
+ *  slug. THE SEAM: a city whose real name is not its title-cased slug — 's-Hertogenbosch,
+ *  Rio de Janeiro — is spelled wrong here, and fixing it means exposing a slug lookup
+ *  from that dictionary rather than adding a second list of exceptions.
+ *
+ *  Worth having anyway: without it a card reads "berlin" beside the timezone's own
+ *  "Berlin", which looks like a bug in the half that is correct. */
+export function cityLabel(slug: string): string {
+  return slug
+    .split('-')
+    .map((part) => (part ? part.charAt(0).toUpperCase() + part.slice(1) : part))
+    .join(' ');
+}
+
 export function skillLabel(slug: string): string {
   return (SKILL_LABELS as Record<string, string>)[slug] ?? titleCase(slug.replace(/-/g, '_'));
 }

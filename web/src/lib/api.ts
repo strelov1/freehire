@@ -13,7 +13,13 @@
 // `Responses` is the onboarding survey's record. Aliased on the way in because the
 // generated contracts are one flat namespace and the name says nothing on its own there —
 // see cmd/gen-contracts for why it is not called `Answers` like its Go siblings.
-import type { Answers, Display, Responses as SurveyAnswers, RevisionView } from '$lib/generated/contracts';
+import type {
+  Answers,
+  CatalogueMember,
+  Display,
+  Responses as SurveyAnswers,
+  RevisionView,
+} from '$lib/generated/contracts';
 import type {
   CvAppearanceDefaults,
   CvAtsDelta,
@@ -110,7 +116,6 @@ import type {
   ExperienceBank,
   TalentNetworkSetting,
   TalentNetworkVisibility,
-  TalentNetworkProfile,
   ExperienceEmployment,
   ApiSuggestion,
 } from './types';
@@ -1534,9 +1539,8 @@ export function createApi(
     );
   }
 
-  // Talent Network: the caller's own opt-in visibility setting (distinct from the public,
-  // unauthenticated profile page at GET /talent-network/:publicID — see
-  // internal/handler/me_talent_network.go and talent_network_profile.go).
+  // Talent Network: the caller's own membership toggle, and the public catalogue it puts
+  // them in (internal/api/handler/me_talent_network.go and talent_catalog.go).
 
   /** The caller's current Talent Network visibility and public id. A user who has never
    *  touched the setting reads "off". */
@@ -1555,14 +1559,22 @@ export function createApi(
     );
   }
 
-  /** The public, unauthenticated Talent Network profile page for one candidate, keyed by
-   *  their opaque `talent_network_public_id`. No auth: this is the shareable-link
-   *  counterpart to getTalentNetwork above. A hidden ("off") or nonexistent id both
-   *  answer 404 — the caller must not try to tell them apart. */
-  async function getTalentNetworkProfile(publicId: string): Promise<TalentNetworkProfile> {
-    return requestData<TalentNetworkProfile>(
-      `/api/v1/talent-network/${encodeURIComponent(publicId)}`,
-    );
+  /** One filtered page of the public Talent Network catalogue. Unauthenticated.
+   *
+   *  `search` is the already-serialised query string (writeTalentQuery's output), passed
+   *  through verbatim rather than rebuilt here: the URL is the single source of truth for
+   *  what is filtered, and a second serialiser is a second answer to what `?skills=go`
+   *  means. */
+  async function listTalent(search: string): Promise<Slice<CatalogueMember>> {
+    const page = await request<Page<CatalogueMember>>(`/api/v1/talent${search ? `?${search}` : ''}`);
+    return toSlice(page, page.meta.offset);
+  }
+
+  /** One member's public card, by their minted catalogue handle. A member who has left,
+   *  a handle nobody holds, and a string that could not be a handle all answer the same
+   *  404 — the caller must not try to tell them apart. */
+  async function getTalentCard(handle: string): Promise<CatalogueMember> {
+    return requestData<CatalogueMember>(`/api/v1/talent/${encodeURIComponent(handle)}`);
   }
 
   /** Permanently erase the signed-in account and everything it owns. Irreversible:
@@ -2527,7 +2539,8 @@ export function createApi(
     completeOnboarding,
     getTalentNetwork,
     setTalentNetworkVisibility,
-    getTalentNetworkProfile,
+    listTalent,
+    getTalentCard,
     deleteAccount,
     extractResumeProfile,
     importLinkedInProfile,

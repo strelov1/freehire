@@ -33,6 +33,7 @@ import (
 	"github.com/strelov1/freehire/internal/candidate/resume"
 	"github.com/strelov1/freehire/internal/candidate/resumeextract"
 	"github.com/strelov1/freehire/internal/candidate/survey"
+	"github.com/strelov1/freehire/internal/candidate/talentnetwork"
 	"github.com/strelov1/freehire/internal/engage/companyfeedback"
 	"github.com/strelov1/freehire/internal/engage/emailnotify"
 	"github.com/strelov1/freehire/internal/engage/mentorship"
@@ -469,10 +470,15 @@ func Register(app *fiber.App, cfg Config) {
 	// The Talent Network visibility toggle is a distinct singleton on `users`, not part
 	// of the user_profiles-backed profileHandlers above (see me_talent_network.go).
 	talentNetworkH := newTalentNetworkHandlers(queries)
-	// The public, unauthenticated counterpart to talentNetworkH above — a separate
-	// handler struct (not a route on talentNetworkH) because it carries no auth
-	// middleware at all (see talent_network_profile.go).
-	talentNetworkProfileH := newTalentNetworkProfileHandlers(queries)
+	// The public catalogue. One Catalogue per process, holding the snapshot every
+	// request is served from — constructing one per request would read the whole
+	// membership per request, which is the outage the snapshot exists to avoid.
+	//
+	// A one-minute TTL: long enough that a burst of visitors costs one read, short
+	// enough that somebody who just joined sees themselves listed while still looking at
+	// the page that said they would be. Leaving takes effect immediately regardless —
+	// the card route re-reads the database rather than the snapshot.
+	talentCatalogH := newTalentCatalogHandlers(talentnetwork.NewCatalogue(queries, time.Minute, time.Now))
 	// One bank for the whole surface. It is stateless over the shared queries, but the
 	// single value is what keeps the evidence gate from being anyone's to attach later:
 	// the CV editor is constructed with it below, not handed it by the assistant.
@@ -854,7 +860,7 @@ func Register(app *fiber.App, cfg Config) {
 	marketPulseH.register(api, mw)
 	experienceH.register(api, mw)
 	talentNetworkH.register(api, mw)
-	talentNetworkProfileH.register(api)
+	talentCatalogH.register(api, mw)
 
 	// CV builder + AI tailoring (see cvHandlers).
 	cvH.register(api, mw)

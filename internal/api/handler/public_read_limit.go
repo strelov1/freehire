@@ -42,6 +42,20 @@ const (
 	// 1200/min is 20 r/s per caller, which is faster than anybody types and far
 	// short of what a scraper would want from an endpoint that returns no postings.
 	suggestPerMinute = 1200
+
+	// talentCatalogPerMinute covers the public Talent Network catalogue. The split
+	// here is by WHAT IS BEING READ rather than by cost or frequency: this is the one
+	// public read that returns people rather than postings. The catalogue is small,
+	// complete and machine-readable, which makes copying it wholesale a matter of
+	// patience — and the members consented to being FOUND, not to being enumerated
+	// into somebody's database.
+	//
+	// A separate budget so it can be tightened when a scrape is seen without touching
+	// the reads the rest of the site depends on, and so exhausting it cannot take the
+	// catalogue down with the job pages. 120/min is two per second: far past a person
+	// paging and filtering, and slow enough that walking a few hundred members takes
+	// long enough to notice.
+	talentCatalogPerMinute = 120
 )
 
 // All three below are keyed by IP, and deliberately: on a PUBLIC read there is no
@@ -84,4 +98,9 @@ func agentSearchLimiter(throttler ratelimit.Throttler) fiber.Handler {
 // visitor typing quickly cannot exhaust the allowance the rest of the site reads on.
 func suggestLimiter(throttler ratelimit.Throttler) fiber.Handler {
 	return ratelimit.Middleware(throttler, ratelimit.KeyByIP("suggest"), suggestPerMinute, time.Minute)
+}
+
+// talentCatalogLimiter throttles the public catalogue of candidates on its own budget.
+func talentCatalogLimiter(throttler ratelimit.Throttler) fiber.Handler {
+	return ratelimit.Middleware(throttler, ratelimit.KeyByIP("talent"), talentCatalogPerMinute, time.Minute)
 }

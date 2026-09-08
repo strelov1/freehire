@@ -2332,23 +2332,32 @@ type Querier interface {
 	// same request again: without this read every refresh minted another copy and stranded the
 	// conversation bound to the previous one.
 	GetTailoredCVForJob(ctx context.Context, arg GetTailoredCVForJobParams) (GetTailoredCVForJobRow, error)
-	// Everything the public Talent Network page needs to render, keyed by the opaque
-	// talent_network_public_id (never users.id, which would leak signup order/row count).
-	// Mirrors the users + user_profiles composition GetProfile/toProfileResponse already
-	// use for the owner-facing profile read (internal/api/handler/me_profile.go), via a LEFT
-	// JOIN because a candidate can enable visibility before ever saving a profile (design
-	// decision: "Missing/empty CV does not block enabling the toggle").
+	// One member's card, by the handle in the public URL. Same predicate as the list, so a
+	// handle nobody holds, a member who has left, and one whose extract has gone stale all
+	// come back as pgx.ErrNoRows — which the handler renders as the one 404. Deciding it
+	// here rather than in the caller is deliberate: three ways to be absent and one way to
+	// say so is a rule that cannot be half-applied.
 	//
-	// Deliberately does NOT filter on talent_network_visibility: the design mandates an
-	// identical 404 for a disabled profile and a nonexistent id, so the caller — not this
-	// query — is the one place that decides that, from the visibility value it gets back
-	// alongside everything else.
-	GetTalentNetworkProfileByPublicID(ctx context.Context, talentNetworkPublicID uuid.UUID) (GetTalentNetworkProfileByPublicIDRow, error)
+	// Read against the DATABASE, never the snapshot the list is served from. A candidate who
+	// leaves must stop resolving immediately, not when the snapshot next refreshes.
+	// The ::text cast is load-bearing, not decoration: talent_handle is nullable, so without
+	// it sqlc types the argument as pgtype.Text and every caller has to wrap a plain string
+	// it already knows is present.
+	GetTalentNetworkMemberByHandle(ctx context.Context, handle string) (GetTalentNetworkMemberByHandleRow, error)
 	// The caller's own Talent Network opt-in state, for the owner-facing settings toggle.
-	// talent_network_public_id rides along so the settings page can render the resulting
-	// public URL the moment a non-'off' mode is selected, without a second round-trip.
-	// Every row has both — 'off' and a freshly-minted uuid are the column defaults — so
-	// there is no "not set yet" case to special-case.
+	// talent_handle rides along so the page can render the public URL without a second
+	// round-trip. It is NULL until the first join — a non-member has no card to link to —
+	// unlike the visibility, which every row carries because 'off' is the column default.
+	//
+	// `listed` answers the question the settings page actually has to ask: not "am I a
+	// member" but "does a visitor see me". They come apart, and the gap is a live trap — a
+	// candidate who joins before uploading a CV is a member with a handle whose card 404s,
+	// so a page reading membership alone tells them their profile is up when it is not.
+	//
+	// It repeats ListTalentNetworkMembers' predicate, which is a duplication worth naming:
+	// the two must be changed together. It is not shared because the catalogue's version
+	// selects rows and this one describes one row, and a caller cannot ask the first
+	// "and what about me".
 	GetTalentNetworkVisibility(ctx context.Context, id int64) (GetTalentNetworkVisibilityRow, error)
 	// The caller's linked Telegram chat (link-status endpoint + delivery resolution).
 	GetTelegramLink(ctx context.Context, userID int64) (TelegramLink, error)
@@ -2462,6 +2471,15 @@ type Querier interface {
 	// only when resume_structured_uploaded_at equals resume_uploaded_at). NULLs when none.
 	// Also returns candidate contacts and last extract status for Profile / seed composition.
 	GetUserResumeStructured(ctx context.Context, id int64) (GetUserResumeStructuredRow, error)
+	// Just the structured résumé, with none of the provenance stamps and none of the
+	// contacts GetUserResumeStructured returns beside it.
+	//
+	// It exists so the Talent Network's handle mint can read one job title without also
+	// holding the candidate's phone number and email in memory. The stamp is deliberately
+	// not applied here: a handle derived from a slightly stale title is still a fine
+	// handle — it is frozen at mint and opaque afterwards — whereas refusing to mint over
+	// an in-flight extraction would block the join itself.
+	GetUserResumeStructuredOnly(ctx context.Context, id int64) ([]byte, error)
 	// Slim role lookup for the RequireRole authorization middleware: it runs on every
 	// request to a role-gated endpoint and needs only the role, so it does not drag the
 	// full user row (the GetJobIDBySlug precedent for a hot-path read).
@@ -2659,6 +2677,10 @@ type Querier interface {
 	// who accepted an invite discloses that a particular person signed up for a job board, which
 	// is not the referrer's to know.
 	InviteStats(ctx context.Context, referrerID int64) (InviteStatsRow, error)
+	// Whether the account is in the beta group, on its own. GetUserByID answers it too, but
+	// carries nine other columns a gate has no use for — and a gate that reads a whole user
+	// row invites somebody to branch on a second field from it later.
+	IsBetaTester(ctx context.Context, id int64) (bool, error)
 	// Cursor read: has this rotated file (by content signature) been applied? The
 	// signature is stable across rename and gzip, so a re-run recognizes the same file.
 	IsViewLogFileProcessed(ctx context.Context, signature int64) (bool, error)
@@ -3449,6 +3471,17 @@ type Querier interface {
 	// mailboxes is an opt-in feature, nowhere near the row counts the repo's chunked
 	// cmd/backfill-* workers exist for — so one unpaged query is enough.
 	ListMailboxesWithoutBackfilledUsername(ctx context.Context) ([]ListMailboxesWithoutBackfilledUsernameRow, error)
+	// The members who joined before handles existed, and so have no public address.
+	//
+	// Migration 0148 rewrote every 'public' row to 'anonymous' but could not mint a handle —
+	// minting reads a job title through a Go dictionary, which SQL cannot do — so those
+	// accounts, and any that were already 'anonymous', are members the catalogue cannot list
+	// and whose card 404s. cmd/backfill-talent-handle walks this list once and closes it.
+	//
+	// No stamp gate here, unlike the catalogue's own read: a member whose CV extract is stale
+	// still needs an address for when it catches up, and withholding one would make the
+	// backfill's own result depend on when it happened to run.
+	ListMembersMissingTalentHandle(ctx context.Context) ([]int64, error)
 	// Every availability row for a mentor, both shapes. The slot engine wants all of them at
 	// once — an override only means anything beside the weekly rules it replaces — so this
 	// deliberately does not filter by window.
@@ -3667,6 +3700,28 @@ type Querier interface {
 	// vacancy's public slug and the bound agent session so each row links back to its workspace.
 	// Base CVs (job_id NULL) are excluded; the JOIN also drops tailored CVs whose job was deleted.
 	ListTailoredCVsByUser(ctx context.Context, userID int64) ([]ListTailoredCVsByUserRow, error)
+	// Every member the public catalogue may show, in one read. The caller projects each row
+	// through talentnetwork.ProjectCard and holds the result as a snapshot — see that
+	// package's doc for why the whole set is read at once rather than filtered in SQL: the
+	// category and seniority a card is filtered by do not exist as columns, they are derived
+	// from the job title by a dictionary that changes weekly.
+	//
+	// The predicate is the membership rule and nothing else:
+	//
+	//   * not 'off' — the candidate asked to be found;
+	//   * a minted handle — without one there is no URL to link the card to, so a row in
+	//     this state is mid-join, not a member;
+	//   * the stamp gate (resume_structured_uploaded_at = resume_uploaded_at, both set) —
+	//     the same "this structure still describes the CV on file" rule the rest of the
+	//     product applies. Without it most cards would be somebody's previous CV.
+	//
+	// LEFT JOIN, because a candidate can join before ever saving a profile: a missing
+	// user_profiles row is empty facets, not a missing member.
+	//
+	// Ordered here rather than by the caller so the snapshot arrives sorted, and TOTALLY:
+	// two members sharing a timestamp would otherwise order arbitrarily, and an arbitrary
+	// order across pages silently drops some people and repeats others.
+	ListTalentNetworkMembers(ctx context.Context) ([]ListTalentNetworkMembersRow, error)
 	ListThreadRepliesAfter(ctx context.Context, arg ListThreadRepliesAfterParams) ([]ListThreadRepliesAfterRow, error)
 	// First page of a thread's replies, oldest first. LEFT JOIN so an authorless reply
 	// still returns — a future AI reply, or one whose author deleted their account.
@@ -5370,10 +5425,26 @@ type Querier interface {
 	// Pause/resume a subscription, scoped to its owner. No matching owner-scoped row
 	// returns no row (the handler maps that to 404).
 	SetSubscriptionActive(ctx context.Context, arg SetSubscriptionActiveParams) (Subscription, error)
-	// Owner-scoped write of the caller's Talent Network visibility. Does not touch
-	// talent_network_public_id: the public URL stays stable across mode changes
-	// (including a round trip through 'off'), so a candidate who already shared it once
-	// never has to reshare a new one.
+	// Claims a freshly minted catalogue handle for a candidate who does not have one yet.
+	//
+	// The `talent_handle IS NULL` predicate is the whole mechanism, and it does two jobs.
+	// It makes the mint idempotent — a member who leaves and rejoins keeps the handle they
+	// already shared, and a second concurrent join claims nothing — and it makes the
+	// statement's own result the answer: 0 rows means somebody already has one, which the
+	// caller reads rather than re-querying and racing again.
+	//
+	// A collision with ANOTHER account's handle surfaces as a unique-violation from
+	// users_talent_handle_key (migration 0150), not as 0 rows. The caller mints a new suffix
+	// and retries — the same shape internal/identity/accounts uses to allocate a username.
+	SetTalentHandleIfUnset(ctx context.Context, arg SetTalentHandleIfUnsetParams) (int64, error)
+	// Owner-scoped write of the caller's Talent Network membership ('off' or 'anonymous'
+	// since migration 0148). Does not touch talent_handle: the public URL stays stable
+	// across a round trip through 'off', so a candidate who already shared it once — or who
+	// leaves and rejoins — never has to reshare a new one.
+	//
+	// The value is NOT validated here. Its authority is the CHECK constraint on the column;
+	// the handler mirrors that set for a cheap 400, and this statement is the third place
+	// the vocabulary would have to be repeated for no gain.
 	SetTalentNetworkVisibility(ctx context.Context, arg SetTalentNetworkVisibilityParams) error
 	// Ultra GIVEN rather than sold. Separate from the Pro grant rather than folded into it: the
 	// two are different decisions a person makes, and one statement setting both would make

@@ -36,6 +36,7 @@ hire
 /backfill-experience-dates
 /backfill-profession-it-tech
 /backfill-requirements
+/backfill-talent-handle
 /backfill-resume-geo
 /backfill-resume-structured
 /backfill-slug-folded
@@ -209,3 +210,6 @@ extension/*.zip
 # one would too. See internal/api/handler/assistant_bakeoff.go.
 /internal/api/handler/testdata/bakeoff-profile*.json
 /internal/api/handler/testdata/bakeoff-resume*.json
+
+# Local Talent Network demo data (see the catalogue AGENTS.md); not part of the change.
+/seed-talent.sql
