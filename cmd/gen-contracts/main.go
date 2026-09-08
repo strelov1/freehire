@@ -89,6 +89,7 @@ func genStructs() (string, error) {
 	applyformTS := filepath.Join(tmp, "applyform.ts")
 	screeninganswersTS := filepath.Join(tmp, "screeninganswers.ts")
 	surveyTS := filepath.Join(tmp, "survey.ts")
+	talentnetworkTS := filepath.Join(tmp, "talentnetwork.ts")
 
 	cfg := &tygo.Config{
 		Packages: []*tygo.PackageConfig{
@@ -175,6 +176,31 @@ func genStructs() (string, error) {
 				// `any` in a generated contract is the one thing the generation is for
 				// avoiding — the client would lose the compile error when the shape moves.
 				TypeMappings: map[string]string{"uuid.UUID": "string"},
+			},
+			{
+				// The public Talent Network catalogue's wire shape (Member + Card +
+				// CardRole). Only card.go: catalogue.go beside it holds the serving
+				// machinery — the snapshot, the Store interface, the filter — none of
+				// which crosses the wire.
+				//
+				// Generated rather than hand-written precisely because of what these types
+				// are FOR. The card is a whitelist deciding what a stranger may see about
+				// a person; a hand-kept copy in types.ts would drift the day somebody adds
+				// a field, and drift here means a client rendering something the
+				// projection stopped sending — or a reviewer reading the copy and
+				// believing it.
+				Path:         "github.com/strelov1/freehire/internal/candidate/talentnetwork",
+				OutputPath:   talentnetworkTS,
+				IncludeFiles: []string{"card.go"},
+				TypeMappings: map[string]string{
+					// Same inlining resumeextract needs below, for the same reason:
+					// PeriodDate's Go name is Date, which collides with the language's own
+					// global.
+					"perioddate.PeriodDate": "{ year: number; month?: number }",
+					// An RFC3339 timestamp on the wire. Without the mapping tygo emits
+					// `any`, which is the one thing generating a contract is for avoiding.
+					"time.Time": "string",
+				},
 			},
 			{
 				// The read-only structured résumé wire shape (Structured + Experience +
@@ -299,7 +325,11 @@ func genStructs() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return enrichBody + "\n" + jobviewBody + "\n" + bundleBody + "\n" + verdictBody + "\n" + atscheckBody + "\n" + cvmatchBody + "\n" + jobmatchBody + "\n" + hardconstraintBody + "\n" + matchanalysisBody + "\n" + coverletterBody + "\n" + resumeextractBody + "\n" + cvBody + "\n" + cveditBody + "\n" + applyformBody + "\n" + screeninganswersBody + "\n" + surveyBody, nil
+	talentnetworkBody, err := readBody(talentnetworkTS)
+	if err != nil {
+		return "", err
+	}
+	return enrichBody + "\n" + jobviewBody + "\n" + bundleBody + "\n" + verdictBody + "\n" + atscheckBody + "\n" + cvmatchBody + "\n" + jobmatchBody + "\n" + hardconstraintBody + "\n" + matchanalysisBody + "\n" + coverletterBody + "\n" + resumeextractBody + "\n" + cvBody + "\n" + cveditBody + "\n" + applyformBody + "\n" + screeninganswersBody + "\n" + surveyBody + "\n" + talentnetworkBody, nil
 }
 
 // readBody returns a tygo output file's body with its leading preamble removed, so

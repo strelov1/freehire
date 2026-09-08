@@ -2215,7 +2215,10 @@ type Querier interface {
 	//
 	// Read against the DATABASE, never the snapshot the list is served from. A candidate who
 	// leaves must stop resolving immediately, not when the snapshot next refreshes.
-	GetTalentNetworkMemberByHandle(ctx context.Context, talentHandle pgtype.Text) (GetTalentNetworkMemberByHandleRow, error)
+	// The ::text cast is load-bearing, not decoration: talent_handle is nullable, so without
+	// it sqlc types the argument as pgtype.Text and every caller has to wrap a plain string
+	// it already knows is present.
+	GetTalentNetworkMemberByHandle(ctx context.Context, handle string) (GetTalentNetworkMemberByHandleRow, error)
 	// Everything the public Talent Network page needs to render, keyed by the opaque
 	// talent_network_public_id (never users.id, which would leak signup order/row count).
 	// Mirrors the users + user_profiles composition GetProfile/toProfileResponse already

@@ -84,24 +84,31 @@ REFACTOR → simplify → review → only then `[x]`.
 
 ## 4. The public API
 
-- [ ] 4.1 `GET /api/v1/talent` in `internal/api/handler/`: unauthenticated, the list
+- [x] 4.1 `GET /api/v1/talent` in `internal/api/handler/`: unauthenticated, the list
       envelope (`data` + `meta`), `meta.total` behind the same predicate as the page.
       Unread parameters reported in `meta.ignored_params` — this endpoint owns its own
       vocabulary, like `/companies` does, and must not borrow `search.UnknownParams`.
-- [ ] 4.2 `GET /api/v1/talent/{handle}`: 404 with an identical body for a non-member, a
+- [x] 4.2 `GET /api/v1/talent/{handle}`: 404 with an identical body for a non-member, a
       handle nobody holds, and a malformed handle. Test all three answer the same, so the
       route cannot be used to probe for accounts — including a request that spells an
       account's `username`.
-- [ ] 4.3 Attach `internal/api/ratelimit` to both routes, and assert in a test that the
+- [x] 4.3 Attach `internal/api/ratelimit` to both routes, and assert in a test that the
       limiter is on these paths — the guard that already exists for "limiters on REAL
       routes" is the pattern to follow.
-- [ ] 4.4 The card response sets a short `Cache-Control`. Document both endpoints in
-      `docs/API.md` and `web/static/openapi.yaml` (the `artifacts` CI job validates the
-      latter against the OpenAPI specification).
-- [ ] 4.5 Check how the catalogue's wire types reach TypeScript — `cmd/gen-contracts`
-      reads `structured.go` only, so decide deliberately whether the new shapes are
-      generated or hand-written in `web/src/lib/types.ts`, and say which in the handler's
-      comment.
+- [x] 4.4 The card response sets a short `Cache-Control` and `X-Robots-Tag: noindex`.
+      Documented in `web/src/lib/docs/api-spec.ts` (the source `docs/API.md` is generated
+      from) and regenerated. **`web/static/openapi.yaml` deliberately NOT touched:** its
+      own description scopes it to job search and says it is what the custom GPT imports
+      as an Action, so adding a catalogue of people there would hand every GPT user a
+      bulk reader of candidate profiles — the exact extraction the rate limit exists to
+      slow down. Publishing it belongs with a decision about who may read it in bulk, not
+      with this change.
+- [x] 4.5 GENERATED, not hand-written: `cmd/gen-contracts` gained a `talentnetwork`
+      entry over `card.go` alone (`catalogue.go` holds the serving machinery, none of
+      which crosses the wire). The types are renamed `CandidateCard` / `CandidateRole` /
+      `CatalogueMember` because every contract lands in ONE TypeScript file and `Card` was
+      already taken by jobview's job card — a second `export interface Card` is a build
+      error at best and a silently shadowed type at worst.
 
 ## 5. The web surface
 

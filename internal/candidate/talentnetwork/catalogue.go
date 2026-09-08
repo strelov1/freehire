@@ -28,32 +28,6 @@ type Store interface {
 	GetTalentNetworkMemberByHandle(ctx context.Context, handle string) (db.GetTalentNetworkMemberByHandleRow, error)
 }
 
-// Member is one entry in the public catalogue: the dictionary-checked card, plus the
-// facts that live in columns rather than in the CV.
-//
-// Every field here survives the same rule ProjectCard enforces. Cities are the NORMALISED
-// extraction (users.resume_cities), not the free-text location inside the CV, which
-// carries values like "Austria, Klagenfurt 9020"; specializations are facets the
-// candidate picked from a closed list; the timezone is an IANA zone. None of them can
-// carry a sentence.
-type Member struct {
-	Handle string `json:"handle"`
-	Card   Card   `json:"card"`
-
-	// Timezone is the IANA zone; TimezoneRegion is the part before the slash. The region
-	// is what a recruiter asking "can we overlap for a call" actually means — there are
-	// dozens of zones per continent — so it is what the filter reads.
-	Timezone       string `json:"timezone,omitempty"`
-	TimezoneRegion string `json:"timezone_region,omitempty"`
-
-	Cities          []string `json:"cities"`
-	Specializations []string `json:"specializations"`
-
-	// UpdatedAt is when the structured extract was written, which is the freshest thing
-	// the catalogue knows about a member. It orders the list.
-	UpdatedAt time.Time `json:"updated_at"`
-}
-
 // Query is the catalogue's whole filter vocabulary. Every field is a closed-vocabulary
 // value or a number: there is no free-text search, because a card carries no free text
 // to search.
@@ -66,6 +40,7 @@ type Query struct {
 	Skills          []string
 	TimezoneRegions []string
 	Cities          []string
+	Specializations []string
 	MinYears        int
 
 	Limit  int
@@ -74,7 +49,7 @@ type Query struct {
 
 // Page is one page of the catalogue and the total behind the same filter.
 type Page struct {
-	Members []Member
+	Members []CatalogueMember
 	Total   int
 }
 
@@ -103,7 +78,7 @@ type Catalogue struct {
 }
 
 type snapshot struct {
-	members []Member
+	members []CatalogueMember
 	builtAt time.Time
 }
 
@@ -123,7 +98,7 @@ func (c *Catalogue) List(ctx context.Context, q Query) (Page, error) {
 		return Page{}, err
 	}
 
-	matched := make([]Member, 0, len(snap.members))
+	matched := make([]CatalogueMember, 0, len(snap.members))
 	for _, m := range snap.members {
 		if q.matches(m) {
 			matched = append(matched, m)
@@ -138,20 +113,20 @@ func (c *Catalogue) List(ctx context.Context, q Query) (Page, error) {
 // ByHandle returns one member, read from the DATABASE rather than the snapshot: a
 // candidate who leaves must stop resolving on the next request, not when the snapshot
 // next refreshes.
-func (c *Catalogue) ByHandle(ctx context.Context, handle string) (Member, error) {
+func (c *Catalogue) ByHandle(ctx context.Context, handle string) (CatalogueMember, error) {
 	// Refused before the query, so a crafted path costs a string comparison. It also
 	// keeps every "not a member" answer identical: a malformed handle and a real one
 	// nobody holds both come back as ErrNotFound.
 	if !ValidHandle(handle) {
-		return Member{}, ErrNotFound
+		return CatalogueMember{}, ErrNotFound
 	}
 
 	row, err := c.store.GetTalentNetworkMemberByHandle(ctx, handle)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return Member{}, ErrNotFound
+			return CatalogueMember{}, ErrNotFound
 		}
-		return Member{}, err
+		return CatalogueMember{}, err
 	}
 	return projectMember(row.TalentHandle.String, row.Timezone.String, row.Cities,
 		row.Specializations, row.ResumeStructured, row.ResumeStructuredUploadedAt.Time), nil
@@ -186,7 +161,7 @@ func (c *Catalogue) current(ctx context.Context) (*snapshot, error) {
 		return nil, err
 	}
 
-	members := make([]Member, 0, len(rows))
+	members := make([]CatalogueMember, 0, len(rows))
 	for _, r := range rows {
 		members = append(members, projectMember(r.TalentHandle.String, r.Timezone.String,
 			r.Cities, r.Specializations, r.ResumeStructured, r.ResumeStructuredUploadedAt.Time))
@@ -202,12 +177,12 @@ func (c *Catalogue) current(ctx context.Context) (*snapshot, error) {
 // An unreadable stored structure yields an EMPTY card rather than dropping the member:
 // they joined, and disappearing from the catalogue is indistinguishable from having
 // left. The same treatment resume.Store.Structured gives an unmarshal failure.
-func projectMember(handle, timezone string, cities, specializations []string, structured []byte, updatedAt time.Time) Member {
+func projectMember(handle, timezone string, cities, specializations []string, structured []byte, updatedAt time.Time) CatalogueMember {
 	var s resumeextract.Structured
 	if len(structured) > 0 {
 		_ = json.Unmarshal(structured, &s)
 	}
-	return Member{
+	return CatalogueMember{
 		Handle:          handle,
 		Card:            ProjectCard(s),
 		Timezone:        timezone,
@@ -241,12 +216,13 @@ func nonNil(s []string) []string {
 // matches reports whether a member satisfies every constraint in q. Values within one
 // filter are OR and different filters are AND: "any of these skills" is what narrowing a
 // search means, while requiring all of them empties the result on the second term.
-func (q Query) matches(m Member) bool {
+func (q Query) matches(m CatalogueMember) bool {
 	return anyOf(q.Categories, m.Card.Category) &&
 		anyOf(q.Seniorities, m.Card.Seniority) &&
 		overlaps(q.Skills, m.Card.Skills) &&
 		anyOf(q.TimezoneRegions, m.TimezoneRegion) &&
 		overlaps(q.Cities, m.Cities) &&
+		overlaps(q.Specializations, m.Specializations) &&
 		m.Card.TotalYears >= q.MinYears
 }
 
@@ -276,12 +252,12 @@ func overlaps(want, have []string) bool {
 
 // window is the LIMIT/OFFSET slice, clamped so an offset past the end is an empty page
 // rather than a panic — a visitor who edits the URL is not an error condition.
-func window(members []Member, limit, offset int) []Member {
+func window(members []CatalogueMember, limit, offset int) []CatalogueMember {
 	if offset < 0 {
 		offset = 0
 	}
 	if offset >= len(members) {
-		return []Member{}
+		return []CatalogueMember{}
 	}
 	rest := members[offset:]
 	if limit > 0 && limit < len(rest) {

@@ -141,7 +141,7 @@ SELECT u.talent_handle,
        COALESCE(p.specializations, '{}')::text[] AS specializations
 FROM users u
 LEFT JOIN user_profiles p ON p.user_id = u.id
-WHERE u.talent_handle = $1
+WHERE u.talent_handle = $1::text
   AND u.talent_network_visibility <> 'off'
   AND u.resume_uploaded_at IS NOT NULL
   AND u.resume_structured_uploaded_at = u.resume_uploaded_at
@@ -164,8 +164,11 @@ type GetTalentNetworkMemberByHandleRow struct {
 //
 // Read against the DATABASE, never the snapshot the list is served from. A candidate who
 // leaves must stop resolving immediately, not when the snapshot next refreshes.
-func (q *Queries) GetTalentNetworkMemberByHandle(ctx context.Context, talentHandle pgtype.Text) (GetTalentNetworkMemberByHandleRow, error) {
-	row := q.db.QueryRow(ctx, getTalentNetworkMemberByHandle, talentHandle)
+// The ::text cast is load-bearing, not decoration: talent_handle is nullable, so without
+// it sqlc types the argument as pgtype.Text and every caller has to wrap a plain string
+// it already knows is present.
+func (q *Queries) GetTalentNetworkMemberByHandle(ctx context.Context, handle string) (GetTalentNetworkMemberByHandleRow, error) {
+	row := q.db.QueryRow(ctx, getTalentNetworkMemberByHandle, handle)
 	var i GetTalentNetworkMemberByHandleRow
 	err := row.Scan(
 		&i.TalentHandle,

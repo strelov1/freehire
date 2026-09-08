@@ -1,6 +1,8 @@
 package talentnetwork
 
 import (
+	"time"
+
 	"github.com/strelov1/freehire/internal/candidate/perioddate"
 	"github.com/strelov1/freehire/internal/candidate/resumeextract"
 	"github.com/strelov1/freehire/internal/dict/classify"
@@ -33,8 +35,8 @@ import (
 // dictionary down into `dict`, which is a change of its own; the fuller picture is what
 // the approved-recruiter tier will carry.
 
-// Card is one candidate as the public catalogue shows them.
-type Card struct {
+// CandidateCard is one candidate as the public catalogue shows them.
+type CandidateCard struct {
 	// Seniority and Category describe the candidate as a whole: what their current (or
 	// most recent) role resolves to. This is the card's heading, built rather than
 	// quoted — see PrimaryTitle.
@@ -52,11 +54,11 @@ type Card struct {
 	// Roles is the work history with everything nameable removed: no employer, no
 	// location, no prose. What remains is the shape of a career, which is what a
 	// recruiter reads a history for anyway.
-	Roles []CardRole `json:"roles"`
+	Roles []CandidateRole `json:"roles"`
 }
 
-// CardRole is one position: what it was, when, and what it was built with.
-type CardRole struct {
+// CandidateRole is one position: what it was, when, and what it was built with.
+type CandidateRole struct {
 	Seniority string `json:"seniority,omitempty"`
 	Category  string `json:"category,omitempty"`
 
@@ -73,9 +75,9 @@ type CardRole struct {
 // role whose title resolves to nothing is KEPT, carrying its period and stack under
 // empty seniority and category: dropping it would make a work history look shorter than
 // it is, and a gap in a career reads worse than an unlabelled job.
-func ProjectCard(s resumeextract.Structured) Card {
+func ProjectCard(s resumeextract.Structured) CandidateCard {
 	primary := classify.Parse(PrimaryTitle(s))
-	return Card{
+	return CandidateCard{
 		Seniority:  primary.Seniority,
 		Category:   primary.Category,
 		TotalYears: s.TotalYears,
@@ -84,14 +86,14 @@ func ProjectCard(s resumeextract.Structured) Card {
 	}
 }
 
-func cardRoles(experience []resumeextract.Experience) []CardRole {
+func cardRoles(experience []resumeextract.Experience) []CandidateRole {
 	if len(experience) == 0 {
 		return nil
 	}
-	roles := make([]CardRole, 0, len(experience))
+	roles := make([]CandidateRole, 0, len(experience))
 	for _, e := range experience {
 		c := classify.Parse(e.Title)
-		roles = append(roles, CardRole{
+		roles = append(roles, CandidateRole{
 			Seniority: c.Seniority,
 			Category:  c.Category,
 			Start:     e.Start,
@@ -115,4 +117,30 @@ func canonicalSkills(tokens []string) []string {
 		return nil
 	}
 	return skilltag.Canonicalize(tokens, skilltag.WithResumeAcronyms())
+}
+
+// CatalogueMember is one entry in the public catalogue: the dictionary-checked card, plus the
+// facts that live in columns rather than in the CV.
+//
+// Every field here survives the same rule ProjectCard enforces. Cities are the NORMALISED
+// extraction (users.resume_cities), not the free-text location inside the CV, which
+// carries values like "Austria, Klagenfurt 9020"; specializations are facets the
+// candidate picked from a closed list; the timezone is an IANA zone. None of them can
+// carry a sentence.
+type CatalogueMember struct {
+	Handle string        `json:"handle"`
+	Card   CandidateCard `json:"card"`
+
+	// Timezone is the IANA zone; TimezoneRegion is the part before the slash. The region
+	// is what a recruiter asking "can we overlap for a call" actually means — there are
+	// dozens of zones per continent — so it is what the filter reads.
+	Timezone       string `json:"timezone,omitempty"`
+	TimezoneRegion string `json:"timezone_region,omitempty"`
+
+	Cities          []string `json:"cities"`
+	Specializations []string `json:"specializations"`
+
+	// UpdatedAt is when the structured extract was written, which is the freshest thing
+	// the catalogue knows about a member. It orders the list.
+	UpdatedAt time.Time `json:"updated_at"`
 }

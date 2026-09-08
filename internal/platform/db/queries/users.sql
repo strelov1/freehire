@@ -500,7 +500,10 @@ SELECT u.talent_handle,
        COALESCE(p.specializations, '{}')::text[] AS specializations
 FROM users u
 LEFT JOIN user_profiles p ON p.user_id = u.id
-WHERE u.talent_handle = $1
+-- The ::text cast is load-bearing, not decoration: talent_handle is nullable, so without
+-- it sqlc types the argument as pgtype.Text and every caller has to wrap a plain string
+-- it already knows is present.
+WHERE u.talent_handle = sqlc.arg(handle)::text
   AND u.talent_network_visibility <> 'off'
   AND u.resume_uploaded_at IS NOT NULL
   AND u.resume_structured_uploaded_at = u.resume_uploaded_at;
