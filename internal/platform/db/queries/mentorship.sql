@@ -6,8 +6,8 @@
 INSERT INTO mentors (
     user_id, company_slug, slug, display_name, headline, bio, topics, languages, timezone,
     session_duration_min, buffer_before_min, buffer_after_min, min_notice_min,
-    horizon_days, meeting_url
-) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+    horizon_days, meeting_url, show_photo
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
 RETURNING *;
 
 -- name: GetMentorByUserID :one
@@ -58,6 +58,7 @@ SET display_name = sqlc.arg(display_name),
     min_notice_min = sqlc.arg(min_notice_min),
     horizon_days = sqlc.arg(horizon_days),
     meeting_url = sqlc.arg(meeting_url),
+    show_photo = sqlc.arg(show_photo),
     updated_at = now()
 -- Keyed on user_id ALONE, which UNIQUE (user_id) makes a single row. Taking an id as well
 -- would mean the caller reading the profile first just to learn one, which is a round trip

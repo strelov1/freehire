@@ -4,7 +4,14 @@
 // without a browser. Mirrors the split companyFacetModel.ts holds for the company
 // catalogue and matchAnalysis.ts for the analysis stream.
 
-import type { Mentor, MentorAvailabilityRule, MentorSession, MentorSlot } from './types';
+import type {
+  Mentor,
+  MentorAvailabilityRule,
+  MentorProfileInput,
+  MentorProfileSuggestions,
+  MentorSession,
+  MentorSlot,
+} from './types';
 
 /** The mentor directory's whole vocabulary, one single-valued filter each.
  *
@@ -221,6 +228,30 @@ function part(parts: Intl.DateTimeFormatPart[], type: string): string {
  *  guess was honoured cannot tell a correct time from a wrong one. */
 export function browserTimezone(): string {
   return typeof Intl === 'undefined' ? 'UTC' : Intl.DateTimeFormat().resolvedOptions().timeZone;
+}
+
+/** Seeds a blank create-form with the candidate's best-effort suggestions, one field at
+ *  a time. A field the suggestions endpoint has nothing for keeps whatever `base` (the
+ *  ordinary blank defaults) already set — the browser timezone included — rather than
+ *  being cleared. This is a ONE-TIME starting point: called once against `blank()`
+ *  before the mentor has typed anything, never merged into an in-progress or existing
+ *  profile's form. */
+export function seedFormFromSuggestions(
+  base: MentorProfileInput,
+  suggestions: MentorProfileSuggestions,
+): { form: MentorProfileInput; topicsText: string; languagesText: string } {
+  return {
+    form: {
+      ...base,
+      name: suggestions.name ?? base.name,
+      headline: suggestions.headline ?? base.headline,
+      bio: suggestions.bio ?? base.bio,
+      timezone: suggestions.timezone ?? base.timezone,
+      company_slug: suggestions.company_slug ?? base.company_slug,
+    },
+    topicsText: (suggestions.topics ?? []).join(', '),
+    languagesText: (suggestions.languages ?? []).join(', '),
+  };
 }
 
 /** Today's date in a named zone, `YYYY-MM-DD`.

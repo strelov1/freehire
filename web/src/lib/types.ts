@@ -1577,8 +1577,7 @@ export interface ApiSuggestionPart {
  *  are the same wire struct (`mentorResponse` in internal/api/handler/mentorship.go).
  *
  *  Deliberately named, unlike a referral offer: a directory of faceless cards gives a
- *  seeker nothing to choose between. There is no avatar yet, and the mentor-profile spec
- *  argues why rather than leaving the requirement half-met.
+ *  seeker nothing to choose between.
  *
  *  `meeting_url` is absent here on purpose — it is a live room, so only a booked party
  *  receives it, on their own booking. The owner's and moderator's routes add `status`,
@@ -1600,6 +1599,10 @@ export interface Mentor {
   session_minutes: number;
   rating_count: number;
   rating_avg: number;
+  /** The mentor's own opt-in to publish their account's CV headshot at
+   *  `/api/v1/mentors/{slug}/photo`. Off by default; render the avatar only when this
+   *  is true, and hide it on a load error rather than showing a broken-image icon. */
+  show_photo: boolean;
 }
 
 /** One offerable hour, carrying three views of the same moment on purpose.
@@ -1732,4 +1735,23 @@ export interface MentorProfileInput {
   notice_minutes: number;
   horizon_days: number;
   meeting_url: string;
+  /** The mentor's own opt-in to publish their account's CV headshot. Off by default —
+   *  see `Mentor.show_photo`. */
+  show_photo: boolean;
+}
+
+/** Best-effort, per-field prefill for the mentor-profile CREATE form, composed from the
+ *  candidate's résumé, user profile, account and experience bank. Every field is
+ *  independently optional — omitted, not an empty string or array, when its source has
+ *  nothing to offer — so seed only the fields that are present and leave the rest at
+ *  their ordinary blank defaults. A one-time starting point: apply it once on mount,
+ *  then treat every field as an ordinary independent input. */
+export interface MentorProfileSuggestions {
+  name?: string;
+  headline?: string;
+  bio?: string;
+  languages?: string[];
+  topics?: string[];
+  timezone?: string;
+  company_slug?: string;
 }

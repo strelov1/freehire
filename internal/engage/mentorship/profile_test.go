@@ -358,6 +358,41 @@ func TestWithdrawalByAStrangerRemovesNothing(t *testing.T) {
 	}
 }
 
+// ShowPhoto defaults off and round-trips through both create and update, independent
+// of every other field — a mentor's own opt-in, not a byproduct of anything else they
+// submit.
+func TestShowPhotoDefaultsOffAndRoundTripsThroughCreateAndUpdate(t *testing.T) {
+	repo := newFakeRepo()
+	svc := newTestService(t, repo)
+
+	created, err := svc.SubmitProfile(context.Background(), validInput())
+	if err != nil {
+		t.Fatalf("SubmitProfile: %v", err)
+	}
+	if created.ShowPhoto {
+		t.Error("show_photo = true on a fresh profile, want false (off by default)")
+	}
+
+	in := validInput()
+	in.ShowPhoto = true
+	updated, err := svc.UpdateProfile(context.Background(), in)
+	if err != nil {
+		t.Fatalf("UpdateProfile: %v", err)
+	}
+	if !updated.ShowPhoto {
+		t.Error("show_photo = false after opting in, want true")
+	}
+
+	in.ShowPhoto = false
+	updated, err = svc.UpdateProfile(context.Background(), in)
+	if err != nil {
+		t.Fatalf("UpdateProfile: %v", err)
+	}
+	if updated.ShowPhoto {
+		t.Error("show_photo = true after opting back out, want false")
+	}
+}
+
 // A profile with no object storage and no notifier configured must still work: the
 // feature ships before every channel exists, exactly as the referral pings do.
 func TestAServiceWithNoNotifierStillWorks(t *testing.T) {

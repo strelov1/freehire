@@ -1,6 +1,7 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
   import { api } from '$lib/api';
-  import { browserTimezone } from '$lib/mentorship';
+  import { browserTimezone, seedFormFromSuggestions } from '$lib/mentorship';
   import { errorMessage } from '$lib/utils';
   import { Badge, Button, Card, Input } from '$lib/ui';
   import type { MentorProfileInput, OwnMentorProfile } from '$lib/types';
@@ -28,6 +29,7 @@
       notice_minutes: 120,
       horizon_days: 30,
       meeting_url: '',
+      show_photo: false,
     };
   }
 
@@ -50,6 +52,7 @@
       notice_minutes: p.notice_minutes ?? 120,
       horizon_days: p.horizon_days ?? 30,
       meeting_url: p.meeting_url,
+      show_photo: p.show_photo,
     };
   }
 
@@ -58,6 +61,24 @@
   let languagesText = $state(profile ? profile.languages.join(', ') : '');
   let saving = $state(false);
   let error = $state('');
+
+  // A one-time prefill for a brand-new profile only: fetched once on mount, seeded into
+  // the still-blank form, and never touched again — every field stays an ordinary,
+  // independently editable input from here on. A failed fetch simply leaves the form at
+  // its ordinary blank defaults; it must never block rendering the form.
+  if (!profile) {
+    onMount(async () => {
+      try {
+        const suggestions = await api.mentorProfileSuggestions();
+        const seeded = seedFormFromSuggestions(form, suggestions);
+        form = seeded.form;
+        topicsText = seeded.topicsText;
+        languagesText = seeded.languagesText;
+      } catch {
+        // Best-effort: the form already has its ordinary blank defaults.
+      }
+    });
+  }
 
   const list = (text: string) =>
     text
@@ -214,6 +235,14 @@
         bind:value={form.meeting_url}
         class="mt-1 w-full"
       />
+    </label>
+
+    <label class="flex items-center gap-2 text-sm sm:col-span-2">
+      <input type="checkbox" bind:checked={form.show_photo} class="h-4 w-4" />
+      <span class="text-muted-foreground">
+        Show my account's CV photo on my public mentor card and profile. Off by default —
+        you decide whether that photo belongs here too.
+      </span>
     </label>
 
     <label class="text-sm sm:col-span-2">

@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"errors"
 	"time"
 
@@ -8,6 +9,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/strelov1/freehire/internal/api/ratelimit"
+	"github.com/strelov1/freehire/internal/candidate/headshot"
 	"github.com/strelov1/freehire/internal/engage/mentorship"
 )
 
@@ -15,10 +17,14 @@ import (
 // slots, the seeker's bookings, the mentor's own cabinet, and the moderation queue.
 type mentorshipHandlers struct {
 	mentorship *mentorship.Service
+	// photos is nil-safe (headshot.Store.Enabled() reports false on a nil receiver), so
+	// an unconfigured object store degrades GetMentorPhoto to "not found" rather than a
+	// server error.
+	photos *headshot.Store
 }
 
-func newMentorshipHandlers(svc *mentorship.Service) *mentorshipHandlers {
-	return &mentorshipHandlers{mentorship: svc}
+func newMentorshipHandlers(svc *mentorship.Service, photos *headshot.Store) *mentorshipHandlers {
+	return &mentorshipHandlers{mentorship: svc, photos: photos}
 }
 
 // slotReadsPerMinute is this endpoint's own budget, separate from the shared public-read
@@ -77,6 +83,7 @@ func (h *mentorshipHandlers) registerPublic(api fiber.Router, mw middleware) {
 	api.Get("/mentors", readLimit, h.ListMentors)
 	api.Get("/mentors/:slug", readLimit, h.GetMentor)
 	api.Get("/mentors/:slug/slots", slotLimit, h.GetMentorSlots)
+	api.Get("/mentors/:slug/photo", readLimit, h.GetMentorPhoto)
 }
 
 // mentorResponse is the public shape of a mentor. user_id is not in it: it is ownership,
@@ -98,9 +105,13 @@ type mentorResponse struct {
 	SessionMinutes int     `json:"session_minutes"`
 	RatingCount    int64   `json:"rating_count"`
 	RatingAvg      float64 `json:"rating_avg"`
-	Status         string  `json:"status,omitempty"`
-	Paused         bool    `json:"paused,omitempty"`
-	MeetingURL     string  `json:"meeting_url,omitempty"`
+	// ShowPhoto is the mentor's own opt-in to serve their account's stored CV headshot
+	// publicly (see GetMentorPhoto). Present in every view — the directory card needs it
+	// to decide whether to render an avatar at all.
+	ShowPhoto  bool   `json:"show_photo"`
+	Status     string `json:"status,omitempty"`
+	Paused     bool   `json:"paused,omitempty"`
+	MeetingURL string `json:"meeting_url,omitempty"`
 
 	// The rest of the session parameters, for the OWNER alone. Pointers rather than plain
 	// ints because a zero buffer is a real setting, and `omitempty` cannot tell "no buffer"
@@ -126,6 +137,7 @@ func toMentorResponse(p mentorship.Profile) mentorResponse {
 		Timezone:       p.Timezone,
 		SessionMinutes: int(p.Session.Duration / time.Minute),
 		RatingCount:    p.RatingCount, RatingAvg: p.RatingAvg,
+		ShowPhoto: p.ShowPhoto,
 	}
 }
 
@@ -220,6 +232,44 @@ func (h *mentorshipHandlers) GetMentor(c *fiber.Ctx) error {
 		return mentorshipError(err)
 	}
 	return c.JSON(fiber.Map{"data": toMentorResponse(profile)})
+}
+
+// errMentorPhotoNotFound is what every reason a mentor's public photo may not be served
+// collapses to: not opted in, no stored headshot, or storage unconfigured. They are
+// deliberately indistinguishable from outside — a response that told them apart would
+// leak whether an opted-out mentor has a CV photo at all, the narrower version of the
+// privacy concern the opt-in itself exists to address.
+var errMentorPhotoNotFound = errors.New("mentor photo not available")
+
+// mentorPhoto resolves an already-public mentor's photo bytes, given their opt-in and
+// the account's stored headshot. It does not itself resolve the profile or check
+// publication status — GetMentorPhoto reuses PublicProfile for that, the same
+// resolution and predicate GetMentor uses, so the two routes cannot drift on what
+// "publicly readable" means.
+func mentorPhoto(ctx context.Context, profile mentorship.Profile, photos *headshot.Store) ([]byte, error) {
+	if !profile.ShowPhoto {
+		return nil, errMentorPhotoNotFound
+	}
+	data, err := photos.Get(ctx, profile.UserID)
+	if err != nil {
+		return nil, errMentorPhotoNotFound
+	}
+	return data, nil
+}
+
+// GetMentorPhoto serves a published mentor's account headshot, only when that mentor has
+// opted in via show_photo. An unpublished profile answers 404 exactly as GetMentor does.
+func (h *mentorshipHandlers) GetMentorPhoto(c *fiber.Ctx) error {
+	profile, err := h.mentorship.PublicProfile(c.Context(), c.Params("slug"))
+	if err != nil {
+		return fiber.NewError(fiber.StatusNotFound)
+	}
+	data, err := mentorPhoto(c.Context(), profile, h.photos)
+	if err != nil {
+		return fiber.NewError(fiber.StatusNotFound)
+	}
+	c.Set(fiber.HeaderContentType, "image/jpeg")
+	return c.Send(data)
 }
 
 // slotResponse is one offerable hour.

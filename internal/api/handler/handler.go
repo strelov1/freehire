@@ -720,7 +720,19 @@ func Register(app *fiber.App, cfg Config) {
 	mentorshipH := newMentorshipHandlers(mentorship.New(
 		mentorship.NewQueriesRepository(queries, cfg.Pool),
 		mentorship.Config{Notifier: mentorshipNotifier, Cache: cfg.Cache},
-	))
+	), photoStore)
+	// The mentor-profile create form's prefill. Composed from four unrelated blocks'
+	// own services (résumé, user profile, account, experience bank) plus the company
+	// catalog — never from mentorship itself, see the mentor-profile-prefill spec.
+	//
+	// The account read is the bare repository, not a second accounts.Service: the
+	// only thing this handler needs is UserByID, which accounts.Repository already
+	// exposes, and newAuthHandlers already builds the one Service this process
+	// needs. A constructor that builds a shared service is the bug this package's
+	// AGENTS.md calls out by name — hoist, don't duplicate.
+	mentorSuggestionsH := newMentorSuggestionsHandlers(
+		resumeStore, profileSvc, accounts.NewQueriesRepository(queries, cfg.Pool), bank, queries,
+	)
 
 	// Allow the canonical frontend origin plus every served domain's https apex,
 	// so a cross-origin (non-credentialed) read works from either domain during a
@@ -850,6 +862,7 @@ func Register(app *fiber.App, cfg Config) {
 
 	// The mentorship marketplace (see mentorshipHandlers).
 	mentorshipH.register(api, mw)
+	mentorSuggestionsH.register(api, mw)
 
 	// Job reports + review queue (see reportHandlers).
 	reportsH.register(api, mw)
