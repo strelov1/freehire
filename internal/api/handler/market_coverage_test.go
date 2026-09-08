@@ -242,3 +242,36 @@ func TestMarketCoverage_IgnoredReportStaysSortedAndCapped(t *testing.T) {
 		t.Errorf("ignored_params = %v, want one alphabetically sorted report", names)
 	}
 }
+
+// TestCoverageWithRole_DoesNotRefetchTheRoleFacet pins the reason the split exists:
+// the caller has already asked for the role's skill distribution, and asking again
+// both costs a query and lets the two readings disagree about the same role.
+func TestCoverageWithRole_DoesNotRefetchTheRoleFacet(t *testing.T) {
+	fake := &recordingFacetCounter{res: search.FacetResult{
+		Total:  500,
+		Facets: map[string]map[string]int64{"skills": {"go": 300}},
+	}}
+	h := &resumeHandlers{facets: fake}
+
+	role := search.FacetResult{
+		Total:  500,
+		Facets: map[string]map[string]int64{"skills": {"go": 300, "kubernetes": 250}},
+	}
+	v, err := h.coverageWithRole(context.Background(), nil, role, []string{"go"}, []string{"go"}, nil, []string{"go"})
+	if err != nil {
+		t.Fatalf("coverageWithRole: %v", err)
+	}
+	// Two queries, not three: the uncovered set and the skill-bearing total. The role
+	// facet came from the argument.
+	if len(fake.calls) != 2 {
+		t.Errorf("FacetCounts calls = %d, want 2 (role facet supplied by the caller)", len(fake.calls))
+	}
+	// The supplied role result is what was scored, not the counter's canned one: the
+	// counter knows nothing of kubernetes, the argument does.
+	if v.Total != 500 {
+		t.Errorf("Total = %d, want 500", v.Total)
+	}
+	if len(v.Skills) < 2 {
+		t.Errorf("Skills = %d rows, want the supplied role distribution's 2", len(v.Skills))
+	}
+}
