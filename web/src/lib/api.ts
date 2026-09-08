@@ -160,7 +160,7 @@ export interface EmailPrefs {
   searches: EmailPrefsSearch[];
 }
 
-export interface EmailPrefsSearch {
+interface EmailPrefsSearch {
   id: number;
   name: string;
   active: boolean;
@@ -169,7 +169,7 @@ export interface EmailPrefsSearch {
 /** A patch, not a replace: an omitted switch keeps its stored value.
  *  `deactivateSearches` can only turn a digest OFF — a link that can only subtract
  *  cannot be used to sign anybody up for anything. */
-export interface EmailPrefsUpdate {
+interface EmailPrefsUpdate {
   alerts?: boolean;
   activity?: boolean;
   news?: boolean;
