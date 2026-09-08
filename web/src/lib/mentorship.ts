@@ -62,7 +62,10 @@ export function mentorFiltersFromParams(p: URLSearchParams): MentorFilters {
 /** A company as the filter offers it: the slug the request carries, the name a person
  *  reads. Two spellings of one employer are already collapsed upstream by
  *  `normalize.CompanySlug` and the alias registry, so the slug is the identity here. */
-export type MentorCompanyOption = { slug: string; name: string };
+// Not exported: it is read only through `MentorFilterOptions` below, and knip's gate
+// covers exports as well as files — an exported name nothing imports is a finding here,
+// not a courtesy.
+type MentorCompanyOption = { slug: string; name: string };
 
 export type MentorFilterOptions = {
   companies: MentorCompanyOption[];
