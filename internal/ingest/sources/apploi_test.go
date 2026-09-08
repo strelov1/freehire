@@ -2,6 +2,9 @@ package sources
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -64,5 +67,65 @@ func TestApploiFetchEmpty(t *testing.T) {
 	}
 	if len(jobs) != 0 {
 		t.Fatalf("jobs = %d, want 0", len(jobs))
+	}
+}
+
+// A later page failing must fail the whole crawl, not return the pages gathered so far —
+// the fullBoardListing bar (source.go).
+func TestApploiFetchFailsOnALaterPageError(t *testing.T) {
+	fullPage := apploiFullPageJSON(apploiPageSize)
+	fake := (&routedHTTP{}).
+		route("offset=0", fullPage).
+		routeErr("offset=100", errors.New("boom"))
+
+	_, err := NewApploi(fake).Fetch(context.Background(), CompanyEntry{Board: "1"})
+	if err == nil {
+		t.Fatal("Fetch succeeded despite page 2 failing — a later-page failure must not be treated as the board's natural end")
+	}
+}
+
+// apploiFullPageJSON renders a page of exactly n live postings, all with distinct ids — used
+// to build a page that is NOT short (n == apploiPageSize), so the walk must keep going.
+func apploiFullPageJSON(n int) string {
+	var b strings.Builder
+	b.WriteString(`{"data":[`)
+	for i := range n {
+		if i > 0 {
+			b.WriteString(",")
+		}
+		fmt.Fprintf(&b, `{"id":"%d","name":"Role","published":true,"archived":false,"private":false}`, 10000+i)
+	}
+	b.WriteString(`],"limit":100,"offset":0}`)
+	return b.String()
+}
+
+// apploiEndlessFake serves a full (never-short) page for any offset requested, so it never
+// yields the "last page" proof — used to prove the page-cap ceiling fails loudly rather than
+// succeeding partially. Mirrors taleoEndlessFake / gustoEndlessFake / baytEndlessListingFake.
+type apploiEndlessFake struct{ calls int }
+
+func (f *apploiEndlessFake) GetJSON(_ context.Context, _ string, v any) error {
+	f.calls++
+	return json.Unmarshal([]byte(apploiFullPageJSON(apploiPageSize)), v)
+}
+
+func TestApploiFetchFailsWhenListingExceedsThePageCap(t *testing.T) {
+	fake := &apploiEndlessFake{}
+
+	_, err := NewApploi(fake).Fetch(context.Background(), CompanyEntry{Board: "1"})
+	if err == nil {
+		t.Fatal("expected reaching the page cap to fail the Fetch")
+	}
+	if fake.calls != apploiMaxPages {
+		t.Errorf("got %d listing calls, want exactly %d (the cap, no more)", fake.calls, apploiMaxPages)
+	}
+}
+
+func TestApploiRegisteredAsFullBoardListing(t *testing.T) {
+	if _, ok := NewApploi(nil).(fullBoardListing); !ok {
+		t.Error("apploi should implement the fullBoardListing marker")
+	}
+	if !FullBoardListingProviders(All(nil))["apploi"] {
+		t.Error("FullBoardListingProviders(All(nil)) should include apploi")
 	}
 }
