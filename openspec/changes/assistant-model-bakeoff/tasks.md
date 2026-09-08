@@ -68,5 +68,5 @@
 
 - [x] 6.1 Document the bake-off in `internal/ai/assistant/AGENTS.md`: what it measures,
       how to run it, and why rounds and cache rate matter more than the price page.
-- [ ] 6.2 Run the bake-off against at least two candidate models over several vacancies,
+- [x] 6.2 Run the bake-off against at least two candidate models over several vacancies,
       record the first report, and read the tailored CVs it carries.
