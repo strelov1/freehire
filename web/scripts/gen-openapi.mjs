@@ -118,6 +118,7 @@ function toParameter(p, location) {
     required: location === 'path' ? true : Boolean(p.required),
     description: p.description,
     schema: schemaFor(p.type),
+    ...(p.example ? { example: p.example } : {}),
   };
 }
 
@@ -131,7 +132,7 @@ function requestBodyFor(ep) {
   const properties = {};
   const required = [];
   for (const p of real) {
-    properties[p.name] = { ...schemaFor(p.type), description: p.description };
+    properties[p.name] = { ...schemaFor(p.type), description: p.description, ...(p.example ? { example: p.example } : {}) };
     if (p.required) required.push(p.name);
   }
   const schema = {
@@ -155,13 +156,27 @@ function isSseExample(responseExample) {
   return /^(data|event):/.test(responseExample.trimStart());
 }
 
+// A few endpoints document themselves as SSE in prose ("same SSE shape as
+// .../messages") without their own responseExample to sniff — mint one, run
+// the other one, autopilot. `SSE` as a whole word (not `text/event-stream`,
+// which the endpoint that DOES carry an example uses instead) is what their
+// descriptions actually say; checked against every description in
+// api-spec.ts to confirm no non-SSE endpoint happens to say it too.
+function isSseEndpoint(ep) {
+  if (ep.responseExample) return isSseExample(ep.responseExample);
+  return Boolean(ep.description) && /\bSSE\b/.test(ep.description);
+}
+
 // Every documented endpoint has exactly one example response today (no status
 // code is modeled in the source data), so it is always keyed 200 — an SSE
 // stream included, since streaming does not change the HTTP status.
 function responsesFor(ep) {
-  if (!ep.responseExample) return { 200: { description: 'Success' } };
-  const isSse = isSseExample(ep.responseExample);
-  const mediaType = isSse ? 'text/event-stream' : 'application/json';
+  const mediaType = isSseEndpoint(ep) ? 'text/event-stream' : 'application/json';
+  if (!ep.responseExample) {
+    return mediaType === 'text/event-stream'
+      ? { 200: { description: 'Success', content: { [mediaType]: { schema: { type: 'string' } } } } }
+      : { 200: { description: 'Success' } };
+  }
   return {
     200: {
       description: 'Success',

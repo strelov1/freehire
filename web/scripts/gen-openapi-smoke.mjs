@@ -88,6 +88,22 @@ async function main() {
     !('application/json' in (assistantStream.responses?.['200']?.content ?? {})),
   );
 
+  // A third SSE endpoint, documented as SSE in prose ("same SSE shape as
+  // .../messages") but with no responseExample at all — nothing to sniff a
+  // leading `data:`/`event:` line from (code review finding).
+  const autopilot = a.paths['/assistant/sessions/{id}/autopilot']?.post;
+  assert('prose-only SSE endpoint found', Boolean(autopilot));
+  assert(
+    'prose-only SSE endpoint uses text/event-stream',
+    'text/event-stream' in (autopilot.responses?.['200']?.content ?? {}),
+  );
+
+  // Parameter examples reach the generated schema, not just placeholder notes.
+  const jobsSlug = a.paths['/jobs/{slug}']?.get;
+  assert('jobs/{slug} found', Boolean(jobsSlug));
+  const slugParam = jobsSlug.parameters?.find((p) => p.name === 'slug');
+  assert('path parameter carries its example', Boolean(slugParam?.example));
+
   // Deprecated marking, exercised on a synthetic fixture (no shipped endpoint
   // currently qualifies — see openspec/changes/migrate-api-docs-scalar/tasks.md).
   const deprecatedFixture = {

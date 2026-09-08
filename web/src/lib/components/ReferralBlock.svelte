@@ -20,8 +20,8 @@
   // This block itself is small, but the modal behind it pulls in Dialog, FormField
   // and the whole request flow — and it was landing in the route's module graph for
   // every job and company page, which is every visitor paying for a form that only
-  // the few who actually ask for a referral ever open. Same lazy posture as shiki
-  // and easymde elsewhere.
+  // the few who actually ask for a referral ever open. Same lazy posture as
+  // easymde elsewhere.
   //
   // `$state.raw`: this holds a component constructor, which must be stored as-is —
   // a deep proxy around it is both pointless and a hazard.

@@ -154,7 +154,8 @@
             "description": "Page size, 1–100.",
             "schema": {
               "type": "integer"
-            }
+            },
+            "example": "20"
           },
           {
             "name": "offset",
@@ -163,7 +164,8 @@
             "description": "Rows to skip.",
             "schema": {
               "type": "integer"
-            }
+            },
+            "example": "0"
           }
         ],
         "responses": {
@@ -196,19 +198,23 @@
                 "properties": {
                   "url": {
                     "type": "string",
-                    "description": "Link to the posting."
+                    "description": "Link to the posting.",
+                    "example": "https://acme.com/careers/123"
                   },
                   "source": {
                     "type": "string",
-                    "description": "Source label."
+                    "description": "Source label.",
+                    "example": "manual"
                   },
                   "title": {
                     "type": "string",
-                    "description": "Job title."
+                    "description": "Job title.",
+                    "example": "Senior Go Engineer"
                   },
                   "company": {
                     "type": "string",
-                    "description": "Company name."
+                    "description": "Company name.",
+                    "example": "Acme"
                   },
                   "location": {
                     "type": "string",
@@ -273,7 +279,8 @@
             "description": "Full-text query over title, company, and description.",
             "schema": {
               "type": "string"
-            }
+            },
+            "example": "golang"
           },
           {
             "name": "sort",
@@ -282,7 +289,8 @@
             "description": "One of `created_at`, `posted_at`, `view_count`, `salary_min`, `salary_max`. Omit for relevance/newest.",
             "schema": {
               "type": "string"
-            }
+            },
+            "example": "posted_at"
           },
           {
             "name": "order",
@@ -291,7 +299,8 @@
             "description": "`asc` or `desc` (default `desc`).",
             "schema": {
               "type": "string"
-            }
+            },
+            "example": "desc"
           },
           {
             "name": "limit",
@@ -300,7 +309,8 @@
             "description": "Page size, 1–100.",
             "schema": {
               "type": "integer"
-            }
+            },
+            "example": "20"
           },
           {
             "name": "offset",
@@ -309,7 +319,8 @@
             "description": "Rows to skip; `offset + limit` ≤ 10000.",
             "schema": {
               "type": "integer"
-            }
+            },
+            "example": "0"
           }
         ],
         "responses": {
@@ -344,7 +355,8 @@
             "description": "Full-text query over title, company, and description.",
             "schema": {
               "type": "string"
-            }
+            },
+            "example": "golang"
           },
           {
             "name": "description_format",
@@ -353,7 +365,8 @@
             "description": "One of `html` (default, verbatim), `text` (tags stripped), `markdown` (HTML converted to Markdown). Unknown values fall back to `html`.",
             "schema": {
               "type": "string"
-            }
+            },
+            "example": "markdown"
           },
           {
             "name": "sort",
@@ -362,7 +375,8 @@
             "description": "One of `created_at`, `posted_at`, `view_count`, `salary_min`, `salary_max`. Omit for relevance/newest.",
             "schema": {
               "type": "string"
-            }
+            },
+            "example": "posted_at"
           },
           {
             "name": "order",
@@ -371,7 +385,8 @@
             "description": "`asc` or `desc` (default `desc`).",
             "schema": {
               "type": "string"
-            }
+            },
+            "example": "desc"
           },
           {
             "name": "limit",
@@ -380,7 +395,8 @@
             "description": "Page size, 1–100.",
             "schema": {
               "type": "integer"
-            }
+            },
+            "example": "20"
           },
           {
             "name": "offset",
@@ -389,7 +405,8 @@
             "description": "Rows to skip; `offset + limit` ≤ 10000.",
             "schema": {
               "type": "integer"
-            }
+            },
+            "example": "0"
           }
         ],
         "responses": {
@@ -424,7 +441,8 @@
             "description": "Same full-text query as search.",
             "schema": {
               "type": "string"
-            }
+            },
+            "example": "golang"
           }
         ],
         "responses": {
@@ -458,7 +476,8 @@
             "description": "The job `public_slug`.",
             "schema": {
               "type": "string"
-            }
+            },
+            "example": "senior-go-engineer-acme-1a2b"
           }
         ],
         "responses": {
@@ -541,7 +560,8 @@
             "description": "The job `public_slug`.",
             "schema": {
               "type": "string"
-            }
+            },
+            "example": "senior-go-engineer-acme-1a2b"
           },
           {
             "name": "limit",
@@ -550,7 +570,8 @@
             "description": "Max similar jobs.",
             "schema": {
               "type": "integer"
-            }
+            },
+            "example": "10"
           }
         ],
         "responses": {
@@ -585,7 +606,8 @@
             "description": "The job `public_slug`.",
             "schema": {
               "type": "string"
-            }
+            },
+            "example": "senior-go-engineer-acme-1a2b"
           },
           {
             "name": "limit",
@@ -594,7 +616,8 @@
             "description": "Page size, 1–200 (default 50).",
             "schema": {
               "type": "integer"
-            }
+            },
+            "example": "50"
           },
           {
             "name": "offset",
@@ -603,7 +626,8 @@
             "description": "Rows to skip.",
             "schema": {
               "type": "integer"
-            }
+            },
+            "example": "0"
           }
         ],
         "responses": {
@@ -638,7 +662,8 @@
             "description": "The job `public_slug`.",
             "schema": {
               "type": "string"
-            }
+            },
+            "example": "senior-go-engineer-acme-1a2b"
           }
         ],
         "responses": {
@@ -843,7 +868,8 @@
                     "items": {
                       "type": "string"
                     },
-                    "description": "The skill list to score (max 100)."
+                    "description": "The skill list to score (max 100).",
+                    "example": "[\"go\",\"postgresql\"]"
                   }
                 },
                 "required": [
@@ -892,7 +918,8 @@
             "description": "Case-insensitive name substring filter.",
             "schema": {
               "type": "string"
-            }
+            },
+            "example": "acme"
           },
           {
             "name": "collections",
@@ -901,7 +928,8 @@
             "description": "Curated-collection slug (e.g. `yc`, `bigtech`). Repeatable.",
             "schema": {
               "type": "string"
-            }
+            },
+            "example": "yc"
           },
           {
             "name": "regions",
@@ -910,7 +938,8 @@
             "description": "Region the company hires in. Repeatable.",
             "schema": {
               "type": "string"
-            }
+            },
+            "example": "eu"
           },
           {
             "name": "countries",
@@ -919,7 +948,8 @@
             "description": "ISO 3166-1 alpha-2 country. Repeatable.",
             "schema": {
               "type": "string"
-            }
+            },
+            "example": "DE"
           },
           {
             "name": "industries",
@@ -928,7 +958,8 @@
             "description": "Curated industry. Matches a company through its curated industries **or** the equivalent job-derived domain. Repeatable.",
             "schema": {
               "type": "string"
-            }
+            },
+            "example": "fintech"
           },
           {
             "name": "domains",
@@ -937,7 +968,8 @@
             "description": "Raw job-derived domain, including values no industry names (`other`, `media`, `mobility`). Repeatable.",
             "schema": {
               "type": "string"
-            }
+            },
+            "example": "fintech"
           },
           {
             "name": "company_type",
@@ -946,7 +978,8 @@
             "description": "Company type (e.g. `product`, `outstaff`). Repeatable.",
             "schema": {
               "type": "string"
-            }
+            },
+            "example": "product"
           },
           {
             "name": "company_size",
@@ -955,7 +988,8 @@
             "description": "Size bucket (e.g. `51-200`). Repeatable.",
             "schema": {
               "type": "string"
-            }
+            },
+            "example": "51-200"
           },
           {
             "name": "remote_regions",
@@ -964,7 +998,8 @@
             "description": "Job-derived remote-hiring region. Repeatable.",
             "schema": {
               "type": "string"
-            }
+            },
+            "example": "eu"
           },
           {
             "name": "yc_batch",
@@ -973,7 +1008,8 @@
             "description": "YC batch (e.g. `W21`). Repeatable.",
             "schema": {
               "type": "string"
-            }
+            },
+            "example": "W21"
           },
           {
             "name": "yc_status",
@@ -982,7 +1018,8 @@
             "description": "YC company status. Repeatable.",
             "schema": {
               "type": "string"
-            }
+            },
+            "example": "active"
           },
           {
             "name": "yc_stage",
@@ -991,7 +1028,8 @@
             "description": "YC funding stage. Repeatable.",
             "schema": {
               "type": "string"
-            }
+            },
+            "example": "series-a"
           },
           {
             "name": "yc_flags",
@@ -1000,7 +1038,8 @@
             "description": "Curated YC highlight flag. Repeatable.",
             "schema": {
               "type": "string"
-            }
+            },
+            "example": "hiring"
           },
           {
             "name": "maturity",
@@ -1009,7 +1048,8 @@
             "description": "Company stage/maturity. Repeatable.",
             "schema": {
               "type": "string"
-            }
+            },
+            "example": "growth"
           },
           {
             "name": "subindustries",
@@ -1018,7 +1058,8 @@
             "description": "YC subindustry leaf (see /companies/subindustries). Repeatable.",
             "schema": {
               "type": "string"
-            }
+            },
+            "example": "payments"
           },
           {
             "name": "limit",
@@ -1027,7 +1068,8 @@
             "description": "Page size, 1–100.",
             "schema": {
               "type": "integer"
-            }
+            },
+            "example": "20"
           },
           {
             "name": "offset",
@@ -1036,7 +1078,8 @@
             "description": "Rows to skip.",
             "schema": {
               "type": "integer"
-            }
+            },
+            "example": "0"
           }
         ],
         "responses": {
@@ -1070,7 +1113,8 @@
             "description": "The company slug.",
             "schema": {
               "type": "string"
-            }
+            },
+            "example": "acme"
           },
           {
             "name": "limit",
@@ -1079,7 +1123,8 @@
             "description": "Page size for the jobs list.",
             "schema": {
               "type": "integer"
-            }
+            },
+            "example": "20"
           },
           {
             "name": "offset",
@@ -1088,7 +1133,8 @@
             "description": "Rows to skip in the jobs list.",
             "schema": {
               "type": "integer"
-            }
+            },
+            "example": "0"
           }
         ],
         "responses": {
@@ -1147,7 +1193,8 @@
             "description": "Prefix to match.",
             "schema": {
               "type": "string"
-            }
+            },
+            "example": "berl"
           },
           {
             "name": "country",
@@ -1156,7 +1203,8 @@
             "description": "ISO 3166-1 alpha-2 code to narrow to.",
             "schema": {
               "type": "string"
-            }
+            },
+            "example": "DE"
           }
         ],
         "responses": {
@@ -1190,7 +1238,8 @@
             "description": "The company slug.",
             "schema": {
               "type": "string"
-            }
+            },
+            "example": "acme"
           },
           {
             "name": "limit",
@@ -1199,7 +1248,8 @@
             "description": "Page size, 1–100.",
             "schema": {
               "type": "integer"
-            }
+            },
+            "example": "20"
           },
           {
             "name": "offset",
@@ -1208,7 +1258,8 @@
             "description": "Rows to skip.",
             "schema": {
               "type": "integer"
-            }
+            },
+            "example": "0"
           }
         ],
         "responses": {
@@ -1241,7 +1292,8 @@
             "description": "The company slug.",
             "schema": {
               "type": "string"
-            }
+            },
+            "example": "acme"
           }
         ],
         "requestBody": {
@@ -1253,15 +1305,18 @@
                 "properties": {
                   "rating": {
                     "type": "integer",
-                    "description": "1–5 stars."
+                    "description": "1–5 stars.",
+                    "example": "4"
                   },
                   "feedback_type": {
                     "type": "string",
-                    "description": "Review category, e.g. `interview`, `culture`, `compensation`."
+                    "description": "Review category, e.g. `interview`, `culture`, `compensation`.",
+                    "example": "interview"
                   },
                   "body": {
                     "type": "string",
-                    "description": "Free-text review."
+                    "description": "Free-text review.",
+                    "example": "Fast process, clear communication."
                   }
                 },
                 "required": [
@@ -1307,7 +1362,8 @@
             "description": "The company slug.",
             "schema": {
               "type": "string"
-            }
+            },
+            "example": "acme"
           },
           {
             "name": "feedback_type",
@@ -1316,7 +1372,8 @@
             "description": "Which category to delete.",
             "schema": {
               "type": "string"
-            }
+            },
+            "example": "interview"
           }
         ],
         "responses": {
@@ -1354,7 +1411,8 @@
             "description": "The company slug.",
             "schema": {
               "type": "string"
-            }
+            },
+            "example": "acme"
           }
         ],
         "responses": {
@@ -1393,7 +1451,8 @@
             "description": "The feedback entry id.",
             "schema": {
               "type": "integer"
-            }
+            },
+            "example": "5"
           }
         ],
         "requestBody": {
@@ -1405,7 +1464,8 @@
                 "properties": {
                   "reason": {
                     "type": "string",
-                    "description": "Report reason code."
+                    "description": "Report reason code.",
+                    "example": "spam"
                   }
                 },
                 "required": [
@@ -1478,7 +1538,8 @@
             "description": "The feedback entry id.",
             "schema": {
               "type": "integer"
-            }
+            },
+            "example": "5"
           }
         ],
         "responses": {
@@ -1517,7 +1578,8 @@
                 "properties": {
                   "email": {
                     "type": "string",
-                    "description": "Account email (canonical key)."
+                    "description": "Account email (canonical key).",
+                    "example": "me@example.com"
                   },
                   "password": {
                     "type": "string",
@@ -1564,7 +1626,8 @@
                 "properties": {
                   "email": {
                     "type": "string",
-                    "description": "Account email."
+                    "description": "Account email.",
+                    "example": "me@example.com"
                   },
                   "password": {
                     "type": "string",
@@ -1687,7 +1750,8 @@
             "description": "One of the enabled providers.",
             "schema": {
               "type": "string"
-            }
+            },
+            "example": "google"
           }
         ],
         "responses": {
@@ -1734,7 +1798,8 @@
                 "properties": {
                   "code": {
                     "type": "string",
-                    "description": "The six-digit code mailed to your address."
+                    "description": "The six-digit code mailed to your address.",
+                    "example": "123456"
                   }
                 },
                 "required": [
@@ -1781,7 +1846,8 @@
                 "properties": {
                   "email": {
                     "type": "string",
-                    "description": "Account email."
+                    "description": "Account email.",
+                    "example": "me@example.com"
                   }
                 },
                 "required": [
@@ -1816,11 +1882,13 @@
                 "properties": {
                   "email": {
                     "type": "string",
-                    "description": "Account email."
+                    "description": "Account email.",
+                    "example": "me@example.com"
                   },
                   "code": {
                     "type": "string",
-                    "description": "The mailed reset code."
+                    "description": "The mailed reset code.",
+                    "example": "123456"
                   },
                   "password": {
                     "type": "string",
@@ -1978,7 +2046,8 @@
                   },
                   "decision": {
                     "type": "string",
-                    "description": "`allow` or `cancel`."
+                    "description": "`allow` or `cancel`.",
+                    "example": "allow"
                   }
                 },
                 "required": [
@@ -2017,7 +2086,8 @@
                 "properties": {
                   "name": {
                     "type": "string",
-                    "description": "Label to tell keys apart."
+                    "description": "Label to tell keys apart.",
+                    "example": "cli-laptop"
                   },
                   "expires_at": {
                     "type": "string",
@@ -2092,7 +2162,8 @@
             "description": "The key id.",
             "schema": {
               "type": "integer"
-            }
+            },
+            "example": "7"
           }
         ],
         "responses": {
@@ -2184,7 +2255,8 @@
                 "properties": {
                   "applied_on": {
                     "type": "string",
-                    "description": "The day the application was sent (`YYYY-MM-DD`). Defaults to today."
+                    "description": "The day the application was sent (`YYYY-MM-DD`). Defaults to today.",
+                    "example": "2026-07-27"
                   }
                 }
               }
@@ -2322,7 +2394,8 @@
                 "properties": {
                   "stage": {
                     "type": "string",
-                    "description": "Application stage from the vocabulary above."
+                    "description": "Application stage from the vocabulary above.",
+                    "example": "interview"
                   },
                   "notes": {
                     "type": "string",
@@ -2452,7 +2525,8 @@
             "description": "The tracking row id (from `/me/tracking`).",
             "schema": {
               "type": "integer"
-            }
+            },
+            "example": "42"
           }
         ],
         "requestBody": {
@@ -2464,7 +2538,8 @@
                 "properties": {
                   "stage": {
                     "type": "string",
-                    "description": "Application stage."
+                    "description": "Application stage.",
+                    "example": "interview"
                   },
                   "notes": {
                     "type": "string",
@@ -2511,7 +2586,8 @@
             "description": "The tracking row id.",
             "schema": {
               "type": "integer"
-            }
+            },
+            "example": "42"
           }
         ],
         "responses": {
@@ -2552,7 +2628,8 @@
             "description": "The tracking row id.",
             "schema": {
               "type": "integer"
-            }
+            },
+            "example": "42"
           }
         ],
         "responses": {
@@ -2675,7 +2752,8 @@
             "description": "Subset to return: `all`, `viewed`, `saved`, `applied`, or `board` (default `all`; an unknown value is a 400).",
             "schema": {
               "type": "string"
-            }
+            },
+            "example": "applied"
           },
           {
             "name": "limit",
@@ -2684,7 +2762,8 @@
             "description": "Page size, 1–100.",
             "schema": {
               "type": "integer"
-            }
+            },
+            "example": "20"
           },
           {
             "name": "offset",
@@ -2693,7 +2772,8 @@
             "description": "Rows to skip.",
             "schema": {
               "type": "integer"
-            }
+            },
+            "example": "0"
           }
         ],
         "responses": {
@@ -2917,7 +2997,8 @@
             "description": "Optional full-text query (as in search).",
             "schema": {
               "type": "string"
-            }
+            },
+            "example": "golang"
           },
           {
             "name": "limit",
@@ -2926,7 +3007,8 @@
             "description": "Page size, 1–100.",
             "schema": {
               "type": "integer"
-            }
+            },
+            "example": "20"
           },
           {
             "name": "offset",
@@ -2935,7 +3017,8 @@
             "description": "Rows to skip; `offset + limit` ≤ 10000.",
             "schema": {
               "type": "integer"
-            }
+            },
+            "example": "0"
           }
         ],
         "responses": {
@@ -2978,7 +3061,8 @@
             "schema": {
               "type": "string",
               "format": "date-time"
-            }
+            },
+            "example": "2026-08-01T00:00:00Z"
           },
           {
             "name": "to",
@@ -2988,7 +3072,8 @@
             "schema": {
               "type": "string",
               "format": "date-time"
-            }
+            },
+            "example": "2026-08-31T23:59:59Z"
           }
         ],
         "responses": {
@@ -3031,7 +3116,8 @@
             "schema": {
               "type": "string",
               "format": "date-time"
-            }
+            },
+            "example": "2026-08-01T00:00:00Z"
           },
           {
             "name": "to",
@@ -3041,7 +3127,8 @@
             "schema": {
               "type": "string",
               "format": "date-time"
-            }
+            },
+            "example": "2026-08-31T23:59:59Z"
           }
         ],
         "responses": {
@@ -3082,7 +3169,8 @@
             "description": "One of `chat` (default), `profile`, `browse`, `interview`, `debrief`.",
             "schema": {
               "type": "string"
-            }
+            },
+            "example": "chat"
           },
           {
             "name": "job",
@@ -3091,7 +3179,8 @@
             "description": "Public slug of an application you hold. Required for `interview`/`debrief`, ignored otherwise.",
             "schema": {
               "type": "string"
-            }
+            },
+            "example": "senior-go-engineer-acme-1a2b"
           }
         ],
         "responses": {
@@ -3162,7 +3251,8 @@
             "schema": {
               "type": "string",
               "format": "uuid"
-            }
+            },
+            "example": "b2f1c2b0-6e2a-4c9e-9c2e-0a1b2c3d4e5f"
           }
         ],
         "responses": {
@@ -3250,7 +3340,8 @@
                 "properties": {
                   "text": {
                     "type": "string",
-                    "description": "Your message."
+                    "description": "Your message.",
+                    "example": "Should I relocate for this role?"
                   }
                 },
                 "required": [
@@ -3340,7 +3431,14 @@
         ],
         "responses": {
           "200": {
-            "description": "Success"
+            "description": "Success",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           }
         },
         "security": [
@@ -3375,7 +3473,14 @@
         ],
         "responses": {
           "200": {
-            "description": "Success"
+            "description": "Success",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           }
         },
         "security": [
@@ -3503,7 +3608,8 @@
                 "properties": {
                   "role": {
                     "type": "string",
-                    "description": "`user` or `assistant`."
+                    "description": "`user` or `assistant`.",
+                    "example": "user"
                   },
                   "content": {
                     "type": "string",
@@ -3555,7 +3661,14 @@
         ],
         "responses": {
           "200": {
-            "description": "Success"
+            "description": "Success",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           }
         },
         "security": [
@@ -3581,23 +3694,28 @@
                 "properties": {
                   "url": {
                     "type": "string",
-                    "description": "Link to the original posting."
+                    "description": "Link to the original posting.",
+                    "example": "https://acme.com/careers/123"
                   },
                   "title": {
                     "type": "string",
-                    "description": "Job title."
+                    "description": "Job title.",
+                    "example": "Senior Go Engineer"
                   },
                   "company": {
                     "type": "string",
-                    "description": "Company name."
+                    "description": "Company name.",
+                    "example": "Acme"
                   },
                   "location": {
                     "type": "string",
-                    "description": "Free-text location."
+                    "description": "Free-text location.",
+                    "example": "Remote — EU"
                   },
                   "remote": {
                     "type": "boolean",
-                    "description": "Whether the role is remote."
+                    "description": "Whether the role is remote.",
+                    "example": "true"
                   },
                   "description": {
                     "type": "string",
@@ -3765,7 +3883,8 @@
             "description": "The submission id.",
             "schema": {
               "type": "integer"
-            }
+            },
+            "example": "9"
           }
         ],
         "responses": {
@@ -3803,7 +3922,8 @@
             "description": "The submission id.",
             "schema": {
               "type": "integer"
-            }
+            },
+            "example": "9"
           }
         ],
         "requestBody": {
@@ -3815,7 +3935,8 @@
                 "properties": {
                   "reason": {
                     "type": "string",
-                    "description": "Why it was rejected."
+                    "description": "Why it was rejected.",
+                    "example": "duplicate"
                   }
                 }
               }
@@ -3869,7 +3990,8 @@
                 "properties": {
                   "reason": {
                     "type": "string",
-                    "description": "Short reason code/category."
+                    "description": "Short reason code/category.",
+                    "example": "expired"
                   },
                   "details": {
                     "type": "string",
@@ -3952,7 +4074,8 @@
             "description": "The report id.",
             "schema": {
               "type": "integer"
-            }
+            },
+            "example": "3"
           }
         ],
         "requestBody": {
@@ -3964,15 +4087,18 @@
                 "properties": {
                   "close_job": {
                     "type": "boolean",
-                    "description": "Soft-close the reported job."
+                    "description": "Soft-close the reported job.",
+                    "example": "true"
                   },
                   "note": {
                     "type": "string",
-                    "description": "What you did about the report. Emailed to the reporter verbatim when notify_reporter is set, and stored as the review reason either way."
+                    "description": "What you did about the report. Emailed to the reporter verbatim when notify_reporter is set, and stored as the review reason either way.",
+                    "example": "Fixed — the job is now marked hybrid"
                   },
                   "notify_reporter": {
                     "type": "boolean",
-                    "description": "Email the reporter this decision. Defaults to false when omitted."
+                    "description": "Email the reporter this decision. Defaults to false when omitted.",
+                    "example": "true"
                   }
                 }
               }
@@ -4014,7 +4140,8 @@
             "description": "The report id.",
             "schema": {
               "type": "integer"
-            }
+            },
+            "example": "3"
           }
         ],
         "requestBody": {
@@ -4026,11 +4153,13 @@
                 "properties": {
                   "reason": {
                     "type": "string",
-                    "description": "Why nothing changed. Emailed to the reporter verbatim when notify_reporter is set."
+                    "description": "Why nothing changed. Emailed to the reporter verbatim when notify_reporter is set.",
+                    "example": "not an issue"
                   },
                   "notify_reporter": {
                     "type": "boolean",
-                    "description": "Email the reporter this decision. Defaults to false when omitted."
+                    "description": "Email the reporter this decision. Defaults to false when omitted.",
+                    "example": "true"
                   }
                 }
               }
@@ -4085,7 +4214,8 @@
                 "properties": {
                   "applied_on": {
                     "type": "string",
-                    "description": "The day you applied (`YYYY-MM-DD`)."
+                    "description": "The day you applied (`YYYY-MM-DD`).",
+                    "example": "2026-07-29"
                   }
                 },
                 "required": [
@@ -4203,14 +4333,16 @@
                     "items": {
                       "type": "string"
                     },
-                    "description": "One or more job categories (max 5)."
+                    "description": "One or more job categories (max 5).",
+                    "example": "[\"backend\"]"
                   },
                   "skills": {
                     "type": "array",
                     "items": {
                       "type": "string"
                     },
-                    "description": "Canonical skill tokens (non-empty)."
+                    "description": "Canonical skill tokens (non-empty).",
+                    "example": "[\"go\",\"postgresql\"]"
                   },
                   "location_preferences": {
                     "type": "object",
@@ -4689,7 +4821,8 @@
                     "items": {
                       "type": "string"
                     },
-                    "description": "ISO alpha-2 country codes you are authorized to work in."
+                    "description": "ISO alpha-2 country codes you are authorized to work in.",
+                    "example": "[\"DE\",\"NL\"]"
                   },
                   "visa_sponsorship_needed": {
                     "type": "boolean",
@@ -4697,19 +4830,23 @@
                   },
                   "desired_salary_amount": {
                     "type": "integer",
-                    "description": "Desired salary figure."
+                    "description": "Desired salary figure.",
+                    "example": "90000"
                   },
                   "desired_salary_currency": {
                     "type": "string",
-                    "description": "Three-letter ISO 4217 currency code."
+                    "description": "Three-letter ISO 4217 currency code.",
+                    "example": "EUR"
                   },
                   "desired_salary_period": {
                     "type": "string",
-                    "description": "Salary period, e.g. `year`, `month`."
+                    "description": "Salary period, e.g. `year`, `month`.",
+                    "example": "year"
                   },
                   "notice_period_days": {
                     "type": "integer",
-                    "description": "Notice period in days."
+                    "description": "Notice period in days.",
+                    "example": "30"
                   },
                   "willing_to_relocate": {
                     "type": "boolean",
@@ -4789,11 +4926,13 @@
                 "properties": {
                   "job_search_stage": {
                     "type": "string",
-                    "description": "One of `not_started`, `searching`, `employed_looking`, `exploring`."
+                    "description": "One of `not_started`, `searching`, `employed_looking`, `exploring`.",
+                    "example": "searching"
                   },
                   "biggest_challenge": {
                     "type": "string",
-                    "description": "One of `english`, `recruiter_contact`, `working_abroad`, `technical_interviews`, `other`."
+                    "description": "One of `english`, `recruiter_contact`, `working_abroad`, `technical_interviews`, `other`.",
+                    "example": "technical_interviews"
                   },
                   "biggest_challenge_note": {
                     "type": "string",
@@ -4801,15 +4940,18 @@
                   },
                   "current_income_amount": {
                     "type": "integer",
-                    "description": "What you earn today, in the currency and period below."
+                    "description": "What you earn today, in the currency and period below.",
+                    "example": "5000"
                   },
                   "current_income_currency": {
                     "type": "string",
-                    "description": "Three-letter ISO 4217 currency code."
+                    "description": "Three-letter ISO 4217 currency code.",
+                    "example": "USD"
                   },
                   "current_income_period": {
                     "type": "string",
-                    "description": "Income period, e.g. `year`, `month`."
+                    "description": "Income period, e.g. `year`, `month`.",
+                    "example": "month"
                   }
                 }
               }
@@ -4880,7 +5022,8 @@
             "description": "One of `day`, `week`, `month` (default `day`).",
             "schema": {
               "type": "string"
-            }
+            },
+            "example": "week"
           },
           {
             "name": "from",
@@ -4890,7 +5033,8 @@
             "schema": {
               "type": "string",
               "format": "date"
-            }
+            },
+            "example": "2026-01-01"
           },
           {
             "name": "to",
@@ -4900,7 +5044,8 @@
             "schema": {
               "type": "string",
               "format": "date"
-            }
+            },
+            "example": "2026-06-30"
           }
         ],
         "responses": {
@@ -4935,7 +5080,8 @@
             "description": "The job-list public slug.",
             "schema": {
               "type": "string"
-            }
+            },
+            "example": "backend-jobs-a3f1"
           }
         ],
         "responses": {
@@ -4995,11 +5141,13 @@
                 "properties": {
                   "name": {
                     "type": "string",
-                    "description": "Display name."
+                    "description": "Display name.",
+                    "example": "Senior Go remote"
                   },
                   "query": {
                     "type": "string",
-                    "description": "Canonical filter query string."
+                    "description": "Canonical filter query string.",
+                    "example": "q=go&seniority=senior&work_mode=remote"
                   }
                 },
                 "required": [
@@ -5045,7 +5193,8 @@
             "description": "The saved-search id.",
             "schema": {
               "type": "integer"
-            }
+            },
+            "example": "2"
           }
         ],
         "requestBody": {
@@ -5101,7 +5250,8 @@
             "description": "The saved-search id.",
             "schema": {
               "type": "integer"
-            }
+            },
+            "example": "2"
           }
         ],
         "responses": {
@@ -5165,11 +5315,13 @@
                 "properties": {
                   "saved_search_id": {
                     "type": "integer",
-                    "description": "The saved search to subscribe."
+                    "description": "The saved search to subscribe.",
+                    "example": "2"
                   },
                   "channel": {
                     "type": "string",
-                    "description": "Delivery channel."
+                    "description": "Delivery channel.",
+                    "example": "telegram"
                   }
                 },
                 "required": [
@@ -5215,7 +5367,8 @@
             "description": "The subscription id.",
             "schema": {
               "type": "integer"
-            }
+            },
+            "example": "1"
           }
         ],
         "requestBody": {
@@ -5227,7 +5380,8 @@
                 "properties": {
                   "active": {
                     "type": "boolean",
-                    "description": "Whether the subscription is active."
+                    "description": "Whether the subscription is active.",
+                    "example": "false"
                   }
                 },
                 "required": [
@@ -5270,7 +5424,8 @@
             "description": "The subscription id.",
             "schema": {
               "type": "integer"
-            }
+            },
+            "example": "1"
           }
         ],
         "responses": {
@@ -5466,7 +5621,8 @@
                 "properties": {
                   "url": {
                     "type": "string",
-                    "description": "Destination URL — must be http or https."
+                    "description": "Destination URL — must be http or https.",
+                    "example": "https://example.com/hook"
                   }
                 },
                 "required": [
@@ -5510,7 +5666,8 @@
                 "properties": {
                   "enabled": {
                     "type": "boolean",
-                    "description": "Whether the destination is enabled."
+                    "description": "Whether the destination is enabled.",
+                    "example": "false"
                   }
                 },
                 "required": [
@@ -5606,11 +5763,13 @@
                 "properties": {
                   "name": {
                     "type": "string",
-                    "description": "Display name."
+                    "description": "Display name.",
+                    "example": "Backend jobs"
                   },
                   "description": {
                     "type": "string",
-                    "description": "Optional free-text description."
+                    "description": "Optional free-text description.",
+                    "example": "Shortlist for this round"
                   }
                 },
                 "required": [
@@ -5655,7 +5814,8 @@
             "description": "The job-list id.",
             "schema": {
               "type": "integer"
-            }
+            },
+            "example": "3"
           }
         ],
         "requestBody": {
@@ -5712,7 +5872,8 @@
             "description": "The job-list id.",
             "schema": {
               "type": "integer"
-            }
+            },
+            "example": "3"
           }
         ],
         "responses": {
@@ -5751,7 +5912,8 @@
             "description": "The job-list id.",
             "schema": {
               "type": "integer"
-            }
+            },
+            "example": "3"
           }
         ],
         "requestBody": {
@@ -5763,7 +5925,8 @@
                 "properties": {
                   "job_slug": {
                     "type": "string",
-                    "description": "The job to add."
+                    "description": "The job to add.",
+                    "example": "senior-go-engineer-acme-1a2b"
                   }
                 },
                 "required": [
@@ -5809,7 +5972,8 @@
             "description": "The job-list id.",
             "schema": {
               "type": "integer"
-            }
+            },
+            "example": "3"
           },
           {
             "name": "job_slug",
@@ -5818,7 +5982,8 @@
             "description": "The job to remove.",
             "schema": {
               "type": "string"
-            }
+            },
+            "example": "senior-go-engineer-acme-1a2b"
           }
         ],
         "responses": {
@@ -5857,7 +6022,8 @@
             "description": "The job-list id.",
             "schema": {
               "type": "integer"
-            }
+            },
+            "example": "3"
           }
         ],
         "responses": {
@@ -5894,7 +6060,8 @@
             "description": "The job-list id.",
             "schema": {
               "type": "integer"
-            }
+            },
+            "example": "3"
           }
         ],
         "responses": {
@@ -5934,11 +6101,13 @@
                 "properties": {
                   "token": {
                     "type": "string",
-                    "description": "The Expo push token minted by the device."
+                    "description": "The Expo push token minted by the device.",
+                    "example": "ExponentPushToken[xxxxxxxxxxxxxxxxxxxxxx]"
                   },
                   "platform": {
                     "type": "string",
-                    "description": "`ios` or `android`."
+                    "description": "`ios` or `android`.",
+                    "example": "ios"
                   }
                 },
                 "required": [
@@ -6066,7 +6235,8 @@
             "description": "Page size, 1–100.",
             "schema": {
               "type": "integer"
-            }
+            },
+            "example": "20"
           },
           {
             "name": "offset",
@@ -6075,7 +6245,8 @@
             "description": "Rows to skip.",
             "schema": {
               "type": "integer"
-            }
+            },
+            "example": "0"
           }
         ],
         "responses": {
@@ -6113,7 +6284,8 @@
             "description": "The notification id.",
             "schema": {
               "type": "integer"
-            }
+            },
+            "example": "5"
           }
         ],
         "responses": {
@@ -6152,7 +6324,8 @@
             "description": "The notification id.",
             "schema": {
               "type": "integer"
-            }
+            },
+            "example": "5"
           }
         ],
         "responses": {
@@ -6529,7 +6702,8 @@
                 "properties": {
                   "timezone": {
                     "type": "string",
-                    "description": "IANA timezone name."
+                    "description": "IANA timezone name.",
+                    "example": "Europe/Berlin"
                   }
                 },
                 "required": [
@@ -6575,7 +6749,8 @@
                 "properties": {
                   "language": {
                     "type": "string",
-                    "description": "Supported language code."
+                    "description": "Supported language code.",
+                    "example": "en"
                   }
                 },
                 "required": [
@@ -6621,7 +6796,8 @@
             "description": "The posting's URL in the wild.",
             "schema": {
               "type": "string"
-            }
+            },
+            "example": "https://boards.greenhouse.io/acme/jobs/123"
           }
         ],
         "responses": {
@@ -7340,7 +7516,8 @@
             "description": "Scope to one country (ISO code).",
             "schema": {
               "type": "string"
-            }
+            },
+            "example": "de"
           },
           {
             "name": "sort",
@@ -7349,7 +7526,8 @@
             "description": "Rank by open count or by growth.",
             "schema": {
               "type": "string"
-            }
+            },
+            "example": "growth"
           },
           {
             "name": "limit",
@@ -7367,7 +7545,8 @@
             "description": "Scope to one job category.",
             "schema": {
               "type": "string"
-            }
+            },
+            "example": "backend"
           }
         ],
         "responses": {
@@ -7524,7 +7703,8 @@
             "description": "Bucket size for the series.",
             "schema": {
               "type": "string"
-            }
+            },
+            "example": "week"
           },
           {
             "name": "from",
@@ -8077,7 +8257,8 @@
                 "properties": {
                   "status": {
                     "type": "string",
-                    "description": "`contacted` or `declined`."
+                    "description": "`contacted` or `declined`.",
+                    "example": "contacted"
                   }
                 },
                 "required": [
@@ -8272,7 +8453,8 @@
                 "properties": {
                   "visibility": {
                     "type": "string",
-                    "description": "Either `off` or `anonymous`."
+                    "description": "Either `off` or `anonymous`.",
+                    "example": "anonymous"
                   }
                 },
                 "required": [
@@ -8318,7 +8500,8 @@
             "description": "Comma-separated role categories.",
             "schema": {
               "type": "string"
-            }
+            },
+            "example": "backend,devops"
           },
           {
             "name": "seniorities",
@@ -8327,7 +8510,8 @@
             "description": "Comma-separated seniority levels.",
             "schema": {
               "type": "string"
-            }
+            },
+            "example": "senior"
           },
           {
             "name": "skills",
@@ -8336,7 +8520,8 @@
             "description": "Comma-separated canonical skills.",
             "schema": {
               "type": "string"
-            }
+            },
+            "example": "go,postgresql"
           },
           {
             "name": "tz",
@@ -8345,7 +8530,8 @@
             "description": "Comma-separated IANA timezone regions. A member with no timezone is excluded when this is set.",
             "schema": {
               "type": "string"
-            }
+            },
+            "example": "Europe"
           },
           {
             "name": "cities",
@@ -8354,7 +8540,8 @@
             "description": "Comma-separated normalised cities.",
             "schema": {
               "type": "string"
-            }
+            },
+            "example": "berlin"
           },
           {
             "name": "specializations",
@@ -8363,7 +8550,8 @@
             "description": "Comma-separated curated specialisations.",
             "schema": {
               "type": "string"
-            }
+            },
+            "example": "platform"
           },
           {
             "name": "min_years",
@@ -8372,7 +8560,8 @@
             "description": "Least total years of experience.",
             "schema": {
               "type": "integer"
-            }
+            },
+            "example": "5"
           },
           {
             "name": "limit",
@@ -8381,7 +8570,8 @@
             "description": "Page size, 1–100. Defaults to 24.",
             "schema": {
               "type": "integer"
-            }
+            },
+            "example": "24"
           },
           {
             "name": "offset",
@@ -8390,7 +8580,8 @@
             "description": "Rows to skip.",
             "schema": {
               "type": "integer"
-            }
+            },
+            "example": "0"
           }
         ],
         "responses": {
@@ -8449,7 +8640,8 @@
             "description": "The member’s minted catalogue handle.",
             "schema": {
               "type": "string"
-            }
+            },
+            "example": "backend-7f2a"
           }
         ],
         "responses": {
@@ -8513,7 +8705,8 @@
                   },
                   "template_id": {
                     "type": "string",
-                    "description": "Which template to render with."
+                    "description": "Which template to render with.",
+                    "example": "classic"
                   },
                   "seed": {
                     "type": "boolean",
@@ -8684,11 +8877,13 @@
                   },
                   "ops[].kind": {
                     "type": "string",
-                    "description": "`set`, `insert`, `remove` or `move`."
+                    "description": "`set`, `insert`, `remove` or `move`.",
+                    "example": "set"
                   },
                   "ops[].path": {
                     "type": "string",
-                    "description": "Where to edit."
+                    "description": "Where to edit.",
+                    "example": "experience[0].bullets[1]"
                   },
                   "ops[].value": {
                     "description": "The new content, for `set` and `insert`."
@@ -9766,15 +9961,18 @@
                 "properties": {
                   "kind": {
                     "type": "string",
-                    "description": "`job` or `project`."
+                    "description": "`job` or `project`.",
+                    "example": "job"
                   },
                   "company": {
                     "type": "string",
-                    "description": "The employer (jobs) — or the project name via `name` (see description)."
+                    "description": "The employer (jobs) — or the project name via `name` (see description).",
+                    "example": "Acme"
                   },
                   "role": {
                     "type": "string",
-                    "description": "Your title."
+                    "description": "Your title.",
+                    "example": "Senior Backend Engineer"
                   },
                   "location": {
                     "type": "string",
@@ -9782,7 +9980,8 @@
                   },
                   "start": {
                     "type": "string",
-                    "description": "Start date."
+                    "description": "Start date.",
+                    "example": "2023-02"
                   },
                   "end": {
                     "type": "string",
@@ -9855,7 +10054,8 @@
                 "properties": {
                   "claim": {
                     "type": "string",
-                    "description": "The sentence a CV bullet would carry."
+                    "description": "The sentence a CV bullet would carry.",
+                    "example": "Cut p99 checkout latency 40%"
                   },
                   "employment_id": {
                     "type": "string",
@@ -9871,7 +10071,8 @@
                     "items": {
                       "type": "string"
                     },
-                    "description": "Numbers backing the claim."
+                    "description": "Numbers backing the claim.",
+                    "example": "[\"12k rps\", \"40%\"]"
                   },
                   "skills": {
                     "type": "array",
@@ -9938,7 +10139,8 @@
                     },
                     "minItems": 2,
                     "maxItems": 2,
-                    "description": "Exactly two atom ids; the first is kept."
+                    "description": "Exactly two atom ids; the first is kept.",
+                    "example": "[\"88b1…\",\"91c2…\"]"
                   }
                 },
                 "required": [
@@ -10170,7 +10372,8 @@
             "description": "One classified label (see the triage vocabulary below).",
             "schema": {
               "type": "string"
-            }
+            },
+            "example": "rejection"
           },
           {
             "name": "unclassified",
@@ -10284,7 +10487,8 @@
             "description": "The message id.",
             "schema": {
               "type": "integer"
-            }
+            },
+            "example": "4821"
           }
         ],
         "responses": {
@@ -10331,7 +10535,8 @@
                   },
                   "messages[].external_id": {
                     "type": "string",
-                    "description": "Dedup key; the Message-ID header."
+                    "description": "Dedup key; the Message-ID header.",
+                    "example": "<CAF...@mail.gmail.com>"
                   },
                   "messages[].thread_id": {
                     "type": "string",
@@ -10422,7 +10627,8 @@
                 "properties": {
                   "signal": {
                     "type": "string",
-                    "description": "One value from the vocabulary above."
+                    "description": "One value from the vocabulary above.",
+                    "example": "interview_invitation"
                   },
                   "slug": {
                     "type": "string",
