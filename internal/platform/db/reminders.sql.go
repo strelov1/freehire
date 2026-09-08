@@ -107,8 +107,55 @@ func (q *Queries) ClaimDueReminders(ctx context.Context, arg ClaimDueRemindersPa
 	return items, nil
 }
 
+const getEmailPrefs = `-- name: GetEmailPrefs :one
+SELECT u.email,
+       COALESCE(ns.enabled, true)              AS activity_enabled,
+       COALESCE(ns.alerts_email_enabled, true) AS alerts_enabled,
+       COALESCE(ns.news_email_enabled, true)   AS news_enabled
+FROM users u
+LEFT JOIN notification_settings ns ON ns.user_id = u.id
+WHERE u.id = $1
+`
+
+type GetEmailPrefsRow struct {
+	Email           string `json:"email"`
+	ActivityEnabled bool   `json:"activity_enabled"`
+	AlertsEnabled   bool   `json:"alerts_enabled"`
+	NewsEnabled     bool   `json:"news_enabled"`
+}
+
+// Everything the public preference page may show, and nothing else: the address the
+// mail went to and the three group switches.
+//
+// Reads through a LEFT JOIN because most accounts have no rule row. The COALESCE
+// defaults are the same ones the DELIVERY queries apply, so what this page shows is
+// what those queries would do — a page that disagreed with the sender would be worse
+// than no page.
+//
+// `enabled` coalesces to TRUE, matching GetReminderForDelivery above and the
+// notification-settings requirement that a never-configured account is enabled. It
+// read FALSE for a while, which had two costs and the second was the real one: the
+// page told somebody their notifications were off while they were receiving saved-job
+// reminders, and every save then wrote that false back — so one click on a CAMPAIGN's
+// unsubscribe button silently turned their reminders off. That is the coupling this
+// whole change exists to break, reintroduced in the other direction.
+//
+// The nudge queries coalesce the other way, and that is not a contradiction: their
+// MATCH step already inner-joins an enabled row, so a nudge cannot exist without one.
+func (q *Queries) GetEmailPrefs(ctx context.Context, id int64) (GetEmailPrefsRow, error) {
+	row := q.db.QueryRow(ctx, getEmailPrefs, id)
+	var i GetEmailPrefsRow
+	err := row.Scan(
+		&i.Email,
+		&i.ActivityEnabled,
+		&i.AlertsEnabled,
+		&i.NewsEnabled,
+	)
+	return i, err
+}
+
 const getNotificationSettings = `-- name: GetNotificationSettings :one
-SELECT user_id, enabled, channels, updated_at, digest_frequency, digest_time, quiet_hours_start, quiet_hours_end FROM notification_settings WHERE user_id = $1
+SELECT user_id, enabled, channels, updated_at, digest_frequency, digest_time, quiet_hours_start, quiet_hours_end, alerts_email_enabled, news_email_enabled FROM notification_settings WHERE user_id = $1
 `
 
 // The caller's notification rule, shared by saved-job reminders and both
@@ -127,6 +174,8 @@ func (q *Queries) GetNotificationSettings(ctx context.Context, userID int64) (No
 		&i.DigestTime,
 		&i.QuietHoursStart,
 		&i.QuietHoursEnd,
+		&i.AlertsEmailEnabled,
+		&i.NewsEmailEnabled,
 	)
 	return i, err
 }
@@ -294,6 +343,67 @@ func (q *Queries) ReleaseReminderClaim(ctx context.Context, id int64) error {
 	return err
 }
 
+const setActivityEnabled = `-- name: SetActivityEnabled :exec
+INSERT INTO notification_settings (user_id, enabled, updated_at)
+VALUES ($1, $2, now())
+ON CONFLICT (user_id) DO UPDATE
+  SET enabled    = EXCLUDED.enabled,
+      updated_at = now()
+`
+
+type SetActivityEnabledParams struct {
+	UserID  int64 `json:"user_id"`
+	Enabled bool  `json:"enabled"`
+}
+
+// Turn the activity group on or off for one account. Separate from
+// SetEmailGroupSwitches so the public page's "unsubscribe from everything" can reach
+// it without also being able to turn it ON by accident: the two callers pass
+// different values and neither writes the other's columns.
+func (q *Queries) SetActivityEnabled(ctx context.Context, arg SetActivityEnabledParams) error {
+	_, err := q.db.Exec(ctx, setActivityEnabled, arg.UserID, arg.Enabled)
+	return err
+}
+
+const setEmailGroupSwitches = `-- name: SetEmailGroupSwitches :exec
+INSERT INTO notification_settings (user_id, enabled, alerts_email_enabled, news_email_enabled, updated_at)
+VALUES ($1, true, $2, $3, now())
+ON CONFLICT (user_id) DO UPDATE
+  SET alerts_email_enabled = EXCLUDED.alerts_email_enabled,
+      news_email_enabled   = EXCLUDED.news_email_enabled,
+      updated_at           = now()
+`
+
+type SetEmailGroupSwitchesParams struct {
+	UserID             int64 `json:"user_id"`
+	AlertsEmailEnabled bool  `json:"alerts_email_enabled"`
+	NewsEmailEnabled   bool  `json:"news_email_enabled"`
+}
+
+// Turn the alerts and news groups on or off for one account, without touching
+// anything else in the rule.
+//
+// Deliberately NOT folded into UpsertNotificationSettings. That one is a full
+// replace: it names every column in its DO UPDATE SET, so routing both writers
+// through it would make a save from the authenticated settings page overwrite a
+// choice somebody made from an unsubscribe link, and the reverse. Two writers with
+// two scopes cannot clobber each other.
+//
+// The INSERT branch matters as much as the UPDATE one, and it is where this was
+// wrong once. Most accounts have no notification_settings row at all, because the
+// only thing that used to create it was a page behind the login — and the
+// never-configured state is ENABLED for lifecycle mail (GetReminderForDelivery
+// coalesces to true). Letting `enabled` fall to its COLUMN default of false on
+// insert therefore turned somebody's saved-job reminders off the moment they
+// declined a campaign, which is exactly the coupling migration 0153 removed.
+//
+// So the insert writes the never-configured default explicitly. A row created by
+// this statement leaves the account receiving precisely what it received before.
+func (q *Queries) SetEmailGroupSwitches(ctx context.Context, arg SetEmailGroupSwitchesParams) error {
+	_, err := q.db.Exec(ctx, setEmailGroupSwitches, arg.UserID, arg.AlertsEmailEnabled, arg.NewsEmailEnabled)
+	return err
+}
+
 const upsertJobReminder = `-- name: UpsertJobReminder :one
 INSERT INTO job_reminders (user_id, job_id, fire_at, channels)
 VALUES ($1, $2, $3, $4::text[])
@@ -361,7 +471,7 @@ ON CONFLICT (user_id) DO UPDATE
       quiet_hours_start  = EXCLUDED.quiet_hours_start,
       quiet_hours_end    = EXCLUDED.quiet_hours_end,
       updated_at         = now()
-RETURNING user_id, enabled, channels, updated_at, digest_frequency, digest_time, quiet_hours_start, quiet_hours_end
+RETURNING user_id, enabled, channels, updated_at, digest_frequency, digest_time, quiet_hours_start, quiet_hours_end, alerts_email_enabled, news_email_enabled
 `
 
 type UpsertNotificationSettingsParams struct {
@@ -398,6 +508,8 @@ func (q *Queries) UpsertNotificationSettings(ctx context.Context, arg UpsertNoti
 		&i.DigestTime,
 		&i.QuietHoursStart,
 		&i.QuietHoursEnd,
+		&i.AlertsEmailEnabled,
+		&i.NewsEmailEnabled,
 	)
 	return i, err
 }

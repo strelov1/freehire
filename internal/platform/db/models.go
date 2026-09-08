@@ -933,14 +933,16 @@ type MentorReview struct {
 }
 
 type NotificationSetting struct {
-	UserID          int64              `json:"user_id"`
-	Enabled         bool               `json:"enabled"`
-	Channels        []string           `json:"channels"`
-	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
-	DigestFrequency string             `json:"digest_frequency"`
-	DigestTime      pgtype.Time        `json:"digest_time"`
-	QuietHoursStart pgtype.Time        `json:"quiet_hours_start"`
-	QuietHoursEnd   pgtype.Time        `json:"quiet_hours_end"`
+	UserID             int64              `json:"user_id"`
+	Enabled            bool               `json:"enabled"`
+	Channels           []string           `json:"channels"`
+	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
+	DigestFrequency    string             `json:"digest_frequency"`
+	DigestTime         pgtype.Time        `json:"digest_time"`
+	QuietHoursStart    pgtype.Time        `json:"quiet_hours_start"`
+	QuietHoursEnd      pgtype.Time        `json:"quiet_hours_end"`
+	AlertsEmailEnabled bool               `json:"alerts_email_enabled"`
+	NewsEmailEnabled   bool               `json:"news_email_enabled"`
 }
 
 type OauthAuthAttempt struct {

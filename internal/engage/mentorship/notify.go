@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/strelov1/freehire/internal/engage/emailnotify"
+	"github.com/strelov1/freehire/internal/engage/emailprefs"
 )
 
 // Compile-time proof that MailNotifier satisfies Notifier.
@@ -27,8 +28,13 @@ var _ Notifier = (*MailNotifier)(nil)
 // notification-settings delta: the rule governs what the SYSTEM originates about a user's
 // activity, not a commitment the user made themselves and which a second person is
 // holding an hour for.
+//
+// That same argument is why they are emailprefs.GroupEssential and carry no unsubscribe
+// link. A booking confirmation is transactional — CAN-SPAM exempts exactly this, and an
+// unsubscribe control on it would be an offer we cannot honour, since cancelling the mail
+// does not cancel the appointment. Someone who wants out cancels the session.
 type MailNotifier struct {
-	sender emailnotify.AttachmentSender
+	sender emailnotify.Sender
 	from   string
 	// cabinetURL is where a recipient goes to see or cancel the session. Every message
 	// carries it, because the alternative to a link is a reply nobody reads.
@@ -38,7 +44,7 @@ type MailNotifier struct {
 // NewMailNotifier builds a MailNotifier. A nil sender is a deployment with no mail
 // transport — the caller passes nil to Config.Notifier instead, and nothing here is
 // reached.
-func NewMailNotifier(sender emailnotify.AttachmentSender, from, cabinetURL string) *MailNotifier {
+func NewMailNotifier(sender emailnotify.Sender, from, cabinetURL string) *MailNotifier {
 	return &MailNotifier{sender: sender, from: from, cabinetURL: cabinetURL}
 }
 
@@ -157,8 +163,15 @@ func (n *MailNotifier) send(ctx context.Context, to recipient, m message, b Book
 		})
 	}
 
-	return n.sender.SendWithAttachments(ctx, n.from, to.email, m.subject,
-		n.renderHTML(m, b), n.renderText(m, b), attachments)
+	return n.sender.Send(ctx, emailnotify.Message{
+		From:        n.from,
+		To:          to.email,
+		Subject:     m.subject,
+		HTML:        n.renderHTML(m, b),
+		Text:        n.renderText(m, b),
+		Group:       emailprefs.GroupEssential,
+		Attachments: attachments,
+	})
 }
 
 func (n *MailNotifier) renderHTML(m message, b Booking) string {

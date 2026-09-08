@@ -1198,6 +1198,12 @@ type Querier interface {
 	// Link a provider identity to an account (first OAuth sign-in). The composite
 	// primary key rejects a duplicate identity.
 	CreateUserIdentity(ctx context.Context, arg CreateUserIdentityParams) error
+	// Turn ONE email digest off, scoped to its owner. Deactivate only — it cannot
+	// create a subscription and cannot turn one back on, so a leaked link can silence
+	// somebody but never sign them up for anything. Returns the affected row count; 0
+	// means it was already off, or is not this account's, and the caller treats both
+	// the same rather than revealing which.
+	DeactivateEmailSubscription(ctx context.Context, arg DeactivateEmailSubscriptionParams) (int64, error)
 	// Whether the caller already spent points on this (feature, ref). True means the action
 	// is a recompute/resume and must not be charged again (idempotency by ref).
 	DebitExists(ctx context.Context, arg DebitExistsParams) (bool, error)
@@ -2090,6 +2096,25 @@ type Querier interface {
 	// until somebody links it. This is the one lookup that turns the id a caller pressed into
 	// the row every linking path works on, immediately after the import stored it.
 	GetEmailIDByExternalID(ctx context.Context, arg GetEmailIDByExternalIDParams) (int64, error)
+	// Everything the public preference page may show, and nothing else: the address the
+	// mail went to and the three group switches.
+	//
+	// Reads through a LEFT JOIN because most accounts have no rule row. The COALESCE
+	// defaults are the same ones the DELIVERY queries apply, so what this page shows is
+	// what those queries would do — a page that disagreed with the sender would be worse
+	// than no page.
+	//
+	// `enabled` coalesces to TRUE, matching GetReminderForDelivery above and the
+	// notification-settings requirement that a never-configured account is enabled. It
+	// read FALSE for a while, which had two costs and the second was the real one: the
+	// page told somebody their notifications were off while they were receiving saved-job
+	// reminders, and every save then wrote that false back — so one click on a CAMPAIGN's
+	// unsubscribe button silently turned their reminders off. That is the coupling this
+	// whole change exists to break, reintroduced in the other direction.
+	//
+	// The nudge queries coalesce the other way, and that is not a contradiction: their
+	// MATCH step already inner-joins an enabled row, so a nudge cannot exist without one.
+	GetEmailPrefs(ctx context.Context, id int64) (GetEmailPrefsRow, error)
 	// Aggregate interaction counts for the public engagement endpoint. Aggregate-only:
 	// every column is a scalar total, so no user identifier or row-level field is
 	// selected. saved / applied are user_jobs interaction-row totals across all users.
@@ -2799,6 +2824,19 @@ type Querier interface {
 	// search query to translate into a filter, plus identity/channel for fan-out. The
 	// worker groups these by canonical(query) so each distinct filter hits the search
 	// index once regardless of how many subscriptions share it.
+	//
+	// The alerts switch is applied HERE rather than at send time, so a delivery path
+	// added later inherits the gate instead of having to remember it.
+	//
+	// It gates the EMAIL channel only. Turning off "job alerts" means turning off the
+	// mail: a Telegram or webhook destination is something the account connected
+	// itself and turns off where it connected it, and silencing those from a link in
+	// an email would be acting well beyond what the link said it would do.
+	//
+	// LEFT JOIN with COALESCE(..., true): a missing notification_settings row means the
+	// account never opened the settings page, which is not the same as opting out. Same
+	// reading as broadcast.sql and onboarding.sql, and the opposite of nudges.sql's
+	// inner join — see migration 0153 for why one column could not answer both.
 	ListActiveSubscriptions(ctx context.Context) ([]ListActiveSubscriptionsRow, error)
 	// The channels cmd/tg-ingest crawls and cmd/tg-extract reads a kind from. Ordered by
 	// name so a run's channel order is stable and its log diffable.
@@ -2951,10 +2989,16 @@ type Querier interface {
 	// therefore the only bound on a run, which is why the caller passes it explicitly
 	// rather than relying on a default.
 	//
-	// The two exclusions are the same as everywhere else, for the same reasons:
-	// an unverified address was never proven to belong to anyone, and an explicit
-	// notification_settings.enabled = false is an opt-out. A missing settings row means
-	// the account never touched the setting and still hears from us.
+	// The two exclusions are the same as everywhere else, for the same reasons: an
+	// unverified address was never proven to belong to anyone, and an explicit
+	// notification_settings.news_email_enabled = false is an opt-out. A missing settings
+	// row means the account never touched the setting and still hears from us.
+	//
+	// The gate used to be `enabled`, which also governs the lifecycle nudges — so
+	// declining letters from the founder also stopped somebody's application
+	// follow-up reminders, and an account with no settings row could not decline at
+	// all, because the only thing that creates the row is a page behind the login.
+	// Migration 0153 split the two.
 	ListBroadcastCandidates(ctx context.Context, arg ListBroadcastCandidatesParams) ([]ListBroadcastCandidatesRow, error)
 	// The feed, newest first.
 	ListCVRevisions(ctx context.Context, arg ListCVRevisionsParams) ([]CvRevision, error)
@@ -3780,6 +3824,11 @@ type Querier interface {
 	// the bucket forever. Empty keys are filtered out so a caller never asks storage to
 	// delete "".
 	ListUserBlobKeys(ctx context.Context, id int64) ([]pgtype.Text, error)
+	// The account's email digest subscriptions, named, for the public preference page.
+	// Email only: the page is reached from an email and may only govern email, so
+	// listing a Telegram subscription there would offer a control the page must not
+	// have.
+	ListUserEmailSubscriptions(ctx context.Context, userID int64) ([]ListUserEmailSubscriptionsRow, error)
 	// Existing thread→application links for the caller, so the matcher can continue a
 	// thread already attached to an application.
 	ListUserEmailThreadLinks(ctx context.Context, userID int64) ([]ListUserEmailThreadLinksRow, error)
@@ -3867,7 +3916,13 @@ type Querier interface {
 	//     mistake to two weeks of signups.
 	//   * The LEFT JOIN on notification_settings — a missing row means the account
 	//     never touched the setting, which is not the same as opting out, so it still
-	//     gets the sequence. An explicit `enabled = false` stops it.
+	//     gets the sequence. An explicit `news_email_enabled = false` stops it.
+	//
+	//     That used to be `enabled`, the same flag the lifecycle nudges read, so
+	//     declining the founder's letters also stopped somebody's application
+	//     reminders — and an account with no settings row could not decline either
+	//     one, because the page that creates the row is behind the login. Migration
+	//     0153 split them; the unsubscribe link writes this column without a session.
 	// Verified accounts inside the window that have not been greeted yet. This is the
 	// only step with no waiting period: it goes out on the next pass after signup.
 	ListWelcomeCandidates(ctx context.Context, arg ListWelcomeCandidatesParams) ([]ListWelcomeCandidatesRow, error)
@@ -5197,6 +5252,11 @@ type Querier interface {
 	SelectStaleRegisteredCandidates(ctx context.Context, arg SelectStaleRegisteredCandidatesParams) ([]SelectStaleRegisteredCandidatesRow, error)
 	// Same shape and same reasoning as SearchOutboxMetrics.
 	SemanticOutboxMetrics(ctx context.Context) (SemanticOutboxMetricsRow, error)
+	// Turn the activity group on or off for one account. Separate from
+	// SetEmailGroupSwitches so the public page's "unsubscribe from everything" can reach
+	// it without also being able to turn it ON by accident: the two callers pass
+	// different values and neither writes the other's columns.
+	SetActivityEnabled(ctx context.Context, arg SetActivityEnabledParams) error
 	// Name a session from its first user message. Applied only while the label is still unset,
 	// so a long conversation keeps the name it was born with. Owner-scoped for the same
 	// reason TouchAssistantSession is.
@@ -5312,6 +5372,26 @@ type Querier interface {
 	// transaction, so the employer_reply event went with it and the company started reading
 	// as silent in the reply-rate rollup.
 	SetEmailClassification(ctx context.Context, arg SetEmailClassificationParams) error
+	// Turn the alerts and news groups on or off for one account, without touching
+	// anything else in the rule.
+	//
+	// Deliberately NOT folded into UpsertNotificationSettings. That one is a full
+	// replace: it names every column in its DO UPDATE SET, so routing both writers
+	// through it would make a save from the authenticated settings page overwrite a
+	// choice somebody made from an unsubscribe link, and the reverse. Two writers with
+	// two scopes cannot clobber each other.
+	//
+	// The INSERT branch matters as much as the UPDATE one, and it is where this was
+	// wrong once. Most accounts have no notification_settings row at all, because the
+	// only thing that used to create it was a page behind the login — and the
+	// never-configured state is ENABLED for lifecycle mail (GetReminderForDelivery
+	// coalesces to true). Letting `enabled` fall to its COLUMN default of false on
+	// insert therefore turned somebody's saved-job reminders off the moment they
+	// declined a campaign, which is exactly the coupling migration 0153 removed.
+	//
+	// So the insert writes the never-configured default explicitly. A row created by
+	// this statement leaves the account receiving precisely what it received before.
+	SetEmailGroupSwitches(ctx context.Context, arg SetEmailGroupSwitchesParams) error
 	// cmd/backfill-experience-dates' write: the four structured columns, each filled only
 	// when still NULL — the same per-boundary independence FillExperienceEmploymentBlanks
 	// uses, so a boundary an ordinary write path already populated is never clobbered by a

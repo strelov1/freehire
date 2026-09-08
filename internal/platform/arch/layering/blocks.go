@@ -200,7 +200,7 @@ var blocks = map[string][]string{
 	// only to ask which tier an account holds. Placing it in identity would invert that —
 	// billing would import a community integration — and the guard would say so.
 	"engage": {
-		"broadcast", "community", "companyfeedback", "discordlink", "emailnotify",
+		"broadcast", "community", "companyfeedback", "discordlink", "emailnotify", "emailprefs",
 		"linkedinauth", "mailpreview", "mentorship", "notify", "nudge", "onboarding", "pushnotify",
 		"referral", "reminder", "report", "socialdigest", "subscription",
 		"telegramnotify", "vote", "webhooknotify",

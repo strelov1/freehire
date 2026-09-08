@@ -23,6 +23,7 @@ import (
 	"log"
 
 	"github.com/strelov1/freehire/internal/engage/emailnotify"
+	"github.com/strelov1/freehire/internal/engage/emailprefs"
 	"github.com/strelov1/freehire/internal/engage/notify"
 	"github.com/strelov1/freehire/internal/engage/pushnotify"
 	"github.com/strelov1/freehire/internal/engage/telegramnotify"
@@ -73,7 +74,7 @@ func run() int {
 		if ses, err := emailnotify.NewClient(ctx, cfg.AWSRegion); err != nil {
 			log.Printf("notify: email channel disabled: %v", err)
 		} else {
-			router[notify.ChannelEmail] = emailnotify.NewNotifier(ses, cfg.NotifyEmailFrom, cfg.FrontendOrigin)
+			router[notify.ChannelEmail] = emailnotify.NewNotifier(ses, cfg.NotifyEmailFrom, cfg.FrontendOrigin, emailprefs.NewLinks(cfg.JWTSecret, cfg.FrontendOrigin))
 		}
 	}
 	searcher := search.NewClient(cfg.MeiliURL, cfg.MeiliKey)

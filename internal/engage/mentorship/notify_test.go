@@ -27,7 +27,8 @@ type fakeSender struct {
 	failFor string
 }
 
-func (f *fakeSender) SendWithAttachments(_ context.Context, _, to, subject, htmlBody, textBody string, attachments []emailnotify.Attachment) error {
+func (f *fakeSender) Send(_ context.Context, m emailnotify.Message) error {
+	to, subject, htmlBody, textBody, attachments := m.To, m.Subject, m.HTML, m.Text, m.Attachments
 	if f.failFor != "" && to == f.failFor {
 		return errors.New("mailbox full")
 	}

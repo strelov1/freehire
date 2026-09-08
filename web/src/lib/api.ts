@@ -148,6 +148,34 @@ interface Page<T> {
  *  `updated_at` is optional because a document indexed before the attribute joined
  *  the shape has none; such a URL ships without a <lastmod> rather than dropping
  *  out of the sitemap. */
+/** What the public unsubscribe page shows. Deliberately small: the token that opens
+ *  it is a bearer credential somebody could have forwarded, so it carries the address
+ *  the mail already went to, three switches, and the names of the searches those
+ *  switches govern — and nothing else about the account. */
+export interface EmailPrefs {
+  email: string;
+  alerts_enabled: boolean;
+  activity_enabled: boolean;
+  news_enabled: boolean;
+  searches: EmailPrefsSearch[];
+}
+
+interface EmailPrefsSearch {
+  id: number;
+  name: string;
+  active: boolean;
+}
+
+/** A patch, not a replace: an omitted switch keeps its stored value.
+ *  `deactivateSearches` can only turn a digest OFF — a link that can only subtract
+ *  cannot be used to sign anybody up for anything. */
+interface EmailPrefsUpdate {
+  alerts?: boolean;
+  activity?: boolean;
+  news?: boolean;
+  deactivateSearches?: number[];
+}
+
 export interface SitemapEntry {
   slug: string;
   updated_at?: string;
@@ -2617,6 +2645,54 @@ export function createApi(
     await call(`/api/v1/company-feedback/${feedbackId}/hide`, { method: 'POST' });
   }
 
+  /** The email preferences a signed unsubscribe link opens. Unauthenticated: the
+   *  token in the link stands in for a session, which is the whole point — somebody
+   *  holding one of our mails turns it off without an account. */
+  function getEmailPrefs(token: string): Promise<EmailPrefs> {
+    return requestData<EmailPrefs>(`/api/v1/email-prefs?t=${encodeURIComponent(token)}`);
+  }
+
+  /** Save the switches. The token goes in the BODY, not the query: nginx logs query
+   *  strings, and this call has a body already, so there is no reason to write a
+   *  never-expiring credential into the access log twice.
+   *
+   *  Every field except the token is optional, and an omitted switch keeps its
+   *  stored value — this is a patch, not a replace. `deactivateSearches` can only
+   *  turn a digest off; there is deliberately no way to turn one on from a link. */
+  function saveEmailPrefs(token: string, update: EmailPrefsUpdate): Promise<EmailPrefs> {
+    return requestData<EmailPrefs>(
+      '/api/v1/email-prefs',
+      jsonBody('PATCH', {
+        token,
+        alerts_enabled: update.alerts,
+        activity_enabled: update.activity,
+        news_enabled: update.news,
+        deactivate_searches: update.deactivateSearches,
+      }),
+    );
+  }
+
+  /** The same three email-group switches for a signed-in caller. Shares the
+   *  server-side service with the token-opened page, so the two views cannot drift
+   *  apart about the same three booleans. */
+  function getMyEmailGroups(): Promise<EmailPrefs> {
+    return requestData<EmailPrefs>('/api/v1/me/email-groups');
+  }
+
+  /** Save them for a signed-in caller. A patch, like the public one: an omitted
+   *  switch keeps its stored value. */
+  function saveMyEmailGroups(update: EmailPrefsUpdate): Promise<EmailPrefs> {
+    return requestData<EmailPrefs>(
+      '/api/v1/me/email-groups',
+      jsonBody('PATCH', {
+        alerts_enabled: update.alerts,
+        activity_enabled: update.activity,
+        news_enabled: update.news,
+        deactivate_searches: update.deactivateSearches,
+      }),
+    );
+  }
+
   return {
     listJobs,
     getJob,
@@ -2875,6 +2951,10 @@ export function createApi(
     reportCompanyFeedback,
     listReportedCompanyFeedback,
     hideCompanyFeedback,
+    getEmailPrefs,
+    saveEmailPrefs,
+    getMyEmailGroups,
+    saveMyEmailGroups,
   };
 }
 

@@ -168,3 +168,68 @@ WHERE id = sqlc.arg(id);
 UPDATE job_reminders
 SET claimed_at = NULL
 WHERE id = $1;
+
+-- name: SetEmailGroupSwitches :exec
+-- Turn the alerts and news groups on or off for one account, without touching
+-- anything else in the rule.
+--
+-- Deliberately NOT folded into UpsertNotificationSettings. That one is a full
+-- replace: it names every column in its DO UPDATE SET, so routing both writers
+-- through it would make a save from the authenticated settings page overwrite a
+-- choice somebody made from an unsubscribe link, and the reverse. Two writers with
+-- two scopes cannot clobber each other.
+--
+-- The INSERT branch matters as much as the UPDATE one, and it is where this was
+-- wrong once. Most accounts have no notification_settings row at all, because the
+-- only thing that used to create it was a page behind the login — and the
+-- never-configured state is ENABLED for lifecycle mail (GetReminderForDelivery
+-- coalesces to true). Letting `enabled` fall to its COLUMN default of false on
+-- insert therefore turned somebody's saved-job reminders off the moment they
+-- declined a campaign, which is exactly the coupling migration 0153 removed.
+--
+-- So the insert writes the never-configured default explicitly. A row created by
+-- this statement leaves the account receiving precisely what it received before.
+INSERT INTO notification_settings (user_id, enabled, alerts_email_enabled, news_email_enabled, updated_at)
+VALUES (sqlc.arg(user_id), true, sqlc.arg(alerts_email_enabled), sqlc.arg(news_email_enabled), now())
+ON CONFLICT (user_id) DO UPDATE
+  SET alerts_email_enabled = EXCLUDED.alerts_email_enabled,
+      news_email_enabled   = EXCLUDED.news_email_enabled,
+      updated_at           = now();
+
+-- name: GetEmailPrefs :one
+-- Everything the public preference page may show, and nothing else: the address the
+-- mail went to and the three group switches.
+--
+-- Reads through a LEFT JOIN because most accounts have no rule row. The COALESCE
+-- defaults are the same ones the DELIVERY queries apply, so what this page shows is
+-- what those queries would do — a page that disagreed with the sender would be worse
+-- than no page.
+--
+-- `enabled` coalesces to TRUE, matching GetReminderForDelivery above and the
+-- notification-settings requirement that a never-configured account is enabled. It
+-- read FALSE for a while, which had two costs and the second was the real one: the
+-- page told somebody their notifications were off while they were receiving saved-job
+-- reminders, and every save then wrote that false back — so one click on a CAMPAIGN's
+-- unsubscribe button silently turned their reminders off. That is the coupling this
+-- whole change exists to break, reintroduced in the other direction.
+--
+-- The nudge queries coalesce the other way, and that is not a contradiction: their
+-- MATCH step already inner-joins an enabled row, so a nudge cannot exist without one.
+SELECT u.email,
+       COALESCE(ns.enabled, true)              AS activity_enabled,
+       COALESCE(ns.alerts_email_enabled, true) AS alerts_enabled,
+       COALESCE(ns.news_email_enabled, true)   AS news_enabled
+FROM users u
+LEFT JOIN notification_settings ns ON ns.user_id = u.id
+WHERE u.id = $1;
+
+-- name: SetActivityEnabled :exec
+-- Turn the activity group on or off for one account. Separate from
+-- SetEmailGroupSwitches so the public page's "unsubscribe from everything" can reach
+-- it without also being able to turn it ON by accident: the two callers pass
+-- different values and neither writes the other's columns.
+INSERT INTO notification_settings (user_id, enabled, updated_at)
+VALUES (sqlc.arg(user_id), sqlc.arg(enabled), now())
+ON CONFLICT (user_id) DO UPDATE
+  SET enabled    = EXCLUDED.enabled,
+      updated_at = now();

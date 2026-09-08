@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/strelov1/freehire/internal/engage/emailprefs"
 	"github.com/strelov1/freehire/internal/engage/onboarding"
 )
 
@@ -12,8 +13,8 @@ import (
 // a bare address renders there as "notifications".
 func TestSenderCarriesAHumanName(t *testing.T) {
 	sender := &fakeSender{}
-	m := onboarding.NewMailer(sender, "notifications@freehire.me", "ilya@example.test", "https://freehire.me")
-	if err := m.Send(context.Background(), onboarding.StepWelcome, "someone@example.com"); err != nil {
+	m := onboarding.NewMailer(sender, "notifications@freehire.me", "ilya@example.test", "https://freehire.me", testLinks())
+	if err := m.Send(context.Background(), onboarding.StepWelcome, 1, "someone@example.com"); err != nil {
 		t.Fatalf("Send: %v", err)
 	}
 	if !strings.Contains(sender.sent[0].from, "Ilya") {
@@ -22,4 +23,10 @@ func TestSenderCarriesAHumanName(t *testing.T) {
 	if !strings.Contains(sender.sent[0].from, "notifications@freehire.me") {
 		t.Errorf("From = %q, want the sending address preserved", sender.sent[0].from)
 	}
+}
+
+// testLinks signs the unsubscribe URLs these mails carry. The secret only has to
+// clear emailprefs' length floor - nothing here verifies a token.
+func testLinks() *emailprefs.Links {
+	return emailprefs.NewLinks("mail-test-secret-padded-to-32-byte", "https://freehire.me")
 }
