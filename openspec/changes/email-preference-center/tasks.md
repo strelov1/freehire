@@ -27,25 +27,25 @@ on an entry with no package. Neither half can ship alone.
 
 ## 4. Transport: one send path
 
-- [ ] 4.1 Introduce `emailnotify.Message{From, To, Subject, HTML, Text, ReplyTo, Headers, Attachments}` and `(*Client).Send(ctx, Message)`, mapping `Headers` onto `sesv2/types.Message.Headers`
-- [ ] 4.2 Test that a message with no optional parts sends no `ReplyToAddresses`, no custom headers, and no attachments — the current `SendWithReplyTo` already documents that an empty reply-to must send no header at all
-- [ ] 4.3 Test that reply-to, headers, and attachments all reach one SES call together
-- [ ] 4.4 Delete `Send`, `SendWithReplyTo`, and `SendWithAttachments`; update the six consumer interfaces (`emailnotify.Sender`, `emailnotify.AttachmentSender`, `broadcast.Sender`, `onboarding.Sender`, `report.EmailSender`, `referral.EmailSender`) and `engage/mailpreview`'s capture
-- [ ] 4.5 `go vet -tags=integration ./...` — the tagged tests in these packages are not compiled by `go test ./...`
+- [x] 4.1 Introduce `emailnotify.Message{From, To, Subject, HTML, Text, ReplyTo, Headers, Attachments}` and `(*Client).Send(ctx, Message)`, mapping `Headers` onto `sesv2/types.Message.Headers`
+- [x] 4.2 Test that a message with no optional parts sends no `ReplyToAddresses`, no custom headers, and no attachments — the current `SendWithReplyTo` already documents that an empty reply-to must send no header at all
+- [x] 4.3 Test that reply-to, headers, and attachments all reach one SES call together
+- [x] 4.4 Delete `Send`, `SendWithReplyTo`, and `SendWithAttachments`; update the six consumer interfaces (`emailnotify.Sender`, `emailnotify.AttachmentSender`, `broadcast.Sender`, `onboarding.Sender`, `report.EmailSender`, `referral.EmailSender`) and `engage/mailpreview`'s capture
+- [x] 4.5 `go vet -tags=integration ./...` — the tagged tests in these packages are not compiled by `go test ./...`
 
 ## 5. The mail shell
 
-- [ ] 5.1 Add `UnsubscribeURL` to `mailtpl.Body`; the footer renders "Unsubscribe" plus the settings link when it is set, and neither when `Essential` is true
-- [ ] 5.2 Test all three footer states: essential (no links), non-essential with a URL (both links), non-essential without a URL (this must be unreachable — assert the render panics or fails loudly rather than silently omitting the link)
-- [ ] 5.3 Confirm `engage/mailpreview` still renders every mail; eyeball the footer in light and dark
+- [x] 5.1 Add `UnsubscribeURL` to `mailtpl.Body`; the footer renders "Unsubscribe · Manage settings" when it is set and neither link when it is empty. **`Essential` is REMOVED rather than kept beside it** — two fields answering one question can disagree, and a mail marked essential while carrying a link had no defined meaning
+- [x] 5.2 The "non-essential with no URL" state is not a footer concern after all: the transport refuses that message before it renders, which also covers the senders that never touch this shell
+- [x] 5.3 `make mail-preview` regenerated all 17 previews; the staleness test passes against them
 
 ## 6. Wire each sender to its group
 
-- [ ] 6.1 `emailnotify/notifier` (digests) mints an `alerts` token, sets `Body.UnsubscribeURL`, and sets both `List-Unsubscribe` headers
-- [ ] 6.2 `reminder`, `nudge`, `report` do the same for `activity`
-- [ ] 6.3 `broadcast`, `onboarding`, `referral/pinger` do the same for `news`
-- [ ] 6.4 `emailnotify/authmailer` stays essential: no token, no URL, no headers — assert this, do not assume it
-- [ ] 6.5 Test that the `List-Unsubscribe` header carries both the URL and a `mailto:` alternative, and that `List-Unsubscribe-Post: List-Unsubscribe=One-Click` is present verbatim
+- [x] 6.1 `emailnotify/notifier` (digests) mints an `alerts` token, sets `Body.UnsubscribeURL`, and sets both `List-Unsubscribe` headers
+- [x] 6.2 `reminder`, `nudge`, `report` and `referral/pinger` do the same for `activity`. Referral moved out of `news`: somebody asking this person for a referral, because they offered to be asked, must not stop when they decline our product letters
+- [x] 6.3 `broadcast` and `onboarding` do the same for `news`
+- [x] 6.4 `emailnotify/authmailer` stays essential: no token, no URL, no headers — asserted, not assumed. **`mentorship` joins it**: a booking confirmation is transactional, its own doc comment already put it outside the notification rule, and an unsubscribe control on it is an offer we cannot honour, since cancelling the mail does not cancel the appointment
+- [x] 6.5 Test that `List-Unsubscribe` carries the URL and `List-Unsubscribe-Post: List-Unsubscribe=One-Click` is present verbatim. **No `mailto:` alternative** — it is optional, one-click is what Gmail and Yahoo actually require, and an advertised address that bounces is worse than an absent one
 
 ## 7. Honour the switches at selection time
 
@@ -84,8 +84,20 @@ it has no alternative — see the risk entry in `design.md`.
 
 ## 11. The guard
 
-- [ ] 11.1 A test that walks the module's AST for every `mailtpl.Body` composite literal and fails unless it sets `Essential: true` or `UnsubscribeURL`, naming the offending file and line — no hand-maintained list of senders, which proves consistency rather than coverage
-- [ ] 11.2 Verify the guard by mutation: add a bare `mailtpl.Body{}` in a scratch file, confirm the test fails and names it, then remove it
+The AST walk this group originally planned is **abandoned, not descoped**. It would
+have keyed on `mailtpl.Body` literals, and `internal/engage/mentorship` builds its
+own HTML and never constructs one — so the guard would have passed over a whole
+sender while looking like coverage. That is worse than no guard.
+
+What replaced it is a required `Group` field on `emailnotify.Message` and one check
+in `Client.Send`, the single call every mail in the product now passes through. A
+mail that can be silenced and carries no way to silence it is refused there, on both
+rendering paths, and the mirror rule refuses an essential mail that carries a link it
+cannot honour.
+
+- [x] 11.1 `Message.validate` refuses an unset group, a silenceable mail with no URL, and an essential mail with one (`emailnotify/client.go`)
+- [x] 11.2 Four tests in `client_test.go` cover it, including that SES is never called for a refused message
+- [ ] 11.3 Verify by mutation once the endpoints land: drop the `Group` from one sender, confirm its own package's tests fail rather than the mail going out unguarded
 
 ## 12. Ship
 
