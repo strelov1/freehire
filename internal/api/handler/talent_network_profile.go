@@ -42,11 +42,11 @@ func (h *talentNetworkProfileHandlers) register(api fiber.Router) {
 // Professional already has its own `skills` field, which would otherwise collide with
 // the user_profiles `skills` facet at the top level.
 //
-// full_name is populated only in "public" mode; GetProfile leaves it as the zero value
-// for "anonymous", which json's `omitempty` then drops from the response entirely —
-// there is no name field to accidentally leak.
+// There is no name field, and that is structural rather than conditional. It used to be
+// populated in "public" mode and omitted in "anonymous"; migration 0145 retired the mode,
+// so a field that can only ever be empty is a field one careless assignment away from
+// publishing a name on a page that promised not to.
 type talentNetworkProfileResponse struct {
-	FullName        string                     `json:"full_name,omitempty"`
 	Specializations []string                   `json:"specializations"`
 	Skills          []string                   `json:"skills"`
 	CV              resumeextract.Professional `json:"cv"`
@@ -107,17 +107,11 @@ func (h *talentNetworkProfileHandlers) GetProfile(c *fiber.Ctx) error {
 		skills = []string{}
 	}
 
-	resp := talentNetworkProfileResponse{
+	// One projection, not a branch on the mode: since migration 0145 the only mode that
+	// reaches this line IS the anonymous one.
+	return c.JSON(fiber.Map{"data": talentNetworkProfileResponse{
 		Specializations: specializations,
 		Skills:          skills,
-	}
-	if row.TalentNetworkVisibility == "anonymous" {
-		resp.CV = structured.Anonymous()
-	} else {
-		pub := structured.Public()
-		resp.FullName = pub.FullName
-		resp.CV = pub.Professional
-	}
-
-	return c.JSON(fiber.Map{"data": resp})
+		CV:              structured.Anonymous(),
+	}})
 }

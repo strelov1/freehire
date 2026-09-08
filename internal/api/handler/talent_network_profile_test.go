@@ -94,7 +94,11 @@ func assertNotFoundBody(t *testing.T, resp *http.Response) {
 	}
 }
 
-func TestTalentNetworkProfile_PublicMode(t *testing.T) {
+// A row that still carries the retired "public" value — one that escaped migration 0145,
+// or was written by a server mid-deploy — must be served ANONYMISED, not by whatever the
+// old branch did. The handler no longer asks which mode it is; anything that is not "off"
+// gets the one projection. This test is the proof that failing closed is what happens.
+func TestTalentNetworkProfile_RetiredPublicValueIsServedAnonymised(t *testing.T) {
 	id := uuid.New()
 	structured := resumeextract.Structured{
 		FullName: "Ada Lovelace",
@@ -103,7 +107,7 @@ func TestTalentNetworkProfile_PublicMode(t *testing.T) {
 		Links:    []string{"https://linkedin.com/in/ada"},
 		Skills:   []string{"go", "algorithms"},
 		Experience: []resumeextract.Experience{
-			{Company: "Analytical Engines Inc", Title: "Engineer", End: &perioddate.PeriodDate{Year: 2020, Month: 1}},
+			{Company: "Analytical Engines Inc", Title: "Engineer", Current: true},
 		},
 	}
 	store := &fakeTalentNetworkPublicStore{row: db.GetTalentNetworkProfileByPublicIDRow{
@@ -124,10 +128,9 @@ func TestTalentNetworkProfile_PublicMode(t *testing.T) {
 	}
 
 	body := talentNetworkReadBody(t, resp)
-	if !strings.Contains(body, "Ada Lovelace") || !strings.Contains(body, "Analytical Engines Inc") {
-		t.Errorf("body missing expected public-mode content: %s", body)
-	}
-	forbidSubstrings(t, body, "ada@example.com", "+1-555-0100", "linkedin.com/in/ada")
+	forbidSubstrings(t, body,
+		"Ada Lovelace", "Analytical Engines Inc",
+		"ada@example.com", "+1-555-0100", "linkedin.com/in/ada")
 }
 
 func TestTalentNetworkProfile_AnonymousMode(t *testing.T) {

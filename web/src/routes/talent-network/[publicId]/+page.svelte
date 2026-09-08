@@ -91,24 +91,12 @@
     el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   });
 
-  // full_name is present only in "public" mode — the backend omits the key entirely for
-  // "anonymous" (see talentNetworkProfileResponse's doc comment), so there is nothing to
-  // accidentally render here; no placeholder like "Anonymous Candidate" is needed.
-  const heading = $derived(profile.full_name || 'Talent Network profile');
+  // There is no name to render, and no placeholder standing in for one. The payload
+  // carries no name field at all since the mode that had one was retired — so the
+  // heading is a fixed label rather than something derived from data that could arrive.
+  const heading = 'Talent Network profile';
 
-  // Avatar initials, derived only when full_name is present (public mode) — anonymous
-  // mode never reaches this because the template falls back to the generic icon.
-  const initials = $derived(
-    (profile.full_name ?? '')
-      .trim()
-      .split(/\s+/)
-      .filter(Boolean)
-      .slice(0, 2)
-      .map((part) => part[0]?.toUpperCase() ?? '')
-      .join(''),
-  );
-
-  const pageTitle = $derived(`${heading} — freehire Talent Network`);
+  const pageTitle = `${heading} — freehire Talent Network`;
   const description = $derived(
     cv.headline || 'A candidate profile shared via freehire’s Talent Network.',
   );
@@ -126,11 +114,7 @@
       <div
         class="flex size-14 shrink-0 items-center justify-center rounded-full bg-secondary text-sm font-semibold text-muted-foreground"
       >
-        {#if profile.full_name}
-          {initials}
-        {:else}
-          <User class="size-6" />
-        {/if}
+        <User class="size-6" />
       </div>
       <div class="flex min-w-0 flex-col gap-1">
         <h1 class="text-2xl font-semibold tracking-tight">{heading}</h1>

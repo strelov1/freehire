@@ -56,7 +56,7 @@ REFACTOR → simplify → review → only then `[x]`.
 - [x] 2.3 A title that resolves to neither category nor seniority still yields a role
       entry carrying its period and stack. A skill outside the dictionary is dropped while
       its resolved neighbours survive.
-- [ ] 2.4 Delete `Structured.Public()`, its `Public` struct, and the handler branch that
+- [x] 2.4 Delete `Structured.Public()`, its `Public` struct, and the handler branch that
       selected it — `public` no longer exists, so nothing may reach them. Confirm with
       `deadcode -test -tags=integration,llmlive ./...` that nothing else did.
 

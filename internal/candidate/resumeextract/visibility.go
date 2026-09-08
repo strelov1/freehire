@@ -85,28 +85,9 @@ func (s Structured) Anonymous() Professional {
 	return p
 }
 
-// Public is Structured's public-mode projection: the contact-free Professional fields
-// plus the candidate's name. Structured carries no photo field today, so a public-mode
-// photo (e.g. users.photo_object_key) is a separate seam a later task composes in from
-// elsewhere — nothing here invents one.
-type Public struct {
-	FullName string `json:"full_name,omitempty"`
-	Professional
-}
-
-// Public projects Structured onto the public-mode view: name shown, work history and
-// skills shown unmodified (including any current employer — unlike Anonymous, which
-// masks it), contact fields still withheld. Public mode reuses the same contact-stripped
-// base as anonymous mode because the page is unauthenticated and publicly reachable (see
-// design.md, "Public mode still strips contact info"). Every project's Link is stripped
-// (stripProjectLinks) for the same reason contact fields are: the page is scrapeable by
-// definition, and a project link is a personal URL regardless of whether the candidate's
-// name is otherwise shown.
-func (s Structured) Public() Public {
-	p := s.Professional()
-	p.Projects = stripProjectLinks(p.Projects)
-	return Public{
-		FullName:     s.FullName,
-		Professional: p,
-	}
-}
+// There was a Public projection here — Professional plus the candidate's name — for the
+// third visibility mode. Migration 0145 retired that mode: the product no longer asks a
+// candidate how much of themselves to disclose, so no caller can select a name-bearing
+// projection any more. It is deleted rather than kept "in case": a projection nothing may
+// reach is not a seam, it is one careless call away from publishing a name on a page that
+// promised not to.
