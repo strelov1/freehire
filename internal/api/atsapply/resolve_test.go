@@ -198,3 +198,37 @@ func TestResolve_NotFullyResolvedWhenAnyUnmappedExists(t *testing.T) {
 		t.Error("FullyResolved() = true, want false — a required field has no answer")
 	}
 }
+
+func TestIsCoverLetterTextField_RecognizesTheKnownID(t *testing.T) {
+	if !isCoverLetterTextField(MergedField{ID: "cover_letter_text", Label: "", Kind: "textarea"}) {
+		t.Error("want a cover_letter_text field recognized by id alone")
+	}
+}
+
+func TestIsCoverLetterTextField_RecognizesAnOpaqueIDByLabel(t *testing.T) {
+	if !isCoverLetterTextField(MergedField{ID: "question_98765", Label: "Cover Letter", Kind: "textarea"}) {
+		t.Error("want an opaque-id field with a Cover Letter label recognized via the label fallback")
+	}
+}
+
+func TestIsCoverLetterTextField_AnUnrelatedFreeTextFieldIsNotRecognized(t *testing.T) {
+	if isCoverLetterTextField(MergedField{ID: "question_11111", Label: "Why do you want to work here?", Kind: "textarea"}) {
+		t.Error("want an unrelated free-text question not recognized as a cover-letter field")
+	}
+}
+
+func TestIsCoverLetterTextField_RecognizesALabelWithATrailingQualifier(t *testing.T) {
+	if !isCoverLetterTextField(MergedField{ID: "question_22222", Label: "Cover Letter (optional)", Kind: "textarea"}) {
+		t.Error("want a label that opens with the phrase recognized regardless of what follows")
+	}
+}
+
+// Found by code review: a substring match on the label would fire on any question that
+// merely MENTIONS a cover letter, not just one asking for one — and since this field's
+// answer is used verbatim, that would submit the candidate's full cover letter as the
+// literal answer to an unrelated question.
+func TestIsCoverLetterTextField_ALabelThatOnlyMentionsACoverLetterIsNotRecognized(t *testing.T) {
+	if isCoverLetterTextField(MergedField{ID: "question_33333", Label: "If you don't have a cover letter, please explain why", Kind: "text"}) {
+		t.Error("want a label that only mentions a cover letter in passing not recognized as a cover-letter field")
+	}
+}

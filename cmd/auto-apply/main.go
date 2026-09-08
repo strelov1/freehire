@@ -15,6 +15,7 @@ import (
 	"github.com/strelov1/freehire/internal/api/atsapply"
 	"github.com/strelov1/freehire/internal/api/candidateprofile"
 	"github.com/strelov1/freehire/internal/application/autoapply"
+	"github.com/strelov1/freehire/internal/candidate/coverletter"
 	"github.com/strelov1/freehire/internal/candidate/cv"
 	"github.com/strelov1/freehire/internal/candidate/experience"
 	"github.com/strelov1/freehire/internal/candidate/resume"
@@ -95,6 +96,7 @@ func run() int {
 	})
 	llmKeyResolver := llmkey.NewResolver(queries, llmKeys)
 	atoms := experience.NewStore(experience.NewQueriesRepository(queries))
+	letters := coverletter.NewStore(coverletter.NewQueriesRepository(queries))
 
 	// cvRenderer is nil when no typst binary is configured (config.resolveTypstBin), the
 	// same nil-safe gating internal/api/handler's PDF-download endpoint uses. A résumé file
@@ -115,7 +117,7 @@ func run() int {
 	// Greenhouse/Ashby endpoints internal/atsapply reuses via applyform.Fetchers are the
 	// platforms' own public job-board APIs, so its user agent, timeouts and size caps are
 	// exactly right here too.
-	sidecar := atsapply.NewClient(sources.NewClient(), llmClient, llmKeyResolver, atoms, cvStore, cvRenderer)
+	sidecar := atsapply.NewClient(sources.NewClient(), llmClient, llmKeyResolver, atoms, letters, cvStore, cvRenderer)
 	// Stored-form fallback (openspec/changes/atsapply-recruitee-stored-schema): lets a
 	// provider with no live schema fetcher (today: Recruitee) reach field resolution
 	// instead of parking before it ever runs, by reading the form cmd/capture-apply-form

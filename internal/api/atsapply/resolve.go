@@ -197,6 +197,23 @@ func isResumeField(f MergedField) bool {
 	return strings.Contains(lower, "resume") || strings.Contains(lower, "résumé")
 }
 
+// isCoverLetterTextField reports whether a free-text field is asking for a cover letter —
+// the free-text sibling of the file-kind "cover_letter" field isResumeField's own doc
+// comment names (internal/ingest/applyform/display.go's vocabulary: "cover_letter" is the
+// upload, "cover_letter_text" is this one). Same id-then-label shape as isResumeField, but
+// the label check is a PREFIX match, not a substring one: this field's answer is the
+// candidate's full cover letter body used verbatim (no offered options to fail matchOption
+// against), so a substring match would also fire on an unrelated question that merely
+// mentions a cover letter in passing (e.g. "If you don't have a cover letter, explain
+// why") and submit the letter as its literal answer — found by code review. A real cover-
+// letter field's label opens with the words, it does not just mention them.
+func isCoverLetterTextField(f MergedField) bool {
+	if strings.EqualFold(strings.TrimSpace(f.ID), "cover_letter_text") {
+		return true
+	}
+	return strings.HasPrefix(strings.ToLower(strings.TrimSpace(f.Label)), "cover letter")
+}
+
 // matchOption resolves free text against a field's offered options, returning the
 // PLATFORM value (not the label) for whichever option it case-insensitively matches. A
 // field with no enumerated options at all takes the text verbatim — there is nothing to

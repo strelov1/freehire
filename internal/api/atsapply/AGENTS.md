@@ -152,6 +152,19 @@ process, called only via `Client.WithBrowserUse`. Scope is deliberately narrow:
   call, sensitive-keyword gate, never an agentic loop). A drafted answer is still checked
   against the field's own offered options (`matchOption`, shared with the deterministic
   path) before it is used.
+- **A cover-letter free-text field prefers the candidate's own already-drafted letter over
+  the generic `Drafter`, when one exists.** `isCoverLetterTextField` (`resolve.go`)
+  recognizes the field (Greenhouse's `cover_letter_text` id, the free-text sibling of the
+  file-kind `cover_letter` upload `isResumeField`'s own doc comment names) and
+  `ResolveWithDrafting` (`draft.go`) checks `LetterReader` — satisfied directly by
+  `*coverletter.Store`, the same structural fit `AtomReader` already has over
+  `*experience.Store` — before ever calling `Drafter.Draft` for that field. A nil
+  `*coverletter.Stored` (no letter drafted yet for this job) or a read error both degrade to
+  the ordinary generic-drafter path, logged the same way `buildGroundingContext`'s own read
+  failure degrades in `client.go`'s `resolve`. This does not make Recruitee-shaped gaps in
+  drafting go away — it only ever runs where `resolve` reaches `ResolveWithDrafting` at all
+  (today: Greenhouse only, per `fillProviders`), same as `LLMDrafter` itself. See
+  `openspec/changes/autoapply-reuse-cover-letter`.
 - **A geography/residency question (`geography.go`) parks before drafting too, for a
   different reason than the sensitive gate.** `sensitiveTerms` (`sensitive.go`) parks a
   question on POLICY grounds — compensation, EEO/demographic, work authorization/visa —
