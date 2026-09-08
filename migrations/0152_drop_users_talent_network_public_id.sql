@@ -1,0 +1,27 @@
+-- Drop the Talent Network's retired public identifier.
+--
+-- 0085 gave every account a random UUID to address its public profile by. The catalogue
+-- that shipped instead addresses a member by a MINTED HANDLE (0149): a readable string
+-- like `software-engineering-x2sz`, which says what the card is before it is opened and
+-- can be regenerated if a member wants a new address. Nothing has read the UUID since
+-- that landed, and no public link ever carried one — the profile pages the UUID was for
+-- were never built, so there is no address anywhere that this breaks.
+--
+-- Deliberately a SEPARATE, LATER migration rather than part of the change that replaced
+-- it. `release.sh` applies every migration and only then flips the app, so a drop shipped
+-- alongside its replacement removes the column while the OLD binary is still serving —
+-- and that binary's queries name it. Splitting the two puts a deploy between them.
+--
+-- Its unique index (users_talent_network_public_id_key, recreated by 0118) goes with the
+-- column; Postgres drops an index whose only column is dropped, so naming it here would
+-- be a second statement that can only fail.
+--
+-- In a transaction, unlike its neighbours: DROP COLUMN is a catalogue edit, not a
+-- rewrite, so the ACCESS EXCLUSIVE lock is held for microseconds once granted. What can
+-- fail is the GRANT — `users` is read by every authenticated request — which surfaces as
+-- the runner's 5s lock_timeout (55P03) and is simply retried, unlike a CREATE INDEX
+-- CONCURRENTLY, which waits on other transactions' snapshots and can leave an invalid
+-- index behind.
+ALTER TABLE public.users
+    -- squawk-ignore ban-drop-column -- the point of this migration: the handle in 0149 replaced this identifier and nothing reads it
+    DROP COLUMN talent_network_public_id;
