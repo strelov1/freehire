@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"strings"
 
 	"github.com/strelov1/freehire/internal/application/autoapply"
 	"github.com/strelov1/freehire/internal/candidate/coverletter"
@@ -27,28 +28,33 @@ type LetterReader interface {
 }
 
 // coverLetterAnswer looks up the candidate's own existing letter for (userID, jobID) and, if
-// one exists, returns it as a ready answer — ok is false both when no letter has been
-// drafted yet (the ordinary case for a job never drafted for) and when the read itself
-// fails, which degrades to "nothing found" here rather than failing the whole attempt, the
-// same "a failure to read the grounding source degrades to drafting nothing" discipline
-// client.go's own resolve already follows for buildGroundingContext.
+// one exists with a non-blank body, returns it as a ready answer — ok is false when no
+// letter has been drafted yet (the ordinary case for a job never drafted for), when the
+// stored letter's body is blank (a state that should not occur, but answering a required
+// field with an empty string is worse than falling through to the drafter), and when the
+// read itself fails, which degrades to "nothing found" here rather than failing the whole
+// attempt, the same "a failure to read the grounding source degrades to drafting nothing"
+// discipline client.go's own resolve already follows for buildGroundingContext.
 func coverLetterAnswer(ctx context.Context, letters LetterReader, userID, jobID int64) (answer string, ok bool) {
 	stored, err := letters.Get(ctx, userID, jobID)
 	if err != nil {
 		log.Printf("atsapply: read cover letter for user %d job %d: %v — falling back to the generic drafter", userID, jobID, err)
 		return "", false
 	}
-	if stored == nil {
+	if stored == nil || strings.TrimSpace(stored.Body) == "" {
 		return "", false
 	}
 	return stored.Body, true
 }
 
 // answerFor prefers the candidate's own existing cover letter over drafter for a
-// cover-letter-semantic field, falling through to drafter for everything else and whenever
-// no letter exists yet.
+// cover-letter-semantic FREE-TEXT field, falling through to drafter for everything else
+// (including a select/radio the label heuristic happens to match — the letter's prose is
+// never one of the platform's own option labels, and matchOption would just park it, where
+// the generic drafter at least has a chance of picking a real option) and whenever no
+// letter exists yet.
 func answerFor(ctx context.Context, f MergedField, drafter Drafter, grounding GroundingContext, letters LetterReader, userID, jobID int64) (answer string, ok bool, err error) {
-	if letters != nil && isCoverLetterTextField(f) {
+	if letters != nil && (f.Kind == "text" || f.Kind == "textarea") && isCoverLetterTextField(f) {
 		if answer, ok := coverLetterAnswer(ctx, letters, userID, jobID); ok {
 			return answer, true, nil
 		}

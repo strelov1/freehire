@@ -22,6 +22,8 @@
 - [x] 4.2 Scenario test: no letter exists for the (user, job) pair — the field is resolved by the existing generic drafter exactly as before this change.
 - [x] 4.3 Scenario test: an unrelated free-text field is unaffected by this change (still goes to `Drafter.Draft` regardless of letter existence).
 - [x] 4.4 Run `go vet -tags=integration ./...` and the full package test suite for `internal/api/atsapply` and `internal/candidate/coverletter`.
+- [x] 4.5 Found on review (CodeRabbit): a stored letter with a blank body was being treated as a valid answer (`matchOption` accepts an empty string for a free-text field with no options), silently answering a required field with nothing instead of falling through to the drafter. Fixed in `coverLetterAnswer`; added `TestCoverLetterAnswer_ABlankStoredBodyIsNotAnAnswer` and `TestResolveWithDrafting_ACoverLetterFieldWithABlankStoredBodyFallsBackToTheGenericDrafter`.
+- [x] 4.6 Found on review (CodeRabbit): `isCoverLetterTextField`'s ID/label match had no `Kind` restriction, so a `select`/`radio` field whose label happened to match (e.g. a "Cover Letter" yes/no dropdown) was routed to letter-reuse too — the letter's prose is never one of the platform's own option labels, so `matchOption` would just park the field, where the generic drafter has a real chance of picking a valid option. Restricted reuse to `Kind == "text"`/`"textarea"` in `answerFor`; added `TestResolveWithDrafting_ACoverLetterMatchingSelectFieldIgnoresTheStoredLetter`.
 
 ## 5. Wrap-up
 

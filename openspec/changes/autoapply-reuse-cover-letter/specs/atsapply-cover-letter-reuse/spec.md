@@ -21,19 +21,34 @@ resolved as an ordinary free-text question.
 - **WHEN** an application form's free-text field asks a question other than for a cover letter (e.g. "Why do you want to work here?")
 - **THEN** that field continues to be resolved by the existing generic drafting path
 
+#### Scenario: A non-free-text field matching the cover-letter vocabulary is unaffected
+
+- **WHEN** an application form's `select` or `radio` field's identifier or label happens to
+  match the cover-letter vocabulary (e.g. a "Cover Letter" yes/no dropdown)
+- **THEN** that field is NOT treated as cover-letter-semantic for reuse purposes — it
+  continues to be resolved by the existing generic drafting path, since the letter's own
+  prose is never one of the platform's own offered option labels
+
 ### Requirement: An existing tailored cover letter is reused for the matching job
 
 When a cover-letter-semantic field is resolved for a (candidate, job) pair that already has a
-drafted cover letter, the system SHALL use that letter's content verbatim as the field's answer
-instead of generating a new generic answer. This package's form model carries no field-length
-constraint for a free-text question (matching how any other free-text answer is already used
-verbatim, per `matchOption`'s own "no options → text taken verbatim" rule) — there is nothing to
-bound against, so none is invented here.
+drafted cover letter with a non-blank body, the system SHALL use that letter's content verbatim
+as the field's answer instead of generating a new generic answer. This package's form model
+carries no field-length constraint for a free-text question (matching how any other free-text
+answer is already used verbatim, per `matchOption`'s own "no options → text taken verbatim"
+rule) — there is nothing to bound against, so none is invented here.
 
 #### Scenario: A tailored letter exists for the job being applied to
 
 - **WHEN** auto-apply resolves a cover-letter field for a job the candidate has already had a cover letter drafted for
 - **THEN** the field's answer is the candidate's existing cover letter for that job, verbatim, and the generic drafter is not invoked for that field
+
+#### Scenario: A stored letter with a blank body is treated as no letter
+
+- **WHEN** auto-apply resolves a cover-letter field for a job whose stored letter row has a
+  blank (empty or whitespace-only) body
+- **THEN** the field is resolved by the generic drafter, exactly as when no letter exists yet
+  — a required field is never answered with a blank string
 
 ### Requirement: The generic drafter remains the fallback when no tailored letter exists
 
