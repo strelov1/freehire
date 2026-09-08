@@ -2221,9 +2221,9 @@ type Querier interface {
 	GetTalentNetworkProfileByPublicID(ctx context.Context, talentNetworkPublicID uuid.UUID) (GetTalentNetworkProfileByPublicIDRow, error)
 	// The caller's own Talent Network opt-in state, for the owner-facing settings toggle.
 	// talent_network_public_id rides along so the settings page can render the resulting
-	// public URL the moment a non-'off' mode is selected, without a second round-trip.
-	// Every row has both — 'off' and a freshly-minted uuid are the column defaults — so
-	// there is no "not set yet" case to special-case.
+	// public URL the moment the toggle goes on, without a second round-trip. Every row has
+	// both — 'off' and a freshly-minted uuid are the column defaults — so there is no
+	// "not set yet" case to special-case.
 	GetTalentNetworkVisibility(ctx context.Context, id int64) (GetTalentNetworkVisibilityRow, error)
 	// The caller's linked Telegram chat (link-status endpoint + delivery resolution).
 	GetTelegramLink(ctx context.Context, userID int64) (TelegramLink, error)
@@ -5181,10 +5181,14 @@ type Querier interface {
 	// Pause/resume a subscription, scoped to its owner. No matching owner-scoped row
 	// returns no row (the handler maps that to 404).
 	SetSubscriptionActive(ctx context.Context, arg SetSubscriptionActiveParams) (Subscription, error)
-	// Owner-scoped write of the caller's Talent Network visibility. Does not touch
-	// talent_network_public_id: the public URL stays stable across mode changes
-	// (including a round trip through 'off'), so a candidate who already shared it once
-	// never has to reshare a new one.
+	// Owner-scoped write of the caller's Talent Network membership ('off' or 'anonymous'
+	// since migration 0145). Does not touch talent_network_public_id: the public URL stays
+	// stable across a round trip through 'off', so a candidate who already shared it once —
+	// or who leaves and rejoins — never has to reshare a new one.
+	//
+	// The value is NOT validated here. Its authority is the CHECK constraint on the column;
+	// the handler mirrors that set for a cheap 400, and this statement is the third place
+	// the vocabulary would have to be repeated for no gain.
 	SetTalentNetworkVisibility(ctx context.Context, arg SetTalentNetworkVisibilityParams) error
 	// Ultra GIVEN rather than sold. Separate from the Pro grant rather than folded into it: the
 	// two are different decisions a person makes, and one statement setting both would make

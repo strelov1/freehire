@@ -10,9 +10,14 @@ import (
 
 // talentNetworkVisibilityValues are the only values SetTalentNetworkVisibility accepts.
 // Kept as a set here (not a shared vocab package) because the enum's authority is the
-// Postgres CHECK/enum on users.talent_network_visibility (see migration) — this mirrors
-// it for a cheap 400 without a round trip, not the other way around.
-var talentNetworkVisibilityValues = map[string]bool{"off": true, "public": true, "anonymous": true}
+// Postgres CHECK on users.talent_network_visibility (migration 0145) — this mirrors it
+// for a cheap 400 without a round trip, not the other way around.
+//
+// Two values, not three: 'public' was retired with the mode picker itself. The product no
+// longer asks a candidate how much of themselves to disclose — the public projection is
+// fixed and anonymised, and membership is the only decision left. A stale client still
+// sending 'public' gets a 400 from here rather than a 500 from the constraint.
+var talentNetworkVisibilityValues = map[string]bool{"off": true, "anonymous": true}
 
 // talentNetworkStore is the slice of *db.Queries the owner-facing visibility endpoint
 // needs, kept narrow so the handler is unit-testable without a database.
@@ -69,13 +74,13 @@ func (h *talentNetworkHandlers) GetVisibility(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"data": toTalentNetworkResponse(row)})
 }
 
-// setTalentNetworkRequest is the PUT body: one of "off", "public", "anonymous".
+// setTalentNetworkRequest is the PUT body: either "off" or "anonymous".
 type setTalentNetworkRequest struct {
 	Visibility string `json:"visibility"`
 }
 
-// PutVisibility updates the authenticated caller's own Talent Network visibility.
-// Any value outside the three valid strings is a 400 and never reaches the store.
+// PutVisibility updates the authenticated caller's own Talent Network membership.
+// Any value outside the two valid strings is a 400 and never reaches the store.
 // Cookie-only (see register).
 func (h *talentNetworkHandlers) PutVisibility(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
@@ -88,7 +93,7 @@ func (h *talentNetworkHandlers) PutVisibility(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusBadRequest, "invalid request body")
 	}
 	if !talentNetworkVisibilityValues[in.Visibility] {
-		return fiber.NewError(fiber.StatusBadRequest, "visibility must be one of off, public, anonymous")
+		return fiber.NewError(fiber.StatusBadRequest, "visibility must be one of off, anonymous")
 	}
 
 	if err := h.store.SetTalentNetworkVisibility(c.Context(), db.SetTalentNetworkVisibilityParams{

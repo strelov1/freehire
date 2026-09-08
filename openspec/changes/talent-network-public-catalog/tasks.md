@@ -3,7 +3,7 @@ REFACTOR → simplify → review → only then `[x]`.
 
 ## 1. Collapse the three modes to two
 
-- [ ] 1.1 Migration `0145_talent_network_two_states.sql`. **Number deliberately: `main`
+- [x] 1.1 Migration `0145_talent_network_two_states.sql`. **Number deliberately: `main`
       already holds six files at `0144`, and order is decided alphabetically, so verify
       nothing else claims `0145` before writing.** Rewrite
       `talent_network_visibility = 'public'` to `'anonymous'`, then drop
@@ -11,9 +11,9 @@ REFACTOR → simplify → review → only then `[x]`.
       `off`/`anonymous`. `users` is hot: `migrate: no-transaction`, and the split
       `ADD ... NOT VALID` + `VALIDATE CONSTRAINT` shape 0085 documents. Run
       `pnpm check:sql`.
-- [ ] 1.2 `internal/platform/db/queries/users.sql`: the set-visibility query refuses
+- [x] 1.2 `internal/platform/db/queries/users.sql`: the set-visibility query refuses
       anything but the two states; `make sqlc`, and confirm the pre-commit diff is clean.
-- [ ] 1.3 `internal/api/handler/me_talent_network.go`: `public` becomes an invalid input
+- [x] 1.3 `internal/api/handler/me_talent_network.go`: `public` becomes an invalid input
       (400), the response still echoes the stored value. Extend
       `me_talent_network_test.go` — a request asking for `public` is refused and stores
       nothing.

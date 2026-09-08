@@ -101,35 +101,25 @@ func TestGetTalentNetwork_DefaultsToOff(t *testing.T) {
 	}
 }
 
-func TestPutTalentNetwork_PublicRoundTrips(t *testing.T) {
+// "public" was the third visibility mode until migration 0145 retired it. It gets its own
+// test rather than a row in RejectsInvalidValue's table because it is the one invalid
+// value that a stale client — an old tab, a cached bundle — will actually send, and
+// because the CHECK constraint would reject it anyway: the handler's job is to turn that
+// into a 400 rather than a 500 from the database.
+func TestPutTalentNetwork_RejectsRetiredPublicValue(t *testing.T) {
 	store := &fakeTalentNetworkStore{visibility: "off", publicID: uuid.New()}
 	app, token := talentNetworkApp(t, store)
 
-	putResp := doTalentNetwork(t, app, fiber.MethodPut, `{"visibility":"public"}`, token)
-	defer putResp.Body.Close()
-	if putResp.StatusCode != fiber.StatusOK {
-		t.Fatalf("PUT status = %d, want 200", putResp.StatusCode)
+	resp := doTalentNetwork(t, app, fiber.MethodPut, `{"visibility":"public"}`, token)
+	defer resp.Body.Close()
+	if resp.StatusCode != fiber.StatusBadRequest {
+		t.Fatalf("PUT status = %d, want 400", resp.StatusCode)
 	}
-	var putGot struct {
-		Data talentNetworkResponse `json:"data"`
+	if store.setCalls != 0 {
+		t.Error("SetTalentNetworkVisibility should not be called for the retired value")
 	}
-	if err := json.NewDecoder(putResp.Body).Decode(&putGot); err != nil {
-		t.Fatalf("decode PUT: %v", err)
-	}
-	if putGot.Data.Visibility != "public" {
-		t.Errorf("PUT visibility = %q, want public", putGot.Data.Visibility)
-	}
-
-	getResp := doTalentNetwork(t, app, fiber.MethodGet, "", token)
-	defer getResp.Body.Close()
-	var getGot struct {
-		Data talentNetworkResponse `json:"data"`
-	}
-	if err := json.NewDecoder(getResp.Body).Decode(&getGot); err != nil {
-		t.Fatalf("decode GET: %v", err)
-	}
-	if getGot.Data.Visibility != "public" {
-		t.Errorf("GET visibility after PUT = %q, want public", getGot.Data.Visibility)
+	if store.visibility != "off" {
+		t.Errorf("stored visibility = %q, want it untouched at off", store.visibility)
 	}
 }
 
@@ -184,7 +174,7 @@ func TestTalentNetwork_RequiresAuth(t *testing.T) {
 		t.Errorf("GET status = %d, want 401", getResp.StatusCode)
 	}
 
-	putResp := doTalentNetwork(t, app, fiber.MethodPut, `{"visibility":"public"}`, "")
+	putResp := doTalentNetwork(t, app, fiber.MethodPut, `{"visibility":"anonymous"}`, "")
 	defer putResp.Body.Close()
 	if putResp.StatusCode != fiber.StatusUnauthorized {
 		t.Errorf("PUT status = %d, want 401", putResp.StatusCode)
