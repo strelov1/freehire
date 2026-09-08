@@ -44,7 +44,7 @@
 -- that sets it has never been reachable from the account navigation. This file
 -- is not a precedent for an unchunked UPDATE over a large slice of `users`.
 --
--- Applied to a fresh volume by initdb after 0145; on an existing prod volume run
+-- Applied to a fresh volume by initdb after 0147; on an existing prod volume run
 -- this manually (SET ROLE hire) BEFORE deploying the code that reads it.
 
 -- Clears the carcass a run that failed after the ADD would have left, so this

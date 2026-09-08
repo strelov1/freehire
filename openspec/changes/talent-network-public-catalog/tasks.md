@@ -3,9 +3,13 @@ REFACTOR → simplify → review → only then `[x]`.
 
 ## 1. Membership: two states, and one permanent handle
 
-- [x] 1.1 Migration `0146_talent_network_two_states.sql`. **Number deliberately: `main`
-      already holds six files at `0144`, and order is decided alphabetically, so verify
-      nothing else claims `0145` before writing.** Rewrite
+- [x] 1.1 Migration `0148_talent_network_two_states.sql`. **RENUMBERED TWICE while this
+      branch was open** — written as `0145`, which was free at the branch point and was
+      taken by `0145_mentorship` before review, then `0146`/`0147` were taken too. There
+      is no gate on the number and ordering falls to the alphabet, so **re-check the
+      highest on `origin/main` immediately before opening the PR**, not when the file is
+      written. References to APPLIED history (0085, 0086, 0117, 0118) must not move with
+      it. Rewrite
       `talent_network_visibility = 'public'` to `'anonymous'`, then drop
       `users_talent_network_visibility_check` and add it back admitting only
       `off`/`anonymous`. `users` is hot: `migrate: no-transaction`, and the split
@@ -17,10 +21,10 @@ REFACTOR → simplify → review → only then `[x]`.
       (400), the response still echoes the stored value. Extend
       `me_talent_network_test.go` — a request asking for `public` is refused and stores
       nothing.
-- [x] 1.4 Migration `0147_users_talent_handle.sql`: add nullable `talent_handle text` to
+- [x] 1.4 Migration `0149_users_talent_handle.sql`: add nullable `talent_handle text` to
       `users`. Nullable is the point — a non-member has no handle, and a default would mint
       one for every account that never joins.
-- [x] 1.5 Migration `0148_users_talent_handle_uniq_idx.sql`: `CREATE UNIQUE INDEX
+- [x] 1.5 Migration `0150_users_talent_handle_uniq_idx.sql`: `CREATE UNIQUE INDEX
       CONCURRENTLY`, own `migrate: no-transaction` file, the shape 0086 uses. **Not `IF NOT
       EXISTS`** — it skips the `indisvalid = f` carcass a cancelled concurrent build leaves,
       which is what 0117 and 0118 existed to repair.

@@ -1,7 +1,7 @@
 // Command backfill-talent-handle is a one-off: mints the catalogue handle for the Talent
 // Network members who joined before handles existed.
 //
-// Migration 0146 rewrote every 'public' row to 'anonymous', and migration 0147 added the
+// Migration 0148 rewrote every 'public' row to 'anonymous', and migration 0149 added the
 // column — but neither could mint. A handle's readable part is the category a job title
 // resolves to through internal/dict/classify, which is a Go dictionary and not something
 // SQL can reach. So those accounts, and any that were already 'anonymous', came out of

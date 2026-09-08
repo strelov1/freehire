@@ -1,6 +1,6 @@
 -- Retires users.talent_network_public_id, the opaque uuid that addressed the old
 -- one-candidate profile page. That route is gone: a member's card is now served at
--- /talent/<handle> (migrations 0147/0148). Two public identifiers for one page is a
+-- /talent/<handle> (migrations 0149/0150). Two public identifiers for one page is a
 -- drift waiting to happen — one of them eventually gets handed out where the other
 -- was meant to be — and nothing ever shared the uuid, because the control that
 -- minted it was never reachable from the account navigation.

@@ -136,7 +136,7 @@ func TestGetTalentNetwork_DefaultsToOff(t *testing.T) {
 	}
 }
 
-// "public" was the third visibility mode until migration 0146 retired it. It gets its own
+// "public" was the third visibility mode until migration 0148 retired it. It gets its own
 // test rather than a row in RejectsInvalidValue's table because it is the one invalid
 // value that a stale client — an old tab, a cached bundle — will actually send, and
 // because the CHECK constraint would reject it anyway: the handler's job is to turn that

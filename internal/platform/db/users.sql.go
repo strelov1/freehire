@@ -579,7 +579,7 @@ ORDER BY id
 
 // The members who joined before handles existed, and so have no public address.
 //
-// Migration 0146 rewrote every 'public' row to 'anonymous' but could not mint a handle —
+// Migration 0148 rewrote every 'public' row to 'anonymous' but could not mint a handle —
 // minting reads a job title through a Go dictionary, which SQL cannot do — so those
 // accounts, and any that were already 'anonymous', are members the catalogue cannot list
 // and whose card 404s. cmd/backfill-talent-handle walks this list once and closes it.
@@ -860,7 +860,7 @@ type SetTalentHandleIfUnsetParams struct {
 // caller reads rather than re-querying and racing again.
 //
 // A collision with ANOTHER account's handle surfaces as a unique-violation from
-// users_talent_handle_key (migration 0148), not as 0 rows. The caller mints a new suffix
+// users_talent_handle_key (migration 0150), not as 0 rows. The caller mints a new suffix
 // and retries — the same shape internal/identity/accounts uses to allocate a username.
 func (q *Queries) SetTalentHandleIfUnset(ctx context.Context, arg SetTalentHandleIfUnsetParams) (int64, error) {
 	result, err := q.db.Exec(ctx, setTalentHandleIfUnset, arg.ID, arg.TalentHandle)
@@ -882,7 +882,7 @@ type SetTalentNetworkVisibilityParams struct {
 }
 
 // Owner-scoped write of the caller's Talent Network membership ('off' or 'anonymous'
-// since migration 0146). Does not touch talent_handle: the public URL stays stable
+// since migration 0148). Does not touch talent_handle: the public URL stays stable
 // across a round trip through 'off', so a candidate who already shared it once — or who
 // leaves and rejoins — never has to reshare a new one.
 //

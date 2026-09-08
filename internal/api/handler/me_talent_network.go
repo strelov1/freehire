@@ -15,7 +15,7 @@ const visibilityOff = "off"
 
 // talentNetworkVisibilityValues are the only values SetTalentNetworkVisibility accepts.
 // Kept as a set here (not a shared vocab package) because the enum's authority is the
-// Postgres CHECK on users.talent_network_visibility (migration 0146) — this mirrors it
+// Postgres CHECK on users.talent_network_visibility (migration 0148) — this mirrors it
 // for a cheap 400 without a round trip, not the other way around.
 //
 // Two values, not three: 'public' was retired with the mode picker itself. The product no
