@@ -198,3 +198,21 @@ func TestResolve_NotFullyResolvedWhenAnyUnmappedExists(t *testing.T) {
 		t.Error("FullyResolved() = true, want false — a required field has no answer")
 	}
 }
+
+func TestIsCoverLetterTextField_RecognizesTheKnownID(t *testing.T) {
+	if !isCoverLetterTextField(MergedField{ID: "cover_letter_text", Label: "", Kind: "textarea"}) {
+		t.Error("want a cover_letter_text field recognized by id alone")
+	}
+}
+
+func TestIsCoverLetterTextField_RecognizesAnOpaqueIDByLabel(t *testing.T) {
+	if !isCoverLetterTextField(MergedField{ID: "question_98765", Label: "Cover Letter", Kind: "textarea"}) {
+		t.Error("want an opaque-id field with a Cover Letter label recognized via the label fallback")
+	}
+}
+
+func TestIsCoverLetterTextField_AnUnrelatedFreeTextFieldIsNotRecognized(t *testing.T) {
+	if isCoverLetterTextField(MergedField{ID: "question_11111", Label: "Why do you want to work here?", Kind: "textarea"}) {
+		t.Error("want an unrelated free-text question not recognized as a cover-letter field")
+	}
+}

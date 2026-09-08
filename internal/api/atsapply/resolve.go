@@ -197,6 +197,19 @@ func isResumeField(f MergedField) bool {
 	return strings.Contains(lower, "resume") || strings.Contains(lower, "résumé")
 }
 
+// isCoverLetterTextField reports whether a free-text field is asking for a cover letter —
+// the free-text sibling of the file-kind "cover_letter" field isResumeField's own doc
+// comment names (internal/ingest/applyform/display.go's vocabulary: "cover_letter" is the
+// upload, "cover_letter_text" is this one). Same id-then-label shape as isResumeField: the
+// id is the stable, observed Greenhouse signal, the label is the fallback for a
+// custom-labeled or opaque-id field this package has not yet measured live.
+func isCoverLetterTextField(f MergedField) bool {
+	if strings.EqualFold(strings.TrimSpace(f.ID), "cover_letter_text") {
+		return true
+	}
+	return strings.Contains(strings.ToLower(f.Label), "cover letter")
+}
+
 // matchOption resolves free text against a field's offered options, returning the
 // PLATFORM value (not the label) for whichever option it case-insensitively matches. A
 // field with no enumerated options at all takes the text verbatim — there is nothing to

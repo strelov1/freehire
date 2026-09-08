@@ -73,6 +73,11 @@ type Client struct {
 	// means "no grounding source configured", and drafting is skipped entirely rather
 	// than run against an always-empty GroundingContext.
 	atoms AtomReader
+	// letters is nil-checked directly, the same convention atoms follows: nil means no
+	// letter store configured, and a cover-letter field simply drafts through the generic
+	// Drafter exactly as it did before this capability existed. See
+	// openspec/changes/autoapply-reuse-cover-letter.
+	letters LetterReader
 	// cvs and renderer resolve and render a claim's approved tailored CV to a résumé PDF,
 	// on demand, at submit time — no object storage involved (openspec/changes/
 	// auto-apply-tailored-resume's design.md: "File rendering is on-demand"). Both nil is
@@ -107,18 +112,20 @@ type CVReader interface {
 
 // NewClient builds a Client. transport is the same one internal/applyform's own capture
 // worker uses (internal/sources.Client) — the Greenhouse/Ashby schema fetch this package
-// reuses needs nothing different from it. llmClient/llmKeys/atoms may all be nil, which
-// disables question drafting entirely and leaves every other behavior unchanged (a form
-// drafting could have completed instead parks, exactly as it did before this capability
-// existed). cvs/renderer may also be nil, with the same degrade: a résumé field parks
-// instead of being filled.
-func NewClient(transport applyform.Transport, llmClient *llm.Client, llmKeys *llmkey.Resolver, atoms AtomReader, cvs CVReader, renderer cv.Renderer) *Client {
+// reuses needs nothing different from it. llmClient/llmKeys/atoms/letters may all be nil,
+// which disables question drafting entirely and leaves every other behavior unchanged (a
+// form drafting could have completed instead parks, exactly as it did before this
+// capability existed) — letters alone being nil only disables the cover-letter-reuse
+// preference, leaving ordinary drafting through llmClient/atoms unaffected. cvs/renderer
+// may also be nil, with the same degrade: a résumé field parks instead of being filled.
+func NewClient(transport applyform.Transport, llmClient *llm.Client, llmKeys *llmkey.Resolver, atoms AtomReader, letters LetterReader, cvs CVReader, renderer cv.Renderer) *Client {
 	return &Client{
 		fetchers:      applyform.Fetchers(transport),
 		allocatorOpts: stealthAllocatorOptions(),
 		llmClient:     llmClient,
 		llmKeys:       llmKeys,
 		atoms:         atoms,
+		letters:       letters,
 		cvs:           cvs,
 		renderer:      renderer,
 	}
@@ -275,7 +282,7 @@ func (c *Client) resolve(ctx context.Context, claimed autoapply.Claimed, merged 
 	}
 
 	bound := llmkey.Bind(ctx, c.llmKeys, c.llmClient, claimed.UserID, llm.Feature(tagAutoApplyDrafting))
-	return ResolveWithDrafting(ctx, merged, answers, NewLLMDrafter(bound), grounding, hasApprovedCV)
+	return ResolveWithDrafting(ctx, merged, answers, NewLLMDrafter(bound), grounding, hasApprovedCV, c.letters, claimed.UserID, claimed.JobID)
 }
 
 // attachApprovedResume renders the claim's approved tailored CV to a temp PDF and sets it

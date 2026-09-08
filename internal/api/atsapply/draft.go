@@ -3,8 +3,10 @@ package atsapply
 import (
 	"context"
 	"fmt"
+	"log"
 
 	"github.com/strelov1/freehire/internal/application/autoapply"
+	"github.com/strelov1/freehire/internal/candidate/coverletter"
 )
 
 // Drafter drafts a free-text answer for one question, grounded in grounding. ok is false
@@ -13,6 +15,33 @@ import (
 // receiving an invented answer.
 type Drafter interface {
 	Draft(ctx context.Context, question MergedField, grounding GroundingContext) (answer string, ok bool, err error)
+}
+
+// LetterReader reads a candidate's own already-drafted cover letter for one job, when one
+// exists. *coverletter.Store satisfies it directly — the same structural fit AtomReader
+// already has over *experience.Store — so no adapter type is needed: a nil *Stored means
+// "no letter yet", exactly coverletter.Store.Get's own contract, not an error this package
+// re-derives.
+type LetterReader interface {
+	Get(ctx context.Context, userID, jobID int64) (*coverletter.Stored, error)
+}
+
+// coverLetterAnswer looks up the candidate's own existing letter for (userID, jobID) and, if
+// one exists, returns it as a ready answer — ok is false both when no letter has been
+// drafted yet (the ordinary case for a job never drafted for) and when the read itself
+// fails, which degrades to "nothing found" here rather than failing the whole attempt, the
+// same "a failure to read the grounding source degrades to drafting nothing" discipline
+// client.go's own resolve already follows for buildGroundingContext.
+func coverLetterAnswer(ctx context.Context, letters LetterReader, userID, jobID int64) (answer string, ok bool) {
+	stored, err := letters.Get(ctx, userID, jobID)
+	if err != nil {
+		log.Printf("atsapply: read cover letter for user %d job %d: %v — falling back to the generic drafter", userID, jobID, err)
+		return "", false
+	}
+	if stored == nil {
+		return "", false
+	}
+	return stored.Body, true
 }
 
 // draftable reports whether a field is even a candidate for drafting: required (an
@@ -46,7 +75,13 @@ func draftable(f MergedField) bool {
 //
 // drafter may be nil (an unconfigured deployment, or a caller that has not wired one in
 // yet) — the deterministic Plan is returned unchanged, the same outcome as today.
-func ResolveWithDrafting(ctx context.Context, fields []MergedField, answers map[string]string, drafter Drafter, grounding GroundingContext, hasApprovedCV bool) (Plan, error) {
+//
+// letters may also be nil (no letter store wired in), in which case every field drafts the
+// same way it always has. When it is set, a field draftable's own gates already accept AND
+// identified as cover-letter-semantic (isCoverLetterTextField) prefers the candidate's own
+// existing letter for (userID, jobID) over the generic drafter — see
+// atsapply-cover-letter-reuse's spec. userID/jobID are only ever used for that lookup.
+func ResolveWithDrafting(ctx context.Context, fields []MergedField, answers map[string]string, drafter Drafter, grounding GroundingContext, hasApprovedCV bool, letters LetterReader, userID, jobID int64) (Plan, error) {
 	plan := Resolve(fields, answers, hasApprovedCV)
 	if drafter == nil {
 		return plan, nil
@@ -65,9 +100,17 @@ func ResolveWithDrafting(ctx context.Context, fields []MergedField, answers map[
 			continue
 		}
 
-		answer, ok, err := drafter.Draft(ctx, f, grounding)
-		if err != nil {
-			return Plan{}, fmt.Errorf("draft %q: %w", f.ID, err)
+		var answer string
+		var ok bool
+		if letters != nil && isCoverLetterTextField(f) {
+			answer, ok = coverLetterAnswer(ctx, letters, userID, jobID)
+		}
+		if !ok {
+			var err error
+			answer, ok, err = drafter.Draft(ctx, f, grounding)
+			if err != nil {
+				return Plan{}, fmt.Errorf("draft %q: %w", f.ID, err)
+			}
 		}
 		if !ok {
 			stillUnmapped = append(stillUnmapped, u)

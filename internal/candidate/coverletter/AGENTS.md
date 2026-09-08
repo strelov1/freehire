@@ -87,6 +87,13 @@ caller overwrites that field regardless.
 The vacancy arrives as a `db.Job` parameter from a caller that has already loaded and
 authorized it: `candidate` is layer 4 and may never import `job` at layer 5.
 
+**`internal/api/atsapply` (layer 8) reads `Store.Get` directly, as a read-only consumer, when
+resolving an ATS form's own cover-letter field for auto-apply** — no new method added for it;
+the same `Get(ctx, userID, jobID) (*Stored, error)` this package's own read path already
+exposes. A nil `*Stored` (no letter drafted yet) degrades to that package's generic drafter,
+not to drafting one here — this package's own three-stage chain never runs unattended. See
+`openspec/changes/autoapply-reuse-cover-letter`.
+
 **A cached fit analysis is a precondition, not something drafting produces.** `Required` reads
 the cache and returns `ErrNoAnalysis` when it is empty; producing is `Ensure`'s, and `Ensure`
 takes the coalescing `Request` the autopilot assembles. A letter has no business assembling that
