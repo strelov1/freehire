@@ -249,7 +249,7 @@ func (a *Analyzer) streamStage(ctx context.Context, stage int, system, user stri
 	for attempt := 1; attempt <= stageAttempts; attempt++ {
 		raw, err := a.client.GenerateJSONStream(ctx, system, user, func(t string) {
 			emit(Event{Kind: EventThinking, Stage: stage, Thinking: t})
-		})
+		}, stageGenOptions(stage)...)
 		if err != nil {
 			// A stage that burned its own per-call deadline is retried like a parse failure.
 			// Production showed such a call hung rather than slow — it ate the full budget
