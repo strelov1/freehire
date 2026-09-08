@@ -27,7 +27,11 @@
               <div>
                 <p class="font-medium">{when.day} at {when.time}</p>
                 <p class="text-muted-foreground text-sm">
-                  {session.headline}
+                  <!-- Whichever of the two the row knows. A seeker's list carries the
+                       mentor's headline; a MENTOR's list carries the seeker's address
+                       instead, and says so — the endpoint sends it precisely so this pane
+                       can name who is coming, and the mentor is meeting this person. -->
+                  {session.seeker_email || session.headline}
                   <!-- The offset, for the same reason a slot carries it: on the autumn
                        transition two sessions an hour apart read as the same clock time. -->
                   · UTC{when.offset}

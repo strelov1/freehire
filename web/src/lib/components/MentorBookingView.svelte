@@ -235,7 +235,7 @@
         {/each}
       </div>
 
-      <div class="mt-1 grid grid-cols-7 gap-1">
+      <div class="mt-1 grid grid-cols-7 gap-1" data-testid="mentor-calendar">
         {#each weeks as week, w (w)}
           {#each week as day, d (day || `blank-${w}-${d}`)}
             {#if day === ''}
@@ -282,6 +282,7 @@
             <li>
               <button
                 type="button"
+                data-testid="mentor-slot"
                 aria-pressed={selectedSlot === slot.starts_at}
                 class="flex w-full items-center justify-between rounded-md border px-3 py-2 text-sm
                        {selectedSlot === slot.starts_at
