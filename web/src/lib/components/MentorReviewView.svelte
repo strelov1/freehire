@@ -1,5 +1,6 @@
 <script lang="ts">
   import { api } from '$lib/api';
+  import { errorMessage } from '$lib/utils';
   import { AsyncData } from '$lib/asyncData.svelte';
   import { Badge, Button, Card } from '$lib/ui';
   import type { PendingMentorProfile } from '$lib/types';
@@ -24,7 +25,7 @@
       await api.decideMentorProfile(profile.id, next);
       queueData.value = queue.filter((p) => p.id !== profile.id);
     } catch (e) {
-      error = e instanceof Error && e.message ? e.message : 'That decision could not be recorded.';
+      error = errorMessage(e, 'That decision could not be recorded.');
     } finally {
       acting = null;
     }

@@ -1,5 +1,7 @@
 <script lang="ts">
   import { api } from '$lib/api';
+  import { browserTimezone } from '$lib/mentorship';
+  import { errorMessage } from '$lib/utils';
   import { Badge, Button, Card } from '$lib/ui';
   import type { MentorProfileInput, OwnMentorProfile } from '$lib/types';
 
@@ -8,8 +10,7 @@
   // The browser's zone as the default for a NEW profile only. An existing one keeps what
   // the mentor chose: their availability is resolved through it, and silently re-reading
   // it from the machine they happen to be on would move every stated hour.
-  const browserZone =
-    typeof Intl === 'undefined' ? 'UTC' : Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const browserZone = browserTimezone();
 
   function blank(): MentorProfileInput {
     return {
@@ -71,7 +72,7 @@
       const body = { ...form, topics: list(topicsText), languages: list(languagesText) };
       profile = profile ? await api.updateMentorProfile(body) : await api.createMentorProfile(body);
     } catch (e) {
-      error = e instanceof Error && e.message ? e.message : 'The profile could not be saved.';
+      error = errorMessage(e, 'The profile could not be saved.');
     } finally {
       saving = false;
     }
@@ -84,7 +85,7 @@
     try {
       profile = await api.pauseMentorProfile(!profile.paused);
     } catch (e) {
-      error = e instanceof Error && e.message ? e.message : 'That could not be changed.';
+      error = errorMessage(e, 'That could not be changed.');
     } finally {
       saving = false;
     }

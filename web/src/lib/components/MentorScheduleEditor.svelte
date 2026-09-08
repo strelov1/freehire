@@ -1,5 +1,6 @@
 <script lang="ts">
   import { api } from '$lib/api';
+  import { errorMessage } from '$lib/utils';
   import { Badge, Button, Card } from '$lib/ui';
   import { splitAvailability, weekdayLabel, weekdayOrder } from '$lib/mentorship';
   import type { MentorAvailabilityRule } from '$lib/types';
@@ -37,7 +38,7 @@
       rules = saved;
       editingWeek = false;
     } catch (e) {
-      error = e instanceof Error && e.message ? e.message : 'The week could not be saved.';
+      error = errorMessage(e, 'The week could not be saved.');
     } finally {
       saving = false;
     }
@@ -61,7 +62,7 @@
       rules = [...rules, added];
       overrideDate = '';
     } catch (e) {
-      error = e instanceof Error && e.message ? e.message : 'The exception could not be added.';
+      error = errorMessage(e, 'The exception could not be added.');
     } finally {
       saving = false;
     }
@@ -74,7 +75,7 @@
       await api.deleteAvailabilityRule(id);
       rules = rules.filter((r) => r.id !== id);
     } catch (e) {
-      error = e instanceof Error && e.message ? e.message : 'The rule could not be removed.';
+      error = errorMessage(e, 'The rule could not be removed.');
     } finally {
       saving = false;
     }

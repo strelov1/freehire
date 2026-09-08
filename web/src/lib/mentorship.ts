@@ -204,6 +204,16 @@ export function monthGrid(month: string): string[][] {
   return weeks;
 }
 
+/** The zone this browser believes it is in, falling back to UTC where `Intl` is absent —
+ *  which is the SSR pass, since the server cannot know the viewer's zone at all.
+ *
+ *  Only ever a REQUEST. What the times are actually in is whatever the slot endpoint
+ *  reports back: an unrecognised name is answered in UTC, and a page that assumed its own
+ *  guess was honoured cannot tell a correct time from a wrong one. */
+export function browserTimezone(): string {
+  return typeof Intl === 'undefined' ? 'UTC' : Intl.DateTimeFormat().resolvedOptions().timeZone;
+}
+
 /** Today's date in a named zone, `YYYY-MM-DD`.
  *
  *  "Today" is a question about a zone, not about a machine: at 16:00 UTC it is already

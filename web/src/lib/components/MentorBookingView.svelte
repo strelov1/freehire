@@ -4,10 +4,12 @@
   import { page } from '$app/state';
   import { resolve } from '$app/paths';
   import { api } from '$lib/api';
+  import { errorMessage } from '$lib/utils';
   import { signinUrl } from '$lib/signin';
   import { Badge, Button, Card, Skeleton } from '$lib/ui';
   import {
     addMonths,
+    browserTimezone,
     daysWithSlots,
     groupSlotsByLocalDay,
     monthGrid,
@@ -31,8 +33,7 @@
   // The zone the browser believes it is in. What the times are ACTUALLY in is whatever the
   // response reports — an unrecognised name is answered in UTC — so this is only ever the
   // request, never the label.
-  const browserZone =
-    typeof Intl !== 'undefined' ? Intl.DateTimeFormat().resolvedOptions().timeZone : 'UTC';
+  const browserZone = browserTimezone();
 
   let slots = $state<MentorSlot[]>([]);
   let zone = $state(browserZone);
@@ -187,8 +188,7 @@
       // The hour may simply have gone: somebody else took it, or the mentor moved their
       // availability inside the minute the slot cache holds. Re-ask rather than leaving a
       // list that still offers it.
-      bookingError =
-        e instanceof Error && e.message ? e.message : 'That hour could not be booked.';
+      bookingError = errorMessage(e, 'That hour could not be booked.');
       void load(slotWindowForMonth(month));
     } finally {
       booking = false;

@@ -2,15 +2,15 @@
   import { invalidateAll } from '$app/navigation';
   import { resolve } from '$app/paths';
   import { api } from '$lib/api';
-  import { canReview, formatInstantIn, isCancellable } from '$lib/mentorship';
+  import { errorMessage } from '$lib/utils';
+  import { browserTimezone, canReview, formatInstantIn, isCancellable } from '$lib/mentorship';
   import { Badge, Button, Card } from '$lib/ui';
   import type { PageData } from './$types';
 
   let { data }: { data: PageData } = $props();
 
   const session = $derived(data.session);
-  const timezone =
-    typeof Intl === 'undefined' ? 'UTC' : Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const timezone = browserTimezone();
   const starts = $derived(formatInstantIn(session.starts_at, timezone));
   const ends = $derived(formatInstantIn(session.ends_at, timezone));
 
@@ -42,8 +42,7 @@
       // unchanged by the review.
       reviewed = true;
     } catch (e) {
-      reviewError =
-        e instanceof Error && e.message ? e.message : 'The review could not be saved.';
+      reviewError = errorMessage(e, 'The review could not be saved.');
     } finally {
       reviewing = false;
     }
@@ -59,8 +58,7 @@
       await invalidateAll();
       confirming = false;
     } catch (e) {
-      cancelError =
-        e instanceof Error && e.message ? e.message : 'The session could not be cancelled.';
+      cancelError = errorMessage(e, 'The session could not be cancelled.');
     } finally {
       cancelling = false;
     }

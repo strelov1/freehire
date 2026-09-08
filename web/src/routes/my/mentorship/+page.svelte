@@ -2,6 +2,7 @@
   import MentorProfileEditor from '$lib/components/MentorProfileEditor.svelte';
   import MentorScheduleEditor from '$lib/components/MentorScheduleEditor.svelte';
   import MentorSessionList from '$lib/components/MentorSessionList.svelte';
+  import { browserTimezone } from '$lib/mentorship';
   import { Button } from '$lib/ui';
   import type { PageData } from './$types';
 
@@ -10,8 +11,7 @@
   // The zone to read the instants in. Resolved here rather than taken from a session: a
   // booking records the zone it was MADE in, which is not necessarily the one the person
   // is sitting in now.
-  const timezone =
-    typeof Intl === 'undefined' ? 'UTC' : Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const timezone = browserTimezone();
 
   // Local copies so the editors can write back without a round trip through `load`.
   let profile = $state(data.profile);
