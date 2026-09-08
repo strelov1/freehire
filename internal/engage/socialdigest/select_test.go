@@ -62,10 +62,13 @@ func TestSelect(t *testing.T) {
 		assertIDs(t, got, []int64{1})
 	})
 
+	// Written against the constant rather than against numbers below whatever it happens to
+	// be: spelled as literals, this test passed for a floor of 10 and asserted the opposite
+	// of its own name the moment the floor moved to 3.
 	t.Run("a day where nothing clears the floor yields nothing", func(t *testing.T) {
 		got := Select([]Posting{
-			posting(1, "alpha", 9),
-			posting(2, "beta", 3),
+			posting(1, "alpha", MinPageUniques-1),
+			posting(2, "beta", MinPageUniques-2),
 		}, nil)
 		if len(got) != 0 {
 			t.Errorf("got %v, want empty", ids(got))
