@@ -18,6 +18,21 @@
   body {
     height: 100%;
   }
+  /* Tell the browser which palette this page is in, so the parts of the UI IT draws
+     match the parts we draw. A native <select>'s open menu, the scrollbars, the focus
+     ring on a form control and the date/colour pickers are all rendered by the OS, and
+     without this they follow the OS setting instead of ours: a visitor whose Mac is in
+     dark mode got a black dropdown menu hanging over a white page.
+
+     It is declared here rather than beside any one control because there is no way to
+     style a native menu — `color-scheme` is the whole of the API. Paired with the `.dark`
+     class app.html sets before first paint, so the two never disagree. */
+  html {
+    color-scheme: light;
+  }
+  html.dark {
+    color-scheme: dark;
+  }
   body {
     @apply bg-background text-foreground font-sans antialiased;
   }
