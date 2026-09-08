@@ -2799,6 +2799,19 @@ type Querier interface {
 	// search query to translate into a filter, plus identity/channel for fan-out. The
 	// worker groups these by canonical(query) so each distinct filter hits the search
 	// index once regardless of how many subscriptions share it.
+	//
+	// The alerts switch is applied HERE rather than at send time, so a delivery path
+	// added later inherits the gate instead of having to remember it.
+	//
+	// It gates the EMAIL channel only. Turning off "job alerts" means turning off the
+	// mail: a Telegram or webhook destination is something the account connected
+	// itself and turns off where it connected it, and silencing those from a link in
+	// an email would be acting well beyond what the link said it would do.
+	//
+	// LEFT JOIN with COALESCE(..., true): a missing notification_settings row means the
+	// account never opened the settings page, which is not the same as opting out. Same
+	// reading as broadcast.sql and onboarding.sql, and the opposite of nudges.sql's
+	// inner join — see migration 0152 for why one column could not answer both.
 	ListActiveSubscriptions(ctx context.Context) ([]ListActiveSubscriptionsRow, error)
 	// The channels cmd/tg-ingest crawls and cmd/tg-extract reads a kind from. Ordered by
 	// name so a run's channel order is stable and its log diffable.
@@ -2951,10 +2964,16 @@ type Querier interface {
 	// therefore the only bound on a run, which is why the caller passes it explicitly
 	// rather than relying on a default.
 	//
-	// The two exclusions are the same as everywhere else, for the same reasons:
-	// an unverified address was never proven to belong to anyone, and an explicit
-	// notification_settings.enabled = false is an opt-out. A missing settings row means
-	// the account never touched the setting and still hears from us.
+	// The two exclusions are the same as everywhere else, for the same reasons: an
+	// unverified address was never proven to belong to anyone, and an explicit
+	// notification_settings.news_email_enabled = false is an opt-out. A missing settings
+	// row means the account never touched the setting and still hears from us.
+	//
+	// The gate used to be `enabled`, which also governs the lifecycle nudges — so
+	// declining letters from the founder also stopped somebody's application
+	// follow-up reminders, and an account with no settings row could not decline at
+	// all, because the only thing that creates the row is a page behind the login.
+	// Migration 0152 split the two.
 	ListBroadcastCandidates(ctx context.Context, arg ListBroadcastCandidatesParams) ([]ListBroadcastCandidatesRow, error)
 	// The feed, newest first.
 	ListCVRevisions(ctx context.Context, arg ListCVRevisionsParams) ([]CvRevision, error)
@@ -3867,7 +3886,13 @@ type Querier interface {
 	//     mistake to two weeks of signups.
 	//   * The LEFT JOIN on notification_settings — a missing row means the account
 	//     never touched the setting, which is not the same as opting out, so it still
-	//     gets the sequence. An explicit `enabled = false` stops it.
+	//     gets the sequence. An explicit `news_email_enabled = false` stops it.
+	//
+	//     That used to be `enabled`, the same flag the lifecycle nudges read, so
+	//     declining the founder's letters also stopped somebody's application
+	//     reminders — and an account with no settings row could not decline either
+	//     one, because the page that creates the row is behind the login. Migration
+	//     0152 split them; the unsubscribe link writes this column without a session.
 	// Verified accounts inside the window that have not been greeted yet. This is the
 	// only step with no waiting period: it goes out on the next pass after signup.
 	ListWelcomeCandidates(ctx context.Context, arg ListWelcomeCandidatesParams) ([]ListWelcomeCandidatesRow, error)

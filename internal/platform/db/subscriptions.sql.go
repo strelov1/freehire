@@ -291,7 +291,9 @@ const listActiveSubscriptions = `-- name: ListActiveSubscriptions :many
 SELECT s.id, s.user_id, s.channel, s.destination, s.start_at, ss.query
 FROM subscriptions s
 JOIN saved_searches ss ON ss.id = s.saved_search_id
+LEFT JOIN notification_settings ns ON ns.user_id = s.user_id
 WHERE s.active
+  AND (s.channel <> 'email' OR COALESCE(ns.alerts_email_enabled, true))
 `
 
 type ListActiveSubscriptionsRow struct {
@@ -307,6 +309,19 @@ type ListActiveSubscriptionsRow struct {
 // search query to translate into a filter, plus identity/channel for fan-out. The
 // worker groups these by canonical(query) so each distinct filter hits the search
 // index once regardless of how many subscriptions share it.
+//
+// The alerts switch is applied HERE rather than at send time, so a delivery path
+// added later inherits the gate instead of having to remember it.
+//
+// It gates the EMAIL channel only. Turning off "job alerts" means turning off the
+// mail: a Telegram or webhook destination is something the account connected
+// itself and turns off where it connected it, and silencing those from a link in
+// an email would be acting well beyond what the link said it would do.
+//
+// LEFT JOIN with COALESCE(..., true): a missing notification_settings row means the
+// account never opened the settings page, which is not the same as opting out. Same
+// reading as broadcast.sql and onboarding.sql, and the opposite of nudges.sql's
+// inner join — see migration 0152 for why one column could not answer both.
 func (q *Queries) ListActiveSubscriptions(ctx context.Context) ([]ListActiveSubscriptionsRow, error) {
 	rows, err := q.db.Query(ctx, listActiveSubscriptions)
 	if err != nil {

@@ -9,15 +9,21 @@
 -- therefore the only bound on a run, which is why the caller passes it explicitly
 -- rather than relying on a default.
 --
--- The two exclusions are the same as everywhere else, for the same reasons:
--- an unverified address was never proven to belong to anyone, and an explicit
--- notification_settings.enabled = false is an opt-out. A missing settings row means
--- the account never touched the setting and still hears from us.
+-- The two exclusions are the same as everywhere else, for the same reasons: an
+-- unverified address was never proven to belong to anyone, and an explicit
+-- notification_settings.news_email_enabled = false is an opt-out. A missing settings
+-- row means the account never touched the setting and still hears from us.
+--
+-- The gate used to be `enabled`, which also governs the lifecycle nudges — so
+-- declining letters from the founder also stopped somebody's application
+-- follow-up reminders, and an account with no settings row could not decline at
+-- all, because the only thing that creates the row is a page behind the login.
+-- Migration 0152 split the two.
 SELECT u.id, u.email
 FROM users u
 LEFT JOIN notification_settings ns ON ns.user_id = u.id
 WHERE u.email_verified
-  AND COALESCE(ns.enabled, true)
+  AND COALESCE(ns.news_email_enabled, true)
   AND NOT EXISTS (
       SELECT 1 FROM broadcast_emails be
       WHERE be.user_id = u.id AND be.campaign = sqlc.arg(campaign)
@@ -32,7 +38,7 @@ SELECT count(*)
 FROM users u
 LEFT JOIN notification_settings ns ON ns.user_id = u.id
 WHERE u.email_verified
-  AND COALESCE(ns.enabled, true)
+  AND COALESCE(ns.news_email_enabled, true)
   AND NOT EXISTS (
       SELECT 1 FROM broadcast_emails be
       WHERE be.user_id = u.id AND be.campaign = sqlc.arg(campaign)
