@@ -17,10 +17,19 @@ work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 
 # The same three sets deploy/ holds: units without the host's .bak clutter, the
-# shell scripts without the compiled binaries beside them, and the one nginx
-# snippet that is hand-edited rather than generated. Only that one:
-# freehire-upstream-active.conf is the symlink the flip repoints, so tracking it
-# would report drift after every release and teach the reader to ignore this tool.
+# shell scripts without the compiled binaries beside them, and the nginx files that
+# are hand-edited rather than generated.
+#
+# That last set used to be one file, described as "the one snippet that is hand-
+# edited". It was not: freehire-api.conf holds every API location, including four
+# hand-tuned SSE blocks and the proxy buffer sizing a 502 taught us, and
+# freehire-logformat.conf holds the format two parsers read positionally. Both were
+# edited by hand and tracked nowhere, which is the exact condition deploy/ exists to
+# end. They are in now.
+#
+# freehire-upstream-active.conf stays out, and that one IS deliberate: it is the
+# symlink the release flip repoints, so tracking it would report drift after every
+# deploy and teach the reader to ignore this tool.
 # One set: run a command on the host that writes a tar to stdout, unpack it under
 # the directory of the same name here. Straight through the pipe rather than via a
 # file, so an ssh that fails takes the pipeline with it instead of leaving an empty
@@ -34,7 +43,7 @@ fetch_set() {
 fetch_set systemd 'cd /etc/systemd/system && tar cz $(ls -d freehire-* | grep -v "\.bak") 2>/dev/null'
 # shellcheck disable=SC2016  # as above
 fetch_set bin     'cd /opt/freehire/bin && tar cz $(ls *.sh | grep -v "\.bak")'
-fetch_set nginx   'cd /etc/nginx && tar cz snippets/freehire-app.conf'
+fetch_set nginx   'cd /etc/nginx && tar cz snippets/freehire-app.conf snippets/freehire-api.conf conf.d/freehire-logformat.conf'
 
 status=0
 for set in systemd bin nginx; do
