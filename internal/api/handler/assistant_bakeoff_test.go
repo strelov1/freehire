@@ -337,6 +337,70 @@ func mustParsePrices(t *testing.T) bakeoffPriceTable {
 	return table
 }
 
+// The committed cases are real postings from this catalogue's own public API, not written
+// ones. A synthetic vacancy exercises the tailoring run against requirements somebody
+// invented to be answerable, which is the one shape the measurement must not be built on.
+func TestLoadBakeoffCasesReadsTheCommittedPostings(t *testing.T) {
+	set, err := loadBakeoffCases(bakeoffCaseFixture)
+	if err != nil {
+		t.Fatalf("loadBakeoffCases: %v", err)
+	}
+	if len(set.Cases) < 2 {
+		t.Fatalf("%d cases, want at least 2 — one posting cannot show a model's spread", len(set.Cases))
+	}
+	for _, c := range set.Cases {
+		if c.Vacancy.Description == "" || c.Vacancy.Title == "" {
+			t.Errorf("case %q carries an empty posting: %+v", c.ID, c.Vacancy)
+		}
+	}
+}
+
+// Failing to read the case set is the ONE failure that ends a bake-off, so it must be loud.
+// Every other failure is a row in the report.
+func TestLoadBakeoffCasesNamesTheFileItCouldNotRead(t *testing.T) {
+	_, err := loadBakeoffCases(filepath.Join("testdata", "no-such-cases.json"))
+	if err == nil {
+		t.Fatal("a missing case file loaded cleanly")
+	}
+	if !strings.Contains(err.Error(), "no-such-cases.json") {
+		t.Errorf("error %q does not name the file", err)
+	}
+}
+
+// A case set with nothing in it would run every model over nothing and report a clean
+// sweep of zero rows, which reads exactly like a bake-off that found no difference.
+func TestLoadBakeoffCasesRefusesAnEmptySet(t *testing.T) {
+	if _, err := loadBakeoffCasesFrom([]byte(`{"cases":[]}`), "inline"); err == nil {
+		t.Error("an empty case set loaded cleanly")
+	}
+}
+
+// Rows are keyed by (model, case). Two cases sharing an id produce rows nothing can tell
+// apart, and a reader comparing them would be comparing two different postings.
+func TestLoadBakeoffCasesRefusesDuplicateIDs(t *testing.T) {
+	raw := []byte(`{"cases":[
+		{"id":"same","vacancy":{"title":"A","description":"long enough to tailor against"}},
+		{"id":"same","vacancy":{"title":"B","description":"also long enough to tailor against"}}
+	]}`)
+	_, err := loadBakeoffCasesFrom(raw, "inline")
+	if err == nil {
+		t.Fatal("duplicate case ids loaded cleanly")
+	}
+	if !strings.Contains(err.Error(), "same") {
+		t.Errorf("error %q does not name the duplicated id", err)
+	}
+}
+
+// A posting with no description gives the run nothing to walk. The autopilot would finish
+// in a round or two and score well on a vacancy that asked for nothing — the cheapest,
+// fastest, most meaningless row in the table.
+func TestLoadBakeoffCasesRefusesAPostingWithNoDescription(t *testing.T) {
+	raw := []byte(`{"cases":[{"id":"hollow","vacancy":{"title":"Engineer","description":""}}]}`)
+	if _, err := loadBakeoffCasesFrom(raw, "inline"); err == nil {
+		t.Error("a posting with no description loaded cleanly")
+	}
+}
+
 // The prefixes the classifier keys on belong to internal/ai/assistant, not here. Asserting
 // them against the real producer means a rename there breaks this test rather than
 // silently re-labelling every malformed call as somebody else's fault.

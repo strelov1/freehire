@@ -36,7 +36,7 @@
 
 ## 4. Fixtures
 
-- [ ] 4.1 Add the case fixture shape (a CV, a vacancy, the expected binding) and its
+- [x] 4.1 Add the case fixture shape (a CV, a vacancy, the expected binding) and its
       loader, with the loader failing loudly on an unreadable or empty case set. Unit test
       the failure path.
 - [ ] 4.2 Export the profile fixture (CV, structured résumé, experience atoms) from

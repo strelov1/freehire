@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -209,6 +211,86 @@ type bakeoffPriceTable struct {
 	Captured string
 	Source   string
 	Rates    bakeoffPrices
+}
+
+// bakeoffCaseFixture is the committed case set: real postings from this catalogue's own
+// public API, captured with
+//
+//	curl -sS 'https://freehire.me/api/v1/jobs/<slug>'
+//
+// and kept whole. They are real rather than written because a synthetic vacancy states
+// requirements somebody invented to be answerable, and a run over those measures how well
+// a model answers a question built to be answered.
+const bakeoffCaseFixture = "testdata/bakeoff-cases.json"
+
+// bakeoffVacancy is the posting a case tailors against, in the columns the seed needs.
+type bakeoffVacancy struct {
+	Source      string `json:"source"`
+	ExternalID  string `json:"external_id"`
+	URL         string `json:"url"`
+	Slug        string `json:"slug"`
+	Title       string `json:"title"`
+	Company     string `json:"company"`
+	Description string `json:"description"`
+}
+
+// bakeoffCase is one posting every candidate model is run against.
+type bakeoffCase struct {
+	ID      string         `json:"id"`
+	Vacancy bakeoffVacancy `json:"vacancy"`
+}
+
+// bakeoffCaseSet is the committed cases and when they were captured.
+type bakeoffCaseSet struct {
+	Captured string        `json:"captured"`
+	Cases    []bakeoffCase `json:"cases"`
+}
+
+// loadBakeoffCases reads the case set from disk.
+//
+// Failing to read the cases is the ONE failure that ends a bake-off — every other failure
+// is a row in the report — so it is loud and names the file. Silence here would run every
+// model over nothing and report a clean sweep of zero rows, which reads exactly like a
+// bake-off that found no difference between them.
+func loadBakeoffCases(path string) (bakeoffCaseSet, error) {
+	raw, err := os.ReadFile(filepath.FromSlash(path))
+	if err != nil {
+		return bakeoffCaseSet{}, fmt.Errorf("bake-off cases: reading %s: %w", path, err)
+	}
+	return loadBakeoffCasesFrom(raw, path)
+}
+
+// loadBakeoffCasesFrom validates a case set that has already been read.
+func loadBakeoffCasesFrom(raw []byte, origin string) (bakeoffCaseSet, error) {
+	var set bakeoffCaseSet
+	if err := json.Unmarshal(raw, &set); err != nil {
+		return bakeoffCaseSet{}, fmt.Errorf("bake-off cases: parsing %s: %w", origin, err)
+	}
+	if len(set.Cases) == 0 {
+		return bakeoffCaseSet{}, fmt.Errorf("bake-off cases: %s names no case", origin)
+	}
+
+	seen := make(map[string]struct{}, len(set.Cases))
+	for _, c := range set.Cases {
+		if strings.TrimSpace(c.ID) == "" {
+			return bakeoffCaseSet{}, fmt.Errorf("bake-off cases: %s carries a case with no id, and rows are keyed by it", origin)
+		}
+		if _, dup := seen[c.ID]; dup {
+			// Two rows keyed alike are indistinguishable in the report, and a reader
+			// comparing them would be comparing two different postings.
+			return bakeoffCaseSet{}, fmt.Errorf("bake-off cases: %s uses the id %q twice", origin, c.ID)
+		}
+		seen[c.ID] = struct{}{}
+
+		// A posting with no description gives the run nothing to walk. The autopilot
+		// would finish in a round or two and score well against a vacancy that asked for
+		// nothing — the cheapest, fastest and most meaningless row in the table.
+		if strings.TrimSpace(c.Vacancy.Description) == "" || strings.TrimSpace(c.Vacancy.Title) == "" {
+			return bakeoffCaseSet{}, fmt.Errorf("bake-off cases: %s case %q has no title or no description to tailor against", origin, c.ID)
+		}
+	}
+
+	return set, nil
 }
 
 // bakeoffPriceFixture is the committed capture. Refresh it — and only then re-read a
