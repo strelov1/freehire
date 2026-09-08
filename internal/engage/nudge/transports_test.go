@@ -91,8 +91,8 @@ func TestEmailNotifier_FollowUpAndInterviewPrepSingle_LeadToTheGeneralBoard(t *t
 	for _, kind := range []string{KindFollowUp, KindInterviewPrep} {
 		t.Run(kind, func(t *testing.T) {
 			sender := &captureSender{}
-			n := NewEmailNotifier(sender, "jobs@freehire.me", "https://freehire.me")
-			ms := []Message{{Kind: kind, JobTitle: "Go Dev", Company: "Acme", Slug: "go-dev-acme"}}
+			n := NewEmailNotifier(sender, "jobs@freehire.me", "https://freehire.me", testLinks())
+			ms := []Message{{UserID: testUserID, Kind: kind, JobTitle: "Go Dev", Company: "Acme", Slug: "go-dev-acme"}}
 			if err := n.Send(context.Background(), "email", "u@x.com", kind, ms); err != nil {
 				t.Fatalf("Send: %v", err)
 			}
