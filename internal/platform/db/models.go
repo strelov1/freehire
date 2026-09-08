@@ -1204,7 +1204,8 @@ type User struct {
 	// Ultra GIVEN rather than sold: support's manual grant. No provider sync touches it, which is the whole reason it is separate.
 	UltraUntilGranted pgtype.Timestamptz `json:"ultra_until_granted"`
 	// How far the Ultra tier reaches, derived by the schema as the furthest of ultra_until_stripe, ultra_until_revenuecat and ultra_until_granted. Refuses assignment (428C9) — write the source column of the origin that decided it. A future value here outranks pro_until: the tier is the better of the two, so that buying the more expensive plan can never give somebody less.
-	UltraUntil pgtype.Timestamptz `json:"ultra_until"`
+	UltraUntil   pgtype.Timestamptz `json:"ultra_until"`
+	TalentHandle pgtype.Text        `json:"talent_handle"`
 }
 
 type UserEmailCode struct {

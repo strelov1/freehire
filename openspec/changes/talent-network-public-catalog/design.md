@@ -92,6 +92,47 @@ seam, it is a loaded gun, and `deadcode` would report it anyway.
 the candidate to reason about a disclosure trade-off at the moment they are least equipped
 to, and it splits the catalogue's population for no benefit this change can name.
 
+### The public URL is a minted handle — not the uuid, and not the account username
+
+A member's card lives at `/talent/<handle>`, where the handle is minted once, on the
+candidate's first join, and never changes again — not through a round trip out of the
+network and back, and not when their CV or job title changes. A URL that moves is a URL
+somebody has already shared.
+
+*Alternative considered — the account's `username`.* Rejected, and it is the one that
+looks obviously right. `internal/identity/username`'s own doc comment anticipates this
+exact use, but `Suggest` derives the username from the email's local part, so for most
+accounts it *is* the person's name — and the hosted mailbox adopts the same string, so
+the URL would also publish a live address that reaches them. On a page whose entire
+purpose is to withhold the name, spending it in the address bar is not a trade-off, it is
+a contradiction.
+
+*Alternative considered — keep the opaque uuid.* Rejected on the product side: an
+unreadable URL is not one anybody links to or remembers, and the catalogue is meant to be
+shared.
+
+*Alternative considered — let the candidate pick the handle.* Rejected: it reintroduces
+the choice this change exists to remove, and a self-chosen handle is where people put
+their GitHub name.
+
+The handle is therefore derived, at mint time, from the professional category the
+candidate's most recent title resolves to, plus a short random suffix — `backend-7f2a`,
+`data-engineer-91c4`. The category is already public on the card, so it discloses nothing
+new; the suffix carries the uniqueness. A candidate whose title resolves to no category
+gets a neutral base. **The derived part is frozen at mint**, deliberately: recomputing it
+later would move somebody's URL because they changed jobs, which is precisely the moment
+they most need the link they already shared to keep working.
+
+Uniqueness is a unique index, and a collision is resolved by minting a new suffix and
+retrying — the same "first free candidate against the store" shape
+`internal/identity/accounts` already uses for usernames.
+
+*And the uuid goes.* `talent_network_public_id` served the route this replaces. Keeping
+both would leave two public identifiers for one page, which drifts in exactly one way:
+somebody eventually returns the one that was not meant to be public. Nothing has shared
+the uuid, because the control that mints it has never been reachable from the account
+navigation.
+
 ### The catalogue is projected in memory, on a TTL, and served from that snapshot
 
 `internal/candidate/talentnetwork` reads the opted-in rows that pass the stamp gate,

@@ -53,6 +53,54 @@ what is disclosed about a person, never remove them from a network they chose to
 - **WHEN** any statement attempts to store `public`
 - **THEN** the constraint rejects it
 
+### Requirement: A member has one permanent catalogue handle
+
+The first time a candidate joins, the system SHALL mint them a catalogue handle and store
+it. The handle SHALL be the only public identifier of their card, SHALL be unique across
+all accounts, and SHALL never change once minted.
+
+The handle SHALL NOT be the account's `username`, and SHALL NOT be derived from the
+candidate's name, email address or any contact detail. It SHALL be derived from the
+professional category their most recent role title resolves to, plus a random suffix, and
+the derived part SHALL be frozen at mint time.
+
+An account that has never joined SHALL have no handle.
+
+#### Scenario: The handle is minted on first join
+
+- **WHEN** a candidate who has never been a member turns the toggle on
+- **THEN** a handle is stored for them
+- **AND** their card is reachable at that handle
+
+#### Scenario: The handle survives leaving and rejoining
+
+- **WHEN** a member leaves the network and later rejoins
+- **THEN** their handle is the same one they had before
+- **AND** a link shared before they left resolves again
+
+#### Scenario: The handle survives a change of job
+
+- **WHEN** a member uploads a new CV whose most recent role resolves to a different
+  category
+- **THEN** their handle is unchanged
+
+#### Scenario: The handle is not the account username
+
+- **WHEN** an account's username was derived from their email's local part
+- **THEN** the minted handle does not contain that username
+- **AND** the account's username appears nowhere in any public catalogue response
+
+#### Scenario: Two candidates whose titles resolve alike
+
+- **WHEN** two candidates in the same category join
+- **THEN** each is minted a distinct handle
+- **AND** neither mint fails
+
+#### Scenario: A title that resolves to no category
+
+- **WHEN** a candidate joins and their most recent title resolves to no category
+- **THEN** a handle is still minted, on a neutral base
+
 ### Requirement: The control is reachable without a direct URL
 
 The Talent Network SHALL be reachable from the account navigation, and the account's

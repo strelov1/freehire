@@ -131,35 +131,40 @@ behind the same predicate as the page.
 - **THEN** `meta.total` is the count of members matching that same filter, not the count of
   all members
 
-### Requirement: One card is served by opaque id, and only while its owner is a member
+### Requirement: One card is served by handle, and only while its owner is a member
 
-A single card SHALL be addressable only by `talent_network_public_id`, never by the
-account's sequential id. A card whose owner is not a member, and a card id that does not
-exist, SHALL be answered identically, so the route cannot be used to learn whether an
-account exists.
+A single card SHALL be addressable only by the member's catalogue handle — never by the
+account's sequential id, its username, or any other identifier the account carries
+elsewhere. A card whose owner is not a member, and a handle that belongs to nobody, SHALL
+be answered identically, so the route cannot be used to learn whether an account exists.
 
 Membership SHALL be re-checked against the database when a card is served, not read from
 whatever snapshot the list is served from.
 
 #### Scenario: A member's card
 
-- **WHEN** a visitor requests a member's card by its opaque id
+- **WHEN** a visitor requests a member's card by their handle
 - **THEN** the card is served under the public projection
 
 #### Scenario: A former member's card
 
-- **WHEN** a member leaves and a visitor requests their card
+- **WHEN** a member leaves and a visitor requests their handle
 - **THEN** the response is 404 on the next request, regardless of any cached list
 
-#### Scenario: An id that never existed
+#### Scenario: A handle that belongs to nobody
 
-- **WHEN** a visitor requests a card by a well-formed id belonging to nobody
+- **WHEN** a visitor requests a card by a well-formed handle nobody holds
 - **THEN** the response is 404 with the same body as a non-member's card
 
-#### Scenario: A malformed id
+#### Scenario: A malformed handle
 
-- **WHEN** a visitor requests a card by a value that is not a well-formed id
+- **WHEN** a visitor requests a card by a value that cannot be a handle
 - **THEN** the response is 404, not a server error
+
+#### Scenario: The account username is not an address
+
+- **WHEN** a visitor requests a card by an account's `username`
+- **THEN** the response is 404, unless that string happens to be somebody's minted handle
 
 ### Requirement: The list is indexable, a card is not
 

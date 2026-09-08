@@ -2337,6 +2337,15 @@ type Querier interface {
 	// only when resume_structured_uploaded_at equals resume_uploaded_at). NULLs when none.
 	// Also returns candidate contacts and last extract status for Profile / seed composition.
 	GetUserResumeStructured(ctx context.Context, id int64) (GetUserResumeStructuredRow, error)
+	// Just the structured résumé, with none of the provenance stamps and none of the
+	// contacts GetUserResumeStructured returns beside it.
+	//
+	// It exists so the Talent Network's handle mint can read one job title without also
+	// holding the candidate's phone number and email in memory. The stamp is deliberately
+	// not applied here: a handle derived from a slightly stale title is still a fine
+	// handle — it is frozen at mint and opaque afterwards — whereas refusing to mint over
+	// an in-flight extraction would block the join itself.
+	GetUserResumeStructuredOnly(ctx context.Context, id int64) ([]byte, error)
 	// Slim role lookup for the RequireRole authorization middleware: it runs on every
 	// request to a role-gated endpoint and needs only the role, so it does not drag the
 	// full user row (the GetJobIDBySlug precedent for a hot-path read).
@@ -5181,6 +5190,18 @@ type Querier interface {
 	// Pause/resume a subscription, scoped to its owner. No matching owner-scoped row
 	// returns no row (the handler maps that to 404).
 	SetSubscriptionActive(ctx context.Context, arg SetSubscriptionActiveParams) (Subscription, error)
+	// Claims a freshly minted catalogue handle for a candidate who does not have one yet.
+	//
+	// The `talent_handle IS NULL` predicate is the whole mechanism, and it does two jobs.
+	// It makes the mint idempotent — a member who leaves and rejoins keeps the handle they
+	// already shared, and a second concurrent join claims nothing — and it makes the
+	// statement's own result the answer: 0 rows means somebody already has one, which the
+	// caller reads rather than re-querying and racing again.
+	//
+	// A collision with ANOTHER account's handle surfaces as a unique-violation from
+	// users_talent_handle_key (migration 0147), not as 0 rows. The caller mints a new suffix
+	// and retries — the same shape internal/identity/accounts uses to allocate a username.
+	SetTalentHandleIfUnset(ctx context.Context, arg SetTalentHandleIfUnsetParams) (int64, error)
 	// Owner-scoped write of the caller's Talent Network membership ('off' or 'anonymous'
 	// since migration 0145). Does not touch talent_network_public_id: the public URL stays
 	// stable across a round trip through 'off', so a candidate who already shared it once —

@@ -234,6 +234,19 @@ SELECT resume_structured, resume_structured_model, resume_structured_uploaded_at
 FROM users
 WHERE id = $1;
 
+-- name: GetUserResumeStructuredOnly :one
+-- Just the structured résumé, with none of the provenance stamps and none of the
+-- contacts GetUserResumeStructured returns beside it.
+--
+-- It exists so the Talent Network's handle mint can read one job title without also
+-- holding the candidate's phone number and email in memory. The stamp is deliberately
+-- not applied here: a handle derived from a slightly stale title is still a fine
+-- handle — it is frozen at mint and opaque afterwards — whereas refusing to mint over
+-- an in-flight extraction would block the join itself.
+SELECT resume_structured
+FROM users
+WHERE id = $1;
+
 -- name: SetUserResumeStructured :execrows
 -- Persist the user's derived structured résumé, stamped with the producing LLM model
 -- and the résumé upload time it was derived from (passed in, not now(), so the stamp
@@ -400,9 +413,26 @@ WHERE id = $1;
 -- public URL the moment the toggle goes on, without a second round-trip. Every row has
 -- both — 'off' and a freshly-minted uuid are the column defaults — so there is no
 -- "not set yet" case to special-case.
-SELECT talent_network_visibility, talent_network_public_id
+SELECT talent_network_visibility, talent_network_public_id, talent_handle
 FROM users
 WHERE id = $1;
+
+-- name: SetTalentHandleIfUnset :execrows
+-- Claims a freshly minted catalogue handle for a candidate who does not have one yet.
+--
+-- The `talent_handle IS NULL` predicate is the whole mechanism, and it does two jobs.
+-- It makes the mint idempotent — a member who leaves and rejoins keeps the handle they
+-- already shared, and a second concurrent join claims nothing — and it makes the
+-- statement's own result the answer: 0 rows means somebody already has one, which the
+-- caller reads rather than re-querying and racing again.
+--
+-- A collision with ANOTHER account's handle surfaces as a unique-violation from
+-- users_talent_handle_key (migration 0147), not as 0 rows. The caller mints a new suffix
+-- and retries — the same shape internal/identity/accounts uses to allocate a username.
+UPDATE users
+SET talent_handle = $2
+WHERE id = $1
+  AND talent_handle IS NULL;
 
 -- name: SetTalentNetworkVisibility :exec
 -- Owner-scoped write of the caller's Talent Network membership ('off' or 'anonymous'

@@ -176,14 +176,15 @@ func (q *Queries) GetTalentNetworkProfileByPublicID(ctx context.Context, talentN
 }
 
 const getTalentNetworkVisibility = `-- name: GetTalentNetworkVisibility :one
-SELECT talent_network_visibility, talent_network_public_id
+SELECT talent_network_visibility, talent_network_public_id, talent_handle
 FROM users
 WHERE id = $1
 `
 
 type GetTalentNetworkVisibilityRow struct {
-	TalentNetworkVisibility string    `json:"talent_network_visibility"`
-	TalentNetworkPublicID   uuid.UUID `json:"talent_network_public_id"`
+	TalentNetworkVisibility string      `json:"talent_network_visibility"`
+	TalentNetworkPublicID   uuid.UUID   `json:"talent_network_public_id"`
+	TalentHandle            pgtype.Text `json:"talent_handle"`
 }
 
 // The caller's own Talent Network opt-in state, for the owner-facing settings toggle.
@@ -194,7 +195,7 @@ type GetTalentNetworkVisibilityRow struct {
 func (q *Queries) GetTalentNetworkVisibility(ctx context.Context, id int64) (GetTalentNetworkVisibilityRow, error) {
 	row := q.db.QueryRow(ctx, getTalentNetworkVisibility, id)
 	var i GetTalentNetworkVisibilityRow
-	err := row.Scan(&i.TalentNetworkVisibility, &i.TalentNetworkPublicID)
+	err := row.Scan(&i.TalentNetworkVisibility, &i.TalentNetworkPublicID, &i.TalentHandle)
 	return i, err
 }
 
@@ -490,6 +491,27 @@ func (q *Queries) GetUserResumeStructured(ctx context.Context, id int64) (GetUse
 	return i, err
 }
 
+const getUserResumeStructuredOnly = `-- name: GetUserResumeStructuredOnly :one
+SELECT resume_structured
+FROM users
+WHERE id = $1
+`
+
+// Just the structured résumé, with none of the provenance stamps and none of the
+// contacts GetUserResumeStructured returns beside it.
+//
+// It exists so the Talent Network's handle mint can read one job title without also
+// holding the candidate's phone number and email in memory. The stamp is deliberately
+// not applied here: a handle derived from a slightly stale title is still a fine
+// handle — it is frozen at mint and opaque afterwards — whereas refusing to mint over
+// an in-flight extraction would block the join itself.
+func (q *Queries) GetUserResumeStructuredOnly(ctx context.Context, id int64) ([]byte, error) {
+	row := q.db.QueryRow(ctx, getUserResumeStructuredOnly, id)
+	var resume_structured []byte
+	err := row.Scan(&resume_structured)
+	return resume_structured, err
+}
+
 const getUserRole = `-- name: GetUserRole :one
 SELECT role
 FROM users
@@ -701,6 +723,37 @@ func (q *Queries) SeizeUnverifiedAccount(ctx context.Context, id int64) (int32, 
 	var token_version int32
 	err := row.Scan(&token_version)
 	return token_version, err
+}
+
+const setTalentHandleIfUnset = `-- name: SetTalentHandleIfUnset :execrows
+UPDATE users
+SET talent_handle = $2
+WHERE id = $1
+  AND talent_handle IS NULL
+`
+
+type SetTalentHandleIfUnsetParams struct {
+	ID           int64       `json:"id"`
+	TalentHandle pgtype.Text `json:"talent_handle"`
+}
+
+// Claims a freshly minted catalogue handle for a candidate who does not have one yet.
+//
+// The `talent_handle IS NULL` predicate is the whole mechanism, and it does two jobs.
+// It makes the mint idempotent — a member who leaves and rejoins keeps the handle they
+// already shared, and a second concurrent join claims nothing — and it makes the
+// statement's own result the answer: 0 rows means somebody already has one, which the
+// caller reads rather than re-querying and racing again.
+//
+// A collision with ANOTHER account's handle surfaces as a unique-violation from
+// users_talent_handle_key (migration 0147), not as 0 rows. The caller mints a new suffix
+// and retries — the same shape internal/identity/accounts uses to allocate a username.
+func (q *Queries) SetTalentHandleIfUnset(ctx context.Context, arg SetTalentHandleIfUnsetParams) (int64, error) {
+	result, err := q.db.Exec(ctx, setTalentHandleIfUnset, arg.ID, arg.TalentHandle)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const setTalentNetworkVisibility = `-- name: SetTalentNetworkVisibility :exec

@@ -24,7 +24,14 @@ the seam.
   constraint. The candidate's choice becomes one toggle — in the network, or not —
   because a mode picker asks a question the product should answer itself.
 - **New public catalogue**, unauthenticated and rate-limited: `GET /api/v1/talent`
-  (filtered, paged list) and `GET /api/v1/talent/{publicId}` (one card).
+  (filtered, paged list) and `GET /api/v1/talent/{handle}` (one card).
+- **A minted catalogue handle** replaces the uuid in the public URL: `/talent/backend-7f2a`
+  rather than `/talent-network/<uuid>`. It is minted once, when the candidate first joins,
+  and never changes — not even through a round trip out of the network. It is **not** the
+  account's `username`: `username.Suggest` derives that from the email's local part, so for
+  most accounts it *is* the person's name, and it is also their hosted mailbox address.
+  Putting it in the URL of a page that promises to withhold the name would undo the
+  feature in the address bar.
 - **A new projection, `Structured.Catalog()`**, that is a whitelist of *structured*
   fields only. It withholds the name, photo, contacts, **every company name** — not just
   the current one — and **every free-text field** (summary, highlights, project
@@ -63,10 +70,21 @@ Impact.
 
 ## Impact
 
-**Schema.** One migration on `users`: rewrite `talent_network_visibility = 'public'` to
-`'anonymous'`, then replace `users_talent_network_visibility_check` with one admitting
-`off` and `anonymous`. `users` is hot, so the constraint swap follows the split
-`ADD ... NOT VALID` + `VALIDATE` shape migration 0085 already documents.
+**Schema.** Three migrations on `users`, each doing one thing:
+
+- rewrite `talent_network_visibility = 'public'` to `'anonymous'` and narrow
+  `users_talent_network_visibility_check` to two states. `users` is hot, so the constraint
+  swap follows the split `ADD ... NOT VALID` + `VALIDATE` shape migration 0085 documents.
+- add `talent_handle text` (nullable — minted on first join, so a non-member has none).
+- build its unique index `CONCURRENTLY`, in its own `no-transaction` file, the shape 0086
+  uses. **Not `IF NOT EXISTS`**: that skips the invalid carcass a cancelled
+  `CONCURRENTLY` build leaves behind, which is exactly what migrations 0117 and 0118
+  existed to repair.
+
+`talent_network_public_id` is retired with the route that served it. Two public
+identifiers for one page is a drift waiting to happen — one of them eventually gets
+handed out where the other was meant to be — and nothing has ever shared the uuid, because
+the control that produces it has never been reachable.
 
 **Go.**
 - `internal/candidate/resumeextract/visibility.go` — add `Catalog()` beside `Anonymous()`

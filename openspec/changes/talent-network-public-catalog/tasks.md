@@ -1,7 +1,7 @@
 Every task runs the spec-driven-tdd micro-cycle: RED (a failing test first) → GREEN →
 REFACTOR → simplify → review → only then `[x]`.
 
-## 1. Collapse the three modes to two
+## 1. Membership: two states, and one permanent handle
 
 - [x] 1.1 Migration `0145_talent_network_two_states.sql`. **Number deliberately: `main`
       already holds six files at `0144`, and order is decided alphabetically, so verify
@@ -17,6 +17,25 @@ REFACTOR → simplify → review → only then `[x]`.
       (400), the response still echoes the stored value. Extend
       `me_talent_network_test.go` — a request asking for `public` is refused and stores
       nothing.
+- [x] 1.4 Migration `0146_users_talent_handle.sql`: add nullable `talent_handle text` to
+      `users`. Nullable is the point — a non-member has no handle, and a default would mint
+      one for every account that never joins.
+- [x] 1.5 Migration `0147_users_talent_handle_uniq_idx.sql`: `CREATE UNIQUE INDEX
+      CONCURRENTLY`, own `migrate: no-transaction` file, the shape 0086 uses. **Not `IF NOT
+      EXISTS`** — it skips the `indisvalid = f` carcass a cancelled concurrent build leaves,
+      which is what 0117 and 0118 existed to repair.
+- [x] 1.6 Minting, in `internal/candidate/talentnetwork`: base from the category the most
+      recent role title resolves to (`internal/dict/classify`), neutral base when it
+      resolves to none, plus a random suffix. Pure function under test — same base yields
+      different handles, and the output always satisfies the shape the route accepts.
+      Collision resolves by re-minting against the store, the shape
+      `internal/identity/accounts` already uses for usernames.
+- [x] 1.7 Wire minting into `PutVisibility`: minted on the first join only, never
+      recomputed. Tests — leaving and rejoining keeps the handle; a new CV in a different
+      category keeps the handle; the minted handle never contains the account's `username`.
+- [ ] 1.8 Retire `talent_network_public_id`: drop the column and every read of it once the
+      handle serves the route (task 4.2 and 5.3). Two public identifiers for one page is a
+      drift, not a fallback.
 
 ## 2. The public projection
 
@@ -56,10 +75,10 @@ REFACTOR → simplify → review → only then `[x]`.
       years, language. Values within one filter are OR, different filters are AND, an
       absent filter equals an empty one. Test each of those three rules separately.
 - [ ] 3.5 Order and paging: freshness of the structured extract descending, tie-broken by
-      `talent_network_public_id`. Test that walking every page of a set containing a
+      the member's handle. Test that walking every page of a set containing a
       timestamp tie returns each member exactly once — a test that only checks the first
       page cannot see this bug.
-- [ ] 3.6 The single-card read: by opaque id, re-checking membership against the database
+- [ ] 3.6 The single-card read: by handle, re-checking membership against the database
       rather than the snapshot, so a departure takes effect immediately.
 
 ## 4. The public API
@@ -68,9 +87,10 @@ REFACTOR → simplify → review → only then `[x]`.
       envelope (`data` + `meta`), `meta.total` behind the same predicate as the page.
       Unread parameters reported in `meta.ignored_params` — this endpoint owns its own
       vocabulary, like `/companies` does, and must not borrow `search.UnknownParams`.
-- [ ] 4.2 `GET /api/v1/talent/{publicId}`: 404 with an identical body for a non-member, an
-      unknown id and a malformed id. Test all three answer the same, so the route cannot be
-      used to probe for accounts.
+- [ ] 4.2 `GET /api/v1/talent/{handle}`: 404 with an identical body for a non-member, a
+      handle nobody holds, and a malformed handle. Test all three answer the same, so the
+      route cannot be used to probe for accounts — including a request that spells an
+      account's `username`.
 - [ ] 4.3 Attach `internal/api/ratelimit` to both routes, and assert in a test that the
       limiter is on these paths — the guard that already exists for "limiters on REAL
       routes" is the pattern to follow.
@@ -93,9 +113,9 @@ REFACTOR → simplify → review → only then `[x]`.
       `page.url`, never to local state; paging as real `<a href>` links, not the design
       system's `Pager` (its own doc comment says it does not touch the URL). Empty state
       and skeleton from the design system.
-- [ ] 5.3 Restyle `web/src/routes/talent-network/[publicId]/` to the catalogue card: no
-      name, no company names, no prose. Its `+page.server.ts` keeps the 404-on-non-member
-      behaviour.
+- [ ] 5.3 Replace `web/src/routes/talent-network/[publicId]/` with `web/src/routes/talent/[handle]/`:
+      the catalogue card — no name, no company names, no prose. Its `+page.server.ts` keeps
+      the 404-on-non-member behaviour. The old route goes; nothing has linked to it.
 - [ ] 5.4 `web/src/routes/my/talent-network/+page.svelte`: the three-option picker becomes
       one toggle. Keep the echoed-value behaviour (trust the PUT response, not the click)
       and keep the "a link you have shared cannot be unshared" warning.
