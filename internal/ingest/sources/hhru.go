@@ -27,8 +27,10 @@ import (
 //
 // Listing and detail are two separate transports (http, detailHTTP) because they don't need the
 // same one: hh.ru's detail pages sit behind DDoS-Guard in a way the listing page does not (see
-// registry.go's hh registration), so detail is routed through Firecrawl while listing stays on
-// the plain client.
+// firecrawltier.go's hh entry). With FIRECRAWL_API_KEY configured, ApplyFirecrawlEgress rewires
+// detail onto Firecrawl while listing stays on a plain, unproxied client; without a key (e.g.
+// local/dev), NewHH gives both fields the same caller-supplied client, exactly as before this
+// split existed.
 type hh struct {
 	http       HTMLGetter // listing (search) pages
 	detailHTTP HTMLGetter // per-vacancy detail pages
