@@ -80,11 +80,16 @@ const (
 	// model spends tens of seconds thinking before answering, so a stage needs more than
 	// the shared client's default.
 	//
-	// It is a budget for ONE attempt, not for the stage: matchanalysis retries a timed-out
-	// stage once, so the worst case per stage is twice this. 90s sits well past the observed
-	// spread (healthy stages answer in 3–25s) while leaving room for that retry — a call
-	// still running at 90s is hung rather than slow, and in production the retry after such
-	// a call answered in under eight seconds.
+	// It is a budget for ONE attempt of the stages a reader is blocked on. What each stage
+	// does with it is matchanalysis's own business — timeoutForStage doubles it for the
+	// adversarial audit, whose subject is already served, and attemptsForStage decides how
+	// many attempts each stage gets.
+	//
+	// 90s was chosen against a spread of 3–25s, which is no longer what production shows:
+	// measured 2026-09-08, healthy stages answer in 45–83s, because a call landing on the
+	// gateway's deliberating provider is slow rather than hung. That is why the retry no
+	// longer helps the stage it was written for and why the audit needed a budget of its
+	// own; the figure itself still sits past the spread for stages 1 and 2.
 	matchAnalysisLLMTimeout = 90 * time.Second
 	// resumeExtractLLMTimeout bounds the single structured-résumé extraction call. It runs
 	// off the upload response path (background) so it can be generous, but still bounded so
