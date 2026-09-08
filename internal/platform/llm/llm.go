@@ -395,7 +395,12 @@ func UsageFrom(choice *llms.ContentChoice) *Usage {
 	if !ok1 && !ok2 && !ok3 {
 		return nil
 	}
-	return &Usage{Input: in, Output: out, Total: total}
+	// The cached count never decides whether there is a usage to report: a provider
+	// that named it and nothing else told us nothing about the call's size, and a
+	// zero Input invented from it would read as a free request.
+	cached, _ := intFrom(choice.GenerationInfo["PromptCachedTokens"])
+
+	return &Usage{Input: in, Output: out, CachedInput: cached, Total: total}
 }
 
 // intFrom coerces a GenerationInfo value (int, int64, or float64 depending on the

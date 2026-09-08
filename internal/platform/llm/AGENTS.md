@@ -64,7 +64,27 @@ backfills, and `internal/ai/enrich`, `matchanalysis`, `resumeextract`, `atscheck
 - `StripJSONFence` (llm.go:370) — recovers the first JSON value from fenced/preambled model
   output. `TrimTruncateRunes` (llm.go:419) — the one "trim + truncate by runes" helper for
   bounding untrusted/model text.
-- `UsageFrom` (llm.go:341) — reads token counts defensively; an absent usage is reported as
-  absent (nil), never as zeros.
+- `UsageFrom` (llm.go:376) — reads token counts defensively; an absent usage is reported as
+  absent (nil), never as zeros. It also reads `PromptCachedTokens`, the part of the prompt
+  the provider served from its cache — the figure that decides what a REPLAYED
+  conversation costs, and the one a price page cannot tell you. **A cached count alone is
+  never a usage**: a provider that named it and nothing else said nothing about the call's
+  size, and a zero `Input` invented beside it would read as a free request.
+  **Zero does not mean "no cache".** langchaingo writes that key unconditionally from a
+  zero-valued struct, so a provider that reports nothing and a request that hit nothing
+  both arrive as `0`, and nothing at this layer can tell them apart. A caller needing the
+  distinction draws it across a whole run — every round reporting zero against a prefix
+  that should have been warm is evidence about the provider; one call is not.
 - `Tracer`/`NewTracer` (langfuse.go) — Langfuse observations labelled with the entrypoint's
-  source; a nil tracer makes every observation a no-op.
+  source; a nil tracer makes every observation a no-op. Token counts travel as Langfuse's
+  `usageDetails`, whose contract is that **every key is a non-overlapping bucket** — each
+  token counted under exactly one. The provider does not report them that way: an
+  OpenAI-shaped `prompt_tokens` counts the cached prefix inside itself, so `usageBuckets`
+  (langfuse.go:245) subtracts before sending. Copying both figures across unadjusted would
+  bill the cached prefix twice, once at the input rate and once at the cache-read rate —
+  the direction that makes a cheap model look expensive. A cached count larger than the
+  prompt containing it is not a reading that can be split, so the prompt goes through
+  whole rather than as a negative bucket Langfuse would price as written. No total is
+  sent: Langfuse derives it, and one of ours would be a fourth number free to disagree
+  with the three it was built from. Requires Langfuse v3 (self-hosted on hydra —
+  `freehire-ops/provision/langfuse/`, image `langfuse/langfuse:3`).

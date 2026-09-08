@@ -182,6 +182,55 @@ func TestGenerateJSON_observesSuccessOmitsUsageWhenAbsent(t *testing.T) {
 	}
 }
 
+// The cached count is what makes one model's replayed prefix cheaper than another's,
+// and it is the one number a price page cannot tell you. langchaingo already surfaces
+// it; until now UsageFrom read past it.
+func TestUsageFromReadsTheCachedPromptCount(t *testing.T) {
+	u := UsageFrom(&llms.ContentChoice{GenerationInfo: map[string]any{
+		"PromptTokens":       1200,
+		"CompletionTokens":   40,
+		"TotalTokens":        1240,
+		"PromptCachedTokens": 900,
+	}})
+	if u == nil {
+		t.Fatal("usage is nil when the provider reported counts")
+	}
+	if u.CachedInput != 900 {
+		t.Errorf("CachedInput = %d, want 900", u.CachedInput)
+	}
+	if u.Input != 1200 || u.Output != 40 || u.Total != 1240 {
+		t.Errorf("the other counts moved: %+v", u)
+	}
+}
+
+// A provider that reports no cached count and one that served nothing from cache both
+// arrive here as zero — langchaingo writes the key from a zero-valued struct either way.
+// UsageFrom does not pretend to tell them apart; it reports the zero it was given, and
+// the distinction is drawn across a whole run by whoever needs it.
+func TestUsageFromReportsZeroCachedWhenTheProviderNamesNone(t *testing.T) {
+	u := UsageFrom(&llms.ContentChoice{GenerationInfo: map[string]any{
+		"PromptTokens":     10,
+		"CompletionTokens": 5,
+		"TotalTokens":      15,
+	}})
+	if u == nil {
+		t.Fatal("usage is nil when the provider reported the three ordinary counts")
+	}
+	if u.CachedInput != 0 {
+		t.Errorf("CachedInput = %d, want 0 when the key is absent", u.CachedInput)
+	}
+}
+
+// A cached count alone is not a usage. Reporting one would invent an input total of zero
+// for a call whose provider said nothing about tokens at all.
+func TestUsageFromStaysNilWhenOnlyTheCachedCountIsPresent(t *testing.T) {
+	if u := UsageFrom(&llms.ContentChoice{GenerationInfo: map[string]any{
+		"PromptCachedTokens": 900,
+	}}); u != nil {
+		t.Errorf("usage = %+v, want nil when no ordinary count was reported", u)
+	}
+}
+
 func TestGenerateJSON_observesErrorAndReturnsUnchangedError(t *testing.T) {
 	sentinel := errors.New("gateway boom")
 	f := &fakeModel{err: sentinel}
