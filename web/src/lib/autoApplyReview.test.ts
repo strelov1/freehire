@@ -31,8 +31,16 @@ describe('autoApplyReviewBanner', () => {
     expect(autoApplyReviewBanner('failed')).toEqual({ kind: 'failed' });
   });
 
-  it('is null for tailoring, approved, and no attempt', () => {
-    for (const status of ['tailoring', 'approved', null, undefined]) {
+  it('is the tailoring variant for tailoring', () => {
+    expect(autoApplyReviewBanner('tailoring')).toEqual({ kind: 'tailoring' });
+  });
+
+  it('is the approved variant for approved', () => {
+    expect(autoApplyReviewBanner('approved')).toEqual({ kind: 'approved' });
+  });
+
+  it('is null for no attempt', () => {
+    for (const status of [null, undefined]) {
       expect(autoApplyReviewBanner(status)).toBeNull();
     }
   });

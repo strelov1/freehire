@@ -54,13 +54,16 @@ describe('notificationTarget', () => {
     });
   });
 
-  // The three auto-apply outcome kinds follow the same rule as follow-up/interview-prep:
-  // the Go side (transports.go/push.go) points all three at the tracking board, never a
-  // per-job deep link, so web must agree.
+  // The three auto-apply outcome kinds now deep-link to the specific application's
+  // drawer, like auto_apply_ready_for_review already does — unlike follow-up/
+  // interview-prep above, which stay on the bare board.
   it.each(['nudge_auto_apply_submitted', 'nudge_auto_apply_blocked', 'nudge_auto_apply_failed'] as const)(
-    'sends a %s nudge to the tracking board, not the job',
+    'sends a %s nudge to the specific application',
     (kind) => {
-      expect(notificationTarget({ kind, public_slug: 'acme-go-engineer' })).toEqual({ kind: 'tracking' });
+      expect(notificationTarget({ kind, public_slug: 'acme-go-engineer' })).toEqual({
+        kind: 'tracking',
+        slug: 'acme-go-engineer',
+      });
     },
   );
 
