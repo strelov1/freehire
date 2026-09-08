@@ -2,8 +2,25 @@ import { describe, it, expect } from 'vitest';
 import { accountNav, isSectionActive, visibleAccountNav } from './accountNav';
 
 describe('accountNav config', () => {
-  it('lists the eighteen account sections', () => {
-    expect(accountNav).toHaveLength(18);
+  it('lists the nineteen account sections', () => {
+    expect(accountNav).toHaveLength(19);
+  });
+
+  // A section whose page exists and whose nav entry does not is reachable by URL and by
+  // nothing else — the shape of bug where "the feature isn't there" and "I can't get to
+  // it with the mouse" look identical from the outside.
+  it('offers a section for mentorship sessions', () => {
+    expect(accountNav.map((i) => i.href)).toContain('/my/mentorship');
+  });
+
+  // Beta-gated while the marketplace has no supply. Asserted from BOTH sides: an entry
+  // that is hidden from everybody is the same bug as one shown to everybody, and only the
+  // pair of assertions tells them apart.
+  it('shows mentorship to a beta tester and to nobody else', () => {
+    const hrefs = (mod: boolean, beta: boolean) => visibleAccountNav(mod, beta).map((i) => i.href);
+    expect(hrefs(false, true)).toContain('/my/mentorship');
+    expect(hrefs(false, false)).not.toContain('/my/mentorship');
+    expect(hrefs(true, false)).not.toContain('/my/mentorship');
   });
 
   it('offers a section for job lists', () => {

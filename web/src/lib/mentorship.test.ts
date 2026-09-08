@@ -17,7 +17,23 @@ import {
   slotLocalDay,
   slotLocalTime,
 } from './mentorship';
-import type { Mentor, MentorSlot } from './types';
+import { formatInstantIn, isCancellable } from './mentorship';
+import type { Mentor, MentorSession, MentorSlot } from './types';
+
+function session(over: Partial<MentorSession> = {}): MentorSession {
+  return {
+    id: 'b1e2',
+    mentor_slug: 'anna-k',
+    headline: 'Staff Engineer',
+    starts_at: '2026-10-15T16:00:00Z',
+    ends_at: '2026-10-15T17:00:00Z',
+    status: 'confirmed',
+    note: '',
+    meeting_url: 'https://meet.example.test/anna',
+    completed: false,
+    ...over,
+  };
+}
 
 function slot(localStart: string, utcOffset = '+00:00'): MentorSlot {
   return {
@@ -325,6 +341,63 @@ describe('the slot window a month needs', () => {
       const days = (Date.parse(to) - Date.parse(from)) / 86_400_000;
       expect(days).toBeLessThanOrEqual(62);
     }
+  });
+});
+
+describe('showing a booked session in the viewer zone', () => {
+  // A booking carries only the absolute instant — no `local_start`, unlike a slot. So here
+  // the zone conversion has to happen in the browser, and that is NOT a contradiction of
+  // the slot rule: an instant ending in Z is unambiguous, while a slot's label was already
+  // resolved server-side and converting it a second time is what moves it.
+  test('the same booking reads differently in two zones', () => {
+    expect(formatInstantIn('2026-10-15T16:00:00Z', 'America/Sao_Paulo')).toEqual({
+      day: '2026-10-15',
+      time: '13:00',
+      offset: '-03:00',
+    });
+    expect(formatInstantIn('2026-10-15T16:00:00Z', 'Asia/Tokyo')).toEqual({
+      day: '2026-10-16',
+      time: '01:00',
+      offset: '+09:00',
+    });
+  });
+
+  test('UTC is offset zero, written out rather than blank', () => {
+    expect(formatInstantIn('2026-10-15T16:00:00Z', 'UTC')).toEqual({
+      day: '2026-10-15',
+      time: '16:00',
+      offset: '+00:00',
+    });
+  });
+
+  // Midnight is the hour a 12-hour clock renders as "12" and a broken conversion as "24".
+  test('midnight is 00:00', () => {
+    expect(formatInstantIn('2026-10-15T00:00:00Z', 'UTC').time).toBe('00:00');
+  });
+});
+
+describe('whether a session can still be cancelled', () => {
+  const now = new Date('2026-10-15T12:00:00Z');
+
+  test('a confirmed session that has not started can be cancelled', () => {
+    expect(isCancellable(session(), now)).toBe(true);
+  });
+
+  // The backend refuses both of these; the button is hidden so nobody presses a control
+  // that only ever returns an error.
+  test('a session whose start has passed cannot', () => {
+    expect(isCancellable(session({ starts_at: '2026-10-15T11:00:00Z' }), now)).toBe(false);
+  });
+
+  test('an already-cancelled session cannot', () => {
+    expect(isCancellable(session({ status: 'cancelled' }), now)).toBe(false);
+  });
+
+  // Exactly at the start instant. The rule is "before its start", so the boundary is out —
+  // and picking a side deliberately is the point, since this is the one moment where the
+  // button and the endpoint could disagree.
+  test('the start instant itself is too late', () => {
+    expect(isCancellable(session({ starts_at: '2026-10-15T12:00:00Z' }), now)).toBe(false);
   });
 });
 

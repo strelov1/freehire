@@ -1636,3 +1636,38 @@ export interface MentorSlots {
   slots: MentorSlot[];
   timezone: string;
 }
+
+/** One booked session, as a PARTY to it sees it.
+ *
+ *  Unlike a slot this carries only the absolute instants — there is no `local_start`, so
+ *  the viewer's zone is applied in the browser. That is not the trap the slot rule warns
+ *  about: an instant ending in `Z` is unambiguous, while a slot's label was already
+ *  resolved server-side and re-resolving it is what moves it.
+ *
+ *  `meeting_url` is present here and absent from the public profile: it is a live room,
+ *  and only the two people meeting in it have any business holding the address.
+ *  `seeker_email` reaches the MENTOR only — a seeker does not need their own back. */
+export interface MentorSession {
+  /** Random, not sequential: a booking is read by two accounts, and a countable id would
+   *  make any single authorisation slip enumerable. */
+  id: string;
+  mentor_slug: string;
+  headline: string;
+  starts_at: string;
+  ends_at: string;
+  status: string;
+  note: string;
+  meeting_url: string;
+  seeker_email?: string;
+  /** Ended and not cancelled — the state a review becomes possible in. Decided by the
+   *  server against one clock, not re-derived here. */
+  completed: boolean;
+}
+
+/** A party's sessions, split by the server against ONE clock for the whole list, so a
+ *  session starting mid-read cannot land in both halves or in neither. A cancelled
+ *  session is PAST whatever its start says: nobody is going to it. */
+export interface MentorSessions {
+  upcoming: MentorSession[];
+  past: MentorSession[];
+}

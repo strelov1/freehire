@@ -1,9 +1,11 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { replaceState } from '$app/navigation';
+  import { goto, replaceState } from '$app/navigation';
   import { page } from '$app/state';
+  import { resolve } from '$app/paths';
   import { api } from '$lib/api';
-  import { Badge, Card, Skeleton } from '$lib/ui';
+  import { signinUrl } from '$lib/signin';
+  import { Badge, Button, Card, Skeleton } from '$lib/ui';
   import {
     addMonths,
     daysWithSlots,
@@ -148,6 +150,51 @@
     };
   });
 
+  // ---- taking the hour ----------------------------------------------------------
+
+  const signedIn = $derived(Boolean(page.data.user));
+  const chosen = $derived(daySlots.find((s) => s.starts_at === selectedSlot));
+
+  let note = $state('');
+  let booking = $state(false);
+  let bookingError = $state('');
+
+  // Not promptSignIn(): that reads `page.url.search`, which lags our shallow writes, so a
+  // visitor would return from signing in with the slot no longer chosen — the one thing
+  // putting it in the URL was for. Read the address bar, which is current.
+  function signInAndComeBack() {
+    const returnTo = location.pathname + location.search;
+    // eslint-disable-next-line svelte/no-navigation-without-resolve -- signinUrl() wraps resolve('/signin'); the rule can't see through the appended query
+    void goto(signinUrl({ returnTo, mode: 'login' }));
+  }
+
+  async function book() {
+    if (!chosen) return;
+    booking = true;
+    bookingError = '';
+    try {
+      const session = await api.bookMentorSession(mentor.slug, {
+        // The absolute instant, never the wall clock: this is what the server re-derives
+        // the slot from.
+        starts_at: chosen.starts_at,
+        // Recorded on the booking so the confirmation is written in the zone the seeker
+        // actually booked in — `zone`, which is what the server used, not what we asked.
+        timezone: zone,
+        note,
+      });
+      void goto(resolve('/my/mentorship/sessions/[id]', { id: session.id }));
+    } catch (e) {
+      // The hour may simply have gone: somebody else took it, or the mentor moved their
+      // availability inside the minute the slot cache holds. Re-ask rather than leaving a
+      // list that still offers it.
+      bookingError =
+        e instanceof Error && e.message ? e.message : 'That hour could not be booked.';
+      void load(slotWindowForMonth(month));
+    } finally {
+      booking = false;
+    }
+  }
+
   const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
   const monthLabel = $derived(
     new Intl.DateTimeFormat('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(
@@ -248,6 +295,43 @@
       {/if}
     </div>
   </div>
+
+  {#if chosen}
+    <div class="mt-4 border-t pt-4">
+      <p class="text-sm">
+        <span class="font-medium">{selectedDay} at {slotLocalTime(chosen)}</span>
+        <span class="text-muted-foreground">
+          (UTC{chosen.utc_offset}) · {mentor.session_minutes} minutes with {mentor.name}
+        </span>
+      </p>
+
+      {#if signedIn}
+        <label class="mt-3 block text-sm">
+          <span class="text-muted-foreground">What would you like to talk about? (optional)</span>
+          <textarea
+            bind:value={note}
+            rows="3"
+            maxlength="1000"
+            class="border-input bg-background mt-1 w-full rounded-md border px-3 py-2 text-sm"
+            placeholder="A sentence is plenty — it helps them prepare."
+          ></textarea>
+        </label>
+
+        <Button class="mt-3" disabled={booking} onclick={book}>
+          {booking ? 'Booking…' : 'Book this session'}
+        </Button>
+      {:else}
+        <p class="text-muted-foreground mt-3 text-sm">
+          Sign in to book. Your chosen hour is in the address, so it will still be here.
+        </p>
+        <Button class="mt-3" onclick={signInAndComeBack}>Sign in to book</Button>
+      {/if}
+
+      {#if bookingError}
+        <p class="text-destructive mt-2 text-sm">{bookingError}</p>
+      {/if}
+    </div>
+  {/if}
 
   <p class="text-muted-foreground mt-4 text-xs">
     Times shown in {zone}. Sessions run {mentor.session_minutes} minutes.

@@ -4,7 +4,7 @@
 // without a browser. Mirrors the split companyFacetModel.ts holds for the company
 // catalogue and matchAnalysis.ts for the analysis stream.
 
-import type { Mentor, MentorSlot } from './types';
+import type { Mentor, MentorSession, MentorSlot } from './types';
 
 /** The mentor directory's whole vocabulary, one single-valued filter each.
  *
@@ -222,6 +222,51 @@ export function todayIn(timezone: string, now: Date = new Date()): string {
   }).formatToParts(now);
   const get = (type: string) => parts.find((p) => p.type === type)?.value ?? '';
   return `${get('year')}-${get('month')}-${get('day')}`;
+}
+
+// ---- a booked session ---------------------------------------------------------------
+
+/** An absolute instant read in a named zone: the day it falls on, the wall clock, and the
+ *  offset that distinguishes two readings sharing a label.
+ *
+ *  This one DOES convert, unlike everything in the slot section above, and the difference
+ *  is the input rather than a change of mind. A slot arrives with `local_start` already
+ *  resolved in the viewer's zone, so converting it again moves it. A booking arrives with
+ *  only `starts_at`, an instant ending in `Z`, which is unambiguous and has to be read in
+ *  some zone before a person can act on it. */
+export function formatInstantIn(
+  instant: string,
+  timezone: string,
+): { day: string; time: string; offset: string } {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: timezone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+    timeZoneName: 'longOffset',
+  }).formatToParts(new Date(instant));
+  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? '';
+  return {
+    day: `${get('year')}-${get('month')}-${get('day')}`,
+    time: `${get('hour')}:${get('minute')}`,
+    // `longOffset` spells it "GMT+09:00"; the sign and the digits are the part worth
+    // showing, and UTC comes back as "+00:00" rather than blank so the label never
+    // looks like a missing value.
+    offset: get('timeZoneName').replace('GMT', '') || '+00:00',
+  };
+}
+
+/** Whether the cancel control should be offered at all.
+ *
+ *  The endpoint refuses a past or already-cancelled session, so this only decides whether
+ *  somebody is shown a button that could return nothing but an error. The boundary is
+ *  deliberate: the rule is "before its start", so the start instant itself is too late —
+ *  that is the one moment where the control and the endpoint could otherwise disagree. */
+export function isCancellable(s: MentorSession, now: Date = new Date()): boolean {
+  return s.status === 'confirmed' && Date.parse(s.starts_at) > now.getTime();
 }
 
 /** The query string that results from setting some keys and clearing others.

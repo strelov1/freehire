@@ -41,6 +41,8 @@ import type {
   FacetCounts,
   ListMeta,
   Mentor,
+  MentorSession,
+  MentorSessions,
   MentorSlot,
   MentorSlots,
   MyJob,
@@ -721,6 +723,44 @@ export function createApi(
       { signal },
     );
     return { slots: res.data, timezone: res.meta.timezone };
+  }
+
+  /** Take one of a mentor's offered hours.
+   *
+   *  `starts_at` is the absolute instant, never the wall clock: it is what the server
+   *  re-derives the slot from. `timezone` is recorded on the booking so the confirmation
+   *  can be written in the zone the seeker actually booked in.
+   *
+   *  Refused with a NAMED reason when the hour is no longer offerable — the mentor paused,
+   *  the availability moved, the notice period elapsed, or somebody else took it. The race
+   *  and the stale tab are deliberately indistinguishable here. */
+  async function bookMentorSession(
+    slug: string,
+    body: { starts_at: string; timezone: string; note?: string; job_id?: number },
+  ): Promise<MentorSession> {
+    return requestData<MentorSession>(
+      `/api/v1/mentors/${slug}/bookings`,
+      jsonBody('POST', body),
+    );
+  }
+
+  /** The caller's own sessions, split by the server against one clock. */
+  async function listMySessions(): Promise<MentorSessions> {
+    return requestData<MentorSessions>('/api/v1/me/mentorship/sessions');
+  }
+
+  /** One session. Readable by its two parties only; anybody else gets the 404 a session
+   *  that does not exist gets, so the route cannot confirm one is real. */
+  async function getMySession(id: string): Promise<MentorSession> {
+    return requestData<MentorSession>(`/api/v1/me/mentorship/sessions/${id}`);
+  }
+
+  /** Cancel, as either party, before the start. Frees the hour and tells the other side. */
+  async function cancelMySession(id: string, reason: string): Promise<MentorSession> {
+    return requestData<MentorSession>(
+      `/api/v1/me/mentorship/sessions/${id}/cancel`,
+      jsonBody('POST', { reason }),
+    );
   }
 
   async function searchCities(q: string, country?: string): Promise<{ value: string; country: string }[]> {
@@ -2469,6 +2509,10 @@ export function createApi(
     listMentors,
     getMentor,
     getMentorSlots,
+    bookMentorSession,
+    listMySessions,
+    getMySession,
+    cancelMySession,
     searchCities,
     insightsRoles,
     insightsSkills,
