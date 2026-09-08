@@ -48,11 +48,21 @@ const FunctionID = "auto-apply-tailor-and-review"
 // decide.
 const ReviewWaitTimeout = 7 * 24 * time.Hour
 
-// hireRequestTimeout bounds ONE call into hire's own API. Tailoring is a real,
-// potentially slow LLM-backed run — internal/api/handler's own assistantLLMTimeout bounds
-// a single model call at 180s, and a tailoring pass can make several; this is generous
-// past the whole run.
-const hireRequestTimeout = 5 * time.Minute
+// hireRequestTimeout bounds ONE call into hire's own API. It must sit ABOVE the tailoring
+// endpoint's own run budget (internal/api/handler's autoApplyTailorBudget, 10 minutes), so
+// that a run always ends on ITS terms rather than being cut off by the caller.
+//
+// "Generous past the whole run" was the previous reading of five minutes, and it was
+// wrong. A tailoring pass makes up to autopilotMaxSteps (30) model calls of up to
+// assistantLLMTimeout (180s) each, so five minutes was not past the run, it was inside it.
+// In production this hung up mid-pass every time: the run kept working, its CV edits were
+// already written, and the entry was never told — three queue entries sat with no tailored
+// CV, reading as "tailoring" indefinitely, while the retry this failure triggered arrived
+// to find the session still busy with the very run it had abandoned (freehire, 2026-09-08).
+//
+// The layering guard forbids importing the handler package here to state the relationship
+// in code, so it is stated here: raise the budget and this must follow.
+const hireRequestTimeout = 12 * time.Minute
 
 // SubmitEvent is EventSubmit's own data: which queue entry to run.
 //
