@@ -1,4 +1,4 @@
-import { redirect } from '@sveltejs/kit';
+import { requireMentorProfile } from '$lib/server/mentorshipGate';
 import { serverApi } from '$lib/server/api';
 import type { PageServerLoad } from './$types';
 
@@ -12,8 +12,7 @@ import type { PageServerLoad } from './$types';
 // and the index is the part of it that is theirs.
 export const load: PageServerLoad = async ({ fetch, request, parent }) => {
   // The layout has already read it; this costs no second call.
-  const { profile } = await parent();
-  if (!profile) redirect(303, '/my/mentorship');
+  requireMentorProfile((await parent()).profile);
 
   const api = serverApi(fetch, request.headers.get('cookie'));
   return { availability: await api.myMentorAvailability() };

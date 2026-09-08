@@ -70,7 +70,10 @@ production; in dev the Vite proxy (`web/vite.config.ts`) forwards `/api` to the 
 - **Mentorship ships behind `users.beta_tester`, WHOLE.** Every route it owns — the public
   directory, a mentor's page, and all four cabinet tabs — answers **404** to anybody
   without the flag, and `MentorBlock` renders nothing. The predicate is
-  `$lib/server/mentorshipGate`, stated once so the beta ends in one edit. Gating only the
+  `$lib/server/mentorshipGate`. **Ending the beta is three edits**, not one: that file,
+  `inBeta` in `MentorBlock.svelte`, and `betaOnly` on `/my/mentorship` in `accountNav.ts`
+  — a door, an offer of the door, and a menu entry, deliberately separate. Grep for
+  `beta_tester` and `betaOnly`; those three are all of it. Gating only the
   cabinet was considered and rejected: it would leave a visitor able to BOOK from a public
   profile and then unable to find the session again or cancel it, and the hour a mentor is
   holding is real. 404 rather than 403 — while the feature is unreleased the honest answer
