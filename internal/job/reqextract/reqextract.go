@@ -101,6 +101,15 @@ var closingHeadings = []string{
 	"why join us",
 	"amit ajanlunk", // Hungarian: "Amit ajánlunk" — "what we offer"
 	"amit kinalunk", // Hungarian: "Amit kínálunk" — "what we provide"
+	// Russian: "Мы предлагаем" — "we offer" — measured against 500 real tbank.ru
+	// postings: 683 real headings across 369 non-templated postings (some carry more
+	// than one), transliterated by unidecode.Unidecode the way normalizeHeading spells
+	// it. See this vocabulary's own doc comment on why measuring, not guessing, matters
+	// here — and reqextract/AGENTS.md's Limitations on what this addition does NOT fix.
+	"my predlagaem",
+	// Russian: "Условия" — "terms"/"conditions", the closing section a posting most
+	// often puts after benefits. 158 real headings in the same sample.
+	"usloviia",
 }
 
 var requiredHeadings = []string{
@@ -130,6 +139,12 @@ var requiredHeadings = []string{
 	"skills and experience",
 	"experience required",
 	"we are looking for",
+	// Russian: "Требования" — "requirements" — measured against the same 500-posting
+	// tbank.ru sample closingHeadings' "my predlagaem" cites: 683 real headings.
+	"trebovaniia",
+	// Russian: "Мы ждем от вас" — "what we expect from you", the same shape as "what we
+	// expect" above. 631 real headings in the same sample.
+	"my zhdem ot vas",
 }
 
 // Derive returns the requirements a posting's description states as a list under a
