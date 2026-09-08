@@ -188,9 +188,32 @@ unit tests plus the function they drive; none of it needs Docker or Postgres.
 
 ## 8. Frontend
 
-- [ ] 8.1 Public mentor directory page with company, topic and language filters
-- [ ] 8.2 Public mentor profile with the booking calendar, sending the browser's
-      resolved timezone and rendering slots in it
+- [x] 8.1 Public mentor directory page with company, topic and language filters.
+      `/mentors`, server-rendered for the current filters so a shared link renders
+      filtered. The query is whitelisted to the three params the endpoint reads, the same
+      rule `/companies` holds — a param it does not read would widen the answer while the
+      address bar still claimed it narrowed it. The filter OPTIONS come from an
+      unfiltered read: a narrowed list cannot offer what it just excluded, so building
+      the controls from the visible rows makes every filter a one-way door. Filtering
+      itself stays on the endpoint — a copy of the publication predicate in the browser
+      is the drift `mentor-profile` warns about. A selected value the options no longer
+      carry is offered as its own option, because a `<select>` whose value names no
+      `<option>` renders BLANK and then lies about what the page is showing.
+- [x] 8.2 Public mentor profile with the booking calendar, sending the browser's
+      resolved timezone and rendering slots in it. The profile is server-rendered; the
+      SLOTS deliberately are not — the server does not know the viewer's zone, so
+      rendering them would mean showing UTC and swapping every visible hour after
+      hydration. Booker state lives in `?month`/`?date`/`?slot` as cal.com's does, which
+      is what survives the sign-in redirect a signed-out seeker is about to take.
+      **Nothing in the day/time path constructs a `Date`**: `local_start` is already in
+      the viewer's zone, and re-deriving it here re-interprets it against the browser's —
+      Tokyo's 16th at 01:00 is still the 15th in UTC, so the slot files under the day
+      before the one offered. The grid is integer arithmetic (Sakamoto) for the same
+      reason. The UTC offset is rendered on every slot: on the autumn transition two
+      slots share a wall clock and differ only there. Re-asks every 60s and on tab
+      focus — 60s because the endpoint caches a window for a minute, so a faster poll
+      spends the rate limit for an identical answer. No reservation system, unlike
+      cal.com: the `EXCLUDE` constraint refuses the second booking outright.
 - [ ] 8.3 Booking confirmation and cancellation flows, and the seeker's session list
 - [ ] 8.4 Mentor cabinet under `/my/`: profile editing, weekly schedule, date overrides,
       and the mentor's own session list

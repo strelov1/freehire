@@ -1580,3 +1580,59 @@ export interface ApiSuggestionPart {
   slug?: string;
   text: string;
 }
+
+/** One mentor as the PUBLIC routes return them — the directory row and the profile read
+ *  are the same wire struct (`mentorResponse` in internal/api/handler/mentorship.go).
+ *
+ *  Deliberately named, unlike a referral offer: a directory of faceless cards gives a
+ *  seeker nothing to choose between. There is no avatar yet, and the mentor-profile spec
+ *  argues why rather than leaving the requirement half-met.
+ *
+ *  `meeting_url` is absent here on purpose — it is a live room, so only a booked party
+ *  receives it, on their own booking. The owner's and moderator's routes add `status`,
+ *  `paused` and (for the owner alone) `meeting_url` to this same struct. */
+export interface Mentor {
+  slug: string;
+  name: string;
+  company_slug: string;
+  company_name: string;
+  headline: string;
+  bio: string;
+  topics: string[];
+  languages: string[];
+  /** The mentor's own IANA zone. What a VIEWER sees is decided per request by the slot
+   *  endpoint, which reports the zone it actually used — never assume this one. */
+  timezone: string;
+  /** What is being booked. An hour and twenty minutes are different offers, so this
+   *  belongs on the card and not only on the profile. */
+  session_minutes: number;
+  rating_count: number;
+  rating_avg: number;
+}
+
+/** One offerable hour, carrying three views of the same moment on purpose.
+ *
+ *  `starts_at`/`ends_at` are the absolute instant — what actually gets booked.
+ *  `local_start`/`local_end` are RFC 3339 in the VIEWER's zone — what a person reads.
+ *  `utc_offset` is the only thing telling apart the two slots that share a wall-clock
+ *  label on the autumn daylight-saving transition; render it, or one October evening
+ *  shows "02:00" twice with no way to choose between them.
+ *
+ *  Never re-derive the local fields from `starts_at` in the browser. The server already
+ *  did that arithmetic against its own zone database, and a second answer computed here
+ *  differs by exactly one hour twice a year — the kind of wrong that looks right. */
+export interface MentorSlot {
+  starts_at: string;
+  ends_at: string;
+  local_start: string;
+  local_end: string;
+  utc_offset: string;
+}
+
+/** The slot endpoint's answer. `timezone` is the zone the server ACTUALLY used, which may
+ *  not be the one asked for: an unrecognised name falls back to UTC. A client that assumes
+ *  its own request was honoured cannot tell a correct time from a wrong one. */
+export interface MentorSlots {
+  slots: MentorSlot[];
+  timezone: string;
+}

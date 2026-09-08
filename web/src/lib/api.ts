@@ -40,6 +40,9 @@ import type {
   CompanyListItem,
   FacetCounts,
   ListMeta,
+  Mentor,
+  MentorSlot,
+  MentorSlots,
   MyJob,
   MyJobCounts,
   PipelineStats,
@@ -678,6 +681,48 @@ export function createApi(
    *  backing the profile's base-city and relocation-cities autocomplete. `country`
    *  narrows to one ISO 3166-1 alpha-2 code; each result carries its own raw code
    *  too (unrelated cities can share a name), not a pre-composed label. */
+  /** The public mentor directory: approved, unpaused profiles, narrowed by the params
+   *  `mentorFiltersToParams` produced.
+   *
+   *  There is no offset and no `total` — the endpoint answers `{data, meta:{count}}`, and
+   *  the supply here is hand-onboarded rather than crawled, so `limit` bounds the page and
+   *  nothing paginates it. */
+  async function listMentors(filters?: URLSearchParams, limit?: number): Promise<Mentor[]> {
+    const params = new URLSearchParams(filters);
+    if (limit != null) params.set('limit', String(limit));
+    const q = params.toString();
+    return requestData<Mentor[]>(`/api/v1/mentors${q ? `?${q}` : ''}`);
+  }
+
+  /** One published mentor. Answers as though the profile did not exist when it is
+   *  pending, rejected, paused or withdrawn — so a 404 here means "not bookable", not
+   *  necessarily "never existed". */
+  async function getMentor(slug: string): Promise<Mentor> {
+    return requestData<Mentor>(`/api/v1/mentors/${slug}`);
+  }
+
+  /** The bookable hours in a window, expressed in the viewer's zone.
+   *
+   *  `from`/`to` are RFC 3339 INSTANTS, not dates — the endpoint parses them that way and
+   *  bounds the span at 62 days. The answer's `timezone` is the zone actually used and may
+   *  not be the one asked for: an unrecognised name falls back to UTC, and a caller that
+   *  assumes otherwise cannot tell a correct time from a wrong one. */
+  async function getMentorSlots(
+    slug: string,
+    from: string,
+    to: string,
+    timezone: string,
+    signal?: AbortSignal,
+  ): Promise<MentorSlots> {
+    const params = new URLSearchParams({ from, to });
+    if (timezone) params.set('timezone', timezone);
+    const res = await request<{ data: MentorSlot[]; meta: { timezone: string } }>(
+      `/api/v1/mentors/${slug}/slots?${params}`,
+      { signal },
+    );
+    return { slots: res.data, timezone: res.meta.timezone };
+  }
+
   async function searchCities(q: string, country?: string): Promise<{ value: string; country: string }[]> {
     const params = new URLSearchParams({ q });
     if (country) params.set('country', country);
@@ -2421,6 +2466,9 @@ export function createApi(
     ingestStatus,
     listCompanies,
     getCompany,
+    listMentors,
+    getMentor,
+    getMentorSlots,
     searchCities,
     insightsRoles,
     insightsSkills,
