@@ -58,9 +58,12 @@ hire
 /hire-api
 /hydrate-adzuna-description
 /import-company-industries
+/linkedin-auth
+/linkedin-token-refresh
 /ingest
 /ingest-scheduler
 /liveness
+/llm-probe
 /mail-ingest
 /mail-preview
 /mentorship-remind
@@ -141,6 +144,12 @@ __pycache__/
 
 # Superpowers visual brainstorm scratch
 .superpowers/
+
+# Agent scratch: review reports, local run logs, throwaway seed SQL. Deliberately
+# outside git — it is a working directory, not an artifact, and a `git add -A` had
+# already swept a server log and a local seed script into a commit before this line
+# existed.
+.cache/
 
 # Node / Vite / Vitest caches. The frontend lives in web/ with its own
 # .gitignore; these guard against a stray tool run (e.g. vitest) from the repo

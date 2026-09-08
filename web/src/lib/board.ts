@@ -7,6 +7,7 @@
 // cmd/gen-contracts). This file used to restate both, which is how the board and the
 // pipeline came to call the same settled application by two different names.
 import { STAGE_GROUPS } from './generated/contracts';
+import { autoApplyNeedsReviewBadge } from './autoApplyReview';
 import type { MyJob } from './types';
 import { must } from './utils';
 
@@ -53,6 +54,13 @@ export type ClosedOutcome = (typeof CLOSED_OUTCOMES)[number];
 // svelte-dnd-action keys each draggable by a top-level `id`; MyJob has none, so
 // the board wraps each row with id = the job's public_slug.
 export type BoardItem = MyJob & { id: string };
+
+/** Whether an application needs the candidate's attention on its auto-apply attempt —
+ *  the same pending_review/blocked check the board card's own "Review" badge already
+ *  makes, reused here so the board's "needs attention" filter can never drift from it. */
+export function needsAttention(item: MyJob): boolean {
+  return autoApplyNeedsReviewBadge(item.auto_apply_status);
+}
 
 /** Whether an application answers the search query, matching on the employer and the
  *  role. Shared by the board and the list — one field narrows whichever view is open.

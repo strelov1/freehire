@@ -89,10 +89,11 @@
     {/if}
     {#if needsAutoApplyReview}
       <span
-        class="flex items-center gap-0.5 text-xs font-medium text-warning-strong"
+        class="flex items-center gap-1 text-xs font-medium text-warning-strong"
         title="Auto-apply needs your review"
         aria-label="Auto-apply needs your review"
       >
+        <span class="size-1.5 shrink-0 rounded-full bg-warning-strong" aria-hidden="true"></span>
         <FileCheck class="size-3 shrink-0" aria-hidden="true" />
         Review
       </span>

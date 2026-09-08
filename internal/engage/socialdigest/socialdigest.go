@@ -22,7 +22,20 @@ import (
 const (
 	// MinPageUniques is the floor a posting must clear to appear at all. Below it the
 	// word "popular" is not describing anything.
-	MinPageUniques = 10
+	//
+	// Lowered from 10 to 3 on 2026-09-08, against a measurement rather than a preference.
+	// 10 was a guess made before any real day had been read, and the day it was checked
+	// against — 2026-09-07 — had exactly ONE posting above it, the best in the catalogue
+	// scoring 12. At 5 there were 22 candidates, which the quarantine and the per-company
+	// cap then cut further. So the floor was not selecting the popular from the ordinary;
+	// it was emptying the list.
+	//
+	// 3 and not 5, because the two rules underneath it are what actually shape the
+	// digest — Size caps the list at ten and MaxPerCompany keeps one employer off it —
+	// and a floor's job is only to keep a posting nobody opened out of a list titled
+	// "most viewed". Worth revisiting upward once page traffic grows: this number should
+	// track what a real day looks like, and today it does.
+	MinPageUniques = 3
 
 	// QuarantineDays is how long a published posting stays out of the list. Without it
 	// a posting that stays popular for a week is the lead item every day for a week,

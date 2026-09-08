@@ -206,20 +206,49 @@ func TestTeamtailorPaginatesUntilEmpty(t *testing.T) {
 	}
 }
 
-func TestTeamtailorStopsWhenPageYieldsNoNewLinks(t *testing.T) {
-	// A board that returns the same links for any ?page=N must not loop: a page with no
-	// *new* links terminates enumeration just like an empty page.
+// A page that repeats an earlier page's link is NOT a genuinely empty page, and must not
+// terminate the walk: the raw per-page link count, not the count of newly-added links, is
+// what proves the board's end (see the fullBoardListing interface, source.go). A board that
+// truly repeats its last link forever for any ?page=N has no other structural end to find and
+// must exhaust ttMaxPages and fail loudly, exactly like a board that never stops yielding
+// genuinely new links — the two are indistinguishable from the walk's point of view, and
+// that indistinguishability is the point: silently trusting "no new links" as proof was the
+// gap the mechanical batch fix (openspec/changes/fullboardlisting-hand-rolled-batch) found and
+// closed for its five adapters, and this is the same fix for teamtailor. Live-verified
+// 2026-09-08 against both currently-crawled boards (migen, tantor): neither actually repeats a
+// page — both answer a genuinely empty page past their real end — so this reflects real
+// platform behavior, not a hypothetical regression.
+func TestTeamtailorFetchFailsWhenAPageRepeatsAnEarlierLink(t *testing.T) {
 	d := ttDetailHTML("Role", "&lt;p&gt;x&lt;/p&gt;", "2026-06-08T00:00:00+02:00", "Oslo", "NO", "")
 	fake := (&routedHTTP{}).
 		route("/jobs?page", ttListingHTML("https://b/jobs/1-a")). // every page returns the same link
 		route("/jobs/1", d)
 
+	_, err := NewTeamtailor(fake).Fetch(context.Background(), CompanyEntry{Board: "b"})
+	if err == nil {
+		t.Fatal("Fetch succeeded despite every page repeating the same link — a repeated non-empty page must not be treated as the board's natural end")
+	}
+}
+
+// A page whose links are all already-seen duplicates (a sort tie spanning a page boundary,
+// for instance) must not end the walk early: only a genuinely empty page proves the board's
+// end. If the walk stopped on "no new links" rather than "the raw page has no links", it
+// would end at page 2 and never reach page 3's genuinely new posting.
+func TestTeamtailorFetchReachesAPostingPastADuplicateOnlyPage(t *testing.T) {
+	d := ttDetailHTML("Role", "&lt;p&gt;x&lt;/p&gt;", "2026-06-08T00:00:00+02:00", "Berlin", "DE", "")
+	fake := (&routedHTTP{}).
+		route("page=1", ttListingHTML("https://b/jobs/1-a")).
+		route("page=2", ttListingHTML("https://b/jobs/1-a")). // same link again: duplicate-only page
+		route("page=3", ttListingHTML("https://b/jobs/2-b")). // a genuinely new link
+		route("page=4", ttListingHTML()).
+		route("/jobs/1", d).route("/jobs/2", d)
+
 	jobs, err := NewTeamtailor(fake).Fetch(context.Background(), CompanyEntry{Board: "b"})
 	if err != nil {
 		t.Fatalf("Fetch: %v", err)
 	}
-	if len(jobs) != 1 {
-		t.Fatalf("got %d jobs, want 1 (de-duplicated, no runaway loop)", len(jobs))
+	if len(jobs) != 2 {
+		t.Fatalf("got %d jobs, want 2 (the walk must not stop at the duplicate-only page 2)", len(jobs))
 	}
 }
 

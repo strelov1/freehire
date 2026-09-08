@@ -50,6 +50,15 @@ var firecrawlProviders = map[string]func(hosted *firecrawlClient, direct HTTPCli
 	"wantapply": func(hosted *firecrawlClient, direct HTTPClient) Source {
 		return NewWantapplyViaHostedSitemap(direct, hosted, wantapplyComSitemapURL, wantapplyComHostname)
 	},
+	// hh.ru's detail pages sit behind DDoS-Guard through the proxy (redirected to an interactive
+	// image CAPTCHA, measured 2026-09-08 — not a JS challenge, so the browser tier does not help
+	// either) while listing works fine on the direct IP. Only detail hydration is hosted; listing
+	// gets its own fresh, unproxied client rather than the `direct` parameter, which becomes the
+	// PROXIED client whenever SOURCES_PROXY_URL is set for any other provider — reusing it here
+	// would put hh's listing right back on the transport this exists to stop using.
+	"hh": func(hosted *firecrawlClient, _ HTTPClient) Source {
+		return NewHHWithDetailGetter(NewClient(), hosted)
+	},
 }
 
 const (

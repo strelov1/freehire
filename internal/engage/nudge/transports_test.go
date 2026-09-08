@@ -82,9 +82,31 @@ func TestEmailNotifier_InterviewPrepBatchLeadsToTheTrackingBoard(t *testing.T) {
 	}
 }
 
+// follow-up and interview-prep single-message notifications still lead to the
+// general tracking board — only the three auto-apply outcome kinds deep-link.
+func TestEmailNotifier_FollowUpAndInterviewPrepSingle_LeadToTheGeneralBoard(t *testing.T) {
+	for _, kind := range []string{KindFollowUp, KindInterviewPrep} {
+		t.Run(kind, func(t *testing.T) {
+			sender := &captureSender{}
+			n := NewEmailNotifier(sender, "jobs@freehire.me", "https://freehire.me")
+			ms := []Message{{Kind: kind, JobTitle: "Go Dev", Company: "Acme", Slug: "go-dev-acme"}}
+			if err := n.Send(context.Background(), "email", "u@x.com", kind, ms); err != nil {
+				t.Fatalf("Send: %v", err)
+			}
+			if !strings.Contains(sender.html, "https://freehire.me/my/tracking?utm_source=email") {
+				t.Errorf("html = %q, want the bare tracking-board destination", sender.html)
+			}
+			if strings.Contains(sender.html, "/my/tracking/go-dev-acme") {
+				t.Errorf("html = %q, must not deep-link to the specific application", sender.html)
+			}
+		})
+	}
+}
+
 // The three auto-apply outcome kinds are about an application, same as
-// follow-up/interview-prep, so they lead to the tracking board — never
-// /my/activity, unlike job-closed.
+// follow-up/interview-prep, so a batch leads to the tracking board — never
+// /my/activity, unlike job-closed. A single-application notification, unlike
+// follow-up/interview-prep, deep-links straight to that application's drawer.
 func TestEmailNotifier_AutoApplyOutcomeKinds_SingleAndBatch(t *testing.T) {
 	cases := []struct {
 		kind        string
@@ -105,8 +127,8 @@ func TestEmailNotifier_AutoApplyOutcomeKinds_SingleAndBatch(t *testing.T) {
 			if !strings.Contains(sender.subject, c.wantSubject) {
 				t.Errorf("subject = %q, want it to contain %q", sender.subject, c.wantSubject)
 			}
-			if !strings.Contains(sender.html, "/my/tracking") {
-				t.Errorf("html = %q, want the tracking-board destination", sender.html)
+			if !strings.Contains(sender.html, "/my/tracking/go-dev-acme") {
+				t.Errorf("html = %q, want a deep link to the specific application", sender.html)
 			}
 		})
 		t.Run(c.kind+"/batch", func(t *testing.T) {
@@ -118,8 +140,8 @@ func TestEmailNotifier_AutoApplyOutcomeKinds_SingleAndBatch(t *testing.T) {
 			if !strings.Contains(sender.subject, "2") {
 				t.Errorf("subject = %q, want the batch count", sender.subject)
 			}
-			if !strings.Contains(sender.html, "/my/tracking") {
-				t.Errorf("html = %q, want the tracking-board destination", sender.html)
+			if !strings.Contains(sender.html, "https://freehire.me/my/tracking?utm_source=email") {
+				t.Errorf("html = %q, want the bare tracking-board destination for a batch", sender.html)
 			}
 		})
 	}
@@ -133,8 +155,8 @@ func TestTelegramNotifier_AutoApplyOutcomeKinds_SingleAndBatch(t *testing.T) {
 			if !strings.Contains(got, "Go Dev") || !strings.Contains(got, "Acme") {
 				t.Errorf("render = %q, want the job title and company", got)
 			}
-			if !strings.Contains(got, "/my/tracking") {
-				t.Errorf("render = %q, want the tracking-board link", got)
+			if !strings.Contains(got, "/my/tracking/go-dev-acme") {
+				t.Errorf("render = %q, want a deep link to the specific application", got)
 			}
 		})
 		t.Run(kind+"/batch", func(t *testing.T) {
@@ -142,6 +164,26 @@ func TestTelegramNotifier_AutoApplyOutcomeKinds_SingleAndBatch(t *testing.T) {
 			got := n.render(kind, batchOf(kind, 2))
 			if !strings.Contains(got, "<b>2</b>") {
 				t.Errorf("render = %q, want the batch count", got)
+			}
+			// A batch within the list limit names each job individually (jobLine),
+			// never a per-application deep link — batchDestination's bare-board link
+			// only appears in the overflow tail, exercised by the "+more" tests below.
+		})
+	}
+}
+
+// follow-up and interview-prep single-message notifications still lead to the
+// general tracking board — only the three auto-apply outcome kinds deep-link.
+func TestTelegramNotifier_FollowUpAndInterviewPrepSingle_LeadToTheGeneralBoard(t *testing.T) {
+	for _, kind := range []string{KindFollowUp, KindInterviewPrep} {
+		t.Run(kind, func(t *testing.T) {
+			n := NewTelegramNotifier(nil, "https://freehire.me")
+			got := n.render(kind, []Message{{Kind: kind, JobTitle: "Go Dev", Company: "Acme", Slug: "go-dev-acme"}})
+			if !strings.Contains(got, "https://freehire.me/my/tracking\"") {
+				t.Errorf("render = %q, want the bare tracking-board destination", got)
+			}
+			if strings.Contains(got, "/my/tracking/go-dev-acme") {
+				t.Errorf("render = %q, must not deep-link to the specific application", got)
 			}
 		})
 	}

@@ -130,17 +130,23 @@ func (t teamtailor) jobURLs(ctx context.Context, e CompanyEntry) ([]string, erro
 			// unnoticed. An unproven end fails the whole crawl instead.
 			return nil, fmt.Errorf("teamtailor: listing %s page %d: %w", e.Board, page, err)
 		}
-		// Stop on the first page that adds no new links: an empty page, or a board that
-		// serves the same page for any ?page=N (de-dup turns the repeat into zero new).
-		newLinks := 0
-		for _, link := range ttJobLinks(base, root) {
+		// Stop on the first page that carries no links at all — the raw count, read before
+		// cross-page dedup, not the count of newly-added ones. A non-empty page whose links
+		// are all already-seen duplicates is not itself proof the board has no more pages
+		// beyond it (a sort tie spanning a page boundary, a re-served page): stopping on
+		// "nothing new" there would leave an unseen posting past it unreached. Two currently
+		// crawled boards (migen, tantor — see ttMaxPages' own comment) were checked live and
+		// both answer a genuinely empty page past their real end, not a repeat, so this is
+		// not a regression against an observed pattern; it closes the same class of gap
+		// found and fixed for the hand-rolled batch (openspec/changes/fullboardlisting-hand-rolled-batch).
+		links := ttJobLinks(base, root)
+		for _, link := range links {
 			if !seen[link] {
 				seen[link] = true
 				urls = append(urls, link)
-				newLinks++
 			}
 		}
-		if newLinks == 0 {
+		if len(links) == 0 {
 			return urls, nil
 		}
 	}

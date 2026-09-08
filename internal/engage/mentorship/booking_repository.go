@@ -217,6 +217,11 @@ func (r *QueriesRepository) ListBookingsBySeeker(ctx context.Context, seekerID i
 	for _, row := range rows {
 		booking := bookingFromRow(row.MentorBooking)
 		booking.MentorSlug = row.MentorSlug
+		// The headline says WHO the session is with. The query has selected it all along
+		// and this loop dropped it, so every row of a seeker's list came back naming
+		// nobody — while the single-session read set it and looked right, and the unit
+		// tests passed because the fake repository fills the field itself.
+		booking.MentorHeadline = row.Headline
 		out = append(out, booking)
 	}
 	return out, nil

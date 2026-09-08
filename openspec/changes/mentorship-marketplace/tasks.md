@@ -158,10 +158,23 @@ unit tests plus the function they drive; none of it needs Docker or Postgres.
       credentials live only there and a worker missing them soft-skips silently forever;
       and the timer is `Persistent=false`, unlike the reconciling workers, because a
       replayed window would fire reminders for sessions that have already started
-- [ ] 6.4 On deploy: build the binary on the host (`release.sh` builds the API, not every
-      command in `cmd/`) and copy the unit and timer across by hand — `release.sh` never
-      touches a unit. Until both are done the feature works and reminders simply never
-      fire
+- [x] 6.4 On deploy: build the binary on the host and copy the unit and timer across by
+      hand — `release.sh` never touches a unit. Done 2026-09-08, and the first half turned
+      out to be a THIRD step nobody had written down: `release.sh` does build worker
+      binaries, but from a hard-coded list, and a command missing from it is simply never
+      built. `mentorship-remind` is on that list now, with the note the list keeps beside
+      every other entry.
+
+      The unit and timer are in `/etc/systemd/system/`, the timer is enabled and firing
+      every 10 minutes, and one run was taken by hand first: `sent=0 failed=0`, exit 0.
+      That figure is ambiguous on its own — a run with no mail credentials reports the
+      same — so `.env.notify` was checked to carry `NOTIFY_EMAIL_FROM` and `AWS_REGION`
+      before the timer was enabled. It does; `sent=0` means nobody was due.
+
+      `deploy/bin/release.sh` was re-synced from the host in the same pass. It had already
+      drifted before this change (missing `discord-sync` and both `linkedin-*` workers),
+      so a repo copy that gained only this entry would still have described a host it does
+      not match.
 
 ## 7. HTTP layer
 
@@ -188,24 +201,132 @@ unit tests plus the function they drive; none of it needs Docker or Postgres.
 
 ## 8. Frontend
 
-- [ ] 8.1 Public mentor directory page with company, topic and language filters
-- [ ] 8.2 Public mentor profile with the booking calendar, sending the browser's
-      resolved timezone and rendering slots in it
-- [ ] 8.3 Booking confirmation and cancellation flows, and the seeker's session list
-- [ ] 8.4 Mentor cabinet under `/my/`: profile editing, weekly schedule, date overrides,
-      and the mentor's own session list
-- [ ] 8.5 Moderation queue screen beside the referral queue
-- [ ] 8.6 Entry point from the vacancy and company pages, rendered only where the
-      company has an approved unpaused mentor — placement coordinated with the open
-      `job-page-cta-hierarchy` change
-- [ ] 8.7 Review submission after a completed session
+- [x] 8.1 Public mentor directory page with company, topic and language filters.
+      `/mentors`, server-rendered for the current filters so a shared link renders
+      filtered. The query is whitelisted to the three params the endpoint reads, the same
+      rule `/companies` holds — a param it does not read would widen the answer while the
+      address bar still claimed it narrowed it. The filter OPTIONS come from an
+      unfiltered read: a narrowed list cannot offer what it just excluded, so building
+      the controls from the visible rows makes every filter a one-way door. Filtering
+      itself stays on the endpoint — a copy of the publication predicate in the browser
+      is the drift `mentor-profile` warns about. A selected value the options no longer
+      carry is offered as its own option, because a `<select>` whose value names no
+      `<option>` renders BLANK and then lies about what the page is showing.
+- [x] 8.2 Public mentor profile with the booking calendar, sending the browser's
+      resolved timezone and rendering slots in it. The profile is server-rendered; the
+      SLOTS deliberately are not — the server does not know the viewer's zone, so
+      rendering them would mean showing UTC and swapping every visible hour after
+      hydration. Booker state lives in `?month`/`?date`/`?slot` as cal.com's does, which
+      is what survives the sign-in redirect a signed-out seeker is about to take.
+      **Nothing in the day/time path constructs a `Date`**: `local_start` is already in
+      the viewer's zone, and re-deriving it here re-interprets it against the browser's —
+      Tokyo's 16th at 01:00 is still the 15th in UTC, so the slot files under the day
+      before the one offered. The grid is integer arithmetic (Sakamoto) for the same
+      reason. The UTC offset is rendered on every slot: on the autumn transition two
+      slots share a wall clock and differ only there. Re-asks every 60s and on tab
+      focus — 60s because the endpoint caches a window for a minute, so a faster poll
+      spends the rate limit for an identical answer. No reservation system, unlike
+      cal.com: the `EXCLUDE` constraint refuses the second booking outright.
+- [x] 8.3 Booking confirmation and cancellation flows, and the seeker's session list.
+      The chosen hour lives in the URL, so the sign-in bounce returns to it — and the
+      sign-in link is built from `location.search`, not `promptSignIn()`, which reads
+      `page.url` and would hand back a returnTo missing the very slot it is carried for.
+      A booked session carries only its instants, so the zone is applied in the browser;
+      that is not the slot trap, and the comment says why. The cancel control is hidden
+      rather than shown-and-refused, tested on both sides of the start instant.
+- [x] 8.4 Mentor cabinet under `/my/`: profile editing, weekly schedule, date overrides,
+      and the mentor's own session list. One `/my/mentorship` section for both sides of
+      the marketplace; the offer-to-mentor form appears only when asked for. The week is
+      edited and saved whole, mirroring the endpoint. **A backend gap surfaced here and
+      was fixed rather than worked around**: the owner's read did not carry the buffers,
+      notice or horizon, so a whole-object save after correcting a headline silently
+      reset them to the form's defaults. `toOwnMentorResponse` now returns them, as
+      pointers — `omitempty` cannot tell a zero buffer from a field that is not yours.
+- [x] 8.5 Moderation queue screen beside the referral queue — a fifth tab of the existing
+      hub, mirrored in `?tab=` like the rest. The approved referral offer is rendered as
+      evidence and nothing acts on it, which is what the spec means by "never a gate".
+- [x] 8.6 Entry point from the vacancy and company pages, rendered only where the
+      company has an approved unpaused mentor. Asked from the DIRECTORY narrowed to that
+      company, never a separate "has a mentor?" endpoint — a second way to ask is a
+      second copy of the publication predicate. Asked in the BROWSER, not in `load`:
+      the job page is the busiest surface here and about three quarters of this host's
+      traffic is crawlers, so a server-side call would spend a request on every bot fetch
+      to answer a question no bot acts on. Placed beside the referral block rather than
+      as a fourth button, since `job-page-cta-hierarchy`
+- [x] 8.7 Review submission after a completed session. Offered only to the SEEKER, and
+      the wire never says which party is reading — what it says is that `seeker_email`
+      reaches the mentor alone, so its absence identifies the reader. Indirect, and
+      therefore tested rather than assumed.
+
+- [x] 8.8 Act on the two-axis review. Five findings fixed:
+      **(a)** `MentorBlock` sat INSIDE the company page's `{#if referralAvailable}`, so a
+      company with a mentor and no referral offer showed nothing — both reviewers found
+      it independently. They are different people volunteering different things and now
+      have independent conditions.
+      **(b)** the mentor's PAST sessions were dropped from the cabinet; the seeker's were
+      not. **(c)** withdrawal had a route and no control, so the capability
+      `mentor-profile` requires was unreachable from a browser. **(d)** fifteen form
+      controls repeated the same class string instead of using the `Input` primitive the
+      design system tracks adoption of. **(e)** two Monday-first weekday lists, one in
+      `mentorship.ts` claiming to own the convention and one in the calendar component —
+      now one list with a test that spells the header.
+      Also: `web/AGENTS.md` records the new surface, and `errorMessage`/`browserTimezone`
+      replaced nine and five hand-rolled copies.
+
+      **Not fixed, and why.** A booking can record the vacancy the seeker came from
+      (`mentor-booking`: "SHALL be able to record the vacancy the seeker was reading"),
+      and the frontend cannot supply it: the public `Job` wire shape carries
+      `public_slug` and `external_id` and NO numeric id — the internal one is deliberately
+      not exposed. Passing `job_id` would mean publishing it. The seam is on the backend:
+      the booking endpoint would take a slug and resolve it. Left for that change rather
+      than worked around here.
+
+      A review cannot be pre-filled for editing: `bookingResponse` carries no review, so
+      the form always opens blank. The PUT still replaces rather than duplicates, which is
+      what the spec requires; showing the current value needs the read to widen.
+
+- [x] 8.9 Ship the whole surface behind `users.beta_tester`, and record which spec
+      scenarios that DEFERS. Every route the feature owns — the public directory, a
+      mentor's page, and all four cabinet tabs — answers 404 without the flag, and
+      `MentorBlock` renders nothing. The predicate is `web/src/lib/server/mentorshipGate`.
+
+      **Three spec scenarios are therefore not true in a browser today.** They are
+      deferrals, not violations: every one of them still holds at the API layer, which is
+      untouched and public, and they become true again when the flag is dropped. Named
+      here so the change cannot archive with specs describing a marketplace nobody can
+      reach:
+      - `mentor-profile`: "A published mentor profile SHALL show ... to any visitor, signed
+        in or not" — and its "An anonymous visitor reads a published profile" scenario.
+      - `mentor-profile`: "WHEN a visitor opens a vacancy whose `company_slug` has at least
+        one approved, unpaused mentor THEN the page offers a route to that company's
+        mentors".
+      - `mentor-availability`: "The slot listing SHALL be readable without authentication."
+
+      Not a spec requirement — a product decision taken while the marketplace has no
+      supply: mentors are onboarded by hand, and a directory that opens empty reads as a
+      broken feature rather than an unlaunched one. Gating only the CABINET was considered
+      and rejected: it would leave somebody able to book from a public profile and then
+      unable to find the session again or cancel it, and the hour a mentor is holding is
+      real. 404 rather than 403 because a 403 advertises a door.
+
+      **Dropping the beta is three edits**, and the gate's own comment lists them:
+      `mentorshipGate.ts`, `inBeta` in `MentorBlock.svelte`, `betaOnly` in `accountNav.ts`.
+
+- [x] 8.10 A seeker's session list names the mentor by HEADLINE, not by name — a wire
+      gap, recorded rather than worked around, in the same class as 8.8's `job_id`.
+      `bookingResponse` carries `headline` and `mentor_slug` and no display name, so the
+      list reads "Principal Engineer" where `mentor-profile` says "The display name SHALL
+      be a field of the PROFILE". Fixing it means widening the booking read; until then
+      the mentor is identified but not named on that one surface.
 
 ## 9. Verification
 
-- [ ] 9.1 `gofmt -l .` prints nothing; `go vet ./...`, `go test ./...`,
+- [x] 9.1 `gofmt -l .` prints nothing; `go vet ./...`, `go test ./...`,
       `go vet -tags=integration ./...` all pass
-- [ ] 9.2 `go test -tags=integration ./...` passes with Docker available
-- [ ] 9.3 `pnpm --dir web lint` and the web test suite pass; `pnpm check:links` passes
+- [x] 9.2 `go test -tags=integration ./...` passes with Docker available — `db` and
+      `handler` both green against a real Postgres
+- [x] 9.3 `pnpm --dir web lint` and the web test suite pass (1751); `pnpm check:links`
+      passes (328 links)
 - [x] 9.4 Write `internal/engage/mentorship/AGENTS.md` covering what is always true here:
       the empty-override trick, the zone-resolution order, the `EXCLUDE` constraint and
       why the application still re-derives, the transactional-notification boundary,
@@ -213,4 +334,6 @@ unit tests plus the function they drive; none of it needs Docker or Postgres.
       module table and `internal/engage/AGENTS.md`; `deploy/AGENTS.md`'s "five workers
       that send mail" and "billing-sync is the first addition" both said something now
       false and are corrected
-- [ ] 9.5 Re-check the migration number against `main` after the final rebase
+- [x] 9.5 Re-check the migration number against `main` after the final rebase — `0145`
+      landed with the backend and is on `main`; the frontend change adds no migration,
+      so there is nothing left to collide
