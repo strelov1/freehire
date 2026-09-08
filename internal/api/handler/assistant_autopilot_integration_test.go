@@ -36,11 +36,35 @@ import (
 	"github.com/strelov1/freehire/internal/platform/llm"
 )
 
+// autopilotOption adjusts a harness past the two models every caller names.
+//
+// Variadic rather than a widened signature: the five arguments below are what an autopilot
+// test is ABOUT, and the one caller wanting more is the bake-off. Adding a sixth parameter
+// would edit six call sites to say nil for something none of them has an opinion on.
+type autopilotOption func(*assistantHandlers)
+
+// withRenderedCVScoring wires the CV toolchain the deterministic scores read.
+//
+// cvmatch and atscheck both score the text layer of the RENDERED PDF rather than the stored
+// document (renderedCVText says why), and a handler holding neither half does not fail that
+// read — it degrades to an unavailable score. That is right for the workspace, whose panel
+// must keep loading without a toolchain, and wrong for the bake-off, which would rank a
+// column of absences and report it as a tie.
+//
+// Both halves together or neither: renderedCVText checks for both, and a harness carrying
+// the renderer alone would reach the extractor with nothing behind it.
+func withRenderedCVScoring(r cv.Renderer, extract func([]byte) (string, error)) autopilotOption {
+	return func(h *assistantHandlers) {
+		h.cv.cvRenderer = r
+		h.cv.extractPDFText = extract
+	}
+}
+
 // newAutopilotHarness wires the handlers, the app and the routes an autopilot test needs.
 // Every test here wants the same assembly — the CV tools, the editor, the experience bank and
 // a match surface — and differs only in the two models: the one that answers the turn and the
 // one that answers the fit chain.
-func newAutopilotHarness(t *testing.T, pool *pgxpool.Pool, iss *auth.Issuer, turnM assistant.Model, fitM llms.Model) (*assistantHandlers, *fiber.App) {
+func newAutopilotHarness(t *testing.T, pool *pgxpool.Pool, iss *auth.Issuer, turnM assistant.Model, fitM llms.Model, opts ...autopilotOption) (*assistantHandlers, *fiber.App) {
 	t.Helper()
 	queries := db.New(pool)
 	bank := experience.NewStore(experience.NewQueriesRepository(queries))
@@ -64,6 +88,11 @@ func newAutopilotHarness(t *testing.T, pool *pgxpool.Pool, iss *auth.Issuer, tur
 		},
 	}
 	h.runner = assistant.NewRunner(turnM, h.store, assistant.RunnerConfig{MaxSteps: 3})
+	// Applied before the routes are registered: an option that replaces a handler's
+	// dependency after register() would leave the closure holding the old one.
+	for _, opt := range opts {
+		opt(h)
+	}
 
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	api := app.Group("/api/v1")

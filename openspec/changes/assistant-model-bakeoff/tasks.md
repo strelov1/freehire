@@ -46,27 +46,27 @@
 
 ## 5. The bake-off
 
-- [ ] 5.1 Expose the seam the bake-off needs from `newAutopilotHarness` without changing
+- [x] 5.1 Expose the seam the bake-off needs from `newAutopilotHarness` without changing
       what existing callers pass. Verify the existing autopilot integration tests still
       pass untouched.
-- [ ] 5.2 Write the `//go:build llmlive` bake-off: for each candidate model, a fresh
+- [x] 5.2 Write the `//go:build llmlive` bake-off: for each candidate model, a fresh
       database, the seeded fixtures, one autopilot run per case, the tally collected from
       the stream. Only the turn model varies; assert in the test that the fit model does
       not.
-- [ ] 5.3 Score each completed run with `cvmatch.Compute` and `atscheck.Compare` against
+- [x] 5.3 Score each completed run with `cvmatch.Compute` and `atscheck.Compare` against
       the base report, and attach both to the row.
-- [ ] 5.4 Record a failed, cancelled or step-capped run as a row carrying that outcome and
+- [x] 5.4 Record a failed, cancelled or step-capped run as a row carrying that outcome and
       continue; end the bake-off only when the case set itself cannot be read.
-- [ ] 5.5 Emit the report: a table to the test log and the full rows as JSON under
+- [x] 5.5 Emit the report: a table to the test log and the full rows as JSON under
       `.cache/`, naming the price table's capture date and the profile the cases were run
       against.
-- [ ] 5.6 Include each completed run's tailored CV text in the JSON report beside its
+- [x] 5.6 Include each completed run's tailored CV text in the JSON report beside its
       vacancy and scores, and omit it for a failed run. Verify by reading a report back
       and finding one CV per completed (model, case).
 
 ## 6. Wrap-up
 
-- [ ] 6.1 Document the bake-off in `internal/ai/assistant/AGENTS.md`: what it measures,
+- [x] 6.1 Document the bake-off in `internal/ai/assistant/AGENTS.md`: what it measures,
       how to run it, and why rounds and cache rate matter more than the price page.
 - [ ] 6.2 Run the bake-off against at least two candidate models over several vacancies,
       record the first report, and read the tailored CVs it carries.

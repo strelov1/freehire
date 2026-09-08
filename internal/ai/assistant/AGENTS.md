@@ -321,6 +321,48 @@ CV tailoring has no tag of its own on purpose: `/me/cvs/tailor` makes no model c
 mints a CV and debits credits, and the work is a turn under the `tailor` preset. A second
 tag would double-count one spend.
 
+## Choosing the turn model: the bake-off
+
+Which model answers a turn is decided by measurement, not by a price page, and the
+measurement is a `//go:build integration && llmlive` test:
+`internal/api/handler/assistant_bakeoff_run_llmlive_test.go`.
+
+```bash
+BAKEOFF_MODELS=vendor/model-a,vendor/model-b \
+LLM_BASE_URL=… LLM_API_KEY=… LLM_MODEL=… \
+  go test -tags=integration,llmlive ./internal/api/handler/ -run TestBakeoff -timeout 3h -v
+```
+
+It runs the **tailoring autopilot** — the assistant's most expensive turn shape — once per
+(candidate model, case) against a fresh Postgres, and writes a ranked table plus a JSON
+report under `.cache/`. Needs Docker, `typst` and `pdftotext`, and the local profile
+fixture (see `bakeoffProfileFixture`: a real CV, deliberately not in this repository).
+
+**Why a per-million price does not answer the question.** Two things decide what a turn
+costs here, and neither is on a price page:
+
+- **Rounds are a multiplier, not an addend.** The transcript is replayed into context every
+  round, so round N carries rounds 1..N-1 with it. A model needing fourteen rounds where
+  another needs five costs far more than its token price says.
+- **Whether the provider serves the replayed prefix from cache decides the rest.** #2633
+  measured 20k tokens a turn being re-read at full price because the history window slid by
+  one message. The bake-off reads `llm.Usage.CachedInput` per round and reports the share.
+
+The cache verdict has **three** states and not two: langchaingo writes the cached key
+unconditionally from a zero-valued struct, so "the provider reported nothing" and "nothing
+was cached" both arrive as `0`. A single-round run is therefore `inconclusive` — there was
+no earlier round for a cache to have held — and only a multi-round run all reporting zero
+is `no cache observed`.
+
+**What it does not do.** It renders no verdict on whether a tailored CV is any good, and
+calls no grader model. It ranks on `cvmatch` and `atscheck` — free, pure, and the same
+numbers the candidate already sees in the workspace — and emits every run's tailored CV
+text beside its vacancy so a reader judges the rest. See
+`openspec/changes/assistant-model-bakeoff/design.md` for why a judge model was rejected.
+
+**Only the turn model varies.** The fit chain stays pinned to `LLM_MODEL`, and the test
+asserts it: swapping both would measure two models and attribute the result to one.
+
 ## Limitations
 - **Measured, not bounded.** A turn is now attributed to the account that ran it and its
   cost is readable (`GET /me/usage`, and per-feature on the gateway), but nothing refuses
