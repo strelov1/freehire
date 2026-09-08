@@ -70,7 +70,25 @@ func UnknownCompanyParams(v url.Values, alsoKnown []string) []UnknownParam {
 	return unknownAgainst(v, known)
 }
 
-// unknownAgainst is the shared body of both reports: everything in v that the
+// UnknownParamsAgainst is the same report for an endpoint whose vocabulary this
+// package does not own at all — the Talent Network catalogue is the first, and it
+// filters on facets derived from a CV rather than on anything in the job index.
+//
+// The vocabulary is the caller's; only the report is shared. That split is the point:
+// the ignored-params convention is a promise the whole API makes, and a second
+// endpoint growing its own spelling of it — or its own suggestion logic — is how a
+// convention stops being one. The caller must NOT be tempted to reach for
+// UnknownParams above and pass its facets as alsoKnown: that would silently accept
+// every job-search facet as legitimate on an endpoint that reads none of them.
+func UnknownParamsAgainst(v url.Values, known []string) []UnknownParam {
+	set := make(map[string]bool, len(known))
+	for _, param := range known {
+		set[param] = true
+	}
+	return unknownAgainst(v, set)
+}
+
+// unknownAgainst is the shared body of the reports: everything in v that the
 // given vocabulary does not contain, named, suggested and bounded.
 func unknownAgainst(v url.Values, known map[string]bool) []UnknownParam {
 	var out []UnknownParam

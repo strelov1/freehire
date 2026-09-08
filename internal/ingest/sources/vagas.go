@@ -46,9 +46,24 @@ const vagasMaxPages = 60
 var vagasBase = &url.URL{Scheme: "https", Host: "www.vagas.com.br"}
 
 func (v vagas) Fetch(ctx context.Context, _ CompanyEntry) ([]Job, error) {
+	return v.FetchNew(ctx, CompanyEntry{}, func(string) bool { return false })
+}
+
+// FetchNew fetches detail only for a posting the catalogue does not already have — seen reports
+// whether a native id is already ingested. A seen posting yields a liveness-refresh job (no
+// detail request), so the pipeline refreshes its open state WITHOUT rewriting the content
+// hydrated when it was new.
+//
+// This is what makes the crawl finish at all. Every request here — listing and detail alike —
+// goes through a one-per-second pacer, so re-reading all 1 939 stored postings costs half an
+// hour before the proxy's own latency, and the run overran its 50-minute budget every time:
+// measured 2026-09-07, the last successful crawl was 2026-08-18 and every attempt since either
+// timed out mid-detail or never got a slot. Hydrating only what is new turns that into a
+// handful of requests in the steady state.
+func (v vagas) FetchNew(ctx context.Context, _ CompanyEntry, seen func(externalID string) bool) ([]Job, error) {
 	// Collect distinct job URLs across every area listing, keyed by native id so a posting
 	// listed under several areas is fetched once.
-	seen := make(map[string]bool)
+	found := make(map[string]bool)
 	var urls []string
 	for i, area := range vagasAreas {
 		areaURLs, err := v.listArea(ctx, area)
@@ -60,15 +75,20 @@ func (v vagas) Fetch(ctx context.Context, _ CompanyEntry) ([]Job, error) {
 		}
 		for _, u := range areaURLs {
 			id := vagasJobID(u)
-			if id == "" || seen[id] {
+			if id == "" || found[id] {
 				continue
 			}
-			seen[id] = true
+			found[id] = true
 			urls = append(urls, u)
 		}
 	}
 
 	return fetchDetails(urls, defaultDetailWorkers, func(u string) (Job, bool) {
+		if id := vagasJobID(u); id != "" && seen(id) {
+			// Already ingested: refresh liveness only, no detail request. Just the identity
+			// the pipeline's touch needs; the stored content is left untouched.
+			return Job{ExternalID: id, URL: u, SeenRefresh: true}, true
+		}
 		return v.detail(ctx, u)
 	}), nil
 }

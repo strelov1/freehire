@@ -33,6 +33,7 @@ import (
 	"github.com/strelov1/freehire/internal/candidate/resume"
 	"github.com/strelov1/freehire/internal/candidate/resumeextract"
 	"github.com/strelov1/freehire/internal/candidate/survey"
+	"github.com/strelov1/freehire/internal/candidate/talentnetwork"
 	"github.com/strelov1/freehire/internal/engage/companyfeedback"
 	"github.com/strelov1/freehire/internal/engage/emailnotify"
 	"github.com/strelov1/freehire/internal/engage/mentorship"
@@ -80,11 +81,16 @@ const (
 	// model spends tens of seconds thinking before answering, so a stage needs more than
 	// the shared client's default.
 	//
-	// It is a budget for ONE attempt, not for the stage: matchanalysis retries a timed-out
-	// stage once, so the worst case per stage is twice this. 90s sits well past the observed
-	// spread (healthy stages answer in 3–25s) while leaving room for that retry — a call
-	// still running at 90s is hung rather than slow, and in production the retry after such
-	// a call answered in under eight seconds.
+	// It is a budget for ONE attempt of the stages a reader is blocked on. What each stage
+	// does with it is matchanalysis's own business — timeoutForStage doubles it for the
+	// adversarial audit, whose subject is already served, and attemptsForStage decides how
+	// many attempts each stage gets.
+	//
+	// 90s was chosen against a spread of 3–25s, which is no longer what production shows:
+	// measured 2026-09-08, healthy stages answer in 45–83s, because a call landing on the
+	// gateway's deliberating provider is slow rather than hung. That is why the retry no
+	// longer helps the stage it was written for and why the audit needed a budget of its
+	// own; the figure itself still sits past the spread for stages 1 and 2.
 	matchAnalysisLLMTimeout = 90 * time.Second
 	// resumeExtractLLMTimeout bounds the single structured-résumé extraction call. It runs
 	// off the upload response path (background) so it can be generous, but still bounded so
@@ -464,10 +470,15 @@ func Register(app *fiber.App, cfg Config) {
 	// The Talent Network visibility toggle is a distinct singleton on `users`, not part
 	// of the user_profiles-backed profileHandlers above (see me_talent_network.go).
 	talentNetworkH := newTalentNetworkHandlers(queries)
-	// The public, unauthenticated counterpart to talentNetworkH above — a separate
-	// handler struct (not a route on talentNetworkH) because it carries no auth
-	// middleware at all (see talent_network_profile.go).
-	talentNetworkProfileH := newTalentNetworkProfileHandlers(queries)
+	// The public catalogue. One Catalogue per process, holding the snapshot every
+	// request is served from — constructing one per request would read the whole
+	// membership per request, which is the outage the snapshot exists to avoid.
+	//
+	// A one-minute TTL: long enough that a burst of visitors costs one read, short
+	// enough that somebody who just joined sees themselves listed while still looking at
+	// the page that said they would be. Leaving takes effect immediately regardless —
+	// the card route re-reads the database rather than the snapshot.
+	talentCatalogH := newTalentCatalogHandlers(talentnetwork.NewCatalogue(queries, time.Minute, time.Now))
 	// One bank for the whole surface. It is stateless over the shared queries, but the
 	// single value is what keeps the evidence gate from being anyone's to attach later:
 	// the CV editor is constructed with it below, not handed it by the assistant.
@@ -849,7 +860,7 @@ func Register(app *fiber.App, cfg Config) {
 	marketPulseH.register(api, mw)
 	experienceH.register(api, mw)
 	talentNetworkH.register(api, mw)
-	talentNetworkProfileH.register(api)
+	talentCatalogH.register(api, mw)
 
 	// CV builder + AI tailoring (see cvHandlers).
 	cvH.register(api, mw)

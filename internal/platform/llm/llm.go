@@ -17,6 +17,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"net/http"
 	"strings"
 	"time"
 
@@ -82,6 +83,17 @@ func (c *Client) ModelID() string {
 	return c.modelID
 }
 
+// Timeout reports the per-call bound this client was built with, so a caller that varies it
+// per call site can derive the new one FROM the configured value rather than restating it.
+// A second copy of the number in a second package is a second answer, free to drift from the
+// one the entrypoint actually chose. Zero on a nil client.
+func (c *Client) Timeout() time.Duration {
+	if c == nil {
+		return 0
+	}
+	return c.timeout
+}
+
 // WithTimeout returns a shallow copy of the client with a different per-call timeout,
 // so a slow use case (a reasoning-heavy multi-stage analysis) can allow longer calls
 // without raising the shared client's default for everyone. Nil-safe.
@@ -121,16 +133,7 @@ func WithTracer(t Tracer, source string) Option {
 // the gateway/provider, apiKey is the bearer credential, model is the model id.
 // No provider is hard-coded — any OpenAI-compatible backend works.
 func New(baseURL, apiKey, model string, opts ...Option) (*Client, error) {
-	m, err := openai.New(
-		openai.WithBaseURL(baseURL),
-		openai.WithToken(apiKey),
-		openai.WithModel(model),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("llm: build client: %w", err)
-	}
 	c := &Client{
-		model:        m,
 		modelID:      model,
 		timeout:      DefaultTimeout,
 		baseURL:      baseURL,
@@ -140,6 +143,20 @@ func New(baseURL, apiKey, model string, opts ...Option) (*Client, error) {
 	for _, o := range opts {
 		o(c)
 	}
+	// The model is built AFTER the options, because the transport it travels on is the
+	// client's own (see transport): a base client needs it for the same reason a bound one
+	// does — a per-call rewrite has to reach a client nobody has bound.
+	m, err := openai.New(
+		openai.WithBaseURL(baseURL),
+		openai.WithToken(apiKey),
+		openai.WithModel(model),
+		openai.WithHTTPClient(&http.Client{Transport: c.transport()}),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("llm: build client: %w", err)
+	}
+	c.model = m
+
 	return c, nil
 }
 
@@ -222,10 +239,14 @@ func NewWithModel(m llms.Model, opts ...Option) *Client {
 // It is not a guarantee: a gateway that stops honouring a schema reports success, so
 // every existing validation stays where it is.
 func (c *Client) GenerateJSON(ctx context.Context, system, user string, opts ...GenOption) (string, error) {
-	model, err := c.modelFor(newGenConfig(opts))
+	cfg := newGenConfig(opts)
+	model, err := c.modelFor(cfg)
 	if err != nil {
 		return "", err
 	}
+	// The reasoning effort travels on the context because langchaingo's request builder
+	// cannot carry it; the transport reads it back off. See WithReasoning.
+	ctx = withReasoning(ctx, cfg.reasoning)
 
 	if c.timeout > 0 {
 		var cancel context.CancelFunc
@@ -302,10 +323,15 @@ func (c *Client) GenerateJSONStream(
 	onThinking func(string),
 	opts ...GenOption,
 ) (string, error) {
-	model, err := c.modelFor(newGenConfig(opts))
+	cfg := newGenConfig(opts)
+	model, err := c.modelFor(cfg)
 	if err != nil {
 		return "", err
 	}
+	// Same as GenerateJSON: the effort rides the context to the transport. A caller that
+	// asks a streaming call not to deliberate is asking for less to arrive on onThinking,
+	// which is the point.
+	ctx = withReasoning(ctx, cfg.reasoning)
 
 	if c.timeout > 0 {
 		var cancel context.CancelFunc
@@ -380,7 +406,12 @@ func UsageFrom(choice *llms.ContentChoice) *Usage {
 	if !ok1 && !ok2 && !ok3 {
 		return nil
 	}
-	return &Usage{Input: in, Output: out, Total: total}
+	// The cached count never decides whether there is a usage to report: a provider
+	// that named it and nothing else told us nothing about the call's size, and a
+	// zero Input invented from it would read as a free request.
+	cached, _ := intFrom(choice.GenerationInfo["PromptCachedTokens"])
+
+	return &Usage{Input: in, Output: out, CachedInput: cached, Total: total}
 }
 
 // intFrom coerces a GenerationInfo value (int, int64, or float64 depending on the

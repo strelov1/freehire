@@ -31,6 +31,8 @@ var privatePredicateExemptions = map[string]string{
 	"ListCompanyBoardTitles":                  "scoped to the ats/company board sources, which a private posting's source is never one of",
 	"UnseenJobIDs":                            "the post-ingest close sweep, scoped to the source a crawl just ran and the company slugs it touched",
 	"UnseenJobIDsBySource":                    "the same sweep, scoped to one source; a private posting's source is never crawled",
+	"CountChronicBoardJobs":                   "the chronic-board safety net's dry-run count, scoped to one board_health-registered provider's source; a private posting's source is never crawled",
+	"CountChronicProviderJobs":                "the same safety net's boardless-provider count, scoped to one crawled source",
 
 	// --- Writes back to the private row itself: the effect stays inside the row, so it
 	// reaches its creator and nobody else. ---

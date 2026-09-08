@@ -634,6 +634,38 @@ type Querier interface {
 	// that no longer exists). Candidate contacts are intentionally kept: they are
 	// owner-edited identity, not an extract artifact.
 	ClearUserResume(ctx context.Context, id int64) error
+	// The chronic-board safety net (openspec change close-chronically-unreachable-boards, issue
+	// #2017), board-scoped: closes every open job of ONE board that board_health.ListChronicBoards
+	// has already proven unreachable for the closure window — no per-run cutoff, because the
+	// evidence here is weeks of accumulated failure, not one run's coverage. Reuses
+	// CloseUnseenJobsForBoard's board_pattern scoping so a same-provider sibling board is never
+	// touched.
+	//
+	// closed_reason is 'board_unreachable', distinct from the ordinary sweep's 'unseen', so a job
+	// closed here is never conflated with one the per-run sweep closed with actual run coverage —
+	// see job-lifecycle spec, "every close records the mechanism".
+	//
+	// The EXISTS clause RE-VALIDATES board_health's current state within this same statement,
+	// against the identical chronic predicate ListChronicBoards used to select the row in the
+	// first place (caught in review, PR #2641/CodeRabbit): the caller reads chronic boards, then
+	// closes them, as two separate round trips, and a board can recover — a real crawl can
+	// succeed, calling RecordBoardSuccess — in the gap between the two. Re-checking here rather
+	// than trusting what the caller read earlier closes that window: if the board's last_success_at
+	// has moved since the caller's read, this EXISTS is false and the UPDATE matches nothing,
+	// exactly as if the caller had re-read board_health immediately before closing.
+	//
+	// The search_delete_outbox CTE is copied verbatim from CloseUnseenJobs: the enqueue must ride
+	// this statement to stay atomic with the close and exact.
+	//
+	// :one rather than :execrows because the CTE moves the row count out of the command tag.
+	CloseChronicBoardJobs(ctx context.Context, arg CloseChronicBoardJobsParams) (int64, error)
+	// The chronic-board safety net's source-scoped sibling, for a BOARDLESS provider's chronic
+	// record (board = '', see ingest-board-health spec): such a record already stands for the
+	// provider's whole crawl, so closing "this board's jobs" means the whole provider's open jobs,
+	// by source alone — mirrors CloseUnseenJobsBySource but with no per-run cutoff, for the same
+	// reason CloseChronicBoardJobs has none. Carries the same board_health re-validation EXISTS
+	// clause as CloseChronicBoardJobs, and for the same reason.
+	CloseChronicProviderJobs(ctx context.Context, arg CloseChronicProviderJobsParams) (int64, error)
 	// Moderator close: the thread leaves the open listing and rejects new replies.
 	CloseCommunityThread(ctx context.Context, id int64) error
 	//
@@ -934,6 +966,18 @@ type Querier interface {
 	// Read-only companion to BackfillBoardCompany, for --dry-run: how many rows a board's backfill
 	// would touch without writing anything.
 	CountBlankCompanyByBoard(ctx context.Context, arg CountBlankCompanyByBoardParams) (int64, error)
+	// How many board_health rows exist for one (provider, board) name across every region it has
+	// ever been seen under. More than one means the name is REGION-AMBIGUOUS — the `boards`
+	// catalog allows one board name to repeat under a provider, distinguished only by region (e.g.
+	// Adzuna's "it-jobs" once per country, internal/ingest/sources/adzuna.go), but
+	// jobs.external_id carries no region dimension at all (externalid.Namespace(board, id)), so a
+	// board-scoped `external_id LIKE '<board>:%'` close cannot tell one region's postings from
+	// another's. The ordinary per-run sweep already refuses to board-scope such a name
+	// (pipeline.ambiguousRegionBoards); the chronic-board safety net (cmd/close-chronic-boards)
+	// makes the same check against board_health directly, since it has no crawl-run board list to
+	// consult and does not need one — board_health's own composite key already records every
+	// region a board name has ever been crawled under.
+	CountBoardHealthRegions(ctx context.Context, arg CountBoardHealthRegionsParams) (int64, error)
 	// How many people a campaign would reach right now. Read before sending: a campaign
 	// is irreversible and goes to everyone, so the number is worth seeing first.
 	CountBroadcastCandidates(ctx context.Context, campaign string) (int64, error)
@@ -949,6 +993,14 @@ type Querier interface {
 	// The predicate is the one the public listings apply, so the totals describe exactly the
 	// set a visitor can page through.
 	CountCatalogueScale(ctx context.Context) (CountCatalogueScaleRow, error)
+	// What CloseChronicBoardJobs would close, for the safety-net worker's dry-run report — same
+	// predicate (including the board_health re-validation, so a dry run cannot report a count for
+	// a board that has already recovered), no write, mirroring CountExpiredTracerClicks alongside
+	// DeleteExpiredTracerClicks.
+	CountChronicBoardJobs(ctx context.Context, arg CountChronicBoardJobsParams) (int64, error)
+	// What CloseChronicProviderJobs would close, for the safety-net worker's dry-run report. Same
+	// board_health re-validation as its close counterpart.
+	CountChronicProviderJobs(ctx context.Context, arg CountChronicProviderJobsParams) (int64, error)
 	// Total companies matching the same optional name + facet filters as ListCompanies,
 	// so search/filter pagination reports the filtered total. Keep this WHERE identical
 	// to ListCompanies (including the job_count > 0 hiring scope).
@@ -2280,23 +2332,32 @@ type Querier interface {
 	// same request again: without this read every refresh minted another copy and stranded the
 	// conversation bound to the previous one.
 	GetTailoredCVForJob(ctx context.Context, arg GetTailoredCVForJobParams) (GetTailoredCVForJobRow, error)
-	// Everything the public Talent Network page needs to render, keyed by the opaque
-	// talent_network_public_id (never users.id, which would leak signup order/row count).
-	// Mirrors the users + user_profiles composition GetProfile/toProfileResponse already
-	// use for the owner-facing profile read (internal/api/handler/me_profile.go), via a LEFT
-	// JOIN because a candidate can enable visibility before ever saving a profile (design
-	// decision: "Missing/empty CV does not block enabling the toggle").
+	// One member's card, by the handle in the public URL. Same predicate as the list, so a
+	// handle nobody holds, a member who has left, and one whose extract has gone stale all
+	// come back as pgx.ErrNoRows — which the handler renders as the one 404. Deciding it
+	// here rather than in the caller is deliberate: three ways to be absent and one way to
+	// say so is a rule that cannot be half-applied.
 	//
-	// Deliberately does NOT filter on talent_network_visibility: the design mandates an
-	// identical 404 for a disabled profile and a nonexistent id, so the caller — not this
-	// query — is the one place that decides that, from the visibility value it gets back
-	// alongside everything else.
-	GetTalentNetworkProfileByPublicID(ctx context.Context, talentNetworkPublicID uuid.UUID) (GetTalentNetworkProfileByPublicIDRow, error)
+	// Read against the DATABASE, never the snapshot the list is served from. A candidate who
+	// leaves must stop resolving immediately, not when the snapshot next refreshes.
+	// The ::text cast is load-bearing, not decoration: talent_handle is nullable, so without
+	// it sqlc types the argument as pgtype.Text and every caller has to wrap a plain string
+	// it already knows is present.
+	GetTalentNetworkMemberByHandle(ctx context.Context, handle string) (GetTalentNetworkMemberByHandleRow, error)
 	// The caller's own Talent Network opt-in state, for the owner-facing settings toggle.
-	// talent_network_public_id rides along so the settings page can render the resulting
-	// public URL the moment a non-'off' mode is selected, without a second round-trip.
-	// Every row has both — 'off' and a freshly-minted uuid are the column defaults — so
-	// there is no "not set yet" case to special-case.
+	// talent_handle rides along so the page can render the public URL without a second
+	// round-trip. It is NULL until the first join — a non-member has no card to link to —
+	// unlike the visibility, which every row carries because 'off' is the column default.
+	//
+	// `listed` answers the question the settings page actually has to ask: not "am I a
+	// member" but "does a visitor see me". They come apart, and the gap is a live trap — a
+	// candidate who joins before uploading a CV is a member with a handle whose card 404s,
+	// so a page reading membership alone tells them their profile is up when it is not.
+	//
+	// It repeats ListTalentNetworkMembers' predicate, which is a duplication worth naming:
+	// the two must be changed together. It is not shared because the catalogue's version
+	// selects rows and this one describes one row, and a caller cannot ask the first
+	// "and what about me".
 	GetTalentNetworkVisibility(ctx context.Context, id int64) (GetTalentNetworkVisibilityRow, error)
 	// The caller's linked Telegram chat (link-status endpoint + delivery resolution).
 	GetTelegramLink(ctx context.Context, userID int64) (TelegramLink, error)
@@ -2410,6 +2471,15 @@ type Querier interface {
 	// only when resume_structured_uploaded_at equals resume_uploaded_at). NULLs when none.
 	// Also returns candidate contacts and last extract status for Profile / seed composition.
 	GetUserResumeStructured(ctx context.Context, id int64) (GetUserResumeStructuredRow, error)
+	// Just the structured résumé, with none of the provenance stamps and none of the
+	// contacts GetUserResumeStructured returns beside it.
+	//
+	// It exists so the Talent Network's handle mint can read one job title without also
+	// holding the candidate's phone number and email in memory. The stamp is deliberately
+	// not applied here: a handle derived from a slightly stale title is still a fine
+	// handle — it is frozen at mint and opaque afterwards — whereas refusing to mint over
+	// an in-flight extraction would block the join itself.
+	GetUserResumeStructuredOnly(ctx context.Context, id int64) ([]byte, error)
 	// Slim role lookup for the RequireRole authorization middleware: it runs on every
 	// request to a role-gated endpoint and needs only the role, so it does not drag the
 	// full user row (the GetJobIDBySlug precedent for a hot-path read).
@@ -2607,6 +2677,10 @@ type Querier interface {
 	// who accepted an invite discloses that a particular person signed up for a job board, which
 	// is not the referrer's to know.
 	InviteStats(ctx context.Context, referrerID int64) (InviteStatsRow, error)
+	// Whether the account is in the beta group, on its own. GetUserByID answers it too, but
+	// carries nine other columns a gate has no use for — and a gate that reads a whole user
+	// row invites somebody to branch on a second field from it later.
+	IsBetaTester(ctx context.Context, id int64) (bool, error)
 	// Cursor read: has this rotated file (by content signature) been applied? The
 	// signature is stable across rename and gzip, so a re-run recognizes the same file.
 	IsViewLogFileProcessed(ctx context.Context, signature int64) (bool, error)
@@ -2906,6 +2980,21 @@ type Querier interface {
 	// Every slug already elected canonical. The merge worker holds these out of a new election,
 	// which is what "frozen" means in practice.
 	ListCanonicalCompanySlugs(ctx context.Context) ([]string, error)
+	// The boards that have proven unreachable for at least `age_window`, not merely cooled down from
+	// a recent run of failures (openspec change close-chronically-unreachable-boards, issue #2017).
+	// A board that has succeeded at least once is measured from last_success_at; one that never has
+	// is measured from first_seen_at instead, since last_error_at is overwritten every failed run
+	// and cannot answer "how long has this been broken". Called with two different windows: a
+	// shorter one for the operator-facing chronic report, a longer one that gates the safety-net
+	// close (see job-lifecycle spec) — one query, no duplicated threshold logic between the two.
+	// Ordered oldest-evidence-first, so both callers see the worst boards first without a second
+	// sort. max_boards mirrors ListUnhealthyBoards's cap (see cmd/ingest's unhealthyBoardsCap,
+	// freehire 2026-08-14 incident): the per-run report passes a small one, the safety-net closer
+	// passes a generous one large enough that a real chronic backlog is never silently truncated —
+	// the two callers' needs differ, so one query with a caller-supplied cap serves both rather
+	// than duplicating the threshold logic across an uncapped and a capped variant. total is the
+	// FULL count before the cap, same convention as ListUnhealthyBoards.Total.
+	ListChronicBoards(ctx context.Context, arg ListChronicBoardsParams) ([]ListChronicBoardsRow, error)
 	// Catalog page: companies with their job counts, most active first. The job count
 	// is read from the denormalized companies.job_count column (maintained by
 	// cmd/recount-companies), so this read does not join jobs. Ordered by job_count
@@ -3382,6 +3471,17 @@ type Querier interface {
 	// mailboxes is an opt-in feature, nowhere near the row counts the repo's chunked
 	// cmd/backfill-* workers exist for — so one unpaged query is enough.
 	ListMailboxesWithoutBackfilledUsername(ctx context.Context) ([]ListMailboxesWithoutBackfilledUsernameRow, error)
+	// The members who joined before handles existed, and so have no public address.
+	//
+	// Migration 0148 rewrote every 'public' row to 'anonymous' but could not mint a handle —
+	// minting reads a job title through a Go dictionary, which SQL cannot do — so those
+	// accounts, and any that were already 'anonymous', are members the catalogue cannot list
+	// and whose card 404s. cmd/backfill-talent-handle walks this list once and closes it.
+	//
+	// No stamp gate here, unlike the catalogue's own read: a member whose CV extract is stale
+	// still needs an address for when it catches up, and withholding one would make the
+	// backfill's own result depend on when it happened to run.
+	ListMembersMissingTalentHandle(ctx context.Context) ([]int64, error)
 	// Every availability row for a mentor, both shapes. The slot engine wants all of them at
 	// once — an override only means anything beside the weekly rules it replaces — so this
 	// deliberately does not filter by window.
@@ -3600,6 +3700,28 @@ type Querier interface {
 	// vacancy's public slug and the bound agent session so each row links back to its workspace.
 	// Base CVs (job_id NULL) are excluded; the JOIN also drops tailored CVs whose job was deleted.
 	ListTailoredCVsByUser(ctx context.Context, userID int64) ([]ListTailoredCVsByUserRow, error)
+	// Every member the public catalogue may show, in one read. The caller projects each row
+	// through talentnetwork.ProjectCard and holds the result as a snapshot — see that
+	// package's doc for why the whole set is read at once rather than filtered in SQL: the
+	// category and seniority a card is filtered by do not exist as columns, they are derived
+	// from the job title by a dictionary that changes weekly.
+	//
+	// The predicate is the membership rule and nothing else:
+	//
+	//   * not 'off' — the candidate asked to be found;
+	//   * a minted handle — without one there is no URL to link the card to, so a row in
+	//     this state is mid-join, not a member;
+	//   * the stamp gate (resume_structured_uploaded_at = resume_uploaded_at, both set) —
+	//     the same "this structure still describes the CV on file" rule the rest of the
+	//     product applies. Without it most cards would be somebody's previous CV.
+	//
+	// LEFT JOIN, because a candidate can join before ever saving a profile: a missing
+	// user_profiles row is empty facets, not a missing member.
+	//
+	// Ordered here rather than by the caller so the snapshot arrives sorted, and TOTALLY:
+	// two members sharing a timestamp would otherwise order arbitrarily, and an arbitrary
+	// order across pages silently drops some people and repeats others.
+	ListTalentNetworkMembers(ctx context.Context) ([]ListTalentNetworkMembersRow, error)
 	ListThreadRepliesAfter(ctx context.Context, arg ListThreadRepliesAfterParams) ([]ListThreadRepliesAfterRow, error)
 	// First page of a thread's replies, oldest first. LEFT JOIN so an authorless reply
 	// still returns — a future AI reply, or one whose author deleted their account.
@@ -5303,10 +5425,26 @@ type Querier interface {
 	// Pause/resume a subscription, scoped to its owner. No matching owner-scoped row
 	// returns no row (the handler maps that to 404).
 	SetSubscriptionActive(ctx context.Context, arg SetSubscriptionActiveParams) (Subscription, error)
-	// Owner-scoped write of the caller's Talent Network visibility. Does not touch
-	// talent_network_public_id: the public URL stays stable across mode changes
-	// (including a round trip through 'off'), so a candidate who already shared it once
-	// never has to reshare a new one.
+	// Claims a freshly minted catalogue handle for a candidate who does not have one yet.
+	//
+	// The `talent_handle IS NULL` predicate is the whole mechanism, and it does two jobs.
+	// It makes the mint idempotent — a member who leaves and rejoins keeps the handle they
+	// already shared, and a second concurrent join claims nothing — and it makes the
+	// statement's own result the answer: 0 rows means somebody already has one, which the
+	// caller reads rather than re-querying and racing again.
+	//
+	// A collision with ANOTHER account's handle surfaces as a unique-violation from
+	// users_talent_handle_key (migration 0150), not as 0 rows. The caller mints a new suffix
+	// and retries — the same shape internal/identity/accounts uses to allocate a username.
+	SetTalentHandleIfUnset(ctx context.Context, arg SetTalentHandleIfUnsetParams) (int64, error)
+	// Owner-scoped write of the caller's Talent Network membership ('off' or 'anonymous'
+	// since migration 0148). Does not touch talent_handle: the public URL stays stable
+	// across a round trip through 'off', so a candidate who already shared it once — or who
+	// leaves and rejoins — never has to reshare a new one.
+	//
+	// The value is NOT validated here. Its authority is the CHECK constraint on the column;
+	// the handler mirrors that set for a cheap 400, and this statement is the third place
+	// the vocabulary would have to be repeated for no gain.
 	SetTalentNetworkVisibility(ctx context.Context, arg SetTalentNetworkVisibilityParams) error
 	// Ultra GIVEN rather than sold. Separate from the Pro grant rather than folded into it: the
 	// two are different decisions a person makes, and one statement setting both would make

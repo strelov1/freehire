@@ -13,7 +13,7 @@ import (
 // /jobs listing enumerates postings as /jobs/<slug>-<id> links and whose job pages carry a
 // schema.org JobPosting ld+json block. The board is the career-site host; the description
 // comes from a per-job detail fetch (bounded-concurrency), like the other ld+json detail
-// adapters (globalpayments, teamtailor). Its /ajax/filter-jobs endpoint is unusable (it
+// adapters (teamtailor). Its /ajax/filter-jobs endpoint is unusable (it
 // caps at 100 and ignores paging), so the paginated HTML listing is the enumeration path.
 type luxoft struct {
 	http HTMLGetter

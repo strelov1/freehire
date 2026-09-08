@@ -390,3 +390,50 @@ func TestWantapplyDefaultStaysOnTheFreeHost(t *testing.T) {
 		t.Fatalf("want the .cy vacancy unchanged, got %+v", jobs)
 	}
 }
+
+// A dropped vacancy never reaches the pipeline, so a crawl that enumerated thousands and read
+// almost none looks identical to a small source. That is what made the .com enumeration's
+// arrival unmeasurable: the list grew from ~605 to 2 755 and the catalogue did not, with
+// nothing anywhere saying how many were lost on the way.
+func TestWantapplyCountsWhatItDropped(t *testing.T) {
+	sitemap := `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+<url><loc>https://wantapply.cy/good-at-acme</loc></url>
+<url><loc>https://wantapply.cy/broken-at-acme</loc></url>
+<url><loc>https://wantapply.cy/alsobroken-at-acme</loc></url>
+</urlset>`
+	page := `<html><body><script type="application/ld+json">{"@context":"https://schema.org","@type":"JobPosting",
+"title":"Dev","hiringOrganization":{"@type":"Organization","name":"Acme"},"description":"<p>Body.</p>"}</script></body></html>`
+	http := &wantapplyFake{
+		xml:  map[string]string{"https://wantapply.cy/sitemap.xml": sitemap},
+		html: map[string]string{"https://wantapply.cy/good-at-acme": page},
+	}
+
+	jobs, dropped, err := NewWantapply(http).(wantapply).fetchCounting(context.Background(), func(string) bool { return false })
+	if err != nil {
+		t.Fatalf("fetchCounting: %v", err)
+	}
+	if len(jobs) != 1 {
+		t.Fatalf("want the one readable vacancy, got %d", len(jobs))
+	}
+	if dropped != 2 {
+		t.Errorf("dropped = %d, want 2 — the count is the whole point", dropped)
+	}
+}
+
+// A vacancy the catalogue already has costs no detail request and so can never be a drop.
+func TestWantapplySeenVacanciesAreNotCountedAsDropped(t *testing.T) {
+	sitemap := `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+<url><loc>https://wantapply.cy/known-at-acme</loc></url>
+</urlset>`
+	http := &wantapplyFake{xml: map[string]string{"https://wantapply.cy/sitemap.xml": sitemap}}
+
+	jobs, dropped, err := NewWantapply(http).(wantapply).fetchCounting(context.Background(), func(string) bool { return true })
+	if err != nil {
+		t.Fatalf("fetchCounting: %v", err)
+	}
+	if len(jobs) != 1 || dropped != 0 {
+		t.Errorf("jobs=%d dropped=%d, want 1 and 0 (a seen vacancy is refreshed, never fetched)", len(jobs), dropped)
+	}
+}

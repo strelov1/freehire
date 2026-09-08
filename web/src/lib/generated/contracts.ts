@@ -1348,7 +1348,80 @@ export interface Responses {
   current_income_period?: string;
 }
 
-export const SOURCE_VALUES = ['telegram', 'workatastartup', 'remoteok', 'arc', '4dayweek', 'adp', 'adzuna', 'aijobs', 'applicantpro', 'applitrack', 'apploi', 'arbeitnow', 'arbeitsagentur', 'ashby', 'ashbygraphql', 'avature', 'bamboohr', 'bayt', 'betterteam', 'breezy', 'briefhq', 'bullhorn', 'careerplug', 'careerspage', 'catsone', 'cleverstaff', 'clinch', 'comeet', 'compleo', 'cornerstone', 'crelate', 'cryptocurrencyjobs', 'dayforce', 'deel', 'djinni', 'earcu', 'echojobs', 'edjoin', 'eightfold', 'enlizt', 'epam', 'erecruiter', 'factorial', 'freshteam', 'functionalworks', 'geekhunter', 'geekjob', 'gem', 'getmanfred', 'getmatch', 'getonbrd', 'getro', 'globalpayments', 'gr8people', 'greenhouse', 'gulftalent', 'gupy', 'gusto', 'habr_career', 'hh', 'hibob', 'himalayas', 'hireology', 'hiringthing', 'hrmdirect', 'huntflow', 'hurma', 'icims', 'infojobs', 'inhire', 'instaffo', 'ismartrecruit', 'isolvedhire', 'itechart', 'jazzhr', 'jibe', 'jobappnetwork', 'jobdanmark', 'jobicy', 'jobleads', 'jobnet', 'jobscore', 'jobspresso', 'jobstash', 'jobtech', 'jobvite', 'jobylon', 'join', 'justjoin', 'keka', 'landingjobs', 'lever', 'likeit', 'loxo', 'luxoft', 'manatal', 'mindsight', 'mycareersfuture', 'neogov', 'nodesk', 'nofluffjobs', 'northstone', 'odoo', 'opencats', 'oracle', 'pageup', 'paycom', 'paycor', 'paylocity', 'peopleforce', 'personio', 'phenom', 'pinpoint', 'powertofly', 'profession', 'quickin', 'radancy', 'rapyd', 'recruitee', 'recruitingsolutions', 'reed', 'remotedotcom', 'remotive', 'remotli', 'rippling', 'schoolspring', 'seek', 'senior', 'smartrecruiters', 'softgarden', 'solides', 'solidjobs', 'spark', 'speedrun', 'startupandvc', 'successfactors', 'talentadore', 'talenthr', 'talentlyft', 'taleo', 'teamex', 'teamtailor', 'tecla', 'thehub', 'themuse', 'topco', 'traffit', 'trakstar', 'trudvsem', 'tyomarkkinatori', 'ukg', 'ukgready', 'usajobs', 'vagas', 'vention', 'vouch', 'wantapply', 'wantedkr', 'werecruit', 'weworkremotely', 'whatjobs', 'whatjobs-ae', 'whatjobs-ar', 'whatjobs-at', 'whatjobs-au', 'whatjobs-be', 'whatjobs-bh', 'whatjobs-br', 'whatjobs-ca', 'whatjobs-ch', 'whatjobs-cl', 'whatjobs-co', 'whatjobs-de', 'whatjobs-dk', 'whatjobs-eg', 'whatjobs-es', 'whatjobs-fi', 'whatjobs-fr', 'whatjobs-gr', 'whatjobs-hk', 'whatjobs-hu', 'whatjobs-id', 'whatjobs-ie', 'whatjobs-in', 'whatjobs-it', 'whatjobs-ke', 'whatjobs-kw', 'whatjobs-lu', 'whatjobs-mx', 'whatjobs-my', 'whatjobs-nl', 'whatjobs-no', 'whatjobs-nz', 'whatjobs-om', 'whatjobs-pe', 'whatjobs-ph', 'whatjobs-pk', 'whatjobs-pl', 'whatjobs-pt', 'whatjobs-py', 'whatjobs-qa', 'whatjobs-sa', 'whatjobs-se', 'whatjobs-sg', 'whatjobs-sv', 'whatjobs-th', 'whatjobs-tr', 'whatjobs-uk', 'whatjobs-ve', 'whatjobs-vn', 'whatjobs-za', 'workable', 'workablemarketplace', 'workday', 'workingnomads', 'workstream', 'wpyoast', 'zohorecruit'] as const;
+/**
+ * CandidateCard is one candidate as the public catalogue shows them.
+ */
+export interface CandidateCard {
+  /**
+   * Seniority and Category describe the candidate as a whole: what their current (or
+   * most recent) role resolves to. This is the card's heading, built rather than
+   * quoted — see PrimaryTitle.
+   */
+  seniority?: string;
+  category?: string;
+  /**
+   * TotalYears is the CV's own figure. A number cannot carry a name.
+   */
+  total_years?: number /* int */;
+  /**
+   * Skills are skilltag canonicals. A token the dictionary does not resolve emits
+   * nothing, which is exactly the whitelisting this card needs — see skilltag's
+   * "never guess" rule.
+   */
+  skills: string[];
+  /**
+   * Roles is the work history with everything nameable removed: no employer, no
+   * location, no prose. What remains is the shape of a career, which is what a
+   * recruiter reads a history for anyway.
+   */
+  roles: CandidateRole[];
+}
+/**
+ * CandidateRole is one position: what it was, when, and what it was built with.
+ */
+export interface CandidateRole {
+  seniority?: string;
+  category?: string;
+  start?: { year: number; month?: number };
+  end?: { year: number; month?: number };
+  current?: boolean;
+  stack?: string[];
+}
+/**
+ * CatalogueMember is one entry in the public catalogue: the dictionary-checked card, plus the
+ * facts that live in columns rather than in the CV.
+ * Every field here survives the same rule ProjectCard enforces. Cities are the NORMALISED
+ * extraction (users.resume_cities), not the free-text location inside the CV, which
+ * carries values like "Austria, Klagenfurt 9020"; the timezone is an IANA zone;
+ * specializations are drawn from vocab.CategoryValues by the profile form. None of the
+ * three can carry a sentence.
+ * Specializations are NOT a duplicate of Card.Category, and the difference is the useful
+ * part. Category is derived from what the candidate has DONE — the title of their most
+ * recent role, through classify. Specializations are what they SAY they want, ticked from
+ * the same closed vocabulary on their own profile. A backend engineer whose profile says
+ * `ml_ai` is somebody a recruiter wants to find, and the two fields disagreeing is the
+ * only way that shows.
+ */
+export interface CatalogueMember {
+  handle: string;
+  card: CandidateCard;
+  /**
+   * Timezone is the IANA zone; TimezoneRegion is the part before the slash. The region
+   * is what a recruiter asking "can we overlap for a call" actually means — there are
+   * dozens of zones per continent — so it is what the filter reads.
+   */
+  timezone?: string;
+  timezone_region?: string;
+  cities: string[];
+  specializations: string[];
+  /**
+   * UpdatedAt is when the structured extract was written, which is the freshest thing
+   * the catalogue knows about a member. It orders the list.
+   */
+  updated_at: string;
+}
+
+export const SOURCE_VALUES = ['telegram', 'workatastartup', 'remoteok', 'arc', '4dayweek', 'adp', 'adzuna', 'aijobs', 'applicantpro', 'applitrack', 'apploi', 'arbeitnow', 'arbeitsagentur', 'ashby', 'ashbygraphql', 'avature', 'bamboohr', 'bayt', 'betterteam', 'breezy', 'briefhq', 'bullhorn', 'careerplug', 'careerspage', 'catsone', 'cleverstaff', 'clinch', 'comeet', 'compleo', 'cornerstone', 'crelate', 'cryptocurrencyjobs', 'dayforce', 'deel', 'djinni', 'earcu', 'echojobs', 'edjoin', 'eightfold', 'enlizt', 'epam', 'erecruiter', 'factorial', 'freshteam', 'functionalworks', 'geekhunter', 'geekjob', 'gem', 'getmanfred', 'getmatch', 'getonbrd', 'getro', 'gr8people', 'greenhouse', 'gulftalent', 'gupy', 'gusto', 'habr_career', 'hh', 'hibob', 'himalayas', 'hireology', 'hiringthing', 'hrmdirect', 'huntflow', 'hurma', 'icims', 'infojobs', 'inhire', 'instaffo', 'ismartrecruit', 'isolvedhire', 'itechart', 'jazzhr', 'jibe', 'jobappnetwork', 'jobdanmark', 'jobicy', 'jobleads', 'jobnet', 'jobscore', 'jobspresso', 'jobstash', 'jobtech', 'jobvite', 'jobylon', 'join', 'keka', 'landingjobs', 'lever', 'likeit', 'loxo', 'luxoft', 'manatal', 'mindsight', 'mycareersfuture', 'neogov', 'nodesk', 'nofluffjobs', 'northstone', 'odoo', 'opencats', 'oracle', 'pageup', 'paycom', 'paycor', 'paylocity', 'peopleforce', 'personio', 'phenom', 'pinpoint', 'powertofly', 'profession', 'quickin', 'radancy', 'rapyd', 'recruitee', 'recruitingsolutions', 'reed', 'remotedotcom', 'remotive', 'remotli', 'rippling', 'schoolspring', 'seek', 'senior', 'smartrecruiters', 'softgarden', 'solides', 'solidjobs', 'spark', 'speedrun', 'startupandvc', 'successfactors', 'talentadore', 'talenthr', 'talentlyft', 'taleo', 'teamex', 'teamtailor', 'tecla', 'thehub', 'themuse', 'topco', 'traffit', 'trakstar', 'trudvsem', 'tyomarkkinatori', 'ukg', 'ukgready', 'usajobs', 'vagas', 'vention', 'vouch', 'wantapply', 'werecruit', 'weworkremotely', 'whatjobs', 'whatjobs-ae', 'whatjobs-ar', 'whatjobs-at', 'whatjobs-au', 'whatjobs-be', 'whatjobs-bh', 'whatjobs-br', 'whatjobs-ca', 'whatjobs-ch', 'whatjobs-cl', 'whatjobs-co', 'whatjobs-de', 'whatjobs-dk', 'whatjobs-eg', 'whatjobs-es', 'whatjobs-fi', 'whatjobs-fr', 'whatjobs-gr', 'whatjobs-hk', 'whatjobs-hu', 'whatjobs-id', 'whatjobs-ie', 'whatjobs-in', 'whatjobs-it', 'whatjobs-ke', 'whatjobs-kw', 'whatjobs-lu', 'whatjobs-mx', 'whatjobs-my', 'whatjobs-nl', 'whatjobs-no', 'whatjobs-nz', 'whatjobs-om', 'whatjobs-pe', 'whatjobs-ph', 'whatjobs-pk', 'whatjobs-pl', 'whatjobs-pt', 'whatjobs-py', 'whatjobs-qa', 'whatjobs-sa', 'whatjobs-se', 'whatjobs-sg', 'whatjobs-sv', 'whatjobs-th', 'whatjobs-tr', 'whatjobs-uk', 'whatjobs-ve', 'whatjobs-vn', 'whatjobs-za', 'workable', 'workablemarketplace', 'workday', 'workingnomads', 'workstream', 'wpyoast', 'zohorecruit'] as const;
 export type Source = (typeof SOURCE_VALUES)[number];
 export const STAGE_VALUES = ['preparing', 'applied', 'screening', 'responded', 'interview', 'offer', 'accepted', 'rejected', 'withdrawn', 'expired'] as const;
 export type Stage = (typeof STAGE_VALUES)[number];

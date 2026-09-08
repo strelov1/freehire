@@ -34,3 +34,22 @@ func EnvInt64(name string, fallback int64) (int64, error) {
 	}
 	return v, nil
 }
+
+// EnvInt32 is EnvInt64 narrowed to int32, for a knob a caller must hand to an API that only
+// takes int32 (e.g. pgtype.Interval.Days). Parsing directly with ParseInt's bitSize=32, rather
+// than reading as int64 and casting, is what makes an out-of-range value a parse error instead
+// of a silent wraparound — a caller that instead wrote int32(EnvInt64(...)) would truncate a
+// value like 3000000000 into a small, wrong int32 rather than refusing it (an incorrect Go
+// integer conversion CodeQL flags on sight, and the two occurrences that shipped in
+// close-chronically-unreachable-boards before this existed are exactly that shape).
+func EnvInt32(name string, fallback int32) (int32, error) {
+	raw, ok := os.LookupEnv(name)
+	if !ok || strings.TrimSpace(raw) == "" {
+		return fallback, nil
+	}
+	v, err := strconv.ParseInt(strings.TrimSpace(raw), 10, 32)
+	if err != nil || v <= 0 {
+		return 0, fmt.Errorf("%s=%q: want a positive integer", name, raw)
+	}
+	return int32(v), nil
+}

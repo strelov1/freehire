@@ -3,6 +3,7 @@ package sources
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"sync"
 	"testing"
@@ -206,5 +207,79 @@ func TestVagasJobID(t *testing.T) {
 		if got := vagasJobID(in); got != want {
 			t.Errorf("vagasJobID(%q) = %q, want %q", in, got, want)
 		}
+	}
+}
+
+// vagas re-fetched the detail page of EVERY posting on every run: 1 939 pages at the pacer's
+// one request a second, which through the proxy overran its 50-minute budget and so never
+// finished, never recorded success, and let its whole catalogue go stale (last success
+// 2026-08-18, measured 2026-09-07). A posting the catalogue already has needs no second read.
+// vagasFake serves listing and detail pages and counts what was asked for, so a test can assert
+// that a page was NOT fetched.
+type vagasFake struct {
+	mu    sync.Mutex
+	pages map[string]string
+	asked map[string]int
+}
+
+func (f *vagasFake) GetHTML(_ context.Context, url string) (*html.Node, error) {
+	f.mu.Lock()
+	if f.asked == nil {
+		f.asked = map[string]int{}
+	}
+	f.asked[url]++
+	body, ok := f.pages[url]
+	f.mu.Unlock()
+	if !ok {
+		return nil, errors.New("vagasFake: no page for " + url)
+	}
+	return html.Parse(strings.NewReader(body))
+}
+
+func TestVagasSkipsDetailForAlreadyIngestedPostings(t *testing.T) {
+	listing := `<html><body>
+<a href="/vagas/v1234567/dev-backend">Dev Backend</a>
+<a href="/vagas/v7654321/dev-frontend">Dev Frontend</a>
+</body></html>`
+	page := `<html><body><script type="application/ld+json">{"@context":"https://schema.org","@type":"JobPosting",
+"title":"Dev","hiringOrganization":{"@type":"Organization","name":"Acme"},"description":"<p>Body.</p>"}</script></body></html>`
+
+	http := &vagasFake{pages: map[string]string{}}
+	for _, area := range vagasAreas {
+		http.pages[fmt.Sprintf("https://www.vagas.com.br/%s?pagina=1", area)] = listing
+	}
+	http.pages["https://www.vagas.com.br/vagas/v1234567/dev-backend"] = page
+	http.pages["https://www.vagas.com.br/vagas/v7654321/dev-frontend"] = page
+
+	// v1234567 is already ingested; only v7654321 may cost a detail request.
+	jobs, err := NewVagas(http).(vagas).FetchNew(context.Background(), CompanyEntry{},
+		func(id string) bool { return id == "1234567" })
+	if err != nil {
+		t.Fatalf("FetchNew: %v", err)
+	}
+	if len(jobs) != 2 {
+		t.Fatalf("want both postings back (one hydrated, one refreshed), got %d", len(jobs))
+	}
+	for _, j := range jobs {
+		if j.ExternalID == "1234567" && !j.SeenRefresh {
+			t.Error("the already-ingested posting was hydrated again instead of refreshed")
+		}
+		if j.ExternalID == "7654321" && j.SeenRefresh {
+			t.Error("the new posting was refreshed instead of hydrated")
+		}
+	}
+	if got := http.asked["https://www.vagas.com.br/vagas/v1234567/dev-backend"]; got != 0 {
+		t.Errorf("the seen posting's detail page was fetched %d times, want 0", got)
+	}
+}
+
+// The pipeline only offers a seen-set to a source that declares itself hydrating, so the
+// interface assertion is what actually turns the change on.
+func TestVagasIsAHydratingSource(t *testing.T) {
+	var s any = NewVagas(&vagasFake{pages: map[string]string{}})
+	if _, ok := s.(interface {
+		FetchNew(context.Context, CompanyEntry, func(string) bool) ([]Job, error)
+	}); !ok {
+		t.Error("vagas does not satisfy the hydrating shape; the pipeline will keep re-reading every posting")
 	}
 }

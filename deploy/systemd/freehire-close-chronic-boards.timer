@@ -1,0 +1,14 @@
+[Unit]
+Description=timer: freehire-close-chronic-boards daily
+[Timer]
+# Daily: a board only becomes eligible for this pass after 60 days of unbroken failure
+# (CHRONIC_BOARD_CLOSE_WINDOW_DAYS), so there is no benefit to a tighter cadence — the set
+# of newly-eligible boards changes by at most a handful per day.
+OnBootSec=15min
+OnUnitActiveSec=1d
+# Persistent=true: a missed day costs nothing but a delay (the mechanism is idempotent —
+# see CloseChronicBoardJobs/CloseChronicProviderJobs's closed_at IS NULL guard), and
+# replaying a missed run on boot can only ever close jobs that already qualify.
+Persistent=true
+[Install]
+WantedBy=timers.target

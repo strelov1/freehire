@@ -204,12 +204,53 @@ every later turn, so a name that lands there stays for the conversation's life. 
 caller with no profile gets a result naming `/my/profile`, never an error and never an
 empty profile the model would read as "no preferences".
 
-## Talent Network public profile (`talent_network_profile.go`)
+## Talent Network catalogue (`talent_catalog.go`)
 
-- `GET /talent-network/:publicID` is the **only** unauthenticated route that serves candidate CV content — it takes no `mw` middleware at all, unlike `get_profile`/`GET /me/profile`, which at least require a session or key. `:publicID` is `users.talent_network_public_id` (an opaque UUID, never `users.id`), minted for every user by migration `0085` regardless of opt-in state.
-- **The 404-identity invariant:** `talent_network_visibility = 'off'` and "no such id" render the byte-identical `{"error":"not found"}` body. A malformed (non-UUID) `:publicID` also 404s rather than 400 — see `talentNetworkPublicID` — so a probe cannot distinguish "not a UUID" from "no such profile" from "a real profile that opted out". Do not add a distinct status/message for any of these three cases; that is the leak this route is built to not have.
-- The response body is built from `resumeextract.Structured.Anonymous()`/`.Public()` (`internal/candidate/resumeextract/visibility.go`), never `Structured` or `Professional` directly — those two functions are the only place project-link stripping and current-employer masking happen, so this handler must not re-derive or bypass them (e.g. by reaching into `row.ResumeStructured` for anything but the `json.Unmarshal` into `Structured`).
-- `full_name` is populated only for `visibility = 'public'`; `GetProfile` leaves it as the Go zero value for `'anonymous'`, and `omitempty` drops the key entirely rather than serializing it empty — there is no name field an anonymous response could accidentally carry.
+- `GET /talent` and `GET /talent/:handle` are the **only** unauthenticated routes that
+  serve candidate CV content — they take no `mw` auth middleware at all. They replaced
+  `GET /talent-network/:publicID`, which served one candidate by an opaque UUID; that
+  route, its handler and its column are gone (migration `0149`), because two public
+  identifiers for one page is a drift waiting to happen.
+- **The projection is not this package's to make.** The body is
+  `talentnetwork.CatalogueMember`, built by `talentnetwork.ProjectCard` — a whitelist that
+  emits only dictionary-resolved terms, numbers and dates, never text a candidate typed.
+  Do not reach into `row.ResumeStructured` here for anything, and do not add a field to
+  the response that did not come through that projection. The reasoning, and the test that
+  enforces it, are in [internal/candidate/talentnetwork/AGENTS.md](../../candidate/talentnetwork/AGENTS.md).
+- **The 404-identity invariant:** a member who left, a member whose CV extract has gone
+  stale, a handle nobody holds, and a string that could not be a handle all render the
+  byte-identical `{"error":"not found"}`. A malformed handle is refused by
+  `talentnetwork.ValidHandle` before the query, so it 404s rather than 400s. Do not add a
+  distinct status or message for any of the four; that is the leak this route is built to
+  not have, and a test asserts the bodies match.
+- `:handle` is the minted catalogue handle, never `users.id` and never `users.username` —
+  the username is derived from the email's local part, so for most accounts it is the
+  person's own name.
+- Membership is re-read from the database on the single-card route rather than from the
+  list's snapshot, so leaving takes effect on the next request.
+- The card response carries a short `Cache-Control` and `X-Robots-Tag: noindex`: a card is
+  a person, and a cache of one outlives their decision to leave.
+- Unread query params go in `meta.ignored_params` through `ignoredTalentParams`, which
+  measures against `talentnetwork.KnownParams()` — **not** `search.UnknownParams`, whose
+  vocabulary is the job filter's. Passing these facets to that function as `alsoKnown`
+  would additionally accept every job-search facet on an endpoint that reads none.
+- Both routes carry `talentCatalogLimiter`, their own budget rather than the shared
+  public-read one (see `public_read_limit.go` for why a read that returns people is
+  bounded separately from one that returns postings).
+
+## The caller's own membership (`me_talent_network.go`)
+
+- `GET /me/talent-network` takes a key; the `PUT` is **cookie-only**, so a leaked API key
+  cannot put somebody in a public catalogue.
+- Two values, `off` and `anonymous`. `public` was retired with the mode picker (migration
+  `0146`) and a request asking for it is a 400 from the handler rather than a 500 from the
+  CHECK constraint.
+- Joining calls `talentnetwork.Join`, which mints the handle. The handler does not hold
+  the mint loop: what to name somebody and how to resolve a collision is domain logic, and
+  it is unit-tested there without a Fiber context.
+- The mint runs **before** the visibility write. A member without a handle is a member the
+  catalogue cannot link to, so a failure must leave the candidate outside the network
+  rather than inside it with no address.
 
 ## Application forms (`apply_form.go`)
 

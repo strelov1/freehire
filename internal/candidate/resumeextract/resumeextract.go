@@ -86,8 +86,14 @@ func (e *Extractor) Extract(ctx context.Context, cvText string) (Structured, err
 	if err != nil {
 		return Structured{}, err
 	}
+	// No deliberation: this is transcription, not judgement. The model is being asked to
+	// restate what the CV already says in a fixed shape, and measurement says it recovers
+	// exactly as much either way — the same employments, titles, dates, skills and
+	// education, with nothing invented — while reasoning costs half the wall clock and
+	// answers unpredictably enough to cross this call's timeout. See llm.ReasoningEffort
+	// for the numbers and for which providers honour it.
 	raw, err := e.client.GenerateJSON(ctx, systemPrompt, userPrompt(red.Redact(cvText)),
-		llm.WithSchema(schemaName, schema))
+		llm.WithSchema(schemaName, schema), llm.WithReasoning(llm.ReasoningNone))
 	if err != nil {
 		return Structured{}, fmt.Errorf("resumeextract: generate: %w", err)
 	}

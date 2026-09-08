@@ -1235,33 +1235,25 @@ export interface UserProfile {
   updated_at: string | null;
 }
 
-/** The three Talent Network visibility modes: hidden, discoverable under the candidate's
- *  own name, or discoverable with name and current employer masked. Mirrors the Postgres
- *  enum backing `users.talent_network_visibility` (see internal/handler/me_talent_network.go). */
-export type TalentNetworkVisibility = 'off' | 'public' | 'anonymous';
+/** Talent Network membership: in, or not. Two values, not three — `public` was retired
+ *  with the mode picker itself (migration 0148), because the product should answer how
+ *  much of a candidate to disclose rather than ask them. Mirrors the CHECK constraint on
+ *  `users.talent_network_visibility`. */
+export type TalentNetworkVisibility = 'off' | 'anonymous';
 
-/** The caller's own Talent Network setting. `talent_network_public_id` rides along even
- *  when visibility is "off", so the settings UI can preview the shareable URL before the
- *  candidate turns it on. */
+/** The caller's own Talent Network membership.
+ *
+ *  `talent_handle` is ABSENT until the first join: it is minted then and kept forever
+ *  after, so an empty one means "not a member yet", never "waiting for one". A surface
+ *  reading it must show no link rather than build one that would 404. */
 export interface TalentNetworkSetting {
   talent_network_visibility: TalentNetworkVisibility;
-  talent_network_public_id: string;
-}
-
-/** The public, unauthenticated Talent Network profile page's payload
- *  (`GET /talent-network/:publicID`, internal/handler/talent_network_profile.go). Mirrors
- *  UserProfile's split between facets and CV, but nests the CV under `cv` instead of
- *  flattening it — `Professional` already has its own `skills`, which would otherwise
- *  collide with the top-level facet of the same name. `full_name` is present only in
- *  "public" mode; the backend omits the key entirely in "anonymous" mode rather than
- *  sending an empty string, so there is nothing to accidentally render. Any current-role
- *  employer masking in `cv.experience` is applied server-side — this type does not
- *  distinguish it. */
-export interface TalentNetworkProfile {
-  full_name?: string;
-  specializations: string[];
-  skills: string[];
-  cv: Professional;
+  talent_handle?: string;
+  /** Whether a visitor can actually SEE them — not the same as membership. A candidate
+   *  who joins before uploading a CV is a member, holds a handle, and is still excluded
+   *  from the catalogue by the stamp gate, so their card 404s. Any surface that offers
+   *  "view your public profile" must read this and not `talent_network_visibility`. */
+  listed: boolean;
 }
 
 /** A notification subscription on a saved search. */

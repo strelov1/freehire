@@ -1,0 +1,19 @@
+[Unit]
+Description=freehire worker: safety-net close for boards proven unreachable for weeks
+After=network.target postgresql.service
+[Service]
+Type=oneshot
+User=freehire
+WorkingDirectory=/opt/freehire/src/hire-current
+EnvironmentFile=/opt/freehire/.env
+# Reads board_health and jobs only — a handful of rows even on a bad day, never the crawl
+# fleet's own load.
+CPUWeight=20
+IOWeight=20
+# Deliberately no --apply here: this worker ships dry-run-only (reporting what it would
+# close) until a human has read at least one full closure-window's report and confirmed
+# the list is boards that are actually gone, not an adapter that needs a fix
+# (openspec change close-chronically-unreachable-boards, design.md Migration Plan step 3).
+# Add --apply to this line only after that review — a separate, deliberate edit, the same
+# way cmd/prune's own --apply is never the default.
+ExecStart=/opt/freehire/src/hire-current/close-chronic-boards
