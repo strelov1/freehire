@@ -33,6 +33,12 @@ func NewNeogov(c neogovHTTP) Source { return neogov{http: c} }
 
 func (neogov) Provider() string { return "neogov" }
 
+// fullBoardListing: Fetch proves completeness by either a genuinely empty page or reaching the
+// source's own declared total, and treats a later-page failure or reaching neogovMaxPages
+// without either proof as a hard Fetch failure. See the fullBoardListing interface (source.go)
+// for the bar.
+func (neogov) fullBoardListing() {}
+
 // neogovMaxPages bounds the walk far above any real agency's posting count.
 const neogovMaxPages = 200
 
@@ -52,6 +58,7 @@ func (s neogov) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 		jobs  []Job
 		seen  = map[string]bool{}
 		total int
+		done  bool
 	)
 	for page := 1; page <= neogovMaxPages; page++ {
 		url := fmt.Sprintf(
@@ -59,10 +66,7 @@ func (s neogov) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 			domain, agency, page)
 		frag, err := s.http.GetTextWithHeaders(ctx, url, neogovXHR)
 		if err != nil {
-			if page == 1 {
-				return nil, fmt.Errorf("neogov: list %s: %w", e.Board, err)
-			}
-			break // a later page failing ends enumeration with what we have
+			return nil, fmt.Errorf("neogov: list %s page %d: %w", e.Board, page, err)
 		}
 		if page == 1 {
 			total = neogovTotal(frag)
@@ -71,7 +75,6 @@ func (s neogov) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 		if err != nil {
 			return nil, fmt.Errorf("neogov: parse %s: %w", e.Board, err)
 		}
-		added := 0
 		for _, j := range pageJobs {
 			if seen[j.ExternalID] {
 				continue
@@ -79,11 +82,19 @@ func (s neogov) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 			seen[j.ExternalID] = true
 			j.Company = e.Company
 			jobs = append(jobs, j)
-			added++
 		}
-		if added == 0 || (total > 0 && len(jobs) >= total) {
+		// A genuinely empty RAW page, or having reached the source's own declared total, both
+		// prove completeness on their own — the two proofs the fullBoardListing bar admits. The
+		// raw page count (before cross-page dedup), not the count of newly-added items, is what
+		// proves emptiness: a page that is entirely already-seen duplicates is non-empty, and
+		// stopping on that would let an unseen posting beyond it go unreached.
+		if len(pageJobs) == 0 || (total > 0 && len(jobs) >= total) {
+			done = true
 			break
 		}
+	}
+	if !done {
+		return nil, fmt.Errorf("neogov: list %s: reached the %d-page safety ceiling without proving the board's end", e.Board, neogovMaxPages)
 	}
 
 	// The listing carries only a teaser snippet; fetch each card's detail page for the full

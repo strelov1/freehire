@@ -26,7 +26,7 @@ type jobDescriptions interface {
 // the other job reads; full descriptions are already public via the detail
 // endpoint.
 func (h *searchHandlers) AgentSearchJobs(c *fiber.Ctx) error {
-	res, limit, offset, err := h.runJobSearch(c)
+	res, limit, offset, dropped, err := h.runJobSearch(c)
 	if err != nil {
 		return err
 	}
@@ -44,7 +44,8 @@ func (h *searchHandlers) AgentSearchJobs(c *fiber.Ctx) error {
 		views[i] = hit.Job
 	}
 
-	return listResponseWithIgnored(c, views, res.Total, limit, offset, ignoredParams(c, agentSearchParams))
+	ignored := search.SortAndCap(append(dropped, ignoredParams(c, agentSearchParams)...))
+	return listResponseWithIgnored(c, views, res.Total, limit, offset, ignored)
 }
 
 // hydrateDescriptions replaces each hit's truncated preview description with the

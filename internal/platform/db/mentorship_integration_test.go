@@ -847,3 +847,45 @@ func TestASilencedAccountStillHearsAboutItsOwnSession(t *testing.T) {
 		}
 	})
 }
+
+// A seeker's session list has to name who the session is WITH. The query selects the
+// mentor's headline and company alongside the booking; a mapping that reads only some of
+// those columns leaves the list describing nobody, and the unit tests cannot see it —
+// their fake repository fills the fields itself, so it passes either way. That is the
+// same fake-repository trap three of this feature's earlier defects hid behind, which is
+// why the assertion is here against the real SQL.
+func TestASeekerListNamesTheMentor(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	ctx := context.Background()
+
+	seedMentorshipCompany(t, pool, "listco")
+	mentorUser := seedMentorshipUser(t, pool, "mentor-list@example.test")
+	seeker := seedMentorshipUser(t, pool, "seeker-list@example.test")
+	mentor := seedMentor(t, q, mentorUser, "listco", "list-mentor")
+
+	if _, err := book(t, q, mentor.ID, seeker, time.Now().Add(48*time.Hour)); err != nil {
+		t.Fatalf("book: %v", err)
+	}
+
+	rows, err := q.ListBookingsBySeeker(ctx, ListBookingsBySeekerParams{
+		SeekerUserID: seeker, RowLimit: 10,
+	})
+	if err != nil {
+		t.Fatalf("ListBookingsBySeeker: %v", err)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("got %d rows, want 1", len(rows))
+	}
+
+	// Each of these is a separate way for the row to arrive anonymous.
+	if rows[0].MentorSlug != "list-mentor" {
+		t.Errorf("mentor_slug = %q, want list-mentor", rows[0].MentorSlug)
+	}
+	if rows[0].Headline == "" {
+		t.Error("the row carries no headline, so the list names nobody")
+	}
+	if rows[0].CompanySlug != "listco" {
+		t.Errorf("company_slug = %q, want listco", rows[0].CompanySlug)
+	}
+}

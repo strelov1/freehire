@@ -26,6 +26,11 @@ func NewPeopleForce(c HTMLGetter) Source { return peopleforce{http: c} }
 
 func (peopleforce) Provider() string { return "peopleforce" }
 
+// fullBoardListing: Fetch proves completeness by paginating to a genuinely empty page, and
+// treats a page failure or reaching peopleforceMaxPages as a hard Fetch failure. See the
+// fullBoardListing interface (source.go) for the bar.
+func (peopleforce) fullBoardListing() {}
+
 // peopleforceMaxPages caps the ?page=N walk so a listing that never yields an empty page
 // cannot loop forever (the largest boards seen are a few pages; this is ample headroom).
 const peopleforceMaxPages = 100
@@ -51,30 +56,35 @@ func (s peopleforce) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	}
 
 	// Page through the listing, collecting each card's detail URL + title until a page yields
-	// no new links (the tail/empty page) or the safety cap is hit. A first-page failure is a
-	// board-level error; a later-page failure just stops the walk with what we have.
+	// no new links (the tail/empty page) — the only proof of completeness this walk has. Any
+	// page failure, or reaching peopleforceMaxPages without that proof, is now a hard Fetch
+	// failure rather than a partial success. See the fullBoardListing interface (source.go) for
+	// the bar.
 	seen := map[string]struct{}{}
 	var cards []peopleforceListing
+	done := false
 	for page := 1; page <= peopleforceMaxPages; page++ {
 		listURL := fmt.Sprintf("%s?page=%d", base, page)
 		root, err := s.http.GetHTML(ctx, listURL)
 		if err != nil {
-			if page == 1 {
-				return nil, fmt.Errorf("peopleforce: listing %s: %w", e.Board, err)
-			}
-			break
+			return nil, fmt.Errorf("peopleforce: listing %s page %d: %w", e.Board, page, err)
 		}
-		added := 0
-		for _, c := range peopleforceListings(base, root) {
+		pageCards := peopleforceListings(base, root)
+		for _, c := range pageCards {
 			if _, ok := seen[c.URL]; !ok {
 				seen[c.URL] = struct{}{}
 				cards = append(cards, c)
-				added++
 			}
 		}
-		if added == 0 {
+		// The raw card count, not the count of newly-kept ones, proves a page empty: a page whose
+		// cards are all already-listed duplicates is not itself proof the board has no more pages.
+		if len(pageCards) == 0 {
+			done = true
 			break
 		}
+	}
+	if !done {
+		return nil, fmt.Errorf("peopleforce: listing %s: reached the %d-page safety ceiling without finding the board's end", e.Board, peopleforceMaxPages)
 	}
 
 	// Each posting's description and structured fields come from its own detail fetch, fanned
@@ -84,8 +94,12 @@ func (s peopleforce) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	}), nil
 }
 
-// detail fetches one job's detail page and maps it to a Job, returning ok=false when the fetch
-// fails or the URL carries no native id, so the caller skips just that posting.
+// detail fetches one job's detail page and maps it to a Job. A URL carrying no native id is a
+// plain drop (ok=false) — it could never have been stored, so no close can reach it. A page the
+// platform answers 404/410 for is dropped too: that is the platform's own evidence the posting is
+// gone. Everything else the fetch could fail with comes back as an unreadableDetail marker
+// instead, since this crawl is now trusted (fullBoardListing) for the sweep's board-scoped close,
+// and a plain drop here would be indistinguishable from the posting having been taken down.
 func (s peopleforce) detail(ctx context.Context, e CompanyEntry, c peopleforceListing) (Job, bool) {
 	id := peopleforceJobID(c.URL)
 	if id == "" {
@@ -93,6 +107,9 @@ func (s peopleforce) detail(ctx context.Context, e CompanyEntry, c peopleforceLi
 	}
 	root, err := s.http.GetHTML(ctx, c.URL)
 	if err != nil {
+		if detailUnreadable(err) {
+			return unreadableDetail(id, c.URL, e.Company), true
+		}
 		return Job{}, false
 	}
 

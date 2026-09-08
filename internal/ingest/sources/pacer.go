@@ -357,18 +357,6 @@ func limitedWhatJobsGetter(c JSONGetter) JSONGetter {
 	return concurrencyLimitedJSONGetter{inner: c, sem: make(chan struct{}, whatjobsMaxInFlight)}
 }
 
-// hh.ru egresses through the single proxy IP (its detail pages 403 the direct datacenter IP), and
-// its per-vacancy detail fan-out is large — thousands of ~1 MB pages across the seeded roles. Fired
-// unpaced at defaultDetailWorkers concurrency, that burst 429s the proxy IP and ~2/3 of details
-// fall back to list-only (which never back-fill, since a seen posting skips detail). Pacing the
-// aggregate rate — not the worker pool — holds it under the proxy window so nearly every detail
-// lands. The interval is a middle ground: fast enough to finish a full role sweep inside the
-// ingest unit's TimeoutStartSec, gentle enough to stop the 429s. Tune from observed convergence.
-const (
-	hhRequestInterval = 250 * time.Millisecond // ~4 req/s
-	hhRequestBurst    = 4
-)
-
 // Teamtailor 403s the crawl in bulk, and the 403 is ours: a "failing" board answers 200 on
 // demand from the same IP, and 1207 of 1208 failures carried a timestamp inside the crawl hour.
 // The cause is the shape of the adapter — every posting's description is its own page fetch — so

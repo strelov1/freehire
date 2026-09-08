@@ -66,6 +66,11 @@ func NewWorkstream(c workstreamHTTP) Source { return workstream{http: c} }
 
 func (workstream) Provider() string { return "workstream" }
 
+// fullBoardListing: list proves completeness by either a stated, in-range totalPages reached or a
+// genuinely empty page, and treats any page failure or reaching workstreamMaxPages with no stated
+// count as a hard Fetch failure. See the fullBoardListing interface (source.go) for the bar.
+func (workstream) fullBoardListing() {}
+
 const (
 	workstreamBaseURL = "https://www.workstream.us"
 	// workstreamMaxPages caps the walk when the page states no totalPages. Ten cards a page puts
@@ -152,17 +157,22 @@ func (s workstream) FetchNew(ctx context.Context, e CompanyEntry, seen func(exte
 	}), nil
 }
 
-// list walks a board's positions listing and returns every posting it advertises. The FIRST page
-// failing is a board-level error; a later page failing ends the walk with what was gathered, so a
-// mid-listing hiccup costs a page rather than the board. It restates the shared crawlPagedLinks
-// loop because it needs each card's whole row — title, address, pay and employment type — and not
-// just its link, and because page 1 is already in hand from resolving the listing URL.
+// list walks a board's positions listing and returns every posting it advertises. It restates the
+// shared crawlPagedLinks loop because it needs each card's whole row — title, address, pay and
+// employment type — and not just its link, and because page 1 is already in hand from resolving
+// the listing URL. Reaching a valid, in-range stated page count is itself proof of completeness
+// (done is seeded from stated below); without one, only a genuinely empty page proves it. Every
+// page failing, and reaching workstreamMaxPages without either proof, are hard Fetch failures
+// rather than a partial success — see the fullBoardListing interface (source.go) for the bar.
 func (s workstream) list(ctx context.Context, e CompanyEntry) ([]workstreamPosting, error) {
 	root, base, err := s.listing(ctx, e)
 	if err != nil {
 		return nil, err
 	}
-	pages := workstreamTotalPages(root)
+	pages, stated := workstreamTotalPages(root)
+	// A stated, in-range page count is itself proof of completeness (the declared-count case);
+	// without one, only a genuinely empty page proves the walk reached the board's end.
+	done := stated
 
 	var out []workstreamPosting
 	listed := make(map[string]bool)
@@ -170,21 +180,26 @@ func (s workstream) list(ctx context.Context, e CompanyEntry) ([]workstreamPosti
 		if page > 1 {
 			root, err = s.http.GetHTML(ctx, workstreamPageURL(base, page))
 			if err != nil {
-				break // a later page failing just ends pagination; page 1's postings still ingest
+				return nil, fmt.Errorf("workstream: listing %s page %d: %w", e.Board, page, err)
 			}
 		}
-		added := 0
-		for _, p := range workstreamListing(root) {
+		cards := workstreamListing(root)
+		for _, p := range cards {
 			if listed[p.id] {
 				continue
 			}
 			listed[p.id] = true
 			out = append(out, p)
-			added++
 		}
-		if added == 0 {
+		// The raw card count, not the count of newly-kept ones, proves a page empty: a page whose
+		// cards are all already-listed duplicates is not itself proof the board has no more pages.
+		if len(cards) == 0 {
+			done = true
 			break // an empty page: the listing is exhausted
 		}
+	}
+	if !done {
+		return nil, fmt.Errorf("workstream: listing %s: reached the %d-page safety ceiling without proving the board's end", e.Board, workstreamMaxPages)
 	}
 	return out, nil
 }
@@ -222,16 +237,18 @@ func (s workstream) listing(ctx context.Context, e CompanyEntry) (*html.Node, *u
 	return root, base, nil
 }
 
-// workstreamTotalPages reads the page count a listing states for itself, falling back to
-// workstreamMaxPages when the page states none or states one this crawl will not follow. The
-// stated count is exact — the last page is short and the page after it renders no card — so it
-// is what ends the walk, with the added==0 rule as the second guard.
-func workstreamTotalPages(root *html.Node) int {
+// workstreamTotalPages reads the page count a listing states for itself, reporting stated=false
+// (and the page falling back to workstreamMaxPages, a safety ceiling rather than a proof) when
+// the page states none or states one this crawl will not follow. The stated count is exact — the
+// last page is short and the page after it renders no card — so a caller that got stated=true may
+// treat reaching it as proof of completeness on its own, with the added==0 rule as the other
+// proof when it did not.
+func workstreamTotalPages(root *html.Node) (pages int, stated bool) {
 	n, err := strconv.Atoi(firstSubmatch(workstreamTotalPagesPattern, workstreamScripts(root)))
 	if err != nil || n < 1 || n > workstreamMaxPages {
-		return workstreamMaxPages
+		return workstreamMaxPages, false
 	}
-	return n
+	return n, true
 }
 
 // workstreamPositionsURL builds a board's employer-wide positions listing URL.

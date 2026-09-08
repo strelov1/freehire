@@ -244,6 +244,25 @@ type Settings struct {
 	// Neither may switch the other on.
 	DiscordDigestWebhookURL string
 
+	// The daily digest's LinkedIn channel: the application that posts to our own company
+	// page, and the page it posts to.
+	//
+	// Optional as a SET, like the Discord bot below: the credentials mint a token, the
+	// organization names where it goes, and a deployment holding some of them has not
+	// configured the channel — see LinkedInDigestConfigured. What is NOT here is the access
+	// token itself, and that absence is the design: it expires every 60 days and is renewed
+	// by a worker, so it lives in social_tokens where a process can write it, not in a file
+	// only a person can edit.
+	//
+	// LinkedInRedirectURI must be one of the redirect URLs registered on the LinkedIn
+	// application and must be absolute HTTPS — LinkedIn refuses http, including on
+	// localhost, which is why the sign-in flow hands a code to a command rather than
+	// catching it on a loopback listener.
+	LinkedInClientID       string
+	LinkedInClientSecret   string
+	LinkedInRedirectURI    string
+	LinkedInOrganizationID string
+
 	// Discord paid channels (internal/engage/discordlink): the bot that keeps the paid
 	// role on the community server in step with the subscription, and the OAuth app a
 	// user links their Discord account through.
@@ -451,6 +470,11 @@ func Load() Settings {
 		NotifyEmailFrom: os.Getenv("NOTIFY_EMAIL_FROM"),
 
 		DiscordDigestWebhookURL: os.Getenv("DISCORD_DIGEST_WEBHOOK_URL"),
+
+		LinkedInClientID:       os.Getenv("LINKEDIN_CLIENT_ID"),
+		LinkedInClientSecret:   os.Getenv("LINKEDIN_CLIENT_SECRET"),
+		LinkedInRedirectURI:    os.Getenv("LINKEDIN_REDIRECT_URI"),
+		LinkedInOrganizationID: os.Getenv("LINKEDIN_ORGANIZATION_ID"),
 
 		DiscordClientID:     os.Getenv("DISCORD_CLIENT_ID"),
 		DiscordClientSecret: os.Getenv("DISCORD_CLIENT_SECRET"),

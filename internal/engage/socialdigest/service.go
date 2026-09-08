@@ -98,6 +98,22 @@ func (s *Service) Dispatch(ctx context.Context, d Digest, publishers []Publisher
 	return errors.Join(failures...)
 }
 
+// viewsLabel is how many people opened a posting, as one short phrase.
+//
+// Shared by both publishers rather than written twice: it is the figure the whole list is
+// RANKED on, so the two channels disagreeing about how to say it — or one of them
+// quietly dropping it — would make the same digest look like two different measurements.
+//
+// It counts page_uniques, which is bot-filtered. Saying "views" of a number that also
+// carried crawler traffic would be the exact claim migration 0138 was written to stop us
+// making in public.
+func viewsLabel(p Posting) string {
+	if p.PageUniques == 1 {
+		return "1 view"
+	}
+	return fmt.Sprintf("%d views", p.PageUniques)
+}
+
 // jobURL is the public link for a posting, tagged with the channel that carried it so
 // the digest's traffic is separable from every other inbound path in analytics.
 func jobURL(origin, slug, utmSource string) string {

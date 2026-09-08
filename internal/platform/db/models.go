@@ -1152,6 +1152,19 @@ type SocialDigestPost struct {
 	PublishedAt pgtype.Timestamptz `json:"published_at"`
 }
 
+// The expiring credential a social publisher posts with, one row per channel. Written by cmd/linkedin-auth (a person signs in) and cmd/linkedin-token-refresh (a worker renews). Read by cmd/social-digest. Plaintext on purpose: this is our own service credential, of the same sensitivity as the webhook URL in .env, not a user's.
+type SocialToken struct {
+	Channel         string             `json:"channel"`
+	AccessToken     string             `json:"access_token"`
+	AccessExpiresAt pgtype.Timestamptz `json:"access_expires_at"`
+	// NULL is the expected case: LinkedIn issues programmatic refresh tokens only to approved Marketing Developer Platform partners. With no refresh token the renewal worker warns ahead of expiry instead of renewing, and a person re-runs the sign-in.
+	RefreshToken     pgtype.Text        `json:"refresh_token"`
+	RefreshExpiresAt pgtype.Timestamptz `json:"refresh_expires_at"`
+	Scope            string             `json:"scope"`
+	ObtainedAt       pgtype.Timestamptz `json:"obtained_at"`
+	RefreshedAt      pgtype.Timestamptz `json:"refreshed_at"`
+}
+
 type Subscription struct {
 	ID               int64              `json:"id"`
 	UserID           int64              `json:"user_id"`
@@ -1274,7 +1287,6 @@ type User struct {
 	ResumeExtractDetail        pgtype.Text        `json:"resume_extract_detail"`
 	ResumeExtractFor           pgtype.Timestamptz `json:"resume_extract_for"`
 	TalentNetworkVisibility    string             `json:"talent_network_visibility"`
-	TalentNetworkPublicID      uuid.UUID          `json:"talent_network_public_id"`
 	Timezone                   pgtype.Text        `json:"timezone"`
 	Language                   string             `json:"language"`
 	LlmKeyID                   pgtype.Text        `json:"llm_key_id"`
@@ -1293,7 +1305,8 @@ type User struct {
 	// Ultra GIVEN rather than sold: support's manual grant. No provider sync touches it, which is the whole reason it is separate.
 	UltraUntilGranted pgtype.Timestamptz `json:"ultra_until_granted"`
 	// How far the Ultra tier reaches, derived by the schema as the furthest of ultra_until_stripe, ultra_until_revenuecat and ultra_until_granted. Refuses assignment (428C9) — write the source column of the origin that decided it. A future value here outranks pro_until: the tier is the better of the two, so that buying the more expensive plan can never give somebody less.
-	UltraUntil pgtype.Timestamptz `json:"ultra_until"`
+	UltraUntil   pgtype.Timestamptz `json:"ultra_until"`
+	TalentHandle pgtype.Text        `json:"talent_handle"`
 }
 
 type UserEmailCode struct {
