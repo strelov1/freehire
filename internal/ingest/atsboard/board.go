@@ -355,6 +355,14 @@ var noBoardFirstSegments = map[string][]string{
 	// boards "api/geo" and "_next/static" — and boardresolve, which takes the first recognized ATS
 	// URL in a fetched page, would meet them before any real one.
 	"jobs.dayforcehcm.com": {"api", "_next"},
+	// Greenhouse's AI-screening opt-out form is ONE shared endpoint
+	// (app4.greenhouse.io/ai_opt_out_request/job_post/<id>/ai_opt_out), served identically to
+	// every customer, and a career page carries its URL in markup that names the employer's own
+	// board nowhere else. It belongs here rather than in reservedSegments because the segment
+	// behind it is the platform's own "job_post": skipping would move the false board one
+	// segment along, not decline it. Two unrelated employers resolving to the same board is what
+	// surfaced it (2026-09-08).
+	"greenhouse.io": {"ai_opt_out_request"},
 }
 
 var reservedSegments = map[string][]string{
