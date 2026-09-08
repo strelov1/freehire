@@ -1,27 +1,14 @@
 <script lang="ts">
-  import MentorSessionList from '$lib/components/MentorSessionList.svelte';
-  import { browserTimezone } from '$lib/mentorship';
+  import MentorSessionSplit from '$lib/components/MentorSessionSplit.svelte';
   import { Button } from '$lib/ui';
   import { resolve } from '$app/paths';
   import type { PageData } from './$types';
 
   let { data }: { data: PageData } = $props();
-
-  const timezone = browserTimezone();
 </script>
 
 <div class="flex flex-col gap-6">
-  <section class="flex flex-col gap-3">
-    <MentorSessionList sessions={data.sessions.upcoming} {timezone} empty="No sessions booked." />
-  </section>
-
-  {#if data.sessions.past.length > 0}
-    <section class="flex flex-col gap-3">
-      <h2 class="text-muted-foreground text-sm">Past</h2>
-      <!-- A cancelled session is here whatever its clock says: nobody is going to it. -->
-      <MentorSessionList sessions={data.sessions.past} {timezone} empty="Nothing yet." />
-    </section>
-  {/if}
+  <MentorSessionSplit sessions={data.sessions} empty="No sessions booked." />
 
   {#if !data.profile}
     <!-- Only for somebody who is not a mentor. Once they are, this is the Profile tab and
