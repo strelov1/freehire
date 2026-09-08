@@ -153,8 +153,9 @@ func batchDestination(kind string) (path, label string) {
 	return "/my/tracking", "Open your tracking board"
 }
 
-// renderOne is the single-nudge body, kept per kind and unchanged, because a batch
-// of one must be indistinguishable from what shipped before grouping.
+// renderOne is the single-nudge body, kept as its own function per kind because a
+// batch of one must render identically to a real single-message send — never a
+// one-item batch headline — regardless of how each kind's own wording evolves.
 func (n *TelegramNotifier) renderOne(m Message) string {
 	title, company := html.EscapeString(m.JobTitle), html.EscapeString(m.Company)
 	trackingURL, jobURL := n.origin+"/my/tracking", n.origin+"/jobs/"+m.Slug

@@ -426,7 +426,7 @@
           id={col.id}
           label={col.label}
           items={shown[col.id]}
-          dragDisabled={searching}
+          dragDisabled={filtering}
           {onconsider}
           {onfinalize}
           onopen={openDrawer}
