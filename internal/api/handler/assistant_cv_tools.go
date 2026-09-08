@@ -30,6 +30,34 @@ import (
 // caller's strictness does not reach through it, and that strictness is load-bearing: an
 // undefined field silently dropped is how an agent once rewrote the wrong experience entry
 // while reading success back.
+// evidenceGoesOnTheOp is the refusal a misplaced evidence_id gets. It names the PLACE, which
+// is the whole point: the decoder's own `unknown field "evidence_id"` names only the field,
+// and a model that cannot tell what to change re-sends what it sent.
+const evidenceGoesOnTheOp = "evidence_id goes on each op inside `ops`, not on the call itself — " +
+	"put it beside the kind, path and value of the edit whose claim it backs"
+
+// adoptCallLevelEvidence reads a call-level evidence_id onto the op it can only have meant.
+//
+// Exactly one op with no evidence of its own: the intent is not in doubt, so the batch is
+// read through — the same leniency opBatch.UnmarshalJSON already extends to a batch packaged
+// as a string. Anything else is refused:
+//
+//   - several ops, because one achievement's evidence spread across several claims is what
+//     the provenance gate exists to stop, and it would be granted here by a typo;
+//   - an op that already names one, because which claim the id was meant to back is exactly
+//     what is unclear, and picking either is inventing an answer.
+func adoptCallLevelEvidence(ops opBatch, evidenceID string) error {
+	evidenceID = strings.TrimSpace(evidenceID)
+	if evidenceID == "" {
+		return nil
+	}
+	if len(ops) != 1 || ops[0].EvidenceID != "" {
+		return errors.New(evidenceGoesOnTheOp)
+	}
+	ops[0].EvidenceID = evidenceID
+	return nil
+}
+
 type opBatch []cvedit.Op
 
 func (b *opBatch) UnmarshalJSON(data []byte) error {
@@ -543,8 +571,10 @@ func (h *assistantHandlers) cvEditTool(cvID uuid.UUID, batchID uuid.UUID) assist
 			" bullets; when full, " +
 			"`set` an existing index or `remove` one before inserting — an insert past the cap is refused " +
 			"and no existing bullet is deleted. Anything that states what the candidate did (a bullet, a " +
-			"summary, a technology, a skill) needs `evidence_id` from experience_search; if the bank holds " +
-			"nothing on the point, ask the candidate and record their answer with experience_add first. " +
+			"summary, a technology, a skill) needs `evidence_id` from experience_search — ON THE OP, " +
+			"beside its kind, path and value, NOT on the call beside `note` and `requirement`; if the " +
+			"bank holds nothing on the point, ask the candidate and record their answer with " +
+			"experience_add first. " +
 			"Contact details are not editable here. If this batch closes a requirement from cv_context, " +
 			"pass `requirement` and `requirement_status` — the report updates in this same call, so you " +
 			"do not need a separate tailor_report call for it.",
@@ -581,8 +611,21 @@ func (h *assistantHandlers) cvEditTool(cvID uuid.UUID, batchID uuid.UUID) assist
 				Note              string  `json:"note"`
 				Requirement       string  `json:"requirement"`
 				RequirementStatus string  `json:"requirement_status"`
+				// EvidenceID is NOT part of this call — it belongs on the op whose claim it
+				// backs. It is read here so the mistake can be answered rather than met with
+				// DecodeArgs's `unknown field "evidence_id"`, which names the field and not
+				// the place: measured on prod 2026-08-25..09-08, 21 refusals, and the model
+				// answered each by re-sending the identical call.
+				//
+				// The mistake is a reasonable one. `requirement` and `requirement_status` ARE
+				// call-level and describe the batch, so "batch metadata goes at the top"
+				// generalises straight onto this.
+				EvidenceID string `json:"evidence_id"`
 			}
 			if err := assistant.DecodeArgs(raw, &in); err != nil {
+				return nil, err
+			}
+			if err := adoptCallLevelEvidence(in.Ops, in.EvidenceID); err != nil {
 				return nil, err
 			}
 			requirement := strings.TrimSpace(in.Requirement)

@@ -25,6 +25,7 @@ import (
 	"github.com/tmc/langchaingo/llms"
 
 	"github.com/strelov1/freehire/internal/ai/assistant"
+	"github.com/strelov1/freehire/internal/application/jobtracking"
 	"github.com/strelov1/freehire/internal/candidate/cv"
 	"github.com/strelov1/freehire/internal/candidate/cvedit"
 	"github.com/strelov1/freehire/internal/candidate/experience"
@@ -36,12 +37,99 @@ import (
 	"github.com/strelov1/freehire/internal/platform/llm"
 )
 
+// autopilotConfig is what a caller may say about a harness beyond the two models.
+//
+// Read while the handlers are ASSEMBLED rather than applied to them afterwards: the fit
+// analyzer is built into a surface that closes over it, so replacing it after the fact
+// would leave the closure holding the old one.
+type autopilotConfig struct {
+	// fitClient overrides the client the fit chain runs on. Nil wraps fitM the plain way.
+	fitClient *llm.Client
+	// renderer and extract are the CV toolchain the deterministic scores read.
+	renderer cv.Renderer
+	extract  func([]byte) (string, error)
+	// tracking is the job-tracking surface the tool registry offers to every preset.
+	tracking *trackingHandlers
+}
+
+// autopilotOption adjusts a harness past the two models every caller names.
+//
+// Variadic rather than a widened signature: the five arguments below are what an autopilot
+// test is ABOUT, and the one caller wanting more is the bake-off. Adding a sixth parameter
+// would edit six call sites to say nil for something none of them has an opinion on.
+type autopilotOption func(*autopilotConfig)
+
+// withFitClient runs the fit chain on a client the caller built, instead of on the plain
+// wrapper around fitM.
+//
+// It exists because llm.NewWithModel — which is what the wrapper is — produces a client with
+// NO HTTP transport, and `reasoning_effort` is written BY a transport (llm.Client.transport
+// installs reasoningInjector; only llm.New does). So on a wrapped model every
+// llm.WithReasoning is silently dropped.
+//
+// Against a fake that costs nothing. Against a real gateway it is the difference between a
+// working chain and none: matchanalysis asks Stage 1 for llm.ReasoningNone (#2640), a
+// wrapped client never sends it, GLM deliberates for ~1500 reasoning tokens, and the stage
+// blows its 90s deadline — twice, since it retries — on every single analysis. Measured
+// 2026-09-08: 6 of 6 attempts, while production ran 21 analyses in the same day with no
+// Stage 1 failure at all.
+func withFitClient(c *llm.Client) autopilotOption {
+	return func(cfg *autopilotConfig) { cfg.fitClient = c }
+}
+
+// withTrackingTools wires the tracking surface the tool registry offers to EVERY preset,
+// the tailoring autopilot included (see assistantHandlers.registry).
+//
+// It matters to a live run and to nothing else: a scripted stand-in never calls a tool it
+// was not scripted to call, while a real model reaches for save_job and my_jobs mid-run and
+// gets "job tracking is not available". That refusal costs a round, and rounds are the
+// bake-off's primary measurement — the transcript is replayed into each one.
+//
+// The search surface has no equivalent option: it needs a Meilisearch, which this harness
+// does not stand. A bake-off therefore measures models whose search_jobs refuses. Every
+// candidate faces the same refusal, so the rows stay comparable to each other; they are not
+// comparable to production, and a report read as though they were would overstate how many
+// rounds a turn takes.
+func withTrackingTools(pool *pgxpool.Pool, queries *db.Queries) autopilotOption {
+	return func(cfg *autopilotConfig) {
+		cfg.tracking = &trackingHandlers{
+			tracking: jobtracking.New(jobtracking.NewQueriesRepository(queries, pool)),
+		}
+	}
+}
+
+// withRenderedCVScoring wires the CV toolchain the deterministic scores read.
+//
+// cvmatch and atscheck both score the text layer of the RENDERED PDF rather than the stored
+// document (renderedCVText says why), and a handler holding neither half does not fail that
+// read — it degrades to an unavailable score. That is right for the workspace, whose panel
+// must keep loading without a toolchain, and wrong for the bake-off, which would rank a
+// column of absences and report it as a tie.
+//
+// Both halves together or neither: renderedCVText checks for both, and a harness carrying
+// the renderer alone would reach the extractor with nothing behind it.
+func withRenderedCVScoring(r cv.Renderer, extract func([]byte) (string, error)) autopilotOption {
+	return func(cfg *autopilotConfig) {
+		cfg.renderer = r
+		cfg.extract = extract
+	}
+}
+
 // newAutopilotHarness wires the handlers, the app and the routes an autopilot test needs.
 // Every test here wants the same assembly — the CV tools, the editor, the experience bank and
 // a match surface — and differs only in the two models: the one that answers the turn and the
 // one that answers the fit chain.
-func newAutopilotHarness(t *testing.T, pool *pgxpool.Pool, iss *auth.Issuer, turnM assistant.Model, fitM llms.Model) (*assistantHandlers, *fiber.App) {
+func newAutopilotHarness(t *testing.T, pool *pgxpool.Pool, iss *auth.Issuer, turnM assistant.Model, fitM llms.Model, opts ...autopilotOption) (*assistantHandlers, *fiber.App) {
 	t.Helper()
+	var cfg autopilotConfig
+	for _, opt := range opts {
+		opt(&cfg)
+	}
+	fitClient := cfg.fitClient
+	if fitClient == nil {
+		fitClient = llm.NewWithModel(fitM)
+	}
+
 	queries := db.New(pool)
 	bank := experience.NewStore(experience.NewQueriesRepository(queries))
 	h := &assistantHandlers{
@@ -51,16 +139,19 @@ func newAutopilotHarness(t *testing.T, pool *pgxpool.Pool, iss *auth.Issuer, tur
 		experience: bank,
 		// The run plan reads the cached analysis through the service, and the tools read the
 		// vacancy through jobs — both held by the assistant itself now.
-		fit:  fitanalysis.New(queries, nil, matchanalysis.NewAnalyzer(nil)),
-		jobs: queries,
+		fit:      fitanalysis.New(queries, nil, matchanalysis.NewAnalyzer(nil)),
+		jobs:     queries,
+		tracking: cfg.tracking,
 		cv: &cvHandlers{
-			cvStore:   cv.NewStore(cv.NewQueriesRepository(queries)),
-			editor:    cvedit.NewEditor(cvedit.NewRepository(pool, queries), bankGate{bank: bank}),
-			queries:   queries,
-			jobReader: queries,
-			fit:       fitanalysis.New(queries, nil, matchanalysis.NewAnalyzer(nil)),
+			cvStore:        cv.NewStore(cv.NewQueriesRepository(queries)),
+			editor:         cvedit.NewEditor(cvedit.NewRepository(pool, queries), bankGate{bank: bank}),
+			queries:        queries,
+			jobReader:      queries,
+			cvRenderer:     cfg.renderer,
+			extractPDFText: cfg.extract,
+			fit:            fitanalysis.New(queries, nil, matchanalysis.NewAnalyzer(nil)),
 			match: fitAPI(pool, queries, iss, resume.New(nil, resume.NewQueriesRepository(queries)),
-				matchanalysis.NewAnalyzer(llm.NewWithModel(fitM))),
+				matchanalysis.NewAnalyzer(fitClient)),
 		},
 	}
 	h.runner = assistant.NewRunner(turnM, h.store, assistant.RunnerConfig{MaxSteps: 3})
