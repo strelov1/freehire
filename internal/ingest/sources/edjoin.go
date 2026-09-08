@@ -83,6 +83,12 @@ func (edjoin) Provider() string { return "edjoin" }
 // in the source facet and in the cross-source duplicate suppression set.
 func (edjoin) aggregator() {}
 
+// fullBoardListing: list proves completeness by either a genuinely empty page or reaching the
+// platform's own exact totalRecords, and treats any page failure or reaching edjoinMaxPages
+// without either proof as a hard Fetch failure. See the fullBoardListing interface (source.go)
+// for the bar.
+func (edjoin) fullBoardListing() {}
+
 const (
 	edjoinBaseURL = "https://www.edjoin.org"
 	// edjoinPageSize is half the largest page the endpoint serves — asking for more than 1,000
@@ -157,24 +163,24 @@ func (s edjoin) FetchNew(ctx context.Context, e CompanyEntry, seen func(external
 	}), nil
 }
 
-// list walks the job type's slice of the central index and returns every posting it holds. The
-// FIRST page failing is a board-level error; a later page failing ends the walk with what was
-// gathered, so a mid-listing hiccup costs a page rather than the board. A row with no id or no
-// district is skipped: the id is the dedup key and the district is the employer, and a posting
-// missing either would be filed under a placeholder that collects unrelated postings.
+// list walks the job type's slice of the central index and returns every posting it holds. Every
+// page failing — the first as much as a later one — is now a hard error, and reaching
+// edjoinMaxPages without a genuinely empty page or reaching totalRecords is too: this adapter
+// proves completeness only by one of those two, never by a partial gather, so anything else
+// fails Fetch loudly. See the fullBoardListing interface (source.go) for the bar. A row with no
+// id or no district is skipped: the id is the dedup key and the district is the employer, and a
+// posting missing either would be filed under a placeholder that collects unrelated postings.
 func (s edjoin) list(ctx context.Context, e CompanyEntry) ([]edjoinPosting, error) {
 	var (
 		out    []edjoinPosting
 		listed = map[int]bool{}
 		total  int
+		done   bool
 	)
 	for page := 1; page <= edjoinMaxPages; page++ {
 		var resp edjoinListing
 		if err := s.http.GetJSON(ctx, edjoinListingURL(e.Board, page), &resp); err != nil {
-			if page == 1 {
-				return nil, fmt.Errorf("edjoin: listing job type %s: %w", e.Board, err)
-			}
-			break // a later page failing just ends pagination; the earlier pages still ingest
+			return nil, fmt.Errorf("edjoin: listing job type %s page %d: %w", e.Board, page, err)
 		}
 		if page == 1 {
 			total = resp.TotalRecords
@@ -189,8 +195,12 @@ func (s edjoin) list(ctx context.Context, e CompanyEntry) ([]edjoinPosting, erro
 			added++
 		}
 		if added == 0 || (total > 0 && len(out) >= total) {
+			done = true
 			break
 		}
+	}
+	if !done {
+		return nil, fmt.Errorf("edjoin: listing job type %s: reached the %d-page safety ceiling without proving the board's end", e.Board, edjoinMaxPages)
 	}
 	return out, nil
 }

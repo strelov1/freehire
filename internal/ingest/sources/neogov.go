@@ -33,6 +33,12 @@ func NewNeogov(c neogovHTTP) Source { return neogov{http: c} }
 
 func (neogov) Provider() string { return "neogov" }
 
+// fullBoardListing: Fetch proves completeness by either a genuinely empty page or reaching the
+// source's own declared total, and treats a later-page failure or reaching neogovMaxPages
+// without either proof as a hard Fetch failure. See the fullBoardListing interface (source.go)
+// for the bar.
+func (neogov) fullBoardListing() {}
+
 // neogovMaxPages bounds the walk far above any real agency's posting count.
 const neogovMaxPages = 200
 
@@ -52,6 +58,7 @@ func (s neogov) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 		jobs  []Job
 		seen  = map[string]bool{}
 		total int
+		done  bool
 	)
 	for page := 1; page <= neogovMaxPages; page++ {
 		url := fmt.Sprintf(
@@ -59,10 +66,7 @@ func (s neogov) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 			domain, agency, page)
 		frag, err := s.http.GetTextWithHeaders(ctx, url, neogovXHR)
 		if err != nil {
-			if page == 1 {
-				return nil, fmt.Errorf("neogov: list %s: %w", e.Board, err)
-			}
-			break // a later page failing ends enumeration with what we have
+			return nil, fmt.Errorf("neogov: list %s page %d: %w", e.Board, page, err)
 		}
 		if page == 1 {
 			total = neogovTotal(frag)
@@ -81,9 +85,15 @@ func (s neogov) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 			jobs = append(jobs, j)
 			added++
 		}
+		// A genuinely empty page, or having reached the source's own declared total, both
+		// prove completeness on their own — the two proofs the fullBoardListing bar admits.
 		if added == 0 || (total > 0 && len(jobs) >= total) {
+			done = true
 			break
 		}
+	}
+	if !done {
+		return nil, fmt.Errorf("neogov: list %s: reached the %d-page safety ceiling without proving the board's end", e.Board, neogovMaxPages)
 	}
 
 	// The listing carries only a teaser snippet; fetch each card's detail page for the full

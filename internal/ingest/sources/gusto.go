@@ -50,6 +50,11 @@ func NewGusto(c gustoHTTP) Source { return gusto{http: c} }
 
 func (gusto) Provider() string { return "gusto" }
 
+// fullBoardListing: list proves completeness by paginating to a genuinely empty page, and treats
+// a page failure or reaching gustoMaxPages as a hard Fetch failure. See the fullBoardListing
+// interface (source.go) for the bar.
+func (gusto) fullBoardListing() {}
+
 const (
 	gustoBaseURL = "https://jobs.gusto.com"
 	// gustoMaxPages caps the per-board pagination. The listing serves 25 postings a page and
@@ -141,21 +146,20 @@ func (s gusto) FetchNew(ctx context.Context, e CompanyEntry, seen func(externalI
 	}), nil
 }
 
-// list walks a board's paginated listing and returns every posting it advertises. The FIRST page
-// failing is a board-level error; a later page failing ends the walk with what was gathered, so a
-// mid-listing hiccup costs a page rather than the board. It restates the shared crawlPagedLinks
-// loop because it needs each item's whole listing row — title, location, pay and employment type
-// — and not just its link.
+// list walks a board's paginated listing and returns every posting it advertises. It restates the
+// shared crawlPagedLinks loop because it needs each item's whole listing row — title, location,
+// pay and employment type — and not just its link. Every page failing, and reaching gustoMaxPages
+// without a genuinely empty page, are now hard Fetch failures rather than a partial success — the
+// empty page is the only proof of completeness this walk has. See the fullBoardListing interface
+// (source.go) for the bar.
 func (s gusto) list(ctx context.Context, e CompanyEntry) ([]gustoPosting, error) {
 	var out []gustoPosting
 	listed := make(map[string]bool)
+	done := false
 	for page := 1; page <= gustoMaxPages; page++ {
 		root, err := s.http.GetHTML(ctx, gustoBoardURL(e.Board, page))
 		if err != nil {
-			if page == 1 {
-				return nil, fmt.Errorf("gusto: listing board %s: %w", e.Board, err)
-			}
-			break // a later page failing just ends pagination; page 1's postings still ingest
+			return nil, fmt.Errorf("gusto: listing board %s page %d: %w", e.Board, page, err)
 		}
 		added := 0
 		for _, p := range gustoListing(root) {
@@ -167,8 +171,12 @@ func (s gusto) list(ctx context.Context, e CompanyEntry) ([]gustoPosting, error)
 			added++
 		}
 		if added == 0 {
+			done = true
 			break // an empty page: the listing is exhausted
 		}
+	}
+	if !done {
+		return nil, fmt.Errorf("gusto: listing board %s: reached the %d-page safety ceiling without finding the board's end", e.Board, gustoMaxPages)
 	}
 	return out, nil
 }

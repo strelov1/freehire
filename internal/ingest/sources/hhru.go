@@ -39,6 +39,11 @@ func (hh) Provider() string { return "hh" }
 // (professional_role id) to bound the crawl, so it is not boardless.
 func (hh) aggregator() {}
 
+// fullBoardListing: crawl proves completeness by paginating to a genuinely empty page, and
+// treats a later-page failure or reaching hhMaxPages as a hard Fetch failure. See the
+// fullBoardListing interface (source.go) for the bar.
+func (hh) fullBoardListing() {}
+
 const (
 	hhSearchURL  = "https://hh.ru/search/vacancy"
 	hhVacancyURL = "https://hh.ru/vacancy/"
@@ -139,27 +144,23 @@ func (s hh) FetchNew(ctx context.Context, e CompanyEntry, seen func(externalID s
 }
 
 // crawl pages the search listing, decoding each page's embedded state, until a page yields no new
-// vacancy or the depth cap is hit — the shared list walk behind Fetch and FetchNew. Promoted (ad)
-// vacancies are skipped: they are injected across searches regardless of the role filter, so each
-// role crawl keeps only genuine matches. A first-page failure is a board-level error; a later page
-// failing ends the walk with the postings gathered so far, so a partial crawl survives a hiccup.
+// vacancy — the shared list walk behind Fetch and FetchNew. Promoted (ad) vacancies are skipped:
+// they are injected across searches regardless of the role filter, so each role crawl keeps only
+// genuine matches. Reaching a page a later page fails to fetch or decode, or reaching hhMaxPages
+// without ever seeing an empty page, no longer ends the walk with a partial result: this adapter
+// proves completeness only by a genuinely empty page, so anything else is a hard Fetch failure —
+// see the fullBoardListing interface (source.go) for the bar this exists to meet.
 func (s hh) crawl(ctx context.Context, e CompanyEntry) ([]hhVacancy, error) {
 	var out []hhVacancy
 	seen := map[int64]bool{}
 	for page := 0; page < hhMaxPages; page++ {
 		root, err := s.http.GetHTML(ctx, s.searchURL(e.Board, page))
 		if err != nil {
-			if page == 0 {
-				return nil, fmt.Errorf("hh: search role %q page %d: %w", e.Board, page, err)
-			}
-			break
+			return nil, fmt.Errorf("hh: search role %q page %d: %w", e.Board, page, err)
 		}
 		st, ok := hhStateOf(root)
 		if !ok {
-			if page == 0 {
-				return nil, fmt.Errorf("hh: search role %q page %d: no %s state", e.Board, page, hhStateID)
-			}
-			break
+			return nil, fmt.Errorf("hh: search role %q page %d: no %s state", e.Board, page, hhStateID)
 		}
 		added := 0
 		for _, v := range st.VacancySearchResult.Vacancies {
@@ -171,10 +172,10 @@ func (s hh) crawl(ctx context.Context, e CompanyEntry) ([]hhVacancy, error) {
 			added++
 		}
 		if added == 0 { // empty page, or hh clamping ?page past its last page
-			break
+			return out, nil
 		}
 	}
-	return out, nil
+	return nil, fmt.Errorf("hh: search role %q: reached the %d-page safety ceiling without finding the role's end", e.Board, hhMaxPages)
 }
 
 // searchURL builds a professional_role search page, newest-first and bounded to the recent-publish

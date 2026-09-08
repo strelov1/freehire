@@ -265,3 +265,38 @@ func TestHHProviderRegisteredAndAggregator(t *testing.T) {
 		t.Error("AggregatorProviders() should include hh (multi-company aggregator)")
 	}
 }
+
+func TestHHRegisteredAsFullBoardListing(t *testing.T) {
+	if _, ok := NewHH(nil).(fullBoardListing); !ok {
+		t.Error("hh should implement the fullBoardListing marker")
+	}
+	if !FullBoardListingProviders(All(nil))["hh"] {
+		t.Error("FullBoardListingProviders(All(nil)) should include hh")
+	}
+}
+
+// hhEndlessFake serves a fresh vacancy on every page requested, so it never yields a genuinely
+// empty page — used to prove the page-cap ceiling fails loudly rather than succeeding partially.
+// Mirrors taleoEndlessFake / gustoEndlessFake.
+type hhEndlessFake struct{ calls int }
+
+func (f *hhEndlessFake) GetHTML(_ context.Context, u string) (*html.Node, error) {
+	f.calls++
+	pu, err := url.Parse(u)
+	if err != nil {
+		return nil, err
+	}
+	page, _ := strconv.Atoi(pu.Query().Get("page"))
+	return html.Parse(strings.NewReader(hhSearchHTML([]hhVacancy{hhVac(int64(10000+page), "T", "Co")})))
+}
+
+func TestHHFetchFailsWhenListingExceedsThePageCap(t *testing.T) {
+	fake := &hhEndlessFake{}
+	_, err := NewHH(fake).Fetch(context.Background(), CompanyEntry{Board: "96"})
+	if err == nil {
+		t.Fatal("expected reaching the page cap to fail the Fetch")
+	}
+	if fake.calls != hhMaxPages {
+		t.Errorf("got %d listing calls, want exactly %d (the cap, no more)", fake.calls, hhMaxPages)
+	}
+}

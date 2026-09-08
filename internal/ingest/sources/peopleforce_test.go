@@ -2,9 +2,12 @@ package sources
 
 import (
 	"context"
+	"fmt"
 	"slices"
 	"strings"
 	"testing"
+
+	"golang.org/x/net/html"
 )
 
 // peopleforceListingHTML is a PeopleForce careers listing page: server-rendered job cards, each
@@ -187,5 +190,36 @@ func TestPeopleForceRegisteredInAll(t *testing.T) {
 	}
 	if !slices.Contains(FilterableProviders(), "peopleforce") {
 		t.Error("FilterableProviders() should include peopleforce (board-based)")
+	}
+}
+
+func TestPeopleForceRegisteredAsFullBoardListing(t *testing.T) {
+	if _, ok := NewPeopleForce(nil).(fullBoardListing); !ok {
+		t.Error("peopleforce should implement the fullBoardListing marker")
+	}
+	if !FullBoardListingProviders(All(nil))["peopleforce"] {
+		t.Error("FullBoardListingProviders(All(nil)) should include peopleforce")
+	}
+}
+
+// peopleforceEndlessFake serves a fresh job card on every page, so it never yields a genuinely
+// empty page — used to prove the page-cap ceiling fails loudly rather than succeeding partially.
+// Mirrors taleoEndlessFake / gustoEndlessFake.
+type peopleforceEndlessFake struct{ calls int }
+
+func (f *peopleforceEndlessFake) GetHTML(_ context.Context, _ string) (*html.Node, error) {
+	f.calls++
+	id := fmt.Sprintf("%d-endless-role", f.calls)
+	return html.Parse(strings.NewReader(peopleforceListingHTML([2]string{id, "Role"})))
+}
+
+func TestPeopleForceFetchFailsWhenListingExceedsThePageCap(t *testing.T) {
+	fake := &peopleforceEndlessFake{}
+	_, err := NewPeopleForce(fake).Fetch(context.Background(), CompanyEntry{Board: "acme"})
+	if err == nil {
+		t.Fatal("expected reaching the page cap to fail the Fetch")
+	}
+	if fake.calls != peopleforceMaxPages {
+		t.Errorf("got %d listing calls, want exactly %d (the cap, no more)", fake.calls, peopleforceMaxPages)
 	}
 }

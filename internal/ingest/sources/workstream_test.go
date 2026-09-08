@@ -2,11 +2,14 @@ package sources
 
 import (
 	"context"
+	"fmt"
 	"net/url"
 	"slices"
 	"strconv"
 	"strings"
 	"testing"
+
+	"golang.org/x/net/html"
 )
 
 // The board and posting the fixtures use. Workstream keys a board by the eight hex characters
@@ -391,5 +394,38 @@ func TestWorkstreamPageURL(t *testing.T) {
 		if got := workstreamPageURL(u, 3); got != want {
 			t.Errorf("workstreamPageURL(%q, 3) = %q, want %q", base, got, want)
 		}
+	}
+}
+
+func TestWorkstreamRegisteredAsFullBoardListing(t *testing.T) {
+	if _, ok := NewWorkstream(nil).(fullBoardListing); !ok {
+		t.Error("workstream should implement the fullBoardListing marker")
+	}
+	if !FullBoardListingProviders(All(nil))["workstream"] {
+		t.Error("FullBoardListingProviders(All(nil)) should include workstream")
+	}
+}
+
+// workstreamEndlessFake serves a fresh listing card on every page and states totalPages=0 (out
+// of range, so unstated), so it never proves completeness — used to prove the page-cap ceiling
+// fails loudly rather than succeeding partially. Mirrors taleoEndlessFake / gustoEndlessFake.
+type workstreamEndlessFake struct{ calls int }
+
+func (f *workstreamEndlessFake) GetHTML(_ context.Context, u string) (*html.Node, error) {
+	f.calls++
+	base := "https://www.workstream.us/j/" + workstreamTestBoard + "/positions"
+	href := fmt.Sprintf("/j/%s/moxies/pickering/line-cook-%08x", workstreamTestBoard, f.calls)
+	body := workstreamListingHTML(base, 0, workstreamCardHTML(href, "Line Cook", "Addr", ""))
+	return html.Parse(strings.NewReader(body))
+}
+
+func TestWorkstreamListFailsWhenListingExceedsThePageCap(t *testing.T) {
+	fake := &workstreamEndlessFake{}
+	_, err := workstream{http: fake}.list(context.Background(), workstreamEntry())
+	if err == nil {
+		t.Fatal("expected reaching the page cap to fail the walk")
+	}
+	if fake.calls != workstreamMaxPages {
+		t.Errorf("got %d listing calls, want exactly %d (the cap, no more)", fake.calls, workstreamMaxPages)
 	}
 }

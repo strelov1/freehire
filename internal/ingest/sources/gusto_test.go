@@ -2,9 +2,12 @@ package sources
 
 import (
 	"context"
+	"fmt"
 	"slices"
 	"strings"
 	"testing"
+
+	"golang.org/x/net/html"
 )
 
 // The two board uuids the fixtures use. Gusto keys a board by the whole
@@ -140,6 +143,15 @@ func TestGustoRegisteredAndFacet(t *testing.T) {
 	// The listing carries no body, so the adapter must hydrate only what the catalogue lacks.
 	if _, ok := All(nil)["gusto"].(HydratingSource); !ok {
 		t.Error("gusto should be a HydratingSource")
+	}
+}
+
+func TestGustoRegisteredAsFullBoardListing(t *testing.T) {
+	if _, ok := NewGusto(nil).(fullBoardListing); !ok {
+		t.Error("gusto should implement the fullBoardListing marker")
+	}
+	if !FullBoardListingProviders(All(nil))["gusto"] {
+		t.Error("FullBoardListingProviders(All(nil)) should include gusto")
 	}
 }
 
@@ -279,21 +291,47 @@ func TestGustoFetchFirstPageFailureFailsTheBoard(t *testing.T) {
 	}
 }
 
-func TestGustoFetchLaterPageFailureKeepsWhatWasGathered(t *testing.T) {
-	// Page 2 has no route and errors; page 1's posting still ingests.
+func TestGustoFetchFailsOnALaterPageError(t *testing.T) {
+	// Page 2 has no route and errors. Because this walk proves completeness only by reaching a
+	// genuinely empty page, an unproven later-page failure now fails the whole Fetch rather than
+	// silently returning page 1's posting as a partial success.
 	fake := (&routedHTTP{}).
 		route("page=1", gustoBoardHTML(gustoListingItemHTML(
 			gustoTestPosting, "Senior Go Engineer", "Austin, TX", "Full time"))).
 		route(gustoTestPosting, gustoPostingHTML("Senior Go Engineer", "Austin, TX &middot; Full time",
 			"a", "", "<p>b</p>", ""))
 
-	jobs, err := NewGusto(fake).Fetch(context.Background(), gustoEntry())
-	if err != nil {
-		t.Fatalf("Fetch: %v", err)
+	_, err := NewGusto(fake).Fetch(context.Background(), gustoEntry())
+	if err == nil {
+		t.Fatal("expected a page-2 failure to fail the whole Fetch")
 	}
-	if len(jobs) != 1 {
-		t.Fatalf("got %d jobs, want 1", len(jobs))
+}
+
+func TestGustoFetchFailsWhenListingExceedsThePageCap(t *testing.T) {
+	// A listing that never returns an empty page cannot prove it reached the board's end, so
+	// reaching gustoMaxPages must fail the Fetch rather than silently returning what was gathered.
+	fake := &gustoEndlessFake{}
+
+	_, err := NewGusto(fake).Fetch(context.Background(), gustoEntry())
+	if err == nil {
+		t.Fatal("expected reaching the page cap to fail the Fetch")
 	}
+	if fake.calls != gustoMaxPages {
+		t.Errorf("got %d listing calls, want exactly %d (the cap, no more)", fake.calls, gustoMaxPages)
+	}
+}
+
+// gustoEndlessFake is an HTMLGetter that always returns a fresh, unique posting per page number,
+// so it never yields a genuinely empty page — used to prove the page-cap ceiling fails loudly
+// rather than succeeding partially. Mirrors taleoEndlessFake / ttEndlessListingFake.
+type gustoEndlessFake struct{ calls int }
+
+func (f *gustoEndlessFake) GetHTML(_ context.Context, _ string) (*html.Node, error) {
+	f.calls++
+	uuid := fmt.Sprintf("11111111-1111-1111-1111-%012d", f.calls)
+	loc := fmt.Sprintf("/postings/acme-robotics-engineer-%s", uuid)
+	body := gustoBoardHTML(gustoListingItemHTML(loc, "Engineer", "Austin, TX", "Full time"))
+	return html.Parse(strings.NewReader(body))
 }
 
 func TestGustoFetchDropsAPostingWithNoBody(t *testing.T) {

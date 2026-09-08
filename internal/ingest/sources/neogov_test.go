@@ -3,6 +3,7 @@ package sources
 import (
 	"context"
 	"errors"
+	"fmt"
 	"regexp"
 	"strings"
 	"sync"
@@ -200,5 +201,44 @@ func TestNeogovTotal(t *testing.T) {
 	}
 	if n := neogovTotal(`<div>no count here</div>`); n != 0 {
 		t.Errorf("neogovTotal(absent) = %d, want 0", n)
+	}
+}
+
+func TestNeogovRegisteredAsFullBoardListing(t *testing.T) {
+	if _, ok := NewNeogov(nil).(fullBoardListing); !ok {
+		t.Error("neogov should implement the fullBoardListing marker")
+	}
+	if !FullBoardListingProviders(All(nil))["neogov"] {
+		t.Error("FullBoardListingProviders(All(nil)) should include neogov")
+	}
+}
+
+// neogovEndlessFake serves a fresh job card on every listing page and states no total, so it
+// never proves completeness — used to prove the page-cap ceiling fails loudly rather than
+// succeeding partially. Mirrors taleoEndlessFake / gustoEndlessFake / hhEndlessFake.
+type neogovEndlessFake struct{ calls int }
+
+func (f *neogovEndlessFake) GetTextWithHeaders(_ context.Context, url string, _ map[string]string) (string, error) {
+	if !strings.Contains(url, "careers/home/index") {
+		return "", nil // a detail fetch never happens before the listing walk fails
+	}
+	f.calls++
+	id := 9000000 + f.calls
+	return fmt.Sprintf(`<li class="list-item" data-job-id="%d">
+	  <h3><a class="item-details-link" href="/careers/schooljobs.com/cochisecollege/jobs/%d/role">Role</a></h3>
+	  <ul class="list-meta"><li>Remote</li></ul>
+	  <div class="list-entry">Snippet.</div>
+	</li>`, id, id), nil
+}
+
+func TestNeogovFetchFailsWhenListingExceedsThePageCap(t *testing.T) {
+	fake := &neogovEndlessFake{}
+	_, err := neogov{http: fake}.Fetch(context.Background(),
+		CompanyEntry{Company: "Cochise College", Board: "schooljobs.com/cochisecollege"})
+	if err == nil {
+		t.Fatal("expected reaching the page cap to fail the Fetch")
+	}
+	if fake.calls != neogovMaxPages {
+		t.Errorf("got %d listing calls, want exactly %d (the cap, no more)", fake.calls, neogovMaxPages)
 	}
 }
