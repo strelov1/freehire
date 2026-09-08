@@ -81,10 +81,16 @@ Impact.
   `CONCURRENTLY` build leaves behind, which is exactly what migrations 0117 and 0118
   existed to repair.
 
-`talent_network_public_id` is retired with the route that served it. Two public
-identifiers for one page is a drift waiting to happen — one of them eventually gets
-handed out where the other was meant to be — and nothing has ever shared the uuid, because
-the control that produces it has never been reachable.
+`talent_network_public_id` stops being READ here — the query, the handler, the wire shape
+and the route are all gone. Two public identifiers for one page is a drift waiting to
+happen, and nothing ever shared the uuid because the control that produces it has never
+been reachable.
+
+**Dropping the column is a separate change, on purpose.** It can only run once the code
+that selects it is off production, and the release script applies every pending migration
+BEFORE flipping the app — so a `DROP COLUMN` here would take the column out from under the
+server still using it, whatever its header says. The follow-up ships it when that ordering
+is no longer a question.
 
 **Go.**
 - `internal/candidate/resumeextract/visibility.go` — add `Catalog()` beside `Anonymous()`

@@ -37,9 +37,14 @@ REFACTOR → simplify → review → only then `[x]`.
 - [x] 1.7 Wire minting into `PutVisibility`: minted on the first join only, never
       recomputed. Tests — leaving and rejoining keeps the handle; a new CV in a different
       category keeps the handle; the minted handle never contains the account's `username`.
-- [x] 1.8 Retire `talent_network_public_id`: drop the column and every read of it once the
-      handle serves the route (task 4.2 and 5.3). Two public identifiers for one page is a
-      drift, not a fallback.
+- [x] 1.8 Retire `talent_network_public_id`: every READ of it is gone in this change —
+      the query, the handler, the wire shape and the route that served it. **The DROP
+      COLUMN is deliberately NOT here.** It was written as an "apply after the deploy"
+      migration, and that instruction cannot survive contact with the automation: the
+      release script runs every pending migration and THEN flips the app, so the column
+      would be dropped out from under the server still selecting it. An instruction the
+      deploy path does not read is not a safeguard. It ships as its own follow-up once
+      this release is live, when dropping it is ordinary.
 
 ## 2. The public projection
 
