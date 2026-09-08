@@ -202,3 +202,28 @@ func TestWithReasoningSetsTheConfig(t *testing.T) {
 		t.Error("the default effort must be the empty string, so the zero value sends nothing")
 	}
 }
+
+// A literal `null` body unmarshals into a map without error and leaves it nil, so the
+// error check above it does not catch it and the write would panic. There is nowhere for a
+// panic in a RoundTripper to land: the extraction that reaches here runs in a bare
+// goroutine, so it would take the process with it rather than fail one call.
+func TestANullBodyDoesNotPanic(t *testing.T) {
+	got, err := withReasoningEffort([]byte("null"), ReasoningNone)
+	if err != nil {
+		t.Fatalf("withReasoningEffort: %v", err)
+	}
+	if string(got) != "null" {
+		t.Errorf("body = %q, want it untouched", got)
+	}
+}
+
+// The same guard on the sibling rewrite beside it, which has the identical shape.
+func TestANullBodyDoesNotPanicOnTheSchemaRewrite(t *testing.T) {
+	got, err := withResponseFormat([]byte("null"), json.RawMessage(`{"type":"json_object"}`))
+	if err != nil {
+		t.Fatalf("withResponseFormat: %v", err)
+	}
+	if string(got) != "null" {
+		t.Errorf("body = %q, want it untouched", got)
+	}
+}

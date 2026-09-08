@@ -127,6 +127,13 @@ func withReasoningEffort(body json.RawMessage, effort ReasoningEffort) (json.Raw
 	if err := json.Unmarshal(body, &fields); err != nil {
 		return body, nil //nolint:nilerr // not a JSON object: not ours to rewrite
 	}
+	// A literal `null` unmarshals into a map WITHOUT error and sets it to nil, so the
+	// error above does not catch it and the write below would panic on a nil map. In a
+	// RoundTripper that panic has no error path to land in — the extraction that reaches
+	// here runs in a bare goroutine, where it would take the process with it.
+	if fields == nil {
+		return body, nil
+	}
 
 	encoded, err := json.Marshal(string(effort))
 	if err != nil {
