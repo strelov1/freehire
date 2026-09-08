@@ -33,6 +33,7 @@ var talentNetworkVisibilityValues = map[string]bool{visibilityOff: true, "anonym
 type talentNetworkStore interface {
 	talentnetwork.JoinStore
 	SetTalentNetworkVisibility(ctx context.Context, arg db.SetTalentNetworkVisibilityParams) error
+	IsBetaTester(ctx context.Context, id int64) (bool, error)
 }
 
 // talentNetworkHandlers serves the caller's own Talent Network visibility setting — a
@@ -122,10 +123,25 @@ func (h *talentNetworkHandlers) PutVisibility(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusBadRequest, "visibility must be one of off, anonymous")
 	}
 
-	// Mint BEFORE the visibility write, not after. A member without a handle is a member
-	// the catalogue cannot link to, so a failure here must leave the candidate outside
-	// the network rather than inside it with no address.
+	// JOINING is beta-only while the feature settles; LEAVING never is. A gate that also
+	// held somebody in would be a gate that traps them, and the one thing this feature
+	// promises is that leaving works — so the check guards the join alone.
+	//
+	// Enforced HERE, on the server, and not by hiding a button. The catalogue's data is
+	// public by design, so a client-side gate would close nothing; what actually keeps
+	// the catalogue to the beta group is that nobody else can put themselves in it.
 	if in.Visibility != visibilityOff {
+		beta, err := h.store.IsBetaTester(c.Context(), userID)
+		if err != nil {
+			return err
+		}
+		if !beta {
+			return fiber.NewError(fiber.StatusForbidden, "the Talent Network is in beta")
+		}
+
+		// Mint BEFORE the visibility write, not after. A member without a handle is a
+		// member the catalogue cannot link to, so a failure here must leave the candidate
+		// outside the network rather than inside it with no address.
 		if err := talentnetwork.Join(c.Context(), h.store, userID); err != nil {
 			return err
 		}

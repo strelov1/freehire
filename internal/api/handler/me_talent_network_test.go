@@ -43,6 +43,10 @@ type fakeTalentNetworkStore struct {
 	// claimConflicts is how many claim attempts fail with a unique violation before one
 	// succeeds, standing in for another account holding the handle we just minted.
 	claimConflicts int
+	// beta is the group the join is gated on while the feature settles. Defaults to
+	// false, so every existing test that joins has to say it is in the group — which is
+	// the point: the gate should be impossible to forget.
+	beta bool
 }
 
 func (f *fakeTalentNetworkStore) GetTalentNetworkVisibility(context.Context, int64) (db.GetTalentNetworkVisibilityRow, error) {
@@ -58,6 +62,10 @@ func (f *fakeTalentNetworkStore) GetTalentNetworkVisibility(context.Context, int
 
 func (f *fakeTalentNetworkStore) GetUserResumeStructuredOnly(context.Context, int64) ([]byte, error) {
 	return f.structured, nil
+}
+
+func (f *fakeTalentNetworkStore) IsBetaTester(context.Context, int64) (bool, error) {
+	return f.beta, nil
 }
 
 func (f *fakeTalentNetworkStore) SetTalentHandleIfUnset(_ context.Context, arg db.SetTalentHandleIfUnsetParams) (int64, error) {
@@ -165,7 +173,7 @@ func TestPutTalentNetwork_RejectsRetiredPublicValue(t *testing.T) {
 }
 
 func TestPutTalentNetwork_AnonymousRoundTrips(t *testing.T) {
-	store := &fakeTalentNetworkStore{visibility: "off"}
+	store := &fakeTalentNetworkStore{visibility: "off", beta: true}
 	app, token := talentNetworkApp(t, store)
 
 	putResp := doTalentNetwork(t, app, fiber.MethodPut, `{"visibility":"anonymous"}`, token)
@@ -217,7 +225,7 @@ const backendResumeJSON = `{
 }`
 
 func TestPutTalentNetwork_MintsAHandleOnFirstJoin(t *testing.T) {
-	store := &fakeTalentNetworkStore{visibility: "off", structured: []byte(backendResumeJSON)}
+	store := &fakeTalentNetworkStore{visibility: "off", beta: true, structured: []byte(backendResumeJSON)}
 	app, token := talentNetworkApp(t, store)
 
 	got := putTalentNetworkOK(t, app, token, "anonymous")
@@ -235,7 +243,7 @@ func TestPutTalentNetwork_MintsAHandleOnFirstJoin(t *testing.T) {
 // The handle is the URL somebody has already shared. Leaving the network must not burn
 // it, and rejoining must not mint a second one.
 func TestPutTalentNetwork_RejoiningKeepsTheHandle(t *testing.T) {
-	store := &fakeTalentNetworkStore{visibility: "anonymous", handle: "backend-7f2a"}
+	store := &fakeTalentNetworkStore{visibility: "anonymous", beta: true, handle: "backend-7f2a"}
 	app, token := talentNetworkApp(t, store)
 
 	if got := putTalentNetworkOK(t, app, token, "off"); got.Handle != "backend-7f2a" {
@@ -253,7 +261,7 @@ func TestPutTalentNetwork_RejoiningKeepsTheHandle(t *testing.T) {
 // might drift: the base comes from the current role's category. It must not — the URL
 // somebody shared has to keep working after they change jobs.
 func TestPutTalentNetwork_ChangingJobsKeepsTheHandle(t *testing.T) {
-	store := &fakeTalentNetworkStore{visibility: "off", structured: []byte(backendResumeJSON)}
+	store := &fakeTalentNetworkStore{visibility: "off", beta: true, structured: []byte(backendResumeJSON)}
 	app, token := talentNetworkApp(t, store)
 
 	minted := putTalentNetworkOK(t, app, token, "anonymous").Handle
@@ -282,7 +290,7 @@ func TestPutTalentNetwork_ChangingJobsKeepsTheHandle(t *testing.T) {
 // test had ever crossed them.
 func TestPutTalentNetwork_ReportsWhetherAVisitorCanActuallySeeThem(t *testing.T) {
 	// A member the stamp gate excludes: joined, handle minted, no readable CV.
-	unlisted := &fakeTalentNetworkStore{visibility: "off", listed: false}
+	unlisted := &fakeTalentNetworkStore{visibility: "off", beta: true, listed: false}
 	app, token := talentNetworkApp(t, unlisted)
 
 	got := putTalentNetworkOK(t, app, token, "anonymous")
@@ -294,7 +302,7 @@ func TestPutTalentNetwork_ReportsWhetherAVisitorCanActuallySeeThem(t *testing.T)
 	}
 
 	// And a member the gate admits.
-	listed := &fakeTalentNetworkStore{visibility: "off", listed: true, structured: []byte(backendResumeJSON)}
+	listed := &fakeTalentNetworkStore{visibility: "off", beta: true, listed: true, structured: []byte(backendResumeJSON)}
 	app2, token2 := talentNetworkApp(t, listed)
 	if !putTalentNetworkOK(t, app2, token2, "anonymous").Listed {
 		t.Error("listed = false for a member whose CV is readable")
@@ -304,7 +312,7 @@ func TestPutTalentNetwork_ReportsWhetherAVisitorCanActuallySeeThem(t *testing.T)
 // The account username is derived from the email's local part, so it is usually the
 // person's name. It must never end up in the URL of the page that withholds it.
 func TestPutTalentNetwork_HandleNeverCarriesTheName(t *testing.T) {
-	store := &fakeTalentNetworkStore{visibility: "off", structured: []byte(backendResumeJSON)}
+	store := &fakeTalentNetworkStore{visibility: "off", beta: true, structured: []byte(backendResumeJSON)}
 	app, token := talentNetworkApp(t, store)
 
 	got := putTalentNetworkOK(t, app, token, "anonymous")
@@ -318,6 +326,7 @@ func TestPutTalentNetwork_HandleNeverCarriesTheName(t *testing.T) {
 func TestPutTalentNetwork_RetriesAHandleCollision(t *testing.T) {
 	store := &fakeTalentNetworkStore{
 		visibility:     "off",
+		beta:           true,
 		structured:     []byte(backendResumeJSON),
 		claimConflicts: 2,
 	}
@@ -335,7 +344,7 @@ func TestPutTalentNetwork_RetriesAHandleCollision(t *testing.T) {
 // A candidate can join before uploading anything. Refusing the join because there is no
 // title to read would gate membership on the CV pipeline.
 func TestPutTalentNetwork_MintsOverAnEmptyCV(t *testing.T) {
-	store := &fakeTalentNetworkStore{visibility: "off"}
+	store := &fakeTalentNetworkStore{visibility: "off", beta: true}
 	app, token := talentNetworkApp(t, store)
 
 	got := putTalentNetworkOK(t, app, token, "anonymous")
@@ -347,7 +356,7 @@ func TestPutTalentNetwork_MintsOverAnEmptyCV(t *testing.T) {
 // Turning the toggle OFF must not mint anything for an account that never joined —
 // otherwise every stray request would burn a handle.
 func TestPutTalentNetwork_LeavingDoesNotMint(t *testing.T) {
-	store := &fakeTalentNetworkStore{visibility: "off", structured: []byte(backendResumeJSON)}
+	store := &fakeTalentNetworkStore{visibility: "off", beta: true, structured: []byte(backendResumeJSON)}
 	app, token := talentNetworkApp(t, store)
 
 	got := putTalentNetworkOK(t, app, token, "off")
@@ -374,7 +383,7 @@ func putTalentNetworkOK(t *testing.T, app *fiber.App, token, visibility string) 
 }
 
 func TestTalentNetwork_RequiresAuth(t *testing.T) {
-	store := &fakeTalentNetworkStore{visibility: "off"}
+	store := &fakeTalentNetworkStore{visibility: "off", beta: true}
 	app, _ := talentNetworkApp(t, store)
 
 	getResp := doTalentNetwork(t, app, fiber.MethodGet, "", "")
@@ -387,5 +396,39 @@ func TestTalentNetwork_RequiresAuth(t *testing.T) {
 	defer putResp.Body.Close()
 	if putResp.StatusCode != fiber.StatusUnauthorized {
 		t.Errorf("PUT status = %d, want 401", putResp.StatusCode)
+	}
+}
+
+// Joining is beta-only while the feature settles. Enforced on the SERVER, not by hiding a
+// button: the catalogue's data is public by design, so a client-side gate would close
+// nothing — what keeps the catalogue to the beta group is that nobody else can put
+// themselves in it.
+func TestPutTalentNetwork_JoiningIsBetaOnly(t *testing.T) {
+	store := &fakeTalentNetworkStore{visibility: "off", beta: false, structured: []byte(backendResumeJSON)}
+	app, token := talentNetworkApp(t, store)
+
+	resp := doTalentNetwork(t, app, fiber.MethodPut, `{"visibility":"anonymous"}`, token)
+	defer resp.Body.Close()
+	if resp.StatusCode != fiber.StatusForbidden {
+		t.Fatalf("status = %d, want 403", resp.StatusCode)
+	}
+	if store.visibility != "off" {
+		t.Errorf("stored visibility = %q, want it untouched at off", store.visibility)
+	}
+	if store.claimCalls != 0 {
+		t.Error("a handle was minted for an account that could not join")
+	}
+}
+
+// LEAVING is never gated. A gate that also held somebody in would be a gate that traps
+// them, and the one thing this feature promises is that leaving works — including for
+// somebody who joined while in the group and was later taken out of it.
+func TestPutTalentNetwork_LeavingIsNeverBetaGated(t *testing.T) {
+	store := &fakeTalentNetworkStore{visibility: "anonymous", beta: false, handle: "backend-7f2a"}
+	app, token := talentNetworkApp(t, store)
+
+	got := putTalentNetworkOK(t, app, token, "off")
+	if got.Visibility != "off" {
+		t.Errorf("visibility = %q, want off", got.Visibility)
 	}
 }

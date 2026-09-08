@@ -2677,6 +2677,10 @@ type Querier interface {
 	// who accepted an invite discloses that a particular person signed up for a job board, which
 	// is not the referrer's to know.
 	InviteStats(ctx context.Context, referrerID int64) (InviteStatsRow, error)
+	// Whether the account is in the beta group, on its own. GetUserByID answers it too, but
+	// carries nine other columns a gate has no use for — and a gate that reads a whole user
+	// row invites somebody to branch on a second field from it later.
+	IsBetaTester(ctx context.Context, id int64) (bool, error)
 	// Cursor read: has this rotated file (by content signature) been applied? The
 	// signature is stable across rename and gzip, so a re-run recognizes the same file.
 	IsViewLogFileProcessed(ctx context.Context, signature int64) (bool, error)

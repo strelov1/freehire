@@ -585,6 +585,22 @@ func (q *Queries) GetUsernameByUser(ctx context.Context, id int64) (GetUsernameB
 	return i, err
 }
 
+const isBetaTester = `-- name: IsBetaTester :one
+SELECT beta_tester
+FROM users
+WHERE id = $1
+`
+
+// Whether the account is in the beta group, on its own. GetUserByID answers it too, but
+// carries nine other columns a gate has no use for — and a gate that reads a whole user
+// row invites somebody to branch on a second field from it later.
+func (q *Queries) IsBetaTester(ctx context.Context, id int64) (bool, error) {
+	row := q.db.QueryRow(ctx, isBetaTester, id)
+	var beta_tester bool
+	err := row.Scan(&beta_tester)
+	return beta_tester, err
+}
+
 const listMembersMissingTalentHandle = `-- name: ListMembersMissingTalentHandle :many
 SELECT id
 FROM users

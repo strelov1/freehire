@@ -121,6 +121,14 @@
   title="Talent Network — freehire"
   description="Anonymous profiles of candidates open to being approached. Filter by discipline, seniority, timezone and experience."
 />
+<svelte:head>
+  <!-- noindex WHILE JOINING IS BETA-ONLY. The list is meant to be indexable — it is the
+  front door of the feature and carries no personal data — but a catalogue whose entire
+  membership is the beta group is not the catalogue we would want indexed, and a search
+  result promising candidates that leads to four is worse than no result. Lift this in the
+  same change that lifts the join gate. -->
+  <meta name="robots" content="noindex" />
+</svelte:head>
 
 <div class="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 py-8">
   <header class="flex flex-col gap-2">

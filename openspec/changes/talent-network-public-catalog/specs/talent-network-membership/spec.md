@@ -61,6 +61,41 @@ what is disclosed about a person, never remove them from a network they chose to
 - **WHEN** any statement attempts to store `public`
 - **THEN** the constraint rejects it
 
+### Requirement: Joining is limited to the beta group while the feature settles
+
+The system SHALL refuse a request to JOIN from an account outside the beta group, and
+SHALL enforce that on the server rather than by hiding a control.
+
+LEAVING SHALL never be refused. A gate that also held somebody in would be a gate that
+traps them, and the one thing this feature promises is that leaving works — including for
+an account that joined while in the group and was later taken out of it.
+
+Hiding the entry points is an affordance, not the gate. The catalogue's data is public by
+design, so a client-side check closes nothing; what keeps the catalogue to the beta
+population is that nobody outside it can put themselves in.
+
+While the gate stands, the catalogue listing SHALL NOT be offered to search engines. It is
+meant to be indexable — it is the front door of the feature and carries no personal data —
+but a catalogue whose whole membership is the beta group is not the one worth indexing,
+and a search result promising candidates that leads to four is worse than no result.
+
+#### Scenario: An account outside the group tries to join
+
+- **WHEN** an account that is not in the beta group asks to join
+- **THEN** the request is refused
+- **AND** nothing is stored: no membership, and no handle minted
+
+#### Scenario: An account outside the group leaves
+
+- **WHEN** a member who is no longer in the beta group asks to leave
+- **THEN** the request succeeds and they leave the network
+
+#### Scenario: The entry points while the gate stands
+
+- **WHEN** an account outside the group views their account or profile
+- **THEN** neither the navigation entry nor the invitation is shown
+- **AND** the catalogue listing carries `noindex`
+
 ### Requirement: A member has one permanent catalogue handle
 
 The first time a candidate joins, the system SHALL mint them a catalogue handle and store

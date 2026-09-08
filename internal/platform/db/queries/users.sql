@@ -448,6 +448,14 @@ WHERE talent_network_visibility <> 'off'
   AND talent_handle IS NULL
 ORDER BY id;
 
+-- name: IsBetaTester :one
+-- Whether the account is in the beta group, on its own. GetUserByID answers it too, but
+-- carries nine other columns a gate has no use for — and a gate that reads a whole user
+-- row invites somebody to branch on a second field from it later.
+SELECT beta_tester
+FROM users
+WHERE id = $1;
+
 -- name: SetTalentHandleIfUnset :execrows
 -- Claims a freshly minted catalogue handle for a candidate who does not have one yet.
 --

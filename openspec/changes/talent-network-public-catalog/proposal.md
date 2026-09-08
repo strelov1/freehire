@@ -44,8 +44,14 @@ the seam.
   skills, timezone region, city (`users.resume_cities`), years of experience, languages.
 - **The opt-in becomes reachable**: a `Talent Network` entry in the account navigation and
   an invitation block on `/my/profile`.
-- **SEO**: the list is indexable; an individual card carries `noindex`, so leaving the
-  network is not undone by a search engine's cache.
+- **Joining is beta-only while the feature settles**, refused on the server rather than by
+  hiding a button — the catalogue's data is public by design, so a client-side gate would
+  close nothing. Leaving is never refused. The navigation entry and the profile invitation
+  are hidden outside the group as an affordance.
+- **SEO**: an individual card carries `noindex`, so leaving the network is not undone by a
+  search engine's cache. The list is meant to be indexable and carries `noindex` too while
+  the join gate stands — a catalogue whose whole membership is the beta group is not the
+  one worth indexing. Both lift together.
 - Not included, deliberately: recruiter accounts and their approval, any reveal of a
   candidate's identity, contact details in any tier, and a mailing to the existing
   members-by-default population.

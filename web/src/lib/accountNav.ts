@@ -38,7 +38,11 @@ export const accountNav = [
   // browse. One toggle. It sits in the nav because the page owns the ONLY control that
   // puts somebody in the catalogue — the feature previously shipped with a working page
   // and no way to reach it, which is indistinguishable from not having shipped.
-  { href: '/my/talent-network', label: 'Talent Network' },
+  //
+  // `betaOnly` while the feature settles. Hiding the entry is an affordance, not the
+  // gate: the server refuses a JOIN from outside the group, which is what actually keeps
+  // the catalogue to the beta population. Leaving is never refused.
+  { href: '/my/talent-network', label: 'Talent Network', betaOnly: true },
   // The notification center: delivery history, saved-search alerts, and the
   // account-level reminder/nudge settings, as three tabs of one section.
   { href: '/my/notifications', label: 'Notifications' },
