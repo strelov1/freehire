@@ -52,6 +52,11 @@ func (hh) Provider() string { return "hh" }
 // (professional_role id) to bound the crawl, so it is not boardless.
 func (hh) aggregator() {}
 
+// hh deliberately does NOT implement fullBoardListing. hh.ru's own search UI caps a query's
+// reachable depth at ~2000 results independent of a role's true count — see crawl's own comment
+// for the live 2026-09-08 confirmation against a currently-configured board — so this adapter
+// cannot structurally prove it reached a busy board's real end the way the marker requires.
+
 const (
 	hhSearchURL  = "https://hh.ru/search/vacancy"
 	hhVacancyURL = "https://hh.ru/vacancy/"
@@ -154,25 +159,28 @@ func (s hh) FetchNew(ctx context.Context, e CompanyEntry, seen func(externalID s
 // crawl pages the search listing, decoding each page's embedded state, until a page yields no new
 // vacancy or the depth cap is hit — the shared list walk behind Fetch and FetchNew. Promoted (ad)
 // vacancies are skipped: they are injected across searches regardless of the role filter, so each
-// role crawl keeps only genuine matches. A first-page failure is a board-level error; a later page
-// failing ends the walk with the postings gathered so far, so a partial crawl survives a hiccup.
+// role crawl keeps only genuine matches. A later page failing to fetch or decode is now a hard
+// Fetch failure (matching the other hand-rolled adapters — a mid-crawl request failure is not
+// evidence of anything). Reaching hhMaxPages, however, is deliberately NOT a hard failure here,
+// unlike the sibling adapters in this batch: hh.ru's OWN search UI caps a query's reachable depth
+// at ~2000 results (hhMaxPages == 2000/hhPageSize) regardless of how many more a role's true
+// count is, so a busy role can legitimately exhaust the cap on every run. Confirmed live
+// 2026-09-08 against a currently-configured board (professional_role 96): hh.ru's own paging
+// state reports totalResults=6657 for the 7-day window while capping its own lastPage at index
+// 19 — the exact ceiling hhMaxPages encodes. Treating that as a Fetch failure would fail this
+// board's crawl on every run, not surface a genuine truncation; hh therefore does NOT earn the
+// fullBoardListing marker (see its own note below) and keeps the original soft return here.
 func (s hh) crawl(ctx context.Context, e CompanyEntry) ([]hhVacancy, error) {
 	var out []hhVacancy
 	seen := map[int64]bool{}
 	for page := 0; page < hhMaxPages; page++ {
 		root, err := s.http.GetHTML(ctx, s.searchURL(e.Board, page))
 		if err != nil {
-			if page == 0 {
-				return nil, fmt.Errorf("hh: search role %q page %d: %w", e.Board, page, err)
-			}
-			break
+			return nil, fmt.Errorf("hh: search role %q page %d: %w", e.Board, page, err)
 		}
 		st, ok := hhStateOf(root)
 		if !ok {
-			if page == 0 {
-				return nil, fmt.Errorf("hh: search role %q page %d: no %s state", e.Board, page, hhStateID)
-			}
-			break
+			return nil, fmt.Errorf("hh: search role %q page %d: no %s state", e.Board, page, hhStateID)
 		}
 		added := 0
 		for _, v := range st.VacancySearchResult.Vacancies {
