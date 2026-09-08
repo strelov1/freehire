@@ -62,24 +62,24 @@ REFACTOR → simplify → review → only then `[x]`.
 
 ## 3. The catalogue package
 
-- [ ] 3.1 Create `internal/candidate/talentnetwork/` and **add it to the block table in
+- [x] 3.1 Create `internal/candidate/talentnetwork/` and **add it to the block table in
       `internal/platform/arch/layering/blocks.go`** — a package in neither column fails
       both guards. Package doc states the in-memory-snapshot decision and the seam for
       when membership outgrows it (design.md, "The catalogue is projected in memory").
-- [ ] 3.2 The read: the membership + stamp-gate predicate as a sqlc query over `users`
+- [x] 3.2 The read: the membership + stamp-gate predicate as a sqlc query over `users`
       (+ `user_profiles` for the curated facets, LEFT JOIN — a member may have no profile
       row). `make sqlc`.
-- [ ] 3.3 The snapshot: project every read row through `Catalog()`, hold it immutably,
+- [x] 3.3 The snapshot: project every read row through `Catalog()`, hold it immutably,
       refresh on a TTL. Test that a refresh replaces the snapshot atomically — a concurrent
       reader never sees a half-built one.
-- [ ] 3.4 Filters over the snapshot: category, seniority, skills, timezone region, city,
+- [x] 3.4 Filters over the snapshot: category, seniority, skills, timezone region, city,
       years, language. Values within one filter are OR, different filters are AND, an
       absent filter equals an empty one. Test each of those three rules separately.
-- [ ] 3.5 Order and paging: freshness of the structured extract descending, tie-broken by
+- [x] 3.5 Order and paging: freshness of the structured extract descending, tie-broken by
       the member's handle. Test that walking every page of a set containing a
       timestamp tie returns each member exactly once — a test that only checks the first
       page cannot see this bug.
-- [ ] 3.6 The single-card read: by handle, re-checking membership against the database
+- [x] 3.6 The single-card read: by handle, re-checking membership against the database
       rather than the snapshot, so a departure takes effect immediately.
 
 ## 4. The public API

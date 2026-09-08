@@ -132,6 +132,52 @@ func (q *Queries) DeleteUser(ctx context.Context, id int64) error {
 	return err
 }
 
+const getTalentNetworkMemberByHandle = `-- name: GetTalentNetworkMemberByHandle :one
+SELECT u.talent_handle,
+       u.timezone,
+       COALESCE(u.resume_cities, '{}')::text[] AS cities,
+       u.resume_structured,
+       u.resume_structured_uploaded_at,
+       COALESCE(p.specializations, '{}')::text[] AS specializations
+FROM users u
+LEFT JOIN user_profiles p ON p.user_id = u.id
+WHERE u.talent_handle = $1
+  AND u.talent_network_visibility <> 'off'
+  AND u.resume_uploaded_at IS NOT NULL
+  AND u.resume_structured_uploaded_at = u.resume_uploaded_at
+`
+
+type GetTalentNetworkMemberByHandleRow struct {
+	TalentHandle               pgtype.Text        `json:"talent_handle"`
+	Timezone                   pgtype.Text        `json:"timezone"`
+	Cities                     []string           `json:"cities"`
+	ResumeStructured           []byte             `json:"resume_structured"`
+	ResumeStructuredUploadedAt pgtype.Timestamptz `json:"resume_structured_uploaded_at"`
+	Specializations            []string           `json:"specializations"`
+}
+
+// One member's card, by the handle in the public URL. Same predicate as the list, so a
+// handle nobody holds, a member who has left, and one whose extract has gone stale all
+// come back as pgx.ErrNoRows — which the handler renders as the one 404. Deciding it
+// here rather than in the caller is deliberate: three ways to be absent and one way to
+// say so is a rule that cannot be half-applied.
+//
+// Read against the DATABASE, never the snapshot the list is served from. A candidate who
+// leaves must stop resolving immediately, not when the snapshot next refreshes.
+func (q *Queries) GetTalentNetworkMemberByHandle(ctx context.Context, talentHandle pgtype.Text) (GetTalentNetworkMemberByHandleRow, error) {
+	row := q.db.QueryRow(ctx, getTalentNetworkMemberByHandle, talentHandle)
+	var i GetTalentNetworkMemberByHandleRow
+	err := row.Scan(
+		&i.TalentHandle,
+		&i.Timezone,
+		&i.Cities,
+		&i.ResumeStructured,
+		&i.ResumeStructuredUploadedAt,
+		&i.Specializations,
+	)
+	return i, err
+}
+
 const getTalentNetworkProfileByPublicID = `-- name: GetTalentNetworkProfileByPublicID :one
 SELECT u.talent_network_visibility,
        u.resume_structured,
@@ -564,6 +610,79 @@ func (q *Queries) GetUsernameByUser(ctx context.Context, id int64) (GetUsernameB
 	var i GetUsernameByUserRow
 	err := row.Scan(&i.Username, &i.UsernameUpdatedAt)
 	return i, err
+}
+
+const listTalentNetworkMembers = `-- name: ListTalentNetworkMembers :many
+SELECT u.talent_handle,
+       u.timezone,
+       COALESCE(u.resume_cities, '{}')::text[] AS cities,
+       u.resume_structured,
+       u.resume_structured_uploaded_at,
+       COALESCE(p.specializations, '{}')::text[] AS specializations
+FROM users u
+LEFT JOIN user_profiles p ON p.user_id = u.id
+WHERE u.talent_network_visibility <> 'off'
+  AND u.talent_handle IS NOT NULL
+  AND u.resume_uploaded_at IS NOT NULL
+  AND u.resume_structured_uploaded_at = u.resume_uploaded_at
+ORDER BY u.resume_structured_uploaded_at DESC, u.talent_handle DESC
+`
+
+type ListTalentNetworkMembersRow struct {
+	TalentHandle               pgtype.Text        `json:"talent_handle"`
+	Timezone                   pgtype.Text        `json:"timezone"`
+	Cities                     []string           `json:"cities"`
+	ResumeStructured           []byte             `json:"resume_structured"`
+	ResumeStructuredUploadedAt pgtype.Timestamptz `json:"resume_structured_uploaded_at"`
+	Specializations            []string           `json:"specializations"`
+}
+
+// Every member the public catalogue may show, in one read. The caller projects each row
+// through talentnetwork.ProjectCard and holds the result as a snapshot — see that
+// package's doc for why the whole set is read at once rather than filtered in SQL: the
+// category and seniority a card is filtered by do not exist as columns, they are derived
+// from the job title by a dictionary that changes weekly.
+//
+// The predicate is the membership rule and nothing else:
+//
+//   - not 'off' — the candidate asked to be found;
+//   - a minted handle — without one there is no URL to link the card to, so a row in
+//     this state is mid-join, not a member;
+//   - the stamp gate (resume_structured_uploaded_at = resume_uploaded_at, both set) —
+//     the same "this structure still describes the CV on file" rule the rest of the
+//     product applies. Without it most cards would be somebody's previous CV.
+//
+// LEFT JOIN, because a candidate can join before ever saving a profile: a missing
+// user_profiles row is empty facets, not a missing member.
+//
+// Ordered here rather than by the caller so the snapshot arrives sorted, and TOTALLY:
+// two members sharing a timestamp would otherwise order arbitrarily, and an arbitrary
+// order across pages silently drops some people and repeats others.
+func (q *Queries) ListTalentNetworkMembers(ctx context.Context) ([]ListTalentNetworkMembersRow, error) {
+	rows, err := q.db.Query(ctx, listTalentNetworkMembers)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListTalentNetworkMembersRow{}
+	for rows.Next() {
+		var i ListTalentNetworkMembersRow
+		if err := rows.Scan(
+			&i.TalentHandle,
+			&i.Timezone,
+			&i.Cities,
+			&i.ResumeStructured,
+			&i.ResumeStructuredUploadedAt,
+			&i.Specializations,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listUserBlobKeys = `-- name: ListUserBlobKeys :many

@@ -2207,6 +2207,15 @@ type Querier interface {
 	// same request again: without this read every refresh minted another copy and stranded the
 	// conversation bound to the previous one.
 	GetTailoredCVForJob(ctx context.Context, arg GetTailoredCVForJobParams) (GetTailoredCVForJobRow, error)
+	// One member's card, by the handle in the public URL. Same predicate as the list, so a
+	// handle nobody holds, a member who has left, and one whose extract has gone stale all
+	// come back as pgx.ErrNoRows — which the handler renders as the one 404. Deciding it
+	// here rather than in the caller is deliberate: three ways to be absent and one way to
+	// say so is a rule that cannot be half-applied.
+	//
+	// Read against the DATABASE, never the snapshot the list is served from. A candidate who
+	// leaves must stop resolving immediately, not when the snapshot next refreshes.
+	GetTalentNetworkMemberByHandle(ctx context.Context, talentHandle pgtype.Text) (GetTalentNetworkMemberByHandleRow, error)
 	// Everything the public Talent Network page needs to render, keyed by the opaque
 	// talent_network_public_id (never users.id, which would leak signup order/row count).
 	// Mirrors the users + user_profiles composition GetProfile/toProfileResponse already
@@ -3494,6 +3503,28 @@ type Querier interface {
 	// vacancy's public slug and the bound agent session so each row links back to its workspace.
 	// Base CVs (job_id NULL) are excluded; the JOIN also drops tailored CVs whose job was deleted.
 	ListTailoredCVsByUser(ctx context.Context, userID int64) ([]ListTailoredCVsByUserRow, error)
+	// Every member the public catalogue may show, in one read. The caller projects each row
+	// through talentnetwork.ProjectCard and holds the result as a snapshot — see that
+	// package's doc for why the whole set is read at once rather than filtered in SQL: the
+	// category and seniority a card is filtered by do not exist as columns, they are derived
+	// from the job title by a dictionary that changes weekly.
+	//
+	// The predicate is the membership rule and nothing else:
+	//
+	//   * not 'off' — the candidate asked to be found;
+	//   * a minted handle — without one there is no URL to link the card to, so a row in
+	//     this state is mid-join, not a member;
+	//   * the stamp gate (resume_structured_uploaded_at = resume_uploaded_at, both set) —
+	//     the same "this structure still describes the CV on file" rule the rest of the
+	//     product applies. Without it most cards would be somebody's previous CV.
+	//
+	// LEFT JOIN, because a candidate can join before ever saving a profile: a missing
+	// user_profiles row is empty facets, not a missing member.
+	//
+	// Ordered here rather than by the caller so the snapshot arrives sorted, and TOTALLY:
+	// two members sharing a timestamp would otherwise order arbitrarily, and an arbitrary
+	// order across pages silently drops some people and repeats others.
+	ListTalentNetworkMembers(ctx context.Context) ([]ListTalentNetworkMembersRow, error)
 	ListThreadRepliesAfter(ctx context.Context, arg ListThreadRepliesAfterParams) ([]ListThreadRepliesAfterRow, error)
 	// First page of a thread's replies, oldest first. LEFT JOIN so an authorless reply
 	// still returns — a future AI reply, or one whose author deleted their account.
