@@ -8,6 +8,12 @@ import (
 	"syscall"
 	"time"
 
+	// The mentorship slot engine resolves IANA zone names at request time, so a missing
+	// zone database would silently label every mentor's schedule UTC — a wrong answer
+	// shaped exactly like a right one. The runtime image ships tzdata today; this makes
+	// the binary independent of that.
+	_ "time/tzdata"
+
 	sentryfiber "github.com/getsentry/sentry-go/fiber"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/logger"

@@ -35,6 +35,7 @@ import (
 	"github.com/strelov1/freehire/internal/candidate/survey"
 	"github.com/strelov1/freehire/internal/engage/companyfeedback"
 	"github.com/strelov1/freehire/internal/engage/emailnotify"
+	"github.com/strelov1/freehire/internal/engage/mentorship"
 	"github.com/strelov1/freehire/internal/engage/referral"
 	"github.com/strelov1/freehire/internal/engage/report"
 	"github.com/strelov1/freehire/internal/identity/accountdelete"
@@ -649,11 +650,18 @@ func Register(app *fiber.App, cfg Config) {
 	// concrete pointer never hides behind a non-nil interface (see the search note above);
 	// a referrer with no reachable channel still sees the request in-cabinet.
 	var referralEmail referral.EmailSender
+	// The same client, held as its CONCRETE type as well, because mentorship needs the
+	// attachment path a bare Sender does not expose — a calendar invitation is only an
+	// invitation when it is an attachment. A typed nil must not hide behind a non-nil
+	// interface here either, which is why this is its own pointer rather than a type
+	// assertion on referralEmail.
+	var mailClient *emailnotify.Client
 	if cfg.AWSRegion != "" && cfg.NotifyEmailFrom != "" {
 		if ec, err := emailnotify.NewClient(context.Background(), cfg.AWSRegion); err != nil {
 			log.Printf("referral: email pinger disabled: %v", err)
 		} else {
 			referralEmail = ec
+			mailClient = ec
 			// The same SES client carries the account mails (verification and password
 			// reset). Without it the accounts service keeps registering and
 			// authenticating; only the code-backed flows report 503.
@@ -678,6 +686,20 @@ func Register(app *fiber.App, cfg Config) {
 	referralSvc := referral.New(referral.NewQueriesRepository(queries), referralPinger, cfg.Blob,
 		referral.Config{CabinetURL: referralCabinetURL})
 	referralsH := newReferralHandlers(referralSvc, cfg.Blob, cvRenderer, cvStore, photoStore)
+
+	// The mentorship marketplace: referral's opposite number, where the insider is named
+	// and chosen rather than anonymous. A nil notifier is a deployment with no mail
+	// transport — the feature works and nobody is told, which is how it ships before SES
+	// is wired for it and what rolling it back looks like.
+	var mentorshipNotifier mentorship.Notifier
+	if mailClient != nil && cfg.NotifyEmailFrom != "" {
+		mentorshipNotifier = mentorship.NewMailNotifier(mailClient, cfg.NotifyEmailFrom,
+			strings.TrimRight(cfg.FrontendOrigin, "/")+"/my/sessions")
+	}
+	mentorshipH := newMentorshipHandlers(mentorship.New(
+		mentorship.NewQueriesRepository(queries, cfg.Pool),
+		mentorship.Config{Notifier: mentorshipNotifier, Cache: cfg.Cache},
+	))
 
 	// Allow the canonical frontend origin plus every served domain's https apex,
 	// so a cross-origin (non-credentialed) read works from either domain during a
@@ -795,6 +817,9 @@ func Register(app *fiber.App, cfg Config) {
 
 	// Employee referrals (see referralHandlers).
 	referralsH.register(api, mw)
+
+	// The mentorship marketplace (see mentorshipHandlers).
+	mentorshipH.register(api, mw)
 
 	// Job reports + review queue (see reportHandlers).
 	reportsH.register(api, mw)

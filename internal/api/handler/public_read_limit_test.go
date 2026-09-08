@@ -213,6 +213,10 @@ func publicReadRoutes(t *testing.T, throttler ratelimit.Throttler) (map[string]*
 		"searchHandlers":    mount((&searchHandlers{}).register),
 		"suggestHandlers":   mount((&suggestHandlers{}).register),
 		"geoHandlers":       mount(newGeoHandlers().register),
+		// The mentor directory and profile read on the shared public-read budget; the
+		// slot endpoint has its own, because it COMPUTES per request and must not be able
+		// to exhaust what the rest of the site reads on.
+		"mentorshipHandlers": mount((&mentorshipHandlers{}).registerPublic),
 	}, iss
 }
 
