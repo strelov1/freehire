@@ -32,9 +32,9 @@ type chronicBoardsReport struct {
 // a dry run genuinely writes nothing. A board with `board == ""` is a boardless provider's own
 // health record (see ingest-board-health spec) and routes to the source-scoped close/count
 // instead of the board-scoped one, since it already stands for the provider's whole catalogue.
-func closeChronicBoards(ctx context.Context, q *db.Queries, closeWindowDays int64, maxBoards int32, apply bool) (chronicBoardsReport, error) {
+func closeChronicBoards(ctx context.Context, q *db.Queries, closeWindowDays int32, maxBoards int32, apply bool) (chronicBoardsReport, error) {
 	rows, err := q.ListChronicBoards(ctx, db.ListChronicBoardsParams{
-		AgeWindow: pgtype.Interval{Days: int32(closeWindowDays), Valid: true},
+		AgeWindow: pgtype.Interval{Days: closeWindowDays, Valid: true},
 		MaxBoards: maxBoards,
 	})
 	if err != nil {

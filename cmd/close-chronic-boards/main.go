@@ -33,7 +33,7 @@ import (
 // window (cmd/ingest's chronicBoardWindowDaysDefault, 30 days): a curator who reads that report
 // has the gap between the two windows to retire or fix a board before this worker would have
 // closed it anyway (design.md Decision 1).
-const chronicBoardCloseWindowDaysDefault = 60
+const chronicBoardCloseWindowDaysDefault int32 = 60
 
 func main() { worker.Main(run) }
 
@@ -49,7 +49,7 @@ func run() int {
 	}
 	defer cleanup()
 
-	days, err := worker.EnvInt64("CHRONIC_BOARD_CLOSE_WINDOW_DAYS", chronicBoardCloseWindowDaysDefault)
+	days, err := worker.EnvInt32("CHRONIC_BOARD_CLOSE_WINDOW_DAYS", chronicBoardCloseWindowDaysDefault)
 	if err != nil {
 		log.Printf("close-chronic-boards: %v", err)
 		return 1

@@ -177,7 +177,7 @@ const chronicBoardsCap = 20
 // above the sweep's ~24h cooldown ceiling, so a board merely backing off from a recent run of
 // failures is never mistaken for one that has proven itself broken. CHRONIC_BOARD_WINDOW_DAYS
 // overrides it without a deploy.
-const chronicBoardWindowDaysDefault = 30
+const chronicBoardWindowDaysDefault int32 = 30
 
 // logChronicBoards emits one summary line naming the worst chronic boards — those that have
 // gone the reporting window without a single successful crawl, as opposed to merely cooling
@@ -186,13 +186,13 @@ const chronicBoardWindowDaysDefault = 30
 // ordinary backoff" apart from "has not worked in over a month and needs a decision". Best-
 // effort, like its sibling: a read or config error is logged and ignored, never fails the run.
 func logChronicBoards(ctx context.Context, q *db.Queries) {
-	days, err := worker.EnvInt64("CHRONIC_BOARD_WINDOW_DAYS", chronicBoardWindowDaysDefault)
+	days, err := worker.EnvInt32("CHRONIC_BOARD_WINDOW_DAYS", chronicBoardWindowDaysDefault)
 	if err != nil {
 		log.Printf("ingest health: chronic board window: %v", err)
 		return
 	}
 	rows, err := q.ListChronicBoards(ctx, db.ListChronicBoardsParams{
-		AgeWindow: pgtype.Interval{Days: int32(days), Valid: true},
+		AgeWindow: pgtype.Interval{Days: days, Valid: true},
 		MaxBoards: chronicBoardsCap,
 	})
 	if err != nil {
