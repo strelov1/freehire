@@ -33,8 +33,9 @@ type chronicBoardsReport struct {
 // health record (see ingest-board-health spec) and routes to the source-scoped close/count
 // instead of the board-scoped one, since it already stands for the provider's whole catalogue.
 func closeChronicBoards(ctx context.Context, q *db.Queries, closeWindowDays int32, maxBoards int32, apply bool) (chronicBoardsReport, error) {
+	ageWindow := pgtype.Interval{Days: closeWindowDays, Valid: true}
 	rows, err := q.ListChronicBoards(ctx, db.ListChronicBoardsParams{
-		AgeWindow: pgtype.Interval{Days: closeWindowDays, Valid: true},
+		AgeWindow: ageWindow,
 		MaxBoards: maxBoards,
 	})
 	if err != nil {
@@ -55,7 +56,7 @@ func closeChronicBoards(ctx context.Context, q *db.Queries, closeWindowDays int3
 				r.Provider, r.Board)
 			continue
 		}
-		n, err := closeOrCountOneBoard(ctx, q, r, apply)
+		n, err := closeOrCountOneBoard(ctx, q, r, ageWindow, apply)
 		if err != nil {
 			return report, err
 		}
@@ -86,18 +87,27 @@ func isRegionAmbiguous(ctx context.Context, q *db.Queries, r db.ListChronicBoard
 	return regions > 1, nil
 }
 
-func closeOrCountOneBoard(ctx context.Context, q *db.Queries, r db.ListChronicBoardsRow, apply bool) (int64, error) {
+// closeOrCountOneBoard closes (or, without apply, counts) one chronic row's jobs. ageWindow is
+// passed through to the query itself, which re-validates board_health's CURRENT state against
+// it before touching anything — see CloseChronicBoardJobs's doc comment for why: the row r was
+// read by an earlier, separate query (ListChronicBoards), and the board can recover in the gap
+// between that read and this call.
+func closeOrCountOneBoard(ctx context.Context, q *db.Queries, r db.ListChronicBoardsRow, ageWindow pgtype.Interval, apply bool) (int64, error) {
 	if r.Board == "" {
 		if apply {
-			return q.CloseChronicProviderJobs(ctx, r.Provider)
+			return q.CloseChronicProviderJobs(ctx, db.CloseChronicProviderJobsParams{Source: r.Provider, AgeWindow: ageWindow})
 		}
-		return q.CountChronicProviderJobs(ctx, r.Provider)
+		return q.CountChronicProviderJobs(ctx, db.CountChronicProviderJobsParams{Source: r.Provider, AgeWindow: ageWindow})
 	}
 	pattern := externalid.BoardPattern(r.Board)
 	if apply {
-		return q.CloseChronicBoardJobs(ctx, db.CloseChronicBoardJobsParams{Source: r.Provider, BoardPattern: pattern})
+		return q.CloseChronicBoardJobs(ctx, db.CloseChronicBoardJobsParams{
+			Source: r.Provider, BoardPattern: pattern, Board: r.Board, AgeWindow: ageWindow,
+		})
 	}
-	return q.CountChronicBoardJobs(ctx, db.CountChronicBoardJobsParams{Source: r.Provider, BoardPattern: pattern})
+	return q.CountChronicBoardJobs(ctx, db.CountChronicBoardJobsParams{
+		Source: r.Provider, BoardPattern: pattern, Board: r.Board, AgeWindow: ageWindow,
+	})
 }
 
 func logChronicBoardAction(r db.ListChronicBoardsRow, n int64, apply bool) {

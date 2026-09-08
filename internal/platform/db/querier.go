@@ -645,6 +645,15 @@ type Querier interface {
 	// closed here is never conflated with one the per-run sweep closed with actual run coverage —
 	// see job-lifecycle spec, "every close records the mechanism".
 	//
+	// The EXISTS clause RE-VALIDATES board_health's current state within this same statement,
+	// against the identical chronic predicate ListChronicBoards used to select the row in the
+	// first place (caught in review, PR #2641/CodeRabbit): the caller reads chronic boards, then
+	// closes them, as two separate round trips, and a board can recover — a real crawl can
+	// succeed, calling RecordBoardSuccess — in the gap between the two. Re-checking here rather
+	// than trusting what the caller read earlier closes that window: if the board's last_success_at
+	// has moved since the caller's read, this EXISTS is false and the UPDATE matches nothing,
+	// exactly as if the caller had re-read board_health immediately before closing.
+	//
 	// The search_delete_outbox CTE is copied verbatim from CloseUnseenJobs: the enqueue must ride
 	// this statement to stay atomic with the close and exact.
 	//
@@ -654,8 +663,9 @@ type Querier interface {
 	// record (board = '', see ingest-board-health spec): such a record already stands for the
 	// provider's whole crawl, so closing "this board's jobs" means the whole provider's open jobs,
 	// by source alone — mirrors CloseUnseenJobsBySource but with no per-run cutoff, for the same
-	// reason CloseChronicBoardJobs has none.
-	CloseChronicProviderJobs(ctx context.Context, source string) (int64, error)
+	// reason CloseChronicBoardJobs has none. Carries the same board_health re-validation EXISTS
+	// clause as CloseChronicBoardJobs, and for the same reason.
+	CloseChronicProviderJobs(ctx context.Context, arg CloseChronicProviderJobsParams) (int64, error)
 	// Moderator close: the thread leaves the open listing and rejects new replies.
 	CloseCommunityThread(ctx context.Context, id int64) error
 	//
@@ -984,10 +994,13 @@ type Querier interface {
 	// set a visitor can page through.
 	CountCatalogueScale(ctx context.Context) (CountCatalogueScaleRow, error)
 	// What CloseChronicBoardJobs would close, for the safety-net worker's dry-run report — same
-	// predicate, no write, mirroring CountExpiredTracerClicks alongside DeleteExpiredTracerClicks.
+	// predicate (including the board_health re-validation, so a dry run cannot report a count for
+	// a board that has already recovered), no write, mirroring CountExpiredTracerClicks alongside
+	// DeleteExpiredTracerClicks.
 	CountChronicBoardJobs(ctx context.Context, arg CountChronicBoardJobsParams) (int64, error)
-	// What CloseChronicProviderJobs would close, for the safety-net worker's dry-run report.
-	CountChronicProviderJobs(ctx context.Context, source string) (int64, error)
+	// What CloseChronicProviderJobs would close, for the safety-net worker's dry-run report. Same
+	// board_health re-validation as its close counterpart.
+	CountChronicProviderJobs(ctx context.Context, arg CountChronicProviderJobsParams) (int64, error)
 	// Total companies matching the same optional name + facet filters as ListCompanies,
 	// so search/filter pagination reports the filtered total. Keep this WHERE identical
 	// to ListCompanies (including the job_count > 0 hiring scope).

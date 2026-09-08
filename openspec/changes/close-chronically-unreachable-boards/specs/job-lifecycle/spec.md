@@ -81,6 +81,29 @@ no board-name collision possible.
   one region for its provider
 - **THEN** that board's open jobs are closed as usual
 
+### Requirement: A board that recovers before the close reaches it is never closed
+
+The safety-net pass SHALL re-evaluate whether a board is still past the closure window
+at the moment it closes (or, in a dry run, counts) that board's jobs, rather than
+trusting only the earlier read that selected it as chronic. A board whose crawl
+succeeds — moving its recorded evidence of the last successful crawl forward — between
+that earlier selection and the close SHALL NOT have its jobs closed, even though the
+pass had already decided, based on the now-stale read, that it qualified.
+
+#### Scenario: A board that recovers between selection and close is spared
+
+- **WHEN** the safety-net pass selects a board as chronic, the board's crawl then
+  succeeds, and only afterward does the pass reach the point of closing that board's
+  jobs
+- **THEN** the board's jobs are not closed
+
+#### Scenario: A dry run's count reflects the same re-evaluation
+
+- **WHEN** a dry run counts what it would close for a board that recovered after
+  selection but before the count
+- **THEN** the reported count for that board is zero, not the number that would have
+  matched at selection time
+
 ### Requirement: A safety-net close carries its own mechanism label
 
 A job closed by the chronic-board safety net SHALL record a close reason distinct

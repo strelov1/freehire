@@ -1426,6 +1426,15 @@ SELECT count(*) FROM closed;
 -- closed here is never conflated with one the per-run sweep closed with actual run coverage —
 -- see job-lifecycle spec, "every close records the mechanism".
 --
+-- The EXISTS clause RE-VALIDATES board_health's current state within this same statement,
+-- against the identical chronic predicate ListChronicBoards used to select the row in the
+-- first place (caught in review, PR #2641/CodeRabbit): the caller reads chronic boards, then
+-- closes them, as two separate round trips, and a board can recover — a real crawl can
+-- succeed, calling RecordBoardSuccess — in the gap between the two. Re-checking here rather
+-- than trusting what the caller read earlier closes that window: if the board's last_success_at
+-- has moved since the caller's read, this EXISTS is false and the UPDATE matches nothing,
+-- exactly as if the caller had re-read board_health immediately before closing.
+--
 -- The search_delete_outbox CTE is copied verbatim from CloseUnseenJobs: the enqueue must ride
 -- this statement to stay atomic with the close and exact.
 --
@@ -1438,6 +1447,13 @@ WITH closed AS (
     WHERE closed_at IS NULL
       AND source = sqlc.arg(source)
       AND external_id LIKE sqlc.arg(board_pattern)
+      AND EXISTS (
+          SELECT 1 FROM board_health bh
+          WHERE bh.provider = sqlc.arg(source)
+            AND bh.board = sqlc.arg(board)
+            AND ((bh.last_success_at IS NOT NULL AND bh.last_success_at < now() - sqlc.arg(age_window)::interval)
+              OR (bh.last_success_at IS NULL AND bh.first_seen_at < now() - sqlc.arg(age_window)::interval))
+      )
     RETURNING id
 ), queued AS (
     INSERT INTO search_delete_outbox (job_id)
@@ -1451,7 +1467,8 @@ SELECT count(*) FROM closed;
 -- record (board = '', see ingest-board-health spec): such a record already stands for the
 -- provider's whole crawl, so closing "this board's jobs" means the whole provider's open jobs,
 -- by source alone — mirrors CloseUnseenJobsBySource but with no per-run cutoff, for the same
--- reason CloseChronicBoardJobs has none.
+-- reason CloseChronicBoardJobs has none. Carries the same board_health re-validation EXISTS
+-- clause as CloseChronicBoardJobs, and for the same reason.
 WITH closed AS (
     UPDATE jobs
     SET closed_at     = now(),
@@ -1459,6 +1476,13 @@ WITH closed AS (
         updated_at    = now()
     WHERE closed_at IS NULL
       AND source = sqlc.arg(source)
+      AND EXISTS (
+          SELECT 1 FROM board_health bh
+          WHERE bh.provider = sqlc.arg(source)
+            AND bh.board = ''
+            AND ((bh.last_success_at IS NOT NULL AND bh.last_success_at < now() - sqlc.arg(age_window)::interval)
+              OR (bh.last_success_at IS NULL AND bh.first_seen_at < now() - sqlc.arg(age_window)::interval))
+      )
     RETURNING id
 ), queued AS (
     INSERT INTO search_delete_outbox (job_id)
@@ -1469,17 +1493,34 @@ SELECT count(*) FROM closed;
 
 -- name: CountChronicBoardJobs :one
 -- What CloseChronicBoardJobs would close, for the safety-net worker's dry-run report — same
--- predicate, no write, mirroring CountExpiredTracerClicks alongside DeleteExpiredTracerClicks.
+-- predicate (including the board_health re-validation, so a dry run cannot report a count for
+-- a board that has already recovered), no write, mirroring CountExpiredTracerClicks alongside
+-- DeleteExpiredTracerClicks.
 SELECT count(*) FROM jobs
 WHERE closed_at IS NULL
   AND source = sqlc.arg(source)
-  AND external_id LIKE sqlc.arg(board_pattern);
+  AND external_id LIKE sqlc.arg(board_pattern)
+  AND EXISTS (
+      SELECT 1 FROM board_health bh
+      WHERE bh.provider = sqlc.arg(source)
+        AND bh.board = sqlc.arg(board)
+        AND ((bh.last_success_at IS NOT NULL AND bh.last_success_at < now() - sqlc.arg(age_window)::interval)
+          OR (bh.last_success_at IS NULL AND bh.first_seen_at < now() - sqlc.arg(age_window)::interval))
+  );
 
 -- name: CountChronicProviderJobs :one
--- What CloseChronicProviderJobs would close, for the safety-net worker's dry-run report.
+-- What CloseChronicProviderJobs would close, for the safety-net worker's dry-run report. Same
+-- board_health re-validation as its close counterpart.
 SELECT count(*) FROM jobs
 WHERE closed_at IS NULL
-  AND source = sqlc.arg(source);
+  AND source = sqlc.arg(source)
+  AND EXISTS (
+      SELECT 1 FROM board_health bh
+      WHERE bh.provider = sqlc.arg(source)
+        AND bh.board = ''
+        AND ((bh.last_success_at IS NOT NULL AND bh.last_success_at < now() - sqlc.arg(age_window)::interval)
+          OR (bh.last_success_at IS NULL AND bh.first_seen_at < now() - sqlc.arg(age_window)::interval))
+  );
 
 -- name: UnseenJobIDs :many
 -- Same candidate set as CloseUnseenJobs, unmaterialized. The sweep's fallback path

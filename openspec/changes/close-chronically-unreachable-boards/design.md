@@ -111,6 +111,22 @@ review, not anticipated in the original design — the LIKE-pattern reuse in Dec
 above copied the SQL shape from `CloseUnseenJobsForBoard` without also copying the
 safety check that makes that shape sound.
 
+**5b. The close (and count) re-validates board_health within its own statement, closing a
+TOCTOU window a second independent review caught.** `closeChronicBoards` reads chronic
+rows via `ListChronicBoards`, then later calls `CloseChronicBoardJobs`/
+`CloseChronicProviderJobs` for each — two separate round trips, with an
+`isRegionAmbiguous` check and a log line in between. A board can recover in that gap: a
+real crawl can succeed and call `RecordBoardSuccess`, moving `last_success_at` forward,
+between the read and the close. `CloseChronicBoardJobs`/`CloseChronicProviderJobs` (and
+their `Count*` dry-run siblings) now carry an `EXISTS` subquery against `board_health`
+that re-evaluates the IDENTICAL chronic predicate `ListChronicBoards` used, at the
+moment the statement runs — so a board that recovered before the close reaches it
+closes nothing, exactly as if the caller had re-read `board_health` immediately before
+acting. This needs `board` and `age_window` as query parameters (previously only
+`source`/`board_pattern`), which is why `closeOrCountOneBoard` now threads the same
+`pgtype.Interval` used for the initial `ListChronicBoards` call through to every close
+and count.
+
 **6. Chronic reporting reuses `ListUnhealthyBoards`'s consumer, adds a second
 section.** The per-run log summary (`cmd/ingest/main.go`'s unhealthy-boards line) and
 the `/status`-page-adjacent operator query both gain a chronic count/list alongside
@@ -146,6 +162,37 @@ surface — same log line shape, one more labeled group.
   matters enough to act on before the board name naturally stops being ambiguous
   (the dead region's `board_health` row could also be deleted by hand, which removes
   the ambiguity and lets a later run close it normally).
+- **[Risk] Retiring ONE region of a multi-region board (`boardcatalog.Retire`, e.g.
+  `cmd/add-board --retire` on a single `(provider, board, region)`) deletes only that
+  region's `board_health` row, which can un-flag a board `isRegionAmbiguous` previously
+  refused to touch** — e.g. Adzuna `it-jobs/us` retired while `it-jobs/gb` is chronic:
+  `CountBoardHealthRegions` now sees one row, and a later run closes `it-jobs:%`,
+  reaching both `gb`'s genuinely chronic jobs and whatever `us` postings never got
+  closed when it retired. → Mitigation: accepted, not fixed — `cmd/prune`'s own bulk
+  retirement (`retireBoards`) always retires every region of a board together, so this
+  needs a DELIBERATE per-region retirement via the less-common single-board path, and
+  its consequence is closing a retired board's already-uncrawlable leftover postings
+  (arguably overdue, since nothing else closes them — the same documented leak as the
+  bullet above) rather than closing a board that is still genuinely being crawled. The
+  narrower, higher-severity case — a board name ambiguous RIGHT NOW, with more than one
+  live region — is exactly what Decision 5a's check catches; this residual is a
+  same-provider, near-identical shape to a risk already accepted in the bullet above,
+  not a new class of exposure. Raised in review (CodeRabbit); declined as
+  disproportionate to fix given how narrow and low-severity it is.
+- **[Declined] CodeRabbit review suggested requiring `consecutive_failures > 0` in
+  `ListChronicBoards`, reasoning that a board `ClearProviderCooldowns` recovered should
+  stop being chronic.** This is incorrect for how this schema is used:
+  `ClearProviderCooldowns` resets `consecutive_failures`/`cooldown_until` when a
+  RECOVERY PROBE proves the provider reachable again, to let its boards retry
+  immediately instead of each waiting out its own backoff — it does NOT touch
+  `last_success_at`, and proves nothing about whether that specific board has actually
+  crawled successfully since. Adding this condition would make a board that is still
+  genuinely broken (its real `last_success_at` unchanged, still months old) stop
+  appearing as chronic the moment ANY board of that provider's cooldown clears
+  administratively — a correctness regression, not a fix. `last_success_at`/
+  `first_seen_at` alone is the deliberate design (Decisions 2-3): they are the only
+  columns that answer "has a crawl actually succeeded", which is the question this
+  mechanism exists to ask.
 
 ## Migration Plan
 
