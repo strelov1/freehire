@@ -15,6 +15,7 @@ import (
 	"github.com/strelov1/freehire/internal/ingest/boardcatalog"
 	"github.com/strelov1/freehire/internal/ingest/pipeline"
 	"github.com/strelov1/freehire/internal/platform/db"
+	"github.com/strelov1/freehire/internal/platform/worker"
 )
 
 // boardHealth adapts *db.Queries to pipeline.BoardHealth: it reads a board's cooldown
@@ -164,4 +165,69 @@ func unhealthyBoardsSummary(rows []db.ListUnhealthyBoardsRow, total int64, now t
 			total, len(rows), strings.Join(parts, " "), omitted)
 	}
 	return fmt.Sprintf("%d unhealthy board(s): %s", total, strings.Join(parts, " "))
+}
+
+// chronicBoardsCap bounds how many chronic boards the per-run report names, same log-size
+// concern as unhealthyBoardsCap — applied to the strictly smaller chronic subset, since a board
+// only qualifies after chronicBoardWindowDays of unbroken failure, not after a handful.
+const chronicBoardsCap = 20
+
+// chronicBoardWindowDaysDefault is how long a board must have gone without a successful crawl
+// before the per-run report calls it chronic (see ingest-board-health spec) — deliberately far
+// above the sweep's ~24h cooldown ceiling, so a board merely backing off from a recent run of
+// failures is never mistaken for one that has proven itself broken. CHRONIC_BOARD_WINDOW_DAYS
+// overrides it without a deploy.
+const chronicBoardWindowDaysDefault = 30
+
+// logChronicBoards emits one summary line naming the worst chronic boards — those that have
+// gone the reporting window without a single successful crawl, as opposed to merely cooling
+// down from a recent run of failures (openspec change close-chronically-unreachable-boards,
+// issue #2017). Distinct from logUnhealthyBoards's line so a curator can tell "still within an
+// ordinary backoff" apart from "has not worked in over a month and needs a decision". Best-
+// effort, like its sibling: a read or config error is logged and ignored, never fails the run.
+func logChronicBoards(ctx context.Context, q *db.Queries) {
+	days, err := worker.EnvInt64("CHRONIC_BOARD_WINDOW_DAYS", chronicBoardWindowDaysDefault)
+	if err != nil {
+		log.Printf("ingest health: chronic board window: %v", err)
+		return
+	}
+	rows, err := q.ListChronicBoards(ctx, db.ListChronicBoardsParams{
+		AgeWindow: pgtype.Interval{Days: int32(days), Valid: true},
+		MaxBoards: chronicBoardsCap,
+	})
+	if err != nil {
+		log.Printf("ingest health: list chronic boards: %v", err)
+		return
+	}
+	if len(rows) == 0 {
+		return
+	}
+	log.Printf("ingest health: %s", chronicBoardsSummary(rows, rows[0].Total, time.Now()))
+}
+
+// chronicBoardsSummary renders the chronic-board line: each named board as
+// "provider/board(days=N)" — or just "provider(days=N)" for a boardless provider's own
+// record — where N is days since the board's evidence anchor: last_success_at for a board
+// that has succeeded at least once, first_seen_at for one that never has (see
+// ingest-board-health spec). Plus how many the cap left out, same convention as
+// unhealthyBoardsSummary.
+func chronicBoardsSummary(rows []db.ListChronicBoardsRow, total int64, now time.Time) string {
+	parts := make([]string, 0, len(rows))
+	for _, r := range rows {
+		since := r.FirstSeenAt.Time
+		if r.LastSuccessAt.Valid {
+			since = r.LastSuccessAt.Time
+		}
+		days := int(now.Sub(since).Hours() / 24)
+		id := r.Provider
+		if r.Board != "" {
+			id += "/" + r.Board
+		}
+		parts = append(parts, fmt.Sprintf("%s(days=%d)", id, days))
+	}
+	if omitted := total - int64(len(rows)); omitted > 0 {
+		return fmt.Sprintf("%d chronic board(s), worst %d: %s (%d more)",
+			total, len(rows), strings.Join(parts, " "), omitted)
+	}
+	return fmt.Sprintf("%d chronic board(s): %s", total, strings.Join(parts, " "))
 }

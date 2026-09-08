@@ -231,6 +231,7 @@ type BoardHealth struct {
 	LastIngestedCount   pgtype.Int4        `json:"last_ingested_count"`
 	LastRunAt           pgtype.Timestamptz `json:"last_run_at"`
 	Region              string             `json:"region"`
+	FirstSeenAt         pgtype.Timestamptz `json:"first_seen_at"`
 }
 
 // Unclassified-URL triage inbox (the link_contributions "review" case). A row is deleted once triage resolves its (provider, board) and inserts into boards.

@@ -241,6 +241,80 @@ func (q *Queries) CanonicalJobForRole(ctx context.Context, arg CanonicalJobForRo
 	return i, err
 }
 
+const closeChronicBoardJobs = `-- name: CloseChronicBoardJobs :one
+WITH closed AS (
+    UPDATE jobs
+    SET closed_at     = now(),
+        closed_reason = 'board_unreachable',
+        updated_at    = now()
+    WHERE closed_at IS NULL
+      AND source = $1
+      AND external_id LIKE $2
+    RETURNING id
+), queued AS (
+    INSERT INTO search_delete_outbox (job_id)
+    SELECT id FROM closed
+    ON CONFLICT (job_id) DO NOTHING
+)
+SELECT count(*) FROM closed
+`
+
+type CloseChronicBoardJobsParams struct {
+	Source       string `json:"source"`
+	BoardPattern string `json:"board_pattern"`
+}
+
+// The chronic-board safety net (openspec change close-chronically-unreachable-boards, issue
+// #2017), board-scoped: closes every open job of ONE board that board_health.ListChronicBoards
+// has already proven unreachable for the closure window — no per-run cutoff, because the
+// evidence here is weeks of accumulated failure, not one run's coverage. Reuses
+// CloseUnseenJobsForBoard's board_pattern scoping so a same-provider sibling board is never
+// touched.
+//
+// closed_reason is 'board_unreachable', distinct from the ordinary sweep's 'unseen', so a job
+// closed here is never conflated with one the per-run sweep closed with actual run coverage —
+// see job-lifecycle spec, "every close records the mechanism".
+//
+// The search_delete_outbox CTE is copied verbatim from CloseUnseenJobs: the enqueue must ride
+// this statement to stay atomic with the close and exact.
+//
+// :one rather than :execrows because the CTE moves the row count out of the command tag.
+func (q *Queries) CloseChronicBoardJobs(ctx context.Context, arg CloseChronicBoardJobsParams) (int64, error) {
+	row := q.db.QueryRow(ctx, closeChronicBoardJobs, arg.Source, arg.BoardPattern)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const closeChronicProviderJobs = `-- name: CloseChronicProviderJobs :one
+WITH closed AS (
+    UPDATE jobs
+    SET closed_at     = now(),
+        closed_reason = 'board_unreachable',
+        updated_at    = now()
+    WHERE closed_at IS NULL
+      AND source = $1
+    RETURNING id
+), queued AS (
+    INSERT INTO search_delete_outbox (job_id)
+    SELECT id FROM closed
+    ON CONFLICT (job_id) DO NOTHING
+)
+SELECT count(*) FROM closed
+`
+
+// The chronic-board safety net's source-scoped sibling, for a BOARDLESS provider's chronic
+// record (board = ”, see ingest-board-health spec): such a record already stands for the
+// provider's whole crawl, so closing "this board's jobs" means the whole provider's open jobs,
+// by source alone — mirrors CloseUnseenJobsBySource but with no per-run cutoff, for the same
+// reason CloseChronicBoardJobs has none.
+func (q *Queries) CloseChronicProviderJobs(ctx context.Context, source string) (int64, error) {
+	row := q.db.QueryRow(ctx, closeChronicProviderJobs, source)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const closeJobByID = `-- name: CloseJobByID :one
 WITH closed AS (
     UPDATE jobs
@@ -909,6 +983,41 @@ func (q *Queries) CountCatalogueScale(ctx context.Context) (CountCatalogueScaleR
 	var i CountCatalogueScaleRow
 	err := row.Scan(&i.OpenJobs, &i.Companies)
 	return i, err
+}
+
+const countChronicBoardJobs = `-- name: CountChronicBoardJobs :one
+SELECT count(*) FROM jobs
+WHERE closed_at IS NULL
+  AND source = $1
+  AND external_id LIKE $2
+`
+
+type CountChronicBoardJobsParams struct {
+	Source       string `json:"source"`
+	BoardPattern string `json:"board_pattern"`
+}
+
+// What CloseChronicBoardJobs would close, for the safety-net worker's dry-run report — same
+// predicate, no write, mirroring CountExpiredTracerClicks alongside DeleteExpiredTracerClicks.
+func (q *Queries) CountChronicBoardJobs(ctx context.Context, arg CountChronicBoardJobsParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countChronicBoardJobs, arg.Source, arg.BoardPattern)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const countChronicProviderJobs = `-- name: CountChronicProviderJobs :one
+SELECT count(*) FROM jobs
+WHERE closed_at IS NULL
+  AND source = $1
+`
+
+// What CloseChronicProviderJobs would close, for the safety-net worker's dry-run report.
+func (q *Queries) CountChronicProviderJobs(ctx context.Context, source string) (int64, error) {
+	row := q.db.QueryRow(ctx, countChronicProviderJobs, source)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
 }
 
 const duplicateClosureGeoAll = `-- name: DuplicateClosureGeoAll :many
