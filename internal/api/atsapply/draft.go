@@ -44,6 +44,18 @@ func coverLetterAnswer(ctx context.Context, letters LetterReader, userID, jobID 
 	return stored.Body, true
 }
 
+// answerFor prefers the candidate's own existing cover letter over drafter for a
+// cover-letter-semantic field, falling through to drafter for everything else and whenever
+// no letter exists yet.
+func answerFor(ctx context.Context, f MergedField, drafter Drafter, grounding GroundingContext, letters LetterReader, userID, jobID int64) (answer string, ok bool, err error) {
+	if letters != nil && isCoverLetterTextField(f) {
+		if answer, ok := coverLetterAnswer(ctx, letters, userID, jobID); ok {
+			return answer, true, nil
+		}
+	}
+	return drafter.Draft(ctx, f, grounding)
+}
+
 // draftable reports whether a field is even a candidate for drafting: required (an
 // optional field with no answer is already a fine outcome, nothing to fix), labeled (a
 // field with no label — the DOM-only shape reconcile.go's own tests measure, e.g. an
@@ -100,17 +112,9 @@ func ResolveWithDrafting(ctx context.Context, fields []MergedField, answers map[
 			continue
 		}
 
-		var answer string
-		var ok bool
-		if letters != nil && isCoverLetterTextField(f) {
-			answer, ok = coverLetterAnswer(ctx, letters, userID, jobID)
-		}
-		if !ok {
-			var err error
-			answer, ok, err = drafter.Draft(ctx, f, grounding)
-			if err != nil {
-				return Plan{}, fmt.Errorf("draft %q: %w", f.ID, err)
-			}
+		answer, ok, err := answerFor(ctx, f, drafter, grounding, letters, userID, jobID)
+		if err != nil {
+			return Plan{}, fmt.Errorf("draft %q: %w", f.ID, err)
 		}
 		if !ok {
 			stillUnmapped = append(stillUnmapped, u)
