@@ -268,3 +268,21 @@ func writeBody(t *testing.T, w http.ResponseWriter, body string) {
 		t.Errorf("write stub response: %v", err)
 	}
 }
+
+// The list is ranked on views, so the number belongs in the post — and it is the
+// bot-filtered page count, never the fused one migration 0138 split it from.
+func TestLinkedInCarriesTheViewCount(t *testing.T) {
+	p := linkedInPublisherAt(t, "http://127.0.0.1:1/posts", fakeTokens{token: "t"})
+
+	got := commentaryOf(t, p, testDigest(Posting{Slug: "s", Title: "T", Company: "C", PageUniques: 12}))
+	if !strings.Contains(got, "12 views") {
+		t.Errorf("commentary does not carry the view count: %q", got)
+	}
+
+	// Singular, because "1 views" in a post under our own name is the kind of detail a
+	// reader notices instead of the vacancy.
+	got = commentaryOf(t, p, testDigest(Posting{Slug: "s", Title: "T", Company: "C", PageUniques: 1}))
+	if !strings.Contains(got, "1 view") || strings.Contains(got, "1 views") {
+		t.Errorf("a single view is not written in the singular: %q", got)
+	}
+}

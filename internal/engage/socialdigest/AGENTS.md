@@ -49,7 +49,13 @@ already publishes.
 - **The editorial constants are constants, not configuration.** `MinPageUniques`,
   `QuarantineDays`, `MaxPerCompany`, `Size`. Each decides what the public sees under
   our own name, so changing one should be a reviewed commit rather than an env var
-  edited over SSH.
+  edited over SSH. `MinPageUniques` moved 10 → 3 on 2026-09-08 for a measured reason
+  recorded at the constant; a test asserting the floor must be written against the
+  constant, never against a literal below it — one was, and it asserted the opposite of
+  its own name the moment the floor moved.
+- **Both channels print the view count, through one shared `viewsLabel`.** It is the
+  figure the whole list is ranked on, so two channels wording it differently — or one
+  quietly dropping it — would make the same digest read as two measurements.
 - **The ledger is keyed `(day, channel)`.** A run that posts to one channel and fails
   on another must, next time, skip the first and retry the second. The quarantine
   reads that same ledger **across** channels: the list is the editorial unit, the
