@@ -3,7 +3,7 @@
   import Seo from '$lib/components/Seo.svelte';
   import TalentCard from '$lib/components/TalentCard.svelte';
   import { CATEGORY_VALUES, SENIORITY_VALUES } from '$lib/generated/contracts';
-  import { CATEGORY_LABELS, SENIORITY_LABELS } from '$lib/labels';
+  import { CATEGORY_LABELS, SENIORITY_LABELS, titleCase } from '$lib/labels';
   import {
     DEFAULT_LIMIT,
     talentFilterSearch,
@@ -50,6 +50,9 @@
    *
    *  Toggling rather than replacing is what makes a row behave like a set, which is how it
    *  reads: clicking a second discipline adds it, clicking a selected one removes it. */
+  // `labels` is an EXCEPTION table, not a full dictionary — SENIORITY_LABELS carries one
+  // entry — so an absent value falls through to titleCase, the same fallback facets.ts
+  // and insights.ts use. Reading it as complete renders chips as bare slugs.
   function options(
     q: TalentQuery,
     key: TalentFilterKey,
@@ -64,7 +67,7 @@
       const search = talentFilterSearch(q, key, next);
       return {
         value,
-        label: labels[value] ?? value,
+        label: labels[value] ?? titleCase(value),
         href: search ? `${resolve('/talent')}?${search}` : resolve('/talent'),
         selected: selected.includes(value),
       };

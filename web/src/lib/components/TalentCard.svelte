@@ -3,8 +3,7 @@
   import { resolve } from '$app/paths';
   import { countryLabel, skillLabel } from '$lib/facets';
   import type { CatalogueMember } from '$lib/generated/contracts';
-  import { CATEGORY_LABELS, SENIORITY_LABELS } from '$lib/labels';
-  import { countryOfTimezone } from '$lib/timezoneCountry';
+  import { talentHeading, talentPlace } from '$lib/talentCard';
   import { Card, Chip, CountryFlag } from '$lib/ui';
 
   // One member of the public Talent Network catalogue.
@@ -19,24 +18,8 @@
 
   const card = $derived(member.card);
 
-  // The heading, assembled from two dictionary values rather than quoted from a CV.
-  // Either half can be absent — classify never guesses — so a member whose title
-  // resolved to nothing still gets a heading rather than an empty line.
-  const grade = $derived(card.seniority ? (SENIORITY_LABELS[card.seniority] ?? card.seniority) : '');
-  const discipline = $derived(card.category ? (CATEGORY_LABELS[card.category] ?? card.category) : '');
-  const heading = $derived([grade, discipline].filter(Boolean).join(' ') || 'Candidate');
-
-  // The country comes from the TIMEZONE, not from the city: the zone is machine-precise
-  // and generated from tzdata, whereas turning a city name into a country would need a
-  // gazetteer this repo does not have. Undefined for Etc/* and UTC, which name an offset
-  // rather than a place.
-  const country = $derived(countryOfTimezone(member.timezone));
-
-  // The city half of an IANA zone, underscores restored: 'America/New_York' reads as
-  // 'New York'. The region prefix is dropped because the city already implies it.
-  const zone = $derived(member.timezone?.split('/').pop()?.replace(/_/g, ' '));
-
-  const place = $derived(member.cities.length ? member.cities.join(', ') : '');
+  const heading = $derived(talentHeading(card.seniority, card.category, 'Candidate'));
+  const { country, zone, place } = $derived(talentPlace(member));
 
   // Eight is what fits on one line at the narrowest card width without wrapping into a
   // block that outweighs everything else on it. The rest are counted, not hidden — a

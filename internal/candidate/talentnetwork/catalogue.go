@@ -128,8 +128,14 @@ func (c *Catalogue) ByHandle(ctx context.Context, handle string) (CatalogueMembe
 		}
 		return CatalogueMember{}, err
 	}
-	return projectMember(row.TalentHandle.String, row.Timezone.String, row.Cities,
-		row.Specializations, row.ResumeStructured, row.ResumeStructuredUploadedAt.Time), nil
+	return projectMember(storedMember{
+		handle:          row.TalentHandle.String,
+		timezone:        row.Timezone.String,
+		cities:          row.Cities,
+		specializations: row.Specializations,
+		structured:      row.ResumeStructured,
+		updatedAt:       row.ResumeStructuredUploadedAt.Time,
+	}), nil
 }
 
 // current returns a snapshot no older than the TTL, refreshing if needed.
@@ -163,8 +169,14 @@ func (c *Catalogue) current(ctx context.Context) (*snapshot, error) {
 
 	members := make([]CatalogueMember, 0, len(rows))
 	for _, r := range rows {
-		members = append(members, projectMember(r.TalentHandle.String, r.Timezone.String,
-			r.Cities, r.Specializations, r.ResumeStructured, r.ResumeStructuredUploadedAt.Time))
+		members = append(members, projectMember(storedMember{
+			handle:          r.TalentHandle.String,
+			timezone:        r.Timezone.String,
+			cities:          r.Cities,
+			specializations: r.Specializations,
+			structured:      r.ResumeStructured,
+			updatedAt:       r.ResumeStructuredUploadedAt.Time,
+		}))
 	}
 
 	s := &snapshot{members: members, builtAt: c.now()}
@@ -172,24 +184,38 @@ func (c *Catalogue) current(ctx context.Context) (*snapshot, error) {
 	return s, nil
 }
 
+// storedMember is the shape both reads return: the list query and the by-handle query
+// select the same columns, but sqlc gives each its own row type, so this is where the two
+// meet. Named fields rather than six positional arguments — half of them strings, half
+// slices — where a transposed pair would compile and publish somebody's cities as their
+// specialisations.
+type storedMember struct {
+	handle          string
+	timezone        string
+	cities          []string
+	specializations []string
+	structured      []byte
+	updatedAt       time.Time
+}
+
 // projectMember turns one stored row into a catalogue entry.
 //
 // An unreadable stored structure yields an EMPTY card rather than dropping the member:
 // they joined, and disappearing from the catalogue is indistinguishable from having
 // left. The same treatment resume.Store.Structured gives an unmarshal failure.
-func projectMember(handle, timezone string, cities, specializations []string, structured []byte, updatedAt time.Time) CatalogueMember {
+func projectMember(row storedMember) CatalogueMember {
 	var s resumeextract.Structured
-	if len(structured) > 0 {
-		_ = json.Unmarshal(structured, &s)
+	if len(row.structured) > 0 {
+		_ = json.Unmarshal(row.structured, &s)
 	}
 	return CatalogueMember{
-		Handle:          handle,
+		Handle:          row.handle,
 		Card:            ProjectCard(s),
-		Timezone:        timezone,
-		TimezoneRegion:  timezoneRegion(timezone),
-		Cities:          nonNil(cities),
-		Specializations: nonNil(specializations),
-		UpdatedAt:       updatedAt,
+		Timezone:        row.timezone,
+		TimezoneRegion:  timezoneRegion(row.timezone),
+		Cities:          nonNil(row.cities),
+		Specializations: nonNil(row.specializations),
+		UpdatedAt:       row.updatedAt,
 	}
 }
 

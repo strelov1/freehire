@@ -2,8 +2,7 @@
   import { Clock, MapPin, User } from '@lucide/svelte';
   import Seo from '$lib/components/Seo.svelte';
   import { countryLabel, skillLabel } from '$lib/facets';
-  import { CATEGORY_LABELS, SENIORITY_LABELS } from '$lib/labels';
-  import { countryOfTimezone } from '$lib/timezoneCountry';
+  import { talentHeading, talentPlace } from '$lib/talentCard';
   import { Card, Chip, CountryFlag } from '$lib/ui';
   import type { PageData } from './$types';
 
@@ -16,13 +15,8 @@
   const member = $derived(data.member);
   const card = $derived(member.card);
 
-  const grade = $derived(card.seniority ? (SENIORITY_LABELS[card.seniority] ?? card.seniority) : '');
-  const discipline = $derived(card.category ? (CATEGORY_LABELS[card.category] ?? card.category) : '');
-  const heading = $derived([grade, discipline].filter(Boolean).join(' ') || 'Candidate');
-
-  const country = $derived(countryOfTimezone(member.timezone));
-  const zone = $derived(member.timezone?.split('/').pop()?.replace(/_/g, ' '));
-  const place = $derived(member.cities.length ? member.cities.join(', ') : '');
+  const heading = $derived(talentHeading(card.seniority, card.category, 'Candidate'));
+  const { country, zone, place } = $derived(talentPlace(member));
 
   /** A role's period, from the two structured dates. "Present" for a role that has not
    *  ended — the backend reports an unset end as current, so an open-ended row here is a
@@ -34,12 +28,10 @@
     return `${from} — ${to}`;
   }
 
+  // A title the dictionary could not place still gets a row, under a neutral label:
+  // dropping it would make a work history look shorter than it is.
   function roleHeading(role: (typeof card.roles)[number]): string {
-    const g = role.seniority ? (SENIORITY_LABELS[role.seniority] ?? role.seniority) : '';
-    const d = role.category ? (CATEGORY_LABELS[role.category] ?? role.category) : '';
-    // A title the dictionary could not place still gets a row: dropping it would make a
-    // work history look shorter than it is.
-    return [g, d].filter(Boolean).join(' ') || 'Role';
+    return talentHeading(role.seniority, role.category, 'Role');
   }
 </script>
 

@@ -2,6 +2,7 @@ package handler
 
 import (
 	"errors"
+	"net/url"
 
 	"github.com/gofiber/fiber/v2"
 
@@ -81,7 +82,7 @@ func (h *talentCatalogHandlers) Get(c *fiber.Ctx) error {
 // The vocabulary is talentnetwork's, not search's. Passing these facets to
 // search.UnknownParams as `alsoKnown` would additionally accept every job-search facet
 // on an endpoint that reads none of them, and report nothing when one arrives.
-func ignoredTalentParams(vals map[string][]string, unreadable []string) []search.UnknownParam {
+func ignoredTalentParams(vals url.Values, unreadable []string) []search.UnknownParam {
 	ignored := search.UnknownParamsAgainst(vals, talentnetwork.KnownParams())
 	for _, param := range unreadable {
 		ignored = append(ignored, search.UnknownParam{Param: param})
