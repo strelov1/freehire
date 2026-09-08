@@ -33,8 +33,10 @@ throttled 403 on the concurrent detail fan-out creates, and exactly the gap the 
   `baytMaxPages` without ever finding a genuinely empty page, are now hard `Fetch` failures rather
   than a partial success.
 - `bayt.detail` now returns the established `unreadableDetail` marker (matching `careerplug.go`'s
-  pattern) on a failed-but-not-404/410 fetch, instead of dropping the posting — closing the gap a
-  throttled detail request would otherwise open now that `bayt` is trusted for board-scoped close.
+  pattern) on a failed-but-not-404/410 fetch, a 200 with no ld+json `JobPosting` at all, or a
+  `JobPosting` with no resolvable employer — instead of dropping the posting in any of those
+  cases. Closes the gap a throttled detail request, or a site-wide markup change that broke
+  parsing, would otherwise open now that `bayt` is trusted for board-scoped close.
 - `bayt` now implements the `fullBoardListing` marker and is included in
   `FullBoardListingProviders`, making its boards eligible for the post-run sweep's board-scoped
   close (`CloseUnseenJobsForBoard`).

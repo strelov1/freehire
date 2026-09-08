@@ -179,13 +179,14 @@ func baytAbsURL(href string) string {
 // detail fetches one job page and maps its ld+json JobPosting to a Job. A URL carrying no
 // parseable id is a plain drop (ok=false) — it could never have been stored, so no close can
 // reach it. A page the platform answers 404/410 for is dropped too: the platform's own
-// evidence the posting is gone. Everything else the fetch could fail with — including a
-// throttled 403, the documented risk of a fast burst against Bayt's Akamai edge — comes back
-// as an unreadableDetail marker instead: this crawl now proves listing completeness
+// evidence the posting is gone. Everything else — a fetch failure (including a throttled
+// 403, the documented risk of a fast burst against Bayt's Akamai edge), a 200 with no
+// ld+json JobPosting at all, or one with no resolvable employer — comes back as an
+// unreadableDetail marker instead: this crawl now proves listing completeness
 // (fullBoardListing) and re-fetches every posting's detail on every run (no HydratingSource),
-// so a plain drop on a merely-unreadable page would be indistinguishable from the posting
-// having been taken down. A page with no usable JobPosting (no ld+json, or no resolvable
-// employer) is a content-shape drop, not a fetch failure, and stays ok=false.
+// so a plain drop on any of these would be indistinguishable from the posting having been
+// taken down, and a site-wide markup change that broke parsing would silently look like a
+// mass removal to the board-scoped close.
 func (b bayt) detail(ctx context.Context, e CompanyEntry, link string) (Job, bool) {
 	id := baytJobID(link)
 	if id == "" {
@@ -200,11 +201,11 @@ func (b bayt) detail(ctx context.Context, e CompanyEntry, link string) (Job, boo
 	}
 	var p baytLDPosting
 	if !ldJobPosting(root, &p) {
-		return Job{}, false
+		return unreadableDetail(id, link, e.Company), true
 	}
 	company := strings.TrimSpace(p.HiringOrg.Name)
 	if company == "" {
-		return Job{}, false
+		return unreadableDetail(id, link, e.Company), true
 	}
 
 	location := joinNonEmpty(

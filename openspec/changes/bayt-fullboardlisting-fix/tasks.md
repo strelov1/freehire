@@ -34,11 +34,25 @@
 - [x] 3.5 `TestBaytRegisteredAsFullBoardListing`: the same `FullBoardListingProviders(All(nil))`
       one-liner every other marked provider's test file carries.
 - [x] 3.6 Confirm every pre-existing `bayt` test still passes unchanged.
+- [x] 3.7 Found on review (CodeRabbit): a 200 detail response with no ld+json `JobPosting`, or
+      one with no resolvable employer, was still a plain drop — the same silent-vanish risk the
+      `unreadableDetail` marker exists to close, and exactly what a site-wide Bayt markup change
+      would trigger at scale now that `bayt` is trusted for board-scoped close. Fixed both
+      branches to return `unreadableDetail`; updated `TestBaytDropsPostingWithNoCompany` →
+      `TestBaytUnreadableDetailForACompanyLessPosting` and
+      `TestBaytDropsDetailWithNoJobPosting` → `TestBaytUnreadableDetailWithNoJobPosting`.
 
 ## 4. Documentation
 
 - [x] 4.1 Update `internal/ingest/sources/AGENTS.md`: move `bayt` from "audited and excluded" to
       the marked-provider list, with the reasoning that resolved the throttling concern.
+- [x] 4.2 Found on review (CodeRabbit): `AGENTS.md`'s `fullBoardListing` bar sentence read as
+      prohibiting a page/offset cap outright ("no artificial page/offset cap"), when the actual
+      rule — already correctly stated elsewhere in the same file's per-adapter notes, and in
+      `openspec/changes/teamtailor-listing-cap-fix`'s own spec delta — is that a cap is fine as
+      long as reaching it fails the crawl rather than succeeding partially. Tightened the
+      wording so the general rule matches what every marked adapter (including `bayt`) actually
+      does.
 
 ## 5. Wrap-up
 

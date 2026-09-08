@@ -140,7 +140,11 @@ func TestBaytFetchListingThenDetailAndMaps(t *testing.T) {
 	}
 }
 
-func TestBaytDropsPostingWithNoCompany(t *testing.T) {
+// A company-less posting is marked unreadable, not silently dropped: this crawl now proves
+// listing completeness (fullBoardListing), and a site-wide markup change that stopped
+// exposing hiringOrganization would otherwise look, to the board-scoped close, exactly like
+// every posting on the board having been taken down. Found on review (CodeRabbit).
+func TestBaytUnreadableDetailForACompanyLessPosting(t *testing.T) {
 	href := "/en/saudi-arabia/jobs/ghost-role-777/"
 	fake := (&routedHTTP{}).
 		route("/en/saudi-arabia/jobs/?page=1", baytListingHTML(href)).
@@ -153,8 +157,12 @@ func TestBaytDropsPostingWithNoCompany(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Fetch: %v", err)
 	}
-	if len(jobs) != 0 {
-		t.Fatalf("company-less posting should be dropped, got %d jobs", len(jobs))
+	markers := unreadableMarkers(jobs)
+	if len(markers) != 1 || markers[0].ExternalID != "777" {
+		t.Fatalf("unreadable markers = %v, want one for the company-less posting", markers)
+	}
+	if len(readPostings(jobs)) != 0 {
+		t.Fatalf("got %d read postings, want 0 — a company-less posting is unread, not stored", len(readPostings(jobs)))
 	}
 }
 
@@ -178,9 +186,11 @@ func TestBaytSkipsListingLinkWithNoID(t *testing.T) {
 	}
 }
 
-func TestBaytDropsDetailWithNoJobPosting(t *testing.T) {
-	// A detail page whose markup lost its JobPosting block is dropped, not errored: one
-	// re-templated posting must not abort an otherwise healthy crawl.
+// A detail page whose markup lost its JobPosting block is marked unreadable, not silently
+// dropped: one re-templated posting must not abort an otherwise healthy crawl, but it also
+// must not vanish as if the posting were gone — see the company-less test above for why.
+// Found on review (CodeRabbit).
+func TestBaytUnreadableDetailWithNoJobPosting(t *testing.T) {
 	href := "/en/saudi-arabia/jobs/broken-detail-321/"
 	fake := (&routedHTTP{}).
 		route("/en/saudi-arabia/jobs/?page=1", baytListingHTML(href)).
@@ -193,8 +203,9 @@ func TestBaytDropsDetailWithNoJobPosting(t *testing.T) {
 	if err != nil {
 		t.Fatalf("a JobPosting-less detail must not error the board: %v", err)
 	}
-	if len(jobs) != 0 {
-		t.Fatalf("JobPosting-less detail should be dropped, got %d jobs", len(jobs))
+	markers := unreadableMarkers(jobs)
+	if len(markers) != 1 || markers[0].ExternalID != "321" {
+		t.Fatalf("unreadable markers = %v, want one for the JobPosting-less detail", markers)
 	}
 }
 
