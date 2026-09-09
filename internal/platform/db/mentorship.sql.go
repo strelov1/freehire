@@ -1141,7 +1141,7 @@ const reactivateMentorProfile = `-- name: ReactivateMentorProfile :one
 UPDATE mentors
 SET status = 'pending', paused = false, updated_at = now()
 WHERE user_id = $1 AND status = 'withdrawn'
-RETURNING id, user_id, company_slug, slug, display_name, headline, bio, topics, languages, timezone, session_duration_min, buffer_before_min, buffer_after_min, min_notice_min, horizon_days, meeting_url, status, paused, decided_by, decided_at, created_at, updated_at
+RETURNING id, user_id, company_slug, slug, display_name, headline, bio, topics, languages, timezone, session_duration_min, buffer_before_min, buffer_after_min, min_notice_min, horizon_days, meeting_url, status, paused, decided_by, decided_at, created_at, updated_at, show_photo
 `
 
 // A withdrawn mentor resubmits for review: back to pending, pause switch cleared, no
@@ -1174,6 +1174,7 @@ func (q *Queries) ReactivateMentorProfile(ctx context.Context, userID int64) (Me
 		&i.DecidedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.ShowPhoto,
 	)
 	return i, err
 }

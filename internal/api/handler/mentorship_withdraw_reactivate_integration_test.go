@@ -54,18 +54,19 @@ func TestMentorshipWithdrawAndReactivateHTTPFlow(t *testing.T) {
 	app.Delete("/api/v1/me/mentorship/profile", cookieAuth, h.WithdrawMentorProfile)
 	app.Post("/api/v1/me/mentorship/profile/reactivate", cookieAuth, h.ReactivateMentorProfile)
 
-	authed := func(method, path string) *http.Request {
-		r := httptest.NewRequest(method, path, nil)
+	authedRequest := func(method, path string) *http.Request {
+		r := httptest.NewRequestWithContext(ctx, method, path, nil)
 		r.AddCookie(&http.Cookie{Name: auth.CookieName, Value: cookie})
 		return r
 	}
 
 	// Reactivating a profile that was never withdrawn (here: no profile at all yet) is
 	// refused as not-found, not silently accepted.
-	resp, err := app.Test(authed(fiber.MethodPost, "/api/v1/me/mentorship/profile/reactivate"))
+	resp, err := app.Test(authedRequest(fiber.MethodPost, "/api/v1/me/mentorship/profile/reactivate"))
 	if err != nil {
 		t.Fatalf("reactivate with no profile: %v", err)
 	}
+	defer resp.Body.Close()
 	if resp.StatusCode != fiber.StatusNotFound {
 		t.Errorf("reactivate with no profile: status = %d, want 404", resp.StatusCode)
 	}
@@ -76,44 +77,53 @@ func TestMentorshipWithdrawAndReactivateHTTPFlow(t *testing.T) {
 		"timezone": "Europe/Berlin", "meeting_url": "https://meet.example.test/http-mentor",
 		"session_minutes": 60, "notice_minutes": 120, "horizon_days": 30
 	}`)
-	createReq := httptest.NewRequest(fiber.MethodPost, "/api/v1/me/mentorship/profile", bytes.NewReader(body))
+	createReq := httptest.NewRequestWithContext(ctx, fiber.MethodPost, "/api/v1/me/mentorship/profile", bytes.NewReader(body))
 	createReq.Header.Set("Content-Type", "application/json")
 	createReq.AddCookie(&http.Cookie{Name: auth.CookieName, Value: cookie})
 	createResp, err := app.Test(createReq)
 	if err != nil {
 		t.Fatalf("submit profile: %v", err)
 	}
+	defer createResp.Body.Close()
 	if createResp.StatusCode != fiber.StatusCreated {
 		b, _ := io.ReadAll(createResp.Body)
 		t.Fatalf("submit profile: status = %d, body = %s", createResp.StatusCode, b)
 	}
 
 	// Reactivating a pending profile (never withdrawn) is a conflict, not a no-op.
-	resp, err = app.Test(authed(fiber.MethodPost, "/api/v1/me/mentorship/profile/reactivate"))
+	pendingResp, err := app.Test(authedRequest(fiber.MethodPost, "/api/v1/me/mentorship/profile/reactivate"))
 	if err != nil {
 		t.Fatalf("reactivate a pending profile: %v", err)
 	}
-	if resp.StatusCode != fiber.StatusConflict {
-		t.Errorf("reactivate a pending profile: status = %d, want 409", resp.StatusCode)
+	defer pendingResp.Body.Close()
+	if pendingResp.StatusCode != fiber.StatusConflict {
+		t.Errorf("reactivate a pending profile: status = %d, want 409", pendingResp.StatusCode)
 	}
 
 	// Withdraw, then withdraw again — the second must succeed, not 404.
-	if resp, err = app.Test(authed(fiber.MethodDelete, "/api/v1/me/mentorship/profile")); err != nil {
+	firstWithdrawResp, err := app.Test(authedRequest(fiber.MethodDelete, "/api/v1/me/mentorship/profile"))
+	if err != nil {
 		t.Fatalf("first withdraw: %v", err)
-	} else if resp.StatusCode != fiber.StatusNoContent {
-		t.Errorf("first withdraw: status = %d, want 204", resp.StatusCode)
 	}
-	if resp, err = app.Test(authed(fiber.MethodDelete, "/api/v1/me/mentorship/profile")); err != nil {
+	defer firstWithdrawResp.Body.Close()
+	if firstWithdrawResp.StatusCode != fiber.StatusNoContent {
+		t.Errorf("first withdraw: status = %d, want 204", firstWithdrawResp.StatusCode)
+	}
+	secondWithdrawResp, err := app.Test(authedRequest(fiber.MethodDelete, "/api/v1/me/mentorship/profile"))
+	if err != nil {
 		t.Fatalf("second withdraw: %v", err)
-	} else if resp.StatusCode != fiber.StatusNoContent {
-		t.Errorf("second withdraw: status = %d, want 204, not the old 404 \"mentor not found\"", resp.StatusCode)
+	}
+	defer secondWithdrawResp.Body.Close()
+	if secondWithdrawResp.StatusCode != fiber.StatusNoContent {
+		t.Errorf("second withdraw: status = %d, want 204, not the old 404 \"mentor not found\"", secondWithdrawResp.StatusCode)
 	}
 
 	// The withdrawn profile does not read back as "paused".
-	profResp, err := app.Test(authed(fiber.MethodGet, "/api/v1/me/mentorship/profile"))
+	profResp, err := app.Test(authedRequest(fiber.MethodGet, "/api/v1/me/mentorship/profile"))
 	if err != nil {
 		t.Fatalf("get profile: %v", err)
 	}
+	defer profResp.Body.Close()
 	var profOut struct {
 		Data struct {
 			Status string `json:"status"`
@@ -129,10 +139,11 @@ func TestMentorshipWithdrawAndReactivateHTTPFlow(t *testing.T) {
 	}
 
 	// Reactivate: back to pending, no longer paused.
-	reactivateResp, err := app.Test(authed(fiber.MethodPost, "/api/v1/me/mentorship/profile/reactivate"))
+	reactivateResp, err := app.Test(authedRequest(fiber.MethodPost, "/api/v1/me/mentorship/profile/reactivate"))
 	if err != nil {
 		t.Fatalf("reactivate: %v", err)
 	}
+	defer reactivateResp.Body.Close()
 	if reactivateResp.StatusCode != fiber.StatusOK {
 		b, _ := io.ReadAll(reactivateResp.Body)
 		t.Fatalf("reactivate: status = %d, body = %s", reactivateResp.StatusCode, b)
