@@ -57,3 +57,16 @@ func TestOf_RefusesAQuestionThatFoldsToNothing(t *testing.T) {
 		}
 	}
 }
+
+// A polite wrapper containing an apostrophe must strip, not become dead code. The fold
+// converts apostrophes to spaces, so the wrapper must too.
+func TestOf_PoliteWrapperWithApostropheStrips(t *testing.T) {
+	withWrapper, ok := Of("We'd like to know your state of residence")
+	if !ok {
+		t.Fatal("Of refused a well-formed question with apostrophe wrapper")
+	}
+	withoutWrapper, _ := Of("your state of residence")
+	if withWrapper != withoutWrapper {
+		t.Errorf("Of(\"We'd like to know your state of residence\") = %q, want %q — the wrapper should strip even when it contains an apostrophe", withWrapper, withoutWrapper)
+	}
+}

@@ -56,7 +56,7 @@ var politeWrappers = []string{
 	"could you tell us",
 	"could you share",
 	"we would like to know",
-	"we'd like to know",
+	"we d like to know",
 	"tell us",
 }
 
