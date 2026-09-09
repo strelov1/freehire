@@ -51,3 +51,18 @@ describe('AIInterviewBadge', () => {
     expect(SOURCE).toContain('{shown}');
   });
 });
+
+// The badge sits inside JobRow's signal row, which is itself behind a guard listing
+// every signal that can put a chip there. A card can carry the label while having no
+// reality verdict, no freshness, no tags, no countries and no credentials — the row is
+// then suppressed with the badge inside it, and the badge is correct and invisible.
+// Nothing about the badge itself can catch that, which is why it is pinned here.
+describe('JobRow signal row', () => {
+  const ROW = readFileSync(join(process.cwd(), 'src/lib/components/JobRow.svelte'), 'utf8');
+  const GUARD = ROW.split('\n').find((line) => line.includes('{#if reality ||')) ?? '';
+
+  it('lists the AI-interview count among the conditions that open it', () => {
+    expect(GUARD).not.toBe('');
+    expect(GUARD).toContain('job.ai_interview_reports');
+  });
+});

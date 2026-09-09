@@ -51,8 +51,20 @@
   // with a message that says so. A dialog that refuses to open because one read failed
   // would be worse than one that occasionally asks a question it could have answered.
   let myKinds = $state<ProcessReportKind[]>([]);
+
+  // Without a company there is nothing to file a process report against, so the entry
+  // is not offered at all. Offering it and failing would spend the person's one tap on
+  // a generic error for a choice that could never have worked.
+  const options = $derived(
+    companySlug ? reportReasons : reportReasons.filter((r) => reportRoute(r.value) !== 'process'),
+  );
+
   $effect(() => {
     let cancelled = false;
+    if (!companySlug) {
+      myKinds = [];
+      return;
+    }
     void api
       .myCompanyProcessReports(companySlug)
       .then((kinds) => {
@@ -180,7 +192,7 @@
 
     {#if step === 'reason'}
       <ul class="flex flex-col gap-2">
-        {#each reportReasons as r (r.value)}
+        {#each options as r (r.value)}
           {@const Icon = reasonIcon[r.value]}
           <li>
             <button

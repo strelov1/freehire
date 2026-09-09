@@ -322,7 +322,10 @@
 
   <!-- Signal row: reality chip + the region/employment facets, grouped under the
        title as quiet outline chips so they read as metadata, not decoration. -->
-  {#if reality || freshness.length > 0 || tags.length > 0 || job.countries?.length || credentials.length > 0}
+  <!-- ai_interview_reports belongs in this guard on its own: a card can carry the
+       label while having no reality verdict, no freshness, no tags, no countries and no
+       credentials, and the row would then be suppressed with the badge inside it. -->
+  {#if reality || freshness.length > 0 || tags.length > 0 || job.countries?.length || credentials.length > 0 || job.ai_interview_reports}
     <div class="mt-2 flex flex-wrap items-center gap-1.5">
       <!-- evergreen_posting IS the reality verdict, so showing both chips states one
            fact twice, the second time louder. The ghost chip carries it inside its
