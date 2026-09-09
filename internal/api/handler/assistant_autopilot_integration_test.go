@@ -969,6 +969,7 @@ func TestAutopilotRefusesToRunWithoutItsRequirementList(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read stream: %v", err)
 	}
+	_ = resp.Body.Close()
 	stream := string(body)
 
 	if fitM.n == 0 {
