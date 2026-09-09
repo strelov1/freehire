@@ -460,3 +460,63 @@ func TestIntegration_RebuildSwapsFreshIndexAndDropsOld(t *testing.T) {
 		t.Error("jobs_rebuild still exists; Promote should drop it")
 	}
 }
+
+// TestSearchQFieldsRestrictsMatchingOnRealEngine reproduces the motivating example
+// from issue #2671 against a real Meilisearch instance (not a fake): "systems"
+// appears only in a company name, not in that job's title, and an unscoped query
+// wrongly surfaces it for a caller looking for systems engineering roles.
+func TestSearchQFieldsRestrictsMatchingOnRealEngine(t *testing.T) {
+	ctx := context.Background()
+	c := startMeili(t)
+	if err := c.EnsureIndex(ctx); err != nil {
+		t.Fatalf("EnsureIndex: %v", err)
+	}
+
+	jobs := []db.Job{
+		{
+			ID: 20, Title: "Engineer – Asset Manager", Company: "STS Systems Defense", Location: "Tyndall AFB, US",
+			Description: "Asset management support role.",
+			PublicSlug:  "engineer-asset-manager-sts-aaa",
+			PostedAt:    pgtype.Timestamptz{Time: time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC), Valid: true},
+			Enrichment:  enrichedJSON(t, enrich.Enrichment{}),
+		},
+		{
+			ID: 21, Title: "Systems Engineer", Company: "Acme", Location: "Berlin",
+			Description: "Design and operate distributed systems.",
+			PublicSlug:  "systems-engineer-acme-bbb",
+			PostedAt:    pgtype.Timestamptz{Time: time.Date(2025, 2, 1, 0, 0, 0, 0, time.UTC), Valid: true},
+			Enrichment:  enrichedJSON(t, enrich.Enrichment{}),
+		},
+	}
+	docs := make([]JobDocument, 0, len(jobs))
+	for _, j := range jobs {
+		d, err := FromJob(j)
+		if err != nil {
+			t.Fatalf("FromJob: %v", err)
+		}
+		docs = append(docs, d)
+	}
+	if err := c.IndexJobs(ctx, docs); err != nil {
+		t.Fatalf("IndexJobs: %v", err)
+	}
+
+	t.Run("unscoped query matches the company-name hit too", func(t *testing.T) {
+		res, err := c.Search(ctx, SearchParams{Query: "systems", Limit: 10})
+		if err != nil {
+			t.Fatalf("Search: %v", err)
+		}
+		if res.Total != 2 {
+			t.Fatalf("Total = %d, want 2 — both the title match and the company-name match", res.Total)
+		}
+	})
+
+	t.Run("q_fields=title excludes the company-name-only match", func(t *testing.T) {
+		res, err := c.Search(ctx, SearchParams{Query: "systems", QFields: []string{"title"}, Limit: 10})
+		if err != nil {
+			t.Fatalf("Search: %v", err)
+		}
+		if res.Total != 1 || res.Hits[0].PublicSlug != "systems-engineer-acme-bbb" {
+			t.Fatalf("hits = %+v, want only the title match", res.Hits)
+		}
+	})
+}

@@ -228,6 +228,57 @@ func TestSearchJobs_ReportsIgnoredParams(t *testing.T) {
 	}
 }
 
+func TestSearchJobs_QFieldsRestrictsSearchableAttributes(t *testing.T) {
+	fake := &fakeSearcher{}
+	app := searchApp(fake)
+
+	status, body := doGet(t, app, "/jobs/search?q=systems&q_fields=title")
+	if status != fiber.StatusOK {
+		t.Fatalf("status = %d, want 200", status)
+	}
+	if len(fake.got.QFields) != 1 || fake.got.QFields[0] != "title" {
+		t.Errorf("QFields = %v, want [title]", fake.got.QFields)
+	}
+	// q_fields is a param this endpoint reads, so a valid value must not itself
+	// be reported as ignored.
+	meta, _ := body["meta"].(map[string]any)
+	if _, present := meta["ignored_params"]; present {
+		t.Errorf("meta.ignored_params = %v, want the key absent for a valid q_fields", meta["ignored_params"])
+	}
+}
+
+func TestSearchJobs_QFieldsAbsentLeavesAllFieldsSearchable(t *testing.T) {
+	fake := &fakeSearcher{}
+	app := searchApp(fake)
+
+	doGet(t, app, "/jobs/search?q=golang")
+	if fake.got.QFields != nil {
+		t.Errorf("QFields = %v, want nil when q_fields is absent", fake.got.QFields)
+	}
+}
+
+func TestSearchJobs_UnrecognizedQFieldsIsReportedAndAppliesNoRestriction(t *testing.T) {
+	fake := &fakeSearcher{}
+	app := searchApp(fake)
+
+	status, body := doGet(t, app, "/jobs/search?q=systems&q_fields=salary")
+	if status != fiber.StatusOK {
+		t.Fatalf("status = %d, want 200", status)
+	}
+	if fake.got.QFields != nil {
+		t.Errorf("QFields = %v, want nil — an unrecognized value must not restrict", fake.got.QFields)
+	}
+	meta, _ := body["meta"].(map[string]any)
+	ignored, _ := meta["ignored_params"].([]any)
+	if len(ignored) != 1 {
+		t.Fatalf("meta.ignored_params = %v, want one entry", meta["ignored_params"])
+	}
+	first, _ := ignored[0].(map[string]any)
+	if first["param"] != "q_fields" {
+		t.Errorf("ignored_params[0] = %v, want q_fields", first)
+	}
+}
+
 func TestSearchJobs_CleanQueryReportsNothingIgnored(t *testing.T) {
 	fake := &fakeSearcher{}
 	app := searchApp(fake)

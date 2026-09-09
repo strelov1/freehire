@@ -126,6 +126,19 @@ func TestAgentSearchJobs_FormatApplies(t *testing.T) {
 	}
 }
 
+func TestAgentSearchJobs_QFieldsRestrictsIdenticallyToThePublicEndpoint(t *testing.T) {
+	fake := &fakeSearcher{}
+	app := agentSearchApp(fake, &fakeDescriptions{})
+
+	status, _ := doGet(t, app, "/agent/jobs/search?q=systems&q_fields=title")
+	if status != fiber.StatusOK {
+		t.Fatalf("status = %d, want 200", status)
+	}
+	if len(fake.got.QFields) != 1 || fake.got.QFields[0] != "title" {
+		t.Errorf("QFields = %v, want [title]", fake.got.QFields)
+	}
+}
+
 func TestAgentSearchJobs_ReportsIgnoredParamsButNotItsOwn(t *testing.T) {
 	fake := &fakeSearcher{}
 	app := agentSearchApp(fake, &fakeDescriptions{})
