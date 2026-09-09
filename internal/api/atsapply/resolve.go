@@ -47,9 +47,13 @@ func (p Plan) FullyResolved() bool {
 // source (a dedicated country fact, or Tier C/LLM-drafted answers) is future work, not a bug
 // here — see design.md's Non-Goals.
 var answerKeyFor = map[string]string{
-	"first_name":              "first_name",
-	"last_name":               "last_name",
-	"full_name":               "full_name",
+	"first_name": "first_name",
+	"last_name":  "last_name",
+	"full_name":  "full_name",
+	// Recruitee's own control name for the same field. Measured on production 2026-09-09:
+	// a queued Recruitee application parked on `{"id": "name", "label": "Full name"}` for
+	// a candidate whose full name the profile had all along.
+	"name":                    "full_name",
 	"email":                   "email",
 	"phone":                   "phone",
 	"location":                "location",

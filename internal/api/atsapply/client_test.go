@@ -13,15 +13,18 @@ import (
 // Lever always parks on its captcha before any fetcher or browser is touched — a nil
 // fetchers map would panic if this short-circuit were ever removed, which is deliberate:
 // it proves nothing downstream runs for this provider.
-func TestSubmit_LeverAlwaysParksOnCaptchaWithoutTouchingFetchersOrBrowser(t *testing.T) {
+// Lever parks for the reason that is TRUE of it — no fill path exists for the provider —
+// rather than for a captcha that a live measurement found on only some of its postings
+// (see TestPreviewClient_ALeverAttemptReachesItsSchema for what was measured).
+func TestSubmit_LeverParksAsNotImplementedRatherThanOnACaptcha(t *testing.T) {
 	c := &Client{fetchers: nil}
 
 	result, err := c.Submit(context.Background(), autoapply.Claimed{Provider: "lever"}, nil)
 	if err != nil {
 		t.Fatalf("Submit: %v", err)
 	}
-	if result.Status != autoapply.StatusParked || result.Reason != "requires_captcha" {
-		t.Errorf("result = %+v, want parked/requires_captcha", result)
+	if result.Status != autoapply.StatusParked || result.Reason != reasonSubmissionNotImplemented {
+		t.Errorf("result = %+v, want parked/%s", result, reasonSubmissionNotImplemented)
 	}
 }
 
