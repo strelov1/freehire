@@ -118,6 +118,24 @@ var labelAnswerKeyFor = []struct {
 	// question carrying a random uuid id (not the "linkedin" id answerKeyFor already
 	// covers), so only a label rule can match it.
 	{"linkedin", []string{"linkedin"}},
+	// Salary, measured live 2026-09-08: queue entry 3 (Garner Health, Greenhouse) parked on
+	// "What is your desired salary?" while screening_answers held 5000 USD/year for that
+	// candidate. Greenhouse gives a custom question an opaque numeric id, so answerKeyFor
+	// could never reach it and only a label rule can — and there was none, though the visa
+	// rule directly above it had been written for the identical gap.
+	//
+	// Four rules rather than one because the pair must be specific enough to EXCLUDE a
+	// question about current pay: that is a different fact (candidate_survey holds it
+	// separately, deliberately), and answering it with a desired figure would misreport the
+	// candidate to an employer. A bare {"salary"} would do exactly that.
+	//
+	// Note what this does NOT change: `salary` stays on sensitive.go's list, so a model may
+	// still never draft one. Sensitivity forbids guessing a figure; it says nothing about
+	// using the one the candidate themselves stored.
+	{"desired_salary", []string{"desired", "salary"}},
+	{"desired_salary", []string{"desired", "compensation"}},
+	{"desired_salary", []string{"salary", "expect"}},
+	{"desired_salary", []string{"compensation", "expect"}},
 }
 
 // matchLabelAnswerKey returns the answer key a field's label matches, if any.
