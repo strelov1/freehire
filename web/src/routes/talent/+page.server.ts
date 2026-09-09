@@ -1,23 +1,31 @@
+import { error } from '@sveltejs/kit';
 import { serverApi } from '$lib/server/api';
-import { readTalentQuery, writeTalentQuery } from '$lib/talentQuery';
+import { talentFiltersFromParams, talentFiltersToParams } from '$lib/talentFacetModel';
+import { PAGE_SIZE, pageExists, pageOffset, parsePage } from '$lib/pagination';
 import type { PageServerLoad } from './$types';
 
-// The public Talent Network catalogue, server-rendered.
+// Server-render the requested page of the Talent Network catalogue for the current
+// filters, so a shared or crawled URL arrives already filtered in the initial HTML.
+// Round-tripping through the filter model whitelists the params to the known facets; the
+// client takes over from there (see TalentView for why that hand-off exists at all).
 //
-// The URL is the single source of truth for what is filtered: the loader reads it, the
-// API is asked for exactly that, and every filter control navigates rather than mutating
-// local state. That is what makes a narrowed catalogue shareable as a link and navigable
-// with the back button — and, since this page is meant to be indexed, what lets a crawler
-// see the same thing a visitor does.
+// `?page=N` addresses the list rather than filtering it, so it is read here and not
+// through the filter model — the same split /companies and /jobs use.
+//
+// Public read: no cookie forwarded.
 export const load: PageServerLoad = async ({ fetch, url }) => {
-  const query = readTalentQuery(url.searchParams);
-  // Re-serialised from the PARSED query rather than forwarded raw, so a hand-edited URL
-  // carrying a limit the API refuses to read is normalised here instead of quietly
-  // widening the answer upstream.
-  const search = writeTalentQuery(query);
+  const currentPage = parsePage(url.searchParams);
 
-  // Public read: no cookie forwarded.
-  const page = await serverApi(fetch).listTalent(search);
+  const params = talentFiltersToParams(talentFiltersFromParams(url.searchParams));
+  params.set('limit', String(PAGE_SIZE));
+  params.set('offset', String(pageOffset(currentPage)));
 
-  return { query, page };
+  const slice = await serverApi(fetch).listTalent(params.toString());
+
+  // A page past the end is a 404 rather than an empty list: a URL naming page nine of a
+  // three-page catalogue is wrong, and rendering it empty would tell a visitor the
+  // filters matched nobody when what happened is that they walked off the end.
+  if (!pageExists(currentPage, slice.total)) error(404, 'Page not found');
+
+  return { page: slice, currentPage };
 };

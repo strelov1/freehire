@@ -36,10 +36,45 @@ func TestFirecrawlClientSatisfiesBothAdaptersTransports(t *testing.T) {
 }
 
 func TestHostedTierCarriesTheTwoUnreachableProviders(t *testing.T) {
-	for _, name := range []string{"bayt", "gulftalent", "wantapply"} {
+	for _, name := range []string{"bayt", "gulftalent", "wantapply", "hh"} {
 		if _, ok := firecrawlProviders[name]; !ok {
 			t.Errorf("%s is not in firecrawlProviders", name)
 		}
+	}
+}
+
+// hh is the mixed-tier case with no proxy involved at all: only detail hydration is hosted,
+// and listing keeps a fresh direct client REGARDLESS of SOURCES_PROXY_URL, because hh's own
+// detail pages are what's blocked (by DDoS-Guard, through the proxy) while listing measurably
+// isn't. Unlike wantapply, which reuses ApplyFirecrawlEgress's shared `direct` transport for
+// its non-hosted pages, hh must NOT reuse it — that value becomes the proxied client whenever
+// SOURCES_PROXY_URL is set for any OTHER provider, which would put hh's listing right back on
+// the proxy this change exists to stop using.
+func TestApplyFirecrawlEgressRewiresHHDetailWithAKey(t *testing.T) {
+	t.Setenv("FIRECRAWL_API_KEY", "test-key")
+
+	registry := map[string]Source{"hh": NewHH(NewClient())}
+	before := registry["hh"]
+
+	if err := ApplyFirecrawlEgress(registry); err != nil {
+		t.Fatalf("ApplyFirecrawlEgress: %v", err)
+	}
+	if registry["hh"] == before {
+		t.Error("hh was not rewired onto the hosted detail transport")
+	}
+}
+
+func TestHHKeepsItsCurrentTransportWithoutAKey(t *testing.T) {
+	t.Setenv("FIRECRAWL_API_KEY", "")
+
+	registry := map[string]Source{"hh": NewHH(NewClient())}
+	before := registry["hh"]
+
+	if err := ApplyFirecrawlEgress(registry); err != nil {
+		t.Fatalf("ApplyFirecrawlEgress: %v", err)
+	}
+	if registry["hh"] != before {
+		t.Error("hh was rewired with no API key configured")
 	}
 }
 

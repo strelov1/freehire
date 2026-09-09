@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { BOARD_COLUMNS, CLOSED_OUTCOMES, boardRefFor, columnOf, matchesQuery } from './board';
+import { BOARD_COLUMNS, CLOSED_OUTCOMES, boardRefFor, columnOf, matchesQuery, needsAttention } from './board';
 import { STAGE_GROUPS } from './generated/contracts';
 import { must } from './utils';
 import type { MyJob } from './types';
@@ -25,6 +25,23 @@ function listed(company: string, title: string): MyJob {
 function pruned(companySlug: string, title: string): MyJob {
   return { company_slug: companySlug, role_title: title, job: null } as MyJob;
 }
+
+describe('needsAttention', () => {
+  it('is true for pending_review and blocked', () => {
+    expect(needsAttention(job({ auto_apply_status: 'pending_review' }))).toBe(true);
+    expect(needsAttention(job({ auto_apply_status: 'blocked' }))).toBe(true);
+  });
+
+  it('is false for every other status', () => {
+    for (const status of ['tailoring', 'approved', 'declined', 'failed'] as const) {
+      expect(needsAttention(job({ auto_apply_status: status }))).toBe(false);
+    }
+  });
+
+  it('is false when there is no live attempt at all', () => {
+    expect(needsAttention(job({ auto_apply_status: undefined }))).toBe(false);
+  });
+});
 
 describe('BOARD_COLUMNS', () => {
   it('has no Saved column — only the active application states', () => {

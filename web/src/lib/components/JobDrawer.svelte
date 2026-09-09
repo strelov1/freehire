@@ -36,6 +36,7 @@
   import { focusTrap } from '$lib/actions/focusTrap';
   import { lockScroll, unlockScroll } from '$lib/scrollLock';
   import { autoApplyReviewBanner } from '$lib/autoApplyReview';
+  import { hasVisibleRows, pendingRows } from '$lib/answerBank';
 
   let {
     item,
@@ -149,6 +150,51 @@
       autoApplyError = errorMessage(e, 'Could not record your decision.');
     } finally {
       autoApplyDeciding = false;
+    }
+  }
+
+  // pendingRows pairs every pending question with its position in the list — never its
+  // label — because two distinct questions can share label text and an entry can carry no
+  // text at all; either would collide an `{#each}` key, a DOM id, or a draft keyed on the
+  // text itself.
+  const pendingQuestions = $derived(pendingRows(autoApply?.resolved_preview?.pending));
+
+  // Whether anything in the pending list will actually render. Only an `empty` row (see
+  // answerBank's PendingRowKind) draws nothing, so gating the list on pendingQuestions.length
+  // alone produces an empty bulleted block whenever every pending question is empty-label. A
+  // work-authorization question is `blocked`, not `empty` — it still renders, naming what is
+  // stopping the application — so hasVisibleRows is what decides this, not a re-derivation
+  // here.
+  const showsPendingList = $derived(hasVisibleRows(pendingQuestions));
+
+  // One draft per pending question, keyed by its row's position (see pendingQuestions).
+  let bankDrafts = $state<Record<number, string>>({});
+  let bankSaving = $state<number | null>(null);
+  let bankError = $state<string | null>(null);
+  // The rows whose answer reached the bank in this session. Nothing else says a save
+  // happened: the draft clears and the button re-disables, which on its own reads like
+  // typing that got lost.
+  let bankSaved = $state<Record<number, boolean>>({});
+
+  async function saveBankedAnswer(key: number, question: string) {
+    const answer = bankDrafts[key]?.trim();
+    // One save at a time — but every Save button is disabled while one is in flight, not
+    // just this row's. A button that looks pressable and silently does nothing is worse
+    // than one that is plainly unavailable.
+    if (!answer || bankSaving !== null) return;
+    bankSaving = key;
+    bankError = null;
+    try {
+      await api.saveBankedAnswer(question, answer);
+      // Cleared rather than left filled: the answer now lives in the bank, and a filled
+      // input beside a saved answer reads as unsaved work. The marker below is what tells
+      // the candidate it went somewhere.
+      bankDrafts = { ...bankDrafts, [key]: '' };
+      bankSaved = { ...bankSaved, [key]: true };
+    } catch (e) {
+      bankError = errorMessage(e, 'Could not save your answer.');
+    } finally {
+      bankSaving = null;
     }
   }
   // The full posting. The listing serves a card — employer, role, and the facets a row draws —
@@ -465,7 +511,23 @@
                (below, on the Emails tab), placed here instead because this is the tab a
                fresh mount always opens on and a pending decision is the primary reason to
                open this drawer at all. -->
-          {#if autoApplyBanner?.kind === 'pending_review'}
+          {#if autoApplyBanner?.kind === 'tailoring'}
+            <div class="rounded-md border border-border bg-muted/30 px-3 py-2">
+              <p class="text-sm text-muted-foreground">Auto-apply is preparing a tailored CV for this job.</p>
+            </div>
+          {:else if autoApplyBanner?.kind === 'approved'}
+            <div class="flex flex-col gap-2 rounded-md border border-border bg-muted/30 px-3 py-2">
+              <p class="text-sm font-medium">Auto-apply approved this application — it's queued for automatic submission.</p>
+              {#if hasPosting && item.job}
+                <a
+                  href={resolve('/tailor/[slug]', { slug: item.job.public_slug })}
+                  class="w-fit text-xs underline-offset-2 hover:underline"
+                >
+                  View tailored CV
+                </a>
+              {/if}
+            </div>
+          {:else if autoApplyBanner?.kind === 'pending_review'}
             <div class="flex flex-col gap-2 rounded-md border border-warning/50 bg-warning-muted/40 px-3 py-2">
               <p class="text-sm font-medium">Auto-apply tailored a CV for this job and is ready to send it.</p>
               {#if autoApply?.resolved_preview?.fields.length}
@@ -478,12 +540,57 @@
                   {/each}
                 </dl>
               {/if}
-              {#if autoApply?.resolved_preview?.pending?.length}
-                <ul class="flex flex-col gap-0.5 text-xs text-muted-foreground">
-                  {#each autoApply.resolved_preview.pending as p (p.label)}
-                    <li>{p.label} — {p.will_draft_at_submission ? 'will be filled in automatically' : 'no known answer yet'}</li>
+              {#if showsPendingList}
+                <ul class="flex flex-col gap-2 text-xs text-muted-foreground">
+                  {#each pendingQuestions as row (row.key)}
+                    {#if row.kind === 'draft'}
+                      <li>{row.pending.label} — will be filled in automatically</li>
+                    {:else if row.kind === 'blocked'}
+                      <!-- A work-authorization question: the bank refuses to recall an
+                           answer for it (the correct one depends on this posting's own
+                           country), and offering an input would only collect one it could
+                           never safely reuse. Plain text, distinct in wording and color from
+                           both the "filled automatically" row above and an answerable
+                           question's input below, so the candidate sees what is blocking
+                           the application instead of nothing at all. -->
+                      <li class="text-warning-strong">
+                        {row.pending.label} — we can't answer this one for you; you'll need to
+                        fill it in yourself when you apply
+                      </li>
+                    {:else if row.kind === 'answerable'}
+                      <li class="flex flex-col gap-1">
+                        <label class="text-foreground" for={`bank-${row.key}`}>{row.pending.label}</label>
+                        <div class="flex items-start gap-2">
+                          <!-- A textarea, not an input: the bound is 2000 characters, and a
+                               single-line control collects a paragraph the writer cannot
+                               re-read. -->
+                          <textarea
+                            id={`bank-${row.key}`}
+                            rows="2"
+                            maxlength="2000"
+                            class="min-w-0 flex-1 resize-y rounded-md border border-border bg-background px-2 py-1"
+                            bind:value={bankDrafts[row.key]}
+                            placeholder="Your answer — saved for next time too"
+                          ></textarea>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={bankSaving !== null || !bankDrafts[row.key]?.trim()}
+                            onclick={() => saveBankedAnswer(row.key, row.pending.label)}
+                          >
+                            Save
+                          </Button>
+                        </div>
+                        {#if bankSaved[row.key]}
+                          <span class="text-brand-strong">Saved — you won’t be asked this again.</span>
+                        {/if}
+                      </li>
+                    {/if}
                   {/each}
                 </ul>
+                {#if bankError}
+                  <p class="text-xs text-destructive">{bankError}</p>
+                {/if}
               {/if}
               {#if hasPosting && item.job}
                 <a
@@ -528,6 +635,27 @@
               <p class="text-sm text-muted-foreground">
                 Auto-apply could not submit this application after retrying. This attempt is final.
               </p>
+            </div>
+          {:else if autoApplyBanner?.kind === 'tailor_failed'}
+            <!-- Deliberately not the 'failed' copy: nothing was submitted and there is no
+                 tailored CV to look at, so "could not submit after retrying" would describe
+                 a step this attempt never reached. Says what did NOT happen, because the
+                 state it replaces (an entry that read as 'tailoring' forever) left people
+                 believing an application was on its way. -->
+            <div class="rounded-md border border-border bg-muted/30 px-3 py-2">
+              <p class="text-sm font-medium">Auto-apply couldn't prepare a CV for this job.</p>
+              <p class="text-xs text-muted-foreground">
+                Nothing was sent, and the job is still on your board. You can tailor a CV yourself and apply
+                as usual.
+              </p>
+              {#if hasPosting && item.job}
+                <a
+                  href={resolve('/tailor/[slug]', { slug: item.job.public_slug })}
+                  class="w-fit text-xs underline-offset-2 hover:underline"
+                >
+                  Tailor a CV
+                </a>
+              {/if}
             </div>
           {/if}
 

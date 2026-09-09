@@ -30,13 +30,13 @@ export const DOCKED_QUERY = '(min-width: 85rem)';
 
 let offset = $state(0);
 
-/** The width the shell must yield on its left, or 0 when nothing is docked. */
+/** The width the shell must yield on its right, or 0 when nothing is docked. */
 export function dockOffset(): number {
   return offset;
 }
 
 /**
- * Claim or release the shell's left margin. Called by the panel, which owns the media
+ * Claim or release the shell's right margin. Called by the panel, which owns the media
  * query and knows whether it is currently a dock or a covering overlay — an overlay takes
  * no space, so it must not move the page behind it.
  */

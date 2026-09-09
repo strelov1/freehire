@@ -18,7 +18,19 @@
 
 <div class="mx-auto flex w-full max-w-4xl flex-col gap-6 px-4 py-6">
   <header class="flex flex-col gap-2">
-    <h1 class="text-2xl font-semibold">{mentor.name}</h1>
+    <div class="flex items-center gap-4">
+      {#if mentor.show_photo}
+        <img
+          src={`/api/v1/mentors/${mentor.slug}/photo`}
+          alt=""
+          class="border-border size-16 shrink-0 rounded-full border object-cover"
+          onerror={(e) => {
+            (e.currentTarget as HTMLImageElement).style.display = 'none';
+          }}
+        />
+      {/if}
+      <h1 class="text-2xl font-semibold">{mentor.name}</h1>
+    </div>
     <p class="text-muted-foreground">{mentor.headline} · {mentor.company_name}</p>
 
     {#if mentor.rating_count > 0}

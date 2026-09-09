@@ -107,6 +107,12 @@ func TestSubmitProfileRefusesWhatCannotYieldASchedule(t *testing.T) {
 		{"no meeting link", func(in *ProfileInput) { in.MeetingURL = "" }, ErrInvalidProfile},
 		{"a meeting link that is not a URL", func(in *ProfileInput) { in.MeetingURL = "not a url" }, ErrInvalidProfile},
 		{"a meeting link that is not http", func(in *ProfileInput) { in.MeetingURL = "javascript:alert(1)" }, ErrInvalidProfile},
+		// A non-empty link is validated identically whether or not the mentor has a
+		// calendar — holding one is no excuse for a link that isn't a URL.
+		{"an invalid meeting link even with a connected calendar", func(in *ProfileInput) {
+			in.MeetingURL = "not a url"
+			in.HasCalendarLink = true
+		}, ErrInvalidProfile},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			in := validInput()
@@ -119,11 +125,25 @@ func TestSubmitProfileRefusesWhatCannotYieldASchedule(t *testing.T) {
 	}
 }
 
+// A mentor with a connected calendar.events grant needs no static meeting link at all: a
+// real one is minted per booking instead. A non-empty link is still validated normally
+// either way — see the table test above.
+func TestSubmitProfileAcceptsNoMeetingLinkWithAConnectedCalendar(t *testing.T) {
+	in := validInput()
+	in.MeetingURL = ""
+	in.HasCalendarLink = true
+
+	if _, err := newTestService(t, newFakeRepo()).SubmitProfile(context.Background(), in); err != nil {
+		t.Errorf("SubmitProfile: %v, want no error — a connected calendar makes the static link optional", err)
+	}
+}
+
 // The slug is in the URL, so its shape is the same one usernames carry — and it is
 // COPIED rather than referenced, so a later username change cannot 404 every link
-// somebody has already shared.
+// somebody has already shared. An empty slug is NOT in this list: it is no longer a
+// refusal, it is a request to derive one — see TestSubmitProfileWithoutASlugDerivesOneFromTheName.
 func TestSubmitProfileRefusesASlugThatCannotBeAURL(t *testing.T) {
-	for _, slug := range []string{"", "no", "Jane-Doe", "jane doe", "jane_doe", "-jane", "jane-", strings.Repeat("a", 31)} {
+	for _, slug := range []string{"no", "Jane-Doe", "jane doe", "jane_doe", "-jane", "jane-", strings.Repeat("a", 31)} {
 		t.Run("slug "+slug, func(t *testing.T) {
 			in := validInput()
 			in.Slug = slug
@@ -153,6 +173,86 @@ func TestSubmitProfileReportsWhatTheDatabaseRefuses(t *testing.T) {
 				t.Errorf("error = %v, want %v", err, tc.want)
 			}
 		})
+	}
+}
+
+// An empty URL slug is no longer a refusal: the mentor left it to the system, and the
+// system derives one from the display name — the field already required on this exact
+// form, so nothing new needs to be typed.
+func TestSubmitProfileWithoutASlugDerivesOneFromTheName(t *testing.T) {
+	repo := newFakeRepo()
+	in := validInput()
+	in.Slug = ""
+
+	got, err := newTestService(t, repo).SubmitProfile(context.Background(), in)
+	if err != nil {
+		t.Fatalf("SubmitProfile: %v", err)
+	}
+	if got.Slug != "jane-doe" {
+		t.Errorf("slug = %q, want %q", got.Slug, "jane-doe")
+	}
+}
+
+// A slug the system derived can collide with one another mentor already holds — the
+// derivation only looks at the name, not the catalogue. The system SHALL resolve that
+// itself with the smallest free numbered variant rather than refusing the submission.
+func TestSubmitProfileWithoutASlugRetriesOnCollision(t *testing.T) {
+	repo := newFakeRepo()
+	if _, err := repo.CreateProfile(context.Background(), ProfileInput{UserID: 1, Slug: "jane-doe"}); err != nil {
+		t.Fatalf("seed CreateProfile: %v", err)
+	}
+
+	in := validInput()
+	in.UserID = 7
+	in.Slug = ""
+
+	got, err := newTestService(t, repo).SubmitProfile(context.Background(), in)
+	if err != nil {
+		t.Fatalf("SubmitProfile: %v", err)
+	}
+	if got.Slug != "jane-doe-2" {
+		t.Errorf("slug = %q, want %q", got.Slug, "jane-doe-2")
+	}
+}
+
+// A display name with no latin letters or digits — an all-Cyrillic name, say — sanitizes
+// to nothing. The system SHALL fall back to a fixed base rather than refuse the
+// submission, exactly as username.Sanitize already falls back for an account username.
+func TestSubmitProfileWithoutASlugFallsBackWhenTheNameSanitizesToNothing(t *testing.T) {
+	repo := newFakeRepo()
+	in := validInput()
+	in.Slug = ""
+	in.DisplayName = "Иван Стрелов"
+
+	got, err := newTestService(t, repo).SubmitProfile(context.Background(), in)
+	if err != nil {
+		t.Fatalf("SubmitProfile: %v", err)
+	}
+	if got.Slug != "user" {
+		t.Errorf("slug = %q, want %q", got.Slug, "user")
+	}
+}
+
+// An explicitly supplied slug that is already taken is refused outright — never
+// silently substituted with a suffixed variant. Substituting one would leave the
+// mentor with a URL that differs from what they typed and no indication that happened.
+func TestSubmitProfileWithAnExplicitTakenSlugIsRefusedWithoutRetrying(t *testing.T) {
+	repo := newFakeRepo()
+	if _, err := repo.CreateProfile(context.Background(), ProfileInput{UserID: 1, Slug: "jane-doe"}); err != nil {
+		t.Fatalf("seed CreateProfile: %v", err)
+	}
+	repo.createCalls = 0 // the seed call above doesn't count
+
+	in := validInput()
+	in.UserID = 7
+	in.Slug = "jane-doe"
+
+	_, err := newTestService(t, repo).SubmitProfile(context.Background(), in)
+	if !errors.Is(err, ErrSlugTaken) {
+		t.Errorf("error = %v, want ErrSlugTaken", err)
+	}
+	if repo.createCalls != 1 {
+		t.Errorf("CreateProfile called %d times, want exactly 1 — an explicit slug must never be silently retried", repo.createCalls)
 	}
 }
 
@@ -323,6 +423,35 @@ func TestWithdrawalCancelsFutureBookingsAndNotifiesEachSeeker(t *testing.T) {
 	}
 }
 
+// A withdrawing mentor's cancelled bookings must not leave stray Meet events live on
+// their own calendar — the same cleanup a single Cancel() already does, extended to the
+// bulk path Withdraw uses.
+func TestWithdrawalDeletesCalendarEventsOfCancelledBookings(t *testing.T) {
+	repo := newFakeRepo()
+	linker := &fakeCalendarLinker{}
+	svc := New(repo, Config{
+		Notifier:       &fakeNotifier{},
+		CalendarLinker: linker,
+		Now:            func() time.Time { return time.Date(2026, time.September, 7, 9, 0, 0, 0, time.UTC) },
+	})
+	submitted, err := svc.SubmitProfile(context.Background(), validInput())
+	if err != nil {
+		t.Fatalf("SubmitProfile: %v", err)
+	}
+	repo.futureBookings[submitted.ID] = []Booking{
+		{ID: uuid.New(), SeekerUserID: 11, MentorUserID: submitted.UserID, GoogleEventID: "evt-1"},
+		// No calendar event to clean up — the ordinary static-link case.
+		{ID: uuid.New(), SeekerUserID: 12, MentorUserID: submitted.UserID},
+	}
+
+	if err := svc.Withdraw(context.Background(), validInput().UserID); err != nil {
+		t.Fatalf("Withdraw: %v", err)
+	}
+	if linker.deletedEventID != "evt-1" {
+		t.Errorf("DeleteMeetEvent called with %q, want evt-1", linker.deletedEventID)
+	}
+}
+
 // A delivery failure must not leave a mentor unable to withdraw. The cancellations have
 // already committed; refusing here would strand them.
 func TestWithdrawalSurvivesAFailedNotification(t *testing.T) {
@@ -465,6 +594,41 @@ func TestReactivateByAStrangerIsRefused(t *testing.T) {
 
 	if _, err := svc.Reactivate(context.Background(), 4242); !errors.Is(err, ErrProfileNotFound) {
 		t.Errorf("error = %v, want ErrProfileNotFound", err)
+	}
+}
+
+// ShowPhoto defaults off and round-trips through both create and update, independent
+// of every other field — a mentor's own opt-in, not a byproduct of anything else they
+// submit.
+func TestShowPhotoDefaultsOffAndRoundTripsThroughCreateAndUpdate(t *testing.T) {
+	repo := newFakeRepo()
+	svc := newTestService(t, repo)
+
+	created, err := svc.SubmitProfile(context.Background(), validInput())
+	if err != nil {
+		t.Fatalf("SubmitProfile: %v", err)
+	}
+	if created.ShowPhoto {
+		t.Error("show_photo = true on a fresh profile, want false (off by default)")
+	}
+
+	in := validInput()
+	in.ShowPhoto = true
+	updated, err := svc.UpdateProfile(context.Background(), in)
+	if err != nil {
+		t.Fatalf("UpdateProfile: %v", err)
+	}
+	if !updated.ShowPhoto {
+		t.Error("show_photo = false after opting in, want true")
+	}
+
+	in.ShowPhoto = false
+	updated, err = svc.UpdateProfile(context.Background(), in)
+	if err != nil {
+		t.Fatalf("UpdateProfile: %v", err)
+	}
+	if updated.ShowPhoto {
+		t.Error("show_photo = true after opting back out, want false")
 	}
 }
 

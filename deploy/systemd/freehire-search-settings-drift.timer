@@ -1,0 +1,18 @@
+[Unit]
+Description=timer: freehire-search-settings-drift every 5 minutes
+[Timer]
+# Monotonic, like queue-metrics and llm-probe: this samples a condition that moves
+# continuously, so the gap between samples is what matters, not the time of day.
+#
+# Five minutes rather than one: the settings this checks change only around a deploy
+# that adds a sortable/filterable attribute or an embedder, which is rare and, once it
+# has drifted, stays drifted until someone patches the live index — a minute's
+# resolution buys nothing here. Five minutes still turns a silent-until-a-caller-hits-
+# it gap into a page-worthy one within minutes of the deploy that caused it.
+OnBootSec=3min
+OnUnitActiveSec=5min
+# Deliberately NOT Persistent=true, like llm-probe: a missed window is a gap in a
+# graph, and replaying it on boot would publish a drift measurement stamped now for
+# live settings that may have already been patched.
+[Install]
+WantedBy=timers.target

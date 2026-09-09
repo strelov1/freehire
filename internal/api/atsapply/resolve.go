@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/strelov1/freehire/internal/application/autoapply"
+	"github.com/strelov1/freehire/internal/dict/answertopic"
 )
 
 // ResolvedField is one field ready to fill, with the exact value the widget expects — an
@@ -46,9 +47,13 @@ func (p Plan) FullyResolved() bool {
 // source (a dedicated country fact, or Tier C/LLM-drafted answers) is future work, not a bug
 // here — see design.md's Non-Goals.
 var answerKeyFor = map[string]string{
-	"first_name":              "first_name",
-	"last_name":               "last_name",
-	"full_name":               "full_name",
+	"first_name": "first_name",
+	"last_name":  "last_name",
+	"full_name":  "full_name",
+	// Recruitee's own control name for the same field. Measured on production 2026-09-09:
+	// a queued Recruitee application parked on `{"id": "name", "label": "Full name"}` for
+	// a candidate whose full name the profile had all along.
+	"name":                    "full_name",
 	"email":                   "email",
 	"phone":                   "phone",
 	"location":                "location",
@@ -109,6 +114,11 @@ func Resolve(fields []MergedField, answers map[string]string, hasApprovedCV bool
 // them either. visa_sponsorship_needed has no such ambiguity: it is stored as a plain
 // "Yes"/"No" (internal/screeninganswers.Answers.AutofillFields), so matching it here can
 // never produce a wrong-country answer the way authorization would.
+//
+// The invariant is enforced, not merely observed by this list's contents: the answer bank
+// is a second route to a label and would otherwise walk straight around it, so
+// matchBankAnswerKey below refuses the same category through workAuthorizationTerms
+// (sensitive.go). Adding a rule here for an authorization question would still be wrong.
 var labelAnswerKeyFor = []struct {
 	answerKey string
 	keywords  []string // ALL must appear (case-insensitive) for the rule to fire
@@ -118,6 +128,24 @@ var labelAnswerKeyFor = []struct {
 	// question carrying a random uuid id (not the "linkedin" id answerKeyFor already
 	// covers), so only a label rule can match it.
 	{"linkedin", []string{"linkedin"}},
+	// Salary, measured live 2026-09-08: queue entry 3 (Garner Health, Greenhouse) parked on
+	// "What is your desired salary?" while screening_answers held 5000 USD/year for that
+	// candidate. Greenhouse gives a custom question an opaque numeric id, so answerKeyFor
+	// could never reach it and only a label rule can — and there was none, though the visa
+	// rule directly above it had been written for the identical gap.
+	//
+	// Four rules rather than one because the pair must be specific enough to EXCLUDE a
+	// question about current pay: that is a different fact (candidate_survey holds it
+	// separately, deliberately), and answering it with a desired figure would misreport the
+	// candidate to an employer. A bare {"salary"} would do exactly that.
+	//
+	// Note what this does NOT change: `salary` stays on sensitive.go's list, so a model may
+	// still never draft one. Sensitivity forbids guessing a figure; it says nothing about
+	// using the one the candidate themselves stored.
+	{"desired_salary", []string{"desired", "salary"}},
+	{"desired_salary", []string{"desired", "compensation"}},
+	{"desired_salary", []string{"salary", "expect"}},
+	{"desired_salary", []string{"compensation", "expect"}},
 }
 
 // matchLabelAnswerKey returns the answer key a field's label matches, if any.
@@ -136,6 +164,45 @@ func matchLabelAnswerKey(label string) (string, bool) {
 		}
 	}
 	return "", false
+}
+
+// bankAnswerKeyPrefix namespaces the banked answers inside the same map the deterministic
+// facts use. One map rather than two arguments threaded through every call site: a banked
+// answer IS an answer, and the resolver has no reason to know which source stated it.
+//
+// The prefix keeps the two from colliding — a topic is a folded question, which can be any
+// text at all, including the exact string "email".
+//
+// Must match the literal internal/api/candidateprofile's Profile.FieldsWithBankedAnswers()
+// writes its banked answers under — plain Fields() carries none, deliberately, so that the
+// bank reaches an application form and nothing else. The two cannot share a constant —
+// candidateprofile importing this package would invert the layering — so this comment and
+// FieldsWithBankedAnswers()'s own are the only thing holding them together.
+const bankAnswerKeyPrefix = "topic:"
+
+// matchBankAnswerKey returns the answers-map key a field's question is banked under, if it
+// can be keyed at all. Checked AFTER the id and label rules, never before: those are typed,
+// validated facts, and the bank's copy is free text — two sources answering one question
+// have to resolve the same way every time rather than by read order.
+//
+// It keys on questionText, not on the raw Label, because the text the candidate ANSWERED is
+// what the server banked the answer under — and PreviewAnswers titles a labelless field
+// with its id. See questionText (reconcile.go) for the seam.
+//
+// A work-authorization question is refused outright, whatever the bank holds:
+// labelAnswerKeyFor above says why (the answer depends on THIS posting's country, which
+// nothing here has), and the bank does not relax it — one topic covers every posting worded
+// that way, so a banked "Yes" would travel between countries. See workAuthorizationTerms.
+func matchBankAnswerKey(f MergedField) (string, bool) {
+	question := questionText(f)
+	if isWorkAuthorizationLabel(question) {
+		return "", false
+	}
+	topic, ok := answertopic.Of(question)
+	if !ok {
+		return "", false
+	}
+	return bankAnswerKeyPrefix + topic, true
 }
 
 // resolveOne resolves a single field's answer. For a Multi field (a checkbox group taking
@@ -162,19 +229,15 @@ func resolveOne(f MergedField, answers map[string]string, hasApprovedCV bool) (R
 		return ResolvedField{}, "file uploads other than the résumé are not resolved by this package", false
 	}
 
-	key, known := answerKeyFor[f.ID]
-	if !known {
-		// The id is opaque (a custom employer-authored question) — fall back to matching
-		// its label against the narrow set of known semantic categories. An id match, when
-		// one exists, is always more specific/trustworthy and is never shadowed by this.
-		key, known = matchLabelAnswerKey(f.Label)
-	}
-	if !known {
+	keys := answerKeysFor(f)
+	if len(keys) == 0 {
 		return ResolvedField{}, fmt.Sprintf("no known answer source for %q", f.ID), false
 	}
-	value, stated := answers[key]
-	if !stated || strings.TrimSpace(value) == "" {
-		return ResolvedField{}, fmt.Sprintf("candidate has not stated %q", key), false
+	value, stated := firstStated(answers, keys)
+	if !stated {
+		// Named after the most specific key, which is the one a reader would go looking
+		// for; the others were tried and are empty too.
+		return ResolvedField{}, fmt.Sprintf("candidate has not stated %q", keys[0]), false
 	}
 
 	platformValue, matched := matchOption(f, value)
@@ -182,6 +245,51 @@ func resolveOne(f MergedField, answers map[string]string, hasApprovedCV bool) (R
 		return ResolvedField{}, fmt.Sprintf("answer %q matches none of this field's offered options", value), false
 	}
 	return ResolvedField{ID: f.ID, Kind: f.Kind, Multi: f.Multi, Value: platformValue}, "", true
+}
+
+// answerKeysFor returns every answers-map key this field may be answered from, most specific
+// first: the field's own id, then the narrow label rules, then the answer bank.
+//
+// A LIST, resolved against the map by firstStated, rather than one key chosen by whichever
+// rule matched first. The difference only shows when a rule matches a fact the candidate has
+// not stated, and that is precisely the case the bank exists for: "Compensation
+// expectations" matches labelAnswerKeyFor's desired_salary rule, so a candidate with no
+// typed desired_salary parked on it — including a candidate who had answered that exact
+// question on the review screen a month earlier and banked it. The bank was never consulted,
+// because a rule had already claimed the field.
+//
+// Precedence is unchanged and still fixed: a typed fact wins wherever it ANSWERS the
+// question. An unstated fact does not answer anything, so falling through to the bank is the
+// same rule read honestly, not a relaxation of it.
+func answerKeysFor(f MergedField) []string {
+	var keys []string
+	if key, ok := answerKeyFor[f.ID]; ok {
+		keys = append(keys, key)
+	}
+	// The id is opaque (a custom employer-authored question) — match its label against the
+	// narrow set of known semantic categories. An id match, when one exists, is always more
+	// specific/trustworthy and is never shadowed by this.
+	if key, ok := matchLabelAnswerKey(f.Label); ok {
+		keys = append(keys, key)
+	}
+	// The bank: an answer the candidate gave to this same question on an earlier
+	// application. Last, so a typed fact always wins — see matchBankAnswerKey.
+	if key, ok := matchBankAnswerKey(f); ok {
+		keys = append(keys, key)
+	}
+	return keys
+}
+
+// firstStated returns the value of the first key the candidate has actually stated. A key
+// present but blank counts as unstated: a blank answer is indistinguishable from an
+// unanswered question, which is the same reason answerbank refuses to store one.
+func firstStated(answers map[string]string, keys []string) (string, bool) {
+	for _, key := range keys {
+		if value := strings.TrimSpace(answers[key]); value != "" {
+			return value, true
+		}
+	}
+	return "", false
 }
 
 // isResumeField reports whether a file-kind field is the résumé/CV upload — the only file
@@ -195,6 +303,23 @@ func isResumeField(f MergedField) bool {
 	}
 	lower := strings.ToLower(f.Label)
 	return strings.Contains(lower, "resume") || strings.Contains(lower, "résumé")
+}
+
+// isCoverLetterTextField reports whether a free-text field is asking for a cover letter —
+// the free-text sibling of the file-kind "cover_letter" field isResumeField's own doc
+// comment names (internal/ingest/applyform/display.go's vocabulary: "cover_letter" is the
+// upload, "cover_letter_text" is this one). Same id-then-label shape as isResumeField, but
+// the label check is a PREFIX match, not a substring one: this field's answer is the
+// candidate's full cover letter body used verbatim (no offered options to fail matchOption
+// against), so a substring match would also fire on an unrelated question that merely
+// mentions a cover letter in passing (e.g. "If you don't have a cover letter, explain
+// why") and submit the letter as its literal answer — found by code review. A real cover-
+// letter field's label opens with the words, it does not just mention them.
+func isCoverLetterTextField(f MergedField) bool {
+	if strings.EqualFold(strings.TrimSpace(f.ID), "cover_letter_text") {
+		return true
+	}
+	return strings.HasPrefix(strings.ToLower(strings.TrimSpace(f.Label)), "cover letter")
 }
 
 // matchOption resolves free text against a field's offered options, returning the

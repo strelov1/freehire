@@ -137,11 +137,24 @@
           >
             <Card class="h-full p-4">
               <div class="flex flex-col gap-2">
-                <div>
-                  <p class="font-medium">{mentor.name}</p>
-                  <p class="text-muted-foreground text-sm">
-                    {mentor.headline} · {mentor.company_name}
-                  </p>
+                <div class="flex items-center gap-3">
+                  {#if mentor.show_photo}
+                    <img
+                      src={`/api/v1/mentors/${mentor.slug}/photo`}
+                      alt=""
+                      loading="lazy"
+                      class="border-border size-10 shrink-0 rounded-full border object-cover"
+                      onerror={(e) => {
+                        (e.currentTarget as HTMLImageElement).style.display = 'none';
+                      }}
+                    />
+                  {/if}
+                  <div>
+                    <p class="font-medium">{mentor.name}</p>
+                    <p class="text-muted-foreground text-sm">
+                      {mentor.headline} · {mentor.company_name}
+                    </p>
+                  </div>
                 </div>
 
                 {#if mentor.topics.length > 0}

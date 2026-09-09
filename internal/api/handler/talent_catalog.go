@@ -34,7 +34,29 @@ func (h *talentCatalogHandlers) register(api fiber.Router, mw middleware) {
 	// from one that returns postings.
 	limiter := talentCatalogLimiter(mw.throttler)
 	api.Get("/talent", limiter, h.List)
+	// Before the parametrised route, or `/talent/:handle` swallows it and every request
+	// for the facets is answered as a lookup of a member called "facets".
+	api.Get("/talent/facets", limiter, h.Facets)
 	api.Get("/talent/:handle", limiter, h.Get)
+}
+
+// Facets serves how many members stand behind each filter value, for the filter the
+// caller currently has.
+//
+// It is what makes the open vocabularies usable: skills are thousands of canonicals, and
+// a control offering them without counts cannot tell a value nobody carries from one
+// whose members have all left. Same query vocabulary as the list, same unread-param
+// report, same rate-limit budget — a filtering visitor makes two requests where a reader
+// makes one, and what bounds scraping the catalogue should bound scraping its shape.
+func (h *talentCatalogHandlers) Facets(c *fiber.Ctx) error {
+	vals := queryValues(c)
+	q, unreadable := talentnetwork.QueryFromValues(vals)
+
+	counts, err := h.catalogue.Facets(c.Context(), q)
+	if err != nil {
+		return err
+	}
+	return dataResponseWithIgnored(c, counts, ignoredTalentParams(vals, unreadable))
 }
 
 // List serves one filtered, ordered page of the catalogue.

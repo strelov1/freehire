@@ -17,7 +17,7 @@ LEFT JOIN notification_settings ns ON ns.user_id = u.id
 WHERE u.email_verified
   AND u.created_at > now() - make_interval(days => $1::int)
   AND w.sent_at < now() - make_interval(days => $2::int)
-  AND COALESCE(ns.enabled, true)
+  AND COALESCE(ns.news_email_enabled, true)
   AND NOT EXISTS (
       SELECT 1 FROM onboarding_emails oe
       WHERE oe.user_id = u.id AND oe.step = 'advanced_search'
@@ -69,7 +69,7 @@ LEFT JOIN notification_settings ns ON ns.user_id = u.id
 WHERE u.email_verified
   AND u.created_at > now() - make_interval(days => $1::int)
   AND w.sent_at < now() - make_interval(days => $2::int)
-  AND COALESCE(ns.enabled, true)
+  AND COALESCE(ns.news_email_enabled, true)
   AND NOT EXISTS (
       SELECT 1 FROM onboarding_emails oe
       WHERE oe.user_id = u.id AND oe.step = 'extension'
@@ -121,7 +121,7 @@ LEFT JOIN notification_settings ns ON ns.user_id = u.id
 WHERE u.email_verified
   AND u.created_at > now() - make_interval(days => $1::int)
   AND w.sent_at < now() - make_interval(days => $2::int)
-  AND COALESCE(ns.enabled, true)
+  AND COALESCE(ns.news_email_enabled, true)
   AND NOT EXISTS (
       SELECT 1 FROM subscriptions s WHERE s.user_id = u.id AND s.active
   )
@@ -180,7 +180,7 @@ LEFT JOIN notification_settings ns ON ns.user_id = u.id
 WHERE u.email_verified
   AND u.created_at > now() - make_interval(days => $1::int)
   AND w.sent_at < now() - make_interval(days => $2::int)
-  AND COALESCE(ns.enabled, true)
+  AND COALESCE(ns.news_email_enabled, true)
   AND NOT EXISTS (
       SELECT 1 FROM onboarding_emails oe
       WHERE oe.user_id = u.id AND oe.step = 'open_source'
@@ -233,7 +233,7 @@ FROM users u
 LEFT JOIN notification_settings ns ON ns.user_id = u.id
 WHERE u.email_verified
   AND u.created_at > now() - make_interval(days => $1::int)
-  AND COALESCE(ns.enabled, true)
+  AND COALESCE(ns.news_email_enabled, true)
   AND NOT EXISTS (
       SELECT 1 FROM onboarding_emails oe
       WHERE oe.user_id = u.id AND oe.step = 'welcome'
@@ -259,12 +259,20 @@ type ListWelcomeCandidatesRow struct {
 //   - `email_verified` — an unverified address is one nobody proved they own.
 //     Mailing it is how a sending domain collects bounces and spam complaints for
 //     addresses that were typos to begin with.
+//
 //   - The `window_days` bound — without it the first deploy mails the entire
 //     historical user table at once. It also caps the blast radius of any future
 //     mistake to two weeks of signups.
+//
 //   - The LEFT JOIN on notification_settings — a missing row means the account
 //     never touched the setting, which is not the same as opting out, so it still
-//     gets the sequence. An explicit `enabled = false` stops it.
+//     gets the sequence. An explicit `news_email_enabled = false` stops it.
+//
+//     That used to be `enabled`, the same flag the lifecycle nudges read, so
+//     declining the founder's letters also stopped somebody's application
+//     reminders — and an account with no settings row could not decline either
+//     one, because the page that creates the row is behind the login. Migration
+//     0153 split them; the unsubscribe link writes this column without a session.
 //
 // Verified accounts inside the window that have not been greeted yet. This is the
 // only step with no waiting period: it goes out on the next pass after signup.

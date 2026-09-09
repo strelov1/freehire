@@ -232,12 +232,23 @@ if [ "$app" = freehire ]; then
   # auto-apply joined the same day, found missing entirely: the timer-driven drain of
   # auto_apply_queue (headless Chrome fill+submit) had never actually been built or
   # provisioned on this host, so an approved entry would sit in the queue forever.
+  # discord-sync joined 2026-09-07 with migration 0144: it keeps the paid role on the
+  # community Discord in step with the subscription. Its whole feature is inert without the
+  # five DISCORD_* values, so a release that builds it on a host without them costs one
+  # binary and changes nothing — which is also why forgetting it here would have been
+  # invisible until somebody wondered why linking a Discord account never granted anything.
   # backfill-requirements joined 2026-09-05, and this list is why: the worker shipped with
   # migration 0139 and its binary simply was not here, so the operator built it by hand to
   # run the first batches. A one-off pass still needs to survive the next release — it is
   # taken in bounded runs over days, and half a backlog with no binary left to finish it is
   # the failure this line prevents.
-  for w in migrate onboarding broadcast ingest enrich embed similar-backfill search-drain reindex reindex-companies import-collections import-yc import-company-industries queue-metrics tg-ingest tg-extract liveness notify remind nudge apple-revoke auth-cleanup capture-apply-form backfill-derive backfill-company-names backfill-descriptions backfill-application-events backfill-slug-folded backfill-duplicate-marker-owner backfill-company-type-hint backfill-requirements billing-sync build-suggestions merge-companies add-board harvest-orphans recount-companies rollup-stats rollup-facets rollup-company rollup-views classify-mail resolve-url gmail-sync cal-sync mail-ingest hydrate-adzuna-description seed-adzuna-description-queue ingest-scheduler schedule-board auto-apply-orchestrate auto-apply social-digest linkedin-auth linkedin-token-refresh; do
+  # mentorship-remind joined 2026-09-08 with the mentorship marketplace. It sends the 24h
+  # and 1h reminders a booked session is due, and its unit reads .env.notify as well as
+  # .env — without the mail credentials it is a soft no-op, so a missing binary and a
+  # missing credential fail the same silent way: every run exits 0 having reminded nobody.
+  # A missed reminder costs somebody the session, which is why it is on this list rather
+  # than built by hand after the fact.
+  for w in migrate onboarding broadcast ingest enrich embed similar-backfill search-drain reindex reindex-companies import-collections import-yc import-company-industries queue-metrics tg-ingest tg-extract liveness llm-probe notify remind nudge apple-revoke auth-cleanup capture-apply-form backfill-derive backfill-company-names backfill-descriptions backfill-application-events backfill-slug-folded backfill-duplicate-marker-owner backfill-company-type-hint backfill-requirements billing-sync build-suggestions merge-companies add-board harvest-orphans recount-companies rollup-stats rollup-facets rollup-company rollup-views classify-mail resolve-url gmail-sync cal-sync mail-ingest hydrate-adzuna-description seed-adzuna-description-queue ingest-scheduler schedule-board auto-apply-orchestrate auto-apply social-digest discord-sync mentorship-remind linkedin-auth linkedin-token-refresh; do
     sudo -u freehire /usr/local/bin/go build -buildvcs=false -o "$w" "./cmd/$w"
   done
   # Every binary a freehire-*.service starts from hire-current has to have just been built,

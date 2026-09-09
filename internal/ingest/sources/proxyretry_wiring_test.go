@@ -59,3 +59,24 @@ func TestApplyProxyEgressWithoutProxyLeavesRefusalRetryProvidersAlone(t *testing
 		t.Error("workable was rewired with no proxy configured")
 	}
 }
+
+// Both ADP products must be rewired, and each must keep the pacer it was built with: the proxy
+// recovers a request the platform refused, the pacer is what stops the run producing them, and
+// an entry that dropped the pacer would trade a recoverable problem for a worse one.
+func TestApplyProxyEgressRewiresBothADPProducts(t *testing.T) {
+	t.Setenv("SOURCES_PROXY_URL", "http://user:pass@proxy.example:8080")
+	registry := All(NewClient())
+	before := map[string]Source{"adp": registry["adp"], "adpmyjobs": registry["adpmyjobs"]}
+
+	if err := ApplyProxyEgress(registry); err != nil {
+		t.Fatalf("ApplyProxyEgress: %v", err)
+	}
+	for _, name := range []string{"adp", "adpmyjobs"} {
+		if registry[name] == before[name] {
+			t.Errorf("%s was not rewired; a refused listing stays final", name)
+		}
+		if got := registry[name].Provider(); got != name {
+			t.Errorf("rewired provider = %q, want %s", got, name)
+		}
+	}
+}

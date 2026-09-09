@@ -67,6 +67,26 @@ func scanControls(form *html.Node) []DOMField {
 	var walk func(*html.Node)
 	walk = func(n *html.Node) {
 		if n.Type == html.ElementNode {
+			// A subtree the page has explicitly hidden from assistive technology holds
+			// nothing a candidate is being asked. Greenhouse's own form components pair
+			// each custom widget with a `required` proxy input marked this way, so the
+			// browser's native validation fires for a control that is not a native form
+			// control; the widget writes the real answer through to it.
+			//
+			// Counting those as questions is not cosmetic. They carry no id and no name,
+			// so they can never reconcile against the platform's schema, never carry a
+			// label, and never resolve from a candidate's answers — they sat in
+			// Plan.Unmapped permanently, which showed the candidate blank lines where
+			// questions should be and kept Plan.FullyResolved() false forever. A vanilla
+			// Greenhouse posting rendered four, so no such attempt could ever have been
+			// submitted, however complete the profile (freehire, 2026-09-08).
+			//
+			// The whole subtree is skipped, not just this node: aria-hidden hides what is
+			// inside it too, and a wrapper carrying it means every control below is a
+			// widget's plumbing rather than its question.
+			if attr(n, "aria-hidden") == "true" {
+				return
+			}
 			switch n.Data {
 			case "input":
 				scanInput(n, &order, groups)

@@ -97,3 +97,49 @@ func TestWorkableFetch(t *testing.T) {
 		t.Errorf("PostedAt = %v, want parsed published_on (2024)", j.PostedAt)
 	}
 }
+
+// Workable implements CompanyDescriber: the account endpoint carries a top-level
+// "description" field alongside its jobs (confirmed live on a 40-board sample: 32/40
+// filled), and dropping details=true shrinks the response substantially while that
+// field is unaffected — details only controls whether each JOB's own body is inlined.
+func TestWorkableImplementsCompanyDescriber(t *testing.T) {
+	if _, ok := NewWorkable(nil).(CompanyDescriber); !ok {
+		t.Error("workable should implement CompanyDescriber")
+	}
+}
+
+func TestWorkableCompanyDescriptionSanitizesContentAndOmitsDetails(t *testing.T) {
+	fake := &fakeHTTP{body: `{"name":"Isla Care","description":"<p>Isla Health is a venture-backed healthtech startup</p><script>alert(1)</script>","jobs":[]}`}
+
+	got, err := NewWorkable(fake).(CompanyDescriber).CompanyDescription(context.Background(), CompanyEntry{Board: "islacare"})
+	if err != nil {
+		t.Fatalf("CompanyDescription: %v", err)
+	}
+	if got != "<p>Isla Health is a venture-backed healthtech startup</p>" {
+		t.Errorf("CompanyDescription = %q, want the sanitized description", got)
+	}
+	if fake.gotURL != "https://apply.workable.com/api/v1/widget/accounts/islacare" {
+		t.Errorf("requested URL = %q, want the account endpoint without details=true", fake.gotURL)
+	}
+}
+
+func TestWorkableCompanyDescriptionEmptyYieldsEmptyString(t *testing.T) {
+	fake := &fakeHTTP{body: `{"name":"Acme","description":"","jobs":[]}`}
+
+	got, err := NewWorkable(fake).(CompanyDescriber).CompanyDescription(context.Background(), CompanyEntry{Board: "acme"})
+	if err != nil {
+		t.Fatalf("CompanyDescription: %v", err)
+	}
+	if got != "" {
+		t.Errorf("CompanyDescription = %q, want empty for a blank description field", got)
+	}
+}
+
+func TestWorkableCompanyDescriptionPropagatesAFetchError(t *testing.T) {
+	fake := &fakeHTTP{err: &StatusError{Method: "GET", Code: 404, URL: "https://apply.workable.com/api/v1/widget/accounts/gone"}}
+
+	_, err := NewWorkable(fake).(CompanyDescriber).CompanyDescription(context.Background(), CompanyEntry{Board: "gone"})
+	if err == nil {
+		t.Fatal("expected an error for a 404 board, got nil")
+	}
+}

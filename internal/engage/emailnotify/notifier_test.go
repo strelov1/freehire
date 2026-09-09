@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/strelov1/freehire/internal/engage/emailprefs"
 	"github.com/strelov1/freehire/internal/engage/notify"
 )
 
@@ -14,18 +15,43 @@ import (
 // assert the SES call arguments without touching AWS.
 type fakeSender struct {
 	from, to, subject, html, text string
+	group                         emailprefs.Group
+	unsubscribeURL                string
 	calls                         int
 	err                           error
 }
 
-func (s *fakeSender) Send(_ context.Context, from, to, subject, html, text string) error {
+// digestUserID is whose digest every sample here is. Any positive id will do; the
+// token is only required to be mintable.
+const digestUserID int64 = 7
+
+func (s *fakeSender) Send(_ context.Context, m Message) error {
 	s.calls++
-	s.from, s.to, s.subject, s.html, s.text = from, to, subject, html, text
+	s.from, s.to, s.subject, s.html, s.text = m.From, m.To, m.Subject, m.HTML, m.Text
+	s.group, s.unsubscribeURL = m.Group, m.UnsubscribeURL
 	return s.err
+}
+
+// testLinks signs the unsubscribe URLs the digest carries. The secret only has to
+// clear emailprefs' length floor.
+func testLinks() *emailprefs.Links {
+	return emailprefs.NewLinks("notifier-test-secret-padded-to-32b", "https://freehire.me")
+}
+
+// testUnsubscribeURL is what testLinks mints for the digest sample, so a render
+// call outside Send can be handed the same string production would build.
+func testUnsubscribeURL(t *testing.T) string {
+	t.Helper()
+	u, err := testLinks().For(digestUserID, emailprefs.GroupAlerts)
+	if err != nil {
+		t.Fatalf("minting the unsubscribe link: %v", err)
+	}
+	return u
 }
 
 func digest() notify.Digest {
 	return notify.Digest{
+		UserID:          digestUserID,
 		SavedSearchName: "Go & <remote>",
 		Total:           3,
 		Jobs: []notify.DigestJob{
@@ -37,22 +63,22 @@ func digest() notify.Digest {
 }
 
 func TestNotifier_RenderSubject(t *testing.T) {
-	n := NewNotifier(&fakeSender{}, "notifications@freehire.me", "https://freehire.me/")
+	n := NewNotifier(&fakeSender{}, "notifications@freehire.me", "https://freehire.me/", testLinks())
 
-	got := n.render(digest())
+	got := n.render(digest(), testUnsubscribeURL(t))
 	if want := `3 new jobs for "Go & <remote>"`; got.subject != want {
 		t.Errorf("subject = %q, want %q", got.subject, want)
 	}
 
-	one := n.render(notify.Digest{SavedSearchName: "x", Total: 1, Jobs: []notify.DigestJob{{Title: "A", Slug: "a"}}})
+	one := n.render(notify.Digest{SavedSearchName: "x", Total: 1, Jobs: []notify.DigestJob{{Title: "A", Slug: "a"}}}, testUnsubscribeURL(t))
 	if want := `1 new job for "x"`; one.subject != want {
 		t.Errorf("singular subject = %q, want %q", one.subject, want)
 	}
 }
 
 func TestNotifier_RenderHTML(t *testing.T) {
-	n := NewNotifier(&fakeSender{}, "notifications@freehire.me", "https://freehire.me/")
-	got := n.render(digest()).html
+	n := NewNotifier(&fakeSender{}, "notifications@freehire.me", "https://freehire.me/", testLinks())
+	got := n.render(digest(), testUnsubscribeURL(t)).html
 
 	// The saved-search name and a hostile title are auto-escaped by html/template.
 	if !strings.Contains(got, "Go &amp; &lt;remote&gt;") {
@@ -82,8 +108,8 @@ func TestNotifier_RenderHTML(t *testing.T) {
 }
 
 func TestNotifier_RenderTextAlternative(t *testing.T) {
-	n := NewNotifier(&fakeSender{}, "notifications@freehire.me", "https://freehire.me")
-	got := n.render(digest()).text
+	n := NewNotifier(&fakeSender{}, "notifications@freehire.me", "https://freehire.me", testLinks())
+	got := n.render(digest(), testUnsubscribeURL(t)).text
 
 	// The text alternative carries the same content in plain form (unescaped).
 	if !strings.Contains(got, "Go Dev <x>") {
@@ -102,7 +128,7 @@ func TestNotifier_RenderTextAlternative(t *testing.T) {
 
 func TestNotifier_Send(t *testing.T) {
 	fs := &fakeSender{}
-	n := NewNotifier(fs, "notifications@freehire.me", "https://freehire.me")
+	n := NewNotifier(fs, "notifications@freehire.me", "https://freehire.me", testLinks())
 
 	err := n.Send(context.Background(), notify.ChannelEmail, "user@acme.com", digest())
 	if err != nil {
@@ -128,7 +154,7 @@ func TestNotifier_Send(t *testing.T) {
 
 func TestNotifier_SendPropagatesError(t *testing.T) {
 	fs := &fakeSender{err: errors.New("ses throttled")}
-	n := NewNotifier(fs, "notifications@freehire.me", "https://freehire.me")
+	n := NewNotifier(fs, "notifications@freehire.me", "https://freehire.me", testLinks())
 
 	if err := n.Send(context.Background(), notify.ChannelEmail, "user@acme.com", digest()); err == nil {
 		t.Error("Send should propagate the sender error so the delivery retries")
@@ -148,8 +174,8 @@ func bigDigest(n int, notificationID int64) notify.Digest {
 }
 
 func TestNotifier_ListsAtMostTenJobs(t *testing.T) {
-	n := NewNotifier(&fakeSender{}, "notifications@freehire.me", "https://freehire.me")
-	got := n.render(bigDigest(67, 42))
+	n := NewNotifier(&fakeSender{}, "notifications@freehire.me", "https://freehire.me", testLinks())
+	got := n.render(bigDigest(67, 42), testUnsubscribeURL(t))
 
 	if c := strings.Count(got.html, "/jobs/job-"); c != notify.ListLimit {
 		t.Errorf("HTML lists %d jobs, want %d", c, notify.ListLimit)
@@ -166,8 +192,8 @@ func TestNotifier_ListsAtMostTenJobs(t *testing.T) {
 }
 
 func TestNotifier_TailLinksToTheDigestsOwnPage(t *testing.T) {
-	n := NewNotifier(&fakeSender{}, "notifications@freehire.me", "https://freehire.me")
-	got := n.render(bigDigest(67, 42))
+	n := NewNotifier(&fakeSender{}, "notifications@freehire.me", "https://freehire.me", testLinks())
+	got := n.render(bigDigest(67, 42), testUnsubscribeURL(t))
 
 	const want = "https://freehire.me/my/notifications/42/jobs?utm_source=email"
 	if !strings.Contains(got.html, want) {
@@ -179,8 +205,8 @@ func TestNotifier_TailLinksToTheDigestsOwnPage(t *testing.T) {
 }
 
 func TestNotifier_TailFallsBackWithoutANotificationID(t *testing.T) {
-	n := NewNotifier(&fakeSender{}, "notifications@freehire.me", "https://freehire.me")
-	got := n.render(bigDigest(67, 0))
+	n := NewNotifier(&fakeSender{}, "notifications@freehire.me", "https://freehire.me", testLinks())
+	got := n.render(bigDigest(67, 0), testUnsubscribeURL(t))
 
 	if strings.Contains(got.html, "/my/notifications/0/jobs") {
 		t.Errorf("a zero notification id must not be rendered as a URL: %s", got.html)

@@ -3,6 +3,7 @@
   import { resolve } from '$app/paths';
   import { api, ApiError } from '$lib/api';
   import { currentUser, isAuthenticated } from '$lib/auth.svelte';
+  import ToggleSwitch from '$lib/components/ToggleSwitch.svelte';
   import { cn } from '$lib/ui';
   import { ProviderIcon } from '$lib/ui';
 
@@ -154,7 +155,12 @@
       <span class="text-xs text-destructive">{saveError}</span>
     {/if}
 
-    {@render toggleSwitch(enabled, 'Enable notifications', toggleEnabled, status !== 'ready')}
+    <ToggleSwitch
+      on={enabled}
+      label="Enable notifications"
+      disabled={status !== 'ready'}
+      onToggle={toggleEnabled}
+    />
   </div>
 
   {#if status === 'error'}
@@ -281,7 +287,11 @@
             Delay reminders, nudges, and instant search alerts until this window ends. A daily digest still arrives at its own time.
           </p>
         </div>
-        {@render toggleSwitch(quietHoursOn, 'Enable quiet hours', toggleQuietHours, false)}
+        <ToggleSwitch
+          on={quietHoursOn}
+          label="Enable quiet hours"
+          onToggle={toggleQuietHours}
+        />
       </div>
       {#if quietHoursOn}
         <div class="flex items-center gap-2 pl-12">
@@ -311,25 +321,3 @@
   </section>
 {/if}
 
-{#snippet toggleSwitch(on: boolean, label: string, onToggle: () => void, disabled: boolean)}
-  <button
-    type="button"
-    role="switch"
-    aria-checked={on}
-    aria-label={label}
-    onclick={onToggle}
-    {disabled}
-    class={cn(
-      'relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors disabled:opacity-50',
-      'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card',
-      on ? 'bg-brand' : 'bg-muted',
-    )}
-  >
-    <span
-      class={cn(
-        'inline-block size-5 rounded-full bg-white shadow-sm transition-transform',
-        on ? 'translate-x-[22px]' : 'translate-x-0.5',
-      )}
-    ></span>
-  </button>
-{/snippet}

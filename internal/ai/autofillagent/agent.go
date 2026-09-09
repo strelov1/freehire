@@ -27,21 +27,55 @@ type Field struct {
 	Combo    bool     `json:"combo"`
 	Options  []string `json:"options,omitempty"`
 	Frame    int      `json:"frame"`
+	// Form is which <form> inside Frame the control belongs to. The extension has
+	// reported it on every field for as long as it has reported Frame; this side
+	// did not parse it, so a fill could be narrowed to a document but never to one
+	// of the forms in it — and a careers page carrying its application form beside
+	// a job-alert signup carries both in the same document.
+	Form int `json:"form"`
+}
+
+// Upload is a CV upload the page offers, as `read_form` reported it. Never a fill
+// target — it travels because it is what marks one form on the page as the
+// APPLICATION. Measured across Greenhouse, Lever and Ashby: every open application
+// offered one, and no page that was not showing an application did, which is what
+// lets a job-alert signup be told from a short application form when counting fields
+// cannot.
+type Upload struct {
+	Frame int `json:"frame"`
+	Form  int `json:"form"`
 }
 
 // Fill is one entry of the plan: the value to write into the control carrying
-// this label. Frame names which of the page's frames the target field was read
-// from (see Field.Frame) — set by splitByKind from the field it resolved the fill
-// against, not by the planner, so a same-labeled control in a different frame is
-// not addressed by a Fill meant for another.
+// this label. Frame and Form name where the target field was read from (see
+// Field.Frame, Field.Form) — set by splitByKind from the field it resolved the
+// fill against, not by the planner, so a same-labeled control elsewhere on the
+// page is not addressed by a Fill meant for another.
+//
+// Both are needed, and neither alone is enough: Frame separates an application
+// served in an ATS iframe from the careers page around it, Form separates the
+// application from a job-alert signup sitting in the SAME document. A fill naming
+// neither is matched by label alone, which is how a write lands in whichever form
+// the extension happens to walk first.
 type Fill struct {
 	Label string `json:"label"`
 	Value string `json:"value"`
 	Frame int    `json:"frame"`
+	Form  int    `json:"form"`
 }
 
 // Profile is the user's canonical autofill fields, keyed as
-// /me/autofill-profile returns them (full_name, email, …).
+// /me/autofill-profile returns them (full_name, email, …) — that is,
+// candidateprofile.Profile.Fields(), which is exactly the fixed set the
+// endpoint serialises.
+//
+// A fixed set, and it has to stay one. groundedValue below admits any planned
+// value sharing a word-run with ANY value in here, so every entry added widens
+// what a model is allowed to write; and Plan marshals the whole map into the
+// prompt, so every entry added is also sent to the provider. The candidate's
+// banked screening answers are free text they typed for employers — on
+// Greenhouse that includes the demographic and veteran/disability questions —
+// and are kept out of Fields() for both reasons.
 type Profile map[string]string
 
 // Report is what the run tells the user.
@@ -87,13 +121,14 @@ var (
 
 // Run drives one autofill turn: read the form, plan, fill, report.
 func Run(ctx context.Context, tools Tools, planner Planner, profile Profile) (Report, error) {
-	fields, err := readForm(ctx, tools)
+	fields, uploads, err := readForm(ctx, tools)
 	if err != nil {
 		return Report{}, err
 	}
 	if len(fields) == 0 {
 		return Report{}, ErrNoFillableFields
 	}
+	fields = scopeToApplication(fields, uploads)
 
 	planned, err := planner.Plan(ctx, fields, profile)
 	if err != nil {
@@ -145,24 +180,61 @@ func splitByKind(fields []Field, planned []Fill) (typed []Fill, widgets []Field)
 				widgets = append(widgets, field)
 				continue
 			}
-			typed = append(typed, Fill{Label: fill.Label, Value: fill.Value, Frame: field.Frame})
+			typed = append(typed, Fill{Label: fill.Label, Value: fill.Value, Frame: field.Frame, Form: field.Form})
 		}
 	}
 	return typed, widgets
 }
 
-func readForm(ctx context.Context, tools Tools) ([]Field, error) {
+func readForm(ctx context.Context, tools Tools) ([]Field, []Upload, error) {
 	raw, err := tools.Call(ctx, "read_form", nil)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	var result struct {
-		Fields []Field `json:"fields"`
+		Fields  []Field  `json:"fields"`
+		Uploads []Upload `json:"uploads"`
 	}
 	if err := json.Unmarshal(raw, &result); err != nil {
-		return nil, fmt.Errorf("read_form returned unreadable fields: %w", err)
+		return nil, nil, fmt.Errorf("read_form returned unreadable fields: %w", err)
 	}
-	return result.Fields, nil
+	return result.Fields, result.Uploads, nil
+}
+
+// scopeToApplication narrows an observation to the one form the application is
+// asking, identified by the CV upload sitting in it.
+//
+// Without it a page carrying both an application and a job-alert signup has both
+// written: each has its own "Email", splitByKind emits one Fill per field carrying a
+// planned label, and every one of those fills now names its own form precisely — so
+// the signup's lands rather than collapsing onto the application's, which is what
+// happened while the scopes were being discarded on arrival.
+//
+// This mirrors the extension's own function of the same name, deliberately rather
+// than by accident: the panel's deterministic filler has narrowed this way since the
+// signup case was found, and the agent path read the same `read_form` reply and threw
+// the uploads away. Two copies because the layering forbids one — Go cannot call into
+// the extension — so a change to either belongs in both.
+//
+// Both indices identify the group: an ATS iframe numbers its own forms from zero, so
+// the frame alone would merge two unrelated first forms. When the upload names a group
+// holding no questions — a page rendering them outside its form element — every field
+// is kept, because filling nothing at all is the worse answer.
+func scopeToApplication(fields []Field, uploads []Upload) []Field {
+	if len(uploads) == 0 {
+		return fields
+	}
+	target := uploads[0]
+	scoped := make([]Field, 0, len(fields))
+	for _, f := range fields {
+		if f.Frame == target.Frame && f.Form == target.Form {
+			scoped = append(scoped, f)
+		}
+	}
+	if len(scoped) == 0 {
+		return fields
+	}
+	return scoped
 }
 
 type outcome struct {

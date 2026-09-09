@@ -14,17 +14,24 @@ import (
 	"strings"
 
 	"github.com/strelov1/freehire/internal/application/mailtpl"
+	"github.com/strelov1/freehire/internal/engage/emailprefs"
 	"github.com/strelov1/freehire/internal/engage/notify"
 )
 
 // Compile-time guarantee that Notifier satisfies the channel abstraction.
 var _ notify.Notifier = (*Notifier)(nil)
 
-// Sender is the email transport: it delivers one rendered message (subject + HTML
-// and plain-text bodies) from `from` to `to`. *Client (AWS SES) satisfies it in
-// production; tests inject a fake so rendering is verified without touching AWS.
+// Sender is the email transport: it delivers one Message. *Client (AWS SES)
+// satisfies it in production; tests inject a fake so rendering is verified without
+// touching AWS.
+//
+// One method, not three. It replaced Send / SendWithReplyTo / SendWithAttachments,
+// which had begun enumerating the combinations of their optional parts — and every
+// mail now passing through a single call is what lets one validate() refuse a
+// silenceable mail with no way out of it, on both the templated and the hand-built
+// rendering paths.
 type Sender interface {
-	Send(ctx context.Context, from, to, subject, htmlBody, textBody string) error
+	Send(ctx context.Context, m Message) error
 }
 
 // Notifier renders a digest to an email and sends it from `from` through the
@@ -36,21 +43,40 @@ type Notifier struct {
 	from       string
 	jobBaseURL string
 	layout     *mailtpl.Layout
+	links      *emailprefs.Links
 }
 
 // NewNotifier builds a Notifier sending from `from` through sender, with links
-// rooted at jobBaseURL (the frontend origin).
-func NewNotifier(sender Sender, from, jobBaseURL string) *Notifier {
+// rooted at jobBaseURL (the frontend origin) and unsubscribe links signed by links.
+func NewNotifier(sender Sender, from, jobBaseURL string, links *emailprefs.Links) *Notifier {
 	base := strings.TrimRight(jobBaseURL, "/")
-	return &Notifier{sender: sender, from: From(productName, from), jobBaseURL: base, layout: mailtpl.New(base)}
+	return &Notifier{
+		sender:     sender,
+		from:       From(productName, from),
+		jobBaseURL: base,
+		layout:     mailtpl.New(base),
+		links:      links,
+	}
 }
 
 // Send renders the digest and delivers it to the email address in dest. The
 // channel argument is ignored — the worker routes only the email channel to this
 // notifier.
 func (n *Notifier) Send(ctx context.Context, _ string, dest string, d notify.Digest) error {
-	e := n.render(d)
-	return n.sender.Send(ctx, n.from, dest, e.subject, e.html, e.text)
+	unsubscribe, err := n.links.For(d.UserID, emailprefs.GroupAlerts)
+	if err != nil {
+		return fmt.Errorf("emailnotify: unsubscribe link for user %d: %w", d.UserID, err)
+	}
+	e := n.render(d, unsubscribe)
+	return n.sender.Send(ctx, Message{
+		From:           n.from,
+		To:             dest,
+		Subject:        e.subject,
+		HTML:           e.html,
+		Text:           e.text,
+		Group:          emailprefs.GroupAlerts,
+		UnsubscribeURL: unsubscribe,
+	})
 }
 
 // renderedEmail is a digest rendered into the three parts a Sender needs.
@@ -67,7 +93,7 @@ type htmlData struct {
 	ViewAllURL string
 }
 
-func (n *Notifier) render(d notify.Digest) renderedEmail {
+func (n *Notifier) render(d notify.Digest, unsubscribeURL string) renderedEmail {
 	listed := d.Listed()
 	rows := make([]mailtpl.Job, 0, len(listed))
 	for _, j := range listed {
@@ -93,17 +119,18 @@ func (n *Notifier) render(d notify.Digest) renderedEmail {
 		Preheader: fmt.Sprintf("%s matching your %q alert", notify.JobCount(d.Total), d.SavedSearchName),
 		Heading:   fmt.Sprintf("%s for “%s”", notify.JobCount(d.Total), d.SavedSearchName),
 		Content:   template.HTML(b.String()), //nolint:gosec // rendered by the trusted template below, which escaped every field in context
-		// The shell already carries the notification-settings link, so the footer
-		// only has to answer "why am I getting this".
-		Footer: "You’re getting this because you set up a job alert on freehire.",
+		// The shell carries the unsubscribe and settings links, so the footer only
+		// has to answer "why am I getting this".
+		Footer:         "You’re getting this because you set up a job alert on freehire.",
+		UnsubscribeURL: unsubscribeURL,
 	})
 
-	return renderedEmail{subject: subject, html: html, text: n.renderText(d, rows, more, viewAll)}
+	return renderedEmail{subject: subject, html: html, text: n.renderText(d, rows, more, viewAll, unsubscribeURL)}
 }
 
 // renderText builds the plain-text alternative, mirroring the HTML body so
 // non-HTML clients (and spam scorers) see the same content.
-func (n *Notifier) renderText(d notify.Digest, rows []mailtpl.Job, more int, viewAllURL string) string {
+func (n *Notifier) renderText(d notify.Digest, rows []mailtpl.Job, more int, viewAllURL, unsubscribeURL string) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "%s for %q\n\n", notify.JobCount(d.Total), d.SavedSearchName)
 	for _, l := range rows {
@@ -120,6 +147,7 @@ func (n *Notifier) renderText(d notify.Digest, rows []mailtpl.Job, more int, vie
 		fmt.Fprintf(&b, "\n+ %d more at %s\n", more, viewAllURL)
 	}
 	b.WriteString("\nManage your alerts: " + n.manageURL() + "\n")
+	b.WriteString(emailprefs.TextFooter(unsubscribeURL))
 	return b.String()
 }
 

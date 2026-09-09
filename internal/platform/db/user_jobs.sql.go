@@ -414,6 +414,7 @@ SELECT jobs.id, jobs.public_slug, jobs.title, jobs.company, jobs.company_slug, j
        aaq.review_decision AS auto_apply_review_decision,
        aaq.blocked_at AS auto_apply_blocked_at, aaq.failed_at AS auto_apply_failed_at,
        aaq.preview_failed_at AS auto_apply_preview_failed_at,
+       aaq.tailor_failed_at AS auto_apply_tailor_failed_at,
        (aaq.resolved_preview IS NOT NULL)::boolean AS auto_apply_has_preview
 FROM user_jobs uj
 JOIN jobs ON jobs.id = uj.job_id
@@ -490,6 +491,7 @@ type ListUserJobsRow struct {
 	AutoApplyBlockedAt       pgtype.Timestamptz `json:"auto_apply_blocked_at"`
 	AutoApplyFailedAt        pgtype.Timestamptz `json:"auto_apply_failed_at"`
 	AutoApplyPreviewFailedAt pgtype.Timestamptz `json:"auto_apply_preview_failed_at"`
+	AutoApplyTailorFailedAt  pgtype.Timestamptz `json:"auto_apply_tailor_failed_at"`
 	AutoApplyHasPreview      bool               `json:"auto_apply_has_preview"`
 }
 
@@ -572,6 +574,7 @@ func (q *Queries) ListUserJobs(ctx context.Context, arg ListUserJobsParams) ([]L
 			&i.AutoApplyBlockedAt,
 			&i.AutoApplyFailedAt,
 			&i.AutoApplyPreviewFailedAt,
+			&i.AutoApplyTailorFailedAt,
 			&i.AutoApplyHasPreview,
 		); err != nil {
 			return nil, err

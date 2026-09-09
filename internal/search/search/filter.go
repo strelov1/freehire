@@ -73,6 +73,28 @@ func NotIn(attr string, ids []int64) string {
 	return b.String()
 }
 
+// In builds an `attr IN [a, b, c]` fragment matching a set of numeric ids — the mirror
+// image of NotIn, for a caller that wants exactly a known set of documents rather than
+// everything except them (e.g. reading specific jobs' reality class back from the index by
+// id, when the caller already knows which ids it wants and has no query of its own to
+// run). An empty set yields the empty string, matching NotIn's own convention.
+func In(attr string, ids []int64) string {
+	if len(ids) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	b.WriteString(attr)
+	b.WriteString(" IN [")
+	for i, id := range ids {
+		if i > 0 {
+			b.WriteString(", ")
+		}
+		b.WriteString(strconv.FormatInt(id, 10))
+	}
+	b.WriteByte(']')
+	return b.String()
+}
+
 // Filter nests OR-groups into a single AND filter for Meilisearch: fragments
 // within a group are ORed, groups are ANDed. Empty groups are dropped; the
 // result is nil when nothing remains, which Meilisearch treats as "no filter".

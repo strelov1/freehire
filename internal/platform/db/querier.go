@@ -1198,6 +1198,12 @@ type Querier interface {
 	// Link a provider identity to an account (first OAuth sign-in). The composite
 	// primary key rejects a duplicate identity.
 	CreateUserIdentity(ctx context.Context, arg CreateUserIdentityParams) error
+	// Turn ONE email digest off, scoped to its owner. Deactivate only — it cannot
+	// create a subscription and cannot turn one back on, so a leaked link can silence
+	// somebody but never sign them up for anything. Returns the affected row count; 0
+	// means it was already off, or is not this account's, and the caller treats both
+	// the same rather than revealing which.
+	DeactivateEmailSubscription(ctx context.Context, arg DeactivateEmailSubscriptionParams) (int64, error)
 	// Whether the caller already spent points on this (feature, ref). True means the action
 	// is a recompute/resume and must not be charged again (idempotency by ref).
 	DebitExists(ctx context.Context, arg DebitExistsParams) (bool, error)
@@ -1502,6 +1508,14 @@ type Querier interface {
 	// Returns the affected row count: 0 means it does not exist or is not the caller's
 	// (the handler maps that to 404).
 	DeleteSavedSearch(ctx context.Context, arg DeleteSavedSearchParams) (int64, error)
+	// The owner removes one answer. Scoped by user_id as well as id, so a foreign id affects
+	// zero rows and the handler renders 404 — never revealing to a probing caller which of the
+	// two it was, the same posture GetAutoApplyQueueEntryForReview already takes.
+	//
+	// Nothing else ever deletes from this table: the bank accumulates, and no reconciler prunes
+	// it. Same rule as the experience bank, and for the same reason — a sweeper here would
+	// silently discard answers the candidate expects to still hold.
+	DeleteScreeningAnswer(ctx context.Context, arg DeleteScreeningAnswerParams) (int64, error)
 	// A full facet reindex reads every job's CURRENT content directly from Postgres, so
 	// any entry queued before the run started is provably already reflected in the
 	// freshly-swapped live index — cmd/reindex calls this once, after a successful
@@ -1887,6 +1901,18 @@ type Querier interface {
 	// non-positive window means "never bury on age" rather than "bury everything", for the
 	// reason RecordEnrichmentFailure spells out: a misconfiguration must cost retries, not mail.
 	FailEmailClassification(ctx context.Context, arg FailEmailClassificationParams) (FailEmailClassificationRow, error)
+	// Applies a company-level description an ATS adapter yielded alongside its board
+	// crawl (see sources.CompanyDescriber — Greenhouse's board-metadata endpoint today).
+	// Same fill-gap shape as UpsertYCCompany's non-owned columns: tagline fills only a
+	// blank, company_info merges key-wise (existing keys win), touching nothing else —
+	// this source has no industries/year_founded/etc. to assert. A slug with no existing
+	// row is inserted with is_reference = false, since it is arriving with a real
+	// crawled job, not as a reference-only row the way an unmatched YC entry is.
+	FillCompanyDescriptionFromIngest(ctx context.Context, arg FillCompanyDescriptionFromIngestParams) error
+	// Applies a confident Wikipedia match: fills tagline only if blank, merges the
+	// company_info keys (existing keys win on collision, matching UpsertYCCompany's
+	// gap-fill rule), and marks the company checked so it is never looked up again.
+	FillCompanyInfoFromWikipedia(ctx context.Context, arg FillCompanyInfoFromWikipediaParams) error
 	// Import's write: fill only the fields the bank has nothing for, and never overwrite a value
 	// already there. A user who corrected their job title must not have that correction undone by
 	// re-uploading the CV it came from. is_current is not touched at all — a CV that still says
@@ -1970,7 +1996,7 @@ type Querier interface {
 	//
 	// tailored_cv_id, unmapped, and resolved_preview (openspec/changes/auto-apply-review-tracking)
 	// ride along on the same row read rather than a second query: they are exactly what the
-	// tracker drawer's own auto-apply banner needs (the six-value status, the answer preview, the
+	// tracker drawer's own auto-apply banner needs (the seven-value status, the answer preview, the
 	// unmapped question list), and this is already "the caller's own existing auto-apply entry
 	// for one job." preview_failed_at (migration 0140) is read for the same reason failed_at
 	// is: without it, an entry whose preview pass permanently gave up would read forever as
@@ -2090,6 +2116,25 @@ type Querier interface {
 	// until somebody links it. This is the one lookup that turns the id a caller pressed into
 	// the row every linking path works on, immediately after the import stored it.
 	GetEmailIDByExternalID(ctx context.Context, arg GetEmailIDByExternalIDParams) (int64, error)
+	// Everything the public preference page may show, and nothing else: the address the
+	// mail went to and the three group switches.
+	//
+	// Reads through a LEFT JOIN because most accounts have no rule row. The COALESCE
+	// defaults are the same ones the DELIVERY queries apply, so what this page shows is
+	// what those queries would do — a page that disagreed with the sender would be worse
+	// than no page.
+	//
+	// `enabled` coalesces to TRUE, matching GetReminderForDelivery above and the
+	// notification-settings requirement that a never-configured account is enabled. It
+	// read FALSE for a while, which had two costs and the second was the real one: the
+	// page told somebody their notifications were off while they were receiving saved-job
+	// reminders, and every save then wrote that false back — so one click on a CAMPAIGN's
+	// unsubscribe button silently turned their reminders off. That is the coupling this
+	// whole change exists to break, reintroduced in the other direction.
+	//
+	// The nudge queries coalesce the other way, and that is not a contradiction: their
+	// MATCH step already inner-joins an enabled row, so a nudge cannot exist without one.
+	GetEmailPrefs(ctx context.Context, id int64) (GetEmailPrefsRow, error)
 	// Aggregate interaction counts for the public engagement endpoint. Aggregate-only:
 	// every column is a scalar total, so no user identifier or row-level field is
 	// selected. saved / applied are user_jobs interaction-row totals across all users.
@@ -2119,6 +2164,11 @@ type Querier interface {
 	// either question on its own.
 	GetGmailConnection(ctx context.Context, userID int64) (GetGmailConnectionRow, error)
 	GetGmailRefreshToken(ctx context.Context, userID int64) (GetGmailRefreshTokenRow, error)
+	// What a write caller (mentor-google-meet-link's CreateMeetEvent) needs in one round
+	// trip: the encrypted refresh token to reach the API, and the scopes to decide the
+	// grant actually covers what this caller wants to do with it. `status` is read too so a
+	// row already marked needs_reconsent can be treated as unusable without a second query.
+	GetGoogleGrantForWrite(ctx context.Context, userID int64) (GetGoogleGrantForWriteRow, error)
 	// The employer's own description of an upcoming interview, for the rehearsal context:
 	// the most recent message classified as an invitation and linked to this application.
 	//
@@ -2712,6 +2762,13 @@ type Querier interface {
 	// a range scan; starts_with()/a default-collation LIKE would seq-scan the whole source (37s
 	// over greenhouse's ~300k rows). board_pattern is "<escaped board>:%", built by the repository.
 	JobsExistForBoard(ctx context.Context, arg JobsExistForBoardParams) (bool, error)
+	// Location, description and the currently-stored work_mode for a named set of ids, for
+	// cmd/backfill-remote-perk-false-positive.
+	//
+	// Ids come from a Meilisearch query for the same reason JobDescriptionsByIDs's do: a
+	// WHERE over `description` de-TOASTs the column for every row it examines, and the
+	// search index already holds the text.
+	JobsForWorkModeRecheckByIDs(ctx context.Context, ids []int64) ([]JobsForWorkModeRecheckByIDsRow, error)
 	// When the candidate last set this application's stage themselves, or NULL if never.
 	//
 	// This is what silences a mail-driven stage suggestion. A `stage_set` later than the message
@@ -2799,6 +2856,19 @@ type Querier interface {
 	// search query to translate into a filter, plus identity/channel for fan-out. The
 	// worker groups these by canonical(query) so each distinct filter hits the search
 	// index once regardless of how many subscriptions share it.
+	//
+	// The alerts switch is applied HERE rather than at send time, so a delivery path
+	// added later inherits the gate instead of having to remember it.
+	//
+	// It gates the EMAIL channel only. Turning off "job alerts" means turning off the
+	// mail: a Telegram or webhook destination is something the account connected
+	// itself and turns off where it connected it, and silencing those from a link in
+	// an email would be acting well beyond what the link said it would do.
+	//
+	// LEFT JOIN with COALESCE(..., true): a missing notification_settings row means the
+	// account never opened the settings page, which is not the same as opting out. Same
+	// reading as broadcast.sql and onboarding.sql, and the opposite of nudges.sql's
+	// inner join — see migration 0153 for why one column could not answer both.
 	ListActiveSubscriptions(ctx context.Context) ([]ListActiveSubscriptionsRow, error)
 	// The channels cmd/tg-ingest crawls and cmd/tg-extract reads a kind from. Ordered by
 	// name so a run's channel order is stable and its log diffable.
@@ -2951,10 +3021,16 @@ type Querier interface {
 	// therefore the only bound on a run, which is why the caller passes it explicitly
 	// rather than relying on a default.
 	//
-	// The two exclusions are the same as everywhere else, for the same reasons:
-	// an unverified address was never proven to belong to anyone, and an explicit
-	// notification_settings.enabled = false is an opt-out. A missing settings row means
-	// the account never touched the setting and still hears from us.
+	// The two exclusions are the same as everywhere else, for the same reasons: an
+	// unverified address was never proven to belong to anyone, and an explicit
+	// notification_settings.news_email_enabled = false is an opt-out. A missing settings
+	// row means the account never touched the setting and still hears from us.
+	//
+	// The gate used to be `enabled`, which also governs the lifecycle nudges — so
+	// declining letters from the founder also stopped somebody's application
+	// follow-up reminders, and an account with no settings row could not decline at
+	// all, because the only thing that creates the row is a page behind the login.
+	// Migration 0153 split the two.
 	ListBroadcastCandidates(ctx context.Context, arg ListBroadcastCandidatesParams) ([]ListBroadcastCandidatesRow, error)
 	// The feed, newest first.
 	ListCVRevisions(ctx context.Context, arg ListCVRevisionsParams) ([]CvRevision, error)
@@ -3050,6 +3126,12 @@ type Querier interface {
 	// companies that are actually hiring, matching the /companies list's hiring scope, and
 	// rides companies_hiring_job_count_idx instead of scanning the full heap.
 	ListCompaniesForReindex(ctx context.Context, arg ListCompaniesForReindexParams) ([]Company, error)
+	// Candidates for the Wikipedia company-info backfill: no tagline yet, and never
+	// resolved by this backfill before (company_info_wikipedia_checked_at IS NULL —
+	// set on every resolution, match or reject, so a company is looked up at most
+	// once). Keyset-paginated by slug so one run can be bounded and a later run
+	// resumes past what it already paged through.
+	ListCompaniesMissingWikipediaInfo(ctx context.Context, arg ListCompaniesMissingWikipediaInfoParams) ([]ListCompaniesMissingWikipediaInfoRow, error)
 	// The open titles a company carries on its OWN board — a source of kind `ats` or
 	// `company`, never an aggregator. The worker turns these into role keys and asks
 	// whether an aggregator posting's key is among them.
@@ -3635,6 +3717,9 @@ type Querier interface {
 	// would silently unschedule every unconfigured provider, which is the exact failure this
 	// table was built to remove.
 	ListSchedulableProviders(ctx context.Context) ([]ListSchedulableProvidersRow, error)
+	// One candidate's whole bank, newest first — what the management surface lists and what the
+	// profile assembler merges into the answer map.
+	ListScreeningAnswers(ctx context.Context, userID int64) ([]ScreeningAnswerBank, error)
 	// Companies whose ingested name is still a squished slug (lowercase, no
 	// whitespace or uppercase) and that have at least one open job, with a
 	// representative open job's source and URL so the backfill worker can locate the
@@ -3780,6 +3865,11 @@ type Querier interface {
 	// the bucket forever. Empty keys are filtered out so a caller never asks storage to
 	// delete "".
 	ListUserBlobKeys(ctx context.Context, id int64) ([]pgtype.Text, error)
+	// The account's email digest subscriptions, named, for the public preference page.
+	// Email only: the page is reached from an email and may only govern email, so
+	// listing a Telegram subscription there would offer a control the page must not
+	// have.
+	ListUserEmailSubscriptions(ctx context.Context, userID int64) ([]ListUserEmailSubscriptionsRow, error)
 	// Existing thread→application links for the caller, so the matcher can continue a
 	// thread already attached to an application.
 	ListUserEmailThreadLinks(ctx context.Context, userID int64) ([]ListUserEmailThreadLinksRow, error)
@@ -3867,7 +3957,13 @@ type Querier interface {
 	//     mistake to two weeks of signups.
 	//   * The LEFT JOIN on notification_settings — a missing row means the account
 	//     never touched the setting, which is not the same as opting out, so it still
-	//     gets the sequence. An explicit `enabled = false` stops it.
+	//     gets the sequence. An explicit `news_email_enabled = false` stops it.
+	//
+	//     That used to be `enabled`, the same flag the lifecycle nudges read, so
+	//     declining the founder's letters also stopped somebody's application
+	//     reminders — and an account with no settings row could not decline either
+	//     one, because the page that creates the row is behind the login. Migration
+	//     0153 split them; the unsubscribe link writes this column without a session.
 	// Verified accounts inside the window that have not been greeted yet. This is the
 	// only step with no waiting period: it goes out on the next pass after signup.
 	ListWelcomeCandidates(ctx context.Context, arg ListWelcomeCandidatesParams) ([]ListWelcomeCandidatesRow, error)
@@ -3926,12 +4022,31 @@ type Querier interface {
 	// untouched and blocked_at, not failed_at, is what excludes it from
 	// auto_apply_queue_claimable_idx from here on.
 	MarkAutoApplyBlocked(ctx context.Context, arg MarkAutoApplyBlockedParams) error
+	// Records that a tailoring run gave up without producing a CV (migration 0154), so the
+	// entry stops reading as one still being prepared.
+	//
+	// Guarded by tailored_cv_id IS NULL as well as review_decision IS NULL: a run that failed
+	// AFTER an earlier one had already produced a CV has nothing to report — the candidate has
+	// something to look at, and telling them preparation failed while it sits there ready is
+	// worse than saying nothing. DeriveStatus ranks the same way and does not depend on this
+	// guard having fired.
+	//
+	// Returns the job's title/company/slug for the caller's own notification, the same shape and
+	// for the same reason SetAutoApplyResolvedPreview already returns them: this statement
+	// already holds the job_id its own WHERE resolved, and a second round trip for exactly what
+	// this write just touched would be a query with no reason to exist. pgx.ErrNoRows means a
+	// guard fired, which the caller treats as "nothing to say", never as an error.
+	MarkAutoApplyTailorFailed(ctx context.Context, arg MarkAutoApplyTailorFailedParams) (MarkAutoApplyTailorFailedRow, error)
 	// Stamp an event as applied. Idempotent by shape: re-stamping a processed row writes the
 	// same fact, and the reconciler's own query no longer returns it.
 	MarkBillingEventProcessed(ctx context.Context, id int64) error
 	// Stamp a revision as undone. Guarded on reverted_at IS NULL so undoing twice affects no row
 	// and the caller can tell the difference without a second read.
 	MarkCVRevisionReverted(ctx context.Context, arg MarkCVRevisionRevertedParams) (int64, error)
+	// Records that the backfill looked this company up and found no confident match,
+	// so it is never looked up again. Touches nothing else: an unmatched company's
+	// tagline/company_info stay exactly as another source may have left them.
+	MarkCompanyWikipediaChecked(ctx context.Context, slug string) error
 	// Stamp the subscription's last daily-digest send instant, so
 	// internal/application/deliverywindow.DigestDue reads "already sent today" on any later pass
 	// within the same local calendar day. Only called after a successful `daily`-mode
@@ -5202,6 +5317,11 @@ type Querier interface {
 	SelectStaleRegisteredCandidates(ctx context.Context, arg SelectStaleRegisteredCandidatesParams) ([]SelectStaleRegisteredCandidatesRow, error)
 	// Same shape and same reasoning as SearchOutboxMetrics.
 	SemanticOutboxMetrics(ctx context.Context) (SemanticOutboxMetricsRow, error)
+	// Turn the activity group on or off for one account. Separate from
+	// SetEmailGroupSwitches so the public page's "unsubscribe from everything" can reach
+	// it without also being able to turn it ON by accident: the two callers pass
+	// different values and neither writes the other's columns.
+	SetActivityEnabled(ctx context.Context, arg SetActivityEnabledParams) error
 	// Name a session from its first user message. Applied only while the label is still unset,
 	// so a long conversation keeps the name it was born with. Owner-scoped for the same
 	// reason TouchAssistantSession is.
@@ -5317,6 +5437,26 @@ type Querier interface {
 	// transaction, so the employer_reply event went with it and the company started reading
 	// as silent in the reply-rate rollup.
 	SetEmailClassification(ctx context.Context, arg SetEmailClassificationParams) error
+	// Turn the alerts and news groups on or off for one account, without touching
+	// anything else in the rule.
+	//
+	// Deliberately NOT folded into UpsertNotificationSettings. That one is a full
+	// replace: it names every column in its DO UPDATE SET, so routing both writers
+	// through it would make a save from the authenticated settings page overwrite a
+	// choice somebody made from an unsubscribe link, and the reverse. Two writers with
+	// two scopes cannot clobber each other.
+	//
+	// The INSERT branch matters as much as the UPDATE one, and it is where this was
+	// wrong once. Most accounts have no notification_settings row at all, because the
+	// only thing that used to create it was a page behind the login — and the
+	// never-configured state is ENABLED for lifecycle mail (GetReminderForDelivery
+	// coalesces to true). Letting `enabled` fall to its COLUMN default of false on
+	// insert therefore turned somebody's saved-job reminders off the moment they
+	// declined a campaign, which is exactly the coupling migration 0153 removed.
+	//
+	// So the insert writes the never-configured default explicitly. A row created by
+	// this statement leaves the account receiving precisely what it received before.
+	SetEmailGroupSwitches(ctx context.Context, arg SetEmailGroupSwitchesParams) error
 	// cmd/backfill-experience-dates' write: the four structured columns, each filled only
 	// when still NULL — the same per-boundary independence FillExperienceEmploymentBlanks
 	// uses, so a boundary an ordinary write path already populated is never clobbered by a
@@ -5365,6 +5505,12 @@ type Querier interface {
 	// the guard answers that per row, which is cheaper and more honest than a cursor that
 	// would go stale the moment ingest writes a new posting behind it.
 	SetJobRequiresClearance(ctx context.Context, arg SetJobRequiresClearanceParams) (int64, error)
+	// Write one row's work_mode, for cmd/backfill-remote-perk-false-positive.
+	//
+	// The IS DISTINCT FROM guard makes the pass idempotent, the same way
+	// SetJobRequiresClearance's does: a row already carrying the recomputed value is not
+	// rewritten, so a re-run writes nothing and stopping mid-way costs nothing to resume.
+	SetJobWorkMode(ctx context.Context, arg SetJobWorkModeParams) (int64, error)
 	// Write one chunk's derived requirements, for cmd/backfill-requirements. Batched
 	// through unnest rather than a statement per row: the pass covers millions of rows and
 	// a round trip each would dominate its runtime.
@@ -5374,6 +5520,11 @@ type Querier interface {
 	// rewritten, so a re-run writes nothing and produces no dead tuples. It also means the
 	// backfill needs no record of which rows it has visited.
 	SetJobsRequirementsDerived(ctx context.Context, arg SetJobsRequirementsDerivedParams) (int64, error)
+	// Best-effort patch after CreateMentorBooking: the calendar event is created AFTER the
+	// booking row wins the EXCLUDE-constraint race, never before, so a lost race can never
+	// leave an orphaned Google event. No WHERE beyond the id — this always follows a
+	// successful CreateMentorBooking for the same row, in the same request.
+	SetMentorBookingCalendarEvent(ctx context.Context, arg SetMentorBookingCalendarEventParams) error
 	// The mentor's own switch. Deliberately independent of status: pausing and resuming
 	// need no moderator, and neither may alter what the moderator decided.
 	SetMentorPaused(ctx context.Context, arg SetMentorPausedParams) (Mentor, error)
@@ -6062,6 +6213,23 @@ type Querier interface {
 	// already belongs to a different account, this reassigns it to the caller
 	// rather than duplicating or leaving it with the previous owner.
 	UpsertPushToken(ctx context.Context, arg UpsertPushTokenParams) (UserPushToken, error)
+	// Records the candidate's answer to one screening question, replacing any earlier answer on
+	// the same topic. The question text is refreshed too: the newest wording is the one they
+	// most recently read and answered, and keeping a stale phrasing beside a fresh answer would
+	// misdescribe what was agreed to.
+	//
+	// provenance is overwritten on conflict rather than preserved: a candidate answering a
+	// question themselves supersedes any earlier suggestion, and that is exactly the promotion
+	// the send-gate depends on.
+	//
+	// The hazard is the OTHER direction, and this statement does not guard it: an agent write
+	// would equally overwrite a candidate's own answer, DEMOTING it out of what may be sent
+	// (internal/candidate/answerbank.Provenance.sendable) and replacing text they authored with
+	// a model's reading. Nothing writes agent_inferred today, so the behaviour is unreachable
+	// and stays as it is rather than being guarded speculatively. Whoever adds that writer owns
+	// this: either the statement grows a `WHERE screening_answer_bank.provenance <> 'candidate'`
+	// guard on the agent path, or the agent's suggestions go somewhere that is not this row.
+	UpsertScreeningAnswer(ctx context.Context, arg UpsertScreeningAnswerParams) error
 	// Create-or-replace the caller's one screening-answers record. Full-replace, mirroring
 	// UpsertUserProfile: the service reads the current row, merges caller-provided fields over
 	// it (omitted fields keep their stored value), and writes the merged result back whole —

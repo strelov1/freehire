@@ -6,8 +6,8 @@
 INSERT INTO mentors (
     user_id, company_slug, slug, display_name, headline, bio, topics, languages, timezone,
     session_duration_min, buffer_before_min, buffer_after_min, min_notice_min,
-    horizon_days, meeting_url
-) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+    horizon_days, meeting_url, show_photo
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
 RETURNING *;
 
 -- name: GetMentorByUserID :one
@@ -58,6 +58,7 @@ SET display_name = sqlc.arg(display_name),
     min_notice_min = sqlc.arg(min_notice_min),
     horizon_days = sqlc.arg(horizon_days),
     meeting_url = sqlc.arg(meeting_url),
+    show_photo = sqlc.arg(show_photo),
     updated_at = now()
 -- Keyed on user_id ALONE, which UNIQUE (user_id) makes a single row. Taking an id as well
 -- would mean the caller reading the profile first just to learn one, which is a round trip
@@ -195,6 +196,13 @@ INSERT INTO mentor_bookings (
     mentor_id, seeker_user_id, starts_at, ends_at, job_id, note, seeker_timezone, meeting_url
 ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 RETURNING *;
+
+-- name: SetMentorBookingCalendarEvent :exec
+-- Best-effort patch after CreateMentorBooking: the calendar event is created AFTER the
+-- booking row wins the EXCLUDE-constraint race, never before, so a lost race can never
+-- leave an orphaned Google event. No WHERE beyond the id — this always follows a
+-- successful CreateMentorBooking for the same row, in the same request.
+UPDATE mentor_bookings SET meeting_url = $2, google_event_id = $3 WHERE id = $1;
 
 -- name: GetMentorBooking :one
 -- One booking with what both parties' views need. Authorisation is the caller's job: this

@@ -41,6 +41,23 @@ and every page fetched costs a credit whether or not it turns out to be one of t
 This was built with that measured and accepted. The number is recorded here so the next person
 inherits it rather than rediscovering it at their own expense.
 
+## A different shape: `hh` is not IP-blocked at all
+
+`bayt`/`gulftalent` refuse **every** address outright; `hh` (headhunter.ru) doesn't. Its listing
+pages work fine on the plain direct IP, and even its detail pages aren't blocked in the ordinary
+sense — through `SOURCES_PROXY_URL` they redirect to an interactive DDoS-Guard image CAPTCHA
+(`/account/captcha`, measured 2026-09-08), which the browser tier can't solve either (it's a
+real CAPTCHA, not a JS challenge) and which this package doesn't attempt to solve. Firecrawl's
+own egress simply isn't the flagged proxy IP, so it reaches the same pages cleanly.
+
+So `hh` is a MIXED-tier provider, like `wantapply`: only the part that's actually broken (detail
+hydration) is hosted, and listing stays on a free, unproxied client — see
+[internal/ingest/sources/AGENTS.md](../../ingest/sources/AGENTS.md)'s "hosted tier" section for
+the wiring. Unlike `wantapply`, hh's free part must NOT reuse `ApplyFirecrawlEgress`'s shared
+`direct` transport — that value becomes the proxied client whenever `SOURCES_PROXY_URL` is set
+for any OTHER provider, which is exactly the (captcha-walled) transport hh's listing needs to
+avoid.
+
 ## Three bounds, none redundant
 
 - **No key, no client.** `ApplyFirecrawlEgress` is a no-op without `FIRECRAWL_API_KEY` and the

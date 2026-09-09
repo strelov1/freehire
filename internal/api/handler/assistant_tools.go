@@ -102,7 +102,7 @@ func (h *assistantHandlers) facetsTool() assistant.Tool {
 			if err := assistant.DecodeArgs(raw, &in); err != nil {
 				return nil, err
 			}
-			if h.search.facets == nil {
+			if h.search == nil || h.search.facets == nil {
 				return nil, errors.New("search is not available")
 			}
 			vals, err := in.Filters.values()
@@ -149,7 +149,7 @@ func (h *assistantHandlers) searchJobsTool() assistant.Tool {
 			if err := assistant.DecodeArgs(raw, &in); err != nil {
 				return nil, err
 			}
-			if h.search.search == nil {
+			if h.search == nil || h.search.search == nil {
 				return nil, errors.New("search is not available")
 			}
 			vals, err := in.Filters.values()
@@ -294,7 +294,7 @@ func (h *assistantHandlers) marketFitTool() assistant.Tool {
 			if err := assistant.DecodeArgs(raw, &in); err != nil {
 				return nil, err
 			}
-			if h.search.facets == nil {
+			if h.search == nil || h.search.facets == nil {
 				return nil, errors.New("search is not available")
 			}
 			skills := nonEmptyStrings(in.Skills)

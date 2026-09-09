@@ -1,0 +1,322 @@
+---
+title: Who collects your data when an AI interviews you — and why
+date: 2026-09-09
+summary: You sat through a 30-minute interview with a bot and never heard back. Here is exactly what was recorded, who keeps it, what they are allowed to do with it, and how to check before you press start.
+type: article
+tags:
+  - job-seekers
+  - ai
+  - privacy
+  - transparency
+draft: false
+---
+
+Four days ago someone opened a thread on a company page here on freehire. The
+whole post is a question:
+
+> I keep getting messages with links to their openings, and $1,500 for a referral
+> if the person I refer gets hired. Has anyone actually heard of someone getting
+> hired through this? It all looks like a way to collect data for training AI,
+> especially considering that the interview itself is conducted by AI.
+
+Nobody answered. So we went looking — through the companies' own legal documents,
+court filings, funding rounds and five subreddits.
+
+They were half right. And the half that is right is written down, in plain
+English, by the companies themselves.
+
+This article is about **your** data: what gets taken, who takes it, why it is
+worth money, and what you can do about it.
+
+---
+
+## 1. What actually gets recorded
+
+Most candidates assume an AI interview is a video call that gets transcribed.
+It is considerably more than that.
+
+Here is the list, quoted from micro1's Candidate Privacy Notice — a document
+separate from the privacy policy you probably clicked past:
+
+> **Audio and video recordings** of your AI interview sessions.
+> **Screen sharing recordings** for technical assessments.
+> **Transcripts** of your responses.
+> **Assessment scores** and evaluation results.
+> **Behavioral and performance analytics** (e.g., information collected from our
+> proctoring tools to assess the integrity of your interviews).
+
+So: your face, your voice, your screen, and telemetry about how you behaved while
+being watched.
+
+That last line is the one nobody reads. "Proctoring tools" means something is
+monitoring you for signs of cheating — and whatever that produces is stored
+alongside the rest.
+
+**The document that covers this is not the one you think.** micro1's main privacy
+policy explicitly excludes the interview:
+
+> This Privacy Policy does not apply to candidates engaging with our AI
+> interviewer (Zara). If you are a candidate for a role with micro1, please review
+> our separate Candidate Privacy Notice.
+
+If a company splits its policy like that, the interesting terms are always in the
+second document.
+
+---
+
+## 2. Who is collecting it
+
+Three different kinds of company are running AI interviews right now, and people
+constantly confuse them. The difference determines what happens to your recording.
+
+| Type | Who | What they actually sell | Where your data sits |
+| --- | --- | --- | --- |
+| **Labeling platforms** | Outlier (Scale AI), Alignerr | Human labour to AI labs | Core to the business |
+| **Expert marketplaces** | Mercor, micro1, Handshake AI, Turing, Surge | Vetted humans who train AI models | Core to the business |
+| **Interviewer software** | Alex (ex-Apriora), Ribbon, HeyMilo, Fika, JobTwine, Humanly | An interview bot sold to ordinary employers | A by-product — but at enormous volume |
+
+The middle row is the one to understand. **These are not recruiting companies that
+use AI. They are data companies that recruit.** They pay people to write, grade
+and label the material frontier AI models are trained on. The interview is the
+turnstile onto that production line — not a step toward a job at a company.
+
+micro1 is the clearest case: it *started* as an AI recruiter and became a data
+company. The recruiter is still there. It is now the front door.
+
+---
+
+## 3. What they are allowed to do with it
+
+This is the part worth reading twice. From the same micro1 Candidate Privacy
+Notice:
+
+> We **reserve the right to use de-identified information collected from
+> interviews, including audio, video, transcripts, and assessment results, to
+> train and enhance our proprietary machine learning models.** For the avoidance
+> of any doubt, we do not share your data, de-identified or otherwise, with AI
+> model companies for the purposes of training their models.
+
+Read carefully, that says two things:
+
+- ✅ Your recording is **not** handed to OpenAI or Anthropic to train their models.
+- ⚠️ Your recording **may be used to train the company's own model** — the same
+  interviewer that assessed you.
+
+### And this is a choice, not a technical necessity
+
+If this were simply how AI interviewing works, everyone in the category would say
+the same thing. They don't.
+
+Mercor — a direct competitor, same mechanic, same market — publishes the opposite
+commitment in its talent documentation:
+
+> Your interview data will not be employed to train AI models; instead, we procure
+> additional training data separately as required.
+
+One company reserves the right. The other gives it up. **Same market, opposite
+promise.** That is what makes it worth knowing which one you are talking to.
+
+---
+
+## 4. Why your interview is worth money
+
+The motive is not hidden. micro1's CEO, Ali Ansari, posted it to LinkedIn in
+January. It got 968 likes:
+
+> human data will be a $1 trillion/year market
+
+Behind that sentence:
+
+| | |
+| --- | --- |
+| **Mercor** | ~$614M gross revenue in H1 2026, ~90% of it from AI labs. Reportedly raising at a **$20B** valuation, with Nvidia in talks for a stake |
+| **micro1** | Gross run rate went $100M → **$500M** in eight months. Valuation went $80M → $2.5B after it pivoted from recruiting into data |
+| **The market** | Each frontier AI lab reportedly spends on the order of **$1B a year** on human training data |
+
+And the volume that implies: micro1 says it runs **3,000+ AI interviews a day**.
+Alex, which sells an interview bot to ordinary employers, says it has run over a
+million screening interviews.
+
+At that scale, recordings are not a by-product of hiring. They are inventory.
+
+---
+
+## 5. What people who went through it say
+
+We pulled the primary threads rather than the review-site summaries. Five
+companies, five dedicated subreddits: `r/micro1_ai`, `r/mercor_ai` (plus a
+separate `r/FuckMercor`), `r/joinhandshakeai`, `r/outlier_ai`, `r/alignerr`.
+
+The striking thing is that **the complaints have the same shape across all five**:
+endless onboarding, removal from a project without pay, deactivation without
+explanation, months of an empty dashboard. That is the description of a process,
+not five coincidences.
+
+The sharpest account is in `r/RemoteJobs`, titled "Beware of micro1", 119 upvotes.
+The author describes themselves as a research engineer at two of the world's
+largest tech companies, IIT Delhi, MS + PhD, IMO gold medalist:
+
+> Most of the high-rate projects there are most likely fake... I've wasted more
+> than **8 hours in interviews with Zara**, their AI recruiter.
+
+Second comment, 48 upvotes:
+
+> micro1 just farms interviews. You are training their AI for free with the
+> promise of a job that will never come.
+
+Third, 20 upvotes — from someone who found the same document we did:
+
+> They use your face/video data... mention in their policies.
+
+From `r/outlier_ai`, 129 upvotes:
+
+> I had been with Outlier for 10 months... Last week, they deactivated my account
+> out of nowhere and told me that they wouldn't pay me my pending earnings.
+
+### The other side, which belongs here just as much
+
+Under those same threads:
+
+> I made 25k in less than 3 months as a generalist. So it's not a scam per se.
+> However, when you view this as a salaried position, that's where the problems
+> arise.
+
+> Projects vary widely. Some projects I've made $4 an hour, some $300 an hour.
+
+> You could be making 2k a week for a few months if you're lucky... Then no
+> projects for several months. Rinse and repeat.
+
+**The honest summary is not "nobody gets paid."** It is that the money is real and
+lottery-shaped, while the data collection applies to everyone — including everyone
+who never earns a cent.
+
+---
+
+## 6. What the law says about your recording
+
+Here the person who opened that thread was more right than they knew.
+
+### In the EU, your consent may not even be the relevant question
+
+Article 5(1)(f) of the EU AI Act has, since **2 February 2025**, prohibited AI
+systems that infer emotions in the workplace. The European Commission's guidelines
+explicitly extend "workplace" to candidates during selection and hiring —
+precisely because the power imbalance is already there before you are employed.
+
+It is a **prohibition, not a consent regime**. Agreeing to it does not make it
+lawful. Penalties reach €35M or 7% of global turnover, and France's CNIL has named
+recruitment a 2026 enforcement priority.
+
+Where the line falls matters:
+
+- Sentiment analysis over a **text transcript** — outside the prohibition. Text is
+  not biometric data.
+- Scoring your **face, voice or body language** for confidence, enthusiasm or
+  "cultural fit" — inside it.
+
+### In the US, "de-identified" has already been tested in court
+
+In *Deyerler v. HireVue*, the platform argued its facial scans were not biometric
+identifiers because they were not used to identify anyone. In February 2024 the
+Northern District of Illinois **rejected that argument**. The case settled for
+**$3,750,000**, with claims open until October 2026.
+
+A de-identified voiceprint or faceprint is still biometric information under
+Illinois BIPA until it is actually deleted. Under GDPR, pseudonymisation is not
+anonymisation.
+
+There is a further wrinkle worth knowing: collecting a recording under one lawful
+basis and *later* deciding to train a model on it is a **new processing activity**
+that needs its own legal basis. "We reserve the right" is not obviously that.
+
+---
+
+## 7. How to check before you press start
+
+Not "avoid these companies." People genuinely earn on them. Just know which
+transaction you are in.
+
+**Before the interview**
+
+1. **Find the candidate-specific privacy notice**, not the main policy. If the
+   main policy excludes the interview, a second document exists. Search the site
+   for "candidate privacy."
+2. **Search that document for the word "train."** Thirty seconds. It is the single
+   highest-value thing you can read.
+3. **Check what the role actually is.** "AI trainer," "generalist," "data
+   annotator," "expert contributor" mean gig work labelling AI output — not
+   employment at a company.
+
+**During**
+
+4. **Notice what is being asked for.** Passport or government ID before any offer.
+   Proctoring that watches your face and your browser. These are choices the
+   company made, and you are allowed to weigh them.
+
+**After**
+
+5. **Ask what happens to the recording if you are rejected.** A company that
+   cannot answer that in one sentence has told you something.
+6. **In the EU, you can ask for deletion** — and emotion inference in a hiring
+   interview is prohibited outright, regardless of what you agreed to.
+7. **Treat it as gig work.** Every balanced account we read said the same thing:
+   the trouble starts when you expect a salary.
+
+---
+
+## 8. What we could not confirm
+
+Being straight about this matters more than the headline.
+
+**"They post fake jobs" is testimony, not proof.** The most-cited source for that
+accusation — a levels.fyi post naming micro1, Mercor and pesto.tech — contains no
+screenshots, no dates, no numbers and no examples. Two replies, one of them a
+joke. Almost every SEO blog on this subject launders that post. The Reddit
+accounts quoted above are more credible because they are specific and
+self-identifying, but they are still individual accounts.
+
+**Much of what you find searching this is written by interested parties** —
+competing vendors and CV services with a reason to sharpen the framing. And note
+that most results for "AI interview scam" are about the *opposite* problem:
+fraudsters using AI to pose as candidates.
+
+**One inconsistency we can show directly.** On 5 September micro1's CEO announced
+the company was hiring 10,000 robotics trainers in seven days at $50–90/hour,
+"accepting applicants globally." The company's own account, in the same
+announcement, said it was "prioritizing English speaking and Western countries."
+Commenters noticed:
+
+> which countries are considered western according to micro1 ???
+
+> I don't think we Africans are given that many opportunities... it seems we are
+> remembered when no one is available to take it, or the task is too hard.
+
+Separately, MIT Technology Review reported in April that micro1 workers filming
+household chores for robot training were paid **$15/hour**, and that "none of them
+know how exactly their data will be used, stored, and shared with third parties."
+The company declined to say whether that data is ever deleted.
+
+---
+
+## The one-line version
+
+An AI interview is not always a step toward a job. Sometimes it is the product —
+and the thing being produced is a recording of your face, your voice and your
+screen, which the company may be entitled to train on whether or not you are ever
+hired.
+
+That is knowable in advance. It takes about thirty seconds and one search for the
+word "train."
+
+---
+
+## Disclosure
+
+freehire lists micro1's postings — 203 of them in the catalogue as of today —
+along with those of most companies named here. We aggregate what employers
+publish; that is the job. It also means we are part of the pipe this article
+describes, which is exactly why we would rather write it than not.
+
+If you have been through one of these interviews and can show what happened, the
+company discussion threads are open. The thread that started this one is still
+sitting there without a reply.

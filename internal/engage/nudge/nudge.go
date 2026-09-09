@@ -70,6 +70,13 @@ type Message struct {
 	Slug       string
 	URL        string
 	DaysSilent int
+	// UserID is whose nudge this is. It rides on the message rather than beside the
+	// slice, where the kind sits and where a per-batch property would more naturally
+	// belong, because the alternative was changing this interface and reminder's and
+	// notify's — each implemented by four channels — to hand one value to the one
+	// channel that needs it. The engine batches by (account, kind), so every message
+	// in a call carries the same value; the email transport reads it off the first.
+	UserID int64
 }
 
 // Notifier delivers one account's due nudges OF ONE KIND over a channel to a
@@ -485,7 +492,10 @@ func (r *Runner) validate(ctx context.Context, id int64, stats *Stats) (db.GetNu
 
 // message projects one delivery row into the display shape a channel renders.
 func (r *Runner) message(info db.GetNudgeForDeliveryRow) Message {
-	msg := Message{Kind: info.Kind, JobTitle: info.Title, Company: info.Company, Slug: info.PublicSlug, URL: info.URL}
+	msg := Message{
+		Kind: info.Kind, JobTitle: info.Title, Company: info.Company,
+		Slug: info.PublicSlug, URL: info.URL, UserID: info.UserID,
+	}
 	if info.Kind == KindFollowUp && info.LastActivityAt.Valid {
 		msg.DaysSilent = silence.Days(r.now(), info.LastActivityAt.Time)
 	}

@@ -1,38 +1,53 @@
-// Maps auto-apply's six-value status (jobtracking/AssembleReviewInfo, openspec/changes/
+// Maps auto-apply's seven-value status (jobtracking/AssembleReviewInfo, openspec/changes/
 // auto-apply-review-tracking) to the tracker's two rendering decisions — kept out of
 // BoardCard.svelte/JobDrawer.svelte so both unit-test without mounting Svelte, mirroring
 // autoApplyButton.ts's own convention.
 
 /** Whether the board card shows its "needs your review" badge — an entry the candidate
- *  must act on (pending_review) or one that stopped and needs their attention (blocked).
- *  `tailoring`, `approved` and terminal `declined`/`failed` entries show no badge: there is
- *  nothing new for the candidate to notice on the card itself. */
+ *  must act on (pending_review) or one that stopped and needs their attention (blocked,
+ *  tailor_failed). `tailoring`, `approved` and terminal `declined`/`failed` entries show no
+ *  badge: there is nothing new for the candidate to notice on the card itself.
+ *
+ *  `tailor_failed` earns one for the same reason `blocked` does — the attempt stopped and
+ *  nothing else on the card says so. It is the state that used to be indistinguishable from
+ *  `tailoring`, which is how three production entries sat for a day looking like work in
+ *  progress. */
 export function autoApplyNeedsReviewBadge(status?: string | null): boolean {
-  return status === 'pending_review' || status === 'blocked';
+  return status === 'pending_review' || status === 'blocked' || status === 'tailor_failed';
 }
 
 export type AutoApplyReviewBanner =
+  | { kind: 'tailoring' }
   | { kind: 'pending_review' }
+  | { kind: 'approved' }
   | { kind: 'blocked' }
   | { kind: 'declined' }
   | { kind: 'failed' }
+  | { kind: 'tailor_failed' }
   | null;
 
-/** Decides which drawer banner variant to render, or null for `tailoring`/`approved` —
- *  states with nothing yet for the candidate to see or decide. `pending_review` is the one
- *  actionable variant (approve/decline); `blocked`/`declined`/`failed` are read-only, and
- *  the drawer's own copy for them must never imply a retry is possible — no retry path
- *  exists anywhere in the backend for any of the three. */
+/** Decides which drawer banner variant to render, or null when there is no live attempt at
+ *  all. `pending_review` is the one actionable variant (approve/decline); `tailoring` and
+ *  `approved` are read-only progress indicators — nothing to decide yet, or the decision is
+ *  already made — and `blocked`/`declined`/`failed` are read-only terminal states, whose
+ *  drawer copy must never imply a retry is possible — no retry path exists anywhere in the
+ *  backend for any of the three. */
 export function autoApplyReviewBanner(status?: string | null): AutoApplyReviewBanner {
   switch (status) {
+    case 'tailoring':
+      return { kind: 'tailoring' };
     case 'pending_review':
       return { kind: 'pending_review' };
+    case 'approved':
+      return { kind: 'approved' };
     case 'blocked':
       return { kind: 'blocked' };
     case 'declined':
       return { kind: 'declined' };
     case 'failed':
       return { kind: 'failed' };
+    case 'tailor_failed':
+      return { kind: 'tailor_failed' };
     default:
       return null;
   }

@@ -104,6 +104,11 @@ type Report struct {
 // the decision path mails them.
 type ReportDetail struct {
 	Report
+	// ReporterID is the account that filed it. Kept here rather than on Report for the
+	// same reason ReporterEmail is: Report is what the handler serializes, and the
+	// ownership columns are never on the wire. The decision path needs it to sign the
+	// reporter's own unsubscribe link.
+	ReporterID    int64
 	ReporterEmail string
 	JobSlug       string
 	JobTitle      string
@@ -139,6 +144,10 @@ const (
 // moderator did about it. Note carries the moderator's words — the resolve note or the
 // dismissal reason — and may be empty.
 type Decision struct {
+	// UserID is the reporter's account, used to sign their unsubscribe link. A report
+	// always has one — job_reports.reported_by is NOT NULL — so this notice is
+	// ordinary activity mail somebody may decline, not a transactional exception.
+	UserID    int64
 	Email     string
 	JobTitle  string
 	JobSlug   string
@@ -295,7 +304,8 @@ func (s *Service) notify(ctx context.Context, asked bool, rep ReportDetail, d De
 	if !asked || s.notifier == nil {
 		return false
 	}
-	d.Email, d.JobTitle, d.JobSlug, d.Details = rep.ReporterEmail, rep.JobTitle, rep.JobSlug, rep.Details
+	d.UserID, d.Email = rep.ReporterID, rep.ReporterEmail
+	d.JobTitle, d.JobSlug, d.Details = rep.JobTitle, rep.JobSlug, rep.Details
 	if err := s.notifier.NotifyDecision(ctx, d); err != nil {
 		log.Printf("report: notifying the reporter of report %d failed: %v", rep.ID, err)
 		return false

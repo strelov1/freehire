@@ -42,7 +42,7 @@ func TestMentorshipWithdrawAndReactivateHTTPFlow(t *testing.T) {
 	h := newMentorshipHandlers(mentorship.New(
 		mentorship.NewQueriesRepository(queries, pool),
 		mentorship.Config{},
-	))
+	), nil)
 
 	iss := auth.NewIssuer("test-secret", time.Hour)
 	cookie, _ := iss.Issue(userID, testTokenVersion)

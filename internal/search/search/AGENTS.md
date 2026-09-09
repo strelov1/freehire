@@ -121,10 +121,19 @@ Settings first, binary second.
 **A hand patch must send the COMPLETE `sortableAttributes` list.** Meili replaces that
 setting wholesale rather than merging it, so a patch naming only the new attribute silently
 drops `posted_at` — and `posted_at` is what the feed's DEFAULT ordering uses, so the blast
-radius is every caller, not just the one who picked the new sort. There is no operator
-script for this: `EnsureIndex` runs only in tests, and settings otherwise reach production
-when `cmd/reindex` swaps a freshly built index in. Read the setting back afterwards; a 200
-on the patch only means the task was accepted.
+radius is every caller, not just the one who picked the new sort. `EnsureIndex` runs only
+in tests, and settings otherwise reach production when `cmd/reindex` swaps a freshly built
+index in. Read the setting back afterwards; a 200 on the patch only means the task was
+accepted.
+
+**`cmd/search-settings-drift` is the read side of this hazard.** It cannot fix the
+ordering — settings-before-binary is still a human decision, made when a deploy and a
+reindex are sequenced — but it means a gap is found on its own five-minute schedule rather
+than by a caller hitting the 500 first: `Client.SettingsDrift` fetches the live jobs and
+companies indexes' settings and diffs them against `facetSettings()`/`companySettings()`,
+publishing what it finds (`freehire_search_settings_drift_count`) via the node_exporter
+textfile collector. It only reports the hazardous direction — a live index still declaring
+something this binary no longer asks for is never drift, per the note above.
 
 `view_count` (the "Most viewed" ordering) is the easy case of this and worth contrasting
 with the match embedder below: the counter rides the embedded job projection, so it is
@@ -185,4 +194,5 @@ slot before, and the disk floor already refuses rebuilds when free space is tigh
 
 ## Limitations
 
-- A Meili filter error 500s the page instead of degrading. That's the robustness seam.
+- **A filter Meilisearch rejects degrades rather than failing the request** (`internal/api/handler/search.go`'s `runJobSearch`, both job-search endpoints). This bullet used to claim the failure was a flat 500 — it was not, even before this fixed anything: `queryErr` already classified it as `ErrBadQuery`, and `errors.go` already mapped that to 400. The stale wording aside, the substance held: a 400 still failed the whole request rather than getting the "drop it, report it" treatment `search.UnknownParams` already gives an unrecognized param. Now: when the primary query fails as `ErrBadQuery` and a dynamic filter was actually part of the request, the handler retries once with the filter dropped and reports every active filter param in `meta.ignored_params` — `search.ActiveFilterParams` is the mirror of `UnknownParams` this needed. The realistic trigger stays what it always was: the "Adding a filterable attribute" deploy window above, not a malformed client value (every facet/scalar value is escaped before it reaches Meilisearch). See `openspec/changes/search-filter-error-degrade`.
+- **The analogous sort-attribute hazard is NOT closed by the above.** "Adding a sortable attribute" (above) has the same root cause and the same ~26 min window, but a bad `sort` value fails the query the same way a bad filter used to — dropping a sort falls back to default ordering, a differently-shaped fix nothing here attempts yet. `searchSortable`'s `view_count` entry (`internal/api/handler/search.go`) still carries the original warning.

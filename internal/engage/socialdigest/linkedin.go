@@ -163,6 +163,9 @@ func (p *LinkedInPublisher) entry(n int, item Posting) string {
 	if where := placeOf(item); where != "" {
 		line += " · " + escapeLinkedInText(where)
 	}
+	// Unescaped, like Discord's: a number and a word this file wrote, containing none of
+	// the reserved characters.
+	line += " · " + viewsLabel(item)
 	return line + "\n" + jobURL(p.origin, item.Slug, ChannelLinkedIn)
 }
 

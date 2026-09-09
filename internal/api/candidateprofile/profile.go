@@ -42,10 +42,26 @@ type Profile struct {
 	NoticePeriod          string `json:"notice_period"`
 	WillingToRelocate     string `json:"willing_to_relocate"`
 	Age18OrOlder          string `json:"age_18_or_older"`
+
+	// BankAnswers is topic → answer for the questions this candidate has answered on
+	// earlier applications. Not a fixed field like the ones above, because the questions
+	// employers author are not a fixed set — that is the whole reason the bank exists.
+	BankAnswers map[string]string `json:"-"`
 }
 
 // Fields flattens Profile into the keyed values a form-filler grounds its plan in — the
-// shape both the browser-extension agent and cmd/auto-apply's sidecar call pass along.
+// fixed set above and nothing else, keyed exactly as /me/autofill-profile returns them.
+//
+// The banked answers are deliberately NOT here; FieldsWithBankedAnswers is what includes
+// them. This map is what internal/api/handler's agent autofill hands to
+// internal/ai/autofillagent, which JSON-marshals the whole of it into a model prompt and
+// then uses it as the grounding set — so adding the bank here would send every free-text
+// answer the candidate ever typed for an employer (on Greenhouse that includes the
+// demographic and veteran/disability questions) to the model on every run, and would widen
+// autofillagent.groundedValue's anti-fabrication gate by the size of the bank: that gate
+// accepts any planned value sharing a word-run with ANY profile value, so a model could
+// fabricate an answer to one question and have it admitted because the words happen to
+// appear in an unrelated banked answer.
 func (p Profile) Fields() map[string]string {
 	return map[string]string{
 		"full_name":  p.FullName,
@@ -65,6 +81,26 @@ func (p Profile) Fields() map[string]string {
 		"willing_to_relocate":     p.WillingToRelocate,
 		"age_18_or_older":         p.Age18OrOlder,
 	}
+}
+
+// FieldsWithBankedAnswers is Fields plus the candidate's banked answers, and is what an
+// application FORM is resolved against — internal/api/atsapply.Resolve, reached through
+// cmd/auto-apply's own autoapply.AnswerSource. Those two are the only consumers the design
+// names, and the split is what keeps the bank off every other path (see Fields).
+//
+// Banked answers ride in the same map under a prefix, so a caller that resolves an answer
+// never has to know which source stated it. The prefix must match internal/api/atsapply's
+// own bankAnswerKeyPrefix — a topic is a folded question and could otherwise collide with a
+// fixed key. The two cannot share a constant (atsapply is layer 8, this block sits below
+// it), so that comment and this one are the only thing holding them together;
+// atsapply's TestResolve_ReadsTheKeysProfileFieldsActuallyWrites is the only test that
+// fails if they drift.
+func (p Profile) FieldsWithBankedAnswers() map[string]string {
+	fields := p.Fields()
+	for topic, answer := range p.BankAnswers {
+		fields["topic:"+topic] = answer
+	}
+	return fields
 }
 
 // CVReader is the one base-CV read Assemble makes. Tailored copies are excluded by the
@@ -92,6 +128,13 @@ type ScreeningAnswersReader interface {
 	Get(ctx context.Context, userID int64) (screeninganswers.Answers, error)
 }
 
+// BankReader supplies the candidate's own banked screening answers, keyed by topic. Only
+// answers they themselves gave — internal/candidate/answerbank.Store.Sendable is what
+// enforces that, not this interface.
+type BankReader interface {
+	Sendable(ctx context.Context, userID int64) (map[string]string, error)
+}
+
 // Assembler holds the sources Assemble reads, in precedence order.
 type Assembler struct {
 	cvs      CVReader
@@ -100,11 +143,14 @@ type Assembler struct {
 	// screeningAnswers is nil-able: "no screening answers configured" degrades the
 	// screening fields to empty, same as an unconfigured résumé reader.
 	screeningAnswers ScreeningAnswersReader
+	// bank is nil-able: "no answer bank configured" degrades to no banked answers, the
+	// same way an unconfigured screening-answers reader degrades those fields to empty.
+	bank BankReader
 }
 
-// NewAssembler builds an Assembler over its sources. screeningAnswers may be nil.
-func NewAssembler(cvs CVReader, resumes ResumeReader, accounts AccountReader, screeningAnswers ScreeningAnswersReader) *Assembler {
-	return &Assembler{cvs: cvs, resumes: resumes, accounts: accounts, screeningAnswers: screeningAnswers}
+// NewAssembler builds an Assembler over its sources. screeningAnswers and bank may be nil.
+func NewAssembler(cvs CVReader, resumes ResumeReader, accounts AccountReader, screeningAnswers ScreeningAnswersReader, bank BankReader) *Assembler {
+	return &Assembler{cvs: cvs, resumes: resumes, accounts: accounts, screeningAnswers: screeningAnswers, bank: bank}
 }
 
 // Assemble builds a candidate's Profile from the first source that states a contact,
@@ -137,6 +183,13 @@ func (a *Assembler) Assemble(ctx context.Context, userID int64) (Profile, error)
 	profile := BuildProfile(firstStatedHeader(fromCV, fromResume), account.Email)
 	if err := applyScreeningFields(ctx, &profile, a.screeningAnswers, userID); err != nil {
 		return Profile{}, err
+	}
+	if a.bank != nil {
+		banked, err := a.bank.Sendable(ctx, userID)
+		if err != nil {
+			return Profile{}, err
+		}
+		profile.BankAnswers = banked
 	}
 	return profile, nil
 }

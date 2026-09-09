@@ -24,12 +24,12 @@ process, called only via `Client.WithBrowserUse`. Scope is deliberately narrow:
   no `MergedField` schema to build a `Plan` from in the first place, since chromedp's own
   DOM scan is what failed there; a captcha-protected posting (Lever, or
   `reasonCaptchaProtected`) is never routed here — that would be an attempt to bypass a
-  platform's bot protection, not this backend's purpose. **Recruitee is absent for a
-  structural reason found during implementation, not a policy one**:
-  `internal/ingest/applyform.Fetchers` has no registered `Fetcher` for it at all (its form
-  arrives free with the ingest crawl and is written directly), so `Client.fetchSchema`
-  already parks a Recruitee attempt with `errNoSchemaFetcher` before `Submit` ever reaches
-  a `Plan` to hand this executor.
+  platform's bot protection, not this backend's purpose. **Recruitee reaches a `Plan` now
+  (its schema-fetch gap is closed — see `fetchSchema`'s stored-form fallback, below) but was never added
+  here**: it is in neither `fillProviders` (no live DOM-scan built for it) nor
+  `browserUseProviders`, so a fully-resolved Recruitee `Plan` still parks with
+  `reasonSubmissionNotImplemented`, the same outcome Ashby/Workable get without the spend
+  guard's approval.
 - **Only an already fully-resolved `Plan`** (`Plan.FullyResolved()`) — this backend is
   handed exact field values to type and never a decision about what to answer. Every
   invariant `resolve.go`/`draft.go`/`sensitive.go`/`geography.go` already enforce (never
@@ -81,6 +81,21 @@ process, called only via `Client.WithBrowserUse`. Scope is deliberately narrow:
   resolved form for one of them still parks rather than being submitted through a fill path
   never built or verified. Widening the live DOM-scan to another provider is a real gap to
   close, not a design decision to defend.
+- **`fetchSchema` falls back to a stored form ONLY when no live fetcher is registered for
+  the provider — not storage-first.** `Client.forms` (`WithStoredFormReader`, same
+  `StoredFormReader` port `PreviewClient` uses) closes Recruitee's own schema-fetch gap:
+  `internal/ingest/applyform.Fetchers` has no `Fetcher` for it (its form arrives free with
+  the ingest crawl and is written directly to `apply_forms`), so before this it parked with
+  `errNoSchemaFetcher` before `resolve` ever ran. This does NOT mirror
+  `PreviewClient.schemaFor`'s storage-first order — `apply_forms` also holds a row for
+  every provider `cmd/capture-apply-form` drains (Greenhouse, Ashby, Workable, Lever), so
+  preferring storage unconditionally would risk a REAL submission reading a possibly-stale,
+  display-captured row instead of a fresh fetch for providers that already work fine. A
+  live fetcher, when one is registered, is always tried first; `c.forms` is reached only
+  when `fetchSchema` would otherwise return `errNoSchemaFetcher`. **This does not make
+  Recruitee submit** — see this file's own note on `browserUseProviders`, above: reaching a
+  `Plan` is not the same as having anything to hand it to. See
+  `openspec/changes/atsapply-recruitee-stored-schema`.
 - **A Greenhouse posting whose form cannot be scanned parks with a named reason instead of
   erroring.** `ScanGreenhouseForm`'s known selector (`greenhouseFormReadySelector`,
   `#application-form`) only ever matched the vanilla `job-boards.greenhouse.io` template.
@@ -137,6 +152,19 @@ process, called only via `Client.WithBrowserUse`. Scope is deliberately narrow:
   call, sensitive-keyword gate, never an agentic loop). A drafted answer is still checked
   against the field's own offered options (`matchOption`, shared with the deterministic
   path) before it is used.
+- **A cover-letter free-text field prefers the candidate's own already-drafted letter over
+  the generic `Drafter`, when one exists.** `isCoverLetterTextField` (`resolve.go`)
+  recognizes the field (Greenhouse's `cover_letter_text` id, the free-text sibling of the
+  file-kind `cover_letter` upload `isResumeField`'s own doc comment names) and
+  `ResolveWithDrafting` (`draft.go`) checks `LetterReader` — satisfied directly by
+  `*coverletter.Store`, the same structural fit `AtomReader` already has over
+  `*experience.Store` — before ever calling `Drafter.Draft` for that field. A nil
+  `*coverletter.Stored` (no letter drafted yet for this job) or a read error both degrade to
+  the ordinary generic-drafter path, logged the same way `buildGroundingContext`'s own read
+  failure degrades in `client.go`'s `resolve`. This does not make Recruitee-shaped gaps in
+  drafting go away — it only ever runs where `resolve` reaches `ResolveWithDrafting` at all
+  (today: Greenhouse only, per `fillProviders`), same as `LLMDrafter` itself. See
+  `openspec/changes/autoapply-reuse-cover-letter`.
 - **A geography/residency question (`geography.go`) parks before drafting too, for a
   different reason than the sensitive gate.** `sensitiveTerms` (`sensitive.go`) parks a
   question on POLICY grounds — compensation, EEO/demographic, work authorization/visa —
