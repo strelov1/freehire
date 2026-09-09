@@ -94,6 +94,15 @@ const (
 	// whole — the same "board contains a dot" signal the adapter itself reads to tell the two
 	// apart, so there is nothing for the recognizer to decide beyond matching that one shape.
 	modeICIMS = "icims"
+	// querypair: board = TWO named query parameters joined by ":", because the platform needs
+	// both to address a tenant and neither alone identifies one. ADP Workforce Now serves every
+	// career centre from one path under "?cid=<tenant>&ccId=<centre>", and its ingest adapter
+	// takes the board as exactly that pair (internal/ingest/sources/adp.go splits on the colon),
+	// so a single parameter would be a board that 404s every crawl. queryPairBoards names the two
+	// parameters and the shape each value must have, for the reason modeQuery demands one: on a
+	// board-only host a parameter is a weak signal, and inventing a board is the expensive
+	// direction.
+	modeQueryPair = "querypair"
 )
 
 // atsBoards lists the supported multi-tenant ATS: a host (exact or subdomain-suffix match) →
@@ -145,6 +154,9 @@ var atsBoards = []struct{ host, source, mode string }{
 
 	// --- query: board = a named query parameter (see queryBoards) ---
 	{"recruitingbypaycor.com", "paycor", modeQuery},
+
+	// --- querypair: board = two named query parameters joined by ":" (see queryPairBoards) ---
+	{"workforcenow.adp.com", "adp", modeQueryPair},
 
 	// --- icims: board = bare slug (classic "careers-<slug>" host) or the whole vanity host ---
 	{"icims.com", "icims", modeICIMS},
@@ -294,6 +306,37 @@ var queryBoards = map[string]struct {
 	},
 }
 
+// queryPairBoards holds, per matched host entry in modeQueryPair, the two query parameters that
+// together name the board, the shape each value must have, and the path the board's listing is
+// served from. It is queryBoards one parameter wider, and exists for the same reason: on a host
+// that serves every tenant from one path, only the parameters tell them apart.
+//
+// The board is written "<first>:<second>" because that is how the ingest adapter takes it, not
+// because the URL reads that way — sources/adp.go cuts the board on the colon into the cid and
+// ccId its API needs, and the catalogue's ~2,800 adp boards are all stored in that form.
+var queryPairBoards = map[string]struct {
+	first, second, listingPath string
+	firstPattern               *regexp.Regexp
+	secondPattern              *regexp.Regexp
+}{
+	// ADP Workforce Now: the recruitment page is
+	// /mascsr/default/mdf/recruitment/recruitment.html?cid=<uuid>&ccId=<id>&jobId=<posting>.
+	// cid is the tenant, ccId the career centre within it — one tenant runs several, and the
+	// adapter's listing call sends both. The ccId is a digits-and-underscore id ("19000101_000001",
+	// "9201289910657_2"), never a uuid, so the two cannot be confused for one another.
+	//
+	// myjobs.adp.com is deliberately absent: it is a DIFFERENT ADP product (a hosted career site
+	// addressed by a name slug), our adapter cannot crawl it, and reading its slug as a board
+	// would produce exactly the silently-wrong board this package exists to avoid.
+	"workforcenow.adp.com": {
+		first:         "cid",
+		second:        "ccId",
+		listingPath:   "/mascsr/default/mdf/recruitment/recruitment.html",
+		firstPattern:  regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`),
+		secondPattern: regexp.MustCompile(`^[0-9][0-9_]*$`),
+	},
+}
+
 // apiBoards lists each ATS's OWN API host, where the board sits behind a fixed path prefix
 // rather than in the first segment. These are not links a person pastes; they are the XHR a
 // career site on the EMPLOYER's own domain makes to load its listing. That request often names
@@ -312,6 +355,12 @@ var apiBoards = []struct{ host, source, prefix string }{
 	// (apply.jobappnetwork.com/clients/<clientId>/posting/<id>/…), so a person-pasted or
 	// harvested URL resolves through the same mechanism as the XHR-only hosts above.
 	{"apply.jobappnetwork.com", "jobappnetwork", "clients"},
+	// Paylocity serves every tenant from one host, and only the LISTING names the board:
+	// /Recruiting/Jobs/All/<board>. A posting (/Recruiting/Jobs/Details/<id>) and its apply
+	// form (/Recruiting/Jobs/Apply/<id>) carry a posting id and nothing else, so they match no
+	// prefix here and are declined — which is right, since skipping the segment would take the
+	// posting id for a board, the same trap workable's "/j/<id>" shortlink carries.
+	{"recruiting.paylocity.com", "paylocity", "Recruiting/Jobs/All"},
 }
 
 // noBoardHosts are hosts under a supported ATS's domain that serve the platform's own
@@ -487,6 +536,29 @@ func Recognize(rawURL string) (source, board, canonical string, ok bool) {
 		u.Fragment = ""
 		u.Path = q.listingPath
 		u.RawQuery = url.Values{q.param: {board}}.Encode()
+		return src, board, u.String(), true
+
+	case modeQueryPair:
+		// ADP Workforce Now: the board is two parameters, and the canonical is the recruitment
+		// page carrying just those two — so a posting link and a bare career-centre link collapse
+		// to one board. The cid is lower-cased (it is a uuid the platform serves in either case
+		// and adp's catalogue holds lower-case); the ccId is left verbatim, since it is digits and
+		// underscores with no case to fold.
+		q, configured := queryPairBoards[apex]
+		if !configured || q.firstPattern == nil || q.secondPattern == nil {
+			return "", "", "", false
+		}
+		// Each pattern rejects an absent or empty parameter along with a malformed one, so a link
+		// on the host naming only one half is declined rather than turned into a truncated board.
+		first := strings.ToLower(u.Query().Get(q.first))
+		second := u.Query().Get(q.second)
+		if !q.firstPattern.MatchString(first) || !q.secondPattern.MatchString(second) {
+			return "", "", "", false
+		}
+		board = first + ":" + second
+		u.Fragment = ""
+		u.Path = q.listingPath
+		u.RawQuery = url.Values{q.first: {first}, q.second: {second}}.Encode()
 		return src, board, u.String(), true
 
 	case modePathLocalePair:

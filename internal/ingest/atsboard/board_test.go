@@ -135,6 +135,29 @@ func TestRecognize(t *testing.T) {
 		{"paycor malformed client id is not a board", "https://recruitingbypaycor.com/career/CareerHome.action?clientId=not-a-board", "", "", "", false},
 		{"paycor truncated client id is not a board", "https://recruitingbypaycor.com/career/JobIntroduction.action?clientId=4028f88b24c330a2&id=1", "", "", "", false},
 
+		// querypair — ADP Workforce Now: cid names the tenant, ccId the career centre inside it,
+		// and the adapter needs both, so the board is the pair. The canonical collapses to the
+		// recruitment page carrying only those two.
+		{"adp posting", "https://workforcenow.adp.com/mascsr/default/mdf/recruitment/recruitment.html?cid=8a680274-0b2e-46cf-b2cc-49bd2ef0c20f&ccId=9201289910657_2&jobId=123&lang=en_US", "adp", "8a680274-0b2e-46cf-b2cc-49bd2ef0c20f:9201289910657_2", "https://workforcenow.adp.com/mascsr/default/mdf/recruitment/recruitment.html?ccId=9201289910657_2&cid=8a680274-0b2e-46cf-b2cc-49bd2ef0c20f", true},
+		{"adp upper-case cid folds", "https://workforcenow.adp.com/mascsr/default/mdf/recruitment/recruitment.html?cid=8A680274-0B2E-46CF-B2CC-49BD2EF0C20F&ccId=19000101_000001", "adp", "8a680274-0b2e-46cf-b2cc-49bd2ef0c20f:19000101_000001", "https://workforcenow.adp.com/mascsr/default/mdf/recruitment/recruitment.html?ccId=19000101_000001&cid=8a680274-0b2e-46cf-b2cc-49bd2ef0c20f", true},
+		// Half a pair is not a board: the adapter splits the board on the colon and sends both
+		// halves, so a truncated one would 404 every crawl.
+		{"adp without a ccId is not a board", "https://workforcenow.adp.com/mascsr/default/mdf/recruitment/recruitment.html?cid=8a680274-0b2e-46cf-b2cc-49bd2ef0c20f", "", "", "", false},
+		{"adp without a cid is not a board", "https://workforcenow.adp.com/mascsr/default/mdf/recruitment/recruitment.html?ccId=19000101_000001", "", "", "", false},
+		{"adp with neither is not a board", "https://workforcenow.adp.com/mascsr/default/mdf/recruitment/recruitment.html", "", "", "", false},
+		{"adp malformed cid is not a board", "https://workforcenow.adp.com/mascsr/default/mdf/recruitment/recruitment.html?cid=acme&ccId=19000101_000001", "", "", "", false},
+		{"adp malformed ccId is not a board", "https://workforcenow.adp.com/mascsr/default/mdf/recruitment/recruitment.html?cid=8a680274-0b2e-46cf-b2cc-49bd2ef0c20f&ccId=main", "", "", "", false},
+		// myjobs.adp.com is a different ADP product our adapter cannot crawl, so its slug must
+		// never become an adp board.
+		{"adp hosted career site is not this platform", "https://myjobs.adp.com/stellantisexternalcx/cx/job/5001207766206", "", "", "", false},
+
+		// apiBoards — Paylocity: only the listing path names the board. A posting and its apply
+		// form carry a posting id and no tenant, so they are declined rather than read as one.
+		{"paylocity listing", "https://recruiting.paylocity.com/Recruiting/Jobs/All/7186761b-1318-47f2-b709-d7e7995cd3f3", "paylocity", "7186761b-1318-47f2-b709-d7e7995cd3f3", "https://recruiting.paylocity.com/Recruiting/Jobs/All/7186761b-1318-47f2-b709-d7e7995cd3f3", true},
+		{"paylocity posting is not a board", "https://recruiting.paylocity.com/Recruiting/Jobs/Details/4037913", "", "", "", false},
+		{"paylocity apply form is not a board", "https://recruiting.paylocity.com/Recruiting/Jobs/Apply/1471799", "", "", "", false},
+		{"paylocity bare listing path is not a board", "https://recruiting.paylocity.com/Recruiting/Jobs/All", "", "", "", false},
+
 		// icims — board IS the host (like subdomain/host modes), so the canonical collapses to
 		// the bare host: the classic "careers-<slug>.icims.com" host folds to the bare slug
 		// (matching icims.yml's usual shape); any other *.icims.com host, including one that
@@ -400,18 +423,26 @@ func TestRecognizeMapsHostsToTheIngestProviderName(t *testing.T) {
 	}
 }
 
-// TestQueryModeRowsAreConfigured guards the one mode whose row is not self-contained: a query
-// entry needs a second row in queryBoards naming the parameter, and without it the host matches
-// and then declines every link on it — a platform that looks supported and recognises nothing.
-// The rest of the table keeps the "one row plus one test case" promise on its own.
+// TestQueryModeRowsAreConfigured guards the two modes whose rows are not self-contained: a query
+// entry needs a second row in queryBoards naming the parameter, and a querypair entry a row in
+// queryPairBoards naming both. Without it the host matches and then declines every link on it —
+// a platform that looks supported and recognises nothing. The rest of the table keeps the
+// "one row plus one test case" promise on its own.
 func TestQueryModeRowsAreConfigured(t *testing.T) {
 	for _, a := range atsBoards {
-		if a.mode != modeQuery {
-			continue
-		}
-		if q, ok := queryBoards[a.host]; !ok || q.param == "" || q.listingPath == "" || q.boardPattern == nil {
-			t.Errorf("atsBoards entry %q (%s) is %s mode but queryBoards has no complete entry for it",
-				a.host, a.source, modeQuery)
+		switch a.mode {
+		case modeQuery:
+			if q, ok := queryBoards[a.host]; !ok || q.param == "" || q.listingPath == "" || q.boardPattern == nil {
+				t.Errorf("atsBoards entry %q (%s) is %s mode but queryBoards has no complete entry for it",
+					a.host, a.source, modeQuery)
+			}
+		case modeQueryPair:
+			q, ok := queryPairBoards[a.host]
+			if !ok || q.first == "" || q.second == "" || q.listingPath == "" ||
+				q.firstPattern == nil || q.secondPattern == nil {
+				t.Errorf("atsBoards entry %q (%s) is %s mode but queryPairBoards has no complete entry for it",
+					a.host, a.source, modeQueryPair)
+			}
 		}
 	}
 }
