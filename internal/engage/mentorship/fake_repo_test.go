@@ -44,7 +44,6 @@ type fakeRepo struct {
 	calendarGrants          map[int64]fakeCalendarGrant
 	needsReconsent          map[int64]bool
 	setBookingCalendarEvent map[uuid.UUID][2]string // bookingID -> [meetingURL, eventID]
-	setBookingCalendarEvErr error
 }
 
 type fakeCalendarGrant struct {
@@ -414,9 +413,6 @@ func (r *fakeRepo) GetMentorCalendarGrant(_ context.Context, userID int64) (stri
 }
 
 func (r *fakeRepo) SetBookingCalendarEvent(_ context.Context, bookingID uuid.UUID, meetingURL, eventID string) error {
-	if r.setBookingCalendarEvErr != nil {
-		return r.setBookingCalendarEvErr
-	}
 	r.setBookingCalendarEvent[bookingID] = [2]string{meetingURL, eventID}
 	b := r.bookings[bookingID]
 	b.MeetingURL = meetingURL

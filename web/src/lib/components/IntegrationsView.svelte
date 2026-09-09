@@ -80,8 +80,9 @@
     exchange: 'Google did not finish handing over access. Try connecting again.',
   });
   const GMAIL_CONNECT_ERRORS = connectErrors('Gmail');
+  // Shared with the mentor calendar flow below: both name the same product ("Calendar")
+  // to the reader, so the same messages apply to either failing.
   const CALENDAR_CONNECT_ERRORS = connectErrors('Calendar');
-  const MENTOR_CALENDAR_CONNECT_ERRORS = connectErrors('Calendar');
   let googleNotice = $state<{ ok: boolean; text: string } | null>(null);
 
   function readGoogleVerdict() {
@@ -99,7 +100,7 @@
     } else if (mentorCalendarFailed) {
       googleNotice = {
         ok: false,
-        text: MENTOR_CALENDAR_CONNECT_ERRORS[mentorCalendarFailed] ?? 'Connecting Calendar failed. Try again.',
+        text: CALENDAR_CONNECT_ERRORS[mentorCalendarFailed] ?? 'Connecting Calendar failed. Try again.',
       };
     } else if (params.get('gmail') === 'connected') {
       googleNotice = { ok: true, text: 'Gmail connected — your ATS mail will show up in the Inbox shortly.' };

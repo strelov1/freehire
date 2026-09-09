@@ -67,6 +67,14 @@ func NewGoogleCalendarLinker(repo calendarGrantReader, connector *gmailsync.Conn
 	return &GoogleCalendarLinker{repo: repo, connector: connector, cipher: cipher}
 }
 
+// hasCalendarWriteGrant reports whether a grant read from GetMentorCalendarGrant actually
+// covers calendar.events — the one test resolve() and HasConnectedCalendar share, so the
+// booking flow's gate and the profile/frontend's "is this mentor connected?" question can
+// never disagree about what "connected" means.
+func hasCalendarWriteGrant(found bool, scopes []string) bool {
+	return found && slices.Contains(scopes, gmailsync.CalendarEventsScope)
+}
+
 // resolve turns a mentor's grant into an authenticated meetAPI, or reports
 // ErrCalendarNotConnected — the one gate both CreateMeetEvent and DeleteMeetEvent share, so
 // a grant that stops qualifying refuses both identically.
@@ -75,7 +83,7 @@ func (l *GoogleCalendarLinker) resolve(ctx context.Context, userID int64) (*meet
 	if err != nil {
 		return nil, err
 	}
-	if !found || !slices.Contains(scopes, gmailsync.CalendarEventsScope) {
+	if !hasCalendarWriteGrant(found, scopes) {
 		return nil, ErrCalendarNotConnected
 	}
 	refresh, err := l.cipher.Decrypt(encToken)
@@ -87,14 +95,13 @@ func (l *GoogleCalendarLinker) resolve(ctx context.Context, userID int64) (*meet
 
 // HasConnectedCalendar reports whether userID holds a usable calendar.events grant —
 // what the profile validation and the frontend both need to decide whether the meeting
-// link field is still required. Uses the same Repository method CreateMeetEvent's own
-// gate does, so the two can never disagree about what "connected" means.
+// link field is still required.
 func (s *Service) HasConnectedCalendar(ctx context.Context, userID int64) (bool, error) {
 	_, scopes, found, err := s.repo.GetMentorCalendarGrant(ctx, userID)
 	if err != nil {
 		return false, err
 	}
-	return found && slices.Contains(scopes, gmailsync.CalendarEventsScope), nil
+	return hasCalendarWriteGrant(found, scopes), nil
 }
 
 // CreateMeetEvent books a calendar event with the seeker as an attendee and a Meet link
