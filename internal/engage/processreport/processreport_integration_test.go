@@ -40,7 +40,7 @@ func newTestService(t *testing.T, cfg Config) (*Service, *pgxpool.Pool) {
 	t.Helper()
 	pool := testdb.Pool(t)
 	if _, err := pool.Exec(context.Background(),
-		`TRUNCATE company_process_reports, jobs, companies, users RESTART IDENTITY CASCADE`); err != nil {
+		`TRUNCATE company_process_reports, search_outbox, jobs, companies, users RESTART IDENTITY CASCADE`); err != nil {
 		t.Fatalf("truncate: %v", err)
 	}
 	return New(db.New(pool), pool, cfg), pool
@@ -71,6 +71,21 @@ func seedJob(t *testing.T, pool *pgxpool.Pool, slug, externalID string) {
 	}
 }
 
+// outboxCount is how many of this company's postings are queued for the search index.
+// The counter reaching the jobs row is only half the job: nothing carries it into
+// Meilisearch unless the row is queued, and a badge that shows on the job page and on no
+// card is what that gap looks like from outside.
+func outboxCount(t *testing.T, pool *pgxpool.Pool, slug string) int {
+	t.Helper()
+	var n int
+	if err := pool.QueryRow(context.Background(),
+		`SELECT count(*) FROM search_outbox o JOIN jobs j ON j.id = o.job_id WHERE j.company_slug = $1`,
+		slug).Scan(&n); err != nil {
+		t.Fatalf("count outbox: %v", err)
+	}
+	return n
+}
+
 func jobCount(t *testing.T, pool *pgxpool.Pool, externalID string) int32 {
 	t.Helper()
 	var n int32
@@ -99,6 +114,11 @@ func TestFileSyncsTheCountOntoTheCompanysJobs(t *testing.T) {
 		if got := jobCount(t, pool, ext); got != 1 {
 			t.Fatalf("%s counter after filing = %d, want 1", ext, got)
 		}
+	}
+	// Queued, not merely written: without this the change reaches Postgres and never
+	// reaches search, so the badge shows on the job page and on no card.
+	if got := outboxCount(t, pool, "synced-co"); got != 2 {
+		t.Fatalf("search_outbox rows after filing = %d, want 2", got)
 	}
 
 	if _, err := svc.Retract(ctx, user, "synced-co", "ai_interview"); err != nil {
