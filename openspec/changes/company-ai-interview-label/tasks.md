@@ -50,7 +50,7 @@
 ## 8. Ship
 
 - [x] 8.1 `gofmt -w` the touched Go, then `go vet ./...`, `go test ./...`, and `go vet -tags=integration ./...` before pushing.
-- [ ] 8.2 Apply the migration on prod BEFORE deploying the binary — otherwise every company read answers 42703 → 500.
-- [ ] 8.3 Patch the live Meilisearch jobs index settings with the new filterable attribute BEFORE the binary that queries it takes traffic, and confirm `freehire_search_settings_drift_count` reads zero.
+- [x] 8.2 ~~Apply the migration on prod by hand~~ — NOT needed: `deploy/bin/release.sh` builds and runs `cmd/migrate` itself, idempotently and under an advisory lock, BEFORE the new colour starts, and a migration failure aborts the release with the live colour untouched. The migration file's "apply manually" header describes the Docker `initdb` path, which is a different one.
+- [ ] 8.3 Patch the live Meilisearch jobs index settings with the new filterable attribute BEFORE the release. `release.sh`'s facet smoke probes `/api/v1/jobs/facets` and REFUSES to flip without it, so a missed patch is a failed release rather than an outage. **Never patch while `freehire-reindexw` is running**: a rebuild swaps a fresh index built with the deployed binary's settings over the live one, which would drop the patch.
 - [ ] 8.4 Deploy, then verify the empty state on prod: the endpoint answers, the badge renders nowhere, the filter matches nothing.
 - [ ] 8.5 After the first labels land, run a full `make reindex` (stop `freehire-reindexw.timer` first) so the facet sees pre-existing documents, then verify the filter against a labelled company.

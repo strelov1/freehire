@@ -216,10 +216,23 @@ and the retraction, in Go, never by a background job. There is one writer.
 
 ## Migration Plan
 
-1. **Migration first, by hand on prod** — the new table and the `companies`
-   counter column, before any binary that reads them.
+1. **The migration needs no hand-running.** `deploy/bin/release.sh` builds and runs
+   `cmd/migrate` itself — idempotent, one transaction per file, recorded in
+   `schema_migrations` under an advisory lock — and it runs BEFORE the new colour
+   starts, so that colour never serves a request against an older schema. A failing
+   migration aborts the release with the live colour untouched. (The "APPLY TO PROD
+   MANUALLY BEFORE DEPLOY" header these migrations carry describes the Docker `initdb`
+   path, which is a different one; taking it at face value is what made an earlier
+   revision of this plan claim a manual step that does not exist.)
 2. **Meilisearch settings patch to the live jobs index** — the new filterable
-   attribute, before the binary that queries it.
+   attribute, before the release. This one IS a hand step, and `release.sh` guards it:
+   after the health check it runs a facet smoke against `/api/v1/jobs/facets` and
+   refuses to flip when a declared attribute is not live, so a missed patch costs a
+   failed release rather than an outage.
+
+   **It must not be applied while `freehire-reindexw` is running.** A rebuild streams
+   into a throwaway index carrying the DEPLOYED binary's settings and swaps it over the
+   live one, so a patch applied mid-rebuild is silently discarded by the swap.
 3. **Deploy the binary and the frontend.** The label is `0` everywhere; the badge
    renders nowhere; the filter matches nothing. This is a correct empty state, not
    a broken one.
