@@ -69,9 +69,30 @@ pins is a canonical facet value, so its glossary page exists by construction. Co
 than assumed: all 45 target slugs appear in `sitemap-skills.xml`, whose own spec requires it to
 list exactly the pages the route serves.
 
-So `collectionForSkill` is pure and synchronous, like `collectionForCategory`, and the reverse
-link is computed from the collection's own params in the existing server load beside
-`marketLink` — no new fetch, no new await, nothing added to the page's critical path.
+So both helpers are pure and synchronous, like `collectionForCategory` — no new fetch, no new
+await, nothing added to the page's critical path.
+
+### The reverse direction cannot read `collection.params`
+
+The obvious implementation of the reverse link is to test `collection.params` in the landing
+page's load, the way `marketLink` beside it tests `params.category`. It is wrong, and finding
+out why is the reason `skillForCollection` exists as a second helper rather than three lines
+inline.
+
+`ResolvedCollection.params` is `Record<string, string>`, not `Record<string, string | string[]>`:
+`scopeParams` has already flattened any list-valued pin, **taking its first value**. So a
+`{ skills: ['go', 'rust'] }` feed arrives at the load looking exactly like a `{ skills: 'go' }`
+one, and the scalar guard that works on the raw registry cannot be written there at all — there
+is nothing left to test. The page would link a two-skill feed to the Go glossary entry it is
+not about.
+
+`marketLink` carries the same latent hole for `category`. It has never bitten because no
+category pin is list-valued, and this change does not fix it — noting it here is cheaper than
+a drive-by edit to code this change is not otherwise touching.
+
+`skillForCollection(slug)` therefore reads `FILTER_COLLECTIONS` directly, where the list is
+still a list. Both directions then live beside each other in one file, which is where a reader
+comparing them will look.
 
 ### Where each side computes its link
 

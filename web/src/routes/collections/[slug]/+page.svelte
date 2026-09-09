@@ -3,6 +3,7 @@
   import { page } from '$app/state';
   import JobsView from '$lib/components/JobsView.svelte';
   import Seo from '$lib/components/Seo.svelte';
+  import { skillLabel } from '$lib/facets';
   import {
     breadcrumbJsonLd,
     collectionHeading,
@@ -89,6 +90,19 @@
           class="text-brand-strong hover:underline"
         >
           {data.marketLink.label} jobs by country — openings, pay and top skills →
+        </a>
+      </p>
+    {/if}
+    <!-- The definition of what this feed is about, when the feed is one skill. Never
+         rendered alongside marketLink above: each needs the collection to pin exactly
+         one param, and one param cannot be both a category and a skill. -->
+    {#if data.glossaryLink}
+      <p class="mt-3 text-sm">
+        <a
+          href={resolve('/skills/[slug]', { slug: data.glossaryLink })}
+          class="text-brand-strong hover:underline"
+        >
+          What is {skillLabel(data.glossaryLink)}? — the glossary entry →
         </a>
       </p>
     {/if}

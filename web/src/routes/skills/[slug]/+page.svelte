@@ -3,6 +3,7 @@
   import { page } from '$app/state';
   import JobRow from '$lib/components/JobRow.svelte';
   import Seo from '$lib/components/Seo.svelte';
+  import { collectionForSkill } from '$lib/collections';
   import { breadcrumbJsonLd, definedTermJsonLd, jsonLdScript } from '$lib/seo';
   import { Badge } from '$lib/ui';
   import type { PageData } from './$types';
@@ -18,8 +19,19 @@
   const metaDescription = $derived(
     `${data.description} ${count(data.total)} open ${data.label} jobs on freehire.`,
   );
-  // A query string on a resolve()d base — no dynamic segment for resolve() to fill.
-  const jobsHref = $derived(`${resolve('/jobs')}?skills=${encodeURIComponent(data.slug)}`);
+  // Where "the open X jobs" goes. A collection pinning exactly this skill is the same
+  // set behind a self-canonical URL, so it wins: /jobs?skills=X answers the reader fine
+  // but its own canonical names /jobs, and this page's most-followed link should not
+  // hand a crawler an address the site says is not the address. 45 of the 875 described
+  // skills have one; for the rest the facet URL is the only page there is, and it is a
+  // legitimate live filter.
+  const feed = $derived(collectionForSkill(data.slug));
+  const jobsHref = $derived(
+    feed
+      ? resolve('/collections/[slug]', { slug: feed.slug })
+      : // A query string on a resolve()d base — no dynamic segment for resolve() to fill.
+        `${resolve('/jobs')}?skills=${encodeURIComponent(data.slug)}`,
+  );
 
   const jsonLd = $derived(
     jsonLdScript([
@@ -71,7 +83,7 @@
          fact, and a page that hid it while showing a definition would look like it had
          nothing to say about hiring. -->
     <p class="mt-4 text-sm">
-      <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- query-only /jobs filter, no route segment to resolve -->
+      <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- jobsHref is resolve()d on the collection branch; the rule cannot see through the variable, and the fallback branch really is a query-only /jobs URL -->
       <a href={jobsHref} class="font-medium underline"
         >{count(data.total)} open {data.label} jobs</a
       >
@@ -103,7 +115,7 @@
         {/each}
       </ul>
       <p class="mt-4 text-sm">
-        <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- query-only /jobs filter, no route segment to resolve -->
+        <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- jobsHref is resolve()d on the collection branch; the rule cannot see through the variable, and the fallback branch really is a query-only /jobs URL -->
         <a href={jobsHref} class="font-medium underline">See all {count(data.total)} →</a>
       </p>
     </section>
