@@ -124,6 +124,7 @@ var blocks = map[string][]string{
 		"userprofile", "username",
 	},
 	"candidate": {
+		"answerbank",
 		"atscheck",
 		// coverletter drafts from the experience bank against a vacancy the caller supplies
 		// as a db.Job — the letter is about the candidate's evidence, so it sits here and
