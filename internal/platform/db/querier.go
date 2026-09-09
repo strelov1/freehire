@@ -1893,6 +1893,14 @@ type Querier interface {
 	// non-positive window means "never bury on age" rather than "bury everything", for the
 	// reason RecordEnrichmentFailure spells out: a misconfiguration must cost retries, not mail.
 	FailEmailClassification(ctx context.Context, arg FailEmailClassificationParams) (FailEmailClassificationRow, error)
+	// Applies a company-level description an ATS adapter yielded alongside its board
+	// crawl (see sources.CompanyDescriber — Greenhouse's board-metadata endpoint today).
+	// Same fill-gap shape as UpsertYCCompany's non-owned columns: tagline fills only a
+	// blank, company_info merges key-wise (existing keys win), touching nothing else —
+	// this source has no industries/year_founded/etc. to assert. A slug with no existing
+	// row is inserted with is_reference = false, since it is arriving with a real
+	// crawled job, not as a reference-only row the way an unmatched YC entry is.
+	FillCompanyDescriptionFromIngest(ctx context.Context, arg FillCompanyDescriptionFromIngestParams) error
 	// Applies a confident Wikipedia match: fills tagline only if blank, merges the
 	// company_info keys (existing keys win on collision, matching UpsertYCCompany's
 	// gap-fill rule), and marks the company checked so it is never looked up again.
