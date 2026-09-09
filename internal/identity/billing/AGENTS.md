@@ -170,6 +170,16 @@ answer 404, and its worker exits without opening a connection.
 - **Checkout reuses a known customer.** A second purchase that created a second customer for
   one person would leave two subscriptions nobody sums.
 
+- **A tier change on a known customer reuses their existing subscription, never a second
+  Checkout Session.** `CheckoutURL` reads the customer's current subscriptions
+  (`decideCheckoutTarget`, in `entitlement.go`) and, if one already entitles them, calls
+  `client.updateSubscriptionPrice` to swap that subscription's item to the new price with
+  proration — it never opens a new Checkout Session for an existing subscriber. This is the
+  fix for a real production incident: before it existed, "Upgrade to Ultra" on an active Pro
+  subscriber opened a second, independent subscription, and both kept billing in parallel.
+  A failure reading the customer's current subscriptions fails the whole call rather than
+  falling back to a new checkout — falling back would silently recreate the bug.
+
 - **Absent credentials mean disabled, never an error.** `ConfigFromEnv` cannot fail and `New`
   cannot fail. `Enabled()` gates the subsystem; `CanCheckout()` additionally needs a site URL
   to return a buyer to, and is separate on purpose — subscriptions already sold keep
@@ -190,7 +200,9 @@ way the tests do not reproduce.
   id string with nothing to match on, and **`current_period_end` is on the item** — verified
   against a real subscription rather than a stub, which is the only way that one shows up.
 - Checkout: `POST /v1/checkout/sessions`, form-encoded. Management: `POST
-  /v1/billing_portal/sessions`, which returns a short-lived URL.
+  /v1/billing_portal/sessions`, which returns a short-lived URL. Changing an existing
+  subscription's price: `POST /v1/subscriptions/{id}` with `items[0][id]`, `items[0][price]`
+  and `proration_behavior`.
 - Delivery: unordered, duplicates possible, retried for up to three days; an endpoint the
   provider decides is broken can be disabled sooner than that.
 

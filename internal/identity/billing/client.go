@@ -128,13 +128,15 @@ func (c *client) do(ctx context.Context, method, path string, form url.Values, i
 // only one place would silently produce a subscription with no end.
 type stripeSubscriptionList struct {
 	Data []struct {
+		ID                string `json:"id"`
 		Status            string `json:"status"`
 		CurrentPeriodEnd  int64  `json:"current_period_end"`
 		CancelAt          int64  `json:"cancel_at"`
 		CancelAtPeriodEnd bool   `json:"cancel_at_period_end"`
 		Items             struct {
 			Data []struct {
-				CurrentPeriodEnd int64 `json:"current_period_end"`
+				ID               string `json:"id"`
+				CurrentPeriodEnd int64  `json:"current_period_end"`
 				Price            struct {
 					ID string `json:"id"`
 				} `json:"price"`
@@ -167,7 +169,7 @@ func (c *client) subscriberState(ctx context.Context, customerID string) (subscr
 
 	out := subscriber{Subscriptions: make([]subscription, 0, len(raw.Data))}
 	for _, s := range raw.Data {
-		sub := subscription{Status: s.Status}
+		sub := subscription{ID: s.ID, Status: s.Status}
 		if s.CancelAt > 0 {
 			sub.CancelAt = time.Unix(s.CancelAt, 0).UTC()
 		}
@@ -175,12 +177,19 @@ func (c *client) subscriberState(ctx context.Context, customerID string) (subscr
 		// The furthest item decides how far the subscription reaches: with items on
 		// different cycles, access should last as long as the longest of them.
 		periodEnd := s.CurrentPeriodEnd
-		for _, item := range s.Items.Data {
+		for i, item := range s.Items.Data {
 			if item.CurrentPeriodEnd > periodEnd {
 				periodEnd = item.CurrentPeriodEnd
 			}
 			if item.Price.ID != "" {
 				sub.PriceIDs = append(sub.PriceIDs, item.Price.ID)
+			}
+			if i == 0 {
+				// Every subscription this integration creates carries exactly one item (see
+				// createCheckoutSession), and an upgrade/downgrade replaces that item's price
+				// rather than adding a second one — so reading only the first item's id matches
+				// the one invariant this integration maintains.
+				sub.ItemID = item.ID
 			}
 		}
 		if periodEnd > 0 {
@@ -245,6 +254,23 @@ func (c *client) createCheckoutSession(ctx context.Context, userID int64, email,
 		return "", fmt.Errorf("billing: provider returned a checkout session with no URL")
 	}
 	return out.URL, nil
+}
+
+// updateSubscriptionPrice changes an existing subscription's item to a different price, with
+// proration. It is the upgrade/downgrade path, and it never creates a second subscription —
+// that is exactly the bug it exists to stop: before this existed, changing tier always opened
+// a new Checkout Session, leaving two subscriptions billing the same customer in parallel.
+//
+// proration_behavior is named explicitly rather than left to the provider's default: this is
+// the one place in the package that changes what an existing subscriber is charged mid-cycle,
+// and a future default change upstream must not alter that silently.
+func (c *client) updateSubscriptionPrice(ctx context.Context, subscriptionID, itemID, priceID string) error {
+	form := url.Values{}
+	form.Set("items[0][id]", itemID)
+	form.Set("items[0][price]", priceID)
+	form.Set("proration_behavior", "create_prorations")
+
+	return c.do(ctx, http.MethodPost, "/subscriptions/"+subscriptionID, form, "", nil)
 }
 
 // createPortalSession opens the provider's own subscription-management page for one

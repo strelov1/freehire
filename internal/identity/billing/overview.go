@@ -32,6 +32,11 @@ type Overview struct {
 	// the kind of contradiction that generates support mail.
 	EndsAt   *time.Time `json:"ends_at,omitempty"`
 	Invoices []Invoice  `json:"invoices"`
+	// MultipleSubscriptions is true when this customer has more than one active entitling
+	// subscription at once — the duplicate-subscription bug, for a customer it already
+	// happened to. The section still describes the single best-entitling one below; this is
+	// additive information rather than a second code path.
+	MultipleSubscriptions bool `json:"multiple_subscriptions,omitempty"`
 }
 
 // Invoice is one charge as a receipt list shows it.
@@ -107,6 +112,7 @@ func (s *Service) overviewFor(ctx context.Context, customer string) (Overview, e
 	}
 	out.Status = best.Status
 	out.AmountCents, out.Currency, out.Interval = amount, currency, interval
+	out.MultipleSubscriptions = moreThanOneEntitling(sub, s.cfg.Prices, s.cfg.UltraPrices)
 
 	when := best.CurrentPeriodEnd
 	if !best.CancelAt.IsZero() {

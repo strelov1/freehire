@@ -277,6 +277,89 @@ func TestTierFirstOrdersAndNeverDrops(t *testing.T) {
 	}
 }
 
+// TestDecideCheckoutTarget pins CheckoutURL's whole decision — open a new Checkout Session,
+// modify an existing subscription in place, or do nothing — kept pure and DB-free so the fix
+// for freehire's duplicate-subscription bug is testable without a database or a network call.
+func TestDecideCheckoutTarget(t *testing.T) {
+	live := func(id, price, end string) subscription {
+		return subscription{ID: id, ItemID: id + "_item", Status: "active", CurrentPeriodEnd: at(t, end), PriceIDs: []string{price}}
+	}
+
+	cases := []struct {
+		name           string
+		sub            subscriber
+		requestedPrice string
+		wantAction     string // "checkout", "update", or "noop"
+		wantSubID      string
+	}{
+		{
+			name:           "no entitling subscription opens a new checkout",
+			sub:            sub(),
+			requestedPrice: proPrice,
+			wantAction:     "checkout",
+		},
+		{
+			name:           "an active Pro subscription requesting Ultra is updated in place",
+			sub:            sub(live("sub_pro", proPrice, "2026-10-01T00:00:00Z")),
+			requestedPrice: ultraPrice,
+			wantAction:     "update",
+			wantSubID:      "sub_pro",
+		},
+		{
+			name:           "an active Ultra subscription requesting Pro is updated in place",
+			sub:            sub(live("sub_ultra", ultraPrice, "2026-10-01T00:00:00Z")),
+			requestedPrice: proPrice,
+			wantAction:     "update",
+			wantSubID:      "sub_ultra",
+		},
+		{
+			name:           "requesting the price already held is a no-op",
+			sub:            sub(live("sub_pro", proPrice, "2026-10-01T00:00:00Z")),
+			requestedPrice: proPrice,
+			wantAction:     "noop",
+		},
+		{
+			// The pre-existing-bug shape this change does not retroactively fix: two
+			// concurrent entitling subscriptions. The decision picks the best-entitling one
+			// (furthest reach) and leaves the other for an operator to clean up by hand.
+			name: "two concurrent entitling subscriptions: the best-entitling one is updated",
+			sub: sub(
+				live("sub_pro", proPrice, "2027-03-01T00:00:00Z"),
+				live("sub_ultra", ultraPrice, "2026-10-01T00:00:00Z"),
+			),
+			requestedPrice: "price_pro_annual",
+			wantAction:     "update",
+			wantSubID:      "sub_pro",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := decideCheckoutTarget(tc.sub, tc.requestedPrice, []string{proPrice}, []string{ultraPrice})
+			switch tc.wantAction {
+			case "checkout":
+				if got != (checkoutTarget{}) {
+					t.Fatalf("want opening a new checkout (zero target), got %+v", got)
+				}
+			case "noop":
+				if !got.AlreadyOnPrice {
+					t.Fatalf("want AlreadyOnPrice, got %+v", got)
+				}
+			case "update":
+				if got.AlreadyOnPrice {
+					t.Fatalf("want an update, got AlreadyOnPrice: %+v", got)
+				}
+				if got.SubscriptionID != tc.wantSubID {
+					t.Fatalf("want subscription %q updated, got %+v", tc.wantSubID, got)
+				}
+				if got.ItemID != tc.wantSubID+"_item" {
+					t.Fatalf("want item %q, got %+v", tc.wantSubID+"_item", got)
+				}
+			}
+		})
+	}
+}
+
 // TestProUntilFromIsIdempotent asserts the property the whole design rests on: the column is
 // DERIVED from provider state, so applying the same state twice yields the same answer and a
 // repeated sync is free.

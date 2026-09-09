@@ -17,7 +17,7 @@ const subscriptionsBody = `{
       "id": "sub_1",
       "status": "active",
       "cancel_at": null,
-      "items": { "data": [ { "current_period_end": 1790812800, "price": { "id": "price_pro_monthly" } } ] }
+      "items": { "data": [ { "id": "si_1", "current_period_end": 1790812800, "price": { "id": "price_pro_monthly" } } ] }
     }
   ]
 }`
@@ -64,6 +64,14 @@ func TestClientSubscriberState(t *testing.T) {
 	s := sub.Subscriptions[0]
 	if s.Status != "active" {
 		t.Errorf("status: got %q", s.Status)
+	}
+	// The subscription and (first) item id are what an upgrade or downgrade needs to name
+	// which subscription to modify in place, instead of opening a second one.
+	if s.ID != "sub_1" {
+		t.Errorf("subscription id: got %q", s.ID)
+	}
+	if s.ItemID != "si_1" {
+		t.Errorf("item id: got %q", s.ItemID)
 	}
 	// Read from the ITEM. The provider moved it there; a client reading only the top level
 	// gets zero, and a zero period end is what an earlier fallback turned into "forever".
@@ -185,6 +193,32 @@ func TestClientCheckoutNeverSendsCustomerCreation(t *testing.T) {
 		}
 		if strings.Contains(gotForm, "customer_creation") {
 			t.Fatalf("form %q sends customer_creation, which subscription mode refuses", gotForm)
+		}
+	}
+}
+
+// TestClientUpdateSubscriptionPrice guards the fix for freehire's duplicate-subscription
+// bug: an upgrade or downgrade must change the existing subscription's item, never open a
+// second subscription.
+func TestClientUpdateSubscriptionPrice(t *testing.T) {
+	var gotPath, gotForm string
+	c := testClient(t, func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		_ = r.ParseForm()
+		gotForm = r.Form.Encode()
+		_, _ = w.Write([]byte(`{"id":"sub_1"}`))
+	})
+
+	if err := c.updateSubscriptionPrice(context.Background(), "sub_1", "si_1", "price_ultra_monthly"); err != nil {
+		t.Fatalf("want no error, got %v", err)
+	}
+
+	if gotPath != "/subscriptions/sub_1" {
+		t.Errorf("path: want /subscriptions/sub_1, got %q", gotPath)
+	}
+	for _, want := range []string{"items%5B0%5D%5Bid%5D=si_1", "items%5B0%5D%5Bprice%5D=price_ultra_monthly", "proration_behavior=create_prorations"} {
+		if !strings.Contains(gotForm, want) {
+			t.Errorf("form %q is missing %q", gotForm, want)
 		}
 	}
 }

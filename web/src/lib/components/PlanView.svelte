@@ -178,6 +178,10 @@
                 {tokenLabel(s.subscription.status, billing.status)}
               </span>
             </div>
+            {#if billing.multiple_subscriptions}
+              <p class="text-xs text-destructive">{s.subscription.duplicateWarning}</p>
+            {/if}
+
             <!-- One date or the other, never both: a renewal date beside a cancellation is
                  the contradiction that generates support mail. -->
             {#if billing.ends_at}

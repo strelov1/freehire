@@ -177,6 +177,10 @@ export interface BillingOverview {
   renews_at?: string;
   ends_at?: string;
   invoices: BillingInvoice[];
+  /** True when the provider reports more than one active entitling subscription for this
+   *  customer at once — the duplicate-subscription bug, for a customer it already happened
+   *  to. Absent (never `false`) for the ordinary case. */
+  multiple_subscriptions?: boolean;
 }
 
 export interface PlanState {

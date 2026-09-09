@@ -24,6 +24,11 @@ type subscriber struct {
 // taking access away over a failed retry is the same mistake as ignoring a grace period.
 // `canceled`, `unpaid` and `incomplete` do not.
 type subscription struct {
+	// ID and ItemID name this subscription and its first item at the provider — what an
+	// upgrade or downgrade needs to modify it in place instead of opening a second
+	// subscription. Empty when the source is a fixture that never set them.
+	ID     string
+	ItemID string
 	Status string
 	// CurrentPeriodEnd is when the paid-for period runs out — the instant access should
 	// lapse if nothing renews it. The zero time means we could not read it, and every caller
@@ -161,6 +166,73 @@ func tierFirst(ids, tier []string) []string {
 		}
 	}
 	return out
+}
+
+// checkoutTarget is CheckoutURL's whole decision for one request: what to do with the price
+// the customer asked for, given what they already have.
+//
+// The zero value means "no entitling subscription exists — open a new Checkout Session",
+// exactly as CheckoutURL always did before this type existed.
+type checkoutTarget struct {
+	// SubscriptionID and ItemID name an existing subscription and its item to change in
+	// place. Set together; both empty (and AlreadyOnPrice false) means open a checkout.
+	SubscriptionID string
+	ItemID         string
+	// AlreadyOnPrice is true when the customer's current entitling subscription already
+	// carries the requested price. Nothing to do.
+	AlreadyOnPrice bool
+}
+
+// decideCheckoutTarget is the fix for freehire's duplicate-subscription bug, kept pure and
+// DB-free: before this existed, CheckoutURL always opened a new Checkout Session regardless
+// of what the customer already had, leaving two subscriptions billing them in parallel.
+//
+// It asks across BOTH configured price lists — a customer's current tier may be either —
+// for their single best-entitling subscription, reusing the same selection
+// bestEntitling/billedSubscription already make. A customer who already holds more than one
+// entitling subscription (the pre-existing-bug state) has this pick the furthest-reaching
+// one; the other is left for an operator to clean up by hand.
+func decideCheckoutTarget(sub subscriber, requestedPrice string, proPrices, ultraPrices []string) checkoutTarget {
+	current := bestEntitling(sub, combinedPrices(proPrices, ultraPrices))
+	if current.Status == "" {
+		return checkoutTarget{}
+	}
+	if slices.Contains(current.PriceIDs, requestedPrice) {
+		return checkoutTarget{AlreadyOnPrice: true}
+	}
+	return checkoutTarget{SubscriptionID: current.ID, ItemID: current.ItemID}
+}
+
+// combinedPrices merges both tiers' price lists for the callers that must ask "does this
+// subscription entitle at ALL", regardless of which tier — deciding what to modify on an
+// upgrade, and counting how many subscriptions currently entitle.
+func combinedPrices(proPrices, ultraPrices []string) []string {
+	combined := make([]string, 0, len(proPrices)+len(ultraPrices))
+	combined = append(combined, proPrices...)
+	combined = append(combined, ultraPrices...)
+	return combined
+}
+
+// moreThanOneEntitling reports whether a customer holds more than one active entitling
+// subscription across both configured price lists — the duplicate-subscription bug's own
+// signature, for a customer it already happened to.
+//
+// It counts SUBSCRIPTIONS (elements of sub.Subscriptions), never price ids: one Stripe
+// subscription can legitimately carry an item of each tier (see billedSubscription's own
+// comment on the shape an upgrade that adds a price to the existing subscription leaves
+// behind), and that is one subscription, not two.
+func moreThanOneEntitling(sub subscriber, proPrices, ultraPrices []string) bool {
+	prices := combinedPrices(proPrices, ultraPrices)
+	count := 0
+	for _, s := range sub.Subscriptions {
+		if s.entitles(prices) {
+			count++
+			if count > 1 {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // bestEntitling is the subscription that decides the plan: of the ones that entitle, the one

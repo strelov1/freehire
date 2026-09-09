@@ -45,6 +45,11 @@ export const messages = defineMessages(
       cancelledPrefix: 'Cancelled — access runs until',
       nextChargePrefix: 'Next charge',
       receipt: 'Receipt',
+      // Shown only when the provider reports more than one active subscription for this
+      // customer at once — a state this page never creates going forward, but can still
+      // describe for a customer it already happened to.
+      duplicateWarning:
+        'You have more than one active subscription, and are being charged for each of them. Open "Manage or cancel" below to cancel the extra one.',
     },
     today: {
       heading: 'Today',
@@ -105,6 +110,8 @@ export const messages = defineMessages(
         cancelledPrefix: 'Отменена — доступ действует до',
         nextChargePrefix: 'Следующее списание',
         receipt: 'Чек',
+        duplicateWarning:
+          'У вас активно больше одной подписки, и оплата идёт по каждой из них. Откройте «Изменить или отменить» ниже, чтобы отменить лишнюю.',
       },
       today: {
         heading: 'Сегодня',

@@ -304,11 +304,15 @@ func NewWithBase(cfg Config, q *db.Queries, baseURL string) *Service {
 // accident. Everything outside this package needs an answer about billing, not the
 // credentials it was derived from — Enabled() is that answer.
 
-// CheckoutURL is where this account buys Pro.
+// CheckoutURL is where this account buys, upgrades or downgrades a subscription.
 //
 // The account's id is taken from the caller's session and never from the request: it decides
 // who gets charged and who becomes Pro, and a value the browser composes is a value the
 // browser can change.
+//
+// A customer who already has an entitling subscription is never sent to a new Checkout
+// Session for a different price — that is the duplicate-subscription bug this method used to
+// have. Instead their existing subscription is changed in place; see decideCheckoutTarget.
 func (s *Service) CheckoutURL(ctx context.Context, userID int64, priceID string, discount Discount) (string, error) {
 	if !s.cfg.CanCheckout() {
 		return "", ErrNoCheckout
@@ -328,6 +332,30 @@ func (s *Service) CheckoutURL(ctx context.Context, userID int64, priceID string,
 	var customerID string
 	if err == nil && existing.Valid {
 		customerID = existing.String
+	}
+
+	if customerID != "" {
+		// A known customer may already have an entitling subscription. Reading it here and
+		// failing the whole call on error — rather than falling back to opening a new
+		// checkout — is the line the fix depends on: falling back would silently recreate the
+		// exact bug (a transient read failure would open a second subscription beside a live
+		// one).
+		current, err := s.client.subscriberState(ctx, customerID)
+		if err != nil {
+			return "", fmt.Errorf("billing: reading the subscriptions of user %d: %w", userID, err)
+		}
+		target := decideCheckoutTarget(current, priceID, s.cfg.Prices, s.cfg.UltraPrices)
+		switch {
+		case target.AlreadyOnPrice:
+			return s.cfg.ReturnURL(), nil
+		case target.SubscriptionID != "":
+			if err := s.client.updateSubscriptionPrice(ctx, target.SubscriptionID, target.ItemID, priceID); err != nil {
+				return "", fmt.Errorf("billing: upgrading user %d to price %q: %w", userID, priceID, err)
+			}
+			return s.cfg.ReturnURL(), nil
+		}
+		// No entitling subscription (a free account, or a former subscriber whose last one
+		// ended): fall through to opening a checkout, exactly as before.
 	}
 
 	// Pre-fill the address we already hold, so a buyer does not retype what we asked them for
