@@ -52,6 +52,12 @@ func TestDoWithRetry_GivesUpAfterMaxAttempts(t *testing.T) {
 	}
 
 	resp, err := doWithRetry(srv.Client(), req, 2, 0)
+	// Defensive, not a hedge on the assertion below: if this invariant ever
+	// regresses, closing here (rather than leaking) is still the right thing to
+	// do, and it's what lets a static bodyclose check see this path is safe.
+	if resp != nil {
+		defer resp.Body.Close()
+	}
 	if err == nil {
 		t.Fatal("expected an error after exhausting retries, got nil")
 	}

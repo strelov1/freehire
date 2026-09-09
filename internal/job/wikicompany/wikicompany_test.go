@@ -30,23 +30,23 @@ func (s *stubServer) start(t *testing.T) *httptest.Server {
 		switch r.URL.Query().Get("action") {
 		case "wbsearchentities":
 			if s.searchID == "" {
-				fmt.Fprint(w, `{"search":[]}`)
+				_, _ = fmt.Fprint(w, `{"search":[]}`)
 				return
 			}
-			fmt.Fprintf(w, `{"search":[{"id":%q,"description":%q}]}`, s.searchID, s.searchDescription)
+			_, _ = fmt.Fprintf(w, `{"search":[{"id":%q,"description":%q}]}`, s.searchID, s.searchDescription)
 		case "wbgetentities":
-			fmt.Fprintf(w, `{"entities":{%q:{"sitelinks":{"enwiki":{"title":%q}}}}}`, s.searchID, s.enwikiTitle)
+			_, _ = fmt.Fprintf(w, `{"entities":{%q:{"sitelinks":{"enwiki":{"title":%q}}}}}`, s.searchID, s.enwikiTitle)
 		default:
 			t.Fatalf("unexpected action: %s", r.URL.Query().Get("action"))
 		}
 	})
 	mux.HandleFunc("/sparql", func(w http.ResponseWriter, r *http.Request) {
 		s.sparqlCalls++
-		fmt.Fprintf(w, `{"boolean":%v}`, s.asks)
+		_, _ = fmt.Fprintf(w, `{"boolean":%v}`, s.asks)
 	})
 	mux.HandleFunc("/api/rest_v1/page/summary/", func(w http.ResponseWriter, r *http.Request) {
 		s.summaryCalls++
-		fmt.Fprintf(w, `{"extract":%q}`, s.summaryExtract)
+		_, _ = fmt.Fprintf(w, `{"extract":%q}`, s.summaryExtract)
 	})
 	srv := httptest.NewServer(mux)
 	t.Cleanup(srv.Close)
