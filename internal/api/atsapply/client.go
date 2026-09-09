@@ -26,13 +26,22 @@ import (
 // would file this spend under its own two-part label instead of alongside the others.
 const tagAutoApplyDrafting = "auto-apply-drafting"
 
-// requiresCaptcha marks providers whose form always renders a captcha, so a blind fill
-// attempt would either fail or (worse) look like it might work and then silently not
-// submit. Lever renders one on every posting — see design.md's Risks. Every attempt for
-// one of these parks before a browser is even launched.
-var requiresCaptcha = map[string]bool{
-	"lever": true,
-}
+// There is no per-provider captcha list any more, and reintroducing one would be a
+// mistake worth naming here.
+//
+// This file used to carry `requiresCaptcha{"lever": true}`, on the design's stated risk
+// that Lever "renders one on every posting". Measured against live postings on 2026-09-09,
+// that is not so: two queued Lever applications (coderio, jobgether) render NO captcha of
+// any kind, four others carry hCaptcha, and on all of them the only "recaptcha" in the page
+// is the string `.g-recaptcha div` inside a CSS rule. A captcha is a per-employer setting
+// on this platform, not a property of it — so the list decided what a page said before
+// anyone looked at the page, and it refused four postings in five for a reason that was
+// never measured.
+//
+// What replaces it is reading the page: browser.go's hasRecaptchaMarker distinguishes a
+// rendered challenge from an invisible score-based one, on the page actually being applied
+// to. That is the same lesson in the same file's history — the marker itself used to fire
+// on the mere WORD "recaptcha" and parked every Greenhouse posting there is.
 
 // fillProviders is the single source of truth for which providers Submit can actually
 // fill/submit for — today, Greenhouse alone (see fillAndSubmit/browser.go). Checked both
@@ -73,6 +82,11 @@ type Client struct {
 	// means "no grounding source configured", and drafting is skipped entirely rather
 	// than run against an always-empty GroundingContext.
 	atoms AtomReader
+	// letters is nil-checked directly, the same convention atoms follows: nil means no
+	// letter store configured, and a cover-letter field simply drafts through the generic
+	// Drafter exactly as it did before this capability existed. See
+	// openspec/changes/autoapply-reuse-cover-letter.
+	letters LetterReader
 	// cvs and renderer resolve and render a claim's approved tailored CV to a résumé PDF,
 	// on demand, at submit time — no object storage involved (openspec/changes/
 	// auto-apply-tailored-resume's design.md: "File rendering is on-demand"). Both nil is
@@ -89,6 +103,12 @@ type Client struct {
 	// reasonSubmissionNotImplemented, exactly as it did before this capability existed.
 	// See openspec/changes/add-browseruse-atsapply-fallback.
 	browserUse *BrowserUseExecutor
+	// forms reads a job's previously-captured application form — the same StoredFormReader
+	// PreviewClient already uses, wired here too so fetchSchema can reach it for a
+	// provider with no live fetcher (today: Recruitee). Nil is the unconfigured
+	// deployment: fetchSchema then behaves exactly as it did before this capability
+	// existed. See openspec/changes/atsapply-recruitee-stored-schema.
+	forms StoredFormReader
 }
 
 // WithBrowserUse attaches the browser-use fallback executor, returning c for chaining.
@@ -96,6 +116,16 @@ type Client struct {
 // NewClient's existing positional signature or any of its other call sites.
 func (c *Client) WithBrowserUse(executor *BrowserUseExecutor) *Client {
 	c.browserUse = executor
+	return c
+}
+
+// WithStoredFormReader attaches the stored-form fallback fetchSchema reads before giving
+// up on a provider with no live fetcher, returning c for chaining — the same
+// "optional dependency via a setter, not a NewClient parameter" shape WithBrowserUse
+// already established, for the same reason: this never touches NewClient's existing
+// positional signature or any of its other call sites.
+func (c *Client) WithStoredFormReader(forms StoredFormReader) *Client {
+	c.forms = forms
 	return c
 }
 
@@ -107,18 +137,23 @@ type CVReader interface {
 
 // NewClient builds a Client. transport is the same one internal/applyform's own capture
 // worker uses (internal/sources.Client) — the Greenhouse/Ashby schema fetch this package
-// reuses needs nothing different from it. llmClient/llmKeys/atoms may all be nil, which
-// disables question drafting entirely and leaves every other behavior unchanged (a form
-// drafting could have completed instead parks, exactly as it did before this capability
-// existed). cvs/renderer may also be nil, with the same degrade: a résumé field parks
-// instead of being filled.
-func NewClient(transport applyform.Transport, llmClient *llm.Client, llmKeys *llmkey.Resolver, atoms AtomReader, cvs CVReader, renderer cv.Renderer) *Client {
+// reuses needs nothing different from it. llmClient/llmKeys/atoms/letters may all be nil,
+// which disables question drafting entirely and leaves every other behavior unchanged (a
+// form drafting could have completed instead parks, exactly as it did before this
+// capability existed) — letters alone being nil only disables the cover-letter-reuse
+// preference, leaving ordinary drafting through llmClient/atoms unaffected. The reverse is
+// NOT true: resolve's own nil-atoms guard skips drafting (and so letter-reuse) entirely,
+// atoms and letters are not two independent switches — see that guard's own comment.
+// cvs/renderer
+// may also be nil, with the same degrade: a résumé field parks instead of being filled.
+func NewClient(transport applyform.Transport, llmClient *llm.Client, llmKeys *llmkey.Resolver, atoms AtomReader, letters LetterReader, cvs CVReader, renderer cv.Renderer) *Client {
 	return &Client{
 		fetchers:      applyform.Fetchers(transport),
 		allocatorOpts: stealthAllocatorOptions(),
 		llmClient:     llmClient,
 		llmKeys:       llmKeys,
 		atoms:         atoms,
+		letters:       letters,
 		cvs:           cvs,
 		renderer:      renderer,
 	}
@@ -131,10 +166,6 @@ var _ autoapply.SidecarClient = (*Client)(nil)
 // cannot safely drive at all (a captcha board), always parks rather than risking a bad or
 // duplicate submission.
 func (c *Client) Submit(ctx context.Context, claimed autoapply.Claimed, answers map[string]string) (autoapply.SidecarResult, error) {
-	if requiresCaptcha[claimed.Provider] {
-		return autoapply.SidecarResult{Status: autoapply.StatusParked, Reason: "requires_captcha"}, nil
-	}
-
 	apiForm, err := c.fetchSchema(ctx, claimed)
 	if err != nil {
 		if errors.Is(err, errNoSchemaFetcher) {
@@ -264,6 +295,12 @@ func (c *Client) Submit(ctx context.Context, claimed autoapply.Claimed, answers 
 // not yet implemented for this provider") — spend with no possible use.
 func (c *Client) resolve(ctx context.Context, claimed autoapply.Claimed, merged []MergedField, answers map[string]string) (Plan, error) {
 	hasApprovedCV := claimed.TailoredCVID != uuid.Nil
+	// A nil c.atoms disables ResolveWithDrafting entirely — including cover-letter reuse,
+	// even when c.letters IS configured. The two are documented as independently nil-safe
+	// (NewClient's own doc comment), which is true of each ALONE; this early return is the
+	// one place that couples them regardless — found by code review. Not reachable today
+	// (cmd/auto-apply/main.go always wires both together), so left as a plain deterministic
+	// Resolve rather than special-cased for a configuration nothing constructs yet.
 	if c.atoms == nil || !fillProviders[claimed.Provider] {
 		return Resolve(merged, answers, hasApprovedCV), nil
 	}
@@ -275,7 +312,7 @@ func (c *Client) resolve(ctx context.Context, claimed autoapply.Claimed, merged 
 	}
 
 	bound := llmkey.Bind(ctx, c.llmKeys, c.llmClient, claimed.UserID, llm.Feature(tagAutoApplyDrafting))
-	return ResolveWithDrafting(ctx, merged, answers, NewLLMDrafter(bound), grounding, hasApprovedCV)
+	return ResolveWithDrafting(ctx, merged, answers, NewLLMDrafter(bound), grounding, hasApprovedCV, c.letters, claimed.UserID, claimed.JobID)
 }
 
 // attachApprovedResume renders the claim's approved tailored CV to a temp PDF and sets it
@@ -355,10 +392,25 @@ func (c *Client) renderResumeToTempFile(ctx context.Context, claimed autoapply.C
 }
 
 // fetchSchema reuses internal/applyform's own per-provider fetcher rather than
-// re-implementing Greenhouse/Ashby's API calls or Lever's page parse.
+// re-implementing Greenhouse/Ashby's API calls or Lever's page parse, live-fetching
+// whenever a fetcher is registered for the provider — deliberately NOT the storage-first
+// order PreviewClient.schemaFor uses for its own, cheaper purpose. apply_forms holds a
+// captured row for every provider cmd/capture-apply-form drains (Greenhouse, Ashby,
+// Workable, Lever — not only Recruitee, whose form arrives free with the crawl instead),
+// so preferring storage here too would risk a real submission reading a row captured for
+// the job page's own display, possibly stale, instead of a fresh fetch, for postings that
+// never needed this fallback at all. c.forms is therefore only ever reached as a fallback,
+// for the one case a live fetch cannot answer: no fetcher registered for the provider.
 func (c *Client) fetchSchema(ctx context.Context, claimed autoapply.Claimed) (applyform.Form, error) {
 	fetcher, ok := c.fetchers[claimed.Provider]
 	if !ok {
+		if c.forms != nil {
+			if form, storedOK, err := c.forms.GetStoredForm(ctx, claimed.JobID); err != nil {
+				return applyform.Form{}, err
+			} else if storedOK {
+				return form, nil
+			}
+		}
 		return applyform.Form{}, fmt.Errorf("%w: %q", errNoSchemaFetcher, claimed.Provider)
 	}
 	return fetcher.Fetch(ctx, applyform.Claimed{

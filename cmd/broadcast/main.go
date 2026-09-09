@@ -21,6 +21,7 @@ import (
 
 	"github.com/strelov1/freehire/internal/engage/broadcast"
 	"github.com/strelov1/freehire/internal/engage/emailnotify"
+	"github.com/strelov1/freehire/internal/engage/emailprefs"
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/platform/worker"
 )
@@ -29,6 +30,7 @@ var (
 	campaignName = flag.String("campaign", "", "which campaign to send (required)")
 	dryRun       = flag.Bool("dry-run", false, "report the audience size and send nothing")
 	only         = flag.String("to", "", "send only to this address, and do not touch the ledger")
+	onlyUser     = flag.Int64("to-user", 0, "the account id -to belongs to; required with -to, because the mail carries that account's unsubscribe link")
 	maxPerRun    = flag.Int("max", broadcast.DefaultMaxPerRun, "cap on one run")
 )
 
@@ -67,13 +69,20 @@ func run() int {
 		log.Printf("broadcast: ses: %v", err)
 		return 1
 	}
-	mailer := broadcast.NewMailer(ses, cfg.NotifyEmailFrom, cfg.OnboardingReplyTo, cfg.FrontendOrigin)
+	mailer := broadcast.NewMailer(ses, cfg.NotifyEmailFrom, cfg.OnboardingReplyTo, cfg.FrontendOrigin, emailprefs.NewLinks(cfg.JWTSecret, cfg.FrontendOrigin))
 	runner := broadcast.New(db.New(pool), mailer, int32(*maxPerRun))
 
 	// A single address, for looking at the letter in a real client. The ledger is
 	// left alone: inspecting a campaign must not consume anybody's one delivery.
 	if *only != "" {
-		if err := mailer.Send(ctx, campaign, *only); err != nil {
+		// The mail carries a real unsubscribe link for a real account, so -to needs
+		// to say whose. Sending a campaign whose only working control belongs to
+		// nobody is how an inspection becomes an unanswerable mail.
+		if *onlyUser <= 0 {
+			log.Print("broadcast: -to also needs -to-user, the account id the address belongs to")
+			return 2
+		}
+		if err := mailer.Send(ctx, campaign, *onlyUser, *only); err != nil {
 			log.Printf("broadcast: %v", err)
 			return 1
 		}

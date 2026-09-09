@@ -26,6 +26,13 @@ type ReminderMessage struct {
 	Company  string
 	Slug     string
 	URL      string
+	// UserID is whose reminder this is. It rides on the message rather than beside
+	// the slice, where a per-batch property would more naturally sit, because the
+	// alternative was changing this interface and nudge's and notify's — each
+	// implemented by four channels — to hand one value to the one channel that needs
+	// it. The engine batches by user, so every message in a call carries the same
+	// value; the email transport reads it off the first.
+	UserID int64
 }
 
 // Notifier delivers one account's due reminders over a channel to a destination,
@@ -228,6 +235,7 @@ func (r *Runner) collect(ctx context.Context, due []int64, stats *Stats) []*batc
 		b.ids = append(b.ids, id)
 		b.msgs = append(b.msgs, ReminderMessage{
 			JobTitle: info.Title, Company: info.Company, Slug: info.PublicSlug, URL: info.URL,
+			UserID: info.UserID,
 		})
 	}
 	return order

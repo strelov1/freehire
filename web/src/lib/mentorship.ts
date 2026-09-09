@@ -4,7 +4,15 @@
 // without a browser. Mirrors the split companyFacetModel.ts holds for the company
 // catalogue and matchAnalysis.ts for the analysis stream.
 
-import type { Mentor, MentorAvailabilityRule, MentorSession, MentorSlot } from './types';
+import type {
+  Mentor,
+  MentorAvailabilityRule,
+  MentorProfileInput,
+  MentorProfileSuggestions,
+  MentorSession,
+  MentorSlot,
+  OwnMentorProfile,
+} from './types';
 
 /** The mentor directory's whole vocabulary, one single-valued filter each.
  *
@@ -221,6 +229,54 @@ function part(parts: Intl.DateTimeFormatPart[], type: string): string {
  *  guess was honoured cannot tell a correct time from a wrong one. */
 export function browserTimezone(): string {
   return typeof Intl === 'undefined' ? 'UTC' : Intl.DateTimeFormat().resolvedOptions().timeZone;
+}
+
+/** Seeds a blank create-form with the candidate's best-effort suggestions, one field at
+ *  a time. A field the suggestions endpoint has nothing for keeps whatever `base` (the
+ *  ordinary blank defaults) already set — the browser timezone included — rather than
+ *  being cleared. This is a ONE-TIME starting point: called once against `blank()`
+ *  before the mentor has typed anything, never merged into an in-progress or existing
+ *  profile's form. */
+export function seedFormFromSuggestions(
+  base: MentorProfileInput,
+  suggestions: MentorProfileSuggestions,
+): MentorProfileInput {
+  return {
+    ...base,
+    name: suggestions.name ?? base.name,
+    headline: suggestions.headline ?? base.headline,
+    bio: suggestions.bio ?? base.bio,
+    timezone: suggestions.timezone ?? base.timezone,
+    company_slug: suggestions.company_slug ?? base.company_slug,
+    topics: suggestions.topics ?? base.topics,
+    languages: suggestions.languages ?? base.languages,
+  };
+}
+
+/** Renders the owner's own profile read back as the whole-object write body every save
+ *  of it takes. Read back rather than defaulted, buffer/notice/horizon included, so a
+ *  save that only touches one field (a headline correction from the profile form, a
+ *  timezone change from the schedule page's session settings) never silently resets
+ *  parameters that screen does not show — the same reasoning `blank()`'s hardcoded
+ *  defaults exist to protect once a profile is created. */
+export function profileInputFromProfile(p: OwnMentorProfile): MentorProfileInput {
+  return {
+    company_slug: p.company_slug,
+    slug: p.slug,
+    name: p.name,
+    headline: p.headline,
+    bio: p.bio,
+    topics: p.topics,
+    languages: p.languages,
+    timezone: p.timezone,
+    session_minutes: p.session_minutes,
+    buffer_before_minutes: p.buffer_before_minutes ?? 0,
+    buffer_after_minutes: p.buffer_after_minutes ?? 0,
+    notice_minutes: p.notice_minutes ?? 120,
+    horizon_days: p.horizon_days ?? 30,
+    meeting_url: p.meeting_url,
+    show_photo: p.show_photo,
+  };
 }
 
 /** Today's date in a named zone, `YYYY-MM-DD`.

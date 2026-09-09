@@ -2,9 +2,13 @@ package sources
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
+
+	"golang.org/x/net/html"
 )
 
 // baytDetailHTML renders a Bayt job page the way bayt.com does: one application/ld+json
@@ -136,7 +140,11 @@ func TestBaytFetchListingThenDetailAndMaps(t *testing.T) {
 	}
 }
 
-func TestBaytDropsPostingWithNoCompany(t *testing.T) {
+// A company-less posting is marked unreadable, not silently dropped: this crawl now proves
+// listing completeness (fullBoardListing), and a site-wide markup change that stopped
+// exposing hiringOrganization would otherwise look, to the board-scoped close, exactly like
+// every posting on the board having been taken down. Found on review (CodeRabbit).
+func TestBaytUnreadableDetailForACompanyLessPosting(t *testing.T) {
 	href := "/en/saudi-arabia/jobs/ghost-role-777/"
 	fake := (&routedHTTP{}).
 		route("/en/saudi-arabia/jobs/?page=1", baytListingHTML(href)).
@@ -149,8 +157,12 @@ func TestBaytDropsPostingWithNoCompany(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Fetch: %v", err)
 	}
-	if len(jobs) != 0 {
-		t.Fatalf("company-less posting should be dropped, got %d jobs", len(jobs))
+	markers := unreadableMarkers(jobs)
+	if len(markers) != 1 || markers[0].ExternalID != "777" {
+		t.Fatalf("unreadable markers = %v, want one for the company-less posting", markers)
+	}
+	if len(readPostings(jobs)) != 0 {
+		t.Fatalf("got %d read postings, want 0 — a company-less posting is unread, not stored", len(readPostings(jobs)))
 	}
 }
 
@@ -174,9 +186,11 @@ func TestBaytSkipsListingLinkWithNoID(t *testing.T) {
 	}
 }
 
-func TestBaytDropsDetailWithNoJobPosting(t *testing.T) {
-	// A detail page whose markup lost its JobPosting block is dropped, not errored: one
-	// re-templated posting must not abort an otherwise healthy crawl.
+// A detail page whose markup lost its JobPosting block is marked unreadable, not silently
+// dropped: one re-templated posting must not abort an otherwise healthy crawl, but it also
+// must not vanish as if the posting were gone — see the company-less test above for why.
+// Found on review (CodeRabbit).
+func TestBaytUnreadableDetailWithNoJobPosting(t *testing.T) {
 	href := "/en/saudi-arabia/jobs/broken-detail-321/"
 	fake := (&routedHTTP{}).
 		route("/en/saudi-arabia/jobs/?page=1", baytListingHTML(href)).
@@ -189,8 +203,9 @@ func TestBaytDropsDetailWithNoJobPosting(t *testing.T) {
 	if err != nil {
 		t.Fatalf("a JobPosting-less detail must not error the board: %v", err)
 	}
-	if len(jobs) != 0 {
-		t.Fatalf("JobPosting-less detail should be dropped, got %d jobs", len(jobs))
+	markers := unreadableMarkers(jobs)
+	if len(markers) != 1 || markers[0].ExternalID != "321" {
+		t.Fatalf("unreadable markers = %v, want one for the JobPosting-less detail", markers)
 	}
 }
 
@@ -220,5 +235,120 @@ func TestBaytPaginationFollowsMultiplePages(t *testing.T) {
 	}
 	if len(jobs) != 2 {
 		t.Fatalf("pagination should collect jobs across pages, got %d", len(jobs))
+	}
+}
+
+// A later listing page failing must fail the whole crawl, not return the pages gathered so
+// far — the fullBoardListing bar (source.go).
+func TestBaytFetchFailsOnALaterPageError(t *testing.T) {
+	fake := (&routedHTTP{}).
+		route("/en/uae/jobs/?page=1", baytListingHTML("/en/uae/jobs/a-1/")).
+		routeErr("/en/uae/jobs/?page=2", errors.New("boom"))
+
+	_, err := NewBayt(fake).Fetch(context.Background(), CompanyEntry{Company: "Bayt", Board: "uae"})
+	if err == nil {
+		t.Fatal("Fetch succeeded despite page 2 failing — a later-page failure must not be treated as the board's natural end")
+	}
+}
+
+// A page whose links are all already-seen duplicates must not end the walk early: only a
+// genuinely empty page proves the board's end. If the walk stopped on "no NEW links" rather
+// than "the raw page has no job links", it would end at page 2 and never reach page 3's
+// genuinely new posting.
+func TestBaytFetchReachesAPostingPastADuplicateOnlyPage(t *testing.T) {
+	fake := (&routedHTTP{}).
+		route("/en/uae/jobs/?page=1", baytListingHTML("/en/uae/jobs/a-1/")).
+		route("/en/uae/jobs/?page=2", baytListingHTML("/en/uae/jobs/a-1/")). // same link again
+		route("/en/uae/jobs/?page=3", baytListingHTML("/en/uae/jobs/b-2/")). // a genuinely new link
+		route("/en/uae/jobs/?page=4", baytListingHTML()).
+		route("/en/uae/jobs/a-1/", baytDetailHTML("A", "2026-07-01", "Acme", "Dubai", "AE")).
+		route("/en/uae/jobs/b-2/", baytDetailHTML("B", "2026-07-02", "Beta", "Dubai", "AE"))
+
+	jobs, err := NewBayt(fake).Fetch(context.Background(), CompanyEntry{Company: "Bayt", Board: "uae"})
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	if len(jobs) != 2 {
+		t.Fatalf("got %d jobs, want 2 (the walk must not stop at the duplicate-only page 2)", len(jobs))
+	}
+}
+
+// baytEndlessListingFake serves a fresh job link on every page requested, so it never yields a
+// genuinely empty page — used to prove the page-cap ceiling fails loudly rather than
+// succeeding partially. Mirrors taleoEndlessFake / gustoEndlessFake / ttEndlessListingFake.
+type baytEndlessListingFake struct{ calls int }
+
+func (f *baytEndlessListingFake) GetHTML(_ context.Context, _ string) (*html.Node, error) {
+	f.calls++
+	href := fmt.Sprintf("/en/uae/jobs/endless-%d/", f.calls)
+	return html.Parse(strings.NewReader(baytListingHTML(href)))
+}
+
+func TestBaytFetchFailsWhenListingExceedsThePageCap(t *testing.T) {
+	fake := &baytEndlessListingFake{}
+
+	_, err := NewBayt(fake).Fetch(context.Background(), CompanyEntry{Company: "Bayt", Board: "uae"})
+	if err == nil {
+		t.Fatal("expected reaching the page cap to fail the Fetch")
+	}
+	if fake.calls != baytMaxPages {
+		t.Errorf("got %d listing calls, want exactly %d (the cap, no more)", fake.calls, baytMaxPages)
+	}
+}
+
+// bayt's detail is its ONLY source for a posting and is re-fetched on every run (no
+// HydratingSource), so a dropped one leaves a live vacancy missing from a crawl that
+// reported no failure — which the sweep would read as the posting having gone. Now that
+// bayt carries the fullBoardListing marker, that silent drop is exactly what the marker's
+// promise forbids: a failed-but-not-gone detail request (the documented throttling risk
+// included) must yield an unreadableDetail marker instead.
+func TestBaytUnreadableDetailIsMarkedNotDropped(t *testing.T) {
+	fake := (&routedHTTP{}).
+		route("/en/uae/jobs/?page=1", baytListingHTML("/en/uae/jobs/a-1/", "/en/uae/jobs/b-2/")).
+		route("/en/uae/jobs/?page=2", baytListingHTML()).
+		routeErr("/en/uae/jobs/b-2/", errors.New("connection reset by peer")).
+		route("/en/uae/jobs/a-1/", baytDetailHTML("A", "2026-07-01", "Acme", "Dubai", "AE"))
+
+	jobs, err := NewBayt(fake).Fetch(context.Background(), CompanyEntry{Company: "Bayt", Board: "uae"})
+	if err != nil {
+		t.Fatalf("Fetch should not abort the board on one unreadable detail: %v", err)
+	}
+	read := readPostings(jobs)
+	if len(read) != 1 || read[0].ExternalID != "1" {
+		t.Fatalf("read = %v, want only the posting whose detail answered", read)
+	}
+	markers := unreadableMarkers(jobs)
+	if len(markers) != 1 || markers[0].ExternalID != "2" {
+		t.Fatalf("unreadable markers = %v, want one for the posting whose detail did not", markers)
+	}
+	if markers[0].Company != "Bayt" {
+		t.Errorf("marker Company = %q, want the ENTRY's configured company", markers[0].Company)
+	}
+}
+
+// The other half of the distinction: 404 is the platform's own answer that the posting is
+// gone, so the crawl drops it rather than marking it unreadable.
+func TestBaytGoneDetailDropsThePosting(t *testing.T) {
+	fake := (&routedHTTP{}).
+		route("/en/uae/jobs/?page=1", baytListingHTML("/en/uae/jobs/a-1/", "/en/uae/jobs/b-2/")).
+		route("/en/uae/jobs/?page=2", baytListingHTML()).
+		routeErr("/en/uae/jobs/b-2/", &StatusError{Method: "GET", Code: 404, URL: "https://www.bayt.com/en/uae/jobs/b-2/"}).
+		route("/en/uae/jobs/a-1/", baytDetailHTML("A", "2026-07-01", "Acme", "Dubai", "AE"))
+
+	jobs, err := NewBayt(fake).Fetch(context.Background(), CompanyEntry{Company: "Bayt", Board: "uae"})
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	if len(jobs) != 1 || jobs[0].ExternalID != "1" {
+		t.Fatalf("got %v, want only the posting whose detail answered — the 404'd one dropped, not marked", jobs)
+	}
+}
+
+func TestBaytRegisteredAsFullBoardListing(t *testing.T) {
+	if _, ok := NewBayt(nil).(fullBoardListing); !ok {
+		t.Error("bayt should implement the fullBoardListing marker")
+	}
+	if !FullBoardListingProviders(All(nil))["bayt"] {
+		t.Error("FullBoardListingProviders(All(nil)) should include bayt")
 	}
 }

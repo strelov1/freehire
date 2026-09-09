@@ -37,6 +37,14 @@ func (bayt) Provider() string { return "bayt" }
 // nature and future-proofs facet inclusion should bayt ever become boardless.
 func (bayt) aggregator() {}
 
+// fullBoardListing: Fetch proves completeness by paginating sequentially to a genuinely
+// empty page (the raw job-link count, before cross-page dedup), and treats a page failure
+// or reaching baytMaxPages as a hard Fetch failure. detail additionally never drops a
+// posting on a merely-unreadable fetch (see detail's own comment) — a plain drop there
+// would have defeated this marker's promise given bayt's documented throttling risk. See
+// the fullBoardListing interface (source.go) for the bar.
+func (bayt) fullBoardListing() {}
+
 const (
 	baytBaseURL = "https://www.bayt.com"
 	// baytMaxPages caps the per-country pagination so a listing that never runs dry (or a
@@ -86,38 +94,54 @@ type baytAddress struct {
 	AddressCountry  string `json:"addressCountry"`
 }
 
+// Fetch walks the country's listing pages sequentially (one request at a time — the burst
+// throttling bayt's Akamai edge is documented to apply is a concurrency-triggered risk,
+// which the detail fan-out below already paces around with baytDetailWorkers) until a
+// genuinely empty page is reached — the raw per-page link count, not the count of links
+// newly kept after cross-page dedup, since a non-empty page whose links are all
+// already-seen duplicates is not itself proof the listing has no more pages beyond it.
+// Every page failing, and reaching baytMaxPages without a genuinely empty page, are hard
+// Fetch failures rather than a partial success — see the fullBoardListing interface
+// (source.go) for the bar.
 func (b bayt) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	seen := make(map[string]struct{})
 	var links []string
+	done := false
 	for page := 1; page <= baytMaxPages; page++ {
 		url := fmt.Sprintf("%s/en/%s/jobs/?page=%d", baytBaseURL, e.Board, page)
 		root, err := b.http.GetHTML(ctx, url)
 		if err != nil {
-			if page == 1 {
-				return nil, fmt.Errorf("bayt: listing %s: %w", e.Board, err)
-			}
-			break // a later page failing just ends pagination; page 1's jobs still ingest
+			return nil, fmt.Errorf("bayt: listing %s page %d: %w", e.Board, page, err)
 		}
-		added := 0
+		// jobLinks is every anchor on the page that IS a job-detail link (baytJobID matches),
+		// before cross-page dedup — the raw count a genuinely empty page proof needs.
+		// baytListingLinks itself returns every anchor including navigation chrome, which
+		// is never empty even on the listing's last page, so it cannot serve as the proof.
+		var jobLinks []string
 		for _, href := range baytListingLinks(root) {
-			id := baytJobID(href)
-			if id == "" {
-				continue
+			if baytJobID(href) != "" {
+				jobLinks = append(jobLinks, href)
 			}
+		}
+		for _, href := range jobLinks {
+			id := baytJobID(href)
 			if _, dup := seen[id]; dup {
 				continue
 			}
 			seen[id] = struct{}{}
 			links = append(links, baytAbsURL(href))
-			added++
 		}
-		if added == 0 {
-			break // no new postings on this page → the listing is exhausted
+		if len(jobLinks) == 0 {
+			done = true
+			break // a genuinely empty page: the listing is exhausted
 		}
+	}
+	if !done {
+		return nil, fmt.Errorf("bayt: listing %s: reached the %d-page safety ceiling without finding the board's end", e.Board, baytMaxPages)
 	}
 
 	return fetchDetails(links, baytDetailWorkers, func(link string) (Job, bool) {
-		return b.detail(ctx, link)
+		return b.detail(ctx, e, link)
 	}), nil
 }
 
@@ -152,25 +176,36 @@ func baytAbsURL(href string) string {
 	return baytBase.ResolveReference(ref).String()
 }
 
-// detail fetches one job page and maps its ld+json JobPosting to a Job, returning ok=false when
-// the page fetch fails, carries no JobPosting, has no resolvable employer (company-less), or has
-// no parseable id (which would collide on the dedup key) — so the caller skips just that posting.
-func (b bayt) detail(ctx context.Context, link string) (Job, bool) {
+// detail fetches one job page and maps its ld+json JobPosting to a Job. A URL carrying no
+// parseable id is a plain drop (ok=false) — it could never have been stored, so no close can
+// reach it. A page the platform answers 404/410 for is dropped too: the platform's own
+// evidence the posting is gone. Everything else — a fetch failure (including a throttled
+// 403, the documented risk of a fast burst against Bayt's Akamai edge), a 200 with no
+// ld+json JobPosting at all, or one with no resolvable employer — comes back as an
+// unreadableDetail marker instead: this crawl now proves listing completeness
+// (fullBoardListing) and re-fetches every posting's detail on every run (no HydratingSource),
+// so a plain drop on any of these would be indistinguishable from the posting having been
+// taken down, and a site-wide markup change that broke parsing would silently look like a
+// mass removal to the board-scoped close.
+func (b bayt) detail(ctx context.Context, e CompanyEntry, link string) (Job, bool) {
 	id := baytJobID(link)
 	if id == "" {
 		return Job{}, false
 	}
 	root, err := b.http.GetHTML(ctx, link)
 	if err != nil {
+		if detailUnreadable(err) {
+			return unreadableDetail(id, link, e.Company), true
+		}
 		return Job{}, false
 	}
 	var p baytLDPosting
 	if !ldJobPosting(root, &p) {
-		return Job{}, false
+		return unreadableDetail(id, link, e.Company), true
 	}
 	company := strings.TrimSpace(p.HiringOrg.Name)
 	if company == "" {
-		return Job{}, false
+		return unreadableDetail(id, link, e.Company), true
 	}
 
 	location := joinNonEmpty(

@@ -15,9 +15,16 @@ import contributorsSnapshot from './data/contributors.json';
 export const SITEMAP_CHUNK = 10000;
 
 // Must equal the backend's jobSitemapChunk. Job chunks are pages of the search
-// index, not of the jobs table: the index already holds exactly the postings worth
-// crawling, and it can address any offset in it directly — which is what let the
+// index, not of the jobs table: the index holds every posting the site's own search
+// can find, and it can address any offset in it directly — which is what let the
 // sitemap stop asking Postgres to number 3.4M rows on every render.
+//
+// Note the chunks page a NARROWED view of that index, not all of it: the backend's
+// jobSitemapFilter admits only tech postings that are not flagged as perpetual
+// listings, and the count these offsets are computed from is filtered the same way.
+// So the number of job chunks tracks the tech slice (~669k, 68 chunks) rather than
+// the whole index (~2.0M) — a sub-sitemap URL for a retired offset answers with an
+// empty urlset, which is what the route already promises for any offset past the end.
 //
 // 10k rather than 25k because the deepest 25k page measured 8s against this route's
 // 10s fetch timeout under load — see the backend constant for the trade.
@@ -58,6 +65,9 @@ export const STATIC_PATHS = [
   '/agents',
   '/cli',
   '/chatgpt',
+  // The public CV roast: an account-free landing page nothing in the feed links to,
+  // built to be found by search rather than clicked to from elsewhere on the site.
+  '/roast',
   '/contribute',
   // The contributor showcase. The per-person profiles are NOT here — they come from
   // the committed snapshot via contributorPaths(), the same way collections do.

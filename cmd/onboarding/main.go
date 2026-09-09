@@ -22,6 +22,7 @@ import (
 	"log"
 
 	"github.com/strelov1/freehire/internal/engage/emailnotify"
+	"github.com/strelov1/freehire/internal/engage/emailprefs"
 	"github.com/strelov1/freehire/internal/engage/onboarding"
 	"github.com/strelov1/freehire/internal/platform/config"
 	"github.com/strelov1/freehire/internal/platform/db"
@@ -38,6 +39,7 @@ import (
 //	./onboarding -to you@example.com -step open_source
 var (
 	sendTo   = flag.String("to", "", "send one mail to this address and exit (no database, no ledger)")
+	sendUser = flag.Int64("to-user", 0, "the account id -to belongs to; required with -to, because the mail carries that account's unsubscribe link")
 	sendStep = flag.String("step", string(onboarding.StepWelcome), "which step -to sends: welcome | advanced_search | no_alert | open_source")
 )
 
@@ -67,8 +69,14 @@ func sendOne() int {
 		return 1
 	}
 
-	mailer := onboarding.NewMailer(ses, cfg.NotifyEmailFrom, cfg.OnboardingReplyTo, cfg.FrontendOrigin)
-	if err := mailer.Send(ctx, onboarding.Step(*sendStep), *sendTo); err != nil {
+	mailer := onboarding.NewMailer(ses, cfg.NotifyEmailFrom, cfg.OnboardingReplyTo, cfg.FrontendOrigin, emailprefs.NewLinks(cfg.JWTSecret, cfg.FrontendOrigin))
+	// The mail carries a real unsubscribe link for a real account, so -to needs to
+	// say whose.
+	if *sendUser <= 0 {
+		log.Print("onboarding: -to also needs -to-user, the account id the address belongs to")
+		return 2
+	}
+	if err := mailer.Send(ctx, onboarding.Step(*sendStep), *sendUser, *sendTo); err != nil {
 		log.Printf("onboarding: %v", err)
 		return 1
 	}
@@ -102,7 +110,7 @@ func run() int {
 		return 1
 	}
 
-	mailer := onboarding.NewMailer(ses, cfg.NotifyEmailFrom, cfg.OnboardingReplyTo, cfg.FrontendOrigin)
+	mailer := onboarding.NewMailer(ses, cfg.NotifyEmailFrom, cfg.OnboardingReplyTo, cfg.FrontendOrigin, emailprefs.NewLinks(cfg.JWTSecret, cfg.FrontendOrigin))
 	runner := onboarding.New(db.New(pool), mailer, onboarding.DefaultConfig())
 
 	stats, err := runner.Run(ctx)

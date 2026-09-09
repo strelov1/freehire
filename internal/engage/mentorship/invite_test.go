@@ -64,6 +64,22 @@ func TestTheInviteCarriesTheSessionAndTheLink(t *testing.T) {
 	}
 }
 
+// A booking with no meeting link — the deliberate outcome of a failed calendar-event
+// creation, see booking.go's attachMeetEvent — renders an invitation with no LOCATION or
+// URL line at all, rather than one pointing nowhere.
+func TestAnEmptyMeetingLinkOmitsLocationAndURL(t *testing.T) {
+	booking := sampleBooking(t)
+	booking.MeetingURL = ""
+	ics := Invite(booking, InviteOptions{Organizer: "mentors@example.test", Summary: "Mentorship session"})
+
+	if strings.Contains(ics, "LOCATION:") {
+		t.Error("an empty meeting link still produced a LOCATION line")
+	}
+	if strings.Contains(ics, "URL:") {
+		t.Error("an empty meeting link still produced a URL line")
+	}
+}
+
 // The UID must be stable and derived from the booking: a cancellation carrying a
 // different one does not cancel anything — it adds a second event to the calendar and
 // leaves the first in place.

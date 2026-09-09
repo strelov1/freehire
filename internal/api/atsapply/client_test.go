@@ -13,15 +13,18 @@ import (
 // Lever always parks on its captcha before any fetcher or browser is touched — a nil
 // fetchers map would panic if this short-circuit were ever removed, which is deliberate:
 // it proves nothing downstream runs for this provider.
-func TestSubmit_LeverAlwaysParksOnCaptchaWithoutTouchingFetchersOrBrowser(t *testing.T) {
+// Lever parks for the reason that is TRUE of it — no fill path exists for the provider —
+// rather than for a captcha that a live measurement found on only some of its postings
+// (see TestPreviewClient_ALeverAttemptReachesItsSchema for what was measured).
+func TestSubmit_LeverParksAsNotImplementedRatherThanOnACaptcha(t *testing.T) {
 	c := &Client{fetchers: nil}
 
 	result, err := c.Submit(context.Background(), autoapply.Claimed{Provider: "lever"}, nil)
 	if err != nil {
 		t.Fatalf("Submit: %v", err)
 	}
-	if result.Status != autoapply.StatusParked || result.Reason != "requires_captcha" {
-		t.Errorf("result = %+v, want parked/requires_captcha", result)
+	if result.Status != autoapply.StatusParked || result.Reason != reasonSubmissionNotImplemented {
+		t.Errorf("result = %+v, want parked/%s", result, reasonSubmissionNotImplemented)
 	}
 }
 
@@ -39,6 +42,89 @@ func TestSubmit_ParksHonestlyWhenNoSchemaFetcherIsRegistered(t *testing.T) {
 	}
 	if result.Status != autoapply.StatusParked || result.Reason != reasonSubmissionNotImplemented {
 		t.Errorf("result = %+v, want parked/%s", result, reasonSubmissionNotImplemented)
+	}
+}
+
+// A provider with no live fetcher (Recruitee) reaches field resolution using a stored form
+// instead of parking immediately — an incomplete resolution proves the stored form was
+// actually read and used: Unmapped names the real missing field, not the generic
+// reasonSubmissionNotImplemented a provider with no schema at all would report.
+func TestSubmit_UsesAStoredFormWhenNoLiveFetcherIsRegistered(t *testing.T) {
+	reader := &fakeFormReader{found: true, form: applyform.Form{Fields: []applyform.Field{
+		{ID: "first_name", Label: "First name", Type: applyform.TypeText, Required: true},
+	}}}
+	c := &Client{fetchers: nil, forms: reader}
+
+	result, err := c.Submit(context.Background(), autoapply.Claimed{Provider: "recruitee"}, map[string]string{})
+	if err != nil {
+		t.Fatalf("Submit: %v", err)
+	}
+	if result.Status != autoapply.StatusParked || len(result.Unmapped) != 1 || result.Unmapped[0].ID != "first_name" {
+		t.Fatalf("result = %+v, want parked with first_name named as unmapped — proves the stored form's own field reached resolution", result)
+	}
+}
+
+// The stored-form fallback still parks honestly when nothing is stored either — same
+// outcome as no fetcher at all, just reached through a live c.forms that found nothing
+// rather than a nil one.
+func TestSubmit_ParksHonestlyWhenAFormReaderFindsNothingStored(t *testing.T) {
+	reader := &fakeFormReader{found: false}
+	c := &Client{fetchers: nil, forms: reader}
+
+	result, err := c.Submit(context.Background(), autoapply.Claimed{Provider: "recruitee"}, nil)
+	if err != nil {
+		t.Fatalf("Submit: %v", err)
+	}
+	if result.Status != autoapply.StatusParked || result.Reason != reasonSubmissionNotImplemented {
+		t.Errorf("result = %+v, want parked/%s", result, reasonSubmissionNotImplemented)
+	}
+}
+
+// A provider that already has a live fetcher must keep using it — apply_forms holds a row
+// for Ashby too (cmd/capture-apply-form captures it for the job page's own display), so a
+// stored-form-first order would silently prefer that possibly-stale row over a fresh fetch
+// for a real submission. Found by design review before this shipped: the first draft of
+// this change mirrored PreviewClient.schemaFor's storage-first order, which is right for a
+// cheap preview but wrong here.
+func TestSubmit_AProviderWithALiveFetcherIgnoresAStoredForm(t *testing.T) {
+	fetcher := &fakeFetcher{form: applyform.Form{Fields: []applyform.Field{
+		{ID: "from_live_fetch", Label: "From live fetch", Type: applyform.TypeText, Required: true},
+	}}}
+	reader := &fakeFormReader{found: true, form: applyform.Form{Fields: []applyform.Field{
+		{ID: "from_stored_form", Label: "From stored form", Type: applyform.TypeText, Required: true},
+	}}}
+	c := &Client{fetchers: map[string]applyform.Fetcher{"ashby": fetcher}, forms: reader}
+
+	result, err := c.Submit(context.Background(), autoapply.Claimed{Provider: "ashby"}, map[string]string{})
+	if err != nil {
+		t.Fatalf("Submit: %v", err)
+	}
+	if !fetcher.called {
+		t.Error("live fetcher was not called, want it preferred over the stored form for a provider that has one")
+	}
+	if len(result.Unmapped) != 1 || result.Unmapped[0].ID != "from_live_fetch" {
+		t.Fatalf("unmapped = %+v, want the live-fetched field named, not the stored form's", result.Unmapped)
+	}
+}
+
+// A stored-form resolution that fully resolves still parks — Recruitee has no fill path
+// (fillProviders) and no browser-use fallback (browserUseProviders), so a complete plan is
+// exactly as unsubmittable as an incomplete one, just for a different reason.
+func TestSubmit_AFullyResolvedStoredFormStillParksWithNoSubmitPath(t *testing.T) {
+	reader := &fakeFormReader{found: true, form: applyform.Form{Fields: []applyform.Field{
+		{ID: "first_name", Label: "First name", Type: applyform.TypeText, Required: true},
+	}}}
+	c := &Client{fetchers: nil, forms: reader}
+
+	result, err := c.Submit(context.Background(), autoapply.Claimed{Provider: "recruitee"}, map[string]string{"first_name": "Ada"})
+	if err != nil {
+		t.Fatalf("Submit: %v", err)
+	}
+	if result.Status != autoapply.StatusParked || result.Reason != reasonSubmissionNotImplemented {
+		t.Fatalf("result = %+v, want parked/%s — fully resolved but still no submit path for this provider", result, reasonSubmissionNotImplemented)
+	}
+	if len(result.Unmapped) != 0 {
+		t.Errorf("unmapped = %+v, want none — every required field resolved", result.Unmapped)
 	}
 }
 

@@ -11,7 +11,7 @@
 // The PostHog SDK (~40KB gzip) is dynamically imported inside initPostHog, so it
 // only downloads when a key is actually configured — it never weighs down the entry
 // chunk for visitors where analytics is inert (no key, or SSR). Same lazy posture
-// as shiki/easymde elsewhere.
+// as easymde elsewhere.
 import type { PostHog } from 'posthog-js';
 
 export interface AnalyticsConfig {

@@ -66,7 +66,7 @@ func (h *assistantHandlers) slugActionTool(name, description string, act func(co
 			if in.Slug == "" {
 				return nil, errors.New("slug is required")
 			}
-			if h.tracking.tracking == nil {
+			if h.tracking == nil || h.tracking.tracking == nil {
 				return nil, errors.New("job tracking is not available")
 			}
 			res, err := act(ctx, userID, in.Slug)
@@ -113,7 +113,7 @@ func (h *assistantHandlers) trackJobTool() assistant.Tool {
 			if in.Stage != nil && !userjob.ValidStage(*in.Stage) {
 				return nil, fmt.Errorf("unknown stage %q — valid stages are: %s", *in.Stage, strings.Join(userjob.Stages, ", "))
 			}
-			if h.tracking.tracking == nil {
+			if h.tracking == nil || h.tracking.tracking == nil {
 				return nil, errors.New("job tracking is not available")
 			}
 			res, err := h.tracking.tracking.Track(ctx, userID, in.Slug, in.Stage, in.Note, appevent.SourceAssistant)
@@ -145,7 +145,7 @@ func (h *assistantHandlers) myJobsTool() assistant.Tool {
 			if err := assistant.DecodeArgs(raw, &in); err != nil {
 				return nil, err
 			}
-			if h.tracking.tracking == nil {
+			if h.tracking == nil || h.tracking.tracking == nil {
 				return nil, errors.New("job tracking is not available")
 			}
 			limit := in.Limit

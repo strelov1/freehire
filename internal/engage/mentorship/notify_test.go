@@ -27,7 +27,8 @@ type fakeSender struct {
 	failFor string
 }
 
-func (f *fakeSender) SendWithAttachments(_ context.Context, _, to, subject, htmlBody, textBody string, attachments []emailnotify.Attachment) error {
+func (f *fakeSender) Send(_ context.Context, m emailnotify.Message) error {
+	to, subject, htmlBody, textBody, attachments := m.To, m.Subject, m.HTML, m.Text, m.Attachments
 	if f.failFor != "" && to == f.failFor {
 		return errors.New("mailbox full")
 	}
@@ -110,6 +111,29 @@ func TestAConfirmationCarriesACalendarInvitation(t *testing.T) {
 		}
 		if !strings.Contains(string(a.Content), "METHOD:REQUEST") {
 			t.Error("the invitation body is not a REQUEST")
+		}
+	}
+}
+
+// A booking with no meeting link — the deliberate outcome of a failed calendar-event
+// creation — must render a confirmation with no join link at all, rather than a broken
+// or empty one.
+func TestAnEmptyMeetingLinkProducesNoJoinLine(t *testing.T) {
+	sender := &fakeSender{}
+	notifier := NewMailNotifier(sender, "mentors@example.test", "")
+
+	booking := crossZoneBooking(t)
+	booking.MeetingURL = ""
+	if err := notifier.BookingConfirmed(context.Background(), booking); err != nil {
+		t.Fatalf("BookingConfirmed: %v", err)
+	}
+
+	for _, m := range sender.sent {
+		if strings.Contains(m.text, "Join:") {
+			t.Errorf("%s's text body still has a join line:\n%s", m.to, m.text)
+		}
+		if strings.Contains(m.html, "Join") {
+			t.Errorf("%s's html body still mentions joining:\n%s", m.to, m.html)
 		}
 	}
 }

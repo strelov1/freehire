@@ -18,6 +18,8 @@
     "pwa:icons": "node scripts/gen-pwa-icons.mjs",
     "gen:api-docs": "node scripts/gen-api-docs.mjs",
     "gen:api-docs:smoke": "node scripts/gen-api-docs-smoke.mjs",
+    "gen:openapi": "node scripts/gen-openapi.mjs",
+    "gen:openapi:smoke": "node scripts/gen-openapi-smoke.mjs",
     "lint": "oxlint && eslint .",
     "lint:fix": "oxlint --fix && eslint . --fix"
   },
@@ -55,6 +57,9 @@
   },
   "dependencies": {
     "@resvg/resvg-js": "^2.6.2",
+    "@scalar/api-reference": "1.68.0",
+    "@scalar/server-side-rendering": "0.1.46",
+    "@scalar/types": "0.19.0",
     "@sentry/sveltekit": "^10.73.0",
     "easymde": "^2.21.0",
     "flag-icons": "^7.5.0",
@@ -64,7 +69,6 @@
     "posthog-js": "^1.427.2",
     "satori": "^0.33.4",
     "satori-html": "^0.3.2",
-    "shiki": "^4.4.3",
     "simple-icons": "^16.29.0",
     "svelte-dnd-action": "^0.9.79",
     "three": "^0.185.1",

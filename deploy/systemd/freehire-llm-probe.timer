@@ -1,0 +1,16 @@
+[Unit]
+Description=timer: freehire-llm-probe every 5 minutes
+[Timer]
+# Monotonic, like queue-metrics: this samples a condition that moves continuously, so the
+# gap between samples is what matters, not the time of day.
+#
+# Five minutes rather than one. The signal is a provider going bad, which is a state that
+# lasts hours or days once it starts — three of them did in the week to 2026-09-08 — so a
+# minute's resolution buys nothing and costs five times the tokens. Five minutes still turns
+# a half-day discovery into a quarter-hour one.
+OnBootSec=3min
+OnUnitActiveSec=5min
+# Deliberately NOT Persistent=true. A missed window is a gap in a graph; replaying it on
+# boot would publish a measurement stamped now for a gateway state that is already gone.
+[Install]
+WantedBy=timers.target

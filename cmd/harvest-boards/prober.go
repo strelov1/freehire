@@ -756,6 +756,8 @@ func (joinProber) probe(ctx context.Context, c httpClient, id string) (string, i
 // probers maps a provider key to its prober. Adding an ATS is one entry here plus the
 // prober type — the same shape as sources.All.
 var probers = map[string]prober{
+	"adp":             adpProber{},
+	"adpmyjobs":       adpMyJobsProber{},
 	"greenhouse":      greenhouseProber{},
 	"lever":           leverProber{},
 	"ashby":           ashbyProber{},

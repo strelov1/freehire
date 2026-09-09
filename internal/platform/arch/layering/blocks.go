@@ -84,7 +84,7 @@ var blocks = map[string][]string{
 		"worker",
 	},
 	"dict": {
-		"classify", "companyname", "industrytag", "lang", "location", "normalize",
+		"answertopic", "classify", "companyname", "industrytag", "lang", "location", "normalize",
 		"roletype", "skilladjacency", "skillbundle", "skilltag", "slugmint",
 		// skillvec/gen is the registry generator — a main package that reads skilltag
 		// and writes skillvec's source. It never ships in a binary, but it is a package
@@ -124,6 +124,7 @@ var blocks = map[string][]string{
 		"userprofile", "username",
 	},
 	"candidate": {
+		"answerbank",
 		"atscheck",
 		// coverletter drafts from the experience bank against a vacancy the caller supplies
 		// as a db.Job — the letter is about the candidate's evidence, so it sits here and
@@ -169,6 +170,10 @@ var blocks = map[string][]string{
 		// way jobview does — the block below it, not the model.
 		"reqextract",
 		"silence", "verdict", "ycdir",
+		// wikicompany resolves a company name against Wikidata/Wikipedia's public APIs
+		// for the company-info-wikipedia-backfill worker — a fact-lookup about a
+		// company, the same footing as ycdir, not an AI/enrichment concern.
+		"wikicompany",
 	},
 	"application": {
 		"appevent", "apptimeline", "autoapply", "autoapplyorchestrate", "calmatch", "calsync",
@@ -200,7 +205,7 @@ var blocks = map[string][]string{
 	// only to ask which tier an account holds. Placing it in identity would invert that —
 	// billing would import a community integration — and the guard would say so.
 	"engage": {
-		"broadcast", "community", "companyfeedback", "discordlink", "emailnotify",
+		"broadcast", "community", "companyfeedback", "discordlink", "emailnotify", "emailprefs",
 		"linkedinauth", "mailpreview", "mentorship", "notify", "nudge", "onboarding", "pushnotify",
 		"referral", "reminder", "report", "socialdigest", "subscription",
 		"telegramnotify", "vote", "webhooknotify",

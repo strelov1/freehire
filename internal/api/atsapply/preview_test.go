@@ -104,20 +104,32 @@ func (r *fakeFormReader) GetStoredForm(context.Context, int64) (applyform.Form, 
 	return r.form, r.found, r.err
 }
 
-func TestPreviewClient_ALeverAttemptParksWithoutTouchingAFetcherOrFormReader(t *testing.T) {
-	fetcher := &fakeFetcher{}
-	reader := &fakeFormReader{}
-	p := &PreviewClient{fetchers: map[string]applyform.Fetcher{"lever": fetcher}, forms: reader}
+// A Lever attempt reaches its schema like any other provider — it is not refused for
+// carrying a captcha it may well not have.
+//
+// Measured against live postings on 2026-09-09, which is what retired the blanket refusal:
+// two of the candidate's own queued Lever applications (coderio, jobgether) render NO
+// captcha at all — no hCaptcha, no reCAPTCHA, nothing. Four others do carry hCaptcha, and
+// their only "recaptcha" is the string `.g-recaptcha div` inside a CSS rule. So the
+// captcha is a per-employer setting, not a property of the platform, and a provider-wide
+// refusal decided what a page said before anyone looked at the page.
+//
+// Nothing here claims a Lever application can now be submitted: fillProviders still covers
+// Greenhouse alone, so Submit parks it as not-implemented. What changes is that the
+// candidate gets an answer preview instead of a reason that was never measured.
+func TestPreviewClient_ALeverAttemptReachesItsSchema(t *testing.T) {
+	fetcher := &fakeFetcher{form: applyform.Form{Provider: "lever"}}
+	p := &PreviewClient{fetchers: map[string]applyform.Fetcher{"lever": fetcher}, forms: nil}
 
 	result, err := p.Preview(context.Background(), autoapply.Claimed{Provider: "lever"}, nil)
 	if err != nil {
 		t.Fatalf("Preview: %v", err)
 	}
-	if !result.Parked || result.Reason != "requires_captcha" {
-		t.Errorf("result = %+v, want parked/requires_captcha", result)
+	if result.Parked {
+		t.Errorf("result = %+v, want a preview rather than a park", result)
 	}
-	if fetcher.called {
-		t.Errorf("fetcher was called, want no schema fetch for a provider that always parks")
+	if !fetcher.called {
+		t.Error("the schema fetcher was never called — Lever is still being refused before it is read")
 	}
 }
 

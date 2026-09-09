@@ -282,6 +282,29 @@ func (q *Queries) GetGmailRefreshToken(ctx context.Context, userID int64) (GetGm
 	return i, err
 }
 
+const getGoogleGrantForWrite = `-- name: GetGoogleGrantForWrite :one
+SELECT refresh_token_enc, scopes, status
+FROM gmail_connections
+WHERE user_id = $1
+`
+
+type GetGoogleGrantForWriteRow struct {
+	RefreshTokenEnc string   `json:"refresh_token_enc"`
+	Scopes          []string `json:"scopes"`
+	Status          string   `json:"status"`
+}
+
+// What a write caller (mentor-google-meet-link's CreateMeetEvent) needs in one round
+// trip: the encrypted refresh token to reach the API, and the scopes to decide the
+// grant actually covers what this caller wants to do with it. `status` is read too so a
+// row already marked needs_reconsent can be treated as unusable without a second query.
+func (q *Queries) GetGoogleGrantForWrite(ctx context.Context, userID int64) (GetGoogleGrantForWriteRow, error) {
+	row := q.db.QueryRow(ctx, getGoogleGrantForWrite, userID)
+	var i GetGoogleGrantForWriteRow
+	err := row.Scan(&i.RefreshTokenEnc, &i.Scopes, &i.Status)
+	return i, err
+}
+
 const getInterviewInvitation = `-- name: GetInterviewInvitation :one
 SELECT id, from_addr, from_name, subject, body_text, body_html, received_at,
     (read_at IS NOT NULL)::boolean AS read

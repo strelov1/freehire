@@ -49,6 +49,7 @@ import type {
   Mentor,
   MentorAvailabilityRule,
   MentorProfileInput,
+  MentorProfileSuggestions,
   MentorSession,
   MentorSessions,
   MentorSlot,
@@ -90,6 +91,7 @@ import type {
   GhostReportInput,
   Verdict,
   ATSResponse,
+  ATSReport,
   JobMatchResult,
   MatchAnalysisResponse,
   Allowance,
@@ -127,6 +129,7 @@ import type {
   TalentNetworkVisibility,
   ExperienceEmployment,
   ApiSuggestion,
+  BankedAnswer,
 } from './types';
 
 /** A page of list items, optionally the total matching the query (endpoints that
@@ -148,6 +151,34 @@ interface Page<T> {
  *  `updated_at` is optional because a document indexed before the attribute joined
  *  the shape has none; such a URL ships without a <lastmod> rather than dropping
  *  out of the sitemap. */
+/** What the public unsubscribe page shows. Deliberately small: the token that opens
+ *  it is a bearer credential somebody could have forwarded, so it carries the address
+ *  the mail already went to, three switches, and the names of the searches those
+ *  switches govern — and nothing else about the account. */
+export interface EmailPrefs {
+  email: string;
+  alerts_enabled: boolean;
+  activity_enabled: boolean;
+  news_enabled: boolean;
+  searches: EmailPrefsSearch[];
+}
+
+interface EmailPrefsSearch {
+  id: number;
+  name: string;
+  active: boolean;
+}
+
+/** A patch, not a replace: an omitted switch keeps its stored value.
+ *  `deactivateSearches` can only turn a digest OFF — a link that can only subtract
+ *  cannot be used to sign anybody up for anything. */
+interface EmailPrefsUpdate {
+  alerts?: boolean;
+  activity?: boolean;
+  news?: boolean;
+  deactivateSearches?: number[];
+}
+
 export interface SitemapEntry {
   slug: string;
   updated_at?: string;
@@ -205,6 +236,22 @@ export interface JobCopy {
   location: string;
   apply_url: string;
   posted_at: string | null;
+}
+
+/** The public roast's wire shape (POST /api/v1/cv/roast, no session — see RoastCV and its
+ *  own roastResponse on the backend): the deterministic ATS report plus a live
+ *  market-coverage reading. `role` is the category slug the reading was measured
+ *  against, empty when the dictionary resolved none; `market_scoped` says which of
+ *  those two happened, so the page never has to infer it from an empty string.
+ *  `market` is absent exactly when `market_available` is false (the facet backend was
+ *  unreachable) — the page must render that as "unavailable", never as a coverage of
+ *  zero, which would read as a real measurement. */
+export interface RoastResponse {
+  report: ATSReport;
+  role: string;
+  market_scoped: boolean;
+  market_available: boolean;
+  market?: Verdict;
 }
 
 /** Max résumé upload size, mirroring the server's BodyLimit (cmd/server/main.go). The
@@ -296,6 +343,10 @@ export interface GmailStatus {
    *  a connected mailbox says nothing about the calendar, and a calendar grant may have
    *  no mailbox behind it at all. */
   calendar_connected?: boolean;
+  /** Whether the same grant covers calendar.events — the mentor-only write consent that
+   *  auto-generates a Meet link per booking and makes the mentor profile's own meeting
+   *  link field optional. A third, separate consent from both fields above. */
+  mentor_calendar_connected?: boolean;
 }
 
 /** The hosted-mailbox option: the caller's address (null when none) + whether
@@ -797,6 +848,14 @@ export function createApi(
     }
   }
 
+  /** Best-effort prefill for the create form, from the candidate's résumé, user
+   *  profile, account and experience bank — never from the mentor profile itself. Only
+   *  the create form calls it, and only before a profile exists; a failure here must
+   *  not block rendering the (then blank) form. */
+  async function mentorProfileSuggestions(): Promise<MentorProfileSuggestions> {
+    return requestData<MentorProfileSuggestions>('/api/v1/me/mentorship/profile/suggestions');
+  }
+
   async function createMentorProfile(body: MentorProfileInput): Promise<OwnMentorProfile> {
     return requestData<OwnMentorProfile>('/api/v1/me/mentorship/profile', jsonBody('POST', body));
   }
@@ -1183,6 +1242,22 @@ export function createApi(
       `/api/v1/me/auto-apply/${encodeURIComponent(queueId)}/review`,
       jsonBody('POST', { decision }),
     );
+  }
+
+  /** Save the candidate's answer to one screening question into their answer bank, so it
+   *  fills the same question on every later application. */
+  async function saveBankedAnswer(question: string, answer: string): Promise<void> {
+    await call('/api/v1/me/answer-bank', jsonBody('PUT', { question, answer }));
+  }
+
+  /** The candidate's whole answer bank, newest first. */
+  function listBankedAnswers(): Promise<BankedAnswer[]> {
+    return requestData<BankedAnswer[]>('/api/v1/me/answer-bank');
+  }
+
+  /** Remove one banked answer by id. */
+  async function deleteBankedAnswer(id: number): Promise<void> {
+    await call(`/api/v1/me/answer-bank/${id}`, { method: 'DELETE' });
   }
 
   /** Dismiss (swipe away) a job in the swipe deck. Keeps it out of the deck only;
@@ -1769,6 +1844,15 @@ export function createApi(
     return toSlice(page, page.meta.offset);
   }
 
+  /** The catalogue's facet distribution under a filter: how many members sit behind each
+   *  value of each facet, so a filter pane can show the number beside every option.
+   *
+   *  A count arrives NEGATIVE when the endpoint holds it back below its small-count floor;
+   *  `reportedCount` in facets.ts is what turns that into "no number". */
+  async function talentFacets(search: string): Promise<FacetCounts> {
+    return requestData<FacetCounts>(`/api/v1/talent/facets${search ? `?${search}` : ''}`);
+  }
+
   /** One member's public card, by their minted catalogue handle. A member who has left,
    *  a handle nobody holds, and a string that could not be a handle all answer the same
    *  404 — the caller must not try to tell them apart. */
@@ -1884,6 +1968,23 @@ export function createApi(
       `/api/v1/me/profile/ats-report${qs ? `?${qs}` : ''}`,
       { method: 'POST' },
     );
+  }
+
+  /** Score an uploaded CV for an ANONYMOUS caller — no session, no stored bytes, no model
+   *  call (see RoastCV on the backend). Same two input shapes as extractResumeProfile (a
+   *  PDF `File` sent as multipart, or pasted text sent as JSON) through the same size
+   *  check and the same `resumeInit` builder. `category` overrides the role the market
+   *  reading is measured against; omitted, the server infers it from the CV's own
+   *  headline. Public route, rate-limited by IP server-side. */
+  async function roastCv(input: File | string, category?: string): Promise<RoastResponse> {
+    if (input instanceof File && input.size > RESUME_MAX_BYTES) {
+      throw new ApiError(
+        413,
+        `This PDF is larger than ${RESUME_MAX_MB} MB. Compress it or export a lighter PDF and try again.`,
+      );
+    }
+    const qs = category ? `?category=${encodeURIComponent(category)}` : '';
+    return requestData<RoastResponse>(`/api/v1/cv/roast${qs}`, resumeInit('POST', input));
   }
 
   /** The caller's notification subscriptions (one per saved search + channel). */
@@ -2608,6 +2709,54 @@ export function createApi(
     await call(`/api/v1/company-feedback/${feedbackId}/hide`, { method: 'POST' });
   }
 
+  /** The email preferences a signed unsubscribe link opens. Unauthenticated: the
+   *  token in the link stands in for a session, which is the whole point — somebody
+   *  holding one of our mails turns it off without an account. */
+  function getEmailPrefs(token: string): Promise<EmailPrefs> {
+    return requestData<EmailPrefs>(`/api/v1/email-prefs?t=${encodeURIComponent(token)}`);
+  }
+
+  /** Save the switches. The token goes in the BODY, not the query: nginx logs query
+   *  strings, and this call has a body already, so there is no reason to write a
+   *  never-expiring credential into the access log twice.
+   *
+   *  Every field except the token is optional, and an omitted switch keeps its
+   *  stored value — this is a patch, not a replace. `deactivateSearches` can only
+   *  turn a digest off; there is deliberately no way to turn one on from a link. */
+  function saveEmailPrefs(token: string, update: EmailPrefsUpdate): Promise<EmailPrefs> {
+    return requestData<EmailPrefs>(
+      '/api/v1/email-prefs',
+      jsonBody('PATCH', {
+        token,
+        alerts_enabled: update.alerts,
+        activity_enabled: update.activity,
+        news_enabled: update.news,
+        deactivate_searches: update.deactivateSearches,
+      }),
+    );
+  }
+
+  /** The same three email-group switches for a signed-in caller. Shares the
+   *  server-side service with the token-opened page, so the two views cannot drift
+   *  apart about the same three booleans. */
+  function getMyEmailGroups(): Promise<EmailPrefs> {
+    return requestData<EmailPrefs>('/api/v1/me/email-groups');
+  }
+
+  /** Save them for a signed-in caller. A patch, like the public one: an omitted
+   *  switch keeps its stored value. */
+  function saveMyEmailGroups(update: EmailPrefsUpdate): Promise<EmailPrefs> {
+    return requestData<EmailPrefs>(
+      '/api/v1/me/email-groups',
+      jsonBody('PATCH', {
+        alerts_enabled: update.alerts,
+        activity_enabled: update.activity,
+        news_enabled: update.news,
+        deactivate_searches: update.deactivateSearches,
+      }),
+    );
+  }
+
   return {
     listJobs,
     getJob,
@@ -2641,6 +2790,7 @@ export function createApi(
     cancelMySession,
     reviewMySession,
     myMentorProfile,
+    mentorProfileSuggestions,
     createMentorProfile,
     updateMentorProfile,
     pauseMentorProfile,
@@ -2683,6 +2833,9 @@ export function createApi(
     unsaveJob,
     autoApplyJob,
     reviewAutoApply,
+    saveBankedAnswer,
+    listBankedAnswers,
+    deleteBankedAnswer,
     dismissJob,
     undismissJob,
     voteJob,
@@ -2759,6 +2912,7 @@ export function createApi(
     getTalentNetwork,
     setTalentNetworkVisibility,
     listTalent,
+    talentFacets,
     getTalentCard,
     deleteAccount,
     extractResumeProfile,
@@ -2769,6 +2923,7 @@ export function createApi(
     getProfileVerdict,
     getATSReport,
     runATSReview,
+    roastCv,
     listSubscriptions,
     createSubscription,
     setSubscriptionActive,
@@ -2865,6 +3020,10 @@ export function createApi(
     reportCompanyFeedback,
     listReportedCompanyFeedback,
     hideCompanyFeedback,
+    getEmailPrefs,
+    saveEmailPrefs,
+    getMyEmailGroups,
+    saveMyEmailGroups,
   };
 }
 

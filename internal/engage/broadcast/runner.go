@@ -65,7 +65,7 @@ func (r *Runner) Run(ctx context.Context, c Campaign) (Stats, error) {
 
 	var stats Stats
 	for _, row := range rows {
-		sendErr := r.mailer.Send(ctx, c, row.Email)
+		sendErr := r.mailer.Send(ctx, c, row.ID, row.Email)
 
 		var errText string
 		if sendErr != nil {

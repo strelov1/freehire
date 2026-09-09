@@ -2,9 +2,12 @@ import { describe, it, expect } from 'vitest';
 import { autoApplyNeedsReviewBadge, autoApplyReviewBanner } from './autoApplyReview';
 
 describe('autoApplyNeedsReviewBadge', () => {
-  it('shows for pending_review and blocked', () => {
+  it('shows for pending_review, blocked and tailor_failed', () => {
     expect(autoApplyNeedsReviewBadge('pending_review')).toBe(true);
     expect(autoApplyNeedsReviewBadge('blocked')).toBe(true);
+    // A run that never produced a CV stopped just as surely as a blocked one did, and the
+    // candidate has no other way to notice: nothing on the card changes otherwise.
+    expect(autoApplyNeedsReviewBadge('tailor_failed')).toBe(true);
   });
 
   it('hides for tailoring, approved, declined, failed, and no attempt', () => {
@@ -31,8 +34,23 @@ describe('autoApplyReviewBanner', () => {
     expect(autoApplyReviewBanner('failed')).toEqual({ kind: 'failed' });
   });
 
-  it('is null for tailoring, approved, and no attempt', () => {
-    for (const status of ['tailoring', 'approved', null, undefined]) {
+  it('is the tailoring variant for tailoring', () => {
+    expect(autoApplyReviewBanner('tailoring')).toEqual({ kind: 'tailoring' });
+  });
+
+  it('is the approved variant for approved', () => {
+    expect(autoApplyReviewBanner('approved')).toEqual({ kind: 'approved' });
+  });
+
+  // A tailoring run that gave up is its own variant, not the "still preparing" one it used
+  // to fall through to: the candidate has no CV to look at, so the copy cannot be the
+  // failed-submission one either (that one implies there was something to send).
+  it('is the tailor_failed variant for tailor_failed', () => {
+    expect(autoApplyReviewBanner('tailor_failed')).toEqual({ kind: 'tailor_failed' });
+  });
+
+  it('is null for no attempt', () => {
+    for (const status of [null, undefined]) {
       expect(autoApplyReviewBanner(status)).toBeNull();
     }
   });

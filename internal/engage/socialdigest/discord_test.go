@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 	"unicode/utf8"
 )
 
@@ -16,7 +17,10 @@ func sampleDigest() Digest {
 		Day: day("2026-09-03"),
 		Items: []Posting{
 			{JobID: 1, Slug: "acme-go-1", Title: "Senior Go Engineer", Company: "Acme", CompanySlug: "acme", Location: "Berlin", PageUniques: 142},
-			{JobID: 2, Slug: "globex-rust-2", Title: "Rust Developer", Company: "Globex", CompanySlug: "globex", Remote: true, PageUniques: 90},
+			// Remote AND a city, which is the ordinary shape of a remote posting in this
+			// catalogue — placeOf is supposed to print one of the two, and with an empty
+			// Location here the rule was never actually exercised.
+			{JobID: 2, Slug: "globex-rust-2", Title: "Rust Developer", Company: "Globex", CompanySlug: "globex", Location: "Munich", Remote: true, PageUniques: 90},
 		},
 	}
 }
@@ -60,9 +64,11 @@ func TestDiscordRender(t *testing.T) {
 			t.Errorf("description missing %q:\n%s", want, e.Description)
 		}
 	}
-	// Remote wins over a city, so a remote posting must not also print a location.
-	if strings.Contains(e.Description, "Remote · ") {
-		t.Errorf("remote posting should carry one place, got:\n%s", e.Description)
+	// Remote wins over a city, so a remote posting prints one place and not both. Asserted
+	// on the city's absence rather than on the separator after "Remote": the view count now
+	// follows the place, so a separator there is expected and proves nothing either way.
+	if strings.Contains(e.Description, "Munich") {
+		t.Errorf("a remote posting printed its city too, got:\n%s", e.Description)
 	}
 }
 
@@ -223,5 +229,22 @@ func TestDiscordPublish(t *testing.T) {
 func TestDiscordName(t *testing.T) {
 	if got := NewDiscordPublisher("", "").Name(); got != ChannelDiscord {
 		t.Errorf("name = %q, want %q", got, ChannelDiscord)
+	}
+}
+
+// Both channels publish the same measurement, so the count has to appear in both — one of
+// them dropping it would make the same digest look like two different lists.
+func TestDiscordCarriesTheViewCount(t *testing.T) {
+	p := NewDiscordPublisher("http://127.0.0.1:1/hook", "https://freehire.me")
+
+	body, err := p.Render(Digest{
+		Day:   time.Date(2026, 9, 7, 0, 0, 0, 0, time.UTC),
+		Items: []Posting{{Slug: "s", Title: "T", Company: "C", PageUniques: 12}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(body, "12 views") {
+		t.Errorf("the embed does not carry the view count: %s", body)
 	}
 }

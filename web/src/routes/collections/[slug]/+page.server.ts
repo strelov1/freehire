@@ -1,6 +1,6 @@
 import { error } from '@sveltejs/kit';
 import { serverApi } from '$lib/server/api';
-import { collectionBySlug } from '$lib/collections';
+import { collectionBySlug, skillForCollection } from '$lib/collections';
 import { pageExists, pageOffset, parsePage } from '$lib/pagination';
 import { categoryLandingLink } from '$lib/roleLandings';
 import type { PageServerLoad } from './$types';
@@ -44,5 +44,20 @@ export const load: PageServerLoad = async ({ params, url, fetch }) => {
   const marketLink = categoryLandingLink(
     Object.keys(collection.params).length === 1 ? (collection.params.category ?? null) : null
   );
-  return { slug: params.slug, collection, initial, pageNumber, marketLink };
+  // The definition of this feed's subject, where the feed IS one skill. Same shape as
+  // marketLink above and the third side of the same division: that link answers "where
+  // are they and what do they pay", this one answers "what is it", and the page itself
+  // answers "who is hiring".
+  //
+  // No description lookup: every canonical skill carries a glossary entry (see
+  // skillDescriptions.ts), and a pinned `skills` value IS a canonical facet value, so
+  // the page exists by construction. Reaching for the catalog would cost this page a
+  // dynamic import it has no other reason to make.
+  //
+  // Resolved from the slug, NOT from `collection.params`: by the time params reach here
+  // scopeParams has flattened a list-valued pin to its first value, so a feed about two
+  // skills would be indistinguishable from one about the first of them. skillForCollection
+  // reads the raw registry, where that difference still exists.
+  const glossaryLink = skillForCollection(params.slug) ?? null;
+  return { slug: params.slug, collection, initial, pageNumber, marketLink, glossaryLink };
 };

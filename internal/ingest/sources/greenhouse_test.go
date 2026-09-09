@@ -197,3 +197,48 @@ func TestGreenhouseFetchReadsEmploymentTypeMetadata(t *testing.T) {
 		t.Errorf("EmploymentType = %q, want full_time", got)
 	}
 }
+
+// Greenhouse implements CompanyDescriber: the board-metadata endpoint (distinct from
+// the postings list) carries an employer-authored "about us" field for a meaningful
+// share of boards (confirmed live: Coinbase, Figma, Asana).
+func TestGreenhouseImplementsCompanyDescriber(t *testing.T) {
+	if _, ok := NewGreenhouse(nil).(CompanyDescriber); !ok {
+		t.Error("greenhouse should implement CompanyDescriber")
+	}
+}
+
+func TestGreenhouseCompanyDescriptionSanitizesContent(t *testing.T) {
+	fake := &fakeHTTP{body: `{"name":"Coinbase","content":"<p>Ready to be pushed</p><script>alert(1)</script>"}`}
+
+	got, err := NewGreenhouse(fake).(CompanyDescriber).CompanyDescription(context.Background(), CompanyEntry{Board: "coinbase"})
+	if err != nil {
+		t.Fatalf("CompanyDescription: %v", err)
+	}
+	if got != "<p>Ready to be pushed</p>" {
+		t.Errorf("CompanyDescription = %q, want the sanitized content", got)
+	}
+	if fake.gotURL != "https://boards-api.greenhouse.io/v1/boards/coinbase" {
+		t.Errorf("requested URL = %q, want the board-metadata endpoint (not /jobs)", fake.gotURL)
+	}
+}
+
+func TestGreenhouseCompanyDescriptionEmptyContentYieldsEmptyString(t *testing.T) {
+	fake := &fakeHTTP{body: `{"name":"Greenhouse","content":""}`}
+
+	got, err := NewGreenhouse(fake).(CompanyDescriber).CompanyDescription(context.Background(), CompanyEntry{Board: "greenhouse"})
+	if err != nil {
+		t.Fatalf("CompanyDescription: %v", err)
+	}
+	if got != "" {
+		t.Errorf("CompanyDescription = %q, want empty for a blank content field", got)
+	}
+}
+
+func TestGreenhouseCompanyDescriptionPropagatesAFetchError(t *testing.T) {
+	fake := &fakeHTTP{err: &StatusError{Method: "GET", Code: 404, URL: "https://boards-api.greenhouse.io/v1/boards/gone"}}
+
+	_, err := NewGreenhouse(fake).(CompanyDescriber).CompanyDescription(context.Background(), CompanyEntry{Board: "gone"})
+	if err == nil {
+		t.Fatal("expected an error for a 404 board, got nil")
+	}
+}

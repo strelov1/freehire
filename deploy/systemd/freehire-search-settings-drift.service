@@ -1,0 +1,14 @@
+[Unit]
+Description=freehire worker: check the live Meilisearch settings against what this binary expects
+After=network.target
+[Service]
+Type=oneshot
+User=freehire
+WorkingDirectory=/opt/freehire/src/hire-current
+EnvironmentFile=/opt/freehire/.env
+# Lowest weights on the host, like queue-metrics and llm-probe: this exists to observe,
+# so it must never be the reason a real caller waits. It opens no database and holds no
+# lock — a run that loses a scheduling race simply reports a few minutes later.
+CPUWeight=10
+IOWeight=10
+ExecStart=/opt/freehire/src/hire-current/search-settings-drift

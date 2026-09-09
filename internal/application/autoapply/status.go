@@ -1,6 +1,6 @@
 package autoapply
 
-// Status is the six-value candidate-facing status for a live auto-apply attempt, richer
+// Status is the seven-value candidate-facing status for a live auto-apply attempt, richer
 // than the job-detail overlay's own three-value derivation (which has its own consumers
 // and its own reasons — see internal/api/handler's autoApplyEntryStatus doc comment — and
 // is left untouched by this).
@@ -24,25 +24,58 @@ const (
 	StatusDeclined Status = "declined"
 	// StatusFailed means an unattended submission attempt exhausted its retries.
 	StatusFailed Status = "failed"
+	// StatusTailorFailed means the tailoring run itself did not produce a CV — distinct
+	// from StatusFailed, which is a SUBMISSION that gave up with a tailored CV in hand.
+	// The two are different things to be told: one attempt has a CV the candidate can
+	// look at, the other has nothing at all.
+	//
+	// Before it existed, a failed tailoring run recorded nothing, so the derivation below
+	// fell through to StatusTailoring and the candidate was told preparation was under way
+	// — indefinitely, about work nobody was doing (freehire, 2026-09-08: three entries,
+	// one of them for over a day).
+	StatusTailorFailed Status = "tailor_failed"
 )
 
-// DeriveStatus derives the six-value status from an attempt's own raw state. Mirrors
+// DerivedFrom is an attempt's own raw state, as DeriveStatus reads it.
+//
+// A struct rather than the positional parameters this replaces: they were five in a row,
+// four of them bool, and a caller had no way to be wrong loudly — the state that made this
+// type worth having would have been the sixth.
+type DerivedFrom struct {
+	HasTailoredCV      bool
+	HasResolvedPreview bool
+	ReviewDecision     string
+	Blocked            bool
+	Failed             bool
+	// TailorFailed is set when the tailoring run itself gave up (auto_apply_queue's own
+	// tailor_failed_at, migration 0154).
+	TailorFailed bool
+}
+
+// DeriveStatus derives the candidate-facing status from an attempt's own raw state. Mirrors
 // internal/api/handler's autoApplyEntryStatus precedence: declined is checked first,
 // because DeclineAutoApplyReview also sets blocked_at (it reuses MarkAutoApplyBlocked's own
 // park vocabulary) — checking blocked/failed before the review decision would misreport a
 // candidate's own decline as an operational failure.
-func DeriveStatus(hasTailoredCV, hasResolvedPreview bool, reviewDecision string, blocked, failed bool) Status {
+//
+// A tailoring failure is checked LAST of the operational states, below a tailored CV that
+// exists: a later run that succeeded supersedes an earlier one that did not, and telling
+// somebody their CV could not be prepared while it sits there ready is worse than saying
+// nothing. The write path clears the marker on success; this does not rely on it having.
+func DeriveStatus(in DerivedFrom) Status {
 	switch {
-	case reviewDecision == "declined":
+	case in.ReviewDecision == "declined":
 		return StatusDeclined
-	case blocked:
+	case in.Blocked:
 		return StatusBlocked
-	case failed:
+	case in.Failed:
 		return StatusFailed
-	case reviewDecision == "approved":
+	case in.ReviewDecision == "approved":
 		return StatusApproved
-	case hasTailoredCV && hasResolvedPreview:
+	case in.HasTailoredCV && in.HasResolvedPreview:
 		return StatusPendingReview
+	case in.TailorFailed:
+		return StatusTailorFailed
 	default:
 		return StatusTailoring
 	}
@@ -59,7 +92,9 @@ type ResolvedAttempt struct {
 	ReviewDecision  string
 	Blocked         bool
 	Failed          bool
-	Unmapped        []UnmappedField
+	// TailorFailed is set when the tailoring run gave up without producing a CV.
+	TailorFailed bool
+	Unmapped     []UnmappedField
 }
 
 // AutoApplyReviewInfo is what a tracked job's own read path surfaces about its live
@@ -85,7 +120,14 @@ func AssembleReviewInfo(hasAttempt bool, a ResolvedAttempt) *AutoApplyReviewInfo
 	if !hasAttempt {
 		return nil
 	}
-	status := DeriveStatus(a.HasTailoredCV, a.ResolvedPreview != nil, a.ReviewDecision, a.Blocked, a.Failed)
+	status := DeriveStatus(DerivedFrom{
+		HasTailoredCV:      a.HasTailoredCV,
+		HasResolvedPreview: a.ResolvedPreview != nil,
+		ReviewDecision:     a.ReviewDecision,
+		Blocked:            a.Blocked,
+		Failed:             a.Failed,
+		TailorFailed:       a.TailorFailed,
+	})
 	info := &AutoApplyReviewInfo{Status: status, QueueID: a.QueueID}
 	if status == StatusPendingReview {
 		info.ResolvedPreview = a.ResolvedPreview

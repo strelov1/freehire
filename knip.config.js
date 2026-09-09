@@ -66,6 +66,12 @@ export default {
         // gen-og.mjs reaches this through a runtime string —
         // vite.ssrLoadModule('/src/lib/server/og/brand.ts') — which no static analysis follows.
         'src/lib/server/og/brand.ts',
+        // Same shape: gen-api-docs.mjs and gen-openapi.mjs's loadDocsModules() reaches these
+        // through vite.ssrLoadModule('/src/lib/docs/api-spec.ts' | '/src/lib/docs/filters.ts').
+        // The /docs/api page itself stopped importing either statically once it moved to
+        // rendering a pre-generated OpenAPI document instead (openspec/changes/migrate-api-docs-scalar).
+        'src/lib/docs/api-spec.ts',
+        'src/lib/docs/filters.ts',
         'scripts/*.mjs',
         'cluster.js',
       ],

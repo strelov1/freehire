@@ -7,6 +7,8 @@ import (
 	"testing"
 
 	"github.com/strelov1/freehire/internal/engage/broadcast"
+	"github.com/strelov1/freehire/internal/engage/emailnotify"
+	"github.com/strelov1/freehire/internal/engage/emailprefs"
 	"github.com/strelov1/freehire/internal/platform/db"
 )
 
@@ -44,13 +46,13 @@ type fakeSender struct {
 
 type sentMail struct{ from, replyTo, to, subject, html, text string }
 
-func (f *fakeSender) SendWithReplyTo(_ context.Context, from, replyTo, to, subject, htmlBody, textBody string) error {
-	f.sent = append(f.sent, sentMail{from, replyTo, to, subject, htmlBody, textBody})
+func (f *fakeSender) Send(_ context.Context, m emailnotify.Message) error {
+	f.sent = append(f.sent, sentMail{m.From, m.ReplyTo, m.To, m.Subject, m.HTML, m.Text})
 	return f.err
 }
 
 func newRunner(store *fakeStore, sender *fakeSender, max int32) *broadcast.Runner {
-	m := broadcast.NewMailer(sender, "notifications@freehire.me", "ilya@example.test", "https://freehire.me")
+	m := broadcast.NewMailer(sender, "notifications@freehire.me", "ilya@example.test", "https://freehire.me", testLinks("https://freehire.me"))
 	return broadcast.New(store, m, max)
 }
 
@@ -139,9 +141,9 @@ func TestPending_SendsNothing(t *testing.T) {
 func TestSend_LinksBackThroughTheConfiguredOrigin(t *testing.T) {
 	for _, name := range broadcast.Names() {
 		sender := &fakeSender{}
-		m := broadcast.NewMailer(sender, "notifications@freehire.me", "ilya@example.test", "https://preview.test")
+		m := broadcast.NewMailer(sender, "notifications@freehire.me", "ilya@example.test", "https://preview.test", testLinks("https://preview.test"))
 		c := campaign(t, name)
-		if err := m.Send(context.Background(), c, "someone@example.com"); err != nil {
+		if err := m.Send(context.Background(), c, 1, "someone@example.com"); err != nil {
 			t.Fatalf("Send %s: %v", c.Name, err)
 		}
 
@@ -159,4 +161,11 @@ func TestSend_LinksBackThroughTheConfiguredOrigin(t *testing.T) {
 			t.Errorf("%s: the campaign has no plain-text body", c.Name)
 		}
 	}
+}
+
+// testLinks signs the unsubscribe URLs a campaign carries. The secret only has to
+// clear emailprefs' length floor — nothing here verifies a token, it just has to be
+// mintable.
+func testLinks(base string) *emailprefs.Links {
+	return emailprefs.NewLinks("broadcast-test-secret-padded-to-32", base)
 }

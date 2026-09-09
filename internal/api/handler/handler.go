@@ -23,6 +23,7 @@ import (
 	"github.com/strelov1/freehire/internal/application/gmailsync"
 	"github.com/strelov1/freehire/internal/application/jobtracking"
 	"github.com/strelov1/freehire/internal/application/mailrecall"
+	"github.com/strelov1/freehire/internal/candidate/answerbank"
 	"github.com/strelov1/freehire/internal/candidate/atscheck"
 	"github.com/strelov1/freehire/internal/candidate/coverletter"
 	"github.com/strelov1/freehire/internal/candidate/cv"
@@ -36,6 +37,7 @@ import (
 	"github.com/strelov1/freehire/internal/candidate/talentnetwork"
 	"github.com/strelov1/freehire/internal/engage/companyfeedback"
 	"github.com/strelov1/freehire/internal/engage/emailnotify"
+	"github.com/strelov1/freehire/internal/engage/emailprefs"
 	"github.com/strelov1/freehire/internal/engage/mentorship"
 	"github.com/strelov1/freehire/internal/engage/referral"
 	"github.com/strelov1/freehire/internal/engage/report"
@@ -449,6 +451,15 @@ func Register(app *fiber.App, cfg Config) {
 	// different lifecycle; see internal/ingest/screeninganswers/AGENTS.md).
 	screeningAnswersSvc := screeninganswers.New(screeninganswers.NewQueriesRepository(queries))
 	screeningAnswersH := newScreeningAnswersHandlers(screeningAnswersSvc)
+	// The candidate's accumulating bank of screening-question answers (internal/candidate/
+	// answerbank) — a third, distinct store from screeningAnswersSvc's six typed facts: this
+	// one takes the open-ended remainder, keyed by the question's own topic rather than a
+	// fixed field. Fed into the autofill assembler below so a banked answer can fill a form
+	// field the deterministic rules never anticipated.
+	answerBank := answerbank.NewStore(answerbank.NewQueriesRepository(queries))
+	// The bank's own list/save/delete routes over the same store, so what autofill reads
+	// and what the review screen edits are never two copies.
+	answerBankH := &answerBankHandlers{bank: answerBank}
 	// The onboarding survey: the candidate's own segmentation answers, and the marker
 	// saying they have been through the wizard. A third singleton beside the two above,
 	// and deliberately so — these answers describe the candidate to us alone, where
@@ -652,7 +663,7 @@ func Register(app *fiber.App, cfg Config) {
 	// The autofill planner is one cheap structured call per run, so it travels on the
 	// shared client's default timeout. The contact block it plans over comes from the base
 	// CV, then the structured résumé — see autofillHandlers.autofillProfile.
-	autofillH := newAutofillHandlers(cvStore, resumeStore, queries, screeningAnswersSvc, a.browserTools, llmBinding{client: cfg.LLM, keys: llmKeys})
+	autofillH := newAutofillHandlers(cvStore, resumeStore, queries, screeningAnswersSvc, answerBank, a.browserTools, llmBinding{client: cfg.LLM, keys: llmKeys})
 	usageH := newUsageHandlers(cfg.LLMKeys, llmKeys)
 	accountDeletion.WithGatewayKeys(llmKeys.Revoke)
 
@@ -661,11 +672,20 @@ func Register(app *fiber.App, cfg Config) {
 	// concrete pointer never hides behind a non-nil interface (see the search note above);
 	// a referrer with no reachable channel still sees the request in-cabinet.
 	var referralEmail referral.EmailSender
-	// The same client, held as its CONCRETE type as well, because mentorship needs the
-	// attachment path a bare Sender does not expose — a calendar invitation is only an
-	// invitation when it is an attachment. A typed nil must not hide behind a non-nil
-	// interface here either, which is why this is its own pointer rather than a type
-	// assertion on referralEmail.
+	// mailLinks signs the unsubscribe URL every non-essential mail carries. One
+	// instance for every sender the API composes, so the token in a footer is the
+	// same shape wherever it was minted.
+	mailLinks := emailprefs.NewLinks(cfg.JWTSecret, cfg.FrontendOrigin)
+	// mailPrefs both serves the preference routes and answers "has this account
+	// turned that group off" for the two senders with no selection query to gate —
+	// the report notice and the referral ping, which go out on a request path. One
+	// instance, so the switch the footer offers and the switch the sender consults
+	// are the same switch.
+	mailPrefs := emailprefs.NewService(queries, cfg.JWTSecret)
+	// The same client, held as its CONCRETE type as well, because mentorship is
+	// composed separately below. A typed nil must not hide behind a non-nil interface
+	// here either, which is why this is its own pointer rather than a type assertion
+	// on referralEmail.
 	var mailClient *emailnotify.Client
 	if cfg.AWSRegion != "" && cfg.NotifyEmailFrom != "" {
 		if ec, err := emailnotify.NewClient(context.Background(), cfg.AWSRegion); err != nil {
@@ -683,7 +703,7 @@ func Register(app *fiber.App, cfg Config) {
 			// And it tells a reporter what a moderator decided about their report.
 			// Without it the queue still decides reports — each decision simply
 			// reports that nobody was notified.
-			reportsH.report.WithNotifier(report.NewMailNotifier(ec, cfg.NotifyEmailFrom, cfg.FrontendOrigin))
+			reportsH.report.WithNotifier(report.NewMailNotifier(ec, cfg.NotifyEmailFrom, cfg.FrontendOrigin, mailLinks, mailPrefs))
 		}
 	} else {
 		log.Print("accounts: AWS_REGION/NOTIFY_EMAIL_FROM unset — email verification and password reset are unavailable")
@@ -692,7 +712,7 @@ func Register(app *fiber.App, cfg Config) {
 	if telegramH.telegramBot != nil {
 		referralTelegram = telegramH.telegramBot
 	}
-	referralPinger := referral.NewChannelPinger(referralEmail, cfg.NotifyEmailFrom, referralTelegram, cfg.FrontendOrigin)
+	referralPinger := referral.NewChannelPinger(referralEmail, cfg.NotifyEmailFrom, referralTelegram, cfg.FrontendOrigin, mailLinks, mailPrefs)
 	referralCabinetURL := strings.TrimRight(cfg.FrontendOrigin, "/") + "/my/referrals?tab=incoming"
 	referralSvc := referral.New(referral.NewQueriesRepository(queries), referralPinger, cfg.Blob,
 		referral.Config{CabinetURL: referralCabinetURL})
@@ -707,10 +727,32 @@ func Register(app *fiber.App, cfg Config) {
 		mentorshipNotifier = mentorship.NewMailNotifier(mailClient, cfg.NotifyEmailFrom,
 			strings.TrimRight(cfg.FrontendOrigin, "/")+"/my/sessions")
 	}
+	// A connected mentor's calendar.events grant, mirroring the read-side gate above: the
+	// candidate calendar sync's own GmailConnector/GmailCipher pair, reused rather than a
+	// second copy of either. Nil when either is unset, so a deployment with no Google
+	// client configured just gets every booking's static-link fallback — this feature's
+	// entire rollback path.
+	mentorshipRepo := mentorship.NewQueriesRepository(queries, cfg.Pool)
+	var mentorshipCalendar mentorship.CalendarLinker
+	if cfg.GmailConnector != nil && cfg.GmailCipher != nil {
+		mentorshipCalendar = mentorship.NewGoogleCalendarLinker(mentorshipRepo, cfg.GmailConnector, cfg.GmailCipher)
+	}
 	mentorshipH := newMentorshipHandlers(mentorship.New(
-		mentorship.NewQueriesRepository(queries, cfg.Pool),
-		mentorship.Config{Notifier: mentorshipNotifier, Cache: cfg.Cache},
-	))
+		mentorshipRepo,
+		mentorship.Config{Notifier: mentorshipNotifier, Cache: cfg.Cache, CalendarLinker: mentorshipCalendar},
+	), photoStore)
+	// The mentor-profile create form's prefill. Composed from four unrelated blocks'
+	// own services (résumé, user profile, account, experience bank) plus the company
+	// catalog — never from mentorship itself, see the mentor-profile-prefill spec.
+	//
+	// The account read is the bare repository, not a second accounts.Service: the
+	// only thing this handler needs is UserByID, which accounts.Repository already
+	// exposes, and newAuthHandlers already builds the one Service this process
+	// needs. A constructor that builds a shared service is the bug this package's
+	// AGENTS.md calls out by name — hoist, don't duplicate.
+	mentorSuggestionsH := newMentorSuggestionsHandlers(
+		resumeStore, profileSvc, accounts.NewQueriesRepository(queries, cfg.Pool), bank, queries,
+	)
 
 	// Allow the canonical frontend origin plus every served domain's https apex,
 	// so a cross-origin (non-credentialed) read works from either domain during a
@@ -742,6 +784,7 @@ func Register(app *fiber.App, cfg Config) {
 	app.Get("/cv/:token", tracerLimiter, auth.OptionalCookieAuth(a.issuer, queries), tracerH.Redirect)
 
 	api := app.Group("/api/v1")
+
 	// optionalAuth attaches the caller when signed in (cookie or key) but never
 	// rejects, so these public detail reads can overlay the caller's own vote
 	// (my_vote) while staying open to anonymous visitors.
@@ -757,6 +800,7 @@ func Register(app *fiber.App, cfg Config) {
 	// browser-convenience surfaces below — key management, saved searches, the CV
 	// builder, the inbox, subscriptions — where a leaked API key must not act.
 	cookieAuth := auth.RequireAuth(a.issuer, a.queries)
+
 	requireModerator := auth.RequireRole(a.queries, "moderator")
 	mw := middleware{
 		optional:       optionalAuth,
@@ -769,6 +813,13 @@ func Register(app *fiber.App, cfg Config) {
 		outboundFetch:  contributionLimiter(cfg.Throttler),
 		throttler:      cfg.Throttler,
 	}
+
+	// The email preference centre. Its three public routes are unauthenticated on
+	// purpose — a person holding one of our mails must be able to turn it off
+	// without an account — so the signed token in the link stands in for a session.
+	// The two /me routes beside them are the same switches for a caller the cookie
+	// already identified.
+	newEmailPrefsHandlers(mailPrefs).register(api, mw)
 
 	// Job search surfaces first: their literal /jobs/* routes must precede the
 	// /jobs/:slug param route so they are not read as slugs (see searchHandlers).
@@ -812,6 +863,8 @@ func Register(app *fiber.App, cfg Config) {
 	// The contact block the extension writes into forms, plain and agent-driven (see
 	// autofillHandlers).
 	autofillH.register(api, mw)
+	// The bank's own management surface: list, save, delete (see me_answer_bank.go).
+	answerBankH.register(api, mw)
 	// The browser-tool wire: a harness on one end, the caller's browser extension
 	// on the other, exchanging raw tool frames. Both ends authenticate with the
 	// session JWT (Bearer for a server-side harness, the subprotocol for the
@@ -831,6 +884,7 @@ func Register(app *fiber.App, cfg Config) {
 
 	// The mentorship marketplace (see mentorshipHandlers).
 	mentorshipH.register(api, mw)
+	mentorSuggestionsH.register(api, mw)
 
 	// Job reports + review queue (see reportHandlers).
 	reportsH.register(api, mw)

@@ -24,6 +24,21 @@ func TestWorkModeFromDescription(t *testing.T) {
 		// Priority — hybrid beats remote when both appear.
 		{"hybrid beats remote", "A hybrid role with some remote days.", "hybrid"},
 
+		// "work from anywhere" qualifier guard (freehire#2696) — real prod sentences.
+		// A bounded-duration qualifier ("up to") near the phrase means it is stating a
+		// travel/PTO perk, not the posting's own arrangement, so it must not fill remote.
+		{"work from anywhere qualified after", "Flexible PTO and the freedom to work from anywhere " +
+			"in the world for up to a month — because life doesn't pause, and neither should you.", ""},
+		{"work from anywhere qualified before", "Our benefits include competitive compensation and " +
+			"flexible working arrangements, allowing you to work from anywhere for up to 45 days per year.", ""},
+		{"qualified phrase does not block unrelated remote phrase", "Our benefits include the freedom " +
+			"to work from anywhere for up to a month. Otherwise, this is a fully remote position open to anyone.", "remote"},
+		{"unrelated up to near 100 percent remote unaffected", "This is a 100% remote role, with a " +
+			"signing bonus of up to $2,000.", "remote"},
+		{"scan continues past a qualified repeat to an unqualified one", "Benefits include up to 12 " +
+			"days work from anywhere per year. Separately, you can work from anywhere in the EU on a " +
+			"permanent basis.", "remote"},
+
 		// Trap negatives — incidental tokens that must NOT trigger a match.
 		{"distributed systems", "Experience building distributed systems at scale.", ""},
 		{"hybrid cloud", "You will manage our hybrid cloud infrastructure.", ""},

@@ -7,6 +7,8 @@ import (
 	"testing"
 	"unicode/utf8"
 
+	"github.com/strelov1/freehire/internal/engage/emailnotify"
+	"github.com/strelov1/freehire/internal/engage/emailprefs"
 	"github.com/strelov1/freehire/internal/engage/report"
 )
 
@@ -17,7 +19,8 @@ type fakeSender struct {
 	err                           error
 }
 
-func (s *fakeSender) Send(_ context.Context, from, to, subject, htmlBody, textBody string) error {
+func (s *fakeSender) Send(_ context.Context, m emailnotify.Message) error {
+	from, to, subject, htmlBody, textBody := m.From, m.To, m.Subject, m.HTML, m.Text
 	s.from, s.to, s.subject, s.html, s.text = from, to, subject, htmlBody, textBody
 	s.called = true
 	return s.err
@@ -27,7 +30,7 @@ func (s *fakeSender) Send(_ context.Context, from, to, subject, htmlBody, textBo
 func notice(t *testing.T, d report.Decision) *fakeSender {
 	t.Helper()
 	sender := &fakeSender{}
-	n := report.NewMailNotifier(sender, "hi@freehire.me", "https://freehire.me")
+	n := report.NewMailNotifier(sender, "hi@freehire.me", "https://freehire.me", testLinks(), nil)
 	if err := n.NotifyDecision(context.Background(), d); err != nil {
 		t.Fatalf("NotifyDecision: %v", err)
 	}
@@ -40,6 +43,7 @@ func notice(t *testing.T, d report.Decision) *fakeSender {
 // reported is a decision on a real-looking report; each test varies the outcome.
 func reported() report.Decision {
 	return report.Decision{
+		UserID:   7,
 		Email:    "lina@example.test",
 		JobTitle: "Senior Web Designer",
 		JobSlug:  "senior-web-designer-incogni-1234",
@@ -193,8 +197,14 @@ func TestNotice_TruncationKeepsValidUTF8(t *testing.T) {
 
 func TestNotice_PropagatesTransportFailure(t *testing.T) {
 	sender := &fakeSender{err: errors.New("ses is down")}
-	n := report.NewMailNotifier(sender, "hi@freehire.me", "https://freehire.me")
+	n := report.NewMailNotifier(sender, "hi@freehire.me", "https://freehire.me", testLinks(), nil)
 	if err := n.NotifyDecision(context.Background(), reported()); err == nil {
 		t.Fatal("a transport failure must reach the caller, which decides what it means")
 	}
+}
+
+// testLinks signs the unsubscribe URLs these mails carry. The secret only has to
+// clear emailprefs' length floor - nothing here verifies a token.
+func testLinks() *emailprefs.Links {
+	return emailprefs.NewLinks("mail-test-secret-padded-to-32-byte", "https://freehire.me")
 }

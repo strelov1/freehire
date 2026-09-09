@@ -1,8 +1,11 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
+  import { resolve } from '$app/paths';
   import { api } from '$lib/api';
-  import { browserTimezone } from '$lib/mentorship';
+  import { browserTimezone, profileInputFromProfile, seedFormFromSuggestions } from '$lib/mentorship';
   import { errorMessage } from '$lib/utils';
   import { Badge, Button, Card, Input } from '$lib/ui';
+  import TokenInput from '$lib/components/facets/TokenInput.svelte';
   import type { MentorProfileInput, OwnMentorProfile } from '$lib/types';
 
   let { profile = $bindable() }: { profile: OwnMentorProfile | null } = $props();
@@ -28,49 +31,66 @@
       notice_minutes: 120,
       horizon_days: 30,
       meeting_url: '',
+      show_photo: false,
     };
   }
 
-  function fromProfile(p: OwnMentorProfile): MentorProfileInput {
-    return {
-      company_slug: p.company_slug,
-      slug: p.slug,
-      name: p.name,
-      headline: p.headline,
-      bio: p.bio,
-      topics: p.topics,
-      languages: p.languages,
-      timezone: p.timezone,
-      session_minutes: p.session_minutes,
-      // Read back rather than defaulted. The owner's read carries these precisely so an
-      // edit re-submits what the mentor chose — a whole-object PUT that filled them from
-      // defaults would silently reset the buffers of anyone who corrected their headline.
-      buffer_before_minutes: p.buffer_before_minutes ?? 0,
-      buffer_after_minutes: p.buffer_after_minutes ?? 0,
-      notice_minutes: p.notice_minutes ?? 120,
-      horizon_days: p.horizon_days ?? 30,
-      meeting_url: p.meeting_url,
-    };
-  }
-
-  let form = $state<MentorProfileInput>(profile ? fromProfile(profile) : blank());
-  let topicsText = $state(profile ? profile.topics.join(', ') : '');
-  let languagesText = $state(profile ? profile.languages.join(', ') : '');
+  let form = $state<MentorProfileInput>(profile ? profileInputFromProfile(profile) : blank());
   let saving = $state(false);
   let error = $state('');
 
-  const list = (text: string) =>
-    text
-      .split(',')
-      .map((s) => s.trim())
-      .filter(Boolean);
+  // Whether the caller has connected a calendar.events grant — the same status call
+  // /my/integrations makes, not a mentorship-specific endpoint. When true, a booking
+  // gets a real Meet link automatically and the static field below has nothing left to
+  // guarantee, so the backend accepts it empty (see mentorship.validateMeetingURL).
+  let hasMentorCalendar = $state(false);
+  onMount(async () => {
+    try {
+      const status = await api.gmailStatus();
+      hasMentorCalendar = status.mentor_calendar_connected === true;
+    } catch {
+      // Best-effort: the field falls back to its ordinary required state.
+    }
+  });
+
+  // A one-time prefill for a brand-new profile only: fetched once on mount, seeded into
+  // the still-blank form, and never touched again — every field stays an ordinary,
+  // independently editable input from here on. A failed fetch simply leaves the form at
+  // its ordinary blank defaults; it must never block rendering the form.
+  if (!profile) {
+    onMount(async () => {
+      try {
+        const suggestions = await api.mentorProfileSuggestions();
+        form = seedFormFromSuggestions(form, suggestions);
+      } catch {
+        // Best-effort: the form already has its ordinary blank defaults.
+      }
+    });
+  }
+
+  // Chip helpers for the two open-vocabulary lists. A duplicate (exact string match) is
+  // simply not added again rather than shown twice — the backend also dedupes on save,
+  // but a chip that visibly repeats itself while typing reads as broken.
+  function addTopic(value: string) {
+    const v = value.trim();
+    if (v && !form.topics.includes(v)) form.topics = [...form.topics, v];
+  }
+  function removeTopic(value: string) {
+    form.topics = form.topics.filter((t) => t !== value);
+  }
+  function addLanguage(value: string) {
+    const v = value.trim();
+    if (v && !form.languages.includes(v)) form.languages = [...form.languages, v];
+  }
+  function removeLanguage(value: string) {
+    form.languages = form.languages.filter((l) => l !== value);
+  }
 
   async function save() {
     saving = true;
     error = '';
     try {
-      const body = { ...form, topics: list(topicsText), languages: list(languagesText) };
-      profile = profile ? await api.updateMentorProfile(body) : await api.createMentorProfile(body);
+      profile = profile ? await api.updateMentorProfile(form) : await api.createMentorProfile(form);
     } catch (e) {
       error = errorMessage(e, 'The profile could not be saved.');
     } finally {
@@ -138,6 +158,12 @@
     </p>
   {/if}
 
+  {#if profile}
+    <p class="text-muted-foreground text-sm">
+      Your timezone and session length live on the <a class="underline" href={resolve('/my/mentorship/schedule')}>schedule page</a> now, alongside when you're free.
+    </p>
+  {/if}
+
   <div class="grid gap-3 sm:grid-cols-2">
     <label class="text-sm">
       <span class="text-muted-foreground">Your name, as seekers will see it</span>
@@ -174,46 +200,50 @@
     </label>
 
     <label class="text-sm">
-      <span class="text-muted-foreground">Topics, comma separated</span>
-      <Input
-        bind:value={topicsText}
-        class="mt-1 w-full"
-      />
+      <span class="text-muted-foreground">Topics</span>
+      <div class="mt-1">
+        <TokenInput
+          tokens={form.topics}
+          onAdd={addTopic}
+          onRemove={removeTopic}
+          placeholder="Type a topic, press Enter"
+        />
+      </div>
     </label>
 
     <label class="text-sm">
-      <span class="text-muted-foreground">Languages, comma separated</span>
-      <Input
-        bind:value={languagesText}
-        class="mt-1 w-full"
-      />
-    </label>
-
-    <label class="text-sm">
-      <span class="text-muted-foreground">Your timezone</span>
-      <Input
-        bind:value={form.timezone}
-        class="mt-1 w-full"
-      />
-    </label>
-
-    <label class="text-sm">
-      <span class="text-muted-foreground">Session length, minutes</span>
-      <input
-        type="number"
-        bind:value={form.session_minutes}
-        class="border-input bg-background mt-1 w-full rounded-md border px-3 py-2 text-sm"
-      />
+      <span class="text-muted-foreground">Languages</span>
+      <div class="mt-1">
+        <TokenInput
+          tokens={form.languages}
+          onAdd={addLanguage}
+          onRemove={removeLanguage}
+          placeholder="Type a language, press Enter"
+        />
+      </div>
     </label>
 
     <label class="text-sm sm:col-span-2">
       <span class="text-muted-foreground">
-        Meeting link — a room you own. Only booked seekers ever see it.
+        {#if hasMentorCalendar}
+          Meeting link — optional. Your connected calendar mints a real Google Meet link
+          for every booking, so you only need this as a fallback.
+        {:else}
+          Meeting link — a room you own. Only booked seekers ever see it.
+        {/if}
       </span>
       <Input
         bind:value={form.meeting_url}
         class="mt-1 w-full"
       />
+    </label>
+
+    <label class="flex items-center gap-2 text-sm sm:col-span-2">
+      <input type="checkbox" bind:checked={form.show_photo} class="h-4 w-4" />
+      <span class="text-muted-foreground">
+        Show my account's CV photo on my public mentor card and profile. Off by default —
+        you decide whether that photo belongs here too.
+      </span>
     </label>
 
     <label class="text-sm sm:col-span-2">

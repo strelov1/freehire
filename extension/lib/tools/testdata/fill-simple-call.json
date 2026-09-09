@@ -1,0 +1,14 @@
+{
+  "id": "call-1",
+  "tool": "fill_simple",
+  "args": {
+    "fills": [
+      {
+        "label": "Email",
+        "value": "ilya@example.com",
+        "frame": 1,
+        "form": 2
+      }
+    ]
+  }
+}

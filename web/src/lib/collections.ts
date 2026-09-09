@@ -679,6 +679,47 @@ export function collectionForCategory(
   return match ? { slug: match.slug, title: match.title } : undefined;
 }
 
+// The curated feed for a skill, where one exists — the counterpart link from the
+// /skills glossary entry, which answers "what is this" and so wants to hand the reader
+// the page that answers "who is hiring for it" rather than a facet URL whose canonical
+// names /jobs. 45 of the 875 described skills have one; the rest returning undefined is
+// ordinary, and their glossary pages keep the facet URL.
+//
+// Read from the PARAMS, never from a slug match, and the difference is not theoretical:
+// `data-science`, `data-engineering`, `devops` and `machine-learning` each name both a
+// skill and a collection, and each of those collections pins a CATEGORY. A category feed
+// and a skill facet are different sets — /collections/devops is everything the classifier
+// filed under DevOps, `skills=devops` is everything that names DevOps as a skill — so a
+// slug match would publish a link promising one and delivering the other.
+//
+// Two guards, for two different mistakes. The single-key one is collectionForCategory's,
+// for its reason: a feed pinning the skill alongside a region is narrower than "the open
+// Kotlin jobs". The scalar one is because `params` values may be lists, which expand to
+// repeated keys with OR semantics — `{ skills: ['go', 'rust'] }` is not the Go page's
+// set. No entry is list-valued today; the guard is for the next one.
+export function collectionForSkill(skill: string): { slug: string; title: string } | undefined {
+  if (!skill) return undefined;
+  const match = FILTER_COLLECTIONS.find(
+    (c) => c.params.skills === skill && Object.keys(c.params).length === 1
+  );
+  return match ? { slug: match.slug, title: match.title } : undefined;
+}
+
+// The inverse of collectionForSkill: the one skill a collection is about, or undefined
+// when it is about anything else. The glossary link a collection landing page carries.
+//
+// It reads FILTER_COLLECTIONS rather than a ResolvedCollection's `params`, and that is
+// the whole reason it exists instead of the landing page testing `collection.params`
+// itself: `scopeParams` has already flattened a list-valued pin down to its FIRST value
+// by then, so a `{ skills: ['go', 'rust'] }` feed would arrive there looking exactly like
+// a `{ skills: 'go' }` one and earn a link to the Go glossary entry it is not about. The
+// raw registry is the only place that distinction survives.
+export function skillForCollection(slug: string): string | undefined {
+  const c = FILTER_COLLECTIONS.find((x) => x.slug === slug);
+  if (!c || Object.keys(c.params).length !== 1) return undefined;
+  return typeof c.params.skills === 'string' ? c.params.skills : undefined;
+}
+
 // Every collection slug across both registries — the sitemap's source for the
 // collection landing URLs. Slugs are unique across the two sets.
 export function collectionSlugs(): string[] {

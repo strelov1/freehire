@@ -83,6 +83,10 @@ func (p *DiscordPublisher) payload(d Digest) discordPayload {
 		if where := placeOf(item); where != "" {
 			b.WriteString(" · " + escapeDiscordMarkdown(where))
 		}
+		// The view count needs no escaping — it is a number and a word this file wrote —
+		// so it is appended rather than run through the escaper, which would only make a
+		// reader wonder what about it was dangerous.
+		b.WriteString(" · " + viewsLabel(item))
 		b.WriteString("\n\n")
 	}
 	return discordPayload{Embeds: []discordEmbed{{

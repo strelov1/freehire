@@ -9,7 +9,7 @@
  * which a position in the list does.
  */
 
-import type { FieldTag, FormField, LabelFill, FillOutcome, RevealRequest, Upload } from './protocol';
+import type { FieldTag, FormField, LabelFill, FillOutcome, FillStatus, RevealRequest, Upload } from './protocol';
 import { countryLabel } from './labels';
 
 type Fillable = HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement;
@@ -495,10 +495,11 @@ export function scopeToApplication<T extends { frame: number; form: number }>(
  * nothing about, or knows only as a blank, is left for the user rather than
  * written over with an empty string.
  *
- * A repeated label is asked for once. A careers page routinely carries two forms
- * — the application and a job-alert signup — and `fillByLabel` answers the first
- * question carrying a label, so the repeats only pad the wire. Pure over its
- * input; the page is not touched here.
+ * A repeated label is asked for once, and the one fill kept carries the frame and
+ * form of the FIRST field that offered it — which is the application's, because
+ * `scopeToApplication` has already narrowed the input to it. Keeping the repeats
+ * would send a second fill addressed at whatever else carries the label. Pure over
+ * its input; the page is not touched here.
  */
 export function planLabelFills(
   fields: { label: string; frame?: number; form?: number }[],
@@ -537,8 +538,10 @@ export function fillsForFrame(fills: LabelFill[], frame: number): LabelFill[] {
  *
  * A fill naming a `form` only matches a question inside that form — the frame's
  * own signup form sharing a label ("Email") with the application form must not
- * absorb a fill meant for the other. A fill naming none matches the first
- * question carrying the label, as `fillByLabel` always has.
+ * absorb a fill meant for the other. A fill naming NONE matches only where the
+ * label is carried once; where it is carried by several questions the fill is
+ * refused as `ambiguous` and nothing is written, because from here the application
+ * and the signup are indistinguishable and the wrong write is silent.
  */
 /** How long the borrowed outline stays on a revealed control. Long enough to
  *  follow by eye, short enough that a walk's next step does not overlap it. */
@@ -558,10 +561,21 @@ export function revealField(
   doc: Document,
   { label, form, focus = false, outlineMs = REVEAL_OUTLINE_MS }: RevealRequest,
 ): boolean {
-  const question = findQuestion(collectQuestions(doc), Array.from(doc.querySelectorAll('form')), label, form);
-  if (!question) return false;
+  // Reveal reports one boolean — the panel either scrolled to the question or says
+  // it was not there — so every miss reads the same here, ambiguity included. That
+  // is right for a reveal: with nothing written, there is nothing to be wrong about,
+  // and highlighting one of two same-labeled questions would assert a choice this
+  // has no basis for.
+  const resolved = findQuestion(
+    unfillableLabels(doc),
+    collectQuestions(doc),
+    Array.from(doc.querySelectorAll('form')),
+    label,
+    form,
+  );
+  if ('miss' in resolved) return false;
 
-  const el = question.controls[0];
+  const el = resolved.found.controls[0];
   el.scrollIntoView({ block: 'center', behavior: 'smooth' });
 
   // Revealing the same control twice inside the outline's lifetime must not make
@@ -591,9 +605,11 @@ const outlined = new WeakMap<Element, { borrowed: string | null; timer: ReturnTy
 export function fillByLabel(doc: Document, fills: LabelFill[]): FillOutcome[] {
   const questions = collectQuestions(doc);
   const forms = Array.from(doc.querySelectorAll('form'));
+  const unfillable = unfillableLabels(doc);
   return fills.map(({ label, value, form }) => {
-    const question = findQuestion(questions, forms, label, form);
-    if (!question) return { label, status: 'not_found' as const };
+    const resolved = findQuestion(unfillable, questions, forms, label, form);
+    if ('miss' in resolved) return { label, status: resolved.miss };
+    const question = resolved.found;
     if (question.controls.length === 1 && isComboWidget(question.controls[0])) {
       return { label, status: 'deferred_combobox' as const };
     }
@@ -601,17 +617,104 @@ export function fillByLabel(doc: Document, fills: LabelFill[]): FillOutcome[] {
   });
 }
 
-/** The question a fill addresses, narrowed to `form` when the fill names one. */
+/**
+ * The one question a fill addresses, or why the label did not name one.
+ *
+ * The misses are kept apart because each implies a different next step for the
+ * harness, and collapsing them into "not found" — which is what this did — invites
+ * a retry in the two cases where a retry cannot succeed.
+ */
+type Resolution =
+  | { found: Question }
+  // Extract, not a bare union of the four names: the outcome vocabulary is
+  // FillStatus's, so a status renamed there must fail to compile here rather than
+  // leave this listing a name the wire no longer uses.
+  | { miss: Extract<FillStatus, 'ambiguous' | 'wrong_form' | 'not_fillable' | 'not_found'> };
+
+/**
+ * Resolves a fill's `label`, narrowed to `form` when the fill names one.
+ *
+ * An unscoped fill matching several questions is `ambiguous` rather than the first
+ * of them: on a page carrying an application form beside a job-alert signup the two
+ * are indistinguishable from here, and writing into the wrong one is worse than
+ * writing into neither.
+ */
 function findQuestion(
+  unfillable: () => Set<string>,
   questions: Question[],
   forms: HTMLFormElement[],
   label: string,
   form: number | undefined,
-): Question | undefined {
+): Resolution {
   const target = normalizeLabel(label);
   const matches = questions.filter((q) => normalizeLabel(q.label) === target);
-  if (form === undefined) return matches[0];
-  return matches.find((q) => formIndex(q.controls[0], forms) === form);
+
+  if (form === undefined) {
+    const [first, ...rest] = matches;
+    if (rest.length > 0) return { miss: 'ambiguous' };
+    if (first) return { found: first };
+    return { miss: absentOrUnfillable(unfillable, target) };
+  }
+
+  // `find`, so a label repeated INSIDE one form resolves to the first of them —
+  // knowingly. `(label, frame, form)` is not a key: a multi-entry section asking
+  // "Employer" once per job carries the label several times in one form, and each
+  // of the fills the agent fans out lands on control #1 while the rest stay empty.
+  // Refusing here instead would take that page from partly filled to not filled at
+  // all, which is the worse answer while nothing on the wire can name a control
+  // more precisely. What closes it is an addressing scheme with a per-control id,
+  // not a refusal.
+  const scoped = matches.find((q) => formIndex(q.controls[0], forms) === form);
+  if (scoped) return { found: scoped };
+  // The label is asked somewhere in this frame, just not in the form named — the
+  // index is what is wrong, not the question.
+  if (matches.length > 0) return { miss: 'wrong_form' };
+  return { miss: absentOrUnfillable(unfillable, target) };
+}
+
+/**
+ * The labels the page carries on a control `collectFillable` dropped, read at most
+ * once and only if something actually misses.
+ *
+ * Lazy because the scan is over the whole document and `extractLabel` walks
+ * `getElementById` for every `aria-labelledby` it meets. Per miss, on an ATS form
+ * with several hundred controls and thirty unanswered questions, that is thirty
+ * full passes synchronously in the content script — and a call whose fills all land
+ * should not pay for it at all.
+ */
+function unfillableLabels(doc: Document): () => Set<string> {
+  let read: Set<string> | undefined;
+  return () => (read ??= readUnfillableLabels(doc));
+}
+
+function readUnfillableLabels(doc: Document): Set<string> {
+  const labels = new Set<string>();
+  for (const el of doc.querySelectorAll<Fillable>('input, select, textarea')) {
+    // Never a fill target in the first place, so its absence is not a refusal.
+    if (el instanceof HTMLInputElement && SKIP_TYPES.has(el.type)) continue;
+    const droppedByCollectFillable = el.disabled || isHidden(el);
+    if (!droppedByCollectFillable) continue;
+    labels.add(normalizeLabel(extractLabel(el)));
+  }
+  return labels;
+}
+
+/**
+ * Tells a label the page never asks from one it asks through a control nothing can
+ * write to.
+ *
+ * `collectFillable` drops a disabled or invisible control before any of this runs,
+ * which is right — keeping one in the match set would risk writing into it — but it
+ * left the two indistinguishable downstream. So the check happens here, on the miss
+ * path only, against the controls that were filtered out.
+ *
+ * Only individually-labelled controls are examined; a disabled member of a grouped
+ * question (a legend over 29 checkboxes) still reads as `not_found`. The group's
+ * label lives on the legend rather than on any one control, and a partially
+ * disabled group is not the case this exists for.
+ */
+function absentOrUnfillable(unfillable: () => Set<string>, target: string): 'not_fillable' | 'not_found' {
+  return unfillable().has(target) ? 'not_fillable' : 'not_found';
 }
 
 /**

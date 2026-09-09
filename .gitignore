@@ -26,6 +26,7 @@ hire
 /backfill-blank-company
 /backfill-clearance
 /backfill-company-info
+/backfill-company-info-wikipedia
 /backfill-company-type-hint
 /backfill-company-names
 /backfill-derive
@@ -35,6 +36,7 @@ hire
 /backfill-experience
 /backfill-experience-dates
 /backfill-profession-it-tech
+/backfill-remote-perk-false-positive
 /backfill-requirements
 /backfill-talent-handle
 /backfill-resume-geo
@@ -63,6 +65,7 @@ hire
 /ingest
 /ingest-scheduler
 /liveness
+/llm-probe
 /mail-ingest
 /mail-preview
 /mentorship-remind
@@ -83,6 +86,7 @@ hire
 /schedule-board
 /social-digest
 /search-drain
+/search-settings-drift
 /seed-adzuna-description-queue
 /similar-backfill
 # Root-level build output of `go build ./cmd/<name>/` — never commit these artifacts.

@@ -81,10 +81,35 @@ function readFills(args: Record<string, unknown> | undefined): LabelFill[] {
   const fills = args?.fills;
   if (!Array.isArray(fills)) throw new Error('fill_simple requires args.fills: [{label, value}]');
   return fills.map((f) => {
-    const { label, value } = (f ?? {}) as Record<string, unknown>;
+    const { label, value, frame, form } = (f ?? {}) as Record<string, unknown>;
     if (typeof label !== 'string' || !label) throw new Error('every fill needs a non-empty label');
-    return { label, value: typeof value === 'string' ? value : String(value ?? '') };
+    return {
+      label,
+      value: typeof value === 'string' ? value : String(value ?? ''),
+      frame: readIndex(frame, 0),
+      form: readIndex(form, -1),
+    };
   });
+}
+
+/**
+ * One of a fill's optional scope indices, or undefined where the harness named none.
+ *
+ * A scope NARROWS a fill — `frame` to one of the tab's documents, `form` to one
+ * `<form>` within it — so omitting both is legal and means "offered to every frame,
+ * matched anywhere in it". An unreadable one is read as absent rather than coerced:
+ * `Number('top')` is NaN and `Number(null)` is 0, and 0 is the top document, a real
+ * target a malformed scope must never silently become.
+ *
+ * `least` differs between the two because their vocabularies do. Frames are counted
+ * from the top document at 0, so a negative frame is malformed however it arrived.
+ * A form index of **-1 is meaningful**: it is what `formIndex` reports for a question
+ * standing outside any `<form>`, which is how Ashby renders its application. Reading
+ * that as "unscoped" would leave every Ashby fill unaddressed — and where the page
+ * also carries a signup asking the same question, unaddressed now means refused.
+ */
+function readIndex(v: unknown, least: number): number | undefined {
+  return typeof v === 'number' && Number.isInteger(v) && v >= least ? v : undefined;
 }
 
 /**
@@ -109,14 +134,21 @@ export function mergeComboboxReplies(replies: ComboboxReply[]): ComboboxReply {
   return replies.find((r) => r.status !== 'not_found') ?? { status: 'not_found' };
 }
 
-// A frame that does not contain the field reports `not_found`, so across frames
-// the informative answer must win over the many negatives. Ordered least to most
+// A frame that does not contain the field reports `not_found`, so across frames the
+// informative answer must win over the many negatives. Ordered least to most
 // informative; ties keep the first frame that reported it.
+//
+// Among the refusals the order is how much a harness can do about each: nothing at
+// all for `not_fillable` (the control exists and cannot be written to until the page
+// changes), correct the index for `wrong_form`, name a form for `ambiguous`.
 const STATUS_RANK: Record<FillStatus, number> = {
   not_found: 0,
-  no_option: 1,
-  deferred_combobox: 2,
-  filled: 3,
+  not_fillable: 1,
+  wrong_form: 2,
+  no_option: 3,
+  ambiguous: 4,
+  deferred_combobox: 5,
+  filled: 6,
 };
 
 /** Folds each frame's outcomes into one answer per requested label. */

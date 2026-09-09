@@ -15,6 +15,8 @@ import (
 	"github.com/strelov1/freehire/internal/api/atsapply"
 	"github.com/strelov1/freehire/internal/api/candidateprofile"
 	"github.com/strelov1/freehire/internal/application/autoapply"
+	"github.com/strelov1/freehire/internal/candidate/answerbank"
+	"github.com/strelov1/freehire/internal/candidate/coverletter"
 	"github.com/strelov1/freehire/internal/candidate/cv"
 	"github.com/strelov1/freehire/internal/candidate/experience"
 	"github.com/strelov1/freehire/internal/candidate/resume"
@@ -63,11 +65,16 @@ func run() int {
 	cvStore := cv.NewStore(cv.NewQueriesRepository(queries))
 	resumeStore := resume.New(blobStore, resume.NewQueriesRepository(queries))
 	screeningAnswersSvc := screeninganswers.New(screeninganswers.NewQueriesRepository(queries))
-	// The same four sources, in the same precedence order, internal/handler's
+	// The candidate's accumulating bank of screening-question answers — the same store
+	// internal/api/handler wires into its own assembler, so a banked answer reaches a form
+	// field here, the worker that actually fills and submits forms, and not only the UI's
+	// preview read.
+	answerBank := answerbank.NewStore(answerbank.NewQueriesRepository(queries))
+	// The same five sources, in the same precedence order, internal/handler's
 	// extension-autofill path already resolves a candidate's profile through — see
 	// internal/candidateprofile's package doc for why this must be the one Assembler.
 	answers := assemblerAnswerSource{
-		assembler: candidateprofile.NewAssembler(cvStore, resumeStore, queries, screeningAnswersSvc),
+		assembler: candidateprofile.NewAssembler(cvStore, resumeStore, queries, screeningAnswersSvc, answerBank),
 	}
 
 	// Question drafting (openspec/changes/auto-apply-llm-drafting) is optional: an
@@ -95,6 +102,7 @@ func run() int {
 	})
 	llmKeyResolver := llmkey.NewResolver(queries, llmKeys)
 	atoms := experience.NewStore(experience.NewQueriesRepository(queries))
+	letters := coverletter.NewStore(coverletter.NewQueriesRepository(queries))
 
 	// cvRenderer is nil when no typst binary is configured (config.resolveTypstBin), the
 	// same nil-safe gating internal/api/handler's PDF-download endpoint uses. A résumé file
@@ -115,7 +123,15 @@ func run() int {
 	// Greenhouse/Ashby endpoints internal/atsapply reuses via applyform.Fetchers are the
 	// platforms' own public job-board APIs, so its user agent, timeouts and size caps are
 	// exactly right here too.
-	sidecar := atsapply.NewClient(sources.NewClient(), llmClient, llmKeyResolver, atoms, cvStore, cvRenderer)
+	sidecar := atsapply.NewClient(sources.NewClient(), llmClient, llmKeyResolver, atoms, letters, cvStore, cvRenderer)
+	// Stored-form fallback (openspec/changes/atsapply-recruitee-stored-schema): lets a
+	// provider with no live schema fetcher (today: Recruitee) reach field resolution
+	// instead of parking before it ever runs, by reading the form cmd/capture-apply-form
+	// (or, for Recruitee, the ingest crawl itself) already captured into apply_forms. The
+	// same reader NewPreviewClient below already uses for its own, differently-ordered
+	// purpose — see fetchSchema's own comment for why Client does NOT mirror
+	// PreviewClient's storage-first order.
+	sidecar = sidecar.WithStoredFormReader(&dbApplyFormReader{q: queries})
 	// browser-use fallback (openspec/changes/add-browseruse-atsapply-fallback): empty key
 	// leaves sidecar exactly as it was before this capability existed — Ashby/Workable/
 	// Recruitee still park with reasonSubmissionNotImplemented. Its own enforce flag and

@@ -1,0 +1,18 @@
+[Unit]
+Description=freehire worker: probe the LLM alias and publish what it answers
+After=network.target
+[Service]
+Type=oneshot
+User=freehire
+WorkingDirectory=/opt/freehire/src/hire-current
+EnvironmentFile=/opt/freehire/.env
+# Lowest weights on the host, like queue-metrics: this exists to observe, so it must never
+# be the reason a real caller waits. It takes no locks and opens no database — a run that
+# loses a scheduling race simply reports a few minutes later.
+CPUWeight=10
+IOWeight=10
+# It DOES spend tokens, unlike every other metrics worker: three questions of a handful of
+# tokens each. That is the price of measuring the one thing no free signal reports — what
+# the provider actually answers, as opposed to whether it is reachable. A day of runs at
+# this cadence costs less than one fit analysis.
+ExecStart=/opt/freehire/src/hire-current/llm-probe
