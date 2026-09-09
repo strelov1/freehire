@@ -143,3 +143,44 @@ func TestScanGreenhouseForm_ATextareaWithNoIDOrNameIsStillScanned(t *testing.T) 
 		t.Fatalf("fields = %d, want the id-less/name-less textarea recorded, not dropped", len(fields))
 	}
 }
+
+// The four controls a live vanilla Greenhouse posting renders that are not questions at
+// all, reproduced verbatim from the DOM of garnerhealth/jobs/6181651004 (2026-09-08).
+//
+// Greenhouse's own form components pair each custom widget — a combobox, a file picker —
+// with a hidden proxy input carrying `required`, so the browser's native form validation
+// fires for a control that is not a native form control. The candidate never sees it, can
+// never tab to it (tabindex="-1"), and assistive technology is explicitly told to ignore it
+// (aria-hidden="true"). The widget writes through to it once a real answer is chosen.
+const greenhouseRequiredProxyInputsHTML = `
+<form id="application-form">
+  <input id="first_name" name="first_name" type="text" required>
+  <div class="select">
+    <input required="" tabindex="-1" aria-hidden="true" class="remix-css-1a0ro4n-requiredInput" value="">
+  </div>
+  <div class="select">
+    <input required="" tabindex="-1" aria-hidden="true" class="remix-css-1a0ro4n-requiredInput" value="">
+  </div>
+</form>
+`
+
+// A proxy input is not a question, and counting it as one is not a cosmetic fault.
+//
+// It has no id and no name, so it can never be reconciled against the platform's own
+// schema, can never carry a label, and can never be resolved from a candidate's answers.
+// It therefore lands in Plan.Unmapped permanently: the answer preview shows a blank line
+// where a question should be, and Plan.FullyResolved() can never return true — so an
+// attempt on a vanilla Greenhouse posting could never be submitted no matter how complete
+// the candidate's profile was. Production carried four of these on every posting.
+func TestScanGreenhouseForm_SkipsAriaHiddenRequiredProxyInputs(t *testing.T) {
+	fields, err := ScanGreenhouseForm(greenhouseRequiredProxyInputsHTML)
+	if err != nil {
+		t.Fatalf("ScanGreenhouseForm: %v", err)
+	}
+	if len(fields) != 1 {
+		t.Fatalf("scanned %d fields, want 1 — the real input alone: %+v", len(fields), fields)
+	}
+	if fields[0].ID != "first_name" {
+		t.Errorf("scanned field = %+v, want the real first_name input", fields[0])
+	}
+}
