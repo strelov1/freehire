@@ -49,7 +49,7 @@
 
 ## 8. Ship
 
-- [ ] 8.1 `gofmt -w` the touched Go, then `go vet ./...`, `go test ./...`, and `go vet -tags=integration ./...` before pushing.
+- [x] 8.1 `gofmt -w` the touched Go, then `go vet ./...`, `go test ./...`, and `go vet -tags=integration ./...` before pushing.
 - [ ] 8.2 Apply the migration on prod BEFORE deploying the binary — otherwise every company read answers 42703 → 500.
 - [ ] 8.3 Patch the live Meilisearch jobs index settings with the new filterable attribute BEFORE the binary that queries it takes traffic, and confirm `freehire_search_settings_drift_count` reads zero.
 - [ ] 8.4 Deploy, then verify the empty state on prod: the endpoint answers, the badge renders nowhere, the filter matches nothing.

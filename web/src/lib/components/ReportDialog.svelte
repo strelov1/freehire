@@ -2,7 +2,7 @@
   import { ArrowLeft, Ban, BellOff, Bot, Check, ChevronRight, Clock, MoreHorizontal, ShieldAlert } from '@lucide/svelte';
   import { api, ApiError } from '$lib/api';
   import { appliedOnError, moderationReasonOf, processKindOf, reportReasons, reportRoute } from '$lib/reports';
-  import type { ReportPickerValue } from '$lib/types';
+  import type { ProcessReportKind, ReportPickerValue } from '$lib/types';
   import { Button, Dialog } from '$lib/ui';
 
   // Reports are filed against a single job, addressed by its public slug — except
@@ -38,6 +38,31 @@
   let appliedOn = $state('');
   let submitting = $state(false);
   let error = $state<string | null>(null);
+  // Whether the last process action took a report BACK, so the closing line says what
+  // happened rather than thanking somebody for withdrawing.
+  let withdrew = $state(false);
+
+  // Which process facts this caller already holds against the company. Loaded when the
+  // dialog opens so the picker shows a held entry as held and offers to withdraw it —
+  // without this the only way to learn is to file and be refused, which reads as the
+  // dialog losing the report the person remembers making.
+  //
+  // Best effort: a failed load leaves the entry offered, and filing then answers 409
+  // with a message that says so. A dialog that refuses to open because one read failed
+  // would be worse than one that occasionally asks a question it could have answered.
+  let myKinds = $state<ProcessReportKind[]>([]);
+  $effect(() => {
+    let cancelled = false;
+    void api
+      .myCompanyProcessReports(companySlug)
+      .then((kinds) => {
+        if (!cancelled) myKinds = kinds;
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  });
 
   // The element itself, because a malformed entry never reaches `appliedOn`: the
   // input clears its value and records the fact in `validity.badInput`.
@@ -70,11 +95,34 @@
       // Submitted from the picker with no second step. The entry IS the whole claim:
       // there is no date to bound it and nothing to elaborate, and asking anyway would
       // collect whatever gets typed to get past the field.
+      //
+      // A held entry withdraws instead. Withdrawal is how the signal self-heals when an
+      // employer changes practice, so it has to be reachable from the same one tap that
+      // filed it.
       const kind = processKindOf(r);
-      if (kind) void send(() => api.reportCompanyProcess(companySlug, kind));
+      if (!kind) return;
+      if (myKinds.includes(kind)) {
+        withdrew = true;
+        void send(async () => {
+          await api.withdrawCompanyProcessReport(companySlug, kind);
+          myKinds = myKinds.filter((k) => k !== kind);
+        });
+        return;
+      }
+      withdrew = false;
+      void send(async () => {
+        await api.reportCompanyProcess(companySlug, kind);
+        myKinds = [...myKinds, kind];
+      });
       return;
     }
     step = 'details';
+  }
+
+  // Whether the caller already holds this entry, so the picker can say so.
+  function held(value: ReportPickerValue): boolean {
+    const kind = processKindOf(value);
+    return kind !== null && myKinds.includes(kind);
   }
 
   function messageFor(e: unknown): string {
@@ -143,7 +191,9 @@
               <Icon class="size-5 shrink-0 text-muted-foreground" />
               <span class="flex min-w-0 flex-col">
                 <span class="text-sm font-medium">{r.label}</span>
-                <span class="text-xs text-muted-foreground">{r.hint}</span>
+                <span class="text-xs text-muted-foreground">
+                  {held(r.value) ? 'You reported this — tap to withdraw' : r.hint}
+                </span>
               </span>
               <ChevronRight class="ml-auto size-4 shrink-0 text-muted-foreground" />
             </button>
@@ -234,7 +284,11 @@
           {#if reason && reportRoute(reason) === 'ghost'}
             Thanks — noted. If enough people report the same thing, we'll flag this posting.
           {:else if reason && reportRoute(reason) === 'process'}
-            Thanks — noted. This is now shown on the company, with how many people reported it.
+            {#if withdrew}
+              Withdrawn — your report no longer counts toward this company's label.
+            {:else}
+              Thanks — noted. This is now shown on the company, with how many people reported it.
+            {/if}
           {:else}
             Thanks — your report was sent. We'll take a look.
           {/if}
