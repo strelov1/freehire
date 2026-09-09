@@ -1,6 +1,6 @@
-// Command llm-probe asks the configured model alias a trivial question a few times and
-// publishes what came back as Prometheus gauges through the node_exporter textfile
-// collector. Schedule it every few minutes.
+// Command llm-probe asks EVERY model alias this deployment routes through a trivial question
+// a few times and publishes what came back as Prometheus gauges through the node_exporter
+// textfile collector, one series per alias. Schedule it every few minutes.
 //
 // It exists because nothing measured what a provider ANSWERS. Three times in the week to
 // 2026-09-08 a provider behind the gateway stopped serving while the gateway went on
@@ -13,8 +13,16 @@
 // The alias is what it probes, not individual keys. Only the gateway host holds the raw
 // keys — the admin API returns them masked — so a probe run anywhere else cannot say WHICH
 // key is dead. It can say the thing that actually matters and that nothing else says: what
-// share of requests through the alias this deployment uses are being served at all. On
+// share of requests through the aliases this deployment uses are being served at all. On
 // 2026-09-08 that share was 23%.
+//
+// It watches every alias because watching one was not enough. Until 2026-09-09 it asked only
+// LLM_MODEL. Measured that day, this deployment routes through two: `flagship` answers from
+// z.ai and carries the assistant, the fit analysis and enrichment; `fast`
+// (SEARCH_INTENT_MODEL) answers from Gemini and carries the AI search filter, whose handler
+// turns a gateway refusal into a 500. A dead `fast` would have broken AI search for everyone
+// while `flagship` went on answering and this worker went on reporting it healthy — the exact
+// silence the worker was built to end.
 package main
 
 import (
@@ -64,21 +72,36 @@ func run() int {
 		return 0
 	}
 
-	client, flush, err := llm.NewClient(cfg.Settings(cfg.Model), "llm-probe")
-	if err != nil {
-		log.Printf("llm-probe: build client: %v", err)
+	// Every alias the deployment routes through, not just LLM_MODEL. cmd/server reads these
+	// same two through cmp.Or, so this asks exactly what production asks.
+	aliases := probedAliases(cfg.Model, os.Getenv("ASSISTANT_MODEL"), os.Getenv("SEARCH_INTENT_MODEL"))
+
+	snaps := make([]snapshot, 0, len(aliases))
+	for _, alias := range aliases {
+		client, flush, err := llm.NewClient(cfg.Settings(alias), "llm-probe")
+		if err != nil {
+			// One unbuildable client is not a reason to publish nothing about the others:
+			// the file is written whole, so an early return here would erase every alias's
+			// numbers and leave the collector reading a stale file as if it were current.
+			log.Printf("llm-probe: build client for %q: %v", alias, err)
+			continue
+		}
+		snaps = append(snaps, collect(context.Background(), client.WithTimeout(probeTimeout), alias))
+		flush()
+	}
+	if len(snaps) == 0 {
+		log.Printf("llm-probe: no alias could be probed")
 		return 1
 	}
-	defer flush()
 
-	snap := collect(context.Background(), client.WithTimeout(probeTimeout), cfg.Model)
-
-	if err := worker.WriteTextfile(dir, textfileName, render(snap)); err != nil {
+	if err := worker.WriteTextfile(dir, textfileName, render(snaps)); err != nil {
 		log.Printf("llm-probe: %v", err)
 		return 1
 	}
 
-	log.Printf("llm-probe: model=%s ok=%d/%d slowest=%s", snap.model, snap.ok, snap.attempts, snap.slowest)
+	for _, snap := range snaps {
+		log.Printf("llm-probe: model=%s ok=%d/%d slowest=%s", snap.model, snap.ok, snap.attempts, snap.slowest)
+	}
 	// A failing alias is not this worker's failure. Exiting non-zero would paint the unit
 	// red for something it is only reporting, and a red unit that means "the thing I watch
 	// is broken" is indistinguishable from one that means "I am broken".
@@ -122,29 +145,63 @@ func collect(ctx context.Context, client *llm.Client, model string) snapshot {
 	return snap
 }
 
-// render writes the gauge set.
+// probedAliases names every alias this deployment actually routes through, once each.
+//
+// The extras fall back to the base when unset, exactly as cmd/server's cmp.Or does, so a
+// deployment that names none of them still probes one alias rather than three copies of it —
+// and a per-series alert is not handed three healthy-looking aliases that are one.
+//
+// The base goes first: it is what most of the product rides, so it is what a human scanning
+// the log or the alert list should read first.
+func probedAliases(base string, extra ...string) []string {
+	out := make([]string, 0, 1+len(extra))
+	seen := make(map[string]bool, 1+len(extra))
+	for _, alias := range append([]string{base}, extra...) {
+		alias = strings.TrimSpace(alias)
+		// A blank is not an alias. Publishing one would put an empty model label on a series
+		// the alert then divides — a measurement about nothing, indistinguishable from a
+		// measurement about something.
+		if alias == "" || seen[alias] {
+			continue
+		}
+		seen[alias] = true
+		out = append(out, alias)
+	}
+	return out
+}
+
+// render writes the gauge set, one series per alias.
 //
 // The success RATE is not published: a rate over three probes is not a rate. The numerator
 // and denominator go out separately and whoever writes the alert divides them, which also
-// lets the alert choose its own window.
-func render(s snapshot) string {
+// lets the alert choose its own window. The division is element-wise on the `model` label,
+// so an alias added here becomes another alert instance rather than blending into the first.
+//
+// HELP and TYPE are written once per METRIC, not once per series: the textfile collector
+// skips a file it cannot parse, and a repeated HELP for one metric is exactly that — a
+// metric that quietly stops existing, which reads like healthy silence.
+func render(snaps []snapshot) string {
 	var b strings.Builder
-	// %s, not %q: escapeLabel has already done the escaping, and %q would do it a second
-	// time — turning one backslash into four and the label into something no alert matches.
-	label := fmt.Sprintf(`{model="%s"}`, escapeLabel(s.model))
-
-	gauge(&b, "freehire_llm_probe_attempts", "Questions asked of the configured model alias in the last run.", label, fmt.Sprintf("%d", s.attempts))
-	gauge(&b, "freehire_llm_probe_ok", "How many of those the gateway answered.", label, fmt.Sprintf("%d", s.ok))
-	gauge(&b, "freehire_llm_probe_slowest_seconds", "The longest single probe, answered or not.", label, fmt.Sprintf("%g", s.slowest.Seconds()))
-
+	for _, m := range []struct {
+		name, help string
+		value      func(snapshot) string
+	}{
+		{"freehire_llm_probe_attempts", "Questions asked of each model alias in the last run.",
+			func(s snapshot) string { return fmt.Sprintf("%d", s.attempts) }},
+		{"freehire_llm_probe_ok", "How many of those the gateway answered.",
+			func(s snapshot) string { return fmt.Sprintf("%d", s.ok) }},
+		{"freehire_llm_probe_slowest_seconds", "The longest single probe, answered or not.",
+			func(s snapshot) string { return fmt.Sprintf("%g", s.slowest.Seconds()) }},
+	} {
+		fmt.Fprintf(&b, "# HELP %s %s\n# TYPE %s gauge\n", m.name, m.help, m.name)
+		for _, s := range snaps {
+			// %s, not %q: escapeLabel has already done the escaping, and %q would do it a
+			// second time — turning one backslash into four and the label into something no
+			// alert matches.
+			fmt.Fprintf(&b, "%s{model=\"%s\"} %s\n", m.name, escapeLabel(s.model), m.value(s))
+		}
+	}
 	return b.String()
-}
-
-// gauge writes one HELP/TYPE/value trio. Every gauge carries both, because the textfile
-// collector SKIPS a file it cannot parse: a malformed payload is not a loud failure, it is
-// a metric that quietly stops existing — which reads exactly like a healthy silence.
-func gauge(b *strings.Builder, name, help, labels, value string) {
-	fmt.Fprintf(b, "# HELP %s %s\n# TYPE %s gauge\n%s%s %s\n", name, help, name, name, labels, value)
 }
 
 // escapeLabel makes a configured value safe as a Prometheus label. The model id comes from

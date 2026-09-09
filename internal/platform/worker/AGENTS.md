@@ -100,7 +100,17 @@ sat undelivered (2026-09-04, see [docs/agents/notifications.md](../../../docs/ag
 An oldest-pending age climbing past a few passes is the signal; `failed` never moved.
 
 **Per gateway, by `cmd/llm-probe`** — `freehire_llm_probe_{attempts,ok,slowest_seconds}`
-labelled by `model`. This answers *is the provider serving*, which nothing else asked.
+labelled by `model`, **one series per alias the deployment routes through**. This answers
+*is the provider serving*, which nothing else asked.
+
+The label is what makes several aliases safe to add: the alert divides
+`freehire_llm_probe_ok` by `freehire_llm_probe_attempts` element-wise, so Prometheus matches
+each alias to itself and a new alias becomes another alert instance rather than blending into
+the first. Watching one alias was not enough — measured 2026-09-09, `flagship` answers from
+z.ai and carries the assistant, the fit analysis and enrichment, while `fast` answers from
+Gemini and carries the AI search filter, whose handler turns a gateway refusal into a 500.
+A dead `fast` would have broken AI search for everyone while this worker reported the gateway
+healthy.
 Three times in the week to 2026-09-08 a provider behind the gateway stopped serving while
 the gateway went on reporting it `active`: Cerebras on an empty wallet (402), then two Z.ai
 accounts — one rate-limited under a Fair Usage Policy (429), one with a revoked key (401).
