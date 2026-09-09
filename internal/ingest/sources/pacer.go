@@ -124,6 +124,23 @@ func (g rateLimitedJSONGetter) GetJSON(ctx context.Context, url string, v any) e
 	return g.inner.GetJSON(ctx, url, v)
 }
 
+// rateLimitedHeaderJSONGetter is rateLimitedJSONGetter for an adapter whose requests carry
+// headers. Every step of such a crawl goes through this one method — a call that needs no
+// headers passes nil — so one limiter is the whole budget.
+type rateLimitedHeaderJSONGetter struct {
+	inner   HeaderJSONGetter
+	limiter waiter
+}
+
+// GetJSONWithHeaders blocks on the limiter before delegating, so a cancelled context surfaces as
+// the Wait error and the inner fetch is skipped.
+func (g rateLimitedHeaderJSONGetter) GetJSONWithHeaders(ctx context.Context, url string, headers map[string]string, v any) error {
+	if err := g.limiter.Wait(ctx); err != nil {
+		return err
+	}
+	return g.inner.GetJSONWithHeaders(ctx, url, headers, v)
+}
+
 // join.com meters by RATE, and the two were easy to confuse: an unpaced crawl fans 8 board
 // workers out over its list endpoint and the refusals looked like a concurrency limit, but
 // holding the rate steady and varying only the worker count clears it — 4 workers at 2 req/s
@@ -257,6 +274,23 @@ const (
 // board's listing pages and detail fan-out in a run compete for the same token bucket.
 func pacedADPGetter(c JSONGetter) JSONGetter {
 	return rateLimitedJSONGetter{
+		inner:   c,
+		limiter: rate.NewLimiter(rate.Every(adpRequestInterval), adpRequestBurst),
+	}
+}
+
+// pacedADPMyJobsGetter paces ADP's OTHER career-site product at the same rate, and on a limiter
+// of its OWN. Sharing one bucket between the two would assert that ADP meters them together,
+// which nothing here has measured: the 429 storm the rate above answers was observed against
+// workforcenow.adp.com, and MyJobs' listing is served from my.adp.com. Halving each product's
+// rate for an unobserved shared budget would slow both crawls for a reason we made up; if the
+// two do turn out to share a window, the evidence will be MyJobs boards 429ing during the adp
+// crawl hour, and the fix is then one limiter passed to both rather than two constructed here.
+//
+// It carries headers because the MyJobs listing is authorised by an `orgoid` request header
+// rather than by query parameters (see adpmyjobs.go).
+func pacedADPMyJobsGetter(c HeaderJSONGetter) HeaderJSONGetter {
+	return rateLimitedHeaderJSONGetter{
 		inner:   c,
 		limiter: rate.NewLimiter(rate.Every(adpRequestInterval), adpRequestBurst),
 	}
