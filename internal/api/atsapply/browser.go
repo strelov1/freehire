@@ -177,16 +177,26 @@ var recaptchaChallengeFrames = []string{
 // evidence that a page's reCAPTCHA is one nobody has to pass.
 const recaptchaInvisibleBadge = "grecaptcha-badge"
 
-// recaptchaWidgetMarkers are the footprints of a reCAPTCHA widget being mounted at all: the
-// checkbox/badge iframe, and the widget element's own class before the script replaces it.
-// Matched with the class's delimiter attached so `g-recaptcha-response` — the hidden token
-// field EVERY reCAPTCHA page carries, invisible ones included — is not read as a widget.
+// recaptchaWidgetMarkers is the footprint of a reCAPTCHA widget being MOUNTED: the iframe
+// Google injects for the checkbox and for the invisible badge alike. Both URL shapes,
+// classic and Enterprise.
+//
+// The widget's own class is deliberately NOT here, and the reason is a defect this list
+// already caused. It used to carry `g-recaptcha"`, `g-recaptcha'` and `g-recaptcha ` — the
+// class with a delimiter attached, so that `g-recaptcha-response` (the hidden token field
+// every reCAPTCHA page has) would not match. But a CSS SELECTOR carries a delimiter too,
+// and Lever's own stylesheet ships `.page-centered,.g-recaptcha div,.h-captcha-spacing {…}`
+// on every posting. So a page with no reCAPTCHA of any kind — no iframe, no badge, nothing
+// but that one styling rule — was read as challenge-protected, and it parked a real,
+// fully-resolved application the candidate had already approved (freehire, 2026-09-09).
+//
+// Reading a class name out of page text cannot tell a rule that STYLES an element from the
+// element. An iframe URL can only be there because the script put it there, which is why
+// this list is iframes alone. Nothing is lost: a rendered widget always mounts an anchor
+// iframe — that is what a live capture established when this function was first narrowed.
 var recaptchaWidgetMarkers = []string{
 	"recaptcha/api2/anchor",
 	"recaptcha/enterprise/anchor",
-	`g-recaptcha"`,
-	`g-recaptcha'`,
-	"g-recaptcha ",
 }
 
 // hasRecaptchaMarker reports whether pageHTML carries a reCAPTCHA CHALLENGE — something a

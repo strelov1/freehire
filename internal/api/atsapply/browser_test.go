@@ -109,7 +109,45 @@ func TestHasRecaptchaMarker_RenderedChallengeWidgetIsAChallenge(t *testing.T) {
 	if !hasRecaptchaMarker(whitelabelFormWithRecaptchaHTML) {
 		t.Error("hasRecaptchaMarker = false for a rendered reCAPTCHA anchor iframe, want true")
 	}
-	if !hasRecaptchaMarker(`<div class="g-recaptcha" data-sitekey="abc"></div>`) {
-		t.Error("hasRecaptchaMarker = false for an explicit g-recaptcha widget, want true")
+	// A bare `<div class="g-recaptcha">` with no iframe is deliberately NOT a challenge.
+	// At that point the script has not run and nothing is being asked; once it does, it
+	// mounts the anchor iframe above. Matching the class instead is what read Lever's own
+	// stylesheet as a captcha and parked a real application — see
+	// TestHasRecaptchaMarker_AStylesheetRuleIsNotAChallenge.
+	//
+	// The trade is deliberate and asymmetric: a missed challenge costs one unconfirmed
+	// submission, which is already a distinct, non-retried outcome. A false one costs the
+	// candidate an application they had approved, silently, forever.
+	if hasRecaptchaMarker(`<div class="g-recaptcha" data-sitekey="abc"></div>`) {
+		t.Error("hasRecaptchaMarker = true for a widget the script has not mounted yet, want false")
+	}
+}
+
+// A CSS rule that STYLES a reCAPTCHA widget is not a widget.
+//
+// Verbatim from the live DOM of jobs.lever.co/jobgether/08a82436-.../apply, 2026-09-09 —
+// the same page a live capture found carries no bframe, no badge and no anchor iframe:
+// nothing of reCAPTCHA is on it at all except this one stylesheet line.
+//
+// It parked a real, fully-resolved application the candidate had already approved. The
+// marker looked for the widget's class with a delimiter attached, on the reasoning that
+// `g-recaptcha-response` (the hidden token field) must not match — but a CSS selector
+// carries a delimiter too. Reading a class name out of page text cannot tell a rule that
+// styles an element from the element.
+const leverStylesheetMentioningRecaptchaHTML = `
+<html><head><style>
+.page-full-width {width: 100%;}
+.page-centered,.g-recaptcha div,.h-captcha-spacing {display: block; margin: 0 auto;}
+</style></head><body>
+<form id="application-form">
+  <input type="text" name="name" required>
+</form>
+</body></html>
+`
+
+func TestHasRecaptchaMarker_AStylesheetRuleIsNotAChallenge(t *testing.T) {
+	if hasRecaptchaMarker(leverStylesheetMentioningRecaptchaHTML) {
+		t.Error("hasRecaptchaMarker = true for a page whose only mention of reCAPTCHA is a CSS rule, " +
+			"want false — it carries no widget, no badge and no challenge iframe")
 	}
 }
