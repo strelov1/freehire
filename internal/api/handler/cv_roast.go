@@ -72,6 +72,24 @@ type roastResponse struct {
 //
 // Public on purpose and rate-limited by IP at the route (see resume.go's register).
 func (h *resumeHandlers) RoastCV(c *fiber.Ctx) error {
+	// Refuse a Content-Encoding outright, before readResumeUpload ever runs. Fiber's
+	// Ctx.Body() (which BodyParser and c.FormFile both read through) inspects
+	// Content-Encoding and DECOMPRESSES, chaining up to three layers, with no ceiling on
+	// the decompressed size — see billing.go's webhookFor for the same trap documented on
+	// the other unauthenticated POST in the app. The server's 8MB BodyLimit only bounds
+	// the wire body, not what it expands to, so a few compressed megabytes become an
+	// unbounded allocation. That was tolerable while this reader sat behind mw.cookie (an
+	// attacker needed an account); this route has no account and no per-account budget,
+	// and one request is enough to matter, so the 10/hour IP limiter does not help either.
+	// No allow-list, no parsing of the header's value: this route has exactly one job and
+	// nobody legitimately gzips a CV upload, so any non-empty Content-Encoding is refused.
+	// readResumeUpload itself is deliberately left untouched — /me/resume/extract still
+	// sits behind mw.cookie, and changing the shared reader would silently break any
+	// signed-in client that gzips today.
+	if c.Get(fiber.HeaderContentEncoding) != "" {
+		return fiber.NewError(fiber.StatusUnsupportedMediaType, "encoded request bodies are not accepted")
+	}
+
 	up, err := readResumeUpload(c)
 	if err != nil {
 		return err

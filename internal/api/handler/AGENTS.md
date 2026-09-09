@@ -261,6 +261,19 @@ empty profile the model would read as "no preferences".
   no model runs. Its limiter is built inline from `mw.throttler` rather than in
   `public_read_limit.go` — that file holds the public READ budgets, and this is a POST
   that forks `pdftotext`.
+- **`RoastCV` refuses any `Content-Encoding` header outright, before `readResumeUpload`
+  runs.** Fiber's `Ctx.Body()` — which `BodyParser` and `c.FormFile` both read through —
+  decompresses `Content-Encoding` transparently, chaining up to three layers, with no
+  ceiling on the decompressed size (see `billing.go`'s `webhookFor` for the same trap on
+  the app's other unauthenticated POST). The server's 8MB `BodyLimit` bounds only the wire
+  body; a few compressed megabytes can expand to gigabytes in memory. That was tolerable
+  while this reader sat behind `mw.cookie` — an attacker needed an account — but this
+  route has none, and one request is enough, so the 10/hour IP limiter does not cover it
+  either. The check is a bare "is this header non-empty", not an allow-list or a parse of
+  its value: this route has exactly one job and nobody legitimately gzips a CV upload, so
+  a second place to get that logic wrong is not worth having. `readResumeUpload` itself is
+  deliberately untouched — `/me/resume/extract` still sits behind `mw.cookie`, and
+  widening the shared reader would silently break any signed-in client that gzips today.
 
 ## Application forms (`apply_form.go`)
 

@@ -2,6 +2,7 @@ package handler
 
 import (
 	"bytes"
+	"compress/gzip"
 	"context"
 	"encoding/json"
 	"errors"
@@ -174,6 +175,83 @@ func TestRoastCV_EmptyTextIsRefused(t *testing.T) {
 	}
 	if len(fake.calls) != 0 {
 		t.Errorf("no facet query should run for an empty CV, got %d", len(fake.calls))
+	}
+}
+
+// gzipBytes compresses data with gzip, for the Content-Encoding refusal tests below.
+func gzipBytes(t *testing.T, data []byte) []byte {
+	t.Helper()
+	var buf bytes.Buffer
+	gw := gzip.NewWriter(&buf)
+	if _, err := gw.Write(data); err != nil {
+		t.Fatalf("gzip write: %v", err)
+	}
+	if err := gw.Close(); err != nil {
+		t.Fatalf("gzip close: %v", err)
+	}
+	return buf.Bytes()
+}
+
+// TestRoastCV_RefusesAContentEncodedBody proves the route refuses a genuinely gzipped
+// body carrying Content-Encoding, rather than merely rejecting the header in isolation:
+// nothing downstream — not even the facet query — runs.
+func TestRoastCV_RefusesAContentEncodedBody(t *testing.T) {
+	fake := &recordingFacetCounter{}
+	app := roastApp(fake)
+
+	plain := []byte(`{"text":"Backend Engineer\n\nSkills\nGo"}`)
+	gz := gzipBytes(t, plain)
+
+	req := httptest.NewRequestWithContext(context.Background(), fiber.MethodPost, "/cv/roast", bytes.NewReader(gz))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set(fiber.HeaderContentEncoding, "gzip")
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("request: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != fiber.StatusUnsupportedMediaType {
+		t.Fatalf("status = %d, want 415 — a Content-Encoding header must be refused", resp.StatusCode)
+	}
+	if len(fake.calls) != 0 {
+		t.Errorf("facet query ran = %d calls, want 0 — nothing downstream should run for a refused request", len(fake.calls))
+	}
+}
+
+// TestRoastCV_RefusesBeforeDecompressingABomb proves the guard sits BEFORE
+// readResumeUpload — where Fiber's Ctx.Body() would otherwise decompress the request —
+// rather than merely that some Content-Encoding header eventually gets rejected. The
+// wire payload is a few kilobytes: gzip collapses a single repeated byte by roughly three
+// orders of magnitude, so a decompressedSize of 8 MiB compresses to well under 1 MiB on
+// the wire, keeping the test fast while still standing in for the unbounded allocation
+// this defect actually was. If the Content-Encoding check is ever moved to after
+// readResumeUpload, this test goes red, because Body() would then run the decompression
+// this guard exists to prevent before the handler ever gets a chance to refuse it.
+func TestRoastCV_RefusesBeforeDecompressingABomb(t *testing.T) {
+	fake := &recordingFacetCounter{}
+	app := roastApp(fake)
+
+	const decompressedSize = 8 * 1024 * 1024 // what the payload below would expand to
+	payload := bytes.Repeat([]byte{'A'}, decompressedSize)
+	gz := gzipBytes(t, payload)
+	if len(gz) > 1024*1024 {
+		t.Fatalf("compressed payload = %d bytes, want well under 1 MiB for the test to stay fast", len(gz))
+	}
+
+	req := httptest.NewRequestWithContext(context.Background(), fiber.MethodPost, "/cv/roast", bytes.NewReader(gz))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set(fiber.HeaderContentEncoding, "gzip")
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("request: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != fiber.StatusUnsupportedMediaType {
+		t.Fatalf("status = %d, want 415 — the %d-byte compressed bomb (would decompress to %d bytes) must be refused before decompression is attempted",
+			resp.StatusCode, len(gz), decompressedSize)
+	}
+	if len(fake.calls) != 0 {
+		t.Errorf("facet query ran = %d calls, want 0", len(fake.calls))
 	}
 }
 
