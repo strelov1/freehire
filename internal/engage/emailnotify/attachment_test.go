@@ -30,15 +30,16 @@ func decodeBase64Part(t *testing.T, part io.Reader) string {
 // multipart readers, all the way down to the attachment's bytes. Checking for substrings
 // would pass on a message no client could read.
 func TestTheRawMessageParsesBackToItsParts(t *testing.T) {
-	raw, err := buildRawMessage(
-		"mentors@example.test", "seeker@example.test", "Your session is confirmed",
-		"<p>See you Tuesday</p>", "See you Tuesday",
-		[]Attachment{{
+	raw, err := buildRawMessage(Message{
+		From: "mentors@example.test", To: "seeker@example.test",
+		Subject: "Your session is confirmed",
+		HTML:    "<p>See you Tuesday</p>", Text: "See you Tuesday",
+		Attachments: []Attachment{{
 			Filename:    "invite.ics",
 			ContentType: "text/calendar; charset=utf-8; method=REQUEST",
 			Content:     []byte("BEGIN:VCALENDAR\r\nEND:VCALENDAR\r\n"),
 		}},
-	)
+	})
 	if err != nil {
 		t.Fatalf("buildRawMessage: %v", err)
 	}
@@ -139,8 +140,10 @@ func assertAlternativeHoldsBothBodies(t *testing.T, part io.Reader, boundary str
 
 // A non-ASCII subject must be header-encoded, or it is rejected or mangled in transit.
 func TestANonASCIISubjectIsEncoded(t *testing.T) {
-	raw, err := buildRawMessage("a@example.test", "b@example.test",
-		"Ваша сессия подтверждена", "<p>hi</p>", "hi", nil)
+	raw, err := buildRawMessage(Message{
+		From: "a@example.test", To: "b@example.test",
+		Subject: "Ваша сессия подтверждена", HTML: "<p>hi</p>", Text: "hi",
+	})
 	if err != nil {
 		t.Fatalf("buildRawMessage: %v", err)
 	}
@@ -166,14 +169,15 @@ func TestANonASCIISubjectIsEncoded(t *testing.T) {
 // Long base64 lines are legal to produce and routinely rewritten in transit, which for an
 // attachment means a file that no longer decodes.
 func TestBase64LinesStayWithinTheLimit(t *testing.T) {
-	raw, err := buildRawMessage("a@example.test", "b@example.test", "s",
-		strings.Repeat("<p>a long html body</p>", 200), "text",
-		[]Attachment{{
+	raw, err := buildRawMessage(Message{
+		From: "a@example.test", To: "b@example.test", Subject: "s",
+		HTML: strings.Repeat("<p>a long html body</p>", 200), Text: "text",
+		Attachments: []Attachment{{
 			Filename:    "invite.ics",
 			ContentType: "text/calendar; charset=utf-8",
 			Content:     []byte(strings.Repeat("BEGIN:VEVENT\r\nEND:VEVENT\r\n", 100)),
 		}},
-	)
+	})
 	if err != nil {
 		t.Fatalf("buildRawMessage: %v", err)
 	}
@@ -187,7 +191,9 @@ func TestBase64LinesStayWithinTheLimit(t *testing.T) {
 
 // A message with no attachments still parses, so the same path serves both.
 func TestAMessageWithNoAttachmentsIsStillValid(t *testing.T) {
-	raw, err := buildRawMessage("a@example.test", "b@example.test", "s", "<p>h</p>", "t", nil)
+	raw, err := buildRawMessage(Message{
+		From: "a@example.test", To: "b@example.test", Subject: "s", HTML: "<p>h</p>", Text: "t",
+	})
 	if err != nil {
 		t.Fatalf("buildRawMessage: %v", err)
 	}

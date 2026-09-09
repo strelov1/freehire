@@ -368,16 +368,20 @@ func (h *matchHandlers) prepareAutopilotRun(c *fiber.Ctx, userID int64, job db.J
 }
 
 // ensure fills the cache before a cold-start autopilot run, whose first tool call reads it
-// and errors without one. Coalesced, best-effort, and never charged — the rules are
+// and errors without one. Coalesced and never charged — the rules are
 // fitanalysis.Service.Ensure's; the claim is taken here because it is per attempt, not per
 // prepared run.
-func (a *autopilotAnalysis) ensure(ctx context.Context) {
+//
+// It REPORTS the outcome. A nil analysis means the deployment has no match surface at all,
+// which is a shape rather than a failure — the fixtures run that way — so it reports nothing
+// missing and leaves the caller free to proceed.
+func (a *autopilotAnalysis) ensure(ctx context.Context) error {
 	if a == nil {
-		return
+		return nil
 	}
 	req := a.req
 	req.Claim = a.fit.Claim(req.UserID, req.Job.ID)
-	a.fit.Ensure(ctx, req)
+	return a.fit.Ensure(ctx, req)
 }
 
 // refresh recomputes the analysis after the run, unconditionally — see

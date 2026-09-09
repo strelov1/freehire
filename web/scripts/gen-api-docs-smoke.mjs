@@ -6,6 +6,7 @@
 //   node scripts/gen-api-docs-smoke.mjs   # asserts; exits non-zero on failure
 
 import { loadDocsModules, renderMarkdown } from './gen-api-docs.mjs';
+import { buildDeprecatedFixture } from './deprecatedFixture.mjs';
 
 const checks = [];
 function assert(name, cond) {
@@ -45,6 +46,14 @@ async function main() {
   assert('documents API keys', a.includes('/me/api-keys'));
   assert('documents saved searches', a.includes('/me/searches'));
   assert('documents auth', a.includes('/auth/login'));
+
+  // Deprecated endpoints render a note naming the replacement. No shipped endpoint
+  // currently carries `deprecated`, so this exercises the mechanism on a synthetic
+  // fixture rather than the real spec.
+  const d = renderMarkdown(buildDeprecatedFixture(spec), filters);
+  assert('deprecated endpoint is marked', d.includes('**Deprecated'));
+  assert('deprecated note names the replacement', d.includes('GET /fixture/v2/{id}'));
+  assert('deprecated note names the since date', d.includes('2026-09-08'));
 
   let failed = 0;
   for (const c of checks) {

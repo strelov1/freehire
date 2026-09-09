@@ -50,6 +50,22 @@ func TestNotIn(t *testing.T) {
 	}
 }
 
+func TestIn(t *testing.T) {
+	if got := In("id", []int64{3, 1, 2}); got != "id IN [3, 1, 2]" {
+		t.Errorf("In = %q, want %q", got, "id IN [3, 1, 2]")
+	}
+	if got := In("id", []int64{7}); got != "id IN [7]" {
+		t.Errorf("In single = %q", got)
+	}
+	// An empty id set yields no fragment, mirroring NotIn's own convention.
+	if got := In("id", nil); got != "" {
+		t.Errorf("In(nil) = %q, want empty", got)
+	}
+	if got := In("id", []int64{}); got != "" {
+		t.Errorf("In(empty) = %q, want empty", got)
+	}
+}
+
 func TestFilter_NilWhenEmpty(t *testing.T) {
 	if got := Filter(); got != nil {
 		t.Errorf("Filter() = %v, want nil", got)

@@ -114,6 +114,7 @@ func (r *Runner) deliverOne(ctx context.Context, subID int64, jobIDs []int64, st
 
 	jobs, jobIDs = r.deferOverflow(ctx, subID, jobs, jobIDs)
 	digest := buildDigest(info.SavedSearchName, jobs)
+	digest.UserID = info.UserID
 
 	// Record the in-app notification BEFORE sending, so the digest can carry its
 	// own row's id and each channel's "and N more" tail can link to the page

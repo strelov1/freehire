@@ -894,3 +894,73 @@ func TestRequestConfirmationToolAllowsAnEmptyQuestion(t *testing.T) {
 		t.Errorf("err = %v, want a claim with no question accepted", err)
 	}
 }
+
+// A model puts evidence_id beside `ops` rather than inside the op it backs, and the mistake
+// is a reasonable one: `requirement` and `requirement_status` ARE call-level and describe the
+// batch, so "batch metadata goes at the top" generalises straight onto evidence_id.
+//
+// What it used to get back was `invalid arguments: json: unknown field "evidence_id"`, which
+// names the field and not the place, so the model re-sent the identical call and was refused
+// again. Measured on prod 2026-08-25..09-08: 21 refusals, and 20 of them carried exactly ONE
+// op — an edit whose intent was never in doubt.
+//
+// One op is therefore read through, the same leniency TestCVEditToolAcceptsOpsAsAJSONString
+// applies to packaging. The op keeps whatever it already carries; nothing is guessed.
+func TestCVEditToolReadsACallLevelEvidenceIDOntoItsOnlyOp(t *testing.T) {
+	bank := newStubBank()
+	atom := bank.add(3, experience.Atom{Claim: "Senior backend engineer", Provenance: experience.ProvenanceStatedInChat})
+	a, repo := cvToolsAPIWithBank(t, oneExperienceCV, bank)
+
+	tool := toolByName(t, a.assistantCVTools(testCVID, 9, uuid.New()), "cv_edit")
+	_, err := tool.Run(context.Background(), 3, json.RawMessage(
+		`{"ops":[{"kind":"set","path":"summary","value":"Senior backend engineer"}],`+
+			`"note":"n","evidence_id":"`+atom.ID.String()+`"}`))
+	if err != nil {
+		t.Fatalf("cv_edit: %v", err)
+	}
+	if !strings.Contains(string(repo.written), "Senior backend engineer") {
+		t.Errorf("stored document = %s, want the edit to have landed", repo.written)
+	}
+}
+
+// More than one op is NOT read through. A single id spread across several edits would attach
+// one achievement's evidence to claims it may not back, which is the one thing the provenance
+// gate exists to stop — so the batch is refused, and the refusal says where the field goes so
+// the next attempt can differ from this one.
+func TestCVEditToolRefusesACallLevelEvidenceIDAcrossSeveralOps(t *testing.T) {
+	bank := newStubBank()
+	atom := bank.add(3, experience.Atom{Claim: "Senior backend engineer", Provenance: experience.ProvenanceStatedInChat})
+	a, _ := cvToolsAPIWithBank(t, oneExperienceCV, bank)
+
+	tool := toolByName(t, a.assistantCVTools(testCVID, 9, uuid.New()), "cv_edit")
+	_, err := tool.Run(context.Background(), 3, json.RawMessage(
+		`{"ops":[{"kind":"set","path":"summary","value":"Senior backend engineer"},`+
+			`{"kind":"set","path":"experience[0].role","value":"Staff Engineer"}],`+
+			`"evidence_id":"`+atom.ID.String()+`"}`))
+	if err == nil {
+		t.Fatal("two ops shared one call-level evidence_id and were applied; the gate must refuse")
+	}
+	if !strings.Contains(err.Error(), "on each op") {
+		t.Errorf("refusal = %q, want it to say where evidence_id belongs", err)
+	}
+}
+
+// An op that already names its own evidence is not overwritten, and the disagreement is not
+// resolved by picking one: which claim the id was meant to back is exactly what is unclear.
+func TestCVEditToolRefusesACallLevelEvidenceIDWhenTheOpAlreadyNamesOne(t *testing.T) {
+	bank := newStubBank()
+	atom := bank.add(3, experience.Atom{Claim: "Senior backend engineer", Provenance: experience.ProvenanceStatedInChat})
+	other := bank.add(3, experience.Atom{Claim: "Ran the payments cluster", Provenance: experience.ProvenanceStatedInChat})
+	a, _ := cvToolsAPIWithBank(t, oneExperienceCV, bank)
+
+	tool := toolByName(t, a.assistantCVTools(testCVID, 9, uuid.New()), "cv_edit")
+	_, err := tool.Run(context.Background(), 3, json.RawMessage(
+		`{"ops":[{"kind":"set","path":"summary","value":"Senior backend engineer","evidence_id":"`+atom.ID.String()+`"}],`+
+			`"evidence_id":"`+other.ID.String()+`"}`))
+	if err == nil {
+		t.Fatal("two different evidence ids were reconciled silently")
+	}
+	if !strings.Contains(err.Error(), "on each op") {
+		t.Errorf("refusal = %q, want it to say where evidence_id belongs", err)
+	}
+}

@@ -2315,6 +2315,27 @@ SET requires_clearance = sqlc.arg(requires_clearance)
 WHERE id = sqlc.arg(id)
   AND requires_clearance IS DISTINCT FROM sqlc.arg(requires_clearance);
 
+-- name: JobsForWorkModeRecheckByIDs :many
+-- Location, description and the currently-stored work_mode for a named set of ids, for
+-- cmd/backfill-remote-perk-false-positive.
+--
+-- Ids come from a Meilisearch query for the same reason JobDescriptionsByIDs's do: a
+-- WHERE over `description` de-TOASTs the column for every row it examines, and the
+-- search index already holds the text.
+SELECT id, location, description, work_mode FROM jobs
+WHERE id = ANY(sqlc.arg(ids)::bigint[]);
+
+-- name: SetJobWorkMode :execrows
+-- Write one row's work_mode, for cmd/backfill-remote-perk-false-positive.
+--
+-- The IS DISTINCT FROM guard makes the pass idempotent, the same way
+-- SetJobRequiresClearance's does: a row already carrying the recomputed value is not
+-- rewritten, so a re-run writes nothing and stopping mid-way costs nothing to resume.
+UPDATE jobs
+SET work_mode = sqlc.arg(work_mode)
+WHERE id = sqlc.arg(id)
+  AND work_mode IS DISTINCT FROM sqlc.arg(work_mode);
+
 -- name: RequirementsDerivedBackfillBounds :one
 -- The id span cmd/backfill-requirements walks. MIN/MAX over the primary key are two
 -- index probes, so this stays cheap on an 11M-row table — deliberately unfiltered,

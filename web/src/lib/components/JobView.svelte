@@ -758,8 +758,7 @@
     <!-- `top-20`, not `top-6`: the site header is `sticky top-0 h-14` and opaque, so a
          card pinned 24px from the viewport spends the whole read with its first 32px —
          the border, the padding, and the top of the match score — behind it. 80px is
-         the header's 56 plus the same 24 of air the card was asking for. Same offset
-         DocsNav's rail already uses. -->
+         the header's 56 plus the same 24 of air the card was asking for. -->
     <div class="sticky top-20 flex flex-col gap-4 rounded-xl border border-border bg-card p-4">
       <JobMatch {job} />
 

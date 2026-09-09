@@ -1,0 +1,63 @@
+-- Split the one notification flag into three, so declining one family of mail does
+-- not silence another. See openspec/changes/email-preference-center.
+--
+-- WHAT WAS WRONG. `enabled` was read two contradictory ways, and both readings were
+-- deliberate where they were written:
+--
+--   * queries/nudges.sql — `JOIN notification_settings ns ON ... AND ns.enabled`.
+--     An inner join, so a MISSING row means do not send. Lifecycle nudges are
+--     opt-in.
+--   * queries/broadcast.sql and queries/onboarding.sql —
+--     `LEFT JOIN ... AND COALESCE(ns.enabled, true)`. A missing row means DO send.
+--     Campaigns and the founder sequence are opt-out.
+--
+-- One column, two product questions, two opposite defaults. The consequence was not
+-- theoretical: a person could not stop letters from the founder without also
+-- stopping their own application follow-up reminders, and a person who had never
+-- opened the settings page had no row at all — which made the campaign predicate
+-- unconditionally true for them and gave them no way to make it false, because the
+-- only thing that creates the row is a page behind the login. That is the state a
+-- subscriber wrote in about, and he was right that it is not lawful: CAN-SPAM wants
+-- an opt-out that costs nothing beyond visiting one page, and GDPR Art. 7(3) wants
+-- withdrawing consent to be as easy as giving it.
+--
+-- WHAT CHANGES. `enabled` keeps its exact present meaning and BOTH of its present
+-- readings, now scoped to the `activity` group alone (saved-job reminders and the
+-- lifecycle nudges). The two new columns take the other two groups:
+--
+--   * alerts_email_enabled — saved-search digests, above the per-subscription
+--     switches in `subscriptions.active`.
+--   * news_email_enabled   — one-off campaigns, the onboarding sequence, referral
+--     pings. This is the column broadcast.sql and onboarding.sql move onto.
+--
+-- Address verification and password reset are `essential` and have no column here,
+-- because they cannot be declined.
+--
+-- WHY DEFAULT true, WHEN `enabled` DEFAULTS false. These are not the same question.
+-- `enabled` guards mail we only send once someone has asked for it; these two guard
+-- mail that is already being sent today. A `false` default would mass-unsubscribe
+-- every account from digests and campaigns at deploy time — a behaviour change
+-- disguised as a schema change. `DEFAULT true` plus `COALESCE(..., true)` on the
+-- read side means the missing-row case and the existing-row case agree, and every
+-- account keeps receiving exactly what it received the day before.
+--
+-- Additive and inert to the running binary, so this file deploys BEFORE the code
+-- and a rollback of the code needs no down-migration: the columns simply stop being
+-- read, and no recorded preference is lost.
+--
+-- No transaction marker. ADD COLUMN with a non-volatile DEFAULT is metadata-only on
+-- PG11+ (the value is stored once as a missing-value, not written to every row), so
+-- this takes ACCESS EXCLUSIVE for an instant and the runner's default transaction
+-- costs nothing. Both columns go in ONE statement so that instant is taken once.
+--
+-- Applied to a fresh volume by initdb after 0152; on an existing prod volume run it
+-- manually (SET ROLE hire) BEFORE deploying the code that reads it.
+--
+-- Numbered 0153 and not 0152: main took 0152 while this branch was being written.
+-- The runner orders by filename, nothing gates a collision, and main has held three
+-- files on one number before — so the number is re-checked against origin/main at
+-- PR time rather than at the moment the file is created.
+
+ALTER TABLE public.notification_settings
+    ADD COLUMN alerts_email_enabled boolean NOT NULL DEFAULT true,
+    ADD COLUMN news_email_enabled   boolean NOT NULL DEFAULT true;

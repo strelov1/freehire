@@ -27,18 +27,29 @@ func NewApploi(c JSONGetter) Source { return apploi{http: c} }
 
 func (apploi) Provider() string { return "apploi" }
 
+// fullBoardListing: Fetch proves completeness by paginating to a page shorter than
+// apploiPageSize (the offset/limit equivalent of a genuinely empty page — a full page can
+// never be the API's last one), and treats a page failure or reaching apploiMaxPages as a
+// hard Fetch failure. No per-posting detail fetch exists (descriptions are inline in the
+// listing), so there is no unreadableDetail concern here. See the fullBoardListing interface
+// (source.go) for the bar.
+func (apploi) fullBoardListing() {}
+
+// Fetch pages the employer's listing until a page shorter than apploiPageSize proves the
+// index has no more rows beyond it — the offset/limit equivalent of a genuinely empty page,
+// since a full-size page can never be the last one for this API. Every page failing, and
+// reaching apploiMaxPages without ever seeing a short page, are hard Fetch failures rather
+// than a partial success — see the fullBoardListing interface (source.go) for the bar.
 func (s apploi) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	var jobs []Job
+	done := false
 	for page := 0; page < apploiMaxPages; page++ {
 		url := fmt.Sprintf("%s?employer=%s&limit=%d&offset=%d", apploiAPI, e.Board, apploiPageSize, page*apploiPageSize)
 		var resp struct {
 			Data []apploiJob `json:"data"`
 		}
 		if err := s.http.GetJSON(ctx, url, &resp); err != nil {
-			if page == 0 {
-				return nil, fmt.Errorf("apploi: board %q: %w", e.Board, err)
-			}
-			break // a later page failing just stops the walk with what we have
+			return nil, fmt.Errorf("apploi: board %q page %d: %w", e.Board, page, err)
 		}
 		for _, j := range resp.Data {
 			// The list carries archived/unpublished/private rows too; keep only the live,
@@ -49,8 +60,12 @@ func (s apploi) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 			jobs = append(jobs, s.toJob(e, j))
 		}
 		if len(resp.Data) < apploiPageSize {
+			done = true
 			break // last (short) page
 		}
+	}
+	if !done {
+		return nil, fmt.Errorf("apploi: board %q: reached the %d-page safety ceiling without finding the board's end", e.Board, apploiMaxPages)
 	}
 	return jobs, nil
 }

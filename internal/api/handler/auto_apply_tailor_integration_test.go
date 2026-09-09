@@ -35,6 +35,7 @@ import (
 	"github.com/strelov1/freehire/internal/candidate/matchanalysis"
 	"github.com/strelov1/freehire/internal/identity/auth"
 	"github.com/strelov1/freehire/internal/platform/db"
+	"github.com/strelov1/freehire/internal/platform/llm"
 )
 
 // newAutoApplyTailorApp wires the assistant routes (which carry PostAutoApplyTailor/
@@ -484,5 +485,109 @@ func TestPostAutoApplyReview_DecisionCannotBeRecordedTwice(t *testing.T) {
 	}
 	if decision != "approved" {
 		t.Errorf("review_decision = %q, want the first decision to stand unchanged", decision)
+	}
+}
+
+// slowTurnModel blocks each model call until its context ends, which is how a test reaches
+// the one outcome that matters here without spending the real budget: an unattended run
+// that is still working when its time runs out.
+type slowTurnModel struct{}
+
+func (m *slowTurnModel) Chat(ctx context.Context, _ []llms.MessageContent, _ []llms.Tool, _ llm.ChatStream) (*llms.ContentChoice, error) {
+	<-ctx.Done()
+	return nil, ctx.Err()
+}
+
+// A tailoring run that spends its whole budget still records what it produced.
+//
+// This is the second half of what left three production entries stuck with no tailored CV
+// and a status that read "tailoring" forever. autopilotMaxSteps allows thirty model calls
+// of up to assistantLLMTimeout each; the orchestrator waited five minutes for all of them
+// and hung up, and because the handler treated a cut-short run as a plain failure, the CV
+// the run had ALREADY edited was never attached to the entry. The work was done and thrown
+// away, three times over, and the queue entry looked untouched every time.
+//
+// The run's own budget is what ends it now, before any caller gives up on it, and the
+// entry moves on with the CV the run got to.
+func TestPostAutoApplyTailor_ASpentBudgetStillRecordsTheTailoredCV(t *testing.T) {
+	pool := startPostgres(t)
+	truncateAutoApplyTailorTables(t, pool)
+	iss := auth.NewIssuer("test-secret", time.Hour)
+	app, _ := newAutoApplyTailorApp(pool, iss, &slowTurnModel{})
+
+	// Shortened so the test observes the budget elapsing rather than waiting out the real
+	// one — the same reason turnQueueWait is a var (see assistant_turns.go).
+	restore := autoApplyTailorBudget
+	autoApplyTailorBudget = 300 * time.Millisecond
+	t.Cleanup(func() { autoApplyTailorBudget = restore })
+
+	userID, cookie := autoApplyTailorUser(t, pool, iss, "budget@example.test")
+	insertBaseCV(t, pool, userID)
+	job := insertAutoApplyJob(t, pool, "tailor-budget")
+	queueID := insertAutoApplyQueueRow(t, pool, userID, job)
+
+	resp := autoApplyRequest(t, app, fiber.MethodPost,
+		"/api/v1/me/auto-apply/"+strconv.FormatInt(queueID, 10)+"/tailor", cookie, nil)
+	defer resp.Body.Close()
+	if resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("status = %d, want 200 — a run that spent its budget produced a CV, not a failure", resp.StatusCode)
+	}
+
+	var stored *uuid.UUID
+	if err := pool.QueryRow(context.Background(),
+		"SELECT tailored_cv_id FROM auto_apply_queue WHERE id = $1", queueID).Scan(&stored); err != nil {
+		t.Fatalf("read stored tailored_cv_id: %v", err)
+	}
+	if stored == nil {
+		t.Fatal("tailored_cv_id is still NULL — the entry cannot move on, and reads as 'tailoring' forever")
+	}
+}
+
+// A tailoring run that fails for a real reason says so, instead of leaving the entry
+// looking like one still being worked on.
+//
+// This is the fault the candidate actually reported: an entry whose run had died recorded
+// nothing at all, so DeriveStatus fell through to StatusTailoring and the tracker kept
+// saying "Auto-apply is preparing a tailored CV for this job" — for over a day, about work
+// nobody was doing, with no notification either.
+func TestPostAutoApplyTailor_AFailedRunIsRecordedAndNotified(t *testing.T) {
+	pool := startPostgres(t)
+	truncateAutoApplyTailorTables(t, pool)
+	iss := auth.NewIssuer("test-secret", time.Hour)
+	app, _ := newAutoApplyTailorApp(pool, iss, failingTurnModel{})
+
+	userID, cookie := autoApplyTailorUser(t, pool, iss, "tailorfail@example.test")
+	insertBaseCV(t, pool, userID)
+	job := insertAutoApplyJob(t, pool, "tailor-fail")
+	queueID := insertAutoApplyQueueRow(t, pool, userID, job)
+
+	resp := autoApplyRequest(t, app, fiber.MethodPost,
+		"/api/v1/me/auto-apply/"+strconv.FormatInt(queueID, 10)+"/tailor", cookie, nil)
+	defer resp.Body.Close()
+	if resp.StatusCode == fiber.StatusOK {
+		t.Fatalf("status = %d, want a failure — the run could not be done", resp.StatusCode)
+	}
+
+	var failedAt *time.Time
+	var lastError string
+	if err := pool.QueryRow(context.Background(),
+		"SELECT tailor_failed_at, last_error FROM auto_apply_queue WHERE id = $1", queueID).
+		Scan(&failedAt, &lastError); err != nil {
+		t.Fatalf("read the entry back: %v", err)
+	}
+	if failedAt == nil {
+		t.Error("tailor_failed_at is NULL — the entry still reads as one being prepared")
+	}
+	if lastError == "" {
+		t.Error("last_error is empty — nothing records why the run gave up")
+	}
+
+	var notifKind string
+	if err := pool.QueryRow(context.Background(),
+		"SELECT kind FROM user_notifications WHERE user_id = $1", userID).Scan(&notifKind); err != nil {
+		t.Fatalf("the candidate was told nothing: %v", err)
+	}
+	if notifKind != autoApplyTailorFailedNotification {
+		t.Errorf("notification kind = %q, want %q", notifKind, autoApplyTailorFailedNotification)
 	}
 }

@@ -220,3 +220,56 @@ func TestTurnRegistryCancelReachesAQueuedTurn(t *testing.T) {
 		t.Fatalf("registry holds %d entries, want 0", n)
 	}
 }
+
+// A synchronous caller — one that refuses rather than waits, as PostAutoApplyTailor does —
+// must not leave a place in line behind it.
+//
+// This is not hypothetical. In production the auto-apply orchestrator's own tailor call
+// took a place in line every time it was refused and never gave it back, so the session
+// answered errTurnQueueFull ("this session already has a message waiting") to every later
+// call for the life of the process — with nobody actually waiting. Three queue entries sat
+// unprocessed behind it, and the log recorded the refusal for one of them verbatim.
+func TestTurnRegistryLeavesNoPlaceInLineForACallerThatWillNotWait(t *testing.T) {
+	var reg turnRegistry
+	session := uuid.New()
+
+	running, _, err := reg.claim(session, func() {})
+	if err != nil || running == nil {
+		t.Fatalf("the first turn did not get the slot: %v, %v", running, err)
+	}
+
+	// Two callers in a row that decline to wait. The SECOND is the whole point: if the
+	// first quietly held a place, this one is refused for the wrong reason — "somebody is
+	// already waiting" rather than "the session is busy" — and every later one with it.
+	for i := 1; i <= 2; i++ {
+		slot, ok := reg.tryClaim(session, func() {})
+		if ok || slot != nil {
+			t.Fatalf("attempt %d took the slot of a busy session: %v", i, slot)
+		}
+	}
+
+	// A caller that WILL wait must still be able to queue: the line was never occupied.
+	_, waiter, err := reg.claim(session, func() {})
+	if err != nil {
+		t.Fatalf("claim after two refused non-waiting callers: %v — a place in line was left behind", err)
+	}
+	if waiter == nil {
+		t.Fatal("no waiter for a busy session, want a place in line")
+	}
+}
+
+// The other half: tryClaim on an idle session behaves exactly like claim's own happy path,
+// so a caller that uses it is not quietly refused work it could have done.
+func TestTurnRegistryTryClaimTakesTheSlotOfAnIdleSession(t *testing.T) {
+	var reg turnRegistry
+	session := uuid.New()
+
+	slot, ok := reg.tryClaim(session, func() {})
+	if !ok || slot == nil {
+		t.Fatalf("tryClaim on an idle session = %v, %v; want the slot", slot, ok)
+	}
+	reg.release(session, slot)
+	if n := reg.len(); n != 0 {
+		t.Fatalf("registry holds %d entries after the turn ended, want 0", n)
+	}
+}

@@ -42,6 +42,16 @@ type fakeRepo struct {
 
 	withdrawn             bool
 	cancelledBeforeDelete int
+
+	// calendarGrants stands in for gmail_connections, keyed by the mentor's user id.
+	calendarGrants          map[int64]fakeCalendarGrant
+	needsReconsent          map[int64]bool
+	setBookingCalendarEvent map[uuid.UUID][2]string // bookingID -> [meetingURL, eventID]
+}
+
+type fakeCalendarGrant struct {
+	refreshTokenEnc string
+	scopes          []string
 }
 
 type referralKey struct {
@@ -51,14 +61,17 @@ type referralKey struct {
 
 func newFakeRepo() *fakeRepo {
 	return &fakeRepo{
-		profiles:               map[int64]Profile{},
-		byUser:                 map[int64]int64{},
-		approvedReferralOffers: map[referralKey]bool{},
-		futureBookings:         map[int64][]Booking{},
-		availability:           map[int64][]Rule{},
-		bookings:               map[uuid.UUID]Booking{},
-		reviews:                map[uuid.UUID]Review{},
-		remindersSent:          map[reminderKey]bool{},
+		profiles:                map[int64]Profile{},
+		byUser:                  map[int64]int64{},
+		approvedReferralOffers:  map[referralKey]bool{},
+		futureBookings:          map[int64][]Booking{},
+		availability:            map[int64][]Rule{},
+		bookings:                map[uuid.UUID]Booking{},
+		reviews:                 map[uuid.UUID]Review{},
+		remindersSent:           map[reminderKey]bool{},
+		calendarGrants:          map[int64]fakeCalendarGrant{},
+		needsReconsent:          map[int64]bool{},
+		setBookingCalendarEvent: map[uuid.UUID][2]string{},
 	}
 }
 
@@ -89,6 +102,7 @@ func (r *fakeRepo) CreateProfile(_ context.Context, in ProfileInput) (Profile, e
 		Timezone:    in.Timezone,
 		Session:     in.Session,
 		MeetingURL:  in.MeetingURL,
+		ShowPhoto:   in.ShowPhoto,
 		Status:      StatusPending,
 	}
 	r.profiles[p.ID] = p
@@ -133,6 +147,7 @@ func (r *fakeRepo) UpdateProfile(_ context.Context, in ProfileInput) (Profile, e
 	p.Timezone = in.Timezone
 	p.Session = in.Session
 	p.MeetingURL = in.MeetingURL
+	p.ShowPhoto = in.ShowPhoto
 	r.profiles[id] = p
 	return p, nil
 }
@@ -398,6 +413,28 @@ func (r *fakeRepo) ReleaseReminderClaim(_ context.Context, bookingID uuid.UUID, 
 	return nil
 }
 
+func (r *fakeRepo) GetMentorCalendarGrant(_ context.Context, userID int64) (string, []string, bool, error) {
+	g, ok := r.calendarGrants[userID]
+	if !ok {
+		return "", nil, false, nil
+	}
+	return g.refreshTokenEnc, g.scopes, true, nil
+}
+
+func (r *fakeRepo) SetBookingCalendarEvent(_ context.Context, bookingID uuid.UUID, meetingURL, eventID string) error {
+	r.setBookingCalendarEvent[bookingID] = [2]string{meetingURL, eventID}
+	b := r.bookings[bookingID]
+	b.MeetingURL = meetingURL
+	b.GoogleEventID = eventID
+	r.bookings[bookingID] = b
+	return nil
+}
+
+func (r *fakeRepo) MarkCalendarGrantNeedsReconsent(_ context.Context, userID int64) error {
+	r.needsReconsent[userID] = true
+	return nil
+}
+
 type reminderKey struct {
 	booking uuid.UUID
 	offset  time.Duration
@@ -438,4 +475,28 @@ func (n *fakeNotifier) BookingReminder(_ context.Context, _ Booking, before time
 	}
 	n.reminders = append(n.reminders, before)
 	return nil
+}
+
+// fakeCalendarLinker stands in for CalendarLinker, so Book()/Cancel() are tested without
+// Google. deletedEventIDs records what Cancel() asked it to remove.
+type fakeCalendarLinker struct {
+	err            error
+	eventID        string
+	meetLink       string
+	deletedEventID string
+	deleteErr      error
+	calls          int
+}
+
+func (l *fakeCalendarLinker) CreateMeetEvent(_ context.Context, _ int64, _ MeetEventInput) (string, string, error) {
+	l.calls++
+	if l.err != nil {
+		return "", "", l.err
+	}
+	return l.eventID, l.meetLink, nil
+}
+
+func (l *fakeCalendarLinker) DeleteMeetEvent(_ context.Context, _ int64, eventID string) error {
+	l.deletedEventID = eventID
+	return l.deleteErr
 }

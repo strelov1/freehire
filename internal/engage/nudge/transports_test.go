@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/strelov1/freehire/internal/engage/emailnotify"
+	"github.com/strelov1/freehire/internal/engage/emailprefs"
 	"github.com/strelov1/freehire/internal/engage/notify"
 	"github.com/strelov1/freehire/internal/engage/telegramnotify"
 	"github.com/strelov1/freehire/internal/platform/db"
@@ -16,7 +18,8 @@ type captureSender struct {
 	subject, html, text string
 }
 
-func (s *captureSender) Send(_ context.Context, _, _, subject, html, text string) error {
+func (s *captureSender) Send(_ context.Context, m emailnotify.Message) error {
+	subject, html, text := m.Subject, m.HTML, m.Text
 	s.subject, s.html, s.text = subject, html, text
 	return nil
 }
@@ -27,14 +30,14 @@ func batchOf(kind string, n int) []Message {
 	ms := make([]Message, n)
 	for i := range ms {
 		id := strconv.Itoa(i)
-		ms[i] = Message{Kind: kind, JobTitle: "Job " + id, Company: "Company " + id, Slug: "job-" + id, DaysSilent: 20 + i}
+		ms[i] = Message{UserID: testUserID, Kind: kind, JobTitle: "Job " + id, Company: "Company " + id, Slug: "job-" + id, DaysSilent: 20 + i}
 	}
 	return ms
 }
 
 func TestEmailNotifier_BatchListsEveryNudgeUnderTheListLimit(t *testing.T) {
 	sender := &captureSender{}
-	n := NewEmailNotifier(sender, "jobs@freehire.me", "https://freehire.me")
+	n := NewEmailNotifier(sender, "jobs@freehire.me", "https://freehire.me", testLinks())
 
 	if err := n.Send(context.Background(), "email", "u@x.com", KindFollowUp, batchOf(KindFollowUp, 3)); err != nil {
 		t.Fatalf("Send: %v", err)
@@ -55,7 +58,7 @@ func TestEmailNotifier_BatchListsEveryNudgeUnderTheListLimit(t *testing.T) {
 // job-closed has nothing left to track, so its batch leads to the saved list.
 func TestEmailNotifier_JobClosedBatchLeadsToSavedJobs(t *testing.T) {
 	sender := &captureSender{}
-	n := NewEmailNotifier(sender, "jobs@freehire.me", "https://freehire.me")
+	n := NewEmailNotifier(sender, "jobs@freehire.me", "https://freehire.me", testLinks())
 
 	if err := n.Send(context.Background(), "email", "u@x.com", KindJobClosed, batchOf(KindJobClosed, 2)); err != nil {
 		t.Fatalf("Send: %v", err)
@@ -69,7 +72,7 @@ func TestEmailNotifier_JobClosedBatchLeadsToSavedJobs(t *testing.T) {
 // board — the third kind, and the one neither of the two above covers.
 func TestEmailNotifier_InterviewPrepBatchLeadsToTheTrackingBoard(t *testing.T) {
 	sender := &captureSender{}
-	n := NewEmailNotifier(sender, "jobs@freehire.me", "https://freehire.me")
+	n := NewEmailNotifier(sender, "jobs@freehire.me", "https://freehire.me", testLinks())
 
 	if err := n.Send(context.Background(), "email", "u@x.com", KindInterviewPrep, batchOf(KindInterviewPrep, 2)); err != nil {
 		t.Fatalf("Send: %v", err)
@@ -82,9 +85,31 @@ func TestEmailNotifier_InterviewPrepBatchLeadsToTheTrackingBoard(t *testing.T) {
 	}
 }
 
+// follow-up and interview-prep single-message notifications still lead to the
+// general tracking board — only the three auto-apply outcome kinds deep-link.
+func TestEmailNotifier_FollowUpAndInterviewPrepSingle_LeadToTheGeneralBoard(t *testing.T) {
+	for _, kind := range []string{KindFollowUp, KindInterviewPrep} {
+		t.Run(kind, func(t *testing.T) {
+			sender := &captureSender{}
+			n := NewEmailNotifier(sender, "jobs@freehire.me", "https://freehire.me", testLinks())
+			ms := []Message{{UserID: testUserID, Kind: kind, JobTitle: "Go Dev", Company: "Acme", Slug: "go-dev-acme"}}
+			if err := n.Send(context.Background(), "email", "u@x.com", kind, ms); err != nil {
+				t.Fatalf("Send: %v", err)
+			}
+			if !strings.Contains(sender.html, "https://freehire.me/my/tracking?utm_source=email") {
+				t.Errorf("html = %q, want the bare tracking-board destination", sender.html)
+			}
+			if strings.Contains(sender.html, "/my/tracking/go-dev-acme") {
+				t.Errorf("html = %q, must not deep-link to the specific application", sender.html)
+			}
+		})
+	}
+}
+
 // The three auto-apply outcome kinds are about an application, same as
-// follow-up/interview-prep, so they lead to the tracking board — never
-// /my/activity, unlike job-closed.
+// follow-up/interview-prep, so a batch leads to the tracking board — never
+// /my/activity, unlike job-closed. A single-application notification, unlike
+// follow-up/interview-prep, deep-links straight to that application's drawer.
 func TestEmailNotifier_AutoApplyOutcomeKinds_SingleAndBatch(t *testing.T) {
 	cases := []struct {
 		kind        string
@@ -97,29 +122,29 @@ func TestEmailNotifier_AutoApplyOutcomeKinds_SingleAndBatch(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.kind+"/single", func(t *testing.T) {
 			sender := &captureSender{}
-			n := NewEmailNotifier(sender, "jobs@freehire.me", "https://freehire.me")
-			ms := []Message{{Kind: c.kind, JobTitle: "Go Dev", Company: "Acme", Slug: "go-dev-acme"}}
+			n := NewEmailNotifier(sender, "jobs@freehire.me", "https://freehire.me", testLinks())
+			ms := []Message{{UserID: testUserID, Kind: c.kind, JobTitle: "Go Dev", Company: "Acme", Slug: "go-dev-acme"}}
 			if err := n.Send(context.Background(), "email", "u@x.com", c.kind, ms); err != nil {
 				t.Fatalf("Send: %v", err)
 			}
 			if !strings.Contains(sender.subject, c.wantSubject) {
 				t.Errorf("subject = %q, want it to contain %q", sender.subject, c.wantSubject)
 			}
-			if !strings.Contains(sender.html, "/my/tracking") {
-				t.Errorf("html = %q, want the tracking-board destination", sender.html)
+			if !strings.Contains(sender.html, "/my/tracking/go-dev-acme") {
+				t.Errorf("html = %q, want a deep link to the specific application", sender.html)
 			}
 		})
 		t.Run(c.kind+"/batch", func(t *testing.T) {
 			sender := &captureSender{}
-			n := NewEmailNotifier(sender, "jobs@freehire.me", "https://freehire.me")
+			n := NewEmailNotifier(sender, "jobs@freehire.me", "https://freehire.me", testLinks())
 			if err := n.Send(context.Background(), "email", "u@x.com", c.kind, batchOf(c.kind, 2)); err != nil {
 				t.Fatalf("Send: %v", err)
 			}
 			if !strings.Contains(sender.subject, "2") {
 				t.Errorf("subject = %q, want the batch count", sender.subject)
 			}
-			if !strings.Contains(sender.html, "/my/tracking") {
-				t.Errorf("html = %q, want the tracking-board destination", sender.html)
+			if !strings.Contains(sender.html, "https://freehire.me/my/tracking?utm_source=email") {
+				t.Errorf("html = %q, want the bare tracking-board destination for a batch", sender.html)
 			}
 		})
 	}
@@ -133,8 +158,8 @@ func TestTelegramNotifier_AutoApplyOutcomeKinds_SingleAndBatch(t *testing.T) {
 			if !strings.Contains(got, "Go Dev") || !strings.Contains(got, "Acme") {
 				t.Errorf("render = %q, want the job title and company", got)
 			}
-			if !strings.Contains(got, "/my/tracking") {
-				t.Errorf("render = %q, want the tracking-board link", got)
+			if !strings.Contains(got, "/my/tracking/go-dev-acme") {
+				t.Errorf("render = %q, want a deep link to the specific application", got)
 			}
 		})
 		t.Run(kind+"/batch", func(t *testing.T) {
@@ -142,6 +167,26 @@ func TestTelegramNotifier_AutoApplyOutcomeKinds_SingleAndBatch(t *testing.T) {
 			got := n.render(kind, batchOf(kind, 2))
 			if !strings.Contains(got, "<b>2</b>") {
 				t.Errorf("render = %q, want the batch count", got)
+			}
+			// A batch within the list limit names each job individually (jobLine),
+			// never a per-application deep link — batchDestination's bare-board link
+			// only appears in the overflow tail, exercised by the "+more" tests below.
+		})
+	}
+}
+
+// follow-up and interview-prep single-message notifications still lead to the
+// general tracking board — only the three auto-apply outcome kinds deep-link.
+func TestTelegramNotifier_FollowUpAndInterviewPrepSingle_LeadToTheGeneralBoard(t *testing.T) {
+	for _, kind := range []string{KindFollowUp, KindInterviewPrep} {
+		t.Run(kind, func(t *testing.T) {
+			n := NewTelegramNotifier(nil, "https://freehire.me")
+			got := n.render(kind, []Message{{Kind: kind, JobTitle: "Go Dev", Company: "Acme", Slug: "go-dev-acme"}})
+			if !strings.Contains(got, "https://freehire.me/my/tracking\"") {
+				t.Errorf("render = %q, want the bare tracking-board destination", got)
+			}
+			if strings.Contains(got, "/my/tracking/go-dev-acme") {
+				t.Errorf("render = %q, must not deep-link to the specific application", got)
 			}
 		})
 	}
@@ -168,7 +213,7 @@ func TestBatchDestination_IsOneRuleForBothChannels(t *testing.T) {
 	} {
 		path, _ := batchDestination(kind)
 		tg := NewTelegramNotifier(nil, "https://freehire.me").batchURL(kind)
-		mail, _ := NewEmailNotifier(&captureSender{}, "j@f.me", "https://freehire.me").batchCTA(kind)
+		mail, _ := NewEmailNotifier(&captureSender{}, "j@f.me", "https://freehire.me", testLinks()).batchCTA(kind)
 		if tg != "https://freehire.me"+path || !strings.HasPrefix(mail, "https://freehire.me"+path) {
 			t.Errorf("%s: telegram %q and email %q disagree with %q", kind, tg, mail, path)
 		}
@@ -179,7 +224,7 @@ func TestBatchDestination_IsOneRuleForBothChannels(t *testing.T) {
 // notify.ListLimit and counts the rest.
 func TestEmailNotifier_BatchOverTheListLimitCountsTheRest(t *testing.T) {
 	sender := &captureSender{}
-	n := NewEmailNotifier(sender, "jobs@freehire.me", "https://freehire.me")
+	n := NewEmailNotifier(sender, "jobs@freehire.me", "https://freehire.me", testLinks())
 
 	if err := n.Send(context.Background(), "email", "u@x.com", KindFollowUp, batchOf(KindFollowUp, notify.ListLimit+4)); err != nil {
 		t.Fatalf("Send: %v", err)
@@ -198,9 +243,9 @@ func TestEmailNotifier_BatchOverTheListLimitCountsTheRest(t *testing.T) {
 // A batch of one must be indistinguishable from what shipped before grouping.
 func TestEmailNotifier_SingleNudgeKeepsItsOwnWording(t *testing.T) {
 	sender := &captureSender{}
-	n := NewEmailNotifier(sender, "jobs@freehire.me", "https://freehire.me")
+	n := NewEmailNotifier(sender, "jobs@freehire.me", "https://freehire.me", testLinks())
 
-	ms := []Message{{Kind: KindFollowUp, JobTitle: "Go Dev", Company: "Acme", Slug: "go-dev-acme", DaysSilent: 12}}
+	ms := []Message{{UserID: testUserID, Kind: KindFollowUp, JobTitle: "Go Dev", Company: "Acme", Slug: "go-dev-acme", DaysSilent: 12}}
 	if err := n.Send(context.Background(), "email", "u@x.com", KindFollowUp, ms); err != nil {
 		t.Fatalf("Send: %v", err)
 	}
@@ -266,3 +311,13 @@ func TestPushNotifier_BatchIsOneNotificationWithoutADeepLink(t *testing.T) {
 		t.Errorf("data[slug] = %q, want no deep link for a multi-job batch", got.data["slug"])
 	}
 }
+
+// testLinks signs the unsubscribe URLs these mails carry. The secret only has to
+// clear emailprefs' length floor - nothing here verifies a token.
+func testLinks() *emailprefs.Links {
+	return emailprefs.NewLinks("mail-test-secret-padded-to-32-byte", "https://freehire.me")
+}
+
+// testUserID is whose mail these samples are. Any positive id will do: the token
+// only has to be mintable.
+const testUserID int64 = 7

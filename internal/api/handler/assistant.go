@@ -967,7 +967,18 @@ func (h *assistantHandlers) PostAssistantAutopilot(c *fiber.Ctx) error {
 //
 // analysis may be nil (no match surface wired) — every method on it is a no-op then.
 func (h *assistantHandlers) runAutopilotToCompletion(ctx context.Context, analysis *autopilotAnalysis, sess assistant.Session, jobDescription string, runner *assistant.Runner, reg *assistant.Registry, system string, emit func(assistant.Event)) error {
-	analysis.ensure(ctx)
+	// A run with no requirement list is not a cheaper run, it is a different one: the brief
+	// is "go through every requirement", cv_context answers that there are none, and the
+	// agent improvises a turn's worth of edits against nothing. Measured on production
+	// 2026-08-25..09-08, 36% of runs went out that way and nothing said so.
+	//
+	// Refusing costs the candidate a run they asked for. Proceeding costs them their
+	// document, edited against a vacancy nobody read — and undoing that is their work, not
+	// ours. So this stops, and says why on the stream the client is already reading.
+	if err := analysis.ensure(ctx); err != nil {
+		log.Printf("assistant: autopilot has no requirement list, session %s: %v", sess.ID, err)
+		return h.refuseAutopilotWithoutAPlan(emit)
+	}
 	h.cv.logSurfaceAlign(ctx, sess.UserID, *sess.CVID, jobDescription)
 	h.layDownRunPlan(ctx, sess)
 
@@ -979,6 +990,31 @@ func (h *assistantHandlers) runAutopilotToCompletion(ctx context.Context, analys
 	analysis.refresh(context.WithoutCancel(ctx))
 	return err
 }
+
+// refuseAutopilotWithoutAPlan ends the run before it starts, on the stream the client is
+// already reading.
+//
+// Both frames are load-bearing. The text is what the candidate sees — a run that stopped
+// with no explanation is indistinguishable from one that ran and found nothing to do. The
+// terminal result is what the CLIENT needs: the web app only calls endTurn() on a `result`,
+// so a stream that simply closes leaves the session believing a turn is still in flight and
+// queues every later message behind one that is over (see Runner.Run's own note on this).
+//
+// It returns an error so the caller logs and reports it, exactly as a failed turn does.
+func (h *assistantHandlers) refuseAutopilotWithoutAPlan(emit func(assistant.Event)) error {
+	emit(assistant.Event{
+		Kind: assistant.EventAssistantText,
+		Text: "I could not read this vacancy's requirements — the fit analysis did not " +
+			"complete, so there was nothing for the run to work through. Your CV is " +
+			"untouched. Try again in a moment.",
+	})
+	emit(assistant.Event{Kind: assistant.EventResult, StopReason: assistant.StopError, IsError: true})
+	return errNoRequirementList
+}
+
+// errNoRequirementList marks a run refused for want of a fit analysis. Distinct from the
+// chain's own error: what stopped the run is the ABSENCE of a plan, whatever produced it.
+var errNoRequirementList = errors.New("autopilot: no requirement list to walk")
 
 // prepareAutopilotAnalysis delegates to matchHandlers.prepareAutopilotRun, which assembles
 // both halves of the run's fit analysis — the fill that gives cv_context something to read,

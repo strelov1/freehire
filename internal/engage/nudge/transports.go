@@ -12,6 +12,7 @@ import (
 
 	"github.com/strelov1/freehire/internal/application/mailtpl"
 	"github.com/strelov1/freehire/internal/engage/emailnotify"
+	"github.com/strelov1/freehire/internal/engage/emailprefs"
 	"github.com/strelov1/freehire/internal/engage/notify"
 	"github.com/strelov1/freehire/internal/engage/telegramnotify"
 )
@@ -153,11 +154,13 @@ func batchDestination(kind string) (path, label string) {
 	return "/my/tracking", "Open your tracking board"
 }
 
-// renderOne is the single-nudge body, kept per kind and unchanged, because a batch
-// of one must be indistinguishable from what shipped before grouping.
+// renderOne is the single-nudge body, kept as its own function per kind because a
+// batch of one must render identically to a real single-message send — never a
+// one-item batch headline — regardless of how each kind's own wording evolves.
 func (n *TelegramNotifier) renderOne(m Message) string {
 	title, company := html.EscapeString(m.JobTitle), html.EscapeString(m.Company)
 	trackingURL, jobURL := n.origin+"/my/tracking", n.origin+"/jobs/"+m.Slug
+	applicationURL := n.origin + "/my/tracking/" + m.Slug
 	switch m.Kind {
 	case KindFollowUp:
 		return fmt.Sprintf(
@@ -173,16 +176,16 @@ func (n *TelegramNotifier) renderOne(m Message) string {
 			title, company, jobURL)
 	case KindAutoApplySubmitted:
 		return fmt.Sprintf(
-			"🎉 Auto-apply submitted your application to <b>%s</b> at <b>%s</b>.\n<a href=\"%s\">Open your tracking board →</a>",
-			title, company, trackingURL)
+			"🎉 Auto-apply submitted your application to <b>%s</b> at <b>%s</b>.\n<a href=\"%s\">Open your application →</a>",
+			title, company, applicationURL)
 	case KindAutoApplyBlocked:
 		return fmt.Sprintf(
-			"⚠️ Auto-apply couldn't finish <b>%s</b> at <b>%s</b> — a required question needs your own answer.\n<a href=\"%s\">Open your tracking board →</a>",
-			title, company, trackingURL)
+			"⚠️ Auto-apply couldn't finish <b>%s</b> at <b>%s</b> — a required question needs your own answer.\n<a href=\"%s\">Open your application →</a>",
+			title, company, applicationURL)
 	case KindAutoApplyFailed:
 		return fmt.Sprintf(
-			"Auto-apply couldn't submit <b>%s</b> at <b>%s</b>, and won't try again.\n<a href=\"%s\">Open your tracking board →</a>",
-			title, company, trackingURL)
+			"Auto-apply couldn't submit <b>%s</b> at <b>%s</b>, and won't try again.\n<a href=\"%s\">Open your application →</a>",
+			title, company, applicationURL)
 	default:
 		return fmt.Sprintf("<b>%s</b> at <b>%s</b>: <a href=\"%s\">Open your tracking board →</a>", title, company, trackingURL)
 	}
@@ -195,13 +198,20 @@ type EmailNotifier struct {
 	from   string
 	origin string
 	layout *mailtpl.Layout
+	links  *emailprefs.Links
 }
 
 // NewEmailNotifier builds an EmailNotifier sending from `from` through sender, with
-// links rooted at origin.
-func NewEmailNotifier(sender emailnotify.Sender, from, origin string) *EmailNotifier {
+// links rooted at origin and unsubscribe links signed by links.
+func NewEmailNotifier(sender emailnotify.Sender, from, origin string, links *emailprefs.Links) *EmailNotifier {
 	base := strings.TrimRight(origin, "/")
-	return &EmailNotifier{sender: sender, from: emailnotify.From(senderName, from), origin: base, layout: mailtpl.New(base)}
+	return &EmailNotifier{
+		sender: sender,
+		from:   emailnotify.From(senderName, from),
+		origin: base,
+		layout: mailtpl.New(base),
+		links:  links,
+	}
 }
 
 // Send renders the batch as one mail and delivers it to the address in dest.
@@ -209,13 +219,22 @@ func (n *EmailNotifier) Send(ctx context.Context, _ string, dest, kind string, m
 	if len(ms) == 0 {
 		return nil
 	}
+	// A batch is one (account, kind), so the first message names the recipient.
+	unsubscribe, err := n.links.For(ms[0].UserID, emailprefs.GroupActivity)
+	if err != nil {
+		return fmt.Errorf("nudge: unsubscribe link for user %d: %w", ms[0].UserID, err)
+	}
 	var subject, htmlBody, textBody string
 	if len(ms) == 1 {
-		subject, htmlBody, textBody = n.render(ms[0])
+		subject, htmlBody, textBody = n.render(ms[0], unsubscribe)
 	} else {
-		subject, htmlBody, textBody = n.renderBatch(kind, ms)
+		subject, htmlBody, textBody = n.renderBatch(kind, ms, unsubscribe)
 	}
-	return n.sender.Send(ctx, n.from, dest, subject, htmlBody, textBody)
+	return n.sender.Send(ctx, emailnotify.Message{
+		From: n.from, To: dest, Subject: subject, HTML: htmlBody,
+		Text:  textBody + emailprefs.TextFooter(unsubscribe),
+		Group: emailprefs.GroupActivity, UnsubscribeURL: unsubscribe,
+	})
 }
 
 // batchBody is what the batch template renders from. Jobs carries the source data,
@@ -244,7 +263,7 @@ var batchTemplate = template.Must(mailtpl.Partials().New("nudge-batch").Parse(`
 {{template "button" (mailLink .URL .CTA)}}`))
 
 // renderBatch builds the multi-nudge mail for one kind.
-func (n *EmailNotifier) renderBatch(kind string, ms []Message) (subject, htmlBody, textBody string) {
+func (n *EmailNotifier) renderBatch(kind string, ms []Message, unsubscribe string) (subject, htmlBody, textBody string) {
 	shown, more := notify.Listed(ms)
 	rows := make([]mailtpl.Job, 0, len(shown))
 	for _, m := range shown {
@@ -260,10 +279,11 @@ func (n *EmailNotifier) renderBatch(kind string, ms []Message) (subject, htmlBod
 	_ = batchTemplate.Execute(&content, batchBody{Jobs: rows, More: more, Lead: lead, URL: url, CTA: cta})
 
 	htmlBody = n.layout.Render(mailtpl.Body{
-		Preheader: pre,
-		Heading:   head,
-		Content:   template.HTML(content.String()), //nolint:gosec // rendered by the trusted template above
-		Footer:    "You’re getting this because you are tracking these applications on freehire.",
+		Preheader:      pre,
+		Heading:        head,
+		Content:        template.HTML(content.String()), //nolint:gosec // rendered by the trusted template above
+		Footer:         "You’re getting this because you are tracking these applications on freehire.",
+		UnsubscribeURL: unsubscribe,
 	})
 
 	var b strings.Builder
@@ -387,9 +407,10 @@ var bodies = template.Must(mailtpl.Partials().New("nudge").Parse(`
 {{template "button" (mailLink .URL .CTA)}}{{end}}
 `))
 
-func (n *EmailNotifier) render(m Message) (subject, htmlBody, textBody string) {
+func (n *EmailNotifier) render(m Message, unsubscribe string) (subject, htmlBody, textBody string) {
 	trackingURL := n.origin + "/my/tracking?utm_source=email"
 	jobURL := n.origin + "/jobs/" + m.Slug + "?utm_source=email"
+	applicationURL := n.origin + "/my/tracking/" + m.Slug + "?utm_source=email"
 
 	// block names the body template; head and pre are the shell's heading and the
 	// inbox preview line.
@@ -422,18 +443,21 @@ func (n *EmailNotifier) render(m Message) (subject, htmlBody, textBody string) {
 	case KindAutoApplySubmitted:
 		block, head, pre = "auto_apply_submitted", "Application submitted", "Auto-apply submitted your application"
 		subject = fmt.Sprintf("Submitted: %s at %s", m.JobTitle, m.Company)
-		textBody = fmt.Sprintf("Auto-apply submitted your application to %s at %s.\n\nOpen your tracking board: %s\n",
-			m.JobTitle, m.Company, trackingURL)
+		data.URL, data.CTA = applicationURL, "Open your application"
+		textBody = fmt.Sprintf("Auto-apply submitted your application to %s at %s.\n\nOpen your application: %s\n",
+			m.JobTitle, m.Company, data.URL)
 	case KindAutoApplyBlocked:
 		block, head, pre = "auto_apply_blocked", "Needs your attention", "Auto-apply couldn't finish this application"
 		subject = fmt.Sprintf("Needs your attention: %s at %s", m.JobTitle, m.Company)
-		textBody = fmt.Sprintf("Auto-apply couldn't finish %s at %s — a required question needs your own answer.\n\nOpen your tracking board: %s\n",
-			m.JobTitle, m.Company, trackingURL)
+		data.URL, data.CTA = applicationURL, "Open your application"
+		textBody = fmt.Sprintf("Auto-apply couldn't finish %s at %s — a required question needs your own answer.\n\nOpen your application: %s\n",
+			m.JobTitle, m.Company, data.URL)
 	case KindAutoApplyFailed:
 		block, head, pre = "auto_apply_failed", "Auto-apply couldn't submit this application", "Auto-apply couldn't submit this application"
 		subject = fmt.Sprintf("Couldn't submit: %s at %s", m.JobTitle, m.Company)
-		textBody = fmt.Sprintf("Auto-apply couldn't submit %s at %s, and won't try again.\n\nOpen your tracking board: %s\n",
-			m.JobTitle, m.Company, trackingURL)
+		data.URL, data.CTA = applicationURL, "Open your application"
+		textBody = fmt.Sprintf("Auto-apply couldn't submit %s at %s, and won't try again.\n\nOpen your application: %s\n",
+			m.JobTitle, m.Company, data.URL)
 	default:
 		block, head, pre = "plain", fmt.Sprintf("%s at %s", m.JobTitle, m.Company), "An update on a job you are tracking"
 		subject = fmt.Sprintf("%s at %s", m.JobTitle, m.Company)
@@ -446,10 +470,11 @@ func (n *EmailNotifier) render(m Message) (subject, htmlBody, textBody string) {
 	_ = bodies.ExecuteTemplate(&content, block, data)
 
 	htmlBody = n.layout.Render(mailtpl.Body{
-		Preheader: pre,
-		Heading:   head,
-		Content:   template.HTML(content.String()), //nolint:gosec // rendered by the trusted templates above
-		Footer:    "You’re getting this because you are tracking this application on freehire.",
+		Preheader:      pre,
+		Heading:        head,
+		UnsubscribeURL: unsubscribe,
+		Content:        template.HTML(content.String()), //nolint:gosec // rendered by the trusted templates above
+		Footer:         "You’re getting this because you are tracking this application on freehire.",
 	})
 	return subject, htmlBody, textBody
 }

@@ -84,6 +84,10 @@ func Listed[T any](items []T) (shown []T, more int) {
 // much shorter slice a message itemizes. Total is the true count, so a renderer
 // can show an "and N more" tail under either bound.
 type Digest struct {
+	// UserID is whose digest this is. Only the email channel reads it, to sign that
+	// recipient's unsubscribe link — a chat or webhook destination the user
+	// connected themselves is turned off where they connected it.
+	UserID          int64
 	SavedSearchName string
 	Total           int
 	Jobs            []DigestJob

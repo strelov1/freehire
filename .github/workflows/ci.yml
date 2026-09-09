@@ -562,6 +562,35 @@ jobs:
           fi
           echo 'docs/API.md matches web/src/lib/docs/api-spec.ts.'
 
+      - name: API docs generator smoke test
+        run: pnpm run gen:api-docs:smoke
+
+      # web/static/api-reference.openapi.json is the OpenAPI document the Scalar-based
+      # /docs/api reference renders, generated from the same api-spec.ts source as
+      # docs/API.md above — same ratchet, same reason it lives here rather than in its
+      # own job. This is UNRELATED to web/static/openapi.yaml (the hand-maintained
+      # ChatGPT Actions schema, linted separately in the `artifacts` job): that file is
+      # deliberately narrow for the GPT Actions importer's own limits, this one is the
+      # whole public API surface.
+      - name: Assert the generated OpenAPI reference matches its source
+        run: |
+          pnpm run gen:openapi
+          if [ -n "$(git status --porcelain -- static/api-reference.openapi.json)" ]; then
+            git --no-pager diff -- static/api-reference.openapi.json
+            echo
+            echo 'web/static/api-reference.openapi.json is stale. Run "pnpm run gen:openapi" in web/ and commit the result.'
+            exit 1
+          fi
+          echo 'web/static/api-reference.openapi.json matches web/src/lib/docs/api-spec.ts.'
+
+      - name: OpenAPI generator smoke test
+        run: pnpm run gen:openapi:smoke
+
+      # Same `minimal` gate as web/static/openapi.yaml in the `artifacts` job: can a
+      # client generator read this at all.
+      - name: Validate the generated OpenAPI reference
+        run: npx --yes @redocly/cli@2.49.0 lint static/api-reference.openapi.json --extends=minimal
+
       - name: Unit tests with coverage
         run: pnpm run test:coverage
 

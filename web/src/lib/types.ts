@@ -702,14 +702,17 @@ export interface MyJob {
   auto_apply_status?: AutoApplyStatus;
 }
 
-/** The six-value candidate-facing status for a live auto-apply attempt. */
+/** The seven-value candidate-facing status for a live auto-apply attempt. */
 type AutoApplyStatus =
   | 'tailoring'
   | 'pending_review'
   | 'approved'
   | 'blocked'
   | 'declined'
-  | 'failed';
+  | 'failed'
+  /** The tailoring run itself gave up without producing a CV — distinct from `failed`,
+   *  which is a submission that gave up with one in hand. */
+  | 'tailor_failed';
 
 /** One resolved question/answer pair in an auto-apply answer preview. */
 interface AutoApplyPreviewField {
@@ -720,7 +723,7 @@ interface AutoApplyPreviewField {
 /** One required question an auto-apply answer preview has no answer for yet.
  *  `will_draft_at_submission` distinguishes "the real submission will fill this in
  *  automatically" from "nothing can answer this". */
-interface AutoApplyPreviewPending {
+export interface AutoApplyPreviewPending {
   label: string;
   will_draft_at_submission: boolean;
 }
@@ -751,6 +754,16 @@ export interface AutoApplyReviewInfo {
   queue_id: number;
   resolved_preview?: AutoApplyResolvedPreview;
   unmapped?: AutoApplyUnmappedField[];
+}
+
+/** One answer the candidate has banked for a screening question. */
+export interface BankedAnswer {
+  id: number;
+  topic: string;
+  question: string;
+  answer: string;
+  provenance: string;
+  updated_at: string;
 }
 
 /** The account-level notification rule: whether notifications are on, and the
@@ -1577,8 +1590,7 @@ export interface ApiSuggestionPart {
  *  are the same wire struct (`mentorResponse` in internal/api/handler/mentorship.go).
  *
  *  Deliberately named, unlike a referral offer: a directory of faceless cards gives a
- *  seeker nothing to choose between. There is no avatar yet, and the mentor-profile spec
- *  argues why rather than leaving the requirement half-met.
+ *  seeker nothing to choose between.
  *
  *  `meeting_url` is absent here on purpose — it is a live room, so only a booked party
  *  receives it, on their own booking. The owner's and moderator's routes add `status`,
@@ -1600,6 +1612,10 @@ export interface Mentor {
   session_minutes: number;
   rating_count: number;
   rating_avg: number;
+  /** The mentor's own opt-in to publish their account's CV headshot at
+   *  `/api/v1/mentors/{slug}/photo`. Off by default; render the avatar only when this
+   *  is true, and hide it on a load error rather than showing a broken-image icon. */
+  show_photo: boolean;
 }
 
 /** One offerable hour, carrying three views of the same moment on purpose.
@@ -1732,4 +1748,23 @@ export interface MentorProfileInput {
   notice_minutes: number;
   horizon_days: number;
   meeting_url: string;
+  /** The mentor's own opt-in to publish their account's CV headshot. Off by default —
+   *  see `Mentor.show_photo`. */
+  show_photo: boolean;
+}
+
+/** Best-effort, per-field prefill for the mentor-profile CREATE form, composed from the
+ *  candidate's résumé, user profile, account and experience bank. Every field is
+ *  independently optional — omitted, not an empty string or array, when its source has
+ *  nothing to offer — so seed only the fields that are present and leave the rest at
+ *  their ordinary blank defaults. A one-time starting point: apply it once on mount,
+ *  then treat every field as an ordinary independent input. */
+export interface MentorProfileSuggestions {
+  name?: string;
+  headline?: string;
+  bio?: string;
+  languages?: string[];
+  topics?: string[];
+  timezone?: string;
+  company_slug?: string;
 }

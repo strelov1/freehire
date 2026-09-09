@@ -63,12 +63,6 @@ var proxiedProviders = map[string]func(HTTPClient) Source{
 	// blocked, setting SOURCES_PROXY_URL routes only this provider through the proxy with no code
 	// change; while the proxy is unset this entry is inert. A fixed, trusted host (SSRF caveat).
 	"geekjob": func(c HTTPClient) Source { return NewGeekjob(c) },
-	// hh.ru's detail pages 403 the direct datacenter IP, so on prod it egresses through the proxy;
-	// its high-volume per-vacancy detail fan-out then 429s the single proxy IP unless paced (the
-	// first prod run landed only ~34% of descriptions unpaced), so — like careerspage/vagas — it is
-	// rate-paced (pacedHTMLGetter) to hold the aggregate rate under the proxy window. While
-	// SOURCES_PROXY_URL is unset this entry is inert (direct crawl is unpaced, fine for local/dev).
-	"hh": func(c HTTPClient) Source { return NewHH(pacedHTMLGetter(c, hhRequestInterval, hhRequestBurst)) },
 	// career.habr.com sits behind Qrator, which challenges the per-vacancy detail HTML from the
 	// prod datacenter IP (the listing JSON passes, but the description parse fails, leaving jobs
 	// with empty descriptions and so no derived skills/geo/enrichment). A residential IP is served
@@ -102,7 +96,7 @@ var proxiedProviders = map[string]func(HTTPClient) Source{
 // and both grew by ~500 boards in the August harvest, so the burst is getting worse.
 //
 // Why not route them through the proxy wholesale: it is a single shared address (verified — six
-// calls, one exit IP), and it is what eightfold, djinni, 2gis and hh have INSTEAD of a direct
+// calls, one exit IP), and it is what eightfold, djinni and 2gis have INSTEAD of a direct
 // path. Moving ~3000 boards an hour onto it would concentrate the same burst on a weaker IP and
 // take the budget from the providers with nowhere else to go.
 var refusalRetryProviders = map[string]func(HTTPClient) Source{
@@ -111,6 +105,20 @@ var refusalRetryProviders = map[string]func(HTTPClient) Source{
 	// producing them. Without the pacer this entry alone moved only a quarter of the failures.
 	"teamtailor": func(c HTTPClient) Source {
 		return NewTeamtailor(pacedHTMLGetter(c, teamtailorRequestInterval, teamtailorRequestBurst))
+	},
+	// ADP is the same shape as teamtailor, measured on prod 2026-09-09 after the catalogue grew
+	// from 2,798 boards to 7,890: one run logged 3,028 boards refused on their listing call, and
+	// board_health carried a consecutive failure for 1,962 of them. Asked in isolation minutes
+	// later the direct IP served two of three sampled boards 200 and refused the third, while the
+	// proxy served all three — the signature of our own burst rather than an address the platform
+	// has blocked. Pacing already holds the rate; what it cannot do is shorten a run that is now
+	// three times as long, so the same rate spends three times the window.
+	//
+	// Both ADP products are listed. They are separate platforms with separate limiters (see
+	// pacedADPMyJobsGetter), and neither can recover a refusal without this.
+	"adp": func(c HTTPClient) Source { return NewADP(pacedADPGetter(c)) },
+	"adpmyjobs": func(c HTTPClient) Source {
+		return NewADPMyJobs(pacedADPMyJobsGetter(c))
 	},
 }
 
@@ -160,6 +168,40 @@ func ApplyProxyEgress(registry map[string]Source) error {
 		}
 	}
 	return nil
+}
+
+// ClientFor returns the client the named provider's crawl would use under the configured
+// proxy policy: wholly proxied where the platform blocks the direct datacenter IP,
+// refusal-retried where it merely rate-limits it, and direct otherwise. It reads the same
+// two allowlists ApplyProxyEgress does, so a provider's policy is stated once.
+//
+// It exists because ApplyProxyEgress can only rewire a provider's ADAPTER, and not every
+// caller reaches a platform through one. cmd/harvest-boards probes a candidate board with
+// a client it builds itself, so it was crawling workable on exactly the direct IP the
+// workable entry in refusalRetryProviders exists to keep it off — measured on prod
+// 2026-09-08, where every board probed from the prod IP returned 429 while the same boards
+// through the proxy returned 200.
+//
+// Like ApplyProxyEgress it is a no-op with SOURCES_PROXY_URL unset, and fails rather than
+// quietly falling back when the variable is set but unparseable — a caller that asked for
+// the proxied policy must not be handed the blocked path instead.
+func ClientFor(provider string) (*Client, error) {
+	raw := strings.TrimSpace(os.Getenv("SOURCES_PROXY_URL"))
+	if raw == "" {
+		return NewClient(), nil
+	}
+	u, err := url.Parse(raw)
+	if err != nil || u.Host == "" {
+		return nil, fmt.Errorf("sources: invalid SOURCES_PROXY_URL %q", redactProxy(raw))
+	}
+	switch {
+	case proxiedProviders[provider] != nil:
+		return NewProxyClient(u), nil
+	case refusalRetryProviders[provider] != nil:
+		return NewRefusalRetryClient(u), nil
+	default:
+		return NewClient(), nil
+	}
 }
 
 // proxiedFingerprintProviders are the fingerprint-client providers whose edge blocks the

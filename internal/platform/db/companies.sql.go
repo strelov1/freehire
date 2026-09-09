@@ -187,8 +187,69 @@ func (q *Queries) EstimateHiringCompanies(ctx context.Context) (int64, error) {
 	return column_1, err
 }
 
+const fillCompanyDescriptionFromIngest = `-- name: FillCompanyDescriptionFromIngest :exec
+INSERT INTO companies (
+    slug, name, tagline, company_info, is_reference, company_info_at
+) VALUES (
+    $1, $2, $3, $4, false, now()
+)
+ON CONFLICT (slug) DO UPDATE SET
+    tagline         = COALESCE(NULLIF(companies.tagline, ''), EXCLUDED.tagline),
+    company_info    = EXCLUDED.company_info || companies.company_info,
+    company_info_at = now(),
+    updated_at      = now()
+`
+
+type FillCompanyDescriptionFromIngestParams struct {
+	Slug        string          `json:"slug"`
+	Name        string          `json:"name"`
+	Tagline     pgtype.Text     `json:"tagline"`
+	CompanyInfo json.RawMessage `json:"company_info"`
+}
+
+// Applies a company-level description an ATS adapter yielded alongside its board
+// crawl (see sources.CompanyDescriber — Greenhouse's board-metadata endpoint today).
+// Same fill-gap shape as UpsertYCCompany's non-owned columns: tagline fills only a
+// blank, company_info merges key-wise (existing keys win), touching nothing else —
+// this source has no industries/year_founded/etc. to assert. A slug with no existing
+// row is inserted with is_reference = false, since it is arriving with a real
+// crawled job, not as a reference-only row the way an unmatched YC entry is.
+func (q *Queries) FillCompanyDescriptionFromIngest(ctx context.Context, arg FillCompanyDescriptionFromIngestParams) error {
+	_, err := q.db.Exec(ctx, fillCompanyDescriptionFromIngest,
+		arg.Slug,
+		arg.Name,
+		arg.Tagline,
+		arg.CompanyInfo,
+	)
+	return err
+}
+
+const fillCompanyInfoFromWikipedia = `-- name: FillCompanyInfoFromWikipedia :exec
+UPDATE companies
+SET tagline          = COALESCE(NULLIF(tagline, ''), $1),
+    company_info     = $2 || company_info,
+    company_info_at  = now(),
+    company_info_wikipedia_checked_at = now(),
+    updated_at       = now()
+WHERE slug = $3
+`
+
+type FillCompanyInfoFromWikipediaParams struct {
+	Tagline     pgtype.Text     `json:"tagline"`
+	CompanyInfo json.RawMessage `json:"company_info"`
+	Slug        string          `json:"slug"`
+}
+
+// Applies a confident Wikipedia match: fills tagline only if blank, merges the
+// company_info keys (existing keys win on collision, matching UpsertYCCompany's
+// gap-fill rule), and marks the company checked so it is never looked up again.
+func (q *Queries) FillCompanyInfoFromWikipedia(ctx context.Context, arg FillCompanyInfoFromWikipediaParams) error {
+	_, err := q.db.Exec(ctx, fillCompanyInfoFromWikipedia, arg.Tagline, arg.CompanyInfo, arg.Slug)
+	return err
+}
+
 const getCompany = `-- name: GetCompany :one
-SELECT slug, name, created_at, updated_at, collections, job_count, regions, countries, domains, company_types, company_sizes, industries, year_founded, employee_count, hq_country, organization_type, tagline, company_info, is_reference, company_info_at, remote_regions, yc_batch, yc_status, yc_stage, yc_flags, maturity, subindustry, upvote_count, downvote_count, feedback_count, feedback_rating_avg, industries_derived
+SELECT slug, name, created_at, updated_at, collections, job_count, regions, countries, domains, company_types, company_sizes, industries, year_founded, employee_count, hq_country, organization_type, tagline, company_info, is_reference, company_info_at, remote_regions, yc_batch, yc_status, yc_stage, yc_flags, maturity, subindustry, upvote_count, downvote_count, feedback_count, feedback_rating_avg, industries_derived, company_info_wikipedia_checked_at
 FROM companies
 WHERE slug = $1
 `
@@ -232,6 +293,7 @@ func (q *Queries) GetCompany(ctx context.Context, slug string) (Company, error) 
 		&i.FeedbackCount,
 		&i.FeedbackRatingAvg,
 		&i.IndustriesDerived,
+		&i.CompanyInfoWikipediaCheckedAt,
 	)
 	return i, err
 }
@@ -388,7 +450,7 @@ func (q *Queries) ListCompanies(ctx context.Context, arg ListCompaniesParams) ([
 }
 
 const listCompaniesForReindex = `-- name: ListCompaniesForReindex :many
-SELECT slug, name, created_at, updated_at, collections, job_count, regions, countries, domains, company_types, company_sizes, industries, year_founded, employee_count, hq_country, organization_type, tagline, company_info, is_reference, company_info_at, remote_regions, yc_batch, yc_status, yc_stage, yc_flags, maturity, subindustry, upvote_count, downvote_count, feedback_count, feedback_rating_avg, industries_derived
+SELECT slug, name, created_at, updated_at, collections, job_count, regions, countries, domains, company_types, company_sizes, industries, year_founded, employee_count, hq_country, organization_type, tagline, company_info, is_reference, company_info_at, remote_regions, yc_batch, yc_status, yc_stage, yc_flags, maturity, subindustry, upvote_count, downvote_count, feedback_count, feedback_rating_avg, industries_derived, company_info_wikipedia_checked_at
 FROM companies
 WHERE slug > $1 AND job_count > 0
 ORDER BY slug
@@ -448,7 +510,52 @@ func (q *Queries) ListCompaniesForReindex(ctx context.Context, arg ListCompanies
 			&i.FeedbackCount,
 			&i.FeedbackRatingAvg,
 			&i.IndustriesDerived,
+			&i.CompanyInfoWikipediaCheckedAt,
 		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listCompaniesMissingWikipediaInfo = `-- name: ListCompaniesMissingWikipediaInfo :many
+SELECT slug, name FROM companies
+WHERE (tagline IS NULL OR tagline = '')
+  AND company_info_wikipedia_checked_at IS NULL
+  AND slug > $1
+ORDER BY slug
+LIMIT $2
+`
+
+type ListCompaniesMissingWikipediaInfoParams struct {
+	AfterSlug string `json:"after_slug"`
+	RowLimit  int32  `json:"row_limit"`
+}
+
+type ListCompaniesMissingWikipediaInfoRow struct {
+	Slug string `json:"slug"`
+	Name string `json:"name"`
+}
+
+// Candidates for the Wikipedia company-info backfill: no tagline yet, and never
+// resolved by this backfill before (company_info_wikipedia_checked_at IS NULL —
+// set on every resolution, match or reject, so a company is looked up at most
+// once). Keyset-paginated by slug so one run can be bounded and a later run
+// resumes past what it already paged through.
+func (q *Queries) ListCompaniesMissingWikipediaInfo(ctx context.Context, arg ListCompaniesMissingWikipediaInfoParams) ([]ListCompaniesMissingWikipediaInfoRow, error) {
+	rows, err := q.db.Query(ctx, listCompaniesMissingWikipediaInfo, arg.AfterSlug, arg.RowLimit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListCompaniesMissingWikipediaInfoRow{}
+	for rows.Next() {
+		var i ListCompaniesMissingWikipediaInfoRow
+		if err := rows.Scan(&i.Slug, &i.Name); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -632,6 +739,20 @@ func (q *Queries) ListSlugLikeCompaniesForBackfill(ctx context.Context) ([]ListS
 		return nil, err
 	}
 	return items, nil
+}
+
+const markCompanyWikipediaChecked = `-- name: MarkCompanyWikipediaChecked :exec
+UPDATE companies
+SET company_info_wikipedia_checked_at = now()
+WHERE slug = $1
+`
+
+// Records that the backfill looked this company up and found no confident match,
+// so it is never looked up again. Touches nothing else: an unmatched company's
+// tagline/company_info stay exactly as another source may have left them.
+func (q *Queries) MarkCompanyWikipediaChecked(ctx context.Context, slug string) error {
+	_, err := q.db.Exec(ctx, markCompanyWikipediaChecked, slug)
+	return err
 }
 
 const refreshCompanyFacets = `-- name: RefreshCompanyFacets :execrows

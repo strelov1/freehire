@@ -93,6 +93,30 @@ func TestScalarFilters_EachOneStillNarrowsAQuery(t *testing.T) {
 	}
 }
 
+func TestActiveFilterParams_ReportsOnlyTheRecognizedOnes(t *testing.T) {
+	v := url.Values{"work_mode": {"remote"}, "salary_min": {"1000"}, "bogus": {"1"}}
+
+	got := ActiveFilterParams(v)
+
+	if len(got) != 2 {
+		t.Fatalf("ActiveFilterParams = %#v, want exactly two entries", got)
+	}
+	if got[0].Param != "salary_min" || got[1].Param != "work_mode" {
+		t.Errorf("order = %q, %q; want salary_min, work_mode", got[0].Param, got[1].Param)
+	}
+	for _, p := range got {
+		if p.DidYouMean != "" {
+			t.Errorf("Param %q: DidYouMean = %q, want empty — already-recognized vocabulary", p.Param, p.DidYouMean)
+		}
+	}
+}
+
+func TestActiveFilterParams_EmptyValuesReportsNothing(t *testing.T) {
+	if got := ActiveFilterParams(url.Values{}); len(got) != 0 {
+		t.Errorf("ActiveFilterParams(empty) = %#v, want none", got)
+	}
+}
+
 func TestUnknownParams_OrdersReportDeterministically(t *testing.T) {
 	// Map iteration must not leak into the response: two ignored params always
 	// come back in the same order.

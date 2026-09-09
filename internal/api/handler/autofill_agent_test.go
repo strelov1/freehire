@@ -160,7 +160,7 @@ func TestRunAgentAutofillAnswersEachFailureAsWhatItIs(t *testing.T) {
 			attach(hub)
 		}
 		h := &autofillHandlers{
-			profiles:     candidateprofile.NewAssembler(emptyProfileSources{}, emptyProfileSources{}, emptyProfileSources{}, emptyProfileSources{}),
+			profiles:     candidateprofile.NewAssembler(emptyProfileSources{}, emptyProfileSources{}, emptyProfileSources{}, emptyProfileSources{}, nil),
 			browserTools: hub,
 		}
 		app := fiber.New(fiber.Config{ErrorHandler: RenderError})

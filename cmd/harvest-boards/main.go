@@ -94,7 +94,15 @@ func run() int {
 	defer cleanup()
 	repo := boardcatalog.NewQueriesRepository(db.New(pool))
 
-	client := newCountingClient(paced(sources.NewClient(), *pace))
+	// The probe talks to the platform's API directly rather than through the provider's
+	// adapter, so it needs the same proxy policy cmd/ingest gets from ApplyProxyEgress —
+	// see sources.ClientFor for what a bare direct client cost workable here.
+	egress, err := sources.ClientFor(provider)
+	if err != nil {
+		log.Printf("harvest-boards: %v", err)
+		return 1
+	}
+	client := newCountingClient(paced(egress, *pace))
 	if *pace > 0 {
 		log.Printf("harvest-boards: pacing probes at %.2f req/s with %d workers", *pace, *workers)
 	}

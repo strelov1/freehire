@@ -6,9 +6,11 @@ import (
 	"fmt"
 	"log"
 	"strconv"
+	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/strelov1/freehire/internal/ai/assistant"
@@ -72,6 +74,26 @@ func (h *assistantHandlers) resolveAutoApplyEntry(c *fiber.Ctx, queueID int64) (
 	})
 	return autoApplyEntry(row), err
 }
+
+// autoApplyTailorBudget bounds ONE unattended tailoring run, end to end.
+//
+// Nothing bounded it before, and the ceiling that appeared to — autopilotMaxSteps (30) at
+// assistantLLMTimeout (180s) a call — allows an hour and a half. What actually ended these
+// runs was the orchestrator hanging up at five minutes, which is the worst way for one to
+// end: the run kept going, the CV edits it had already made were kept, and the queue entry
+// was never told, so it sat unclaimable and read as "tailoring" indefinitely. Three
+// production entries did exactly that (freehire, 2026-09-08).
+//
+// Ten minutes is deliberately shorter than the caller's own patience
+// (autoapplyorchestrate.hireRequestTimeout, 12 minutes), so a run that overruns is ended
+// HERE, where the tailored CV can still be recorded and the entry can move on to review.
+// The runner already treats an ended context as a cancellation rather than a failure
+// (assistant.Runner.Run's StopCancelled), so the pass stops between rounds with its work
+// committed rather than unwinding it.
+//
+// A var so a test can shorten it — the path it guards is a run that spends the whole
+// budget, which a test cannot otherwise reach without spending it too.
+var autoApplyTailorBudget = 10 * time.Minute
 
 // autoApplyTailorResponse is what starting a tailoring run reports: the tailored CV id and
 // its per-requirement account of itself, the same report shape the interactive workspace
@@ -162,17 +184,16 @@ func (h *assistantHandlers) PostAutoApplyTailor(c *fiber.Ctx) error {
 		return mapAssistantError(err)
 	}
 
-	ctx, cancel := context.WithCancel(c.Context())
+	ctx, cancel := context.WithTimeout(c.Context(), autoApplyTailorBudget)
 	defer cancel()
-	slot, waiter, err := h.turns.claim(sess.ID, cancel)
-	if err != nil {
-		return fiber.NewError(fiber.StatusConflict, err.Error())
-	}
-	if waiter != nil {
-		// Unlike streamSSE (a human watching a live stream, worth a queued wait), this is
-		// a synchronous API-key call: refusing immediately lets the caller retry later
-		// rather than holding the connection open for up to a minute against a run it
-		// cannot observe anyway.
+	// tryClaim, not claim: unlike streamSSE (a human watching a live stream, worth a queued
+	// wait), this is a synchronous API-key call — refusing immediately lets the caller retry
+	// later rather than holding the connection open for up to a minute against a run it
+	// cannot observe anyway. claim would hand back a place in LINE for that wait, which this
+	// handler has no way to give back; doing exactly that is what wedged the session in
+	// production (see tryClaim's own doc comment).
+	slot, ok := h.turns.tryClaim(sess.ID, cancel)
+	if !ok {
 		return fiber.NewError(fiber.StatusConflict, "this tailoring session is busy with another run")
 	}
 	defer h.turns.release(sess.ID, slot)
@@ -185,6 +206,7 @@ func (h *assistantHandlers) PostAutoApplyTailor(c *fiber.Ctx) error {
 
 	if err := h.runAutopilotToCompletion(ctx, analysis, sess, job.Description, runner, reg, system, noop); err != nil {
 		log.Printf("auto-apply: tailoring run for queue entry %d (cv %s): %v", queueID, tailored.ID, err)
+		h.recordTailoringFailure(c, queueID, err)
 		// The CAUSE, not fiber.NewError(500, "the tailoring run failed"): the streamed
 		// autopilot reports this same error to Sentry (reportStreamFault in
 		// assistant.go), and phrasing it here took the synchronous route's copy out of
@@ -221,6 +243,57 @@ func (h *assistantHandlers) PostAutoApplyTailor(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"data": autoApplyTailorResponse{
 		TailoredCVID: tailored.ID.String(), AutopilotReport: rec.AutopilotReport,
 	}})
+}
+
+// autoApplyTailorFailedNotification is the notification kind for a tailoring run that gave
+// up. Its own kind rather than reusing autoApplyReadyForReviewNotification's: the two say
+// opposite things, and the notification centre groups by this.
+const autoApplyTailorFailedNotification = "auto_apply_tailoring_failed"
+
+// recordTailoringFailure marks an entry whose run produced no CV, and tells the candidate.
+//
+// Best-effort throughout, and deliberately so: the caller is already returning the run's
+// own failure, and nothing here is worth turning that into a different one. What it must
+// not do is fail silently in the ONE way that matters — leaving the entry looking like work
+// still in progress, which is exactly the state this exists to end.
+//
+// It runs on a context detached from the request's. This is called precisely when a run has
+// ended badly, and the most common way for that to happen is the caller giving up first —
+// so the request's own context is usually already dead, and a write on it would be dropped
+// at the moment it is most needed. The same reason runAutopilotToCompletion's own analysis
+// refresh is detached.
+//
+// The error text is stored as the diagnostic it is, never shown to the candidate:
+// ResolvedAttempt has no field to carry it for exactly that reason. What they see is the
+// status and the notification below.
+func (h *assistantHandlers) recordTailoringFailure(c *fiber.Ctx, queueID int64, cause error) {
+	ctx := context.WithoutCancel(c.Context())
+
+	row, err := h.queries.MarkAutoApplyTailorFailed(ctx, db.MarkAutoApplyTailorFailedParams{
+		ID: queueID, LastError: cause.Error(),
+	})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			// A guard fired: the entry already has a tailored CV from an earlier run, or
+			// the candidate has already decided on it. Both mean there is nothing to
+			// report — see MarkAutoApplyTailorFailed's own comment.
+			return
+		}
+		log.Printf("auto-apply: recording the tailoring failure for queue entry %d: %v", queueID, err)
+		return
+	}
+
+	if _, err := h.queries.RecordNotification(ctx, db.RecordNotificationParams{
+		UserID: row.UserID,
+		Kind:   autoApplyTailorFailedNotification,
+		Title:  "We couldn't prepare your application",
+		Body: fmt.Sprintf("Tailoring your CV for %s at %s didn't finish. Nothing was sent, and the job is still on your board.",
+			row.Title, row.Company),
+		PublicSlug: pgtype.Text{String: row.PublicSlug, Valid: true},
+	}); err != nil {
+		// Best-effort, the same convention every other RecordNotification call follows.
+		log.Printf("auto-apply: notifying the tailoring failure for queue entry %d: %v", queueID, err)
+	}
 }
 
 // autoApplyReviewRequest is the candidate's decision on one queue entry's tailored CV.

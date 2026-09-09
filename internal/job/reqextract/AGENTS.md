@@ -95,10 +95,29 @@ section ends instead of each guessing.
 `Derive(descriptionHTML)` parses the fragment with `x/net/html` and walks it in
 document order, carrying one piece of state: the priority of the section currently
 open, or `""` for none. A recognized heading opens a section, a list closes the one it
-was found in, and an unrecognized structural heading, a closing heading, prose or a
-table close it too. Entry text is the item's plain text — markup stripped, entities
-decoded, whitespace collapsed, a space contributed at each block boundary so
+was found in, and an unrecognized structural heading, a closing heading or a table
+close it too. Entry text is the item's plain text — markup stripped, entities decoded,
+whitespace collapsed, a space contributed at each block boundary so
 `Go<ul><li>generics` does not read `Gogenerics`.
+
+**A `<p>`-per-item section is read too, via a deferred buffer.** A too-long-for-a-heading
+text block (real prose, by `isHeadingCandidate`'s own length test) no longer closes the
+section on sight — it is buffered in `pending`, because it may be this section's own
+first stated item rather than prose explaining the section away, and the two cannot be
+told apart from one paragraph alone. This closes a real gap, not a hypothetical one:
+every one of 683 real `Требования` headings sampled from `tbank.ru` is followed by a run
+of `<p>` paragraphs, never a list — before this buffer existed, the Russian vocabulary
+addition above matched the heading and extracted nothing from that source's postings.
+The buffer's fate is decided only when something resolves it. A real heading
+transition (a new section, a `closingHeadings` match, or an unrecognized h1–h6), or a
+table, both **commit** the buffer's paragraphs as the section's own items — but only
+when there are two or more of them; a single buffered line stays undecidable and is
+dropped, because a lone unmatched sentence is as likely a lead-in as an item. A list
+found afterward is decided by `pendingHasProse`: when it is set, real prose already
+closed this section on its own, so the buffer is **discarded** and the list is left
+unread — it belongs to whatever follows, not to this heading; when it is not set,
+every buffered line was a short lead-in or spacer, so the buffer is silently cleared and
+the list is read as this section's own, exactly as before this mechanism existed.
 
 The result is written to `jobs.requirements_derived` by every job write path (through
 `internal/job/job`'s `withDerived`) and folded into the served
@@ -133,6 +152,12 @@ reader something — and the two barely overlap (6,806 + 98,410 entries in the s
 union to 102,707), which is the whole bet of this package holding: the model reads the
 prose postings, the parser reads the marked-up ones.
 
+Both figures predate the `<p>`-per-item buffer described above, so they undercount —
+they were measured while every `tbank.ru`-shaped posting (list-less, paragraph-per-item)
+still yielded nothing. Re-measure with the same `TABLESAMPLE` method rather than assuming
+the delta; the walk's other behavior is unchanged, so raising the number without a fresh
+sample would be exactly the guess this section warns against.
+
 A regex sweep for a requirements-shaped heading said 23% before any of this was built.
 The shipped extractor is stricter than a regex on purpose: a missed section is a blank
 space, while a benefits list under a "Requirements" heading is a false claim the reader
@@ -140,11 +165,16 @@ cannot detect.
 
 ## Limitations
 
-- **Latin-alphabet headings, mostly English.** `normalizeHeading` transliterates before
-  matching (the same fold `normalize.Slug` applies), so an accented heading is spelled
-  once in the vocabulary — `Előnyt jelent` is entered as `elonyt jelent`, not as the
-  `el nyt jelent` a plain ASCII filter would have produced. Hungarian is in; more
-  languages are an additive change to the three vocabularies.
+- **Latin-alphabet headings, mostly English — Hungarian and Russian are in.**
+  `normalizeHeading` transliterates before matching (the same fold `normalize.Slug`
+  applies, via `unidecode.Unidecode`), so an accented or non-Latin heading is spelled
+  once in the vocabulary — `Előnyt jelent` is entered as `elonyt jelent`, and
+  `Требования` as `trebovaniia`, never the mangled ASCII a plain filter would have
+  produced. More languages are an additive change to the three vocabularies — **but
+  measure against real postings first**, not just against `unidecode`'s own output: the
+  Russian entries were added after counting real headings across 500 live `tbank.ru`
+  postings (`git log` this file for the exact counts), which is also what surfaced the
+  next limitation.
 - **No clustering.** Near-duplicate phrasings ("excellent written and verbal
   communication skills" vs "strong written and verbal communication skills") are stored
   as stated. Real, but a different problem.

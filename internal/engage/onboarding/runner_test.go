@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/strelov1/freehire/internal/engage/emailnotify"
 	"github.com/strelov1/freehire/internal/engage/onboarding"
 	"github.com/strelov1/freehire/internal/platform/db"
 )
@@ -86,13 +87,13 @@ type fakeSender struct {
 
 type sentMail struct{ from, replyTo, to, subject, html, text string }
 
-func (f *fakeSender) SendWithReplyTo(_ context.Context, from, replyTo, to, subject, htmlBody, textBody string) error {
-	f.sent = append(f.sent, sentMail{from, replyTo, to, subject, htmlBody, textBody})
+func (f *fakeSender) Send(_ context.Context, m emailnotify.Message) error {
+	f.sent = append(f.sent, sentMail{m.From, m.ReplyTo, m.To, m.Subject, m.HTML, m.Text})
 	return f.err
 }
 
 func newRunner(store *fakeStore, sender *fakeSender) *onboarding.Runner {
-	mailer := onboarding.NewMailer(sender, "notifications@freehire.me", "ilya@example.test", "https://freehire.me")
+	mailer := onboarding.NewMailer(sender, "notifications@freehire.me", "ilya@example.test", "https://freehire.me", testLinks())
 	return onboarding.New(store, mailer, onboarding.DefaultConfig())
 }
 

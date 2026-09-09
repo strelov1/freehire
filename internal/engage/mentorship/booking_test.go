@@ -7,6 +7,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
+	"github.com/strelov1/freehire/internal/application/gmailsync"
 )
 
 // bookableMentor is an approved mentor free every Tuesday 18:00–22:00 Berlin, hour-long
@@ -44,6 +46,18 @@ func tuesdayAt(t *testing.T, hour int) time.Time {
 func bookingService(repo *fakeRepo, notifier Notifier) *Service {
 	return New(repo, Config{
 		Notifier: notifier,
+		Now: func() time.Time {
+			return time.Date(2026, time.September, 7, 9, 0, 0, 0, time.UTC)
+		},
+	})
+}
+
+// bookingServiceWithCalendar is bookingService plus a CalendarLinker, for the tests that
+// exercise the connected-mentor path.
+func bookingServiceWithCalendar(repo *fakeRepo, notifier Notifier, calendar CalendarLinker) *Service {
+	return New(repo, Config{
+		Notifier:       notifier,
+		CalendarLinker: calendar,
 		Now: func() time.Time {
 			return time.Date(2026, time.September, 7, 9, 0, 0, 0, time.UTC)
 		},
@@ -255,6 +269,185 @@ func TestAFailedConfirmationDoesNotUndoTheBooking(t *testing.T) {
 	}
 	if booking.Status != BookingConfirmed {
 		t.Errorf("status = %q, want confirmed", booking.Status)
+	}
+}
+
+// A mentor with no calendar linker configured at all books byte-for-byte identically to
+// today — the regression guard for the whole feature's overwhelming common case.
+func TestBookingAnUnconnectedMentorIsUnchanged(t *testing.T) {
+	repo := newFakeRepo()
+	notifier := &fakeNotifier{}
+	mentor := bookableMentor(t, repo)
+	svc := bookingService(repo, notifier)
+
+	booking, err := svc.Book(context.Background(), BookingInput{
+		MentorSlug: mentor.Slug, SeekerUserID: 42,
+		StartsAt: tuesdayAt(t, 18), SeekerTimezone: "Asia/Tokyo",
+	})
+	if err != nil {
+		t.Fatalf("Book: %v", err)
+	}
+	if booking.MeetingURL != mentor.MeetingURL {
+		t.Errorf("meeting link = %q, want the mentor's static link %q", booking.MeetingURL, mentor.MeetingURL)
+	}
+	if booking.GoogleEventID != "" {
+		t.Errorf("GoogleEventID = %q, want empty", booking.GoogleEventID)
+	}
+}
+
+// A mentor with a calendar linker configured but no actual grant (the ordinary case even
+// once the feature ships, until a mentor opts in) also books unchanged: CreateMeetEvent
+// answers ErrCalendarNotConnected and Book() leaves the static snapshot alone.
+func TestBookingAMentorWithNoGrantIsUnchanged(t *testing.T) {
+	repo := newFakeRepo()
+	notifier := &fakeNotifier{}
+	mentor := bookableMentor(t, repo)
+	linker := &fakeCalendarLinker{err: ErrCalendarNotConnected}
+	svc := bookingServiceWithCalendar(repo, notifier, linker)
+
+	booking, err := svc.Book(context.Background(), BookingInput{
+		MentorSlug: mentor.Slug, SeekerUserID: 42,
+		StartsAt: tuesdayAt(t, 18), SeekerTimezone: "Asia/Tokyo",
+	})
+	if err != nil {
+		t.Fatalf("Book: %v", err)
+	}
+	if booking.MeetingURL != mentor.MeetingURL {
+		t.Errorf("meeting link = %q, want the mentor's static link", booking.MeetingURL)
+	}
+	if linker.calls != 1 {
+		t.Errorf("CreateMeetEvent called %d times, want 1", linker.calls)
+	}
+}
+
+// A connected mentor's booking carries the calendar's own Meet link and event id — not
+// the mentor's static one — and the notifier receives that same link.
+func TestBookingAConnectedMentorUsesTheCalendarLink(t *testing.T) {
+	repo := newFakeRepo()
+	notifier := &fakeNotifier{}
+	mentor := bookableMentor(t, repo)
+	linker := &fakeCalendarLinker{eventID: "evt-1", meetLink: "https://meet.google.com/xyz-abcd-efg"}
+	svc := bookingServiceWithCalendar(repo, notifier, linker)
+
+	booking, err := svc.Book(context.Background(), BookingInput{
+		MentorSlug: mentor.Slug, SeekerUserID: 42,
+		StartsAt: tuesdayAt(t, 18), SeekerTimezone: "Asia/Tokyo",
+	})
+	if err != nil {
+		t.Fatalf("Book: %v", err)
+	}
+	if booking.MeetingURL != "https://meet.google.com/xyz-abcd-efg" {
+		t.Errorf("meeting link = %q, want the calendar's own link", booking.MeetingURL)
+	}
+	if booking.GoogleEventID != "evt-1" {
+		t.Errorf("GoogleEventID = %q, want evt-1", booking.GoogleEventID)
+	}
+	if len(notifier.confirmed) != 1 || notifier.confirmed[0].MeetingURL != booking.MeetingURL {
+		t.Errorf("the notifier did not receive the calendar's link")
+	}
+	if got := repo.setBookingCalendarEvent[booking.ID]; got != [2]string{booking.MeetingURL, "evt-1"} {
+		t.Errorf("SetBookingCalendarEvent recorded %v", got)
+	}
+}
+
+// A CreateMeetEvent failure that is NOT ErrCalendarNotConnected still returns a confirmed
+// booking, with an EMPTY link rather than the mentor's stale static one — the explicit
+// decision this feature's design settled on over silently falling back.
+func TestBookingCalendarFailureLeavesTheLinkEmptyButStillBooks(t *testing.T) {
+	repo := newFakeRepo()
+	notifier := &fakeNotifier{}
+	mentor := bookableMentor(t, repo)
+	linker := &fakeCalendarLinker{err: errors.New("google: rate limited")}
+	svc := bookingServiceWithCalendar(repo, notifier, linker)
+
+	booking, err := svc.Book(context.Background(), BookingInput{
+		MentorSlug: mentor.Slug, SeekerUserID: 42,
+		StartsAt: tuesdayAt(t, 18), SeekerTimezone: "Asia/Tokyo",
+	})
+	if err != nil {
+		t.Fatalf("Book: %v — a calendar failure must not fail the booking", err)
+	}
+	if booking.Status != BookingConfirmed {
+		t.Errorf("status = %q, want confirmed", booking.Status)
+	}
+	if booking.MeetingURL != "" {
+		t.Errorf("meeting link = %q, want empty", booking.MeetingURL)
+	}
+	if repo.needsReconsent[mentor.UserID] {
+		t.Error("a non-revocation failure must not mark needs_reconsent")
+	}
+}
+
+// A revocation-shaped calendar failure additionally marks the mentor's grant for
+// re-consent, the same mechanism gmailsync's own sync worker uses for the read-side
+// grants.
+func TestBookingCalendarRevocationMarksNeedsReconsent(t *testing.T) {
+	repo := newFakeRepo()
+	notifier := &fakeNotifier{}
+	mentor := bookableMentor(t, repo)
+	linker := &fakeCalendarLinker{err: &gmailsync.APIError{Op: "mentor calendar: create event", StatusCode: 401, Status: "401 Unauthorized"}}
+	svc := bookingServiceWithCalendar(repo, notifier, linker)
+
+	if _, err := svc.Book(context.Background(), BookingInput{
+		MentorSlug: mentor.Slug, SeekerUserID: 42,
+		StartsAt: tuesdayAt(t, 18), SeekerTimezone: "Asia/Tokyo",
+	}); err != nil {
+		t.Fatalf("Book: %v", err)
+	}
+	if !repo.needsReconsent[mentor.UserID] {
+		t.Error("a revocation-shaped failure must mark needs_reconsent")
+	}
+}
+
+// Cancelling a booking with an event id best-effort deletes it; the mentor's own user id
+// is what DeleteMeetEvent is called with, since the grant lives on the mentor's account.
+func TestCancellingABookingWithAnEventDeletesIt(t *testing.T) {
+	repo := newFakeRepo()
+	notifier := &fakeNotifier{}
+	mentor := bookableMentor(t, repo)
+	linker := &fakeCalendarLinker{eventID: "evt-1", meetLink: "https://meet.google.com/xyz"}
+	svc := bookingServiceWithCalendar(repo, notifier, linker)
+
+	booking, err := svc.Book(context.Background(), BookingInput{
+		MentorSlug: mentor.Slug, SeekerUserID: 42,
+		StartsAt: tuesdayAt(t, 18), SeekerTimezone: "Asia/Tokyo",
+	})
+	if err != nil {
+		t.Fatalf("Book: %v", err)
+	}
+
+	if _, err := svc.Cancel(context.Background(), booking.ID, 42, "changed my mind"); err != nil {
+		t.Fatalf("Cancel: %v", err)
+	}
+	if linker.deletedEventID != "evt-1" {
+		t.Errorf("DeleteMeetEvent called with %q, want evt-1", linker.deletedEventID)
+	}
+}
+
+// A DeleteMeetEvent failure must not fail the cancellation: the session is already off
+// and both parties already told, and a stray event on the mentor's own calendar costs
+// nobody anything a retried cancel could fix.
+func TestCancellingSurvivesADeleteMeetEventFailure(t *testing.T) {
+	repo := newFakeRepo()
+	notifier := &fakeNotifier{}
+	mentor := bookableMentor(t, repo)
+	linker := &fakeCalendarLinker{eventID: "evt-1", meetLink: "https://meet.google.com/xyz", deleteErr: errors.New("google: unavailable")}
+	svc := bookingServiceWithCalendar(repo, notifier, linker)
+
+	booking, err := svc.Book(context.Background(), BookingInput{
+		MentorSlug: mentor.Slug, SeekerUserID: 42,
+		StartsAt: tuesdayAt(t, 18), SeekerTimezone: "Asia/Tokyo",
+	})
+	if err != nil {
+		t.Fatalf("Book: %v", err)
+	}
+
+	cancelled, err := svc.Cancel(context.Background(), booking.ID, 42, "changed my mind")
+	if err != nil {
+		t.Fatalf("Cancel: %v — a delete failure must not fail the cancellation", err)
+	}
+	if cancelled.Status != BookingCancelled {
+		t.Errorf("status = %q, want cancelled", cancelled.Status)
 	}
 }
 

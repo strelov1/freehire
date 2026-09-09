@@ -37,7 +37,7 @@
     if (browser) localStorage.setItem('hire.myNavCollapsed', collapsed ? '1' : '0');
   }
 
-  // A docked assistant takes 360px off the left of the page. Collapsing the nav for its
+  // A docked assistant takes 360px off the right of the page. Collapsing the nav for its
   // duration buys back 168 of them, which is the difference between the bank keeping the
   // width it had and losing a fifth of it — see DOCKED_QUERY for the arithmetic.
   //
@@ -79,12 +79,12 @@
   <meta name="robots" content="noindex" />
 </svelte:head>
 
-<!-- The docked assistant is fixed to the viewport's left edge, so the shell steps aside
+<!-- The docked assistant is fixed to the viewport's right edge, so the shell steps aside
      rather than sharing its width with it. Padding on a wrapper, not a margin on the shell
      itself, so `mx-auto` keeps centring the content within whatever is left. -->
 <div
-  class="transition-[padding-left] duration-200 motion-reduce:transition-none"
-  style:padding-left={dockOffset() ? `${dockOffset()}px` : undefined}
+  class="transition-[padding-right] duration-200 motion-reduce:transition-none"
+  style:padding-right={dockOffset() ? `${dockOffset()}px` : undefined}
 >
   <div class="mx-auto w-full max-w-6xl px-4 py-6">
     <!-- No signed-out branch here: +layout.server.ts redirects an anonymous visitor to

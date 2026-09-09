@@ -4,6 +4,7 @@
   import { resolve } from '$app/paths';
   import { Search, X as XIcon } from '@lucide/svelte';
   import { api } from '$lib/api';
+  import { cn } from '$lib/ui';
   import { isAuthenticated } from '$lib/auth.svelte';
   import { UrlSyncedState, syncOnNavigation } from '$lib/urlSynced.svelte';
   import type { MyJob } from '$lib/types';
@@ -11,6 +12,7 @@
     BOARD_COLUMNS,
     columnOf,
     matchesQuery,
+    needsAttention,
     type BoardColumnId,
     type BoardItem,
     type ClosedOutcome,
@@ -123,28 +125,39 @@
     if (!preloaded && isAuthenticated()) void load();
   });
 
-  // Search, mirrored into `?q=` so a shared or reloaded link shows the same rows.
-  // UrlSyncedState owns the transport: it writes the URL synchronously on every
-  // keystroke (the structural fix for the dropped-character race) and seeds from
-  // location.search rather than page.url, which lags after a shallow-routing
-  // back/forward. Filtering is local and instant, so there is nothing to debounce —
-  // setNow writes and applies together, and the view reads `value`.
-  const search = new UrlSyncedState<string>(page.url.searchParams, {
-    parse: (p) => p.get('q') ?? '',
-    serialize: (v) => new URLSearchParams(v ? { q: v } : {}),
+  // Search + the "needs attention" toggle, mirrored into `?q=`/`?attention=1` so a
+  // shared or reloaded link shows the same rows. One UrlSyncedState over both
+  // fields — not two separate ones — because each instance's write replaces the
+  // WHOLE query string with its own serialization; two independent states on the
+  // same page would each erase the other's param on every change. It writes the
+  // URL synchronously on every keystroke/click (the structural fix for the
+  // dropped-character race) and seeds from location.search rather than page.url,
+  // which lags after a shallow-routing back/forward. Filtering is local and
+  // instant, so there is nothing to debounce — setNow writes and applies
+  // together, and the view reads `value`.
+  const filters = new UrlSyncedState<{ q: string; attention: boolean }>(page.url.searchParams, {
+    parse: (p) => ({ q: p.get('q') ?? '', attention: p.get('attention') === '1' }),
+    serialize: (v) =>
+      new URLSearchParams({
+        ...(v.q ? { q: v.q } : {}),
+        ...(v.attention ? { attention: '1' } : {}),
+      }),
   });
-  syncOnNavigation(search);
-  const query = $derived(search.value);
+  syncOnNavigation(filters);
+  const query = $derived(filters.value.q);
+  const attentionOnly = $derived(filters.value.attention);
 
   const searching = $derived(query.trim().length > 0);
+  const filtering = $derived(searching || attentionOnly);
+  const matchesFilters = (i: BoardItem) => matchesQuery(i, query) && (!attentionOnly || needsAttention(i));
   const shown = $derived<Record<BoardColumnId, BoardItem[]>>(
-    searching
+    filtering
       ? {
-          preparing: columns.preparing.filter((i) => matchesQuery(i, query)),
-          applied: columns.applied.filter((i) => matchesQuery(i, query)),
-          interview: columns.interview.filter((i) => matchesQuery(i, query)),
-          offer: columns.offer.filter((i) => matchesQuery(i, query)),
-          closed: columns.closed.filter((i) => matchesQuery(i, query)),
+          preparing: columns.preparing.filter(matchesFilters),
+          applied: columns.applied.filter(matchesFilters),
+          interview: columns.interview.filter(matchesFilters),
+          offer: columns.offer.filter(matchesFilters),
+          closed: columns.closed.filter(matchesFilters),
         }
       : columns,
   );
@@ -370,7 +383,7 @@
       <input
         type="search"
         value={query}
-        oninput={(e) => search.setNow(e.currentTarget.value)}
+        oninput={(e) => filters.setNow({ ...filters.value, q: e.currentTarget.value })}
         placeholder="Search company or role"
         aria-label="Search applications by company or role"
         class="w-full rounded-md border border-input bg-transparent py-1.5 pl-8 pr-8 text-sm"
@@ -378,7 +391,7 @@
       {#if searching}
         <button
           type="button"
-          onclick={() => search.setNow('')}
+          onclick={() => filters.setNow({ ...filters.value, q: '' })}
           aria-label="Clear search"
           class="absolute right-1.5 top-1/2 -translate-y-1/2 rounded p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
         >
@@ -386,7 +399,20 @@
         </button>
       {/if}
     </div>
-    {#if searching}
+    <button
+      type="button"
+      aria-pressed={attentionOnly}
+      onclick={() => filters.setNow({ ...filters.value, attention: !attentionOnly })}
+      class={cn(
+        'shrink-0 rounded-md border px-2.5 py-1.5 text-sm font-medium transition-colors',
+        attentionOnly
+          ? 'border-warning/50 bg-warning-muted/40 text-warning-strong'
+          : 'border-input text-muted-foreground hover:bg-accent hover:text-foreground',
+      )}
+    >
+      Needs attention
+    </button>
+    {#if filtering}
       <span class="shrink-0 text-xs tabular-nums text-muted-foreground">{matched} of {total}</span>
     {/if}
   </div>
@@ -400,7 +426,7 @@
           id={col.id}
           label={col.label}
           items={shown[col.id]}
-          dragDisabled={searching}
+          dragDisabled={filtering}
           {onconsider}
           {onfinalize}
           onopen={openDrawer}
