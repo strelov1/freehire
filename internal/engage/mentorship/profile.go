@@ -112,6 +112,12 @@ type ProfileInput struct {
 	Session     SessionParams
 	MeetingURL  string
 	ShowPhoto   bool
+	// HasCalendarLink says the caller holds a connected calendar.events grant at
+	// submission time, resolved by the handler the same way GmailStatus already does.
+	// A mentor who has one gets a real Meet link minted per booking, so their own
+	// meeting_url field is no longer the only way a session gets a link — see
+	// validateMeetingURL.
+	HasCalendarLink bool
 }
 
 // DirectoryFilter narrows the public directory. An empty field means unfiltered, matching
@@ -225,6 +231,12 @@ func (s *Service) Withdraw(ctx context.Context, userID int64) error {
 		return err
 	}
 	s.notifyCancelled(ctx, cancelled, CancelledByMentor, reasonMentorWithdrew)
+	// Best-effort, same as a single Cancel(): a cancelled session that minted a real
+	// Meet event must not leave that event live on the mentor's own calendar after
+	// everyone has been told the session is off.
+	for _, booking := range cancelled {
+		s.deleteMeetEventBestEffort(ctx, booking)
+	}
 
 	return s.repo.WithdrawProfile(ctx, userID)
 }
@@ -244,7 +256,7 @@ func validateProfile(in ProfileInput, creating bool) error {
 	if len(in.Languages) == 0 {
 		return fmt.Errorf("%w: at least one language is required", ErrInvalidProfile)
 	}
-	if err := validateMeetingURL(in.MeetingURL); err != nil {
+	if err := validateMeetingURL(in.MeetingURL, in.HasCalendarLink); err != nil {
 		return err
 	}
 	if err := validateMentorZone(in.Timezone); err != nil {
@@ -288,8 +300,17 @@ func validateMentorZone(name string) error {
 // validateMeetingURL shape-checks the link, in the manner of referral's LinkedIn check:
 // http(s) and parseable, never fetched. A scheme check specifically — a javascript: URL
 // rendered as a link on a public profile is a click away from being executed.
-func validateMeetingURL(raw string) error {
+//
+// An empty link is refused UNLESS the mentor holds a connected calendar.events grant: in
+// that case a real link is minted per booking, so the static field has nothing left to
+// guarantee. A non-empty link is validated identically either way — a mentor who fills it
+// in anyway still gets a real URL check, not a free pass because they also have a
+// calendar.
+func validateMeetingURL(raw string, hasCalendarLink bool) error {
 	if strings.TrimSpace(raw) == "" {
+		if hasCalendarLink {
+			return nil
+		}
 		return fmt.Errorf("%w: a meeting link is required", ErrInvalidProfile)
 	}
 	parsed, err := url.Parse(raw)

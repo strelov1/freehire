@@ -325,6 +325,10 @@ export interface GmailStatus {
    *  a connected mailbox says nothing about the calendar, and a calendar grant may have
    *  no mailbox behind it at all. */
   calendar_connected?: boolean;
+  /** Whether the same grant covers calendar.events — the mentor-only write consent that
+   *  auto-generates a Meet link per booking and makes the mentor profile's own meeting
+   *  link field optional. A third, separate consent from both fields above. */
+  mentor_calendar_connected?: boolean;
 }
 
 /** The hosted-mailbox option: the caller's address (null when none) + whether

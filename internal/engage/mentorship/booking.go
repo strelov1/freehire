@@ -4,9 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"time"
 
 	"github.com/google/uuid"
+
+	"github.com/strelov1/freehire/internal/application/gmailsync"
 )
 
 // The statuses a booking holds. There is no `completed`: completion is not a decision
@@ -116,11 +119,16 @@ func (s *Service) Book(ctx context.Context, in BookingInput) (Booking, error) {
 		Note:           in.Note,
 		SeekerTimezone: in.SeekerTimezone,
 		// A snapshot. A mentor changing their link afterwards must not rewrite the
-		// invitation somebody already has in their calendar.
+		// invitation somebody already has in their calendar. Overwritten below when the
+		// mentor's calendar mints a real one instead.
 		MeetingURL: mentor.MeetingURL,
 	})
 	if err != nil {
 		return Booking{}, err
+	}
+
+	if s.calendar != nil {
+		s.attachMeetEvent(ctx, mentor, &booking)
 	}
 
 	// Best-effort, and after the write: the seeker holds the hour whether or not the
@@ -131,6 +139,69 @@ func (s *Service) Book(ctx context.Context, in BookingInput) (Booking, error) {
 		}
 	}
 	return booking, nil
+}
+
+// attachMeetEvent asks the mentor's calendar for a Meet-carrying event once a booking has
+// committed, and reconciles the row to what actually happened. Every path is best-effort:
+// the seeker already holds the hour, and a booking with no link — or a stale static one —
+// is recoverable, while a lost hour is not.
+func (s *Service) attachMeetEvent(ctx context.Context, mentor Profile, booking *Booking) {
+	eventID, meetLink, err := s.calendar.CreateMeetEvent(ctx, mentor.UserID, MeetEventInput{
+		StartsAt:    booking.StartsAt,
+		EndsAt:      booking.EndsAt,
+		SeekerEmail: booking.SeekerEmail,
+		Summary:     "Mentorship session with " + mentor.DisplayName,
+	})
+	switch {
+	case errors.Is(err, ErrCalendarNotConnected):
+		// The row already carries the mentor's static link from CreateBooking above —
+		// today's behaviour, unchanged.
+		return
+	case err != nil:
+		logDeliveryFailure("calendar event", *booking, err)
+		// This mentor DOES hold a calendar.events grant — CreateMeetEvent would have
+		// answered ErrCalendarNotConnected above otherwise — so the static link the row
+		// still carries is stale rather than a fallback worth keeping; an explicit empty
+		// answer beats surfacing a link nobody chose for this session.
+		if setErr := s.setCalendarEvent(ctx, booking, "", ""); setErr != nil {
+			logDeliveryFailure("calendar event reset", *booking, setErr)
+		}
+		if gmailsync.RevokedGrant(err) {
+			if markErr := s.repo.MarkCalendarGrantNeedsReconsent(ctx, mentor.UserID); markErr != nil {
+				log.Printf("mentorship: marking mentor %d needs_reconsent: %v", mentor.UserID, markErr)
+			}
+		}
+	default:
+		if setErr := s.setCalendarEvent(ctx, booking, meetLink, eventID); setErr != nil {
+			logDeliveryFailure("calendar event record", *booking, setErr)
+		}
+	}
+}
+
+// setCalendarEvent writes a booking's calendar-event fields and, on success, patches the
+// same values onto the in-memory booking — used both when a real event was minted and
+// when a failed write clears a now-stale static link, so the caller sees what was
+// actually stored either way.
+func (s *Service) setCalendarEvent(ctx context.Context, booking *Booking, meetingURL, eventID string) error {
+	if err := s.repo.SetBookingCalendarEvent(ctx, booking.ID, meetingURL, eventID); err != nil {
+		return err
+	}
+	booking.MeetingURL = meetingURL
+	booking.GoogleEventID = eventID
+	return nil
+}
+
+// deleteMeetEventBestEffort removes the calendar event a booking minted, if any, ignoring
+// (but logging) any failure — used by both Cancel and Withdraw's bulk cancellation, so a
+// mentor leaving the marketplace does not leave stray Meet events behind on their own
+// calendar for sessions freehire has already told everyone are off.
+func (s *Service) deleteMeetEventBestEffort(ctx context.Context, booking Booking) {
+	if booking.GoogleEventID == "" || s.calendar == nil {
+		return
+	}
+	if err := s.calendar.DeleteMeetEvent(ctx, booking.MentorUserID, booking.GoogleEventID); err != nil {
+		logDeliveryFailure("calendar event deletion", booking, err)
+	}
 }
 
 // Cancel ends a confirmed session before it starts. Either party may; nobody else can
@@ -146,6 +217,8 @@ func (s *Service) Cancel(ctx context.Context, bookingID uuid.UUID, actorID int64
 		by = CancelledByMentor
 	}
 	s.notifyCancelled(ctx, []Booking{booking}, by, reason)
+	s.deleteMeetEventBestEffort(ctx, booking)
+
 	return booking, nil
 }
 

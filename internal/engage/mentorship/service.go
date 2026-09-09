@@ -57,6 +57,11 @@ type Booking struct {
 	SeekerTimezone string
 	MentorTimezone string
 	MeetingURL     string
+	// GoogleEventID is the calendar event MeetingURL was minted from, when the mentor
+	// held a connected calendar.events grant at booking time. Empty for every booking
+	// made against a mentor's static link — the ordinary case — so Cancel knows whether
+	// there is an event to best-effort delete.
+	GoogleEventID string
 }
 
 // Repository is the persistence contract, in domain types. The adapter is responsible for
@@ -118,6 +123,19 @@ type Repository interface {
 	// ReleaseReminderClaim gives a claim back after a failed delivery, so the next run
 	// retries rather than skipping the reminder forever.
 	ReleaseReminderClaim(ctx context.Context, bookingID uuid.UUID, offset time.Duration) error
+
+	// GetMentorCalendarGrant reads what a mentor's Google grant holds, for the calendar
+	// write CreateMeetEvent is about to attempt. found is false for no grant, a grant not
+	// in 'connected' status (needs_reconsent included — the same unusable answer without a
+	// second query), or any status this package does not recognise as usable.
+	GetMentorCalendarGrant(ctx context.Context, userID int64) (refreshTokenEnc string, scopes []string, found bool, err error)
+	// SetBookingCalendarEvent records the Meet-carrying event a booking's calendar write
+	// created, replacing the mentor's static snapshot with the link Google minted.
+	SetBookingCalendarEvent(ctx context.Context, bookingID uuid.UUID, meetingURL, eventID string) error
+	// MarkCalendarGrantNeedsReconsent flags a revocation-shaped calendar-write failure on
+	// the SAME status column and mechanism gmailsync already uses for the read-side
+	// grants — one grant, one health flag, shared across every consent it covers.
+	MarkCalendarGrantNeedsReconsent(ctx context.Context, userID int64) error
 }
 
 // BookingRow is what the service asks the repository to write. It is separate from
@@ -160,6 +178,11 @@ type Config struct {
 	Notifier Notifier
 	// Now is the clock, injectable for tests; nil → time.Now.
 	Now func() time.Time
+	// CalendarLinker mints the Meet-carrying calendar event a connected mentor's booking
+	// uses instead of their static link. Nil disables the feature without disabling
+	// bookings — every mentor behaves as not-connected, today's behaviour, which is how
+	// this ships before a Google client is configured and how it is rolled back.
+	CalendarLinker CalendarLinker
 }
 
 // Service implements the mentorship use cases over a Repository.
@@ -168,6 +191,7 @@ type Service struct {
 	notifier Notifier
 	cache    cache.Cache
 	now      func() time.Time
+	calendar CalendarLinker
 }
 
 // New builds a Service. A nil Now falls back to time.Now; a nil Notifier disables
@@ -177,7 +201,7 @@ func New(repo Repository, cfg Config) *Service {
 	if now == nil {
 		now = time.Now
 	}
-	return &Service{repo: repo, notifier: cfg.Notifier, cache: cfg.Cache, now: now}
+	return &Service{repo: repo, notifier: cfg.Notifier, cache: cfg.Cache, now: now, calendar: cfg.CalendarLinker}
 }
 
 // notifyCancelled tells each seeker their session is off, best-effort. Failures are

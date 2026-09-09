@@ -65,3 +65,37 @@ func TestConsentURLsAskForOneThingEach(t *testing.T) {
 		t.Errorf("the calendar consent was not incremental: %s", calendar)
 	}
 }
+
+// A mentor's write consent is a third, separate ask: neither the mail flow nor the
+// candidate's read-only calendar flow may request calendar.events, and the mentor
+// flow's own URL must be incremental (keeping whatever else the account already holds)
+// and land on its own redirect, distinct from both other flows'.
+func TestMentorCalendarAuthCodeURL(t *testing.T) {
+	c := NewConnector("id", "secret", "https://freehire.me")
+
+	mail := c.AuthCodeURL("state-1")
+	calendarRead := c.CalendarAuthCodeURL("state-2")
+	mentorCalendar := c.MentorCalendarAuthCodeURL("state-3")
+
+	if strings.Contains(mail, "calendar") {
+		t.Errorf("the mail consent requested a calendar scope: %s", mail)
+	}
+	if strings.Contains(calendarRead, url.QueryEscape(CalendarEventsScope)) {
+		t.Errorf("the read-only calendar consent requested the write scope: %s", calendarRead)
+	}
+
+	u, err := url.Parse(mentorCalendar)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	q := u.Query()
+	if !strings.Contains(q.Get("scope"), CalendarEventsScope) {
+		t.Errorf("scope missing calendar.events: %q", q.Get("scope"))
+	}
+	if q.Get("include_granted_scopes") != "true" {
+		t.Errorf("include_granted_scopes = %q, want true", q.Get("include_granted_scopes"))
+	}
+	if q.Get("redirect_uri") != "https://freehire.me/api/v1/me/mentor-calendar/callback" {
+		t.Errorf("redirect_uri = %q, want its own callback distinct from the candidate calendar flow's", q.Get("redirect_uri"))
+	}
+}

@@ -39,6 +39,20 @@
   let saving = $state(false);
   let error = $state('');
 
+  // Whether the caller has connected a calendar.events grant — the same status call
+  // /my/integrations makes, not a mentorship-specific endpoint. When true, a booking
+  // gets a real Meet link automatically and the static field below has nothing left to
+  // guarantee, so the backend accepts it empty (see mentorship.validateMeetingURL).
+  let hasMentorCalendar = $state(false);
+  onMount(async () => {
+    try {
+      const status = await api.gmailStatus();
+      hasMentorCalendar = status.mentor_calendar_connected === true;
+    } catch {
+      // Best-effort: the field falls back to its ordinary required state.
+    }
+  });
+
   // A one-time prefill for a brand-new profile only: fetched once on mount, seeded into
   // the still-blank form, and never touched again — every field stays an ordinary,
   // independently editable input from here on. A failed fetch simply leaves the form at
@@ -211,7 +225,12 @@
 
     <label class="text-sm sm:col-span-2">
       <span class="text-muted-foreground">
-        Meeting link — a room you own. Only booked seekers ever see it.
+        {#if hasMentorCalendar}
+          Meeting link — optional. Your connected calendar mints a real Google Meet link
+          for every booking, so you only need this as a fallback.
+        {:else}
+          Meeting link — a room you own. Only booked seekers ever see it.
+        {/if}
       </span>
       <Input
         bind:value={form.meeting_url}

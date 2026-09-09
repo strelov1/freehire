@@ -115,6 +115,29 @@ func TestAConfirmationCarriesACalendarInvitation(t *testing.T) {
 	}
 }
 
+// A booking with no meeting link — the deliberate outcome of a failed calendar-event
+// creation — must render a confirmation with no join link at all, rather than a broken
+// or empty one.
+func TestAnEmptyMeetingLinkProducesNoJoinLine(t *testing.T) {
+	sender := &fakeSender{}
+	notifier := NewMailNotifier(sender, "mentors@example.test", "")
+
+	booking := crossZoneBooking(t)
+	booking.MeetingURL = ""
+	if err := notifier.BookingConfirmed(context.Background(), booking); err != nil {
+		t.Fatalf("BookingConfirmed: %v", err)
+	}
+
+	for _, m := range sender.sent {
+		if strings.Contains(m.text, "Join:") {
+			t.Errorf("%s's text body still has a join line:\n%s", m.to, m.text)
+		}
+		if strings.Contains(m.html, "Join") {
+			t.Errorf("%s's html body still mentions joining:\n%s", m.to, m.html)
+		}
+	}
+}
+
 // A cancellation must carry a CANCEL with the SAME UID, or the event stays in both
 // calendars and two people turn up to a meeting that is off.
 func TestACancellationRemovesTheEventRatherThanAddingOne(t *testing.T) {

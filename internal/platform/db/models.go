@@ -904,6 +904,7 @@ type MentorBooking struct {
 	CancelledBy    pgtype.Int8        `json:"cancelled_by"`
 	CancelReason   string             `json:"cancel_reason"`
 	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	GoogleEventID  string             `json:"google_event_id"`
 }
 
 // One row per reminder actually sent. The composite key is the idempotency guard: re-running the reminder worker inserts a duplicate key and sends nothing.

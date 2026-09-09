@@ -183,6 +183,13 @@ INSERT INTO mentor_bookings (
 ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 RETURNING *;
 
+-- name: SetMentorBookingCalendarEvent :exec
+-- Best-effort patch after CreateMentorBooking: the calendar event is created AFTER the
+-- booking row wins the EXCLUDE-constraint race, never before, so a lost race can never
+-- leave an orphaned Google event. No WHERE beyond the id — this always follows a
+-- successful CreateMentorBooking for the same row, in the same request.
+UPDATE mentor_bookings SET meeting_url = $2, google_event_id = $3 WHERE id = $1;
+
 -- name: GetMentorBooking :one
 -- One booking with what both parties' views need. Authorisation is the caller's job: this
 -- returns the row for any id, and every caller must check the reader is its mentor or its
