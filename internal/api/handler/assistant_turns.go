@@ -88,6 +88,28 @@ func (r *turnRegistry) claim(session uuid.UUID, cancel context.CancelFunc) (*tur
 	return nil, &turnWaiter{registry: r, session: session}, nil
 }
 
+// tryClaim asks for the session's slot on behalf of a turn that will NOT wait for it: it
+// hands back the slot of an idle session, and simply reports a busy one as busy.
+//
+// It exists because claim's waiter is a RESERVATION — a place in line the caller is then
+// obliged to give back, by entering it or by leaving it. A caller that refuses instead of
+// waiting has no natural place to do either, and PostAutoApplyTailor duly did neither: in
+// production it took a place in line on every refusal and never released one, so the
+// session answered errTurnQueueFull to every later call for the life of the process, with
+// nobody waiting. Three auto-apply entries sat unprocessed behind that.
+//
+// So this is not claim-with-a-flag: the point is that a synchronous caller cannot reserve
+// anything, and therefore cannot forget to release it.
+func (r *turnRegistry) tryClaim(session uuid.UUID, cancel context.CancelFunc) (*turnSlot, bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if _, running := r.turns[session]; running {
+		return nil, false
+	}
+	return r.take(session, cancel), true
+}
+
 // take records a turn as running. The caller holds the lock.
 func (r *turnRegistry) take(session uuid.UUID, cancel context.CancelFunc) *turnSlot {
 	if r.turns == nil {

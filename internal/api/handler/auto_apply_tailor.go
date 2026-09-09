@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"strconv"
+	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
@@ -72,6 +73,26 @@ func (h *assistantHandlers) resolveAutoApplyEntry(c *fiber.Ctx, queueID int64) (
 	})
 	return autoApplyEntry(row), err
 }
+
+// autoApplyTailorBudget bounds ONE unattended tailoring run, end to end.
+//
+// Nothing bounded it before, and the ceiling that appeared to — autopilotMaxSteps (30) at
+// assistantLLMTimeout (180s) a call — allows an hour and a half. What actually ended these
+// runs was the orchestrator hanging up at five minutes, which is the worst way for one to
+// end: the run kept going, the CV edits it had already made were kept, and the queue entry
+// was never told, so it sat unclaimable and read as "tailoring" indefinitely. Three
+// production entries did exactly that (freehire, 2026-09-08).
+//
+// Ten minutes is deliberately shorter than the caller's own patience
+// (autoapplyorchestrate.hireRequestTimeout, 12 minutes), so a run that overruns is ended
+// HERE, where the tailored CV can still be recorded and the entry can move on to review.
+// The runner already treats an ended context as a cancellation rather than a failure
+// (assistant.Runner.Run's StopCancelled), so the pass stops between rounds with its work
+// committed rather than unwinding it.
+//
+// A var so a test can shorten it — the path it guards is a run that spends the whole
+// budget, which a test cannot otherwise reach without spending it too.
+var autoApplyTailorBudget = 10 * time.Minute
 
 // autoApplyTailorResponse is what starting a tailoring run reports: the tailored CV id and
 // its per-requirement account of itself, the same report shape the interactive workspace
@@ -162,17 +183,16 @@ func (h *assistantHandlers) PostAutoApplyTailor(c *fiber.Ctx) error {
 		return mapAssistantError(err)
 	}
 
-	ctx, cancel := context.WithCancel(c.Context())
+	ctx, cancel := context.WithTimeout(c.Context(), autoApplyTailorBudget)
 	defer cancel()
-	slot, waiter, err := h.turns.claim(sess.ID, cancel)
-	if err != nil {
-		return fiber.NewError(fiber.StatusConflict, err.Error())
-	}
-	if waiter != nil {
-		// Unlike streamSSE (a human watching a live stream, worth a queued wait), this is
-		// a synchronous API-key call: refusing immediately lets the caller retry later
-		// rather than holding the connection open for up to a minute against a run it
-		// cannot observe anyway.
+	// tryClaim, not claim: unlike streamSSE (a human watching a live stream, worth a queued
+	// wait), this is a synchronous API-key call — refusing immediately lets the caller retry
+	// later rather than holding the connection open for up to a minute against a run it
+	// cannot observe anyway. claim would hand back a place in LINE for that wait, which this
+	// handler has no way to give back; doing exactly that is what wedged the session in
+	// production (see tryClaim's own doc comment).
+	slot, ok := h.turns.tryClaim(sess.ID, cancel)
+	if !ok {
 		return fiber.NewError(fiber.StatusConflict, "this tailoring session is busy with another run")
 	}
 	defer h.turns.release(sess.ID, slot)
