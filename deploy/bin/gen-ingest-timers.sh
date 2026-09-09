@@ -45,7 +45,7 @@ HEAVY="bamboohr icims paycom gupy mycareersfuture ukg careerplug jibe jazzhr vag
 # timer here. They are heavy by definition — sharding is what a provider gets when even
 # the 3h HEAVY cadence could not finish it — so for the SLOT POOL they belong with HEAVY,
 # even though for SCHEDULING they are skipped by the `continue`s in the loop below.
-SHARDED="workday oracle paylocity eightfold join dayforce workstream"
+SHARDED="workday oracle paylocity eightfold join dayforce workstream adp adpmyjobs"
 
 # Heavy for the POOL but not for the SCHEDULE. Measured 2026-09-07 from
 # freehire_worker_last_run_duration_seconds — the binary's own runtime, which is the only
@@ -92,6 +92,16 @@ for n in "${PROVIDERS[@]}"; do
   # needs a raised TimeoutStartSec=4500 per shard to fit ~395 boards at this file's per-board
   # rate — see the paylocity shard block for the arithmetic.
   [ "$n" = paylocity ] && continue
+  # adp tripled (2,798 -> 7,890 boards) on 2026-09-08 and inherited paylocity's exact failure:
+  # a run reached ~2,300 boards before TimeoutStartSec and, with crawl order fixed and no
+  # resume cursor, took the same leading slice every cycle — 4,414 boards had never been
+  # attempted once. Crawled as 8 board-sharded runs instead, generated below.
+  [ "$n" = adp ] && continue
+  # adpmyjobs is ADP's other career-site product (added 2026-09-09). Fifteen times fewer
+  # boards, but each carries ~161 open jobs against adp's 8.6, so it hit the same timeout from
+  # the other direction — killed on 7 of its first 8 firings at ~52 of 498 boards. Also 8
+  # shards, generated below.
+  [ "$n" = adpmyjobs ] && continue
   # eightfold routes through the egress proxy (SOURCES_PROXY_URL) because its edge
   # IP-blocklists the prod IP. A few boards are enormous (nvidia/hp/citi: thousands of
   # jobs × per-job detail through 2 workers on one throttled proxy → ~20+ min each), so a
@@ -327,6 +337,93 @@ TIMER
   systemctl enable --now "freehire-ingest-paylocity-shard@$N.timer" >/dev/null
 done
 echo "generated + enabled 24 paylocity shard timers"
+
+# adp shards: one service template (--shard=N/8) + 8 timers, one every 3h, so the whole
+# catalogue cycles once every 24h.
+#
+# adp grew from 2,798 boards to 7,890 on 2026-09-08 and immediately landed in the state
+# paylocity was in above: crawl order is fixed with no resume cursor, so the same leading
+# slice is taken every cycle. Measured 2026-09-09 across three runs — progress 2182, 2248
+# and 2311 of 7,890 before TimeoutStartSec killed each one, and 4,414 boards (56%) with no
+# board_health row at all, meaning they had never been attempted once. Six of nine real runs
+# in 24h ended 'timeout'.
+#
+# 8 shards, not paylocity's 24: an adp board is small (26,131 open jobs over 3,033 boards
+# with any = 8.6 each), so a board is one listing call plus its detail fan-out — measured
+# ~3s under the provider's 5 req/s pacer. 7,890/8 = 986 boards a shard =~ 2,958s, inside the
+# raised TimeoutStartSec=4500 with margin rather than shaved to fit the generic 3000s.
+cat > /etc/systemd/system/freehire-ingest-adp-shard@.service <<'UNIT'
+[Unit]
+Description=freehire ingest adp shard %i/8
+After=network.target postgresql.service meilisearch.service
+[Service]
+Type=oneshot
+User=freehire
+WorkingDirectory=/opt/freehire/src/hire-current
+EnvironmentFile=/opt/freehire/.env
+CPUWeight=40
+IOWeight=40
+TimeoutStartSec=4500
+ExecStart=/opt/freehire/bin/ingest-slot.sh /opt/freehire/src/hire-current/ingest adp --shard=%i/8
+UNIT
+# Retire the legacy hourly timer so it can't race the shards.
+systemctl disable --now freehire-ingest@adp.timer 2>/dev/null || true
+for N in $(seq 1 8); do
+  cat > "/etc/systemd/system/freehire-ingest-adp-shard@$N.timer" <<TIMER
+[Unit]
+Description=timer ingest adp shard $N/8
+[Timer]
+OnCalendar=*-*-* $(printf %02d $(( (N-1) * 3 ))):35:00
+Persistent=true
+RandomizedDelaySec=180
+[Install]
+WantedBy=timers.target
+TIMER
+  systemctl enable --now "freehire-ingest-adp-shard@$N.timer" >/dev/null
+done
+echo "generated + enabled 8 adp shard timers"
+
+# adpmyjobs shards: the same 8-way split for ADP's other career-site product, added
+# 2026-09-09 with 498 boards and killed on 7 of its 8 firings in the first day, reaching
+# ~52 boards each time.
+#
+# The same shard count for a fifteenth of the boards, because the boards are the opposite
+# shape: 26,890 open jobs over 167 crawled boards = 161 each, against adp's 8.6. A MyJobs
+# board is therefore ~58s of paced detail fan-out (measured: 52 boards in one 3000s run),
+# so 498/8 = 62 boards a shard =~ 3,596s — the same 4500s budget, reached from the other
+# direction. Sharding is what fixes the timeout; the pacer is a separate lever, and it is
+# deliberately not touched here: board_health carries zero failures for this provider, which
+# says the current rate is safe, not that a higher one would be.
+cat > /etc/systemd/system/freehire-ingest-adpmyjobs-shard@.service <<'UNIT'
+[Unit]
+Description=freehire ingest adpmyjobs shard %i/8
+After=network.target postgresql.service meilisearch.service
+[Service]
+Type=oneshot
+User=freehire
+WorkingDirectory=/opt/freehire/src/hire-current
+EnvironmentFile=/opt/freehire/.env
+CPUWeight=40
+IOWeight=40
+TimeoutStartSec=4500
+ExecStart=/opt/freehire/bin/ingest-slot.sh /opt/freehire/src/hire-current/ingest adpmyjobs --shard=%i/8
+UNIT
+# Retire the legacy hourly timer so it can't race the shards.
+systemctl disable --now freehire-ingest@adpmyjobs.timer 2>/dev/null || true
+for N in $(seq 1 8); do
+  cat > "/etc/systemd/system/freehire-ingest-adpmyjobs-shard@$N.timer" <<TIMER
+[Unit]
+Description=timer ingest adpmyjobs shard $N/8
+[Timer]
+OnCalendar=*-*-* $(printf %02d $(( (N-1) * 3 ))):45:00
+Persistent=true
+RandomizedDelaySec=180
+[Install]
+WantedBy=timers.target
+TIMER
+  systemctl enable --now "freehire-ingest-adpmyjobs-shard@$N.timer" >/dev/null
+done
+echo "generated + enabled 8 adpmyjobs shard timers"
 
 # join shards: one service template (--shard=N/5) + 5 timers, each every 5h at :20, offset one
 # hour apart so a single shard runs per hour and the whole ~4749-board file cycles once every
