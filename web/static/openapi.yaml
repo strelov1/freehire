@@ -773,6 +773,13 @@ components:
         their order or adjacency in the matched field — quoting does **not**
         request a contiguous phrase match. Use `q_fields` to narrow which
         fields `q` is matched against.
+
+        Exact-phrase matching is not offered today, and the default relevance
+        order (`sort` omitted) does not reliably rank a contiguous match above
+        a scattered-token one within the same field — the index trades that
+        precision for cheaper indexing over long-form descriptions. A caller
+        that needs phrase precision must currently over-fetch and filter or
+        rank client-side.
     QFields:
       name: q_fields
       in: query

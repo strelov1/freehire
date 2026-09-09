@@ -244,7 +244,7 @@ export const GROUPS: Group[] = [
           'since a dropped filter otherwise looks like a broad result.',
         filterable: true,
         query: [
-          { name: 'q', type: 'string', description: 'Full-text query over `title`, `company`, `description`, and `location`. Unquoted words match as an OR of stemmed tokens; quoted (`"systems engineer"`) as an order-independent AND — quoting is not a contiguous-phrase match. Narrow which fields it matches with `q_fields`.', example: 'golang' },
+          { name: 'q', type: 'string', description: 'Full-text query over `title`, `company`, `description`, and `location`. Unquoted words match as an OR of stemmed tokens; quoted (`"systems engineer"`) as an order-independent AND — quoting is not a contiguous-phrase match. Narrow which fields it matches with `q_fields`. Exact-phrase matching is not offered, and default relevance order does not reliably rank a contiguous match above a scattered-token one.', example: 'golang' },
           { name: 'q_fields', type: 'string', description: 'Comma-separated subset of `title,company,description,location` to restrict `q` to, e.g. `title`. A name outside that set drops the whole parameter (reported in `meta.ignored_params`) rather than partially applying.', example: 'title' },
           { name: 'sort', type: 'string', description: 'One of `created_at`, `posted_at`, `view_count`, `salary_min`, `salary_max`. Omit for relevance/newest.', example: 'posted_at' },
           { name: 'order', type: 'string', description: '`asc` or `desc` (default `desc`).', example: 'desc' },
@@ -268,7 +268,7 @@ export const GROUPS: Group[] = [
           'index preview. Use `description_format` to choose how it is rendered.',
         filterable: true,
         query: [
-          { name: 'q', type: 'string', description: 'Full-text query over `title`, `company`, `description`, and `location`. Unquoted words match as an OR of stemmed tokens; quoted (`"systems engineer"`) as an order-independent AND — quoting is not a contiguous-phrase match. Narrow which fields it matches with `q_fields`.', example: 'golang' },
+          { name: 'q', type: 'string', description: 'Full-text query over `title`, `company`, `description`, and `location`. Unquoted words match as an OR of stemmed tokens; quoted (`"systems engineer"`) as an order-independent AND — quoting is not a contiguous-phrase match. Narrow which fields it matches with `q_fields`. Exact-phrase matching is not offered, and default relevance order does not reliably rank a contiguous match above a scattered-token one.', example: 'golang' },
           { name: 'q_fields', type: 'string', description: 'Comma-separated subset of `title,company,description,location` to restrict `q` to, e.g. `title`. A name outside that set drops the whole parameter (reported in `meta.ignored_params`) rather than partially applying.', example: 'title' },
           { name: 'description_format', type: 'string', description: 'One of `html` (default, verbatim), `text` (tags stripped), `markdown` (HTML converted to Markdown). Unknown values fall back to `html`.', example: 'markdown' },
           { name: 'sort', type: 'string', description: 'One of `created_at`, `posted_at`, `view_count`, `salary_min`, `salary_max`. Omit for relevance/newest.', example: 'posted_at' },

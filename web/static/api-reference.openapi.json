@@ -276,7 +276,7 @@
             "name": "q",
             "in": "query",
             "required": false,
-            "description": "Full-text query over `title`, `company`, `description`, and `location`. Unquoted words match as an OR of stemmed tokens; quoted (`\"systems engineer\"`) as an order-independent AND — quoting is not a contiguous-phrase match. Narrow which fields it matches with `q_fields`.",
+            "description": "Full-text query over `title`, `company`, `description`, and `location`. Unquoted words match as an OR of stemmed tokens; quoted (`\"systems engineer\"`) as an order-independent AND — quoting is not a contiguous-phrase match. Narrow which fields it matches with `q_fields`. Exact-phrase matching is not offered, and default relevance order does not reliably rank a contiguous match above a scattered-token one.",
             "schema": {
               "type": "string"
             },
@@ -362,7 +362,7 @@
             "name": "q",
             "in": "query",
             "required": false,
-            "description": "Full-text query over `title`, `company`, `description`, and `location`. Unquoted words match as an OR of stemmed tokens; quoted (`\"systems engineer\"`) as an order-independent AND — quoting is not a contiguous-phrase match. Narrow which fields it matches with `q_fields`.",
+            "description": "Full-text query over `title`, `company`, `description`, and `location`. Unquoted words match as an OR of stemmed tokens; quoted (`\"systems engineer\"`) as an order-independent AND — quoting is not a contiguous-phrase match. Narrow which fields it matches with `q_fields`. Exact-phrase matching is not offered, and default relevance order does not reliably rank a contiguous match above a scattered-token one.",
             "schema": {
               "type": "string"
             },

@@ -34,10 +34,14 @@ var qSearchableFields = []string{"title", "company", "description", "location"}
 // attribute order and a caller-controlled order would make identical
 // restrictions rank differently for no predictable reason.
 //
-// When q_fields is absent (or empty after dropping stray comma fragments —
-// the same tolerance splitFacetValues gives every facet, so `q_fields=` and
-// `q_fields=title,` behave like a bare `?skills=`), both return values are
-// nil: no restriction, nothing to report. When it names a field outside
+// q_fields reads through splitFacetValues, the same as every other facet: a
+// repeated key (`q_fields=title&q_fields=company`) and a comma-joined value
+// (`q_fields=title,company`) resolve to the same set, and a stray comma
+// fragment (`q_fields=title,` or a bare `?q_fields=`) is dropped rather than
+// treated as a named field.
+//
+// When q_fields is absent or empty after that, both return values are nil: no
+// restriction, nothing to report. When it names a field outside
 // qSearchableFields, the ENTIRE value is treated as invalid — even the names
 // that were valid are dropped — and reported via the same UnknownParam shape
 // UnknownParams uses. Partial application would silently narrow a caller's
@@ -45,19 +49,15 @@ var qSearchableFields = []string{"title", "company", "description", "location"}
 // report; whole-value drop keeps the failure in the same class as an
 // unrecognized facet: coarse, but honest.
 func QFieldsFromValues(v url.Values) (fields []string, ignored []UnknownParam) {
-	raw := v.Get("q_fields")
-	if raw == "" {
-		return nil, nil
-	}
 	requested := make(map[string]bool)
-	for _, name := range strings.Split(raw, ",") {
-		if name == "" {
-			continue
-		}
+	for _, name := range splitFacetValues(v["q_fields"]) {
 		if !slices.Contains(qSearchableFields, name) {
 			return nil, []UnknownParam{{Param: "q_fields"}}
 		}
 		requested[name] = true
+	}
+	if len(requested) == 0 {
+		return nil, nil
 	}
 	for _, field := range qSearchableFields {
 		if requested[field] {

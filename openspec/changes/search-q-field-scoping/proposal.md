@@ -14,7 +14,10 @@ not the title. A caller who wants systems-engineering roles cannot exclude this 
 - Document `q`'s actual matching semantics for both endpoints in `web/static/openapi.yaml`:
   unquoted `q` is OR-of-stemmed-tokens, quoted `q` is AND-of-stemmed-tokens irrespective
   of word order (**not** a contiguous-phrase match), and `q` searches `title`, `company`,
-  `description`, and `location`.
+  `description`, and `location`. Also answers issue #2671's point 4 directly: the default
+  relevance order (no `sort`) does **not** reliably rank a contiguous match above a
+  scattered-token one, since `ProximityPrecision: byAttribute` (`#1637`) gives the
+  `proximity` ranking rule only attribute-level, not word-level, distance data.
 - Add a `q_fields` parameter to both endpoints restricting which of those four fields `q`
   matches against (e.g. `q_fields=title`), implemented via Meilisearch's query-time
   `AttributesToSearchOn` — no reindex required, no change to stored index settings.

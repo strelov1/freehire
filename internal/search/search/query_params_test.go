@@ -218,10 +218,33 @@ func TestQFieldsFromValues_MultipleFieldsComeBackInCanonicalOrder(t *testing.T) 
 	}
 }
 
+func TestQFieldsFromValues_RepeatedKeyIsTheSameAsCommaJoined(t *testing.T) {
+	// Every other facet resolves a repeated key the same as a comma-joined value
+	// (splitFacetValues); q_fields must not be a silent exception that keeps only
+	// the first occurrence.
+	fields, ignored := QFieldsFromValues(url.Values{"q_fields": {"company", "title"}})
+	if !slices.Equal(fields, []string{"title", "company"}) {
+		t.Errorf("fields = %v, want [title company] from a repeated key", fields)
+	}
+	if ignored != nil {
+		t.Errorf("ignored = %v, want nil", ignored)
+	}
+}
+
 func TestQFieldsFromValues_UnrecognizedFieldIsReportedAndAppliesNoRestriction(t *testing.T) {
 	fields, ignored := QFieldsFromValues(url.Values{"q_fields": {"salary"}})
 	if fields != nil {
 		t.Errorf("fields = %v, want nil — an unrecognized value must not restrict", fields)
+	}
+	if len(ignored) != 1 || ignored[0].Param != "q_fields" {
+		t.Errorf("ignored = %v, want one entry naming q_fields", ignored)
+	}
+}
+
+func TestQFieldsFromValues_OneBadValueInARepeatedKeyInvalidatesTheWholeValue(t *testing.T) {
+	fields, ignored := QFieldsFromValues(url.Values{"q_fields": {"title", "salary"}})
+	if fields != nil {
+		t.Errorf("fields = %v, want nil — one bad value in a repeated key still drops the whole value", fields)
 	}
 	if len(ignored) != 1 || ignored[0].Param != "q_fields" {
 		t.Errorf("ignored = %v, want one entry naming q_fields", ignored)

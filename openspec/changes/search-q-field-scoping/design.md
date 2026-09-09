@@ -79,14 +79,22 @@ in the same class as an unrecognized facet: coarse, but honest and consistent.
 
 ### Validation lives beside `UnknownParams`, as a value check, not a name check
 
-`query_params.go` gains a small `validQFields` set and a helper that both (a)
-returns the valid `AttributesToSearchOn` list for `buildSearchRequest` and (b)
-reports `q_fields` as an ignored param (reusing the existing `UnknownParam` /
-`SortAndCap` shape) when any named field isn't in that set. This sits next to
-`UnknownParams` rather than inside it: `UnknownParams` answers "is this param name
-one I read at all", which stays true for `q_fields` (it is read) — the new check
-answers "is what's inside it something I understood", a different question the
-existing function doesn't ask of any other param today.
+`query_params.go` gains a small `qSearchableFields` set and a `QFieldsFromValues`
+helper that both (a) returns the valid `AttributesToSearchOn` list for
+`buildSearchRequest` and (b) reports `q_fields` as an ignored param (reusing the
+existing `UnknownParam` shape) when any named field isn't in that set. This sits
+next to `UnknownParams` rather than inside it: `UnknownParams` answers "is this
+param name one I read at all", which stays true for `q_fields` (it is read) —
+the new check answers "is what's inside it something I understood", a different
+question the existing function doesn't ask of any other param today.
+
+It reads `v["q_fields"]` through the existing `splitFacetValues`, the same
+helper every ordinary facet uses — not `url.Values.Get`, which would silently
+keep only the first occurrence of a repeated key (`q_fields=title&q_fields=
+company`) with no report, exactly the silent-narrowing failure mode this
+feature exists to avoid. A repeated key and a comma-joined value therefore
+resolve identically, matching `skills=go&skills=react` vs `skills=go,react`
+everywhere else in this filter vocabulary.
 
 ### Spike findings backing the exact-phrase non-goal
 

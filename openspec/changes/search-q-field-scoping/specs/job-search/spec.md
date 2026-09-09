@@ -22,11 +22,16 @@ field — quoting SHALL NOT be interpreted as a contiguous-phrase match.
 
 The endpoint SHALL additionally accept a `q_fields` parameter restricting which
 of the four `q`-searchable fields (`title`, `company`, `description`, `location`)
-`q` is matched against. `q_fields` SHALL accept one or more of those field names
-(comma-separated). When absent, `q` matches across all four fields as described
-above. A `q_fields` value naming no recognized field SHALL be dropped and
-reported via `meta.ignored_params`, consistent with how every other unrecognized
-search parameter is handled, and SHALL NOT restrict or widen the match.
+`q` is matched against. `q_fields` SHALL accept one or more of those field names,
+either as a repeated query parameter or as a single comma-separated value (the
+two forms SHALL resolve identically). When absent, `q` matches across all four
+fields as described above. If `q_fields` names ANY field outside that set of
+four — whether alone or alongside otherwise-valid names — the ENTIRE parameter
+SHALL be dropped: `q` SHALL match unrestricted across all four fields, exactly
+as if `q_fields` were absent, and `q_fields` SHALL be reported via
+`meta.ignored_params`, consistent with how every other unrecognized search
+parameter is handled. Recognized names SHALL NOT be partially applied when the
+value also contains an unrecognized one.
 
 The endpoint SHALL additionally accept a `posted_within_days` parameter. When it
 is a positive integer `N`, the search SHALL be restricted to jobs whose
@@ -66,11 +71,26 @@ other public job reads.
   whether "systems" also appears in that job's `company`, `description`, or
   `location`
 
+#### Scenario: A repeated q_fields key is the same as a comma-joined value
+
+- **WHEN** a client requests
+  `GET /api/v1/jobs/search?q=systems&q_fields=title&q_fields=company`
+- **THEN** the results are identical to
+  `GET /api/v1/jobs/search?q=systems&q_fields=title,company`
+
 #### Scenario: Unrecognized q_fields value is reported, not applied
 
 - **WHEN** a client requests `GET /api/v1/jobs/search?q=systems&q_fields=salary`
 - **THEN** the response is unrestricted by `q_fields` (as if it were absent) and
   `meta.ignored_params` includes `q_fields`
+
+#### Scenario: One unrecognized name in a mixed q_fields value drops it entirely
+
+- **WHEN** a client requests
+  `GET /api/v1/jobs/search?q=systems&q_fields=title,salary`
+- **THEN** the response is unrestricted by `q_fields` (as if it were absent) —
+  `title` is NOT applied on its own — and `meta.ignored_params` includes
+  `q_fields`
 
 #### Scenario: Faceted filtering by region
 
