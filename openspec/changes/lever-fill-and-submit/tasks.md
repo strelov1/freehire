@@ -33,5 +33,5 @@
 
 ## 6. Verification
 
-- [ ] 6.1 Run `go build ./... && go vet ./... && go test ./... && go vet -tags=integration ./...` — all clean.
-- [ ] 6.2 Replay `ScanForm` against a freshly captured live Lever DOM on the production host, confirming the field inventory matches what the fixture asserts. A fixture that agrees only with itself is what this package was burned by twice this week.
+- [x] 6.1 Run `go build ./... && go vet ./... && go test ./... && go vet -tags=integration ./...` — all clean.
+- [x] 6.2 Replay `ScanForm` against a freshly captured live Lever DOM on the production host, confirming the field inventory matches what the fixture asserts. A fixture that agrees only with itself is what this package was burned by twice this week.
