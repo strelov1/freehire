@@ -188,7 +188,10 @@ func (c *Client) Submit(ctx context.Context, claimed autoapply.Claimed, answers 
 		}
 		defer cancelBrowser()
 
-		pageHTML, err := renderedHTML(browserCtx, claimed.JobURL, greenhouseFormReadySelector)
+		// Safe to discard the lookup's ok here ONLY while this branch is gated to a provider
+		// the registry always holds. Lifting that gate must turn this into a real check.
+		layout, _ := layoutFor(claimed.Provider)
+		pageHTML, err := renderedHTML(browserCtx, claimed.JobURL, layout.formSelector)
 		if err != nil {
 			if result, parked := unscannableFormResult(err); parked {
 				return result, nil
@@ -203,7 +206,7 @@ func (c *Client) Submit(ctx context.Context, claimed autoapply.Claimed, answers 
 		if hasRecaptchaMarker(pageHTML) {
 			return autoapply.SidecarResult{Status: autoapply.StatusParked, Reason: string(reasonCaptchaProtected)}, nil
 		}
-		dom, err := ScanGreenhouseForm(pageHTML)
+		dom, err := ScanForm(pageHTML, layout)
 		if err != nil {
 			return autoapply.SidecarResult{}, fmt.Errorf("scan application form: %w", err)
 		}

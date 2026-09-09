@@ -121,11 +121,6 @@ func renderedHTML(ctx context.Context, url, readySelector string) (string, error
 	return "", &unscannableFormError{reason: classifyUnscannableForm(currentHTML)}
 }
 
-// greenhouseFormReadySelector is Greenhouse's own form element id, confirmed against a
-// live posting in the 2026-09-02 spike. Only the vanilla job-boards.greenhouse.io template
-// is known to use it — a white-label custom domain may not (see classifyUnscannableForm).
-const greenhouseFormReadySelector = "application-form"
-
 // unscannableFormReason classifies why a Greenhouse posting's application form could not be
 // scanned, when its known selector never appeared.
 type unscannableFormReason string
@@ -155,7 +150,7 @@ func (e *unscannableFormError) Error() string {
 // classifyUnscannableForm inspects a page's already-rendered HTML (captured after its known
 // selector failed to appear within pageLoadTimeout) to tell a reCAPTCHA-gated form apart
 // from one whose layout this package simply does not recognize. Pure and fixture-testable,
-// the same way ScanGreenhouseForm already is — no further browser interaction needed to
+// the same way ScanForm already is — no further browser interaction needed to
 // classify.
 //
 // Narrow and named, matching resolve.go's "never guess" rule: this looks only for

@@ -6,11 +6,11 @@
 
 ## 2. Scanning by the layout
 
-- [ ] 2.1 Capture the fixture: reduce the live DOM of `jobs.lever.co/coderio/6ce0e52b-e7bc-462f-ac9e-1d31c8c0e037/apply` to its form controls, verbatim attributes, into `internal/api/atsapply/leverform_test.go`. It must show what Lever does NOT have: no input carries an `id`.
-- [ ] 2.2 Write the failing tests over that fixture: Lever's fields are identified by `name` (including `urls[LinkedIn]` and the file input `resume`); the location control, which has BOTH an id and a differing name, is identified by its name; a Greenhouse fixture is still identified by `id`; and a `byName` control with no name is dropped rather than given a synthetic key.
-- [ ] 2.3 Replace `ScanGreenhouseForm` with `ScanForm(pageHTML string, layout formLayout)`, threading the addressing through `scanControls`, `scanInput` and `scanSimple`. Set `DOMField.ID` from whichever attribute the layout addresses by, keeping `Name` as the raw attribute, so everything downstream keeps working on one identifier.
-- [ ] 2.4 Delete `greenhouseFormReadySelector`; its value is now `layout.formSelector`, passed by the callers. Update both call sites (`client.go`, `preview_client.go`) enough to build.
-- [ ] 2.5 Confirm the pre-existing Greenhouse scan tests pass UNMODIFIED. A test that needed editing means behaviour moved for the platform that already worked — stop and say so rather than editing it.
+- [x] 2.1 Capture the fixture: reduce the live DOM of `jobs.lever.co/coderio/6ce0e52b-e7bc-462f-ac9e-1d31c8c0e037/apply` to its form controls, verbatim attributes, into `internal/api/atsapply/leverform_test.go`. It must show what Lever does NOT have: no input carries an `id`.
+- [x] 2.2 Write the failing tests over that fixture: Lever's fields are identified by `name` (including `urls[LinkedIn]` and the file input `resume`); the location control, which has BOTH an id and a differing name, is identified by its name; a Greenhouse fixture is still identified by `id`; and a `byName` control with no name is dropped rather than given a synthetic key.
+- [x] 2.3 Replace `ScanGreenhouseForm` with `ScanForm(pageHTML string, layout formLayout)`, threading the addressing through `scanControls`, `scanInput` and `scanSimple`. Set `DOMField.ID` from whichever attribute the layout addresses by, keeping `Name` as the raw attribute, so everything downstream keeps working on one identifier.
+- [x] 2.4 Delete `greenhouseFormReadySelector`; its value is now `layout.formSelector`, passed by the callers. Update both call sites (`client.go`, `preview_client.go`) enough to build.
+- [x] 2.5 Confirm the pre-existing Greenhouse scan tests pass UNMODIFIED. A test that needed editing means behaviour moved for the platform that already worked — stop and say so rather than editing it.
 
 ## 3. Selecting and submitting by the layout
 

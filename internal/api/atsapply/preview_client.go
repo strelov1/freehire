@@ -110,7 +110,10 @@ func (p *PreviewClient) previewGreenhouse(ctx context.Context, claimed autoapply
 	}
 	defer cancel()
 
-	pageHTML, err := renderedHTML(browserCtx, claimed.JobURL, greenhouseFormReadySelector)
+	// Safe to discard the lookup's ok here ONLY while this branch is gated to a provider
+	// the registry always holds. Lifting that gate must turn this into a real check.
+	layout, _ := layoutFor(claimed.Provider)
+	pageHTML, err := renderedHTML(browserCtx, claimed.JobURL, layout.formSelector)
 	if err != nil {
 		if result, parked := unscannableFormResult(err); parked {
 			return autoapply.PreviewResult{Parked: true, Reason: result.Reason}, nil
@@ -120,7 +123,7 @@ func (p *PreviewClient) previewGreenhouse(ctx context.Context, claimed autoapply
 	if hasRecaptchaMarker(pageHTML) {
 		return autoapply.PreviewResult{Parked: true, Reason: string(reasonCaptchaProtected)}, nil
 	}
-	dom, err := ScanGreenhouseForm(pageHTML)
+	dom, err := ScanForm(pageHTML, layout)
 	if err != nil {
 		return autoapply.PreviewResult{}, fmt.Errorf("scan application form: %w", err)
 	}
