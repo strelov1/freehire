@@ -62,6 +62,7 @@ func (h *mentorshipHandlers) register(api fiber.Router, mw middleware) {
 
 	// Moderation, behind the same gate the referral queue uses.
 	api.Get("/mentorship/profiles", mw.key, mw.moderator, h.ListPendingMentorProfiles)
+	api.Get("/mentorship/profiles/:id/photo", mw.key, mw.moderator, h.GetPendingMentorPhoto)
 	api.Post("/mentorship/profiles/:id/decide", mw.key, mw.moderator, h.DecideMentorProfile)
 }
 
@@ -113,6 +114,11 @@ type mentorResponse struct {
 	Status     string `json:"status,omitempty"`
 	Paused     bool   `json:"paused,omitempty"`
 	MeetingURL string `json:"meeting_url,omitempty"`
+	// CreatedAt is when the profile was submitted — moderator and owner views only. A
+	// visitor deciding whether to book has no use for it, and it says nothing the public
+	// card needs to say. A pointer because `omitempty` does not drop a zero-value
+	// time.Time (it is a struct, not one of the types the encoder treats as "empty").
+	CreatedAt *time.Time `json:"created_at,omitempty"`
 
 	// The rest of the session parameters, for the OWNER alone. Pointers rather than plain
 	// ints because a zero buffer is a real setting, and `omitempty` cannot tell "no buffer"
@@ -171,6 +177,7 @@ func toModeratorMentorResponse(p mentorship.Profile) mentorResponse {
 	out := toMentorResponse(p)
 	out.Status = p.Status
 	out.Paused = p.Paused
+	out.CreatedAt = &p.CreatedAt
 	return out
 }
 
@@ -262,6 +269,29 @@ func mentorPhoto(ctx context.Context, profile mentorship.Profile, photos *headsh
 // opted in via show_photo. An unpublished profile answers 404 exactly as GetMentor does.
 func (h *mentorshipHandlers) GetMentorPhoto(c *fiber.Ctx) error {
 	profile, err := h.mentorship.PublicProfile(c.Context(), c.Params("slug"))
+	if err != nil {
+		return fiber.NewError(fiber.StatusNotFound)
+	}
+	data, err := mentorPhoto(c.Context(), profile, h.photos)
+	if err != nil {
+		return fiber.NewError(fiber.StatusNotFound)
+	}
+	c.Set(fiber.HeaderContentType, "image/jpeg")
+	return c.Send(data)
+}
+
+// GetPendingMentorPhoto lets a moderator preview a still-pending mentor's opted-in
+// photo — the same bytes GetMentorPhoto would serve once approved, but resolved by the
+// row id a moderator already reads off the queue rather than by slug, and unconditional
+// on status: ProfileForModeration carries no publication predicate, because the
+// mw.moderator gate in front of this route is the access control, not a second copy of
+// the public one.
+func (h *mentorshipHandlers) GetPendingMentorPhoto(c *fiber.Ctx) error {
+	id, err := c.ParamsInt("id")
+	if err != nil {
+		return fiber.NewError(fiber.StatusNotFound)
+	}
+	profile, err := h.mentorship.ProfileForModeration(c.Context(), int64(id))
 	if err != nil {
 		return fiber.NewError(fiber.StatusNotFound)
 	}

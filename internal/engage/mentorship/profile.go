@@ -232,6 +232,20 @@ func (s *Service) PendingQueue(ctx context.Context) ([]PendingProfile, error) {
 	return s.repo.ListPendingProfiles(ctx)
 }
 
+// ProfileForModeration reads a profile by its row id, whatever its status. It carries no
+// access check of its own — every caller sits behind the moderator gate already, the
+// same division of labour Decide relies on for the same id.
+func (s *Service) ProfileForModeration(ctx context.Context, id int64) (Profile, error) {
+	profile, found, err := s.repo.ProfileByID(ctx, id)
+	if err != nil {
+		return Profile{}, err
+	}
+	if !found {
+		return Profile{}, ErrProfileNotFound
+	}
+	return profile, nil
+}
+
 // Directory is the public list of mentors.
 func (s *Service) Directory(ctx context.Context, f DirectoryFilter) ([]Profile, error) {
 	if f.Limit <= 0 || f.Limit > maxDirectoryPage {

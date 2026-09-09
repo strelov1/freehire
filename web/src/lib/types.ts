@@ -1762,6 +1762,9 @@ export interface PendingMentorProfile extends Mentor {
   id: number;
   status: string;
   paused: boolean;
+  /** When the profile was submitted (or resubmitted after a withdrawal) — moderator-only,
+   *  ISO 8601. */
+  created_at: string;
   /** Evidence for the human deciding: this account is already an approved referrer for
    *  the same company. Corroboration, never a gate — an approved offer does not approve
    *  a mentor profile, and the spec says so outright. */
