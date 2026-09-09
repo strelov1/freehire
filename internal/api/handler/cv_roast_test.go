@@ -123,8 +123,12 @@ Built services in Go against PostgreSQL for four years, deployed with Docker.`
 	if !ok {
 		t.Fatalf("market is not an object: %v", data["market"])
 	}
-	// The highest-yield missing skill is the line the page is built around: the role
-	// demands kubernetes, this CV does not name it, so it must come back first.
+	// This does NOT prove kubernetes is the skill missing from the CV: the shared
+	// fake returns the same canned facet map for all three queries regardless of
+	// filter, so it cannot distinguish "the right role" from any other. What it
+	// does prove is that the facet map survives the plumbing into verdict.Compute
+	// intact and ordered — rankGaps sorts by raw count, and kubernetes (300) only
+	// outranks go (250) here because the fixture says so.
 	gaps, _ := market["gaps"].([]any)
 	if len(gaps) == 0 {
 		t.Fatal("gaps is empty, want the missing skill that unlocks the most vacancies")
