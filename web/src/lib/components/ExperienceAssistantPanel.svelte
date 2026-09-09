@@ -97,7 +97,7 @@
       // used to be a column inside the account content area, which meant it spent the
       // bank's width — the conversation and the achievements it is about were both cramped.
       // Below the header, like the selection action bar, and under it in the stack.
-      docked ? 'fixed bottom-0 left-0 top-14 z-30' : 'fixed inset-0 z-50',
+      docked ? 'fixed bottom-0 right-0 top-14 z-30' : 'fixed inset-0 z-50',
       !open && 'hidden',
     ]}
     style:width={docked ? `${DOCK_WIDTH}px` : undefined}
@@ -111,7 +111,7 @@
         // Flush against the viewport edge now, so it is a wall rather than a card: one
         // border on the side that meets the page, and no rounding on edges that touch
         // nothing.
-        docked && 'border-r border-border',
+        docked && 'border-l border-border',
         !docked && 'bg-background',
       ]}
     >
