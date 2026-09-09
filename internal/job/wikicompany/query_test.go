@@ -39,3 +39,24 @@ func TestBuildOrganizationCheckQuery_UsesTransitivePropertyPath(t *testing.T) {
 		}
 	}
 }
+
+// TestBuildOrganizationCheckQuery_ExcludesGeographicAndAdministrativeEntities
+// guards against a production false positive: "Nissan" resolved to Q270195, a
+// commune in Hérault, France — wdt:P31/wdt:P279* from a commune's class reaches
+// Q56061 (administrative territorial entity), which Wikidata also treats as
+// under Q43229 (organization) somewhere in its multi-parent class hierarchy, so
+// the positive organization walk alone accepted it. The query must also assert
+// the candidate is NOT reachable from a small set of geographic/administrative
+// anchors, so a same-named place is rejected regardless of that shared ancestry.
+func TestBuildOrganizationCheckQuery_ExcludesGeographicAndAdministrativeEntities(t *testing.T) {
+	query := buildOrganizationCheckQuery("Q270195")
+
+	if !strings.Contains(query, "FILTER NOT EXISTS") {
+		t.Fatalf("query does not exclude geographic/administrative entities: %s", query)
+	}
+	for _, excluded := range nonOrganizationAnchorQIDs {
+		if !strings.Contains(query, "wd:"+excluded) {
+			t.Fatalf("query missing exclusion QID %s: %s", excluded, query)
+		}
+	}
+}
