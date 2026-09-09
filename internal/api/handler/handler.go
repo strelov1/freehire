@@ -457,6 +457,9 @@ func Register(app *fiber.App, cfg Config) {
 	// fixed field. Fed into the autofill assembler below so a banked answer can fill a form
 	// field the deterministic rules never anticipated.
 	answerBank := answerbank.NewStore(answerbank.NewQueriesRepository(queries))
+	// The bank's own list/save/delete routes over the same store, so what autofill reads
+	// and what the review screen edits are never two copies.
+	answerBankH := &answerBankHandlers{bank: answerBank}
 	// The onboarding survey: the candidate's own segmentation answers, and the marker
 	// saying they have been through the wizard. A third singleton beside the two above,
 	// and deliberately so — these answers describe the candidate to us alone, where
@@ -850,6 +853,8 @@ func Register(app *fiber.App, cfg Config) {
 	// The contact block the extension writes into forms, plain and agent-driven (see
 	// autofillHandlers).
 	autofillH.register(api, mw)
+	// The bank's own management surface: list, save, delete (see me_answer_bank.go).
+	answerBankH.register(api, mw)
 	// The browser-tool wire: a harness on one end, the caller's browser extension
 	// on the other, exchanging raw tool frames. Both ends authenticate with the
 	// session JWT (Bearer for a server-side harness, the subprotocol for the
