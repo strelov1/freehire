@@ -42,6 +42,10 @@ no compiler or type checker spans the gap either.
   answer and it rewrites the wire for both harnesses and the panel at once; the scopes
   `read_form` already reports close the observed failure without it.
 - Closing cross-frame ambiguity (see Risks).
+- Telling apart a label repeated INSIDE one form (a multi-entry "Employer" section). The
+  two scopes narrow a fill to one form, not to one control; within a form the first match
+  still wins. Refusing there would take a partly-filled page to an unfilled one, and the
+  fix is a per-control identity the wire does not carry.
 
 ## Decisions
 

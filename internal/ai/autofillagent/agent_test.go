@@ -13,7 +13,11 @@ import (
 // was asked to write, reporting every requested fill as written unless the field
 // was flagged as a combobox.
 type fakeTools struct {
-	fields    []autofillagent.Field
+	fields []autofillagent.Field
+	// uploads is what the page reports alongside its fields: the CV upload that marks
+	// one form as the application. Left empty by most tests, whose pages carry a single
+	// form and need no telling apart.
+	uploads   []autofillagent.Upload
 	requested []autofillagent.Fill
 	readErr   error
 }
@@ -24,7 +28,7 @@ func (f *fakeTools) Call(_ context.Context, tool string, args any) (json.RawMess
 		if f.readErr != nil {
 			return nil, f.readErr
 		}
-		return json.Marshal(map[string]any{"fields": f.fields})
+		return json.Marshal(map[string]any{"fields": f.fields, "uploads": f.uploads})
 	case "fill_simple":
 		raw, _ := json.Marshal(args)
 		var call struct {
@@ -324,6 +328,62 @@ func TestRunTagsEachFillWithItsFieldsFrameAndForm(t *testing.T) {
 	}
 	if got := tools.requested[0]; got.Frame != 1 || got.Form != 2 {
 		t.Errorf("fill scoped to frame %d form %d, want frame 1 form 2", got.Frame, got.Form)
+	}
+}
+
+// The page the proposal opens with: an application form and a job-alert signup in the
+// SAME document, each asking for an email address.
+//
+// splitByKind emits one Fill per field carrying the plan's label — deliberate, so a
+// widget and a plain control sharing a label in different frames are each routed. But
+// across two forms in one frame it means the signup gets its own precisely-addressed
+// fill, and precise addressing is what makes it LAND. Before the scopes were carried
+// the extension collapsed both onto the first match, so this was a coin flip; without
+// this narrowing it becomes two writes, every time.
+//
+// The upload is what tells the two apart, and it is on the wire already — the
+// extension's own filler narrows on it (scopeToApplication) and this side threw it
+// away.
+func TestRunDoesNotWriteIntoASignupSharingTheApplicationsLabel(t *testing.T) {
+	tools := &fakeTools{
+		fields: []autofillagent.Field{
+			{Label: "Email", Type: "email", Frame: 0, Form: 0}, // the application
+			{Label: "Email", Type: "email", Frame: 0, Form: 1}, // a job-alert signup
+		},
+		uploads: []autofillagent.Upload{{Frame: 0, Form: 0}},
+	}
+	planner := plannerFunc(func(_ []autofillagent.Field, p autofillagent.Profile) ([]autofillagent.Fill, error) {
+		return []autofillagent.Fill{{Label: "Email", Value: p["email"]}}, nil
+	})
+
+	if _, err := autofillagent.Run(context.Background(), tools, planner, profile()); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	if len(tools.requested) != 1 {
+		t.Fatalf("fill_simple was asked to write %+v, want one fill — the signup is not ours to fill", tools.requested)
+	}
+	if got := tools.requested[0]; got.Form != 0 {
+		t.Errorf("the fill named form %d, want form 0 — the form the upload is in", got.Form)
+	}
+}
+
+// The narrowing must not become a way to fill nothing. A page whose application cannot
+// be identified keeps every field, which is the same call the extension's own
+// scopeToApplication makes and for the same reason.
+func TestRunKeepsEveryFieldWhenNoUploadNamesTheApplication(t *testing.T) {
+	tools := &fakeTools{fields: []autofillagent.Field{
+		{Label: "Email", Type: "email", Frame: 0, Form: 0},
+	}}
+	planner := plannerFunc(func(_ []autofillagent.Field, p autofillagent.Profile) ([]autofillagent.Fill, error) {
+		return []autofillagent.Fill{{Label: "Email", Value: p["email"]}}, nil
+	})
+
+	if _, err := autofillagent.Run(context.Background(), tools, planner, profile()); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if len(tools.requested) != 1 {
+		t.Fatalf("fill_simple was asked to write %+v, want the one field the page asks", tools.requested)
 	}
 }
 

@@ -63,3 +63,32 @@
 - [ ] 8.2 Load the built extension unpacked and run one agent autofill against a real ATS
   page carrying a second form — the failure this change exists for is only observable in a
   browser, and no unit test proves the write landed in the right form on a live page.
+
+## 9. Fixes from review
+
+- [x] 9.1 Test (RED): a fill carrying `form: -1` reaches `fillByLabel` still scoped, and
+  matches a question standing outside any `<form>`. `-1` is the documented Ashby shape
+  (`protocol.ts`'s `FormField.form`, `formIndex`'s own return), and one `readScope` shared
+  by two differently-valued indices discards it — leaving Ashby unscoped AND, on a page
+  with a second same-labelled form, newly writing nothing.
+- [x] 9.2 Split the reader: `frame` admits `>= 0`, `form` admits `>= -1`.
+- [x] 9.3 Test (RED): one planned fill for a label carried by BOTH the application form and
+  a job-alert signup in one frame must not write to the signup. `splitByKind` emits one
+  `Fill` per matching field, so precise addressing turns the old coin-flip into two
+  writes — the harm the proposal opens with, made deterministic.
+- [x] 9.4 `readForm` reads `uploads` (the wire already sends them); the agent narrows its
+  fields to the application form before planning, mirroring the extension's own
+  `scopeToApplication`. A page whose application cannot be identified keeps every field,
+  as the extension's does.
+- [x] 9.5 Correct the three comments the change falsified: `form.ts`'s `fillByLabel` and
+  `planLabelFills` doc blocks and `protocol.ts`'s `LabelFill`, all of which still say an
+  unscoped fill matches the first question carrying the label.
+- [x] 9.6 `internal/ai/browsertools/AGENTS.md` — the fold cannot report a cross-frame
+  collision (it keeps one outcome per label and ties keep the first), and there is no
+  hand-authored `fill_simple` caller: the assistant exposes `read_current_page` only.
+  Both claims are currently false.
+- [x] 9.7 Either extend the boundary fixture test to reject a key `readFills` ignores, or
+  retract `browsertools/AGENTS.md`'s claim that it proves the other end reads a new field.
+  Today only the fixture UPDATE is enforced.
+- [x] 9.8 Note in `findQuestion` that a label repeated INSIDE one form still resolves to
+  the first control — design.md reads as though it does not.

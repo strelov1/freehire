@@ -75,12 +75,17 @@ export interface FramedUpload extends Upload {
  * A value to write into the question carrying `label` (see `fillByLabel`). For a
  * grouped question the value is one of the options it offers, not free text.
  *
- * `frame`/`form` scope the write to the question the fill was planned from —
- * `deterministicAutofill` sets both, carried over from the `FramedField` that
- * justified the fill, so a same-labeled control outside that frame or form is
- * left alone. Undefined for a `fill_simple` tool call, whose label the agent
- * names on its own with no field to read them from; such a fill still matches
- * the first question carrying the label, as before frame/form scoping existed.
+ * `frame`/`form` scope the write to the question the fill was planned from, so a
+ * same-labeled control outside that frame or form is left alone. Both writers set
+ * them, each from the field that justified the fill: `deterministicAutofill` from
+ * its `FramedField`, and hire's agent from the `read_form` field it matched.
+ *
+ * They stay optional because a hand-written `fill_simple` may name neither — but
+ * unscoped no longer means "first match wins". Where the label is carried once the
+ * fill lands; where it is carried by several the outcome is `ambiguous` and nothing
+ * is written. **`form` is -1 for a question standing outside any `<form>`**, which
+ * is how Ashby renders its application, so a reader of these must admit it: -1 is a
+ * scope, not a missing one.
  */
 export interface LabelFill {
   label: string;

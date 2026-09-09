@@ -481,6 +481,27 @@ describe('fillByLabel', () => {
     expect(outcomes).toEqual([{ label: 'Email', status: 'filled' }]);
   });
 
+  // Ashby renders its application outside any <form>, which formIndex reports as -1.
+  // That is a scope like any other and must resolve — otherwise the one platform the
+  // shape was documented for is exactly the one the addressing cannot reach.
+  it('resolves form -1 to the question standing outside any form', () => {
+    const loose = document.createElement('input');
+    loose.type = 'text';
+    loose.id = 'loose-email';
+    const looseLabel = document.createElement('label');
+    looseLabel.setAttribute('for', loose.id);
+    looseLabel.textContent = 'Email';
+    document.body.append(looseLabel, loose);
+    const signup = formWith('signup', ['Email']);
+    const signupInput = must(signup.querySelector<HTMLInputElement>('input'));
+
+    const outcomes = fillByLabel(document, [{ label: 'Email', value: 'ilya@example.com', form: -1 }]);
+
+    expect(loose.value).toBe('ilya@example.com');
+    expect(signupInput.value).toBe('');
+    expect(outcomes).toEqual([{ label: 'Email', status: 'filled' }]);
+  });
+
   // A label carried once is not ambiguous, so the refusal cannot reach the ordinary
   // page — which is every page with one form on it.
   it('still fills an unscoped fill whose label is carried once', () => {

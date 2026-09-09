@@ -35,6 +35,17 @@ type Field struct {
 	Form int `json:"form"`
 }
 
+// Upload is a CV upload the page offers, as `read_form` reported it. Never a fill
+// target — it travels because it is what marks one form on the page as the
+// APPLICATION. Measured across Greenhouse, Lever and Ashby: every open application
+// offered one, and no page that was not showing an application did, which is what
+// lets a job-alert signup be told from a short application form when counting fields
+// cannot.
+type Upload struct {
+	Frame int `json:"frame"`
+	Form  int `json:"form"`
+}
+
 // Fill is one entry of the plan: the value to write into the control carrying
 // this label. Frame and Form name where the target field was read from (see
 // Field.Frame, Field.Form) — set by splitByKind from the field it resolved the
@@ -100,13 +111,14 @@ var (
 
 // Run drives one autofill turn: read the form, plan, fill, report.
 func Run(ctx context.Context, tools Tools, planner Planner, profile Profile) (Report, error) {
-	fields, err := readForm(ctx, tools)
+	fields, uploads, err := readForm(ctx, tools)
 	if err != nil {
 		return Report{}, err
 	}
 	if len(fields) == 0 {
 		return Report{}, ErrNoFillableFields
 	}
+	fields = scopeToApplication(fields, uploads)
 
 	planned, err := planner.Plan(ctx, fields, profile)
 	if err != nil {
@@ -164,18 +176,55 @@ func splitByKind(fields []Field, planned []Fill) (typed []Fill, widgets []Field)
 	return typed, widgets
 }
 
-func readForm(ctx context.Context, tools Tools) ([]Field, error) {
+func readForm(ctx context.Context, tools Tools) ([]Field, []Upload, error) {
 	raw, err := tools.Call(ctx, "read_form", nil)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	var result struct {
-		Fields []Field `json:"fields"`
+		Fields  []Field  `json:"fields"`
+		Uploads []Upload `json:"uploads"`
 	}
 	if err := json.Unmarshal(raw, &result); err != nil {
-		return nil, fmt.Errorf("read_form returned unreadable fields: %w", err)
+		return nil, nil, fmt.Errorf("read_form returned unreadable fields: %w", err)
 	}
-	return result.Fields, nil
+	return result.Fields, result.Uploads, nil
+}
+
+// scopeToApplication narrows an observation to the one form the application is
+// asking, identified by the CV upload sitting in it.
+//
+// Without it a page carrying both an application and a job-alert signup has both
+// written: each has its own "Email", splitByKind emits one Fill per field carrying a
+// planned label, and every one of those fills now names its own form precisely — so
+// the signup's lands rather than collapsing onto the application's, which is what
+// happened while the scopes were being discarded on arrival.
+//
+// This mirrors the extension's own function of the same name, deliberately rather
+// than by accident: the panel's deterministic filler has narrowed this way since the
+// signup case was found, and the agent path read the same `read_form` reply and threw
+// the uploads away. Two copies because the layering forbids one — Go cannot call into
+// the extension — so a change to either belongs in both.
+//
+// Both indices identify the group: an ATS iframe numbers its own forms from zero, so
+// the frame alone would merge two unrelated first forms. When the upload names a group
+// holding no questions — a page rendering them outside its form element — every field
+// is kept, because filling nothing at all is the worse answer.
+func scopeToApplication(fields []Field, uploads []Upload) []Field {
+	if len(uploads) == 0 {
+		return fields
+	}
+	target := uploads[0]
+	scoped := make([]Field, 0, len(fields))
+	for _, f := range fields {
+		if f.Frame == target.Frame && f.Form == target.Form {
+			scoped = append(scoped, f)
+		}
+	}
+	if len(scoped) == 0 {
+		return fields
+	}
+	return scoped
 }
 
 type outcome struct {

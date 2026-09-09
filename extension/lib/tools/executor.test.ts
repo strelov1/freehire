@@ -130,6 +130,51 @@ describe('executeTool', () => {
     expect(seen).toEqual([{ label: 'Email', value: 'a@b.c', frame: 1, form: 2 }]);
   });
 
+  // -1 is not a malformed form index, it is the documented one for a question
+  // standing outside any <form> — which is how Ashby renders its application (see
+  // FormField.form, and formIndex's own return). Reading it as "unscoped" leaves
+  // every Ashby fill unaddressed, and on a page that also carries a job-alert form
+  // asking the same question, unaddressed now means refused: nothing is written.
+  it('keeps form -1, the index of a question outside any form', async () => {
+    let seen: LabelFill[] = [];
+    const page = bridge({
+      fillSimple: async (fills) => {
+        seen = fills;
+        return fills.map((f) => ({ label: f.label, status: 'filled' as const }));
+      },
+    });
+
+    await executeTool(
+      {
+        id: 'c11',
+        tool: 'fill_simple',
+        args: { fills: [{ label: 'Email', value: 'a@b.c', frame: 0, form: -1 }] },
+      },
+      page,
+    );
+
+    expect(seen).toEqual([{ label: 'Email', value: 'a@b.c', frame: 0, form: -1 }]);
+  });
+
+  // A frame index has no such case: frames are counted from the top document at 0,
+  // so a negative one is malformed however it arrived.
+  it('rejects a negative frame, which has no meaning', async () => {
+    let seen: LabelFill[] = [];
+    const page = bridge({
+      fillSimple: async (fills) => {
+        seen = fills;
+        return fills.map((f) => ({ label: f.label, status: 'filled' as const }));
+      },
+    });
+
+    await executeTool(
+      { id: 'c12', tool: 'fill_simple', args: { fills: [{ label: 'Email', value: 'a@b.c', frame: -1 }] } },
+      page,
+    );
+
+    expect(seen).toEqual([{ label: 'Email', value: 'a@b.c', frame: undefined, form: undefined }]);
+  });
+
   // A scope is optional — an unscoped fill is still offered to every frame — but a
   // malformed one must not be read as frame 0, which is the top document and a real
   // target. Absent and unreadable both mean "not scoped".
@@ -247,6 +292,20 @@ describe('the fill_simple frame hire actually sends', () => {
 
     expect(res.error).toBeUndefined();
     expect(seen).toEqual([{ label: 'Email', value: 'ilya@example.com', frame: 1, form: 2 }]);
+  });
+
+  // Matching the values is only half of it. The defect was a field hire SENT that
+  // this side never read, and an assertion over what `readFills` produced cannot see
+  // one: an ignored key simply does not appear in the result. So the fixture's own
+  // keys are checked against the set this reader handles — add a field to
+  // `autofillagent.Fill`, regenerate, and this fails until `readFills` is taught it.
+  it('has no key this reader ignores', () => {
+    const READ_BY_READFILLS = new Set(['label', 'value', 'frame', 'form']);
+
+    const { args } = JSON.parse(fillSimpleFrame) as { args: { fills: Record<string, unknown>[] } };
+    const ignored = args.fills.flatMap((fill) => Object.keys(fill).filter((k) => !READ_BY_READFILLS.has(k)));
+
+    expect(ignored, `readFills ignores ${ignored.join(', ')} — teach it, or drop the field`).toEqual([]);
   });
 });
 

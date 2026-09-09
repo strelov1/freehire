@@ -495,10 +495,11 @@ export function scopeToApplication<T extends { frame: number; form: number }>(
  * nothing about, or knows only as a blank, is left for the user rather than
  * written over with an empty string.
  *
- * A repeated label is asked for once. A careers page routinely carries two forms
- * — the application and a job-alert signup — and `fillByLabel` answers the first
- * question carrying a label, so the repeats only pad the wire. Pure over its
- * input; the page is not touched here.
+ * A repeated label is asked for once, and the one fill kept carries the frame and
+ * form of the FIRST field that offered it — which is the application's, because
+ * `scopeToApplication` has already narrowed the input to it. Keeping the repeats
+ * would send a second fill addressed at whatever else carries the label. Pure over
+ * its input; the page is not touched here.
  */
 export function planLabelFills(
   fields: { label: string; frame?: number; form?: number }[],
@@ -537,8 +538,10 @@ export function fillsForFrame(fills: LabelFill[], frame: number): LabelFill[] {
  *
  * A fill naming a `form` only matches a question inside that form — the frame's
  * own signup form sharing a label ("Email") with the application form must not
- * absorb a fill meant for the other. A fill naming none matches the first
- * question carrying the label, as `fillByLabel` always has.
+ * absorb a fill meant for the other. A fill naming NONE matches only where the
+ * label is carried once; where it is carried by several questions the fill is
+ * refused as `ambiguous` and nothing is written, because from here the application
+ * and the signup are indistinguishable and the wrong write is silent.
  */
 /** How long the borrowed outline stays on a revealed control. Long enough to
  *  follow by eye, short enough that a walk's next step does not overlap it. */
@@ -646,6 +649,14 @@ function findQuestion(
     return { miss: absentOrUnfillable(doc, target) };
   }
 
+  // `find`, so a label repeated INSIDE one form resolves to the first of them —
+  // knowingly. `(label, frame, form)` is not a key: a multi-entry section asking
+  // "Employer" once per job carries the label several times in one form, and each
+  // of the fills the agent fans out lands on control #1 while the rest stay empty.
+  // Refusing here instead would take that page from partly filled to not filled at
+  // all, which is the worse answer while nothing on the wire can name a control
+  // more precisely. What closes it is an addressing scheme with a per-control id,
+  // not a refusal.
   const scoped = matches.find((q) => formIndex(q.controls[0], forms) === form);
   if (scoped) return { found: scoped };
   // The label is asked somewhere in this frame, just not in the form named — the

@@ -30,15 +30,19 @@ against whatever page the user is on and sends results back.
   state that hid this one.
 - **One thing the addressing still cannot see: cross-frame ambiguity.** A fill
   naming no `frame` is offered to every frame, and each frame sees only its own
-  document — so two frames each holding one match both report a clean `filled`, and
-  only the fold that merges their answers can tell there were two. That fold runs
-  after the writes have landed, so it can report the collision but not prevent it.
-  Within ONE frame the case is handled: `fillByLabel` refuses with `ambiguous` and
-  writes nothing. The gap is left open rather than engineered around because
-  `autofillagent` now names a frame on every fill, which leaves it to a
-  hand-authored `fill_simple` from the assistant; closing it properly means a
-  resolve pass before any write, i.e. a second round trip on every fill. The seam,
-  if it ever becomes worth it, is `fillByLabel` in `extension/lib/form.ts`.
+  document — so two frames each holding one match both write, and both report a
+  clean `filled`. **Nothing anywhere notices**: `mergeFrameOutcomes` keeps the
+  highest-ranked outcome per label and ties keep the first, so the second `filled`
+  is dropped rather than counted, and the fold cannot report the collision because
+  it cannot see it. Within ONE frame the case IS handled: `fillByLabel` refuses with
+  `ambiguous` and writes nothing.
+  The gap is left open rather than engineered around because nothing reaches it
+  today — `autofillagent` names both scopes on every fill, and no other caller
+  issues `fill_simple` at all (the assistant's `browse` preset exposes
+  `read_current_page` and no writing tool). It is written down because the next
+  writer of a `fill_simple` caller is who it would bite. Closing it means a resolve
+  pass before any write, i.e. a second round trip on every fill; the seam is
+  `fillByLabel` in `extension/lib/form.ts`.
 - **Never hang a caller.** A call with no extension attached is answered with
   `{id, error}` rather than dropped — the harness is blocked on that id. A result
   with no harness left is dropped (nobody is waiting). That one answer is the

@@ -86,8 +86,8 @@ function readFills(args: Record<string, unknown> | undefined): LabelFill[] {
     return {
       label,
       value: typeof value === 'string' ? value : String(value ?? ''),
-      frame: readScope(frame),
-      form: readScope(form),
+      frame: readIndex(frame, 0),
+      form: readIndex(form, -1),
     };
   });
 }
@@ -97,12 +97,19 @@ function readFills(args: Record<string, unknown> | undefined): LabelFill[] {
  *
  * A scope NARROWS a fill — `frame` to one of the tab's documents, `form` to one
  * `<form>` within it — so omitting both is legal and means "offered to every frame,
- * matched anywhere in it". An unreadable one is therefore read as absent rather than
- * coerced: `Number('top')` is NaN and `Number(null)` is 0, and 0 is the top document,
- * a real target a malformed scope must never silently become.
+ * matched anywhere in it". An unreadable one is read as absent rather than coerced:
+ * `Number('top')` is NaN and `Number(null)` is 0, and 0 is the top document, a real
+ * target a malformed scope must never silently become.
+ *
+ * `least` differs between the two because their vocabularies do. Frames are counted
+ * from the top document at 0, so a negative frame is malformed however it arrived.
+ * A form index of **-1 is meaningful**: it is what `formIndex` reports for a question
+ * standing outside any `<form>`, which is how Ashby renders its application. Reading
+ * that as "unscoped" would leave every Ashby fill unaddressed — and where the page
+ * also carries a signup asking the same question, unaddressed now means refused.
  */
-function readScope(v: unknown): number | undefined {
-  return typeof v === 'number' && Number.isInteger(v) && v >= 0 ? v : undefined;
+function readIndex(v: unknown, least: number): number | undefined {
+  return typeof v === 'number' && Number.isInteger(v) && v >= least ? v : undefined;
 }
 
 /**

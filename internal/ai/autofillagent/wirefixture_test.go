@@ -1,7 +1,9 @@
 package autofillagent_test
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -20,34 +22,67 @@ import (
 // because it checked the SENDER. Nothing checked that the receiver read what was sent,
 // and the two ends are in different languages, so no compiler spans the gap.
 //
-// This is that missing check, in the only form that can span it: one file, written from
-// the real struct on this side and parsed by the real argument reader on the other. A
-// change to Fill's JSON fails here with instructions to regenerate; the regenerated
-// fixture then fails the extension's test if its reader cannot handle the new shape.
+// This is that missing check, in the only form that can span it: one file, produced by
+// the real send path on this side and parsed by the real argument reader on the other.
+// A change to what this side sends fails here with instructions to regenerate; the
+// regenerated fixture then fails the extension's test, which asserts both the values it
+// reads AND that it recognises every key present — so a field added here cannot be
+// silently ignored there, which is exactly how the scope was lost.
 const fillCallFixture = "../../../extension/lib/tools/testdata/fill-simple-call.json"
+
+// capturingTools records the tool call Run issues rather than answering from a canned
+// form. Deliberately driving Run instead of marshalling a Fill directly: the args
+// wrapper (`{"fills": …}`) and the tool NAME are part of what goes on the wire, and a
+// fixture assembled by hand beside them would not notice either being renamed.
+type capturingTools struct {
+	fields []autofillagent.Field
+	tool   string
+	args   any
+}
+
+func (c *capturingTools) Call(_ context.Context, tool string, args any) (json.RawMessage, error) {
+	switch tool {
+	case "read_form":
+		return json.Marshal(map[string]any{"fields": c.fields})
+	case "fill_simple":
+		c.tool, c.args = tool, args
+		return json.Marshal(map[string]any{"outcomes": []map[string]string{{"label": "Email", "status": "filled"}}})
+	default:
+		return nil, errors.New("unknown tool: " + tool)
+	}
+}
 
 // The envelope Caller.Call wraps every tool call in. Duplicated here rather than
 // exported from browsertools: the envelope's own correctness is caller_test.go's
-// business, and what this fixture is for is the ARGS — one Fill, marshalled by the
-// struct that actually goes on the wire.
+// business, and what this fixture is for is the payload.
 type toolCallFrame struct {
 	ID   string `json:"id"`
 	Tool string `json:"tool"`
 	Args any    `json:"args,omitempty"`
 }
 
-// TestFillSimpleWireFixtureIsCurrent regenerates the frame from the live struct and
-// fails if the committed fixture no longer matches it.
+// TestFillSimpleWireFixtureIsCurrent regenerates the frame from a real Run and fails
+// if the committed fixture no longer matches it.
 //
 // Regenerate with: UPDATE_WIRE_FIXTURE=1 go test ./internal/ai/autofillagent/
 func TestFillSimpleWireFixtureIsCurrent(t *testing.T) {
 	// Both scopes non-zero and different from each other, so a fixture that lost one
 	// or transposed them cannot pass: frame 1 is an ATS iframe, form 2 the third form
 	// inside it. A zero would be indistinguishable from an absent field.
-	fills := []autofillagent.Fill{{Label: "Email", Value: "ilya@example.com", Frame: 1, Form: 2}}
-	frame := toolCallFrame{ID: "call-1", Tool: "fill_simple", Args: map[string]any{"fills": fills}}
+	tools := &capturingTools{fields: []autofillagent.Field{
+		{Label: "Email", Type: "email", Frame: 1, Form: 2},
+	}}
+	planner := plannerFunc(func(_ []autofillagent.Field, p autofillagent.Profile) ([]autofillagent.Fill, error) {
+		return []autofillagent.Fill{{Label: "Email", Value: p["email"]}}, nil
+	})
+	if _, err := autofillagent.Run(context.Background(), tools, planner, profile()); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if tools.args == nil {
+		t.Fatal("Run issued no fill_simple call, so there is no frame to record")
+	}
 
-	want, err := json.MarshalIndent(frame, "", "  ")
+	want, err := json.MarshalIndent(toolCallFrame{ID: "call-1", Tool: tools.tool, Args: tools.args}, "", "  ")
 	if err != nil {
 		t.Fatalf("marshal frame: %v", err)
 	}

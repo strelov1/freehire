@@ -8,9 +8,14 @@ reports on every field it returns. The extension SHALL read all three off the wi
 a harness sends SHALL NOT be discarded.
 
 `frame` narrows a fill to one of the tab's documents (0 is the top document); `form` narrows
-it further to one `<form>` within that document. Together they identify exactly the control
-the harness observed, so a re-render or a second form carrying the same label cannot
-redirect the write.
+it further to one `<form>` within that document, and SHALL admit **-1**, the index of a
+question standing outside any form — the shape Ashby renders its application in. Together
+they narrow a fill to one form, so a re-render or a second form carrying the same label
+cannot redirect the write.
+
+They do not make `(label, frame, form)` a key: a label repeated inside ONE form — a
+multi-entry section asking "Employer" once per job — still resolves to the first of them.
+Closing that needs a per-control identity the wire does not carry, and is out of scope here.
 
 A fill naming no `frame` SHALL continue to be offered to every frame, and a fill naming no
 `form` SHALL continue to match within the frame's whole document — the scopes narrow a
