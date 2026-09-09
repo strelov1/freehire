@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
@@ -154,9 +154,30 @@ describe('marketLine', () => {
 
 const PAGE = readFileSync(join(import.meta.dirname, '+page.svelte'), 'utf8');
 
+// Resolved from the package root (vitest's process.cwd() is `web/` — confirmed by every
+// other test's own relative import paths), not from this test file's own directory, so
+// relocating this test file cannot silently change which route directory gets inspected.
+const ROAST_ROUTE_DIR = join(process.cwd(), 'src/routes/roast');
+
 describe('/roast page markup', () => {
-  it('lives outside src/routes/my — the public layout, no session gate', () => {
-    expect(import.meta.dirname).not.toMatch(/[\\/]routes[\\/]my([\\/]|$)/);
+  // A test asserting a property of THIS TEST FILE's own path (e.g. "import.meta.dirname
+  // does not contain /routes/my/") cannot fail from any change to the page's actual
+  // routing or auth behavior — it is a tautology about where the test happens to live,
+  // not a check of the route tree. SvelteKit's directory rules mean the only place a
+  // session gate could attach to this route SPECIFICALLY (short of editing the shared
+  // root +layout.server.ts, which every public page relies on staying gate-free) is a
+  // +layout.server.ts / +layout.ts / +layout.svelte dropped right into this directory —
+  // see web/src/routes/my/+layout.server.ts for the exact shape such a gate takes
+  // (a `redirect(302, signinUrl(...))` when `parent()`'s `user` is absent). This asserts
+  // none of the three exist, so a future PR introducing one here — even by accident —
+  // fails this test instead of silently gating an account-free page.
+  it('carries no layout of its own — the only place a session gate could attach to this route', () => {
+    for (const name of ['+layout.server.ts', '+layout.ts', '+layout.svelte']) {
+      expect(
+        existsSync(join(ROAST_ROUTE_DIR, name)),
+        `${name} must not exist under src/routes/roast — its presence would be a session gate scoped to this route (see web/src/routes/my/+layout.server.ts for the shape one takes)`,
+      ).toBe(false);
+    }
   });
 
   it('renders the drop zone unconditionally, not behind an auth check', () => {
