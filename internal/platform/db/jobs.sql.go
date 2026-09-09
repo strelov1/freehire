@@ -2113,6 +2113,49 @@ func (q *Queries) JobDescriptionsByIDs(ctx context.Context, ids []int64) ([]JobD
 	return items, nil
 }
 
+const jobsForWorkModeRecheckByIDs = `-- name: JobsForWorkModeRecheckByIDs :many
+SELECT id, location, description, work_mode FROM jobs
+WHERE id = ANY($1::bigint[])
+`
+
+type JobsForWorkModeRecheckByIDsRow struct {
+	ID          int64  `json:"id"`
+	Location    string `json:"location"`
+	Description string `json:"description"`
+	WorkMode    string `json:"work_mode"`
+}
+
+// Location, description and the currently-stored work_mode for a named set of ids, for
+// cmd/backfill-remote-perk-false-positive.
+//
+// Ids come from a Meilisearch query for the same reason JobDescriptionsByIDs's do: a
+// WHERE over `description` de-TOASTs the column for every row it examines, and the
+// search index already holds the text.
+func (q *Queries) JobsForWorkModeRecheckByIDs(ctx context.Context, ids []int64) ([]JobsForWorkModeRecheckByIDsRow, error) {
+	rows, err := q.db.Query(ctx, jobsForWorkModeRecheckByIDs, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []JobsForWorkModeRecheckByIDsRow{}
+	for rows.Next() {
+		var i JobsForWorkModeRecheckByIDsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Location,
+			&i.Description,
+			&i.WorkMode,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const latestOpenJobAddedAt = `-- name: LatestOpenJobAddedAt :one
 SELECT (
     SELECT created_at
@@ -3766,6 +3809,31 @@ type SetJobRequiresClearanceParams struct {
 // would go stale the moment ingest writes a new posting behind it.
 func (q *Queries) SetJobRequiresClearance(ctx context.Context, arg SetJobRequiresClearanceParams) (int64, error) {
 	result, err := q.db.Exec(ctx, setJobRequiresClearance, arg.RequiresClearance, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const setJobWorkMode = `-- name: SetJobWorkMode :execrows
+UPDATE jobs
+SET work_mode = $1
+WHERE id = $2
+  AND work_mode IS DISTINCT FROM $1
+`
+
+type SetJobWorkModeParams struct {
+	WorkMode string `json:"work_mode"`
+	ID       int64  `json:"id"`
+}
+
+// Write one row's work_mode, for cmd/backfill-remote-perk-false-positive.
+//
+// The IS DISTINCT FROM guard makes the pass idempotent, the same way
+// SetJobRequiresClearance's does: a row already carrying the recomputed value is not
+// rewritten, so a re-run writes nothing and stopping mid-way costs nothing to resume.
+func (q *Queries) SetJobWorkMode(ctx context.Context, arg SetJobWorkModeParams) (int64, error) {
+	result, err := q.db.Exec(ctx, setJobWorkMode, arg.WorkMode, arg.ID)
 	if err != nil {
 		return 0, err
 	}
