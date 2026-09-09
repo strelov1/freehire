@@ -245,7 +245,44 @@ func TestRoastCV_AnUnreadableCVIsAnAnswerNotAnError(t *testing.T) {
 	data := out["data"].(map[string]any)
 	report := data["report"].(map[string]any)
 	if report["overall"] == nil {
-		t.Error("overall is nil, want a real (low) score")
+		t.Fatal("overall is nil, want a real (low) score")
+	}
+
+	// atscheck.Score always returns a non-nil Overall, so "overall is present" alone
+	// proves nothing about the number's magnitude — the actual pin is that a two-word
+	// CV scores LOW. Verified against atscheck.Score("Jane Doe", nil, nil) directly:
+	// every one of the five categories reads for structure, dates, bullets, contact
+	// info, or length this text has none of, so today it comes back exactly 0/100.
+	// The threshold is set well above that measured floor (not pinned to 0) so the
+	// test survives a future reweighting of the categories without losing what it
+	// pins: a 2-word CV must still read as a bad score, not a mediocre or good one.
+	overall, _ := report["overall"].(float64)
+	if overall > 15 {
+		t.Errorf("overall = %v, want a low score for a 2-word CV", overall)
+	}
+
+	// The machine-readability check is format_compliance's own item for the emptiness
+	// signal atscheck.go documents as "the single biggest ATS killer" (see its package
+	// doc). It is the ONLY item in that category whose failStatus is StatusFail — every
+	// other item there fails to StatusWarn — so locating the category's first item and
+	// asserting its status is "fail" pins the exact regression the reviewer named: a
+	// change that stopped marking this item failed for an unreadable CV. (Its Text
+	// switches between the pass copy "Text is machine-readable" and a fail-specific
+	// remediation string, so status — not text — is what a test can rely on.)
+	categories, _ := report["categories"].([]any)
+	var formatItems []any
+	for _, c := range categories {
+		cat, _ := c.(map[string]any)
+		if cat["id"] == "format_compliance" {
+			formatItems, _ = cat["items"].([]any)
+		}
+	}
+	if len(formatItems) == 0 {
+		t.Fatal("format_compliance category has no items")
+	}
+	machineReadable, _ := formatItems[0].(map[string]any)
+	if machineReadable["status"] != "fail" {
+		t.Errorf("format_compliance's machine-readability item status = %v, want fail", machineReadable["status"])
 	}
 }
 
@@ -322,12 +359,21 @@ func TestRoastCV_UndecodablePDFIsA400NotA500(t *testing.T) {
 	}
 }
 
-// TestRoastCV_TouchesNoStore reads the handler's own source and fails if it reaches for
-// any of resumeHandlers' persisting collaborators. "Stores nothing" is a promise made to
-// an anonymous visitor about their CV, and it is exactly the kind of promise a later
-// well-meaning edit breaks — adding a "just cache the report" line looks harmless and is
-// not. A behavioural test cannot see this: the fields are nil in every unit test, so a
-// handler that used them would simply panic in prod and pass here.
+// TestRoastCV_TouchesNoStore reads RoastCV's own body, in this file, and fails if it
+// contains a direct h.<field> selector naming one of resumeHandlers' persisting
+// collaborators. "Stores nothing" is a promise made to an anonymous visitor about their
+// CV, and it is exactly the kind of promise a later well-meaning edit breaks — adding a
+// "just cache the report" line looks harmless and is not. A behavioural test cannot see
+// this: the fields are nil in every unit test, so a handler that used them would simply
+// panic in prod and pass here.
+//
+// Scope, stated plainly: this walks only RoastCV's own body in cv_roast.go. It does NOT
+// see a write introduced inside a helper RoastCV calls — roleFacet, coverageWithRole — or
+// inside a shared response helper like dataResponseWithIgnored or coverageIgnoredParams.
+// coverageWithRole in particular is shared code with callers outside this feature, so a
+// guard that followed calls across files would be brittle and could fail for reasons that
+// have nothing to do with this endpoint. Extending the scope was considered and rejected
+// for that reason; this guard's job is only to catch a write added directly to RoastCV.
 func TestRoastCV_TouchesNoStore(t *testing.T) {
 	file, err := parser.ParseFile(token.NewFileSet(), "cv_roast.go", nil, 0)
 	if err != nil {
