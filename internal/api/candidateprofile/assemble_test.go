@@ -55,6 +55,17 @@ func (f fakeScreening) Get(context.Context, int64) (screeninganswers.Answers, er
 	return f.ret, f.err
 }
 
+// fakeBank is a BankReader returning canned banked answers, the same shape fakeScreening
+// takes for the typed facts beside it.
+type fakeBank struct {
+	ret map[string]string
+	err error
+}
+
+func (f fakeBank) Sendable(context.Context, int64) (map[string]string, error) {
+	return f.ret, f.err
+}
+
 func assemblerWith(cvs fakeCV, st resumeextract.Structured, stOK bool, email string) *Assembler {
 	return NewAssembler(cvs, fakeResume{ret: st, ok: stOK}, fakeAccount{email: email}, nil, nil)
 }
@@ -351,5 +362,40 @@ func TestFields_CarriesNoBankedAnswerAndFieldsWithBankedAnswersDoes(t *testing.T
 	// the autofill path by aliasing.
 	if _, leaked := p.Fields()["topic:salary_expectation"]; leaked {
 		t.Error("FieldsWithBankedAnswers wrote into the map Fields returns")
+	}
+}
+
+// Assemble must actually read the bank. Every other test in this file passes nil for it, so
+// deleting the read left the whole suite green — including atsapply's seam test, which
+// builds a Profile literal and never goes through Assemble at all. That is the same
+// "test that cannot fail" shape the seam test was written to avoid, one hop earlier in the
+// chain.
+func TestAssemble_IncludesBankedAnswersWhenStated(t *testing.T) {
+	a := NewAssembler(fakeCV{}, fakeResume{}, fakeAccount{email: "account@example.com"}, nil,
+		fakeBank{ret: map[string]string{"salary_expectation": "5000 USD per year"}})
+
+	got, err := a.Assemble(context.Background(), 7)
+	if err != nil {
+		t.Fatalf("Assemble: %v", err)
+	}
+	if got.BankAnswers["salary_expectation"] != "5000 USD per year" {
+		t.Errorf("BankAnswers = %v, want the banked answer the reader returned", got.BankAnswers)
+	}
+	// And it has to travel the whole way to the map an application form is resolved
+	// against, not merely onto the struct.
+	if got.FieldsWithBankedAnswers()["topic:salary_expectation"] != "5000 USD per year" {
+		t.Errorf("FieldsWithBankedAnswers = %v, want the banked answer under its prefix", got.FieldsWithBankedAnswers())
+	}
+}
+
+// A bank read that fails is a real error, not an absent bank: the caller asked for a
+// profile and cannot be handed one that silently omits half its answers.
+func TestAssemble_PropagatesABankReadFailure(t *testing.T) {
+	wantErr := errors.New("bank is unreachable")
+	a := NewAssembler(fakeCV{}, fakeResume{}, fakeAccount{email: "account@example.com"}, nil,
+		fakeBank{err: wantErr})
+
+	if _, err := a.Assemble(context.Background(), 7); !errors.Is(err, wantErr) {
+		t.Fatalf("Assemble error = %v, want the bank's own failure", err)
 	}
 }

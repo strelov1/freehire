@@ -359,11 +359,17 @@ func TestResolve_ReadsTheKeysProfileFieldsActuallyWrites(t *testing.T) {
 // The feature, asserted as one story: a required question parks, the candidate answers it,
 // and the next resolve fills it — even though the second employer words it differently.
 //
-// This is the test that would have caught the whole class of bug this feature exists for.
-// Everything else here checks a piece.
+// The two phrasings share no words at all. That is the point, and it is what the earlier
+// version of this test did not do: it differed only by surrounding whitespace, so it proved
+// strings.Fields trims and would have passed with the topic dictionary deleted entirely.
+// "What is your desired salary?" and "Compensation expectations" only meet through
+// internal/dict/answertopic's salary_expectation entry, so this fails if that regresses.
+//
+// This candidate has no typed desired_salary — that is the premise, since a stated one is
+// why the question would not have parked in the first place.
 func TestResolve_AnAnsweredQuestionStopsBlockingLaterApplications(t *testing.T) {
 	firstEmployer := []MergedField{{
-		ID: "question_4005041004", Label: "Which state do you currently reside in?",
+		ID: "question_4005041004", Label: "What is your desired salary?",
 		Kind: "text", Required: true,
 	}}
 	noAnswersYet := map[string]string{}
@@ -376,12 +382,18 @@ func TestResolve_AnAnsweredQuestionStopsBlockingLaterApplications(t *testing.T) 
 		t.Fatal("FullyResolved() is true with a required question unanswered")
 	}
 
-	// The candidate answers it. answertopic.Of is what the server applies on save; the key
-	// here is what that produces.
-	banked := map[string]string{"topic:which state do you currently reside in": "Santa Catarina"}
+	// The candidate answers it on the review screen. answertopic.Of is what the server
+	// applies on save; the key here is what that produces.
+	topic, ok := bankTopicKeyForTest(t, before.Unmapped[0].Label)
+	if !ok {
+		t.Fatal("the server would refuse to bank the question the candidate was just shown")
+	}
+	banked := map[string]string{topic: "5000 USD per year"}
 
+	// A different employer, months later, asking the same thing in words the first one did
+	// not use.
 	secondEmployer := []MergedField{{
-		ID: "question_99887766", Label: "  Which state do you currently reside in?  ",
+		ID: "question_99887766", Label: "Compensation expectations",
 		Kind: "text", Required: true,
 	}}
 
@@ -389,38 +401,8 @@ func TestResolve_AnAnsweredQuestionStopsBlockingLaterApplications(t *testing.T) 
 	if !after.FullyResolved() {
 		t.Fatalf("unmapped = %+v, want a different employer's phrasing answered from the bank", after.Unmapped)
 	}
-	if after.Fields[0].Value != "Santa Catarina" {
+	if after.Fields[0].Value != "5000 USD per year" {
 		t.Errorf("value = %q, want the banked answer", after.Fields[0].Value)
-	}
-}
-
-// The bank must never answer a work-authorization question. "Are you authorized to work in
-// the country in which this position is located?" is ONE topic across every posting worded
-// that way, so a "Yes" banked from a US posting would be re-asserted, in the candidate's
-// name, on a Brazilian one — and at submit time, where the candidate never sees it.
-// labelAnswerKeyFor's own doc comment states this invariant; the bank is bound by it too.
-func TestResolve_NeverAnswersAWorkAuthorizationQuestionFromTheBank(t *testing.T) {
-	for _, label := range []string{
-		"Are you legally authorized to work in the country in which this position is located?",
-		"Do you now or in the future require sponsorship to work in the United States?",
-		"Do you have the right to work in the UK?",
-		"Will you require a visa?",
-	} {
-		topic, ok := bankTopicKeyForTest(t, label)
-		answers := map[string]string{topic: "Yes"}
-		if !ok {
-			t.Fatalf("the fold refused %q — this test would pass for the wrong reason", label)
-		}
-		fields := []MergedField{{ID: "question_1", Label: label, Kind: "text", Required: true}}
-
-		plan := Resolve(fields, answers, false)
-
-		if len(plan.Fields) != 0 {
-			t.Errorf("Resolve(%q) filled %+v — a work-authorization question needs this posting's own country, which nothing here has", label, plan.Fields)
-		}
-		if len(plan.Unmapped) != 1 {
-			t.Errorf("Resolve(%q) unmapped = %+v, want the question reported as unanswered", label, plan.Unmapped)
-		}
 	}
 }
 

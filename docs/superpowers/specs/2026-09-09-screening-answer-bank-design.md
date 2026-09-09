@@ -205,6 +205,12 @@ recognised as the mistake it would be.
   wins: it is validated and structured, the bank's copy is free text. The merge order is
   fixed, not a per-answer decision.
 
+  *Answers*, not *is named by a rule that matched*. A field resolves against the keys it may
+  be answered from — id, then label rule, then bank — and takes the first one the candidate
+  has actually stated. Stopping at the first matching RULE is what made "Compensation
+  expectations" park for a candidate with no typed desired salary who had banked that exact
+  answer a month earlier: the label rule claimed the field and the bank was never consulted.
+
 ## Testing
 
 - `answertopic`: fold cases from real captured labels (the three in the table above, plus

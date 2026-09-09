@@ -225,24 +225,15 @@ func resolveOne(f MergedField, answers map[string]string, hasApprovedCV bool) (R
 		return ResolvedField{}, "file uploads other than the résumé are not resolved by this package", false
 	}
 
-	key, known := answerKeyFor[f.ID]
-	if !known {
-		// The id is opaque (a custom employer-authored question) — fall back to matching
-		// its label against the narrow set of known semantic categories. An id match, when
-		// one exists, is always more specific/trustworthy and is never shadowed by this.
-		key, known = matchLabelAnswerKey(f.Label)
-	}
-	if !known {
-		// The bank: an answer the candidate gave to this same question on an earlier
-		// application. Last, so a typed fact always wins — see matchBankAnswerKey.
-		key, known = matchBankAnswerKey(f)
-	}
-	if !known {
+	keys := answerKeysFor(f)
+	if len(keys) == 0 {
 		return ResolvedField{}, fmt.Sprintf("no known answer source for %q", f.ID), false
 	}
-	value, stated := answers[key]
-	if !stated || strings.TrimSpace(value) == "" {
-		return ResolvedField{}, fmt.Sprintf("candidate has not stated %q", key), false
+	value, stated := firstStated(answers, keys)
+	if !stated {
+		// Named after the most specific key, which is the one a reader would go looking
+		// for; the others were tried and are empty too.
+		return ResolvedField{}, fmt.Sprintf("candidate has not stated %q", keys[0]), false
 	}
 
 	platformValue, matched := matchOption(f, value)
@@ -250,6 +241,51 @@ func resolveOne(f MergedField, answers map[string]string, hasApprovedCV bool) (R
 		return ResolvedField{}, fmt.Sprintf("answer %q matches none of this field's offered options", value), false
 	}
 	return ResolvedField{ID: f.ID, Kind: f.Kind, Multi: f.Multi, Value: platformValue}, "", true
+}
+
+// answerKeysFor returns every answers-map key this field may be answered from, most specific
+// first: the field's own id, then the narrow label rules, then the answer bank.
+//
+// A LIST, resolved against the map by firstStated, rather than one key chosen by whichever
+// rule matched first. The difference only shows when a rule matches a fact the candidate has
+// not stated, and that is precisely the case the bank exists for: "Compensation
+// expectations" matches labelAnswerKeyFor's desired_salary rule, so a candidate with no
+// typed desired_salary parked on it — including a candidate who had answered that exact
+// question on the review screen a month earlier and banked it. The bank was never consulted,
+// because a rule had already claimed the field.
+//
+// Precedence is unchanged and still fixed: a typed fact wins wherever it ANSWERS the
+// question. An unstated fact does not answer anything, so falling through to the bank is the
+// same rule read honestly, not a relaxation of it.
+func answerKeysFor(f MergedField) []string {
+	var keys []string
+	if key, ok := answerKeyFor[f.ID]; ok {
+		keys = append(keys, key)
+	}
+	// The id is opaque (a custom employer-authored question) — match its label against the
+	// narrow set of known semantic categories. An id match, when one exists, is always more
+	// specific/trustworthy and is never shadowed by this.
+	if key, ok := matchLabelAnswerKey(f.Label); ok {
+		keys = append(keys, key)
+	}
+	// The bank: an answer the candidate gave to this same question on an earlier
+	// application. Last, so a typed fact always wins — see matchBankAnswerKey.
+	if key, ok := matchBankAnswerKey(f); ok {
+		keys = append(keys, key)
+	}
+	return keys
+}
+
+// firstStated returns the value of the first key the candidate has actually stated. A key
+// present but blank counts as unstated: a blank answer is indistinguishable from an
+// unanswered question, which is the same reason answerbank refuses to store one.
+func firstStated(answers map[string]string, keys []string) (string, bool) {
+	for _, key := range keys {
+		if value := strings.TrimSpace(answers[key]); value != "" {
+			return value, true
+		}
+	}
+	return "", false
 }
 
 // isResumeField reports whether a file-kind field is the résumé/CV upload — the only file
