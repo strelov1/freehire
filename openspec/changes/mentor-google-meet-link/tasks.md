@@ -49,85 +49,82 @@
 
 ## 4. Domain: `internal/engage/mentorship` — the calendar-write seam
 
-- [ ] 4.1 Add `GoogleEventID string` to `Booking` and to the `mentor_bookings` scan in
-      `repository.go`
-- [ ] 4.2 Add to `Repository` interface:
-      `GetMentorCalendarGrant(ctx, userID int64) (refreshTokenEnc string, scopes
-      []string, found bool, err error)` and
-      `SetBookingCalendarEvent(ctx, bookingID uuid.UUID, meetingURL, eventID string)
-      error` and `MarkCalendarGrantNeedsReconsent(ctx, userID int64) error`
-      (the last can share the existing `needs_reconsent` status-set query if one
-      already exists at the `db.Queries` level for `gmail_connections`; otherwise add
-      one narrow query for it)
-- [ ] 4.3 Implement the three on `QueriesRepository`
-- [ ] 4.4 Add `CalendarLinker` interface and `ErrCalendarNotConnected` to a new
-      `googlemeet.go`:
-      ```go
-      type CalendarLinker interface {
-          CreateMeetEvent(ctx context.Context, userID int64, in MeetEventInput) (eventID, meetLink string, err error)
-          DeleteMeetEvent(ctx context.Context, userID int64, eventID string) error
-      }
-      ```
-      `MeetEventInput` carries what one event needs: start/end instants, the seeker's
-      email, a summary. Implementation depends on `*gmailsync.Connector` and
-      `*tokencrypt.Cipher` (both injected, both nil-safe the way `Notifier`/`Cache`
-      already are on `Config`)
-- [ ] 4.5 `CreateMeetEvent`: read the grant via `GetMentorCalendarGrant`; no row, or a
-      row whose `scopes` lacks `CalendarEventsScope`, returns `ErrCalendarNotConnected`
-      immediately (no HTTP call). Otherwise decrypt the refresh token, `POST
-      https://www.googleapis.com/calendar/v3/calendars/primary/events?conferenceDataVersion=1`
-      with one attendee (the seeker's email) and `conferenceData.createRequest` set
-      (a random request id per call), mirroring `calsync.APIReader`'s plain-`net/http`
-      style; wrap a non-200 response in `gmailsync.APIError{Op, StatusCode, Status}`;
-      parse `id` and `hangoutLink` from the response
-- [ ] 4.6 `DeleteMeetEvent`: same grant lookup, `DELETE
-      .../calendars/primary/events/{eventID}`; a 404/410 (already gone) is treated as
-      success, not an error
-- [ ] 4.7 Add `CalendarLinker CalendarLinker` to `mentorship.Config`, `calendar
-      CalendarLinker` to `Service`, wire it in `New()` — nil-safe throughout
-- [ ] 4.8 Unit tests (fake `CalendarLinker` in `fake_repo_test.go`-style): not-connected
-      → `ErrCalendarNotConnected`; connected + success → event id and Meet link parsed
-      from a canned response; connected + 401/403 → wrapped as `gmailsync.APIError`
-      and `RevokedGrant` reports true on it; a non-auth failure (500) → `RevokedGrant`
-      reports false
+- [x] 4.1 Added `GoogleEventID string` to `Booking` and to `bookingFromRow` (reads
+      `db.MentorBooking.GoogleEventID`, present on every `mentor_bookings` scan since
+      task 1.2's `make sqlc` regeneration).
+- [x] 4.2 Added to `Repository`: `GetMentorCalendarGrant`, `SetBookingCalendarEvent`,
+      `MarkCalendarGrantNeedsReconsent`. `GetMentorCalendarGrant` treats any status
+      other than `'connected'` (needs_reconsent included) as not-found, so the caller
+      never needs a second query to learn a grant is unusable.
+- [x] 4.3 Implemented the three on `QueriesRepository` (`repository.go`):
+      `GetMentorCalendarGrant` over `GetGoogleGrantForWrite`, `SetBookingCalendarEvent`
+      over `SetMentorBookingCalendarEvent`, `MarkCalendarGrantNeedsReconsent` reusing
+      `SetGmailStatus` — the same query the read-side grants already share.
+- [x] 4.4 Added `CalendarLinker`/`ErrCalendarNotConnected`/`MeetEventInput` to
+      `googlemeet.go`, plus `GoogleCalendarLinker` (depends on a narrow
+      `calendarGrantReader`, `*gmailsync.Connector`, `*tokencrypt.Cipher`).
+- [x] 4.5 `GoogleCalendarLinker.CreateMeetEvent`: `resolve()` reads the grant and
+      refuses with `ErrCalendarNotConnected` before any HTTP call when not found or
+      missing `CalendarEventsScope`; otherwise decrypts the token and POSTs via the
+      extracted `meetAPI.createEvent`, mirroring `calsync.APIReader`'s style —
+      `conferenceDataVersion=1`, one attendee, a random `requestId` per call, a non-2xx
+      wrapped in `gmailsync.APIError`, `id`/`hangoutLink` parsed from the response.
+- [x] 4.6 `DeleteMeetEvent`/`meetAPI.deleteEvent`: same grant gate, `DELETE
+      .../events/{eventID}`; 200/204/404/410 all read as success.
+- [x] 4.7 Added `CalendarLinker CalendarLinker` to `Config`, `calendar CalendarLinker`
+      to `Service`, wired in `New()` — nil-safe.
+- [x] 4.8 `googlemeet_test.go`: not-connected (no row, and a grant present but missing
+      the write scope) → `ErrCalendarNotConnected` before any network call; `meetAPI`
+      tested directly against `httptest` (mirroring `calsync`'s rewrite-transport
+      pattern, extended to preserve the DELETE path segment) — success parses
+      `id`/`hangoutLink`; 403 wraps as `gmailsync.APIError` and `RevokedGrant` reports
+      true; 500 does not; 404/410 on delete read as success.
+      Deviation from the task text: the HTTP-shape tests exercise the extracted
+      `meetAPI` directly with a plain client rather than `GoogleCalendarLinker` end to
+      end, so they need no real OAuth handshake — exactly how `calsync.APIReader`'s own
+      tests avoid it. The not-connected gate IS tested through `GoogleCalendarLinker`
+      itself, since that path needs no network call at all.
 
 ## 5. `Book()`/`Cancel()`: use the seam
 
-- [ ] 5.1 In `Book()`: after `s.repo.CreateBooking` succeeds, if `s.calendar != nil`
-      call `CreateMeetEvent`. `ErrCalendarNotConnected` → do nothing further (the row
-      already has `mentor.MeetingURL`, today's behavior, unchanged). Success → call
-      `SetBookingCalendarEvent`, and patch the in-memory `booking.MeetingURL`/
-      `GoogleEventID` before the notifier is invoked, so the confirmation email/ICS
-      carries the real link. Any other error → log it (reusing `logDeliveryFailure`'s
-      style), leave the row's link empty (insert `MeetingURL: ""` instead of
-      `mentor.MeetingURL` whenever the mentor holds *any* `calendar.events` grant,
-      connected-or-failing — see design.md), and if `gmailsync.RevokedGrant(err)` call
-      `MarkCalendarGrantNeedsReconsent`
-- [ ] 5.2 In `Cancel()`: after the existing cancel + notify, if
-      `booking.GoogleEventID != ""` and `s.calendar != nil`, call `DeleteMeetEvent`
-      best-effort, logging (never returning) a failure
-- [ ] 5.3 Unit tests: a connected mentor's booking gets the fake `CalendarLinker`'s
-      returned link and event id, and the notifier receives a `Booking` with that
-      link (not the mentor's static one); an unconnected mentor's booking is
-      byte-for-byte identical to today (regression guard, extending the existing
-      booking tests); a `CreateMeetEvent` failure still returns a confirmed booking
-      with an empty link and calls `MarkCalendarGrantNeedsReconsent` only when the
-      fake reports a revocation-shaped error; cancelling a booking with an event id
-      calls `DeleteMeetEvent`; a `DeleteMeetEvent` failure does not fail `Cancel()`
+- [x] 5.1 In `Book()`: `CreateBooking` still snapshots `mentor.MeetingURL` as before;
+      when `s.calendar != nil`, `attachMeetEvent` then calls `CreateMeetEvent`.
+      `ErrCalendarNotConnected` → leave the row as inserted (today's behaviour,
+      unchanged). Success → `SetBookingCalendarEvent` plus an in-memory patch of
+      `booking.MeetingURL`/`GoogleEventID` before the notifier fires. Any other error →
+      `logDeliveryFailure`, then `SetBookingCalendarEvent(id, "", "")` to blank the
+      stale static link (a mentor reaching this branch DOES hold a grant, by
+      construction — `ErrCalendarNotConnected` would have returned above otherwise),
+      and `MarkCalendarGrantNeedsReconsent` when `gmailsync.RevokedGrant(err)`.
+- [x] 5.2 In `Cancel()`: after the existing cancel + notify, if
+      `booking.GoogleEventID != ""` and `s.calendar != nil`, `DeleteMeetEvent`
+      best-effort (called with the mentor's user id, since the grant lives on their
+      account), logging — never returning — a failure.
+- [x] 5.3 `booking_test.go`: an unconnected mentor (`s.calendar == nil`) and a
+      connected-linker-but-no-grant mentor (`ErrCalendarNotConnected`) both book
+      byte-for-byte as today; a connected mentor's booking carries the fake linker's
+      link/event id and the notifier receives that same link; a non-`ErrCalendarNotConnected`
+      failure still returns a confirmed booking with an empty link and marks
+      `needs_reconsent` only for a `gmailsync.APIError{401}`-shaped one; cancelling
+      calls `DeleteMeetEvent` with the stored event id; a `DeleteMeetEvent` failure
+      does not fail `Cancel()`.
 
 ## 6. Profile: conditional meeting-link requirement
 
-- [ ] 6.1 Add `HasCalendarLink bool` to `ProfileInput`
-- [ ] 6.2 Change `validateMeetingURL(raw string, hasCalendarLink bool) error`: an empty
-      `raw` returns `nil` when `hasCalendarLink`, otherwise unchanged; thread the new
-      parameter through `validateProfile`'s one call site
-- [ ] 6.3 In `internal/api/handler/mentorship_write.go`'s `mentorProfileBody` (or
-      wherever `profileRequest.toInput(userID)` is called), look up the caller's
-      `gmail_connections` scopes the same way `GmailStatus` does and set
-      `in.HasCalendarLink` before calling `SubmitProfile`/`UpdateProfile`
-- [ ] 6.4 Unit tests: `validateProfile` — empty link + `hasCalendarLink=false` →
-      refused (regression); empty link + `hasCalendarLink=true` → accepted; a
-      non-empty link is validated identically either way
+- [x] 6.1 Added `HasCalendarLink bool` to `ProfileInput`.
+- [x] 6.2 Changed `validateMeetingURL(raw string, hasCalendarLink bool) error`: an
+      empty `raw` returns `nil` when `hasCalendarLink`, otherwise unchanged; threaded
+      through `validateProfile`'s one call site.
+- [x] 6.3 Added `Service.HasConnectedCalendar` (googlemeet.go), sharing
+      `GetMentorCalendarGrant` + the same scope check `CreateMeetEvent`'s gate uses, so
+      the two can never disagree about what "connected" means. Added
+      `mentorshipHandlers.withCalendarLink` (`mentorship_write.go`), called from both
+      `SubmitMentorProfile` and `UpdateMentorProfile` before `toInput`'s result reaches
+      the service.
+- [x] 6.4 `profile_test.go`: empty link + `HasCalendarLink=false` → refused
+      (regression, existing table test); empty link + `HasCalendarLink=true` →
+      accepted (`TestSubmitProfileAcceptsNoMeetingLinkWithAConnectedCalendar`); an
+      invalid non-empty link is refused identically with `HasCalendarLink=true` too.
 
 ## 7. Frontend
 

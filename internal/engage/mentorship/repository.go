@@ -301,7 +301,43 @@ func bookingFromRow(row db.MentorBooking) Booking {
 		Note:           row.Note,
 		SeekerTimezone: row.SeekerTimezone,
 		MeetingURL:     row.MeetingUrl,
+		GoogleEventID:  row.GoogleEventID,
 	}
+}
+
+// GetMentorCalendarGrant reads a mentor's Google grant for the calendar write CreateMeetEvent
+// is about to attempt. Any status other than 'connected' — needs_reconsent included —
+// answers not-found, since both mean the same thing to the caller: skip the event, leave
+// the booking's link empty.
+func (r *QueriesRepository) GetMentorCalendarGrant(ctx context.Context, userID int64) (string, []string, bool, error) {
+	row, err := r.q.GetGoogleGrantForWrite(ctx, userID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", nil, false, nil
+	}
+	if err != nil {
+		return "", nil, false, err
+	}
+	if row.Status != "connected" {
+		return "", nil, false, nil
+	}
+	return row.RefreshTokenEnc, row.Scopes, true, nil
+}
+
+// SetBookingCalendarEvent records the Meet-carrying event a booking's calendar write
+// created, replacing the mentor's static MeetingURL snapshot with Google's own link.
+func (r *QueriesRepository) SetBookingCalendarEvent(ctx context.Context, bookingID uuid.UUID, meetingURL, eventID string) error {
+	return r.q.SetMentorBookingCalendarEvent(ctx, db.SetMentorBookingCalendarEventParams{
+		ID:            pgtype.UUID{Bytes: bookingID, Valid: true},
+		MeetingUrl:    meetingURL,
+		GoogleEventID: eventID,
+	})
+}
+
+// MarkCalendarGrantNeedsReconsent flags a revocation-shaped calendar-write failure via the
+// same status column and mechanism gmailsync.dbStore.SetNeedsReconsent already uses for the
+// read-side grants: one grant, one shared health flag.
+func (r *QueriesRepository) MarkCalendarGrantNeedsReconsent(ctx context.Context, userID int64) error {
+	return r.q.SetGmailStatus(ctx, db.SetGmailStatusParams{UserID: userID, Status: "needs_reconsent"})
 }
 
 // minutesOf converts a duration to the whole minutes the schema stores. SessionParams

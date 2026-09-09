@@ -299,7 +299,11 @@ func (h *mentorshipHandlers) SubmitMentorProfile(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
-	profile, err := h.mentorship.SubmitProfile(c.Context(), req.toInput(userID))
+	in, err := h.withCalendarLink(c, userID, req)
+	if err != nil {
+		return err
+	}
+	profile, err := h.mentorship.SubmitProfile(c.Context(), in)
 	if err != nil {
 		return mentorshipError(err)
 	}
@@ -311,11 +315,28 @@ func (h *mentorshipHandlers) UpdateMentorProfile(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
-	profile, err := h.mentorship.UpdateProfile(c.Context(), req.toInput(userID))
+	in, err := h.withCalendarLink(c, userID, req)
+	if err != nil {
+		return err
+	}
+	profile, err := h.mentorship.UpdateProfile(c.Context(), in)
 	if err != nil {
 		return mentorshipError(err)
 	}
 	return c.JSON(fiber.Map{"data": toOwnMentorResponse(profile)})
+}
+
+// withCalendarLink resolves whether the caller holds a connected calendar.events grant
+// and sets it on the input, so a connected mentor's meeting link is no longer required —
+// the same test CreateMeetEvent's own gate applies at booking time.
+func (h *mentorshipHandlers) withCalendarLink(c *fiber.Ctx, userID int64, req profileRequest) (mentorship.ProfileInput, error) {
+	in := req.toInput(userID)
+	hasCalendar, err := h.mentorship.HasConnectedCalendar(c.Context(), userID)
+	if err != nil {
+		return mentorship.ProfileInput{}, err
+	}
+	in.HasCalendarLink = hasCalendar
+	return in, nil
 }
 
 func mentorProfileBody(c *fiber.Ctx) (int64, profileRequest, error) {

@@ -107,6 +107,12 @@ func TestSubmitProfileRefusesWhatCannotYieldASchedule(t *testing.T) {
 		{"no meeting link", func(in *ProfileInput) { in.MeetingURL = "" }, ErrInvalidProfile},
 		{"a meeting link that is not a URL", func(in *ProfileInput) { in.MeetingURL = "not a url" }, ErrInvalidProfile},
 		{"a meeting link that is not http", func(in *ProfileInput) { in.MeetingURL = "javascript:alert(1)" }, ErrInvalidProfile},
+		// A non-empty link is validated identically whether or not the mentor has a
+		// calendar — holding one is no excuse for a link that isn't a URL.
+		{"an invalid meeting link even with a connected calendar", func(in *ProfileInput) {
+			in.MeetingURL = "not a url"
+			in.HasCalendarLink = true
+		}, ErrInvalidProfile},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			in := validInput()
@@ -116,6 +122,19 @@ func TestSubmitProfileRefusesWhatCannotYieldASchedule(t *testing.T) {
 				t.Errorf("error = %v, want %v", err, tc.want)
 			}
 		})
+	}
+}
+
+// A mentor with a connected calendar.events grant needs no static meeting link at all: a
+// real one is minted per booking instead. A non-empty link is still validated normally
+// either way — see the table test above.
+func TestSubmitProfileAcceptsNoMeetingLinkWithAConnectedCalendar(t *testing.T) {
+	in := validInput()
+	in.MeetingURL = ""
+	in.HasCalendarLink = true
+
+	if _, err := newTestService(t, newFakeRepo()).SubmitProfile(context.Background(), in); err != nil {
+		t.Errorf("SubmitProfile: %v, want no error — a connected calendar makes the static link optional", err)
 	}
 }
 
