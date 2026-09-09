@@ -115,6 +115,16 @@ func ignoredParams(c *fiber.Ctx, own []string) []search.UnknownParam {
 	return search.UnknownParams(queryValues(c), own)
 }
 
+// mergedJobSearchIgnored combines runJobSearch's own value-level ignored-param
+// report — q_fields naming a field outside the searchable vocabulary, and/or any
+// filter params the Meilisearch-rejection degrade dropped — with the ordinary
+// name-level ignoredParams(c, own) report, into one sorted, capped list. The same
+// merge both job-search endpoints need, named once so neither can apply it
+// slightly differently.
+func mergedJobSearchIgnored(c *fiber.Ctx, own []string, fromSearch []search.UnknownParam) []search.UnknownParam {
+	return search.SortAndCap(append(fromSearch, ignoredParams(c, own)...))
+}
+
 // searchSortable is the allowlist of sort params mapped to their index attribute;
 // anything else is ignored so a bad param cannot make Meilisearch reject the query.
 var searchSortable = map[string]string{
@@ -178,7 +188,7 @@ func (h *searchHandlers) SearchJobs(c *fiber.Ctx) error {
 	}
 	h.attachGhost(c, res.Hits, views)
 
-	ignored := search.SortAndCap(append(dropped, ignoredParams(c, jobSearchParams)...))
+	ignored := mergedJobSearchIgnored(c, jobSearchParams, dropped)
 	return listResponseWithIgnored(c, views, res.Total, limit, offset, ignored)
 }
 

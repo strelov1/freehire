@@ -44,7 +44,7 @@ func (h *searchHandlers) AgentSearchJobs(c *fiber.Ctx) error {
 		views[i] = hit.Job
 	}
 
-	ignored := search.SortAndCap(append(dropped, ignoredParams(c, agentSearchParams)...))
+	ignored := mergedJobSearchIgnored(c, agentSearchParams, dropped)
 	return listResponseWithIgnored(c, views, res.Total, limit, offset, ignored)
 }
 
