@@ -1,8 +1,8 @@
 ## 1. The registry
 
-- [ ] 1.1 Write the failing test for `layoutFor`: Greenhouse resolves to `("application-form", "#submit_app", byID)`, Lever to `("application-form", "#btn-submit", byName)` — the values measured on `jobs.lever.co/coderio/.../apply` on 2026-09-09 — and a platform with no fill path (ashby, workable, recruitee, the empty string) resolves to nothing.
-- [ ] 1.2 Write the containment test: every entry in `fillProviders` has a layout. It passes trivially now and becomes load-bearing in 4.1; its purpose is that the two sets live in different files and a platform added to one and not the other would reach a submit click with selectors matching nothing.
-- [ ] 1.3 Create `internal/api/atsapply/layout.go` with `addressing` (`byID`, `byName`), `formLayout{formSelector, submitSelector, addressBy}`, the `layouts` table and `layoutFor`. The doc comments must carry WHY a table of measured values rather than heuristics — a submit click cannot be withdrawn, and this package has twice acted on an inference about a page nobody had loaded.
+- [x] 1.1 Write the failing test for `layoutFor`: Greenhouse resolves to `("application-form", "#submit_app", byID)`, Lever to `("application-form", "#btn-submit", byName)` — the values measured on `jobs.lever.co/coderio/.../apply` on 2026-09-09 — and a platform with no fill path (ashby, workable, recruitee, the empty string) resolves to nothing.
+- [x] 1.2 Write the containment test: every entry in `fillProviders` has a layout. It passes trivially now and becomes load-bearing in 4.1; its purpose is that the two sets live in different files and a platform added to one and not the other would reach a submit click with selectors matching nothing.
+- [x] 1.3 Create `internal/api/atsapply/layout.go` with `addressing` (`byID`, `byName`), `formLayout{formSelector, submitSelector, addressBy}`, the `layouts` table and `layoutFor`. The doc comments must carry WHY a table of measured values rather than heuristics — a submit click cannot be withdrawn, and this package has twice acted on an inference about a page nobody had loaded.
 
 ## 2. Scanning by the layout
 
