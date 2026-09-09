@@ -338,20 +338,30 @@ func (s *Service) Follow(ctx context.Context, r Request) (*matchanalysis.Analysi
 // this is what lets that run start without requiring the candidate to have produced an
 // analysis first.
 //
-// Best-effort and silent: a lookup or compute failure (no LLM configured, an analyzer error)
-// is logged and left uncached, exactly as the on-demand run already degrades. It never
-// charges — this path is unmetered, tracked only by the same LLM spend attribution every call
-// already carries (see the tailor-coldstart-autopilot design's "no new metering" decision) —
-// so r.Chargeable is ignored here rather than trusted.
+// It REPORTS whether the caller ended up with an analysis, and that is the point. The fill
+// used to be best-effort and silent, so an autopilot run whose chain failed proceeded with no
+// requirement list at all: measured on production 2026-08-25..09-08, 57 of 159 runs — 36% —
+// went out that way, spending a turn's tokens editing a CV against nothing while cv_context
+// answered "no analysis has been run for this job". Nothing anywhere said so.
+//
+// It never charges — this path is unmetered, tracked only by the same LLM spend attribution
+// every call already carries (see the tailor-coldstart-autopilot design's "no new metering"
+// decision) — so r.Chargeable is ignored here rather than trusted.
 //
 // r.Claim decides the coalescing: the tailoring workspace's visible stream starts at the same
-// cold start this runs at, so both routinely race for the identical pair. A follower waits and
-// returns without touching the LLM; whether the leader actually cached anything is not this
-// function's concern, exactly as before the coalescing existed.
-func (s *Service) Ensure(ctx context.Context, r Request) {
+// cold start this runs at, so both routinely race for the identical pair. A follower waits
+// and then reads the cache like anyone else — the leader's outcome IS this function's concern
+// now, because a follower that reported success on a failed leader would hand the run the
+// same empty plan by a quieter route.
+//
+// The answer is taken from the CACHE rather than from which branch ran, so leader, follower,
+// cache hit and unconfigured analyzer are all answered by one question: is there a row to
+// walk? A path analysis would have to be kept in step with every future branch; this cannot
+// drift.
+func (s *Service) Ensure(ctx context.Context, r Request) error {
 	if !r.Claim.IsLeader() {
 		r.Claim.wait()
-		return
+		return s.cachedAnalysisPresent(ctx, r)
 	}
 	succeeded := false
 	defer func() {
@@ -367,13 +377,32 @@ func (s *Service) Ensure(ctx context.Context, r Request) {
 	if _, err := s.store.GetUserJobAnalysis(ctx,
 		db.GetUserJobAnalysisParams{UserID: r.UserID, JobID: r.Job.ID}); err == nil {
 		succeeded = true // already cached — nothing to compute, and a good row for a follower to read
-		return
+		return nil
 	} else if !errors.Is(err, pgx.ErrNoRows) {
 		log.Printf("matchanalysis: checking cache before an autopilot run, user %d job %d: %v",
 			r.UserID, r.Job.ID, err)
-		return
+		return fmt.Errorf("%w: reading the cache: %w", ErrNoAnalysis, err)
 	}
 	succeeded = s.compute(ctx, r, "inline compute before an autopilot run")
+	if !succeeded {
+		return ErrNoAnalysis
+	}
+	return nil
+}
+
+// cachedAnalysisPresent answers whether a row a run can walk is in the cache now. It is what
+// a follower asks after its leader has finished, and it deliberately asks the STORE rather
+// than the leader: the leader reports through the claim only that it is done.
+func (s *Service) cachedAnalysisPresent(ctx context.Context, r Request) error {
+	_, err := s.store.GetUserJobAnalysis(ctx,
+		db.GetUserJobAnalysisParams{UserID: r.UserID, JobID: r.Job.ID})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ErrNoAnalysis
+	}
+	if err != nil {
+		return fmt.Errorf("%w: reading the cache: %w", ErrNoAnalysis, err)
+	}
+	return nil
 }
 
 // Refresh UNCONDITIONALLY recomputes the chain and overwrites the cache, even when nothing was

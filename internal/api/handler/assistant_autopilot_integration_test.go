@@ -912,3 +912,89 @@ func seedFitAnalysis(t *testing.T, pool *pgxpool.Pool, userID int64, cvID uuid.U
 		t.Fatalf("seed analysis: %v", err)
 	}
 }
+
+// brokenFitModel fails every call, the way a stage that blows its deadline does.
+type brokenFitModel struct{ n int }
+
+func (m *brokenFitModel) GenerateContent(context.Context, []llms.MessageContent, ...llms.CallOption) (*llms.ContentResponse, error) {
+	m.n++
+	return nil, errors.New("stage timed out")
+}
+func (*brokenFitModel) Call(context.Context, string, ...llms.CallOption) (string, error) {
+	return "", nil
+}
+
+// countingTurnModel answers like walkedTheRequirements and records whether it was called at
+// all — a run that must not start is a run whose turn model never sees a request.
+type countingTurnModel struct {
+	turnModel
+	calls int
+}
+
+func (m *countingTurnModel) Chat(ctx context.Context, msgs []llms.MessageContent, tools []llms.Tool, s llm.ChatStream) (*llms.ContentChoice, error) {
+	m.calls++
+	return m.turnModel.Chat(ctx, msgs, tools, s)
+}
+
+// An autopilot run whose pre-run fit analysis produced nothing must REFUSE, not proceed.
+//
+// The run's whole brief is to walk the vacancy's requirements, and that list comes from the
+// analysis. Without one the run has no plan: cv_context answers "no analysis has been run for
+// this job", the agent improvises, and it still spends a turn's worth of tokens editing the
+// candidate's CV against nothing. Measured on prod 2026-08-25..09-08: 57 of 159 runs, 36%,
+// went out this way, and nothing anywhere said so — `ensure` discarded Ensure's outcome and
+// the run proceeded regardless.
+//
+// The refusal must reach the client as a terminal frame. The stream is already open by the
+// time this runs (opening it first is what stopped a proxy cutting cold-start runs), and a
+// stream that ends with no `result` leaves the session believing a turn is still in flight.
+func TestAutopilotRefusesToRunWithoutItsRequirementList(t *testing.T) {
+	pool := startPostgres(t)
+	queries := db.New(pool)
+	iss := auth.NewIssuer("test-secret", time.Hour)
+	turnM := &countingTurnModel{turnModel: turnModel{replies: []*llms.ContentChoice{{Content: "Walked the requirements."}}}}
+	fitM := &brokenFitModel{}
+	h, app := newAutopilotHarness(t, pool, iss, turnM, fitM)
+
+	userID, cookie := assistantUser(t, pool, iss, "autopilot-no-plan@example.test", true)
+	seedBankedCareer(t, queries, userID)
+	sessionID, cvID := seedTailoringSession(t, pool, h, userID)
+
+	resp := assistantRequest(t, app, fiber.MethodPost,
+		"/api/v1/assistant/sessions/"+sessionID+"/autopilot", cookie, nil)
+	if resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("autopilot: status %d, want 200 — the stream is already open", resp.StatusCode)
+	}
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("read stream: %v", err)
+	}
+	_ = resp.Body.Close()
+	stream := string(body)
+
+	if fitM.n == 0 {
+		t.Fatal("the fit chain was never attempted; this test is not exercising the fill")
+	}
+	if turnM.calls != 0 {
+		t.Errorf("the turn model was called %d times; a run with no requirement list must not start", turnM.calls)
+	}
+	// A terminal frame, or the session stays "turn in flight" and queues every later message
+	// behind a turn that is over.
+	if !strings.Contains(stream, "event: result") {
+		t.Errorf("stream carries no terminal result:\n%s", stream)
+	}
+	// And a reason the candidate can act on, rather than a run that silently did nothing.
+	if !strings.Contains(stream, "fit analysis") {
+		t.Errorf("stream does not say why the run did not start:\n%s", stream)
+	}
+
+	// The CV is untouched: refusing costs the candidate a run, editing their document
+	// against nothing costs them the document.
+	rec, err := h.cv.cvStore.Get(context.Background(), cvID, userID)
+	if err != nil {
+		t.Fatalf("get cv: %v", err)
+	}
+	if rec.Document.Summary != "before the run" {
+		t.Errorf("summary = %q, want the document untouched", rec.Document.Summary)
+	}
+}
