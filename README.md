@@ -88,8 +88,11 @@ which draw on AI credits.
 - **[sqlc](https://sqlc.dev/)** — type-safe DB access from SQL (no ORM)
 - **[Meilisearch](https://www.meilisearch.com/)** — full-text and faceted job search
 - **[langchaingo](https://github.com/tmc/langchaingo)** — LLM access over any OpenAI-compatible endpoint (no vendor baked in)
+- **[Bifrost](https://github.com/maximhq/bifrost)** — LLM gateway: per-user virtual keys, cross-provider fallback, spend tracking
+- **[Langfuse](https://langfuse.com/)** — LLM call tracing and observability
 - **[SvelteKit](https://kit.svelte.dev/) 2** (Svelte 5 runes) + **Tailwind 4** — the server-rendered frontend under `web/`
 - **Redis** — rate limiting and realtime fan-out · **S3-compatible object storage** — CVs, headshots, previews
+- **[Prometheus](https://prometheus.io/)** (via the node_exporter textfile collector) + **[Grafana](https://grafana.com/)** — metrics and dashboards for the ingest/LLM infrastructure
 - **Docker Compose** — local development
 
 ## Quick start
