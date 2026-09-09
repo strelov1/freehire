@@ -107,14 +107,20 @@ func TestSendable_OmitsAnAnswerTheCandidateDidNotGive(t *testing.T) {
 	}
 }
 
-// A caller naming its own provenance is not evidence of who it is: anything unrecognised
-// falls to the label that cannot be sent. Failing closed is the point.
-func TestSave_AnUnrecognisedAuthorIsNotSendable(t *testing.T) {
-	s := NewStore(newFakeRepo())
+// The read gate, asserted against a row that is already in the table. Save refuses an
+// unrecognised provenance outright, so nothing this binary writes can reach here — but a row
+// written by an older binary, or by hand, still can, and it must not be sent to an employer.
+// Failing closed is the point, and it is the same rule internal/candidate/experience applies.
+func TestSendable_AnUnrecognisedAuthorAlreadyInTheTableIsNotSent(t *testing.T) {
+	repo := newFakeRepo()
+	s := NewStore(repo)
 	ctx := context.Background()
 
-	if err := s.Save(ctx, 1, "Do you have a work permit?", "Yes", Provenance("totally-the-candidate-honest")); err != nil {
-		t.Fatalf("Save: %v", err)
+	if err := repo.Upsert(ctx, 1, Answer{
+		Topic: "work_permit", Question: "Do you have a work permit?", Answer: "Yes",
+		Provenance: "totally-the-candidate-honest",
+	}); err != nil {
+		t.Fatalf("Upsert: %v", err)
 	}
 
 	sendable, err := s.Sendable(ctx, 1)
@@ -194,5 +200,27 @@ func TestSave_KeysANonLatinQuestion(t *testing.T) {
 	}
 	if len(sendable) != 1 {
 		t.Fatalf("Sendable = %v, want the banked answer to a readable question", sendable)
+	}
+}
+
+// Provenance is a closed vocabulary, so a value outside it fails at the WRITE. Stored, it
+// would fail silently at the read instead: Sendable fails closed, so a typo'd label means an
+// answer the candidate gave, sees listed, and watches park on every application forever with
+// nothing anywhere saying why.
+func TestSave_RefusesAProvenanceOutsideTheVocabulary(t *testing.T) {
+	s := NewStore(newFakeRepo())
+	ctx := context.Background()
+
+	for _, by := range []Provenance{"", "Candidate", "candidat", "user"} {
+		err := s.Save(ctx, 1, "What is your desired salary?", "5000 USD per year", by)
+		if !errors.Is(err, ErrUnknownProvenance) {
+			t.Errorf("Save(by=%q) = %v, want ErrUnknownProvenance", by, err)
+		}
+	}
+
+	for _, by := range []Provenance{AuthorCandidate, AuthorAgent} {
+		if err := s.Save(ctx, 1, "What is your desired salary?", "5000 USD per year", by); err != nil {
+			t.Errorf("Save(by=%q) = %v, want the vocabulary's own members accepted", by, err)
+		}
 	}
 }

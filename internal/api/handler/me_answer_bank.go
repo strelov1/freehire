@@ -3,6 +3,7 @@ package handler
 import (
 	"errors"
 	"strconv"
+	"time"
 
 	"github.com/gofiber/fiber/v2"
 
@@ -24,13 +25,17 @@ func (h *answerBankHandlers) register(api fiber.Router, mw middleware) {
 // bankedAnswerResponse is one answer on the wire. provenance rides along so a surface can
 // show which answers are the candidate's own — the store's List returns every provenance
 // deliberately.
+//
+// UpdatedAt is a time.Time, not a pre-formatted string: encoding/json marshals it as RFC3339
+// with whatever sub-second precision it carries, which is both correct and free. Formatting
+// it by hand re-implemented the standard and dropped the fraction while doing so.
 type bankedAnswerResponse struct {
-	ID         int64  `json:"id"`
-	Topic      string `json:"topic"`
-	Question   string `json:"question"`
-	Answer     string `json:"answer"`
-	Provenance string `json:"provenance"`
-	UpdatedAt  string `json:"updated_at"`
+	ID         int64     `json:"id"`
+	Topic      string    `json:"topic"`
+	Question   string    `json:"question"`
+	Answer     string    `json:"answer"`
+	Provenance string    `json:"provenance"`
+	UpdatedAt  time.Time `json:"updated_at"`
 }
 
 // ListAnswers returns the caller's whole bank, newest first.
@@ -47,7 +52,7 @@ func (h *answerBankHandlers) ListAnswers(c *fiber.Ctx) error {
 	for _, a := range answers {
 		out = append(out, bankedAnswerResponse{
 			ID: a.ID, Topic: a.Topic, Question: a.Question, Answer: a.Answer,
-			Provenance: a.Provenance, UpdatedAt: a.UpdatedAt.UTC().Format("2006-01-02T15:04:05Z"),
+			Provenance: a.Provenance, UpdatedAt: a.UpdatedAt.UTC(),
 		})
 	}
 	return c.JSON(fiber.Map{"data": out})

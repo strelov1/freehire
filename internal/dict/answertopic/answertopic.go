@@ -120,6 +120,14 @@ func fold(question string) string {
 }
 
 // containsAll reports whether every keyword appears in the folded question.
+//
+// Substring, not whole-word, and therefore NOT internal/dict/wordmatch — which exists in
+// this same block so dictionaries stop hand-rolling this loop, and is the right answer for
+// a dictionary of whole terms. This one is a dictionary of STEMS: "relocat" has to match
+// "relocation" and "relocate", "expect" has to match "expectations". wordmatch.Contains with
+// either boundary refuses all three, because a stem is by definition not a whole word.
+// Measured, not assumed. Adding a stem-mode boundary to wordmatch would be a boundary that
+// answers "always true" on the right-hand side, which is not a boundary.
 func containsAll(folded string, keywords []string) bool {
 	for _, kw := range keywords {
 		if !strings.Contains(folded, kw) {

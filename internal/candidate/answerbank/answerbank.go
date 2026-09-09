@@ -58,6 +58,12 @@ const (
 // own provenance.
 func (p Provenance) sendable() bool { return p == AuthorCandidate }
 
+// known reports whether this is one of the two members of the vocabulary. Save refuses
+// anything else, so a typo fails loudly at the write. Stored, it would fail SILENTLY at the
+// read instead — sendable() declines it, so the answer would sit in the candidate's bank,
+// visible in their list, and never once reach a form, with nothing anywhere saying why.
+func (p Provenance) known() bool { return p == AuthorCandidate || p == AuthorAgent }
+
 // Answer is one banked answer.
 type Answer struct {
 	ID         int64
@@ -81,6 +87,8 @@ var (
 	// ErrNotFound reports a delete that matched nothing — a missing id and another
 	// candidate's id alike, so a probing caller learns nothing about which.
 	ErrNotFound = errors.New("answerbank: no such answer")
+	// ErrUnknownProvenance refuses a provenance outside the vocabulary. See Provenance.known.
+	ErrUnknownProvenance = errors.New("answerbank: unknown provenance")
 )
 
 // Repository is the storage this package needs. An interface so the store's own rules are
@@ -104,6 +112,9 @@ func NewStore(repo Repository) *Store { return &Store{repo: repo} }
 // caller naming itself is not evidence of who it is. This is the same rule — and the same
 // hazard — as experience.Author and cvedit.Actor.
 func (s *Store) Save(ctx context.Context, userID int64, question, answer string, by Provenance) error {
+	if !by.known() {
+		return ErrUnknownProvenance
+	}
 	trimmed := strings.TrimSpace(answer)
 	if trimmed == "" {
 		return ErrEmptyAnswer

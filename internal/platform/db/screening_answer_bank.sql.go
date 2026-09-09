@@ -98,6 +98,14 @@ type UpsertScreeningAnswerParams struct {
 // provenance is overwritten on conflict rather than preserved: a candidate answering a
 // question themselves supersedes any earlier suggestion, and that is exactly the promotion
 // the send-gate depends on.
+//
+// The hazard is the OTHER direction, and this statement does not guard it: an agent write
+// would equally overwrite a candidate's own answer, DEMOTING it out of what may be sent
+// (internal/candidate/answerbank.Provenance.sendable) and replacing text they authored with
+// a model's reading. Nothing writes agent_inferred today, so the behaviour is unreachable
+// and stays as it is rather than being guarded speculatively. Whoever adds that writer owns
+// this: either the statement grows a `WHERE screening_answer_bank.provenance <> 'candidate'`
+// guard on the agent path, or the agent's suggestions go somewhere that is not this row.
 func (q *Queries) UpsertScreeningAnswer(ctx context.Context, arg UpsertScreeningAnswerParams) error {
 	_, err := q.db.Exec(ctx, upsertScreeningAnswer,
 		arg.UserID,

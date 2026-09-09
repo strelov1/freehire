@@ -29,9 +29,14 @@ export function answerableQuestions(
   pending: AutoApplyPreviewPending[] | undefined | null
 ): AutoApplyPreviewPending[] {
   if (!pending) return [];
-  return pending.filter(
-    (p) =>
-      !p.will_draft_at_submission && p.label.trim() !== '' && !asksAboutWorkAuthorization(p.label)
+  return pending.filter(isAnswerable);
+}
+
+/** The rule itself, so `answerableQuestions` and `pendingRows` share it rather than one
+ *  reconstructing the other's verdict. See `pendingRows` for what the reconstruction cost. */
+function isAnswerable(p: AutoApplyPreviewPending): boolean {
+  return (
+    !p.will_draft_at_submission && p.label.trim() !== '' && !asksAboutWorkAuthorization(p.label)
   );
 }
 
@@ -51,8 +56,9 @@ export interface PendingAnswerRow {
    *  per-question draft map alike. */
   key: number;
   pending: AutoApplyPreviewPending;
-  /** Whether `answerableQuestions` would have kept this entry — computed once here so the
-   *  filtering rule lives in exactly one place, not copied into the template. */
+  /** Whether the candidate may answer this one — the same `isAnswerable` rule
+   *  `answerableQuestions` filters on, computed once here so the template never re-derives
+   *  it. */
   answerable: boolean;
 }
 
@@ -61,10 +67,17 @@ export interface PendingAnswerRow {
  *  A question the model will draft at submission stays in the list — it just renders as
  *  "filled automatically" rather than an input — because the candidate still needs to see
  *  it is accounted for. Only `answerableQuestions`'s own rule decides whether the candidate
- *  gets an input; nothing here re-derives it. */
+ *  gets an input; nothing here re-derives it.
+ *
+ *  It calls that rule (`isAnswerable`) rather than asking whether `answerableQuestions`
+ *  kept the entry. Membership through a `Set` of the returned entries worked only for as
+ *  long as `answerableQuestions` was a `filter` handing back the very same object
+ *  references: the day it mapped, spread or copied one, every row would silently become
+ *  unanswerable, no input would render anywhere, and every test here would still pass,
+ *  because none of them can see an object's identity. A shared predicate has nothing to
+ *  drift from. */
 export function pendingRows(
   pending: AutoApplyPreviewPending[] | undefined | null
 ): PendingAnswerRow[] {
-  const answerable = new Set(answerableQuestions(pending));
-  return (pending ?? []).map((p, key) => ({ key, pending: p, answerable: answerable.has(p) }));
+  return (pending ?? []).map((p, key) => ({ key, pending: p, answerable: isAnswerable(p) }));
 }

@@ -177,6 +177,7 @@ Each is self-contained and can be read independently.
 | **Enrichment** (Enrichment contract, LLM Provider; enums live in `internal/dict/vocab`) | [internal/ai/enrich/AGENTS.md](internal/ai/enrich/AGENTS.md) |
 | **Geography** (country/region codes, work-mode hint, dict-only vs hybrid) | [internal/dict/location/AGENTS.md](internal/dict/location/AGENTS.md) |
 | **Skill tagging** (alias→canonical dictionary, jobs.skills facet) | [internal/dict/skilltag/AGENTS.md](internal/dict/skilltag/AGENTS.md) |
+| **Answer topics** (a screening question keyed by what it asks, not how it is worded) | [internal/dict/answertopic/AGENTS.md](internal/dict/answertopic/AGENTS.md) |
 | **Skill vectors** (the permanent position registry, the ballast, why coverage decides the order) | [internal/dict/skillvec/AGENTS.md](internal/dict/skillvec/AGENTS.md) |
 | **Seniority & category** (title→seniority/category, dict-only) | [internal/dict/classify/AGENTS.md](internal/dict/classify/AGENTS.md) |
 | **`internal/ai`** — the block itself: what it is, what it may import | [internal/ai/AGENTS.md](internal/ai/AGENTS.md) |
@@ -197,6 +198,7 @@ Each is self-contained and can be read independently.
 | **Job-match scoring** (deterministic CV-vs-vacancy score, the unverifiable rule) | [internal/candidate/cvmatch/AGENTS.md](internal/candidate/cvmatch/AGENTS.md) |
 | **ATS-readiness score** (deterministic CV score, de-identified LLM review, delta) | [internal/candidate/atscheck/AGENTS.md](internal/candidate/atscheck/AGENTS.md) |
 | **Experience bank** (durable employments + evidence atoms, provenance, retrieval) | [internal/candidate/experience/AGENTS.md](internal/candidate/experience/AGENTS.md) |
+| **Screening answer bank** (what the candidate answers employers, accumulating across applications) | [internal/candidate/answerbank/AGENTS.md](internal/candidate/answerbank/AGENTS.md) |
 | **Résumé identity** (one stored CV per user, contact-block layers) | [internal/candidate/resume/AGENTS.md](internal/candidate/resume/AGENTS.md) |
 | **Talent Network** (the public anonymous catalogue: the dictionary-only projection, the minted handle, the snapshot) | [internal/candidate/talentnetwork/AGENTS.md](internal/candidate/talentnetwork/AGENTS.md) |
 | **Structured CV** (LLM parse of stored CV, stamp-and-compare) | [internal/candidate/resumeextract/AGENTS.md](internal/candidate/resumeextract/AGENTS.md) |
