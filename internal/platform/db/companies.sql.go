@@ -249,7 +249,7 @@ func (q *Queries) FillCompanyInfoFromWikipedia(ctx context.Context, arg FillComp
 }
 
 const getCompany = `-- name: GetCompany :one
-SELECT slug, name, created_at, updated_at, collections, job_count, regions, countries, domains, company_types, company_sizes, industries, year_founded, employee_count, hq_country, organization_type, tagline, company_info, is_reference, company_info_at, remote_regions, yc_batch, yc_status, yc_stage, yc_flags, maturity, subindustry, upvote_count, downvote_count, feedback_count, feedback_rating_avg, industries_derived, company_info_wikipedia_checked_at
+SELECT slug, name, created_at, updated_at, collections, job_count, regions, countries, domains, company_types, company_sizes, industries, year_founded, employee_count, hq_country, organization_type, tagline, company_info, is_reference, company_info_at, remote_regions, yc_batch, yc_status, yc_stage, yc_flags, maturity, subindustry, upvote_count, downvote_count, feedback_count, feedback_rating_avg, industries_derived, company_info_wikipedia_checked_at, ai_interview_reports
 FROM companies
 WHERE slug = $1
 `
@@ -294,6 +294,7 @@ func (q *Queries) GetCompany(ctx context.Context, slug string) (Company, error) 
 		&i.FeedbackRatingAvg,
 		&i.IndustriesDerived,
 		&i.CompanyInfoWikipediaCheckedAt,
+		&i.AiInterviewReports,
 	)
 	return i, err
 }
@@ -450,7 +451,7 @@ func (q *Queries) ListCompanies(ctx context.Context, arg ListCompaniesParams) ([
 }
 
 const listCompaniesForReindex = `-- name: ListCompaniesForReindex :many
-SELECT slug, name, created_at, updated_at, collections, job_count, regions, countries, domains, company_types, company_sizes, industries, year_founded, employee_count, hq_country, organization_type, tagline, company_info, is_reference, company_info_at, remote_regions, yc_batch, yc_status, yc_stage, yc_flags, maturity, subindustry, upvote_count, downvote_count, feedback_count, feedback_rating_avg, industries_derived, company_info_wikipedia_checked_at
+SELECT slug, name, created_at, updated_at, collections, job_count, regions, countries, domains, company_types, company_sizes, industries, year_founded, employee_count, hq_country, organization_type, tagline, company_info, is_reference, company_info_at, remote_regions, yc_batch, yc_status, yc_stage, yc_flags, maturity, subindustry, upvote_count, downvote_count, feedback_count, feedback_rating_avg, industries_derived, company_info_wikipedia_checked_at, ai_interview_reports
 FROM companies
 WHERE slug > $1 AND job_count > 0
 ORDER BY slug
@@ -511,6 +512,7 @@ func (q *Queries) ListCompaniesForReindex(ctx context.Context, arg ListCompanies
 			&i.FeedbackRatingAvg,
 			&i.IndustriesDerived,
 			&i.CompanyInfoWikipediaCheckedAt,
+			&i.AiInterviewReports,
 		); err != nil {
 			return nil, err
 		}
