@@ -1508,6 +1508,14 @@ type Querier interface {
 	// Returns the affected row count: 0 means it does not exist or is not the caller's
 	// (the handler maps that to 404).
 	DeleteSavedSearch(ctx context.Context, arg DeleteSavedSearchParams) (int64, error)
+	// The owner removes one answer. Scoped by user_id as well as id, so a foreign id affects
+	// zero rows and the handler renders 404 — never revealing to a probing caller which of the
+	// two it was, the same posture GetAutoApplyQueueEntryForReview already takes.
+	//
+	// Nothing else ever deletes from this table: the bank accumulates, and no reconciler prunes
+	// it. Same rule as the experience bank, and for the same reason — a sweeper here would
+	// silently discard answers the candidate expects to still hold.
+	DeleteScreeningAnswer(ctx context.Context, arg DeleteScreeningAnswerParams) (int64, error)
 	// A full facet reindex reads every job's CURRENT content directly from Postgres, so
 	// any entry queued before the run started is provably already reflected in the
 	// freshly-swapped live index — cmd/reindex calls this once, after a successful
@@ -3694,6 +3702,9 @@ type Querier interface {
 	// would silently unschedule every unconfigured provider, which is the exact failure this
 	// table was built to remove.
 	ListSchedulableProviders(ctx context.Context) ([]ListSchedulableProvidersRow, error)
+	// One candidate's whole bank, newest first — what the management surface lists and what the
+	// profile assembler merges into the answer map.
+	ListScreeningAnswers(ctx context.Context, userID int64) ([]ScreeningAnswerBank, error)
 	// Companies whose ingested name is still a squished slug (lowercase, no
 	// whitespace or uppercase) and that have at least one open job, with a
 	// representative open job's source and URL so the backfill worker can locate the
@@ -6176,6 +6187,23 @@ type Querier interface {
 	// already belongs to a different account, this reassigns it to the caller
 	// rather than duplicating or leaving it with the previous owner.
 	UpsertPushToken(ctx context.Context, arg UpsertPushTokenParams) (UserPushToken, error)
+	// Records the candidate's answer to one screening question, replacing any earlier answer on
+	// the same topic. The question text is refreshed too: the newest wording is the one they
+	// most recently read and answered, and keeping a stale phrasing beside a fresh answer would
+	// misdescribe what was agreed to.
+	//
+	// provenance is overwritten on conflict rather than preserved: a candidate answering a
+	// question themselves supersedes any earlier suggestion, and that is exactly the promotion
+	// the send-gate depends on.
+	//
+	// The hazard is the OTHER direction, and this statement does not guard it: an agent write
+	// would equally overwrite a candidate's own answer, DEMOTING it out of what may be sent
+	// (internal/candidate/answerbank.Provenance.sendable) and replacing text they authored with
+	// a model's reading. Nothing writes agent_inferred today, so the behaviour is unreachable
+	// and stays as it is rather than being guarded speculatively. Whoever adds that writer owns
+	// this: either the statement grows a `WHERE screening_answer_bank.provenance <> 'candidate'`
+	// guard on the agent path, or the agent's suggestions go somewhere that is not this row.
+	UpsertScreeningAnswer(ctx context.Context, arg UpsertScreeningAnswerParams) error
 	// Create-or-replace the caller's one screening-answers record. Full-replace, mirroring
 	// UpsertUserProfile: the service reads the current row, merges caller-provided fields over
 	// it (omitted fields keep their stored value), and writes the merged result back whole —

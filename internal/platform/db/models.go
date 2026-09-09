@@ -1104,6 +1104,17 @@ type ScreeningAnswer struct {
 	UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
 }
 
+type ScreeningAnswerBank struct {
+	ID         int64              `json:"id"`
+	UserID     int64              `json:"user_id"`
+	Topic      string             `json:"topic"`
+	Question   string             `json:"question"`
+	Answer     string             `json:"answer"`
+	Provenance string             `json:"provenance"`
+	CreatedAt  pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt  pgtype.Timestamptz `json:"updated_at"`
+}
+
 type SearchDeleteOutbox struct {
 	ID        int64              `json:"id"`
 	JobID     int64              `json:"job_id"`

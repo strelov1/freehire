@@ -723,7 +723,7 @@ interface AutoApplyPreviewField {
 /** One required question an auto-apply answer preview has no answer for yet.
  *  `will_draft_at_submission` distinguishes "the real submission will fill this in
  *  automatically" from "nothing can answer this". */
-interface AutoApplyPreviewPending {
+export interface AutoApplyPreviewPending {
   label: string;
   will_draft_at_submission: boolean;
 }
@@ -754,6 +754,16 @@ export interface AutoApplyReviewInfo {
   queue_id: number;
   resolved_preview?: AutoApplyResolvedPreview;
   unmapped?: AutoApplyUnmappedField[];
+}
+
+/** One answer the candidate has banked for a screening question. */
+export interface BankedAnswer {
+  id: number;
+  topic: string;
+  question: string;
+  answer: string;
+  provenance: string;
+  updated_at: string;
 }
 
 /** The account-level notification rule: whether notifications are on, and the

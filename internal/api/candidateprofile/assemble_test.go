@@ -3,6 +3,7 @@ package candidateprofile
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/strelov1/freehire/internal/candidate/cv"
@@ -54,8 +55,19 @@ func (f fakeScreening) Get(context.Context, int64) (screeninganswers.Answers, er
 	return f.ret, f.err
 }
 
+// fakeBank is a BankReader returning canned banked answers, the same shape fakeScreening
+// takes for the typed facts beside it.
+type fakeBank struct {
+	ret map[string]string
+	err error
+}
+
+func (f fakeBank) Sendable(context.Context, int64) (map[string]string, error) {
+	return f.ret, f.err
+}
+
 func assemblerWith(cvs fakeCV, st resumeextract.Structured, stOK bool, email string) *Assembler {
-	return NewAssembler(cvs, fakeResume{ret: st, ok: stOK}, fakeAccount{email: email}, nil)
+	return NewAssembler(cvs, fakeResume{ret: st, ok: stOK}, fakeAccount{email: email}, nil, nil)
 }
 
 func TestAssemble_PrefersBaseCVOverStructuredResume(t *testing.T) {
@@ -277,7 +289,7 @@ func TestContactHeaderFromStructured(t *testing.T) {
 func TestAssemble_IncludesScreeningAnswersWhenStated(t *testing.T) {
 	days := 14
 	a := NewAssembler(fakeCV{}, fakeResume{}, fakeAccount{email: "account@example.com"},
-		fakeScreening{ret: screeninganswers.Answers{NoticePeriodDays: &days}})
+		fakeScreening{ret: screeninganswers.Answers{NoticePeriodDays: &days}}, nil)
 
 	got, err := a.Assemble(context.Background(), 7)
 	if err != nil {
@@ -289,7 +301,7 @@ func TestAssemble_IncludesScreeningAnswersWhenStated(t *testing.T) {
 }
 
 func TestAssemble_NoScreeningReaderYieldsEmptyScreeningFields(t *testing.T) {
-	a := NewAssembler(fakeCV{}, fakeResume{}, fakeAccount{email: "account@example.com"}, nil)
+	a := NewAssembler(fakeCV{}, fakeResume{}, fakeAccount{email: "account@example.com"}, nil, nil)
 
 	got, err := a.Assemble(context.Background(), 7)
 	if err != nil {
@@ -302,7 +314,7 @@ func TestAssemble_NoScreeningReaderYieldsEmptyScreeningFields(t *testing.T) {
 
 func TestAssemble_ScreeningAnswersNotFoundYieldsEmptyFields(t *testing.T) {
 	a := NewAssembler(fakeCV{}, fakeResume{}, fakeAccount{email: "account@example.com"},
-		fakeScreening{err: screeninganswers.ErrNotFound})
+		fakeScreening{err: screeninganswers.ErrNotFound}, nil)
 
 	got, err := a.Assemble(context.Background(), 7)
 	if err != nil {
@@ -310,5 +322,80 @@ func TestAssemble_ScreeningAnswersNotFoundYieldsEmptyFields(t *testing.T) {
 	}
 	if got.WillingToRelocate != "" {
 		t.Errorf("WillingToRelocate = %q, want empty when the caller has stated no screening answers", got.WillingToRelocate)
+	}
+}
+
+// The split is the point, so it is asserted rather than left to a comment.
+//
+// Fields() is what internal/api/handler hands to internal/ai/autofillagent, which marshals
+// the whole map into a model prompt AND uses it as the grounding set that keeps the agent
+// from fabricating. A banked answer in here would be sent to the provider on every autofill
+// run — free text the candidate typed for employers, which on Greenhouse includes the
+// demographic and veteran/disability questions — and would widen that gate by the size of
+// the bank. Only FieldsWithBankedAnswers carries them, and only an application form is
+// resolved against it.
+func TestFields_CarriesNoBankedAnswerAndFieldsWithBankedAnswersDoes(t *testing.T) {
+	p := Profile{
+		Email:       "candidate@example.com",
+		BankAnswers: map[string]string{"salary_expectation": "5000 USD per year"},
+	}
+
+	plain := p.Fields()
+	for key, value := range plain {
+		if strings.HasPrefix(key, "topic:") {
+			t.Errorf("Fields() carries %q = %q — a banked answer reaches the autofill model prompt", key, value)
+		}
+	}
+	if plain["email"] != "candidate@example.com" {
+		t.Errorf("Fields()[email] = %q, want the fixed fields untouched", plain["email"])
+	}
+
+	withBank := p.FieldsWithBankedAnswers()
+	if withBank["topic:salary_expectation"] != "5000 USD per year" {
+		t.Errorf("FieldsWithBankedAnswers()[topic:salary_expectation] = %q, want the banked answer", withBank["topic:salary_expectation"])
+	}
+	if withBank["email"] != "candidate@example.com" {
+		t.Errorf("FieldsWithBankedAnswers() dropped a fixed field")
+	}
+	// Fields() must not be handed the caller a map that FieldsWithBankedAnswers then writes
+	// into: the two are called on the same Profile, and a shared map would put the bank on
+	// the autofill path by aliasing.
+	if _, leaked := p.Fields()["topic:salary_expectation"]; leaked {
+		t.Error("FieldsWithBankedAnswers wrote into the map Fields returns")
+	}
+}
+
+// Assemble must actually read the bank. Every other test in this file passes nil for it, so
+// deleting the read left the whole suite green — including atsapply's seam test, which
+// builds a Profile literal and never goes through Assemble at all. That is the same
+// "test that cannot fail" shape the seam test was written to avoid, one hop earlier in the
+// chain.
+func TestAssemble_IncludesBankedAnswersWhenStated(t *testing.T) {
+	a := NewAssembler(fakeCV{}, fakeResume{}, fakeAccount{email: "account@example.com"}, nil,
+		fakeBank{ret: map[string]string{"salary_expectation": "5000 USD per year"}})
+
+	got, err := a.Assemble(context.Background(), 7)
+	if err != nil {
+		t.Fatalf("Assemble: %v", err)
+	}
+	if got.BankAnswers["salary_expectation"] != "5000 USD per year" {
+		t.Errorf("BankAnswers = %v, want the banked answer the reader returned", got.BankAnswers)
+	}
+	// And it has to travel the whole way to the map an application form is resolved
+	// against, not merely onto the struct.
+	if got.FieldsWithBankedAnswers()["topic:salary_expectation"] != "5000 USD per year" {
+		t.Errorf("FieldsWithBankedAnswers = %v, want the banked answer under its prefix", got.FieldsWithBankedAnswers())
+	}
+}
+
+// A bank read that fails is a real error, not an absent bank: the caller asked for a
+// profile and cannot be handed one that silently omits half its answers.
+func TestAssemble_PropagatesABankReadFailure(t *testing.T) {
+	wantErr := errors.New("bank is unreachable")
+	a := NewAssembler(fakeCV{}, fakeResume{}, fakeAccount{email: "account@example.com"}, nil,
+		fakeBank{err: wantErr})
+
+	if _, err := a.Assemble(context.Background(), 7); !errors.Is(err, wantErr) {
+		t.Fatalf("Assemble error = %v, want the bank's own failure", err)
 	}
 }

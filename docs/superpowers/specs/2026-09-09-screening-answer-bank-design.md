@@ -34,7 +34,13 @@ been bitten by exactly this shape of hand-maintained list before.
   it says nothing about using an answer the candidate themselves gave.
 - **Work-authorization questions are never auto-answered.** `authorized_countries` is a list
   of countries the candidate may work in, not a yes/no about *this posting's* country.
-  Unchanged.
+  Unchanged — and the bank does not become a way around it. A question like "Are you
+  authorized to work in the country in which this position is located?" folds to ONE topic
+  across every posting worded that way, so a banked "Yes" would travel from a US posting to
+  a Brazilian one, at submit time, without the candidate seeing it. `matchBankAnswerKey`
+  refuses the authorization subset of the sensitive terms (`authoriz`, `right to work`,
+  `sponsor`, `visa`) and the review screen does not offer an input for one. The rest of the
+  sensitive list — salary above all — stays bankable: sensitivity forbids *guessing*.
 - **Non-sensitive free-text questions already draft** (`ResolveWithDrafting`). The bank does
   not replace drafting; it covers what drafting must not touch.
 
@@ -179,9 +185,15 @@ recognised as the mistake it would be.
 
 ## Errors and edges
 
-- **An empty answer is a delete, not a stored blank.** A blank string in a form field is
-  indistinguishable from an unanswered question, and storing one would silently mark a
-  question answered forever.
+- **An empty answer is refused, not stored and not a delete.** A blank string in a form
+  field is indistinguishable from an unanswered question, and storing one would silently
+  mark a question answered forever — so far, unchanged. This bullet used to say the write
+  should *delete* instead; it does not, and the code is right. An implicit destructive
+  action triggered by clearing a field is worse than an explicit refusal: the candidate who
+  selects an answer and presses Save has no way to tell they have just discarded it, and the
+  bank is precisely the store nothing but its owner may remove from. Removal has its own
+  route — `DELETE /api/v1/me/answer-bank/:id` — which says what it does. `Save` returns
+  `ErrEmptyAnswer`, rendered as HTTP 400.
 - **A question whose fold yields an empty topic is refused** (a label of pure punctuation,
   which real forms do produce). It cannot be keyed, so it cannot be recalled.
 - **Answer length is bounded at 2000 characters.** Long enough for any screening answer a
@@ -192,6 +204,12 @@ recognised as the mistake it would be.
 - **The bank never overrides a typed fact.** If `screening_answers` answers a question, that
   wins: it is validated and structured, the bank's copy is free text. The merge order is
   fixed, not a per-answer decision.
+
+  *Answers*, not *is named by a rule that matched*. A field resolves against the keys it may
+  be answered from — id, then label rule, then bank — and takes the first one the candidate
+  has actually stated. Stopping at the first matching RULE is what made "Compensation
+  expectations" park for a candidate with no typed desired salary who had banked that exact
+  answer a month earlier: the label rule claimed the field and the bank was never consulted.
 
 ## Testing
 
