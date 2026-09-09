@@ -27,9 +27,9 @@
 
 ## 5. The package's account of itself
 
-- [ ] 5.1 Rewrite the statements in `internal/api/atsapply/AGENTS.md` that are now false: the platform list, the "one provider with a live DOM-scan" framing, and any mention of `ScanGreenhouseForm` or `greenhouseSubmitSelector`.
-- [ ] 5.2 State what the code cannot: that a layout's three values are measured off a real posting and never inferred, naming the two failures that taught it; that addressing is one setting because a mismatch is silent; and that an unconfirmed submission is never retried because a duplicate application costs the candidate more than a missing one.
-- [ ] 5.3 Run `pnpm check:links` — every relative link in the file must resolve.
+- [x] 5.1 Rewrite the statements in `internal/api/atsapply/AGENTS.md` that are now false: the platform list, the "one provider with a live DOM-scan" framing, and any mention of `ScanGreenhouseForm` or `greenhouseSubmitSelector`.
+- [x] 5.2 State what the code cannot: that a layout's three values are measured off a real posting and never inferred, naming the two failures that taught it; that addressing is one setting because a mismatch is silent; and that an unconfirmed submission is never retried because a duplicate application costs the candidate more than a missing one.
+- [x] 5.3 Run `pnpm check:links` — every relative link in the file must resolve.
 
 ## 6. Verification
 

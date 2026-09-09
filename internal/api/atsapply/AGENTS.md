@@ -19,8 +19,8 @@ all: Ashby and Workable, via the browser-use.com cloud agent API** (`browseruse_
 `openspec/changes/add-browseruse-atsapply-fallback`). This does not reopen the decision
 above — it is a plain HTTP client (`internal/platform/browseruse`), no second language or
 process, called only via `Client.WithBrowserUse`. Scope is deliberately narrow:
-- **Only Ashby and Workable** (`browserUseProviders`) — Greenhouse already has a fill path
-  and never reaches this branch; a white-label (unrecognized-layout) Greenhouse posting has
+- **Only Ashby and Workable** (`browserUseProviders`) — Greenhouse and Lever already have a
+  fill path and never reach this branch; a white-label (unrecognized-layout) Greenhouse posting has
   no `MergedField` schema to build a `Plan` from in the first place, since chromedp's own
   DOM scan is what failed there; a captcha-protected posting (Lever, or
   `reasonCaptchaProtected`) is never routed here — that would be an attempt to bypass a
@@ -74,12 +74,31 @@ process, called only via `Client.WithBrowserUse`. Scope is deliberately narrow:
 - **Never guesses an answer.** A select/checkbox's answer must match one of the platform's
   own offered option labels, or the field parks. An optional field with no known answer is
   left alone entirely (neither filled nor reported) — nothing here drafts text for it.
-- **A DOM-only live scan is built for Greenhouse only.** Lever always parks on its captcha
-  (`requiresCaptcha`, a static per-provider check, not DOM-based detection) before any
-  fetcher or browser is touched. Every other provider (Ashby, and anything reached in the
-  future) reconciles against `applyform.Form` alone — `mergedFromAPIOnly` — and a fully
-  resolved form for one of them still parks rather than being submitted through a fill path
-  never built or verified. Widening the live DOM-scan to another provider is a real gap to
+- **A platform is driven only if `layouts` (`layout.go`) describes its page.** That
+  description is three values — the element the form renders under, the button a person
+  clicks, and which attribute identifies a control — and each was read off a real posting.
+  Greenhouse and Lever have one; everything else reconciles against `applyform.Form` alone
+  (`mergedFromAPIOnly`) and parks as not-implemented however completely it resolved.
+
+  **The three values are measured, never inferred, and that is not a style preference.**
+  Locating the form as "the element with the most inputs", or the button by its text, is
+  what this package already did wrong twice in one day: `hasRecaptchaMarker` fired on the
+  mere WORD "recaptcha" and so parked every Greenhouse posting there is, and a
+  `requiresCaptcha{"lever": true}` list decided what a page said before anyone had loaded
+  the page — two of that candidate's own Lever postings carry no captcha at all. A submit
+  click cannot be withdrawn.
+
+  **Addressing is ONE setting, not two.** It decides both which attribute identifies a
+  scanned control and which selects it (`domscan.identify`, `fill.fieldSelector`,
+  `addressing.queryKind`). Splitting them fails silently: every field resolves, the plan
+  calls itself complete, and nothing is found on the page — at the last step, after the
+  model spend and after the candidate approved. A review caught exactly this in the
+  file-upload branch, which had kept a literal `chromedp.ByID`; under Lever's `byName` that
+  becomes `#[name="resume"]`, invalid CSS, on the one field every posting requires.
+  `TestFillOne_EveryActionOnTheSharedSelectorCarriesTheLayoutsQueryKind` reads the source to
+  keep it from coming back.
+
+  Widening the live DOM-scan to another provider is a real gap to
   close, not a design decision to defend.
 - **`fetchSchema` falls back to a stored form ONLY when no live fetcher is registered for
   the provider — not storage-first.** `Client.forms` (`WithStoredFormReader`, same
@@ -96,9 +115,9 @@ process, called only via `Client.WithBrowserUse`. Scope is deliberately narrow:
   Recruitee submit** — see this file's own note on `browserUseProviders`, above: reaching a
   `Plan` is not the same as having anything to hand it to. See
   `openspec/changes/atsapply-recruitee-stored-schema`.
-- **A Greenhouse posting whose form cannot be scanned parks with a named reason instead of
-  erroring.** `ScanGreenhouseForm`'s known selector (`greenhouseFormReadySelector`,
-  `#application-form`) only ever matched the vanilla `job-boards.greenhouse.io` template.
+- **A posting whose form cannot be scanned parks with a named reason instead of
+  erroring.** `ScanForm`'s selector comes from the layout, and Greenhouse's
+  (`#application-form`) only ever matched the vanilla `job-boards.greenhouse.io` template.
   Live verification found a real, likely-common case it does not: a white-label custom
   domain (a real GoDaddy posting on `careers.godaddy`) renders a completely different DOM id
   scheme and is gated by reCAPTCHA Enterprise on the form itself. `renderedHTML` (`browser.go`)
@@ -218,10 +237,11 @@ process, called only via `Client.WithBrowserUse`. Scope is deliberately narrow:
 
 ## How it works
 `Client.Submit`: captcha short-circuit → fetch the platform's schema via
-`applyform.Fetchers` → (Greenhouse only) launch a browser, render the page via `renderedHTML`
-(known selector, or — on that wait's own timeout — classify why via `classifyUnscannableForm`,
-which `Submit` maps to an early `StatusParked` return via `unscannableFormResult`),
-`ScanGreenhouseForm` → `Reconcile` → `Client.resolve`
+`applyform.Fetchers` → (only when `layoutFor` describes the platform) launch a browser,
+render the page via `renderedHTML` (the layout's own selector, or — on that wait's own
+timeout — classify why via `classifyUnscannableForm`, which `Submit` maps to an early
+`StatusParked` return via `unscannableFormResult`),
+`ScanForm` → `Reconcile` → `Client.resolve`
 (deterministic `Resolve`, then — if an experience-bank reader is configured —
 `ResolveWithDrafting` over what is still unmapped, via a freshly `llmkey.Bind`-ed
 `LLMDrafter`) → if `Plan.FullyResolved()`, `fillAndSubmit`; else return `StatusParked` with
