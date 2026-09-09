@@ -151,6 +151,29 @@
       autoApplyDeciding = false;
     }
   }
+
+  // One draft per pending question, keyed by its label — the same key the {#each} uses, so
+  // an input and its draft cannot drift apart.
+  let bankDrafts = $state<Record<string, string>>({});
+  let bankSaving = $state<string | null>(null);
+  let bankError = $state<string | null>(null);
+
+  async function saveBankedAnswer(question: string) {
+    const answer = bankDrafts[question]?.trim();
+    if (!answer || bankSaving) return;
+    bankSaving = question;
+    bankError = null;
+    try {
+      await api.saveBankedAnswer(question, answer);
+      // Cleared rather than left filled: the answer now lives in the bank, and a filled
+      // input beside a saved answer reads as unsaved work.
+      bankDrafts = { ...bankDrafts, [question]: '' };
+    } catch (e) {
+      bankError = errorMessage(e, 'Could not save your answer.');
+    } finally {
+      bankSaving = null;
+    }
+  }
   // The full posting. The listing serves a card — employer, role, and the facets a row draws —
   // because carrying every description was 84% of its payload for text no row renders. The
   // panel is the one place that wants the posting, and it already makes this request for the
@@ -495,11 +518,36 @@
                 </dl>
               {/if}
               {#if autoApply?.resolved_preview?.pending?.length}
-                <ul class="flex flex-col gap-0.5 text-xs text-muted-foreground">
+                <ul class="flex flex-col gap-2 text-xs text-muted-foreground">
                   {#each autoApply.resolved_preview.pending as p (p.label)}
-                    <li>{p.label} — {p.will_draft_at_submission ? 'will be filled in automatically' : 'no known answer yet'}</li>
+                    {#if p.will_draft_at_submission}
+                      <li>{p.label} — will be filled in automatically</li>
+                    {:else if p.label.trim() !== ''}
+                      <li class="flex flex-col gap-1">
+                        <label class="text-foreground" for={`bank-${p.label}`}>{p.label}</label>
+                        <div class="flex gap-2">
+                          <input
+                            id={`bank-${p.label}`}
+                            class="min-w-0 flex-1 rounded-md border border-border bg-background px-2 py-1"
+                            bind:value={bankDrafts[p.label]}
+                            placeholder="Your answer — saved for next time too"
+                          />
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={bankSaving === p.label || !bankDrafts[p.label]?.trim()}
+                            onclick={() => saveBankedAnswer(p.label)}
+                          >
+                            Save
+                          </Button>
+                        </div>
+                      </li>
+                    {/if}
                   {/each}
                 </ul>
+                {#if bankError}
+                  <p class="text-xs text-destructive">{bankError}</p>
+                {/if}
               {/if}
               {#if hasPosting && item.job}
                 <a
