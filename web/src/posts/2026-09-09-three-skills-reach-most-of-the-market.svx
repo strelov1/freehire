@@ -1,0 +1,113 @@
+---
+title: Three skills reach 82% of the market, and the fourth barely helps
+date: 2026-09-09
+summary: We measured how many open postings each additional skill on a CV actually opens up. The curve flattens far earlier than the advice suggests — and it flattens at almost exactly the same place in four different fields.
+type: article
+tags:
+  - skills
+  - data
+  - job-search
+draft: false
+---
+
+The standard advice for a stalled job search is to learn something else. Another
+framework, another cloud, another line on the CV. It is offered as though the return
+were flat — as though the tenth skill opened as many doors as the second.
+
+We can check that, because we hold the postings. So: for open, technical postings in
+one field, how many does each additional skill actually reach?
+
+The answer is that the curve flattens early, and it flattens at almost exactly the same
+place in every field we looked at.
+
+## The measurement
+
+Take open backend postings. There are **45,453** of them, of which **41,712** carry at
+least one tagged skill. Everything below is against that second number, and the reason
+matters: the difference is our tagger's coverage, not the market's. Measuring against
+all 45,453 would report a gap in our dictionary as if it were a gap in demand.
+
+The most-asked-for skills in that population look like this:
+
+| skill | postings |
+| --- | --- |
+| api | 23,167 |
+| java | 17,964 |
+| cloud | 17,096 |
+| aws | 13,378 |
+| ci-cd | 13,289 |
+| ai | 12,681 |
+| python | 11,962 |
+| sql | 10,742 |
+| docker | 10,476 |
+| kubernetes | 10,283 |
+
+Those percentages cannot be added. A posting asking for both Java and AWS appears in
+both rows, so summing the top five would count it twice and produce a number over 100.
+What you want is the union: how many *distinct* postings a set of skills reaches
+between them.
+
+## The curve
+
+| skills known | postings reached | share |
+| --- | --- | --- |
+| 1 (api) | 23,168 | 55.5% |
+| 3 (+ java, cloud) | 34,198 | 82.0% |
+| 5 (+ aws, ci-cd) | 35,958 | 86.2% |
+| 10 (+ five more) | 38,742 | 92.9% |
+
+Read the increments rather than the totals. The second and third skills buy **26.5
+points**. The fourth and fifth buy **4.2**. The sixth through tenth buy **6.7 between
+the five of them**.
+
+By the third skill you are already legible to four postings in five. Everything after
+that is the long tail of the long tail.
+
+## It is not a backend accident
+
+One field proves nothing, so we ran the same measurement on three more, each against its
+own most-demanded skills.
+
+| field | 1 skill | 3 skills | 5 skills |
+| --- | --- | --- | --- |
+| Backend | 55.5% | **82.0%** | 86.2% |
+| DevOps | 61.9% | **81.1%** | 84.2% |
+| Frontend | 67.1% | **83.2%** | 88.9% |
+| Mobile | 60.6% | **82.6%** | 83.3% |
+
+Four fields. Entirely different skills in each — `react`/`typescript`/`api` against
+`cloud`/`devops`/`ci-cd` against `android`/`ios`/`api`. And the three-skill figure lands
+inside a two-point band every time.
+
+Mobile is the starkest: going from three skills to five adds **0.7 points**. Two more
+technologies, less than one percent more of the market.
+
+## What this does and does not mean
+
+It does not mean those particular three skills are the ones to learn. The top three
+differ by field and move with the market; the finding is the shape of the curve, not its
+contents.
+
+It does not mean a posting you "reach" is a posting you get. Coverage is about being
+legible to a listing at all — the posting still asks for everything else on it, and so
+does the person reading your CV afterwards.
+
+And it is bounded by our own vocabulary. Our skill tagger is dictionary-only: it emits
+nothing for a term it does not recognise, which is exactly why the denominator here is
+postings that carry a tagged skill rather than all of them. A niche technology can be in
+real demand and invisible to this count.
+
+## What it does mean
+
+The marginal skill is worth much less than the advice implies, and the useful question is
+not "what else should I learn" but "which of the three or four things that actually carry
+my field are missing from my CV". Those are very different questions. The first has no
+end; the second has an answer, and it is usually short.
+
+That second question is answerable per person, and we put it on a page you can use
+without an account: drop a CV into [freehire.me/roast](https://freehire.me/roast) and it
+will tell you how many open postings in your field your skills already reach, and which
+single missing skill would reach the most more. It stores nothing and sends your CV to no
+model.
+
+If the answer turns out to be one skill, that is the whole finding above, applied to you.
