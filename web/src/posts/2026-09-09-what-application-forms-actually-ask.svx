@@ -1,0 +1,163 @@
+---
+title: What 647,795 application forms actually ask
+date: 2026-09-09
+summary: We keep a copy of the application form behind every posting we crawl. Counting them answers a question the advice articles skip — not how to beat the ATS, but how much it asks of you, and how much that depends on which one your employer bought.
+type: article
+tags:
+  - ats
+  - applications
+  - data
+draft: false
+---
+
+Search for why an applicant-tracking system rejected your résumé and you will find
+the same article about thirty times. Most of it rests on one statistic — that around
+70% of résumés are filtered out before a human sees them — which is repeated
+everywhere and sourced nowhere. We are not going to replace it with a number of our
+own, because we do not have one either. Nobody outside the ATS vendors does.
+
+What we do have is the forms.
+
+freehire captures the application form behind every posting it crawls, because our
+auto-apply feature has to fill them in. As of 2026-09-09 that is **647,795 forms**
+across five platforms, stored the way the platform sent them — the employers' own
+wording, not our summary of it.
+
+| platform | forms |
+| --- | --- |
+| Greenhouse | 283,363 |
+| Lever | 117,424 |
+| Ashby | 87,988 |
+| Recruitee | 79,584 |
+| Workable | 79,436 |
+
+That is not the job market. It is the postings from five platforms that we crawl and
+could capture a form for, which skews toward tech, and toward companies large enough
+to buy an ATS at all. Everything below is about those.
+
+## How much a form asks
+
+The simplest question first: how many fields does an application form have?
+
+| platform | questions, average | median | longest form |
+| --- | --- | --- | --- |
+| Greenhouse | 19.9 | 19 | 113 |
+| Lever | 14.6 | 15 | 154 |
+| Workable | 14.1 | 13 | 78 |
+| Ashby | 10.5 | 10 | 50 |
+| Recruitee | 8.5 | 7 | 60 |
+
+The averages are safe to read here, and that had to be checked rather than assumed: on
+every platform the median sits within 1.5 of the mean, so no handful of enormous forms
+is dragging the figure. If the mean had been 19.9 against a median of 6 it would have
+been describing something almost nobody meets.
+
+So the same application costs you about **2.3 times more work on Greenhouse than on
+Recruitee** — and you did not pick either one. The employer did, probably years ago,
+for reasons that had nothing to do with you.
+
+The longest form in the corpus has **154 fields**. It is on Lever, whose typical form
+is one of the shorter ones.
+
+## How much of it you cannot skip
+
+Fields are one thing; mandatory fields are another. Here the measurement gets narrower,
+and the reason why is worth more than the number.
+
+Greenhouse, Ashby, Workable and Recruitee each publish an explicit "this field is
+required" flag through their APIs. Lever does not. Its form has to be read out of the
+page markup, and requiredness inferred from a `✱` glyph next to the label. So we
+checked what that inference actually yields: **48.8% of Lever forms come back with no
+required field at all**, against **0.0%** for each of the other four.
+
+A form with no mandatory field is not a thing that exists — every one of them needs a
+name or an address to reply to. So that 48.8% is not Lever being relaxed. It is the
+failure rate of reading a form out of markup instead of an API, and it means any
+required-field number we published for Lever would be measuring us rather than them.
+Lever is therefore left out of the table below and kept in the one above, which counts
+fields and never reads the flag.
+
+| platform | required, average | median | most required |
+| --- | --- | --- | --- |
+| Greenhouse | 13.2 | 13 | 76 |
+| Workable | 10.3 | 9 | 75 |
+| Ashby | 8.3 | 8 | 40 |
+| Recruitee | 6.8 | 5 | 48 |
+
+Two thirds to four fifths of a form is mandatory, consistently: 66% on Greenhouse, 73%
+on Workable, 79% on Ashby, 80% on Recruitee. The optional questions are the minority
+everywhere, which is the opposite of how application forms are usually described.
+
+And somewhere out there is a Greenhouse form with **76 required answers** on it. For
+one job. Against a median of 13, that is not typical — but somebody built it, and
+somebody is expected to fill it in.
+
+## What they ask, once the basics are done
+
+Name, email, phone, CV and cover letter are on nearly every form. They are the floor,
+not the finding. Underneath them the forms diverge, and the wording is the employers'
+own.
+
+Counting this honestly needs a caveat about method. Labels are stored verbatim, so one
+question fragments across spellings: `resume/cv`, `resume`, `cv`, `lebenslauf`,
+`lettre de motivation` and `currículo/cv` are one field; `linkedin profile`,
+`linkedin url` and `linkedin` are one question; `how did you hear about this job?`,
+`how did you hear about us?` and `how did you hear about this opportunity?` are one
+question asked three ways. No mechanical rule merges those — they differ in wording,
+not in formatting — so the families below were grouped by hand, and every label folded
+into each one is listed in our working notes rather than hidden behind a total.
+
+**Your other profiles: 308,948 forms ask for LinkedIn.** Then `website` (84,692),
+`portfolio url` (59,543), `github url` (58,455), `twitter url` (44,907). A photo is
+asked for on 46,323.
+
+**Where you are: 243,452 forms ask your current location**, plus separate city, state,
+country and postcode fields on top.
+
+Two of these deserve care rather than a headline. `latitude` and `longitude` appear
+118,203 times each — but on exactly **one** of the five platforms. So do
+`disabilitystatus` and `veteranstatus`, at 104,970 each. Those are one vendor's form
+template, not something the industry decided. We nearly wrote "application forms
+collect your exact coordinates", which would have been true of the count and false
+about the world.
+
+The contrast is what makes it worth saying: `gender` appears 113,269 times across all
+five platforms, and `race` 106,774 times across four. Those are practices. Coordinates
+are a product decision at one company.
+
+**Work authorization: 70,635 forms**, mostly variations on whether you can legally
+work in the United States and whether you will need sponsorship.
+
+**"How did you hear about us": 61,762.** **An age gate: 30,337.** **Salary
+expectations: 24,762.** **Notice period: 7,841.**
+
+## What this does not tell you
+
+It does not tell you why Greenhouse forms are longer. A platform's default template,
+the kind of employer that buys it, and the questions those employers add are three
+different explanations, and counting fields separates none of them.
+
+It does not tell you how long a form takes. Thirteen required checkboxes and thirteen
+required essay boxes count the same here and are not the same afternoon.
+
+It does not tell you how many *employers* ask something. A company with 4,000 open
+postings puts its custom question on 4,000 forms, and these are per-posting counts.
+
+And it tells you nothing at all about whether any of this filtering works, or whether
+that 70% figure is close. We measured what the forms ask. What happens to your answers
+afterwards is behind a door none of us can see through.
+
+## What you can do about it
+
+Not much about the form. It arrives the length it arrives.
+
+What you can change is the document you feed into it — and that part is not mysterious.
+The first thing every one of these systems does is try to turn your CV into text. If it
+cannot, nothing else you did matters.
+
+We put that check on a page you can use without an account: drop a CV into
+[freehire.me/roast](https://freehire.me/roast) and it will tell you what a parser reads,
+what it misses, and which skills the open postings in your field are asking for that
+your CV does not mention. It stores nothing and it does not send your CV to a model.
+
+The forms are not going to get shorter. The CV can get more readable.
