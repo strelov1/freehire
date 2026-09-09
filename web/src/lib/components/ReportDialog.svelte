@@ -1,13 +1,18 @@
 <script lang="ts">
-  import { ArrowLeft, Ban, BellOff, Check, ChevronRight, Clock, MoreHorizontal, ShieldAlert } from '@lucide/svelte';
+  import { ArrowLeft, Ban, BellOff, Bot, Check, ChevronRight, Clock, MoreHorizontal, ShieldAlert } from '@lucide/svelte';
   import { api, ApiError } from '$lib/api';
-  import { appliedOnError, isEvidenceReason, reportReasons } from '$lib/reports';
-  import type { ReportReason } from '$lib/types';
+  import { appliedOnError, moderationReasonOf, processKindOf, reportReasons, reportRoute } from '$lib/reports';
+  import type { ReportPickerValue } from '$lib/types';
   import { Button, Dialog } from '$lib/ui';
 
-  // Reports are filed against a single job, addressed by its public slug. The
-  // parent owns open/close; this component owns the two-step flow within.
-  let { slug, onClose }: { slug: string; onClose: () => void } = $props();
+  // Reports are filed against a single job, addressed by its public slug — except
+  // the process facts, which are about the EMPLOYER and go to the company the job
+  // already names. The parent owns open/close; this component owns the flow within.
+  let {
+    slug,
+    companySlug,
+    onClose,
+  }: { slug: string; companySlug: string; onClose: () => void } = $props();
 
   // The parent mounts this component to open it and unmounts on onClose, so the
   // dialog is open for its whole life. Dialog owns the closing — Escape, the
@@ -28,7 +33,7 @@
   // queue's only lever is closing the job: somebody says nobody answered them and
   // the one available response is to delete the posting, which helps no one.
   let step = $state<'reason' | 'details' | 'applied' | 'done'>('reason');
-  let reason = $state<ReportReason | null>(null);
+  let reason = $state<ReportPickerValue | null>(null);
   let details = $state('');
   let appliedOn = $state('');
   let submitting = $state(false);
@@ -44,23 +49,37 @@
 
   // A lucide icon per reason, keyed by the controlled value (the labels/order
   // themselves live in $lib/reports so they stay one source of truth).
-  const reasonIcon: Record<ReportReason, typeof BellOff> = {
+  const reasonIcon: Record<ReportPickerValue, typeof BellOff> = {
     no_response: BellOff,
+    ai_interview: Bot,
     not_relevant: Clock,
     spam: Ban,
     fraud: ShieldAlert,
     other: MoreHorizontal,
   };
 
-  function pick(r: ReportReason) {
+  function pick(r: ReportPickerValue) {
     reason = r;
     error = null;
-    step = isEvidenceReason(r) ? 'applied' : 'details';
+    const route = reportRoute(r);
+    if (route === 'ghost') {
+      step = 'applied';
+      return;
+    }
+    if (route === 'process') {
+      // Submitted from the picker with no second step. The entry IS the whole claim:
+      // there is no date to bound it and nothing to elaborate, and asking anyway would
+      // collect whatever gets typed to get past the field.
+      const kind = processKindOf(r);
+      if (kind) void send(() => api.reportCompanyProcess(companySlug, kind));
+      return;
+    }
+    step = 'details';
   }
 
   function messageFor(e: unknown): string {
     if (e instanceof ApiError) {
-      if (e.status === 409) return 'You already reported this job.';
+      if (e.status === 409) return 'You already reported this.';
       if (e.status === 403) return 'Please confirm your email address first.';
       if (e.status === 429) return "That's a lot of reports today — try again tomorrow.";
       if (e.status === 401) return 'Please sign in to report a job.';
@@ -87,7 +106,9 @@
     e.preventDefault();
     // Captured into a local before the closure: narrowing `reason` with an early
     // return does not survive into the callback passed to send().
-    const picked = reason;
+    // Narrowed through moderationReasonOf rather than cast: it is the guard that
+    // keeps a picker entry off the endpoint whose vocabulary does not contain it.
+    const picked = reason && moderationReasonOf(reason);
     if (!picked) return;
     await send(() => api.reportJob(slug, { reason: picked, details }));
   }
@@ -210,8 +231,10 @@
           <Check class="size-5" />
         </span>
         <p class="text-sm">
-          {#if reason && isEvidenceReason(reason)}
+          {#if reason && reportRoute(reason) === 'ghost'}
             Thanks — noted. If enough people report the same thing, we'll flag this posting.
+          {:else if reason && reportRoute(reason) === 'process'}
+            Thanks — noted. This is now shown on the company, with how many people reported it.
           {:else}
             Thanks — your report was sent. We'll take a look.
           {/if}

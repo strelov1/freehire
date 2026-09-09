@@ -1063,5 +1063,5 @@
 </article>
 
 {#if showReport}
-  <ReportDialog slug={job.public_slug} onClose={() => (showReport = false)} />
+  <ReportDialog slug={job.public_slug} companySlug={job.company_slug} onClose={() => (showReport = false)} />
 {/if}

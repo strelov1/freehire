@@ -35,10 +35,10 @@
 
 ## 6. Frontend — filing
 
-- [ ] 6.1 Add the entry to `reportReasons` in `web/src/lib/reports.ts` and extend the evidence split so it routes to the company endpoint, not the moderation one.
-- [ ] 6.2 Extend the test that pins the split so routing this entry to the moderation queue fails a test by name.
-- [ ] 6.3 Wire `ReportDialog.svelte`: choosing it submits immediately from the company slug the job payload already carries — no date step, no details step.
-- [ ] 6.4 Add the API client methods and their error mapping (409 "you already reported this", 401, 429).
+- [x] 6.1 Add the entry to `reportReasons` in `web/src/lib/reports.ts` and extend the evidence split so it routes to the company endpoint, not the moderation one.
+- [x] 6.2 Extend the test that pins the split so routing this entry to the moderation queue fails a test by name.
+- [x] 6.3 Wire `ReportDialog.svelte`: choosing it submits immediately from the company slug the job payload already carries — no date step, no details step.
+- [x] 6.4 Add the API client methods and their error mapping (409 "you already reported this", 401, 429).
 
 ## 7. Frontend — showing
 

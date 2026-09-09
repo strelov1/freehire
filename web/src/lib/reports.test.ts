@@ -5,8 +5,10 @@ import {
   decisionNotePlaceholder,
   decisionNotePrompt,
   decisionOutcome,
-  isEvidenceReason,
+  moderationReasonOf,
+  processKindOf,
   reportReasons,
+  reportRoute,
   reportReasonLabel,
   type DecisionKind,
 } from './reports';
@@ -75,9 +77,31 @@ describe('decisionOutcome', () => {
   });
 });
 
-describe('isEvidenceReason', () => {
-  it('routes no_response to the evidence channel', () => {
-    expect(isEvidenceReason('no_response')).toBe(true);
+describe('reportRoute', () => {
+  it('routes no_response to the ghost signal', () => {
+    expect(reportRoute('no_response')).toBe('ghost');
+  });
+
+  // ai_interview is a statement of fact about an employer. There is nothing for a
+  // moderator to DO about a true statement, and the queue's only lever — closing the
+  // posting — would answer it with something nobody asked for.
+  it('routes ai_interview to the company process report', () => {
+    expect(reportRoute('ai_interview')).toBe('process');
+    expect(processKindOf('ai_interview')).toBe('ai_interview');
+    expect(moderationReasonOf('ai_interview')).toBeNull();
+  });
+
+  // The narrowing helpers are the guard that keeps an entry off the endpoint whose
+  // vocabulary does not contain it, so they must disagree in both directions.
+  it('keeps a moderation reason out of the process endpoint', () => {
+    expect(processKindOf('fraud')).toBeNull();
+    expect(moderationReasonOf('fraud')).toBe('fraud');
+  });
+
+  it('offers every entry it can route', () => {
+    for (const option of reportReasons) {
+      expect(['moderation', 'ghost', 'process']).toContain(reportRoute(option.value));
+    }
   });
 
   // The moderation queue's only verdict is closing the job. A reason routed there
@@ -85,13 +109,14 @@ describe('isEvidenceReason', () => {
   it.each<ReportReason>(['not_relevant', 'spam', 'fraud', 'other'])(
     'keeps %s on the moderation path',
     (reason) => {
-      expect(isEvidenceReason(reason)).toBe(false);
+      expect(reportRoute(reason)).toBe('moderation');
     },
   );
 
-  it('classifies every reason in the vocabulary', () => {
-    const evidence = reportReasons.filter((r) => isEvidenceReason(r.value));
-    expect(evidence).toHaveLength(1);
+  it('sends exactly one entry down each non-moderation lane', () => {
+    const lanes = reportReasons.map((r) => reportRoute(r.value));
+    expect(lanes.filter((l) => l === 'ghost')).toHaveLength(1);
+    expect(lanes.filter((l) => l === 'process')).toHaveLength(1);
   });
 });
 
