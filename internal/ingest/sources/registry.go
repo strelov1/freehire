@@ -193,6 +193,11 @@ func All(c HTTPClient) map[string]Source {
 		// Rate-paced (pacedADPGetter): all ~2,800 boards share one ADP host, and the run's own
 		// aggregate volume 429s most of them unpaced. See pacer.go.
 		NewADP(pacedADPGetter(c)),
+		// ADP MyJobs: ADP's OTHER career-site product, addressed by site slug rather than by
+		// Workforce Now's cid+ccId pair, so a company on it is unreachable through NewADP above.
+		// Rate-paced on a limiter of its OWN, not the one above — see pacedADPMyJobsGetter for
+		// why sharing would be an assertion nothing has measured.
+		NewADPMyJobs(pacedADPMyJobsGetter(c)),
 		NewITechArt(c),
 		NewVention(c),
 		// Detail hydration is rate-paced (pacedHTMLGetter) to hold the run's request rate
