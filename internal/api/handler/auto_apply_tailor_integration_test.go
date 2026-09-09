@@ -542,3 +542,52 @@ func TestPostAutoApplyTailor_ASpentBudgetStillRecordsTheTailoredCV(t *testing.T)
 		t.Fatal("tailored_cv_id is still NULL — the entry cannot move on, and reads as 'tailoring' forever")
 	}
 }
+
+// A tailoring run that fails for a real reason says so, instead of leaving the entry
+// looking like one still being worked on.
+//
+// This is the fault the candidate actually reported: an entry whose run had died recorded
+// nothing at all, so DeriveStatus fell through to StatusTailoring and the tracker kept
+// saying "Auto-apply is preparing a tailored CV for this job" — for over a day, about work
+// nobody was doing, with no notification either.
+func TestPostAutoApplyTailor_AFailedRunIsRecordedAndNotified(t *testing.T) {
+	pool := startPostgres(t)
+	truncateAutoApplyTailorTables(t, pool)
+	iss := auth.NewIssuer("test-secret", time.Hour)
+	app, _ := newAutoApplyTailorApp(pool, iss, failingTurnModel{})
+
+	userID, cookie := autoApplyTailorUser(t, pool, iss, "tailorfail@example.test")
+	insertBaseCV(t, pool, userID)
+	job := insertAutoApplyJob(t, pool, "tailor-fail")
+	queueID := insertAutoApplyQueueRow(t, pool, userID, job)
+
+	resp := autoApplyRequest(t, app, fiber.MethodPost,
+		"/api/v1/me/auto-apply/"+strconv.FormatInt(queueID, 10)+"/tailor", cookie, nil)
+	defer resp.Body.Close()
+	if resp.StatusCode == fiber.StatusOK {
+		t.Fatalf("status = %d, want a failure — the run could not be done", resp.StatusCode)
+	}
+
+	var failedAt *time.Time
+	var lastError string
+	if err := pool.QueryRow(context.Background(),
+		"SELECT tailor_failed_at, last_error FROM auto_apply_queue WHERE id = $1", queueID).
+		Scan(&failedAt, &lastError); err != nil {
+		t.Fatalf("read the entry back: %v", err)
+	}
+	if failedAt == nil {
+		t.Error("tailor_failed_at is NULL — the entry still reads as one being prepared")
+	}
+	if lastError == "" {
+		t.Error("last_error is empty — nothing records why the run gave up")
+	}
+
+	var notifKind string
+	if err := pool.QueryRow(context.Background(),
+		"SELECT kind FROM user_notifications WHERE user_id = $1", userID).Scan(&notifKind); err != nil {
+		t.Fatalf("the candidate was told nothing: %v", err)
+	}
+	if notifKind != autoApplyTailorFailedNotification {
+		t.Errorf("notification kind = %q, want %q", notifKind, autoApplyTailorFailedNotification)
+	}
+}

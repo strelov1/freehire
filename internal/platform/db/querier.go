@@ -1976,7 +1976,7 @@ type Querier interface {
 	//
 	// tailored_cv_id, unmapped, and resolved_preview (openspec/changes/auto-apply-review-tracking)
 	// ride along on the same row read rather than a second query: they are exactly what the
-	// tracker drawer's own auto-apply banner needs (the six-value status, the answer preview, the
+	// tracker drawer's own auto-apply banner needs (the seven-value status, the answer preview, the
 	// unmapped question list), and this is already "the caller's own existing auto-apply entry
 	// for one job." preview_failed_at (migration 0140) is read for the same reason failed_at
 	// is: without it, an entry whose preview pass permanently gave up would read forever as
@@ -3981,6 +3981,21 @@ type Querier interface {
 	// untouched and blocked_at, not failed_at, is what excludes it from
 	// auto_apply_queue_claimable_idx from here on.
 	MarkAutoApplyBlocked(ctx context.Context, arg MarkAutoApplyBlockedParams) error
+	// Records that a tailoring run gave up without producing a CV (migration 0154), so the
+	// entry stops reading as one still being prepared.
+	//
+	// Guarded by tailored_cv_id IS NULL as well as review_decision IS NULL: a run that failed
+	// AFTER an earlier one had already produced a CV has nothing to report — the candidate has
+	// something to look at, and telling them preparation failed while it sits there ready is
+	// worse than saying nothing. DeriveStatus ranks the same way and does not depend on this
+	// guard having fired.
+	//
+	// Returns the job's title/company/slug for the caller's own notification, the same shape and
+	// for the same reason SetAutoApplyResolvedPreview already returns them: this statement
+	// already holds the job_id its own WHERE resolved, and a second round trip for exactly what
+	// this write just touched would be a query with no reason to exist. pgx.ErrNoRows means a
+	// guard fired, which the caller treats as "nothing to say", never as an error.
+	MarkAutoApplyTailorFailed(ctx context.Context, arg MarkAutoApplyTailorFailedParams) (MarkAutoApplyTailorFailedRow, error)
 	// Stamp an event as applied. Idempotent by shape: re-stamping a processed row writes the
 	// same fact, and the reconciler's own query no longer returns it.
 	MarkBillingEventProcessed(ctx context.Context, id int64) error

@@ -188,6 +188,7 @@ type AutoApplyQueue struct {
 	ResolvedPreview []byte             `json:"resolved_preview"`
 	PreviewAttempts int32              `json:"preview_attempts"`
 	PreviewFailedAt pgtype.Timestamptz `json:"preview_failed_at"`
+	TailorFailedAt  pgtype.Timestamptz `json:"tailor_failed_at"`
 }
 
 type BillingEvent struct {
