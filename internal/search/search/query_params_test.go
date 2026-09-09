@@ -228,6 +228,18 @@ func TestQFieldsFromValues_UnrecognizedFieldIsReportedAndAppliesNoRestriction(t 
 	}
 }
 
+func TestQFieldsFromValues_TrailingCommaIsTolerated(t *testing.T) {
+	// Same tolerance splitFacetValues gives every ordinary facet: a stray comma
+	// fragment is dropped, not treated as a named (and therefore unrecognized) field.
+	fields, ignored := QFieldsFromValues(url.Values{"q_fields": {"title,"}})
+	if !slices.Equal(fields, []string{"title"}) {
+		t.Errorf("fields = %v, want [title]", fields)
+	}
+	if ignored != nil {
+		t.Errorf("ignored = %v, want nil", ignored)
+	}
+}
+
 func TestQFieldsFromValues_OneBadNameInvalidatesTheWholeValue(t *testing.T) {
 	// A caller who mistypes one of several names must not get a silently
 	// narrower-than-intended search on the names that happened to be valid.

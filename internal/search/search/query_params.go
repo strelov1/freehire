@@ -34,13 +34,16 @@ var qSearchableFields = []string{"title", "company", "description", "location"}
 // attribute order and a caller-controlled order would make identical
 // restrictions rank differently for no predictable reason.
 //
-// When q_fields is absent, both return values are nil (no restriction, nothing
-// to report). When it names a field outside qSearchableFields, the ENTIRE value
-// is treated as invalid — even the names that were valid are dropped — and
-// reported via the same UnknownParam shape UnknownParams uses. Partial
-// application would silently narrow a caller's search past what a typo made
-// them ask for, with no signal beyond the report; whole-value drop keeps the
-// failure in the same class as an unrecognized facet: coarse, but honest.
+// When q_fields is absent (or empty after dropping stray comma fragments —
+// the same tolerance splitFacetValues gives every facet, so `q_fields=` and
+// `q_fields=title,` behave like a bare `?skills=`), both return values are
+// nil: no restriction, nothing to report. When it names a field outside
+// qSearchableFields, the ENTIRE value is treated as invalid — even the names
+// that were valid are dropped — and reported via the same UnknownParam shape
+// UnknownParams uses. Partial application would silently narrow a caller's
+// search past what a typo made them ask for, with no signal beyond the
+// report; whole-value drop keeps the failure in the same class as an
+// unrecognized facet: coarse, but honest.
 func QFieldsFromValues(v url.Values) (fields []string, ignored []UnknownParam) {
 	raw := v.Get("q_fields")
 	if raw == "" {
@@ -48,6 +51,9 @@ func QFieldsFromValues(v url.Values) (fields []string, ignored []UnknownParam) {
 	}
 	requested := make(map[string]bool)
 	for _, name := range strings.Split(raw, ",") {
+		if name == "" {
+			continue
+		}
 		if !slices.Contains(qSearchableFields, name) {
 			return nil, []UnknownParam{{Param: "q_fields"}}
 		}
