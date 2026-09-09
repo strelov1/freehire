@@ -325,6 +325,29 @@ func TestResolve_ATypedFactOutranksABankedAnswer(t *testing.T) {
 	}
 }
 
+// The Resolve-level guard for the same refusal matchBankAnswerKey enforces directly: a
+// work-authorization question must stay unmapped even when the bank holds an answer banked
+// under its own topic, because that answer depends on a country nothing here has and would
+// otherwise travel to a posting in a different one at submit time, unseen by the candidate.
+func TestResolve_NeverAnswersAWorkAuthorizationQuestionFromTheBank(t *testing.T) {
+	label := "Are you legally authorized to work in the country in which this position is located?"
+	topic, ok := bankTopicKeyForTest(t, label)
+	if !ok {
+		t.Fatal("the server would refuse to bank the question the candidate was just shown")
+	}
+	answers := map[string]string{topic: "Yes"}
+	fields := []MergedField{{ID: "question_1", Label: label, Kind: "text", Required: true}}
+
+	plan := Resolve(fields, answers, false)
+
+	if plan.FullyResolved() {
+		t.Fatalf("plan = %+v, want the work-authorization question to stay unmapped despite a banked answer", plan)
+	}
+	if len(plan.Unmapped) != 1 || plan.Unmapped[0].Label != label {
+		t.Fatalf("Unmapped = %+v, want the work-authorization question reported", plan.Unmapped)
+	}
+}
+
 // The seam: what Profile.FieldsWithBankedAnswers() writes must be what resolveOne reads.
 //
 // The prefix is two separate literals in two packages that cannot share a constant
