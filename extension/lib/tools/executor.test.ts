@@ -1,8 +1,11 @@
 import { describe, it, expect } from 'vitest';
+// The raw text, not the parsed object: parseToolCall takes what comes off the socket,
+// and parsing it here would skip the half of the boundary that reads the wire.
+import fillSimpleFrame from './testdata/fill-simple-call.json?raw';
 import { executeTool, mergeComboboxReplies, mergeFrameOutcomes, type PageBridge } from './executor';
 import { parseToolCall } from './wire';
 import type { FramedField } from './wire';
-import type { ComboboxStep } from '../protocol';
+import type { ComboboxStep, LabelFill } from '../protocol';
 
 const field = (label: string, frame = 0): FramedField => ({
   index: 0,
@@ -102,6 +105,63 @@ describe('executeTool', () => {
     expect(res.error).toMatch(/fills/);
   });
 
+  // The scope is what stops a write landing in the wrong one of two forms carrying
+  // the same label. A harness reads it off `read_form` and sends it back here; this
+  // reader dropped it, so every agent-planned fill arrived unscoped and `form.ts`
+  // broadcast it to every frame and took the first match.
+  it('carries the frame and form a fill names through to the page', async () => {
+    let seen: LabelFill[] = [];
+    const page = bridge({
+      fillSimple: async (fills) => {
+        seen = fills;
+        return fills.map((f) => ({ label: f.label, status: 'filled' as const }));
+      },
+    });
+
+    await executeTool(
+      {
+        id: 'c5',
+        tool: 'fill_simple',
+        args: { fills: [{ label: 'Email', value: 'a@b.c', frame: 1, form: 2 }] },
+      },
+      page,
+    );
+
+    expect(seen).toEqual([{ label: 'Email', value: 'a@b.c', frame: 1, form: 2 }]);
+  });
+
+  // A scope is optional — an unscoped fill is still offered to every frame — but a
+  // malformed one must not be read as frame 0, which is the top document and a real
+  // target. Absent and unreadable both mean "not scoped".
+  it('leaves an absent or unreadable scope unscoped rather than defaulting it', async () => {
+    let seen: LabelFill[] = [];
+    const page = bridge({
+      fillSimple: async (fills) => {
+        seen = fills;
+        return fills.map((f) => ({ label: f.label, status: 'filled' as const }));
+      },
+    });
+
+    await executeTool(
+      {
+        id: 'c6',
+        tool: 'fill_simple',
+        args: {
+          fills: [
+            { label: 'Email', value: 'a@b.c' },
+            { label: 'Phone', value: '123', frame: 'top', form: 1.5 },
+          ],
+        },
+      },
+      page,
+    );
+
+    expect(seen).toEqual([
+      { label: 'Email', value: 'a@b.c', frame: undefined, form: undefined },
+      { label: 'Phone', value: '123', frame: undefined, form: undefined },
+    ]);
+  });
+
   it('reports an unknown tool as an error result, not silence', async () => {
     const res = await executeTool({ id: 'c4', tool: 'submit_form' }, bridge());
 
@@ -152,6 +212,41 @@ describe('executeTool', () => {
     const res = await executeTool({ id: 'c10', tool: 'combobox.select', args: { label: 'Country' } }, bridge());
 
     expect(res.error).toMatch(/value/);
+  });
+});
+
+// The check that spans the two ends of the wire.
+//
+// hire's autofill agent has tagged every fill with its frame since frame scoping was
+// introduced, and a Go test asserts that it does — while `readFills` here destructured
+// only {label, value}, so the tag was dropped on arrival and `form.ts` broadcast the
+// fill to every frame and matched it by label alone. Both sides' tests were green: the
+// Go one checks the sender, the ones above check this reader against arguments written
+// by hand here. Neither can see a field one side sends and the other ignores.
+//
+// The fixture is written from hire's live `autofillagent.Fill` struct
+// (internal/ai/autofillagent/wirefixture_test.go, which fails if it drifts), so this
+// reads the real frame rather than a second hand-written copy of it that would drift
+// the same way.
+describe('the fill_simple frame hire actually sends', () => {
+  it('reaches the page with both of its scopes intact', async () => {
+    let seen: LabelFill[] = [];
+    const page = bridge({
+      fillSimple: async (fills) => {
+        seen = fills;
+        return fills.map((f) => ({ label: f.label, status: 'filled' as const }));
+      },
+    });
+
+    const call = parseToolCall(fillSimpleFrame);
+    // Thrown rather than asserted: a fixture that no longer parses is a broken
+    // fixture, and the assertion below would report it as a scope that went missing.
+    if (!call) throw new Error('the committed fill_simple fixture is not a well-formed tool call');
+
+    const res = await executeTool(call, page);
+
+    expect(res.error).toBeUndefined();
+    expect(seen).toEqual([{ label: 'Email', value: 'ilya@example.com', frame: 1, form: 2 }]);
   });
 });
 
@@ -215,6 +310,52 @@ describe('mergeFrameOutcomes', () => {
 
   it('returns nothing when no frame answered', () => {
     expect(mergeFrameOutcomes([])).toEqual([]);
+  });
+
+  // A refusal is an answer: the frame that reported it is the one holding the
+  // question, and the frames answering `not_found` are the ones that never saw it.
+  // Folding the negatives over it would tell the harness the page does not ask
+  // something it does ask — and hide the one status it could act on.
+  it('keeps a refusal over the frames that never held the control', () => {
+    const merged = mergeFrameOutcomes([
+      [{ label: 'Email', status: 'not_found' }],
+      [{ label: 'Email', status: 'ambiguous' }],
+      [{ label: 'Email', status: 'not_found' }],
+    ]);
+
+    expect(merged).toEqual([{ label: 'Email', status: 'ambiguous' }]);
+  });
+
+  // The negative comes FIRST on purpose: ties keep the frame that answered first,
+  // so an informative status placed first would survive a flattened rank table and
+  // the test would pass without testing the ranking at all.
+  it('keeps wrong_form over a frame that does not carry the label at all', () => {
+    const merged = mergeFrameOutcomes([
+      [{ label: 'Email', status: 'not_found' }],
+      [{ label: 'Email', status: 'wrong_form' }],
+    ]);
+
+    expect(merged).toEqual([{ label: 'Email', status: 'wrong_form' }]);
+  });
+
+  it('keeps not_fillable over a frame that does not carry the label at all', () => {
+    const merged = mergeFrameOutcomes([
+      [{ label: 'Email', status: 'not_found' }],
+      [{ label: 'Email', status: 'not_fillable' }],
+    ]);
+
+    expect(merged).toEqual([{ label: 'Email', status: 'not_fillable' }]);
+  });
+
+  // A write that landed is what actually happened, and no other frame's refusal
+  // undoes it — so `filled` stays the top of the order.
+  it('keeps a write that landed over another frame refusing the same label', () => {
+    const merged = mergeFrameOutcomes([
+      [{ label: 'Email', status: 'ambiguous' }],
+      [{ label: 'Email', status: 'filled' }],
+    ]);
+
+    expect(merged).toEqual([{ label: 'Email', status: 'filled' }]);
   });
 });
 

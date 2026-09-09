@@ -300,6 +300,33 @@ func TestRunSurfacesAToolFailure(t *testing.T) {
 	}
 }
 
+// A fill must name BOTH scopes the field was read from. Frame alone leaves the
+// ordinary careers page broken: the application form and a job-alert signup both
+// live in the top document, both ask for an email address, and a fill naming only
+// the frame is matched by label across the whole of it — so the write lands in
+// whichever the extension walks first.
+func TestRunTagsEachFillWithItsFieldsFrameAndForm(t *testing.T) {
+	tools := &fakeTools{fields: []autofillagent.Field{
+		{Label: "Email", Type: "email", Frame: 1, Form: 2},
+	}}
+	planner := plannerFunc(func(_ []autofillagent.Field, p autofillagent.Profile) ([]autofillagent.Fill, error) {
+		// The planner names the label and the value only; where to write is the
+		// agent's to resolve from the field it matched.
+		return []autofillagent.Fill{{Label: "Email", Value: p["email"]}}, nil
+	})
+
+	if _, err := autofillagent.Run(context.Background(), tools, planner, profile()); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	if len(tools.requested) != 1 {
+		t.Fatalf("fill_simple requested %+v, want exactly one fill", tools.requested)
+	}
+	if got := tools.requested[0]; got.Frame != 1 || got.Form != 2 {
+		t.Errorf("fill scoped to frame %d form %d, want frame 1 form 2", got.Frame, got.Form)
+	}
+}
+
 func contains(list []string, want string) bool {
 	for _, got := range list {
 		if got == want {

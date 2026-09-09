@@ -9,7 +9,7 @@
  * which a position in the list does.
  */
 
-import type { FieldTag, FormField, LabelFill, FillOutcome, RevealRequest, Upload } from './protocol';
+import type { FieldTag, FormField, LabelFill, FillOutcome, FillStatus, RevealRequest, Upload } from './protocol';
 import { countryLabel } from './labels';
 
 type Fillable = HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement;
@@ -558,10 +558,15 @@ export function revealField(
   doc: Document,
   { label, form, focus = false, outlineMs = REVEAL_OUTLINE_MS }: RevealRequest,
 ): boolean {
-  const question = findQuestion(collectQuestions(doc), Array.from(doc.querySelectorAll('form')), label, form);
-  if (!question) return false;
+  // Reveal reports one boolean — the panel either scrolled to the question or says
+  // it was not there — so every miss reads the same here, ambiguity included. That
+  // is right for a reveal: with nothing written, there is nothing to be wrong about,
+  // and highlighting one of two same-labeled questions would assert a choice this
+  // has no basis for.
+  const resolved = findQuestion(doc, collectQuestions(doc), Array.from(doc.querySelectorAll('form')), label, form);
+  if ('miss' in resolved) return false;
 
-  const el = question.controls[0];
+  const el = resolved.found.controls[0];
   el.scrollIntoView({ block: 'center', behavior: 'smooth' });
 
   // Revealing the same control twice inside the outline's lifetime must not make
@@ -592,8 +597,9 @@ export function fillByLabel(doc: Document, fills: LabelFill[]): FillOutcome[] {
   const questions = collectQuestions(doc);
   const forms = Array.from(doc.querySelectorAll('form'));
   return fills.map(({ label, value, form }) => {
-    const question = findQuestion(questions, forms, label, form);
-    if (!question) return { label, status: 'not_found' as const };
+    const resolved = findQuestion(doc, questions, forms, label, form);
+    if ('miss' in resolved) return { label, status: resolved.miss };
+    const question = resolved.found;
     if (question.controls.length === 1 && isComboWidget(question.controls[0])) {
       return { label, status: 'deferred_combobox' as const };
     }
@@ -601,17 +607,76 @@ export function fillByLabel(doc: Document, fills: LabelFill[]): FillOutcome[] {
   });
 }
 
-/** The question a fill addresses, narrowed to `form` when the fill names one. */
+/**
+ * The one question a fill addresses, or why the label did not name one.
+ *
+ * The misses are kept apart because each implies a different next step for the
+ * harness, and collapsing them into "not found" — which is what this did — invites
+ * a retry in the two cases where a retry cannot succeed.
+ */
+type Resolution =
+  | { found: Question }
+  // Extract, not a bare union of the four names: the outcome vocabulary is
+  // FillStatus's, so a status renamed there must fail to compile here rather than
+  // leave this listing a name the wire no longer uses.
+  | { miss: Extract<FillStatus, 'ambiguous' | 'wrong_form' | 'not_fillable' | 'not_found'> };
+
+/**
+ * Resolves a fill's `label`, narrowed to `form` when the fill names one.
+ *
+ * An unscoped fill matching several questions is `ambiguous` rather than the first
+ * of them: on a page carrying an application form beside a job-alert signup the two
+ * are indistinguishable from here, and writing into the wrong one is worse than
+ * writing into neither.
+ */
 function findQuestion(
+  doc: Document,
   questions: Question[],
   forms: HTMLFormElement[],
   label: string,
   form: number | undefined,
-): Question | undefined {
+): Resolution {
   const target = normalizeLabel(label);
   const matches = questions.filter((q) => normalizeLabel(q.label) === target);
-  if (form === undefined) return matches[0];
-  return matches.find((q) => formIndex(q.controls[0], forms) === form);
+
+  if (form === undefined) {
+    const [first, ...rest] = matches;
+    if (rest.length > 0) return { miss: 'ambiguous' };
+    if (first) return { found: first };
+    return { miss: absentOrUnfillable(doc, target) };
+  }
+
+  const scoped = matches.find((q) => formIndex(q.controls[0], forms) === form);
+  if (scoped) return { found: scoped };
+  // The label is asked somewhere in this frame, just not in the form named — the
+  // index is what is wrong, not the question.
+  if (matches.length > 0) return { miss: 'wrong_form' };
+  return { miss: absentOrUnfillable(doc, target) };
+}
+
+/**
+ * Tells a label the page never asks from one it asks through a control nothing can
+ * write to.
+ *
+ * `collectFillable` drops a disabled or invisible control before any of this runs,
+ * which is right — keeping one in the match set would risk writing into it — but it
+ * left the two indistinguishable downstream. So the check happens here, on the miss
+ * path only, against the controls that were filtered out.
+ *
+ * Only individually-labelled controls are examined; a disabled member of a grouped
+ * question (a legend over 29 checkboxes) still reads as `not_found`. The group's
+ * label lives on the legend rather than on any one control, and a partially
+ * disabled group is not the case this exists for.
+ */
+function absentOrUnfillable(doc: Document, target: string): 'not_fillable' | 'not_found' {
+  const carried = Array.from(doc.querySelectorAll<Fillable>('input, select, textarea')).some((el) => {
+    // Never a fill target in the first place, so its absence is not a refusal.
+    if (el instanceof HTMLInputElement && SKIP_TYPES.has(el.type)) return false;
+    const droppedByCollectFillable = el.disabled || isHidden(el);
+    if (!droppedByCollectFillable) return false;
+    return normalizeLabel(extractLabel(el)) === target;
+  });
+  return carried ? 'not_fillable' : 'not_found';
 }
 
 /**

@@ -15,6 +15,30 @@ against whatever page the user is on and sends results back.
 - **Opaque frames.** The relay parses nothing but the `id` (and only to build an
   error answer): `{id,tool,args}` / `{id,result}` pass through verbatim. Adding a
   primitive is a change in the extension and the harness, not here.
+- **Opaque cuts both ways: nothing here notices a field one end sends and the
+  other ignores.** `autofillagent.Fill` carried `frame` for months, with a Go test
+  asserting it did, while the extension's argument reader destructured only
+  `{label, value}` — so every agent-planned fill arrived unscoped, was broadcast to
+  every frame and matched by label alone. Both ends' tests were green because each
+  checked its own side, and the ends are in different languages, so no compiler
+  spans the gap either. What spans it now is a fixture: a Go test writes the real
+  `fill_simple` frame from the live struct into
+  `extension/lib/tools/testdata/fill-simple-call.json` (regenerate with
+  `UPDATE_WIRE_FIXTURE=1 go test ./internal/ai/autofillagent/`) and the extension's
+  own test parses it back. **Adding a field to a wire struct means updating that
+  fixture and proving the other end reads it** — a test on either side alone is the
+  state that hid this one.
+- **One thing the addressing still cannot see: cross-frame ambiguity.** A fill
+  naming no `frame` is offered to every frame, and each frame sees only its own
+  document — so two frames each holding one match both report a clean `filled`, and
+  only the fold that merges their answers can tell there were two. That fold runs
+  after the writes have landed, so it can report the collision but not prevent it.
+  Within ONE frame the case is handled: `fillByLabel` refuses with `ambiguous` and
+  writes nothing. The gap is left open rather than engineered around because
+  `autofillagent` now names a frame on every fill, which leaves it to a
+  hand-authored `fill_simple` from the assistant; closing it properly means a
+  resolve pass before any write, i.e. a second round trip on every fill. The seam,
+  if it ever becomes worth it, is `fillByLabel` in `extension/lib/form.ts`.
 - **Never hang a caller.** A call with no extension attached is answered with
   `{id, error}` rather than dropped — the harness is blocked on that id. A result
   with no harness left is dropped (nobody is waiting). That one answer is the

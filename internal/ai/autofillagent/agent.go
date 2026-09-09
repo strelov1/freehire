@@ -27,17 +27,30 @@ type Field struct {
 	Combo    bool     `json:"combo"`
 	Options  []string `json:"options,omitempty"`
 	Frame    int      `json:"frame"`
+	// Form is which <form> inside Frame the control belongs to. The extension has
+	// reported it on every field for as long as it has reported Frame; this side
+	// did not parse it, so a fill could be narrowed to a document but never to one
+	// of the forms in it — and a careers page carrying its application form beside
+	// a job-alert signup carries both in the same document.
+	Form int `json:"form"`
 }
 
 // Fill is one entry of the plan: the value to write into the control carrying
-// this label. Frame names which of the page's frames the target field was read
-// from (see Field.Frame) — set by splitByKind from the field it resolved the fill
-// against, not by the planner, so a same-labeled control in a different frame is
-// not addressed by a Fill meant for another.
+// this label. Frame and Form name where the target field was read from (see
+// Field.Frame, Field.Form) — set by splitByKind from the field it resolved the
+// fill against, not by the planner, so a same-labeled control elsewhere on the
+// page is not addressed by a Fill meant for another.
+//
+// Both are needed, and neither alone is enough: Frame separates an application
+// served in an ATS iframe from the careers page around it, Form separates the
+// application from a job-alert signup sitting in the SAME document. A fill naming
+// neither is matched by label alone, which is how a write lands in whichever form
+// the extension happens to walk first.
 type Fill struct {
 	Label string `json:"label"`
 	Value string `json:"value"`
 	Frame int    `json:"frame"`
+	Form  int    `json:"form"`
 }
 
 // Profile is the user's canonical autofill fields, keyed as
@@ -145,7 +158,7 @@ func splitByKind(fields []Field, planned []Fill) (typed []Fill, widgets []Field)
 				widgets = append(widgets, field)
 				continue
 			}
-			typed = append(typed, Fill{Label: fill.Label, Value: fill.Value, Frame: field.Frame})
+			typed = append(typed, Fill{Label: fill.Label, Value: fill.Value, Frame: field.Frame, Form: field.Form})
 		}
 	}
 	return typed, widgets

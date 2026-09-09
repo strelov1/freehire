@@ -101,7 +101,30 @@ export type FillStatus =
   /** A custom-widget combobox — deliberately left alone (deferred capability). */
   | 'deferred_combobox'
   /** No option matching the value: a native <select>'s, or a group's. */
-  | 'no_option';
+  | 'no_option'
+  /**
+   * The label matches more than one question and the fill named no `form`, so
+   * nothing was written. A careers page routinely carries its application beside a
+   * job-alert signup, both asking for an email address; picking one is a coin flip,
+   * and losing it writes the candidate's details into a form they did not choose
+   * and reports `filled`. The `form` index `read_form` reports on every field is
+   * what resolves this, so the refusal hands a decidable next step back.
+   */
+  | 'ambiguous'
+  /**
+   * The label is carried by a question in this frame, but not inside the `form`
+   * the fill named. Distinct from `not_found`, which says the page never asks it:
+   * here the fill's form index is what is wrong, and correcting it is a next step
+   * the harness can take.
+   */
+  | 'wrong_form'
+  /**
+   * A control carrying the label is on the page and cannot be written to — it is
+   * disabled, or not visible. Reported rather than folded into `not_found`,
+   * because no re-send helps until the page itself changes: a retry against a
+   * `not_found` is worth making, a retry against this one never is.
+   */
+  | 'not_fillable';
 
 export interface FillOutcome {
   label: string;

@@ -415,9 +415,11 @@ describe('fillByLabel', () => {
     expect(outcomes).toEqual([{ label: 'Email', status: 'filled' }]);
   });
 
-  it('reports not_found rather than fall back to an out-of-form match', () => {
+  it('reports wrong_form rather than fall back to an out-of-form match', () => {
     // The target form (0) exists, but only the other form (1) carries this
-    // label — the fill must not silently land there.
+    // label — the fill must not silently land there. `wrong_form` and not
+    // `not_found`: the label IS on the page, so the harness's next step is to
+    // correct the index, not to give up on the question.
     formWith('application', ['First Name']);
     const signup = formWith('signup', ['Email']);
     const signupInput = must(signup.querySelector<HTMLInputElement>('input'));
@@ -425,7 +427,70 @@ describe('fillByLabel', () => {
     const outcomes = fillByLabel(document, [{ label: 'Email', value: 'ilya@example.com', form: 0 }]);
 
     expect(signupInput.value).toBe('');
-    expect(outcomes).toEqual([{ label: 'Email', status: 'not_found' }]);
+    expect(outcomes).toEqual([{ label: 'Email', status: 'wrong_form' }]);
+  });
+
+  // `collectFillable` drops a disabled or hidden control before anything matches
+  // against it, so such a question was indistinguishable from one the page never
+  // asked — and a harness reading `not_found` retries a fill that cannot land
+  // until the page itself changes.
+  it('reports not_fillable for a control that is present but disabled', () => {
+    const application = formWith('application', ['Email']);
+    must(application.querySelector<HTMLInputElement>('input')).disabled = true;
+
+    const outcomes = fillByLabel(document, [{ label: 'Email', value: 'ilya@example.com' }]);
+
+    expect(outcomes).toEqual([{ label: 'Email', status: 'not_fillable' }]);
+  });
+
+  it('still reports not_found for a label the page does not carry at all', () => {
+    formWith('application', ['Email']);
+
+    const outcomes = fillByLabel(document, [{ label: 'Favourite colour', value: 'blue' }]);
+
+    expect(outcomes).toEqual([{ label: 'Favourite colour', status: 'not_found' }]);
+  });
+
+  // The same two forms as the test above, but with the fill naming neither. Taking
+  // the first match here is a coin flip between the application and a job-alert
+  // signup, and losing it writes the candidate's address into a form they did not
+  // choose — reported as `filled`, so nothing downstream can tell.
+  it('refuses a fill whose label matches more than one question and names no form', () => {
+    const application = formWith('application', ['Email']);
+    const signup = formWith('signup', ['Email']);
+    const applicationInput = must(application.querySelector<HTMLInputElement>('input'));
+    const signupInput = must(signup.querySelector<HTMLInputElement>('input'));
+
+    const outcomes = fillByLabel(document, [{ label: 'Email', value: 'ilya@example.com' }]);
+
+    expect(applicationInput.value).toBe('');
+    expect(signupInput.value).toBe('');
+    expect(outcomes).toEqual([{ label: 'Email', status: 'ambiguous' }]);
+  });
+
+  // The refusal is not a dead end: the index the harness read off `read_form` is
+  // exactly what resolves it.
+  it('fills the named form on a page it would otherwise refuse', () => {
+    formWith('application', ['Email']);
+    const signup = formWith('signup', ['Email']);
+    const signupInput = must(signup.querySelector<HTMLInputElement>('input'));
+
+    const outcomes = fillByLabel(document, [{ label: 'Email', value: 'ilya@example.com', form: 1 }]);
+
+    expect(signupInput.value).toBe('ilya@example.com');
+    expect(outcomes).toEqual([{ label: 'Email', status: 'filled' }]);
+  });
+
+  // A label carried once is not ambiguous, so the refusal cannot reach the ordinary
+  // page — which is every page with one form on it.
+  it('still fills an unscoped fill whose label is carried once', () => {
+    const application = formWith('application', ['Email']);
+    const applicationInput = must(application.querySelector<HTMLInputElement>('input'));
+
+    const outcomes = fillByLabel(document, [{ label: 'Email', value: 'ilya@example.com' }]);
+
+    expect(applicationInput.value).toBe('ilya@example.com');
+    expect(outcomes).toEqual([{ label: 'Email', status: 'filled' }]);
   });
 });
 
