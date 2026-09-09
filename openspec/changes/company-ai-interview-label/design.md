@@ -121,10 +121,39 @@ difference. The counter is materialised on `companies` and recomputed in the
 writing transaction, the pattern `feedback_count` and `upvote_count` already use,
 so a reader never sees a label without its number.
 
-### The facet travels the `collections` road
+### The counter is a `jobs` column, synced inside the report transaction
 
-**Chosen:** the company's label is denormalized onto `jobview.Job` exactly as
-`Collections` is, and declared filterable on the jobs index.
+**Chosen:** mirror `collections` — a denormalized column on `jobs` — but write it
+in the same transaction as the report, rather than on a worker's schedule.
+
+`jobs.collections` is a column that `cmd/import-collections` syncs from
+`companies` after it writes them (jobs.sql:1077-1086), bumping `updated_at` so
+`reindex --since` picks the rows up. Two things about that pattern are separable,
+and it took getting them backwards once to see it:
+
+- **The column is right.** `jobview.FromRow` takes a bare `db.Job`, and
+  `job.Extras` — documented as holding exactly this, "denormalized from the
+  company" — is built from that row. A column means sqlc regenerates, `Extras`
+  gains a field, the wire shape gains a field, the search document gains it by
+  embedding, and **no query signature and no caller changes**.
+- **The worker's schedule is wrong.** Membership in a collection changes rarely,
+  so hours of staleness are invisible. A report is filed in real time: the company
+  page would show the label the moment somebody filed while that same company's
+  job cards said nothing until the next sync. The same fact present on one page
+  and absent on the next reads as a bug, and no wording fixes it.
+
+So the sync runs in the write: one `UPDATE jobs SET ... WHERE company_slug = $1`
+beside the company recompute. It is one statement, not a loop, and filing a report
+is a rare action — the largest employers here carry thousands of open postings and
+a few thousand row updates in one statement is unremarkable. It bumps `updated_at`
+for the same reason the collections sync does, so `reindex --since` carries the
+change into the facet index.
+
+**Alternative rejected: JOIN `companies` on the read.** No job read query joins
+companies today, so adding one changes `ListJobs`/`GetJobBySlug` from returning
+`db.Job` to returning generated row types, which ripples through every caller of
+the projection. That is a wide, invasive change to carry one integer, and it buys
+nothing the column does not already give.
 
 **Alternative rejected:** filter on the companies index and intersect. The jobs
 index is what `/jobs` queries; a second round-trip to resolve company slugs would

@@ -70,6 +70,12 @@ type Job struct {
 	// deterministic source fact (no LLM counterpart) served straight from the jobs
 	// column; an untagged job serializes it as [].
 	Collections []string `json:"collections"`
+	// AIInterviewReports is how many people have reported that this job's company
+	// screens candidates with an AI interviewer (internal/engage/processreport),
+	// denormalized from the company onto the job. Omitted at zero: the count is what
+	// the label must always be shown with, so "no reports" has to be the absence of
+	// the field rather than a zero a badge could render beside.
+	AIInterviewReports int32 `json:"ai_interview_reports,omitempty"`
 	// IsTech is the deterministic technical/non-technical facet: "tech" or "non_tech",
 	// omitted when unknown (the tri-state jobs.is_tech NULL). Served top-level and
 	// indexed as a filterable Meili facet; an unknown value is absent so it filters as
@@ -197,36 +203,37 @@ func FromDomain(j job.Job, x job.Extras) (Job, error) {
 	e.Cities = nil
 
 	return Job{
-		PublicSlug:        f.PublicSlug,
-		Source:            f.Source,
-		ManuallyAdded:     f.ManuallyAdded,
-		ExternalID:        f.ExternalID,
-		URL:               outboundurl.Tag(f.URL),
-		Title:             f.Title,
-		Company:           f.Company,
-		CompanySlug:       f.CompanySlug,
-		Location:          f.Location,
-		Description:       f.Description,
-		Countries:         countries,
-		Regions:           regions,
-		WorkMode:          workMode,
-		Skills:            skills,
-		Cities:            cities,
-		Collections:       collections,
-		IsTech:            isTechFacet(f.IsTech),
-		RequiresClearance: f.RequiresClearance != nil && *f.RequiresClearance,
-		PostedAt:          rfc3339Ptr(effectivePosted(f.PostedAt, f.CreatedAt, now)),
-		CreatedAt:         rfc3339Ptr(f.CreatedAt),
-		UpdatedAt:         rfc3339Ptr(f.UpdatedAt),
-		LastSeenAt:        rfc3339Ptr(f.LastSeenAt),
-		ClosedAt:          rfc3339Ptr(f.ClosedAt),
-		Enrichment:        e,
-		EnrichedAt:        rfc3339Ptr(f.EnrichedAt),
-		EnrichmentVersion: f.EnrichmentVersion,
-		ViewCount:         x.ViewCount,
-		AppliedCount:      x.AppliedCount,
-		UpvoteCount:       x.UpvoteCount,
-		DownvoteCount:     x.DownvoteCount,
+		PublicSlug:         f.PublicSlug,
+		Source:             f.Source,
+		ManuallyAdded:      f.ManuallyAdded,
+		ExternalID:         f.ExternalID,
+		URL:                outboundurl.Tag(f.URL),
+		Title:              f.Title,
+		Company:            f.Company,
+		CompanySlug:        f.CompanySlug,
+		Location:           f.Location,
+		Description:        f.Description,
+		Countries:          countries,
+		Regions:            regions,
+		WorkMode:           workMode,
+		Skills:             skills,
+		Cities:             cities,
+		Collections:        collections,
+		AIInterviewReports: x.AIInterviewReports,
+		IsTech:             isTechFacet(f.IsTech),
+		RequiresClearance:  f.RequiresClearance != nil && *f.RequiresClearance,
+		PostedAt:           rfc3339Ptr(effectivePosted(f.PostedAt, f.CreatedAt, now)),
+		CreatedAt:          rfc3339Ptr(f.CreatedAt),
+		UpdatedAt:          rfc3339Ptr(f.UpdatedAt),
+		LastSeenAt:         rfc3339Ptr(f.LastSeenAt),
+		ClosedAt:           rfc3339Ptr(f.ClosedAt),
+		Enrichment:         e,
+		EnrichedAt:         rfc3339Ptr(f.EnrichedAt),
+		EnrichmentVersion:  f.EnrichmentVersion,
+		ViewCount:          x.ViewCount,
+		AppliedCount:       x.AppliedCount,
+		UpvoteCount:        x.UpvoteCount,
+		DownvoteCount:      x.DownvoteCount,
 	}, nil
 }
 

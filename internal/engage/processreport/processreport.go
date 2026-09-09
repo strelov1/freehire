@@ -153,6 +153,13 @@ func (s *Service) File(ctx context.Context, userID int64, slug, kind string) (in
 	if err != nil {
 		return 0, err
 	}
+	// Copy the count onto the company's postings in the same transaction, so a job
+	// card never disagrees with the company page about a fact filed a second ago.
+	if err := q.SyncJobsAIInterviewReports(ctx, db.SyncJobsAIInterviewReportsParams{
+		CompanySlug: slug, AiInterviewReports: count,
+	}); err != nil {
+		return 0, err
+	}
 	if err := tx.Commit(ctx); err != nil {
 		return 0, err
 	}
@@ -195,6 +202,13 @@ func (s *Service) Retract(ctx context.Context, userID int64, slug, kind string) 
 
 	count, err := q.RecountCompanyProcessReports(ctx, slug)
 	if err != nil {
+		return 0, err
+	}
+	// Copy the count onto the company's postings in the same transaction, so a job
+	// card never disagrees with the company page about a fact filed a second ago.
+	if err := q.SyncJobsAIInterviewReports(ctx, db.SyncJobsAIInterviewReportsParams{
+		CompanySlug: slug, AiInterviewReports: count,
+	}); err != nil {
 		return 0, err
 	}
 	if err := tx.Commit(ctx); err != nil {

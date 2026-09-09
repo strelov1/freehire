@@ -50,6 +50,20 @@ UPDATE companies SET
 WHERE slug = $1
 RETURNING ai_interview_reports;
 
+-- name: SyncJobsAIInterviewReports :exec
+-- Copy the company's counter onto its postings, so a job card carries the label
+-- without the read path joining companies. Run in the SAME transaction as the report,
+-- not on a schedule: a report is filed in real time, and a company page showing the
+-- label while that company's own job cards say nothing reads as a bug.
+--
+-- IS DISTINCT FROM keeps a no-op report from touching a single row, and updated_at is
+-- bumped for the same reason SyncJobCollections bumps it — `reindex --since` is what
+-- carries the change into the facet index.
+UPDATE jobs
+   SET ai_interview_reports = $2, updated_at = now()
+ WHERE company_slug = $1
+   AND ai_interview_reports IS DISTINCT FROM $2;
+
 -- name: MyLiveCompanyProcessReportKinds :many
 -- The kinds this user currently has live against one company. The write surface needs
 -- it to open in the right state: without it a returning reader cannot be shown that

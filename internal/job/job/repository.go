@@ -24,6 +24,11 @@ type Extras struct {
 	UpvoteCount   int32
 	DownvoteCount int32
 	Collections   []string
+	// AIInterviewReports is how many people have reported that this job's COMPANY
+	// screens with an AI interviewer, denormalized onto the posting the same way
+	// Collections is. Zero means nobody has, which is why the wire shape omits it
+	// rather than serving a 0 that would render as a label with no reports.
+	AIInterviewReports int32
 }
 
 // FromRow is the anti-corruption mapping from a persistence row to the domain
@@ -107,6 +112,8 @@ func extrasFromRow(r db.Job) Extras {
 		UpvoteCount:   r.UpvoteCount,
 		DownvoteCount: r.DownvoteCount,
 		Collections:   r.Collections,
+
+		AIInterviewReports: r.AiInterviewReports,
 	}
 }
 

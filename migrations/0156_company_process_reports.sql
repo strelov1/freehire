@@ -65,3 +65,18 @@ CREATE INDEX company_process_reports_company_kind_live_idx
 ALTER TABLE public.companies
     -- squawk-ignore prefer-bigint-over-int -- mirrors its neighbours on this table (job_count, feedback_count, upvote_count are all integer); one company reaching 2.1 billion candidate reports is not a scenario
     ADD COLUMN ai_interview_reports integer NOT NULL DEFAULT 0;
+
+-- The same count denormalized onto the posting, the way jobs.collections carries the
+-- company's curated tags. It is a column and not a join because jobview.FromRow takes
+-- a bare db.Job and job.Extras is built from it — a column costs a regeneration, while
+-- a join changes what the job read queries return and ripples through every caller of
+-- the projection, to carry one integer.
+--
+-- Unlike collections, which cmd/import-collections syncs on a schedule, this is written
+-- in the same transaction as the report. A report is filed in real time: a scheduled
+-- sync would show the label on the company page the moment somebody filed while that
+-- company's own job cards said nothing until the next run, and the same fact present on
+-- one page and absent on the next reads as a bug.
+ALTER TABLE public.jobs
+    -- squawk-ignore prefer-bigint-over-int -- mirrors companies.ai_interview_reports, which it is a copy of; the two are compared and must not disagree about their width
+    ADD COLUMN ai_interview_reports integer NOT NULL DEFAULT 0;

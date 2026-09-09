@@ -40,7 +40,7 @@ func newTestService(t *testing.T, cfg Config) (*Service, *pgxpool.Pool) {
 	t.Helper()
 	pool := testdb.Pool(t)
 	if _, err := pool.Exec(context.Background(),
-		`TRUNCATE company_process_reports, companies, users RESTART IDENTITY CASCADE`); err != nil {
+		`TRUNCATE company_process_reports, jobs, companies, users RESTART IDENTITY CASCADE`); err != nil {
 		t.Fatalf("truncate: %v", err)
 	}
 	return New(db.New(pool), pool, cfg), pool
@@ -57,6 +57,58 @@ func storedCount(t *testing.T, pool *pgxpool.Pool, slug string) int32 {
 		t.Fatalf("read counter: %v", err)
 	}
 	return n
+}
+
+// seedJob inserts one posting owned by a company, so the sync onto jobs can be
+// observed. The jobs table's own required columns are the only ones set.
+func seedJob(t *testing.T, pool *pgxpool.Pool, slug, externalID string) {
+	t.Helper()
+	if _, err := pool.Exec(context.Background(),
+		`INSERT INTO jobs (source, external_id, url, title, company, company_slug, public_slug)
+		 VALUES ('test', $2, 'https://example.test/' || $2, 'Engineer', $1, $1, $2)`,
+		slug, externalID); err != nil {
+		t.Fatalf("insert job: %v", err)
+	}
+}
+
+func jobCount(t *testing.T, pool *pgxpool.Pool, externalID string) int32 {
+	t.Helper()
+	var n int32
+	if err := pool.QueryRow(context.Background(),
+		`SELECT ai_interview_reports FROM jobs WHERE external_id = $1`, externalID).Scan(&n); err != nil {
+		t.Fatalf("read job counter: %v", err)
+	}
+	return n
+}
+
+// The whole reason the counter is denormalized onto the posting: a card must not
+// disagree with the company page about a fact filed a second ago. A scheduled sync
+// would leave exactly that gap, so the write does it.
+func TestFileSyncsTheCountOntoTheCompanysJobs(t *testing.T) {
+	svc, pool := newTestService(t, Config{})
+	insertCompany(t, pool, "synced-co")
+	seedJob(t, pool, "synced-co", "job-one")
+	seedJob(t, pool, "synced-co", "job-two")
+	user := insertUser(t, pool, "syncer@example.com")
+	ctx := context.Background()
+
+	if _, err := svc.File(ctx, user, "synced-co", "ai_interview"); err != nil {
+		t.Fatalf("file: %v", err)
+	}
+	for _, ext := range []string{"job-one", "job-two"} {
+		if got := jobCount(t, pool, ext); got != 1 {
+			t.Fatalf("%s counter after filing = %d, want 1", ext, got)
+		}
+	}
+
+	if _, err := svc.Retract(ctx, user, "synced-co", "ai_interview"); err != nil {
+		t.Fatalf("retract: %v", err)
+	}
+	for _, ext := range []string{"job-one", "job-two"} {
+		if got := jobCount(t, pool, ext); got != 0 {
+			t.Fatalf("%s counter after retraction = %d, want 0", ext, got)
+		}
+	}
 }
 
 func TestFileRaisesTheLabelOnOneReport(t *testing.T) {

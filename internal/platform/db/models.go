@@ -745,6 +745,7 @@ type Job struct {
 	RequiresClearance     pgtype.Bool        `json:"requires_clearance"`
 	RequirementsDerived   []byte             `json:"requirements_derived"`
 	HydratedAt            pgtype.Timestamptz `json:"hydrated_at"`
+	AiInterviewReports    int32              `json:"ai_interview_reports"`
 }
 
 type JobDailyStat struct {

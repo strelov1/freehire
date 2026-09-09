@@ -5828,6 +5828,15 @@ type Querier interface {
 	// re-keys jobs, this re-keys companies to match. DISTINCT ON collapses a slug's
 	// name variants; ON CONFLICT folds collisions and refreshes existing rows.
 	SyncCompaniesFromJobs(ctx context.Context) error
+	// Copy the company's counter onto its postings, so a job card carries the label
+	// without the read path joining companies. Run in the SAME transaction as the report,
+	// not on a schedule: a report is filed in real time, and a company page showing the
+	// label while that company's own job cards say nothing reads as a bug.
+	//
+	// IS DISTINCT FROM keeps a no-op report from touching a single row, and updated_at is
+	// bumped for the same reason SyncJobCollections bumps it — `reindex --since` is what
+	// carries the change into the facet index.
+	SyncJobsAIInterviewReports(ctx context.Context, arg SyncJobsAIInterviewReportsParams) error
 	// The day's candidates, most-viewed first, ranked on page_uniques — NOT on uniques.
 	// uniques fuses page opens with API reads and API reads carry no bot filtering, so on
 	// a host whose traffic is mostly crawlers it answers "what did robots fetch". See

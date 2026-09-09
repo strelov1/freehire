@@ -21,10 +21,10 @@
 
 ## 4. Wire shape
 
-- [ ] 4.1 Add the label + count to `jobview.Job`, omitted entirely when the count is zero (never a zero on the wire), and to the card input struct alongside `Collections`. Keep it scalars-in: `job` (layer 5) may not import `engage` (layer 7), so the value arrives from the query, never from the service.
-- [ ] 4.2 Denormalize the company's counter onto the job read paths the way `collections` already travels from company to job — list, detail, and the search document builder.
-- [ ] 4.3 Add the same field to the company read used by the company page.
-- [ ] 4.4 Unit tests: a labelled company's job carries label + count; an unlabelled one omits the field.
+- [x] 4.1 Add the label + count to `jobview.Job`, omitted entirely when the count is zero (never a zero on the wire), and to the card input struct alongside `Collections`. Keep it scalars-in: `job` (layer 5) may not import `engage` (layer 7), so the value arrives from the query, never from the service.
+- [x] 4.2 Add `jobs.ai_interview_reports` (migration 0156) and sync it from the company inside the report transaction — one `UPDATE ... WHERE company_slug = $1` beside the recompute, bumping `updated_at` so `reindex --since` carries it. See design.md, "The counter is a `jobs` column, synced inside the report transaction".
+- [x] 4.3 Add the same field to the company read used by the company page.
+- [x] 4.4 Unit tests: a labelled company's job carries label + count; an unlabelled one omits the field.
 
 ## 5. Search
 

@@ -151,3 +151,28 @@ func (q *Queries) RetractCompanyProcessReport(ctx context.Context, arg RetractCo
 	err := row.Scan(&id)
 	return id, err
 }
+
+const syncJobsAIInterviewReports = `-- name: SyncJobsAIInterviewReports :exec
+UPDATE jobs
+   SET ai_interview_reports = $2, updated_at = now()
+ WHERE company_slug = $1
+   AND ai_interview_reports IS DISTINCT FROM $2
+`
+
+type SyncJobsAIInterviewReportsParams struct {
+	CompanySlug        string `json:"company_slug"`
+	AiInterviewReports int32  `json:"ai_interview_reports"`
+}
+
+// Copy the company's counter onto its postings, so a job card carries the label
+// without the read path joining companies. Run in the SAME transaction as the report,
+// not on a schedule: a report is filed in real time, and a company page showing the
+// label while that company's own job cards say nothing reads as a bug.
+//
+// IS DISTINCT FROM keeps a no-op report from touching a single row, and updated_at is
+// bumped for the same reason SyncJobCollections bumps it — `reindex --since` is what
+// carries the change into the facet index.
+func (q *Queries) SyncJobsAIInterviewReports(ctx context.Context, arg SyncJobsAIInterviewReportsParams) error {
+	_, err := q.db.Exec(ctx, syncJobsAIInterviewReports, arg.CompanySlug, arg.AiInterviewReports)
+	return err
+}
