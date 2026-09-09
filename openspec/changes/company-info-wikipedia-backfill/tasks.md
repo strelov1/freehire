@@ -1,7 +1,7 @@
 ## 1. Schema
 
-- [ ] 1.1 Add migration: `companies.company_info_wikipedia_checked_at timestamptz NULL`.
-- [ ] 1.2 Run `make sqlc` and confirm the generated Go picks up the new column with no other diff.
+- [x] 1.1 Add migration: `companies.company_info_wikipedia_checked_at timestamptz NULL`.
+- [x] 1.2 Run `make sqlc` and confirm the generated Go picks up the new column with no other diff.
 
 ## 2. Wikidata client
 
