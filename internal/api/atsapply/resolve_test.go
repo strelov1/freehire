@@ -232,3 +232,56 @@ func TestIsCoverLetterTextField_ALabelThatOnlyMentionsACoverLetterIsNotRecognize
 		t.Error("want a label that only mentions a cover letter in passing not recognized as a cover-letter field")
 	}
 }
+
+// The candidate's own stored salary expectation answers an employer's salary question,
+// whatever they called it.
+//
+// Measured on production 2026-09-08: queue entry 3 parked on "What is your desired salary?"
+// while screening_answers held 5000 USD/year for that very candidate. Greenhouse gives a
+// custom question an opaque numeric id, so answerKeyFor can never reach it and only a label
+// rule can — and there was none for salary, though there was one for visa sponsorship right
+// beside it.
+//
+// The three phrasings are the shapes real boards use for the same question. A rule that
+// only matched the exact wording of the one posting we happened to look at would be the
+// same gap again, one phrasing narrower.
+func TestResolve_MatchesASalaryQuestionByLabelWhateverItIsCalled(t *testing.T) {
+	answers := map[string]string{"desired_salary": "5000 USD per year"}
+
+	for _, label := range []string{
+		"What is your desired salary?",
+		"Salary expectations",
+		"Desired compensation (USD)",
+	} {
+		t.Run(label, func(t *testing.T) {
+			fields := []MergedField{{ID: "question_19869712004", Label: label, Kind: "text", Required: true}}
+
+			plan := Resolve(fields, answers, false)
+
+			if len(plan.Unmapped) != 0 {
+				t.Fatalf("unmapped = %+v, want the salary question answered from the candidate's own figure", plan.Unmapped)
+			}
+			if len(plan.Fields) != 1 || plan.Fields[0].Value != "5000 USD per year" {
+				t.Fatalf("plan.Fields = %+v, want the stored salary", plan.Fields)
+			}
+		})
+	}
+}
+
+// The rule must not reach a question ABOUT pay that is not asking for the candidate's own
+// figure. Current pay is a different fact (candidate_survey holds it separately and
+// deliberately), and answering it with a desired figure would misreport them to an
+// employer.
+func TestResolve_DoesNotAnswerACurrentSalaryQuestionWithTheDesiredOne(t *testing.T) {
+	answers := map[string]string{"desired_salary": "5000 USD per year"}
+	fields := []MergedField{{ID: "question_1", Label: "What is your current salary?", Kind: "text", Required: true}}
+
+	plan := Resolve(fields, answers, false)
+
+	if len(plan.Fields) != 0 {
+		t.Fatalf("plan.Fields = %+v, want the current-salary question left unanswered", plan.Fields)
+	}
+	if len(plan.Unmapped) != 1 {
+		t.Fatalf("unmapped = %+v, want the current-salary question reported as unanswered", plan.Unmapped)
+	}
+}
