@@ -4,11 +4,17 @@
   import { api } from '$lib/api';
   import { browserTimezone, profileInputFromProfile, seedFormFromSuggestions } from '$lib/mentorship';
   import { errorMessage } from '$lib/utils';
+  import { previewMentorSlug, resolveMentorSlugForSubmit } from '$lib/mentorSlugPreview';
   import { Badge, Button, Card, Input } from '$lib/ui';
+  import CompanyPicker from './CompanyPicker.svelte';
   import TokenInput from '$lib/components/facets/TokenInput.svelte';
   import type { MentorProfileInput, OwnMentorProfile } from '$lib/types';
 
   let { profile = $bindable() }: { profile: OwnMentorProfile | null } = $props();
+
+  // Matches internal/engage/mentorship's slugPattern. Used only to hint at an invalid
+  // MANUALLY-typed address — the backend is still the one that refuses it on submit.
+  const slugPattern = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 
   // The browser's zone as the default for a NEW profile only. An existing one keeps what
   // the mentor chose: their availability is resolved through it, and silently re-reading
@@ -38,6 +44,17 @@
   let form = $state<MentorProfileInput>(profile ? profileInputFromProfile(profile) : blank());
   let saving = $state(false);
   let error = $state('');
+
+  // Live-derives "Your URL" from the name while the mentor hasn't edited the URL
+  // directly — the moment they do, their choice stands even if they keep editing the
+  // name. Create mode only: an existing profile's slug never changes (see
+  // internal/engage/mentorship/profile.go:95-97), so there is nothing to preview.
+  let slugTouched = $state(false);
+  $effect(() => {
+    if (!profile && !slugTouched) {
+      form.slug = previewMentorSlug(form.name);
+    }
+  });
 
   // Whether the caller has connected a calendar.events grant — the same status call
   // /my/integrations makes, not a mentorship-specific endpoint. When true, a booking
@@ -90,7 +107,14 @@
     saving = true;
     error = '';
     try {
-      profile = profile ? await api.updateMentorProfile(form) : await api.createMentorProfile(form);
+      const body = {
+        ...form,
+        // The field shows the live preview so the mentor sees a plausible address, but
+        // that preview is not a submission unless they deliberately touched it — see
+        // resolveMentorSlugForSubmit.
+        slug: resolveMentorSlugForSubmit(form.slug, slugTouched),
+      };
+      profile = profile ? await api.updateMentorProfile(body) : await api.createMentorProfile(body);
     } catch (e) {
       error = errorMessage(e, 'The profile could not be saved.');
     } finally {
@@ -173,23 +197,46 @@
       />
     </label>
 
-    <label class="text-sm">
-      <span class="text-muted-foreground">Company slug</span>
-      <input
-        bind:value={form.company_slug}
-        disabled={Boolean(profile)}
-        class="border-input bg-background mt-1 w-full rounded-md border px-3 py-2 text-sm disabled:opacity-60"
-      />
-    </label>
+    {#if profile}
+      <!-- Neither field changes after creation — see profile.go:95-97 — so an existing
+           profile shows them as facts, not as disabled form controls. -->
+      <div class="text-sm">
+        <span class="text-muted-foreground">Company</span>
+        <!-- company_name is only populated on the JOINED reads (public profile,
+             directory) — the owner's own read carries the row as stored, so this falls
+             back to the slug exactly as ReferralsView.svelte already does. -->
+        <p class="mt-1">{profile.company_name || profile.company_slug}</p>
+      </div>
 
-    <label class="text-sm">
-      <span class="text-muted-foreground">Your URL</span>
-      <input
-        bind:value={form.slug}
-        disabled={Boolean(profile)}
-        class="border-input bg-background mt-1 w-full rounded-md border px-3 py-2 text-sm disabled:opacity-60"
-      />
-    </label>
+      <div class="text-sm">
+        <span class="text-muted-foreground">Your URL</span>
+        <p class="mt-1">/mentors/{profile.slug}</p>
+      </div>
+    {:else}
+      <label class="text-sm">
+        <span class="text-muted-foreground">Your company</span>
+        <CompanyPicker onSelect={(c) => (form.company_slug = c?.slug ?? '')} />
+      </label>
+
+      <label class="text-sm">
+        <span class="text-muted-foreground">Your URL</span>
+        <input
+          bind:value={form.slug}
+          oninput={() => (slugTouched = true)}
+          class="border-input bg-background mt-1 w-full rounded-md border px-3 py-2 text-sm"
+        />
+        {#if form.slug && !slugPattern.test(form.slug)}
+          <p class="text-destructive mt-1 text-xs">
+            Lowercase letters, digits and single hyphens only.
+          </p>
+        {:else}
+          <p class="text-muted-foreground mt-1 text-xs">
+            Lowercase letters, digits and hyphens. Leave it blank to generate one from
+            your name.
+          </p>
+        {/if}
+      </label>
+    {/if}
 
     <label class="text-sm">
       <span class="text-muted-foreground">Headline</span>
