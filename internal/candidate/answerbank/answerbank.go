@@ -21,14 +21,21 @@ import (
 	"errors"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/strelov1/freehire/internal/dict/answertopic"
 )
 
-// MaxAnswerLen bounds one stored answer. Long enough for any screening answer a form
-// actually asks for, short enough that a pasted essay is refused — that is a cover letter,
-// and internal/candidate/coverletter is the path for those. Enforced here rather than only
-// in the form because an API key reaches the write route too.
+// MaxAnswerLen bounds one stored answer, in CHARACTERS — what the design states and what a
+// form's own counter would show. Long enough for any screening answer a form actually asks
+// for, short enough that a pasted essay is refused — that is a cover letter, and
+// internal/candidate/coverletter is the path for those. Enforced here rather than only in
+// the form because an API key reaches the write route too.
+//
+// Counted in runes, not bytes. Every Cyrillic character costs two bytes, so a byte bound
+// refuses a ~660-character Russian answer as an essay while allowing an English one three
+// times its length — and internal/dict/answertopic keys such a question perfectly well, so
+// there is nothing else to stop the candidate reaching this.
 const MaxAnswerLen = 2000
 
 // Provenance is who asserted an answer. Only the candidate's own may be sent to an
@@ -101,7 +108,7 @@ func (s *Store) Save(ctx context.Context, userID int64, question, answer string,
 	if trimmed == "" {
 		return ErrEmptyAnswer
 	}
-	if len(trimmed) > MaxAnswerLen {
+	if utf8.RuneCountInString(trimmed) > MaxAnswerLen {
 		return ErrTooLong
 	}
 	topic, ok := answertopic.Of(question)

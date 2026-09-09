@@ -18,6 +18,11 @@ banked answer serves every phrasing of it.
   the text the review screen titles the input with. This package sees "country" and keys it.
   It refused for a while, and the effect was that the single most frequent parking question
   in the product was the one question the bank could never learn.
+- **The fold is Unicode, not ASCII.** This catalogue aggregates Russian- and
+  Hungarian-language sources, so a question genuinely arrives in one. An ASCII range refuses
+  every such question as "no readable text" — and keeps whatever Latin fragment it carried,
+  so `Зарплата (USD)` folded to `usd` and pulled every other question mentioning that
+  currency onto one topic. The alphabet is the curated-list trap in another shape.
 - **Two different questions must never collapse.** `desired salary` and `current salary`
   are the worked example: merging them answers one with the other, in the candidate's name,
   to an employer. A test asserts they stay apart; keep it when adding dictionary entries.

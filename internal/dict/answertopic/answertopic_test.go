@@ -73,3 +73,56 @@ func TestOf_PoliteWrapperWithApostropheStrips(t *testing.T) {
 		t.Errorf("Of(\"We'd like to know your state of residence\") = %q, want %q — the wrapper should strip even when it contains an apostrophe", withWrapper, withoutWrapper)
 	}
 }
+
+// This catalogue aggregates Russian- and Hungarian-language sources, so a screening question
+// arrives in one of those languages. An ASCII-only fold drops every rune of it, and the
+// question is refused with "this question cannot be saved — it has no readable text", which
+// is not true of a perfectly readable question.
+func TestOf_KeysANonLatinQuestion(t *testing.T) {
+	for _, question := range []string{
+		"Какой у вас желаемый доход?",
+		"Mennyi a fizetési igénye?",
+		"Wie hoch ist Ihre Gehaltsvorstellung?",
+	} {
+		got, ok := Of(question)
+		if !ok {
+			t.Errorf("Of(%q) refused a readable question", question)
+			continue
+		}
+		if got == "" {
+			t.Errorf("Of(%q) = %q — an empty key can never be recalled", question, got)
+		}
+	}
+}
+
+// The severe case, not merely the refused one. With an ASCII-only fold "Зарплата (USD)"
+// keeps only the parenthesised currency and folds to "usd" — so every other question
+// mentioning USD collapses onto that one topic, and the candidate's salary figure is sent
+// as the answer to something else entirely. This is what
+// TestOf_DifferentQuestionsKeepDifferentTopics exists to prevent, in the language the
+// dictionary happens not to be written in.
+func TestOf_NonLatinQuestionsDoNotCollapseOntoTheirLatinFragments(t *testing.T) {
+	salary, ok := Of("Зарплата (USD)")
+	if !ok {
+		t.Fatal("Of refused a readable question")
+	}
+	budget, ok := Of("Бюджет проекта (USD)")
+	if !ok {
+		t.Fatal("Of refused a readable question")
+	}
+	if salary == budget {
+		t.Errorf("two different questions both key to %q — answering one with the other misreports the candidate", salary)
+	}
+	if salary == "usd" || budget == "usd" {
+		t.Errorf("a question folded to its currency alone: %q / %q", salary, budget)
+	}
+}
+
+// Stable for a non-Latin question too: the same question in two casings keys alike.
+func TestOf_IsStableForANonLatinQuestion(t *testing.T) {
+	first, _ := Of("Какой у вас желаемый доход?")
+	again, _ := Of("  КАКОЙ У ВАС ЖЕЛАЕМЫЙ ДОХОД  ")
+	if first != again || first == "" {
+		t.Errorf("Of is not stable for a non-Latin question: %q vs %q", first, again)
+	}
+}

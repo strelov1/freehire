@@ -160,3 +160,39 @@ func TestDelete_AForeignAnswerIsNotFound(t *testing.T) {
 		t.Errorf("Delete(own answer) = %v, want nil", err)
 	}
 }
+
+// The bound is on CHARACTERS, as the design says and as the form's own counter would show.
+// Counting bytes refuses a ~660-character Cyrillic answer as though it were a pasted essay
+// — every rune costs two bytes — and that becomes reachable the moment the fold accepts
+// non-ASCII text at all.
+func TestSave_BoundsTheAnswerInRunesNotBytes(t *testing.T) {
+	s := NewStore(newFakeRepo())
+	ctx := context.Background()
+
+	atTheLimit := strings.Repeat("я", MaxAnswerLen)
+	if err := s.Save(ctx, 1, "Расскажите о себе", atTheLimit, AuthorCandidate); err != nil {
+		t.Fatalf("Save refused an answer of exactly %d characters: %v", MaxAnswerLen, err)
+	}
+
+	overTheLimit := strings.Repeat("я", MaxAnswerLen+1)
+	if err := s.Save(ctx, 1, "Расскажите о себе", overTheLimit, AuthorCandidate); !errors.Is(err, ErrTooLong) {
+		t.Fatalf("Save(%d characters) = %v, want ErrTooLong", MaxAnswerLen+1, err)
+	}
+}
+
+// A question in a language the dictionary is not written in still banks and still recalls.
+func TestSave_KeysANonLatinQuestion(t *testing.T) {
+	s := NewStore(newFakeRepo())
+	ctx := context.Background()
+
+	if err := s.Save(ctx, 1, "Какой у вас желаемый доход?", "5000 USD в год", AuthorCandidate); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	sendable, err := s.Sendable(ctx, 1)
+	if err != nil {
+		t.Fatalf("Sendable: %v", err)
+	}
+	if len(sendable) != 1 {
+		t.Fatalf("Sendable = %v, want the banked answer to a readable question", sendable)
+	}
+}

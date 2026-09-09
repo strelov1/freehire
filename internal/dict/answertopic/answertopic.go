@@ -17,7 +17,10 @@
 // folded question is deliberately out of scope.
 package answertopic
 
-import "strings"
+import (
+	"strings"
+	"unicode"
+)
 
 // dictionary maps a topic to the keyword sets that name it. ALL keywords in a set must
 // appear for that set to fire; any one set firing is enough.
@@ -65,6 +68,14 @@ var politeWrappers = []string{
 // A question that folds to nothing — an empty label, or one that is pure punctuation, both
 // of which real forms produce — is refused. A key derived from nothing cannot be recalled,
 // so storing one would silently mark a question answered forever.
+//
+// "Readable text" is Unicode's answer, not ASCII's: this catalogue aggregates Russian- and
+// Hungarian-language sources, so a screening question genuinely arrives in one of those.
+// An ASCII-only fold refused every one of them as unreadable — and, worse, kept whatever
+// Latin fragment they happened to contain, so "Зарплата (USD)" folded to "usd" and pulled
+// every other question mentioning that currency onto one topic. That is the collapse
+// TestOf_DifferentQuestionsKeepDifferentTopics exists to prevent, arriving through the
+// alphabet rather than through the dictionary.
 func Of(question string) (string, bool) {
 	folded := fold(question)
 	if folded == "" {
@@ -89,7 +100,7 @@ func fold(question string) string {
 	b.Grow(len(lower))
 	for _, r := range lower {
 		switch {
-		case r >= 'a' && r <= 'z', r >= '0' && r <= '9':
+		case unicode.IsLetter(r), unicode.IsDigit(r):
 			b.WriteRune(r)
 		default:
 			// Every non-alphanumeric rune, not a fixed punctuation list: a question can
