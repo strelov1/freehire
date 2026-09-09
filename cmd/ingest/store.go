@@ -56,17 +56,18 @@ type seenPolicy struct {
 }
 
 // dbStore is the only non-test implementation of pipeline.Store, and it is expected to carry
-// all three optional capabilities — the pipeline discovers them by type assertion and
+// every optional capability below — the pipeline discovers them by type assertion and
 // silently degrades on a miss, which is right for a test fake and wrong for this one. A
 // dropped Touch stops refreshing a re-listed posting's last_seen_at, and the 48h unseen sweep
 // then closes live jobs. These state that expectation to the compiler, the way board_health.go
 // already does for the one port that was exported.
 var (
-	_ pipeline.Store      = (*dbStore)(nil)
-	_ pipeline.FormSaver  = (*dbStore)(nil)
-	_ pipeline.Closer     = (*dbStore)(nil)
-	_ pipeline.Toucher    = (*dbStore)(nil)
-	_ pipeline.SeenLookup = (*dbStore)(nil)
+	_ pipeline.Store                    = (*dbStore)(nil)
+	_ pipeline.FormSaver                = (*dbStore)(nil)
+	_ pipeline.Closer                   = (*dbStore)(nil)
+	_ pipeline.Toucher                  = (*dbStore)(nil)
+	_ pipeline.SeenLookup               = (*dbStore)(nil)
+	_ pipeline.CompanyDescriptionFiller = (*dbStore)(nil)
 )
 
 func newDBStore(pool *pgxpool.Pool, targetVersion int, crawled *crawledSet, tally *writeTally, seen seenPolicy) *dbStore {
@@ -455,6 +456,28 @@ func (s *dbStore) Touch(ctx context.Context, source, externalID string) error {
 	// worse than a gap — a hydrating provider re-lists through here and only NEW offers reach
 	// save(), so the run would report 0% and read as the very churn the line exists to expose.
 	s.tally.record(source, true)
+	return nil
+}
+
+// FillCompanyDescription implements pipeline.CompanyDescriptionFiller: apply a
+// company-level description an adapter yielded (see sources.CompanyDescriber) to the
+// company's tagline/company_info gap. Stored under company_info.summary rather than
+// the short tagline field — this text is raw employer-authored prose, not the
+// terse, curated-style values tagline is reserved for (the YC directory's one_liner,
+// the Wikipedia backfill's Wikidata description).
+func (s *dbStore) FillCompanyDescription(ctx context.Context, slug, name, description string) error {
+	info, err := json.Marshal(map[string]string{"summary": description})
+	if err != nil {
+		return fmt.Errorf("fill company description %s: encode company_info: %w", slug, err)
+	}
+	if err := s.q.FillCompanyDescriptionFromIngest(ctx, db.FillCompanyDescriptionFromIngestParams{
+		Slug:        slug,
+		Name:        name,
+		Tagline:     pgtype.Text{},
+		CompanyInfo: info,
+	}); err != nil {
+		return fmt.Errorf("fill company description %s: %w", slug, err)
+	}
 	return nil
 }
 

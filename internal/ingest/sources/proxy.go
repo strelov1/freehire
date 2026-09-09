@@ -156,6 +156,40 @@ func ApplyProxyEgress(registry map[string]Source) error {
 	return nil
 }
 
+// ClientFor returns the client the named provider's crawl would use under the configured
+// proxy policy: wholly proxied where the platform blocks the direct datacenter IP,
+// refusal-retried where it merely rate-limits it, and direct otherwise. It reads the same
+// two allowlists ApplyProxyEgress does, so a provider's policy is stated once.
+//
+// It exists because ApplyProxyEgress can only rewire a provider's ADAPTER, and not every
+// caller reaches a platform through one. cmd/harvest-boards probes a candidate board with
+// a client it builds itself, so it was crawling workable on exactly the direct IP the
+// workable entry in refusalRetryProviders exists to keep it off — measured on prod
+// 2026-09-08, where every board probed from the prod IP returned 429 while the same boards
+// through the proxy returned 200.
+//
+// Like ApplyProxyEgress it is a no-op with SOURCES_PROXY_URL unset, and fails rather than
+// quietly falling back when the variable is set but unparseable — a caller that asked for
+// the proxied policy must not be handed the blocked path instead.
+func ClientFor(provider string) (*Client, error) {
+	raw := strings.TrimSpace(os.Getenv("SOURCES_PROXY_URL"))
+	if raw == "" {
+		return NewClient(), nil
+	}
+	u, err := url.Parse(raw)
+	if err != nil || u.Host == "" {
+		return nil, fmt.Errorf("sources: invalid SOURCES_PROXY_URL %q", redactProxy(raw))
+	}
+	switch {
+	case proxiedProviders[provider] != nil:
+		return NewProxyClient(u), nil
+	case refusalRetryProviders[provider] != nil:
+		return NewRefusalRetryClient(u), nil
+	default:
+		return NewClient(), nil
+	}
+}
+
 // proxiedFingerprintProviders are the fingerprint-client providers whose edge blocks the
 // direct datacenter IP even with a correct Chrome TLS fingerprint, but serves that same
 // fingerprint through the residential proxy — so they need both, unlike proxiedProviders

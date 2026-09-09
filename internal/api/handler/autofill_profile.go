@@ -26,9 +26,9 @@ type autofillHandlers struct {
 	llm llmBinding
 }
 
-func newAutofillHandlers(cvs candidateprofile.CVReader, resumes candidateprofile.ResumeReader, accounts candidateprofile.AccountReader, screeningAnswers candidateprofile.ScreeningAnswersReader, tools *browsertools.Hub, llm llmBinding) *autofillHandlers {
+func newAutofillHandlers(cvs candidateprofile.CVReader, resumes candidateprofile.ResumeReader, accounts candidateprofile.AccountReader, screeningAnswers candidateprofile.ScreeningAnswersReader, bank candidateprofile.BankReader, tools *browsertools.Hub, llm llmBinding) *autofillHandlers {
 	return &autofillHandlers{
-		profiles:     candidateprofile.NewAssembler(cvs, resumes, accounts, screeningAnswers),
+		profiles:     candidateprofile.NewAssembler(cvs, resumes, accounts, screeningAnswers, bank),
 		browserTools: tools,
 		llm:          llm,
 	}

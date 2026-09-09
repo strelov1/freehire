@@ -23,6 +23,7 @@ import (
 	"github.com/strelov1/freehire/internal/application/gmailsync"
 	"github.com/strelov1/freehire/internal/application/jobtracking"
 	"github.com/strelov1/freehire/internal/application/mailrecall"
+	"github.com/strelov1/freehire/internal/candidate/answerbank"
 	"github.com/strelov1/freehire/internal/candidate/atscheck"
 	"github.com/strelov1/freehire/internal/candidate/coverletter"
 	"github.com/strelov1/freehire/internal/candidate/cv"
@@ -450,6 +451,15 @@ func Register(app *fiber.App, cfg Config) {
 	// different lifecycle; see internal/ingest/screeninganswers/AGENTS.md).
 	screeningAnswersSvc := screeninganswers.New(screeninganswers.NewQueriesRepository(queries))
 	screeningAnswersH := newScreeningAnswersHandlers(screeningAnswersSvc)
+	// The candidate's accumulating bank of screening-question answers (internal/candidate/
+	// answerbank) — a third, distinct store from screeningAnswersSvc's six typed facts: this
+	// one takes the open-ended remainder, keyed by the question's own topic rather than a
+	// fixed field. Fed into the autofill assembler below so a banked answer can fill a form
+	// field the deterministic rules never anticipated.
+	answerBank := answerbank.NewStore(answerbank.NewQueriesRepository(queries))
+	// The bank's own list/save/delete routes over the same store, so what autofill reads
+	// and what the review screen edits are never two copies.
+	answerBankH := &answerBankHandlers{bank: answerBank}
 	// The onboarding survey: the candidate's own segmentation answers, and the marker
 	// saying they have been through the wizard. A third singleton beside the two above,
 	// and deliberately so — these answers describe the candidate to us alone, where
@@ -653,7 +663,7 @@ func Register(app *fiber.App, cfg Config) {
 	// The autofill planner is one cheap structured call per run, so it travels on the
 	// shared client's default timeout. The contact block it plans over comes from the base
 	// CV, then the structured résumé — see autofillHandlers.autofillProfile.
-	autofillH := newAutofillHandlers(cvStore, resumeStore, queries, screeningAnswersSvc, a.browserTools, llmBinding{client: cfg.LLM, keys: llmKeys})
+	autofillH := newAutofillHandlers(cvStore, resumeStore, queries, screeningAnswersSvc, answerBank, a.browserTools, llmBinding{client: cfg.LLM, keys: llmKeys})
 	usageH := newUsageHandlers(cfg.LLMKeys, llmKeys)
 	accountDeletion.WithGatewayKeys(llmKeys.Revoke)
 
@@ -717,9 +727,19 @@ func Register(app *fiber.App, cfg Config) {
 		mentorshipNotifier = mentorship.NewMailNotifier(mailClient, cfg.NotifyEmailFrom,
 			strings.TrimRight(cfg.FrontendOrigin, "/")+"/my/sessions")
 	}
+	// A connected mentor's calendar.events grant, mirroring the read-side gate above: the
+	// candidate calendar sync's own GmailConnector/GmailCipher pair, reused rather than a
+	// second copy of either. Nil when either is unset, so a deployment with no Google
+	// client configured just gets every booking's static-link fallback — this feature's
+	// entire rollback path.
+	mentorshipRepo := mentorship.NewQueriesRepository(queries, cfg.Pool)
+	var mentorshipCalendar mentorship.CalendarLinker
+	if cfg.GmailConnector != nil && cfg.GmailCipher != nil {
+		mentorshipCalendar = mentorship.NewGoogleCalendarLinker(mentorshipRepo, cfg.GmailConnector, cfg.GmailCipher)
+	}
 	mentorshipH := newMentorshipHandlers(mentorship.New(
-		mentorship.NewQueriesRepository(queries, cfg.Pool),
-		mentorship.Config{Notifier: mentorshipNotifier, Cache: cfg.Cache},
+		mentorshipRepo,
+		mentorship.Config{Notifier: mentorshipNotifier, Cache: cfg.Cache, CalendarLinker: mentorshipCalendar},
 	), photoStore)
 	// The mentor-profile create form's prefill. Composed from four unrelated blocks'
 	// own services (résumé, user profile, account, experience bank) plus the company
@@ -843,6 +863,8 @@ func Register(app *fiber.App, cfg Config) {
 	// The contact block the extension writes into forms, plain and agent-driven (see
 	// autofillHandlers).
 	autofillH.register(api, mw)
+	// The bank's own management surface: list, save, delete (see me_answer_bank.go).
+	answerBankH.register(api, mw)
 	// The browser-tool wire: a harness on one end, the caller's browser extension
 	// on the other, exchanging raw tool frames. Both ends authenticate with the
 	// session JWT (Bearer for a server-side harness, the subprotocol for the

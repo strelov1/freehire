@@ -45,6 +45,13 @@ func (h *assistantHandlers) getProfileTool() assistant.Tool {
 			"themselves; read those with experience_search when you need them. Takes no arguments.",
 		Schema: map[string]any{"type": "object", "properties": map[string]any{}},
 		Run: func(ctx context.Context, userID int64, _ json.RawMessage) (any, error) {
+			// Registered for every session, so it is registered on every assembly — and the
+			// assistant's constructor takes each surface as a pointer that may be nil (it
+			// guards cvH itself). Without this the absence is a nil dereference inside the
+			// SSE stream's goroutine, which the candidate reads as a turn that died.
+			if h.profile == nil || h.profile.userProfile == nil {
+				return nil, errors.New("the saved profile is not available")
+			}
 			profile, err := h.profile.userProfile.Get(ctx, userID)
 			if errors.Is(err, userprofile.ErrNotFound) {
 				return noProfileResult{

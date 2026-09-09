@@ -188,6 +188,7 @@ type AutoApplyQueue struct {
 	ResolvedPreview []byte             `json:"resolved_preview"`
 	PreviewAttempts int32              `json:"preview_attempts"`
 	PreviewFailedAt pgtype.Timestamptz `json:"preview_failed_at"`
+	TailorFailedAt  pgtype.Timestamptz `json:"tailor_failed_at"`
 }
 
 type BillingEvent struct {
@@ -269,38 +270,39 @@ type CommunityPersona struct {
 }
 
 type Company struct {
-	Slug              string             `json:"slug"`
-	Name              string             `json:"name"`
-	CreatedAt         pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
-	Collections       []string           `json:"collections"`
-	JobCount          int32              `json:"job_count"`
-	Regions           []string           `json:"regions"`
-	Countries         []string           `json:"countries"`
-	Domains           []string           `json:"domains"`
-	CompanyTypes      []string           `json:"company_types"`
-	CompanySizes      []string           `json:"company_sizes"`
-	Industries        []string           `json:"industries"`
-	YearFounded       pgtype.Int4        `json:"year_founded"`
-	EmployeeCount     pgtype.Int4        `json:"employee_count"`
-	HqCountry         pgtype.Text        `json:"hq_country"`
-	OrganizationType  pgtype.Text        `json:"organization_type"`
-	Tagline           pgtype.Text        `json:"tagline"`
-	CompanyInfo       json.RawMessage    `json:"company_info"`
-	IsReference       bool               `json:"is_reference"`
-	CompanyInfoAt     pgtype.Timestamptz `json:"company_info_at"`
-	RemoteRegions     []string           `json:"remote_regions"`
-	YcBatch           []string           `json:"yc_batch"`
-	YcStatus          []string           `json:"yc_status"`
-	YcStage           []string           `json:"yc_stage"`
-	YcFlags           []string           `json:"yc_flags"`
-	Maturity          pgtype.Text        `json:"maturity"`
-	Subindustry       pgtype.Text        `json:"subindustry"`
-	UpvoteCount       int32              `json:"upvote_count"`
-	DownvoteCount     int32              `json:"downvote_count"`
-	FeedbackCount     int32              `json:"feedback_count"`
-	FeedbackRatingAvg pgtype.Float4      `json:"feedback_rating_avg"`
-	IndustriesDerived []string           `json:"industries_derived"`
+	Slug                          string             `json:"slug"`
+	Name                          string             `json:"name"`
+	CreatedAt                     pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt                     pgtype.Timestamptz `json:"updated_at"`
+	Collections                   []string           `json:"collections"`
+	JobCount                      int32              `json:"job_count"`
+	Regions                       []string           `json:"regions"`
+	Countries                     []string           `json:"countries"`
+	Domains                       []string           `json:"domains"`
+	CompanyTypes                  []string           `json:"company_types"`
+	CompanySizes                  []string           `json:"company_sizes"`
+	Industries                    []string           `json:"industries"`
+	YearFounded                   pgtype.Int4        `json:"year_founded"`
+	EmployeeCount                 pgtype.Int4        `json:"employee_count"`
+	HqCountry                     pgtype.Text        `json:"hq_country"`
+	OrganizationType              pgtype.Text        `json:"organization_type"`
+	Tagline                       pgtype.Text        `json:"tagline"`
+	CompanyInfo                   json.RawMessage    `json:"company_info"`
+	IsReference                   bool               `json:"is_reference"`
+	CompanyInfoAt                 pgtype.Timestamptz `json:"company_info_at"`
+	RemoteRegions                 []string           `json:"remote_regions"`
+	YcBatch                       []string           `json:"yc_batch"`
+	YcStatus                      []string           `json:"yc_status"`
+	YcStage                       []string           `json:"yc_stage"`
+	YcFlags                       []string           `json:"yc_flags"`
+	Maturity                      pgtype.Text        `json:"maturity"`
+	Subindustry                   pgtype.Text        `json:"subindustry"`
+	UpvoteCount                   int32              `json:"upvote_count"`
+	DownvoteCount                 int32              `json:"downvote_count"`
+	FeedbackCount                 int32              `json:"feedback_count"`
+	FeedbackRatingAvg             pgtype.Float4      `json:"feedback_rating_avg"`
+	IndustriesDerived             []string           `json:"industries_derived"`
+	CompanyInfoWikipediaCheckedAt pgtype.Timestamptz `json:"company_info_wikipedia_checked_at"`
 }
 
 type CompanyFeedback struct {
@@ -902,6 +904,7 @@ type MentorBooking struct {
 	CancelledBy    pgtype.Int8        `json:"cancelled_by"`
 	CancelReason   string             `json:"cancel_reason"`
 	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	GoogleEventID  string             `json:"google_event_id"`
 }
 
 // One row per reminder actually sent. The composite key is the idempotency guard: re-running the reminder worker inserts a duplicate key and sends nothing.
@@ -1099,6 +1102,17 @@ type ScreeningAnswer struct {
 	WillingToRelocate     pgtype.Bool        `json:"willing_to_relocate"`
 	Age18OrOlder          pgtype.Bool        `json:"age_18_or_older"`
 	UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
+}
+
+type ScreeningAnswerBank struct {
+	ID         int64              `json:"id"`
+	UserID     int64              `json:"user_id"`
+	Topic      string             `json:"topic"`
+	Question   string             `json:"question"`
+	Answer     string             `json:"answer"`
+	Provenance string             `json:"provenance"`
+	CreatedAt  pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt  pgtype.Timestamptz `json:"updated_at"`
 }
 
 type SearchDeleteOutbox struct {

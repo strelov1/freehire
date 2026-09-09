@@ -222,6 +222,18 @@ type CoverageGated interface {
 		covered func(companies []string) map[string]bool) ([]Job, error)
 }
 
+// CompanyDescriber is a Source that can also fetch its board's own company-level
+// description — an "about us" field the platform exposes separately from posting
+// bodies (e.g. Greenhouse's board-metadata endpoint) — once per board rather than
+// once per posting. The pipeline calls it after a board's Fetch, and treats a
+// ("", nil) return, an error, or the interface simply not being implemented the
+// same way: no description, no company-info write for that crawl. Optional because
+// most platforms expose no such field at all.
+type CompanyDescriber interface {
+	Source
+	CompanyDescription(ctx context.Context, e CompanyEntry) (string, error)
+}
+
 // boardless marks an adapter whose API has no per-tenant board id, so config
 // validation lets its entries omit board. A boardless adapter may serve one company
 // (greenhouse/lever and the other multi-tenant ATS adapters are NOT boardless and

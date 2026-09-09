@@ -1,0 +1,21 @@
+---
+title: New API reference, with a live try-it console
+date: 2026-09-08
+summary: /docs/api got a full redesign — searchable, grouped by feature, and every endpoint has a Try it panel that calls the real API.
+type: changelog
+tags:
+  - api
+  - developer-experience
+draft: false
+---
+
+The API reference at [/docs/api](/docs/api) has a new look. It's searchable,
+grouped by feature area in a proper sidebar, and every endpoint has a **Try
+it** panel — fill in the parameters and see a real response, no separate
+tool needed.
+
+Old bookmarks to a specific endpoint's own page still work; they land you on
+the main reference now instead of 404ing.
+
+Nothing about the API itself changed — same endpoints, same behavior, just a
+better way to read about them.

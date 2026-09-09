@@ -20,7 +20,7 @@ SET status = 'cancelled', cancelled_at = now(),
 FROM users u
 WHERE u.id = b.seeker_user_id
   AND b.mentor_id = $3 AND b.status = 'confirmed' AND b.starts_at > now()
-RETURNING b.id, b.mentor_id, b.seeker_user_id, b.starts_at, b.ends_at, b.status, b.job_id, b.note, b.seeker_timezone, b.meeting_url, b.cancelled_at, b.cancelled_by, b.cancel_reason, b.created_at, u.email AS seeker_email
+RETURNING b.id, b.mentor_id, b.seeker_user_id, b.starts_at, b.ends_at, b.status, b.job_id, b.note, b.seeker_timezone, b.meeting_url, b.cancelled_at, b.cancelled_by, b.cancel_reason, b.created_at, b.google_event_id, u.email AS seeker_email
 `
 
 type CancelFutureBookingsForMentorParams struct {
@@ -62,6 +62,7 @@ func (q *Queries) CancelFutureBookingsForMentor(ctx context.Context, arg CancelF
 			&i.MentorBooking.CancelledBy,
 			&i.MentorBooking.CancelReason,
 			&i.MentorBooking.CreatedAt,
+			&i.MentorBooking.GoogleEventID,
 			&i.SeekerEmail,
 		); err != nil {
 			return nil, err
@@ -86,7 +87,7 @@ WHERE b.mentor_id = m.id
   AND b.status = 'confirmed'
   AND b.starts_at > now()
   AND $1::bigint IN (b.seeker_user_id, m.user_id)
-RETURNING b.id, b.mentor_id, b.seeker_user_id, b.starts_at, b.ends_at, b.status, b.job_id, b.note, b.seeker_timezone, b.meeting_url, b.cancelled_at, b.cancelled_by, b.cancel_reason, b.created_at
+RETURNING b.id, b.mentor_id, b.seeker_user_id, b.starts_at, b.ends_at, b.status, b.job_id, b.note, b.seeker_timezone, b.meeting_url, b.cancelled_at, b.cancelled_by, b.cancel_reason, b.created_at, b.google_event_id
 `
 
 type CancelMentorBookingParams struct {
@@ -119,6 +120,7 @@ func (q *Queries) CancelMentorBooking(ctx context.Context, arg CancelMentorBooki
 		&i.CancelledBy,
 		&i.CancelReason,
 		&i.CreatedAt,
+		&i.GoogleEventID,
 	)
 	return i, err
 }
@@ -165,7 +167,7 @@ const createMentorBooking = `-- name: CreateMentorBooking :one
 INSERT INTO mentor_bookings (
     mentor_id, seeker_user_id, starts_at, ends_at, job_id, note, seeker_timezone, meeting_url
 ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-RETURNING id, mentor_id, seeker_user_id, starts_at, ends_at, status, job_id, note, seeker_timezone, meeting_url, cancelled_at, cancelled_by, cancel_reason, created_at
+RETURNING id, mentor_id, seeker_user_id, starts_at, ends_at, status, job_id, note, seeker_timezone, meeting_url, cancelled_at, cancelled_by, cancel_reason, created_at, google_event_id
 `
 
 type CreateMentorBookingParams struct {
@@ -216,6 +218,7 @@ func (q *Queries) CreateMentorBooking(ctx context.Context, arg CreateMentorBooki
 		&i.CancelledBy,
 		&i.CancelReason,
 		&i.CreatedAt,
+		&i.GoogleEventID,
 	)
 	return i, err
 }
@@ -404,7 +407,7 @@ func (q *Queries) DeleteReminderClaim(ctx context.Context, arg DeleteReminderCla
 }
 
 const getMentorBooking = `-- name: GetMentorBooking :one
-SELECT b.id, b.mentor_id, b.seeker_user_id, b.starts_at, b.ends_at, b.status, b.job_id, b.note, b.seeker_timezone, b.meeting_url, b.cancelled_at, b.cancelled_by, b.cancel_reason, b.created_at, m.slug AS mentor_slug, m.user_id AS mentor_user_id,
+SELECT b.id, b.mentor_id, b.seeker_user_id, b.starts_at, b.ends_at, b.status, b.job_id, b.note, b.seeker_timezone, b.meeting_url, b.cancelled_at, b.cancelled_by, b.cancel_reason, b.created_at, b.google_event_id, m.slug AS mentor_slug, m.user_id AS mentor_user_id,
        m.timezone AS mentor_timezone, m.company_slug, m.headline,
        mu.email AS mentor_email, su.email AS seeker_email
 FROM mentor_bookings b
@@ -446,6 +449,7 @@ func (q *Queries) GetMentorBooking(ctx context.Context, id pgtype.UUID) (GetMent
 		&i.MentorBooking.CancelledBy,
 		&i.MentorBooking.CancelReason,
 		&i.MentorBooking.CreatedAt,
+		&i.MentorBooking.GoogleEventID,
 		&i.MentorSlug,
 		&i.MentorUserID,
 		&i.MentorTimezone,
@@ -635,7 +639,7 @@ func (q *Queries) GetPublishedMentorBySlug(ctx context.Context, slug string) (Ge
 }
 
 const listBookingsByMentor = `-- name: ListBookingsByMentor :many
-SELECT b.id, b.mentor_id, b.seeker_user_id, b.starts_at, b.ends_at, b.status, b.job_id, b.note, b.seeker_timezone, b.meeting_url, b.cancelled_at, b.cancelled_by, b.cancel_reason, b.created_at, u.email AS seeker_email
+SELECT b.id, b.mentor_id, b.seeker_user_id, b.starts_at, b.ends_at, b.status, b.job_id, b.note, b.seeker_timezone, b.meeting_url, b.cancelled_at, b.cancelled_by, b.cancel_reason, b.created_at, b.google_event_id, u.email AS seeker_email
 FROM mentor_bookings b
 JOIN users u ON u.id = b.seeker_user_id
 WHERE b.mentor_id = $1
@@ -679,6 +683,7 @@ func (q *Queries) ListBookingsByMentor(ctx context.Context, arg ListBookingsByMe
 			&i.MentorBooking.CancelledBy,
 			&i.MentorBooking.CancelReason,
 			&i.MentorBooking.CreatedAt,
+			&i.MentorBooking.GoogleEventID,
 			&i.SeekerEmail,
 		); err != nil {
 			return nil, err
@@ -692,7 +697,7 @@ func (q *Queries) ListBookingsByMentor(ctx context.Context, arg ListBookingsByMe
 }
 
 const listBookingsBySeeker = `-- name: ListBookingsBySeeker :many
-SELECT b.id, b.mentor_id, b.seeker_user_id, b.starts_at, b.ends_at, b.status, b.job_id, b.note, b.seeker_timezone, b.meeting_url, b.cancelled_at, b.cancelled_by, b.cancel_reason, b.created_at, m.slug AS mentor_slug, m.headline, m.company_slug,
+SELECT b.id, b.mentor_id, b.seeker_user_id, b.starts_at, b.ends_at, b.status, b.job_id, b.note, b.seeker_timezone, b.meeting_url, b.cancelled_at, b.cancelled_by, b.cancel_reason, b.created_at, b.google_event_id, m.slug AS mentor_slug, m.headline, m.company_slug,
        c.name AS company_name
 FROM mentor_bookings b
 JOIN mentors m ON m.id = b.mentor_id
@@ -741,6 +746,7 @@ func (q *Queries) ListBookingsBySeeker(ctx context.Context, arg ListBookingsBySe
 			&i.MentorBooking.CancelledBy,
 			&i.MentorBooking.CancelReason,
 			&i.MentorBooking.CreatedAt,
+			&i.MentorBooking.GoogleEventID,
 			&i.MentorSlug,
 			&i.Headline,
 			&i.CompanySlug,
@@ -757,7 +763,7 @@ func (q *Queries) ListBookingsBySeeker(ctx context.Context, arg ListBookingsBySe
 }
 
 const listBookingsDueForReminder = `-- name: ListBookingsDueForReminder :many
-SELECT b.id, b.mentor_id, b.seeker_user_id, b.starts_at, b.ends_at, b.status, b.job_id, b.note, b.seeker_timezone, b.meeting_url, b.cancelled_at, b.cancelled_by, b.cancel_reason, b.created_at, m.timezone AS mentor_timezone, m.user_id AS mentor_user_id,
+SELECT b.id, b.mentor_id, b.seeker_user_id, b.starts_at, b.ends_at, b.status, b.job_id, b.note, b.seeker_timezone, b.meeting_url, b.cancelled_at, b.cancelled_by, b.cancel_reason, b.created_at, b.google_event_id, m.timezone AS mentor_timezone, m.user_id AS mentor_user_id,
        m.slug AS mentor_slug, m.headline, m.meeting_url AS mentor_meeting_url,
        u.email AS seeker_email, mu.email AS mentor_email
 FROM mentor_bookings b
@@ -828,6 +834,7 @@ func (q *Queries) ListBookingsDueForReminder(ctx context.Context, arg ListBookin
 			&i.MentorBooking.CancelledBy,
 			&i.MentorBooking.CancelReason,
 			&i.MentorBooking.CreatedAt,
+			&i.MentorBooking.GoogleEventID,
 			&i.MentorTimezone,
 			&i.MentorUserID,
 			&i.MentorSlug,
@@ -1150,6 +1157,25 @@ func (q *Queries) RecordReminderSent(ctx context.Context, arg RecordReminderSent
 		return 0, err
 	}
 	return result.RowsAffected(), nil
+}
+
+const setMentorBookingCalendarEvent = `-- name: SetMentorBookingCalendarEvent :exec
+UPDATE mentor_bookings SET meeting_url = $2, google_event_id = $3 WHERE id = $1
+`
+
+type SetMentorBookingCalendarEventParams struct {
+	ID            pgtype.UUID `json:"id"`
+	MeetingUrl    string      `json:"meeting_url"`
+	GoogleEventID string      `json:"google_event_id"`
+}
+
+// Best-effort patch after CreateMentorBooking: the calendar event is created AFTER the
+// booking row wins the EXCLUDE-constraint race, never before, so a lost race can never
+// leave an orphaned Google event. No WHERE beyond the id — this always follows a
+// successful CreateMentorBooking for the same row, in the same request.
+func (q *Queries) SetMentorBookingCalendarEvent(ctx context.Context, arg SetMentorBookingCalendarEventParams) error {
+	_, err := q.db.Exec(ctx, setMentorBookingCalendarEvent, arg.ID, arg.MeetingUrl, arg.GoogleEventID)
+	return err
 }
 
 const setMentorPaused = `-- name: SetMentorPaused :one

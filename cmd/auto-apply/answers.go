@@ -23,5 +23,7 @@ func (a assemblerAnswerSource) Answers(ctx context.Context, userID int64) (map[s
 	if err != nil {
 		return nil, err
 	}
-	return profile.Fields(), nil
+	// FieldsWithBankedAnswers, not Fields: resolving an application form is the one path
+	// the banked answers belong on. See candidateprofile.Fields for what they are kept off.
+	return profile.FieldsWithBankedAnswers(), nil
 }

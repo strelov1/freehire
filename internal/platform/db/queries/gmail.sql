@@ -12,6 +12,15 @@ SELECT refresh_token_enc, status, sync_cursor
 FROM gmail_connections
 WHERE user_id = $1;
 
+-- name: GetGoogleGrantForWrite :one
+-- What a write caller (mentor-google-meet-link's CreateMeetEvent) needs in one round
+-- trip: the encrypted refresh token to reach the API, and the scopes to decide the
+-- grant actually covers what this caller wants to do with it. `status` is read too so a
+-- row already marked needs_reconsent can be treated as unusable without a second query.
+SELECT refresh_token_enc, scopes, status
+FROM gmail_connections
+WHERE user_id = $1;
+
 -- name: UpsertGmailConnection :exec
 -- Connect (or reconnect) a user's Gmail: store the encrypted refresh token and
 -- mark connected, preserving the sync cursor on reconnect.

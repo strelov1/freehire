@@ -1,14 +1,19 @@
-// Maps auto-apply's six-value status (jobtracking/AssembleReviewInfo, openspec/changes/
+// Maps auto-apply's seven-value status (jobtracking/AssembleReviewInfo, openspec/changes/
 // auto-apply-review-tracking) to the tracker's two rendering decisions — kept out of
 // BoardCard.svelte/JobDrawer.svelte so both unit-test without mounting Svelte, mirroring
 // autoApplyButton.ts's own convention.
 
 /** Whether the board card shows its "needs your review" badge — an entry the candidate
- *  must act on (pending_review) or one that stopped and needs their attention (blocked).
- *  `tailoring`, `approved` and terminal `declined`/`failed` entries show no badge: there is
- *  nothing new for the candidate to notice on the card itself. */
+ *  must act on (pending_review) or one that stopped and needs their attention (blocked,
+ *  tailor_failed). `tailoring`, `approved` and terminal `declined`/`failed` entries show no
+ *  badge: there is nothing new for the candidate to notice on the card itself.
+ *
+ *  `tailor_failed` earns one for the same reason `blocked` does — the attempt stopped and
+ *  nothing else on the card says so. It is the state that used to be indistinguishable from
+ *  `tailoring`, which is how three production entries sat for a day looking like work in
+ *  progress. */
 export function autoApplyNeedsReviewBadge(status?: string | null): boolean {
-  return status === 'pending_review' || status === 'blocked';
+  return status === 'pending_review' || status === 'blocked' || status === 'tailor_failed';
 }
 
 export type AutoApplyReviewBanner =
@@ -18,6 +23,7 @@ export type AutoApplyReviewBanner =
   | { kind: 'blocked' }
   | { kind: 'declined' }
   | { kind: 'failed' }
+  | { kind: 'tailor_failed' }
   | null;
 
 /** Decides which drawer banner variant to render, or null when there is no live attempt at
@@ -40,6 +46,8 @@ export function autoApplyReviewBanner(status?: string | null): AutoApplyReviewBa
       return { kind: 'declined' };
     case 'failed':
       return { kind: 'failed' };
+    case 'tailor_failed':
+      return { kind: 'tailor_failed' };
     default:
       return null;
   }

@@ -3,6 +3,8 @@ package atsapply
 import (
 	"testing"
 
+	"github.com/strelov1/freehire/internal/api/candidateprofile"
+	"github.com/strelov1/freehire/internal/dict/answertopic"
 	"github.com/strelov1/freehire/internal/ingest/applyform"
 )
 
@@ -230,5 +232,275 @@ func TestIsCoverLetterTextField_RecognizesALabelWithATrailingQualifier(t *testin
 func TestIsCoverLetterTextField_ALabelThatOnlyMentionsACoverLetterIsNotRecognized(t *testing.T) {
 	if isCoverLetterTextField(MergedField{ID: "question_33333", Label: "If you don't have a cover letter, please explain why", Kind: "text"}) {
 		t.Error("want a label that only mentions a cover letter in passing not recognized as a cover-letter field")
+	}
+}
+
+// The candidate's own stored salary expectation answers an employer's salary question,
+// whatever they called it.
+//
+// Measured on production 2026-09-08: queue entry 3 parked on "What is your desired salary?"
+// while screening_answers held 5000 USD/year for that very candidate. Greenhouse gives a
+// custom question an opaque numeric id, so answerKeyFor can never reach it and only a label
+// rule can — and there was none for salary, though there was one for visa sponsorship right
+// beside it.
+//
+// The three phrasings are the shapes real boards use for the same question. A rule that
+// only matched the exact wording of the one posting we happened to look at would be the
+// same gap again, one phrasing narrower.
+func TestResolve_MatchesASalaryQuestionByLabelWhateverItIsCalled(t *testing.T) {
+	answers := map[string]string{"desired_salary": "5000 USD per year"}
+
+	for _, label := range []string{
+		"What is your desired salary?",
+		"Salary expectations",
+		"Desired compensation (USD)",
+	} {
+		t.Run(label, func(t *testing.T) {
+			fields := []MergedField{{ID: "question_19869712004", Label: label, Kind: "text", Required: true}}
+
+			plan := Resolve(fields, answers, false)
+
+			if len(plan.Unmapped) != 0 {
+				t.Fatalf("unmapped = %+v, want the salary question answered from the candidate's own figure", plan.Unmapped)
+			}
+			if len(plan.Fields) != 1 || plan.Fields[0].Value != "5000 USD per year" {
+				t.Fatalf("plan.Fields = %+v, want the stored salary", plan.Fields)
+			}
+		})
+	}
+}
+
+// The rule must not reach a question ABOUT pay that is not asking for the candidate's own
+// figure. Current pay is a different fact (candidate_survey holds it separately and
+// deliberately), and answering it with a desired figure would misreport them to an
+// employer.
+func TestResolve_DoesNotAnswerACurrentSalaryQuestionWithTheDesiredOne(t *testing.T) {
+	answers := map[string]string{"desired_salary": "5000 USD per year"}
+	fields := []MergedField{{ID: "question_1", Label: "What is your current salary?", Kind: "text", Required: true}}
+
+	plan := Resolve(fields, answers, false)
+
+	if len(plan.Fields) != 0 {
+		t.Fatalf("plan.Fields = %+v, want the current-salary question left unanswered", plan.Fields)
+	}
+	if len(plan.Unmapped) != 1 {
+		t.Fatalf("unmapped = %+v, want the current-salary question reported as unanswered", plan.Unmapped)
+	}
+}
+
+// A banked answer reaches a question no rule and no id could match — the bank's whole
+// purpose. The key is the question's own topic, so the wording the employer used does not
+// have to be the wording the candidate answered.
+func TestResolve_AnsweredFromTheBankByTopic(t *testing.T) {
+	answers := map[string]string{"topic:which state do you currently reside in": "Santa Catarina"}
+	fields := []MergedField{{
+		ID: "question_4005041004", Label: "Which state do you currently reside in?",
+		Kind: "text", Required: true,
+	}}
+
+	plan := Resolve(fields, answers, false)
+
+	if len(plan.Unmapped) != 0 {
+		t.Fatalf("unmapped = %+v, want the question answered from the bank", plan.Unmapped)
+	}
+	if len(plan.Fields) != 1 || plan.Fields[0].Value != "Santa Catarina" {
+		t.Fatalf("plan.Fields = %+v, want the banked answer", plan.Fields)
+	}
+}
+
+// A typed fact still wins. It is validated and structured; the bank's copy is free text,
+// and two sources answering one question must resolve the same way every time rather than
+// by whichever was read first.
+func TestResolve_ATypedFactOutranksABankedAnswer(t *testing.T) {
+	answers := map[string]string{
+		"desired_salary":           "5000 USD per year",
+		"topic:salary_expectation": "whatever you think is fair",
+	}
+	fields := []MergedField{{ID: "question_1", Label: "What is your desired salary?", Kind: "text", Required: true}}
+
+	plan := Resolve(fields, answers, false)
+
+	if len(plan.Fields) != 1 || plan.Fields[0].Value != "5000 USD per year" {
+		t.Fatalf("plan.Fields = %+v, want the typed fact to win", plan.Fields)
+	}
+}
+
+// The Resolve-level guard for the same refusal matchBankAnswerKey enforces directly: a
+// work-authorization question must stay unmapped even when the bank holds an answer banked
+// under its own topic, because that answer depends on a country nothing here has and would
+// otherwise travel to a posting in a different one at submit time, unseen by the candidate.
+func TestResolve_NeverAnswersAWorkAuthorizationQuestionFromTheBank(t *testing.T) {
+	label := "Are you legally authorized to work in the country in which this position is located?"
+	topic, ok := bankTopicKeyForTest(t, label)
+	if !ok {
+		t.Fatal("the server would refuse to bank the question the candidate was just shown")
+	}
+	answers := map[string]string{topic: "Yes"}
+	fields := []MergedField{{ID: "question_1", Label: label, Kind: "text", Required: true}}
+
+	plan := Resolve(fields, answers, false)
+
+	if plan.FullyResolved() {
+		t.Fatalf("plan = %+v, want the work-authorization question to stay unmapped despite a banked answer", plan)
+	}
+	if len(plan.Unmapped) != 1 || plan.Unmapped[0].Label != label {
+		t.Fatalf("Unmapped = %+v, want the work-authorization question reported", plan.Unmapped)
+	}
+}
+
+// The seam: what Profile.FieldsWithBankedAnswers() writes must be what resolveOne reads.
+//
+// The prefix is two separate literals in two packages that cannot share a constant
+// (candidateprofile importing atsapply would invert the layering). Every other test here
+// hands Resolve a map it built itself with the prefix already applied — so all of them
+// would still pass if the two literals drifted apart, while the feature silently filled
+// nothing. This is the only test that would fail.
+//
+// It must keep going through whatever accessor cmd/auto-apply's AnswerSource calls, or it
+// stops testing the seam and starts testing a map literal. Today that is
+// FieldsWithBankedAnswers; plain Fields() deliberately carries no banked answer at all.
+func TestResolve_ReadsTheKeysProfileFieldsActuallyWrites(t *testing.T) {
+	profile := candidateprofile.Profile{
+		BankAnswers: map[string]string{"which state do you currently reside in": "Santa Catarina"},
+	}
+
+	fields := []MergedField{{
+		ID: "question_4005041004", Label: "Which state do you currently reside in?",
+		Kind: "text", Required: true,
+	}}
+
+	plan := Resolve(fields, profile.FieldsWithBankedAnswers(), false)
+
+	if !plan.FullyResolved() {
+		t.Fatalf("unmapped = %+v — Profile.FieldsWithBankedAnswers() and resolveOne disagree about the banked-answer key prefix", plan.Unmapped)
+	}
+	if plan.Fields[0].Value != "Santa Catarina" {
+		t.Errorf("value = %q, want the banked answer", plan.Fields[0].Value)
+	}
+}
+
+// The feature, asserted as one story: a required question parks, the candidate answers it,
+// and the next resolve fills it — even though the second employer words it differently.
+//
+// The two phrasings share no words at all. That is the point, and it is what the earlier
+// version of this test did not do: it differed only by surrounding whitespace, so it proved
+// strings.Fields trims and would have passed with the topic dictionary deleted entirely.
+// "What is your desired salary?" and "Compensation expectations" only meet through
+// internal/dict/answertopic's salary_expectation entry, so this fails if that regresses.
+//
+// This candidate has no typed desired_salary — that is the premise, since a stated one is
+// why the question would not have parked in the first place.
+func TestResolve_AnAnsweredQuestionStopsBlockingLaterApplications(t *testing.T) {
+	firstEmployer := []MergedField{{
+		ID: "question_4005041004", Label: "What is your desired salary?",
+		Kind: "text", Required: true,
+	}}
+	noAnswersYet := map[string]string{}
+
+	before := Resolve(firstEmployer, noAnswersYet, false)
+	if len(before.Unmapped) != 1 {
+		t.Fatalf("unmapped = %+v, want the question to park before it is answered", before.Unmapped)
+	}
+	if before.FullyResolved() {
+		t.Fatal("FullyResolved() is true with a required question unanswered")
+	}
+
+	// The candidate answers it on the review screen. answertopic.Of is what the server
+	// applies on save; the key here is what that produces.
+	topic, ok := bankTopicKeyForTest(t, before.Unmapped[0].Label)
+	if !ok {
+		t.Fatal("the server would refuse to bank the question the candidate was just shown")
+	}
+	banked := map[string]string{topic: "5000 USD per year"}
+
+	// A different employer, months later, asking the same thing in words the first one did
+	// not use.
+	secondEmployer := []MergedField{{
+		ID: "question_99887766", Label: "Compensation expectations",
+		Kind: "text", Required: true,
+	}}
+
+	after := Resolve(secondEmployer, banked, false)
+	if !after.FullyResolved() {
+		t.Fatalf("unmapped = %+v, want a different employer's phrasing answered from the bank", after.Unmapped)
+	}
+	if after.Fields[0].Value != "5000 USD per year" {
+		t.Errorf("value = %q, want the banked answer", after.Fields[0].Value)
+	}
+}
+
+// The refusal is the work-authorization SUBSET of sensitiveTerms, not the whole list.
+// Salary is on that list and the salary case is the feature's headline; demographic
+// questions are on it too and are the candidate's own answer to give. Only authorization is
+// unanswerable here, because only it depends on a country nothing in this package holds.
+func TestMatchBankAnswerKey_RefusesOnlyTheWorkAuthorizationSubset(t *testing.T) {
+	refused := []string{
+		"Are you legally authorized to work in the country in which this position is located?",
+		"Do you now or in the future require sponsorship to work in the United States?",
+		"Do you have the right to work in the UK?",
+		"Will you require a visa?",
+	}
+	for _, label := range refused {
+		if key, ok := matchBankAnswerKey(MergedField{Label: label}); ok {
+			t.Errorf("matchBankAnswerKey(%q) = %q, true; want a refusal", label, key)
+		}
+	}
+
+	kept := []string{
+		"What is your desired salary?",
+		"Compensation expectations",
+		"Are you a protected veteran?",
+		"Which state do you currently reside in?",
+	}
+	for _, label := range kept {
+		if _, ok := matchBankAnswerKey(MergedField{Label: label}); !ok {
+			t.Errorf("matchBankAnswerKey(%q) refused — only work authorization is refused here", label)
+		}
+	}
+}
+
+// bankTopicKeyForTest is the answers-map key a question is banked under, built the way the
+// server does on save.
+func bankTopicKeyForTest(t *testing.T, question string) (string, bool) {
+	t.Helper()
+	topic, ok := answertopic.Of(question)
+	return bankAnswerKeyPrefix + topic, ok
+}
+
+// The empty-label seam, asserted across the two functions that have to agree about it.
+//
+// MergedField.Label is empty for any DOM-rendered field the platform's schema never
+// declared (reconcile.go), and Greenhouse's `country` is exactly that field — required on
+// nearly every posting and, by resolve.go's own admission, the single most common reason an
+// application parks. The review screen shows the candidate an input titled "country"
+// (PreviewAnswers substitutes the id), they answer it, and the server banks it under the
+// topic of the text they read. If the resolver keys on the raw label instead, that answer is
+// stored under a key nothing can recall and the field parks again forever.
+func TestPreviewAndResolveAgreeOnALabellessField(t *testing.T) {
+	field := MergedField{ID: "country", Kind: "text", Required: true}
+
+	preview := PreviewAnswers([]MergedField{field}, map[string]string{}, false)
+	if len(preview.Pending) != 1 {
+		t.Fatalf("preview.Pending = %+v, want the labelless field reported as pending", preview.Pending)
+	}
+	// What the candidate is shown, and therefore what the save route receives as the
+	// question text.
+	shown := preview.Pending[0].Label
+	if shown == "" {
+		t.Fatal("the review screen would render an input with no title at all")
+	}
+
+	topic, ok := bankTopicKeyForTest(t, shown)
+	if !ok {
+		t.Fatalf("the server would refuse to bank %q — nothing the candidate types can be saved", shown)
+	}
+
+	plan := Resolve([]MergedField{field}, map[string]string{topic: "Brazil"}, false)
+
+	if !plan.FullyResolved() {
+		t.Fatalf("unmapped = %+v — the answer was banked under %q and the resolver looks somewhere else", plan.Unmapped, topic)
+	}
+	if plan.Fields[0].Value != "Brazil" {
+		t.Errorf("value = %q, want the banked answer", plan.Fields[0].Value)
 	}
 }

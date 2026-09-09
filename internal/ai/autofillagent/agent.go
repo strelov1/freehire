@@ -41,7 +41,17 @@ type Fill struct {
 }
 
 // Profile is the user's canonical autofill fields, keyed as
-// /me/autofill-profile returns them (full_name, email, …).
+// /me/autofill-profile returns them (full_name, email, …) — that is,
+// candidateprofile.Profile.Fields(), which is exactly the fixed set the
+// endpoint serialises.
+//
+// A fixed set, and it has to stay one. groundedValue below admits any planned
+// value sharing a word-run with ANY value in here, so every entry added widens
+// what a model is allowed to write; and Plan marshals the whole map into the
+// prompt, so every entry added is also sent to the provider. The candidate's
+// banked screening answers are free text they typed for employers — on
+// Greenhouse that includes the demographic and veteran/disability questions —
+// and are kept out of Fields() for both reasons.
 type Profile map[string]string
 
 // Report is what the run tells the user.

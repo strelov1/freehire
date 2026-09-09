@@ -1508,6 +1508,14 @@ type Querier interface {
 	// Returns the affected row count: 0 means it does not exist or is not the caller's
 	// (the handler maps that to 404).
 	DeleteSavedSearch(ctx context.Context, arg DeleteSavedSearchParams) (int64, error)
+	// The owner removes one answer. Scoped by user_id as well as id, so a foreign id affects
+	// zero rows and the handler renders 404 — never revealing to a probing caller which of the
+	// two it was, the same posture GetAutoApplyQueueEntryForReview already takes.
+	//
+	// Nothing else ever deletes from this table: the bank accumulates, and no reconciler prunes
+	// it. Same rule as the experience bank, and for the same reason — a sweeper here would
+	// silently discard answers the candidate expects to still hold.
+	DeleteScreeningAnswer(ctx context.Context, arg DeleteScreeningAnswerParams) (int64, error)
 	// A full facet reindex reads every job's CURRENT content directly from Postgres, so
 	// any entry queued before the run started is provably already reflected in the
 	// freshly-swapped live index — cmd/reindex calls this once, after a successful
@@ -1893,6 +1901,18 @@ type Querier interface {
 	// non-positive window means "never bury on age" rather than "bury everything", for the
 	// reason RecordEnrichmentFailure spells out: a misconfiguration must cost retries, not mail.
 	FailEmailClassification(ctx context.Context, arg FailEmailClassificationParams) (FailEmailClassificationRow, error)
+	// Applies a company-level description an ATS adapter yielded alongside its board
+	// crawl (see sources.CompanyDescriber — Greenhouse's board-metadata endpoint today).
+	// Same fill-gap shape as UpsertYCCompany's non-owned columns: tagline fills only a
+	// blank, company_info merges key-wise (existing keys win), touching nothing else —
+	// this source has no industries/year_founded/etc. to assert. A slug with no existing
+	// row is inserted with is_reference = false, since it is arriving with a real
+	// crawled job, not as a reference-only row the way an unmatched YC entry is.
+	FillCompanyDescriptionFromIngest(ctx context.Context, arg FillCompanyDescriptionFromIngestParams) error
+	// Applies a confident Wikipedia match: fills tagline only if blank, merges the
+	// company_info keys (existing keys win on collision, matching UpsertYCCompany's
+	// gap-fill rule), and marks the company checked so it is never looked up again.
+	FillCompanyInfoFromWikipedia(ctx context.Context, arg FillCompanyInfoFromWikipediaParams) error
 	// Import's write: fill only the fields the bank has nothing for, and never overwrite a value
 	// already there. A user who corrected their job title must not have that correction undone by
 	// re-uploading the CV it came from. is_current is not touched at all — a CV that still says
@@ -1976,7 +1996,7 @@ type Querier interface {
 	//
 	// tailored_cv_id, unmapped, and resolved_preview (openspec/changes/auto-apply-review-tracking)
 	// ride along on the same row read rather than a second query: they are exactly what the
-	// tracker drawer's own auto-apply banner needs (the six-value status, the answer preview, the
+	// tracker drawer's own auto-apply banner needs (the seven-value status, the answer preview, the
 	// unmapped question list), and this is already "the caller's own existing auto-apply entry
 	// for one job." preview_failed_at (migration 0140) is read for the same reason failed_at
 	// is: without it, an entry whose preview pass permanently gave up would read forever as
@@ -2144,6 +2164,11 @@ type Querier interface {
 	// either question on its own.
 	GetGmailConnection(ctx context.Context, userID int64) (GetGmailConnectionRow, error)
 	GetGmailRefreshToken(ctx context.Context, userID int64) (GetGmailRefreshTokenRow, error)
+	// What a write caller (mentor-google-meet-link's CreateMeetEvent) needs in one round
+	// trip: the encrypted refresh token to reach the API, and the scopes to decide the
+	// grant actually covers what this caller wants to do with it. `status` is read too so a
+	// row already marked needs_reconsent can be treated as unusable without a second query.
+	GetGoogleGrantForWrite(ctx context.Context, userID int64) (GetGoogleGrantForWriteRow, error)
 	// The employer's own description of an upcoming interview, for the rehearsal context:
 	// the most recent message classified as an invitation and linked to this application.
 	//
@@ -3094,6 +3119,12 @@ type Querier interface {
 	// companies that are actually hiring, matching the /companies list's hiring scope, and
 	// rides companies_hiring_job_count_idx instead of scanning the full heap.
 	ListCompaniesForReindex(ctx context.Context, arg ListCompaniesForReindexParams) ([]Company, error)
+	// Candidates for the Wikipedia company-info backfill: no tagline yet, and never
+	// resolved by this backfill before (company_info_wikipedia_checked_at IS NULL —
+	// set on every resolution, match or reject, so a company is looked up at most
+	// once). Keyset-paginated by slug so one run can be bounded and a later run
+	// resumes past what it already paged through.
+	ListCompaniesMissingWikipediaInfo(ctx context.Context, arg ListCompaniesMissingWikipediaInfoParams) ([]ListCompaniesMissingWikipediaInfoRow, error)
 	// The open titles a company carries on its OWN board — a source of kind `ats` or
 	// `company`, never an aggregator. The worker turns these into role keys and asks
 	// whether an aggregator posting's key is among them.
@@ -3679,6 +3710,9 @@ type Querier interface {
 	// would silently unschedule every unconfigured provider, which is the exact failure this
 	// table was built to remove.
 	ListSchedulableProviders(ctx context.Context) ([]ListSchedulableProvidersRow, error)
+	// One candidate's whole bank, newest first — what the management surface lists and what the
+	// profile assembler merges into the answer map.
+	ListScreeningAnswers(ctx context.Context, userID int64) ([]ScreeningAnswerBank, error)
 	// Companies whose ingested name is still a squished slug (lowercase, no
 	// whitespace or uppercase) and that have at least one open job, with a
 	// representative open job's source and URL so the backfill worker can locate the
@@ -3981,12 +4015,31 @@ type Querier interface {
 	// untouched and blocked_at, not failed_at, is what excludes it from
 	// auto_apply_queue_claimable_idx from here on.
 	MarkAutoApplyBlocked(ctx context.Context, arg MarkAutoApplyBlockedParams) error
+	// Records that a tailoring run gave up without producing a CV (migration 0154), so the
+	// entry stops reading as one still being prepared.
+	//
+	// Guarded by tailored_cv_id IS NULL as well as review_decision IS NULL: a run that failed
+	// AFTER an earlier one had already produced a CV has nothing to report — the candidate has
+	// something to look at, and telling them preparation failed while it sits there ready is
+	// worse than saying nothing. DeriveStatus ranks the same way and does not depend on this
+	// guard having fired.
+	//
+	// Returns the job's title/company/slug for the caller's own notification, the same shape and
+	// for the same reason SetAutoApplyResolvedPreview already returns them: this statement
+	// already holds the job_id its own WHERE resolved, and a second round trip for exactly what
+	// this write just touched would be a query with no reason to exist. pgx.ErrNoRows means a
+	// guard fired, which the caller treats as "nothing to say", never as an error.
+	MarkAutoApplyTailorFailed(ctx context.Context, arg MarkAutoApplyTailorFailedParams) (MarkAutoApplyTailorFailedRow, error)
 	// Stamp an event as applied. Idempotent by shape: re-stamping a processed row writes the
 	// same fact, and the reconciler's own query no longer returns it.
 	MarkBillingEventProcessed(ctx context.Context, id int64) error
 	// Stamp a revision as undone. Guarded on reverted_at IS NULL so undoing twice affects no row
 	// and the caller can tell the difference without a second read.
 	MarkCVRevisionReverted(ctx context.Context, arg MarkCVRevisionRevertedParams) (int64, error)
+	// Records that the backfill looked this company up and found no confident match,
+	// so it is never looked up again. Touches nothing else: an unmatched company's
+	// tagline/company_info stay exactly as another source may have left them.
+	MarkCompanyWikipediaChecked(ctx context.Context, slug string) error
 	// Stamp the subscription's last daily-digest send instant, so
 	// internal/application/deliverywindow.DigestDue reads "already sent today" on any later pass
 	// within the same local calendar day. Only called after a successful `daily`-mode
@@ -5449,6 +5502,11 @@ type Querier interface {
 	// rewritten, so a re-run writes nothing and produces no dead tuples. It also means the
 	// backfill needs no record of which rows it has visited.
 	SetJobsRequirementsDerived(ctx context.Context, arg SetJobsRequirementsDerivedParams) (int64, error)
+	// Best-effort patch after CreateMentorBooking: the calendar event is created AFTER the
+	// booking row wins the EXCLUDE-constraint race, never before, so a lost race can never
+	// leave an orphaned Google event. No WHERE beyond the id — this always follows a
+	// successful CreateMentorBooking for the same row, in the same request.
+	SetMentorBookingCalendarEvent(ctx context.Context, arg SetMentorBookingCalendarEventParams) error
 	// The mentor's own switch. Deliberately independent of status: pausing and resuming
 	// need no moderator, and neither may alter what the moderator decided.
 	SetMentorPaused(ctx context.Context, arg SetMentorPausedParams) (Mentor, error)
@@ -6137,6 +6195,23 @@ type Querier interface {
 	// already belongs to a different account, this reassigns it to the caller
 	// rather than duplicating or leaving it with the previous owner.
 	UpsertPushToken(ctx context.Context, arg UpsertPushTokenParams) (UserPushToken, error)
+	// Records the candidate's answer to one screening question, replacing any earlier answer on
+	// the same topic. The question text is refreshed too: the newest wording is the one they
+	// most recently read and answered, and keeping a stale phrasing beside a fresh answer would
+	// misdescribe what was agreed to.
+	//
+	// provenance is overwritten on conflict rather than preserved: a candidate answering a
+	// question themselves supersedes any earlier suggestion, and that is exactly the promotion
+	// the send-gate depends on.
+	//
+	// The hazard is the OTHER direction, and this statement does not guard it: an agent write
+	// would equally overwrite a candidate's own answer, DEMOTING it out of what may be sent
+	// (internal/candidate/answerbank.Provenance.sendable) and replacing text they authored with
+	// a model's reading. Nothing writes agent_inferred today, so the behaviour is unreachable
+	// and stays as it is rather than being guarded speculatively. Whoever adds that writer owns
+	// this: either the statement grows a `WHERE screening_answer_bank.provenance <> 'candidate'`
+	// guard on the agent path, or the agent's suggestions go somewhere that is not this row.
+	UpsertScreeningAnswer(ctx context.Context, arg UpsertScreeningAnswerParams) error
 	// Create-or-replace the caller's one screening-answers record. Full-replace, mirroring
 	// UpsertUserProfile: the service reads the current row, merges caller-provided fields over
 	// it (omitted fields keep their stored value), and writes the merged result back whole —

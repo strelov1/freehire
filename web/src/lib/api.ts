@@ -129,6 +129,7 @@ import type {
   TalentNetworkVisibility,
   ExperienceEmployment,
   ApiSuggestion,
+  BankedAnswer,
 } from './types';
 
 /** A page of list items, optionally the total matching the query (endpoints that
@@ -342,6 +343,10 @@ export interface GmailStatus {
    *  a connected mailbox says nothing about the calendar, and a calendar grant may have
    *  no mailbox behind it at all. */
   calendar_connected?: boolean;
+  /** Whether the same grant covers calendar.events — the mentor-only write consent that
+   *  auto-generates a Meet link per booking and makes the mentor profile's own meeting
+   *  link field optional. A third, separate consent from both fields above. */
+  mentor_calendar_connected?: boolean;
 }
 
 /** The hosted-mailbox option: the caller's address (null when none) + whether
@@ -1237,6 +1242,22 @@ export function createApi(
       `/api/v1/me/auto-apply/${encodeURIComponent(queueId)}/review`,
       jsonBody('POST', { decision }),
     );
+  }
+
+  /** Save the candidate's answer to one screening question into their answer bank, so it
+   *  fills the same question on every later application. */
+  async function saveBankedAnswer(question: string, answer: string): Promise<void> {
+    await call('/api/v1/me/answer-bank', jsonBody('PUT', { question, answer }));
+  }
+
+  /** The candidate's whole answer bank, newest first. */
+  function listBankedAnswers(): Promise<BankedAnswer[]> {
+    return requestData<BankedAnswer[]>('/api/v1/me/answer-bank');
+  }
+
+  /** Remove one banked answer by id. */
+  async function deleteBankedAnswer(id: number): Promise<void> {
+    await call(`/api/v1/me/answer-bank/${id}`, { method: 'DELETE' });
   }
 
   /** Dismiss (swipe away) a job in the swipe deck. Keeps it out of the deck only;
@@ -2812,6 +2833,9 @@ export function createApi(
     unsaveJob,
     autoApplyJob,
     reviewAutoApply,
+    saveBankedAnswer,
+    listBankedAnswers,
+    deleteBankedAnswer,
     dismissJob,
     undismissJob,
     voteJob,

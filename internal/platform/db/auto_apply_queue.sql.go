@@ -320,7 +320,7 @@ func (q *Queries) GetAutoApplyQueueEntryByID(ctx context.Context, id int64) (Get
 
 const getAutoApplyQueueEntryForJob = `-- name: GetAutoApplyQueueEntryForJob :one
 SELECT id, review_decision, failed_at, blocked_at, tailored_cv_id, unmapped, resolved_preview,
-       preview_failed_at
+       preview_failed_at, tailor_failed_at
 FROM auto_apply_queue
 WHERE user_id = $1 AND job_id = $2
 `
@@ -339,6 +339,7 @@ type GetAutoApplyQueueEntryForJobRow struct {
 	Unmapped        []byte             `json:"unmapped"`
 	ResolvedPreview []byte             `json:"resolved_preview"`
 	PreviewFailedAt pgtype.Timestamptz `json:"preview_failed_at"`
+	TailorFailedAt  pgtype.Timestamptz `json:"tailor_failed_at"`
 }
 
 // The caller's own existing auto-apply entry for one job, if any — the conflict-read path
@@ -355,7 +356,7 @@ type GetAutoApplyQueueEntryForJobRow struct {
 //
 // tailored_cv_id, unmapped, and resolved_preview (openspec/changes/auto-apply-review-tracking)
 // ride along on the same row read rather than a second query: they are exactly what the
-// tracker drawer's own auto-apply banner needs (the six-value status, the answer preview, the
+// tracker drawer's own auto-apply banner needs (the seven-value status, the answer preview, the
 // unmapped question list), and this is already "the caller's own existing auto-apply entry
 // for one job." preview_failed_at (migration 0140) is read for the same reason failed_at
 // is: without it, an entry whose preview pass permanently gave up would read forever as
@@ -372,6 +373,7 @@ func (q *Queries) GetAutoApplyQueueEntryForJob(ctx context.Context, arg GetAutoA
 		&i.Unmapped,
 		&i.ResolvedPreview,
 		&i.PreviewFailedAt,
+		&i.TailorFailedAt,
 	)
 	return i, err
 }
@@ -436,6 +438,59 @@ type MarkAutoApplyBlockedParams struct {
 func (q *Queries) MarkAutoApplyBlocked(ctx context.Context, arg MarkAutoApplyBlockedParams) error {
 	_, err := q.db.Exec(ctx, markAutoApplyBlocked, arg.LastError, arg.Unmapped, arg.ID)
 	return err
+}
+
+const markAutoApplyTailorFailed = `-- name: MarkAutoApplyTailorFailed :one
+WITH updated AS (
+    UPDATE auto_apply_queue q
+    SET tailor_failed_at = now(),
+        last_error       = $1
+    WHERE q.id = $2
+      AND q.review_decision IS NULL
+      AND q.tailored_cv_id IS NULL
+    RETURNING q.job_id, q.user_id
+)
+SELECT j.public_slug, j.title, j.company, u.user_id
+FROM jobs j
+JOIN updated u ON u.job_id = j.id
+`
+
+type MarkAutoApplyTailorFailedParams struct {
+	LastError string `json:"last_error"`
+	ID        int64  `json:"id"`
+}
+
+type MarkAutoApplyTailorFailedRow struct {
+	PublicSlug string `json:"public_slug"`
+	Title      string `json:"title"`
+	Company    string `json:"company"`
+	UserID     int64  `json:"user_id"`
+}
+
+// Records that a tailoring run gave up without producing a CV (migration 0154), so the
+// entry stops reading as one still being prepared.
+//
+// Guarded by tailored_cv_id IS NULL as well as review_decision IS NULL: a run that failed
+// AFTER an earlier one had already produced a CV has nothing to report — the candidate has
+// something to look at, and telling them preparation failed while it sits there ready is
+// worse than saying nothing. DeriveStatus ranks the same way and does not depend on this
+// guard having fired.
+//
+// Returns the job's title/company/slug for the caller's own notification, the same shape and
+// for the same reason SetAutoApplyResolvedPreview already returns them: this statement
+// already holds the job_id its own WHERE resolved, and a second round trip for exactly what
+// this write just touched would be a query with no reason to exist. pgx.ErrNoRows means a
+// guard fired, which the caller treats as "nothing to say", never as an error.
+func (q *Queries) MarkAutoApplyTailorFailed(ctx context.Context, arg MarkAutoApplyTailorFailedParams) (MarkAutoApplyTailorFailedRow, error) {
+	row := q.db.QueryRow(ctx, markAutoApplyTailorFailed, arg.LastError, arg.ID)
+	var i MarkAutoApplyTailorFailedRow
+	err := row.Scan(
+		&i.PublicSlug,
+		&i.Title,
+		&i.Company,
+		&i.UserID,
+	)
+	return i, err
 }
 
 const recordAutoApplyFailure = `-- name: RecordAutoApplyFailure :one
@@ -569,7 +624,8 @@ UPDATE auto_apply_queue
 SET tailored_cv_id    = $1,
     resolved_preview  = NULL,
     preview_attempts  = 0,
-    preview_failed_at = NULL
+    preview_failed_at = NULL,
+    tailor_failed_at  = NULL
 WHERE id = $2 AND review_decision IS NULL
 `
 
