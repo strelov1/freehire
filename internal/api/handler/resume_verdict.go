@@ -58,6 +58,11 @@ func (h *resumeHandlers) computeCoverage(c *fiber.Ctx, userID int64, profile use
 // total (see below). coverageSkills drives covered/uncovered; declared/body/all
 // score the role-skill breakdown — the two sets differ for the CV verdict (profile
 // skills vs parsed CV) and coincide for a stateless skill list.
+//
+// The role query (A) is split into coverageWithRole so a caller that has already asked
+// for the role's skill distribution — the public roast, which needs it for the ATS
+// keyword score too — can supply it instead of asking twice. Two answers to the same
+// question can differ while the index is being written; one answer cannot.
 func (h *resumeHandlers) coverageFor(ctx context.Context, roleFilter any, coverageSkills, declared, body, all []string) (verdict.Verdict, error) {
 	role, err := h.facets.FacetCounts(ctx, search.FacetParams{
 		Filter: roleFilter,
@@ -66,6 +71,12 @@ func (h *resumeHandlers) coverageFor(ctx context.Context, roleFilter any, covera
 	if err != nil {
 		return verdict.Verdict{}, err
 	}
+	return h.coverageWithRole(ctx, roleFilter, role, coverageSkills, declared, body, all)
+}
+
+// coverageWithRole is coverageFor with query A already answered: it issues the uncovered
+// (B) and skill-bearing-total (C) queries and computes the verdict.
+func (h *resumeHandlers) coverageWithRole(ctx context.Context, roleFilter any, role search.FacetResult, coverageSkills, declared, body, all []string) (verdict.Verdict, error) {
 	uncovered, err := h.facets.FacetCounts(ctx, search.FacetParams{
 		Filter: search.AndNotSkills(roleFilter, coverageSkills),
 		Facets: []string{"skills"},

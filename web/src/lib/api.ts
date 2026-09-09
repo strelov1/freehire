@@ -91,6 +91,7 @@ import type {
   GhostReportInput,
   Verdict,
   ATSResponse,
+  ATSReport,
   JobMatchResult,
   MatchAnalysisResponse,
   Allowance,
@@ -235,6 +236,22 @@ export interface JobCopy {
   location: string;
   apply_url: string;
   posted_at: string | null;
+}
+
+/** The public roast's wire shape (POST /api/v1/cv/roast, no session — see RoastCV and its
+ *  own roastResponse on the backend): the deterministic ATS report plus a live
+ *  market-coverage reading. `role` is the category slug the reading was measured
+ *  against, empty when the dictionary resolved none; `market_scoped` says which of
+ *  those two happened, so the page never has to infer it from an empty string.
+ *  `market` is absent exactly when `market_available` is false (the facet backend was
+ *  unreachable) — the page must render that as "unavailable", never as a coverage of
+ *  zero, which would read as a real measurement. */
+export interface RoastResponse {
+  report: ATSReport;
+  role: string;
+  market_scoped: boolean;
+  market_available: boolean;
+  market?: Verdict;
 }
 
 /** Max résumé upload size, mirroring the server's BodyLimit (cmd/server/main.go). The
@@ -1953,6 +1970,23 @@ export function createApi(
     );
   }
 
+  /** Score an uploaded CV for an ANONYMOUS caller — no session, no stored bytes, no model
+   *  call (see RoastCV on the backend). Same two input shapes as extractResumeProfile (a
+   *  PDF `File` sent as multipart, or pasted text sent as JSON) through the same size
+   *  check and the same `resumeInit` builder. `category` overrides the role the market
+   *  reading is measured against; omitted, the server infers it from the CV's own
+   *  headline. Public route, rate-limited by IP server-side. */
+  async function roastCv(input: File | string, category?: string): Promise<RoastResponse> {
+    if (input instanceof File && input.size > RESUME_MAX_BYTES) {
+      throw new ApiError(
+        413,
+        `This PDF is larger than ${RESUME_MAX_MB} MB. Compress it or export a lighter PDF and try again.`,
+      );
+    }
+    const qs = category ? `?category=${encodeURIComponent(category)}` : '';
+    return requestData<RoastResponse>(`/api/v1/cv/roast${qs}`, resumeInit('POST', input));
+  }
+
   /** The caller's notification subscriptions (one per saved search + channel). */
   async function listSubscriptions(): Promise<Subscription[]> {
     return requestData<Subscription[]>('/api/v1/me/subscriptions');
@@ -2889,6 +2923,7 @@ export function createApi(
     getProfileVerdict,
     getATSReport,
     runATSReview,
+    roastCv,
     listSubscriptions,
     createSubscription,
     setSubscriptionActive,

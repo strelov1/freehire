@@ -104,6 +104,13 @@ func (h *resumeHandlers) register(api fiber.Router, mw middleware) {
 	// against the facet-filtered market. Cookie or API key — the CLI drives it with
 	// a key. No user data is stored; it is the stateless sibling of the CV verdict.
 	api.Post("/market/coverage", mw.key, h.MarketCoverage)
+
+	// The public CV roast: no session, no API key. It is the landing page for search
+	// traffic that has never heard of us, so an account gate here would spend the visit
+	// to gain nothing — the same reason /jobs/find is public and first. Stores nothing
+	// and calls no model; the model review and tailoring are what the account is for.
+	// IP-limited, since there is no caller to key by.
+	api.Post("/cv/roast", cvRoastLimiter(mw.throttler), h.RoastCV)
 }
 
 // resumeTextRequest is the JSON body for the pasted-text path.
