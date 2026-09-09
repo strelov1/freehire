@@ -51,6 +51,28 @@
 
 - [x] 8.1 `gofmt -w` the touched Go, then `go vet ./...`, `go test ./...`, and `go vet -tags=integration ./...` before pushing.
 - [x] 8.2 ~~Apply the migration on prod by hand~~ — NOT needed: `deploy/bin/release.sh` builds and runs `cmd/migrate` itself, idempotently and under an advisory lock, BEFORE the new colour starts, and a migration failure aborts the release with the live colour untouched. The migration file's "apply manually" header describes the Docker `initdb` path, which is a different one.
-- [ ] 8.3 Patch the live Meilisearch jobs index settings with the new filterable attribute BEFORE the release. `release.sh`'s facet smoke probes `/api/v1/jobs/facets` and REFUSES to flip without it, so a missed patch is a failed release rather than an outage. **Never patch while `freehire-reindexw` is running**: a rebuild swaps a fresh index built with the deployed binary's settings over the live one, which would drop the patch.
-- [ ] 8.4 Deploy, then verify the empty state on prod: the endpoint answers, the badge renders nowhere, the filter matches nothing.
-- [ ] 8.5 After the first labels land, run a full `make reindex` (stop `freehire-reindexw.timer` first) so the facet sees pre-existing documents, then verify the filter against a labelled company.
+- [x] 8.3 Patched the live Meilisearch jobs index: 33 filterable attributes, `ai_interview` among them (task 755175, 166s). Applied only AFTER `freehire-reindexw` finished — a rebuild swaps a fresh index carrying the deployed binary's settings over the live one, which would have discarded the patch.
+- [x] 8.4 Deployed 7de312ca8 and verified the empty state on prod: `POST /api/v1/companies/:slug/process-reports` answers 401 (route live), `/jobs/facets` and its disjunctive path 200, `ai_interview=false` returns the whole catalogue (2,045,297) and `ai_interview=true` returns 0, with `meta.ignored_params` absent — the param is read, not silently dropped. The company payload omits the count at zero, as required.
+- [ ] 8.5 **Deferred by design, not forgotten.** A full `make reindex` is only needed once the first labels land: incremental pushes do not carry this field (it is not in `content_hash`), so pre-existing documents keep `ai_interview` absent until a rebuild. Nobody has reported anything yet, so there is nothing for a rebuild to carry. Stop `freehire-reindexw.timer` first.
+
+
+## 9. What the rollout actually cost
+
+Recorded because the plan above was wrong twice, and both corrections are reusable.
+
+- **`ALTER TABLE jobs ADD COLUMN` could not catch a lock gap for ~3 hours.** It takes
+  ACCESS EXCLUSIVE, which conflicts with the ACCESS SHARE of an ordinary `SELECT`, and
+  `jobs` is never quiet. Every attempt failed `55P03` against the runner's deliberate 5s
+  `lock_timeout` — and while it failed, **autodeploy was blocked for everybody**, not just
+  this change.
+- **Pausing the worker fleet was necessary but not sufficient.** `freehire:pause:all` holds
+  only NEW runs; two `similar-backfill` queries already in flight held the table for 133s
+  and counting. The migration went through within seconds of polling `pg_locks` until no
+  holder older than 8s remained. Diagnosing with `pg_locks` should have come before the
+  retries, not after six of them.
+- **`cmd/migrate` respects the pause too**, which is what `FREEHIRE_IGNORE_PAUSE=1` is for:
+  hold the fleet, then run one thing against a quiet host. It is documented in
+  `worker/pause.go` and it is exactly this situation.
+- **Autodeploy stops retrying a commit after two failures** (`/var/lib/freehire/autodeploy.state`,
+  "not retrying until main moves"). Clearing that file is the way back, not pushing a commit
+  to move `main`.
