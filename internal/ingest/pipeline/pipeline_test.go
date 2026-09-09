@@ -27,6 +27,22 @@ type fakeStore struct {
 	seenByBrd map[string]map[string]bool // per-board sets, keyed by the requested board
 	seenAsked []string                   // every board the runner scoped a lookup to
 	seenErr   error                      // when set, ExistingExternalIDs fails
+	// filled records every FillCompanyDescription call, in order.
+	filled []filledDescription
+}
+
+type filledDescription struct {
+	slug, name, description string
+}
+
+func (s *fakeStore) FillCompanyDescription(_ context.Context, slug, name, description string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.err != nil {
+		return s.err
+	}
+	s.filled = append(s.filled, filledDescription{slug, name, description})
+	return nil
 }
 
 func (s *fakeStore) ExistingExternalIDs(_ context.Context, _, board string) (map[string]bool, error) {
@@ -111,6 +127,22 @@ func (f fakeSource) Provider() string { return f.provider }
 
 func (f fakeSource) Fetch(context.Context, sources.CompanyEntry) ([]sources.Job, error) {
 	return f.jobs, f.err
+}
+
+// fakeDescriberSource implements sources.CompanyDescriber alongside the plain
+// fakeSource: CompanyDescription returns a canned (description, err) and counts how
+// many times it was called, so a test can prove it happens once per board regardless
+// of how many postings the board carries.
+type fakeDescriberSource struct {
+	fakeSource
+	description    string
+	descriptionErr error
+	descCalls      int
+}
+
+func (f *fakeDescriberSource) CompanyDescription(context.Context, sources.CompanyEntry) (string, error) {
+	f.descCalls++
+	return f.description, f.descriptionErr
 }
 
 // fakeStreamingSource implements sources.StreamingSource: FetchStream emits jobs through the
@@ -254,6 +286,115 @@ func TestRunStreamsAllJobs(t *testing.T) {
 	}
 	if len(store.saved) != 2 || stats.Total().Ingested != 2 || stats.Total().Failed != 0 {
 		t.Fatalf("saved=%d stats=%+v, want 2 saved Ingested=2 Failed=0", len(store.saved), stats.Total())
+	}
+}
+
+// TestRunFillsCompanyDescriptionOncePerBoard proves the runner calls a
+// CompanyDescriber adapter's CompanyDescription exactly once per board regardless of
+// how many postings it carries, and forwards a non-empty result to the Store's
+// FillCompanyDescription, keyed by the board's company slug.
+func TestRunFillsCompanyDescriptionOncePerBoard(t *testing.T) {
+	src := &fakeDescriberSource{
+		fakeSource: fakeSource{provider: "greenhouse", jobs: []sources.Job{
+			{ExternalID: "1", Title: "A", Company: "Coinbase", URL: "u"},
+			{ExternalID: "2", Title: "B", Company: "Coinbase", URL: "u"},
+		}},
+		description: "Ready to be pushed beyond what you think you're capable of?",
+	}
+	store := &fakeStore{}
+	r := Runner{Registry: registry(src), Store: store}
+
+	stats, err := r.Run(context.Background(), []sources.CompanyEntry{
+		{Company: "Coinbase", Provider: "greenhouse", Board: "coinbase"},
+	})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if stats.Total().Ingested != 2 {
+		t.Fatalf("Ingested = %d, want 2 (the company-description fetch must not affect job ingest)", stats.Total().Ingested)
+	}
+	if src.descCalls != 1 {
+		t.Fatalf("CompanyDescription called %d times, want exactly 1 (once per board, not per posting)", src.descCalls)
+	}
+	if len(store.filled) != 1 {
+		t.Fatalf("FillCompanyDescription called %d times, want 1", len(store.filled))
+	}
+	want := filledDescription{slug: normalize.CompanySlug("Coinbase"), name: "Coinbase", description: src.description}
+	if store.filled[0] != want {
+		t.Errorf("filled = %+v, want %+v", store.filled[0], want)
+	}
+}
+
+// TestRunSkipsCompanyDescriptionWriteWhenEmpty proves an empty CompanyDescription
+// result (the employer left the field blank) makes no Store write at all.
+func TestRunSkipsCompanyDescriptionWriteWhenEmpty(t *testing.T) {
+	src := &fakeDescriberSource{
+		fakeSource: fakeSource{provider: "greenhouse", jobs: []sources.Job{
+			{ExternalID: "1", Title: "A", Company: "C", URL: "u"},
+		}},
+		description: "",
+	}
+	store := &fakeStore{}
+	r := Runner{Registry: registry(src), Store: store}
+
+	if _, err := r.Run(context.Background(), []sources.CompanyEntry{
+		{Company: "C", Provider: "greenhouse", Board: "c"},
+	}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if len(store.filled) != 0 {
+		t.Errorf("FillCompanyDescription called with an empty description, want no call: %v", store.filled)
+	}
+}
+
+// TestRunCompanyDescriptionErrorDoesNotFailTheBoard proves a CompanyDescription
+// error is swallowed (logged, not propagated): the board's own job ingest still
+// succeeds, and no company-info write happens for that board.
+func TestRunCompanyDescriptionErrorDoesNotFailTheBoard(t *testing.T) {
+	src := &fakeDescriberSource{
+		fakeSource: fakeSource{provider: "greenhouse", jobs: []sources.Job{
+			{ExternalID: "1", Title: "A", Company: "C", URL: "u"},
+		}},
+		descriptionErr: errors.New("board metadata endpoint unreachable"),
+	}
+	store := &fakeStore{}
+	r := Runner{Registry: registry(src), Store: store}
+
+	stats, err := r.Run(context.Background(), []sources.CompanyEntry{
+		{Company: "C", Provider: "greenhouse", Board: "c"},
+	})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if stats.Total().Ingested != 1 || stats.Total().Failed != 0 {
+		t.Fatalf("stats = %+v, want Ingested=1 Failed=0 — a company-description error must not fail the board", stats.Total())
+	}
+	if len(store.filled) != 0 {
+		t.Errorf("FillCompanyDescription called despite a CompanyDescription error: %v", store.filled)
+	}
+}
+
+// TestRunSourceWithoutCompanyDescriberIsUnaffected proves an adapter that does not
+// implement CompanyDescriber (the common case) ingests normally with no company-info
+// write attempted at all.
+func TestRunSourceWithoutCompanyDescriberIsUnaffected(t *testing.T) {
+	src := fakeSource{provider: "lever", jobs: []sources.Job{
+		{ExternalID: "1", Title: "A", Company: "C", URL: "u"},
+	}}
+	store := &fakeStore{}
+	r := Runner{Registry: registry(src), Store: store}
+
+	stats, err := r.Run(context.Background(), []sources.CompanyEntry{
+		{Company: "C", Provider: "lever", Board: "c"},
+	})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if stats.Total().Ingested != 1 {
+		t.Fatalf("Ingested = %d, want 1", stats.Total().Ingested)
+	}
+	if len(store.filled) != 0 {
+		t.Errorf("FillCompanyDescription called for a non-CompanyDescriber adapter: %v", store.filled)
 	}
 }
 
