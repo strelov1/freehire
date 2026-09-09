@@ -566,7 +566,13 @@ export function revealField(
   // is right for a reveal: with nothing written, there is nothing to be wrong about,
   // and highlighting one of two same-labeled questions would assert a choice this
   // has no basis for.
-  const resolved = findQuestion(doc, collectQuestions(doc), Array.from(doc.querySelectorAll('form')), label, form);
+  const resolved = findQuestion(
+    unfillableLabels(doc),
+    collectQuestions(doc),
+    Array.from(doc.querySelectorAll('form')),
+    label,
+    form,
+  );
   if ('miss' in resolved) return false;
 
   const el = resolved.found.controls[0];
@@ -599,8 +605,9 @@ const outlined = new WeakMap<Element, { borrowed: string | null; timer: ReturnTy
 export function fillByLabel(doc: Document, fills: LabelFill[]): FillOutcome[] {
   const questions = collectQuestions(doc);
   const forms = Array.from(doc.querySelectorAll('form'));
+  const unfillable = unfillableLabels(doc);
   return fills.map(({ label, value, form }) => {
-    const resolved = findQuestion(doc, questions, forms, label, form);
+    const resolved = findQuestion(unfillable, questions, forms, label, form);
     if ('miss' in resolved) return { label, status: resolved.miss };
     const question = resolved.found;
     if (question.controls.length === 1 && isComboWidget(question.controls[0])) {
@@ -633,7 +640,7 @@ type Resolution =
  * writing into neither.
  */
 function findQuestion(
-  doc: Document,
+  unfillable: () => Set<string>,
   questions: Question[],
   forms: HTMLFormElement[],
   label: string,
@@ -646,7 +653,7 @@ function findQuestion(
     const [first, ...rest] = matches;
     if (rest.length > 0) return { miss: 'ambiguous' };
     if (first) return { found: first };
-    return { miss: absentOrUnfillable(doc, target) };
+    return { miss: absentOrUnfillable(unfillable, target) };
   }
 
   // `find`, so a label repeated INSIDE one form resolves to the first of them —
@@ -662,7 +669,34 @@ function findQuestion(
   // The label is asked somewhere in this frame, just not in the form named — the
   // index is what is wrong, not the question.
   if (matches.length > 0) return { miss: 'wrong_form' };
-  return { miss: absentOrUnfillable(doc, target) };
+  return { miss: absentOrUnfillable(unfillable, target) };
+}
+
+/**
+ * The labels the page carries on a control `collectFillable` dropped, read at most
+ * once and only if something actually misses.
+ *
+ * Lazy because the scan is over the whole document and `extractLabel` walks
+ * `getElementById` for every `aria-labelledby` it meets. Per miss, on an ATS form
+ * with several hundred controls and thirty unanswered questions, that is thirty
+ * full passes synchronously in the content script — and a call whose fills all land
+ * should not pay for it at all.
+ */
+function unfillableLabels(doc: Document): () => Set<string> {
+  let read: Set<string> | undefined;
+  return () => (read ??= readUnfillableLabels(doc));
+}
+
+function readUnfillableLabels(doc: Document): Set<string> {
+  const labels = new Set<string>();
+  for (const el of doc.querySelectorAll<Fillable>('input, select, textarea')) {
+    // Never a fill target in the first place, so its absence is not a refusal.
+    if (el instanceof HTMLInputElement && SKIP_TYPES.has(el.type)) continue;
+    const droppedByCollectFillable = el.disabled || isHidden(el);
+    if (!droppedByCollectFillable) continue;
+    labels.add(normalizeLabel(extractLabel(el)));
+  }
+  return labels;
 }
 
 /**
@@ -679,15 +713,8 @@ function findQuestion(
  * label lives on the legend rather than on any one control, and a partially
  * disabled group is not the case this exists for.
  */
-function absentOrUnfillable(doc: Document, target: string): 'not_fillable' | 'not_found' {
-  const carried = Array.from(doc.querySelectorAll<Fillable>('input, select, textarea')).some((el) => {
-    // Never a fill target in the first place, so its absence is not a refusal.
-    if (el instanceof HTMLInputElement && SKIP_TYPES.has(el.type)) return false;
-    const droppedByCollectFillable = el.disabled || isHidden(el);
-    if (!droppedByCollectFillable) return false;
-    return normalizeLabel(extractLabel(el)) === target;
-  });
-  return carried ? 'not_fillable' : 'not_found';
+function absentOrUnfillable(unfillable: () => Set<string>, target: string): 'not_fillable' | 'not_found' {
+  return unfillable().has(target) ? 'not_fillable' : 'not_found';
 }
 
 /**

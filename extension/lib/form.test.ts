@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import {
   revealField,
   extractForm,
@@ -479,6 +479,42 @@ describe('fillByLabel', () => {
 
     expect(signupInput.value).toBe('ilya@example.com');
     expect(outcomes).toEqual([{ label: 'Email', status: 'filled' }]);
+  });
+
+  // Telling `not_fillable` from `not_found` means looking at the controls
+  // `collectFillable` dropped, and that scan is over the WHOLE document. Doing it
+  // per miss puts an ATS form's several hundred controls through `extractLabel` —
+  // which walks `getElementById` for `aria-labelledby` — once for every unanswered
+  // question, synchronously, in the content script. One pass per call is enough,
+  // and a call whose fills all land should not pay for it at all.
+  it('scans the document for unfillable controls at most once, however many fills miss', () => {
+    formWith('application', ['Email']);
+    const seen = vi.spyOn(document, 'querySelectorAll');
+
+    fillByLabel(document, [
+      { label: 'Nothing A', value: 'x' },
+      { label: 'Nothing B', value: 'y' },
+      { label: 'Nothing C', value: 'z' },
+    ]);
+
+    const scans = seen.mock.calls.filter(([sel]) => sel === 'input, select, textarea').length;
+    seen.mockRestore();
+
+    // One for collectQuestions, at most one for the miss path — not one per miss.
+    expect(scans).toBeLessThanOrEqual(2);
+  });
+
+  it('does not scan for unfillable controls when every fill lands', () => {
+    formWith('application', ['Email']);
+    const seen = vi.spyOn(document, 'querySelectorAll');
+
+    fillByLabel(document, [{ label: 'Email', value: 'ilya@example.com' }]);
+
+    const scans = seen.mock.calls.filter(([sel]) => sel === 'input, select, textarea').length;
+    seen.mockRestore();
+
+    // Only collectQuestions'. Nothing missed, so nothing to explain.
+    expect(scans).toBe(1);
   });
 
   // Ashby renders its application outside any <form>, which formIndex reports as -1.
