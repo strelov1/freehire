@@ -9,9 +9,15 @@ banked answer serves every phrasing of it.
   still keys, from the fold alone. This ordering is deliberate: `internal/api/atsapply`'s
   own `labelAnswerKeyFor` was a sole-route list, and its missing salary rule was invisible
   precisely because nothing reports the questions a list fails to match.
-- **A question that folds to nothing is refused, never stored under an empty key.** Real
-  forms produce empty labels — Greenhouse's hidden `required` proxy inputs carry no label
-  at all — and a key derived from nothing can never be recalled.
+- **A question that folds to nothing is refused, never stored under an empty key.** A label
+  of pure punctuation is what real forms produce, and a key derived from nothing can never
+  be recalled.
+- **A labelless field is not that case.** Greenhouse's DOM-only inputs carry no label —
+  `country`, required on nearly every posting, is the commonest of them — and the caller
+  keys those by the field's own id (`internal/api/atsapply`'s `questionText`), which is also
+  the text the review screen titles the input with. This package sees "country" and keys it.
+  It refused for a while, and the effect was that the single most frequent parking question
+  in the product was the one question the bank could never learn.
 - **Two different questions must never collapse.** `desired salary` and `current salary`
   are the worked example: merging them answers one with the other, in the candidate's name,
   to an employer. A test asserts they stay apart; keep it when adding dictionary entries.

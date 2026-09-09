@@ -20,10 +20,12 @@ describe('answerableQuestions', () => {
     expect(answerableQuestions(pending)).toEqual([]);
   });
 
-  // A labelless entry cannot be answered: there is nothing to show the candidate, and the
-  // server refuses to key it. Rendering a blank input invites an answer to a question
-  // nobody can see.
-  it('skips a question with no readable text', () => {
+  // A guard, not the labelless-field case. The server titles a DOM-only field with its own
+  // id before this list is built (internal/api/atsapply's questionText — Greenhouse's
+  // `country` arrives here reading "country" and IS answerable), so what survives to be
+  // filtered here is a field with neither a label nor an id. Rendering a blank input would
+  // invite an answer to a question nobody can see.
+  it('skips a question with no readable text at all', () => {
     const pending = [
       { label: '', will_draft_at_submission: false },
       { label: '   ', will_draft_at_submission: false }
@@ -65,8 +67,8 @@ describe('answerableQuestions', () => {
 
 // pendingRows pairs every raw pending entry with a stable identity (its position) and
 // whether it is answerable. Nothing here may key on label text: two distinct questions
-// can share a label, and a live Greenhouse posting renders four pending entries with an
-// EMPTY label — either would collide if the identity came from the text itself.
+// can share a label, and an entry can carry no text at all — either would collide if the
+// identity came from the text itself.
 describe('pendingRows', () => {
   it('gives two entries with the same label their own distinct identity', () => {
     const pending = [
@@ -82,7 +84,7 @@ describe('pendingRows', () => {
     expect(rows.every((r) => r.answerable)).toBe(true);
   });
 
-  it('gives several empty-label entries their own distinct identity too', () => {
+  it('gives several textless entries their own distinct identity too', () => {
     const pending = [
       { label: '', will_draft_at_submission: false },
       { label: '', will_draft_at_submission: false },

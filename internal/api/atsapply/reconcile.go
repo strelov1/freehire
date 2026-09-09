@@ -28,6 +28,27 @@ type MergedField struct {
 	Options []applyform.Option
 }
 
+// questionText is what this field ASKS, as a person would read it: the employer's own label
+// where there is one, the field's id where there is not.
+//
+// One function rather than two agreeing expressions, because the two are a seam. Label is
+// empty for every DOM-rendered field the platform schema never declared — Greenhouse's
+// `country`, required on nearly every posting, is the worked example — and both the review
+// screen (PreviewAnswers) and the answer bank's key (matchBankAnswerKey) have to call that
+// field the same thing. They did not: the screen titled the input "country", the candidate
+// answered it, the server banked it under the topic of "country", and the resolver folded
+// "" and refused. The field parked again on every application, forever, and it is the
+// commonest parking question there is.
+//
+// A genuinely unkeyable string is still refused downstream — internal/dict/answertopic.Of
+// declines a fold that yields nothing, which is a field with neither a label nor an id.
+func questionText(f MergedField) string {
+	if f.Label != "" {
+		return f.Label
+	}
+	return f.ID
+}
+
 // domToAPIAlias is the one DOM-id-to-API-id mismatch the 2026-09-02 spike measured on a
 // live Greenhouse posting: the rendered location autocomplete carries the DOM id
 // `candidate-location`, while the question API calls the same question `location`.

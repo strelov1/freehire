@@ -432,7 +432,7 @@ func TestMatchBankAnswerKey_RefusesOnlyTheWorkAuthorizationSubset(t *testing.T) 
 		"Will you require a visa?",
 	}
 	for _, label := range refused {
-		if key, ok := matchBankAnswerKey(label); ok {
+		if key, ok := matchBankAnswerKey(MergedField{Label: label}); ok {
 			t.Errorf("matchBankAnswerKey(%q) = %q, true; want a refusal", label, key)
 		}
 	}
@@ -444,7 +444,7 @@ func TestMatchBankAnswerKey_RefusesOnlyTheWorkAuthorizationSubset(t *testing.T) 
 		"Which state do you currently reside in?",
 	}
 	for _, label := range kept {
-		if _, ok := matchBankAnswerKey(label); !ok {
+		if _, ok := matchBankAnswerKey(MergedField{Label: label}); !ok {
 			t.Errorf("matchBankAnswerKey(%q) refused — only work authorization is refused here", label)
 		}
 	}
@@ -456,4 +456,42 @@ func bankTopicKeyForTest(t *testing.T, question string) (string, bool) {
 	t.Helper()
 	topic, ok := answertopic.Of(question)
 	return bankAnswerKeyPrefix + topic, ok
+}
+
+// The empty-label seam, asserted across the two functions that have to agree about it.
+//
+// MergedField.Label is empty for any DOM-rendered field the platform's schema never
+// declared (reconcile.go), and Greenhouse's `country` is exactly that field — required on
+// nearly every posting and, by resolve.go's own admission, the single most common reason an
+// application parks. The review screen shows the candidate an input titled "country"
+// (PreviewAnswers substitutes the id), they answer it, and the server banks it under the
+// topic of the text they read. If the resolver keys on the raw label instead, that answer is
+// stored under a key nothing can recall and the field parks again forever.
+func TestPreviewAndResolveAgreeOnALabellessField(t *testing.T) {
+	field := MergedField{ID: "country", Kind: "text", Required: true}
+
+	preview := PreviewAnswers([]MergedField{field}, map[string]string{}, false)
+	if len(preview.Pending) != 1 {
+		t.Fatalf("preview.Pending = %+v, want the labelless field reported as pending", preview.Pending)
+	}
+	// What the candidate is shown, and therefore what the save route receives as the
+	// question text.
+	shown := preview.Pending[0].Label
+	if shown == "" {
+		t.Fatal("the review screen would render an input with no title at all")
+	}
+
+	topic, ok := bankTopicKeyForTest(t, shown)
+	if !ok {
+		t.Fatalf("the server would refuse to bank %q — nothing the candidate types can be saved", shown)
+	}
+
+	plan := Resolve([]MergedField{field}, map[string]string{topic: "Brazil"}, false)
+
+	if !plan.FullyResolved() {
+		t.Fatalf("unmapped = %+v — the answer was banked under %q and the resolver looks somewhere else", plan.Unmapped, topic)
+	}
+	if plan.Fields[0].Value != "Brazil" {
+		t.Errorf("value = %q, want the banked answer", plan.Fields[0].Value)
+	}
 }

@@ -46,9 +46,9 @@ function asksAboutWorkAuthorization(label: string): boolean {
 export interface PendingAnswerRow {
   /** The entry's position in the raw list. Never the label: two distinct questions can
    *  share text (an "Additional information" field is common to more than one ATS
-   *  question), and a live Greenhouse posting renders four pending entries with an EMPTY
-   *  label — either would collide if the identity came from the text itself, which breaks
-   *  an `{#each}` key, a DOM `id`, and a per-question draft map alike. */
+   *  question), and an entry can carry no text at all — either would collide if the
+   *  identity came from the text itself, which breaks an `{#each}` key, a DOM `id`, and a
+   *  per-question draft map alike. */
   key: number;
   pending: AutoApplyPreviewPending;
   /** Whether `answerableQuestions` would have kept this entry — computed once here so the

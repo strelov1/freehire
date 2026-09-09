@@ -47,9 +47,12 @@ func TestOf_AnUnknownQuestionStillKeysStably(t *testing.T) {
 	}
 }
 
-// Greenhouse's hidden proxy inputs reach this with an empty label (see
-// internal/api/atsapply/domscan.go). A key derived from nothing can never be recalled, so
-// it must be refused rather than stored.
+// A key derived from nothing can never be recalled, so it must be refused rather than
+// stored. This is a label of pure punctuation, which real forms do produce.
+//
+// It is NOT the labelless-field case: internal/api/atsapply keys a DOM-only field (
+// Greenhouse's `country`) by its id through questionText, so such a field reaches Of as
+// "country" and keys perfectly well.
 func TestOf_RefusesAQuestionThatFoldsToNothing(t *testing.T) {
 	for _, empty := range []string{"", "   ", "???", "-- --"} {
 		if got, ok := Of(empty); ok {

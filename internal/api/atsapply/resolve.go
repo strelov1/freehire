@@ -175,20 +175,25 @@ func matchLabelAnswerKey(label string) (string, bool) {
 // them together.
 const bankAnswerKeyPrefix = "topic:"
 
-// matchBankAnswerKey returns the answers-map key a field's label is banked under, if the
-// label can be keyed at all. Checked AFTER the id and label rules, never before: those are
-// typed, validated facts, and the bank's copy is free text — two sources answering one
-// question have to resolve the same way every time rather than by read order.
+// matchBankAnswerKey returns the answers-map key a field's question is banked under, if it
+// can be keyed at all. Checked AFTER the id and label rules, never before: those are typed,
+// validated facts, and the bank's copy is free text — two sources answering one question
+// have to resolve the same way every time rather than by read order.
+//
+// It keys on questionText, not on the raw Label, because the text the candidate ANSWERED is
+// what the server banked the answer under — and PreviewAnswers titles a labelless field
+// with its id. See questionText (reconcile.go) for the seam.
 //
 // A work-authorization question is refused outright, whatever the bank holds:
 // labelAnswerKeyFor above says why (the answer depends on THIS posting's country, which
 // nothing here has), and the bank does not relax it — one topic covers every posting worded
 // that way, so a banked "Yes" would travel between countries. See workAuthorizationTerms.
-func matchBankAnswerKey(label string) (string, bool) {
-	if isWorkAuthorizationLabel(label) {
+func matchBankAnswerKey(f MergedField) (string, bool) {
+	question := questionText(f)
+	if isWorkAuthorizationLabel(question) {
 		return "", false
 	}
-	topic, ok := answertopic.Of(label)
+	topic, ok := answertopic.Of(question)
 	if !ok {
 		return "", false
 	}
@@ -229,7 +234,7 @@ func resolveOne(f MergedField, answers map[string]string, hasApprovedCV bool) (R
 	if !known {
 		// The bank: an answer the candidate gave to this same question on an earlier
 		// application. Last, so a typed fact always wins — see matchBankAnswerKey.
-		key, known = matchBankAnswerKey(f.Label)
+		key, known = matchBankAnswerKey(f)
 	}
 	if !known {
 		return ResolvedField{}, fmt.Sprintf("no known answer source for %q", f.ID), false

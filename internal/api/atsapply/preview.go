@@ -24,21 +24,20 @@ func PreviewAnswers(fields []MergedField, answers map[string]string, hasApproved
 		if f.Kind == "file" {
 			continue
 		}
-		label := f.Label
-		if label == "" {
-			label = f.ID
-		}
-		preview.Fields = append(preview.Fields, autoapply.PreviewField{Label: label, Value: resolved.Value})
+		preview.Fields = append(preview.Fields, autoapply.PreviewField{
+			Label: questionText(f), Value: resolved.Value,
+		})
 	}
 
+	// questionText, not a label-or-id expression written out here: what this screen titles a
+	// question is what the candidate answers, and what they answer is banked under that
+	// text's topic — so this and matchBankAnswerKey have to be one function. See
+	// questionText's own comment for what happened when they were two.
 	for _, u := range plan.Unmapped {
-		label := u.Label
-		if label == "" {
-			label = u.ID
-		}
+		f := byID[u.ID]
 		preview.Pending = append(preview.Pending, autoapply.PreviewPending{
-			Label:                 label,
-			WillDraftAtSubmission: draftable(byID[u.ID]),
+			Label:                 questionText(f),
+			WillDraftAtSubmission: draftable(f),
 		})
 	}
 	return preview
