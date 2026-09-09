@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/strelov1/freehire/internal/application/autoapply"
+	"github.com/strelov1/freehire/internal/dict/answertopic"
 )
 
 // ResolvedField is one field ready to fill, with the exact value the widget expects — an
@@ -156,6 +157,26 @@ func matchLabelAnswerKey(label string) (string, bool) {
 	return "", false
 }
 
+// bankAnswerKeyPrefix namespaces the banked answers inside the same map the deterministic
+// facts use. One map rather than two arguments threaded through every call site: a banked
+// answer IS an answer, and the resolver has no reason to know which source stated it.
+//
+// The prefix keeps the two from colliding — a topic is a folded question, which can be any
+// text at all, including the exact string "email".
+const bankAnswerKeyPrefix = "topic:"
+
+// matchBankAnswerKey returns the answers-map key a field's label is banked under, if the
+// label can be keyed at all. Checked AFTER the id and label rules, never before: those are
+// typed, validated facts, and the bank's copy is free text — two sources answering one
+// question have to resolve the same way every time rather than by read order.
+func matchBankAnswerKey(label string) (string, bool) {
+	topic, ok := answertopic.Of(label)
+	if !ok {
+		return "", false
+	}
+	return bankAnswerKeyPrefix + topic, true
+}
+
 // resolveOne resolves a single field's answer. For a Multi field (a checkbox group taking
 // several answers) this matches at most ONE option's value, even when more than one would
 // be correct — AnswerSource only ever supplies single-value identity/work-authorization
@@ -186,6 +207,11 @@ func resolveOne(f MergedField, answers map[string]string, hasApprovedCV bool) (R
 		// its label against the narrow set of known semantic categories. An id match, when
 		// one exists, is always more specific/trustworthy and is never shadowed by this.
 		key, known = matchLabelAnswerKey(f.Label)
+	}
+	if !known {
+		// The bank: an answer the candidate gave to this same question on an earlier
+		// application. Last, so a typed fact always wins — see matchBankAnswerKey.
+		key, known = matchBankAnswerKey(f.Label)
 	}
 	if !known {
 		return ResolvedField{}, fmt.Sprintf("no known answer source for %q", f.ID), false

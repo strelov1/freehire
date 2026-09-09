@@ -285,3 +285,40 @@ func TestResolve_DoesNotAnswerACurrentSalaryQuestionWithTheDesiredOne(t *testing
 		t.Fatalf("unmapped = %+v, want the current-salary question reported as unanswered", plan.Unmapped)
 	}
 }
+
+// A banked answer reaches a question no rule and no id could match — the bank's whole
+// purpose. The key is the question's own topic, so the wording the employer used does not
+// have to be the wording the candidate answered.
+func TestResolve_AnsweredFromTheBankByTopic(t *testing.T) {
+	answers := map[string]string{"topic:which state do you currently reside in": "Santa Catarina"}
+	fields := []MergedField{{
+		ID: "question_4005041004", Label: "Which state do you currently reside in?",
+		Kind: "text", Required: true,
+	}}
+
+	plan := Resolve(fields, answers, false)
+
+	if len(plan.Unmapped) != 0 {
+		t.Fatalf("unmapped = %+v, want the question answered from the bank", plan.Unmapped)
+	}
+	if len(plan.Fields) != 1 || plan.Fields[0].Value != "Santa Catarina" {
+		t.Fatalf("plan.Fields = %+v, want the banked answer", plan.Fields)
+	}
+}
+
+// A typed fact still wins. It is validated and structured; the bank's copy is free text,
+// and two sources answering one question must resolve the same way every time rather than
+// by whichever was read first.
+func TestResolve_ATypedFactOutranksABankedAnswer(t *testing.T) {
+	answers := map[string]string{
+		"desired_salary":           "5000 USD per year",
+		"topic:salary_expectation": "whatever you think is fair",
+	}
+	fields := []MergedField{{ID: "question_1", Label: "What is your desired salary?", Kind: "text", Required: true}}
+
+	plan := Resolve(fields, answers, false)
+
+	if len(plan.Fields) != 1 || plan.Fields[0].Value != "5000 USD per year" {
+		t.Fatalf("plan.Fields = %+v, want the typed fact to win", plan.Fields)
+	}
+}

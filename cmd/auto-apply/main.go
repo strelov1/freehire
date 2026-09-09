@@ -15,6 +15,7 @@ import (
 	"github.com/strelov1/freehire/internal/api/atsapply"
 	"github.com/strelov1/freehire/internal/api/candidateprofile"
 	"github.com/strelov1/freehire/internal/application/autoapply"
+	"github.com/strelov1/freehire/internal/candidate/answerbank"
 	"github.com/strelov1/freehire/internal/candidate/coverletter"
 	"github.com/strelov1/freehire/internal/candidate/cv"
 	"github.com/strelov1/freehire/internal/candidate/experience"
@@ -64,11 +65,16 @@ func run() int {
 	cvStore := cv.NewStore(cv.NewQueriesRepository(queries))
 	resumeStore := resume.New(blobStore, resume.NewQueriesRepository(queries))
 	screeningAnswersSvc := screeninganswers.New(screeninganswers.NewQueriesRepository(queries))
-	// The same four sources, in the same precedence order, internal/handler's
+	// The candidate's accumulating bank of screening-question answers — the same store
+	// internal/api/handler wires into its own assembler, so a banked answer reaches a form
+	// field here, the worker that actually fills and submits forms, and not only the UI's
+	// preview read.
+	answerBank := answerbank.NewStore(answerbank.NewQueriesRepository(queries))
+	// The same five sources, in the same precedence order, internal/handler's
 	// extension-autofill path already resolves a candidate's profile through — see
 	// internal/candidateprofile's package doc for why this must be the one Assembler.
 	answers := assemblerAnswerSource{
-		assembler: candidateprofile.NewAssembler(cvStore, resumeStore, queries, screeningAnswersSvc),
+		assembler: candidateprofile.NewAssembler(cvStore, resumeStore, queries, screeningAnswersSvc, answerBank),
 	}
 
 	// Question drafting (openspec/changes/auto-apply-llm-drafting) is optional: an

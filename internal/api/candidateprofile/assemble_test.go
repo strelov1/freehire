@@ -55,7 +55,7 @@ func (f fakeScreening) Get(context.Context, int64) (screeninganswers.Answers, er
 }
 
 func assemblerWith(cvs fakeCV, st resumeextract.Structured, stOK bool, email string) *Assembler {
-	return NewAssembler(cvs, fakeResume{ret: st, ok: stOK}, fakeAccount{email: email}, nil)
+	return NewAssembler(cvs, fakeResume{ret: st, ok: stOK}, fakeAccount{email: email}, nil, nil)
 }
 
 func TestAssemble_PrefersBaseCVOverStructuredResume(t *testing.T) {
@@ -277,7 +277,7 @@ func TestContactHeaderFromStructured(t *testing.T) {
 func TestAssemble_IncludesScreeningAnswersWhenStated(t *testing.T) {
 	days := 14
 	a := NewAssembler(fakeCV{}, fakeResume{}, fakeAccount{email: "account@example.com"},
-		fakeScreening{ret: screeninganswers.Answers{NoticePeriodDays: &days}})
+		fakeScreening{ret: screeninganswers.Answers{NoticePeriodDays: &days}}, nil)
 
 	got, err := a.Assemble(context.Background(), 7)
 	if err != nil {
@@ -289,7 +289,7 @@ func TestAssemble_IncludesScreeningAnswersWhenStated(t *testing.T) {
 }
 
 func TestAssemble_NoScreeningReaderYieldsEmptyScreeningFields(t *testing.T) {
-	a := NewAssembler(fakeCV{}, fakeResume{}, fakeAccount{email: "account@example.com"}, nil)
+	a := NewAssembler(fakeCV{}, fakeResume{}, fakeAccount{email: "account@example.com"}, nil, nil)
 
 	got, err := a.Assemble(context.Background(), 7)
 	if err != nil {
@@ -302,7 +302,7 @@ func TestAssemble_NoScreeningReaderYieldsEmptyScreeningFields(t *testing.T) {
 
 func TestAssemble_ScreeningAnswersNotFoundYieldsEmptyFields(t *testing.T) {
 	a := NewAssembler(fakeCV{}, fakeResume{}, fakeAccount{email: "account@example.com"},
-		fakeScreening{err: screeninganswers.ErrNotFound})
+		fakeScreening{err: screeninganswers.ErrNotFound}, nil)
 
 	got, err := a.Assemble(context.Background(), 7)
 	if err != nil {
