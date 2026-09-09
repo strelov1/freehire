@@ -39,6 +39,7 @@ import (
 	"github.com/strelov1/freehire/internal/engage/emailnotify"
 	"github.com/strelov1/freehire/internal/engage/emailprefs"
 	"github.com/strelov1/freehire/internal/engage/mentorship"
+	"github.com/strelov1/freehire/internal/engage/processreport"
 	"github.com/strelov1/freehire/internal/engage/referral"
 	"github.com/strelov1/freehire/internal/engage/report"
 	"github.com/strelov1/freehire/internal/identity/accountdelete"
@@ -434,6 +435,7 @@ func Register(app *fiber.App, cfg Config) {
 	// Feedback reuses communityH's persona minting (via the communityPersonas
 	// adapter) so a user's pseudonym stays the same one discussion threads show,
 	// which is why it is constructed after communityH rather than alongside it.
+	companyProcessReportH := newCompanyProcessReportHandlers(processreport.New(queries, cfg.Pool, processreport.Config{}))
 	companyFeedbackH := newCompanyFeedbackHandlers(companyfeedback.New(queries, cfg.Pool, communityPersonas{svc: communityH.community}, companyfeedback.Config{}))
 	// Contributions detect the ATS board from the URL alone (network-free, board.go), with a
 	// network fallback (boardresolve) that fetches a company careers page and detects an
@@ -858,6 +860,7 @@ func Register(app *fiber.App, cfg Config) {
 	timelineH.register(api, mw)
 	votesH.register(api, mw)
 	companyFeedbackH.register(api, mw)
+	companyProcessReportH.register(api, mw)
 	// Per-job skill match + the on-demand LLM fit analysis (see matchHandlers).
 	matchH.register(api, mw)
 	// The contact block the extension writes into forms, plain and agent-driven (see

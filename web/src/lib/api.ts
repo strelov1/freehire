@@ -87,6 +87,8 @@ import type {
   SeekerReferralRequest,
   IncomingReferralRequest,
   Report,
+  ProcessReportKind,
+  ProcessReportResult,
   ReportInput,
   GhostReportInput,
   Verdict,
@@ -2179,6 +2181,33 @@ export function createApi(
     await call(`/api/v1/jobs/${slug}/ghost-report`, jsonBody('POST', input));
   }
 
+  /** Report a fact about how a COMPANY hires — today only that it screens with an AI
+   *  interviewer. Filed from a job page but addressed by company, because that is what
+   *  the report is about. Reaches no moderator: there is nothing to act on about a true
+   *  statement. Returns the company's resulting count, so the caller can render the
+   *  badge from this answer rather than re-reading the company. 409 if already filed. */
+  async function reportCompanyProcess(slug: string, kind: ProcessReportKind): Promise<ProcessReportResult> {
+    return requestData<ProcessReportResult>(
+      `/api/v1/companies/${encodeURIComponent(slug)}/process-reports`,
+      jsonBody('POST', { kind }),
+    );
+  }
+
+  /** Withdraw this caller's own process report (404 if there is none). The row is kept
+   *  and stamped rather than deleted, so withdrawing cannot be used to file twice. */
+  async function withdrawCompanyProcessReport(slug: string, kind: ProcessReportKind): Promise<ProcessReportResult> {
+    return requestData<ProcessReportResult>(
+      `/api/v1/companies/${encodeURIComponent(slug)}/process-reports?kind=${encodeURIComponent(kind)}`,
+      { method: 'DELETE' },
+    );
+  }
+
+  /** Which process-report kinds this caller currently holds against a company, so the
+   *  write surface opens in the right state instead of finding out by being refused. */
+  async function myCompanyProcessReports(slug: string): Promise<ProcessReportKind[]> {
+    return requestData<ProcessReportKind[]>(`/api/v1/companies/${encodeURIComponent(slug)}/process-reports/mine`);
+  }
+
   /** Withdraw this caller's ghost claim about a job (204, or 404 if there is none). */
   async function withdrawGhostReport(slug: string): Promise<void> {
     // call(), not request(): a 204 carries no body, and .json() on an empty one
@@ -2953,6 +2982,9 @@ export function createApi(
     rejectSubmission,
     reportJob,
     reportGhostJob,
+    reportCompanyProcess,
+    withdrawCompanyProcessReport,
+    myCompanyProcessReports,
     withdrawGhostReport,
     listPendingReports,
     resolveReport,

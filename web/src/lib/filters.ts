@@ -125,6 +125,10 @@ export class FilterStore {
     this.#url.setNow({ ...this.#url.value, visa: on });
   }
 
+  setHideAIInterview(on: boolean) {
+    this.#url.setNow({ ...this.#url.value, hideAIInterview: on });
+  }
+
   setClearance(v: ClearanceFilter) {
     this.#url.setNow({ ...this.#url.value, clearance: v });
   }

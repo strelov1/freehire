@@ -110,38 +110,44 @@ type companyView struct {
 	// shape as UpvoteCount/DownvoteCount above.
 	FeedbackCount     int32    `json:"feedback_count"`
 	FeedbackRatingAvg *float32 `json:"feedback_rating_avg"`
+	// AIInterviewReports is how many people have reported that this company screens
+	// with an AI interviewer (internal/engage/processreport). Omitted at zero: the
+	// count is what the label must always be shown with, so no reports has to be an
+	// absent field rather than a zero a badge could render beside.
+	AIInterviewReports int32 `json:"ai_interview_reports,omitempty"`
 }
 
 // companyViewFrom projects a stored company onto its public view, dropping only the
 // internal bookkeeping columns.
 func companyViewFrom(c db.Company) companyView {
 	return companyView{
-		Slug:              c.Slug,
-		Name:              c.Name,
-		Collections:       c.Collections,
-		JobCount:          c.JobCount,
-		Regions:           c.Regions,
-		Countries:         c.Countries,
-		Domains:           c.Domains,
-		CompanyTypes:      c.CompanyTypes,
-		CompanySizes:      c.CompanySizes,
-		Industries:        c.Industries,
-		YearFounded:       pgconv.IntPtr(c.YearFounded),
-		EmployeeCount:     pgconv.IntPtr(c.EmployeeCount),
-		HqCountry:         pgconv.TextPtr(c.HqCountry),
-		OrganizationType:  pgconv.TextPtr(c.OrganizationType),
-		Tagline:           pgconv.TextPtr(c.Tagline),
-		CompanyInfo:       c.CompanyInfo,
-		RemoteRegions:     c.RemoteRegions,
-		YcBatch:           c.YcBatch,
-		YcStatus:          c.YcStatus,
-		YcStage:           c.YcStage,
-		YcFlags:           c.YcFlags,
-		Maturity:          pgconv.TextPtr(c.Maturity),
-		UpvoteCount:       c.UpvoteCount,
-		DownvoteCount:     c.DownvoteCount,
-		FeedbackCount:     c.FeedbackCount,
-		FeedbackRatingAvg: pgconv.Float4Ptr(c.FeedbackRatingAvg),
+		Slug:               c.Slug,
+		Name:               c.Name,
+		Collections:        c.Collections,
+		JobCount:           c.JobCount,
+		Regions:            c.Regions,
+		Countries:          c.Countries,
+		Domains:            c.Domains,
+		CompanyTypes:       c.CompanyTypes,
+		CompanySizes:       c.CompanySizes,
+		Industries:         c.Industries,
+		YearFounded:        pgconv.IntPtr(c.YearFounded),
+		EmployeeCount:      pgconv.IntPtr(c.EmployeeCount),
+		HqCountry:          pgconv.TextPtr(c.HqCountry),
+		OrganizationType:   pgconv.TextPtr(c.OrganizationType),
+		Tagline:            pgconv.TextPtr(c.Tagline),
+		CompanyInfo:        c.CompanyInfo,
+		RemoteRegions:      c.RemoteRegions,
+		YcBatch:            c.YcBatch,
+		YcStatus:           c.YcStatus,
+		YcStage:            c.YcStage,
+		YcFlags:            c.YcFlags,
+		Maturity:           pgconv.TextPtr(c.Maturity),
+		UpvoteCount:        c.UpvoteCount,
+		DownvoteCount:      c.DownvoteCount,
+		FeedbackCount:      c.FeedbackCount,
+		FeedbackRatingAvg:  pgconv.Float4Ptr(c.FeedbackRatingAvg),
+		AIInterviewReports: c.AiInterviewReports,
 	}
 }
 
@@ -429,21 +435,27 @@ type companyListItem struct {
 	// detail view (companyView) already serves.
 	FeedbackCount     int32    `json:"feedback_count"`
 	FeedbackRatingAvg *float32 `json:"feedback_rating_avg"`
+	// AIInterviewReports is how many people have reported that this company screens
+	// with an AI interviewer (internal/engage/processreport). Omitted at zero: the
+	// count is what the label must always be shown with, so no reports has to be an
+	// absent field rather than a zero a badge could render beside.
+	AIInterviewReports int32 `json:"ai_interview_reports,omitempty"`
 }
 
 // companyListItemFromRow projects the Postgres read onto the wire shape. The row already carries
 // null-ness, so the two nullable columns pass through as-is.
 func companyListItemFromRow(r db.ListCompaniesRow) companyListItem {
 	return companyListItem{
-		Slug:              r.Slug,
-		Name:              r.Name,
-		JobCount:          r.JobCount,
-		Tagline:           pgconv.TextPtr(r.Tagline),
-		Industries:        r.Industries,
-		HqCountry:         pgconv.TextPtr(r.HqCountry),
-		Collections:       r.Collections,
-		FeedbackCount:     r.FeedbackCount,
-		FeedbackRatingAvg: pgconv.Float4Ptr(r.FeedbackRatingAvg),
+		Slug:               r.Slug,
+		Name:               r.Name,
+		JobCount:           r.JobCount,
+		Tagline:            pgconv.TextPtr(r.Tagline),
+		Industries:         r.Industries,
+		HqCountry:          pgconv.TextPtr(r.HqCountry),
+		Collections:        r.Collections,
+		FeedbackCount:      r.FeedbackCount,
+		FeedbackRatingAvg:  pgconv.Float4Ptr(r.FeedbackRatingAvg),
+		AIInterviewReports: r.AiInterviewReports,
 	}
 }
 

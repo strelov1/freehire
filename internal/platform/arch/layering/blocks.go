@@ -206,7 +206,12 @@ var blocks = map[string][]string{
 	// billing would import a community integration — and the guard would say so.
 	"engage": {
 		"broadcast", "community", "companyfeedback", "discordlink", "emailnotify", "emailprefs",
-		"linkedinauth", "mailpreview", "mentorship", "notify", "nudge", "onboarding", "pushnotify",
+		"linkedinauth", "mailpreview", "mentorship", "notify", "nudge", "onboarding",
+		// processreport holds candidate-reported facts about how a company hires (today:
+		// that it screens with an AI interviewer). It sits beside companyfeedback and not
+		// in job, because what it stores is what a PERSON reported, not a property the
+		// catalogue derived — the same reason report and vote are here.
+		"processreport", "pushnotify",
 		"referral", "reminder", "report", "socialdigest", "subscription",
 		"telegramnotify", "vote", "webhooknotify",
 	},

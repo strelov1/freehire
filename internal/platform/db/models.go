@@ -303,6 +303,7 @@ type Company struct {
 	FeedbackRatingAvg             pgtype.Float4      `json:"feedback_rating_avg"`
 	IndustriesDerived             []string           `json:"industries_derived"`
 	CompanyInfoWikipediaCheckedAt pgtype.Timestamptz `json:"company_info_wikipedia_checked_at"`
+	AiInterviewReports            int32              `json:"ai_interview_reports"`
 }
 
 type CompanyFeedback struct {
@@ -323,6 +324,15 @@ type CompanyFeedbackReport struct {
 	ReporterUserID pgtype.Int8        `json:"reporter_user_id"`
 	Reason         string             `json:"reason"`
 	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+}
+
+type CompanyProcessReport struct {
+	ID          int64              `json:"id"`
+	UserID      int64              `json:"user_id"`
+	CompanySlug string             `json:"company_slug"`
+	Kind        string             `json:"kind"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	RetractedAt pgtype.Timestamptz `json:"retracted_at"`
 }
 
 // Retired company slug -> the canonical slug it merged into. The one company-adjacent table that is NOT derived from jobs: DeleteOrphanCompanies would drop a canon stored in companies as soon as the employer went quiet. Read by folded_key on ingest and by alias_slug to serve a 301.
@@ -735,6 +745,7 @@ type Job struct {
 	RequiresClearance     pgtype.Bool        `json:"requires_clearance"`
 	RequirementsDerived   []byte             `json:"requirements_derived"`
 	HydratedAt            pgtype.Timestamptz `json:"hydrated_at"`
+	AiInterviewReports    int32              `json:"ai_interview_reports"`
 }
 
 type JobDailyStat struct {

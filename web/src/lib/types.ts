@@ -317,6 +317,11 @@ export interface Company {
   // left a rated review and their average star rating. rating_avg is null while
   // feedback_count is 0.
   feedback_count: number;
+  /** How many people have reported that this company screens with an AI interviewer
+   *  (internal/engage/processreport). Absent when nobody has: the label is required to
+   *  be shown with its count, so no reports is the absence of the field rather than a
+   *  zero a badge could render beside. */
+  ai_interview_reports?: number;
   feedback_rating_avg: number | null;
 }
 
@@ -325,6 +330,11 @@ export interface Company {
  *  company without a second round trip. */
 export interface CompanyFeedbackSummary {
   feedback_count: number;
+  /** How many people have reported that this company screens with an AI interviewer
+   *  (internal/engage/processreport). Absent when nobody has: the label is required to
+   *  be shown with its count, so no reports is the absence of the field rather than a
+   *  zero a badge could render beside. */
+  ai_interview_reports?: number;
   feedback_rating_avg: number | null;
 }
 
@@ -374,6 +384,11 @@ export interface CompanyListItem {
   /** Materialized feedback counters (internal/companyfeedback), the same fields
    *  the single-company detail view serves. */
   feedback_count: number;
+  /** How many people have reported that this company screens with an AI interviewer
+   *  (internal/engage/processreport). Absent when nobody has: the label is required to
+   *  be shown with its count, so no reports is the absence of the field rather than a
+   *  zero a badge could render beside. */
+  ai_interview_reports?: number;
   feedback_rating_avg: number | null;
 }
 
@@ -602,6 +617,28 @@ export interface PrefillResult {
 /** Why a job was reported. A closed vocabulary mirroring the backend's
  *  internal/report reasons; labels live in $lib/reports. */
 export type ReportReason = 'no_response' | 'not_relevant' | 'spam' | 'fraud' | 'other';
+
+/** What a candidate can report about how a company hires. A closed vocabulary
+ *  mirroring the backend's vocab.CompanyProcessReportKindValues and the CHECK in
+ *  migration 0156. Each value is a statement that is either true of an employer or
+ *  not, which is why one reporter is enough to show it and why nothing here reaches
+ *  a moderator. */
+export type ProcessReportKind = 'ai_interview';
+
+/** Everything the report picker can offer. It is deliberately WIDER than
+ *  ReportReason: the picker is one list to a person, but its entries land on two
+ *  different endpoints, and only ReportReason's values are ones the moderation
+ *  endpoint will accept. Keeping them separate types is what stops an entry drifting
+ *  onto the route that would file it as a ticket for a reviewer who cannot act on it. */
+export type ReportPickerValue = ReportReason | ProcessReportKind;
+
+/** What a process-report write answers with: the kind acted on and the company's
+ *  resulting count. The count comes back on every write so a caller renders the badge
+ *  from this response rather than re-reading the company. */
+export interface ProcessReportResult {
+  kind: ProcessReportKind;
+  count: number;
+}
 
 /** A user's report of a problem with a live vacancy. `reporter_email` and the
  *  `job_*` fields are present only on the moderator review queue, never on the

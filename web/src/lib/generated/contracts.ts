@@ -112,6 +112,11 @@ export interface Card {
   skills?: string[];
   collections?: string[];
   /**
+   * AIInterviewReports mirrors Job.AIInterviewReports — omitted at zero for the same
+   * reason: the badge is the count, so no reports must be an absent field.
+   */
+  ai_interview_reports?: number /* int32 */;
+  /**
    * PostedAt is the effective posting date, the same derivation the full projection makes:
    * the stated date, or the row's creation when the source never gave one.
    */
@@ -225,6 +230,14 @@ export interface Job {
    * column; an untagged job serializes it as [].
    */
   collections: string[];
+  /**
+   * AIInterviewReports is how many people have reported that this job's company
+   * screens candidates with an AI interviewer (internal/engage/processreport),
+   * denormalized from the company onto the job. Omitted at zero: the count is what
+   * the label must always be shown with, so "no reports" has to be the absence of
+   * the field rather than a zero a badge could render beside.
+   */
+  ai_interview_reports?: number /* int32 */;
   /**
    * IsTech is the deterministic technical/non-technical facet: "tech" or "non_tech",
    * omitted when unknown (the tri-state jobs.is_tech NULL). Served top-level and

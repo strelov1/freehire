@@ -183,6 +183,7 @@
       return (
         selCount(f, 'relocation') +
         (f.visa ? 1 : 0) +
+        (f.hideAIInterview ? 1 : 0) +
         (f.clearance !== 'any' ? 1 : 0) +
         selCount(f, 'collections', employerCredentialValues)
       );
@@ -486,6 +487,17 @@
         onchange={(e) => staged.setVisa(e.currentTarget.checked)}
       />
       <span>Offers visa sponsorship</span>
+    </label>
+    <!-- Stated as what it hides, not as a judgement. The badge names the practice and
+         its report count; this is only the way to act on it. -->
+    <label class="flex cursor-pointer items-center gap-2 text-sm">
+      <input
+        type="checkbox"
+        class="size-4 rounded border-border"
+        checked={staged.value.hideAIInterview}
+        onchange={(e) => staged.setHideAIInterview(e.currentTarget.checked)}
+      />
+      <span>Hide employers reported to interview with AI</span>
     </label>
     <h3 class="mb-2 mt-6 text-sm font-semibold tracking-tight">Security clearance</h3>
     <div class="inline-flex overflow-hidden rounded-md border border-border" role="group">

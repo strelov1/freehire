@@ -18,6 +18,7 @@
   import CredentialBadge from './CredentialBadge.svelte';
   import BackerBadge from './BackerBadge.svelte';
   import { credentialBadges } from '$lib/credentials';
+  import AIInterviewBadge from './AIInterviewBadge.svelte';
   import GhostBadge from './GhostBadge.svelte';
   import RealityBadge from './RealityBadge.svelte';
   import SkillIcon from './SkillIcon.svelte';
@@ -321,7 +322,10 @@
 
   <!-- Signal row: reality chip + the region/employment facets, grouped under the
        title as quiet outline chips so they read as metadata, not decoration. -->
-  {#if reality || freshness.length > 0 || tags.length > 0 || job.countries?.length || credentials.length > 0}
+  <!-- ai_interview_reports belongs in this guard on its own: a card can carry the
+       label while having no reality verdict, no freshness, no tags, no countries and no
+       credentials, and the row would then be suppressed with the badge inside it. -->
+  {#if reality || freshness.length > 0 || tags.length > 0 || job.countries?.length || credentials.length > 0 || job.ai_interview_reports}
     <div class="mt-2 flex flex-wrap items-center gap-1.5">
       <!-- evergreen_posting IS the reality verdict, so showing both chips states one
            fact twice, the second time louder. The ghost chip carries it inside its
@@ -331,6 +335,10 @@
       {:else}
         <RealityBadge {reality} />
       {/if}
+      <!-- A separate fact from the two above: those describe the POSTING's reality, this
+           describes how the EMPLOYER screens. It is neutral and joins them rather than
+           superseding either. Renders nothing when nobody has reported. -->
+      <AIInterviewBadge count={job.ai_interview_reports} />
       <!-- Freshness before the facets: "New" is a fact about right now, the facets are
            stable attributes of the role. Both sit behind the reality/ghost chip, because
            a warning that a posting may not be real outranks a note that it is fresh.

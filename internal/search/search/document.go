@@ -71,6 +71,19 @@ type JobDocument struct {
 	// needs no jobs column and no cmd/backfill-derive pass — a reindex is what
 	// reaches existing postings.
 	RoleType string `json:"role_type"`
+	// AIInterview is true when the job's company carries at least one un-retracted
+	// AI-interview report, derived at index time from the embedded view's count.
+	//
+	// It exists BESIDE the count rather than instead of it because the two answer
+	// different questions: the count is what the badge renders, and a filter over an
+	// integer would make "hide these employers" a range query nobody would guess. It is
+	// declared on the document, not on jobview.Job, so it is filterable but never served
+	// to clients — the same reason PostedTS lives here.
+	//
+	// Written only when true. Nothing in the index is ever written false, so the
+	// negative is asked as NOT of the positive (see aiInterviewFragment), which is what
+	// also reaches the documents that omit the attribute entirely.
+	AIInterview bool `json:"ai_interview,omitempty"`
 	// Vectors carries the job's skill vector under Meilisearch's reserved `_vectors`
 	// key — the userProvided embedder that backs the match sort (see
 	// internal/dict/skillvec). Like Roles and RoleType it lives on the document rather
@@ -118,6 +131,7 @@ func FromJob(j db.Job) (JobDocument, error) {
 		Job:         view,
 		AIArchetype: aiarchetype.Derive(j.Skills, j.Category),
 		RoleType:    roletype.Derive(j.Title),
+		AIInterview: view.AIInterviewReports > 0,
 	}
 	if eff := jobview.EffectivePostedAt(j.PostedAt, j.CreatedAt, time.Now()); eff.Valid {
 		doc.PostedTS = eff.Time.Unix()

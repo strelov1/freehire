@@ -3,19 +3,21 @@
 // moderator queue (rendering a stored reason). Kept beside the API client rather
 // than generated, since these reasons live in the report package, not the
 // enrichment contract that cmd/gen-contracts emits.
-import type { ReportReason } from './types';
+import type { ProcessReportKind, ReportPickerValue, ReportReason } from './types';
 
 interface ReasonOption {
-  value: ReportReason;
+  value: ReportPickerValue;
   /** Short label for the picker and the queue. */
   label: string;
   /** One-line help shown under the label in the picker. */
   hint: string;
 }
 
-/** The reasons in the order they appear in the picker (mirrors the mockup). */
+/** The entries in the order they appear in the picker (mirrors the mockup). One list
+ *  to a person; three destinations underneath — see reportRoute. */
 export const reportReasons: ReasonOption[] = [
   { value: 'no_response', label: 'No response', hint: 'Applied but never heard back' },
+  { value: 'ai_interview', label: 'AI interview', hint: 'The interview was conducted by a bot' },
   { value: 'not_relevant', label: 'No longer relevant', hint: 'Position filled or expired' },
   { value: 'spam', label: 'Spam or not a job', hint: 'An ad or not a real vacancy' },
   { value: 'fraud', label: 'Fraud', hint: 'A scam or asks for payment' },
@@ -23,7 +25,7 @@ export const reportReasons: ReasonOption[] = [
 ];
 
 /** Label for a stored reason value (used by the moderator queue). */
-export function reportReasonLabel(reason: ReportReason): string {
+export function reportReasonLabel(reason: ReportPickerValue): string {
   return reportReasons.find((r) => r.value === reason)?.label ?? reason;
 }
 
@@ -87,17 +89,40 @@ export function decisionOutcome({
   return `The decision was recorded, but the email${who}${about} did not go out. Follow up by hand if it matters.`;
 }
 
-/** Whether a reason files EVIDENCE for the ghost signal rather than a moderation
- *  report. Only `no_response` does: it describes an outcome the reporter lived
- *  through, which accumulates and can be withdrawn, while the other four describe
- *  the posting itself and need a moderator who can act on it.
+/** Where a picked entry is filed.
  *
- *  It lives here rather than inline in the dialog so the split is pinned by a test.
- *  Rerouting `no_response` back to the moderation queue would put it in front of a
- *  reviewer whose only lever is closing the job — the thing this whole split exists
- *  to stop — and nothing in the component would have noticed. */
-export function isEvidenceReason(reason: ReportReason): boolean {
-  return reason === 'no_response';
+ *  - `moderation` — a complaint about the POSTING, for a reviewer who can close it.
+ *  - `ghost` — evidence about an outcome the reporter lived through, accumulating on
+ *    the job and withdrawable.
+ *  - `process` — a fact about how the COMPANY hires, accumulating on the employer.
+ *
+ *  Only the first reaches a person. The moderation queue's only lever is closing the
+ *  job, so an entry routed there by mistake reaches a reviewer who cannot express
+ *  "noted, counted" — and for `ai_interview` there is nothing to act on at all, since
+ *  the report is true.
+ *
+ *  This lives here rather than inline in the dialog so the routing is pinned by a
+ *  test. Nothing in the component would notice an entry silently changing lanes. */
+export type ReportRoute = 'moderation' | 'ghost' | 'process';
+
+export function reportRoute(value: ReportPickerValue): ReportRoute {
+  if (value === 'no_response') return 'ghost';
+  if (value === 'ai_interview') return 'process';
+  return 'moderation';
+}
+
+/** The process-report kinds the picker can produce, narrowed from a picked value.
+ *  Returns null for everything else, so a caller cannot hand a moderation reason to
+ *  the company endpoint. */
+export function processKindOf(value: ReportPickerValue): ProcessReportKind | null {
+  return value === 'ai_interview' ? 'ai_interview' : null;
+}
+
+/** The moderation reason a picked value denotes, or null when it is filed elsewhere.
+ *  This is the type-level guard that keeps a picker entry off the endpoint whose
+ *  vocabulary does not contain it. */
+export function moderationReasonOf(value: ReportPickerValue): ReportReason | null {
+  return reportRoute(value) === 'moderation' ? (value as ReportReason) : null;
 }
 
 interface AppliedOnInput {

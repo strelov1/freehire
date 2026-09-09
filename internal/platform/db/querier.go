@@ -1062,6 +1062,10 @@ type Querier interface {
 	// edit-by-resubmit never inserts a new row (the ON CONFLICT DO UPDATE branch
 	// leaves created_at untouched), so this only grows on genuinely new rows.
 	CountRecentCompanyFeedback(ctx context.Context, arg CountRecentCompanyFeedbackParams) (int64, error)
+	// How many reports this user has filed since `since` — the rate-limit check, mirroring
+	// CountRecentCompanyFeedback. A revival takes the ON CONFLICT branch and leaves
+	// created_at untouched, so this only grows on genuinely new rows.
+	CountRecentCompanyProcessReports(ctx context.Context, arg CountRecentCompanyProcessReportsParams) (int64, error)
 	CountRecentRepliesByUser(ctx context.Context, arg CountRecentRepliesByUserParams) (int64, error)
 	// Rate-limit count: threads a user opened since a cutoff. Served by
 	// threads_author_created_idx.
@@ -1901,6 +1905,23 @@ type Querier interface {
 	// non-positive window means "never bury on age" rather than "bury everything", for the
 	// reason RecordEnrichmentFailure spells out: a misconfiguration must cost retries, not mail.
 	FailEmailClassification(ctx context.Context, arg FailEmailClassificationParams) (FailEmailClassificationRow, error)
+	// Candidate-reported facts about how a company hires (migration 0156). One row per
+	// (user, company, kind); withdrawal sets retracted_at rather than deleting, so the
+	// uniqueness bound survives a retraction and cannot be used to file repeatedly.
+	//
+	// The domain layer runs file-or-retract and then the recount in ONE transaction, so
+	// a reader never sees the label without the count that qualifies it.
+	// The company row's lock that serializes concurrent writes with the recompute below
+	// is LockCompanyForVote, reused here rather than duplicated under a second name —
+	// the same call companyfeedback makes for the same reason. It locks the companies
+	// row; nothing about it is specific to votes.
+	// File a report, or revive the caller's own retracted one.
+	//
+	// The ON CONFLICT branch is guarded on retracted_at IS NOT NULL, so an already-live
+	// report updates nothing and RETURNS NO ROW — which is exactly how the service tells
+	// "filed" from "you already reported this" (409) without a second read. A revival
+	// reuses the row rather than inserting a second, keeping the uniqueness bound whole.
+	FileCompanyProcessReport(ctx context.Context, arg FileCompanyProcessReportParams) (int64, error)
 	// Applies a company-level description an ATS adapter yielded alongside its board
 	// crawl (see sources.CompanyDescriber — Greenhouse's board-metadata endpoint today).
 	// Same fill-gap shape as UpsertYCCompany's non-owned columns: tagline fills only a
@@ -4226,6 +4247,10 @@ type Querier interface {
 	// after normalisation, so a private title merges into a public one's count rather than
 	// standing alone under it.
 	MineJobTitles(ctx context.Context) ([]MineJobTitlesRow, error)
+	// The kinds this user currently has live against one company. The write surface needs
+	// it to open in the right state: without it a returning reader cannot be shown that
+	// they already reported, and the only way to find out would be to try and be refused.
+	MyLiveCompanyProcessReportKinds(ctx context.Context, arg MyLiveCompanyProcessReportKindsParams) ([]string, error)
 	// The similar-jobs rollup for one source job (design.md Decision 5), consumed by
 	// cmd/similar-backfill to populate jobs.similar_job_ids. A candidate job's distance to
 	// the source is the MINIMUM cosine distance across every (source chunk, candidate
@@ -4822,6 +4847,15 @@ type Querier interface {
 	// company_feedback_company_slug_idx — the same shape as RecountCompanyVotes.
 	// Hidden rows don't count toward either number.
 	RecountCompanyFeedback(ctx context.Context, companySlug string) (RecountCompanyFeedbackRow, error)
+	// Recompute the company's materialized counter from the rows and return it. Run as
+	// its own statement AFTER the write within one transaction, the same shape as
+	// RecountCompanyFeedback and RecountCompanyVotes.
+	//
+	// The kind is named in the statement rather than passed in because the counter is a
+	// column, and a column holds one kind. A second kind gets its own column and its own
+	// line here — which is the point at which the cost of another kind becomes visible,
+	// instead of a widening jsonb nobody can filter on.
+	RecountCompanyProcessReports(ctx context.Context, companySlug string) (int32, error)
 	// Recompute a single company's materialized vote counters from company_votes and
 	// return them. Run as its own statement AFTER the vote write within one transaction.
 	// Scoped to one company_slug via company_votes_company_slug_idx.
@@ -5159,6 +5193,10 @@ type Querier interface {
 	RestoreEmail(ctx context.Context, arg RestoreEmailParams) (int64, error)
 	// Retire a live (pending or active) board without deleting its row.
 	RetireBoard(ctx context.Context, arg RetireBoardParams) (int64, error)
+	// Withdraw the caller's own live report. Guarded on retracted_at IS NULL so a second
+	// withdrawal returns no row (404) rather than silently restamping the timestamp, and
+	// so the row is never deleted.
+	RetractCompanyProcessReport(ctx context.Context, arg RetractCompanyProcessReportParams) (int64, error)
 	// Withdraw a live claim. Scoped to a non-retracted row so a second retraction affects
 	// nothing and surfaces as not-found, rather than silently re-stamping the date.
 	RetractGhostReport(ctx context.Context, arg RetractGhostReportParams) (GhostReport, error)
@@ -5803,6 +5841,15 @@ type Querier interface {
 	// re-keys jobs, this re-keys companies to match. DISTINCT ON collapses a slug's
 	// name variants; ON CONFLICT folds collisions and refreshes existing rows.
 	SyncCompaniesFromJobs(ctx context.Context) error
+	// Copy the company's counter onto its postings, so a job card carries the label
+	// without the read path joining companies. Run in the SAME transaction as the report,
+	// not on a schedule: a report is filed in real time, and a company page showing the
+	// label while that company's own job cards say nothing reads as a bug.
+	//
+	// IS DISTINCT FROM keeps a no-op report from touching a single row, and updated_at is
+	// bumped for the same reason SyncJobCollections bumps it — `reindex --since` is what
+	// carries the change into the facet index.
+	SyncJobsAIInterviewReports(ctx context.Context, arg SyncJobsAIInterviewReportsParams) error
 	// The day's candidates, most-viewed first, ranked on page_uniques — NOT on uniques.
 	// uniques fuses page opens with API reads and API reads carry no bot filtering, so on
 	// a host whose traffic is mostly crawlers it answers "what did robots fetch". See

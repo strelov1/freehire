@@ -26,6 +26,9 @@ type Card struct {
 	Regions        []string `json:"regions,omitempty"`
 	Skills         []string `json:"skills,omitempty"`
 	Collections    []string `json:"collections,omitempty"`
+	// AIInterviewReports mirrors Job.AIInterviewReports — omitted at zero for the same
+	// reason: the badge is the count, so no reports must be an absent field.
+	AIInterviewReports int32 `json:"ai_interview_reports,omitempty"`
 	// PostedAt is the effective posting date, the same derivation the full projection makes:
 	// the stated date, or the row's creation when the source never gave one.
 	PostedAt *string `json:"posted_at,omitempty"`

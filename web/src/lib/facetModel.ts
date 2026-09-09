@@ -30,6 +30,15 @@ export interface JobFilters {
   /** Facet state keyed by the facet's query param (see FACETS). */
   facets: Record<string, FacetState>;
   visa: boolean;
+  /** Hide the postings of employers candidates have reported screening with an AI
+   *  interviewer. A boolean, not the three states `clearance` carries: that facet
+   *  answers two different people, while nobody searches FOR an AI screen — the only
+   *  useful question here is "not these".
+   *
+   *  Serialized as `ai_interview=false`, whose value names the FACET while this names
+   *  the INTENT. It has to be the negative of the positive rather than an equality,
+   *  because nothing in the index is ever written false. */
+  hideAIInterview: boolean;
   /** What to do about postings that state a government security-clearance requirement
    *  (UK SC/DV, US Secret/TS-SCI, AU NV1). Three states rather than a boolean because
    *  the facet answers two different people: someone who cannot hold a clearance wants
@@ -203,6 +212,7 @@ export function emptyFilters(): JobFilters {
     q: '',
     facets: emptyFacets(),
     visa: false,
+    hideAIInterview: false,
     clearance: 'any',
     salaryMin: null,
     postedWithinDays: null,
@@ -227,6 +237,7 @@ export function filtersToParams(f: JobFilters): URLSearchParams {
     if (st.matchAll && st.include.length > 1) p.set(`${def.param}_mode`, 'and');
   }
   if (f.visa) p.set('visa_sponsorship', 'true');
+  if (f.hideAIInterview) p.set('ai_interview', 'false');
   if (f.clearance === 'hide') p.set('requires_clearance', 'false');
   if (f.clearance === 'only') p.set('requires_clearance', 'true');
   if (f.salaryMin != null) p.set('salary_min', String(f.salaryMin));
@@ -290,6 +301,7 @@ export function filtersFromParams(p: URLSearchParams): JobFilters {
     f.facets[def.param] = { include, exclude, matchAll };
   }
   f.visa = p.get('visa_sponsorship') === 'true';
+  f.hideAIInterview = p.get('ai_interview') === 'false';
   const clearance = p.get('requires_clearance');
   f.clearance = clearance === 'false' ? 'hide' : clearance === 'true' ? 'only' : 'any';
   const salary = Number(p.get('salary_min'));
@@ -324,6 +336,7 @@ export function activeFilterCount(f: JobFilters): number {
     if (st) n += st.include.length + st.exclude.length;
   }
   if (f.visa) n += 1;
+  if (f.hideAIInterview) n += 1;
   if (f.clearance !== 'any') n += 1;
   if (f.salaryMin != null) n += 1;
   if (f.postedWithinDays != null) n += 1;

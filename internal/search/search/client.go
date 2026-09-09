@@ -601,6 +601,10 @@ func facetSettings() *meilisearch.Settings {
 			// is_tech is the served top-level tech/non-tech facet (jobview), filtered on
 			// the bare attribute; an unknown value is absent so it filters as empty.
 			"is_tech",
+			// ai_interview is true-or-absent like is_tech: written only when the job's
+			// company carries at least one un-retracted report, so the negative is asked
+			// as NOT of the positive rather than an equality that would match nothing.
+			"ai_interview",
 			// ai_archetype is derived at index time (aiarchetype) from skills+category
 			// and served top-level like the other bare facets, so it filters on the
 			// plain attribute, not a dot path.
