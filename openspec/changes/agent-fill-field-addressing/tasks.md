@@ -60,7 +60,7 @@
 
 - [x] 8.1 `cd extension && npm test && npm run check`; `gofmt -l .` prints nothing;
   `go vet ./...`; `go test ./...`; `go vet -tags=integration ./...`.
-- [ ] 8.2 Load the built extension unpacked and run one agent autofill against a real ATS
+- [x] 8.2 Load the built extension unpacked and run one agent autofill against a real ATS
   page carrying a second form — the failure this change exists for is only observable in a
   browser, and no unit test proves the write landed in the right form on a live page.
 
