@@ -110,6 +110,11 @@ func Resolve(fields []MergedField, answers map[string]string, hasApprovedCV bool
 // them either. visa_sponsorship_needed has no such ambiguity: it is stored as a plain
 // "Yes"/"No" (internal/screeninganswers.Answers.AutofillFields), so matching it here can
 // never produce a wrong-country answer the way authorization would.
+//
+// The invariant is enforced, not merely observed by this list's contents: the answer bank
+// is a second route to a label and would otherwise walk straight around it, so
+// matchBankAnswerKey below refuses the same category through workAuthorizationTerms
+// (sensitive.go). Adding a rule here for an authorization question would still be wrong.
 var labelAnswerKeyFor = []struct {
 	answerKey string
 	keywords  []string // ALL must appear (case-insensitive) for the rule to fire
@@ -174,7 +179,15 @@ const bankAnswerKeyPrefix = "topic:"
 // label can be keyed at all. Checked AFTER the id and label rules, never before: those are
 // typed, validated facts, and the bank's copy is free text — two sources answering one
 // question have to resolve the same way every time rather than by read order.
+//
+// A work-authorization question is refused outright, whatever the bank holds:
+// labelAnswerKeyFor above says why (the answer depends on THIS posting's country, which
+// nothing here has), and the bank does not relax it — one topic covers every posting worded
+// that way, so a banked "Yes" would travel between countries. See workAuthorizationTerms.
 func matchBankAnswerKey(label string) (string, bool) {
+	if isWorkAuthorizationLabel(label) {
+		return "", false
+	}
 	topic, ok := answertopic.Of(label)
 	if !ok {
 		return "", false

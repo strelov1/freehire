@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/strelov1/freehire/internal/api/candidateprofile"
+	"github.com/strelov1/freehire/internal/dict/answertopic"
 	"github.com/strelov1/freehire/internal/ingest/applyform"
 )
 
@@ -387,4 +388,72 @@ func TestResolve_AnAnsweredQuestionStopsBlockingLaterApplications(t *testing.T) 
 	if after.Fields[0].Value != "Santa Catarina" {
 		t.Errorf("value = %q, want the banked answer", after.Fields[0].Value)
 	}
+}
+
+// The bank must never answer a work-authorization question. "Are you authorized to work in
+// the country in which this position is located?" is ONE topic across every posting worded
+// that way, so a "Yes" banked from a US posting would be re-asserted, in the candidate's
+// name, on a Brazilian one — and at submit time, where the candidate never sees it.
+// labelAnswerKeyFor's own doc comment states this invariant; the bank is bound by it too.
+func TestResolve_NeverAnswersAWorkAuthorizationQuestionFromTheBank(t *testing.T) {
+	for _, label := range []string{
+		"Are you legally authorized to work in the country in which this position is located?",
+		"Do you now or in the future require sponsorship to work in the United States?",
+		"Do you have the right to work in the UK?",
+		"Will you require a visa?",
+	} {
+		topic, ok := bankTopicKeyForTest(t, label)
+		answers := map[string]string{topic: "Yes"}
+		if !ok {
+			t.Fatalf("the fold refused %q — this test would pass for the wrong reason", label)
+		}
+		fields := []MergedField{{ID: "question_1", Label: label, Kind: "text", Required: true}}
+
+		plan := Resolve(fields, answers, false)
+
+		if len(plan.Fields) != 0 {
+			t.Errorf("Resolve(%q) filled %+v — a work-authorization question needs this posting's own country, which nothing here has", label, plan.Fields)
+		}
+		if len(plan.Unmapped) != 1 {
+			t.Errorf("Resolve(%q) unmapped = %+v, want the question reported as unanswered", label, plan.Unmapped)
+		}
+	}
+}
+
+// The refusal is the work-authorization SUBSET of sensitiveTerms, not the whole list.
+// Salary is on that list and the salary case is the feature's headline; demographic
+// questions are on it too and are the candidate's own answer to give. Only authorization is
+// unanswerable here, because only it depends on a country nothing in this package holds.
+func TestMatchBankAnswerKey_RefusesOnlyTheWorkAuthorizationSubset(t *testing.T) {
+	refused := []string{
+		"Are you legally authorized to work in the country in which this position is located?",
+		"Do you now or in the future require sponsorship to work in the United States?",
+		"Do you have the right to work in the UK?",
+		"Will you require a visa?",
+	}
+	for _, label := range refused {
+		if key, ok := matchBankAnswerKey(label); ok {
+			t.Errorf("matchBankAnswerKey(%q) = %q, true; want a refusal", label, key)
+		}
+	}
+
+	kept := []string{
+		"What is your desired salary?",
+		"Compensation expectations",
+		"Are you a protected veteran?",
+		"Which state do you currently reside in?",
+	}
+	for _, label := range kept {
+		if _, ok := matchBankAnswerKey(label); !ok {
+			t.Errorf("matchBankAnswerKey(%q) refused — only work authorization is refused here", label)
+		}
+	}
+}
+
+// bankTopicKeyForTest is the answers-map key a question is banked under, built the way the
+// server does on save.
+func bankTopicKeyForTest(t *testing.T, question string) (string, bool) {
+	t.Helper()
+	topic, ok := answertopic.Of(question)
+	return bankAnswerKeyPrefix + topic, ok
 }

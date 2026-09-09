@@ -31,6 +31,32 @@ describe('answerableQuestions', () => {
     expect(answerableQuestions(pending)).toEqual([]);
   });
 
+  // The server refuses to recall a work-authorization answer (atsapply's
+  // matchBankAnswerKey), because one topic covers every posting worded that way and a "Yes"
+  // banked from a US posting would fill a Brazilian one. Offering an input here would
+  // collect exactly that answer, and the candidate would never see it used.
+  it('does not offer an input for a work-authorization question', () => {
+    const pending = [
+      {
+        label: 'Are you legally authorized to work in the country in which this position is located?',
+        will_draft_at_submission: false
+      },
+      { label: 'Do you require visa sponsorship?', will_draft_at_submission: false },
+      { label: 'Do you have the right to work in the UK?', will_draft_at_submission: false }
+    ];
+    expect(answerableQuestions(pending)).toEqual([]);
+  });
+
+  // Only the authorization subset. Salary is sensitive too and is the case the bank exists
+  // for; a demographic question is the candidate's own answer to give.
+  it('still offers an input for the other sensitive questions', () => {
+    const pending = [
+      { label: 'What is your desired salary?', will_draft_at_submission: false },
+      { label: 'Are you a protected veteran?', will_draft_at_submission: false }
+    ];
+    expect(answerableQuestions(pending)).toHaveLength(2);
+  });
+
   it('is empty for no pending questions at all', () => {
     expect(answerableQuestions(undefined)).toEqual([]);
     expect(answerableQuestions([])).toEqual([]);

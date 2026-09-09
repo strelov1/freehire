@@ -1,20 +1,44 @@
 import type { AutoApplyPreviewPending } from '$lib/types';
 
+/** The question stems that mean "may you work in this posting's country".
+ *
+ *  This list is the TypeScript half of one rule. The Go half is
+ *  `internal/api/atsapply/sensitive.go`'s `workAuthorizationTerms`, which refuses to RECALL
+ *  a banked answer to such a question: the answer depends on the job's own location, one
+ *  topic covers every posting worded that way, and a "Yes" banked while looking at a US
+ *  posting would otherwise fill a Brazilian one at submit time, unseen. Offering an input
+ *  here is what would collect that answer in the first place, so the screen refuses too.
+ *
+ *  The two lists cannot share a definition across languages, so each names the other — the
+ *  same arrangement `bankAnswerKeyPrefix` already documents. Keep them in step.
+ *
+ *  Deliberately NOT the whole sensitive-terms list the Go side keeps for drafting: salary is
+ *  on that list and the salary case is what the bank exists for. */
+const WORK_AUTHORIZATION_TERMS = ['authoriz', 'right to work', 'sponsor', 'visa'];
+
 /** The pending questions worth offering the candidate an input for.
  *
  *  Kept out of JobDrawer.svelte so it unit-tests without mounting Svelte, the same
  *  convention autoApplyReview.ts and autoApplyButton.ts already follow.
  *
- *  Two are skipped. One that will be drafted at submission needs nothing from the
- *  candidate — asking anyway is work we already handle. One with no readable label cannot
- *  be answered at all: there is nothing to show, and the server refuses to key a question
- *  that folds to nothing, so an input there would collect an answer that could never be
- *  saved. */
+ *  Three are skipped. One that will be drafted at submission needs nothing from the
+ *  candidate — asking anyway is work we already handle. One asking about work authorization
+ *  is refused for the reason WORK_AUTHORIZATION_TERMS gives. And one with no readable text
+ *  cannot be answered at all: there is nothing to show. */
 export function answerableQuestions(
   pending: AutoApplyPreviewPending[] | undefined | null
 ): AutoApplyPreviewPending[] {
   if (!pending) return [];
-  return pending.filter((p) => !p.will_draft_at_submission && p.label.trim() !== '');
+  return pending.filter(
+    (p) =>
+      !p.will_draft_at_submission && p.label.trim() !== '' && !asksAboutWorkAuthorization(p.label)
+  );
+}
+
+/** Whether a question asks whether the candidate may work in this posting's country. */
+function asksAboutWorkAuthorization(label: string): boolean {
+  const lower = label.toLowerCase();
+  return WORK_AUTHORIZATION_TERMS.some((term) => lower.includes(term));
 }
 
 /** One pending question paired with a stable identity and whether the candidate can

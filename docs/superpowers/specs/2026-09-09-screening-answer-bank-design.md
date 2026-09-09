@@ -34,7 +34,13 @@ been bitten by exactly this shape of hand-maintained list before.
   it says nothing about using an answer the candidate themselves gave.
 - **Work-authorization questions are never auto-answered.** `authorized_countries` is a list
   of countries the candidate may work in, not a yes/no about *this posting's* country.
-  Unchanged.
+  Unchanged — and the bank does not become a way around it. A question like "Are you
+  authorized to work in the country in which this position is located?" folds to ONE topic
+  across every posting worded that way, so a banked "Yes" would travel from a US posting to
+  a Brazilian one, at submit time, without the candidate seeing it. `matchBankAnswerKey`
+  refuses the authorization subset of the sensitive terms (`authoriz`, `right to work`,
+  `sponsor`, `visa`) and the review screen does not offer an input for one. The rest of the
+  sensitive list — salary above all — stays bankable: sensitivity forbids *guessing*.
 - **Non-sensitive free-text questions already draft** (`ResolveWithDrafting`). The bank does
   not replace drafting; it covers what drafting must not touch.
 
