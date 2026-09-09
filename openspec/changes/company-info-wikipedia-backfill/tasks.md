@@ -5,11 +5,11 @@
 
 ## 2. Wikidata client
 
-- [ ] 2.1 Add a small Wikidata HTTP client package (under the `job` block, alongside `internal/job/ycdir`) wrapping `wbsearchentities` (candidate search by name) and the `query.wikidata.org` SPARQL endpoint (type-confidence `ASK` query), with a fixed request rate and backoff-on-429/5xx.
-- [ ] 2.2 Curate the initial business/organization QID anchor set (`Q4830453` business, `Q43229` organization, `Q6881511` enterprise, `Q783794` company, `Q891723` public company, `Q328664` corporation, plus common subtypes worth anchoring directly) as a package-level constant.
-- [ ] 2.3 Implement the type-confidence check: given a candidate QID, `ASK` whether `wdt:P31/wdt:P279*` reaches any anchor QID.
-- [ ] 2.4 Implement fetching the accepted candidate's Wikidata `description` (→ `tagline`) and, via its `enwiki` sitelink, the Wikipedia summary `extract` (→ `company_info.summary`).
-- [ ] 2.5 Unit-test the client against recorded fixtures for: a clean company match, a same-named person/place/concept rejection (using the spike's own false-positive cases as fixtures), and a subtype match that a flat `P31` check would miss (e.g. "defense contractor").
+- [x] 2.1 Add a small Wikidata HTTP client package (under the `job` block, alongside `internal/job/ycdir`) wrapping `wbsearchentities` (candidate search by name) and the `query.wikidata.org` SPARQL endpoint (type-confidence `ASK` query), with a fixed request rate and backoff-on-429/5xx.
+- [x] 2.2 Curate the initial business/organization QID anchor set (`Q4830453` business, `Q43229` organization, `Q6881511` enterprise, `Q783794` company, `Q891723` public company, `Q328664` corporation, plus common subtypes worth anchoring directly) as a package-level constant.
+- [x] 2.3 Implement the type-confidence check: given a candidate QID, `ASK` whether `wdt:P31/wdt:P279*` reaches any anchor QID.
+- [x] 2.4 Implement fetching the accepted candidate's Wikidata `description` (→ `tagline`) and, via its `enwiki` sitelink, the Wikipedia summary `extract` (→ `company_info.summary`).
+- [x] 2.5 Unit-test the client against recorded fixtures for: a clean company match, a same-named person/place/concept rejection (using the spike's own false-positive cases as fixtures), and a subtype match that a flat `P31` check would miss (e.g. "defense contractor").
 
 ## 3. Backfill worker
 
