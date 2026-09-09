@@ -350,3 +350,41 @@ func TestResolve_ReadsTheKeysProfileFieldsActuallyWrites(t *testing.T) {
 		t.Errorf("value = %q, want the banked answer", plan.Fields[0].Value)
 	}
 }
+
+// The feature, asserted as one story: a required question parks, the candidate answers it,
+// and the next resolve fills it — even though the second employer words it differently.
+//
+// This is the test that would have caught the whole class of bug this feature exists for.
+// Everything else here checks a piece.
+func TestResolve_AnAnsweredQuestionStopsBlockingLaterApplications(t *testing.T) {
+	firstEmployer := []MergedField{{
+		ID: "question_4005041004", Label: "Which state do you currently reside in?",
+		Kind: "text", Required: true,
+	}}
+	noAnswersYet := map[string]string{}
+
+	before := Resolve(firstEmployer, noAnswersYet, false)
+	if len(before.Unmapped) != 1 {
+		t.Fatalf("unmapped = %+v, want the question to park before it is answered", before.Unmapped)
+	}
+	if before.FullyResolved() {
+		t.Fatal("FullyResolved() is true with a required question unanswered")
+	}
+
+	// The candidate answers it. answertopic.Of is what the server applies on save; the key
+	// here is what that produces.
+	banked := map[string]string{"topic:which state do you currently reside in": "Santa Catarina"}
+
+	secondEmployer := []MergedField{{
+		ID: "question_99887766", Label: "  Which state do you currently reside in?  ",
+		Kind: "text", Required: true,
+	}}
+
+	after := Resolve(secondEmployer, banked, false)
+	if !after.FullyResolved() {
+		t.Fatalf("unmapped = %+v, want a different employer's phrasing answered from the bank", after.Unmapped)
+	}
+	if after.Fields[0].Value != "Santa Catarina" {
+		t.Errorf("value = %q, want the banked answer", after.Fields[0].Value)
+	}
+}
