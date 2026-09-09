@@ -497,7 +497,7 @@ func TestRoastCV_TouchesNoStore(t *testing.T) {
 	if err != nil {
 		t.Fatalf("parse cv_roast.go: %v", err)
 	}
-	forbidden := []string{"resume", "atsCache", "atsAnalyzer", "bank", "structuredExtractor", "llm"}
+	forbidden := []string{"resume", "atsCache", "atsAnalyzer", "bank", "structuredExtractor", "llm", "userProfile"}
 
 	var body *ast.BlockStmt
 	for _, decl := range file.Decls {
