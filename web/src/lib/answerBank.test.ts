@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { answerableQuestions, pendingRows } from './answerBank';
+import { answerableQuestions, hasVisibleRows, pendingRows } from './answerBank';
 
 describe('answerableQuestions', () => {
   it('offers an input for a question that has readable text', () => {
@@ -65,8 +65,8 @@ describe('answerableQuestions', () => {
   });
 });
 
-// pendingRows pairs every raw pending entry with a stable identity (its position) and
-// whether it is answerable. Nothing here may key on label text: two distinct questions
+// pendingRows pairs every raw pending entry with a stable identity (its position) and a
+// `kind` saying how it renders. Nothing here may key on label text: two distinct questions
 // can share a label, and an entry can carry no text at all — either would collide if the
 // identity came from the text itself.
 describe('pendingRows', () => {
@@ -81,7 +81,7 @@ describe('pendingRows', () => {
     // Distinct identity, not just distinct array position: a Set built from the keys must
     // hold two members, not collapse to one the way it would if the key were the label.
     expect(new Set(rows.map((r) => r.key)).size).toBe(2);
-    expect(rows.every((r) => r.answerable)).toBe(true);
+    expect(rows.every((r) => r.kind === 'answerable')).toBe(true);
   });
 
   it('gives several textless entries their own distinct identity too', () => {
@@ -93,7 +93,9 @@ describe('pendingRows', () => {
     ];
     const rows = pendingRows(pending);
     expect(new Set(rows.map((r) => r.key)).size).toBe(4);
-    expect(rows.every((r) => !r.answerable)).toBe(true);
+    // Empty-label rows draw nothing — there is genuinely nothing to show, unlike a
+    // work-authorization question, which has a label but still cannot be answered.
+    expect(rows.every((r) => r.kind === 'empty')).toBe(true);
   });
 
   it('marks a question drafted at submission unanswerable without dropping it from the list', () => {
@@ -101,12 +103,60 @@ describe('pendingRows', () => {
     const rows = pendingRows(pending);
     expect(rows).toHaveLength(1);
     const [row] = rows;
-    expect(row?.answerable).toBe(false);
+    expect(row?.kind).toBe('draft');
     expect(row?.pending.will_draft_at_submission).toBe(true);
+  });
+
+  // The regression this branch introduced: a work-authorization question has a real label
+  // and is neither drafted nor answerable, so it must still produce a row — one the
+  // candidate can see names what is blocking the application, distinct from both an
+  // answerable question and an empty-label one that genuinely has nothing to show.
+  it('marks a work-authorization question blocked, not silently dropped', () => {
+    const pending = [
+      {
+        label: 'Are you legally authorized to work in the country in which this position is located?',
+        will_draft_at_submission: false
+      }
+    ];
+    const rows = pendingRows(pending);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.kind).toBe('blocked');
   });
 
   it('is empty for no pending questions at all', () => {
     expect(pendingRows(undefined)).toEqual([]);
     expect(pendingRows([])).toEqual([]);
+  });
+});
+
+// hasVisibleRows is what JobDrawer.svelte gates the whole pending block on — it must not
+// re-derive which kinds render, or it can drift from pendingRows and reintroduce the bug
+// this fixes (a blocked-only list rendering an empty-looking block, or nothing at all).
+describe('hasVisibleRows', () => {
+  it('is true when the only pending row is a blocked work-authorization question', () => {
+    const pending = [{ label: 'Do you require visa sponsorship?', will_draft_at_submission: false }];
+    expect(hasVisibleRows(pendingRows(pending))).toBe(true);
+  });
+
+  it('is true when the only pending row is answerable', () => {
+    const pending = [{ label: 'What is your desired salary?', will_draft_at_submission: false }];
+    expect(hasVisibleRows(pendingRows(pending))).toBe(true);
+  });
+
+  it('is true when the only pending row will be drafted at submission', () => {
+    const pending = [{ label: 'Why do you want to work here?', will_draft_at_submission: true }];
+    expect(hasVisibleRows(pendingRows(pending))).toBe(true);
+  });
+
+  it('is false when every row is empty-label', () => {
+    const pending = [
+      { label: '', will_draft_at_submission: false },
+      { label: '   ', will_draft_at_submission: false }
+    ];
+    expect(hasVisibleRows(pendingRows(pending))).toBe(false);
+  });
+
+  it('is false for no pending questions at all', () => {
+    expect(hasVisibleRows(pendingRows(undefined))).toBe(false);
   });
 });

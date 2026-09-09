@@ -35,9 +35,27 @@ export function answerableQuestions(
 /** The rule itself, so `answerableQuestions` and `pendingRows` share it rather than one
  *  reconstructing the other's verdict. See `pendingRows` for what the reconstruction cost. */
 function isAnswerable(p: AutoApplyPreviewPending): boolean {
-  return (
-    !p.will_draft_at_submission && p.label.trim() !== '' && !asksAboutWorkAuthorization(p.label)
-  );
+  return rowKind(p) === 'answerable';
+}
+
+/** How one pending question renders on the review screen.
+ *
+ *  - `draft`: the model fills this at submission; needs nothing from the candidate.
+ *  - `answerable`: offer an input (and bank what they type).
+ *  - `blocked`: has real text but cannot be answered — a work-authorization question, whose
+ *    correct answer depends on the posting's own country. Still rendered, as plain text
+ *    naming what is blocking the application: a screen that says nothing while auto-apply
+ *    quietly cannot proceed is the exact failure this feature exists to end.
+ *  - `empty`: no readable text at all. Genuinely nothing to show — unlike `blocked`, which
+ *    has a label, this one draws no row.
+ */
+export type PendingRowKind = 'draft' | 'answerable' | 'blocked' | 'empty';
+
+function rowKind(p: AutoApplyPreviewPending): PendingRowKind {
+  if (p.will_draft_at_submission) return 'draft';
+  if (p.label.trim() === '') return 'empty';
+  if (asksAboutWorkAuthorization(p.label)) return 'blocked';
+  return 'answerable';
 }
 
 /** Whether a question asks whether the candidate may work in this posting's country. */
@@ -56,28 +74,37 @@ export interface PendingAnswerRow {
    *  per-question draft map alike. */
   key: number;
   pending: AutoApplyPreviewPending;
-  /** Whether the candidate may answer this one — the same `isAnswerable` rule
-   *  `answerableQuestions` filters on, computed once here so the template never re-derives
-   *  it. */
-  answerable: boolean;
+  /** How this row renders — see `PendingRowKind`. Computed once here so the template
+   *  switches on it rather than re-deriving whether a question is answerable or blocked. */
+  kind: PendingRowKind;
 }
 
-/** Every pending question, indexed and flagged, for the review screen to render.
+/** Every pending question, indexed and kinded, for the review screen to render.
  *
  *  A question the model will draft at submission stays in the list — it just renders as
  *  "filled automatically" rather than an input — because the candidate still needs to see
- *  it is accounted for. Only `answerableQuestions`'s own rule decides whether the candidate
- *  gets an input; nothing here re-derives it.
+ *  it is accounted for. A question that is neither drafted nor answerable (a
+ *  work-authorization one) stays in the list too, as `blocked`, for the same reason: the
+ *  candidate needs to see what is stopping the application, not a screen that says nothing.
+ *  Only `rowKind`'s own rule decides how a row renders; nothing here re-derives it.
  *
- *  It calls that rule (`isAnswerable`) rather than asking whether `answerableQuestions`
- *  kept the entry. Membership through a `Set` of the returned entries worked only for as
- *  long as `answerableQuestions` was a `filter` handing back the very same object
- *  references: the day it mapped, spread or copied one, every row would silently become
- *  unanswerable, no input would render anywhere, and every test here would still pass,
- *  because none of them can see an object's identity. A shared predicate has nothing to
- *  drift from. */
+ *  It calls that rule directly rather than asking whether `answerableQuestions` kept the
+ *  entry. Membership through a `Set` of the returned entries worked only for as long as
+ *  `answerableQuestions` was a `filter` handing back the very same object references: the
+ *  day it mapped, spread or copied one, every row would silently become unanswerable, no
+ *  input would render anywhere, and every test here would still pass, because none of them
+ *  can see an object's identity. A shared predicate has nothing to drift from. */
 export function pendingRows(
   pending: AutoApplyPreviewPending[] | undefined | null
 ): PendingAnswerRow[] {
-  return (pending ?? []).map((p, key) => ({ key, pending: p, answerable: isAnswerable(p) }));
+  return (pending ?? []).map((p, key) => ({ key, pending: p, kind: rowKind(p) }));
+}
+
+/** Whether any row in the list draws anything at all. An `empty` row (no readable label)
+ *  draws nothing; every other kind — `draft`, `answerable`, `blocked` — draws a line. Lives
+ *  here, not in JobDrawer.svelte, so the screen never re-derives which kinds render: that
+ *  re-derivation is exactly what produced the bug this function closes, where a list of
+ *  only work-authorization questions rendered an empty-looking block with no explanation. */
+export function hasVisibleRows(rows: PendingAnswerRow[]): boolean {
+  return rows.some((row) => row.kind !== 'empty');
 }

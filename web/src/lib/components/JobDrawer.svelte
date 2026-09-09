@@ -36,7 +36,7 @@
   import { focusTrap } from '$lib/actions/focusTrap';
   import { lockScroll, unlockScroll } from '$lib/scrollLock';
   import { autoApplyReviewBanner } from '$lib/autoApplyReview';
-  import { pendingRows } from '$lib/answerBank';
+  import { hasVisibleRows, pendingRows } from '$lib/answerBank';
 
   let {
     item,
@@ -159,14 +159,13 @@
   // text itself.
   const pendingQuestions = $derived(pendingRows(autoApply?.resolved_preview?.pending));
 
-  // Whether anything in the pending list will actually render. A row that is neither
-  // drafted-at-submission nor answerable draws nothing, so gating the list on
-  // pendingQuestions.length alone produces an empty bulleted block whenever every pending
-  // question is unanswerable — which is exactly the case for a form asking only about work
-  // authorization.
-  const showsPendingList = $derived(
-    pendingQuestions.some((row) => row.pending.will_draft_at_submission || row.answerable)
-  );
+  // Whether anything in the pending list will actually render. Only an `empty` row (see
+  // answerBank's PendingRowKind) draws nothing, so gating the list on pendingQuestions.length
+  // alone produces an empty bulleted block whenever every pending question is empty-label. A
+  // work-authorization question is `blocked`, not `empty` — it still renders, naming what is
+  // stopping the application — so hasVisibleRows is what decides this, not a re-derivation
+  // here.
+  const showsPendingList = $derived(hasVisibleRows(pendingQuestions));
 
   // One draft per pending question, keyed by its row's position (see pendingQuestions).
   let bankDrafts = $state<Record<number, string>>({});
@@ -544,9 +543,21 @@
               {#if showsPendingList}
                 <ul class="flex flex-col gap-2 text-xs text-muted-foreground">
                   {#each pendingQuestions as row (row.key)}
-                    {#if row.pending.will_draft_at_submission}
+                    {#if row.kind === 'draft'}
                       <li>{row.pending.label} — will be filled in automatically</li>
-                    {:else if row.answerable}
+                    {:else if row.kind === 'blocked'}
+                      <!-- A work-authorization question: the bank refuses to recall an
+                           answer for it (the correct one depends on this posting's own
+                           country), and offering an input would only collect one it could
+                           never safely reuse. Plain text, distinct in wording and color from
+                           both the "filled automatically" row above and an answerable
+                           question's input below, so the candidate sees what is blocking
+                           the application instead of nothing at all. -->
+                      <li class="text-warning-strong">
+                        {row.pending.label} — we can't answer this one for you; you'll need to
+                        fill it in yourself when you apply
+                      </li>
+                    {:else if row.kind === 'answerable'}
                       <li class="flex flex-col gap-1">
                         <label class="text-foreground" for={`bank-${row.key}`}>{row.pending.label}</label>
                         <div class="flex items-start gap-2">
