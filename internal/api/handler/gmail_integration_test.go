@@ -126,4 +126,31 @@ func TestGmailInboxEndToEnd(t *testing.T) {
 	}() {
 		t.Error("calendar-only grant (empty email) reported as Mail connected")
 	}
+
+	// mentor_calendar_connected must agree with the SAME "connected" test the booking
+	// flow's own grant lookup applies (mentorship.GetMentorCalendarGrant): a grant that
+	// covers calendar.events but has since been marked needs_reconsent must NOT read as
+	// connected here, or a mentor's profile form keeps telling them the meeting link is
+	// optional while every new booking silently gets no link at all.
+	if _, err := pool.Exec(ctx,
+		`UPDATE gmail_connections SET scopes = $2 WHERE user_id = $1`,
+		uid, []string{"https://www.googleapis.com/auth/calendar.events"}); err != nil {
+		t.Fatalf("seed mentor calendar scope: %v", err)
+	}
+	if _, body := do("GET", "/api/v1/me/gmail"); func() bool {
+		d, _ := body["data"].(map[string]any)
+		return d["mentor_calendar_connected"] != true
+	}() {
+		t.Error("a connected calendar.events grant was not reported as mentor_calendar_connected")
+	}
+	if _, err := pool.Exec(ctx,
+		`UPDATE gmail_connections SET status = 'needs_reconsent' WHERE user_id = $1`, uid); err != nil {
+		t.Fatalf("mark needs_reconsent: %v", err)
+	}
+	if _, body := do("GET", "/api/v1/me/gmail"); func() bool {
+		d, _ := body["data"].(map[string]any)
+		return d["mentor_calendar_connected"] == true
+	}() {
+		t.Error("a needs_reconsent grant was still reported as mentor_calendar_connected")
+	}
 }

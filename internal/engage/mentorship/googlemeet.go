@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"net/url"
 	"slices"
@@ -181,6 +182,15 @@ func (a *meetAPI) createEvent(ctx context.Context, in MeetEventInput) (string, s
 	var out meetEvent
 	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
 		return "", "", fmt.Errorf("mentor calendar: decode event: %w", err)
+	}
+	if out.HangoutLink == "" {
+		// Google's own docs allow conferenceData.createRequest to still be PENDING when
+		// the event insert itself answers 200/201 — the conference is provisioned
+		// asynchronously and the link is absent until it resolves. Retrying later is out
+		// of scope (see design.md), so the event is kept and the booking's link stays
+		// empty exactly as it would on any other failure — this just makes the otherwise
+		// silent case visible in logs.
+		log.Printf("mentor calendar: event %s created with no hangoutLink yet (conference still pending)", out.ID)
 	}
 	return out.ID, out.HangoutLink, nil
 }

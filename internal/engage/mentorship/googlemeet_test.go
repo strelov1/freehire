@@ -136,6 +136,28 @@ func TestMeetAPICreateEventParsesTheCanonicalResponse(t *testing.T) {
 	}
 }
 
+// Google may answer 200 with the conference still provisioning asynchronously
+// (conferenceData.createRequest.status "pending"), so hangoutLink can legitimately be
+// absent on an otherwise successful insert. That must not be read as an error — the
+// event id still comes back so the caller can hold onto it — only the link is empty.
+func TestMeetAPICreateEventToleratesAPendingConference(t *testing.T) {
+	api, _ := apiAgainst(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":"evt-456"}`))
+	})
+
+	id, link, err := api.createEvent(context.Background(), MeetEventInput{})
+	if err != nil {
+		t.Fatalf("createEvent: %v, want no error for a pending conference", err)
+	}
+	if id != "evt-456" {
+		t.Errorf("id = %q, want evt-456", id)
+	}
+	if link != "" {
+		t.Errorf("link = %q, want empty", link)
+	}
+}
+
 // A 401/403 must come back as gmailsync.APIError so RevokedGrant recognises it — the
 // signal Book() uses to mark the grant needs_reconsent.
 func TestMeetAPICreateEventRevokedGrant(t *testing.T) {

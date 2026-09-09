@@ -165,3 +165,47 @@
 - [x] 8.5 Added `TestAnEmptyMeetingLinkOmitsLocationAndURL` (`invite_test.go`) and
       `TestAnEmptyMeetingLinkProducesNoJoinLine` (`notify_test.go`) — both confirm the
       existing guards need no change.
+
+## 9. Post-review fixes
+
+A `/code-review` pass after task 8 found real gaps this task list's own groups had not
+covered. Fixed rather than deferred, each with a regression test:
+
+- [x] `GmailStatus`'s `mentor_calendar_connected` was scope-only, so a grant marked
+      `needs_reconsent` still read as connected — the profile form kept telling a
+      mentor their meeting link was optional while every new booking silently landed
+      with none. Now gated on `status == 'connected'` too, agreeing with
+      `GetMentorCalendarGrant`'s own test. Covered by
+      `TestGmailInboxEndToEnd`'s new assertions (`gmail_integration_test.go`).
+- [x] `Withdraw()`'s bulk cancellation never deleted the Meet events its cancelled
+      bookings had minted, unlike the single-booking `Cancel()` path — a withdrawing
+      mentor could leave stray live events on their own calendar after every seeker
+      was told the sessions were off. Both paths now share
+      `Service.deleteMeetEventBestEffort`. Covered by
+      `TestWithdrawalDeletesCalendarEventsOfCancelledBookings`.
+- [x] `Service.HasConnectedCalendar` and `GoogleCalendarLinker.resolve` each
+      independently tested "found && covers calendar.events" — factored into one
+      shared `hasCalendarWriteGrant` so the two definitions of "connected" cannot
+      drift apart (from the earlier `/simplify` pass).
+- [x] `attachMeetEvent`'s two `SetBookingCalendarEvent`-then-patch call sites were
+      duplicated and logged failures through two different helpers; factored into
+      `Service.setCalendarEvent`, both logged through `logDeliveryFailure`.
+- [x] `withCalendarLink` queried the caller's calendar grant even when the submitted
+      meeting link was already non-empty, though `validateMeetingURL` only ever
+      consults it for an empty one — skipped now when there's nothing to decide.
+- [x] `gmailsync`'s three incremental-consent method pairs
+      (`CalendarAuthCodeURL`/`MentorCalendarAuthCodeURL`,
+      `ExchangeCalendar`/`ExchangeMentorCalendar`) duplicated their bodies near
+      verbatim; factored into shared `scopedAuthCodeURL`/`scopedExchange` (the
+      sign-in flow's own `AuthCodeURL`/`Exchange` stay separate — no scope override,
+      no cfg clone).
+- [x] `meetAPI.createEvent` treated a 200/201 response with no `hangoutLink` (Google's
+      documented "conference still pending" case) as an ordinary silent success; kept
+      the same outcome (event id kept, link empty, no retry — retrying is an
+      explicit non-goal) but added a log line so the case is visible in production.
+      Covered by `TestMeetAPICreateEventToleratesAPendingConference`.
+- [x] NOT fixed, by design: `meetAPI`'s `meetEventsURL` redeclares the same literal
+      `calsync.eventsURL` already holds. Deduping it means exporting a constant from
+      an unrelated package (`internal/application/calsync`) that file was never
+      otherwise touched by this change — out of this task's surgical scope for a
+      single literal with low drift risk.

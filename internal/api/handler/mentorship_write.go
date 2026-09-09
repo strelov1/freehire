@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"strings"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -329,8 +330,15 @@ func (h *mentorshipHandlers) UpdateMentorProfile(c *fiber.Ctx) error {
 // withCalendarLink resolves whether the caller holds a connected calendar.events grant
 // and sets it on the input, so a connected mentor's meeting link is no longer required —
 // the same test CreateMeetEvent's own gate applies at booking time.
+//
+// Skipped when the submitted link is already non-empty: validateMeetingURL only ever
+// consults HasCalendarLink for an EMPTY link, so a mentor who filled the field in pays
+// no extra round trip to answer a question that cannot change their outcome.
 func (h *mentorshipHandlers) withCalendarLink(c *fiber.Ctx, userID int64, req profileRequest) (mentorship.ProfileInput, error) {
 	in := req.toInput(userID)
+	if strings.TrimSpace(in.MeetingURL) != "" {
+		return in, nil
+	}
 	hasCalendar, err := h.mentorship.HasConnectedCalendar(c.Context(), userID)
 	if err != nil {
 		return mentorship.ProfileInput{}, err

@@ -342,6 +342,35 @@ func TestWithdrawalCancelsFutureBookingsAndNotifiesEachSeeker(t *testing.T) {
 	}
 }
 
+// A withdrawing mentor's cancelled bookings must not leave stray Meet events live on
+// their own calendar — the same cleanup a single Cancel() already does, extended to the
+// bulk path Withdraw uses.
+func TestWithdrawalDeletesCalendarEventsOfCancelledBookings(t *testing.T) {
+	repo := newFakeRepo()
+	linker := &fakeCalendarLinker{}
+	svc := New(repo, Config{
+		Notifier:       &fakeNotifier{},
+		CalendarLinker: linker,
+		Now:            func() time.Time { return time.Date(2026, time.September, 7, 9, 0, 0, 0, time.UTC) },
+	})
+	submitted, err := svc.SubmitProfile(context.Background(), validInput())
+	if err != nil {
+		t.Fatalf("SubmitProfile: %v", err)
+	}
+	repo.futureBookings[submitted.ID] = []Booking{
+		{ID: uuid.New(), SeekerUserID: 11, MentorUserID: submitted.UserID, GoogleEventID: "evt-1"},
+		// No calendar event to clean up — the ordinary static-link case.
+		{ID: uuid.New(), SeekerUserID: 12, MentorUserID: submitted.UserID},
+	}
+
+	if err := svc.Withdraw(context.Background(), validInput().UserID); err != nil {
+		t.Fatalf("Withdraw: %v", err)
+	}
+	if linker.deletedEventID != "evt-1" {
+		t.Errorf("DeleteMeetEvent called with %q, want evt-1", linker.deletedEventID)
+	}
+}
+
 // A delivery failure must not leave a mentor unable to withdraw. The cancellations have
 // already committed; refusing here would strand them.
 func TestWithdrawalSurvivesAFailedNotification(t *testing.T) {

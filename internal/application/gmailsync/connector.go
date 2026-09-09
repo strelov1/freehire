@@ -88,6 +88,20 @@ func (c *Connector) AuthCodeURL(state string) string {
 	)
 }
 
+// scopedAuthCodeURL builds an incremental-auth consent URL for exactly one scope on its
+// own redirect — shared by every consent past the sign-in one, since each is a separate
+// cost and a separate decision, and only the scope and the redirect ever differ between
+// them.
+func scopedAuthCodeURL(cfg oauth2.Config, state, scope, redirect string) string {
+	cfg.Scopes = []string{scope}
+	cfg.RedirectURL = redirect
+	return cfg.AuthCodeURL(state,
+		oauth2.AccessTypeOffline,
+		oauth2.SetAuthURLParam("prompt", "consent"),
+		oauth2.SetAuthURLParam("include_granted_scopes", "true"),
+	)
+}
+
 // CalendarAuthCodeURL builds the consent URL for the calendar, on its own.
 //
 // Separate from AuthCodeURL because the two are separate costs and separate decisions: a
@@ -95,14 +109,7 @@ func (c *Connector) AuthCodeURL(state string) string {
 // and connecting a mailbox must never quietly ask for a diary. Incremental, so accepting
 // this keeps whatever they already granted — the returned refresh token then covers both.
 func (c *Connector) CalendarAuthCodeURL(state string) string {
-	cfg := *c.cfg
-	cfg.Scopes = []string{CalendarScope}
-	cfg.RedirectURL = c.calendarRedirect
-	return cfg.AuthCodeURL(state,
-		oauth2.AccessTypeOffline,
-		oauth2.SetAuthURLParam("prompt", "consent"),
-		oauth2.SetAuthURLParam("include_granted_scopes", "true"),
-	)
+	return scopedAuthCodeURL(*c.cfg, state, CalendarScope, c.calendarRedirect)
 }
 
 // Exchange turns the callback code into a refresh token and the connected Gmail
@@ -137,6 +144,22 @@ func GrantedScopes(tok *oauth2.Token) []string {
 	return strings.Fields(raw)
 }
 
+// scopedExchange turns a scoped consent's callback code into a refresh token, shared by
+// every consent past the sign-in one — op names it in the error text, since that is the
+// only thing that differs between them once the scope/redirect are already applied.
+func scopedExchange(ctx context.Context, cfg oauth2.Config, op, scope, redirect, code string) (refreshToken string, scopes []string, err error) {
+	cfg.Scopes = []string{scope}
+	cfg.RedirectURL = redirect
+	tok, err := cfg.Exchange(safehttp.GuardedOAuth2Context(ctx, gmailHTTPTimeout), code)
+	if err != nil {
+		return "", nil, fmt.Errorf("%s: exchange code: %w", op, err)
+	}
+	if tok.RefreshToken == "" {
+		return "", nil, fmt.Errorf("%s: no refresh token (consent was not offline)", op)
+	}
+	return tok.RefreshToken, GrantedScopes(tok), nil
+}
+
 // ExchangeCalendar turns the calendar callback's code into a refresh token.
 //
 // Separate from Exchange because that one reads the mailbox address from the Gmail
@@ -145,17 +168,7 @@ func GrantedScopes(tok *oauth2.Token) []string {
 // for. The token itself covers whatever they have granted in total — the consent is
 // incremental — so a candidate with both ends up with one grant covering both.
 func (c *Connector) ExchangeCalendar(ctx context.Context, code string) (refreshToken string, scopes []string, err error) {
-	cfg := *c.cfg
-	cfg.Scopes = []string{CalendarScope}
-	cfg.RedirectURL = c.calendarRedirect
-	tok, err := cfg.Exchange(safehttp.GuardedOAuth2Context(ctx, gmailHTTPTimeout), code)
-	if err != nil {
-		return "", nil, fmt.Errorf("calendar: exchange code: %w", err)
-	}
-	if tok.RefreshToken == "" {
-		return "", nil, errors.New("calendar: no refresh token (consent was not offline)")
-	}
-	return tok.RefreshToken, GrantedScopes(tok), nil
+	return scopedExchange(ctx, *c.cfg, "calendar", CalendarScope, c.calendarRedirect, code)
 }
 
 // MentorCalendarAuthCodeURL builds the consent URL for a mentor's calendar.events
@@ -169,30 +182,13 @@ func (c *Connector) ExchangeCalendar(ctx context.Context, code string) (refreshT
 // hold. Incremental, so a mentor who is also a candidate with mail/calendar-read
 // connected keeps those too.
 func (c *Connector) MentorCalendarAuthCodeURL(state string) string {
-	cfg := *c.cfg
-	cfg.Scopes = []string{CalendarEventsScope}
-	cfg.RedirectURL = c.mentorCalendarRedirect
-	return cfg.AuthCodeURL(state,
-		oauth2.AccessTypeOffline,
-		oauth2.SetAuthURLParam("prompt", "consent"),
-		oauth2.SetAuthURLParam("include_granted_scopes", "true"),
-	)
+	return scopedAuthCodeURL(*c.cfg, state, CalendarEventsScope, c.mentorCalendarRedirect)
 }
 
 // ExchangeMentorCalendar turns the mentor-calendar callback's code into a refresh
 // token, exactly as ExchangeCalendar does for the read-only flow.
 func (c *Connector) ExchangeMentorCalendar(ctx context.Context, code string) (refreshToken string, scopes []string, err error) {
-	cfg := *c.cfg
-	cfg.Scopes = []string{CalendarEventsScope}
-	cfg.RedirectURL = c.mentorCalendarRedirect
-	tok, err := cfg.Exchange(safehttp.GuardedOAuth2Context(ctx, gmailHTTPTimeout), code)
-	if err != nil {
-		return "", nil, fmt.Errorf("mentor calendar: exchange code: %w", err)
-	}
-	if tok.RefreshToken == "" {
-		return "", nil, errors.New("mentor calendar: no refresh token (consent was not offline)")
-	}
-	return tok.RefreshToken, GrantedScopes(tok), nil
+	return scopedExchange(ctx, *c.cfg, "mentor calendar", CalendarEventsScope, c.mentorCalendarRedirect, code)
 }
 
 // TokenSource mints access tokens from a stored refresh token (used by the sync

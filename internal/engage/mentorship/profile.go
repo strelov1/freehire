@@ -231,6 +231,12 @@ func (s *Service) Withdraw(ctx context.Context, userID int64) error {
 		return err
 	}
 	s.notifyCancelled(ctx, cancelled, CancelledByMentor, reasonMentorWithdrew)
+	// Best-effort, same as a single Cancel(): a cancelled session that minted a real
+	// Meet event must not leave that event live on the mentor's own calendar after
+	// everyone has been told the session is off.
+	for _, booking := range cancelled {
+		s.deleteMeetEventBestEffort(ctx, booking)
+	}
 
 	return s.repo.WithdrawProfile(ctx, userID)
 }

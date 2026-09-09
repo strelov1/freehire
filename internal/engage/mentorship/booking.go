@@ -163,11 +163,8 @@ func (s *Service) attachMeetEvent(ctx context.Context, mentor Profile, booking *
 		// answered ErrCalendarNotConnected above otherwise — so the static link the row
 		// still carries is stale rather than a fallback worth keeping; an explicit empty
 		// answer beats surfacing a link nobody chose for this session.
-		if setErr := s.repo.SetBookingCalendarEvent(ctx, booking.ID, "", ""); setErr != nil {
-			log.Printf("mentorship: clearing booking %s's link after a failed calendar write: %v", booking.ID, setErr)
-		} else {
-			booking.MeetingURL = ""
-			booking.GoogleEventID = ""
+		if setErr := s.setCalendarEvent(ctx, booking, "", ""); setErr != nil {
+			logDeliveryFailure("calendar event reset", *booking, setErr)
 		}
 		if gmailsync.RevokedGrant(err) {
 			if markErr := s.repo.MarkCalendarGrantNeedsReconsent(ctx, mentor.UserID); markErr != nil {
@@ -175,12 +172,35 @@ func (s *Service) attachMeetEvent(ctx context.Context, mentor Profile, booking *
 			}
 		}
 	default:
-		if setErr := s.repo.SetBookingCalendarEvent(ctx, booking.ID, meetLink, eventID); setErr != nil {
-			logDeliveryFailure("calendar event", *booking, setErr)
-			return
+		if setErr := s.setCalendarEvent(ctx, booking, meetLink, eventID); setErr != nil {
+			logDeliveryFailure("calendar event record", *booking, setErr)
 		}
-		booking.MeetingURL = meetLink
-		booking.GoogleEventID = eventID
+	}
+}
+
+// setCalendarEvent writes a booking's calendar-event fields and, on success, patches the
+// same values onto the in-memory booking — used both when a real event was minted and
+// when a failed write clears a now-stale static link, so the caller sees what was
+// actually stored either way.
+func (s *Service) setCalendarEvent(ctx context.Context, booking *Booking, meetingURL, eventID string) error {
+	if err := s.repo.SetBookingCalendarEvent(ctx, booking.ID, meetingURL, eventID); err != nil {
+		return err
+	}
+	booking.MeetingURL = meetingURL
+	booking.GoogleEventID = eventID
+	return nil
+}
+
+// deleteMeetEventBestEffort removes the calendar event a booking minted, if any, ignoring
+// (but logging) any failure — used by both Cancel and Withdraw's bulk cancellation, so a
+// mentor leaving the marketplace does not leave stray Meet events behind on their own
+// calendar for sessions freehire has already told everyone are off.
+func (s *Service) deleteMeetEventBestEffort(ctx context.Context, booking Booking) {
+	if booking.GoogleEventID == "" || s.calendar == nil {
+		return
+	}
+	if err := s.calendar.DeleteMeetEvent(ctx, booking.MentorUserID, booking.GoogleEventID); err != nil {
+		logDeliveryFailure("calendar event deletion", booking, err)
 	}
 }
 
@@ -197,15 +217,7 @@ func (s *Service) Cancel(ctx context.Context, bookingID uuid.UUID, actorID int64
 		by = CancelledByMentor
 	}
 	s.notifyCancelled(ctx, []Booking{booking}, by, reason)
-
-	// Best-effort cleanup of the calendar event the booking minted, if any. The session
-	// is already cancelled and its parties already told; a failure here costs nobody
-	// anything but a stray event on the mentor's own calendar.
-	if booking.GoogleEventID != "" && s.calendar != nil {
-		if err := s.calendar.DeleteMeetEvent(ctx, booking.MentorUserID, booking.GoogleEventID); err != nil {
-			logDeliveryFailure("calendar event deletion", booking, err)
-		}
-	}
+	s.deleteMeetEventBestEffort(ctx, booking)
 
 	return booking, nil
 }

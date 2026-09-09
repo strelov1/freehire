@@ -431,7 +431,12 @@ func (h *inboxHandlers) GmailStatus(c *fiber.Ctx) error {
 		// Whether this grant covers calendar.events — the mentor-only write consent
 		// mentor-google-meet-link reads to decide whether a booking gets an
 		// auto-generated Meet link and whether the profile's own link becomes optional.
-		"mentor_calendar_connected": slices.Contains(conn.Scopes, gmailsync.CalendarEventsScope),
+		// Gated on status too, unlike calendar_connected above: a mentor whose booking
+		// flow already treats a needs_reconsent grant as not-connected (see
+		// mentorship.GetMentorCalendarGrant) must not be told here that they're still
+		// connected — that reading would leave their profile's meeting link optional and
+		// every new booking silently landing with no link at all.
+		"mentor_calendar_connected": conn.Status == "connected" && slices.Contains(conn.Scopes, gmailsync.CalendarEventsScope),
 	}})
 }
 
