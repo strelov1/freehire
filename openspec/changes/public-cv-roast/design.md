@@ -60,6 +60,17 @@ rewrites it. Giving away the second half leaves the page with no next step to of
 `atscheck.NewAnalyzer(nil)` already makes `Analyze` a no-op returning `(nil, nil)`, so
 "deterministic only" is the analyzer's own documented degradation rather than a new branch.
 
+**One narrow, pre-existing exception to "never sent anywhere":** `sentry-go/fiber` clones
+and captures the request body (`scope.SetRequestBody`) on every request by default
+(`SendDefaultPII:false` does not suppress this — that flag governs user/IP identity, not
+the body), and its filter preserves any JSON key not on its sensitive-terms list, which
+`"text"` is not. So a *pasted* CV under `MaxBodyBytes` (10 KiB — the `application/json`
+`{text: ...}` path only; a `multipart/form-data` `File` upload falls through this filter
+untouched) would reach Sentry verbatim if this route ever reports a 500 or panics while
+handling it. This is app-wide and pre-existing, not introduced by this change, and fixing
+it (a Sentry `BeforeSend` scrub, or turning off body capture) is a separate decision that
+affects every route, not just this one.
+
 ### Refusals and degradations
 
 | Situation | Behaviour |
@@ -83,6 +94,26 @@ free, but not a model call either; the limit is set to stop a scraper rather tha
 a scarce resource. It is deliberately looser than a per-minute limit would be: a visitor
 iterating on their CV genuinely re-uploads several times in a row, and that is the behaviour
 the page wants.
+
+**What this argument does not cover: concurrency.** `ratelimit.Middleware` is a windowed
+request-count limiter, not a semaphore — it bounds how many requests one IP may make per
+hour, never how many of them may run at once. Ten requests from ten different IPs (or,
+since the limiter is keyed by source address and nginx applies no `limit_req` to `/api/`
+at all, ten requests spread thinly across a modest botnet) are all permitted concurrently.
+Per allowed request in flight, the cost is real: up to 8 MB buffered by fasthttp, another
+8 MB cloned by Sentry's fiber middleware, another copy from `io.ReadAll` in
+`readResumeUpload` (resume.go), an 8 MB temporary file on disk, and a `pdftotext` fork that
+can hold up to `pdfExtractTimeout` (15s) of CPU. That subprocess is started with
+`exec.CommandContext(context.WithTimeout(context.Background(), pdfExtractTimeout), ...)` —
+its own timeout, not the request's — so it outlives a client that disconnects and outlives
+Fiber's 10s `WriteTimeout`, and the temp file it reads from lives exactly as long as it does.
+A flood spread across enough source addresses can therefore put hundreds of concurrent
+8 MB temp files under `/tmp` well within the per-IP budget. This host's facet reindex
+already refuses to run below a free-space floor it currently clears by roughly 1 GiB, so
+the failure mode such a flood produces is not a 429 or a 500 — it is `freehire-reindexw`
+quietly not running. **This is a known, open gap, not an oversight**: bounding aggregate
+concurrency (a semaphore, a global in-flight cap, a disk-space guard on the upload path)
+is a deliberate follow-up, out of scope for this change.
 
 ### Where the code lives
 

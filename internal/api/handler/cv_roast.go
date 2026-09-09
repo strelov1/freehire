@@ -151,6 +151,11 @@ var errSearchUnavailable = errors.New("search is not available")
 // Per HOUR rather than per minute, on purpose: someone fixing their CV genuinely
 // re-uploads it several times in a row, and that is the behaviour the page wants. A
 // per-minute ceiling would punish exactly the visitor who is getting value.
+//
+// This bounds request COUNT per IP, not aggregate concurrency — it does nothing against
+// many IPs at once, each under its own allowance. See design.md's "Rate limit" section
+// for what one allowed request costs in memory/disk/CPU and why that gap is knowingly
+// left open rather than addressed here.
 const cvRoastPerHour = 10
 
 // cvRoastLimiter bounds the public roast by source address. There is no authenticated
