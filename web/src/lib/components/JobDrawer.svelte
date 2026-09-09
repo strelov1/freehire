@@ -36,6 +36,7 @@
   import { focusTrap } from '$lib/actions/focusTrap';
   import { lockScroll, unlockScroll } from '$lib/scrollLock';
   import { autoApplyReviewBanner } from '$lib/autoApplyReview';
+  import { pendingRows } from '$lib/answerBank';
 
   let {
     item,
@@ -152,22 +153,27 @@
     }
   }
 
-  // One draft per pending question, keyed by its label — the same key the {#each} uses, so
-  // an input and its draft cannot drift apart.
-  let bankDrafts = $state<Record<string, string>>({});
-  let bankSaving = $state<string | null>(null);
+  // pendingRows pairs every pending question with its position in the list — never its
+  // label — because two distinct questions can share label text and a live Greenhouse
+  // posting renders four pending entries with an empty label; either would collide an
+  // `{#each}` key, a DOM id, or a draft keyed on the text itself.
+  const pendingQuestions = $derived(pendingRows(autoApply?.resolved_preview?.pending));
+
+  // One draft per pending question, keyed by its row's position (see pendingQuestions).
+  let bankDrafts = $state<Record<number, string>>({});
+  let bankSaving = $state<number | null>(null);
   let bankError = $state<string | null>(null);
 
-  async function saveBankedAnswer(question: string) {
-    const answer = bankDrafts[question]?.trim();
-    if (!answer || bankSaving) return;
-    bankSaving = question;
+  async function saveBankedAnswer(key: number, question: string) {
+    const answer = bankDrafts[key]?.trim();
+    if (!answer || bankSaving !== null) return;
+    bankSaving = key;
     bankError = null;
     try {
       await api.saveBankedAnswer(question, answer);
       // Cleared rather than left filled: the answer now lives in the bank, and a filled
       // input beside a saved answer reads as unsaved work.
-      bankDrafts = { ...bankDrafts, [question]: '' };
+      bankDrafts = { ...bankDrafts, [key]: '' };
     } catch (e) {
       bankError = errorMessage(e, 'Could not save your answer.');
     } finally {
@@ -517,26 +523,26 @@
                   {/each}
                 </dl>
               {/if}
-              {#if autoApply?.resolved_preview?.pending?.length}
+              {#if pendingQuestions.length}
                 <ul class="flex flex-col gap-2 text-xs text-muted-foreground">
-                  {#each autoApply.resolved_preview.pending as p (p.label)}
-                    {#if p.will_draft_at_submission}
-                      <li>{p.label} — will be filled in automatically</li>
-                    {:else if p.label.trim() !== ''}
+                  {#each pendingQuestions as row (row.key)}
+                    {#if row.pending.will_draft_at_submission}
+                      <li>{row.pending.label} — will be filled in automatically</li>
+                    {:else if row.answerable}
                       <li class="flex flex-col gap-1">
-                        <label class="text-foreground" for={`bank-${p.label}`}>{p.label}</label>
+                        <label class="text-foreground" for={`bank-${row.key}`}>{row.pending.label}</label>
                         <div class="flex gap-2">
                           <input
-                            id={`bank-${p.label}`}
+                            id={`bank-${row.key}`}
                             class="min-w-0 flex-1 rounded-md border border-border bg-background px-2 py-1"
-                            bind:value={bankDrafts[p.label]}
+                            bind:value={bankDrafts[row.key]}
                             placeholder="Your answer — saved for next time too"
                           />
                           <Button
                             size="sm"
                             variant="outline"
-                            disabled={bankSaving === p.label || !bankDrafts[p.label]?.trim()}
-                            onclick={() => saveBankedAnswer(p.label)}
+                            disabled={bankSaving === row.key || !bankDrafts[row.key]?.trim()}
+                            onclick={() => saveBankedAnswer(row.key, row.pending.label)}
                           >
                             Save
                           </Button>

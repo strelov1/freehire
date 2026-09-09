@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { answerableQuestions } from './answerBank';
+import { answerableQuestions, pendingRows } from './answerBank';
 
 describe('answerableQuestions', () => {
   it('offers an input for a question that has readable text', () => {
@@ -34,5 +34,51 @@ describe('answerableQuestions', () => {
   it('is empty for no pending questions at all', () => {
     expect(answerableQuestions(undefined)).toEqual([]);
     expect(answerableQuestions([])).toEqual([]);
+  });
+});
+
+// pendingRows pairs every raw pending entry with a stable identity (its position) and
+// whether it is answerable. Nothing here may key on label text: two distinct questions
+// can share a label, and a live Greenhouse posting renders four pending entries with an
+// EMPTY label — either would collide if the identity came from the text itself.
+describe('pendingRows', () => {
+  it('gives two entries with the same label their own distinct identity', () => {
+    const pending = [
+      { label: 'Additional information', will_draft_at_submission: false },
+      { label: 'Additional information', will_draft_at_submission: false }
+    ];
+    const rows = pendingRows(pending);
+    expect(rows).toHaveLength(2);
+    expect(rows.map((r) => r.key)).toEqual([0, 1]);
+    // Distinct identity, not just distinct array position: a Set built from the keys must
+    // hold two members, not collapse to one the way it would if the key were the label.
+    expect(new Set(rows.map((r) => r.key)).size).toBe(2);
+    expect(rows.every((r) => r.answerable)).toBe(true);
+  });
+
+  it('gives several empty-label entries their own distinct identity too', () => {
+    const pending = [
+      { label: '', will_draft_at_submission: false },
+      { label: '', will_draft_at_submission: false },
+      { label: '   ', will_draft_at_submission: false },
+      { label: '', will_draft_at_submission: false }
+    ];
+    const rows = pendingRows(pending);
+    expect(new Set(rows.map((r) => r.key)).size).toBe(4);
+    expect(rows.every((r) => !r.answerable)).toBe(true);
+  });
+
+  it('marks a question drafted at submission unanswerable without dropping it from the list', () => {
+    const pending = [{ label: 'Why do you want to work here?', will_draft_at_submission: true }];
+    const rows = pendingRows(pending);
+    expect(rows).toHaveLength(1);
+    const [row] = rows;
+    expect(row?.answerable).toBe(false);
+    expect(row?.pending.will_draft_at_submission).toBe(true);
+  });
+
+  it('is empty for no pending questions at all', () => {
+    expect(pendingRows(undefined)).toEqual([]);
+    expect(pendingRows([])).toEqual([]);
   });
 });
