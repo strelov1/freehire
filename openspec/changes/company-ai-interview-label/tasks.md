@@ -14,10 +14,10 @@
 
 ## 3. HTTP
 
-- [ ] 3.1 `POST /api/v1/companies/:slug/process-reports` — `RequireAuth`, 404 on an unknown company slug, 400 on an unknown kind, 409 on a duplicate, 201 on success. Response shape `{"data": ...}`.
-- [ ] 3.2 `DELETE /api/v1/companies/:slug/process-reports` — retracts the caller's own report of the named kind; 404 when none exists.
-- [ ] 3.3 Apply the same per-day rate limit the report endpoints answer 429 on.
-- [ ] 3.4 Integration tests in `internal/api/handler` covering every status above, including that filing creates no moderation report.
+- [x] 3.1 `POST /api/v1/companies/:slug/process-reports` — `RequireAuth`, 404 on an unknown company slug, 400 on an unknown kind, 409 on a duplicate, 201 on success. Response shape `{"data": ...}`.
+- [x] 3.2 `DELETE /api/v1/companies/:slug/process-reports` — retracts the caller's own report of the named kind; 404 when none exists.
+- [x] 3.3 Apply the same per-day rate limit the report endpoints answer 429 on.
+- [x] 3.4 Integration tests in `internal/api/handler` covering every status above, including that filing creates no moderation report.
 
 ## 4. Wire shape
 

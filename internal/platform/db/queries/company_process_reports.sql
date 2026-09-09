@@ -50,6 +50,14 @@ UPDATE companies SET
 WHERE slug = $1
 RETURNING ai_interview_reports;
 
+-- name: MyLiveCompanyProcessReportKinds :many
+-- The kinds this user currently has live against one company. The write surface needs
+-- it to open in the right state: without it a returning reader cannot be shown that
+-- they already reported, and the only way to find out would be to try and be refused.
+SELECT kind FROM company_process_reports
+ WHERE user_id = $1 AND company_slug = $2 AND retracted_at IS NULL
+ ORDER BY kind;
+
 -- name: CountRecentCompanyProcessReports :one
 -- How many reports this user has filed since `since` — the rate-limit check, mirroring
 -- CountRecentCompanyFeedback. A revival takes the ON CONFLICT branch and leaves

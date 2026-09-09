@@ -70,6 +70,40 @@ func (q *Queries) FileCompanyProcessReport(ctx context.Context, arg FileCompanyP
 	return id, err
 }
 
+const myLiveCompanyProcessReportKinds = `-- name: MyLiveCompanyProcessReportKinds :many
+SELECT kind FROM company_process_reports
+ WHERE user_id = $1 AND company_slug = $2 AND retracted_at IS NULL
+ ORDER BY kind
+`
+
+type MyLiveCompanyProcessReportKindsParams struct {
+	UserID      int64  `json:"user_id"`
+	CompanySlug string `json:"company_slug"`
+}
+
+// The kinds this user currently has live against one company. The write surface needs
+// it to open in the right state: without it a returning reader cannot be shown that
+// they already reported, and the only way to find out would be to try and be refused.
+func (q *Queries) MyLiveCompanyProcessReportKinds(ctx context.Context, arg MyLiveCompanyProcessReportKindsParams) ([]string, error) {
+	rows, err := q.db.Query(ctx, myLiveCompanyProcessReportKinds, arg.UserID, arg.CompanySlug)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []string{}
+	for rows.Next() {
+		var kind string
+		if err := rows.Scan(&kind); err != nil {
+			return nil, err
+		}
+		items = append(items, kind)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const recountCompanyProcessReports = `-- name: RecountCompanyProcessReports :one
 UPDATE companies SET
     ai_interview_reports = (

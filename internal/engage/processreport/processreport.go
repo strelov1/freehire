@@ -203,6 +203,27 @@ func (s *Service) Retract(ctx context.Context, userID int64, slug, kind string) 
 	return count, nil
 }
 
+// Mine returns the kinds the caller currently has live against a company (possibly
+// empty). The write surface needs it to open in the right state — without it a
+// returning reader cannot be shown that they already reported, and the only way to
+// find out would be to file and be refused. ErrCompanyNotFound for a bad slug, checked
+// first so it is never confused with "you have not reported anything".
+func (s *Service) Mine(ctx context.Context, userID int64, slug string) ([]string, error) {
+	if err := s.requireCompany(ctx, slug); err != nil {
+		return nil, err
+	}
+	kinds, err := s.q.MyLiveCompanyProcessReportKinds(ctx, db.MyLiveCompanyProcessReportKindsParams{
+		UserID: userID, CompanySlug: slug,
+	})
+	if err != nil {
+		return nil, err
+	}
+	if kinds == nil {
+		kinds = []string{}
+	}
+	return kinds, nil
+}
+
 // requireCompany reports ErrCompanyNotFound for a slug naming no company — the cheap
 // existence check that returns a clean 404 before the transaction opens, since the FK
 // would otherwise surface a bad slug as an opaque constraint violation (the same

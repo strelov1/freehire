@@ -4240,6 +4240,10 @@ type Querier interface {
 	// after normalisation, so a private title merges into a public one's count rather than
 	// standing alone under it.
 	MineJobTitles(ctx context.Context) ([]MineJobTitlesRow, error)
+	// The kinds this user currently has live against one company. The write surface needs
+	// it to open in the right state: without it a returning reader cannot be shown that
+	// they already reported, and the only way to find out would be to try and be refused.
+	MyLiveCompanyProcessReportKinds(ctx context.Context, arg MyLiveCompanyProcessReportKindsParams) ([]string, error)
 	// The similar-jobs rollup for one source job (design.md Decision 5), consumed by
 	// cmd/similar-backfill to populate jobs.similar_job_ids. A candidate job's distance to
 	// the source is the MINIMUM cosine distance across every (source chunk, candidate
