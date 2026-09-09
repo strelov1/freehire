@@ -9,12 +9,13 @@
   // account exists yet. The CV bytes live only in this component's own state and are
   // never sent anywhere but the one POST — see RoastCV's own doc on the backend for why
   // nothing here writes.
+  import { goto } from '$app/navigation';
   import { page } from '$app/state';
   import { FileUp, LoaderCircle } from '@lucide/svelte';
   import { api, ApiError, RESUME_MAX_MB, type RoastResponse } from '$lib/api';
   import { CATEGORY_OPTIONS } from '$lib/facets';
   import { categoryLabel } from '$lib/labels';
-  import { promptSignIn } from '$lib/signin';
+  import { signinUrl } from '$lib/signin';
   import { cn, Button } from '$lib/ui';
   import Seo from '$lib/components/Seo.svelte';
   import ATSReportView from '$lib/components/ATSReportView.svelte';
@@ -31,6 +32,13 @@
   // category without asking the visitor to upload it again.
   let lastInput = $state<File | string | null>(null);
   let changingRole = $state(false);
+  // Bumped whenever the <select>'s displayed value has to be forced back to the role
+  // that was actually measured — a plain assignment to the `value` binding below would
+  // not do it, because a native <select> keeps whatever option the visitor clicked even
+  // when the request behind it never took effect. Wrapping the element in
+  // {#key roleChangeResetKey} makes Svelte tear it down and rebuild it against the
+  // current `role`, which is the only reliable way to override that native state.
+  let roleChangeResetKey = $state(0);
   // Guards against an out-of-order response: a fast second upload can have an older
   // request resolve after a newer one, so only the latest attempt commits.
   let gen = 0;
@@ -44,6 +52,11 @@
     status = 'busy';
     error = null;
     lastInput = input;
+    // A fresh upload supersedes any role change still in flight — see changeRole's own
+    // gen guard, which stops that stale request from ever committing its result, but
+    // would otherwise leave the picker disabled forever waiting for a response nothing
+    // will act on.
+    changingRole = false;
     try {
       const next = await api.roastCv(input);
       if (my !== gen) return;
@@ -80,13 +93,29 @@
 
   // Re-scores the SAME CV against a different role, leaving the current result on screen
   // if the retry fails rather than clearing a working reading over a transient error.
+  // Uses the same out-of-order guard as roast(): a superseding upload must win over a
+  // role change that was already in flight, never the other way around.
   async function changeRole(category: string) {
     if (!lastInput || changingRole) return;
+    const my = ++gen;
     changingRole = true;
+    error = null;
     try {
-      result = await api.roastCv(lastInput, category);
-    } catch {
-      // The visitor still has the reading they had before — say nothing further.
+      const next = await api.roastCv(lastInput, category);
+      if (my !== gen) return;
+      result = next;
+      status = 'idle';
+    } catch (err) {
+      if (my !== gen) return;
+      // The visitor still has the reading they had before — keep it on screen, but say
+      // so: a silent failure here left the picker showing a role the reading was never
+      // scored against, once the visitor had spent the hourly budget roast() also draws
+      // on. Surface it through the same error banner the upload path uses rather than a
+      // second error surface, and force the <select> back to the role that reading
+      // actually describes.
+      status = 'error';
+      error = err instanceof ApiError ? err.message : 'Could not change role. Please try again.';
+      roleChangeResetKey++;
     } finally {
       changingRole = false;
     }
@@ -95,6 +124,18 @@
   function onRoleChange(e: Event) {
     const value = (e.currentTarget as HTMLSelectElement).value;
     if (value) void changeRole(value);
+  }
+
+  // Deliberately not the shared "sign in to do X" gate helper from $lib/signin.ts: that
+  // one opens the LOGIN form and returns the visitor to the page they came from, which is
+  // right for an in-place gate on an existing account (Save, Follow, Vote) but wrong here
+  // — this page's audience has never heard of freehire, so there is no account to log
+  // into, and returning to /roast would show the same anonymous page with the upload
+  // gone. Instead this opens the REGISTER form (no `mode`) and lands a fresh account
+  // straight on the signed-in continuation the CTA promised.
+  function onSignIn() {
+    // eslint-disable-next-line svelte/no-navigation-without-resolve -- signinUrl() wraps resolve('/signin')
+    void goto(signinUrl({ returnTo: '/my/profile/cv-readiness' }));
   }
 
   const role = $derived(result ? roleDisplay(result) : null);
@@ -178,18 +219,20 @@
         {/if}
         <label class="flex items-center gap-2 text-xs text-muted-foreground">
           Compare against
-          <select
-            data-testid="roast-role-change"
-            class="rounded-md border border-input bg-background px-2 py-1 text-xs disabled:opacity-60"
-            value={role?.scoped ? role.role : ''}
-            disabled={changingRole}
-            onchange={onRoleChange}
-          >
-            <option value="" disabled selected={!role?.scoped}>Pick a role…</option>
-            {#each CATEGORY_OPTIONS as opt (opt.value)}
-              <option value={opt.value}>{opt.label}</option>
-            {/each}
-          </select>
+          {#key roleChangeResetKey}
+            <select
+              data-testid="roast-role-change"
+              class="rounded-md border border-input bg-background px-2 py-1 text-xs disabled:opacity-60"
+              value={role?.scoped ? role.role : ''}
+              disabled={changingRole}
+              onchange={onRoleChange}
+            >
+              <option value="" disabled selected={!role?.scoped}>Pick a role…</option>
+              {#each CATEGORY_OPTIONS as opt (opt.value)}
+                <option value={opt.value}>{opt.label}</option>
+              {/each}
+            </select>
+          {/key}
         </label>
       </div>
 
@@ -222,7 +265,7 @@
         <p class="text-sm text-muted-foreground">
           Sign in to get an AI review of your CV's content and tailor it to a specific job.
         </p>
-        <Button variant="primary" onclick={promptSignIn}>Sign in</Button>
+        <Button variant="primary" onclick={onSignIn}>Sign in</Button>
       </div>
     </div>
   {/if}

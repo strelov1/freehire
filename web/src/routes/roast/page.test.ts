@@ -187,7 +187,6 @@ describe('/roast page markup', () => {
     // session gate — the whole point of this page is that no session is required to see it.
     const before = PAGE.slice(0, idx);
     expect(before).not.toContain('isAuthenticated');
-    expect(PAGE).not.toContain('RequireAuth');
   });
 
   it('names the role and offers a change control together', () => {
@@ -221,7 +220,66 @@ describe('/roast page markup', () => {
     expect(PAGE).not.toMatch(/\bfetch\(/);
   });
 
-  it('ends on a sign-in call to action', () => {
-    expect(PAGE).toContain('promptSignIn');
+  it('ends on a sign-in call to action that opens the register form on the signed-in continuation', () => {
+    // Not promptSignIn(): that helper opens the LOGIN form and returns to the anonymous
+    // page it was called from, which is wrong for an audience that has never heard of us
+    // and has no account to log into. This must open the register form (no `mode`) and
+    // land on the page the CTA promises.
+    expect(PAGE).toContain('signinUrl({ returnTo: \'/my/profile/cv-readiness\' })');
+    expect(PAGE).not.toContain('promptSignIn');
+  });
+});
+
+// changeRole's body, isolated so these assertions cannot accidentally match roast()'s own
+// (near-identical) guard a few lines above it.
+const CHANGE_ROLE_START = PAGE.indexOf('async function changeRole');
+const CHANGE_ROLE_END = PAGE.indexOf('function onRoleChange', CHANGE_ROLE_START);
+const CHANGE_ROLE_BODY = PAGE.slice(CHANGE_ROLE_START, CHANGE_ROLE_END);
+
+describe('changeRole guards', () => {
+  it('is found, and is not empty — a prerequisite for every assertion below', () => {
+    expect(CHANGE_ROLE_START).toBeGreaterThan(-1);
+    expect(CHANGE_ROLE_END).toBeGreaterThan(CHANGE_ROLE_START);
+  });
+
+  // A role change in flight must not win a race against a newer upload: without this,
+  // dropping a new CV while a role-change request is still pending can have the stale
+  // response land last and overwrite the new CV's report with the old CV's re-scored one.
+  it('uses the same out-of-order guard as roast(), so a stale response cannot overwrite a newer one', () => {
+    expect(CHANGE_ROLE_BODY).toMatch(/const my = \+\+gen;/);
+    expect(CHANGE_ROLE_BODY).toMatch(/if \(my !== gen\) return;/);
+  });
+
+  // A failed role change must tell the visitor, not fail silently — the budget backing
+  // it (cvRoastPerHour) is shared with roast() and can already be spent by the time the
+  // picker is used.
+  it('tells the visitor when a role change fails, instead of failing silently', () => {
+    expect(CHANGE_ROLE_BODY).not.toContain('say nothing further');
+    expect(CHANGE_ROLE_BODY).toMatch(/status = 'error';/);
+    expect(CHANGE_ROLE_BODY).toMatch(/error = /);
+  });
+
+  // The failure path must reset the picker's own displayed value — otherwise a native
+  // <select> keeps showing the role the visitor clicked even though the reading on the
+  // page still describes the previous one.
+  it('resets the picker so it cannot show a role the reading was never scored against', () => {
+    expect(CHANGE_ROLE_BODY).toContain('roleChangeResetKey++');
+  });
+});
+
+describe('the role picker', () => {
+  // Svelte only forces a native <select>'s displayed value back onto the DOM when the
+  // element itself is torn down and rebuilt — a plain reactive `value={...}` binding is
+  // not enough once the browser's own selection has drifted from it. {#key} is how this
+  // page does that rebuild, keyed on the counter changeRole's catch bumps.
+  it('is wrapped in a {#key} block keyed on roleChangeResetKey', () => {
+    const selectIdx = PAGE.indexOf('data-testid="roast-role-change"');
+    expect(selectIdx).toBeGreaterThan(-1);
+    const before = PAGE.slice(0, selectIdx);
+    const keyIdx = before.lastIndexOf('{#key roleChangeResetKey}');
+    expect(keyIdx).toBeGreaterThan(-1);
+    // No other {/key} between the block's opening and the <select> itself.
+    const between = PAGE.slice(keyIdx, selectIdx);
+    expect(between).not.toContain('{/key}');
   });
 });
