@@ -187,6 +187,43 @@ func (q *Queries) EstimateHiringCompanies(ctx context.Context) (int64, error) {
 	return column_1, err
 }
 
+const fillCompanyDescriptionFromIngest = `-- name: FillCompanyDescriptionFromIngest :exec
+INSERT INTO companies (
+    slug, name, tagline, company_info, is_reference, company_info_at
+) VALUES (
+    $1, $2, $3, $4, false, now()
+)
+ON CONFLICT (slug) DO UPDATE SET
+    tagline         = COALESCE(NULLIF(companies.tagline, ''), EXCLUDED.tagline),
+    company_info    = EXCLUDED.company_info || companies.company_info,
+    company_info_at = now(),
+    updated_at      = now()
+`
+
+type FillCompanyDescriptionFromIngestParams struct {
+	Slug        string          `json:"slug"`
+	Name        string          `json:"name"`
+	Tagline     pgtype.Text     `json:"tagline"`
+	CompanyInfo json.RawMessage `json:"company_info"`
+}
+
+// Applies a company-level description an ATS adapter yielded alongside its board
+// crawl (see sources.CompanyDescriber — Greenhouse's board-metadata endpoint today).
+// Same fill-gap shape as UpsertYCCompany's non-owned columns: tagline fills only a
+// blank, company_info merges key-wise (existing keys win), touching nothing else —
+// this source has no industries/year_founded/etc. to assert. A slug with no existing
+// row is inserted with is_reference = false, since it is arriving with a real
+// crawled job, not as a reference-only row the way an unmatched YC entry is.
+func (q *Queries) FillCompanyDescriptionFromIngest(ctx context.Context, arg FillCompanyDescriptionFromIngestParams) error {
+	_, err := q.db.Exec(ctx, fillCompanyDescriptionFromIngest,
+		arg.Slug,
+		arg.Name,
+		arg.Tagline,
+		arg.CompanyInfo,
+	)
+	return err
+}
+
 const fillCompanyInfoFromWikipedia = `-- name: FillCompanyInfoFromWikipedia :exec
 UPDATE companies
 SET tagline          = COALESCE(NULLIF(tagline, ''), $1),

@@ -91,6 +91,18 @@ type SeenLookup interface {
 	ExistingExternalIDs(ctx context.Context, source, board string) (map[string]bool, error)
 }
 
+// CompanyDescriptionFiller is the optional Store capability a sources.CompanyDescriber
+// adapter needs: apply a company-level description to that company's tagline/
+// company_info gap. It exists as a capability because only the ingest dbStore has a
+// company_info table to write to — a test fake or a future non-Postgres Store simply
+// skips the write, exactly like FormSaver/Closer/Toucher. slug is the board's company,
+// already normalized (normalize.CompanySlug), so the Store implementation matches the
+// same key every other company-info source writes under; name is the board's own
+// display name, needed only when the slug has no existing row yet to insert one.
+type CompanyDescriptionFiller interface {
+	FillCompanyDescription(ctx context.Context, slug, name, description string) error
+}
+
 // HydrationRetryWindow is how long after a posting enters the catalogue its missing description
 // is still worth another detail request. Being stored is what makes a posting "seen", so without
 // a window a failed first hydration is permanent: the row keeps its empty body for life (that is
@@ -519,6 +531,10 @@ func (r Runner) ingestBoard(ctx context.Context, e sources.CompanyEntry) Stats {
 		return Stats{Failed: 1}
 	}
 
+	// Independent of which Fetch variant this board takes below: a company-level
+	// description is a fact about the board, not about any one posting.
+	r.fillCompanyDescription(ctx, e, src)
+
 	// A streaming adapter persists postings as it crawls, so a long rate-limited board's
 	// progress is saved incrementally (and survives an interrupted run) rather than buffered
 	// until the whole board finishes.
@@ -550,6 +566,35 @@ func (r Runner) ingestBoard(ctx context.Context, e sources.CompanyEntry) Stats {
 		return Stats{Failed: 1}
 	}
 	return r.ingestFetched(ctx, e, raw, seen)
+}
+
+// fillCompanyDescription calls a CompanyDescriber adapter once per board and, when it
+// yields a non-empty description, applies it via the Store's optional
+// CompanyDescriptionFiller capability. Neither a missing capability on either side nor
+// an error from the adapter propagates — a company-description fetch must never
+// affect the board's own job ingest, only ever add a tagline/company_info gap-fill on
+// top of it.
+func (r Runner) fillCompanyDescription(ctx context.Context, e sources.CompanyEntry, src sources.Source) {
+	cd, ok := src.(sources.CompanyDescriber)
+	if !ok {
+		return
+	}
+	filler, ok := r.Store.(CompanyDescriptionFiller)
+	if !ok {
+		return
+	}
+	description, err := cd.CompanyDescription(ctx, e)
+	if err != nil {
+		log.Printf("ingest: %s board %q (%s): company description: %v", e.Provider, e.Board, e.Company, err)
+		return
+	}
+	if description == "" {
+		return
+	}
+	slug := normalize.CompanySlug(e.Company)
+	if err := filler.FillCompanyDescription(ctx, slug, e.Company, description); err != nil {
+		log.Printf("ingest: %s board %q (%s): fill company description: %v", e.Provider, e.Board, e.Company, err)
+	}
 }
 
 // ingestFetched turns one board's already-fetched raw postings into Stats: applying a

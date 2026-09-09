@@ -323,6 +323,25 @@ ON CONFLICT (slug) DO UPDATE SET
     company_info_at = now(),
     updated_at      = now();
 
+-- name: FillCompanyDescriptionFromIngest :exec
+-- Applies a company-level description an ATS adapter yielded alongside its board
+-- crawl (see sources.CompanyDescriber — Greenhouse's board-metadata endpoint today).
+-- Same fill-gap shape as UpsertYCCompany's non-owned columns: tagline fills only a
+-- blank, company_info merges key-wise (existing keys win), touching nothing else —
+-- this source has no industries/year_founded/etc. to assert. A slug with no existing
+-- row is inserted with is_reference = false, since it is arriving with a real
+-- crawled job, not as a reference-only row the way an unmatched YC entry is.
+INSERT INTO companies (
+    slug, name, tagline, company_info, is_reference, company_info_at
+) VALUES (
+    sqlc.arg(slug), sqlc.arg(name), sqlc.arg(tagline), sqlc.arg(company_info), false, now()
+)
+ON CONFLICT (slug) DO UPDATE SET
+    tagline         = COALESCE(NULLIF(companies.tagline, ''), EXCLUDED.tagline),
+    company_info    = EXCLUDED.company_info || companies.company_info,
+    company_info_at = now(),
+    updated_at      = now();
+
 -- name: ListCompaniesMissingWikipediaInfo :many
 -- Candidates for the Wikipedia company-info backfill: no tagline yet, and never
 -- resolved by this backfill before (company_info_wikipedia_checked_at IS NULL —
