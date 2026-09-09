@@ -1,13 +1,13 @@
 ## 1. Adapter contract
 
-- [ ] 1.1 Add the `CompanyDescriber` optional interface to `internal/ingest/sources` (`CompanyDescription(ctx, CompanyEntry) (string, error)`).
-- [ ] 1.2 Document the contract addition alongside the existing `Source` interface docs (no per-posting duplication; called once per board).
+- [x] 1.1 Add the `CompanyDescriber` optional interface to `internal/ingest/sources` (`CompanyDescription(ctx, CompanyEntry) (string, error)`).
+- [x] 1.2 Document the contract addition alongside the existing `Source` interface docs (no per-posting duplication; called once per board).
 
 ## 2. Greenhouse adapter
 
-- [ ] 2.1 Implement `CompanyDescription` on the Greenhouse adapter: fetch `https://boards-api.greenhouse.io/v1/boards/{board}` (distinct from the `/jobs` endpoint), return the sanitized `content` field, or `("", nil)` when blank/absent.
-- [ ] 2.2 Reuse the existing `sanitizeHTML` helper on the returned text.
-- [ ] 2.3 Unit-test against fixtures: populated `content`, blank `content`, and a 404 board (treated the same as "no description", not a hard failure of the whole board crawl).
+- [x] 2.1 Implement `CompanyDescription` on the Greenhouse adapter: fetch `https://boards-api.greenhouse.io/v1/boards/{board}` (distinct from the `/jobs` endpoint), return the sanitized `content` field, or `("", nil)` when blank/absent.
+- [x] 2.2 Reuse the existing `sanitizeHTML` helper on the returned text.
+- [x] 2.3 Unit-test against fixtures: populated `content`, blank `content`, and a 404 board (treated the same as "no description", not a hard failure of the whole board crawl).
 
 ## 3. Pipeline wiring
 

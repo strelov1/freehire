@@ -50,6 +50,26 @@ func (g greenhouse) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	return jobs, nil
 }
 
+// CompanyDescription fetches the board's own "about us" text from the board-metadata
+// endpoint — distinct from the /jobs listing used by Fetch, so this costs one extra
+// request per board crawl, not per posting. Unlike the listing's content=true field,
+// this one is raw (not entity-encoded) HTML, confirmed against live boards. An
+// employer who has not filled the field in yields ("", nil), not an error.
+func (g greenhouse) CompanyDescription(ctx context.Context, e CompanyEntry) (string, error) {
+	url := fmt.Sprintf("%s/%s", greenhouseBaseURL, e.Board)
+
+	var resp struct {
+		Content string `json:"content"`
+	}
+	if err := g.http.GetJSON(ctx, url, &resp); err != nil {
+		return "", fmt.Errorf("greenhouse: fetch board metadata %s: %w", e.Board, err)
+	}
+	if resp.Content == "" {
+		return "", nil
+	}
+	return sanitizeHTML(resp.Content), nil
+}
+
 // GreenhousePosting is one job from the Greenhouse public boards API (the list endpoint
 // with content=true and the per-job endpoint share the shape), exported so the
 // link-following adapter (internal/ingest/linksource) decodes the same payload.
