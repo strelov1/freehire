@@ -49,7 +49,7 @@ export const messages = defineMessages(
       // customer at once — a state this page never creates going forward, but can still
       // describe for a customer it already happened to.
       duplicateWarning:
-        'You have more than one active subscription, and are being charged for each of them. Open "Manage or cancel" below to cancel the extra one.',
+        'You have more than one active subscription, and are being charged for each of them. Use "Manage or cancel" to cancel the extra one.',
     },
     today: {
       heading: 'Today',
@@ -111,7 +111,7 @@ export const messages = defineMessages(
         nextChargePrefix: 'Следующее списание',
         receipt: 'Чек',
         duplicateWarning:
-          'У вас активно больше одной подписки, и оплата идёт по каждой из них. Откройте «Изменить или отменить» ниже, чтобы отменить лишнюю.',
+          'У вас активно больше одной подписки, и оплата идёт по каждой из них. Используйте «Изменить или отменить», чтобы отменить лишнюю.',
       },
       today: {
         heading: 'Сегодня',

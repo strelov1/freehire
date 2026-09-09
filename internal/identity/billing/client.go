@@ -264,13 +264,18 @@ func (c *client) createCheckoutSession(ctx context.Context, userID int64, email,
 // proration_behavior is named explicitly rather than left to the provider's default: this is
 // the one place in the package that changes what an existing subscriber is charged mid-cycle,
 // and a future default change upstream must not alter that silently.
-func (c *client) updateSubscriptionPrice(ctx context.Context, subscriptionID, itemID, priceID string) error {
+//
+// idempotencyKey is required, unlike most reads in this file: this call creates a proration
+// invoice item, so a low-level HTTP retry of the same request (Go's transport can replay a
+// POST whose body is seekable, which url.Values.Encode()'s is) must not bill the same change
+// twice.
+func (c *client) updateSubscriptionPrice(ctx context.Context, subscriptionID, itemID, priceID, idempotencyKey string) error {
 	form := url.Values{}
 	form.Set("items[0][id]", itemID)
 	form.Set("items[0][price]", priceID)
 	form.Set("proration_behavior", "create_prorations")
 
-	return c.do(ctx, http.MethodPost, "/subscriptions/"+subscriptionID, form, "", nil)
+	return c.do(ctx, http.MethodPost, "/subscriptions/"+subscriptionID, form, idempotencyKey, nil)
 }
 
 // createPortalSession opens the provider's own subscription-management page for one

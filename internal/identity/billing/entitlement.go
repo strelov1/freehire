@@ -175,12 +175,19 @@ func tierFirst(ids, tier []string) []string {
 // exactly as CheckoutURL always did before this type existed.
 type checkoutTarget struct {
 	// SubscriptionID and ItemID name an existing subscription and its item to change in
-	// place. Set together; both empty (and AlreadyOnPrice false) means open a checkout.
+	// place. Set together; both empty (and AlreadyOnPrice, Ambiguous both false) means open
+	// a checkout.
 	SubscriptionID string
 	ItemID         string
 	// AlreadyOnPrice is true when the customer's current entitling subscription already
 	// carries the requested price. Nothing to do.
 	AlreadyOnPrice bool
+	// Ambiguous is true when the customer's current entitling subscription carries more
+	// than one item — the shape billedSubscription's own comment describes an upgrade
+	// through the provider's portal leaving behind — so which item id the requested price
+	// should replace cannot be recovered from price ids alone. Refusing rather than guessing
+	// item[0] avoids silently changing the wrong one.
+	Ambiguous bool
 }
 
 // decideCheckoutTarget is the fix for freehire's duplicate-subscription bug, kept pure and
@@ -192,6 +199,13 @@ type checkoutTarget struct {
 // bestEntitling/billedSubscription already make. A customer who already holds more than one
 // entitling subscription (the pre-existing-bug state) has this pick the furthest-reaching
 // one; the other is left for an operator to clean up by hand.
+//
+// It deliberately shares bestEntitling's "a subscription whose period end cannot be read
+// entitles nobody" rule rather than picking a different one for checkout purposes: a
+// selection that disagreed would let this method believe a customer has an entitling
+// subscription while the rest of billing (SyncUser, the plan derivation) believes they have
+// none — a worse inconsistency than opening a checkout for an account the whole system
+// already treats as unentitled.
 func decideCheckoutTarget(sub subscriber, requestedPrice string, proPrices, ultraPrices []string) checkoutTarget {
 	current := bestEntitling(sub, combinedPrices(proPrices, ultraPrices))
 	if current.Status == "" {
@@ -199,6 +213,9 @@ func decideCheckoutTarget(sub subscriber, requestedPrice string, proPrices, ultr
 	}
 	if slices.Contains(current.PriceIDs, requestedPrice) {
 		return checkoutTarget{AlreadyOnPrice: true}
+	}
+	if len(current.PriceIDs) > 1 {
+		return checkoutTarget{Ambiguous: true}
 	}
 	return checkoutTarget{SubscriptionID: current.ID, ItemID: current.ItemID}
 }

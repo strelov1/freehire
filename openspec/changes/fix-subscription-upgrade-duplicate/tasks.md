@@ -75,4 +75,55 @@
       the SAME subscription now carries the Ultra price (one subscription, one item, price
       swapped), not a second subscription. **Not run in this session** — no Stripe test-mode
       credentials or database available in the sandboxed environment; needs a human (or a
-      staging deploy) with `STRIPE_SECRET_KEY` pointed at a Stripe test-mode account.
+      staging deploy) with `STRIPE_SECRET_KEY` pointed at a Stripe test-mode account. Partially
+      substituted by 7.5 below (a real-Postgres, stubbed-Stripe integration test exercising
+      the same path), which is a lower bar than a real Stripe test-mode account.
+
+## 7. Code review follow-ups
+
+A first review (before this section existed) found the core architecture sound but flagged
+two ways the new logic could still silently reopen a duplicate/mis-billed subscription given
+unusual subscription data, plus a response-contract gap. Addressed here rather than filed as
+follow-up issues, since the whole point of this change is closing exactly those paths.
+
+- [x] 7.1 **Important:** a subscription carrying more than one item (a customer who upgraded
+      through Stripe's own Customer Portal, which can add a new item to an existing
+      subscription rather than replace one) must not have its price replaced by silently
+      guessing item[0] — the requested price might belong to a different item entirely. Added
+      `checkoutTarget.Ambiguous`; `decideCheckoutTarget` returns it when the selected
+      subscription's `PriceIDs` has more than one entry, and `CheckoutURL` turns that into an
+      error rather than a checkout or an update. Table-driven cases added to
+      `TestDecideCheckoutTarget`; integration coverage in `TestCheckoutURLRefusesToGuessOnAnAmbiguousSubscription`.
+- [x] 7.2 **Important (documented, not changed):** `decideCheckoutTarget` reuses
+      `bestEntitling`'s existing, deliberate "a subscription whose period end cannot be read
+      entitles nobody" rule (see the big comment on the `subscription` type and
+      `TestProUntilFrom`). A selection of its own for checkout purposes would let `CheckoutURL`
+      believe a customer is entitled while the rest of billing (`SyncUser`, the plan
+      derivation) believes they are not — a worse inconsistency than opening a checkout for an
+      account the whole system already treats as unentitled. Pinned with a dedicated test case
+      and a comment explaining why, rather than left as an unstated assumption.
+- [x] 7.3 **Important:** `CheckoutURL` computed a discount and the `/billing/checkout` handler
+      always reported it as applied, even when the update-in-place branch took it and
+      (correctly, per design.md) dropped it. `CheckoutURL` now returns the Discount that was
+      actually applied — `Discount{}` for every in-place-update/no-op branch, the input
+      `discount` only when a Checkout Session coupon was actually minted — and the handler
+      reports that instead of the input. Covered by
+      `TestCheckoutURLUpdatesAnExistingSubscriptionInPlace` (discount dropped, no coupon call)
+      and `TestCheckoutURLOpensACheckoutSessionForAKnownCustomerWithNoSubscription` (discount
+      applied, coupon minted).
+- [x] 7.4 **Minor:** `updateSubscriptionPrice` now carries a fresh idempotency key per call
+      (`uuid.NewString()`, already a module dependency) — it creates a proration invoice item,
+      and without a key a low-level HTTP transport retry of the same request could bill the
+      same change twice. Test extended in `client_test.go`.
+- [x] 7.5 **Minor:** added `checkout_integration_test.go` (real Postgres via testcontainers,
+      stubbed Stripe) exercising `CheckoutURL` end to end — the one piece of the fix
+      (`GetStripeCustomerID` → `decideCheckoutTarget` → `updateSubscriptionPrice`/
+      `createCheckoutSession` wiring in `service.go`) the pure unit tests cannot reach, per
+      design.md's own stated reason `CheckoutURL` has no dedicated unit test. Three tests: an
+      existing entitling subscription is updated in place and no coupon/checkout call is made;
+      a known customer with no entitling subscription still reaches an ordinary checkout with
+      its discount applied; an ambiguous (multi-item) subscription is refused rather than
+      guessed at.
+- [x] 7.6 **Minor:** fixed `PlanView.messages.ts`'s `duplicateWarning` copy — it said
+      "...below" but the "Manage or cancel" link it refers to renders above the subscription
+      section, not below it. Reworded to be layout-independent (en + ru).

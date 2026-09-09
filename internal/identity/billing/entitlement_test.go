@@ -331,6 +331,48 @@ func TestDecideCheckoutTarget(t *testing.T) {
 			wantAction:     "update",
 			wantSubID:      "sub_pro",
 		},
+		{
+			// One subscription carrying an item of each tier — the shape billedSubscription's
+			// own comment describes an upgrade through the provider's portal leaving behind.
+			// Which item id belongs to which price is not recoverable from price ids alone
+			// (item order is not a documented guarantee — the whole reason tierFirst exists
+			// rather than trusting raw order), so this must refuse to guess rather than
+			// silently replace the wrong item.
+			name: "a subscription holding an item of each tier is ambiguous",
+			sub: sub(subscription{
+				ID: "sub_both", ItemID: "sub_both_item0", Status: "active",
+				CurrentPeriodEnd: at(t, "2026-10-01T00:00:00Z"),
+				PriceIDs:         []string{proPrice, ultraPrice},
+			}),
+			requestedPrice: "price_pro_annual",
+			wantAction:     "ambiguous",
+		},
+		{
+			// An ambiguous subscription that already carries the requested price is still a
+			// no-op: nothing needs to change, so there is nothing to guess about.
+			name: "a subscription holding an item of each tier already on the requested price",
+			sub: sub(subscription{
+				ID: "sub_both", ItemID: "sub_both_item0", Status: "active",
+				CurrentPeriodEnd: at(t, "2026-10-01T00:00:00Z"),
+				PriceIDs:         []string{proPrice, ultraPrice},
+			}),
+			requestedPrice: ultraPrice,
+			wantAction:     "noop",
+		},
+		{
+			// The inherited edge of bestEntitling's own documented, tested design: a
+			// subscription whose period end cannot be read entitles nobody (see the big
+			// comment above the subscription type, and TestProUntilFrom's identical case).
+			// decideCheckoutTarget deliberately reuses that same rule rather than a selection
+			// of its own — disagreeing with it would let this method believe a customer has
+			// an entitling subscription while the rest of billing (SyncUser, the plan
+			// derivation) believes they have none, which is a worse inconsistency than opening
+			// a checkout for an account the whole system already treats as unentitled.
+			name:           "a subscription whose period end cannot be read is treated as no entitling subscription, like everywhere else in this package",
+			sub:            sub(subscription{ID: "sub_broken", Status: "active", PriceIDs: []string{proPrice}}),
+			requestedPrice: ultraPrice,
+			wantAction:     "checkout",
+		},
 	}
 
 	for _, tc := range cases {
@@ -344,6 +386,10 @@ func TestDecideCheckoutTarget(t *testing.T) {
 			case "noop":
 				if !got.AlreadyOnPrice {
 					t.Fatalf("want AlreadyOnPrice, got %+v", got)
+				}
+			case "ambiguous":
+				if !got.Ambiguous {
+					t.Fatalf("want Ambiguous, got %+v", got)
 				}
 			case "update":
 				if got.AlreadyOnPrice {

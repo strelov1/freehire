@@ -201,15 +201,16 @@ func TestClientCheckoutNeverSendsCustomerCreation(t *testing.T) {
 // bug: an upgrade or downgrade must change the existing subscription's item, never open a
 // second subscription.
 func TestClientUpdateSubscriptionPrice(t *testing.T) {
-	var gotPath, gotForm string
+	var gotPath, gotForm, gotIdempotencyKey string
 	c := testClient(t, func(w http.ResponseWriter, r *http.Request) {
 		gotPath = r.URL.Path
+		gotIdempotencyKey = r.Header.Get("Idempotency-Key")
 		_ = r.ParseForm()
 		gotForm = r.Form.Encode()
 		_, _ = w.Write([]byte(`{"id":"sub_1"}`))
 	})
 
-	if err := c.updateSubscriptionPrice(context.Background(), "sub_1", "si_1", "price_ultra_monthly"); err != nil {
+	if err := c.updateSubscriptionPrice(context.Background(), "sub_1", "si_1", "price_ultra_monthly", "idem_key_1"); err != nil {
 		t.Fatalf("want no error, got %v", err)
 	}
 
@@ -220,6 +221,11 @@ func TestClientUpdateSubscriptionPrice(t *testing.T) {
 		if !strings.Contains(gotForm, want) {
 			t.Errorf("form %q is missing %q", gotForm, want)
 		}
+	}
+	// A proration-creating call must carry an idempotency key: a low-level HTTP retry of the
+	// same request must not create the same proration twice.
+	if gotIdempotencyKey != "idem_key_1" {
+		t.Errorf("idempotency key: want %q, got %q", "idem_key_1", gotIdempotencyKey)
 	}
 }
 

@@ -178,7 +178,16 @@ answer 404, and its worker exits without opening a connection.
   fix for a real production incident: before it existed, "Upgrade to Ultra" on an active Pro
   subscriber opened a second, independent subscription, and both kept billing in parallel.
   A failure reading the customer's current subscriptions fails the whole call rather than
-  falling back to a new checkout — falling back would silently recreate the bug.
+  falling back to a new checkout — falling back would silently recreate the bug. A
+  subscription carrying more than one item (the shape `billedSubscription`'s own comment
+  describes an upgrade through the provider's portal leaving behind) refuses rather than
+  guessing which item's price to replace — item order is not a documented guarantee, the same
+  reason `tierFirst` exists instead of trusting raw order. `updateSubscriptionPrice` carries a
+  fresh idempotency key per call, because it creates a proration invoice item and a low-level
+  HTTP retry replaying the same request must not bill it twice. `CheckoutURL`'s returned
+  `Discount` is what was actually APPLIED, never the one offered: an in-place update never
+  applies one, so its caller (the `/billing/checkout` handler) must not report a discount that
+  never touched the customer's bill.
 
 - **Absent credentials mean disabled, never an error.** `ConfigFromEnv` cannot fail and `New`
   cannot fail. `Enabled()` gates the subsystem; `CanCheckout()` additionally needs a site URL
