@@ -2144,6 +2144,11 @@ type Querier interface {
 	// either question on its own.
 	GetGmailConnection(ctx context.Context, userID int64) (GetGmailConnectionRow, error)
 	GetGmailRefreshToken(ctx context.Context, userID int64) (GetGmailRefreshTokenRow, error)
+	// What a write caller (mentor-google-meet-link's CreateMeetEvent) needs in one round
+	// trip: the encrypted refresh token to reach the API, and the scopes to decide the
+	// grant actually covers what this caller wants to do with it. `status` is read too so a
+	// row already marked needs_reconsent can be treated as unusable without a second query.
+	GetGoogleGrantForWrite(ctx context.Context, userID int64) (GetGoogleGrantForWriteRow, error)
 	// The employer's own description of an upcoming interview, for the rehearsal context:
 	// the most recent message classified as an invitation and linked to this application.
 	//
@@ -5449,6 +5454,11 @@ type Querier interface {
 	// rewritten, so a re-run writes nothing and produces no dead tuples. It also means the
 	// backfill needs no record of which rows it has visited.
 	SetJobsRequirementsDerived(ctx context.Context, arg SetJobsRequirementsDerivedParams) (int64, error)
+	// Best-effort patch after CreateMentorBooking: the calendar event is created AFTER the
+	// booking row wins the EXCLUDE-constraint race, never before, so a lost race can never
+	// leave an orphaned Google event. No WHERE beyond the id — this always follows a
+	// successful CreateMentorBooking for the same row, in the same request.
+	SetMentorBookingCalendarEvent(ctx context.Context, arg SetMentorBookingCalendarEventParams) error
 	// The mentor's own switch. Deliberately independent of status: pausing and resuming
 	// need no moderator, and neither may alter what the moderator decided.
 	SetMentorPaused(ctx context.Context, arg SetMentorPausedParams) (Mentor, error)
