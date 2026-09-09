@@ -4,11 +4,13 @@ import {
   POPULAR_COLLECTION_FALLBACK,
   collectionBySlug,
   collectionForCategory,
+  collectionForSkill,
   collectionSlugs,
   jobFacetsFromJob,
   popularCollectionLinks,
   relatedCollectionLinks,
   relatedCollectionSlugs,
+  skillForCollection,
 } from './collections';
 import type { Job } from './types';
 import { FACETS } from './facets';
@@ -327,5 +329,75 @@ describe('collectionForCategory', () => {
     for (const c of multi) {
       expect(collectionForCategory(c.params.category as string)?.slug).not.toBe(c.slug);
     }
+  });
+});
+
+describe('collectionForSkill', () => {
+  it('finds the feed that pins exactly this skill', () => {
+    expect(collectionForSkill('kotlin')).toMatchObject({ slug: 'kotlin' });
+    expect(collectionForSkill('python')).toMatchObject({ slug: 'python' });
+    expect(collectionForSkill('terraform')).toMatchObject({ slug: 'terraform' });
+  });
+
+  it('returns nothing for a skill no collection covers', () => {
+    // 45 of the 875 described skills have a feed; the rest are not an error.
+    expect(collectionForSkill('sinatra')).toBeUndefined();
+    expect(collectionForSkill('')).toBeUndefined();
+  });
+
+  // The reason this helper reads params instead of matching slugs. Each of these four
+  // names both a skill and a collection, and the collection pins a CATEGORY — a
+  // different set from the skill facet. A slug match passes every other test in this
+  // file and gets all four of these wrong.
+  it.each(['data-science', 'data-engineering', 'devops', 'machine-learning'])(
+    'does not match %s, whose same-named collection pins a category',
+    (slug) => {
+      expect(collectionBySlug(slug)).toBeDefined();
+      expect(collectionForSkill(slug)).toBeUndefined();
+    }
+  );
+
+  it('ignores a collection that pins the skill ALONGSIDE something else', () => {
+    const multi = FILTER_COLLECTIONS.filter(
+      (c) => c.params.skills && Object.keys(c.params).length > 1
+    );
+    for (const c of multi) {
+      expect(collectionForSkill(c.params.skills as string)?.slug).not.toBe(c.slug);
+    }
+  });
+
+  it('ignores a list-valued skills pin, whose OR semantics are not one skill', () => {
+    // No entry is list-valued today; the guard is for the next one, so the test builds
+    // the shape rather than waiting for the registry to grow it.
+    const listPinned = FILTER_COLLECTIONS.filter((c) => Array.isArray(c.params.skills));
+    for (const c of listPinned) {
+      for (const value of c.params.skills as string[]) {
+        expect(collectionForSkill(value)?.slug).not.toBe(c.slug);
+      }
+    }
+  });
+});
+
+describe('skillForCollection', () => {
+  it('names the one skill a single-skill feed is about', () => {
+    expect(skillForCollection('kotlin')).toBe('kotlin');
+    expect(skillForCollection('python')).toBe('python');
+  });
+
+  it('names nothing for a feed that is not one skill', () => {
+    expect(skillForCollection('devops')).toBeUndefined(); // pins a category
+    expect(skillForCollection('remote-worldwide')).toBeUndefined(); // pins two params
+    expect(skillForCollection('y-combinator')).toBeUndefined(); // company membership
+    expect(skillForCollection('not-a-collection')).toBeUndefined();
+  });
+
+  // The two directions must agree, or a page links somewhere that does not link back.
+  it('is the exact inverse of collectionForSkill', () => {
+    const forward = FILTER_COLLECTIONS.map((c) => c.slug).filter((s) => skillForCollection(s));
+    for (const slug of forward) {
+      const skill = skillForCollection(slug) as string;
+      expect(collectionForSkill(skill)?.slug).toBe(slug);
+    }
+    expect(forward.length).toBeGreaterThan(0);
   });
 });
