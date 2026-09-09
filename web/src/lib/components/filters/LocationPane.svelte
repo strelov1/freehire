@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { ChevronDown, Globe, Search, X } from '@lucide/svelte';
+  import { ChevronDown, Globe, MapPin, Search, X } from '@lucide/svelte';
   import { SvelteSet } from 'svelte/reactivity';
   import { countryLabel, REGION_UNSPECIFIED, type FacetStore } from '$lib/facets';
   import { REGION_LABELS } from '$lib/labels';
@@ -7,6 +7,9 @@
   import type { FacetCounts } from '$lib/types';
   import { CountryFlag } from '$lib/ui';
   import { pillClass, pillTitle } from '../facets/pill';
+  import { isAuthenticated } from '$lib/auth.svelte';
+  import { profileStore } from '$lib/profile.svelte';
+  import { eligibleForMeValues, isEligibleForMeOn, resolveGeoSource } from '$lib/eligibleForMe';
 
   // Location pane: a region → country tree plus a flat, searchable Cities list.
   // The country tree is built from the exported country→region map, scoped to what
@@ -116,6 +119,58 @@
     store.clearFacet('countries');
     store.clearFacet('cities');
   }
+
+  // "Eligible for me": composes existing `countries`/`regions` include values (see
+  // eligibleForMe.ts and openspec/changes/eligible-for-me-location-filter) rather than
+  // introducing a new filter. The country/region source follows a fixed precedence —
+  // the signed-in profile's stated country first, then the macro-region the existing
+  // geo-default-scope endpoint derives from the visitor's edge country header — and
+  // resolves to nothing for a visitor neither source can place, in which case the pill
+  // renders disabled instead of staging an empty or wrong narrowing.
+  let edgeRegion = $state<string | null>(null);
+  let edgeRegionRequested = false;
+
+  const profileCountry = $derived(profileStore.profile?.location_preferences?.base?.country ?? null);
+  const geoSource = $derived(resolveGeoSource(profileCountry, edgeRegion));
+  const eligibleValues = $derived(eligibleForMeValues(geoSource));
+  const eligibleOn = $derived(isEligibleForMeOn(geoSource, countryF.include, regionF.include));
+
+  // Only asks the edge for a region when the profile can't already answer with a
+  // country: a signed-in candidate with a stated base country never needs it, so this
+  // skips the request entirely rather than fetching a value nothing will use.
+  //
+  // Waits on the `ensureLoaded()` promise itself rather than polling the reactive
+  // `profileStore.loaded` flag: `loaded` only ever flips to `true` on a SUCCESSFUL
+  // load (see UserResource — a failed load leaves it `false` forever, with no retry
+  // scheduled), so gating on it would leave a signed-in visitor whose profile fetch
+  // failed stuck with the pill disabled for the whole session. `ensureLoaded()`
+  // itself always resolves, success or failure, which is exactly the "wait until we
+  // know one way or the other" signal this needs.
+  $effect(() => {
+    if (edgeRegionRequested || profileCountry) return;
+    edgeRegionRequested = true;
+    (async () => {
+      if (isAuthenticated()) await profileStore.ensureLoaded();
+      if (profileStore.profile?.location_preferences?.base?.country) return;
+      try {
+        const res = await fetch('/geo/region');
+        edgeRegion = res.ok ? ((await res.json()) as { region: string | null }).region : null;
+      } catch {
+        edgeRegion = null;
+      }
+    })();
+  });
+
+  function toggleEligibleForMe() {
+    if (!geoSource) return;
+    if (eligibleOn) {
+      for (const c of eligibleValues.countries) store.remove('countries', c);
+      for (const r of eligibleValues.regions) store.remove('regions', r);
+    } else {
+      for (const c of eligibleValues.countries) store.add('countries', c);
+      for (const r of eligibleValues.regions) store.add('regions', r);
+    }
+  }
 </script>
 
 <div class="mb-2 flex min-h-6 items-center justify-between gap-2">
@@ -161,8 +216,22 @@
   </div>
 {/if}
 
-{#if visibleFlatRegions.length}
+{#if geoSource || visibleFlatRegions.length}
   <div class="mb-1 flex flex-wrap gap-2 border-b border-border pb-3">
+    <button
+      type="button"
+      onclick={toggleEligibleForMe}
+      disabled={!geoSource}
+      aria-pressed={eligibleOn}
+      title={geoSource ? pillTitle(eligibleOn, false, false) : "We couldn't determine your location"}
+      class={[
+        pillClass(eligibleOn, false, 'inline-flex items-center gap-1.5 px-3 py-1.5 text-sm'),
+        !geoSource && 'cursor-not-allowed opacity-50',
+      ]}
+    >
+      <MapPin class="size-4 shrink-0" />
+      Eligible for me
+    </button>
     {#each visibleFlatRegions as code (code)}
       {@const rExc = regionF.exclude.includes(code)}
       {@const rInc = regionF.include.includes(code)}
