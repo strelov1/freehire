@@ -154,26 +154,44 @@
   }
 
   // pendingRows pairs every pending question with its position in the list — never its
-  // label — because two distinct questions can share label text and a live Greenhouse
-  // posting renders four pending entries with an empty label; either would collide an
-  // `{#each}` key, a DOM id, or a draft keyed on the text itself.
+  // label — because two distinct questions can share label text and an entry can carry no
+  // text at all; either would collide an `{#each}` key, a DOM id, or a draft keyed on the
+  // text itself.
   const pendingQuestions = $derived(pendingRows(autoApply?.resolved_preview?.pending));
+
+  // Whether anything in the pending list will actually render. A row that is neither
+  // drafted-at-submission nor answerable draws nothing, so gating the list on
+  // pendingQuestions.length alone produces an empty bulleted block whenever every pending
+  // question is unanswerable — which is exactly the case for a form asking only about work
+  // authorization.
+  const showsPendingList = $derived(
+    pendingQuestions.some((row) => row.pending.will_draft_at_submission || row.answerable)
+  );
 
   // One draft per pending question, keyed by its row's position (see pendingQuestions).
   let bankDrafts = $state<Record<number, string>>({});
   let bankSaving = $state<number | null>(null);
   let bankError = $state<string | null>(null);
+  // The rows whose answer reached the bank in this session. Nothing else says a save
+  // happened: the draft clears and the button re-disables, which on its own reads like
+  // typing that got lost.
+  let bankSaved = $state<Record<number, boolean>>({});
 
   async function saveBankedAnswer(key: number, question: string) {
     const answer = bankDrafts[key]?.trim();
+    // One save at a time — but every Save button is disabled while one is in flight, not
+    // just this row's. A button that looks pressable and silently does nothing is worse
+    // than one that is plainly unavailable.
     if (!answer || bankSaving !== null) return;
     bankSaving = key;
     bankError = null;
     try {
       await api.saveBankedAnswer(question, answer);
       // Cleared rather than left filled: the answer now lives in the bank, and a filled
-      // input beside a saved answer reads as unsaved work.
+      // input beside a saved answer reads as unsaved work. The marker below is what tells
+      // the candidate it went somewhere.
       bankDrafts = { ...bankDrafts, [key]: '' };
+      bankSaved = { ...bankSaved, [key]: true };
     } catch (e) {
       bankError = errorMessage(e, 'Could not save your answer.');
     } finally {
@@ -523,7 +541,7 @@
                   {/each}
                 </dl>
               {/if}
-              {#if pendingQuestions.length}
+              {#if showsPendingList}
                 <ul class="flex flex-col gap-2 text-xs text-muted-foreground">
                   {#each pendingQuestions as row (row.key)}
                     {#if row.pending.will_draft_at_submission}
@@ -531,22 +549,30 @@
                     {:else if row.answerable}
                       <li class="flex flex-col gap-1">
                         <label class="text-foreground" for={`bank-${row.key}`}>{row.pending.label}</label>
-                        <div class="flex gap-2">
-                          <input
+                        <div class="flex items-start gap-2">
+                          <!-- A textarea, not an input: the bound is 2000 characters, and a
+                               single-line control collects a paragraph the writer cannot
+                               re-read. -->
+                          <textarea
                             id={`bank-${row.key}`}
-                            class="min-w-0 flex-1 rounded-md border border-border bg-background px-2 py-1"
+                            rows="2"
+                            maxlength="2000"
+                            class="min-w-0 flex-1 resize-y rounded-md border border-border bg-background px-2 py-1"
                             bind:value={bankDrafts[row.key]}
                             placeholder="Your answer — saved for next time too"
-                          />
+                          ></textarea>
                           <Button
                             size="sm"
                             variant="outline"
-                            disabled={bankSaving === row.key || !bankDrafts[row.key]?.trim()}
+                            disabled={bankSaving !== null || !bankDrafts[row.key]?.trim()}
                             onclick={() => saveBankedAnswer(row.key, row.pending.label)}
                           >
                             Save
                           </Button>
                         </div>
+                        {#if bankSaved[row.key]}
+                          <span class="text-brand-strong">Saved — you won’t be asked this again.</span>
+                        {/if}
                       </li>
                     {/if}
                   {/each}

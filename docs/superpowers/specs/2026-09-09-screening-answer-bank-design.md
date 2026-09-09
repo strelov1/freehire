@@ -185,9 +185,15 @@ recognised as the mistake it would be.
 
 ## Errors and edges
 
-- **An empty answer is a delete, not a stored blank.** A blank string in a form field is
-  indistinguishable from an unanswered question, and storing one would silently mark a
-  question answered forever.
+- **An empty answer is refused, not stored and not a delete.** A blank string in a form
+  field is indistinguishable from an unanswered question, and storing one would silently
+  mark a question answered forever — so far, unchanged. This bullet used to say the write
+  should *delete* instead; it does not, and the code is right. An implicit destructive
+  action triggered by clearing a field is worse than an explicit refusal: the candidate who
+  selects an answer and presses Save has no way to tell they have just discarded it, and the
+  bank is precisely the store nothing but its owner may remove from. Removal has its own
+  route — `DELETE /api/v1/me/answer-bank/:id` — which says what it does. `Save` returns
+  `ErrEmptyAnswer`, rendered as HTTP 400.
 - **A question whose fold yields an empty topic is refused** (a label of pure punctuation,
   which real forms do produce). It cannot be keyed, so it cannot be recalled.
 - **Answer length is bounded at 2000 characters.** Long enough for any screening answer a
