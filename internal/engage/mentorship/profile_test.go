@@ -597,6 +597,35 @@ func TestReactivateByAStrangerIsRefused(t *testing.T) {
 	}
 }
 
+// A moderator reads a profile by row id regardless of its status — the queue lists
+// pending rows, but the lookup itself carries no status guard: the caller (an id from a
+// moderator's own queue read) already establishes the context.
+func TestProfileForModerationReadsAnyStatus(t *testing.T) {
+	repo := newFakeRepo()
+	svc := newTestService(t, repo)
+	submitted, err := svc.SubmitProfile(context.Background(), validInput())
+	if err != nil {
+		t.Fatalf("SubmitProfile: %v", err)
+	}
+
+	got, err := svc.ProfileForModeration(context.Background(), submitted.ID)
+	if err != nil {
+		t.Fatalf("ProfileForModeration: %v", err)
+	}
+	if got.ID != submitted.ID || got.Status != StatusPending {
+		t.Errorf("got id=%d status=%q, want id=%d status=%q", got.ID, got.Status, submitted.ID, StatusPending)
+	}
+}
+
+func TestProfileForModerationRefusesAnUnknownID(t *testing.T) {
+	repo := newFakeRepo()
+	svc := newTestService(t, repo)
+
+	if _, err := svc.ProfileForModeration(context.Background(), 999999); !errors.Is(err, ErrProfileNotFound) {
+		t.Errorf("error = %v, want ErrProfileNotFound", err)
+	}
+}
+
 // ShowPhoto defaults off and round-trips through both create and update, independent
 // of every other field — a mentor's own opt-in, not a byproduct of anything else they
 // submit.
