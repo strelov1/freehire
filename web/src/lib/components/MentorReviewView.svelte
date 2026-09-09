@@ -4,6 +4,7 @@
   import { AsyncData } from '$lib/asyncData.svelte';
   import { Badge, Button, Card } from '$lib/ui';
   import type { PendingMentorProfile } from '$lib/types';
+  import { SvelteSet } from 'svelte/reactivity';
   import States from './States.svelte';
 
   const queueData = new AsyncData<PendingMentorProfile[]>([]);
@@ -20,19 +21,17 @@
 
   // Which cards have their public-preview expanded. A set of ids rather than one flag,
   // so opening one profile's preview does not close another's.
-  let previewing = $state<Set<number>>(new Set());
+  const previewing = new SvelteSet<number>();
   // A photo load failure (unopted-in, or genuinely missing) hides the image rather than
   // showing a broken-image icon — the same rule the public card follows.
-  let photoFailed = $state<Set<number>>(new Set());
+  const photoFailed = new SvelteSet<number>();
 
   function togglePreview(id: number) {
-    const next = new Set(previewing);
-    if (next.has(id)) {
-      next.delete(id);
+    if (previewing.has(id)) {
+      previewing.delete(id);
     } else {
-      next.add(id);
+      previewing.add(id);
     }
-    previewing = next;
   }
 
   async function decide(profile: PendingMentorProfile, next: 'approved' | 'rejected') {
@@ -119,7 +118,7 @@
                     src={`/api/v1/mentorship/profiles/${profile.id}/photo`}
                     alt=""
                     class="h-16 w-16 shrink-0 rounded-full object-cover"
-                    onerror={() => (photoFailed = new Set(photoFailed).add(profile.id))}
+                    onerror={() => photoFailed.add(profile.id)}
                   />
                 {/if}
                 <div class="flex flex-col gap-2">
