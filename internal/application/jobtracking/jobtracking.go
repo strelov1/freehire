@@ -123,7 +123,7 @@ type TrackedJob struct {
 	// the second does not soften the first. It is kept out of silence.StateFor's inputs for the same
 	// reason FollowedUpAt is — see internal/application/userjob.
 	CVOpenedAt *time.Time
-	// AutoApplyStatus is the six-value status of this job's live auto-apply attempt, nil
+	// AutoApplyStatus is the seven-value status of this job's live auto-apply attempt, nil
 	// when it has none (openspec/changes/auto-apply-review-tracking). The board's own
 	// "needs your review" badge reads only this — the full answer preview and unmapped
 	// question list are the drawer's own, richer read (GetTrackedApplication), not
