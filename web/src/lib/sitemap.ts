@@ -58,6 +58,9 @@ export const STATIC_PATHS = [
   '/agents',
   '/cli',
   '/chatgpt',
+  // The public CV roast: an account-free landing page nothing in the feed links to,
+  // built to be found by search rather than clicked to from elsewhere on the site.
+  '/roast',
   '/contribute',
   // The contributor showcase. The per-person profiles are NOT here — they come from
   // the committed snapshot via contributorPaths(), the same way collections do.

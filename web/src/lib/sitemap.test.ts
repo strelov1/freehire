@@ -25,6 +25,7 @@ describe('sitemap static paths', () => {
       '/agents',
       '/cli',
       '/chatgpt',
+      '/roast',
       '/contribute',
       '/status',
       '/privacy',
