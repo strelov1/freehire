@@ -28,4 +28,4 @@
 
 - [ ] 5.1 Run `--apply` against production at increasing scale, staged like `merge-companies` (small bound first, widen once reviewed).
 - [ ] 5.2 Add the worker to the deploy host's cron schedule (periodic, e.g. monthly) per `deploy/AGENTS.md`, so newly-crawled companies keep getting checked.
-- [ ] 5.3 Document the new worker in the root `AGENTS.md` worker list (env vars, schedule, idempotency notes) alongside the other one-off/periodic backfills.
+- [x] 5.3 Document the new worker in the root `AGENTS.md` worker list (env vars, schedule, idempotency notes) alongside the other one-off/periodic backfills.
