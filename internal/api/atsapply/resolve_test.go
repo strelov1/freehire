@@ -3,6 +3,7 @@ package atsapply
 import (
 	"testing"
 
+	"github.com/strelov1/freehire/internal/api/candidateprofile"
 	"github.com/strelov1/freehire/internal/ingest/applyform"
 )
 
@@ -320,5 +321,32 @@ func TestResolve_ATypedFactOutranksABankedAnswer(t *testing.T) {
 
 	if len(plan.Fields) != 1 || plan.Fields[0].Value != "5000 USD per year" {
 		t.Fatalf("plan.Fields = %+v, want the typed fact to win", plan.Fields)
+	}
+}
+
+// The seam: what Profile.Fields() writes must be what resolveOne reads.
+//
+// The prefix is two separate literals in two packages that cannot share a constant
+// (candidateprofile importing atsapply would invert the layering). Every other test here
+// hands Resolve a map it built itself with the prefix already applied — so all of them
+// would still pass if the two literals drifted apart, while the feature silently filled
+// nothing. This is the only test that would fail.
+func TestResolve_ReadsTheKeysProfileFieldsActuallyWrites(t *testing.T) {
+	profile := candidateprofile.Profile{
+		BankAnswers: map[string]string{"which state do you currently reside in": "Santa Catarina"},
+	}
+
+	fields := []MergedField{{
+		ID: "question_4005041004", Label: "Which state do you currently reside in?",
+		Kind: "text", Required: true,
+	}}
+
+	plan := Resolve(fields, profile.Fields(), false)
+
+	if !plan.FullyResolved() {
+		t.Fatalf("unmapped = %+v — Profile.Fields() and resolveOne disagree about the banked-answer key prefix", plan.Unmapped)
+	}
+	if plan.Fields[0].Value != "Santa Catarina" {
+		t.Errorf("value = %q, want the banked answer", plan.Fields[0].Value)
 	}
 }
