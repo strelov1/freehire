@@ -1,0 +1,29 @@
+---
+title: Filter remote jobs to the ones you can actually take
+date: 2026-09-09
+summary: A new "Eligible for me" toggle in the job search hides postings scoped to a country or region you're not in — without hiding worldwide-remote roles or ones with no location stated at all.
+type: changelog
+tags:
+  - filters
+  - job-seekers
+draft: false
+---
+
+Someone in Indonesia flagged a posting listed as remote that turned out to be open
+only to candidates in Canada. Reading the fine print on every "Remote" listing to
+check gets old fast, so open [All filters → Location](/jobs) and there's a new
+**Eligible for me** pill.
+
+Turn it on and anything scoped to a country or region you're not in drops out of
+the list. It leaves worldwide-remote postings alone, and it leaves postings whose
+location we could not read from the listing alone too — hiding those would be
+worse than showing them, since we genuinely don't know either way.
+
+It's off by default, on purpose. Across the open catalogue, most postings marked
+"remote" are actually scoped to one specific country (77.7%) rather than open to
+the whole world (9.9%), so switching this on for everyone would have made the list
+look broken for anyone outside a handful of countries.
+
+Signed in with a location saved on your profile, it uses that. Otherwise it falls
+back to your rough region, the same guess the site already makes elsewhere on
+first visit.
