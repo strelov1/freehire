@@ -153,6 +153,7 @@ paths:
       x-openai-isConsequential: false
       parameters:
         - $ref: "#/components/parameters/Q"
+        - $ref: "#/components/parameters/QFields"
         - $ref: "#/components/parameters/Limit"
         - $ref: "#/components/parameters/Offset"
         - $ref: "#/components/parameters/Sort"
@@ -223,6 +224,7 @@ paths:
       x-openai-isConsequential: false
       parameters:
         - $ref: "#/components/parameters/Q"
+        - $ref: "#/components/parameters/QFields"
         - $ref: "#/components/parameters/Limit"
         - $ref: "#/components/parameters/Offset"
         - $ref: "#/components/parameters/Sort"
@@ -762,7 +764,39 @@ components:
       in: query
       schema:
         type: string
-      description: Full-text query over title, company, and description.
+      description: |
+        Full-text query over `title`, `company`, `description`, and `location`.
+
+        Unquoted, multiple words match as an OR of (stemmed) tokens: any word
+        matching in any of those fields is a hit. Double-quoted (e.g.
+        `q="systems engineer"`), the words match as an AND, irrespective of
+        their order or adjacency in the matched field — quoting does **not**
+        request a contiguous phrase match. Use `q_fields` to narrow which
+        fields `q` is matched against.
+
+        Exact-phrase matching is not offered today, and the default relevance
+        order (`sort` omitted) does not reliably rank a contiguous match above
+        a scattered-token one within the same field — the index trades that
+        precision for cheaper indexing over long-form descriptions. A caller
+        that needs phrase precision must currently over-fetch and filter or
+        rank client-side.
+    QFields:
+      name: q_fields
+      in: query
+      schema:
+        type: string
+      description: |
+        Restrict `q` matching to a comma-separated subset of its four
+        searchable fields: `title`, `company`, `description`, `location`. For
+        example `q_fields=title` matches "systems" only in the job title, not
+        in the company name or body — the only lever `q` has to exclude a
+        posting like "STS Systems Defense" from a search for systems engineer
+        roles.
+
+        Naming any field outside that set (e.g. `q_fields=salary`) drops the
+        parameter entirely — `q` runs unrestricted, across all four fields —
+        and `q_fields` is reported in `meta.ignored_params`, the same
+        convention every other unrecognized filter follows.
     Limit:
       name: limit
       in: query

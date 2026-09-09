@@ -2,6 +2,7 @@ package search
 
 import (
 	"net/url"
+	"slices"
 	"sort"
 	"strings"
 )
@@ -19,6 +20,51 @@ var scalarFilters = []string{
 	"experience_years_max",
 	"posted_within_days",
 	"open_within_days",
+}
+
+// qSearchableFields are the fields `q` matches against, in the same order as the
+// jobs index's SearchableAttributes (see facetSettings in client.go). q_fields
+// restricts `q` to a subset of this vocabulary.
+var qSearchableFields = []string{"title", "company", "description", "location"}
+
+// QFieldsFromValues resolves the q_fields query param into the
+// AttributesToSearchOn list buildSearchRequest should pass to Meilisearch. The
+// returned fields are always in qSearchableFields' canonical order regardless
+// of how the caller wrote them, because Meilisearch's ranking is sensitive to
+// attribute order and a caller-controlled order would make identical
+// restrictions rank differently for no predictable reason.
+//
+// q_fields reads through splitFacetValues, the same as every other facet: a
+// repeated key (`q_fields=title&q_fields=company`) and a comma-joined value
+// (`q_fields=title,company`) resolve to the same set, and a stray comma
+// fragment (`q_fields=title,` or a bare `?q_fields=`) is dropped rather than
+// treated as a named field.
+//
+// When q_fields is absent or empty after that, both return values are nil: no
+// restriction, nothing to report. When it names a field outside
+// qSearchableFields, the ENTIRE value is treated as invalid — even the names
+// that were valid are dropped — and reported via the same UnknownParam shape
+// UnknownParams uses. Partial application would silently narrow a caller's
+// search past what a typo made them ask for, with no signal beyond the
+// report; whole-value drop keeps the failure in the same class as an
+// unrecognized facet: coarse, but honest.
+func QFieldsFromValues(v url.Values) (fields []string, ignored []UnknownParam) {
+	requested := make(map[string]bool)
+	for _, name := range splitFacetValues(v["q_fields"]) {
+		if !slices.Contains(qSearchableFields, name) {
+			return nil, []UnknownParam{{Param: "q_fields"}}
+		}
+		requested[name] = true
+	}
+	if len(requested) == 0 {
+		return nil, nil
+	}
+	for _, field := range qSearchableFields {
+		if requested[field] {
+			fields = append(fields, field)
+		}
+	}
+	return fields, nil
 }
 
 // maxUnknownParamsReported bounds how many ignored params one response echoes.

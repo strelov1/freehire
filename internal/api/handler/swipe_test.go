@@ -147,6 +147,32 @@ func TestSwipeDeck_ReportsIgnoredParams(t *testing.T) {
 	}
 }
 
+// q_fields is deliberately NOT part of the deck's vocabulary — SwipeDeck builds
+// its own SearchParams and never reads it — so unlike /jobs/search and
+// /agent/jobs/search it must keep reporting the param as unknown rather than
+// silently accepting a restriction it never applies.
+func TestSwipeDeck_QFieldsIsNotUnderstoodAndIsReported(t *testing.T) {
+	fake := &fakeSearcher{}
+	app, iss := deckApp(fake, nil)
+
+	status, body := deckGet(t, app, iss, "/api/v1/me/tracking/swipe?q=systems&q_fields=title")
+	if status != fiber.StatusOK {
+		t.Fatalf("status = %d, want 200", status)
+	}
+	if fake.got.QFields != nil {
+		t.Errorf("QFields = %v, want nil — the deck never applies this restriction", fake.got.QFields)
+	}
+	meta, _ := body["meta"].(map[string]any)
+	ignored, _ := meta["ignored_params"].([]any)
+	if len(ignored) != 1 {
+		t.Fatalf("meta.ignored_params = %v, want one entry", meta["ignored_params"])
+	}
+	first, _ := ignored[0].(map[string]any)
+	if first["param"] != "q_fields" {
+		t.Errorf("ignored_params[0] = %v, want q_fields", first)
+	}
+}
+
 // The deck's own transport params are not filters and must not be accused of anything —
 // a warning on every well-formed request is a warning nobody reads.
 func TestSwipeDeck_CleanQueryReportsNothingIgnored(t *testing.T) {

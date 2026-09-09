@@ -97,9 +97,14 @@ const maxSearchWindow = 10000
 // facetsParams in facets.go, companiesParams in companies.go).
 var searchParams = []string{"q", "sort", "order", "limit", "offset"}
 
-// agentSearchParams is searchParams plus the agent endpoint's response-format
-// selector.
-var agentSearchParams = slices.Concat(searchParams, []string{"description_format"})
+// jobSearchParams is searchParams plus q_fields, the field-scoping parameter
+// only the two job-search endpoints (not the swipe deck, which shares
+// searchParams but never reads q_fields) understand.
+var jobSearchParams = slices.Concat(searchParams, []string{"q_fields"})
+
+// agentSearchParams is jobSearchParams plus the agent endpoint's
+// response-format selector.
+var agentSearchParams = slices.Concat(jobSearchParams, []string{"description_format"})
 
 // ignoredParams reports the query params of this request that neither the filter
 // nor the endpoint itself reads. They are echoed in the response meta instead of
@@ -108,6 +113,16 @@ var agentSearchParams = slices.Concat(searchParams, []string{"description_format
 // `country=it` pass for a search of Italy.
 func ignoredParams(c *fiber.Ctx, own []string) []search.UnknownParam {
 	return search.UnknownParams(queryValues(c), own)
+}
+
+// mergedJobSearchIgnored combines runJobSearch's own value-level ignored-param
+// report — q_fields naming a field outside the searchable vocabulary, and/or any
+// filter params the Meilisearch-rejection degrade dropped — with the ordinary
+// name-level ignoredParams(c, own) report, into one sorted, capped list. The same
+// merge both job-search endpoints need, named once so neither can apply it
+// slightly differently.
+func mergedJobSearchIgnored(c *fiber.Ctx, own []string, fromSearch []search.UnknownParam) []search.UnknownParam {
+	return search.SortAndCap(append(fromSearch, ignoredParams(c, own)...))
 }
 
 // searchSortable is the allowlist of sort params mapped to their index attribute;
@@ -173,7 +188,7 @@ func (h *searchHandlers) SearchJobs(c *fiber.Ctx) error {
 	}
 	h.attachGhost(c, res.Hits, views)
 
-	ignored := search.SortAndCap(append(dropped, ignoredParams(c, searchParams)...))
+	ignored := mergedJobSearchIgnored(c, jobSearchParams, dropped)
 	return listResponseWithIgnored(c, views, res.Total, limit, offset, ignored)
 }
 
@@ -182,8 +197,10 @@ func (h *searchHandlers) SearchJobs(c *fiber.Ctx) error {
 // the single place the query is built, so the public and agent search endpoints
 // cannot drift. The availability and deep-pagination guards return a fiber *Error
 // the caller can return directly; on success it returns the raw hits, the applied
-// limit/offset, and any filter params dropped by the degrade below (nil in the
-// ordinary case — see its own comment).
+// limit/offset, and every value-level ignored-param report gathered while building
+// the query — q_fields naming a field outside the searchable vocabulary, plus any
+// filter params dropped by the degrade below (nil in the ordinary case) — for the
+// caller to merge into its own ignoredParams(c, own) report.
 func (h *searchHandlers) runJobSearch(c *fiber.Ctx) (search.SearchResult, int, int, []search.UnknownParam, error) {
 	if h.search == nil {
 		return search.SearchResult{}, 0, 0, nil, fiber.NewError(fiber.StatusServiceUnavailable, "search is not available")
@@ -197,16 +214,18 @@ func (h *searchHandlers) runJobSearch(c *fiber.Ctx) (search.SearchResult, int, i
 	vector := h.matchVector(c)
 	sort := searchSort(c, vector != nil)
 	filter := buildSearchFilter(c)
+	qFields, qFieldsIgnored := search.QFieldsFromValues(queryValues(c))
 	res, err := h.search.Search(c.Context(), search.SearchParams{
-		Query:  c.Query("q"),
-		Filter: filter,
-		Sort:   sort,
-		Vector: vector,
-		Limit:  limit,
-		Offset: offset,
+		Query:   c.Query("q"),
+		Filter:  filter,
+		Sort:    sort,
+		Vector:  vector,
+		QFields: qFields,
+		Limit:   limit,
+		Offset:  offset,
 	})
 
-	var dropped []search.UnknownParam
+	dropped := qFieldsIgnored
 	if err != nil {
 		// Degrade, not fail, when the filter itself is why Meilisearch refused the
 		// query — the deploy window a filterable attribute is declared in code
@@ -222,14 +241,14 @@ func (h *searchHandlers) runJobSearch(c *fiber.Ctx) (search.SearchResult, int, i
 			return search.SearchResult{}, 0, 0, nil, err
 		}
 		res, err = h.search.Search(c.Context(), search.SearchParams{
-			Query: c.Query("q"), Sort: sort, Vector: vector, Limit: limit, Offset: offset,
+			Query: c.Query("q"), Sort: sort, Vector: vector, QFields: qFields, Limit: limit, Offset: offset,
 		})
 		if err != nil {
 			return search.SearchResult{}, 0, 0, nil, err
 		}
 		// Which single param Meilisearch minded is not knowable from its own
 		// error, so every active filter param is reported rather than a guess.
-		dropped = search.ActiveFilterParams(queryValues(c))
+		dropped = append(dropped, search.ActiveFilterParams(queryValues(c))...)
 	}
 
 	h.recordQuery(c.Query("q"))

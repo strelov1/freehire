@@ -56,3 +56,17 @@ func TestSearchRequestPassesPaginationThrough(t *testing.T) {
 		t.Errorf("limit/offset = %d/%d, want 25/400", req.Limit, req.Offset)
 	}
 }
+
+func TestSearchRequestWithoutQFieldsLeavesAttributesToSearchOnUnset(t *testing.T) {
+	req := buildSearchRequest(SearchParams{Query: "golang", Limit: 20})
+	if req.AttributesToSearchOn != nil {
+		t.Errorf("AttributesToSearchOn = %v, want nil — Meilisearch's default (all searchable attributes) must apply", req.AttributesToSearchOn)
+	}
+}
+
+func TestSearchRequestWithQFieldsSetsAttributesToSearchOn(t *testing.T) {
+	req := buildSearchRequest(SearchParams{Query: "systems", QFields: []string{"title"}, Limit: 20})
+	if len(req.AttributesToSearchOn) != 1 || req.AttributesToSearchOn[0] != "title" {
+		t.Errorf("AttributesToSearchOn = %v, want [title]", req.AttributesToSearchOn)
+	}
+}

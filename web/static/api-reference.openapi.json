@@ -276,11 +276,21 @@
             "name": "q",
             "in": "query",
             "required": false,
-            "description": "Full-text query over title, company, and description.",
+            "description": "Full-text query over `title`, `company`, `description`, and `location`. Unquoted words match as an OR of stemmed tokens; quoted (`\"systems engineer\"`) as an order-independent AND — quoting is not a contiguous-phrase match. Narrow which fields it matches with `q_fields`. Exact-phrase matching is not offered, and default relevance order does not reliably rank a contiguous match above a scattered-token one.",
             "schema": {
               "type": "string"
             },
             "example": "golang"
+          },
+          {
+            "name": "q_fields",
+            "in": "query",
+            "required": false,
+            "description": "Comma-separated subset of `title,company,description,location` to restrict `q` to, e.g. `title`. A name outside that set drops the whole parameter (reported in `meta.ignored_params`) rather than partially applying.",
+            "schema": {
+              "type": "string"
+            },
+            "example": "title"
           },
           {
             "name": "sort",
@@ -352,11 +362,21 @@
             "name": "q",
             "in": "query",
             "required": false,
-            "description": "Full-text query over title, company, and description.",
+            "description": "Full-text query over `title`, `company`, `description`, and `location`. Unquoted words match as an OR of stemmed tokens; quoted (`\"systems engineer\"`) as an order-independent AND — quoting is not a contiguous-phrase match. Narrow which fields it matches with `q_fields`. Exact-phrase matching is not offered, and default relevance order does not reliably rank a contiguous match above a scattered-token one.",
             "schema": {
               "type": "string"
             },
             "example": "golang"
+          },
+          {
+            "name": "q_fields",
+            "in": "query",
+            "required": false,
+            "description": "Comma-separated subset of `title,company,description,location` to restrict `q` to, e.g. `title`. A name outside that set drops the whole parameter (reported in `meta.ignored_params`) rather than partially applying.",
+            "schema": {
+              "type": "string"
+            },
+            "example": "title"
           },
           {
             "name": "description_format",

@@ -185,6 +185,96 @@ func TestUnknownParams_SuggestsThroughFacetModifiers(t *testing.T) {
 	}
 }
 
+func TestQFieldsFromValues_AbsentRestrictsNothing(t *testing.T) {
+	fields, ignored := QFieldsFromValues(url.Values{})
+	if fields != nil {
+		t.Errorf("fields = %v, want nil", fields)
+	}
+	if ignored != nil {
+		t.Errorf("ignored = %v, want nil", ignored)
+	}
+}
+
+func TestQFieldsFromValues_SingleRecognizedField(t *testing.T) {
+	fields, ignored := QFieldsFromValues(url.Values{"q_fields": {"title"}})
+	if !slices.Equal(fields, []string{"title"}) {
+		t.Errorf("fields = %v, want [title]", fields)
+	}
+	if ignored != nil {
+		t.Errorf("ignored = %v, want nil", ignored)
+	}
+}
+
+func TestQFieldsFromValues_MultipleFieldsComeBackInCanonicalOrder(t *testing.T) {
+	// The caller wrote "company,title" — Meilisearch's ranking is sensitive to
+	// attribute order, so a caller-controlled order would make identical
+	// restrictions rank differently for no reason a caller could predict.
+	fields, ignored := QFieldsFromValues(url.Values{"q_fields": {"company,title"}})
+	if !slices.Equal(fields, []string{"title", "company"}) {
+		t.Errorf("fields = %v, want [title company] regardless of the requested order", fields)
+	}
+	if ignored != nil {
+		t.Errorf("ignored = %v, want nil", ignored)
+	}
+}
+
+func TestQFieldsFromValues_RepeatedKeyIsTheSameAsCommaJoined(t *testing.T) {
+	// Every other facet resolves a repeated key the same as a comma-joined value
+	// (splitFacetValues); q_fields must not be a silent exception that keeps only
+	// the first occurrence.
+	fields, ignored := QFieldsFromValues(url.Values{"q_fields": {"company", "title"}})
+	if !slices.Equal(fields, []string{"title", "company"}) {
+		t.Errorf("fields = %v, want [title company] from a repeated key", fields)
+	}
+	if ignored != nil {
+		t.Errorf("ignored = %v, want nil", ignored)
+	}
+}
+
+func TestQFieldsFromValues_UnrecognizedFieldIsReportedAndAppliesNoRestriction(t *testing.T) {
+	fields, ignored := QFieldsFromValues(url.Values{"q_fields": {"salary"}})
+	if fields != nil {
+		t.Errorf("fields = %v, want nil — an unrecognized value must not restrict", fields)
+	}
+	if len(ignored) != 1 || ignored[0].Param != "q_fields" {
+		t.Errorf("ignored = %v, want one entry naming q_fields", ignored)
+	}
+}
+
+func TestQFieldsFromValues_OneBadValueInARepeatedKeyInvalidatesTheWholeValue(t *testing.T) {
+	fields, ignored := QFieldsFromValues(url.Values{"q_fields": {"title", "salary"}})
+	if fields != nil {
+		t.Errorf("fields = %v, want nil — one bad value in a repeated key still drops the whole value", fields)
+	}
+	if len(ignored) != 1 || ignored[0].Param != "q_fields" {
+		t.Errorf("ignored = %v, want one entry naming q_fields", ignored)
+	}
+}
+
+func TestQFieldsFromValues_TrailingCommaIsTolerated(t *testing.T) {
+	// Same tolerance splitFacetValues gives every ordinary facet: a stray comma
+	// fragment is dropped, not treated as a named (and therefore unrecognized) field.
+	fields, ignored := QFieldsFromValues(url.Values{"q_fields": {"title,"}})
+	if !slices.Equal(fields, []string{"title"}) {
+		t.Errorf("fields = %v, want [title]", fields)
+	}
+	if ignored != nil {
+		t.Errorf("ignored = %v, want nil", ignored)
+	}
+}
+
+func TestQFieldsFromValues_OneBadNameInvalidatesTheWholeValue(t *testing.T) {
+	// A caller who mistypes one of several names must not get a silently
+	// narrower-than-intended search on the names that happened to be valid.
+	fields, ignored := QFieldsFromValues(url.Values{"q_fields": {"title,salary"}})
+	if fields != nil {
+		t.Errorf("fields = %v, want nil — one bad name drops the whole value", fields)
+	}
+	if len(ignored) != 1 || ignored[0].Param != "q_fields" {
+		t.Errorf("ignored = %v, want one entry naming q_fields", ignored)
+	}
+}
+
 func TestUnknownCompanyParams(t *testing.T) {
 	// Companies filter on their own vocabulary, so the jobs facets are NOT
 	// known here — `seniority=senior` does nothing on a company search and has

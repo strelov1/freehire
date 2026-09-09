@@ -472,6 +472,9 @@ type SearchParams struct {
 	// over vector ranking in Meilisearch, so sending both silently discards the match
 	// order rather than erroring.
 	Vector []float32
+	// QFields restricts Query matching to these searchable attributes (see
+	// QFieldsFromValues). Nil means Meilisearch's default: all of them.
+	QFields []string
 }
 
 // SearchResult holds the matched documents and Meilisearch's estimated total.
@@ -522,10 +525,11 @@ func queryErr(ctx context.Context, op string, err error) error {
 // Vector sent without an embedder name is a 400, so the two must never drift apart.
 func buildSearchRequest(p SearchParams) *meilisearch.SearchRequest {
 	req := &meilisearch.SearchRequest{
-		Filter: p.Filter,
-		Sort:   p.Sort,
-		Limit:  int64(p.Limit),
-		Offset: int64(p.Offset),
+		Filter:               p.Filter,
+		Sort:                 p.Sort,
+		Limit:                int64(p.Limit),
+		Offset:               int64(p.Offset),
+		AttributesToSearchOn: p.QFields,
 	}
 	if len(p.Vector) > 0 {
 		req.Vector = p.Vector

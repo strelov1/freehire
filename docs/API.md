@@ -250,7 +250,8 @@ Combine free-text `q` with any of the filter params below. Repeated facet params
 
 | Name | Type | Required | Description |
 | --- | --- | --- | --- |
-| `q` | string | no | Full-text query over title, company, and description. (e.g. `golang`) |
+| `q` | string | no | Full-text query over `title`, `company`, `description`, and `location`. Unquoted words match as an OR of stemmed tokens; quoted (`"systems engineer"`) as an order-independent AND — quoting is not a contiguous-phrase match. Narrow which fields it matches with `q_fields`. Exact-phrase matching is not offered, and default relevance order does not reliably rank a contiguous match above a scattered-token one. (e.g. `golang`) |
+| `q_fields` | string | no | Comma-separated subset of `title,company,description,location` to restrict `q` to, e.g. `title`. A name outside that set drops the whole parameter (reported in `meta.ignored_params`) rather than partially applying. (e.g. `title`) |
 | `sort` | string | no | One of `created_at`, `posted_at`, `view_count`, `salary_min`, `salary_max`. Omit for relevance/newest. (e.g. `posted_at`) |
 | `order` | string | no | `asc` or `desc` (default `desc`). (e.g. `desc`) |
 | `limit` | integer | no | Page size, 1–100. (e.g. `20`) |
@@ -281,7 +282,8 @@ Same query and filters as `/jobs/search`, but each result carries the `descripti
 
 | Name | Type | Required | Description |
 | --- | --- | --- | --- |
-| `q` | string | no | Full-text query over title, company, and description. (e.g. `golang`) |
+| `q` | string | no | Full-text query over `title`, `company`, `description`, and `location`. Unquoted words match as an OR of stemmed tokens; quoted (`"systems engineer"`) as an order-independent AND — quoting is not a contiguous-phrase match. Narrow which fields it matches with `q_fields`. Exact-phrase matching is not offered, and default relevance order does not reliably rank a contiguous match above a scattered-token one. (e.g. `golang`) |
+| `q_fields` | string | no | Comma-separated subset of `title,company,description,location` to restrict `q` to, e.g. `title`. A name outside that set drops the whole parameter (reported in `meta.ignored_params`) rather than partially applying. (e.g. `title`) |
 | `description_format` | string | no | One of `html` (default, verbatim), `text` (tags stripped), `markdown` (HTML converted to Markdown). Unknown values fall back to `html`. (e.g. `markdown`) |
 | `sort` | string | no | One of `created_at`, `posted_at`, `view_count`, `salary_min`, `salary_max`. Omit for relevance/newest. (e.g. `posted_at`) |
 | `order` | string | no | `asc` or `desc` (default `desc`). (e.g. `desc`) |
