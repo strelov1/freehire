@@ -33,6 +33,9 @@ type fakeRepo struct {
 	// createErr forces CreateProfile to fail, standing in for a constraint violation the
 	// adapter has already translated into a domain error.
 	createErr error
+	// createCalls counts CreateProfile invocations, so a test can assert an explicitly
+	// supplied, taken slug is refused on the first attempt rather than silently retried.
+	createCalls int
 	// createBookingErr stands in for the EXCLUDE constraint firing between the engine
 	// offering a slot and the insert reaching the database — the lost race.
 	createBookingErr error
@@ -60,11 +63,17 @@ func newFakeRepo() *fakeRepo {
 }
 
 func (r *fakeRepo) CreateProfile(_ context.Context, in ProfileInput) (Profile, error) {
+	r.createCalls++
 	if r.createErr != nil {
 		return Profile{}, r.createErr
 	}
 	if _, taken := r.byUser[in.UserID]; taken {
 		return Profile{}, ErrAlreadyAMentor
+	}
+	for _, p := range r.profiles {
+		if p.Slug == in.Slug {
+			return Profile{}, ErrSlugTaken
+		}
 	}
 	r.nextID++
 	p := Profile{
