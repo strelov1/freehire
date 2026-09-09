@@ -39,20 +39,31 @@ type matcher interface {
 type result struct {
 	Matched  int
 	Rejected int
+	Failed   int // a per-company error, counted and stepped over — never fatal to the run.
 }
+
+func (r result) processed() int64 { return int64(r.Matched + r.Rejected + r.Failed) }
 
 // pageSize bounds how many candidates one ListMissing call requests at a time.
 const pageSize = int32(200)
 
 // runBackfill pages through eligible companies, looks each one up, and — only
 // when apply is true — writes the outcome. It stops once maxPerRun companies
-// have been processed (matched + rejected) or no eligible companies remain.
-func runBackfill(ctx context.Context, st store, m matcher, apply bool, maxPerRun int64) (result, error) {
+// have been processed (matched + rejected + failed) or no eligible companies
+// remain.
+//
+// A per-company failure (a Lookup, Fill, or MarkChecked error) is counted and
+// stepped over rather than aborting the run — the same convention
+// backfill-talent-handle and discord-sync use. It is NOT marked checked, so it
+// stays eligible and is retried on the next run; only ListMissing itself failing
+// (the run cannot read its own work) is fatal. onFail, if non-nil, is called with
+// each skipped company's slug and error so the caller can log it.
+func runBackfill(ctx context.Context, st store, m matcher, apply bool, maxPerRun int64, onFail func(slug string, err error)) (result, error) {
 	var res result
 	afterSlug := ""
 
-	for int64(res.Matched+res.Rejected) < maxPerRun {
-		remaining := maxPerRun - int64(res.Matched+res.Rejected)
+	for res.processed() < maxPerRun {
+		remaining := maxPerRun - res.processed()
 		limit := pageSize
 		if remaining < int64(pageSize) {
 			limit = int32(remaining)
@@ -67,33 +78,15 @@ func runBackfill(ctx context.Context, st store, m matcher, apply bool, maxPerRun
 		}
 
 		for _, c := range candidates {
-			match, err := m.Lookup(ctx, c.Name)
-			if err != nil {
-				return res, fmt.Errorf("lookup %s: %w", c.Slug, err)
-			}
-
-			if match == nil {
-				res.Rejected++
-				if apply {
-					if err := st.MarkChecked(ctx, c.Slug); err != nil {
-						return res, fmt.Errorf("mark checked %s: %w", c.Slug, err)
-					}
-				}
-			} else {
-				res.Matched++
-				if apply {
-					info, err := json.Marshal(companyInfoSummary(match.Summary))
-					if err != nil {
-						return res, fmt.Errorf("encode company_info for %s: %w", c.Slug, err)
-					}
-					if err := st.Fill(ctx, c.Slug, match.Tagline, info); err != nil {
-						return res, fmt.Errorf("fill %s: %w", c.Slug, err)
-					}
+			if err := processCandidate(ctx, st, m, apply, c, &res); err != nil {
+				res.Failed++
+				if onFail != nil {
+					onFail(c.Slug, err)
 				}
 			}
 
 			afterSlug = c.Slug
-			if int64(res.Matched+res.Rejected) >= maxPerRun {
+			if res.processed() >= maxPerRun {
 				return res, nil
 			}
 		}
@@ -103,6 +96,38 @@ func runBackfill(ctx context.Context, st store, m matcher, apply bool, maxPerRun
 		}
 	}
 	return res, nil
+}
+
+// processCandidate resolves and, when apply is true, writes the outcome for one
+// company. It mutates res on success (Matched/Rejected) and leaves res untouched
+// on error, so the caller can count the failure itself.
+func processCandidate(ctx context.Context, st store, m matcher, apply bool, c candidate, res *result) error {
+	match, err := m.Lookup(ctx, c.Name)
+	if err != nil {
+		return fmt.Errorf("lookup %s: %w", c.Slug, err)
+	}
+
+	if match == nil {
+		if apply {
+			if err := st.MarkChecked(ctx, c.Slug); err != nil {
+				return fmt.Errorf("mark checked %s: %w", c.Slug, err)
+			}
+		}
+		res.Rejected++
+		return nil
+	}
+
+	if apply {
+		info, err := json.Marshal(companyInfoSummary(match.Summary))
+		if err != nil {
+			return fmt.Errorf("encode company_info for %s: %w", c.Slug, err)
+		}
+		if err := st.Fill(ctx, c.Slug, match.Tagline, info); err != nil {
+			return fmt.Errorf("fill %s: %w", c.Slug, err)
+		}
+	}
+	res.Matched++
+	return nil
 }
 
 // companyInfoSummary builds the company_info JSONB fragment for a match's

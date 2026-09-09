@@ -5,6 +5,25 @@ import (
 	"testing"
 )
 
+func TestIsValidQID(t *testing.T) {
+	cases := []struct {
+		qid  string
+		want bool
+	}{
+		{"Q123456", true},
+		{"Q1", true},
+		{"", false},
+		{"123456", false},                // missing the Q prefix
+		{"Q123 } VALUES { wd:Q1", false}, // a malformed/injected value must never reach the query builder
+		{"q123", false},                  // lowercase q is not a valid Wikidata entity ID
+	}
+	for _, c := range cases {
+		if got := isValidQID(c.qid); got != c.want {
+			t.Errorf("isValidQID(%q) = %v, want %v", c.qid, got, c.want)
+		}
+	}
+}
+
 func TestBuildOrganizationCheckQuery_UsesTransitivePropertyPath(t *testing.T) {
 	query := buildOrganizationCheckQuery("Q123456")
 

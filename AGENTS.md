@@ -211,6 +211,7 @@ Each is self-contained and can be read independently.
 | **Requirements extraction** (a posting's own requirements from its markup, no model; three closed vocabularies) | [internal/job/reqextract/AGENTS.md](internal/job/reqextract/AGENTS.md) |
 | **Ghost detection** (hedged posting-reality verdict, two evidence tiers, crosscheck) | [internal/job/ghost/AGENTS.md](internal/job/ghost/AGENTS.md) |
 | **YC directory** (import-yc, curated facets, matching by former names) | [internal/job/ycdir/AGENTS.md](internal/job/ycdir/AGENTS.md) |
+| **Wikidata company matching** (type-confidence gate, no keyword scan, backfill-company-info-wikipedia) | [internal/job/wikicompany/AGENTS.md](internal/job/wikicompany/AGENTS.md) |
 | **Company collections** (curated company tags, register datasets, reconciliation) | [internal/job/collections/AGENTS.md](internal/job/collections/AGENTS.md) |
 | **`internal/application`** — the block itself: what it is, what it may import | [internal/application/AGENTS.md](internal/application/AGENTS.md) |
 | **Per-user job tracking** (view/apply/save/track, stages, /me/tracking) | [internal/application/userjob/AGENTS.md](internal/application/userjob/AGENTS.md) |

@@ -153,3 +153,106 @@ func TestLookup_NoSearchResults(t *testing.T) {
 		t.Errorf("expected no SPARQL call when there is no candidate, got %d calls", stub.sparqlCalls)
 	}
 }
+
+// TestLookup_RejectsMalformedEntityID guards against a malformed or unexpectedly
+// shaped id ever being interpolated into the SPARQL query text: it must surface as
+// an explicit error, not run isOrganization with a corrupted qid.
+func TestLookup_RejectsMalformedEntityID(t *testing.T) {
+	stub := &stubServer{
+		searchID:          "Q123 } VALUES { wd:Q1",
+		searchDescription: "not a real Wikidata id",
+	}
+	client := newTestClient(stub.start(t))
+
+	match, err := client.Lookup(context.Background(), "whatever")
+	if err == nil {
+		t.Fatal("expected an error for a malformed entity id, got nil")
+	}
+	if match != nil {
+		t.Fatalf("expected no match alongside the error, got %+v", match)
+	}
+	if stub.sparqlCalls != 0 {
+		t.Errorf("expected no SPARQL call with a malformed entity id, got %d calls", stub.sparqlCalls)
+	}
+}
+
+// TestLookup_NoEnwikiSitelinkSkipsSummaryFetch: a description-only match (the
+// entity has no enwiki sitelink) must not attempt the Wikipedia summary request.
+func TestLookup_NoEnwikiSitelinkSkipsSummaryFetch(t *testing.T) {
+	stub := &stubServer{
+		searchID:          "Q1",
+		searchDescription: "American defense contractor",
+		asks:              true,
+		// enwikiTitle left empty: no sitelink.
+	}
+	client := newTestClient(stub.start(t))
+
+	match, err := client.Lookup(context.Background(), "CACI")
+	if err != nil {
+		t.Fatalf("Lookup returned error: %v", err)
+	}
+	if match == nil {
+		t.Fatal("expected a match from the description alone")
+	}
+	if match.Summary != "" {
+		t.Errorf("Summary = %q, want empty with no enwiki sitelink", match.Summary)
+	}
+	if stub.summaryCalls != 0 {
+		t.Errorf("expected no Wikipedia summary request with no enwiki sitelink, got %d calls", stub.summaryCalls)
+	}
+}
+
+// TestLookup_EmptyDescriptionStillMatchesOnSummaryAlone documents a deliberate
+// choice, not an accident: Wikidata's own description field is blank for many
+// otherwise well-typed entities, and the entity's Wikipedia extract alone is
+// still enough to accept the match. The caller (the backfill worker) still marks
+// such a company checked — see cmd/backfill-company-info-wikipedia's own tests —
+// because a description that doesn't exist today won't appear on a mechanical
+// retry; only company_info.summary gets filled from this match, tagline stays
+// empty via this source.
+func TestLookup_EmptyDescriptionStillMatchesOnSummaryAlone(t *testing.T) {
+	stub := &stubServer{
+		searchID:          "Q2",
+		searchDescription: "", // Wikidata carries no short description for this entity.
+		asks:              true,
+		enwikiTitle:       "Some Company",
+		summaryExtract:    "Some Company is a widget manufacturer founded in 1990.",
+	}
+	client := newTestClient(stub.start(t))
+
+	match, err := client.Lookup(context.Background(), "Some Company")
+	if err != nil {
+		t.Fatalf("Lookup returned error: %v", err)
+	}
+	if match == nil {
+		t.Fatal("expected a match from the Wikipedia summary alone")
+	}
+	if match.Tagline != "" {
+		t.Errorf("Tagline = %q, want empty (Wikidata carries no description)", match.Tagline)
+	}
+	if match.Summary != "Some Company is a widget manufacturer founded in 1990." {
+		t.Errorf("Summary = %q, want the Wikipedia extract", match.Summary)
+	}
+}
+
+// TestLookup_NoDescriptionAndNoSummaryYieldsNoMatch: an organization-typed
+// candidate with neither a Wikidata description nor a reachable Wikipedia extract
+// carries nothing worth writing, so Lookup reports no match at all rather than an
+// empty one.
+func TestLookup_NoDescriptionAndNoSummaryYieldsNoMatch(t *testing.T) {
+	stub := &stubServer{
+		searchID:          "Q3",
+		searchDescription: "",
+		asks:              true,
+		// No enwiki sitelink either, so there is no summary to fall back on.
+	}
+	client := newTestClient(stub.start(t))
+
+	match, err := client.Lookup(context.Background(), "Some Company")
+	if err != nil {
+		t.Fatalf("Lookup returned error: %v", err)
+	}
+	if match != nil {
+		t.Fatalf("expected no match with neither a description nor a summary, got %+v", match)
+	}
+}

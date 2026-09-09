@@ -77,10 +77,16 @@ ASK { wd:Q<id> wdt:P31/wdt:P279* ?type . VALUES ?type { wd:Q4830453 wd:Q43229 wd
 against `query.wikidata.org`, with the anchor QID set curated and reviewed
 against the spike's confirmed-good sample before rollout (`Q4830453`
 business, `Q43229` organization, `Q6881511` enterprise, `Q783794` company,
-`Q891723` public company, `Q328664` corporation, plus a handful of common
-subtypes worth anchoring directly for query-cost reasons: bank, mining
-company, airline). One extra HTTP round-trip per candidate is acceptable —
-this is a slow, periodic backfill, not a request-path lookup.
+`Q891723` public company, `Q328664` corporation). No narrower subtypes (bank,
+mining company, airline) are anchored directly: the whole point of walking
+`P279*` instead of checking `P31` directly is that a subtype the anchor set
+doesn't name outright — a bank, a mining company, "American defense
+contractor" (CACI's own description) — still reaches one of the six anchors
+through its own subclass chain, which is exactly what
+`wikicompany.TestLookup_AcceptsSubtypeNotInAnchorSet` verifies. Adding
+narrower anchors would be redundant with what the transitive walk already
+covers. One extra HTTP round-trip per candidate is acceptable — this is a
+slow, periodic backfill, not a request-path lookup.
 
 *Alternative considered:* keep the spike's keyword heuristic. Rejected — the
 spec explicitly rules it out, and the spike already showed concrete

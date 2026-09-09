@@ -52,11 +52,15 @@ func TestDoWithRetry_GivesUpAfterMaxAttempts(t *testing.T) {
 	}
 
 	resp, err := doWithRetry(srv.Client(), req, 2, 0)
-	if resp != nil {
-		defer resp.Body.Close()
-	}
 	if err == nil {
 		t.Fatal("expected an error after exhausting retries, got nil")
+	}
+	// No caller of doWithRetry ever reads the body on the error path, so an
+	// exhausted retry must close it itself and return nil — leaving it open on a
+	// returned-but-unusable response is exactly the leak a caller forgetting a
+	// conditional Close() would reintroduce.
+	if resp != nil {
+		t.Fatalf("expected a nil response on the error path, got %+v (body would leak)", resp)
 	}
 	if attempts != 2 {
 		t.Fatalf("expected exactly 2 attempts, got %d", attempts)

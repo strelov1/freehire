@@ -2,8 +2,19 @@ package wikicompany
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 )
+
+// qidPattern matches a Wikidata entity ID: an uppercase Q followed by digits, and
+// nothing else. wbsearchentities is expected to only ever return values of this
+// shape, but validating before a QID is interpolated into a SPARQL query string
+// turns a malformed or unexpectedly-shaped response into an explicit error instead
+// of silently building a corrupted (or, worst case, injected) query.
+var qidPattern = regexp.MustCompile(`^Q[0-9]+$`)
+
+// isValidQID reports whether qid has the shape of a genuine Wikidata entity ID.
+func isValidQID(qid string) bool { return qidPattern.MatchString(qid) }
 
 // organizationAnchorQIDs are the curated Wikidata classes a candidate must descend
 // from (via wdt:P31/wdt:P279*) to be accepted as a company/organization match:

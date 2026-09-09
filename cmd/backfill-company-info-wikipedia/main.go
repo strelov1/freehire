@@ -53,18 +53,27 @@ func run() int {
 	q := db.New(pool)
 	client := wikicompany.New(safehttp.NewClient(15 * time.Second))
 
-	res, err := runBackfill(ctx, dbStore{q: q}, client, *apply, maxPerRun)
+	onFail := func(slug string, err error) {
+		log.Printf("backfill-company-info-wikipedia: %s: %v", slug, err)
+	}
+
+	res, err := runBackfill(ctx, dbStore{q: q}, client, *apply, maxPerRun, onFail)
 	if err != nil {
 		log.Printf("backfill-company-info-wikipedia: %v", err)
 		return 1
 	}
 
+	// A per-company failure (already logged via onFail) is counted and stepped
+	// over, never fatal to the run — the same convention backfill-talent-handle
+	// and discord-sync use, so one company whose Wikidata lookup deterministically
+	// fails does not turn every future scheduled run red.
 	if !*apply {
-		log.Printf("backfill-company-info-wikipedia: dry run — would match %d, reject %d (of up to %d). Re-run with --apply to write.",
-			res.Matched, res.Rejected, maxPerRun)
+		log.Printf("backfill-company-info-wikipedia: dry run — would match %d, reject %d, %d failed (of up to %d). Re-run with --apply to write.",
+			res.Matched, res.Rejected, res.Failed, maxPerRun)
 		return 0
 	}
-	log.Printf("backfill-company-info-wikipedia: matched %d, rejected %d (of up to %d)", res.Matched, res.Rejected, maxPerRun)
+	log.Printf("backfill-company-info-wikipedia: matched %d, rejected %d, %d failed (of up to %d)",
+		res.Matched, res.Rejected, res.Failed, maxPerRun)
 	return 0
 }
 

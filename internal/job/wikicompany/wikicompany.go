@@ -61,6 +61,9 @@ func (c *Client) Lookup(ctx context.Context, name string) (*Match, error) {
 	if qid == "" {
 		return nil, nil
 	}
+	if !isValidQID(qid) {
+		return nil, fmt.Errorf("wikicompany: unexpected entity id shape %q for %q", qid, name)
+	}
 
 	isOrg, err := c.isOrganization(ctx, qid)
 	if err != nil {
