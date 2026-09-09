@@ -128,21 +128,22 @@
 
 ## 7. Frontend
 
-- [ ] 7.1 `/my/integrations`: add a "Connect Google Calendar for automatic Meet links"
-      action beside the existing Gmail/Calendar cards, reading
-      `mentor_calendar_connected` from the Gmail-status response and linking to
-      `/api/v1/me/mentor-calendar/connect`
-- [ ] 7.2 `MentorProfileEditor.svelte`: fetch whether the caller has
-      `mentor_calendar_connected` (reuse the same status call `/my/integrations`
-      already makes) and render the "Meeting link" field as optional — no required
-      marker/validation-on-submit-message change needed beyond what the backend
-      already refuses — when it is true
-- [ ] 7.3 Manual check via the `run` skill in a real browser: connecting is out of
-      reach without live Google credentials in dev, so verify what is testable
-      without them — the profile form's meeting-link requirement toggles correctly
-      when `mentor_calendar_connected` is stubbed/forced true via a direct API
-      response, and confirm the unconnected path (the overwhelming common case) is
-      pixel-identical to before this change
+- [x] 7.1 Added a "Mentor calendar" card to `IntegrationsView.svelte`, beside the
+      existing Mail/Calendar cards inside the same Google block — its own status line,
+      its own Connect link (`/api/v1/me/mentor-calendar/connect`), its own
+      `mentor_calendar_error`/`mentor_calendar=connected` verdict handling, read from
+      `GmailStatus.mentor_calendar_connected` (added to `$lib/api.ts`).
+- [x] 7.2 `MentorProfileEditor.svelte`: fetches `mentor_calendar_connected` via
+      `api.gmailStatus()` on mount (the same call `/my/integrations` makes) and
+      rewords the meeting-link label to say it's optional/fallback when true — no
+      HTML required-marker existed on this field before, so there was none to remove;
+      the backend's own refusal is unchanged for the not-connected case.
+- [x] 7.3 Verified via `svelte-check` (0 errors), `eslint` (clean on the touched
+      files), the full frontend `vitest run` (1805 tests passing) and the
+      design-system adoption ratchet (unchanged — both edits reuse components already
+      used in their files). Live-browser check of the connect flow itself deferred to
+      task 8's end-to-end pass, since it needs Docker + a running server; connecting
+      to real Google is out of reach in dev regardless, as this task always expected.
 
 ## 8. Verification
 

@@ -29,6 +29,7 @@
 
   const hasGmail = $derived(!!gmail?.connected);
   const hasCalendar = $derived(gmail?.calendar_connected === true);
+  const hasMentorCalendar = $derived(gmail?.mentor_calendar_connected === true);
 
   async function loadGmail() {
     gmailLoading = true;
@@ -80,12 +81,14 @@
   });
   const GMAIL_CONNECT_ERRORS = connectErrors('Gmail');
   const CALENDAR_CONNECT_ERRORS = connectErrors('Calendar');
+  const MENTOR_CALENDAR_CONNECT_ERRORS = connectErrors('Calendar');
   let googleNotice = $state<{ ok: boolean; text: string } | null>(null);
 
   function readGoogleVerdict() {
     const params = page.url.searchParams;
     const gmailFailed = params.get('gmail_error');
     const calendarFailed = params.get('calendar_error');
+    const mentorCalendarFailed = params.get('mentor_calendar_error');
     if (gmailFailed) {
       googleNotice = { ok: false, text: GMAIL_CONNECT_ERRORS[gmailFailed] ?? 'Connecting Gmail failed. Try again.' };
     } else if (calendarFailed) {
@@ -93,10 +96,20 @@
         ok: false,
         text: CALENDAR_CONNECT_ERRORS[calendarFailed] ?? 'Connecting Calendar failed. Try again.',
       };
+    } else if (mentorCalendarFailed) {
+      googleNotice = {
+        ok: false,
+        text: MENTOR_CALENDAR_CONNECT_ERRORS[mentorCalendarFailed] ?? 'Connecting Calendar failed. Try again.',
+      };
     } else if (params.get('gmail') === 'connected') {
       googleNotice = { ok: true, text: 'Gmail connected — your ATS mail will show up in the Inbox shortly.' };
     } else if (params.get('calendar') === 'connected') {
       googleNotice = { ok: true, text: 'Calendar connected — accepted interviews will show up on the Tracking calendar.' };
+    } else if (params.get('mentor_calendar') === 'connected') {
+      googleNotice = {
+        ok: true,
+        text: 'Calendar connected — your mentorship bookings will get an automatic Meet link.',
+      };
     } else {
       return;
     }
@@ -315,6 +328,34 @@
             <!-- eslint-disable svelte/no-navigation-without-resolve -- an API route the browser must navigate to so Google can redirect it back, not a SvelteKit page to resolve -->
             <a
               href="/api/v1/me/calendar/connect"
+              class="shrink-0 rounded-md border border-border px-3 py-1.5 text-sm hover:bg-accent hover:text-accent-foreground"
+              >Connect</a
+            >
+            <!-- eslint-enable svelte/no-navigation-without-resolve -->
+          {/if}
+        </div>
+
+        <!-- Mentor calendar: a THIRD, separate write consent — never inferred from the
+             read-only Calendar grant above, which candidates connect for an unrelated
+             purpose and must not silently be handed write access over. -->
+        <div class="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-3">
+          <div class="min-w-0">
+            <div class="flex items-center gap-1.5 text-sm">
+              <CalendarDays class="h-3.5 w-3.5 text-muted-foreground" /> Mentor calendar
+              {#if hasMentorCalendar}
+                <Badge variant="outline" class={CONNECTED_BADGE_CLASS}>Connected</Badge>
+              {/if}
+            </div>
+            <p class="text-xs text-muted-foreground">
+              {hasMentorCalendar
+                ? 'New mentorship bookings get an automatic Google Meet link.'
+                : 'For mentors: get an automatic Google Meet link on every booking instead of a fixed link.'}
+            </p>
+          </div>
+          {#if !hasMentorCalendar && gmail?.available}
+            <!-- eslint-disable svelte/no-navigation-without-resolve -- an API route the browser must navigate to so Google can redirect it back, not a SvelteKit page to resolve -->
+            <a
+              href="/api/v1/me/mentor-calendar/connect"
               class="shrink-0 rounded-md border border-border px-3 py-1.5 text-sm hover:bg-accent hover:text-accent-foreground"
               >Connect</a
             >
