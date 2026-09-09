@@ -48,12 +48,57 @@ func WorkModeFromDescription(desc string) string {
 	lower := strings.ToLower(desc)
 	for _, wm := range descriptionWorkModePhrases {
 		for _, p := range wm.phrases {
-			if strings.Contains(lower, p) {
-				return wm.mode
+			i := strings.Index(lower, p)
+			if i < 0 {
+				continue
 			}
+			if travelPerkPhrases[p] && travelPerkQualified(lower, i, i+len(p)) {
+				continue
+			}
+			return wm.mode
 		}
 	}
 	return ""
+}
+
+// travelPerkPhrases are the remote-family phrases that are ALSO a common idiom for a
+// bounded travel/PTO allowance ("the freedom to work from anywhere in the world for up
+// to a month") rather than the posting's own work arrangement. Measured over prod
+// postings mentioning "work from anywhere" (freehire#2696): no other phrase in
+// descriptionWorkModePhrases showed this ambiguity — "100% remote"/"fully remote"/etc.
+// are not idioms for a bounded benefit ("100% remote for up to X days" is not a sentence
+// employers write), so guarding them would only cost coverage with no measured gain. The
+// same "measured evidence, not symmetry" doctrine remoteDenialPhrases' comment applies to
+// "on-site only"/"must be onsite" below.
+var travelPerkPhrases = map[string]bool{
+	"work from anywhere": true,
+	"work-from-anywhere": true,
+}
+
+// travelPerkQualifiers mark a travelPerkPhrases match as a bounded allowance rather than
+// an unconditional statement — the same "usually unambiguous but sometimes qualified"
+// shape as remoteDenialPhrases/denialQualifiers below, applied here to a phrase that FILLS
+// a blank instead of overruling a stated one. "up to" alone is a broad enough marker
+// (unlike denialQualifiers, which had to enumerate distinct scoping shapes): every
+// disqualifying prod sentence found carries it ("for up to a month", "up to 12 days",
+// "allowing up to 20 remote days"), and it is inherently a bounded-quantity phrase. Unlike
+// a denial qualifier, which only ever follows the phrase it scopes, this one appears on
+// EITHER side of the match in real postings ("work from anywhere ... for up to a month"
+// and "up to 12 days work from anywhere"), so both directions are checked.
+var travelPerkQualifiers = []string{"up to"}
+
+// travelPerkQualifierWindow reuses denialQualifierWindow's value: the observed distances
+// in production sentences are well inside it, and a second, unmeasured window constant
+// would be an invented number rather than evidence.
+const travelPerkQualifierWindow = denialQualifierWindow
+
+// travelPerkQualified reports whether a bounded-duration qualifier appears within
+// travelPerkQualifierWindow characters before or after the match spanning [start, end) in
+// text (already lowercased).
+func travelPerkQualified(text string, start, end int) bool {
+	before := text[max(0, start-travelPerkQualifierWindow):start]
+	after := text[end:min(len(text), end+travelPerkQualifierWindow)]
+	return containsAny(before, travelPerkQualifiers) || containsAny(after, travelPerkQualifiers)
 }
 
 // remoteDenialPhrases are the sentences with which a posting denies remote work outright.
