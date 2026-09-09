@@ -62,6 +62,31 @@ func (w workable) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	return jobs, nil
 }
 
+// CompanyDescription fetches the account's own "about us" text — a top-level
+// description field the same widget endpoint Fetch calls also carries. It
+// deliberately omits ?details=true: confirmed live, that flag only controls
+// whether each JOB's own full body is inlined (Fetch needs it, this doesn't), and
+// dropping it shrinks the response substantially (~11x on a sampled board) while
+// leaving the account-level description unaffected — so this is a second request,
+// but a cheap one, not a duplicate of Fetch's own (potentially much larger)
+// payload. Like the job listing's own description (Fetch, above), this field is
+// raw HTML, not entity-encoded, so no html.UnescapeString is needed. An employer
+// who has not filled the field in yields ("", nil), not an error.
+func (w workable) CompanyDescription(ctx context.Context, e CompanyEntry) (string, error) {
+	url := fmt.Sprintf("%s/%s", workableBaseURL, e.Board)
+
+	var resp struct {
+		Description string `json:"description"`
+	}
+	if err := w.http.GetJSON(ctx, url, &resp); err != nil {
+		return "", fmt.Errorf("workable: fetch account %s: %w", e.Board, err)
+	}
+	if resp.Description == "" {
+		return "", nil
+	}
+	return sanitizeHTML(resp.Description), nil
+}
+
 // workableEmploymentType maps Workable's widget "type" onto the freehire vocabulary,
 // returning "" for "Other"/absent so the description parser decides.
 func workableEmploymentType(t string) string {

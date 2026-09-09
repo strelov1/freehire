@@ -140,9 +140,10 @@ func TestSubmitProfileAcceptsNoMeetingLinkWithAConnectedCalendar(t *testing.T) {
 
 // The slug is in the URL, so its shape is the same one usernames carry — and it is
 // COPIED rather than referenced, so a later username change cannot 404 every link
-// somebody has already shared.
+// somebody has already shared. An empty slug is NOT in this list: it is no longer a
+// refusal, it is a request to derive one — see TestSubmitProfileWithoutASlugDerivesOneFromTheName.
 func TestSubmitProfileRefusesASlugThatCannotBeAURL(t *testing.T) {
-	for _, slug := range []string{"", "no", "Jane-Doe", "jane doe", "jane_doe", "-jane", "jane-", strings.Repeat("a", 31)} {
+	for _, slug := range []string{"no", "Jane-Doe", "jane doe", "jane_doe", "-jane", "jane-", strings.Repeat("a", 31)} {
 		t.Run("slug "+slug, func(t *testing.T) {
 			in := validInput()
 			in.Slug = slug
@@ -172,6 +173,86 @@ func TestSubmitProfileReportsWhatTheDatabaseRefuses(t *testing.T) {
 				t.Errorf("error = %v, want %v", err, tc.want)
 			}
 		})
+	}
+}
+
+// An empty URL slug is no longer a refusal: the mentor left it to the system, and the
+// system derives one from the display name — the field already required on this exact
+// form, so nothing new needs to be typed.
+func TestSubmitProfileWithoutASlugDerivesOneFromTheName(t *testing.T) {
+	repo := newFakeRepo()
+	in := validInput()
+	in.Slug = ""
+
+	got, err := newTestService(t, repo).SubmitProfile(context.Background(), in)
+	if err != nil {
+		t.Fatalf("SubmitProfile: %v", err)
+	}
+	if got.Slug != "jane-doe" {
+		t.Errorf("slug = %q, want %q", got.Slug, "jane-doe")
+	}
+}
+
+// A slug the system derived can collide with one another mentor already holds — the
+// derivation only looks at the name, not the catalogue. The system SHALL resolve that
+// itself with the smallest free numbered variant rather than refusing the submission.
+func TestSubmitProfileWithoutASlugRetriesOnCollision(t *testing.T) {
+	repo := newFakeRepo()
+	if _, err := repo.CreateProfile(context.Background(), ProfileInput{UserID: 1, Slug: "jane-doe"}); err != nil {
+		t.Fatalf("seed CreateProfile: %v", err)
+	}
+
+	in := validInput()
+	in.UserID = 7
+	in.Slug = ""
+
+	got, err := newTestService(t, repo).SubmitProfile(context.Background(), in)
+	if err != nil {
+		t.Fatalf("SubmitProfile: %v", err)
+	}
+	if got.Slug != "jane-doe-2" {
+		t.Errorf("slug = %q, want %q", got.Slug, "jane-doe-2")
+	}
+}
+
+// A display name with no latin letters or digits — an all-Cyrillic name, say — sanitizes
+// to nothing. The system SHALL fall back to a fixed base rather than refuse the
+// submission, exactly as username.Sanitize already falls back for an account username.
+func TestSubmitProfileWithoutASlugFallsBackWhenTheNameSanitizesToNothing(t *testing.T) {
+	repo := newFakeRepo()
+	in := validInput()
+	in.Slug = ""
+	in.DisplayName = "Иван Стрелов"
+
+	got, err := newTestService(t, repo).SubmitProfile(context.Background(), in)
+	if err != nil {
+		t.Fatalf("SubmitProfile: %v", err)
+	}
+	if got.Slug != "user" {
+		t.Errorf("slug = %q, want %q", got.Slug, "user")
+	}
+}
+
+// An explicitly supplied slug that is already taken is refused outright — never
+// silently substituted with a suffixed variant. Substituting one would leave the
+// mentor with a URL that differs from what they typed and no indication that happened.
+func TestSubmitProfileWithAnExplicitTakenSlugIsRefusedWithoutRetrying(t *testing.T) {
+	repo := newFakeRepo()
+	if _, err := repo.CreateProfile(context.Background(), ProfileInput{UserID: 1, Slug: "jane-doe"}); err != nil {
+		t.Fatalf("seed CreateProfile: %v", err)
+	}
+	repo.createCalls = 0 // the seed call above doesn't count
+
+	in := validInput()
+	in.UserID = 7
+	in.Slug = "jane-doe"
+
+	_, err := newTestService(t, repo).SubmitProfile(context.Background(), in)
+	if !errors.Is(err, ErrSlugTaken) {
+		t.Errorf("error = %v, want ErrSlugTaken", err)
+	}
+	if repo.createCalls != 1 {
+		t.Errorf("CreateProfile called %d times, want exactly 1 — an explicit slug must never be silently retried", repo.createCalls)
 	}
 }
 

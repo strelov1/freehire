@@ -8,6 +8,8 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/strelov1/freehire/internal/identity/username"
 )
 
 // The moderation statuses a profile can hold. Pausing is NOT one of them: it is the
@@ -55,9 +57,9 @@ type Profile struct {
 	UserID      int64
 	CompanySlug string
 	CompanyName string
-	// Slug is the profile's public address. It is COPIED from the account's username at
-	// creation rather than following it, because a username change would otherwise 404
-	// every link anybody has shared.
+	// Slug is the profile's public address. It is fixed at creation — an explicit choice,
+	// or one SubmitProfile derived from DisplayName — and never changes afterward, because
+	// changing it would 404 every link anybody has already shared.
 	Slug string
 	// DisplayName is the name the public sees. Required, and the reason this profile is
 	// not a referral offer: a referral is anonymous by design, a mentor is chosen.
@@ -102,6 +104,9 @@ type PendingProfile struct {
 type ProfileInput struct {
 	UserID      int64
 	CompanySlug string
+	// Slug is the requested public address. On a submission (never on an edit, which
+	// ignores it), an empty Slug is not a refusal: SubmitProfile derives one from
+	// DisplayName instead of requiring the caller to invent one.
 	Slug        string
 	DisplayName string
 	Headline    string
@@ -130,15 +135,50 @@ type DirectoryFilter struct {
 	Limit       int32
 }
 
+// maxSlugAttempts bounds SubmitProfile's collision-suffix search over a slug it derived
+// itself, so a pathological run of taken addresses fails loudly instead of looping
+// forever. Mirrors accounts.maxUsernameAttempts's reasoning for the same search over
+// account usernames.
+const maxSlugAttempts = 100
+
 // SubmitProfile records a mentor profile, awaiting moderation. Everything that could stop
 // it working is refused here rather than at the first booking: a zone that does not
 // resolve has no schedule, a session that cannot yield a slot has no availability, and a
 // meeting link that is not a link has no meeting.
+//
+// An empty Slug is not one of those refusals: it means the mentor left the address to
+// the system, which derives one from DisplayName — already required on this same
+// submission — using the same sanitisation rule an account username applies. A slug the
+// mentor typed themselves is never touched this way; only a derived one gets a silent
+// numeric-suffix retry on collision, because retrying an explicit choice would hand the
+// mentor a URL that quietly differs from what they typed.
 func (s *Service) SubmitProfile(ctx context.Context, in ProfileInput) (Profile, error) {
+	derived := strings.TrimSpace(in.Slug) == ""
+	if derived {
+		// DisplayName's words are hyphen-joined before sanitizing, unlike
+		// username.Sanitize's usual inputs (an email local-part, a legacy handle) which
+		// never contain spaces to begin with — "Jane Doe" should become "jane-doe", not
+		// "janedoe".
+		in.Slug = username.Sanitize(strings.Join(strings.Fields(in.DisplayName), "-"))
+	}
 	if err := validateProfile(in, true); err != nil {
 		return Profile{}, err
 	}
-	return s.repo.CreateProfile(ctx, normaliseProfile(in))
+	if !derived {
+		return s.repo.CreateProfile(ctx, normaliseProfile(in))
+	}
+
+	base := in.Slug
+	for attempt := 1; attempt <= maxSlugAttempts; attempt++ {
+		candidate := in
+		candidate.Slug = username.Candidate(base, attempt)
+		profile, err := s.repo.CreateProfile(ctx, normaliseProfile(candidate))
+		if errors.Is(err, ErrSlugTaken) {
+			continue
+		}
+		return profile, err
+	}
+	return Profile{}, ErrSlugTaken
 }
 
 // MyProfile is the owner's own profile whatever its status — a pending or rejected one
