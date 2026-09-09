@@ -14,16 +14,16 @@
 
 ## 3. Selecting and submitting by the layout
 
-- [ ] 3.1 Write the failing test for `fieldSelector(id, by)`: `byID` gives `#first_name`, `byName` gives `[name="name"]`, and a bracketed name (`urls[LinkedIn]`) survives quoted intact — brackets are selector syntax when unquoted.
-- [ ] 3.2 Change `fieldSelector` to take the addressing, and derive chromedp's query kind from the same value (`ByID` or `ByQuery`) in the same place, so the selector and the way it is interpreted cannot disagree.
-- [ ] 3.3 Replace the hard-coded `greenhouseSubmitSelector` click in `fillAndSubmit` with `layout.submitSelector`, and delete the constant. Record in the comment that Lever's `#btn-submit` is a `type="button"` whose own JS runs the invisible hCaptcha and then clicks the real hidden control — we click what a person clicks and do not model the rest.
+- [x] 3.1 Write the failing test for `fieldSelector(id, by)`: `byID` gives `#first_name`, `byName` gives `[name="name"]`, and a bracketed name (`urls[LinkedIn]`) survives quoted intact — brackets are selector syntax when unquoted.
+- [x] 3.2 Change `fieldSelector` to take the addressing, and derive chromedp's query kind from the same value (`ByID` or `ByQuery`) in the same place, so the selector and the way it is interpreted cannot disagree.
+- [x] 3.3 Replace the hard-coded `greenhouseSubmitSelector` click in `fillAndSubmit` with `layout.submitSelector`, and delete the constant. Record in the comment that Lever's `#btn-submit` is a `type="button"` whose own JS runs the invisible hCaptcha and then clicks the real hidden control — we click what a person clicks and do not model the rest.
 
 ## 4. Turning Lever on
 
-- [ ] 4.1 Write the failing test asserting `fillProviders["lever"]`, then add the entry, with a comment naming what was measured to justify it (the live preview came back fully resolved; the form's controls were captured 2026-09-09).
-- [ ] 4.2 Replace `if claimed.Provider == "greenhouse"` in `client.go` with a `layoutFor` lookup, passing `layout.formSelector` to `renderedHTML` and `layout` to `ScanForm` and `fillAndSubmit`.
-- [ ] 4.3 Make the same change in `preview_client.go`'s own Greenhouse branch — the preview must scan Lever's DOM too, or the candidate's preview and the actual submission would disagree about what the form contains.
-- [ ] 4.4 Verify the containment test from 1.2 now fails when `lever` is removed from either the registry or `fillProviders`, and passes with both. This is the only step that proves it holds weight.
+- [x] 4.1 Write the failing test asserting `fillProviders["lever"]`, then add the entry, with a comment naming what was measured to justify it (the live preview came back fully resolved; the form's controls were captured 2026-09-09).
+- [x] 4.2 Replace `if claimed.Provider == "greenhouse"` in `client.go` with a `layoutFor` lookup, passing `layout.formSelector` to `renderedHTML` and `layout` to `ScanForm` and `fillAndSubmit`.
+- [x] 4.3 Make the same change in `preview_client.go`'s own Greenhouse branch — the preview must scan Lever's DOM too, or the candidate's preview and the actual submission would disagree about what the form contains.
+- [x] 4.4 Verify the containment test from 1.2 now fails when `lever` is removed from either the registry or `fillProviders`, and passes with both. This is the only step that proves it holds weight.
 
 ## 5. The package's account of itself
 

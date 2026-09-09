@@ -44,11 +44,20 @@ const tagAutoApplyDrafting = "auto-apply-drafting"
 // on the mere WORD "recaptcha" and parked every Greenhouse posting there is.
 
 // fillProviders is the single source of truth for which providers Submit can actually
-// fill/submit for — today, Greenhouse alone (see fillAndSubmit/browser.go). Checked both
-// before drafting is attempted (resolve, to avoid paying for a draft nothing can use) and
-// before a fill+submit is attempted (Submit) — one set, so the two can never drift apart.
+// fill/submit for. Checked both before drafting is attempted (resolve, to avoid paying for
+// a draft nothing can use) and before a fill+submit is attempted (Submit) — one set, so the
+// two can never drift apart.
+//
+// Every entry here must also have a layout (layout.go), and a test asserts the containment:
+// a provider Submit will try to fill, with no description of its page to fill it by, would
+// reach a submit click with selectors matching nothing.
 var fillProviders = map[string]bool{
 	"greenhouse": true,
+	// Measured 2026-09-09. Retiring the blanket captcha refusal (#2721) let the preview
+	// pass reach Lever's schema for the first time, and it came back with every field
+	// answered and nothing pending; the form's controls were captured from a live posting
+	// the same day (see leverform_test.go's fixture).
+	"lever": true,
 }
 
 // reasonSubmissionNotImplemented is the one park reason for two distinct gaps that both
@@ -178,19 +187,19 @@ func (c *Client) Submit(ctx context.Context, claimed autoapply.Claimed, answers 
 	var browserCtx context.Context
 	var cancelBrowser context.CancelFunc
 
-	if claimed.Provider == "greenhouse" {
-		// The one provider with a live DOM-scan built so far (design.md's scope note —
-		// the 2026-09-02 spike measured a real gap here; Ashby's API schema is an
-		// unverified-but-accepted assumption of completeness for now).
+	// Whether this package can drive a browser at this platform at all is the registry's
+	// answer, not a provider name spelled out here: adding a third platform is a row in
+	// layout.go rather than another branch. A provider with no layout reaches neither a
+	// browser nor a submit click, and Submit reports it as not-implemented below.
+	layout, canDrive := layoutFor(claimed.Provider)
+
+	if canDrive {
 		browserCtx, cancelBrowser, err = c.newBrowser(ctx)
 		if err != nil {
 			return autoapply.SidecarResult{}, fmt.Errorf("launch browser: %w", err)
 		}
 		defer cancelBrowser()
 
-		// Safe to discard the lookup's ok here ONLY while this branch is gated to a provider
-		// the registry always holds. Lifting that gate must turn this into a real check.
-		layout, _ := layoutFor(claimed.Provider)
 		pageHTML, err := renderedHTML(browserCtx, claimed.JobURL, layout.formSelector)
 		if err != nil {
 			if result, parked := unscannableFormResult(err); parked {
@@ -245,13 +254,13 @@ func (c *Client) Submit(ctx context.Context, claimed autoapply.Claimed, answers 
 				return result, err
 			}
 		}
-		// Fill/submit is only wired for Greenhouse so far — see fill.go. A form for
+		// Fill/submit is wired for the platforms in fillProviders — see layout.go. A form for
 		// another provider that DID fully resolve still parks rather than being
 		// submitted through a path never built or verified.
 		return autoapply.SidecarResult{Status: autoapply.StatusParked, Reason: reasonSubmissionNotImplemented}, nil
 	}
 	if browserCtx == nil {
-		return autoapply.SidecarResult{}, fmt.Errorf("internal error: no browser session for a Greenhouse submission")
+		return autoapply.SidecarResult{}, fmt.Errorf("internal error: no browser session for a submission this package can drive")
 	}
 
 	cleanup, parked := c.attachApprovedResume(ctx, claimed, &plan)
@@ -262,7 +271,7 @@ func (c *Client) Submit(ctx context.Context, claimed autoapply.Claimed, answers 
 		defer cleanup()
 	}
 
-	confirmed, err := fillAndSubmit(browserCtx, plan)
+	confirmed, err := fillAndSubmit(browserCtx, plan, layout)
 	if err != nil {
 		// A fill action failing, or the board EXPLICITLY refusing the submit click
 		// (SUBMIT_REFUSED_MARKERS in fill.go), both mean no submission happened — safe

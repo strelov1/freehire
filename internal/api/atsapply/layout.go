@@ -1,5 +1,7 @@
 package atsapply
 
+import "github.com/chromedp/chromedp"
+
 // addressing is how a platform identifies a control on its own application form — which
 // attribute names it, and therefore which attribute selects it.
 //
@@ -45,9 +47,8 @@ type formLayout struct {
 
 // layouts is every platform this package can drive a browser against.
 //
-// Nothing consults it yet — Submit still gates on fillProviders alone, and the two are
-// wired together later in this same change. Until then this table is the description, not
-// the gate.
+// Submit and the preview pass both consult it to decide whether to launch a browser at all,
+// and fillProviders must agree with it — a test asserts the containment.
 //
 // Both entries happen to name the form `application-form`. That is written out per
 // platform rather than shared: the third platform will not share it, and a shared constant
@@ -55,6 +56,17 @@ type formLayout struct {
 var layouts = map[string]formLayout{
 	"greenhouse": {formSelector: "application-form", submitSelector: "#submit_app", addressBy: byID},
 	"lever":      {formSelector: "application-form", submitSelector: "#btn-submit", addressBy: byName},
+}
+
+// queryKind is how chromedp must interpret the selector this addressing produces. It lives
+// beside the addressing rather than at the call site so a selector and the lookup that
+// consumes it come from one value: a `[name=…]` selector handed to a by-id lookup finds
+// nothing, and finds it silently.
+func (a addressing) queryKind() chromedp.QueryOption {
+	if a == byName {
+		return chromedp.ByQuery
+	}
+	return chromedp.ByID
 }
 
 // layoutFor returns the platform's page description, or false when this package cannot

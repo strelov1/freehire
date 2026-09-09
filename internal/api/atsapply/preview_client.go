@@ -60,8 +60,10 @@ func (p *PreviewClient) Preview(ctx context.Context, claimed autoapply.Claimed, 
 	// ClaimAutoApplyBatch's own comment already documents for Claimed.TailoredCVID.
 	hasApprovedCV := claimed.TailoredCVID != uuid.Nil
 
-	if claimed.Provider == "greenhouse" {
-		return p.previewGreenhouse(ctx, claimed, answers, hasApprovedCV)
+	// Same registry the submission path consults. The preview must scan whatever DOM the
+	// submission will, or the candidate approves an answer set the fill never sees.
+	if _, canDrive := layoutFor(claimed.Provider); canDrive {
+		return p.previewByLayout(ctx, claimed, answers, hasApprovedCV)
 	}
 
 	apiForm, err := p.schemaFor(ctx, claimed)
@@ -95,10 +97,13 @@ func (p *PreviewClient) schemaFor(ctx context.Context, claimed autoapply.Claimed
 	})
 }
 
-// previewGreenhouse scans the live form exactly the way Client.Submit does for its own
-// Greenhouse branch, then closes the browser immediately — a preview never fills or
-// submits, so nothing here needs the session to outlive the scan.
-func (p *PreviewClient) previewGreenhouse(ctx context.Context, claimed autoapply.Claimed, answers map[string]string, hasApprovedCV bool) (autoapply.PreviewResult, error) {
+// previewByLayout scans the live form exactly the way Client.Submit does, for any platform
+// the registry holds a page description of, then closes the browser immediately — a preview
+// never fills or submits, so nothing here needs the session to outlive the scan.
+//
+// It must scan by the SAME layout the submission will, or the candidate approves an answer
+// set the fill never sees.
+func (p *PreviewClient) previewByLayout(ctx context.Context, claimed autoapply.Claimed, answers map[string]string, hasApprovedCV bool) (autoapply.PreviewResult, error) {
 	apiForm, err := p.schemaFor(ctx, claimed)
 	if err != nil {
 		return autoapply.PreviewResult{}, fmt.Errorf("fetch %s schema: %w", claimed.Provider, err)
@@ -110,9 +115,13 @@ func (p *PreviewClient) previewGreenhouse(ctx context.Context, claimed autoapply
 	}
 	defer cancel()
 
-	// Safe to discard the lookup's ok here ONLY while this branch is gated to a provider
-	// the registry always holds. Lifting that gate must turn this into a real check.
-	layout, _ := layoutFor(claimed.Provider)
+	layout, canDrive := layoutFor(claimed.Provider)
+	if !canDrive {
+		// Preview is only ever reached for a drivable platform (Preview's own branch
+		// above), so this cannot fire — but a lookup whose failure is discarded is how a
+		// later caller ends up scanning with a zero-valued layout.
+		return autoapply.PreviewResult{}, fmt.Errorf("no form layout for %q", claimed.Provider)
+	}
 	pageHTML, err := renderedHTML(browserCtx, claimed.JobURL, layout.formSelector)
 	if err != nil {
 		if result, parked := unscannableFormResult(err); parked {

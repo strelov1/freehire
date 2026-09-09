@@ -195,7 +195,7 @@ var recaptchaWidgetMarkers = []string{
 // The distinction is the whole point of this function, and it is not a nicety. EVERY
 // vanilla job-boards.greenhouse.io posting ships an invisible, score-based reCAPTCHA
 // Enterprise. The earlier unscoped `strings.Contains(html, "recaptcha")` therefore matched
-// every Greenhouse posting there is, and through previewGreenhouse's own check that parked
+// every Greenhouse posting there is, and through previewByLayout's own check that parked
 // the ONE provider this package can actually fill — before a single application was ever
 // attempted (freehire, 2026-09-08: 5 of the 10 entries the queue had ever held, all of them
 // on pages whose form scans fine in under two seconds).
