@@ -16,6 +16,19 @@
 # ingest is idempotent and hourly, so the next tick picks the board up. Skips are
 # logged, never silent: a fleet that quietly stops crawling looks identical to a
 # healthy one.
+#
+# A log line turned out not to be enough. A skip exits 0, so the unit is green in
+# systemd, board_health records nothing (there was no attempt to record), and the
+# journal for these units rolls over in hours — so a day later a skipped cycle
+# leaves no trace anywhere. Measured 2026-09-09: 1,058 skips in 24h across the
+# fleet, none of them visible to anything but `journalctl` in the moment. Sharding
+# raised the stakes, because a skipped shard is not an hour lost but a whole cycle:
+# adpmyjobs shard 6/8 was skipped and its eighth of the boards waited a day.
+#
+# So a skip also publishes a counter through the node_exporter textfile collector,
+# the same way every worker publishes its own run metrics (PROM_TEXTFILE_DIR). It is
+# a no-op when that variable is unset or its directory is missing, which is how a
+# dev host behaves exactly as before.
 set -uo pipefail
 
 # INGEST_SLOTS is the TOTAL concurrency the fleet may reach, and the heavy pool is carved
@@ -70,6 +83,41 @@ if ((first > last)); then
 fi
 mkdir -p "$DIR" 2>/dev/null || true
 
+# record_skip bumps this provider+pool's skip counter and republishes the whole metric
+# file. The count lives beside the slot locks in $DIR (tmpfs), so a reboot resets it —
+# which is what a counter is allowed to do, and what rate() already handles.
+#
+# The state file holds every provider's count, not just this one, because the metric file
+# is rewritten whole: publishing only the provider that just skipped would drop every
+# other provider's series on each write, and a series that keeps vanishing reads as a
+# broken exporter rather than as a quiet provider. The read-modify-write is under its own
+# lock, since several units skip at the same moment by construction — they are all waiting
+# on the same busy pool.
+record_skip() {
+	local dir=${PROM_TEXTFILE_DIR:-}
+	[ -n "$dir" ] && [ -d "$dir" ] || return 0
+	local state="$DIR/skips.state" out="$dir/ingest-slot-skips.prom" now
+	now=$(date +%s)
+	(
+		flock 9 || exit 0
+		touch "$state" 2>/dev/null || exit 0
+		awk -v p="${provider:-unknown}" -v pool="$pool" -v now="$now" '
+			$1 == p && $2 == pool { print $1, $2, $3 + 1, now; found = 1; next }
+			NF == 4 { print }
+			END { if (!found) print p, pool, 1, now }
+		' "$state" >"$state.tmp" 2>/dev/null && mv "$state.tmp" "$state" || exit 0
+		{
+			echo "# HELP freehire_ingest_slot_skips_total Ingest cycles skipped because the slot pool was busy."
+			echo "# TYPE freehire_ingest_slot_skips_total counter"
+			awk '{ printf "freehire_ingest_slot_skips_total{provider=\"%s\",pool=\"%s\"} %s\n", $1, $2, $3 }' "$state"
+			echo "# HELP freehire_ingest_slot_last_skip_timestamp_seconds Unix time this provider last skipped a cycle."
+			echo "# TYPE freehire_ingest_slot_last_skip_timestamp_seconds gauge"
+			awk '{ printf "freehire_ingest_slot_last_skip_timestamp_seconds{provider=\"%s\",pool=\"%s\"} %s\n", $1, $2, $4 }' "$state"
+		} >"$out.tmp" 2>/dev/null && mv "$out.tmp" "$out" || exit 0
+	) 9>"$DIR/skips.lock"
+	return 0
+}
+
 deadline=$((SECONDS + WAIT))
 while :; do
 	for ((i = first; i <= last; i++)); do
@@ -80,6 +128,7 @@ while :; do
 	done
 	if ((SECONDS >= deadline)); then
 		echo "ingest-slot: all $((last - first + 1)) $pool slots busy for ${WAIT}s, skipping this cycle: $*" >&2
+		record_skip
 		exit 0
 	fi
 	sleep "$POLL"
