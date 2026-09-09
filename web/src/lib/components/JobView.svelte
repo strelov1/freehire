@@ -40,6 +40,7 @@
   import JobMatch from './JobMatch.svelte';
   import { supersedesReality } from '$lib/ghost';
   import GhostChecklist from './GhostChecklist.svelte';
+  import AIInterviewBadge from './AIInterviewBadge.svelte';
   import RealityBadge from './RealityBadge.svelte';
   import ReferralBlock from './ReferralBlock.svelte';
   import MentorBlock from './MentorBlock.svelte';
@@ -670,6 +671,11 @@
       {#if !supersedesReality(job.ghost)}
         <RealityBadge reality={job.reality} detailed />
       {/if}
+
+      <!-- How the employer screens, beside how the posting reads. Neutral by design:
+           the badge names the practice and its report count, and lets the reader
+           decide. -->
+      <AIInterviewBadge count={job.ai_interview_reports} />
 
       <!-- Freshness rides the same provenance line: like the backer and the reality
            badge it describes the POSTING, not the role, so the title keeps a single

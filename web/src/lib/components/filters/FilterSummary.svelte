@@ -73,6 +73,10 @@
     push('Salary', salary);
 
     if (f.visa) push('Visa', [{ key: 'visa', text: 'Sponsorship', exclude: false, remove: () => store.setVisa(false) }]);
+    if (f.hideAIInterview)
+      push('AI interview', [
+        { key: 'ai_interview', text: 'Hidden', exclude: true, remove: () => store.setHideAIInterview(false) },
+      ]);
     if (f.clearance !== 'any')
       push('Clearance', [
         {

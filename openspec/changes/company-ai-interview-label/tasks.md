@@ -42,10 +42,10 @@
 
 ## 7. Frontend — showing
 
-- [ ] 7.1 A badge component rendering the practice and its count in neutral styling — no warning colour, no alert icon. It MUST NOT render when the count is absent.
-- [ ] 7.2 Place it on the job card, the job page and the company page.
-- [ ] 7.3 Add the filter control to the filter modal so it is reachable with a mouse, and make it persist the way the other filters do.
-- [ ] 7.4 Component tests: badge hidden at zero, badge shows the count, filter round-trips through the URL.
+- [x] 7.1 A badge component rendering the practice and its count in neutral styling — no warning colour, no alert icon. It MUST NOT render when the count is absent.
+- [x] 7.2 Place it on the job card, the job page and the company page.
+- [x] 7.3 Add the filter control to the filter modal so it is reachable with a mouse, and make it persist the way the other filters do.
+- [x] 7.4 Component tests: badge hidden at zero, badge shows the count, filter round-trips through the URL.
 
 ## 8. Ship
 

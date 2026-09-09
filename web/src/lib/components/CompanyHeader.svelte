@@ -1,4 +1,5 @@
 <script lang="ts">
+  import AIInterviewBadge from './AIInterviewBadge.svelte';
   import { resolve } from '$app/paths';
   import { MessageSquare, Star } from '@lucide/svelte';
   import { api } from '$lib/api';
@@ -150,6 +151,10 @@
       myVote={company.my_vote ?? 0}
     />
   </div>
+  <!-- The employer-level fact, where it belongs: an AI interviewer is a property of
+       how this company hires, not of any one posting. Renders nothing until somebody
+       reports it. -->
+  <AIInterviewBadge count={company.ai_interview_reports} class="mt-2" />
   {#if hasMeta}
     <!-- Industries and links are two groups, not one flat wrap list: on a phone a flat
          list mixes a chip and a URL on the same line. Grouping keeps them on one row

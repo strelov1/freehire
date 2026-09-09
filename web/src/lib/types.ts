@@ -317,6 +317,11 @@ export interface Company {
   // left a rated review and their average star rating. rating_avg is null while
   // feedback_count is 0.
   feedback_count: number;
+  /** How many people have reported that this company screens with an AI interviewer
+   *  (internal/engage/processreport). Absent when nobody has: the label is required to
+   *  be shown with its count, so no reports is the absence of the field rather than a
+   *  zero a badge could render beside. */
+  ai_interview_reports?: number;
   feedback_rating_avg: number | null;
 }
 
@@ -325,6 +330,11 @@ export interface Company {
  *  company without a second round trip. */
 export interface CompanyFeedbackSummary {
   feedback_count: number;
+  /** How many people have reported that this company screens with an AI interviewer
+   *  (internal/engage/processreport). Absent when nobody has: the label is required to
+   *  be shown with its count, so no reports is the absence of the field rather than a
+   *  zero a badge could render beside. */
+  ai_interview_reports?: number;
   feedback_rating_avg: number | null;
 }
 
@@ -374,6 +384,11 @@ export interface CompanyListItem {
   /** Materialized feedback counters (internal/companyfeedback), the same fields
    *  the single-company detail view serves. */
   feedback_count: number;
+  /** How many people have reported that this company screens with an AI interviewer
+   *  (internal/engage/processreport). Absent when nobody has: the label is required to
+   *  be shown with its count, so no reports is the absence of the field rather than a
+   *  zero a badge could render beside. */
+  ai_interview_reports?: number;
   feedback_rating_avg: number | null;
 }
 
