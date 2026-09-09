@@ -31,6 +31,8 @@ func (q *Queries) CountRecentCompanyProcessReports(ctx context.Context, arg Coun
 }
 
 const fileCompanyProcessReport = `-- name: FileCompanyProcessReport :one
+
+
 INSERT INTO company_process_reports (user_id, company_slug, kind)
 VALUES ($1, $2, $3)
 ON CONFLICT (user_id, company_slug, kind) DO UPDATE
@@ -45,6 +47,16 @@ type FileCompanyProcessReportParams struct {
 	Kind        string `json:"kind"`
 }
 
+// Candidate-reported facts about how a company hires (migration 0156). One row per
+// (user, company, kind); withdrawal sets retracted_at rather than deleting, so the
+// uniqueness bound survives a retraction and cannot be used to file repeatedly.
+//
+// The domain layer runs file-or-retract and then the recount in ONE transaction, so
+// a reader never sees the label without the count that qualifies it.
+// The company row's lock that serializes concurrent writes with the recompute below
+// is LockCompanyForVote, reused here rather than duplicated under a second name —
+// the same call companyfeedback makes for the same reason. It locks the companies
+// row; nothing about it is specific to votes.
 // File a report, or revive the caller's own retracted one.
 //
 // The ON CONFLICT branch is guarded on retracted_at IS NOT NULL, so an already-live
@@ -56,28 +68,6 @@ func (q *Queries) FileCompanyProcessReport(ctx context.Context, arg FileCompanyP
 	var id int64
 	err := row.Scan(&id)
 	return id, err
-}
-
-const lockCompanyForProcessReport = `-- name: LockCompanyForProcessReport :exec
-
-SELECT 1 FROM companies WHERE slug = $1 FOR UPDATE
-`
-
-// Candidate-reported facts about how a company hires (migration 0156). One row per
-// (user, company, kind); withdrawal sets retracted_at rather than deleting, so the
-// uniqueness bound survives a retraction and cannot be used to file repeatedly.
-//
-// The domain layer runs file-or-retract and then the recount in ONE transaction, so
-// a reader never sees the label without the count that qualifies it.
-// Take the company row's lock so concurrent reports on the same company serialize.
-// Same statement as LockCompanyForVote and deliberately a separate name: the two
-// callers are unrelated, and sharing one would read as coupling between votes and
-// reports that does not exist. Called first in the report transaction, because
-// RecountCompanyProcessReports rewrites the counter from scratch and two unordered
-// recounts can leave it behind the rows.
-func (q *Queries) LockCompanyForProcessReport(ctx context.Context, slug string) error {
-	_, err := q.db.Exec(ctx, lockCompanyForProcessReport, slug)
-	return err
 }
 
 const recountCompanyProcessReports = `-- name: RecountCompanyProcessReports :one

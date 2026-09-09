@@ -5,14 +5,10 @@
 -- The domain layer runs file-or-retract and then the recount in ONE transaction, so
 -- a reader never sees the label without the count that qualifies it.
 
--- name: LockCompanyForProcessReport :exec
--- Take the company row's lock so concurrent reports on the same company serialize.
--- Same statement as LockCompanyForVote and deliberately a separate name: the two
--- callers are unrelated, and sharing one would read as coupling between votes and
--- reports that does not exist. Called first in the report transaction, because
--- RecountCompanyProcessReports rewrites the counter from scratch and two unordered
--- recounts can leave it behind the rows.
-SELECT 1 FROM companies WHERE slug = $1 FOR UPDATE;
+-- The company row's lock that serializes concurrent writes with the recompute below
+-- is LockCompanyForVote, reused here rather than duplicated under a second name —
+-- the same call companyfeedback makes for the same reason. It locks the companies
+-- row; nothing about it is specific to votes.
 
 -- name: FileCompanyProcessReport :one
 -- File a report, or revive the caller's own retracted one.

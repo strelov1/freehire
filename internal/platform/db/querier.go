@@ -1905,6 +1905,16 @@ type Querier interface {
 	// non-positive window means "never bury on age" rather than "bury everything", for the
 	// reason RecordEnrichmentFailure spells out: a misconfiguration must cost retries, not mail.
 	FailEmailClassification(ctx context.Context, arg FailEmailClassificationParams) (FailEmailClassificationRow, error)
+	// Candidate-reported facts about how a company hires (migration 0156). One row per
+	// (user, company, kind); withdrawal sets retracted_at rather than deleting, so the
+	// uniqueness bound survives a retraction and cannot be used to file repeatedly.
+	//
+	// The domain layer runs file-or-retract and then the recount in ONE transaction, so
+	// a reader never sees the label without the count that qualifies it.
+	// The company row's lock that serializes concurrent writes with the recompute below
+	// is LockCompanyForVote, reused here rather than duplicated under a second name —
+	// the same call companyfeedback makes for the same reason. It locks the companies
+	// row; nothing about it is specific to votes.
 	// File a report, or revive the caller's own retracted one.
 	//
 	// The ON CONFLICT branch is guarded on retracted_at IS NOT NULL, so an already-live
@@ -3971,19 +3981,6 @@ type Querier interface {
 	// Verified accounts inside the window that have not been greeted yet. This is the
 	// only step with no waiting period: it goes out on the next pass after signup.
 	ListWelcomeCandidates(ctx context.Context, arg ListWelcomeCandidatesParams) ([]ListWelcomeCandidatesRow, error)
-	// Candidate-reported facts about how a company hires (migration 0156). One row per
-	// (user, company, kind); withdrawal sets retracted_at rather than deleting, so the
-	// uniqueness bound survives a retraction and cannot be used to file repeatedly.
-	//
-	// The domain layer runs file-or-retract and then the recount in ONE transaction, so
-	// a reader never sees the label without the count that qualifies it.
-	// Take the company row's lock so concurrent reports on the same company serialize.
-	// Same statement as LockCompanyForVote and deliberately a separate name: the two
-	// callers are unrelated, and sharing one would read as coupling between votes and
-	// reports that does not exist. Called first in the report transaction, because
-	// RecountCompanyProcessReports rewrites the counter from scratch and two unordered
-	// recounts can leave it behind the rows.
-	LockCompanyForProcessReport(ctx context.Context, slug string) error
 	// Per-(user, company) thumbs votes. Unlike a job vote (a nullable column on the
 	// user_jobs row that persists for other marks), a company_votes row exists solely to
 	// hold the vote, so clearing a vote DELETEs the row. The domain layer branches in Go

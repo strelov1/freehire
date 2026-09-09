@@ -232,7 +232,18 @@ var (
 	// deliberately smaller than internal/engage/report's job-reasons, since a review
 	// report has no "no longer relevant" or "no response" equivalent.
 	CompanyFeedbackReportReasonValues = []string{"spam", "offensive", "false_information", "other"}
-	CompanySizeValues                 = []string{"1-10", "11-50", "51-200", "201-500", "501-1000", "1000+"}
+	// CompanyProcessReportKindValues is the closed vocabulary of candidate-reported
+	// facts about how a company hires (internal/engage/processreport). Unlike a
+	// feedback entry it carries no rating and no text: each value is a statement that
+	// is either true of an employer or not, which is why one reporter is enough to
+	// show it and why there is nothing here for a moderator to decide.
+	//
+	// It is mirrored by a CHECK constraint in migration 0156, and it decides what the
+	// badge renders and what the search facet declares — so a new value is a code
+	// change and a migration, never configuration. Each value additionally needs its
+	// own counter column, which is what keeps the cost of another one visible.
+	CompanyProcessReportKindValues = []string{"ai_interview"}
+	CompanySizeValues              = []string{"1-10", "11-50", "51-200", "201-500", "501-1000", "1000+"}
 	// AIArchetypeValues is the six AI skill-signature archetype slugs
 	// internal/ai/aiarchetype's rule table can derive, in priority order. Kept here
 	// (rather than only inside internal/ai/aiarchetype) so cmd/gen-contracts can emit

@@ -7,10 +7,10 @@
 
 ## 2. Domain service
 
-- [ ] 2.1 Create `internal/engage/processreport` with the controlled `kind` vocabulary as a code constant, and add the package to the table in `internal/platform/arch/layering/blocks.go` — a package in neither block table fails the guard.
-- [ ] 2.2 File: reject an unknown kind before any write; 409 on an existing un-retracted row for the same `(user, company, kind)`; clear `retracted_at` when one exists; recompute the counter in the same transaction.
-- [ ] 2.3 Retract: set `retracted_at` without deleting, recompute the counter in the same transaction, and answer "not found" when the user never filed.
-- [ ] 2.4 Unit tests for the vocabulary gate, the duplicate answer, the re-file-after-retraction path, and that the counter equals the un-retracted row count after each operation.
+- [x] 2.1 Create `internal/engage/processreport` with the controlled `kind` vocabulary as a code constant, and add the package to the table in `internal/platform/arch/layering/blocks.go` — a package in neither block table fails the guard.
+- [x] 2.2 File: reject an unknown kind before any write; 409 on an existing un-retracted row for the same `(user, company, kind)`; clear `retracted_at` when one exists; recompute the counter in the same transaction.
+- [x] 2.3 Retract: set `retracted_at` without deleting, recompute the counter in the same transaction, and answer "not found" when the user never filed.
+- [x] 2.4 Unit tests for the vocabulary gate, the duplicate answer, the re-file-after-retraction path, and that the counter equals the un-retracted row count after each operation.
 
 ## 3. HTTP
 
