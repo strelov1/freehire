@@ -26,13 +26,22 @@ import (
 // would file this spend under its own two-part label instead of alongside the others.
 const tagAutoApplyDrafting = "auto-apply-drafting"
 
-// requiresCaptcha marks providers whose form always renders a captcha, so a blind fill
-// attempt would either fail or (worse) look like it might work and then silently not
-// submit. Lever renders one on every posting — see design.md's Risks. Every attempt for
-// one of these parks before a browser is even launched.
-var requiresCaptcha = map[string]bool{
-	"lever": true,
-}
+// There is no per-provider captcha list any more, and reintroducing one would be a
+// mistake worth naming here.
+//
+// This file used to carry `requiresCaptcha{"lever": true}`, on the design's stated risk
+// that Lever "renders one on every posting". Measured against live postings on 2026-09-09,
+// that is not so: two queued Lever applications (coderio, jobgether) render NO captcha of
+// any kind, four others carry hCaptcha, and on all of them the only "recaptcha" in the page
+// is the string `.g-recaptcha div` inside a CSS rule. A captcha is a per-employer setting
+// on this platform, not a property of it — so the list decided what a page said before
+// anyone looked at the page, and it refused four postings in five for a reason that was
+// never measured.
+//
+// What replaces it is reading the page: browser.go's hasRecaptchaMarker distinguishes a
+// rendered challenge from an invisible score-based one, on the page actually being applied
+// to. That is the same lesson in the same file's history — the marker itself used to fire
+// on the mere WORD "recaptcha" and parked every Greenhouse posting there is.
 
 // fillProviders is the single source of truth for which providers Submit can actually
 // fill/submit for — today, Greenhouse alone (see fillAndSubmit/browser.go). Checked both
@@ -157,10 +166,6 @@ var _ autoapply.SidecarClient = (*Client)(nil)
 // cannot safely drive at all (a captcha board), always parks rather than risking a bad or
 // duplicate submission.
 func (c *Client) Submit(ctx context.Context, claimed autoapply.Claimed, answers map[string]string) (autoapply.SidecarResult, error) {
-	if requiresCaptcha[claimed.Provider] {
-		return autoapply.SidecarResult{Status: autoapply.StatusParked, Reason: "requires_captcha"}, nil
-	}
-
 	apiForm, err := c.fetchSchema(ctx, claimed)
 	if err != nil {
 		if errors.Is(err, errNoSchemaFetcher) {

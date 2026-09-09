@@ -504,3 +504,24 @@ func TestPreviewAndResolveAgreeOnALabellessField(t *testing.T) {
 		t.Errorf("value = %q, want the banked answer", plan.Fields[0].Value)
 	}
 }
+
+// Recruitee calls the full-name control `name`, and the candidate's own full name went
+// unused because answerKeyFor only knew `full_name`.
+//
+// Measured on production 2026-09-09: queue entry 11 parked on eight required questions,
+// and the first was `{"id": "name", "label": "Full name", "reason": "no known answer
+// source for \"name\""}` — for a candidate whose full name the profile has always held.
+// A platform's own control name, missing from a map of platform control names.
+func TestResolve_MatchesRecruiteesFullNameControl(t *testing.T) {
+	answers := map[string]string{"full_name": "Ada Lovelace"}
+	fields := []MergedField{{ID: "name", Label: "Full name", Kind: "text", Required: true}}
+
+	plan := Resolve(fields, answers, false)
+
+	if len(plan.Unmapped) != 0 {
+		t.Fatalf("unmapped = %+v, want the full-name field answered", plan.Unmapped)
+	}
+	if len(plan.Fields) != 1 || plan.Fields[0].Value != "Ada Lovelace" {
+		t.Fatalf("plan.Fields = %+v, want the stored full name", plan.Fields)
+	}
+}
