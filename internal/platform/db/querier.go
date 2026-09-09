@@ -2762,6 +2762,13 @@ type Querier interface {
 	// a range scan; starts_with()/a default-collation LIKE would seq-scan the whole source (37s
 	// over greenhouse's ~300k rows). board_pattern is "<escaped board>:%", built by the repository.
 	JobsExistForBoard(ctx context.Context, arg JobsExistForBoardParams) (bool, error)
+	// Location, description and the currently-stored work_mode for a named set of ids, for
+	// cmd/backfill-remote-perk-false-positive.
+	//
+	// Ids come from a Meilisearch query for the same reason JobDescriptionsByIDs's do: a
+	// WHERE over `description` de-TOASTs the column for every row it examines, and the
+	// search index already holds the text.
+	JobsForWorkModeRecheckByIDs(ctx context.Context, ids []int64) ([]JobsForWorkModeRecheckByIDsRow, error)
 	// When the candidate last set this application's stage themselves, or NULL if never.
 	//
 	// This is what silences a mail-driven stage suggestion. A `stage_set` later than the message
@@ -5493,6 +5500,12 @@ type Querier interface {
 	// the guard answers that per row, which is cheaper and more honest than a cursor that
 	// would go stale the moment ingest writes a new posting behind it.
 	SetJobRequiresClearance(ctx context.Context, arg SetJobRequiresClearanceParams) (int64, error)
+	// Write one row's work_mode, for cmd/backfill-remote-perk-false-positive.
+	//
+	// The IS DISTINCT FROM guard makes the pass idempotent, the same way
+	// SetJobRequiresClearance's does: a row already carrying the recomputed value is not
+	// rewritten, so a re-run writes nothing and stopping mid-way costs nothing to resume.
+	SetJobWorkMode(ctx context.Context, arg SetJobWorkModeParams) (int64, error)
 	// Write one chunk's derived requirements, for cmd/backfill-requirements. Batched
 	// through unnest rather than a statement per row: the pass covers millions of rows and
 	// a round trip each would dominate its runtime.
