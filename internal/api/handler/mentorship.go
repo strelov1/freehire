@@ -47,6 +47,7 @@ func (h *mentorshipHandlers) register(api fiber.Router, mw middleware) {
 	api.Put("/me/mentorship/profile", mw.key, h.UpdateMentorProfile)
 	api.Delete("/me/mentorship/profile", mw.key, h.WithdrawMentorProfile)
 	api.Post("/me/mentorship/profile/pause", mw.key, h.PauseMentorProfile)
+	api.Post("/me/mentorship/profile/reactivate", mw.key, h.ReactivateMentorProfile)
 	api.Get("/me/mentorship/availability", mw.key, h.GetMyAvailability)
 	api.Put("/me/mentorship/availability/weekly", mw.key, h.ReplaceWeeklyAvailability)
 	api.Post("/me/mentorship/availability/overrides", mw.key, h.AddAvailabilityOverride)
@@ -339,6 +340,8 @@ func mentorshipError(err error) error {
 		return fiber.NewError(fiber.StatusConflict, "that profile address is taken")
 	case errors.Is(err, mentorship.ErrProfileNotPending):
 		return fiber.NewError(fiber.StatusConflict, "this profile is not pending")
+	case errors.Is(err, mentorship.ErrProfileNotWithdrawn):
+		return fiber.NewError(fiber.StatusConflict, "this profile is not withdrawn")
 	case errors.Is(err, mentorship.ErrSlotUnavailable):
 		// One status for every ordinary way a booking fails to land — taken, withdrawn,
 		// inside the notice period, past the horizon, or a lost race. They are one event

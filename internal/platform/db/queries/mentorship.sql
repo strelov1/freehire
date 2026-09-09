@@ -136,11 +136,25 @@ LIMIT sqlc.arg(row_limit);
 -- Future bookings must still be cancelled and their seekers notified before this runs;
 -- what changes is that the PAST survives.
 --
--- The owner guard scopes it to the caller, and the status guard makes a second withdrawal
--- match no row.
+-- The owner guard scopes it to the caller. Deliberately unconditional on status: a
+-- second withdrawal SHALL change nothing rather than fail, so the caller (which already
+-- confirmed the profile exists via ProfileByUser) never has to tell "already withdrawn"
+-- apart from "does not exist". It also does NOT touch `paused` — status and pause are
+-- independent decisions, and writing both here is what made a withdrawn profile show up
+-- labelled "paused".
 UPDATE mentors
-SET status = 'withdrawn', paused = true, updated_at = now()
-WHERE user_id = $1 AND status <> 'withdrawn';
+SET status = 'withdrawn', updated_at = now()
+WHERE user_id = $1;
+
+-- name: ReactivateMentorProfile :one
+-- A withdrawn mentor resubmits for review: back to pending, pause switch cleared, no
+-- auto-approval. The status guard is symmetric with DecideMentorProfile's — it makes
+-- resubmitting a profile that was never withdrawn match no row, which the repository
+-- maps to ErrProfileNotWithdrawn after confirming the profile exists at all.
+UPDATE mentors
+SET status = 'pending', paused = false, updated_at = now()
+WHERE user_id = $1 AND status = 'withdrawn'
+RETURNING *;
 
 -- name: ListMentorAvailability :many
 -- Every availability row for a mentor, both shapes. The slot engine wants all of them at

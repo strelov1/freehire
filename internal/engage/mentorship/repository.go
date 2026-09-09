@@ -246,8 +246,9 @@ func (r *QueriesRepository) CancelFutureBookings(ctx context.Context, mentorID, 
 
 // WithdrawProfile marks the profile withdrawn. It does NOT delete the row: bookings and
 // reviews reference it ON DELETE CASCADE, so deleting would erase the history this
-// feature promises to keep. Zero rows means no profile of that caller's, or one already
-// withdrawn.
+// feature promises to keep. It is idempotent — the SQL carries no status guard — so zero
+// rows here means only that the caller has no profile at all, which Service.Withdraw has
+// already ruled out via ownProfile; this remains a race guard, not the ordinary path.
 func (r *QueriesRepository) WithdrawProfile(ctx context.Context, userID int64) error {
 	rows, err := r.q.WithdrawMentorProfile(ctx, userID)
 	if err != nil {
@@ -257,6 +258,21 @@ func (r *QueriesRepository) WithdrawProfile(ctx context.Context, userID int64) e
 		return ErrProfileNotFound
 	}
 	return nil
+}
+
+// ReactivateProfile moves a withdrawn profile back to pending. Service.Reactivate has
+// already confirmed the profile is withdrawn, so zero rows here means only a race with
+// another writer — ErrProfileNotFound is the same "somebody else changed this between
+// our read and our write" answer the rest of the package gives.
+func (r *QueriesRepository) ReactivateProfile(ctx context.Context, userID int64) (Profile, error) {
+	row, err := r.q.ReactivateMentorProfile(ctx, userID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return Profile{}, ErrProfileNotFound
+	}
+	if err != nil {
+		return Profile{}, err
+	}
+	return profileFromRow(row), nil
 }
 
 func profileFromRow(row db.Mentor) Profile {

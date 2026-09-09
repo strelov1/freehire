@@ -815,9 +815,17 @@ export function createApi(
 
   /** Withdraw. Every confirmed future booking is cancelled and each seeker told; past
    *  bookings are retained as history. The row is MARKED, not deleted — bookings and
-   *  reviews cascade off it, so a delete would erase every session that ever happened. */
+   *  reviews cascade off it, so a delete would erase every session that ever happened.
+   *  Idempotent: withdrawing an already-withdrawn profile succeeds. */
   async function withdrawMentorProfile(): Promise<void> {
     await call('/api/v1/me/mentorship/profile', { method: 'DELETE' });
+  }
+
+  /** Resubmit a withdrawn profile for moderation — back to pending, with no special
+   *  treatment for having been a mentor before. Refused (409) for a profile that was
+   *  never withdrawn. */
+  async function reactivateMentorProfile(): Promise<OwnMentorProfile> {
+    return requestData<OwnMentorProfile>('/api/v1/me/mentorship/profile/reactivate', { method: 'POST' });
   }
 
   async function myMentorAvailability(): Promise<MentorAvailabilityRule[]> {
@@ -2645,6 +2653,7 @@ export function createApi(
     updateMentorProfile,
     pauseMentorProfile,
     withdrawMentorProfile,
+    reactivateMentorProfile,
     myMentorAvailability,
     replaceWeeklyAvailability,
     addAvailabilityOverride,
