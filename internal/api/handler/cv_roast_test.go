@@ -1,9 +1,17 @@
 package handler
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
+	"go/ast"
+	"go/parser"
+	"go/token"
+	"mime/multipart"
 	"net/http/httptest"
+	"os"
+	"slices"
 	"testing"
 
 	"github.com/gofiber/fiber/v2"
@@ -166,4 +174,184 @@ func TestRoastCV_EmptyTextIsRefused(t *testing.T) {
 	if len(fake.calls) != 0 {
 		t.Errorf("no facet query should run for an empty CV, got %d", len(fake.calls))
 	}
+}
+
+func TestRoastCV_SearchDownStillScoresTheCV(t *testing.T) {
+	app := roastApp(nil) // facet backend unconfigured
+	body, _ := json.Marshal(map[string]string{"text": "Backend Engineer\n\nSkills\nGo, Docker"})
+
+	status, out := doPostJSON(t, app, "/cv/roast", string(body))
+	if status != fiber.StatusOK {
+		t.Fatalf("status = %d, want 200 — the ATS half needs no index", status)
+	}
+	data := out["data"].(map[string]any)
+	if data["report"] == nil {
+		t.Error("report is nil, want the ATS score")
+	}
+	if avail, _ := data["market_available"].(bool); avail {
+		t.Error("market_available = true with no facet backend")
+	}
+	if _, present := data["market"]; present {
+		t.Error("market is present, want it omitted rather than reported as zero")
+	}
+}
+
+func TestRoastCV_SearchErrorStillScoresTheCV(t *testing.T) {
+	fake := &recordingFacetCounter{err: errors.New("meili down")}
+	app := roastApp(fake)
+	body, _ := json.Marshal(map[string]string{"text": "Backend Engineer\n\nSkills\nGo"})
+
+	status, out := doPostJSON(t, app, "/cv/roast", string(body))
+	if status != fiber.StatusOK {
+		t.Fatalf("status = %d, want 200", status)
+	}
+	data := out["data"].(map[string]any)
+	if avail, _ := data["market_available"].(bool); avail {
+		t.Error("market_available = true after a failed facet query")
+	}
+}
+
+func TestRoastCV_UnresolvableRoleMeasuresTheWholeCatalogue(t *testing.T) {
+	fake := &recordingFacetCounter{res: search.FacetResult{Total: 900}}
+	app := roastApp(fake)
+	// A headline no category alias matches.
+	body, _ := json.Marshal(map[string]string{"text": "Zebra Wrangler\n\nSkills\nGo"})
+
+	_, out := doPostJSON(t, app, "/cv/roast", string(body))
+	data := out["data"].(map[string]any)
+	if data["role"] != "" {
+		t.Errorf("role = %v, want empty — nothing resolved and we do not guess", data["role"])
+	}
+	if scoped, _ := data["market_scoped"].(bool); scoped {
+		t.Error("market_scoped = true with no resolved role")
+	}
+	if data["market"] == nil {
+		t.Error("market is nil, want the whole-catalogue reading")
+	}
+}
+
+func TestRoastCV_AnUnreadableCVIsAnAnswerNotAnError(t *testing.T) {
+	fake := &recordingFacetCounter{res: search.FacetResult{Total: 100}}
+	app := roastApp(fake)
+	// Far under atscheck's minReadableWords (30) — what a scanned, image-only CV
+	// extracts to. This is the single most valuable thing the page can tell someone,
+	// so it must be a 200 carrying a failed item, never a 4xx.
+	body, _ := json.Marshal(map[string]string{"text": "Jane Doe"})
+
+	status, out := doPostJSON(t, app, "/cv/roast", string(body))
+	if status != fiber.StatusOK {
+		t.Fatalf("status = %d, want 200", status)
+	}
+	data := out["data"].(map[string]any)
+	report := data["report"].(map[string]any)
+	if report["overall"] == nil {
+		t.Error("overall is nil, want a real (low) score")
+	}
+}
+
+// TestRoastCV_RealPDFFromAnAnonymousCaller is the spec's headline scenario driven end to
+// end: a genuine PDF, no session, a real score. The package already ships the fixture and
+// TestExtractResumeProfile_PDF already proves pdftotext is present in this environment.
+func TestRoastCV_RealPDFFromAnAnonymousCaller(t *testing.T) {
+	pdf, err := os.ReadFile("testdata/resume_sample.pdf")
+	if err != nil {
+		t.Fatalf("read fixture: %v", err)
+	}
+	fake := &recordingFacetCounter{res: search.FacetResult{
+		Total:  500,
+		Facets: map[string]map[string]int64{"skills": {"go": 300}},
+	}}
+	app := roastApp(fake)
+
+	var buf bytes.Buffer
+	mw := multipart.NewWriter(&buf)
+	part, err := mw.CreateFormFile("file", "resume.pdf")
+	if err != nil {
+		t.Fatalf("form file: %v", err)
+	}
+	if _, err := part.Write(pdf); err != nil {
+		t.Fatalf("write part: %v", err)
+	}
+	_ = mw.Close()
+
+	req := httptest.NewRequestWithContext(context.Background(), fiber.MethodPost, "/cv/roast", &buf)
+	req.Header.Set("Content-Type", mw.FormDataContentType())
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("request: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+	var out map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	data, ok := out["data"].(map[string]any)
+	if !ok || data["report"] == nil {
+		t.Fatalf("no report in response: %v", out)
+	}
+}
+
+func TestRoastCV_UndecodablePDFIsA400NotA500(t *testing.T) {
+	fake := &recordingFacetCounter{res: search.FacetResult{Total: 100}}
+	app := roastApp(fake)
+
+	// Bytes that are not a PDF, posted the multipart way the browser posts a file.
+	var buf bytes.Buffer
+	mw := multipart.NewWriter(&buf)
+	part, err := mw.CreateFormFile("file", "cv.pdf")
+	if err != nil {
+		t.Fatalf("form file: %v", err)
+	}
+	if _, err := part.Write([]byte("this is not a PDF")); err != nil {
+		t.Fatalf("write part: %v", err)
+	}
+	_ = mw.Close()
+
+	req := httptest.NewRequestWithContext(context.Background(), fiber.MethodPost, "/cv/roast", &buf)
+	req.Header.Set("Content-Type", mw.FormDataContentType())
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("request: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != fiber.StatusBadRequest {
+		t.Errorf("status = %d, want 400 — bad client input, not a server fault", resp.StatusCode)
+	}
+}
+
+// TestRoastCV_TouchesNoStore reads the handler's own source and fails if it reaches for
+// any of resumeHandlers' persisting collaborators. "Stores nothing" is a promise made to
+// an anonymous visitor about their CV, and it is exactly the kind of promise a later
+// well-meaning edit breaks — adding a "just cache the report" line looks harmless and is
+// not. A behavioural test cannot see this: the fields are nil in every unit test, so a
+// handler that used them would simply panic in prod and pass here.
+func TestRoastCV_TouchesNoStore(t *testing.T) {
+	file, err := parser.ParseFile(token.NewFileSet(), "cv_roast.go", nil, 0)
+	if err != nil {
+		t.Fatalf("parse cv_roast.go: %v", err)
+	}
+	forbidden := []string{"resume", "atsCache", "atsAnalyzer", "bank", "structuredExtractor", "llm"}
+
+	var body *ast.BlockStmt
+	for _, decl := range file.Decls {
+		if fn, ok := decl.(*ast.FuncDecl); ok && fn.Name.Name == "RoastCV" {
+			body = fn.Body
+		}
+	}
+	if body == nil {
+		t.Fatal("RoastCV not found in cv_roast.go — this guard would pass on anything")
+	}
+	ast.Inspect(body, func(n ast.Node) bool {
+		sel, ok := n.(*ast.SelectorExpr)
+		if !ok {
+			return true
+		}
+		if ident, ok := sel.X.(*ast.Ident); ok && ident.Name == "h" && slices.Contains(forbidden, sel.Sel.Name) {
+			t.Errorf("RoastCV reaches h.%s — the public roast must store nothing and call no model", sel.Sel.Name)
+		}
+		return true
+	})
 }
