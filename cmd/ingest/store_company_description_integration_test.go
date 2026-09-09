@@ -11,6 +11,8 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/jackc/pgx/v5/pgtype"
+
 	"github.com/strelov1/freehire/internal/platform/testdb"
 )
 
@@ -27,13 +29,17 @@ func TestFillCompanyDescription_NewCompanyIsInsertedAsNonReference(t *testing.T)
 	}
 
 	var isReference bool
+	var tagline pgtype.Text
 	var companyInfo []byte
 	if err := pool.QueryRow(ctx,
-		`SELECT is_reference, company_info FROM companies WHERE slug = 'coinbase'`).Scan(&isReference, &companyInfo); err != nil {
+		`SELECT is_reference, tagline, company_info FROM companies WHERE slug = 'coinbase'`).Scan(&isReference, &tagline, &companyInfo); err != nil {
 		t.Fatalf("select: %v", err)
 	}
 	if isReference {
 		t.Error("is_reference = true, want false for an ingest-discovered company")
+	}
+	if tagline.Valid && tagline.String != "" {
+		t.Errorf("tagline = %q, want unset — this source writes only company_info.summary, never tagline", tagline.String)
 	}
 	var info map[string]string
 	if err := json.Unmarshal(companyInfo, &info); err != nil {

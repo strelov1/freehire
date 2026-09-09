@@ -44,6 +44,9 @@ func TestFillCompanyDescriptionFromIngest(t *testing.T) {
 		if c.JobCount != 0 {
 			t.Errorf("job_count = %d, want 0 (this write does not touch it)", c.JobCount)
 		}
+		if c.Tagline.Valid && c.Tagline.String != "" {
+			t.Errorf("tagline = %q, want unset when the caller passes an empty tagline", c.Tagline.String)
+		}
 		if companyInfoString(t, c.CompanyInfo, "summary") == "" {
 			t.Error("company_info.summary missing")
 		}

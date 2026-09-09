@@ -11,7 +11,7 @@
 
 ## 3. Pipeline wiring
 
-- [x] 3.1 After a board's `Fetch` succeeds, type-assert the adapter for `CompanyDescriber` and call it once; on error, log and continue (a failed company-description fetch SHALL NOT fail the board's job ingest).
+- [x] 3.1 Type-assert the adapter for `CompanyDescriber` and call it once per board, independent of `Fetch`'s own outcome (a company-level description is a fact about the board, not gated on its job listing succeeding); on error, log and continue (a failed company-description fetch SHALL NOT fail the board's job ingest). Implemented in `Runner.ingestBoard` right after the adapter lookup, before the streaming/buffered `Fetch` dispatch — deliberately not "after Fetch succeeds" as an earlier draft of this task assumed, since the two are independent and there is no reason to couple them.
 - [x] 3.2 Add the `FillCompanyDescriptionFromIngest`-shaped query (final name at implementation time) to `internal/platform/db/queries/companies.sql`: `INSERT ... ON CONFLICT (slug) DO UPDATE` touching only `tagline` (gap-fill), `company_info` (key-merge, gap-fill), `company_info_at`; `is_reference = false` on insert.
 - [x] 3.3 Run `make sqlc` and confirm the generated Go has no unrelated diff.
 - [x] 3.4 Call the new write from the pipeline step added in 3.1, keyed by the board's company slug.
