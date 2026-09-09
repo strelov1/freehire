@@ -32,6 +32,16 @@ func newProcessReportApp(queries *db.Queries, pool *pgxpool.Pool, iss *auth.Issu
 	return app
 }
 
+// statusOf reads a response for its status alone and closes the body. The status-only
+// assertions need it because bodyclose counts an unread body as a leak — and in a test
+// that files dozens of requests it would be one.
+func statusOf(t *testing.T, resp *http.Response) int {
+	t.Helper()
+	_, _ = io.ReadAll(resp.Body)
+	resp.Body.Close()
+	return resp.StatusCode
+}
+
 func decodeProcessReport(t *testing.T, resp *http.Response) processReportResponse {
 	t.Helper()
 	raw, _ := io.ReadAll(resp.Body)
@@ -83,9 +93,8 @@ func TestCompanyProcessReportEndpoints(t *testing.T) {
 	const path = "/api/v1/companies/acme-ai/process-reports"
 
 	// Anonymous filing is rejected: this is a claim attributed to a person.
-	if resp := doFeedbackRequest(t, app, fiber.MethodPost, path, "",
-		`{"kind":"ai_interview"}`); resp.StatusCode != fiber.StatusUnauthorized {
-		t.Fatalf("anon file: want 401, got %d", resp.StatusCode)
+	if got := statusOf(t, doFeedbackRequest(t, app, fiber.MethodPost, path, "", `{"kind":"ai_interview"}`)); got != fiber.StatusUnauthorized {
+		t.Fatalf("anon file: want 401, got %d", got)
 	}
 
 	// Before filing, the caller holds nothing — and it is an empty array, never null,
@@ -98,16 +107,14 @@ func TestCompanyProcessReportEndpoints(t *testing.T) {
 
 	// An unknown kind is refused before any write. The vocabulary decides what the
 	// badge renders, so it cannot be open.
-	if resp := doFeedbackRequest(t, app, fiber.MethodPost, path, cookie,
-		`{"kind":"unpaid_test_task"}`); resp.StatusCode != fiber.StatusBadRequest {
-		t.Fatalf("unknown kind: want 400, got %d", resp.StatusCode)
+	if got := statusOf(t, doFeedbackRequest(t, app, fiber.MethodPost, path, cookie, `{"kind":"unpaid_test_task"}`)); got != fiber.StatusBadRequest {
+		t.Fatalf("unknown kind: want 400, got %d", got)
 	}
 
 	// An unknown company is a clean 404, not the FK's opaque constraint violation.
-	if resp := doFeedbackRequest(t, app, fiber.MethodPost,
-		"/api/v1/companies/no-such-co/process-reports", cookie,
-		`{"kind":"ai_interview"}`); resp.StatusCode != fiber.StatusNotFound {
-		t.Fatalf("unknown company: want 404, got %d", resp.StatusCode)
+	if got := statusOf(t, doFeedbackRequest(t, app, fiber.MethodPost,
+		"/api/v1/companies/no-such-co/process-reports", cookie, `{"kind":"ai_interview"}`)); got != fiber.StatusNotFound {
+		t.Fatalf("unknown company: want 404, got %d", got)
 	}
 
 	// Filing answers 201 with the company's resulting count, so the caller renders the
@@ -130,9 +137,8 @@ func TestCompanyProcessReportEndpoints(t *testing.T) {
 
 	// A second live report is 409, not a silent no-op: the caller asked to file and
 	// deserves to know their report already stands.
-	if resp := doFeedbackRequest(t, app, fiber.MethodPost, path, cookie,
-		`{"kind":"ai_interview"}`); resp.StatusCode != fiber.StatusConflict {
-		t.Fatalf("duplicate file: want 409, got %d", resp.StatusCode)
+	if got := statusOf(t, doFeedbackRequest(t, app, fiber.MethodPost, path, cookie, `{"kind":"ai_interview"}`)); got != fiber.StatusConflict {
+		t.Fatalf("duplicate file: want 409, got %d", got)
 	}
 
 	// Withdrawing returns the lowered count; the kind rides as a query param.
@@ -146,9 +152,8 @@ func TestCompanyProcessReportEndpoints(t *testing.T) {
 	}
 
 	// Withdrawing again has nothing to withdraw.
-	if resp := doFeedbackRequest(t, app, fiber.MethodDelete, path+"?kind=ai_interview", cookie,
-		""); resp.StatusCode != fiber.StatusNotFound {
-		t.Fatalf("second retract: want 404, got %d", resp.StatusCode)
+	if got := statusOf(t, doFeedbackRequest(t, app, fiber.MethodDelete, path+"?kind=ai_interview", cookie, "")); got != fiber.StatusNotFound {
+		t.Fatalf("second retract: want 404, got %d", got)
 	}
 
 	// Re-filing revives the same row, so the count returns to one rather than two —
@@ -189,14 +194,12 @@ func TestCompanyProcessReportRateLimit(t *testing.T) {
 	// ration honest reporting.
 	app := newProcessReportApp(queries, pool, iss, processreport.Config{Window: time.Hour, Cap: 1})
 
-	if resp := doFeedbackRequest(t, app, fiber.MethodPost,
-		"/api/v1/companies/rate-one/process-reports", cookie,
-		`{"kind":"ai_interview"}`); resp.StatusCode != fiber.StatusCreated {
-		t.Fatalf("first: want 201, got %d", resp.StatusCode)
+	if got := statusOf(t, doFeedbackRequest(t, app, fiber.MethodPost,
+		"/api/v1/companies/rate-one/process-reports", cookie, `{"kind":"ai_interview"}`)); got != fiber.StatusCreated {
+		t.Fatalf("first: want 201, got %d", got)
 	}
-	if resp := doFeedbackRequest(t, app, fiber.MethodPost,
-		"/api/v1/companies/rate-two/process-reports", cookie,
-		`{"kind":"ai_interview"}`); resp.StatusCode != fiber.StatusTooManyRequests {
-		t.Fatalf("over the cap: want 429, got %d", resp.StatusCode)
+	if got := statusOf(t, doFeedbackRequest(t, app, fiber.MethodPost,
+		"/api/v1/companies/rate-two/process-reports", cookie, `{"kind":"ai_interview"}`)); got != fiber.StatusTooManyRequests {
+		t.Fatalf("over the cap: want 429, got %d", got)
 	}
 }

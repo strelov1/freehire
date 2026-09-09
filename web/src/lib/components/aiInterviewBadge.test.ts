@@ -19,7 +19,13 @@ const SOURCE = readFileSync(join(process.cwd(), 'src/lib/components/AIInterviewB
 // The tone assertions read the MARKUP only. Prose that argues for the neutral tone
 // necessarily names the tones it rejects, and a test that failed on its own rationale
 // would push the reasoning out of the file.
-const MARKUP = SOURCE.replace(/<script[\s\S]*?<\/script>/, '').replace(/<!--[\s\S]*?-->/g, '');
+//
+// Split on the literal closing tag rather than a regex: an HTML-stripping pattern here
+// reads to a static analyser as a sanitizer for untrusted input, and it flags the
+// incomplete ones. This is a file reading itself, so a plain split says what is meant
+// and leaves nothing to misread. The badge's own rationale lives in that script block,
+// which is exactly why it has to come off before the assertions run.
+const MARKUP = SOURCE.split('</script>').pop() ?? '';
 
 describe('AIInterviewBadge', () => {
   it('carries no warning or destructive styling', () => {
