@@ -12,6 +12,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/gofiber/fiber/v2"
@@ -356,6 +357,45 @@ func TestRoastCV_UndecodablePDFIsA400NotA500(t *testing.T) {
 	defer resp.Body.Close()
 	if resp.StatusCode != fiber.StatusBadRequest {
 		t.Errorf("status = %d, want 400 — bad client input, not a server fault", resp.StatusCode)
+	}
+}
+
+// TestRoastCV_IsMountedPublicAndLimited drives the real register, not a bare app: the
+// route being public is the point, and a limiter that is correct in isolation and
+// unmounted in place is exactly the defect public_read_limit_test.go exists for.
+func TestRoastCV_IsMountedPublicAndLimited(t *testing.T) {
+	h := &resumeHandlers{facets: &recordingFacetCounter{res: search.FacetResult{Total: 10}}}
+	app := fiber.New(fiber.Config{
+		ErrorHandler: RenderError,
+		ProxyHeader:  fiber.HeaderXForwardedFor,
+	})
+	refuse := func(c *fiber.Ctx) error {
+		return fiber.NewError(fiber.StatusUnauthorized, "auth middleware ran")
+	}
+	h.register(app.Group("/api/v1"), middleware{
+		cookie:    refuse,
+		key:       refuse,
+		throttler: newOneShotThrottler(),
+	})
+
+	post := func() int {
+		req := httptest.NewRequestWithContext(context.Background(), fiber.MethodPost,
+			"/api/v1/cv/roast", strings.NewReader(`{"text":"Backend Engineer\n\nSkills\nGo"}`))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set(fiber.HeaderXForwardedFor, "203.0.113.7")
+		resp, err := app.Test(req)
+		if err != nil {
+			t.Fatalf("request: %v", err)
+		}
+		defer resp.Body.Close()
+		return resp.StatusCode
+	}
+
+	if got := post(); got != fiber.StatusOK {
+		t.Fatalf("first call = %d, want 200 — the route must need no session and no key", got)
+	}
+	if got := post(); got != fiber.StatusTooManyRequests {
+		t.Errorf("second call = %d, want 429 — the limiter is not mounted", got)
 	}
 }
 

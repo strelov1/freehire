@@ -252,6 +252,16 @@ empty profile the model would read as "no preferences".
   catalogue cannot link to, so a failure must leave the candidate outside the network
   rather than inside it with no address.
 
+## Résumé / CV (`resume.go`, `cv_roast.go`)
+
+- `POST /cv/roast` is public — no cookie, no key — and is the only unauthenticated route
+  that accepts a CV. It stores nothing (unlike `/me/resume/extract`, which stores because
+  its signed-in caller's later steps need the file) and never calls the LLM analyzer, so
+  `internal/candidate/pii` is not on its path: that layer protects a CV from a model, and
+  no model runs. Its limiter is built inline from `mw.throttler` rather than in
+  `public_read_limit.go` — that file holds the public READ budgets, and this is a POST
+  that forks `pdftotext`.
+
 ## Application forms (`apply_form.go`)
 
 - `GET /jobs/:slug/apply-form` serves the questions a posting's application will ask,
