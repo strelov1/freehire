@@ -44,9 +44,22 @@
       `specs/deterministic-facets/spec.md`'s new requirement is covered by a test
       case.
 
-## 4. Close-out
+## 4. Review fix
 
-- [ ] 4.1 Note in the PR description that reaching already-ingested jobs needs
+- [x] 4.1 Independent review (`requesting-code-review`) found an Important gap: a
+      description stating "work from anywhere" TWICE — once qualified, once plainly
+      — resolved to `""` instead of `"remote"`, because the guard skipped the first
+      (guarded) occurrence but the loop then moved to the next PHRASE rather than
+      re-scanning for another occurrence of the SAME phrase. Added a failing test
+      (`scan continues past a qualified repeat to an unqualified one`, verified red
+      against the pre-fix code), then closed the gap by re-scanning forward past a
+      suppressed match — mirroring `RemoteContradicted`'s own "scan past a qualified
+      match" loop — instead of documenting it as an accepted limitation. Verified
+      green; full `go build`/`go vet`/`go test ./...` re-run clean afterward.
+
+## 5. Close-out
+
+- [x] 5.1 Note in the PR description that reaching already-ingested jobs needs
       `cmd/backfill-derive` followed by a full `cmd/reindex` (ops follow-up, not
       part of this PR — per design.md's Migration Plan).
-- [ ] 4.2 Reference freehire#2696 in the PR/commit.
+- [x] 5.2 Reference freehire#2696 in the PR/commit.

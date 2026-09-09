@@ -35,6 +35,9 @@ func TestWorkModeFromDescription(t *testing.T) {
 			"to work from anywhere for up to a month. Otherwise, this is a fully remote position open to anyone.", "remote"},
 		{"unrelated up to near 100 percent remote unaffected", "This is a 100% remote role, with a " +
 			"signing bonus of up to $2,000.", "remote"},
+		{"scan continues past a qualified repeat to an unqualified one", "Benefits include up to 12 " +
+			"days work from anywhere per year. Separately, you can work from anywhere in the EU on a " +
+			"permanent basis.", "remote"},
 
 		// Trap negatives — incidental tokens that must NOT trigger a match.
 		{"distributed systems", "Experience building distributed systems at scale.", ""},

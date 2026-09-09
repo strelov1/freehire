@@ -84,14 +84,21 @@ figure would wrongly lose its remote fill) for no measured benefit — the same
 reasoning `remoteDenialPhrases`'s comment already applies to `on-site only`/`must
 be onsite`.
 
-**When suppressed, continue scanning rather than returning early.** The existing
-loop structure (`for wm := range phrases { for p := range wm.phrases { if
-Contains... return wm.mode } } }`) already has this property implicitly: skipping
-a guarded match just means falling through to the next phrase check, so a
-description with both a qualified "work from anywhere" and an unrelated unqualified
-remote/hybrid/onsite phrase still resolves correctly from the other phrase. No
-special-case early-return logic is needed — the guard only changes what happens
-*at* the "work from anywhere" match, not the loop around it.
+**When suppressed, keep scanning for the SAME phrase before moving to the next
+one.** Falling through to the next phrase in `descriptionWorkModePhrases` handles a
+description with both a qualified "work from anywhere" and an unrelated,
+unqualified remote/hybrid/onsite phrase elsewhere — but it is not enough on its
+own: a description can also state "work from anywhere" TWICE, once qualified
+("up to 12 days work from anywhere per year") and once plainly ("you can work from
+anywhere in the EU"). A single `strings.Index` per phrase only ever sees the first
+occurrence, so a naive "skip and fall through to the next phrase" implementation
+would miss the second, unqualified occurrence of the *same* phrase entirely and
+return `""` where `"remote"` is correct. `phraseMatches` therefore re-scans forward
+past a suppressed match for more occurrences of the same phrase — the identical
+"scan past a qualified match" property `RemoteContradicted`'s loop already has for
+denial phrases (and the same one `TestRemoteContradictedReadsPastAQualifiedDenial`
+guards there). Caught in review (not in the original design) and closed with a
+matching test case before merge.
 
 ## Risks / Trade-offs
 

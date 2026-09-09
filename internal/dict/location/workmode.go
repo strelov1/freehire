@@ -48,17 +48,36 @@ func WorkModeFromDescription(desc string) string {
 	lower := strings.ToLower(desc)
 	for _, wm := range descriptionWorkModePhrases {
 		for _, p := range wm.phrases {
-			i := strings.Index(lower, p)
-			if i < 0 {
-				continue
+			if phraseMatches(lower, p) {
+				return wm.mode
 			}
-			if travelPerkPhrases[p] && travelPerkQualified(lower, i, i+len(p)) {
-				continue
-			}
-			return wm.mode
 		}
 	}
 	return ""
+}
+
+// phraseMatches reports whether p occurs in text (already lowercased) unguarded. A
+// travelPerkPhrases match that IS qualified does not end the search for p — the same
+// "scan past a qualified match" property RemoteContradicted's loop has for denial phrases
+// (see TestRemoteContradictedReadsPastAQualifiedDenial): a description may hedge one
+// occurrence of "work from anywhere" as a bounded perk and state another, unqualified one
+// plainly, and the unqualified one still stands.
+func phraseMatches(text, p string) bool {
+	guarded := travelPerkPhrases[p]
+	rest := text
+	offset := 0
+	for {
+		i := strings.Index(rest, p)
+		if i < 0 {
+			return false
+		}
+		start, end := offset+i, offset+i+len(p)
+		if !guarded || !travelPerkQualified(text, start, end) {
+			return true
+		}
+		offset = end
+		rest = text[offset:]
+	}
 }
 
 // travelPerkPhrases are the remote-family phrases that are ALSO a common idiom for a
