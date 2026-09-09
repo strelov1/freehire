@@ -3,6 +3,7 @@ package candidateprofile
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/strelov1/freehire/internal/candidate/cv"
@@ -310,5 +311,45 @@ func TestAssemble_ScreeningAnswersNotFoundYieldsEmptyFields(t *testing.T) {
 	}
 	if got.WillingToRelocate != "" {
 		t.Errorf("WillingToRelocate = %q, want empty when the caller has stated no screening answers", got.WillingToRelocate)
+	}
+}
+
+// The split is the point, so it is asserted rather than left to a comment.
+//
+// Fields() is what internal/api/handler hands to internal/ai/autofillagent, which marshals
+// the whole map into a model prompt AND uses it as the grounding set that keeps the agent
+// from fabricating. A banked answer in here would be sent to the provider on every autofill
+// run — free text the candidate typed for employers, which on Greenhouse includes the
+// demographic and veteran/disability questions — and would widen that gate by the size of
+// the bank. Only FieldsWithBankedAnswers carries them, and only an application form is
+// resolved against it.
+func TestFields_CarriesNoBankedAnswerAndFieldsWithBankedAnswersDoes(t *testing.T) {
+	p := Profile{
+		Email:       "candidate@example.com",
+		BankAnswers: map[string]string{"salary_expectation": "5000 USD per year"},
+	}
+
+	plain := p.Fields()
+	for key, value := range plain {
+		if strings.HasPrefix(key, "topic:") {
+			t.Errorf("Fields() carries %q = %q — a banked answer reaches the autofill model prompt", key, value)
+		}
+	}
+	if plain["email"] != "candidate@example.com" {
+		t.Errorf("Fields()[email] = %q, want the fixed fields untouched", plain["email"])
+	}
+
+	withBank := p.FieldsWithBankedAnswers()
+	if withBank["topic:salary_expectation"] != "5000 USD per year" {
+		t.Errorf("FieldsWithBankedAnswers()[topic:salary_expectation] = %q, want the banked answer", withBank["topic:salary_expectation"])
+	}
+	if withBank["email"] != "candidate@example.com" {
+		t.Errorf("FieldsWithBankedAnswers() dropped a fixed field")
+	}
+	// Fields() must not be handed the caller a map that FieldsWithBankedAnswers then writes
+	// into: the two are called on the same Profile, and a shared map would put the bank on
+	// the autofill path by aliasing.
+	if _, leaked := p.Fields()["topic:salary_expectation"]; leaked {
+		t.Error("FieldsWithBankedAnswers wrote into the map Fields returns")
 	}
 }

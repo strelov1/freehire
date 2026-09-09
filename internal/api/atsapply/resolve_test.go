@@ -325,13 +325,17 @@ func TestResolve_ATypedFactOutranksABankedAnswer(t *testing.T) {
 	}
 }
 
-// The seam: what Profile.Fields() writes must be what resolveOne reads.
+// The seam: what Profile.FieldsWithBankedAnswers() writes must be what resolveOne reads.
 //
 // The prefix is two separate literals in two packages that cannot share a constant
 // (candidateprofile importing atsapply would invert the layering). Every other test here
 // hands Resolve a map it built itself with the prefix already applied — so all of them
 // would still pass if the two literals drifted apart, while the feature silently filled
 // nothing. This is the only test that would fail.
+//
+// It must keep going through whatever accessor cmd/auto-apply's AnswerSource calls, or it
+// stops testing the seam and starts testing a map literal. Today that is
+// FieldsWithBankedAnswers; plain Fields() deliberately carries no banked answer at all.
 func TestResolve_ReadsTheKeysProfileFieldsActuallyWrites(t *testing.T) {
 	profile := candidateprofile.Profile{
 		BankAnswers: map[string]string{"which state do you currently reside in": "Santa Catarina"},
@@ -342,10 +346,10 @@ func TestResolve_ReadsTheKeysProfileFieldsActuallyWrites(t *testing.T) {
 		Kind: "text", Required: true,
 	}}
 
-	plan := Resolve(fields, profile.Fields(), false)
+	plan := Resolve(fields, profile.FieldsWithBankedAnswers(), false)
 
 	if !plan.FullyResolved() {
-		t.Fatalf("unmapped = %+v — Profile.Fields() and resolveOne disagree about the banked-answer key prefix", plan.Unmapped)
+		t.Fatalf("unmapped = %+v — Profile.FieldsWithBankedAnswers() and resolveOne disagree about the banked-answer key prefix", plan.Unmapped)
 	}
 	if plan.Fields[0].Value != "Santa Catarina" {
 		t.Errorf("value = %q, want the banked answer", plan.Fields[0].Value)
