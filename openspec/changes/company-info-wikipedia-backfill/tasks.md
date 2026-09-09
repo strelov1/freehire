@@ -20,9 +20,9 @@
 
 ## 4. Verification
 
-- [ ] 4.1 Integration test (`-tags=integration`) against a seeded `companies` table: a company with an existing tagline is untouched; a company with no tagline and a fixture-backed confident match gets filled; a company with no tagline and a fixture-backed rejected match gets only its checkpoint column set; a re-run performs no further writes or lookups for already-checked rows.
+- [x] 4.1 Integration test (`-tags=integration`) against a seeded `companies` table: a company with an existing tagline is untouched; a company with no tagline and a fixture-backed confident match gets filled; a company with no tagline and a fixture-backed rejected match gets only its checkpoint column set; a re-run performs no further writes or lookups for already-checked rows. (`internal/platform/db/company_wikipedia_integration_test.go`, plus the store/matcher fakes in `cmd/backfill-company-info-wikipedia/run_test.go` for the apply/dry-run branch logic.)
 - [ ] 4.2 Dry-run the worker against production with a small `WIKIPEDIA_BACKFILL_MAX_PER_RUN`; manually review the proposed matches against the spike's known-good sample (Hitachi Energy, Sberbank, Nissan, Masco, Paladin Energy, etc.) and known-bad sample (`Boardroom Appointments`, `CWAN`, `Evolution`, `takeaway`) before enabling `--apply` at scale.
-- [ ] 4.3 `gofmt -l .`, `go vet ./...`, `go test ./...`, and `go vet -tags=integration ./...` all clean.
+- [x] 4.3 `gofmt -l .`, `go vet ./...`, `go test ./...`, and `go vet -tags=integration ./...` all clean.
 
 ## 5. Rollout
 
