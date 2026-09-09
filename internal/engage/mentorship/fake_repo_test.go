@@ -216,21 +216,33 @@ func (r *fakeRepo) CancelFutureBookings(_ context.Context, mentorID, cancelledBy
 }
 
 // WithdrawProfile marks rather than deletes, exactly as the SQL does — the bookings and
-// reviews map below survive it, which is the behaviour under test.
+// reviews map below survive it, which is the behaviour under test. It is idempotent: a
+// profile already withdrawn stays withdrawn rather than erroring, and withdrawal never
+// touches the pause switch.
 func (r *fakeRepo) WithdrawProfile(_ context.Context, userID int64) error {
 	id, ok := r.byUser[userID]
 	if !ok {
 		return ErrProfileNotFound
 	}
 	p := r.profiles[id]
-	if p.Status == StatusWithdrawn {
-		return ErrProfileNotFound
-	}
 	p.Status = StatusWithdrawn
-	p.Paused = true
 	r.profiles[id] = p
 	r.withdrawn = true
 	return nil
+}
+
+// ReactivateProfile mirrors the SQL guard: only a withdrawn row moves, to pending with
+// the pause switch cleared.
+func (r *fakeRepo) ReactivateProfile(_ context.Context, userID int64) (Profile, error) {
+	id, ok := r.byUser[userID]
+	if !ok || r.profiles[id].Status != StatusWithdrawn {
+		return Profile{}, ErrProfileNotFound
+	}
+	p := r.profiles[id]
+	p.Status = StatusPending
+	p.Paused = false
+	r.profiles[id] = p
+	return p, nil
 }
 
 func (r *fakeRepo) ListAvailability(_ context.Context, mentorID int64) ([]Rule, error) {

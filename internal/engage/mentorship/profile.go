@@ -23,7 +23,7 @@ const (
 	// StatusWithdrawn is a mentor who has left. The row SURVIVES it: bookings and reviews
 	// reference the profile ON DELETE CASCADE, so deleting would erase every session that
 	// ever happened — and a session belongs to both people who were in it, not to whether
-	// the mentor is still here.
+	// the mentor is still here. Not permanent: Reactivate sends it back to StatusPending.
 	StatusWithdrawn = "withdrawn"
 )
 
@@ -44,6 +44,10 @@ var (
 	ErrCompanyNotFound = errors.New("mentorship: company not found")
 	// ErrProfileNotPending → 409. A decision on a profile already decided.
 	ErrProfileNotPending = errors.New("mentorship: profile is not pending")
+	// ErrProfileNotWithdrawn → 409. Resubmission is only for a withdrawn profile —
+	// forcing a pending, rejected or approved one back to review out of turn is refused
+	// rather than treated as a no-op, symmetric with ErrProfileNotPending.
+	ErrProfileNotWithdrawn = errors.New("mentorship: profile is not withdrawn")
 )
 
 // slugPattern is the shape of a profile's public address, deliberately identical to the
@@ -279,6 +283,21 @@ func (s *Service) Withdraw(ctx context.Context, userID int64) error {
 	}
 
 	return s.repo.WithdrawProfile(ctx, userID)
+}
+
+// Reactivate resubmits a withdrawn profile for moderation, moving it back to `pending`
+// and clearing the pause switch. It is not a way to force review out of turn: a profile
+// that is pending, rejected or approved was never withdrawn, and ErrProfileNotWithdrawn
+// refuses those rather than silently doing nothing.
+func (s *Service) Reactivate(ctx context.Context, userID int64) (Profile, error) {
+	profile, err := s.ownProfile(ctx, userID)
+	if err != nil {
+		return Profile{}, err
+	}
+	if profile.Status != StatusWithdrawn {
+		return Profile{}, ErrProfileNotWithdrawn
+	}
+	return s.repo.ReactivateProfile(ctx, userID)
 }
 
 // validateProfile checks what the database cannot. `creating` gates the fields an edit

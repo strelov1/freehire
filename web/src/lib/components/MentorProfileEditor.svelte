@@ -103,6 +103,8 @@
     form.languages = form.languages.filter((l) => l !== value);
   }
 
+  // Also reachable while withdrawn: the fields stay editable so a mentor can correct
+  // something before resubmitting, and the update endpoint carries no status guard.
   async function save() {
     saving = true;
     error = '';
@@ -133,9 +135,10 @@
     try {
       await api.withdrawMentorProfile();
       // The profile is MARKED withdrawn, not deleted — past sessions and their reviews
-      // hang off the row. Dropping it from local state simply returns this screen to the
-      // "offer to mentor" state.
-      profile = null;
+      // hang off the row, and the account's one-profile slot stays occupied by it. Local
+      // state reflects that rather than clearing to null: a null profile would offer the
+      // "Submit for review" form, whose POST would 409 against the still-occupied slot.
+      profile = profile && { ...profile, status: 'withdrawn', paused: false };
       confirmingWithdrawal = false;
     } catch (e) {
       error = errorMessage(e, 'The profile could not be withdrawn.');
@@ -156,6 +159,22 @@
       saving = false;
     }
   }
+
+  // Resubmitting is exactly what a first-time submission is: back to pending, no special
+  // treatment for having been a mentor before.
+  let reactivating = $state(false);
+
+  async function reactivate() {
+    reactivating = true;
+    error = '';
+    try {
+      profile = await api.reactivateMentorProfile();
+    } catch (e) {
+      error = errorMessage(e, 'The profile could not be resubmitted.');
+    } finally {
+      reactivating = false;
+    }
+  }
 </script>
 
 <Card class="flex flex-col gap-4 p-4">
@@ -164,7 +183,7 @@
     {#if profile}
       <div class="flex items-center gap-2">
         <Badge variant={profile.status === 'approved' ? 'secondary' : 'outline'}>
-          {profile.paused ? 'paused' : profile.status}
+          {profile.status === 'approved' && profile.paused ? 'paused' : profile.status}
         </Badge>
         {#if profile.status === 'approved'}
           <!-- Pausing needs no moderator, and confirmed bookings stand through it. -->
@@ -311,7 +330,15 @@
 
   {#if profile}
     <div class="border-t pt-4">
-      {#if confirmingWithdrawal}
+      {#if profile.status === 'withdrawn'}
+        <p class="text-muted-foreground mb-2 text-sm">
+          You withdrew this profile. Resubmitting sends it back for review — like a first
+          submission, with no special treatment for having been a mentor before.
+        </p>
+        <Button variant="ghost" size="sm" disabled={reactivating} onclick={reactivate}>
+          {reactivating ? 'Submitting…' : 'Submit for review again'}
+        </Button>
+      {:else if confirmingWithdrawal}
         <p class="text-sm font-medium">Withdraw your profile?</p>
         <p class="text-muted-foreground mt-1 text-sm">
           Every confirmed session still ahead is cancelled and each person told. Sessions

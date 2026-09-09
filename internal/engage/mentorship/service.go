@@ -84,8 +84,13 @@ type Repository interface {
 	ListPublishedProfiles(ctx context.Context, f DirectoryFilter) ([]Profile, error)
 	CancelFutureBookings(ctx context.Context, mentorID, cancelledBy int64, reason string) ([]Booking, error)
 	// WithdrawProfile marks a profile withdrawn. It must NOT delete the row — bookings
-	// and reviews cascade off it, and the past is history both parties keep.
+	// and reviews cascade off it, and the past is history both parties keep. It is
+	// idempotent: withdrawing an already-withdrawn profile succeeds.
 	WithdrawProfile(ctx context.Context, userID int64) error
+	// ReactivateProfile moves a withdrawn profile back to pending and clears the pause
+	// switch. The caller (Service.Reactivate) has already confirmed the profile is
+	// withdrawn, so a zero-row result here means only a genuine race.
+	ReactivateProfile(ctx context.Context, userID int64) (Profile, error)
 
 	ListAvailability(ctx context.Context, mentorID int64) ([]Rule, error)
 	ReplaceWeeklyAvailability(ctx context.Context, mentorID int64, rules []Rule) error

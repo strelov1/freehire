@@ -1137,6 +1137,48 @@ func (q *Queries) ListPublishedMentors(ctx context.Context, arg ListPublishedMen
 	return items, nil
 }
 
+const reactivateMentorProfile = `-- name: ReactivateMentorProfile :one
+UPDATE mentors
+SET status = 'pending', paused = false, updated_at = now()
+WHERE user_id = $1 AND status = 'withdrawn'
+RETURNING id, user_id, company_slug, slug, display_name, headline, bio, topics, languages, timezone, session_duration_min, buffer_before_min, buffer_after_min, min_notice_min, horizon_days, meeting_url, status, paused, decided_by, decided_at, created_at, updated_at, show_photo
+`
+
+// A withdrawn mentor resubmits for review: back to pending, pause switch cleared, no
+// auto-approval. The status guard is symmetric with DecideMentorProfile's — it makes
+// resubmitting a profile that was never withdrawn match no row, which the repository
+// maps to ErrProfileNotWithdrawn after confirming the profile exists at all.
+func (q *Queries) ReactivateMentorProfile(ctx context.Context, userID int64) (Mentor, error) {
+	row := q.db.QueryRow(ctx, reactivateMentorProfile, userID)
+	var i Mentor
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.CompanySlug,
+		&i.Slug,
+		&i.DisplayName,
+		&i.Headline,
+		&i.Bio,
+		&i.Topics,
+		&i.Languages,
+		&i.Timezone,
+		&i.SessionDurationMin,
+		&i.BufferBeforeMin,
+		&i.BufferAfterMin,
+		&i.MinNoticeMin,
+		&i.HorizonDays,
+		&i.MeetingUrl,
+		&i.Status,
+		&i.Paused,
+		&i.DecidedBy,
+		&i.DecidedAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.ShowPhoto,
+	)
+	return i, err
+}
+
 const recordReminderSent = `-- name: RecordReminderSent :execrows
 INSERT INTO mentor_booking_reminders (booking_id, offset_minutes)
 VALUES ($1, $2)
@@ -1355,8 +1397,8 @@ func (q *Queries) UpsertMentorReview(ctx context.Context, arg UpsertMentorReview
 
 const withdrawMentorProfile = `-- name: WithdrawMentorProfile :execrows
 UPDATE mentors
-SET status = 'withdrawn', paused = true, updated_at = now()
-WHERE user_id = $1 AND status <> 'withdrawn'
+SET status = 'withdrawn', updated_at = now()
+WHERE user_id = $1
 `
 
 // Withdrawal marks the profile rather than deleting it, and that is the whole point:
@@ -1367,8 +1409,12 @@ WHERE user_id = $1 AND status <> 'withdrawn'
 // Future bookings must still be cancelled and their seekers notified before this runs;
 // what changes is that the PAST survives.
 //
-// The owner guard scopes it to the caller, and the status guard makes a second withdrawal
-// match no row.
+// The owner guard scopes it to the caller. Deliberately unconditional on status: a
+// second withdrawal SHALL change nothing rather than fail, so the caller (which already
+// confirmed the profile exists via ProfileByUser) never has to tell "already withdrawn"
+// apart from "does not exist". It also does NOT touch `paused` — status and pause are
+// independent decisions, and writing both here is what made a withdrawn profile show up
+// labelled "paused".
 func (q *Queries) WithdrawMentorProfile(ctx context.Context, userID int64) (int64, error) {
 	result, err := q.db.Exec(ctx, withdrawMentorProfile, userID)
 	if err != nil {

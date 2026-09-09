@@ -55,7 +55,17 @@ not one. They share the company key and nothing else.
 
 - **Withdrawal MARKS the profile, it does not delete it.** Bookings and reviews reference
   it `ON DELETE CASCADE`, so a delete erases every session that ever happened. Future
-  bookings are cancelled and their seekers told FIRST; the past survives.
+  bookings are cancelled and their seekers told FIRST; the past survives. Withdrawal is
+  idempotent (a repeat withdrawal succeeds, per spec) and does NOT touch the `paused`
+  switch — the two were folded together once and a withdrawn profile showed up in the
+  owner's UI labelled "paused" as a result.
+
+- **Withdrawal is not permanent: `Reactivate` sends a withdrawn profile back to
+  `pending`.** It is refused (`ErrProfileNotWithdrawn`) for a profile that is pending,
+  rejected or approved — resubmitting is not a way to force review out of turn, and
+  those were never withdrawn in the first place. A reactivated profile gets no special
+  treatment for having been a mentor before: it re-enters the ordinary moderation queue
+  exactly as a first submission would.
 
 - **The publication predicate lives in the SQL** (`approved AND NOT paused`), in every
   query that reads publicly, so the directory and the profile read cannot disagree. There

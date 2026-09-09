@@ -394,6 +394,20 @@ func (h *mentorshipHandlers) WithdrawMentorProfile(c *fiber.Ctx) error {
 	return c.SendStatus(fiber.StatusNoContent)
 }
 
+// ReactivateMentorProfile resubmits a withdrawn profile for moderation. It is refused,
+// not silently accepted, for a profile that was never withdrawn.
+func (h *mentorshipHandlers) ReactivateMentorProfile(c *fiber.Ctx) error {
+	userID, err := requireUserID(c)
+	if err != nil {
+		return err
+	}
+	profile, err := h.mentorship.Reactivate(c.Context(), userID)
+	if err != nil {
+		return mentorshipError(err)
+	}
+	return c.JSON(fiber.Map{"data": toOwnMentorResponse(profile)})
+}
+
 // ListPendingMentorProfiles is the moderation queue.
 func (h *mentorshipHandlers) ListPendingMentorProfiles(c *fiber.Ctx) error {
 	pending, err := h.mentorship.PendingQueue(c.Context())

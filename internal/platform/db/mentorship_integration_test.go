@@ -252,13 +252,65 @@ func TestWithdrawalKeepsTheHistory(t *testing.T) {
 		}
 	})
 
-	t.Run("a second withdrawal matches nothing", func(t *testing.T) {
+	t.Run("a second withdrawal succeeds and changes nothing", func(t *testing.T) {
 		rows, err := q.WithdrawMentorProfile(ctx, mentorUser)
 		if err != nil {
 			t.Fatalf("WithdrawMentorProfile: %v", err)
 		}
-		if rows != 0 {
-			t.Errorf("a second withdrawal affected %d rows, want 0", rows)
+		if rows != 1 {
+			t.Errorf("a second withdrawal affected %d rows, want 1 — it is idempotent, not a no-op query", rows)
+		}
+	})
+
+	t.Run("withdrawal never touched the pause switch", func(t *testing.T) {
+		row, err := q.GetMentorByUserID(ctx, mentorUser)
+		if err != nil {
+			t.Fatalf("GetMentorByUserID: %v", err)
+		}
+		if row.Paused {
+			t.Error("withdrawal set paused=true — status and pause must stay independent")
+		}
+	})
+}
+
+// A withdrawn mentor can resubmit for review: back to pending, pause cleared, no
+// auto-approval. Reactivating a profile that was never withdrawn must match no row.
+func TestReactivateMentorProfile(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	ctx := context.Background()
+
+	seedMentorshipCompany(t, pool, "returnco")
+	mentorUser := seedMentorshipUser(t, pool, "mentor-return@example.test")
+	mentor := seedMentor(t, q, mentorUser, "returnco", "returning-mentor")
+	approve(t, q, mentor.ID, mentorUser)
+
+	t.Run("reactivating a profile that is not withdrawn matches nothing", func(t *testing.T) {
+		_, err := q.ReactivateMentorProfile(ctx, mentorUser)
+		if err == nil {
+			t.Error("reactivated an approved profile, want no matching row")
+		}
+	})
+
+	if _, err := q.WithdrawMentorProfile(ctx, mentorUser); err != nil {
+		t.Fatalf("WithdrawMentorProfile: %v", err)
+	}
+
+	reactivated, err := q.ReactivateMentorProfile(ctx, mentorUser)
+	if err != nil {
+		t.Fatalf("ReactivateMentorProfile: %v", err)
+	}
+	if reactivated.Status != "pending" {
+		t.Errorf("status = %q, want pending", reactivated.Status)
+	}
+	if reactivated.Paused {
+		t.Error("a reactivated profile is paused")
+	}
+
+	t.Run("reactivating again matches nothing, since it is pending again", func(t *testing.T) {
+		_, err := q.ReactivateMentorProfile(ctx, mentorUser)
+		if err == nil {
+			t.Error("reactivated a pending profile, want no matching row")
 		}
 	})
 }

@@ -4514,6 +4514,11 @@ type Querier interface {
 	// scheduled runs says cmd/push-receipts is not draining — the one failure this queue can
 	// have and the one it would otherwise report as a perfectly healthy backlog.
 	PushTicketOutboxMetrics(ctx context.Context) (PushTicketOutboxMetricsRow, error)
+	// A withdrawn mentor resubmits for review: back to pending, pause switch cleared, no
+	// auto-approval. The status guard is symmetric with DecideMentorProfile's — it makes
+	// resubmitting a profile that was never withdrawn match no row, which the repository
+	// maps to ErrProfileNotWithdrawn after confirming the profile exists at all.
+	ReactivateMentorProfile(ctx context.Context, userID int64) (Mentor, error)
 	// One row per company with its current open-count and the open-count as of @prev_ts,
 	// from a single scan of jobs over canonical rows only (same count(*) FILTER idiom as
 	// insights_role_stats). open_count uses closed_at IS NULL (open now); open_count_prev
@@ -6347,8 +6352,12 @@ type Querier interface {
 	// Future bookings must still be cancelled and their seekers notified before this runs;
 	// what changes is that the PAST survives.
 	//
-	// The owner guard scopes it to the caller, and the status guard makes a second withdrawal
-	// match no row.
+	// The owner guard scopes it to the caller. Deliberately unconditional on status: a
+	// second withdrawal SHALL change nothing rather than fail, so the caller (which already
+	// confirmed the profile exists via ProfileByUser) never has to tell "already withdrawn"
+	// apart from "does not exist". It also does NOT touch `paused` — status and pause are
+	// independent decisions, and writing both here is what made a withdrawn profile show up
+	// labelled "paused".
 	WithdrawMentorProfile(ctx context.Context, userID int64) (int64, error)
 }
 
