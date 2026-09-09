@@ -57,28 +57,32 @@ var submitRefusedMarkers = []string{
 // This is the least-verified part of the package — see design.md's Testing section and
 // task 7.1: correctness here rests on the 2026-09-02 spike's single live posting and the
 // reference implementation's own measured rules, not on this package's own live testing.
-func fillAndSubmit(ctx context.Context, plan Plan) (bool, error) {
+func fillAndSubmit(ctx context.Context, plan Plan, layout formLayout) (bool, error) {
 	for _, f := range plan.Fields {
-		if err := fillOne(ctx, f); err != nil {
+		if err := fillOne(ctx, f, layout.addressBy); err != nil {
 			return false, fmt.Errorf("fill %q: %w", f.ID, err)
 		}
 	}
 
-	if err := chromedp.Run(ctx, chromedp.Click(greenhouseSubmitSelector, chromedp.ByQuery)); err != nil {
+	if err := chromedp.Run(ctx, chromedp.Click(layout.submitSelector, chromedp.ByQuery)); err != nil {
 		return false, fmt.Errorf("click submit: %w", err)
 	}
 
 	return verifySubmission(ctx)
 }
 
-// greenhouseSubmitSelector is Greenhouse's own submit button id.
-const greenhouseSubmitSelector = "#submit_app"
-
-func fillOne(parent context.Context, f ResolvedField) error {
+func fillOne(parent context.Context, f ResolvedField, by addressing) error {
 	ctx, cancel := context.WithTimeout(parent, fillTimeout)
 	defer cancel()
 
-	sel := fieldSelector(f.ID)
+	// sel and kind are ONE decision, taken once here: a `[name=…]` selector handed to a
+	// by-id lookup is silently rewritten to `#[name=…]`, which is invalid CSS and matches
+	// nothing. Every branch below MUST pass `kind` — a review caught the file branch
+	// hard-coding chromedp.ByID, which would have meant no Lever application carrying a
+	// résumé could ever be submitted, on a page where the résumé is required. There is a
+	// test asserting no branch reintroduces a literal query kind.
+	sel := fieldSelector(f.ID, by)
+	kind := by.queryKind()
 
 	switch f.Kind {
 	case "textarea", "text":
@@ -102,9 +106,9 @@ func fillOne(parent context.Context, f ResolvedField) error {
 		// outcome, which is exactly why StatusUnconfirmed exists as a distinct,
 		// non-retried outcome rather than trusting any of this always worked.
 		return chromedp.Run(ctx,
-			chromedp.Clear(sel, chromedp.ByID),
-			chromedp.SendKeys(sel, f.Value, chromedp.ByID),
-			chromedp.SendKeys(sel, kb.Enter, chromedp.ByID),
+			chromedp.Clear(sel, kind),
+			chromedp.SendKeys(sel, f.Value, kind),
+			chromedp.SendKeys(sel, kb.Enter, kind),
 		)
 	case "select":
 		// SetValue sets the DOM .value property directly, which a React-controlled
@@ -113,7 +117,7 @@ func fillOne(parent context.Context, f ResolvedField) error {
 		// unset even though the raw DOM value looks right. Dispatching the events a
 		// real interaction would fire is what makes React notice.
 		return chromedp.Run(ctx,
-			chromedp.SetValue(sel, f.Value, chromedp.ByID),
+			chromedp.SetValue(sel, f.Value, kind),
 			chromedp.Evaluate(fmt.Sprintf(dispatchChangeEventsJS, sel), nil),
 		)
 	case "checkbox_group":
@@ -128,16 +132,26 @@ func fillOne(parent context.Context, f ResolvedField) error {
 		// rendered the approved tailored CV and overwritten Value with the temp PDF's
 		// path — never a candidate-authored string, so no further validation of Value
 		// belongs here.
-		return chromedp.Run(ctx, chromedp.SetUploadFiles(sel, []string{f.Value}, chromedp.ByID))
+		return chromedp.Run(ctx, chromedp.SetUploadFiles(sel, []string{f.Value}, kind))
 	default:
 		return fmt.Errorf("no fill strategy for kind %q", f.Kind)
 	}
 }
 
-// fieldSelector resolves a merged field's id to a DOM selector. IDs from this package's own
-// scan are element ids; `#id` is correct for every kind ScanGreenhouseForm produces except
-// checkbox_group, which fillOne selects by name+value directly instead.
-func fieldSelector(id string) string {
+// fieldSelector resolves a field's identifier to a DOM selector, the way its own platform
+// names it. The identifier is whatever the layout addressed the control by (see
+// domscan.identify) — an element id on Greenhouse, a name on Lever.
+//
+// A byName selector quotes the value because Lever's names carry brackets:
+// `urls[LinkedIn]`, and every employer question as `cards[<uuid>][field0]`. Unquoted,
+// brackets are selector syntax and the lookup silently matches nothing.
+//
+// checkbox_group is the exception under either addressing: fillOne selects those by
+// name+value directly, since a group's members share a name rather than an identifier.
+func fieldSelector(id string, by addressing) string {
+	if by == byName {
+		return fmt.Sprintf("[name=%q]", id)
+	}
 	return "#" + id
 }
 

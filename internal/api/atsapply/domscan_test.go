@@ -24,7 +24,7 @@ const greenhouseFixtureHTML = `
 `
 
 func TestScanGreenhouseForm_ExtractsPlainFields(t *testing.T) {
-	fields, err := ScanGreenhouseForm(greenhouseFixtureHTML)
+	fields, err := ScanForm(greenhouseFixtureHTML, greenhouseTestLayout())
 	if err != nil {
 		t.Fatalf("ScanGreenhouseForm: %v", err)
 	}
@@ -49,7 +49,7 @@ func TestScanGreenhouseForm_ExtractsPlainFields(t *testing.T) {
 }
 
 func TestScanGreenhouseForm_SkipsHiddenFields(t *testing.T) {
-	fields, err := ScanGreenhouseForm(greenhouseFixtureHTML)
+	fields, err := ScanForm(greenhouseFixtureHTML, greenhouseTestLayout())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -61,7 +61,7 @@ func TestScanGreenhouseForm_SkipsHiddenFields(t *testing.T) {
 }
 
 func TestScanGreenhouseForm_GroupsACheckboxGroupByName(t *testing.T) {
-	fields, err := ScanGreenhouseForm(greenhouseFixtureHTML)
+	fields, err := ScanForm(greenhouseFixtureHTML, greenhouseTestLayout())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -84,7 +84,7 @@ func TestScanGreenhouseForm_GroupsACheckboxGroupByName(t *testing.T) {
 }
 
 func TestScanGreenhouseForm_NoApplicationFormIsAnError(t *testing.T) {
-	if _, err := ScanGreenhouseForm(`<html><body>not a form page</body></html>`); err == nil {
+	if _, err := ScanForm(`<html><body>not a form page</body></html>`, greenhouseTestLayout()); err == nil {
 		t.Fatal("want an error when #application-form is not on the page")
 	}
 }
@@ -98,7 +98,7 @@ func TestScanGreenhouseForm_APlainInputWithNoIDOrNameIsStillScanned(t *testing.T
 	  <input type="text" required>
 	</form></body></html>`
 
-	fields, err := ScanGreenhouseForm(html)
+	fields, err := ScanForm(html, greenhouseTestLayout())
 	if err != nil {
 		t.Fatalf("ScanGreenhouseForm: %v", err)
 	}
@@ -118,7 +118,7 @@ func TestScanGreenhouseForm_TwoPlainInputsWithNoIDOrNameDoNotCollide(t *testing.
 	  <input type="text" required>
 	</form></body></html>`
 
-	fields, err := ScanGreenhouseForm(html)
+	fields, err := ScanForm(html, greenhouseTestLayout())
 	if err != nil {
 		t.Fatalf("ScanGreenhouseForm: %v", err)
 	}
@@ -135,7 +135,7 @@ func TestScanGreenhouseForm_ATextareaWithNoIDOrNameIsStillScanned(t *testing.T) 
 	  <textarea required></textarea>
 	</form></body></html>`
 
-	fields, err := ScanGreenhouseForm(html)
+	fields, err := ScanForm(html, greenhouseTestLayout())
 	if err != nil {
 		t.Fatalf("ScanGreenhouseForm: %v", err)
 	}
@@ -173,7 +173,7 @@ const greenhouseRequiredProxyInputsHTML = `
 // attempt on a vanilla Greenhouse posting could never be submitted no matter how complete
 // the candidate's profile was. Production carried four of these on every posting.
 func TestScanGreenhouseForm_SkipsAriaHiddenRequiredProxyInputs(t *testing.T) {
-	fields, err := ScanGreenhouseForm(greenhouseRequiredProxyInputsHTML)
+	fields, err := ScanForm(greenhouseRequiredProxyInputsHTML, greenhouseTestLayout())
 	if err != nil {
 		t.Fatalf("ScanGreenhouseForm: %v", err)
 	}
@@ -183,4 +183,14 @@ func TestScanGreenhouseForm_SkipsAriaHiddenRequiredProxyInputs(t *testing.T) {
 	if fields[0].ID != "first_name" {
 		t.Errorf("scanned field = %+v, want the real first_name input", fields[0])
 	}
+}
+
+// greenhouseTestLayout is the layout these tests scan under. A helper rather than a literal
+// so a change to Greenhouse's own page description reaches every test that depends on it.
+func greenhouseTestLayout() formLayout {
+	l, ok := layoutFor("greenhouse")
+	if !ok {
+		panic("greenhouse has no layout")
+	}
+	return l
 }

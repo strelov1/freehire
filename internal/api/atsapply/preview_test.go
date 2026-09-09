@@ -104,32 +104,24 @@ func (r *fakeFormReader) GetStoredForm(context.Context, int64) (applyform.Form, 
 	return r.form, r.found, r.err
 }
 
-// A Lever attempt reaches its schema like any other provider — it is not refused for
-// carrying a captcha it may well not have.
+// A platform this package cannot drive a browser at still reaches its stored schema, and
+// its preview is computed from that rather than refused.
 //
-// Measured against live postings on 2026-09-09, which is what retired the blanket refusal:
-// two of the candidate's own queued Lever applications (coderio, jobgether) render NO
-// captcha at all — no hCaptcha, no reCAPTCHA, nothing. Four others do carry hCaptcha, and
-// their only "recaptcha" is the string `.g-recaptcha div` inside a CSS rule. So the
-// captcha is a per-employer setting, not a property of the platform, and a provider-wide
-// refusal decided what a page said before anyone looked at the page.
-//
-// Nothing here claims a Lever application can now be submitted: fillProviders still covers
-// Greenhouse alone, so Submit parks it as not-implemented. What changes is that the
-// candidate gets an answer preview instead of a reason that was never measured.
-func TestPreviewClient_ALeverAttemptReachesItsSchema(t *testing.T) {
-	fetcher := &fakeFetcher{form: applyform.Form{Provider: "lever"}}
-	p := &PreviewClient{fetchers: map[string]applyform.Fetcher{"lever": fetcher}, forms: nil}
+// This test used to be about Lever, asserting it reached a fetcher after #2721 retired the
+// blanket captcha refusal. Lever is now driven by a browser like Greenhouse (its layout is
+// in the registry), so the non-browser path it was written for no longer describes it.
+// Recruitee is the platform that path now serves: no layout, so no browser, and the stored
+// form is what the preview is built from.
+func TestPreviewClient_APlatformWithNoLayoutPreviewsFromItsStoredForm(t *testing.T) {
+	reader := &fakeFormReader{form: applyform.Form{Provider: "recruitee"}, found: true}
+	p := &PreviewClient{fetchers: nil, forms: reader}
 
-	result, err := p.Preview(context.Background(), autoapply.Claimed{Provider: "lever"}, nil)
+	result, err := p.Preview(context.Background(), autoapply.Claimed{Provider: "recruitee"}, nil)
 	if err != nil {
 		t.Fatalf("Preview: %v", err)
 	}
 	if result.Parked {
-		t.Errorf("result = %+v, want a preview rather than a park", result)
-	}
-	if !fetcher.called {
-		t.Error("the schema fetcher was never called — Lever is still being refused before it is read")
+		t.Errorf("result = %+v, want a preview computed from the stored form", result)
 	}
 }
 
