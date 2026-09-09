@@ -314,6 +314,7 @@ SELECT jobs.id, jobs.public_slug, jobs.title, jobs.company, jobs.company_slug, j
        aaq.review_decision AS auto_apply_review_decision,
        aaq.blocked_at AS auto_apply_blocked_at, aaq.failed_at AS auto_apply_failed_at,
        aaq.preview_failed_at AS auto_apply_preview_failed_at,
+       aaq.tailor_failed_at AS auto_apply_tailor_failed_at,
        (aaq.resolved_preview IS NOT NULL)::boolean AS auto_apply_has_preview
 FROM user_jobs uj
 JOIN jobs ON jobs.id = uj.job_id

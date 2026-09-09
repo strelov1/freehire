@@ -36,6 +36,10 @@ func autoApplyReviewInfoForJob(ctx context.Context, queries *db.Queries, userID,
 		// there would read as "tailoring" forever, with nothing telling the candidate
 		// anything went wrong.
 		Failed: row.FailedAt.Valid || row.PreviewFailedAt.Valid,
+		// Distinct from Failed: a tailoring run that never produced a CV (tailor_failed_at,
+		// migration 0154). Folding it into Failed would tell the candidate the submission
+		// gave up, which is a different — and, since there is no CV, a wrong — story.
+		TailorFailed: row.TailorFailedAt.Valid,
 	}
 	if len(row.Unmapped) > 0 {
 		if err := json.Unmarshal(row.Unmapped, &attempt.Unmapped); err != nil {

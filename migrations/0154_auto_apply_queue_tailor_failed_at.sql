@@ -1,0 +1,24 @@
+-- A tailoring run that gave up left no trace at all: SetAutoApplyTailoredCV is reached only
+-- on a clean return, and nothing else in the entry moves. autoapply.DeriveStatus therefore
+-- fell through to its default and told the candidate "Auto-apply is preparing a tailored CV
+-- for this job" — indefinitely, about work nobody was doing. Three production entries sat
+-- that way on 2026-09-08, one of them for over a day.
+--
+-- Its own column rather than reusing one that exists:
+--
+--   failed_at is the SUBMISSION pass's dead-letter (RecordAutoApplyFailure) and is what
+--   ClaimAutoApplyBatch excludes on. An entry that never produced a CV cannot be claimed by
+--   that pass anyway (its predicate requires tailored_cv_id), so setting it there would say
+--   something false about a pass that never ran.
+--
+--   preview_failed_at (0140) belongs to the answer-preview pass, which likewise only ever
+--   runs once a CV exists. Migration 0140 exists precisely BECAUSE that pass sharing the
+--   submission's own counters misreported one as the other; sharing again here would repeat
+--   the mistake one step earlier in the same sequence.
+--
+-- No attempt counter beside it: unlike the two drain passes, nothing retries a tailoring run
+-- on a schedule — the orchestrator's Inngest step either succeeds or ends the run — so a
+-- countdown would have nothing to count. Re-running one is a deliberate act (publishing the
+-- submit event again), and SetAutoApplyTailoredCV clears this marker when it lands.
+ALTER TABLE public.auto_apply_queue
+    ADD COLUMN tailor_failed_at timestamptz;

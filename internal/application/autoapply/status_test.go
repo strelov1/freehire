@@ -23,7 +23,13 @@ func TestDeriveStatus_SixStates(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			got := DeriveStatus(c.hasTailoredCV, c.hasResolvedPreview, c.reviewDecision, c.blocked, c.failed)
+			got := DeriveStatus(DerivedFrom{
+				HasTailoredCV:      c.hasTailoredCV,
+				HasResolvedPreview: c.hasResolvedPreview,
+				ReviewDecision:     c.reviewDecision,
+				Blocked:            c.blocked,
+				Failed:             c.failed,
+			})
 			if got != c.want {
 				t.Errorf("DeriveStatus(%v, %v, %q, %v, %v) = %q, want %q",
 					c.hasTailoredCV, c.hasResolvedPreview, c.reviewDecision, c.blocked, c.failed, got, c.want)
@@ -83,5 +89,39 @@ func TestAssembleReviewInfo_DeclinedCarriesNeitherPreviewNorUnmapped(t *testing.
 	}
 	if got.ResolvedPreview != nil || got.Unmapped != nil {
 		t.Errorf("got = %+v, want neither preview nor unmapped surfaced for a declined attempt", got)
+	}
+}
+
+// A tailoring run that failed for a real reason must not read as one still in progress.
+//
+// Before this state existed, a failed run recorded nothing at all, so DeriveStatus fell
+// through to its default and the candidate was told "Auto-apply is preparing a tailored CV
+// for this job" — indefinitely, about work nobody was doing. Three production entries sat
+// that way, one of them for over a day.
+func TestDeriveStatus_AFailedTailoringRunIsNotStillTailoring(t *testing.T) {
+	got := DeriveStatus(DerivedFrom{TailorFailed: true})
+	if got != StatusTailorFailed {
+		t.Errorf("DeriveStatus(tailor failed) = %q, want %q", got, StatusTailorFailed)
+	}
+}
+
+// A later run that succeeds supersedes the earlier failure: the candidate has a CV to look
+// at, and being told the preparation failed while it sits there ready would be worse than
+// saying nothing. The write path clears the marker, and the derivation does not depend on
+// it having done so.
+func TestDeriveStatus_ASucceedingRunOutranksAnEarlierTailoringFailure(t *testing.T) {
+	got := DeriveStatus(DerivedFrom{
+		HasTailoredCV: true, HasResolvedPreview: true, TailorFailed: true,
+	})
+	if got != StatusPendingReview {
+		t.Errorf("DeriveStatus(tailored, previewed, earlier failure) = %q, want %q", got, StatusPendingReview)
+	}
+}
+
+// The candidate's own decision still outranks everything, exactly as it does for blocked.
+func TestDeriveStatus_ADeclineOutranksATailoringFailure(t *testing.T) {
+	got := DeriveStatus(DerivedFrom{ReviewDecision: "declined", TailorFailed: true})
+	if got != StatusDeclined {
+		t.Errorf("DeriveStatus(declined, tailor failed) = %q, want %q", got, StatusDeclined)
 	}
 }

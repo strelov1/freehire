@@ -702,14 +702,17 @@ export interface MyJob {
   auto_apply_status?: AutoApplyStatus;
 }
 
-/** The six-value candidate-facing status for a live auto-apply attempt. */
+/** The seven-value candidate-facing status for a live auto-apply attempt. */
 type AutoApplyStatus =
   | 'tailoring'
   | 'pending_review'
   | 'approved'
   | 'blocked'
   | 'declined'
-  | 'failed';
+  | 'failed'
+  /** The tailoring run itself gave up without producing a CV — distinct from `failed`,
+   *  which is a submission that gave up with one in hand. */
+  | 'tailor_failed';
 
 /** One resolved question/answer pair in an auto-apply answer preview. */
 interface AutoApplyPreviewField {

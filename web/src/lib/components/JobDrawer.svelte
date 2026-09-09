@@ -636,6 +636,27 @@
                 Auto-apply could not submit this application after retrying. This attempt is final.
               </p>
             </div>
+          {:else if autoApplyBanner?.kind === 'tailor_failed'}
+            <!-- Deliberately not the 'failed' copy: nothing was submitted and there is no
+                 tailored CV to look at, so "could not submit after retrying" would describe
+                 a step this attempt never reached. Says what did NOT happen, because the
+                 state it replaces (an entry that read as 'tailoring' forever) left people
+                 believing an application was on its way. -->
+            <div class="rounded-md border border-border bg-muted/30 px-3 py-2">
+              <p class="text-sm font-medium">Auto-apply couldn't prepare a CV for this job.</p>
+              <p class="text-xs text-muted-foreground">
+                Nothing was sent, and the job is still on your board. You can tailor a CV yourself and apply
+                as usual.
+              </p>
+              {#if hasPosting && item.job}
+                <a
+                  href={resolve('/tailor/[slug]', { slug: item.job.public_slug })}
+                  class="w-fit text-xs underline-offset-2 hover:underline"
+                >
+                  Tailor a CV
+                </a>
+              {/if}
+            </div>
           {/if}
 
           {#if pendingOutcome}
