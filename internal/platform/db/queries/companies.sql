@@ -323,6 +323,39 @@ ON CONFLICT (slug) DO UPDATE SET
     company_info_at = now(),
     updated_at      = now();
 
+-- name: ListCompaniesMissingWikipediaInfo :many
+-- Candidates for the Wikipedia company-info backfill: no tagline yet, and never
+-- resolved by this backfill before (company_info_wikipedia_checked_at IS NULL —
+-- set on every resolution, match or reject, so a company is looked up at most
+-- once). Keyset-paginated by slug so one run can be bounded and a later run
+-- resumes past what it already paged through.
+SELECT slug, name FROM companies
+WHERE (tagline IS NULL OR tagline = '')
+  AND company_info_wikipedia_checked_at IS NULL
+  AND slug > sqlc.arg(after_slug)
+ORDER BY slug
+LIMIT sqlc.arg(row_limit);
+
+-- name: FillCompanyInfoFromWikipedia :exec
+-- Applies a confident Wikipedia match: fills tagline only if blank, merges the
+-- company_info keys (existing keys win on collision, matching UpsertYCCompany's
+-- gap-fill rule), and marks the company checked so it is never looked up again.
+UPDATE companies
+SET tagline          = COALESCE(NULLIF(tagline, ''), sqlc.arg(tagline)),
+    company_info     = sqlc.arg(company_info) || company_info,
+    company_info_at  = now(),
+    company_info_wikipedia_checked_at = now(),
+    updated_at       = now()
+WHERE slug = sqlc.arg(slug);
+
+-- name: MarkCompanyWikipediaChecked :exec
+-- Records that the backfill looked this company up and found no confident match,
+-- so it is never looked up again. Touches nothing else: an unmatched company's
+-- tagline/company_info stay exactly as another source may have left them.
+UPDATE companies
+SET company_info_wikipedia_checked_at = now()
+WHERE slug = sqlc.arg(slug);
+
 -- name: RefreshCompanyFacets :execrows
 -- Recompute every company's denormalized state in one set-based pass: the open-job
 -- count plus the facet arrays derived from those open jobs — regions/countries from

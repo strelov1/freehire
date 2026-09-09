@@ -13,8 +13,8 @@
 
 ## 3. Backfill worker
 
-- [ ] 3.1 Add the `companies` query: select candidates where `tagline IS NULL AND company_info_wikipedia_checked_at IS NULL`, keyset-paginated, bounded by a per-run max.
-- [ ] 3.2 Add the `companies` write: on a confirmed match, set `tagline`, merge `company_info.summary` (gap-fill semantics — never overwrite an existing key), set `company_info_at` and `company_info_wikipedia_checked_at`; on no match or a rejected match, set only `company_info_wikipedia_checked_at`.
+- [x] 3.1 Add the `companies` query: select candidates where `tagline IS NULL AND company_info_wikipedia_checked_at IS NULL`, keyset-paginated, bounded by a per-run max.
+- [x] 3.2 Add the `companies` write: on a confirmed match, set `tagline`, merge `company_info.summary` (gap-fill semantics — never overwrite an existing key), set `company_info_at` and `company_info_wikipedia_checked_at`; on no match or a rejected match, set only `company_info_wikipedia_checked_at`.
 - [ ] 3.3 Implement `cmd/backfill-company-info-wikipedia`: dry-run (report proposed writes) by default, `--apply` to write; `WIKIPEDIA_BACKFILL_MAX_PER_RUN` env cap via `worker.EnvInt64`.
 - [ ] 3.4 Wire the worker through `internal/platform/worker` bootstrap (`DATABASE_URL` only, no other required env).
 
