@@ -106,6 +106,20 @@ var refusalRetryProviders = map[string]func(HTTPClient) Source{
 	"teamtailor": func(c HTTPClient) Source {
 		return NewTeamtailor(pacedHTMLGetter(c, teamtailorRequestInterval, teamtailorRequestBurst))
 	},
+	// ADP is the same shape as teamtailor, measured on prod 2026-09-09 after the catalogue grew
+	// from 2,798 boards to 7,890: one run logged 3,028 boards refused on their listing call, and
+	// board_health carried a consecutive failure for 1,962 of them. Asked in isolation minutes
+	// later the direct IP served two of three sampled boards 200 and refused the third, while the
+	// proxy served all three — the signature of our own burst rather than an address the platform
+	// has blocked. Pacing already holds the rate; what it cannot do is shorten a run that is now
+	// three times as long, so the same rate spends three times the window.
+	//
+	// Both ADP products are listed. They are separate platforms with separate limiters (see
+	// pacedADPMyJobsGetter), and neither can recover a refusal without this.
+	"adp": func(c HTTPClient) Source { return NewADP(pacedADPGetter(c)) },
+	"adpmyjobs": func(c HTTPClient) Source {
+		return NewADPMyJobs(pacedADPMyJobsGetter(c))
+	},
 }
 
 // ApplyProxyEgress rewires the proxiedProviders in registry to egress through the proxy
