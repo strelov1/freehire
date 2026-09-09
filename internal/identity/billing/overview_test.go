@@ -192,7 +192,13 @@ func TestSubscriptionOverviewDoesNotFlagASingleSubscription(t *testing.T) {
 	s := serviceWithProvider(t, func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case r.URL.Path == "/subscriptions":
-			_, _ = w.Write([]byte(`{"object":"list","data":[{"status":"active","items":{"data":[{"current_period_end":4102444800,"price":{"id":"price_ultra_monthly"}}]}}]}`))
+			// ONE subscription object, two items — Pro's id first, deliberately, matching
+			// TestBilledSubscription's identical fixture: the shape an upgrade that adds a
+			// price to the existing subscription (through the provider's own portal) leaves
+			// behind, as opposed to two separate subscription objects.
+			_, _ = w.Write([]byte(`{"object":"list","data":[{"status":"active","items":{"data":[` +
+				`{"current_period_end":4102444800,"price":{"id":"price_pro_monthly"}},` +
+				`{"current_period_end":4102444800,"price":{"id":"price_ultra_monthly"}}]}}]}`))
 		case strings.HasPrefix(r.URL.Path, "/prices/"):
 			_, _ = fmt.Fprintf(w, `{"id":"price_ultra_monthly","unit_amount":1900,"currency":"usd","recurring":{"interval":"month"}}`)
 		default:

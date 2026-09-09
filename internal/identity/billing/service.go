@@ -333,10 +333,17 @@ func (s *Service) CheckoutURL(ctx context.Context, userID int64, priceID string,
 	}
 
 	// An existing customer is reused so a second purchase cannot create a second customer for
-	// one person — which would leave two subscriptions nobody sums.
+	// one person — which would leave two subscriptions nobody sums. A failure to even read
+	// the binding is refused rather than silently treated as "no customer": a transient DB
+	// error would otherwise make a known customer look unbound and open a checkout that
+	// creates a second Stripe customer and a second subscription — the same fix this whole
+	// method exists for, applied one query earlier.
 	existing, err := s.q.GetStripeCustomerID(ctx, userID)
+	if err != nil {
+		return "", Discount{}, fmt.Errorf("billing: reading the Stripe customer of user %d: %w", userID, err)
+	}
 	var customerID string
-	if err == nil && existing.Valid {
+	if existing.Valid {
 		customerID = existing.String
 	}
 

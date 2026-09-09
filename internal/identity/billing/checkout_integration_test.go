@@ -142,6 +142,32 @@ func TestCheckoutURLOpensACheckoutSessionForAKnownCustomerWithNoSubscription(t *
 	}
 }
 
+// TestCheckoutURLFailsRatherThanTreatAFailedBindingReadAsUnbound guards a sibling of the
+// fix's central line (service.go's read of client.subscriberState): a failure reading
+// GetStripeCustomerID itself must not be treated as "no customer", which would open a
+// checkout that creates a second Stripe customer and a second subscription for someone who
+// already has both — reproducing the exact bug this method exists to prevent. A nonexistent
+// user id is what makes the underlying `:one` query fail deterministically, without needing
+// to fail the database connection itself.
+func TestCheckoutURLFailsRatherThanTreatAFailedBindingReadAsUnbound(t *testing.T) {
+	router := &checkoutRouter{
+		subscriptions: func(w http.ResponseWriter, _ *http.Request) {
+			_, _ = w.Write([]byte(`{"data":[]}`))
+		},
+	}
+	s, _ := newTieredService(t, router.handler())
+	ctx := context.Background()
+
+	const nonexistentUserID = -1
+	if _, _, err := s.CheckoutURL(ctx, nonexistentUserID, proPrice, Discount{}); err == nil {
+		t.Fatal("want an error when the customer binding cannot be read, got nil")
+	}
+
+	if router.checkoutCalled {
+		t.Fatal("a checkout was opened despite the binding read failing — this is the bug this test guards")
+	}
+}
+
 // TestCheckoutURLRefusesToGuessOnAnAmbiguousSubscription: a subscription already carrying an
 // item of each tier (the shape billedSubscription's own comment describes an upgrade through
 // the provider's portal leaving behind) must never have an item silently replaced by guess.
