@@ -717,9 +717,19 @@ func Register(app *fiber.App, cfg Config) {
 		mentorshipNotifier = mentorship.NewMailNotifier(mailClient, cfg.NotifyEmailFrom,
 			strings.TrimRight(cfg.FrontendOrigin, "/")+"/my/sessions")
 	}
+	// A connected mentor's calendar.events grant, mirroring the read-side gate above: the
+	// candidate calendar sync's own GmailConnector/GmailCipher pair, reused rather than a
+	// second copy of either. Nil when either is unset, so a deployment with no Google
+	// client configured just gets every booking's static-link fallback — this feature's
+	// entire rollback path.
+	mentorshipRepo := mentorship.NewQueriesRepository(queries, cfg.Pool)
+	var mentorshipCalendar mentorship.CalendarLinker
+	if cfg.GmailConnector != nil && cfg.GmailCipher != nil {
+		mentorshipCalendar = mentorship.NewGoogleCalendarLinker(mentorshipRepo, cfg.GmailConnector, cfg.GmailCipher)
+	}
 	mentorshipH := newMentorshipHandlers(mentorship.New(
-		mentorship.NewQueriesRepository(queries, cfg.Pool),
-		mentorship.Config{Notifier: mentorshipNotifier, Cache: cfg.Cache},
+		mentorshipRepo,
+		mentorship.Config{Notifier: mentorshipNotifier, Cache: cfg.Cache, CalendarLinker: mentorshipCalendar},
 	), photoStore)
 	// The mentor-profile create form's prefill. Composed from four unrelated blocks'
 	// own services (résumé, user profile, account, experience bank) plus the company
