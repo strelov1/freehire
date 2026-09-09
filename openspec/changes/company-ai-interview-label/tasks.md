@@ -28,10 +28,10 @@
 
 ## 5. Search
 
-- [ ] 5.1 Add the field to `JobDocument` and declare it filterable in the jobs index settings (`internal/search/search/client.go`).
-- [ ] 5.2 Add the query param to `search.UnknownParams`' vocabulary so it is never silently dropped, and map it in `query_filter.go`.
-- [ ] 5.3 Confirm `search-settings-drift` reports the gap when the attribute is missing from the live index — this is the guard that makes the ordering mistake visible.
-- [ ] 5.4 Integration test (`//go:build integration`) that the filter excludes a labelled company's jobs and that omitting it returns both.
+- [x] 5.1 Add the field to `JobDocument` and declare it filterable in the jobs index settings (`internal/search/search/client.go`).
+- [x] 5.2 Add the query param to `search.UnknownParams`' vocabulary so it is never silently dropped, and map it in `query_filter.go`.
+- [x] 5.3 Confirm `search-settings-drift` reports the gap when the attribute is missing from the live index — this is the guard that makes the ordering mistake visible.
+- [x] 5.4 Integration test (`//go:build integration`) that the filter excludes a labelled company's jobs and that omitting it returns both.
 
 ## 6. Frontend — filing
 

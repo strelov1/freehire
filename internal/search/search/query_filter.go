@@ -41,7 +41,10 @@ var StringFacets = map[string]string{
 	// settings patch declaring the attribute filterable MUST reach the live index
 	// before a binary carrying this line does — otherwise every facets request 500s.
 	"requires_clearance": "requires_clearance",
-	"ai_archetype":       "ai_archetype",
+	// ai_interview is written on the document at index time from the company's report
+	// count (see JobDocument.AIInterview), so it filters on the bare attribute.
+	"ai_interview": "ai_interview",
+	"ai_archetype": "ai_archetype",
 	// Derived at index time like the two above, so it filters on the bare attribute.
 	// The vocabulary holds one value, which makes `role_type_exclude` the way to ask
 	// for postings with no management marker — NOT a positive individual-contributor
@@ -78,8 +81,8 @@ func facetEq(param, attr, val string) string {
 	if param == "regions" && val == RegionUnspecified {
 		return IsEmpty(attr)
 	}
-	if param == RequiresClearanceParam {
-		return clearanceFragment(attr, val)
+	if trueOrAbsentParams[param] {
+		return trueOrAbsentFragment(attr, val)
 	}
 	return Eq(attr, val)
 }
@@ -89,12 +92,26 @@ func facetEq(param, attr, val string) string {
 // posting — the vast majority — carries no such attribute at all.
 const RequiresClearanceParam = "requires_clearance"
 
-// clearanceFragment builds the requires_clearance predicate. "false" cannot be an
-// equality: nothing in the index is ever written false, so `requires_clearance =
-// false` matches nothing and would silently empty a result set the caller expected to
-// be nearly the whole catalogue. Negating the positive is what actually answers
-// "everything not marked", including the documents that omit the attribute.
-func clearanceFragment(attr, val string) string {
+// AIInterviewParam asks whether the posting's company screens with an AI interviewer.
+// Same true-or-absent shape: a job carries the attribute only when its company has at
+// least one un-retracted report, and the useful question is the negative — "do not show
+// me these employers" — which is why it cannot be an equality on false.
+const AIInterviewParam = "ai_interview"
+
+// trueOrAbsentParams are the facets whose stored value is written only when true, so
+// the index holds the attribute for the marked minority and nothing at all for
+// everyone else. They share one predicate builder because they share one hazard.
+var trueOrAbsentParams = map[string]bool{
+	RequiresClearanceParam: true,
+	AIInterviewParam:       true,
+}
+
+// trueOrAbsentFragment builds the predicate for those facets. "false" cannot be an
+// equality: nothing in the index is ever written false, so `attr = false` matches
+// nothing and would silently empty a result set the caller expected to be nearly the
+// whole catalogue. Negating the positive is what actually answers "everything not
+// marked", including the documents that omit the attribute.
+func trueOrAbsentFragment(attr, val string) string {
 	if val == "false" {
 		return "NOT " + EqBool(attr, true)
 	}
