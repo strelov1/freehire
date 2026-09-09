@@ -163,6 +163,11 @@ func matchLabelAnswerKey(label string) (string, bool) {
 //
 // The prefix keeps the two from colliding — a topic is a folded question, which can be any
 // text at all, including the exact string "email".
+//
+// Must match the literal internal/api/candidateprofile's Profile.Fields() writes its banked
+// answers under. The two cannot share a constant — candidateprofile importing this package
+// would invert the layering — so this comment and Fields()'s own are the only thing holding
+// them together.
 const bankAnswerKeyPrefix = "topic:"
 
 // matchBankAnswerKey returns the answers-map key a field's label is banked under, if the
