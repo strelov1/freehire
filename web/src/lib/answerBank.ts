@@ -49,7 +49,7 @@ function isAnswerable(p: AutoApplyPreviewPending): boolean {
  *  - `empty`: no readable text at all. Genuinely nothing to show — unlike `blocked`, which
  *    has a label, this one draws no row.
  */
-export type PendingRowKind = 'draft' | 'answerable' | 'blocked' | 'empty';
+type PendingRowKind = 'draft' | 'answerable' | 'blocked' | 'empty';
 
 function rowKind(p: AutoApplyPreviewPending): PendingRowKind {
   if (p.will_draft_at_submission) return 'draft';
