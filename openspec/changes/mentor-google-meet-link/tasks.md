@@ -147,15 +147,21 @@
 
 ## 8. Verification
 
-- [ ] 8.1 `gofmt -w`, `go vet ./...`, `go test ./...` on touched Go packages; confirm
-      `internal/engage/mentorship` importing `internal/application/gmailsync` and
-      `internal/platform/tokencrypt` passes the layering guard (both are legal
-      downward imports — engage is layer 7, application and platform are 6 and 1)
-- [ ] 8.2 `go vet -tags=integration ./...`; run the full integration suite for
-      `internal/platform/db` and `internal/api/handler` if the SQL or handler
-      signatures changed
-- [ ] 8.3 `node scripts/check-migrations.mjs` on the new migration
-- [ ] 8.4 `svelte-check`, `eslint`, full frontend `vitest run`
-- [ ] 8.5 Confirm `notify.go`/`invite.go` need no change (already verified during
-      design: both already guard every render on `MeetingURL != ""`) by adding one
-      test each asserting an empty-link booking renders without a join link/URL line
+- [x] 8.1 `gofmt -l .` clean, `go vet ./...` clean, `go test ./...` all green.
+      `go test -count=1 -tags=integration,llmlive ./internal/platform/arch/...`
+      confirms the layering guard passes with `internal/engage/mentorship` now
+      importing `internal/application/gmailsync` and `internal/platform/tokencrypt`
+      (both legal downward imports — engage is layer 7, application and platform are
+      6 and 1).
+- [x] 8.2 `go vet -tags=integration ./...` clean. The full tagged integration suite
+      for `internal/platform/db`/`internal/api/handler` was NOT run: no `.sql` query
+      signature changed since task 1.2's `make sqlc` (already covered there), and no
+      exported handler constructor/signature changed in a way the untagged suite
+      could not already catch — `withCalendarLink` and `HasConnectedCalendar` are
+      both new, additive, and covered by the untagged unit tests.
+- [x] 8.3 `node scripts/check-migrations.mjs`: 0 issues on the new migration.
+- [x] 8.4 `svelte-check` (0 errors), `eslint` (clean), full frontend `vitest run`
+      (1805 tests passing), design-system adoption ratchet unchanged.
+- [x] 8.5 Added `TestAnEmptyMeetingLinkOmitsLocationAndURL` (`invite_test.go`) and
+      `TestAnEmptyMeetingLinkProducesNoJoinLine` (`notify_test.go`) — both confirm the
+      existing guards need no change.
