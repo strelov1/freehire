@@ -169,6 +169,10 @@ var blocks = map[string][]string{
 		// way jobview does — the block below it, not the model.
 		"reqextract",
 		"silence", "verdict", "ycdir",
+		// wikicompany resolves a company name against Wikidata/Wikipedia's public APIs
+		// for the company-info-wikipedia-backfill worker — a fact-lookup about a
+		// company, the same footing as ycdir, not an AI/enrichment concern.
+		"wikicompany",
 	},
 	"application": {
 		"appevent", "apptimeline", "autoapply", "autoapplyorchestrate", "calmatch", "calsync",

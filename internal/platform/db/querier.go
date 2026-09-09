@@ -1893,6 +1893,10 @@ type Querier interface {
 	// non-positive window means "never bury on age" rather than "bury everything", for the
 	// reason RecordEnrichmentFailure spells out: a misconfiguration must cost retries, not mail.
 	FailEmailClassification(ctx context.Context, arg FailEmailClassificationParams) (FailEmailClassificationRow, error)
+	// Applies a confident Wikipedia match: fills tagline only if blank, merges the
+	// company_info keys (existing keys win on collision, matching UpsertYCCompany's
+	// gap-fill rule), and marks the company checked so it is never looked up again.
+	FillCompanyInfoFromWikipedia(ctx context.Context, arg FillCompanyInfoFromWikipediaParams) error
 	// Import's write: fill only the fields the bank has nothing for, and never overwrite a value
 	// already there. A user who corrected their job title must not have that correction undone by
 	// re-uploading the CV it came from. is_current is not touched at all — a CV that still says
@@ -3094,6 +3098,12 @@ type Querier interface {
 	// companies that are actually hiring, matching the /companies list's hiring scope, and
 	// rides companies_hiring_job_count_idx instead of scanning the full heap.
 	ListCompaniesForReindex(ctx context.Context, arg ListCompaniesForReindexParams) ([]Company, error)
+	// Candidates for the Wikipedia company-info backfill: no tagline yet, and never
+	// resolved by this backfill before (company_info_wikipedia_checked_at IS NULL —
+	// set on every resolution, match or reject, so a company is looked up at most
+	// once). Keyset-paginated by slug so one run can be bounded and a later run
+	// resumes past what it already paged through.
+	ListCompaniesMissingWikipediaInfo(ctx context.Context, arg ListCompaniesMissingWikipediaInfoParams) ([]ListCompaniesMissingWikipediaInfoRow, error)
 	// The open titles a company carries on its OWN board — a source of kind `ats` or
 	// `company`, never an aggregator. The worker turns these into role keys and asks
 	// whether an aggregator posting's key is among them.
@@ -3987,6 +3997,10 @@ type Querier interface {
 	// Stamp a revision as undone. Guarded on reverted_at IS NULL so undoing twice affects no row
 	// and the caller can tell the difference without a second read.
 	MarkCVRevisionReverted(ctx context.Context, arg MarkCVRevisionRevertedParams) (int64, error)
+	// Records that the backfill looked this company up and found no confident match,
+	// so it is never looked up again. Touches nothing else: an unmatched company's
+	// tagline/company_info stay exactly as another source may have left them.
+	MarkCompanyWikipediaChecked(ctx context.Context, slug string) error
 	// Stamp the subscription's last daily-digest send instant, so
 	// internal/application/deliverywindow.DigestDue reads "already sent today" on any later pass
 	// within the same local calendar day. Only called after a successful `daily`-mode
