@@ -68,6 +68,44 @@ func TestRecordSuccessReportsNotReachedForAnEmptyListing(t *testing.T) {
 	}
 }
 
+// A board whose listing works but whose every detail request fails must still record a yield.
+// This is the mass-close path, and it is the reason `reached` is boardListedAnyPosting rather
+// than the boardReachedPostings permission gate it started as.
+//
+// The shape: a link-only adapter (smartrecruiters, icims, breezy, jazzhr and the rest, whose
+// detail request is a posting's only content) meets a refusing origin or changed markup. Every
+// posting comes back Unreadable. Unreadable is deliberately NOT Failed — the board answered, and
+// failing it would cool a working board over a per-posting hole — so the crawl records SUCCESS
+// with consecutive_failures at 0 and a fresh last_success_at. If that also recorded "no yield",
+// the board would age past the empty-feed window with every one of its live postings still on
+// it, and the safety net would close them all as feed_empty. The listing named those postings:
+// the feed is not empty, our reading of it is broken, and those are different diagnoses.
+func TestRecordSuccessReportsReachedWhenEveryPostingWasUnreadable(t *testing.T) {
+	src := fakeSource{provider: "smartrecruiters", jobs: unreadableBoard("Acme", 3, 3)}
+	health := &fakeHealth{}
+	r := Runner{Registry: registry(src), Store: &fakeStore{}, BoardHealth: health}
+
+	stats, err := r.Run(context.Background(), []sources.CompanyEntry{
+		{Company: "Acme", Provider: "smartrecruiters", Board: "acme"},
+	})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	got := stats["smartrecruiters"]
+	if got.Unreadable != 3 || got.Ingested != 0 || got.Failed != 0 {
+		t.Fatalf("stats = %+v, want Unreadable=3 Ingested=0 Failed=0 (fixture assumption)", got)
+	}
+	if len(health.successes) == 0 {
+		t.Fatal("fixture assumption: an all-unreadable board is still recorded as a SUCCESS, " +
+			"which is exactly what makes it dangerous here")
+	}
+	if !health.reached["smartrecruiters/acme/"] {
+		t.Error("reached = false for a board whose listing named 3 postings it could not read, " +
+			"want true: this board would otherwise be closed as an empty feed while every " +
+			"posting on it is live")
+	}
+}
+
 // An ingested posting is the unambiguous case, pinned so a refactor of the reached expression
 // cannot quietly narrow it to something that excludes the ordinary path.
 func TestRecordSuccessReportsReachedWhenAPostingWasIngested(t *testing.T) {

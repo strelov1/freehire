@@ -1,5 +1,5 @@
 [Unit]
-Description=freehire worker: safety-net close for boards proven unreachable for weeks
+Description=freehire worker: safety-net close for boards proven unreachable, or proven empty, for weeks
 After=network.target postgresql.service
 [Service]
 Type=oneshot
@@ -10,10 +10,16 @@ EnvironmentFile=/opt/freehire/.env
 # fleet's own load.
 CPUWeight=20
 IOWeight=20
-# Deliberately no --apply here: this worker ships dry-run-only (reporting what it would
-# close) until a human has read at least one full closure-window's report and confirmed
-# the list is boards that are actually gone, not an adapter that needs a fix
-# (openspec change close-chronically-unreachable-boards, design.md Migration Plan step 3).
-# Add --apply to this line only after that review — a separate, deliberate edit, the same
-# way cmd/prune's own --apply is never the default.
+# Deliberately no --apply and no --apply-empty-feed here: this worker ships dry-run-only
+# (reporting what it would close) until a human has read at least one full closure-window's
+# report and confirmed the list is boards that are actually gone, not an adapter that needs
+# a fix (openspec change close-chronically-unreachable-boards, design.md Migration Plan
+# step 3). Add either flag to this line only after that review — a separate, deliberate
+# edit, the same way cmd/prune's own --apply is never the default.
+#
+# The two passes have SEPARATE flags on purpose, and adding one must not be read as
+# endorsing the other: --apply arms the unreachable pass, --apply-empty-feed arms the
+# empty-feed pass (migration 0158), and each reports its own boards for its own reasons.
+# Reviewing weeks of "no board could be reached" reports says nothing about whether the
+# boards reported as EMPTY are really empty.
 ExecStart=/opt/freehire/src/hire-current/close-chronic-boards

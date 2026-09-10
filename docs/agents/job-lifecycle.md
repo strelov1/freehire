@@ -1,7 +1,7 @@
 # Job lifecycle conventions
 
 ## Scope
-The open/closed state of a job row, the five mechanisms that write `closed_at`, and the filtering semantics that depend on it.
+The open/closed state of a job row, the six mechanisms that write `closed_at`, and the filtering semantics that depend on it.
 
 ## Always true
 - A job is open while `closed_at IS NULL`. Closing is a soft state, and the lifecycle never deletes.
@@ -18,7 +18,7 @@ The open/closed state of a job row, the five mechanisms that write `closed_at`, 
 - A board whose crawls all SUCCEED but whose feed has carried nothing for a long time is closed by the same worker's second pass: `closed_reason = 'feed_empty'`.
 
 ## How it works
-Closing is a soft state on one column (`closed_at`) written by four independent mechanisms, each covering a gap the others can't reach. Three of them close on evidence; the fourth, the age rule, closes on a guess, which is why every close now records which one wrote it.
+Closing is a soft state on one column (`closed_at`) written by six independent mechanisms, each covering a gap the others can't reach. Five of them close on evidence; the age rule (4) closes on a guess, which is why every close now records which one wrote it. The two safety nets, (5) and (6), differ from the rest in what their evidence is ABOUT: the first four read a posting, while (5) and (6) read a board's history and close on what the crawl has been unable to learn for weeks — (5) because nothing could reach the board, (6) because everything reached it and found nothing there.
 
 One interaction with catalogue pruning is worth knowing. Once ingest starts rejecting a board's non-technical postings, the ones already stored stop being seen and the unseen sweep closes them after 48h — so `closed_at` fills with rows the campaign is about to delete. That is why `cmd/prune`'s scan covers closed rows: a scan over open jobs only would leave exactly the rows nothing will ever replace.
 

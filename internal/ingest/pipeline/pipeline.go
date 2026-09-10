@@ -123,10 +123,12 @@ type BoardHealth interface {
 	// skips the board when it is set and in the future.
 	Cooldown(ctx context.Context, provider, board, region string) (time.Time, bool, error)
 	// RecordSuccess clears the board's failure state and stamps freshness. reached reports
-	// whether the crawl found any posting at all on this board (boardReachedPostings) — a
+	// whether the board's LISTING named any posting at all (boardListedAnyPosting) — a
 	// separate question from ingested, which counts only the ones that became rows, and the
 	// one an empty feed answers differently from a live board whose every posting we already
-	// hold. See board_health.last_yield_at (migration 0158) for what it feeds and why.
+	// hold, or cannot read, or failed to save. See board_health.last_yield_at (migration
+	// 0158) for what it feeds, and boardListedAnyPosting for why it is deliberately the most
+	// generous reading available.
 	RecordSuccess(ctx context.Context, provider, board, region string, ingested int, reached bool) error
 	// RecordFailure counts a failed crawl and cools the board down per the backoff policy.
 	RecordFailure(ctx context.Context, provider, board, region, errMsg string) error
@@ -556,7 +558,7 @@ func (r Runner) ingestBoard(ctx context.Context, e sources.CompanyEntry) Stats {
 		if st.Failed > 0 && st.Ingested == 0 && st.Rejected == 0 && st.ATSCovered == 0 {
 			r.recordFailure(ctx, e, "streaming board failed with no progress")
 		} else {
-			r.recordSuccess(ctx, e, st.Ingested, boardReachedPostings(st))
+			r.recordSuccess(ctx, e, st.Ingested, boardListedAnyPosting(st))
 		}
 		return st
 	}
@@ -675,7 +677,7 @@ func (r Runner) ingestFetched(ctx context.Context, e sources.CompanyEntry, raw [
 	// which on a national feed heavy with non-tech postings is the ordinary outcome, not an
 	// empty feed. The whole board would then age into the empty-feed net and have its jobs
 	// closed under a diagnosis that was never true of it.
-	r.recordSuccess(ctx, e, st.Ingested, boardReachedPostings(st))
+	r.recordSuccess(ctx, e, st.Ingested, boardListedAnyPosting(st))
 	// Too much of the board went unread for its crawl to be evidence of what is still on it,
 	// so this run's close scopes are withheld for every employer the board carries — the board
 	// scope through boardQualifies, the company scope through these slugs. Announced because
