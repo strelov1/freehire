@@ -12,7 +12,8 @@ for sale.
 
 The system SHALL configure the free tier's daily allowance to zero, by default, for every
 currently metered AI feature: CV tailoring, job-fit analysis, the assistant, dictation and
-cover-letter drafting.
+cover-letter drafting. Auto-apply already carries this shape from an earlier change and is
+unaffected here — after this change every metered feature, auto-apply included, shares it.
 
 #### Scenario: A free account is refused a metered AI feature
 
