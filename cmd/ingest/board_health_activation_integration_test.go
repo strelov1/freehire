@@ -28,7 +28,7 @@ func TestBoardHealth_RecordSuccessActivatesAPendingBoard(t *testing.T) {
 		t.Fatalf("seed pending board: %v", err)
 	}
 
-	if err := h.RecordSuccess(ctx, "greenhouse", "acme", "", 3); err != nil {
+	if err := h.RecordSuccess(ctx, "greenhouse", "acme", "", 3, true); err != nil {
 		t.Fatalf("RecordSuccess: %v", err)
 	}
 
@@ -49,7 +49,7 @@ func TestBoardHealth_RecordSuccessIsHarmlessWithNoMatchingBoard(t *testing.T) {
 	ctx := context.Background()
 	h := newBoardHealth(pool)
 
-	if err := h.RecordSuccess(ctx, "greenhouse", "no-catalog-row", "", 1); err != nil {
+	if err := h.RecordSuccess(ctx, "greenhouse", "no-catalog-row", "", 1, true); err != nil {
 		t.Fatalf("RecordSuccess: %v", err)
 	}
 }
@@ -69,7 +69,7 @@ func TestBoardHealth_RecordSuccessDoesNotReactivateAnAlreadyActiveBoard(t *testi
 		t.Fatalf("seed active board: %v", err)
 	}
 
-	if err := h.RecordSuccess(ctx, "greenhouse", "acme", "", 5); err != nil {
+	if err := h.RecordSuccess(ctx, "greenhouse", "acme", "", 5, true); err != nil {
 		t.Fatalf("RecordSuccess: %v", err)
 	}
 
