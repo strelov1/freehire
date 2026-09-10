@@ -196,21 +196,31 @@
   <!-- A. Catalogue scale -->
   <section class="mb-14">
     <p class="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">// the catalogue</p>
-    <dl class="mt-6 grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-3 lg:grid-cols-5">
-      {#each stats as s (s.label)}
-        <div class="bg-background p-5 sm:p-6">
-          <dt class="font-mono text-xs uppercase tracking-wide text-muted-foreground">{s.label}</dt>
-          <dd class="mt-2 text-3xl font-semibold tracking-tight tabular-nums sm:text-4xl">
-            {#if s.href}
-              <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- links to the JSON API endpoint, not a SvelteKit route -->
-              <a href={s.href} class="hover:underline">{s.value}</a>
-            {:else}
-              {s.value}
-            {/if}
-          </dd>
-        </div>
-      {/each}
-    </dl>
+    <!-- Wrapping flex, not a fixed grid: the strip holds five figures and drops any the
+         snapshot could not measure, so a fixed column count leaves a hole in the last row
+         — and with the separators drawn by the container's own colour showing through a
+         one-pixel gap, that hole rendered as a grey block. Here the last row's tiles grow
+         to fill the width instead. The tiles' own borders draw the separators, and the
+         negative margin pushes the outermost ones under the container's clipped edge. -->
+    <div class="mt-6 overflow-hidden rounded-xl border border-border">
+      <dl class="-mb-px -mr-px flex flex-wrap">
+        {#each stats as s (s.label)}
+          <!-- A two-line label must not push its figure down: the tile is a column and the
+               figure is pinned to its bottom, so every figure in a row shares one baseline. -->
+          <div class="flex min-w-36 flex-1 flex-col border-b border-r border-border p-5 sm:p-6">
+            <dt class="font-mono text-xs uppercase tracking-wide text-balance text-muted-foreground">{s.label}</dt>
+            <dd class="mt-auto pt-2 text-3xl font-semibold tracking-tight tabular-nums sm:text-4xl">
+              {#if s.href}
+                <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- links to the JSON API endpoint, not a SvelteKit route -->
+                <a href={s.href} class="hover:underline">{s.value}</a>
+              {:else}
+                {s.value}
+              {/if}
+            </dd>
+          </div>
+        {/each}
+      </dl>
+    </div>
   </section>
 
   <!-- B. Catalogue movement -->
@@ -260,9 +270,9 @@
     {#if engagement}
       <dl class="grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-4">
         {#each engagement as e (e.label)}
-          <div class="bg-background p-5 sm:p-6">
-            <dt class="font-mono text-xs uppercase tracking-wide text-muted-foreground">{e.label}</dt>
-            <dd class="mt-2 text-3xl font-semibold tracking-tight tabular-nums sm:text-4xl">{e.value}</dd>
+          <div class="flex flex-col bg-background p-5 sm:p-6">
+            <dt class="font-mono text-xs uppercase tracking-wide text-balance text-muted-foreground">{e.label}</dt>
+            <dd class="mt-auto pt-2 text-3xl font-semibold tracking-tight tabular-nums sm:text-4xl">{e.value}</dd>
           </div>
         {/each}
       </dl>
