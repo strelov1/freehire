@@ -189,6 +189,7 @@ type AutoApplyQueue struct {
 	PreviewAttempts int32              `json:"preview_attempts"`
 	PreviewFailedAt pgtype.Timestamptz `json:"preview_failed_at"`
 	TailorFailedAt  pgtype.Timestamptz `json:"tailor_failed_at"`
+	CaptchaAttempts int32              `json:"captcha_attempts"`
 }
 
 type BillingEvent struct {

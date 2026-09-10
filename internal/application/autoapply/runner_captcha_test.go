@@ -27,14 +27,14 @@ func TestRunRetriesACaptchaRefusalOnItsOwnGenerousBudget(t *testing.T) {
 	if stats.Failed != 1 {
 		t.Errorf("Failed = %d, want 1 — a captcha refusal is a failed attempt, just a retryable one", stats.Failed)
 	}
-	if len(store.failed) != 1 || store.failed[0] != 7 {
-		t.Fatalf("Store.Fail calls = %v, want [7]", store.failed)
+	if len(store.failedCaptcha) != 1 || store.failedCaptcha[0] != 7 {
+		t.Fatalf("Store.FailCaptcha calls = %v, want [7]", store.failedCaptcha)
 	}
-	if store.failMax != captchaMaxAttempts {
-		t.Errorf("Fail called with maxAttempts=%d, want captchaMaxAttempts=%d", store.failMax, captchaMaxAttempts)
+	if store.failCaptchaMax != captchaMaxAttempts {
+		t.Errorf("FailCaptcha called with maxAttempts=%d, want captchaMaxAttempts=%d", store.failCaptchaMax, captchaMaxAttempts)
 	}
-	if store.failMax <= opts().MaxAttempts {
-		t.Errorf("captchaMaxAttempts=%d is not more generous than the ordinary budget %d, which is the whole point", store.failMax, opts().MaxAttempts)
+	if store.failCaptchaMax <= opts().MaxAttempts {
+		t.Errorf("captchaMaxAttempts=%d is not more generous than the ordinary budget %d, which is the whole point", store.failCaptchaMax, opts().MaxAttempts)
 	}
 }
 
