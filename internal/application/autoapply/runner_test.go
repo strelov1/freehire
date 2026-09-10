@@ -17,11 +17,13 @@ type fakeStore struct {
 	parkedUnmapped map[int64][]UnmappedField
 	parkErr        error
 
-	failed       []int64
-	failAttempts map[int64]int
-	failMax      int
-	failMsg      string
-	failErr      error
+	failed         []int64
+	failAttempts   map[int64]int
+	failMax        int
+	failMsg        string
+	failedCaptcha  []int64
+	failCaptchaMax int
+	failErr        error
 }
 
 func (f *fakeStore) Claim(ctx context.Context, batch, leaseSeconds int) ([]Claimed, error) {
@@ -50,6 +52,20 @@ func (f *fakeStore) Park(ctx context.Context, queueID int64, unmapped []Unmapped
 	}
 	f.parkedUnmapped[queueID] = unmapped
 	return nil
+}
+
+func (f *fakeStore) FailCaptcha(ctx context.Context, queueID int64, errMsg string, maxAttempts int) (bool, error) {
+	if f.failErr != nil {
+		return false, f.failErr
+	}
+	f.failedCaptcha = append(f.failedCaptcha, queueID)
+	f.failCaptchaMax = maxAttempts
+	f.failMsg = errMsg
+	if f.failAttempts == nil {
+		f.failAttempts = map[int64]int{}
+	}
+	f.failAttempts[queueID]++
+	return f.failAttempts[queueID] >= maxAttempts, nil
 }
 
 func (f *fakeStore) Fail(ctx context.Context, queueID int64, errMsg string, maxAttempts int) (bool, error) {

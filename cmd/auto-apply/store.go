@@ -124,6 +124,23 @@ func (s *dbStore) Fail(ctx context.Context, queueID int64, errMsg string, maxAtt
 	return row.FailedAt.Valid, nil
 }
 
+// FailCaptcha is Fail's counterpart for the one refusal safe to retry, on captcha_attempts
+// rather than Fail's attempts (migration 0157). It shares failed_at: running out of asks is
+// still the entry giving up, and the candidate is told the same way. Separating the counter
+// is what stops the captcha's generous budget from spending down the one a genuinely
+// transient error depends on — the same trap FailPreview below already documents.
+func (s *dbStore) FailCaptcha(ctx context.Context, queueID int64, errMsg string, maxAttempts int) (bool, error) {
+	row, err := s.q.RecordAutoApplyCaptchaRefusal(ctx, db.RecordAutoApplyCaptchaRefusalParams{
+		ID:          queueID,
+		LastError:   errMsg,
+		MaxAttempts: int32(maxAttempts),
+	})
+	if err != nil {
+		return false, err
+	}
+	return row.FailedAt.Valid, nil
+}
+
 // FailPreview is Fail's own counterpart for the preview pass, on preview_attempts/
 // preview_failed_at rather than Fail's attempts/failed_at (migration 0140) — a code review
 // caught the two passes sharing one budget, which let a transient preview error dead-letter

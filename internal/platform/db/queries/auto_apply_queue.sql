@@ -125,6 +125,29 @@ SET preview_attempts = preview_attempts + 1,
 WHERE id = sqlc.arg(id)
 RETURNING preview_attempts, preview_failed_at;
 
+-- name: RecordAutoApplyCaptchaRefusal :one
+-- RecordAutoApplyFailure's counterpart for the one refusal that is safe to retry, on its
+-- own counter (migration 0157). A board that says it could not VERIFY the submission has
+-- told us it created no application, so asking again costs the employer nothing — and it
+-- must be asked many more times than an ordinary failure, because an invisible captcha is a
+-- coin toss no browser configuration improves.
+--
+-- Its own column for the same reason RecordAutoApplyPreviewFailure has one: counting these
+-- asks in `attempts` spent down the budget the genuinely transient errors depend on, and a
+-- live entry that had collected 12 captcha refusals was dead-lettered by the first field
+-- fill that timed out, without the three tries that error was entitled to. Same shape
+-- otherwise: bump the counter, record the reason, dead-letter once it reaches the max,
+-- leave the lease in place.
+UPDATE auto_apply_queue
+SET captcha_attempts = captcha_attempts + 1,
+    last_error       = sqlc.arg(last_error),
+    failed_at        = CASE
+                           WHEN captcha_attempts + 1 >= sqlc.arg(max_attempts)::int THEN now()
+                           ELSE NULL
+                       END
+WHERE id = sqlc.arg(id)
+RETURNING captcha_attempts, failed_at;
+
 -- name: MarkAutoApplyTailorFailed :one
 -- Records that a tailoring run gave up without producing a CV (migration 0154), so the
 -- entry stops reading as one still being prepared.

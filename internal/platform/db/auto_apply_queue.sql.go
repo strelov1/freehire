@@ -493,6 +493,48 @@ func (q *Queries) MarkAutoApplyTailorFailed(ctx context.Context, arg MarkAutoApp
 	return i, err
 }
 
+const recordAutoApplyCaptchaRefusal = `-- name: RecordAutoApplyCaptchaRefusal :one
+UPDATE auto_apply_queue
+SET captcha_attempts = captcha_attempts + 1,
+    last_error       = $1,
+    failed_at        = CASE
+                           WHEN captcha_attempts + 1 >= $2::int THEN now()
+                           ELSE NULL
+                       END
+WHERE id = $3
+RETURNING captcha_attempts, failed_at
+`
+
+type RecordAutoApplyCaptchaRefusalParams struct {
+	LastError   string `json:"last_error"`
+	MaxAttempts int32  `json:"max_attempts"`
+	ID          int64  `json:"id"`
+}
+
+type RecordAutoApplyCaptchaRefusalRow struct {
+	CaptchaAttempts int32              `json:"captcha_attempts"`
+	FailedAt        pgtype.Timestamptz `json:"failed_at"`
+}
+
+// RecordAutoApplyFailure's counterpart for the one refusal that is safe to retry, on its
+// own counter (migration 0157). A board that says it could not VERIFY the submission has
+// told us it created no application, so asking again costs the employer nothing — and it
+// must be asked many more times than an ordinary failure, because an invisible captcha is a
+// coin toss no browser configuration improves.
+//
+// Its own column for the same reason RecordAutoApplyPreviewFailure has one: counting these
+// asks in `attempts` spent down the budget the genuinely transient errors depend on, and a
+// live entry that had collected 12 captcha refusals was dead-lettered by the first field
+// fill that timed out, without the three tries that error was entitled to. Same shape
+// otherwise: bump the counter, record the reason, dead-letter once it reaches the max,
+// leave the lease in place.
+func (q *Queries) RecordAutoApplyCaptchaRefusal(ctx context.Context, arg RecordAutoApplyCaptchaRefusalParams) (RecordAutoApplyCaptchaRefusalRow, error) {
+	row := q.db.QueryRow(ctx, recordAutoApplyCaptchaRefusal, arg.LastError, arg.MaxAttempts, arg.ID)
+	var i RecordAutoApplyCaptchaRefusalRow
+	err := row.Scan(&i.CaptchaAttempts, &i.FailedAt)
+	return i, err
+}
+
 const recordAutoApplyFailure = `-- name: RecordAutoApplyFailure :one
 UPDATE auto_apply_queue
 SET attempts   = attempts + 1,

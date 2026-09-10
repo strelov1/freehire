@@ -4658,6 +4658,19 @@ type Querier interface {
 	// place — its expiry gates the retry to a later run and doubles as the crash reaper, so a
 	// failed entry is never reprocessed within the same run. Mirrors RecordSemanticFailure.
 	RecordApplyFormFailure(ctx context.Context, arg RecordApplyFormFailureParams) (RecordApplyFormFailureRow, error)
+	// RecordAutoApplyFailure's counterpart for the one refusal that is safe to retry, on its
+	// own counter (migration 0157). A board that says it could not VERIFY the submission has
+	// told us it created no application, so asking again costs the employer nothing — and it
+	// must be asked many more times than an ordinary failure, because an invisible captcha is a
+	// coin toss no browser configuration improves.
+	//
+	// Its own column for the same reason RecordAutoApplyPreviewFailure has one: counting these
+	// asks in `attempts` spent down the budget the genuinely transient errors depend on, and a
+	// live entry that had collected 12 captcha refusals was dead-lettered by the first field
+	// fill that timed out, without the three tries that error was entitled to. Same shape
+	// otherwise: bump the counter, record the reason, dead-letter once it reaches the max,
+	// leave the lease in place.
+	RecordAutoApplyCaptchaRefusal(ctx context.Context, arg RecordAutoApplyCaptchaRefusalParams) (RecordAutoApplyCaptchaRefusalRow, error)
 	// Count a transient failure: bump attempts, record the error, and dead-letter (set
 	// failed_at) once attempts reach the max. The lease (claimed_at) is intentionally left in
 	// place — its expiry gates the retry to a later run, so a failed entry is never

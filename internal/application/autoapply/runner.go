@@ -146,6 +146,13 @@ type Store interface {
 	Park(ctx context.Context, queueID int64, unmapped []UnmappedField, reason string) error
 	// Fail records a transient failure for one entry; it reports whether it dead-lettered.
 	Fail(ctx context.Context, queueID int64, errMsg string, maxAttempts int) (deadLettered bool, err error)
+	// FailCaptcha counts a captcha refusal on its own counter (migration 0157) rather
+	// than the ordinary attempts budget. Deliberately NOT Fail with a different
+	// maxAttempts: the two share a column that way, and the captcha's far more generous
+	// budget then spends down the one a genuinely transient error depends on — a live
+	// entry with 12 captcha refusals was dead-lettered by the first field fill that
+	// timed out. Same separation RecordAutoApplyPreviewFailure already makes.
+	FailCaptcha(ctx context.Context, queueID int64, errMsg string, maxAttempts int) (deadLettered bool, err error)
 }
 
 // RunOptions are the per-run knobs, the same shape internal/applyform's RunOptions takes.
@@ -309,7 +316,7 @@ func (rn *run) failCaptcha(ctx context.Context, c Claimed, boardSaid string) out
 	if boardSaid != "" {
 		reason = fmt.Sprintf("%s: %s", reason, boardSaid)
 	}
-	dead, failErr := rn.store.Fail(ctx, c.QueueID, reason, captchaMaxAttempts)
+	dead, failErr := rn.store.FailCaptcha(ctx, c.QueueID, reason, captchaMaxAttempts)
 	if failErr != nil {
 		log.Printf("auto-apply: record captcha refusal for queue entry %d: %v", c.QueueID, failErr)
 	} else if dead {
