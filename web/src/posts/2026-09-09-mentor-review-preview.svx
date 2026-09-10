@@ -1,0 +1,18 @@
+---
+title: Reviewing mentor applications got easier
+date: 2026-09-09
+summary: The moderation queue for mentor profiles now shows when someone applied and lets a reviewer preview the profile before deciding.
+type: changelog
+tags:
+  - mentorship
+draft: false
+---
+
+Mentorship is still in beta, but the review side of it needed catching up. A
+moderator deciding whether to approve a mentor profile could only see the text
+fields — no submission date, and no way to see how the profile would actually
+look once published.
+
+Both are fixed now: each pending application shows when it came in, and a
+**Preview** toggle renders it the way a visitor would see it — photo included,
+if the mentor opted in to show one — before anyone hits approve or reject.
