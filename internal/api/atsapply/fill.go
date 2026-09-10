@@ -73,13 +73,23 @@ func isCaptchaRefusal(bodyText string) bool {
 	return containsAny(strings.ToLower(bodyText), captchaRefusalMarkers)
 }
 
+// captchaRefusal carries a refusal that is safe to retry. It answers errors.Is for
+// errCaptchaRefused while reading as the detail alone: the sentinel is a label the client
+// dispatches on, and the runner writes its own sentence in front of it when it records the
+// row. Wrapping with fmt.Errorf("%w: %w", …) instead made the recorded reason say "captcha
+// refused the submission" twice before saying anything a person could act on.
+type captchaRefusal struct{ detail error }
+
+func (e captchaRefusal) Error() string   { return e.detail.Error() }
+func (e captchaRefusal) Unwrap() []error { return []error{errCaptchaRefused, e.detail} }
+
 // newRefusalError builds the error a matched refusal marker travels as: the marker that
 // fired, the board's own sentence around it, and — when the board declined to verify — the
 // errCaptchaRefused sentinel the runner reads with errors.Is.
 func newRefusalError(marker, bodyText string) error {
 	err := fmt.Errorf("board refused the submission: matched marker %q in %q", marker, refusalEvidence(bodyText, marker))
 	if isCaptchaRefusal(bodyText) {
-		return fmt.Errorf("%w: %w", errCaptchaRefused, err)
+		return captchaRefusal{detail: err}
 	}
 	return err
 }
