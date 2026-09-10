@@ -194,7 +194,11 @@ func TestBrowserUseEligible(t *testing.T) {
 		{"ashby with no file field", "ashby", Plan{Fields: []ResolvedField{{ID: "email", Kind: "text"}}}, true},
 		{"workable with no file field", "workable", Plan{}, true},
 		{"greenhouse is never eligible", "greenhouse", Plan{}, false},
-		{"unknown provider is never eligible", "lever", Plan{}, false},
+		// Lever moved here on 2026-09-10: it has a working fill path that loses the
+		// invisible-hCaptcha coin toss seven attempts in eight, and the cloud browser
+		// solves supported captchas itself. See browserUseProviders.
+		{"lever, whose own fill path the captcha mostly blocks", "lever", Plan{}, true},
+		{"unknown provider is never eligible", "smartrecruiters", Plan{}, false},
 		// Recruitee has no registered applyform.Fetcher at all (found during
 		// implementation — see browserUseProviders' own doc comment), so Client.Submit
 		// never even reaches browserUseEligible for it; excluded here for the same reason.

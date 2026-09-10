@@ -88,12 +88,18 @@ func TestAddressing_QueryKindMatchesTheSelectorItProduces(t *testing.T) {
 	}
 }
 
-// Lever can be filled. This is the switch the whole change exists to flip, and it is
-// asserted separately from the layout because the two live in different files — which is
-// exactly what TestLayoutFor_CoversEveryFillProvider guards from the other side.
-func TestFillProviders_IncludesLever(t *testing.T) {
-	if !fillProviders["lever"] {
-		t.Error("lever is not in fillProviders; its resolved plans still park as not-implemented")
+// Lever keeps its layout without being a fill provider, and that is not an oversight. The
+// layout's applyPath is what tells ANY executor which page the form is on, and the cloud
+// agent that now submits Lever reads it through agentTargetURL. The submit selector and
+// addressing beside it are dormant rather than dead — they are what a Lever fill path would
+// need again if the captcha ever stopped deciding these attempts.
+func TestLeverKeepsItsLayoutAfterMovingToTheCloudAgent(t *testing.T) {
+	layout, ok := layoutFor("lever")
+	if !ok {
+		t.Fatal("lever lost its layout, so nothing knows its form is at /apply")
+	}
+	if layout.applyPath != "/apply" {
+		t.Errorf("lever applyPath = %q, want /apply", layout.applyPath)
 	}
 }
 
