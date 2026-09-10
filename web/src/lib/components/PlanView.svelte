@@ -92,6 +92,10 @@
   // it is the only plan.plan value the "Upgrade to Ultra" CTA below is offered for.
   let ultraOffered = $state(false);
   $effect(() => {
+    // Cleared first, on every run — the same reason the billing effect above does: what is
+    // on screen belongs to the plan we last read, so a stale true surviving a plan change
+    // must not linger.
+    ultraOffered = false;
     if (plan?.plan !== 'pro') return;
     let live = true;
     api
