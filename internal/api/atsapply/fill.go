@@ -83,6 +83,45 @@ type captchaRefusal struct{ detail error }
 func (e captchaRefusal) Error() string   { return e.detail.Error() }
 func (e captchaRefusal) Unwrap() []error { return []error{errCaptchaRefused, e.detail} }
 
+// challengeVisibleJS asks the page whether a captcha challenge is actually ON SCREEN. Both
+// conditions are load-bearing and both were learned the same way, by reading a live page:
+// the provider mounts its frames on EVERY posting at full size and keeps them
+// visibility:hidden until it poses a puzzle, so size alone says nothing — an earlier version
+// of this check called a hidden frame a challenge and reported a run that had actually
+// PASSED as refused.
+const challengeVisibleJS = `(() => Array.from(document.querySelectorAll("iframe")).some(f => {
+	const src = f.src || "";
+	if (!src.includes("hcaptcha.com") && !src.includes("recaptcha")) return false;
+	if (window.getComputedStyle(f).visibility === "hidden") return false;
+	return f.getBoundingClientRect().height > 100;
+}))()`
+
+// challengeVisible reports whether a captcha challenge currently covers the form. A page that
+// cannot be asked (the browser is gone, the context is done) answers false: this only ever
+// reclassifies a failure that already happened, and guessing "captcha" without evidence would
+// hand an ordinary error the captcha's twenty asks.
+func challengeVisible(ctx context.Context) bool {
+	var visible bool
+	if err := chromedp.Run(ctx, chromedp.Evaluate(challengeVisibleJS, &visible)); err != nil {
+		return false
+	}
+	return visible
+}
+
+// classifyFillFailure decides whether a failure to fill a field was really the captcha.
+//
+// Lever's own page binds the invisible captcha to the LOCATION field's focus — touching it
+// calls hcaptcha.execute() — so when the score is not enough the challenge covers the form
+// and the very next keystroke times out. Recorded as an ordinary transient error, three of
+// those dead-lettered a live entry whose captcha budget still had twelve asks left. The
+// cause is the captcha, so it belongs on the captcha's counter.
+func classifyFillFailure(err error, challengeOnScreen bool) error {
+	if challengeOnScreen {
+		return captchaRefusal{detail: err}
+	}
+	return err
+}
+
 // newRefusalError builds the error a matched refusal marker travels as: the marker that
 // fired, the board's own sentence around it, and — when the board declined to verify — the
 // errCaptchaRefused sentinel the runner reads with errors.Is.
@@ -125,7 +164,7 @@ func refusalEvidence(bodyText, marker string) string {
 func fillAndSubmit(ctx context.Context, plan Plan, layout formLayout) (bool, error) {
 	for _, f := range plan.Fields {
 		if err := fillOne(ctx, f, layout.addressBy); err != nil {
-			return false, fmt.Errorf("fill %q: %w", f.ID, err)
+			return false, classifyFillFailure(fmt.Errorf("fill %q: %w", f.ID, err), challengeVisible(ctx))
 		}
 	}
 
