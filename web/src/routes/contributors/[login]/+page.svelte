@@ -99,11 +99,11 @@
 
   <dl class="mt-8 grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-border bg-border">
     {#each stats as stat (stat.label)}
-      <div class="bg-background p-5">
+      <div class="flex flex-col bg-background p-5">
         <dt class="font-mono text-xs uppercase tracking-wide text-muted-foreground">
           {stat.label}
         </dt>
-        <dd class="mt-2 text-3xl font-semibold tracking-tight tabular-nums">{stat.value}</dd>
+        <dd class="mt-auto pt-2 text-3xl font-semibold tracking-tight tabular-nums">{stat.value}</dd>
       </div>
     {/each}
   </dl>

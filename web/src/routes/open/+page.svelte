@@ -198,9 +198,11 @@
     <p class="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">// the catalogue</p>
     <dl class="mt-6 grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-3 lg:grid-cols-5">
       {#each stats as s (s.label)}
-        <div class="bg-background p-5 sm:p-6">
+        <!-- A two-line label must not push its figure down: the cell is a column and the
+             figure is pinned to its bottom, so every figure in a row shares one baseline. -->
+        <div class="flex flex-col bg-background p-5 sm:p-6">
           <dt class="font-mono text-xs uppercase tracking-wide text-muted-foreground">{s.label}</dt>
-          <dd class="mt-2 text-3xl font-semibold tracking-tight tabular-nums sm:text-4xl">
+          <dd class="mt-auto pt-2 text-3xl font-semibold tracking-tight tabular-nums sm:text-4xl">
             {#if s.href}
               <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- links to the JSON API endpoint, not a SvelteKit route -->
               <a href={s.href} class="hover:underline">{s.value}</a>
@@ -260,9 +262,9 @@
     {#if engagement}
       <dl class="grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-4">
         {#each engagement as e (e.label)}
-          <div class="bg-background p-5 sm:p-6">
+          <div class="flex flex-col bg-background p-5 sm:p-6">
             <dt class="font-mono text-xs uppercase tracking-wide text-muted-foreground">{e.label}</dt>
-            <dd class="mt-2 text-3xl font-semibold tracking-tight tabular-nums sm:text-4xl">{e.value}</dd>
+            <dd class="mt-auto pt-2 text-3xl font-semibold tracking-tight tabular-nums sm:text-4xl">{e.value}</dd>
           </div>
         {/each}
       </dl>

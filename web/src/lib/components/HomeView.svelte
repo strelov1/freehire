@@ -228,9 +228,11 @@
     <SectionLabel text="the catalogue" />
     <dl class="mt-6 grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-4">
       {#each figures as f (f.label)}
-        <div class="bg-background p-5 sm:p-6">
+        <!-- A two-line label must not push its figure down: the cell is a column and the
+             figure is pinned to its bottom, so every figure in a row shares one baseline. -->
+        <div class="flex flex-col bg-background p-5 sm:p-6">
           <dt class="font-mono text-xs uppercase tracking-wide text-muted-foreground">{f.label}</dt>
-          <dd class="mt-2 text-3xl font-semibold tracking-tight tabular-nums sm:text-4xl">{f.value}</dd>
+          <dd class="mt-auto pt-2 text-3xl font-semibold tracking-tight tabular-nums sm:text-4xl">{f.value}</dd>
         </div>
       {/each}
     </dl>
