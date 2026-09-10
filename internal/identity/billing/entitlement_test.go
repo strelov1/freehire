@@ -277,6 +277,135 @@ func TestTierFirstOrdersAndNeverDrops(t *testing.T) {
 	}
 }
 
+// TestDecideCheckoutTarget pins CheckoutURL's whole decision — open a new Checkout Session,
+// modify an existing subscription in place, or do nothing — kept pure and DB-free so the fix
+// for freehire's duplicate-subscription bug is testable without a database or a network call.
+func TestDecideCheckoutTarget(t *testing.T) {
+	live := func(id, price, end string) subscription {
+		return subscription{ID: id, ItemID: id + "_item", Status: "active", CurrentPeriodEnd: at(t, end), PriceIDs: []string{price}}
+	}
+
+	cases := []struct {
+		name           string
+		sub            subscriber
+		requestedPrice string
+		wantAction     string // "checkout", "update", or "noop"
+		wantSubID      string
+	}{
+		{
+			name:           "no entitling subscription opens a new checkout",
+			sub:            sub(),
+			requestedPrice: proPrice,
+			wantAction:     "checkout",
+		},
+		{
+			name:           "an active Pro subscription requesting Ultra is updated in place",
+			sub:            sub(live("sub_pro", proPrice, "2026-10-01T00:00:00Z")),
+			requestedPrice: ultraPrice,
+			wantAction:     "update",
+			wantSubID:      "sub_pro",
+		},
+		{
+			name:           "an active Ultra subscription requesting Pro is updated in place",
+			sub:            sub(live("sub_ultra", ultraPrice, "2026-10-01T00:00:00Z")),
+			requestedPrice: proPrice,
+			wantAction:     "update",
+			wantSubID:      "sub_ultra",
+		},
+		{
+			name:           "requesting the price already held is a no-op",
+			sub:            sub(live("sub_pro", proPrice, "2026-10-01T00:00:00Z")),
+			requestedPrice: proPrice,
+			wantAction:     "noop",
+		},
+		{
+			// The pre-existing-bug shape this change does not retroactively fix: two
+			// concurrent entitling subscriptions. The decision picks the best-entitling one
+			// (furthest reach) and leaves the other for an operator to clean up by hand.
+			name: "two concurrent entitling subscriptions: the best-entitling one is updated",
+			sub: sub(
+				live("sub_pro", proPrice, "2027-03-01T00:00:00Z"),
+				live("sub_ultra", ultraPrice, "2026-10-01T00:00:00Z"),
+			),
+			requestedPrice: "price_pro_annual",
+			wantAction:     "update",
+			wantSubID:      "sub_pro",
+		},
+		{
+			// One subscription carrying an item of each tier — the shape billedSubscription's
+			// own comment describes an upgrade through the provider's portal leaving behind.
+			// Which item id belongs to which price is not recoverable from price ids alone
+			// (item order is not a documented guarantee — the whole reason tierFirst exists
+			// rather than trusting raw order), so this must refuse to guess rather than
+			// silently replace the wrong item.
+			name: "a subscription holding an item of each tier is ambiguous",
+			sub: sub(subscription{
+				ID: "sub_both", ItemID: "sub_both_item0", Status: "active",
+				CurrentPeriodEnd: at(t, "2026-10-01T00:00:00Z"),
+				PriceIDs:         []string{proPrice, ultraPrice},
+			}),
+			requestedPrice: "price_pro_annual",
+			wantAction:     "ambiguous",
+		},
+		{
+			// An ambiguous subscription that already carries the requested price is still a
+			// no-op: nothing needs to change, so there is nothing to guess about.
+			name: "a subscription holding an item of each tier already on the requested price",
+			sub: sub(subscription{
+				ID: "sub_both", ItemID: "sub_both_item0", Status: "active",
+				CurrentPeriodEnd: at(t, "2026-10-01T00:00:00Z"),
+				PriceIDs:         []string{proPrice, ultraPrice},
+			}),
+			requestedPrice: ultraPrice,
+			wantAction:     "noop",
+		},
+		{
+			// The inherited edge of bestEntitling's own documented, tested design: a
+			// subscription whose period end cannot be read entitles nobody (see the big
+			// comment above the subscription type, and TestProUntilFrom's identical case).
+			// decideCheckoutTarget deliberately reuses that same rule rather than a selection
+			// of its own — disagreeing with it would let this method believe a customer has
+			// an entitling subscription while the rest of billing (SyncUser, the plan
+			// derivation) believes they have none, which is a worse inconsistency than opening
+			// a checkout for an account the whole system already treats as unentitled.
+			name:           "a subscription whose period end cannot be read is treated as no entitling subscription, like everywhere else in this package",
+			sub:            sub(subscription{ID: "sub_broken", Status: "active", PriceIDs: []string{proPrice}}),
+			requestedPrice: ultraPrice,
+			wantAction:     "checkout",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := decideCheckoutTarget(tc.sub, tc.requestedPrice, []string{proPrice}, []string{ultraPrice})
+			switch tc.wantAction {
+			case "checkout":
+				if got != (checkoutTarget{}) {
+					t.Fatalf("want opening a new checkout (zero target), got %+v", got)
+				}
+			case "noop":
+				if !got.AlreadyOnPrice {
+					t.Fatalf("want AlreadyOnPrice, got %+v", got)
+				}
+			case "ambiguous":
+				if !got.Ambiguous {
+					t.Fatalf("want Ambiguous, got %+v", got)
+				}
+			case "update":
+				if got.AlreadyOnPrice {
+					t.Fatalf("want an update, got AlreadyOnPrice: %+v", got)
+				}
+				if got.SubscriptionID != tc.wantSubID {
+					t.Fatalf("want subscription %q updated, got %+v", tc.wantSubID, got)
+				}
+				if got.ItemID != tc.wantSubID+"_item" {
+					t.Fatalf("want item %q, got %+v", tc.wantSubID+"_item", got)
+				}
+			}
+		})
+	}
+}
+
 // TestProUntilFromIsIdempotent asserts the property the whole design rests on: the column is
 // DERIVED from provider state, so applying the same state twice yields the same answer and a
 // repeated sync is free.

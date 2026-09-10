@@ -183,7 +183,7 @@ func (h *billingHandlers) Checkout(c *fiber.Ctx) error {
 
 	// The price comes from the pricing page's monthly/annual choice. It is validated
 	// against the configured list inside the service — never trusted as sent.
-	url, err := h.billing.CheckoutURL(ctx, userID, c.Query("price"), discount)
+	url, applied, err := h.billing.CheckoutURL(ctx, userID, c.Query("price"), discount)
 	if err != nil {
 		// Either checkout is unconfigured, or the provider refused. Neither is something a
 		// candidate can act on, and a 404 lets the surface omit the offer rather than render
@@ -193,10 +193,12 @@ func (h *billingHandlers) Checkout(c *fiber.Ctx) error {
 	}
 	return c.JSON(fiber.Map{"data": fiber.Map{
 		"url": url,
-		// Which offer was applied, so the page can say so rather than leaving the buyer to
-		// work it out from the amount on the provider's page. Empty when there was none.
-		"discount_percent": discount.PercentOff,
-		"discount_source":  discount.Label,
+		// Which offer was actually APPLIED — not merely offered — so the page can say so
+		// rather than leaving the buyer to work it out from the amount on the provider's
+		// page. Empty when there was none, including when a tier change modified an existing
+		// subscription in place rather than opening a checkout: that path never applies one.
+		"discount_percent": applied.PercentOff,
+		"discount_source":  applied.Label,
 	}})
 }
 

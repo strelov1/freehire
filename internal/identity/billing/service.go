@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
@@ -304,14 +305,23 @@ func NewWithBase(cfg Config, q *db.Queries, baseURL string) *Service {
 // accident. Everything outside this package needs an answer about billing, not the
 // credentials it was derived from — Enabled() is that answer.
 
-// CheckoutURL is where this account buys Pro.
+// CheckoutURL is where this account buys, upgrades or downgrades a subscription.
 //
 // The account's id is taken from the caller's session and never from the request: it decides
 // who gets charged and who becomes Pro, and a value the browser composes is a value the
 // browser can change.
-func (s *Service) CheckoutURL(ctx context.Context, userID int64, priceID string, discount Discount) (string, error) {
+//
+// A customer who already has an entitling subscription is never sent to a new Checkout
+// Session for a different price — that is the duplicate-subscription bug this method used to
+// have. Instead their existing subscription is changed in place; see decideCheckoutTarget.
+//
+// The returned Discount is what was actually APPLIED, never simply the one the caller
+// offered: an in-place update never applies one (see decideCheckoutTarget's Non-Goal in
+// design.md), and a caller that echoed the input regardless would tell a subscriber a
+// discount was used when their bill never reflected it.
+func (s *Service) CheckoutURL(ctx context.Context, userID int64, priceID string, discount Discount) (string, Discount, error) {
 	if !s.cfg.CanCheckout() {
-		return "", ErrNoCheckout
+		return "", Discount{}, ErrNoCheckout
 	}
 
 	// A price the browser named must be one we actually sell. The parameter arrives from the
@@ -319,15 +329,54 @@ func (s *Service) CheckoutURL(ctx context.Context, userID int64, priceID string,
 	if priceID == "" {
 		priceID = s.cfg.CheckoutPrice()
 	} else if !s.cfg.Sells(priceID) {
-		return "", fmt.Errorf("%w: price %q is not offered", ErrNoCheckout, priceID)
+		return "", Discount{}, fmt.Errorf("%w: price %q is not offered", ErrNoCheckout, priceID)
 	}
 
 	// An existing customer is reused so a second purchase cannot create a second customer for
-	// one person — which would leave two subscriptions nobody sums.
+	// one person — which would leave two subscriptions nobody sums. A failure to even read
+	// the binding is refused rather than silently treated as "no customer": a transient DB
+	// error would otherwise make a known customer look unbound and open a checkout that
+	// creates a second Stripe customer and a second subscription — the same fix this whole
+	// method exists for, applied one query earlier.
 	existing, err := s.q.GetStripeCustomerID(ctx, userID)
+	if err != nil {
+		return "", Discount{}, fmt.Errorf("billing: reading the Stripe customer of user %d: %w", userID, err)
+	}
 	var customerID string
-	if err == nil && existing.Valid {
+	if existing.Valid {
 		customerID = existing.String
+	}
+
+	if customerID != "" {
+		// A known customer may already have an entitling subscription. Reading it here and
+		// failing the whole call on error — rather than falling back to opening a new
+		// checkout — is the line the fix depends on: falling back would silently recreate the
+		// exact bug (a transient read failure would open a second subscription beside a live
+		// one).
+		current, err := s.client.subscriberState(ctx, customerID)
+		if err != nil {
+			return "", Discount{}, fmt.Errorf("billing: reading the subscriptions of user %d: %w", userID, err)
+		}
+		target := decideCheckoutTarget(current, priceID, s.cfg.Prices, s.cfg.UltraPrices)
+		switch {
+		case target.AlreadyOnPrice:
+			return s.cfg.ReturnURL(), Discount{}, nil
+		case target.Ambiguous:
+			return "", Discount{}, fmt.Errorf(
+				"billing: user %d's subscription carries more than one item; refusing to guess which one to change", userID)
+		case target.SubscriptionID != "":
+			// A fresh key per call: this protects one call's own low-level HTTP retries from
+			// double-billing a proration, not repeated user clicks — a genuine second attempt
+			// gets a fresh key and is itself idempotent in EFFECT (setting an already-current
+			// price again changes nothing).
+			idempotencyKey := uuid.NewString()
+			if err := s.client.updateSubscriptionPrice(ctx, target.SubscriptionID, target.ItemID, priceID, idempotencyKey); err != nil {
+				return "", Discount{}, fmt.Errorf("billing: upgrading user %d to price %q: %w", userID, priceID, err)
+			}
+			return s.cfg.ReturnURL(), Discount{}, nil
+		}
+		// No entitling subscription (a free account, or a former subscriber whose last one
+		// ended): fall through to opening a checkout, exactly as before.
 	}
 
 	// Pre-fill the address we already hold, so a buyer does not retype what we asked them for
@@ -348,12 +397,16 @@ func (s *Service) CheckoutURL(ctx context.Context, userID int64, priceID string,
 	if !discount.none() {
 		couponID, err = s.client.createCoupon(ctx, discount.PercentOff, discount.Label, discount.Key)
 		if err != nil {
-			return "", fmt.Errorf("billing: minting a discount for user %d: %w", userID, err)
+			return "", Discount{}, fmt.Errorf("billing: minting a discount for user %d: %w", userID, err)
 		}
 	}
 
-	return s.client.createCheckoutSession(ctx, userID, email,
+	url, err := s.client.createCheckoutSession(ctx, userID, email,
 		priceID, s.cfg.ReturnURL(), s.cfg.ReturnURL(), customerID, couponID)
+	if err != nil {
+		return "", Discount{}, err
+	}
+	return url, discount, nil
 }
 
 // HasCollectedAtLeast reports whether this customer has had an invoice collecting at least

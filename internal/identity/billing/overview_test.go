@@ -175,4 +175,42 @@ func TestSubscriptionOverviewDescribesTheTierThePlanCameFrom(t *testing.T) {
 	if out.RenewsAt == nil || out.RenewsAt.Unix() != endsIn2030 {
 		t.Fatalf("want the Ultra subscription's renewal date, got %v", out.RenewsAt)
 	}
+	// Same fixture, same two live subscriptions as the case above — this is the reported
+	// duplicate-subscription bug shape (Pro + Ultra both billing at once), and the overview
+	// must say so rather than silently showing only the better one.
+	if !out.MultipleSubscriptions {
+		t.Fatalf("want MultipleSubscriptions, got %+v", out)
+	}
+}
+
+// TestSubscriptionOverviewDoesNotFlagASingleSubscription guards against a false positive: a
+// subscription that legitimately carries an item of each tier (what an upgrade that adds a
+// price to the existing subscription leaves behind, per billedSubscription's own comment)
+// is still exactly ONE subscription and must not be reported as a duplicate.
+func TestSubscriptionOverviewDoesNotFlagASingleSubscription(t *testing.T) {
+	t.Setenv("STRIPE_ULTRA_PRICE_IDS", ultraPrice)
+	s := serviceWithProvider(t, func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.URL.Path == "/subscriptions":
+			// ONE subscription object, two items — Pro's id first, deliberately, matching
+			// TestBilledSubscription's identical fixture: the shape an upgrade that adds a
+			// price to the existing subscription (through the provider's own portal) leaves
+			// behind, as opposed to two separate subscription objects.
+			_, _ = w.Write([]byte(`{"object":"list","data":[{"status":"active","items":{"data":[` +
+				`{"current_period_end":4102444800,"price":{"id":"price_pro_monthly"}},` +
+				`{"current_period_end":4102444800,"price":{"id":"price_ultra_monthly"}}]}}]}`))
+		case strings.HasPrefix(r.URL.Path, "/prices/"):
+			_, _ = fmt.Fprintf(w, `{"id":"price_ultra_monthly","unit_amount":1900,"currency":"usd","recurring":{"interval":"month"}}`)
+		default:
+			_, _ = w.Write([]byte(`{"object":"list","data":[]}`))
+		}
+	})
+
+	out, err := s.overviewFor(context.Background(), "cus_9")
+	if err != nil {
+		t.Fatalf("want no error, got %v", err)
+	}
+	if out.MultipleSubscriptions {
+		t.Fatalf("a single subscription must never be reported as a duplicate: %+v", out)
+	}
 }
