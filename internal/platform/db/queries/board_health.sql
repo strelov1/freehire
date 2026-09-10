@@ -10,15 +10,30 @@ WHERE provider = $1 AND board = $2 AND region = $3;
 -- name: RecordBoardSuccess :exec
 -- A successful crawl clears the failure state and stamps freshness. Upsert so a
 -- first-ever crawl creates the row.
+--
+-- `reached` stamps last_yield_at (migration 0158) and is the caller's answer to a question
+-- last_ingested_count cannot: whether the crawl actually found a posting on this board. The two
+-- differ in both directions. A board can ingest 0 having reached plenty — every posting rejected
+-- by the non-tech gate, or already covered by a non-aggregator source, which is the ordinary
+-- outcome on an aggregator board whose employers we also crawl directly. And a board can ingest 0
+-- having reached nothing at all, which is the empty feed this column exists to detect. Stamping
+-- on `last_ingested_count > 0` instead would call the first case empty and eventually close a
+-- perfectly live board's jobs.
+--
+-- On a run that did NOT reach a posting the column is left exactly as it was, rather than
+-- cleared: it is a high-water mark, and how long ago it was set is the whole measurement.
 INSERT INTO board_health (provider, board, region, consecutive_failures, cooldown_until,
-                          last_success_at, last_ingested_count, last_run_at)
-VALUES ($1, $2, $3, 0, NULL, now(), $4, now())
+                          last_success_at, last_ingested_count, last_run_at, last_yield_at)
+VALUES ($1, $2, $3, 0, NULL, now(), $4, now(),
+        CASE WHEN sqlc.arg(reached)::boolean THEN now() END)
 ON CONFLICT (provider, board, region) DO UPDATE SET
     consecutive_failures = 0,
     cooldown_until       = NULL,
     last_success_at      = now(),
     last_ingested_count  = EXCLUDED.last_ingested_count,
-    last_run_at          = now();
+    last_run_at          = now(),
+    last_yield_at        = CASE WHEN sqlc.arg(reached)::boolean THEN now()
+                                ELSE board_health.last_yield_at END;
 
 -- name: RecordBoardFailure :one
 -- Count a failed crawl: bump consecutive_failures, record the error, stamp the run,
@@ -82,6 +97,41 @@ FROM board_health
 WHERE (last_success_at IS NOT NULL AND last_success_at < now() - sqlc.arg(age_window)::interval)
    OR (last_success_at IS NULL AND first_seen_at < now() - sqlc.arg(age_window)::interval)
 ORDER BY coalesce(last_success_at, first_seen_at), provider, board, region
+LIMIT sqlc.arg(max_boards);
+
+-- name: ListEmptyFeedBoards :many
+-- The boards whose crawls SUCCEED but whose feed has carried nothing for at least `age_window`
+-- — the exact twin of ListChronicBoards, measuring the failure mode that one structurally
+-- cannot see (migration 0158 records the incident this answers).
+--
+-- Three conditions, and each excludes a different thing that must not be closed as "empty":
+--
+--  1. last_yield_at IS NOT NULL. NULL means no yield has been OBSERVED since the column was
+--     added, which is not the same claim as "this feed is empty" — and on the day 0158 landed
+--     it was true of every row in the table. Treating it as evidence is the one mistake here
+--     that would close the whole catalogue, so NULL never qualifies, permanently. A board that
+--     truly yields nothing from now on gets its seeded stamp from the migration and ages out
+--     of the window on its own.
+--  2. last_yield_at older than the window. The measurement itself.
+--  3. the board is REACHABLE: it has succeeded at least once inside the same window, and its
+--     most recent crawl succeeded (consecutive_failures = 0). Without this an unreachable
+--     board qualifies here too — its last_yield_at is old for the entirely different reason
+--     that nothing has been able to read it — and it would be closed under the wrong reason,
+--     hiding a broken adapter behind a diagnosis that points at the source's inventory.
+--     Requiring a CURRENT clean crawl rather than merely a recent one costs only a cycle's
+--     latency on a board that is genuinely empty and transiently failing.
+--
+-- Ordered oldest-evidence-first and capped by max_boards, same convention as ListChronicBoards;
+-- total is the FULL count before the cap.
+SELECT provider, board, region, last_success_at, last_yield_at, first_seen_at,
+       count(*) OVER () AS total
+FROM board_health
+WHERE last_yield_at IS NOT NULL
+  AND last_yield_at < now() - sqlc.arg(age_window)::interval
+  AND last_success_at IS NOT NULL
+  AND last_success_at >= now() - sqlc.arg(age_window)::interval
+  AND consecutive_failures = 0
+ORDER BY last_yield_at, provider, board, region
 LIMIT sqlc.arg(max_boards);
 
 -- name: CountBoardHealthRegions :one

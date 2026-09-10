@@ -17,6 +17,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/strelov1/freehire/internal/platform/externalid"
@@ -127,6 +128,49 @@ func TestCloseUnseenJobsQueuesNothingForJobsItLeftOpen(t *testing.T) {
 	}
 }
 
+// seedSafetyNetBoardHealth writes the board_health state one safety-net close re-validates
+// against inside its own UPDATE. Named for its callers rather than reusing seedBoardHealth
+// (board_health_integration_test.go), whose signature answers that file's questions — regions,
+// a nullable last_success_at — and knows nothing of last_yield_at.
+func seedSafetyNetBoardHealth(t *testing.T, pool *pgxpool.Pool, board string, failures int, lastSuccess, lastYield string) {
+	t.Helper()
+	// Clear this provider's rows first: the shared truncate() deliberately names only the
+	// tables the jobs fixtures need, board_health is not among them, and two subtests below
+	// seed the same (provider, board, region) key. Without this the second INSERT is a
+	// duplicate-key error rather than a test result.
+	if _, err := pool.Exec(context.Background(),
+		`DELETE FROM board_health WHERE provider = 'greenhouse'`); err != nil {
+		t.Fatalf("clear board_health: %v", err)
+	}
+	if _, err := pool.Exec(context.Background(),
+		`INSERT INTO board_health (provider, board, region, consecutive_failures, first_seen_at,
+		                           last_success_at, last_yield_at)
+		 VALUES ('greenhouse', $1, '', $2, now() - interval '500 days',
+		         now() - $3::interval, now() - $4::interval)`,
+		board, failures, lastSuccess, lastYield); err != nil {
+		t.Fatalf("seed board_health %q: %v", board, err)
+	}
+}
+
+// The two safety nets' states are deliberately not reachable from one row shape: unreachable
+// means no successful crawl in a long time, empty-feed means crawls succeeding right now with
+// no yield in a long time.
+func seedUnreachableBoard(t *testing.T, pool *pgxpool.Pool) {
+	seedSafetyNetBoardHealth(t, pool, "acme", 20, "90 days", "90 days")
+}
+
+func seedUnreachableProvider(t *testing.T, pool *pgxpool.Pool) {
+	seedSafetyNetBoardHealth(t, pool, "", 20, "90 days", "90 days")
+}
+
+func seedEmptyFeedBoard(t *testing.T, pool *pgxpool.Pool) {
+	seedSafetyNetBoardHealth(t, pool, "acme", 0, "1 hour", "60 days")
+}
+
+func seedEmptyFeedProvider(t *testing.T, pool *pgxpool.Pool) {
+	seedSafetyNetBoardHealth(t, pool, "", 0, "1 hour", "60 days")
+}
+
 // Every way a job can be closed must queue its removal. This enumerates the family rather
 // than testing each member in its own function on purpose: a further closing query added
 // later is a one-line addition here, and leaving it out is the exact mistake that would put
@@ -140,6 +184,12 @@ func TestEveryClosingQueryQueuesTheRemoval(t *testing.T) {
 	closers := []struct {
 		name  string
 		close func(ctx context.Context, q *Queries, jobID int64) error
+		// setup, when set, writes the board_health state a close's own re-validation clause
+		// requires. The sweep's closes need none — they are gated on a cutoff the fixture's
+		// own age already satisfies — but the two safety nets each re-check board_health
+		// inside their UPDATE, so without it they would match nothing and the case would
+		// prove nothing (the assertion below catches exactly that).
+		setup func(t *testing.T, pool *pgxpool.Pool)
 	}{
 		{"CloseUnseenJobs", func(ctx context.Context, q *Queries, _ int64) error {
 			_, err := q.CloseUnseenJobs(ctx, CloseUnseenJobsParams{
@@ -148,14 +198,14 @@ func TestEveryClosingQueryQueuesTheRemoval(t *testing.T) {
 				CompanySlugs: []string{"acme"},
 			})
 			return err
-		}},
+		}, nil},
 		{"CloseUnseenJobsBySource", func(ctx context.Context, q *Queries, _ int64) error {
 			_, err := q.CloseUnseenJobsBySource(ctx, CloseUnseenJobsBySourceParams{
 				Source: "greenhouse",
 				Cutoff: pgTimestamptz(time.Now().Add(-48 * time.Hour)),
 			})
 			return err
-		}},
+		}, nil},
 		{"CloseUnseenJobsForBoard", func(ctx context.Context, q *Queries, _ int64) error {
 			_, err := q.CloseUnseenJobsForBoard(ctx, CloseUnseenJobsForBoardParams{
 				Source:       "greenhouse",
@@ -163,22 +213,22 @@ func TestEveryClosingQueryQueuesTheRemoval(t *testing.T) {
 				BoardPattern: externalid.BoardPattern("acme"),
 			})
 			return err
-		}},
+		}, nil},
 		{"CloseUnseenJobByID", func(ctx context.Context, q *Queries, jobID int64) error {
 			_, err := q.CloseUnseenJobByID(ctx, jobID)
 			return err
-		}},
+		}, nil},
 		{"CloseJobByID", func(ctx context.Context, q *Queries, jobID int64) error {
 			_, err := q.CloseJobByID(ctx, jobID)
 			return err
-		}},
+		}, nil},
 		{"CloseJobBySourceExternalID", func(ctx context.Context, q *Queries, _ int64) error {
 			_, err := q.CloseJobBySourceExternalID(ctx, CloseJobBySourceExternalIDParams{
 				Source:     "greenhouse",
 				ExternalID: "acme:closer",
 			})
 			return err
-		}},
+		}, nil},
 		// The age rule (cmd/liveness). The cutoff is in the FUTURE because the fixture's
 		// posted_at is NULL and its created_at is now — COALESCE(posted_at, created_at)
 		// then reads as "just posted", and this statement's question is only whether the
@@ -189,7 +239,7 @@ func TestEveryClosingQueryQueuesTheRemoval(t *testing.T) {
 				Cutoff:  pgTimestamptz(time.Now().Add(time.Hour)),
 			})
 			return err
-		}},
+		}, nil},
 		{"CloseStaleUnseenUnprobeableJobs", func(ctx context.Context, q *Queries, _ int64) error {
 			_, err := q.CloseStaleUnseenUnprobeableJobs(ctx, CloseStaleUnseenUnprobeableJobsParams{
 				Sources:    []string{"greenhouse"},
@@ -197,13 +247,50 @@ func TestEveryClosingQueryQueuesTheRemoval(t *testing.T) {
 				SeenCutoff: pgTimestamptz(time.Now().Add(-48 * time.Hour)),
 			})
 			return err
-		}},
+		}, nil},
 		// The probe's own close. Threshold 1 makes this strike the closing one; the
 		// strike-only call is a separate case below, since it must queue NOTHING.
 		{"MarkLivenessExpired", func(ctx context.Context, q *Queries, jobID int64) error {
 			_, err := q.MarkLivenessExpired(ctx, MarkLivenessExpiredParams{ID: jobID, Threshold: 1})
 			return err
-		}},
+		}, nil},
+		// The two safety nets (cmd/close-chronic-boards). Each re-validates board_health inside
+		// its own UPDATE, so each needs the health row its predicate looks for — hence setup.
+		// The chronic pair was missing from this list until the empty-feed pair was added
+		// beside it: a hand-written enumeration only covers what someone remembered to add,
+		// which is the failure this test's own doc records for cmd/liveness.
+		{"CloseChronicBoardJobs", func(ctx context.Context, q *Queries, _ int64) error {
+			_, err := q.CloseChronicBoardJobs(ctx, CloseChronicBoardJobsParams{
+				Source:       "greenhouse",
+				BoardPattern: externalid.BoardPattern("acme"),
+				Board:        "acme",
+				AgeWindow:    pgtype.Interval{Days: 60, Valid: true},
+			})
+			return err
+		}, seedUnreachableBoard},
+		{"CloseChronicProviderJobs", func(ctx context.Context, q *Queries, _ int64) error {
+			_, err := q.CloseChronicProviderJobs(ctx, CloseChronicProviderJobsParams{
+				Source:    "greenhouse",
+				AgeWindow: pgtype.Interval{Days: 60, Valid: true},
+			})
+			return err
+		}, seedUnreachableProvider},
+		{"CloseEmptyFeedBoardJobs", func(ctx context.Context, q *Queries, _ int64) error {
+			_, err := q.CloseEmptyFeedBoardJobs(ctx, CloseEmptyFeedBoardJobsParams{
+				Source:       "greenhouse",
+				BoardPattern: externalid.BoardPattern("acme"),
+				Board:        "acme",
+				AgeWindow:    pgtype.Interval{Days: 30, Valid: true},
+			})
+			return err
+		}, seedEmptyFeedBoard},
+		{"CloseEmptyFeedProviderJobs", func(ctx context.Context, q *Queries, _ int64) error {
+			_, err := q.CloseEmptyFeedProviderJobs(ctx, CloseEmptyFeedProviderJobsParams{
+				Source:    "greenhouse",
+				AgeWindow: pgtype.Interval{Days: 30, Valid: true},
+			})
+			return err
+		}, seedEmptyFeedProvider},
 	}
 
 	pool := startPostgres(t)
@@ -219,6 +306,9 @@ func TestEveryClosingQueryQueuesTheRemoval(t *testing.T) {
 				t.Fatalf("upsert: %v", err)
 			}
 			ageJob(t, pool, job.ID, 72*time.Hour)
+			if c.setup != nil {
+				c.setup(t, pool)
+			}
 
 			if err := c.close(ctx, q, job.ID); err != nil {
 				t.Fatalf("close: %v", err)

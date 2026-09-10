@@ -668,6 +668,31 @@ type Querier interface {
 	CloseChronicProviderJobs(ctx context.Context, arg CloseChronicProviderJobsParams) (int64, error)
 	// Moderator close: the thread leaves the open listing and rejects new replies.
 	CloseCommunityThread(ctx context.Context, id int64) error
+	// The empty-feed safety net, board-scoped: closes every open job of ONE board that
+	// board_health.ListEmptyFeedBoards has proven reachable-but-empty for the closure window.
+	// Structurally identical to CloseChronicBoardJobs — same board_pattern scoping so a
+	// same-provider sibling board is never touched, same search_delete_outbox CTE riding the
+	// statement so the index enqueue stays atomic with the close, same :one because that CTE moves
+	// the row count out of the command tag — and different in exactly two places: the reason it
+	// writes, and the board_health predicate it re-validates.
+	//
+	// closed_reason is 'feed_empty' (migration 0159), which asserts something none of the existing
+	// reasons do: every crawl SUCCEEDED and the feed carried nothing. 'board_unreachable' would
+	// claim the opposite diagnosis and send an operator looking at our access rather than at the
+	// source's inventory.
+	//
+	// The EXISTS clause re-validates board_health's CURRENT state inside this same statement, for
+	// the reason CloseChronicBoardJobs states in full: the caller lists boards and closes them as
+	// two separate round trips, and a board can recover in the gap — here by a single crawl that
+	// reaches one posting and stamps last_yield_at. Re-checking closes that window; note it
+	// re-checks last_yield_at specifically, since that is the column a recovery moves.
+	CloseEmptyFeedBoardJobs(ctx context.Context, arg CloseEmptyFeedBoardJobsParams) (int64, error)
+	// The empty-feed safety net's source-scoped sibling, for a BOARDLESS provider's record
+	// (board = '', see ingest-board-health spec): such a record already stands for the provider's
+	// whole crawl, so closing "this board's jobs" means the whole provider's open jobs, by source
+	// alone. Mirrors CloseChronicProviderJobs, carrying the same re-validation EXISTS clause as
+	// CloseEmptyFeedBoardJobs and for the same reason.
+	CloseEmptyFeedProviderJobs(ctx context.Context, arg CloseEmptyFeedProviderJobsParams) (int64, error)
 	//
 	// The removal enqueue rides this statement (see CloseUnseenJobs for why): feeding
 	// search_delete_outbox from the UPDATE's own RETURNING keeps it atomic with the close and
@@ -1023,6 +1048,13 @@ type Querier interface {
 	//
 	// Soft-deleted mail is excluded, so these counts and the listing's agree.
 	CountEmailsByState(ctx context.Context, userID int64) ([]CountEmailsByStateRow, error)
+	// What CloseEmptyFeedBoardJobs would close, for the safety-net worker's dry-run report — same
+	// predicate including the board_health re-validation, so a dry run cannot report a count for a
+	// board that has already yielded again, and no write.
+	CountEmptyFeedBoardJobs(ctx context.Context, arg CountEmptyFeedBoardJobsParams) (int64, error)
+	// What CloseEmptyFeedProviderJobs would close, for the safety-net worker's dry-run report.
+	// Same board_health re-validation as its close counterpart.
+	CountEmptyFeedProviderJobs(ctx context.Context, arg CountEmptyFeedProviderJobsParams) (int64, error)
 	// What the retention sweep would remove. cmd/prune reports before it deletes, and a dry run that
 	// cannot say a number is not a report.
 	CountExpiredTracerClicks(ctx context.Context, maxAge pgtype.Interval) (int64, error)
@@ -3310,6 +3342,30 @@ type Querier interface {
 	// inbox and seven assistant tools: one shared statement grown for one reader is how the
 	// two drift.
 	ListEmailsForRecall(ctx context.Context, arg ListEmailsForRecallParams) ([]ListEmailsForRecallRow, error)
+	// The boards whose crawls SUCCEED but whose feed has carried nothing for at least `age_window`
+	// — the exact twin of ListChronicBoards, measuring the failure mode that one structurally
+	// cannot see (migration 0158 records the incident this answers).
+	//
+	// Three conditions, and each excludes a different thing that must not be closed as "empty":
+	//
+	//  1. last_yield_at IS NOT NULL. NULL means no yield has been OBSERVED since the column was
+	//     added, which is not the same claim as "this feed is empty" — and on the day 0158 landed
+	//     it was true of every row in the table. Treating it as evidence is the one mistake here
+	//     that would close the whole catalogue, so NULL never qualifies, permanently. A board that
+	//     truly yields nothing from now on gets its seeded stamp from the migration and ages out
+	//     of the window on its own.
+	//  2. last_yield_at older than the window. The measurement itself.
+	//  3. the board is REACHABLE: it has succeeded at least once inside the same window, and its
+	//     most recent crawl succeeded (consecutive_failures = 0). Without this an unreachable
+	//     board qualifies here too — its last_yield_at is old for the entirely different reason
+	//     that nothing has been able to read it — and it would be closed under the wrong reason,
+	//     hiding a broken adapter behind a diagnosis that points at the source's inventory.
+	//     Requiring a CURRENT clean crawl rather than merely a recent one costs only a cycle's
+	//     latency on a board that is genuinely empty and transiently failing.
+	//
+	// Ordered oldest-evidence-first and capped by max_boards, same convention as ListChronicBoards;
+	// total is the FULL count before the cap.
+	ListEmptyFeedBoards(ctx context.Context, arg ListEmptyFeedBoardsParams) ([]ListEmptyFeedBoardsRow, error)
 	// Every atom the caller owns. Retrieval reads the whole set and scores it in Go: a
 	// requirement can match on skills OR on text alone, so there is no prefilter that would not
 	// drop real evidence. Ordered by employment so a consumer can group without a second pass.
@@ -4691,6 +4747,18 @@ type Querier interface {
 	RecordBoardFailure(ctx context.Context, arg RecordBoardFailureParams) (int32, error)
 	// A successful crawl clears the failure state and stamps freshness. Upsert so a
 	// first-ever crawl creates the row.
+	//
+	// `reached` stamps last_yield_at (migration 0158) and is the caller's answer to a question
+	// last_ingested_count cannot: whether the crawl actually found a posting on this board. The two
+	// differ in both directions. A board can ingest 0 having reached plenty — every posting rejected
+	// by the non-tech gate, or already covered by a non-aggregator source, which is the ordinary
+	// outcome on an aggregator board whose employers we also crawl directly. And a board can ingest 0
+	// having reached nothing at all, which is the empty feed this column exists to detect. Stamping
+	// on `last_ingested_count > 0` instead would call the first case empty and eventually close a
+	// perfectly live board's jobs.
+	//
+	// On a run that did NOT reach a posting the column is left exactly as it was, rather than
+	// cleared: it is a high-water mark, and how long ago it was set is the whole measurement.
 	RecordBoardSuccess(ctx context.Context, arg RecordBoardSuccessParams) error
 	// Closes out one (user, campaign) whether or not the send worked.
 	RecordBroadcastEmail(ctx context.Context, arg RecordBroadcastEmailParams) error

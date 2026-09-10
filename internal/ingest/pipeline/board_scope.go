@@ -12,6 +12,30 @@ func boardReachedPostings(st Stats) bool {
 	return st.Ingested+st.Rejected+st.ATSCovered > 0
 }
 
+// boardListedAnyPosting reports whether the board's LISTING named at least one posting, whatever
+// became of it afterwards. It is what board_health.last_yield_at is stamped from (migration
+// 0158), and it is deliberately NOT boardReachedPostings, even though the two differ only by
+// Skipped and Unreadable.
+//
+// The difference is which direction is safe, and the two callers need opposite ones.
+// boardReachedPostings is a PERMISSION gate: false there means "this run may not prove coverage",
+// and withholding permission costs a crawl cycle. Here false accumulates, day after day, into
+// "this feed is empty" and eventually CLOSES the board's jobs — so false is the expensive answer
+// and the predicate must be the generous one.
+//
+// Concretely, reusing the permission gate would mass-close a live board. A link-only adapter
+// whose listing keeps working while its detail requests all begin failing — a refusing origin, a
+// platform changing its markup — marks every posting Unreadable. Unreadable is deliberately not
+// Failed (see Stats.Unreadable), so the board records SUCCESS with consecutive_failures at 0 and
+// a fresh last_success_at, and under boardReachedPostings it would stamp no yield on any run,
+// age past the empty-feed window, and lose every live posting on it. An all-Skipped board, where
+// every save is failing, has the same shape. In both, the listing plainly named postings: the
+// feed is not empty, our reading of it is broken, and that is a different diagnosis with a
+// different remedy.
+func boardListedAnyPosting(st Stats) bool {
+	return st.Ingested+st.Rejected+st.ATSCovered+st.Skipped+st.Unreadable > 0
+}
+
 // maxUnreadablePercent is the share of a board's listed postings that may be unreadable before
 // the crawl stops counting as evidence of what is on that board. A share rather than a count,
 // and neither zero nor generous, for reasons that pull in opposite directions:

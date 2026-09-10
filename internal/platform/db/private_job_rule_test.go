@@ -33,6 +33,17 @@ var privatePredicateExemptions = map[string]string{
 	"UnseenJobIDsBySource":                    "the same sweep, scoped to one source; a private posting's source is never crawled",
 	"CountChronicBoardJobs":                   "the chronic-board safety net's dry-run count, scoped to one board_health-registered provider's source; a private posting's source is never crawled",
 	"CountChronicProviderJobs":                "the same safety net's boardless-provider count, scoped to one crawled source",
+	// Two independent reasons, either of which alone excludes a private posting: its source is
+	// only ever privatejob.SourcePasted or SourceWeblink, neither of which any crawl registers
+	// in board_health, so the statements' EXISTS clause finds nothing; and its external_id is a
+	// bare uuid.NewString() with no "board:" prefix, so the board-scoped LIKE cannot match it.
+	// Adding NOT is_private here anyway would be actively worse than the exemption: these two
+	// COUNT statements are the dry run for the two CLOSE statements beside them, which the rule
+	// does not check, and a count that filtered rows its close does not would report a number
+	// the --apply run then disagrees with — turning the report a human reads before arming the
+	// net into a lie about what arming it does.
+	"CountEmptyFeedBoardJobs":    "the empty-feed safety net's dry-run count, scoped the same way as its chronic twin above: one board_health-registered provider's source, which a private posting's source is never one of",
+	"CountEmptyFeedProviderJobs": "the same safety net's boardless-provider count, scoped to one crawled source",
 
 	// --- Writes back to the private row itself: the effect stays inside the row, so it
 	// reaches its creator and nobody else. ---

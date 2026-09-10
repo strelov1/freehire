@@ -58,7 +58,7 @@ func TestBoardHealth_FailureCooldownSelfHeal(t *testing.T) {
 	}
 
 	// A success self-heals: failure state cleared, cooldown gone.
-	if err := h.RecordSuccess(ctx, "greenhouse", "acme", "", 7); err != nil {
+	if err := h.RecordSuccess(ctx, "greenhouse", "acme", "", 7, true); err != nil {
 		t.Fatalf("RecordSuccess: %v", err)
 	}
 	if _, cooled, _ := h.Cooldown(ctx, "greenhouse", "acme", ""); cooled {
@@ -96,7 +96,7 @@ func TestBoardHealth_CooledBoardsAndClear(t *testing.T) {
 	cool("breezy", "b1")
 	cool("breezy", "b2")
 	cool("breezy", "b3")
-	if err := h.RecordSuccess(ctx, "breezy", "b-ok", "", 1); err != nil {
+	if err := h.RecordSuccess(ctx, "breezy", "b-ok", "", 1, true); err != nil {
 		t.Fatalf("RecordSuccess: %v", err)
 	}
 	// join: an unrelated provider's cooled board, to prove clearing is provider-scoped.
@@ -146,7 +146,7 @@ func TestBoardHealth_RegionDisambiguates(t *testing.T) {
 			t.Fatalf("RecordFailure gb: %v", err)
 		}
 	}
-	if err := h.RecordSuccess(ctx, "adzuna", "it-jobs", "us", 42); err != nil {
+	if err := h.RecordSuccess(ctx, "adzuna", "it-jobs", "us", 42, true); err != nil {
 		t.Fatalf("RecordSuccess us: %v", err)
 	}
 
@@ -233,7 +233,7 @@ func TestBoardHealth_ChronicIsDistinctFromMerelyCooling(t *testing.T) {
 	}
 
 	// A board that succeeded once, long enough ago to be chronic, then kept failing.
-	if err := h.RecordSuccess(ctx, "paylocity", "long-dead", "", 1); err != nil {
+	if err := h.RecordSuccess(ctx, "paylocity", "long-dead", "", 1, true); err != nil {
 		t.Fatalf("RecordSuccess long-dead: %v", err)
 	}
 	if _, err := pool.Exec(ctx,

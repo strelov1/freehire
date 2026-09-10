@@ -56,12 +56,13 @@ func (h *boardHealth) Cooldown(ctx context.Context, provider, board, region stri
 // pending boards row to active on this, its first successful crawl (a no-op — found=false,
 // no error — for a board that is already active, or that has no boards row at all, e.g.
 // one crawled before this migration).
-func (h *boardHealth) RecordSuccess(ctx context.Context, provider, board, region string, ingested int) error {
+func (h *boardHealth) RecordSuccess(ctx context.Context, provider, board, region string, ingested int, reached bool) error {
 	if err := h.q.RecordBoardSuccess(ctx, db.RecordBoardSuccessParams{
 		Provider:          provider,
 		Board:             board,
 		Region:            region,
 		LastIngestedCount: pgtype.Int4{Int32: int32(ingested), Valid: true},
+		Reached:           reached,
 	}); err != nil {
 		return err
 	}

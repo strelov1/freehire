@@ -351,6 +351,115 @@ func (q *Queries) CloseChronicProviderJobs(ctx context.Context, arg CloseChronic
 	return count, err
 }
 
+const closeEmptyFeedBoardJobs = `-- name: CloseEmptyFeedBoardJobs :one
+WITH closed AS (
+    UPDATE jobs
+    SET closed_at     = now(),
+        closed_reason = 'feed_empty',
+        updated_at    = now()
+    WHERE closed_at IS NULL
+      AND source = $1
+      AND external_id LIKE $2
+      AND EXISTS (
+          SELECT 1 FROM board_health bh
+          WHERE bh.provider = $1
+            AND bh.board = $3
+            AND bh.last_yield_at IS NOT NULL
+            AND bh.last_yield_at < now() - $4::interval
+            AND bh.last_success_at IS NOT NULL
+            AND bh.last_success_at >= now() - $4::interval
+            AND bh.consecutive_failures = 0
+      )
+    RETURNING id
+), queued AS (
+    INSERT INTO search_delete_outbox (job_id)
+    SELECT id FROM closed
+    ON CONFLICT (job_id) DO NOTHING
+)
+SELECT count(*) FROM closed
+`
+
+type CloseEmptyFeedBoardJobsParams struct {
+	Source       string          `json:"source"`
+	BoardPattern string          `json:"board_pattern"`
+	Board        string          `json:"board"`
+	AgeWindow    pgtype.Interval `json:"age_window"`
+}
+
+// The empty-feed safety net, board-scoped: closes every open job of ONE board that
+// board_health.ListEmptyFeedBoards has proven reachable-but-empty for the closure window.
+// Structurally identical to CloseChronicBoardJobs — same board_pattern scoping so a
+// same-provider sibling board is never touched, same search_delete_outbox CTE riding the
+// statement so the index enqueue stays atomic with the close, same :one because that CTE moves
+// the row count out of the command tag — and different in exactly two places: the reason it
+// writes, and the board_health predicate it re-validates.
+//
+// closed_reason is 'feed_empty' (migration 0159), which asserts something none of the existing
+// reasons do: every crawl SUCCEEDED and the feed carried nothing. 'board_unreachable' would
+// claim the opposite diagnosis and send an operator looking at our access rather than at the
+// source's inventory.
+//
+// The EXISTS clause re-validates board_health's CURRENT state inside this same statement, for
+// the reason CloseChronicBoardJobs states in full: the caller lists boards and closes them as
+// two separate round trips, and a board can recover in the gap — here by a single crawl that
+// reaches one posting and stamps last_yield_at. Re-checking closes that window; note it
+// re-checks last_yield_at specifically, since that is the column a recovery moves.
+func (q *Queries) CloseEmptyFeedBoardJobs(ctx context.Context, arg CloseEmptyFeedBoardJobsParams) (int64, error) {
+	row := q.db.QueryRow(ctx, closeEmptyFeedBoardJobs,
+		arg.Source,
+		arg.BoardPattern,
+		arg.Board,
+		arg.AgeWindow,
+	)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const closeEmptyFeedProviderJobs = `-- name: CloseEmptyFeedProviderJobs :one
+WITH closed AS (
+    UPDATE jobs
+    SET closed_at     = now(),
+        closed_reason = 'feed_empty',
+        updated_at    = now()
+    WHERE closed_at IS NULL
+      AND source = $1
+      AND EXISTS (
+          SELECT 1 FROM board_health bh
+          WHERE bh.provider = $1
+            AND bh.board = ''
+            AND bh.last_yield_at IS NOT NULL
+            AND bh.last_yield_at < now() - $2::interval
+            AND bh.last_success_at IS NOT NULL
+            AND bh.last_success_at >= now() - $2::interval
+            AND bh.consecutive_failures = 0
+      )
+    RETURNING id
+), queued AS (
+    INSERT INTO search_delete_outbox (job_id)
+    SELECT id FROM closed
+    ON CONFLICT (job_id) DO NOTHING
+)
+SELECT count(*) FROM closed
+`
+
+type CloseEmptyFeedProviderJobsParams struct {
+	Source    string          `json:"source"`
+	AgeWindow pgtype.Interval `json:"age_window"`
+}
+
+// The empty-feed safety net's source-scoped sibling, for a BOARDLESS provider's record
+// (board = ”, see ingest-board-health spec): such a record already stands for the provider's
+// whole crawl, so closing "this board's jobs" means the whole provider's open jobs, by source
+// alone. Mirrors CloseChronicProviderJobs, carrying the same re-validation EXISTS clause as
+// CloseEmptyFeedBoardJobs and for the same reason.
+func (q *Queries) CloseEmptyFeedProviderJobs(ctx context.Context, arg CloseEmptyFeedProviderJobsParams) (int64, error) {
+	row := q.db.QueryRow(ctx, closeEmptyFeedProviderJobs, arg.Source, arg.AgeWindow)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const closeJobByID = `-- name: CloseJobByID :one
 WITH closed AS (
     UPDATE jobs
@@ -1080,6 +1189,75 @@ type CountChronicProviderJobsParams struct {
 // board_health re-validation as its close counterpart.
 func (q *Queries) CountChronicProviderJobs(ctx context.Context, arg CountChronicProviderJobsParams) (int64, error) {
 	row := q.db.QueryRow(ctx, countChronicProviderJobs, arg.Source, arg.AgeWindow)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const countEmptyFeedBoardJobs = `-- name: CountEmptyFeedBoardJobs :one
+SELECT count(*) FROM jobs
+WHERE closed_at IS NULL
+  AND source = $1
+  AND external_id LIKE $2
+  AND EXISTS (
+      SELECT 1 FROM board_health bh
+      WHERE bh.provider = $1
+        AND bh.board = $3
+        AND bh.last_yield_at IS NOT NULL
+        AND bh.last_yield_at < now() - $4::interval
+        AND bh.last_success_at IS NOT NULL
+        AND bh.last_success_at >= now() - $4::interval
+        AND bh.consecutive_failures = 0
+  )
+`
+
+type CountEmptyFeedBoardJobsParams struct {
+	Source       string          `json:"source"`
+	BoardPattern string          `json:"board_pattern"`
+	Board        string          `json:"board"`
+	AgeWindow    pgtype.Interval `json:"age_window"`
+}
+
+// What CloseEmptyFeedBoardJobs would close, for the safety-net worker's dry-run report — same
+// predicate including the board_health re-validation, so a dry run cannot report a count for a
+// board that has already yielded again, and no write.
+func (q *Queries) CountEmptyFeedBoardJobs(ctx context.Context, arg CountEmptyFeedBoardJobsParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countEmptyFeedBoardJobs,
+		arg.Source,
+		arg.BoardPattern,
+		arg.Board,
+		arg.AgeWindow,
+	)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const countEmptyFeedProviderJobs = `-- name: CountEmptyFeedProviderJobs :one
+SELECT count(*) FROM jobs
+WHERE closed_at IS NULL
+  AND source = $1
+  AND EXISTS (
+      SELECT 1 FROM board_health bh
+      WHERE bh.provider = $1
+        AND bh.board = ''
+        AND bh.last_yield_at IS NOT NULL
+        AND bh.last_yield_at < now() - $2::interval
+        AND bh.last_success_at IS NOT NULL
+        AND bh.last_success_at >= now() - $2::interval
+        AND bh.consecutive_failures = 0
+  )
+`
+
+type CountEmptyFeedProviderJobsParams struct {
+	Source    string          `json:"source"`
+	AgeWindow pgtype.Interval `json:"age_window"`
+}
+
+// What CloseEmptyFeedProviderJobs would close, for the safety-net worker's dry-run report.
+// Same board_health re-validation as its close counterpart.
+func (q *Queries) CountEmptyFeedProviderJobs(ctx context.Context, arg CountEmptyFeedProviderJobsParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countEmptyFeedProviderJobs, arg.Source, arg.AgeWindow)
 	var count int64
 	err := row.Scan(&count)
 	return count, err

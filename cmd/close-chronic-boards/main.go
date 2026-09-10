@@ -35,11 +35,28 @@ import (
 // closed it anyway (design.md Decision 1).
 const chronicBoardCloseWindowDaysDefault int32 = 60
 
+// emptyFeedCloseWindowDaysDefault is deliberately SHORTER than the unreachable window above,
+// because the two windows are waiting out different uncertainties. An unreachable board is
+// waiting out OUR side — a blocked crawler, a rotated URL, an adapter that needs a fix — and
+// sixty days is the room a curator is given to act before the safety net does. An empty feed has
+// already told us its answer, successfully, on every run: there is nothing here. Thirty days is
+// how long we insist it keeps saying so before believing it, which is generous against the one
+// benign reading (a seasonal or deliberately paused board) and still an order of magnitude
+// tighter than leaving the postings open forever, which is what happened before this existed.
+const emptyFeedCloseWindowDaysDefault int32 = 30
+
 func main() { worker.Main(run) }
 
 func run() int {
-	apply := flag.Bool("apply", false, "actually close; without it the run only reports")
-	flag.Bool("dry-run", false, "no-op: reporting is the default, --apply is what closes")
+	apply := flag.Bool("apply", false, "actually close chronically UNREACHABLE boards; without it that pass only reports")
+	// A second, separate switch rather than letting --apply arm both passes. The unit file's
+	// own comment tells a future operator to add --apply once they have read a full closure
+	// window's worth of the UNREACHABLE pass's reports — and if that one flag also armed this
+	// one, following that instruction would silently start closing jobs on evidence nobody had
+	// reviewed, which is precisely the posture the dry-run default exists to prevent. Each
+	// safety net is armed by a person who has read that net's own reports.
+	applyEmptyFeed := flag.Bool("apply-empty-feed", false, "actually close reachable-but-EMPTY boards; without it that pass only reports")
+	flag.Bool("dry-run", false, "no-op: reporting is the default, --apply / --apply-empty-feed are what close")
 	flag.Parse()
 
 	ctx, _, pool, cleanup, err := worker.Bootstrap(context.Background())
@@ -55,7 +72,15 @@ func run() int {
 		return 1
 	}
 
-	report, err := closeChronicBoards(ctx, db.New(pool), days, maxChronicBoardsPerRun, *apply)
+	emptyDays, err := worker.EnvInt32("EMPTY_FEED_CLOSE_WINDOW_DAYS", emptyFeedCloseWindowDaysDefault)
+	if err != nil {
+		log.Printf("close-chronic-boards: %v", err)
+		return 1
+	}
+
+	q := db.New(pool)
+
+	report, err := closeChronicBoards(ctx, q, days, maxChronicBoardsPerRun, *apply)
 	if err != nil {
 		log.Printf("close-chronic-boards: %v", err)
 		return 1
@@ -67,5 +92,22 @@ func run() int {
 	}
 	log.Printf("close-chronic-boards: %d chronic board(s) (%d skipped as region-ambiguous), %s %d job(s) total",
 		report.boardsProcessed, report.boardsSkippedAmbiguous, verb, report.jobsAffected)
+
+	// The empty-feed pass runs after the unreachable one and never instead of it: the two select
+	// disjoint sets by construction (a board qualifying here must have succeeded inside its own
+	// window, which is exactly what a chronic board has not), so neither can take work from the
+	// other, and a board that somehow moved between the two states between the passes is simply
+	// examined twice against predicates the close statements re-validate anyway.
+	empty, err := closeEmptyFeedBoards(ctx, q, emptyDays, maxChronicBoardsPerRun, *applyEmptyFeed)
+	if err != nil {
+		log.Printf("close-chronic-boards: %v", err)
+		return 1
+	}
+	emptyVerb := "would close"
+	if *applyEmptyFeed {
+		emptyVerb = "closed"
+	}
+	log.Printf("close-chronic-boards: %d empty-feed board(s) (%d skipped as region-ambiguous), %s %d job(s) total",
+		empty.boardsProcessed, empty.boardsSkippedAmbiguous, emptyVerb, empty.jobsAffected)
 	return 0
 }

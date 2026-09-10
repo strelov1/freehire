@@ -122,8 +122,14 @@ type BoardHealth interface {
 	// Cooldown reports the board's cooldown_until and whether it is set. The Runner
 	// skips the board when it is set and in the future.
 	Cooldown(ctx context.Context, provider, board, region string) (time.Time, bool, error)
-	// RecordSuccess clears the board's failure state and stamps freshness.
-	RecordSuccess(ctx context.Context, provider, board, region string, ingested int) error
+	// RecordSuccess clears the board's failure state and stamps freshness. reached reports
+	// whether the board's LISTING named any posting at all (boardListedAnyPosting) — a
+	// separate question from ingested, which counts only the ones that became rows, and the
+	// one an empty feed answers differently from a live board whose every posting we already
+	// hold, or cannot read, or failed to save. See board_health.last_yield_at (migration
+	// 0158) for what it feeds, and boardListedAnyPosting for why it is deliberately the most
+	// generous reading available.
+	RecordSuccess(ctx context.Context, provider, board, region string, ingested int, reached bool) error
 	// RecordFailure counts a failed crawl and cools the board down per the backoff policy.
 	RecordFailure(ctx context.Context, provider, board, region, errMsg string) error
 	// CooledBoards returns up to limit (board, region) pairs of the provider currently in
@@ -552,7 +558,7 @@ func (r Runner) ingestBoard(ctx context.Context, e sources.CompanyEntry) Stats {
 		if st.Failed > 0 && st.Ingested == 0 && st.Rejected == 0 && st.ATSCovered == 0 {
 			r.recordFailure(ctx, e, "streaming board failed with no progress")
 		} else {
-			r.recordSuccess(ctx, e, st.Ingested)
+			r.recordSuccess(ctx, e, st.Ingested, boardListedAnyPosting(st))
 		}
 		return st
 	}
@@ -661,10 +667,17 @@ func (r Runner) ingestFetched(ctx context.Context, e sources.CompanyEntry, raw [
 			e.Provider, e.Board, e.Company, st.ATSCovered, len(raw))
 	}
 	rej.log(e)
+	st.Rejected = rej.rejected
 	// The board was reachable (Fetch succeeded), so it is healthy regardless of per-job
 	// save skips — those are stats.Skipped, not a board outage.
-	r.recordSuccess(ctx, e, st.Ingested)
-	st.Rejected = rej.rejected
+	//
+	// Deliberately AFTER st.Rejected is filled in above, not before: boardReachedPostings
+	// counts a rejected posting as a posting the crawl reached, and reading st a line earlier
+	// would see Rejected == 0 and report an all-rejected board as having yielded nothing —
+	// which on a national feed heavy with non-tech postings is the ordinary outcome, not an
+	// empty feed. The whole board would then age into the empty-feed net and have its jobs
+	// closed under a diagnosis that was never true of it.
+	r.recordSuccess(ctx, e, st.Ingested, boardListedAnyPosting(st))
 	// Too much of the board went unread for its crawl to be evidence of what is still on it,
 	// so this run's close scopes are withheld for every employer the board carries — the board
 	// scope through boardQualifies, the company scope through these slugs. Announced because
@@ -1029,11 +1042,11 @@ func (r Runner) cooledDown(ctx context.Context, e sources.CompanyEntry) bool {
 // recordSuccess / recordFailure persist a board's outcome best-effort: a health-store
 // error is logged and never propagated (health must not fail ingest), and both no-op
 // when no BoardHealth port is wired.
-func (r Runner) recordSuccess(ctx context.Context, e sources.CompanyEntry, ingested int) {
+func (r Runner) recordSuccess(ctx context.Context, e sources.CompanyEntry, ingested int, reached bool) {
 	if r.BoardHealth == nil {
 		return
 	}
-	if err := r.BoardHealth.RecordSuccess(ctx, e.Provider, e.Board, e.Region, ingested); err != nil {
+	if err := r.BoardHealth.RecordSuccess(ctx, e.Provider, e.Board, e.Region, ingested, reached); err != nil {
 		log.Printf("ingest: record board success %s/%s: %v", e.Provider, e.Board, err)
 	}
 }

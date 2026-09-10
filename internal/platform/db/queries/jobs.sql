@@ -1522,6 +1522,118 @@ WHERE closed_at IS NULL
           OR (bh.last_success_at IS NULL AND bh.first_seen_at < now() - sqlc.arg(age_window)::interval))
   );
 
+-- name: CloseEmptyFeedBoardJobs :one
+-- The empty-feed safety net, board-scoped: closes every open job of ONE board that
+-- board_health.ListEmptyFeedBoards has proven reachable-but-empty for the closure window.
+-- Structurally identical to CloseChronicBoardJobs — same board_pattern scoping so a
+-- same-provider sibling board is never touched, same search_delete_outbox CTE riding the
+-- statement so the index enqueue stays atomic with the close, same :one because that CTE moves
+-- the row count out of the command tag — and different in exactly two places: the reason it
+-- writes, and the board_health predicate it re-validates.
+--
+-- closed_reason is 'feed_empty' (migration 0159), which asserts something none of the existing
+-- reasons do: every crawl SUCCEEDED and the feed carried nothing. 'board_unreachable' would
+-- claim the opposite diagnosis and send an operator looking at our access rather than at the
+-- source's inventory.
+--
+-- The EXISTS clause re-validates board_health's CURRENT state inside this same statement, for
+-- the reason CloseChronicBoardJobs states in full: the caller lists boards and closes them as
+-- two separate round trips, and a board can recover in the gap — here by a single crawl that
+-- reaches one posting and stamps last_yield_at. Re-checking closes that window; note it
+-- re-checks last_yield_at specifically, since that is the column a recovery moves.
+WITH closed AS (
+    UPDATE jobs
+    SET closed_at     = now(),
+        closed_reason = 'feed_empty',
+        updated_at    = now()
+    WHERE closed_at IS NULL
+      AND source = sqlc.arg(source)
+      AND external_id LIKE sqlc.arg(board_pattern)
+      AND EXISTS (
+          SELECT 1 FROM board_health bh
+          WHERE bh.provider = sqlc.arg(source)
+            AND bh.board = sqlc.arg(board)
+            AND bh.last_yield_at IS NOT NULL
+            AND bh.last_yield_at < now() - sqlc.arg(age_window)::interval
+            AND bh.last_success_at IS NOT NULL
+            AND bh.last_success_at >= now() - sqlc.arg(age_window)::interval
+            AND bh.consecutive_failures = 0
+      )
+    RETURNING id
+), queued AS (
+    INSERT INTO search_delete_outbox (job_id)
+    SELECT id FROM closed
+    ON CONFLICT (job_id) DO NOTHING
+)
+SELECT count(*) FROM closed;
+
+-- name: CloseEmptyFeedProviderJobs :one
+-- The empty-feed safety net's source-scoped sibling, for a BOARDLESS provider's record
+-- (board = '', see ingest-board-health spec): such a record already stands for the provider's
+-- whole crawl, so closing "this board's jobs" means the whole provider's open jobs, by source
+-- alone. Mirrors CloseChronicProviderJobs, carrying the same re-validation EXISTS clause as
+-- CloseEmptyFeedBoardJobs and for the same reason.
+WITH closed AS (
+    UPDATE jobs
+    SET closed_at     = now(),
+        closed_reason = 'feed_empty',
+        updated_at    = now()
+    WHERE closed_at IS NULL
+      AND source = sqlc.arg(source)
+      AND EXISTS (
+          SELECT 1 FROM board_health bh
+          WHERE bh.provider = sqlc.arg(source)
+            AND bh.board = ''
+            AND bh.last_yield_at IS NOT NULL
+            AND bh.last_yield_at < now() - sqlc.arg(age_window)::interval
+            AND bh.last_success_at IS NOT NULL
+            AND bh.last_success_at >= now() - sqlc.arg(age_window)::interval
+            AND bh.consecutive_failures = 0
+      )
+    RETURNING id
+), queued AS (
+    INSERT INTO search_delete_outbox (job_id)
+    SELECT id FROM closed
+    ON CONFLICT (job_id) DO NOTHING
+)
+SELECT count(*) FROM closed;
+
+-- name: CountEmptyFeedBoardJobs :one
+-- What CloseEmptyFeedBoardJobs would close, for the safety-net worker's dry-run report — same
+-- predicate including the board_health re-validation, so a dry run cannot report a count for a
+-- board that has already yielded again, and no write.
+SELECT count(*) FROM jobs
+WHERE closed_at IS NULL
+  AND source = sqlc.arg(source)
+  AND external_id LIKE sqlc.arg(board_pattern)
+  AND EXISTS (
+      SELECT 1 FROM board_health bh
+      WHERE bh.provider = sqlc.arg(source)
+        AND bh.board = sqlc.arg(board)
+        AND bh.last_yield_at IS NOT NULL
+        AND bh.last_yield_at < now() - sqlc.arg(age_window)::interval
+        AND bh.last_success_at IS NOT NULL
+        AND bh.last_success_at >= now() - sqlc.arg(age_window)::interval
+        AND bh.consecutive_failures = 0
+  );
+
+-- name: CountEmptyFeedProviderJobs :one
+-- What CloseEmptyFeedProviderJobs would close, for the safety-net worker's dry-run report.
+-- Same board_health re-validation as its close counterpart.
+SELECT count(*) FROM jobs
+WHERE closed_at IS NULL
+  AND source = sqlc.arg(source)
+  AND EXISTS (
+      SELECT 1 FROM board_health bh
+      WHERE bh.provider = sqlc.arg(source)
+        AND bh.board = ''
+        AND bh.last_yield_at IS NOT NULL
+        AND bh.last_yield_at < now() - sqlc.arg(age_window)::interval
+        AND bh.last_success_at IS NOT NULL
+        AND bh.last_success_at >= now() - sqlc.arg(age_window)::interval
+        AND bh.consecutive_failures = 0
+  );
+
 -- name: UnseenJobIDs :many
 -- Same candidate set as CloseUnseenJobs, unmaterialized. The sweep's fallback path
 -- (see CloseUnseenJobByID) uses this to close row by row when the single bulk UPDATE
