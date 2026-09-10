@@ -53,11 +53,6 @@ const tagAutoApplyDrafting = "auto-apply-drafting"
 // reach a submit click with selectors matching nothing.
 var fillProviders = map[string]bool{
 	"greenhouse": true,
-	// Measured 2026-09-09. Retiring the blanket captcha refusal (#2721) let the preview
-	// pass reach Lever's schema for the first time, and it came back with every field
-	// answered and nothing pending; the form's controls were captured from a live posting
-	// the same day (see leverform_test.go's fixture).
-	"lever": true,
 }
 
 // reasonSubmissionNotImplemented is the one park reason for two distinct gaps that both
@@ -250,7 +245,7 @@ func (c *Client) Submit(ctx context.Context, claimed autoapply.Claimed, answers 
 			}
 			if !browserUseEnforce() {
 				log.Printf("atsapply: browser-use fallback would attempt job %d (%s) — shadow mode, still parking", claimed.JobID, claimed.Provider)
-			} else if result, handled, err := c.browserUse.submit(ctx, plan, merged, claimed.JobURL); handled {
+			} else if result, handled, err := c.browserUse.submit(ctx, plan, merged, agentTargetURL(claimed.Provider, claimed.JobURL)); handled {
 				return result, err
 			}
 		}

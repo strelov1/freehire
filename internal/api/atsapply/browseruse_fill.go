@@ -33,6 +33,32 @@ import (
 var browserUseProviders = map[string]bool{
 	"ashby":    true,
 	"workable": true,
+	// Lever is here for a different reason than the other two: it HAS a working fill
+	// path, and that path mostly cannot finish. Its forms carry an invisible hCaptcha —
+	// 10 of 12 live postings sampled on 2026-09-10 — and this package's own Chrome
+	// passes it about one attempt in eight. Eight probe runs (headless and windowed
+	// under Xvfb, datacentre and residential IP, with and without mouse/scroll warm-up,
+	// with and without a User-Agent naming HeadlessChrome) moved the odds not at all;
+	// the pass looked like a coin landing well. The cloud agent runs a hardened browser
+	// behind residential proxies and solves supported captchas itself, with no request
+	// field to turn that on. So Lever is routed here deliberately, at a cost per
+	// attempt, rather than left on a free path that mostly parks.
+	"lever": true,
+}
+
+// agentTargetURL is the page the cloud agent is told to open for a posting.
+//
+// Not simply the posting URL: Lever renders its description and its form on two pages, and
+// the form is at the posting URL plus /apply. The Chrome path already learned this the
+// expensive way — a live attempt parked as unrecognized_form_layout on a page that loaded
+// fine and had no form on it — and layout.go holds that knowledge. Handing the agent the
+// same wrong URL would repeat that, only slower and for money.
+func agentTargetURL(provider, postingURL string) string {
+	layout, ok := layoutFor(provider)
+	if !ok {
+		return postingURL
+	}
+	return layout.applyURL(postingURL)
 }
 
 // browserUseOutcome is the terminal signal buildTask's own instruction requires the
