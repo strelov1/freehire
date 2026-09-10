@@ -153,10 +153,16 @@ func (q *Queries) RetractCompanyProcessReport(ctx context.Context, arg RetractCo
 }
 
 const syncJobsAIInterviewReports = `-- name: SyncJobsAIInterviewReports :exec
-UPDATE jobs
-   SET ai_interview_reports = $2, updated_at = now()
- WHERE company_slug = $1
-   AND ai_interview_reports IS DISTINCT FROM $2
+WITH updated AS (
+    UPDATE jobs
+       SET ai_interview_reports = $2, updated_at = now()
+     WHERE company_slug = $1
+       AND ai_interview_reports IS DISTINCT FROM $2
+    RETURNING id, closed_at, COALESCE(posted_at, created_at) AS eff_posted_at
+)
+INSERT INTO search_outbox (job_id, job_posted_at)
+SELECT id, eff_posted_at FROM updated WHERE closed_at IS NULL
+ON CONFLICT (job_id) DO NOTHING
 `
 
 type SyncJobsAIInterviewReportsParams struct {
@@ -165,13 +171,24 @@ type SyncJobsAIInterviewReportsParams struct {
 }
 
 // Copy the company's counter onto its postings, so a job card carries the label
-// without the read path joining companies. Run in the SAME transaction as the report,
-// not on a schedule: a report is filed in real time, and a company page showing the
-// label while that company's own job cards say nothing reads as a bug.
+// without the read path joining companies, and QUEUE the changed ones for the search
+// index. Run in the SAME transaction as the report, not on a schedule: a report is
+// filed in real time, and a company page showing the label while that company's own
+// job cards say nothing reads as a bug.
 //
-// IS DISTINCT FROM keeps a no-op report from touching a single row, and updated_at is
-// bumped for the same reason SyncJobCollections bumps it — `reindex --since` is what
-// carries the change into the facet index.
+// The enqueue is the half that was missing. Bumping updated_at alone is what
+// PropagateCollectionsToJobs does, and its comment points at `reindex --since` — a mode
+// cmd/reindex does not have. Nothing carried the change into Meilisearch, so the badge
+// appeared on the job page (served from Postgres) and on nothing else, and the filter
+// matched nobody. The first report on prod had to be pushed into search_outbox by hand
+// to make the feature visible at all.
+//
+// Only OPEN postings are queued: a closed one is not in the search index, so a row for
+// it is work the drain would do and then discard. The column is still written for
+// closed rows, so a posting that reopens already carries the right count.
+//
+// IS DISTINCT FROM keeps a no-op report from touching a single row, which also keeps
+// the enqueue empty when nothing changed.
 func (q *Queries) SyncJobsAIInterviewReports(ctx context.Context, arg SyncJobsAIInterviewReportsParams) error {
 	_, err := q.db.Exec(ctx, syncJobsAIInterviewReports, arg.CompanySlug, arg.AiInterviewReports)
 	return err

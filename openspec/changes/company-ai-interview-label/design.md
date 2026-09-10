@@ -142,12 +142,21 @@ and it took getting them backwards once to see it:
   job cards said nothing until the next sync. The same fact present on one page
   and absent on the next reads as a bug, and no wording fixes it.
 
-So the sync runs in the write: one `UPDATE jobs SET ... WHERE company_slug = $1`
-beside the company recompute. It is one statement, not a loop, and filing a report
-is a rare action — the largest employers here carry thousands of open postings and
-a few thousand row updates in one statement is unremarkable. It bumps `updated_at`
-for the same reason the collections sync does, so `reindex --since` carries the
-change into the facet index.
+So the sync runs in the write: one statement beside the company recompute that writes
+the column AND queues the changed open postings into `search_outbox`. It is one
+statement, not a loop, and filing a report is a rare action — the largest employers here
+carry thousands of open postings and a few thousand row updates in one statement is
+unremarkable.
+
+**The enqueue was missing in the first version, and the gap is worth recording.**
+`PropagateCollectionsToJobs` only bumps `updated_at`, and its comment points at
+`reindex --since` — a mode `cmd/reindex` does not have. Copying that shape meant nothing
+carried the change into Meilisearch: on the first real report the badge appeared on the
+job page (served from Postgres) and on no card, and the filter matched nobody. The rows
+had to be pushed into `search_outbox` by hand to make the feature visible at all. Only
+OPEN postings are queued — a closed one is not in the index, so a row for it is work the
+drain would do and discard — while the column is written for closed rows too, so a
+posting that reopens already carries the right count.
 
 **Alternative rejected: JOIN `companies` on the read.** No job read query joins
 companies today, so adding one changes `ListJobs`/`GetJobBySlug` from returning
