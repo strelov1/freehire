@@ -1,6 +1,10 @@
 package atsapply
 
-import "github.com/chromedp/chromedp"
+import (
+	"strings"
+
+	"github.com/chromedp/chromedp"
+)
 
 // addressing is how a platform identifies a control on its own application form — which
 // attribute names it, and therefore which attribute selects it.
@@ -43,6 +47,31 @@ type formLayout struct {
 	submitSelector string
 	// addressBy is how a control on this platform is named, and so how it is selected.
 	addressBy addressing
+	// applyPath is appended to a posting's own URL to reach the page its application form
+	// is on. Empty when the posting URL IS that page.
+	//
+	// Greenhouse renders the description and the form together, so the worker's navigation
+	// target has always been the posting URL itself. Lever renders them on two pages: the
+	// posting URL carries the description and no form at all, and the form is at that URL
+	// plus /apply. A live attempt parked as unrecognized_form_layout because of exactly
+	// that — the page loaded fine and simply had no form on it.
+	applyPath string
+}
+
+// applyURL is the page this platform's application form is on, given the posting's own URL.
+//
+// Idempotent: a URL that already ends in the path (with or without a trailing slash) is
+// returned unchanged, so a stored URL that happens to include it does not gain a second
+// copy.
+func (l formLayout) applyURL(postingURL string) string {
+	if l.applyPath == "" {
+		return postingURL
+	}
+	trimmed := strings.TrimSuffix(postingURL, "/")
+	if strings.HasSuffix(trimmed, l.applyPath) {
+		return postingURL
+	}
+	return trimmed + l.applyPath
 }
 
 // layouts is every platform this package can drive a browser against.
@@ -55,7 +84,7 @@ type formLayout struct {
 // would have to be un-shared under time pressure.
 var layouts = map[string]formLayout{
 	"greenhouse": {formSelector: "application-form", submitSelector: "#submit_app", addressBy: byID},
-	"lever":      {formSelector: "application-form", submitSelector: "#btn-submit", addressBy: byName},
+	"lever":      {formSelector: "application-form", submitSelector: "#btn-submit", addressBy: byName, applyPath: "/apply"},
 }
 
 // queryKind is how chromedp must interpret the selector this addressing produces. It lives

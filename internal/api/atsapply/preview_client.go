@@ -122,7 +122,7 @@ func (p *PreviewClient) previewByLayout(ctx context.Context, claimed autoapply.C
 		// later caller ends up scanning with a zero-valued layout.
 		return autoapply.PreviewResult{}, fmt.Errorf("no form layout for %q", claimed.Provider)
 	}
-	pageHTML, err := renderedHTML(browserCtx, claimed.JobURL, layout.formSelector)
+	pageHTML, err := renderedHTML(browserCtx, layout.applyURL(claimed.JobURL), layout.formSelector)
 	if err != nil {
 		if result, parked := unscannableFormResult(err); parked {
 			return autoapply.PreviewResult{Parked: true, Reason: result.Reason}, nil

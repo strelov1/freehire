@@ -29,7 +29,7 @@ func TestLayoutFor_KnowsTheTwoProvidersWithAFillPath(t *testing.T) {
 	if !ok {
 		t.Fatal("lever has no layout")
 	}
-	wantLever := formLayout{formSelector: "application-form", submitSelector: "#btn-submit", addressBy: byName}
+	wantLever := formLayout{formSelector: "application-form", submitSelector: "#btn-submit", addressBy: byName, applyPath: "/apply"}
 	if lv != wantLever {
 		t.Errorf("lever layout = %+v, want %+v", lv, wantLever)
 	}
@@ -140,5 +140,39 @@ func TestFillOne_EveryActionOnTheSharedSelectorCarriesTheLayoutsQueryKind(t *tes
 	}
 	if checked == 0 {
 		t.Error("no line acting on sel was found; this test is no longer pinned to anything")
+	}
+}
+
+// Lever renders the posting and the application form on two different pages; Greenhouse
+// renders them on one.
+//
+// The worker navigates to the posting's own URL (jobs.url), which for Greenhouse IS the
+// form. On Lever that page carries the description and no form at all — the form lives at
+// the same URL plus /apply. A live attempt on queue entry 6 parked as
+// unrecognized_form_layout for exactly this reason: the page loaded fine and simply had no
+// application form on it (freehire, 2026-09-10).
+func TestApplyURL_SendsEachPlatformToThePageItsFormIsOn(t *testing.T) {
+	gh, _ := layoutFor("greenhouse")
+	const ghPosting = "https://job-boards.greenhouse.io/garnerhealth/jobs/6181651004"
+	if got := gh.applyURL(ghPosting); got != ghPosting {
+		t.Errorf("greenhouse apply url = %q, want the posting URL unchanged", got)
+	}
+
+	lv, _ := layoutFor("lever")
+	const lvPosting = "https://jobs.lever.co/jobgether/08a82436-bd70-48bc-8304-1355c12a74ae"
+	if got := lv.applyURL(lvPosting); got != lvPosting+"/apply" {
+		t.Errorf("lever apply url = %q, want the posting URL plus /apply", got)
+	}
+}
+
+// A posting URL that already ends in the form's path must not gain a second one.
+func TestApplyURL_DoesNotDoubleTheSuffix(t *testing.T) {
+	lv, _ := layoutFor("lever")
+	const alreadyApply = "https://jobs.lever.co/jobgether/08a82436/apply"
+	if got := lv.applyURL(alreadyApply); got != alreadyApply {
+		t.Errorf("apply url = %q, want it unchanged when the path is already there", got)
+	}
+	if got := lv.applyURL(alreadyApply + "/"); got != alreadyApply+"/" {
+		t.Errorf("apply url = %q, want a trailing slash to count as the same path", got)
 	}
 }
