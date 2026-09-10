@@ -2,6 +2,7 @@ package atsapply
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -46,6 +47,41 @@ var confirmationMarkers = []string{
 var submitRefusedMarkers = []string{
 	"please try again",
 	"there was an error",
+}
+
+// errCaptchaRefused marks the one refusal that is safe to retry. A board that says it could
+// not VERIFY the submission is telling us it did not accept one — no application exists, so
+// asking again costs the employer nothing. Every other post-submit uncertainty must not be
+// retried, because it might mean the opposite.
+var errCaptchaRefused = errors.New("captcha refused the submission")
+
+// captchaRefusalMarkers are the boards' own wordings for a failed captcha verification.
+// Deliberately narrow: each requires the word "verify"/"verifying" beside the failure, so a
+// board objecting to the résumé or a field — which it could only do having READ the
+// submission — stays an ordinary refusal.
+var captchaRefusalMarkers = []string{
+	"error verifying your",
+	"could not verify",
+	"couldn't verify",
+	"unable to verify",
+	"verification failed",
+}
+
+// isCaptchaRefusal reports whether the page text is a board declining to verify rather than
+// declining the content of the application.
+func isCaptchaRefusal(bodyText string) bool {
+	return containsAny(strings.ToLower(bodyText), captchaRefusalMarkers)
+}
+
+// newRefusalError builds the error a matched refusal marker travels as: the marker that
+// fired, the board's own sentence around it, and — when the board declined to verify — the
+// errCaptchaRefused sentinel the runner reads with errors.Is.
+func newRefusalError(marker, bodyText string) error {
+	err := fmt.Errorf("board refused the submission: matched marker %q in %q", marker, refusalEvidence(bodyText, marker))
+	if isCaptchaRefusal(bodyText) {
+		return fmt.Errorf("%w: %w", errCaptchaRefused, err)
+	}
+	return err
 }
 
 // refusalEvidenceWindow is how much of the page text either side of a refusal marker is
@@ -212,7 +248,7 @@ func verifySubmission(parent context.Context) (bool, error) {
 		}
 		for _, m := range submitRefusedMarkers {
 			if strings.Contains(lower, m) {
-				return false, fmt.Errorf("board refused the submission: matched marker %q in %q", m, refusalEvidence(bodyText, m))
+				return false, newRefusalError(m, bodyText)
 			}
 		}
 		select {

@@ -20,6 +20,7 @@ type fakeStore struct {
 	failed       []int64
 	failAttempts map[int64]int
 	failMax      int
+	failMsg      string
 	failErr      error
 }
 
@@ -61,6 +62,7 @@ func (f *fakeStore) Fail(ctx context.Context, queueID int64, errMsg string, maxA
 	}
 	f.failAttempts[queueID]++
 	f.failMax = maxAttempts
+	f.failMsg = errMsg
 	return f.failAttempts[queueID] >= maxAttempts, nil
 }
 
