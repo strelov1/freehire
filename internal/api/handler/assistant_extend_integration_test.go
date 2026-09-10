@@ -42,7 +42,10 @@ func startedTailorSession(t *testing.T, pool *pgxpool.Pool, cfg plan.Config, use
 func TestExtendingASessionBuysMoreTurns(t *testing.T) {
 	pool := startPostgres(t)
 	iss := auth.NewIssuer("test-secret", time.Hour)
-	cfg := plan.DefaultConfig().Enforcing()
+	// Tailoring's free allowance is 0 by default now (subscription-only); pinned to 2 here
+	// because the test spends it twice on purpose — the session start and the extension —
+	// and asserts exactly that count below.
+	cfg := plan.DefaultConfig().Enforcing().WithFreeDaily(plan.FeatureTailor, 2)
 	cfg.TailorTurnsPerSession = 1
 	app := meteredAssistantApp(t, pool, iss,
 		&turnModel{replies: []*llms.ContentChoice{{Content: "one"}, {Content: "two"}}}, cfg)

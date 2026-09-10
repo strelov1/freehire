@@ -35,6 +35,13 @@ import (
 	"github.com/strelov1/freehire/internal/platform/db"
 )
 
+// testTailorFreeDaily is the free tailoring allowance every fixture in this file pins via
+// plan.Config.WithFreeDaily — tailoring's real default is 0 (subscription-only), and a
+// vacuous zero-limit fixture cannot tell "spent" from "never had any". One is enough: no
+// test here bootstraps more than one vacancy in a run (a reload of the SAME vacancy is
+// idempotent and charges once).
+const testTailorFreeDaily = 1
+
 // newTailorAPI builds a handler wired for the tailoring endpoints and truncates the tables.
 func newTailorAPI(t *testing.T) (*cvHandlers, *auth.Issuer, *pgxpool.Pool) {
 	t.Helper()
@@ -45,7 +52,7 @@ func newTailorAPI(t *testing.T) (*cvHandlers, *auth.Issuer, *pgxpool.Pool) {
 		t.Fatalf("truncate: %v", err)
 	}
 	iss := auth.NewIssuer("test-secret", time.Hour)
-	plans := plan.NewStore(queries, pool, plan.DefaultConfig().Enforcing())
+	plans := plan.NewStore(queries, pool, plan.DefaultConfig().Enforcing().WithFreeDaily(plan.FeatureTailor, testTailorFreeDaily))
 	bank := experience.NewStore(experience.NewQueriesRepository(queries))
 	resumeStore := resume.New(nil, resume.NewQueriesRepository(queries))
 	h := &cvHandlers{queries: queries, jobReader: queries,
@@ -435,7 +442,7 @@ func TestTailorCVOutOfCredits(t *testing.T) {
 	// who already opened today's sessions would be in.
 	if _, err := pool.Exec(ctx,
 		`INSERT INTO usage_daily (user_id, feature, day, used) VALUES ($1, 'tailor', CURRENT_DATE, $2)`,
-		user, plan.DefaultConfig().FreeDaily(plan.FeatureTailor)); err != nil {
+		user, testTailorFreeDaily); err != nil {
 		t.Fatalf("seed a spent allowance: %v", err)
 	}
 

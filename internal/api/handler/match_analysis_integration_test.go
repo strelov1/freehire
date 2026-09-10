@@ -101,13 +101,19 @@ func seedBankedCareer(t *testing.T, queries *db.Queries, userID int64) {
 	}
 }
 
+// fitFreeDailyForTests is generous on purpose: fit analysis's free allowance is 0 by
+// default now (subscription-only), and fitAPI is shared across several subtests run
+// against the SAME seeded user, so the day's counter accumulates real consumptions across
+// all of them rather than resetting per subtest.
+const fitFreeDailyForTests = 20
+
 func fitAPI(pool *pgxpool.Pool, queries *db.Queries, iss *auth.Issuer, store *resume.Store, an *matchanalysis.Analyzer) *matchHandlers {
 	return &matchHandlers{
 		queries:     queries,
 		userProfile: userprofile.New(ownedProfile()),
 		resume:      store, matchAnalysis: an,
 		fit: fitanalysis.New(queries,
-			plan.NewStore(queries, pool, plan.DefaultConfig().Enforcing()), an),
+			plan.NewStore(queries, pool, plan.DefaultConfig().Enforcing().WithFreeDaily(plan.FeatureFit, fitFreeDailyForTests)), an),
 	}
 }
 

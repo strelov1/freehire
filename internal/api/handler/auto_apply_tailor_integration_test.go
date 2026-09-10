@@ -44,7 +44,10 @@ import (
 // h.plans.StartSession runs, so this variant adds it to both assistantHandlers.plans and
 // cvHandlers.plans (refuseNewTailoring's own field).
 func newAutoApplyTailorApp(pool *pgxpool.Pool, iss *auth.Issuer, model assistant.Model) (*fiber.App, *assistantHandlers) {
-	return newAutoApplyTailorAppWithPlanConfig(pool, iss, model, plan.DefaultConfig())
+	// Tailoring's free allowance is 0 by default now (subscription-only); pinned to 1 here
+	// because several tests in this file actually run POST /tailor expecting it to pass the
+	// allowance gate, not just reach an ownership/state check ahead of it.
+	return newAutoApplyTailorAppWithPlanConfig(pool, iss, model, plan.DefaultConfig().WithFreeDaily(plan.FeatureTailor, 1))
 }
 
 // newAutoApplyTailorAppWithPlanConfig wires the harness with NO auto-apply orchestrator
@@ -237,7 +240,12 @@ func TestPostAutoApplyTailor_SpentAllowanceRefusesBeforeAnyCVOrSession(t *testin
 	pool := startPostgres(t)
 	truncateAutoApplyTailorTables(t, pool)
 	iss := auth.NewIssuer("test-secret", time.Hour)
-	app, _ := newAutoApplyTailorAppWithPlanConfig(pool, iss, &turnModel{}, plan.DefaultConfig().Enforcing())
+	// Tailoring's free allowance is 0 by default now, which a bare DefaultConfig() would
+	// make this test vacuous — "spent" and "never had any" would look identical. Pinning a
+	// real allowance and spending it down is what actually proves a refusal fires because
+	// the allowance ran out, not merely because it never existed.
+	planCfg := plan.DefaultConfig().Enforcing().WithFreeDaily(plan.FeatureTailor, 1)
+	app, _ := newAutoApplyTailorAppWithPlanConfig(pool, iss, &turnModel{}, planCfg)
 
 	userID, cookie := autoApplyTailorUser(t, pool, iss, "poor@example.test")
 	insertBaseCV(t, pool, userID)
@@ -249,7 +257,7 @@ func TestPostAutoApplyTailor_SpentAllowanceRefusesBeforeAnyCVOrSession(t *testin
 	// sessions would be in.
 	if _, err := pool.Exec(context.Background(),
 		`INSERT INTO usage_daily (user_id, feature, day, used) VALUES ($1, 'tailor', CURRENT_DATE, $2)`,
-		userID, plan.DefaultConfig().FreeDaily(plan.FeatureTailor)); err != nil {
+		userID, planCfg.FreeDaily(plan.FeatureTailor)); err != nil {
 		t.Fatalf("seed a spent allowance: %v", err)
 	}
 

@@ -414,7 +414,7 @@ func TestUsageOnProReportsUnlimited(t *testing.T) {
 
 func TestShadowModeRecordsWithoutRefusing(t *testing.T) {
 	now := time.Date(2026, 9, 15, 10, 0, 0, 0, time.UTC)
-	s, pool := newStore(t, DefaultConfig(), now) // enforcement off, as shipped
+	s, pool := newStore(t, notEnforcing(), now) // enforcement off
 	ctx := context.Background()
 	user := insertUser(t, pool, "shadow-mode@example.test")
 

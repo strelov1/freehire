@@ -291,7 +291,10 @@ func TestCoverLetter_UnproducedDraftLeavesTheStoreAndTheAllowanceAlone(t *testin
 	// request refuses at 409 long before the allowance is touched, and the test would pass
 	// while proving nothing about the release.
 	seedAnalysis(t, f.h, f.userID, f.jobID)
-	f.h.plans = plan.NewStore(db.New(pool), pool, plan.DefaultConfig())
+	// Cover-letter's free allowance is 0 by default now (subscription-only); pinned to 1
+	// here so the request actually reaches the draft step (and its release) instead of
+	// refusing at 402 before ever touching the allowance this test is about.
+	f.h.plans = plan.NewStore(db.New(pool), pool, plan.DefaultConfig().WithFreeDaily(plan.FeatureCoverLetter, 1))
 
 	// The fixture's analyzer has no client, so Draft returns (nil, nil): the unconfigured
 	// deployment, and the shape of every "produced nothing" outcome.

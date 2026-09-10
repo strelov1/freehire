@@ -86,6 +86,27 @@
     };
   });
 
+  // Whether Ultra is currently offered at all, read off the same public prices list
+  // /pricing itself renders its Ultra column from — one source of truth about what is for
+  // sale, rather than a second signal that could drift from it. Scoped to a Pro account:
+  // it is the only plan.plan value the "Upgrade to Ultra" CTA below is offered for.
+  let ultraOffered = $state(false);
+  $effect(() => {
+    // Cleared first, on every run — the same reason the billing effect above does: what is
+    // on screen belongs to the plan we last read, so a stale true surviving a plan change
+    // must not linger.
+    ultraOffered = false;
+    if (plan?.plan !== 'pro') return;
+    let live = true;
+    api
+      .plans()
+      .then((m) => live && (ultraOffered = m.prices.some((p) => p.tier === 'ultra')))
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  });
+
   const money = formatMinorUnits;
 
   $effect(() => {
@@ -141,9 +162,11 @@
         <!-- Both, not one or the other. A subscriber below the top tier has two things to do
              here and they are different: buy the plan above, and change or cancel the one
              they have. Showing only "Manage subscription" left a Pro subscriber with no way
-             to reach Ultra from the page that tells them what plan they are on. -->
+             to reach Ultra from the page that tells them what plan they are on — but only
+             while Ultra is actually for sale; advertising a tier nobody can buy is worse
+             than not offering an upgrade at all. -->
         <div class="flex shrink-0 flex-wrap items-center gap-2">
-          {#if plan.plan !== 'ultra'}
+          {#if plan.plan === 'free' || (plan.plan === 'pro' && ultraOffered)}
             <!-- To /pricing rather than straight to checkout: the choice between monthly and
                  annual belongs on a page that can explain it, and sending someone to a payment
                  form without it silently sells them the monthly one. -->
