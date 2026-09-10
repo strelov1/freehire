@@ -97,16 +97,21 @@
     </div>
   </header>
 
-  <dl class="mt-8 grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-border bg-border">
-    {#each stats as stat (stat.label)}
-      <div class="flex flex-col bg-background p-5">
-        <dt class="font-mono text-xs uppercase tracking-wide text-muted-foreground">
-          {stat.label}
-        </dt>
-        <dd class="mt-auto pt-2 text-3xl font-semibold tracking-tight tabular-nums">{stat.value}</dd>
-      </div>
-    {/each}
-  </dl>
+  <!-- A contributor who has opened no issues has one tile, so a fixed two-column grid
+       would leave half the strip as an empty cell — a wrapping flex grows the last row's
+       tiles to fill the width instead. -->
+  <div class="mt-8 overflow-hidden rounded-xl border border-border">
+    <dl class="-mb-px -mr-px flex flex-wrap">
+      {#each stats as stat (stat.label)}
+        <div class="flex min-w-36 flex-1 flex-col border-b border-r border-border p-5">
+          <dt class="font-mono text-xs uppercase tracking-wide text-balance text-muted-foreground">
+            {stat.label}
+          </dt>
+          <dd class="mt-auto pt-2 text-3xl font-semibold tracking-tight tabular-nums">{stat.value}</dd>
+        </div>
+      {/each}
+    </dl>
+  </div>
 
   {#if who.recentPullRequests.length > 0}
     <section class="mt-12">

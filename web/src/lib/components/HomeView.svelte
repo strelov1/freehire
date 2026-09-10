@@ -231,7 +231,7 @@
         <!-- A two-line label must not push its figure down: the cell is a column and the
              figure is pinned to its bottom, so every figure in a row shares one baseline. -->
         <div class="flex flex-col bg-background p-5 sm:p-6">
-          <dt class="font-mono text-xs uppercase tracking-wide text-muted-foreground">{f.label}</dt>
+          <dt class="font-mono text-xs uppercase tracking-wide text-balance text-muted-foreground">{f.label}</dt>
           <dd class="mt-auto pt-2 text-3xl font-semibold tracking-tight tabular-nums sm:text-4xl">{f.value}</dd>
         </div>
       {/each}
