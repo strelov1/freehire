@@ -71,7 +71,29 @@ const (
 	// unconfirmed result is dead-lettered immediately, the same way a lost post-submit
 	// record is, rather than spending a retry.
 	StatusUnconfirmed SubmitStatus = "unconfirmed"
+	// StatusCaptchaRefused means the board answered the submit click by saying, in its own
+	// words, that it could not verify the submission — so no application was created. It is
+	// the ONE post-submit outcome that is safe to retry: every other uncertainty here could
+	// mean the employer already has the application, and StatusUnconfirmed exists precisely
+	// because that possibility must never be retried into a duplicate.
+	StatusCaptchaRefused SubmitStatus = "captcha_refused"
 )
+
+// captchaMaxAttempts is the retry budget for StatusCaptchaRefused, deliberately far more
+// generous than the run's ordinary MaxAttempts.
+//
+// An invisible captcha is not a condition that can be configured away. Eight probe runs
+// against a live Lever posting — headless and windowed under Xvfb, from a datacentre IP and
+// a residential one, with and without mouse/scroll/dwell warm-up, with and without a
+// User-Agent that says "HeadlessChrome" — passed exactly once. Nothing about the browser
+// moved the odds; the pass looked like a coin landing well. What decides whether the
+// application ever goes through is therefore how many times we are willing to ask, and each
+// ask is free of consequence: the board itself said no application was created.
+//
+// 20, against a timer that fires every 5 minutes and takes one attempt per entry, is roughly
+// an hour and a half of asking. Bounded because a posting closes and a person deserves to be
+// told we gave up, rather than a queue that retries silently forever.
+const captchaMaxAttempts = 20
 
 // SidecarResult is what the sidecar returned for one attempt.
 type SidecarResult struct {
@@ -234,6 +256,8 @@ func (rn *run) process(ctx context.Context, c Claimed) outbox.Outcome {
 		return outbox.Discarded
 	case StatusUnconfirmed:
 		return rn.deadLetterImmediately(ctx, c, "submission unconfirmed: neither a confirmation nor a refusal was seen")
+	case StatusCaptchaRefused:
+		return rn.failCaptcha(ctx, c, result.Reason)
 	default:
 		return rn.fail(ctx, c, fmt.Errorf("sidecar returned unknown status %q", result.Status))
 	}
@@ -274,6 +298,27 @@ func (rn *run) deadLetterImmediately(ctx context.Context, c Claimed, reason stri
 		return outbox.Failed
 	}
 	return outbox.DeadLettered
+}
+
+// failCaptcha records a captcha refusal against its own generous budget rather than the
+// run's ordinary one. It is otherwise an ordinary failure — the entry stays claimable, the
+// attempt counts, and running out still dead-letters, which is what tells the candidate we
+// stopped asking rather than leaving them to wonder.
+func (rn *run) failCaptcha(ctx context.Context, c Claimed, boardSaid string) outbox.Outcome {
+	reason := "captcha refused the submission, so no application was created"
+	if boardSaid != "" {
+		reason = fmt.Sprintf("%s: %s", reason, boardSaid)
+	}
+	dead, failErr := rn.store.Fail(ctx, c.QueueID, reason, captchaMaxAttempts)
+	if failErr != nil {
+		log.Printf("auto-apply: record captcha refusal for queue entry %d: %v", c.QueueID, failErr)
+	} else if dead {
+		log.Printf("auto-apply: queue entry %d (job %d) dead-lettered after %d captcha refusals: %s", c.QueueID, c.JobID, captchaMaxAttempts, reason)
+	}
+	if failErr == nil && dead {
+		return outbox.DeadLettered
+	}
+	return outbox.Failed
 }
 
 func (rn *run) fail(ctx context.Context, c Claimed, err error) outbox.Outcome {

@@ -273,6 +273,14 @@ func (c *Client) Submit(ctx context.Context, claimed autoapply.Claimed, answers 
 
 	confirmed, err := fillAndSubmit(browserCtx, plan, layout)
 	if err != nil {
+		if errors.Is(err, errCaptchaRefused) {
+			// The board said it could not VERIFY the submission, which is it telling us
+			// no application was created. Reported as its own status rather than an
+			// error, because the runner retries this one on a far more generous budget:
+			// an invisible captcha is a coin toss no browser configuration improves, and
+			// each further ask is free of consequence to the employer.
+			return autoapply.SidecarResult{Status: autoapply.StatusCaptchaRefused, Reason: err.Error()}, nil
+		}
 		// A fill action failing, or the board EXPLICITLY refusing the submit click
 		// (SUBMIT_REFUSED_MARKERS in fill.go), both mean no submission happened — safe
 		// to retry normally. This is deliberately distinct from the timeout-with-no-
