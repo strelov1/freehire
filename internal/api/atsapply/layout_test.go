@@ -29,7 +29,7 @@ func TestLayoutFor_KnowsTheTwoProvidersWithAFillPath(t *testing.T) {
 	if !ok {
 		t.Fatal("lever has no layout")
 	}
-	wantLever := formLayout{formSelector: "application-form", submitSelector: "#btn-submit", addressBy: byName}
+	wantLever := formLayout{formSelector: "application-form", submitSelector: "#btn-submit", addressBy: byName, applyPath: "/apply"}
 	if lv != wantLever {
 		t.Errorf("lever layout = %+v, want %+v", lv, wantLever)
 	}
