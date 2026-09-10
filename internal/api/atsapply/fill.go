@@ -48,6 +48,25 @@ var submitRefusedMarkers = []string{
 	"there was an error",
 }
 
+// refusalEvidenceWindow is how much of the page text either side of a refusal marker is
+// carried back. Wide enough for the sentence the marker sits in — which is where a board
+// says what it actually objected to — and narrow enough to stay one readable line in a
+// queue row's last_error.
+const refusalEvidenceWindow = 140
+
+// refusalEvidence returns the page text around a matched refusal marker, collapsed onto one
+// line. A marker names this package's own detector; the board's reason is in the sentence
+// beside it, and without that sentence the only way to learn it is a second real submission.
+func refusalEvidence(bodyText, marker string) string {
+	i := strings.Index(strings.ToLower(bodyText), marker)
+	if i < 0 {
+		return ""
+	}
+	start := max(0, i-refusalEvidenceWindow)
+	end := min(len(bodyText), i+len(marker)+refusalEvidenceWindow)
+	return strings.Join(strings.Fields(bodyText[start:end]), " ")
+}
+
 // fillAndSubmit fills every field the plan resolved, presses submit, and reports whether
 // the submission was confirmed. It runs on an already-navigated page (the same session
 // renderedHTML used to scan the form) — config always wins here in the sense that matters
@@ -193,7 +212,7 @@ func verifySubmission(parent context.Context) (bool, error) {
 		}
 		for _, m := range submitRefusedMarkers {
 			if strings.Contains(lower, m) {
-				return false, fmt.Errorf("board refused the submission: matched marker %q", m)
+				return false, fmt.Errorf("board refused the submission: matched marker %q in %q", m, refusalEvidence(bodyText, m))
 			}
 		}
 		select {
