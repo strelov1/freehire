@@ -12,39 +12,32 @@ func TestConfigFromEnvDefaultsToTheShippedConfig(t *testing.T) {
 		t.Errorf("an unset environment changed the free allowance")
 	}
 	for _, f := range AllFeatures() {
-		// auto-apply ships enforcing and is asserted so in tier_test.go — the one feature
-		// whose ceiling is what a tier is sold on, so counting-only would sell nothing.
-		if f == FeatureAutoApply {
-			continue
+		if !cfg.Enforced(f) {
+			t.Errorf("%q does not enforce with nothing set; every metered AI feature ships enforcing", f)
 		}
-		if cfg.Enforced(f) {
-			t.Errorf("%q enforces with nothing set; enforcement is opt-in per feature", f)
-		}
-	}
-	if !cfg.Enforced(FeatureAutoApply) {
-		t.Error("auto-apply stopped enforcing with nothing set; PLAN_ENFORCE turns features " +
-			"ON and must never be the thing that keeps this one on")
 	}
 }
 
+// enforcedFeatures is the pure function PLAN_ENFORCE's per-name behaviour actually lives
+// in. It is tested directly rather than through ConfigFromEnv().Enforced(), because every
+// feature now enforces by default — a naming test built on that combination could no
+// longer tell "named" from "already on regardless".
 func TestEnforcementIsNamedPerFeature(t *testing.T) {
-	t.Setenv("PLAN_ENFORCE", "match, dictation")
-	cfg := ConfigFromEnv()
+	got := enforcedFeatures("match, dictation")
 
-	if !cfg.Enforced(FeatureFit) || !cfg.Enforced(FeatureDictation) {
+	if !got[FeatureFit] || !got[FeatureDictation] {
 		t.Error("a named feature does not enforce")
 	}
-	if cfg.Enforced(FeatureTailor) || cfg.Enforced(FeatureAssistant) {
+	if got[FeatureTailor] || got[FeatureAssistant] {
 		t.Error("an unnamed feature enforces; the switch must turn on exactly what it names")
 	}
 }
 
 func TestEnforceAllIsSpelledOut(t *testing.T) {
-	t.Setenv("PLAN_ENFORCE", "all")
-	cfg := ConfigFromEnv()
+	got := enforcedFeatures("all")
 
 	for _, f := range AllFeatures() {
-		if !cfg.Enforced(f) {
+		if !got[f] {
 			t.Errorf("%q does not enforce under 'all'", f)
 		}
 	}
@@ -53,13 +46,12 @@ func TestEnforceAllIsSpelledOut(t *testing.T) {
 func TestAnUnknownFeatureNameIsIgnoredNotGuessed(t *testing.T) {
 	// A typo must not silently enforce something else, and must not stop the features
 	// that were spelled correctly from taking effect.
-	t.Setenv("PLAN_ENFORCE", "mach,tailor")
-	cfg := ConfigFromEnv()
+	got := enforcedFeatures("mach,tailor")
 
-	if !cfg.Enforced(FeatureTailor) {
+	if !got[FeatureTailor] {
 		t.Error("a correctly named feature was lost because another name was misspelled")
 	}
-	if cfg.Enforced(FeatureFit) {
+	if got[FeatureFit] {
 		t.Error("a misspelled name was resolved to a feature by guessing")
 	}
 }

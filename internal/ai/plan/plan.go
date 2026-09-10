@@ -175,49 +175,56 @@ type Config struct {
 // guards are set roughly twenty times higher: they exist to stop a script from draining
 // the gateway on one subscription, not to bound a person.
 //
-// Enforcement is OFF for every feature. These numbers come from 101 users over 23 days
-// under no paywall at all, and turning them on before the shadow run has been read means
-// refusing real people on a number nobody checked.
+// Every metered AI feature is subscription-only: free gets none of it, and enforcement is
+// ON from the start — a zero allowance needs no shadow run to justify refusing it, unlike
+// the pro/ultra numbers themselves, which are still the unverified reading of 101 users
+// over 23 days under no paywall at all. PLAN_FREE_DAILY_<FEATURE> (env.go) is the lever
+// that reopens a free allowance for one feature without a deploy, if that is ever wanted;
+// nothing here forecloses it.
 func DefaultConfig() Config {
 	return Config{
 		features: map[Feature]featureConfig{
 			FeatureTailor: {
-				free:  tierAllowance{daily: 2},
-				pro:   tierAllowance{daily: 40, unlimited: true},
-				ultra: tierAllowance{daily: 120, unlimited: true},
+				free:    tierAllowance{},
+				pro:     tierAllowance{daily: 40, unlimited: true},
+				ultra:   tierAllowance{daily: 120, unlimited: true},
+				enforce: true,
 			},
 			FeatureFit: {
-				free:  tierAllowance{daily: 3},
-				pro:   tierAllowance{daily: 60, unlimited: true},
-				ultra: tierAllowance{daily: 180, unlimited: true},
+				free:    tierAllowance{},
+				pro:     tierAllowance{daily: 60, unlimited: true},
+				ultra:   tierAllowance{daily: 180, unlimited: true},
+				enforce: true,
 			},
 			FeatureAssistant: {
-				free:  tierAllowance{daily: 10},
-				pro:   tierAllowance{daily: 200, unlimited: true},
-				ultra: tierAllowance{daily: 600, unlimited: true},
+				free:    tierAllowance{},
+				pro:     tierAllowance{daily: 200, unlimited: true},
+				ultra:   tierAllowance{daily: 600, unlimited: true},
+				enforce: true,
 			},
 			FeatureDictation: {
-				free:  tierAllowance{daily: 10},
-				pro:   tierAllowance{daily: 200, unlimited: true},
-				ultra: tierAllowance{daily: 600, unlimited: true},
+				free:    tierAllowance{},
+				pro:     tierAllowance{daily: 200, unlimited: true},
+				ultra:   tierAllowance{daily: 600, unlimited: true},
+				enforce: true,
 			},
-			// Ships with enforcement OFF like every other AI feature: the shadow run is read
-			// first, and a ceiling set before there is any usage to read is a guess.
+			// Same shape as every other feature here now, not a special case: it once shipped
+			// in shadow ("a ceiling set before there is any usage to read is a guess"), and
+			// that reasoning was about the PRO/ULTRA numbers, which are still unverified. It
+			// says nothing about free, where the number is zero by product decision rather
+			// than a guess to be read back from usage.
 			FeatureCoverLetter: {
-				free:  tierAllowance{daily: 3},
-				pro:   tierAllowance{daily: 60, unlimited: true},
-				ultra: tierAllowance{daily: 180, unlimited: true},
+				free:    tierAllowance{},
+				pro:     tierAllowance{daily: 60, unlimited: true},
+				ultra:   tierAllowance{daily: 180, unlimited: true},
+				enforce: true,
 			},
-			// The one feature that is shaped differently, and the one that enforces on
-			// arrival. Free gets none — it is a paid feature today and stays one. Pro gets a
-			// REAL three a day rather than a fair-use guard, because that ceiling is what
-			// the tier above is sold on; a ceiling that only counted would leave Ultra
-			// selling nothing, and the route it replaces already refuses with 402 today.
-			//
-			// Ultra's figure is deliberately loose and admittedly unmeasured: it guards the
+			// No longer the one exception — see the package-level comment above. What is
+			// still specific to auto-apply: pro carries a REAL three a day rather than a
+			// fair-use guard, because that ceiling is what the tier above is sold on, and
+			// Ultra's figure is deliberately loose and admittedly unmeasured — it guards the
 			// HOST (each attempt is a browser) rather than a price, and there is no usage
-			// history to set it from — the whole feature has run twice. Read it after a
-			// month rather than defending it now.
+			// history to set it from.
 			FeatureAutoApply: {
 				free:    tierAllowance{},
 				pro:     tierAllowance{daily: 3},

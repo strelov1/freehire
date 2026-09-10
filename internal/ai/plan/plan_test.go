@@ -60,10 +60,11 @@ func TestDefaultConfigMatchesTheSpec(t *testing.T) {
 	cfg := DefaultConfig()
 
 	free := map[Feature]int{
-		FeatureTailor:    2,
-		FeatureFit:       3,
-		FeatureAssistant: 10,
-		FeatureDictation: 10,
+		FeatureTailor:      0,
+		FeatureFit:         0,
+		FeatureAssistant:   0,
+		FeatureDictation:   0,
+		FeatureCoverLetter: 0,
 	}
 	for feature, want := range free {
 		if got := cfg.FreeDaily(feature); got != want {
@@ -75,45 +76,22 @@ func TestDefaultConfigMatchesTheSpec(t *testing.T) {
 	}
 }
 
-func TestEnforcementStartsOff(t *testing.T) {
+// TestFreeTierOffersNoMeteredFeature documents the product decision every metered AI
+// feature now ships under: subscription-only, not a smaller free number. Replaces the
+// earlier TestEnforcementStartsOff and TestEveryPlanOffersEveryFeature, whose premises
+// (auto-apply as the one exception; every feature reachable free) both inverted once the
+// other five features joined it.
+func TestFreeTierOffersNoMeteredFeature(t *testing.T) {
 	cfg := DefaultConfig()
 	for _, feature := range AllFeatures() {
-		// auto-apply is the one exception, asserted deliberately in tier_test.go: pro's
-		// ceiling on it is what the tier above is sold on, so a ceiling that only counted
-		// would leave that tier selling nothing. Its route also already refused the whole
-		// free tier with 402 before the allowance took that gate's place.
-		if feature == FeatureAutoApply {
-			continue
+		if got := cfg.FreeDaily(feature); got != 0 {
+			t.Errorf("free daily allowance for %q = %d, want 0 — every metered feature is subscription-only", feature, got)
 		}
-		if cfg.Enforced(feature) {
-			t.Errorf("%q ships enforcing; the numbers come from three weeks of one August under no paywall, "+
-				"and refusing on an unread number is what the shadow run exists to avoid", feature)
+		if !cfg.Enforced(feature) {
+			t.Errorf("%q does not enforce; a zero free allowance that only counts refuses nobody", feature)
 		}
-	}
-}
-
-func TestEveryPlanOffersEveryFeature(t *testing.T) {
-	cfg := DefaultConfig()
-	for _, feature := range AllFeatures() {
-		// auto-apply is the one feature the free plan does not offer at all, and it is an
-		// exception to the rule this test states rather than a hole in it. It was already
-		// one before it was metered — the route refused every free caller with 402 — and
-		// what changed is only that the refusal now carries numbers. It is also the only
-		// action here that spends somebody ELSE's attention: a real application arriving at
-		// a real employer under our name.
-		if feature == FeatureAutoApply {
-			if cfg.FreeDaily(feature) != 0 {
-				t.Errorf("free auto-apply allows %d a day; it is a paid feature and stays one",
-					cfg.FreeDaily(feature))
-			}
-			continue
-		}
-		if cfg.FreeDaily(feature) <= 0 {
-			t.Errorf("%q is unreachable on the free plan; a plan differs in how much it allows, never in whether the feature exists", feature)
-		}
-		if cfg.Allowance(TierPro, feature).Limit <= cfg.FreeDaily(feature) {
-			t.Errorf("pro's fair-use guard for %q (%d) is not above the free allowance (%d)",
-				feature, cfg.Allowance(TierPro, feature).Limit, cfg.FreeDaily(feature))
+		if cfg.Allowance(TierPro, feature).Limit <= 0 {
+			t.Errorf("%q offers nothing on pro either; a subscription must unlock the feature it is sold on", feature)
 		}
 	}
 }
@@ -122,8 +100,8 @@ func TestAllowanceForTier(t *testing.T) {
 	cfg := DefaultConfig()
 
 	free := cfg.Allowance(TierFree, FeatureFit)
-	if free.Unlimited || free.Limit != 3 {
-		t.Errorf("free fit allowance = %+v, want a limit of 3", free)
+	if free.Unlimited || free.Limit != 0 {
+		t.Errorf("free fit allowance = %+v, want nothing — fit analysis is subscription-only", free)
 	}
 	pro := cfg.Allowance(TierPro, FeatureFit)
 	if !pro.Unlimited {

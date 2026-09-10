@@ -49,8 +49,8 @@ func TestAllowanceAnswersForEveryTier(t *testing.T) {
 	c := DefaultConfig()
 
 	free := c.Allowance(TierFree, FeatureTailor)
-	if free.Unlimited || free.Limit != 2 {
-		t.Fatalf("free tailor = %+v, want a real limit of 2", free)
+	if free.Unlimited || free.Limit != 0 {
+		t.Fatalf("free tailor = %+v, want nothing — tailoring is subscription-only", free)
 	}
 
 	pro := c.Allowance(TierPro, FeatureTailor)
@@ -101,17 +101,13 @@ func TestAutoApplyIsMeteredAndProHasARealCeiling(t *testing.T) {
 	}
 }
 
-func TestAutoApplyEnforcesOnArrival(t *testing.T) {
+func TestEveryFeatureEnforcesOnArrival(t *testing.T) {
 	c := DefaultConfig()
 
-	if !c.Enforced(FeatureAutoApply) {
-		t.Fatal("auto-apply ships in shadow mode — a pro ceiling that only counts leaves " +
-			"Ultra selling nothing, and the route it replaces already hard-refuses today")
-	}
-	for _, f := range []Feature{FeatureTailor, FeatureFit, FeatureAssistant, FeatureDictation, FeatureCoverLetter} {
-		if c.Enforced(f) {
-			t.Fatalf("%s ships enforcing — every feature but auto-apply is read in shadow "+
-				"first, and this change does not turn any of them on", f)
+	for _, f := range AllFeatures() {
+		if !c.Enforced(f) {
+			t.Fatalf("%s ships in shadow mode — every metered AI feature is subscription-only "+
+				"by product decision, and a zero free allowance needs no shadow run to justify refusing it", f)
 		}
 	}
 }

@@ -31,14 +31,20 @@ transaction. `store.go` is the transaction around it and nothing else.
   replaced a free number plus a pro fair-use figure, which could only say "free has a
   ceiling, pro does not" — and auto-apply needs the third shape, a real daily ceiling on pro.
 
-- **auto-apply is the one feature that enforces on arrival.** Every other metered feature
-  ships with `enforce: false` and is read in shadow first, because that protects people from
-  ceilings nobody has verified. It cannot apply here: pro's ceiling is what the tier above is
-  sold on, and one that only counts leaves Ultra selling nothing. It is also less of a break
-  than it looks — that route already refused the whole free tier with 402, and the allowance
-  took that gate's place. Its Ultra fair-use figure is deliberately loose and admittedly
-  unmeasured: it guards the HOST, since each attempt is a browser, and the feature has run
-  twice in its life.
+- **Every metered feature enforces on arrival — free gets none of it.** auto-apply was the
+  first to ship this way: pro's ceiling there is what the tier above is sold on, and one
+  that only counts leaves Ultra selling nothing, so shadow mode never applied to it. The
+  other five joined it by a later, explicit product decision (subscription-only AI
+  features) rather than by reading a shadow run — a free allowance of zero needs no usage
+  history to justify refusing it, unlike a positive number would. Its Ultra fair-use figure
+  is deliberately loose and admittedly unmeasured: it guards the HOST, since each attempt
+  is a browser, and the feature has run twice in its life.
+
+  **The PRO/ULTRA numbers are still the unread shadow-run reading**, and that distinction
+  matters: what changed is that FREE gets nothing, not that the pro/ultra ceilings
+  themselves were re-verified. `PLAN_FREE_DAILY_<FEATURE>` remains the lever that reopens a
+  free allowance for one feature without a deploy, exactly as it always could — nothing
+  about shipping enforced removes it, since it only ever accepts a positive number.
 
 - **Two bounds on tailoring, and they stop different things.** A daily session count bounds
   how many vacancies a candidate works on; a per-session turn ceiling bounds how far one of
@@ -91,11 +97,13 @@ transaction. `store.go` is the transaction around it and nothing else.
   decision rests on come back understated. `Refuses` is a method on the Standing rather than
   on the Store for the same reason: the flag and the rule travel together.
 
-- **Shadow mode: enforcement is a switch, per feature, and it ships off.** With it off,
-  `Consume` records and reports but never refuses — the shadow run answers "how many people
-  would this have stopped, and where in their day?" against live traffic. `PLAN_ENFORCE`
-  names the features whose refusal is on (`match,tailor` or `all`), so the run ends one
-  feature at a time without a deploy.
+- **Shadow mode: enforcement is a switch, per feature.** With it off, `Consume` records and
+  reports but never refuses — the shadow run answers "how many people would this have
+  stopped, and where in their day?" against live traffic. Every metered feature ships on
+  today (see "Every metered feature enforces on arrival" above), so the switch has nothing
+  left to turn on among them — it exists for whatever ships next: `PLAN_ENFORCE` names the
+  features whose refusal is on (`match,tailor` or `all`), so a FUTURE feature's shadow run
+  can still end one feature at a time without a deploy.
 
   **A `PLAN_*_DAILY_<F>` suffix writes a dashed feature with an UNDERSCORE**
   (`PLAN_PRO_DAILY_AUTO_APPLY`), while `PLAN_ENFORCE` names the feature exactly as the

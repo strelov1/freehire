@@ -95,8 +95,11 @@ func TestMatchAnalysisStreamEndpoint(t *testing.T) {
 			queries:     queries,
 			userProfile: userprofile.New(ownedProfile()),
 			resume:      store, matchAnalysis: an,
+			// Fit analysis's free allowance is 0 by default now (subscription-only); pinned
+			// generously since this fixture is shared across several subtests run against
+			// the same seeded user, whose daily counter accumulates real consumptions.
 			fit: fitanalysis.New(queries,
-				plan.NewStore(queries, pool, plan.DefaultConfig().Enforcing()), an),
+				plan.NewStore(queries, pool, plan.DefaultConfig().Enforcing().WithFreeDaily(plan.FeatureFit, fitFreeDailyForTests)), an),
 		}
 		app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 		for _, mw := range mws {

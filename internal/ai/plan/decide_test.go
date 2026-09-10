@@ -5,8 +5,34 @@ import (
 	"time"
 )
 
-// enforcing is the config the shadow run ends with: every feature refusing.
-func enforcing() Config { return DefaultConfig().Enforcing() }
+// enforcing is the config the shadow run used to end with, before every feature shipped
+// enforcing by default. Every feature's free allowance is pinned here to its historical
+// default (2/3/10/10/3) rather than read off DefaultConfig, because the product default is
+// now zero for all of them — the tests built on this helper exercise the decide/store
+// MECHANISM (idempotency, day rollover, boundary refusal, the tailoring session's own two
+// bounds), which needs room to consume partway into an allowance, not the product's actual
+// number. Several tailoring-session tests depend on the EXACT historical tailor figure (2):
+// they assert a specific session refused after exactly that many charges, not merely "some
+// positive number".
+func enforcing() Config {
+	return DefaultConfig().Enforcing().
+		WithFreeDaily(FeatureTailor, 2).
+		WithFreeDaily(FeatureFit, 3).
+		WithFreeDaily(FeatureAssistant, 10).
+		WithFreeDaily(FeatureDictation, 10).
+		WithFreeDaily(FeatureCoverLetter, 3)
+}
+
+// notEnforcing is DefaultConfig with every feature's refusal forced back off, and
+// FeatureFit's free allowance pinned to a positive number for the same reason enforcing()
+// pins it: `decide` treats an allowance of exactly zero as an UNCONFIGURED feature (always
+// refused, regardless of enforcement — see decide.go), so testing shadow behaviour needs a
+// real, positive allowance to shadow past, not the product's actual zero.
+func notEnforcing() Config {
+	return DefaultConfig().
+		with(func(_ Feature, fc *featureConfig) { fc.enforce = false }).
+		WithFreeDaily(FeatureFit, 3)
+}
 
 func TestDecideWithinAllowance(t *testing.T) {
 	now := time.Date(2026, 9, 15, 10, 0, 0, 0, time.UTC)
@@ -63,7 +89,7 @@ func TestDecideChargesAnAlreadyPaidRefNothing(t *testing.T) {
 
 func TestDecideShadowRecordsButNeverRefuses(t *testing.T) {
 	now := time.Date(2026, 9, 15, 10, 0, 0, 0, time.UTC)
-	d := DefaultConfig().decide(TierFree, FeatureFit, 3, false, now) // enforcement off
+	d := notEnforcing().decide(TierFree, FeatureFit, 3, false, now) // enforcement off
 
 	if !d.Allowed {
 		t.Fatal("shadow mode refused; the point of it is to count what a limit WOULD stop, without stopping anyone")
@@ -142,7 +168,7 @@ func TestDecideFairUseGuardStopsAScript(t *testing.T) {
 
 func TestFairUseGuardHoldsEvenInShadow(t *testing.T) {
 	now := time.Date(2026, 9, 15, 10, 0, 0, 0, time.UTC)
-	cfg := DefaultConfig() // enforcement off
+	cfg := notEnforcing() // enforcement off
 	d := cfg.decide(TierPro, FeatureFit, cfg.Allowance(TierPro, FeatureFit).Limit, false, now)
 
 	// Shadow mode exists so nobody is refused on an unread number. The guard is not that

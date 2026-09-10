@@ -131,7 +131,7 @@ func TestProSessionsHaveNoTurnCeiling(t *testing.T) {
 }
 
 func TestShadowModeDoesNotStopATurn(t *testing.T) {
-	cfg := DefaultConfig() // enforcement off, as shipped
+	cfg := notEnforcing() // enforcement off
 	d := cfg.decideTurn(TierFree, 1, cfg.TailorTurnsPerSession+5)
 
 	if !d.Allowed {
