@@ -200,7 +200,7 @@ func (c *Client) Submit(ctx context.Context, claimed autoapply.Claimed, answers 
 		}
 		defer cancelBrowser()
 
-		pageHTML, err := renderedHTML(browserCtx, claimed.JobURL, layout.formSelector)
+		pageHTML, err := renderedHTML(browserCtx, layout.applyURL(claimed.JobURL), layout.formSelector)
 		if err != nil {
 			if result, parked := unscannableFormResult(err); parked {
 				return result, nil
