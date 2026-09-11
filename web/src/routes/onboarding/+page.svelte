@@ -31,7 +31,7 @@
   import { safeRedirect } from '$lib/safeRedirect';
   import { signinUrl } from '$lib/signin';
   import { focusTrap } from '$lib/actions/focusTrap';
-  import type { CandidateContacts, DerivedLocation, LocationPreferences, ResumeMeta } from '$lib/types';
+  import type { CandidateContacts, LocationPreferences, ResumeMeta } from '$lib/types';
   import type { MergedFacets } from '$lib/onboardingImport';
   import ChallengeStep from '$lib/components/onboarding/ChallengeStep.svelte';
   import ConfirmStep from '$lib/components/onboarding/ConfirmStep.svelte';
@@ -86,7 +86,6 @@
   let searchStage = $state<string | null>(null);
   let challenge = $state<string | null>(null);
   let challengeNote = $state('');
-  let importedLocation = $state<DerivedLocation | null>(null);
 
   // ---- what this account has already answered ----
 
@@ -366,12 +365,6 @@
     skills = merged.skills;
   }
 
-  function onLinkedInUrl(url: string) {
-    if (links.linkedin !== '') return; // never overwrite one the candidate already has
-    links = { ...links, linkedin: url };
-    linksPrefilled = true;
-  }
-
   /** Escape leaves the wizard for THIS VISIT only — it does not mark onboarding complete.
    *
    *  Deliberately weaker than the close button beside it. Escape is not always aimed at the
@@ -442,8 +435,6 @@
             <CvStep
               staged={{ specializations, seniorities, skills }}
               {onExtracted}
-              onDerivedLocation={(loc) => (importedLocation = loc)}
-              {onLinkedInUrl}
               onCvUploaded={() => void waitForResumeStructure()}
               onAdvance={() => void advance()}
             />
@@ -469,7 +460,7 @@
           {:else if currentKind === 'location'}
             <LocationStep
               value={location}
-              derivedLocation={importedLocation ?? profileStore.profile?.derived_location}
+              derivedLocation={profileStore.profile?.derived_location}
               onChange={(next) => (location = next)}
             />
           {:else if currentKind === 'money'}

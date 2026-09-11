@@ -1,19 +1,22 @@
 <script lang="ts">
-  // The CV step, with its two co-equal entry points: upload a PDF, or hand us a public
-  // LinkedIn profile. Both fold into the same staged facets through the same dictionaries —
-  // a profile is one more source of evidence about the candidate, not a different kind of
-  // thing, so it must not merge by different rules.
+  // The CV step: upload a PDF and let its facets fold into the wizard's staged set.
   //
-  // Everything here is step-local (the two in-flight states, their generation counters, the
-  // notes) except the staged facets themselves, which belong to the wizard and come back
-  // out through `onExtracted`.
+  // There was a second entry point here — paste a public LinkedIn profile link and read the
+  // same facets off the page. It is gone. LinkedIn answers a datacentre address with its
+  // block status rather than a profile, so in production the import failed for ~87% of the
+  // people who tried it (103 of 119 attempts in the week to 2026-09-10) and the step's first
+  // impression was an error. What it could ever have yielded was the headline and the city;
+  // the "Save to PDF" hint below is the same profile, read the way LinkedIn does release it.
+  //
+  // Everything here is step-local (the in-flight state, its generation counter, the notes)
+  // except the staged facets themselves, which belong to the wizard and come back out
+  // through `onExtracted`.
   import { FileUp, LoaderCircle } from '@lucide/svelte';
   import { api, ApiError, RESUME_MAX_MB } from '$lib/api';
   import { cvUploadReason, track } from '$lib/analytics';
   import { isAuthenticated } from '$lib/auth.svelte';
   import { resumeStore } from '$lib/resume.svelte';
   import { MAX_SPECIALIZATIONS } from '$lib/profileLimits';
-  import type { DerivedLocation } from '$lib/types';
   import { mergeFacets, type MergedFacets, type StagedFacets } from '$lib/onboardingImport';
 
   interface Props {
@@ -21,15 +24,6 @@
      *  it, so a manual pick made before an upload is not thrown away by it. */
     staged: StagedFacets;
     onExtracted: (merged: MergedFacets) => void;
-    /** An address read off a LinkedIn profile. Handed on as a DERIVED location, never as a
-     *  stated preference: it is something we worked out about the candidate, not something
-     *  they told us. */
-    onDerivedLocation: (location: DerivedLocation) => void;
-    /** The LinkedIn URL the candidate typed here, so the confirm step's LinkedIn field is
-     *  already filled with the address they just gave us. The CV route has no equivalent:
-     *  the extract endpoint returns facets only, and the links a résumé carries reach the
-     *  wizard through GET /me/resume instead. */
-    onLinkedInUrl: (url: string) => void;
     /** A CV has just been stored, so its background parse has just started. Fired from here
      *  rather than from the wizard's Continue because the two are seconds apart, and those
      *  are seconds of a wait the candidate would otherwise spend on the next step for
@@ -39,8 +33,7 @@
     onAdvance: () => void;
   }
 
-  let { staged, onExtracted, onDerivedLocation, onLinkedInUrl, onCvUploaded, onAdvance }: Props =
-    $props();
+  let { staged, onExtracted, onCvUploaded, onAdvance }: Props = $props();
 
   let cvState = $state<'idle' | 'parsing' | 'error'>('idle');
   let cvError = $state<string | null>(null);
@@ -57,12 +50,12 @@
     cvInput?.click();
   }
 
-  // What an import says afterwards. Both entry points share it because they share the fold
-  // (mergeFacets) — including the specialization cap, which is the one part of the result
-  // the candidate cannot see for themselves: a role the cap left out simply is not on the
-  // next step, and an import that quietly kept 10 of 13 reads as one that misread the CV.
-  function importNote(merged: MergedFacets, source: string): string {
-    if (!merged.resolved) return `Couldn’t read details from ${source} — pick below.`;
+  // What an upload says afterwards — including the specialization cap, which is the one part
+  // of the result the candidate cannot see for themselves: a role the cap left out simply is
+  // not on the next step, and an import that quietly kept 10 of 13 reads as one that misread
+  // the CV.
+  function importNote(merged: MergedFacets): string {
+    if (!merged.resolved) return 'Couldn’t read details from that CV — pick below.';
     if (merged.specializationsDropped > 0) {
       const n = merged.specializationsDropped;
       return `Filled in what we found — review on the next step. A profile holds ${MAX_SPECIALIZATIONS} specializations, so ${n} more we found ${n === 1 ? 'was' : 'were'} left out.`;
@@ -70,12 +63,12 @@
     return 'Filled in what we found — review on the next step.';
   }
 
-  // Whether an import should carry the candidate onward by itself. It should when the note it
+  // Whether an upload should carry the candidate onward by itself. It should when the note it
   // would leave behind says nothing they need to act on: "review on the next step" is a
-  // promise best kept by going there, and staying put after a successful import reads as the
+  // promise best kept by going there, and staying put after a successful upload reads as the
   // upload not having registered.
   //
-  // The two notes that DO say something — an import that recognised nothing, and one whose
+  // The two notes that DO say something — an upload that recognised nothing, and one whose
   // roles the specialization cap trimmed — keep the candidate here to read them. Both are
   // about this step, and neither survives the screen it was written for.
   function shouldAdvanceAfter(merged: MergedFacets): boolean {
@@ -106,7 +99,7 @@
       const merged = mergeFacets(staged, cv);
       onExtracted(merged);
       cvState = 'idle';
-      cvNote = importNote(merged, 'that CV');
+      cvNote = importNote(merged);
       if (shouldAdvanceAfter(merged)) onAdvance();
     } catch (err) {
       track('cv_upload', {
@@ -117,45 +110,6 @@
       if (gen !== cvGen) return;
       cvState = 'error';
       cvError = err instanceof ApiError ? err.message : 'Could not read the CV. Please try again.';
-    }
-  }
-
-  let liUrl = $state('');
-  let liState = $state<'idle' | 'loading' | 'error'>('idle');
-  let liError = $state<string | null>(null);
-  let liNote = $state<string | null>(null);
-  let liGen = 0;
-
-  async function importLinkedIn() {
-    if (!isAuthenticated()) return;
-    const url = liUrl.trim();
-    if (!url || liState === 'loading') return;
-
-    const gen = ++liGen;
-    liState = 'loading';
-    liError = null;
-    liNote = null;
-    try {
-      const li = await api.importLinkedInProfile(url);
-      track('linkedin_import', { ok: true, origin: 'onboarding_gate' });
-      if (gen !== liGen) return; // superseded by another import or a page reset
-      const merged = mergeFacets(staged, li);
-      onExtracted(merged);
-      if (li.location) onDerivedLocation(li.location);
-      // The candidate just typed their own LinkedIn to import it. Asking again for a URL
-      // they already gave us one step later reads as not having listened.
-      onLinkedInUrl(url);
-      liState = 'idle';
-      liNote = importNote(merged, 'that profile');
-      // The same rule as the upload above, deliberately: the two entry points are co-equal
-      // and leave the same note, so one of them moving on while the other sits still would
-      // make that one sentence mean two different things.
-      if (shouldAdvanceAfter(merged)) onAdvance();
-    } catch (err) {
-      track('linkedin_import', { ok: false, origin: 'onboarding_gate' });
-      if (gen !== liGen) return;
-      liState = 'error';
-      liError = err instanceof ApiError ? err.message : 'Could not read that profile. Please try again.';
     }
   }
 </script>
@@ -184,49 +138,10 @@
   <p class="mt-2 text-xs text-muted-foreground">PDF with selectable text, up to {RESUME_MAX_MB} MB.</p>
 {/if}
 
-<!-- The second entry point. Co-equal with the dropzone, not a fallback under it: a user
-     with no PDF should not have to work out that the greyed-out half of the step is the one
-     meant for them. -->
-<div class="mt-5 flex items-center gap-3">
-  <div class="h-px flex-1 bg-border"></div>
-  <span class="text-xs font-medium uppercase tracking-wide text-muted-foreground">or</span>
-  <div class="h-px flex-1 bg-border"></div>
-</div>
-
-<form class="mt-4 flex gap-2" onsubmit={(e) => { e.preventDefault(); void importLinkedIn(); }}>
-  <input
-    bind:value={liUrl}
-    type="text"
-    inputmode="url"
-    autocomplete="url"
-    placeholder="linkedin.com/in/your-name"
-    aria-label="Your LinkedIn profile link"
-    disabled={liState === 'loading'}
-    class="min-w-0 flex-1 rounded-xl border border-input bg-card px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-ring disabled:opacity-60"
-  />
-  <button
-    type="submit"
-    disabled={liState === 'loading' || liUrl.trim() === ''}
-    class="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl border border-border bg-card px-4 py-2.5 text-sm font-medium transition-colors hover:border-brand hover:bg-accent disabled:opacity-60"
-  >
-    {#if liState === 'loading'}
-      <LoaderCircle class="size-4 animate-spin" aria-hidden="true" /> Reading…
-    {:else}
-      Import
-    {/if}
-  </button>
-</form>
-
-{#if liState === 'error'}
-  <p class="mt-2 text-xs text-destructive">{liError}</p>
-{:else if liNote}
-  <p class="mt-2 text-xs text-muted-foreground">{liNote}</p>
-{/if}
-
-<!-- Said before anyone tries it, not after it disappoints them. LinkedIn does not release
-     work history to a reader who is not signed in, so this fills your role, skills, level
-     and location and nothing else. -->
-<p class="mt-2 text-xs text-muted-foreground">
-  LinkedIn only shares your headline and location publicly — not your work history.
-  To bring that in, open your profile on LinkedIn, choose <span class="font-medium text-foreground">More → Save to PDF</span>, and upload the file above.
+<!-- The route for a candidate who has no PDF to hand. It is a hint rather than a second
+     control on purpose: LinkedIn releases a signed-out reader the headline and the city and
+     nothing else, so a button promising to read a profile link would promise more than the
+     page behind it can give. -->
+<p class="mt-4 text-xs text-muted-foreground">
+  No CV file? Open your profile on LinkedIn, choose <span class="font-medium text-foreground">More → Save to PDF</span>, and upload that.
 </p>

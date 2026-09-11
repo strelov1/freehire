@@ -135,11 +135,6 @@ var blocks = map[string][]string{
 		// coalescing); matchanalysis stays the prompt chain and the Analysis type.
 		"fitanalysis",
 		"hardconstraint", "hardconstraint/credentials", "headshot", "jobmatch",
-		// linkedinprofile reads the candidate's own public profile page, so it belongs
-		// with the rest of what a candidate is made of. It takes only safehttp from
-		// platform and derives nothing itself — the caller runs the same dictionaries
-		// the CV path runs, which is what keeps one text from resolving two ways.
-		"linkedinprofile",
 		"matchanalysis", "pii", "perioddate", "resume", "resumeextract",
 		// survey holds the candidate's self-reported segmentation answers (job-search
 		// stage, biggest challenge, current income). It sits here rather than in engage,
