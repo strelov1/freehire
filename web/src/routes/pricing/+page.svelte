@@ -227,7 +227,10 @@
   </p>
 {/snippet}
 
-<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+<!-- Three tracks only when there is a third card to fill one: a grid fixed at
+     lg:grid-cols-3 with two children leaves the third an empty gap on wide screens instead
+     of the two cards sharing the row the way they already do at the sm breakpoint. -->
+<div class="grid gap-4 sm:grid-cols-2 {ultraChosen ? 'lg:grid-cols-3' : ''}">
     <!-- Free -->
     <section class="flex flex-col gap-4 rounded-xl border border-border p-6">
       <div class="flex flex-col gap-1">
