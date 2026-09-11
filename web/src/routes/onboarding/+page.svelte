@@ -313,6 +313,13 @@
       }
       if (resume && resume.parse_status !== 'pending') {
         cvParse = resume.parse_status === 'failed' ? 'failed' : 'idle';
+        // A parse that landed is what makes the server able to derive a location from the
+        // CV, and that field reaches the wizard only through the profile store — which was
+        // read on arrival, before this CV existed. Without this the location step offers a
+        // new candidate no derived address at all, which is the one case it is there for.
+        // Best-effort and not awaited: a failed read keeps the previous copy, and the step
+        // is several clicks away (see ProfileStore.refresh).
+        if (resume.parse_status !== 'failed') void profileStore.refresh();
         return;
       }
       // A read that failed outright (resume === null) is treated as still pending: one
