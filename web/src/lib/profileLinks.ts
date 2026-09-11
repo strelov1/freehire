@@ -7,10 +7,9 @@
 // nothing keeping them in agreement. So the sorting is a presentation concern and lives
 // here, next to the form that needs it.
 //
-// The host rule mirrors internal/candidate/linkedinprofile's Go matcher: an EXACT host
-// match against a small set, never a suffix test and never a substring search.
-// `linkedin.com.evil.example` ends in nothing this accepts, and that is the entire point —
-// a lookalike host must not be handed the "this is your LinkedIn" box.
+// The host rule is an EXACT host match against a small set, never a suffix test and never a
+// substring search. `linkedin.com.evil.example` ends in nothing this accepts, and that is the
+// entire point — a lookalike host must not be handed the "this is your LinkedIn" box.
 
 /** What a link is, as far as the wizard's two named fields are concerned. */
 export type LinkKind = 'linkedin' | 'github' | 'other';

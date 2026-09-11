@@ -23,10 +23,7 @@
 // scalar<->array slips, which flexjson does not cover; roundInt — strict number-only, so a
 // string fails the decode instead of silently coercing), internal/candidate/resumeextract
 // (verbatimString — a bare scalar kept as written, not coerced; truncInt — leading integer,
-// truncating where flexjson.Int rounds), and internal/candidate/linkedinprofile (textOf /
-// itemsOf — scalar<->array again, but over JSON-LD, where the tolerance must be per MEMBER:
-// it holds a node's members raw and lifts each independently, so one unexpected shape costs
-// that member and not the node).
+// truncating where flexjson.Int rounds).
 package flexjson
 
 import (

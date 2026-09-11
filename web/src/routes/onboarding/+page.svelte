@@ -31,7 +31,7 @@
   import { safeRedirect } from '$lib/safeRedirect';
   import { signinUrl } from '$lib/signin';
   import { focusTrap } from '$lib/actions/focusTrap';
-  import type { CandidateContacts, DerivedLocation, LocationPreferences, ResumeMeta } from '$lib/types';
+  import type { CandidateContacts, LocationPreferences, ResumeMeta } from '$lib/types';
   import type { MergedFacets } from '$lib/onboardingImport';
   import ChallengeStep from '$lib/components/onboarding/ChallengeStep.svelte';
   import ConfirmStep from '$lib/components/onboarding/ConfirmStep.svelte';
@@ -86,7 +86,6 @@
   let searchStage = $state<string | null>(null);
   let challenge = $state<string | null>(null);
   let challengeNote = $state('');
-  let importedLocation = $state<DerivedLocation | null>(null);
 
   // ---- what this account has already answered ----
 
@@ -314,6 +313,13 @@
       }
       if (resume && resume.parse_status !== 'pending') {
         cvParse = resume.parse_status === 'failed' ? 'failed' : 'idle';
+        // A parse that landed is what makes the server able to derive a location from the
+        // CV, and that field reaches the wizard only through the profile store — which was
+        // read on arrival, before this CV existed. Without this the location step offers a
+        // new candidate no derived address at all, which is the one case it is there for.
+        // Best-effort and not awaited: a failed read keeps the previous copy, and the step
+        // is several clicks away (see ProfileStore.refresh).
+        if (resume.parse_status !== 'failed') void profileStore.refresh();
         return;
       }
       // A read that failed outright (resume === null) is treated as still pending: one
@@ -364,12 +370,6 @@
     specializations = merged.specializations;
     seniorities = merged.seniorities;
     skills = merged.skills;
-  }
-
-  function onLinkedInUrl(url: string) {
-    if (links.linkedin !== '') return; // never overwrite one the candidate already has
-    links = { ...links, linkedin: url };
-    linksPrefilled = true;
   }
 
   /** Escape leaves the wizard for THIS VISIT only — it does not mark onboarding complete.
@@ -442,8 +442,6 @@
             <CvStep
               staged={{ specializations, seniorities, skills }}
               {onExtracted}
-              onDerivedLocation={(loc) => (importedLocation = loc)}
-              {onLinkedInUrl}
               onCvUploaded={() => void waitForResumeStructure()}
               onAdvance={() => void advance()}
             />
@@ -469,7 +467,7 @@
           {:else if currentKind === 'location'}
             <LocationStep
               value={location}
-              derivedLocation={importedLocation ?? profileStore.profile?.derived_location}
+              derivedLocation={profileStore.profile?.derived_location}
               onChange={(next) => (location = next)}
             />
           {:else if currentKind === 'money'}
