@@ -363,6 +363,9 @@ func All(c HTTPClient) map[string]Source {
 		// Its GraphQL detail endpoint meters by a per-IP request budget, so only that path is
 		// rate-paced; the search listing stays on the bare client.
 		NewSeek(c, pacedSeekPoster(c)),
+		// Japan Dev: curated Japan technology aggregator. One public sitemap lists posting URLs;
+		// detail pages carry structured Nuxt SSR state and official ATS apply links when available.
+		NewJapanDev(c),
 		// EDJOIN: California's K-12 education board, multi-company aggregator enumerated by
 		// job type (board) over one central index, hydrating bodies from each posting page's
 		// schema.org block. The board is a job type and not a district on purpose — see
