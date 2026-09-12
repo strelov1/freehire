@@ -153,4 +153,60 @@ func TestGmailInboxEndToEnd(t *testing.T) {
 	}() {
 		t.Error("a needs_reconsent grant was still reported as mentor_calendar_connected")
 	}
+
+	// mentor_busy_sync_connected needs BOTH the explicit opt-in flag and the shared
+	// calendar.readonly scope: the flag alone (opted in, but the grant has since lost or
+	// never gained the scope) must not read as connected, since the worker could not
+	// actually call the API.
+	if _, err := pool.Exec(ctx,
+		`UPDATE gmail_connections SET status = 'connected', scopes = '{}', mentor_busy_sync_opted_in = true WHERE user_id = $1`,
+		uid); err != nil {
+		t.Fatalf("seed opted-in without scope: %v", err)
+	}
+	if _, body := do("GET", "/api/v1/me/gmail"); func() bool {
+		d, _ := body["data"].(map[string]any)
+		return d["mentor_busy_sync_connected"] == true
+	}() {
+		t.Error("opted-in without the calendar.readonly scope was reported as mentor_busy_sync_connected")
+	}
+
+	// The scope alone (no opt-in) must not read as connected either — that is precisely
+	// the unrelated-grant case this feature exists to distinguish from, since the
+	// candidate-side calendar flow requests this very same scope.
+	if _, err := pool.Exec(ctx,
+		`UPDATE gmail_connections SET scopes = $2, mentor_busy_sync_opted_in = false WHERE user_id = $1`,
+		uid, []string{"https://www.googleapis.com/auth/calendar.readonly"}); err != nil {
+		t.Fatalf("seed scope without opt-in: %v", err)
+	}
+	if _, body := do("GET", "/api/v1/me/gmail"); func() bool {
+		d, _ := body["data"].(map[string]any)
+		return d["mentor_busy_sync_connected"] == true
+	}() {
+		t.Error("an unrelated calendar.readonly grant (no opt-in) was reported as mentor_busy_sync_connected")
+	}
+
+	// Both together: connected.
+	if _, err := pool.Exec(ctx,
+		`UPDATE gmail_connections SET mentor_busy_sync_opted_in = true WHERE user_id = $1`, uid); err != nil {
+		t.Fatalf("seed opted-in with scope: %v", err)
+	}
+	if _, body := do("GET", "/api/v1/me/gmail"); func() bool {
+		d, _ := body["data"].(map[string]any)
+		return d["mentor_busy_sync_connected"] != true
+	}() {
+		t.Error("opted-in with the calendar.readonly scope was not reported as mentor_busy_sync_connected")
+	}
+
+	// A needs_reconsent grant must not read as connected even with both the flag and the
+	// scope recorded — the same rule mentor_calendar_connected already follows above.
+	if _, err := pool.Exec(ctx,
+		`UPDATE gmail_connections SET status = 'needs_reconsent' WHERE user_id = $1`, uid); err != nil {
+		t.Fatalf("mark needs_reconsent: %v", err)
+	}
+	if _, body := do("GET", "/api/v1/me/gmail"); func() bool {
+		d, _ := body["data"].(map[string]any)
+		return d["mentor_busy_sync_connected"] == true
+	}() {
+		t.Error("a needs_reconsent grant was still reported as mentor_busy_sync_connected")
+	}
 }

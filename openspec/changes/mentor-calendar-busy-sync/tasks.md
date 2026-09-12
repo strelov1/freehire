@@ -32,7 +32,7 @@
 
 ## 3. HTTP: connect/callback + status
 
-- [ ] 3.1 Add `mentorBusyStateCookieName = "hire_mentor_busy_state"` in
+- [x] 3.1 Add `mentorBusyStateCookieName = "hire_mentor_busy_state"` in
       `internal/api/handler/gmail.go`; add `MentorBusySyncConnect`/`MentorBusySyncCallback`
       handlers mirroring `MentorCalendarConnect`/`MentorCalendarCallback` (own state
       cookie, own redirect target, `UpsertCalendarGrant`/`RecordGrantScopes` persistence
@@ -41,22 +41,24 @@
       alone cannot distinguish this consent from the pre-existing candidate-side calendar
       grant), same `?mentor_busy_error=...` / `?mentor_busy=connected` redirect-to-
       `/my/integrations` convention.
-- [ ] 3.2 Register `GET /me/mentor-busy-sync/connect` (`mw.cookie`) and
+- [x] 3.2 Register `GET /me/mentor-busy-sync/connect` (`mw.cookie`) and
       `GET /me/mentor-busy-sync/callback` (`mw.optionalCookie`) inside the existing
       `if h.gmailReady()` block in `register()`.
-- [ ] 3.3 Extend `GmailStatus`'s response with `"mentor_busy_sync_connected":
+- [x] 3.3 Extend `GmailStatus`'s response with `"mentor_busy_sync_connected":
       conn.MentorBusySyncOptedIn && slices.Contains(conn.Scopes, gmailsync.CalendarScope)
       && conn.Status == "connected"`, alongside the existing `calendar_connected` and
       `mentor_calendar_connected` (both branches: the connected row and the no-row/
-      not-connected default). Requires threading the new column through
-      `GetGmailConnectionStatus`'s row (`gmail.sql`) and `make sqlc`.
-- [ ] 3.4 Unit test for `MentorBusySyncConnect` (RequiresAuth +
+      not-connected default). Done in task 1.2 already (`GetGmailConnection` extended,
+      `make sqlc` run).
+- [x] 3.4 Unit test for `MentorBusySyncConnect` (RequiresAuth +
       SendsToGoogleForCalendarReadonlyAlone — own cookie, own scope, none of the other
       three flows' cookies), mirroring `me_mentor_calendar_test.go`. No unit test for
       `MentorBusySyncCallback`, matching the precedent `MentorCalendarCallback` already
-      set (needs a database). Unit test for `GmailStatus`: opted-in but scope missing (a
-      grant that predates or lost the scope) reports `mentor_busy_sync_connected: false`;
-      opted-in with the scope but `status = 'needs_reconsent'` also reports `false`.
+      set (needs a database). Integration test (`gmail_integration_test.go`, extends
+      `TestGmailInboxEndToEnd`) for `GmailStatus`: opted-in but scope missing reports
+      `mentor_busy_sync_connected: false`; scope present but not opted in also reports
+      `false` (the unrelated-grant case); both together reports `true`; `status =
+      'needs_reconsent'` with both still present reports `false`.
 
 ## 4. Domain: `internal/engage/mentorship/busysync` — the sync worker
 
