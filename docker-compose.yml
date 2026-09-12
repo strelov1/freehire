@@ -54,8 +54,11 @@ services:
   # the previous per-request extraction — real locally, but no upload persists, so the
   # fit analysis never sees a structured résumé. minio-init creates the bucket once and
   # exits; the app waits on that, not on minio itself, since the bucket must exist first.
+  # Pulled from Quay, not Docker Hub: minio/minio and minio/mc no longer exist as Docker
+  # Hub repositories at all (MinIO moved its distribution there), so every pull of the
+  # `minio/*` names 404s — not a rate limit, and not something a retry fixes.
   minio:
-    image: minio/minio:latest
+    image: quay.io/minio/minio:latest
     environment:
       MINIO_ROOT_USER: minioadmin
       MINIO_ROOT_PASSWORD: minioadmin
@@ -66,7 +69,7 @@ services:
       - minio_data:/data
 
   minio-init:
-    image: minio/mc:latest
+    image: quay.io/minio/mc:latest
     depends_on:
       - minio
     entrypoint: >
