@@ -27,7 +27,7 @@
   import StyleSettings from '$lib/components/cv/StyleSettings.svelte';
   import TemplateGallery from '$lib/tailor/TemplateGallery.svelte';
   import AccountNavRail from '$lib/components/AccountNavRail.svelte';
-  import { Button, ConfirmDialog } from '$lib/ui';
+  import { ConfirmDialog } from '$lib/ui';
   import { clampWidth } from '$lib/tailor/geometry';
   import { undoRun, openingActions } from '$lib/tailor/autopilot';
   import {
@@ -47,10 +47,6 @@
 
   let status = $state<'loading' | 'ready' | 'error'>('loading');
   let errorMsg = $state('');
-  // Read off the 402 body rather than inferred from the status code: the server omits it
-  // for a fair-use refusal and for a caller already on the top tier, and duplicating that
-  // rule here would drift from it the next time a tier is added.
-  let upgradeUrl = $state<string | null>(null);
   let sessionId = $state<string | undefined>(undefined);
   let resuming = $state(false);
   let cvId = $state('');
@@ -314,11 +310,8 @@
           ? ` More at ${new Date(resetsAt).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}.`
           : '';
         errorMsg = `${e.message}${more}`;
-        const url = e.body?.upgrade_url;
-        upgradeUrl = typeof url === 'string' ? url : null;
       } else {
         errorMsg = e instanceof ApiError ? e.message : 'Could not open the tailoring workspace.';
-        upgradeUrl = null;
       }
       status = 'error';
     }
@@ -536,9 +529,6 @@
   {:else if status === 'error'}
     <div class="flex min-w-0 flex-1 flex-col items-center justify-center gap-3 p-6 text-center">
       <p class="max-w-md text-sm text-destructive">{errorMsg}</p>
-      {#if upgradeUrl}
-        <Button variant="primary" size="sm" href={upgradeUrl}>Upgrade</Button>
-      {/if}
       <a href={resolve('/jobs/[slug]', { slug })} class="text-sm text-brand hover:underline">Back to the role</a>
     </div>
   {:else}

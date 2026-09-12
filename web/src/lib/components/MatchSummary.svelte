@@ -106,15 +106,9 @@
       </span>
     </a>
   {:else if allowanceRefused}
-    <!-- This branch is reachable only on the free tier: `refuses` never trips for an
-         unlimited allowance, and pro/ultra never report one that isn't. So the upgrade CTA
-         is always the right offer here, not a guess at who is looking at it. -->
-    <div class="flex items-center justify-between gap-2">
-      <span class="text-sm text-muted-foreground">
-        You've used today's {refusedName}. More at {resetsAtLabel(refusedAllowance)}.
-      </span>
-      <Button variant="primary" size="sm" href={resolve('/pricing')}>Upgrade</Button>
-    </div>
+    <p class="text-sm text-muted-foreground">
+      You've used today's {refusedName}. More at {resetsAtLabel(refusedAllowance)}.
+    </p>
   {:else}
     <Button
       variant="primary"

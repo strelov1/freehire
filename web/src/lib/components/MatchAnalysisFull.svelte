@@ -373,15 +373,11 @@
          recompute of an already-analysed role stays available on those pages). While the
          ceiling is only being counted this stays hidden and the analysis runs. -->
     {#if blockedNew}
-      <!-- refuses() never trips for an unlimited allowance, and pro/ultra never report one
-           that isn't — so reaching this branch already means free tier, and the upgrade
-           offer is never a guess. -->
-      <div class="fit-reveal flex flex-col items-center gap-3 rounded-xl border border-dashed border-border bg-card p-10 text-center" style="--i:1">
+      <div class="fit-reveal flex flex-col items-center gap-2 rounded-xl border border-dashed border-border bg-card p-10 text-center" style="--i:1">
         <p class="text-sm font-medium">You've used today's job analyses.</p>
         <p class="text-xs text-muted-foreground">
           More at {resetsAtLabel(allowance)}. Analyses you've already run stay available.
         </p>
-        <Button variant="primary" size="sm" href={resolve('/pricing')}>Upgrade</Button>
       </div>
     {/if}
 
