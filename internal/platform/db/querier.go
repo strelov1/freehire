@@ -592,6 +592,13 @@ type Querier interface {
 	// Explicitly clear a user's job vote (the DELETE endpoint). No-op when no row or no
 	// vote exists. The caller recomputes counters via RecountJobVotes in the same tx.
 	ClearJobVote(ctx context.Context, arg ClearJobVoteParams) error
+	// The other half of the flag's lifecycle: called whenever this feature marks the grant
+	// needing reconsent, so a later reconnect through an UNRELATED flow (the candidate's own
+	// read-only calendar, which shares this exact scope and restores `status` to 'connected'
+	// via UpsertCalendarGrant without ever knowing this column exists) cannot silently
+	// resurrect a stale consent. Re-enrollment after that can only happen by completing this
+	// feature's own connect callback again.
+	ClearMentorBusySyncOptedIn(ctx context.Context, userID int64) error
 	// Clear the active cooldown and failure count for every currently-cooled board of a
 	// provider — applied once a recovery probe proves the provider reachable again, so the
 	// run crawls them this cycle instead of each waiting out its own backoff (up to a day)
@@ -6271,9 +6278,9 @@ type Querier interface {
 	UpsertManualJob(ctx context.Context, arg UpsertManualJobParams) (Job, error)
 	// One row per synced busy interval, source fixed to 'google_calendar' (the only writer
 	// of this source). external_id is not Google's — a free/busy period carries no
-	// identifier — but a stable hash of the interval's own bounds (see
-	// busysync.externalID), so a re-sync of an unchanged interval updates rather than
-	// duplicates, exactly as the table's unique constraint intends for an events-based sync.
+	// identifier — but the interval's own bounds, concatenated (see busysync.externalID), so
+	// a re-sync of an unchanged interval updates rather than duplicates, exactly as the
+	// table's unique constraint intends for an events-based sync.
 	UpsertMentorBusyInterval(ctx context.Context, arg UpsertMentorBusyIntervalParams) error
 	// One review per booking, editable. booking_id is the primary key, so a second submission
 	// is an update by construction rather than by a service check — which is also why the

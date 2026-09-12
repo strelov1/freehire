@@ -11,6 +11,21 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const clearMentorBusySyncOptedIn = `-- name: ClearMentorBusySyncOptedIn :exec
+UPDATE gmail_connections SET mentor_busy_sync_opted_in = false WHERE user_id = $1
+`
+
+// The other half of the flag's lifecycle: called whenever this feature marks the grant
+// needing reconsent, so a later reconnect through an UNRELATED flow (the candidate's own
+// read-only calendar, which shares this exact scope and restores `status` to 'connected'
+// via UpsertCalendarGrant without ever knowing this column exists) cannot silently
+// resurrect a stale consent. Re-enrollment after that can only happen by completing this
+// feature's own connect callback again.
+func (q *Queries) ClearMentorBusySyncOptedIn(ctx context.Context, userID int64) error {
+	_, err := q.db.Exec(ctx, clearMentorBusySyncOptedIn, userID)
+	return err
+}
+
 const countEmails = `-- name: CountEmails :one
 SELECT
     count(*) FILTER (WHERE $2::bool OR coalesce(status_signal, '') <> 'other')::bigint AS total,

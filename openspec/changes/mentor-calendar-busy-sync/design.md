@@ -46,11 +46,13 @@ worker calls `freeBusy` and never `events.list`.
 **Consequence for the storage key**: `mentor_busy_intervals`'s unique constraint is
 `(mentor_id, source, external_id)`, written with an events-based sync in mind ("one row
 per calendar event per mentor"). A free/busy period carries no identifier. This design
-derives `external_id` deterministically from the interval's own bounds (a hash of
-`starts_at|ends_at`), so the constraint's actual job — a re-sync updates rather than
-duplicates — holds for intervals exactly as it would for events. Two independent busy
-blocks that happen to share identical bounds collapsing into one stored row is not a
-bug: they are indistinguishable busy time either way.
+derives `external_id` deterministically from the interval's own bounds — `starts_at` and
+`ends_at`, concatenated, not hashed: the bounds already sit in cleartext in the same row's
+own columns, so hashing them buys no privacy, only a less readable key — so the
+constraint's actual job — a re-sync updates rather than duplicates — holds for intervals
+exactly as it would for events. Two independent busy blocks that happen to share
+identical bounds collapsing into one stored row is not a bug: they are indistinguishable
+busy time either way.
 
 ### A dedicated opt-in flag, because the scope is shared
 

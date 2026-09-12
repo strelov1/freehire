@@ -174,3 +174,42 @@
 - [x] 7.6 `/code-review` pass on the full diff; fix Critical + Important findings with a
       regression test each, matching how `mentor-google-meet-link`'s own task 9 closed
       out its post-review fixes.
+
+## 8. Post-review fixes
+
+A `/code-review high` pass after task 7.6 found real gaps, fixed rather than deferred,
+each with a regression test:
+
+- [x] `SetNeedsReconsent` marked the shared `status` but never cleared
+      `mentor_busy_sync_opted_in`, so a mentor whose grant was revoked and who later
+      reconnected through the UNRELATED candidate-side read-only calendar flow (which
+      shares this exact scope and restores `status` to `'connected'` via
+      `UpsertCalendarGrant` without ever knowing this column exists) would have busy-sync
+      silently resume without ever revisiting this feature's own connect screen — exactly
+      the "an unrelated Google connection does not imply this grant" case the spec exists
+      to prevent, reached via the revoke-then-reconnect-elsewhere path rather than the
+      first-connection one. Added `ClearMentorBusySyncOptedIn` (`gmail.sql`), called
+      alongside `SetGmailStatus` in `DBStore.SetNeedsReconsent`. Covered by
+      `TestSetNeedsReconsentClearsTheOptInFlag`.
+- [x] `APIReader.ListBusy` silently dropped a period whose bounds failed to parse, with no
+      trace anywhere — a malformed period is not a documented shape for this endpoint (every
+      free/busy period is a timed instant, unlike calsync's events which genuinely have an
+      all-day variant), so dropping it is still correct, but doing so invisibly means a
+      silently-dropped busy period is a silently-unblocked slot with nothing in the
+      journal to explain a resulting double-booking. Added a log line on each drop,
+      mirroring how `meetAPI`'s own pending-conference case was made visible in
+      `mentor-google-meet-link`'s post-review pass. Covered by
+      `TestListBusyDropsAnUnparseablePeriodButKeepsTheRest`.
+- [x] `externalID` hashed the interval's own bounds with SHA-256 for no benefit — the
+      bounds already sit in cleartext in `starts_at`/`ends_at` on the very same row, so a
+      hash buys no privacy, only a less readable key. Simplified to the plain
+      concatenated bounds; `TestReplaceBusyWindowReplacesRatherThanMerges`'s re-sync
+      assertion already covers the "same key on re-sync" property this touches.
+- [x] NOT fixed, by design: `DeleteMentorBusyIntervalsInWindow` has no lower bound on
+      `starts_at`, so its correctness relies on each mentor's `window_end` never
+      decreasing run over run. True today — `busyWindowDays` is a fixed constant and `now`
+      is always the real clock, so `window_end` only grows — and already documented in the
+      query's own comment. Defending against a future change to `busyWindowDays` or a
+      hypothetical backfill/replay entrypoint that does not exist today would be exactly
+      the premature engineering this repo's AGENTS.md warns against; revisit if either is
+      ever proposed.

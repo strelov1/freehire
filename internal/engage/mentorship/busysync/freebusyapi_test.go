@@ -111,6 +111,31 @@ func TestListBusyAsksForThePrimaryCalendarAndTheWindow(t *testing.T) {
 	}
 }
 
+// A period Google returns in a shape ListBusy cannot parse must not fail the whole read
+// or silently vanish without a trace — it is dropped, and every OTHER period in the same
+// response still comes through, matching how the codebase already treats an unexpected
+// API shape elsewhere (meetAPI's pending-conference case).
+func TestListBusyDropsAnUnparseablePeriodButKeepsTheRest(t *testing.T) {
+	reader, _, _ := readerAgainst(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"calendars":{"primary":{"busy":[
+		  {"start":"not-a-time","end":"2026-08-13T10:00:00Z"},
+		  {"start":"2026-08-14T14:00:00Z","end":"2026-08-14T15:30:00Z"}
+		]}}}`))
+	})
+
+	got, err := reader.ListBusy(context.Background(), time.Now(), time.Now().AddDate(0, 0, 60))
+	if err != nil {
+		t.Fatalf("ListBusy: %v, want no error for one malformed period among valid ones", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("read %d periods, want the 1 well-formed one", len(got))
+	}
+	if !got[0].Start.Equal(time.Date(2026, 8, 14, 14, 0, 0, 0, time.UTC)) {
+		t.Errorf("kept period = %+v, want the well-formed one", got[0])
+	}
+}
+
 // A non-2xx response wraps as gmailsync.APIError so RevokedGrant can classify it —
 // exactly the shape calsync's own reader uses, since the two consents share one grant
 // and one status flag.

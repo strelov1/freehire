@@ -241,9 +241,9 @@ ORDER BY starts_at;
 -- name: UpsertMentorBusyInterval :exec
 -- One row per synced busy interval, source fixed to 'google_calendar' (the only writer
 -- of this source). external_id is not Google's — a free/busy period carries no
--- identifier — but a stable hash of the interval's own bounds (see
--- busysync.externalID), so a re-sync of an unchanged interval updates rather than
--- duplicates, exactly as the table's unique constraint intends for an events-based sync.
+-- identifier — but the interval's own bounds, concatenated (see busysync.externalID), so
+-- a re-sync of an unchanged interval updates rather than duplicates, exactly as the
+-- table's unique constraint intends for an events-based sync.
 INSERT INTO mentor_busy_intervals (mentor_id, starts_at, ends_at, source, external_id)
 VALUES ($1, $2, $3, 'google_calendar', $4)
 ON CONFLICT (mentor_id, source, external_id) DO UPDATE

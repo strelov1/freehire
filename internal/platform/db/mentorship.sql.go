@@ -1393,9 +1393,9 @@ type UpsertMentorBusyIntervalParams struct {
 
 // One row per synced busy interval, source fixed to 'google_calendar' (the only writer
 // of this source). external_id is not Google's — a free/busy period carries no
-// identifier — but a stable hash of the interval's own bounds (see
-// busysync.externalID), so a re-sync of an unchanged interval updates rather than
-// duplicates, exactly as the table's unique constraint intends for an events-based sync.
+// identifier — but the interval's own bounds, concatenated (see busysync.externalID), so
+// a re-sync of an unchanged interval updates rather than duplicates, exactly as the
+// table's unique constraint intends for an events-based sync.
 func (q *Queries) UpsertMentorBusyInterval(ctx context.Context, arg UpsertMentorBusyIntervalParams) error {
 	_, err := q.db.Exec(ctx, upsertMentorBusyInterval,
 		arg.MentorID,

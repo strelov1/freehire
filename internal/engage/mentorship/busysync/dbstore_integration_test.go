@@ -114,6 +114,51 @@ func TestListConnectionsRequiresEveryCondition(t *testing.T) {
 	}
 }
 
+// SetNeedsReconsent must clear the explicit opt-in flag, not just the shared status.
+// Otherwise a mentor whose grant is revoked and who later reconnects through a
+// completely unrelated flow (the candidate-side read-only calendar, which requests the
+// very same calendar.readonly scope and restores status to 'connected' via
+// UpsertCalendarGrant) would have busy-sync silently resume without ever revisiting this
+// feature's own connect screen — exactly the "an unrelated Google connection does not
+// imply this grant" case the spec exists to prevent, just reached via the revoke-then-
+// reconnect-elsewhere path rather than the first-connection one.
+func TestSetNeedsReconsentClearsTheOptInFlag(t *testing.T) {
+	pool := testdb.Pool(t)
+	ctx := context.Background()
+	queries := db.New(pool)
+	store := NewDBStore(queries, pool)
+
+	uid := seedUser(t, pool, "revoke@example.test")
+	seedApprovedMentor(t, pool, queries, uid, "revoke-mentor")
+	if _, err := pool.Exec(ctx,
+		`INSERT INTO gmail_connections (user_id, email, refresh_token_enc, status, scopes, mentor_busy_sync_opted_in)
+		 VALUES ($1, '', 'enc', 'connected', $2, true)`,
+		uid, []string{gmailsync.CalendarScope}); err != nil {
+		t.Fatalf("seed connection: %v", err)
+	}
+
+	if err := store.SetNeedsReconsent(ctx, uid); err != nil {
+		t.Fatalf("SetNeedsReconsent: %v", err)
+	}
+
+	// The scenario: an UNRELATED reconnect (the candidate's own read-only calendar flow)
+	// restores status to 'connected' with the same scope, exactly as UpsertCalendarGrant
+	// does, without ever calling this feature's own connect callback.
+	if _, err := pool.Exec(ctx,
+		`UPDATE gmail_connections SET status = 'connected', scopes = $2 WHERE user_id = $1`,
+		uid, []string{gmailsync.CalendarScope}); err != nil {
+		t.Fatalf("simulate unrelated reconnect: %v", err)
+	}
+
+	conns, err := store.ListConnections(ctx)
+	if err != nil {
+		t.Fatalf("ListConnections: %v", err)
+	}
+	if len(conns) != 0 {
+		t.Fatalf("got %d connections after an unrelated reconnect, want 0 — the opt-in must not survive a revocation", len(conns))
+	}
+}
+
 // ReplaceBusyWindow is a transactional replace, not a merge: a stale interval inside the
 // window must be gone, and the new periods must be exactly what was passed, keyed so a
 // re-sync of an unchanged interval updates rather than duplicates.

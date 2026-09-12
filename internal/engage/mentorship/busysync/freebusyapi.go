@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"time"
 
@@ -99,10 +100,18 @@ func (r *APIReader) ListBusy(ctx context.Context, from, to time.Time) ([]BusyPer
 	for _, p := range primary.Busy {
 		start, err := time.Parse(time.RFC3339, p.Start)
 		if err != nil {
+			// Every busy period Google documents is a timed instant, never an all-day
+			// date-only shape — unlike calsync's events, which genuinely have both. A
+			// period here that fails to parse is not a known API variant, so it is
+			// dropped rather than failing the whole read (one bad period must not cost
+			// a mentor every other one), but logged: a silently dropped period is a
+			// silently un-blocked slot, and that must leave a trace somewhere.
+			log.Printf("mentor-busy-sync: dropping a busy period with an unparseable start %q", p.Start)
 			continue
 		}
 		end, err := time.Parse(time.RFC3339, p.End)
 		if err != nil {
+			log.Printf("mentor-busy-sync: dropping a busy period with an unparseable end %q", p.End)
 			continue
 		}
 		out = append(out, BusyPeriod{Start: start, End: end})

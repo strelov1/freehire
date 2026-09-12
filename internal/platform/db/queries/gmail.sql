@@ -59,6 +59,15 @@ WHERE status = 'connected' AND email <> '';
 -- tell the two purposes apart (see mentor-calendar-busy-sync's design.md).
 UPDATE gmail_connections SET mentor_busy_sync_opted_in = true WHERE user_id = $1;
 
+-- name: ClearMentorBusySyncOptedIn :exec
+-- The other half of the flag's lifecycle: called whenever this feature marks the grant
+-- needing reconsent, so a later reconnect through an UNRELATED flow (the candidate's own
+-- read-only calendar, which shares this exact scope and restores `status` to 'connected'
+-- via UpsertCalendarGrant without ever knowing this column exists) cannot silently
+-- resurrect a stale consent. Re-enrollment after that can only happen by completing this
+-- feature's own connect callback again.
+UPDATE gmail_connections SET mentor_busy_sync_opted_in = false WHERE user_id = $1;
+
 -- name: ListMentorBusySyncConnections :many
 -- Drives cmd/mentor-busy-sync: every mentor whose account both explicitly opted in to
 -- busy-sync AND still holds a usable calendar.readonly grant, and whose profile is
