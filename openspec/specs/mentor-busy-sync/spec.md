@@ -1,10 +1,12 @@
+# mentor-busy-sync Specification
+
 ## Purpose
 
 Lets a mentor opt in to read-only Google Calendar access purely so their own existing
 commitments are read as busy time and kept out of what freehire offers a seeker to book,
 without ever exposing what those commitments are.
 
-## ADDED Requirements
+## Requirements
 
 ### Requirement: A mentor may connect Google Calendar for busy-time sync
 
@@ -78,6 +80,15 @@ rather than leaving it looking healthy while every sync attempt quietly fails.
 - **WHEN** a sync attempt using a mentor's stored busy-sync refresh token fails in a way
   that indicates the grant was revoked
 - **THEN** the connection is marked as needing reconsent
+
+#### Scenario: A revocation is not undone by an unrelated reconnect
+
+- **WHEN** a mentor's grant is marked needing reconsent, and the account later completes
+  an unrelated Google connect flow that happens to restore the shared grant to a healthy
+  status while still covering `calendar.readonly`
+- **THEN** the account is not treated as having opted in to busy-time sync
+- **AND** syncing resumes only once the mentor completes this feature's own connect flow
+  again
 
 ### Requirement: Disconnecting stops future syncs without erasing sync history
 
