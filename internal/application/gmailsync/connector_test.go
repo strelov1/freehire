@@ -99,3 +99,44 @@ func TestMentorCalendarAuthCodeURL(t *testing.T) {
 		t.Errorf("redirect_uri = %q, want its own callback distinct from the candidate calendar flow's", q.Get("redirect_uri"))
 	}
 }
+
+// A mentor's busy-sync consent reuses CalendarScope (Google has no narrower read scope
+// for free/busy alone), but must still land on its own redirect — distinct from the
+// candidate's read-only calendar flow, the mentor's write flow, and the mail flow — since
+// that redirect, not the scope, is what a purpose-specific consent depends on here.
+func TestMentorBusyAuthCodeURL(t *testing.T) {
+	c := NewConnector("id", "secret", "https://freehire.me")
+
+	mail := c.AuthCodeURL("state-1")
+	calendarRead := c.CalendarAuthCodeURL("state-2")
+	mentorCalendar := c.MentorCalendarAuthCodeURL("state-3")
+	mentorBusy := c.MentorBusyAuthCodeURL("state-4")
+
+	u, err := url.Parse(mentorBusy)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	q := u.Query()
+	if !strings.Contains(q.Get("scope"), url.QueryEscape(CalendarScope)) && !strings.Contains(q.Get("scope"), CalendarScope) {
+		t.Errorf("scope missing calendar.readonly: %q", q.Get("scope"))
+	}
+	if strings.Contains(q.Get("scope"), CalendarEventsScope) {
+		t.Errorf("the busy-sync consent must not request the write scope: %q", q.Get("scope"))
+	}
+	if q.Get("include_granted_scopes") != "true" {
+		t.Errorf("include_granted_scopes = %q, want true", q.Get("include_granted_scopes"))
+	}
+	if q.Get("redirect_uri") != "https://freehire.me/api/v1/me/mentor-busy-sync/callback" {
+		t.Errorf("redirect_uri = %q, want its own callback", q.Get("redirect_uri"))
+	}
+
+	for name, other := range map[string]string{"mail": mail, "calendar-read": calendarRead, "mentor-calendar": mentorCalendar} {
+		otherU, err := url.Parse(other)
+		if err != nil {
+			t.Fatalf("parse %s: %v", name, err)
+		}
+		if otherU.Query().Get("redirect_uri") == q.Get("redirect_uri") {
+			t.Errorf("mentor-busy-sync shares its redirect with the %s flow", name)
+		}
+	}
+}

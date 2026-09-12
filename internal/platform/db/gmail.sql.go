@@ -229,25 +229,30 @@ func (q *Queries) GetEmail(ctx context.Context, arg GetEmailParams) (GetEmailRow
 }
 
 const getGmailConnection = `-- name: GetGmailConnection :one
-SELECT user_id, email, status, sync_cursor, connected_at, last_synced_at, scopes
+SELECT user_id, email, status, sync_cursor, connected_at, last_synced_at, scopes,
+    mentor_busy_sync_opted_in
 FROM gmail_connections
 WHERE user_id = $1
 `
 
 type GetGmailConnectionRow struct {
-	UserID       int64              `json:"user_id"`
-	Email        string             `json:"email"`
-	Status       string             `json:"status"`
-	SyncCursor   int64              `json:"sync_cursor"`
-	ConnectedAt  pgtype.Timestamptz `json:"connected_at"`
-	LastSyncedAt pgtype.Timestamptz `json:"last_synced_at"`
-	Scopes       []string           `json:"scopes"`
+	UserID                int64              `json:"user_id"`
+	Email                 string             `json:"email"`
+	Status                string             `json:"status"`
+	SyncCursor            int64              `json:"sync_cursor"`
+	ConnectedAt           pgtype.Timestamptz `json:"connected_at"`
+	LastSyncedAt          pgtype.Timestamptz `json:"last_synced_at"`
+	Scopes                []string           `json:"scopes"`
+	MentorBusySyncOptedIn bool               `json:"mentor_busy_sync_opted_in"`
 }
 
 // The grant row as the status endpoint reads it. `scopes` is included because the two
 // consents are separate: a connected mailbox says nothing about the calendar, and a
 // calendar grant may have no mailbox behind it, so the row's existence cannot answer
-// either question on its own.
+// either question on its own. `mentor_busy_sync_opted_in` is included for the same
+// reason again, one purpose further: `scopes` alone cannot say whether THIS consent was
+// given, since it reuses the same calendar.readonly scope the candidate-side calendar
+// grant already requests.
 func (q *Queries) GetGmailConnection(ctx context.Context, userID int64) (GetGmailConnectionRow, error) {
 	row := q.db.QueryRow(ctx, getGmailConnection, userID)
 	var i GetGmailConnectionRow
@@ -259,6 +264,7 @@ func (q *Queries) GetGmailConnection(ctx context.Context, userID int64) (GetGmai
 		&i.ConnectedAt,
 		&i.LastSyncedAt,
 		&i.Scopes,
+		&i.MentorBusySyncOptedIn,
 	)
 	return i, err
 }
@@ -575,6 +581,47 @@ func (q *Queries) ListEmails(ctx context.Context, arg ListEmailsParams) ([]ListE
 	return items, nil
 }
 
+const listMentorBusySyncConnections = `-- name: ListMentorBusySyncConnections :many
+SELECT m.id AS mentor_id, gc.user_id
+FROM gmail_connections gc
+JOIN mentors m ON m.user_id = gc.user_id
+WHERE gc.status = 'connected'
+  AND gc.mentor_busy_sync_opted_in
+  AND $1::text = ANY(gc.scopes)
+  AND m.status = 'approved'
+`
+
+type ListMentorBusySyncConnectionsRow struct {
+	MentorID int64 `json:"mentor_id"`
+	UserID   int64 `json:"user_id"`
+}
+
+// Drives cmd/mentor-busy-sync: every mentor whose account both explicitly opted in to
+// busy-sync AND still holds a usable calendar.readonly grant, and whose profile is
+// published — an unapproved or withdrawn mentor offers no bookable slots, so their busy
+// time is not worth an API call until they are approved (the very next run picks them up
+// once they are). The scope check is defensive alongside the flag: a grant can lose a
+// scope outside our control, and this worker must not call an API it no longer holds.
+func (q *Queries) ListMentorBusySyncConnections(ctx context.Context, calendarScope string) ([]ListMentorBusySyncConnectionsRow, error) {
+	rows, err := q.db.Query(ctx, listMentorBusySyncConnections, calendarScope)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListMentorBusySyncConnectionsRow{}
+	for rows.Next() {
+		var i ListMentorBusySyncConnectionsRow
+		if err := rows.Scan(&i.MentorID, &i.UserID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const markAllEmailsRead = `-- name: MarkAllEmailsRead :execrows
 UPDATE emails SET read_at = now()
 WHERE user_id = $1
@@ -705,6 +752,19 @@ type SetGmailSyncedParams struct {
 
 func (q *Queries) SetGmailSynced(ctx context.Context, arg SetGmailSyncedParams) error {
 	_, err := q.db.Exec(ctx, setGmailSynced, arg.UserID, arg.SyncCursor)
+	return err
+}
+
+const setMentorBusySyncOptedIn = `-- name: SetMentorBusySyncOptedIn :exec
+UPDATE gmail_connections SET mentor_busy_sync_opted_in = true WHERE user_id = $1
+`
+
+// Records that a mentor completed the busy-sync connect flow's own callback. Set only
+// there, never inferred from `scopes` alone: calendar.readonly is the same scope the
+// unrelated candidate-side calendar grant already requests, so scope presence cannot
+// tell the two purposes apart (see mentor-calendar-busy-sync's design.md).
+func (q *Queries) SetMentorBusySyncOptedIn(ctx context.Context, userID int64) error {
+	_, err := q.db.Exec(ctx, setMentorBusySyncOptedIn, userID)
 	return err
 }
 
