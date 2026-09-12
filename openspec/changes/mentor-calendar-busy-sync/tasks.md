@@ -135,14 +135,15 @@
 
 ## 6. Frontend
 
-- [ ] 6.1 Add a "Mentor calendar sync" card to `IntegrationsView.svelte`, beside the
+- [x] 6.1 Add a "Mentor calendar sync" card to `IntegrationsView.svelte`, beside the
       existing Google cards — its own status line, its own Connect link
       (`/api/v1/me/mentor-busy-sync/connect`), its own `mentor_busy_error`/
       `mentor_busy=connected` verdict handling, read from
       `GmailStatus.mentor_busy_sync_connected` (added to `$lib/api.ts`).
-- [ ] 6.2 Verify via `svelte-check` (0 errors), `eslint` (clean on the touched file), the
-      full frontend `vitest run`, and the design-system adoption ratchet (unchanged — the
-      card reuses components `IntegrationsView.svelte` already uses).
+- [x] 6.2 Verified via `svelte-check` (0 errors, 39 pre-existing warnings none in the
+      touched file), `eslint` (clean on `IntegrationsView.svelte` and `api.ts`), the full
+      frontend `vitest run` (1881 tests passing), and the design-system adoption ratchet
+      (unchanged — the card reuses `Badge`/`CalendarDays` already used in this file).
 
 ## 7. Verification
 
