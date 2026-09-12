@@ -62,7 +62,7 @@
 
 ## 4. Domain: `internal/engage/mentorship/busysync` — the sync worker
 
-- [ ] 4.1 New package `internal/engage/mentorship/busysync`. Define `Connection{MentorID,
+- [x] 4.1 New package `internal/engage/mentorship/busysync`. Define `Connection{MentorID,
       UserID int64}`, `BusyPeriod{Start, End time.Time}`, a `FreeBusyReader` interface
       (`ListBusy(ctx, from, to time.Time) ([]BusyPeriod, error)`) behind a
       `ReaderFactory(ctx, refreshToken string) FreeBusyReader`, and a `Store` interface:
@@ -71,37 +71,48 @@
       time.Time, periods []BusyPeriod) error` (the transactional delete-then-insert
       design.md specifies), `SetNeedsReconsent(ctx, userID int64) error`. Mirrors
       `calsync`'s `Store`/`Worker` shapes deliberately (see design.md's Context).
-- [ ] 4.2 `Worker{store, cipher, newReader, now}` with `NewWorker(...)` and `RunOnce(ctx)
+- [x] 4.2 `Worker{store, cipher, newReader, now}` with `NewWorker(...)` and `RunOnce(ctx)
       error`, copying `calsync.Worker.RunOnce`'s best-effort-per-connection shape and
       `RevokedGrant` handling verbatim in structure: one connection's non-revocation
       error is logged and counted, a revocation-shaped one calls `SetNeedsReconsent`, and
       the run returns a "N of M failed" error when any failed.
-- [ ] 4.3 `syncMentor`: reads the token, decrypts it, calls
+- [x] 4.3 `syncMentor`: reads the token, decrypts it, calls
       `ListBusy(now, now.AddDate(0,0,busyWindowDays))` (`busyWindowDays = 60`, per
-      design.md's fixed-forward-window decision — a named constant, not inlined), derives
-      each period's `external_id` as a stable hash of `starts_at|ends_at` (RFC3339,
-      UTC), and calls `ReplaceBusyWindow`.
-- [ ] 4.4 Implement `Store` on `QueriesRepository` (or a new adapter beside it, matching
-      whichever `internal/engage/mentorship` already does for `booking_repository.go`):
-      `ListConnections` over `ListMentorBusySyncConnections`, `ReplaceBusyWindow` running
+      design.md's fixed-forward-window decision — a named constant, not inlined), and
+      calls `ReplaceBusyWindow` with the raw periods. Deviation from the task text: the
+      `external_id` hash is derived in `DBStore.ReplaceBusyWindow` (task 4.4), not here —
+      it is purely a storage-layer concern for the SQL unique constraint, and keeping
+      `BusyPeriod`/`Store` free of it keeps the domain worker's tests (4.6) about sync
+      behavior rather than hashing.
+- [x] 4.4 Implemented `Store` as a new adapter, `busysync.DBStore` (mirroring
+      `calsync.DBStore`'s own shape — a thin wrapper over `*db.Queries` plus the pool it
+      needs for one transaction — rather than extending `mentorship.QueriesRepository`,
+      which serves a different concern: profiles, bookings, reviews): `ListConnections`
+      over `ListMentorBusySyncConnections`, `ReplaceBusyWindow` running
       `DeleteMentorBusyIntervalsInWindow` then one `UpsertMentorBusyInterval` per period
-      inside a transaction, `SetNeedsReconsent` reusing the existing `SetGmailStatus`
-      query the read/write grants already share.
-- [ ] 4.5 `FreeBusyReader` HTTP implementation: `POST
+      inside a transaction (with `externalID`, the hash from task 4.3's note),
+      `SetNeedsReconsent` reusing `SetGmailStatus`.
+- [x] 4.5 `FreeBusyReader` HTTP implementation: `POST
       https://www.googleapis.com/calendar/v3/freeBusy` with `timeMin`/`timeMax`/
       `items: [{id: "primary"}]`, parsing `calendars.primary.busy[]` into `BusyPeriod`.
       A non-2xx response wraps as `gmailsync.APIError` (mirroring `calsync.APIReader`'s
       style) so `gmailsync.RevokedGrant` can classify it.
-- [ ] 4.6 Unit tests: `syncMentor` against a fake reader — periods round-trip into
-      `ReplaceBusyWindow` with the right window bound; a revocation-shaped reader error
-      calls `SetNeedsReconsent` and does not call `ReplaceBusyWindow`; a non-revocation
-      error is returned and does not call `SetNeedsReconsent`. `Worker.RunOnce`: one
-      failing connection among several does not stop the others (the spec's "one
-      mentor's sync failure does not affect another's" scenario), and the run's returned
-      error names the failure count. Freebusy HTTP reader tested against `httptest`
-      (mirroring `calsync.calendarapi_test.go`'s rewrite-transport pattern): a normal
-      response parses `busy[]` correctly; a 403 wraps as `gmailsync.APIError` and
-      `RevokedGrant` reports true.
+- [x] 4.6 Unit tests (`worker_test.go`): periods round-trip into `ReplaceBusyWindow` with
+      the right window bound; a revocation-shaped reader error calls `SetNeedsReconsent`
+      and does NOT call `ReplaceBusyWindow`; a non-revocation error does not call
+      `SetNeedsReconsent`; one failing connection among several does not stop the others
+      (the spec's own scenario), and the run's returned error names the failure count.
+      Freebusy HTTP reader tested against `httptest` (`freebusyapi_test.go`, mirroring
+      `calsync.calendarapi_test.go`'s rewrite-transport pattern): the request itself
+      (POST, primary calendar, timeMin/timeMax) and a normal response parse correctly; a
+      403 wraps as `gmailsync.APIError` and `RevokedGrant` reports true. Integration
+      tests (`dbstore_integration_test.go`, real Postgres via testcontainers):
+      `ListConnections` requires the opt-in flag AND the scope AND `connected` status AND
+      an approved profile all at once — missing any one excludes the mentor, including
+      the unrelated-grant case (scope without the flag) this whole feature exists to get
+      right; `ReplaceBusyWindow` replaces rather than merges (a stale interval inside the
+      window is gone after a resync with different periods) and a re-sync of the same
+      period updates rather than duplicates the row.
 
 ## 5. `cmd/mentor-busy-sync`
 
