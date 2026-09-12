@@ -114,6 +114,16 @@ signature does not.
 is its unit and timer — **not installed by `release.sh`**, which never touches a unit, and
 its binary is not built by it either.
 
+`cmd/mentor-busy-sync` is the calendar sync `mentor_busy_intervals` was always waiting on
+(see the table's own comment in migration 0145): a mentor opts in on `/my/integrations`
+(its own consent, `busysync` package's `Store.ListConnections` gates on the explicit
+`gmail_connections.mentor_busy_sync_opted_in` flag rather than on the shared
+`calendar.readonly` scope alone, since an unrelated candidate-side grant already requests
+that same scope), and the worker reconciles the table by replacing the whole synced window
+per mentor each run — never a row-by-row diff. `deploy/systemd/freehire-mentor-busy-sync.*`
+is its unit and timer, under the same "not installed by `release.sh`" rule as the reminder
+worker above.
+
 ## Testing
 
 The fake repository in fake_repo_test.go describes the contract; it cannot prove it. Three

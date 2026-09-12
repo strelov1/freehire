@@ -2,8 +2,12 @@
 -- The grant row as the status endpoint reads it. `scopes` is included because the two
 -- consents are separate: a connected mailbox says nothing about the calendar, and a
 -- calendar grant may have no mailbox behind it, so the row's existence cannot answer
--- either question on its own.
-SELECT user_id, email, status, sync_cursor, connected_at, last_synced_at, scopes
+-- either question on its own. `mentor_busy_sync_opted_in` is included for the same
+-- reason again, one purpose further: `scopes` alone cannot say whether THIS consent was
+-- given, since it reuses the same calendar.readonly scope the candidate-side calendar
+-- grant already requests.
+SELECT user_id, email, status, sync_cursor, connected_at, last_synced_at, scopes,
+    mentor_busy_sync_opted_in
 FROM gmail_connections
 WHERE user_id = $1;
 
@@ -47,6 +51,37 @@ SET email = EXCLUDED.email,
 SELECT user_id, email, sync_cursor
 FROM gmail_connections
 WHERE status = 'connected' AND email <> '';
+
+-- name: SetMentorBusySyncOptedIn :exec
+-- Records that a mentor completed the busy-sync connect flow's own callback. Set only
+-- there, never inferred from `scopes` alone: calendar.readonly is the same scope the
+-- unrelated candidate-side calendar grant already requests, so scope presence cannot
+-- tell the two purposes apart (see mentor-calendar-busy-sync's design.md).
+UPDATE gmail_connections SET mentor_busy_sync_opted_in = true WHERE user_id = $1;
+
+-- name: ClearMentorBusySyncOptedIn :exec
+-- The other half of the flag's lifecycle: called whenever this feature marks the grant
+-- needing reconsent, so a later reconnect through an UNRELATED flow (the candidate's own
+-- read-only calendar, which shares this exact scope and restores `status` to 'connected'
+-- via UpsertCalendarGrant without ever knowing this column exists) cannot silently
+-- resurrect a stale consent. Re-enrollment after that can only happen by completing this
+-- feature's own connect callback again.
+UPDATE gmail_connections SET mentor_busy_sync_opted_in = false WHERE user_id = $1;
+
+-- name: ListMentorBusySyncConnections :many
+-- Drives cmd/mentor-busy-sync: every mentor whose account both explicitly opted in to
+-- busy-sync AND still holds a usable calendar.readonly grant, and whose profile is
+-- published — an unapproved or withdrawn mentor offers no bookable slots, so their busy
+-- time is not worth an API call until they are approved (the very next run picks them up
+-- once they are). The scope check is defensive alongside the flag: a grant can lose a
+-- scope outside our control, and this worker must not call an API it no longer holds.
+SELECT m.id AS mentor_id, gc.user_id
+FROM gmail_connections gc
+JOIN mentors m ON m.user_id = gc.user_id
+WHERE gc.status = 'connected'
+  AND gc.mentor_busy_sync_opted_in
+  AND sqlc.arg(calendar_scope)::text = ANY(gc.scopes)
+  AND m.status = 'approved';
 
 -- name: SetGmailSynced :exec
 UPDATE gmail_connections

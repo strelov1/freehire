@@ -59,6 +59,11 @@ type Connector struct {
 	// consents for separate purposes on possibly the same account, and Google matching
 	// the wrong one back to the wrong handler would be worse than a third field here.
 	mentorCalendarRedirect string
+	// mentorBusyRedirect is the callback for a mentor's busy-sync consent. It reuses
+	// CalendarScope — Google has one read scope for the whole calendar, not a narrower
+	// one for free/busy alone — so this redirect, not the scope, is what tells the
+	// callback apart from the candidate's own read-only calendar flow at calendarRedirect.
+	mentorBusyRedirect string
 }
 
 // NewConnector builds the Gmail connector from the Google OAuth credentials. The
@@ -74,6 +79,7 @@ func NewConnector(clientID, clientSecret, origin string) *Connector {
 		},
 		calendarRedirect:       origin + "/api/v1/me/calendar/callback",
 		mentorCalendarRedirect: origin + "/api/v1/me/mentor-calendar/callback",
+		mentorBusyRedirect:     origin + "/api/v1/me/mentor-busy-sync/callback",
 	}
 }
 
@@ -189,6 +195,23 @@ func (c *Connector) MentorCalendarAuthCodeURL(state string) string {
 // token, exactly as ExchangeCalendar does for the read-only flow.
 func (c *Connector) ExchangeMentorCalendar(ctx context.Context, code string) (refreshToken string, scopes []string, err error) {
 	return scopedExchange(ctx, *c.cfg, "mentor calendar", CalendarEventsScope, c.mentorCalendarRedirect, code)
+}
+
+// MentorBusyAuthCodeURL builds the consent URL for a mentor's busy-time sync — its own
+// redirect, on the same CalendarScope the candidate's read-only calendar flow already
+// uses. Google offers no narrower scope for free/busy alone, so unlike
+// MentorCalendarAuthCodeURL this cannot lean on a scope unique to the purpose; the
+// redirect is what a purpose-specific consent depends on here (see design.md of
+// mentor-calendar-busy-sync, and gmail_connections.mentor_busy_sync_opted_in, which
+// records the consent itself for the same reason).
+func (c *Connector) MentorBusyAuthCodeURL(state string) string {
+	return scopedAuthCodeURL(*c.cfg, state, CalendarScope, c.mentorBusyRedirect)
+}
+
+// ExchangeMentorBusy turns the mentor-busy-sync callback's code into a refresh token,
+// exactly as ExchangeCalendar does for the candidate's read-only flow.
+func (c *Connector) ExchangeMentorBusy(ctx context.Context, code string) (refreshToken string, scopes []string, err error) {
+	return scopedExchange(ctx, *c.cfg, "mentor busy sync", CalendarScope, c.mentorBusyRedirect, code)
 }
 
 // TokenSource mints access tokens from a stored refresh token (used by the sync

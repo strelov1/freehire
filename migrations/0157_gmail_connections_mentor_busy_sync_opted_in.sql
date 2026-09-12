@@ -1,0 +1,11 @@
+-- mentor_busy_sync_opted_in records that a mentor explicitly consented to have their
+-- Google Calendar's busy time synced into mentor_busy_intervals — a purpose distinct
+-- from the pre-existing candidate-side calendar.readonly grant, which shares the very
+-- same OAuth scope. Google has one read scope for the whole calendar, so scope presence
+-- alone cannot tell the two purposes apart; this flag is what does, set only by the
+-- mentor-busy-sync connect flow's own callback on success, never inferred from an
+-- unrelated grant already covering calendar.readonly.
+--
+-- NOT NULL DEFAULT false is additive on Postgres 11+ (a constant default needs no table
+-- rewrite), so this needs no backfill step.
+ALTER TABLE gmail_connections ADD COLUMN mentor_busy_sync_opted_in boolean NOT NULL DEFAULT false;

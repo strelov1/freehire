@@ -201,7 +201,13 @@ var blocks = map[string][]string{
 	// billing would import a community integration — and the guard would say so.
 	"engage": {
 		"broadcast", "community", "companyfeedback", "discordlink", "emailnotify", "emailprefs",
-		"linkedinauth", "mailpreview", "mentorship", "notify", "nudge", "onboarding",
+		"linkedinauth", "mailpreview", "mentorship",
+		// mentorship/busysync is named in full, per the auth/oauth convention: it is a
+		// sub-package of mentorship and takes its parent's block, but the sync worker
+		// reaches into application (gmailsync) the way mentorship itself does for the
+		// calendar-write consent, so it is listed rather than left implicit.
+		"mentorship/busysync",
+		"notify", "nudge", "onboarding",
 		// processreport holds candidate-reported facts about how a company hires (today:
 		// that it screens with an AI interviewer). It sits beside companyfeedback and not
 		// in job, because what it stores is what a PERSON reported, not a property the

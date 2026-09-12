@@ -1,0 +1,11 @@
+[Unit]
+Description=freehire worker: sync a mentor's Google Calendar busy time into mentor_busy_intervals
+After=network.target postgresql.service
+[Service]
+Type=oneshot
+User=freehire
+WorkingDirectory=/opt/freehire/src/hire-current
+EnvironmentFile=/opt/freehire/.env
+CPUWeight=20
+IOWeight=20
+ExecStart=/opt/freehire/src/hire-current/mentor-busy-sync

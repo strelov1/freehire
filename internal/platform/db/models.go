@@ -556,14 +556,15 @@ type GhostReport struct {
 }
 
 type GmailConnection struct {
-	UserID          int64              `json:"user_id"`
-	Email           string             `json:"email"`
-	RefreshTokenEnc string             `json:"refresh_token_enc"`
-	Status          string             `json:"status"`
-	SyncCursor      int64              `json:"sync_cursor"`
-	ConnectedAt     pgtype.Timestamptz `json:"connected_at"`
-	LastSyncedAt    pgtype.Timestamptz `json:"last_synced_at"`
-	Scopes          []string           `json:"scopes"`
+	UserID                int64              `json:"user_id"`
+	Email                 string             `json:"email"`
+	RefreshTokenEnc       string             `json:"refresh_token_enc"`
+	Status                string             `json:"status"`
+	SyncCursor            int64              `json:"sync_cursor"`
+	ConnectedAt           pgtype.Timestamptz `json:"connected_at"`
+	LastSyncedAt          pgtype.Timestamptz `json:"last_synced_at"`
+	Scopes                []string           `json:"scopes"`
+	MentorBusySyncOptedIn bool               `json:"mentor_busy_sync_opted_in"`
 }
 
 // Per (provider, shard) scheduling state: when the run is next due, whether a tick has claimed it, and how the last run ended. Machine-owned; curator settings live in ingest_schedule.

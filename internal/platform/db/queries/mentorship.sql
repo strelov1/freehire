@@ -238,6 +238,28 @@ WHERE mentor_id = $1
   AND starts_at < sqlc.arg(window_end) AND ends_at > sqlc.arg(window_start)
 ORDER BY starts_at;
 
+-- name: UpsertMentorBusyInterval :exec
+-- One row per synced busy interval, source fixed to 'google_calendar' (the only writer
+-- of this source). external_id is not Google's — a free/busy period carries no
+-- identifier — but the interval's own bounds, concatenated (see busysync.externalID), so
+-- a re-sync of an unchanged interval updates rather than duplicates, exactly as the
+-- table's unique constraint intends for an events-based sync.
+INSERT INTO mentor_busy_intervals (mentor_id, starts_at, ends_at, source, external_id)
+VALUES ($1, $2, $3, 'google_calendar', $4)
+ON CONFLICT (mentor_id, source, external_id) DO UPDATE
+SET starts_at = EXCLUDED.starts_at, ends_at = EXCLUDED.ends_at, synced_at = now();
+
+-- name: DeleteMentorBusyIntervalsInWindow :exec
+-- Half of the sync's replace-the-window reconcile (see mentor-calendar-busy-sync's
+-- design.md): every 'google_calendar' interval for this mentor starting before
+-- window_end is cleared, then UpsertMentorBusyInterval re-inserts what free/busy
+-- currently reports — in one transaction, so ListBusy never sees a partial reconcile.
+-- No lower bound: the sync worker only ever writes intervals starting at or after "now",
+-- so a row this misses is one no run has ever produced, and a mentor's every synced
+-- interval always starts before some future run's window_end.
+DELETE FROM mentor_busy_intervals
+WHERE mentor_id = $1 AND source = 'google_calendar' AND starts_at < sqlc.arg(window_end);
+
 -- name: ListBookingsBySeeker :many
 -- The seeker's own sessions, newest first. Upcoming and past are split by the caller
 -- against one clock rather than by two queries against two.

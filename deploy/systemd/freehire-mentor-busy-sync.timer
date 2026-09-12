@@ -1,0 +1,12 @@
+[Unit]
+Description=timer: freehire-mentor-busy-sync
+[Timer]
+# Hourly, like freehire-cal-sync — a personal calendar changes far less often than a
+# mailbox fills, and each run replaces the whole 60-day forward window regardless of
+# when it last ran, so a missed hour costs nothing. Offset from cal-sync's :20 and
+# gmail-sync's :00/15/30/45 so the three do not start together.
+OnCalendar=*:40:00
+Persistent=true
+RandomizedDelaySec=120
+[Install]
+WantedBy=timers.target

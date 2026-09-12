@@ -348,6 +348,11 @@ export interface GmailStatus {
    *  auto-generates a Meet link per booking and makes the mentor profile's own meeting
    *  link field optional. A third, separate consent from both fields above. */
   mentor_calendar_connected?: boolean;
+  /** Whether the mentor explicitly opted in to busy-time sync — a FOURTH consent that
+   *  shares calendar_connected's own scope (Google has no narrower one for free/busy
+   *  alone) but is never inferred from it: an unrelated calendar_connected grant made for
+   *  the tracking calendar above must not silently enroll a mentor's busy time here. */
+  mentor_busy_sync_connected?: boolean;
 }
 
 /** The hosted-mailbox option: the caller's address (null when none) + whether
