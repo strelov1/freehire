@@ -117,7 +117,7 @@ func TestMentorBusyAuthCodeURL(t *testing.T) {
 		t.Fatalf("parse: %v", err)
 	}
 	q := u.Query()
-	if !strings.Contains(q.Get("scope"), url.QueryEscape(CalendarScope)) && !strings.Contains(q.Get("scope"), CalendarScope) {
+	if !strings.Contains(q.Get("scope"), CalendarScope) {
 		t.Errorf("scope missing calendar.readonly: %q", q.Get("scope"))
 	}
 	if strings.Contains(q.Get("scope"), CalendarEventsScope) {

@@ -30,7 +30,9 @@ func seedUser(t *testing.T, pool *pgxpool.Pool, email string) int64 {
 	return id
 }
 
-func seedApprovedMentor(t *testing.T, pool *pgxpool.Pool, queries *db.Queries, userID int64, slug string) int64 {
+// seedMentor creates a pending profile, seeding the 'busysyncco' company it belongs to
+// on first use (ON CONFLICT DO NOTHING, so every caller can call this unconditionally).
+func seedMentor(t *testing.T, pool *pgxpool.Pool, queries *db.Queries, userID int64, slug string) int64 {
 	t.Helper()
 	ctx := context.Background()
 	if _, err := pool.Exec(ctx,
@@ -48,10 +50,17 @@ func seedApprovedMentor(t *testing.T, pool *pgxpool.Pool, queries *db.Queries, u
 	if err != nil {
 		t.Fatalf("CreateMentorProfile: %v", err)
 	}
-	if _, err := pool.Exec(ctx, `UPDATE mentors SET status = 'approved' WHERE id = $1`, mentor.ID); err != nil {
+	return mentor.ID
+}
+
+func seedApprovedMentor(t *testing.T, pool *pgxpool.Pool, queries *db.Queries, userID int64, slug string) int64 {
+	t.Helper()
+	mentorID := seedMentor(t, pool, queries, userID, slug)
+	if _, err := pool.Exec(context.Background(),
+		`UPDATE mentors SET status = 'approved' WHERE id = $1`, mentorID); err != nil {
 		t.Fatalf("approve mentor: %v", err)
 	}
-	return mentor.ID
+	return mentorID
 }
 
 // ListConnections must require every condition the design calls for at once: the
@@ -72,28 +81,10 @@ func TestListConnectionsRequiresEveryCondition(t *testing.T) {
 			uid, status, scopes, optedIn); err != nil {
 			t.Fatalf("seed connection for %s: %v", email, err)
 		}
-		var mentorID int64
 		if approve {
-			mentorID = seedApprovedMentor(t, pool, queries, uid, slug)
-		} else {
-			mentor, err := queries.CreateMentorProfile(ctx, db.CreateMentorProfileParams{
-				UserID: uid, CompanySlug: "busysyncco", Slug: slug,
-				DisplayName: "Test Mentor", Headline: "Engineer", Bio: "",
-				Topics: []string{"career"}, Languages: []string{"en"},
-				Timezone: "Europe/Berlin", SessionDurationMin: 60,
-				MinNoticeMin: 120, HorizonDays: 30,
-				MeetingUrl: "https://meet.example.test/" + slug,
-			})
-			if err != nil {
-				t.Fatalf("seed pending mentor for %s: %v", email, err)
-			}
-			mentorID = mentor.ID
+			return seedApprovedMentor(t, pool, queries, uid, slug)
 		}
-		return mentorID
-	}
-	if _, err := pool.Exec(ctx,
-		`INSERT INTO companies (slug, name) VALUES ('busysyncco', 'Busysync Co') ON CONFLICT DO NOTHING`); err != nil {
-		t.Fatalf("seed company: %v", err)
+		return seedMentor(t, pool, queries, uid, slug)
 	}
 
 	eligible := seed("eligible@example.test", "eligible", true, []string{gmailsync.CalendarScope}, "connected", true)

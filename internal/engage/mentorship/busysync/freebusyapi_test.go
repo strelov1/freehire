@@ -21,23 +21,27 @@ const freeBusyJSON = `{"calendars":{"primary":{"busy":[
   {"start":"2026-08-14T14:00:00Z","end":"2026-08-14T15:30:00Z"}
 ]}}}`
 
-// readerAgainst returns the reader plus pointers the caller reads AFTER making the
-// request — the request itself only happens inside reader.ListBusy, so a plain returned
-// value would always read as the zero value.
-func readerAgainst(t *testing.T, handler http.HandlerFunc) (reader *APIReader, gotReq **http.Request, gotBody *[]byte) {
+// capturedRequest is filled in by readerAgainst's server as it handles the call — read
+// its fields only AFTER calling ListBusy, since the request that fills them happens
+// inside that call.
+type capturedRequest struct {
+	req  *http.Request
+	body []byte
+}
+
+func readerAgainst(t *testing.T, handler http.HandlerFunc) (*APIReader, *capturedRequest) {
 	t.Helper()
-	gotReq = new(*http.Request)
-	gotBody = new([]byte)
+	captured := &capturedRequest{}
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		*gotReq = r
-		*gotBody, _ = io.ReadAll(r.Body)
+		captured.req = r
+		captured.body, _ = io.ReadAll(r.Body)
 		handler(w, r)
 	}))
 	t.Cleanup(srv.Close)
 
-	reader = NewAPIReader(srv.Client())
+	reader := NewAPIReader(srv.Client())
 	reader.client = &http.Client{Transport: rewriteHost{to: srv.URL, base: srv.Client().Transport}}
-	return reader, gotReq, gotBody
+	return reader, captured
 }
 
 type rewriteHost struct {
@@ -55,7 +59,7 @@ func (t rewriteHost) RoundTrip(r *http.Request) (*http.Response, error) {
 }
 
 func TestListBusyReadsThePeriodsGoogleReturns(t *testing.T) {
-	reader, _, _ := readerAgainst(t, func(w http.ResponseWriter, r *http.Request) {
+	reader, _ := readerAgainst(t, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(freeBusyJSON))
 	})
@@ -79,7 +83,7 @@ func TestListBusyReadsThePeriodsGoogleReturns(t *testing.T) {
 func TestListBusyAsksForThePrimaryCalendarAndTheWindow(t *testing.T) {
 	from := time.Date(2026, 8, 12, 0, 0, 0, 0, time.UTC)
 	to := time.Date(2026, 10, 11, 0, 0, 0, 0, time.UTC)
-	reader, req, body := readerAgainst(t, func(w http.ResponseWriter, r *http.Request) {
+	reader, captured := readerAgainst(t, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"calendars":{"primary":{"busy":[]}}}`))
 	})
@@ -87,8 +91,8 @@ func TestListBusyAsksForThePrimaryCalendarAndTheWindow(t *testing.T) {
 	if _, err := reader.ListBusy(context.Background(), from, to); err != nil {
 		t.Fatalf("ListBusy: %v", err)
 	}
-	if (*req).Method != http.MethodPost {
-		t.Errorf("method = %s, want POST", (*req).Method)
+	if captured.req.Method != http.MethodPost {
+		t.Errorf("method = %s, want POST", captured.req.Method)
 	}
 	var sent struct {
 		TimeMin string `json:"timeMin"`
@@ -97,8 +101,8 @@ func TestListBusyAsksForThePrimaryCalendarAndTheWindow(t *testing.T) {
 			ID string `json:"id"`
 		} `json:"items"`
 	}
-	if err := json.Unmarshal(*body, &sent); err != nil {
-		t.Fatalf("decode sent body %q: %v", *body, err)
+	if err := json.Unmarshal(captured.body, &sent); err != nil {
+		t.Fatalf("decode sent body %q: %v", captured.body, err)
 	}
 	if sent.TimeMin != from.Format(time.RFC3339) {
 		t.Errorf("timeMin = %q, want %q", sent.TimeMin, from.Format(time.RFC3339))
@@ -116,7 +120,7 @@ func TestListBusyAsksForThePrimaryCalendarAndTheWindow(t *testing.T) {
 // response still comes through, matching how the codebase already treats an unexpected
 // API shape elsewhere (meetAPI's pending-conference case).
 func TestListBusyDropsAnUnparseablePeriodButKeepsTheRest(t *testing.T) {
-	reader, _, _ := readerAgainst(t, func(w http.ResponseWriter, r *http.Request) {
+	reader, _ := readerAgainst(t, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"calendars":{"primary":{"busy":[
 		  {"start":"not-a-time","end":"2026-08-13T10:00:00Z"},
@@ -140,7 +144,7 @@ func TestListBusyDropsAnUnparseablePeriodButKeepsTheRest(t *testing.T) {
 // exactly the shape calsync's own reader uses, since the two consents share one grant
 // and one status flag.
 func TestListBusyWrapsAFailingResponse(t *testing.T) {
-	reader, _, _ := readerAgainst(t, func(w http.ResponseWriter, r *http.Request) {
+	reader, _ := readerAgainst(t, func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
 	})
 
