@@ -178,6 +178,32 @@ func (s seek) FetchNew(ctx context.Context, e CompanyEntry, seen func(externalID
 	if err != nil {
 		return nil, err
 	}
+	return s.hydrate(ctx, e, m, postings, seen, nil), nil
+}
+
+// FetchNewGated lets the pipeline tell this aggregator which listed employers are already
+// covered by first-party ATS sources before we spend SEEK's scarce GraphQL detail budget.
+// Covered postings are still emitted list-only so the ordinary aggregator gate can count and
+// discard them; only the body request is skipped. This matters especially for JobStreet, where
+// a first crawl spans tens of thousands of listings but a substantial share of employers are
+// already covered directly by freehire.
+func (s seek) FetchNewGated(ctx context.Context, e CompanyEntry, seen func(externalID string) bool,
+	covered func(companies []string) map[string]bool) ([]Job, error) {
+	m, postings, err := s.crawl(ctx, e)
+	if err != nil {
+		return nil, err
+	}
+	names := make([]string, 0, len(postings))
+	for _, p := range postings {
+		if company := p.employer(); company != "" {
+			names = append(names, company)
+		}
+	}
+	return s.hydrate(ctx, e, m, postings, seen, covered(names)), nil
+}
+
+func (s seek) hydrate(ctx context.Context, e CompanyEntry, m seekMarket, postings []seekPosting,
+	seen func(externalID string) bool, skip map[string]bool) []Job {
 	return fetchDetails(postings, defaultDetailWorkers, func(p seekPosting) (Job, bool) {
 		base, ok := p.toJob(m)
 		if !ok {
@@ -188,23 +214,18 @@ func (s seek) FetchNew(ctx context.Context, e CompanyEntry, seen func(externalID
 			base.Description = "" // liveness refresh only: never rewrite the stored body
 			return base, true
 		}
+		if skip[base.Company] {
+			base.Description = "" // aggregator gate will discard it; a detail request is pure loss
+			return base, true
+		}
 		body, ok := s.detail(ctx, m, p.ID)
 		if !ok {
-			// Defer rather than store body-less. A stored row without a body is re-offered for
-			// hydration only until it is pipeline.HydrationRetryWindow (14 days) old — after
-			// that `seen` reports it like any other row and it is marked SeenRefresh forever.
-			// Dropping it leaves it new, so EVERY later crawl retries it, with no deadline. This
-			// is the opposite of what hh and the other hydrating adapters do, and it is
-			// deliberate: their rule assumes a rare failure that the retry window absorbs, while
-			// SEEK's rate limiter refuses in bursts of thousands (measured on prod: 3,267
-			// refusals in 95 seconds, 87% of a first crawl stranded body-less) — a backlog large
-			// enough that a bounded window would time out before clearing it.
 			log.Printf("%s: detail %s/%s failed; deferring the posting to the next crawl", s.provider, e.Region, p.ID)
 			return Job{}, false
 		}
 		base.Description += body // base.Description is the salary paragraph (or "")
 		return base, true
-	}), nil
+	})
 }
 
 // crawl pages the search listing until a page yields no posting it has not already collected.

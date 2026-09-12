@@ -709,3 +709,46 @@ func TestJobStreetPageCeilingFailsInsteadOfSilentlyTruncating(t *testing.T) {
 		t.Errorf("error = %q, want page-ceiling diagnosis", err)
 	}
 }
+
+func TestJobStreetFetchNewGatedSkipsCoveredEmployerDetail(t *testing.T) {
+	fake := &seekFake{
+		searchByPage: map[int][]seekPosting{
+			1: {seekPost("1", "Covered role", "Covered Co"), seekPost("2", "New role", "New Co")},
+			2: {},
+		},
+		detailByID: map[string]string{"1": "covered body", "2": "new body"},
+	}
+	src := NewJobStreet(fake, fake)
+	gated, ok := src.(CoverageGated)
+	if !ok {
+		t.Fatal("jobstreet should implement CoverageGated")
+	}
+	jobs, err := gated.FetchNewGated(context.Background(), CompanyEntry{Provider: "jobstreet", Board: "6287", Region: "ph"},
+		func(string) bool { return false },
+		func(companies []string) map[string]bool {
+			if !slices.Contains(companies, "Covered Co") || !slices.Contains(companies, "New Co") {
+				t.Fatalf("coverage companies = %v", companies)
+			}
+			return map[string]bool{"Covered Co": true}
+		})
+	if err != nil {
+		t.Fatalf("FetchNewGated: %v", err)
+	}
+	if len(jobs) != 2 {
+		t.Fatalf("len(jobs) = %d, want 2", len(jobs))
+	}
+	fake.mu.Lock()
+	hits := append([]string(nil), fake.detailHits...)
+	fake.mu.Unlock()
+	if slices.Contains(hits, "1") || !slices.Contains(hits, "2") {
+		t.Fatalf("detail hits = %v, want only uncovered posting 2", hits)
+	}
+	for _, j := range jobs {
+		if j.ExternalID == "1" && j.Description != "" {
+			t.Errorf("covered posting description = %q, want empty list-only result", j.Description)
+		}
+		if j.ExternalID == "2" && !strings.Contains(j.Description, "new body") {
+			t.Errorf("uncovered posting description = %q, want hydrated body", j.Description)
+		}
+	}
+}
