@@ -147,18 +147,30 @@
 
 ## 7. Verification
 
-- [ ] 7.1 `gofmt -l .` clean, `go vet ./...` clean, `go test ./...` all green.
-- [ ] 7.2 `go test -count=1 -tags=integration,llmlive ./internal/platform/arch/...`
+- [x] 7.1 `gofmt -l .` clean, `go vet ./...` clean, `go test ./...` all green (one
+      pre-existing, unrelated failure: `cmd/billing-sync`'s
+      `TestTheStoreProviderAloneKeepsTheWorkerRunning`, present on `main` before this
+      change and untouched by it).
+- [x] 7.2 `go test -count=1 -tags=integration,llmlive ./internal/platform/arch/...`
       confirms the layering guard passes with the new `internal/engage/mentorship/busysync`
       package importing `internal/application/gmailsync` and `internal/platform/tokencrypt`
       (both legal downward imports — engage is layer 7, application and platform are 6
-      and 1).
-- [ ] 7.3 `go vet -tags=integration ./...` clean. Run the full tagged integration suite
-      for `internal/platform/db`/`internal/api/handler` if any `.sql` query signature
-      changed in a way the untagged suite could not already catch.
-- [ ] 7.4 `node scripts/check-migrations.mjs`: 0 issues on the new migration.
-- [ ] 7.5 `svelte-check`, `eslint`, full frontend `vitest run`, design-system adoption
-      ratchet — all clean/unchanged.
-- [ ] 7.6 `/code-review` pass on the full diff; fix Critical + Important findings with a
+      and 1). Required adding `mentorship/busysync` to `blocks.go`'s `engage` list (task
+      5.1) and `/mentor-busy-sync` to `.gitignore` (`TestEveryCmdBinaryIsGitignored`).
+- [x] 7.3 `go vet -tags=integration ./...` clean. Ran the full tagged integration suite
+      for `internal/platform/db`, `internal/api/handler`, `internal/engage/mentorship`
+      (including the new `busysync` package), `internal/application/gmailsync` and
+      `internal/application/calsync` — all green, since `GetGmailConnection`'s row shape
+      changed.
+- [x] 7.4 `node scripts/check-migrations.mjs`: 0 issues on the new migration. `make sqlc`
+      re-run: idempotent, no diff.
+- [x] 7.5 `svelte-check` (0 errors), `eslint` (clean), full frontend `vitest run` (1881
+      passing), design-system adoption ratchet (unchanged) — all clean. Also ran
+      `golangci-lint run --new-from-merge-base=origin/main` (0 issues) and
+      `deadcode -test -tags=integration,llmlive ./...` (nothing new). `pnpm check:dead`
+      (knip) was not run clean — it fails on `extension/`'s own unbuilt `.wxt/` state,
+      which predates this change and is unrelated to it; AGENTS.md documents this check
+      as CI-only for exactly this reason ("a fresh worktree usually has neither").
+- [x] 7.6 `/code-review` pass on the full diff; fix Critical + Important findings with a
       regression test each, matching how `mentor-google-meet-link`'s own task 9 closed
       out its post-review fixes.
