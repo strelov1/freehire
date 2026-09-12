@@ -116,16 +116,22 @@
 
 ## 5. `cmd/mentor-busy-sync`
 
-- [ ] 5.1 New `cmd/mentor-busy-sync/main.go` following this repo's cron-worker
+- [x] 5.1 New `cmd/mentor-busy-sync/main.go` following this repo's cron-worker
       conventions (`internal/platform/worker`'s `Main`/`Bootstrap` — see its AGENTS.md):
       needs `DATABASE_URL` and the Google OAuth client config `gmailsync.Connector`
       needs; wires `busysync.NewWorker` with `busysync.ReaderFactoryFor` (a Google-backed
-      `ReaderFactory`, mirroring `calsync.ReaderFactoryFor`) and runs `RunOnce`.
-- [ ] 5.2 `deploy/systemd/freehire-mentor-busy-sync.service` and `.timer` (a `Type=oneshot`
-      unit + timer, following `freehire-mentorship-remind.*`'s shape). Document in
-      `internal/engage/mentorship/AGENTS.md`'s command table entry (mirroring how
-      `cmd/mentorship-remind` is documented at the top level) that this unit needs
-      hand-provisioning on the host and is not touched by `release.sh`.
+      `ReaderFactory`, mirroring `calsync.ReaderFactoryFor`) and runs `RunOnce`. Mirrors
+      `cmd/cal-sync/main.go` line for line. Also added `mentor-busy-sync` to
+      `internal/platform/arch/layering/blocks.go`'s `engage` list (as
+      `mentorship/busysync`, the `auth/oauth` naming convention for a sub-package) and to
+      `.gitignore` — both required by `internal/platform/arch/layering`'s and
+      `internal/platform/arch`'s own tests.
+- [x] 5.2 `deploy/systemd/freehire-mentor-busy-sync.service` and `.timer` (a `Type=oneshot`
+      unit + timer, hourly like `freehire-cal-sync.timer` and offset from it and
+      `gmail-sync`'s). Documented in `AGENTS.md`'s worker table (a new bullet beside
+      `mentorship-remind`) and in `internal/engage/mentorship/AGENTS.md`'s "How it works"
+      section that this unit needs hand-provisioning on the host and is not touched by
+      `release.sh`.
 
 ## 6. Frontend
 
