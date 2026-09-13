@@ -60,10 +60,14 @@
   };
   // Same priority order dayStatuses reports in — booked over busy over free over closed —
   // so the dots read left-to-right the way the underlying partition prioritises them.
+  // Design-system tokens only (no raw Tailwind palette utilities, which
+  // check-token-coverage gates): `warning` reads as "needs attention" for busy time,
+  // and `brand` (an olive green) is the closest existing token to a positive/available
+  // signal for free time — this palette has no dedicated success/green token yet.
   const STATUS_DOT: Record<MentorCalendarInterval['status'], string> = {
     booked: 'bg-primary',
-    busy: 'bg-amber-500',
-    free: 'bg-emerald-500',
+    busy: 'bg-warning',
+    free: 'bg-brand',
     closed: 'bg-muted-foreground/30',
   };
 
