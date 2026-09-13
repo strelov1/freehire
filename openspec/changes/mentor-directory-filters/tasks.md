@@ -110,17 +110,27 @@
 
 ## 7. Verification
 
-- [ ] 7.1 `gofmt -l .` clean, `go vet ./...` clean, `go test ./...` all green.
-- [ ] 7.2 `go vet -tags=integration ./...` clean. Run the full tagged integration suite
-      for `internal/platform/db` and `internal/api/handler` (the `.sql` query signatures
-      changed).
-- [ ] 7.3 `node scripts/check-migrations.mjs`: 0 issues on the new migration. `make sqlc`
-      re-run: idempotent, no diff.
-- [ ] 7.4 `svelte-check` (0 errors), `eslint` (clean), full frontend `vitest run`,
-      design-system adoption ratchet — all clean/unchanged.
-- [ ] 7.5 Manual check via the `run` skill: create a profile with a seniority level,
-      confirm it appears on the directory card/filter and round-trips through an edit;
-      confirm the search box narrows by name/headline; confirm "no reviews yet" excludes
-      a mentor with at least one review.
+- [x] 7.1 `gofmt -l .` clean, `go vet ./...` clean, `go test ./...` all green.
+- [x] 7.2 `go vet -tags=integration ./...` clean. Ran the full tagged integration suite
+      for `internal/platform/db`, `internal/api/handler` and `internal/engage/mentorship`
+      (the `.sql` query signatures changed) — all green. Layering guard
+      (`-tags=integration,llmlive ./internal/platform/arch/...`) also green.
+- [x] 7.3 `node scripts/check-migrations.mjs`: 0 issues on the new migration. `make sqlc`
+      re-run: idempotent, no diff. `golangci-lint run --new-from-merge-base=origin/main`:
+      0 issues.
+- [x] 7.4 `svelte-check` (0 errors), `eslint` (clean), full frontend `vitest run` (1890
+      passing), design-system adoption ratchet — all clean/unchanged.
+- [x] 7.5 Manual check via the `run` skill (Playwright against a live `go run ./cmd/server`
+      + `vite dev`): created a mentor profile with `seniority=senior`, confirmed the
+      Search/Seniority/"No reviews yet" controls render on `/mentors`, the "Senior" badge
+      shows on the card, filtering by `seniority=senior` includes the mentor and
+      `seniority=junior` excludes it (empty-state message, `withSelected` correctly shows
+      "junior" even though no mentor currently has it), the search box narrows by a
+      name substring and excludes on a non-match, "no reviews yet" includes a mentor with
+      zero reviews, and the Seniority `<select>` on `/my/mentorship/profile` shows the
+      saved value and round-trips a change (`senior` → `lead`) across a page reload. Zero
+      network errors on the mentor/mentorship endpoints throughout. (Needed manually
+      marking the test account's `onboarding_completed_at` via SQL first — the SPA
+      redirects an unfinished-onboarding account away from every other route.)
 - [ ] 7.6 `/code-review` pass on the full diff; fix Critical + Important findings with a
       regression test each.
