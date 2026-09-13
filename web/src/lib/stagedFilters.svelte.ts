@@ -89,6 +89,10 @@ export class StagedFilters implements FacetStore {
     this.#f = { ...this.#f, hideAIInterview: on };
   }
 
+  setAutoApplyAvailable(on: boolean): void {
+    this.#f = { ...this.#f, autoApplyAvailable: on };
+  }
+
   setClearance(v: ClearanceFilter): void {
     this.#f = { ...this.#f, clearance: v };
   }

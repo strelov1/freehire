@@ -18,6 +18,7 @@
     missingChipClass,
   } from '$lib/jobMatch';
   import { profileStore } from '$lib/profile.svelte';
+  import { syncProfileAlert } from '$lib/profileAlertSync';
   import type { Job, JobMatchResult } from '$lib/types';
   import { Button } from '$lib/ui';
   import MatchSummary from './MatchSummary.svelte';
@@ -122,6 +123,7 @@
     overlay = claimSkill(before, skill);
     try {
       await profileStore.addSkill(skill);
+      void syncProfileAlert();
       // Navigated on mid-write: the claim stands, but its confirmation belongs to the job
       // that was open, and the next job's block has already reset itself.
       if (job.public_slug !== slug) return;
@@ -148,6 +150,7 @@
     claiming = null;
     try {
       await (avoid ? profileStore.avoidSkill(skill) : profileStore.unavoidSkill(skill));
+      void syncProfileAlert();
       return job.public_slug === slug;
     } catch {
       if (job.public_slug === slug) failed = skill;
@@ -178,6 +181,7 @@
     done = null;
     try {
       await profileStore.removeSkill(last.skill);
+      void syncProfileAlert();
       await reconcile(slug);
     } catch {
       if (job.public_slug !== slug) return;

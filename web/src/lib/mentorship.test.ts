@@ -3,7 +3,9 @@ import {
   addMonths,
   daysInMonth,
   daysWithSlots,
+  dayStatuses,
   emptyMentorFilters,
+  groupCalendarByLocalDay,
   monthGrid,
   monthOf,
   profileInputFromProfile,
@@ -16,9 +18,11 @@ import {
   mentorFiltersFromParams,
   mentorFiltersToParams,
   mentorFiltersToQuery,
+  seniorityLabel,
   slotLocalDay,
   slotLocalTime,
   canReview,
+  companyLabel,
   formatInstantIn,
   isCancellable,
   splitAvailability,
@@ -29,6 +33,7 @@ import {
 import type {
   Mentor,
   MentorAvailabilityRule,
+  MentorCalendarInterval,
   MentorProfileInput,
   MentorProfileSuggestions,
   MentorSession,
@@ -89,11 +94,27 @@ describe('mentor directory filters', () => {
     expect(mentorFiltersToParams(emptyMentorFilters()).toString()).toBe('');
   });
 
-  test('the three filters the directory reads survive a round trip', () => {
-    const params = new URLSearchParams('company=acme&topic=career&language=en');
-    expect(mentorFiltersToParams(mentorFiltersFromParams(params)).toString()).toBe(
-      new URLSearchParams({ company: 'acme', topic: 'career', language: 'en' }).toString(),
+  test('the six filters the directory reads survive a round trip', () => {
+    const params = new URLSearchParams(
+      'company=acme&topic=career&language=en&seniority=senior&q=jane&no_reviews=1',
     );
+    const forwarded = mentorFiltersToParams(mentorFiltersFromParams(params));
+    expect(forwarded.get('company')).toBe('acme');
+    expect(forwarded.get('topic')).toBe('career');
+    expect(forwarded.get('language')).toBe('en');
+    expect(forwarded.get('seniority')).toBe('senior');
+    expect(forwarded.get('q')).toBe('jane');
+    expect(forwarded.get('no_reviews')).toBe('1');
+  });
+
+  // no_reviews is a flag, not a value — it is either present as "1" or absent, unlike the
+  // five string filters above.
+  test('no_reviews is a flag: absent means unfiltered, never sent as false', () => {
+    expect(mentorFiltersFromParams(new URLSearchParams('')).noReviews).toBe(false);
+    expect(mentorFiltersToParams(emptyMentorFilters()).has('no_reviews')).toBe(false);
+    expect(
+      mentorFiltersToParams({ ...emptyMentorFilters(), noReviews: true }).get('no_reviews'),
+    ).toBe('1');
   });
 
   // The directory's vocabulary is company/topic/language and nothing else — the same
@@ -129,7 +150,7 @@ describe('mentor directory filters', () => {
 
   test('the query string form clears to empty, so a cleared filter has no trailing ?', () => {
     expect(mentorFiltersToQuery(emptyMentorFilters())).toBe('');
-    expect(mentorFiltersToQuery({ company: 'acme', topic: '', language: '' })).toBe(
+    expect(mentorFiltersToQuery({ ...emptyMentorFilters(), company: 'acme' })).toBe(
       'company=acme',
     );
   });
@@ -138,6 +159,30 @@ describe('mentor directory filters', () => {
   test('surrounding whitespace is trimmed away', () => {
     const params = new URLSearchParams('company=%20acme%20');
     expect(mentorFiltersToParams(mentorFiltersFromParams(params)).get('company')).toBe('acme');
+  });
+});
+
+describe('seniorityLabel', () => {
+  test('sentence-cases a value with no special label', () => {
+    expect(seniorityLabel('senior')).toBe('Senior');
+  });
+
+  test('uses the shared label map for the one value that needs it', () => {
+    expect(seniorityLabel('c_level')).toBe('C-level');
+  });
+});
+
+describe('companyLabel', () => {
+  test('prefers the display name when present', () => {
+    expect(companyLabel('Acme Corp', 'acme')).toBe('Acme Corp');
+  });
+
+  test('falls back to the slug when only that is known', () => {
+    expect(companyLabel('', 'acme')).toBe('acme');
+  });
+
+  test('reads as Independent when neither is set', () => {
+    expect(companyLabel('', '')).toBe('Independent');
   });
 });
 
@@ -182,7 +227,26 @@ describe('mentor filter options', () => {
   });
 
   test('an empty directory offers no options at all', () => {
-    expect(mentorFilterOptions([])).toEqual({ companies: [], topics: [], languages: [] });
+    expect(mentorFilterOptions([])).toEqual({
+      companies: [],
+      topics: [],
+      languages: [],
+      seniorities: [],
+    });
+  });
+
+  // Seniority is optional on a mentor, unlike topics/languages which are always arrays —
+  // a mentor who left it unset must not turn into a spurious "" option nobody could have
+  // meant to pick.
+  test('seniority options are derived the same way as topics, and unset ones are skipped', () => {
+    // 'lead' sorts before 'middle' alphabetically but after it in career order — picked
+    // deliberately so a naive alpha sort would fail this assertion.
+    const options = mentorFilterOptions([
+      mentor({ seniority: 'lead' }),
+      mentor({ slug: 'bo', seniority: 'middle' }),
+      mentor({ slug: 'cy' }),
+    ]);
+    expect(options.seniorities).toEqual(['middle', 'lead']);
   });
 });
 
@@ -573,6 +637,7 @@ describe('seedFormFromSuggestions', () => {
       horizon_days: 30,
       meeting_url: '',
       show_photo: false,
+      seniority: '',
     };
   }
 
@@ -665,7 +730,18 @@ describe('profileInputFromProfile', () => {
       horizon_days: 14,
       meeting_url: 'https://meet.example.test/jane',
       show_photo: true,
+      seniority: '',
     });
+  });
+
+  test('a stated seniority carries over unchanged', () => {
+    expect(profileInputFromProfile(ownProfile({ seniority: 'senior' })).seniority).toBe(
+      'senior',
+    );
+  });
+
+  test('an unset seniority becomes the empty string, never undefined', () => {
+    expect(profileInputFromProfile(ownProfile({ seniority: undefined })).seniority).toBe('');
   });
 
   // The owner's read carries the session parameters precisely so a re-submit (from
@@ -686,5 +762,79 @@ describe('profileInputFromProfile', () => {
     expect(input.buffer_after_minutes).toBe(0);
     expect(input.notice_minutes).toBe(120);
     expect(input.horizon_days).toBe(30);
+  });
+});
+
+function interval(
+  startsAt: string,
+  endsAt: string,
+  status: MentorCalendarInterval['status'],
+): MentorCalendarInterval {
+  return { starts_at: startsAt, ends_at: endsAt, status };
+}
+
+describe('grouping a mentor own-calendar into local days', () => {
+  test('an interval wholly inside one day is grouped under it alone', () => {
+    const grouped = groupCalendarByLocalDay(
+      [interval('2026-09-08T16:00:00Z', '2026-09-08T17:00:00Z', 'free')],
+      'UTC',
+    );
+    expect([...grouped.keys()]).toEqual(['2026-09-08']);
+  });
+
+  // The whole reason this differs from groupSlotsByLocalDay: a mentor with no
+  // availability rules yet gets back ONE closed interval spanning the entire requested
+  // window, not one per day. Bucketing only by start day would leave every day after the
+  // first showing no data at all, when the source data says they are closed too.
+  test('an interval spanning several days appears under every day it touches', () => {
+    const grouped = groupCalendarByLocalDay(
+      [interval('2026-09-01T00:00:00Z', '2026-09-04T00:00:00Z', 'closed')],
+      'UTC',
+    );
+    expect([...grouped.keys()]).toEqual(['2026-09-01', '2026-09-02', '2026-09-03']);
+  });
+
+  // ends_at is exclusive, matching the domain's half-open intervals: an interval ending
+  // exactly at a day's start does not touch that day.
+  test('an interval ending exactly at midnight does not touch that day', () => {
+    const grouped = groupCalendarByLocalDay(
+      [interval('2026-09-08T22:00:00Z', '2026-09-09T00:00:00Z', 'busy')],
+      'UTC',
+    );
+    expect([...grouped.keys()]).toEqual(['2026-09-08']);
+  });
+
+  test('grouping is in the given timezone, not UTC', () => {
+    // 22:00 UTC is already the 9th in Europe/Berlin (UTC+2 in September).
+    const grouped = groupCalendarByLocalDay(
+      [interval('2026-09-08T22:00:00Z', '2026-09-08T23:00:00Z', 'free')],
+      'Europe/Berlin',
+    );
+    expect([...grouped.keys()]).toEqual(['2026-09-09']);
+  });
+
+  test('an empty interval list groups into nothing', () => {
+    expect(groupCalendarByLocalDay([], 'UTC').size).toBe(0);
+  });
+});
+
+describe('which statuses a day shows, in priority order', () => {
+  test('booked outranks busy, free and closed', () => {
+    const day = [
+      interval('2026-09-08T09:00:00Z', '2026-09-08T10:00:00Z', 'closed'),
+      interval('2026-09-08T18:00:00Z', '2026-09-08T19:00:00Z', 'free'),
+      interval('2026-09-08T20:00:00Z', '2026-09-08T21:00:00Z', 'booked'),
+    ];
+    expect(dayStatuses(day)).toEqual(['booked', 'free', 'closed']);
+  });
+
+  test('a day with only closed time reports just closed', () => {
+    expect(dayStatuses([interval('2026-09-08T00:00:00Z', '2026-09-09T00:00:00Z', 'closed')])).toEqual([
+      'closed',
+    ]);
+  });
+
+  test('a day with no intervals reports nothing', () => {
+    expect(dayStatuses([])).toEqual([]);
   });
 });

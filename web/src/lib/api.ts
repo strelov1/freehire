@@ -48,6 +48,7 @@ import type {
   ListMeta,
   Mentor,
   MentorAvailabilityRule,
+  MentorCalendar,
   MentorProfileInput,
   MentorProfileSuggestions,
   MentorSession,
@@ -895,6 +896,17 @@ export function createApi(
 
   async function myMentorAvailability(): Promise<MentorAvailabilityRule[]> {
     return requestData<MentorAvailabilityRule[]>('/api/v1/me/mentorship/availability');
+  }
+
+  /** The caller's own resolved calendar for one month — booked, busy, free and closed
+   *  time — read-only. `month` is `YYYY-MM`; omitted, the server defaults to the current
+   *  month. */
+  async function myMentorCalendar(month?: string): Promise<MentorCalendar> {
+    const params = month ? `?month=${encodeURIComponent(month)}` : '';
+    const res = await request<{ data: MentorCalendar['intervals']; meta: { timezone: string } }>(
+      `/api/v1/me/mentorship/availability/calendar${params}`,
+    );
+    return { intervals: res.data, timezone: res.meta.timezone };
   }
 
   /** Swap the WHOLE recurring week in one call.
@@ -2161,9 +2173,16 @@ export function createApi(
     });
   }
 
-  /** Reject a pending submission with an optional reason. */
-  async function rejectSubmission(id: number, reason?: string): Promise<Submission> {
-    return requestData<Submission>(`/api/v1/submissions/${id}/reject`, jsonBody('POST', { reason: reason ?? '' }));
+  /** Reject a pending submission with an optional reason. When blockDomain is set, the
+   *  submission's URL host is also added to the submission-domain blocklist and every
+   *  other pending submission on that host is rejected in the same action — the response
+   *  is still only the target submission, so a caller passing blockDomain should re-fetch
+   *  the queue to see any bulk-rejected siblings. */
+  async function rejectSubmission(id: number, reason?: string, blockDomain?: boolean): Promise<Submission> {
+    return requestData<Submission>(
+      `/api/v1/submissions/${id}/reject`,
+      jsonBody('POST', { reason: reason ?? '', block_domain: blockDomain ?? false }),
+    );
   }
 
   /** Report a problem with a live vacancy (by slug). Returns the pending report. */
@@ -2823,6 +2842,7 @@ export function createApi(
     withdrawMentorProfile,
     reactivateMentorProfile,
     myMentorAvailability,
+    myMentorCalendar,
     replaceWeeklyAvailability,
     addAvailabilityOverride,
     deleteAvailabilityRule,

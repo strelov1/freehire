@@ -102,6 +102,11 @@ type Repository interface {
 	// here — the slot engine widens these, because the buffers belong to the mentor and
 	// may change between two reads of the same booking.
 	ListBusy(ctx context.Context, mentorID int64, from, to time.Time) ([]Interval, error)
+	// ListBusyByKind is ListBusy's two sources kept apart — this mentor's confirmed
+	// bookings and their synced-calendar busy intervals — for the mentor's own calendar
+	// breakdown, which needs to say which kind an occupied moment is. The public slot
+	// engine has no such need and keeps using ListBusy's flat union.
+	ListBusyByKind(ctx context.Context, mentorID int64, from, to time.Time) (booked, busy []Interval, err error)
 
 	// CreateBooking writes a confirmed booking. The adapter translates the EXCLUDE
 	// constraint's violation into ErrSlotUnavailable — the same sentinel a stale page

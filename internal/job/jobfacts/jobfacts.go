@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/strelov1/freehire/internal/candidate/hardconstraint/credentials"
+	"github.com/strelov1/freehire/internal/dict/edulevel"
 )
 
 // reDegreeOptional matches a posting that offers a degree with an
@@ -84,44 +85,15 @@ func EmploymentType(title, description string) string {
 	return ""
 }
 
-// Education-level matchers, highest degree first so "Master's or PhD" resolves to
-// the ceiling actually named. "none" is emitted only on an explicit negation, and
-// only when no positive degree is named (see EducationLevel).
-// These favour precision over recall (it is a faceted field — a wrong value is worse
-// than a missing one): only unambiguous degree forms match. Bare single-letter
-// abbreviations are deliberately excluded — "ms"/"m.s" collide with "MS Office"/
-// "MS SQL" and "bs"/"b.s" with everyday text — and bare "master" is excluded because
-// "scrum master" is not a degree. The "'s" possessive, an explicit "<level> degree",
-// or the -Sc/MBA/PhD tokens are required instead.
-//
-// The possessive admits BOTH apostrophes. A description written in a rich-text editor
-// carries the typographic one, and an ASCII-only spelling read "Bachelor’s degree
-// required" as no degree at all — every one of the five most recent prod postings
-// naming a degree spelled it that way (checked 2026-09-06).
-var (
-	rePhD      = regexp.MustCompile(`\b(ph\.?\s?d|phd|doctorate|doctoral)\b`)
-	reMaster   = regexp.MustCompile(`\b(master['’]?s|master degree|m\.?sc|mba|graduate degree)\b`)
-	reBachelor = regexp.MustCompile(`\b(bachelor['’]?s|bachelor degree|b\.?sc|undergraduate degree)\b`)
-	reNoDegree = regexp.MustCompile(`\b(no (?:degree|diploma)|degree not required|without a degree|no degree required)\b`)
-)
-
 // EducationLevel resolves the required education from the description, returning
 // one of vocab.EducationLevelValues or "" when nothing is stated. A named degree
 // wins over a "no degree" phrase (a posting that says "Bachelor's or equivalent;
-// no degree required for exceptional candidates" still has a degree signal).
+// no degree required for exceptional candidates" still has a degree signal). The
+// actual degree matching lives in internal/dict/edulevel.ForRequirement — this
+// package keeps only hardRequirementText's required/optional clause split, which
+// depends on internal/job/reqextract and therefore cannot move down into dict.
 func EducationLevel(description string) string {
-	s := strings.ToLower(hardRequirementText(description))
-	switch {
-	case rePhD.MatchString(s):
-		return "phd"
-	case reMaster.MatchString(s):
-		return "master"
-	case reBachelor.MatchString(s):
-		return "bachelor"
-	case reNoDegree.MatchString(s):
-		return "none"
-	}
-	return ""
+	return edulevel.ForRequirement(hardRequirementText(description))
 }
 
 // experienceCap bounds a parsed years value; anything larger is hyperbole or a

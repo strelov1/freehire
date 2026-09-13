@@ -180,3 +180,83 @@ func TestProjectCard_KeepsARoleWithNoResolvedTitle(t *testing.T) {
 		t.Error("the unresolved role lost its period")
 	}
 }
+
+// A resolvable degree carries its level and year, and nothing else from the entry —
+// no institution, in any field.
+func TestProjectCard_CarriesResolvedEducation(t *testing.T) {
+	card := ProjectCard(resumeextract.Structured{
+		Education: []resumeextract.Education{
+			{Degree: "BSc Computer Science", Institution: "Some University", Year: date(2019, 6)},
+		},
+	})
+	if len(card.Education) != 1 {
+		t.Fatalf("education = %d, want 1", len(card.Education))
+	}
+	if card.Education[0].Level != "bachelor" {
+		t.Errorf("education level = %q, want bachelor", card.Education[0].Level)
+	}
+	if card.Education[0].Year == nil || card.Education[0].Year.Year != 2019 {
+		t.Error("the resolved education entry lost its year")
+	}
+}
+
+// An education entry whose degree resolves to nothing is dropped entirely — unlike an
+// unresolved role, there is no "gap reads worse than absence" argument for education.
+func TestProjectCard_DropsUnresolvedEducation(t *testing.T) {
+	card := ProjectCard(resumeextract.Structured{
+		Education: []resumeextract.Education{
+			{Degree: "Certificate in Project Management", Institution: "Some Institute"},
+			{Degree: "MSc Data Science", Year: date(2021, 1)},
+		},
+	})
+	if len(card.Education) != 1 {
+		t.Fatalf("education = %d, want the unresolvable entry dropped", len(card.Education))
+	}
+	if card.Education[0].Level != "master" {
+		t.Errorf("education level = %q, want the resolvable entry's master", card.Education[0].Level)
+	}
+}
+
+// A degree with no stated year still resolves — Year is optional on the entry, not a
+// condition for keeping it.
+func TestProjectCard_CarriesResolvedEducationWithNoYear(t *testing.T) {
+	card := ProjectCard(resumeextract.Structured{
+		Education: []resumeextract.Education{{Degree: "PhD in Physics"}},
+	})
+	if len(card.Education) != 1 {
+		t.Fatalf("education = %d, want 1", len(card.Education))
+	}
+	if card.Education[0].Level != "phd" {
+		t.Errorf("education level = %q, want phd", card.Education[0].Level)
+	}
+	if card.Education[0].Year != nil {
+		t.Errorf("education year = %v, want nil (none was stated)", card.Education[0].Year)
+	}
+}
+
+// A certification the dictionary resolves is canonicalized; one it does not is dropped.
+func TestProjectCard_KeepsOnlyResolvedCertifications(t *testing.T) {
+	card := ProjectCard(resumeextract.Structured{
+		Certifications: []string{"PMP", "Certified Underwater Basket Weaver"},
+	})
+	if len(card.Certifications) != 1 || card.Certifications[0] != "pmp" {
+		t.Errorf("certifications = %v, want only [pmp]", card.Certifications)
+	}
+}
+
+// Multiple resolved certifications all survive, sorted.
+func TestProjectCard_CarriesMultipleResolvedCertifications(t *testing.T) {
+	card := ProjectCard(resumeextract.Structured{
+		Certifications: []string{"CISSP", "CKAD", "PMP"},
+	})
+	want := []string{"cissp", "ckad", "pmp"}
+	if len(card.Certifications) != len(want) {
+		t.Fatalf("certifications = %v, want %v", card.Certifications, want)
+	}
+	for i, c := range want {
+		if card.Certifications[i] != c {
+			t.Errorf("certifications = %v, want %v", card.Certifications, want)
+			break
+		}
+	}
+}

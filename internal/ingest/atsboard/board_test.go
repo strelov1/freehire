@@ -30,6 +30,14 @@ func TestRecognize(t *testing.T) {
 		// word as the board and onboarded nothing; Greenhouse's embed machinery has no board in
 		// the path at all (the slug is in the `for=` param, which atsdetect reads).
 		{"jobvite portal segment skipped", "https://jobs.jobvite.com/careers/ness/jobs", "jobvite", "ness", "https://jobs.jobvite.com/careers/ness/jobs", true},
+		// HERP's board sits behind the platform's own "v1" path word, the same
+		// reserved-leading-segment shape Gusto's "/boards/<board>" already uses.
+		{"herp job posting", "https://herp.careers/v1/a244/GnoQonoXGBZi", "herp", "a244", "https://herp.careers/v1/a244/GnoQonoXGBZi", true},
+		{"herp bare v1 has no board", "https://herp.careers/v1", "", "", "", false},
+		// HRMOS's board sits behind the platform's own "pages" path word, the same
+		// reserved-leading-segment shape Gusto's "/boards/<board>" already uses.
+		{"hrmos job posting", "https://hrmos.co/pages/cyberagent-group/jobs/900100", "hrmos", "cyberagent-group", "https://hrmos.co/pages/cyberagent-group/jobs/900100", true},
+		{"hrmos bare pages has no board", "https://hrmos.co/pages", "", "", "", false},
 		{"greenhouse embed app has no board", "https://job-boards.greenhouse.io/embed/job_app?token=1", "", "", "", false},
 		{"greenhouse embed script has no board", "https://boards.greenhouse.io/embed/job_board/js?for=acme", "", "", "", false},
 		// The CDN host leads with the same "job-boards" label the real board hosts do, so only a
@@ -186,6 +194,7 @@ func TestRecognize(t *testing.T) {
 		{"recruitee vacancy strips path", "https://acme.recruitee.com/o/senior-go/apply?utm=x", "recruitee", "acme", "https://acme.recruitee.com", true},
 		{"recruitee board listing", "https://acme.recruitee.com", "recruitee", "acme", "https://acme.recruitee.com", true},
 		{"bamboohr subdomain", "https://acme.bamboohr.com/careers/42", "bamboohr", "acme", "https://acme.bamboohr.com", true},
+		{"keka subdomain", "https://100.keka.com/careers", "keka", "100", "https://100.keka.com", true},
 		{"personio nested apex subdomain", "https://acme.jobs.personio.com/job/9", "personio", "acme", "https://acme.jobs.personio.com", true},
 		{"personio de host", "https://reflex-aerospace-gmbh.jobs.personio.de/job/2679152?display=en#apply", "personio", "reflex-aerospace-gmbh", "https://reflex-aerospace-gmbh.jobs.personio.de", true},
 		{"softgarden subdomain", "https://moll.softgarden.io/job/123/apply", "softgarden", "moll", "https://moll.softgarden.io", true},
@@ -328,6 +337,7 @@ func TestRecognize(t *testing.T) {
 		// "help". Before this guard was wired into modeSubdomain, both resolved as false boards.
 		{"recruitee platform app host not a tenant", "https://app.recruitee.com/", "", "", "", false},
 		{"bamboohr platform help host not a tenant", "https://help.bamboohr.com/s/article/x", "", "", "", false},
+		{"keka platform app host not a tenant", "https://app.keka.com/", "", "", "", false},
 		// "embed" READS like platform machinery and is not: embed.bamboohr.com is the board of a
 		// company actually called Embed, serving live postings, and BambooHR's widget is a PATH on
 		// each tenant's own host (<board>.bamboohr.com/jobs/embed2.php) rather than a host of its

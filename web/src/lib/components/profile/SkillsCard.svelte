@@ -5,6 +5,15 @@
   import { profileStore } from '$lib/profile.svelte';
   import SkillsPicker from './SkillsPicker.svelte';
 
+  let {
+    onProfileChanged,
+  }: {
+    /** Fired after a skill/excluded-skill change saves — the profile-derived
+     *  saved-search alert needs to stay in step with it, the same way RoleCard's
+     *  and LocationCard's own autosaves already do. */
+    onProfileChanged?: () => void;
+  } = $props();
+
   // No local buffer: both lists read straight off the profile, so a write's effect on the
   // chips comes purely from the store's own reactive state changing.
   const skills = $derived(profileStore.profile?.skills ?? []);
@@ -32,6 +41,7 @@
     lastSkillBlocked = false;
     try {
       await (skills.includes(skill) ? profileStore.removeSkill(skill) : profileStore.addSkill(skill));
+      onProfileChanged?.();
     } catch {
       failed = skill;
     } finally {
@@ -52,6 +62,7 @@
       await (excludedSkills.includes(skill)
         ? profileStore.unavoidSkill(skill)
         : profileStore.avoidSkill(skill));
+      onProfileChanged?.();
     } catch {
       failed = skill;
     } finally {

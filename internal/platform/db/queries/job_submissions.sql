@@ -67,3 +67,22 @@ SET status        = 'rejected',
     review_reason = sqlc.arg(review_reason)
 WHERE id = sqlc.arg(id) AND status = 'pending'
 RETURNING *;
+
+-- name: ListPendingSubmissionURLs :many
+-- id+url of every pending submission, used only to find which OTHER pending rows share the
+-- host being blocked (see RejectAndBlockHost in the submission package): host matching needs
+-- Go's net/url normalization (see submission.normalizeHost), so this fetches the candidates
+-- and the caller filters in Go rather than duplicating that normalization in SQL.
+SELECT id, url FROM job_submissions WHERE status = 'pending';
+
+-- name: MarkSubmissionsRejectedByIDs :many
+-- Bulk-reject every given id still pending, recording the same moderator and reason on
+-- each — the sibling half of RejectAndBlockHost. Scoped to status='pending' like the
+-- single-row Mark* queries, so a row already decided by the time this runs is left alone.
+UPDATE job_submissions
+SET status        = 'rejected',
+    reviewed_by   = sqlc.arg(reviewed_by)::bigint,
+    reviewed_at   = now(),
+    review_reason = sqlc.arg(review_reason)
+WHERE id = ANY(sqlc.arg(ids)::bigint[]) AND status = 'pending'
+RETURNING *;

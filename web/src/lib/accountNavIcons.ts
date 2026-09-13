@@ -24,7 +24,6 @@ import {
   ShieldCheck,
   TrendingUp,
   Plug,
-  Radar,
   Webhook,
 } from '@lucide/svelte';
 import type { LucideIcon } from '@lucide/svelte';
@@ -38,7 +37,6 @@ export const accountNavIcons: Record<AccountNavItem['href'], LucideIcon> = {
   // Not the handshake beside it: a referral is a hand-off between two people, mentorship
   // is somebody teaching. The two sections sit together and must not read as one.
   '/my/mentorship': GraduationCap,
-  '/my/talent-network': Radar,
   '/my/tracking': LayoutList,
   '/my/lists': ListPlus,
   '/my/activity': Activity,
