@@ -888,6 +888,7 @@ type Mentor struct {
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
 	ShowPhoto bool               `json:"show_photo"`
+	Seniority string             `json:"seniority"`
 }
 
 // A mentor's availability in two row shapes: weekly (weekday set) and dated override (on_date set). A dated row replaces its whole date; an empty dated row closes it.
