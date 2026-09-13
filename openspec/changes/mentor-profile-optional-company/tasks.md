@@ -37,10 +37,11 @@
 
 ## 3. Backend: mentor-profile HTTP surface
 
-- [ ] 3.1 Confirm (no code change expected per design.md's Impact) that
-      `mentorResponse`/`profileRequest`'s `CompanySlug`/`CompanyName` fields already
-      tolerate an empty string on the wire in both directions — add a regression test if
-      none already covers a company-less profile round-tripping through `toMentorResponse`.
+- [x] 3.1 Confirmed (no code change needed, as design.md's Impact predicted):
+      `mentorResponse`/`profileRequest`'s `CompanySlug`/`CompanyName` fields are plain,
+      non-`omitempty` strings that already tolerate empty on the wire in both directions.
+      Added `TestCompanyFieldsAreEmptyForACompanyLessMentor` as the regression test that
+      didn't exist before.
 
 ## 4. Frontend: `MentorProfileEditor.svelte`
 

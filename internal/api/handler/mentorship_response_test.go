@@ -52,6 +52,22 @@ func TestSeniorityIsOnEveryView(t *testing.T) {
 	}
 }
 
+// A company-less mentor's response carries empty company fields, not a placeholder —
+// the domain type already reads an unset company as "" (mentorship.Profile.CompanySlug),
+// and the response struct is a plain, non-omitempty string that must pass that through
+// on the wire unchanged, on every view built on toMentorResponse.
+func TestCompanyFieldsAreEmptyForACompanyLessMentor(t *testing.T) {
+	p := mentorship.Profile{CompanySlug: "", CompanyName: ""}
+
+	resp := toMentorResponse(p)
+	if resp.CompanySlug != "" {
+		t.Errorf("public response company_slug = %q, want empty", resp.CompanySlug)
+	}
+	if resp.CompanyName != "" {
+		t.Errorf("public response company_name = %q, want empty", resp.CompanyName)
+	}
+}
+
 // The three new directory filters must be part of the endpoint's known vocabulary —
 // otherwise they would silently narrow the answer while also being reported as ignored,
 // which is the confusing direction this file's own comment on knownMentorParams warns
