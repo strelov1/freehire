@@ -13,17 +13,29 @@ const ROW = readFileSync(join(import.meta.dirname, 'JobRow.svelte'), 'utf8');
 // The compact card's control inventory is a separate `{#if compact} … {:else} … {/if}`
 // branch (see the component's own comment on `compact`): splitting on that boundary is what
 // lets the assertions below tell "renders in the action row" apart from "renders regardless
-// of compact", which a plain `ROW.includes(...)` cannot.
-const compactBranch = ROW.slice(ROW.indexOf('{#if compact}'), ROW.indexOf('{:else}'));
-const actionRow = ROW.slice(ROW.indexOf('{:else}'), ROW.lastIndexOf('{/if}'));
+// of compact", which a plain `ROW.includes(...)` cannot. The file has other `{#if}/{:else}`
+// blocks earlier, so the search for THIS `{:else}` must start at `{#if compact}` itself —
+// and if that marker is ever missing, `indexOf` must not be allowed to fall back to search
+// from the top of the file and silently pair with one of those earlier, unrelated `{:else}`
+// markers, slicing out an empty string that would make every assertion below vacuous. Each
+// step below returns '' as soon as a marker is missing, and `'finds the branches it audits'`
+// is what turns that into a failure instead of a silent pass.
+const compactIfIndex = ROW.indexOf('{#if compact}');
+const compactElseIndex = compactIfIndex === -1 ? -1 : ROW.indexOf('{:else}', compactIfIndex);
+const compactBranch = compactElseIndex === -1 ? '' : ROW.slice(compactIfIndex, compactElseIndex);
+const actionRow = compactElseIndex === -1 ? '' : ROW.slice(compactElseIndex, ROW.lastIndexOf('{/if}'));
 // The button's own `{#if applyJob} … {/if}` block, isolated within the action row so the
 // hover-reveal and link-hygiene assertions can't pass by matching Hide's copies instead.
-const applyBlock = actionRow.slice(
-  actionRow.indexOf('{#if applyJob}'),
-  actionRow.indexOf('{/if}', actionRow.indexOf('{#if applyJob}')),
-);
+const applyIfIndex = actionRow.indexOf('{#if applyJob}');
+const applyBlock = applyIfIndex === -1 ? '' : actionRow.slice(applyIfIndex, actionRow.indexOf('{/if}', applyIfIndex));
 
 describe('JobRow direct-apply button', () => {
+  it('finds the branches it audits', () => {
+    expect(compactBranch, 'compact branch not found in JobRow.svelte').not.toBe('');
+    expect(actionRow, 'action row not found in JobRow.svelte').not.toBe('');
+    expect(applyBlock, 'applyJob block not found in JobRow.svelte').not.toBe('');
+  });
+
   it('is gated on a job that actually carries an outbound url', () => {
     expect(ROW).toContain("const applyJob = $derived('url' in job ? job : null);");
     expect(applyBlock).not.toBe('');
