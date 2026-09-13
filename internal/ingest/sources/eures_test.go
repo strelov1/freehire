@@ -180,6 +180,17 @@ func TestEuresMapsFieldsHappyPath(t *testing.T) {
 	}
 }
 
+func TestEuresNoMatchingPostingsYieldsEmptyNotError(t *testing.T) {
+	fake := &euresFake{} // no searchByPage entries => every page answers zero records
+	jobs, err := NewEures(fake).Fetch(context.Background(), CompanyEntry{Board: "mt"})
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	if len(jobs) != 0 {
+		t.Errorf("len(jobs) = %d, want 0 for a board with no matching postings", len(jobs))
+	}
+}
+
 func TestEuresLocationFallsBackWhenDetailFails(t *testing.T) {
 	const page1 = `{"numberRecords":1,"jvs":[{"id":"X1","title":"T","employer":{"name":"Co"}}]}`
 	fake := &euresFake{

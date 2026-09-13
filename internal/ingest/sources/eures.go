@@ -148,7 +148,7 @@ func euresSearchBody(board string, page int) euresSearchRequest {
 		SectorCodes:                         []string{},
 		EducationAndQualificationLevelCodes: []string{},
 		PositionOfferingCodes:               []string{},
-		LocationCodes:                       []string{board},
+		LocationCodes:                       []string{strings.ToLower(strings.TrimSpace(board))},
 		EuresFlagCodes:                      []string{},
 		OtherBenefitsCodes:                  []string{},
 		RequiredLanguages:                   []string{},
