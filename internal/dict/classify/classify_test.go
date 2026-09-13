@@ -1103,6 +1103,46 @@ func TestParse_ITTailCoverage(t *testing.T) {
 		{"IT Specialist", "support", "the same desk \"IT Support Specialist\" already resolves to"},
 		{"IT Technician", "support", ""},
 
+		// German fused compounds. German joins a title's role words into one
+		// unbroken word with no separator, so the word-boundary matcher that
+		// resolves a hyphenated Russian title or a spaced English one can never
+		// reach the German spelling unless the fused form is its own alias.
+		{"Systemadministrator (m/w/d)", "devops", ""},
+		{"IT-Systemadministrator (m/w/d)", "devops", "a hyphen is a word boundary, so the bare alias reaches this"},
+		{"IT Systemadministrator (m/w/d)", "devops", "a space is a word boundary too"},
+		{"Netzwerkadministrator (m/w/d)", "network_engineering", ""},
+		{"Datenbankadministrator (m/w/d)", "devops", ""},
+		{"Netzwerktechniker (m/w/d)", "network_engineering", ""},
+		{"IT-Netzwerktechniker (m/w/d)", "network_engineering", ""},
+		{"Softwaretester (m/w/d)", "qa", "bare \"tester\" cannot see this — it is fused, not word-bounded"},
+		{"Anwendungsentwickler (m/w/d)", "software_engineering", ""},
+		{"Inhouse Anwendungsentwickler (m/w/d)", "software_engineering", ""},
+
+		// Systemtechniker/Systemelektroniker also name non-IT disciplines (electrical,
+		// physical-security systems work) — the same trap the Systems Engineer family
+		// above documents. Only the IT-qualified spellings resolve.
+		{"IT Systemtechniker (m/w/d)", "devops", ""},
+		{"IT-Systemtechniker (m/w/d)", "devops", ""},
+		{"IT Systemelektroniker (m/w/d)", "devops", ""},
+		{"IT-Systemelektroniker (m/w/d)", "devops", ""},
+		{"Systemtechniker (m/w/d) Elektrotechnik", "", "electrical/controls work, not IT"},
+		{"Systemtechniker Sicherheitstechnik (m/w/d)", "", "physical security systems, not IT"},
+
+		// Fachinformatiker: the German formal IT-specialist title and
+		// apprenticeship. It never names a non-IT role, so the bare word resolves;
+		// its two dominant qualifiers (declared before the bare fallback) resolve
+		// more precisely when adjacent to the word.
+		{"Fachinformatiker (m/w/d)", "devops", "bare fallback; never names a non-IT role"},
+		{"Fachinformatiker Systemintegration (m/w/d)", "devops", ""},
+		{"Fachinformatiker für Systemintegration (m/w/d)", "devops", ""},
+		{"Fachinformatiker Anwendungsentwicklung (m/w/d)", "software_engineering", ""},
+		{"Fachinformatiker für Anwendungsentwicklung (m/w/d)", "software_engineering", ""},
+
+		// SPS-Programmierer (PLC/industrial-controller programming) is explicitly
+		// out of scope, unchanged: it is already deliberately excluded from a
+		// software category, on the same reasoning as "CNC Programmer" above.
+		{"SPS-Programmierer (m/w/d)", "", "industrial/PLC, not software — same as CNC Programmer"},
+
 		// The integration family.
 		{"Integration Engineer", "software_engineering", ""},
 		{"Systems Integration Engineer", "software_engineering", ""},

@@ -1484,6 +1484,47 @@ var categoryTable = []aliasEntry{
 	{"программист", "software_engineering"},
 	{"разработчик", "software_engineering"},
 
+	// German administration/technician/tester/developer fused compounds. German
+	// joins a title's role words into one unbroken word with no separator, so
+	// none of these can be reached by the spaced English alias they otherwise
+	// match — same doctrine as the "разработчик" bare tokens above, except a
+	// German compound has no internal separator at all, so the alias must be
+	// the fused form itself rather than relying on a hyphen/space boundary
+	// inside it. A hyphen or space BEFORE the compound is still a boundary,
+	// so each bare alias below already reaches an "IT-"/"IT "-prefixed title
+	// without a separate entry.
+	{"systemadministrator", "devops"},
+	{"netzwerkadministrator", "network_engineering"},
+	{"datenbankadministrator", "devops"},
+	{"netzwerktechniker", "network_engineering"},
+	{"softwaretester", "qa"},
+	{"anwendungsentwickler", "software_engineering"},
+
+	// Systemtechniker/Systemelektroniker also name non-IT disciplines in prod
+	// titles ("Systemtechniker Elektrotechnik", "Systemtechniker
+	// Sicherheitstechnik") — the same cross-domain trap the Systems Engineer
+	// family below documents. Only the IT-qualified spellings resolve; the
+	// bare word is deliberately absent, and hyphenated/spaced forms are two
+	// different strings to this matcher so both need their own entry.
+	{"it systemtechniker", "devops"},
+	{"it-systemtechniker", "devops"},
+	{"it systemelektroniker", "devops"},
+	{"it-systemelektroniker", "devops"},
+
+	// Fachinformatiker: the German formal IT-specialist title and
+	// apprenticeship. Unlike Systemtechniker above, it never names a non-IT
+	// role, so the bare word resolves too — but declared LAST, after its two
+	// dominant qualifiers, so a title where the qualifier sits directly next
+	// to the word (no intervening "für"/"/in"/"m/w/d") gets the more precise
+	// category. SPS-Programmierer (PLC/industrial-controller programming) is
+	// deliberately NOT given an entry here — already excluded from a software
+	// category, same reasoning as "CNC Programmer" above.
+	{"fachinformatiker systemintegration", "devops"},
+	{"fachinformatiker für systemintegration", "devops"},
+	{"fachinformatiker anwendungsentwicklung", "software_engineering"},
+	{"fachinformatiker für anwendungsentwicklung", "software_engineering"},
+	{"fachinformatiker", "devops"},
+
 	// The Russian engineering family. Roughly half the industrial residue, and none of
 	// it carried an English alias. The two qualified forms that name ANOTHER discipline
 	// are declared first: "Инженер-проектировщик" is a draughtsman and
