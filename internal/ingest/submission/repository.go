@@ -148,9 +148,15 @@ func (r *QueriesRepository) IsHostBlocked(ctx context.Context, host string) (boo
 //
 // Host matching happens here, in Go, rather than in SQL: normalizeHost's rules (lowercase,
 // strip one leading "www.") are the same ones Submit checks against, and duplicating them
-// as a second, SQL implementation would risk the two drifting apart. The candidate set
-// (every pending row) is bounded by the same queue depth ListPendingSubmissions already
-// caps at 500, so fetching it whole and filtering in Go costs nothing worth avoiding.
+// as a second, SQL implementation would risk the two drifting apart.
+//
+// ListPendingSubmissionURLs carries no LIMIT, unlike the moderator-facing
+// ListPendingSubmissions (capped at 500 for display) — a cap here would defeat the point:
+// a spammer's whole backlog must be swept, however large, since a row left behind is a row
+// still on the board using a domain the moderator just decided to block. This is safe
+// because the query only ever runs on this deliberate, infrequent moderator action (never
+// on a hot path) and is index-scanned via the partial `status = 'pending'` index rather
+// than a full table scan.
 func (r *QueriesRepository) RejectAndBlockHost(ctx context.Context, id int64, host string, reviewerID int64, reason string) (Submission, error) {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
@@ -191,8 +197,14 @@ func (r *QueriesRepository) RejectAndBlockHost(ctx context.Context, id int64, ho
 		}
 	}
 	if target == nil {
-		// id was not among the candidates rejected — it was no longer pending by the time
-		// this ran (a concurrent decision), the same race MarkRejected guards against.
+		// id was not among the rows rejected — it was no longer pending by the time this
+		// ran (a concurrent decision), the same race MarkRejected guards against. The
+		// deferred Rollback discards the WHOLE transaction on this path, not just id's own
+		// status: the blocklist insert and every sibling's bulk reject are undone too, even
+		// though nothing was wrong with them. The caller cannot retry this same action
+		// (id is now permanently non-pending, so Service.Reject's own pending check fails
+		// before ever reaching here) — a moderator hitting this window has to re-target a
+		// different still-pending sibling to get the block+bulk-reject to go through.
 		return Submission{}, ErrAlreadyDecided
 	}
 

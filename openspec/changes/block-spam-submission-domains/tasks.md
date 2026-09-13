@@ -99,3 +99,48 @@
       `eslint` on the UI change (5.3). Flagging per the repo's UI-testing convention: this
       was not clicked through in an actual browser, so treat the visual confirm-dialog
       wording/flow as unverified until someone does.
+
+## 7. Review fixes (requesting-code-review pass)
+
+An independent review of the full diff (see the skill's report) found no Critical issues,
+two Important issues, and three Minor suggestions. All are addressed:
+
+- [x] 7.1 **Important**: the comment on `RejectAndBlockHost` and its reasoning claimed the
+      candidate set was "bounded by the same queue depth `ListPendingSubmissions` already
+      caps at 500" — false: that `LIMIT 500` is on the moderator-facing display query only,
+      `ListPendingSubmissionURLs` carries no limit and fetches every pending row (correctly
+      — capping it would leave spam siblings behind). Corrected the comment in
+      `internal/ingest/submission/repository.go` to state the real reasoning: no hard
+      bound, safe because the query only runs on this infrequent moderator action and is
+      index-scanned via the partial `status = 'pending'` index.
+- [x] 7.2 **Important**: the `target == nil` race branch (id decided concurrently between
+      `Service.Reject`'s `Get()` and this transaction) had no test, and its consequence —
+      the deferred rollback discards the blocklist insert AND every sibling's bulk reject,
+      not just the target's own status — was undocumented. Added
+      `internal/ingest/submission/repository_integration_test.go`
+      (`TestRejectAndBlockHost_TargetAlreadyDecided_RollsBackWholeTransaction`), which
+      seeds an already-`approved` target plus a genuine pending sibling and asserts the
+      whole transaction rolls back (sibling still pending, no blocklist row) — deterministic
+      via direct repository-level seeding rather than a real goroutine race, since
+      `RejectAndBlockHost`'s candidate query already excludes non-pending rows regardless of
+      *why* they became non-pending. Expanded the code comment on the `target == nil`
+      branch to spell out the consequence and the moderator's actual retry path.
+- [x] 7.3 **Minor**: added `TestCreate_NeverConsultsAnySubmissionDomainBlocklist` to
+      `internal/ingest/moderation/moderation_test.go` — a regression guard so a future
+      change sharing validation between the submit and moderator-create paths fails loudly
+      here instead of silently blocking a moderator.
+- [x] 7.4 **Minor**: added `internal/ingest/submission/submission_internal_test.go`
+      (white-box, `package submission`) unit-testing `normalizeHost` and `hostOf` directly,
+      including `hostOf` on a genuinely unparseable URL (`http://[::1`) — makes the
+      "unreachable in practice" claim in the code comment self-verifying.
+- Not done: the third Minor suggestion (documenting the inherent, non-transactional race
+  between `Submit`'s `IsHostBlocked` check and a concurrent `BlockHost` insert) — accepted
+  as a known, self-healing trade-off per the reviewer's own framing; no spec requirement
+  covers it and it doesn't warrant a code change.
+
+All fixes verified: `gofmt -l .` clean, `CGO_ENABLED=0 go vet ./...` and `go vet
+-tags=integration ./...` clean, unit tests for `internal/ingest/submission`,
+`internal/ingest/moderation`, and `internal/api/handler` green, and the new/updated
+integration tests (`TestRejectAndBlockHost_TargetAlreadyDecided_RollsBackWholeTransaction`,
+`TestSubmissionDomainBlocklistEndToEnd`) green against real Postgres via
+Docker/testcontainers.
