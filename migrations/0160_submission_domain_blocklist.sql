@@ -1,0 +1,27 @@
+-- Hosts refused at the public job-submission form (POST /api/v1/submissions).
+--
+-- A moderator populates this by rejecting a submission with block_domain=true (see
+-- internal/ingest/submission.Service.Reject); it is never written by the crawl pipeline or
+-- by a moderator's own hand-authored vacancy create, which is a trusted caller and never
+-- consults this table.
+--
+-- This is a new, empty table, so the unique index is a plain CREATE UNIQUE INDEX: there is
+-- nothing to scan and no lock worth naming.
+CREATE TABLE IF NOT EXISTS submission_domain_blocklist (
+    id         bigserial PRIMARY KEY,
+    host       text NOT NULL,
+    blocked_by bigint NOT NULL REFERENCES users(id),
+    reason     text NOT NULL DEFAULT '',
+    created_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS submission_domain_blocklist_host_key
+    ON submission_domain_blocklist (host);
+
+COMMENT ON TABLE submission_domain_blocklist IS
+    'Hosts refused at the public submission form. Checked only in submission.Service.Submit; '
+    'never applied to a moderator-authored vacancy create.';
+
+COMMENT ON COLUMN submission_domain_blocklist.host IS
+    'Lowercased, with one leading "www." stripped (submission.normalizeHost) — matched '
+    'exactly against a submitted URL''s normalized host, no wildcard/suffix matching.';

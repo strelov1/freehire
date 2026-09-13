@@ -82,17 +82,36 @@
     }
   }
 
+  // Best-effort host extraction for the block-domain confirm prompt; an unparseable URL
+  // (should not happen, Validate already required an absolute http(s) URL) just skips the
+  // offer to block rather than throwing.
+  function hostOf(url: string): string | null {
+    try {
+      return new URL(url).host;
+    } catch {
+      return null;
+    }
+  }
+
   async function reject(s: Submission) {
     if (acting !== null) return;
     const reason = window.prompt(`Reject "${s.title}"? Optional reason:`, '');
     // A null return means the moderator cancelled the prompt; an empty string is a
     // reasonless rejection, which is allowed.
     if (reason === null) return;
+    const host = hostOf(s.url);
+    const blockDomain = host !== null && window.confirm(`Also block "${host}" and reject its other pending submissions?`);
     acting = s.id;
     actionError = null;
     try {
-      await api.rejectSubmission(s.id, reason);
-      drop(s.id);
+      await api.rejectSubmission(s.id, reason, blockDomain);
+      if (blockDomain) {
+        // block_domain may have rejected other pending rows too (on the same host); a
+        // full re-fetch reflects that instead of only dropping the one id.
+        await queueData.run(() => api.listPendingSubmissions());
+      } else {
+        drop(s.id);
+      }
     } catch {
       actionError = `Could not reject "${s.title}". It may have already been decided.`;
     } finally {

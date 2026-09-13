@@ -258,6 +258,10 @@ type Querier interface {
 	// not rewritten — and the affected set is bounded to two boards, so unlike the
 	// multi-million-row backfills this needs no chunking.
 	BackfillProfessionITBoardTech(ctx context.Context, boardPatterns []string) (int64, error)
+	// Add a host to the blocklist, attributed to the blocking moderator. ON CONFLICT DO NOTHING
+	// makes blocking an already-blocked host a no-op rather than an error (submission.Service.Reject
+	// calls this every time block_domain is set, whether or not the host is new).
+	BlockHost(ctx context.Context, arg BlockHostParams) error
 	// Find the ashby board already carrying a job with this Ashby job id — for company careers
 	// pages that embed Ashby via the ashby_jid widget param (the board slug is JS-rendered, absent
 	// from the URL/markup). external_id is "<board>:<uuid>"; served by the
@@ -2799,6 +2803,8 @@ type Querier interface {
 	// carries nine other columns a gate has no use for — and a gate that reads a whole user
 	// row invites somebody to branch on a second field from it later.
 	IsBetaTester(ctx context.Context, id int64) (bool, error)
+	// Whether a normalized host (see submission.normalizeHost) is on the submission blocklist.
+	IsHostBlocked(ctx context.Context, host string) (bool, error)
 	// Cursor read: has this rotated file (by content signature) been applied? The
 	// signature is stable across rename and gzip, so a re-run recognizes the same file.
 	IsViewLogFileProcessed(ctx context.Context, signature int64) (bool, error)
@@ -3735,6 +3741,11 @@ type Querier interface {
 	// Capped at 500 as a runaway-growth guard — far above any plausible backlog; a queue
 	// that deep needs bulk triage, not a longer page.
 	ListPendingReports(ctx context.Context) ([]ListPendingReportsRow, error)
+	// id+url of every pending submission, used only to find which OTHER pending rows share the
+	// host being blocked (see RejectAndBlockHost in the submission package): host matching needs
+	// Go's net/url normalization (see submission.normalizeHost), so this fetches the candidates
+	// and the caller filters in Go rather than duplicating that normalization in SQL.
+	ListPendingSubmissionURLs(ctx context.Context) ([]ListPendingSubmissionURLsRow, error)
 	// The moderator review queue: pending submissions, newest first, with the submitter's
 	// email so the moderator can judge provenance. Capped at 500 as a runaway-growth
 	// guard — far above any plausible backlog; a queue that deep needs bulk triage,
@@ -4272,6 +4283,10 @@ type Querier interface {
 	// Mark a pending submission rejected with an optional reason, recording the deciding
 	// moderator. Scoped to status='pending' (see MarkSubmissionApproved). No job is created.
 	MarkSubmissionRejected(ctx context.Context, arg MarkSubmissionRejectedParams) (JobSubmission, error)
+	// Bulk-reject every given id still pending, recording the same moderator and reason on
+	// each — the sibling half of RejectAndBlockHost. Scoped to status='pending' like the
+	// single-row Mark* queries, so a row already decided by the time this runs is left alone.
+	MarkSubmissionsRejectedByIDs(ctx context.Context, arg MarkSubmissionsRejectedByIDsParams) ([]JobSubmission, error)
 	// Completion: the post was processed (jobs written, or no vacancy found). Run in
 	// the same transaction as the extracted jobs' UpsertJob calls.
 	MarkTelegramPostExtracted(ctx context.Context, arg MarkTelegramPostExtractedParams) error
