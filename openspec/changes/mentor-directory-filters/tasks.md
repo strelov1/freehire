@@ -132,5 +132,24 @@
       network errors on the mentor/mentorship endpoints throughout. (Needed manually
       marking the test account's `onboarding_completed_at` via SQL first — the SPA
       redirects an unfinished-onboarding account away from every other route.)
-- [ ] 7.6 `/code-review` pass on the full diff; fix Critical + Important findings with a
-      regression test each.
+- [x] 7.6 `/code-review` pass on the full diff. Found the branch was stale against
+      `origin/main` by two merged PRs (#2766, #2767) — rebased, which removed the
+      OAuth-callback-dedup files from this change's diff entirely (they had shown up only
+      as a stale-base artifact). Fixed both Important findings with regression tests:
+      `seniorityLabel` in `mentorship.ts` now reuses `labels.ts`'s `titleCase` instead of a
+      second hand-rolled fallback (matching `insights.ts`'s own `seniorityLabel`); the
+      directory's seniority filter options are now ordered by `SENIORITY_VALUES` (career
+      order) instead of alphabetically, with the covering test strengthened to use
+      `lead`/`middle` so an alpha-sort regression would fail it. Also fixed both Minor
+      findings: `Seniority` is now trimmed in `normaliseProfile` and validated on the
+      trimmed value (new `TestSubmitProfileTrimsSeniority`, RED before the fix), and a
+      misleading subtest name (`"by free-text query matching the name"` → `"...the
+      headline"`, since the assertion only ever matched via the headline). Confirmed no
+      competitor name/domain anywhere in the diff or OpenSpec docs. Re-ran the full suite
+      after fixes: `gofmt -l .` clean, `go vet ./...` and `go vet -tags=integration ./...`
+      clean, `go test ./...` (220 packages, all passing under `CGO_ENABLED=0` — a local
+      macOS SDK/clang linker issue blocks `CGO_ENABLED=1` builds of several `cmd/`
+      binaries, confirmed pre-existing and unrelated to this change), tagged integration
+      suites for `internal/platform/db`, `internal/api/handler` and
+      `internal/engage/mentorship` all green, layering guard green, `svelte-check` (0
+      errors), `eslint` (clean), full frontend `vitest run` (1890 passing).
