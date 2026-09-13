@@ -100,5 +100,18 @@
       and submitting an unknown company is still refused with 404. Loaded the create form
       itself in a real browser and confirmed the relabeled "Your company — optional"
       field and its hint render correctly. Zero network errors throughout.
-- [ ] 6.6 `/code-review` pass on the full diff; fix Critical + Important findings with a
-      regression test each.
+- [x] 6.6 `/code-review` pass on the full diff (rebased onto latest `origin/main` first —
+      confirmed not stale). No competitor-name leak, no stale-base risk found. Fixed both
+      Important findings: `MentorReviewView.svelte`'s two company render sites (the queue
+      row, which also shows the raw slug in parens for a company-haver, and the approval
+      preview panel) didn't use `companyLabel` and would have shown a dangling `" ()"` /
+      blank segment for a company-less pending submission — fixed both, verified live via
+      Playwright as a moderator (screenshot: "Aspiring Mentor · Independent", no dangling
+      parens, in both the row and its preview). Added a paragraph to design.md's Migration
+      Plan naming the code-rollback exposure (an old binary's non-nullable `CompanySlug`
+      Go type would fail to scan a NULL row, breaking any listing query that includes a
+      company-less mentor) that the review flagged as missing. Tightened design.md's
+      Non-Goals wording per the review's Minor note, since it had claimed the moderation
+      queue's display "need[ed] no new code" moments before the review found it did.
+      Re-verified: `svelte-check` (0 errors), `eslint` (clean), full frontend `vitest run`
+      (1905 passing).

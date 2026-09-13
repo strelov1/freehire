@@ -25,10 +25,12 @@ that a NULL column value can never satisfy. See proposal.md for the "why."
   already emits `onSelect(null)` when its query is cleared or never filled in — leaving it
   untouched and simply not picking anything IS the "no company" path once the backend
   stops requiring one.
-- No change to the moderation queue, the public profile read, or the "vacancy leads to a
-  mentor" entry point's own logic — all three already tolerate a NULL/empty company by
-  construction (see proposal.md - Impact) and need no new code, only a display fallback
-  on the directory card.
+- No change to the moderation queue's, the public profile read's, or the "vacancy leads to
+  a mentor" entry point's own LOGIC — all three already tolerate a NULL/empty company by
+  construction (see proposal.md - Impact) and need no new query or validation code. Their
+  DISPLAY does need the same `companyLabel` fallback the directory card gets — the
+  moderation queue in particular renders a profile's company twice (`MentorReviewView.svelte`)
+  and both sites are in scope alongside `MentorsView.svelte`/`MentorProfileEditor.svelte`.
 
 ## Decisions
 
@@ -86,3 +88,16 @@ Single additive migration, no code deploy ordering constraint beyond the repo's 
 is only relaxed, so old code reading the column continues to work unchanged even if the
 migration runs first. Rollback is the same `ALTER TABLE ... SET NOT NULL` in reverse, safe
 only once no company-less row exists (true until this change's frontend ships).
+
+**Code rollback, not just schema rollback, has a narrow exposure worth naming.** The
+pre-change binary's generated code declares `CompanySlug` as a plain, non-nullable Go
+`string` on `Mentor`, `GetMentorBookingRow`, and `ListBookingsBySeekerRow`. If that binary
+is rolled back (an ordinary incident-response move, independent of any schema rollback)
+after at least one company-less mentor row exists, scanning that row's NULL
+`company_slug` into a non-nullable `string` is a pgx scan error — which fails the whole
+query it occurs in, not just that one row's display. In practice this means the directory
+listing, the pending queue, or a booking list that happens to include a company-less
+mentor would 500 entirely under the old binary until either it rolls forward again or the
+schema rollback (above) also runs. Not mitigated here — the window is short and self-heals
+on the next forward roll — but worth knowing before reaching for a binary rollback as the
+first response to an unrelated incident while this change is live.
