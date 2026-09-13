@@ -5,7 +5,7 @@
   import { REGION_LABELS } from '$lib/labels';
   import { COUNTRY_REGION_MAP } from '$lib/generated/contracts';
   import type { FacetCounts } from '$lib/types';
-  import { CountryFlag } from '$lib/ui';
+  import { Chip, CountryFlag } from '$lib/ui';
   import { pillClass, pillTitle } from '../facets/pill';
   import { isAuthenticated } from '$lib/auth.svelte';
   import { profileStore } from '$lib/profile.svelte';
@@ -199,19 +199,14 @@
 </div>
 
 {#if selectedChips.length}
-  <div class="mb-4 flex flex-wrap gap-1.5">
+  <div class="mb-4 flex flex-wrap gap-1.5 border-b border-border pb-3">
     {#each selectedChips as chip (chip.key)}
-      <span
-        class={[
-          'inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium',
-          chip.exclude ? 'border-destructive/30 bg-destructive/15 text-destructive line-through' : 'border-border bg-secondary text-secondary-foreground',
-        ]}
-      >
+      <Chip variant={chip.exclude ? 'destructive' : 'brand'} class={`gap-1 py-1 pr-1.5 ${chip.exclude ? 'line-through' : ''}`}>
         {chip.label}
-        <button type="button" aria-label="Remove {chip.label}" onclick={chip.remove} class="text-muted-foreground transition-colors hover:text-foreground">
+        <button type="button" aria-label="Remove {chip.label}" onclick={chip.remove} class="opacity-70 transition-opacity hover:opacity-100">
           <X class="size-3" />
         </button>
-      </span>
+      </Chip>
     {/each}
   </div>
 {/if}
