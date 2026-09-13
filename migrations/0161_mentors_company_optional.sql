@@ -1,0 +1,11 @@
+-- company_slug was NOT NULL from the start (0145_mentorship.sql), on the assumption that
+-- every mentor is an insider at a company the catalogue already carries. Dropping the
+-- constraint lets an independent mentor, or one whose employer isn't in the catalogue,
+-- submit with no company at all — NULL means "no company," the same reading
+-- jobs.company_slug (also nullable) already gives the concept elsewhere in this schema.
+--
+-- The FK to companies(slug) is untouched: a company that IS supplied is still checked
+-- against the catalogue exactly as before, and a FK column simply imposes no constraint
+-- on a NULL value. No backfill — every existing row already has a real company.
+-- squawk-ignore ban-drop-not-null -- this IS the change: every consumer of company_slug (SQL joins, the Go domain/HTTP layers, the frontend) already treats it as a plain string tolerant of empty/absent, audited in mentor-profile-optional-company/design.md
+ALTER TABLE mentors ALTER COLUMN company_slug DROP NOT NULL;

@@ -364,9 +364,6 @@ func validateProfile(in ProfileInput, creating bool) error {
 		return err
 	}
 	if creating {
-		if strings.TrimSpace(in.CompanySlug) == "" {
-			return fmt.Errorf("%w: a company is required", ErrInvalidProfile)
-		}
 		if len(in.Slug) < 3 || len(in.Slug) > 30 || !slugPattern.MatchString(in.Slug) {
 			return fmt.Errorf("%w: %q is not a usable profile address", ErrInvalidProfile, in.Slug)
 		}

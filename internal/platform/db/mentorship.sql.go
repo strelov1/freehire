@@ -233,23 +233,23 @@ RETURNING id, user_id, company_slug, slug, display_name, headline, bio, topics, 
 `
 
 type CreateMentorProfileParams struct {
-	UserID             int64    `json:"user_id"`
-	CompanySlug        string   `json:"company_slug"`
-	Slug               string   `json:"slug"`
-	DisplayName        string   `json:"display_name"`
-	Headline           string   `json:"headline"`
-	Bio                string   `json:"bio"`
-	Topics             []string `json:"topics"`
-	Languages          []string `json:"languages"`
-	Timezone           string   `json:"timezone"`
-	SessionDurationMin int32    `json:"session_duration_min"`
-	BufferBeforeMin    int32    `json:"buffer_before_min"`
-	BufferAfterMin     int32    `json:"buffer_after_min"`
-	MinNoticeMin       int32    `json:"min_notice_min"`
-	HorizonDays        int32    `json:"horizon_days"`
-	MeetingUrl         string   `json:"meeting_url"`
-	ShowPhoto          bool     `json:"show_photo"`
-	Seniority          string   `json:"seniority"`
+	UserID             int64       `json:"user_id"`
+	CompanySlug        pgtype.Text `json:"company_slug"`
+	Slug               string      `json:"slug"`
+	DisplayName        string      `json:"display_name"`
+	Headline           string      `json:"headline"`
+	Bio                string      `json:"bio"`
+	Topics             []string    `json:"topics"`
+	Languages          []string    `json:"languages"`
+	Timezone           string      `json:"timezone"`
+	SessionDurationMin int32       `json:"session_duration_min"`
+	BufferBeforeMin    int32       `json:"buffer_before_min"`
+	BufferAfterMin     int32       `json:"buffer_after_min"`
+	MinNoticeMin       int32       `json:"min_notice_min"`
+	HorizonDays        int32       `json:"horizon_days"`
+	MeetingUrl         string      `json:"meeting_url"`
+	ShowPhoto          bool        `json:"show_photo"`
+	Seniority          string      `json:"seniority"`
 }
 
 // Submit a mentor profile. Starts pending, awaiting a human moderator — nothing else
@@ -448,7 +448,7 @@ type GetMentorBookingRow struct {
 	MentorSlug     string        `json:"mentor_slug"`
 	MentorUserID   int64         `json:"mentor_user_id"`
 	MentorTimezone string        `json:"mentor_timezone"`
-	CompanySlug    string        `json:"company_slug"`
+	CompanySlug    pgtype.Text   `json:"company_slug"`
 	Headline       string        `json:"headline"`
 	MentorEmail    string        `json:"mentor_email"`
 	SeekerEmail    string        `json:"seeker_email"`
@@ -745,7 +745,7 @@ type ListBookingsBySeekerRow struct {
 	MentorBooking MentorBooking `json:"mentor_booking"`
 	MentorSlug    string        `json:"mentor_slug"`
 	Headline      string        `json:"headline"`
-	CompanySlug   string        `json:"company_slug"`
+	CompanySlug   pgtype.Text   `json:"company_slug"`
 	CompanyName   pgtype.Text   `json:"company_name"`
 }
 

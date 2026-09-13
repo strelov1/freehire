@@ -863,15 +863,15 @@ type Mailbox struct {
 
 // One moderated, publicly named mentor profile per account, bound to one company in the catalogue. The opposite number of referral_offers, which keeps its insider anonymous: a referral is a favour asked of a stranger, a mentor is chosen.
 type Mentor struct {
-	ID          int64    `json:"id"`
-	UserID      int64    `json:"user_id"`
-	CompanySlug string   `json:"company_slug"`
-	Slug        string   `json:"slug"`
-	DisplayName string   `json:"display_name"`
-	Headline    string   `json:"headline"`
-	Bio         string   `json:"bio"`
-	Topics      []string `json:"topics"`
-	Languages   []string `json:"languages"`
+	ID          int64       `json:"id"`
+	UserID      int64       `json:"user_id"`
+	CompanySlug pgtype.Text `json:"company_slug"`
+	Slug        string      `json:"slug"`
+	DisplayName string      `json:"display_name"`
+	Headline    string      `json:"headline"`
+	Bio         string      `json:"bio"`
+	Topics      []string    `json:"topics"`
+	Languages   []string    `json:"languages"`
 	// IANA zone name. It alone gives mentor_availability's zoneless times a meaning, so a row without a resolvable one has no schedule at all rather than a UTC one.
 	Timezone           string `json:"timezone"`
 	SessionDurationMin int32  `json:"session_duration_min"`

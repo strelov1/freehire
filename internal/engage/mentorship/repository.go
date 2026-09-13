@@ -49,7 +49,7 @@ func NewQueriesRepository(q *db.Queries, pool *pgxpool.Pool) *QueriesRepository 
 func (r *QueriesRepository) CreateProfile(ctx context.Context, in ProfileInput) (Profile, error) {
 	row, err := r.q.CreateMentorProfile(ctx, db.CreateMentorProfileParams{
 		UserID:             in.UserID,
-		CompanySlug:        in.CompanySlug,
+		CompanySlug:        optionalText(in.CompanySlug),
 		Slug:               in.Slug,
 		DisplayName:        in.DisplayName,
 		Headline:           in.Headline,
@@ -286,7 +286,7 @@ func profileFromRow(row db.Mentor) Profile {
 	return Profile{
 		ID:          row.ID,
 		UserID:      row.UserID,
-		CompanySlug: row.CompanySlug,
+		CompanySlug: pgconv.TextString(row.CompanySlug),
 		Slug:        row.Slug,
 		DisplayName: row.DisplayName,
 		Headline:    row.Headline,

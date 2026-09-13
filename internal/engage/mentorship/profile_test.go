@@ -57,6 +57,25 @@ func TestSubmitProfileStartsPending(t *testing.T) {
 	}
 }
 
+// An independent mentor, or one whose employer isn't in the catalogue, has no company to
+// name at all — only a company that IS supplied still has to name a real catalogue row
+// (see TestSubmitProfileReportsWhatTheDatabaseRefuses' unknown-company case).
+func TestSubmitProfileAcceptsNoCompany(t *testing.T) {
+	repo := newFakeRepo()
+	svc := newTestService(t, repo)
+
+	in := validInput()
+	in.CompanySlug = ""
+
+	got, err := svc.SubmitProfile(context.Background(), in)
+	if err != nil {
+		t.Fatalf("SubmitProfile: %v, want no error for a company-less profile", err)
+	}
+	if got.CompanySlug != "" {
+		t.Errorf("CompanySlug = %q, want empty", got.CompanySlug)
+	}
+}
+
 // The moderation rule stated as a test, because it is the one an eager future change is
 // most likely to "improve": an approved referral offer is evidence for a human, never a
 // gate that approves anything.
@@ -88,7 +107,6 @@ func TestSubmitProfileRefusesWhatCannotYieldASchedule(t *testing.T) {
 		mutate func(*ProfileInput)
 		want   error
 	}{
-		{"no company", func(in *ProfileInput) { in.CompanySlug = "" }, ErrInvalidProfile},
 		// A profile without a name is the anonymous referral offer with extra steps, and
 		// this marketplace's whole premise is that a mentor is chosen.
 		{"no name", func(in *ProfileInput) { in.DisplayName = "" }, ErrInvalidProfile},
@@ -774,6 +792,69 @@ func TestDirectoryAppliesTheNewFilters(t *testing.T) {
 		}
 		if len(out) != 2 {
 			t.Errorf("Directory() = %d profiles, want 2", len(out))
+		}
+	})
+}
+
+// A company-less mentor is a full directory member — unfiltered, they appear like any
+// other — but "unset never matches a filter" holds for company exactly as it already
+// does for seniority: no company named means no company filter can ever select them.
+func TestDirectoryIncludesACompanyLessMentorButNeverMatchesACompanyFilter(t *testing.T) {
+	repo := newFakeRepo()
+	svc := newTestService(t, repo)
+
+	submitApproved := func(mutate func(*ProfileInput)) Profile {
+		in := validInput()
+		in.Slug = ""
+		mutate(&in)
+		p, err := svc.SubmitProfile(context.Background(), in)
+		if err != nil {
+			t.Fatalf("SubmitProfile: %v", err)
+		}
+		p, err = svc.Decide(context.Background(), p.ID, 99, StatusApproved)
+		if err != nil {
+			t.Fatalf("Decide: %v", err)
+		}
+		return p
+	}
+
+	independent := submitApproved(func(in *ProfileInput) {
+		in.DisplayName = "Robin Freelance"
+		in.UserID = 103
+		in.CompanySlug = ""
+	})
+	atCompany := submitApproved(func(in *ProfileInput) {
+		in.DisplayName = "Casey Employed"
+		in.UserID = 104
+		in.CompanySlug = "acme"
+	})
+
+	t.Run("unfiltered includes the company-less mentor", func(t *testing.T) {
+		out, err := svc.Directory(context.Background(), DirectoryFilter{})
+		if err != nil {
+			t.Fatalf("Directory: %v", err)
+		}
+		var sawIndependent bool
+		for _, p := range out {
+			if p.ID == independent.ID {
+				sawIndependent = true
+				if p.CompanySlug != "" {
+					t.Errorf("independent mentor's CompanySlug = %q, want empty", p.CompanySlug)
+				}
+			}
+		}
+		if !sawIndependent || len(out) != 2 {
+			t.Errorf("Directory() = %+v, want both mentors including the company-less one", out)
+		}
+	})
+
+	t.Run("filtering by company excludes the company-less mentor", func(t *testing.T) {
+		out, err := svc.Directory(context.Background(), DirectoryFilter{CompanySlug: "acme"})
+		if err != nil {
+			t.Fatalf("Directory: %v", err)
+		}
+		if len(out) != 1 || out[0].ID != atCompany.ID {
+			t.Errorf("Directory(company=acme) = %+v, want just %q", out, atCompany.Slug)
 		}
 	})
 }

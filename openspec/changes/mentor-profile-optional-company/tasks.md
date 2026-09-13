@@ -1,30 +1,37 @@
 ## 1. Database
 
-- [ ] 1.1 Add migration `migrations/0161_mentors_company_optional.sql`:
+- [x] 1.1 Add migration `migrations/0161_mentors_company_optional.sql`:
       `ALTER TABLE mentors ALTER COLUMN company_slug DROP NOT NULL` — additive, no
-      backfill (see design.md's Migration Plan). Run `node scripts/check-migrations.mjs`.
-- [ ] 1.2 Run `make sqlc` to regenerate `CompanySlug` as `pgtype.Text` on every affected
-      generated struct (`Mentor`, `CreateMentorProfileParams`). Confirm no query text
-      changes are needed (every read already `LEFT JOIN`s `companies`; the `company`
-      filter is already `sqlc.narg`-based and NULL-safe) — this task is regen-only.
+      backfill (see design.md's Migration Plan). `node scripts/check-migrations.mjs`: 0
+      issues (needed a `squawk-ignore ban-drop-not-null` — deliberate, audited in design.md).
+- [x] 1.2 Ran `make sqlc`: regenerated `CompanySlug` as `pgtype.Text` on `Mentor`,
+      `CreateMentorProfileParams`, and two unrelated-but-affected booking read rows
+      (`GetMentorBookingRow`, `ListBookingsBySeekerRow` — neither has a Go call site that
+      reads `.CompanySlug`, confirmed via grep, so no follow-up needed there). No query
+      text changes, as expected.
 
 ## 2. Domain: `internal/engage/mentorship`
 
-- [ ] 2.1 Remove the "a company is required" check from `validateProfile`'s `creating`
+- [x] 2.1 Removed the "a company is required" check from `validateProfile`'s `creating`
       branch (`profile.go`) — a submission naming an unknown company is still refused via
       the existing FK-violation → `ErrCompanyNotFound` mapping; only the "must supply
       something" gate goes away.
-- [ ] 2.2 Update `repository.go`'s `CreateProfile` to pass `CompanySlug` through
+- [x] 2.2 Updated `repository.go`'s `CreateProfile` to pass `CompanySlug` through
       `optionalText` (the same helper `DirectoryFilter.CompanySlug` already uses) instead
       of the raw string, matching the new `pgtype.Text` param type.
-- [ ] 2.3 Update `repository.go`'s `profileFromRow` to read `CompanySlug` through
+- [x] 2.3 Updated `repository.go`'s `profileFromRow` to read `CompanySlug` through
       `pgconv.TextString`, matching how `CompanyName` is already read on the same line.
-- [ ] 2.4 Update `fakeRepo` (`fake_repo_test.go`) if it does any company-slug-specific
-      handling that assumed a non-empty value (check `CreateProfile`, `ListPublishedProfiles`
-      filter logic).
-- [ ] 2.5 Unit tests: `TestSubmitProfileAcceptsNoCompany` (a profile submitted with an
-      empty `CompanySlug` succeeds and is created with no company); confirm the existing
-      "unknown company" refusal test still passes unchanged; a fake-repo `Directory` test
+- [x] 2.4 Checked `fakeRepo` (`fake_repo_test.go`): no change needed. Its
+      `CreateProfile`/`profileFromRow`-equivalent and the directory filter predicate
+      (`f.CompanySlug != "" && p.CompanySlug != f.CompanySlug`) already operate on the
+      plain-string domain type and already treat an empty `CompanySlug` as "never matches
+      a filter" by construction — the same pattern seniority already established.
+- [x] 2.5 Unit tests: `TestSubmitProfileAcceptsNoCompany` (RED before 2.1-2.3, GREEN
+      after — a profile submitted with an empty `CompanySlug` succeeds and is created with
+      no company); removed the now-obsolete "no company" case from
+      `TestSubmitProfileRefusesWhatCannotYieldASchedule`'s refusal table; confirmed the
+      existing "unknown company" refusal test (`TestSubmitProfileReportsWhatTheDatabaseRefuses`)
+      still passes unchanged; added `TestDirectoryIncludesACompanyLessMentorButNeverMatchesACompanyFilter`
       confirming a company-less mentor appears unfiltered and never matches a company
       filter (mirrors the existing seniority/no-reviews filter tests).
 
