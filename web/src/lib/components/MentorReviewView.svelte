@@ -1,5 +1,6 @@
 <script lang="ts">
   import { api } from '$lib/api';
+  import { companyLabel } from '$lib/mentorship';
   import { errorMessage, formatDate } from '$lib/utils';
   import { AsyncData } from '$lib/asyncData.svelte';
   import { Badge, Button, Card } from '$lib/ui';
@@ -71,7 +72,9 @@
               <div>
                 <p class="font-medium">{profile.name}</p>
                 <p class="text-muted-foreground text-sm">
-                  {profile.headline} · {profile.company_name} ({profile.company_slug})
+                  {profile.headline} · {companyLabel(profile.company_name, profile.company_slug)}{profile.company_slug
+                    ? ` (${profile.company_slug})`
+                    : ''}
                 </p>
               </div>
               <p class="text-muted-foreground shrink-0 text-xs">
@@ -125,7 +128,7 @@
                   <div>
                     <p class="font-medium">{profile.name}</p>
                     <p class="text-muted-foreground text-sm">
-                      {profile.headline} · {profile.company_name}
+                      {profile.headline} · {companyLabel(profile.company_name, profile.company_slug)}
                     </p>
                   </div>
                   <div class="flex flex-wrap gap-1">

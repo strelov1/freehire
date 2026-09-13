@@ -39,6 +39,14 @@ export interface JobFilters {
    *  the INTENT. It has to be the negative of the positive rather than an equality,
    *  because nothing in the index is ever written false. */
   hideAIInterview: boolean;
+  /** Keep only postings whose ATS provider is one auto-apply can currently attempt
+   *  to fill and submit (Greenhouse, Lever, Ashby, Workable) — a best-effort
+   *  provider-eligibility signal, never a guarantee a real attempt would succeed.
+   *
+   *  Serialized as `auto_apply_available=true`, true-or-absent like
+   *  `hideAIInterview`'s underlying facet: nothing in the index is ever written
+   *  false, so turning this off must omit the param rather than write `=false`. */
+  autoApplyAvailable: boolean;
   /** What to do about postings that state a government security-clearance requirement
    *  (UK SC/DV, US Secret/TS-SCI, AU NV1). Three states rather than a boolean because
    *  the facet answers two different people: someone who cannot hold a clearance wants
@@ -213,6 +221,7 @@ export function emptyFilters(): JobFilters {
     facets: emptyFacets(),
     visa: false,
     hideAIInterview: false,
+    autoApplyAvailable: false,
     clearance: 'any',
     salaryMin: null,
     postedWithinDays: null,
@@ -238,6 +247,7 @@ export function filtersToParams(f: JobFilters): URLSearchParams {
   }
   if (f.visa) p.set('visa_sponsorship', 'true');
   if (f.hideAIInterview) p.set('ai_interview', 'false');
+  if (f.autoApplyAvailable) p.set('auto_apply_available', 'true');
   if (f.clearance === 'hide') p.set('requires_clearance', 'false');
   if (f.clearance === 'only') p.set('requires_clearance', 'true');
   if (f.salaryMin != null) p.set('salary_min', String(f.salaryMin));
@@ -302,6 +312,7 @@ export function filtersFromParams(p: URLSearchParams): JobFilters {
   }
   f.visa = p.get('visa_sponsorship') === 'true';
   f.hideAIInterview = p.get('ai_interview') === 'false';
+  f.autoApplyAvailable = p.get('auto_apply_available') === 'true';
   const clearance = p.get('requires_clearance');
   f.clearance = clearance === 'false' ? 'hide' : clearance === 'true' ? 'only' : 'any';
   const salary = Number(p.get('salary_min'));
@@ -337,6 +348,7 @@ export function activeFilterCount(f: JobFilters): number {
   }
   if (f.visa) n += 1;
   if (f.hideAIInterview) n += 1;
+  if (f.autoApplyAvailable) n += 1;
   if (f.clearance !== 'any') n += 1;
   if (f.salaryMin != null) n += 1;
   if (f.postedWithinDays != null) n += 1;

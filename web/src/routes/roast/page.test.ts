@@ -5,11 +5,11 @@ import { describe, expect, it } from 'vitest';
 import { ApiError, createApi, RESUME_MAX_MB } from '$lib/api';
 import { marketLine, roleDisplay } from './roastView';
 
-// `web/` has no component-mount test infrastructure at all: vitest.config.ts runs in
-// plain Node with no Svelte plugin and no DOM (see paginated.svelte.test.ts's own note,
-// and jobActionStrip.test.ts, which audits JobView.svelte's source text for the same
-// reason). This file follows both of those, not the brief's illustrative
-// `render(Page, ...)` snippet, which this repo's harness cannot run:
+// This file predates `web/`'s `components` vitest project (real `.svelte` rendering via
+// `@testing-library/svelte` + jsdom, `*.spec.ts` — added for the profile-alert-sync fix)
+// and follows the same three-way split jobActionStrip.test.ts and paginated.svelte.test.ts
+// use instead of the brief's illustrative `render(Page, ...)` snippet — migrating this
+// file to a real mount is a reasonable follow-up, not done here:
 //
 //  1. The client wiring (`api.roastCv`) is real logic and gets a real unit test against
 //     `createApi`, the same way api.test.ts covers every other endpoint.

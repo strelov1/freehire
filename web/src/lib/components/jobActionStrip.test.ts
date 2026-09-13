@@ -9,18 +9,15 @@ import { describe, expect, it } from 'vitest';
 // and because TabStrip handles its own overflow correctly (it scrolls and fades rather
 // than wrapping) nothing threw, nothing logged, and no test failed.
 //
-// This is a SOURCE-TEXT AUDIT, and deliberately not a mounted-component test. Two reasons,
-// and the second is the load-bearing one:
-//
-//  1. `web/` has no component-test infrastructure at all — vitest.config.ts runs in plain
-//     Node with no Svelte plugin and no DOM (see its own comment, and paginated.svelte.ts's
-//     test, which cannot instantiate a `$state` class for the same reason).
-//  2. Even with jsdom it would not catch this. "The labels stay readable" is a property of
-//     LAYOUT — flexbox, the container's width, real font metrics — and jsdom has no layout
-//     engine; `getBoundingClientRect` returns zeros. A mounted test would assert the
-//     elements exist, which they always did. Catching the real thing needs a browser with
-//     real rendering, which this repo does not run against a PR (pr-smoke is k6 over HTTP;
-//     lighthouse-watchdog is Lighthouse against production).
+// This is a SOURCE-TEXT AUDIT, and deliberately not a mounted-component test, even though
+// `web/` now has one: vitest.config.ts's `components` project renders real `.svelte` files
+// via `@testing-library/svelte` + jsdom (`*.spec.ts`, added for the profile-alert-sync fix).
+// That project would not catch THIS bug regardless: "the labels stay readable" is a property
+// of LAYOUT — flexbox, the container's width, real font metrics — and jsdom has no layout
+// engine; `getBoundingClientRect` returns zeros. A mounted test would assert the elements
+// exist, which they always did. Catching the real thing needs a browser with real rendering,
+// which this repo does not run against a PR (pr-smoke is k6 over HTTP; lighthouse-watchdog is
+// Lighthouse against production).
 //
 // So this guards the CAUSE rather than the symptom: which controls compose the strip. That
 // is a genuine proxy and worth naming as one — it will not notice a fifth quiet button, or

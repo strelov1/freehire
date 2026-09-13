@@ -377,3 +377,26 @@ func TestCreate_DropsUnknownEmploymentTypeAndSeniority(t *testing.T) {
 		t.Errorf("Seniority = %q, want the unknown value dropped", got.Seniority)
 	}
 }
+
+// TestCreate_NeverConsultsAnySubmissionDomainBlocklist is a regression guard for the
+// submission-domain blocklist (internal/ingest/submission): that check exists ONLY on the
+// public submit path and must never reach a moderator's own hand-authored vacancy — a
+// moderator is already the trusted party the blocklist exists to protect the queue from.
+// Today this holds structurally (Service and CreateInput.Validate have no blocklist
+// dependency at all), so this test's real job is to fail loudly if that ever changes
+// without an explicit decision: fakeRepo offers no way to report "blocked", so Create
+// succeeding here proves nothing was consulted, not merely that nothing said no.
+func TestCreate_NeverConsultsAnySubmissionDomainBlocklist(t *testing.T) {
+	repo := &fakeRepo{}
+	_, _, err := moderation.New(repo).Create(context.Background(), 7, moderation.CreateInput{
+		URL:     "https://gridnaut.site/jobs/moderator-added/",
+		Title:   "Developer",
+		Company: "Gridnaut Recruiting",
+	})
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	if !repo.createCalled {
+		t.Fatal("repo.Create was not called for a moderator-authored URL on a would-be-blocked host")
+	}
+}

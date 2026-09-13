@@ -2,8 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { accountNav, isSectionActive, visibleAccountNav } from './accountNav';
 
 describe('accountNav config', () => {
-  it('lists the twenty account sections', () => {
-    expect(accountNav).toHaveLength(20);
+  it('lists the nineteen account sections', () => {
+    expect(accountNav).toHaveLength(19);
   });
 
   // A section whose page exists and whose nav entry does not is reachable by URL and by
@@ -50,15 +50,17 @@ describe('accountNav config', () => {
 });
 
 describe('visibleAccountNav', () => {
-  // The Talent Network is beta-only while it settles. This is an affordance, not the
-  // gate — the server refuses a JOIN from outside the group — but an entry left visible
-  // would offer a page whose only button answers 403.
-  it('hides the Talent Network outside the beta group', () => {
-    const forEveryone = visibleAccountNav(false, false).map((i) => i.href);
-    const forBeta = visibleAccountNav(false, true).map((i) => i.href);
-
-    expect(forEveryone).not.toContain('/my/talent-network');
-    expect(forBeta).toContain('/my/talent-network');
+  // The Talent Network's only entry point is the profile page's invitation card now —
+  // the nav carries no section for it at all, for anybody, beta or not.
+  it('carries no Talent Network entry, for anyone', () => {
+    for (const [mod, beta] of [
+      [false, false],
+      [true, false],
+      [false, true],
+      [true, true],
+    ] as const) {
+      expect(visibleAccountNav(mod, beta).map((i) => i.href)).not.toContain('/my/talent-network');
+    }
   });
 
   it('shows the Agent, Inbox and Tailor sections to a plain user', () => {

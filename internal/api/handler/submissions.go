@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/strelov1/freehire/internal/ingest/linkimport"
 	"github.com/strelov1/freehire/internal/ingest/moderation"
@@ -22,11 +23,11 @@ type submissionHandlers struct {
 	importer   *linkimport.Importer
 }
 
-func newSubmissionHandlers(queries *db.Queries, moderation *moderation.Service, importer *linkimport.Importer) *submissionHandlers {
+func newSubmissionHandlers(queries *db.Queries, pool *pgxpool.Pool, moderation *moderation.Service, importer *linkimport.Importer) *submissionHandlers {
 	// Submission approval mints through the same moderation service, so derivation,
 	// dedup, and the enrichment enqueue are reused rather than duplicated.
 	return &submissionHandlers{
-		submission: submission.New(submission.NewQueriesRepository(queries), moderation),
+		submission: submission.New(submission.NewQueriesRepository(queries, pool), moderation),
 		importer:   importer,
 	}
 }
@@ -169,6 +170,8 @@ func submissionError(err error) error {
 		return fiber.NewError(fiber.StatusConflict, "a pending submission for this URL already exists")
 	case errors.Is(err, submission.ErrAlreadyDecided):
 		return fiber.NewError(fiber.StatusConflict, "submission already decided")
+	case errors.Is(err, submission.ErrBlockedDomain):
+		return fiber.NewError(fiber.StatusForbidden, "this domain is not accepted")
 	case errors.Is(err, moderation.ErrInvalid):
 		return fiber.NewError(fiber.StatusBadRequest, err.Error())
 	default:
@@ -304,14 +307,18 @@ func (h *submissionHandlers) ApproveSubmission(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"data": toSubmissionResponse(sub)})
 }
 
-// rejectRequest is the optional rejection reason body.
+// rejectRequest is the optional rejection reason body. BlockDomain also adds the
+// submission URL's host to the submission-domain blocklist and rejects every other
+// pending submission on that host, in the same action (see submission.Service.Reject).
 type rejectRequest struct {
-	Reason string `json:"reason"`
+	Reason      string `json:"reason"`
+	BlockDomain bool   `json:"block_domain"`
 }
 
 // RejectSubmission marks a pending submission rejected with an optional reason. Role-gated.
 // The reason body is optional, so a parse failure (e.g. empty body) leaves the reason blank
-// rather than rejecting the request.
+// rather than rejecting the request. With block_domain set, the response is only the
+// target submission — the frontend re-reads the queue to see any bulk-rejected siblings.
 func (h *submissionHandlers) RejectSubmission(c *fiber.Ctx) error {
 	reviewerID, err := requireUserID(c)
 	if err != nil {
@@ -325,7 +332,7 @@ func (h *submissionHandlers) RejectSubmission(c *fiber.Ctx) error {
 	var in rejectRequest
 	_ = c.BodyParser(&in)
 
-	sub, err := h.submission.Reject(c.Context(), reviewerID, id, in.Reason)
+	sub, err := h.submission.Reject(c.Context(), reviewerID, id, in.Reason, in.BlockDomain)
 	if err != nil {
 		return submissionError(err)
 	}

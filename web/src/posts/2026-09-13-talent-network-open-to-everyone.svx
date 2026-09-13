@@ -1,0 +1,19 @@
+---
+title: Talent Network is open to everyone now
+date: 2026-09-13
+summary: Joining the anonymous candidate catalogue no longer needs a beta invite, and the list is now open to search engines.
+type: changelog
+tags:
+  - talent-network
+draft: false
+---
+
+[Talent Network](/talent) — the public catalogue where candidates appear anonymously by
+skills and experience, never by name or employer — was gated to a beta group while it
+found its feet. That gate is gone: any signed-in candidate can join from their
+[profile page](/my/profile), no invite needed.
+
+The catalogue list is also indexable by search engines now, so it can actually be found.
+
+Nothing changes for anyone already in: your card, your handle, and what it does and
+doesn't show stay exactly the same.

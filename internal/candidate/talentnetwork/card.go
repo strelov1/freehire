@@ -5,7 +5,9 @@ import (
 
 	"github.com/strelov1/freehire/internal/candidate/perioddate"
 	"github.com/strelov1/freehire/internal/candidate/resumeextract"
+	"github.com/strelov1/freehire/internal/dict/certification"
 	"github.com/strelov1/freehire/internal/dict/classify"
+	"github.com/strelov1/freehire/internal/dict/edulevel"
 	"github.com/strelov1/freehire/internal/dict/skilltag"
 )
 
@@ -28,12 +30,13 @@ import (
 // values fails the other way: something we should have shown is missing, and somebody
 // notices and adds it.
 //
-// What that costs, stated plainly: languages, certifications and education carry no
-// dictionary this block can reach, so they are absent from v1. vocab.EducationLevelValues
-// exists but the text→level resolver lives in internal/job/jobfacts — block `job`,
-// layer 5 — which `candidate` may not import. Serving them means first moving that
-// dictionary down into `dict`, which is a change of its own; the fuller picture is what
-// the approved-recruiter tier will carry.
+// What that costs, stated plainly: languages carry no dictionary this block can reach,
+// so they are absent. Education and certifications now DO have one — internal/dict/edulevel
+// (a candidate's degree text resolved to vocab.EducationLevelValues) and
+// internal/dict/certification (a curated alias table) — so an education entry's LEVEL and
+// YEAR and a resolved certification's canonical name are carried; the institution name,
+// field of study, and any certification issuer or date are not, for the same reason an
+// employer name is not: free text a dictionary cannot vouch for.
 
 // CandidateCard is one candidate as the public catalogue shows them.
 type CandidateCard struct {
@@ -55,6 +58,24 @@ type CandidateCard struct {
 	// location, no prose. What remains is the shape of a career, which is what a
 	// recruiter reads a history for anyway.
 	Roles []CandidateRole `json:"roles"`
+
+	// Education carries only what internal/dict/edulevel resolves from each entry's
+	// degree text, plus its year — never the institution or field of study. An entry
+	// whose degree resolves to nothing is dropped rather than kept under an empty
+	// label: a work-history gap reads worse than absence, but a candidate's set of
+	// degrees carries no such expectation of completeness.
+	Education []EducationEntry `json:"education,omitempty"`
+
+	// Certifications are internal/dict/certification canonicals. A name the dictionary
+	// does not resolve emits nothing, the same whitelisting Skills gets from skilltag.
+	Certifications []string `json:"certifications,omitempty"`
+}
+
+// EducationEntry is one education item, reduced to what a dictionary can vouch for:
+// the degree's level and the year, never the institution.
+type EducationEntry struct {
+	Level string                 `json:"level,omitempty"`
+	Year  *perioddate.PeriodDate `json:"year,omitempty"`
 }
 
 // CandidateRole is one position: what it was, when, and what it was built with.
@@ -78,12 +99,32 @@ type CandidateRole struct {
 func ProjectCard(s resumeextract.Structured) CandidateCard {
 	primary := classify.Parse(PrimaryTitle(s))
 	return CandidateCard{
-		Seniority:  primary.Seniority,
-		Category:   primary.Category,
-		TotalYears: s.TotalYears,
-		Skills:     canonicalSkills(s.Skills),
-		Roles:      cardRoles(s.Experience),
+		Seniority:      primary.Seniority,
+		Category:       primary.Category,
+		TotalYears:     s.TotalYears,
+		Skills:         canonicalSkills(s.Skills),
+		Roles:          cardRoles(s.Experience),
+		Education:      cardEducation(s.Education),
+		Certifications: certification.Canonicalize(s.Certifications),
 	}
+}
+
+// cardEducation resolves each entry's degree text via edulevel.ForDegree, dropping an
+// entry whose degree resolves to nothing rather than keeping it under an empty label —
+// see CandidateCard.Education's own comment for why that differs from cardRoles.
+func cardEducation(education []resumeextract.Education) []EducationEntry {
+	if len(education) == 0 {
+		return nil
+	}
+	entries := make([]EducationEntry, 0, len(education))
+	for _, e := range education {
+		level := edulevel.ForDegree(e.Degree)
+		if level == "" {
+			continue
+		}
+		entries = append(entries, EducationEntry{Level: level, Year: e.Year})
+	}
+	return entries
 }
 
 func cardRoles(experience []resumeextract.Experience) []CandidateRole {

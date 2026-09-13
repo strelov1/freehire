@@ -64,6 +64,53 @@ func TestGmailCallbackStateMismatchRedirects(t *testing.T) {
 	}
 }
 
+// The same two guards (missing session, state mismatch) hold for every one of the four
+// Google callbacks in this file, not just Gmail's — locked in here before any shared
+// refactor of their common prefix.
+func TestGoogleCallbacksGuardEveryFlow(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		path        string
+		stateCookie string
+		errorParam  string
+	}{
+		{"gmail", "/api/v1/me/gmail/callback", gmailStateCookieName, "gmail_error"},
+		{"calendar", "/api/v1/me/calendar/callback", calendarStateCookieName, "calendar_error"},
+		{"mentor calendar", "/api/v1/me/mentor-calendar/callback", mentorCalendarStateCookieName, "mentor_calendar_error"},
+		{"mentor busy sync", "/api/v1/me/mentor-busy-sync/callback", mentorBusyStateCookieName, "mentor_busy_error"},
+	} {
+		t.Run(tc.name+"/no session", func(t *testing.T) {
+			app, frontend := newGmailCallbackApp(t)
+			resp, err := app.Test(httptest.NewRequestWithContext(context.Background(), "GET", tc.path+"?state=abc&code=xyz", nil), -1)
+			if err != nil {
+				t.Fatalf("callback: %v", err)
+			}
+			defer resp.Body.Close()
+			if got, want := resp.Header.Get("Location"), frontend+"/my/integrations?"+tc.errorParam+"=auth"; got != want {
+				t.Errorf("Location = %q, want %q", got, want)
+			}
+		})
+		t.Run(tc.name+"/state mismatch", func(t *testing.T) {
+			app, frontend := newGmailCallbackApp(t)
+			iss := auth.NewIssuer(testGmailSecret, time.Hour)
+			token, err := iss.Issue(1, testTokenVersion)
+			if err != nil {
+				t.Fatalf("issue: %v", err)
+			}
+			r := httptest.NewRequestWithContext(context.Background(), "GET", tc.path+"?state=abc&code=xyz", nil)
+			r.Header.Set("Cookie", auth.CookieName+"="+token)
+			resp, err := app.Test(r, -1)
+			if err != nil {
+				t.Fatalf("callback: %v", err)
+			}
+			defer resp.Body.Close()
+			if got, want := resp.Header.Get("Location"), frontend+"/my/integrations?"+tc.errorParam+"=state"; got != want {
+				t.Errorf("Location = %q, want %q", got, want)
+			}
+		})
+	}
+}
+
 const testGmailSecret = "test-secret-that-is-long-enough-0001"
 
 // newGmailCallbackApp mounts the real route table (register), so the middleware the
@@ -105,6 +152,10 @@ func TestGoogleCallbacksReportARefusalInsteadOfClaimingSuccess(t *testing.T) {
 		{"mail returned nothing", "/api/v1/me/gmail/callback", gmailStateCookieName, "", "gmail_error=exchange"},
 		{"calendar declined", "/api/v1/me/calendar/callback", calendarStateCookieName, "error=access_denied", "calendar_error=denied"},
 		{"calendar returned nothing", "/api/v1/me/calendar/callback", calendarStateCookieName, "", "calendar_error=exchange"},
+		{"mentor calendar declined", "/api/v1/me/mentor-calendar/callback", mentorCalendarStateCookieName, "error=access_denied", "mentor_calendar_error=denied"},
+		{"mentor calendar returned nothing", "/api/v1/me/mentor-calendar/callback", mentorCalendarStateCookieName, "", "mentor_calendar_error=exchange"},
+		{"mentor busy sync declined", "/api/v1/me/mentor-busy-sync/callback", mentorBusyStateCookieName, "error=access_denied", "mentor_busy_error=denied"},
+		{"mentor busy sync returned nothing", "/api/v1/me/mentor-busy-sync/callback", mentorBusyStateCookieName, "", "mentor_busy_error=exchange"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			app, frontend := newGmailCallbackApp(t)

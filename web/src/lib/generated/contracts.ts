@@ -255,6 +255,15 @@ export interface Job {
    * nothing" must not reach a reader as "this job needs no clearance".
    */
   requires_clearance?: boolean;
+  /**
+   * AutoApplyAvailable marks a posting whose ATS provider (Source) is one
+   * internal/api/atsapply can currently attempt to fill and submit for (see
+   * AutoApplyProviders) — a best-effort, provider-level eligibility signal,
+   * never a guarantee that a real attempt would succeed. True-or-absent like
+   * RequiresClearance: omitted rather than false, because "not one of the
+   * providers we can drive" must not be read as "checked and ineligible".
+   */
+  auto_apply_available?: boolean;
   posted_at?: string;
   created_at?: string;
   updated_at?: string;
@@ -1052,6 +1061,11 @@ export interface Project {
  * Education is one education entry. Year is the same structured perioddate.PeriodDate as
  * Experience's Start/End (month is rarely stated for a degree, so it is usually
  * year-only, but the type stays the one shared shape rather than a bare int).
+ * Degree is assumed short and dedicated (a CV's own degree line, e.g. "BSc Computer
+ * Science"), never a full sentence — internal/dict/edulevel.ForDegree relies on this to
+ * safely match bare "BS"/"MS" forms that would be ambiguous in free-running prose. If
+ * this field's extraction ever changes to allow fuller sentences, revisit ForDegree's
+ * leniency alongside it.
  */
 export interface Education {
   degree?: string;
@@ -1397,6 +1411,27 @@ export interface CandidateCard {
    * recruiter reads a history for anyway.
    */
   roles: CandidateRole[];
+  /**
+   * Education carries only what internal/dict/edulevel resolves from each entry's
+   * degree text, plus its year — never the institution or field of study. An entry
+   * whose degree resolves to nothing is dropped rather than kept under an empty
+   * label: a work-history gap reads worse than absence, but a candidate's set of
+   * degrees carries no such expectation of completeness.
+   */
+  education?: EducationEntry[];
+  /**
+   * Certifications are internal/dict/certification canonicals. A name the dictionary
+   * does not resolve emits nothing, the same whitelisting Skills gets from skilltag.
+   */
+  certifications?: string[];
+}
+/**
+ * EducationEntry is one education item, reduced to what a dictionary can vouch for:
+ * the degree's level and the year, never the institution.
+ */
+export interface EducationEntry {
+  level?: string;
+  year?: { year: number; month?: number };
 }
 /**
  * CandidateRole is one position: what it was, when, and what it was built with.
@@ -1443,7 +1478,7 @@ export interface CatalogueMember {
   updated_at: string;
 }
 
-export const SOURCE_VALUES = ['telegram', 'workatastartup', 'remoteok', 'arc', '4dayweek', 'adp', 'adpmyjobs', 'adzuna', 'aijobs', 'applicantpro', 'applitrack', 'apploi', 'arbeitnow', 'arbeitsagentur', 'ashby', 'ashbygraphql', 'avature', 'bamboohr', 'bayt', 'betterteam', 'breezy', 'briefhq', 'bullhorn', 'careerplug', 'careerspage', 'catsone', 'cleverstaff', 'clinch', 'comeet', 'compleo', 'cornerstone', 'crelate', 'cryptocurrencyjobs', 'dayforce', 'deel', 'djinni', 'earcu', 'echojobs', 'edjoin', 'eightfold', 'enlizt', 'epam', 'erecruiter', 'factorial', 'freshteam', 'functionalworks', 'geekhunter', 'geekjob', 'gem', 'getmanfred', 'getmatch', 'getonbrd', 'getro', 'gr8people', 'greenhouse', 'gulftalent', 'gupy', 'gusto', 'habr_career', 'hh', 'hibob', 'himalayas', 'hireology', 'hiringthing', 'hrmdirect', 'huntflow', 'hurma', 'icims', 'infojobs', 'inhire', 'instaffo', 'ismartrecruit', 'isolvedhire', 'itechart', 'jazzhr', 'jibe', 'jobappnetwork', 'jobdanmark', 'jobicy', 'jobleads', 'jobnet', 'jobscore', 'jobspresso', 'jobstash', 'jobtech', 'jobvite', 'jobylon', 'join', 'keka', 'landingjobs', 'lever', 'likeit', 'loxo', 'luxoft', 'manatal', 'mindsight', 'mycareersfuture', 'neogov', 'nodesk', 'nofluffjobs', 'northstone', 'odoo', 'opencats', 'oracle', 'pageup', 'paycom', 'paycor', 'paylocity', 'peopleforce', 'personio', 'phenom', 'pinpoint', 'powertofly', 'profession', 'quickin', 'radancy', 'rapyd', 'recruitee', 'recruitingsolutions', 'reed', 'remotedotcom', 'remotive', 'remotli', 'rippling', 'schoolspring', 'seek', 'senior', 'smartrecruiters', 'softgarden', 'solides', 'solidjobs', 'spark', 'speedrun', 'startupandvc', 'successfactors', 'talentadore', 'talenthr', 'talentlyft', 'taleo', 'teamex', 'teamtailor', 'tecla', 'thehub', 'themuse', 'topco', 'traffit', 'trakstar', 'trudvsem', 'tyomarkkinatori', 'ukg', 'ukgready', 'usajobs', 'vagas', 'vention', 'vouch', 'wantapply', 'wellfound', 'werecruit', 'weworkremotely', 'whatjobs', 'whatjobs-ae', 'whatjobs-ar', 'whatjobs-at', 'whatjobs-au', 'whatjobs-be', 'whatjobs-bh', 'whatjobs-br', 'whatjobs-ca', 'whatjobs-ch', 'whatjobs-cl', 'whatjobs-co', 'whatjobs-de', 'whatjobs-dk', 'whatjobs-eg', 'whatjobs-es', 'whatjobs-fi', 'whatjobs-fr', 'whatjobs-gr', 'whatjobs-hk', 'whatjobs-hu', 'whatjobs-id', 'whatjobs-ie', 'whatjobs-in', 'whatjobs-it', 'whatjobs-ke', 'whatjobs-kw', 'whatjobs-lu', 'whatjobs-mx', 'whatjobs-my', 'whatjobs-nl', 'whatjobs-no', 'whatjobs-nz', 'whatjobs-om', 'whatjobs-pe', 'whatjobs-ph', 'whatjobs-pk', 'whatjobs-pl', 'whatjobs-pt', 'whatjobs-py', 'whatjobs-qa', 'whatjobs-sa', 'whatjobs-se', 'whatjobs-sg', 'whatjobs-sv', 'whatjobs-th', 'whatjobs-tr', 'whatjobs-uk', 'whatjobs-ve', 'whatjobs-vn', 'whatjobs-za', 'workable', 'workablemarketplace', 'workday', 'workingnomads', 'workstream', 'wpyoast', 'zohorecruit'] as const;
+export const SOURCE_VALUES = ['telegram', 'workatastartup', 'remoteok', 'arc', '4dayweek', 'adp', 'adpmyjobs', 'adzuna', 'aijobs', 'applicantpro', 'applitrack', 'apploi', 'arbeitnow', 'arbeitsagentur', 'ashby', 'ashbygraphql', 'avature', 'bamboohr', 'bayt', 'betterteam', 'breezy', 'briefhq', 'bullhorn', 'careerplug', 'careerspage', 'catsone', 'cleverstaff', 'clinch', 'comeet', 'compleo', 'cornerstone', 'crelate', 'cryptocurrencyjobs', 'dayforce', 'deel', 'djinni', 'earcu', 'echojobs', 'edjoin', 'eightfold', 'enlizt', 'epam', 'erecruiter', 'factorial', 'freshteam', 'functionalworks', 'geekhunter', 'geekjob', 'gem', 'getmanfred', 'getmatch', 'getonbrd', 'getro', 'gr8people', 'greenhouse', 'gulftalent', 'gupy', 'gusto', 'habr_career', 'herp', 'hh', 'hibob', 'himalayas', 'hireology', 'hiringthing', 'hrmdirect', 'hrmos', 'huntflow', 'hurma', 'icims', 'infojobs', 'inhire', 'instaffo', 'ismartrecruit', 'isolvedhire', 'itechart', 'jazzhr', 'jibe', 'jobappnetwork', 'jobdanmark', 'jobicy', 'jobleads', 'jobnet', 'jobscore', 'jobspresso', 'jobstash', 'jobtech', 'jobvite', 'jobylon', 'join', 'keka', 'landingjobs', 'lever', 'likeit', 'loxo', 'luxoft', 'manatal', 'mindsight', 'mycareersfuture', 'neogov', 'nodesk', 'nofluffjobs', 'northstone', 'odoo', 'opencats', 'oracle', 'pageup', 'paycom', 'paycor', 'paylocity', 'peopleforce', 'personio', 'phenom', 'pinpoint', 'powertofly', 'profession', 'quickin', 'radancy', 'rapyd', 'recruitee', 'recruitingsolutions', 'reed', 'remotedotcom', 'remotive', 'remotli', 'rippling', 'schoolspring', 'seek', 'senior', 'smartrecruiters', 'softgarden', 'solides', 'solidjobs', 'spark', 'speedrun', 'startupandvc', 'successfactors', 'talentadore', 'talenthr', 'talentlyft', 'taleo', 'teamex', 'teamtailor', 'tecla', 'thehub', 'themuse', 'topco', 'traffit', 'trakstar', 'trudvsem', 'tyomarkkinatori', 'ukg', 'ukgready', 'usajobs', 'vagas', 'vention', 'vouch', 'wantapply', 'wellfound', 'werecruit', 'weworkremotely', 'whatjobs', 'whatjobs-ae', 'whatjobs-ar', 'whatjobs-at', 'whatjobs-au', 'whatjobs-be', 'whatjobs-bh', 'whatjobs-br', 'whatjobs-ca', 'whatjobs-ch', 'whatjobs-cl', 'whatjobs-co', 'whatjobs-de', 'whatjobs-dk', 'whatjobs-eg', 'whatjobs-es', 'whatjobs-fi', 'whatjobs-fr', 'whatjobs-gr', 'whatjobs-hk', 'whatjobs-hu', 'whatjobs-id', 'whatjobs-ie', 'whatjobs-in', 'whatjobs-it', 'whatjobs-ke', 'whatjobs-kw', 'whatjobs-lu', 'whatjobs-mx', 'whatjobs-my', 'whatjobs-nl', 'whatjobs-no', 'whatjobs-nz', 'whatjobs-om', 'whatjobs-pe', 'whatjobs-ph', 'whatjobs-pk', 'whatjobs-pl', 'whatjobs-pt', 'whatjobs-py', 'whatjobs-qa', 'whatjobs-sa', 'whatjobs-se', 'whatjobs-sg', 'whatjobs-sv', 'whatjobs-th', 'whatjobs-tr', 'whatjobs-uk', 'whatjobs-ve', 'whatjobs-vn', 'whatjobs-za', 'workable', 'workablemarketplace', 'workday', 'workingnomads', 'workstream', 'wpyoast', 'zohorecruit'] as const;
 export type Source = (typeof SOURCE_VALUES)[number];
 export const STAGE_VALUES = ['preparing', 'applied', 'screening', 'responded', 'interview', 'offer', 'accepted', 'rejected', 'withdrawn', 'expired'] as const;
 export type Stage = (typeof STAGE_VALUES)[number];

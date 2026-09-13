@@ -7,41 +7,74 @@
 import type {
   Mentor,
   MentorAvailabilityRule,
+  MentorCalendarInterval,
   MentorProfileInput,
   MentorProfileSuggestions,
   MentorSession,
   MentorSlot,
   OwnMentorProfile,
 } from './types';
+import { SENIORITY_VALUES } from './generated/contracts';
+import { SENIORITY_LABELS, titleCase } from './labels';
 
-/** The mentor directory's whole vocabulary, one single-valued filter each.
+/** A seniority code as a person reads it — reuses the platform's one seniority label
+ *  map and its one title-cased fallback (the same pair `insights.ts`'s own
+ *  `seniorityLabel` uses), falling back for a value the map has nothing special to say
+ *  about (most of them: only `c_level` needs a label at all). An empty value (a mentor
+ *  who left seniority unset) title-cases to '', which is the correct display: this
+ *  capability has no "All levels" band the way `/insights` does. */
+export function seniorityLabel(value: string): string {
+  return SENIORITY_LABELS[value] ?? titleCase(value);
+}
+
+/** A mentor's company as a person reads it — the display name if the read joined one, the
+ *  slug as a fallback, and "Independent" when neither is set. A mentor is not required to
+ *  name a company at all (an independent consultant, or one whose employer isn't in the
+ *  catalogue), and a blank space where a company would normally read is easy to mistake
+ *  for a data gap rather than a deliberate choice. */
+export function companyLabel(companyName: string, companySlug: string): string {
+  return companyName || companySlug || 'Independent';
+}
+
+/** The mentor directory's whole vocabulary. Five single-valued string filters plus one
+ *  flag (`noReviews`) — the flag is kept out of `MENTOR_FILTER_KEYS` below rather than
+ *  forced into the same string shape, since "present" is its whole meaning and there is
+ *  no value to carry.
  *
- *  Single-valued because the endpoint reads them with `query.Get`, not `QueryAll`
- *  (internal/api/handler/mentorship.go) — a second value is not an OR, it is discarded. */
+ *  The string filters are single-valued because the endpoint reads them with
+ *  `query.Get`, not `QueryAll` (internal/api/handler/mentorship.go) — a second value is
+ *  not an OR, it is discarded. */
 export type MentorFilters = {
   company: string;
   topic: string;
   language: string;
+  seniority: string;
+  q: string;
+  noReviews: boolean;
 };
 
-/** The filter keys, in the order they are emitted. This list and `knownMentorParams` in
+/** The single-valued filter keys, in the order they are emitted. This list (plus
+ *  `noReviews`, handled separately below) and `knownMentorParams` in
  *  internal/api/handler/mentorship.go are the same vocabulary written twice; a key added
  *  there and forgotten here is simply unreachable from the UI, which is the harmless
  *  direction, and one removed there and left here is forwarded to an endpoint that now
  *  reports it as ignored. */
-const MENTOR_FILTER_KEYS = ['company', 'topic', 'language'] as const;
+const MENTOR_FILTER_KEYS = ['company', 'topic', 'language', 'seniority', 'q'] as const;
 
 export function emptyMentorFilters(): MentorFilters {
-  return { company: '', topic: '', language: '' };
+  return { company: '', topic: '', language: '', seniority: '', q: '', noReviews: false };
 }
 
 /** Serialize to the query the directory endpoint is called with. An unset filter emits
- *  no key at all: `?company=` is not "no company", it is a company whose slug is empty. */
+ *  no key at all: `?company=` is not "no company", it is a company whose slug is empty.
+ *  `noReviews` follows the same rule in its own shape: false emits nothing, true emits
+ *  `no_reviews=1` — there is no "explicitly false" to distinguish from "unset". */
 export function mentorFiltersToParams(f: MentorFilters): URLSearchParams {
   const p = new URLSearchParams();
   for (const key of MENTOR_FILTER_KEYS) {
     if (f[key]) p.set(key, f[key]);
   }
+  if (f.noReviews) p.set('no_reviews', '1');
   return p;
 }
 
@@ -64,6 +97,7 @@ export function mentorFiltersFromParams(p: URLSearchParams): MentorFilters {
   for (const key of MENTOR_FILTER_KEYS) {
     f[key] = (p.get(key) ?? '').trim();
   }
+  f.noReviews = p.get('no_reviews') === '1';
   return f;
 }
 
@@ -79,6 +113,7 @@ export type MentorFilterOptions = {
   companies: MentorCompanyOption[];
   topics: string[];
   languages: string[];
+  seniorities: string[];
 };
 
 /** Derive the filter controls' options from a directory listing.
@@ -93,11 +128,15 @@ export function mentorFilterOptions(mentors: Mentor[]): MentorFilterOptions {
   const companies = new Map<string, string>();
   const topics = new Set<string>();
   const languages = new Set<string>();
+  const seniorities = new Set<string>();
 
   for (const m of mentors) {
     if (m.company_slug) companies.set(m.company_slug, m.company_name || m.company_slug);
     for (const t of m.topics ?? []) topics.add(t);
     for (const l of m.languages ?? []) languages.add(l);
+    // Unlike topics/languages, seniority is a single optional field rather than an
+    // array — a mentor who left it unset contributes nothing, not an empty-string option.
+    if (m.seniority) seniorities.add(m.seniority);
   }
 
   return {
@@ -106,6 +145,9 @@ export function mentorFilterOptions(mentors: Mentor[]): MentorFilterOptions {
       .sort((a, b) => a.name.localeCompare(b.name)),
     topics: [...topics].sort((a, b) => a.localeCompare(b)),
     languages: [...languages].sort((a, b) => a.localeCompare(b)),
+    // Career order (SENIORITY_VALUES), not alphabetical — alpha would scramble
+    // "junior, middle, senior, lead" into a meaningless letter sort.
+    seniorities: SENIORITY_VALUES.filter((s) => seniorities.has(s)),
   };
 }
 
@@ -276,6 +318,7 @@ export function profileInputFromProfile(p: OwnMentorProfile): MentorProfileInput
     horizon_days: p.horizon_days ?? 30,
     meeting_url: p.meeting_url,
     show_photo: p.show_photo,
+    seniority: p.seniority ?? '',
   };
 }
 
@@ -296,6 +339,55 @@ export function todayIn(timezone: string, now: Date = new Date()): string {
     day: '2-digit',
   }).formatToParts(now);
   return `${part(parts, 'year')}-${part(parts, 'month')}-${part(parts, 'day')}`;
+}
+
+// ---- the mentor's own calendar ------------------------------------------------------
+//
+// Unlike a slot, a calendar interval can span many days — a mentor with no availability
+// rules yet gets back ONE `closed` interval covering the whole requested window, not one
+// per day. Bucketing only by start day (the way groupSlotsByLocalDay does) would leave
+// every day after the first showing no data at all, so grouping here walks every day an
+// interval touches instead.
+
+/** The calendar day right after a `YYYY-MM-DD`, rolling months and years. Plain
+ *  calendar-date arithmetic — no zone, because a day already resolved from an instant
+ *  does not need resolving twice. */
+function nextDay(day: string): string {
+  const month = day.slice(0, 7);
+  const date = Number(day.slice(8, 10));
+  if (date < daysInMonth(month)) return `${month}-${String(date + 1).padStart(2, '0')}`;
+  return `${addMonths(month, 1)}-01`;
+}
+
+/** Groups a mentor's own resolved-calendar intervals by every local day they touch, in a
+ *  given zone. `ends_at` is exclusive, matching the domain's half-open intervals — one
+ *  ending exactly at a day's start does not touch that day. */
+export function groupCalendarByLocalDay(
+  intervals: MentorCalendarInterval[],
+  timezone: string,
+): Map<string, MentorCalendarInterval[]> {
+  const byDay = new Map<string, MentorCalendarInterval[]>();
+  for (const iv of intervals) {
+    const startDay = todayIn(timezone, new Date(iv.starts_at));
+    const lastInstant = new Date(Date.parse(iv.ends_at) - 1);
+    const endDay = todayIn(timezone, lastInstant);
+    for (let day = startDay; day <= endDay; day = nextDay(day)) {
+      const bucket = byDay.get(day);
+      if (bucket) bucket.push(iv);
+      else byDay.set(day, [iv]);
+    }
+  }
+  return byDay;
+}
+
+/** Which statuses a day shows, in the same priority the domain partition itself carves
+ *  the window in — booked over busy over free over closed. Drives the month grid's
+ *  compact per-day indicator; the expanded day view shows the actual intervals. */
+export function dayStatuses(
+  dayIntervals: MentorCalendarInterval[],
+): MentorCalendarInterval['status'][] {
+  const present = new Set(dayIntervals.map((iv) => iv.status));
+  return (['booked', 'busy', 'free', 'closed'] as const).filter((s) => present.has(s));
 }
 
 // ---- the mentor's own schedule ------------------------------------------------------

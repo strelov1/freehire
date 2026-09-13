@@ -23,6 +23,7 @@ func TestSubmissionError_Mapping(t *testing.T) {
 		{"not found", submission.ErrSubmissionNotFound, fiber.StatusNotFound},
 		{"duplicate pending", submission.ErrDuplicatePending, fiber.StatusConflict},
 		{"already decided", submission.ErrAlreadyDecided, fiber.StatusConflict},
+		{"blocked domain", submission.ErrBlockedDomain, fiber.StatusForbidden},
 		{"invalid content", fmt.Errorf("%w: url is required", moderation.ErrInvalid), fiber.StatusBadRequest},
 	}
 	for _, tc := range cases {

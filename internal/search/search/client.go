@@ -609,6 +609,14 @@ func facetSettings() *meilisearch.Settings {
 			// company carries at least one un-retracted report, so the negative is asked
 			// as NOT of the positive rather than an equality that would match nothing.
 			"ai_interview",
+			// auto_apply_available is true-or-absent like ai_interview: written only
+			// when the job's source is one of the four ATS providers auto-apply can
+			// currently attempt (see JobDocument.AutoApplyAvailable). Adding a
+			// filterable attribute is the one hazardous part of shipping this: until
+			// the LIVE index declares it, a binary that requests the facet hard-500s
+			// /api/v1/jobs/facets for every caller, so the settings patch goes out
+			// BEFORE the binary flips.
+			"auto_apply_available",
 			// ai_archetype is derived at index time (aiarchetype) from skills+category
 			// and served top-level like the other bare facets, so it filters on the
 			// plain attribute, not a dot path.

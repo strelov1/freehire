@@ -2,6 +2,7 @@ package mentorship
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -47,6 +48,9 @@ type fakeRepo struct {
 	calendarGrants          map[int64]fakeCalendarGrant
 	needsReconsent          map[int64]bool
 	setBookingCalendarEvent map[uuid.UUID][2]string // bookingID -> [meetingURL, eventID]
+
+	// busyIntervals stands in for mentor_busy_intervals, keyed by mentor id.
+	busyIntervals map[int64][]Interval
 }
 
 type fakeCalendarGrant struct {
@@ -72,6 +76,7 @@ func newFakeRepo() *fakeRepo {
 		calendarGrants:          map[int64]fakeCalendarGrant{},
 		needsReconsent:          map[int64]bool{},
 		setBookingCalendarEvent: map[uuid.UUID][2]string{},
+		busyIntervals:           map[int64][]Interval{},
 	}
 }
 
@@ -103,6 +108,7 @@ func (r *fakeRepo) CreateProfile(_ context.Context, in ProfileInput) (Profile, e
 		Session:     in.Session,
 		MeetingURL:  in.MeetingURL,
 		ShowPhoto:   in.ShowPhoto,
+		Seniority:   in.Seniority,
 		Status:      StatusPending,
 	}
 	r.profiles[p.ID] = p
@@ -148,6 +154,7 @@ func (r *fakeRepo) UpdateProfile(_ context.Context, in ProfileInput) (Profile, e
 	p.Session = in.Session
 	p.MeetingURL = in.MeetingURL
 	p.ShowPhoto = in.ShowPhoto
+	p.Seniority = in.Seniority
 	r.profiles[id] = p
 	return p, nil
 }
@@ -201,6 +208,17 @@ func (r *fakeRepo) ListPublishedProfiles(_ context.Context, f DirectoryFilter) (
 			continue
 		}
 		if f.Language != "" && !contains(p.Languages, f.Language) {
+			continue
+		}
+		if f.Seniority != "" && p.Seniority != f.Seniority {
+			continue
+		}
+		if f.Query != "" &&
+			!strings.Contains(strings.ToLower(p.DisplayName), strings.ToLower(f.Query)) &&
+			!strings.Contains(strings.ToLower(p.Headline), strings.ToLower(f.Query)) {
+			continue
+		}
+		if f.NoReviewsOnly && p.RatingCount != 0 {
 			continue
 		}
 		out = append(out, p)
@@ -269,17 +287,31 @@ func (r *fakeRepo) DeleteAvailabilityRule(_ context.Context, _, _ int64) error {
 
 // ListBusy mirrors what the query does: this mentor's CONFIRMED bookings overlapping the
 // window, on half-open bounds, with no buffers applied.
-func (r *fakeRepo) ListBusy(_ context.Context, mentorID int64, from, to time.Time) ([]Interval, error) {
-	var out []Interval
+func (r *fakeRepo) ListBusy(ctx context.Context, mentorID int64, from, to time.Time) ([]Interval, error) {
+	booked, busy, err := r.ListBusyByKind(ctx, mentorID, from, to)
+	if err != nil {
+		return nil, err
+	}
+	return append(booked, busy...), nil
+}
+
+// ListBusyByKind is ListBusy's two sources kept apart: this mentor's CONFIRMED bookings,
+// and the synced-calendar intervals seeded directly into busyIntervals by a test.
+func (r *fakeRepo) ListBusyByKind(_ context.Context, mentorID int64, from, to time.Time) (booked, busy []Interval, err error) {
 	for _, b := range r.bookings {
 		if b.MentorID != mentorID || b.Status != BookingConfirmed {
 			continue
 		}
 		if b.StartsAt.Before(to) && b.EndsAt.After(from) {
-			out = append(out, Interval{Start: b.StartsAt, End: b.EndsAt})
+			booked = append(booked, Interval{Start: b.StartsAt, End: b.EndsAt})
 		}
 	}
-	return out, nil
+	for _, iv := range r.busyIntervals[mentorID] {
+		if iv.Start.Before(to) && iv.End.After(from) {
+			busy = append(busy, iv)
+		}
+	}
+	return booked, busy, nil
 }
 
 func (r *fakeRepo) CreateBooking(_ context.Context, row BookingRow) (Booking, error) {

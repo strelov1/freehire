@@ -148,6 +148,39 @@ func (q *Queries) GetSubmission(ctx context.Context, id int64) (JobSubmission, e
 	return i, err
 }
 
+const listPendingSubmissionURLs = `-- name: ListPendingSubmissionURLs :many
+SELECT id, url FROM job_submissions WHERE status = 'pending'
+`
+
+type ListPendingSubmissionURLsRow struct {
+	ID  int64  `json:"id"`
+	URL string `json:"url"`
+}
+
+// id+url of every pending submission, used only to find which OTHER pending rows share the
+// host being blocked (see RejectAndBlockHost in the submission package): host matching needs
+// Go's net/url normalization (see submission.normalizeHost), so this fetches the candidates
+// and the caller filters in Go rather than duplicating that normalization in SQL.
+func (q *Queries) ListPendingSubmissionURLs(ctx context.Context) ([]ListPendingSubmissionURLsRow, error) {
+	rows, err := q.db.Query(ctx, listPendingSubmissionURLs)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListPendingSubmissionURLsRow{}
+	for rows.Next() {
+		var i ListPendingSubmissionURLsRow
+		if err := rows.Scan(&i.ID, &i.URL); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listPendingSubmissions = `-- name: ListPendingSubmissions :many
 SELECT s.id, s.submitted_by, s.url, s.source, s.title, s.company, s.location, s.remote, s.description, s.posted_at, s.status, s.review_reason, s.reviewed_by, s.reviewed_at, s.job_id, s.created_at, s.skills, s.regions, s.cities, s.work_mode, s.salary_min, s.salary_max, s.salary_currency, s.salary_period, s.employment_type, s.seniority, u.email AS submitter_email
 FROM job_submissions s
@@ -431,4 +464,70 @@ func (q *Queries) MarkSubmissionRejected(ctx context.Context, arg MarkSubmission
 		&i.Seniority,
 	)
 	return i, err
+}
+
+const markSubmissionsRejectedByIDs = `-- name: MarkSubmissionsRejectedByIDs :many
+UPDATE job_submissions
+SET status        = 'rejected',
+    reviewed_by   = $1::bigint,
+    reviewed_at   = now(),
+    review_reason = $2
+WHERE id = ANY($3::bigint[]) AND status = 'pending'
+RETURNING id, submitted_by, url, source, title, company, location, remote, description, posted_at, status, review_reason, reviewed_by, reviewed_at, job_id, created_at, skills, regions, cities, work_mode, salary_min, salary_max, salary_currency, salary_period, employment_type, seniority
+`
+
+type MarkSubmissionsRejectedByIDsParams struct {
+	ReviewedBy   int64   `json:"reviewed_by"`
+	ReviewReason string  `json:"review_reason"`
+	Ids          []int64 `json:"ids"`
+}
+
+// Bulk-reject every given id still pending, recording the same moderator and reason on
+// each — the sibling half of RejectAndBlockHost. Scoped to status='pending' like the
+// single-row Mark* queries, so a row already decided by the time this runs is left alone.
+func (q *Queries) MarkSubmissionsRejectedByIDs(ctx context.Context, arg MarkSubmissionsRejectedByIDsParams) ([]JobSubmission, error) {
+	rows, err := q.db.Query(ctx, markSubmissionsRejectedByIDs, arg.ReviewedBy, arg.ReviewReason, arg.Ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []JobSubmission{}
+	for rows.Next() {
+		var i JobSubmission
+		if err := rows.Scan(
+			&i.ID,
+			&i.SubmittedBy,
+			&i.URL,
+			&i.Source,
+			&i.Title,
+			&i.Company,
+			&i.Location,
+			&i.Remote,
+			&i.Description,
+			&i.PostedAt,
+			&i.Status,
+			&i.ReviewReason,
+			&i.ReviewedBy,
+			&i.ReviewedAt,
+			&i.JobID,
+			&i.CreatedAt,
+			&i.Skills,
+			&i.Regions,
+			&i.Cities,
+			&i.WorkMode,
+			&i.SalaryMin,
+			&i.SalaryMax,
+			&i.SalaryCurrency,
+			&i.SalaryPeriod,
+			&i.EmploymentType,
+			&i.Seniority,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
