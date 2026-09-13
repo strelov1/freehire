@@ -628,6 +628,9 @@ func TestDirectoryFiltersTreatNullAsUnfiltered(t *testing.T) {
 	user := seedMentorshipUser(t, pool, "mentor-filter@example.test")
 	mentor := seedMentor(t, q, user, "filterco", "filter-mentor")
 	approve(t, q, mentor.ID, moderator)
+	if _, err := pool.Exec(ctx, `UPDATE mentors SET seniority = 'senior' WHERE id = $1`, mentor.ID); err != nil {
+		t.Fatalf("seed seniority: %v", err)
+	}
 
 	for _, tc := range []struct {
 		name  string
@@ -645,6 +648,18 @@ func TestDirectoryFiltersTreatNullAsUnfiltered(t *testing.T) {
 			Language: pgtype.Text{String: "xx", Valid: true}, RowLimit: 50}, 0},
 		{"non-matching company", ListPublishedMentorsParams{
 			CompanySlug: pgtype.Text{String: "nobody", Valid: true}, RowLimit: 50}, 0},
+		{"matching seniority", ListPublishedMentorsParams{
+			Seniority: pgtype.Text{String: "senior", Valid: true}, RowLimit: 50}, 1},
+		{"non-matching seniority", ListPublishedMentorsParams{
+			Seniority: pgtype.Text{String: "junior", Valid: true}, RowLimit: 50}, 0},
+		{"query matching the headline", ListPublishedMentorsParams{
+			Query: pgtype.Text{String: "Senior Eng", Valid: true}, RowLimit: 50}, 1},
+		{"query matching the display name", ListPublishedMentorsParams{
+			Query: pgtype.Text{String: "filter-mentor", Valid: true}, RowLimit: 50}, 1},
+		{"query matching neither", ListPublishedMentorsParams{
+			Query: pgtype.Text{String: "underwater-basketry", Valid: true}, RowLimit: 50}, 0},
+		{"no_reviews_only excludes nobody when nobody has reviews", ListPublishedMentorsParams{
+			NoReviewsOnly: true, RowLimit: 50}, 1},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			got, err := q.ListPublishedMentors(ctx, tc.arg)
@@ -661,6 +676,46 @@ func TestDirectoryFiltersTreatNullAsUnfiltered(t *testing.T) {
 				t.Errorf("found the mentor %d times, want %d", found, tc.wantN)
 			}
 		})
+	}
+}
+
+// no_reviews_only must EXCLUDE a mentor once they have at least one review, not just
+// include one who has none — the inclusion side is already covered by
+// TestDirectoryFiltersTreatNullAsUnfiltered, whose single seeded mentor has no reviews.
+func TestDirectoryNoReviewsOnlyExcludesAReviewedMentor(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	ctx := context.Background()
+
+	seedMentorshipCompany(t, pool, "reviewedco")
+	moderator := seedMentorshipUser(t, pool, "moderator-reviewed@example.test")
+	mentorUser := seedMentorshipUser(t, pool, "mentor-reviewed@example.test")
+	seeker := seedMentorshipUser(t, pool, "seeker-reviewed@example.test")
+	mentor := seedMentor(t, q, mentorUser, "reviewedco", "reviewed-mentor")
+	approve(t, q, mentor.ID, moderator)
+
+	var bookingID string
+	if err := pool.QueryRow(ctx,
+		`INSERT INTO mentor_bookings (mentor_id, seeker_user_id, starts_at, ends_at, seeker_timezone, meeting_url)
+		 VALUES ($1, $2, now() - interval '1 day', now() - interval '1 day' + interval '1 hour', 'UTC', 'https://meet.example.test/reviewed')
+		 RETURNING id`,
+		mentor.ID, seeker).Scan(&bookingID); err != nil {
+		t.Fatalf("seed booking: %v", err)
+	}
+	if _, err := pool.Exec(ctx,
+		`INSERT INTO mentor_reviews (booking_id, mentor_id, seeker_user_id, rating) VALUES ($1, $2, $3, 5)`,
+		bookingID, mentor.ID, seeker); err != nil {
+		t.Fatalf("seed review: %v", err)
+	}
+
+	got, err := q.ListPublishedMentors(ctx, ListPublishedMentorsParams{NoReviewsOnly: true, RowLimit: 50})
+	if err != nil {
+		t.Fatalf("ListPublishedMentors: %v", err)
+	}
+	for _, m := range got {
+		if m.Mentor.Slug == "reviewed-mentor" {
+			t.Error("no_reviews_only included a mentor who has a review")
+		}
 	}
 }
 
