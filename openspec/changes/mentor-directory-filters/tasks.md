@@ -56,21 +56,22 @@
 
 ## 4. Frontend: filter plumbing
 
-- [ ] 4.1 Extend `MentorFilters`/`MENTOR_FILTER_KEYS` in `web/src/lib/mentorship.ts`
-      with `q`, `seniority`, `noReviews` (serialized as `no_reviews`, matching the
-      backend param name — `MENTOR_FILTER_KEYS` entries and their wire keys may need to
-      stop being the same string if `noReviews`'s camelCase key differs from
-      `no_reviews`'s wire form; check whether `mentorFiltersToParams`/
-      `mentorFiltersFromParams`'s single loop still fits or needs a small key-mapping
-      table, and keep whichever is less code).
-- [ ] 4.2 Extend `MentorFilterOptions`/`mentorFilterOptions` with a `seniorities: string[]`
+- [x] 4.1 Extend `MentorFilters`/`MENTOR_FILTER_KEYS` in `web/src/lib/mentorship.ts`
+      with `q`, `seniority` (folded into the existing single-loop
+      `MENTOR_FILTER_KEYS`) and `noReviews: boolean` (kept OUT of that loop — handled by
+      two explicit lines in `mentorFiltersToParams`/`mentorFiltersFromParams`, since a
+      flag's "present means true" shape does not fit the "empty string means unfiltered"
+      loop the five string filters share).
+- [x] 4.2 Extend `MentorFilterOptions`/`mentorFilterOptions` with a `seniorities: string[]`
       list, derived from the unfiltered directory response exactly as `topics`/
       `languages` already are.
-- [ ] 4.3 Add `seniority?: string` to the `Mentor` type and `seniority: string` to
-      `MentorProfileInput` (`web/src/lib/types.ts`).
-- [ ] 4.4 Unit tests (`mentorship.test.ts` or wherever the existing filter-serialization
-      tests for `mentorFiltersToParams`/`mentorFiltersFromParams`/`mentorFilterOptions`
-      live): round-trip the three new keys through params, and `mentorFilterOptions`
+- [x] 4.3 Add `seniority?: string` to the `Mentor` type and `seniority: string` to
+      `MentorProfileInput` (`web/src/lib/types.ts`). Also fixed the three call sites
+      type-checking caught as a result (`profileInputFromProfile`, `MentorBlock.svelte`'s
+      hand-rolled filter literal, `MentorProfileEditor.svelte`'s `blank()`) — part of
+      task 6.2's own scope, done here since the type change made them fail to compile.
+- [x] 4.4 Unit tests (`mentorship.test.ts`): round-trip the three new keys through params,
+      `no_reviews` as a flag (absent vs `=1`, never `=false`), and `mentorFilterOptions`
       derives `seniorities` from the unfiltered mentor list the same way it derives
       `topics`.
 

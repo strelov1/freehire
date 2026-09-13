@@ -38,6 +38,7 @@
       horizon_days: 30,
       meeting_url: '',
       show_photo: false,
+      seniority: '',
     };
   }
 
