@@ -312,6 +312,10 @@ func All(c HTTPClient) map[string]Source {
 		NewTyomarkkinatori(c),
 		NewLikeit(c),
 		NewArbeitsagentur(c),
+		// EURES: the EU's cross-border public employment portal, aggregating national PES
+		// and partner-board feeds across ~31 EU/EFTA countries. Board-based (board =
+		// country), aggregator-marked (see eures.go for the confirmed re-listing evidence).
+		NewEures(c),
 		// International single-company adapters (boardless).
 		NewTelegramCareers(c),
 		NewAmazon(c),
