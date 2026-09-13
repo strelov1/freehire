@@ -18,6 +18,11 @@ CREATE TABLE IF NOT EXISTS submission_domain_blocklist (
 CREATE UNIQUE INDEX IF NOT EXISTS submission_domain_blocklist_host_key
     ON submission_domain_blocklist (host);
 
+-- Every FK to users(id) needs a supporting index (TestEveryUserForeignKeyIsIndexed) so
+-- deleting an account never scans this table.
+CREATE INDEX IF NOT EXISTS submission_domain_blocklist_blocked_by_idx
+    ON submission_domain_blocklist (blocked_by);
+
 COMMENT ON TABLE submission_domain_blocklist IS
     'Hosts refused at the public submission form. Checked only in submission.Service.Submit; '
     'never applied to a moderator-authored vacancy create.';
