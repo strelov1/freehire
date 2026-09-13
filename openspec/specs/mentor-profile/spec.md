@@ -2,22 +2,28 @@
 
 ## Purpose
 
-Who a mentor is, and how a profile becomes public. An insider at a company the catalogue
-already carries publishes a NAMED profile — not the anonymous shape a referral offer
-takes, because a directory of faceless cards gives a seeker nothing to choose between —
-and it reaches the public only by a moderator's hand. Nothing infers approval, including
-an approved referral offer for the same company. Also covers pausing, withdrawing, the
-public directory, and the entry points from a vacancy and a company page.
+Who a mentor is, and how a profile becomes public. A mentor — typically an insider at a
+company the catalogue already carries, but not required to be — publishes a NAMED
+profile, not the anonymous shape a referral offer takes, because a directory of faceless
+cards gives a seeker nothing to choose between. It reaches the public only by a
+moderator's hand. Nothing infers approval, including an approved referral offer for the
+same company. Also covers pausing, withdrawing, the public directory, and the entry
+points from a vacancy and a company page.
 
 ## Requirements
 
-### Requirement: A mentor profile is owned by one account and names one company
+### Requirement: A mentor profile is owned by one account and may name a company
 
-The system SHALL hold at most one mentor profile per user account, and that profile
-SHALL name exactly one company by `companies.slug` — the same key `jobs.company_slug`
-carries. A profile SHALL carry a stable public slug used in its URL, an IANA timezone,
-a headline, a biography, a topic list, a language list, and the session parameters
-(duration, buffers, minimum notice, booking horizon, meeting link).
+The system SHALL hold at most one mentor profile per user account. A profile MAY name a
+company by `companies.slug` — the same key `jobs.company_slug` carries — but is NOT
+required to: an independent mentor, or one whose employer is not in the catalogue, MAY
+submit with no company at all. A profile SHALL carry a stable public slug used in its
+URL, an IANA timezone, a headline, a biography, a topic list, a language list, and the
+session parameters (duration, buffers, minimum notice, booking horizon, meeting link).
+
+A submission that names a company SHALL still be checked against the catalogue exactly
+as before — only the requirement to name ONE is removed, not the check on a name that IS
+supplied.
 
 A submission that supplies no URL slug SHALL NOT be refused for that reason: the system
 SHALL derive one from the display name, using the same character rule an explicitly
@@ -37,6 +43,12 @@ itself, never to one the mentor chose.
 - **WHEN** a profile is submitted with a `company_slug` no `companies` row carries
 - **THEN** the system refuses with a not-found error naming the company
 - **AND** no profile row is written
+
+#### Scenario: A profile with no company is accepted
+
+- **WHEN** a profile is submitted with no `company_slug` at all
+- **THEN** the system creates the profile with no company
+- **AND** the profile is not refused for lacking one
 
 #### Scenario: An empty URL slug is derived from the display name
 
@@ -209,6 +221,10 @@ Following the project's dropped-filter rule, the directory SHALL report any quer
 parameter it did not read in `meta.ignored_params`, and SHALL omit that key when there
 are none.
 
+A mentor with no company SHALL appear in the unfiltered directory like any other, and
+SHALL never match a directory search narrowed by company — the same "unset never
+matches a filter" rule seniority already follows.
+
 #### Scenario: The directory excludes profiles that are not publishable
 
 - **WHEN** a visitor lists the mentor directory
@@ -237,6 +253,16 @@ are none.
 - **WHEN** a visitor narrows the directory to mentors with no reviews yet
 - **THEN** only mentors whose review count is zero appear
 
+#### Scenario: A company-less mentor appears in the unfiltered directory
+
+- **WHEN** a visitor lists the mentor directory with no company filter
+- **THEN** an approved, unpaused mentor with no company appears alongside the rest
+
+#### Scenario: A company-less mentor never matches a company filter
+
+- **WHEN** a visitor narrows the directory by any company
+- **THEN** a mentor with no company does not appear in the results
+
 ### Requirement: A vacancy and a company page lead to their mentors
 
 Where the catalogue holds an approved mentor for a company, the system SHALL expose
@@ -246,6 +272,10 @@ posting can reach a mentor at that employer.
 The answer SHALL come from the directory narrowed to that company rather than from a
 separate "has a mentor?" endpoint. A second way to ask means a second copy of the
 publication predicate, and two copies of a predicate drift.
+
+A mentor with no company SHALL NOT be attributed to any company's vacancy or company
+page — this follows directly from the directory's company filter never matching a
+company-less mentor, so no separate exclusion is needed.
 
 #### Scenario: A vacancy at a company with a mentor offers the entry point
 
@@ -257,6 +287,12 @@ publication predicate, and two copies of a predicate drift.
 
 - **WHEN** a visitor opens a vacancy whose company has no approved, unpaused mentor
 - **THEN** no mentorship entry point is rendered
+
+#### Scenario: A company-less mentor is never offered as a company's entry point
+
+- **WHEN** a visitor opens a vacancy or company page for any company
+- **THEN** a mentor with no company is never offered as that company's mentorship
+  entry point
 
 ### Requirement: Withdrawing a profile preserves booking history
 
