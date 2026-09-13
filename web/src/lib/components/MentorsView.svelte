@@ -5,6 +5,7 @@
   import {
     emptyMentorFilters,
     mentorFiltersToQuery,
+    seniorityLabel,
     type MentorFilterOptions,
     type MentorFilters,
   } from '$lib/mentorship';
@@ -74,7 +75,7 @@
   );
   const seniorityOptions = $derived(
     withSelected(
-      options.seniorities.map((s) => ({ value: s, label: s })),
+      options.seniorities.map((s) => ({ value: s, label: seniorityLabel(s) })),
       filters.seniority,
     ),
   );
@@ -210,7 +211,7 @@
                 {#if mentor.topics.length > 0 || mentor.seniority}
                   <div class="flex flex-wrap gap-1">
                     {#if mentor.seniority}
-                      <Badge variant="outline">{mentor.seniority}</Badge>
+                      <Badge variant="outline">{seniorityLabel(mentor.seniority)}</Badge>
                     {/if}
                     {#each mentor.topics as topic (topic)}
                       <Badge variant="secondary">{topic}</Badge>

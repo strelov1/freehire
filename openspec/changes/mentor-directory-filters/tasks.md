@@ -95,15 +95,18 @@
 
 ## 6. Frontend: `MentorProfileEditor.svelte`
 
-- [ ] 6.1 Add an optional seniority `<select>` to the create/edit form (plain `<select>`,
-      matching this form's existing convention — no design-system dropdown component is
-      used here today), with an explicit "Prefer not to say" / blank option since the
-      field is optional.
-- [ ] 6.2 `blank()`'s defaults and `profileInputFromProfile` both carry `seniority`
-      (empty string default, read back from an existing profile on edit — the same
-      whole-object-save reasoning `show_photo`/session params already follow in this
-      file, so editing one field never silently resets seniority to blank).
-- [ ] 6.3 Verify via `svelte-check`, `eslint`, full frontend `vitest run`.
+- [x] 6.1 Add an optional seniority `<select>` to the create/edit form (plain `<select>`,
+      matching this form's existing convention), with an explicit "Prefer not to say"
+      option. Options come from `SENIORITY_VALUES` (`$lib/generated/contracts`, already
+      generated from the same Go `vocab.SeniorityValues` this change's backend half
+      validates against) labelled via a new `seniorityLabel` helper in `mentorship.ts`
+      (reuses the existing `SENIORITY_LABELS` map from `$lib/labels`, the same one job
+      filters already use, rather than a second label set).
+- [x] 6.2 `blank()`'s defaults and `profileInputFromProfile` both carry `seniority`
+      (empty string default, read back from an existing profile on edit) — done in task
+      4.3 already, once the type change forced it.
+- [x] 6.3 Verified via `svelte-check` (0 errors), `eslint` (clean), full frontend
+      `vitest run` (1890 passing).
 
 ## 7. Verification
 

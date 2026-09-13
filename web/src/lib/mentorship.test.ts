@@ -16,6 +16,7 @@ import {
   mentorFiltersFromParams,
   mentorFiltersToParams,
   mentorFiltersToQuery,
+  seniorityLabel,
   slotLocalDay,
   slotLocalTime,
   canReview,
@@ -154,6 +155,16 @@ describe('mentor directory filters', () => {
   test('surrounding whitespace is trimmed away', () => {
     const params = new URLSearchParams('company=%20acme%20');
     expect(mentorFiltersToParams(mentorFiltersFromParams(params)).get('company')).toBe('acme');
+  });
+});
+
+describe('seniorityLabel', () => {
+  test('sentence-cases a value with no special label', () => {
+    expect(seniorityLabel('senior')).toBe('Senior');
+  });
+
+  test('uses the shared label map for the one value that needs it', () => {
+    expect(seniorityLabel('c_level')).toBe('C-level');
   });
 });
 
