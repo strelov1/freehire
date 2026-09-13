@@ -45,22 +45,28 @@
 
 ## 4. Frontend: `MentorProfileEditor.svelte`
 
-- [ ] 4.1 Relabel the create-mode company field to "Your company — optional" with a hint
+- [x] 4.1 Relabeled the create-mode company field to "Your company — optional" with a hint
       ("Leave blank if you're independent or your employer isn't listed"). No component
       logic change — `CompanyPicker` already emits `onSelect(null)` when cleared/unfilled.
-- [ ] 4.2 Fix the existing-profile company display (`{profile.company_name ||
-      profile.company_slug}`) to show "Independent" when both are empty, instead of a
-      blank paragraph.
-- [ ] 4.3 Unit/component test (or a `mentorship.ts` helper + test, if the label logic is
-      extracted) confirming the "Independent" fallback renders for a company-less
-      profile and the existing behavior is unchanged for one with a company.
+- [x] 4.2 Fixed the existing-profile company display to use the new `companyLabel` helper
+      (shows "Independent" when both `company_name`/`company_slug` are empty, unchanged
+      otherwise).
+- [x] 4.3 Extracted `companyLabel(companyName, companySlug)` into `mentorship.ts` (mirrors
+      `seniorityLabel`'s pattern) and added `describe('companyLabel', ...)` in
+      `mentorship.test.ts` (RED before the helper existed, GREEN after) covering all three
+      cases: name present, slug-only fallback, and the "Independent" case. Reused
+      verbatim in both `MentorsView.svelte` and `MentorProfileEditor.svelte`, so this one
+      test suite covers both render sites.
 
 ## 5. Frontend: `MentorsView.svelte`
 
-- [ ] 5.1 Fix the directory card's `{mentor.headline} · {mentor.company_name}` to omit
-      the dangling separator and show "Independent" in place of the company segment when
-      `company_name` is empty.
-- [ ] 5.2 Unit test confirming the card's rendered text for a company-less mentor.
+- [x] 5.1 Fixed the directory card to use `companyLabel(mentor.company_name,
+      mentor.company_slug)` in place of the bare `mentor.company_name` — no dangling
+      separator, "Independent" shown for a company-less mentor.
+- [x] 5.2 Covered by the same `companyLabel` test suite added in task 4.3 — no separate
+      component test needed since the helper is used verbatim in the template and this
+      repo's convention keeps pure logic tested in `.ts` files rather than duplicating
+      coverage at the markup layer.
 
 ## 6. Verification
 

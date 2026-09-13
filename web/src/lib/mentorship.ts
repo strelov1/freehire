@@ -26,6 +26,15 @@ export function seniorityLabel(value: string): string {
   return SENIORITY_LABELS[value] ?? titleCase(value);
 }
 
+/** A mentor's company as a person reads it — the display name if the read joined one, the
+ *  slug as a fallback, and "Independent" when neither is set. A mentor is not required to
+ *  name a company at all (an independent consultant, or one whose employer isn't in the
+ *  catalogue), and a blank space where a company would normally read is easy to mistake
+ *  for a data gap rather than a deliberate choice. */
+export function companyLabel(companyName: string, companySlug: string): string {
+  return companyName || companySlug || 'Independent';
+}
+
 /** The mentor directory's whole vocabulary. Five single-valued string filters plus one
  *  flag (`noReviews`) — the flag is kept out of `MENTOR_FILTER_KEYS` below rather than
  *  forced into the same string shape, since "present" is its whole meaning and there is

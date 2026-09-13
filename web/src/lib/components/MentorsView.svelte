@@ -3,6 +3,7 @@
   import { resolve } from '$app/paths';
   import { Badge, Card, EmptyState } from '$lib/ui';
   import {
+    companyLabel,
     emptyMentorFilters,
     mentorFiltersToQuery,
     seniorityLabel,
@@ -203,7 +204,7 @@
                   <div>
                     <p class="font-medium">{mentor.name}</p>
                     <p class="text-muted-foreground text-sm">
-                      {mentor.headline} · {mentor.company_name}
+                      {mentor.headline} · {companyLabel(mentor.company_name, mentor.company_slug)}
                     </p>
                   </div>
                 </div>

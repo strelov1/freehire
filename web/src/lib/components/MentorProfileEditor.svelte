@@ -4,6 +4,7 @@
   import { api } from '$lib/api';
   import {
     browserTimezone,
+    companyLabel,
     profileInputFromProfile,
     seedFormFromSuggestions,
     seniorityLabel,
@@ -230,8 +231,10 @@
         <span class="text-muted-foreground">Company</span>
         <!-- company_name is only populated on the JOINED reads (public profile,
              directory) — the owner's own read carries the row as stored, so this falls
-             back to the slug exactly as ReferralsView.svelte already does. -->
-        <p class="mt-1">{profile.company_name || profile.company_slug}</p>
+             back to the slug exactly as ReferralsView.svelte already does. companyLabel's
+             own further fallback to "Independent" covers a mentor who chose no company
+             at all — see mentor-profile-optional-company. -->
+        <p class="mt-1">{companyLabel(profile.company_name, profile.company_slug)}</p>
       </div>
 
       <div class="text-sm">
@@ -240,8 +243,11 @@
       </div>
     {:else}
       <label class="text-sm">
-        <span class="text-muted-foreground">Your company</span>
+        <span class="text-muted-foreground">Your company — optional</span>
         <CompanyPicker onSelect={(c) => (form.company_slug = c?.slug ?? '')} />
+        <p class="text-muted-foreground mt-1 text-xs">
+          Leave blank if you're independent or your employer isn't listed.
+        </p>
       </label>
 
       <label class="text-sm">
