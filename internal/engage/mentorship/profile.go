@@ -6,9 +6,11 @@ import (
 	"fmt"
 	"net/url"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 
+	"github.com/strelov1/freehire/internal/dict/vocab"
 	"github.com/strelov1/freehire/internal/identity/username"
 )
 
@@ -78,7 +80,12 @@ type Profile struct {
 	// ShowPhoto is the mentor's own opt-in to serve their account's stored CV headshot
 	// on their public directory card and profile page. Off by default: the account
 	// headshot is a job-search photo a mentor may not want reused here without asking.
-	ShowPhoto   bool
+	ShowPhoto bool
+	// Seniority is optional and, when set, one of vocab.SeniorityValues — the platform's
+	// one seniority vocabulary, not a second mentor-only list. Empty means unset, never
+	// a value of its own: a mentor who leaves it blank is simply unaffected by a
+	// directory search narrowed by seniority.
+	Seniority   string
 	Status      string
 	Paused      bool
 	DecidedBy   int64
@@ -121,6 +128,8 @@ type ProfileInput struct {
 	Session     SessionParams
 	MeetingURL  string
 	ShowPhoto   bool
+	// Seniority is optional; see Profile.Seniority for what an empty value means.
+	Seniority string
 	// HasCalendarLink says the caller holds a connected calendar.events grant at
 	// submission time, resolved by the handler the same way GmailStatus already does.
 	// A mentor who has one gets a real Meet link minted per booking, so their own
@@ -136,7 +145,15 @@ type DirectoryFilter struct {
 	CompanySlug string
 	Topic       string
 	Language    string
-	Limit       int32
+	Seniority   string
+	// Query narrows by a case-insensitive substring match against a mentor's name or
+	// headline. Empty means unfiltered, same as every other field here.
+	Query string
+	// NoReviewsOnly narrows to mentors with zero reviews. false (the zero value) is
+	// itself "unfiltered" — there is no separate "explicitly false" state to confuse it
+	// with, unlike the string fields above.
+	NoReviewsOnly bool
+	Limit         int32
 }
 
 // maxSlugAttempts bounds SubmitProfile's collision-suffix search over a slug it derived
@@ -328,6 +345,11 @@ func validateProfile(in ProfileInput, creating bool) error {
 	}
 	if len(in.Languages) == 0 {
 		return fmt.Errorf("%w: at least one language is required", ErrInvalidProfile)
+	}
+	// Optional: an empty value is always valid, unlike topics/languages above. Only a
+	// non-empty value outside the platform's one seniority vocabulary is refused.
+	if in.Seniority != "" && !slices.Contains(vocab.SeniorityValues, in.Seniority) {
+		return fmt.Errorf("%w: %q is not a recognised seniority level", ErrInvalidProfile, in.Seniority)
 	}
 	if err := validateMeetingURL(in.MeetingURL, in.HasCalendarLink); err != nil {
 		return err

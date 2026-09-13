@@ -16,24 +16,26 @@
 
 ## 2. Domain: `internal/engage/mentorship`
 
-- [ ] 2.1 Add `Seniority string` to `Profile` and `ProfileInput` (`profile.go`).
-- [ ] 2.2 Add `Query`, `Seniority`, `NoReviewsOnly bool` to `DirectoryFilter`
+- [x] 2.1 Add `Seniority string` to `Profile` and `ProfileInput` (`profile.go`).
+- [x] 2.2 Add `Query`, `Seniority`, `NoReviewsOnly bool` to `DirectoryFilter`
       (`profile.go`), each following the struct's existing "empty means unfiltered"
       doc comment.
-- [ ] 2.3 In `validateProfile`, refuse a non-empty `Seniority` outside
+- [x] 2.3 In `validateProfile`, refuse a non-empty `Seniority` outside
       `vocab.SeniorityValues` via `slices.Contains`, mirroring
       `processreport.ValidKind`'s exact shape. An empty value is always valid (optional
       field).
-- [ ] 2.4 Wire `Seniority` through `QueriesRepository.CreateProfile`/`UpdateProfile`
+- [x] 2.4 Wire `Seniority` through `QueriesRepository.CreateProfile`/`UpdateProfile`
       params and `profileFromRow` (`repository.go`). Wire `Query`/`Seniority`/
       `NoReviewsOnly` through `ListPublishedProfiles`'s call into
       `ListPublishedMentorsParams` (`optionalText` for the two string filters, the bool
       passed straight through).
-- [ ] 2.5 Unit tests: `validateProfile` refuses an unrecognised seniority value and
+- [x] 2.5 Unit tests: `validateProfile` refuses an unrecognised seniority value and
       accepts every value in `vocab.SeniorityValues` plus the empty string
       (table-driven). Fake-repository test for `Directory` threading the three new
       filter fields into what the fake repo receives, mirroring how `company`/`topic`/
-      `language` are already asserted.
+      `language` are already asserted. Also updated `fakeRepo.CreateProfile`/
+      `UpdateProfile` to carry `Seniority` through — a gap the RED test caught before
+      the SQL-backed path could have hidden it.
 
 ## 3. Backend: mentor-profile HTTP surface
 
