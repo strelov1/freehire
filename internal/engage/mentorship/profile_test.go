@@ -143,6 +143,22 @@ func TestSubmitProfileAcceptsNoMeetingLinkWithAConnectedCalendar(t *testing.T) {
 
 // Every value in the platform's seniority vocabulary is accepted, and so is leaving it
 // unset — the field is optional, unlike name/headline/topics/languages.
+// Seniority is normalised the same way every other free-text ProfileInput field is
+// (DisplayName, Headline, Bio, MeetingURL) — an untrimmed value from a caller other than
+// the fixed <select> the frontend uses must not be refused for whitespace alone.
+func TestSubmitProfileTrimsSeniority(t *testing.T) {
+	in := validInput()
+	in.Seniority = "  senior  "
+
+	profile, err := newTestService(t, newFakeRepo()).SubmitProfile(context.Background(), in)
+	if err != nil {
+		t.Fatalf("SubmitProfile: %v", err)
+	}
+	if profile.Seniority != "senior" {
+		t.Errorf("Seniority = %q, want trimmed %q", profile.Seniority, "senior")
+	}
+}
+
 func TestSubmitProfileAcceptsEveryValidSeniorityAndEmpty(t *testing.T) {
 	for _, seniority := range append([]string{""}, vocab.SeniorityValues...) {
 		t.Run("seniority "+seniority, func(t *testing.T) {
@@ -731,7 +747,7 @@ func TestDirectoryAppliesTheNewFilters(t *testing.T) {
 		}
 	})
 
-	t.Run("by free-text query matching the name", func(t *testing.T) {
+	t.Run("by free-text query matching the headline", func(t *testing.T) {
 		out, err := svc.Directory(context.Background(), DirectoryFilter{Query: "senior"})
 		if err != nil {
 			t.Fatalf("Directory: %v", err)

@@ -221,12 +221,14 @@ describe('mentor filter options', () => {
   // a mentor who left it unset must not turn into a spurious "" option nobody could have
   // meant to pick.
   test('seniority options are derived the same way as topics, and unset ones are skipped', () => {
+    // 'lead' sorts before 'middle' alphabetically but after it in career order — picked
+    // deliberately so a naive alpha sort would fail this assertion.
     const options = mentorFilterOptions([
-      mentor({ seniority: 'senior' }),
-      mentor({ slug: 'bo', seniority: 'junior' }),
+      mentor({ seniority: 'lead' }),
+      mentor({ slug: 'bo', seniority: 'middle' }),
       mentor({ slug: 'cy' }),
     ]);
-    expect(options.seniorities).toEqual(['junior', 'senior']);
+    expect(options.seniorities).toEqual(['middle', 'lead']);
   });
 });
 

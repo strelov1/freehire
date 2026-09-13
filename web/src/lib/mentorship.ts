@@ -13,17 +13,17 @@ import type {
   MentorSlot,
   OwnMentorProfile,
 } from './types';
-import { SENIORITY_LABELS } from './labels';
+import { SENIORITY_VALUES } from './generated/contracts';
+import { SENIORITY_LABELS, titleCase } from './labels';
 
 /** A seniority code as a person reads it — reuses the platform's one seniority label
- *  map (the same one job filters use via `enrichment.ts`'s own `label()`), falling back
- *  to a sentence-cased version of the code for a value the map has nothing special to
- *  say about (most of them: only `c_level` needs a label at all). */
+ *  map and its one title-cased fallback (the same pair `insights.ts`'s own
+ *  `seniorityLabel` uses), falling back for a value the map has nothing special to say
+ *  about (most of them: only `c_level` needs a label at all). An empty value (a mentor
+ *  who left seniority unset) title-cases to '', which is the correct display: this
+ *  capability has no "All levels" band the way `/insights` does. */
 export function seniorityLabel(value: string): string {
-  const known = SENIORITY_LABELS[value];
-  if (known) return known;
-  const spaced = value.replace(/_/g, ' ');
-  return spaced.charAt(0).toUpperCase() + spaced.slice(1);
+  return SENIORITY_LABELS[value] ?? titleCase(value);
 }
 
 /** The mentor directory's whole vocabulary. Five single-valued string filters plus one
@@ -135,7 +135,9 @@ export function mentorFilterOptions(mentors: Mentor[]): MentorFilterOptions {
       .sort((a, b) => a.name.localeCompare(b.name)),
     topics: [...topics].sort((a, b) => a.localeCompare(b)),
     languages: [...languages].sort((a, b) => a.localeCompare(b)),
-    seniorities: [...seniorities].sort((a, b) => a.localeCompare(b)),
+    // Career order (SENIORITY_VALUES), not alphabetical — alpha would scramble
+    // "junior, middle, senior, lead" into a meaningless letter sort.
+    seniorities: SENIORITY_VALUES.filter((s) => seniorities.has(s)),
   };
 }
 

@@ -347,8 +347,11 @@ func validateProfile(in ProfileInput, creating bool) error {
 		return fmt.Errorf("%w: at least one language is required", ErrInvalidProfile)
 	}
 	// Optional: an empty value is always valid, unlike topics/languages above. Only a
-	// non-empty value outside the platform's one seniority vocabulary is refused.
-	if in.Seniority != "" && !slices.Contains(vocab.SeniorityValues, in.Seniority) {
+	// non-empty value outside the platform's one seniority vocabulary is refused. Trimmed
+	// before the vocabulary check for the same reason DisplayName/Headline trim above —
+	// normaliseProfile trims it too, but a caller other than the frontend's fixed <select>
+	// must not be refused for whitespace before that ever runs.
+	if seniority := strings.TrimSpace(in.Seniority); seniority != "" && !slices.Contains(vocab.SeniorityValues, seniority) {
 		return fmt.Errorf("%w: %q is not a recognised seniority level", ErrInvalidProfile, in.Seniority)
 	}
 	if err := validateMeetingURL(in.MeetingURL, in.HasCalendarLink); err != nil {
@@ -425,6 +428,7 @@ func normaliseProfile(in ProfileInput) ProfileInput {
 	in.Headline = strings.TrimSpace(in.Headline)
 	in.Bio = strings.TrimSpace(in.Bio)
 	in.MeetingURL = strings.TrimSpace(in.MeetingURL)
+	in.Seniority = strings.TrimSpace(in.Seniority)
 	in.Topics = normaliseTags(in.Topics)
 	in.Languages = normaliseTags(in.Languages)
 	return in
