@@ -110,7 +110,7 @@ func TestListBusyByKindSeparatesBookingsFromSyncedIntervals(t *testing.T) {
 	seeker := seedUser(t, pool, "seeker-busykind@example.test")
 
 	mentor, err := queries.CreateMentorProfile(ctx, db.CreateMentorProfileParams{
-		UserID: mentorUser, CompanySlug: "busykindco", Slug: "busykind-mentor",
+		UserID: mentorUser, CompanySlug: pgtype.Text{String: "busykindco", Valid: true}, Slug: "busykind-mentor",
 		DisplayName: "Kim B.", Headline: "Staff Engineer", Bio: "",
 		Topics: []string{"career"}, Languages: []string{"en"},
 		Timezone: "Europe/Berlin", SessionDurationMin: 60,

@@ -45,7 +45,7 @@ func TestGetMyCalendarHTTPFlow(t *testing.T) {
 
 	queries := db.New(pool)
 	mentor, err := queries.CreateMentorProfile(ctx, db.CreateMentorProfileParams{
-		UserID: mentorUserID, CompanySlug: "calhttpco", Slug: "cal-http-mentor",
+		UserID: mentorUserID, CompanySlug: pgtype.Text{String: "calhttpco", Valid: true}, Slug: "cal-http-mentor",
 		DisplayName: "Cal H.", Headline: "Engineering Manager", Bio: "",
 		Topics: []string{"career"}, Languages: []string{"en"},
 		Timezone: "Europe/Berlin", SessionDurationMin: 60,
