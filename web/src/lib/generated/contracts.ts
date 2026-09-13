@@ -1061,6 +1061,11 @@ export interface Project {
  * Education is one education entry. Year is the same structured perioddate.PeriodDate as
  * Experience's Start/End (month is rarely stated for a degree, so it is usually
  * year-only, but the type stays the one shared shape rather than a bare int).
+ * Degree is assumed short and dedicated (a CV's own degree line, e.g. "BSc Computer
+ * Science"), never a full sentence — internal/dict/edulevel.ForDegree relies on this to
+ * safely match bare "BS"/"MS" forms that would be ambiguous in free-running prose. If
+ * this field's extraction ever changes to allow fuller sentences, revisit ForDegree's
+ * leniency alongside it.
  */
 export interface Education {
   degree?: string;
