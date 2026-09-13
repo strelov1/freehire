@@ -545,40 +545,55 @@
          one under it — two stacked rules under one card read as a layout mistake. -->
     {@render footer?.()}
 
-    <!-- Direct-apply shortcut (freehire#2755): a way out to the posting's own site
-         without opening the job page first. Outline, never the brand-green primary —
-         that loud slot is reserved for auto-apply on the job page itself, and a list
-         card outshouting the page it links to states the wrong priority. Hover-reveal
-         matches Hide below; `pointer-coarse` is load-bearing, not decoration — a phone
-         has no hover, so without it the button is invisible to every touch visitor.
-         `nofollow`: the destination is the poster's own site, which the catalogue never
-         vetted (the same stance JobView.svelte's own Apply link takes) — without it a
-         submitted vacancy buys a followed link from every card in every list. -->
-    {#if applyJob}
-      <Button
-        variant="outline"
-        href={applyJob.url}
-        target="_blank"
-        rel="nofollow noopener noreferrer"
-        onclick={onApplyClick}
-        class="h-9 shrink-0 opacity-0 focus-visible:opacity-100 group-hover:opacity-100 pointer-coarse:opacity-100"
-      >
-        <ExternalLink class="size-4" aria-hidden="true" />
-        Apply
-      </Button>
-    {/if}
+    <!-- Apply and Hide share the row's far end, one `ml-auto` wrapper (not one each —
+         two auto margins on adjacent items split the leftover space and pull them
+         apart) pulling both away from Save so the destination and the dismissal read
+         as a distinct group instead of crowding Save's own affirmative slot. -->
+    {#if applyJob || onHide}
+      <div class="ml-auto flex shrink-0 items-center gap-2">
+        <!-- Direct-apply shortcut (freehire#2755): a way out to the posting's own site
+             without opening the job page first. Outline, never the brand-green primary —
+             that loud slot is reserved for auto-apply on the job page itself, and a list
+             card outshouting the page it links to states the wrong priority. `bg-transparent`
+             drops the outline variant's default `bg-background` fill: unlike a lone button on
+             a page, this one sits on the card's own background, and that fill read as a solid
+             chip louder than every other control on the card — Save carries the same border
+             with no fill, and Apply should read as its equal, not its loudest element.
+             Hover-reveal matches Hide; `pointer-coarse` is load-bearing, not decoration — a
+             phone has no hover, so without it the button is invisible to every touch visitor.
+             `nofollow`: the destination is the poster's own site, which the catalogue never
+             vetted (the same stance JobView.svelte's own Apply link takes) — without it a
+             submitted vacancy buys a followed link from every card in every list. -->
+        {#if applyJob}
+          <Button
+            variant="outline"
+            href={applyJob.url}
+            target="_blank"
+            rel="nofollow noopener noreferrer"
+            onclick={onApplyClick}
+            class="h-9 shrink-0 bg-transparent opacity-0 focus-visible:opacity-100 group-hover:opacity-100 pointer-coarse:opacity-100"
+          >
+            <ExternalLink class="size-4" aria-hidden="true" />
+            Apply
+          </Button>
+        {/if}
 
-    {#if onHide}
-      <button
-        type="button"
-        onclick={hide}
-        disabled={hiding}
-        aria-label="Hide this job"
-        title="Not interested — hide this job"
-        class="ml-auto grid size-8 place-items-center rounded-lg text-muted-foreground opacity-0 transition hover:bg-accent hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100 pointer-coarse:opacity-100 disabled:pointer-events-none disabled:opacity-50"
-      >
-        <EyeOff class="size-3.5" aria-hidden="true" />
-      </button>
+        <!-- A visible border on reveal gives Hide the same weight as Apply and Save
+             instead of a bare hover-fill floating unanchored next to two bordered
+             buttons — it stays transparent at rest, same hover-reveal as before. -->
+        {#if onHide}
+          <button
+            type="button"
+            onclick={hide}
+            disabled={hiding}
+            aria-label="Hide this job"
+            title="Not interested — hide this job"
+            class="grid size-8 place-items-center rounded-lg border border-transparent text-muted-foreground opacity-0 transition hover:border-border hover:bg-accent hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100 pointer-coarse:opacity-100 disabled:pointer-events-none disabled:opacity-50"
+          >
+            <EyeOff class="size-3.5" aria-hidden="true" />
+          </button>
+        {/if}
+      </div>
     {/if}
   </div>
 {/if}
