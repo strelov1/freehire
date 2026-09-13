@@ -39,22 +39,20 @@
 
 ## 3. Backend: mentor-profile HTTP surface
 
-- [ ] 3.1 Add `Seniority string` to `mentorResponse` (`json:"seniority,omitempty"`) and
+- [x] 3.1 Add `Seniority string` to `mentorResponse` (`json:"seniority,omitempty"`) and
       set it in `toMentorResponse` (`internal/api/handler/mentorship.go`) — present on
       every view (public, owner, moderator) since they all build on top of it.
-- [ ] 3.2 Add `Seniority string` to `profileRequest` and thread it into
+- [x] 3.2 Add `Seniority string` to `profileRequest` and thread it into
       `ProfileInput.Seniority` in `toInput` (`internal/api/handler/mentorship_write.go`).
-- [ ] 3.3 In `ListMentors`, read `q`, `seniority` and `no_reviews` from the query into
-      `DirectoryFilter.Query`/`Seniority`/`NoReviewsOnly` (the bool: `c.QueryBool("no_reviews")`
-      or equivalent truthy check). Add all three to `knownMentorParams`
-      (`internal/api/handler/mentorship.go`).
-- [ ] 3.4 Unit tests: `ListMentors` reports an unlisted param in `meta.ignored_params`
-      still works with the three new ones added to the known set (regression — the
-      existing test for this must keep passing with the vocabulary extended). A
-      dedicated test that `q`/`seniority`/`no_reviews` are NOT reported as ignored.
-      Table-driven test for `profileRequest.toInput` carrying `Seniority` through
-      unchanged (mirrors existing field-mapping tests in this file, if any exist —
-      otherwise add the one field-mapping assertion this file is missing).
+- [x] 3.3 In `ListMentors`, read `q`, `seniority` and `no_reviews` from the query into
+      `DirectoryFilter.Query`/`Seniority`/`NoReviewsOnly` (`c.QueryBool("no_reviews")`).
+      Added all three to `knownMentorParams` (`internal/api/handler/mentorship.go`).
+- [x] 3.4 Unit tests: `TestSeniorityIsOnEveryView` (all three response views carry it),
+      `TestNewDirectoryFiltersAreKnownParams` (the three new params are not reported as
+      ignored), `TestProfileRequestToInputCarriesSeniority` (this file had no
+      `toInput` field-mapping test at all before this change — added the one
+      assertion needed to catch a field landing in the request struct but never
+      reaching `ProfileInput`).
 
 ## 4. Frontend: filter plumbing
 
