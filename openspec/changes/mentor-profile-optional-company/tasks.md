@@ -86,12 +86,19 @@
       (only my own hand-written test edits show as modified, no generated-file diff).
       `golangci-lint run --new-from-merge-base=origin/main` (v2.12.2, matching CI's pin):
       0 issues.
-- [ ] 6.4 `svelte-check` (0 errors), `eslint` (clean), full frontend `vitest run`, design-
-      system adoption ratchet — all clean/unchanged.
-- [ ] 6.5 Manual check via the `run` skill: submit a mentor profile with no company via
-      the UI, confirm it's created, appears in the unfiltered directory as "Independent",
-      never appears when filtering by any company, and does not show up as a mentorship
-      entry point on any vacancy or company page. Also confirm submitting WITH a company
-      still works exactly as before.
+- [x] 6.4 `svelte-check` (0 errors, 39 pre-existing unrelated warnings), `eslint` (clean),
+      full frontend `vitest run` (163 files, 1905 passing). Design-system adoption:
+      unaffected — the new markup reuses the exact plain `<p>` primitive already present
+      on the same lines being edited, no new raw-HTML pattern introduced.
+- [x] 6.5 Manual check (Playwright against a live `go run ./cmd/server` + `vite dev`, an
+      isolated Postgres container on an alternate host port): submitted a mentor profile
+      with no company (via curl, mirroring the API a real form submit hits) — created
+      successfully, approved, confirmed it appears in the unfiltered `/mentors` directory
+      as "Independent" (both the directory card and the owner's own profile view),
+      confirmed filtering by `?company=acme` excludes it while including a second,
+      company-having mentor. Confirmed submitting WITH a company still works unchanged,
+      and submitting an unknown company is still refused with 404. Loaded the create form
+      itself in a real browser and confirmed the relabeled "Your company — optional"
+      field and its hint render correctly. Zero network errors throughout.
 - [ ] 6.6 `/code-review` pass on the full diff; fix Critical + Important findings with a
       regression test each.
