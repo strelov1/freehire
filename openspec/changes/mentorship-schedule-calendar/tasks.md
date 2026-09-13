@@ -27,10 +27,12 @@
 
 ## 3. Service layer
 
-- [x] 3.1 Add `Service.MyCalendar(ctx, userID int64, month time.Time) (CalendarResult, error)`
-      in `internal/engage/mentorship/schedule_service.go`, mirroring `slotsFor`/
-      `MyAvailability`: resolve the caller's own profile (`ownProfile`), load rules,
-      load booked+busy via `ListBusyByKind`, and call `Calendar(...)`.
+- [x] 3.1 Add `Service.MyCalendar(...)` in `internal/engage/mentorship/schedule_service.go`,
+      mirroring `slotsFor`/`MyAvailability`: resolve the caller's own profile
+      (`ownProfile`), load rules, load booked+busy via `ListBusyByKind`, and call
+      `Calendar(...)`. Signature ended up `(ctx, userID int64, year int, month
+      time.Month)` rather than the `month time.Time` sketched above — explicit
+      year+month avoids "which day of a time.Time counts" ambiguity at the call site.
 - [x] 3.2 Unit test the service method against a fake repository (see existing
       `fake_repo_test.go`), including the "no profile" refusal already used elsewhere.
 

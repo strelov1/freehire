@@ -36,6 +36,10 @@
       calendar = await api.myMentorCalendar(target);
       failed = false;
     } catch {
+      // Clear the stale month rather than leaving it on screen: `month` has already
+      // moved, so keeping the previous fetch's intervals would show a grid full of
+      // dots that belong to a different month right beside the failure message.
+      calendar = { intervals: [], timezone: calendar.timezone };
       failed = true;
     } finally {
       loading = false;

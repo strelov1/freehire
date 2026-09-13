@@ -80,3 +80,43 @@ func TestMyCalendarReflectsASyncedIntervalAsBusy(t *testing.T) {
 		t.Errorf("no busy interval starting at %v in %+v", synced, result.Intervals)
 	}
 }
+
+// MyCalendar takes no mentor identifier at all — it always resolves the caller's OWN
+// profile via ownProfile(userID) — so a second mentor's booking has no way to reach the
+// first mentor's breakdown. This is a construction guarantee rather than a checked
+// branch, and this test is the regression guard for it.
+func TestMyCalendarNeverShowsAnotherMentorsBooking(t *testing.T) {
+	repo := newFakeRepo()
+	mine := bookableMentor(t, repo)
+
+	otherInput := validInput()
+	otherInput.UserID = 999
+	otherInput.Slug = "other-mentor"
+	other, err := repo.CreateProfile(context.Background(), otherInput)
+	if err != nil {
+		t.Fatalf("CreateProfile (other mentor): %v", err)
+	}
+	if _, err := repo.DecideProfile(context.Background(), other.ID, 1, StatusApproved); err != nil {
+		t.Fatalf("DecideProfile (other mentor): %v", err)
+	}
+
+	otherBooking := tuesdayAt(t, 18)
+	otherBookingID := uuid.New()
+	repo.bookings[otherBookingID] = Booking{
+		ID: otherBookingID, MentorID: other.ID, Status: BookingConfirmed,
+		StartsAt: otherBooking, EndsAt: otherBooking.Add(time.Hour),
+	}
+
+	svc := calendarMonthService(repo)
+	result, err := svc.MyCalendar(context.Background(), mine.UserID, 2026, time.September)
+	if err != nil {
+		t.Fatalf("MyCalendar: %v", err)
+	}
+
+	for _, iv := range result.Intervals {
+		if iv.Status == StatusBooked {
+			t.Errorf("own calendar shows a booked interval %+v, but the only booking belongs to a different mentor",
+				iv)
+		}
+	}
+}

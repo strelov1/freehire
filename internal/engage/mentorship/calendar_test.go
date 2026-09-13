@@ -159,6 +159,31 @@ func TestCalendarPastIntervalIsNeverFree(t *testing.T) {
 	}
 }
 
+// TestCalendarPastIntervalIsNeverFree exercises a time that is BOTH before now and
+// outside the mentor's stated hours, so it is closed either way and does not, on its
+// own, prove the notice cutoff is what withholds it. This test isolates that: `now`
+// sits INSIDE Monday's stated evening, so the 2-hour minimum notice — not the
+// availability window — is what pushes the rest of Monday past the earliest offerable
+// instant, while a later evening well past the notice period is unaffected.
+func TestCalendarWithinTheNoticeWindowIsClosedNotFree(t *testing.T) {
+	req := calendarRequest(t)
+	zone := req.MentorZone
+	req.Now = time.Date(2026, time.September, 7, 18, 30, 0, 0, zone) // mid-Monday-evening
+
+	result := mustCalendar(t, req)
+
+	withinNotice := time.Date(2026, time.September, 7, 19, 0, 0, 0, zone)
+	if got := statusAt(t, result, withinNotice); got != StatusClosed {
+		t.Errorf("Status = %v at %v (inside stated hours, inside the 2-hour notice window), want closed",
+			got, withinNotice)
+	}
+
+	pastNotice := time.Date(2026, time.September, 8, 18, 0, 0, 0, zone)
+	if got := statusAt(t, result, pastNotice); got != StatusFree {
+		t.Errorf("Status = %v at %v (well past the notice window), want free", got, pastNotice)
+	}
+}
+
 // The breakdown's free ranges are exactly what the public slot engine would offer for
 // the same inputs — the whole point of reusing its pipeline.
 func TestCalendarFreeRangesMatchWhatSlotsOffers(t *testing.T) {
