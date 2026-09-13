@@ -52,7 +52,7 @@ func TestListBookingsBySeekerCarriesTheMentorsIdentity(t *testing.T) {
 	seeker := seedUser(t, pool, "seeker-repo@example.test")
 
 	mentor, err := queries.CreateMentorProfile(ctx, db.CreateMentorProfileParams{
-		UserID: mentorUser, CompanySlug: "repoco", Slug: "repo-mentor",
+		UserID: mentorUser, CompanySlug: pgtype.Text{String: "repoco", Valid: true}, Slug: "repo-mentor",
 		DisplayName: "Dana R.", Headline: "Principal Engineer", Bio: "",
 		Topics: []string{"career"}, Languages: []string{"en"},
 		Timezone: "Europe/Berlin", SessionDurationMin: 60,

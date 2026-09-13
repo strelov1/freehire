@@ -40,7 +40,7 @@ func seedMentor(t *testing.T, pool *pgxpool.Pool, queries *db.Queries, userID in
 		t.Fatalf("seed company: %v", err)
 	}
 	mentor, err := queries.CreateMentorProfile(ctx, db.CreateMentorProfileParams{
-		UserID: userID, CompanySlug: "busysyncco", Slug: slug,
+		UserID: userID, CompanySlug: pgtype.Text{String: "busysyncco", Valid: true}, Slug: slug,
 		DisplayName: "Test Mentor", Headline: "Engineer", Bio: "",
 		Topics: []string{"career"}, Languages: []string{"en"},
 		Timezone: "Europe/Berlin", SessionDurationMin: 60,

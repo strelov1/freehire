@@ -70,12 +70,21 @@
 
 ## 6. Verification
 
-- [ ] 6.1 `gofmt -l .` clean, `go vet ./...` clean, `go test ./...` all green.
-- [ ] 6.2 `go vet -tags=integration ./...` clean. Run the full tagged integration suite for
-      `internal/platform/db`, `internal/api/handler` and `internal/engage/mentorship` (the
-      `.sql` query signatures and generated types changed).
-- [ ] 6.3 `node scripts/check-migrations.mjs`: 0 issues on the new migration. `make sqlc`
-      re-run: idempotent, no diff. `golangci-lint run --new-from-merge-base=origin/main`:
+- [x] 6.1 `gofmt -l .` clean, `go vet ./...` clean, `go test ./...` green except
+      `cmd/billing-sync`'s `TestTheStoreProviderAloneKeepsTheWorkerRunning`, confirmed
+      pre-existing and failing identically on a pristine `origin/main` checkout (unrelated
+      to this change — a throwaway worktree at `origin/main` reproduced the same failure).
+- [x] 6.2 `go vet -tags=integration ./...` clean — needed fixing several more direct
+      `CreateMentorProfileParams{CompanySlug: "..."}`/`.CompanySlug` call sites in
+      integration test files that the domain-layer survey didn't cover (it only checked
+      non-test production code paths): `internal/platform/db/mentorship_integration_test.go`
+      (multiple), `internal/engage/mentorship/repository_integration_test.go`,
+      `internal/engage/mentorship/busysync/dbstore_integration_test.go`. Ran the full
+      tagged integration suite for `internal/platform/db`, `internal/api/handler` and
+      `internal/engage/mentorship` — all green.
+- [x] 6.3 `node scripts/check-migrations.mjs`: 0 issues. `make sqlc` re-run: idempotent
+      (only my own hand-written test edits show as modified, no generated-file diff).
+      `golangci-lint run --new-from-merge-base=origin/main` (v2.12.2, matching CI's pin):
       0 issues.
 - [ ] 6.4 `svelte-check` (0 errors), `eslint` (clean), full frontend `vitest run`, design-
       system adoption ratchet — all clean/unchanged.

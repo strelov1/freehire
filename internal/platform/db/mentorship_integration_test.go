@@ -43,7 +43,7 @@ func seedMentor(t *testing.T, q *Queries, userID int64, company, slug string) Me
 	t.Helper()
 	mentor, err := q.CreateMentorProfile(context.Background(), CreateMentorProfileParams{
 		UserID:             userID,
-		CompanySlug:        company,
+		CompanySlug:        pgtype.Text{String: company, Valid: company != ""},
 		Slug:               slug,
 		DisplayName:        "Jane " + slug,
 		Headline:           "Senior Engineer",
@@ -734,7 +734,7 @@ func TestMentorshipUniquenessConstraints(t *testing.T) {
 
 	t.Run("a second profile for one account is refused", func(t *testing.T) {
 		if _, err := q.CreateMentorProfile(ctx, CreateMentorProfileParams{
-			UserID: mentorUser, CompanySlug: "uniqueco", Slug: "unique-mentor-again",
+			UserID: mentorUser, CompanySlug: pgtype.Text{String: "uniqueco", Valid: true}, Slug: "unique-mentor-again",
 			DisplayName: "Also Me", Headline: "Also me", Timezone: "Europe/Berlin",
 			SessionDurationMin: 30, HorizonDays: 30, MeetingUrl: "https://meet.example.test/z",
 		}); err == nil {
@@ -745,7 +745,7 @@ func TestMentorshipUniquenessConstraints(t *testing.T) {
 	t.Run("a profile naming an unknown company is refused", func(t *testing.T) {
 		other := seedMentorshipUser(t, pool, "mentor-nocompany@example.test")
 		if _, err := q.CreateMentorProfile(ctx, CreateMentorProfileParams{
-			UserID: other, CompanySlug: "no-such-company", Slug: "orphan-mentor",
+			UserID: other, CompanySlug: pgtype.Text{String: "no-such-company", Valid: true}, Slug: "orphan-mentor",
 			DisplayName: "Nobody", Headline: "Nobody", Timezone: "Europe/Berlin",
 			SessionDurationMin: 30, HorizonDays: 30, MeetingUrl: "https://meet.example.test/z",
 		}); err == nil {
@@ -806,8 +806,8 @@ func TestUpdateMentorProfileLeavesTheSlugAndCompanyAlone(t *testing.T) {
 	if updated.Slug != "stable-mentor" {
 		t.Errorf("slug = %q after an edit, want stable-mentor", updated.Slug)
 	}
-	if updated.CompanySlug != "stableco" {
-		t.Errorf("company = %q after an edit, want stableco", updated.CompanySlug)
+	if updated.CompanySlug.String != "stableco" || !updated.CompanySlug.Valid {
+		t.Errorf("company = %+v after an edit, want stableco", updated.CompanySlug)
 	}
 	if updated.Headline != "Staff Engineer" || updated.Timezone != "Europe/Lisbon" {
 		t.Errorf("the edit did not apply: headline=%q timezone=%q", updated.Headline, updated.Timezone)
@@ -992,7 +992,7 @@ func TestASeekerListNamesTheMentor(t *testing.T) {
 	if rows[0].Headline == "" {
 		t.Error("the row carries no headline, so the list names nobody")
 	}
-	if rows[0].CompanySlug != "listco" {
-		t.Errorf("company_slug = %q, want listco", rows[0].CompanySlug)
+	if rows[0].CompanySlug.String != "listco" || !rows[0].CompanySlug.Valid {
+		t.Errorf("company_slug = %+v, want listco", rows[0].CompanySlug)
 	}
 }
