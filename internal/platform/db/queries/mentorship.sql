@@ -6,8 +6,8 @@
 INSERT INTO mentors (
     user_id, company_slug, slug, display_name, headline, bio, topics, languages, timezone,
     session_duration_min, buffer_before_min, buffer_after_min, min_notice_min,
-    horizon_days, meeting_url, show_photo
-) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+    horizon_days, meeting_url, show_photo, seniority
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
 RETURNING *;
 
 -- name: GetMentorByUserID :one
@@ -59,6 +59,7 @@ SET display_name = sqlc.arg(display_name),
     horizon_days = sqlc.arg(horizon_days),
     meeting_url = sqlc.arg(meeting_url),
     show_photo = sqlc.arg(show_photo),
+    seniority = sqlc.arg(seniority),
     updated_at = now()
 -- Keyed on user_id ALONE, which UNIQUE (user_id) makes a single row. Taking an id as well
 -- would mean the caller reading the profile first just to learn one, which is a round trip
@@ -125,6 +126,13 @@ WHERE m.status = 'approved' AND NOT m.paused
   AND (sqlc.narg(company_slug)::text IS NULL OR m.company_slug = sqlc.narg(company_slug)::text)
   AND (sqlc.narg(topic)::text IS NULL OR sqlc.narg(topic)::text = ANY (m.topics))
   AND (sqlc.narg(language)::text IS NULL OR sqlc.narg(language)::text = ANY (m.languages))
+  AND (sqlc.narg(seniority)::text IS NULL OR m.seniority = sqlc.narg(seniority)::text)
+  -- Unescaped, matching companies.sql's and gmail.sql's own text search — see
+  -- mentor-directory-filters' design.md for why this change does not revisit that.
+  AND (sqlc.narg(query)::text IS NULL
+       OR m.display_name ILIKE '%' || sqlc.narg(query)::text || '%'
+       OR m.headline ILIKE '%' || sqlc.narg(query)::text || '%')
+  AND (NOT sqlc.arg(no_reviews_only)::bool OR COALESCE(r.rating_count, 0) = 0)
 ORDER BY m.created_at DESC, m.id DESC
 LIMIT sqlc.arg(row_limit);
 

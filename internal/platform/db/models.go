@@ -888,6 +888,7 @@ type Mentor struct {
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
 	ShowPhoto bool               `json:"show_photo"`
+	Seniority string             `json:"seniority"`
 }
 
 // A mentor's availability in two row shapes: weekly (weekday set) and dated override (on_date set). A dated row replaces its whole date; an empty dated row closes it.
@@ -1195,6 +1196,16 @@ type SocialToken struct {
 	Scope            string             `json:"scope"`
 	ObtainedAt       pgtype.Timestamptz `json:"obtained_at"`
 	RefreshedAt      pgtype.Timestamptz `json:"refreshed_at"`
+}
+
+// Hosts refused at the public submission form. Checked only in submission.Service.Submit; never applied to a moderator-authored vacancy create.
+type SubmissionDomainBlocklist struct {
+	ID int64 `json:"id"`
+	// Lowercased, with one leading "www." stripped (submission.normalizeHost) — matched exactly against a submitted URL's normalized host, no wildcard/suffix matching.
+	Host      string             `json:"host"`
+	BlockedBy int64              `json:"blocked_by"`
+	Reason    string             `json:"reason"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
 }
 
 type Subscription struct {

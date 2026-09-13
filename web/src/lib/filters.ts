@@ -129,6 +129,10 @@ export class FilterStore {
     this.#url.setNow({ ...this.#url.value, hideAIInterview: on });
   }
 
+  setAutoApplyAvailable(on: boolean) {
+    this.#url.setNow({ ...this.#url.value, autoApplyAvailable: on });
+  }
+
   setClearance(v: ClearanceFilter) {
     this.#url.setNow({ ...this.#url.value, clearance: v });
   }

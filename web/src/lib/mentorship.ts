@@ -14,35 +14,58 @@ import type {
   MentorSlot,
   OwnMentorProfile,
 } from './types';
+import { SENIORITY_VALUES } from './generated/contracts';
+import { SENIORITY_LABELS, titleCase } from './labels';
 
-/** The mentor directory's whole vocabulary, one single-valued filter each.
+/** A seniority code as a person reads it — reuses the platform's one seniority label
+ *  map and its one title-cased fallback (the same pair `insights.ts`'s own
+ *  `seniorityLabel` uses), falling back for a value the map has nothing special to say
+ *  about (most of them: only `c_level` needs a label at all). An empty value (a mentor
+ *  who left seniority unset) title-cases to '', which is the correct display: this
+ *  capability has no "All levels" band the way `/insights` does. */
+export function seniorityLabel(value: string): string {
+  return SENIORITY_LABELS[value] ?? titleCase(value);
+}
+
+/** The mentor directory's whole vocabulary. Five single-valued string filters plus one
+ *  flag (`noReviews`) — the flag is kept out of `MENTOR_FILTER_KEYS` below rather than
+ *  forced into the same string shape, since "present" is its whole meaning and there is
+ *  no value to carry.
  *
- *  Single-valued because the endpoint reads them with `query.Get`, not `QueryAll`
- *  (internal/api/handler/mentorship.go) — a second value is not an OR, it is discarded. */
+ *  The string filters are single-valued because the endpoint reads them with
+ *  `query.Get`, not `QueryAll` (internal/api/handler/mentorship.go) — a second value is
+ *  not an OR, it is discarded. */
 export type MentorFilters = {
   company: string;
   topic: string;
   language: string;
+  seniority: string;
+  q: string;
+  noReviews: boolean;
 };
 
-/** The filter keys, in the order they are emitted. This list and `knownMentorParams` in
+/** The single-valued filter keys, in the order they are emitted. This list (plus
+ *  `noReviews`, handled separately below) and `knownMentorParams` in
  *  internal/api/handler/mentorship.go are the same vocabulary written twice; a key added
  *  there and forgotten here is simply unreachable from the UI, which is the harmless
  *  direction, and one removed there and left here is forwarded to an endpoint that now
  *  reports it as ignored. */
-const MENTOR_FILTER_KEYS = ['company', 'topic', 'language'] as const;
+const MENTOR_FILTER_KEYS = ['company', 'topic', 'language', 'seniority', 'q'] as const;
 
 export function emptyMentorFilters(): MentorFilters {
-  return { company: '', topic: '', language: '' };
+  return { company: '', topic: '', language: '', seniority: '', q: '', noReviews: false };
 }
 
 /** Serialize to the query the directory endpoint is called with. An unset filter emits
- *  no key at all: `?company=` is not "no company", it is a company whose slug is empty. */
+ *  no key at all: `?company=` is not "no company", it is a company whose slug is empty.
+ *  `noReviews` follows the same rule in its own shape: false emits nothing, true emits
+ *  `no_reviews=1` — there is no "explicitly false" to distinguish from "unset". */
 export function mentorFiltersToParams(f: MentorFilters): URLSearchParams {
   const p = new URLSearchParams();
   for (const key of MENTOR_FILTER_KEYS) {
     if (f[key]) p.set(key, f[key]);
   }
+  if (f.noReviews) p.set('no_reviews', '1');
   return p;
 }
 
@@ -65,6 +88,7 @@ export function mentorFiltersFromParams(p: URLSearchParams): MentorFilters {
   for (const key of MENTOR_FILTER_KEYS) {
     f[key] = (p.get(key) ?? '').trim();
   }
+  f.noReviews = p.get('no_reviews') === '1';
   return f;
 }
 
@@ -80,6 +104,7 @@ export type MentorFilterOptions = {
   companies: MentorCompanyOption[];
   topics: string[];
   languages: string[];
+  seniorities: string[];
 };
 
 /** Derive the filter controls' options from a directory listing.
@@ -94,11 +119,15 @@ export function mentorFilterOptions(mentors: Mentor[]): MentorFilterOptions {
   const companies = new Map<string, string>();
   const topics = new Set<string>();
   const languages = new Set<string>();
+  const seniorities = new Set<string>();
 
   for (const m of mentors) {
     if (m.company_slug) companies.set(m.company_slug, m.company_name || m.company_slug);
     for (const t of m.topics ?? []) topics.add(t);
     for (const l of m.languages ?? []) languages.add(l);
+    // Unlike topics/languages, seniority is a single optional field rather than an
+    // array — a mentor who left it unset contributes nothing, not an empty-string option.
+    if (m.seniority) seniorities.add(m.seniority);
   }
 
   return {
@@ -107,6 +136,9 @@ export function mentorFilterOptions(mentors: Mentor[]): MentorFilterOptions {
       .sort((a, b) => a.name.localeCompare(b.name)),
     topics: [...topics].sort((a, b) => a.localeCompare(b)),
     languages: [...languages].sort((a, b) => a.localeCompare(b)),
+    // Career order (SENIORITY_VALUES), not alphabetical — alpha would scramble
+    // "junior, middle, senior, lead" into a meaningless letter sort.
+    seniorities: SENIORITY_VALUES.filter((s) => seniorities.has(s)),
   };
 }
 
@@ -277,6 +309,7 @@ export function profileInputFromProfile(p: OwnMentorProfile): MentorProfileInput
     horizon_days: p.horizon_days ?? 30,
     meeting_url: p.meeting_url,
     show_photo: p.show_photo,
+    seniority: p.seniority ?? '',
   };
 }
 

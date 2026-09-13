@@ -1,19 +1,20 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
   import { resolve } from '$app/paths';
-  import { Bookmark, Check, Eye, EyeOff, FileText, Lock } from '@lucide/svelte';
+  import { Bookmark, Check, ExternalLink, Eye, EyeOff, FileText, Lock } from '@lucide/svelte';
   import { companyLogoUrl } from '$lib/logo';
   import CountryFlagStack from './CountryFlagStack.svelte';
   import JobMatchBar from './JobMatchBar.svelte';
   import { api } from '$lib/api';
   import { isAuthenticated } from '$lib/auth.svelte';
   import { promptSignIn } from '$lib/signin';
+  import { track } from '$lib/analytics';
   import { cardTags, cardTagsFromCard, formatSalary } from '$lib/enrichment';
   import { computeClientMatch, matchTeaser, resolveMatchState } from '$lib/jobMatch';
   import { profileStore } from '$lib/profile.svelte';
   import { foreignContentLang, metaDescription } from '$lib/seo';
   import type { Job, JobCard } from '$lib/types';
-  import { Badge, EntityLogo } from '$lib/ui';
+  import { Badge, Button, EntityLogo } from '$lib/ui';
   import { supersedesReality } from '$lib/ghost';
   import CredentialBadge from './CredentialBadge.svelte';
   import BackerBadge from './BackerBadge.svelte';
@@ -116,6 +117,13 @@
   // figure rather than as information.
   const views = $derived('view_count' in job ? job.view_count : 0);
   const applied = $derived('applied_count' in job ? job.applied_count : 0);
+  // The direct-apply shortcut in the action row below. Only `jobview.Job` carries the
+  // outbound `url` (and the `source` the apply-intent event reports) — `jobview.Card`
+  // (saved / lists / tracking board) does not, so those surfaces render no button
+  // rather than guessing a destination. See freehire#2755: widening Card is a separate,
+  // deliberately deferred change (it touches CardInput, both call sites, and the SPA
+  // contracts), so this narrows to the shape that already carries the field.
+  const applyJob = $derived('url' in job ? job : null);
   // The two freshness badges, through the card's own gate: a projection that carries no
   // reality signal earns none, because on those surfaces the posting date alone would
   // vouch for a job the signal was written to distrust. Everything else — the
@@ -234,6 +242,12 @@
     } finally {
       hiding = false;
     }
+  }
+
+  // Apply-intent — fired regardless of auth, the same event and shape the job page's own
+  // Apply button fires (JobView.svelte), so the funnel stays comparable across surfaces.
+  function onApplyClick() {
+    if (applyJob) track('job_apply', { slug: applyJob.public_slug, source: applyJob.source });
   }
 </script>
 
@@ -530,6 +544,29 @@
     <!-- The caller's own controls share this row rather than getting a second bordered
          one under it — two stacked rules under one card read as a layout mistake. -->
     {@render footer?.()}
+
+    <!-- Direct-apply shortcut (freehire#2755): a way out to the posting's own site
+         without opening the job page first. Outline, never the brand-green primary —
+         that loud slot is reserved for auto-apply on the job page itself, and a list
+         card outshouting the page it links to states the wrong priority. Hover-reveal
+         matches Hide below; `pointer-coarse` is load-bearing, not decoration — a phone
+         has no hover, so without it the button is invisible to every touch visitor.
+         `nofollow`: the destination is the poster's own site, which the catalogue never
+         vetted (the same stance JobView.svelte's own Apply link takes) — without it a
+         submitted vacancy buys a followed link from every card in every list. -->
+    {#if applyJob}
+      <Button
+        variant="outline"
+        href={applyJob.url}
+        target="_blank"
+        rel="nofollow noopener noreferrer"
+        onclick={onApplyClick}
+        class="h-9 shrink-0 opacity-0 focus-visible:opacity-100 group-hover:opacity-100 pointer-coarse:opacity-100"
+      >
+        <ExternalLink class="size-4" aria-hidden="true" />
+        Apply
+      </Button>
+    {/if}
 
     {#if onHide}
       <button

@@ -255,6 +255,15 @@ export interface Job {
    * nothing" must not reach a reader as "this job needs no clearance".
    */
   requires_clearance?: boolean;
+  /**
+   * AutoApplyAvailable marks a posting whose ATS provider (Source) is one
+   * internal/api/atsapply can currently attempt to fill and submit for (see
+   * AutoApplyProviders) — a best-effort, provider-level eligibility signal,
+   * never a guarantee that a real attempt would succeed. True-or-absent like
+   * RequiresClearance: omitted rather than false, because "not one of the
+   * providers we can drive" must not be read as "checked and ineligible".
+   */
+  auto_apply_available?: boolean;
   posted_at?: string;
   created_at?: string;
   updated_at?: string;
@@ -1397,6 +1406,27 @@ export interface CandidateCard {
    * recruiter reads a history for anyway.
    */
   roles: CandidateRole[];
+  /**
+   * Education carries only what internal/dict/edulevel resolves from each entry's
+   * degree text, plus its year — never the institution or field of study. An entry
+   * whose degree resolves to nothing is dropped rather than kept under an empty
+   * label: a work-history gap reads worse than absence, but a candidate's set of
+   * degrees carries no such expectation of completeness.
+   */
+  education?: EducationEntry[];
+  /**
+   * Certifications are internal/dict/certification canonicals. A name the dictionary
+   * does not resolve emits nothing, the same whitelisting Skills gets from skilltag.
+   */
+  certifications?: string[];
+}
+/**
+ * EducationEntry is one education item, reduced to what a dictionary can vouch for:
+ * the degree's level and the year, never the institution.
+ */
+export interface EducationEntry {
+  level?: string;
+  year?: { year: number; month?: number };
 }
 /**
  * CandidateRole is one position: what it was, when, and what it was built with.

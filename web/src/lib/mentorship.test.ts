@@ -18,6 +18,7 @@ import {
   mentorFiltersFromParams,
   mentorFiltersToParams,
   mentorFiltersToQuery,
+  seniorityLabel,
   slotLocalDay,
   slotLocalTime,
   canReview,
@@ -92,11 +93,27 @@ describe('mentor directory filters', () => {
     expect(mentorFiltersToParams(emptyMentorFilters()).toString()).toBe('');
   });
 
-  test('the three filters the directory reads survive a round trip', () => {
-    const params = new URLSearchParams('company=acme&topic=career&language=en');
-    expect(mentorFiltersToParams(mentorFiltersFromParams(params)).toString()).toBe(
-      new URLSearchParams({ company: 'acme', topic: 'career', language: 'en' }).toString(),
+  test('the six filters the directory reads survive a round trip', () => {
+    const params = new URLSearchParams(
+      'company=acme&topic=career&language=en&seniority=senior&q=jane&no_reviews=1',
     );
+    const forwarded = mentorFiltersToParams(mentorFiltersFromParams(params));
+    expect(forwarded.get('company')).toBe('acme');
+    expect(forwarded.get('topic')).toBe('career');
+    expect(forwarded.get('language')).toBe('en');
+    expect(forwarded.get('seniority')).toBe('senior');
+    expect(forwarded.get('q')).toBe('jane');
+    expect(forwarded.get('no_reviews')).toBe('1');
+  });
+
+  // no_reviews is a flag, not a value — it is either present as "1" or absent, unlike the
+  // five string filters above.
+  test('no_reviews is a flag: absent means unfiltered, never sent as false', () => {
+    expect(mentorFiltersFromParams(new URLSearchParams('')).noReviews).toBe(false);
+    expect(mentorFiltersToParams(emptyMentorFilters()).has('no_reviews')).toBe(false);
+    expect(
+      mentorFiltersToParams({ ...emptyMentorFilters(), noReviews: true }).get('no_reviews'),
+    ).toBe('1');
   });
 
   // The directory's vocabulary is company/topic/language and nothing else — the same
@@ -132,7 +149,7 @@ describe('mentor directory filters', () => {
 
   test('the query string form clears to empty, so a cleared filter has no trailing ?', () => {
     expect(mentorFiltersToQuery(emptyMentorFilters())).toBe('');
-    expect(mentorFiltersToQuery({ company: 'acme', topic: '', language: '' })).toBe(
+    expect(mentorFiltersToQuery({ ...emptyMentorFilters(), company: 'acme' })).toBe(
       'company=acme',
     );
   });
@@ -141,6 +158,16 @@ describe('mentor directory filters', () => {
   test('surrounding whitespace is trimmed away', () => {
     const params = new URLSearchParams('company=%20acme%20');
     expect(mentorFiltersToParams(mentorFiltersFromParams(params)).get('company')).toBe('acme');
+  });
+});
+
+describe('seniorityLabel', () => {
+  test('sentence-cases a value with no special label', () => {
+    expect(seniorityLabel('senior')).toBe('Senior');
+  });
+
+  test('uses the shared label map for the one value that needs it', () => {
+    expect(seniorityLabel('c_level')).toBe('C-level');
   });
 });
 
@@ -185,7 +212,26 @@ describe('mentor filter options', () => {
   });
 
   test('an empty directory offers no options at all', () => {
-    expect(mentorFilterOptions([])).toEqual({ companies: [], topics: [], languages: [] });
+    expect(mentorFilterOptions([])).toEqual({
+      companies: [],
+      topics: [],
+      languages: [],
+      seniorities: [],
+    });
+  });
+
+  // Seniority is optional on a mentor, unlike topics/languages which are always arrays —
+  // a mentor who left it unset must not turn into a spurious "" option nobody could have
+  // meant to pick.
+  test('seniority options are derived the same way as topics, and unset ones are skipped', () => {
+    // 'lead' sorts before 'middle' alphabetically but after it in career order — picked
+    // deliberately so a naive alpha sort would fail this assertion.
+    const options = mentorFilterOptions([
+      mentor({ seniority: 'lead' }),
+      mentor({ slug: 'bo', seniority: 'middle' }),
+      mentor({ slug: 'cy' }),
+    ]);
+    expect(options.seniorities).toEqual(['middle', 'lead']);
   });
 });
 
@@ -576,6 +622,7 @@ describe('seedFormFromSuggestions', () => {
       horizon_days: 30,
       meeting_url: '',
       show_photo: false,
+      seniority: '',
     };
   }
 
@@ -668,7 +715,18 @@ describe('profileInputFromProfile', () => {
       horizon_days: 14,
       meeting_url: 'https://meet.example.test/jane',
       show_photo: true,
+      seniority: '',
     });
+  });
+
+  test('a stated seniority carries over unchanged', () => {
+    expect(profileInputFromProfile(ownProfile({ seniority: 'senior' })).seniority).toBe(
+      'senior',
+    );
+  });
+
+  test('an unset seniority becomes the empty string, never undefined', () => {
+    expect(profileInputFromProfile(ownProfile({ seniority: undefined })).seniority).toBe('');
   });
 
   // The owner's read carries the session parameters precisely so a re-submit (from

@@ -2,7 +2,13 @@
   import { onMount } from 'svelte';
   import { resolve } from '$app/paths';
   import { api } from '$lib/api';
-  import { browserTimezone, profileInputFromProfile, seedFormFromSuggestions } from '$lib/mentorship';
+  import {
+    browserTimezone,
+    profileInputFromProfile,
+    seedFormFromSuggestions,
+    seniorityLabel,
+  } from '$lib/mentorship';
+  import { SENIORITY_VALUES } from '$lib/generated/contracts';
   import { errorMessage } from '$lib/utils';
   import { previewMentorSlug, resolveMentorSlugForSubmit } from '$lib/mentorSlugPreview';
   import { Badge, Button, Card, Input } from '$lib/ui';
@@ -38,6 +44,7 @@
       horizon_days: 30,
       meeting_url: '',
       show_photo: false,
+      seniority: '',
     };
   }
 
@@ -295,13 +302,29 @@
           Meeting link — optional. Your connected calendar mints a real Google Meet link
           for every booking, so you only need this as a fallback.
         {:else}
-          Meeting link — a room you own. Only booked seekers ever see it.
+          Meeting link — a room you own. Only booked seekers ever see it. Don't want to
+          paste one? Connect <a class="underline" href={resolve('/my/integrations')}
+            >Mentor calendar</a
+          > instead and we'll create a fresh Meet link for every booking.
         {/if}
       </span>
       <Input
         bind:value={form.meeting_url}
         class="mt-1 w-full"
       />
+    </label>
+
+    <label class="text-sm">
+      <span class="text-muted-foreground">Seniority — optional</span>
+      <select
+        bind:value={form.seniority}
+        class="border-input bg-background mt-1 h-9 w-full rounded-md border px-2 text-sm"
+      >
+        <option value="">Prefer not to say</option>
+        {#each SENIORITY_VALUES as value (value)}
+          <option {value}>{seniorityLabel(value)}</option>
+        {/each}
+      </select>
     </label>
 
     <label class="flex items-center gap-2 text-sm sm:col-span-2">

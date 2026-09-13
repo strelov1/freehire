@@ -111,7 +111,11 @@ type mentorResponse struct {
 	// ShowPhoto is the mentor's own opt-in to serve their account's stored CV headshot
 	// publicly (see GetMentorPhoto). Present in every view — the directory card needs it
 	// to decide whether to render an avatar at all.
-	ShowPhoto  bool   `json:"show_photo"`
+	ShowPhoto bool `json:"show_photo"`
+	// Seniority is the platform's own closed vocabulary (vocab.SeniorityValues) or empty
+	// when the mentor left it unset — present on every view, same reasoning as
+	// ShowPhoto above.
+	Seniority  string `json:"seniority,omitempty"`
 	Status     string `json:"status,omitempty"`
 	Paused     bool   `json:"paused,omitempty"`
 	MeetingURL string `json:"meeting_url,omitempty"`
@@ -145,7 +149,7 @@ func toMentorResponse(p mentorship.Profile) mentorResponse {
 		Timezone:       p.Timezone,
 		SessionMinutes: int(p.Session.Duration / time.Minute),
 		RatingCount:    p.RatingCount, RatingAvg: p.RatingAvg,
-		ShowPhoto: p.ShowPhoto,
+		ShowPhoto: p.ShowPhoto, Seniority: p.Seniority,
 	}
 }
 
@@ -186,9 +190,12 @@ func toModeratorMentorResponse(p mentorship.Profile) mentorResponse {
 func (h *mentorshipHandlers) ListMentors(c *fiber.Ctx) error {
 	query := queryValues(c)
 	filter := mentorship.DirectoryFilter{
-		CompanySlug: query.Get("company"),
-		Topic:       query.Get("topic"),
-		Language:    query.Get("language"),
+		CompanySlug:   query.Get("company"),
+		Topic:         query.Get("topic"),
+		Language:      query.Get("language"),
+		Seniority:     query.Get("seniority"),
+		Query:         query.Get("q"),
+		NoReviewsOnly: c.QueryBool("no_reviews"),
 	}
 	if limit := c.QueryInt("limit"); limit > 0 {
 		filter.Limit = int32(limit)
@@ -221,6 +228,7 @@ func (h *mentorshipHandlers) ListMentors(c *fiber.Ctx) error {
 // which is the dangerous one. They change together.
 var knownMentorParams = map[string]bool{
 	"company": true, "topic": true, "language": true, "limit": true,
+	"seniority": true, "q": true, "no_reviews": true,
 }
 
 func unknownMentorParams(query map[string][]string) []string {

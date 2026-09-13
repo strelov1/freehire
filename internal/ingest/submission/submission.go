@@ -9,6 +9,8 @@ package submission
 import (
 	"context"
 	"errors"
+	"net/url"
+	"strings"
 	"time"
 
 	"github.com/strelov1/freehire/internal/ingest/moderation"
@@ -25,6 +27,9 @@ var (
 	// ErrAlreadyDecided is an approve/reject of a submission that is no longer pending
 	// (mapped to 409).
 	ErrAlreadyDecided = errors.New("submission: already decided")
+	// ErrBlockedDomain is a submission whose URL host is on the blocklist (mapped to 403).
+	// No row is written — see Service.Submit.
+	ErrBlockedDomain = errors.New("submission: this domain is not accepted")
 )
 
 // Submission is a stored queue entry: the package domain type, decoupled from the generated
@@ -92,6 +97,14 @@ type Repository interface {
 	ListByUser(ctx context.Context, userID int64) ([]UserSubmission, error)
 	MarkApproved(ctx context.Context, id, reviewerID, jobID int64) (Submission, error)
 	MarkRejected(ctx context.Context, id, reviewerID int64, reason string) (Submission, error)
+	// IsHostBlocked reports whether a normalized host (see normalizeHost) is on the
+	// submission-domain blocklist.
+	IsHostBlocked(ctx context.Context, host string) (bool, error)
+	// RejectAndBlockHost adds host to the blocklist (attributed to reviewerID/reason) and,
+	// in the same action, rejects id plus every other still-pending submission whose URL
+	// host normalizes to host. Returns the target (id)'s resulting row; a target no longer
+	// pending by the time this runs is ErrAlreadyDecided, matching MarkRejected.
+	RejectAndBlockHost(ctx context.Context, id int64, host string, reviewerID int64, reason string) (Submission, error)
 }
 
 // Service implements the submission use cases.
@@ -105,13 +118,21 @@ func New(repo Repository, minter Minter) *Service {
 	return &Service{repo: repo, minter: minter}
 }
 
-// Submit validates contributed content against the same contract a moderator create uses
-// and stores it as a pending submission owned by the given user. A second submission of a
-// URL already pending surfaces ErrDuplicatePending (the repository maps the unique
-// violation).
+// Submit validates contributed content against the same contract a moderator create uses,
+// refuses a URL whose host is on the submission-domain blocklist (ErrBlockedDomain, no row
+// written), and otherwise stores it as a pending submission owned by the given user. A
+// second submission of a URL already pending surfaces ErrDuplicatePending (the repository
+// maps the unique violation).
 func (s *Service) Submit(ctx context.Context, submittedBy int64, in moderation.CreateInput) (Submission, error) {
 	if err := in.Validate(); err != nil {
 		return Submission{}, err
+	}
+	blocked, err := s.repo.IsHostBlocked(ctx, hostOf(in.URL))
+	if err != nil {
+		return Submission{}, err
+	}
+	if blocked {
+		return Submission{}, ErrBlockedDomain
 	}
 	return s.repo.Create(ctx, submittedBy, in)
 }
@@ -169,7 +190,12 @@ func (s *Service) Approve(ctx context.Context, reviewerID, id int64) (Submission
 // Reject marks a pending submission rejected with an optional reason, recording the
 // reviewing moderator. No job is created. A missing submission is ErrSubmissionNotFound;
 // one that is no longer pending is ErrAlreadyDecided.
-func (s *Service) Reject(ctx context.Context, reviewerID, id int64, reason string) (Submission, error) {
+//
+// When blockDomain is set, the submission's URL host is added to the submission-domain
+// blocklist and every other still-pending submission on that host is rejected in the same
+// action (see Repository.RejectAndBlockHost) — a moderator clearing one spam submission
+// clears the whole domain's backlog and refuses it going forward, in one call.
+func (s *Service) Reject(ctx context.Context, reviewerID, id int64, reason string, blockDomain bool) (Submission, error) {
 	sub, err := s.repo.Get(ctx, id)
 	if err != nil {
 		return Submission{}, err
@@ -177,9 +203,32 @@ func (s *Service) Reject(ctx context.Context, reviewerID, id int64, reason strin
 	if sub.Status != statusPending {
 		return Submission{}, ErrAlreadyDecided
 	}
+	if blockDomain {
+		return s.repo.RejectAndBlockHost(ctx, id, hostOf(sub.URL), reviewerID, reason)
+	}
 	return s.repo.MarkRejected(ctx, id, reviewerID, reason)
 }
 
 // statusPending is the only status that can be approved or rejected; the closed vocabulary
 // lives in the migration's CHECK.
 const statusPending = "pending"
+
+// hostOf extracts the normalized host from a URL already known to parse (Validate, or a
+// stored submission's own URL, guarantees this). A parse failure — unreachable in practice
+// — yields "", which matches no blocklist entry.
+func hostOf(rawURL string) string {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return ""
+	}
+	return normalizeHost(u.Host)
+}
+
+// normalizeHost lowercases a URL host and strips one leading "www." prefix, so
+// gridnaut.site and www.GridNaut.site match the same blocklist entry. Deliberately no
+// wildcard or subdomain/suffix matching: exact-host is enough for the observed pattern and
+// keeps this a single indexed lookup with no false-positive risk.
+func normalizeHost(host string) string {
+	host = strings.ToLower(strings.TrimSpace(host))
+	return strings.TrimPrefix(host, "www.")
+}

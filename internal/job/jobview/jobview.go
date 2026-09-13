@@ -89,10 +89,17 @@ type Job struct {
 	// stored column only ever holds true or NULL, so the key is present exactly when
 	// a requirement was detected. There is no serialized false, because "we detected
 	// nothing" must not reach a reader as "this job needs no clearance".
-	RequiresClearance bool    `json:"requires_clearance,omitempty"`
-	PostedAt          *string `json:"posted_at"`
-	CreatedAt         *string `json:"created_at"`
-	UpdatedAt         *string `json:"updated_at"`
+	RequiresClearance bool `json:"requires_clearance,omitempty"`
+	// AutoApplyAvailable marks a posting whose ATS provider (Source) is one
+	// internal/api/atsapply can currently attempt to fill and submit for (see
+	// AutoApplyProviders) — a best-effort, provider-level eligibility signal,
+	// never a guarantee that a real attempt would succeed. True-or-absent like
+	// RequiresClearance: omitted rather than false, because "not one of the
+	// providers we can drive" must not be read as "checked and ineligible".
+	AutoApplyAvailable bool    `json:"auto_apply_available,omitempty"`
+	PostedAt           *string `json:"posted_at"`
+	CreatedAt          *string `json:"created_at"`
+	UpdatedAt          *string `json:"updated_at"`
 	// LastSeenAt is when a re-crawl last confirmed this posting still live — see
 	// docs/agents/job-lifecycle.md. The SPA uses it to estimate a rolling
 	// JobPosting.validThrough for an open job (seo.ts), since most sources carry
@@ -222,6 +229,7 @@ func FromDomain(j job.Job, x job.Extras) (Job, error) {
 		AIInterviewReports: x.AIInterviewReports,
 		IsTech:             isTechFacet(f.IsTech),
 		RequiresClearance:  f.RequiresClearance != nil && *f.RequiresClearance,
+		AutoApplyAvailable: AutoApplyProviders[f.Source],
 		PostedAt:           rfc3339Ptr(effectivePosted(f.PostedAt, f.CreatedAt, now)),
 		CreatedAt:          rfc3339Ptr(f.CreatedAt),
 		UpdatedAt:          rfc3339Ptr(f.UpdatedAt),

@@ -1636,6 +1636,9 @@ export interface Mentor {
    *  `/api/v1/mentors/{slug}/photo`. Off by default; render the avatar only when this
    *  is true, and hide it on a load error rather than showing a broken-image icon. */
   show_photo: boolean;
+  /** One of the platform's seniority levels, or absent when the mentor left it unset —
+   *  never an empty string on the wire (the backend omits the key entirely). */
+  seniority?: string;
 }
 
 /** One offerable hour, carrying three views of the same moment on purpose.
@@ -1793,6 +1796,10 @@ export interface MentorProfileInput {
   /** The mentor's own opt-in to publish their account's CV headshot. Off by default —
    *  see `Mentor.show_photo`. */
   show_photo: boolean;
+  /** One of the platform's seniority levels, or '' to leave it unset — see
+   *  `Mentor.seniority`. Always a string here, unlike the optional wire field, so the
+   *  form has a plain value to bind a `<select>` to. */
+  seniority: string;
 }
 
 /** Best-effort, per-field prefill for the mentor-profile CREATE form, composed from the

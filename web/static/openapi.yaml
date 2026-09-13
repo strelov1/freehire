@@ -168,6 +168,7 @@ paths:
         - $ref: "#/components/parameters/SkillsMode"
         - $ref: "#/components/parameters/IsTech"
         - $ref: "#/components/parameters/RequiresClearance"
+        - $ref: "#/components/parameters/AutoApplyAvailable"
         - $ref: "#/components/parameters/AIArchetype"
         - $ref: "#/components/parameters/RoleType"
         - $ref: "#/components/parameters/Collections"
@@ -240,6 +241,7 @@ paths:
         - $ref: "#/components/parameters/SkillsMode"
         - $ref: "#/components/parameters/IsTech"
         - $ref: "#/components/parameters/RequiresClearance"
+        - $ref: "#/components/parameters/AutoApplyAvailable"
         - $ref: "#/components/parameters/AIArchetype"
         - $ref: "#/components/parameters/RoleType"
         - $ref: "#/components/parameters/Collections"
@@ -324,6 +326,7 @@ paths:
         - $ref: "#/components/parameters/SkillsMode"
         - $ref: "#/components/parameters/IsTech"
         - $ref: "#/components/parameters/RequiresClearance"
+        - $ref: "#/components/parameters/AutoApplyAvailable"
         - $ref: "#/components/parameters/AIArchetype"
         - $ref: "#/components/parameters/RoleType"
         - $ref: "#/components/parameters/Collections"
@@ -985,6 +988,21 @@ components:
 
         `true` returns only the marked postings, for a cleared candidate seeking
         exactly that work. Omitting the parameter filters nothing.
+    AutoApplyAvailable:
+      name: auto_apply_available
+      in: query
+      schema:
+        type: boolean
+      description: |
+        Whether the posting's ATS provider is one freehire's auto-apply feature
+        can currently attempt to fill and submit for. A best-effort,
+        provider-eligibility signal only — a marked posting can still park on a
+        live obstacle (a captcha, an unrecognized form layout, missing
+        candidate answers) discovered only when an attempt actually runs, never
+        a guarantee of successful submission.
+
+        `true` returns only the marked postings. Omitting the parameter filters
+        nothing.
     IsTech:
       name: is_tech
       in: query
@@ -1488,6 +1506,13 @@ components:
             security-clearance requirement. Absent otherwise — there is no
             `false`, because "no requirement was detected" is not the same claim
             as "this posting needs no clearance".
+        auto_apply_available:
+          type: boolean
+          description: |
+            Present and `true` only when the posting's ATS provider is one
+            freehire's auto-apply feature can currently attempt to fill and
+            submit for. Absent otherwise — a best-effort provider-eligibility
+            signal, never a guarantee of successful submission.
         posted_at:
           type: string
           format: date-time

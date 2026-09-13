@@ -83,6 +83,12 @@ type JobDocument struct {
 	// Written only when true. Nothing in the index is ever written false, so the
 	// negative is asked as NOT of the positive (see aiInterviewFragment), which is what
 	// also reaches the documents that omit the attribute entirely.
+	//
+	// Unlike AIInterview, the auto-apply eligibility signal (`auto_apply_available`)
+	// has no served proxy standing in for it — there is no count to show a badge with
+	// — so it is a field on jobview.Job itself (jobview.AutoApplyProviders), not a
+	// document-only bool: it needs to reach the served job object, not just back a
+	// filter. It flattens into this document like every other jobview.Job field.
 	AIInterview bool `json:"ai_interview,omitempty"`
 	// Vectors carries the job's skill vector under Meilisearch's reserved `_vectors`
 	// key — the userProvided embedder that backs the match sort (see

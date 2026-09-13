@@ -5,6 +5,7 @@
   import {
     emptyMentorFilters,
     mentorFiltersToQuery,
+    seniorityLabel,
     type MentorFilterOptions,
     type MentorFilters,
   } from '$lib/mentorship';
@@ -31,7 +32,16 @@
     });
   }
 
-  const active = $derived(Boolean(filters.company || filters.topic || filters.language));
+  const active = $derived(
+    Boolean(
+      filters.company ||
+        filters.topic ||
+        filters.language ||
+        filters.seniority ||
+        filters.q ||
+        filters.noReviews,
+    ),
+  );
 
   // A <select> whose value names no <option> renders BLANK — it does not fall back to the
   // first entry, and the control then lies about what the page is showing. That happens
@@ -63,10 +73,27 @@
       filters.language,
     ),
   );
+  const seniorityOptions = $derived(
+    withSelected(
+      options.seniorities.map((s) => ({ value: s, label: seniorityLabel(s) })),
+      filters.seniority,
+    ),
+  );
 </script>
 
 <div class="flex flex-col gap-6">
   <div class="flex flex-wrap items-end gap-3">
+    <label class="flex flex-col gap-1 text-sm">
+      <span class="text-muted-foreground">Search</span>
+      <input
+        type="search"
+        placeholder="Name or headline"
+        class="border-input bg-background h-9 w-48 rounded-md border px-2 text-sm"
+        value={filters.q}
+        onchange={(e) => apply({ ...filters, q: e.currentTarget.value })}
+      />
+    </label>
+
     <label class="flex flex-col gap-1 text-sm">
       <span class="text-muted-foreground">Company</span>
       <select
@@ -107,6 +134,30 @@
           <option value={option.value}>{option.label}</option>
         {/each}
       </select>
+    </label>
+
+    <label class="flex flex-col gap-1 text-sm">
+      <span class="text-muted-foreground">Seniority</span>
+      <select
+        class="border-input bg-background h-9 rounded-md border px-2 text-sm"
+        value={filters.seniority}
+        onchange={(e) => apply({ ...filters, seniority: e.currentTarget.value })}
+      >
+        <option value="">Any seniority</option>
+        {#each seniorityOptions as option (option.value)}
+          <option value={option.value}>{option.label}</option>
+        {/each}
+      </select>
+    </label>
+
+    <label class="flex h-9 items-center gap-2 text-sm">
+      <input
+        type="checkbox"
+        checked={filters.noReviews}
+        onchange={(e) => apply({ ...filters, noReviews: e.currentTarget.checked })}
+        class="h-4 w-4"
+      />
+      <span class="text-muted-foreground">No reviews yet</span>
     </label>
 
     {#if active}
@@ -157,8 +208,11 @@
                   </div>
                 </div>
 
-                {#if mentor.topics.length > 0}
+                {#if mentor.topics.length > 0 || mentor.seniority}
                   <div class="flex flex-wrap gap-1">
+                    {#if mentor.seniority}
+                      <Badge variant="outline">{seniorityLabel(mentor.seniority)}</Badge>
+                    {/if}
                     {#each mentor.topics as topic (topic)}
                       <Badge variant="secondary">{topic}</Badge>
                     {/each}

@@ -2,6 +2,7 @@ package mentorship
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -107,6 +108,7 @@ func (r *fakeRepo) CreateProfile(_ context.Context, in ProfileInput) (Profile, e
 		Session:     in.Session,
 		MeetingURL:  in.MeetingURL,
 		ShowPhoto:   in.ShowPhoto,
+		Seniority:   in.Seniority,
 		Status:      StatusPending,
 	}
 	r.profiles[p.ID] = p
@@ -152,6 +154,7 @@ func (r *fakeRepo) UpdateProfile(_ context.Context, in ProfileInput) (Profile, e
 	p.Session = in.Session
 	p.MeetingURL = in.MeetingURL
 	p.ShowPhoto = in.ShowPhoto
+	p.Seniority = in.Seniority
 	r.profiles[id] = p
 	return p, nil
 }
@@ -205,6 +208,17 @@ func (r *fakeRepo) ListPublishedProfiles(_ context.Context, f DirectoryFilter) (
 			continue
 		}
 		if f.Language != "" && !contains(p.Languages, f.Language) {
+			continue
+		}
+		if f.Seniority != "" && p.Seniority != f.Seniority {
+			continue
+		}
+		if f.Query != "" &&
+			!strings.Contains(strings.ToLower(p.DisplayName), strings.ToLower(f.Query)) &&
+			!strings.Contains(strings.ToLower(p.Headline), strings.ToLower(f.Query)) {
+			continue
+		}
+		if f.NoReviewsOnly && p.RatingCount != 0 {
 			continue
 		}
 		out = append(out, p)

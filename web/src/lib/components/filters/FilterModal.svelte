@@ -184,6 +184,7 @@
         selCount(f, 'relocation') +
         (f.visa ? 1 : 0) +
         (f.hideAIInterview ? 1 : 0) +
+        (f.autoApplyAvailable ? 1 : 0) +
         (f.clearance !== 'any' ? 1 : 0) +
         selCount(f, 'collections', employerCredentialValues)
       );
@@ -499,6 +500,19 @@
       />
       <span>Hide employers reported to interview with AI</span>
     </label>
+    <h3 class="mb-2 mt-6 text-sm font-semibold tracking-tight">Auto-apply</h3>
+    <label class="flex cursor-pointer items-center gap-2 text-sm">
+      <input
+        type="checkbox"
+        class="size-4 rounded border-border"
+        checked={staged.value.autoApplyAvailable}
+        onchange={(e) => staged.setAutoApplyAvailable(e.currentTarget.checked)}
+      />
+      <span>Auto-apply available</span>
+    </label>
+    <p class="mt-1 text-xs text-muted-foreground">
+      Best-effort — successful submission isn't guaranteed.
+    </p>
     <h3 class="mb-2 mt-6 text-sm font-semibold tracking-tight">Security clearance</h3>
     <div class="inline-flex overflow-hidden rounded-md border border-border" role="group">
       {#each CLEARANCE_OPTIONS as opt (opt.value)}
