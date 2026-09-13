@@ -592,13 +592,6 @@ type Querier interface {
 	// Explicitly clear a user's job vote (the DELETE endpoint). No-op when no row or no
 	// vote exists. The caller recomputes counters via RecountJobVotes in the same tx.
 	ClearJobVote(ctx context.Context, arg ClearJobVoteParams) error
-	// The other half of the flag's lifecycle: called whenever this feature marks the grant
-	// needing reconsent, so a later reconnect through an UNRELATED flow (the candidate's own
-	// read-only calendar, which shares this exact scope and restores `status` to 'connected'
-	// via UpsertCalendarGrant without ever knowing this column exists) cannot silently
-	// resurrect a stale consent. Re-enrollment after that can only happen by completing this
-	// feature's own connect callback again.
-	ClearMentorBusySyncOptedIn(ctx context.Context, userID int64) error
 	// Clear the active cooldown and failure count for every currently-cooled board of a
 	// provider — applied once a recovery probe proves the provider reachable again, so the
 	// run crawls them this cycle instead of each waiting out its own backoff (up to a day)
@@ -5526,6 +5519,15 @@ type Querier interface {
 	// backfill pass racing behind it — plus is_current, which this only ever turns TRUE, never
 	// back to false, when the caller found a present-reading label is_current disagreed with.
 	SetExperienceEmploymentBackfilledDates(ctx context.Context, arg SetExperienceEmploymentBackfilledDatesParams) (int64, error)
+	// A move to 'needs_reconsent' also clears mentor_busy_sync_opted_in — every caller
+	// (gmail-sync, cal-sync, mentor-calendar-write, mentor-busy-sync) marks that status only
+	// when this account's ONE shared refresh token has failed, and the flag exists solely to
+	// gate a consent that same token covers. Left standing, a later reconnect through an
+	// UNRELATED flow (which restores status to 'connected' while still requesting
+	// calendar.readonly) would silently resume busy-sync without the mentor ever revisiting
+	// its own connect screen — see mentor-calendar-busy-sync's design.md. Fixed here, once,
+	// rather than in each caller: they all share this exact statement, and duplicating the
+	// clear in only one of them is precisely the gap a code review found.
 	SetGmailStatus(ctx context.Context, arg SetGmailStatusParams) error
 	SetGmailSynced(ctx context.Context, arg SetGmailSyncedParams) error
 	// Targeted enrichment write used by the enrichment command: set only the payload

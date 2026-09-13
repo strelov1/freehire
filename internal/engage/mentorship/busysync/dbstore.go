@@ -88,17 +88,9 @@ func externalID(start, end time.Time) string {
 }
 
 // SetNeedsReconsent flags the grant, shared with every other Google feature this account
-// may use, AND clears the busy-sync opt-in flag. The second step is the one this feature
-// owns alone: `scopes`/`status` naturally clear themselves against a real revocation
-// (calsync's own comment on UpsertCalendarGrant explains why unioning scopes would be
-// wrong), but this flag exists ONLY because calendar.readonly is shared with an unrelated
-// grant, so nothing else would ever reset it — an unrelated reconnect through that other
-// flow restores `status` to 'connected' with the same scope without ever touching this
-// column, and without clearing it here that would silently resume a consent the mentor
-// never re-gave.
+// may use. SetGmailStatus itself clears mentor_busy_sync_opted_in alongside the move to
+// needs_reconsent — see its own comment for why that lives in the one shared statement
+// rather than duplicated in every caller that can mark this status.
 func (s *DBStore) SetNeedsReconsent(ctx context.Context, userID int64) error {
-	if err := s.q.SetGmailStatus(ctx, db.SetGmailStatusParams{UserID: userID, Status: "needs_reconsent"}); err != nil {
-		return err
-	}
-	return s.q.ClearMentorBusySyncOptedIn(ctx, userID)
+	return s.q.SetGmailStatus(ctx, db.SetGmailStatusParams{UserID: userID, Status: "needs_reconsent"})
 }

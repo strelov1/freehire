@@ -213,3 +213,30 @@ each with a regression test:
       hypothetical backfill/replay entrypoint that does not exist today would be exactly
       the premature engineering this repo's AGENTS.md warns against; revisit if either is
       ever proposed.
+
+## 9. Post-merge review fixes
+
+A second `/code-review` pass, run locally before merging the PR, found two more real
+gaps — fixed with regression tests, before this branch reached `main`:
+
+- [x] Task 8's fix only cleared `mentor_busy_sync_opted_in` in
+      `busysync.DBStore.SetNeedsReconsent` — but `SetGmailStatus` is also called with
+      `"needs_reconsent"` from `internal/application/gmailsync`,
+      `internal/application/calsync`, and `internal/engage/mentorship`
+      (`MarkCalendarGrantNeedsReconsent`), none of which knew this column existed. Moved
+      the clear into `SetGmailStatus` itself — the one statement every caller already
+      shares — guarded on `$2 = 'needs_reconsent'` so an unrelated status update never
+      touches it. This also made `SetNeedsReconsent` a single atomic statement instead of
+      two separate writes, closing a second finding (a transient failure between them
+      could leave the flag stuck true against a `needs_reconsent` status). Covered by
+      `TestSetGmailStatusNeedsReconsentClearsMentorBusySyncOptIn` and
+      `TestSetGmailStatusOtherStatusesLeaveTheOptInFlagAlone`
+      (`internal/platform/db/gmail_connections_integration_test.go`), which exercise the
+      shared query directly rather than through any one caller.
+- [x] `APIReader.ListBusy` decoded a `200` response with `calendars.primary.errors` set
+      (Google's documented shape for a calendar it could not read) as an empty, error-free
+      `busy[]` — silently reconciling the mentor's stored busy set to "nothing is busy" on
+      a read that never actually succeeded. Added a check for `primary.Errors` that fails
+      the read with an ordinary (non-`gmailsync.APIError`) error, so it is treated as any
+      other per-mentor sync failure: logged, counted, and never reconciled or read as a
+      revocation. Covered by `TestListBusyFailsWhenGoogleReportsAPerCalendarError`.

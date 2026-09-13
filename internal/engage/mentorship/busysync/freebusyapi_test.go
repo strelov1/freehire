@@ -140,6 +140,23 @@ func TestListBusyDropsAnUnparseablePeriodButKeepsTheRest(t *testing.T) {
 	}
 }
 
+// Google may answer 200 with the primary calendar unreadable (a documented shape
+// distinct from a 401/403 grant revocation: e.g. {"errors":[{"reason":"notFound"}]}
+// alongside an empty busy[]). Treating that as "nothing is busy" would silently clear a
+// mentor's real conflicts on the next reconcile — it must fail the read instead, exactly
+// like any other per-mentor sync failure the spec already covers.
+func TestListBusyFailsWhenGoogleReportsAPerCalendarError(t *testing.T) {
+	reader, _ := readerAgainst(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"calendars":{"primary":{"busy":[],"errors":[{"domain":"global","reason":"notFound"}]}}}`))
+	})
+
+	_, err := reader.ListBusy(context.Background(), time.Now(), time.Now().AddDate(0, 0, 60))
+	if err == nil {
+		t.Fatal("ListBusy succeeded although Google reported the primary calendar unreadable")
+	}
+}
+
 // A non-2xx response wraps as gmailsync.APIError so RevokedGrant can classify it —
 // exactly the shape calsync's own reader uses, since the two consents share one grant
 // and one status flag.

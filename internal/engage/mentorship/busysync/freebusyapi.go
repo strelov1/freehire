@@ -52,9 +52,17 @@ type freeBusyPeriod struct {
 	End   string `json:"end"`
 }
 
+// freeBusyError is Google's documented shape for a calendar it could not read —
+// distinct from an HTTP-level failure: the request itself succeeds (200), but a
+// per-calendar error means the busy[] beside it is not a real answer.
+type freeBusyError struct {
+	Reason string `json:"reason"`
+}
+
 type freeBusyResponse struct {
 	Calendars map[string]struct {
-		Busy []freeBusyPeriod `json:"busy"`
+		Busy   []freeBusyPeriod `json:"busy"`
+		Errors []freeBusyError  `json:"errors"`
 	} `json:"calendars"`
 }
 
@@ -96,6 +104,14 @@ func (r *APIReader) ListBusy(ctx context.Context, from, to time.Time) ([]BusyPer
 		return nil, fmt.Errorf("calendar: decode freeBusy: %w", err)
 	}
 	primary := body.Calendars["primary"]
+	if len(primary.Errors) > 0 {
+		// A 200 with an empty busy[] here is NOT "nothing is busy" — Google could not
+		// read the calendar at all, and reconciling on it would silently clear every
+		// real conflict already stored. Not a gmailsync.APIError: this is not the grant
+		// saying no (no HTTP status failed), so it must not be read as a revocation —
+		// it is an ordinary per-mentor sync failure, exactly like any other.
+		return nil, fmt.Errorf("calendar: freeBusy could not read the primary calendar: %s", primary.Errors[0].Reason)
+	}
 	out := make([]BusyPeriod, 0, len(primary.Busy))
 	for _, p := range primary.Busy {
 		start, err := time.Parse(time.RFC3339, p.Start)
