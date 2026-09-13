@@ -77,21 +77,21 @@
 
 ## 5. Frontend: `MentorsView.svelte`
 
-- [ ] 5.1 Add a text `<input>` for `q`, alongside the three existing `<select>`s, using
-      the same `apply({ ...filters, q: e.currentTarget.value })` pattern — consider
-      whether free text needs a debounce the existing selects don't (they fire on
-      `onchange`, not on every keystroke); decide based on whether `apply`'s
-      `goto`-per-change is cheap enough here too (the directory is small and
-      hand-onboarded per this file's own existing comment) or whether `oninput` would
-      fire a navigation per keystroke and needs `onchange` instead.
-- [ ] 5.2 Add a seniority `<select>` mirroring the Company/Topic/Language ones exactly
+- [x] 5.1 Add a text `<input>` for `q`, alongside the three existing `<select>`s, using
+      the same `apply({ ...filters, q: e.currentTarget.value })` pattern. Used
+      `onchange` (fires on blur/Enter), not `oninput` — matching the existing controls'
+      one-navigation-per-change cost, since firing `apply`'s `goto` on every keystroke
+      would be a materially different cost than on every dropdown selection.
+- [x] 5.2 Add a seniority `<select>` mirroring the Company/Topic/Language ones exactly
       (including `withSelected` for a filter value the current options no longer carry).
-- [ ] 5.3 Add a "No reviews yet" checkbox toggle wired to `filters.noReviews`.
-- [ ] 5.4 Extend the `active` derived flag (currently `company || topic || language`) to
-      include the three new filters, so "Clear filters" appears whenever any of the six
-      is set.
-- [ ] 5.5 Verify via `svelte-check`, `eslint`, full frontend `vitest run`, design-system
-      adoption ratchet.
+      Also added a seniority `Badge` to each mentor card (outline variant, beside the
+      topic badges) — filtering by an attribute the card never shows would be a
+      confusing feature to use.
+- [x] 5.3 Add a "No reviews yet" checkbox toggle wired to `filters.noReviews`.
+- [x] 5.4 Extended the `active` derived flag (was `company || topic || language`) to
+      include all six filters, so "Clear filters" appears whenever any is set.
+- [x] 5.5 Verified via `svelte-check` (0 errors), `eslint` (clean), full frontend
+      `vitest run` (1888 passing), design-system adoption ratchet (unchanged).
 
 ## 6. Frontend: `MentorProfileEditor.svelte`
 
