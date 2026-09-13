@@ -302,7 +302,10 @@
           Meeting link — optional. Your connected calendar mints a real Google Meet link
           for every booking, so you only need this as a fallback.
         {:else}
-          Meeting link — a room you own. Only booked seekers ever see it.
+          Meeting link — a room you own. Only booked seekers ever see it. Don't want to
+          paste one? Connect <a class="underline" href={resolve('/my/integrations')}
+            >Mentor calendar</a
+          > instead and we'll create a fresh Meet link for every booking.
         {/if}
       </span>
       <Input
