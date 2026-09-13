@@ -55,6 +55,7 @@ func (h *mentorshipHandlers) register(api fiber.Router, mw middleware) {
 	api.Post("/me/mentorship/profile/pause", mw.key, h.PauseMentorProfile)
 	api.Post("/me/mentorship/profile/reactivate", mw.key, h.ReactivateMentorProfile)
 	api.Get("/me/mentorship/availability", mw.key, h.GetMyAvailability)
+	api.Get("/me/mentorship/availability/calendar", mw.key, h.GetMyCalendar)
 	api.Put("/me/mentorship/availability/weekly", mw.key, h.ReplaceWeeklyAvailability)
 	api.Post("/me/mentorship/availability/overrides", mw.key, h.AddAvailabilityOverride)
 	api.Delete("/me/mentorship/availability/:id", mw.key, h.DeleteAvailabilityRule)

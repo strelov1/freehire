@@ -48,6 +48,7 @@ import type {
   ListMeta,
   Mentor,
   MentorAvailabilityRule,
+  MentorCalendar,
   MentorProfileInput,
   MentorProfileSuggestions,
   MentorSession,
@@ -895,6 +896,17 @@ export function createApi(
 
   async function myMentorAvailability(): Promise<MentorAvailabilityRule[]> {
     return requestData<MentorAvailabilityRule[]>('/api/v1/me/mentorship/availability');
+  }
+
+  /** The caller's own resolved calendar for one month — booked, busy, free and closed
+   *  time — read-only. `month` is `YYYY-MM`; omitted, the server defaults to the current
+   *  month. */
+  async function myMentorCalendar(month?: string): Promise<MentorCalendar> {
+    const params = month ? `?month=${encodeURIComponent(month)}` : '';
+    const res = await request<{ data: MentorCalendar['intervals']; meta: { timezone: string } }>(
+      `/api/v1/me/mentorship/availability/calendar${params}`,
+    );
+    return { intervals: res.data, timezone: res.meta.timezone };
   }
 
   /** Swap the WHOLE recurring week in one call.
@@ -2823,6 +2835,7 @@ export function createApi(
     withdrawMentorProfile,
     reactivateMentorProfile,
     myMentorAvailability,
+    myMentorCalendar,
     replaceWeeklyAvailability,
     addAvailabilityOverride,
     deleteAvailabilityRule,

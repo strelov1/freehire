@@ -7,6 +7,7 @@
 import type {
   Mentor,
   MentorAvailabilityRule,
+  MentorCalendarInterval,
   MentorProfileInput,
   MentorProfileSuggestions,
   MentorSession,
@@ -296,6 +297,55 @@ export function todayIn(timezone: string, now: Date = new Date()): string {
     day: '2-digit',
   }).formatToParts(now);
   return `${part(parts, 'year')}-${part(parts, 'month')}-${part(parts, 'day')}`;
+}
+
+// ---- the mentor's own calendar ------------------------------------------------------
+//
+// Unlike a slot, a calendar interval can span many days — a mentor with no availability
+// rules yet gets back ONE `closed` interval covering the whole requested window, not one
+// per day. Bucketing only by start day (the way groupSlotsByLocalDay does) would leave
+// every day after the first showing no data at all, so grouping here walks every day an
+// interval touches instead.
+
+/** The calendar day right after a `YYYY-MM-DD`, rolling months and years. Plain
+ *  calendar-date arithmetic — no zone, because a day already resolved from an instant
+ *  does not need resolving twice. */
+function nextDay(day: string): string {
+  const month = day.slice(0, 7);
+  const date = Number(day.slice(8, 10));
+  if (date < daysInMonth(month)) return `${month}-${String(date + 1).padStart(2, '0')}`;
+  return `${addMonths(month, 1)}-01`;
+}
+
+/** Groups a mentor's own resolved-calendar intervals by every local day they touch, in a
+ *  given zone. `ends_at` is exclusive, matching the domain's half-open intervals — one
+ *  ending exactly at a day's start does not touch that day. */
+export function groupCalendarByLocalDay(
+  intervals: MentorCalendarInterval[],
+  timezone: string,
+): Map<string, MentorCalendarInterval[]> {
+  const byDay = new Map<string, MentorCalendarInterval[]>();
+  for (const iv of intervals) {
+    const startDay = todayIn(timezone, new Date(iv.starts_at));
+    const lastInstant = new Date(Date.parse(iv.ends_at) - 1);
+    const endDay = todayIn(timezone, lastInstant);
+    for (let day = startDay; day <= endDay; day = nextDay(day)) {
+      const bucket = byDay.get(day);
+      if (bucket) bucket.push(iv);
+      else byDay.set(day, [iv]);
+    }
+  }
+  return byDay;
+}
+
+/** Which statuses a day shows, in the same priority the domain partition itself carves
+ *  the window in — booked over busy over free over closed. Drives the month grid's
+ *  compact per-day indicator; the expanded day view shows the actual intervals. */
+export function dayStatuses(
+  dayIntervals: MentorCalendarInterval[],
+): MentorCalendarInterval['status'][] {
+  const present = new Set(dayIntervals.map((iv) => iv.status));
+  return (['booked', 'busy', 'free', 'closed'] as const).filter((s) => present.has(s));
 }
 
 // ---- the mentor's own schedule ------------------------------------------------------

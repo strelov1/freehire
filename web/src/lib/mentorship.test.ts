@@ -3,7 +3,9 @@ import {
   addMonths,
   daysInMonth,
   daysWithSlots,
+  dayStatuses,
   emptyMentorFilters,
+  groupCalendarByLocalDay,
   monthGrid,
   monthOf,
   profileInputFromProfile,
@@ -29,6 +31,7 @@ import {
 import type {
   Mentor,
   MentorAvailabilityRule,
+  MentorCalendarInterval,
   MentorProfileInput,
   MentorProfileSuggestions,
   MentorSession,
@@ -686,5 +689,79 @@ describe('profileInputFromProfile', () => {
     expect(input.buffer_after_minutes).toBe(0);
     expect(input.notice_minutes).toBe(120);
     expect(input.horizon_days).toBe(30);
+  });
+});
+
+function interval(
+  startsAt: string,
+  endsAt: string,
+  status: MentorCalendarInterval['status'],
+): MentorCalendarInterval {
+  return { starts_at: startsAt, ends_at: endsAt, status };
+}
+
+describe('grouping a mentor own-calendar into local days', () => {
+  test('an interval wholly inside one day is grouped under it alone', () => {
+    const grouped = groupCalendarByLocalDay(
+      [interval('2026-09-08T16:00:00Z', '2026-09-08T17:00:00Z', 'free')],
+      'UTC',
+    );
+    expect([...grouped.keys()]).toEqual(['2026-09-08']);
+  });
+
+  // The whole reason this differs from groupSlotsByLocalDay: a mentor with no
+  // availability rules yet gets back ONE closed interval spanning the entire requested
+  // window, not one per day. Bucketing only by start day would leave every day after the
+  // first showing no data at all, when the source data says they are closed too.
+  test('an interval spanning several days appears under every day it touches', () => {
+    const grouped = groupCalendarByLocalDay(
+      [interval('2026-09-01T00:00:00Z', '2026-09-04T00:00:00Z', 'closed')],
+      'UTC',
+    );
+    expect([...grouped.keys()]).toEqual(['2026-09-01', '2026-09-02', '2026-09-03']);
+  });
+
+  // ends_at is exclusive, matching the domain's half-open intervals: an interval ending
+  // exactly at a day's start does not touch that day.
+  test('an interval ending exactly at midnight does not touch that day', () => {
+    const grouped = groupCalendarByLocalDay(
+      [interval('2026-09-08T22:00:00Z', '2026-09-09T00:00:00Z', 'busy')],
+      'UTC',
+    );
+    expect([...grouped.keys()]).toEqual(['2026-09-08']);
+  });
+
+  test('grouping is in the given timezone, not UTC', () => {
+    // 22:00 UTC is already the 9th in Europe/Berlin (UTC+2 in September).
+    const grouped = groupCalendarByLocalDay(
+      [interval('2026-09-08T22:00:00Z', '2026-09-08T23:00:00Z', 'free')],
+      'Europe/Berlin',
+    );
+    expect([...grouped.keys()]).toEqual(['2026-09-09']);
+  });
+
+  test('an empty interval list groups into nothing', () => {
+    expect(groupCalendarByLocalDay([], 'UTC').size).toBe(0);
+  });
+});
+
+describe('which statuses a day shows, in priority order', () => {
+  test('booked outranks busy, free and closed', () => {
+    const day = [
+      interval('2026-09-08T09:00:00Z', '2026-09-08T10:00:00Z', 'closed'),
+      interval('2026-09-08T18:00:00Z', '2026-09-08T19:00:00Z', 'free'),
+      interval('2026-09-08T20:00:00Z', '2026-09-08T21:00:00Z', 'booked'),
+    ];
+    expect(dayStatuses(day)).toEqual(['booked', 'free', 'closed']);
+  });
+
+  test('a day with only closed time reports just closed', () => {
+    expect(dayStatuses([interval('2026-09-08T00:00:00Z', '2026-09-09T00:00:00Z', 'closed')])).toEqual([
+      'closed',
+    ]);
+  });
+
+  test('a day with no intervals reports nothing', () => {
+    expect(dayStatuses([])).toEqual([]);
   });
 });

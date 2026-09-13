@@ -1723,6 +1723,25 @@ export interface MentorAvailabilityRule {
   closure: boolean;
 }
 
+/** One labeled span of a mentor's own resolved calendar — booked, busy, free or closed —
+ *  computed the same way the public slot engine decides what a seeker may book.
+ *
+ *  `starts_at`/`ends_at` are absolute instants in UTC; render them in the mentor's own
+ *  zone (`MentorCalendar.timezone`), not the viewer's — this is a self-view, and the
+ *  mentor's own weekly-hours editor already assumes their own zone. */
+export interface MentorCalendarInterval {
+  starts_at: string;
+  ends_at: string;
+  status: 'booked' | 'busy' | 'free' | 'closed';
+}
+
+/** The owner's own resolved calendar for one month: a gapless, non-overlapping partition
+ *  of the requested window. `timezone` is the mentor's own IANA zone. */
+export interface MentorCalendar {
+  intervals: MentorCalendarInterval[];
+  timezone: string;
+}
+
 /** The mentor's own profile: the public shape plus what only its owner sees. */
 export interface OwnMentorProfile extends Mentor {
   status: string;
