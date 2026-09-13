@@ -499,10 +499,10 @@ func TestSubmissionDomainBlocklistEndToEnd(t *testing.T) {
 	req := func(method, path, cookie, body string) *http.Request {
 		var r *http.Request
 		if body != "" {
-			r = httptest.NewRequest(method, path, bytes.NewReader([]byte(body)))
+			r = httptest.NewRequestWithContext(ctx, method, path, bytes.NewReader([]byte(body)))
 			r.Header.Set("Content-Type", "application/json")
 		} else {
-			r = httptest.NewRequest(method, path, nil)
+			r = httptest.NewRequestWithContext(ctx, method, path, nil)
 		}
 		if cookie != "" {
 			r.AddCookie(&http.Cookie{Name: auth.CookieName, Value: cookie})
@@ -532,6 +532,7 @@ func TestSubmissionDomainBlocklistEndToEnd(t *testing.T) {
 	}
 
 	spam1 := submit(t, "https://gridnaut.site/jobs/role-one/")
+	defer spam1.Body.Close()
 	if spam1.StatusCode != fiber.StatusCreated {
 		b, _ := io.ReadAll(spam1.Body)
 		t.Fatalf("seed spam1 status = %d, want 201 (body %s)", spam1.StatusCode, b)
@@ -539,6 +540,7 @@ func TestSubmissionDomainBlocklistEndToEnd(t *testing.T) {
 	spam1ID := decodeID(t, spam1)
 
 	spam2 := submit(t, "https://gridnaut.site/jobs/role-two/")
+	defer spam2.Body.Close()
 	if spam2.StatusCode != fiber.StatusCreated {
 		b, _ := io.ReadAll(spam2.Body)
 		t.Fatalf("seed spam2 status = %d, want 201 (body %s)", spam2.StatusCode, b)
@@ -551,6 +553,7 @@ func TestSubmissionDomainBlocklistEndToEnd(t *testing.T) {
 		if err != nil {
 			t.Fatalf("reject with block_domain: %v", err)
 		}
+		defer resp.Body.Close()
 		if resp.StatusCode != fiber.StatusOK {
 			b, _ := io.ReadAll(resp.Body)
 			t.Fatalf("status = %d, want 200 (body %s)", resp.StatusCode, b)
@@ -586,6 +589,7 @@ func TestSubmissionDomainBlocklistEndToEnd(t *testing.T) {
 
 	t.Run("a later submission of the blocked host is refused with no row written", func(t *testing.T) {
 		resp := submit(t, "https://gridnaut.site/jobs/role-three/")
+		defer resp.Body.Close()
 		if resp.StatusCode != fiber.StatusForbidden {
 			b, _ := io.ReadAll(resp.Body)
 			t.Fatalf("status = %d, want 403 (body %s)", resp.StatusCode, b)
@@ -602,6 +606,7 @@ func TestSubmissionDomainBlocklistEndToEnd(t *testing.T) {
 
 	t.Run("a www.-prefixed variant of the blocked host is also refused", func(t *testing.T) {
 		resp := submit(t, "https://www.gridnaut.site/jobs/role-four/")
+		defer resp.Body.Close()
 		if resp.StatusCode != fiber.StatusForbidden {
 			b, _ := io.ReadAll(resp.Body)
 			t.Fatalf("status = %d, want 403 (body %s)", resp.StatusCode, b)
@@ -624,6 +629,7 @@ func TestSubmissionDomainBlocklistEndToEnd(t *testing.T) {
 		if err != nil {
 			t.Fatalf("reject pre-existing: %v", err)
 		}
+		defer resp.Body.Close()
 		if resp.StatusCode != fiber.StatusOK {
 			b, _ := io.ReadAll(resp.Body)
 			t.Fatalf("status = %d, want 200 (body %s)", resp.StatusCode, b)
