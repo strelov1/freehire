@@ -1,0 +1,23 @@
+---
+title: Search and filter the mentor directory
+date: 2026-09-13
+summary: The mentor directory now has a search box, a seniority filter, and a "no reviews yet" toggle alongside company, topic and language.
+type: changelog
+tags:
+  - mentorship
+  - filters
+draft: false
+---
+
+[Talk to someone who works there](/mentors) got three new ways to narrow the list.
+
+Know roughly who you're looking for? Type a name or headline into the new **Search**
+box. Want someone at your own level, or a step ahead? Pick a **Seniority** — junior
+through C-level — and mentors who haven't set one simply won't match, rather than
+showing up as a false positive.
+
+There's also a **No reviews yet** toggle, for anyone who'd rather book time with a
+newer mentor than wait behind a long queue for a popular one.
+
+All three sit next to the existing company, topic and language filters, and can be
+combined with them the same way.
