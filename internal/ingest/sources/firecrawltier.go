@@ -48,8 +48,13 @@ var firecrawlProviders = map[string]func(hosted *firecrawlClient, direct HTTPCli
 	// wellfound: every address this repository can egress from — direct, proxied, and our own
 	// proxied headless-browser tier — gets the same Cloudflare "Security Check" JS challenge
 	// page, measured live 2026-09-13. The hosted tier passes it and returns the real,
-	// server-rendered page.
-	"wellfound": func(hosted *firecrawlClient, _ HTTPClient) Source { return NewWellfound(hosted) },
+	// server-rendered page. Paced (wellfoundRequestInterval): a provider with several
+	// role-slice boards hits the pipeline's own per-board concurrency, and unpaced concurrent
+	// boards blew Firecrawl's own account-level rate ceiling live on 2026-09-14 — see the
+	// constant's own doc comment in pacer.go for the incident.
+	"wellfound": func(hosted *firecrawlClient, _ HTTPClient) Source {
+		return NewWellfound(pacedHTMLGetter(hosted, wellfoundRequestInterval, wellfoundRequestBurst))
+	},
 	// Only the enumeration is hosted: .com lists 2 755 vacancies where .cy lists ~605, and every
 	// one of them is readable on .cy. See NewWantapplyViaHostedSitemap.
 	"wantapply": func(hosted *firecrawlClient, direct HTTPClient) Source {

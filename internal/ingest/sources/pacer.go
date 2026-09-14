@@ -415,3 +415,21 @@ const (
 	teamtailorRequestInterval = 50 * time.Millisecond // ~20 req/s
 	teamtailorRequestBurst    = 8
 )
+
+// Wellfound's requests go through the hosted Firecrawl tier, so the ceiling being paced
+// against is Firecrawl's own account-level rate limit, not the target site's edge — and,
+// unlike every other pace in this file, it is shared across every OTHER firecrawl-tier
+// provider's requests too (bayt, gulftalent, hh), which this adapter's own limiter cannot see.
+// Found live 2026-09-14: crawling wellfound's 11 role-slice boards in one ingest run, 4 boards
+// failed with "vendor rate limit did not lift after 4 attempts" within three minutes —
+// concurrent boards (the pipeline's own per-board concurrency) collided on Firecrawl's shared
+// ceiling faster than its built-in retry/backoff (firecrawl.go's own 3 retries at 20s) could
+// recover from. Each failure discarded an otherwise-successful partial crawl, per this
+// adapter's own "a later page failure discards the whole board" rule — a real, not
+// hypothetical, cost. The interval is deliberately conservative since the true account-wide
+// ceiling is unknown and shared with providers this file cannot coordinate with; tune upward
+// only from observed convergence, the same discipline every other pace in this file follows.
+const (
+	wellfoundRequestInterval = 2 * time.Second // ~0.5 req/s
+	wellfoundRequestBurst    = 1
+)
