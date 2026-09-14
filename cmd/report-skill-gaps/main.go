@@ -121,17 +121,45 @@ func run() int {
 }
 
 // foldSkillCounts tallies one chunk's (id, skill) rows into the running frequency
-// map and returns where the next chunk should start: the last id seen plus one when
-// the chunk came back at the row-limit ceiling (the LIMIT, not the id range, ended
-// it), or the chunk's own upper bound (rangeEnd) otherwise.
+// map and returns where the next chunk should start.
+//
+// ListJobSkillsForGapReport is a one-row-per-(job id, skill) LATERAL expansion
+// ordered by id, so a row LIMIT is not guaranteed to land on a job-id boundary —
+// unlike a one-row-per-job chunk query, where "the LIMIT was hit" and "the last
+// row's job is fully read" are the same fact. When the chunk comes back at the
+// limit, the last id seen might have more skills that did not fit, so this holds
+// back that id's rows (they are not tallied yet) and resumes the NEXT chunk AT
+// that same id — re-reading it whole rather than silently losing its tail. The one
+// exception is a chunk made entirely of one id: there is no earlier id to fall back
+// to, so its rows are kept and the loop still moves past it, trading a possible
+// undercount for guaranteed forward progress (holding back would repeat forever if
+// a single job's own skill list alone fills the limit).
 func foldSkillCounts(counts map[string]int, rows []db.ListJobSkillsForGapReportRow, limit int32, rangeEnd int64) int64 {
-	for _, r := range rows {
+	if len(rows) == 0 {
+		return rangeEnd
+	}
+	if len(rows) < int(limit) {
+		for _, r := range rows {
+			counts[r.Skill]++
+		}
+		return rangeEnd
+	}
+
+	lastID := rows[len(rows)-1].ID
+	cut := len(rows)
+	for cut > 0 && rows[cut-1].ID == lastID {
+		cut--
+	}
+	if cut == 0 {
+		for _, r := range rows {
+			counts[r.Skill]++
+		}
+		return lastID + 1
+	}
+	for _, r := range rows[:cut] {
 		counts[r.Skill]++
 	}
-	if len(rows) == int(limit) && len(rows) > 0 {
-		return rows[len(rows)-1].ID + 1
-	}
-	return rangeEnd
+	return lastID
 }
 
 // writeSkillGapReport prints the top n candidates as a tab-separated count/phrase

@@ -53,6 +53,43 @@ func TestSkillGapCandidatesSortsDescendingByCount(t *testing.T) {
 	}
 }
 
+func TestSkillGapCandidatesTreatsIdentityBearingSymbolsAsPartOfThePhrase(t *testing.T) {
+	// C++ resolves to the "cpp" canonical (internal/dict/skilltag/dictionaries.go);
+	// bare "C" does not. Stripping the trailing "++" would fold both into the same
+	// normalized key "c" and, since C++'s count is higher, pick "C++" as the
+	// bucket's display form — which resolves, so the WHOLE bucket (including C's
+	// real, unresolved occurrences) would be dropped from the report.
+	got := SkillGapCandidates(map[string]int{
+		"C++": 10,
+		"C":   7,
+	})
+
+	if len(got) != 1 {
+		t.Fatalf("got %d candidates, want 1 (only bare C is unresolved): %+v", len(got), got)
+	}
+	if got[0].Phrase != "C" || got[0].Count != 7 {
+		t.Fatalf("got %+v, want {Phrase: C, Count: 7} — C++ must not fold into C's bucket", got[0])
+	}
+}
+
+func TestSkillGapCandidatesKeepsBareLetterSeparateFromItsSharpVariant(t *testing.T) {
+	// F# resolves to "fsharp" (internal/dict/skilltag/dictionaries.go); bare "F"
+	// has no entry at all. The trailing "#" must not be stripped, or both fold into
+	// a bucket keyed on the bare letter and F's real occurrences are lost the same
+	// way the C/C++ case above demonstrates.
+	got := SkillGapCandidates(map[string]int{
+		"F#": 4,
+		"F":  6,
+	})
+
+	if len(got) != 1 {
+		t.Fatalf("got %d candidates, want 1 (F# resolves, bare F does not): %+v", len(got), got)
+	}
+	if got[0].Phrase != "F" || got[0].Count != 6 {
+		t.Fatalf("got %+v, want {Phrase: F, Count: 6}", got[0])
+	}
+}
+
 func TestSkillGapCandidatesSkipsEmptyPhrase(t *testing.T) {
 	got := SkillGapCandidates(map[string]int{"": 7, "   ": 4})
 

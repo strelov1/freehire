@@ -22,11 +22,15 @@ type SkillGapCandidate struct {
 
 // SkillGapCandidates ranks the raw enrichment.skills phrases that
 // internal/dict/skilltag.Parse resolves to nothing, given each phrase's occurrence
-// count exactly as recorded. Phrases differing only in case, punctuation, or
-// whitespace are treated as one candidate; its count is their sum and its display
-// form is whichever original spelling occurred most often. Blank phrases are
-// dropped. The result is sorted by count descending, then by phrase for a
-// deterministic order among ties.
+// count exactly as recorded. Phrases differing only in case, a hyphen/underscore
+// used as a word separator, surrounding/internal whitespace, or a trailing
+// sentence-punctuation mark are treated as one candidate; its count is their sum
+// and its display form is whichever original spelling occurred most often. A
+// symbol that is part of a technology's own name (e.g. the "++" in C++, the "#" in
+// C#/F#) is never stripped — doing so would fold distinct, already-individually-
+// resolvable skills into the same bucket as an unrelated bare-letter gap. Blank
+// phrases are dropped. The result is sorted by count descending, then by phrase
+// for a deterministic order among ties.
 func SkillGapCandidates(counts map[string]int) []SkillGapCandidate {
 	type bucket struct {
 		total   int
@@ -67,23 +71,42 @@ func SkillGapCandidates(counts map[string]int) []SkillGapCandidate {
 	return candidates
 }
 
-// normalizeSkillPhrase collapses case, punctuation, and whitespace differences so
-// trivial spelling variants of the same phrase group together: letters and digits
-// are lowercased and kept, every other run of characters becomes a single space,
-// and the result is trimmed. It never guesses a semantic equivalence beyond that.
+// normalizeSkillPhrase collapses only the punctuation this codebase already treats
+// as insignificant, never a character that can carry a technology's identity.
+// Two passes:
+//
+//  1. Trim trailing sentence-punctuation (a stray period, comma, etc. an LLM's list
+//     formatting can leave glued to the last word) — but never a trailing '+' or
+//     '#', since those END identity-bearing names (C++, C#, F#) rather than
+//     punctuating a sentence.
+//  2. Lowercase, and collapse '-'/'_'/whitespace runs into a single space — the
+//     same separator-insensitivity internal/dict/skilltag itself applies when
+//     resolving a multi-word phrase (see its package doc: hyphenated, underscored,
+//     and spaced forms of a term all resolve alike). Every other character
+//     (including '+', '#', '.', '/') is kept exactly as written.
+//
+// This is deliberately narrower than "strip all punctuation": widening it invited
+// bare "C" and "C++" (or "F" and "F#") into the same bucket, corrupting or hiding
+// the report's real signal for two actually-distinct technologies.
 func normalizeSkillPhrase(phrase string) string {
+	trimmed := strings.TrimRightFunc(phrase, func(r rune) bool {
+		return r != '+' && r != '#' && !unicode.IsLetter(r) && !unicode.IsDigit(r)
+	})
+
 	var b strings.Builder
 	pendingSpace := false
-	for _, r := range phrase {
-		if unicode.IsLetter(r) || unicode.IsDigit(r) {
-			if pendingSpace && b.Len() > 0 {
-				b.WriteByte(' ')
+	for _, r := range trimmed {
+		if r == '-' || r == '_' || unicode.IsSpace(r) {
+			if b.Len() > 0 {
+				pendingSpace = true
 			}
-			b.WriteRune(unicode.ToLower(r))
-			pendingSpace = false
 			continue
 		}
-		pendingSpace = true
+		if pendingSpace {
+			b.WriteByte(' ')
+			pendingSpace = false
+		}
+		b.WriteRune(unicode.ToLower(r))
 	}
 	return b.String()
 }

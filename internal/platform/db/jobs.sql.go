@@ -2587,18 +2587,20 @@ type ListJobSkillsForGapReportRow struct {
 // One chunk of the skill-gap report: every (job id, raw skill phrase) pair LLM
 // enrichment recorded, for jobs in an id range.
 //
-// The CASE inside the LATERAL call is load-bearing, not defensive dressing:
-// jsonb_array_elements_text errors on a non-array JSON value, and it is invoked once
-// per row of `jobs` before any WHERE clause gets a chance to exclude that row (a WHERE
-// predicate here would filter the EXPANDED rows, too late to stop the call that
-// produced them). Substituting '[]'::jsonb for anything that is not a JSON array —
-// enrichment.skills absent, enrichment itself NULL, or (defensively) some other JSON
-// shape — makes the call total: it always sees an array, and a job with no skills
-// array simply contributes zero rows rather than erroring the whole chunk.
+// The CASE inside the LATERAL call keeps the query safe regardless of what the
+// query planner decides to do: jsonb_array_elements_text errors on a non-array JSON
+// value, and this call does not rely on a later WHERE predicate being pushed down
+// ahead of it to avoid that — substituting '[]'::jsonb for anything that is not a
+// JSON array (enrichment.skills absent, enrichment itself an empty object, or
+// defensively some other JSON shape) makes the call total on its own: it always
+// sees an array, and a job with no skills array simply contributes zero rows.
 //
-// The LIMIT bounds how many (id, skill) pairs one statement returns, not how many jobs
-// it reads — same reasoning as ListJobsForRequirementsBackfill's row cap. The caller
-// resumes from the last job id it saw when a chunk comes back full.
+// The LIMIT bounds how many (id, skill) pairs one statement returns, not how many
+// jobs it reads. Unlike ListJobsForRequirementsBackfill's one-row-per-job cap, this
+// is a one-row-per-(job, skill) LATERAL expansion, so the LIMIT is not guaranteed to
+// land on a job-id boundary — the caller (cmd/report-skill-gaps) accounts for that:
+// when a chunk comes back full, it holds back the last id's rows and resumes AT
+// that id rather than past it, so a job's skill list is never read half-counted.
 //
 // enriched_at IS NOT NULL, not `enrichment IS NOT NULL`: jobs.enrichment defaults to
 // '{}'::jsonb NOT NULL (migration 0001), so a job that has never been enriched still

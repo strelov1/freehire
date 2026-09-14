@@ -24,9 +24,17 @@ dictionary resolves to no canonical skill.
 - **THEN** the report does not include that phrase
 
 #### Scenario: Trivial spelling variants of the same unresolved phrase are collapsed
-- **WHEN** two unresolved enrichment skill phrases differ only in letter case, punctuation,
-  or surrounding/internal whitespace
+- **WHEN** two unresolved enrichment skill phrases differ only in letter case, a
+  hyphen/underscore used as a word separator, surrounding/internal whitespace, or a
+  trailing sentence-punctuation mark
 - **THEN** the report treats them as one candidate and sums their occurrence counts
+
+#### Scenario: Symbols that are part of a technology's own name are not collapsed away
+- **WHEN** two enrichment skill phrases differ by a symbol that is part of a
+  technology's identity rather than incidental formatting (for example "C++" vs.
+  "C#" vs. bare "C")
+- **THEN** the report treats them as separate candidates, even when one of them
+  happens to resolve in the skill-tagging dictionary and the other does not
 
 ### Requirement: Classify drift candidates rank titles where the dictionary disagrees with the model
 
