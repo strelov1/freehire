@@ -1,0 +1,91 @@
+# internal/job/searchping
+
+Announcing a posting's public URL to the external search engines that accept being
+**told**, instead of waiting to be crawled. Drained by `cmd/search-ping`, hourly.
+
+**Block: `job` (layer 5).** It reaches no further than `platform`. It is here and not in
+`search` because `search` is OUR index — Meilisearch, the drain, saved searches — while
+this is a fact about a posting's public address.
+
+## Why it exists
+
+Waiting does not work at this catalogue's size. Measured on prod, 2026-09-14:
+
+| | |
+|---|---|
+| distinct `/jobs/<slug>` pages Googlebot fetched that day | **65** |
+| job pages the sitemap declares | ~690,000 |
+| new technical postings published per day | ~14,000 |
+| Search Console URL Inspection on postings sampled from the sitemap | `URL is unknown to Google` |
+
+`URL is unknown to Google` is not "rejected" or "low quality" — it is *never fetched*. A
+posting is closed as soon as the employer's own listing disappears, so a page first
+crawled months later is stale before it is reachable.
+
+## The budget is the design, not the plumbing
+
+Google's Indexing API grants **200 publish calls a day** by default against ~14k new
+postings a day. Everything else follows from that.
+
+**A ledger, not an outbox.** Every other queue in this schema (`search_outbox`,
+`recent_feed_outbox`, `enrichment_outbox`) drains faster than it fills. This one cannot.
+An outbox fed by `cmd/ingest` would grow without bound forever and its oldest row would
+never be reached. `job_search_pings` (migration 0162) records what was **sent**, so each
+run chooses the newest eligible postings afresh and the choice can change without a
+backlog to unwind.
+
+**The remaining allowance is read back from the ledger**, because the API offers no way
+to ask: it answers `429` when the day is spent and nothing before that. The timer fires
+hourly, so a run that assumed it had the whole allowance would spend it again every hour.
+
+**The budget day ends at midnight Pacific**, where Google resets it — not UTC and not the
+host's clock. Measured in UTC, a run just after 00:00 UTC would spend an allowance Google
+still counts against yesterday, for most of the year.
+
+**Newest first is the whole selection policy**, and it does two jobs. A posting is worth
+announcing while it is still open, and the budget is far smaller than the catalogue. It
+also stands in for a filter this package cannot apply: the sitemap additionally excludes
+the `likely-evergreen` reality class, which lives only in the search index, but that
+class is *earned by staying open a long time*, so the newest rows have not had the chance
+to qualify. Google adjusts the quota by the quality of what is submitted, which is why
+the divergence is named rather than left to be discovered.
+
+## The two engines
+
+| | Google Indexing API | IndexNow |
+|---|---|---|
+| Reaches | Google | Bing, Yandex, Seznam, Naver |
+| Budget | 200/day (raisable on request) | none published |
+| Credential | service account, **owner** in Search Console | a public key served from the site |
+| Batching | one URL per call; batching saves HTTP, **not quota** | up to 10,000 per call |
+| Partial failure | normal | impossible — it answers for the list at once |
+
+`Announce` therefore takes a batch and returns the URLs the engine **accepted**. The
+ledger records what an engine *took*, never what it was offered: a partial batch recorded
+in full silently drops the postings that were not sent, and they are never selected
+again. The accepted prefix is recorded even when the batch as a whole failed — a send
+that happened and was not written down costs the budget twice.
+
+**Eligibility lives in the SQL**, beside the query, not in a caller. The API's terms admit
+only `JobPosting` and `BroadcastEvent` pages, and the penalty for anything else is the
+quota itself.
+
+## Two traps worth naming
+
+**`siteFullUser` is not `siteOwner`.** A service account added to Search Console with
+"Full" permission can read every report and cannot publish: the Indexing API answers
+`403 Permission denied. Failed to verify the URL ownership.` Nothing in that message says
+"change the role".
+
+**The IndexNow key lives in two places** — `web/static/<key>.txt`, which the site serves,
+and `INDEXNOW_KEY`, which the worker sends. IndexNow's answer to a mismatch is a `403` on
+every submission, which reads like a broken integration rather than two copies that
+drifted apart, so `VerifyKey` fetches the file once at startup and refuses to run if they
+disagree. The key is **public by design** — it is ownership proof, not a secret, which is
+why the file is checked in.
+
+## Rolling it back
+
+Clear `GOOGLE_INDEXING_KEY_FILE` and `INDEXNOW_KEY`. An engine with no credential is not
+configured and is skipped without error; with neither, the run is a no-op that never
+opens the pool. The timer can stay enabled.

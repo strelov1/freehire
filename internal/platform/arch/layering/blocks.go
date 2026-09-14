@@ -171,6 +171,13 @@ var blocks = map[string][]string{
 		// and returns them in the enrichment contract's shape, so it takes enrich the
 		// way jobview does — the block below it, not the model.
 		"reqextract",
+		// searchping announces a posting's public URL to the external search engines
+		// that accept being told (Google's Indexing API, IndexNow). It is here and not
+		// in search because search is OUR index — Meilisearch, the drain, saved
+		// searches — while this is a fact about a posting's public address and reaches
+		// no further than platform. Which postings are eligible lives in the SQL beside
+		// the query, so nothing above needs to be imported to decide it.
+		"searchping",
 		"silence", "verdict", "ycdir",
 		// wikicompany resolves a company name against Wikidata/Wikipedia's public APIs
 		// for the company-info-wikipedia-backfill worker — a fact-lookup about a
