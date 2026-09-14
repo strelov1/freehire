@@ -83,9 +83,21 @@ change from "this specific hole is closed" into "the next one is visible".
       answer 400 in 0.26–0.80s at `offset=179500`; the boundary page (`offset=9900&limit=100`)
       still serves 200, and the ordinary first page answers in 0.96s. The new pool and latency
       metrics are live on the active colour's `/metrics`.
-- [ ] 8.4 Ship the alert rules to litellm-host AFTER the binary, per the deploy-order note in
-      the rules file. **Blocked on a follow-up**: verifying 7.1 on production showed
-      `empty_acquire_total` running at 15/s against a pool one-tenth occupied, so an alert on
-      that rate would fire permanently. The rule now reads `acquire_wait_seconds_total`, whose
-      per-second rate is the average number of callers queued — which the binary must publish
-      first.
+- [x] 8.4 Alert rules live on litellm-host, shipped after the binary as the deploy-order note
+      requires. Grafana logged `starting to provision alerting` → `finished to provision
+      alerting` with nothing between; `alert_rule` holds 23 rules including the three new ones;
+      no evaluation errors; `alert_instance` is empty, so nothing is firing falsely.
+
+      Every expression was checked against live Prometheus BEFORE shipping, which is what a
+      `noDataState: Alerting` rule demands: pool occupancy 0.235 (threshold 0.7), p95 latency
+      0.53s (threshold 2s), 400-rate 0.034/s (threshold 2/s).
+
+      Getting the pool expression right took three drafts and two live measurements, and both
+      discarded ones looked correct on paper. `rate(empty_acquire_total)` read 15–39/s on a pool
+      one tenth occupied — pgx counts an acquire that waited at all, microseconds included.
+      `rate(acquire_seconds_total)` read 1.36 s/s on that same idle pool, and the claim that
+      this was "the average number of callers queued" was wrong: pgx's `AcquireDuration` is the
+      total duration of ALL acquires, instant hand-offs included. What works is averaged
+      occupancy — instantaneous `acquired/max` is bursty (sampled 9/10, 10/10, then 0/10 for
+      most of two minutes), but over five minutes it settles at 0.125–0.235 while the outage
+      held 10/10 for fifty minutes.
