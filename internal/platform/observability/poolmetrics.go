@@ -30,6 +30,7 @@ type poolCollector struct {
 	idle      *prometheus.Desc
 	max       *prometheus.Desc
 	emptyWait *prometheus.Desc
+	waited    *prometheus.Desc
 }
 
 // NewPoolCollector builds the collector for one pool. Register it on the default registry
@@ -43,12 +44,24 @@ func NewPoolCollector(pool poolStatter) prometheus.Collector {
 			"Connections open and free to be handed out.", nil, nil),
 		max: prometheus.NewDesc("freehire_db_pool_max_connections",
 			"The pool's ceiling. Saturation is acquired/max; alert on the ratio, never on the raw count — the ceiling is per-process configuration and changes.", nil, nil),
-		// The one that names the bottleneck rather than describing it. acquired == max is a
-		// pool that is BUSY; this counter only rises when a caller found nothing free and
-		// had to wait, which is a pool that is TOO SMALL for what is being asked of it. A
-		// pool can sit at its ceiling all day serving fast queries without this moving.
+		// How OFTEN a caller found nothing free. Useful as a trend, and deliberately NOT
+		// what to alert on — measured on production 2026-09-14 this sits around 15/s on a
+		// perfectly healthy pool (1 connection acquired, 9 idle at the same instant),
+		// because it counts an acquire that waited at all, including the microseconds pgx
+		// spends handing a connection over under ordinary concurrency. An alert on this
+		// rate fires permanently, and a permanently red alert is one nobody reads.
 		emptyWait: prometheus.NewDesc("freehire_db_pool_empty_acquire_total",
-			"Acquisitions that found no free connection and had to wait for one.", nil, nil),
+			"Acquisitions that found no free connection, however briefly. A trend, not an alerting signal — see freehire_db_pool_acquire_wait_seconds_total.", nil, nil),
+		// How LONG callers waited, in total. This is the one to alert on, because its rate
+		// is dimensionless and means something exact: seconds spent waiting per second
+		// elapsed IS the average number of callers queued at any instant. Above 1, someone
+		// is always waiting; on 2026-09-14 it would have been ten.
+		//
+		// The distinction matters because the two can move in opposite directions. Ten
+		// thousand waits of a microsecond is a busy pool working correctly; ten waits of
+		// two minutes is the outage. Only this one tells them apart.
+		waited: prometheus.NewDesc("freehire_db_pool_acquire_wait_seconds_total",
+			"Cumulative time callers spent waiting for a pooled connection. Its per-second rate is the average number of callers queued.", nil, nil),
 	}
 }
 
@@ -57,6 +70,7 @@ func (c *poolCollector) Describe(ch chan<- *prometheus.Desc) {
 	ch <- c.idle
 	ch <- c.max
 	ch <- c.emptyWait
+	ch <- c.waited
 }
 
 func (c *poolCollector) Collect(ch chan<- prometheus.Metric) {
@@ -65,4 +79,5 @@ func (c *poolCollector) Collect(ch chan<- prometheus.Metric) {
 	ch <- prometheus.MustNewConstMetric(c.idle, prometheus.GaugeValue, float64(stat.IdleConns()))
 	ch <- prometheus.MustNewConstMetric(c.max, prometheus.GaugeValue, float64(stat.MaxConns()))
 	ch <- prometheus.MustNewConstMetric(c.emptyWait, prometheus.CounterValue, float64(stat.EmptyAcquireCount()))
+	ch <- prometheus.MustNewConstMetric(c.waited, prometheus.CounterValue, stat.AcquireDuration().Seconds())
 }
