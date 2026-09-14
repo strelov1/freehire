@@ -161,7 +161,7 @@ func companyViewFrom(c db.Company) companyView {
 // directory facets. meta.total reports the count matching the full filter so
 // pagination is correct.
 func (h *companiesHandlers) ListCompanies(c *fiber.Ctx) error {
-	limit, offset, err := pageParamsWindowed(c, defaultLimit, maxLimit)
+	limit, offset, err := pageParams(c)
 	if err != nil {
 		return err
 	}
@@ -341,7 +341,7 @@ func (h *companiesHandlers) GetCompany(c *fiber.Ctx) error {
 	// the window cannot make this endpoint touch the database at all, whatever it pages
 	// through. It also keeps the refusal uniform across the list endpoints, which is what
 	// their shared guard asserts.
-	limit, offset, err := pageParamsWindowed(c, defaultLimit, maxLimit)
+	limit, offset, err := pageParams(c)
 	if err != nil {
 		return err
 	}

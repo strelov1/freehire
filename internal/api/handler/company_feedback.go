@@ -161,7 +161,7 @@ func companyFeedbackError(err error) error {
 // ListFeedback returns a company's feedback, newest first, offset-paginated. Public.
 func (h *companyFeedbackHandlers) ListFeedback(c *fiber.Ctx) error {
 	slug := c.Params("slug")
-	limit, offset, err := pageParamsWindowed(c, defaultLimit, maxLimit)
+	limit, offset, err := pageParams(c)
 	if err != nil {
 		return err
 	}

@@ -26,7 +26,7 @@ func (h *trackingHandlers) SwipeDeck(c *fiber.Ctx) error {
 		return err
 	}
 
-	limit, offset, err := pageParamsWindowed(c, defaultLimit, maxLimit)
+	limit, offset, err := pageParams(c)
 	if err != nil {
 		return err
 	}

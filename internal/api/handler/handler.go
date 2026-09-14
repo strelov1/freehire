@@ -224,6 +224,16 @@ func pageParamsBounded(c *fiber.Ctx, fallback, ceiling int) (limit, offset int) 
 // the same page forever and a person paging would silently see the wrong slice. The same
 // reasoning already decided maxSearchWindow on the Meili-backed lists, and this shares its
 // constant rather than introducing a second number that could drift.
+// pageParams is pageParamsWindowed at the shared list caps — the form six of its seven
+// call sites want, and the same convenience the package carried before the window existed.
+//
+// It returns an error where the old pageParams returned two values, which is deliberate: any
+// call site left behind by the change fails to compile rather than silently skipping the
+// window.
+func pageParams(c *fiber.Ctx) (limit, offset int, err error) {
+	return pageParamsWindowed(c, defaultLimit, maxLimit)
+}
+
 func pageParamsWindowed(c *fiber.Ctx, fallback, ceiling int) (limit, offset int, err error) {
 	limit, offset = pageParamsBounded(c, fallback, ceiling)
 	if offset+limit > maxPageWindow {

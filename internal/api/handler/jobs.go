@@ -76,7 +76,7 @@ func (h *jobsHandlers) register(api fiber.Router, mw middleware) {
 // `?countries=de` here gets the whole catalogue back, and without meta.ignored_params
 // that reads as a real answer about Germany (see ignoredListJobsParams).
 func (h *jobsHandlers) ListJobs(c *fiber.Ctx) error {
-	limit, offset, err := pageParamsWindowed(c, defaultLimit, maxLimit)
+	limit, offset, err := pageParams(c)
 	if err != nil {
 		return err
 	}

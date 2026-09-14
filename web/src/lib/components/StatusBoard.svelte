@@ -162,15 +162,17 @@
             <div class="text-sm opacity-80">
               Database {site.database} · {nfPercent.format(site.error_rate)} error rate over the last {site.window_minutes} min
             </div>
-            <!-- Named only when it is the thing making the site degraded. The error rate
-                 above describes requests that finished; a saturated pool is why requests
-                 cannot start, and stating both unconditionally would bury the one that
-                 matters on the day it matters. -->
-            {#if site.pool_pressure >= 0.9}
-              <div class="text-sm opacity-80">
-                Requests are queuing for a database connection ({nfPercent.format(site.pool_pressure)} of the pool in use)
-              </div>
-            {/if}
+            <!-- Reported beside the error rate, never conditionally. The two answer
+                 different questions — the error rate describes requests that FINISHED,
+                 this describes how much of the connection pool is held at this instant,
+                 which is why requests may not start. An earlier draft showed this line
+                 only above 90% and read as a warning; the live pool touches its ceiling
+                 in ordinary bursts, so that phrasing cried wolf on a healthy site. A
+                 sustained reading is what matters, and judging that needs history the
+                 page does not have (the Grafana rule averages it over five minutes). -->
+            <div class="text-sm opacity-80">
+              Database connections in use: {nfPercent.format(site.pool_pressure)}
+            </div>
           </div>
         </div>
 

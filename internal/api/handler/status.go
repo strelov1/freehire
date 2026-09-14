@@ -55,27 +55,23 @@ const (
 	// siteDownErrorRate: at or above this fraction reads down even though the
 	// database itself answers.
 	siteDownErrorRate = 0.5
-	// siteDegradedPoolPressure: at or above this fraction of the connection pool held
-	// at once, the site reads degraded even while the database answers and the error
-	// fraction looks clean.
-	//
-	// It exists because on 2026-09-14 this page read "All systems operational" for the
-	// 54 minutes nginx spent answering 504. Every other signal here was blind to that
-	// outage by construction: the error fraction counts only responses this process
-	// PRODUCED, and a request queued for a pooled connection produces none; pool.Ping
-	// succeeds in microseconds while every connection is held; and latency is not
-	// measured at all. The pool's own occupancy was the one live signal that had the
-	// outage's shape, and nothing read it.
-	//
-	// 0.9 rather than 1.0 because full is already too late to be a warning — by then
-	// callers are queuing — and because a pool momentarily at its cap under ordinary
-	// load is normal. It is deliberately capped at degraded; see deriveSiteStatus.
-	siteDegradedPoolPressure = 0.9
 )
 
 // poolPressure is the fraction of the connection pool held at once. A pool reporting no
 // capacity (unconfigured, or closed) yields 0 rather than dividing by zero — "I cannot
 // measure this" must not render as "everything is held".
+//
+// Reported, never judged. It is a single instant, and an instant cannot carry a verdict
+// here: sampled every 5s against the healthy live site this reads 9/10 and 10/10 inside
+// the same two minutes it spends mostly at 0/10, because real traffic is bursty and
+// touching the ceiling is ordinary. A draft of this did feed deriveSiteStatus, and the
+// consequence would have been permanent: the sampler takes one reading every five minutes
+// and RecordSiteStatusSample keeps the day's WORST, so a single unlucky burst would have
+// painted a whole day degraded and the 90-day strip would have gone yellow for good.
+//
+// What turns this number into a verdict is the Grafana rule, which averages it over five
+// minutes — 0.125-0.235 healthy against the outage's sustained 1.0. That needs history
+// this function does not have.
 func poolPressure(acquired, maxConns int32) float64 {
 	if maxConns <= 0 {
 		return 0
@@ -88,36 +84,26 @@ func poolPressure(acquired, maxConns int32) float64 {
 //   - down    when the database is up but the error fraction is at or above
 //     siteDownErrorRate;
 //   - degraded when the error fraction exceeds siteDegradedErrorRate;
-//   - degraded when the connection pool is held at or above siteDegradedPoolPressure;
 //   - operational otherwise.
 //
-// Pool pressure is checked LAST and can only raise operational to degraded — never soften
-// a worse verdict, and never reach down on its own. A saturated pool means requests are
-// queuing; that is a different and weaker claim than "the database does not answer" or
-// "half of all responses are errors", and stating it as either would make the page less
-// truthful rather than more.
-//
-// It is also the one signal deliberately exempt from the traffic floor. The floor exists
-// so a couple of unlucky requests right after a deploy cannot read as an outage — a
-// sampling argument, which applies to a FRACTION of requests and not to an occupancy read
-// directly from the pool. During the 2026-09-14 outage almost nothing completed, so the
-// floor was suppressing the error fraction at exactly the moment the pool was full.
-func deriveSiteStatus(dbUp bool, errorRate float64, totalRequests int64, poolPressure float64) providerStatus {
+// Pool occupancy is deliberately NOT an input, though siteHealth reports it: see
+// poolPressure for why an instantaneous reading cannot carry a verdict that the daily
+// sampler then keeps the worst of.
+func deriveSiteStatus(dbUp bool, errorRate float64, totalRequests int64) providerStatus {
 	if !dbUp {
 		return statusDown
 	}
-	if totalRequests >= minSiteRequestsForSignal {
-		switch {
-		case errorRate >= siteDownErrorRate:
-			return statusDown
-		case errorRate > siteDegradedErrorRate:
-			return statusDegraded
-		}
+	if totalRequests < minSiteRequestsForSignal {
+		return statusOperational
 	}
-	if poolPressure >= siteDegradedPoolPressure {
+	switch {
+	case errorRate >= siteDownErrorRate:
+		return statusDown
+	case errorRate > siteDegradedErrorRate:
 		return statusDegraded
+	default:
+		return statusOperational
 	}
-	return statusOperational
 }
 
 // severityOrder is the single source of truth for the integer severity
@@ -292,7 +278,7 @@ func currentSiteHealth(ctx context.Context, pool *pgxpool.Pool) (health siteHeal
 	pressure := poolPressure(stat.AcquiredConns(), stat.MaxConns())
 
 	return siteHealth{
-		Status:        deriveSiteStatus(dbUp, errorRate, totalRequests, pressure),
+		Status:        deriveSiteStatus(dbUp, errorRate, totalRequests),
 		Database:      dbStatusLabel(dbUp),
 		ErrorRate:     errorRate,
 		WindowMinutes: int(siteErrorWindow / time.Minute),

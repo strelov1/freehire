@@ -44,7 +44,9 @@ func TestOffsetIsParsedOnlyByTheSharedHelper(t *testing.T) {
 		body := string(src)
 
 		readsRaw := strings.Contains(body, `QueryInt("offset"`) || strings.Contains(body, `Query("offset"`)
-		usesHelper := strings.Contains(body, "pageParamsBounded(") || strings.Contains(body, "pageParamsWindowed(")
+		usesHelper := strings.Contains(body, "pageParams(") ||
+			strings.Contains(body, "pageParamsBounded(") ||
+			strings.Contains(body, "pageParamsWindowed(")
 		if !readsRaw && !usesHelper {
 			continue
 		}

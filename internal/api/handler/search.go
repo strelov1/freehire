@@ -206,7 +206,7 @@ func (h *searchHandlers) runJobSearch(c *fiber.Ctx) (search.SearchResult, int, i
 		return search.SearchResult{}, 0, 0, nil, fiber.NewError(fiber.StatusServiceUnavailable, "search is not available")
 	}
 
-	limit, offset, err := pageParamsWindowed(c, defaultLimit, maxLimit)
+	limit, offset, err := pageParams(c)
 	if err != nil {
 		return search.SearchResult{}, 0, 0, nil, err
 	}
