@@ -150,7 +150,13 @@ var blocks = map[string][]string{
 		"talentnetwork",
 	},
 	"job": {
-		"applydate", "collections", "ghost", "ghostreport", "job", "jobdedup",
+		"applydate", "collections",
+		// dictgap turns LLM enrichment facts already in the catalogue into ranked
+		// candidate gaps for the deterministic dict/skilltag and dict/classify
+		// dictionaries — a fact about postings' recorded facets, not an AI/enrichment
+		// concern, the same footing reqextract and wikicompany take below.
+		"dictgap",
+		"ghost", "ghostreport", "job", "jobdedup",
 		"jobderive", "jobfacts", "jobhash", "jobreality", "jobview", "liveness",
 		"outboundurl", "privatejob",
 		// recentfeed polls recent_feed_outbox and groups the batch by

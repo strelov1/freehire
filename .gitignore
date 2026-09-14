@@ -193,6 +193,8 @@ extension/*.zip
 /recount-companies
 /reindex
 /reindex-companies
+/report-classify-drift
+/report-skill-gaps
 /reslug
 /rollup-facets
 /build-suggestions

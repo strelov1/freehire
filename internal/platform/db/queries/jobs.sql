@@ -2526,3 +2526,91 @@ SET is_tech = true
 WHERE source = 'profession'
   AND external_id ILIKE ANY(sqlc.arg(board_patterns)::text[])
   AND is_tech IS DISTINCT FROM true;
+
+-- name: SkillGapReportBounds :one
+-- The id span cmd/report-skill-gaps walks. Same MIN/MAX-over-the-primary-key shape as
+-- RequirementsDerivedBackfillBounds — two index probes, deliberately unfiltered.
+SELECT COALESCE(MIN(id), 0)::bigint AS min_id,
+       COALESCE(MAX(id), 0)::bigint AS max_id
+FROM jobs;
+
+-- name: ListJobSkillsForGapReport :many
+-- One chunk of the skill-gap report: every (job id, raw skill phrase) pair LLM
+-- enrichment recorded, for jobs in an id range.
+--
+-- The CASE inside the LATERAL call is load-bearing, not defensive dressing:
+-- jsonb_array_elements_text errors on a non-array JSON value, and it is invoked once
+-- per row of `jobs` before any WHERE clause gets a chance to exclude that row (a WHERE
+-- predicate here would filter the EXPANDED rows, too late to stop the call that
+-- produced them). Substituting '[]'::jsonb for anything that is not a JSON array —
+-- enrichment.skills absent, enrichment itself NULL, or (defensively) some other JSON
+-- shape — makes the call total: it always sees an array, and a job with no skills
+-- array simply contributes zero rows rather than erroring the whole chunk.
+--
+-- The LIMIT bounds how many (id, skill) pairs one statement returns, not how many jobs
+-- it reads — same reasoning as ListJobsForRequirementsBackfill's row cap. The caller
+-- resumes from the last job id it saw when a chunk comes back full.
+--
+-- enriched_at IS NOT NULL, not `enrichment IS NOT NULL`: jobs.enrichment defaults to
+-- '{}'::jsonb NOT NULL (migration 0001), so a job that has never been enriched still
+-- has a non-NULL enrichment column — enriched_at is the real "this job has actually
+-- been enriched" signal. The CASE above already makes an unenriched row contribute
+-- zero rows on its own (an empty object has no 'skills' array), so this filter is a
+-- cheaper way to skip most of the table rather than a correctness requirement.
+SELECT j.id, s.skill::text AS skill
+FROM jobs j
+CROSS JOIN LATERAL jsonb_array_elements_text(
+    CASE WHEN jsonb_typeof(j.enrichment -> 'skills') = 'array'
+         THEN j.enrichment -> 'skills'
+         ELSE '[]'::jsonb
+    END
+) AS s(skill)
+WHERE j.id >= sqlc.arg(from_id) AND j.id < sqlc.arg(to_id)
+  AND j.enriched_at IS NOT NULL
+ORDER BY j.id
+LIMIT sqlc.arg(row_limit);
+
+-- name: ClassifyDriftReportBounds :one
+-- The id span cmd/report-classify-drift walks. Same shape as SkillGapReportBounds.
+SELECT COALESCE(MIN(id), 0)::bigint AS min_id,
+       COALESCE(MAX(id), 0)::bigint AS max_id
+FROM jobs;
+
+-- name: ListTitlesForClassifyDrift :many
+-- One chunk of the classify-drift report: every distinct title among enriched jobs in
+-- an id range, with how many jobs in THIS CHUNK carried it and one representative
+-- enrichment seniority/category pair (MIN picks an arbitrary but deterministic one —
+-- the report only needs a disagreement signal per title, not a distribution across
+-- postings that share a title but disagree with each other).
+--
+-- Deliberately NO row LIMIT, unlike ListJobSkillsForGapReport: GROUP BY already caps
+-- this statement's output at the number of DISTINCT titles in the id range, which is
+-- always far below the range's row count, so the id range width alone (the caller's
+-- chunk-size knob) is what bounds one statement's cost. A LIMIT on top of an
+-- unordered GROUP BY would silently drop titles from the chunk rather than bounding
+-- memory, with no id to resume from — aggregated rows carry no single id to resume a
+-- partial chunk from, unlike the per-row chunks elsewhere in this file.
+--
+-- Grouping happens per chunk, not across the whole table: a title spanning more than
+-- one id range comes back as more than one row, one per chunk it appears in. The
+-- caller (cmd/report-classify-drift) merges those by title across chunks.
+--
+-- enriched_at IS NOT NULL, not `enrichment IS NOT NULL` or is_tech/closed_at:
+-- jobs.enrichment defaults to '{}'::jsonb NOT NULL (migration 0001), so a job that
+-- has never been enriched still has a non-NULL enrichment column — enriched_at is
+-- the real "this job has actually been enriched" signal, the same one
+-- EnqueuePendingJobs uses to decide what still needs enriching. A title's dictionary
+-- answer is a fact about the title text alone, independent of whether the posting is
+-- open or confirmed technical, and filtering on either would hide real drift on
+-- titles that skew toward one state. COALESCE to '' rather than leaving the
+-- aggregate nullable: a title where every enriched job left a facet unstated is
+-- exactly the "no opinion" case dictgap.ClassifyDriftCandidates already treats as
+-- empty.
+SELECT title,
+       count(*)::bigint AS job_count,
+       COALESCE(MIN(enrichment ->> 'seniority'), '')::text AS enrichment_seniority,
+       COALESCE(MIN(enrichment ->> 'category'), '')::text AS enrichment_category
+FROM jobs
+WHERE id >= sqlc.arg(from_id) AND id < sqlc.arg(to_id)
+  AND enriched_at IS NOT NULL
+GROUP BY title;
