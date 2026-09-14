@@ -138,8 +138,8 @@ github.com/felixge/httpsnoop v1.1.0 h1:3YtUj32ZZkqZtt3sZZsClsymw/QDuVfpNhoA31zeO
 github.com/felixge/httpsnoop v1.1.0/go.mod h1:Zqxgdd+1Rkcz8euOqdr7lqgCRJztwr5hp9vDSi5UZCE=
 github.com/getsentry/sentry-go v0.49.0 h1:Ehejknu1l023Ub7QoRBVLAI7g3Jnhqku4oWx4B4Sh5s=
 github.com/getsentry/sentry-go v0.49.0/go.mod h1:nuMJAoCfe1u0Bts2ocyNI+TW8HT84vRMqwA5Qq/SKUI=
-github.com/getsentry/sentry-go/fiber v0.48.0 h1:CVA5Rt2jamC/ykXz/elshu79zXWzgZitLvRFAFRrvlI=
-github.com/getsentry/sentry-go/fiber v0.48.0/go.mod h1:wCsv9l/Y7Z6myRNw9fQ3jjG46+y242W7hMQSUG8l3Io=
+github.com/getsentry/sentry-go/fiber v0.49.0 h1:QVWcmsqul2xD1PITQ3OURRMV+tLlo3BnrrfWeK7eveA=
+github.com/getsentry/sentry-go/fiber v0.49.0/go.mod h1:wLmd8u7rtsxKQS20mAFLTufSM1iQ4S0cEWP0QeYcgZQ=
 github.com/go-errors/errors v1.4.2 h1:J6MZopCL4uSllY1OfXM374weqZFFItUbrImctkmUxIA=
 github.com/go-errors/errors v1.4.2/go.mod h1:sIVyrIiJhuEF+Pj9Ebtd6P/rEYROXFi3BopGUQ5a5Og=
 github.com/go-json-experiment/json v0.0.0-20260623181947-01eb4420fa68 h1:KZaTBSyshWX3MP5jukJcNSuXDQTO+rNpt0J564dX/eg=
