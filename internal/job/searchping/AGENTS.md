@@ -66,6 +66,19 @@ in full silently drops the postings that were not sent, and they are never selec
 again. The accepted prefix is recorded even when the batch as a whole failed — a send
 that happened and was not written down costs the budget twice.
 
+**The send is at-least-once, and that direction is chosen.** An HTTP call cannot join
+the transaction that records it, so one of the two orderings has to lose. Sending first
+and failing to record costs a duplicate announcement — bounded, surfaced in the run's
+error, harmless to the engine. Recording first and failing to send would cost the posting
+its announcement permanently and silently, because a recorded row is never selected
+again. The loud, bounded failure is the one to keep.
+
+**The budget day needs the real zone, not a fixed offset.** During DST a fixed `-8`
+standing in for Pacific puts the boundary an hour late, so pings sent in that hour go
+uncounted while Google counts them, and the run reads more allowance left than it has. A
+fixed `-7` fails the same way in winter. `time/tzdata` is imported so this cannot depend
+on whether the host carries a zone database.
+
 **Eligibility lives in the SQL**, beside the query, not in a caller. The API's terms admit
 only `JobPosting` and `BroadcastEvent` pages, and the penalty for anything else is the
 quota itself.

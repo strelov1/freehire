@@ -222,3 +222,19 @@ func TestBudgetDayStartIsPacificNotUTC(t *testing.T) {
 		t.Fatalf("budget day starts at %02d:%02d Pacific, want midnight", h, m)
 	}
 }
+
+// The zone must carry its daylight saving rule. A fixed -8 offset standing in for
+// Pacific puts the summer boundary an hour LATE, so pings sent in that hour go
+// uncounted while Google counts them — the run reads more allowance left than it has
+// and overspends. The failure is silent, which is why it is pinned to an instant.
+func TestBudgetDayFollowsDaylightSaving(t *testing.T) {
+	summer := time.Date(2026, 7, 15, 10, 0, 0, 0, time.UTC) // PDT, UTC-7
+	winter := time.Date(2026, 1, 15, 10, 0, 0, 0, time.UTC) // PST, UTC-8
+
+	if got := budgetDayStart(summer).UTC(); !got.Equal(time.Date(2026, 7, 15, 7, 0, 0, 0, time.UTC)) {
+		t.Fatalf("summer budget day starts at %s, want 07:00 UTC (midnight PDT)", got)
+	}
+	if got := budgetDayStart(winter).UTC(); !got.Equal(time.Date(2026, 1, 15, 8, 0, 0, 0, time.UTC)) {
+		t.Fatalf("winter budget day starts at %s, want 08:00 UTC (midnight PST)", got)
+	}
+}

@@ -22,6 +22,12 @@ import (
 	"log"
 	"strings"
 	"time"
+
+	// Embeds the IANA zone database. Required, not defensive: the budget day is
+	// Google's, measured in Pacific time with its daylight saving rule, and a host
+	// without tzdata would otherwise make LoadLocation fail — see pacific below for
+	// what each stand-in gets wrong.
+	_ "time/tzdata"
 )
 
 // Engine is one external search engine that accepts a URL announcement.
@@ -71,18 +77,23 @@ type Repository interface {
 // not the host's clock. A budget day measured in UTC would let a run just after 00:00
 // UTC spend an allowance that, for eight or nine months of the year, Google still
 // considers yesterday's.
-var pacific = mustLoadPacific()
-
-func mustLoadPacific() *time.Location {
-	// A host without tzdata would otherwise silently fall back to UTC, which is the
-	// misreading this variable exists to prevent; the fixed offset is the winter one,
-	// the conservative direction (it starts the budget day later than DST would).
+//
+// The zone must be the real one, with its daylight saving rule, and NOT a fixed -8
+// offset standing in for it. During DST a fixed PST puts the boundary an hour LATE, so
+// the pings sent in that hour are not counted while Google counts them — the run reads
+// more allowance left than it has and overspends. (A fixed -7 fails the same way in
+// winter, in the opposite hour.) Hence time/tzdata below: it embeds the zone database
+// in the binary, so this cannot depend on whether the host happens to carry one.
+var pacific = func() *time.Location {
 	loc, err := time.LoadLocation("America/Los_Angeles")
 	if err != nil {
-		return time.FixedZone("PST", -8*60*60)
+		// Unreachable with time/tzdata imported, and a panic rather than a fallback on
+		// purpose: every stand-in for this zone is wrong for part of the year, and being
+		// wrong here is silent — it looks like budget that was never spent.
+		panic("searchping: America/Los_Angeles unavailable despite time/tzdata: " + err.Error())
 	}
 	return loc
-}
+}()
 
 // budgetDayStart is the instant the current quota day began.
 func budgetDayStart(now time.Time) time.Time {
@@ -209,6 +220,14 @@ func (r *Runner) runOne(ctx context.Context, engine Engine, batch int) Report {
 
 	// Record whatever was accepted even when the batch also failed. A send that
 	// happened and was not written down is the one outcome that costs budget twice.
+	//
+	// This is AT-LEAST-ONCE and deliberately so: an HTTP call cannot join the
+	// transaction that records it, so one of the two orderings has to lose. Sending
+	// first and failing to record costs a duplicate announcement — bounded, visible in
+	// the run's error, and harmless to the engine. Recording first and failing to send
+	// would cost the posting its announcement permanently and silently, because a
+	// recorded row is never selected again. The loud, bounded failure is the one to
+	// keep.
 	var recordErrs []error
 	for _, url := range accepted {
 		c, ok := bySlug[url]
