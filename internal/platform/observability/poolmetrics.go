@@ -52,16 +52,22 @@ func NewPoolCollector(pool poolStatter) prometheus.Collector {
 		// rate fires permanently, and a permanently red alert is one nobody reads.
 		emptyWait: prometheus.NewDesc("freehire_db_pool_empty_acquire_total",
 			"Acquisitions that found no free connection, however briefly. A trend, not an alerting signal — see freehire_db_pool_acquire_wait_seconds_total.", nil, nil),
-		// How LONG callers waited, in total. This is the one to alert on, because its rate
-		// is dimensionless and means something exact: seconds spent waiting per second
-		// elapsed IS the average number of callers queued at any instant. Above 1, someone
-		// is always waiting; on 2026-09-14 it would have been ten.
+		// How long callers spent inside Acquire, in total. A diagnostic, and NOT the
+		// alerting signal either — the name pgx gives it is AcquireDuration and what it
+		// documents is "the total duration of all successful Acquire calls", so it counts
+		// handing over an already-idle connection just as it counts a two-minute wait.
+		// Measured on production it runs at ~1.36 seconds per second against a pool one
+		// tenth occupied, which is not 1.36 callers queued; it is Little's law over every
+		// acquire, most of them instant.
 		//
-		// The distinction matters because the two can move in opposite directions. Ten
-		// thousand waits of a microsecond is a busy pool working correctly; ten waits of
-		// two minutes is the outage. Only this one tells them apart.
-		waited: prometheus.NewDesc("freehire_db_pool_acquire_wait_seconds_total",
-			"Cumulative time callers spent waiting for a pooled connection. Its per-second rate is the average number of callers queued.", nil, nil),
+		// It earns its place as the thing that separates ten thousand waits of a
+		// microsecond from ten waits of two minutes, which no count can: divide it by
+		// freehire_db_pool_empty_acquire_total for the mean. What carries the ALERT is
+		// sustained occupancy — avg_over_time of acquired/max — because during the
+		// 2026-09-14 outage the pool sat at 10/10 for fifty minutes, while a healthy pool
+		// samples at 0/10 most of the time and touches its ceiling only in bursts.
+		waited: prometheus.NewDesc("freehire_db_pool_acquire_seconds_total",
+			"Cumulative time spent inside Acquire, waiting and instant hand-offs alike. A diagnostic: divide by the empty-acquire count for a mean wait. Alert on sustained acquired/max instead.", nil, nil),
 	}
 }
 
