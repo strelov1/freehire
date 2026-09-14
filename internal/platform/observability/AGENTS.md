@@ -58,6 +58,58 @@ method is tens of thousands of series on a single-target Prometheus. Widening it
 `TestHTTPMetricsLabelsAreBounded`, which fails if a path label creeps in. The route lives in a
 separate metric instead — below.
 
+## Per-route latency
+
+`freehire_http_request_duration_seconds{route}` observes how long each response took, labelled by
+route pattern and by nothing else — the same split, for a sharper reason. A histogram multiplies
+its label set by its bucket count, so at ~700 routes and 11 buckets this is already the largest
+emitter in the process: one extra label does not add 700 series, it adds ~7,700.
+`TestDurationMetricLabelsAreBounded` fails if one arrives.
+
+It exists because nothing measured latency at all until the 2026-09-14 deep-offset outage, and
+that absence is why the outage was found by a person saying the site felt slow rather than by a
+graph. The two counters above answer "how many" and "which status"; a request that takes two
+minutes and then succeeds is a `200` to both, and `requestWindow` below carries `minute`/`total`/
+`errors` with no field a duration could go into. **Slow is the state that precedes down, and it
+was unobservable.**
+
+The buckets stop at 30s because that is the API pool's `statement_timeout` (`cmd/server`): past it
+a query is cancelled, so a wider bucket would only ever collect requests that were not waiting on
+Postgres. They start at 5ms because the ordinary reads on this catalogue answer in single-digit
+milliseconds — the incident's own logs show `/api/v1/companies` at 4ms while the site was
+unreachable — and a histogram whose first bucket already holds the healthy case cannot show it
+degrading.
+
+## Connection pool
+
+`NewPoolCollector` publishes five series for the API server's pgx pool
+(`freehire_db_pool_{acquired,idle,max}_connections`, `_empty_acquire_total`,
+`_acquire_seconds_total`). A `prometheus.Collector` rather than gauges a goroutine polls:
+`pgxpool.Stat()` reads counters the pool already keeps in memory, so reading them at scrape time
+is cheaper and fresher than sampling on a timer, and there is no interval to choose or ticker to
+stop. Registered by `cmd/server` only — the cron workers publish through the node_exporter
+textfile collector instead.
+
+**Nothing in this repository read `pool.Stat()` before 2026-09-14**, which is why that outage was
+invisible: a deep-offset crawl held all ten connections for minutes at a time while `pool.Ping`
+kept answering in microseconds and the error fraction kept reading clean, because almost nothing
+was FINISHING to be counted.
+
+**Alert on sustained `acquired/max`, and on neither wait metric.** Both were drafted as the
+alerting signal and both were disproved by measuring the live pool:
+
+| expression | on a pool one tenth occupied | why not |
+|---|---|---|
+| `rate(_empty_acquire_total)` | 15-39/s | pgx counts an acquire that waited at ALL, microseconds included |
+| `rate(_acquire_seconds_total)` | 1.36 s/s | `AcquireDuration` is the total duration of ALL acquires, instant hand-offs included — Little's law over every acquire, not over the waiting ones |
+| `avg_over_time(acquired[5m]) / avg_over_time(max[5m])` | 0.125-0.235 | what the Grafana rule uses, at a 0.7 threshold |
+
+Instantaneous occupancy is not usable either: sampled every 5s on a healthy site it reads 9/10,
+10/10, then 0/10 for most of two minutes. Real traffic is bursty and touching the ceiling is
+ordinary; the outage held 10/10 for fifty minutes. The two wait metrics stay published as
+diagnostics — `_acquire_seconds_total` divided by `_empty_acquire_total` is a mean wait, which
+separates ten thousand waits of a microsecond from ten waits of two minutes, and no count can.
+
 ## Per-route traffic
 
 `freehire_http_route_requests_total{route}` counts every response by the route PATTERN it matched,

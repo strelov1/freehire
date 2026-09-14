@@ -815,10 +815,11 @@ components:
       schema:
         type: integer
         minimum: 0
-        # The window is on offset+limit, so this is the ceiling only for the smallest
-        # possible limit. A generator cannot express the real bound; the description is
-        # what states it.
-        maximum: 10000
+        # No `maximum` here on purpose. The bound is on offset+limit, which JSON Schema
+        # cannot express across two params, and a `maximum: 10000` would be a
+        # machine-readable claim the server does not honour: offset=10000 with any limit
+        # is already a 400. A wrong bound a client generator trusts is worse than no
+        # bound at all — the description below is what states the real one.
         default: 0
       description: |
         Rows to skip. On every list endpoint `offset + limit` may not exceed

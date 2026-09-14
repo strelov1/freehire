@@ -185,9 +185,7 @@ type middleware struct {
 //
 // The unbounded-depth reader. Every PUBLIC list calls pageParamsWindowed below instead; what
 // is left here are the caller's own resources — the tracking board, the inbox, the
-// notification list — where the set is one user's and the depth is theirs to walk. A
-// convenience wrapper defaulting the two bounds used to sit above this and every remaining
-// caller passes its own, so it is gone rather than kept for symmetry.
+// notification list — where the set is one user's and the depth is theirs to walk.
 //
 // It is the ONLY place the offset query param is read, and a test enforces that. The clamp to
 // MaxInt32 is the reason: every paginated column binds as a Postgres int4, Fiber's QueryInt is
@@ -221,25 +219,25 @@ func pageParamsBounded(c *fiber.Ctx, fallback, ceiling int) (limit, offset int) 
 //
 // Refusing rather than clamping to the ceiling is the deliberate half. A clamped page answers
 // 200 with rows the caller did not ask for, which reads as success: a walker would loop over
-// the same page forever and a person paging would silently see the wrong slice. The same
-// reasoning already decided maxSearchWindow on the Meili-backed lists, and this shares its
-// constant rather than introducing a second number that could drift.
-// pageParams is pageParamsWindowed at the shared list caps — the form six of its seven
-// call sites want, and the same convenience the package carried before the window existed.
-//
-// It returns an error where the old pageParams returned two values, which is deliberate: any
-// call site left behind by the change fails to compile rather than silently skipping the
-// window.
-func pageParams(c *fiber.Ctx) (limit, offset int, err error) {
-	return pageParamsWindowed(c, defaultLimit, maxLimit)
-}
-
+// the same page forever and a person paging would silently see the wrong slice. That
+// reasoning first landed on the Meili-backed lists, under a constant of their own; this
+// is that constant, moved here so one number decides for both stores.
 func pageParamsWindowed(c *fiber.Ctx, fallback, ceiling int) (limit, offset int, err error) {
 	limit, offset = pageParamsBounded(c, fallback, ceiling)
 	if offset+limit > maxPageWindow {
 		return 0, 0, fiber.NewError(fiber.StatusBadRequest, "pagination too deep")
 	}
 	return limit, offset, nil
+}
+
+// pageParams is pageParamsWindowed at the shared list caps — the form six of its seven call
+// sites want, and the same convenience the package carried before the window existed.
+//
+// It returns an error where the old pageParams returned two values, which is deliberate: any
+// call site left behind by the change fails to compile rather than silently skipping the
+// window.
+func pageParams(c *fiber.Ctx) (limit, offset int, err error) {
+	return pageParamsWindowed(c, defaultLimit, maxLimit)
 }
 
 // listResponse writes the shared paginated-list envelope: the data slice plus a
@@ -884,7 +882,7 @@ func Register(app *fiber.App, cfg Config) {
 	// dependencies: interpretation needs a model and the caller's profile, not the
 	// index.
 	intentH.register(api, mw)
-	sitemapH.register(api)
+	sitemapH.register(api, mw)
 	jobsH.register(api, mw)
 	companiesH.register(api, mw)
 	geoH.register(api, mw)

@@ -51,7 +51,7 @@ func NewPoolCollector(pool poolStatter) prometheus.Collector {
 		// spends handing a connection over under ordinary concurrency. An alert on this
 		// rate fires permanently, and a permanently red alert is one nobody reads.
 		emptyWait: prometheus.NewDesc("freehire_db_pool_empty_acquire_total",
-			"Acquisitions that found no free connection, however briefly. A trend, not an alerting signal — see freehire_db_pool_acquire_wait_seconds_total.", nil, nil),
+			"Acquisitions that found no free connection, however briefly. A trend, not an alerting signal — alert on sustained acquired/max instead.", nil, nil),
 		// How long callers spent inside Acquire, in total. A diagnostic, and NOT the
 		// alerting signal either — the name pgx gives it is AcquireDuration and what it
 		// documents is "the total duration of all successful Acquire calls", so it counts

@@ -1122,7 +1122,10 @@ interface SiteHealth {
   error_rate: number;
   /** Fraction of the database connection pool held at once, 0..1. Answers a different
    *  question from `error_rate`: that one describes requests that FINISHED, this one
-   *  describes requests that cannot start. A saturated pool reads `degraded`. */
+   *  describes requests that cannot start. Reported, never judged: it is a single
+   *  instant, and the live pool touches its ceiling in ordinary bursts, so `status`
+   *  above does not read it. Judging it needs an average over minutes, which the
+   *  Grafana rule does and this page cannot. */
   pool_pressure: number;
   window_minutes: number;
   history: SiteHistoryEntry[];

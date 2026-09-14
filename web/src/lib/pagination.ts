@@ -14,7 +14,8 @@ import { toSearchString } from './urlSearchString';
 export const PAGE_SIZE = 20;
 
 /** How deep the search API will page: it refuses `offset + limit > SEARCH_WINDOW`
- *  with "pagination too deep" (internal/handler/search.go, maxSearchWindow). */
+ *  with "pagination too deep" (internal/api/handler/handler.go, maxPageWindow — it
+ *  bounds every list endpoint, not just search, since the 2026-09-14 outage). */
 const SEARCH_WINDOW = 10000;
 
 /** Last page the API will serve, and so the last one worth linking — a link past

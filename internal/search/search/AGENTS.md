@@ -81,12 +81,13 @@ reads a precomputed pgvector lookup instead (`internal/search/similarjobs`,
 - `swapIndexes` calls `POST /swap-indexes` over raw HTTP, not the SDK: the pinned
   meilisearch-go always serializes a `rename` field that engine v1.13 rejects.
 - Indexed descriptions are capped at `maxIndexedDescriptionRunes`; `maxTotalHits` is the
-  count-honesty cap, **not** the pagination guard (that's `maxSearchWindow` in the handler).
+  count-honesty cap, **not** the pagination guard (that's `maxPageWindow` in the handler,
+  which bounds the Postgres-backed lists too since the 2026-09-14 deep-offset outage).
 - **Both indexes are also what the sitemaps page** (`sitemap.go` → `/api/v1/jobs/sitemap`
   and `/api/v1/companies/sitemap`), which makes the "unresolved category never enters the
   index" rule above a decision about what Google crawls, not only about what search
   returns. They read through `GET /indexes/<uid>/documents` — offset-addressed, unaffected
-  by `maxTotalHits` and `maxSearchWindow` (both bound `/search`, not this route), and
+  by `maxTotalHits` and `maxPageWindow` (both bound `/search`, not this route), and
   measured flat in the offset: 0 and 1.2M both answer under 0.25s on prod. That replaced a
   Postgres `row_number()` walk which had grown to 64s over 3.4M rows and was timing out
   `/sitemap.xml` outright. Two consequences worth holding: an index outage is now a

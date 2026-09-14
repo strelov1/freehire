@@ -262,6 +262,36 @@ func TestRouteMetricLabelsAreBounded(t *testing.T) {
 	}
 }
 
+// TestDurationMetricLabelsAreBounded is the same guard for the histogram, and it matters more
+// here than on either counter: a histogram multiplies its label set by its bucket count, so at
+// ~700 routes and 11 buckets this is already the largest emitter in the process. One extra
+// label does not add 700 series, it adds ~7,700.
+func TestDurationMetricLabelsAreBounded(t *testing.T) {
+	app := fiber.New(fiber.Config{ErrorHandler: CountErrors(fiber.DefaultErrorHandler)})
+	app.Use(HTTPMetrics())
+	app.Get("/dur", func(c *fiber.Ctx) error { return c.SendString("ok") })
+	app.Post("/dur", func(c *fiber.Ctx) error { return fiber.NewError(fiber.StatusBadRequest, "no") })
+
+	before := testutil.CollectAndCount(httpDuration)
+
+	for _, req := range []*http.Request{
+		httptest.NewRequestWithContext(t.Context(), fiber.MethodGet, "/dur", nil),
+		httptest.NewRequestWithContext(t.Context(), fiber.MethodPost, "/dur", nil),
+	} {
+		resp, err := app.Test(req)
+		if err != nil {
+			t.Fatalf("%s /dur: %v", req.Method, err)
+		}
+		resp.Body.Close()
+	}
+
+	// Two methods, two statuses, one route: one new histogram.
+	if got := testutil.CollectAndCount(httpDuration) - before; got > 1 {
+		t.Errorf("one route produced %d new histograms — a status or method label has crept in, "+
+			"and a histogram multiplies that by its bucket count", got)
+	}
+}
+
 // TestMethodLabelDoesNotAliasTheRequestBuffer is the regression test for a live prod failure.
 //
 // fasthttp backs c.Method() with the request buffer and recycles it, so a label value taken

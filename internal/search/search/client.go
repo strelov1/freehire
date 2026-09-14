@@ -65,7 +65,7 @@ const (
 	// maxTotalHits caps how high a search counts its results: below it,
 	// estimatedTotalHits is the true filtered total, so it is set well above the
 	// index size to keep the reported count honest. It is NOT the pagination guard
-	// — deep offset paging is bounded separately by maxSearchWindow in the search
+	// — deep offset paging is bounded separately by maxPageWindow in the handler
 	// handler — so a large value here costs nothing beyond an accurate total.
 	// Keep it comfortably above the open-job catalogue (which crossed 1M in
 	// 2026-06): once the real total exceeds this cap, every count saturates at it.

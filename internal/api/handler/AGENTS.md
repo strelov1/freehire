@@ -294,7 +294,7 @@ empty profile the model would read as "no preferences".
   `pageParamsWindowed` live in `handler.go`, and `pagination_rule_test.go` fails the build if
   any other non-test file in the package reads the raw param. The clamp into int32 range is
   why: without it `?offset=3000000000` binds negative and Postgres answers 500.
-- **Every list endpoint calls `pageParamsWindowed`**, which refuses `offset+limit >
+- **Every PUBLIC list calls `pageParams`/`pageParamsWindowed`**, which refuse `offset+limit >
   maxPageWindow` with 400. One constant, one helper, both stores — the Meili-backed search and
   the Postgres-backed lists share it rather than each carrying a number that can drift apart.
 - **Check the window before any query, including a slug lookup.** `GetCompany` and `JobCopies`

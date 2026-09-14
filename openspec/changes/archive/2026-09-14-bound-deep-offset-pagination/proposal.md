@@ -65,10 +65,15 @@ public list mounted with no limiter at all, and each request fires three queries
 remembered: it bounds the query a connection may hold. Server-only — the cron workers share
 `internal/platform/database` and some legitimately run for hours.
 
-**The status page learns to see a saturated pool.** `currentSiteHealth` calls exactly one
+**The status page learns to REPORT a saturated pool.** `currentSiteHealth` calls exactly one
 method on the pool, `Ping`, which succeeds while every connection is busy. Adding
-`pool.Stat()` is one in-memory read and turns the outage's actual shape into a `degraded`
-verdict instead of "All systems operational".
+`pool.Stat()` is one in-memory read, and the fraction goes on the wire as `pool_pressure`.
+
+It does not become a verdict, though a draft of this made it one. The daily sampler keeps a
+day's WORST severity from one reading every five minutes, and the live pool touches its
+ceiling in ordinary bursts — so a 90% threshold would have painted whole days degraded
+permanently. Judging this number needs an average over minutes, which the Grafana rule has
+and the page does not. See tasks §5.1.
 
 ## What does NOT change
 

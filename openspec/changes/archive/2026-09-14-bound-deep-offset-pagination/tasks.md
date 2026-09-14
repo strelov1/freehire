@@ -25,9 +25,28 @@
 
 ## 5. The status page sees a saturated pool
 
-- [x] 5.1 `currentSiteHealth` reads `pool.Stat()`; at or above 90% of the pool held, the site reads `degraded`.
-- [x] 5.2 Tests at both boundaries, on an idle pool, on a pool reporting no capacity (the division guard), and that the signal can never outrank `down`. Exempt from the traffic floor on purpose — that floor is a sampling argument about a FRACTION, and during the outage almost nothing completed.
-- [x] 5.3 `pool_pressure` on the wire; `StatusBoard.svelte` names it only when it is what makes the site degraded.
+- [x] 5.1 `currentSiteHealth` reads `pool.Stat()` and reports the fraction as `pool_pressure`.
+
+      **This shipped REVERSED from how it was written, and the reversal is the finding.** The
+      task said "at or above 90% of the pool held, the site reads `degraded`", and that was
+      built — then removed before it could do harm. `StartSiteStatusSampler` takes ONE reading
+      every five minutes and `RecordSiteStatusSample` keeps the day's WORST severity, while the
+      live pool — sampled every 5s against the healthy production site — reads 9/10 and 10/10
+      inside the same two minutes it otherwise spends at 0/10. Real traffic is bursty and
+      touching the ceiling is ordinary, so one unlucky sample would have painted a whole day
+      degraded and the 90-day history strip would have gone yellow permanently, with no way to
+      walk it back.
+
+      An instant cannot carry that verdict. The number is reported and the Grafana rule judges
+      it, averaging over five minutes (0.125-0.235 healthy against the outage's sustained 1.0) —
+      history this process does not keep. Same lesson as §7.1's three drafts, found the same
+      way: by measuring the live pool instead of reasoning about it.
+- [x] 5.2 Tests pin the arithmetic and the division guard (a pool reporting no capacity yields 0,
+      because "I cannot measure this" must not render as "everything is held"), plus the decision
+      itself: an exhausted pool must read `operational` from `deriveSiteStatus`.
+- [x] 5.3 `pool_pressure` on the wire; `StatusBoard.svelte` reports it beside the error rate,
+      unconditionally. An earlier draft showed the line only above 90% and phrased it as a
+      warning — which would have cried wolf on the same ordinary bursts.
 
 ## 6. Docs
 
