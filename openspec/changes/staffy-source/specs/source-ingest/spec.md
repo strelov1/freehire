@@ -42,6 +42,13 @@ unaffected; a listing fetch, decode, or completeness-check failure SHALL fail th
 - **THEN** the adapter yields that posting as an Unreadable marker carrying its identity,
   and every other posting is unaffected
 
+#### Scenario: A detail page with no parseable metadata block marks only that posting unreadable
+
+- **WHEN** a posting's detail page answers successfully but carries no metadata block at
+  all
+- **THEN** the adapter yields that posting as an Unreadable marker rather than a job with
+  empty structured fields or a mis-bounded description
+
 #### Scenario: Seniority maps from a closed, confirmed vocabulary
 
 - **WHEN** a posting's detail states a seniority label of `Junior`, `Jr`, `Semi senior`,

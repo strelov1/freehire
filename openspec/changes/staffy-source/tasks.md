@@ -12,13 +12,17 @@
 - [x] 2.1 For each listing link, fetch the detail page and read its `.metadata` block's
       three `<span>` children (location, work arrangement, seniority) plus the page's
       `<h2>`-delimited prose sections (concatenated into the description)
-- [x] 2.2 A failed detail fetch marks only that posting Unreadable
-      (`unreadableDetail`/`detailUnreadable`), never the whole board
+- [x] 2.2 A failed detail fetch, or a page with no parseable `.metadata` block at all,
+      marks only that posting Unreadable (`unreadableDetail`/`detailUnreadable`), never
+      the whole board
 - [x] 2.3 Map `external_id` = the slug from the posting URL, title = the page's own `<h1>`,
       URL = the detail page URL, `company` = the configured `CompanyEntry.Company`,
       `location` = the first metadata span verbatim
-- [x] 2.4 Map the third metadata span to a seniority level (`Junior`→`junior`, `Semi
-      senior`→`middle`, `Senior`/`Sr`→`senior`, else `""`)
+- [x] 2.4 Map the third metadata span to a seniority level, case-insensitively:
+      `Junior`/`Jr`→`junior`, `Semi senior`/`Ssr`→`middle`, `Senior`/`Sr`→`senior`,
+      `Staff`→`staff`, else `""` (widened after sampling 30+ of the 61 live postings —
+      an initial ~5-posting sample missed `Jr`/`Ssr`/`Staff`/the `Semi Senior`
+      capitalization variant entirely)
 - [x] 2.5 Map the second metadata span to a work mode via a local Spanish-aware prefix
       check (`Remoto`→`remote`, `Hibrido`/`Híbrido`→`hybrid`, else `""`); `Remote` true
       only when the mapped work mode is `remote`
@@ -35,8 +39,10 @@
 
 - [x] 4.1 Write `staffy_test.go` covering: listing enumeration + detail hydration (using a
       realistic multi-posting fixture), the declared-total-mismatch failure,
-      seniority/work-mode mapping, an unreadable detail marking only that posting, a
-      listing failure aborting the whole `Fetch`, and an empty board
+      seniority/work-mode mapping (including the abbreviation and case-variant forms), a
+      `<ul>`/`<li>` prose section rendering its list items through, a missing-metadata
+      page marked Unreadable, an unreadable detail marking only that posting, a listing
+      failure aborting the whole `Fetch`, and an empty board
 - [x] 4.2 Run the full adapter test suite plus `atsboard`
 - [x] 4.3 Confirm `staffy` needs no `cmd/harvest-boards` prober entry — boardless
       providers are refused a prober outright (`TestProberForRefusesBoardlessProviders`);

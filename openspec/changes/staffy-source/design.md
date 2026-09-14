@@ -22,9 +22,13 @@ Confirmed live against `jobs.wearestaffy.com`:
   at least one genuinely ambiguous compound label (`Senior/ Semi senior`) a posting
   itself doesn't commit to one level.
 - The page body below is a sequence of `<h2>`-delimited prose sections — About the
-  company, About the role, Responsibilities, Requirements, Nice to have — none reliably
-  present on every posting (About the company is absent on most sampled postings) but
-  safe to concatenate wholesale into one description.
+  company, About the role, Responsibilities, Requirements, Nice to have, Beneficios
+  (Benefits) — none reliably present on every posting (About the company is absent on
+  most sampled postings) but safe to concatenate wholesale into one description: the
+  extraction code names no section explicitly, it collects every `h2`/`p`/`ul` direct
+  child after the metadata block, whatever headings a given posting happens to carry.
+  Most of these sections render as `<ul>`/`<li>` lists on live postings, not a single
+  `<p>` — confirmed the shared `innerHTML` helper serializes nested list items correctly.
 - The listing's own combined `<p class="eyebrow">Argentina · Hibrido (2 veces por
   semana)</p>` text is NOT used — the detail page's three separate spans are strictly
   cleaner to parse than un-splitting a `·`-joined free-text pair, and the detail fetch is
@@ -84,6 +88,13 @@ Confirmed live against `jobs.wearestaffy.com`:
 - **A detail-fetch failure marks only that posting Unreadable, never the whole board** —
   the listing already proves the posting exists and names it, the same posture every
   other listing-then-detail adapter in this package gives.
+- **A detail page whose `.metadata` block cannot be found at all is ALSO marked
+  Unreadable**, not just a transport failure. Without it every structured field is lost
+  and `staffyDescriptionHTML`'s direct-child walk has no anchor for where the prose
+  sections begin — silently shipping an empty-location/empty-work-mode job (or a
+  description missing its intended boundary) would be worse than dropping it, the same
+  "page read successfully but doesn't have what we need" posture the missing-`article`
+  check already gives.
 
 ## Risks / Trade-offs
 

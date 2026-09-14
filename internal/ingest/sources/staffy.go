@@ -99,13 +99,18 @@ func (s staffy) detail(ctx context.Context, e CompanyEntry, loc string) (Job, bo
 	if titleNode == nil {
 		return unreadableDetail(id, loc, e.Company), true
 	}
-	title := textContent(firstH1(titleNode))
+	// A missing metadata block means the page's markup has drifted from the shape this
+	// adapter depends on: staffyDescriptionHTML's direct-child walk needs it to know
+	// where the prose sections begin, and without it every structured field is lost too
+	// — mark the whole posting Unreadable rather than silently ship an empty/mis-mapped
+	// job, the same "page read successfully but doesn't have what we need" posture every
+	// other DOM-scraping adapter in this package already gives a missing element.
 	spans := staffyMetadataSpans(root)
-	location, workText := "", ""
-	seniorityText := ""
-	if len(spans) >= 3 {
-		location, workText, seniorityText = spans[0], spans[1], spans[2]
+	if len(spans) < 3 {
+		return unreadableDetail(id, loc, e.Company), true
 	}
+	title := textContent(firstH1(titleNode))
+	location, workText, seniorityText := spans[0], spans[1], spans[2]
 	workMode := staffyWorkMode(workText)
 
 	return Job{

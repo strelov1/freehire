@@ -37,6 +37,27 @@ func staffyDetailHTML(title, location, workArrangement, seniority, description s
 		`</article></section></main></body></html>`
 }
 
+// staffyDetailHTMLNoMetadata mirrors a hypothetical detail page whose markup drifted: no
+// element carries the "metadata" class at all, the shape staffyDescriptionHTML's
+// direct-child walk depends on to know where the prose sections begin.
+func staffyDetailHTMLNoMetadata(title string) string {
+	return `<html><body><main><section class="position-layout"><article class="position-content">` +
+		`<h1>` + title + `</h1>` +
+		`<h2>About the role</h2><p>Some text.</p>` +
+		`</article></section></main></body></html>`
+}
+
+// staffyDetailHTMLWithList mirrors the common live shape where a prose section is a <ul>
+// of <li> items (Responsibilities/Requirements/etc. on most real postings) rather than a
+// single <p>.
+func staffyDetailHTMLWithList(title string) string {
+	return `<html><body><main><section class="position-layout"><article class="position-content">` +
+		`<h1>` + title + `</h1>` +
+		`<div class="metadata"><span>Argentina</span><span>Remoto</span><span>Senior</span></div>` +
+		`<h2>Responsibilities</h2><ul><li>Build things.</li><li>Ship things.</li></ul>` +
+		`</article></section></main></body></html>`
+}
+
 func TestStaffyProvider(t *testing.T) {
 	if got := NewStaffy(nil).Provider(); got != "staffy" {
 		t.Errorf("Provider() = %q, want %q", got, "staffy")
@@ -167,6 +188,51 @@ func TestStaffyUnreadableDetailIsMarkedNotDropped(t *testing.T) {
 	}
 	if jobs[0].ExternalID != "data-engineer-junior-1967" {
 		t.Errorf("ExternalID = %q, want data-engineer-junior-1967", jobs[0].ExternalID)
+	}
+}
+
+// A <ul>/<li> prose section — the common shape on live postings (Responsibilities/
+// Requirements/etc. are almost always lists, not a single paragraph) — must render its
+// list items through, not collapse to an empty or malformed <ul>.
+func TestStaffyDescriptionRendersListItems(t *testing.T) {
+	fake := (&routedHTTP{}).
+		route("/positions/data-engineer-junior-1967", staffyDetailHTMLWithList("Data Engineer")).
+		route(staffyListingURL, staffyListingHTML(1,
+			[2]string{"data-engineer-junior-1967", "Data Engineer"}))
+
+	jobs, err := NewStaffy(fake).Fetch(context.Background(), CompanyEntry{Company: "Staffy"})
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	if len(jobs) != 1 {
+		t.Fatalf("got %d jobs, want 1", len(jobs))
+	}
+	desc := jobs[0].Description
+	if !strings.Contains(desc, "Build things.") || !strings.Contains(desc, "Ship things.") {
+		t.Errorf("Description = %q, want both list items rendered through", desc)
+	}
+}
+
+// A detail page whose markup has drifted (no "metadata" class found at all) must not
+// silently yield a Job with an empty location/work-mode/seniority and a truncated or
+// empty description — the same "page read successfully but doesn't have what we need"
+// shape every other DOM-scraping adapter in this package marks Unreadable rather than
+// silently mis-mapping.
+func TestStaffyMissingMetadataIsMarkedUnreadable(t *testing.T) {
+	fake := (&routedHTTP{}).
+		route("/positions/data-engineer-junior-1967", staffyDetailHTMLNoMetadata("Data Engineer")).
+		route(staffyListingURL, staffyListingHTML(1,
+			[2]string{"data-engineer-junior-1967", "Data Engineer"}))
+
+	jobs, err := NewStaffy(fake).Fetch(context.Background(), CompanyEntry{Company: "Staffy"})
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	if len(jobs) != 1 {
+		t.Fatalf("got %d jobs, want 1 (an unreadable marker, not a silently mis-mapped job)", len(jobs))
+	}
+	if jobs[0].Description != "" || jobs[0].Location != "" {
+		t.Errorf("got a populated job from a page with no metadata block: %+v", jobs[0])
 	}
 }
 
