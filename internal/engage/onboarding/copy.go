@@ -53,7 +53,7 @@ var specs = map[Step]spec{
 	},
 
 	StepAdvancedSearch: {
-		subject:   "The filters go deeper than you’d think",
+		subject:   "20 filters. Most boards give you 5.",
 		preheader: "Exclude a value, not just include one — and save the search.",
 		heading:   "The filters go deeper",
 		body: body("advanced_search", `
@@ -75,7 +75,7 @@ var specs = map[Step]spec{
 	},
 
 	StepNoAlert: {
-		subject:   "Want me to set up your search?",
+		subject:   "You never set up your search",
 		preheader: "Tell me the role — I’ll tell you honestly if we cover it.",
 		heading:   "Want me to set it up?",
 		body: body("no_alert", `
@@ -98,7 +98,7 @@ var specs = map[Step]spec{
 	// about software the reader has to install, and an overstated sentence here is
 	// found out within a minute of installing it.
 	StepExtension: {
-		subject:   "A freehire panel on any job page",
+		subject:   "It fills out the application for you",
 		preheader: "It reads the posting, scores it against your CV, and fills the form.",
 		heading:   "A side panel on any job page",
 		body: body("extension", `
@@ -127,7 +127,7 @@ var specs = map[Step]spec{
 	},
 
 	StepOpenSource: {
-		subject:   "Open code, and one place to ask",
+		subject:   "Every line of freehire is public",
 		preheader: "freehire is open source — and the Discord is where the questions go.",
 		heading:   "Open code, one place to ask",
 		body: body("open_source", `
