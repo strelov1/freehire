@@ -65,7 +65,7 @@ func TestProberForFallsBackToTheProvidersAdapter(t *testing.T) {
 func TestProberForRefusesBoardlessProviders(t *testing.T) {
 	// A boardless adapter serves one catalogue whatever board it is handed, so it would
 	// report jobs for a board that does not exist and confirm every candidate put to it.
-	for _, provider := range []string{"echojobs", "jobstash", "ozon"} {
+	for _, provider := range []string{"echojobs", "jobstash", "ozon", "staffy"} {
 		if p, ok := proberFor(provider); ok {
 			t.Errorf("proberFor(%q) = %T, want no prober: a boardless adapter cannot refute a board", provider, p)
 		}

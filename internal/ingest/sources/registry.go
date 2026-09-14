@@ -334,6 +334,9 @@ func All(c HTTPClient) map[string]Source {
 		NewGoogle(c),
 		NewApple(c),
 		NewLumenalta(c),
+		// Staffy: a single recruiting agency's own board, boardless like Lumenalta; both the
+		// listing and detail pages are fully static server-rendered HTML.
+		NewStaffy(c),
 		NewDataArt(c),
 		NewOnstrider(c, os.Getenv("ONSTRIDER_REFERRAL_HANDLE")),
 		NewAlignerr(c, os.Getenv("ALIGNERR_REFERRAL_CODE")),
