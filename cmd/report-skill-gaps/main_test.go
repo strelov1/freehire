@@ -86,10 +86,12 @@ func TestFoldSkillCounts(t *testing.T) {
 
 func TestWriteSkillGapReport(t *testing.T) {
 	var buf bytes.Buffer
-	writeSkillGapReport(&buf, []dictgap.SkillGapCandidate{
+	if err := writeSkillGapReport(&buf, []dictgap.SkillGapCandidate{
 		{Phrase: "Frobnicator", Count: 10},
 		{Phrase: "Widgetize", Count: 3},
-	}, 1)
+	}, 1); err != nil {
+		t.Fatalf("writeSkillGapReport: %v", err)
+	}
 
 	out := buf.String()
 	if !strings.Contains(out, "10\tFrobnicator") {

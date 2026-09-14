@@ -55,7 +55,7 @@ func run() int {
 		log.Printf("report-skill-gaps: %v", err)
 		return 1
 	}
-	topN, err := worker.EnvInt64("REPORT_SKILL_GAPS_TOP", defaultTopN)
+	topN, err := worker.EnvInt32("REPORT_SKILL_GAPS_TOP", defaultTopN)
 	if err != nil {
 		log.Printf("report-skill-gaps: %v", err)
 		return 1
@@ -116,7 +116,10 @@ func run() int {
 	log.Printf("report-skill-gaps: done, examined=%d distinct phrases=%d", examined, len(counts))
 	candidates := dictgap.SkillGapCandidates(counts)
 	log.Printf("report-skill-gaps: %d unresolved candidates, printing top %d", len(candidates), topN)
-	writeSkillGapReport(os.Stdout, candidates, int(topN))
+	if err := writeSkillGapReport(os.Stdout, candidates, int(topN)); err != nil {
+		log.Printf("report-skill-gaps: write report: %v", err)
+		return 1
+	}
 	return 0
 }
 
@@ -165,11 +168,14 @@ func foldSkillCounts(counts map[string]int, rows []db.ListJobSkillsForGapReportR
 // writeSkillGapReport prints the top n candidates as a tab-separated count/phrase
 // table, one per line, ranked highest count first (candidates is assumed already
 // sorted, as dictgap.SkillGapCandidates returns it).
-func writeSkillGapReport(w io.Writer, candidates []dictgap.SkillGapCandidate, n int) {
+func writeSkillGapReport(w io.Writer, candidates []dictgap.SkillGapCandidate, n int) error {
 	if n < len(candidates) {
 		candidates = candidates[:n]
 	}
 	for _, c := range candidates {
-		fmt.Fprintf(w, "%d\t%s\n", c.Count, c.Phrase)
+		if _, err := fmt.Fprintf(w, "%d\t%s\n", c.Count, c.Phrase); err != nil {
+			return err
+		}
 	}
+	return nil
 }

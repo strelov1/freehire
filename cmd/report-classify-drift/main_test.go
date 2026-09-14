@@ -61,7 +61,9 @@ func TestWriteDriftReport(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	writeDriftReport(&buf, report, 200)
+	if err := writeDriftReport(&buf, report, 200); err != nil {
+		t.Fatalf("writeDriftReport: %v", err)
+	}
 	out := buf.String()
 
 	if !strings.Contains(out, "12\tMember of Technical Staff\t\tsenior") {

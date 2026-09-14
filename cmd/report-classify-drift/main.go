@@ -50,7 +50,7 @@ func run() int {
 		log.Printf("report-classify-drift: %v", err)
 		return 1
 	}
-	topN, err := worker.EnvInt64("REPORT_CLASSIFY_DRIFT_TOP", defaultTopN)
+	topN, err := worker.EnvInt32("REPORT_CLASSIFY_DRIFT_TOP", defaultTopN)
 	if err != nil {
 		log.Printf("report-classify-drift: %v", err)
 		return 1
@@ -117,7 +117,10 @@ func run() int {
 	report := dictgap.ClassifyDriftCandidates(rows)
 	log.Printf("report-classify-drift: %d seniority candidates, %d category candidates, printing top %d each",
 		len(report.Seniority), len(report.Category), topN)
-	writeDriftReport(os.Stdout, report, int(topN))
+	if err := writeDriftReport(os.Stdout, report, int(topN)); err != nil {
+		log.Printf("report-classify-drift: write report: %v", err)
+		return 1
+	}
 	return 0
 }
 
@@ -146,18 +149,27 @@ func mergeTitleClassifications(acc map[string]*dictgap.TitleClassification, rows
 // count/title/dictionary_value/enrichment_value table, seniority first then
 // category, each ranked highest count first (as dictgap.ClassifyDriftCandidates
 // already sorts them).
-func writeDriftReport(w io.Writer, report dictgap.DriftReport, n int) {
-	fmt.Fprintln(w, "# seniority")
-	writeDriftCandidates(w, report.Seniority, n)
-	fmt.Fprintln(w, "# category")
-	writeDriftCandidates(w, report.Category, n)
+func writeDriftReport(w io.Writer, report dictgap.DriftReport, n int) error {
+	if _, err := fmt.Fprintln(w, "# seniority"); err != nil {
+		return err
+	}
+	if err := writeDriftCandidates(w, report.Seniority, n); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintln(w, "# category"); err != nil {
+		return err
+	}
+	return writeDriftCandidates(w, report.Category, n)
 }
 
-func writeDriftCandidates(w io.Writer, candidates []dictgap.DriftCandidate, n int) {
+func writeDriftCandidates(w io.Writer, candidates []dictgap.DriftCandidate, n int) error {
 	if n < len(candidates) {
 		candidates = candidates[:n]
 	}
 	for _, c := range candidates {
-		fmt.Fprintf(w, "%d\t%s\t%s\t%s\n", c.Count, c.Title, c.DictionaryValue, c.EnrichmentValue)
+		if _, err := fmt.Fprintf(w, "%d\t%s\t%s\t%s\n", c.Count, c.Title, c.DictionaryValue, c.EnrichmentValue); err != nil {
+			return err
+		}
 	}
+	return nil
 }
