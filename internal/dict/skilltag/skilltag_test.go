@@ -668,6 +668,8 @@ func TestParse_AmbiguousCorroboration(t *testing.T) {
 		{"swift adjective", "We need a swift and friendly barista.", nil, []string{"swift"}},
 		{"ruby name", "Report directly to Ruby, the floor manager.", nil, []string{"ruby"}},
 		{"cloud weather", "Outdoor role, rain or cloud, year round.", nil, []string{"cloud"}},
+		{"soap cleaning product", "Restock hand soap and paper towels in the restroom.", nil, []string{"soap"}},
+		{"s3 roadmap phase", "We finished the S3 phase of the roadmap.", nil, []string{"s3"}},
 		// broad concepts alone (non-tech context) → dropped
 		{"ai marketing", "AI-powered marketing automation for our sales team.", nil, []string{"ai", "automation"}},
 		{"crm sales role", "Manage our CRM as an account executive.", nil, []string{"crm"}},
@@ -679,11 +681,16 @@ func TestParse_AmbiguousCorroboration(t *testing.T) {
 		{"networking + linux", "Networking with Linux, BGP and firewalls.", []string{"networking", "linux", "bgp"}, nil},
 		{"swift + ios", "Swift developer building for iOS.", []string{"swift", "ios"}, nil},
 		{"cloud + aws", "Cloud infrastructure on AWS and Kubernetes.", []string{"cloud", "aws", "kubernetes"}, nil},
+		{"soap + dotnet", "Maintain a legacy SOAP service built on .NET.", []string{"soap", "dotnet"}, nil},
+		{"s3 + lambda", "Store uploads in S3 and process them with Lambda.", []string{"s3"}, nil},
 		// unambiguous alias forms tag WITHOUT corroboration
 		{"reactjs standalone", "We build with reactjs.", []string{"react"}, nil},
 		{"react native phrase", "React Native mobile apps.", []string{"react-native", "react"}, nil},
 		{"spring boot phrase", "Spring Boot services.", []string{"spring"}, nil},
 		{"ruby on rails phrase", "A Ruby on Rails shop.", []string{"ruby", "rails"}, nil},
+		{"soap api phrase", "We expose a SOAP API for legacy partners.", []string{"soap"}, nil},
+		{"aws s3 phrase", "Upload files to AWS S3 for storage.", []string{"s3"}, nil},
+		{"amazon s3 phrase", "Backups are stored in Amazon S3.", []string{"s3"}, nil},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

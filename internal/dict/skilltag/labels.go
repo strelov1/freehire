@@ -149,6 +149,7 @@ var displayNames = map[string]string{
 	"snmp":   "SNMP",
 	"sns":    "SNS",
 	"soa":    "SOA",
+	"soap":   "SOAP",
 	"soql":   "SOQL",
 	"spss":   "SPSS",
 	"sql":    "SQL",
