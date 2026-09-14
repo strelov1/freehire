@@ -173,9 +173,14 @@ func TestStaffyUnreadableDetailIsMarkedNotDropped(t *testing.T) {
 func TestStaffySeniorityMapping(t *testing.T) {
 	cases := []struct{ label, want string }{
 		{"Junior", "junior"},
+		{"Jr", "junior"},
 		{"Semi senior", "middle"},
+		{"Semi Senior", "middle"}, // confirmed live: capitalization varies by posting
+		{"Ssr", "middle"},         // confirmed live: the standard AR/LatAm-market abbreviation
 		{"Senior", "senior"},
 		{"Sr", "senior"},
+		{"Staff", "staff"},          // confirmed live (ai-staff-engineer)
+		{"Senior/ Semi senior", ""}, // confirmed live: a genuinely ambiguous compound label
 		{"Lead", ""},
 		{"", ""},
 	}

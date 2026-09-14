@@ -12,8 +12,15 @@ Confirmed live against `jobs.wearestaffy.com`:
 - Each posting's own detail page (`/positions/<slug>`) is likewise static HTML. Its
   `.metadata` block is exactly three `<span>` elements in a fixed order: location
   (free text, e.g. `Argentina`, `LATAM`, `AR - UY - COL`), work arrangement (free text
-  in Spanish, e.g. `Remoto`, `Hibrido - 2 veces por semana`, `Hibrido (Puerto Madero)`),
-  and a seniority label (confirmed live: `Junior`, `Semi senior`, `Senior`, `Sr`).
+  in Spanish, e.g. `Remoto`, `Hibrido - 2 veces por semana`, `Hibrido (Puerto Madero)`,
+  and a `Remoto / Hibrido (...)` compound), and a seniority label. **Sampled across 30+
+  of the 61 live postings** (not just the first few — an earlier draft of this design
+  sampled only ~5 and would have shipped an incomplete mapping missing `Jr`, `Ssr`,
+  `Staff`, and the capitalization variant `Semi Senior`, all found only once the sample
+  was widened): the standard Argentina/LatAm-market IT abbreviations `Jr`/`Ssr`/`Sr` for
+  Junior/Semi-Senior/Senior appear alongside their spelled-out forms, plus `Staff`, plus
+  at least one genuinely ambiguous compound label (`Senior/ Semi senior`) a posting
+  itself doesn't commit to one level.
 - The page body below is a sequence of `<h2>`-delimited prose sections — About the
   company, About the role, Responsibilities, Requirements, Nice to have — none reliably
   present on every posting (About the company is absent on most sampled postings) but
@@ -58,11 +65,13 @@ Confirmed live against `jobs.wearestaffy.com`:
   already established, here against `"61 activas"` rather than a JSON `count`/`total`
   field. A mismatch between the declared total and the actual `job-card` count fails the
   whole `Fetch`, the same as those three.
-- **Seniority maps from the detail page's third metadata span**: `Junior`→`junior`,
-  `Semi senior`→`middle` (the standard LatAm-market term for mid-level), `Senior`/`Sr`→
-  `senior` — a confirmed, clean, closed vocabulary (unlike `pyjamahr`'s ambiguous
-  `entry-level`/`associate`, which stayed unmapped for exactly this reason). Any other
-  value maps to `""` rather than a guess.
+- **Seniority maps from the detail page's third metadata span**, case-insensitively:
+  `Junior`/`Jr`→`junior`, `Semi senior`/`Ssr`→`middle` (the standard LatAm-market term
+  and its abbreviation for mid-level), `Senior`/`Sr`→`senior`, `Staff`→`staff` — a
+  confirmed vocabulary from a 30+-posting sample (unlike `pyjamahr`'s ambiguous
+  `entry-level`/`associate`, which stayed unmapped for exactly this reason). A
+  compound/ambiguous label (e.g. `Senior/ Semi senior`) or any other value maps to `""`
+  rather than a guess.
 - **Work mode maps from the detail page's second metadata span via a local, Spanish-aware
   prefix check** (`Remoto`→`remote`, `Hibrido`/`Híbrido`→`hybrid`, else `""`) rather than
   extending the shared `workplaceTypeMode` helper, which only recognizes English spellings

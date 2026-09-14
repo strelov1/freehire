@@ -198,17 +198,23 @@ func staffyJobID(loc string) string {
 	return parts[len(parts)-1]
 }
 
-// staffySeniority maps the detail page's third metadata span onto vocab.SeniorityValues.
-// "Junior", "Semi senior", "Senior", and "Sr" are confirmed live; any other label
-// (including one never seen) maps to "" rather than a guess.
+// staffySeniority maps the detail page's third metadata span onto vocab.SeniorityValues,
+// using the standard Argentina/LatAm-market IT abbreviations (Jr/Ssr/Sr for
+// Junior/Semi-Senior/Senior). Confirmed live across a 30+-posting sample: "Junior", "Jr",
+// "Semi senior", "Semi Senior" (capitalization varies by posting), "Ssr", "Senior", "Sr",
+// and "Staff". A compound/ambiguous label a posting itself doesn't commit to one level
+// (e.g. "Senior/ Semi senior", also confirmed live) maps to "" rather than a guess, the
+// same as any other unrecognized label.
 func staffySeniority(label string) string {
-	switch strings.TrimSpace(label) {
-	case "Junior":
+	switch strings.ToLower(strings.TrimSpace(label)) {
+	case "junior", "jr":
 		return "junior"
-	case "Semi senior":
+	case "semi senior", "ssr":
 		return "middle"
-	case "Senior", "Sr":
+	case "senior", "sr":
 		return "senior"
+	case "staff":
+		return "staff"
 	default:
 		return ""
 	}

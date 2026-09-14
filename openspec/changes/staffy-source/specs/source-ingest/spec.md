@@ -44,7 +44,8 @@ unaffected; a listing fetch, decode, or completeness-check failure SHALL fail th
 
 #### Scenario: Seniority maps from a closed, confirmed vocabulary
 
-- **WHEN** a posting's detail states a seniority label of `Junior`, `Semi senior`,
-  `Senior`, or `Sr`
-- **THEN** the yielded job's seniority is `junior`, `middle`, or `senior` respectively;
-  any other label yields an empty seniority rather than a guess
+- **WHEN** a posting's detail states a seniority label of `Junior`, `Jr`, `Semi senior`,
+  `Ssr`, `Senior`, `Sr`, or `Staff` (case-insensitive)
+- **THEN** the yielded job's seniority is `junior`, `middle`, `senior`, or `staff`
+  respectively; a compound or otherwise unrecognized label yields an empty seniority
+  rather than a guess
