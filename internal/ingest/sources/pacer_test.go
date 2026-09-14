@@ -66,6 +66,67 @@ func TestRateLimitedHTMLGetter_WaitErrorShortCircuits(t *testing.T) {
 	}
 }
 
+func TestConcurrencyLimitedHTMLGetter_AcquiresThenDelegates(t *testing.T) {
+	node := &html.Node{}
+	inner := &recordingHTMLGetter{node: node}
+	g := concurrencyLimitedHTMLGetter{inner: inner, sem: make(chan struct{}, 2)}
+
+	got, err := g.GetHTML(context.Background(), "https://wellfound.com/role/r/software-engineer?page=1")
+	if err != nil {
+		t.Fatalf("GetHTML returned error: %v", err)
+	}
+	if len(inner.urls) != 1 {
+		t.Fatalf("inner GetHTML called %d times, want 1", len(inner.urls))
+	}
+	if got != node {
+		t.Fatalf("GetHTML did not pass through the inner node")
+	}
+	// The slot must be released after the call, so the getter is reusable up to its cap.
+	if len(g.sem) != 0 {
+		t.Fatalf("semaphore slot not released: len=%d, want 0", len(g.sem))
+	}
+}
+
+func TestConcurrencyLimitedHTMLGetter_CancelledContextShortCircuits(t *testing.T) {
+	inner := &recordingHTMLGetter{node: &html.Node{}}
+	sem := make(chan struct{}, 1)
+	sem <- struct{}{} // fill the only slot so the next acquire must wait
+	g := concurrencyLimitedHTMLGetter{inner: inner, sem: sem}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := g.GetHTML(ctx, "https://wellfound.com/"); !errors.Is(err, context.Canceled) {
+		t.Fatalf("GetHTML error = %v, want context.Canceled", err)
+	}
+	if len(inner.urls) != 0 {
+		t.Fatalf("inner GetHTML called despite no free slot (%d times)", len(inner.urls))
+	}
+}
+
+// Wellfound's requests all go through the hosted Firecrawl client, and pacing the request
+// START rate alone (rateLimitedHTMLGetter) was not enough live: crawling 11 role-slice boards
+// concurrently still hit "vendor rate limit did not lift after 4 attempts" on 10 of 11 boards
+// within ~3 minutes on 2026-09-14, even paced at one new request every 2 seconds — because a
+// slow in-flight request (Firecrawl bypassing Wellfound's Cloudflare challenge takes several
+// seconds) overlaps with the next board's paced request, so several requests are in flight at
+// once despite the spaced-out start times. This is the same "simultaneity, not rate" shape
+// TestLimitedWhatJobsGetter_SharesOneGentleCap documents — the fix is a concurrency cap, not a
+// tighter rate.
+func TestLimitedWellfoundGetter_SharesOneInFlightCap(t *testing.T) {
+	g, ok := limitedWellfoundGetter(&recordingHTMLGetter{}).(concurrencyLimitedHTMLGetter)
+	if !ok {
+		t.Fatal("limitedWellfoundGetter should wrap the getter in a concurrency limiter")
+	}
+	if got := cap(g.sem); got != wellfoundMaxInFlight {
+		t.Errorf("cap = %d, want wellfoundMaxInFlight (%d)", got, wellfoundMaxInFlight)
+	}
+	if wellfoundMaxInFlight != 1 {
+		t.Errorf("wellfoundMaxInFlight = %d, want 1 — Firecrawl's own account-level ceiling is shared "+
+			"with bayt/gulftalent/hh and unmeasured, so this run's share of it must stay minimal",
+			wellfoundMaxInFlight)
+	}
+}
+
 // recordingJSONGetter records the URLs it was asked to fetch.
 type recordingJSONGetter struct {
 	urls []string
