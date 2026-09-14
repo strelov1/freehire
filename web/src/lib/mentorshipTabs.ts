@@ -16,9 +16,11 @@ export type MentorshipTabId = 'sessions' | 'bookings' | 'profile' | 'schedule';
 
 // `as const` keeps each href a literal route so callers can pass it to `resolve()`
 // type-safely (mirroring accountNav.ts's own use of the pattern).
+// Profile leads the strip: it is a new mentor's first task after approval, ahead of
+// Sessions and Bookings, which keep their own relative order. Schedule stays last.
 export const MENTORSHIP_TABS = [
+  { id: 'profile', label: 'Profile', href: '/my/mentorship/profile' },
   { id: 'sessions', label: 'Your sessions', href: '/my/mentorship' },
   { id: 'bookings', label: 'Booked with you', href: '/my/mentorship/bookings' },
-  { id: 'profile', label: 'Profile', href: '/my/mentorship/profile' },
   { id: 'schedule', label: 'Schedule', href: '/my/mentorship/schedule' },
 ] as const satisfies readonly { id: MentorshipTabId; label: string; href: string }[];

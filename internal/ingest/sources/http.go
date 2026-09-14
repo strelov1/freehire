@@ -271,6 +271,24 @@ func newClientWithProxy(proxy *url.URL) *Client {
 	}
 }
 
+// longTimeout bounds a NewLongTimeoutClient request — generous enough for a legitimately
+// large single-page fetch (a listing that inlines every posting rather than paginating),
+// unlike streamTimeout's many-minute allowance for a throttled bulk feed trickling in.
+// Sized against a real measurement: HumanBit's ~5.6 MB listing page took ~18s to fetch
+// (curl -w, 2026-09-13), past the standard 15s httpClient timeout, which made every crawl
+// of that board fail intermittently with "context deadline exceeded" in production.
+const longTimeout = 45 * time.Second
+
+// NewLongTimeoutClient builds an ingest client identical to NewClient but with a longer
+// request timeout, for a platform whose listing page is legitimately large rather than
+// paginated (e.g. HumanBit). It keeps the ordinary streamTimeout for GetStream — this only
+// widens the bounded, buffered fetch path (GetJSON/GetHTML/GetText/...).
+func NewLongTimeoutClient() *Client {
+	c := NewClient()
+	c.httpClient = safehttp.NewClientWithProxy(longTimeout, nil)
+	return c
+}
+
 // NewSingleUseConnClient builds a client that dials a fresh connection per request, for a
 // platform whose server mishandles one it has already answered on. It is exposed for host
 // tools (harvest-boards' Profession prober, which reads the same sitemaps the crawl does

@@ -227,28 +227,29 @@ const createMentorProfile = `-- name: CreateMentorProfile :one
 INSERT INTO mentors (
     user_id, company_slug, slug, display_name, headline, bio, topics, languages, timezone,
     session_duration_min, buffer_before_min, buffer_after_min, min_notice_min,
-    horizon_days, meeting_url, show_photo
-) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
-RETURNING id, user_id, company_slug, slug, display_name, headline, bio, topics, languages, timezone, session_duration_min, buffer_before_min, buffer_after_min, min_notice_min, horizon_days, meeting_url, status, paused, decided_by, decided_at, created_at, updated_at, show_photo
+    horizon_days, meeting_url, show_photo, seniority
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+RETURNING id, user_id, company_slug, slug, display_name, headline, bio, topics, languages, timezone, session_duration_min, buffer_before_min, buffer_after_min, min_notice_min, horizon_days, meeting_url, status, paused, decided_by, decided_at, created_at, updated_at, show_photo, seniority
 `
 
 type CreateMentorProfileParams struct {
-	UserID             int64    `json:"user_id"`
-	CompanySlug        string   `json:"company_slug"`
-	Slug               string   `json:"slug"`
-	DisplayName        string   `json:"display_name"`
-	Headline           string   `json:"headline"`
-	Bio                string   `json:"bio"`
-	Topics             []string `json:"topics"`
-	Languages          []string `json:"languages"`
-	Timezone           string   `json:"timezone"`
-	SessionDurationMin int32    `json:"session_duration_min"`
-	BufferBeforeMin    int32    `json:"buffer_before_min"`
-	BufferAfterMin     int32    `json:"buffer_after_min"`
-	MinNoticeMin       int32    `json:"min_notice_min"`
-	HorizonDays        int32    `json:"horizon_days"`
-	MeetingUrl         string   `json:"meeting_url"`
-	ShowPhoto          bool     `json:"show_photo"`
+	UserID             int64       `json:"user_id"`
+	CompanySlug        pgtype.Text `json:"company_slug"`
+	Slug               string      `json:"slug"`
+	DisplayName        string      `json:"display_name"`
+	Headline           string      `json:"headline"`
+	Bio                string      `json:"bio"`
+	Topics             []string    `json:"topics"`
+	Languages          []string    `json:"languages"`
+	Timezone           string      `json:"timezone"`
+	SessionDurationMin int32       `json:"session_duration_min"`
+	BufferBeforeMin    int32       `json:"buffer_before_min"`
+	BufferAfterMin     int32       `json:"buffer_after_min"`
+	MinNoticeMin       int32       `json:"min_notice_min"`
+	HorizonDays        int32       `json:"horizon_days"`
+	MeetingUrl         string      `json:"meeting_url"`
+	ShowPhoto          bool        `json:"show_photo"`
+	Seniority          string      `json:"seniority"`
 }
 
 // Submit a mentor profile. Starts pending, awaiting a human moderator — nothing else
@@ -273,6 +274,7 @@ func (q *Queries) CreateMentorProfile(ctx context.Context, arg CreateMentorProfi
 		arg.HorizonDays,
 		arg.MeetingUrl,
 		arg.ShowPhoto,
+		arg.Seniority,
 	)
 	var i Mentor
 	err := row.Scan(
@@ -299,6 +301,7 @@ func (q *Queries) CreateMentorProfile(ctx context.Context, arg CreateMentorProfi
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.ShowPhoto,
+		&i.Seniority,
 	)
 	return i, err
 }
@@ -308,7 +311,7 @@ UPDATE mentors
 SET status = $1, decided_by = $2,
     decided_at = now(), updated_at = now()
 WHERE id = $3 AND status = 'pending'
-RETURNING id, user_id, company_slug, slug, display_name, headline, bio, topics, languages, timezone, session_duration_min, buffer_before_min, buffer_after_min, min_notice_min, horizon_days, meeting_url, status, paused, decided_by, decided_at, created_at, updated_at, show_photo
+RETURNING id, user_id, company_slug, slug, display_name, headline, bio, topics, languages, timezone, session_duration_min, buffer_before_min, buffer_after_min, min_notice_min, horizon_days, meeting_url, status, paused, decided_by, decided_at, created_at, updated_at, show_photo, seniority
 `
 
 type DecideMentorProfileParams struct {
@@ -347,6 +350,7 @@ func (q *Queries) DecideMentorProfile(ctx context.Context, arg DecideMentorProfi
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.ShowPhoto,
+		&i.Seniority,
 	)
 	return i, err
 }
@@ -444,7 +448,7 @@ type GetMentorBookingRow struct {
 	MentorSlug     string        `json:"mentor_slug"`
 	MentorUserID   int64         `json:"mentor_user_id"`
 	MentorTimezone string        `json:"mentor_timezone"`
-	CompanySlug    string        `json:"company_slug"`
+	CompanySlug    pgtype.Text   `json:"company_slug"`
 	Headline       string        `json:"headline"`
 	MentorEmail    string        `json:"mentor_email"`
 	SeekerEmail    string        `json:"seeker_email"`
@@ -484,7 +488,7 @@ func (q *Queries) GetMentorBooking(ctx context.Context, id pgtype.UUID) (GetMent
 }
 
 const getMentorByID = `-- name: GetMentorByID :one
-SELECT id, user_id, company_slug, slug, display_name, headline, bio, topics, languages, timezone, session_duration_min, buffer_before_min, buffer_after_min, min_notice_min, horizon_days, meeting_url, status, paused, decided_by, decided_at, created_at, updated_at, show_photo FROM mentors WHERE id = $1
+SELECT id, user_id, company_slug, slug, display_name, headline, bio, topics, languages, timezone, session_duration_min, buffer_before_min, buffer_after_min, min_notice_min, horizon_days, meeting_url, status, paused, decided_by, decided_at, created_at, updated_at, show_photo, seniority FROM mentors WHERE id = $1
 `
 
 // By primary key, for the paths that already hold one (booking, moderation).
@@ -515,12 +519,13 @@ func (q *Queries) GetMentorByID(ctx context.Context, id int64) (Mentor, error) {
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.ShowPhoto,
+		&i.Seniority,
 	)
 	return i, err
 }
 
 const getMentorByUserID = `-- name: GetMentorByUserID :one
-SELECT id, user_id, company_slug, slug, display_name, headline, bio, topics, languages, timezone, session_duration_min, buffer_before_min, buffer_after_min, min_notice_min, horizon_days, meeting_url, status, paused, decided_by, decided_at, created_at, updated_at, show_photo FROM mentors WHERE user_id = $1
+SELECT id, user_id, company_slug, slug, display_name, headline, bio, topics, languages, timezone, session_duration_min, buffer_before_min, buffer_after_min, min_notice_min, horizon_days, meeting_url, status, paused, decided_by, decided_at, created_at, updated_at, show_photo, seniority FROM mentors WHERE user_id = $1
 `
 
 // The owner's own profile, whatever its status — the mentor cabinet reads this, and a
@@ -552,6 +557,7 @@ func (q *Queries) GetMentorByUserID(ctx context.Context, userID int64) (Mentor, 
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.ShowPhoto,
+		&i.Seniority,
 	)
 	return i, err
 }
@@ -598,7 +604,7 @@ func (q *Queries) GetMentorReviewSummary(ctx context.Context, mentorID int64) (G
 }
 
 const getPublishedMentorBySlug = `-- name: GetPublishedMentorBySlug :one
-SELECT m.id, m.user_id, m.company_slug, m.slug, m.display_name, m.headline, m.bio, m.topics, m.languages, m.timezone, m.session_duration_min, m.buffer_before_min, m.buffer_after_min, m.min_notice_min, m.horizon_days, m.meeting_url, m.status, m.paused, m.decided_by, m.decided_at, m.created_at, m.updated_at, m.show_photo, c.name AS company_name,
+SELECT m.id, m.user_id, m.company_slug, m.slug, m.display_name, m.headline, m.bio, m.topics, m.languages, m.timezone, m.session_duration_min, m.buffer_before_min, m.buffer_after_min, m.min_notice_min, m.horizon_days, m.meeting_url, m.status, m.paused, m.decided_by, m.decided_at, m.created_at, m.updated_at, m.show_photo, m.seniority, c.name AS company_name,
     COALESCE(r.rating_count, 0)::bigint AS rating_count,
     COALESCE(r.rating_avg, 0)::numeric  AS rating_avg
 FROM mentors m
@@ -653,6 +659,7 @@ func (q *Queries) GetPublishedMentorBySlug(ctx context.Context, slug string) (Ge
 		&i.Mentor.CreatedAt,
 		&i.Mentor.UpdatedAt,
 		&i.Mentor.ShowPhoto,
+		&i.Mentor.Seniority,
 		&i.CompanyName,
 		&i.RatingCount,
 		&i.RatingAvg,
@@ -738,7 +745,7 @@ type ListBookingsBySeekerRow struct {
 	MentorBooking MentorBooking `json:"mentor_booking"`
 	MentorSlug    string        `json:"mentor_slug"`
 	Headline      string        `json:"headline"`
-	CompanySlug   string        `json:"company_slug"`
+	CompanySlug   pgtype.Text   `json:"company_slug"`
 	CompanyName   pgtype.Text   `json:"company_name"`
 }
 
@@ -996,7 +1003,7 @@ func (q *Queries) ListMentorBusyIntervals(ctx context.Context, arg ListMentorBus
 }
 
 const listPendingMentorProfiles = `-- name: ListPendingMentorProfiles :many
-SELECT m.id, m.user_id, m.company_slug, m.slug, m.display_name, m.headline, m.bio, m.topics, m.languages, m.timezone, m.session_duration_min, m.buffer_before_min, m.buffer_after_min, m.min_notice_min, m.horizon_days, m.meeting_url, m.status, m.paused, m.decided_by, m.decided_at, m.created_at, m.updated_at, m.show_photo, c.name AS company_name,
+SELECT m.id, m.user_id, m.company_slug, m.slug, m.display_name, m.headline, m.bio, m.topics, m.languages, m.timezone, m.session_duration_min, m.buffer_before_min, m.buffer_after_min, m.min_notice_min, m.horizon_days, m.meeting_url, m.status, m.paused, m.decided_by, m.decided_at, m.created_at, m.updated_at, m.show_photo, m.seniority, c.name AS company_name,
     EXISTS (
         SELECT 1 FROM referral_offers r
         WHERE r.user_id = m.user_id AND r.company_slug = m.company_slug
@@ -1053,6 +1060,7 @@ func (q *Queries) ListPendingMentorProfiles(ctx context.Context) ([]ListPendingM
 			&i.Mentor.CreatedAt,
 			&i.Mentor.UpdatedAt,
 			&i.Mentor.ShowPhoto,
+			&i.Mentor.Seniority,
 			&i.CompanyName,
 			&i.HasApprovedReferralOffer,
 		); err != nil {
@@ -1067,7 +1075,7 @@ func (q *Queries) ListPendingMentorProfiles(ctx context.Context) ([]ListPendingM
 }
 
 const listPublishedMentors = `-- name: ListPublishedMentors :many
-SELECT m.id, m.user_id, m.company_slug, m.slug, m.display_name, m.headline, m.bio, m.topics, m.languages, m.timezone, m.session_duration_min, m.buffer_before_min, m.buffer_after_min, m.min_notice_min, m.horizon_days, m.meeting_url, m.status, m.paused, m.decided_by, m.decided_at, m.created_at, m.updated_at, m.show_photo, c.name AS company_name,
+SELECT m.id, m.user_id, m.company_slug, m.slug, m.display_name, m.headline, m.bio, m.topics, m.languages, m.timezone, m.session_duration_min, m.buffer_before_min, m.buffer_after_min, m.min_notice_min, m.horizon_days, m.meeting_url, m.status, m.paused, m.decided_by, m.decided_at, m.created_at, m.updated_at, m.show_photo, m.seniority, c.name AS company_name,
     COALESCE(r.rating_count, 0)::bigint AS rating_count,
     COALESCE(r.rating_avg, 0)::numeric  AS rating_avg
 FROM mentors m
@@ -1080,15 +1088,25 @@ WHERE m.status = 'approved' AND NOT m.paused
   AND ($1::text IS NULL OR m.company_slug = $1::text)
   AND ($2::text IS NULL OR $2::text = ANY (m.topics))
   AND ($3::text IS NULL OR $3::text = ANY (m.languages))
+  AND ($4::text IS NULL OR m.seniority = $4::text)
+  -- Unescaped, matching companies.sql's and gmail.sql's own text search — see
+  -- mentor-directory-filters' design.md for why this change does not revisit that.
+  AND ($5::text IS NULL
+       OR m.display_name ILIKE '%' || $5::text || '%'
+       OR m.headline ILIKE '%' || $5::text || '%')
+  AND (NOT $6::bool OR COALESCE(r.rating_count, 0) = 0)
 ORDER BY m.created_at DESC, m.id DESC
-LIMIT $4
+LIMIT $7
 `
 
 type ListPublishedMentorsParams struct {
-	CompanySlug pgtype.Text `json:"company_slug"`
-	Topic       pgtype.Text `json:"topic"`
-	Language    pgtype.Text `json:"language"`
-	RowLimit    int32       `json:"row_limit"`
+	CompanySlug   pgtype.Text `json:"company_slug"`
+	Topic         pgtype.Text `json:"topic"`
+	Language      pgtype.Text `json:"language"`
+	Seniority     pgtype.Text `json:"seniority"`
+	Query         pgtype.Text `json:"query"`
+	NoReviewsOnly bool        `json:"no_reviews_only"`
+	RowLimit      int32       `json:"row_limit"`
 }
 
 type ListPublishedMentorsRow struct {
@@ -1112,6 +1130,9 @@ func (q *Queries) ListPublishedMentors(ctx context.Context, arg ListPublishedMen
 		arg.CompanySlug,
 		arg.Topic,
 		arg.Language,
+		arg.Seniority,
+		arg.Query,
+		arg.NoReviewsOnly,
 		arg.RowLimit,
 	)
 	if err != nil {
@@ -1145,6 +1166,7 @@ func (q *Queries) ListPublishedMentors(ctx context.Context, arg ListPublishedMen
 			&i.Mentor.CreatedAt,
 			&i.Mentor.UpdatedAt,
 			&i.Mentor.ShowPhoto,
+			&i.Mentor.Seniority,
 			&i.CompanyName,
 			&i.RatingCount,
 			&i.RatingAvg,
@@ -1163,7 +1185,7 @@ const reactivateMentorProfile = `-- name: ReactivateMentorProfile :one
 UPDATE mentors
 SET status = 'pending', paused = false, updated_at = now()
 WHERE user_id = $1 AND status = 'withdrawn'
-RETURNING id, user_id, company_slug, slug, display_name, headline, bio, topics, languages, timezone, session_duration_min, buffer_before_min, buffer_after_min, min_notice_min, horizon_days, meeting_url, status, paused, decided_by, decided_at, created_at, updated_at, show_photo
+RETURNING id, user_id, company_slug, slug, display_name, headline, bio, topics, languages, timezone, session_duration_min, buffer_before_min, buffer_after_min, min_notice_min, horizon_days, meeting_url, status, paused, decided_by, decided_at, created_at, updated_at, show_photo, seniority
 `
 
 // A withdrawn mentor resubmits for review: back to pending, pause switch cleared, no
@@ -1197,6 +1219,7 @@ func (q *Queries) ReactivateMentorProfile(ctx context.Context, userID int64) (Me
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.ShowPhoto,
+		&i.Seniority,
 	)
 	return i, err
 }
@@ -1246,7 +1269,7 @@ const setMentorPaused = `-- name: SetMentorPaused :one
 UPDATE mentors
 SET paused = $1, updated_at = now()
 WHERE user_id = $2
-RETURNING id, user_id, company_slug, slug, display_name, headline, bio, topics, languages, timezone, session_duration_min, buffer_before_min, buffer_after_min, min_notice_min, horizon_days, meeting_url, status, paused, decided_by, decided_at, created_at, updated_at, show_photo
+RETURNING id, user_id, company_slug, slug, display_name, headline, bio, topics, languages, timezone, session_duration_min, buffer_before_min, buffer_after_min, min_notice_min, horizon_days, meeting_url, status, paused, decided_by, decided_at, created_at, updated_at, show_photo, seniority
 `
 
 type SetMentorPausedParams struct {
@@ -1283,6 +1306,7 @@ func (q *Queries) SetMentorPaused(ctx context.Context, arg SetMentorPausedParams
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.ShowPhoto,
+		&i.Seniority,
 	)
 	return i, err
 }
@@ -1302,9 +1326,10 @@ SET display_name = $1,
     horizon_days = $11,
     meeting_url = $12,
     show_photo = $13,
+    seniority = $14,
     updated_at = now()
-WHERE user_id = $14
-RETURNING id, user_id, company_slug, slug, display_name, headline, bio, topics, languages, timezone, session_duration_min, buffer_before_min, buffer_after_min, min_notice_min, horizon_days, meeting_url, status, paused, decided_by, decided_at, created_at, updated_at, show_photo
+WHERE user_id = $15
+RETURNING id, user_id, company_slug, slug, display_name, headline, bio, topics, languages, timezone, session_duration_min, buffer_before_min, buffer_after_min, min_notice_min, horizon_days, meeting_url, status, paused, decided_by, decided_at, created_at, updated_at, show_photo, seniority
 `
 
 type UpdateMentorProfileParams struct {
@@ -1321,6 +1346,7 @@ type UpdateMentorProfileParams struct {
 	HorizonDays        int32    `json:"horizon_days"`
 	MeetingUrl         string   `json:"meeting_url"`
 	ShowPhoto          bool     `json:"show_photo"`
+	Seniority          string   `json:"seniority"`
 	UserID             int64    `json:"user_id"`
 }
 
@@ -1346,6 +1372,7 @@ func (q *Queries) UpdateMentorProfile(ctx context.Context, arg UpdateMentorProfi
 		arg.HorizonDays,
 		arg.MeetingUrl,
 		arg.ShowPhoto,
+		arg.Seniority,
 		arg.UserID,
 	)
 	var i Mentor
@@ -1373,6 +1400,7 @@ func (q *Queries) UpdateMentorProfile(ctx context.Context, arg UpdateMentorProfi
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.ShowPhoto,
+		&i.Seniority,
 	)
 	return i, err
 }

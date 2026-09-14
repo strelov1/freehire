@@ -2,7 +2,7 @@
   import { Clock, MapPin, User } from '@lucide/svelte';
   import Seo from '$lib/components/Seo.svelte';
   import { countryLabel, skillLabel } from '$lib/facets';
-  import { CATEGORY_LABELS, titleCase } from '$lib/labels';
+  import { CATEGORY_LABELS, CERTIFICATION_LABELS, EDUCATION_LEVEL_LABELS, titleCase } from '$lib/labels';
   import { talentHeading, talentPlace } from '$lib/talentCard';
   import { Card, Chip, CountryFlag } from '$lib/ui';
   import type { PageData } from './$types';
@@ -33,6 +33,15 @@
   // dropping it would make a work history look shorter than it is.
   function roleHeading(role: (typeof card.roles)[number]): string {
     return talentHeading(role.seniority, role.category, 'Role');
+  }
+
+  /** An education entry's chip text: "Bachelor's degree · 2019", or just the level
+   *  when no year resolved. Never the institution — the card never carries one. */
+  function educationLabel(entry: NonNullable<typeof card.education>[number]): string {
+    const level = entry.level
+      ? (EDUCATION_LEVEL_LABELS[entry.level] ?? titleCase(entry.level))
+      : '';
+    return entry.year ? `${level} · ${entry.year.year}` : level;
   }
 </script>
 
@@ -93,17 +102,6 @@
     </section>
   {/if}
 
-  {#if card.skills.length}
-    <section class="flex flex-col gap-2">
-      <h2 class="text-sm font-medium">Skills</h2>
-      <div class="flex flex-wrap gap-1.5">
-        {#each card.skills as skill (skill)}
-          <Chip>{skillLabel(skill)}</Chip>
-        {/each}
-      </div>
-    </section>
-  {/if}
-
   {#if card.roles.length}
     <section class="flex flex-col gap-2">
       <h2 class="text-sm font-medium">Experience</h2>
@@ -130,7 +128,42 @@
     </section>
   {/if}
 
-  {#if !card.skills.length && !card.roles.length}
+  {#if card.education?.length}
+    <section class="flex flex-col gap-2">
+      <h2 class="text-sm font-medium">Education</h2>
+      <div class="flex flex-wrap gap-1.5">
+        <!-- Keyed by index for the same reason Experience is: no id, and two entries can
+        share a level and year. -->
+        {#each card.education as entry, i (i)}
+          <Chip>{educationLabel(entry)}</Chip>
+        {/each}
+      </div>
+    </section>
+  {/if}
+
+  {#if card.certifications?.length}
+    <section class="flex flex-col gap-2">
+      <h2 class="text-sm font-medium">Certifications</h2>
+      <div class="flex flex-wrap gap-1.5">
+        {#each card.certifications as cert (cert)}
+          <Chip>{CERTIFICATION_LABELS[cert] ?? titleCase(cert)}</Chip>
+        {/each}
+      </div>
+    </section>
+  {/if}
+
+  {#if card.skills.length}
+    <section class="flex flex-col gap-2">
+      <h2 class="text-sm font-medium">Skills</h2>
+      <div class="flex flex-wrap gap-1.5">
+        {#each card.skills as skill (skill)}
+          <Chip>{skillLabel(skill)}</Chip>
+        {/each}
+      </div>
+    </section>
+  {/if}
+
+  {#if !card.skills.length && !card.roles.length && !card.education?.length && !card.certifications?.length}
     <p class="text-sm text-muted-foreground">
       This candidate has joined the network but has not published anything yet.
     </p>

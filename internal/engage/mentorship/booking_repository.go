@@ -91,13 +91,30 @@ func (r *QueriesRepository) DeleteAvailabilityRule(ctx context.Context, ruleID, 
 // intervals read from their calendar. The second is empty until that sync ships, and it
 // is unioned here rather than in SQL so the seam stays one query per source.
 func (r *QueriesRepository) ListBusy(ctx context.Context, mentorID int64, from, to time.Time) ([]Interval, error) {
+	booked, busy, err := r.listBusyByKind(ctx, mentorID, from, to)
+	if err != nil {
+		return nil, err
+	}
+	return append(booked, busy...), nil
+}
+
+// ListBusyByKind is ListBusy's two sources kept apart, for a caller — the mentor's own
+// calendar breakdown — that needs to say WHICH kind of occupied a moment is. The public
+// slot engine has no such caller and keeps using ListBusy's flat union.
+func (r *QueriesRepository) ListBusyByKind(ctx context.Context, mentorID int64, from, to time.Time) (booked, busy []Interval, err error) {
+	return r.listBusyByKind(ctx, mentorID, from, to)
+}
+
+// listBusyByKind reads a mentor's confirmed bookings and synced calendar intervals as two
+// separate slices, each ordered ascending by start.
+func (r *QueriesRepository) listBusyByKind(ctx context.Context, mentorID int64, from, to time.Time) (booked, busy []Interval, err error) {
 	bookings, err := r.q.ListMentorBusyBookings(ctx, db.ListMentorBusyBookingsParams{
 		MentorID:    mentorID,
 		WindowStart: pgtype.Timestamptz{Time: from, Valid: true},
 		WindowEnd:   pgtype.Timestamptz{Time: to, Valid: true},
 	})
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	calendar, err := r.q.ListMentorBusyIntervals(ctx, db.ListMentorBusyIntervalsParams{
 		MentorID:    mentorID,
@@ -105,17 +122,18 @@ func (r *QueriesRepository) ListBusy(ctx context.Context, mentorID int64, from, 
 		WindowEnd:   pgtype.Timestamptz{Time: to, Valid: true},
 	})
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	out := make([]Interval, 0, len(bookings)+len(calendar))
+	booked = make([]Interval, 0, len(bookings))
 	for _, row := range bookings {
-		out = append(out, Interval{Start: row.StartsAt.Time, End: row.EndsAt.Time})
+		booked = append(booked, Interval{Start: row.StartsAt.Time, End: row.EndsAt.Time})
 	}
+	busy = make([]Interval, 0, len(calendar))
 	for _, row := range calendar {
-		out = append(out, Interval{Start: row.StartsAt.Time, End: row.EndsAt.Time})
+		busy = append(busy, Interval{Start: row.StartsAt.Time, End: row.EndsAt.Time})
 	}
-	return out, nil
+	return booked, busy, nil
 }
 
 // CreateBooking writes a confirmed booking, translating the non-overlap constraint into

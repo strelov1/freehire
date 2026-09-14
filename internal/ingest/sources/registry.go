@@ -151,6 +151,7 @@ func All(c HTTPClient) map[string]Source {
 		NewHiBob(c),
 		NewGem(c),
 		NewSuccessFactors(c),
+		NewSelfRecruit(c),
 		// Paced: its per-posting detail fan-out fired ~37k requests in 10 minutes and Teamtailor
 		// 403'd nearly half the fleet (see teamtailorRequestInterval).
 		NewTeamtailor(pacedHTMLGetter(c, teamtailorRequestInterval, teamtailorRequestBurst)),
@@ -181,6 +182,8 @@ func All(c HTTPClient) map[string]Source {
 		NewJazzHR(c),
 		NewWPYoast(c),
 		NewBreezy(c),
+		NewHerp(c),
+		NewHrmos(c),
 		NewJoin(pacedJoinGetter(c)),
 		NewRapyd(c),
 		NewCareerPlug(c),
@@ -216,6 +219,7 @@ func All(c HTTPClient) map[string]Source {
 		NewPageUp(c),
 		NewNeogov(c),
 		NewDeel(c),
+		NewScalis(c),
 		NewVouch(c),
 		NewRecruitingSolutions(c),
 		NewUKG(c),
@@ -291,6 +295,12 @@ func All(c HTTPClient) map[string]Source {
 		NewHimalayas(c),
 		NewRemotive(c),
 		NewRemotedotcom(c),
+		// wellfound needs no fingerprint-spoofing transport of its own (unlike bayt/gulftalent
+		// below) — its pages sit behind a full Cloudflare JS challenge that only the hosted
+		// Firecrawl tier can pass, wired in firecrawlProviders. Without that credential this
+		// entry still exists (classification/dedup must know about it) but every crawl attempt
+		// simply 403s on the challenge response, the same shape bayt/gulftalent already have.
+		NewWellfound(c),
 		NewRemotli(c),
 		NewLandingJobs(c),
 		NewTheMuse(c),
@@ -304,6 +314,10 @@ func All(c HTTPClient) map[string]Source {
 		NewTyomarkkinatori(c),
 		NewLikeit(c),
 		NewArbeitsagentur(c),
+		// EURES: the EU's cross-border public employment portal, aggregating national PES
+		// and partner-board feeds across ~31 EU/EFTA countries. Board-based (board =
+		// country), aggregator-marked (see eures.go for the confirmed re-listing evidence).
+		NewEures(c),
 		// International single-company adapters (boardless).
 		NewTelegramCareers(c),
 		NewAmazon(c),
@@ -427,6 +441,17 @@ func All(c HTTPClient) map[string]Source {
 	registry["aijobs"] = cookieSessionSource[aijobsHTTP](c, func(h aijobsHTTP) Source {
 		return NewAijobs(h, aijobsMaxNewPerRun)
 	})
+	// HumanBit's listing page is a single, unpaginated ~5.6 MB payload that measured ~18s to
+	// fetch — past the standard 15s client timeout, which made every crawl fail
+	// intermittently with "context deadline exceeded" in production. Swap in the
+	// long-timeout transport only when there is a real client to serve; the taxonomy path
+	// (c == nil, e.g. FilterableProviders) must stay transport-free, per the invariant
+	// Taxonomy documents.
+	if c == nil {
+		registry["humanbit"] = NewHumanBit(nil)
+	} else {
+		registry["humanbit"] = NewHumanBit(NewLongTimeoutClient())
+	}
 	// meta/uber/gusto are NOT served by the shared client: Meta's edge 400s the default Go
 	// TLS+HTTP/2 fingerprint and Uber's and Gusto's Cloudflare edges challenge it, so all three
 	// need the shared Chrome-fingerprint transport (fingerprintHTTP, also used by the

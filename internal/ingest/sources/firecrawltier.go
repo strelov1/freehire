@@ -45,6 +45,11 @@ import (
 var firecrawlProviders = map[string]func(hosted *firecrawlClient, direct HTTPClient) Source{
 	"bayt":       func(hosted *firecrawlClient, _ HTTPClient) Source { return NewBayt(hosted) },
 	"gulftalent": func(hosted *firecrawlClient, _ HTTPClient) Source { return NewGulfTalent(hosted) },
+	// wellfound: every address this repository can egress from — direct, proxied, and our own
+	// proxied headless-browser tier — gets the same Cloudflare "Security Check" JS challenge
+	// page, measured live 2026-09-13. The hosted tier passes it and returns the real,
+	// server-rendered page.
+	"wellfound": func(hosted *firecrawlClient, _ HTTPClient) Source { return NewWellfound(hosted) },
 	// Only the enumeration is hosted: .com lists 2 755 vacancies where .cy lists ~605, and every
 	// one of them is readable on .cy. See NewWantapplyViaHostedSitemap.
 	"wantapply": func(hosted *firecrawlClient, direct HTTPClient) Source {

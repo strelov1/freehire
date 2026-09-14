@@ -115,6 +115,7 @@
         addedSkills = current ? withSkills(current, cv.skills).skills.length - before.length : 0;
         if (addedSkills > 0 || addedSpecs > 0) {
           await profileStore.mergeResumeExtraction(cv.skills, nextSpecializations);
+          onSaved?.();
         }
       } else {
         const beforeSkills = skills.length;

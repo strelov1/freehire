@@ -204,6 +204,67 @@ func (h *mentorshipHandlers) AddAvailabilityOverride(c *fiber.Ctx) error {
 	return c.Status(fiber.StatusCreated).JSON(fiber.Map{"data": toAvailabilityResponse(rule)})
 }
 
+// calendarIntervalResponse is one labeled span of a mentor's own resolved calendar.
+type calendarIntervalResponse struct {
+	StartsAt time.Time `json:"starts_at"`
+	EndsAt   time.Time `json:"ends_at"`
+	// Status is one of "booked", "busy", "free" or "closed" — see the mentor-schedule-
+	// calendar spec.
+	Status string `json:"status"`
+}
+
+// GetMyCalendar is the owner's own resolved calendar for one month — booked, busy, free
+// and closed time — computed the same way the public slot engine decides what a seeker
+// may book. Unlike that endpoint, this one is authenticated, read by exactly one
+// account, and expressed in the mentor's own timezone: there is no viewer to negotiate
+// with.
+func (h *mentorshipHandlers) GetMyCalendar(c *fiber.Ctx) error {
+	userID, err := requireUserID(c)
+	if err != nil {
+		return err
+	}
+	year, month, err := calendarMonth(c)
+	if err != nil {
+		return err
+	}
+
+	result, err := h.mentorship.MyCalendar(c.Context(), userID, year, month)
+	if err != nil {
+		return mentorshipError(err)
+	}
+
+	out := make([]calendarIntervalResponse, 0, len(result.Intervals))
+	for _, iv := range result.Intervals {
+		out = append(out, calendarIntervalResponse{
+			StartsAt: iv.Start.UTC(),
+			EndsAt:   iv.End.UTC(),
+			Status:   string(iv.Status),
+		})
+	}
+	return c.JSON(fiber.Map{
+		"data": out,
+		"meta": fiber.Map{"timezone": result.Zone, "count": len(out)},
+	})
+}
+
+// calendarMonth parses "?month=YYYY-MM", defaulting to the current UTC month. "Current"
+// is a UTC approximation rather than the mentor's own — resolving that would need the
+// profile read this function runs before, and being off by a day at the very edge of a
+// month is a cosmetic default, not a correctness question the caller cannot fix by
+// passing an explicit month.
+func calendarMonth(c *fiber.Ctx) (year int, month time.Month, err error) {
+	raw := c.Query("month")
+	if raw == "" {
+		now := time.Now().UTC()
+		return now.Year(), now.Month(), nil
+	}
+	parsed, parseErr := time.Parse("2006-01", raw)
+	if parseErr != nil {
+		return 0, 0, fiber.NewError(fiber.StatusUnprocessableEntity, "month must be YYYY-MM")
+	}
+	return parsed.Year(), parsed.Month(), nil
+}
+
 // DeleteAvailabilityRule removes one row of the caller's own schedule.
 func (h *mentorshipHandlers) DeleteAvailabilityRule(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)

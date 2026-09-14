@@ -253,6 +253,9 @@ type profileRequest struct {
 	// ShowPhoto is the mentor's own opt-in to publish their account's CV headshot. Off
 	// by default; see mentorship.Profile.ShowPhoto.
 	ShowPhoto bool `json:"show_photo"`
+	// Seniority is optional; see mentorship.Profile.Seniority for what an empty value
+	// means and what a non-empty one must be.
+	Seniority string `json:"seniority"`
 }
 
 func (r profileRequest) toInput(userID int64) mentorship.ProfileInput {
@@ -275,6 +278,7 @@ func (r profileRequest) toInput(userID int64) mentorship.ProfileInput {
 		},
 		MeetingURL: r.MeetingURL,
 		ShowPhoto:  r.ShowPhoto,
+		Seniority:  r.Seniority,
 	}
 }
 

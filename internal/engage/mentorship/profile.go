@@ -6,9 +6,11 @@ import (
 	"fmt"
 	"net/url"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 
+	"github.com/strelov1/freehire/internal/dict/vocab"
 	"github.com/strelov1/freehire/internal/identity/username"
 )
 
@@ -78,7 +80,12 @@ type Profile struct {
 	// ShowPhoto is the mentor's own opt-in to serve their account's stored CV headshot
 	// on their public directory card and profile page. Off by default: the account
 	// headshot is a job-search photo a mentor may not want reused here without asking.
-	ShowPhoto   bool
+	ShowPhoto bool
+	// Seniority is optional and, when set, one of vocab.SeniorityValues — the platform's
+	// one seniority vocabulary, not a second mentor-only list. Empty means unset, never
+	// a value of its own: a mentor who leaves it blank is simply unaffected by a
+	// directory search narrowed by seniority.
+	Seniority   string
 	Status      string
 	Paused      bool
 	DecidedBy   int64
@@ -121,6 +128,8 @@ type ProfileInput struct {
 	Session     SessionParams
 	MeetingURL  string
 	ShowPhoto   bool
+	// Seniority is optional; see Profile.Seniority for what an empty value means.
+	Seniority string
 	// HasCalendarLink says the caller holds a connected calendar.events grant at
 	// submission time, resolved by the handler the same way GmailStatus already does.
 	// A mentor who has one gets a real Meet link minted per booking, so their own
@@ -136,7 +145,15 @@ type DirectoryFilter struct {
 	CompanySlug string
 	Topic       string
 	Language    string
-	Limit       int32
+	Seniority   string
+	// Query narrows by a case-insensitive substring match against a mentor's name or
+	// headline. Empty means unfiltered, same as every other field here.
+	Query string
+	// NoReviewsOnly narrows to mentors with zero reviews. false (the zero value) is
+	// itself "unfiltered" — there is no separate "explicitly false" state to confuse it
+	// with, unlike the string fields above.
+	NoReviewsOnly bool
+	Limit         int32
 }
 
 // maxSlugAttempts bounds SubmitProfile's collision-suffix search over a slug it derived
@@ -329,6 +346,14 @@ func validateProfile(in ProfileInput, creating bool) error {
 	if len(in.Languages) == 0 {
 		return fmt.Errorf("%w: at least one language is required", ErrInvalidProfile)
 	}
+	// Optional: an empty value is always valid, unlike topics/languages above. Only a
+	// non-empty value outside the platform's one seniority vocabulary is refused. Trimmed
+	// before the vocabulary check for the same reason DisplayName/Headline trim above —
+	// normaliseProfile trims it too, but a caller other than the frontend's fixed <select>
+	// must not be refused for whitespace before that ever runs.
+	if seniority := strings.TrimSpace(in.Seniority); seniority != "" && !slices.Contains(vocab.SeniorityValues, seniority) {
+		return fmt.Errorf("%w: %q is not a recognised seniority level", ErrInvalidProfile, in.Seniority)
+	}
 	if err := validateMeetingURL(in.MeetingURL, in.HasCalendarLink); err != nil {
 		return err
 	}
@@ -339,9 +364,6 @@ func validateProfile(in ProfileInput, creating bool) error {
 		return err
 	}
 	if creating {
-		if strings.TrimSpace(in.CompanySlug) == "" {
-			return fmt.Errorf("%w: a company is required", ErrInvalidProfile)
-		}
 		if len(in.Slug) < 3 || len(in.Slug) > 30 || !slugPattern.MatchString(in.Slug) {
 			return fmt.Errorf("%w: %q is not a usable profile address", ErrInvalidProfile, in.Slug)
 		}
@@ -403,6 +425,7 @@ func normaliseProfile(in ProfileInput) ProfileInput {
 	in.Headline = strings.TrimSpace(in.Headline)
 	in.Bio = strings.TrimSpace(in.Bio)
 	in.MeetingURL = strings.TrimSpace(in.MeetingURL)
+	in.Seniority = strings.TrimSpace(in.Seniority)
 	in.Topics = normaliseTags(in.Topics)
 	in.Languages = normaliseTags(in.Languages)
 	return in

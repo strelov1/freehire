@@ -515,7 +515,7 @@ func Register(app *fiber.App, cfg Config) {
 	contributionsH := newContributionHandlers(contributionSvc, queries, importer, postingURLs)
 	// Prefill reuses the SAME importer (its Resolve half, which never writes) rather than
 	// a second parsing registry — see submissionHandlers.PrefillSubmission.
-	submissionsH := newSubmissionHandlers(queries, moderationSvc, importer)
+	submissionsH := newSubmissionHandlers(queries, cfg.Pool, moderationSvc, importer)
 	// jd-tailor-intake reuses the SAME importer as the contribution flow (shared SSRF-guarded
 	// transport and rate limits — see the comment on ingestClient above) for its recognized-ATS
 	// branch, and internal/job/privatejob for its generic-scrape/pasted-text branch.

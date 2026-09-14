@@ -36,7 +36,7 @@ func TestFirecrawlClientSatisfiesBothAdaptersTransports(t *testing.T) {
 }
 
 func TestHostedTierCarriesTheTwoUnreachableProviders(t *testing.T) {
-	for _, name := range []string{"bayt", "gulftalent", "wantapply", "hh"} {
+	for _, name := range []string{"bayt", "gulftalent", "wantapply", "hh", "wellfound"} {
 		if _, ok := firecrawlProviders[name]; !ok {
 			t.Errorf("%s is not in firecrawlProviders", name)
 		}

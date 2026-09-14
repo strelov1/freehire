@@ -89,6 +89,7 @@ hire
 /search-drain
 /search-settings-drift
 /seed-adzuna-description-queue
+/seed-from-inventory
 /similar-backfill
 # Root-level build output of `go build ./cmd/<name>/` — never commit these artifacts.
 /backfill-company-info
@@ -121,7 +122,26 @@ hire
 /scratch/
 
 # Environment
+#
+# Default-deny, because the file that leaks is never the one a rule was written for: a copy
+# of .env taken before a risky change (.env.bak.pre-bifrost, .env.old, .env.2026-09-12) holds
+# exactly the same credentials and is named whatever the person was thinking at the time. An
+# allowlist of backup suffixes would only ever cover the shapes somebody already met.
+#
+# The negations name the env files that are meant to be committed — they carry no secrets.
+# Listing one here is the decision to publish it, so a new one must be added deliberately.
+#
+# Each negation is ANCHORED to its full path, for the reason the worker-binary block above
+# records in the other direction: a pattern with no slash in it matches that name at ANY
+# depth. Unanchored, `!.env.example` would also re-admit a `.env.example` nobody has written
+# yet, in a directory nobody has created yet — and `!.env.production` would re-admit a
+# future service's production env, which is the one file in this whole block most likely to
+# hold a live credential. Default-deny only holds if the exceptions cannot spread.
 .env
+.env.*
+!/.env.example
+!/web/.env.example
+!/extension/.env.production
 
 # IDE / OS
 .idea/
@@ -193,6 +213,8 @@ extension/*.zip
 /recount-companies
 /reindex
 /reindex-companies
+/report-classify-drift
+/report-skill-gaps
 /reslug
 /rollup-facets
 /build-suggestions

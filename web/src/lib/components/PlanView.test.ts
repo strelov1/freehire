@@ -2,9 +2,10 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-// A SOURCE-TEXT AUDIT, deliberately not a mounted-component test — web/ has no
-// component-test infrastructure at all (see jobActionStrip.test.ts's own comment: no
-// Svelte plugin, no DOM in vitest.config.ts).
+// A SOURCE-TEXT AUDIT, not a mounted-component test. Predates `web/`'s `components`
+// vitest project (real `.svelte` rendering via `@testing-library/svelte` + jsdom,
+// `*.spec.ts` — added for the profile-alert-sync fix); migrating this file to render
+// `PlanView` for real is a reasonable follow-up, not done here.
 //
 // What is worth pinning here: the "Upgrade to Ultra" call to action must not advertise a
 // tier that is not actually for sale. A Pro subscriber unconditionally saw it before this

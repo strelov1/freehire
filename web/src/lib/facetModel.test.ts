@@ -171,6 +171,36 @@ describe('experienceYearsMax', () => {
   });
 });
 
+describe('autoApplyAvailable', () => {
+  it('is absent from the URL when unset', () => {
+    expect(filtersToParams(emptyFilters()).has('auto_apply_available')).toBe(false);
+  });
+
+  it('serializes true and reads it back', () => {
+    const f = emptyFilters();
+    f.autoApplyAvailable = true;
+    const p = filtersToParams(f);
+    expect(p.get('auto_apply_available')).toBe('true');
+    expect(filtersFromParams(p).autoApplyAvailable).toBe(true);
+  });
+
+  // True-or-absent, like the backend facet it drives: turning the checkbox off
+  // must remove the param entirely, never write `auto_apply_available=false` —
+  // the index never carries an explicit false, so that value would silently
+  // filter to nothing instead of clearing the filter.
+  it('never serializes false — omits the param instead', () => {
+    const f = emptyFilters();
+    f.autoApplyAvailable = false;
+    expect(filtersToParams(f).has('auto_apply_available')).toBe(false);
+  });
+
+  it('counts as one active filter when true', () => {
+    const f = emptyFilters();
+    f.autoApplyAvailable = true;
+    expect(activeFilterCount(f)).toBe(1);
+  });
+});
+
 describe('the retired role facet', () => {
   // `role` is gone from FACETS, so emptyFilters no longer seeds it and the generic
   // param path has nothing to serialize. A stale `role=` in a URL is simply not read —
