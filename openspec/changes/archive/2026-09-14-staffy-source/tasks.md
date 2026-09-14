@@ -50,6 +50,9 @@
 
 ## 5. Close the submission
 
-- [ ] 5.1 After merge and deploy, add the `staffy` board (boardless, no `--board` flag)
-      via `cmd/add-board --apply` on prod and delete `board_submissions` id 193, then
-      re-verify live via `cmd/ingest staffy`
+- [x] 5.1 After merge and deploy, add the `staffy` board (boardless, no `--board` flag)
+      via `cmd/add-board --apply` on prod and delete `board_submissions` id 193 (the row
+      had been re-inserted with a new id, 195, after an earlier accidental deletion
+      during triage — deleted at its actual id), then re-verify live via
+      `cmd/ingest staffy` — succeeded cleanly on the first live crawl
+      (`ingested=61 failed=0 unreadable=0`, exactly matching the declared total)
