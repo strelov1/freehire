@@ -299,14 +299,18 @@ func (rj wellfoundResolvedJob) toJob() (Job, bool) {
 	}, true
 }
 
-// wellfoundDescription folds the listing's free-text compensation range into the sanitized HTML
-// body. Wellfound states a display range ("$150k – $180k"), never a structured amount and
-// currency, so it is carried as text rather than guessed into Job's structured salary fields —
-// the same treatment SEEK's salaryLabel and Workstream's pay line already get in this catalogue,
-// down to routing the whole constructed paragraph through sanitizeHTML rather than hand-escaping
-// it (see seek.go's salary paragraph and workstream.go's pay line for the exact precedent).
+// wellfoundDescription folds the listing's free-text compensation range into the rendered
+// HTML body. Wellfound's own description field is Markdown, not HTML — confirmed live
+// (freehire.me/jobs/ai-engineer-co-founder-role-brandbrahma-pkuqoprb rendered a raw
+// "**bold**" before this fix) — so it goes through the same markdownToHTML (goldmark)
+// conversion join.go's Join.com adapter already established in this package for exactly
+// this shape of source, before sanitizing. The compensation range is a display string, never
+// a structured amount and currency, so it is carried as text rather than guessed into Job's
+// structured salary fields — the same treatment SEEK's salaryLabel and Workstream's pay line
+// already get in this catalogue, down to routing the whole constructed paragraph through
+// sanitizeHTML rather than hand-escaping it.
 func wellfoundDescription(e wellfoundJobEntry) string {
-	body := sanitizeHTML(e.Description)
+	body := sanitizeHTML(markdownToHTML(e.Description))
 	comp := strings.TrimSpace(e.Compensation)
 	if comp == "" {
 		return body

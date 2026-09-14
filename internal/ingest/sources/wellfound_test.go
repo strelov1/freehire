@@ -81,7 +81,7 @@ const wellfoundOnePage = `{
     "id": "100",
     "slug": "senior-backend-engineer",
     "title": "Senior Backend Engineer",
-    "description": "<p>Build things.</p>",
+    "description": "Build things.",
     "compensation": "$150k – $180k",
     "remote": true,
     "locationNames": ["United States"]
@@ -91,7 +91,7 @@ const wellfoundOnePage = `{
     "id": "101",
     "slug": "product-designer",
     "title": "Product Designer",
-    "description": "<p>Design things.</p>",
+    "description": "Design things.",
     "compensation": "",
     "remote": false,
     "locationNames": ["Berlin"]
@@ -101,7 +101,7 @@ const wellfoundOnePage = `{
     "id": "103",
     "slug": "orphan-role",
     "title": "Orphan Role",
-    "description": "<p>Nobody highlights this one.</p>",
+    "description": "Nobody highlights this one.",
     "compensation": "",
     "remote": true,
     "locationNames": []
@@ -166,7 +166,7 @@ func TestParseWellfoundPage_PopulatesEntryScalarFields(t *testing.T) {
 	if e.Title != "Senior Backend Engineer" {
 		t.Errorf("Title = %q", e.Title)
 	}
-	if e.Description != "<p>Build things.</p>" {
+	if e.Description != "Build things." {
 		t.Errorf("Description = %q", e.Description)
 	}
 	if e.Compensation != "$150k – $180k" {
@@ -467,6 +467,68 @@ func TestWellfound_Fetch_MapsAWellFormedEntryToAJob(t *testing.T) {
 	}
 	if !strings.Contains(backend.Description, "150k") {
 		t.Errorf("Description = %q, want the free-text compensation folded in (SEEK/Workstream precedent)", backend.Description)
+	}
+}
+
+// TestWellfound_Fetch_ConvertsMarkdownDescriptionToHTML guards against a real bug found live
+// (freehire.me/jobs/ai-engineer-co-founder-role-brandbrahma-pkuqoprb): Wellfound's own
+// description field is Markdown, not HTML — the earlier test fixtures happened to use
+// already-HTML bodies ("<p>Build things.</p>"), which never exercised this. A raw
+// "**bold**"/"* list item" was rendering literally on the site instead of as real markup.
+// join.go's markdownToHTML (goldmark) is the established fix for exactly this shape of
+// source in this package.
+func TestWellfound_Fetch_ConvertsMarkdownDescriptionToHTML(t *testing.T) {
+	data := `{
+  "ROOT_QUERY": {
+    "__typename": "Query",
+    "talent": {
+      "__typename": "Talent",
+      "seoLandingPageJobSearchResults({\"page\":1,\"remote\":true,\"role\":\"software-engineer\"})": {
+        "__typename": "Results",
+        "pageCount": 1,
+        "totalJobCount": 1,
+        "totalStartupCount": 1,
+        "perPage": 20,
+        "startups": [{"__ref": "StartupResult:1"}]
+      }
+    }
+  },
+  "StartupResult:1": {
+    "__typename": "StartupResult",
+    "id": "1",
+    "name": "Acme Inc",
+    "slug": "acme-inc",
+    "highlightedJobListings": [{"__ref": "JobListingSearchResult:100"}]
+  },
+  "JobListingSearchResult:100": {
+    "__typename": "JobListingSearchResult",
+    "id": "100",
+    "slug": "founding-engineer",
+    "title": "Founding Engineer",
+    "description": "**Equity-Only Position**: no cash salary until funding.\n\n* Own the roadmap\n* Ship fast",
+    "compensation": "",
+    "remote": true,
+    "locationNames": []
+  }
+}`
+	url1 := wellfoundPageURL("software-engineer", 1)
+	fake := &wellfoundFakeHTTP{t: t, pages: map[string]string{url1: data}}
+	jobs, err := NewWellfound(fake).Fetch(context.Background(), CompanyEntry{Provider: "wellfound", Board: "software-engineer"})
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	if len(jobs) != 1 {
+		t.Fatalf("len(jobs) = %d, want 1", len(jobs))
+	}
+	desc := jobs[0].Description
+	if strings.Contains(desc, "**Equity-Only Position**") {
+		t.Errorf("Description = %q, raw Markdown was not rendered to HTML", desc)
+	}
+	if !strings.Contains(desc, "<strong>Equity-Only Position</strong>") {
+		t.Errorf("Description = %q, want the Markdown bold rendered as <strong>", desc)
+	}
+	if !strings.Contains(desc, "<li>") {
+		t.Errorf("Description = %q, want the Markdown bullet list rendered as <li>", desc)
 	}
 }
 
