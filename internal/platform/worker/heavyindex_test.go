@@ -106,20 +106,13 @@ func TestHeavyIndexLockKey_IsRegisteredAndUnique(t *testing.T) {
 	}
 }
 
-// TestReleaseThen_CallsEachOnceInOrder pins the composition that shipped broken.
+// TestReleaseThen_CallsEachOnceInOrder pins the two properties the closure that shipped
+// broken violated — see releaseThen for what it did and why.
 //
-// The inline closure it replaces read `release()` where `release` was the function's own
-// NAMED RETURN VALUE, so `return func(){ release(); … }` rebound that name to the new
-// closure before anything called it — and the closure then called itself until the stack
-// ran out. Every run that TOOK the lock died at the moment it let go, after finishing all
-// of its work: cmd/reindex, cmd/reindex-companies and cmd/build-suggestions alike. CI
-// caught it as `fatal error: stack overflow` in pr-smoke, with heavyindex.go:52 repeating
-// down the whole trace.
-//
-// So this asserts the two things that failure violated: each function runs EXACTLY once,
-// and the unlock runs BEFORE the connection goes back — the advisory lock is a session
-// lock living on that connection, and unlocking after its release would be unlocking on
-// whichever session takes it next.
+// EXACTLY once, because the old one called itself until the stack ran out. And unlock
+// BEFORE the connection goes back, because the advisory lock is a session lock living on
+// that connection: unlocking after its release would unlock on whichever session takes
+// it next.
 func TestReleaseThen_CallsEachOnceInOrder(t *testing.T) {
 	var order []string
 
