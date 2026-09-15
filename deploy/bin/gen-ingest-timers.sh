@@ -148,6 +148,31 @@ for n in "${PROVIDERS[@]}"; do
   # churns 403s and board_health noise without ingesting anything. Skip until proxy support is
   # wired for the fingerprint client; the disable loop after this loop retires any live timer.
   { [ "$n" = bayt ] || [ "$n" = gulftalent ]; } && continue
+  # apploi's upstream API stopped honouring the `employer` parameter, and the adapter is
+  # built entirely on it (api.apploi.com/v1/jobs?employer=<id>). Measured 2026-09-15 against
+  # the live endpoint: `employer=39092`, `employer=999999999`, `employer=52601` and NO
+  # employer parameter at all return byte-identical pages. Every one of the 5833 boards
+  # therefore walks apploi's whole global catalogue instead of that employer's postings.
+  #
+  # Both halves of that are already in production data. The crawl cannot finish: it stops
+  # at apploiMaxPages (100 pages, a hard Fetch failure by the fullBoardListing contract),
+  # which is ~100 requests and ~5 minutes spent per board to store nothing -- 592 of 5833
+  # boards carry that error, and a 50-minute run reaches 235 boards before systemd kills
+  # it on TimeoutStartSec. And what it DID store before the endpoint changed is the same
+  # posting once per board under a different employer each time: external_id
+  # `41350:1498798|ontray` sits beside `53924:1498798|fulton-manor-care-center` and
+  # `52204:1498798|magnet-aba-therapy` -- one real job, three companies, none of them
+  # necessarily right.
+  #
+  # Skipped rather than fixed here because the fix is an ADAPTER rewrite, not a schedule:
+  # the endpoint is a single global catalogue now, so apploi belongs as a BOARDLESS
+  # provider crawled once, attributing each posting by its own `brand_name` field (the only
+  # employer identity the payload still carries -- there is no employer id in it any more).
+  # Until then an enabled timer holds a heavy slot for 50 minutes to ingest nothing.
+  #
+  # NOT resolved by this line: the ~1.47M open apploi rows already stored. Leaving them is
+  # a deliberate hold, not an oversight -- closing them is a separate, reviewed decision.
+  [ "$n" = apploi ] && continue
   # join.com meters by rate, not concurrency (internal/sources/pacer.go), and an hourly
   # full-file run at the paced rate can't clear ~4700 boards' worth of requests inside
   # TimeoutStartSec. Crawled as 5 board-sharded runs instead — generated below, not here.
@@ -637,7 +662,11 @@ else
     [ "$(systemctl is-enabled "$u" 2>/dev/null)" = enabled ] || continue
     for g in "${GENERATED[@]}"; do [ "$g" = "$p" ] && continue 2; done
     systemctl disable --now "$u" >/dev/null 2>&1 || true
-    echo "gen-ingest-timers: retired $p — no live board in the catalogue"
+    # States what this run OBSERVED, not why. A provider reaches here for two different
+    # reasons -- its boards left the catalogue, or a `continue` above skipped it on
+    # purpose (apploi, bayt, the sharded ones) -- and a message that asserts the first
+    # sends a reader hunting for boards that are still there.
+    echo "gen-ingest-timers: retired $p — this run generated no timer for it"
     swept=$((swept+1))
   done
   # An `if`, not `[ ... ] && echo`: under `set -e` the && form exits the script whenever
