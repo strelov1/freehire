@@ -202,8 +202,14 @@ var wordAliases = map[string]string{
 	"newrelic":      "newrelic",
 	"pagerduty":     "pagerduty",
 	// api / data
-	"graphql":    "graphql",
-	"grpc":       "grpc",
+	"graphql": "graphql",
+	"grpc":    "grpc",
+	// soap is gated (ambiguousWords) — the cleaning product collides on a multi-
+	// industry board (retail/hospitality/cleaning postings all say "soap"), so the
+	// bare word tags only alongside a strong tech token; "soap api"/"soap apis"
+	// below carry a genuinely-named integration on their own, the same shape
+	// "rest api" gives the also-gated "rest".
+	"soap":       "soap",
 	"pytorch":    "pytorch",
 	"tensorflow": "tensorflow",
 	"pandas":     "pandas",
@@ -494,9 +500,13 @@ var wordAliases = map[string]string{
 	"cloudwatch": "cloudwatch",
 	"ec2":        "ec2",
 	"rds":        "rds",
-	"mssql":      "sql-server",
-	"tsql":       "sql-server",
-	"ga4":        "google-analytics",
+	// s3 is gated (ambiguousWords), unlike its ec2/rds siblings: a bare "S3" also
+	// names a project-roadmap phase/stage label ("the S3 phase of the roadmap"),
+	// so it tags only alongside a strong tech token — see the "s3 trap" test.
+	"s3":    "s3",
+	"mssql": "sql-server",
+	"tsql":  "sql-server",
+	"ga4":   "google-analytics",
 
 	// LLM-mined batch 2 (jobs.enrichment->skills, freq 500-1500). Distinctive single
 	// tokens. Ultra-generic concept words (caching, routing, concurrency,
@@ -820,6 +830,8 @@ var ambiguousWords = map[string]bool{
 	"maven":     true,
 	"1c":        true,
 	"amplitude": true,
+	"soap":      true,
+	"s3":        true,
 	// broad concepts (batch 3) — tag only in a concrete tech context
 	"ai":         true,
 	"automation": true,
@@ -952,6 +964,8 @@ var engineeringPhraseAliases = []phraseAlias{
 	// spelled-out form carries the real postings that say "RESTful API" rather than
 	// "REST API" — it is the phrase, not the adjective, that names the style.
 	{"restful api", "rest"}, {"restful apis", "rest"},
+	{"soap api", "soap"}, {"soap apis", "soap"},
+	{"aws s3", "s3"}, {"amazon s3", "s3"},
 	{"github actions", "github-actions"},
 	{"cloudformation", "cloudformation"},
 	{"scikit-learn", "scikit-learn"},

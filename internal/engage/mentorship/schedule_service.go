@@ -74,6 +74,45 @@ func (s *Service) AddOverride(ctx context.Context, userID int64, rule Rule) erro
 	return s.repo.AddAvailabilityRule(ctx, profile.ID, rule)
 }
 
+// MyCalendar is the owner's own resolved calendar for one month: their availability,
+// bookings and synced-calendar busy time, partitioned into booked/busy/free/closed the
+// same way slotsFor computes what a seeker may book.
+func (s *Service) MyCalendar(ctx context.Context, userID int64, year int, month time.Month) (CalendarResult, error) {
+	profile, err := s.ownProfile(ctx, userID)
+	if err != nil {
+		return CalendarResult{}, err
+	}
+	zone, err := time.LoadLocation(profile.Timezone)
+	if err != nil {
+		return CalendarResult{}, fmt.Errorf("%w: mentor %d has timezone %q", ErrNoMentorZone, profile.ID, profile.Timezone)
+	}
+
+	from := time.Date(year, month, 1, 0, 0, 0, 0, zone)
+	to := from.AddDate(0, 1, 0)
+
+	rules, err := s.repo.ListAvailability(ctx, profile.ID)
+	if err != nil {
+		return CalendarResult{}, err
+	}
+	// Widened a day either side, matching slotsFor: a booking or busy interval starting
+	// just before the month can still block an hour inside it once buffers are applied.
+	booked, busy, err := s.repo.ListBusyByKind(ctx, profile.ID, from.AddDate(0, 0, -1), to.AddDate(0, 0, 1))
+	if err != nil {
+		return CalendarResult{}, err
+	}
+
+	return Calendar(CalendarRequest{
+		Rules:      rules,
+		MentorZone: zone,
+		Params:     profile.Session,
+		Booked:     booked,
+		Busy:       busy,
+		From:       from,
+		To:         to,
+		Now:        s.now(),
+	})
+}
+
 // DeleteAvailabilityRule removes one row of the caller's own schedule.
 func (s *Service) DeleteAvailabilityRule(ctx context.Context, userID, ruleID int64) error {
 	profile, err := s.ownProfile(ctx, userID)

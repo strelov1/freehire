@@ -43,7 +43,7 @@ func seedMentor(t *testing.T, q *Queries, userID int64, company, slug string) Me
 	t.Helper()
 	mentor, err := q.CreateMentorProfile(context.Background(), CreateMentorProfileParams{
 		UserID:             userID,
-		CompanySlug:        company,
+		CompanySlug:        pgtype.Text{String: company, Valid: company != ""},
 		Slug:               slug,
 		DisplayName:        "Jane " + slug,
 		Headline:           "Senior Engineer",
@@ -628,6 +628,9 @@ func TestDirectoryFiltersTreatNullAsUnfiltered(t *testing.T) {
 	user := seedMentorshipUser(t, pool, "mentor-filter@example.test")
 	mentor := seedMentor(t, q, user, "filterco", "filter-mentor")
 	approve(t, q, mentor.ID, moderator)
+	if _, err := pool.Exec(ctx, `UPDATE mentors SET seniority = 'senior' WHERE id = $1`, mentor.ID); err != nil {
+		t.Fatalf("seed seniority: %v", err)
+	}
 
 	for _, tc := range []struct {
 		name  string
@@ -645,6 +648,18 @@ func TestDirectoryFiltersTreatNullAsUnfiltered(t *testing.T) {
 			Language: pgtype.Text{String: "xx", Valid: true}, RowLimit: 50}, 0},
 		{"non-matching company", ListPublishedMentorsParams{
 			CompanySlug: pgtype.Text{String: "nobody", Valid: true}, RowLimit: 50}, 0},
+		{"matching seniority", ListPublishedMentorsParams{
+			Seniority: pgtype.Text{String: "senior", Valid: true}, RowLimit: 50}, 1},
+		{"non-matching seniority", ListPublishedMentorsParams{
+			Seniority: pgtype.Text{String: "junior", Valid: true}, RowLimit: 50}, 0},
+		{"query matching the headline", ListPublishedMentorsParams{
+			Query: pgtype.Text{String: "Senior Eng", Valid: true}, RowLimit: 50}, 1},
+		{"query matching the display name", ListPublishedMentorsParams{
+			Query: pgtype.Text{String: "filter-mentor", Valid: true}, RowLimit: 50}, 1},
+		{"query matching neither", ListPublishedMentorsParams{
+			Query: pgtype.Text{String: "underwater-basketry", Valid: true}, RowLimit: 50}, 0},
+		{"no_reviews_only excludes nobody when nobody has reviews", ListPublishedMentorsParams{
+			NoReviewsOnly: true, RowLimit: 50}, 1},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			got, err := q.ListPublishedMentors(ctx, tc.arg)
@@ -664,6 +679,46 @@ func TestDirectoryFiltersTreatNullAsUnfiltered(t *testing.T) {
 	}
 }
 
+// no_reviews_only must EXCLUDE a mentor once they have at least one review, not just
+// include one who has none — the inclusion side is already covered by
+// TestDirectoryFiltersTreatNullAsUnfiltered, whose single seeded mentor has no reviews.
+func TestDirectoryNoReviewsOnlyExcludesAReviewedMentor(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	ctx := context.Background()
+
+	seedMentorshipCompany(t, pool, "reviewedco")
+	moderator := seedMentorshipUser(t, pool, "moderator-reviewed@example.test")
+	mentorUser := seedMentorshipUser(t, pool, "mentor-reviewed@example.test")
+	seeker := seedMentorshipUser(t, pool, "seeker-reviewed@example.test")
+	mentor := seedMentor(t, q, mentorUser, "reviewedco", "reviewed-mentor")
+	approve(t, q, mentor.ID, moderator)
+
+	var bookingID string
+	if err := pool.QueryRow(ctx,
+		`INSERT INTO mentor_bookings (mentor_id, seeker_user_id, starts_at, ends_at, seeker_timezone, meeting_url)
+		 VALUES ($1, $2, now() - interval '1 day', now() - interval '1 day' + interval '1 hour', 'UTC', 'https://meet.example.test/reviewed')
+		 RETURNING id`,
+		mentor.ID, seeker).Scan(&bookingID); err != nil {
+		t.Fatalf("seed booking: %v", err)
+	}
+	if _, err := pool.Exec(ctx,
+		`INSERT INTO mentor_reviews (booking_id, mentor_id, seeker_user_id, rating) VALUES ($1, $2, $3, 5)`,
+		bookingID, mentor.ID, seeker); err != nil {
+		t.Fatalf("seed review: %v", err)
+	}
+
+	got, err := q.ListPublishedMentors(ctx, ListPublishedMentorsParams{NoReviewsOnly: true, RowLimit: 50})
+	if err != nil {
+		t.Fatalf("ListPublishedMentors: %v", err)
+	}
+	for _, m := range got {
+		if m.Mentor.Slug == "reviewed-mentor" {
+			t.Error("no_reviews_only included a mentor who has a review")
+		}
+	}
+}
+
 // One profile per account, and one review per booking — both are constraints rather than
 // service checks, which is what makes a second write an update or a refusal by
 // construction.
@@ -679,7 +734,7 @@ func TestMentorshipUniquenessConstraints(t *testing.T) {
 
 	t.Run("a second profile for one account is refused", func(t *testing.T) {
 		if _, err := q.CreateMentorProfile(ctx, CreateMentorProfileParams{
-			UserID: mentorUser, CompanySlug: "uniqueco", Slug: "unique-mentor-again",
+			UserID: mentorUser, CompanySlug: pgtype.Text{String: "uniqueco", Valid: true}, Slug: "unique-mentor-again",
 			DisplayName: "Also Me", Headline: "Also me", Timezone: "Europe/Berlin",
 			SessionDurationMin: 30, HorizonDays: 30, MeetingUrl: "https://meet.example.test/z",
 		}); err == nil {
@@ -690,7 +745,7 @@ func TestMentorshipUniquenessConstraints(t *testing.T) {
 	t.Run("a profile naming an unknown company is refused", func(t *testing.T) {
 		other := seedMentorshipUser(t, pool, "mentor-nocompany@example.test")
 		if _, err := q.CreateMentorProfile(ctx, CreateMentorProfileParams{
-			UserID: other, CompanySlug: "no-such-company", Slug: "orphan-mentor",
+			UserID: other, CompanySlug: pgtype.Text{String: "no-such-company", Valid: true}, Slug: "orphan-mentor",
 			DisplayName: "Nobody", Headline: "Nobody", Timezone: "Europe/Berlin",
 			SessionDurationMin: 30, HorizonDays: 30, MeetingUrl: "https://meet.example.test/z",
 		}); err == nil {
@@ -751,8 +806,8 @@ func TestUpdateMentorProfileLeavesTheSlugAndCompanyAlone(t *testing.T) {
 	if updated.Slug != "stable-mentor" {
 		t.Errorf("slug = %q after an edit, want stable-mentor", updated.Slug)
 	}
-	if updated.CompanySlug != "stableco" {
-		t.Errorf("company = %q after an edit, want stableco", updated.CompanySlug)
+	if updated.CompanySlug.String != "stableco" || !updated.CompanySlug.Valid {
+		t.Errorf("company = %+v after an edit, want stableco", updated.CompanySlug)
 	}
 	if updated.Headline != "Staff Engineer" || updated.Timezone != "Europe/Lisbon" {
 		t.Errorf("the edit did not apply: headline=%q timezone=%q", updated.Headline, updated.Timezone)
@@ -937,7 +992,7 @@ func TestASeekerListNamesTheMentor(t *testing.T) {
 	if rows[0].Headline == "" {
 		t.Error("the row carries no headline, so the list names nobody")
 	}
-	if rows[0].CompanySlug != "listco" {
-		t.Errorf("company_slug = %q, want listco", rows[0].CompanySlug)
+	if rows[0].CompanySlug.String != "listco" || !rows[0].CompanySlug.Valid {
+		t.Errorf("company_slug = %+v, want listco", rows[0].CompanySlug)
 	}
 }

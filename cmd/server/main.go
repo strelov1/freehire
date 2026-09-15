@@ -18,6 +18,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/logger"
 	"github.com/gofiber/fiber/v2/middleware/recover"
+	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
@@ -85,7 +86,7 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	pool, err := database.Connect(ctx, cfg.DatabaseURL)
+	pool, err := database.Connect(ctx, cfg.DatabaseURL, database.WithStatementTimeout(apiStatementTimeout))
 	if err != nil {
 		log.Fatalf("database: %v", err)
 	}
@@ -383,6 +384,11 @@ func main() {
 	}()
 	log.Printf("hire listening on :%s", cfg.Port)
 
+	// Registered here rather than beside the pool's creation because the collector reads
+	// the pool at SCRAPE time: registering it means the /metrics listener below can answer
+	// with the pool's occupancy as of the request, with no sampling goroutine in between.
+	prometheus.MustRegister(observability.NewPoolCollector(pool))
+
 	observability.StartMetricsServer(cfg.MetricsPort)
 
 	// Graceful shutdown on SIGINT/SIGTERM: block until the signal-bound context is
@@ -442,6 +448,22 @@ const recentFeedPollInterval = 10 * time.Second
 // INGEST_REFETCH_ALL=1 repair run) degrades to "the feed is a tick behind"
 // rather than one tick doing unbounded work.
 const recentFeedBatchSize = 500
+
+// apiStatementTimeout is how long Postgres lets one query on the API server's pool run
+// before cancelling it. The backstop under every handler, for the endpoint whose cost
+// nobody anticipated; the per-endpoint bounds (the pagination window, the limit ceilings)
+// are what should be doing the work, and this is what catches the next one they miss.
+//
+// 30s is chosen from both sides. It is far past what any request path measures — the
+// slowest ordinary queries on this catalogue are the unfiltered company list and the
+// job-facet rollups, seconds at worst on a cold cache — and far short of the minutes a
+// single deep-offset walk held a connection on 2026-09-14, which is the shape it exists to
+// cut. A request cut here answers an error, which is the honest outcome: the alternative is
+// the connection staying held while every other caller queues behind it.
+//
+// The LLM-backed routes are not affected. They spend their time in the model, not in a
+// query; what bounds them is their own per-call timeout beside this one.
+const apiStatementTimeout = 30 * time.Second
 
 // siteStatusSampleInterval is how often the /status page's daily history
 // sampler (handler.StartSiteStatusSampler) records the site's current

@@ -2,6 +2,7 @@ package observability
 
 import (
 	"strconv"
+	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/prometheus/client_golang/prometheus"
@@ -38,6 +39,30 @@ var httpRequests = promauto.NewCounterVec(prometheus.CounterOpts{
 var httpRouteRequests = promauto.NewCounterVec(prometheus.CounterOpts{
 	Name: "freehire_http_route_requests_total",
 	Help: "API responses by the route pattern they matched (not the request path).",
+}, []string{"route"})
+
+// httpDuration observes how long each response took, by route pattern.
+//
+// Nothing measured latency until the 2026-09-14 outage, and that absence is why it was found
+// by a person saying the site felt slow rather than by a graph. The two counters above answer
+// "how many" and "which status"; a request that takes two minutes and then succeeds is a 200
+// to both of them, and the in-process window ErrorRate reads has no field a duration could go
+// into either. Slow is the state that precedes down, and it was unobservable.
+//
+// Labelled by route and by nothing else, for the reason httpRouteRequests argues: route alone
+// is ~700 series, and a histogram multiplies that by its bucket count, so a second label here
+// is the cardinality both counters were split to avoid.
+//
+// The buckets run to 30s because that is the API pool's statement_timeout (cmd/server): past
+// it a query is cancelled, so a bucket beyond would only ever collect requests that were not
+// waiting on Postgres. They start at 5ms because the ordinary reads on this API answer in
+// single-digit milliseconds — the incident's own logs show /api/v1/companies at 4ms while the
+// site was unreachable — and a histogram whose first bucket already holds the healthy case
+// cannot show it degrading.
+var httpDuration = promauto.NewHistogramVec(prometheus.HistogramOpts{
+	Name:    "freehire_http_request_duration_seconds",
+	Help:    "How long each API response took, by the route pattern it matched.",
+	Buckets: []float64{0.005, 0.025, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30},
 }, []string{"route"})
 
 // unmatchedRoute is the label for a request no registered route claimed.
@@ -139,8 +164,15 @@ func HTTPMetrics() fiber.Handler {
 // updated instead of two kept in sync by hand.
 func recordResponse(c *fiber.Ctx) {
 	status := c.Response().StatusCode()
+	route := routeLabel(c)
 	httpRequests.WithLabelValues(methodLabel(c.Method()), strconv.Itoa(status)).Inc()
-	httpRouteRequests.WithLabelValues(routeLabel(c)).Inc()
+	httpRouteRequests.WithLabelValues(route).Inc()
+	// fasthttp stamps ConnRequestNum's arrival time on the RequestCtx, so this is the time
+	// the request was ACCEPTED — not the time a middleware first looked at it. That is the
+	// span worth measuring: on 2026-09-14 the wait was for a pooled connection inside the
+	// handler, and a timer started later in the chain would still have caught it, but a
+	// future wait in the middleware chain itself would not.
+	httpDuration.WithLabelValues(route).Observe(time.Since(c.Context().Time()).Seconds())
 	RecordRequest(status)
 }
 

@@ -26,9 +26,9 @@ func (h *trackingHandlers) SwipeDeck(c *fiber.Ctx) error {
 		return err
 	}
 
-	limit, offset := pageParams(c)
-	if offset+limit > maxSearchWindow {
-		return fiber.NewError(fiber.StatusBadRequest, "pagination too deep")
+	limit, offset, err := pageParams(c)
+	if err != nil {
+		return err
 	}
 
 	excluded, err := h.tracking.ExcludedJobIDs(c.Context(), userID)

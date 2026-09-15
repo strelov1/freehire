@@ -1,0 +1,40 @@
+[Unit]
+# Re-derives every deterministic column (facets, role_fingerprint, slugs) over the whole
+# jobs table. Run BY HAND after a dictionary change, then follow with
+# REINDEX_DEDUP=1 make reindex -- there is deliberately NO timer beside this file.
+#
+# THERE USED TO BE ONE, AND IT COULD NOT WORK. A transient `taxonomy-backfill-night`
+# unit (systemd-run, so in /run and in nobody's git) fired at 02:12 with
+# TimeoutStartSec=10h. The pass over 12.7M rows needs longer than that, and before
+# BACKFILL_DERIVE_FROM_ID existed it had no resume point at all -- so every night it ran
+# ten hours from the first id, was killed about two thirds through, burned ~29h of CPU on
+# an already-saturated host and derived nothing it kept. Five merged dictionary fixes
+# waited on it. A schedule cannot own this pass, because systemd has nowhere to put the
+# cursor between runs; an operator chains the runs and reads the id out of the log.
+#
+# Usage:
+#   systemctl start freehire-backfill-derive          # unbounded, until it finishes
+#   systemctl show -p Result freehire-backfill-derive # did it finish or time out
+# To chain bounded runs instead, override the two knobs per run:
+#   systemctl set-environment is NOT read here -- use a drop-in or
+#   systemd-run --uid=freehire -p EnvironmentFile=/opt/freehire/.env \
+#     -E BACKFILL_DERIVE_FROM_ID=<id> -E BACKFILL_DERIVE_MAX=<rows> \
+#     /opt/freehire/src/hire-current/backfill-derive
+Description=freehire worker: re-derive every job's facets, fingerprint and slugs (run by hand)
+After=network.target postgresql.service
+[Service]
+Type=oneshot
+User=freehire
+WorkingDirectory=/opt/freehire/src/hire-current
+EnvironmentFile=/opt/freehire/.env
+# Lowest share of a host whose bottleneck is the crawl fleet: this pass reads and
+# de-TOASTs every description in the catalogue and will happily take everything it is
+# given. BACKFILL_CONCURRENCY=6 has degraded prod before; the binary defaults to 1.
+CPUWeight=10
+IOWeight=10
+# No TimeoutStartSec. The pass is resumable now, but a timeout that fires mid-run still
+# throws away the hours already spent unless somebody reads the resume id out of the
+# journal -- and the journal on this host rotates faster than that. `infinity` makes the
+# run's end an operator's decision, and a stop is free: the next run continues.
+TimeoutStartSec=infinity
+ExecStart=/opt/freehire/src/hire-current/backfill-derive

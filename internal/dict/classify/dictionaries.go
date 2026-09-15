@@ -359,7 +359,36 @@ var categoryTable = []aliasEntry{
 	// than guessed, which is the same call `design systems` and bare `engineer` got.
 	{"security guard", "personal_services"},
 	{"armed guard", "personal_services"},
-	{"security", "security"},
+	// Bare "security" is NOT an entry, for the reason the Hungarian block below already
+	// gives about "biztonsági": the word alone is the guard at least as often as the
+	// discipline. Measured over the live catalogue, the single commonest title carrying
+	// it is "Security Officer" (1 102 open postings), followed by "Security Specialist"
+	// (602) and "Night shift security front desk - receptionist" (483) — none of them
+	// technical, and "Security Supervisor" (149) and bare "Security" (91) behind them.
+	// The bare alias sent every one of those to the security category, and because
+	// `security` is in vocab.TechCategories that category is enough for
+	// jobderive.TechEvidence to set is_tech TRUE on its own, ahead of the non-tech
+	// dictionary. So a mall guard was filed as an IT security role — in search, and
+	// (since 2026-09-14) in what cmd/search-ping spends Google's Indexing API quota on.
+	//
+	// Only the qualified forms below, each in the spelling the live sample carries.
+	// "information security" covers the officer/analyst/engineer/manager/specialist
+	// family in one entry, which is how "Chief Information Security Officer" keeps its
+	// category while "Security Officer" loses it. Deliberately ABSENT because they are
+	// genuinely ambiguous rather than merely rare: "security specialist", "security
+	// manager", "security supervisor", "security consultant" — these resolve to no
+	// category and their is_tech falls to unknown, which is the never-guess contract
+	// every dictionary here follows. Same call the bare "analyst" fall-through got.
+	{"security engineer", "security"},
+	{"security architect", "security"},
+	{"security analyst", "security"},
+	{"security operations", "security"},
+	{"security researcher", "security"},
+	{"information security", "security"},
+	{"it security", "security"},
+	{"application security", "security"},
+	{"network security", "security"},
+	{"cloud security", "security"},
 	{"infosec", "security"},
 	{"appsec", "security"},
 	{"cybersecurity", "security"},
@@ -1483,6 +1512,47 @@ var categoryTable = []aliasEntry{
 	{"администратор баз данных", "devops"},
 	{"программист", "software_engineering"},
 	{"разработчик", "software_engineering"},
+
+	// German administration/technician/tester/developer fused compounds. German
+	// joins a title's role words into one unbroken word with no separator, so
+	// none of these can be reached by the spaced English alias they otherwise
+	// match — same doctrine as the "разработчик" bare tokens above, except a
+	// German compound has no internal separator at all, so the alias must be
+	// the fused form itself rather than relying on a hyphen/space boundary
+	// inside it. A hyphen or space BEFORE the compound is still a boundary,
+	// so each bare alias below already reaches an "IT-"/"IT "-prefixed title
+	// without a separate entry.
+	{"systemadministrator", "devops"},
+	{"netzwerkadministrator", "network_engineering"},
+	{"datenbankadministrator", "devops"},
+	{"netzwerktechniker", "network_engineering"},
+	{"softwaretester", "qa"},
+	{"anwendungsentwickler", "software_engineering"},
+
+	// Systemtechniker/Systemelektroniker also name non-IT disciplines in prod
+	// titles ("Systemtechniker Elektrotechnik", "Systemtechniker
+	// Sicherheitstechnik") — the same cross-domain trap the Systems Engineer
+	// family below documents. Only the IT-qualified spellings resolve; the
+	// bare word is deliberately absent, and hyphenated/spaced forms are two
+	// different strings to this matcher so both need their own entry.
+	{"it systemtechniker", "devops"},
+	{"it-systemtechniker", "devops"},
+	{"it systemelektroniker", "devops"},
+	{"it-systemelektroniker", "devops"},
+
+	// Fachinformatiker: the German formal IT-specialist title and
+	// apprenticeship. Unlike Systemtechniker above, it never names a non-IT
+	// role, so the bare word resolves too — but declared LAST, after its two
+	// dominant qualifiers, so a title where the qualifier sits directly next
+	// to the word (no intervening "für"/"/in"/"m/w/d") gets the more precise
+	// category. SPS-Programmierer (PLC/industrial-controller programming) is
+	// deliberately NOT given an entry here — already excluded from a software
+	// category, same reasoning as "CNC Programmer" above.
+	{"fachinformatiker systemintegration", "devops"},
+	{"fachinformatiker für systemintegration", "devops"},
+	{"fachinformatiker anwendungsentwicklung", "software_engineering"},
+	{"fachinformatiker für anwendungsentwicklung", "software_engineering"},
+	{"fachinformatiker", "devops"},
 
 	// The Russian engineering family. Roughly half the industrial residue, and none of
 	// it carried an English alias. The two qualified forms that name ANOTHER discipline

@@ -21,6 +21,9 @@ func TestRecognize(t *testing.T) {
 		{"lever strips /apply", "https://jobs.lever.co/offchainlabs/52c01c91/apply", "lever", "offchainlabs", "https://jobs.lever.co/offchainlabs/52c01c91", true},
 		{"lever eu data-residency host", "https://jobs.eu.lever.co/coinspaid/244123b5-ffbb/apply?x=1", "lever", "coinspaid", "https://jobs.eu.lever.co/coinspaid/244123b5-ffbb", true},
 		{"ashby vacancy", "https://jobs.ashbyhq.com/blitzy/a741b4e8-8799", "ashby", "blitzy", "https://jobs.ashbyhq.com/blitzy/a741b4e8-8799", true},
+		{"humanbit vacancy", "https://jobs.humanbit.ai/scrabble-jigsaw/jobs/3e4ec4a3-65f4-41c2-b5d5-a9e12c5fdf4f", "humanbit", "scrabble-jigsaw", "https://jobs.humanbit.ai/scrabble-jigsaw/jobs/3e4ec4a3-65f4-41c2-b5d5-a9e12c5fdf4f", true},
+		{"recrutei vacancy", "https://jobs.recrutei.com.br/digisystem/vacancy/157190-desenvolvedor-fullstack-senior", "recrutei", "digisystem", "https://jobs.recrutei.com.br/digisystem/vacancy/157190-desenvolvedor-fullstack-senior", true},
+		{"pyjamahr vacancy", "https://jobs.pyjamahr.com/dodo-payments/backend-engineer-rust-4", "pyjamahr", "dodo-payments", "https://jobs.pyjamahr.com/dodo-payments/backend-engineer-rust-4", true},
 		{"talenthr vacancy", "https://jobs.talenthr.io/dnext/senior-backend-developer-2/22", "talenthr", "dnext", "https://jobs.talenthr.io/dnext/senior-backend-developer-2/22", true},
 		{"deel path", "https://jobs.deel.com/acme/jobs/123", "deel", "acme", "https://jobs.deel.com/acme/jobs/123", true},
 		{"jobvite path", "https://jobs.jobvite.com/acme/job/oABC", "jobvite", "acme", "https://jobs.jobvite.com/acme/job/oABC", true},
@@ -30,6 +33,14 @@ func TestRecognize(t *testing.T) {
 		// word as the board and onboarded nothing; Greenhouse's embed machinery has no board in
 		// the path at all (the slug is in the `for=` param, which atsdetect reads).
 		{"jobvite portal segment skipped", "https://jobs.jobvite.com/careers/ness/jobs", "jobvite", "ness", "https://jobs.jobvite.com/careers/ness/jobs", true},
+		// HERP's board sits behind the platform's own "v1" path word, the same
+		// reserved-leading-segment shape Gusto's "/boards/<board>" already uses.
+		{"herp job posting", "https://herp.careers/v1/a244/GnoQonoXGBZi", "herp", "a244", "https://herp.careers/v1/a244/GnoQonoXGBZi", true},
+		{"herp bare v1 has no board", "https://herp.careers/v1", "", "", "", false},
+		// HRMOS's board sits behind the platform's own "pages" path word, the same
+		// reserved-leading-segment shape Gusto's "/boards/<board>" already uses.
+		{"hrmos job posting", "https://hrmos.co/pages/cyberagent-group/jobs/900100", "hrmos", "cyberagent-group", "https://hrmos.co/pages/cyberagent-group/jobs/900100", true},
+		{"hrmos bare pages has no board", "https://hrmos.co/pages", "", "", "", false},
 		{"greenhouse embed app has no board", "https://job-boards.greenhouse.io/embed/job_app?token=1", "", "", "", false},
 		{"greenhouse embed script has no board", "https://boards.greenhouse.io/embed/job_board/js?for=acme", "", "", "", false},
 		// The CDN host leads with the same "job-boards" label the real board hosts do, so only a
@@ -59,6 +70,9 @@ func TestRecognize(t *testing.T) {
 		{"greenhouse boards API", "https://boards-api.greenhouse.io/v1/boards/anthropic/jobs", "greenhouse", "anthropic", "https://boards-api.greenhouse.io/v1/boards/anthropic", true},
 		{"lever postings API", "https://api.lever.co/v0/postings/matchgroup?mode=json", "lever", "matchgroup", "https://api.lever.co/v0/postings/matchgroup", true},
 		{"api host without a board", "https://api.ashbyhq.com/posting-api/job-board", "", "", "", false},
+		{"humanbit bare host no board", "https://jobs.humanbit.ai/", "", "", "", false},
+		{"recrutei bare host no board", "https://jobs.recrutei.com.br/", "", "", "", false},
+		{"pyjamahr bare host no board", "https://jobs.pyjamahr.com/", "", "", "", false},
 		{"api host off-prefix path", "https://api.lever.co/v1/something/else", "", "", "", false},
 		// jobappnetwork (talentReef): the platform's own public apply link already carries the
 		// board in this shape, so this is the same pathprefix mechanism reused on a host that is
@@ -186,8 +200,11 @@ func TestRecognize(t *testing.T) {
 		{"recruitee vacancy strips path", "https://acme.recruitee.com/o/senior-go/apply?utm=x", "recruitee", "acme", "https://acme.recruitee.com", true},
 		{"recruitee board listing", "https://acme.recruitee.com", "recruitee", "acme", "https://acme.recruitee.com", true},
 		{"bamboohr subdomain", "https://acme.bamboohr.com/careers/42", "bamboohr", "acme", "https://acme.bamboohr.com", true},
+		{"keka subdomain", "https://100.keka.com/careers", "keka", "100", "https://100.keka.com", true},
 		{"personio nested apex subdomain", "https://acme.jobs.personio.com/job/9", "personio", "acme", "https://acme.jobs.personio.com", true},
 		{"personio de host", "https://reflex-aerospace-gmbh.jobs.personio.de/job/2679152?display=en#apply", "personio", "reflex-aerospace-gmbh", "https://reflex-aerospace-gmbh.jobs.personio.de", true},
+		{"selfrecruit posting strips path", "https://dressup.selfrecruit.ge/a7cdcc00-1c9c-464c-8960-945af0c0e0a4", "selfrecruit", "dressup", "https://dressup.selfrecruit.ge", true},
+		{"scalis posting strips path", "https://boldbusiness.scalis.ai/job/5f78d010-b21f-4d22-b037-e86865530f62", "scalis", "boldbusiness", "https://boldbusiness.scalis.ai", true},
 		{"softgarden subdomain", "https://moll.softgarden.io/job/123/apply", "softgarden", "moll", "https://moll.softgarden.io", true},
 		// softgarden also serves tenants under a regional career host, <tenant>.career.softgarden.de.
 		// The tenant label is the same board the adapter fetches at <board>.softgarden.io (verified
@@ -309,6 +326,8 @@ func TestRecognize(t *testing.T) {
 		{"ashby bare host no board", "https://jobs.ashbyhq.com", "", "", "", false},
 		{"recruitee bare apex no tenant", "https://recruitee.com/", "", "", "", false},
 		{"personio bare apex no tenant", "https://jobs.personio.com", "", "", "", false},
+		{"selfrecruit bare apex no tenant", "https://selfrecruit.ge/", "", "", "", false},
+		{"scalis bare apex no tenant", "https://scalis.ai/", "", "", "", false},
 		{"hibob bare apex no tenant", "https://careers.hibob.com", "", "", "", false},
 		{"single-tenant geekjob", "https://geekjob.ru/vacancy/6a1e", "", "", "", false},
 		{"teamtailor custom domain not derivable", "https://careers.arrive.com/jobs/1", "", "", "", false},
@@ -328,6 +347,7 @@ func TestRecognize(t *testing.T) {
 		// "help". Before this guard was wired into modeSubdomain, both resolved as false boards.
 		{"recruitee platform app host not a tenant", "https://app.recruitee.com/", "", "", "", false},
 		{"bamboohr platform help host not a tenant", "https://help.bamboohr.com/s/article/x", "", "", "", false},
+		{"keka platform app host not a tenant", "https://app.keka.com/", "", "", "", false},
 		// "embed" READS like platform machinery and is not: embed.bamboohr.com is the board of a
 		// company actually called Embed, serving live postings, and BambooHR's widget is a PATH on
 		// each tenant's own host (<board>.bamboohr.com/jobs/embed2.php) rather than a host of its

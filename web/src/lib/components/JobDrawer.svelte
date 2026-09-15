@@ -2,7 +2,7 @@
   import { resolve } from '$app/paths';
   import { goto } from '$app/navigation';
   import { Button, cn, EntityLogo } from '$lib/ui';
-  import { Trash2, X, ExternalLink, Mic, NotebookPen, Send, Target, SquarePen } from '@lucide/svelte';
+  import { Trash2, X, ExternalLink, Mic, NotebookPen, Send, Target, SquarePen, Check } from '@lucide/svelte';
   import { askConfirmTailor } from '$lib/confirmTailorDialog.svelte';
   import { groupedStages, humanizeStage, offersDebrief } from '$lib/stages';
   import { canFollowUp } from '$lib/followup';
@@ -36,6 +36,8 @@
   import { focusTrap } from '$lib/actions/focusTrap';
   import { lockScroll, unlockScroll } from '$lib/scrollLock';
   import { autoApplyReviewBanner } from '$lib/autoApplyReview';
+  import { autoApplyProgressSteps, type AutoApplyProgressStepId } from '$lib/autoApplyProgress';
+  import { isAutoApplyPaused, setAutoApplyPaused } from '$lib/autoApplyPauseStorage';
   import { hasVisibleRows, pendingRows } from '$lib/answerBank';
 
   let {
@@ -113,7 +115,7 @@
   // where to advertise it, not who may have it.
   const offersDebriefAction = $derived(hasPosting && offersDebrief(item.stage ?? ''));
 
-  type Tab = 'application' | 'fit' | 'description' | 'emails';
+  type Tab = 'application' | 'fit' | 'description' | 'emails' | 'auto_apply';
   // The Emails tab shows linked mail — open to every signed-in user.
   const canSeeMail = $derived(!!currentUser());
 
@@ -135,6 +137,48 @@
   let autoApplyDeciding = $state(false);
   let autoApplyError = $state<string | null>(null);
   const autoApplyBanner = $derived(autoApplyReviewBanner(autoApply?.status));
+
+  // The application's history, newest first, from the ledger — also loaded by
+  // loadEmails() below. It replaces a strip that read as a timeline and was not one:
+  // viewed/saved/applied ordered by depth, so the newest fact sat on the left and the
+  // oldest on the right. `viewed` and `saved` are gone from it on purpose — they are marks
+  // on a posting, and viewed_at is refreshed on every view, so at the foot of a history it
+  // would state a first view while holding the latest date.
+  //
+  // Declared here (before TABS, which reads autoApplied) rather than nearer its own
+  // rendering further down — the same ordering `emails`'s own comment already explains.
+  let events = $state.raw<TimelineEvent[]>([]);
+
+  // Once a successful submission retires the live attempt, `autoApply` goes back to null
+  // and the job's stage looks like any other "applied" job. The ledger still knows better:
+  // cmd/auto-apply's Store.Submit records this exact fact (appevent.SourceAutoApply) when
+  // it calls MarkJobApplied. See openspec/changes/auto-apply-progress-tab/design.md.
+  const autoApplied = $derived(events.some((e) => e.kind === 'applied' && e.source === 'auto_apply'));
+  const progressSteps = $derived(autoApplyProgressSteps(autoApply?.status, autoApplied));
+  const PROGRESS_STEP_LABELS: Record<AutoApplyProgressStepId, string> = {
+    tailoring: 'Tailoring',
+    review: 'Review',
+    submitted: 'Submitted',
+  };
+
+  // The Pause/Continue marker (openspec/changes/auto-apply-progress-tab/design.md) is
+  // purely a candidate-side reminder — it never reaches the server and has no effect on
+  // cmd/auto-apply. Only offered over a live, still-open attempt: once it is terminal or
+  // already submitted there is nothing left to pause. `pausedOverride` lets a press inside
+  // this mount take effect immediately, without waiting on a reload to re-read storage.
+  const canPauseAutoApply = $derived(
+    !!autoApply && ['tailoring', 'pending_review', 'approved', 'blocked'].includes(autoApply.status)
+  );
+  let pausedOverride = $state<boolean | null>(null);
+  const autoApplyPaused = $derived(
+    pausedOverride ?? (autoApply ? isAutoApplyPaused(autoApply.queue_id) : false)
+  );
+  function toggleAutoApplyPaused() {
+    if (!autoApply) return;
+    const next = !autoApplyPaused;
+    setAutoApplyPaused(autoApply.queue_id, next);
+    pausedOverride = next;
+  }
 
   async function decideAutoApply(decision: 'approved' | 'declined') {
     if (!autoApply || autoApplyDeciding) return;
@@ -208,6 +252,7 @@
 
   const TABS = $derived<{ id: Tab; label: string }[]>([
     { id: 'application', label: 'Application' },
+    ...(autoApply || autoApplied ? [{ id: 'auto_apply' as Tab, label: 'Progress' }] : []),
     { id: 'fit', label: 'Job Match' },
     { id: 'description', label: 'Job description' },
     ...(canSeeMail ? [{ id: 'emails' as Tab, label: emails ? `Emails (${emails.length})` : 'Emails' }] : []),
@@ -321,13 +366,6 @@
   const title = $derived(item.job?.title || item.role_title);
   let tags = $derived(item.job ? cardTagsFromCard(item.job) : []);
   let stageLabel = $derived(item.stage ? humanizeStage(item.stage) : null);
-
-  // The application's history, newest first, from the ledger. It replaces a strip that read
-  // as a timeline and was not one: viewed/saved/applied ordered by depth, so the newest fact
-  // sat on the left and the oldest on the right. `viewed` and `saved` are gone from it on
-  // purpose — they are marks on a posting, and viewed_at is refreshed on every view, so at
-  // the foot of a history it would state a first view while holding the latest date.
-  let events = $state.raw<TimelineEvent[]>([]);
 
   // Lock background scroll while the fullscreen panel is open, released on unmount
   // (close / job switch). A DOM side-effect — the legitimate use of $effect.
@@ -506,11 +544,113 @@
     >
       {#if tab === 'application'}
         <div class="flex flex-col gap-4">
-          <!-- Auto-apply's own "action needed"/status banner (openspec/changes/
-               auto-apply-review-tracking) — same shape the stage-suggestion banner uses
-               (below, on the Emails tab), placed here instead because this is the tab a
-               fresh mount always opens on and a pending decision is the primary reason to
-               open this drawer at all. -->
+          {#if pendingOutcome}
+            <div class="flex flex-col gap-2 rounded-lg border border-border p-3">
+              <p class="text-sm font-medium">How did it close?</p>
+              <div class="flex flex-wrap gap-2">
+                {#each CLOSED_OUTCOMES as o (o)}
+                  <Button variant="outline" onclick={() => onchooseoutcome(o)}>{humanizeStage(o)}</Button>
+                {/each}
+              </div>
+            </div>
+          {/if}
+
+          <!-- What happened, newest first. Absent entirely when the ledger holds nothing:
+               an application saved but never applied to has no history, and an empty frame
+               would say otherwise. -->
+          {#if events.length}
+            <div class="flex flex-col gap-1 text-sm">
+              <span class="font-medium">History</span>
+              <ol class="flex flex-col gap-1.5">
+                {#each events as e (e.id)}
+                  <li class="flex items-baseline gap-2">
+                    <span class="shrink-0 text-xs {eventTone(e.kind)}" aria-hidden="true">●</span>
+                    <span class="w-24 shrink-0 text-xs text-muted-foreground">{timeAgo(e.occurred_at)}</span>
+                    <span class="min-w-0 text-sm">{eventLabel(e)}</span>
+                  </li>
+                {/each}
+              </ol>
+            </div>
+          {/if}
+
+          <label class="flex flex-col gap-1 text-sm">
+            <span class="font-medium">Stage</span>
+            <select
+              value={item.stage ?? ''}
+              onchange={(e) => onsetstage(e.currentTarget.value)}
+              class="rounded-md border border-input bg-transparent px-2 py-1.5 text-sm"
+            >
+              <option value="">No stage</option>
+              <!-- Grouped so `Closed` reads as a heading over its three outcomes rather than
+                   as a fifth state competing with them — the same four groups the board's
+                   columns use, from the same generated table. -->
+              {#each groupedStages() as g (g.id)}
+                <optgroup label={g.label}>
+                  {#each g.options as s (s.value)}
+                    <option value={s.value}>{s.label}</option>
+                  {/each}
+                </optgroup>
+              {/each}
+            </select>
+          </label>
+
+          <div class="flex flex-col gap-1 text-sm">
+            <span class="font-medium">Notes</span>
+            <NoteEditor value={item.notes ?? ''} onsave={onsavenotes} />
+          </div>
+        </div>
+      {:else if tab === 'auto_apply'}
+        <div class="flex flex-col gap-4">
+          {#if progressSteps}
+            <ol class="flex items-center" aria-label="Auto-apply progress">
+              {#each progressSteps as step, i (step.id)}
+                <li class="flex flex-1 items-center last:flex-none">
+                  <div class="flex flex-col items-center gap-1">
+                    <span
+                      class={cn(
+                        'flex size-6 shrink-0 items-center justify-center rounded-full text-xs font-medium',
+                        step.state === 'done' && 'bg-brand text-brand-foreground',
+                        step.state === 'active' && 'bg-brand-muted text-brand-strong ring-2 ring-brand-ring',
+                        step.state === 'queued' && 'bg-muted text-muted-foreground ring-2 ring-border',
+                        step.state === 'error' && 'bg-destructive/15 text-destructive',
+                        step.state === 'pending' && 'bg-muted text-muted-foreground'
+                      )}
+                    >
+                      {#if step.state === 'done'}
+                        <Check class="size-3.5" />
+                      {:else if step.state === 'error'}
+                        <X class="size-3.5" />
+                      {:else}
+                        {i + 1}
+                      {/if}
+                    </span>
+                    <span class="text-xs font-medium whitespace-nowrap">{PROGRESS_STEP_LABELS[step.id]}</span>
+                  </div>
+                  {#if i < progressSteps.length - 1}
+                    <span class="mx-1 h-px flex-1 bg-border" aria-hidden="true"></span>
+                  {/if}
+                </li>
+              {/each}
+            </ol>
+          {/if}
+
+          {#if canPauseAutoApply}
+            <div class="flex flex-col gap-1">
+              <Button variant="outline" size="sm" class="w-fit" onclick={toggleAutoApplyPaused}>
+                {autoApplyPaused ? 'Continue' : 'Pause'}
+              </Button>
+              {#if autoApplyPaused}
+                <p class="text-xs text-muted-foreground">
+                  Marked as paused — a reminder for you only. Auto-apply keeps working on it in the
+                  background regardless.
+                </p>
+              {/if}
+            </div>
+          {/if}
+
+          <!-- Auto-apply's own "action needed"/status content (openspec/changes/
+               auto-apply-progress-tab) — moved here from the Application tab so this is
+               the one place it lives. -->
           {#if autoApplyBanner?.kind === 'tailoring'}
             <div class="rounded-md border border-border bg-muted/30 px-3 py-2">
               <p class="text-sm text-muted-foreground">Auto-apply is preparing a tailored CV for this job.</p>
@@ -657,62 +797,11 @@
                 </a>
               {/if}
             </div>
-          {/if}
-
-          {#if pendingOutcome}
-            <div class="flex flex-col gap-2 rounded-lg border border-border p-3">
-              <p class="text-sm font-medium">How did it close?</p>
-              <div class="flex flex-wrap gap-2">
-                {#each CLOSED_OUTCOMES as o (o)}
-                  <Button variant="outline" onclick={() => onchooseoutcome(o)}>{humanizeStage(o)}</Button>
-                {/each}
-              </div>
+          {:else if autoApplied}
+            <div class="rounded-md border border-border bg-muted/30 px-3 py-2">
+              <p class="text-sm text-muted-foreground">This application was submitted automatically by auto-apply.</p>
             </div>
           {/if}
-
-          <!-- What happened, newest first. Absent entirely when the ledger holds nothing:
-               an application saved but never applied to has no history, and an empty frame
-               would say otherwise. -->
-          {#if events.length}
-            <div class="flex flex-col gap-1 text-sm">
-              <span class="font-medium">History</span>
-              <ol class="flex flex-col gap-1.5">
-                {#each events as e (e.id)}
-                  <li class="flex items-baseline gap-2">
-                    <span class="shrink-0 text-xs {eventTone(e.kind)}" aria-hidden="true">●</span>
-                    <span class="w-24 shrink-0 text-xs text-muted-foreground">{timeAgo(e.occurred_at)}</span>
-                    <span class="min-w-0 text-sm">{eventLabel(e)}</span>
-                  </li>
-                {/each}
-              </ol>
-            </div>
-          {/if}
-
-          <label class="flex flex-col gap-1 text-sm">
-            <span class="font-medium">Stage</span>
-            <select
-              value={item.stage ?? ''}
-              onchange={(e) => onsetstage(e.currentTarget.value)}
-              class="rounded-md border border-input bg-transparent px-2 py-1.5 text-sm"
-            >
-              <option value="">No stage</option>
-              <!-- Grouped so `Closed` reads as a heading over its three outcomes rather than
-                   as a fifth state competing with them — the same four groups the board's
-                   columns use, from the same generated table. -->
-              {#each groupedStages() as g (g.id)}
-                <optgroup label={g.label}>
-                  {#each g.options as s (s.value)}
-                    <option value={s.value}>{s.label}</option>
-                  {/each}
-                </optgroup>
-              {/each}
-            </select>
-          </label>
-
-          <div class="flex flex-col gap-1 text-sm">
-            <span class="font-medium">Notes</span>
-            <NoteEditor value={item.notes ?? ''} onsave={onsavenotes} />
-          </div>
         </div>
       {:else if tab === 'fit'}
         <div class="flex flex-col gap-6">

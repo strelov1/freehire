@@ -68,7 +68,11 @@ Single items are wrapped as `{ "data": ... }`. Collections add pagination metada
 
 List and search endpoints page with `limit` (default 20, max 100) and `offset` (default 0). `meta.total` reports the total matching the current filters, so you can compute the number of pages.
 
-Search pagination is bounded: `offset + limit` may not exceed 10000 (`pagination too deep` → 400). This is deep-paging protection, not a cap on the reported total — use filters to narrow rather than paging that far.
+Pagination is bounded on **every** list endpoint: `offset + limit` may not exceed 10000 (`pagination too deep` → 400). This is deep-paging protection, not a cap on the reported total — use filters to narrow rather than paging that far.
+
+The bound is a refusal rather than a clamp, deliberately: a clamped page would answer 200 carrying rows you did not ask for, and a client walking pages would loop over the same page forever without being able to tell. A 400 means "there is no such page", which is the truth.
+
+It applies whichever store answers the endpoint, and it is not the same thing as the rate limit. A rate limit bounds requests per minute; on an endpoint whose `offset` you choose, the work per request is also yours to choose — so a client inside its request budget can still be asking for far more work than the budget implies. Both bounds exist and neither substitutes for the other.
 
 ## Errors
 

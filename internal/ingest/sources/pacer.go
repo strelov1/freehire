@@ -345,6 +345,28 @@ func (g concurrencyLimitedJSONGetter) GetJSON(ctx context.Context, url string, v
 	return g.inner.GetJSON(ctx, url, v)
 }
 
+// concurrencyLimitedHTMLGetter is the HTML-GET counterpart of concurrencyLimitedJSONGetter: it
+// bounds how many GetHTML calls are in flight at once via a shared semaphore, independent of
+// the pipeline's board-worker pool — the right lever for a host that degrades under sustained
+// concurrent load rather than by rate. One instance carries one semaphore, shared across every
+// board and page.
+type concurrencyLimitedHTMLGetter struct {
+	inner HTMLGetter
+	sem   chan struct{}
+}
+
+// GetHTML acquires a semaphore slot before delegating (releasing it after), so at most cap
+// requests run at once; a cancelled context surfaces while waiting and skips the inner fetch.
+func (g concurrencyLimitedHTMLGetter) GetHTML(ctx context.Context, url string) (*html.Node, error) {
+	select {
+	case g.sem <- struct{}{}:
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+	defer func() { <-g.sem }()
+	return g.inner.GetHTML(ctx, url)
+}
+
 // opendata.trudvsem.ru answers a page in ~0.5s in isolation and tolerates a brief burst, but its
 // gov infra degrades under the SUSTAINED concurrent load of the pipeline's 8 board workers
 // hammering it for a whole crawl — intermittent 500s and slow bodies that trip the 15s read
@@ -415,3 +437,31 @@ const (
 	teamtailorRequestInterval = 50 * time.Millisecond // ~20 req/s
 	teamtailorRequestBurst    = 8
 )
+
+// Wellfound's requests go through the hosted Firecrawl tier, so the ceiling being throttled
+// against is Firecrawl's own account-level limit, not the target site's edge — and, unlike
+// every rate-based pace in this file, it is shared across every OTHER firecrawl-tier
+// provider's requests too (bayt, gulftalent, hh), which this adapter's own limiter cannot see.
+//
+// Found live 2026-09-14, twice. First: crawling wellfound's 11 role-slice boards in one ingest
+// run unbounded, 4 boards failed with "vendor rate limit did not lift after 4 attempts" within
+// three minutes. The first fix paced the request START rate (one every 2s, rateLimitedHTMLGetter)
+// — but a re-run under that fix still failed 10 of 11 boards the same way within ~3 minutes,
+// because Firecrawl's own request (bypassing Wellfound's Cloudflare challenge) takes several
+// seconds to complete, so the next paced board's request starts and overlaps with it — several
+// requests end up in flight simultaneously despite the spaced-out starts. The real ceiling is on
+// CONCURRENT requests, not request rate: the same "simultaneity, not rate" shape
+// whatjobs/trudvsem/emagine already document above. Each failure discarded an otherwise-
+// successful partial crawl, per this adapter's own "a later page failure discards the whole
+// board" rule — a real, not hypothetical, cost, twice over.
+//
+// One in flight is deliberately the most conservative cap available, since the true account-wide
+// ceiling is unknown and shared with providers this file cannot coordinate with; tune upward
+// only from observed convergence, the same discipline every other cap in this file follows.
+const wellfoundMaxInFlight = 1
+
+// limitedWellfoundGetter wraps a getter with a fresh semaphore shared across one registry
+// build, so every board's paginated fetch in a run competes for the same single in-flight slot.
+func limitedWellfoundGetter(c HTMLGetter) HTMLGetter {
+	return concurrencyLimitedHTMLGetter{inner: c, sem: make(chan struct{}, wellfoundMaxInFlight)}
+}

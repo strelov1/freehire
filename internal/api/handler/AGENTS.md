@@ -288,6 +288,32 @@ empty profile the model would read as "no preferences".
   Both render 404, and keeping them distinguishable is the point: "this employer asks
   nothing" and "we cannot read this platform" are different statements.
 
+## Pagination (`handler.go`)
+
+- **`offset` is read in exactly one file.** `pageParams` / `pageParamsBounded` /
+  `pageParamsWindowed` live in `handler.go`, and `pagination_rule_test.go` fails the build if
+  any other non-test file in the package reads the raw param. The clamp into int32 range is
+  why: without it `?offset=3000000000` binds negative and Postgres answers 500.
+- **Every PUBLIC list calls `pageParams`/`pageParamsWindowed`**, which refuse `offset+limit >
+  maxPageWindow` with 400. One constant, one helper, both stores — the Meili-backed search and
+  the Postgres-backed lists share it rather than each carrying a number that can drift apart.
+- **Check the window before any query, including a slug lookup.** `GetCompany` and `JobCopies`
+  both read the page params before their first read, so a refused request costs no database
+  work at all. That ordering is asserted by `pagination_window_routes_test.go`, which drives
+  each route with zero-valued handlers: a 400 proves nothing was queried, and its sibling
+  control proves a shallow request really does reach the handler.
+
+**The rule worth carrying to the next endpoint: a caller-controlled offset is a
+caller-controlled COST, and a rate limiter cannot bound it.** `public_read_limit.go` splits its
+budgets "by cost, not by path" — which silently assumes a path HAS a fixed cost. On 2026-09-14
+a crawler walked `/api/v1/jobs?offset=` to ~180,000 at eight requests in flight. It collected
+2,406 × 429 from the limiter, obeying its 600/min budget in full, and still took the site down:
+each request walked ~180,000 heap tuples and held one of the pool's ten connections for over two
+minutes. Everything else queued — `/api/v1/threads`, whose own query is keyset-paginated and
+index-served, was answered in 15m41s, all of it spent waiting for a connection. nginx returned
+504 to 14,007 requests. When adding an endpoint, ask what the most expensive request a caller
+can *phrase* costs, not how many they may send.
+
 ## Error Convention
 
 - Genuinely domain-specific status choices (e.g. `Me` returning 401 for a gone user token) stay in the handler.

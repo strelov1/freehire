@@ -1,0 +1,138 @@
+-- name: ListJobsToPing :many
+-- The newest eligible postings this engine has not been told about yet, for
+-- cmd/search-ping. The gate mirrors needsRecentFeed in cmd/ingest/store.go — open,
+-- canonical, public, technical — because a URL worth announcing is a URL the site
+-- itself claims, and those are the same postings.
+--
+-- NEWEST FIRST is the whole selection policy, and it is doing two jobs. The obvious
+-- one: a posting is most worth announcing while it is still open, and the budget is
+-- far smaller than the catalogue, so anything but recency spends it on pages whose
+-- moment has passed. The second is a quality guard we get for free — the sitemap
+-- additionally excludes the "likely-evergreen" reality class, which lives only in the
+-- search index and cannot be joined here, but that class is earned by a posting
+-- staying open for a long time, so the newest rows have not had the chance to qualify.
+-- Google adjusts the daily quota by the quality of what is submitted, which is why the
+-- divergence is worth naming rather than leaving to be discovered.
+--
+-- The anti-join is served by job_search_pings_pkey; the ORDER BY by the same
+-- open-and-recent index the public feed uses.
+SELECT j.id, j.public_slug
+FROM jobs j
+WHERE j.closed_at IS NULL
+  AND j.duplicate_of IS NULL
+  AND NOT j.is_private
+  AND j.is_tech IS TRUE
+  AND j.public_slug IS NOT NULL
+  AND NOT EXISTS (
+      SELECT 1
+      FROM job_search_pings p
+      WHERE p.job_id = j.id
+        AND p.engine = sqlc.arg(engine)
+        AND p.kind = 'created'
+  )
+ORDER BY j.created_at DESC
+LIMIT sqlc.arg(batch_size);
+
+-- name: ListClosedJobsToPing :many
+-- Postings that have CLOSED since they were announced, so the engine can re-read a page
+-- whose validThrough has moved into the past.
+--
+-- A closure is a re-crawl, never a deletion: the page stays at HTTP 200 and keeps its
+-- JobPosting markup with validThrough retired, which is one of the three ways Google
+-- documents for taking a job posting down. Sending URL_DELETED for a page that is still
+-- online is a misuse of the API, and the API's penalty is the quota.
+--
+-- Only postings this engine was ALREADY told about ('created'): announcing the closure
+-- of a page an engine never heard of teaches it a dead URL and spends budget doing it.
+-- That also keeps the candidate set naturally small — it can never exceed what has been
+-- announced — which is why this needs no recency window of its own.
+--
+-- MOST RECENTLY CLOSED first, the mirror of the other query's policy: a stale listing is
+-- most damaging while it is still ranking, and the oldest closures have long since been
+-- re-crawled on Google's own schedule.
+SELECT j.id, j.public_slug
+FROM jobs j
+JOIN job_search_pings created
+  ON created.job_id = j.id
+ AND created.engine = sqlc.arg(engine)
+ AND created.kind = 'created'
+WHERE j.closed_at IS NOT NULL
+  AND j.public_slug IS NOT NULL
+  AND NOT EXISTS (
+      SELECT 1
+      FROM job_search_pings closed
+      WHERE closed.job_id = j.id
+        AND closed.engine = sqlc.arg(engine)
+        AND closed.kind = 'closed'
+  )
+ORDER BY j.closed_at DESC
+LIMIT sqlc.arg(batch_size);
+
+-- name: RecordJobSearchPing :exec
+-- Record that this posting was announced to this engine, for this event. ON CONFLICT DO
+-- NOTHING keeps a re-run after a partial failure from double-spending a budget that is
+-- counted in hundreds per day: the row is what makes the send idempotent, so it is
+-- written per URL as each send succeeds rather than once for the batch at the end.
+INSERT INTO job_search_pings (job_id, engine, kind)
+VALUES (sqlc.arg(job_id), sqlc.arg(engine), sqlc.arg(kind))
+ON CONFLICT (job_id, engine, kind) DO NOTHING;
+
+-- name: CountJobSearchPingsSince :one
+-- How many URLs this engine has been sent since a moment, across BOTH events — what
+-- bounds the day. The budget is the engine's, not the event's: a closure and a new
+-- posting cost the same one call, so counting them separately would let the day's
+-- allowance be spent twice.
+--
+-- Served by job_search_pings_engine_pinged_at_idx, which is why migration 0163 leaves
+-- that index alone rather than re-keying it by kind: this query never filters on kind,
+-- and an unconstrained column sitting between the two it does filter on costs a planner
+-- without a B-tree skip scan every historical row for that engine.
+SELECT count(*)
+FROM job_search_pings
+WHERE engine = sqlc.arg(engine)
+  AND pinged_at >= sqlc.arg(since);
+
+-- name: ListCompaniesToPing :many
+-- The company pages this engine has not been told about, newest first.
+--
+-- job_count > 0 is the whole eligibility, and it is not a fresh judgement: it is the
+-- same gate that puts a company in the sitemap, derived by cmd/recount-companies from
+-- the postings the SEARCH INDEX will hold (see the long argument on that query in
+-- companies.sql). So a page announced here is exactly a page the site already claims,
+-- and a company whose last posting drops out of search stops being offered without this
+-- query knowing why.
+--
+-- NEWEST FIRST, matching the job query's policy: a company only just discovered is the
+-- one no engine can have seen, and the older rows have had every chance to be crawled.
+-- Not by job_count — the evidence points the other way. The company pages actually
+-- ranking in Bing are the long tail (laserfocus, truebiz, read-bean, astra-tech-labs),
+-- because for a small employer this page may be the only assembled list of its roles,
+-- while a large one's own careers site already owns that query.
+SELECT c.slug
+FROM companies c
+WHERE c.job_count > 0
+  AND NOT EXISTS (
+      SELECT 1
+      FROM company_search_pings p
+      WHERE p.company_slug = c.slug
+        AND p.engine = sqlc.arg(engine)
+  )
+ORDER BY c.created_at DESC
+LIMIT sqlc.arg(batch_size);
+
+-- name: RecordCompanySearchPing :exec
+-- Record that this company page was announced to this engine. Idempotent, for the same
+-- reason its job sibling is: the row is what stops a re-run after a partial failure from
+-- spending a bounded budget twice.
+INSERT INTO company_search_pings (company_slug, engine)
+VALUES (sqlc.arg(company_slug), sqlc.arg(engine))
+ON CONFLICT (company_slug, engine) DO NOTHING;
+
+-- name: CountCompanySearchPingsSince :one
+-- How many company pages this engine has been sent since a moment. Counted separately
+-- from the job ledger and then ADDED by the caller: the budget belongs to the engine,
+-- and a company page costs it exactly what a job page does.
+SELECT count(*)
+FROM company_search_pings
+WHERE engine = sqlc.arg(engine)
+  AND pinged_at >= sqlc.arg(since);

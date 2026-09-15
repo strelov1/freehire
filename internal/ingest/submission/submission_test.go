@@ -36,6 +36,19 @@ type fakeRepo struct {
 	rejectCalled   bool
 	rejectErr      error
 	rejectRet      submission.Submission
+
+	isHostBlockedHost   string
+	isHostBlockedCalled bool
+	isHostBlockedRet    bool
+	isHostBlockedErr    error
+
+	blockID       int64
+	blockHost     string
+	blockReviewer int64
+	blockReason   string
+	blockCalled   bool
+	blockErr      error
+	blockRet      submission.Submission
 }
 
 func (f *fakeRepo) Create(_ context.Context, submittedBy int64, in moderation.CreateInput) (submission.Submission, error) {
@@ -63,6 +76,16 @@ func (f *fakeRepo) MarkApproved(_ context.Context, id, reviewerID, jobID int64) 
 func (f *fakeRepo) MarkRejected(_ context.Context, id, reviewerID int64, reason string) (submission.Submission, error) {
 	f.rejectID, f.rejectReviewer, f.rejectReason, f.rejectCalled = id, reviewerID, reason, true
 	return f.rejectRet, f.rejectErr
+}
+
+func (f *fakeRepo) IsHostBlocked(_ context.Context, host string) (bool, error) {
+	f.isHostBlockedHost, f.isHostBlockedCalled = host, true
+	return f.isHostBlockedRet, f.isHostBlockedErr
+}
+
+func (f *fakeRepo) RejectAndBlockHost(_ context.Context, id int64, host string, reviewerID int64, reason string) (submission.Submission, error) {
+	f.blockID, f.blockHost, f.blockReviewer, f.blockReason, f.blockCalled = id, host, reviewerID, reason, true
+	return f.blockRet, f.blockErr
 }
 
 // fakeMinter stands in for moderation.Service: it records the approve-time mint call.
@@ -211,7 +234,7 @@ func TestApprove_AlreadyDecided(t *testing.T) {
 func TestReject_MarksWithReason(t *testing.T) {
 	repo := &fakeRepo{getRet: submission.Submission{ID: 5, Status: "pending"}, rejectRet: submission.Submission{Status: "rejected"}}
 	minter := &fakeMinter{}
-	_, err := submission.New(repo, minter).Reject(context.Background(), 3, 5, "duplicate")
+	_, err := submission.New(repo, minter).Reject(context.Background(), 3, 5, "duplicate", false)
 	if err != nil {
 		t.Fatalf("Reject: %v", err)
 	}
@@ -224,15 +247,86 @@ func TestReject_MarksWithReason(t *testing.T) {
 	if minter.called {
 		t.Error("reject must not mint a job")
 	}
+	if repo.blockCalled {
+		t.Error("a plain reject must not touch the blocklist")
+	}
 }
 
 func TestReject_AlreadyDecided(t *testing.T) {
 	repo := &fakeRepo{getRet: submission.Submission{ID: 5, Status: "rejected"}}
-	_, err := submission.New(repo, &fakeMinter{}).Reject(context.Background(), 3, 5, "")
+	_, err := submission.New(repo, &fakeMinter{}).Reject(context.Background(), 3, 5, "", false)
 	if !errors.Is(err, submission.ErrAlreadyDecided) {
 		t.Errorf("err = %v, want ErrAlreadyDecided", err)
 	}
 	if repo.rejectCalled {
 		t.Error("a decided submission must not be re-marked")
+	}
+}
+
+func TestReject_AlreadyDecided_BlockDomainNotAttempted(t *testing.T) {
+	repo := &fakeRepo{getRet: submission.Submission{ID: 5, Status: "approved"}}
+	_, err := submission.New(repo, &fakeMinter{}).Reject(context.Background(), 3, 5, "", true)
+	if !errors.Is(err, submission.ErrAlreadyDecided) {
+		t.Errorf("err = %v, want ErrAlreadyDecided", err)
+	}
+	if repo.blockCalled {
+		t.Error("a decided submission must not trigger a blocklist write")
+	}
+}
+
+func TestReject_BlockDomain_UsesNormalizedHostOfSubmissionURL(t *testing.T) {
+	repo := &fakeRepo{
+		getRet:   submission.Submission{ID: 5, Status: "pending", URL: "https://WWW.Gridnaut.Site/jobs/1"},
+		blockRet: submission.Submission{ID: 5, Status: "rejected"},
+	}
+	_, err := submission.New(repo, &fakeMinter{}).Reject(context.Background(), 3, 5, "referral spam", true)
+	if err != nil {
+		t.Fatalf("Reject: %v", err)
+	}
+	if !repo.blockCalled {
+		t.Fatal("repo.RejectAndBlockHost was not called")
+	}
+	if repo.blockID != 5 || repo.blockReviewer != 3 || repo.blockReason != "referral spam" {
+		t.Errorf("block params = id=%d reviewer=%d reason=%q, want id=5 reviewer=3 reason=%q", repo.blockID, repo.blockReviewer, repo.blockReason, "referral spam")
+	}
+	if repo.blockHost != "gridnaut.site" {
+		t.Errorf("blockHost = %q, want normalized host %q", repo.blockHost, "gridnaut.site")
+	}
+	if repo.rejectCalled {
+		t.Error("block_domain must use RejectAndBlockHost, not the plain MarkRejected path")
+	}
+}
+
+func TestSubmit_RefusesBlockedHost(t *testing.T) {
+	repo := &fakeRepo{isHostBlockedRet: true}
+	_, err := submission.New(repo, &fakeMinter{}).Submit(context.Background(), 7, validInput())
+	if !errors.Is(err, submission.ErrBlockedDomain) {
+		t.Errorf("err = %v, want ErrBlockedDomain", err)
+	}
+	if repo.createCalled {
+		t.Error("a blocked host must not be persisted")
+	}
+}
+
+func TestSubmit_ChecksNormalizedHost(t *testing.T) {
+	repo := &fakeRepo{}
+	in := validInput()
+	in.URL = "https://WWW.Acme.Example/jobs/1"
+	if _, err := submission.New(repo, &fakeMinter{}).Submit(context.Background(), 7, in); err != nil {
+		t.Fatalf("Submit: %v", err)
+	}
+	if repo.isHostBlockedHost != "acme.example" {
+		t.Errorf("isHostBlockedHost = %q, want normalized host %q", repo.isHostBlockedHost, "acme.example")
+	}
+}
+
+func TestSubmit_AllowsNonBlockedHost(t *testing.T) {
+	repo := &fakeRepo{isHostBlockedRet: false, createRet: submission.Submission{ID: 1, Status: "pending"}}
+	_, err := submission.New(repo, &fakeMinter{}).Submit(context.Background(), 7, validInput())
+	if err != nil {
+		t.Fatalf("Submit: %v", err)
+	}
+	if !repo.createCalled {
+		t.Error("a non-blocked host must be persisted as usual")
 	}
 }

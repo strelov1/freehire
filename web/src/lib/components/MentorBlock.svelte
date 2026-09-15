@@ -3,7 +3,7 @@
   import { resolve } from '$app/paths';
   import { page } from '$app/state';
   import { api } from '$lib/api';
-  import { mentorFiltersToQuery } from '$lib/mentorship';
+  import { emptyMentorFilters, mentorFiltersToQuery } from '$lib/mentorship';
   import type { Mentor } from '$lib/types';
 
   // The entry point from a vacancy and from a company page: a route to that employer's
@@ -25,7 +25,7 @@
   // The same filter this block asked with, so the directory it opens shows exactly the
   // people it counted — built once rather than spelled twice.
   const companyFilter = $derived(
-    mentorFiltersToQuery({ company: companySlug, topic: '', language: '' }),
+    mentorFiltersToQuery({ ...emptyMentorFilters(), company: companySlug }),
   );
   const directoryHref = $derived(`${resolve('/mentors')}?${companyFilter}`);
 

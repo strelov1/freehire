@@ -58,7 +58,7 @@ export default ts.config(
   // lift the whole block once the analytics say iOS 15 is gone.
   {
     files: ['**/*.{ts,svelte,svelte.ts}'],
-    ignores: ['**/*.test.ts', 'scripts/**', 'src/lib/server/**'],
+    ignores: ['**/*.test.ts', '**/*.spec.ts', 'scripts/**', 'src/lib/server/**'],
     rules: {
       'no-restricted-syntax': [
         'error',

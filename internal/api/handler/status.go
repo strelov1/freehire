@@ -57,14 +57,38 @@ const (
 	siteDownErrorRate = 0.5
 )
 
+// poolPressure is the fraction of the connection pool held at once. A pool reporting no
+// capacity (unconfigured, or closed) yields 0 rather than dividing by zero — "I cannot
+// measure this" must not render as "everything is held".
+//
+// Reported, never judged. It is a single instant, and an instant cannot carry a verdict
+// here: sampled every 5s against the healthy live site this reads 9/10 and 10/10 inside
+// the same two minutes it spends mostly at 0/10, because real traffic is bursty and
+// touching the ceiling is ordinary. A draft of this did feed deriveSiteStatus, and the
+// consequence would have been permanent: the sampler takes one reading every five minutes
+// and RecordSiteStatusSample keeps the day's WORST, so a single unlucky burst would have
+// painted a whole day degraded and the 90-day strip would have gone yellow for good.
+//
+// What turns this number into a verdict is the Grafana rule, which averages it over five
+// minutes — 0.125-0.235 healthy against the outage's sustained 1.0. That needs history
+// this function does not have.
+func poolPressure(acquired, maxConns int32) float64 {
+	if maxConns <= 0 {
+		return 0
+	}
+	return float64(acquired) / float64(maxConns)
+}
+
 // deriveSiteStatus maps the site's own live signals to its status:
-//   - down    when the database is unreachable, regardless of error rate;
-//   - operational when the database is up and there isn't enough traffic in
-//     the window to trust the error fraction;
+//   - down    when the database is unreachable, regardless of every other signal;
 //   - down    when the database is up but the error fraction is at or above
 //     siteDownErrorRate;
 //   - degraded when the error fraction exceeds siteDegradedErrorRate;
 //   - operational otherwise.
+//
+// Pool occupancy is deliberately NOT an input, though siteHealth reports it: see
+// poolPressure for why an instantaneous reading cannot carry a verdict that the daily
+// sampler then keeps the worst of.
 func deriveSiteStatus(dbUp bool, errorRate float64, totalRequests int64) providerStatus {
 	if !dbUp {
 		return statusDown
@@ -194,9 +218,15 @@ type statusProvider struct {
 // internal/platform/observability.ErrorRate) — never from an external
 // Prometheus query.
 type siteHealth struct {
-	Status        providerStatus     `json:"status"`
-	Database      string             `json:"database"`
-	ErrorRate     float64            `json:"error_rate"`
+	Status    providerStatus `json:"status"`
+	Database  string         `json:"database"`
+	ErrorRate float64        `json:"error_rate"`
+	// PoolPressure is the fraction of the database connection pool held at once, 0..1.
+	// Carried on the wire beside ErrorRate because the two answer different questions and
+	// the page needs both: the error fraction describes the requests that FINISHED, this
+	// one describes the requests that cannot start. On 2026-09-14 the first read clean for
+	// the whole outage precisely because nothing was finishing.
+	PoolPressure  float64            `json:"pool_pressure"`
 	WindowMinutes int                `json:"window_minutes"`
 	History       []siteHistoryEntry `json:"history"`
 }
@@ -241,11 +271,18 @@ func siteHistoryFromRows(rows []db.SiteStatusHistoryRow) []siteHistoryEntry {
 func currentSiteHealth(ctx context.Context, pool *pgxpool.Pool) (health siteHealth, dbUp bool) {
 	errorRate, totalRequests := observability.ErrorRate(siteErrorWindow)
 	dbUp = pool.Ping(ctx) == nil
+
+	// Stat reads counters the pool already keeps in memory — no query, no round trip — so
+	// this costs nothing on a path that answers an unauthenticated public page.
+	stat := pool.Stat()
+	pressure := poolPressure(stat.AcquiredConns(), stat.MaxConns())
+
 	return siteHealth{
 		Status:        deriveSiteStatus(dbUp, errorRate, totalRequests),
 		Database:      dbStatusLabel(dbUp),
 		ErrorRate:     errorRate,
 		WindowMinutes: int(siteErrorWindow / time.Minute),
+		PoolPressure:  pressure,
 	}, dbUp
 }
 

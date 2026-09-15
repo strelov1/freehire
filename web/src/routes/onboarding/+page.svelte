@@ -28,6 +28,7 @@
   import { persistStep, type SaveDeps, type WizardAnswers } from '$lib/onboardingSave';
   import { splitProfileLinks, type ProfileLinks } from '$lib/profileLinks';
   import { profileStore } from '$lib/profile.svelte';
+  import { syncProfileAlert } from '$lib/profileAlertSync';
   import { safeRedirect } from '$lib/safeRedirect';
   import { signinUrl } from '$lib/signin';
   import { focusTrap } from '$lib/actions/focusTrap';
@@ -196,7 +197,11 @@
   });
 
   const saveDeps: SaveDeps = {
-    saveProfile: (spec, sk, sen, excl, loc) => profileStore.save(spec, sk, sen, excl, loc),
+    saveProfile: async (spec, sk, sen, excl, loc) => {
+      const result = await profileStore.save(spec, sk, sen, excl, loc);
+      void syncProfileAlert();
+      return result;
+    },
     putResumeContacts: (c) => api.putResumeContacts(c),
     updateScreeningAnswers: (p) => api.updateScreeningAnswers(p),
     updateSurvey: (p) => api.updateSurvey(p),

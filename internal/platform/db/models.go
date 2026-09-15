@@ -338,6 +338,12 @@ type CompanyProcessReport struct {
 	RetractedAt pgtype.Timestamptz `json:"retracted_at"`
 }
 
+type CompanySearchPing struct {
+	CompanySlug string             `json:"company_slug"`
+	Engine      string             `json:"engine"`
+	PingedAt    pgtype.Timestamptz `json:"pinged_at"`
+}
+
 // Retired company slug -> the canonical slug it merged into. The one company-adjacent table that is NOT derived from jobs: DeleteOrphanCompanies would drop a canon stored in companies as soon as the employer went quiet. Read by folded_key on ingest and by alias_slug to serve a 301.
 type CompanySlugAlias struct {
 	AliasSlug     string `json:"alias_slug"`
@@ -812,6 +818,13 @@ type JobReport struct {
 	CreatedAt       pgtype.Timestamptz `json:"created_at"`
 }
 
+type JobSearchPing struct {
+	JobID    int64              `json:"job_id"`
+	Engine   string             `json:"engine"`
+	PingedAt pgtype.Timestamptz `json:"pinged_at"`
+	Kind     string             `json:"kind"`
+}
+
 type JobSemanticChunk struct {
 	JobID      int64           `json:"job_id"`
 	ChunkIndex int16           `json:"chunk_index"`
@@ -863,15 +876,15 @@ type Mailbox struct {
 
 // One moderated, publicly named mentor profile per account, bound to one company in the catalogue. The opposite number of referral_offers, which keeps its insider anonymous: a referral is a favour asked of a stranger, a mentor is chosen.
 type Mentor struct {
-	ID          int64    `json:"id"`
-	UserID      int64    `json:"user_id"`
-	CompanySlug string   `json:"company_slug"`
-	Slug        string   `json:"slug"`
-	DisplayName string   `json:"display_name"`
-	Headline    string   `json:"headline"`
-	Bio         string   `json:"bio"`
-	Topics      []string `json:"topics"`
-	Languages   []string `json:"languages"`
+	ID          int64       `json:"id"`
+	UserID      int64       `json:"user_id"`
+	CompanySlug pgtype.Text `json:"company_slug"`
+	Slug        string      `json:"slug"`
+	DisplayName string      `json:"display_name"`
+	Headline    string      `json:"headline"`
+	Bio         string      `json:"bio"`
+	Topics      []string    `json:"topics"`
+	Languages   []string    `json:"languages"`
 	// IANA zone name. It alone gives mentor_availability's zoneless times a meaning, so a row without a resolvable one has no schedule at all rather than a UTC one.
 	Timezone           string `json:"timezone"`
 	SessionDurationMin int32  `json:"session_duration_min"`
@@ -888,6 +901,7 @@ type Mentor struct {
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
 	ShowPhoto bool               `json:"show_photo"`
+	Seniority string             `json:"seniority"`
 }
 
 // A mentor's availability in two row shapes: weekly (weekday set) and dated override (on_date set). A dated row replaces its whole date; an empty dated row closes it.
@@ -1195,6 +1209,16 @@ type SocialToken struct {
 	Scope            string             `json:"scope"`
 	ObtainedAt       pgtype.Timestamptz `json:"obtained_at"`
 	RefreshedAt      pgtype.Timestamptz `json:"refreshed_at"`
+}
+
+// Hosts refused at the public submission form. Checked only in submission.Service.Submit; never applied to a moderator-authored vacancy create.
+type SubmissionDomainBlocklist struct {
+	ID int64 `json:"id"`
+	// Lowercased, with one leading "www." stripped (submission.normalizeHost) — matched exactly against a submitted URL's normalized host, no wildcard/suffix matching.
+	Host      string             `json:"host"`
+	BlockedBy int64              `json:"blocked_by"`
+	Reason    string             `json:"reason"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
 }
 
 type Subscription struct {

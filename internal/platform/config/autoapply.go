@@ -23,12 +23,21 @@ import (
 // unconfigured LLM just means every attempt's unmapped free-text questions stay parked,
 // the same degrade every other LLM feature already has.
 type AutoApply struct {
-	BatchSize    int           // claim wave size
-	LeaseSeconds int           // how long a claim is held before it can be reclaimed
-	MaxAttempts  int           // transient failures before an attempt is dead-lettered
-	Concurrency  int           // how many attempts run at once
-	MaxPerRun    int           // how much of the queue one run takes; 0 is unbounded
-	CallTimeout  time.Duration // bounds a single attempt's browser session
+	BatchSize    int // claim wave size
+	LeaseSeconds int // how long a claim is held before it can be reclaimed
+	MaxAttempts  int // transient failures before an attempt is dead-lettered
+	Concurrency  int // how many attempts run at once
+	MaxPerRun    int // how much of the queue one run takes; 0 is unbounded
+	// CallTimeout bounds a single attempt end to end. It must OUTLAST every path that
+	// attempt can take, because whichever deadline fires first decides the outcome — and
+	// only the path's own timeout can read what actually happened. At 120s it undercut the
+	// browser-use cloud path's own budget, so a live Lever attempt was reported unconfirmed
+	// (and so dead-lettered, since unconfirmed might mean already-submitted) 115 seconds in,
+	// while the agent went on to finish at 229 seconds reporting it had deliberately not
+	// submitted. Cloud runs measured 41-347 seconds; a chromedp session is bounded far more
+	// tightly by its own per-field and per-verify timeouts, so the longer budget costs it
+	// nothing.
+	CallTimeout time.Duration
 	// BrowserUseAPIKey authenticates the browser-use.com cloud fallback (Ashby/Workable
 	// only — Recruitee has no registered applyform.Fetcher and never reaches this
 	// executor; see internal/api/atsapply/browseruse_fill.go). Empty disables the
@@ -52,7 +61,7 @@ func LoadAutoApply() AutoApply {
 		MaxAttempts:  envInt("AUTO_APPLY_MAX_ATTEMPTS", 3),
 		Concurrency:  envInt("AUTO_APPLY_CONCURRENCY", 2),
 		MaxPerRun:    envInt("AUTO_APPLY_MAX_PER_RUN", 200),
-		CallTimeout:  time.Duration(envInt("AUTO_APPLY_CALL_TIMEOUT_SECONDS", 120)) * time.Second,
+		CallTimeout:  time.Duration(envInt("AUTO_APPLY_CALL_TIMEOUT_SECONDS", 720)) * time.Second,
 
 		BrowserUseAPIKey: os.Getenv("AUTO_APPLY_BROWSERUSE_API_KEY"),
 	}

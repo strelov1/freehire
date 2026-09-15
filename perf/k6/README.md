@@ -142,6 +142,40 @@ Same siting rule as `PROFILE=saturation`: point it at the **idle** colour's API
 port on the prod host, never the live origin. It has its own `FORCE_SCRAPER`
 latch with no localhost exemption for exactly that reason.
 
+## Deep-offset probe (`deepoffset.js`)
+
+Answers a third question, and the narrowest: **what does ONE request cost at a given offset?**
+Not "how much can the host take" — that is `pages.js` and `scraper.js`. The property this
+measures is the one the 2026-09-14 outage turned on: a crawler inside its 600/min rate budget
+took the catalogue offline because `LIMIT n OFFSET k` reads and discards k rows, and it chose k.
+
+```bash
+# Resolve the IDLE colour FIRST. API ports: blue :8081, green :8082.
+readlink /opt/freehire/src/hire-current   # -> hire-green  =>  idle API is :8081
+
+FORCE_DEEP_OFFSET=1 PERF_BASE_URL=http://127.0.0.1:8081 k6 run perf/k6/deepoffset.js
+```
+
+**One VU, strictly sequential, by construction.** Measuring a single request in isolation is the
+whole point, and against an origin whose Postgres is shared with the live colour, concurrency
+here would be a re-enactment rather than a measurement — ten concurrent deep offsets is exactly
+what exhausted the pool. Same siting rule and same latch reasoning as `scraper.js`: the latch has
+no localhost exemption because the intended target IS a localhost port, on prod.
+
+The summary prints a cost curve, one line per offset. **A curve that climbs with the offset is
+the defect; a flat line that turns into REFUSED at the window is the fix.** Measured across both
+colours on 2026-09-14, blue still holding the pre-fix commit:
+
+| offset | before | after |
+|---|---|---|
+| 1,000 | 4.336s | 0.871s |
+| 10,000 | 3.987s | 0.211s refused |
+| 50,000 | 20.243s | 0.211s refused |
+| 179,500 | **53.968s** | **0.239s refused** |
+
+The `check` asserts `200 or 400`, never a 5xx — past the window a 400 is the CORRECT answer, and
+asserting 200 would fail the run precisely when the fix is working.
+
 ## Key knobs
 
 | env                    | default                       | purpose                                        |
@@ -166,6 +200,9 @@ latch with no localhost exemption for exactly that reason.
 | `SCRAPER_MAX_PAGES`    | `5`                           | extraction depth per employer (100/page)       |
 | `SCRAPER_PAGE_SIZE`    | `100`                         | postings per extraction request                |
 | `SCRAPER_VU_SECONDS`   | `14`                          | seconds budgeted per company walk; sizes the VU pool — raise THIS, not the step duration, when a run drops iterations |
+| `FORCE_DEEP_OFFSET`    | —                             | must be `1` to run `deepoffset.js`              |
+| `DEEP_OFFSETS`         | `0,1000,5000,9900,10000,20000,100000,179500` | offsets probed, one request each |
+| `DEEP_OFFSET_LIMIT`    | `100`                         | page size per probe                            |
 
 ## Reading results
 

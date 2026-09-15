@@ -162,6 +162,17 @@
             <div class="text-sm opacity-80">
               Database {site.database} · {nfPercent.format(site.error_rate)} error rate over the last {site.window_minutes} min
             </div>
+            <!-- Reported beside the error rate, never conditionally. The two answer
+                 different questions — the error rate describes requests that FINISHED,
+                 this describes how much of the connection pool is held at this instant,
+                 which is why requests may not start. An earlier draft showed this line
+                 only above 90% and read as a warning; the live pool touches its ceiling
+                 in ordinary bursts, so that phrasing cried wolf on a healthy site. A
+                 sustained reading is what matters, and judging that needs history the
+                 page does not have (the Grafana rule averages it over five minutes). -->
+            <div class="text-sm opacity-80">
+              Database connections in use: {nfPercent.format(site.pool_pressure)}
+            </div>
           </div>
         </div>
 

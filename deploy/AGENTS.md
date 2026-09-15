@@ -7,10 +7,17 @@ it exists is that the machine was the sole copy.
 Snapshot taken 2026-09-05 from `/etc/systemd/system/freehire-*`, `/opt/freehire/bin/*.sh` and
 `/etc/nginx/snippets/freehire-app.conf`.
 
+The `freehire-*` glob is why `meilisearch.service` was missing until 2026-09-14: the search
+engine's unit does not carry the prefix, so the snapshot walked straight past the one process
+that holds two thirds of the host's memory. It is recorded now, with the drop-in that bounds
+it. **A service this host runs and this directory does not name is the next one of these** —
+`systemctl list-units --type=service --state=running` is the list to diff against, not the
+glob.
+
 ## What is here
 
 ```
-systemd/   384 files — 54 .service, 325 .timer, 5 drop-in directories
+systemd/   386 files — 55 .service, 325 .timer, 6 drop-in directories
 bin/        16 operator scripts (release, autodeploy, backups, alerting, ingest slotting)
 nginx/       1 snippet — snippets/freehire-app.conf, hand-edited, not generated
 ```
@@ -27,8 +34,23 @@ files beside it are per-provider schedules, which is why the timer count dwarfs 
 else.
 
 `bin/gen-ingest-timers.sh` writes them from the board catalog
-(`SELECT provider FROM boards WHERE status IN ('pending','active')`) — it is not run by
-anything, so a new provider means running it on the host.
+(`SELECT provider FROM boards WHERE status IN ('pending','active')`). It used to be run by
+nothing, so a new provider was scheduled only when somebody remembered to run it — and on
+2026-09-15 that gap held **12 providers with live boards and no timer at all**, including
+`eures` (31 boards) and `wellfound` (11), served to visitors while never being crawled.
+Every one of them had been added after the generator's last manual run, six days earlier.
+
+It is on `freehire-gen-ingest-timers.timer` now, daily at 04:40 UTC, which bounds that gap
+at a day. The run is safe unattended because of a property of the script rather than of the
+timer: it only ever creates and enables, and every `systemctl disable` in it names one unit
+literally — so a firing against a catalog that has shrunk generates fewer timers and retires
+nothing. The closing `systemctl daemon-reload` is what the unattended run added: the script
+REWRITES every timer file, and `systemctl enable` on an already-enabled unit links nothing,
+so before that an edited `OnCalendar` reached the fleet only via the reload an operator
+happened to do by hand.
+
+This is a bridge, not the answer — the scheduler below is. Keep the timer until every
+provider is `managed`, then both go together.
 
 **`freehire-similarw` is here because an unbounded worker blocks every DDL migration.**
 The similar-jobs backfill ran as a hand-started transient unit for five days; its page

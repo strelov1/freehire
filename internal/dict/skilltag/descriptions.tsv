@@ -884,3 +884,5 @@ substance-painter	Substance 3D Painter is a texture painting application that pa
 substance-designer	Substance 3D Designer is a node-based application for authoring procedural materials and textures, which are then applied to 3D models in tools such as Substance 3D Painter.
 houdini	Houdini is a procedural 3D application from SideFX, used for visual effects work such as simulations of fire, water, destruction and crowds.
 godot	Godot is an open-source game engine for building 2D and 3D games, scripted in its own GDScript language or in C#.
+s3	S3 is a cloud service provided by Amazon Web Services that stores and retrieves any amount of data as objects, organized into buckets.
+soap	SOAP is an XML-based protocol for exchanging structured information between applications over a network, typically used to define and call web services.

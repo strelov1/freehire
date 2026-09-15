@@ -168,6 +168,7 @@ paths:
         - $ref: "#/components/parameters/SkillsMode"
         - $ref: "#/components/parameters/IsTech"
         - $ref: "#/components/parameters/RequiresClearance"
+        - $ref: "#/components/parameters/AutoApplyAvailable"
         - $ref: "#/components/parameters/AIArchetype"
         - $ref: "#/components/parameters/RoleType"
         - $ref: "#/components/parameters/Collections"
@@ -240,6 +241,7 @@ paths:
         - $ref: "#/components/parameters/SkillsMode"
         - $ref: "#/components/parameters/IsTech"
         - $ref: "#/components/parameters/RequiresClearance"
+        - $ref: "#/components/parameters/AutoApplyAvailable"
         - $ref: "#/components/parameters/AIArchetype"
         - $ref: "#/components/parameters/RoleType"
         - $ref: "#/components/parameters/Collections"
@@ -324,6 +326,7 @@ paths:
         - $ref: "#/components/parameters/SkillsMode"
         - $ref: "#/components/parameters/IsTech"
         - $ref: "#/components/parameters/RequiresClearance"
+        - $ref: "#/components/parameters/AutoApplyAvailable"
         - $ref: "#/components/parameters/AIArchetype"
         - $ref: "#/components/parameters/RoleType"
         - $ref: "#/components/parameters/Collections"
@@ -812,10 +815,18 @@ components:
       schema:
         type: integer
         minimum: 0
+        # No `maximum` here on purpose. The bound is on offset+limit, which JSON Schema
+        # cannot express across two params, and a `maximum: 10000` would be a
+        # machine-readable claim the server does not honour: offset=10000 with any limit
+        # is already a 400. A wrong bound a client generator trusts is worse than no
+        # bound at all — the description below is what states the real one.
         default: 0
       description: |
-        Rows to skip. On the job endpoints `offset + limit` may not exceed
-        10000; deeper paging is a 400.
+        Rows to skip. On every list endpoint `offset + limit` may not exceed
+        10000; deeper paging is a 400 ("pagination too deep"), never a clamped
+        page — a 200 carrying rows you did not ask for would leave a client
+        walking pages unable to tell it had reached the end. Narrow with
+        filters rather than paging that far.
     Sort:
       name: sort
       in: query
@@ -985,6 +996,21 @@ components:
 
         `true` returns only the marked postings, for a cleared candidate seeking
         exactly that work. Omitting the parameter filters nothing.
+    AutoApplyAvailable:
+      name: auto_apply_available
+      in: query
+      schema:
+        type: boolean
+      description: |
+        Whether the posting's ATS provider is one freehire's auto-apply feature
+        can currently attempt to fill and submit for. A best-effort,
+        provider-eligibility signal only — a marked posting can still park on a
+        live obstacle (a captcha, an unrecognized form layout, missing
+        candidate answers) discovered only when an attempt actually runs, never
+        a guarantee of successful submission.
+
+        `true` returns only the marked postings. Omitting the parameter filters
+        nothing.
     IsTech:
       name: is_tech
       in: query
@@ -1488,6 +1514,13 @@ components:
             security-clearance requirement. Absent otherwise — there is no
             `false`, because "no requirement was detected" is not the same claim
             as "this posting needs no clearance".
+        auto_apply_available:
+          type: boolean
+          description: |
+            Present and `true` only when the posting's ATS provider is one
+            freehire's auto-apply feature can currently attempt to fill and
+            submit for. Absent otherwise — a best-effort provider-eligibility
+            signal, never a guarantee of successful submission.
         posted_at:
           type: string
           format: date-time

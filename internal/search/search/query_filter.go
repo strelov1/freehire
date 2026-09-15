@@ -44,7 +44,12 @@ var StringFacets = map[string]string{
 	// ai_interview is written on the document at index time from the company's report
 	// count (see JobDocument.AIInterview), so it filters on the bare attribute.
 	"ai_interview": "ai_interview",
-	"ai_archetype": "ai_archetype",
+	// auto_apply_available is computed from the job's source at wire-shape build
+	// time (see jobview.AutoApplyProviders) and flattens onto the document like
+	// every other jobview.Job field, true-or-absent like ai_interview. Unlike
+	// ai_interview it is also part of the served job object, not document-only.
+	"auto_apply_available": "auto_apply_available",
+	"ai_archetype":         "ai_archetype",
 	// Derived at index time like the two above, so it filters on the bare attribute.
 	// The vocabulary holds one value, which makes `role_type_exclude` the way to ask
 	// for postings with no management marker — NOT a positive individual-contributor
@@ -98,12 +103,20 @@ const RequiresClearanceParam = "requires_clearance"
 // me these employers" — which is why it cannot be an equality on false.
 const AIInterviewParam = "ai_interview"
 
+// AutoApplyAvailableParam asks whether the posting's ATS provider is one
+// cmd/auto-apply can currently attempt to fill and submit for. Same
+// true-or-absent shape: a job carries the attribute only when its source is
+// one of the four eligible providers (see jobview.AutoApplyProviders) —
+// a best-effort eligibility signal, never a submission guarantee.
+const AutoApplyAvailableParam = "auto_apply_available"
+
 // trueOrAbsentParams are the facets whose stored value is written only when true, so
 // the index holds the attribute for the marked minority and nothing at all for
 // everyone else. They share one predicate builder because they share one hazard.
 var trueOrAbsentParams = map[string]bool{
-	RequiresClearanceParam: true,
-	AIInterviewParam:       true,
+	RequiresClearanceParam:  true,
+	AIInterviewParam:        true,
+	AutoApplyAvailableParam: true,
 }
 
 // trueOrAbsentFragment builds the predicate for those facets. "false" cannot be an

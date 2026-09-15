@@ -37,12 +37,28 @@ func newCompanyFeedbackHandlers(svc *companyfeedback.Service) *companyFeedbackHa
 	return &companyFeedbackHandlers{feedback: svc}
 }
 
+// registerPublic mounts the one route anyone may read, with the public-read limiter FIRST on
+// its chain. Split from register for the same reason mentorshipHandlers splits its own: the
+// limiter guard drives every GET a register mounts and requires the limiter to lead each
+// chain, which the cookie-gated and moderator reads below cannot satisfy — auth has to run
+// first there. Keeping them in one register would mean weakening the guard or throttling an
+// authenticated read by IP, and both are worse than a second method.
+//
+// The limiter itself is new. This was the one public list registered with none at all, which
+// made it the cheapest unthrottled way to make this process work: the handler fires three
+// queries per request (the company existence check, the page, and the count). Cheap per query
+// is not free per request, and the budget is shared with the other public reads precisely so
+// a caller cannot spend it twice.
+func (h *companyFeedbackHandlers) registerPublic(api fiber.Router, mw middleware) {
+	// Only pseudonymous persona handles are ever exposed, never a user id, so feedback is
+	// browsable without signing in.
+	api.Get("/companies/:slug/feedback", publicReadLimiter(mw.throttler), h.ListFeedback)
+}
+
 func (h *companyFeedbackHandlers) register(api fiber.Router, mw middleware) {
-	// Reads are public — only pseudonymous persona handles are ever exposed, never
-	// a user id — so feedback is browsable without signing in. Writes are
-	// cookie-only, the same as thread create/reply: this is authored public
+	h.registerPublic(api, mw)
+	// Writes are cookie-only, the same as thread create/reply: this is authored public
 	// content, not the single-bit vote a leaked API key is trusted with.
-	api.Get("/companies/:slug/feedback", h.ListFeedback)
 	api.Get("/companies/:slug/feedback/mine", mw.cookie, h.GetMyFeedback)
 	api.Post("/companies/:slug/feedback", mw.cookie, h.UpsertFeedback)
 	api.Delete("/companies/:slug/feedback", mw.cookie, h.DeleteFeedback)
@@ -145,7 +161,10 @@ func companyFeedbackError(err error) error {
 // ListFeedback returns a company's feedback, newest first, offset-paginated. Public.
 func (h *companyFeedbackHandlers) ListFeedback(c *fiber.Ctx) error {
 	slug := c.Params("slug")
-	limit, offset := pageParams(c)
+	limit, offset, err := pageParams(c)
+	if err != nil {
+		return err
+	}
 	items, err := h.feedback.List(c.Context(), slug, int32(limit), int32(offset))
 	if err != nil {
 		return companyFeedbackError(err)

@@ -35,13 +35,19 @@ type jobCopy struct {
 // its owner and lists that owner's whole group rather than a fragment. Response:
 // {"data": [copy...]}.
 func (h *jobsHandlers) JobCopies(c *fiber.Ctx) error {
+	// Before the slug lookup: a refused page must cost no database work at all. See
+	// GetCompany, which orders its own two reads the same way.
+	limit, offset, err := pageParamsWindowed(c, defaultCopiesLimit, maxCopiesLimit)
+	if err != nil {
+		return err
+	}
+
 	id, err := h.queries.GetJobIDBySlug(c.Context(), c.Params("slug"))
 	if err != nil {
 		// RenderError maps pgx.ErrNoRows to 404, anything else to 500.
 		return err
 	}
 
-	limit, offset := pageParamsBounded(c, defaultCopiesLimit, maxCopiesLimit)
 	rows, err := h.queries.ListJobCopies(c.Context(), db.ListJobCopiesParams{
 		JobID:     id,
 		RowLimit:  int32(limit),

@@ -117,10 +117,19 @@ var atsBoards = []struct{ host, source, mode string }{
 	{"jobs.lever.co", "lever", modePath},
 	{"jobs.eu.lever.co", "lever", modePath}, // Lever EU data-residency host; same path shape/board as the US host
 	{"jobs.ashbyhq.com", "ashby", modePath},
+	{"jobs.humanbit.ai", "humanbit", modePath},
+	{"jobs.recrutei.com.br", "recrutei", modePath},
+	{"jobs.pyjamahr.com", "pyjamahr", modePath},
 	{"apply.workable.com", "workable", modePath},
 	{"jobs.deel.com", "deel", modePath},
 	{"jobs.gem.com", "gem", modePath},
 	{"jobs.jobvite.com", "jobvite", modePath},
+	// HERP's board sits at /v1/<board>/… — "v1" is platform machinery, reserved below, the
+	// same shape Gusto's "boards" word already uses.
+	{"herp.careers", "herp", modePath},
+	// HRMOS's board sits at /pages/<board>/… — "pages" is platform machinery, reserved below,
+	// the same shape Gusto's "boards" word already uses.
+	{"hrmos.co", "hrmos", modePath},
 	{"jobs.quickin.io", "quickin", modePath},
 	{"jobs.talenthr.io", "talenthr", modePath},
 	{"careers.pageuppeople.com", "pageup", modePathNumeric},
@@ -170,6 +179,9 @@ var atsBoards = []struct{ host, source, mode string }{
 	{"jobs.personio.com", "personio", modeSubdomain},
 	{"jobs.personio.de", "personio", modeSubdomain}, // Personio DE regional host; board = same tenant subdomain
 	{"pinpointhq.com", "pinpoint", modeSubdomain},
+	{"scalis.ai", "scalis", modeSubdomain},
+	{"keka.com", "keka", modeSubdomain},
+	{"selfrecruit.ge", "selfrecruit", modeSubdomain},
 	{"talentlyft.com", "talentlyft", modeSubdomain},
 	{"traffit.com", "traffit", modeSubdomain},
 	{"applytojob.com", "jazzhr", modeSubdomain},
@@ -416,7 +428,11 @@ var noBoardFirstSegments = map[string][]string{
 
 var reservedSegments = map[string][]string{
 	"jobs.jobvite.com": {"careers"},
-	"greenhouse.io":    {"embed", "job_app", "job_board", "js"},
+	// HERP addresses every board at /v1/<board>/…; "v1" is the platform's own path word.
+	"herp.careers": {"v1"},
+	// HRMOS addresses every board at /pages/<board>/…; "pages" is the platform's own path word.
+	"hrmos.co":      {"pages"},
+	"greenhouse.io": {"embed", "job_app", "job_board", "js"},
 	// Gusto's board listing is /boards/<board>; "boards" is the platform's word, never a tenant.
 	"jobs.gusto.com": {"boards"},
 }

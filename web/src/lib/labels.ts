@@ -162,6 +162,37 @@ export const DOMAIN_LABELS: Record<string, string> = {
 
 export const COMPANY_TYPE_LABELS: Record<string, string> = { inhouse: 'In-house' };
 
+// Education levels a candidate's degree text resolves to (internal/dict/edulevel),
+// shown on the Talent Network profile.
+export const EDUCATION_LEVEL_LABELS: Record<string, string> = {
+  bachelor: "Bachelor's degree",
+  master: "Master's degree",
+  phd: 'PhD',
+};
+
+// Certification canonicals (internal/dict/certification), shown on the Talent
+// Network profile. Kept in sync with that package's alias table by hand — a code
+// missing here falls back to titleCase, which is why the dictionary stays small and
+// curated rather than open-ended.
+export const CERTIFICATION_LABELS: Record<string, string> = {
+  'aws-solutions-architect': 'AWS Certified Solutions Architect',
+  'aws-developer': 'AWS Certified Developer',
+  'aws-sysops-administrator': 'AWS Certified SysOps Administrator',
+  'aws-cloud-practitioner': 'AWS Certified Cloud Practitioner',
+  'azure-fundamentals': 'Azure Fundamentals',
+  'azure-administrator': 'Azure Administrator Associate',
+  'azure-solutions-architect': 'Azure Solutions Architect Expert',
+  'gcp-cloud-architect': 'Google Cloud Professional Cloud Architect',
+  'gcp-cloud-engineer': 'Google Cloud Associate Cloud Engineer',
+  pmp: 'PMP',
+  cka: 'Certified Kubernetes Administrator (CKA)',
+  ckad: 'Certified Kubernetes Application Developer (CKAD)',
+  cissp: 'CISSP',
+  'comptia-security-plus': 'CompTIA Security+',
+  'comptia-network-plus': 'CompTIA Network+',
+  'scrum-master': 'Scrum Master',
+};
+
 // The six AI skill-signature archetypes (vocab.AIArchetypeValues). Listed in full
 // rather than override-only: the title-cased fallback would render "Rag App
 // Builder" for an acronym that must read "RAG", so every value needs an explicit

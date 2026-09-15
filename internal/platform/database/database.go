@@ -3,6 +3,7 @@ package database
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -32,11 +33,41 @@ const defaultMaxConns = 10
 // wins if it is shorter, so a SIGTERM during startup cancels immediately.
 const reachableWindow = 30 * time.Second
 
+// Option adjusts a pool before it is opened.
+type Option func(*pgxpool.Config)
+
+// WithStatementTimeout makes Postgres cancel any query on this pool that runs longer than d.
+//
+// It is the backstop for the endpoint whose cost nobody anticipated, and it is opt-in because
+// the right answer differs by caller rather than by deployment. On 2026-09-14 a deep-offset
+// crawl pinned all ten of the API server's connections in one query for minutes each; every
+// other request queued behind them and nginx answered 504 for 54 minutes. Nothing cut those
+// queries: the schema sets statement_timeout to 0, pgx sets none, and Fiber's WriteTimeout
+// closes the client socket while the handler goroutine and its in-flight query keep the
+// connection.
+//
+// Only cmd/server asks for it. The cron workers share this package and some legitimately run
+// for hours — backfill-derive walks the whole catalogue — so a package-wide default would
+// turn a correct batch pass into a nightly failure.
+//
+// It bounds the QUERY, not the wait for a connection. A caller that also needs the ACQUIRE
+// bounded must carry a context deadline; the two failures are different and this covers the
+// one that holds a connection hostage.
+func WithStatementTimeout(d time.Duration) Option {
+	return func(c *pgxpool.Config) {
+		// Milliseconds, as a bare integer, is what Postgres takes for a unitless value.
+		c.ConnConfig.RuntimeParams["statement_timeout"] = strconv.FormatInt(d.Milliseconds(), 10)
+	}
+}
+
 // Connect creates a Postgres connection pool and waits for it to become reachable.
-func Connect(ctx context.Context, dsn string) (*pgxpool.Pool, error) {
+func Connect(ctx context.Context, dsn string, opts ...Option) (*pgxpool.Pool, error) {
 	config, err := poolConfig(dsn)
 	if err != nil {
 		return nil, err
+	}
+	for _, opt := range opts {
+		opt(config)
 	}
 
 	pool, err := pgxpool.NewWithConfig(ctx, config)

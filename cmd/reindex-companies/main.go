@@ -43,6 +43,20 @@ func run() int {
 		return 1
 	}
 
+	// A rebuild-and-swap on the companies index, on the same single Meilisearch task queue
+	// the jobs rebuild uses — the two must never overlap, and a swap holds roughly twice the
+	// index's disk while it happens.
+	releaseLock, gotLock, err := worker.HoldHeavyIndexLock(ctx, pool)
+	if err != nil {
+		log.Printf("index lock: %v", err)
+		return 1
+	}
+	if !gotLock {
+		log.Print("reindex-companies: another catalogue-wide index job is running — skipping this run")
+		return 0
+	}
+	defer releaseLock()
+
 	client := search.NewClient(cfg.MeiliURL, cfg.MeiliKey)
 	reader := &queriesReader{q: db.New(pool)}
 

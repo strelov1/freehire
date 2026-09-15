@@ -50,11 +50,24 @@ func newSitemapHandlers(jobs, companies sitemapLister) *sitemapHandlers {
 	return &sitemapHandlers{jobs: jobs, companies: companies}
 }
 
-func (h *sitemapHandlers) register(api fiber.Router) {
-	api.Get("/jobs/sitemap", h.JobSitemap)
-	api.Get("/jobs/sitemap/boundaries", h.JobSitemapBoundaries)
-	api.Get("/companies/sitemap", h.CompanySitemap)
-	api.Get("/companies/sitemap/boundaries", h.CompanySitemapBoundaries)
+// register mounts the four public sitemap reads behind the shared public-read budget.
+//
+// They carried no limiter at all until the deep-offset change, which is the same omission
+// GET /companies/:slug/feedback carried and the reason both are now a documented rule:
+// an unauthenticated list registered without a limiter is a defect whatever its query
+// costs. Nothing here is expensive per request — the pages come from Meilisearch, not from
+// a table scan — but "cheap" is not "free", and an unthrottled route is simply the door a
+// throttled caller walks through instead (the argument jobsHandlers.register already makes
+// about /jobs versus /jobs/search).
+//
+// A real crawler is unaffected: it fetches a sitemap chunk at a time, minutes apart, and
+// 600/min is three orders of magnitude above that.
+func (h *sitemapHandlers) register(api fiber.Router, mw middleware) {
+	readLimit := publicReadLimiter(mw.throttler)
+	api.Get("/jobs/sitemap", readLimit, h.JobSitemap)
+	api.Get("/jobs/sitemap/boundaries", readLimit, h.JobSitemapBoundaries)
+	api.Get("/companies/sitemap", readLimit, h.CompanySitemap)
+	api.Get("/companies/sitemap/boundaries", readLimit, h.CompanySitemapBoundaries)
 }
 
 // sitemapMaxURLs is the sitemap-protocol per-file cap — the hard ceiling an

@@ -65,7 +65,11 @@ func newSitemapTestAppWith(jobs, companies sitemapLister) *fiber.App {
 	h := &sitemapHandlers{jobs: jobs, companies: companies}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	api := app.Group("/api/v1")
-	h.register(api)
+	// A zero middleware carries a nil throttler, which ratelimit.Middleware treats as "no
+	// backend configured" and fails open — so these tests exercise the handlers rather than
+	// the limiter in front of them. That the limiter IS mounted, and mounted first, is
+	// asserted by TestPublicReadLimiters_KeyWhatTheMountedChainCanSee instead.
+	h.register(api, middleware{})
 	return app
 }
 
@@ -283,7 +287,7 @@ func TestSitemapRoutesAreNotShadowedBySlug(t *testing.T) {
 	h := &sitemapHandlers{jobs: &stubSitemapIndex{docs: stubDocs(3)}, companies: &stubSitemapIndex{docs: stubDocs(3)}}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	api := app.Group("/api/v1")
-	h.register(api)
+	h.register(api, middleware{})
 	// The catch-alls production registers after the sitemap literals. Answering 418
 	// makes "the slug route swallowed it" unmistakable in a failure.
 	catchAll := func(c *fiber.Ctx) error { return c.SendStatus(fiber.StatusTeapot) }

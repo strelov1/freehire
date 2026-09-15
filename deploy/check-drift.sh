@@ -39,8 +39,13 @@ fetch_set() {
   ssh -o ConnectTimeout=15 "$HOST" "$2" | tar xz -C "$work/$1"
 }
 
+# `meilisearch*` is named beside the glob, not folded into it: the search engine's unit
+# carries no freehire- prefix, so `freehire-*` walked straight past the one process holding
+# two thirds of the host's memory. Nobody noticed until it exhausted the machine on
+# 2026-09-14 and the hunt for its memory limits found the unit was not in git at all. A
+# service this host runs and this list does not name is the next one of these.
 # shellcheck disable=SC2016  # single quotes on purpose: the $( ) picks the files on the HOST
-fetch_set systemd 'cd /etc/systemd/system && tar cz $(ls -d freehire-* | grep -v "\.bak") 2>/dev/null'
+fetch_set systemd 'cd /etc/systemd/system && tar cz $(ls -d freehire-* meilisearch* 2>/dev/null | grep -v "\.bak") 2>/dev/null'
 # shellcheck disable=SC2016  # as above
 fetch_set bin     'cd /opt/freehire/bin && tar cz $(ls *.sh | grep -v "\.bak")'
 fetch_set nginx   'cd /etc/nginx && tar cz snippets/freehire-app.conf snippets/freehire-api.conf conf.d/freehire-logformat.conf'

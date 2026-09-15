@@ -24,7 +24,8 @@ import (
 //   - "pte" is small — 7 companies — and earns its place on one of them: without it,
 //     "epam systems pte. ltd." keys apart from the EPAM Systems that holds 1,172 open jobs.
 //
-// Two tails that look like they belong here and deliberately do not:
+// Two tails that look like they belong here and deliberately do not — they live in
+// [boardNameTails] instead, where over-trimming costs a lookup rather than an employer:
 //
 //   - "spa" is the Italian S.p.A. AND the literal word. "Hilton Luxor Resort & Spa" carries
 //     more open jobs than any genuine S.p.A. in the catalogue, so stripping it would merge a
@@ -35,8 +36,7 @@ import (
 //     "group" is an ordinary word by which two businesses legitimately differ, so merging on
 //     it is a judgement. Judgements belong to cmd/merge-companies, which shows a dry run,
 //     elects by job count and records a reversible alias — not to a pure function applied
-//     silently to every new posting. cmd/harvest-ats keeps both as board-name guesses, where
-//     an extra candidate costs one lookup rather than an employer.
+//     silently to every new posting.
 var legalSuffixes = map[string]struct{}{
 	"corporation": {}, "limited": {}, "gmbh": {}, "corp": {}, "llc": {}, "ltd": {},
 	"inc": {}, "incorporated": {}, "plc": {}, "llp": {}, "lp": {}, "cic": {}, "cio": {},
@@ -56,12 +56,53 @@ var legalSuffixes = map[string]struct{}{
 //
 // A single-word name is never stripped: "Limited" stays "limited", because an empty slug
 // silently matches nothing while a visibly odd company row can be found and fixed.
-func CompanySlug(name string) string {
+func CompanySlug(name string) string { return trimTail(name, IsLegalForm) }
+
+// boardNameTails are the tails an ATS board id drops that the company key must keep. They are
+// a SECOND vocabulary rather than entries in [legalSuffixes] because they are not corporate
+// forms, and the two are read at opposite prices: dropping one from a board-id guess costs a
+// probe against a board that simply does not answer, while dropping it from the company key
+// re-keys an employer silently, on every posting, forever. See legalSuffixes' own note above
+// for the evidence on each — a resort that folds onto a hotel chain, and a brand word two
+// businesses legitimately differ by.
+//
+// Matched by the same letters-only comparison, so one entry covers every spelling: "spa"
+// catches "SpA" and "S.p.A." alike. That punctuated form is why this is judged on a name's
+// WORDS rather than on a slug's segments — [Slug] has already turned "S.p.A." into "s-p-a",
+// where no tail can be recognised.
+var boardNameTails = map[string]struct{}{
+	"group": {}, "spa": {},
+}
+
+// IsBoardNameTail reports whether a single word is a tail an ATS board id commonly drops
+// ("Group", "S.p.A."). It deliberately does NOT answer for corporate forms — those are
+// [IsLegalForm]'s vocabulary — so a caller that wants both asks both, and neither list can
+// grow into the other by accident.
+//
+// It is exported for the callers that hold a slug rather than a name and must judge one
+// segment of it on its own (cmd/harvest-ats, over a platform profile slug like `doodle-ag`).
+func IsBoardNameTail(word string) bool {
+	_, ok := boardNameTails[letters(word)]
+	return ok
+}
+
+// BoardNameSlug is [CompanySlug] widened by [boardNameTails]: the board id a company's name
+// suggests, rather than the key the company is filed under. "Acme S.p.A." yields `acme` where
+// CompanySlug yields `acme-s-p-a`.
+//
+// Use it only to PROPOSE a board id to cmd/harvest-boards, which keeps a candidate solely on
+// live evidence — a slug that happens to be another employer's board is rejected by the probe
+// and the name gate, not accepted on the resemblance. It must never key a company.
+func BoardNameSlug(name string) string {
+	return trimTail(name, func(word string) bool { return IsLegalForm(word) || IsBoardNameTail(word) })
+}
+
+// trimTail is the shared walk under [CompanySlug] and [BoardNameSlug]: drop trailing words the
+// caller's vocabulary recognises, then slug what is left. The two differ only in that
+// vocabulary, and sharing the walk is what keeps their single-word and repeat rules identical.
+func trimTail(name string, isTail func(word string) bool) string {
 	words := strings.FieldsFunc(dropApostrophes(name), isWordBreak)
-	for len(words) > 1 {
-		if _, isForm := legalSuffixes[letters(words[len(words)-1])]; !isForm {
-			break
-		}
+	for len(words) > 1 && isTail(words[len(words)-1]) {
 		words = words[:len(words)-1]
 	}
 	return Slug(strings.Join(words, " "))

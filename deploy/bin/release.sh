@@ -248,7 +248,16 @@ if [ "$app" = freehire ]; then
   # missing credential fail the same silent way: every run exits 0 having reminded nobody.
   # A missed reminder costs somebody the session, which is why it is on this list rather
   # than built by hand after the fact.
-  for w in migrate onboarding broadcast ingest enrich embed similar-backfill search-drain reindex reindex-companies import-collections import-yc import-company-industries queue-metrics tg-ingest tg-extract liveness llm-probe notify remind nudge apple-revoke auth-cleanup capture-apply-form backfill-derive backfill-company-names backfill-descriptions backfill-application-events backfill-slug-folded backfill-duplicate-marker-owner backfill-company-type-hint backfill-requirements billing-sync build-suggestions merge-companies add-board harvest-orphans recount-companies rollup-stats rollup-facets rollup-company rollup-views classify-mail resolve-url gmail-sync cal-sync mail-ingest hydrate-adzuna-description seed-adzuna-description-queue ingest-scheduler schedule-board auto-apply-orchestrate auto-apply social-digest discord-sync mentorship-remind linkedin-auth linkedin-token-refresh; do
+  # harvest-boards joined 2026-09-15, and it is the only entry here added by an outage
+  # rather than by the check below. harvest-orphans has been on this list since freehire#1413
+  # precisely so its run needs no hand build — but it only writes the SEED, and the tool that
+  # consumes it was missing, so the second half of the same job had no binary at all. The one
+  # way left to run it was `go run ./cmd/harvest-boards`, which recompiles the whole module
+  # per invocation; 45 of them from one ssh session took 20.7GiB of compilers on a 30GiB box
+  # and served 14,783 504s in ten minutes. The pair has to ship together: listing the half
+  # that writes a worklist and not the half that drains it is what makes `go run` look like
+  # the only option.
+  for w in migrate onboarding broadcast ingest enrich embed similar-backfill search-drain reindex reindex-companies import-collections import-yc import-company-industries queue-metrics tg-ingest tg-extract liveness llm-probe notify remind nudge apple-revoke auth-cleanup capture-apply-form backfill-derive backfill-company-names backfill-descriptions backfill-application-events backfill-slug-folded backfill-duplicate-marker-owner backfill-company-type-hint backfill-requirements billing-sync build-suggestions merge-companies add-board harvest-orphans harvest-boards recount-companies rollup-stats rollup-facets rollup-company rollup-views classify-mail resolve-url gmail-sync cal-sync mail-ingest hydrate-adzuna-description seed-adzuna-description-queue ingest-scheduler schedule-board auto-apply-orchestrate auto-apply social-digest discord-sync mentorship-remind linkedin-auth linkedin-token-refresh search-ping; do
     sudo -u freehire /usr/local/bin/go build -buildvcs=false -o "$w" "./cmd/$w"
   done
   # Every binary a freehire-*.service starts from hire-current has to have just been built,

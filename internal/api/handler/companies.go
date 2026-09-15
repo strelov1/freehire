@@ -161,7 +161,10 @@ func companyViewFrom(c db.Company) companyView {
 // directory facets. meta.total reports the count matching the full filter so
 // pagination is correct.
 func (h *companiesHandlers) ListCompanies(c *fiber.Ctx) error {
-	limit, offset := pageParams(c)
+	limit, offset, err := pageParams(c)
+	if err != nil {
+		return err
+	}
 	search := c.Query("q")
 	// sort=rating orders by feedback_rating_avg (see ListCompanies in
 	// internal/platform/db/queries/companies.sql); any other value (including absent)
@@ -333,6 +336,16 @@ func facetValues(vals url.Values, key string) []string {
 func (h *companiesHandlers) GetCompany(c *fiber.Ctx) error {
 	slug := c.Params("slug")
 
+	// The pagination window is checked before the company lookup, not after it. A refused
+	// request must cost nothing: reading the query params first means a caller paging past
+	// the window cannot make this endpoint touch the database at all, whatever it pages
+	// through. It also keeps the refusal uniform across the list endpoints, which is what
+	// their shared guard asserts.
+	limit, offset, err := pageParams(c)
+	if err != nil {
+		return err
+	}
+
 	company, err := h.queries.GetCompany(c.Context(), slug)
 	if errors.Is(err, pgx.ErrNoRows) {
 		// A slug a merge retired keeps working, rather than becoming a dead end that also
@@ -353,8 +366,6 @@ func (h *companiesHandlers) GetCompany(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
-
-	limit, offset := pageParams(c)
 
 	jobs, err := h.queries.ListJobsByCompany(c.Context(), db.ListJobsByCompanyParams{
 		CompanySlug: slug,

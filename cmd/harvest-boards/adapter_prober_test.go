@@ -45,7 +45,7 @@ func TestProberForPrefersTheBespokeProber(t *testing.T) {
 func TestProberForFallsBackToTheProvidersAdapter(t *testing.T) {
 	// Platforms with a board-keyed adapter and no bespoke prober. Before the fallback these
 	// were unharvestable: harvest-boards refused the provider outright.
-	for _, provider := range []string{"rippling", "zohorecruit", "ukg", "phenom", "hibob"} {
+	for _, provider := range []string{"rippling", "zohorecruit", "ukg", "phenom", "hibob", "herp", "hrmos", "scalis", "selfrecruit", "humanbit", "recrutei", "pyjamahr", "recruiterflow"} {
 		p, ok := proberFor(provider)
 		if !ok {
 			t.Errorf("proberFor(%q) not found; the provider has an adapter and is board-keyed", provider)
@@ -65,7 +65,7 @@ func TestProberForFallsBackToTheProvidersAdapter(t *testing.T) {
 func TestProberForRefusesBoardlessProviders(t *testing.T) {
 	// A boardless adapter serves one catalogue whatever board it is handed, so it would
 	// report jobs for a board that does not exist and confirm every candidate put to it.
-	for _, provider := range []string{"echojobs", "jobstash", "ozon"} {
+	for _, provider := range []string{"echojobs", "jobstash", "ozon", "staffy"} {
 		if p, ok := proberFor(provider); ok {
 			t.Errorf("proberFor(%q) = %T, want no prober: a boardless adapter cannot refute a board", provider, p)
 		}

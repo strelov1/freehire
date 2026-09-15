@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestClientGetJSONDecodesAndSendsUserAgent(t *testing.T) {
@@ -538,5 +539,26 @@ func TestTextCapClearsTheListingPageThatOutgrewIt(t *testing.T) {
 	if maxTextBody < 2*yandexCrowdListingBytes {
 		t.Errorf("maxTextBody = %d leaves under 2x headroom over %d — a growing listing reaches it again",
 			maxTextBody, yandexCrowdListingBytes)
+	}
+}
+
+// humanBitListingFetchSeconds is a real measured fetch time of HumanBit's ~5.6 MB listing
+// page (jobs.humanbit.ai/scrabble-jigsaw), timed via curl -w on 2026-09-13. It exceeds the
+// standard client's 15s timeout, which made every HumanBit crawl fail intermittently with
+// "context deadline exceeded" in production.
+const humanBitListingFetchSeconds = 18
+
+func TestNewLongTimeoutClientExceedsAMeasuredSlowListingFetch(t *testing.T) {
+	c := NewLongTimeoutClient()
+	if c.httpClient.Timeout <= humanBitListingFetchSeconds*time.Second {
+		t.Fatalf("httpClient.Timeout = %v, want more than the %ds a slow listing page (e.g. HumanBit) can take to fetch",
+			c.httpClient.Timeout, humanBitListingFetchSeconds)
+	}
+}
+
+func TestNewLongTimeoutClientKeepsTheOrdinaryStreamTimeout(t *testing.T) {
+	c := NewLongTimeoutClient()
+	if c.streamClient.Timeout != streamTimeout {
+		t.Errorf("streamClient.Timeout = %v, want the ordinary %v", c.streamClient.Timeout, streamTimeout)
 	}
 }

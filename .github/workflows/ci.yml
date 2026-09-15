@@ -175,6 +175,31 @@ jobs:
       - name: Check documentation links
         run: node scripts/check-doc-links.mjs
 
+  # The version of every package whose TYPES cross the design system's `link:` boundary.
+  # design-system is symlinked into web and extension rather than copied, so each of the
+  # three installs its own node_modules and a shared package lands on disk more than once —
+  # harmless for a value, fatal for a type, since TypeScript identifies a type by where it
+  # was declared. Dependabot raised @lucide/svelte in design-system alone (#2836) and
+  # svelte-check reported eight errors in web about a type being unassignable to itself.
+  #
+  # Its own job for the same reason `docs` is: it reads three package.json files and needs
+  # no package tree installed. It also fails EARLIER than the svelte-check that catches the
+  # consequence — that one needs both packages installed and the design system built, so on
+  # a Dependabot PR it is minutes of CI away from a message that never names the cause.
+  shared-deps:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      - name: Check shared dependency versions
+        run: node scripts/check-shared-deps.mjs
+
   # The workflows themselves. Nothing has ever read them except GitHub, at the moment it
   # runs one — so an unknown runner label, a mistyped `needs:` or a broken expression is
   # discovered by a job failing, and a job that only runs on a tag or a schedule is
@@ -221,7 +246,7 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v6.0.10
+        uses: pnpm/action-setup@v6.1.0
 
       - name: Setup Node.js
         uses: actions/setup-node@v7
@@ -397,7 +422,7 @@ jobs:
           fetch-depth: 0
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v6.0.10
+        uses: pnpm/action-setup@v6.1.0
 
       - name: Setup Node.js
         uses: actions/setup-node@v7
@@ -425,7 +450,7 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v6.0.10
+        uses: pnpm/action-setup@v6.1.0
 
       - name: Setup Node.js
         uses: actions/setup-node@v7
@@ -510,7 +535,7 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v6.0.10
+        uses: pnpm/action-setup@v6.1.0
 
       - name: Setup Node.js
         uses: actions/setup-node@v7
