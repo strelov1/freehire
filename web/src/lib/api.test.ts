@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { ApiError, createApi } from './api';
 import { must } from './utils';
@@ -132,5 +132,69 @@ describe('recent authentication adapters', () => {
     const result = await createApi(fetcher).connectedIdentities();
     expect(result.identities).toEqual([]);
     expect(result.has_password).toBe(true);
+  });
+});
+
+describe('plan refusal telemetry', () => {
+  /** A fetch that answers one 402 with the refusal envelope the backend writes
+   *  (handler.write402): the message, the allowance naming the feature, and — only when
+   *  there is a tier to sell — the upgrade link. */
+  function refusingFetch(body: unknown): typeof fetch {
+    return (() =>
+      Promise.resolve(
+        new Response(JSON.stringify(body), {
+          status: 402,
+          headers: { 'content-type': 'application/json' },
+        }),
+      )) as unknown as typeof fetch;
+  }
+
+  async function refuse(body: unknown): Promise<void> {
+    const client = createApi(refusingFetch(body), '', {});
+    await expect(client.ingestStatus()).rejects.toBeInstanceOf(ApiError);
+  }
+
+  it('records the feature the SERVER named, not one guessed from the path', async () => {
+    const spy = vi.spyOn(await import('./analytics'), 'track');
+
+    await refuse({ error: 'no tailoring left today', allowance: { feature: 'tailor' }, upgrade_url: '/my/plan' });
+
+    expect(spy).toHaveBeenCalledWith('plan_refused', { feature: 'tailor', upgrade_offered: true });
+    spy.mockRestore();
+  });
+
+  // An Ultra subscriber is refused with no upgrade_url, because there is nothing above
+  // their tier to sell. That is a different fact from a free caller's refusal and the
+  // event has to keep them apart, or "people hit the wall" stops meaning "people would
+  // have paid".
+  it('separates a refusal with nothing left to sell', async () => {
+    const spy = vi.spyOn(await import('./analytics'), 'track');
+
+    await refuse({ error: 'no analyses left today', allowance: { feature: 'match' } });
+
+    expect(spy).toHaveBeenCalledWith('plan_refused', { feature: 'match', upgrade_offered: false });
+    spy.mockRestore();
+  });
+
+  // Every other failure shares this code path — a 404 firing a paywall event would make
+  // demand for a paid feature unreadable.
+  it('stays silent on any status but 402', async () => {
+    const spy = vi.spyOn(await import('./analytics'), 'track');
+    const client = createApi(
+      (() =>
+        Promise.resolve(
+          new Response(JSON.stringify({ error: 'nope' }), {
+            status: 404,
+            headers: { 'content-type': 'application/json' },
+          }),
+        )) as unknown as typeof fetch,
+      '',
+      {},
+    );
+
+    await expect(client.ingestStatus()).rejects.toBeInstanceOf(ApiError);
+
+    expect(spy).not.toHaveBeenCalled();
+    spy.mockRestore();
   });
 });

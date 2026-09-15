@@ -1,5 +1,7 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
+  import { page } from '$app/state';
+  import { track } from '$lib/analytics';
   import { api } from '$lib/api';
   import { currentUser, isAuthenticated } from '$lib/auth.svelte';
   import { locale } from '$lib/i18n/currentLocale.svelte';
@@ -43,6 +45,30 @@
       .myUsage()
       .then((u) => (usage = u))
       .catch(() => (usage = null));
+  });
+
+  // A finished purchase lands here carrying ?checkout=success (billing.Config.SuccessURL),
+  // because the provider is given the same page for success and cancel. This is the only
+  // place a payment meets the channel that produced it: the money is known to Postgres and
+  // the acquisition source only to the product analytics, and nothing else joins them.
+  //
+  // The TIER comes from the loaded plan rather than from what was clicked — the server's
+  // answer, so a purchase recorded here is one the account actually holds. Recorded once:
+  // the marker is stripped from the address afterwards, or a reload would count a second
+  // sale that never happened.
+  let purchaseRecorded = $state(false);
+  $effect(() => {
+    if (purchaseRecorded || page.url.searchParams.get('checkout') !== 'success') return;
+    const tier = plan?.plan;
+    if (tier !== 'pro' && tier !== 'ultra') return;
+
+    purchaseRecorded = true;
+    track('subscribe', { plan: tier });
+
+    const url = new URL(page.url);
+    url.searchParams.delete('checkout');
+    // window.history explicitly: this component has its own `history` (the usage log).
+    window.history.replaceState(window.history.state, '', url);
   });
 
   // Where a subscriber changes their card or cancels — the provider's own page. Null when

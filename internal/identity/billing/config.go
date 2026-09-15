@@ -117,6 +117,19 @@ func (c Config) CheckoutPrice() string {
 	return c.Prices[0]
 }
 
-// ReturnURL is where the provider sends a browser back to, for both a finished purchase and
-// a visit to the management portal.
+// ReturnURL is where the provider sends a browser back to: an abandoned checkout, and a
+// visit to the management portal.
 func (c Config) ReturnURL() string { return c.SiteURL + "/my/plan" }
+
+// SuccessURL is where a FINISHED purchase lands. It is ReturnURL with a marker, and the
+// marker is the whole point: Stripe is given the same page for both outcomes, so without
+// it a browser coming back from a completed checkout is indistinguishable from one that
+// pressed cancel — or from someone who simply opened the plan page. The SPA reads the
+// marker to record the purchase, which is the only place the acquisition channel and the
+// payment meet: the payment itself is known to Postgres and the channel only to the
+// product analytics, and nothing else joins them.
+//
+// A marker, not the session id Stripe can template in: this says a purchase finished and
+// nothing more, so it neither leaks an identifier into a browser history nor invites a
+// caller to trust a value the user can edit.
+func (c Config) SuccessURL() string { return c.ReturnURL() + "?checkout=success" }

@@ -13,6 +13,7 @@
 // `Responses` is the onboarding survey's record. Aliased on the way in because the
 // generated contracts are one flat namespace and the name says nothing on its own there —
 // see cmd/gen-contracts for why it is not called `Answers` like its Go siblings.
+import { track } from './analytics';
 import type {
   Answers,
   CatalogueMember,
@@ -306,6 +307,33 @@ export class MovedError extends Error {
   }
 }
 
+/** Record the moment a plan limit said no, from the one place every failed response
+ *  passes through.
+ *
+ *  Here rather than at each call site on purpose: a metered feature added later is
+ *  covered without anyone remembering to instrument it, and a list of features kept by
+ *  hand is exactly the shape that hides what is missing. The feature name and whether an
+ *  upgrade was on offer come from the SERVER's own refusal body (see handler.write402),
+ *  so neither is guessed from the request path.
+ *
+ *  This is the only record of demand for a paid feature. What a user SPENT is in
+ *  Postgres; what they were REFUSED is nowhere else at all.
+ *
+ *  No browser guard of its own: toApiError also runs during SSR, and `track` already
+ *  handles that — it queues into a bounded buffer that a server process simply never
+ *  drains. A second guard here would only make this call behave unlike every other
+ *  `track` in the app, and would be untestable in the node environment the unit tests
+ *  run in. */
+function recordPlanRefusal(status: number, body: unknown): void {
+  if (status !== 402) return;
+  const b = body as { allowance?: { feature?: unknown }; upgrade_url?: unknown } | null;
+  const feature = b?.allowance?.feature;
+  track('plan_refused', {
+    feature: typeof feature === 'string' ? feature : 'unknown',
+    upgrade_offered: typeof b?.upgrade_url === 'string',
+  });
+}
+
 /** Parse a failed response into an ApiError. The backend's standard error envelope is
  *  `{ "error": msg }`; surface that as the message (falling back to the status line for a
  *  non-JSON error, e.g. a proxy 502) and keep the whole parsed body for callers that need
@@ -314,6 +342,7 @@ async function toApiError(res: Response): Promise<ApiError> {
   try {
     const body = await res.json();
     const msg = body && typeof body.error === 'string' ? body.error : `${res.status} ${res.statusText}`;
+    recordPlanRefusal(res.status, body);
     return new ApiError(res.status, msg, body ?? undefined);
   } catch {
     return new ApiError(res.status, `${res.status} ${res.statusText}`);
@@ -1393,6 +1422,11 @@ export function createApi(
    *  up — both answer 404. Callers treat that as "no upgrade offer here" and hide the
    *  entry point, never as an error to show. */
   async function billingCheckout(priceID?: string): Promise<CheckoutSession> {
+    // Intent, recorded before the answer: this is the step between reaching the plan page
+    // and paying, and it is the only one that says a visitor meant to buy. A failure to
+    // create the session is then visible as intent without a purchase rather than as
+    // nothing at all.
+    track('checkout_start', { price_id: priceID ?? 'default' });
     const q = priceID ? `?price=${encodeURIComponent(priceID)}` : '';
     // No code here. This is a GET, and `SameSite=Lax` sends the session cookie on a
     // cross-site top-level navigation — so a GET that redeemed a code would let any page

@@ -401,8 +401,9 @@ func (s *Service) CheckoutURL(ctx context.Context, userID int64, priceID string,
 		}
 	}
 
+	// Success and cancel differ by one marker — see Config.SuccessURL for why they must.
 	url, err := s.client.createCheckoutSession(ctx, userID, email,
-		priceID, s.cfg.ReturnURL(), s.cfg.ReturnURL(), customerID, couponID)
+		priceID, s.cfg.SuccessURL(), s.cfg.ReturnURL(), customerID, couponID)
 	if err != nil {
 		return "", Discount{}, err
 	}
