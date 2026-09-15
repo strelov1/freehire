@@ -1,0 +1,17 @@
+[Unit]
+Description=timer: regenerate the per-provider ingest timers daily
+
+[Timer]
+# 04:40 UTC: after the nightly taxonomy backfill (02:12) and the 03:15 reindex, before the
+# 06:45 suggestion rebuild. The run itself is one small SELECT and ~300 systemctl calls, so
+# the slot is chosen to avoid a daemon-reload landing in the middle of a heavy unit rather
+# than because the work is expensive.
+OnCalendar=*-*-* 04:40:00
+# Persistent=true: a missed day is a day of a newly added provider not being crawled, and
+# replaying the run can only create and enable timers -- every disable in the script names
+# one unit literally, so a catch-up firing can never retire the fleet.
+Persistent=true
+RandomizedDelaySec=300
+
+[Install]
+WantedBy=timers.target

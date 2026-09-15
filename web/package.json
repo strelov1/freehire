@@ -35,9 +35,9 @@
     "@testing-library/svelte": "^5.4.2",
     "@tsconfig/svelte": "^5.0.4",
     "@types/node": "^26.4.1",
-    "@types/three": "^0.185.4",
+    "@types/three": "^0.186.0",
     "@vite-pwa/sveltekit": "^1.1.0",
-    "@vitest/coverage-v8": "^4.1.10",
+    "@vitest/coverage-v8": "^4.1.11",
     "eslint": "^10.8.0",
     "eslint-plugin-oxlint": "^1.77.0",
     "eslint-plugin-svelte": "^3.22.0",
@@ -55,7 +55,7 @@
     "typescript-eslint": "^8.63.0",
     "vite": "^8.1.4",
     "vite-plugin-pwa": "^1.2.0",
-    "vitest": "^4.1.9"
+    "vitest": "^4.1.11"
   },
   "dependencies": {
     "@resvg/resvg-js": "^2.6.2",
@@ -66,14 +66,14 @@
     "easymde": "^2.21.0",
     "flag-icons": "^7.5.0",
     "freehire-design-system": "link:../design-system",
-    "isomorphic-dompurify": "^4.1.0",
-    "marked": "^18.0.11",
-    "posthog-js": "^1.427.2",
+    "isomorphic-dompurify": "^4.2.0",
+    "marked": "^18.0.12",
+    "posthog-js": "^1.430.2",
     "satori": "^0.33.4",
     "satori-html": "^0.3.2",
-    "simple-icons": "^16.29.0",
+    "simple-icons": "^16.30.0",
     "svelte-dnd-action": "^0.9.79",
-    "three": "^0.185.1",
+    "three": "^0.186.0",
     "workbox-window": "^7.4.1"
   }
 }

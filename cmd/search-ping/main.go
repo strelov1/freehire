@@ -128,8 +128,8 @@ func configuredEngines(ctx context.Context, origin string) ([]searchping.Engine,
 func report(reports []searchping.Report) int {
 	code := 0
 	for _, r := range reports {
-		// engine and event both, always: the two passes share one allowance, so a line
-		// that named only the engine would leave "which one spent the day" unanswerable.
+		// engine and event both, always: the passes share one allowance, so a line that
+		// named only the engine would leave "which one spent the day" unanswerable.
 		who := fmt.Sprintf("%s/%s", r.Engine, r.Kind)
 		switch {
 		case r.Err != nil:
