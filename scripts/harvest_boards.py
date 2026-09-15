@@ -39,8 +39,9 @@ from ats_boards import (  # noqa: E402
 # Aggregator JSON files. We sweep the raw text with regex, so the per-file schema
 # (key names) does not matter — only that ATS URLs appear somewhere in the JSON.
 AGGREGATORS = [
-    "https://raw.githubusercontent.com/vanshb03/Summer2026-Internships/dev/.github/scripts/listings.json",
-    "https://raw.githubusercontent.com/SimplifyJobs/Summer2026-Internships/dev/.github/scripts/listings.json",
+    "https://raw.githubusercontent.com/SimplifyJobs/New-Grad-Positions/dev/.github/scripts/listings.json",
+    "https://raw.githubusercontent.com/SimplifyJobs/Summer2027-Internships/dev/.github/scripts/listings.json",
+    "https://raw.githubusercontent.com/vanshb03/Summer2027-Internships/dev/.github/scripts/listings.json",
     "https://raw.githubusercontent.com/crypto-jobs-fyi/crawler/HEAD/ai_companies.json",
     "https://raw.githubusercontent.com/crypto-jobs-fyi/crawler/HEAD/crypto_companies.json",
     "https://raw.githubusercontent.com/crypto-jobs-fyi/crawler/HEAD/fin_companies.json",

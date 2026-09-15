@@ -74,6 +74,17 @@ def test_slug_title_humanizes():
     assert h._slug_title("thelabnyc") == "Thelabnyc"
 
 
+def test_aggregators_include_current_season_repos():
+    expected = {
+        "https://raw.githubusercontent.com/SimplifyJobs/New-Grad-Positions/dev/.github/scripts/listings.json",
+        "https://raw.githubusercontent.com/SimplifyJobs/Summer2027-Internships/dev/.github/scripts/listings.json",
+        "https://raw.githubusercontent.com/vanshb03/Summer2027-Internships/dev/.github/scripts/listings.json",
+    }
+    assert expected <= set(h.AGGREGATORS)
+    assert not any("Summer2026" in url for url in h.AGGREGATORS), \
+        "stale prior-season repo left in AGGREGATORS"
+
+
 def _run():
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
     failed = 0

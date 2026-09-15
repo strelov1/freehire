@@ -8,6 +8,7 @@ scripts/discover_boards.py (query-driven web discovery). Stdlib only.
 from __future__ import annotations
 
 import json
+import os
 import re
 import subprocess
 import sys
@@ -18,6 +19,11 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
 SOURCES_DIR = REPO / "sources"
+# Where a harvest run's --write lands: one seed JSON file per provider, in the
+# {"board": ..., "company": ...} shape cmd/harvest-boards's seed.go already parses. Not
+# SOURCES_DIR — that directory was retired by #2406, and cmd/harvest-boards writes into the
+# `boards` table directly, not a YAML file.
+SEED_DIR = REPO / "scripts" / ".harvest-seeds"
 UA = "freehire-harvest/1.0 (+https://freehire.me)"
 
 # (compiled regex, provider). Group 1 (first non-empty group) is the board slug.
@@ -101,14 +107,50 @@ def extract_slugs(text: str) -> set[tuple[str, str]]:
     return out
 
 
-def existing_slugs() -> dict[str, set[str]]:
+def parse_boards_dump(dump: str) -> dict[str, set[str]]:
+    """Parse a `psql -t -A -c "select provider, lower(board) from boards"` dump — one
+    `provider|board` pair per line — into {provider: {board, ...}}. A line missing the
+    separator (blank, or psql banner noise) is skipped rather than raising, and a provider
+    absent from the dump reads back as an empty set, not a KeyError.
+    """
     out: dict[str, set[str]] = defaultdict(set)
-    for prov in VALIDATORS:
-        f = SOURCES_DIR / f"{prov}.yml"
-        if f.exists():
-            for m in re.findall(r"board:\s*\"?([^\"\n]+)\"?", f.read_text()):
-                out[prov].add(m.strip().lower())
+    for line in dump.splitlines():
+        if "|" not in line:
+            continue
+        prov, board = (part.strip() for part in line.split("|", 1))
+        if prov and board:
+            out[prov].add(board)
     return out
+
+
+def _boards_table_dump(database_url: str) -> str:
+    """Shell out to psql for a live `provider|board` dump of the `boards` catalog.
+
+    Untested IO boundary, like fetch() — the parsing it feeds (parse_boards_dump) is what
+    carries the test coverage.
+    """
+    return subprocess.run(
+        ["psql", database_url, "-t", "-A", "-c", "select provider, lower(board) from boards"],
+        capture_output=True, text=True, timeout=60, check=True,
+    ).stdout
+
+
+def existing_slugs() -> dict[str, set[str]]:
+    """The live board catalog, as {provider: {board, ...}} — what a harvest candidate is
+    deduped against. Needs DATABASE_URL; missing it fails the run rather than degrading to
+    an empty catalog, which would make every candidate look new instead of looking like the
+    dedup step it actually is (the same "fail loud, don't look like a clean run" rule the
+    Go backfill tools use for a missing/invalid knob).
+    """
+    database_url = os.environ.get("DATABASE_URL")
+    if not database_url:
+        sys.exit("existing_slugs: DATABASE_URL not set — cannot dedup against the live board catalog")
+    return parse_boards_dump(_boards_table_dump(database_url))
+
+
+def seed_items(rows: list[tuple[str, str, int]]) -> list[dict[str, str]]:
+    """Build cmd/harvest-boards seed-file entries from survivor rows (name, slug, job count)."""
+    return [{"board": slug, "company": name} for name, slug, _ in rows]
 
 
 def validate(provider: str, slug: str) -> int | None:
@@ -170,7 +212,8 @@ def github_fragments(query: str, pages: int) -> list[str]:
 
 
 def emit_survivors(cand: dict[tuple[str, str], str], write: bool) -> int:
-    """Dedup vs sources/*.yml, validate live concurrently, print/append YAML.
+    """Dedup vs the live `boards` catalog, validate live concurrently, print/write a
+    per-provider seed JSON file cmd/harvest-boards can apply directly.
 
     cand maps (provider, slug) -> best-effort company name. Returns the count of
     new validated boards. Shared by harvest (aggregators) and discover (web search).
@@ -206,11 +249,12 @@ def emit_survivors(cand: dict[tuple[str, str], str], write: bool) -> int:
             print(f"- company: {yaml_name(name)}  # {n} jobs")
             print(f"  board: {slug}")
         if write:
-            f = SOURCES_DIR / f"{prov}.yml"
-            with f.open("a") as fh:
-                for name, slug, n in rows:
-                    fh.write(f"- company: {yaml_name(name)}\n  board: {slug}\n")
-            print(f"  -> appended {len(rows)} entries to {f.relative_to(REPO)}", file=sys.stderr)
+            SEED_DIR.mkdir(parents=True, exist_ok=True)
+            f = SEED_DIR / f"{prov}.json"
+            f.write_text(json.dumps(seed_items(rows), indent=2) + "\n")
+            print(f"  -> wrote {len(rows)} entries to {f.relative_to(REPO)} — apply with "
+                  f"`go run ./cmd/harvest-boards {prov} {f.relative_to(REPO)} --apply`",
+                  file=sys.stderr)
 
     print(f"\n{total} new validated boards total", file=sys.stderr)
     return total
