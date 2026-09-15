@@ -31,14 +31,15 @@ func visitedIDs(store *fakeStore) []int64 {
 	return out
 }
 
-// A run started past an id must not revisit it — that is what makes an interrupted
-// pass resumable rather than restarting at the beginning of a 12.7M-row table.
-func TestBackfill_WindowStartsAfterFromID(t *testing.T) {
+// A run started at an id must not go back before it — that is what makes an interrupted
+// pass resumable rather than restarting at the beginning of a 12.7M-row table. What the
+// id itself means is pinned separately, by TestBackfill_FromIDIsInclusive.
+func TestBackfill_WindowStartsAtFromID(t *testing.T) {
 	store := &fakeStore{jobs: []db.Job{
 		derivableJob(1), derivableJob(2), derivableJob(3), derivableJob(4), derivableJob(5),
 	}}
 
-	run, err := backfillWindow(context.Background(), store, 1, scanWindow{fromID: 3}, 0, nil)
+	run, err := backfillWindow(context.Background(), store, 1, scanWindow{fromID: 4}, 0, nil)
 	if err != nil {
 		t.Fatalf("backfillWindow: %v", err)
 	}
