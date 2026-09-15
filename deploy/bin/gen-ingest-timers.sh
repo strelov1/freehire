@@ -185,7 +185,29 @@ for n in "${PROVIDERS[@]}"; do
         # crawl reads a recency slice, so a late run mostly re-reads what the next one
         # would have, and the ceiling is worth more than the catch-up.
         adzuna) cal="*-*-* 00/6:22:00"; persistent=false ;;
-        *)    cal="*:$(printf %02d "$min"):00" ;;
+        # The tail: every 2h, spread across BOTH hours of the cycle as well as across
+        # the minutes, the same two-axis trick the HEAVY branch above uses.
+        #
+        # It was hourly, and hourly does not fit. Measured 2026-09-15: ~230 tail
+        # providers at ~150s of real crawl each is ~9.6 slot-hours per sweep, against
+        # the 5 slots the shared pool has once HEAVY_SLOTS took its 5. Asking for that
+        # every hour is 190% of capacity, so ingest-slot.sh threw away what would not
+        # fit -- 837 of 1482 firings skipped in 24h, 52-58% in every window measured
+        # since, unchanged by moving the resident crawls to HEAVY (freehire#2859),
+        # because re-pooling cannot create capacity that is not there.
+        #
+        # At 2h the same demand is ~4.8 slot-hours per hour against 5, which fits.
+        #
+        # This LOOKS like halving freshness and is the opposite. An hourly timer that
+        # is skipped 59% of the time already crawls a provider every ~2.4h on average,
+        # and which hour it lands in is a lottery -- wellfound and recruiterflow lost
+        # it for over a day straight, with no failure to show for it. A 2h timer that
+        # actually runs is both fresher on average and, unlike the hourly one, a figure
+        # anyone can reason about. Persistent=true still catches up a missed cycle.
+        #
+        # The real fix is cmd/ingest-scheduler, which can order the work by how stale a
+        # provider is instead of by a wall clock. This is what the wall clock can do.
+        *)    cal="*-*-* $(printf %02d "$(( i % 2 ))")/2:$(printf %02d "$min"):00" ;;
       esac ;;
   esac
   cat > "/etc/systemd/system/freehire-ingest@$n.timer" <<T
