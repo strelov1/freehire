@@ -59,9 +59,9 @@ export type ReauthDraft =
 export function recentAuthExpiry(): Date | null {
   const raw = readSession(expiryKey);
   if (!raw) return null;
-  const at = new Date(raw);
-  if (Number.isNaN(at.getTime()) || at.getTime() <= Date.now()) return null;
-  return at;
+  const at = Number(raw);
+  if (!Number.isFinite(at) || at <= Date.now()) return null;
+  return new Date(at);
 }
 
 /** Drop the recorded expiry, because the server refused an action this hint said was allowed.
@@ -168,7 +168,14 @@ export async function completeProviderReauthentication(code: string): Promise<Re
   forgetSession(verifierKey);
   try {
     if (!verifier) throw new Error('reauthentication attempt expired');
-    sessionStorage.setItem(expiryKey, await api.exchangeOAuthReauthentication(code, verifier));
+    // Only the parsed INSTANT is kept, never the string the endpoint answered with. The
+    // proof itself lives in an HttpOnly cookie this code cannot read; all that is recorded
+    // here is when it stops being valid, so nothing sensitive reaches storage — and
+    // reducing it to a number at the point of writing says that in the code rather than
+    // only in a comment. An unparseable answer records nothing, which reads downstream as
+    // "no proof held".
+    const expiresAt = Date.parse(await api.exchangeOAuthReauthentication(code, verifier));
+    if (Number.isFinite(expiresAt)) sessionStorage.setItem(expiryKey, String(expiresAt));
   } catch (e) {
     // A trip that does not end in a proof leaves nothing behind. The draft only means
     // anything to the surface that is about to be resumed, and there will be no resuming —
