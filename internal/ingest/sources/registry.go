@@ -260,6 +260,9 @@ func All(c HTTPClient) map[string]Source {
 		NewTopco(c),
 		NewGetmatch(c),
 		NewGetmanfred(c),
+		// Joppy: Spain-only tech board with no search API, walked via its own sitemap directory —
+		// every company's page carries that company's open postings in full, no detail request.
+		NewJoppy(c),
 		NewEchoJobs(c),
 		NewHabrCareer(c),
 		NewGeekjob(c),
