@@ -544,3 +544,35 @@ TIMER
   systemctl enable --now "freehire-ingest-workstream-shard@$N.timer" >/dev/null
 done
 echo "generated + enabled 2 workstream shard timers"
+
+# A heartbeat, published the way every other periodic worker here publishes one. What this
+# watches is not whether a crawl succeeded -- board_health answers that -- but whether the
+# SCHEDULE is still being derived from the catalog at all. On 2026-09-15 it was not: the
+# script had last run six days earlier, and 12 providers with live boards (eures with 31 of
+# them, wellfound with 11) had no timer and were never crawled, while every unit on the host
+# stayed green because a provider nothing runs cannot fail.
+#
+# Deliberately NOT a metric for the skip rate: `ingest-slot.sh` already publishes
+# freehire_ingest_slot_skips_total, and the healthy value there is high (837 of 1482 firings
+# skipped in the 24h to 2026-09-15 -- the fleet is oversubscribed by design and the
+# semaphore is what keeps it from taking the host down). A threshold on that would fire
+# every day and teach the reader to ignore it. Coverage has a healthy value of zero; the
+# skip rate does not.
+if [ -n "${PROM_TEXTFILE_DIR:-}" ] && [ -d "$PROM_TEXTFILE_DIR" ]; then
+  out=$PROM_TEXTFILE_DIR/gen-ingest-timers.prom
+  {
+    echo "# HELP freehire_ingest_timers_generated Per-provider ingest timers written from the boards catalog."
+    echo "# TYPE freehire_ingest_timers_generated gauge"
+    echo "freehire_ingest_timers_generated $i"
+    echo "# HELP freehire_ingest_timers_last_run_seconds Unix time the ingest timer generator last completed."
+    echo "# TYPE freehire_ingest_timers_last_run_seconds gauge"
+    echo "freehire_ingest_timers_last_run_seconds $(date +%s)"
+  } > "$out.tmp" && mv "$out.tmp" "$out"
+fi
+
+# Every timer file above is REWRITTEN on each run, and `systemctl enable` on a unit that is
+# already enabled links nothing new, so systemd goes on running the schedule it parsed the
+# last time it reloaded. An edited OnCalendar therefore reaches the fleet only here. This
+# mattered little while the script was run by hand and the operator reloaded out of habit;
+# it matters now that freehire-gen-ingest-timers.timer runs it unattended.
+systemctl daemon-reload
