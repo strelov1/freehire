@@ -8,26 +8,39 @@ import (
 )
 
 type fakeRepo struct {
-	candidates []Candidate
-	sentToday  int64
-	recorded   []int64
-	listLimit  int32
-	recordErr  error
+	candidates    []Candidate
+	closed        []Candidate
+	sentToday     int64
+	recorded      []int64
+	recordedAs    []Kind
+	listLimit     int32
+	closededLimit int32
+	recordErr     error
+}
+
+func take(all []Candidate, limit int32) []Candidate {
+	if int(limit) < len(all) {
+		return all[:limit]
+	}
+	return all
 }
 
 func (f *fakeRepo) JobsToPing(_ context.Context, _ string, limit int32) ([]Candidate, error) {
 	f.listLimit = limit
-	if int(limit) < len(f.candidates) {
-		return f.candidates[:limit], nil
-	}
-	return f.candidates, nil
+	return take(f.candidates, limit), nil
 }
 
-func (f *fakeRepo) RecordPing(_ context.Context, jobID int64, _ string) error {
+func (f *fakeRepo) ClosedJobsToPing(_ context.Context, _ string, limit int32) ([]Candidate, error) {
+	f.closededLimit = limit
+	return take(f.closed, limit), nil
+}
+
+func (f *fakeRepo) RecordPing(_ context.Context, jobID int64, _ string, kind Kind) error {
 	if f.recordErr != nil {
 		return f.recordErr
 	}
 	f.recorded = append(f.recorded, jobID)
+	f.recordedAs = append(f.recordedAs, kind)
 	return nil
 }
 
@@ -57,6 +70,20 @@ func (f *fakeEngine) Announce(_ context.Context, urls []string) ([]string, error
 	return urls[:n], f.err
 }
 
+// pick is the report for one engine's one pass. Every run now produces a report per
+// (engine, event), so a test that indexed by position would quietly assert about the
+// wrong pass the next time the order changes.
+func pick(t *testing.T, reports []Report, engine string, kind Kind) Report {
+	t.Helper()
+	for _, r := range reports {
+		if r.Engine == engine && r.Kind == kind {
+			return r
+		}
+	}
+	t.Fatalf("no report for %s/%s in %d reports", engine, kind, len(reports))
+	return Report{}
+}
+
 func candidates(n int) []Candidate {
 	out := make([]Candidate, 0, n)
 	for i := 1; i <= n; i++ {
@@ -72,10 +99,7 @@ func TestRunAnnouncesAndRecords(t *testing.T) {
 
 	reports := runner.Run(context.Background(), 10)
 
-	if len(reports) != 1 {
-		t.Fatalf("want one report, got %d", len(reports))
-	}
-	r := reports[0]
+	r := pick(t, reports, "test", KindCreated)
 	if r.Err != nil {
 		t.Fatalf("unexpected error: %v", r.Err)
 	}
@@ -97,7 +121,7 @@ func TestRunRecordsOnlyWhatTheEngineAccepted(t *testing.T) {
 	engine := &fakeEngine{name: "test", accept: 2}
 	runner := New(repo, "https://freehire.me", engine)
 
-	r := runner.Run(context.Background(), 10)[0]
+	r := pick(t, runner.Run(context.Background(), 10), "test", KindCreated)
 
 	if r.Recorded != 2 {
 		t.Fatalf("recorded = %d, want 2", r.Recorded)
@@ -114,7 +138,7 @@ func TestRunRecordsAcceptedEvenWhenTheBatchFailed(t *testing.T) {
 	engine := &fakeEngine{name: "test", accept: 1, err: errors.New("quota exhausted")}
 	runner := New(repo, "https://freehire.me", engine)
 
-	r := runner.Run(context.Background(), 10)[0]
+	r := pick(t, runner.Run(context.Background(), 10), "test", KindCreated)
 
 	if r.Err == nil {
 		t.Fatal("want the engine's error to survive")
@@ -131,7 +155,7 @@ func TestRunBoundsTheBatchByWhatIsLeftOfTheDay(t *testing.T) {
 	engine := &fakeEngine{name: "google", budget: 200, accept: 10}
 	runner := New(repo, "https://freehire.me", engine)
 
-	r := runner.Run(context.Background(), 50)[0]
+	r := pick(t, runner.Run(context.Background(), 50), "google", KindCreated)
 
 	if repo.listLimit != 3 {
 		t.Fatalf("asked for %d candidates, want 3 (200 budget - 197 already sent)", repo.listLimit)
@@ -146,7 +170,7 @@ func TestRunSendsNothingOnceTheDayIsSpent(t *testing.T) {
 	engine := &fakeEngine{name: "google", budget: 200, accept: 10}
 	runner := New(repo, "https://freehire.me", engine)
 
-	r := runner.Run(context.Background(), 50)[0]
+	r := pick(t, runner.Run(context.Background(), 50), "google", KindCreated)
 
 	if engine.callSeen {
 		t.Fatal("the engine must not be called once the day's budget is spent")
@@ -162,7 +186,7 @@ func TestUnboundedEngineIsNotConfusedWithASpentOne(t *testing.T) {
 	repo := &fakeRepo{candidates: candidates(2)}
 	engine := &fakeEngine{name: "indexnow", budget: 0, accept: 2}
 
-	r := New(repo, "https://freehire.me", engine).Run(context.Background(), 50)[0]
+	r := pick(t, New(repo, "https://freehire.me", engine).Run(context.Background(), 50), "indexnow", KindCreated)
 
 	if r.Remaining != -1 {
 		t.Fatalf("remaining = %d, want -1 for an unbounded engine", r.Remaining)
@@ -177,14 +201,13 @@ func TestOneEngineFailingDoesNotStopAnother(t *testing.T) {
 
 	reports := New(repo, "https://freehire.me", broken, working).Run(context.Background(), 10)
 
-	if len(reports) != 2 {
-		t.Fatalf("want two reports, got %d", len(reports))
+	brokenReport := pick(t, reports, "broken", KindCreated)
+	workingReport := pick(t, reports, "working", KindCreated)
+	if brokenReport.Err == nil || workingReport.Err != nil {
+		t.Fatalf("errors = %v / %v, want the first only", brokenReport.Err, workingReport.Err)
 	}
-	if reports[0].Err == nil || reports[1].Err != nil {
-		t.Fatalf("errors = %v / %v, want the first only", reports[0].Err, reports[1].Err)
-	}
-	if reports[1].Recorded != 2 {
-		t.Fatalf("second engine recorded %d, want 2", reports[1].Recorded)
+	if workingReport.Recorded != 2 {
+		t.Fatalf("second engine recorded %d, want 2", workingReport.Recorded)
 	}
 }
 
@@ -192,7 +215,7 @@ func TestPreviewSendsNothing(t *testing.T) {
 	repo := &fakeRepo{candidates: candidates(2)}
 	engine := &fakeEngine{name: "test", accept: 2}
 
-	r := New(repo, "https://freehire.me", engine).Preview(context.Background(), 10)[0]
+	r := pick(t, New(repo, "https://freehire.me", engine).Preview(context.Background(), 10), "test", KindCreated)
 
 	if engine.callSeen {
 		t.Fatal("preview must not call the engine")
@@ -236,5 +259,95 @@ func TestBudgetDayFollowsDaylightSaving(t *testing.T) {
 	}
 	if got := budgetDayStart(winter).UTC(); !got.Equal(time.Date(2026, 1, 15, 8, 0, 0, 0, time.UTC)) {
 		t.Fatalf("winter budget day starts at %s, want 08:00 UTC (midnight PST)", got)
+	}
+}
+
+// New postings come first, and the closure pass gets what is left. This is the whole
+// reason the two events share one allowance rather than each having their own: a new
+// posting is what brings a visitor, a closure only tidies an index we do not own.
+func TestNewPostingsTakeTheBudgetBeforeClosures(t *testing.T) {
+	repo := &fakeRepo{candidates: candidates(10), closed: candidates(10), sentToday: 197}
+	engine := &fakeEngine{name: "google", budget: 200, accept: 10}
+
+	reports := New(repo, "https://freehire.me", engine).Run(context.Background(), 50)
+
+	created := pick(t, reports, "google", KindCreated)
+	closed := pick(t, reports, "google", KindClosed)
+	if created.Recorded != 3 {
+		t.Fatalf("created recorded %d, want the 3 left of the day", created.Recorded)
+	}
+	if closed.Offered != 0 || closed.Recorded != 0 {
+		t.Fatalf("closures offered=%d recorded=%d, want nothing — the day was spent on new postings",
+			closed.Offered, closed.Recorded)
+	}
+}
+
+func TestClosuresGetWhatTheNewPostingsLeave(t *testing.T) {
+	// Two new postings against a budget of five leaves three for the closure pass.
+	repo := &fakeRepo{candidates: candidates(2), closed: candidates(10), sentToday: 195}
+	engine := &fakeEngine{name: "google", budget: 200, accept: 10}
+
+	reports := New(repo, "https://freehire.me", engine).Run(context.Background(), 50)
+
+	if got := pick(t, reports, "google", KindCreated).Recorded; got != 2 {
+		t.Fatalf("created recorded %d, want 2", got)
+	}
+	if got := pick(t, reports, "google", KindClosed).Recorded; got != 3 {
+		t.Fatalf("closures recorded %d, want the 3 the new postings left", got)
+	}
+	if repo.closededLimit != 3 {
+		t.Fatalf("asked for %d closures, want 3", repo.closededLimit)
+	}
+}
+
+// An unbounded engine is not spending anything shared, so its closure pass gets a full
+// batch rather than the leftovers of the pass before — otherwise IndexNow, which has no
+// quota at all, would silently stop announcing closures as soon as new postings filled
+// one batch.
+func TestUnboundedEngineGivesEachPassAFullBatch(t *testing.T) {
+	repo := &fakeRepo{candidates: candidates(10), closed: candidates(10)}
+	engine := &fakeEngine{name: "indexnow", budget: 0, accept: 10}
+
+	reports := New(repo, "https://freehire.me", engine).Run(context.Background(), 10)
+
+	if got := pick(t, reports, "indexnow", KindCreated).Recorded; got != 10 {
+		t.Fatalf("created recorded %d, want 10", got)
+	}
+	if got := pick(t, reports, "indexnow", KindClosed).Recorded; got != 10 {
+		t.Fatalf("closures recorded %d, want a full batch of its own", got)
+	}
+}
+
+// The ledger has to record WHICH event, or a closure would look like the announcement
+// the posting already had and would never be selected — the row for 'created' is what
+// the closure query joins against.
+func TestTheLedgerRecordsWhichEvent(t *testing.T) {
+	repo := &fakeRepo{candidates: candidates(1), closed: candidates(1)}
+	engine := &fakeEngine{name: "indexnow", budget: 0, accept: 1}
+
+	New(repo, "https://freehire.me", engine).Run(context.Background(), 10)
+
+	if len(repo.recordedAs) != 2 {
+		t.Fatalf("recorded %d pings, want 2", len(repo.recordedAs))
+	}
+	if repo.recordedAs[0] != KindCreated || repo.recordedAs[1] != KindClosed {
+		t.Fatalf("recorded kinds = %v, want [created closed]", repo.recordedAs)
+	}
+}
+
+func TestPreviewShowsBothPasses(t *testing.T) {
+	repo := &fakeRepo{candidates: candidates(2), closed: candidates(3)}
+	engine := &fakeEngine{name: "indexnow", budget: 0, accept: 5}
+
+	reports := New(repo, "https://freehire.me", engine).Preview(context.Background(), 10)
+
+	if engine.callSeen {
+		t.Fatal("preview must not call the engine")
+	}
+	if got := len(pick(t, reports, "indexnow", KindCreated).URLs); got != 2 {
+		t.Fatalf("created preview showed %d urls, want 2", got)
+	}
+	if got := len(pick(t, reports, "indexnow", KindClosed).URLs); got != 3 {
+		t.Fatalf("closure preview showed %d urls, want 3", got)
 	}
 }

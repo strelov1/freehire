@@ -21,6 +21,7 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"log"
 	"os"
 	"strconv"
@@ -127,21 +128,24 @@ func configuredEngines(ctx context.Context, origin string) ([]searchping.Engine,
 func report(reports []searchping.Report) int {
 	code := 0
 	for _, r := range reports {
+		// engine and event both, always: the two passes share one allowance, so a line
+		// that named only the engine would leave "which one spent the day" unanswerable.
+		who := fmt.Sprintf("%s/%s", r.Engine, r.Kind)
 		switch {
 		case r.Err != nil:
 			log.Printf("search-ping: %s offered=%d accepted=%d recorded=%d: %v",
-				r.Engine, r.Offered, r.Accepted, r.Recorded, r.Err)
+				who, r.Offered, r.Accepted, r.Recorded, r.Err)
 			code = 1
 		case len(r.URLs) > 0:
-			log.Printf("search-ping: %s would announce %d url(s), remaining=%s", r.Engine, len(r.URLs), budgetWord(r.Remaining))
+			log.Printf("search-ping: %s would announce %d url(s), remaining=%s", who, len(r.URLs), budgetWord(r.Remaining))
 			for _, u := range r.URLs {
 				log.Printf("  %s", u)
 			}
 		case r.Offered == 0:
-			log.Printf("search-ping: %s nothing to announce (remaining today: %s)", r.Engine, budgetWord(r.Remaining))
+			log.Printf("search-ping: %s nothing to announce (remaining today: %s)", who, budgetWord(r.Remaining))
 		default:
 			log.Printf("search-ping: %s offered=%d accepted=%d recorded=%d remaining=%s",
-				r.Engine, r.Offered, r.Accepted, r.Recorded, budgetWord(r.Remaining))
+				who, r.Offered, r.Accepted, r.Recorded, budgetWord(r.Remaining))
 		}
 	}
 	return code

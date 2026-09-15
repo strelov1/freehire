@@ -50,6 +50,29 @@ class is *earned by staying open a long time*, so the newest rows have not had t
 to qualify. Google adjusts the quota by the quality of what is submitted, which is why
 the divergence is named rather than left to be discovered.
 
+## The two events, and which wins
+
+A posting is announced twice: once when it appears (`created`), once after it closes
+(`closed`). **Both are `URL_UPDATED`.** A closed posting's page stays at HTTP 200 and
+keeps its `JobPosting` markup with `validThrough` moved into the past, which is one of the
+three ways Google documents for retiring a posting — so a closure needs a *re-crawl*, not
+a deletion. Sending `URL_DELETED` for a page that is still online is a misuse of the API,
+and the API's penalty is the quota.
+
+**New postings take the budget first.** The two events share one engine's daily
+allowance, and the order is the policy: a new posting brings a visitor, a closure only
+tidies an index we do not own. While the allowance is 200/day against ~14k new postings,
+the first pass consumes all of it and the second does nothing — which is correct.
+Closures start flowing when the allowance grows, with no code change.
+
+An **unbounded** engine gives each pass a full batch instead of the leftovers, or
+IndexNow — which has no quota at all — would silently stop announcing closures the moment
+new postings filled one batch.
+
+The closure query only considers postings this engine was **already told about**:
+announcing the closure of a page an engine never heard of teaches it a dead URL and spends
+budget doing it. That also bounds the candidate set by construction.
+
 ## The two engines
 
 | | Google Indexing API | IndexNow |

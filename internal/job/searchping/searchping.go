@@ -57,16 +57,40 @@ type Candidate struct {
 	Slug  string
 }
 
-// Repository is the ledger: which postings an engine has already been told about, and
-// the record that it has.
+// Kind is which event about a posting is being announced. Both are URL_UPDATED to the
+// engine — a closed posting's page stays at HTTP 200 with its JobPosting markup and a
+// retired validThrough, which is one of the three ways Google documents for taking a
+// posting down, so a closure is a RE-CRAWL and never a deletion. Sending URL_DELETED for
+// a page that is still online is a misuse of the API, and its penalty is the quota.
+//
+// The values are STORED in the ledger, so they must stay stable across releases.
+type Kind string
+
+const (
+	// KindCreated is "this posting exists", announced once when it is first selected.
+	KindCreated Kind = "created"
+
+	// KindClosed is "read this page again", announced once after the posting closes so
+	// the engine sees the validThrough that has moved into the past.
+	KindClosed Kind = "closed"
+)
+
+// Repository is the ledger: which postings an engine has already been told about, for
+// which event, and the record that it has.
 type Repository interface {
 	// JobsToPing returns the newest eligible postings this engine has not been sent,
 	// newest first. The eligibility gate lives in SQL beside the query — see
 	// internal/platform/db/queries/job_search_pings.sql.
 	JobsToPing(ctx context.Context, engine string, limit int32) ([]Candidate, error)
 
-	// RecordPing marks one posting as announced to one engine. Idempotent.
-	RecordPing(ctx context.Context, jobID int64, engine string) error
+	// ClosedJobsToPing returns postings that closed after this engine was told they
+	// existed, most recently closed first. Bounded by construction: it can never exceed
+	// what has already been announced.
+	ClosedJobsToPing(ctx context.Context, engine string, limit int32) ([]Candidate, error)
+
+	// RecordPing marks one posting as announced to one engine, for one event.
+	// Idempotent.
+	RecordPing(ctx context.Context, jobID int64, engine string, kind Kind) error
 
 	// PingsSince counts what this engine has been sent since a moment, so a run that
 	// shares a budget day with an earlier one does not overspend it.
@@ -101,9 +125,10 @@ func budgetDayStart(now time.Time) time.Time {
 	return time.Date(local.Year(), local.Month(), local.Day(), 0, 0, 0, 0, pacific)
 }
 
-// Report is what one run did, per engine.
+// Report is what one run did, for one engine and one event.
 type Report struct {
 	Engine    string
+	Kind      Kind
 	Offered   int
 	Accepted  int
 	Recorded  int
@@ -138,65 +163,92 @@ func (r *Runner) jobURL(slug string) string {
 	return r.origin + "/jobs/" + slug
 }
 
-// Run announces one batch per engine. An engine that fails does not stop another: the
-// engines are independent services and a shared run is an implementation detail, not a
-// transaction.
+// passes is the order the two events compete for one engine's day, and the order is the
+// policy. A new posting is what brings a visitor; a closure only tidies an index we do
+// not own. While the allowance is 200 a day against ~14k new postings, the first pass
+// will consume all of it and the second will do nothing — which is correct. Closures
+// start flowing when the allowance grows, without a code change.
+var passes = []Kind{KindCreated, KindClosed}
+
+// Run announces one batch per engine, per event. An engine that fails does not stop
+// another: the engines are independent services and a shared run is an implementation
+// detail, not a transaction.
 func (r *Runner) Run(ctx context.Context, batch int) []Report {
-	reports := make([]Report, 0, len(r.engines))
-	for _, engine := range r.engines {
-		reports = append(reports, r.runOne(ctx, engine, batch))
-	}
-	return reports
+	return r.walk(ctx, batch, r.runPass)
 }
 
 // Preview resolves exactly what Run would send, and sends nothing. It reads the same
 // budget the real run would, so a dry run against an engine whose day is spent reports
 // an empty batch rather than the batch it would have sent yesterday.
 func (r *Runner) Preview(ctx context.Context, batch int) []Report {
-	reports := make([]Report, 0, len(r.engines))
-	for _, engine := range r.engines {
-		report := Report{Engine: engine.Name(), Remaining: -1}
+	return r.walk(ctx, batch, r.previewPass)
+}
 
-		limit, err := r.remainingToday(ctx, engine, batch)
+// walk runs every (engine, event) pair, threading one engine's remaining allowance
+// through its passes in order. Shared for Run and Preview so a dry run cannot drift from
+// what the real one would choose — the budget arithmetic is the part most worth seeing
+// before it spends anything.
+func (r *Runner) walk(ctx context.Context, batch int, pass func(context.Context, Engine, Kind, int) Report) []Report {
+	reports := make([]Report, 0, len(r.engines)*len(passes))
+	for _, engine := range r.engines {
+		left, err := r.remainingToday(ctx, engine, batch)
 		if err != nil {
-			report.Err = err
-			reports = append(reports, report)
+			reports = append(reports, Report{Engine: engine.Name(), Remaining: -1, Err: err})
 			continue
 		}
-		if engine.DailyBudget() > 0 {
-			report.Remaining = limit
-		}
-		if limit > 0 {
-			candidates, err := r.repo.JobsToPing(ctx, engine.Name(), int32(limit))
-			if err != nil {
-				report.Err = fmt.Errorf("list candidates: %w", err)
+		for _, kind := range passes {
+			// An unbounded engine is not spending anything shared, so each of its passes
+			// gets the full batch rather than the leftovers of the one before.
+			limit := batch
+			if engine.DailyBudget() > 0 {
+				limit = left
 			}
-			for _, c := range candidates {
-				report.URLs = append(report.URLs, r.jobURL(c.Slug))
-			}
-			report.Offered = len(report.URLs)
+			report := pass(ctx, engine, kind, limit)
+			reports = append(reports, report)
+			left -= report.Recorded + len(report.URLs)
 		}
-		reports = append(reports, report)
 	}
 	return reports
 }
 
-func (r *Runner) runOne(ctx context.Context, engine Engine, batch int) Report {
-	report := Report{Engine: engine.Name(), Remaining: -1}
-
-	limit, err := r.remainingToday(ctx, engine, batch)
-	if err != nil {
-		report.Err = err
-		return report
+func (r *Runner) candidates(ctx context.Context, engine Engine, kind Kind, limit int) ([]Candidate, error) {
+	if kind == KindClosed {
+		return r.repo.ClosedJobsToPing(ctx, engine.Name(), int32(limit))
 	}
+	return r.repo.JobsToPing(ctx, engine.Name(), int32(limit))
+}
+
+func (r *Runner) previewPass(ctx context.Context, engine Engine, kind Kind, limit int) Report {
+	report := Report{Engine: engine.Name(), Kind: kind, Remaining: -1}
 	if engine.DailyBudget() > 0 {
-		report.Remaining = limit
+		report.Remaining = max(limit, 0)
 	}
 	if limit <= 0 {
 		return report
 	}
 
-	candidates, err := r.repo.JobsToPing(ctx, engine.Name(), int32(limit))
+	candidates, err := r.candidates(ctx, engine, kind, limit)
+	if err != nil {
+		report.Err = fmt.Errorf("list candidates: %w", err)
+		return report
+	}
+	for _, c := range candidates {
+		report.URLs = append(report.URLs, r.jobURL(c.Slug))
+	}
+	report.Offered = len(report.URLs)
+	return report
+}
+
+func (r *Runner) runPass(ctx context.Context, engine Engine, kind Kind, limit int) Report {
+	report := Report{Engine: engine.Name(), Kind: kind, Remaining: -1}
+	if engine.DailyBudget() > 0 {
+		report.Remaining = max(limit, 0)
+	}
+	if limit <= 0 {
+		return report
+	}
+
+	candidates, err := r.candidates(ctx, engine, kind, limit)
 	if err != nil {
 		report.Err = fmt.Errorf("list candidates: %w", err)
 		return report
@@ -237,7 +289,7 @@ func (r *Runner) runOne(ctx context.Context, engine Engine, batch int) Report {
 			log.Printf("searchping: %s accepted an unoffered url %q", engine.Name(), url)
 			continue
 		}
-		if err := r.repo.RecordPing(ctx, c.JobID, engine.Name()); err != nil {
+		if err := r.repo.RecordPing(ctx, c.JobID, engine.Name(), kind); err != nil {
 			recordErrs = append(recordErrs, fmt.Errorf("record job %d: %w", c.JobID, err))
 			continue
 		}

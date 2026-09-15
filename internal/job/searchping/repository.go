@@ -33,8 +33,24 @@ func (r *PostgresRepository) JobsToPing(ctx context.Context, engine string, limi
 	return candidates, nil
 }
 
-func (r *PostgresRepository) RecordPing(ctx context.Context, jobID int64, engine string) error {
-	return r.q.RecordJobSearchPing(ctx, db.RecordJobSearchPingParams{JobID: jobID, Engine: engine})
+func (r *PostgresRepository) ClosedJobsToPing(ctx context.Context, engine string, limit int32) ([]Candidate, error) {
+	rows, err := r.q.ListClosedJobsToPing(ctx, db.ListClosedJobsToPingParams{Engine: engine, BatchSize: limit})
+	if err != nil {
+		return nil, err
+	}
+	candidates := make([]Candidate, 0, len(rows))
+	for _, row := range rows {
+		candidates = append(candidates, Candidate{JobID: row.ID, Slug: row.PublicSlug})
+	}
+	return candidates, nil
+}
+
+func (r *PostgresRepository) RecordPing(ctx context.Context, jobID int64, engine string, kind Kind) error {
+	return r.q.RecordJobSearchPing(ctx, db.RecordJobSearchPingParams{
+		JobID:  jobID,
+		Engine: engine,
+		Kind:   string(kind),
+	})
 }
 
 func (r *PostgresRepository) PingsSince(ctx context.Context, engine string, since time.Time) (int64, error) {

@@ -28,23 +28,60 @@ WHERE j.closed_at IS NULL
       FROM job_search_pings p
       WHERE p.job_id = j.id
         AND p.engine = sqlc.arg(engine)
+        AND p.kind = 'created'
   )
 ORDER BY j.created_at DESC
 LIMIT sqlc.arg(batch_size);
 
+-- name: ListClosedJobsToPing :many
+-- Postings that have CLOSED since they were announced, so the engine can re-read a page
+-- whose validThrough has moved into the past.
+--
+-- A closure is a re-crawl, never a deletion: the page stays at HTTP 200 and keeps its
+-- JobPosting markup with validThrough retired, which is one of the three ways Google
+-- documents for taking a job posting down. Sending URL_DELETED for a page that is still
+-- online is a misuse of the API, and the API's penalty is the quota.
+--
+-- Only postings this engine was ALREADY told about ('created'): announcing the closure
+-- of a page an engine never heard of teaches it a dead URL and spends budget doing it.
+-- That also keeps the candidate set naturally small — it can never exceed what has been
+-- announced — which is why this needs no recency window of its own.
+--
+-- MOST RECENTLY CLOSED first, the mirror of the other query's policy: a stale listing is
+-- most damaging while it is still ranking, and the oldest closures have long since been
+-- re-crawled on Google's own schedule.
+SELECT j.id, j.public_slug
+FROM jobs j
+JOIN job_search_pings created
+  ON created.job_id = j.id
+ AND created.engine = sqlc.arg(engine)
+ AND created.kind = 'created'
+WHERE j.closed_at IS NOT NULL
+  AND j.public_slug IS NOT NULL
+  AND NOT EXISTS (
+      SELECT 1
+      FROM job_search_pings closed
+      WHERE closed.job_id = j.id
+        AND closed.engine = sqlc.arg(engine)
+        AND closed.kind = 'closed'
+  )
+ORDER BY j.closed_at DESC
+LIMIT sqlc.arg(batch_size);
+
 -- name: RecordJobSearchPing :exec
--- Record that this posting was announced to this engine. ON CONFLICT DO NOTHING keeps
--- a re-run after a partial failure from double-spending a budget that is counted in
--- hundreds per day: the row is what makes the send idempotent, so it is written per
--- URL as each send succeeds rather than once for the batch at the end.
-INSERT INTO job_search_pings (job_id, engine)
-VALUES (sqlc.arg(job_id), sqlc.arg(engine))
-ON CONFLICT (job_id, engine) DO NOTHING;
+-- Record that this posting was announced to this engine, for this event. ON CONFLICT DO
+-- NOTHING keeps a re-run after a partial failure from double-spending a budget that is
+-- counted in hundreds per day: the row is what makes the send idempotent, so it is
+-- written per URL as each send succeeds rather than once for the batch at the end.
+INSERT INTO job_search_pings (job_id, engine, kind)
+VALUES (sqlc.arg(job_id), sqlc.arg(engine), sqlc.arg(kind))
+ON CONFLICT (job_id, engine, kind) DO NOTHING;
 
 -- name: CountJobSearchPingsSince :one
--- How many URLs this engine has been sent since a moment — what the worker logs, and
--- the only way to see a bounded daily budget actually being spent. Served by
--- job_search_pings_engine_pinged_at_idx.
+-- How many URLs this engine has been sent since a moment, across BOTH events — what
+-- bounds the day. The budget is the engine's, not the event's: a closure and a new
+-- posting cost the same one call, so counting them separately would let the day's
+-- allowance be spent twice. Served by job_search_pings_engine_kind_pinged_at_idx.
 SELECT count(*)
 FROM job_search_pings
 WHERE engine = sqlc.arg(engine)
