@@ -144,18 +144,17 @@ func run() int {
 
 	queries := db.New(pool)
 	log.Printf("backfill-derive starting: concurrency=%d from_id=%d max=%d", concurrency, fromID, maxRows)
-	run, err := backfillBounded(ctx, queries, concurrency, scanWindow{fromID: fromID, maxRows: maxRows})
+	pass, err := backfillBounded(ctx, queries, concurrency, scanWindow{fromID: fromID, maxRows: maxRows})
 	if err != nil {
 		log.Printf("backfill-derive: %v", err)
 		return 1
 	}
-	scanned, updated, slugsMoved := run.Scanned, run.Updated, run.SlugsMoved
 
 	// A slug rewrite re-keys jobs.company_slug; reconcile the derived companies
 	// catalogue to match (and drop rows orphaned by the change) so company pages
 	// resolve. Skip the whole-table sync when no slug moved.
 	var orphaned int64
-	if slugsMoved > 0 {
+	if pass.SlugsMoved > 0 {
 		if err := queries.SyncCompaniesFromJobs(ctx); err != nil {
 			log.Printf("backfill-derive: sync companies: %v", err)
 			return 1
@@ -170,14 +169,14 @@ func run() int {
 	// The resume point is the difference between "that was all" and "two thirds of the
 	// table is still stale" — and the pass gives no other sign of which one happened, so
 	// it is said plainly rather than left for an operator to infer from a row count.
-	if run.ResumeID > 0 {
+	if pass.ResumeID > 0 {
 		log.Printf("backfill-derive stopped early: scanned=%d updated=%d slugs_moved=%d companies_orphaned=%d — "+
 			"the table is NOT fully derived, continue with BACKFILL_DERIVE_FROM_ID=%d",
-			scanned, updated, slugsMoved, orphaned, run.ResumeID)
+			pass.Scanned, pass.Updated, pass.SlugsMoved, orphaned, pass.ResumeID)
 		return 0
 	}
 	log.Printf("backfill-derive done: scanned=%d updated=%d slugs_moved=%d companies_orphaned=%d (follow with a reindex)",
-		scanned, updated, slugsMoved, orphaned)
+		pass.Scanned, pass.Updated, pass.SlugsMoved, orphaned)
 	return 0
 }
 
@@ -253,26 +252,11 @@ func deriveRow(j db.Job, canon map[string]string) (params db.UpdateJobDerivedPar
 	}, facetsMoved || fingerprintMoved || slugMoved, slugMoved
 }
 
-// backfillAll re-derives every job's facets, fingerprint, and slugs and rewrites the
-// rows whose derived values differ from what is stored. A single reader pages by keyset
-// (id > last seen) so concurrent writes cannot skip or repeat rows, and a pool of
-// `concurrency` workers derives and writes in parallel (order-independent). It reports
-// how many rows were written (updated) and how many of those moved a slug (slugsMoved),
-// so the caller knows whether to reconcile companies. The first store error cancels the
-// run and is returned.
-func backfillAll(ctx context.Context, store deriveStore, concurrency int64) (scanned, updated, slugsMoved int, err error) {
-	run, err := backfillBounded(ctx, store, concurrency, scanWindow{})
-	return run.Scanned, run.Updated, run.SlugsMoved, err
-}
-
 // scanWindow bounds one run of the pass.
 //
-// The pass walks 12.7M rows and de-TOASTs a description for each, which on the
-// production host takes longer than any timeout it is sensible to give a unit. Before
-// this existed it had no resume point at all — `afterID` started at 0 every time — so
-// the nightly unit ran for its full 10h TimeoutStartSec, was killed about two thirds
-// of the way through, and began again at the first id the next night. It could not
-// finish, and five merged dictionary fixes waited on it for weeks.
+// It exists because the pass walks 12.7M rows and de-TOASTs a description for each,
+// which outlasts any timeout it is sensible to give a unit — so a run has to be able to
+// stop and be continued. See AGENTS.md for the nightly arrangement that could not.
 type scanWindow struct {
 	// fromID is exclusive: the pass reads ids strictly greater, so handing back the id
 	// a previous run stopped at resumes without re-deriving it.
@@ -292,7 +276,16 @@ type backfillRun struct {
 	ResumeID int64
 }
 
-// backfillBounded is backfillWindow with the production progress log attached.
+// backfillBounded re-derives every job's facets, fingerprint, and slugs within win and
+// rewrites the rows whose derived values differ from what is stored. A single reader pages
+// by keyset (id > last seen) so concurrent writes cannot skip or repeat rows, and a pool of
+// `concurrency` workers derives and writes in parallel (order-independent). It reports how
+// many rows were written (Updated) and how many of those moved a slug (SlugsMoved), so the
+// caller knows whether to reconcile companies, and where a follow-up run must start. The
+// first store error cancels the run and is returned.
+//
+// This is backfillWindow with the production progress log attached, and the entry point
+// main uses — so it is also the one the tests exercise.
 func backfillBounded(ctx context.Context, store deriveStore, concurrency int64, win scanWindow) (backfillRun, error) {
 	start := time.Now()
 	return backfillWindow(ctx, store, concurrency, win, progressEvery, func(scanned, updated, slugs int64) {
@@ -327,13 +320,7 @@ func loadAliasRegistry(ctx context.Context, store deriveStore) (map[string]strin
 	return canon, nil
 }
 
-func backfillProgress(ctx context.Context, store deriveStore, concurrency, every int64, report func(scanned, updated, slugsMoved int64)) (scanned, updated, slugsMoved int, err error) {
-	run, err := backfillWindow(ctx, store, concurrency, scanWindow{}, every, report)
-	return run.Scanned, run.Updated, run.SlugsMoved, err
-}
-
 func backfillWindow(ctx context.Context, store deriveStore, concurrency int64, win scanWindow, every int64, report func(scanned, updated, slugsMoved int64)) (backfillRun, error) {
-	var err error
 	if concurrency < 1 {
 		concurrency = 1
 	}
