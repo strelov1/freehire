@@ -144,49 +144,71 @@ func run() int {
 
 	queries := db.New(pool)
 	log.Printf("backfill-derive starting: concurrency=%d from_id=%d max=%d", concurrency, fromID, maxRows)
-	pass, err := backfillPass(ctx, queries, concurrency, scanWindow{fromID: fromID, maxRows: maxRows})
+	pass, orphaned, err := derivePass(ctx, queries, concurrency, scanWindow{fromID: fromID, maxRows: maxRows})
+
+	// ONE report, reached by every path. Deciding what to say at each `return` instead is
+	// what made the resume point vanish twice in one evening: the pass's own error is
+	// only one of the ways this ends, the companies reconcile after it is two more, and
+	// each new exit is another place to forget (freehire#2876).
+	msg, exit := runOutcome(pass, orphaned, err)
+	log.Print(msg)
 	if err != nil {
-		// The id comes FIRST, and before the exit. A SIGTERM — a unit timeout, a
-		// redeploy — reaches the pool as a cancelled write, so the ordinary way this pass
-		// ends is through here rather than through the clean path below; printing the
-		// error alone is what turns a stop into hours of lost work.
-		if pass.ResumeID > 0 {
-			log.Printf("backfill-derive stopped at scanned=%d updated=%d — "+
-				"the table is NOT fully derived, continue with BACKFILL_DERIVE_FROM_ID=%d",
-				pass.Scanned, pass.Updated, pass.ResumeID)
-		}
 		log.Printf("backfill-derive: %v", err)
-		return 1
+	}
+	return exit
+}
+
+// derivePass runs the scan and, when a slug moved, reconciles the companies catalogue
+// derived from it. It returns whatever it managed before failing, so the caller still
+// holds the resume point when a later step is the thing that failed.
+func derivePass(ctx context.Context, queries *db.Queries, concurrency int64, win scanWindow) (backfillRun, int64, error) {
+	pass, err := backfillPass(ctx, queries, concurrency, win)
+	if err != nil {
+		return pass, 0, err
 	}
 
 	// A slug rewrite re-keys jobs.company_slug; reconcile the derived companies
 	// catalogue to match (and drop rows orphaned by the change) so company pages
 	// resolve. Skip the whole-table sync when no slug moved.
-	var orphaned int64
-	if pass.SlugsMoved > 0 {
-		if err := queries.SyncCompaniesFromJobs(ctx); err != nil {
-			log.Printf("backfill-derive: sync companies: %v", err)
-			return 1
-		}
-		orphaned, err = queries.DeleteOrphanCompanies(ctx)
-		if err != nil {
-			log.Printf("backfill-derive: delete orphan companies: %v", err)
-			return 1
-		}
+	if pass.SlugsMoved == 0 {
+		return pass, 0, nil
 	}
+	if err := queries.SyncCompaniesFromJobs(ctx); err != nil {
+		return pass, 0, fmt.Errorf("sync companies: %w", err)
+	}
+	orphaned, err := queries.DeleteOrphanCompanies(ctx)
+	if err != nil {
+		return pass, 0, fmt.Errorf("delete orphan companies: %w", err)
+	}
+	return pass, orphaned, nil
+}
 
-	// The resume point is the difference between "that was all" and "two thirds of the
-	// table is still stale" — and the pass gives no other sign of which one happened, so
-	// it is said plainly rather than left for an operator to infer from a row count.
-	if pass.ResumeID > 0 {
-		log.Printf("backfill-derive stopped early: scanned=%d updated=%d slugs_moved=%d companies_orphaned=%d — "+
-			"the table is NOT fully derived, continue with BACKFILL_DERIVE_FROM_ID=%d",
-			pass.Scanned, pass.Updated, pass.SlugsMoved, orphaned, pass.ResumeID)
-		return 0
+// runOutcome turns what a run managed into the one line it prints and the code it exits
+// with. Pure, so every ending is a table in a test rather than a branch only production
+// can reach.
+//
+// The resume point is the difference between "that was all" and "most of the table is
+// still stale", and the pass gives no other sign of which one happened — so it is said
+// plainly whenever there is one, whether or not the run also failed.
+func runOutcome(pass backfillRun, orphaned int64, err error) (string, int) {
+	exit := 0
+	if err != nil {
+		exit = 1
 	}
-	log.Printf("backfill-derive done: scanned=%d updated=%d slugs_moved=%d companies_orphaned=%d (follow with a reindex)",
-		pass.Scanned, pass.Updated, pass.SlugsMoved, orphaned)
-	return 0
+	switch {
+	case pass.ResumeID > 0:
+		return fmt.Sprintf("backfill-derive stopped early: scanned=%d updated=%d slugs_moved=%d companies_orphaned=%d — "+
+			"the table is NOT fully derived, continue with BACKFILL_DERIVE_FROM_ID=%d",
+			pass.Scanned, pass.Updated, pass.SlugsMoved, orphaned, pass.ResumeID), exit
+	case err != nil:
+		// No resume point and a failure means the run never got far enough to have one —
+		// a registry that would not load, say. Claiming `done` there would be a lie about
+		// the whole table.
+		return fmt.Sprintf("backfill-derive stopped before it could derive anything: scanned=%d", pass.Scanned), exit
+	default:
+		return fmt.Sprintf("backfill-derive done: scanned=%d updated=%d slugs_moved=%d companies_orphaned=%d (follow with a reindex)",
+			pass.Scanned, pass.Updated, pass.SlugsMoved, orphaned), exit
+	}
 }
 
 // deriveRow re-derives a job's facets, role_fingerprint, and slugs, and reports
