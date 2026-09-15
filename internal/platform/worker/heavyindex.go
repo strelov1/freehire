@@ -43,15 +43,32 @@ func HoldHeavyIndexLock(ctx context.Context, pool *pgxpool.Pool) (release func()
 	// released the moment its session ends, so handing the connection back to the pool
 	// mid-run would silently drop it.
 	l := &poolLocker{conn: conn}
-	release, ok, err = holdHeavyIndexLock(ctx, l)
+	unlock, ok, err := holdHeavyIndexLock(ctx, l)
 	if !ok || err != nil {
 		conn.Release()
 		return nil, ok, err
 	}
+	return releaseThen(unlock, conn.Release), true, nil
+}
+
+// releaseThen composes the lock's own release with handing the connection back.
+//
+// It is a function rather than a closure written inline because of what the inline one
+// did: `release` is a NAMED RETURN VALUE, so `return func() { release(); ... }` assigns
+// the new closure to `release` before it is ever called — and the closure then calls
+// itself. Every run that took the lock died with a stack overflow at the moment it let
+// go, after doing all of its work. Named here, the two functions are ordinary arguments
+// that cannot be reassigned by the return, and the composition is testable without a
+// database.
+//
+// Order matters: the lock is a SESSION advisory lock living on this one connection, so
+// unlocking after the connection went back to the pool would be unlocking on somebody
+// else's session.
+func releaseThen(unlock, releaseConn func()) func() {
 	return func() {
-		release()
-		conn.Release()
-	}, true, nil
+		unlock()
+		releaseConn()
+	}
 }
 
 // locker is the two statements this needs, so the decision around them can be tested without
