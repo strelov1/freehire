@@ -126,11 +126,19 @@ def parse_boards_dump(dump: str) -> dict[str, set[str]]:
 def _boards_table_dump(database_url: str) -> str:
     """Shell out to psql for a live `provider|board` dump of the `boards` catalog.
 
+    Scoped to status IN ('pending','active') — the same scope `boards_identity_key` itself
+    uses — so a `rejected` or `retired` board reads back as untracked. The catalog design is
+    deliberate about this (internal/ingest/boardcatalog/AGENTS.md: "a corrected resubmission
+    after a validation failure is never blocked by the earlier typo", same for a mistaken
+    retirement); dumping every status would make this dedup silently re-block exactly the
+    resubmission path that scoping exists to allow.
+
     Untested IO boundary, like fetch() — the parsing it feeds (parse_boards_dump) is what
     carries the test coverage.
     """
     return subprocess.run(
-        ["psql", database_url, "-t", "-A", "-c", "select provider, lower(board) from boards"],
+        ["psql", database_url, "-t", "-A", "-c",
+         "select provider, lower(board) from boards where status in ('pending', 'active')"],
         capture_output=True, text=True, timeout=60, check=True,
     ).stdout
 
