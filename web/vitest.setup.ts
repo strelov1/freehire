@@ -17,3 +17,21 @@ if (typeof ResizeObserver === 'undefined') {
   }
   globalThis.ResizeObserver = ResizeObserverStub;
 }
+
+// jsdom parses `<dialog>` but implements none of its methods, so `dialog.svelte`'s
+// `el.showModal()` throws and nothing built on Dialog can be rendered here at all. The stub
+// drives the one piece of state the component and its tests read back — `open` — and leaves
+// the rest (focus trapping, inertness, the top layer) to the browser, which is where those
+// belong anyway.
+if (typeof HTMLDialogElement !== 'undefined' && !HTMLDialogElement.prototype.showModal) {
+  HTMLDialogElement.prototype.showModal = function showModal(this: HTMLDialogElement) {
+    this.open = true;
+  };
+  HTMLDialogElement.prototype.show = function show(this: HTMLDialogElement) {
+    this.open = true;
+  };
+  HTMLDialogElement.prototype.close = function close(this: HTMLDialogElement) {
+    this.open = false;
+    this.dispatchEvent(new Event('close'));
+  };
+}

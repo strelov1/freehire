@@ -19,7 +19,6 @@ Base URL: `https://freehire.me/api/v1`
 - [Geography](#geography)
 - [Company feedback](#company-feedback)
 - [Authentication](#authentication)
-- [API keys](#api-keys)
 - [Job interactions](#job-interactions)
 - [In-app assistant](#in-app-assistant)
 - [Job submissions](#job-submissions)
@@ -50,7 +49,7 @@ Base URL: `https://freehire.me/api/v1`
 
 All endpoints are served under `https://freehire.me/api/v1`. The API is read-first and open: the job, search, facet, and company endpoints need no authentication and may be called cross-origin.
 
-Authenticated endpoints accept either the browser session cookie (set by sign-in, same-origin) or a personal API key sent as a Bearer token — see Authentication and API keys below.
+Authenticated endpoints accept either the browser session cookie (set by sign-in, same-origin) or a personal API key sent as a Bearer token — see the authentication model below. Keys are created in your account, at [freehire.me/my/api-keys](https://freehire.me/my/api-keys), not through this API.
 
 ## Response envelope
 
@@ -82,11 +81,13 @@ Errors use standard HTTP status codes: 400 (bad request / invalid value), 401 (m
 
 Browser clients authenticate with an `HttpOnly` session cookie set on sign-in (same-origin; the SPA cannot read it). Non-browser clients use a personal API key as `Authorization: Bearer <token>`.
 
-Endpoints marked “Session or API key” accept either; endpoints marked “Session only” (API-key management, saved searches, subscriptions) accept only the cookie, so a leaked key cannot manage credentials. “Moderator” endpoints additionally require the moderator role.
+Endpoints marked “Session or API key” accept either; endpoints marked “Session only” (saved searches, subscriptions) accept only the cookie, so a leaked key cannot manage credentials. “Moderator” endpoints additionally require the moderator role.
 
 ## What is not here
 
 This reference covers every endpoint you can call. A handful are deliberately left out because calling them directly is meaningless: the Gmail and calendar consent redirects (`/me/gmail/connect`, `/me/calendar/connect`, and their callbacks), which only a browser can complete; the Telegram bot webhook; the browser-tool websocket relay; the sitemap-cursor helpers behind `/sitemap.xml`; and the `/og/*.png` social-preview cards, which render an image rather than answer with JSON.
+
+Managing API keys (`POST`, `GET` and `DELETE` on `/me/api-keys`) is not documented here, because no API client can call it. Those endpoints accept only the browser session cookie, and additionally require a freshly proven identity — a password re-entry or a sign-in-provider check — that a script has no way to supply. Create and revoke keys in your account instead, at [freehire.me/my/api-keys](https://freehire.me/my/api-keys); the plaintext token is shown exactly once, at creation, so store it then.
 
 The `/jobs/{slug}/fit` endpoints are pre-rename aliases of `/jobs/{slug}/match-analysis` and hit the same handlers. They still work, so existing clients do not break — use the match-analysis paths in new code.
 
@@ -1278,68 +1279,6 @@ Submitted by the consent screen’s own form, not called directly. On `decision=
 
 ```bash
 # submitted by the consent page's own form, not called directly
-```
-
-## API keys
-
-Personal keys for non-browser access. Management is session-only (a leaked key cannot mint more keys). The plaintext token is shown exactly once, at creation — store it then.
-
-### `POST /me/api-keys`
-
-**Auth:** Session only
-
-Create a key; returns the plaintext token once.
-
-**Body**
-
-| Name | Type | Required | Description |
-| --- | --- | --- | --- |
-| `name` | string | yes | Label to tell keys apart. (e.g. `cli-laptop`) |
-| `expires_at` | string (RFC3339) | no | Optional expiry; omit for no expiry. |
-
-```bash
-curl -X POST "https://freehire.me/api/v1/me/api-keys" \
-  -H 'Content-Type: application/json' \
-  -b cookies.txt \
-  -d '{"name":"cli-laptop"}'
-```
-
-```json
-{ "data": { "id": 7, "name": "cli-laptop", "token_prefix": "fh_ab12", "token": "fh_ab12...REDACTED...full-token-shown-once" } }
-```
-
-### `GET /me/api-keys`
-
-**Auth:** Session only
-
-List your keys (metadata only, never the token).
-
-```bash
-curl "https://freehire.me/api/v1/me/api-keys" -b cookies.txt
-```
-
-```json
-{ "data": [ { "id": 7, "name": "cli-laptop", "token_prefix": "fh_ab12", "last_used_at": null, "expires_at": null } ] }
-```
-
-### `DELETE /me/api-keys/{id}`
-
-**Auth:** Session only
-
-Revoke a key.
-
-**Path parameters**
-
-| Name | Type | Required | Description |
-| --- | --- | --- | --- |
-| `id` | integer | yes | The key id. (e.g. `7`) |
-
-```bash
-curl -X DELETE "https://freehire.me/api/v1/me/api-keys/7" -b cookies.txt
-```
-
-```json
-{ "data": { "ok": true } }
 ```
 
 ## Job interactions

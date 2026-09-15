@@ -43,9 +43,20 @@ async function main() {
   assert('has the first recipe query', a.includes(recipe.query));
 
   // Whole-API coverage spot-checks.
-  assert('documents API keys', a.includes('/me/api-keys'));
   assert('documents saved searches', a.includes('/me/searches'));
   assert('documents auth', a.includes('/auth/login'));
+
+  // Key management is the one surface deliberately NOT documented as an endpoint: it is
+  // cookie-only AND gated on a freshly proven identity, so a scripted call always answers
+  // 428 and a copyable curl for it is a recipe that cannot work.
+  //
+  // Asserted on the RENDERED HEADING, not on the path string. This check used to read
+  // `a.includes('/me/api-keys')` under the name "documents API keys", and it still passed
+  // after the endpoints were removed — the replacement paragraph mentions those paths in
+  // prose while saying they are unavailable. A green check that had come to mean the
+  // opposite of its name is worse than no check.
+  assert('does not document key management as an endpoint', !a.includes('## API keys'));
+  assert('sends the reader to the account surface', a.includes('freehire.me/my/api-keys'));
 
   // Deprecated endpoints render a note naming the replacement. No shipped endpoint
   // currently carries `deprecated`, so this exercises the mechanism on a synthetic

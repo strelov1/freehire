@@ -2,35 +2,24 @@
   import { resolve } from '$app/paths';
   import { api, ApiError } from '$lib/api';
   import { AsyncData } from '$lib/asyncData.svelte';
-  import { currentUser, isAuthenticated } from '$lib/auth.svelte';
+  import { isAuthenticated } from '$lib/auth.svelte';
   import { locale } from '$lib/i18n/currentLocale.svelte';
   import { t } from '$lib/i18n/t';
-  import { beginProviderReauthentication } from '$lib/recentAuth';
   import type { ApiKey, CreatedApiKey } from '$lib/types';
-  import { Button, ConfirmDialog, Input } from '$lib/ui';
+  import { Button, ConfirmDialog } from '$lib/ui';
   import { timeAgo } from '$lib/utils';
   import { messages } from './ApiKeysView.messages';
+  import ConfirmIdentity from './ConfirmIdentity.svelte';
+  import CreateApiKeyDialog from './CreateApiKeyDialog.svelte';
   import States from './States.svelte';
 
+  // The page is a list and two dialogs. It used to be a list and a permanently open create
+  // form, and the identity check was spread across both: the password input lived in that
+  // form while the revoke dialog demanded a password — from behind a modal backdrop, where
+  // no input is reachable. Each dialog now carries its own confirmation.
   const s = $derived(t(messages, locale()));
 
-  // Create form. The option labels follow the locale, so the list is derived
-  // rather than a module constant — `days` is what the form actually binds to.
-  const expiryOptions = $derived([
-    { label: s.form.expiryNever, days: 0 },
-    { label: s.form.expiry30, days: 30 },
-    { label: s.form.expiry90, days: 90 },
-    { label: s.form.expiry365, days: 365 },
-  ]);
-  let name = $state('');
-  let expiryDays = $state(0);
-  let creating = $state(false);
-  let formError = $state<string | null>(null);
-  let confirmationPassword = $state('');
-  let recentAuthRequired = $state(false);
-  const user = $derived(currentUser());
-  const hasPassword = $derived(user?.has_password ?? false);
-  const identitiesData = new AsyncData<string[]>([]);
+  let createOpen = $state(false);
 
   // The plaintext token of the just-created key — shown here exactly once, then
   // dismissed. It is never persisted client-side and never fetched again.
@@ -52,56 +41,16 @@
   $effect(() => {
     if (isAuthenticated()) void keysData.run(() => api.listApiKeys());
   });
-  $effect(() => {
-    if (isAuthenticated() && !hasPassword && recentAuthRequired) {
-      void identitiesData.run(async () =>
-        (await api.connectedIdentities()).identities
-          .filter((i) => i.status === 'active')
-          .map((i) => i.provider),
-      );
-    }
-  });
   const status = $derived(keysData.status);
   const keys = $derived(keysData.value);
 
-  async function submit(e: SubmitEvent) {
-    e.preventDefault();
-    const trimmed = name.trim();
-    if (!trimmed || creating) return;
-    creating = true;
-    formError = null;
+  function onCreated(key: CreatedApiKey): void {
+    revealed = key;
     copied = false;
-    try {
-      if (hasPassword) {
-        if (!confirmationPassword) {
-          formError = s.errors.passwordRequired;
-          return;
-        }
-        await api.reauthenticatePassword(confirmationPassword);
-      }
-      const expiresAt =
-        expiryDays > 0 ? new Date(Date.now() + expiryDays * 86_400_000).toISOString() : undefined;
-      const created = await api.createApiKey(trimmed, expiresAt);
-      revealed = created;
-      keysData.value = [created, ...keysData.value];
-      name = '';
-      expiryDays = 0;
-      confirmationPassword = '';
-    } catch (error) {
-      if (error instanceof ApiError && error.status === 428) {
-        formError = s.errors.reauthBeforeCreate;
-        recentAuthRequired = true;
-      } else if (error instanceof ApiError && error.status === 401 && hasPassword) {
-        formError = s.errors.wrongPassword;
-      } else {
-        formError = s.errors.createFailed;
-      }
-    } finally {
-      creating = false;
-    }
+    keysData.value = [key, ...keysData.value];
   }
 
-  async function copyToken() {
+  async function copyToken(): Promise<void> {
     if (!revealed) return;
     try {
       await navigator.clipboard.writeText(revealed.token);
@@ -113,40 +62,39 @@
 
   let revokeTarget = $state<ApiKey | null>(null);
   let confirmRevokeOpen = $state(false);
+  let revokePassword = $state('');
+  let revokeIdentity = $state<ConfirmIdentity | null>(null);
 
-  function requestRevoke(key: ApiKey) {
+  function requestRevoke(key: ApiKey): void {
     revokeTarget = key;
+    revokePassword = '';
     confirmRevokeOpen = true;
   }
 
-  async function revoke() {
+  async function revoke(): Promise<void> {
     const key = revokeTarget;
     if (!key) return;
-    if (hasPassword && !confirmationPassword) {
-      formError = s.errors.passwordRequired;
-      throw new Error(formError);
-    }
     try {
-      if (hasPassword) await api.reauthenticatePassword(confirmationPassword);
+      await revokeIdentity?.prove();
       await api.revokeApiKey(key.id);
       keysData.value = keysData.value.filter((k) => k.id !== key.id);
       if (revealed?.id === key.id) revealed = null;
-      confirmationPassword = '';
+      revokePassword = '';
     } catch (error) {
+      // ConfirmDialog shows a thrown message in place and holds itself open, which is what
+      // keeps the confirmation the member needs on screen with the failure that asked
+      // for it.
       if (error instanceof ApiError && error.status === 428) {
-        formError = s.errors.reauthBeforeRevoke;
-        recentAuthRequired = true;
-      } else if (error instanceof ApiError && error.status === 401 && hasPassword) {
-        formError = s.errors.wrongPassword;
-      } else {
-        formError = s.errors.revokeFailed;
+        revokeIdentity?.refused();
+        throw new Error(s.errors.reauthBeforeRevoke, { cause: error });
       }
-      throw new Error(formError, { cause: error });
+      const message =
+        error instanceof ApiError && error.status === 401 && !revokeIdentity?.isConfirmed()
+          ? s.errors.wrongPassword
+          : s.errors.revokeFailed;
+      throw new Error(message, { cause: error });
     }
   }
-
-  const selectClass =
-    'h-9 rounded-lg border border-input bg-transparent px-3 text-sm transition-colors focus-visible:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 dark:bg-input/30';
 </script>
 
 {#if !isAuthenticated()}
@@ -155,15 +103,18 @@
   </p>
 {:else}
   <div class="flex flex-col gap-6">
-    <div class="flex flex-col gap-1">
-      <h1 class="text-2xl font-semibold tracking-tight">{s.title}</h1>
-      <p class="text-sm text-muted-foreground">
-        {s.intro.lead}
-        <a href={resolve('/cli')} class="font-medium text-foreground underline-offset-4 hover:underline">{s.intro.cliLink}</a>{s.intro.orSendDirectly}
-        <code class="rounded bg-muted px-1 py-0.5 font-mono text-xs">Authorization: Bearer &lt;key&gt;</code>{s.intro.seeThe}
-        <a href={resolve('/docs/api')} class="font-medium text-foreground underline-offset-4 hover:underline">{s.intro.apiReferenceLink}</a>
-        {s.intro.apiReferenceTail}
-      </p>
+    <div class="flex flex-wrap items-start justify-between gap-3">
+      <div class="flex flex-col gap-1">
+        <h1 class="text-2xl font-semibold tracking-tight">{s.title}</h1>
+        <p class="text-sm text-muted-foreground">
+          {s.intro.lead}
+          <a href={resolve('/cli')} class="font-medium text-foreground underline-offset-4 hover:underline">{s.intro.cliLink}</a>{s.intro.orSendDirectly}
+          <code class="rounded bg-muted px-1 py-0.5 font-mono text-xs">Authorization: Bearer &lt;key&gt;</code>{s.intro.seeThe}
+          <a href={resolve('/docs/api')} class="font-medium text-foreground underline-offset-4 hover:underline">{s.intro.apiReferenceLink}</a>
+          {s.intro.apiReferenceTail}
+        </p>
+      </div>
+      <Button variant="primary" onclick={() => (createOpen = true)}>{s.form.create}</Button>
     </div>
 
     {#if revealed}
@@ -199,70 +150,6 @@
       </div>
     {/if}
 
-    <form
-      onsubmit={submit}
-      class="flex flex-col gap-3 rounded-lg border border-border p-4 sm:flex-row sm:items-end"
-    >
-      <label class="flex flex-1 flex-col gap-1">
-        <span class="text-sm font-medium">{s.form.nameLabel}</span>
-        <Input
-          bind:value={name}
-          placeholder={s.form.namePlaceholder}
-          maxlength={100}
-          class="w-full"
-        />
-      </label>
-      <label class="flex flex-col gap-1">
-        <span class="text-sm font-medium">{s.form.expiryLabel}</span>
-        <select bind:value={expiryDays} class={selectClass}>
-          {#each expiryOptions as opt (opt.days)}
-            <option value={opt.days}>{opt.label}</option>
-          {/each}
-        </select>
-      </label>
-      {#if hasPassword}
-        <label class="flex flex-col gap-1">
-          <span class="text-sm font-medium">{s.form.confirmPasswordLabel}</span>
-          <Input
-            type="password"
-            bind:value={confirmationPassword}
-            autocomplete="current-password"
-            class="w-full"
-          />
-        </label>
-      {/if}
-      <Button variant="primary" type="submit" disabled={!name.trim() || creating}>
-        {creating ? s.form.creating : s.form.create}
-      </Button>
-    </form>
-
-    {#if !hasPassword && recentAuthRequired}
-      <div class="rounded-lg border border-border p-4">
-        <p class="mb-3 text-sm text-muted-foreground">
-          {s.reauth.prompt}
-        </p>
-        {#if identitiesData.status === 'loading'}
-          <p class="text-sm text-muted-foreground">{s.reauth.loading}</p>
-        {:else if identitiesData.status === 'error'}
-          <p class="text-sm text-destructive">{s.reauth.error}</p>
-        {:else}
-          <div class="flex flex-wrap gap-2">
-            {#each identitiesData.value as provider (provider)}
-              <Button
-                variant="outline"
-                size="sm"
-                onclick={() => beginProviderReauthentication(provider, '/my/api-keys')}
-              >{s.reauth.confirmWithPrefix} {provider}</Button>
-            {/each}
-          </div>
-        {/if}
-      </div>
-    {/if}
-
-    {#if formError}
-      <p class="text-sm text-destructive">{formError}</p>
-    {/if}
-
     {#if status === 'loading'}
       <States state="loading" />
     {:else if status === 'error'}
@@ -294,6 +181,8 @@
     {/if}
   </div>
 
+  <CreateApiKeyDialog bind:open={createOpen} {onCreated} />
+
   <ConfirmDialog
     bind:open={confirmRevokeOpen}
     title={`${s.revokeDialog.titlePrefix} "${revokeTarget?.name ?? ''}"${s.revokeDialog.titleSuffix}`}
@@ -301,5 +190,18 @@
     confirmLabel={s.revokeDialog.confirmLabel}
     variant="destructive"
     onConfirm={revoke}
-  />
+  >
+    <!-- The fix for the original report. ConfirmDialog has always accepted `children`;
+         this page simply never passed any, so the dialog asked for a password that only
+         existed on the page behind its own backdrop. `{#if}` because Dialog renders its
+         children whether or not it is open. -->
+    {#if confirmRevokeOpen}
+      <ConfirmIdentity
+        bind:this={revokeIdentity}
+        bind:password={revokePassword}
+        returnTo="/my/api-keys"
+        prompt={s.revokeDialog.confirmPrompt}
+      />
+    {/if}
+  </ConfirmDialog>
 {/if}

@@ -26,7 +26,12 @@
   // Stores which message to show, not the resolved string — so a language switch
   // while an error is visible re-renders it in the new language instead of
   // leaving behind a snapshot from whichever locale was active when it occurred.
-  type PasswordErrorKey = 'mismatchError' | 'wrongCurrentPassword' | 'weakPassword' | 'genericError';
+  type PasswordErrorKey =
+    | 'mismatchError'
+    | 'wrongCurrentPassword'
+    | 'weakPassword'
+    | 'staleSession'
+    | 'genericError';
   let changeErrorKey = $state<PasswordErrorKey | null>(null);
   let changed = $state(false);
 
@@ -36,6 +41,13 @@
     if (e instanceof ApiError) {
       if (e.status === 401) return 'wrongCurrentPassword';
       if (e.status === 400) return 'weakPassword';
+      // 428 is the recent-auth gate. Unlike the other gated surfaces, this one cannot
+      // answer it by asking for confirmation: the current password IS the confirmation and
+      // the server just accepted it. Reaching here means the proof would not bind to this
+      // session — a session minted before per-session ids existed — and the only cure is
+      // signing in again. It used to fall through to "Something went wrong", which is both
+      // untrue and unactionable.
+      if (e.status === 428) return 'staleSession';
     }
     return 'genericError';
   }
