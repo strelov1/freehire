@@ -13,8 +13,8 @@ importers:
   .:
     dependencies:
       '@lucide/svelte':
-        specifier: ^1.35.0
-        version: 1.35.0(svelte@5.56.10(@typescript-eslint/types@8.70.0))
+        specifier: ^1.45.0
+        version: 1.45.0(svelte@5.56.10(@typescript-eslint/types@8.70.0))
       clsx:
         specifier: ^2.1.1
         version: 2.1.1
@@ -553,8 +553,8 @@ packages:
     peerDependencies:
       tslib: '2'
 
-  '@lucide/svelte@1.35.0':
-    resolution: {integrity: sha512-1I5WeiEFc21HOLv/GR11vuN3MqN/k/mhCEMW7nEtwSAGOcZ0C5ZgI1Y2Rvs/egfKTUiOTw+R9Ys9BJ+GwAKSWw==}
+  '@lucide/svelte@1.45.0':
+    resolution: {integrity: sha512-SBqLvcYGEDz82Lwz7meR4qM+SGeDKRU/RBo8BhAhARNUzIXTrykbFLabW9X1Fokp01Yw2kOFx/AsLUUIxj0NLA==}
     peerDependencies:
       svelte: ^5
 
@@ -3296,7 +3296,7 @@ snapshots:
       '@jsonjoy.com/codegen': 17.67.0(tslib@2.8.1)
       tslib: 2.8.1
 
-  '@lucide/svelte@1.35.0(svelte@5.56.10(@typescript-eslint/types@8.70.0))':
+  '@lucide/svelte@1.45.0(svelte@5.56.10(@typescript-eslint/types@8.70.0))':
     dependencies:
       svelte: 5.56.10(@typescript-eslint/types@8.70.0)
 
