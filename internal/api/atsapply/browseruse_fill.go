@@ -291,6 +291,23 @@ func NewBrowserUseExecutor(client *browseruse.Client) *BrowserUseExecutor {
 	}
 }
 
+// resultForParkedReport reads why the agent stopped and picks the outcome that matches.
+//
+// The cloud browser solves supported captchas, but not always — a live Lever run reported
+// "hCaptcha verification failed and the application was not submitted." Parking that waits
+// for data nobody can supply: nothing about the candidate changed, and the next ask might
+// simply pass. It is the same refusal the Chrome path already retries on its own budget, and
+// it comes with the same guarantee the retry rests on — the board created no application.
+//
+// Everything else an agent parks on really is missing data (a question nobody answered), and
+// retrying that produces the identical park twenty times over.
+func resultForParkedReport(detail string) autoapply.SidecarResult {
+	if isCaptchaRefusal(detail) {
+		return autoapply.SidecarResult{Status: autoapply.StatusCaptchaRefused, Reason: detail}
+	}
+	return autoapply.SidecarResult{Status: autoapply.StatusParked, Reason: detail}
+}
+
 // browserUseWaitTimeout bounds how long this waits for one cloud run to finish.
 //
 // Measured, not guessed: nine live runs on 2026-09-15 took 41, 73, 83, 91, 129, 158, 229,
@@ -358,7 +375,7 @@ func (e *BrowserUseExecutor) submit(ctx context.Context, plan Plan, merged []Mer
 	case outcomeConfirmed:
 		return autoapply.SidecarResult{Status: autoapply.StatusApplied}, true, nil
 	case outcomeParked:
-		return autoapply.SidecarResult{Status: autoapply.StatusParked, Reason: detail}, true, nil
+		return resultForParkedReport(detail), true, nil
 	default:
 		return autoapply.SidecarResult{Status: autoapply.StatusUnconfirmed}, true, nil
 	}
