@@ -26,7 +26,12 @@ type CountJobSearchPingsSinceParams struct {
 // How many URLs this engine has been sent since a moment, across BOTH events — what
 // bounds the day. The budget is the engine's, not the event's: a closure and a new
 // posting cost the same one call, so counting them separately would let the day's
-// allowance be spent twice. Served by job_search_pings_engine_kind_pinged_at_idx.
+// allowance be spent twice.
+//
+// Served by job_search_pings_engine_pinged_at_idx, which is why migration 0163 leaves
+// that index alone rather than re-keying it by kind: this query never filters on kind,
+// and an unconstrained column sitting between the two it does filter on costs a planner
+// without a B-tree skip scan every historical row for that engine.
 func (q *Queries) CountJobSearchPingsSince(ctx context.Context, arg CountJobSearchPingsSinceParams) (int64, error) {
 	row := q.db.QueryRow(ctx, countJobSearchPingsSince, arg.Engine, arg.Since)
 	var count int64

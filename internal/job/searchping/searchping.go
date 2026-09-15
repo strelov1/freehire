@@ -205,7 +205,12 @@ func (r *Runner) walk(ctx context.Context, batch int, pass func(context.Context,
 			}
 			report := pass(ctx, engine, kind, limit)
 			reports = append(reports, report)
-			left -= report.Recorded + len(report.URLs)
+			// ACCEPTED, not recorded: the engine consumed a call the moment it took the
+			// URL, whether or not the ledger write that followed succeeded. Charging the
+			// next pass for recorded ones only would let a failed write hand the closure
+			// pass budget that Google has already counted against the day. (Preview
+			// accepts nothing and fills URLs instead, which is why both are subtracted.)
+			left -= report.Accepted + len(report.URLs)
 		}
 	}
 	return reports
@@ -299,7 +304,9 @@ func (r *Runner) runPass(ctx context.Context, engine Engine, kind Kind, limit in
 		report.Err = errors.Join(report.Err, errors.Join(recordErrs...))
 	}
 	if report.Remaining >= 0 {
-		report.Remaining -= report.Recorded
+		// Accepted for the same reason: what is left of the day is what the engine has
+		// not been handed, not what this process managed to write down.
+		report.Remaining -= report.Accepted
 	}
 	return report
 }

@@ -36,12 +36,13 @@ ALTER TABLE public.job_search_pings
 ALTER TABLE public.job_search_pings
     ADD CONSTRAINT job_search_pings_pkey PRIMARY KEY (job_id, engine, kind);
 
--- The reporting index widens the same way: "what has this engine been told, and when"
--- is now a question per event, since the two are spent from the same daily budget and
--- the whole point of separating them is to see which one is consuming it.
--- squawk-ignore require-concurrent-index-deletion -- a few hundred rows, and a concurrent drop cannot run inside this file's transaction
-DROP INDEX IF EXISTS job_search_pings_engine_pinged_at_idx;
-
--- squawk-ignore require-concurrent-index-creation -- a few hundred rows; CONCURRENTLY would force this whole file out of its transaction, and the primary key swap above would stop being atomic with it
-CREATE INDEX job_search_pings_engine_kind_pinged_at_idx
-    ON public.job_search_pings (engine, kind, pinged_at DESC);
+-- The existing job_search_pings_engine_pinged_at_idx is deliberately LEFT ALONE, and no
+-- per-kind index replaces it. CountJobSearchPingsSince — the query that decides how much
+-- of the day's allowance is left — filters on (engine, pinged_at) and never on kind,
+-- because the budget belongs to the engine and both events spend from it. An index
+-- keyed (engine, kind, pinged_at) would put an unconstrained column between the two it
+-- does filter on, so a planner without a B-tree skip scan reads every historical row for
+-- that engine before reaching the timestamp.
+--
+-- Nothing else needs one: both candidate queries probe (job_id, engine, kind), which is
+-- exactly the widened primary key above.

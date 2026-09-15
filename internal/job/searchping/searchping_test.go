@@ -351,3 +351,26 @@ func TestPreviewShowsBothPasses(t *testing.T) {
 		t.Fatalf("closure preview showed %d urls, want 3", got)
 	}
 }
+
+// A call is spent when the ENGINE takes the URL, not when the ledger write that follows
+// succeeds. Charging the next pass for recorded announcements only would let a failed
+// write hand the closure pass budget Google has already counted against the day.
+func TestBudgetIsChargedForAcceptedNotRecorded(t *testing.T) {
+	repo := &fakeRepo{
+		candidates: candidates(3),
+		closed:     candidates(10),
+		sentToday:  195, // five left of a 200 budget
+		recordErr:  errors.New("database is down"),
+	}
+	engine := &fakeEngine{name: "google", budget: 200, accept: 3}
+
+	reports := New(repo, "https://freehire.me", engine).Run(context.Background(), 50)
+
+	created := pick(t, reports, "google", KindCreated)
+	if created.Accepted != 3 || created.Recorded != 0 {
+		t.Fatalf("created accepted=%d recorded=%d, want 3/0", created.Accepted, created.Recorded)
+	}
+	if got := pick(t, reports, "google", KindClosed).Offered; got != 2 {
+		t.Fatalf("closures offered %d, want 2 — the 3 accepted calls are spent even though none were recorded", got)
+	}
+}
