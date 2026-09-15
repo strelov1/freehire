@@ -6,6 +6,7 @@
   "packageManager": "pnpm@11.7.0",
   "scripts": {
     "check:dead": "pnpm --dir web exec svelte-kit sync && knip",
+    "check:deps": "node scripts/check-shared-deps.mjs",
     "check:links": "node scripts/check-doc-links.mjs",
     "check:sql": "node scripts/check-migrations.mjs"
   },

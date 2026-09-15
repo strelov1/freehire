@@ -63,7 +63,20 @@ Non-obvious:
 - `design-system/` — a separate pnpm package, sibling to `web/` and `extension/`, linked via
   pnpm's `link:../design-system` (`web/`) or npm's `file:../design-system` (`extension/`) — both
   are symlinks, not copies. **Install it before building either consumer** — neither package
-  manager installs a linked/`file:` package's own dependencies for you.
+  manager installs a linked/`file:` package's own dependencies for you. Being a symlink also
+  means each of the three installs its OWN `node_modules`, so a package all of them depend on
+  sits on disk more than once — free for a value, fatal for a TYPE, since TypeScript
+  identifies a type by where it was declared and two copies of `LucideIcon` are two unrelated
+  types sharing a name. `pnpm check:deps` (`scripts/check-shared-deps.mjs`, the `shared-deps`
+  CI job) holds the three manifests to the same version for exactly the packages the design
+  system imports as types — a set it DERIVES from `design-system/src` rather than listing, so
+  a new type import joins the rule by existing. It reads no lockfile and compares the declared
+  range literally: `^1.25.0` and `^1.45.0` overlap perfectly well and are the two ranges that
+  put `@lucide/svelte` on disk twice (freehire#2836), so "the ranges are compatible" is the
+  wrong question. `peerDependencies` is exempt — a library's peer range is deliberately wider
+  than what it develops against. Dependabot cannot see any of this: it reads three
+  `package.json` files as three unrelated projects, so it will keep proposing a bump to one of
+  them, and that PR is correct once the other two move with it.
 - `extension/` — the browser extension (WXT + Svelte side-panel agent client), npm-managed
   unlike the rest of the JS in this repo. See [extension/AGENTS.md](extension/AGENTS.md).
 - `internal/platform/db/` — **generated**; edit `internal/platform/db/queries/*.sql` and run `make sqlc`. The pre-commit hook and the `sqlc` CI job regenerate and diff, so a query edited without regenerating no longer ships the old Go with every check green. Both use `make sqlc`, which holds the only version pin — a second pin would be a second answer, and the drift between them would look exactly like stale code.
