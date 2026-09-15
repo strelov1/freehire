@@ -223,6 +223,38 @@ func pacedSeekPoster(c JSONPoster) JSONPoster {
 	}
 }
 
+// jobstreet.com/jobsdb.com looks like the same frontend protocol as seek.com.au/seek.co.nz (same
+// v5 search schema, same GraphQL jobDetails operation) and was shipped sharing seekDetailInterval
+// on that assumption. It is not the same measured-safe rate: on 2026-09-15, seekDetailInterval
+// against a real SG crawl (22 board rows, defaultDetailWorkers fan-out per board) answered
+// {"errors":[{"message":"Too many requests.","extensions":{"code":"RATE_LIMITED"}}]} — HTTP 200,
+// not 429, so the ordinary error-based retry/defer path never distinguishes it from a transient
+// failure — on essentially every detail POST that reached hydration, and the crawl landed ZERO
+// postings. The penalty also did not clear within minutes at 1 request per 5 seconds, unlike
+// SEEK AU/NZ's documented two-minutes-idle recovery, so whatever budget JobStreet/JobsDB actually
+// enforces is both lower and slower to reset than SEEK's.
+//
+// This starts well below every other pacer in this file (see seekDetailInterval's own reasoning
+// for why under-shooting is the safe direction) precisely because the true budget is unmeasured
+// and the one data point available says "slower than 2 req/s, by an unknown margin, with an
+// unknown reset". Tune upward only after a full crawl completes with a low failure count.
+const (
+	jobStreetDetailInterval = 5 * time.Second // ~0.2 req/s
+	jobStreetDetailBurst    = 1
+)
+
+// pacedJobStreetPoster is deliberately a SEPARATE limiter instance from pacedSeekPoster, not a
+// slower shared one: SEEK AU/NZ's own detail budget is unaffected by the 2026-09-15 JobStreet
+// incident (verified live: a SEEK AU GraphQL request succeeded normally minutes into JobStreet's
+// penalty window), so coupling them would cost SEEK's throughput for a problem that is JobStreet's
+// alone.
+func pacedJobStreetPoster(c JSONPoster) JSONPoster {
+	return rateLimitedJSONPoster{
+		inner:   c,
+		limiter: rate.NewLimiter(rate.Every(jobStreetDetailInterval), jobStreetDetailBurst),
+	}
+}
+
 // Eightfold rate-limits an IP to ~290 requests per window (see eightfold.go), and its crawl
 // egresses through the single shared proxy IP alongside a dozen other providers
 // (proxiedProviders) — so its own concurrency cap (eightfoldDetailWorkers) and retry backoff

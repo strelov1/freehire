@@ -39,7 +39,8 @@ func NewSeek(list JSONGetter, detail JSONPoster) Source {
 // NewJobStreet builds the JobStreet/JobsDB adapter over the same SEEK frontend protocol.
 // JobStreet (SG/MY/ID/PH) and JobsDB (HK/TH) share SEEK's v5 search and GraphQL schemas but use
 // different market hosts/site keys, so they are one implementation with a distinct provider
-// identity and board catalogue.
+// identity and board catalogue. The detail transport is NOT shared with NewSeek's, despite the
+// shared protocol: see pacedJobStreetPoster for why the two networks need separate token buckets.
 func NewJobStreet(list JSONGetter, detail JSONPoster) Source {
 	return seek{provider: "jobstreet", markets: jobStreetMarkets, maxPages: jobStreetMaxPages, failAtPageCeiling: true, http: list, graphql: detail}
 }
