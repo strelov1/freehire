@@ -103,7 +103,7 @@ func (f *fakeStore) UpdateJobDerived(_ context.Context, arg db.UpdateJobDerivedP
 // a test still exercises production's path rather than a parallel one — which is why
 // they live here and not beside it.
 func backfillAll(ctx context.Context, store deriveStore, concurrency int64) (scanned, updated, slugsMoved int, err error) {
-	pass, err := backfillBounded(ctx, store, concurrency, scanWindow{})
+	pass, err := backfillPass(ctx, store, concurrency, scanWindow{})
 	return pass.Scanned, pass.Updated, pass.SlugsMoved, err
 }
 
