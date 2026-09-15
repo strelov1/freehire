@@ -172,6 +172,15 @@ type Report struct {
 	URLs []string
 }
 
+// spent is how much of an engine's day this pass consumed.
+//
+// ACCEPTED, not recorded: the engine consumed a call the moment it took the URL, whether
+// or not the ledger write that followed succeeded. Charging only for recorded ones would
+// let a failed write hand the next pass budget the engine has already counted against
+// the day. Preview accepts nothing and fills URLs instead, and exactly one of the two is
+// ever non-zero.
+func (r Report) spent() int { return r.Accepted + len(r.URLs) }
+
 // Runner announces the newest eligible postings to every configured engine.
 type Runner struct {
 	repo    Repository
@@ -186,10 +195,10 @@ func New(repo Repository, origin string, engines ...Engine) *Runner {
 	return &Runner{repo: repo, origin: strings.TrimRight(strings.TrimSpace(origin), "/"), engines: engines}
 }
 
-// jobURL is the public address of a posting. Announcing anything else — a redirect, an
-// old domain — spends budget teaching an engine a URL it will only have to follow
-// away from, which is the exact waste this fleet already measured on Googlebot (64% of
-// its visits on 2026-09-14 answered 301 from retired hostnames).
+// pageURL is the public address of a posting or of a company. Announcing anything else —
+// a redirect, an old domain — spends budget teaching an engine a URL it will only have to
+// follow away from, which is the exact waste this fleet already measured on Googlebot
+// (64% of its visits on 2026-09-14 answered 301 from retired hostnames).
 func (r *Runner) pageURL(kind Kind, slug string) string {
 	if kind.isCompany() {
 		return r.origin + "/companies/" + slug
@@ -253,12 +262,7 @@ func (r *Runner) walk(ctx context.Context, batch int, pass func(context.Context,
 			}
 			report := pass(ctx, engine, kind, limit)
 			reports = append(reports, report)
-			// ACCEPTED, not recorded: the engine consumed a call the moment it took the
-			// URL, whether or not the ledger write that followed succeeded. Charging the
-			// next pass for recorded ones only would let a failed write hand the closure
-			// pass budget that Google has already counted against the day. (Preview
-			// accepts nothing and fills URLs instead, which is why both are subtracted.)
-			left -= report.Accepted + len(report.URLs)
+			left -= report.spent()
 		}
 	}
 	return reports
@@ -275,20 +279,32 @@ func (r *Runner) candidates(ctx context.Context, engine Engine, kind Kind, limit
 	}
 }
 
-func (r *Runner) previewPass(ctx context.Context, engine Engine, kind Kind, limit int) Report {
+// plan opens a pass: the report it will be reported under, and what it may send. An
+// empty candidate slice covers all three ways a pass has nothing to do — the day's
+// budget is spent, the query failed, or nothing is eligible — so neither caller needs to
+// tell them apart, and the one that did is the report's own Err.
+func (r *Runner) plan(ctx context.Context, engine Engine, kind Kind, limit int) (Report, []Candidate) {
 	report := Report{Engine: engine.Name(), Kind: kind, Remaining: -1}
 	if engine.DailyBudget() > 0 {
+		// Clamped, though walk never passes a negative: Remaining is a tri-state where
+		// -1 means "unbounded", so a negative leaking in here would make a spent engine
+		// report the opposite of the truth.
 		report.Remaining = max(limit, 0)
 	}
 	if limit <= 0 {
-		return report
+		return report, nil
 	}
 
 	candidates, err := r.candidates(ctx, engine, kind, limit)
 	if err != nil {
 		report.Err = fmt.Errorf("list candidates: %w", err)
-		return report
+		return report, nil
 	}
+	return report, candidates
+}
+
+func (r *Runner) previewPass(ctx context.Context, engine Engine, kind Kind, limit int) Report {
+	report, candidates := r.plan(ctx, engine, kind, limit)
 	for _, c := range candidates {
 		report.URLs = append(report.URLs, r.pageURL(kind, c.Slug))
 	}
@@ -297,19 +313,7 @@ func (r *Runner) previewPass(ctx context.Context, engine Engine, kind Kind, limi
 }
 
 func (r *Runner) runPass(ctx context.Context, engine Engine, kind Kind, limit int) Report {
-	report := Report{Engine: engine.Name(), Kind: kind, Remaining: -1}
-	if engine.DailyBudget() > 0 {
-		report.Remaining = max(limit, 0)
-	}
-	if limit <= 0 {
-		return report
-	}
-
-	candidates, err := r.candidates(ctx, engine, kind, limit)
-	if err != nil {
-		report.Err = fmt.Errorf("list candidates: %w", err)
-		return report
-	}
+	report, candidates := r.plan(ctx, engine, kind, limit)
 	if len(candidates) == 0 {
 		return report
 	}
@@ -356,9 +360,7 @@ func (r *Runner) runPass(ctx context.Context, engine Engine, kind Kind, limit in
 		report.Err = errors.Join(report.Err, errors.Join(recordErrs...))
 	}
 	if report.Remaining >= 0 {
-		// Accepted for the same reason: what is left of the day is what the engine has
-		// not been handed, not what this process managed to write down.
-		report.Remaining -= report.Accepted
+		report.Remaining -= report.spent()
 	}
 	return report
 }
@@ -377,9 +379,5 @@ func (r *Runner) remainingToday(ctx context.Context, engine Engine, batch int) (
 	if err != nil {
 		return 0, fmt.Errorf("count today's pings: %w", err)
 	}
-	left := budget - int(sent)
-	if left < 0 {
-		left = 0
-	}
-	return min(left, batch), nil
+	return min(max(budget-int(sent), 0), batch), nil
 }
