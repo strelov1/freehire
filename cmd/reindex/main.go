@@ -58,6 +58,24 @@ func run() int {
 	}
 	defer cleanup()
 
+	// Catalogue-wide index work runs one at a time — full rebuild, marker passes and the
+	// suggestion build all take this same lock. The schedule cannot keep them apart on its
+	// own: a rebuild took 4.5 hours on 2026-09-15 against clock times laid out when it took
+	// three, so the 06:45, 16:30 and 19:30 jobs land inside one every day. That afternoon
+	// two of them together took the site down. Skipping is right rather than waiting: every
+	// one of these is idempotent and due again soon, while waiting holds a Type=oneshot unit
+	// open for hours and reads as a hang.
+	releaseLock, gotLock, err := worker.HoldHeavyIndexLock(ctx, pool)
+	if err != nil {
+		log.Printf("index lock: %v", err)
+		return 1
+	}
+	if !gotLock {
+		log.Print("reindex: another catalogue-wide index job is running — skipping this run")
+		return 0
+	}
+	defer releaseLock()
+
 	q := db.New(pool)
 	rcfg := config.LoadReindex()
 

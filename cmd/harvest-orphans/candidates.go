@@ -27,9 +27,20 @@ type seedEntry struct {
 
 // candidates proposes board ids for one company from its catalogue slug and display name
 // alone — never from a fetched website, so discovery does not depend on resolving a domain.
-// Three renderings cover how ATS tenants are actually named: the slug the catalogue already
-// derived, the name with its corporate form stripped and words hyphenated, and the same
-// unseparated. Duplicates collapse, so a single-word company proposes exactly one candidate.
+// Five renderings cover how ATS tenants are actually named: the slug the catalogue already
+// derived, the name with its corporate form stripped and words hyphenated, the same
+// unseparated, and both of those again with a board-name tail off as well. Duplicates
+// collapse, so a single-word company proposes exactly one candidate and a company with no
+// board-name tail proposes the same three it always did.
+//
+// The last two exist because the company KEY cannot strip those tails and a board id routinely
+// does: normalize.BoardNameSlug documents the two prices. The Italian S.p.A. is the case that
+// forced them — 125 of the 1,402 companies in the jobleads worklist carry it, and Slug has
+// turned it into `s-p-a` by the time any of the first three renderings look at it, so each of
+// those companies proposed only ids no platform has ever issued. An extra candidate here costs
+// one probe against a board that does not answer; harvest-boards' corroboration gate is what
+// keeps the over-trim ("Hilton Luxor Resort & Spa" → `hilton-luxor-resort`) from being filed
+// under the wrong employer.
 func candidates(slug, company string) []string {
 	var out []string
 	add := func(c string) {
@@ -46,6 +57,9 @@ func candidates(slug, company string) []string {
 	add(slug)
 	add(normalize.CompanySlug(company))
 	add(normalize.CompanyKey(company))
+	board := normalize.BoardNameSlug(company)
+	add(board)
+	add(normalize.FoldSlug(board))
 	return out
 }
 

@@ -48,7 +48,28 @@ SLOTS=${INGEST_SLOTS:-10}
 # Four is what was observed resident, so the split hands the long crawls the slots they
 # already occupied and fences the rest off for the tail. Raising this takes slots FROM
 # the tail, which is the thing being protected — measure the skip rate before moving it.
-HEAVY_SLOTS=${INGEST_HEAVY_SLOTS:-4}
+#
+# 4 -> 5 on 2026-09-15, measured as that warning asks. The fleet had outgrown the split:
+# a full sweep now costs ~26 slot-hours, not the ~11 above, and SIX providers no roster
+# named (workable, vk, trudvsem, freshteam, successfactors, hrmos) had become permanently
+# resident in the SHARED pool — sampled every 20s for 8 minutes, four of them held a slot
+# in 48 of 48 samples. The same residency disease as before, one tier down: 837 of 1482
+# firings skipped that day, and ten providers whose timers had just been created were
+# skipped on their first cycle, every one.
+#
+# The fix is in gen-ingest-timers.sh, which moves seven long crawls to the 3h HEAVY cadence
+# (a 50-minute crawl holds 83% of a slot hourly, 28% at 3h). Those seven are chosen by
+# RUNTIME, not by the residency sampled above, so the two sets overlap without matching:
+# four of the six residents move (workable, trudvsem, freshteam, successfactors) and the
+# other three of the seven were never resident; vk (25min) and hrmos (34min) stay, being
+# frequent rather than long — the reasoning is beside the HEAVY list, which owns it.
+#
+# The 1.8 slots of new demand those seven bring land on a heavy pool already sampled at 78%
+# of 4 (3.1 slots used), so 4 would thrash and 5 is what the arithmetic asks for. It costs
+# the tail one slot and hands it back five slot-hours of residency, which is the trade.
+#
+# Reversible without a deploy: INGEST_HEAVY_SLOTS in /opt/freehire/.env wins over this.
+HEAVY_SLOTS=${INGEST_HEAVY_SLOTS:-5}
 WAIT=${INGEST_SLOT_WAIT:-600}
 DIR=${INGEST_SLOT_DIR:-/run/freehire/ingest-slots}
 # The heavy roster is WRITTEN BY gen-ingest-timers.sh, which is where the list already
