@@ -359,7 +359,36 @@ var categoryTable = []aliasEntry{
 	// than guessed, which is the same call `design systems` and bare `engineer` got.
 	{"security guard", "personal_services"},
 	{"armed guard", "personal_services"},
-	{"security", "security"},
+	// Bare "security" is NOT an entry, for the reason the Hungarian block below already
+	// gives about "biztonsági": the word alone is the guard at least as often as the
+	// discipline. Measured over the live catalogue, the single commonest title carrying
+	// it is "Security Officer" (1 102 open postings), followed by "Security Specialist"
+	// (602) and "Night shift security front desk - receptionist" (483) — none of them
+	// technical, and "Security Supervisor" (149) and bare "Security" (91) behind them.
+	// The bare alias sent every one of those to the security category, and because
+	// `security` is in vocab.TechCategories that category is enough for
+	// jobderive.TechEvidence to set is_tech TRUE on its own, ahead of the non-tech
+	// dictionary. So a mall guard was filed as an IT security role — in search, and
+	// (since 2026-09-14) in what cmd/search-ping spends Google's Indexing API quota on.
+	//
+	// Only the qualified forms below, each in the spelling the live sample carries.
+	// "information security" covers the officer/analyst/engineer/manager/specialist
+	// family in one entry, which is how "Chief Information Security Officer" keeps its
+	// category while "Security Officer" loses it. Deliberately ABSENT because they are
+	// genuinely ambiguous rather than merely rare: "security specialist", "security
+	// manager", "security supervisor", "security consultant" — these resolve to no
+	// category and their is_tech falls to unknown, which is the never-guess contract
+	// every dictionary here follows. Same call the bare "analyst" fall-through got.
+	{"security engineer", "security"},
+	{"security architect", "security"},
+	{"security analyst", "security"},
+	{"security operations", "security"},
+	{"security researcher", "security"},
+	{"information security", "security"},
+	{"it security", "security"},
+	{"application security", "security"},
+	{"network security", "security"},
+	{"cloud security", "security"},
 	{"infosec", "security"},
 	{"appsec", "security"},
 	{"cybersecurity", "security"},

@@ -1377,6 +1377,14 @@ func TestParse_ConsumerIndustries(t *testing.T) {
 // strongest, so declaration order does nothing for it. An alias that looks harmless
 // under `Parse` can still tag a title with a second, wrong category here — which is
 // exactly what a "security officer" entry did to a CISO.
+//
+// What this protects is the CISO, and it still does. The bare "security" alias that used
+// to satisfy it has been replaced by the qualified forms: "Chief Information Security
+// Officer" keeps the security category through "information security", while a plain
+// "Security Officer" — 1 102 open postings, and a mall guard in nearly all of them —
+// now claims NEITHER category. That is the never-guess contract, not a regression:
+// an unqualified security officer is genuinely ambiguous, so it resolves to nothing and
+// its is_tech falls to unknown instead of being asserted either way.
 func TestCategories_ServiceOverlaps(t *testing.T) {
 	for _, tc := range []struct {
 		title    string
@@ -1385,14 +1393,20 @@ func TestCategories_ServiceOverlaps(t *testing.T) {
 	}{
 		{"Chief Information Security Officer", "personal_services", "security"},
 		{"Information Security Officer", "personal_services", "security"},
-		{"Security Officer", "personal_services", "security"},
+		{"IT Security Officer", "personal_services", "security"},
+		// Claims nothing at all: not the guard category (which would mis-tag the three
+		// above on this very path) and not the technical one either.
+		{"Security Officer", "personal_services", ""},
 	} {
 		got := Categories(tc.title)
 		if slices.Contains(got, tc.mustNot) {
 			t.Errorf("Categories(%q) = %v, must NOT contain %q", tc.title, got, tc.mustNot)
 		}
-		if !slices.Contains(got, tc.mustHave) {
+		if tc.mustHave != "" && !slices.Contains(got, tc.mustHave) {
 			t.Errorf("Categories(%q) = %v, must contain %q", tc.title, got, tc.mustHave)
+		}
+		if tc.mustHave == "" && slices.Contains(got, "security") {
+			t.Errorf("Categories(%q) = %v, must not claim the security facet", tc.title, got)
 		}
 	}
 }
@@ -1460,7 +1474,8 @@ func TestParse_ServiceSectors(t *testing.T) {
 		{"Esthetician", "personal_services", ""},
 		{"Lifeguard", "personal_services", ""},
 		{"Security Guard", "personal_services", "was resolving to the infosec facet"},
-		{"Security Officer", "security", "deliberately not claimed: see the Categories() regression below"},
+		{"Security Officer", "", "an unqualified one is a guard far more often than a CISO — 1 102 live postings say so; the qualified forms carry the discipline"},
+		{"Security Specialist", "", "ambiguous the same way, and 602 live postings of it"},
 		{"Chief Information Security Officer", "security", ""},
 		{"Janitor", "personal_services", ""},
 		{"Housekeeper", "personal_services", ""},
@@ -1609,6 +1624,65 @@ func TestParse_AnalystIsQualifiedOrNothing(t *testing.T) {
 	for _, c := range cases {
 		if got := Parse(c.title).Category; got != c.wantCategory {
 			t.Errorf("Parse(%q).Category = %q, want %q", c.title, got, c.wantCategory)
+		}
+	}
+}
+
+// TestParse_SecurityIsQualifiedOrNothing pins the replacement of the bare "security"
+// alias with the qualified forms the catalogue actually carries — the same call the bare
+// "analyst" fall-through got above, for the same reason and with a sharper cost.
+//
+// The bare alias was not careless: it existed so that "Chief Information Security
+// Officer" would claim the security facet, because the obvious alternative — a
+// "security officer" → personal_services entry — tagged the CISO as a guard on the
+// multi-category CV path, where every matching alias is returned and declaration order
+// decides nothing. See TestCategories_ServiceOverlaps.
+//
+// What it cost was invisible from inside this package. `security` is in
+// vocab.TechCategories, and jobderive.TechEvidence treats a technical CATEGORY as enough
+// to set is_tech TRUE on its own — ahead of the non-tech dictionary, deliberately, so
+// that "Backend Engineer — Teller Systems" is not deleted on its accidental "teller"
+// match. So the bare alias did not merely mis-file a mall guard's facet: it asserted the
+// guard was a technical posting, and no later evidence could take that back. Measured
+// over the 150 commonest live titles carrying the word (10 276 open postings), it
+// declared 10 156 of them technical; with the qualified forms, 5 917.
+//
+// The rule is: qualified or nothing. A title that names the discipline keeps the facet;
+// an unqualified one claims neither facet and lets is_tech stay unknown.
+func TestParse_SecurityIsQualifiedOrNothing(t *testing.T) {
+	for _, tc := range []struct {
+		title string
+		want  string
+		why   string
+	}{
+		// Qualified: the discipline is named.
+		{"Security Engineer", "security", ""},
+		{"Senior Security Engineer", "security", ""},
+		{"Security Architect", "security", ""},
+		{"Security Analyst", "security", ""},
+		{"Information Security Officer", "security", "the officer title that IS technical"},
+		{"Chief Information Security Officer", "security", "what the bare alias existed to protect"},
+		{"IT Security Analyst", "security", ""},
+		{"Application Security Engineer", "security", ""},
+		{"Network Security Engineer", "security", ""},
+		{"Cloud Security Engineer", "security", ""},
+		{"Security Operations Analyst", "security", ""},
+		{"Cyber Security Engineer", "security", "already qualified before this change"},
+
+		// Unqualified: claims nothing rather than guessing. Counts are open postings.
+		{"Security Officer", "", "1 102 of them, and a guard in nearly all"},
+		{"Unarmed Security Officer", "", ""},
+		{"Mall Security Officer", "", ""},
+		{"Retail Security Officer", "", ""},
+		{"Security Specialist", "", "602, and genuinely either"},
+		{"Security Supervisor", "", "149"},
+		{"Security", "", "91, bare"},
+
+		// Still the guard category, through its own entry rather than the fall-through.
+		{"Security Guard", "personal_services", "was resolving to the infosec facet once"},
+	} {
+		if got := Parse(tc.title).Category; got != tc.want {
+			t.Errorf("Parse(%q).Category = %q, want %q %s", tc.title, got, tc.want, tc.why)
 		}
 	}
 }
