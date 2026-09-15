@@ -11,6 +11,28 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const countCompanySearchPingsSince = `-- name: CountCompanySearchPingsSince :one
+SELECT count(*)
+FROM company_search_pings
+WHERE engine = $1
+  AND pinged_at >= $2
+`
+
+type CountCompanySearchPingsSinceParams struct {
+	Engine string             `json:"engine"`
+	Since  pgtype.Timestamptz `json:"since"`
+}
+
+// How many company pages this engine has been sent since a moment. Counted separately
+// from the job ledger and then ADDED by the caller: the budget belongs to the engine,
+// and a company page costs it exactly what a job page does.
+func (q *Queries) CountCompanySearchPingsSince(ctx context.Context, arg CountCompanySearchPingsSinceParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countCompanySearchPingsSince, arg.Engine, arg.Since)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const countJobSearchPingsSince = `-- name: CountJobSearchPingsSince :one
 SELECT count(*)
 FROM job_search_pings
@@ -105,6 +127,60 @@ func (q *Queries) ListClosedJobsToPing(ctx context.Context, arg ListClosedJobsTo
 	return items, nil
 }
 
+const listCompaniesToPing = `-- name: ListCompaniesToPing :many
+SELECT c.slug
+FROM companies c
+WHERE c.job_count > 0
+  AND NOT EXISTS (
+      SELECT 1
+      FROM company_search_pings p
+      WHERE p.company_slug = c.slug
+        AND p.engine = $1
+  )
+ORDER BY c.created_at DESC
+LIMIT $2
+`
+
+type ListCompaniesToPingParams struct {
+	Engine    string `json:"engine"`
+	BatchSize int32  `json:"batch_size"`
+}
+
+// The company pages this engine has not been told about, newest first.
+//
+// job_count > 0 is the whole eligibility, and it is not a fresh judgement: it is the
+// same gate that puts a company in the sitemap, derived by cmd/recount-companies from
+// the postings the SEARCH INDEX will hold (see the long argument on that query in
+// companies.sql). So a page announced here is exactly a page the site already claims,
+// and a company whose last posting drops out of search stops being offered without this
+// query knowing why.
+//
+// NEWEST FIRST, matching the job query's policy: a company only just discovered is the
+// one no engine can have seen, and the older rows have had every chance to be crawled.
+// Not by job_count — the evidence points the other way. The company pages actually
+// ranking in Bing are the long tail (laserfocus, truebiz, read-bean, astra-tech-labs),
+// because for a small employer this page may be the only assembled list of its roles,
+// while a large one's own careers site already owns that query.
+func (q *Queries) ListCompaniesToPing(ctx context.Context, arg ListCompaniesToPingParams) ([]string, error) {
+	rows, err := q.db.Query(ctx, listCompaniesToPing, arg.Engine, arg.BatchSize)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []string{}
+	for rows.Next() {
+		var slug string
+		if err := rows.Scan(&slug); err != nil {
+			return nil, err
+		}
+		items = append(items, slug)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listJobsToPing = `-- name: ListJobsToPing :many
 SELECT j.id, j.public_slug
 FROM jobs j
@@ -169,6 +245,25 @@ func (q *Queries) ListJobsToPing(ctx context.Context, arg ListJobsToPingParams) 
 		return nil, err
 	}
 	return items, nil
+}
+
+const recordCompanySearchPing = `-- name: RecordCompanySearchPing :exec
+INSERT INTO company_search_pings (company_slug, engine)
+VALUES ($1, $2)
+ON CONFLICT (company_slug, engine) DO NOTHING
+`
+
+type RecordCompanySearchPingParams struct {
+	CompanySlug string `json:"company_slug"`
+	Engine      string `json:"engine"`
+}
+
+// Record that this company page was announced to this engine. Idempotent, for the same
+// reason its job sibling is: the row is what stops a re-run after a partial failure from
+// spending a bounded budget twice.
+func (q *Queries) RecordCompanySearchPing(ctx context.Context, arg RecordCompanySearchPingParams) error {
+	_, err := q.db.Exec(ctx, recordCompanySearchPing, arg.CompanySlug, arg.Engine)
+	return err
 }
 
 const recordJobSearchPing = `-- name: RecordJobSearchPing :exec

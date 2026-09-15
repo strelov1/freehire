@@ -47,14 +47,29 @@ type Engine interface {
 	// DailyBudget bounds how many URLs one day's runs may send, or 0 for unbounded.
 	DailyBudget() int
 
+	// Accepts reports whether this engine may be told about a kind of page at all.
+	//
+	// It exists because the restriction is real and one-sided: Google's Indexing API
+	// admits only JobPosting and BroadcastEvent pages, so a company page sent there is
+	// a terms violation whose penalty is the quota. IndexNow has no such rule. Asking
+	// the engine rather than branching on its name keeps that fact where it belongs and
+	// makes the next engine state its own answer.
+	Accepts(kind Kind) bool
+
 	// Announce sends the URLs and returns those the engine accepted, in any order.
 	Announce(ctx context.Context, urls []string) ([]string, error)
 }
 
-// Candidate is a posting eligible to be announced.
+// Candidate is a page eligible to be announced.
 type Candidate struct {
+	// JobID identifies a posting in the ledger; zero for a company page.
 	JobID int64
-	Slug  string
+
+	// Company identifies a company in the ledger; empty for a posting.
+	Company string
+
+	// Slug is the last path segment of the public URL — of the posting or the company.
+	Slug string
 }
 
 // Kind is which event about a posting is being announced. Both are URL_UPDATED to the
@@ -73,7 +88,18 @@ const (
 	// KindClosed is "read this page again", announced once after the posting closes so
 	// the engine sees the validThrough that has moved into the past.
 	KindClosed Kind = "closed"
+
+	// KindCompany is "this employer's page exists". It has no closure event — a company
+	// whose postings all close keeps a 200 page — and unlike the two above it is not
+	// stored in a `kind` column: its ledger is company_search_pings, which needs no such
+	// column because it holds only one event.
+	KindCompany Kind = "company"
 )
+
+// isCompany reports whether a pass is about company pages rather than postings. The
+// distinction decides three things at once: which ledger records it, which URL prefix it
+// takes, and — through Engine.Accepts — whether an engine may be told about it at all.
+func (k Kind) isCompany() bool { return k == KindCompany }
 
 // Repository is the ledger: which postings an engine has already been told about, for
 // which event, and the record that it has.
@@ -88,12 +114,17 @@ type Repository interface {
 	// what has already been announced.
 	ClosedJobsToPing(ctx context.Context, engine string, limit int32) ([]Candidate, error)
 
-	// RecordPing marks one posting as announced to one engine, for one event.
-	// Idempotent.
-	RecordPing(ctx context.Context, jobID int64, engine string, kind Kind) error
+	// CompaniesToPing returns company pages this engine has not been told about, newest
+	// first. Eligibility is the same job_count > 0 that puts a company in the sitemap.
+	CompaniesToPing(ctx context.Context, engine string, limit int32) ([]Candidate, error)
 
-	// PingsSince counts what this engine has been sent since a moment, so a run that
-	// shares a budget day with an earlier one does not overspend it.
+	// RecordPing marks one page as announced to one engine, for one event. Idempotent.
+	RecordPing(ctx context.Context, c Candidate, engine string, kind Kind) error
+
+	// PingsSince counts every page — posting and company alike — this engine has been
+	// sent since a moment, so a run that shares a budget day with an earlier one does
+	// not overspend it. Both ledgers, because the budget belongs to the engine and a
+	// company page costs it exactly what a posting does.
 	PingsSince(ctx context.Context, engine string, since time.Time) (int64, error)
 }
 
@@ -159,16 +190,27 @@ func New(repo Repository, origin string, engines ...Engine) *Runner {
 // old domain — spends budget teaching an engine a URL it will only have to follow
 // away from, which is the exact waste this fleet already measured on Googlebot (64% of
 // its visits on 2026-09-14 answered 301 from retired hostnames).
-func (r *Runner) jobURL(slug string) string {
+func (r *Runner) pageURL(kind Kind, slug string) string {
+	if kind.isCompany() {
+		return r.origin + "/companies/" + slug
+	}
 	return r.origin + "/jobs/" + slug
 }
 
-// passes is the order the two events compete for one engine's day, and the order is the
-// policy. A new posting is what brings a visitor; a closure only tidies an index we do
-// not own. While the allowance is 200 a day against ~14k new postings, the first pass
-// will consume all of it and the second will do nothing — which is correct. Closures
-// start flowing when the allowance grows, without a code change.
-var passes = []Kind{KindCreated, KindClosed}
+// passes is the order the three events compete for one engine's day, and the order is
+// the policy.
+//
+// A new posting first: it is what brings a visitor. Then the company page, which is the
+// page that actually WINS — measured 2026-09-15, Bing's highest-impression pages are
+// /companies/<slug> and the queries behind them are all "<company name> careers", and
+// Google's own August data agrees. It sits second only because a posting is perishable
+// and a company page is not: the posting's moment passes, the employer's page keeps.
+// Closures last: they tidy an index we do not own.
+//
+// Google never reaches the second pass at all — Accepts declines it, because its
+// Indexing API admits only JobPosting pages. The ordering matters for IndexNow, which
+// accepts everything and has no quota, and for whatever engine comes next.
+var passes = []Kind{KindCreated, KindCompany, KindClosed}
 
 // Run announces one batch per engine, per event. An engine that fails does not stop
 // another: the engines are independent services and a shared run is an implementation
@@ -197,6 +239,12 @@ func (r *Runner) walk(ctx context.Context, batch int, pass func(context.Context,
 			continue
 		}
 		for _, kind := range passes {
+			// An engine that will not take this kind of page is not offered it, and the
+			// pass is not reported either — a line saying "google/company: nothing to
+			// announce" would read like an empty catalogue rather than a rule.
+			if !engine.Accepts(kind) {
+				continue
+			}
 			// An unbounded engine is not spending anything shared, so each of its passes
 			// gets the full batch rather than the leftovers of the one before.
 			limit := batch
@@ -217,10 +265,14 @@ func (r *Runner) walk(ctx context.Context, batch int, pass func(context.Context,
 }
 
 func (r *Runner) candidates(ctx context.Context, engine Engine, kind Kind, limit int) ([]Candidate, error) {
-	if kind == KindClosed {
+	switch kind {
+	case KindClosed:
 		return r.repo.ClosedJobsToPing(ctx, engine.Name(), int32(limit))
+	case KindCompany:
+		return r.repo.CompaniesToPing(ctx, engine.Name(), int32(limit))
+	default:
+		return r.repo.JobsToPing(ctx, engine.Name(), int32(limit))
 	}
-	return r.repo.JobsToPing(ctx, engine.Name(), int32(limit))
 }
 
 func (r *Runner) previewPass(ctx context.Context, engine Engine, kind Kind, limit int) Report {
@@ -238,7 +290,7 @@ func (r *Runner) previewPass(ctx context.Context, engine Engine, kind Kind, limi
 		return report
 	}
 	for _, c := range candidates {
-		report.URLs = append(report.URLs, r.jobURL(c.Slug))
+		report.URLs = append(report.URLs, r.pageURL(kind, c.Slug))
 	}
 	report.Offered = len(report.URLs)
 	return report
@@ -265,7 +317,7 @@ func (r *Runner) runPass(ctx context.Context, engine Engine, kind Kind, limit in
 	bySlug := make(map[string]Candidate, len(candidates))
 	urls := make([]string, 0, len(candidates))
 	for _, c := range candidates {
-		url := r.jobURL(c.Slug)
+		url := r.pageURL(kind, c.Slug)
 		bySlug[url] = c
 		urls = append(urls, url)
 	}
@@ -294,8 +346,8 @@ func (r *Runner) runPass(ctx context.Context, engine Engine, kind Kind, limit in
 			log.Printf("searchping: %s accepted an unoffered url %q", engine.Name(), url)
 			continue
 		}
-		if err := r.repo.RecordPing(ctx, c.JobID, engine.Name(), kind); err != nil {
-			recordErrs = append(recordErrs, fmt.Errorf("record job %d: %w", c.JobID, err))
+		if err := r.repo.RecordPing(ctx, c, engine.Name(), kind); err != nil {
+			recordErrs = append(recordErrs, fmt.Errorf("record %s: %w", url, err))
 			continue
 		}
 		report.Recorded++

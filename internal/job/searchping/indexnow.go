@@ -66,6 +66,11 @@ func (i *IndexNowEngine) Name() string { return indexNowEngineName }
 // than counting, and what bounds a run here is the batch size the worker was given.
 func (i *IndexNowEngine) DailyBudget() int { return 0 }
 
+// Accepts takes everything. IndexNow is a URL protocol with no opinion about what a page
+// contains, which is what makes it the only route for the company pages — the pages that
+// measurably win, and the ones Google's Indexing API may not be told about.
+func (i *IndexNowEngine) Accepts(Kind) bool { return true }
+
 // VerifyKey fetches the key file the site serves and checks it matches the key this
 // engine will send. It exists because the key lives in two places — the static file in
 // web/static and the worker's configuration — and IndexNow's answer to a mismatch is a

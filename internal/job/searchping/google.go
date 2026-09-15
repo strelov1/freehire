@@ -122,6 +122,13 @@ func (g *GoogleEngine) Name() string { return googleEngineName }
 
 func (g *GoogleEngine) DailyBudget() int { return g.budget }
 
+// Accepts admits only the posting events. The Indexing API is open to exactly two kinds
+// of page — JobPosting, and BroadcastEvent inside a VideoObject — so a company page sent
+// here is a terms violation, and the API's penalty is the quota this whole package is
+// budgeted around. The refusal lives here rather than in the caller because it is a fact
+// about Google, not about the run.
+func (g *GoogleEngine) Accepts(kind Kind) bool { return !kind.isCompany() }
+
 // Announce publishes each URL in turn. One HTTP call per URL is the API's own shape —
 // batching there saves HTTP overhead and NOT quota, which is counted per URL, so the
 // loop costs nothing a batch would have saved.

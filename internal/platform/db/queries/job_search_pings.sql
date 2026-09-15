@@ -91,3 +91,48 @@ SELECT count(*)
 FROM job_search_pings
 WHERE engine = sqlc.arg(engine)
   AND pinged_at >= sqlc.arg(since);
+
+-- name: ListCompaniesToPing :many
+-- The company pages this engine has not been told about, newest first.
+--
+-- job_count > 0 is the whole eligibility, and it is not a fresh judgement: it is the
+-- same gate that puts a company in the sitemap, derived by cmd/recount-companies from
+-- the postings the SEARCH INDEX will hold (see the long argument on that query in
+-- companies.sql). So a page announced here is exactly a page the site already claims,
+-- and a company whose last posting drops out of search stops being offered without this
+-- query knowing why.
+--
+-- NEWEST FIRST, matching the job query's policy: a company only just discovered is the
+-- one no engine can have seen, and the older rows have had every chance to be crawled.
+-- Not by job_count — the evidence points the other way. The company pages actually
+-- ranking in Bing are the long tail (laserfocus, truebiz, read-bean, astra-tech-labs),
+-- because for a small employer this page may be the only assembled list of its roles,
+-- while a large one's own careers site already owns that query.
+SELECT c.slug
+FROM companies c
+WHERE c.job_count > 0
+  AND NOT EXISTS (
+      SELECT 1
+      FROM company_search_pings p
+      WHERE p.company_slug = c.slug
+        AND p.engine = sqlc.arg(engine)
+  )
+ORDER BY c.created_at DESC
+LIMIT sqlc.arg(batch_size);
+
+-- name: RecordCompanySearchPing :exec
+-- Record that this company page was announced to this engine. Idempotent, for the same
+-- reason its job sibling is: the row is what stops a re-run after a partial failure from
+-- spending a bounded budget twice.
+INSERT INTO company_search_pings (company_slug, engine)
+VALUES (sqlc.arg(company_slug), sqlc.arg(engine))
+ON CONFLICT (company_slug, engine) DO NOTHING;
+
+-- name: CountCompanySearchPingsSince :one
+-- How many company pages this engine has been sent since a moment. Counted separately
+-- from the job ledger and then ADDED by the caller: the budget belongs to the engine,
+-- and a company page costs it exactly what a job page does.
+SELECT count(*)
+FROM company_search_pings
+WHERE engine = sqlc.arg(engine)
+  AND pinged_at >= sqlc.arg(since);

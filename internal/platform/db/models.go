@@ -338,6 +338,12 @@ type CompanyProcessReport struct {
 	RetractedAt pgtype.Timestamptz `json:"retracted_at"`
 }
 
+type CompanySearchPing struct {
+	CompanySlug string             `json:"company_slug"`
+	Engine      string             `json:"engine"`
+	PingedAt    pgtype.Timestamptz `json:"pinged_at"`
+}
+
 // Retired company slug -> the canonical slug it merged into. The one company-adjacent table that is NOT derived from jobs: DeleteOrphanCompanies would drop a canon stored in companies as soon as the employer went quiet. Read by folded_key on ingest and by alias_slug to serve a 301.
 type CompanySlugAlias struct {
 	AliasSlug     string `json:"alias_slug"`

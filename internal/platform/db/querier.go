@@ -1037,6 +1037,10 @@ type Querier interface {
 	// to ListCompanies (including the job_count > 0 hiring scope).
 	CountCompanies(ctx context.Context, arg CountCompaniesParams) (int64, error)
 	CountCompanyFeedback(ctx context.Context, companySlug string) (int64, error)
+	// How many company pages this engine has been sent since a moment. Counted separately
+	// from the job ledger and then ADDED by the caller: the budget belongs to the engine,
+	// and a company page costs it exactly what a job page does.
+	CountCompanySearchPingsSince(ctx context.Context, arg CountCompanySearchPingsSinceParams) (int64, error)
 	// Total live messages for the caller under the same optional filters as ListEmails, plus
 	// how many of them the `other` default omitted.
 	//
@@ -3231,6 +3235,22 @@ type Querier interface {
 	// once). Keyset-paginated by slug so one run can be bounded and a later run
 	// resumes past what it already paged through.
 	ListCompaniesMissingWikipediaInfo(ctx context.Context, arg ListCompaniesMissingWikipediaInfoParams) ([]ListCompaniesMissingWikipediaInfoRow, error)
+	// The company pages this engine has not been told about, newest first.
+	//
+	// job_count > 0 is the whole eligibility, and it is not a fresh judgement: it is the
+	// same gate that puts a company in the sitemap, derived by cmd/recount-companies from
+	// the postings the SEARCH INDEX will hold (see the long argument on that query in
+	// companies.sql). So a page announced here is exactly a page the site already claims,
+	// and a company whose last posting drops out of search stops being offered without this
+	// query knowing why.
+	//
+	// NEWEST FIRST, matching the job query's policy: a company only just discovered is the
+	// one no engine can have seen, and the older rows have had every chance to be crawled.
+	// Not by job_count — the evidence points the other way. The company pages actually
+	// ranking in Bing are the long tail (laserfocus, truebiz, read-bean, astra-tech-labs),
+	// because for a small employer this page may be the only assembled list of its roles,
+	// while a large one's own careers site already owns that query.
+	ListCompaniesToPing(ctx context.Context, arg ListCompaniesToPingParams) ([]string, error)
 	// The open titles a company carries on its OWN board — a source of kind `ats` or
 	// `company`, never an aggregator. The worker turns these into role keys and asks
 	// whether an aggregator posting's key is among them.
@@ -4897,6 +4917,10 @@ type Querier interface {
 	RecordBoardSuccess(ctx context.Context, arg RecordBoardSuccessParams) error
 	// Closes out one (user, campaign) whether or not the send worked.
 	RecordBroadcastEmail(ctx context.Context, arg RecordBroadcastEmailParams) error
+	// Record that this company page was announced to this engine. Idempotent, for the same
+	// reason its job sibling is: the row is what stops a re-run after a partial failure from
+	// spending a bounded budget twice.
+	RecordCompanySearchPing(ctx context.Context, arg RecordCompanySearchPingParams) error
 	// Ledger write, one row per posting in the published list. Written only AFTER a
 	// channel has published; a dry run never reaches here. ON CONFLICT DO NOTHING so a
 	// retry that races itself cannot fail the run over a row that already says what we

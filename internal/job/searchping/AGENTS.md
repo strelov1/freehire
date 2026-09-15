@@ -53,7 +53,7 @@ the divergence is named rather than left to be discovered.
 ## The two events, and which wins
 
 A posting is announced twice: once when it appears (`created`), once after it closes
-(`closed`). **Both are `URL_UPDATED`.** A closed posting's page stays at HTTP 200 and
+(`closed`); a company page once (`company`, below). **Both are `URL_UPDATED`.** A closed posting's page stays at HTTP 200 and
 keeps its `JobPosting` markup with `validThrough` moved into the past, which is one of the
 three ways Google documents for retiring a posting — so a closure needs a *re-crawl*, not
 a deletion. Sending `URL_DELETED` for a page that is still online is a misuse of the API,
@@ -72,6 +72,42 @@ new postings filled one batch.
 The closure query only considers postings this engine was **already told about**:
 announcing the closure of a page an engine never heard of teaches it a dead URL and spends
 budget doing it. That also bounds the candidate set by construction.
+
+## The company page is the asset, and only IndexNow may hear about it
+
+Measured 2026-09-15 through the Bing Webmaster API — the first look this repository has
+ever had at Bing's side:
+
+| | |
+|---|---|
+| pages Bing holds in its index | **255,038**, climbing ~6k/day |
+| its highest-impression pages | `/companies/<slug>` — laserfocus, astra-tech-labs, truebiz, read-bean |
+| the query shape behind them | **"<company name> careers"** |
+| bingbot's crawl, two days | 6,275 company pages vs 3,679 job pages |
+
+Google's own query data from early August says the same thing (`princess cruises
+careers`, `techno brain careers`). Two engines, independently, agree.
+
+The reason is structural: a job page's text belongs to the employer and exists in a dozen
+other copies, while a company page is OUR assembly — every open role of one employer in
+one place — which the employer often does not publish anywhere.
+
+**But Google may not be told.** Its Indexing API admits only `JobPosting` and
+`BroadcastEvent` pages, so a company page sent there is a terms violation whose penalty
+is the quota. `Engine.Accepts` is where that fact lives: Google declines `KindCompany`,
+IndexNow takes everything, and the runner skips a refused pass without reporting it — a
+line reading `google/company: nothing to announce` would look like an empty catalogue
+rather than a rule.
+
+Eligibility is `companies.job_count > 0`, the same gate that puts a company in the
+sitemap, so a page announced here is exactly a page the site already claims. Newest
+first, and deliberately **not** by `job_count`: the company pages actually ranking are
+the long tail, because for a small employer this page may be the only assembled list of
+its roles while a large one's own careers site already owns that query.
+
+Company pings have their own ledger (`company_search_pings`, migration 0164) and **no
+kind column** — a company page has one event. It gains and loses postings continuously
+and its URL never dies of it: a company whose postings all close keeps a 200 page.
 
 ## The two engines
 

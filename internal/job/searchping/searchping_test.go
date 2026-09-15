@@ -8,14 +8,16 @@ import (
 )
 
 type fakeRepo struct {
-	candidates    []Candidate
-	closed        []Candidate
-	sentToday     int64
-	recorded      []int64
-	recordedAs    []Kind
-	listLimit     int32
-	closededLimit int32
-	recordErr     error
+	candidates  []Candidate
+	closed      []Candidate
+	companies   []Candidate
+	sentToday   int64
+	recorded    []int64
+	recordedAs  []Kind
+	recordedCo  []string
+	listLimit   int32
+	closedLimit int32
+	recordErr   error
 }
 
 func take(all []Candidate, limit int32) []Candidate {
@@ -31,16 +33,23 @@ func (f *fakeRepo) JobsToPing(_ context.Context, _ string, limit int32) ([]Candi
 }
 
 func (f *fakeRepo) ClosedJobsToPing(_ context.Context, _ string, limit int32) ([]Candidate, error) {
-	f.closededLimit = limit
+	f.closedLimit = limit
 	return take(f.closed, limit), nil
 }
 
-func (f *fakeRepo) RecordPing(_ context.Context, jobID int64, _ string, kind Kind) error {
+func (f *fakeRepo) CompaniesToPing(_ context.Context, _ string, limit int32) ([]Candidate, error) {
+	return take(f.companies, limit), nil
+}
+
+func (f *fakeRepo) RecordPing(_ context.Context, c Candidate, _ string, kind Kind) error {
 	if f.recordErr != nil {
 		return f.recordErr
 	}
-	f.recorded = append(f.recorded, jobID)
+	f.recorded = append(f.recorded, c.JobID)
 	f.recordedAs = append(f.recordedAs, kind)
+	if c.Company != "" {
+		f.recordedCo = append(f.recordedCo, c.Company)
+	}
 	return nil
 }
 
@@ -50,6 +59,7 @@ func (f *fakeRepo) PingsSince(_ context.Context, _ string, _ time.Time) (int64, 
 
 type fakeEngine struct {
 	name     string
+	refuses  Kind
 	budget   int
 	offered  []string
 	accept   int // how many of the offered URLs to accept
@@ -59,6 +69,8 @@ type fakeEngine struct {
 
 func (f *fakeEngine) Name() string     { return f.name }
 func (f *fakeEngine) DailyBudget() int { return f.budget }
+
+func (f *fakeEngine) Accepts(kind Kind) bool { return f.refuses == "" || kind != f.refuses }
 
 func (f *fakeEngine) Announce(_ context.Context, urls []string) ([]string, error) {
 	f.callSeen = true
@@ -295,8 +307,8 @@ func TestClosuresGetWhatTheNewPostingsLeave(t *testing.T) {
 	if got := pick(t, reports, "google", KindClosed).Recorded; got != 3 {
 		t.Fatalf("closures recorded %d, want the 3 the new postings left", got)
 	}
-	if repo.closededLimit != 3 {
-		t.Fatalf("asked for %d closures, want 3", repo.closededLimit)
+	if repo.closedLimit != 3 {
+		t.Fatalf("asked for %d closures, want 3", repo.closedLimit)
 	}
 }
 
@@ -372,5 +384,68 @@ func TestBudgetIsChargedForAcceptedNotRecorded(t *testing.T) {
 	}
 	if got := pick(t, reports, "google", KindClosed).Offered; got != 2 {
 		t.Fatalf("closures offered %d, want 2 — the 3 accepted calls are spent even though none were recorded", got)
+	}
+}
+
+// The rule this pass exists under: Google's Indexing API admits only JobPosting pages,
+// so a company page sent there is a terms violation whose penalty is the quota. The
+// refusal is the engine's own answer, not a branch on its name.
+func TestAnEngineIsNeverOfferedAKindItRefuses(t *testing.T) {
+	repo := &fakeRepo{candidates: candidates(2), companies: candidates(5)}
+	google := &fakeEngine{name: "google", budget: 200, refuses: KindCompany, accept: 10}
+	indexnow := &fakeEngine{name: "indexnow", accept: 10}
+
+	reports := New(repo, "https://freehire.me", google, indexnow).Run(context.Background(), 10)
+
+	for _, r := range reports {
+		if r.Engine == "google" && r.Kind == KindCompany {
+			t.Fatalf("google was offered the company pass: %+v", r)
+		}
+	}
+	if got := pick(t, reports, "indexnow", KindCompany).Recorded; got != 5 {
+		t.Fatalf("indexnow recorded %d company pages, want 5", got)
+	}
+	// And the refusal must not leave a misleading line behind: "nothing to announce"
+	// would read like an empty catalogue rather than a rule.
+	for _, r := range reports {
+		if r.Engine == "google" && r.Kind == KindCompany {
+			t.Fatal("a refused pass must not be reported at all")
+		}
+	}
+}
+
+func TestCompanyPagesUseTheCompanyPath(t *testing.T) {
+	repo := &fakeRepo{companies: []Candidate{{Company: "laserfocus", Slug: "laserfocus"}}}
+	engine := &fakeEngine{name: "indexnow", accept: 1}
+
+	r := pick(t, New(repo, "https://freehire.me", engine).Preview(context.Background(), 10), "indexnow", KindCompany)
+
+	if len(r.URLs) != 1 || r.URLs[0] != "https://freehire.me/companies/laserfocus" {
+		t.Fatalf("urls = %v, want the /companies/ path", r.URLs)
+	}
+}
+
+// A company is recorded by its slug in its own ledger, not by a job id it does not have.
+func TestCompanyPingIsRecordedBySlug(t *testing.T) {
+	repo := &fakeRepo{companies: []Candidate{{Company: "truebiz", Slug: "truebiz"}}}
+	engine := &fakeEngine{name: "indexnow", accept: 1}
+
+	New(repo, "https://freehire.me", engine).Run(context.Background(), 10)
+
+	if len(repo.recordedCo) != 1 || repo.recordedCo[0] != "truebiz" {
+		t.Fatalf("recorded companies = %v, want [truebiz]", repo.recordedCo)
+	}
+}
+
+// New postings still come first. The company page is what WINS, but a posting is
+// perishable and an employer's page is not — so the order is deliberate, not incidental.
+func TestPostingsStillTakeTheBudgetBeforeCompanies(t *testing.T) {
+	repo := &fakeRepo{candidates: candidates(10), companies: candidates(10), sentToday: 197}
+	engine := &fakeEngine{name: "google", budget: 200, accept: 10}
+
+	reports := New(repo, "https://freehire.me", engine).Run(context.Background(), 50)
+
+	if got := pick(t, reports, "google", KindCreated).Recorded; got != 3 {
+		t.Fatalf("created recorded %d, want the 3 left of the day", got)
 	}
 }

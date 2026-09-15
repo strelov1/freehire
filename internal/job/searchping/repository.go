@@ -45,17 +45,45 @@ func (r *PostgresRepository) ClosedJobsToPing(ctx context.Context, engine string
 	return candidates, nil
 }
 
-func (r *PostgresRepository) RecordPing(ctx context.Context, jobID int64, engine string, kind Kind) error {
+func (r *PostgresRepository) CompaniesToPing(ctx context.Context, engine string, limit int32) ([]Candidate, error) {
+	slugs, err := r.q.ListCompaniesToPing(ctx, db.ListCompaniesToPingParams{Engine: engine, BatchSize: limit})
+	if err != nil {
+		return nil, err
+	}
+	candidates := make([]Candidate, 0, len(slugs))
+	for _, slug := range slugs {
+		candidates = append(candidates, Candidate{Company: slug, Slug: slug})
+	}
+	return candidates, nil
+}
+
+func (r *PostgresRepository) RecordPing(ctx context.Context, c Candidate, engine string, kind Kind) error {
+	if kind.isCompany() {
+		return r.q.RecordCompanySearchPing(ctx, db.RecordCompanySearchPingParams{
+			CompanySlug: c.Company,
+			Engine:      engine,
+		})
+	}
 	return r.q.RecordJobSearchPing(ctx, db.RecordJobSearchPingParams{
-		JobID:  jobID,
+		JobID:  c.JobID,
 		Engine: engine,
 		Kind:   string(kind),
 	})
 }
 
+// PingsSince sums BOTH ledgers. The budget belongs to the engine and a company page
+// costs it exactly what a posting does, so counting only one would let the day's
+// allowance be spent close to twice over the moment an engine takes both.
 func (r *PostgresRepository) PingsSince(ctx context.Context, engine string, since time.Time) (int64, error) {
-	return r.q.CountJobSearchPingsSince(ctx, db.CountJobSearchPingsSinceParams{
-		Engine: engine,
-		Since:  pgtype.Timestamptz{Time: since, Valid: true},
-	})
+	at := pgtype.Timestamptz{Time: since, Valid: true}
+
+	jobs, err := r.q.CountJobSearchPingsSince(ctx, db.CountJobSearchPingsSinceParams{Engine: engine, Since: at})
+	if err != nil {
+		return 0, err
+	}
+	companies, err := r.q.CountCompanySearchPingsSince(ctx, db.CountCompanySearchPingsSinceParams{Engine: engine, Since: at})
+	if err != nil {
+		return 0, err
+	}
+	return jobs + companies, nil
 }
