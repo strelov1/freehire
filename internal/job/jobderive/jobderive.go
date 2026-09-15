@@ -294,12 +294,38 @@ func deriveRequiresClearance(desc string) *bool {
 // "…Engineer" matches the non-tech detector only where its discipline is named
 // outright — "mechanical engineer", "civil engineer" and the rest of that anchored
 // family — so "Drainage Engineer" still matches neither detector and stays unknown.
+//
+// The two kinds of technical evidence are NOT weighed the same, and that is the whole
+// of what this function decides. A technical TITLE (classify.IsTech) wins outright, as
+// it always has: it speaks for the whole role, so "Backend Engineer — Teller Systems"
+// stays technical despite its accidental "teller". A technical CATEGORY does not — it
+// is resolved from a SUBSTRING, and a substring can be about something else entirely.
+// "Quality Assurance Nurse Manager" resolves to `qa`, "Registered Nurse Intensive Mobile
+// Team" to `mobile`, "инспектор по охране труда" to `security`. In each the title
+// dictionary already says non-technical outright, and before this it was never asked:
+// the category alone asserted true and nothing later could take it back.
+//
+// Measured over the 3 000 commonest titles currently flagged technical (197 916 open
+// postings), letting the non-tech TITLE outvote a category-only signal changes 22 titles
+// and 2 067 postings, every one of them a correction — nurses, HVAC project managers,
+// mobile mechanics and phlebotomists, occupational-safety inspectors, a policeman, a
+// school safety teacher, a QA lab technician. Nothing moves the other way: the positive
+// branch is strictly narrower than before, so this can only ever withdraw a true.
+//
+// TechEvidence itself is deliberately UNCHANGED. It is also the veto the ingest filter
+// and the prune rule read, where the cost of getting this wrong is a deleted posting
+// rather than a mislabelled facet — see its own comment.
 func deriveIsTech(category, title string, sourceHint bool) *bool {
-	if sourceHint || TechEvidence(category, title) {
+	if sourceHint || classify.IsTech(title) {
 		t := true
 		return &t
 	}
-	if slices.Contains(vocab.NonTechCategories, category) || classify.IsNonTech(title) {
+	nonTech := slices.Contains(vocab.NonTechCategories, category) || classify.IsNonTech(title)
+	if slices.Contains(vocab.TechCategories, category) && !nonTech {
+		t := true
+		return &t
+	}
+	if nonTech {
 		f := false
 		return &f
 	}

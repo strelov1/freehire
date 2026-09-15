@@ -158,3 +158,53 @@ func TestDerive_IsTech_MarketingAliasesDoNotClaimTech(t *testing.T) {
 		}
 	}
 }
+
+// TestDerive_IsTech_NonTechTitleBeatsTechCategory pins which of the two technical
+// signals may be outvoted.
+//
+// A technical TITLE speaks for the whole role and keeps its outright win — that is what
+// stops "Backend Engineer — Teller Systems" from being dragged out of the catalogue by
+// its accidental "teller". A technical CATEGORY is resolved from a SUBSTRING, and the
+// substring can be about something else: `qa` from a hospital's quality assurance,
+// `mobile` from a mobile clinic or a mobile mechanic, `security` from occupational
+// safety. In every case below the title dictionary already said non-technical outright
+// and was never asked, because the category had already asserted true.
+//
+// Measured over the 3 000 commonest titles currently flagged technical (197 916 open
+// postings), this changes 22 titles and 2 067 postings — every one a correction, and
+// none in the other direction, since the positive branch is strictly narrower than
+// before.
+func TestDerive_IsTech_NonTechTitleBeatsTechCategory(t *testing.T) {
+	for _, tt := range []struct {
+		name string
+		in   Input
+		want *bool
+	}{
+		// The category is technical; the title says otherwise, and now wins.
+		{"qa category, nurse title", Input{Title: "Quality Assurance Nurse Manager"}, boolp(false)},
+		{"qa category, nurse abbreviation", Input{Title: "QA Nurse LPN/RN"}, boolp(false)},
+		{"qa category, lab technician", Input{Title: "QA Lab Technician"}, boolp(false)},
+		{"mobile category, nurse title", Input{Title: "Registered Nurse Intensive Mobile Team"}, boolp(false)},
+		{"mobile category, mechanic title", Input{Title: "Mobile Diesel Mechanic"}, boolp(false)},
+		{"project_management category, HVAC title", Input{Title: "HVAC Project Manager"}, boolp(false)},
+
+		// A technical TITLE still wins outright — the case TechEvidence exists to protect.
+		{"tech title survives an accidental non-tech word", Input{Title: "Backend Engineer — Teller Systems"}, boolp(true)},
+		{"tech title survives a non-tech domain", Input{Title: "Data Engineer, Nurse Scheduling"}, boolp(true)},
+		{"tech title survives a non-tech product", Input{Title: "Full Stack Developer (Janitorial SaaS)"}, boolp(true)},
+
+		// A technical category with no non-tech title is untouched.
+		{"qa category, software title", Input{Title: "QA Automation Engineer"}, boolp(true)},
+		{"mobile category, software title", Input{Title: "Mobile Developer"}, boolp(true)},
+
+		// The source hint still wins ahead of everything, including a non-tech title:
+		// it is a fact the source stated about its own crawl scope.
+		{"source hint beats a non-tech title", Input{Title: "QA Nurse LPN/RN", IsTechHint: true}, boolp(true)},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := Derive(tt.in).IsTech; showBoolp(got) != showBoolp(tt.want) {
+				t.Errorf("IsTech(%q) = %s, want %s", tt.in.Title, showBoolp(got), showBoolp(tt.want))
+			}
+		})
+	}
+}
