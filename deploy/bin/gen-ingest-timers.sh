@@ -39,7 +39,32 @@ mapfile -t PROVIDERS <<<"$providers"
 # ~11 runs resident at all times, saturating host I/O (pressure `full` 19%). An hourly
 # timer on a 40-minute board only ever bought partial results. taleo was already on 3h
 # for the same reason and joins them so it shares the spread below.
-HEAVY="bamboohr icims paycom gupy mycareersfuture ukg careerplug jibe jazzhr vagas apple taleo"
+# ONE LINE, deliberately: membership is tested with `case " $HEAVY " in *" $n "*)`, which
+# is a search for a space-delimited word. A newline inside the list would silently fail to
+# match the entry before it and the entry after it, and nothing would report that.
+#
+# phenom..successfactors were added 2026-09-15, by the same metric and the same rule as the
+# rest: freehire_worker_last_run_duration_seconds (the binary's own runtime,
+# which is the only figure that excludes the wait inside ingest-slot.sh) above the ~40min
+# mark where an hourly timer can only ever buy partial results. Measured: phenom 50.1,
+# jobleads 50.0, wantapply 50.0, workable 50.0, trudvsem 48.3, freshteam 42.8,
+# successfactors 39.5.
+#
+# They were starving the whole tail, and the arithmetic is the entire story: a 50-minute
+# crawl on an HOURLY timer holds 83% of one slot forever. Four of them is 3.3 of the six
+# slots the shared pool has. Sampled every 20s for 8 minutes on 2026-09-15, workable, vk,
+# trudvsem and freshteam held a shared slot in 48 of 48 samples and successfactors in 38 --
+# six providers sitting on all six slots continuously, while the other ~230 split whatever
+# was left. 837 of 1482 firings that day were skipped, and the ten providers whose timers
+# had just been created were skipped on their FIRST cycle, every one.
+#
+# At the 3h HEAVY cadence the same crawl holds 28% of a slot instead of 83%.
+#
+# What this does NOT fix: the fleet's total demand is ~26 slot-hours per cycle against 10
+# slots, so hourly-for-everyone is unreachable however the pools are cut. That is what
+# cmd/ingest-scheduler exists to solve -- it can order the work by how stale a provider
+# actually is, which a wall-clock timer cannot.
+HEAVY="bamboohr icims paycom gupy mycareersfuture ukg careerplug jibe jazzhr vagas apple taleo phenom jobleads wantapply workable trudvsem freshteam successfactors"
 
 # SHARDED lists the providers generated as shard units further down instead of as one
 # timer here. They are heavy by definition — sharding is what a provider gets when even
