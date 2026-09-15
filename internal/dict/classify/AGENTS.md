@@ -88,11 +88,19 @@ has had its backfill run. **Delete this section once it has.**
   technical (197,916 open postings): 22 titles and 2,067 postings move, every one a
   correction.
 
-Together roughly **6,300 stored postings still read `is_tech = true` when the current
-dictionaries say otherwise** — mall guards, nurses, HVAC project managers, occupational
-safety inspectors. Until the backfill runs they stay in technical search, and
-`cmd/search-ping` keeps spending a little of Google's 200-a-day allowance on them
-(measured 2026-09-15: 14 of 398 announcements, 3.5%).
+Together roughly **6,300 stored postings read `is_tech = true` against what the current
+dictionaries say** — mall guards, nurses, HVAC project managers, occupational safety
+inspectors.
+
+**An open posting corrects itself on its next crawl, and only that.** `job.New` runs
+`jobderive.Derive` on every ingest, and `is_tech` is part of `RefreshUnchangedJob`'s match
+key, so a row whose derived value moved fails the cheap refresh and goes through
+`UpsertJob`, which writes the new one. What the backfill is for is everything that will
+NOT be crawled again: **closed postings above all** — they appear in no listing, so
+nothing re-derives them — and any posting whose board or provider has stopped being
+crawled. Until then those stay in technical search, and `cmd/search-ping` spends a little
+of Google's 200-a-day allowance on the open ones it reaches first (measured 2026-09-15:
+14 of 398 announcements, 3.5%).
 
 Clearing it is `cmd/backfill-derive` (~15h; hold `BACKFILL_CONCURRENCY` at 2-3, it has
 degraded prod at 6) followed by a full `make reindex` — `is_tech` is not part of

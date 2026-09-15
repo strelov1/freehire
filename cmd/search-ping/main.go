@@ -58,13 +58,11 @@ func run() int {
 	// without touching the database at all. This is what makes the rollback — clear the
 	// two credentials — leave a green timer on a host that has no DATABASE_URL, which is
 	// what this worker's unit, its entry in AGENTS.md and its pull request all promise.
+	//
+	// The gate reads the environment and nothing else. Building the engines needs the
+	// signal-bound context Bootstrap has not created yet, so it waits until below.
 	cfg := config.Load()
-	engines, err := configuredEngines(cfg.FrontendOrigin)
-	if err != nil {
-		log.Printf("search-ping: %v", err)
-		return 1
-	}
-	if len(engines) == 0 {
+	if !anyEngineConfigured() {
 		log.Printf("search-ping: no engine configured, nothing to do")
 		return 0
 	}
@@ -89,18 +87,20 @@ func run() int {
 	}
 	defer cleanup()
 
-	// Verified after the pool is open rather than during construction, because it is the
-	// one part of readying an engine that leaves the process: a network check belongs on
-	// the far side of the gate that decides whether this run does anything at all.
-	for _, engine := range engines {
-		verifier, ok := engine.(keyVerifier)
-		if !ok {
-			continue
-		}
-		if err := verifier.VerifyKey(ctx); err != nil {
-			log.Printf("search-ping: %v", err)
-			return 1
-		}
+	// Built with ctx, not context.Background(): Google's client refreshes its token on
+	// that context, so a SIGTERM mid-refresh should end the run rather than wait out the
+	// HTTP timeout. That is the whole reason this sits below Bootstrap and the gate above
+	// reads only the environment.
+	engines, err := configuredEngines(ctx, cfg.FrontendOrigin)
+	if err != nil {
+		log.Printf("search-ping: %v", err)
+		return 1
+	}
+	if len(engines) == 0 {
+		// Unreachable past the gate, and checked anyway: the day the two disagree, this
+		// is a clean exit rather than a runner with nothing to drive.
+		log.Printf("search-ping: no engine configured, nothing to do")
+		return 0
 	}
 
 	runner := searchping.New(searchping.NewPostgresRepository(db.New(pool)), cfg.FrontendOrigin, engines...)
@@ -111,29 +111,28 @@ func run() int {
 	return report(runner.Run(ctx, int(batch)))
 }
 
-// keyVerifier is an engine that can prove its credential before anything is sent.
-// Optional, and only IndexNow implements it: its ownership proof is a file the site
-// serves, so the key lives in two places and they can drift apart. Google's credential
-// is a signed assertion with nothing to compare against.
-type keyVerifier interface {
-	VerifyKey(context.Context) error
+// anyEngineConfigured reports whether this deployment has been given anything to
+// announce with. It reads the environment and nothing else — no file, no network, no
+// database — because it runs before Bootstrap, so that a host with neither credential
+// never opens a pool it has no use for.
+func anyEngineConfigured() bool {
+	return strings.TrimSpace(os.Getenv("GOOGLE_INDEXING_KEY_FILE")) != "" ||
+		strings.TrimSpace(os.Getenv("INDEXNOW_KEY")) != ""
 }
 
-// configuredEngines builds the engines whose configuration is present, and touches
-// nothing outside this process while doing it — it is called before the pool is open, so
-// that a deployment with no credentials never reaches the database.
+// configuredEngines builds the engines whose configuration is present.
 //
 // A missing credential is not an error: it is how an engine ships turned off and how it
-// is rolled back. A credential that is present but unreadable IS an error — the
-// difference between "not configured" and "misconfigured" is the whole point of checking.
-func configuredEngines(origin string) ([]searchping.Engine, error) {
+// is rolled back. A credential that is present but unusable IS an error — the difference
+// between "not configured" and "misconfigured" is the whole point of checking.
+func configuredEngines(ctx context.Context, origin string) ([]searchping.Engine, error) {
 	var engines []searchping.Engine
 
 	budget, err := worker.EnvInt32("GOOGLE_INDEXING_DAILY_BUDGET", 200)
 	if err != nil {
 		return nil, err
 	}
-	google, err := searchping.NewGoogleEngine(context.Background(), os.Getenv("GOOGLE_INDEXING_KEY_FILE"), int(budget), requestTimeout)
+	google, err := searchping.NewGoogleEngine(ctx, os.Getenv("GOOGLE_INDEXING_KEY_FILE"), int(budget), requestTimeout)
 	if err != nil {
 		return nil, err
 	}
@@ -146,10 +145,12 @@ func configuredEngines(origin string) ([]searchping.Engine, error) {
 		return nil, err
 	}
 	if indexNow != nil {
-		// Its key is checked once by the caller, after the gate — see run(). Once per run
-		// rather than per send: IndexNow answers a key mismatch with a 403 on every
-		// submission, which reads like a broken integration instead of two copies of a
-		// public key that drifted apart.
+		// Checked once here rather than per send: IndexNow answers a key mismatch with a
+		// 403 on every submission, which reads like a broken integration instead of two
+		// copies of a public key that drifted apart.
+		if err := indexNow.VerifyKey(ctx); err != nil {
+			return nil, err
+		}
 		engines = append(engines, indexNow)
 	}
 
