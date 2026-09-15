@@ -86,11 +86,7 @@
 
   function messageFor(e: unknown): string {
     if (!(e instanceof ApiError)) return s.genericError;
-    if (e.status === 428) return s.reauthRequired;
-    // With a password in play the 401 is the re-authentication refusing it, not the
-    // session: the deletion request itself never gets sent in that case.
-    if (e.status === 401 && !identity?.isConfirmed()) return s.wrongPassword;
-    // Everything else the server says is worth repeating verbatim — the typed
+    // Everything the server says here is worth repeating verbatim — the typed
     // confirmation not matching (400), and the 503 that means nothing was deleted.
     return e.message;
   }
@@ -100,17 +96,18 @@
     busy = true;
     error = null;
     try {
-      await identity?.prove();
+      if (!(await identity?.prove())) {
+        busy = false;
+        return;
+      }
       await api.deleteAccount(confirmation.trim());
       // The account is gone and the session cookie with it; re-resolve to signed-out
       // before leaving so no stale user lingers in the layout.
       await invalidateAll();
       await goto(resolve('/'));
     } catch (e) {
-      // The server overruled a proof this dialog believed in; drop the belief so the
-      // confirmation step returns rather than a failure the member cannot act on.
-      if (e instanceof ApiError && e.status === 428) identity?.refused();
-      error = messageFor(e);
+      // Identity refusals are worded once, by the component that asked for the proof.
+      error = identity?.handleRefusal(e) ?? messageFor(e);
       busy = false;
     }
   }
@@ -159,21 +156,17 @@
     disabled={busy}
   />
 
-  <!-- `{#if open}` because Dialog renders its children unconditionally: a bare
-       ConfirmIdentity would fetch this member's sign-in providers on every visit to the
-       security page, whether or not they ever open this dialog. -->
-  {#if open}
-    <div class="mt-4">
-      <ConfirmIdentity
-        bind:this={identity}
-        bind:password
-        returnTo="/my/security"
-        draft={() => ({ surface: 'delete-account' })}
-        prompt={s.confirmPrompt}
-        disabled={busy}
-      />
-    </div>
-  {/if}
+  <div class="mt-4">
+    <ConfirmIdentity
+      bind:this={identity}
+      bind:password
+      returnTo="/my/security"
+      draft={() => ({ surface: 'delete-account' })}
+      prompt={s.confirmPrompt}
+      active={open}
+      disabled={busy}
+    />
+  </div>
 
   {#if error}
     <p class="mt-3 text-sm text-destructive">{error}</p>

@@ -1,8 +1,9 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
-  import { api, ApiError } from '$lib/api';
+  import { api } from '$lib/api';
   import { AsyncData } from '$lib/asyncData.svelte';
   import { isAuthenticated } from '$lib/auth.svelte';
+  import { consumeReauthDraft } from '$lib/recentAuth';
   import { locale } from '$lib/i18n/currentLocale.svelte';
   import { t } from '$lib/i18n/t';
   import type { ApiKey, CreatedApiKey } from '$lib/types';
@@ -65,6 +66,25 @@
   let revokePassword = $state('');
   let revokeIdentity = $state<ConfirmIdentity | null>(null);
 
+  // Reopen the revocation the member left to confirm. The key ID travels rather than the
+  // key itself: the list is re-fetched on mount, so the row is looked up fresh — a stored
+  // copy could be of a key that has since been revoked from another tab.
+  $effect(() => {
+    const pending = consumeReauthDraft('revoke-api-key');
+    if (!pending) return;
+    pendingRevokeId = pending.keyId;
+  });
+  // Held until the list arrives, since the dialog names the key and the fetch may still be
+  // in flight when the draft is read.
+  let pendingRevokeId = $state<number | null>(null);
+  $effect(() => {
+    if (pendingRevokeId === null) return;
+    const key = keysData.value.find((k) => k.id === pendingRevokeId);
+    if (!key) return;
+    pendingRevokeId = null;
+    requestRevoke(key);
+  });
+
   function requestRevoke(key: ApiKey): void {
     revokeTarget = key;
     revokePassword = '';
@@ -75,24 +95,18 @@
     const key = revokeTarget;
     if (!key) return;
     try {
-      await revokeIdentity?.prove();
+      if (!(await revokeIdentity?.prove())) throw new Error(s.errors.confirmFirst);
       await api.revokeApiKey(key.id);
       keysData.value = keysData.value.filter((k) => k.id !== key.id);
       if (revealed?.id === key.id) revealed = null;
       revokePassword = '';
     } catch (error) {
       // ConfirmDialog shows a thrown message in place and holds itself open, which is what
-      // keeps the confirmation the member needs on screen with the failure that asked
-      // for it.
-      if (error instanceof ApiError && error.status === 428) {
-        revokeIdentity?.refused();
-        throw new Error(s.errors.reauthBeforeRevoke, { cause: error });
-      }
-      const message =
-        error instanceof ApiError && error.status === 401 && !revokeIdentity?.isConfirmed()
-          ? s.errors.wrongPassword
-          : s.errors.revokeFailed;
-      throw new Error(message, { cause: error });
+      // keeps the confirmation the member needs on screen beside the failure that asked
+      // for it. Identity refusals are worded by the component that asked for the proof.
+      throw new Error(revokeIdentity?.handleRefusal(error) ?? s.errors.revokeFailed, {
+        cause: error,
+      });
     }
   }
 </script>
@@ -193,15 +207,14 @@
   >
     <!-- The fix for the original report. ConfirmDialog has always accepted `children`;
          this page simply never passed any, so the dialog asked for a password that only
-         existed on the page behind its own backdrop. `{#if}` because Dialog renders its
-         children whether or not it is open. -->
-    {#if confirmRevokeOpen}
-      <ConfirmIdentity
-        bind:this={revokeIdentity}
-        bind:password={revokePassword}
-        returnTo="/my/api-keys"
-        prompt={s.revokeDialog.confirmPrompt}
-      />
-    {/if}
+         existed on the page behind its own backdrop. -->
+    <ConfirmIdentity
+      bind:this={revokeIdentity}
+      bind:password={revokePassword}
+      returnTo="/my/api-keys"
+      prompt={s.revokeDialog.confirmPrompt}
+      draft={() => ({ surface: 'revoke-api-key', keyId: revokeTarget?.id ?? 0 })}
+      active={confirmRevokeOpen}
+    />
   </ConfirmDialog>
 {/if}

@@ -41,8 +41,7 @@ export const messages = defineMessages(
       create: 'Create key',
     },
     errors: {
-      wrongPassword: 'That password is not right.',
-      reauthBeforeRevoke: 'Confirm your identity before revoking a key.',
+      confirmFirst: 'Confirm it is you before revoking a key.',
       revokeFailed: 'Could not revoke the key. Please try again.',
     },
     list: {
@@ -90,8 +89,7 @@ export const messages = defineMessages(
         create: 'Создать ключ',
       },
       errors: {
-        wrongPassword: 'Неверный пароль.',
-        reauthBeforeRevoke: 'Подтвердите свою личность, прежде чем отзывать ключ.',
+        confirmFirst: 'Подтвердите, что это вы, прежде чем отзывать ключ.',
         revokeFailed: 'Не удалось отозвать ключ. Попробуйте ещё раз.',
       },
       list: {

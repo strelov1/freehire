@@ -22,8 +22,6 @@ export const messages = defineMessages(
     manageSubscription: 'Manage subscription',
     confirmPrefix: 'Type',
     confirmSuffix: 'to confirm',
-    wrongPassword: 'That password is not right.',
-    reauthRequired: 'Confirm your identity before deleting your account.',
     // The `prompt` handed to ConfirmIdentity: why THIS action is worth confirming.
     confirmPrompt: 'Deleting an account cannot be undone, so we check it is you.',
     cancel: 'Cancel',
@@ -51,8 +49,6 @@ export const messages = defineMessages(
       manageSubscription: 'Управление подпиской',
       confirmPrefix: 'Введите',
       confirmSuffix: 'для подтверждения',
-      wrongPassword: 'Неверный пароль.',
-      reauthRequired: 'Подтвердите свою личность, прежде чем удалять аккаунт.',
       confirmPrompt: 'Удаление аккаунта нельзя отменить, поэтому мы проверяем, что это вы.',
       cancel: 'Отмена',
       deleting: 'Удаление…',

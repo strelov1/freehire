@@ -72,18 +72,17 @@
     error = null;
     try {
       // Holds a proof or buys one with the typed password — the component decides which,
-      // so this dialog does not carry its own copy of that rule.
-      await identity?.prove();
+      // and says so itself when the member has supplied neither.
+      if (!(await identity?.prove())) return;
       const expiresAt =
         days > 0 ? new Date(Date.now() + days * 86_400_000).toISOString() : undefined;
       onCreated(await api.createApiKey(trimmed, expiresAt));
       reset();
       open = false;
     } catch (e) {
-      error = messageFor(e);
-      // The server overruled a proof this dialog believed in; drop the belief so the
-      // confirmation step comes back rather than a bare failure the member cannot act on.
-      if (e instanceof ApiError && e.status === 428) identity?.refused();
+      // Identity refusals are worded once, by the component that asked for the proof;
+      // anything else is this dialog's own to explain.
+      error = identity?.handleRefusal(e) ?? messageFor(e);
     } finally {
       creating = false;
     }
@@ -91,18 +90,13 @@
 
   function messageFor(e: unknown): string {
     if (!(e instanceof ApiError)) return s.errors.createFailed;
-    // With a password in play the 401 is the re-authentication refusing it, not the
-    // session: the creation request itself never got sent in that case.
-    if (e.status === 401 && !identity?.isConfirmed()) return s.errors.wrongPassword;
-    if (e.status === 428) return '';
     return e.message || s.errors.createFailed;
   }
 </script>
 
 <Dialog bind:open title={s.title} dismissible={!creating} class="sm:max-w-md">
-  <!-- `{#if open}` because Dialog renders its children unconditionally: a bare
-       ConfirmIdentity would fetch this member's sign-in providers on every visit to a page
-       whose dialog they never open. -->
+  <!-- `{#if open}` because Dialog renders its children unconditionally, and this form's own
+       inputs would otherwise sit in the DOM of a page nobody opened it on. -->
   {#if open}
     <form onsubmit={submit} class="flex flex-col gap-4">
       <label class="flex flex-col gap-1">
@@ -134,6 +128,7 @@
         returnTo="/my/api-keys"
         draft={() => ({ surface: 'create-api-key', name, days })}
         prompt={s.confirmPrompt}
+        active={open}
         disabled={creating}
       />
 

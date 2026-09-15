@@ -19,7 +19,6 @@ export const messages = defineMessages(
     creating: 'Creating…',
     errors: {
       nameRequired: 'Give the key a name.',
-      wrongPassword: 'That password is not right.',
       createFailed: 'Could not create the key. Please try again.',
     },
   },
@@ -39,7 +38,6 @@ export const messages = defineMessages(
       creating: 'Создание…',
       errors: {
         nameRequired: 'Дайте ключу название.',
-        wrongPassword: 'Неверный пароль.',
         createFailed: 'Не удалось создать ключ. Попробуйте ещё раз.',
       },
     },

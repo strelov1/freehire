@@ -178,9 +178,10 @@ which is the legacy no-JTI session (`auth.ErrNoSessionID`). A second password bo
 one just accepted would ask the member to repeat what already worked.
 
 So this surface maps `428` to its own message naming the only thing that actually fixes it:
-sign out and sign back in. The spec's requirement — "never reports it as an unspecified
-error" — is met; what it is not met with is a confirmation control, because there is no
-control that would help.
+sign out and sign back in. The scenario "Every gated surface handles 428" was amended to say
+so in as many words — "presents the confirmation step, **or** — where the confirmation the
+member could offer has already been given and refused — names what would actually resolve
+it" — rather than leaving the code quietly at odds with a document that said otherwise.
 
 This is the one gated surface that does not mount `ConfirmIdentity`, and the reason is
 structural rather than an omission.

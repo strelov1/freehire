@@ -108,6 +108,23 @@ describe('consumeReauthDraft', () => {
     expect(consumeReauthDraft('delete-account')).toBeNull();
   });
 
+  it('carries which key a revocation was about', async () => {
+    // Without this the member confirms, comes back to a closed dialog, and has to find the
+    // key again — the silent loss the transport exists to prevent, one surface short.
+    await beginProviderReauthentication('google', '/my/api-keys', {
+      surface: 'revoke-api-key',
+      keyId: 7,
+    });
+
+    expect(consumeReauthDraft('revoke-api-key')).toEqual({ surface: 'revoke-api-key', keyId: 7 });
+  });
+
+  it('refuses a revocation draft whose key id is not a number', () => {
+    storage.setItem(DRAFT_KEY, JSON.stringify({ surface: 'revoke-api-key', keyId: 'seven' }));
+
+    expect(consumeReauthDraft('revoke-api-key')).toBeNull();
+  });
+
   it('leaves another surface’s draft alone instead of eating it', async () => {
     // Two surfaces on one route both consume on mount. Without the tag the first to run
     // swallows a draft it does not recognise and the one it belongs to never sees it —

@@ -55,10 +55,17 @@ member no way to satisfy.
 - **THEN** that surface offers one confirmation control per connected provider whose identity
   is active, and no password input
 
-#### Scenario: No confirmation is demanded without an input
+#### Scenario: No confirmation is demanded without a way forward
 
 - **WHEN** a surface reports that confirmation is required
-- **THEN** the same surface renders at least one control by which the member can provide it
+- **THEN** the same surface either renders a control by which the member can provide it, or
+  states why none can be offered and what to do instead — never a demand with nothing beside
+  it
+
+#### Scenario: A failure to offer the methods is not a dead end
+
+- **WHEN** a surface cannot load the member's sign-in providers
+- **THEN** it says so and offers to try again, rather than leaving a state nothing can move
 
 ### Requirement: A pending action survives the provider round trip
 
@@ -126,4 +133,12 @@ a generic failure.
 #### Scenario: Every gated surface handles 428
 
 - **WHEN** any surface performing a gated action receives `428`
-- **THEN** it presents the confirmation step, and never reports it as an unspecified error
+- **THEN** it presents the confirmation step, or — where the confirmation the member could
+  offer has already been given and refused — names what would actually resolve it
+- **AND** never reports it as an unspecified error
+
+#### Scenario: A blank answer is not sent as if it were one
+
+- **WHEN** a member submits a gated action without supplying the confirmation asked of them
+- **THEN** nothing is sent to the server, and the surface says what is missing
+- **AND** the member is never told their answer was wrong when they gave none

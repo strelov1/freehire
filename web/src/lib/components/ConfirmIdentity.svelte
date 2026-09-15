@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { api } from '$lib/api';
+  import { ApiError, api } from '$lib/api';
   import { AsyncData } from '$lib/asyncData.svelte';
   import { currentUser } from '$lib/auth.svelte';
   import { locale } from '$lib/i18n/currentLocale.svelte';
@@ -24,15 +24,18 @@
   // proof is already held. The caller owns only its own action: it reads `password` and
   // spends it, asks `isConfirmed()` whether it needs to, and calls `refused()` on a 428.
   //
-  // INSIDE A DIALOG, WRAP IT IN `{#if open}`. `design-system/src/dialog.svelte` renders its
-  // children unconditionally, so a bare instance mounts on page load: it would fetch the
-  // member's providers on every visit to a page whose dialog they never open, and tick its
-  // countdown against a hidden node for the life of the page.
+  // INSIDE A DIALOG, PASS `active={open}`. `design-system/src/dialog.svelte` renders its
+  // children unconditionally, so a dialog's contents mount on page load: without this the
+  // component would fetch the member's providers on every visit to a page whose dialog they
+  // never open, and tick its countdown against a hidden node for the life of the page.
+  // It is a prop rather than a `{#if}` at each host so that forgetting it is impossible
+  // rather than merely documented.
   let {
     password = $bindable(''),
     returnTo,
     draft,
     prompt,
+    active = true,
     disabled = false,
   }: {
     /** The typed password, for the caller to spend on `reauthenticatePassword` immediately
@@ -46,6 +49,9 @@
     /** Why THIS action needs confirming. An API key and a deleted account are not dangerous
      *  for the same reason, so the sentence belongs to the caller, not here. */
     prompt: string;
+    /** False while the surface holding this is not on screen: nothing is fetched, nothing
+     *  ticks, and nothing renders. */
+    active?: boolean;
     disabled?: boolean;
   } = $props();
 
@@ -60,6 +66,8 @@
   // Not `$derived`: this is a snapshot of a cookie the client cannot read, and it must be
   // droppable on demand when the server disagrees with it (see `refused`).
   let expiresAt = $state<Date | null>(recentAuthExpiry());
+  // The component's own validation, shown beside the input it is about.
+  let inlineError = $state<string | null>(null);
   const confirmed = $derived(expiresAt !== null);
 
   // Fetched only for the accounts that can actually use a provider, and only while a proof
@@ -73,8 +81,14 @@
     );
   }
   $effect(() => {
-    if (hasPassword || confirmed) return;
+    if (!active || hasPassword || confirmed) return;
     loadProviders();
+  });
+
+  // A surface that closes and reopens should not greet the member with the complaint it
+  // raised last time.
+  $effect(() => {
+    if (!active) inlineError = null;
   });
 
   /** Called by the caller when the server answered a gated action with 428 despite this
@@ -93,19 +107,48 @@
     return confirmed;
   }
 
-  /** Make sure a proof is held, and resolve once one is. Called immediately before the
-   *  gated request.
+  /** Make sure a proof is held. Called immediately before the gated request; the caller
+   *  proceeds only on `true`.
    *
    *  A held proof is spent as-is; otherwise the typed password buys one. This lives here
    *  rather than at each call site because the decision is identical at all three of them,
    *  and three copies of one decision is precisely what produced three different
    *  behaviours from one requirement before this component existed.
    *
-   *  It does not swallow anything: a refused password throws, and the caller decides what
-   *  that means on its own surface. */
-  export async function prove(): Promise<void> {
-    if (confirmed) return;
+   *  `false` means the member has not supplied what was asked for — and the reason is
+   *  already on screen, beside the control it refers to. A blank password is NOT sent:
+   *  `''` earns a 401, which the caller would word as "that password is not right" to
+   *  somebody who has not typed one.
+   *
+   *  A password the server refuses still throws; `handleRefusal` words that. */
+  export async function prove(): Promise<boolean> {
+    if (confirmed) return true;
+    if (hasPassword && !password) {
+      inlineError = s.passwordRequired;
+      return false;
+    }
+    inlineError = null;
     await api.reauthenticatePassword(password);
+    return true;
+  }
+
+  /** What to tell the member when the server refused, or null when the refusal was not
+   *  about identity and belongs to the caller's own vocabulary.
+   *
+   *  It also drops a proof the server just overruled, because there is no case where a
+   *  surface should report a 428 and go on believing it is confirmed. Both halves live
+   *  here because all three callers had grown the same cascade — the very shape this
+   *  component exists to stop. */
+  export function handleRefusal(e: unknown): string | null {
+    if (!(e instanceof ApiError)) return null;
+    if (e.status === 428) {
+      refused();
+      return s.refused;
+    }
+    // Only when a password was actually asked for: a 401 told to a member who never saw a
+    // password box is not about their password.
+    if (e.status === 401 && hasPassword && !confirmed) return s.wrongPassword;
+    return null;
   }
 
   // A bare clock, no word beside it — see the note in the message catalogue. Ticks so the
@@ -113,7 +156,7 @@
   // the claim outright once it has: a stale green tick is worse than no tick.
   let now = $state(Date.now());
   $effect(() => {
-    if (!confirmed) return;
+    if (!active || !confirmed) return;
     const timer = setInterval(() => {
       now = Date.now();
       if (expiresAt && expiresAt.getTime() <= now) expiresAt = null;
@@ -134,7 +177,8 @@
   );
 </script>
 
-<!-- `aria-live` because this block SWAPS IN PLACE: `refused()` turns a standing "identity
+{#if active}
+  <!-- `aria-live` because this block SWAPS IN PLACE: `refused()` turns a standing "identity
      confirmed" back into a password field after the server 428s, and a screen-reader user
      would otherwise be given no sign that what they are looking at changed. -->
 {#if confirmed}
@@ -148,43 +192,53 @@
   </p>
 {:else}
   <div aria-live="polite" class="flex flex-col gap-2 border-t border-border pt-4">
-    <p class="text-sm font-medium">{s.heading}</p>
-    <p class="text-sm text-muted-foreground">{prompt}</p>
-
-    {#if hasPassword}
-      <label class="mt-1 flex flex-col gap-1">
-        <span class="text-sm font-medium">{s.passwordLabel}</span>
-        <Input type="password" autocomplete="current-password" bind:value={password} {disabled} />
-      </label>
-    {:else if identitiesData.status === 'loading'}
+    <!-- The heading and the prompt are the DEMAND, so they wait until there is something
+         to demand with. While the providers are still loading the block says only what it
+         is doing: a "confirm it is you" above an empty box is the shape the spec forbids,
+         and it is on screen for as long as that request takes. -->
+    {#if !hasPassword && identitiesData.status === 'loading'}
       <p class="text-sm text-muted-foreground">{s.providersLoading}</p>
-    {:else if identitiesData.status === 'error' || noMethodAvailable}
+    {:else}
+      <p class="text-sm font-medium">{s.heading}</p>
+      <p class="text-sm text-muted-foreground">{prompt}</p>
+
+      {#if hasPassword}
+        <label class="mt-1 flex flex-col gap-1">
+          <span class="text-sm font-medium">{s.passwordLabel}</span>
+          <Input type="password" autocomplete="current-password" bind:value={password} {disabled} />
+        </label>
+        {#if inlineError}
+          <p class="text-sm text-destructive">{inlineError}</p>
+        {/if}
+      {:else if identitiesData.status === 'error' || noMethodAvailable}
       <!-- Both of these states used to be terminal: a sentence, and nothing to press. The
            effect has no reason to re-run, so a member whose network blipped was stuck
            until they reloaded the page — the same dead end this component exists to
            abolish, just one layer down. The retry also covers the no-method case, where
            an empty list may simply be a read that went wrong. -->
-      <p class="text-sm text-destructive">
-        {identitiesData.status === 'error' ? s.providersError : s.noMethod}
-      </p>
-      <div class="mt-1">
-        <Button variant="outline" size="sm" {disabled} onclick={loadProviders}>{s.retry}</Button>
-      </div>
-    {:else}
-      <p class="text-sm text-muted-foreground">{s.returnNote}</p>
-      <div class="mt-1 flex flex-wrap gap-2">
-        {#each providers as provider (provider)}
-          <Button
-            variant="outline"
-            size="sm"
-            {disabled}
-            onclick={() => beginProviderReauthentication(provider, returnTo, draft?.())}
-          >
-            {s.confirmWithPrefix}
-            {provider}
-          </Button>
-        {/each}
-      </div>
+        <p class="text-sm text-destructive">
+          {identitiesData.status === 'error' ? s.providersError : s.noMethod}
+        </p>
+        <div class="mt-1">
+          <Button variant="outline" size="sm" {disabled} onclick={loadProviders}>{s.retry}</Button>
+        </div>
+      {:else}
+        <p class="text-sm text-muted-foreground">{s.returnNote}</p>
+        <div class="mt-1 flex flex-wrap gap-2">
+          {#each providers as provider (provider)}
+            <Button
+              variant="outline"
+              size="sm"
+              {disabled}
+              onclick={() => beginProviderReauthentication(provider, returnTo, draft?.())}
+            >
+              {s.confirmWithPrefix}
+              {provider}
+            </Button>
+          {/each}
+        </div>
+      {/if}
     {/if}
   </div>
+{/if}
 {/if}

@@ -56,8 +56,15 @@ vi.mock('$lib/recentAuth', () => ({
   beginProviderReauthentication: begin,
   recentAuthExpiry: expiry,
   forgetRecentAuthExpiry: forget,
-  consumeReauthDraft: () => null,
+  consumeReauthDraft: (surface: string) => {
+    const d = draft.next as { surface?: string } | null;
+    if (!d || d.surface !== surface) return null;
+    draft.next = null;
+    return d;
+  },
 }));
+
+const draft = vi.hoisted(() => ({ next: null as unknown }));
 
 const key: ApiKey = {
   id: 7,
@@ -82,6 +89,7 @@ function openDialog(): HTMLElement {
 }
 
 beforeEach(() => {
+  draft.next = null;
   begin.mockReset();
   forget.mockReset();
   expiry.mockReset().mockReturnValue(null);
@@ -132,6 +140,35 @@ describe('ApiKeysView — revoking', () => {
     expect(
       await within(openDialog()).findByRole('button', { name: 'Confirm with google' }),
     ).toBeTruthy();
+  });
+
+  it('carries which key was being revoked across a provider round trip', async () => {
+    signedIn(false);
+    render(ApiKeysView);
+    await screen.findByText('CI bot');
+    await fireEvent.click(screen.getByRole('button', { name: 'Revoke' }));
+
+    await fireEvent.click(
+      await within(openDialog()).findByRole('button', { name: 'Confirm with google' }),
+    );
+
+    expect(begin).toHaveBeenCalledWith('google', '/my/api-keys', {
+      surface: 'revoke-api-key',
+      keyId: 7,
+    });
+  });
+
+  it('reopens the revoke dialog for the same key when the member returns', async () => {
+    // Otherwise they come back to a closed dialog and have to find the key again — the
+    // silent loss this transport exists to prevent, one surface short.
+    signedIn(false);
+    draft.next = { surface: 'revoke-api-key', keyId: 7 };
+    expiry.mockReturnValue(new Date(Date.now() + 9 * 60_000));
+
+    render(ApiKeysView);
+
+    expect(await screen.findByText('Revoke "CI bot"?')).toBeTruthy();
+    expect(revokeApiKey).not.toHaveBeenCalled();
   });
 
   it('keeps the key listed when the server refuses a held proof', async () => {

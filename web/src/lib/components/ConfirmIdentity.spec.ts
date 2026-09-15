@@ -12,8 +12,9 @@ type Identity = { provider: string; linked_at: string; status: string; can_unlin
 // confirmation is required and leave the member nothing to press — which is exactly what
 // the API-keys revoke dialog did.
 
-const { connectedIdentities, begin, expiry, forget, user } = vi.hoisted(() => ({
+const { connectedIdentities, reauthenticatePassword, begin, expiry, forget, user } = vi.hoisted(() => ({
   connectedIdentities: vi.fn(),
+  reauthenticatePassword: vi.fn(),
   begin: vi.fn(),
   expiry: vi.fn(),
   forget: vi.fn(),
@@ -23,7 +24,21 @@ const { connectedIdentities, begin, expiry, forget, user } = vi.hoisted(() => ({
 // `locale()` reads `page.data.locale`; the shared stub carries only `url`, and an absent
 // locale is what selects the English source catalogue.
 vi.mock('$app/state', () => ({ page: { data: {}, url: new URL('http://localhost/') } }));
-vi.mock('$lib/api', () => ({ api: { connectedIdentities } }));
+const { StubApiError } = vi.hoisted(() => ({
+  StubApiError: class StubApiError extends Error {
+    constructor(
+      public status: number,
+      message = 'failed',
+    ) {
+      super(message);
+    }
+  },
+}));
+
+vi.mock('$lib/api', () => ({
+  api: { connectedIdentities, reauthenticatePassword },
+  ApiError: StubApiError,
+}));
 vi.mock('$lib/auth.svelte', () => ({ currentUser: () => user.current }));
 vi.mock('$lib/recentAuth', () => ({
   beginProviderReauthentication: begin,
@@ -46,6 +61,7 @@ beforeEach(() => {
   begin.mockReset();
   forget.mockReset();
   expiry.mockReset().mockReturnValue(null);
+  reauthenticatePassword.mockReset().mockResolvedValue('2099-01-01T00:00:00Z');
   connectedIdentities.mockReset().mockResolvedValue({
     has_password: false,
     identities: [identity('google', 'active')],
@@ -224,6 +240,91 @@ describe('ConfirmIdentity', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it('refuses to spend a password the member never typed', async () => {
+    // Sending '' earns a 401, which every caller words as "that password is not right" —
+    // told to somebody who has not typed one yet. The old per-caller `passwordRequired`
+    // message was lost when the check moved in here; this is it, beside its own input.
+    signedIn(true);
+    const { component } = render(ConfirmIdentity, { props });
+    const c = component as unknown as { prove: () => Promise<boolean> };
+    await screen.findByLabelText('Password');
+
+    await expect(c.prove()).resolves.toBe(false);
+
+    expect(reauthenticatePassword).not.toHaveBeenCalled();
+    expect(await screen.findByText(/Enter your password/i)).toBeTruthy();
+  });
+
+  it('spends a typed password and reports that it may proceed', async () => {
+    signedIn(true);
+    const { component } = render(ConfirmIdentity, { props: { ...props, password: 'hunter2' } });
+    const c = component as unknown as { prove: () => Promise<boolean> };
+
+    await expect(c.prove()).resolves.toBe(true);
+
+    expect(reauthenticatePassword).toHaveBeenCalledWith('hunter2');
+  });
+
+  it('needs no password at all when a proof is held', async () => {
+    signedIn(false);
+    expiry.mockReturnValue(new Date(Date.now() + 9 * 60_000));
+    const { component } = render(ConfirmIdentity, { props });
+    const c = component as unknown as { prove: () => Promise<boolean> };
+
+    await expect(c.prove()).resolves.toBe(true);
+
+    expect(reauthenticatePassword).not.toHaveBeenCalled();
+  });
+
+  it('owns the wording for the refusals that are about identity, and only those', async () => {
+    // Three callers had three copies of this cascade — the same shape the component was
+    // written to abolish. Anything not about identity is handed back for the caller to
+    // word on its own surface.
+    signedIn(true);
+    expiry.mockReturnValue(new Date(Date.now() + 9 * 60_000));
+    const { component } = render(ConfirmIdentity, { props });
+    const c = component as unknown as { handleRefusal: (e: unknown) => string | null };
+
+    expect(c.handleRefusal(new StubApiError(428))).toMatch(/confirm/i);
+    expect(forget).toHaveBeenCalled();
+    expect(c.handleRefusal(new StubApiError(401))).toMatch(/not right/i);
+    expect(c.handleRefusal(new StubApiError(500))).toBeNull();
+    expect(c.handleRefusal(new Error('offline'))).toBeNull();
+  });
+
+  it('does not call a 401 a wrong password when no password was asked for', async () => {
+    signedIn(false);
+    expiry.mockReturnValue(new Date(Date.now() + 9 * 60_000));
+    const { component } = render(ConfirmIdentity, { props });
+    const c = component as unknown as { handleRefusal: (e: unknown) => string | null };
+
+    expect(c.handleRefusal(new StubApiError(401))).toBeNull();
+  });
+
+  it('does not demand confirmation while it is still working out how', async () => {
+    // The loading state says what it is doing and asks for nothing. A heading demanding
+    // confirmation above an empty box is the shape the spec forbids, and it is reachable
+    // for as long as the providers request takes.
+    signedIn(false);
+    connectedIdentities.mockReturnValue(new Promise(() => {}));
+
+    render(ConfirmIdentity, { props });
+
+    expect(await screen.findByText(/Loading your sign-in providers/i)).toBeTruthy();
+    expect(screen.queryByText('Confirm it is you')).toBeNull();
+  });
+
+  it('renders nothing and fetches nothing while its surface is closed', async () => {
+    // Dialog renders its children whether or not it is open, so an always-active instance
+    // would ask the server about a member who never opened the dialog.
+    signedIn(false);
+
+    render(ConfirmIdentity, { props: { ...props, active: false } });
+
+    expect(screen.queryByText('Confirm it is you')).toBeNull();
+    expect(connectedIdentities).not.toHaveBeenCalled();
   });
 
   it('counts down in minutes and seconds', async () => {

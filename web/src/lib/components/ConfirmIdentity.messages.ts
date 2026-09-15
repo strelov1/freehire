@@ -19,6 +19,10 @@ export const messages = defineMessages(
     // strings in one locale each. A bare duration reads correctly in every language.
     confirmed: 'Identity confirmed',
     noMethod: 'This account has no way to confirm. Please contact support.',
+    passwordRequired: 'Enter your password to confirm.',
+    wrongPassword: 'That password is not right.',
+    // Shown when the server rejects a proof this component believed was held.
+    refused: 'Please confirm it is you again.',
   },
   {
     ru: {
