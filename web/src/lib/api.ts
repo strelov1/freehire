@@ -307,6 +307,11 @@ export class MovedError extends Error {
   }
 }
 
+/** The shape handler.write402 writes: the allowance that ran out, and the upgrade link —
+ *  present only when the caller's tier has something above it to buy. Typed loosely
+ *  because it arrives as parsed JSON and only these two fields are read. */
+type PlanRefusalBody = { allowance?: { feature?: unknown }; upgrade_url?: unknown };
+
 /** Record the moment a plan limit said no, from the one place every failed response
  *  passes through.
  *
@@ -326,11 +331,11 @@ export class MovedError extends Error {
  *  run in. */
 function recordPlanRefusal(status: number, body: unknown): void {
   if (status !== 402) return;
-  const b = body as { allowance?: { feature?: unknown }; upgrade_url?: unknown } | null;
-  const feature = b?.allowance?.feature;
+  const refusal = body as PlanRefusalBody | null;
+  const feature = refusal?.allowance?.feature;
   track('plan_refused', {
     feature: typeof feature === 'string' ? feature : 'unknown',
-    upgrade_offered: typeof b?.upgrade_url === 'string',
+    upgrade_offered: typeof refusal?.upgrade_url === 'string',
   });
 }
 

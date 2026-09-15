@@ -56,7 +56,10 @@
   // answer, so a purchase recorded here is one the account actually holds. Recorded once:
   // the marker is stripped from the address afterwards, or a reload would count a second
   // sale that never happened.
-  let purchaseRecorded = $state(false);
+  // Plain `let`, deliberately not $state: nothing renders from it, and a reactive flag
+  // read at the top of the effect that sets it would make the effect re-run itself once
+  // for nothing.
+  let purchaseRecorded = false;
   $effect(() => {
     if (purchaseRecorded || page.url.searchParams.get('checkout') !== 'success') return;
     const tier = plan?.plan;
