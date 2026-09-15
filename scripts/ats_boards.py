@@ -246,6 +246,9 @@ def emit_survivors(cand: dict[tuple[str, str], str], write: bool) -> int:
     for (prov, _), row in best.items():
         survivors[prov].append(row)
 
+    if write:
+        SEED_DIR.mkdir(parents=True, exist_ok=True)
+
     total = 0
     for prov in VALIDATORS:
         rows = sorted(survivors[prov], key=lambda r: -r[2])
@@ -257,7 +260,6 @@ def emit_survivors(cand: dict[tuple[str, str], str], write: bool) -> int:
             print(f"- company: {yaml_name(name)}  # {n} jobs")
             print(f"  board: {slug}")
         if write:
-            SEED_DIR.mkdir(parents=True, exist_ok=True)
             f = SEED_DIR / f"{prov}.json"
             f.write_text(json.dumps(seed_items(rows), indent=2) + "\n")
             print(f"  -> wrote {len(rows)} entries to {f.relative_to(REPO)} — apply with "
