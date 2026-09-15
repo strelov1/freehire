@@ -49,6 +49,10 @@ const noTxMarker = "migrate: no-transaction"
 //	0x66686763  cmd/ghost-crosscheck — "fhgc", likewise
 //	0x66687363  cmd/ingest-scheduler — "fhsc", likewise; it makes the fleet's concurrency
 //	                                   cap atomic, which a check-then-act pair is not
+//	0x66686978  internal/platform/worker — "fhix", likewise; ONE catalogue-wide index job at
+//	                                   a time (full rebuild, marker passes, suggestion
+//	                                   build). A clock-based schedule could not keep them
+//	                                   apart once the rebuild grew past its window
 //	0x66687277  cmd/billing-sync     — "fhrw", likewise; it serializes the referral grant
 //	                                   pass, so the per-referrer reward ceiling is a bound
 //	                                   rather than a suggestion. A count read in one

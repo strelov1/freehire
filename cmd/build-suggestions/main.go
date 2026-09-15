@@ -57,6 +57,22 @@ func run() int {
 	}
 	floors := config.LoadSuggest()
 
+	// This writes a separate index through the same rebuild-and-swap the jobs index uses,
+	// and Meilisearch runs ONE serial task queue — a swap queued behind a full rebuild holds
+	// this Type=oneshot unit open and looks like a hang. 06:45 sat inside the 03:15 rebuild
+	// every day once that rebuild grew to 4.5 hours. Skipping costs a day of a dictionary
+	// that is rebuilt daily.
+	releaseLock, gotLock, err := worker.HoldHeavyIndexLock(ctx, pool)
+	if err != nil {
+		log.Printf("index lock: %v", err)
+		return 1
+	}
+	if !gotLock {
+		log.Print("build-suggestions: another catalogue-wide index job is running — skipping this run")
+		return 0
+	}
+	defer releaseLock()
+
 	q := db.New(pool)
 	client := search.NewClient(cfg.MeiliURL, cfg.MeiliKey)
 
