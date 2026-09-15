@@ -3,7 +3,6 @@ package main
 import (
 	"net/url"
 	"regexp"
-	"slices"
 	"strings"
 
 	"github.com/strelov1/freehire/internal/dict/normalize"
@@ -43,14 +42,6 @@ func guessedCandidates(site companySite) []hit {
 // already tried three ways is not new evidence).
 const maxCandidateSlugs = 3
 
-// boardNameTails are the tails a platform profile slug carries while the board does not, BEYOND
-// the corporate forms normalize.IsLegalForm knows. They are here rather than in the shared list
-// because they are not legal forms and must not re-key the catalogue: "group" is part of a brand
-// name, and "spa" collides with the literal word. Over-trimming is safe here and only here —
-// this produces board-id GUESSES, where an extra candidate costs one lookup and a missing one
-// loses the board.
-var boardNameTails = []string{"group", "spa"}
-
 // careersHostPrefixes are the sub-domains a company puts its careers site on. Their labels
 // are not the company, so `jobs.picnic.app` must contribute `picnic`, not `jobs`.
 var careersHostPrefixes = map[string]bool{
@@ -85,7 +76,13 @@ func candidateSlugs(site companySite) []string {
 	}
 	// Both spellings of the name: boards are registered hyphenated (`delivery-hero`) about as
 	// often as run together (`deliveryhero`), and neither is derivable from the other.
-	nameSlug := trimLegalForm(normalize.Slug(site.Name))
+	//
+	// The name goes through BoardNameSlug rather than trimLegalForm(Slug(name)) below: trimming
+	// the NAME's words sees a tail the slug has already broken up ("Acme S.p.A." is `acme-s-p-a`
+	// by then, whose last segment is `a`), and repeats, so a compound form comes off whole
+	// ("Atlassian Pty Ltd" → `atlassian`, not `atlassian-pty`). trimLegalForm stays for the
+	// profile slugs, which arrive as slugs and have no name to go back to.
+	nameSlug := normalize.BoardNameSlug(site.Name)
 	add(nameSlug)
 	add(strings.ReplaceAll(nameSlug, "-", ""))
 	return out
@@ -98,7 +95,7 @@ func trimLegalForm(slug string) string {
 	if !ok {
 		return slug
 	}
-	if normalize.IsLegalForm(tail) || slices.Contains(boardNameTails, tail) {
+	if normalize.IsLegalForm(tail) || normalize.IsBoardNameTail(tail) {
 		return head
 	}
 	return slug

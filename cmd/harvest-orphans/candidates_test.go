@@ -26,7 +26,23 @@ func TestCandidates(t *testing.T) {
 		{
 			name: "legal form is stripped from the name-derived candidates",
 			slug: "arch-capital-group-ltd", company: "Arch Capital Group Ltd.",
-			want: []string{"arch-capital-group-ltd", "arch-capital-group", "archcapitalgroup"},
+			want: []string{"arch-capital-group-ltd", "arch-capital-group", "archcapitalgroup",
+				"arch-capital", "archcapital"},
+		},
+		{
+			// The Italian form is the largest single tail in the jobleads worklist this tool was
+			// pointed at (125 of 1,402 companies). CompanySlug cannot strip it — "spa" is also the
+			// literal word, and stripping it in the company key merges a resort into a hotel chain
+			// — so without the board rendering every one of these proposed only `acme-s-p-a`,
+			// which is nobody's board id.
+			name: "punctuated Italian form the company key must keep still yields a board guess",
+			slug: "acme-s-p-a", company: "Acme S.p.A.",
+			want: []string{"acme-s-p-a", "acmespa", "acme"},
+		},
+		{
+			name: "brand tail yields a board guess without re-keying the company",
+			slug: "bosch-group", company: "Bosch Group",
+			want: []string{"bosch-group", "boschgroup", "bosch"},
 		},
 		{
 			name: "aggregator slug carrying a domain suffix keeps its own form too",
