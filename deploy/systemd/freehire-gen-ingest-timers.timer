@@ -7,9 +7,15 @@ Description=timer: regenerate the per-provider ingest timers daily
 # the slot is chosen to avoid a daemon-reload landing in the middle of a heavy unit rather
 # than because the work is expensive.
 OnCalendar=*-*-* 04:40:00
-# Persistent=true: a missed day is a day of a newly added provider not being crawled, and
-# replaying the run can only create and enable timers -- every disable in the script names
-# one unit literally, so a catch-up firing can never retire the fleet.
+# Persistent=true: a missed day is a day of a newly added provider not being crawled.
+#
+# A catch-up firing CAN retire timers -- the script's sweep disables any enabled timer the
+# run generated nothing for, which is not a per-unit list. This comment used to say the
+# opposite, and was written when it was true. What bounds the catch-up is the same thing
+# that bounds every other firing: the sweep refuses entirely unless the run generated at
+# least 80% of the timers currently enabled, and a catalogue query returning nothing exits
+# non-zero long before the sweep is reached. A replay is no more dangerous than the run it
+# replays, which is the property Persistent=true actually needs.
 Persistent=true
 RandomizedDelaySec=300
 
