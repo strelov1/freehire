@@ -36,6 +36,20 @@ func TestCandidateSlugs(t *testing.T) {
 			site: companySite{Name: "Acme"},
 			want: []string{"acme"},
 		},
+		// The two cases that prove the name path goes through normalize.BoardNameSlug rather
+		// than trimming one segment of normalize.Slug's output. Under the latter, a compound
+		// form came off by halves (`atlassian-pty`) and a punctuated one not at all — Slug has
+		// already made "S.p.A." into `s-p-a`, whose last segment is `a`.
+		{
+			name: "a compound legal form comes off whole",
+			site: companySite{Name: "Atlassian Pty Ltd"},
+			want: []string{"atlassian"},
+		},
+		{
+			name: "a punctuated form the company key must keep still yields a board guess",
+			site: companySite{Name: "Acme S.p.A."},
+			want: []string{"acme"},
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

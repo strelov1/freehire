@@ -46,7 +46,7 @@
     "oxlint": "^1.81.0",
     "storybook": "10.5.10",
     "style-dictionary": "^5.5.3",
-    "svelte": "^5.56.10",
+    "svelte": "^5.57.0",
     "svelte-check": "^4.7.6",
     "svelte-eslint-parser": "^1.8.1",
     "tailwindcss": "^4.3.3",
@@ -60,7 +60,7 @@
     "tailwindcss": "^4"
   },
   "dependencies": {
-    "@lucide/svelte": "^1.35.0",
+    "@lucide/svelte": "^1.45.0",
     "clsx": "^2.1.1",
     "tailwind-merge": "^3.6.0",
     "tailwind-variants": "^3.3.1"

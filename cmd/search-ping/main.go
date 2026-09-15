@@ -29,6 +29,7 @@ import (
 	"time"
 
 	"github.com/strelov1/freehire/internal/job/searchping"
+	"github.com/strelov1/freehire/internal/platform/config"
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/platform/worker"
 )
@@ -52,13 +53,24 @@ func run() int {
 		return 1
 	}
 
-	ctx, cfg, pool, cleanup, err := worker.Bootstrap(context.Background())
-	if err != nil {
-		log.Printf("database: %v", err)
-		return 1
+	// Gated BEFORE Bootstrap, like discord-sync and billing-sync: with no engine
+	// configured there is nothing to announce, and an unconfigured deployment must run
+	// without touching the database at all. This is what makes the rollback — clear the
+	// two credentials — leave a green timer on a host that has no DATABASE_URL, which is
+	// what this worker's unit, its entry in AGENTS.md and its pull request all promise.
+	//
+	// The gate reads the environment and nothing else. Building the engines needs the
+	// signal-bound context Bootstrap has not created yet, so it waits until below.
+	cfg := config.Load()
+	if !anyEngineConfigured() {
+		log.Printf("search-ping: no engine configured, nothing to do")
+		return 0
 	}
-	defer cleanup()
 
+	// After the gate, not before it: an origin nobody can fetch matters only once there
+	// is something to announce, and refusing on it first would turn an unconfigured
+	// developer checkout into an hourly red unit.
+	//
 	// Every URL this worker sends is rooted at the origin, and a search engine told a
 	// localhost address learns nothing and spends a call doing it. Unlike the rest of
 	// the fleet this is not a local oddity but a wasted slice of a 200-a-day budget, so
@@ -68,12 +80,25 @@ func run() int {
 		return 1
 	}
 
+	ctx, _, pool, cleanup, err := worker.Bootstrap(context.Background())
+	if err != nil {
+		log.Printf("database: %v", err)
+		return 1
+	}
+	defer cleanup()
+
+	// Built with ctx, not context.Background(): Google's client refreshes its token on
+	// that context, so a SIGTERM mid-refresh should end the run rather than wait out the
+	// HTTP timeout. That is the whole reason this sits below Bootstrap and the gate above
+	// reads only the environment.
 	engines, err := configuredEngines(ctx, cfg.FrontendOrigin)
 	if err != nil {
 		log.Printf("search-ping: %v", err)
 		return 1
 	}
 	if len(engines) == 0 {
+		// Unreachable past the gate, and checked anyway: the day the two disagree, this
+		// is a clean exit rather than a runner with nothing to drive.
 		log.Printf("search-ping: no engine configured, nothing to do")
 		return 0
 	}
@@ -86,10 +111,20 @@ func run() int {
 	return report(runner.Run(ctx, int(batch)))
 }
 
-// configuredEngines builds the engines whose configuration is present. A missing
-// credential is not an error: it is how an engine ships turned off and how it is rolled
-// back. A credential that is present but unusable IS an error — the difference between
-// "not configured" and "misconfigured" is the whole point of checking.
+// anyEngineConfigured reports whether this deployment has been given anything to
+// announce with. It reads the environment and nothing else — no file, no network, no
+// database — because it runs before Bootstrap, so that a host with neither credential
+// never opens a pool it has no use for.
+func anyEngineConfigured() bool {
+	return strings.TrimSpace(os.Getenv("GOOGLE_INDEXING_KEY_FILE")) != "" ||
+		strings.TrimSpace(os.Getenv("INDEXNOW_KEY")) != ""
+}
+
+// configuredEngines builds the engines whose configuration is present.
+//
+// A missing credential is not an error: it is how an engine ships turned off and how it
+// is rolled back. A credential that is present but unusable IS an error — the difference
+// between "not configured" and "misconfigured" is the whole point of checking.
 func configuredEngines(ctx context.Context, origin string) ([]searchping.Engine, error) {
 	var engines []searchping.Engine
 
