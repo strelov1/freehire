@@ -20,11 +20,15 @@ i=0
 # shellcheck disable=SC1091  # the host env file, not part of this repo
 if [ -f /opt/freehire/.env ]; then set -a; . /opt/freehire/.env; set +a; fi
 
-# An empty result is the only answer worth refusing on, and set -e already refuses a
-# failed query. There is deliberately no "fewer than N providers looks wrong" floor: this
-# script only ever creates and enables units — every systemctl disable below names one
-# unit literally — so a short list generates fewer timers and retires nothing. A floor
-# would guard nothing and would block a legitimately smaller catalog.
+# An empty result is the only answer worth refusing on outright, and set -e already refuses
+# a failed query.
+#
+# This comment used to argue that no "fewer than N providers looks wrong" floor was needed,
+# because the script only ever created and enabled units. That stopped being true when the
+# sweep at the very bottom gained the ability to retire a timer whose provider has left the
+# catalogue — so the floor the old reasoning ruled out now guards exactly the case that
+# reasoning relied on not existing. It lives with the sweep, not here, because a short list
+# is only dangerous to the sweep: generation itself is still create-and-enable only.
 providers=$(psql "$DATABASE_URL" -tAc \
   "SELECT provider FROM boards WHERE status IN ('pending','active') GROUP BY provider ORDER BY provider")
 if [ -z "$providers" ]; then
@@ -32,6 +36,12 @@ if [ -z "$providers" ]; then
   exit 1
 fi
 mapfile -t PROVIDERS <<<"$providers"
+# Every provider the per-provider loop below actually generated a timer for. The sweep at
+# the bottom retires the enabled timers NOT in here, so it must be appended to at exactly
+# one place: beside the `systemctl enable` that creates the timer, never beside the loop's
+# `continue`s — a sharded provider is skipped there on purpose and its plain timer is meant
+# to stay retired.
+GENERATED=()
 
 # Boards measured (2026-07-31, 3h of journal) to average >=25 min per run — together
 # 65% of all ingest busy-time, with oracle/paylocity/ukg/careerplug hitting
@@ -221,6 +231,7 @@ RandomizedDelaySec=180
 WantedBy=timers.target
 T
   systemctl enable --now "freehire-ingest@$n.timer" >/dev/null
+  GENERATED+=("$n")
   i=$((i+1))
 done
 echo "generated + enabled $i per-provider ingest timers"
@@ -591,6 +602,50 @@ TIMER
   systemctl enable --now "freehire-ingest-workstream-shard@$N.timer" >/dev/null
 done
 echo "generated + enabled 2 workstream shard timers"
+
+# The sweep. Retires the per-provider timer of a provider that has LEFT the catalogue —
+# every board of it retired, rejected, or deleted.
+#
+# The header of this file claimed for a long time that this already happened ("its timer is
+# retired by the sweep at the end"). It did not: every `systemctl disable` above names one
+# unit literally, so a provider that dropped out kept firing forever. Found 2026-09-15,
+# when three boards whose provider no adapter answers to (globalpayments, justjoin,
+# wantedkr — rows that predate boardcatalog's insert-time registry check) were marked
+# rejected and their timers went on running anyway. Prose about code is tested by nothing.
+#
+# The floor is what makes this safe, and it is not decoration: the moment a run can RETIRE
+# a timer, a query that returns a short list stops being harmless and starts being a
+# fleet-wide outage that looks like a successful run. 80% is deliberately loose — a real
+# catalogue does not shed a fifth of its providers between two daily runs, and a wave of
+# board retirements that legitimately does is worth a human looking at it once.
+enabled_now=0
+for f in /etc/systemd/system/freehire-ingest@*.timer; do
+  [ -e "$f" ] || continue
+  u=${f##*/}
+  if [ "$(systemctl is-enabled "$u" 2>/dev/null)" = enabled ]; then enabled_now=$((enabled_now+1)); fi
+done
+if [ "${#GENERATED[@]}" -lt $(( enabled_now * 8 / 10 )) ]; then
+  echo "gen-ingest-timers: generated ${#GENERATED[@]} timers against $enabled_now enabled — refusing to sweep" >&2
+else
+  swept=0
+  for f in /etc/systemd/system/freehire-ingest@*.timer; do
+    [ -e "$f" ] || continue
+    u=${f##*/}; p=${u#freehire-ingest@}; p=${p%.timer}
+    # Already-disabled units are left alone rather than disabled again: the literal
+    # disables above own those, and re-running their work here would hide which list a
+    # retirement came from.
+    [ "$(systemctl is-enabled "$u" 2>/dev/null)" = enabled ] || continue
+    for g in "${GENERATED[@]}"; do [ "$g" = "$p" ] && continue 2; done
+    systemctl disable --now "$u" >/dev/null 2>&1 || true
+    echo "gen-ingest-timers: retired $p — no live board in the catalogue"
+    swept=$((swept+1))
+  done
+  # An `if`, not `[ ... ] && echo`: under `set -e` the && form exits the script whenever
+  # there is nothing to sweep, which is the ordinary case.
+  if [ "$swept" -gt 0 ]; then
+    echo "retired $swept timer(s) whose provider left the catalogue"
+  fi
+fi
 
 # A heartbeat, published the way every other periodic worker here publishes one. What this
 # watches is not whether a crawl succeeded -- board_health answers that -- but whether the
