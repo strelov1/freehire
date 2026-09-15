@@ -34,6 +34,10 @@
 - [x] 3.6 Test + implement: salary — `SalaryMin`/`SalaryMax`/`SalaryCurrency`="EUR"/
       `SalaryPeriod`="year" set only when `isSalaryPublic` is true; confirmed unset (even though
       the platform's own payload carries `salaryMin`/`salaryMax` internally) when it is false.
+      Gate is `isSalaryPublic && (min != nil || max != nil)` — publishes whichever bound is
+      present, matching the `edjoin`/`ukgready` convention for a one-sided range, found during
+      review (a real live one-sided public salary has not been observed, but the stricter
+      `min != nil && max != nil` gate would have silently dropped one).
 - [x] 3.7 Test + implement: description fold for facts with no structured field — append
       human-readable sentences for `sponsorVisa`, `relocationPack`, `onlyEuCandidates` (each
       only when true/stated), and the must-have vs nice-to-have skill split, and the required
@@ -42,6 +46,14 @@
       picking a bucket boundary for a 5-point scale with only 4 labels is exactly the same
       guessed-equivalence problem design.md's Decisions section rejects for CEFR, just one step
       removed, so it applies here too.
+
+      **Found in review**: the sentences are joined with literal `"\n\n"`, which the frontend's
+      `{@html}` renderer collapses to nothing (no `white-space: pre-wrap`, only real `<p>`
+      elements are styled) — every fact would have rendered as one dense run-on paragraph.
+      `joppyDescriptionExtras` now builds Markdown internally and converts it through the
+      existing `sanitizeHTML(markdownToHTML(...))` pipeline (the same one `apple.go` and
+      `getmanfred.go` already use for an assembled multi-section description) before returning,
+      so a caller cannot forget the conversion step.
 
 ## 4. Registration
 

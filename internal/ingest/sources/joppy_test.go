@@ -143,6 +143,21 @@ func TestJoppyDescriptionExtras(t *testing.T) {
 	}
 }
 
+func TestJoppyDescriptionExtrasRendersRealParagraphs(t *testing.T) {
+	job := joppyJob{
+		SponsorVisa: true,
+		Skills:      []joppySkill{{Name: "SAP", IsMandatory: true}},
+		Languages:   []joppyLanguage{{Name: "english", Level: 4}},
+	}
+	got := joppyDescriptionExtras(job)
+	if !strings.Contains(got, "<p>") {
+		t.Errorf("joppyDescriptionExtras() = %q, want real HTML paragraphs (rendered via {@html} on the frontend)", got)
+	}
+	if strings.Contains(got, "\n\n") {
+		t.Errorf("joppyDescriptionExtras() = %q, contains literal blank-line separators instead of HTML paragraph breaks", got)
+	}
+}
+
 func TestJoppyDescriptionExtrasOmitsUnsetFacts(t *testing.T) {
 	got := joppyDescriptionExtras(joppyJob{})
 	for _, unwanted := range []string{"visa", "relocation", "EU"} {
@@ -237,6 +252,17 @@ func TestJoppyFetch(t *testing.T) {
 	}
 	if j1.SalaryCurrency != "EUR" || j1.SalaryPeriod != "year" {
 		t.Errorf("j1 salary currency/period = %q/%q, want EUR/year", j1.SalaryCurrency, j1.SalaryPeriod)
+	}
+	if !slices.Contains(j1.Skills, "sap") {
+		t.Errorf("j1.Skills = %v, want it to contain the canonicalized \"sap\"", j1.Skills)
+	}
+	// EnglishLevel is deliberately left unset (see design.md): Joppy's own 1-5 scale has no
+	// authoritative CEFR equivalence, so the requirement is folded into the description instead.
+	if j1.EnglishLevel != "" {
+		t.Errorf("j1.EnglishLevel = %q, want unset — no guessed CEFR mapping", j1.EnglishLevel)
+	}
+	if !strings.Contains(j1.Description, "<p>") {
+		t.Errorf("j1.Description = %q, want the appended extras rendered as real HTML paragraphs", j1.Description)
 	}
 
 	// j2 has isSalaryPublic=false: salary must NOT be published even though the platform's own

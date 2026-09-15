@@ -200,7 +200,7 @@ func joppyMapJob(company *joppyCompany, j joppyJob) (Job, bool) {
 		WorkMode:    workMode,
 		Skills:      skilltag.Canonicalize(joppySkillNames(j.Skills)),
 	}
-	if j.IsSalaryPublic && j.SalaryMin != nil && j.SalaryMax != nil {
+	if j.IsSalaryPublic && (j.SalaryMin != nil || j.SalaryMax != nil) {
 		job.SalaryMin = j.SalaryMin
 		job.SalaryMax = j.SalaryMax
 		job.SalaryCurrency = "EUR"
@@ -252,11 +252,18 @@ const joppyLanguageLevelMax = 5
 
 // joppyDescriptionExtras renders the posting facts Job has no dedicated field for — visa
 // sponsorship, a relocation package, EU-candidates-only eligibility, the must-have/nice-to-have
-// skill split, and required languages — as plain sentences appended to the description, so a
-// real platform-stated fact is never silently dropped just because no column exists for it.
-// Language levels are rendered as the platform's own raw "N/5" figure rather than mapped onto a
-// CEFR bucket Joppy never actually committed to (see design.md).
+// skill split, and required languages — as sanitized HTML the caller can append directly to the
+// (already-HTML) description, so a real platform-stated fact is never silently dropped just
+// because no column exists for it. Language levels are rendered as the platform's own raw "N/5"
+// figure rather than mapped onto a CEFR bucket Joppy never actually committed to (see
+// design.md).
 func joppyDescriptionExtras(j joppyJob) string {
+	return sanitizeHTML(markdownToHTML(joppyDescriptionExtrasMarkdown(j)))
+}
+
+// joppyDescriptionExtrasMarkdown builds the extras as blank-line-separated Markdown paragraphs;
+// joppyDescriptionExtras converts the result to HTML before it reaches a caller.
+func joppyDescriptionExtrasMarkdown(j joppyJob) string {
 	var b strings.Builder
 
 	var mandatory, niceToHave []string
