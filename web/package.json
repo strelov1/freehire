@@ -35,7 +35,7 @@
     "@testing-library/svelte": "^5.4.2",
     "@tsconfig/svelte": "^5.0.4",
     "@types/node": "^26.4.1",
-    "@types/three": "^0.185.4",
+    "@types/three": "^0.186.0",
     "@vite-pwa/sveltekit": "^1.1.0",
     "@vitest/coverage-v8": "^4.1.10",
     "eslint": "^10.8.0",
@@ -73,7 +73,7 @@
     "satori-html": "^0.3.2",
     "simple-icons": "^16.30.0",
     "svelte-dnd-action": "^0.9.79",
-    "three": "^0.185.1",
+    "three": "^0.186.0",
     "workbox-window": "^7.4.1"
   }
 }
