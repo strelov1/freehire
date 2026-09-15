@@ -56,20 +56,32 @@ declare -A GENERATED=()
 # is a search for a space-delimited word. A newline inside the list would silently fail to
 # match the entry before it and the entry after it, and nothing would report that.
 #
-# phenom..successfactors were added 2026-09-15, by the same metric and the same rule as the
-# rest: freehire_worker_last_run_duration_seconds (the binary's own runtime,
-# which is the only figure that excludes the wait inside ingest-slot.sh) above the ~40min
-# mark where an hourly timer can only ever buy partial results. Measured: phenom 50.1,
-# jobleads 50.0, wantapply 50.0, workable 50.0, trudvsem 48.3, freshteam 42.8,
-# successfactors 39.5.
+# phenom..successfactors were added 2026-09-15 by the same metric as the rest:
+# freehire_worker_last_run_duration_seconds, the binary's own runtime, which is the only
+# figure that excludes the wait inside ingest-slot.sh. Measured: phenom 50.1, jobleads 50.0,
+# wantapply 50.0, workable 50.0, trudvsem 48.3, freshteam 42.8, successfactors 39.5.
 #
-# They were starving the whole tail, and the arithmetic is the entire story: a 50-minute
-# crawl on an HOURLY timer holds 83% of one slot forever. Four of them is 3.3 of the six
-# slots the shared pool has. Sampled every 20s for 8 minutes on 2026-09-15, workable, vk,
-# trudvsem and freshteam held a shared slot in 48 of 48 samples and successfactors in 38 --
-# six providers sitting on all six slots continuously, while the other ~230 split whatever
-# was left. 837 of 1482 firings that day were skipped, and the ten providers whose timers
-# had just been created were skipped on their FIRST cycle, every one.
+# The rule is RUNTIME, and the boundary is ~40min rather than 40: successfactors at 39.5
+# sits below the line and is in anyway, because half a minute does not distinguish a crawl
+# that fits an hourly timer from one that does not, and it was separately observed resident.
+# Recorded rather than rounded away — a list whose stated rule excludes one of its own
+# members teaches a reader to distrust the rule.
+#
+# The arithmetic is the whole story: a 50-minute crawl on an HOURLY timer holds 83% of one
+# slot forever, so four of them is 3.3 of the six slots the shared pool had. Sampled every
+# 20s for 8 minutes on 2026-09-15, workable, vk, trudvsem and freshteam held a shared slot
+# in 48 of 48 samples and successfactors in 38 — six providers sitting on all six slots
+# continuously, while the other ~230 split whatever was left. 837 of 1482 firings that day
+# were skipped, and the ten providers whose timers had just been created were skipped on
+# their FIRST cycle, every one.
+#
+# vk (25.0) and hrmos (34.0) were in that resident six and are deliberately NOT here. They
+# are resident because they are frequent, not because one run is long, and the two need
+# different answers: HEAVY buys a 3h cadence, which is the wrong instrument for a crawl
+# that already fits its hour. Moving the >40min cohort out was measured to be enough — see
+# the tail's 2h cadence below, which is what actually closed the gap. If either turns
+# resident again once the pool has settled, it wants a cadence decision of its own, not
+# membership here.
 #
 # At the 3h HEAVY cadence the same crawl holds 28% of a slot instead of 83%.
 #
@@ -95,7 +107,12 @@ SHARDED="workday oracle paylocity eightfold join dayforce workstream adp adpmyjo
 # Deliberately NOT moved into HEAVY: that would also drop them to a 3h cadence, and
 # nothing measured here says their listings change slowly enough to justify that. The pool
 # and the schedule are separate decisions, and this list is the one that says so.
-HEAVY_POOL_ONLY="greenhouse apploi smartrecruiters lamoda trakstar adp teamtailor"
+#
+# apploi was here and is gone (2026-09-15): it is no longer scheduled at all, so naming it
+# as a pool tenant wrote a provider nothing can launch into /opt/freehire/etc/ingest-heavy.
+# Its 46min above is left as recorded evidence of what the cohort looks like; it is history,
+# not a live tenant.
+HEAVY_POOL_ONLY="greenhouse smartrecruiters lamoda trakstar adp teamtailor"
 
 # The roster ingest-slot.sh reads to decide which pool a run takes. Written here because
 # the list already lives here: a second copy kept in the slot script would drift from the
@@ -267,7 +284,11 @@ echo "generated + enabled $i per-provider ingest timers"
 # Retire the fingerprint-client 403-churners skipped above (they may carry a timer enabled
 # before they were skipped), so they stop running until proxy support is wired for the
 # fingerprint client. Mirrors the workday/eightfold legacy-timer cleanup below.
-for n in bayt gulftalent; do
+# apploi joins them rather than relying on the sweep below. The sweep would catch it, but
+# the sweep is allowed to refuse (the 80% floor), and a refusal would leave apploi holding
+# a heavy slot for 50 minutes per run to ingest nothing — exactly the cost the skip exists
+# to stop. A provider skipped on purpose is retired on purpose.
+for n in bayt gulftalent apploi; do
   systemctl disable --now "freehire-ingest@$n.timer" 2>/dev/null || true
 done
 
@@ -662,13 +683,25 @@ for f in /etc/systemd/system/freehire-ingest@*.timer; do
   enabled+=("${p%.timer}")
 done
 
+swept=0
+refused=0
 if [ "${#GENERATED[@]}" -lt $(( ${#enabled[@]} * 8 / 10 )) ]; then
+  # Counted, not just logged. A refusal means the catalogue query answered with far less
+  # than the fleet — which is the shape this guard exists to catch, and a run that only
+  # writes it to stderr and exits 0 IS that shape: successful-looking and wrong. The
+  # heartbeat below publishes this, so a refusal is visible without reading journald.
+  refused=1
   echo "gen-ingest-timers: generated ${#GENERATED[@]} timers against ${#enabled[@]} enabled — refusing to sweep" >&2
 else
-  swept=0
   for p in "${enabled[@]}"; do
     [ -n "${GENERATED[$p]:-}" ] && continue
-    systemctl disable --now "freehire-ingest@$p.timer" >/dev/null 2>&1 || true
+    # Reported by what systemctl DID, not by what was attempted: the `|| true` keeps one
+    # stuck unit from ending the run, and counting a failed disable as a retirement would
+    # make the summary claim a fleet state that is not there.
+    if ! systemctl disable --now "freehire-ingest@$p.timer" >/dev/null 2>&1; then
+      echo "gen-ingest-timers: could not disable freehire-ingest@$p.timer — still enabled" >&2
+      continue
+    fi
     # States what this run OBSERVED, not why. A provider reaches here for two different
     # reasons — its boards left the catalogue, or a `continue` above skipped it on purpose
     # (apploi, bayt, the sharded ones) — and a message that asserts the first sends a
@@ -677,8 +710,11 @@ else
     echo "gen-ingest-timers: retired $p — this run generated no timer for it"
     swept=$((swept+1))
   done
-  # An `if`, not `[ ... ] && echo`: under `set -e` the && form exits the script whenever
-  # there is nothing to sweep, which is the ordinary case.
+  # An `if`, not `[ ... ] && echo`. The reason first given here was that the && form exits
+  # under `set -e` when there is nothing to sweep; that is FALSE and was never tested --
+  # the shell exempts a command that is not the last of an AND-OR list, so it survives
+  # mid-script and only leaks a non-zero status when it is the final statement. The `if`
+  # earns its place for the smaller reason: it cannot acquire that fault by being moved.
   if [ "$swept" -gt 0 ]; then
     echo "retired $swept timer(s) this run did not generate"
   fi
@@ -706,6 +742,16 @@ if [ -n "${PROM_TEXTFILE_DIR:-}" ] && [ -d "$PROM_TEXTFILE_DIR" ]; then
     echo "# HELP freehire_ingest_timers_last_run_seconds Unix time the ingest timer generator last completed."
     echo "# TYPE freehire_ingest_timers_last_run_seconds gauge"
     echo "freehire_ingest_timers_last_run_seconds $(date +%s)"
+    # 1 means the run declined to sweep because it generated far fewer timers than the
+    # fleet currently has enabled. The heartbeat above stays fresh either way -- a refused
+    # sweep is a COMPLETED run -- so without this the one outcome the floor exists to make
+    # visible would be the one outcome nothing can see.
+    echo "# HELP freehire_ingest_timers_sweep_refused 1 when the run declined to retire timers because its catalogue read looked short."
+    echo "# TYPE freehire_ingest_timers_sweep_refused gauge"
+    echo "freehire_ingest_timers_sweep_refused $refused"
+    echo "# HELP freehire_ingest_timers_retired Timers this run retired because it generated none for that provider."
+    echo "# TYPE freehire_ingest_timers_retired gauge"
+    echo "freehire_ingest_timers_retired $swept"
   } > "$out.tmp" && mv "$out.tmp" "$out"
 fi
 
