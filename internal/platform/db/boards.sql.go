@@ -241,6 +241,31 @@ func (q *Queries) RetireBoard(ctx context.Context, arg RetireBoardParams) (int64
 	return result.RowsAffected(), nil
 }
 
+const retireProviderBoards = `-- name: RetireProviderBoards :execrows
+UPDATE boards
+SET status = 'retired'
+WHERE provider = $1
+  AND status IN ('pending', 'active')
+`
+
+// Retire EVERY live board of one provider in one statement.
+//
+// Separate from RetireBoard rather than looping it: this is used when the provider itself is
+// withdrawn, not when a board is found dead, and the populations differ by three orders of
+// magnitude — apploi alone carries 5833 boards (migration 0165). A loop would be 5833 round
+// trips to say one thing.
+//
+// Deliberately does NOT touch 'rejected': a rejected board failed insert-time validation and
+// never became live, so calling it retired would erase why it is there. Idempotent — the
+// status predicate means a re-run matches nothing.
+func (q *Queries) RetireProviderBoards(ctx context.Context, provider string) (int64, error) {
+	result, err := q.db.Exec(ctx, retireProviderBoards, provider)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const updateBoardCompany = `-- name: UpdateBoardCompany :execrows
 UPDATE boards
 SET company = $1

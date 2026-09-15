@@ -56,3 +56,19 @@ WHERE provider = sqlc.arg(provider) AND lower(board) = lower(sqlc.arg(board))
 SELECT * FROM boards
 WHERE submitted_by = sqlc.arg(submitted_by)
 ORDER BY created_at DESC;
+
+-- name: RetireProviderBoards :execrows
+-- Retire EVERY live board of one provider in one statement.
+--
+-- Separate from RetireBoard rather than looping it: this is used when the provider itself is
+-- withdrawn, not when a board is found dead, and the populations differ by three orders of
+-- magnitude — apploi alone carries 5833 boards (migration 0165). A loop would be 5833 round
+-- trips to say one thing.
+--
+-- Deliberately does NOT touch 'rejected': a rejected board failed insert-time validation and
+-- never became live, so calling it retired would erase why it is there. Idempotent — the
+-- status predicate means a re-run matches nothing.
+UPDATE boards
+SET status = 'retired'
+WHERE provider = sqlc.arg(provider)
+  AND status IN ('pending', 'active');

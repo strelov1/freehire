@@ -556,6 +556,54 @@ func (q *Queries) CloseJobBySourceExternalID(ctx context.Context, arg CloseJobBy
 	return count, err
 }
 
+const closeMisattributedSourceJobs = `-- name: CloseMisattributedSourceJobs :one
+WITH closed AS (
+    UPDATE jobs
+    SET closed_at     = now(),
+        closed_reason = 'source_misattributed',
+        updated_at    = now()
+    WHERE closed_at IS NULL
+      AND source = $1
+      AND id >= $2
+      AND id < $3
+    RETURNING id
+)
+SELECT count(*) FROM closed
+`
+
+type CloseMisattributedSourceJobsParams struct {
+	Source string `json:"source"`
+	FromID int64  `json:"from_id"`
+	ToID   int64  `json:"to_id"`
+}
+
+// Closes one id-range chunk of a source whose stored rows carry an employer we now know is
+// wrong and cannot repair in place (see migration 0165 for the case that forced the label).
+//
+// Chunked over an id RANGE rather than a keyset over matching rows: the affected set is the
+// whole of one source, the id sequence runs far ahead of the live row count, and a range walk
+// lets the caller resume at a printed cursor after an interruption. Idempotent — `closed_at IS
+// NULL` means a re-run over a chunk already done writes nothing, so stopping mid-way is free.
+//
+// NO search_delete_outbox CTE, unlike every other Close* query in this file, and that is the
+// one thing to think twice about before copying this. The others close tens to thousands of
+// rows, where riding the enqueue on the UPDATE is both correct and cheap. This closes a source
+// whole — 1.47M rows for apploi against a deletion queue whose ordinary depth is ~7k — and
+// Meilisearch runs ONE serial task queue, so a wave that size would sit in front of the
+// scheduled rebuild and the incremental pushes for as long as it took to drain. cmd/merge-
+// companies already made this trade and documents it ("Do NOT reindex afterwards... the
+// scheduled freehire-reindexw picks it up"): the rebuild reads open rows from Postgres, so a
+// closed row simply is not in the next index. The cost is that the postings stay searchable
+// until that rebuild — hours, not days — which is the right price for not blocking it.
+//
+// :one rather than :execrows because the CTE moves the row count out of the command tag.
+func (q *Queries) CloseMisattributedSourceJobs(ctx context.Context, arg CloseMisattributedSourceJobsParams) (int64, error) {
+	row := q.db.QueryRow(ctx, closeMisattributedSourceJobs, arg.Source, arg.FromID, arg.ToID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const closeStaleUnseenUnprobeableJobs = `-- name: CloseStaleUnseenUnprobeableJobs :one
 WITH closed AS (
     UPDATE jobs
@@ -3508,6 +3556,20 @@ func (q *Queries) MarkLivenessExpired(ctx context.Context, arg MarkLivenessExpir
 	var i MarkLivenessExpiredRow
 	err := row.Scan(&i.ID, &i.LivenessStrikes, &i.ClosedAt)
 	return i, err
+}
+
+const maxJobIDForSource = `-- name: MaxJobIDForSource :one
+SELECT COALESCE(MAX(id), 0)::bigint FROM jobs WHERE source = $1
+`
+
+// The upper bound of the id-range walk above. MAX over a source is an index scan on
+// (source, external_id)'s table, not a count of matching rows, so it is cheap even when the
+// source holds millions.
+func (q *Queries) MaxJobIDForSource(ctx context.Context, source string) (int64, error) {
+	row := q.db.QueryRow(ctx, maxJobIDForSource, source)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
 }
 
 const orphanAggregatorCompanies = `-- name: OrphanAggregatorCompanies :many
