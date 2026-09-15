@@ -41,7 +41,10 @@ mapfile -t PROVIDERS <<<"$providers"
 # one place: beside the `systemctl enable` that creates the timer, never beside the loop's
 # `continue`s — a sharded provider is skipped there on purpose and its plain timer is meant
 # to stay retired.
-GENERATED=()
+#
+# A SET, not a list, so the sweep's membership test is a lookup rather than a scan of 240
+# names per timer, and reads as the question it is asking.
+declare -A GENERATED=()
 
 # Boards measured (2026-07-31, 3h of journal) to average >=25 min per run — together
 # 65% of all ingest busy-time, with oracle/paylocity/ukg/careerplug hitting
@@ -256,7 +259,7 @@ RandomizedDelaySec=180
 WantedBy=timers.target
 T
   systemctl enable --now "freehire-ingest@$n.timer" >/dev/null
-  GENERATED+=("$n")
+  GENERATED[$n]=1
   i=$((i+1))
 done
 echo "generated + enabled $i per-provider ingest timers"
@@ -643,36 +646,41 @@ echo "generated + enabled 2 workstream shard timers"
 # fleet-wide outage that looks like a successful run. 80% is deliberately loose — a real
 # catalogue does not shed a fifth of its providers between two daily runs, and a wave of
 # board retirements that legitimately does is worth a human looking at it once.
-enabled_now=0
+# Collected in ONE pass, because `systemctl is-enabled` forks a process and the floor and
+# the sweep both need the same answer: asking twice for each of ~254 timers took this run
+# from 14 seconds to over ten minutes.
+#
+# Already-disabled units never enter the list, so the sweep leaves them alone rather than
+# disabling them again — the literal disables above own those, and redoing their work here
+# would hide which list a retirement came from.
+enabled=()
 for f in /etc/systemd/system/freehire-ingest@*.timer; do
   [ -e "$f" ] || continue
   u=${f##*/}
-  if [ "$(systemctl is-enabled "$u" 2>/dev/null)" = enabled ]; then enabled_now=$((enabled_now+1)); fi
+  [ "$(systemctl is-enabled "$u" 2>/dev/null)" = enabled ] || continue
+  p=${u#freehire-ingest@}
+  enabled+=("${p%.timer}")
 done
-if [ "${#GENERATED[@]}" -lt $(( enabled_now * 8 / 10 )) ]; then
-  echo "gen-ingest-timers: generated ${#GENERATED[@]} timers against $enabled_now enabled — refusing to sweep" >&2
+
+if [ "${#GENERATED[@]}" -lt $(( ${#enabled[@]} * 8 / 10 )) ]; then
+  echo "gen-ingest-timers: generated ${#GENERATED[@]} timers against ${#enabled[@]} enabled — refusing to sweep" >&2
 else
   swept=0
-  for f in /etc/systemd/system/freehire-ingest@*.timer; do
-    [ -e "$f" ] || continue
-    u=${f##*/}; p=${u#freehire-ingest@}; p=${p%.timer}
-    # Already-disabled units are left alone rather than disabled again: the literal
-    # disables above own those, and re-running their work here would hide which list a
-    # retirement came from.
-    [ "$(systemctl is-enabled "$u" 2>/dev/null)" = enabled ] || continue
-    for g in "${GENERATED[@]}"; do [ "$g" = "$p" ] && continue 2; done
-    systemctl disable --now "$u" >/dev/null 2>&1 || true
+  for p in "${enabled[@]}"; do
+    [ -n "${GENERATED[$p]:-}" ] && continue
+    systemctl disable --now "freehire-ingest@$p.timer" >/dev/null 2>&1 || true
     # States what this run OBSERVED, not why. A provider reaches here for two different
-    # reasons -- its boards left the catalogue, or a `continue` above skipped it on
-    # purpose (apploi, bayt, the sharded ones) -- and a message that asserts the first
-    # sends a reader hunting for boards that are still there.
+    # reasons — its boards left the catalogue, or a `continue` above skipped it on purpose
+    # (apploi, bayt, the sharded ones) — and a message that asserts the first sends a
+    # reader hunting for boards that are still there. Same reason the summary below counts
+    # rather than explains.
     echo "gen-ingest-timers: retired $p — this run generated no timer for it"
     swept=$((swept+1))
   done
   # An `if`, not `[ ... ] && echo`: under `set -e` the && form exits the script whenever
   # there is nothing to sweep, which is the ordinary case.
   if [ "$swept" -gt 0 ]; then
-    echo "retired $swept timer(s) whose provider left the catalogue"
+    echo "retired $swept timer(s) this run did not generate"
   fi
 fi
 
