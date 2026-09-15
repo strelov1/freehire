@@ -186,7 +186,13 @@ func browserUseEnforce() bool {
 // run reaching $0.07 on what should have been a cheap fill; an uncapped run has no ceiling
 // at all if the agent gets stuck in a similar loop.
 func browserUsePerRunCostCapUSD() float64 {
-	const fallback = 0.25
+	// Measured 2026-09-15 over every cloud run this deployment has made: the ones that did
+	// real work cost $0.0166 to $0.0707, and one cost $0.197 to spend 1040 seconds arriving
+	// at the same captcha refusal a $0.017 run reached in 147. The cap is what stops an
+	// agent going round in circles, and at $0.25 it was not stopping anything — worse, that
+	// run outlasted our own wait, which turns a knowable refusal into an unknown outcome
+	// and dead-letters the entry. $0.10 clears the dearest useful run by 40%.
+	const fallback = 0.10
 	raw := os.Getenv("AUTO_APPLY_BROWSERUSE_MAX_COST_USD")
 	if raw == "" {
 		return fallback
@@ -303,7 +309,7 @@ func NewBrowserUseExecutor(client *browseruse.Client) *BrowserUseExecutor {
 // retrying that produces the identical park twenty times over.
 func resultForParkedReport(detail string) autoapply.SidecarResult {
 	if isCaptchaRefusal(detail) {
-		return autoapply.SidecarResult{Status: autoapply.StatusCaptchaRefused, Reason: detail}
+		return autoapply.SidecarResult{Status: autoapply.StatusCaptchaRefused, Reason: detail, RetryBudget: cloudCaptchaMaxAttempts}
 	}
 	return autoapply.SidecarResult{Status: autoapply.StatusParked, Reason: detail}
 }
@@ -320,7 +326,15 @@ func resultForParkedReport(detail string) autoapply.SidecarResult {
 // per-attempt deadline (AUTO_APPLY_CALL_TIMEOUT_SECONDS) so that THIS timeout is the one
 // that fires — only this path can read the agent's own report and tell "it parked" from
 // "we stopped watching".
-const browserUseWaitTimeout = 8 * time.Minute
+const browserUseWaitTimeout = 10 * time.Minute
+
+// cloudCaptchaMaxAttempts is how many times a captcha refusal from the CLOUD path is worth
+// repeating. Deliberately far below the free path's twenty: there an ask costs nothing, here
+// each one is billed, and this board refused five in a row on 2026-09-15 at $0.017-$0.197
+// apiece. Eight asks is roughly thirty cents — worth spending on a coin toss that has landed
+// well before (a Lever application went through this way on 2026-09-10) and cheap enough to
+// stop and tell the candidate to press submit himself when it does not.
+const cloudCaptchaMaxAttempts = 8
 
 // submit runs plan through browser-use against applyURL. handled reports whether this
 // call decided the attempt's outcome at all; false (only when the daily spend guard

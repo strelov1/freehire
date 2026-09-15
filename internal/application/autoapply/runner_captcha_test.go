@@ -81,3 +81,33 @@ func indexFold(haystack, needle string) int {
 	}
 	return -1
 }
+
+// A sidecar that pays for its own asks names how many are worth making, and the runner has
+// to honour it — otherwise a cloud captcha refusal quietly spends the free path's twenty
+// asks at a few cents each.
+func TestRunHonoursASidecarsOwnRetryBudget(t *testing.T) {
+	store := &fakeStore{waves: [][]Claimed{{{QueueID: 21, UserID: 10, JobID: 100}}}}
+	answers := &fakeAnswers{answers: map[string]string{}}
+	sidecar := &fakeSidecar{result: SidecarResult{Status: StatusCaptchaRefused, RetryBudget: 8}}
+
+	if _, err := Run(context.Background(), store, answers, sidecar, opts()); err != nil {
+		t.Fatal(err)
+	}
+	if store.failCaptchaMax != 8 {
+		t.Errorf("FailCaptcha called with maxAttempts=%d, want the sidecar's own 8", store.failCaptchaMax)
+	}
+}
+
+// Saying nothing keeps the measured default, which is what the free path relies on.
+func TestRunFallsBackToItsOwnBudgetWhenTheSidecarNamesNone(t *testing.T) {
+	store := &fakeStore{waves: [][]Claimed{{{QueueID: 22, UserID: 10, JobID: 100}}}}
+	answers := &fakeAnswers{answers: map[string]string{}}
+	sidecar := &fakeSidecar{result: SidecarResult{Status: StatusCaptchaRefused}}
+
+	if _, err := Run(context.Background(), store, answers, sidecar, opts()); err != nil {
+		t.Fatal(err)
+	}
+	if store.failCaptchaMax != captchaMaxAttempts {
+		t.Errorf("FailCaptcha called with maxAttempts=%d, want captchaMaxAttempts=%d", store.failCaptchaMax, captchaMaxAttempts)
+	}
+}

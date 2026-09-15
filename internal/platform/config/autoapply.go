@@ -61,7 +61,7 @@ func LoadAutoApply() AutoApply {
 		MaxAttempts:  envInt("AUTO_APPLY_MAX_ATTEMPTS", 3),
 		Concurrency:  envInt("AUTO_APPLY_CONCURRENCY", 2),
 		MaxPerRun:    envInt("AUTO_APPLY_MAX_PER_RUN", 200),
-		CallTimeout:  time.Duration(envInt("AUTO_APPLY_CALL_TIMEOUT_SECONDS", 600)) * time.Second,
+		CallTimeout:  time.Duration(envInt("AUTO_APPLY_CALL_TIMEOUT_SECONDS", 720)) * time.Second,
 
 		BrowserUseAPIKey: os.Getenv("AUTO_APPLY_BROWSERUSE_API_KEY"),
 	}
