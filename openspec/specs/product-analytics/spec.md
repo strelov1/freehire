@@ -89,12 +89,42 @@ tracking, email) is never recorded.
 
 The app SHALL emit explicit events for the core funnel — `search`, `job_view`,
 `job_apply`, `job_save`, `job_track`, `signup`, `cv_upload`, `match_run`,
-`tailor_run`, `assistant_message` — through a single analytics module, fired on
-the UI action regardless of authentication state. A no-op SHALL be safe when
+`tailor_run`, `assistant_message` — and for the paid funnel — `plan_refused`,
+`checkout_start`, `subscribe` — through a single analytics module, fired on
+the UI action regardless of authentication state.
+
+`plan_refused` is the one exception to "fired on the UI action", and deliberately:
+it is emitted where the refusal is READ rather than where a button was pressed,
+because a metered feature's 402 arrives on whichever transport that feature owns.
+Most arrive as ordinary JSON and are recorded centrally; the streaming ones — the
+assistant, the cover letter, dictation — read their own refusal and say so
+themselves. One cannot be recorded at all: the fit analysis opens an `EventSource`,
+where the browser exposes no HTTP status and a 402 surfaces only as an error.
+Counting that one needs a different transport, not a different call site. A no-op SHALL be safe when
 PostHog is uninitialized. Event properties SHALL carry no personal data: no
 email, no name, no file name, no résumé or message text. A failure reason SHALL
 be reported as a bounded code drawn from a closed set, never as a raw error
 message, so that a reworded error does not silently split a metric into two.
+
+#### Scenario: A plan limit refuses a metered action
+
+- **WHEN** a metered feature answers 402 because the day's allowance is spent
+- **THEN** a `plan_refused` event is captured carrying the feature the SERVER
+  named and whether an upgrade was offered, so that a refusal with nothing left to
+  sell — an Ultra subscriber's — is not counted as demand that would have paid
+
+#### Scenario: A visitor means to buy
+
+- **WHEN** a signed-in visitor asks for a checkout session
+- **THEN** a `checkout_start` event is captured, whether or not the session is
+  created, so that intent is visible apart from purchase
+
+#### Scenario: A purchase completes
+
+- **WHEN** a purchase finishes — through the provider's checkout page, or as an
+  upgrade applied in place to an existing subscription
+- **THEN** a `subscribe` event is captured EXACTLY once, carrying the tier the
+  account now holds rather than the one that was clicked
 
 #### Scenario: Anonymous user applies
 

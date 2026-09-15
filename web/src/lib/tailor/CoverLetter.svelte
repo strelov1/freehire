@@ -11,7 +11,7 @@
   // checkable — every sentence about the candidate's experience traces to something they
   // themselves asserted — so it renders even when it is empty, saying so.
   import { Copy, Check, FileText, Loader2 } from '@lucide/svelte';
-  import { api } from '$lib/api';
+  import { api, trackPlanRefusal } from '$lib/api';
   import type { CoverLetterView } from '$lib/cv';
 
   let { cvId }: { cvId: string } = $props();
@@ -76,6 +76,9 @@
         // A refusal answers before the stream opens, so its status and sentence are both
         // readable here: an exhausted allowance says so, rather than looking like a drop.
         const body = await res.json().catch(() => null);
+        // This stream owns its transport, so the central record in toApiError never sees
+        // the refusal — see trackPlanRefusal.
+        trackPlanRefusal(res.status, body);
         error = body?.error ?? 'The letter could not be drafted.';
         return;
       }

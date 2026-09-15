@@ -1,5 +1,6 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
+  import { replaceState } from '$app/navigation';
   import { page } from '$app/state';
   import { track } from '$lib/analytics';
   import { api } from '$lib/api';
@@ -68,10 +69,11 @@
     purchaseRecorded = true;
     track('subscribe', { plan: tier });
 
-    const url = new URL(page.url);
-    url.searchParams.delete('checkout');
-    // window.history explicitly: this component has its own `history` (the usage log).
-    window.history.replaceState(window.history.state, '', url);
+    // SvelteKit's replaceState, not the browser's: every other view here uses it, and a
+    // raw history call leaves the framework's own `page.url` and history index pointing
+    // at an address that no longer exists.
+    // eslint-disable-next-line svelte/no-navigation-without-resolve -- shallow same-page URL clean-up to the current pathname; nothing to resolve
+    replaceState(page.url.pathname, page.state);
   });
 
   // Where a subscriber changes their card or cancels — the provider's own page. Null when

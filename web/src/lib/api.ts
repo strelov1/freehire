@@ -312,24 +312,33 @@ export class MovedError extends Error {
  *  because it arrives as parsed JSON and only these two fields are read. */
 type PlanRefusalBody = { allowance?: { feature?: unknown }; upgrade_url?: unknown };
 
-/** Record the moment a plan limit said no, from the one place every failed response
- *  passes through.
+/** Record the moment a plan limit said no.
  *
- *  Here rather than at each call site on purpose: a metered feature added later is
- *  covered without anyone remembering to instrument it, and a list of features kept by
- *  hand is exactly the shape that hides what is missing. The feature name and whether an
- *  upgrade was on offer come from the SERVER's own refusal body (see handler.write402),
- *  so neither is guessed from the request path.
+ *  This is the only record of DEMAND for a paid feature. What a user spent is in
+ *  Postgres; what they were refused is nowhere else at all.
  *
- *  This is the only record of demand for a paid feature. What a user SPENT is in
- *  Postgres; what they were REFUSED is nowhere else at all.
+ *  `toApiError` calls it for every ordinary JSON response, which covers a metered
+ *  feature reached that way without anyone remembering to instrument it. It is EXPORTED
+ *  because that is not all of them: the streaming features each own their transport and
+ *  read the refusal themselves, so they call this directly —
+ *
+ *    - the assistant (assistant/client.ts, its own fetch and TurnRefused)
+ *    - the cover letter (tailor/CoverLetter.svelte, a raw Response)
+ *    - dictation (assistant/speech.ts, its own status ladder)
+ *
+ *  and one of them cannot: MatchAnalysisFull.svelte opens an EventSource, where the
+ *  browser exposes no HTTP status at all and a 402 surfaces only as `onerror`. Counting
+ *  that one needs a different transport, not a different call site.
+ *
+ *  The feature name and whether an upgrade was on offer come from the SERVER's own
+ *  refusal body (handler.write402), so neither is guessed from the request path.
  *
  *  No browser guard of its own: toApiError also runs during SSR, and `track` already
  *  handles that — it queues into a bounded buffer that a server process simply never
  *  drains. A second guard here would only make this call behave unlike every other
  *  `track` in the app, and would be untestable in the node environment the unit tests
  *  run in. */
-function recordPlanRefusal(status: number, body: unknown): void {
+export function trackPlanRefusal(status: number, body: unknown): void {
   if (status !== 402) return;
   const refusal = body as PlanRefusalBody | null;
   const feature = refusal?.allowance?.feature;
@@ -347,7 +356,7 @@ async function toApiError(res: Response): Promise<ApiError> {
   try {
     const body = await res.json();
     const msg = body && typeof body.error === 'string' ? body.error : `${res.status} ${res.statusText}`;
-    recordPlanRefusal(res.status, body);
+    trackPlanRefusal(res.status, body);
     return new ApiError(res.status, msg, body ?? undefined);
   } catch {
     return new ApiError(res.status, `${res.status} ${res.statusText}`);
