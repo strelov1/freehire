@@ -161,6 +161,24 @@ def seed_items(rows: list[tuple[str, str, int]]) -> list[dict[str, str]]:
     return [{"board": slug, "company": name} for name, slug, _ in rows]
 
 
+def merge_seed_items(
+    existing: list[dict[str, str]], new: list[dict[str, str]],
+) -> list[dict[str, str]]:
+    """Merge a run's new seed entries into a provider's existing seed file, keyed by board.
+
+    Multiple --write runs (e.g. several discover_boards.py queries) before a single
+    cmd/harvest-boards --apply must accumulate, not clobber each other — the old
+    sources/<provider>.yml append preserved that, and a plain overwrite here would silently
+    drop whatever an earlier run already validated and had not yet been applied. A board
+    already in `existing` is replaced by this run's entry when re-harvested (fresher
+    validation); one not re-harvested this run is carried over unchanged.
+    """
+    merged = {item["board"]: item for item in existing}
+    for item in new:
+        merged[item["board"]] = item
+    return list(merged.values())
+
+
 def validate(provider: str, slug: str) -> int | None:
     """Return active job count if the board is live and non-empty, else None."""
     body = fetch(VALIDATORS[provider](slug), timeout=20)
@@ -261,10 +279,12 @@ def emit_survivors(cand: dict[tuple[str, str], str], write: bool) -> int:
             print(f"  board: {slug}")
         if write:
             f = SEED_DIR / f"{prov}.json"
-            f.write_text(json.dumps(seed_items(rows), indent=2) + "\n")
-            print(f"  -> wrote {len(rows)} entries to {f.relative_to(REPO)} — apply with "
-                  f"`go run ./cmd/harvest-boards {prov} {f.relative_to(REPO)} --apply`",
-                  file=sys.stderr)
+            existing = json.loads(f.read_text()) if f.exists() else []
+            merged = merge_seed_items(existing, seed_items(rows))
+            f.write_text(json.dumps(merged, indent=2) + "\n")
+            print(f"  -> {f.relative_to(REPO)} now holds {len(merged)} entries "
+                  f"({len(rows)} from this run) — apply with `go run ./cmd/harvest-boards "
+                  f"{prov} {f.relative_to(REPO)} --apply`", file=sys.stderr)
 
     print(f"\n{total} new validated boards total", file=sys.stderr)
     return total
