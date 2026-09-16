@@ -51,7 +51,6 @@ if (env.PUBLIC_SENTRY_DSN) {
     // The same filter the browser half applies, and it matters MORE here: an SSR `load`
     // that could not read the API in ten seconds reports once per visitor per page, so a
     // slow afternoon arrives as thousands of identical events carrying no stack to act on.
-    // 70% of everything accepted in the billing period to 2026-09-16 was that one shape.
     // See $lib/sentryNoise.
     beforeSend: (event, hint) => (isTransientNoise(hint?.originalException) ? null : event),
   });

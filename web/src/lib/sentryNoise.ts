@@ -58,10 +58,6 @@ const TRANSIENT_MESSAGES = [
 /** Error class names that are a condition whatever they carry. */
 const TRANSIENT_NAMES = new Set(['AbortError', 'TimeoutError']);
 
-function text(value: unknown): string {
-  return typeof value === 'string' ? value.toLowerCase() : '';
-}
-
 /**
  * True when this failure is a transient condition rather than a defect, and so must be
  * dropped before it is billed against the month's allowance.
@@ -84,6 +80,7 @@ export function isTransientNoise(err: unknown): boolean {
     return true;
   }
 
-  const message = text(e.message);
-  return message !== '' && TRANSIENT_MESSAGES.some((fragment) => message.includes(fragment));
+  if (typeof e.message !== 'string') return false;
+  const message = e.message.toLowerCase();
+  return TRANSIENT_MESSAGES.some((fragment) => message.includes(fragment));
 }
