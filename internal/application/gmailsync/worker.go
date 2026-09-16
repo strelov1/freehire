@@ -157,7 +157,6 @@ func (w *Worker) syncUser(ctx context.Context, u Connection) outcome {
 	newest := u.Cursor
 	sawFailure := false
 	revoked := false
-	var revokedErr error
 	seen := make(map[string]bool)
 	seenThread := make(map[string]bool)
 	var threadIDs []string
@@ -184,8 +183,8 @@ func (w *Worker) syncUser(ctx context.Context, u Connection) outcome {
 		msg, err := reader.GetMessage(ctx, id)
 		if err != nil {
 			if RevokedGrant(err) {
+				log.Printf("gmail-sync: user %d: get %s: %v — marking needs_reconsent", u.UserID, id, err)
 				revoked = true
-				revokedErr = err
 				return
 			}
 			log.Printf("gmail-sync: user %d: get %s: %v", u.UserID, id, err)
@@ -237,7 +236,6 @@ func (w *Worker) syncUser(ctx context.Context, u Connection) outcome {
 	}
 
 	if revoked {
-		log.Printf("gmail-sync: user %d: get: %v — marking needs_reconsent", u.UserID, revokedErr)
 		if err := w.store.SetNeedsReconsent(ctx, u.UserID); err != nil {
 			log.Printf("gmail-sync: user %d: set status: %v", u.UserID, err)
 			return outcomeFailed
