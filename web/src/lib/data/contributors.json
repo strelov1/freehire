@@ -86,10 +86,100 @@
       "accountType": "Bot",
       "role": "contributor",
       "firstContributionAt": "2026-06-15T03:15:26Z",
-      "lastContributionAt": "2026-09-09T02:14:11Z",
-      "mergedPullRequests": 160,
+      "lastContributionAt": "2026-09-15T15:18:40Z",
+      "mergedPullRequests": 175,
       "openedIssues": 0,
       "recentPullRequests": [
+        {
+          "number": 2852,
+          "title": "Bump three and @types/three in /web",
+          "mergedAt": "2026-09-15T15:18:40Z",
+          "url": "https://github.com/strelov1/freehire/pull/2852"
+        },
+        {
+          "number": 2834,
+          "title": "Bump style-dictionary from 5.5.2 to 5.5.3 in /design-system",
+          "mergedAt": "2026-09-15T15:18:03Z",
+          "url": "https://github.com/strelov1/freehire/pull/2834"
+        },
+        {
+          "number": 2832,
+          "title": "Bump typescript-eslint from 8.67.0 to 8.70.0 in /design-system",
+          "mergedAt": "2026-09-15T15:11:00Z",
+          "url": "https://github.com/strelov1/freehire/pull/2832"
+        },
+        {
+          "number": 2828,
+          "title": "Bump marked from 18.0.11 to 18.0.12 in /web",
+          "mergedAt": "2026-09-15T15:10:34Z",
+          "url": "https://github.com/strelov1/freehire/pull/2828"
+        },
+        {
+          "number": 2823,
+          "title": "Bump golang.org/x/time from 0.15.0 to 0.16.0",
+          "mergedAt": "2026-09-15T15:10:07Z",
+          "url": "https://github.com/strelov1/freehire/pull/2823"
+        },
+        {
+          "number": 2838,
+          "title": "Bump github.com/getsentry/sentry-go/fiber from 0.48.0 to 0.49.0",
+          "mergedAt": "2026-09-15T14:51:37Z",
+          "url": "https://github.com/strelov1/freehire/pull/2838"
+        },
+        {
+          "number": 2837,
+          "title": "Bump github.com/aws/aws-sdk-go-v2/service/s3 from 1.111.0 to 1.113.0",
+          "mergedAt": "2026-09-15T14:51:24Z",
+          "url": "https://github.com/strelov1/freehire/pull/2837"
+        },
+        {
+          "number": 2831,
+          "title": "Bump isomorphic-dompurify from 4.1.0 to 4.2.0 in /web",
+          "mergedAt": "2026-09-15T14:50:38Z",
+          "url": "https://github.com/strelov1/freehire/pull/2831"
+        },
+        {
+          "number": 2830,
+          "title": "Bump github.com/aws/aws-sdk-go-v2 from 1.46.0 to 1.47.0",
+          "mergedAt": "2026-09-15T14:50:10Z",
+          "url": "https://github.com/strelov1/freehire/pull/2830"
+        },
+        {
+          "number": 2826,
+          "title": "Bump posthog-js from 1.427.2 to 1.430.2 in /web",
+          "mergedAt": "2026-09-15T14:47:35Z",
+          "url": "https://github.com/strelov1/freehire/pull/2826"
+        },
+        {
+          "number": 2829,
+          "title": "Bump vitest from 4.1.11 to 5.0.0 in /design-system",
+          "mergedAt": "2026-09-15T14:46:12Z",
+          "url": "https://github.com/strelov1/freehire/pull/2829"
+        },
+        {
+          "number": 2824,
+          "title": "Bump simple-icons from 16.29.0 to 16.30.0 in /web",
+          "mergedAt": "2026-09-15T14:46:05Z",
+          "url": "https://github.com/strelov1/freehire/pull/2824"
+        },
+        {
+          "number": 2822,
+          "title": "Bump golang.org/x/net from 0.58.0 to 0.59.0",
+          "mergedAt": "2026-09-15T14:45:57Z",
+          "url": "https://github.com/strelov1/freehire/pull/2822"
+        },
+        {
+          "number": 2825,
+          "title": "Bump happy-dom from 20.14.0 to 20.14.3 in /extension",
+          "mergedAt": "2026-09-15T14:45:49Z",
+          "url": "https://github.com/strelov1/freehire/pull/2825"
+        },
+        {
+          "number": 2827,
+          "title": "Bump pnpm/action-setup from 6.0.10 to 6.1.0",
+          "mergedAt": "2026-09-15T14:45:42Z",
+          "url": "https://github.com/strelov1/freehire/pull/2827"
+        },
         {
           "number": 2686,
           "title": "Bump google.golang.org/grpc from 1.83.1 to 1.83.2",
@@ -119,96 +209,6 @@
           "title": "Bump @storybook/svelte from 10.5.8 to 10.5.10 in /design-system",
           "mergedAt": "2026-09-07T18:21:21Z",
           "url": "https://github.com/strelov1/freehire/pull/2609"
-        },
-        {
-          "number": 2607,
-          "title": "Bump @types/node from 26.4.0 to 26.4.1 in /web",
-          "mergedAt": "2026-09-07T18:08:02Z",
-          "url": "https://github.com/strelov1/freehire/pull/2607"
-        },
-        {
-          "number": 2608,
-          "title": "Bump happy-dom from 20.11.15 to 20.14.0 in /extension",
-          "mergedAt": "2026-09-07T18:07:55Z",
-          "url": "https://github.com/strelov1/freehire/pull/2608"
-        },
-        {
-          "number": 2610,
-          "title": "Bump isomorphic-dompurify from 3.22.0 to 4.1.0 in /web",
-          "mergedAt": "2026-09-07T18:07:42Z",
-          "url": "https://github.com/strelov1/freehire/pull/2610"
-        },
-        {
-          "number": 2613,
-          "title": "Bump svelte-eslint-parser from 1.8.0 to 1.8.1 in /design-system",
-          "mergedAt": "2026-09-07T18:07:35Z",
-          "url": "https://github.com/strelov1/freehire/pull/2613"
-        },
-        {
-          "number": 2614,
-          "title": "Bump posthog-js from 1.418.10 to 1.427.2 in /web",
-          "mergedAt": "2026-09-07T18:07:27Z",
-          "url": "https://github.com/strelov1/freehire/pull/2614"
-        },
-        {
-          "number": 2615,
-          "title": "Bump simple-icons from 16.28.0 to 16.29.0 in /web",
-          "mergedAt": "2026-09-07T18:07:20Z",
-          "url": "https://github.com/strelov1/freehire/pull/2615"
-        },
-        {
-          "number": 2616,
-          "title": "Bump oxlint and eslint-plugin-oxlint in /design-system",
-          "mergedAt": "2026-09-07T18:07:12Z",
-          "url": "https://github.com/strelov1/freehire/pull/2616"
-        },
-        {
-          "number": 2617,
-          "title": "Bump @storybook/svelte-vite from 10.5.8 to 10.5.10 in /design-system",
-          "mergedAt": "2026-09-07T18:07:04Z",
-          "url": "https://github.com/strelov1/freehire/pull/2617"
-        },
-        {
-          "number": 2619,
-          "title": "Bump globals from 17.11.0 to 17.12.0 in /design-system",
-          "mergedAt": "2026-09-07T18:06:57Z",
-          "url": "https://github.com/strelov1/freehire/pull/2619"
-        },
-        {
-          "number": 2620,
-          "title": "Bump github.com/yuin/goldmark from 1.8.5 to 1.8.6",
-          "mergedAt": "2026-09-07T18:06:49Z",
-          "url": "https://github.com/strelov1/freehire/pull/2620"
-        },
-        {
-          "number": 2622,
-          "title": "Bump github.com/cloudflare/circl from 1.6.2 to 1.6.3",
-          "mergedAt": "2026-09-07T18:06:40Z",
-          "url": "https://github.com/strelov1/freehire/pull/2622"
-        },
-        {
-          "number": 2606,
-          "title": "Bump @sentry/sveltekit from 10.72.0 to 10.73.0 in /web",
-          "mergedAt": "2026-09-07T17:42:25Z",
-          "url": "https://github.com/strelov1/freehire/pull/2606"
-        },
-        {
-          "number": 2605,
-          "title": "Bump github.com/bogdanfinn/fhttp from 0.6.8 to 0.6.9",
-          "mergedAt": "2026-09-07T17:38:25Z",
-          "url": "https://github.com/strelov1/freehire/pull/2605"
-        },
-        {
-          "number": 2452,
-          "title": "Bump google.golang.org/grpc from 1.82.1 to 1.83.1",
-          "mergedAt": "2026-09-05T03:08:31Z",
-          "url": "https://github.com/strelov1/freehire/pull/2452"
-        },
-        {
-          "number": 2257,
-          "title": "Bump @types/node from 26.2.0 to 26.4.0 in /web",
-          "mergedAt": "2026-09-01T02:52:57Z",
-          "url": "https://github.com/strelov1/freehire/pull/2257"
         }
       ]
     },
@@ -292,10 +292,17 @@
       "accountType": "User",
       "role": "contributor",
       "firstContributionAt": "2026-09-09T08:48:23Z",
-      "lastContributionAt": "2026-09-13T03:02:35Z",
-      "mergedPullRequests": 0,
+      "lastContributionAt": "2026-09-13T12:35:14Z",
+      "mergedPullRequests": 1,
       "openedIssues": 4,
-      "recentPullRequests": []
+      "recentPullRequests": [
+        {
+          "number": 2765,
+          "title": "#2755: add a direct-apply shortcut to job list cards",
+          "mergedAt": "2026-09-13T12:35:14Z",
+          "url": "https://github.com/strelov1/freehire/pull/2765"
+        }
+      ]
     },
     {
       "login": "HafizMMoaz",
@@ -374,6 +381,18 @@
       "lastContributionAt": "2026-09-07T16:05:49Z",
       "mergedPullRequests": 0,
       "openedIssues": 5,
+      "recentPullRequests": []
+    },
+    {
+      "login": "Manan-Santoki",
+      "id": 76106418,
+      "avatarUrl": "https://avatars.githubusercontent.com/u/76106418?u=df6a95434b4302ce7a5ec7eeb9b176f13c4f74c7&v=4",
+      "accountType": "User",
+      "role": "contributor",
+      "firstContributionAt": "2026-09-15T21:32:26Z",
+      "lastContributionAt": "2026-09-15T21:32:26Z",
+      "mergedPullRequests": 0,
+      "openedIssues": 1,
       "recentPullRequests": []
     },
     {
@@ -488,129 +507,129 @@
       "accountType": "User",
       "role": "maintainer",
       "firstContributionAt": "2026-06-11T03:56:53Z",
-      "lastContributionAt": "2026-09-13T02:41:56Z",
-      "mergedPullRequests": 2398,
+      "lastContributionAt": "2026-09-16T11:35:02Z",
+      "mergedPullRequests": 2512,
       "openedIssues": 90,
       "recentPullRequests": [
         {
-          "number": 2763,
-          "title": "Sync a mentor's Google Calendar busy time into mentor_busy_intervals",
-          "mergedAt": "2026-09-13T02:41:56Z",
-          "url": "https://github.com/strelov1/freehire/pull/2763"
+          "number": 2895,
+          "title": "Recognise a resume upload by what employers actually call it",
+          "mergedAt": "2026-09-16T11:35:02Z",
+          "url": "https://github.com/strelov1/freehire/pull/2895"
         },
         {
-          "number": 2759,
-          "title": "Revert: drop the free-tier Upgrade CTAs (Stripe is still test mode)",
-          "mergedAt": "2026-09-12T01:46:58Z",
-          "url": "https://github.com/strelov1/freehire/pull/2759"
+          "number": 2900,
+          "title": "Answer the contact-address TODO instead of carrying it",
+          "mergedAt": "2026-09-16T11:26:57Z",
+          "url": "https://github.com/strelov1/freehire/pull/2900"
         },
         {
-          "number": 2760,
-          "title": "Pull minio images from Quay — Docker Hub no longer has them",
-          "mergedAt": "2026-09-12T01:35:06Z",
-          "url": "https://github.com/strelov1/freehire/pull/2760"
+          "number": 2899,
+          "title": "Ask whether the Sentry credential works, because the build structurally cannot",
+          "mergedAt": "2026-09-16T11:24:25Z",
+          "url": "https://github.com/strelov1/freehire/pull/2899"
         },
         {
-          "number": 2758,
-          "title": "Offer an upgrade where a free-tier allowance refusal is shown",
-          "mergedAt": "2026-09-11T18:15:01Z",
-          "url": "https://github.com/strelov1/freehire/pull/2758"
+          "number": 2896,
+          "title": "Say the noise filter's last check once, and only where it decides something",
+          "mergedAt": "2026-09-16T11:12:03Z",
+          "url": "https://github.com/strelov1/freehire/pull/2896"
         },
         {
-          "number": 2757,
-          "title": "Fix pricing page grid when Ultra isn't offered",
-          "mergedAt": "2026-09-11T17:28:35Z",
-          "url": "https://github.com/strelov1/freehire/pull/2757"
+          "number": 2898,
+          "title": "Put the pages the navigation leads to in the sitemap, and ask membership once",
+          "mergedAt": "2026-09-16T11:06:41Z",
+          "url": "https://github.com/strelov1/freehire/pull/2898"
         },
         {
-          "number": 2756,
-          "title": "Drop the LinkedIn profile import from onboarding",
-          "mergedAt": "2026-09-11T04:16:39Z",
-          "url": "https://github.com/strelov1/freehire/pull/2756"
+          "number": 2897,
+          "title": "Check the branding gate against the live site, and record what it found",
+          "mergedAt": "2026-09-16T10:54:40Z",
+          "url": "https://github.com/strelov1/freehire/pull/2897"
         },
         {
-          "number": 2754,
-          "title": "Make every metered AI feature subscription-only",
-          "mergedAt": "2026-09-10T21:30:12Z",
-          "url": "https://github.com/strelov1/freehire/pull/2754"
+          "number": 2887,
+          "title": "Let the generator see `managed`, and start the scheduler cutover",
+          "mergedAt": "2026-09-16T10:39:00Z",
+          "url": "https://github.com/strelov1/freehire/pull/2887"
         },
         {
-          "number": 2753,
-          "title": "Close the boards whose feed answers successfully with nothing",
-          "mergedAt": "2026-09-10T19:14:32Z",
-          "url": "https://github.com/strelov1/freehire/pull/2753"
+          "number": 2893,
+          "title": "Add a hackernews source adapter",
+          "mergedAt": "2026-09-16T10:34:16Z",
+          "url": "https://github.com/strelov1/freehire/pull/2893"
         },
         {
-          "number": 2752,
-          "title": "Send Lever to the cloud agent, which solves the captcha itself",
-          "mergedAt": "2026-09-10T18:24:18Z",
-          "url": "https://github.com/strelov1/freehire/pull/2752"
+          "number": 2894,
+          "title": "Archive welcome-pro-subscribers and sync its specs to main",
+          "mergedAt": "2026-09-16T04:12:55Z",
+          "url": "https://github.com/strelov1/freehire/pull/2894"
         },
         {
-          "number": 2751,
-          "title": "Count a fill that times out under a captcha challenge as the captcha",
-          "mergedAt": "2026-09-10T16:34:47Z",
-          "url": "https://github.com/strelov1/freehire/pull/2751"
+          "number": 2892,
+          "title": "Stop reporting conditions as faults, and fix the two defects that were hiding behind them",
+          "mergedAt": "2026-09-16T03:57:03Z",
+          "url": "https://github.com/strelov1/freehire/pull/2892"
         },
         {
-          "number": 2750,
-          "title": "Give a captcha refusal its own attempt counter",
-          "mergedAt": "2026-09-10T14:19:44Z",
-          "url": "https://github.com/strelov1/freehire/pull/2750"
+          "number": 2889,
+          "title": "Welcome a newly-paying subscriber with a one-time email and a header badge",
+          "mergedAt": "2026-09-16T03:57:00Z",
+          "url": "https://github.com/strelov1/freehire/pull/2889"
         },
         {
-          "number": 2749,
-          "title": "Say \"captcha refused\" once in the recorded reason",
-          "mergedAt": "2026-09-10T13:11:25Z",
-          "url": "https://github.com/strelov1/freehire/pull/2749"
+          "number": 2891,
+          "title": "Lead to the Talent Network from the header, the footer and its own page",
+          "mergedAt": "2026-09-16T03:42:35Z",
+          "url": "https://github.com/strelov1/freehire/pull/2891"
         },
         {
-          "number": 2748,
-          "title": "Retry a captcha refusal instead of burying the application",
-          "mergedAt": "2026-09-10T12:19:05Z",
-          "url": "https://github.com/strelov1/freehire/pull/2748"
+          "number": 2890,
+          "title": "Write down what Google verification costs, before we owe it again next year",
+          "mergedAt": "2026-09-16T03:38:09Z",
+          "url": "https://github.com/strelov1/freehire/pull/2890"
         },
         {
-          "number": 2746,
-          "title": "Carry the board's own words back with a refused submission",
-          "mergedAt": "2026-09-10T03:10:00Z",
-          "url": "https://github.com/strelov1/freehire/pull/2746"
+          "number": 2888,
+          "title": "Say what connecting Gmail actually does, so the scope can be verified",
+          "mergedAt": "2026-09-16T03:22:48Z",
+          "url": "https://github.com/strelov1/freehire/pull/2888"
         },
         {
-          "number": 2745,
-          "title": "Align the stat-tile figures on one baseline",
-          "mergedAt": "2026-09-10T02:43:20Z",
-          "url": "https://github.com/strelov1/freehire/pull/2745"
+          "number": 2886,
+          "title": "Archive the identity-confirmation change, and record what the last task caught",
+          "mergedAt": "2026-09-16T02:48:23Z",
+          "url": "https://github.com/strelov1/freehire/pull/2886"
         },
         {
-          "number": 2744,
-          "title": "Send each platform to the page its application form is actually on",
-          "mergedAt": "2026-09-10T02:34:25Z",
-          "url": "https://github.com/strelov1/freehire/pull/2744"
+          "number": 2885,
+          "title": "Halve the shard cadence, so the heavy pool's own members can run",
+          "mergedAt": "2026-09-16T02:33:47Z",
+          "url": "https://github.com/strelov1/freehire/pull/2885"
         },
         {
-          "number": 2743,
-          "title": "docs(blog): changelog — mentor review preview",
-          "mergedAt": "2026-09-10T01:54:02Z",
-          "url": "https://github.com/strelov1/freehire/pull/2743"
+          "number": 2884,
+          "title": "Return re-authentication to the callback the provider actually knows about",
+          "mergedAt": "2026-09-16T01:50:37Z",
+          "url": "https://github.com/strelov1/freehire/pull/2884"
         },
         {
-          "number": 2738,
-          "title": "Queue the postings a report changed, so the label reaches search",
-          "mergedAt": "2026-09-10T01:49:22Z",
-          "url": "https://github.com/strelov1/freehire/pull/2738"
+          "number": 2883,
+          "title": "Record what the apploi close actually measured, and fix its chunk default",
+          "mergedAt": "2026-09-16T01:32:12Z",
+          "url": "https://github.com/strelov1/freehire/pull/2883"
         },
         {
-          "number": 2742,
-          "title": "Archive mentor-moderation-preview, sync specs to main",
-          "mergedAt": "2026-09-10T00:08:52Z",
-          "url": "https://github.com/strelov1/freehire/pull/2742"
+          "number": 2879,
+          "title": "Fix board-harvest dedup/write to target the live boards table",
+          "mergedAt": "2026-09-16T01:10:21Z",
+          "url": "https://github.com/strelov1/freehire/pull/2879"
         },
         {
-          "number": 2740,
-          "title": "Stop an upgrade or downgrade from opening a second Stripe subscription",
-          "mergedAt": "2026-09-10T00:04:23Z",
-          "url": "https://github.com/strelov1/freehire/pull/2740"
+          "number": 2882,
+          "title": "Give JobStreet/JobsDB its own GraphQL pacer, not SEEK's",
+          "mergedAt": "2026-09-15T23:55:06Z",
+          "url": "https://github.com/strelov1/freehire/pull/2882"
         }
       ]
     },
