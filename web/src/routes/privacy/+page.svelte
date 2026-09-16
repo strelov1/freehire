@@ -11,7 +11,7 @@
 
   // Static effective date — freehire has no Date.now-driven content, and a hard
   // date is what a privacy policy needs. Bump this whenever the policy changes.
-  const lastUpdated = 'August 12, 2026';
+  const lastUpdated = 'September 16, 2026';
 </script>
 
 <Seo
@@ -47,7 +47,8 @@
           your email address and — for password sign-in — a salted bcrypt hash of your password (never
           the plaintext). If you sign in with Google, GitHub, or LinkedIn, we store your verified
           email and a provider identifier so we can recognise you next time; we do not keep the
-          provider's access tokens.
+          provider's access tokens. Connecting Gmail or Google Calendar is a separate, opt-in step
+          that does store a token — see “Gmail and Google Calendar”.
         </li>
         <li>
           <span class="font-medium text-foreground">Job activity.</span> If you save, view, apply to,
@@ -116,7 +117,10 @@
       <ul class="flex flex-col gap-2 text-sm leading-relaxed text-muted-foreground">
         <li>
           <span class="font-medium text-foreground">A language-model provider</span> — processes CV
-          and job text to produce AI match analysis, only when you request it.
+          and job text to produce AI match analysis, only when you request it; and, if you have
+          connected Gmail, classifies the hiring mail our own keyword vocabulary could not place
+          (see “Gmail and Google Calendar”). It processes this text to answer that one request and
+          is contractually barred from training on it.
         </li>
         <li>
           <span class="font-medium text-foreground">Product analytics (Google Analytics, PostHog)</span>
@@ -170,6 +174,67 @@
         We do not sell this data, and we do not use it for anything unrelated to running the
         extension's job-application agent, in line with the Chrome Web Store's limited-use
         requirements.
+      </p>
+    </section>
+
+    <section class="flex flex-col gap-3">
+      <h2 class="text-xl font-semibold tracking-tight">Gmail and Google Calendar</h2>
+      <p class="text-sm leading-relaxed text-muted-foreground">
+        This section applies only if you use the Inbox feature and connect a Google account to it.
+        It is off by default, it is separate from signing in with Google, and nothing below happens
+        for anyone who has not connected one. You can disconnect at any time from your account
+        settings, or revoke the grant directly in your
+        <a
+          href="https://myaccount.google.com/permissions"
+          class="font-medium text-foreground underline-offset-4 hover:underline"
+          >Google account permissions</a
+        >.
+      </p>
+      <ul class="flex flex-col gap-3 text-sm leading-relaxed text-muted-foreground">
+        <li>
+          <span class="font-medium text-foreground">What we read</span> (<code
+            class="font-mono text-foreground">gmail.readonly</code
+          >). We do not read your whole mailbox. Each sync runs a search for hiring-shaped mail
+          only — messages from recognised applicant-tracking systems, or carrying application and
+          interview wording — and skips mail you sent yourself. We store the matching messages
+          (sender, subject, date, body) so your application inbox and pipeline stages work. Nothing
+          else in your mailbox is fetched, and we never send mail on your behalf.
+        </li>
+        <li>
+          <span class="font-medium text-foreground">Your calendar</span> (<code
+            class="font-mono text-foreground">calendar.readonly</code
+          >, and <code class="font-mono text-foreground">calendar.events</code> only if you are a
+          mentor taking bookings). Read access shows your interviews alongside your applications.
+          The mentor write scope creates the event and Meet link for a session someone books with
+          you — we create nothing else and delete nothing.
+        </li>
+        <li>
+          <span class="font-medium text-foreground">Automated processing.</span> To decide which
+          application a message belongs to and what stage it signals, we first try a fixed keyword
+          vocabulary that runs entirely on our own servers. Only when that cannot decide do we send
+          the sender, the subject, and the first 4,000 characters of the body to our language-model
+          provider (see “Third-party services”). No human at freehire reads your mail, except where
+          you explicitly ask us to look at a specific message for support, or where we are legally
+          required to.
+        </li>
+        <li>
+          <span class="font-medium text-foreground">Your Google token.</span> The refresh token that
+          lets us sync is encrypted at rest with AES-256 and is never shown to you or to anyone
+          else. Disconnecting revokes it with Google and deletes the messages we synced from that
+          account.
+        </li>
+      </ul>
+      <p class="text-sm leading-relaxed text-muted-foreground">
+        freehire's use and transfer to any other app of information received from Google APIs will
+        adhere to the
+        <a
+          href="https://developers.google.com/terms/api-services-user-data-policy"
+          class="font-medium text-foreground underline-offset-4 hover:underline"
+          >Google API Services User Data Policy</a
+        >, including the Limited Use requirements. We do not sell this data, we do not use it for
+        advertising or to build advertising profiles, we do not use it to train or improve any
+        generalised machine-learning model, and we do not transfer it to anyone except the
+        processors named in this policy and only to provide the Inbox feature you asked for.
       </p>
     </section>
 
