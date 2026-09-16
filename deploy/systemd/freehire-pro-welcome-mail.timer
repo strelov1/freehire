@@ -1,0 +1,16 @@
+[Unit]
+Description=timer: freehire-pro-welcome-mail every 10 minutes
+[Timer]
+# Ten minutes, not billing-sync/discord-sync's hourly: a purchase confirmation that
+# arrives an hour late reads as broken in a way a Discord role does not. Not tighter
+# either — every run's write is a single indexed-row page, so ten minutes costs nothing
+# and is already well inside "feels immediate" for a subscriber who just paid.
+OnBootSec=5min
+OnUnitActiveSec=10min
+# Persistent=true, like billing-sync and discord-sync and NOT like mentorship-remind:
+# this reconciles STATE (an account either has been welcomed or has not), so replaying a
+# missed window can only correct it — a subscriber welcomed a bit late on boot is a
+# strictly better outcome than one never welcomed at all.
+Persistent=true
+[Install]
+WantedBy=timers.target

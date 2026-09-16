@@ -2,8 +2,9 @@
 """Query-driven open-web ATS board discovery.
 
 Run a free-text query across search channels (DuckDuckGo, Google CSE, GitHub code
-search, Common Crawl), extract ATS board URLs, dedup against sources/*.yml,
-validate each board live, and print (or --write) ready-to-paste YAML.
+search, Common Crawl), extract ATS board URLs, dedup against the live `boards`
+catalog, validate each board live, and print (or --write) a per-provider seed
+JSON file for cmd/harvest-boards.
 
 Usage:
     python3 scripts/discover_boards.py --query "fintech berlin" \
@@ -215,7 +216,8 @@ def main() -> int:
     ap.add_argument("--query", default="", help="search term for this run")
     ap.add_argument("--provider", default="", help="comma list; default = all")
     ap.add_argument("--channel", default="ddg", help="comma list from ddg,google,serping,github,cc")
-    ap.add_argument("--write", action="store_true", help="append survivors to sources/<provider>.yml")
+    ap.add_argument("--write", action="store_true",
+                     help="write survivors to scripts/.harvest-seeds/<provider>.json")
     ap.add_argument("--limit", type=int, default=20, help="cap results per channel/provider")
     args = ap.parse_args()
 

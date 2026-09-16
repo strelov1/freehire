@@ -39,7 +39,14 @@ func requireSQLState(t *testing.T, err error, want string) {
 	}
 }
 
-func TestScheduleRowDefaultsToHourlyUnshardedAndEnabled(t *testing.T) {
+// The column defaults must equal the Go defaults, because they are two places holding ONE
+// fact that apply in different circumstances: the constants to a provider with NO row, the
+// columns the moment a row exists. `schedule-board --manage` creates a row, so a drift
+// between them silently changes the cadence of every provider handed to the scheduler --
+// which is exactly what happened on 2026-09-16, when DefaultCadence moved to 2h and this
+// column did not. Asserted against the CONSTANTS, not against literals, so the next move
+// cannot pass by editing one side.
+func TestScheduleRowDefaultsMatchTheGoDefaults(t *testing.T) {
 	pool := testdb.Pool(t)
 	ctx := context.Background()
 
@@ -63,14 +70,14 @@ func TestScheduleRowDefaultsToHourlyUnshardedAndEnabled(t *testing.T) {
 		t.Fatalf("read back: %v", err)
 	}
 
-	if shards != 1 {
-		t.Errorf("shards = %d, want 1", shards)
+	if shards != DefaultShards {
+		t.Errorf("shards = %d, want %d (DefaultShards)", shards, DefaultShards)
 	}
-	if cadenceSec != 3600 {
-		t.Errorf("cadence_sec = %d, want 3600", cadenceSec)
+	if want := int(DefaultCadence.Seconds()); cadenceSec != want {
+		t.Errorf("cadence_sec = %d, want %d (DefaultCadence)", cadenceSec, want)
 	}
-	if timeoutSec != 3000 {
-		t.Errorf("timeout_sec = %d, want 3000", timeoutSec)
+	if want := int(DefaultRunTimeout.Seconds()); timeoutSec != want {
+		t.Errorf("timeout_sec = %d, want %d (DefaultRunTimeout)", timeoutSec, want)
 	}
 	if !enabled {
 		t.Error("enabled = false, want true — a row existing is not a decision to stop crawling")

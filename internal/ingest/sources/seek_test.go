@@ -555,3 +555,200 @@ func TestSeekNewZealandMarketUsesItsOwnHostAndScope(t *testing.T) {
 		t.Errorf("where = %q, want All New Zealand", got)
 	}
 }
+
+func TestJobStreetIsRegisteredAsItsOwnAggregatorProvider(t *testing.T) {
+	src := NewJobStreet(&seekFake{}, &seekFake{})
+	if src.Provider() != "jobstreet" {
+		t.Fatalf("Provider() = %q, want jobstreet", src.Provider())
+	}
+	if _, ok := src.(HydratingSource); !ok {
+		t.Error("jobstreet must share SEEK's HydratingSource behaviour")
+	}
+	if _, ok := src.(aggregator); !ok {
+		t.Error("jobstreet must be an aggregator so first-party ATS copies win dedup")
+	}
+	if _, ok := src.(boardless); ok {
+		t.Error("jobstreet must not be boardless: the ICT subclassification is the crawl slice")
+	}
+	if !slices.Contains(AggregatorProviders(Taxonomy()), "jobstreet") {
+		t.Error("jobstreet missing from AggregatorProviders")
+	}
+	if got := SweepGraceWindows(Taxonomy())["jobstreet"]; got != DefaultSweepGrace {
+		t.Errorf("jobstreet sweep grace = %v, want the %v default because its listing reaches a natural end", got, DefaultSweepGrace)
+	}
+}
+
+func TestJobStreetMarketsUseTheirOwnHostSiteKeyAndWhere(t *testing.T) {
+	cases := []struct {
+		region, host, siteKey, where string
+	}{
+		{"sg", "sg.jobstreet.com", "SG-Main", "Singapore"},
+		{"my", "my.jobstreet.com", "MY-Main", "Malaysia"},
+		{"id", "id.jobstreet.com", "ID-Main", "Indonesia"},
+		{"ph", "ph.jobstreet.com", "PH-Main", "Philippines"},
+		{"hk", "hk.jobsdb.com", "HK-Main", "Hong Kong"},
+		{"th", "th.jobsdb.com", "TH-Main", "Thailand"},
+	}
+	if len(cases) != len(jobStreetMarkets) {
+		t.Fatalf("market test cases = %d, registered markets = %d", len(cases), len(jobStreetMarkets))
+	}
+	for _, tc := range cases {
+		t.Run(tc.region, func(t *testing.T) {
+			fake := &seekFake{searchByPage: map[int][]seekPosting{1: {seekPost("1", "Dev", "Co")}}}
+			if _, err := NewJobStreet(fake, fake).Fetch(context.Background(), CompanyEntry{Region: tc.region, Board: "6290"}); err != nil {
+				t.Fatalf("Fetch: %v", err)
+			}
+			pu, err := url.Parse(fake.searchURLs[0])
+			if err != nil {
+				t.Fatalf("parse search URL: %v", err)
+			}
+			if pu.Host != tc.host {
+				t.Errorf("host = %q, want %q", pu.Host, tc.host)
+			}
+			if got := pu.Query().Get("siteKey"); got != tc.siteKey {
+				t.Errorf("siteKey = %q, want %q", got, tc.siteKey)
+			}
+			if got := pu.Query().Get("where"); got != tc.where {
+				t.Errorf("where = %q, want %q", got, tc.where)
+			}
+			if got := pu.Query().Get("subclassification"); got != "6290" {
+				t.Errorf("subclassification = %q, want 6290", got)
+			}
+		})
+	}
+}
+
+func TestJobStreetSingaporeMapsHumanAndDetailURLsToJobStreet(t *testing.T) {
+	p := seekPost("94590000", "Backend Engineer", "Example Pte Ltd")
+	p.Locations = []seekLocation{{Label: "Singapore", CountryCode: "SG"}}
+	fake := &seekFake{
+		searchByPage: map[int][]seekPosting{1: {p}},
+		detailByID:   map[string]string{"94590000": "<p>Build APIs</p>"},
+	}
+	jobs, err := NewJobStreet(fake, fake).(HydratingSource).FetchNew(context.Background(),
+		CompanyEntry{Region: "sg", Board: "6287"}, func(string) bool { return false })
+	if err != nil {
+		t.Fatalf("FetchNew: %v", err)
+	}
+	if len(jobs) != 1 {
+		t.Fatalf("len(jobs) = %d, want 1", len(jobs))
+	}
+	if jobs[0].URL != "https://sg.jobstreet.com/job/94590000" {
+		t.Errorf("URL = %q", jobs[0].URL)
+	}
+	if fake.detailURL != "https://sg.jobstreet.com/graphql" {
+		t.Errorf("detail endpoint = %q", fake.detailURL)
+	}
+	if !slices.Equal(jobs[0].Countries, []string{"sg"}) {
+		t.Errorf("Countries = %v, want [sg]", jobs[0].Countries)
+	}
+}
+
+func TestJobStreetPhilippinesAndThailandMapHumanAndDetailURLs(t *testing.T) {
+	cases := []struct {
+		region, host, country string
+	}{
+		{"ph", "ph.jobstreet.com", "ph"},
+		{"th", "th.jobsdb.com", "th"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.region, func(t *testing.T) {
+			p := seekPost("94590001", "Backend Engineer", "Example")
+			p.Locations = []seekLocation{{Label: "Market", CountryCode: strings.ToUpper(tc.country)}}
+			fake := &seekFake{
+				searchByPage: map[int][]seekPosting{1: {p}},
+				detailByID:   map[string]string{"94590001": "<p>Build APIs</p>"},
+			}
+			jobs, err := NewJobStreet(fake, fake).(HydratingSource).FetchNew(context.Background(),
+				CompanyEntry{Region: tc.region, Board: "6287"}, func(string) bool { return false })
+			if err != nil {
+				t.Fatalf("FetchNew: %v", err)
+			}
+			if len(jobs) != 1 {
+				t.Fatalf("len(jobs) = %d, want 1", len(jobs))
+			}
+			wantURL := "https://" + tc.host + "/job/94590001"
+			if jobs[0].URL != wantURL {
+				t.Errorf("URL = %q, want %q", jobs[0].URL, wantURL)
+			}
+			wantDetail := "https://" + tc.host + "/graphql"
+			if fake.detailURL != wantDetail {
+				t.Errorf("detail endpoint = %q, want %q", fake.detailURL, wantDetail)
+			}
+			if !slices.Equal(jobs[0].Countries, []string{tc.country}) {
+				t.Errorf("Countries = %v, want [%s]", jobs[0].Countries, tc.country)
+			}
+		})
+	}
+}
+
+func TestJobStreetUnknownMarketFailsWithoutRequest(t *testing.T) {
+	fake := &seekFake{}
+	_, err := NewJobStreet(fake, fake).Fetch(context.Background(), CompanyEntry{Company: "JobStreet Nowhere", Region: "xx", Board: "6287"})
+	if err == nil || !strings.Contains(err.Error(), "jobstreet") || !strings.Contains(err.Error(), "xx") {
+		t.Fatalf("unknown market error = %v, want provider and region", err)
+	}
+	if len(fake.searchURLs) != 0 {
+		t.Errorf("unknown market issued requests: %v", fake.searchURLs)
+	}
+}
+
+func TestJobStreetPageCeilingFailsInsteadOfSilentlyTruncating(t *testing.T) {
+	fake := &seekFake{searchByPage: map[int][]seekPosting{
+		1: {seekPost("1", "A", "Co")},
+		2: {seekPost("2", "B", "Co")},
+		3: {seekPost("3", "Would prove there is more", "Co")},
+	}}
+	src := NewJobStreet(fake, fake).(seek)
+	src.maxPages = 2 // shrink the production safety ceiling to make the invariant cheap to test
+	jobs, err := src.Fetch(context.Background(), CompanyEntry{Region: "sg", Board: "6290"})
+	if err == nil {
+		t.Fatalf("capped JobStreet walk returned %d jobs without an error; silent truncation must fail", len(jobs))
+	}
+	if !strings.Contains(err.Error(), "exceeded 2 pages") {
+		t.Errorf("error = %q, want page-ceiling diagnosis", err)
+	}
+}
+
+func TestJobStreetFetchNewGatedSkipsCoveredEmployerDetail(t *testing.T) {
+	fake := &seekFake{
+		searchByPage: map[int][]seekPosting{
+			1: {seekPost("1", "Covered role", "Covered Co"), seekPost("2", "New role", "New Co")},
+			2: {},
+		},
+		detailByID: map[string]string{"1": "covered body", "2": "new body"},
+	}
+	src := NewJobStreet(fake, fake)
+	gated, ok := src.(CoverageGated)
+	if !ok {
+		t.Fatal("jobstreet should implement CoverageGated")
+	}
+	jobs, err := gated.FetchNewGated(context.Background(), CompanyEntry{Provider: "jobstreet", Board: "6287", Region: "ph"},
+		func(string) bool { return false },
+		func(companies []string) map[string]bool {
+			if !slices.Contains(companies, "Covered Co") || !slices.Contains(companies, "New Co") {
+				t.Fatalf("coverage companies = %v", companies)
+			}
+			return map[string]bool{"Covered Co": true}
+		})
+	if err != nil {
+		t.Fatalf("FetchNewGated: %v", err)
+	}
+	if len(jobs) != 2 {
+		t.Fatalf("len(jobs) = %d, want 2", len(jobs))
+	}
+	fake.mu.Lock()
+	hits := append([]string(nil), fake.detailHits...)
+	fake.mu.Unlock()
+	if slices.Contains(hits, "1") || !slices.Contains(hits, "2") {
+		t.Fatalf("detail hits = %v, want only uncovered posting 2", hits)
+	}
+	for _, j := range jobs {
+		if j.ExternalID == "1" && j.Description != "" {
+			t.Errorf("covered posting description = %q, want empty list-only result", j.Description)
+		}
+		if j.ExternalID == "2" && !strings.Contains(j.Description, "new body") {
+			t.Errorf("uncovered posting description = %q, want hydrated body", j.Description)
+		}
+	}
+}

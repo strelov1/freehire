@@ -57,11 +57,16 @@ SLOTS=${INGEST_SLOTS:-10}
 # firings skipped that day, and ten providers whose timers had just been created were
 # skipped on their first cycle, every one.
 #
-# The fix is in gen-ingest-timers.sh, which moves the seven measured >40min crawls to the
-# 3h HEAVY cadence (a 50-minute crawl holds 83% of a slot hourly, 28% at 3h). That lands
-# ~1.8 slots of new demand on a heavy pool already sampled at 78% of 4 (3.1 slots used),
-# so 4 would thrash and 5 is what the arithmetic asks for. It costs the tail one slot and
-# hands it back five slot-hours of residency, which is the trade being made.
+# The fix is in gen-ingest-timers.sh, which moves seven long crawls to the 3h HEAVY cadence
+# (a 50-minute crawl holds 83% of a slot hourly, 28% at 3h). Those seven are chosen by
+# RUNTIME, not by the residency sampled above, so the two sets overlap without matching:
+# four of the six residents move (workable, trudvsem, freshteam, successfactors) and the
+# other three of the seven were never resident; vk (25min) and hrmos (34min) stay, being
+# frequent rather than long — the reasoning is beside the HEAVY list, which owns it.
+#
+# The 1.8 slots of new demand those seven bring land on a heavy pool already sampled at 78%
+# of 4 (3.1 slots used), so 4 would thrash and 5 is what the arithmetic asks for. It costs
+# the tail one slot and hands it back five slot-hours of residency, which is the trade.
 #
 # Reversible without a deploy: INGEST_HEAVY_SLOTS in /opt/freehire/.env wins over this.
 HEAVY_SLOTS=${INGEST_HEAVY_SLOTS:-5}

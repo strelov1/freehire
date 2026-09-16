@@ -360,6 +360,9 @@ func (s *Service) CheckoutURL(ctx context.Context, userID int64, priceID string,
 		target := decideCheckoutTarget(current, priceID, s.cfg.Prices, s.cfg.UltraPrices)
 		switch {
 		case target.AlreadyOnPrice:
+			// ReturnURL, deliberately not SuccessURL: nothing was bought. Marking this a
+			// purchase would count a sale every time somebody re-opened the price they are
+			// already on.
 			return s.cfg.ReturnURL(), Discount{}, nil
 		case target.Ambiguous:
 			return "", Discount{}, fmt.Errorf(
@@ -373,7 +376,11 @@ func (s *Service) CheckoutURL(ctx context.Context, userID int64, priceID string,
 			if err := s.client.updateSubscriptionPrice(ctx, target.SubscriptionID, target.ItemID, priceID, idempotencyKey); err != nil {
 				return "", Discount{}, fmt.Errorf("billing: upgrading user %d to price %q: %w", userID, priceID, err)
 			}
-			return s.cfg.ReturnURL(), Discount{}, nil
+			// SuccessURL: this IS a purchase, just one made without a checkout page — an
+			// upgrade in place. Returning the plain ReturnURL here left every Pro-to-Ultra
+			// sale looking like an abandoned one, since checkout_start had already been
+			// recorded and nothing ever answered it.
+			return s.cfg.SuccessURL(), Discount{}, nil
 		}
 		// No entitling subscription (a free account, or a former subscriber whose last one
 		// ended): fall through to opening a checkout, exactly as before.
@@ -401,8 +408,9 @@ func (s *Service) CheckoutURL(ctx context.Context, userID int64, priceID string,
 		}
 	}
 
+	// Success and cancel differ by one marker — see Config.SuccessURL for why they must.
 	url, err := s.client.createCheckoutSession(ctx, userID, email,
-		priceID, s.cfg.ReturnURL(), s.cfg.ReturnURL(), customerID, couponID)
+		priceID, s.cfg.SuccessURL(), s.cfg.ReturnURL(), customerID, couponID)
 	if err != nil {
 		return "", Discount{}, err
 	}

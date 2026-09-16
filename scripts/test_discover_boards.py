@@ -106,6 +106,53 @@ def test_collect_candidates_filters_to_provider():
     assert ("lever", "strayco") not in cand  # filtered: not the queried provider
 
 
+def test_parse_boards_dump_groups_by_provider():
+    dump = "greenhouse|acme\nashby|clipbook\ngreenhouse|other-co\n"
+    out = ats_boards.parse_boards_dump(dump)
+    assert out["greenhouse"] == {"acme", "other-co"}
+    assert out["ashby"] == {"clipbook"}
+
+
+def test_parse_boards_dump_ignores_blank_and_malformed_lines():
+    dump = "greenhouse|acme\n\nnotaline\nashby|clipbook\n"
+    out = ats_boards.parse_boards_dump(dump)
+    assert out["greenhouse"] == {"acme"}
+    assert out["ashby"] == {"clipbook"}
+
+
+def test_parse_boards_dump_unknown_provider_lookup_is_empty_not_a_keyerror():
+    out = ats_boards.parse_boards_dump("greenhouse|acme\n")
+    assert out["workable"] == set()
+
+
+def test_seed_items_builds_board_company_pairs():
+    rows = [("Acme Inc", "acme", 12), ("Beta Co", "beta", 3)]
+    assert ats_boards.seed_items(rows) == [
+        {"board": "acme", "company": "Acme Inc"},
+        {"board": "beta", "company": "Beta Co"},
+    ]
+
+
+def test_merge_seed_items_keeps_existing_entries_not_in_this_run():
+    existing = [{"board": "acme", "company": "Acme Inc"}]
+    new = [{"board": "beta", "company": "Beta Co"}]
+    merged = ats_boards.merge_seed_items(existing, new)
+    assert {"board": "acme", "company": "Acme Inc"} in merged
+    assert {"board": "beta", "company": "Beta Co"} in merged
+    assert len(merged) == 2
+
+
+def test_merge_seed_items_lets_a_fresher_entry_replace_the_stale_one():
+    existing = [{"board": "acme", "company": "Acme (stale name)"}]
+    new = [{"board": "acme", "company": "Acme Inc"}]
+    assert ats_boards.merge_seed_items(existing, new) == [{"board": "acme", "company": "Acme Inc"}]
+
+
+def test_merge_seed_items_with_no_existing_file_is_just_the_new_rows():
+    assert ats_boards.merge_seed_items([], [{"board": "acme", "company": "Acme Inc"}]) == \
+        [{"board": "acme", "company": "Acme Inc"}]
+
+
 def _run():
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
     failed = 0

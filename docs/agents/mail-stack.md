@@ -333,7 +333,11 @@ every other worker in this repo.
 
 ## Limitations
 
-- Gmail sync runs under an unverified restricted-scope OAuth app — test users only until
-  Google verification.
+- Gmail sync runs under an unverified restricted-scope OAuth app — test users only (100 of
+  them, Google's cap on a project in Testing) until Google verification. Lifting that is a
+  manual, console-only errand with a recurring bill attached, because `gmail.readonly` is
+  restricted and therefore carries an annual paid security assessment; the calendar scopes
+  beside it do not. [../google-oauth-verification.md](../google-oauth-verification.md) is
+  the runbook, and holds the scope justifications and demo-video script the forms ask for.
 - `internal/application/gmailsync/learn.go` self-learns confident job-mail sender domains; promotion is
   count-based and has no decay.

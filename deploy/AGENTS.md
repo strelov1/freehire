@@ -41,10 +41,19 @@ nothing, so a new provider was scheduled only when somebody remembered to run it
 Every one of them had been added after the generator's last manual run, six days earlier.
 
 It is on `freehire-gen-ingest-timers.timer` now, daily at 04:40 UTC, which bounds that gap
-at a day. The run is safe unattended because of a property of the script rather than of the
-timer: it only ever creates and enables, and every `systemctl disable` in it names one unit
-literally — so a firing against a catalog that has shrunk generates fewer timers and retires
-nothing. The closing `systemctl daemon-reload` is what the unattended run added: the script
+at a day.
+
+**What makes the unattended run safe is the floor, and it was not always.** This paragraph
+used to say the script "only ever creates and enables, and every `systemctl disable` in it
+names one unit literally — so a firing against a catalog that has shrunk generates fewer
+timers and retires nothing." That was true, and it stopped being true the same day, when
+the script gained a sweep that retires by pattern: an enabled timer whose provider this run
+generated nothing for. A run CAN now retire, so the argument had to be replaced rather than
+kept. It is the 80% floor beside the sweep — a run that generated fewer than four fifths of
+the timers currently enabled refuses to sweep at all — and the catalogue query returning
+nothing still exits non-zero before reaching any of it.
+
+The closing `systemctl daemon-reload` is what the unattended run added: the script
 REWRITES every timer file, and `systemctl enable` on an already-enabled unit links nothing,
 so before that an edited `OnCalendar` reached the fleet only via the reload an operator
 happened to do by hand.
@@ -174,10 +183,11 @@ a scheduled Dependabot run made every deploy stop, silently, at exit 0.
   `/opt/freehire/.env`; the mail credentials (`NOTIFY_EMAIL_FROM` plus the SES keys) live
   ONLY in `/opt/freehire/.env.notify`. A worker that sends mail and reads just the first
   loses its email channel — and does not fail, because "channel not configured" is a
-  deliberate soft-skip. **The six workers that send mail are `notify`, `nudge`, `remind`,
-  `broadcast`, `onboarding` and `mentorship-remind`**, and each must read both files.
-  `remind` and `nudge` did not, from the day they shipped until 2026-09-01: 244 email
-  reminders piled up unsent across 43 people while every run exited 0 with `failed=0`.
+  deliberate soft-skip. **The seven workers that send mail are `notify`, `nudge`, `remind`,
+  `broadcast`, `onboarding`, `mentorship-remind` and `pro-welcome-mail`**, and each must
+  read both files. `remind` and `nudge` did not, from the day they shipped until
+  2026-09-01: 244 email reminders piled up unsent across 43 people while every run exited
+  0 with `failed=0`.
   Neither env file is in git and neither should be.
 - **A `.d/` drop-in beside a unit is how the host adds to it**, and both spellings are in
   use here: `mail.conf` adds the env file above, `10-timeout.conf` and

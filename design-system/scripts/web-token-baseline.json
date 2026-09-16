@@ -40,7 +40,7 @@
   "web/src/lib/components/GhostChecklist.svelte": 6,
   "web/src/lib/components/GmailConnectDialog.svelte": 1,
   "web/src/lib/components/HeaderLocationFilter.svelte": 2,
-  "web/src/lib/components/HeaderMenu.svelte": 1,
+  "web/src/lib/components/HeaderMenu.svelte": 2,
   "web/src/lib/components/HeaderSearch.svelte": 2,
   "web/src/lib/components/HomeFunnel.svelte": 1,
   "web/src/lib/components/HomeLandingView.svelte": 1,

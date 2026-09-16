@@ -48,6 +48,7 @@ hire
 /cal-sync
 /capture-apply-form
 /classify-mail
+/close-apploi-misattributed
 /close-chronic-boards
 /cv-previews
 /discord-sync
@@ -75,6 +76,7 @@ hire
 /notify
 /nudge
 /onboarding
+/pro-welcome-mail
 /prune
 /push-receipts
 /queue-metrics
@@ -249,3 +251,8 @@ extension/*.zip
 
 # Local Talent Network demo data (see the catalogue AGENTS.md); not part of the change.
 /seed-talent.sql
+
+# scripts/harvest_boards.py / discover_boards.py --write output: per-provider seed JSON for
+# cmd/harvest-boards, regenerated from the live boards table + whatever aggregator/query ran.
+# Not the catalog's own record (that's `boards`, written by cmd/harvest-boards --apply).
+/scripts/.harvest-seeds/

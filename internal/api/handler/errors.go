@@ -136,7 +136,16 @@ func classify(err error) (status int, msg string, report bool) {
 	// The candidate has not run their fit analysis for this job, so the tailoring surfaces
 	// have nothing to ground on. A state, not a fault — and one both readers of the fit
 	// service meet, so the status is decided here rather than at each call site.
-	case errors.Is(err, fitanalysis.ErrNoAnalysis):
+	//
+	// errNoRequirementList is the same state reached from the other side: an autopilot run
+	// whose analysis would not fill, refused deliberately by refuseAutopilotWithoutAPlan
+	// rather than let loose on a CV with nothing to work through. It is listed HERE, beside
+	// the condition it shares, because both of its readers — RenderError for the plain
+	// endpoint and reportStreamFault for the streamed one — ask this function and only this
+	// function whether a failure is worth reporting. Filed as a fault it was 12 Sentry
+	// events for a refusal that had already explained itself to the candidate on the
+	// stream, on a quota measured in thousands (see web/src/lib/sentryNoise.ts).
+	case errors.Is(err, fitanalysis.ErrNoAnalysis), errors.Is(err, errNoRequirementList):
 		return fiber.StatusConflict, "run the fit analysis first", false
 	// The client cancelled the request (navigated away, closed the tab). The
 	// cancellation propagates through downstream calls (DB, Meilisearch) as

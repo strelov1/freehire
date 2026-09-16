@@ -16,6 +16,8 @@ export const messages = defineMessages(
       mismatchError: 'The two new passwords do not match.',
       wrongCurrentPassword: 'That current password is not right.',
       weakPassword: 'Choose a password of 8–72 characters.',
+      staleSession:
+        'This sign-in session is too old to confirm a security change. Please sign out and sign back in, then try again.',
       genericError: 'Something went wrong. Please try again.',
       changed: 'Password changed. Other devices were signed out.',
       saving: 'Saving…',
@@ -52,6 +54,8 @@ export const messages = defineMessages(
         mismatchError: 'Новые пароли не совпадают.',
         wrongCurrentPassword: 'Текущий пароль указан неверно.',
         weakPassword: 'Выберите пароль от 8 до 72 символов.',
+        staleSession:
+          'Эта сессия слишком старая, чтобы подтвердить изменение настроек безопасности. Выйдите и войдите заново, затем повторите.',
         genericError: 'Что-то пошло не так. Попробуйте ещё раз.',
         changed: 'Пароль изменён. Другие устройства вышли из аккаунта.',
         saving: 'Сохранение…',

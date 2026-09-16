@@ -89,3 +89,38 @@ func TestRegistry_ProviderUnknownIsNotOK(t *testing.T) {
 		t.Error("github reported enabled; want not ok")
 	}
 }
+
+// A provider console registers ONE callback URL per application, so sign-in and
+// re-authentication cannot each have their own. They used to: `ProviderV2` asked the
+// provider to return to `/api/v2/...` while only `/api/v1/...` was ever registered,
+// which GitHub refuses outright ("The redirect_uri is not associated with this
+// application") — and which nobody noticed, because the buttons that start that flow
+// only appeared after the server had already refused an action. Google happened to have
+// both listed; GitHub, LinkedIn and Apple did not.
+//
+// Keeping the two in step is not something a comment can enforce, so it is asserted.
+func TestRegistry_BothFlowsRedirectToTheSameRegisteredCallback(t *testing.T) {
+	reg := NewRegistry(map[string]config.OAuthCredentials{
+		"google": {ClientID: "id", ClientSecret: "secret"},
+		"github": {ClientID: "id", ClientSecret: "secret"},
+	})
+
+	for _, name := range []string{"google", "github"} {
+		signIn, ok := reg.Provider(name, "https://freehire.me")
+		if !ok {
+			t.Fatalf("%s not enabled for sign-in", name)
+		}
+		reauth, ok := reg.ProviderV2(name, "https://freehire.me")
+		if !ok {
+			t.Fatalf("%s not enabled for re-authentication", name)
+		}
+		want := "freehire.me%2Fapi%2Fv1%2Fauth%2Foauth%2F" + name + "%2Fcallback"
+		if got := reauth.AuthCodeURL("s"); !strings.Contains(got, want) {
+			t.Errorf("%s re-authentication redirect is not the registered callback:\n got %q\nwant substring %q", name, got, want)
+		}
+		if signIn.AuthCodeURL("s") != reauth.AuthCodeURL("s") {
+			t.Errorf("%s: sign-in and re-authentication disagree about the callback:\n sign-in %q\n reauth  %q",
+				name, signIn.AuthCodeURL("s"), reauth.AuthCodeURL("s"))
+		}
+	}
+}

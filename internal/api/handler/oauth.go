@@ -92,6 +92,17 @@ func (h *authHandlers) OAuthStart(c *fiber.Ctx) error {
 	return c.Redirect(p.AuthCodeURL(state), fiber.StatusFound)
 }
 
+// callbackState reads the state the provider returned. Apple's callback arrives as a
+// POST with a form-encoded body instead of a GET query string — response_mode=form_post
+// is mandatory once the email scope is requested. Every other provider's callback is
+// still a GET.
+func callbackState(c *fiber.Ctx) string {
+	if c.Method() == fiber.MethodPost {
+		return c.FormValue("state")
+	}
+	return c.Query("state")
+}
+
 // OAuthCallback completes the flow: verify the CSRF state, exchange the code
 // for the provider identity, resolve (or create) the account, then finish. On
 // the web it starts the session and redirects to the SPA; for a mobile flow it
@@ -108,6 +119,22 @@ func (h *authHandlers) OAuthCallback(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusNotFound, "unknown provider")
 	}
 
+	// Re-authentication returns to this same URL, because a provider console registers
+	// ONE callback per application — asking for a second path is asking for a redirect
+	// the provider has never heard of, which is exactly what GitHub refused. The two
+	// flows are told apart here, by which state cookie the browser brings back: each
+	// sets its own, under its own name, and each is single-use.
+	//
+	// Gated on the flag that registers the v2 routes at all: with it off no such attempt
+	// can exist, so a cookie of that name proves nothing and must not divert a sign-in.
+	// Compared against the state the PROVIDER returned, so a stale cookie left by an
+	// abandoned attempt cannot capture somebody else's sign-in either.
+	if h.authV2Enabled {
+		if v2State := c.Cookies(oauthV2StateCookieName); v2State != "" && v2State == callbackState(c) {
+			return h.OAuthCallbackV2(c)
+		}
+	}
+
 	// The state, return target, and platform are single-use: clear all three
 	// cookies no matter how the rest goes. Re-sanitize the return path.
 	cookieState := c.Cookies(oauth.StateCookieName)
@@ -117,12 +144,9 @@ func (h *authHandlers) OAuthCallback(c *fiber.Ctx) error {
 	oauth.ClearReturnCookie(c, h.cookieSecure)
 	oauth.ClearPlatformCookie(c, h.cookieSecure)
 
-	// Apple's callback arrives as a POST with a form-encoded body instead of a
-	// GET query string — response_mode=form_post is mandatory once the email
-	// scope is requested. Every other provider's callback is still a GET.
-	state, code := c.Query("state"), c.Query("code")
+	state, code := callbackState(c), c.Query("code")
 	if c.Method() == fiber.MethodPost {
-		state, code = c.FormValue("state"), c.FormValue("code")
+		code = c.FormValue("code")
 	}
 	if state == "" || state != cookieState {
 		return h.oauthFail(c, p.Name(), returnTo, mobile, errors.New("state mismatch"))
@@ -185,7 +209,7 @@ func (h *authHandlers) OAuthExchange(c *fiber.Ctx) error {
 	if err != nil {
 		return accountsError(err)
 	}
-	return c.JSON(fiber.Map{"data": toUserResponse(user)})
+	return c.JSON(fiber.Map{"data": h.toUserResponseWithTier(c.Context(), user)})
 }
 
 // oauthFail logs the failure server-side and sends the client back to where

@@ -8,6 +8,24 @@ Provider registry over the same cookie session as password login.
 2. `.../callback` — verifies state, exchanges code, fetches identity (id + **verified** email), resolves account, sets same JWT session cookie as password login, 302s back to SPA
 3. Failures → 302 with `?auth_error=oauth`, never JSON (details go to server log)
 
+**One registered callback, two flows.** `Provider` (sign-in) and `ProviderV2`
+(re-authentication, and the verifier-bound native flow) build the SAME redirect URL,
+`<origin>/api/v1/auth/oauth/<name>/callback`, and a test asserts they never drift apart.
+A provider console has room for one callback URL per application, so a second path is not
+a second option — it is a redirect the provider has never been told about. `ProviderV2`
+used to answer `/api/v2/...`: GitHub refused it outright ("The redirect_uri is not
+associated with this application"), and only Google worked, because somebody had listed
+both there and nowhere else. The failure was invisible for months because the buttons
+that start that flow only appeared after the server had already refused an action.
+
+`OAuthCallback` decides which flow a return belongs to by **which state cookie the browser
+brings back** — `hire_oauth_state` for sign-in, `hire_oauth_v2_state` for the other — and
+hands over to `OAuthCallbackV2` when the second matches the state the provider returned.
+The dispatch is gated on `AUTH_V2_ENABLED`, the same flag that registers the v2 routes:
+with it off no such attempt can exist, so a cookie of that name proves nothing. The
+`/api/v2/.../callback` routes stay registered so an attempt started before a deploy still
+completes.
+
 ## Mobile Flow
 
 `/start?platform=mobile` sets a short-lived platform cookie (`state.go`); the callback then redirects to the app's custom scheme carrying a one-time code instead of setting the session cookie, and the app redeems it at `POST /api/v1/auth/oauth/exchange` for a session. See [docs/auth-mobile-v2-runbook.md](../../../../docs/auth-mobile-v2-runbook.md).

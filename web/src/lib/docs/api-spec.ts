@@ -76,8 +76,9 @@ export const OVERVIEW: Overview[] = [
         'open: the job, search, facet, and company endpoints need no authentication ' +
         'and may be called cross-origin.',
       'Authenticated endpoints accept either the browser session cookie (set by ' +
-        'sign-in, same-origin) or a personal API key sent as a Bearer token — see ' +
-        'Authentication and API keys below.',
+        'sign-in, same-origin) or a personal API key sent as a Bearer token — see the ' +
+        'authentication model below. Keys are created in your account, at ' +
+        '[freehire.me/my/api-keys](https://freehire.me/my/api-keys), not through this API.',
     ],
   },
   {
@@ -130,7 +131,7 @@ export const OVERVIEW: Overview[] = [
         'sign-in (same-origin; the SPA cannot read it). Non-browser clients use a ' +
         'personal API key as `Authorization: Bearer <token>`.',
       'Endpoints marked “Session or API key” accept either; endpoints marked ' +
-        '“Session only” (API-key management, saved searches, subscriptions) accept ' +
+        '“Session only” (saved searches, subscriptions) accept ' +
         'only the cookie, so a leaked key cannot manage credentials. “Moderator” ' +
         'endpoints additionally require the moderator role.',
     ],
@@ -146,6 +147,18 @@ export const OVERVIEW: Overview[] = [
         'browser-tool websocket relay; the sitemap-cursor helpers behind ' +
         '`/sitemap.xml`; and the `/og/*.png` social-preview cards, which render an ' +
         'image rather than answer with JSON.',
+      // This entry replaces what used to be a full "API keys" endpoint group, curl
+      // examples and all. Those recipes could not work: key management is cookie-only AND
+      // gated on a short-lived proof of recent credential control, so a scripted call
+      // answers 428 no matter what the reader does. Readers took the documented command at
+      // face value and got stuck, which is a worse outcome than not documenting it.
+      'Managing API keys (`POST`, `GET` and `DELETE` on `/me/api-keys`) is not ' +
+        'documented here, because no API client can call it. Those endpoints accept only ' +
+        'the browser session cookie, and additionally require a freshly proven identity — ' +
+        'a password re-entry or a sign-in-provider check — that a script has no way to ' +
+        'supply. Create and revoke keys in your account instead, at ' +
+        '[freehire.me/my/api-keys](https://freehire.me/my/api-keys); the plaintext token is ' +
+        'shown exactly once, at creation, so store it then.',
       'The `/jobs/{slug}/fit` endpoints are pre-rename aliases of ' +
         '`/jobs/{slug}/match-analysis` and hit the same handlers. They still work, ' +
         'so existing clients do not break — use the match-analysis paths in new code.',
@@ -989,47 +1002,6 @@ ${BASE_URL}/auth/extension/connect?redirect_uri=https://<extension-id>.chromiuma
           { name: 'decision', type: 'string', required: true, description: '`allow` or `cancel`.', example: 'allow' },
         ],
         curl: `# submitted by the consent page's own form, not called directly`,
-      },
-    ],
-  },
-  {
-    title: 'API keys',
-    intro:
-      'Personal keys for non-browser access. Management is session-only (a leaked ' +
-      'key cannot mint more keys). The plaintext token is shown exactly once, at ' +
-      'creation — store it then.',
-    endpoints: [
-      {
-        method: 'POST',
-        path: '/me/api-keys',
-        auth: 'cookie',
-        summary: 'Create a key; returns the plaintext token once.',
-        body: [
-          { name: 'name', type: 'string', required: true, description: 'Label to tell keys apart.', example: 'cli-laptop' },
-          { name: 'expires_at', type: 'string (RFC3339)', description: 'Optional expiry; omit for no expiry.' },
-        ],
-        curl: `curl -X POST "${BASE_URL}/me/api-keys" \\
-  -H 'Content-Type: application/json' \\
-  -b cookies.txt \\
-  -d '{"name":"cli-laptop"}'`,
-        responseExample: `{ "data": { "id": 7, "name": "cli-laptop", "token_prefix": "fh_ab12", "token": "fh_ab12...REDACTED...full-token-shown-once" } }`,
-      },
-      {
-        method: 'GET',
-        path: '/me/api-keys',
-        auth: 'cookie',
-        summary: 'List your keys (metadata only, never the token).',
-        curl: `curl "${BASE_URL}/me/api-keys" -b cookies.txt`,
-        responseExample: `{ "data": [ { "id": 7, "name": "cli-laptop", "token_prefix": "fh_ab12", "last_used_at": null, "expires_at": null } ] }`,
-      },
-      {
-        method: 'DELETE',
-        path: '/me/api-keys/{id}',
-        auth: 'cookie',
-        summary: 'Revoke a key.',
-        pathParams: [{ name: 'id', type: 'integer', required: true, description: 'The key id.', example: '7' }],
-        curl: `curl -X DELETE "${BASE_URL}/me/api-keys/7" -b cookies.txt`,
-        responseExample: `{ "data": { "ok": true } }`,
       },
     ],
   },

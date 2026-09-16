@@ -127,33 +127,88 @@ func run() int {
 		return 1
 	}
 
-	queries := db.New(pool)
-	log.Printf("backfill-derive starting: concurrency=%d", concurrency)
-	scanned, updated, slugsMoved, err := backfillAll(ctx, queries, concurrency)
+	// Unset is unbounded — the whole table in one run, which is what a deploy-time
+	// dictionary fix wants when the host has the hours to spare. Set it when the run has
+	// to fit inside a unit's timeout; worker.EnvInt64 refuses a 0, so "unset" is the only
+	// way to say unbounded and a typo cannot silently mean "scan nothing".
+	maxRows, err := worker.EnvInt64("BACKFILL_DERIVE_MAX", 0)
+	if err != nil {
+		log.Printf("backfill-derive: %v", err)
+		return 1
+	}
+	fromID, err := worker.EnvInt64("BACKFILL_DERIVE_FROM_ID", 0)
 	if err != nil {
 		log.Printf("backfill-derive: %v", err)
 		return 1
 	}
 
+	queries := db.New(pool)
+	log.Printf("backfill-derive starting: concurrency=%d from_id=%d max=%d", concurrency, fromID, maxRows)
+	pass, orphaned, err := derivePass(ctx, queries, concurrency, scanWindow{fromID: fromID, maxRows: maxRows})
+
+	// ONE report, reached by every path. Deciding what to say at each `return` instead is
+	// what made the resume point vanish twice in one evening: the pass's own error is
+	// only one of the ways this ends, the companies reconcile after it is two more, and
+	// each new exit is another place to forget (freehire#2876).
+	msg, exit := runOutcome(pass, orphaned, err)
+	log.Print(msg)
+	if err != nil {
+		log.Printf("backfill-derive: %v", err)
+	}
+	return exit
+}
+
+// derivePass runs the scan and, when a slug moved, reconciles the companies catalogue
+// derived from it. It returns whatever it managed before failing, so the caller still
+// holds the resume point when a later step is the thing that failed.
+func derivePass(ctx context.Context, queries *db.Queries, concurrency int64, win scanWindow) (backfillRun, int64, error) {
+	pass, err := backfillPass(ctx, queries, concurrency, win)
+	if err != nil {
+		return pass, 0, err
+	}
+
 	// A slug rewrite re-keys jobs.company_slug; reconcile the derived companies
 	// catalogue to match (and drop rows orphaned by the change) so company pages
 	// resolve. Skip the whole-table sync when no slug moved.
-	var orphaned int64
-	if slugsMoved > 0 {
-		if err := queries.SyncCompaniesFromJobs(ctx); err != nil {
-			log.Printf("backfill-derive: sync companies: %v", err)
-			return 1
-		}
-		orphaned, err = queries.DeleteOrphanCompanies(ctx)
-		if err != nil {
-			log.Printf("backfill-derive: delete orphan companies: %v", err)
-			return 1
-		}
+	if pass.SlugsMoved == 0 {
+		return pass, 0, nil
 	}
+	if err := queries.SyncCompaniesFromJobs(ctx); err != nil {
+		return pass, 0, fmt.Errorf("sync companies: %w", err)
+	}
+	orphaned, err := queries.DeleteOrphanCompanies(ctx)
+	if err != nil {
+		return pass, 0, fmt.Errorf("delete orphan companies: %w", err)
+	}
+	return pass, orphaned, nil
+}
 
-	log.Printf("backfill-derive done: scanned=%d updated=%d slugs_moved=%d companies_orphaned=%d (follow with a reindex)",
-		scanned, updated, slugsMoved, orphaned)
-	return 0
+// runOutcome turns what a run managed into the one line it prints and the code it exits
+// with. Pure, so every ending is a table in a test rather than a branch only production
+// can reach.
+//
+// The resume point is the difference between "that was all" and "most of the table is
+// still stale", and the pass gives no other sign of which one happened — so it is said
+// plainly whenever there is one, whether or not the run also failed.
+func runOutcome(pass backfillRun, orphaned int64, err error) (string, int) {
+	exit := 0
+	if err != nil {
+		exit = 1
+	}
+	switch {
+	case pass.ResumeID > 0:
+		return fmt.Sprintf("backfill-derive stopped early: scanned=%d updated=%d slugs_moved=%d companies_orphaned=%d — "+
+			"the table is NOT fully derived, continue with BACKFILL_DERIVE_FROM_ID=%d",
+			pass.Scanned, pass.Updated, pass.SlugsMoved, orphaned, pass.ResumeID), exit
+	case err != nil:
+		// No resume point and a failure means the run never got far enough to have one —
+		// a registry that would not load, say. Claiming `done` there would be a lie about
+		// the whole table.
+		return fmt.Sprintf("backfill-derive stopped before it could derive anything: scanned=%d", pass.Scanned), exit
+	default:
+		return fmt.Sprintf("backfill-derive done: scanned=%d updated=%d slugs_moved=%d companies_orphaned=%d (follow with a reindex)",
+			pass.Scanned, pass.Updated, pass.SlugsMoved, orphaned), exit
+	}
 }
 
 // deriveRow re-derives a job's facets, role_fingerprint, and slugs, and reports
@@ -228,16 +283,94 @@ func deriveRow(j db.Job, canon map[string]string) (params db.UpdateJobDerivedPar
 	}, facetsMoved || fingerprintMoved || slugMoved, slugMoved
 }
 
-// backfillAll re-derives every job's facets, fingerprint, and slugs and rewrites the
-// rows whose derived values differ from what is stored. A single reader pages by keyset
-// (id > last seen) so concurrent writes cannot skip or repeat rows, and a pool of
-// `concurrency` workers derives and writes in parallel (order-independent). It reports
-// how many rows were written (updated) and how many of those moved a slug (slugsMoved),
-// so the caller knows whether to reconcile companies. The first store error cancels the
-// run and is returned.
-func backfillAll(ctx context.Context, store deriveStore, concurrency int64) (scanned, updated, slugsMoved int, err error) {
+// scanWindow bounds one run of the pass.
+//
+// It exists because the pass walks 12.7M rows and de-TOASTs a description for each,
+// which outlasts any timeout it is sensible to give a unit — so a run has to be able to
+// stop and be continued. See AGENTS.md for the nightly arrangement that could not.
+type scanWindow struct {
+	// fromID is the first id a run must DO, inclusive — the same sense as the sibling
+	// pass's BACKFILL_REQUIREMENTS_FROM_ID. Two knobs sharing a name and a shape while
+	// disagreeing about whether the id is done or to-do lose exactly one row per hop for
+	// an operator who chains them.
+	fromID int64
+	// maxRows bounds how many rows one run scans. Zero is unbounded — never a literal
+	// 0 from an operator, since worker.EnvInt64 refuses anything but a positive value,
+	// so "unset" is the only way to ask for the whole table.
+	maxRows int64
+}
+
+// pendingRows are the rows handed to the worker pool that have not finished.
+//
+// It exists because the reader legitimately runs AHEAD of the pool: jobsCh is buffered at
+// backfillBatchSize, so the reader can hand over a whole page — and advance its own keyset
+// cursor past it — before a worker has written any of it. Resuming from the reader's cursor
+// therefore skips however much of the backlog was still queued when the run stopped, and a
+// skipped row keeps stale facets for good with nothing downstream reporting it. Measured on
+// the review's own test: the reader's cursor said 500 while id 5 had not been written.
+//
+// So the resume point comes from the OLDEST row still unfinished, not from the newest row
+// read. A row is added when the reader hands it over and removed when a worker is done with
+// it — including the common case of deciding it needs no write. A row whose write FAILED
+// stays, which is what makes the resume point fall before it.
+type pendingRows struct {
+	mu  sync.Mutex
+	ids map[int64]struct{}
+}
+
+func newPendingRows() *pendingRows { return &pendingRows{ids: make(map[int64]struct{})} }
+
+func (p *pendingRows) add(id int64) {
+	p.mu.Lock()
+	p.ids[id] = struct{}{}
+	p.mu.Unlock()
+}
+
+func (p *pendingRows) done(id int64) {
+	p.mu.Lock()
+	delete(p.ids, id)
+	p.mu.Unlock()
+}
+
+// oldest is the lowest id still unfinished. Read once, after the pool has joined, so the
+// linear scan over at most backfillBatchSize+concurrency entries costs nothing.
+func (p *pendingRows) oldest() (int64, bool) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	var lo int64
+	var found bool
+	for id := range p.ids {
+		if !found || id < lo {
+			lo, found = id, true
+		}
+	}
+	return lo, found
+}
+
+// backfillRun is what one bounded pass did, and where the next one starts.
+type backfillRun struct {
+	Scanned, Updated, SlugsMoved int
+	// ResumeID is the id a follow-up run must be given as fromID — the first row this
+	// one did not finish. Zero means the pass reached the end of the table with nothing
+	// outstanding: an operator needs to tell "there is more" from "that was all" without
+	// counting rows themselves, and must be able to trust the answer either way.
+	ResumeID int64
+}
+
+// backfillPass re-derives every job's facets, fingerprint, and slugs within win and
+// rewrites the rows whose derived values differ from what is stored. A single reader pages
+// by keyset (id > last seen) so concurrent writes cannot skip or repeat rows, and a pool of
+// `concurrency` workers derives and writes in parallel (order-independent). It reports how
+// many rows were written (Updated) and how many of those moved a slug (SlugsMoved), so the
+// caller knows whether to reconcile companies, and where a follow-up run must start. The
+// first store error cancels the run and is returned.
+//
+// This is backfillWindow with the production progress log attached, and the entry point
+// main uses — so it is also the one the tests exercise. It is not "bounded": win may be
+// empty, and then it is the whole table.
+func backfillPass(ctx context.Context, store deriveStore, concurrency int64, win scanWindow) (backfillRun, error) {
 	start := time.Now()
-	return backfillProgress(ctx, store, concurrency, progressEvery, func(scanned, updated, slugs int64) {
+	return backfillWindow(ctx, store, concurrency, win, progressEvery, func(scanned, updated, slugs int64) {
 		log.Printf("backfill-derive: scanned %d, updated %d, slugs_moved %d, %s elapsed",
 			scanned, updated, slugs, time.Since(start).Round(time.Second))
 	})
@@ -269,7 +402,7 @@ func loadAliasRegistry(ctx context.Context, store deriveStore) (map[string]strin
 	return canon, nil
 }
 
-func backfillProgress(ctx context.Context, store deriveStore, concurrency, every int64, report func(scanned, updated, slugsMoved int64)) (scanned, updated, slugsMoved int, err error) {
+func backfillWindow(ctx context.Context, store deriveStore, concurrency int64, win scanWindow, every int64, report func(scanned, updated, slugsMoved int64)) (backfillRun, error) {
 	if concurrency < 1 {
 		concurrency = 1
 	}
@@ -279,7 +412,7 @@ func backfillProgress(ctx context.Context, store deriveStore, concurrency, every
 	// so every row in a run resolves against the same registry.
 	canon, err := loadAliasRegistry(ctx, store)
 	if err != nil {
-		return 0, 0, 0, err
+		return backfillRun{}, err
 	}
 
 	ctx, cancel := context.WithCancel(ctx)
@@ -302,6 +435,12 @@ func backfillProgress(ctx context.Context, store deriveStore, concurrency, every
 	// stale for good. The helper degrades to reading the faulting window row by row and
 	// skips only what is genuinely unreadable.
 	reader := worker.NewFullScanReader(store)
+	// Where the reader's own cursor was when it gave up, written by the reader goroutine
+	// alone and read only after readerWG.Wait(). Zero means it reached the end of the
+	// table. It is a CEILING on the resume point, not the resume point itself — what the
+	// run actually finished is what pending knows.
+	var stoppedAt int64
+	pending := newPendingRows()
 	var readerWG sync.WaitGroup
 	readerWG.Add(1)
 	go func() {
@@ -316,21 +455,63 @@ func backfillProgress(ctx context.Context, store deriveStore, concurrency, every
 				log.Printf("backfill-derive: skipped %d corrupted row(s); their derived columns are unchanged", skipped)
 			}
 		}()
-		var afterID int64
+		// The reader's keyset is strictly-greater, while fromID names the first id to DO,
+		// so the cursor starts one below it. fromID 0 means "from the beginning", and
+		// there is no id 0 to lose.
+		afterID := win.fromID - 1
+		if win.fromID == 0 {
+			afterID = 0
+		}
+		var fed int64
 		for {
-			jobs, lastID, corrupted, e := worker.ResilientPage(ctx, reader, afterID, backfillBatchSize)
+			// Narrow the last page to what is left of the budget, so a run stops AT
+			// maxRows rather than up to one batch past it. Checking only between pages
+			// would overshoot by backfillBatchSize, which makes the knob approximate —
+			// and the knob's whole job is to fit the run inside a unit's timeout.
+			batch := int32(backfillBatchSize)
+			if win.maxRows > 0 {
+				left := win.maxRows - fed
+				if left <= 0 {
+					// The budget is spent, but that is not yet news: a budget that lands
+					// exactly on the last row means the table IS fully derived, and
+					// reporting "not fully derived" there sends an operator back for a
+					// pass with nothing in it. One indexed row settles which it was.
+					rest, _, _, e := worker.ResilientPage(ctx, reader, afterID, 1)
+					if e != nil {
+						fail(e)
+						return
+					}
+					if len(rest) > 0 {
+						stoppedAt = afterID
+					}
+					return
+				}
+				if left < int64(batch) {
+					batch = int32(left)
+				}
+			}
+
+			jobs, lastID, corrupted, e := worker.ResilientPage(ctx, reader, afterID, batch)
 			if e != nil {
+				stoppedAt = afterID
 				fail(e)
 				return
 			}
 			skipped += len(corrupted)
 			for i := range jobs {
+				// Registered BEFORE the hand-over, so a row sitting in the channel's
+				// buffer counts as unfinished. Registering it in the worker instead would
+				// leave the whole buffered backlog invisible, which is the gap this
+				// bookkeeping exists to close.
+				pending.add(jobs[i].ID)
 				select {
 				case jobsCh <- jobs[i]:
 				case <-ctx.Done():
+					stoppedAt = afterID
 					return
 				}
 			}
+			fed += int64(len(jobs))
 			// Keyset progress is the exhaustion signal. A "< batchSize" test would end
 			// the scan at the first corrupted row, because the degrade path returns a
 			// legitimately short page whenever it skips one.
@@ -354,12 +535,19 @@ func backfillProgress(ctx context.Context, store deriveStore, concurrency, every
 				}
 				params, changed, slugMoved := deriveRow(j, canon)
 				if !changed {
+					// Finished: a row whose derived values already match needs no write,
+					// and holding it pending would drag the resume point back over work
+					// that is genuinely done.
+					pending.done(j.ID)
 					continue
 				}
 				if e := store.UpdateJobDerived(ctx, params); e != nil {
+					// Deliberately NOT marked done — this row is the reason the run is
+					// stopping, so the resume point must land before it.
 					fail(e)
 					return
 				}
+				pending.done(j.ID)
 				atomic.AddInt64(&updatedN, 1)
 				if slugMoved {
 					atomic.AddInt64(&slugsN, 1)
@@ -370,5 +558,25 @@ func backfillProgress(ctx context.Context, store deriveStore, concurrency, every
 
 	workerWG.Wait()
 	readerWG.Wait()
-	return int(scannedN), int(updatedN), int(slugsN), runErr
+
+	// Both are read only here, after the reader has returned and the pool has joined, so
+	// no synchronisation beyond those joins is needed.
+	//
+	// The oldest unfinished row wins over the reader's cursor whenever there is one. A
+	// run that stopped cleanly at the end of the table can still hold pending rows — the
+	// pool abandons its backlog the moment one write fails — and reporting `done` there
+	// would leave them stale for good.
+	resumeID := stoppedAt + 1
+	if stoppedAt == 0 {
+		resumeID = 0
+	}
+	if oldest, ok := pending.oldest(); ok && (resumeID == 0 || oldest < resumeID) {
+		resumeID = oldest
+	}
+	return backfillRun{
+		Scanned:    int(scannedN),
+		Updated:    int(updatedN),
+		SlugsMoved: int(slugsN),
+		ResumeID:   resumeID,
+	}, runErr
 }

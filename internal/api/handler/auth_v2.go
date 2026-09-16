@@ -210,7 +210,10 @@ func callbackWith(raw, key, value string) (string, error) {
 
 func (h *authHandlers) OAuthCallbackV2(c *fiber.Ctx) error {
 	registry, ok := h.oauth.(oauthV2Registry)
-	if !ok {
+	// `mobileAuth` is checked too because this is no longer reached only by its own
+	// route: the shared sign-in callback hands over to it, and a deployment that has
+	// not configured the attempt store must answer rather than dereference nothing.
+	if !ok || h.mobileAuth == nil {
 		return authError(503, "oauth_unavailable", "sign-in unavailable")
 	}
 	provider := c.Params("provider")
@@ -329,7 +332,7 @@ func (h *authHandlers) OAuthExchangeV2(c *fiber.Ctx) error {
 	if err = h.setSession(c, ex.UserID); err != nil {
 		return err
 	}
-	return c.JSON(fiber.Map{"data": toUserResponse(user)})
+	return c.JSON(fiber.Map{"data": h.toUserResponseWithTier(c.Context(), user)})
 }
 
 func (h *authHandlers) AppleAttemptV2(c *fiber.Ctx) error {
@@ -478,7 +481,7 @@ func (h *authHandlers) AppleExchangeV2(c *fiber.Ctx) error {
 	if err = h.setSession(c, userID); err != nil {
 		return err
 	}
-	return c.JSON(fiber.Map{"data": toUserResponse(user)})
+	return c.JSON(fiber.Map{"data": h.toUserResponseWithTier(c.Context(), user)})
 }
 
 func (h *authHandlers) PasswordReauthV2(c *fiber.Ctx) error {

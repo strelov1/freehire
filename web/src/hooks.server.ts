@@ -5,6 +5,7 @@ import * as Sentry from '@sentry/sveltekit';
 import { hasSessionCookie } from '$lib/authCookie';
 import { cachePolicy } from '$lib/httpCache';
 import { isTranslatedLocale, LOCALE_COOKIE } from '$lib/locale';
+import { isTransientNoise } from '$lib/sentryNoise';
 import { CAPTURE_MAX_AGE_SECONDS, REF_COOKIE, captureRef, capturePromo } from '$lib/referral';
 
 // Resolves the account-section locale for `<html lang>` before the response
@@ -47,6 +48,12 @@ if (env.PUBLIC_SENTRY_DSN) {
     environment: env.PUBLIC_SENTRY_ENVIRONMENT || 'development',
     tracesSampleRate: 0,
     sendDefaultPii: false,
+    // The same filter the browser half applies, and it matters MORE here: an SSR `load`
+    // that could not read the API in ten seconds reports once per visitor per page, so a
+    // slow afternoon arrives as thousands of identical events carrying no stack to act on.
+    // 70% of everything accepted in the billing period to 2026-09-16 was that one shape.
+    // See $lib/sentryNoise.
+    beforeSend: (event, hint) => (isTransientNoise(hint?.originalException) ? null : event),
   });
 }
 

@@ -122,6 +122,10 @@ func Taxonomy() map[string]Source { return All(nil) }
 // HTTP client across them. Adding a platform is a new adapter plus one line here.
 // A nil client builds the transport-free taxonomy registry — call Taxonomy for that.
 func All(c HTTPClient) map[string]Source {
+	// SEEK, JobStreet and JobsDB share the same frontend/GraphQL infrastructure and our
+	// crawl egresses from one IP, so their detail requests must compete for ONE token bucket.
+	// Two independent pacedSeekPoster calls would silently double the measured safe rate.
+	seekNetworkDetail := pacedSeekPoster(c)
 	registry := reg(
 		NewGreenhouse(c),
 		NewLever(c),
@@ -264,6 +268,9 @@ func All(c HTTPClient) map[string]Source {
 		NewTopco(c),
 		NewGetmatch(c),
 		NewGetmanfred(c),
+		// Joppy: Spain-only tech board with no search API, walked via its own sitemap directory —
+		// every company's page carries that company's open postings in full, no detail request.
+		NewJoppy(c),
 		NewEchoJobs(c),
 		NewHabrCareer(c),
 		NewGeekjob(c),
@@ -279,6 +286,9 @@ func All(c HTTPClient) map[string]Source {
 		NewCryptocurrencyJobs(c),
 		NewJobspresso(c),
 		NewStartupAndVC(c),
+		// Hacker News "Ask HN: Who is hiring?": the two newest monthly threads, read whole
+		// through the Algolia HN API — one global feed, company per comment.
+		NewHackerNews(c),
 		browserUASource(c, NewFourDayWeek),
 		NewFunctionalWorks(c),
 		NewTheHub(c),
@@ -362,7 +372,11 @@ func All(c HTTPClient) map[string]Source {
 		// hydrating descriptions from its GraphQL endpoint. Keyless.
 		// Its GraphQL detail endpoint meters by a per-IP request budget, so only that path is
 		// rate-paced; the search listing stays on the bare client.
-		NewSeek(c, pacedSeekPoster(c)),
+		NewSeek(c, seekNetworkDetail),
+		NewJobStreet(c, seekNetworkDetail),
+		// Japan Dev: curated Japan technology aggregator. One public sitemap lists posting URLs;
+		// detail pages carry structured Nuxt SSR state and official ATS apply links when available.
+		NewJapanDev(c),
 		// EDJOIN: California's K-12 education board, multi-company aggregator enumerated by
 		// job type (board) over one central index, hydrating bodies from each posting page's
 		// schema.org block. The board is a job type and not a district on purpose — see

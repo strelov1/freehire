@@ -95,8 +95,12 @@ func TestCheckoutURLUpdatesAnExistingSubscriptionInPlace(t *testing.T) {
 		!strings.Contains(router.updateForm, "items%5B0%5D%5Bprice%5D="+ultraPrice) {
 		t.Fatalf("update form = %q, want item si_1 replaced with %s", router.updateForm, ultraPrice)
 	}
-	if url != s.cfg.ReturnURL() {
-		t.Fatalf("url = %q, want the return URL %q", url, s.cfg.ReturnURL())
+	// SuccessURL, not ReturnURL: an upgrade applied in place IS a purchase — it simply
+	// never shows a checkout page. Sending the browser back without the marker left every
+	// Pro-to-Ultra sale looking abandoned in the funnel, since checkout_start had already
+	// been recorded and nothing ever answered it.
+	if url != s.cfg.SuccessURL() {
+		t.Fatalf("url = %q, want the success URL %q", url, s.cfg.SuccessURL())
 	}
 	if applied != (Discount{}) {
 		t.Fatalf("applied discount = %+v, want none — an in-place update never applies one", applied)

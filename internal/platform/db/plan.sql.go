@@ -321,6 +321,59 @@ func (q *Queries) ListConsumptionRefsByPrefix(ctx context.Context, arg ListConsu
 	return items, nil
 }
 
+const listNewlyPayingUsersMissingWelcomeEmail = `-- name: ListNewlyPayingUsersMissingWelcomeEmail :many
+SELECT id, email, pro_until, ultra_until
+FROM users
+WHERE pro_welcome_sent_at IS NULL
+  AND ((pro_until IS NOT NULL AND pro_until > now())
+       OR (ultra_until IS NOT NULL AND ultra_until > now()))
+ORDER BY id
+LIMIT $1
+`
+
+type ListNewlyPayingUsersMissingWelcomeEmailRow struct {
+	ID         int64              `json:"id"`
+	Email      string             `json:"email"`
+	ProUntil   pgtype.Timestamptz `json:"pro_until"`
+	UltraUntil pgtype.Timestamptz `json:"ultra_until"`
+}
+
+// Accounts currently entitled to a paying tier (pro or ultra, per the same
+// pro_until/ultra_until this whole file resolves everything else from) that have not yet
+// received the one-time welcome email. cmd/pro-welcome-mail's candidate page.
+//
+// pro_until/ultra_until, not the three per-provider sources: this asks the same question
+// plan.TierOf answers everywhere else, so a manual grant or a store subscription reaches a
+// welcome exactly like a Stripe one does.
+//
+// Ordered by id for a stable, resumable page — the candidate set is small and every row
+// returned here is claimed (pro_welcome_sent_at stamped) before the next page is read, so
+// there is no starvation risk the way a NULLS-FIRST stamp order guards against elsewhere.
+func (q *Queries) ListNewlyPayingUsersMissingWelcomeEmail(ctx context.Context, maxRows int32) ([]ListNewlyPayingUsersMissingWelcomeEmailRow, error) {
+	rows, err := q.db.Query(ctx, listNewlyPayingUsersMissingWelcomeEmail, maxRows)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListNewlyPayingUsersMissingWelcomeEmailRow{}
+	for rows.Next() {
+		var i ListNewlyPayingUsersMissingWelcomeEmailRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Email,
+			&i.ProUntil,
+			&i.UltraUntil,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listTailoredCVLabelsBySessions = `-- name: ListTailoredCVLabelsBySessions :many
 SELECT c.agent_session_id, j.title AS job_title, j.public_slug AS job_slug
 FROM cvs c
@@ -514,6 +567,24 @@ type SetProUntilGrantedParams struct {
 func (q *Queries) SetProUntilGranted(ctx context.Context, arg SetProUntilGrantedParams) error {
 	_, err := q.db.Exec(ctx, setProUntilGranted, arg.Until, arg.ID)
 	return err
+}
+
+const setProWelcomeSent = `-- name: SetProWelcomeSent :execrows
+UPDATE users
+SET pro_welcome_sent_at = now()
+WHERE id = $1
+  AND pro_welcome_sent_at IS NULL
+`
+
+// Claims the welcome send for one account. Guarded by IS NULL so a concurrent or repeated
+// run never re-sends: 0 rows affected means somebody already claimed it, which the caller
+// treats as "already welcomed", not as an error.
+func (q *Queries) SetProWelcomeSent(ctx context.Context, id int64) (int64, error) {
+	result, err := q.db.Exec(ctx, setProWelcomeSent, id)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const setRevenueCatEntitlement = `-- name: SetRevenueCatEntitlement :exec

@@ -65,6 +65,9 @@
   const isDark = $derived(themeStore.isDark);
   const email = $derived(currentUser()?.email ?? '');
   const isModerator = $derived(currentUser()?.role === 'moderator');
+  // Drives the desktop profile icon's tier badge — see header-navigation's "Paying-tier
+  // badge on the desktop profile icon" requirement. 'free' shows nothing.
+  const tier = $derived(currentUser()?.tier ?? 'free');
 
   // Static nav (always shown) and the signed-in account items (shown only when
   // authenticated). Moderation is gated on the moderator role at render time.
@@ -91,6 +94,7 @@
   // too, but only there and only above 640px — this is where it is always reachable.
   const navLinks = [
     NAV.collections,
+    NAV.talent,
     NAV.howItWorks,
     NAV.cvTailoring,
     NAV.jobNotifications,
@@ -235,11 +239,19 @@
   {#if isAuthenticated()}
     <a
       href={resolve('/my/profile')}
-      aria-label="Profile"
+      aria-label={tier === 'free' ? 'Profile' : `Profile (${tier})`}
       title={email}
-      class={cn('hidden sm:inline-flex', iconButton)}
+      class={cn('relative hidden sm:inline-flex', iconButton)}
     >
       <CircleUser class="size-5" />
+      {#if tier !== 'free'}
+        <span
+          aria-hidden="true"
+          class="absolute -bottom-1 -right-1 rounded-full bg-brand px-1 py-px text-[8px] font-bold uppercase leading-none text-brand-foreground ring-2 ring-background"
+        >
+          {tier}
+        </span>
+      {/if}
     </a>
   {:else}
     <button

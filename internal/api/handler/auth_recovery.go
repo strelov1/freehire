@@ -101,7 +101,7 @@ func (h *authHandlers) ConfirmEmailVerification(c *fiber.Ctx) error {
 	if err != nil {
 		return accountsError(err)
 	}
-	return c.JSON(fiber.Map{"data": toUserResponse(user)})
+	return c.JSON(fiber.Map{"data": h.toUserResponseWithTier(c.Context(), user)})
 }
 
 type forgotPasswordRequest struct {

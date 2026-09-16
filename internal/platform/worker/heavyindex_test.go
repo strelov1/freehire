@@ -64,6 +64,27 @@ func TestHoldHeavyIndexLock_DoesNotTreatAFailureAsPermission(t *testing.T) {
 	}
 }
 
+// The 2026-09-15 production crash: HoldHeavyIndexLock's own `return func() { release();
+// conn.Release() }, true, nil` captured its named-return variable `release` and then
+// reassigned that same variable to the closure that captured it, so calling the returned
+// function called itself forever — a fatal, unrecoverable stack overflow in every caller
+// that ever released the lock (cmd/reindex, cmd/build-suggestions, the dedup passes). This
+// pins the fix's shape: composeRelease closes over two plain parameters that are never
+// reassigned, so the returned function cannot alias itself.
+func TestComposeRelease_CallsInnerThenCleanupExactlyOnce(t *testing.T) {
+	var innerCalls, cleanupCalls int
+	release := composeRelease(func() { innerCalls++ }, func() { cleanupCalls++ })
+
+	release()
+
+	if innerCalls != 1 {
+		t.Errorf("inner called %d times, want 1", innerCalls)
+	}
+	if cleanupCalls != 1 {
+		t.Errorf("cleanup called %d times, want 1", cleanupCalls)
+	}
+}
+
 type stubLocker struct {
 	locked   bool
 	released bool

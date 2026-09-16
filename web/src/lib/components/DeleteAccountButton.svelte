@@ -2,12 +2,12 @@
   import { goto, invalidateAll } from '$app/navigation';
   import { resolve } from '$app/paths';
   import { ApiError, api } from '$lib/api';
-  import { AsyncData } from '$lib/asyncData.svelte';
   import { currentUser } from '$lib/auth.svelte';
   import { locale } from '$lib/i18n/currentLocale.svelte';
   import { t } from '$lib/i18n/t';
-  import { beginProviderReauthentication } from '$lib/recentAuth';
+  import { consumeReauthDraft } from '$lib/recentAuth';
   import { Button, Dialog, Input } from '$lib/ui';
+  import ConfirmIdentity from './ConfirmIdentity.svelte';
   import { messages } from './DeleteAccountButton.messages';
 
   // Account deletion, stated plainly. This is the one action on the site that cannot
@@ -21,16 +21,29 @@
   //
   // The server gates this behind a separate, short-lived proof of recent credential
   // control (`recentauth`) on top of the session, so the dialog has to obtain one
-  // before it can delete anything. A password account proves it here, inline. An
-  // OAuth-only account has to leave for its provider and come back, which loses this
-  // dialog — so those buttons appear only once the server has actually refused,
-  // never on the speculation that it might.
+  // before it can delete anything. HOW that proof is produced is no longer this
+  // component's business: the shared ConfirmIdentity owns it, so all three gated
+  // surfaces ask for it the same way and cannot drift apart again.
+  //
+  // Those provider buttons used to appear only after the server had actually refused,
+  // because leaving for a provider destroyed this dialog and everything typed into it,
+  // and offering the trip speculatively would have cost the member that for nothing.
+  // Carrying the pending action across the trip removed the cost, so the confirmation
+  // is simply part of the dialog now.
   let open = $state(false);
   let confirmation = $state('');
   let password = $state('');
   let busy = $state(false);
   let error = $state<string | null>(null);
-  let reauthRequired = $state(false);
+  let identity = $state<ConfirmIdentity | null>(null);
+
+  // Reopen on return from a provider. The draft carries nothing but its own name: the
+  // typed address is NOT restored, because it is not a form field to be helpfully
+  // remembered — it is the barrier that stands between a stray click and an irreversible
+  // act, and restoring it would quietly lower it.
+  $effect(() => {
+    if (consumeReauthDraft('delete-account')) open = true;
+  });
 
   // Where this member cancels: the payment provider's own page, asked for rather than
   // composed here. A cancellation flow of our own would be one more thing that can disagree
@@ -54,20 +67,7 @@
   const s = $derived(t(messages, locale()));
   const user = $derived(currentUser());
   const email = $derived(user?.email ?? '');
-  // An OAuth-only account has no password to confirm with. This has to come from the
-  // server — being signed in says nothing about whether a password exists.
-  const hasPassword = $derived(user?.has_password ?? false);
   const matches = $derived(confirmation.trim().toLowerCase() === email.toLowerCase() && email !== '');
-
-  const identitiesData = new AsyncData<string[]>([]);
-  $effect(() => {
-    if (hasPassword || !reauthRequired) return;
-    void identitiesData.run(async () =>
-      (await api.connectedIdentities()).identities
-        .filter((i) => i.status === 'active')
-        .map((i) => i.provider),
-    );
-  });
 
   // Closing mid-delete would hide the outcome of a request that cannot be repeated,
   // so the dialog holds until the call resolves. `dismissible` is how that is said
@@ -82,38 +82,32 @@
     confirmation = '';
     password = '';
     error = null;
-    reauthRequired = false;
   });
 
   function messageFor(e: unknown): string {
     if (!(e instanceof ApiError)) return s.genericError;
-    if (e.status === 428) return s.reauthRequired;
-    // With a password in play the 401 is the re-authentication refusing it, not the
-    // session: the deletion request itself never gets sent in that case.
-    if (e.status === 401 && hasPassword) return s.wrongPassword;
-    // Everything else the server says is worth repeating verbatim — the typed
+    // Everything the server says here is worth repeating verbatim — the typed
     // confirmation not matching (400), and the 503 that means nothing was deleted.
     return e.message;
   }
 
   async function remove() {
     if (!matches || busy) return;
-    if (hasPassword && !password) {
-      error = s.passwordRequired;
-      return;
-    }
     busy = true;
     error = null;
     try {
-      if (hasPassword) await api.reauthenticatePassword(password);
+      if (!(await identity?.prove())) {
+        busy = false;
+        return;
+      }
       await api.deleteAccount(confirmation.trim());
       // The account is gone and the session cookie with it; re-resolve to signed-out
       // before leaving so no stale user lingers in the layout.
       await invalidateAll();
       await goto(resolve('/'));
     } catch (e) {
-      if (e instanceof ApiError && e.status === 428) reauthRequired = true;
-      error = messageFor(e);
+      // Identity refusals are worded once, by the component that asked for the proof.
+      error = identity?.handleRefusal(e) ?? messageFor(e);
       busy = false;
     }
   }
@@ -162,46 +156,20 @@
     disabled={busy}
   />
 
-  {#if hasPassword}
-    <label class="mt-4 block text-sm font-medium" for="delete-account-password">
-      {s.passwordLabel}
-    </label>
-    <Input
-      id="delete-account-password"
-      type="password"
-      class="mt-1.5"
-      autocomplete="current-password"
-      bind:value={password}
+  <div class="mt-4">
+    <ConfirmIdentity
+      bind:this={identity}
+      bind:password
+      returnTo="/my/security"
+      draft={() => ({ surface: 'delete-account' })}
+      prompt={s.confirmPrompt}
+      active={open}
       disabled={busy}
     />
-  {/if}
+  </div>
 
   {#if error}
     <p class="mt-3 text-sm text-destructive">{error}</p>
-  {/if}
-
-  {#if !hasPassword && reauthRequired}
-    <div class="mt-3 rounded-lg border border-border p-3">
-      {#if identitiesData.status === 'loading'}
-        <p class="text-sm text-muted-foreground">{s.reauthProvidersLoading}</p>
-      {:else if identitiesData.status === 'error'}
-        <p class="text-sm text-destructive">{s.reauthProvidersError}</p>
-      {:else}
-        <div class="flex flex-wrap gap-2">
-          {#each identitiesData.value as provider (provider)}
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={busy}
-              onclick={() => beginProviderReauthentication(provider, '/my/security')}
-            >
-              {s.reauthWithPrefix}
-              {provider}
-            </Button>
-          {/each}
-        </div>
-      {/if}
-    </div>
   {/if}
 
   <div class="mt-5 flex items-center justify-end gap-2">

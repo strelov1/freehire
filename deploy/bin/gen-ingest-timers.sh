@@ -20,18 +20,45 @@ i=0
 # shellcheck disable=SC1091  # the host env file, not part of this repo
 if [ -f /opt/freehire/.env ]; then set -a; . /opt/freehire/.env; set +a; fi
 
-# An empty result is the only answer worth refusing on, and set -e already refuses a
-# failed query. There is deliberately no "fewer than N providers looks wrong" floor: this
-# script only ever creates and enables units — every systemctl disable below names one
-# unit literally — so a short list generates fewer timers and retires nothing. A floor
-# would guard nothing and would block a legitimately smaller catalog.
+# An empty result is the only answer worth refusing on outright, and set -e already refuses
+# a failed query.
+#
+# This comment used to argue that no "fewer than N providers looks wrong" floor was needed,
+# because the script only ever created and enabled units. That stopped being true when the
+# sweep at the very bottom gained the ability to retire a timer whose provider has left the
+# catalogue — so the floor the old reasoning ruled out now guards exactly the case that
+# reasoning relied on not existing. It lives with the sweep, not here, because a short list
+# is only dangerous to the sweep: generation itself is still create-and-enable only.
+# The LEFT JOIN is the cutover's one-owner rule, enforced here rather than trusted to an
+# operator. A provider handed to cmd/ingest-scheduler (ingest_schedule.managed) must NOT
+# also carry a static timer: the two ceilings cannot see each other, so a doubly-driven
+# provider runs twice at once on a host calibrated for one. The runbook says to disable the
+# timer and flip the flag as ONE step — but this script runs unattended at 04:40 and would
+# have RECREATED the timer of every cut-over provider the same night, silently undoing the
+# operator's half of it. LEFT, not INNER: a provider with no override row is unmanaged and
+# still ours, which is the whole design of that table.
+#
+# The sweep at the bottom finishes the job: a provider that becomes managed drops out of
+# this list, so its timer is retired on the next run without anyone naming it.
 providers=$(psql "$DATABASE_URL" -tAc \
-  "SELECT provider FROM boards WHERE status IN ('pending','active') GROUP BY provider ORDER BY provider")
+  "SELECT b.provider FROM boards b
+     LEFT JOIN ingest_schedule s ON s.provider = b.provider
+    WHERE b.status IN ('pending','active') AND COALESCE(s.managed, false) = false
+    GROUP BY b.provider ORDER BY b.provider")
 if [ -z "$providers" ]; then
   echo "gen-ingest-timers: the catalog lists no live board — nothing to schedule" >&2
   exit 1
 fi
 mapfile -t PROVIDERS <<<"$providers"
+# Every provider the per-provider loop below actually generated a timer for. The sweep at
+# the bottom retires the enabled timers NOT in here, so it must be appended to at exactly
+# one place: beside the `systemctl enable` that creates the timer, never beside the loop's
+# `continue`s — a sharded provider is skipped there on purpose and its plain timer is meant
+# to stay retired.
+#
+# A SET, not a list, so the sweep's membership test is a lookup rather than a scan of 240
+# names per timer, and reads as the question it is asking.
+declare -A GENERATED=()
 
 # Boards measured (2026-07-31, 3h of journal) to average >=25 min per run — together
 # 65% of all ingest busy-time, with oracle/paylocity/ukg/careerplug hitting
@@ -43,20 +70,32 @@ mapfile -t PROVIDERS <<<"$providers"
 # is a search for a space-delimited word. A newline inside the list would silently fail to
 # match the entry before it and the entry after it, and nothing would report that.
 #
-# phenom..successfactors were added 2026-09-15, by the same metric and the same rule as the
-# rest: freehire_worker_last_run_duration_seconds (the binary's own runtime,
-# which is the only figure that excludes the wait inside ingest-slot.sh) above the ~40min
-# mark where an hourly timer can only ever buy partial results. Measured: phenom 50.1,
-# jobleads 50.0, wantapply 50.0, workable 50.0, trudvsem 48.3, freshteam 42.8,
-# successfactors 39.5.
+# phenom..successfactors were added 2026-09-15 by the same metric as the rest:
+# freehire_worker_last_run_duration_seconds, the binary's own runtime, which is the only
+# figure that excludes the wait inside ingest-slot.sh. Measured: phenom 50.1, jobleads 50.0,
+# wantapply 50.0, workable 50.0, trudvsem 48.3, freshteam 42.8, successfactors 39.5.
 #
-# They were starving the whole tail, and the arithmetic is the entire story: a 50-minute
-# crawl on an HOURLY timer holds 83% of one slot forever. Four of them is 3.3 of the six
-# slots the shared pool has. Sampled every 20s for 8 minutes on 2026-09-15, workable, vk,
-# trudvsem and freshteam held a shared slot in 48 of 48 samples and successfactors in 38 --
-# six providers sitting on all six slots continuously, while the other ~230 split whatever
-# was left. 837 of 1482 firings that day were skipped, and the ten providers whose timers
-# had just been created were skipped on their FIRST cycle, every one.
+# The rule is RUNTIME, and the boundary is ~40min rather than 40: successfactors at 39.5
+# sits below the line and is in anyway, because half a minute does not distinguish a crawl
+# that fits an hourly timer from one that does not, and it was separately observed resident.
+# Recorded rather than rounded away — a list whose stated rule excludes one of its own
+# members teaches a reader to distrust the rule.
+#
+# The arithmetic is the whole story: a 50-minute crawl on an HOURLY timer holds 83% of one
+# slot forever, so four of them is 3.3 of the six slots the shared pool had. Sampled every
+# 20s for 8 minutes on 2026-09-15, workable, vk, trudvsem and freshteam held a shared slot
+# in 48 of 48 samples and successfactors in 38 — six providers sitting on all six slots
+# continuously, while the other ~230 split whatever was left. 837 of 1482 firings that day
+# were skipped, and the ten providers whose timers had just been created were skipped on
+# their FIRST cycle, every one.
+#
+# vk (25.0) and hrmos (34.0) were in that resident six and are deliberately NOT here. They
+# are resident because they are frequent, not because one run is long, and the two need
+# different answers: HEAVY buys a 3h cadence, which is the wrong instrument for a crawl
+# that already fits its hour. Moving the >40min cohort out was measured to be enough — see
+# the tail's 2h cadence below, which is what actually closed the gap. If either turns
+# resident again once the pool has settled, it wants a cadence decision of its own, not
+# membership here.
 #
 # At the 3h HEAVY cadence the same crawl holds 28% of a slot instead of 83%.
 #
@@ -82,7 +121,12 @@ SHARDED="workday oracle paylocity eightfold join dayforce workstream adp adpmyjo
 # Deliberately NOT moved into HEAVY: that would also drop them to a 3h cadence, and
 # nothing measured here says their listings change slowly enough to justify that. The pool
 # and the schedule are separate decisions, and this list is the one that says so.
-HEAVY_POOL_ONLY="greenhouse apploi smartrecruiters lamoda trakstar adp teamtailor"
+#
+# apploi was here and is gone (2026-09-15): it is no longer scheduled at all, so naming it
+# as a pool tenant wrote a provider nothing can launch into /opt/freehire/etc/ingest-heavy.
+# Its 46min above is left as recorded evidence of what the cohort looks like; it is history,
+# not a live tenant.
+HEAVY_POOL_ONLY="greenhouse smartrecruiters lamoda trakstar adp teamtailor"
 
 # The roster ingest-slot.sh reads to decide which pool a run takes. Written here because
 # the list already lives here: a second copy kept in the slot script would drift from the
@@ -138,6 +182,31 @@ for n in "${PROVIDERS[@]}"; do
   # churns 403s and board_health noise without ingesting anything. Skip until proxy support is
   # wired for the fingerprint client; the disable loop after this loop retires any live timer.
   { [ "$n" = bayt ] || [ "$n" = gulftalent ]; } && continue
+  # apploi's upstream API stopped honouring the `employer` parameter, and the adapter is
+  # built entirely on it (api.apploi.com/v1/jobs?employer=<id>). Measured 2026-09-15 against
+  # the live endpoint: `employer=39092`, `employer=999999999`, `employer=52601` and NO
+  # employer parameter at all return byte-identical pages. Every one of the 5833 boards
+  # therefore walks apploi's whole global catalogue instead of that employer's postings.
+  #
+  # Both halves of that are already in production data. The crawl cannot finish: it stops
+  # at apploiMaxPages (100 pages, a hard Fetch failure by the fullBoardListing contract),
+  # which is ~100 requests and ~5 minutes spent per board to store nothing -- 592 of 5833
+  # boards carry that error, and a 50-minute run reaches 235 boards before systemd kills
+  # it on TimeoutStartSec. And what it DID store before the endpoint changed is the same
+  # posting once per board under a different employer each time: external_id
+  # `41350:1498798|ontray` sits beside `53924:1498798|fulton-manor-care-center` and
+  # `52204:1498798|magnet-aba-therapy` -- one real job, three companies, none of them
+  # necessarily right.
+  #
+  # Skipped rather than fixed here because the fix is an ADAPTER rewrite, not a schedule:
+  # the endpoint is a single global catalogue now, so apploi belongs as a BOARDLESS
+  # provider crawled once, attributing each posting by its own `brand_name` field (the only
+  # employer identity the payload still carries -- there is no employer id in it any more).
+  # Until then an enabled timer holds a heavy slot for 50 minutes to ingest nothing.
+  #
+  # NOT resolved by this line: the ~1.47M open apploi rows already stored. Leaving them is
+  # a deliberate hold, not an oversight -- closing them is a separate, reviewed decision.
+  [ "$n" = apploi ] && continue
   # join.com meters by rate, not concurrency (internal/sources/pacer.go), and an hourly
   # full-file run at the paced rate can't clear ~4700 boards' worth of requests inside
   # TimeoutStartSec. Crawled as 5 board-sharded runs instead — generated below, not here.
@@ -221,6 +290,7 @@ RandomizedDelaySec=180
 WantedBy=timers.target
 T
   systemctl enable --now "freehire-ingest@$n.timer" >/dev/null
+  GENERATED[$n]=1
   i=$((i+1))
 done
 echo "generated + enabled $i per-provider ingest timers"
@@ -228,7 +298,11 @@ echo "generated + enabled $i per-provider ingest timers"
 # Retire the fingerprint-client 403-churners skipped above (they may carry a timer enabled
 # before they were skipped), so they stop running until proxy support is wired for the
 # fingerprint client. Mirrors the workday/eightfold legacy-timer cleanup below.
-for n in bayt gulftalent; do
+# apploi joins them rather than relying on the sweep below. The sweep would catch it, but
+# the sweep is allowed to refuse (the 80% floor), and a refusal would leave apploi holding
+# a heavy slot for 50 minutes per run to ingest nothing — exactly the cost the skip exists
+# to stop. A provider skipped on purpose is retired on purpose.
+for n in bayt gulftalent apploi; do
   systemctl disable --now "freehire-ingest@$n.timer" 2>/dev/null || true
 done
 
@@ -238,9 +312,23 @@ done
 # never literally "custom"), so cmd/ingest custom finds nothing and exits 0.
 systemctl disable --now freehire-ingest@custom.timer 2>/dev/null || true
 
-# workday shards: one service template (--shard=N/6) + 6 timers, each every 6h at :40,
-# offset one hour apart so a single ~1000-board shard runs per hour and finishes well
-# within the 40-min timeout, together covering all ~6165 boards over a 6-hour cycle.
+# workday shards: one service template (--shard=N/6) + 6 timers, each every 12h at :40,
+# offset TWO hours apart so a single ~1000-board shard runs every other hour and finishes
+# well within the 40-min timeout, together covering all ~6165 boards over a 12-hour cycle.
+#
+# It was every 6h (one shard per hour) until 2026-09-15, and that is where the heavy pool's
+# capacity was going. Measured that day: the six sharded providers firing one shard per hour
+# each demanded 5.83 slots against a heavy pool of 5, before any of the 19 HEAVY providers
+# or the 6 pool-only ones were counted. The shards themselves skipped 34 of 66 firings in
+# 24h, and bamboohr -- 12,004 boards, 9,407 technical postings, 11,204 companies -- went 32
+# hours without a crawl because every one of its 3h firings found five busy slots.
+#
+# Halving the shard rate costs almost nothing REAL: at a 51% skip rate these providers were
+# already sweeping about every 12h, just unpredictably and while burning a slot's worth of
+# 600-second waits to find out. The new cadence states what was already happening and hands
+# the waiting back to the pool. The offsets are respread to (N-1)*2 rather than left at
+# N-1: doubling the period without moving them would clump all six shards into hours 0-5
+# and 12-17 and leave half the day empty.
 # ExecStart uses hire-current (the active blue/green release), matching the workers.
 cat > /etc/systemd/system/freehire-ingest-workday-shard@.service <<'UNIT'
 [Unit]
@@ -263,7 +351,7 @@ for N in 1 2 3 4 5 6; do
 [Unit]
 Description=timer ingest workday shard $N/6
 [Timer]
-OnCalendar=*-*-* 0$((N-1))/6:40:00
+OnCalendar=*-*-* $(printf %02d $(( (N-1)*2 )))/12:40:00
 Persistent=true
 RandomizedDelaySec=180
 [Install]
@@ -299,7 +387,7 @@ for N in 1 2 3 4; do
 [Unit]
 Description=timer ingest eightfold shard $N/4
 [Timer]
-OnCalendar=*-*-* 0$((N-1))/4:50:00
+OnCalendar=*-*-* $(printf %02d $(( (N-1)*2 )))/8:50:00
 Persistent=true
 RandomizedDelaySec=180
 [Install]
@@ -335,7 +423,7 @@ for N in 1 2 3 4; do
 [Unit]
 Description=timer ingest oracle shard $N/4
 [Timer]
-OnCalendar=*-*-* 0$((N-1))/4:15:00
+OnCalendar=*-*-* $(printf %02d $(( (N-1)*2 )))/8:15:00
 Persistent=true
 RandomizedDelaySec=180
 [Install]
@@ -505,7 +593,7 @@ for N in 1 2 3 4 5; do
 [Unit]
 Description=timer ingest join shard $N/5
 [Timer]
-OnCalendar=*-*-* 0$((N-1))/5:20:00
+OnCalendar=*-*-* $(printf %02d $(( (N-1)*2 )))/10:20:00
 Persistent=true
 RandomizedDelaySec=180
 [Install]
@@ -540,7 +628,7 @@ for N in 1 2 3 4; do
 [Unit]
 Description=timer ingest dayforce shard $N/4
 [Timer]
-OnCalendar=*-*-* 0$((N-1))/4:42:00
+OnCalendar=*-*-* $(printf %02d $(( (N-1)*2 )))/8:42:00
 Persistent=true
 RandomizedDelaySec=180
 [Install]
@@ -592,6 +680,74 @@ TIMER
 done
 echo "generated + enabled 2 workstream shard timers"
 
+# The sweep. Retires the per-provider timer of a provider that has LEFT the catalogue —
+# every board of it retired, rejected, or deleted.
+#
+# The header of this file claimed for a long time that this already happened ("its timer is
+# retired by the sweep at the end"). It did not: every `systemctl disable` above names one
+# unit literally, so a provider that dropped out kept firing forever. Found 2026-09-15,
+# when three boards whose provider no adapter answers to (globalpayments, justjoin,
+# wantedkr — rows that predate boardcatalog's insert-time registry check) were marked
+# rejected and their timers went on running anyway. Prose about code is tested by nothing.
+#
+# The floor is what makes this safe, and it is not decoration: the moment a run can RETIRE
+# a timer, a query that returns a short list stops being harmless and starts being a
+# fleet-wide outage that looks like a successful run. 80% is deliberately loose — a real
+# catalogue does not shed a fifth of its providers between two daily runs, and a wave of
+# board retirements that legitimately does is worth a human looking at it once.
+# Collected in ONE pass, because `systemctl is-enabled` forks a process and the floor and
+# the sweep both need the same answer: asking twice for each of ~254 timers took this run
+# from 14 seconds to over ten minutes.
+#
+# Already-disabled units never enter the list, so the sweep leaves them alone rather than
+# disabling them again — the literal disables above own those, and redoing their work here
+# would hide which list a retirement came from.
+enabled=()
+for f in /etc/systemd/system/freehire-ingest@*.timer; do
+  [ -e "$f" ] || continue
+  u=${f##*/}
+  [ "$(systemctl is-enabled "$u" 2>/dev/null)" = enabled ] || continue
+  p=${u#freehire-ingest@}
+  enabled+=("${p%.timer}")
+done
+
+swept=0
+refused=0
+if [ "${#GENERATED[@]}" -lt $(( ${#enabled[@]} * 8 / 10 )) ]; then
+  # Counted, not just logged. A refusal means the catalogue query answered with far less
+  # than the fleet — which is the shape this guard exists to catch, and a run that only
+  # writes it to stderr and exits 0 IS that shape: successful-looking and wrong. The
+  # heartbeat below publishes this, so a refusal is visible without reading journald.
+  refused=1
+  echo "gen-ingest-timers: generated ${#GENERATED[@]} timers against ${#enabled[@]} enabled — refusing to sweep" >&2
+else
+  for p in "${enabled[@]}"; do
+    [ -n "${GENERATED[$p]:-}" ] && continue
+    # Reported by what systemctl DID, not by what was attempted: the `|| true` keeps one
+    # stuck unit from ending the run, and counting a failed disable as a retirement would
+    # make the summary claim a fleet state that is not there.
+    if ! systemctl disable --now "freehire-ingest@$p.timer" >/dev/null 2>&1; then
+      echo "gen-ingest-timers: could not disable freehire-ingest@$p.timer — still enabled" >&2
+      continue
+    fi
+    # States what this run OBSERVED, not why. A provider reaches here for two different
+    # reasons — its boards left the catalogue, or a `continue` above skipped it on purpose
+    # (apploi, bayt, the sharded ones) — and a message that asserts the first sends a
+    # reader hunting for boards that are still there. Same reason the summary below counts
+    # rather than explains.
+    echo "gen-ingest-timers: retired $p — this run generated no timer for it"
+    swept=$((swept+1))
+  done
+  # An `if`, not `[ ... ] && echo`. The reason first given here was that the && form exits
+  # under `set -e` when there is nothing to sweep; that is FALSE and was never tested --
+  # the shell exempts a command that is not the last of an AND-OR list, so it survives
+  # mid-script and only leaks a non-zero status when it is the final statement. The `if`
+  # earns its place for the smaller reason: it cannot acquire that fault by being moved.
+  if [ "$swept" -gt 0 ]; then
+    echo "retired $swept timer(s) this run did not generate"
+  fi
+fi
+
 # A heartbeat, published the way every other periodic worker here publishes one. What this
 # watches is not whether a crawl succeeded -- board_health answers that -- but whether the
 # SCHEDULE is still being derived from the catalog at all. On 2026-09-15 it was not: the
@@ -614,6 +770,16 @@ if [ -n "${PROM_TEXTFILE_DIR:-}" ] && [ -d "$PROM_TEXTFILE_DIR" ]; then
     echo "# HELP freehire_ingest_timers_last_run_seconds Unix time the ingest timer generator last completed."
     echo "# TYPE freehire_ingest_timers_last_run_seconds gauge"
     echo "freehire_ingest_timers_last_run_seconds $(date +%s)"
+    # 1 means the run declined to sweep because it generated far fewer timers than the
+    # fleet currently has enabled. The heartbeat above stays fresh either way -- a refused
+    # sweep is a COMPLETED run -- so without this the one outcome the floor exists to make
+    # visible would be the one outcome nothing can see.
+    echo "# HELP freehire_ingest_timers_sweep_refused 1 when the run declined to retire timers because its catalogue read looked short."
+    echo "# TYPE freehire_ingest_timers_sweep_refused gauge"
+    echo "freehire_ingest_timers_sweep_refused $refused"
+    echo "# HELP freehire_ingest_timers_retired Timers this run retired because it generated none for that provider."
+    echo "# TYPE freehire_ingest_timers_retired gauge"
+    echo "freehire_ingest_timers_retired $swept"
   } > "$out.tmp" && mv "$out.tmp" "$out"
 fi
 

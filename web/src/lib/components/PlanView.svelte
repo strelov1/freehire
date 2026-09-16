@@ -1,5 +1,8 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
+  import { replaceState } from '$app/navigation';
+  import { page } from '$app/state';
+  import { track } from '$lib/analytics';
   import { api } from '$lib/api';
   import { currentUser, isAuthenticated } from '$lib/auth.svelte';
   import { locale } from '$lib/i18n/currentLocale.svelte';
@@ -43,6 +46,34 @@
       .myUsage()
       .then((u) => (usage = u))
       .catch(() => (usage = null));
+  });
+
+  // A finished purchase lands here carrying ?checkout=success (billing.Config.SuccessURL),
+  // because the provider is given the same page for success and cancel. This is the only
+  // place a payment meets the channel that produced it: the money is known to Postgres and
+  // the acquisition source only to the product analytics, and nothing else joins them.
+  //
+  // The TIER comes from the loaded plan rather than from what was clicked — the server's
+  // answer, so a purchase recorded here is one the account actually holds. Recorded once:
+  // the marker is stripped from the address afterwards, or a reload would count a second
+  // sale that never happened.
+  // Plain `let`, deliberately not $state: nothing renders from it, and a reactive flag
+  // read at the top of the effect that sets it would make the effect re-run itself once
+  // for nothing.
+  let purchaseRecorded = false;
+  $effect(() => {
+    if (purchaseRecorded || page.url.searchParams.get('checkout') !== 'success') return;
+    const tier = plan?.plan;
+    if (tier !== 'pro' && tier !== 'ultra') return;
+
+    purchaseRecorded = true;
+    track('subscribe', { plan: tier });
+
+    // SvelteKit's replaceState, not the browser's: every other view here uses it, and a
+    // raw history call leaves the framework's own `page.url` and history index pointing
+    // at an address that no longer exists.
+    // eslint-disable-next-line svelte/no-navigation-without-resolve -- shallow same-page URL clean-up to the current pathname; nothing to resolve
+    replaceState(page.url.pathname, page.state);
   });
 
   // Where a subscriber changes their card or cancels — the provider's own page. Null when

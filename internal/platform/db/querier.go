@@ -727,6 +727,27 @@ type Querier interface {
 	// for the still-open ones). WHERE closed_at IS NULL keeps it idempotent; a later
 	// upsert of the same (source, external_id) reopens it if the posting reappears.
 	CloseJobBySourceExternalID(ctx context.Context, arg CloseJobBySourceExternalIDParams) (int64, error)
+	// Closes one id-range chunk of a source whose stored rows carry an employer we now know is
+	// wrong and cannot repair in place (see migration 0165 for the case that forced the label).
+	//
+	// Chunked over an id RANGE rather than a keyset over matching rows: the affected set is the
+	// whole of one source, the id sequence runs far ahead of the live row count, and a range walk
+	// lets the caller resume at a printed cursor after an interruption. Idempotent — `closed_at IS
+	// NULL` means a re-run over a chunk already done writes nothing, so stopping mid-way is free.
+	//
+	// NO search_delete_outbox CTE, unlike every other Close* query in this file, and that is the
+	// one thing to think twice about before copying this. The others close tens to thousands of
+	// rows, where riding the enqueue on the UPDATE is both correct and cheap. This closes a source
+	// whole — 1.47M rows for apploi against a deletion queue whose ordinary depth is ~7k — and
+	// Meilisearch runs ONE serial task queue, so a wave that size would sit in front of the
+	// scheduled rebuild and the incremental pushes for as long as it took to drain. cmd/merge-
+	// companies already made this trade and documents it ("Do NOT reindex afterwards... the
+	// scheduled freehire-reindexw picks it up"): the rebuild reads open rows from Postgres, so a
+	// closed row simply is not in the next index. The cost is that the postings stay searchable
+	// until that rebuild — hours, not days — which is the right price for not blocking it.
+	//
+	// :one rather than :execrows because the CTE moves the row count out of the command tag.
+	CloseMisattributedSourceJobs(ctx context.Context, arg CloseMisattributedSourceJobsParams) (int64, error)
 	// The same age rule as CloseStaleUnsignalledJobs, for a source that IS re-crawled but
 	// whose postings a probe can never judge — whatjobs today, whose stored url is the ad
 	// network's own tracking landing page and answers identically whether or not the posting
@@ -3778,6 +3799,18 @@ type Querier interface {
 	// reviewed it under — the write dialog's "which categories have I already
 	// used" read. Not filtered by status, same reasoning as GetMyCompanyFeedback.
 	ListMyCompanyFeedback(ctx context.Context, arg ListMyCompanyFeedbackParams) ([]CompanyFeedback, error)
+	// Accounts currently entitled to a paying tier (pro or ultra, per the same
+	// pro_until/ultra_until this whole file resolves everything else from) that have not yet
+	// received the one-time welcome email. cmd/pro-welcome-mail's candidate page.
+	//
+	// pro_until/ultra_until, not the three per-provider sources: this asks the same question
+	// plan.TierOf answers everywhere else, so a manual grant or a store subscription reaches a
+	// welcome exactly like a Stripe one does.
+	//
+	// Ordered by id for a stable, resumable page — the candidate set is small and every row
+	// returned here is claimed (pro_welcome_sent_at stamped) before the next page is read, so
+	// there is no starvation risk the way a NULLS-FIRST stamp order guards against elsewhere.
+	ListNewlyPayingUsersMissingWelcomeEmail(ctx context.Context, maxRows int32) ([]ListNewlyPayingUsersMissingWelcomeEmailRow, error)
 	// Greeted a while ago, and still without an active alert — the one action the
 	// product is built around.
 	//
@@ -4415,6 +4448,10 @@ type Querier interface {
 	// Cursor write: mark a rotated file applied. Idempotent — a concurrent/rerun mark
 	// is a no-op, so the file is never double-applied.
 	MarkViewLogFileProcessed(ctx context.Context, arg MarkViewLogFileProcessedParams) error
+	// The upper bound of the id-range walk above. MAX over a source is an index scan on
+	// (source, external_id)'s table, not a count of matching rows, so it is cheap even when the
+	// source holds millions.
+	MaxJobIDForSource(ctx context.Context, source string) (int64, error)
 	// Fold ONE requirement's outcome into the run report: replace the entry whose requirement
 	// matches case- and whitespace-insensitively, or append when none does. Done as one UPDATE
 	// expression rather than a read-modify-write from Go, because a read-modify-write has no lock
@@ -5443,6 +5480,17 @@ type Querier interface {
 	RestoreEmail(ctx context.Context, arg RestoreEmailParams) (int64, error)
 	// Retire a live (pending or active) board without deleting its row.
 	RetireBoard(ctx context.Context, arg RetireBoardParams) (int64, error)
+	// Retire EVERY live board of one provider in one statement.
+	//
+	// Separate from RetireBoard rather than looping it: this is used when the provider itself is
+	// withdrawn, not when a board is found dead, and the populations differ by three orders of
+	// magnitude — apploi alone carries 5833 boards (migration 0165). A loop would be 5833 round
+	// trips to say one thing.
+	//
+	// Deliberately does NOT touch 'rejected': a rejected board failed insert-time validation and
+	// never became live, so calling it retired would erase why it is there. Idempotent — the
+	// status predicate means a re-run matches nothing.
+	RetireProviderBoards(ctx context.Context, provider string) (int64, error)
 	// Withdraw the caller's own live report. Guarded on retracted_at IS NULL so a second
 	// withdrawal returns no row (404) rather than silently restamping the timestamp, and
 	// so the row is never deleted.
@@ -5829,6 +5877,10 @@ type Querier interface {
 	// the whole reason it is separate — before migration 0135 a hand-set value lived in the
 	// column the Stripe sync overwrites, and the next webhook silently undid it.
 	SetProUntilGranted(ctx context.Context, arg SetProUntilGrantedParams) error
+	// Claims the welcome send for one account. Guarded by IS NULL so a concurrent or repeated
+	// run never re-sends: 0 rows affected means somebody already claimed it, which the caller
+	// treats as "already welcomed", not as an error.
+	SetProWelcomeSent(ctx context.Context, id int64) (int64, error)
 	// How far the APP STORE or GOOGLE PLAY subscription reaches, for every tier. Written only by
 	// the RevenueCat sync, and only over its own source columns, for the same reason the Stripe
 	// setter is confined to its own: neither provider may answer for a plan it did not sell.
@@ -6468,6 +6520,15 @@ type Querier interface {
 	// The CHECK on the table still decides whether the result is legal — disabling without a
 	// reason is refused here exactly as it is in psql, which is the point of putting the rule
 	// in the schema.
+	//
+	// The "documented default" arrives as an ARGUMENT, not as a literal. It used to be
+	// `COALESCE(..., 3600)` here, which made this the THIRD place holding one fact -- beside
+	// ingestsched.DefaultCadence and the column's own DEFAULT -- and the three agreed only
+	// because nobody had ever moved one. On 2026-09-16 one moved: DefaultCadence went to 2h for
+	// the reason freehire#2862 measured, and this literal quietly kept handing every newly
+	// written row the hourly ask that had just been shown not to fit. Passing the constants in
+	// leaves the column defaults for hand-written psql only, where the schema test pins them to
+	// the same constants.
 	UpsertIngestSchedule(ctx context.Context, arg UpsertIngestScheduleParams) error
 	// Single atomic write: upsert the company (only when the slug is non-empty,
 	// via the WHERE on the SELECT) and the job together, keeping the "one write =

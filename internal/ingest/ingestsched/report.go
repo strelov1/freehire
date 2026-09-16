@@ -81,6 +81,14 @@ func (r *QueriesRepository) SaveOverride(ctx context.Context, in OverrideInput) 
 		DisabledReason: textPtr(in.DisabledReason),
 		Notes:          textPtr(in.Notes),
 		Managed:        boolPtr(in.Managed),
+		// What a field the caller did not name falls back to on a NEW row. Supplied here
+		// rather than written into the query, so this package's constants are the one
+		// place the fleet's shape is stated. Note that Go will happily compile this call
+		// without them and write zeroes — a cadence of 0 seconds — so the absence of a
+		// compile error is not evidence that a new default argument reached the query.
+		DefaultShards:     int32(DefaultShards),
+		DefaultCadenceSec: int32(DefaultCadence.Seconds()),
+		DefaultTimeoutSec: int32(DefaultRunTimeout.Seconds()),
 	})
 	if err != nil {
 		return fmt.Errorf("save override for %s: %w", in.Provider, err)

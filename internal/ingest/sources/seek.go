@@ -20,8 +20,12 @@ import (
 // not: /api/jobsearch/v5/search serves JSON to any client — no cookie, no credential and no
 // browser-shaped User-Agent.
 type seek struct {
-	http    JSONGetter
-	graphql JSONPoster
+	provider          string
+	markets           map[string]seekMarket
+	maxPages          int
+	failAtPageCeiling bool
+	http              JSONGetter
+	graphql           JSONPoster
 }
 
 // NewSeek builds the SEEK adapter. The listing and the detail take SEPARATE transports because only
@@ -29,10 +33,18 @@ type seek struct {
 // while the GraphQL detail is metered by a per-IP budget (see seekDetailInterval). sources.All hands
 // the bare client for the first and a paced poster for the second.
 func NewSeek(list JSONGetter, detail JSONPoster) Source {
-	return seek{http: list, graphql: detail}
+	return seek{provider: "seek", markets: seekMarkets, maxPages: seekMaxPages, http: list, graphql: detail}
 }
 
-func (seek) Provider() string { return "seek" }
+// NewJobStreet builds the JobStreet/JobsDB adapter over the same SEEK frontend protocol.
+// JobStreet (SG/MY/ID/PH) and JobsDB (HK/TH) share SEEK's v5 search and GraphQL schemas but use
+// different market hosts/site keys, so they are one implementation with a distinct provider
+// identity and board catalogue.
+func NewJobStreet(list JSONGetter, detail JSONPoster) Source {
+	return seek{provider: "jobstreet", markets: jobStreetMarkets, maxPages: jobStreetMaxPages, failAtPageCeiling: true, http: list, graphql: detail}
+}
+
+func (s seek) Provider() string { return s.provider }
 
 // aggregator marks seek as a genuine multi-company aggregator: a vacancy an employer also posts on
 // its own ATS appears here too, so the cross-source dedup pass prefers the first-party copy. Unlike
@@ -48,7 +60,12 @@ func (seek) aggregator() {}
 // back, writing a phantom removal into job_daily_stats each cycle. The marker is sound here because
 // liveness CANNOT be probed instead: SEEK's own job pages sit behind the same Cloudflare interstitial
 // as its search pages.
-func (seek) sweepGrace() time.Duration { return 14 * 24 * time.Hour }
+func (s seek) sweepGrace() time.Duration {
+	if s.provider == "jobstreet" {
+		return DefaultSweepGrace
+	}
+	return 14 * 24 * time.Hour
+}
 
 const (
 	seekPageSize = 100
@@ -57,6 +74,12 @@ const (
 	// window and confirm its end. The walk's real stop condition is a page adding no new posting;
 	// this only bounds an edge that keeps answering with fresh inventory.
 	seekMaxPages = 6
+	// JobStreet/JobsDB does not share SEEK AU/NZ's ~550-result window: live SG 6290
+	// served 17 pages (1,698 rows) and page 18 empty on 2026-09-12. Keep a generous
+	// safety ceiling, but unlike SEEK treat reaching it as a crawl failure — JobStreet
+	// has demonstrated a natural end, so silently accepting a capped walk would throw
+	// away inventory the API was willing to serve.
+	jobStreetMaxPages = 100
 )
 
 // seekMarket is one SEEK country site. The three request fields travel together because none works
@@ -74,6 +97,19 @@ type seekMarket struct {
 var seekMarkets = map[string]seekMarket{
 	"au": {host: "https://www.seek.com.au", siteKey: "AU-Main", where: "All Australia"},
 	"nz": {host: "https://www.seek.co.nz", siteKey: "NZ-Main", where: "All New Zealand"},
+}
+
+// jobStreetMarkets are the APAC SEEK-network sites live-verified against the same v5 API on
+// 2026-09-12. `where` is load-bearing and is NOT spelled "All <country>" on these sites:
+// Singapore returned zero results for "All Singapore" while "Singapore" returned the full
+// market. Hong Kong and Thailand expose the same platform under the legacy JobsDB brand.
+var jobStreetMarkets = map[string]seekMarket{
+	"sg": {host: "https://sg.jobstreet.com", siteKey: "SG-Main", where: "Singapore"},
+	"my": {host: "https://my.jobstreet.com", siteKey: "MY-Main", where: "Malaysia"},
+	"id": {host: "https://id.jobstreet.com", siteKey: "ID-Main", where: "Indonesia"},
+	"ph": {host: "https://ph.jobstreet.com", siteKey: "PH-Main", where: "Philippines"},
+	"hk": {host: "https://hk.jobsdb.com", siteKey: "HK-Main", where: "Hong Kong"},
+	"th": {host: "https://th.jobsdb.com", siteKey: "TH-Main", where: "Thailand"},
 }
 
 // seekSearchPage is the slice of a search response the adapter reads. totalCount is deliberately
@@ -142,6 +178,32 @@ func (s seek) FetchNew(ctx context.Context, e CompanyEntry, seen func(externalID
 	if err != nil {
 		return nil, err
 	}
+	return s.hydrate(ctx, e, m, postings, seen, nil), nil
+}
+
+// FetchNewGated lets the pipeline tell this aggregator which listed employers are already
+// covered by first-party ATS sources before we spend SEEK's scarce GraphQL detail budget.
+// Covered postings are still emitted list-only so the ordinary aggregator gate can count and
+// discard them; only the body request is skipped. This matters especially for JobStreet, where
+// a first crawl spans tens of thousands of listings but a substantial share of employers are
+// already covered directly by freehire.
+func (s seek) FetchNewGated(ctx context.Context, e CompanyEntry, seen func(externalID string) bool,
+	covered func(companies []string) map[string]bool) ([]Job, error) {
+	m, postings, err := s.crawl(ctx, e)
+	if err != nil {
+		return nil, err
+	}
+	names := make([]string, 0, len(postings))
+	for _, p := range postings {
+		if company := p.employer(); company != "" {
+			names = append(names, company)
+		}
+	}
+	return s.hydrate(ctx, e, m, postings, seen, covered(names)), nil
+}
+
+func (s seek) hydrate(ctx context.Context, e CompanyEntry, m seekMarket, postings []seekPosting,
+	seen func(externalID string) bool, skip map[string]bool) []Job {
 	return fetchDetails(postings, defaultDetailWorkers, func(p seekPosting) (Job, bool) {
 		base, ok := p.toJob(m)
 		if !ok {
@@ -152,39 +214,34 @@ func (s seek) FetchNew(ctx context.Context, e CompanyEntry, seen func(externalID
 			base.Description = "" // liveness refresh only: never rewrite the stored body
 			return base, true
 		}
+		if skip[base.Company] {
+			base.Description = "" // aggregator gate will discard it; a detail request is pure loss
+			return base, true
+		}
 		body, ok := s.detail(ctx, m, p.ID)
 		if !ok {
-			// Defer rather than store body-less. A stored row without a body is re-offered for
-			// hydration only until it is pipeline.HydrationRetryWindow (14 days) old — after
-			// that `seen` reports it like any other row and it is marked SeenRefresh forever.
-			// Dropping it leaves it new, so EVERY later crawl retries it, with no deadline. This
-			// is the opposite of what hh and the other hydrating adapters do, and it is
-			// deliberate: their rule assumes a rare failure that the retry window absorbs, while
-			// SEEK's rate limiter refuses in bursts of thousands (measured on prod: 3,267
-			// refusals in 95 seconds, 87% of a first crawl stranded body-less) — a backlog large
-			// enough that a bounded window would time out before clearing it.
-			log.Printf("seek: detail %s/%s failed; deferring the posting to the next crawl", e.Region, p.ID)
+			log.Printf("%s: detail %s/%s failed; deferring the posting to the next crawl", s.provider, e.Region, p.ID)
 			return Job{}, false
 		}
 		base.Description += body // base.Description is the salary paragraph (or "")
 		return base, true
-	}), nil
+	})
 }
 
 // crawl pages the search listing until a page yields no posting it has not already collected.
 func (s seek) crawl(ctx context.Context, e CompanyEntry) (seekMarket, []seekPosting, error) {
-	m, ok := seekMarkets[strings.ToLower(strings.TrimSpace(e.Region))]
+	m, ok := s.markets[strings.ToLower(strings.TrimSpace(e.Region))]
 	if !ok {
-		return seekMarket{}, nil, fmt.Errorf("seek: company %q has an unknown market (Region) %q", e.Company, e.Region)
+		return seekMarket{}, nil, fmt.Errorf("%s: company %q has an unknown market (Region) %q", s.provider, e.Company, e.Region)
 	}
 	board := strings.TrimSpace(e.Board)
 	var out []seekPosting
 	seen := map[string]bool{}
-	for page := 1; page <= seekMaxPages; page++ {
+	for page := 1; page <= s.maxPages; page++ {
 		var resp seekSearchPage
 		if err := s.http.GetJSON(ctx, s.searchURL(m, board, page), &resp); err != nil {
 			if page == 1 {
-				return seekMarket{}, nil, fmt.Errorf("seek: search %s subclass %q page %d: %w", e.Region, board, page, err)
+				return seekMarket{}, nil, fmt.Errorf("%s: search %s subclass %q page %d: %w", s.provider, e.Region, board, page, err)
 			}
 			break
 		}
@@ -197,9 +254,12 @@ func (s seek) crawl(ctx context.Context, e CompanyEntry) (seekMarket, []seekPost
 			out = append(out, p)
 			added++
 		}
-		if added == 0 { // empty page, or SEEK's result window exhausted
-			break
+		if added == 0 { // empty page, repeated tail, or SEEK's result window exhausted
+			return m, out, nil
 		}
+	}
+	if s.failAtPageCeiling {
+		return seekMarket{}, nil, fmt.Errorf("%s: search %s subclass %q exceeded %d pages without reaching the end", s.provider, e.Region, board, s.maxPages)
 	}
 	return m, out, nil
 }

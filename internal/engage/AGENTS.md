@@ -16,4 +16,4 @@ reports the whole graph at once, including imports that exist only in test files
 
 ## Packages
 
-`broadcast` `community` `companyfeedback` `discordlink` `emailnotify` `emailprefs` `mailpreview` `mentorship` `notify` `nudge` `onboarding` `pushnotify` `referral` `reminder` `report` `socialdigest` `subscription` `telegramnotify` `vote` `webhooknotify`
+`broadcast` `community` `companyfeedback` `discordlink` `emailnotify` `emailprefs` `mailpreview` `mentorship` `notify` `nudge` `onboarding` `prowelcome` `pushnotify` `referral` `reminder` `report` `socialdigest` `subscription` `telegramnotify` `vote` `webhooknotify`

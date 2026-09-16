@@ -10,6 +10,7 @@
 // turn is a request of its own — which is what lets a phone background its tab
 // without throwing the work away.
 
+import { trackPlanRefusal } from '$lib/api';
 import { readFrames } from './sse';
 import type { TurnEvent } from './wire';
 
@@ -158,6 +159,10 @@ async function turnFailure(res: Response, sessionId: string, failure: string): P
   }
   try {
     const body = await res.json();
+    // The assistant reads its own refusal, so the central record in toApiError never
+    // sees it — see trackPlanRefusal for the three transports that have to say so
+    // themselves.
+    trackPlanRefusal(res.status, body);
     const session = body?.session ?? {};
     return new TurnRefused(
       typeof body?.error === 'string' ? body.error : `${failure} (402)`,

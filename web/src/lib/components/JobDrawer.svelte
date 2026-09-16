@@ -672,7 +672,15 @@
               <p class="text-sm font-medium">Auto-apply tailored a CV for this job and is ready to send it.</p>
               {#if autoApply?.resolved_preview?.fields.length}
                 <dl class="flex flex-col gap-1 text-sm">
-                  {#each autoApply.resolved_preview.fields as f (f.label)}
+                  <!-- Keyed on the position, as JobApplyForm keys the questions it renders
+                       from the same forms. A PreviewField carries a label and a value and
+                       nothing else (internal/application/autoapply/preview.go), and an ATS
+                       form is free to ask "Location" twice — so a key on the label is one
+                       repeated question away from each_key_duplicate taking the drawer
+                       down, the same way the tag row did (FREEHIRE-WEB-20). This list is a
+                       read-only snapshot that nothing reorders, so position IS its
+                       identity. -->
+                  {#each autoApply.resolved_preview.fields as f, i (i)}
                     <div class="flex gap-2">
                       <dt class="shrink-0 text-muted-foreground">{f.label}:</dt>
                       <dd class="min-w-0 truncate">{f.value}</dd>

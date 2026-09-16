@@ -444,6 +444,10 @@ export interface User {
   // stand-in while the wizard was about the CV and stopped being one the moment it grew
   // questions a CV cannot answer.
   onboarding_completed_at: string | null;
+  // The caller's resolved plan tier, same values as PlanState['plan']. Rides along on
+  // this same response so the header's tier badge needs no second request to
+  // GET /api/v1/me/plan just to learn what api.myPlan() would answer anyway.
+  tier: 'free' | 'pro' | 'ultra';
 }
 
 /** A crowdsourced board contribution: a job link a user pasted for a company board we do

@@ -477,33 +477,36 @@ const upsertIngestSchedule = `-- name: UpsertIngestSchedule :exec
 INSERT INTO ingest_schedule (provider, shards, cadence_sec, timeout_sec,
                              enabled, disabled_reason, notes, managed)
 VALUES ($1,
-        COALESCE($2::int, 1),
-        COALESCE($3::int, 3600),
-        COALESCE($4::int, 3000),
-        COALESCE($5::boolean, true),
-        $6::text,
-        $7::text,
-        COALESCE($8::boolean, false))
+        COALESCE($2::int, $3::int),
+        COALESCE($4::int, $5::int),
+        COALESCE($6::int, $7::int),
+        COALESCE($8::boolean, true),
+        $9::text,
+        $10::text,
+        COALESCE($11::boolean, false))
 ON CONFLICT (provider) DO UPDATE SET
     shards          = COALESCE($2::int, ingest_schedule.shards),
-    cadence_sec     = COALESCE($3::int, ingest_schedule.cadence_sec),
-    timeout_sec     = COALESCE($4::int, ingest_schedule.timeout_sec),
-    enabled         = COALESCE($5::boolean, ingest_schedule.enabled),
-    disabled_reason = COALESCE($6::text, ingest_schedule.disabled_reason),
-    notes           = COALESCE($7::text, ingest_schedule.notes),
-    managed         = COALESCE($8::boolean, ingest_schedule.managed),
+    cadence_sec     = COALESCE($4::int, ingest_schedule.cadence_sec),
+    timeout_sec     = COALESCE($6::int, ingest_schedule.timeout_sec),
+    enabled         = COALESCE($8::boolean, ingest_schedule.enabled),
+    disabled_reason = COALESCE($9::text, ingest_schedule.disabled_reason),
+    notes           = COALESCE($10::text, ingest_schedule.notes),
+    managed         = COALESCE($11::boolean, ingest_schedule.managed),
     updated_at      = now()
 `
 
 type UpsertIngestScheduleParams struct {
-	Provider       string      `json:"provider"`
-	Shards         pgtype.Int4 `json:"shards"`
-	CadenceSec     pgtype.Int4 `json:"cadence_sec"`
-	TimeoutSec     pgtype.Int4 `json:"timeout_sec"`
-	Enabled        pgtype.Bool `json:"enabled"`
-	DisabledReason pgtype.Text `json:"disabled_reason"`
-	Notes          pgtype.Text `json:"notes"`
-	Managed        pgtype.Bool `json:"managed"`
+	Provider          string      `json:"provider"`
+	Shards            pgtype.Int4 `json:"shards"`
+	DefaultShards     int32       `json:"default_shards"`
+	CadenceSec        pgtype.Int4 `json:"cadence_sec"`
+	DefaultCadenceSec int32       `json:"default_cadence_sec"`
+	TimeoutSec        pgtype.Int4 `json:"timeout_sec"`
+	DefaultTimeoutSec int32       `json:"default_timeout_sec"`
+	Enabled           pgtype.Bool `json:"enabled"`
+	DisabledReason    pgtype.Text `json:"disabled_reason"`
+	Notes             pgtype.Text `json:"notes"`
+	Managed           pgtype.Bool `json:"managed"`
 }
 
 // Write one provider's override. Every argument is optional: a NULL means "leave this
@@ -513,12 +516,24 @@ type UpsertIngestScheduleParams struct {
 // The CHECK on the table still decides whether the result is legal — disabling without a
 // reason is refused here exactly as it is in psql, which is the point of putting the rule
 // in the schema.
+//
+// The "documented default" arrives as an ARGUMENT, not as a literal. It used to be
+// `COALESCE(..., 3600)` here, which made this the THIRD place holding one fact -- beside
+// ingestsched.DefaultCadence and the column's own DEFAULT -- and the three agreed only
+// because nobody had ever moved one. On 2026-09-16 one moved: DefaultCadence went to 2h for
+// the reason freehire#2862 measured, and this literal quietly kept handing every newly
+// written row the hourly ask that had just been shown not to fit. Passing the constants in
+// leaves the column defaults for hand-written psql only, where the schema test pins them to
+// the same constants.
 func (q *Queries) UpsertIngestSchedule(ctx context.Context, arg UpsertIngestScheduleParams) error {
 	_, err := q.db.Exec(ctx, upsertIngestSchedule,
 		arg.Provider,
 		arg.Shards,
+		arg.DefaultShards,
 		arg.CadenceSec,
+		arg.DefaultCadenceSec,
 		arg.TimeoutSec,
+		arg.DefaultTimeoutSec,
 		arg.Enabled,
 		arg.DisabledReason,
 		arg.Notes,

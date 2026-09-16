@@ -227,6 +227,12 @@ var blocks = map[string][]string{
 		// in job, because what it stores is what a PERSON reported, not a property the
 		// catalogue derived — the same reason report and vote are here.
 		"processreport", "pushnotify",
+		// prowelcome is here rather than beside billing for the same reason discordlink
+		// is: it is outbound engagement (a one-time email), not subscription logic. It
+		// reads a tier resolved elsewhere (plan.TierOf, same as discordlink) and never
+		// imports identity/billing at all — the reconciling worker that calls it reads
+		// the entitlement columns directly.
+		"prowelcome",
 		"referral", "reminder", "report", "socialdigest", "subscription",
 		"telegramnotify", "vote", "webhooknotify",
 	},

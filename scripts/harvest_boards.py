@@ -3,14 +3,15 @@
 
 Pipeline: collect candidate (provider, slug, company) tuples from a set of
 aggregator JSON files on GitHub (and, optionally, GitHub code search), drop the
-ones we already track in sources/*.yml, validate the rest against the same public
-ATS endpoints our ingest adapters use, and print the survivors as ready-to-paste
-YAML.
+ones already tracked in the live `boards` catalog, validate the rest against the
+same public ATS endpoints our ingest adapters use, and print the survivors as a
+ready-to-paste report.
 
 Usage:
     python3 scripts/harvest_boards.py              # JSON aggregators only
     python3 scripts/harvest_boards.py --github     # also sweep GitHub code search (needs gh, 10 req/min)
-    python3 scripts/harvest_boards.py --write      # append survivors to sources/<provider>.yml
+    python3 scripts/harvest_boards.py --write      # write survivors to scripts/.harvest-seeds/<provider>.json
+                                                    # (apply with: go run ./cmd/harvest-boards <provider> <seed> --apply)
 
 Only standard library is used; GitHub code search shells out to `gh`.
 """
@@ -39,8 +40,9 @@ from ats_boards import (  # noqa: E402
 # Aggregator JSON files. We sweep the raw text with regex, so the per-file schema
 # (key names) does not matter — only that ATS URLs appear somewhere in the JSON.
 AGGREGATORS = [
-    "https://raw.githubusercontent.com/vanshb03/Summer2026-Internships/dev/.github/scripts/listings.json",
-    "https://raw.githubusercontent.com/SimplifyJobs/Summer2026-Internships/dev/.github/scripts/listings.json",
+    "https://raw.githubusercontent.com/SimplifyJobs/New-Grad-Positions/dev/.github/scripts/listings.json",
+    "https://raw.githubusercontent.com/SimplifyJobs/Summer2027-Internships/dev/.github/scripts/listings.json",
+    "https://raw.githubusercontent.com/vanshb03/Summer2027-Internships/dev/.github/scripts/listings.json",
     "https://raw.githubusercontent.com/crypto-jobs-fyi/crawler/HEAD/ai_companies.json",
     "https://raw.githubusercontent.com/crypto-jobs-fyi/crawler/HEAD/crypto_companies.json",
     "https://raw.githubusercontent.com/crypto-jobs-fyi/crawler/HEAD/fin_companies.json",
@@ -357,7 +359,8 @@ def main() -> int:
     ap.add_argument("--hn", action="store_true", help="also harvest HN 'Who is hiring?' threads")
     ap.add_argument("--hn-months", type=int, default=3, help="how many recent HN threads to scan")
     ap.add_argument("--workday", action="store_true", help="harvest Workday boards only (host/site, POST validation)")
-    ap.add_argument("--write", action="store_true", help="append survivors to sources/<provider>.yml")
+    ap.add_argument("--write", action="store_true",
+                     help="write survivors to scripts/.harvest-seeds/<provider>.json")
     args = ap.parse_args()
 
     if args.workday:

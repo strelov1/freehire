@@ -246,3 +246,32 @@ SELECT pro_until, pro_until_stripe, pro_until_revenuecat, pro_until_granted,
        ultra_until, ultra_until_stripe, ultra_until_revenuecat, ultra_until_granted
 FROM users
 WHERE id = $1;
+
+-- name: ListNewlyPayingUsersMissingWelcomeEmail :many
+-- Accounts currently entitled to a paying tier (pro or ultra, per the same
+-- pro_until/ultra_until this whole file resolves everything else from) that have not yet
+-- received the one-time welcome email. cmd/pro-welcome-mail's candidate page.
+--
+-- pro_until/ultra_until, not the three per-provider sources: this asks the same question
+-- plan.TierOf answers everywhere else, so a manual grant or a store subscription reaches a
+-- welcome exactly like a Stripe one does.
+--
+-- Ordered by id for a stable, resumable page — the candidate set is small and every row
+-- returned here is claimed (pro_welcome_sent_at stamped) before the next page is read, so
+-- there is no starvation risk the way a NULLS-FIRST stamp order guards against elsewhere.
+SELECT id, email, pro_until, ultra_until
+FROM users
+WHERE pro_welcome_sent_at IS NULL
+  AND ((pro_until IS NOT NULL AND pro_until > now())
+       OR (ultra_until IS NOT NULL AND ultra_until > now()))
+ORDER BY id
+LIMIT sqlc.arg(max_rows);
+
+-- name: SetProWelcomeSent :execrows
+-- Claims the welcome send for one account. Guarded by IS NULL so a concurrent or repeated
+-- run never re-sends: 0 rows affected means somebody already claimed it, which the caller
+-- treats as "already welcomed", not as an error.
+UPDATE users
+SET pro_welcome_sent_at = now()
+WHERE id = sqlc.arg(id)
+  AND pro_welcome_sent_at IS NULL;

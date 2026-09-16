@@ -97,6 +97,21 @@ func (f *fakeStore) UpdateJobDerived(_ context.Context, arg db.UpdateJobDerivedP
 // dictionary facet from jobderive.Derive (the six original plus the four synthetic
 // enrichment facets), the role_fingerprint computed from the freshly derived
 // company_slug, and the recomputed public_slug/company_slug.
+// backfillAll and backfillProgress are the unbounded shorthands these tests read best
+// with: most of them assert on what a whole pass derived, and a scanWindow{} at every
+// call site would say nothing. They delegate straight to the entry points main uses, so
+// a test still exercises production's path rather than a parallel one — which is why
+// they live here and not beside it.
+func backfillAll(ctx context.Context, store deriveStore, concurrency int64) (scanned, updated, slugsMoved int, err error) {
+	pass, err := backfillPass(ctx, store, concurrency, scanWindow{})
+	return pass.Scanned, pass.Updated, pass.SlugsMoved, err
+}
+
+func backfillProgress(ctx context.Context, store deriveStore, concurrency, every int64, report func(scanned, updated, slugsMoved int64)) (scanned, updated, slugsMoved int, err error) {
+	pass, err := backfillWindow(ctx, store, concurrency, scanWindow{}, every, report)
+	return pass.Scanned, pass.Updated, pass.SlugsMoved, err
+}
+
 func expectedDerived(j db.Job) db.UpdateJobDerivedParams {
 	d := jobderive.Derive(jobderive.Input{
 		Title: j.Title, Company: j.Company, Source: j.Source, ExternalID: j.ExternalID,

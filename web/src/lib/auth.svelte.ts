@@ -9,6 +9,7 @@
 import { invalidateAll } from '$app/navigation';
 import { page } from '$app/state';
 import { api } from '$lib/api';
+import { forgetRecentAuthExpiry } from '$lib/recentAuth';
 import type { User } from '$lib/types';
 
 /** The current signed-in user, or null. Reactive: reads `page.data.user`. */
@@ -63,5 +64,10 @@ export async function logout() {
   } catch {
     // ignore
   }
+  // The recent-auth proof belonged to the session that just ended. The hint recording when
+  // it expires is per-TAB, so signing in as somebody else in the same tab would otherwise
+  // meet a standing "identity confirmed" for a session holding no proof. It self-heals on
+  // the next 428, but between here and there it is simply wrong.
+  forgetRecentAuthExpiry();
   await invalidateAll();
 }

@@ -43,15 +43,28 @@ func HoldHeavyIndexLock(ctx context.Context, pool *pgxpool.Pool) (release func()
 	// released the moment its session ends, so handing the connection back to the pool
 	// mid-run would silently drop it.
 	l := &poolLocker{conn: conn}
-	release, ok, err = holdHeavyIndexLock(ctx, l)
+	innerRelease, ok, err := holdHeavyIndexLock(ctx, l)
 	if !ok || err != nil {
 		conn.Release()
 		return nil, ok, err
 	}
+	return composeRelease(innerRelease, conn.Release), true, nil
+}
+
+// composeRelease returns a release function that calls inner then cleanup exactly once.
+// Kept as its own step, rather than inlined as a closure assigned into HoldHeavyIndexLock's
+// named `release` return, because that inlined shape is what caused a fatal stack-overflow
+// crash on 2026-09-15: `return func() { release(); conn.Release() }, true, nil` builds a
+// closure that captures `release` by reference, and assigning that very closure BACK into
+// the named return `release` (which is exactly what a named-return `return` statement does)
+// made the closure call itself, forever, the moment anything invoked it. `composeRelease`
+// closes over two plain, never-reassigned local parameters instead, so there is no variable
+// left for the returned closure to alias onto itself.
+func composeRelease(inner, cleanup func()) func() {
 	return func() {
-		release()
-		conn.Release()
-	}, true, nil
+		inner()
+		cleanup()
+	}
 }
 
 // locker is the two statements this needs, so the decision around them can be tested without

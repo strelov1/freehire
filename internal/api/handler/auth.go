@@ -4,12 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"strings"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/strelov1/freehire/internal/ai/plan"
 	"github.com/strelov1/freehire/internal/api/ratelimit"
 	"github.com/strelov1/freehire/internal/engage/pushnotify"
 	"github.com/strelov1/freehire/internal/identity/accounts"
@@ -271,6 +273,11 @@ type userResponse struct {
 	// rather than on its own endpoint because the layout already makes this read before
 	// it can decide anything at all.
 	OnboardingCompletedAt *time.Time `json:"onboarding_completed_at"`
+	// Tier is the caller's resolved plan (plan.TierFree/TierPro/TierUltra). It rides
+	// along on the same call that already powers currentUser() on every page — the
+	// header's tier badge reads it from here rather than a second request to
+	// GET /api/v1/me/plan just to learn what api.myPlan() would answer anyway.
+	Tier plan.Tier `json:"tier"`
 }
 
 type credentials struct {
@@ -282,11 +289,41 @@ type credentials struct {
 	Timezone *string `json:"timezone"`
 }
 
-// toUserResponse maps an accounts.User to its public response shape.
+// toUserResponse maps an accounts.User to its public response shape. Pure and DB-free on
+// purpose — it leaves Tier at its zero value, which is why every response handler calls
+// toUserResponseWithTier instead; this stays the thing submissions_test.go's
+// TestToUserResponse_* cases exercise without a database.
 func toUserResponse(u accounts.User) userResponse {
 	return userResponse{ID: u.ID, Email: u.Email, Role: u.Role, BetaTester: u.BetaTester,
 		EmailVerified: u.EmailVerified, HasPassword: u.HasPassword, CreatedAt: u.CreatedAt,
 		Timezone: u.Timezone, Language: u.Language, OnboardingCompletedAt: u.OnboardingCompletedAt}
+}
+
+// toUserResponseWithTier is what every response handler calls: toUserResponse plus the
+// caller's resolved tier, riding along on the same request that already powers
+// currentUser() on every page — see resolveTier.
+func (h *authHandlers) toUserResponseWithTier(ctx context.Context, u accounts.User) userResponse {
+	resp := toUserResponse(u)
+	resp.Tier = h.resolveTier(ctx, u.ID)
+	return resp
+}
+
+// resolveTier reads one indexed row (the same read plan.Store.Tier performs on every
+// metered action) and resolves it via plan.TierOf — never a second resolution path. A read
+// failure, or queries being unset (several handler unit tests build an authHandlers with
+// only the fields their own code path touches), degrades to plan.TierFree and is logged
+// rather than failing the response: nothing about signing in, registering, or reading one's
+// own account may depend on a badge rendering correctly.
+func (h *authHandlers) resolveTier(ctx context.Context, userID int64) plan.Tier {
+	if h.queries == nil {
+		return plan.TierFree
+	}
+	untils, err := h.queries.GetPlanUntils(ctx, userID)
+	if err != nil {
+		log.Printf("auth: resolving tier for user %d: %v", userID, err)
+		return plan.TierFree
+	}
+	return plan.TierOf(untils.ProUntil.Time, untils.UltraUntil.Time, time.Now().UTC())
 }
 
 // timezoneRequest is the PATCH /me/timezone body.
@@ -308,7 +345,7 @@ func (h *authHandlers) UpdateTimezone(c *fiber.Ctx) error {
 	if err != nil {
 		return accountsError(err)
 	}
-	return c.JSON(fiber.Map{"data": toUserResponse(user)})
+	return c.JSON(fiber.Map{"data": h.toUserResponseWithTier(c.Context(), user)})
 }
 
 // languageRequest is the PATCH /me/language body.
@@ -330,7 +367,7 @@ func (h *authHandlers) UpdateLanguage(c *fiber.Ctx) error {
 	if err != nil {
 		return accountsError(err)
 	}
-	return c.JSON(fiber.Map{"data": toUserResponse(user)})
+	return c.JSON(fiber.Map{"data": h.toUserResponseWithTier(c.Context(), user)})
 }
 
 // accountsError maps the accounts service sentinels to HTTP errors, preserving
@@ -397,7 +434,7 @@ func (h *authHandlers) Register(c *fiber.Ctx) error {
 	// After the session, never before: the account is made and the person is signed in
 	// whatever happens here.
 	h.attributeInvite(c, user.ID)
-	return c.Status(fiber.StatusCreated).JSON(fiber.Map{"data": toUserResponse(user)})
+	return c.Status(fiber.StatusCreated).JSON(fiber.Map{"data": h.toUserResponseWithTier(c.Context(), user)})
 }
 
 // Login verifies credentials, starts a session (auth cookie), and returns the
@@ -415,7 +452,7 @@ func (h *authHandlers) Login(c *fiber.Ctx) error {
 	if err := h.setSession(c, user.ID); err != nil {
 		return err
 	}
-	return c.JSON(fiber.Map{"data": toUserResponse(user)})
+	return c.JSON(fiber.Map{"data": h.toUserResponseWithTier(c.Context(), user)})
 }
 
 // Logout clears the auth cookie. It is public and idempotent: clearing an
@@ -494,7 +531,7 @@ func (h *authHandlers) Me(c *fiber.Ctx) error {
 	if err != nil {
 		return accountsError(err)
 	}
-	return c.JSON(fiber.Map{"data": toUserResponse(user)})
+	return c.JSON(fiber.Map{"data": h.toUserResponseWithTier(c.Context(), user)})
 }
 
 // authHasher adapts the auth package's bcrypt helpers to the accounts.PasswordHasher

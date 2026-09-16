@@ -19,8 +19,22 @@ const (
 	// need partitioning.
 	DefaultShards = 1
 
-	// DefaultCadence matches the hourly per-provider timers the script generated.
-	DefaultCadence = time.Hour
+	// DefaultCadence matches the per-provider timers the script generates, which is what
+	// the fleet actually runs on — not an independent opinion about how fresh a listing
+	// should be. It was time.Hour, because that was true when this package was written.
+	//
+	// It stopped being true on 2026-09-15, when the tail moved to 2h (freehire#2862) for a
+	// reason that applies here unchanged: ~230 tail providers at ~150s of real crawl each
+	// is ~9.6 slot-hours per sweep against the 5 slots their pool has, so an hourly ask is
+	// 190% of capacity and ingest-slot.sh threw away what would not fit — 837 of 1482
+	// firings skipped in 24h. At 2h the same demand is ~4.8 against 5, and the measured
+	// skip rate fell from 59% to 27%.
+	//
+	// Leaving this at an hour would have handed every cut-over provider the ask that was
+	// already refused, with the scheduler's cap unable to see the static ceiling it was
+	// competing with. A default that disagrees with the fleet is not a default, it is a
+	// second opinion nobody asked for.
+	DefaultCadence = 2 * time.Hour
 
 	// DefaultRunTimeout is 2400s of crawl budget plus the 600s worst-case wait the
 	// retired ingest-slot.sh semaphore could impose, kept whole so the number stays
