@@ -23,9 +23,12 @@ describe('site navigation', () => {
 
   // The homepage row stands in for the search box on that one route and is a shortcut to
   // the menu's own top, not a second navigation with its own opinions — see the constant's
-  // doc comment. Five is the number that fits before it stops being a shortcut.
-  it('keeps the homepage header row to five destinations, all of them from NAV', () => {
-    expect(HEADER_LINKS).toHaveLength(5);
+  // doc comment. The ceiling is what fits beside the brand and the menu controls at `lg`,
+  // measured rather than chosen; the row has no overflow behaviour, so passing it crowds
+  // those controls instead of wrapping. Raising this number means looking at the header at
+  // 1024px first, which is the whole reason it is asserted at all.
+  it('keeps the homepage header row within what fits, all of it from NAV', () => {
+    expect(HEADER_LINKS.length).toBeLessThanOrEqual(6);
     for (const link of HEADER_LINKS) {
       expect(Object.values(NAV)).toContain(link);
     }

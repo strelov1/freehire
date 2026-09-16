@@ -65,15 +65,29 @@ export const NAV = {
 
 /** What the homepage header shows where every other page shows the search box.
  *
- *  Five, and no more: this is a shortcut to the menu's own top, not a second
- *  navigation with its own opinions about what matters. Three ways into the catalogue
- *  and two ways to find out what this is. TopBar decides when the row is drawn — and,
- *  below `lg`, how much of it: it takes entries from the FRONT of this list, so the
- *  ORDER here is what a narrow screen gets, not just the order it reads in. */
+ *  A shortcut to the menu's own top, not a second navigation with its own opinions
+ *  about what matters — which is the bound, and the count is only ever what that bound
+ *  happens to allow. It read "five, and no more" while it listed four ways into the
+ *  catalogue and two ways to find out what this is; Talent Network is a fourth
+ *  catalogue, so the shape held and the number moved.
+ *
+ *  Six is what fits, measured rather than chosen: at 1024px — `lg`, where the whole row
+ *  first appears, and therefore the tightest case, since below it TopBar draws only the
+ *  first two — the nav ends 37px short of the controls on its right. A seventh label
+ *  costs more than that, so it does not fit. Check at `lg` before adding one: the row
+ *  has no overflow behaviour, so passing the bound crowds those controls silently rather
+ *  than wrapping.
+ *
+ *  TopBar decides when the row is drawn — and, below `lg`, how much of it: it takes
+ *  entries from the FRONT of this list, so the ORDER here is what a narrow screen gets,
+ *  not just the order it reads in. */
 export const HEADER_LINKS = [
   NAV.jobs,
   NAV.companies,
   NAV.collections,
   NAV.howItWorks,
+  // Before About deliberately: About is who publishes the site, and everything ahead of
+  // it is something to go and look at.
+  NAV.talent,
   NAV.about,
 ] as const;

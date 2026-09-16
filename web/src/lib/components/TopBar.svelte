@@ -44,10 +44,14 @@
    *  screen gets. Today that is Jobs and Companies.
    *
    *  Two, because that is what fits at the narrow end (33px to spare at 320px, labels
-   *  only — see the nav below). `lg` rather than a width nearer the 800px where all five
+   *  only — see the nav below). `lg` rather than a width nearer the 800px where the rest
    *  do begin to fit, because Tailwind's own breakpoints are what the rest of this header
    *  is written in and one more arbitrary query is a second answer to the same question.
-   *  Under `lg` the burger lists all five anyway, which is where they were until now. */
+   *  Under `lg` the burger lists them all anyway, which is where they were until now.
+   *
+   *  Deliberately a count and not a slice of named links: the row IS HEADER_LINKS' own
+   *  order, so a destination added to that list or moved within it changes what a narrow
+   *  screen gets without anything here needing to know. */
   const LINKS_BELOW_LG = 2;
 
   // On the full-viewport surfaces (the agent, the tailor workspace) the page below runs

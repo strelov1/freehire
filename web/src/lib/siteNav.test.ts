@@ -12,11 +12,16 @@ describe('siteNav', () => {
     expect(SOURCE).toMatch(/open:\s*\{\s*href:\s*'\/open',\s*label:\s*'Open'/);
   });
 
-  it('does not add Open to HEADER_LINKS (still the same five entries)', () => {
+  // /open is a data page, reachable from the footer and the menu. The homepage row is
+  // the shortcut to the catalogue, and it is not one of those.
+  //
+  // How LONG that row may be is asserted in siteNav.spec.ts instead, against the real
+  // imported value and beside the measurement that decides the number. It was a second
+  // `toHaveLength` here, which is how adding a destination failed a test whose own name
+  // was about something else.
+  it('does not add Open to HEADER_LINKS', () => {
     const headerLinks = SOURCE.slice(SOURCE.indexOf('export const HEADER_LINKS'));
     const listBody = headerLinks.slice(0, headerLinks.indexOf('] as const'));
     expect(listBody).not.toContain('NAV.open');
-    const entries = [...listBody.matchAll(/NAV\.\w+/g)];
-    expect(entries).toHaveLength(5);
   });
 });
