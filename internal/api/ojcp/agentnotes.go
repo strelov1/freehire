@@ -1,0 +1,45 @@
+package ojcp
+
+import (
+	"fmt"
+	"strings"
+
+	"github.com/strelov1/freehire/internal/job/jobview"
+)
+
+// OJCP has no field for "this posting may no longer be a real opening". `agent_notes` is
+// the spec's free-text channel to an agent, so the posting-reality verdict travels there
+// until the standard grows a field of its own — which is the follow-on RFC this
+// implementation is meant to argue for.
+//
+// The wording is bound by the same doctrine as the interface's: the system observes facts
+// about a POSTING and never an employer's intent, so the strongest thing it may say is
+// that the posting is likely inactive. An agent will relay this to a candidate, and quite
+// possibly to the employer; a sentence that reads as an accusation would be relayed as one.
+var realityVerdict = map[string]string{
+	"likely":   "likely to be inactive",
+	"possible": "possibly inactive",
+}
+
+// agentNotesFor renders the posting-reality verdict as a sentence, or "" when there is no
+// verdict. Silence is deliberate: most of the catalogue carries none, and a note saying
+// "no concerns" would assert a check we never ran.
+func agentNotesFor(j jobview.Job) string {
+	g := j.Ghost
+	if g == nil {
+		return ""
+	}
+	verdict, ok := realityVerdict[g.Level]
+	if !ok {
+		return ""
+	}
+
+	note := fmt.Sprintf(
+		"Posting-reality signal (freehire): this posting is %s — %d of %d checks fired",
+		verdict, len(g.Criteria), g.CriteriaTotal,
+	)
+	if len(g.Criteria) > 0 {
+		note += " (" + strings.Join(g.Criteria, ", ") + ")"
+	}
+	return note + ". These are observations about the posting, not a statement about the employer."
+}

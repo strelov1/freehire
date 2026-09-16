@@ -16,16 +16,27 @@
 
 ## 2. JobPosting projection
 
-- [ ] 2.1 Project `jobview.Job` into an OJCP `JobPosting`: `ojcp_id` from the public slug,
+- [x] 2.1 Project `jobview.Job` into an OJCP `JobPosting`: `ojcp_id` from the public slug,
       `url` from our page, `official_job_url` from the source URL, title, employer,
-      `datePosted`, `validThrough`, `jobLocation`, `employmentType`, `skills_required`.
-- [ ] 2.2 Project the ghost verdict into `agent_notes`, omitting the field entirely when the
-      posting carries no verdict.
+      `datePosted`, `validThrough`, `employmentType`, `experienceLevel`, `remote_policy`,
+      `baseSalary`, `skills_required`. `datePosted` is REQUIRED by the schema, so it falls
+      back to `created_at`; `remote_policy` and the salary period are CLOSED enums, so an
+      untranslatable value omits the field rather than failing the posting. Seniority
+      translates only the exact matches (`middle`→`mid`, `c_level`→`executive`) and emits
+      ours verbatim otherwise, rather than collapsing four levels into two.
+      (`jobLocation` is deferred to 2.6 — it needs the geography facets, not the flat string.)
+- [x] 2.2 Project the ghost verdict into `agent_notes`, omitting the field entirely when the
+      posting carries no verdict — including at level `none`, where a "no concerns" note
+      would assert a check we never ran. Wording stays hedged; a test forbids the
+      accusatory vocabulary outright.
 - [ ] 2.3 Project a stored apply form into an `ApplyPath` carrying `type`, `ats_provider` and
       `required_fields`.
 - [ ] 2.4 Derive `supports_agent_submission` from auto-apply's supported-source set, reporting
       `false` for a challenge-gated ATS. Test both directions against real source names.
 - [ ] 2.5 Project a posting with no captured form into a single `external_redirect` path.
+- [ ] 2.6 Project the geography facets (countries, regions, cities) into `jobLocation`,
+      which the schema shapes as a single schema.org `Place` — so a posting open in several
+      countries needs a deliberate answer rather than an arbitrary first element.
 
 ## 3. Tool implementations (transport-free)
 
