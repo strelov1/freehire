@@ -60,7 +60,10 @@ type JobPosting struct {
 	JobLocation     *Place  `json:"jobLocation,omitempty"`
 	BaseSalary      *Salary `json:"baseSalary,omitempty"`
 
-	SkillsRequired []string `json:"skills_required,omitempty"`
+	// SkillsRequired and SkillsPreferred are split by what the posting itself demanded —
+	// see skills.go for why the skills facet cannot fill either.
+	SkillsRequired  []string `json:"skills_required,omitempty"`
+	SkillsPreferred []string `json:"skills_preferred,omitempty"`
 	// AgentNotes carries the posting-reality verdict — see agentnotes.go for why it lives
 	// in a free-text field and how carefully it is worded.
 	AgentNotes string `json:"agent_notes,omitempty"`
@@ -156,9 +159,9 @@ func jobPostingFrom(j jobview.Job, origin string) JobPosting {
 		RemotePolicy:    remotePolicy[j.WorkMode],
 		JobLocation:     jobLocationFor(j),
 		BaseSalary:      salaryFrom(j),
-		SkillsRequired:  j.Skills,
 		AgentNotes:      agentNotesFor(j),
 	}
+	posting.SkillsRequired, posting.SkillsPreferred = skillsFor(j)
 	// An origin the deployment never configured would produce "/jobs/<slug>" — a relative
 	// path no agent can dereference, and one `format: uri` rejects. Publishing nothing is
 	// the better failure: the posting is still reachable through official_job_url.

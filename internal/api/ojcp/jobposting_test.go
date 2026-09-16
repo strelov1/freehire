@@ -80,9 +80,8 @@ func TestJobPostingFromCarriesTheFieldsWeMeanToEmit(t *testing.T) {
 	if posting.Employer.Name != "Acme Corp" {
 		t.Errorf("employer.name = %q", posting.Employer.Name)
 	}
-	if len(posting.SkillsRequired) != 2 {
-		t.Errorf("skills_required = %v, want both skills", posting.SkillsRequired)
-	}
+	// Skills are NOT asserted here: they come from the posting's stated requirements, not
+	// from the skills facet, and this fixture states none. See skills_test.go.
 }
 
 func TestJobPostingFromSeparatesOurPageFromTheSourcesOwnLink(t *testing.T) {
