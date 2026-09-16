@@ -102,10 +102,14 @@ func (r *Registry) Provider(name, origin string) (Provider, bool) {
 // ProviderV2 builds a browser provider for the verifier-bound native flow.
 // Apple is used here only by the same-origin web recent-auth adapter; native
 // clients use their SDK plus the dedicated nonce-bound exchange endpoint.
+//
+// Same callback as Provider, deliberately. A provider console registers ONE callback
+// URL per application, so a second path is not a second option — it is a redirect the
+// provider has never heard of. This used to answer `/api/v2/...`, which GitHub refused
+// outright ("The redirect_uri is not associated with this application"); Google only
+// worked because somebody had listed both there and nowhere else. The flows are told
+// apart at the callback by which state cookie the browser brings back, not by which URL
+// the provider was sent to.
 func (r *Registry) ProviderV2(name, origin string) (Provider, bool) {
-	c, ok := r.creds[name]
-	if !ok {
-		return nil, false
-	}
-	return constructors[name](c, origin+"/api/v2/auth/oauth/"+name+"/callback"), true
+	return r.Provider(name, origin)
 }

@@ -210,7 +210,10 @@ func callbackWith(raw, key, value string) (string, error) {
 
 func (h *authHandlers) OAuthCallbackV2(c *fiber.Ctx) error {
 	registry, ok := h.oauth.(oauthV2Registry)
-	if !ok {
+	// `mobileAuth` is checked too because this is no longer reached only by its own
+	// route: the shared sign-in callback hands over to it, and a deployment that has
+	// not configured the attempt store must answer rather than dereference nothing.
+	if !ok || h.mobileAuth == nil {
 		return authError(503, "oauth_unavailable", "sign-in unavailable")
 	}
 	provider := c.Params("provider")
