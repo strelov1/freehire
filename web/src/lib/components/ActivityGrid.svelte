@@ -2,27 +2,26 @@
   import { onMount, tick } from 'svelte';
   import { resolve } from '$app/paths';
   import { api } from '$lib/api';
-  import { boardRefFor } from '$lib/board';
   import {
     buildActivityGrid,
     LEVELS,
     rangeForWindow,
     type ActivityDay,
     type ActivityWeek,
-  } from '$lib/contributionGrid';
-  import { eventLabel, eventTone } from '$lib/events';
+  } from '$lib/activityGrid';
   import { locale } from '$lib/i18n/currentLocale.svelte';
   import { plural, t } from '$lib/i18n/t';
   import type { TimelineEvent } from '$lib/types';
-  import { Button } from '$lib/ui';
-  import { messages } from './ContributionGrid.messages';
+  import { Button, Card } from '$lib/ui';
+  import { messages } from './ActivityGrid.messages';
+  import ApplicationEventList from './ApplicationEventList.svelte';
   import States from './States.svelte';
 
   // A year of the caller's own job-search actions, drawn the way a contribution graph is.
   //
   // The server load hands over the window fetched in ITS timezone; which square an event
   // lands on is decided here, because only the browser knows the reader's clock. See
-  // contributionGrid.ts — the arithmetic, the counting rule and the streaks all live there,
+  // activityGrid.ts — the arithmetic, the counting rule and the streaks all live there,
   // and this component renders the model and nothing else.
   let { prefetched }: { prefetched: TimelineEvent[] | undefined } = $props();
 
@@ -94,14 +93,12 @@
   const countOf = (n: number) => `${n} ${plural(locale(), n, s.actions)}`;
   const daysOf = (n: number) => `${n} ${plural(locale(), n, s.days)}`;
 
+
   /** What a square says on hover and to a screen reader. A day with nothing on it says so in
    *  words rather than "0 actions", which across three hundred empty squares is noise a screen
    *  reader has to walk through one at a time. */
   const cellLabel = (d: ActivityDay) =>
     `${d.count > 0 ? countOf(d.count) : s.noActions} — ${dayHeading(d)}`;
-
-  const timeOf = (instant: string) =>
-    new Date(instant).toLocaleTimeString(locale(), { hour: '2-digit', minute: '2-digit' });
 
   // A year of squares is tall enough that the panel can open below the fold, where the click
   // reads as having done nothing. Only scrolls when it actually is out of view.
@@ -130,7 +127,7 @@
   {:else if status === 'loading'}
     <States state="loading" rows={3} />
   {:else}
-    <div class="rounded-lg border bg-card p-4">
+    <Card class="p-4">
       <div class="flex flex-wrap items-baseline justify-between gap-2">
         <h2 class="text-lg font-medium">{s.heading}</h2>
         <p class="text-sm text-muted-foreground">{countOf(grid.total)}</p>
@@ -185,82 +182,49 @@
         {/each}
         <span>{s.legendMore}</span>
       </div>
-    </div>
+    </Card>
 
     <div class="grid gap-3 sm:grid-cols-3">
-      <div class="rounded-lg border bg-card p-4">
+      <Card class="p-4">
         <p class="text-sm text-muted-foreground">{s.totalLabel}</p>
         <p class="text-2xl font-semibold tabular-nums">{grid.total}</p>
-      </div>
-      <div class="rounded-lg border bg-card p-4">
+      </Card>
+      <Card class="p-4">
         <p class="text-sm text-muted-foreground">{s.currentStreakLabel}</p>
         <p class="text-2xl font-semibold tabular-nums">{daysOf(grid.currentStreak)}</p>
-      </div>
-      <div class="rounded-lg border bg-card p-4">
+      </Card>
+      <Card class="p-4">
         <p class="text-sm text-muted-foreground">{s.longestStreakLabel}</p>
         <p class="text-2xl font-semibold tabular-nums">{daysOf(grid.longestStreak)}</p>
-      </div>
+      </Card>
     </div>
 
     {#if selected}
       <!-- Assembled from the events already fetched for the window. Selecting a day issues no
            request — and it lists EVERY event of that day, including the ones that do not shade
            the square, because what a square measures is effort and what a day held is history. -->
-      <div id="activity-day-panel" role="region" aria-live="polite" class="rounded-lg border bg-card p-4">
-        <h3 class="mb-3 text-sm font-medium">
-          {dayHeading(selected)}
-          {#if selected.count > 0}
-            <span class="font-normal text-muted-foreground">· {countOf(selected.count)}</span>
+      <Card class="p-4">
+        <div id="activity-day-panel" role="region" aria-live="polite">
+          <h3 class="mb-3 text-sm font-medium">
+            {dayHeading(selected)}
+            {#if selected.count > 0}
+              <span class="font-normal text-muted-foreground">· {countOf(selected.count)}</span>
+            {/if}
+          </h3>
+          {#if selected.events.length === 0}
+            <p class="text-sm text-muted-foreground">{s.panelNothing}</p>
+          {:else}
+            <ApplicationEventList events={selected.events} />
           {/if}
-        </h3>
-        {#if selected.events.length === 0}
-          <p class="text-sm text-muted-foreground">{s.panelNothing}</p>
-        {:else}
-          <ul class="flex flex-col gap-3">
-            {#each selected.events as e (e.id)}
-              <li class="flex gap-3">
-                <span
-                  class="mt-1.5 inline-block h-2 w-2 shrink-0 rounded-full border {eventTone(e.kind)}"
-                  class:bg-current={e.observed}
-                  style="border-color: currentColor"
-                ></span>
-                <div class="min-w-0 flex-1">
-                  <p class="text-sm">
-                    <span class="font-medium">{e.company_slug}</span>
-                    {#if e.role_title}<span class="text-muted-foreground"> · {e.role_title}</span>{/if}
-                  </p>
-                  <p class="text-sm text-muted-foreground">{eventLabel(e)}</p>
-                  {#if e.email_subject}
-                    <p class="truncate text-sm italic text-muted-foreground">“{e.email_subject}”</p>
-                  {/if}
-                  <p class="mt-0.5 text-xs text-muted-foreground">
-                    {#if e.observed}{timeOf(e.occurred_at)}{:else}{s.recordedByYou}{/if}
-                    {#if boardRefFor(e)}
-                      · <a class="underline hover:no-underline" href={resolve('/my/tracking/[id]', { id: boardRefFor(e) ?? '' })}
-                        >{s.applicationLink}</a
-                      >
-                    {/if}
-                    {#if e.email_id}
-                      ·
-                      <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- resolve()d base plus a query string; there is no dynamic route segment to resolve -->
-                      <a class="underline hover:no-underline" href={`${resolve('/my/inbox')}?message=${e.email_id}`}
-                        >{s.messageLink}</a
-                      >
-                    {/if}
-                  </p>
-                </div>
-              </li>
-            {/each}
-          </ul>
-        {/if}
-      </div>
+        </div>
+      </Card>
     {/if}
 
     {#if grid.total === 0}
-      <div class="rounded-lg border bg-card p-4">
+      <Card class="p-4">
         <p class="text-sm text-muted-foreground">{s.empty}</p>
         <Button variant="outline" size="sm" class="mt-3" href={resolve('/my/tracking')}>{s.emptyCta}</Button>
-      </div>
+      </Card>
     {/if}
   {/if}
 </div>

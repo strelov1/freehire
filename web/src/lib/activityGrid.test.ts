@@ -1,5 +1,5 @@
 // The reader's timezone decides which square an event lands on, so the suite runs in one
-// that is not UTC — and `contributionGrid.west.test.ts` mirrors it on the other side of
+// that is not UTC — and `activityGrid.west.test.ts` mirrors it on the other side of
 // Greenwich. Set before anything touches Date, for the reason calendarModel.test.ts gives.
 process.env.TZ = 'Europe/Warsaw'; // UTC+2 in summer
 
@@ -15,7 +15,7 @@ import {
   rangeForWindow,
   SOURCE_IS_THE_CANDIDATE,
   WINDOW_DAYS,
-} from './contributionGrid';
+} from './activityGrid';
 import type { TimelineEvent } from './types';
 
 const event = (kind: string, source: string): TimelineEvent =>
@@ -219,19 +219,33 @@ describe('buildActivityGrid shape', () => {
     expect(inWindow).toHaveLength(WINDOW_DAYS);
     expect(inWindow.at(-1)?.key).toBe('2026-09-16');
     expect(inWindow.at(-1)?.isToday).toBe(true);
-    expect(inWindow[0]?.key).toBe('2025-09-18');
+    expect(inWindow[0]?.key).toBe('2025-09-19'); // WINDOW_DAYS - 1 days before 2026-09-16
   });
 
-  // The endpoint refuses a span over `apptimeline.MaxRangeDays` (366) outright rather than
-  // trimming it, so a window one day too wide is not a smaller grid — it is an error state
-  // for every reader. This is the assertion that keeps WINDOW_DAYS honest.
-  it('asks for a span the endpoint will actually answer', () => {
-    const { from, to } = rangeForWindow(TODAY);
-    const span = (Date.parse(to) - Date.parse(from)) / 86_400_000;
+  // The endpoint refuses a span over `apptimeline.MaxRangeDays` outright rather than trimming
+  // it, so a window one hour too wide is not a smaller grid — it is an error state for every
+  // reader on that day. And the Go check is `to.Sub(from) > 366*24h`, an ABSOLUTE duration:
+  // a calendar day is 25 hours when the clocks go back, so a span of 366 calendar dates that
+  // happens to contain two autumn transitions lasts 366 days and two hours and is refused.
+  //
+  // Checked on EVERY date of a year rather than on one, because that is exactly the shape of
+  // the bug: picking a single day to assert on picks a day that passes. Two of them do not.
+  it('asks for a span the endpoint will answer, on every day of the year', () => {
+    const CAP_MS = 366 * 86_400_000;
+    for (let i = 0; i < 366; i++) {
+      const day = new Date(2026, 0, 1 + i);
+      const { from, to } = rangeForWindow(day);
+      expect(Date.parse(to) - Date.parse(from), day.toDateString()).toBeLessThanOrEqual(CAP_MS);
+    }
+  });
 
-    expect(span).toBeLessThanOrEqual(366);
-    // And still covers the whole window with a day of margin at each end.
-    expect(Date.parse(from)).toBeLessThan(new Date(2025, 8, 18).getTime());
+  it('still covers the whole window with a day of margin at each end', () => {
+    const { from, to } = rangeForWindow(TODAY);
+    const grid = buildActivityGrid([], TODAY);
+    const firstSquare = grid.days.find((d) => d.inWindow);
+
+    expect(firstSquare).toBeDefined();
+    expect(Date.parse(from)).toBeLessThan(firstSquare?.date.getTime() ?? 0);
     expect(Date.parse(to)).toBeGreaterThan(new Date(2026, 8, 16, 23, 59).getTime());
   });
 

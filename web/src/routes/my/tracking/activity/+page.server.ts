@@ -10,7 +10,7 @@ import type { PageServerLoad } from './$types';
 //
 // The load fetches only. Which square an event lands on, and therefore every streak, is
 // decided in the browser, the one place the reader's timezone is known — see
-// contributionGrid.
+// activityGrid.
 export const load: PageServerLoad = async ({ parent, url, fetch, request }) => {
   const { user } = await parent();
   if (!user) {

@@ -7,11 +7,11 @@
 
 ## 2. The grid model and the counting rule
 
-- [x] 2.1 RED: write `web/src/lib/contributionGrid.test.ts` covering the counting predicate —
+- [x] 2.1 RED: write `web/src/lib/activityGrid.test.ts` covering the counting predicate —
       `applied` and `follow_up_sent` count from any source; `stage_set` counts only from `user`,
       `assistant`, `auto_apply`; `employer_reply` never counts; `stage_set` from `system` and from
       the mail/calendar sources never counts; an unrecognised kind never counts.
-- [x] 2.2 GREEN: implement the predicate in `web/src/lib/contributionGrid.ts`.
+- [x] 2.2 GREEN: implement the predicate in `web/src/lib/activityGrid.ts`.
 - [x] 2.3 RED: extend the test for exhaustiveness — walk `APPLICATION_EVENT_KINDS` and
       `APPLICATION_EVENT_SOURCES` and assert every member has an explicit verdict, so a kind or
       source added in Go fails here rather than silently scoring zero. Mirror the shape
@@ -38,7 +38,7 @@
 
 ## 3. The renderer
 
-- [x] 3.1 Create `web/src/lib/components/ContributionGrid.svelte`: a renderer over the model only
+- [x] 3.1 Create `web/src/lib/components/ActivityGrid.svelte`: a renderer over the model only
       — squares, month labels above the week columns, weekday row labels, legend from less to
       more, and a per-square tooltip naming the date and its count. No arithmetic in the
       component.
@@ -51,7 +51,7 @@
       `web/src/lib/events.ts`; clicking the selected square closes it. No fetch on selection.
 - [x] 3.5 Make the grid horizontally scrollable on narrow viewports, opening scrolled to today
       rather than to a year ago.
-- [x] 3.6 Add `ContributionGrid.messages.ts` following the catalog pattern the other components
+- [x] 3.6 Add `ActivityGrid.messages.ts` following the catalog pattern the other components
       use, and route every visible string through it.
 - [x] 3.7 Confirm tokens, not raw colours, for the shading scale. The gate is
       `pnpm -C design-system check:tokens` — a repo-boundary check that reads `web/src` against a
@@ -80,7 +80,7 @@
 - [x] 5.2 `go build ./...`, `go vet ./...`, `go test ./...`, `gofmt -l .` clean for the generator
       change.
 - [x] 5.3 Prove the model reaches the SCREEN, not only the numbers. Written as
-      `web/src/lib/components/ContributionGrid.spec.ts` rather than checked by eye, because the
+      `web/src/lib/components/ActivityGrid.spec.ts` rather than checked by eye, because the
       three things worth confirming are all repeatable: a day holding only an employer reply
       renders as an empty square whose panel still lists that reply; selecting a day issues no
       request; and the span the fallback fetch asks for is one the endpoint will answer. A
@@ -88,3 +88,23 @@
 - [x] 5.4 `web/AGENTS.md` does not enumerate the tracking views — no edit needed. The list that
       does is the `SECTIONS` array in the tracking layout, updated in 4.4 along with the comment
       above it.
+
+## 6. Review fixes
+
+- [x] 6.1 **The window overflowed the endpoint's cap on two days a year.** `MaxRangeDays` is an
+      ABSOLUTE duration and a calendar day is 25 hours when the clocks go back, so a 366-date
+      span containing two autumn transitions lasts 366 days and two hours and is refused
+      outright — the error state for every reader in that zone, measured in Warsaw on 24–25
+      October 2026. `WINDOW_DAYS` 364 → 363. The old guard test asserted on ONE date and was
+      green; both timezone suites now walk all 366 start dates of a year.
+- [x] 6.2 Reconcile the spec with the code it describes: the window is bounded by what the
+      endpoint answers rather than being "366 days", a month's caption sits on the column its
+      week ENDS in, and the weekday rail labels alternate rows and is hidden from assistive
+      technology. Same for the stale figures in the proposal and design.
+- [x] 6.3 Extract `ApplicationEventList.svelte` (+ its messages catalog) and use it from BOTH
+      day panels; remove the ~40 duplicated lines from `TrackingCalendar.svelte`. Record in the
+      design why `eventLabel`'s English vocabulary is deliberately left for its own change.
+- [x] 6.4 Use the `Card` primitive instead of five hand-rolled `rounded-lg border bg-card`
+      divs, and record the adoption-baseline gain.
+- [x] 6.5 Unify the naming — `activityGrid.ts`, `ActivityGrid.svelte`, `ActivityDay/Week/Grid`,
+      `/my/tracking/activity`, the "Activity" tab. It was four names for one concept.

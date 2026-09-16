@@ -1,4 +1,4 @@
-// The mirror of contributionGrid.test.ts, run west of UTC.
+// The mirror of activityGrid.test.ts, run west of UTC.
 //
 // It is a separate file because TZ is a per-process setting and vitest gives each file its
 // own worker — the same reason calendarModel.west.test.ts exists, and the same trap. One zone
@@ -12,7 +12,7 @@ process.env.TZ = 'America/Los_Angeles'; // UTC-7 in summer
 
 import { describe, expect, it } from 'vitest';
 
-import { buildActivityGrid, WINDOW_DAYS } from './contributionGrid';
+import { buildActivityGrid, rangeForWindow, WINDOW_DAYS } from './activityGrid';
 import type { TimelineEvent } from './types';
 
 const event = (occurredAt: string, id = 1): TimelineEvent =>
@@ -60,5 +60,19 @@ describe('buildActivityGrid west of UTC', () => {
     const keys = grid.days.map((d) => d.key);
 
     expect(new Set(keys).size).toBe(keys.length);
+  });
+
+  // The endpoint's cap is an absolute duration and a calendar day is 25 hours when the clocks
+  // go back, so a window is refused on the days whose span happens to contain two autumn
+  // transitions — and WHICH days those are is a property of the zone. Warsaw's fall in late
+  // October is not Los Angeles's in early November, so the eastern suite's copy of this does
+  // not cover it. Walked over a whole year, because picking one day picks a day that passes.
+  it('asks for a span the endpoint will answer, on every day of the year', () => {
+    const CAP_MS = 366 * 86_400_000;
+    for (let i = 0; i < 366; i++) {
+      const day = new Date(2026, 0, 1 + i);
+      const { from, to } = rangeForWindow(day);
+      expect(Date.parse(to) - Date.parse(from), day.toDateString()).toBeLessThanOrEqual(CAP_MS);
+    }
   });
 });

@@ -15,6 +15,7 @@
   import { isAuthenticated } from '$lib/auth.svelte';
   import type { ScheduledInterview, TimelineEvent } from '$lib/types';
   import { Button } from '$lib/ui';
+  import ApplicationEventList from './ApplicationEventList.svelte';
   import States from './States.svelte';
 
   // The server load hands over one month, fetched in ITS timezone; everything after that
@@ -130,7 +131,8 @@
   const tone = (kind: string) => eventTone(kind);
   const label = (e: TimelineEvent) => eventLabel(e);
 
-  const timeOf = (e: TimelineEvent) => clockOf(e.occurred_at);
+  // Only the meetings are clocked here now; a ledger event's own time is rendered by
+  // ApplicationEventList, which both day panels share.
   const clockOf = (instant: string) =>
     new Date(instant).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
 
@@ -301,47 +303,7 @@
         {#if selected.events.length === 0 && selected.interviews.length === 0}
           <p class="text-sm text-muted-foreground">Nothing happened on this day.</p>
         {:else if selected.events.length > 0}
-          <ul class="flex flex-col gap-3">
-            {#each selected.events as e (e.id)}
-              <li class="flex gap-3">
-                <span
-                  class="mt-1.5 inline-block h-2 w-2 shrink-0 rounded-full border {tone(e.kind)}"
-                  class:bg-current={e.observed}
-                  style="border-color: currentColor"
-                ></span>
-                <div class="min-w-0 flex-1">
-                  <p class="text-sm">
-                    <span class="font-medium">{e.company_slug}</span>
-                    {#if e.role_title}<span class="text-muted-foreground"> · {e.role_title}</span>{/if}
-                  </p>
-                  <p class="text-sm text-muted-foreground">{label(e)}</p>
-                  {#if e.email_subject}
-                    <p class="truncate text-sm italic text-muted-foreground">“{e.email_subject}”</p>
-                  {/if}
-                  <p class="mt-0.5 text-xs text-muted-foreground">
-                    {#if e.observed}
-                      {timeOf(e)}
-                    {:else}
-                      recorded by you
-                    {/if}
-                    {#if boardRefFor(e)}
-                      · <a
-                          class="underline hover:no-underline"
-                          href={resolve('/my/tracking/[id]', { id: boardRefFor(e) ?? '' })}>application</a
-                        >
-                    {/if}
-                    {#if e.email_id}
-                      ·
-                      <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- resolve()d base plus a query string; there is no dynamic route segment to resolve -->
-                      <a class="underline hover:no-underline" href={`${resolve('/my/inbox')}?message=${e.email_id}`}
-                        >message</a
-                      >
-                    {/if}
-                  </p>
-                </div>
-              </li>
-            {/each}
-          </ul>
+          <ApplicationEventList events={selected.events} />
         {/if}
       </div>
     {/if}

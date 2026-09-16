@@ -8,13 +8,14 @@ turns that ledger into the one figure that makes somebody come back tomorrow: a 
 
 The GitHub contribution graph is the reference because it is already understood — nobody needs a
 legend explained — and because the material for it is already published. `GET /me/timeline`
-serves a caller's dated events and accepts a span of up to 366 days, exactly a year of squares.
+serves a caller's dated events and accepts a span of up to 366 days — a year of squares, less
+the margin the request needs and the slack a clock change eats.
 
 ## What Changes
 
 - A new **Activity** tab in the tracking section at `/my/tracking/activity`, beside Board, List,
   Pipeline and Calendar.
-- A year-long contribution grid: 53 weeks by 7 days, each cell shaded by how much the candidate
+- A year-long contribution grid: whole weeks by 7 days, each cell shaded by how much the candidate
   did that day, with month labels, a legend, and a hover tooltip naming the day and its count.
 - Three figures beneath it: total actions in the last year, the current streak of consecutive
   active days, and the longest such streak.
@@ -48,9 +49,12 @@ serves a caller's dated events and accepts a span of up to 366 days, exactly a y
 
 - `web/src/routes/my/tracking/+layout.svelte` — a fifth tab.
 - `web/src/routes/my/tracking/activity/` — new route (`+page.svelte`, `+page.server.ts`).
-- `web/src/lib/contributionGrid.ts` — new: the grid's arithmetic and the counting rule, pure and
+- `web/src/lib/activityGrid.ts` — new: the grid's arithmetic and the counting rule, pure and
   unit-testable, in the shape `calendarModel.ts` established.
-- `web/src/lib/components/ContributionGrid.svelte` — new: the renderer.
+- `web/src/lib/components/ActivityGrid.svelte` — new: the renderer.
+- `web/src/lib/components/ApplicationEventList.svelte` — new: the day panel's event list,
+  extracted so this view and the calendar share one, rather than the calendar's being copied.
+  `TrackingCalendar.svelte` loses its inline copy.
 - `web/src/lib/server/tracking.ts` — a year-range loader beside `loadBoard` and `loadTimeline`.
 - `cmd/gen-contracts/main.go` — one line emitting `APPLICATION_EVENT_SOURCES` from the existing
   `appevent.Sources`, plus the regenerated `web/src/lib/generated/contracts.ts`.

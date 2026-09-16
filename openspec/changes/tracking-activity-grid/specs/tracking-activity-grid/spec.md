@@ -6,13 +6,24 @@ The tracking section SHALL offer an activity view of the caller's own job-search
 `/my/tracking/activity`, presented as a tab beside Board, List, Pipeline and Calendar. The view
 SHALL be its own URL so it is linkable, bookmarkable and survives a reload.
 
-The view SHALL draw the last 366 days as a grid of one square per day, seven rows deep and
+The view SHALL draw roughly the last year as a grid of one square per day, seven rows deep and
 ordered by week, oldest week at the left. A square SHALL be shaded by how many counting actions
 fell on that day, across a fixed number of levels, with zero drawn as an empty level rather than
 omitted — a day with nothing on it is part of the answer.
 
-The grid SHALL carry the labels that make it readable without explanation: the month each week
-column begins, the weekday rows, and a legend running from less to more.
+How long the window is SHALL be decided by what the endpoint will answer, not chosen: the
+timeline refuses a span over `apptimeline.MaxRangeDays` outright rather than trimming it, the
+request carries a day of margin at each end, and the cap is an ABSOLUTE duration while a
+calendar day is 25 hours when the clocks go back. The window SHALL therefore leave slack for a
+span containing two autumn transitions, and SHALL be verified across a whole year of start
+dates rather than at one — a single date checked is a date that passes.
+
+The grid SHALL carry the labels that make it readable without explanation: the month a week
+column belongs to, the weekdays, and a legend running from less to more. A month's label SHALL
+sit on the column that week ENDS in, because a column straddling the 1st sits mostly in the new
+month and labelling it with the old one puts the caption a column left of what it names. The
+weekday rail MAY label alternate rows only, and SHALL be hidden from assistive technology,
+because every square already announces its own full date.
 
 #### Scenario: The activity view is its own URL
 
@@ -27,7 +38,14 @@ column begins, the weekday rows, and a legend running from less to more.
 #### Scenario: The window is the last year, ending today
 
 - **WHEN** the grid is drawn
-- **THEN** its last square is the reader's today and its first is no more than 366 days earlier
+- **THEN** its last square is the reader's today and its first is no more than a year earlier
+
+#### Scenario: The request fits the cap on every day of the year
+
+- **WHEN** the span to fetch is worked out for any date in any timezone, including one whose
+  window contains two autumn clock changes
+- **THEN** its absolute duration is at most `apptimeline.MaxRangeDays`, so the endpoint answers
+  rather than refusing and leaving every reader on that date with an error
 
 ### Requirement: A square counts only what the candidate did
 

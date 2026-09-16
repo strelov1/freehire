@@ -2,9 +2,9 @@ import { fireEvent, render, screen } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { TimelineEvent } from '$lib/types';
-import ContributionGrid from './ContributionGrid.svelte';
+import ActivityGrid from './ActivityGrid.svelte';
 
-// The model's own arithmetic is covered in contributionGrid.test.ts, in two timezones. What
+// The model's own arithmetic is covered in activityGrid.test.ts, in two timezones. What
 // is covered HERE is the contract between the model and the screen — the three things a
 // reader would notice broken and the unit tests could never see:
 //
@@ -63,9 +63,9 @@ beforeEach(() => {
   myTimeline.mockReset();
 });
 
-describe('ContributionGrid', () => {
+describe('ActivityGrid', () => {
   it('paints the server payload without fetching', () => {
-    render(ContributionGrid, { prefetched: [on(daysAgo(1), 'applied', 'user')] });
+    render(ActivityGrid, { prefetched: [on(daysAgo(1), 'applied', 'user')] });
 
     expect(myTimeline).not.toHaveBeenCalled();
     expect(screen.getByText('Your last year')).toBeTruthy();
@@ -75,7 +75,7 @@ describe('ContributionGrid', () => {
   // The whole feature's premise on screen: effort is shaded, everything else is history.
   it('leaves a day of employer replies unshaded and still lists them', async () => {
     const day = daysAgo(3);
-    render(ContributionGrid, {
+    render(ActivityGrid, {
       prefetched: [on(day, 'employer_reply', 'mail_gmail', { email_subject: 'Thanks for applying' })],
     });
 
@@ -91,7 +91,7 @@ describe('ContributionGrid', () => {
 
   it('closes the panel when the open day is selected again', async () => {
     const day = daysAgo(2);
-    render(ContributionGrid, { prefetched: [on(day, 'applied', 'user')] });
+    render(ActivityGrid, { prefetched: [on(day, 'applied', 'user')] });
 
     const square = squareFor(day);
     await fireEvent.click(square);
@@ -104,7 +104,7 @@ describe('ContributionGrid', () => {
   it('fetches the window itself when the server load did not answer', async () => {
     myTimeline.mockResolvedValue([on(daysAgo(1), 'applied', 'user')]);
 
-    render(ContributionGrid, { prefetched: undefined });
+    render(ActivityGrid, { prefetched: undefined });
     await vi.waitFor(() => expect(screen.getByText('1 action')).toBeTruthy());
 
     expect(myTimeline).toHaveBeenCalledTimes(1);
@@ -117,13 +117,13 @@ describe('ContributionGrid', () => {
   it('says so rather than showing a blank grid when nothing was fetched', async () => {
     myTimeline.mockRejectedValue(new Error('down'));
 
-    render(ContributionGrid, { prefetched: undefined });
+    render(ActivityGrid, { prefetched: undefined });
 
     await vi.waitFor(() => expect(screen.getByText("Couldn't load your activity.")).toBeTruthy());
   });
 
   it('invites a caller with an empty year rather than scolding them', () => {
-    render(ContributionGrid, { prefetched: [] });
+    render(ActivityGrid, { prefetched: [] });
 
     expect(screen.getByText(/Nothing here yet/)).toBeTruthy();
     // Both streak figures, current and longest — an empty year has neither.

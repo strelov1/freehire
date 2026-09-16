@@ -9,9 +9,10 @@ client fetch rather than a 500.
 
 The material is already published. `GET /me/timeline` serves the caller's application events over
 a range and caps one request at `MaxRangeDays = 366`
-(`internal/application/apptimeline/apptimeline.go:47`) — a year of squares fits in one request by
-a margin of one day. `web/src/lib/events.ts` already owns how an event reads and what tone it is
-drawn in, shared by the calendar and the application panel.
+(`internal/application/apptimeline/apptimeline.go:47`) — a year of squares fits in one request,
+though by less margin than it first appears (see the window decision below).
+`web/src/lib/events.ts` already owns how an event reads and what tone it is drawn in, shared by
+the calendar and the application panel.
 
 Feasibility was measured on production rather than assumed (2026-09-16): 418 users hold events in
 the last 366 days, median 5, p95 11, maximum 655. The heaviest user in the database is roughly
@@ -47,7 +48,7 @@ is the platform noticing that a listing closed.
 
 ### One pure module owns the arithmetic AND the counting rule
 
-`web/src/lib/contributionGrid.ts`, in the shape of `calendarModel.ts`: it takes the flat
+`web/src/lib/activityGrid.ts`, in the shape of `calendarModel.ts`: it takes the flat
 `TimelineEvent[]` and today's date, and returns the drawable model — weeks of days, each with its
 local day key, its count, its shading level, and its events. The counting predicate lives here
 too, beside the arithmetic it feeds, rather than in the component or in a filter applied by the
@@ -126,7 +127,36 @@ the timeline; `application_interviews` is the calendar's second layer, about mee
 still move, and nothing on this page draws a future.
 
 The 366-day cap is the endpoint's, so the requested window is sized to fit inside it *including*
-the margin — a window of 366 days plus two margin days would be refused.
+the margin — and with slack, not exactly. **The cap is an absolute duration and a calendar day
+is not always 24 hours.** A span of 366 dates that happens to contain two autumn clock changes
+lasts 366 days and two hours, and `apptimeline` refuses it outright rather than trimming it, so
+every reader in that zone gets the error state on those dates. A first pass of this design said
+"364 + 2 is 366 exactly"; exactly was the bug, and it would have fired in Warsaw on 24 and 25
+October 2026 and in Los Angeles around 1 November. `WINDOW_DAYS` is therefore 363, leaving
+about a day of slack — more than any zone's transitions can consume, Lord Howe's half hour
+included.
+
+What holds it shut is the shape of the test, not the number: `rangeForWindow` is asserted over
+all 366 start dates of a year, in BOTH timezone suites, because picking one date to check picks
+a date that passes. The original single-date assertion was green against the broken window.
+
+### The day panel is extracted, not copied
+
+A first pass wrote this view's day panel as a transcription of `TrackingCalendar.svelte`'s —
+the same forty lines of dot, company line, quoted subject, clock and two links, including the
+same eslint suppression. Review caught it, and it is the exact failure `$lib/events` was
+created to stop one layer down: that module holds the labels and tones because "copying them
+would have meant the same event captioned two ways on two screens". The markup around those
+labels had the same property and had been duplicated anyway.
+
+It is now `ApplicationEventList.svelte`, used by both panels, and the calendar lost its copy.
+
+**What it does NOT fix is the ledger's own vocabulary.** `eventLabel` is English for all three
+of its consumers (this list, the calendar's cells, the job drawer), while this view ships with
+a Russian catalog — so a Russian reader gets Russian chrome around English captions. Half-fixing
+it inside the one component that happens to have a catalog would be worse than the gap: the
+honest fix is one change to `$lib/events` and its three callers, and it belongs to its own
+change. The shared list is where it will land when it does.
 
 ### The seam left, not built
 

@@ -65,15 +65,21 @@ export function countsAsCandidateAction(event: TimelineEvent): boolean {
   return false;
 }
 
-/** How many days the grid covers, ending today: 52 weeks.
+/** How many days the grid covers, ending today.
  *
- *  Deliberately NOT the endpoint's own 366-day cap (`apptimeline.MaxRangeDays`), and not 365
- *  either. The fetch adds a day of margin at each end — the server's date is not the reader's
- *  — so the REQUEST spans `WINDOW_DAYS + 2` days, and anything above 364 is refused outright
- *  by the endpoint rather than merely trimmed. 364 + 2 is 366 exactly.
+ *  Bounded by the endpoint, not chosen for looks. `apptimeline.MaxRangeDays` refuses a request
+ *  outright — 400, not a trimmed answer — when `to.Sub(from) > 366*24h`, and the fetch adds a
+ *  day of margin at each end, so the REQUEST spans `WINDOW_DAYS + 2` calendar days.
  *
- *  That it is also a whole number of weeks is a small bonus: the grid needs no ragged column. */
-export const WINDOW_DAYS = 364;
+ *  The trap is that the cap is an ABSOLUTE duration and a calendar day is not always 24 hours.
+ *  A span of 366 dates that contains two autumn clock changes lasts 366 days and two hours,
+ *  and is refused. 364 therefore looked exact and was wrong: in Warsaw on 24 and 25 October
+ *  2026 — and in Los Angeles around 1 November — every reader would have got the error state.
+ *
+ *  363 leaves a day of slack, which is more than any timezone's transitions can consume, and
+ *  `rangeForWindow`'s own test walks all 366 days of a year rather than asserting on one:
+ *  picking a single day to check picks a day that passes. */
+export const WINDOW_DAYS = 363;
 
 /** The number of shades above zero. */
 export const LEVELS = 4;
