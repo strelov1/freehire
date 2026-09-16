@@ -167,9 +167,9 @@ The commands, the order, and the rollback for each step are written out in
 [runbook.md](runbook.md). It touches a live fleet of 238 providers over several days, and
 the order matters more than any single command.
 
-- [ ] 8.1 Deploy §1-§7 with shadow mode on. Confirm the unit runs, reports, and launches
-      nothing.
-- [ ] 8.2 Seed the overrides from `gen-ingest-timers.sh`'s constants, each with its `notes`:
+- [x] 8.1 Deploy §1-§7 with shadow mode on. Confirm the unit runs, reports, and launches
+      nothing. Verified 2026-09-16: `mode=shadow eligible=251 launched=0 would_launch=1`.
+- [x] 8.2 Seed the overrides from `gen-ingest-timers.sh`'s constants, each with its `notes`:
       the twelve `HEAVY` providers at 3 h; `reed` at 6 h; the seven shard families
       (workday 6, eightfold 4, oracle 4, paylocity 24, join 5, dayforce 4, workstream 2)
       with their raised timeouts; `bayt`/`gulftalent` disabled with the fingerprint-client
@@ -178,9 +178,20 @@ the order matters more than any single command.
 - [ ] 8.3 Read a full day of shadow output against what the timers actually launched.
       Resolve every discrepancy BEFORE any provider is cut over.
 - [ ] 8.4 Cut over the unsharded providers in waves, then the seven shard families last.
-      Each provider: `systemctl disable --now freehire-ingest@<p>.timer` and flip `managed`
-      as one step. Read the HOST's enabled units as the source of truth for what to
-      disable — `deploy/` is 190 files adrift and must not drive this.
+      Flip `managed`; the timer retires itself. **First wave done 2026-09-16** — `techtree`
+      and `wellfound`, `INGEST_SCHEDULER_CAP=2`, `INGEST_SCHEDULER_APPLY=1`. First live
+      launch: `mode=apply launched=1`, transient unit `freehire-ingest-run-techtree` wrote
+      87 postings, exited 0, and the next tick read `in_flight=0` with the claim released
+      and `next_due_at` advanced 24h — so the reaper closes the loop the review's 10.1
+      opened.
+      The disable is no longer an operator step: `gen-ingest-timers.sh` now LEFT JOINs
+      `ingest_schedule` and skips `managed`, so a cut-over provider drops out of its list
+      and the sweep retires the timer. That had to change before any wave — the generator
+      runs unattended at 04:40 and would have RECREATED every disabled timer the same
+      night, silently restoring the double-drive this step exists to prevent.
+      Also synced that night's shard-cadence change (freehire#2885) into the overrides:
+      workday 12h, oracle/eightfold/dayforce 8h, join 10h. Without it a cut-over shard
+      family would have reverted to the cadence that starved the heavy pool.
 - [ ] 8.5 Once every provider is managed: drop the `managed` column and its gate, so
       absence once again means scheduled on defaults. NOT OPTIONAL — see 1.4.
 
