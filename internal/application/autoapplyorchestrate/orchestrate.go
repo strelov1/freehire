@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/inngest/inngestgo"
+	inngesterrors "github.com/inngest/inngestgo/errors"
 	"github.com/inngest/inngestgo/step"
 )
 
@@ -141,9 +142,44 @@ func callHire(ctx context.Context, cfg Config, path string, body any) error {
 	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
 		b, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("POST %s: status %d: %s", path, resp.StatusCode, string(b))
+		return responseError(resp.StatusCode, path, string(b))
 	}
 	return nil
+}
+
+// busyRetryDelay is how long a step waits after hire says the session is busy. Long enough
+// to outlast the run it collided with — a live tailoring run took 7m44s on 2026-09-16 — and
+// short enough that a candidate is not left waiting on a queue that has stalled.
+const busyRetryDelay = 8 * time.Minute
+
+// responseError turns a non-2xx into the error the step returns, and decides whether Inngest
+// should treat it as a failure or as "come back later".
+//
+// 409 from the tailoring route is hire's own guard against two tailoring runs on one session
+// — the earlier run is still going and will finish. Spending a retry on it is pure waste:
+// measured 2026-09-16, a 7m44s tailoring run was still going when the retry arrived, which
+// got its 409 in 31 milliseconds and did it again, until the attempts ran out against a door
+// that was always going to be shut for another few minutes.
+//
+// Every other status keeps its ordinary meaning. A 500 IS a failed run and must spend a
+// retry; a 404 is a wrong route that retrying cannot fix.
+func responseError(status int, path, body string) error {
+	err := fmt.Errorf("POST %s: status %d: %s", path, status, body)
+	if status == http.StatusConflict {
+		return inngestgo.RetryAtError(err, time.Now().Add(busyRetryDelay))
+	}
+	return err
+}
+
+// retryAt reports the time a wrapped error asks to be retried at, if it asks at all. It asks
+// the library's own reader rather than matching a type here, so a test asserts what the
+// runtime will actually do with the error.
+func retryAt(err error) (time.Time, bool) {
+	at := inngesterrors.GetRetryAtTime(err)
+	if at == nil {
+		return time.Time{}, false
+	}
+	return *at, true
 }
 
 // Register creates the durable tailor-then-review Inngest function on client, wired to
