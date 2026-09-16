@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { formatSalary } from './enrichment';
-import type { Enrichment } from './types';
+import { cardTags, formatSalary } from './enrichment';
+import type { Enrichment, Job } from './types';
 
 describe('formatSalary', () => {
   it('returns null when neither bound is stated', () => {
@@ -51,5 +51,28 @@ describe('formatSalary', () => {
     expect(formatSalary({ salary_min: 10_000, salary_max: 20_000, salary_currency: 'PLN' } as Enrichment)).toBe(
       '10K – 20K PLN',
     );
+  });
+});
+
+describe('cardTags', () => {
+  it('lists the stated facets in order', () => {
+    expect(
+      cardTags({
+        work_mode: 'onsite',
+        regions: ['europe'],
+        enrichment: { employment_type: 'full_time', seniority: 'senior' },
+      } as unknown as Job),
+    ).toEqual(['On-site', 'Europe', 'Full-time', 'Senior']);
+  });
+
+  // FREEHIRE-WEB-20: every caller keys its `{#each}` on the tag text, so a row carrying the
+  // same word twice does not merely look wrong — Svelte throws each_key_duplicate and the
+  // drawer stops rendering. It is reachable because WORK_MODE_LABELS holds exactly one
+  // override and REGION_LABELS does not cover the geography the LLM fallback can emit, so
+  // both facets sentence-case the same raw value and print the same word.
+  it('never repeats a tag, however two facets arrive at the same word', () => {
+    expect(
+      cardTags({ work_mode: 'remote', regions: ['remote'] } as unknown as Job),
+    ).toEqual(['Remote']);
   });
 });

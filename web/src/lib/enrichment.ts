@@ -161,7 +161,15 @@ function tagRow(f: {
   if (f.employment_type) tags.push(label(EMPLOYMENT_LABELS, f.employment_type));
   if (f.seniority) tags.push(label(SENIORITY_LABELS, f.seniority));
 
-  return tags;
+  // Four independent facets, four independent label maps, and `label()` falls back to the
+  // raw value sentence-cased whenever a map has no entry — so an unmapped code in one
+  // facet can print the very word another facet mapped to. A row that shows the same chip
+  // twice is wrong on its own; it is ALSO a crash, because every caller keys its `{#each}`
+  // on the tag text and Svelte refuses a duplicate key outright
+  // (svelte.dev/e/each_key_duplicate), taking the whole drawer down with it. Deduplicating
+  // at the source fixes both at once, and keeps the keys honest for every consumer rather
+  // than for the one that happened to be reported.
+  return [...new Set(tags)];
 }
 
 /**

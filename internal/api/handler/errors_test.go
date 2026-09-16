@@ -210,6 +210,13 @@ func TestClassify_ReportsOnlyUnexpected500(t *testing.T) {
 		{"wrapped client disconnect still 499", fmt.Errorf("search: query: %w", context.Canceled), statusClientClosedRequest, false},
 		{"malformed search query maps to 400", fmt.Errorf("search: query: %w: bad filter", search.ErrBadQuery), fiber.StatusBadRequest, false},
 		{"server-side timeout is still reported", context.DeadlineExceeded, fiber.StatusInternalServerError, true},
+		// An autopilot run refused for want of a fit analysis has already said so to the
+		// candidate, on the stream they were reading, in words they can act on. Filing it
+		// as a fault put 12 copies of a refusal working exactly as designed into an inbox
+		// whose monthly allowance the site had already spent — a state, like ErrNoAnalysis
+		// it shares the condition with, not a fault.
+		{"autopilot refused for want of a plan is a state", errNoRequirementList, fiber.StatusConflict, false},
+		{"wrapped, it is still a state", fmt.Errorf("autopilot: %w", errNoRequirementList), fiber.StatusConflict, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
