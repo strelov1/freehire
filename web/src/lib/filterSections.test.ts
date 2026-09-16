@@ -10,7 +10,6 @@ import { RAIL } from './filterSections';
 // (companyRailGroups.test.ts); the job rail did not, which is why nothing caught it.
 //
 // An entry here is a claim that the facet IS reachable, just not from its own rail row.
-// `source` is the one facet that is deliberately not offered at all.
 const HOSTED_ELSEWHERE: Record<string, string> = {
   category: 'category pane (specialization chips)',
   ai_archetype: 'category pane (AI specialization)',
@@ -31,9 +30,11 @@ const HOSTED_ELSEWHERE: Record<string, string> = {
   reality: 'posted pane, beneath the age bound',
 };
 
-// Not offered anywhere, on purpose. Which job board a posting was crawled from is
-// provenance, not something a candidate filters on; the param stays URL-only.
-const NOT_OFFERED = new Set(['source']);
+// Nothing is withheld today — every declared job facet is reachable, either by its own
+// rail row or via HOSTED_ELSEWHERE. Kept as a named, empty set (rather than dropping the
+// checks below) so a future refusal has a place to be recorded deliberately, the way
+// `source` once was here before it got its own Company-adjacent rail row.
+const NOT_OFFERED = new Set<string>();
 
 describe('the job filter rail', () => {
   it('reaches every job facet — by its own entry, a hosting pane, or a recorded refusal', () => {

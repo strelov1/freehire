@@ -1,6 +1,6 @@
 <script lang="ts">
   import { optionMatches, uniqueByValue, type FacetOption } from '$lib/facets';
-  import { CountryFlag, Input } from '$lib/ui';
+  import { CountryFlag, EntityLogo, Input } from '$lib/ui';
   import SkillIcon from '../SkillIcon.svelte';
   import { pillClass, pillTitle } from './pill';
   import { must } from '$lib/utils';
@@ -23,6 +23,7 @@
     cap,
     searchAliases,
     techIcons = false,
+    entityLogos = false,
   }: {
     options: FacetOption[];
     include: string[];
@@ -48,6 +49,9 @@
     // Show a brand logo beside a pill's label, where SkillIcon has one for the
     // option's value — set only by the skills facet (see FacetDef.techIcons).
     techIcons?: boolean;
+    // Show the option's brand mark via EntityLogo (opt.icon, resolved through the
+    // logo proxy) — set only by the source facet (see FacetDef.entityLogos).
+    entityLogos?: boolean;
   } = $props();
 
   let filter = $state('');
@@ -91,7 +95,7 @@
         title={pillTitle(included, excluded, excludable)}
         class={pillClass(included || excluded, excluded, 'inline-flex max-w-full items-center gap-1.5 px-2.5 py-1 text-sm')}
       >
-        {#if opt.flag}<CountryFlag code={opt.flag} label={opt.label} class="text-base" />{:else if techIcons}<SkillIcon slug={opt.value} class="size-3.5 shrink-0" />{/if}
+        {#if opt.flag}<CountryFlag code={opt.flag} label={opt.label} class="text-base" />{:else if techIcons}<SkillIcon slug={opt.value} class="size-3.5 shrink-0" />{:else if entityLogos}<EntityLogo name={opt.label} src={opt.icon} shape="square" size="xs" class="shrink-0" />{/if}
         <!-- A very long value (roles like "Senior Business Development Representative")
              truncates to one line with an ellipsis instead of wrapping the pill onto
              two rows; the full label surfaces on hover via title. -->

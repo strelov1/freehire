@@ -29,6 +29,7 @@ import { COLLECTIONS } from './collections';
 import { TIMEZONE_REGIONS } from './talentFacetModel';
 import { backerBadges } from './backers';
 import { api } from './api';
+import { sourceLogoUrl } from './logo';
 
 export interface FacetOption {
   value: string;
@@ -122,6 +123,12 @@ export interface FacetDef {
    * coincidentally collide with a tech mark's key (a company named "Docker").
    */
   techIcons?: boolean;
+  /**
+   * Show the option's brand mark (via EntityLogo, resolved from its display label
+   * through the logo proxy) beside its label — set only by the source facet, whose
+   * values are ATS/aggregator names the proxy actually resolves.
+   */
+  entityLogos?: boolean;
 }
 
 // Resolve an ISO 3166-1 alpha-2 code to an English country name via platform Intl
@@ -277,6 +284,15 @@ export function reportedCount(n: number): number | undefined {
   return n < 0 ? undefined : n;
 }
 
+/** Brand-mark URL for a dynamic facet value, where the facet's values are entity
+ *  names the logo proxy can resolve — today only `source` (see EntityLogo /
+ *  sourceLogoUrl, the same pair /sources and JobSourceRow render their marks with).
+ *  Other dynamic facets (skills, countries, cities) have no logo proxy to ask. */
+function dynamicIcon(param: string, value: string): string | undefined {
+  if (param === 'source') return sourceLogoUrl(sourceLabel(value)) ?? undefined;
+  return undefined;
+}
+
 /** Build select options for a dynamic facet from its live distribution (value →
  *  count) plus any already-selected values (so a selection absent from the current
  *  distribution stays listed and removable), labelled via dynamicLabel and sorted
@@ -285,7 +301,12 @@ export function reportedCount(n: number): number | undefined {
 export function dynamicOptions(param: string, dist: Record<string, number>, selected: string[]): FacetOption[] {
   const keys = new Set<string>([...Object.keys(dist), ...selected]);
   return [...keys]
-    .map((value) => ({ value, label: dynamicLabel(param, value), count: reportedCount(dist[value] ?? 0) }))
+    .map((value) => ({
+      value,
+      label: dynamicLabel(param, value),
+      count: reportedCount(dist[value] ?? 0),
+      icon: dynamicIcon(param, value),
+    }))
     .sort((a, b) => (b.count ?? 0) - (a.count ?? 0) || a.label.localeCompare(b.label));
 }
 
@@ -681,5 +702,5 @@ export const FACETS: FacetDef[] = [
   { param: 'reality', label: 'Posting reality', control: 'pills', options: REALITY, excludable: true },
   { param: 'salary_currency', label: 'Currency', control: 'pills', options: CURRENCY, excludable: true },
   { param: 'company_slug', label: 'Company', control: 'remote', excludable: true, placeholder: 'Search companies', remote: companySearch },
-  { param: 'source', label: 'Source', control: 'select', dynamic: true, excludable: true, placeholder: 'Search sources' },
+  { param: 'source', label: 'Source', control: 'select', dynamic: true, excludable: true, placeholder: 'Search sources', entityLogos: true },
 ];
