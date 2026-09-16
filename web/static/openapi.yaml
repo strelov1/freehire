@@ -281,6 +281,148 @@ paths:
                 $ref: "#/components/schemas/JobListEnvelope"
         default:
           $ref: "#/components/responses/Error"
+  /ojcp/v1/search:
+    post:
+      operationId: ojcpSearchJobs
+      tags:
+        - Jobs
+      summary: "OJCP: search jobs"
+      description: |
+        The `search_jobs` tool of the [Open Job Context Protocol](https://spec.ojcp.dev/),
+        answered over REST. The same query the other search endpoints run, projected into
+        OJCP's own shapes — each result is a `JobPosting` carrying the paths it can be
+        applied through and whether an agent can submit unattended.
+
+        Discover this surface at `/.well-known/ojcp.json`. The same three tools are
+        served over MCP at `/api/v1/ojcp/mcp`, which is the transport most agents use.
+
+        A filter this provider cannot honour is named in `ignored_params` rather than
+        silently dropped: an answer that widened because a parameter was not understood
+        says so.
+      x-openai-isConsequential: false
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              description: |
+                An OJCP `search_jobs` input. Unrecognised fields are ignored rather than
+                refused, per the standard's extensibility rule.
+              properties:
+                query:
+                  type: string
+                location:
+                  type: object
+                  properties:
+                    city: { type: string }
+                    country: { type: string }
+                    remote_ok: { type: boolean }
+                filters:
+                  type: object
+                  properties:
+                    employment_type: { type: string }
+                    experience_level: { type: string }
+                    salary_min: { type: number }
+                    salary_max: { type: number }
+                    posted_within_days: { type: integer }
+                pagination:
+                  type: object
+                  properties:
+                    limit: { type: integer, maximum: 50, default: 10 }
+                    offset: { type: integer, default: 0 }
+      responses:
+        "200":
+          description: An OJCP search-jobs response.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ojcp_version, query, total_results, returned, offset, jobs]
+                properties:
+                  ojcp_version: { type: string }
+                  query: { type: string }
+                  total_results: { type: integer }
+                  returned: { type: integer }
+                  offset: { type: integer }
+                  jobs:
+                    type: array
+                    items:
+                      type: object
+                      description: An OJCP JobPosting.
+                  ignored_params:
+                    type: array
+                    description: Input fields this provider could not honour.
+                    items: { type: string }
+        default:
+          $ref: "#/components/responses/Error"
+  /ojcp/v1/jobs/{slug}:
+    get:
+      operationId: ojcpJobDetail
+      tags:
+        - Jobs
+      summary: "OJCP: read one posting"
+      description: |
+        The `get_job_detail` tool, by the `ojcp_id` a search result carries.
+      x-openai-isConsequential: false
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+          description: The posting's ojcp_id (its public_slug).
+      responses:
+        "200":
+          description: An OJCP job-detail response.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ojcp_version, job]
+                properties:
+                  ojcp_version: { type: string }
+                  job:
+                    type: object
+                    description: An OJCP JobPosting.
+        default:
+          $ref: "#/components/responses/Error"
+  /ojcp/v1/employers/{slug}:
+    get:
+      operationId: ojcpEmployerContext
+      tags:
+        - Companies
+      summary: "OJCP: read an employer"
+      description: |
+        The `get_employer_context` tool, by the `ojcp_employer_id` a posting carries.
+        Includes `open_roles_count`, the one figure a single posting cannot state.
+      x-openai-isConsequential: false
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+          description: The employer's ojcp_employer_id (its company slug).
+      responses:
+        "200":
+          description: An OJCP employer-context response.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ojcp_version, employer_id, name]
+                properties:
+                  ojcp_version: { type: string }
+                  employer_id: { type: string }
+                  name: { type: string }
+                  description: { type: string }
+                  industries:
+                    type: array
+                    items: { type: string }
+                  open_roles_count: { type: integer }
+        default:
+          $ref: "#/components/responses/Error"
   /jobs/facets:
     get:
       operationId: getJobFacets

@@ -70,44 +70,47 @@
 - [x] 3.4 `get_employer_context`: `EmployerContextFrom` projects a company, keyed by the
       same slug a posting publishes as `ojcp_employer_id`, and carries `open_roles_count` —
       the one figure an agent cannot derive from a single posting.
-- [ ] 3.5 Assert the visibility predicate is the shared one — a test that a private posting
+- [x] 3.5 Assert the visibility predicate is the shared one — a test that a private posting
       and a suppressed duplicate are unreachable through every tool.
 
 ## 4. REST transport
 
-- [ ] 4.1 Add `/ojcp/v1/*` routes wiring each tool to its handler, loading data the way the
+- [x] 4.1 Add `/ojcp/v1/*` routes wiring each tool to its handler, loading data the way the
       existing handlers do.
-- [ ] 4.2 Render errors as the OJCP error envelope with the matching HTTP status.
-- [ ] 4.3 Ignore unrecognised input fields rather than rejecting the call.
-- [ ] 4.4 Integration test (build tag `integration`) covering all three tools end to end.
+- [x] 4.2 Render errors as the OJCP error envelope with the matching HTTP status.
+- [x] 4.3 Ignore unrecognised input fields rather than rejecting the call.
+- [x] 4.4 Handler tests covering all three tools end to end, plus the two failure paths an
+      agent must tell apart (unknown id, search unavailable). They run under the ordinary
+      `go test` rather than the `integration` tag: the transport's dependencies are both
+      ports (a searcher and a store), so a real database would prove nothing more.
 
 ## 5. MCP transport
 
-- [ ] 5.1 Add the official Go MCP SDK to `go.mod`, stand up a server in
+- [x] 5.1 Add the official Go MCP SDK to `go.mod`, stand up a server in
       `internal/api/ojcpmcp` registering the three tools against the same implementations,
       and register that package in `internal/platform/arch/layering/blocks.go`.
-- [ ] 5.2 Mount it into Fiber via `adaptor.HTTPHandler` at the path the manifest declares.
-- [ ] 5.3 Render errors as JSON-RPC errors carrying the OJCP envelope in `data`.
-- [ ] 5.4 Test that the same call over both transports yields an identical projected payload.
+- [x] 5.2 Mount it into Fiber via `adaptor.HTTPHandler` at the path the manifest declares.
+- [x] 5.3 Render errors as JSON-RPC errors carrying the OJCP envelope in `data`.
+- [x] 5.4 Test that the same call over both transports yields an identical projected payload.
 
 ## 6. Manifest
 
-- [ ] 6.1 Render the manifest from deployment configuration — provider block, `tools`,
+- [x] 6.1 Render the manifest from deployment configuration — provider block, `tools`,
       `feed_endpoints`, `mcp_endpoint`, `auth`, `rate_limits` — and serve it at
       `/.well-known/ojcp.json` with `Content-Type: application/json`.
-- [ ] 6.2 Test that every name in `tools` resolves to a registered handler on both transports,
+- [x] 6.2 Test that every name in `tools` resolves to a registered handler on both transports,
       so the manifest cannot advertise a tool we do not answer.
-- [ ] 6.3 Test that the declared `rate_limits` are read from the same configuration the
+- [x] 6.3 Test that the declared `rate_limits` are read from the same configuration the
       limiter enforces, so the two cannot disagree.
-- [ ] 6.4 Validate the rendered manifest against the vendored manifest schema.
+- [x] 6.4 Validate the rendered manifest against the vendored manifest schema.
 
 ## 7. Documentation and rollout
 
-- [ ] 7.1 Document the REST tools in `web/static/openapi.yaml` (the `artifacts` CI job
+- [x] 7.1 Document the REST tools in `web/static/openapi.yaml` (the `artifacts` CI job
       validates it).
-- [ ] 7.2 Write `internal/api/ojcp/AGENTS.md`: what the package is, the pure-projection rule,
+- [x] 7.2 Write `internal/api/ojcp/AGENTS.md`: what the package is, the pure-projection rule,
       why `supports_agent_submission` is derived, and where the schemas came from.
-- [ ] 7.3 Add the OJCP surface to the root `CLAUDE.md` module table.
+- [x] 7.3 Add the OJCP surface to the root `CLAUDE.md` module table.
 - [ ] 7.4 After deploy: run OJCP's conformance suite against the live origin and record what
       it reports.
 - [ ] 7.5 After a clean conformance run: open the `ADOPTERS.md` PR (tier: Implementing) and
