@@ -11,10 +11,13 @@ already have gone out.
 ### Requirement: An early submit signal stops the fill loop
 
 While filling an application form's fields in order, the system SHALL check, after
-each text-entry field, whether the form's own submit control is still present on the
-page. When it is no longer present, the system SHALL treat the application as possibly
-already submitted: it SHALL NOT fill any remaining field, and it SHALL NOT click submit
-itself.
+each text-entry field, whether the form's own submit control is still present,
+enabled, and visible on the page. When it is no longer present, or is present but
+disabled or hidden, the system SHALL treat the application as possibly already
+submitted: it SHALL NOT fill any remaining field, and it SHALL NOT click submit
+itself. A control that has been left mounted but disabled or hidden by a same-page
+submission is treated the same as one removed outright — neither is usable to click
+again.
 
 #### Scenario: The submit control disappears after a text field is filled
 
@@ -23,10 +26,17 @@ itself.
 - **THEN** the system stops filling the remaining fields
 - **AND** the system does not click the submit control itself
 
-#### Scenario: The submit control is still present after a text field is filled
+#### Scenario: The submit control is left disabled or hidden after a text field is filled
 
 - **WHEN** the submit control is still present on the page immediately after a
-  text-entry field was filled
+  text-entry field was filled, but is disabled or hidden
+- **THEN** the system stops filling the remaining fields
+- **AND** the system does not click the submit control itself
+
+#### Scenario: The submit control is still present, enabled, and visible after a text field is filled
+
+- **WHEN** the submit control is still present, enabled, and visible on the page
+  immediately after a text-entry field was filled
 - **THEN** the system continues filling the remaining fields exactly as it would
   without this check
 

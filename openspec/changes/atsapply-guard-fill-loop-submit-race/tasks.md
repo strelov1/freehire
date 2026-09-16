@@ -13,9 +13,12 @@
 ## 2. Live submit-control presence check
 
 - [x] 2.1 Add `formStillPresent(ctx context.Context, submitSelector string) bool` to
-      `fill.go`, structured like `challengeVisible` (a `chromedp.Evaluate` of
-      `document.querySelector(sel) !== null`), but defaulting to `false` ("gone") on an
-      `Evaluate` error — document the reasoning inline (an error here is itself likely
+      `fill.go`, structured like `challengeVisible` (a `chromedp.Evaluate` checking the
+      selector resolves to an element that is present, not `disabled`, and not hidden via
+      `display: none` / `visibility: hidden` — widened from a bare
+      `document.querySelector(sel) !== null` after code review found a same-page async
+      submit can leave the control mounted but unusable), defaulting to `false` ("gone") on
+      an `Evaluate` error — document the reasoning inline (an error here is itself likely
       evidence of a destroyed execution context, i.e. a navigation), per design.md's
       "Error default" decision. No unit test for this function itself, matching
       `challengeVisible`'s existing precedent — note that explicitly in its doc comment.

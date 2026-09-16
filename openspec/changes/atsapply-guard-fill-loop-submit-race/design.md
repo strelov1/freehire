@@ -105,6 +105,21 @@ an operator investigating a specific job a concrete signal to grep for.
   the same shape of trade the package already makes everywhere else in `fill.go`
   (`pollEndedByDeadline`, `verifySubmission`'s own timeout): an occasional lost attempt
   costs a retry-by-the-candidate; a missed early-submit risks a real duplicate application.
+- **[Risk]** `formStillPresent` runs once, immediately after `fillOne` returns from sending
+  the field's `Enter` keystroke — but the browser may not have started processing a
+  triggered submission (an async `fetch`/XHR handler, client-side validation) by that exact
+  moment, so the check can read "still present, enabled, visible" a beat before the page
+  actually changes. → **Mitigation**: not addressed here, deliberately. Unlike the
+  `Evaluate`-error case above, there is no correctness-preserving fix available without a
+  guess: a fixed settle delay before checking is exactly the kind of unverified magic number
+  `AGENTS.md` already warns against for this file ("a targeted fix needs live verification
+  against a real board, not a guess"), and this package's own convention is to not add one
+  speculatively. The residual case this leaves — the loop takes one more field's worth of
+  action before a delayed real submission actually manifests — does not regress past this
+  PR's baseline: that next `fillOne` call then fails against a page that has moved on,
+  which is the SAME plain, ordinary error this whole class of risk produced before this
+  change existed (see proposal.md's Why). This PR narrows how often that ordinary-error path
+  is reached; it was never scoped to close it to zero (see the Non-Goals above).
 - **[Risk]** One extra `chromedp.Evaluate` round-trip per `text`/`textarea` field lengthens
   every ordinary fill slightly. → **Mitigation**: negligible against the existing 5s
   `fillTimeout` per field; no live measurement has shown fill-loop duration as a bottleneck.
