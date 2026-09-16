@@ -1,4 +1,5 @@
 import { render } from '@testing-library/svelte';
+import { flushSync } from 'svelte';
 import { describe, expect, it, vi } from 'vitest';
 import { House } from '@lucide/svelte';
 import TabStrip, { tabStripId } from './tab-strip.svelte';
@@ -215,6 +216,35 @@ describe('TabStrip', () => {
       expect(observed).toContain(newTab);
     } finally {
       globalThis.ResizeObserver = originalRO;
+    }
+  });
+
+  // The strip is not sticky, so a page scroll carries a tab's boundary past a pointer
+  // that never moved — a real hover enter/leave the reader did nothing to cause. Without
+  // this guard `transition-colors` turns every one of those into a visible fade, and a
+  // scroll gesture fires a rapid string of them. The guard doesn't touch the hover
+  // affordance itself, only whether the color change animates while a scroll is in flight.
+  it('drops the hover color transition while the page is scrolling, and restores it once it settles', () => {
+    vi.useFakeTimers();
+    try {
+      const { tabs } = setup('one');
+
+      expect(tabs[1]?.className).toContain('transition-colors');
+      expect(tabs[1]?.className).not.toContain('transition-none');
+
+      window.dispatchEvent(new Event('scroll'));
+      flushSync();
+
+      expect(tabs[1]?.className).toContain('transition-none');
+      expect(tabs[1]?.className).not.toContain('transition-colors');
+
+      vi.advanceTimersByTime(150);
+      flushSync();
+
+      expect(tabs[1]?.className).toContain('transition-colors');
+      expect(tabs[1]?.className).not.toContain('transition-none');
+    } finally {
+      vi.useRealTimers();
     }
   });
 });

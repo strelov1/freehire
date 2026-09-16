@@ -56,6 +56,31 @@
   let buttons = $state<(HTMLElement | null)[]>([]);
   const activeIndex = $derived(tabs.findIndex((t) => t.id === active));
 
+  // The strip sits in normal document flow, not sticky — so a page scroll carries it (and
+  // its tabs) past a pointer that never moved. Each tab or gap that crosses the pointer as
+  // a result fires a real, browser-native hover enter/leave, and `transition-colors` below
+  // turns every one of those into a visible fade. Over a scroll gesture that's a rapid
+  // string of fades with no pointer motion behind any of them, which reads as the row
+  // shimmering. The fix is not to drop the hover affordance (still correct once the page is
+  // still) — it's to make the color change land instantly while a scroll is in flight, so a
+  // hover neither of us asked for doesn't animate.
+  let scrolling = $state(false);
+  let scrollSettleTimer: ReturnType<typeof setTimeout> | undefined;
+  $effect(() => {
+    function onScroll() {
+      scrolling = true;
+      clearTimeout(scrollSettleTimer);
+      scrollSettleTimer = setTimeout(() => {
+        scrolling = false;
+      }, 150);
+    }
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => {
+      window.removeEventListener('scroll', onScroll);
+      clearTimeout(scrollSettleTimer);
+    };
+  });
+
   // Whether either end is out of view. Measured rather than assumed: an unconditional fade
   // would paint a phantom edge-shadow on a row that already fits.
   let atStart = $state(true);
@@ -170,7 +195,8 @@
   >
     {#each tabs as t, i (t.id)}
       {@const cls = cn(
-        '-mb-px flex shrink-0 items-center gap-1.5 whitespace-nowrap border-b-2 px-1 pb-2.5 text-sm font-medium transition-colors',
+        '-mb-px flex shrink-0 items-center gap-1.5 whitespace-nowrap border-b-2 px-1 pb-2.5 text-sm font-medium',
+        scrolling ? 'transition-none' : 'transition-colors',
         t.id === active
           ? 'border-brand text-foreground'
           : 'border-transparent text-muted-foreground hover:text-foreground',
