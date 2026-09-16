@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ojcp.dev/schemas/v0.1/responses/employer-context.json",
+  "title": "OJCP get_employer_context Response",
+  "description": "Response schema for the get_employer_context tool.",
+  "type": "object",
+  "required": ["ojcp_version", "employer_id", "name"],
+  "properties": {
+    "ojcp_version": {
+      "type": "string",
+      "enum": ["0.1"],
+      "description": "The OJCP specification version."
+    },
+    "employer_id": {
+      "type": "string",
+      "description": "The OJCP employer identifier."
+    },
+    "name": {
+      "type": "string",
+      "description": "Employer name."
+    },
+    "description": {
+      "type": "string",
+      "description": "Brief description of the employer."
+    },
+    "culture_context": {
+      "type": "string",
+      "description": "Free-text description of company culture."
+    },
+    "industries": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Industries the employer operates in."
+    },
+    "hq_location": {
+      "type": "object",
+      "properties": {
+        "city": { "type": "string" },
+        "state": { "type": "string" },
+        "country": { "type": "string" }
+      }
+    },
+    "benefits": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Notable benefits offered."
+    },
+    "hiring_process": {
+      "type": "string",
+      "description": "Description of the typical hiring process and timeline."
+    },
+    "open_roles_count": {
+      "type": "integer",
+      "description": "Number of currently open roles at this employer."
+    }
+  }
+}

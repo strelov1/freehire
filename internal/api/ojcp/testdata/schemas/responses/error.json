@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ojcp.dev/schemas/v0.1/responses/error.json",
+  "title": "OJCP Error Response",
+  "description": "Standard error response envelope returned by all OJCP tools when a request fails.",
+  "type": "object",
+  "required": ["ojcp_version", "error_code", "message"],
+  "properties": {
+    "ojcp_version": {
+      "type": "string",
+      "enum": ["0.1"],
+      "description": "The OJCP specification version."
+    },
+    "error_code": {
+      "type": "string",
+      "enum": [
+        "invalid_request",
+        "missing_required_field",
+        "invalid_field_value",
+        "job_not_found",
+        "employer_not_found",
+        "application_not_found",
+        "invalid_session_token",
+        "session_expired",
+        "no_agent_apply_path",
+        "rate_limited",
+        "unauthorized",
+        "forbidden",
+        "provider_error",
+        "agent_signature_missing",
+        "agent_signature_invalid",
+        "agent_key_not_found",
+        "agent_digest_mismatch",
+        "agent_algorithm_unsupported",
+        "agent_signature_expired",
+        "agent_nonce_replayed",
+        "agent_identity_mismatch"
+      ],
+      "description": "Machine-readable error code. Agent identity errors (agent_*) are defined by the Agent Identity section. Verification-specific errors use the verification_errors array in submit_application responses."
+    },
+    "message": {
+      "type": "string",
+      "description": "Human-readable error message suitable for agent logging or display to the user."
+    },
+    "retry_after_seconds": {
+      "type": "integer",
+      "description": "Seconds to wait before retrying. REQUIRED when error_code is 'rate_limited'."
+    },
+    "details": {
+      "type": "object",
+      "description": "Additional error context. Shape varies by error_code.",
+      "additionalProperties": true
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "required": ["error_code"],
+        "properties": { "error_code": { "const": "rate_limited" } }
+      },
+      "then": {
+        "required": ["retry_after_seconds"]
+      }
+    }
+  ]
+}

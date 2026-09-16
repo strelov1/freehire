@@ -1,0 +1,101 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ojcp.dev/schemas/v0.1/responses/search-jobs.json",
+  "title": "OJCP search_jobs Response",
+  "description": "Response schema for the search_jobs tool.",
+  "type": "object",
+  "required": ["ojcp_version", "query", "total_results", "returned", "offset", "jobs"],
+  "properties": {
+    "ojcp_version": {
+      "type": "string",
+      "enum": ["0.1"],
+      "description": "The OJCP specification version."
+    },
+    "query": {
+      "type": "string",
+      "description": "The original search query, echoed back."
+    },
+    "total_results": {
+      "type": "integer",
+      "description": "Total number of matching jobs."
+    },
+    "returned": {
+      "type": "integer",
+      "description": "Number of jobs returned in this response."
+    },
+    "offset": {
+      "type": "integer",
+      "description": "Pagination offset of the first result."
+    },
+    "jobs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["ojcp_id", "title", "employer", "datePosted"],
+        "properties": {
+          "ojcp_id": { "type": "string" },
+          "title": { "type": "string" },
+          "employer": {
+            "type": "object",
+            "required": ["name"],
+            "properties": {
+              "name": { "type": "string" },
+              "ojcp_employer_id": { "type": "string" }
+            }
+          },
+          "datePosted": { "type": "string", "format": "date" },
+          "employmentType": { "type": "string" },
+          "jobLocation": {
+            "type": "object",
+            "properties": {
+              "address": {
+                "type": "object",
+                "properties": {
+                  "addressLocality": { "type": "string" },
+                  "addressRegion": { "type": "string" },
+                  "addressCountry": { "type": "string" }
+                }
+              }
+            }
+          },
+          "baseSalary": {
+            "type": "object",
+            "properties": {
+              "currency": { "type": "string" },
+              "minValue": { "type": "number" },
+              "maxValue": { "type": "number" },
+              "unitText": { "type": "string" }
+            }
+          },
+          "skills_required": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "urgency": { "type": "string" },
+          "apply_paths": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["type", "supports_agent_submission"],
+              "properties": {
+                "type": { "type": "string" },
+                "supports_agent_submission": { "type": "boolean" }
+              }
+            }
+          },
+          "fit_score": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "description": "Personalized fit score (0.0–1.0). Present only when candidate_context was provided."
+          },
+          "fit_rationale": {
+            "type": "string",
+            "description": "Human-readable explanation of the fit score. Present only when candidate_context was provided."
+          }
+        }
+      },
+      "description": "Array of matching job summaries, ranked by relevance."
+    }
+  }
+}

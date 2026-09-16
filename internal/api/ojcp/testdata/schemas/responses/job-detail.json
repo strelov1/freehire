@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ojcp.dev/schemas/v0.1/responses/job-detail.json",
+  "title": "OJCP get_job_detail Response",
+  "description": "Response schema for the get_job_detail tool. Returns a full OJCP JobPosting.",
+  "type": "object",
+  "required": ["ojcp_version", "job"],
+  "properties": {
+    "ojcp_version": {
+      "type": "string",
+      "enum": ["0.1"],
+      "description": "The OJCP specification version."
+    },
+    "job": {
+      "$ref": "https://ojcp.dev/schemas/v0.1/job-posting.json",
+      "description": "The full JobPosting object."
+    },
+    "employer_context": {
+      "type": "object",
+      "description": "Employer context, included when include_employer_context is true.",
+      "properties": {
+        "name": { "type": "string" },
+        "ojcp_employer_id": { "type": "string" },
+        "description": { "type": "string" },
+        "culture_context": { "type": "string" },
+        "industries": { "type": "array", "items": { "type": "string" } },
+        "hq_location": {
+          "type": "object",
+          "properties": {
+            "city": { "type": "string" },
+            "state": { "type": "string" },
+            "country": { "type": "string" }
+          }
+        }
+      }
+    },
+    "fit_score": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1,
+      "description": "Personalized fit score. Present only when candidate_context was provided."
+    },
+    "fit_rationale": {
+      "type": "string",
+      "description": "Explanation of the fit score. Present only when candidate_context was provided."
+    }
+  }
+}

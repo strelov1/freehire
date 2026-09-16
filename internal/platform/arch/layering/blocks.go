@@ -250,7 +250,11 @@ var blocks = map[string][]string{
 	// assembler), so it keeps handler's own reach; atsapply is cmd/auto-apply's
 	// counterpart to handler — the orchestration layer a cron entrypoint composes
 	// ingest+candidate+ai through, the same role handler plays for an HTTP request.
-	"api": {"atsapply", "candidateprofile", "handler", "ogimage", "ratelimit", "realtime"},
+	// ojcp is the projection into the Open Job Context Protocol's wire shapes. It sits in
+	// api rather than in job beside jobview because it is a foreign schema's rendering of
+	// our catalogue, not a shape the catalogue itself owns — and because it reads job,
+	// ingest (the captured apply form) and search together, which only api may do.
+	"api": {"atsapply", "candidateprofile", "handler", "ogimage", "ojcp", "ratelimit", "realtime"},
 }
 
 // Assignment is the flattened package → block view the move script drives from.

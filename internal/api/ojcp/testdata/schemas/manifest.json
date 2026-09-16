@@ -1,0 +1,263 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ojcp.dev/schemas/v0.1/manifest.json",
+  "title": "OJCP Manifest",
+  "description": "Schema for the /.well-known/ojcp.json manifest file that declares an OJCP-compliant provider's capabilities.",
+  "type": "object",
+  "required": ["ojcp_version", "provider", "tools"],
+  "properties": {
+    "ojcp_version": {
+      "type": "string",
+      "description": "The OJCP specification version this manifest conforms to.",
+      "enum": ["0.1"]
+    },
+    "provider": {
+      "type": "object",
+      "description": "Information about the job context provider.",
+      "required": ["name"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Human-readable name of the provider."
+        },
+        "employer_id": {
+          "type": "string",
+          "description": "Unique identifier for the employer or job board."
+        },
+        "logo_url": {
+          "type": "string",
+          "format": "uri",
+          "description": "URL to the provider's logo."
+        },
+        "description": {
+          "type": "string",
+          "description": "Brief description of the provider, suitable for agent context."
+        },
+        "culture_context": {
+          "type": "string",
+          "description": "Free-text description of company culture, useful for agent fit-scoring."
+        },
+        "industries": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Industries the provider operates in."
+        },
+        "hq_location": {
+          "type": "object",
+          "properties": {
+            "city": { "type": "string" },
+            "state": { "type": "string" },
+            "country": { "type": "string" }
+          }
+        }
+      }
+    },
+    "feed_endpoints": {
+      "type": "object",
+      "description": "REST API endpoints for job data access.",
+      "properties": {
+        "search": {
+          "type": "string",
+          "format": "uri",
+          "description": "Endpoint for job search queries."
+        },
+        "detail": {
+          "type": "string",
+          "format": "uri-template",
+          "description": "Endpoint template for fetching individual job details."
+        },
+        "apply_init": {
+          "type": "string",
+          "format": "uri",
+          "description": "Endpoint for initiating an application."
+        }
+      }
+    },
+    "mcp_endpoint": {
+      "type": "string",
+      "format": "uri",
+      "description": "MCP-compatible endpoint for tool invocation."
+    },
+    "tools": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "description": "Standard tool names: search_jobs, get_job_detail, get_employer_context, begin_application, submit_application, check_application_status. Custom tools use namespaced names (e.g., acme:get_referral_link)."
+      },
+      "description": "List of OJCP tools supported by this provider. Includes standard tools and optionally provider-specific custom tools."
+    },
+    "apply_paths": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "ats_direct",
+          "provider_hosted",
+          "platform_native",
+          "email",
+          "external_redirect",
+          "custom"
+        ]
+      },
+      "description": "Application mechanisms supported by this provider."
+    },
+    "auth": {
+      "type": "object",
+      "description": "Authentication requirements for accessing this provider's tools.",
+      "properties": {
+        "required": {
+          "type": "boolean",
+          "description": "Whether authentication is required to call any tools."
+        },
+        "optional_scopes": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Optional OAuth-style scopes that unlock additional capabilities."
+        },
+        "agent_signatures": {
+          "type": "object",
+          "description": "Declares support for verifiable agent identity via RFC 9421 HTTP Message Signatures (see the Agent Identity section).",
+          "properties": {
+            "supported": {
+              "type": "boolean",
+              "description": "Whether the provider verifies RFC 9421 agent request signatures."
+            },
+            "algorithms": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": ["ed25519", "ecdsa-p256-sha256", "ecdsa-p384-sha384", "rsa-pss-sha512"]
+              },
+              "description": "Accepted RFC 9421 signature algorithm labels. 'ed25519' is RECOMMENDED."
+            },
+            "required_for": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": ["begin_application", "submit_application", "application_prefill", "full_profile", "restricted_feed"]
+              },
+              "description": "Context tokens where a verified agent identity is mandatory. See the Agent Identity section for how each token matches an incoming request."
+            }
+          }
+        }
+      }
+    },
+    "rate_limits": {
+      "type": "object",
+      "description": "Rate limiting policy for this provider. Providers MUST enforce these limits and return HTTP 429 (REST) or JSON-RPC error -32029 (MCP) when exceeded.",
+      "properties": {
+        "anonymous_rps": {
+          "type": "number",
+          "description": "Maximum requests per second for unauthenticated clients."
+        },
+        "authenticated_rps": {
+          "type": "number",
+          "description": "Maximum requests per second for authenticated clients."
+        },
+        "burst_limit": {
+          "type": "integer",
+          "description": "Maximum number of concurrent requests allowed before throttling."
+        }
+      }
+    },
+    "resume_upload": {
+      "type": "object",
+      "description": "Optional resume upload endpoint. When declared, agents with local resume files can POST them to obtain a hosted resume_url for use in submit_application. Subject to the manifest's rate_limits and upload-specific caps. See spec § Resume Upload.",
+      "required": ["endpoint"],
+      "properties": {
+        "endpoint": {
+          "type": "string",
+          "format": "uri",
+          "description": "HTTPS URL accepting multipart/form-data POST with a 'resume' field. Requires session_token from begin_application as bearer auth."
+        },
+        "max_size_mb": {
+          "type": "integer",
+          "description": "Maximum upload size in megabytes. RECOMMENDED 10.",
+          "default": 10
+        },
+        "max_uploads_per_session": {
+          "type": "integer",
+          "description": "Maximum number of uploads allowed per begin_application session. RECOMMENDED 5.",
+          "default": 5
+        },
+        "accepted_mime_types": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "MIME types accepted by the upload endpoint. Providers MUST validate by file content, not just the client-supplied Content-Type header.",
+          "default": [
+            "application/pdf",
+            "application/msword",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+          ]
+        }
+      }
+    },
+    "signature": {
+      "type": "object",
+      "description": "Optional cryptographic signature over the manifest content. When present, agents MUST validate the signature before trusting application_data submissions to this provider. The signature is computed over the manifest with the 'signature' field excluded. See spec § Provider Trust.",
+      "required": ["alg", "kid", "signed_at", "expires_at", "value"],
+      "properties": {
+        "alg": {
+          "type": "string",
+          "enum": ["ES256", "RS256", "ES384", "RS384"],
+          "description": "Signing algorithm. ES256 RECOMMENDED."
+        },
+        "kid": {
+          "type": "string",
+          "description": "Key identifier matching a key in the provider's JWK Set at /.well-known/ojcp-keys.json."
+        },
+        "signed_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp when the signature was created."
+        },
+        "expires_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp when the signature expires. RECOMMENDED 24 hours from signed_at."
+        },
+        "iss": {
+          "type": "string",
+          "description": "The provider domain or identifier this signature attests. Agents MUST verify this matches the domain serving the manifest."
+        },
+        "value": {
+          "type": "string",
+          "description": "Base64url-encoded signature bytes."
+        }
+      }
+    },
+    "supported_verifiers": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["verifier_id"],
+        "properties": {
+          "verifier_id": {
+            "type": "string",
+            "description": "Verifier identifier (e.g., 'id.me', 'clear')."
+          },
+          "verifier_name": {
+            "type": "string",
+            "description": "Human-readable verifier name."
+          },
+          "verifier_manifest_url": {
+            "type": "string",
+            "format": "uri",
+            "description": "URL to the verifier's /.well-known/ojcp-verifier.json manifest."
+          },
+          "verification_types": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Types of verification this verifier supports."
+          },
+          "required_for_paths": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Apply path types that require this verifier."
+          }
+        }
+      },
+      "description": "Identity verification providers accepted by this OJCP provider."
+    }
+  }
+}

@@ -1,0 +1,230 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ojcp.dev/schemas/v0.1/job-posting.json",
+  "title": "OJCP JobPosting",
+  "description": "Schema for an OJCP job posting. Extends schema.org/JobPosting with agent-specific fields.",
+  "type": "object",
+  "required": ["ojcp_id", "title", "employer", "datePosted"],
+  "properties": {
+    "@context": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "JSON-LD context references."
+    },
+    "@type": {
+      "type": "string",
+      "const": "JobPosting"
+    },
+    "ojcp_id": {
+      "type": "string",
+      "description": "Unique OJCP identifier for this job posting. RECOMMENDED format: {provider_domain}:{internal_id} (e.g., careers.acme.com:swe-42091)."
+    },
+    "title": {
+      "type": "string",
+      "description": "Job title."
+    },
+    "employer": {
+      "type": "object",
+      "required": ["name"],
+      "properties": {
+        "@type": {
+          "type": "string",
+          "const": "Organization"
+        },
+        "name": {
+          "type": "string",
+          "description": "Employer name."
+        },
+        "ojcp_employer_id": {
+          "type": "string",
+          "description": "OJCP identifier for the employer."
+        }
+      }
+    },
+    "datePosted": {
+      "type": "string",
+      "format": "date",
+      "description": "Date the job was posted (ISO 8601)."
+    },
+    "validThrough": {
+      "type": "string",
+      "format": "date",
+      "description": "Date the posting expires (ISO 8601)."
+    },
+    "url": {
+      "type": "string",
+      "format": "uri",
+      "description": "A general web URL for the job posting. May point to third-party boards or aggregators."
+    },
+    "official_job_url": {
+      "type": "string",
+      "format": "uri",
+      "description": "The canonical public web URL of the job description page on the employer's official careers site or ATS. Serves as a candidate-facing trust and verification anchor: agents SHOULD verify that its registrable domain matches the provider's verified domain (see Provider Trust / .well-known/ojcp-keys.json)."
+    },
+    "employmentType": {
+      "type": "string",
+      "description": "Type of employment. Standard values: full_time, part_time, contract, internship, temporary. Providers MAY use additional values (e.g., freelance, volunteer, apprenticeship). Note: schema.org uses UPPERCASE — OJCP normalizes to lowercase."
+    },
+    "experienceLevel": {
+      "type": "string",
+      "description": "Required experience level. Standard values: entry, mid, senior, lead, director, executive. Providers MAY use additional values."
+    },
+    "jobLocation": {
+      "type": "object",
+      "properties": {
+        "@type": {
+          "type": "string",
+          "const": "Place"
+        },
+        "address": {
+          "type": "object",
+          "properties": {
+            "addressLocality": { "type": "string" },
+            "addressRegion": { "type": "string" },
+            "addressCountry": { "type": "string" }
+          }
+        }
+      }
+    },
+    "baseSalary": {
+      "type": "object",
+      "properties": {
+        "@type": {
+          "type": "string",
+          "const": "MonetaryAmountDistribution"
+        },
+        "currency": {
+          "type": "string",
+          "description": "ISO 4217 currency code."
+        },
+        "minValue": {
+          "type": "number",
+          "description": "Minimum salary value."
+        },
+        "maxValue": {
+          "type": "number",
+          "description": "Maximum salary value."
+        },
+        "unitText": {
+          "type": "string",
+          "enum": ["HOUR", "WEEK", "MONTH", "YEAR"],
+          "description": "Pay period."
+        }
+      }
+    },
+    "description": {
+      "type": "string",
+      "description": "Full job description text."
+    },
+    "skills_required": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Skills required for the role."
+    },
+    "skills_preferred": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Skills that are preferred but not required."
+    },
+    "team_context": {
+      "type": "string",
+      "description": "Description of the team, reporting structure, and working environment."
+    },
+    "urgency": {
+      "type": "string",
+      "enum": ["low", "moderate", "high", "critical"],
+      "description": "How urgently the employer is looking to fill this role."
+    },
+    "application_volume_signal": {
+      "type": "string",
+      "enum": ["low", "moderate", "high", "very_high"],
+      "description": "Relative volume of applications already received."
+    },
+    "apply_paths": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/ApplyPath"
+      },
+      "description": "Available application mechanisms for this job."
+    },
+    "requisition_id": {
+      "type": "string",
+      "description": "Internal requisition or job ID used by the employer's ATS."
+    },
+    "department": {
+      "type": "string",
+      "description": "Department or business unit for this role."
+    },
+    "hiring_manager": {
+      "type": "string",
+      "description": "Name of the hiring manager."
+    },
+    "remote_policy": {
+      "type": "string",
+      "enum": ["on_site", "hybrid", "remote", "flexible"],
+      "description": "Remote work policy for this role."
+    },
+    "agent_notes": {
+      "type": "string",
+      "description": "Free-text notes intended for agent consumption (e.g., recruiter info, timeline hints)."
+    }
+  },
+  "$defs": {
+    "ApplyPath": {
+      "type": "object",
+      "required": ["type", "supports_agent_submission"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["ats_direct", "provider_hosted", "platform_native", "email", "external_redirect", "custom"],
+          "description": "The application mechanism type."
+        },
+        "product_name": {
+          "type": "string",
+          "description": "Optional vendor product name for this apply path (e.g., 'Indeed Apply', 'Easy Apply'). Informational only."
+        },
+        "url": {
+          "type": "string",
+          "format": "uri",
+          "description": "URL for the application entry point."
+        },
+        "ats_provider": {
+          "type": "string",
+          "description": "Name of the ATS provider (e.g., Workday, Greenhouse, Lever)."
+        },
+        "estimated_completion_minutes": {
+          "type": "integer",
+          "description": "Estimated time to complete the application in minutes."
+        },
+        "required_fields": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Fields required to submit the application."
+        },
+        "optional_fields": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Optional fields that can strengthen the application."
+        },
+        "supports_agent_submission": {
+          "type": "boolean",
+          "description": "Whether this apply path supports fully autonomous agent submission."
+        },
+        "form_skill_url": {
+          "type": "string",
+          "format": "uri",
+          "description": "URL to a form skill descriptor that teaches agents how to fill out this apply path's form — field mappings, validation rules, conditional logic, and submission instructions."
+        },
+        "requires_verification": {
+          "type": "boolean",
+          "description": "Whether identity verification is required before the application can be submitted via this path."
+        },
+        "accepted_verifiers": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Identity verifier identifiers accepted for this apply path (e.g., 'id.me', 'clear'). If omitted when requires_verification is true, the provider accepts any verifier listed in the manifest's supported_verifiers."
+        }
+      }
+    }
+  }
+}
