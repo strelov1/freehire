@@ -226,8 +226,12 @@ async function attachTailoredCV(jobSlug: string): Promise<RuntimeMessage> {
   const tabId = await activeTabId();
   if (tabId == null) return fail('no active tab to attach the file to');
 
-  const { uploads } = await readFramedUploadsOnly();
-  const pick = pickAttachableUpload(uploads);
+  // Independent of each other — reading the page's frames and fetching the tailored CV
+  // metadata share nothing, so there is no reason to pay their latency one after another.
+  const [formReply, cv] = await Promise.all([readFramedForm(), getTailoredCVForJob(jobSlug, token)]);
+  if (formReply.kind !== 'FRAMED_FORM') return fail('could not read this page to find the upload field');
+
+  const pick = pickAttachableUpload(formReply.uploads);
   switch (pick.kind) {
     case 'none':
       return fail('no file upload field found on this page');
@@ -240,7 +244,6 @@ async function attachTailoredCV(jobSlug: string): Promise<RuntimeMessage> {
   }
   const upload = pick.upload;
 
-  const cv = await getTailoredCVForJob(jobSlug, token);
   if (!cv) return fail('no tailored CV found for this job');
 
   const pdfBytes = await getCVPdfBytes(cv.id, token);
@@ -279,15 +282,4 @@ async function attachTailoredCV(jobSlug: string): Promise<RuntimeMessage> {
       // Already detached (e.g. the tab closed mid-call) — nothing left to clean up.
     });
   }
-}
-
-/** Just the uploads half of `readFramedForm`, for the one caller that has no use for the
- *  fields — reading them too would cost every frame a round trip this caller never needs. */
-async function readFramedUploadsOnly(): Promise<{ uploads: FramedUpload[] }> {
-  const uploads: FramedUpload[] = [];
-  await eachFrame({ kind: 'GET_FRAMED_FORM' }, (reply, frame) => {
-    if (reply?.kind !== 'FORM') return;
-    for (const upload of reply.uploads) uploads.push({ ...upload, frame });
-  });
-  return { uploads };
 }

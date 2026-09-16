@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import {
   uploadInputExpression,
   base64FromArrayBuffer,
@@ -12,20 +12,65 @@ import {
 import type { FramedUpload } from '../protocol';
 
 describe('uploadInputExpression', () => {
-  it('scopes to the numbered form when the upload sits inside one', () => {
-    expect(uploadInputExpression(2)).toBe(
-      "(document.querySelectorAll('form')[2])?.querySelector('input[type=\"file\"]') ?? null",
-    );
+  // Evaluated for real against a real document, the same way CDP's Runtime.evaluate would —
+  // a string-equality check on the generated source cannot prove it actually finds the
+  // right element, which is the one thing that matters here.
+  function evalExpression(form: number): HTMLInputElement | null {
+    return new Function(`return (${uploadInputExpression(form)});`)() as HTMLInputElement | null;
+  }
+
+  afterEach(() => {
+    document.body.innerHTML = '';
   });
 
-  it('scopes to the document when the upload stands outside any form (form -1, as Ashby renders it)', () => {
-    expect(uploadInputExpression(-1)).toBe("(document)?.querySelector('input[type=\"file\"]') ?? null");
+  it('finds the upload inside the numbered form', () => {
+    const form0 = document.createElement('form');
+    const form1 = document.createElement('form');
+    const file = document.createElement('input');
+    file.type = 'file';
+    form1.append(file);
+    document.body.append(form0, form1);
+
+    expect(evalExpression(1)).toBe(file);
   });
 
-  it('scopes to form index 0 distinctly from the no-form case', () => {
-    expect(uploadInputExpression(0)).toBe(
-      "(document.querySelectorAll('form')[0])?.querySelector('input[type=\"file\"]') ?? null",
-    );
+  it('finds the upload standing outside any form (form -1, as Ashby renders it)', () => {
+    const file = document.createElement('input');
+    file.type = 'file';
+    document.body.append(file);
+
+    expect(evalExpression(-1)).toBe(file);
+  });
+
+  it('returns null when the numbered form no longer exists on the page', () => {
+    expect(evalExpression(3)).toBeNull();
+  });
+
+  it('skips a hidden file input and finds the visible one, matching extractUploads’ own filter', () => {
+    // A widget can keep an earlier, hidden/disabled input[type=file] in the DOM (an
+    // internal placeholder, a disabled "remove attachment" leftover) alongside the real
+    // one. extractUploads (lib/form.ts) already filters these out when deciding a page
+    // offers exactly one reachable upload — this expression has to agree, or it can place
+    // the file into a node nobody detected and the visible field never receives it.
+    const hidden = document.createElement('input');
+    hidden.type = 'file';
+    hidden.hidden = true;
+    const visible = document.createElement('input');
+    visible.type = 'file';
+    document.body.append(hidden, visible);
+
+    expect(evalExpression(-1)).toBe(visible);
+  });
+
+  it('skips a disabled file input and finds the enabled one', () => {
+    const disabled = document.createElement('input');
+    disabled.type = 'file';
+    disabled.disabled = true;
+    const enabled = document.createElement('input');
+    enabled.type = 'file';
+    document.body.append(disabled, enabled);
+
+    expect(evalExpression(-1)).toBe(enabled);
   });
 });
 
