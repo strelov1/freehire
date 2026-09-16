@@ -101,12 +101,12 @@ func (h *statsHandlers) Sources(c *fiber.Ctx) error {
 // buildSourceEntries folds the adapter registry, the fleet health rollup and the per-source
 // snapshot into the wire entries, in source order. Which sources exist is decided by
 // sourcestats.Union, which argues the case once for both this endpoint and the rollup.
-func buildSourceEntries(reg map[string]sources.Source, health []db.ProviderHealthRollupRow, snapshot []db.ListSourceStatsRow, now time.Time) []sourceEntry {
+func buildSourceEntries(reg map[string]sources.Source, health []db.ProviderHealthRollupRow, snapshot []db.SourceStat, now time.Time) []sourceEntry {
 	byHealth := make(map[string]db.ProviderHealthRollupRow, len(health))
 	for _, r := range health {
 		byHealth[r.Provider] = r
 	}
-	bySnapshot := make(map[string]db.ListSourceStatsRow, len(snapshot))
+	bySnapshot := make(map[string]db.SourceStat, len(snapshot))
 	for _, r := range snapshot {
 		bySnapshot[r.Source] = r
 	}
@@ -135,7 +135,7 @@ func buildSourceEntries(reg map[string]sources.Source, health []db.ProviderHealt
 // jobsBlock renders one snapshot row, attaching the overlap figures only where they mean
 // anything. Unmatched is computed here rather than stored, so it cannot drift from the
 // raw count it is a remainder of.
-func jobsBlock(row db.ListSourceStatsRow, kind string) *sourceJobs {
+func jobsBlock(row db.SourceStat, kind string) *sourceJobs {
 	jobs := &sourceJobs{Open: row.OpenJobs, MeasuredAt: row.MeasuredAt.Time.Format(time.RFC3339)}
 	if row.BrowsableJobs.Valid {
 		n := row.BrowsableJobs.Int64

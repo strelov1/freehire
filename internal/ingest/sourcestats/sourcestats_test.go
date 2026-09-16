@@ -68,7 +68,7 @@ func TestRowsKeepsASourceThatHasGoneQuiet(t *testing.T) {
 	// the registry nor the scan. Without the previous snapshot in the union it disappears
 	// from the page the moment its last posting closes, which is the same silent drop the
 	// union exists to prevent, one closure later.
-	previous := []db.ListSourceStatsRow{
+	previous := []db.SourceStat{
 		{Source: "greenhouse", OpenJobs: 10},
 		{Source: "telegram", OpenJobs: 3},
 	}

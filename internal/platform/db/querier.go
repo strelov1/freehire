@@ -80,13 +80,6 @@ type Querier interface {
 	// Per-source snapshot (source_stats): the measurement cmd/rollup-stats takes on each run
 	// and the read the public /api/v1/sources endpoint serves from it.
 	//
-	// The table still has a `sample_url` column that nothing here names any more. Dropping it
-	// belongs to a LATER release, not this one: release.sh applies migrations BEFORE the new
-	// colour starts, so the old binary — whose compiled SELECT still lists the column — serves
-	// against the new schema for the length of a build and a health check, and would answer
-	// /sources with a 42703 for all of it. That is the exact failure release.sh's own migration
-	// block documents. One release to stop reading a column, the next to drop it.
-	//
 	// Rebuilt as an atomic delete-and-reinsert inside one transaction, like the facet
 	// snapshot beside it, so a reader never sees a partially rebuilt table — and so an
 	// adapter removed from the registry leaves the snapshot instead of lingering as a row
@@ -4030,7 +4023,7 @@ type Querier interface {
 	ListSlugLikeCompaniesForBackfill(ctx context.Context) ([]ListSlugLikeCompaniesForBackfillRow, error)
 	// The whole snapshot. Aggregate only — per-source counts, no record-level data. A few hundred rows, so it is read whole and joined in Go against
 	// the adapter registry rather than filtered here.
-	ListSourceStats(ctx context.Context) ([]ListSourceStatsRow, error)
+	ListSourceStats(ctx context.Context) ([]SourceStat, error)
 	// "My submissions": one user's submissions, newest first, whatever their status.
 	// LEFT JOIN the minted job (present only once approved) to surface its public_slug,
 	// so the UI can link an approved submission straight to its live vacancy page.

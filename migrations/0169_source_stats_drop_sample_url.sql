@@ -1,0 +1,28 @@
+-- Drop source_stats.sample_url — the second half of a two-release column removal. The
+-- first half (freehire#2926) stopped every read and write of it; this one takes the column.
+--
+-- It existed for one job: carry the HOST of one of a source's own postings, so the public
+-- /sources page could resolve a brand mark from it. Migration 0168 argued that "every
+-- posting of a source shares a host". Production disproved that within an hour of the page
+-- going live: an ATS posting's URL usually lives on the EMPLOYER's domain, so the sampled
+-- host for `greenhouse` was bankrate.com and for `successfactors` a staffing agency's — and
+-- the page served those companies' logos under the platforms' names. Where the host WAS the
+-- platform's it was typically a per-tenant subdomain (`jobs.smartrecruiters.com`,
+-- `2020companies.wd1.myworkdayjobs.com`) that the logo proxy 404s on. Logos are resolved
+-- from the source's DISPLAY NAME in the browser instead, which is what that proxy takes:
+-- measured 2026-09-16, 15 of 16 source names resolve where hosts were about half 404 and
+-- half the wrong brand.
+--
+-- WHY THIS COULD NOT RIDE THE SAME RELEASE. release.sh applies migrations BEFORE the new
+-- colour starts, so between the migrate step and the nginx flip the OLD binary is the one
+-- serving — and its compiled SELECT still named this column. Dropping it there would have
+-- answered /sources with a 42703 for the length of a build and a health check. That is the
+-- exact failure release.sh's own migration block documents (`jobs.ats_absent_at`).
+--
+-- WHAT IS STILL EXPOSED, stated rather than glossed: the INACTIVE colour is the previous
+-- release and still holds a binary that names the column. It serves no traffic, but
+-- rollback.sh flips to it, so a rollback taken between this migration and the next release
+-- would 500 on /sources — and only on /sources; nothing else reads this table. The next
+-- release of anything rebuilds that colour and closes the window.
+-- squawk-ignore ban-drop-column -- "may break existing clients" is the subject of every paragraph above: the only client is our own previous binary, which is why this is a SECOND release and not the same one, and the rollback window that leaves open is stated rather than assumed away. There is no third-party client — source_stats is read by one endpoint and written by one worker, both in this repository.
+ALTER TABLE public.source_stats DROP COLUMN IF EXISTS sample_url;

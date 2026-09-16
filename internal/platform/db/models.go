@@ -1216,7 +1216,6 @@ type SourceStat struct {
 	OpenJobs       int64              `json:"open_jobs"`
 	AtsMatchedJobs int64              `json:"ats_matched_jobs"`
 	BrowsableJobs  pgtype.Int8        `json:"browsable_jobs"`
-	SampleUrl      pgtype.Text        `json:"sample_url"`
 	MeasuredAt     pgtype.Timestamptz `json:"measured_at"`
 }
 

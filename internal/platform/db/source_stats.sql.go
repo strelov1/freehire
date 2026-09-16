@@ -30,13 +30,6 @@ type AggregateOpenJobsBySourceRow struct {
 // Per-source snapshot (source_stats): the measurement cmd/rollup-stats takes on each run
 // and the read the public /api/v1/sources endpoint serves from it.
 //
-// The table still has a `sample_url` column that nothing here names any more. Dropping it
-// belongs to a LATER release, not this one: release.sh applies migrations BEFORE the new
-// colour starts, so the old binary — whose compiled SELECT still lists the column — serves
-// against the new schema for the length of a build and a health check, and would answer
-// /sources with a 42703 for all of it. That is the exact failure release.sh's own migration
-// block documents. One release to stop reading a column, the next to drop it.
-//
 // Rebuilt as an atomic delete-and-reinsert inside one transaction, like the facet
 // snapshot beside it, so a reader never sees a partially rebuilt table — and so an
 // adapter removed from the registry leaves the snapshot instead of lingering as a row
@@ -148,25 +141,17 @@ FROM source_stats
 ORDER BY source
 `
 
-type ListSourceStatsRow struct {
-	Source         string             `json:"source"`
-	OpenJobs       int64              `json:"open_jobs"`
-	AtsMatchedJobs int64              `json:"ats_matched_jobs"`
-	BrowsableJobs  pgtype.Int8        `json:"browsable_jobs"`
-	MeasuredAt     pgtype.Timestamptz `json:"measured_at"`
-}
-
 // The whole snapshot. Aggregate only — per-source counts, no record-level data. A few hundred rows, so it is read whole and joined in Go against
 // the adapter registry rather than filtered here.
-func (q *Queries) ListSourceStats(ctx context.Context) ([]ListSourceStatsRow, error) {
+func (q *Queries) ListSourceStats(ctx context.Context) ([]SourceStat, error) {
 	rows, err := q.db.Query(ctx, listSourceStats)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []ListSourceStatsRow{}
+	items := []SourceStat{}
 	for rows.Next() {
-		var i ListSourceStatsRow
+		var i SourceStat
 		if err := rows.Scan(
 			&i.Source,
 			&i.OpenJobs,
