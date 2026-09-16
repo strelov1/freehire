@@ -56,10 +56,11 @@ func (f *fakeStore) SetNeedsReconsent(_ context.Context, userID int64) error {
 }
 
 type fakeReader struct {
-	ids     []string
-	byID    map[string]Message
-	threads map[string][]string // threadID -> message ids
-	listErr error
+	ids       []string
+	byID      map[string]Message
+	threads   map[string][]string // threadID -> message ids
+	listErr   error
+	getErrIDs map[string]error // message ids on which GetMessage fails
 }
 
 func (f *fakeReader) ListATSMessageIDs(context.Context, string, int64) ([]string, error) {
@@ -69,6 +70,9 @@ func (f *fakeReader) ListThreadMessageIDs(_ context.Context, threadID string) ([
 	return f.threads[threadID], nil
 }
 func (f *fakeReader) GetMessage(_ context.Context, id string) (Message, error) {
+	if err := f.getErrIDs[id]; err != nil {
+		return Message{}, err
+	}
 	return f.byID[id], nil
 }
 
@@ -354,6 +358,68 @@ func TestRunOnceDoesNotDisconnectOverATransientFailure(t *testing.T) {
 				t.Errorf("stats = %+v, want the connection counted as failed and retried next run", stats)
 			}
 		})
+	}
+}
+
+// A 403 on an individual message fetch is the grant saying no exactly as much as a 403 on
+// the list call is — RevokedGrant reads the status code, not which endpoint sent it. Before
+// this test the fetch loop treated every GetMessage error alike (logged, counted as
+// sawFailure, retried next run), so a mailbox whose grant lost message-read access relisted
+// and re-403'd the SAME messages every run forever: never flagged for re-consent, because
+// nothing on this path asked RevokedGrant. Production measured this at ~450k failed message
+// fetches in 24h for one connection.
+func TestRunOnceRevokedTokenOnMessageFetchMarksReconsent(t *testing.T) {
+	c := testCipher(t)
+	enc, _ := c.Encrypt("refresh-token")
+	store := &fakeStore{conns: []Connection{{UserID: 9, Cursor: 1_700_000_000}}, encToken: enc}
+	reader := &fakeReader{
+		ids: []string{"m1", "m2"},
+		byID: map[string]Message{
+			"m2": {ID: "m2", Subject: "Thank you for applying to Acme", ReceivedAt: time.Unix(1_700_000_500, 0)},
+		},
+		getErrIDs: map[string]error{
+			"m1": &APIError{Op: "gmail: get message m1", StatusCode: 403, Status: "403 Forbidden"},
+		},
+	}
+	w := NewWorker(store, c, func(context.Context, string, []string) GmailReader { return reader })
+
+	stats, err := w.RunOnce(context.Background())
+	if err != nil {
+		t.Fatalf("RunOnce: %v", err)
+	}
+	if len(store.reconsentUsers) != 1 || store.reconsentUsers[0] != 9 {
+		t.Errorf("reconsent = %v, want [9]", store.reconsentUsers)
+	}
+	if store.syncedCalled {
+		t.Error("should not advance the cursor when a message fetch revealed a revoked grant")
+	}
+	if stats.Reconsent != 1 || stats.Synced != 0 || stats.Failed != 0 {
+		t.Errorf("stats = %+v, want one connection flagged for re-consent", stats)
+	}
+}
+
+// A 500, a reset connection, or a message that would not store on a live grant says nothing
+// about the grant — the existing per-message failure path, unchanged by the fix above.
+func TestRunOnceDoesNotDisconnectOverATransientMessageFetchFailure(t *testing.T) {
+	c := testCipher(t)
+	enc, _ := c.Encrypt("refresh-token")
+	store := &fakeStore{conns: []Connection{{UserID: 9, Cursor: 0}}, encToken: enc}
+	reader := &fakeReader{
+		ids:       []string{"m1"},
+		byID:      map[string]Message{},
+		getErrIDs: map[string]error{"m1": &APIError{Op: "gmail: get message m1", StatusCode: 503, Status: "503 Service Unavailable"}},
+	}
+	w := NewWorker(store, c, func(context.Context, string, []string) GmailReader { return reader })
+
+	stats, err := w.RunOnce(context.Background())
+	if err != nil {
+		t.Fatalf("RunOnce: %v", err)
+	}
+	if len(store.reconsentUsers) != 0 {
+		t.Errorf("marked %v for re-consent over a transient fetch failure", store.reconsentUsers)
+	}
+	if stats.Failed != 1 || stats.Reconsent != 0 {
+		t.Errorf("stats = %+v, want the connection counted as failed and retried next run", stats)
 	}
 }
 
