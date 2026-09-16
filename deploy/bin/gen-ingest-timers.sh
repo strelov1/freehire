@@ -298,9 +298,23 @@ done
 # never literally "custom"), so cmd/ingest custom finds nothing and exits 0.
 systemctl disable --now freehire-ingest@custom.timer 2>/dev/null || true
 
-# workday shards: one service template (--shard=N/6) + 6 timers, each every 6h at :40,
-# offset one hour apart so a single ~1000-board shard runs per hour and finishes well
-# within the 40-min timeout, together covering all ~6165 boards over a 6-hour cycle.
+# workday shards: one service template (--shard=N/6) + 6 timers, each every 12h at :40,
+# offset TWO hours apart so a single ~1000-board shard runs every other hour and finishes
+# well within the 40-min timeout, together covering all ~6165 boards over a 12-hour cycle.
+#
+# It was every 6h (one shard per hour) until 2026-09-15, and that is where the heavy pool's
+# capacity was going. Measured that day: the six sharded providers firing one shard per hour
+# each demanded 5.83 slots against a heavy pool of 5, before any of the 19 HEAVY providers
+# or the 6 pool-only ones were counted. The shards themselves skipped 34 of 66 firings in
+# 24h, and bamboohr -- 12,004 boards, 9,407 technical postings, 11,204 companies -- went 32
+# hours without a crawl because every one of its 3h firings found five busy slots.
+#
+# Halving the shard rate costs almost nothing REAL: at a 51% skip rate these providers were
+# already sweeping about every 12h, just unpredictably and while burning a slot's worth of
+# 600-second waits to find out. The new cadence states what was already happening and hands
+# the waiting back to the pool. The offsets are respread to (N-1)*2 rather than left at
+# N-1: doubling the period without moving them would clump all six shards into hours 0-5
+# and 12-17 and leave half the day empty.
 # ExecStart uses hire-current (the active blue/green release), matching the workers.
 cat > /etc/systemd/system/freehire-ingest-workday-shard@.service <<'UNIT'
 [Unit]
@@ -323,7 +337,7 @@ for N in 1 2 3 4 5 6; do
 [Unit]
 Description=timer ingest workday shard $N/6
 [Timer]
-OnCalendar=*-*-* 0$((N-1))/6:40:00
+OnCalendar=*-*-* $(printf %02d $(( (N-1)*2 )))/12:40:00
 Persistent=true
 RandomizedDelaySec=180
 [Install]
@@ -359,7 +373,7 @@ for N in 1 2 3 4; do
 [Unit]
 Description=timer ingest eightfold shard $N/4
 [Timer]
-OnCalendar=*-*-* 0$((N-1))/4:50:00
+OnCalendar=*-*-* $(printf %02d $(( (N-1)*2 )))/8:50:00
 Persistent=true
 RandomizedDelaySec=180
 [Install]
@@ -395,7 +409,7 @@ for N in 1 2 3 4; do
 [Unit]
 Description=timer ingest oracle shard $N/4
 [Timer]
-OnCalendar=*-*-* 0$((N-1))/4:15:00
+OnCalendar=*-*-* $(printf %02d $(( (N-1)*2 )))/8:15:00
 Persistent=true
 RandomizedDelaySec=180
 [Install]
@@ -565,7 +579,7 @@ for N in 1 2 3 4 5; do
 [Unit]
 Description=timer ingest join shard $N/5
 [Timer]
-OnCalendar=*-*-* 0$((N-1))/5:20:00
+OnCalendar=*-*-* $(printf %02d $(( (N-1)*2 )))/10:20:00
 Persistent=true
 RandomizedDelaySec=180
 [Install]
@@ -600,7 +614,7 @@ for N in 1 2 3 4; do
 [Unit]
 Description=timer ingest dayforce shard $N/4
 [Timer]
-OnCalendar=*-*-* 0$((N-1))/4:42:00
+OnCalendar=*-*-* $(printf %02d $(( (N-1)*2 )))/8:42:00
 Persistent=true
 RandomizedDelaySec=180
 [Install]
