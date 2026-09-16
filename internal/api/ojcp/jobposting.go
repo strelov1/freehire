@@ -17,7 +17,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/strelov1/freehire/internal/dict/vocab"
 	"github.com/strelov1/freehire/internal/job/jobview"
+	"github.com/strelov1/freehire/internal/platform/htmltext"
 )
 
 // Version is the OJCP specification version this projection targets. It travels in every
@@ -103,18 +105,25 @@ var experienceLevel = map[string]string{
 }
 
 // salaryUnit translates our pay-period vocabulary into OJCP's, which is a closed enum.
-// Our "day" has no counterpart there; such a posting keeps its figures and omits the
-// period rather than being rounded into a week.
+// Our "day" has no counterpart there, and salaryFrom drops the whole block rather than
+// publishing figures with no period — a daily rate read as an annual one is a wrong
+// answer, not a partial one.
 var salaryUnit = map[string]string{
 	"year":  "YEAR",
 	"month": "MONTH",
 	"hour":  "HOUR",
 }
 
-// Employer is OJCP's employer block. Only `name` is required by the schema.
+// Employer is OJCP's employer block. Only `name` is required by the schema, but
+// OJCPEmployerID is what makes the third tool reachable: `get_employer_context` takes an
+// employer_id, and a posting is the only place an agent can learn one. Without it, an agent
+// that found a job has no key to ask about the company.
 type Employer struct {
 	Type string `json:"@type,omitempty"`
 	Name string `json:"name"`
+	// OJCPEmployerID is our company slug — the same key /companies/<slug> is served under,
+	// so an id an agent stores keeps resolving.
+	OJCPEmployerID string `json:"ojcp_employer_id,omitempty"`
 }
 
 // jobPostingFrom projects one catalogue posting into OJCP's shape. origin is the absolute
@@ -125,14 +134,23 @@ type Employer struct {
 // an agent as a date we claim to know.
 func jobPostingFrom(j jobview.Job, origin string) JobPosting {
 	posting := JobPosting{
-		Context:         []string{"https://schema.org"},
-		Type:            "JobPosting",
-		OJCPID:          j.PublicSlug,
-		Title:           j.Title,
-		Employer:        Employer{Type: "Organization", Name: j.Company},
-		DatePosted:      datePosted(j),
-		ValidThrough:    validThrough(j),
-		Description:     j.Description,
+		Context: []string{"https://schema.org"},
+		Type:    "JobPosting",
+		OJCPID:  j.PublicSlug,
+		Title:   j.Title,
+		Employer: Employer{
+			Type:           "Organization",
+			Name:           j.Company,
+			OJCPEmployerID: j.CompanySlug,
+		},
+		DatePosted: datePosted(j),
+
+		ValidThrough: validThrough(j),
+		// The stored description is markup. OJCP's field is "Full job description text" and
+		// the schema offers no format parameter, so the conversion happens here rather than
+		// being left to every agent — which would also make each of them pay several times
+		// the tokens to read past the tags.
+		Description:     htmltext.ToText(j.Description),
 		EmploymentType:  j.Enrichment.EmploymentType,
 		ExperienceLevel: seniorityFor(j.Enrichment.Seniority),
 		RemotePolicy:    remotePolicy[j.WorkMode],
@@ -141,7 +159,10 @@ func jobPostingFrom(j jobview.Job, origin string) JobPosting {
 		SkillsRequired:  j.Skills,
 		AgentNotes:      agentNotesFor(j),
 	}
-	if j.PublicSlug != "" {
+	// An origin the deployment never configured would produce "/jobs/<slug>" — a relative
+	// path no agent can dereference, and one `format: uri` rejects. Publishing nothing is
+	// the better failure: the posting is still reachable through official_job_url.
+	if j.PublicSlug != "" && origin != "" {
 		posting.URL = strings.TrimSuffix(origin, "/") + "/jobs/" + j.PublicSlug
 	}
 	return posting
@@ -165,12 +186,23 @@ func salaryFrom(j jobview.Job) *Salary {
 	if e.SalaryMin == nil && e.SalaryMax == nil {
 		return nil
 	}
+
+	// A figure without its period or its currency is not a smaller answer, it is a wrong
+	// one. Our vocabulary has "day" and OJCP's unitText enum does not, so a EUR 400/day
+	// contract published as a bare 400 reads to an agent as an annual salary — it buries a
+	// six-figure role at the bottom of a ranking, or drops it against a salary_min filter.
+	// A bare number with no currency is uncomparable in the same way.
+	unit, known := salaryUnit[e.SalaryPeriod]
+	if !known || !vocab.IsCurrencyCode(e.SalaryCurrency) {
+		return nil
+	}
+
 	return &Salary{
 		Type:     "MonetaryAmountDistribution",
 		Currency: e.SalaryCurrency,
 		MinValue: asFloat(e.SalaryMin),
 		MaxValue: asFloat(e.SalaryMax),
-		UnitText: salaryUnit[e.SalaryPeriod],
+		UnitText: unit,
 	}
 }
 

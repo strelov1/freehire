@@ -71,11 +71,44 @@ func (p Projector) applyPaths(j jobview.Job, form *applyform.Form) []ApplyPath {
 
 	return []ApplyPath{{
 		Type:                    "ats_direct",
-		URL:                     j.URL,
+		URL:                     applyEntryPoint(j),
 		ATSProvider:             form.Provider,
 		RequiredFields:          requiredFieldNames(form),
 		SupportsAgentSubmission: p.Submittable[form.Provider] && !demandsAnotherUpload(form),
 	}}
+}
+
+// applyFormPath is the suffix a platform's application form lives under, where it is not
+// on the posting page itself. The schema calls an apply path's URL "the application entry
+// point", so a platform that separates the two must be followed.
+//
+// Lever is the one we know about, and we know because this repo paid for it: a live
+// auto-apply attempt parked as `unrecognized_form_layout` on a page that loaded fine and
+// simply had no form on it. The authoritative copy is `layouts` in internal/api/atsapply,
+// which cannot be imported here — it is unexported and would drag chromedp into a package
+// that must stay pure — so this is a second copy on purpose. Adding a platform there means
+// adding it here.
+var applyFormPath = map[string]string{
+	"lever": "/apply",
+}
+
+// applyEntryPoint is where an agent (or a candidate) actually finds the form.
+func applyEntryPoint(j jobview.Job) string {
+	suffix, separate := applyFormPath[j.Source]
+	if !separate || j.URL == "" {
+		return j.URL
+	}
+
+	// The tag jobview appends is a query parameter, so the suffix belongs before it.
+	base, query, hasQuery := strings.Cut(j.URL, "?")
+	base = strings.TrimSuffix(base, "/")
+	if strings.HasSuffix(base, suffix) {
+		return j.URL
+	}
+	if !hasQuery {
+		return base + suffix
+	}
+	return base + suffix + "?" + query
 }
 
 // demandsAnotherUpload reports whether the form requires a file that is not the résumé.
