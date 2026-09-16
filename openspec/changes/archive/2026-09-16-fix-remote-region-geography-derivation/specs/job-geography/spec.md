@@ -41,13 +41,19 @@ overridden by the title.
 ### Requirement: Description-based geography restriction recognizes region-scoping prose
 
 When `location` and `title` both leave geography unpinned, the description-based restriction
-check SHALL match not only citizenship/work-authorization phrasing but also explicit
-"role/position is based, located, or restricted within `<country/region>`" scoping prose
-(for example: "this is a fully remote role within New Zealand, Australia East Coast, or
-nearby time zones", "based in the United States, Canada, Argentina, or Brazil"). A match
-SHALL resolve the named countries/regions against the same curated dictionaries as the
-location parser and SHALL NOT guess a geography from prose that names no resolvable
-country/region token.
+check SHALL match not only citizenship/work-authorization phrasing but also an explicit,
+role/candidate-qualified "based/located/hiring/restricted/remote role within
+`<country/region>`" scoping statement (for example: "a fully remote role within New Zealand,
+Australia East Coast, or nearby time zones", "candidates based in the United States, Canada,
+Argentina, or Brazil"). A match SHALL resolve the named countries/regions against the same
+curated dictionaries as the location parser and SHALL NOT guess a geography from prose that
+names no resolvable country/region token. The anchor phrases SHALL be role- or
+candidate-qualified rather than a bare preposition ("based in"/"located in" alone) — an
+unqualified anchor is ambiguous between a role restriction and an unrelated company-HQ
+mention ("Our company is based in Berlin, but this role is fully remote and open
+worldwide"), and matching the HQ sentence as if it were the role's own restriction is exactly
+the kind of mislabeling this capability exists to prevent (found in code review; see
+design.md's Decision 3).
 
 #### Scenario: Region-scoping description prose resolves a bare-remote posting
 
@@ -60,9 +66,16 @@ country/region token.
 
 #### Scenario: A multi-country scoping list resolves every named country
 
-- **WHEN** a description states the role is "based in the United States, Canada, Argentina,
-  or Brazil"
+- **WHEN** a description states the role is "open to candidates based in the United States,
+  Canada, Argentina, or Brazil"
 - **THEN** the derived `countries` include `us`, `ca`, `ar`, and `br`
+
+#### Scenario: A company-HQ mention is not mistaken for a role restriction
+
+- **WHEN** a description states "Our company is based in Berlin, Germany, but this role is
+  fully remote and open worldwide" — a company-location statement, not a role restriction
+- **THEN** this step yields no geography, since the qualifying anchor phrases match only a
+  role- or candidate-referring statement, never a bare "based in"/"located in"
 
 #### Scenario: Non-restriction prose is still not mistaken for a signal
 
