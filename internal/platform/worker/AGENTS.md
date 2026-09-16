@@ -99,6 +99,25 @@ failure to notice: `notify` reported `delivered=1 failed=0` for weeks while 1.14
 sat undelivered (2026-09-04, see [docs/agents/notifications.md](../../../docs/agents/notifications.md)).
 An oldest-pending age climbing past a few passes is the signal; `failed` never moved.
 
+**Per source, by the same worker** — `freehire_ingest_{rows_written,distinct_postings}`
+labelled by `provider`, over a ten-minute window. Every family above answers *is something
+failing*; this one answers *is what succeeded worth anything*, which is the question the
+others structurally cannot reach. On 2026-09-02 `api.apploi.com` stopped honouring its
+`employer` parameter, so all 5,833 of that provider's boards fetched the same global
+catalogue: 1,565,701 rows accumulated standing for 3,024 real jobs — 518 copies each, under
+518 different and mostly wrong employers, 12.5% of everything live search could find. Every
+crawl returned 200 with valid postings, so board health stayed green, the queues stayed
+shallow and the per-run family stayed green. It ran two weeks and was found by a person
+reading the catalogue. Dividing rows by postings in Prometheus makes it a one-line rule.
+**Divide in the rule, not here**: the tolerable multiple differs per source (a
+keyword-sliced aggregator legitimately stores one posting under two boards — jobleads
+measured 2.1 on 2026-09-16), and a ratio computed in the exporter would have to invent an
+answer for a source that wrote nothing. The window is ten minutes because that is what the
+file header's cost bar allows — measured on prod 2026-09-16, the same query costs 22ms at
+10m, 328ms at 15m, 837ms at 60m and 20.8s at 24h — and because duplication appears BETWEEN
+boards, never within one crawl, so the gap opens as soon as two of a source's boards land in
+one window.
+
 **Per gateway, by `cmd/llm-probe`** — `freehire_llm_probe_{attempts,ok,slowest_seconds}`
 labelled by `model`, **one series per alias the deployment routes through**. This answers
 *is the provider serving*, which nothing else asked.

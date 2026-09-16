@@ -39,6 +39,21 @@ type providerHealth struct {
 	healthy     int64
 }
 
+// ingestVolume is how much one source wrote into the catalogue in the recent window, and
+// how many DISTINCT postings that writing stands for. The two are published separately and
+// the GAP between them is the signal: a source whose boards all fetch the same catalogue
+// writes many rows for few postings.
+//
+// It measures what every other family here structurally cannot. The rest answer "is
+// something failing"; this answers "is what succeeded worth anything". apploi's crawls all
+// returned 200 with valid postings for two weeks while accumulating 1.5M rows standing for
+// 3,024 real jobs, and nothing in this exposition moved.
+type ingestVolume struct {
+	provider         string
+	rowsWritten      int64
+	distinctPostings int64
+}
+
 // snapshot is everything one collection pass measured. newestJob is the zero time when
 // the catalogue holds no open job at all, which render treats as "publish nothing"
 // rather than as a 1970 timestamp.
@@ -56,6 +71,7 @@ type snapshot struct {
 	cooledBoards  int64
 	newestJob     time.Time
 	providers     []providerHealth
+	ingest        []ingestVolume
 }
 
 // render turns a snapshot into the Prometheus text exposition format.
@@ -138,6 +154,35 @@ func render(s snapshot) string {
 				fmt.Fprintf(&b, "freehire_provider_boards{provider=%q,state=%q} %d\n",
 					p.name, st.name, st.count)
 			}
+		}
+	}
+
+	// Ingest volume against distinct postings: the only family here that can catch a source
+	// whose crawls all SUCCEED and whose output is worthless. Everything above measures
+	// failure — a queue backing up, a board cooling, a provider going quiet — and apploi
+	// tripped none of it for two weeks while writing 518 copies of every posting under 518
+	// different employers.
+	//
+	// Two raw counts, deliberately not a ratio. Which multiple deserves a page depends on
+	// the source (a keyword-sliced aggregator legitimately stores one posting under two
+	// boards; jobleads measured 2.1 on 2026-09-16), so the threshold belongs to the alert
+	// rule — the same division freehire_provider_boards already makes. Dividing them in
+	// Prometheus also degrades gracefully: rows/postings is simply absent for a source that
+	// wrote nothing, where a ratio computed here would have to invent a number.
+	//
+	// A source that wrote nothing in the window yields no row, and the whole family is
+	// omitted rather than zeroed — a zero here would claim the source was measured and
+	// found idle, when the window may simply not have contained its crawl.
+	if len(s.ingest) > 0 {
+		writeHeader(&b, "freehire_ingest_rows_written",
+			"Open postings a source wrote into the catalogue in the recent window.")
+		for _, v := range s.ingest {
+			fmt.Fprintf(&b, "freehire_ingest_rows_written{provider=%q} %d\n", v.provider, v.rowsWritten)
+		}
+		writeHeader(&b, "freehire_ingest_distinct_postings",
+			"Distinct postings those rows stand for; a gap below rows_written means one posting stored under many boards.")
+		for _, v := range s.ingest {
+			fmt.Fprintf(&b, "freehire_ingest_distinct_postings{provider=%q} %d\n", v.provider, v.distinctPostings)
 		}
 	}
 

@@ -30,6 +30,7 @@ type metricsQueries interface {
 	NewestOpenJobCreatedAt(context.Context) (pgtype.Timestamptz, error)
 	ProviderIngestHealth(context.Context) ([]db.ProviderIngestHealthRow, error)
 	NotifyBacklogMetrics(context.Context) (db.NotifyBacklogMetricsRow, error)
+	IngestDuplicationMetrics(context.Context) ([]db.IngestDuplicationMetricsRow, error)
 }
 
 // collect runs one measurement pass. Any query failure aborts the pass: a partial
@@ -114,6 +115,22 @@ func collect(ctx context.Context, q metricsQueries) (snapshot, error) {
 		providers[i] = p
 	}
 
+	// Carried through untouched, never divided or thresholded here: which multiple is a
+	// problem depends on the source, and that judgement belongs to the alert rule (see
+	// render.go). A source that wrote nothing in the window is simply absent from the rows.
+	volume, err := q.IngestDuplicationMetrics(ctx)
+	if err != nil {
+		return snapshot{}, fmt.Errorf("ingest duplication metrics: %w", err)
+	}
+	ingest := make([]ingestVolume, len(volume))
+	for i, r := range volume {
+		ingest[i] = ingestVolume{
+			provider:         r.Provider,
+			rowsWritten:      r.RowsWritten,
+			distinctPostings: r.DistinctPostings,
+		}
+	}
+
 	return snapshot{
 		// Every queue in the pipeline, because a queue this worker does not measure has
 		// no signal at all: each of these is drained by a worker that exits 0 whether it
@@ -148,6 +165,7 @@ func collect(ctx context.Context, q metricsQueries) (snapshot, error) {
 		cooledBoards:               boards.Cooled,
 		newestJob:                  newestJob,
 		providers:                  providers,
+		ingest:                     ingest,
 	}, nil
 }
 

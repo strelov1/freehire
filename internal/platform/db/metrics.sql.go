@@ -242,6 +242,83 @@ func (q *Queries) EnrichmentOutboxMetrics(ctx context.Context) (EnrichmentOutbox
 	return i, err
 }
 
+const ingestDuplicationMetrics = `-- name: IngestDuplicationMetrics :many
+SELECT
+    j.source                        AS provider,
+    count(*)::bigint                AS rows_written,
+    count(DISTINCT j.url)::bigint   AS distinct_postings
+FROM jobs j
+WHERE j.closed_at IS NULL
+  AND NOT j.is_private
+  AND j.created_at > now() - interval '10 minutes'
+  AND j.url <> ''
+GROUP BY j.source
+ORDER BY j.source
+`
+
+type IngestDuplicationMetricsRow struct {
+	Provider         string `json:"provider"`
+	RowsWritten      int64  `json:"rows_written"`
+	DistinctPostings int64  `json:"distinct_postings"`
+}
+
+// How many rows each source has just written, and how many DISTINCT postings those rows
+// stand for. The gap between the two is the signal: one posting stored under many boards.
+//
+// It exists because nothing could see the apploi failure of 2026-09-02. api.apploi.com
+// stopped honouring its `employer` parameter, so all 5,833 of that provider's boards began
+// fetching the same global catalogue, and 1,565,701 rows accumulated standing for 3,024
+// real jobs -- 518 copies each, under 518 different and mostly wrong employers, 12.5% of
+// everything live search could find. Every crawl SUCCEEDED throughout. board_health stayed
+// green, the per-run family stayed green, and the queue depths stayed normal, because
+// nothing was failing: the platform answered 200 with valid postings. It ran for two weeks
+// and was found by a person reading the catalogue, not by a gauge.
+//
+// The window is ten minutes, and that is a measured choice rather than a round number.
+// Measured on prod 2026-09-16: 24h costs 20,818ms, 60m costs 837ms, 15m costs 328ms, and
+// 10m costs 22ms -- the same order as ProviderIngestHealth's 54ms, which is the bar this
+// file's header sets. Ten minutes is also sufficient: the duplication appears BETWEEN
+// boards, never within one crawl (a board that fetches the global catalogue writes each of
+// its postings once), so the gap opens as soon as two boards of the same source land in one
+// window. apploi would have had roughly forty per window. A source whose boards crawl more
+// slowly than that reads 1:1 and is simply not accused.
+//
+// Rides jobs_open_created_idx (created_at DESC, id DESC) WHERE closed_at IS NULL, which is
+// why it is scoped to open rows -- and that scope is honest for this question anyway: a row
+// closed within the window was withdrawn, not ingested.
+//
+// Publishes the two RAW counts, never a ratio. Which ratio deserves a page belongs in the
+// alert rule, the same argument freehire_provider_boards already makes for board states --
+// and a ratio computed here would also have to invent an answer for a source that wrote
+// nothing, where the honest count is a pair of zeros.
+//
+// Sources that write no url are excluded rather than counted as one big duplicate: a row
+// with no url cannot be told apart from another one, so including them would accuse a
+// source of duplication for a field it simply does not carry.
+//
+// NOT is_private for the catalogue-wide reason (internal/job/privatejob), and because it is
+// right for this question on its own: a pasted JD was not INGESTED, and counting one would
+// put 'pasted' and 'weblink' in the exposition as providers that no crawl can explain.
+func (q *Queries) IngestDuplicationMetrics(ctx context.Context) ([]IngestDuplicationMetricsRow, error) {
+	rows, err := q.db.Query(ctx, ingestDuplicationMetrics)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []IngestDuplicationMetricsRow{}
+	for rows.Next() {
+		var i IngestDuplicationMetricsRow
+		if err := rows.Scan(&i.Provider, &i.RowsWritten, &i.DistinctPostings); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const mailClassificationOutboxMetrics = `-- name: MailClassificationOutboxMetrics :one
 SELECT
     count(*) FILTER (WHERE failed_at IS NULL)     AS depth,

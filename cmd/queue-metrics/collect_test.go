@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"reflect"
 	"strconv"
 	"testing"
 	"time"
@@ -30,6 +31,8 @@ type fakeQueries struct {
 	boards       db.BoardHealthMetricsRow
 	newest       pgtype.Timestamptz
 	health       []db.ProviderIngestHealthRow
+	ingest       []db.IngestDuplicationMetricsRow
+	ingestErr    error
 	notify       db.NotifyBacklogMetricsRow
 	newestErr    error
 	searchErr    error
@@ -89,6 +92,10 @@ func (f fakeQueries) NewestOpenJobCreatedAt(context.Context) (pgtype.Timestamptz
 
 func (f fakeQueries) ProviderIngestHealth(context.Context) ([]db.ProviderIngestHealthRow, error) {
 	return f.health, nil
+}
+
+func (f fakeQueries) IngestDuplicationMetrics(context.Context) ([]db.IngestDuplicationMetricsRow, error) {
+	return f.ingest, f.ingestErr
 }
 
 func populatedQueries() fakeQueries {
@@ -308,4 +315,35 @@ func queueByName(queues []queueMetrics, name string) (queueMetrics, bool) {
 		}
 	}
 	return queueMetrics{}, false
+}
+
+// The measurement is carried through untouched: collect must not divide, threshold or
+// otherwise interpret it — the alert rule owns that, and a source legitimately writing one
+// posting under two boards must not be quietly "corrected" here.
+func TestCollectCarriesIngestVolume(t *testing.T) {
+	q := fakeQueries{ingest: []db.IngestDuplicationMetricsRow{
+		{Provider: "apploi", RowsWritten: 15120, DistinctPostings: 3024},
+		{Provider: "greenhouse", RowsWritten: 412, DistinctPostings: 412},
+	}}
+	got, err := collect(context.Background(), q)
+	if err != nil {
+		t.Fatalf("collect: %v", err)
+	}
+	want := []ingestVolume{
+		{provider: "apploi", rowsWritten: 15120, distinctPostings: 3024},
+		{provider: "greenhouse", rowsWritten: 412, distinctPostings: 412},
+	}
+	if !reflect.DeepEqual(got.ingest, want) {
+		t.Errorf("ingest = %+v, want %+v", got.ingest, want)
+	}
+}
+
+// A failure here aborts the pass, like every other query: publishing the other families
+// without this one is how a silent corruption goes unwatched while the exposition still
+// looks healthy.
+func TestCollectFailsWhenIngestVolumeFails(t *testing.T) {
+	q := fakeQueries{ingestErr: errors.New("boom")}
+	if _, err := collect(context.Background(), q); err == nil {
+		t.Fatal("collect returned no error when the ingest-volume query failed")
+	}
 }

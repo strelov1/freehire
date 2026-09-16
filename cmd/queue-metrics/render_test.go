@@ -359,3 +359,73 @@ func TestRenderOmitsAnEmptyOptionalFamilyEntirely(t *testing.T) {
 		t.Errorf("render() dropped the families that DO have samples\ngot:\n%s", got)
 	}
 }
+
+// The two counts must be published SEPARATELY, never as a ratio: the alert rule owns the
+// threshold (see render.go on freehire_provider_boards), and a ratio would also have to
+// invent an answer for a source that wrote nothing.
+func TestRenderIngestDuplication(t *testing.T) {
+	s := fullSnapshot()
+	s.ingest = []ingestVolume{
+		// The apploi shape: many rows standing for few postings.
+		{provider: "apploi", rowsWritten: 15120, distinctPostings: 3024},
+		// The ordinary shape: one row per posting.
+		{provider: "greenhouse", rowsWritten: 412, distinctPostings: 412},
+	}
+	got := render(s)
+	for _, want := range []string{
+		"# HELP freehire_ingest_rows_written",
+		"# TYPE freehire_ingest_rows_written gauge",
+		`freehire_ingest_rows_written{provider="apploi"} 15120`,
+		`freehire_ingest_rows_written{provider="greenhouse"} 412`,
+		"# HELP freehire_ingest_distinct_postings",
+		"# TYPE freehire_ingest_distinct_postings gauge",
+		`freehire_ingest_distinct_postings{provider="apploi"} 3024`,
+		`freehire_ingest_distinct_postings{provider="greenhouse"} 412`,
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("exposition missing %q\ngot:\n%s", want, got)
+		}
+	}
+	if strings.Contains(got, "freehire_ingest_duplication_ratio") {
+		t.Error("exposition publishes a baked ratio; the threshold belongs to the alert rule")
+	}
+}
+
+// A source that wrote nothing in the window produces no row at all, so the family must be
+// omitted head and all rather than emitted as a bare HELP/TYPE pair — the same rule the
+// provider timestamp family follows.
+func TestRenderOmitsIngestFamiliesWhenNothingWasWritten(t *testing.T) {
+	got := render(fullSnapshot())
+	for _, name := range []string{"freehire_ingest_rows_written", "freehire_ingest_distinct_postings"} {
+		if strings.Contains(got, name) {
+			t.Errorf("exposition carries %s with no sources measured", name)
+		}
+	}
+}
+
+// Both families must parse, and they are absent from fullSnapshot(), so the contract test
+// above never validates them.
+func TestRenderIngestFamiliesAreWellFormed(t *testing.T) {
+	s := fullSnapshot()
+	s.ingest = []ingestVolume{
+		{provider: "apploi", rowsWritten: 15120, distinctPostings: 3024},
+		{provider: "greenhouse", rowsWritten: 412, distinctPostings: 412},
+	}
+	parser := expfmt.NewTextParser(model.UTF8Validation)
+	families, err := parser.TextToMetricFamilies(strings.NewReader(render(s)))
+	if err != nil {
+		t.Fatalf("rendered exposition does not parse: %v", err)
+	}
+	for _, name := range []string{"freehire_ingest_rows_written", "freehire_ingest_distinct_postings"} {
+		family, ok := families[name]
+		if !ok {
+			t.Fatalf("parsed exposition is missing family %s", name)
+		}
+		if got, want := len(family.GetMetric()), len(s.ingest); got != want {
+			t.Errorf("%s has %d samples, want %d", name, got, want)
+		}
+		if family.GetType() != dto.MetricType_GAUGE {
+			t.Errorf("%s parsed as %v, want GAUGE", name, family.GetType())
+		}
+	}
+}
