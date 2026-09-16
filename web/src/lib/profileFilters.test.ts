@@ -178,7 +178,7 @@ describe('filtersFromProfile', () => {
     });
 
     it('bounds the contribution so a maxed-out list cannot break the alert query', () => {
-      // Same hazard skillCharBudget exists for, and the same cap behind it: a profile may
+      // Same hazard charBudget exists for, and the same cap behind it: a profile may
       // hold up to 200 excluded sources (maxExcludedCount == maxSkills). Fed through whole
       // they would push the profile-derived query past savedsearch's maxQueryLen and the
       // alert toggle would fail with a raw "query is too long".
