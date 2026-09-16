@@ -152,18 +152,31 @@
   // is job-page opens by every visitor (three orders of magnitude larger by
   // construction) measured only from the day the rollup began recording the
   // bot-filtered column. The prose below is not enough for either — this grid gets
-  // screenshotted on its own, and read that way "jobs viewed 5,401,347" beside "jobs
-  // saved 1,448" looks like a broken ratio rather than two different populations, and
-  // reads as the life of the site rather than a fortnight.
+  // screenshotted on its own, and read that way "jobs viewed 5.4M" beside "jobs saved
+  // 1,460" looks like a broken ratio rather than two different populations, and reads
+  // as the life of the site rather than a fortnight.
   //
   // The window comes from the API, never from a date written here: the API derives it
   // from the data, so if the missing history is ever recovered the note widens on its
   // own, and a hardcoded date would start lying the moment that happened.
+  //
+  // It is also the only cell rendered compactly ("5.4M"), like the catalogue strip
+  // above, while the other seven stay exact. Not a style inconsistency but the same
+  // split as everything else about this cell: a seven-digit figure is the only one that
+  // gains anything from being shortened, and compacting a neighbour would spend real
+  // precision to print "1.5K" where "1,460" already fit — beside a "506" that has no
+  // compact form at all, so the row would round some numbers and not others at a
+  // threshold nobody can see. Compact notation also BOUNDS the width for good ("1.2B"
+  // is four characters), which is what lets the figures keep the larger type below.
   const engagement = $derived.by(() => {
     const e = data.engagement;
     if (!e) return null;
     return [
-      { value: nf.format(e.viewed), label: 'job views, all visitors', note: sinceNote(e.viewed_since) },
+      {
+        value: compactNf.format(e.viewed),
+        label: 'job views, all visitors',
+        note: sinceNote(e.viewed_since),
+      },
       { value: nf.format(e.saved), label: 'jobs saved' },
       { value: nf.format(e.applied), label: 'applications' },
       { value: nf.format(e.saved_searches), label: 'saved searches' },
@@ -313,11 +326,12 @@
             <dt class="font-mono text-xs uppercase tracking-wide text-balance text-muted-foreground">
               {e.label}{#if e.note}<span class="block normal-case opacity-70">{e.note}</span>{/if}
             </dt>
-            <!-- Sized for the WIDEST figure this grid can hold, not the typical one: the
-                 view count runs seven digits and text-4xl overflowed its 1/4-width cell
-                 into the neighbour. Compacting it to "5.4M" like the catalogue strip above
-                 is not the fix — this page promises "no vanity rounding" in its own intro. -->
-            <dd class="mt-auto pt-2 text-2xl font-semibold tracking-tight tabular-nums sm:text-3xl">{e.value}</dd>
+            <!-- This type size is safe only because the view count is rendered compactly:
+                 spelled out, its seven digits overflowed a 1/4-width cell into the
+                 neighbour, and no font size fits a figure that keeps growing. Compact
+                 notation is what bounds it ("1.2B" is four characters), so a figure that
+                 goes exact again has to come back down to text-2xl/sm:text-3xl. -->
+            <dd class="mt-auto pt-2 text-3xl font-semibold tracking-tight tabular-nums sm:text-4xl">{e.value}</dd>
           </div>
         {/each}
       </dl>
