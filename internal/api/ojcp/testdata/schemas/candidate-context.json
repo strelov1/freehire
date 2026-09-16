@@ -1,0 +1,91 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ojcp.dev/schemas/v0.1/candidate-context.json",
+  "title": "OJCP CandidateContext",
+  "description": "Schema for a consent-scoped candidate profile passed by agents for personalized search and fit scoring.",
+  "type": "object",
+  "required": ["ojcp_candidate_context_version", "consent_scope"],
+  "properties": {
+    "ojcp_candidate_context_version": {
+      "type": "string",
+      "description": "Version of the CandidateContext schema.",
+      "enum": ["0.1"]
+    },
+    "consent_scope": {
+      "type": "string",
+      "enum": ["search_personalization", "fit_scoring", "application_prefill", "full_profile"],
+      "description": "The scope of consent granted by the candidate for use of this data."
+    },
+    "skills": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Candidate's skills."
+    },
+    "experience_years": {
+      "type": "number",
+      "description": "Total years of professional experience."
+    },
+    "current_title": {
+      "type": "string",
+      "description": "Candidate's current job title."
+    },
+    "location_preference": {
+      "type": "object",
+      "properties": {
+        "city": { "type": "string" },
+        "state": { "type": "string" },
+        "country": { "type": "string" },
+        "remote_ok": {
+          "type": "boolean",
+          "description": "Whether the candidate is open to remote work."
+        }
+      }
+    },
+    "employment_type_preference": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Preferred employment types. Standard values: full_time, part_time, contract, internship, temporary. Additional values MAY be used."
+    },
+    "salary_expectation": {
+      "type": "object",
+      "properties": {
+        "min": {
+          "type": "number",
+          "description": "Minimum acceptable salary."
+        },
+        "max": {
+          "type": "number",
+          "description": "Maximum expected salary."
+        },
+        "currency": {
+          "type": "string",
+          "description": "ISO 4217 currency code."
+        }
+      }
+    },
+    "work_authorization": {
+      "type": "string",
+      "description": "Work authorization status (e.g., US_citizen, permanent_resident, visa_required)."
+    },
+    "resume_embedding_hash": {
+      "type": "string",
+      "description": "SHA-256 hash of a resume embedding vector, enabling semantic match scoring without transmitting the full resume."
+    },
+    "name": {
+      "type": "string",
+      "description": "Candidate's full name. Only include when consent_scope is 'application_prefill' or 'full_profile'."
+    },
+    "email": {
+      "type": "string",
+      "format": "email",
+      "description": "Candidate's contact email. Only include when consent_scope is 'application_prefill' or 'full_profile'."
+    },
+    "resume_url": {
+      "type": "string",
+      "format": "uri",
+      "description": "URL to the candidate's resume document. Only include when consent_scope is 'application_prefill' or 'full_profile'."
+    }
+  }
+}

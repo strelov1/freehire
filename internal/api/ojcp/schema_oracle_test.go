@@ -74,6 +74,18 @@ func compileVendoredSchemas() {
 	// Every resource is registered before any is compiled. Compiling as we go would fail
 	// on the first schema whose $ref names a file later in the walk.
 	c := jsonschema.NewCompiler()
+
+	// Draft 2020-12 treats `format` as an annotation unless the validator opts in, so
+	// without this a `datePosted` of "16/09/2026" — or a `url` that is not one — validates
+	// clean, and the oracle is blind to exactly the fields the posting projection writes.
+	c.AssertFormat()
+
+	// The offline guarantee is asserted here, not inherited from whatever loader the
+	// library happens to default to. A $ref the vendored set does not satisfy must fail the
+	// compile; silently fetching it would make CI depend on ojcp.dev being reachable, and
+	// the day it is not, the red build lands in an unrelated PR with no hint where it
+	// came from.
+	c.UseLoader(refusingLoader{})
 	ids := make([]string, 0, len(files))
 	for _, path := range files {
 		raw, err := os.ReadFile(path)
@@ -124,6 +136,16 @@ func vendoredSchemaPaths() ([]string, error) {
 		return nil
 	})
 	return paths, err
+}
+
+// refusingLoader is the compiler's whole view of the outside world: it answers every URL
+// with an error. Anything the vendored tree does not itself register is therefore a compile
+// failure naming the missing $id, which is the diagnosis a re-vendoring that forgot a file
+// actually needs.
+type refusingLoader struct{}
+
+func (refusingLoader) Load(url string) (any, error) {
+	return nil, fmt.Errorf("refusing to fetch %s: OJCP schemas resolve only from %s", url, vendoredSchemaDir)
 }
 
 // readSchemaID reads the $id a vendored schema publishes itself under. A file without one

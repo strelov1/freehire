@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ojcp.dev/schemas/v0.1/tools/get-job-detail-input.json",
+  "title": "get_job_detail Input",
+  "description": "Input schema for the get_job_detail tool.",
+  "type": "object",
+  "properties": {
+    "job_id": {
+      "type": "string",
+      "description": "The unique OJCP job identifier"
+    },
+    "include_employer_context": {
+      "type": "boolean",
+      "default": true
+    },
+    "candidate_context": { "$ref": "https://ojcp.dev/schemas/v0.1/candidate-context.json" }
+  },
+  "required": ["job_id"]
+}

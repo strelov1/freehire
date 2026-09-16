@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ojcp.dev/schemas/v0.1/tools/get-employer-context-input.json",
+  "title": "get_employer_context Input",
+  "description": "Input schema for the get_employer_context tool.",
+  "type": "object",
+  "properties": {
+    "employer_id": {
+      "type": "string",
+      "description": "The OJCP employer identifier"
+    }
+  },
+  "required": ["employer_id"]
+}

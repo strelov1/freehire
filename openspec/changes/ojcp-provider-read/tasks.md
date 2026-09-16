@@ -1,15 +1,18 @@
 ## 1. Groundwork
 
-- [ ] 1.1 Vendor OJCP's published JSON Schemas (manifest, job-posting, and the three read
-      tool responses) into `internal/api/ojcp/testdata/schemas/`, with a short README noting
-      the upstream commit they were taken from — they are the oracle every projection test
-      validates against, so their provenance must be recorded.
-- [ ] 1.2 Add a schema-validation test helper that loads those schemas offline and asserts a
+- [x] 1.1 Vendor OJCP's published JSON Schemas (manifest, job-posting, and the three read
+      tools' inputs and responses) into `internal/api/ojcp/testdata/schemas/`, with a short
+      README noting the upstream commit they were taken from — they are the oracle every
+      projection test validates against, so their provenance must be recorded.
+- [x] 1.2 Add a schema-validation test helper that loads those schemas offline and asserts a
       projected value against one. Prove it by feeding it a value that violates a `required`
-      field and watching it fail.
-- [ ] 1.3 Register `internal/api/ojcp` and `internal/api/ojcpmcp` in
-      `internal/platform/arch/layering/blocks.go` (both in the `api` block) and confirm the
-      layering guard passes with the packages still empty.
+      field and watching it fail. Turn on `format` assertion (draft 2020-12 leaves it off, so
+      a malformed `datePosted` would otherwise pass) and pin the offline guarantee with a
+      loader that refuses every URL rather than relying on the library's default.
+- [x] 1.3 Register `internal/api/ojcp` in `internal/platform/arch/layering/blocks.go` (the
+      `api` block) and confirm the layering guard passes. `internal/api/ojcpmcp` is
+      registered in task 5.1, when the package first exists: the guard fails on a table entry
+      naming a package that is not on disk.
 
 ## 2. JobPosting projection
 
@@ -47,8 +50,9 @@
 
 ## 5. MCP transport
 
-- [ ] 5.1 Add the official Go MCP SDK to `go.mod` and stand up a server in
-      `internal/api/ojcpmcp` registering the three tools against the same implementations.
+- [ ] 5.1 Add the official Go MCP SDK to `go.mod`, stand up a server in
+      `internal/api/ojcpmcp` registering the three tools against the same implementations,
+      and register that package in `internal/platform/arch/layering/blocks.go`.
 - [ ] 5.2 Mount it into Fiber via `adaptor.HTTPHandler` at the path the manifest declares.
 - [ ] 5.3 Render errors as JSON-RPC errors carrying the OJCP envelope in `data`.
 - [ ] 5.4 Test that the same call over both transports yields an identical projected payload.

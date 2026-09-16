@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ojcp.dev/schemas/v0.1/tools/search-jobs-input.json",
+  "title": "search_jobs Input",
+  "description": "Input schema for the search_jobs tool.",
+  "type": "object",
+  "properties": {
+    "query": {
+      "type": "string",
+      "description": "Natural language search query, e.g. 'senior backend engineer remote'"
+    },
+    "location": {
+      "type": "object",
+      "properties": {
+        "city": { "type": "string" },
+        "state": { "type": "string" },
+        "country": { "type": "string" },
+        "remote_ok": { "type": "boolean" },
+        "radius_miles": { "type": "number" }
+      }
+    },
+    "filters": {
+      "type": "object",
+      "properties": {
+        "employment_type": {
+          "type": "string",
+          "description": "Standard values: full_time, part_time, contract, internship, temporary. Providers MAY accept additional values."
+        },
+        "salary_min": { "type": "number" },
+        "salary_max": { "type": "number" },
+        "experience_level": {
+          "type": "string",
+          "description": "Standard values: entry, mid, senior, lead, director, executive. Providers MAY accept additional values."
+        },
+        "posted_within_days": { "type": "integer" }
+      }
+    },
+    "candidate_context": { "$ref": "https://ojcp.dev/schemas/v0.1/candidate-context.json" },
+    "pagination": {
+      "type": "object",
+      "properties": {
+        "limit": { "type": "integer", "default": 10, "maximum": 50 },
+        "offset": { "type": "integer", "default": 0 }
+      }
+    }
+  },
+  "required": ["query"]
+}
