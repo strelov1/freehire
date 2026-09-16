@@ -54,6 +54,12 @@ export interface CompletenessInput {
   /** How many search alerts the user has. Only "any" matters; the count is what the
    *  caller already holds, so it is not narrowed to a boolean here. */
   alertCount: number;
+  /** Whether the reader said they don't want the alerts step, e.g. because they are not
+   *  job-hunting right now. Drops the step from the list entirely rather than marking it
+   *  done — a done step still counts toward the total, and a step nobody asked to
+   *  complete must not inflate it. Ignored once an alert actually exists: a real
+   *  subscription is a stronger signal than a stale dismissal. */
+  alertsDismissed?: boolean;
 }
 
 /** Whether the location block says anything at all.
@@ -76,8 +82,13 @@ function statesLocation(profile: UserProfile | null): boolean {
 }
 
 /** The setup steps and whether each is done, in the order they are asked for. */
-export function accountSteps({ hasCv, profile, alertCount }: CompletenessInput): CompletenessStep[] {
-  return [
+export function accountSteps({
+  hasCv,
+  profile,
+  alertCount,
+  alertsDismissed,
+}: CompletenessInput): CompletenessStep[] {
+  const steps: CompletenessStep[] = [
     {
       id: 'cv',
       label: 'Add your CV',
@@ -113,13 +124,18 @@ export function accountSteps({ hasCv, profile, alertCount }: CompletenessInput):
       href: '/my/profile/location',
       done: statesLocation(profile),
     },
-    {
+  ];
+
+  if (alertCount > 0 || !alertsDismissed) {
+    steps.push({
       id: 'alerts',
       label: 'Get new matches sent to you',
       href: '/my/searches',
       done: alertCount > 0,
-    },
-  ];
+    });
+  }
+
+  return steps;
 }
 
 /** Whether following `step` would move the reader at all.

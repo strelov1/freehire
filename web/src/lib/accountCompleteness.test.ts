@@ -176,4 +176,35 @@ describe('stepLeadsSomewhere', () => {
     expect(outstandingOf(accountSteps(full))).toEqual([]);
     expect(accountSteps(full).every((s) => s.done)).toBe(true);
   });
+
+  // Someone who is not job-hunting right now must be able to say so, rather than being
+  // told forever that one step remains. Dismissal drops the step entirely rather than
+  // marking it done — a done step still counts toward the total, and a step nobody asked
+  // to complete must not inflate it.
+  it('drops the alerts step entirely once dismissed, rather than counting it done', () => {
+    const steps = accountSteps({ ...empty, alertsDismissed: true });
+    expect(steps.map((s) => s.id)).not.toContain('alerts');
+    expect(steps).toHaveLength(4);
+  });
+
+  it('ignores the dismissal once an alert actually exists', () => {
+    expect(doneIds({ ...empty, alertCount: 1, alertsDismissed: true })).toEqual(['alerts']);
+  });
+
+  it('reports a dismissed-but-otherwise-complete account as having nothing outstanding', () => {
+    const full: CompletenessInput = {
+      hasCv: true,
+      profile: profile({
+        specializations: ['backend'],
+        seniorities: ['senior'],
+        skills: ['go'],
+        location_preferences: { work_modes: ['remote'], remote: {}, base: {}, relocation: { open: false } },
+      }),
+      alertCount: 0,
+      alertsDismissed: true,
+    };
+    const steps = accountSteps(full);
+    expect(steps).toHaveLength(4);
+    expect(outstandingOf(steps)).toEqual([]);
+  });
 });

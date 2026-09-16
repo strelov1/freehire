@@ -1,9 +1,9 @@
 <script lang="ts">
-  import { Check, ArrowRight } from '@lucide/svelte';
+  import { Check, ArrowRight, X } from '@lucide/svelte';
   import { page } from '$app/state';
   import { resolve } from '$app/paths';
   import { outstandingOf, stepLeadsSomewhere, type CompletenessStep } from '$lib/accountCompleteness';
-  import { ensureAccountSetupLoaded, setupSteps } from '$lib/accountSetup.svelte';
+  import { dismissAlertsStep, ensureAccountSetupLoaded, setupSteps } from '$lib/accountSetup.svelte';
 
   // "How complete is my account", mounted in /my/profile's LAYOUT — so it is on screen for
   // all eight profile sections, and four of its five steps are done on one of them (only
@@ -74,14 +74,31 @@
               <span class="line-through decoration-border">{step.label}</span>
             </p>
           {:else if leadsSomewhere(step)}
-            <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- stepHref() wraps resolve(step.href); the rule can't see through the appended #anchorId -->
-            <a href={stepHref(step)} class="group flex items-center gap-2 rounded-lg px-1 py-1.5 text-sm transition-colors hover:bg-accent">
-              {@render dotAndLabel(step)}
-              <ArrowRight
-                class="size-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5"
-                aria-hidden="true"
-              />
-            </a>
+            <!-- The dismiss button (alerts only) must not nest inside the link, so the
+                 row itself carries the hover background and the group, and the link
+                 covers only the part that navigates. -->
+            <div class="group flex items-center gap-1 rounded-lg py-1.5 pl-1 pr-1.5 text-sm transition-colors hover:bg-accent">
+              <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- stepHref() wraps resolve(step.href); the rule can't see through the appended #anchorId -->
+              <a href={stepHref(step)} class="flex min-w-0 flex-1 items-center gap-2">
+                {@render dotAndLabel(step)}
+                <ArrowRight
+                  class="size-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5"
+                  aria-hidden="true"
+                />
+              </a>
+              {#if step.id === 'alerts'}
+                <!-- Not everyone is job-hunting right now — this is the only step that
+                     can be waved off instead of completed. -->
+                <button
+                  type="button"
+                  onclick={dismissAlertsStep}
+                  aria-label="Hide the &quot;{step.label}&quot; step"
+                  class="shrink-0 rounded-md p-1 text-muted-foreground transition-colors hover:bg-background hover:text-accent-foreground"
+                >
+                  <X class="size-4" aria-hidden="true" />
+                </button>
+              {/if}
+            </div>
           {:else}
             <!-- The step is done on the page already open. Still listed — it is genuinely
                  outstanding — but as a statement rather than a link, with the section it

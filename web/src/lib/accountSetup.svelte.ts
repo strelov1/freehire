@@ -15,10 +15,15 @@
 // page whose visitor least needs it.
 
 import { accountSteps, outstandingOf, type CompletenessStep } from './accountCompleteness';
-import { isAuthenticated } from './auth.svelte';
+import { readAlertsDismissed, writeAlertsDismissed } from './accountSetupDismiss';
+import { currentUser, isAuthenticated } from './auth.svelte';
 import { notifications } from './notifications.svelte';
 import { profileStore } from './profile.svelte';
 import { resumeStore } from './resume.svelte';
+
+/** Reactive so dismissing the step updates the card immediately, without re-fetching
+ *  anything — a plain localStorage read is not itself a tracked dependency. */
+let alertsDismissed = $state(false);
 
 /** Start the three loads. Idempotent and safe to call from several components.
  *
@@ -30,6 +35,15 @@ export function ensureAccountSetupLoaded(): void {
   void resumeStore.ensureLoaded();
   void profileStore.ensureLoaded();
   void notifications.ensureLoaded();
+  alertsDismissed = readAlertsDismissed(currentUser()?.id);
+}
+
+/** Hide the "alerts" step for this account and device — there is no undo in the UI; a
+ *  reader who changes their mind can still reach subscriptions directly from
+ *  /my/notifications/searches. */
+export function dismissAlertsStep(): void {
+  alertsDismissed = true;
+  writeAlertsDismissed(currentUser()?.id);
 }
 
 /** True once all three inputs have settled.
@@ -52,6 +66,7 @@ function input() {
     // tell someone their alerts are set up while no job is being sent to them — the
     // exact thing this step exists to notice.
     alertCount: notifications.subscriptions.filter((s) => s.active).length,
+    alertsDismissed,
   };
 }
 
