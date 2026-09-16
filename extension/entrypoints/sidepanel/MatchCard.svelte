@@ -140,6 +140,9 @@
   // Reading which CV exists is cheap and side-effect-free, so it runs unconditionally
   // whenever the job changes, same as the match-analysis read above.
   let tailoredCV = $state<TailoredCV | null>(null);
+  let attaching = $state(false);
+  let attachError = $state('');
+  let attached = $state(false);
   $effect(() => {
     const slug = job.public_slug;
     tailoredCV = null;
@@ -157,10 +160,6 @@
       .catch(() => {});
   });
   let showAttach = $derived(isCatalogJob && hasUploadField && tailoredCV !== null);
-
-  let attaching = $state(false);
-  let attachError = $state('');
-  let attached = $state(false);
 
   async function attachTailoredCV() {
     if (attaching || !tailoredCV) return;

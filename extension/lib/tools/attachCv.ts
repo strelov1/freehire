@@ -44,9 +44,9 @@ export function pdfDataUrl(buffer: ArrayBuffer): string {
 
 /**
  * The slice of `chrome.downloads` this module needs, so `resolveDownloadedPath` is testable
- * with a fake rather than a real download. The real implementation is thin glue over
- * `chrome.downloads` itself (see `attachCvChrome.ts`), per extension/AGENTS.md's "test the
- * logic, not the transport".
+ * with a fake rather than a real download. The real implementation (`realDownloadsAPI` in
+ * `entrypoints/background.ts`) is thin glue over `chrome.downloads` itself, per
+ * extension/AGENTS.md's "test the logic, not the transport".
  */
 export interface DownloadsAPI {
   download(options: { url: string; filename: string; conflictAction: 'uniquify' }): Promise<number>;
