@@ -48,11 +48,11 @@
 
 ## 6. Panel UI (`MatchCard.svelte`)
 
-- [ ] 6.1 Show the "Attach tailored CV" action only when both hold: a tailored CV exists for
+- [x] 6.1 Show the "Attach tailored CV" action only when both hold: a tailored CV exists for
       the job in view (§2) and `extractUploads` reports a file field on the current page —
       matching the spec's three scenarios (shown, hidden on no tailored CV, hidden on no
       upload field).
-- [ ] 6.2 Wire the click to the message from §5.3; show its success/failure result inline
+- [x] 6.2 Wire the click to the message from §5.3; show its success/failure result inline
       (reuse the panel's existing inline-error pattern rather than introducing a new one).
 
 ## 7. Verification

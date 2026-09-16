@@ -1,23 +1,27 @@
 <script lang="ts">
-  import { Bookmark, Check, FileText, SquarePen, TriangleAlert } from '@lucide/svelte';
+  import { Bookmark, Check, FileText, Paperclip, SquarePen, TriangleAlert } from '@lucide/svelte';
   import { Button, Card, ConfirmDialog, CountryFlag } from 'freehire-design-system';
+  import { browser } from 'wxt/browser';
+  import type { RuntimeMessage } from '../../lib/protocol';
   import { getToken, HIRE_ORIGIN } from '../../lib/auth';
   import {
     allowanceRefuses,
     allowanceRemaining,
     companyLogoUrl,
     getMatchAnalysis,
+    getTailoredCVForJob,
     partitionBlockers,
     saveJob,
     unsaveJob,
     type FreehireJob,
     type JobMatch,
     type MatchAnalysisResponse,
+    type TailoredCV,
   } from '../../lib/freehire';
   import { categoryLabel, countryLabel, regionLabel, workModeLabel } from '../../lib/labels';
   import { ensureSavedLoaded, isSaved, markSaved, markUnsaved } from '../../lib/savedJobs';
 
-  let { job, match }: { job: FreehireJob; match: JobMatch } = $props();
+  let { job, match, hasUploadField }: { job: FreehireJob; match: JobMatch; hasUploadField: boolean } = $props();
 
   function scoreTone(score: number): 'good' | 'warn' | 'bad' {
     if (score >= 70) return 'good';
@@ -129,6 +133,53 @@
   let blockers = $derived(partitionBlockers(match.blockers));
   let hasGaps = $derived(match.missing.length > 0 || blockers.unmet.length > 0);
   let tailorConfirmLabel = $derived(hasGaps ? 'Tailor anyway' : 'Tailor my CV');
+
+  // The "Attach tailored CV" action — shown only when both a tailored CV already exists
+  // for this job and the page has a file upload field to place it into (see
+  // openspec/changes/extension-attach-tailored-cv/specs/extension-autofill/spec.md).
+  // Reading which CV exists is cheap and side-effect-free, so it runs unconditionally
+  // whenever the job changes, same as the match-analysis read above.
+  let tailoredCV = $state<TailoredCV | null>(null);
+  $effect(() => {
+    const slug = job.public_slug;
+    tailoredCV = null;
+    if (slug === '') return;
+    getToken()
+      .then((token) => (token ? getTailoredCVForJob(slug, token) : null))
+      .then((cv) => {
+        if (job.public_slug === slug) tailoredCV = cv;
+      })
+      .catch(() => {});
+  });
+  let showAttach = $derived(isCatalogJob && hasUploadField && tailoredCV !== null);
+
+  let attaching = $state(false);
+  let attachError = $state('');
+  let attached = $state(false);
+
+  async function attachTailoredCV() {
+    if (attaching || !tailoredCV) return;
+    attaching = true;
+    attachError = '';
+    attached = false;
+    try {
+      const reply = (await browser.runtime.sendMessage({
+        kind: 'ATTACH_TAILORED_CV',
+        jobSlug: job.public_slug,
+      } satisfies RuntimeMessage)) as RuntimeMessage | undefined;
+      if (reply?.kind === 'ATTACH_TAILORED_CV_RESULT' && reply.ok) {
+        attached = true;
+      } else if (reply?.kind === 'ATTACH_TAILORED_CV_RESULT') {
+        attachError = reply.error;
+      } else {
+        attachError = 'could not reach the extension to attach the file';
+      }
+    } catch (err) {
+      attachError = err instanceof Error ? err.message : 'could not attach the file';
+    } finally {
+      attaching = false;
+    }
+  }
 </script>
 
 <Card class="card">
@@ -214,6 +265,26 @@
         {/if}
       {/if}
     </div>
+
+    {#if showAttach}
+      <div class="attach">
+        <Button
+          class="attach-btn"
+          variant="outline"
+          size="sm"
+          disabled={attaching}
+          onclick={attachTailoredCV}
+        >
+          <Paperclip class="icon-sm" />
+          {attaching ? 'Attaching…' : 'Attach tailored CV'}
+        </Button>
+        {#if attached}
+          <p class="hint attach-ok"><Check class="icon-sm" /> Attached to this form</p>
+        {:else if attachError}
+          <p class="hint attach-err"><TriangleAlert class="icon-sm" /> {attachError}</p>
+        {/if}
+      </div>
+    {/if}
 
     <Button
       class="save"
@@ -526,6 +597,28 @@
     font-size: 12px;
     font-weight: 500;
     color: var(--brand-strong);
+  }
+  .attach {
+    margin-top: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  :global(.attach-btn) {
+    width: 100%;
+    gap: 6px;
+  }
+  .attach-ok,
+  .attach-err {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .attach-ok {
+    color: var(--brand-strong);
+  }
+  .attach-err {
+    color: var(--destructive);
   }
   :global(.save) {
     width: 100%;

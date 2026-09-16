@@ -207,6 +207,11 @@ const realDownloadsAPI: DownloadsAPI = {
   },
 };
 
+/** `Error#message` when there is one, else the value's own string form. */
+function errorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
+
 /**
  * Attaches the caller's tailored CV for `jobSlug` to the current page's upload field.
  * See lib/tools/attachCv.ts and openspec/changes/extension-attach-tailored-cv/design.md
@@ -228,7 +233,7 @@ async function attachTailoredCV(jobSlug: string): Promise<RuntimeMessage> {
   try {
     assertReachableFrame(upload.frame);
   } catch (err) {
-    return fail(err instanceof Error ? err.message : String(err));
+    return fail(errorMessage(err));
   }
 
   const cv = await getTailoredCVForJob(jobSlug, token);
@@ -242,14 +247,14 @@ async function attachTailoredCV(jobSlug: string): Promise<RuntimeMessage> {
   try {
     filePath = await resolveDownloadedPath(realDownloadsAPI, dataUrl, filename, DOWNLOAD_TIMEOUT_MS);
   } catch (err) {
-    return fail(err instanceof Error ? err.message : String(err));
+    return fail(errorMessage(err));
   }
 
   const debuggee = { tabId };
   try {
     await browser.debugger.attach(debuggee, '1.3');
   } catch (err) {
-    return fail(classifyAttachError(err instanceof Error ? err.message : String(err)));
+    return fail(classifyAttachError(errorMessage(err)));
   }
   try {
     const evalResult = (await browser.debugger.sendCommand(debuggee, 'Runtime.evaluate', {
@@ -264,7 +269,7 @@ async function attachTailoredCV(jobSlug: string): Promise<RuntimeMessage> {
     });
     return { kind: 'ATTACH_TAILORED_CV_RESULT', ok: true };
   } catch (err) {
-    return fail(err instanceof Error ? err.message : String(err));
+    return fail(errorMessage(err));
   } finally {
     await browser.debugger.detach(debuggee).catch(() => {
       // Already detached (e.g. the tab closed mid-call) — nothing left to clean up.

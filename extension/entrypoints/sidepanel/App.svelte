@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { browser } from 'wxt/browser';
-  import { type RuntimeMessage, type LabelFill } from '../../lib/protocol';
+  import { type RuntimeMessage, type LabelFill, type FramedUpload } from '../../lib/protocol';
   import { createSession, getSession, SessionNotFound } from '../../lib/assistant/api';
   import { sendTurn, type Turn } from '../../lib/assistant/client';
   import { initChat, reduceTurnEvent, type ChatState } from '../../lib/assistant/chat';
@@ -485,6 +485,10 @@
    *  about whether the page is showing an application: it accepted values. Reset
    *  by a page change, with the plan. */
   let formFilled = $state(false);
+  /** The upload fields the last read found — MatchCard's "Attach tailored CV" action
+   *  is gated on this being non-empty, the same detection `showsApplicationForm`
+   *  already relies on. */
+  let uploads = $state<FramedUpload[]>([]);
 
   /** Reads the page's form and rebuilds the plan, or clears it for a page that
    *  is not showing an application. */
@@ -518,8 +522,10 @@
     if (reply?.kind !== 'FRAMED_FORM') {
       questionsSeen = 0;
       plan = null;
+      uploads = [];
       return;
     }
+    uploads = reply.uploads;
     questionsSeen = reply.fields.filter((f) => f.label.trim() !== '').length;
     if (!showsApplicationForm(reply.fields, reply.uploads, { filled: formFilled })) {
       plan = null;
@@ -836,7 +842,7 @@
         <div class="match-scroll">
           {#if user}
             {#if matchStatus === 'ready' && matchJob && match}
-              <MatchCard job={matchJob} {match} />
+              <MatchCard job={matchJob} {match} hasUploadField={uploads.length > 0} />
             {:else if matchStatus === 'loading'}
               <div class="match-skeleton">
                 <Skeleton class="h-9 w-9 rounded-lg" />
