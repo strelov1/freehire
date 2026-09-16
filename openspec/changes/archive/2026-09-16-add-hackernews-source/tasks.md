@@ -95,7 +95,7 @@
 
 ## 4. Follow-up (not part of this change's diff)
 
-- [ ] 4.1 Note in the PR description: board-catalog promotion for HN-mentioned companies
+- [x] 4.1 Note in the PR description: board-catalog promotion for HN-mentioned companies
       with a recognizable ATS link is `python3 scripts/harvest_boards.py --hn --write` (fixed
       by PR #2879), run as a periodic operational task — same shape as
       harvest-githublists-boards' deferred group 3, not scheduled here.
