@@ -42,8 +42,12 @@ not the repo. Ship it, then submit.
    `web/src/routes/privacy/+page.svelte`, added in freehire#2888). It has to carry the
    verbatim Limited Use sentence and describe each scope, or the submission is refused
    before anyone looks at the product.
-2. Verify domain ownership of `freehire.me` with Google. We already hold Search Console
-   access; the verification must sit under the same account that owns the Cloud project.
+2. Verify domain ownership of `freehire.me` with Google. `dig +short TXT freehire.me`
+   already returns a `google-site-verification=` record (measured 2026-09-16), so this is
+   most likely done from the Search Console setup. **Confirm the account, not the record**
+   — the verification has to sit under the same Google account that owns the Cloud
+   project, and a record proving some account owns the domain looks identical to one
+   proving the right one does.
 3. Google Cloud Console → OAuth consent screen → **Publish App**. Apps in testing are not
    eligible for review.
 4. Fill the branding information and submit for **brand verification** (app name, logo,
@@ -59,6 +63,21 @@ team arrives by email**, and a thread nobody reads stalls the whole submission.
 
 Re-verification is triggered by adding redirect URIs or JavaScript origins, or by renaming
 the product. Worth remembering before a routine-looking config change.
+
+## Branding assets
+
+The consent screen wants a **square 120x120** logo. Derive it rather than drawing one, so
+the consent screen and the installed app stay the same mark:
+
+```sh
+sips -Z 120 web/static/pwa-512x512.png --out /tmp/freehire-oauth-logo-120.png
+```
+
+Not committed, because it is derived and the site never serves it — one command is a
+smaller thing to keep true than a binary that silently drifts from the icon it was cut
+from. The other four branding fields are already live and were checked on 2026-09-16:
+`freehire.me`, `/privacy` and `/terms` all answer 200, and the footer links the last two
+from every page, which is where a reviewer looks for them.
 
 ## Scope justifications
 
