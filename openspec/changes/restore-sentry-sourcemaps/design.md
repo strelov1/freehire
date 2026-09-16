@@ -135,13 +135,27 @@ why `errorHandler` did not help.
 
 ## Migration Plan
 
-1. Land the build/release change with the host still holding the dead token. Deploys fail
-   at the new check — loudly, before the build, with the cause named. This is the moment
-   the problem becomes visible instead of silent.
-2. Mint a replacement token with the scope the upload needs, install it on the host, and
-   revoke the old one.
-3. Confirm the next release passes the check and that Sentry shows artifacts for it.
-4. Re-read a production issue and confirm the frames name our own files.
+**The credential is replaced BEFORE the check reaches the host, not after.** An earlier
+draft had it the other way round — land the change against the dead token, let every deploy
+fail loudly, and call that "the moment the problem becomes visible". That was rejected, and
+it was wrong twice over. It would have bought visibility nobody needed (the problem was
+already measured, in this document) at the price of blocking every unrelated deploy until a
+human happened to be free to mint a token. And it misread its own mechanism: merging this
+change does NOT arm the check. `deploy/` does not deploy itself (`deploy/AGENTS.md`), so the
+host keeps running its own copy of `release.sh` until someone copies the new one over. That
+copy is the arming step, and it is step 3.
+
+1. Merge the change. Nothing on the host changes: the check is in the repository and the
+   host still runs its old `release.sh`, so releases behave exactly as before. This step is
+   inert by design, which is what makes the ordering below free to choose.
+2. Mint a replacement token with the scope the upload needs, install it in
+   `/opt/freehire/env/sentry-build.env`, and **revoke the old one** — it was read out of
+   `journald`, so this is a rotation, not a swap.
+3. Copy the new `release.sh` to `/opt/freehire/bin/`. This is what arms the check, and it
+   is safe now precisely because step 2 already happened. Confirm with
+   `./deploy/check-drift.sh` exiting 0.
+4. Confirm the next release passes the check and that Sentry shows artifacts for it.
+5. Re-read a production issue and confirm the frames name our own files.
 
 **Rollback:** unset `SENTRY_AUTH_TOKEN` on the host. Releases resume immediately, source
 maps go back to being absent, and the release says so on every run — the pre-change

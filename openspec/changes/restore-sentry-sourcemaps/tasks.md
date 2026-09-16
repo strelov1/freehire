@@ -53,6 +53,11 @@
 
 ## 4. Rotate the credential on the host
 
+**Order is load-bearing: 4.1-4.3 before 4.4.** Copying `release.sh` to the host is what arms
+the check, and arming it against the dead token refuses every release — including everyone
+else's. Until 4.4 runs, this whole change is inert on production, which is why merging it
+first was safe.
+
 - [ ] 4.1 Mint a replacement Sentry token with the scope the upload needs. **User action** —
       the agent cannot mint one.
 - [ ] 4.2 Install it in `/opt/freehire/env/sentry-build.env` (0600 root), replacing the

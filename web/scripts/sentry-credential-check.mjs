@@ -61,6 +61,15 @@ function withoutTrailingSlash(url) {
   return url.replace(/\/+$/, '');
 }
 
+/** What a setting's value is, and — by returning undefined for whitespace — what counts as
+ *  set at all. One definition, because `configurationOf` decides whether the credential is
+ *  complete while `main` reads the same variables to probe with: two spellings of "is this
+ *  set" could disagree, and the half-configured case they exist to catch is exactly where
+ *  they would. */
+function setting(env, name) {
+  return env[name]?.trim();
+}
+
 /**
  * The two reads, in the order they answer distinct questions.
  *
@@ -151,7 +160,7 @@ export function verdict({ configuration, missing = [], status, unreachable, org,
 /** Which of the required variables are set, and which are not. Exported for its own test:
  *  it decides WHICH QUESTION gets asked, so getting it wrong is not visible in verdict(). */
 export function configurationOf(env) {
-  const missing = REQUIRED_VARS.filter((name) => !env[name]?.trim());
+  const missing = REQUIRED_VARS.filter((name) => !setting(env, name));
   if (missing.length === 0) return { configuration: 'complete', missing };
   if (missing.length === REQUIRED_VARS.length) return { configuration: 'none', missing };
   return { configuration: 'partial', missing };
@@ -177,14 +186,14 @@ async function probe({ baseUrl, org, project }, token) {
 }
 
 async function main() {
-  const org = process.env.SENTRY_ORG?.trim();
-  const project = process.env.SENTRY_PROJECT?.trim();
-  const token = process.env.SENTRY_AUTH_TOKEN?.trim();
+  const org = setting(process.env, 'SENTRY_ORG');
+  const project = setting(process.env, 'SENTRY_PROJECT');
+  const token = setting(process.env, 'SENTRY_AUTH_TOKEN');
   // Read by `@sentry/bundler-plugins` (options-mapping.js: `userOptions.url ??
   // process.env["SENTRY_URL"] ?? SENTRY_SAAS_URL`), which hands it to sentry-cli — so as long
   // as release.sh passes it through to the build too, the check and the upload cannot disagree
   // about which Sentry they mean.
-  const baseUrl = process.env.SENTRY_URL?.trim() || 'https://sentry.io';
+  const baseUrl = setting(process.env, 'SENTRY_URL') || 'https://sentry.io';
 
   const { configuration, missing } = configurationOf(process.env);
   const outcome =
