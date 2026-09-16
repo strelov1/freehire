@@ -126,11 +126,18 @@
   // Two rows of four on desktop: the first is finding and tracking work, the second
   // is what people build on top of it (CV, AI read, mail). Order carries that
   // grouping, so keep the halves intact when adding a counter.
+  //
+  // The first cell is the one exception in the grid and its LABEL has to say so: every
+  // other counter here is signed-in members, while `viewed` counts job-page opens by
+  // every visitor, so it is three orders of magnitude larger by construction. The prose
+  // below is not enough — this grid gets screenshotted on its own, and read that way
+  // "jobs viewed 5,401,347" beside "jobs saved 1,448" looks like a broken ratio rather
+  // than two different populations.
   const engagement = $derived.by(() => {
     const e = data.engagement;
     if (!e) return null;
     return [
-      { value: nf.format(e.viewed), label: 'jobs viewed' },
+      { value: nf.format(e.viewed), label: 'job views, all visitors' },
       { value: nf.format(e.saved), label: 'jobs saved' },
       { value: nf.format(e.applied), label: 'applications' },
       { value: nf.format(e.saved_searches), label: 'saved searches' },
@@ -264,15 +271,20 @@
     </div>
     <h2 class="mt-3 text-xl font-semibold tracking-tight">What people do here</h2>
     <p class="mb-6 mt-1 text-sm text-muted-foreground">
-      Signed-in interactions across freehire — postings opened and tracked, CVs written and tailored
-      to a vacancy, matches analyzed against a CV, and inboxes wired up for application mail.
+      Job pages opened by every visitor, signed in or not, and bot-filtered — then the signed-in
+      interactions on top: postings tracked, CVs written and tailored to a vacancy, matches analyzed
+      against a CV, and inboxes wired up for application mail.
     </p>
     {#if engagement}
       <dl class="grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-4">
         {#each engagement as e (e.label)}
           <div class="flex flex-col bg-background p-5 sm:p-6">
             <dt class="font-mono text-xs uppercase tracking-wide text-balance text-muted-foreground">{e.label}</dt>
-            <dd class="mt-auto pt-2 text-3xl font-semibold tracking-tight tabular-nums sm:text-4xl">{e.value}</dd>
+            <!-- Sized for the WIDEST figure this grid can hold, not the typical one: the
+                 view count runs seven digits and text-4xl overflowed its 1/4-width cell
+                 into the neighbour. Compacting it to "5.4M" like the catalogue strip above
+                 is not the fix — this page promises "no vanity rounding" in its own intro. -->
+            <dd class="mt-auto pt-2 text-2xl font-semibold tracking-tight tabular-nums sm:text-3xl">{e.value}</dd>
           </div>
         {/each}
       </dl>

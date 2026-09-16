@@ -30,7 +30,7 @@ SELECT
     -- applications live in their own table now, and counting them there is also the
     -- honest count: one that outlived its posting is still an application somebody made.
     (SELECT count(*) FROM applications WHERE applied_at IS NOT NULL)::int AS applied,
-    (SELECT COALESCE(sum(uniques), 0) FROM job_daily_views)::int AS viewed,
+    (SELECT COALESCE(sum(page_uniques), 0) FROM job_daily_views)::int AS viewed,
     (SELECT count(*) FROM users WHERE resume_object_key IS NOT NULL)::int AS cvs_uploaded,
     (SELECT count(*) FROM cvs WHERE is_tailored)::int AS cvs_tailored,
     (SELECT count(*) FROM user_job_analysis)::int AS match_analyses,
@@ -54,11 +54,17 @@ type GetEngagementStatsRow struct {
 // Aggregate interaction counts for the public engagement endpoint. Aggregate-only:
 // every column is a scalar total, so no user identifier or row-level field is
 // selected. saved / applied are user_jobs interaction-row totals across all users.
-// "viewed" is the all-traffic view total (anonymous + signed-in + API) produced by
+// "viewed" is the human view total (anonymous + signed-in, every visitor) produced by
 // the nginx-log aggregation worker. It sums the worker's per-day rollup
 // (job_daily_views), NOT jobs.view_count — a SUM over the 6M-row jobs table seqscans
 // for ~90s and times the endpoint out, while the rollup is small and fast. (The
 // per-job "N views" on the job card still reads jobs.view_count directly, no scan.)
+// It sums `page_uniques`, NEVER `uniques` — the same rule social-digest's ranking
+// follows, and for the same reason: `uniques` fuses bot-filtered page opens with
+// UNFILTERED API reads, and crawlers are most of this host's traffic. Measured
+// 2026-09-16, `uniques` reported 11,027,722 against `page_uniques`' 5,401,347, so
+// the figure this endpoint published was more than half robots — and it sat on /open
+// beside the seven signed-in counters as though it described the same people.
 // The remaining five mirror event-total semantics from their own tables:
 // cvs_uploaded is the count of users holding a stored résumé (one per user, so also a
 // people count); cvs_tailored counts CVs created as a per-vacancy copy, read off the

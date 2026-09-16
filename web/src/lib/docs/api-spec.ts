@@ -3148,6 +3148,8 @@ data: {"type":"result","stop_reason":"completed"}
         path: '/stats/engagement',
         auth: 'none',
         summary: 'Jobs saved, applied to and viewed across all users, plus CV and inbox usage.',
+        description:
+          '`viewed` is the only field here that is not a signed-in count: it is bot-filtered job-page opens by every visitor, signed in or not, so it is orders of magnitude larger than the rest. Aggregate-only — no user identifier is exposed.',
         curl: `curl "${BASE_URL}/stats/engagement"`,
         responseExample: `{ "data": { "saved": 41200, "applied": 18730, "viewed": 903400, "cvs_uploaded": 2140, "cvs_tailored": 860, "match_analyses": 5310, "inboxes_connected": 410, "saved_searches": 1290 } }`,
       },

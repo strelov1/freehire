@@ -151,15 +151,20 @@ func TestEngagementStatsEndpoint(t *testing.T) {
 		t.Fatalf("seed mailbox: %v", err)
 	}
 
-	// "viewed" is the all-traffic total: SUM(job_daily_views.uniques), the nginx-log
+	// "viewed" is the human view total: SUM(job_daily_views.page_uniques), the nginx-log
 	// worker's rollup, not derived from user_jobs. Summed from the small rollup (not
 	// SUM over the 6M-row jobs table, which seqscans for ~90s). Seed 5 + 2 + 1 = 8
-	// across days/jobs.
+	// page views across days/jobs.
+	//
+	// The two columns are seeded to DIFFERENT totals on purpose: `uniques` (100 + 100 +
+	// 100 = 300) fuses bot-filtered page opens with unfiltered API reads, so a query
+	// reading it publishes crawler traffic as engagement. Seeding both to the same value
+	// would let either column satisfy this assertion, which is how the wrong one shipped.
 	if _, err := pool.Exec(ctx,
-		`INSERT INTO job_daily_views (day, job_id, uniques) VALUES
-		   (DATE '2026-07-20', $1, 5),
-		   (DATE '2026-07-20', $2, 2),
-		   (DATE '2026-07-19', $1, 1)`,
+		`INSERT INTO job_daily_views (day, job_id, uniques, page_uniques) VALUES
+		   (DATE '2026-07-20', $1, 100, 5),
+		   (DATE '2026-07-20', $2, 100, 2),
+		   (DATE '2026-07-19', $1, 100, 1)`,
 		j1, j2); err != nil {
 		t.Fatalf("seed job_daily_views: %v", err)
 	}

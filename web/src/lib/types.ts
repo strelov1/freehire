@@ -1048,7 +1048,12 @@ export interface UserGrowthPoint {
  *  jobs viewed, and what people build on top — CVs uploaded and tailored, matches
  *  analyzed, inboxes connected, searches saved. `inboxes_connected` sums live Gmail
  *  grants and claimed hosted mailboxes, so a user holding both counts twice.
- *  Aggregate-only — no per-user or row-level field. */
+ *  Aggregate-only — no per-user or row-level field.
+ *
+ *  `viewed` is the ONLY field here that is not a signed-in count: it is bot-filtered
+ *  job-page opens by every visitor, signed in or not, so it is orders of magnitude
+ *  larger than its neighbours by construction. Whatever renders it must say so —
+ *  presenting the eight side by side as one population reads as a broken ratio. */
 export interface EngagementStats {
   saved: number;
   applied: number;
