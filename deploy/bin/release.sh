@@ -134,7 +134,24 @@ if [ -r "$SENTRY_BUILD_ENV" ]; then
 	# shellcheck source=/dev/null
 	. "$SENTRY_BUILD_ENV"
 	set +a
-	echo "[release:$app] source maps will be uploaded to Sentry (${SENTRY_ORG:-?}/${SENTRY_PROJECT:-?})"
+fi
+# This line used to ANNOUNCE the upload, unconditionally, the moment the env file was
+# readable — and was wrong for months. The host's token was answered `Invalid token (http
+# status: 401)` on every release while the announcement printed and the release went green;
+# 0 of the 100 most recent freehire-web releases carried an uploaded file. It reads as a
+# statement, so it has to be one: ask first, then say which of the three states this release
+# is in.
+#
+# The build cannot be the thing that asks. @sentry/sveltekit's vite/sourceMaps.js wraps the
+# upload in a bare `catch {}` ABOVE @sentry/vite-plugin's own errorHandler, so a failed
+# upload is a warning in a log and an exit status of 0 — no plugin option changes that.
+#
+# Runs before `pnpm install` deliberately: the checker imports nothing, so a dead credential
+# costs seconds here instead of the three minutes the web build takes.
+if ! node web/scripts/sentry-credential-check.mjs; then
+	echo "release: source maps would not upload for $new — refusing to release; the live color is untouched" >&2
+	echo "release: fix /opt/freehire/env/sentry-build.env, or remove it to release without source maps" >&2
+	exit 1
 fi
 # web migrated from npm to pnpm (DS Phase 2, freehire#1088): install/build via corepack,
 # which provisions the pnpm version pinned in web/package.json's packageManager field.

@@ -29,6 +29,23 @@ export default defineConfig({
   // succeeds, only readable minified stack traces in Sentry are skipped. When
   // enabled in ops, org/project/token come from the environment (freehire-ops),
   // never from code.
+  //
+  // That is the ABSENT-token case, and for months it was the only one written down
+  // while production was in the other one. A token Sentry REJECTS behaves the same
+  // from out here — warning printed, build exits 0 — because @sentry/sveltekit's
+  // vite/sourceMaps.js wraps the upload in a bare `catch {}`:
+  //
+  //     try { await originalWriteBundle({ dir: outDir }); }
+  //     catch { console.warn("[Source Maps Plugin] Failed to upload source maps!"); }
+  //
+  // That catch sits ABOVE @sentry/vite-plugin's own `errorHandler` option, whose
+  // documented default is to throw and stop the bundle — so no option set here can
+  // make a bad credential fail this build, and the build's exit status is not
+  // evidence that anything was uploaded. Measured 2026-09-16: 0 of the 100 most
+  // recent freehire-web releases had an uploaded file, every deploy green.
+  //
+  // What asks instead is scripts/sentry-credential-check.mjs, run from
+  // deploy/bin/release.sh before this build.
   plugins: [
     sentrySvelteKit({
       sourceMapsUploadOptions: {
