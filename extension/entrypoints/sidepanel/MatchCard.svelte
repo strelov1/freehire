@@ -143,6 +143,11 @@
   $effect(() => {
     const slug = job.public_slug;
     tailoredCV = null;
+    // A stale "Attached ✓" (or error) from the PREVIOUS job must not survive the
+    // navigation — this effect already reruns on every slug change, so it is the one
+    // place both resets are guaranteed to run before the new job's own attempt.
+    attached = false;
+    attachError = '';
     if (slug === '') return;
     getToken()
       .then((token) => (token ? getTailoredCVForJob(slug, token) : null))

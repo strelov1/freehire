@@ -4,10 +4,12 @@ import {
   base64FromArrayBuffer,
   pdfDataUrl,
   resolveDownloadedPath,
-  assertReachableFrame,
+  pickAttachableUpload,
   classifyAttachError,
+  TOP_FRAME,
   type DownloadsAPI,
 } from './attachCv';
+import type { FramedUpload } from '../protocol';
 
 describe('uploadInputExpression', () => {
   it('scopes to the numbered form when the upload sits inside one', () => {
@@ -50,12 +52,12 @@ describe('resolveDownloadedPath', () => {
       download: vi.fn(async () => id),
       search: vi.fn(async () => [{ state: 'in_progress' }]),
       onChanged: {
-        addListener: (cb: (delta: Delta) => void) => {
+        addListener: vi.fn((cb: (delta: Delta) => void) => {
           listener = cb;
-        },
-        removeListener: () => {
+        }),
+        removeListener: vi.fn(() => {
           listener = null;
-        },
+        }),
       },
       emit(delta: Delta) {
         listener?.(delta);
@@ -112,15 +114,49 @@ describe('resolveDownloadedPath', () => {
       vi.useRealTimers();
     }
   });
+
+  it('cleans up its timer and listener when download() itself rejects', async () => {
+    const api = fakeDownloadsAPI();
+    api.download = vi.fn(async () => {
+      throw new Error('quota exceeded');
+    });
+    const pending = resolveDownloadedPath(api, 'data:application/pdf;base64,x', 'cv.pdf', 1000);
+    await expect(pending).rejects.toThrow('quota exceeded');
+    // A listener left registered here would still react to a later, unrelated download's
+    // events — removeListener not firing on this path was exactly the leak.
+    expect(api.onChanged.removeListener).toHaveBeenCalledTimes(1);
+  });
 });
 
-describe('assertReachableFrame', () => {
-  it('allows the top frame', () => {
-    expect(() => assertReachableFrame(0)).not.toThrow();
+describe('pickAttachableUpload', () => {
+  const upload = (frame: number, form = 0): FramedUpload => ({ form, frame });
+
+  it('picks the one reachable (top-frame) upload', () => {
+    expect(pickAttachableUpload([upload(TOP_FRAME)])).toEqual({ kind: 'found', upload: upload(TOP_FRAME) });
   });
 
-  it('refuses an embedded frame, which may be a different origin CDP cannot reach', () => {
-    expect(() => assertReachableFrame(3)).toThrow(/embedded/i);
+  it('reports none when the page offers no upload at all', () => {
+    expect(pickAttachableUpload([])).toEqual({ kind: 'none' });
+  });
+
+  it('reports unreachable when every upload lives outside the top frame', () => {
+    // The "site-with-iframe" Greenhouse variant: a real upload exists, but only inside a
+    // frame this action's unscoped Runtime.evaluate cannot address.
+    expect(pickAttachableUpload([upload(2), upload(3)])).toEqual({ kind: 'unreachable' });
+  });
+
+  it('reports ambiguous when more than one reachable upload exists (résumé + cover letter)', () => {
+    expect(pickAttachableUpload([upload(TOP_FRAME, 0), upload(TOP_FRAME, 1)])).toEqual({
+      kind: 'ambiguous',
+      count: 2,
+    });
+  });
+
+  it('picks the reachable one over an unreachable one, rather than reporting ambiguous', () => {
+    expect(pickAttachableUpload([upload(2), upload(TOP_FRAME)])).toEqual({
+      kind: 'found',
+      upload: upload(TOP_FRAME),
+    });
   });
 });
 

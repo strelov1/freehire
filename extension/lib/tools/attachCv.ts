@@ -7,6 +7,8 @@
  * transport".
  */
 
+import type { FramedUpload } from '../protocol';
+
 /**
  * The JS source CDP's `Runtime.evaluate` runs, inside the upload's own frame, to
  * resolve the exact `<input type="file">` `extractUploads` found — scoped by the
@@ -116,31 +118,50 @@ export async function resolveDownloadedPath(
 
     api.onChanged.addListener(onChanged);
 
-    api.download({ url: dataUrl, filename, conflictAction: 'uniquify' }).then((downloadId) => {
-      if (settled) return;
-      id = downloadId;
-      const match = buffered.find((d) => d.id === id);
-      if (match) handle(match);
-    }, reject);
+    api.download({ url: dataUrl, filename, conflictAction: 'uniquify' }).then(
+      (downloadId) => {
+        if (settled) return;
+        id = downloadId;
+        const match = buffered.find((d) => d.id === id);
+        if (match) handle(match);
+      },
+      (err) => finish(() => reject(err)),
+    );
   });
 }
 
 /** Every Chromium tab's top document — the only frame CDP addressing reaches in this
  *  change (see design.md's cross-origin-iframe risk). Mirrors background.ts's own
  *  `TOP_FRAME`, which the frame-fan-out plumbing already treats the same way. */
-const TOP_FRAME = 0;
+export const TOP_FRAME = 0;
+
+/** What `pickAttachableUpload` found, in decreasing order of usability. */
+export type UploadPick =
+  | { kind: 'found'; upload: FramedUpload }
+  /** No upload field anywhere on the page. */
+  | { kind: 'none' }
+  /**
+   * An upload exists, but only inside a frame other than the top one — a cross-origin
+   * embedded ATS iframe (the "site-with-iframe" Greenhouse variant) runs in a different
+   * render process, and this change's `Runtime.evaluate` call — unscoped, so it runs in
+   * the top frame's default execution context — cannot reach a node in a different one.
+   */
+  | { kind: 'unreachable' }
+  /** More than one reachable upload (e.g. résumé + cover letter) — nothing in `Upload`
+   *  carries a label to tell them apart, so guessing the first one risks writing the
+   *  candidate's CV into a cover-letter field silently. */
+  | { kind: 'ambiguous'; count: number };
 
 /**
- * Refuses an upload outside the top frame. A cross-origin embedded ATS iframe (the
- * "site-with-iframe" Greenhouse variant) runs in a different render process, and this
- * change's `Runtime.evaluate` call — unscoped, so it runs in the top frame's default
- * execution context — cannot reach a node in a different one. Failing here with a clear
- * reason beats a silent no-op or, worse, writing into the wrong frame's input.
+ * Picks the one upload field this action can actually write into, or says why it can't —
+ * refusing rather than guessing, the same rule `fillByLabel`'s `ambiguous`/`wrong_form`
+ * outcomes already follow for filling a labelled question (extension/AGENTS.md).
  */
-export function assertReachableFrame(frame: number): void {
-  if (frame !== TOP_FRAME) {
-    throw new Error("can't reach this embedded form yet — it's inside a frame this action cannot address");
-  }
+export function pickAttachableUpload(uploads: FramedUpload[]): UploadPick {
+  const reachable = uploads.filter((u) => u.frame === TOP_FRAME);
+  if (reachable.length === 0) return uploads.length === 0 ? { kind: 'none' } : { kind: 'unreachable' };
+  if (reachable.length > 1) return { kind: 'ambiguous', count: reachable.length };
+  return { kind: 'found', upload: reachable[0] as FramedUpload };
 }
 
 /**

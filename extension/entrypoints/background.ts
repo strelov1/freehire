@@ -17,7 +17,7 @@ import {
   uploadInputExpression,
   pdfDataUrl,
   resolveDownloadedPath,
-  assertReachableFrame,
+  pickAttachableUpload,
   classifyAttachError,
   type DownloadsAPI,
 } from '../lib/tools/attachCv';
@@ -227,14 +227,18 @@ async function attachTailoredCV(jobSlug: string): Promise<RuntimeMessage> {
   if (tabId == null) return fail('no active tab to attach the file to');
 
   const { uploads } = await readFramedUploadsOnly();
-  const upload = uploads[0];
-  if (!upload) return fail('no file upload field found on this page');
-
-  try {
-    assertReachableFrame(upload.frame);
-  } catch (err) {
-    return fail(errorMessage(err));
+  const pick = pickAttachableUpload(uploads);
+  switch (pick.kind) {
+    case 'none':
+      return fail('no file upload field found on this page');
+    case 'unreachable':
+      return fail("can't reach this embedded form yet — it's inside a frame this action cannot address");
+    case 'ambiguous':
+      return fail(
+        `found ${pick.count} file fields on this page and cannot tell which one to use — attach it by hand`,
+      );
   }
+  const upload = pick.upload;
 
   const cv = await getTailoredCVForJob(jobSlug, token);
   if (!cv) return fail('no tailored CV found for this job');

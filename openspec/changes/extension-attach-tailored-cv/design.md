@@ -82,13 +82,25 @@ DevTools on this tab and try again," rather than a generic error.
 
 ## Risks / Trade-offs
 
-- **[Cross-origin embedded ATS iframe]** → A company site can embed Greenhouse behind a
-  cross-origin `<iframe>` (the "site-with-iframe" variant `extension/AGENTS.md` already
-  names). `Runtime.evaluate` scoped to the top frame's context cannot reach a node in a
-  different render process. Mitigation: detect this case (the frame index `extractUploads`
-  already reports is not the top frame) and report a clear "can't reach this embedded form
-  yet" failure instead of a silent no-op or a wrong-frame write; a same-process same-origin
-  iframe (the common case) is unaffected and works through the ordinary frame addressing.
+- **[Embedded ATS iframe, cross-origin or not]** → A company site can embed Greenhouse behind
+  an `<iframe>` (the "site-with-iframe" variant `extension/AGENTS.md` already names).
+  `Runtime.evaluate`, unscoped, runs in the top frame's own default execution context and
+  cannot reach a node in any other frame — this holds regardless of whether that frame
+  happens to share an origin with the top one; nothing in this change distinguishes the two.
+  Mitigation: `pickAttachableUpload` (`lib/tools/attachCv.ts`) considers only uploads reported
+  in the top frame, and reports `unreachable` (surfaced as "can't reach this embedded form
+  yet") when every upload the page offers sits in another one — never a silent no-op or a
+  wrong-frame write. The panel's own visibility gate for the action (`App.svelte`'s
+  `hasUploadField`) applies the same top-frame-only filter, so the action does not even
+  appear for a page whose only upload is embedded.
+- **[More than one upload field on the page]** → `Upload`/`FramedUpload` carry no label, so
+  a form offering both a résumé and a cover-letter upload cannot be told apart by this
+  action — guessing the first one risks writing the CV into the wrong field. Mitigation:
+  `pickAttachableUpload` reports `ambiguous` (with the count) whenever more than one
+  top-frame upload exists, and the caller refuses with a clear message rather than picking
+  one; widening `Upload` to carry a label, so this could disambiguate the way `fillByLabel`
+  does, is a larger change than this one and is left for if it turns out to matter in
+  practice.
 - **[Chrome's "ask where to save each file" setting]** → If the user has that setting on,
   `chrome.downloads.download` surfaces a native Save dialog instead of completing silently,
   stalling the flow on an OS-level prompt this code cannot see. Mitigation: bound the wait
