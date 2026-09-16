@@ -55,6 +55,24 @@ var fillProviders = map[string]bool{
 	"greenhouse": true,
 }
 
+// SubmittableProviders is fillProviders as a value other packages may read: the providers
+// an application can be COMPLETED on without a person.
+//
+// It is exported because the OJCP surface publishes exactly this fact as
+// `supports_agent_submission`, the flag an external agent plans around, and a hand-written
+// copy over there would be a fourth list in a repo that already has three easy to confuse:
+// jobview.AutoApplyProviders (four ATSs a fill may be ATTEMPTED on), handler's enqueue set
+// (five that may be QUEUED), and this one. Only this one means submitted.
+//
+// A copy is returned so a caller cannot mutate the map this package routes on.
+func SubmittableProviders() map[string]bool {
+	out := make(map[string]bool, len(fillProviders))
+	for provider, ok := range fillProviders {
+		out[provider] = ok
+	}
+	return out
+}
+
 // reasonSubmissionNotImplemented is the one park reason for two distinct gaps that both
 // mean "nothing here can ever act on this attempt, regardless of how well the form
 // resolves": fillProviders excluding a provider whose schema DID fetch (Ashby, Workable),

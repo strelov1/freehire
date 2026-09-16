@@ -232,6 +232,11 @@ func publicReadRoutes(t *testing.T, throttler ratelimit.Throttler) (map[string]*
 		// invisible to the guard above, which only checks that a register mounting a
 		// limiter is driven here and so cannot see one mounting none.
 		"sitemapHandlers": mount((&sitemapHandlers{}).register),
+		// The OJCP read surface. It shares the agent-search budget rather than the
+		// browsing one, because its calls cost what /agent/jobs/search costs — and the
+		// OJCP manifest DECLARES that figure, which the spec makes binding: a limit
+		// advertised and not enforced breaks a MUST.
+		"ojcpHandlers": mount((&ojcpHandlers{}).register),
 	}, iss
 }
 
