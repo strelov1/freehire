@@ -36,8 +36,22 @@
 // simply absent from the next index.
 //
 // Chunked, paced and idempotent — the close is `closed_at IS NULL` guarded, so a re-run writes
-// nothing and stopping mid-way is free. CLOSE_APPLOI_CHUNK (default 50k) sets the id span per
-// statement and CLOSE_APPLOI_FROM_ID resumes at the cursor a previous run logged.
+// nothing and stopping mid-way is free. CLOSE_APPLOI_CHUNK sets the id span per statement and
+// CLOSE_APPLOI_FROM_ID resumes at the cursor a previous run logged.
+//
+// THE CHUNK IS AN ID SPAN, NOT A ROW COUNT, and on this table the two are nowhere near each
+// other: jobs.id has reached 1.6 BILLION while the table holds ~11M rows, so an id range is
+// about 145x wider than the number of rows in it. The first run of this worker was launched
+// with the 50k default every other backfill here uses, and spent four minutes closing nothing
+// — apploi's rows start at id 485,750,838, which is 9,715 empty chunks and half an hour of
+// pacing away from a walk that starts at zero. It finished in 18 minutes at
+// CLOSE_APPLOI_CHUNK=5000000 with CLOSE_APPLOI_FROM_ID set to that minimum.
+//
+// So the default is 5M, and the rule for the next id-range walk over this table is: measure
+// `SELECT min(id), max(id) FROM jobs WHERE <predicate>` FIRST and set both knobs from it. The
+// rows are not spread evenly either — one 5M chunk near the top closed 43,599 rows and the
+// last one closed 1.4M, because ids are handed out by a sequence and a source's bulk re-ingest
+// lands them together.
 //
 // Needs only DATABASE_URL.
 package main
@@ -72,7 +86,7 @@ func run() int {
 	}
 	defer cleanup()
 
-	chunk, err := worker.EnvInt64("CLOSE_APPLOI_CHUNK", 50_000)
+	chunk, err := worker.EnvInt64("CLOSE_APPLOI_CHUNK", 5_000_000)
 	if err != nil {
 		log.Printf("close-apploi-misattributed: %v", err)
 		return 1
