@@ -4,14 +4,15 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"net/url"
 	"strconv"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/adaptor"
 	"github.com/jackc/pgx/v5"
 
 	"github.com/strelov1/freehire/internal/api/atsapply"
 	"github.com/strelov1/freehire/internal/api/ojcp"
+	"github.com/strelov1/freehire/internal/api/ojcpmcp"
 	"github.com/strelov1/freehire/internal/ingest/applyform"
 	"github.com/strelov1/freehire/internal/job/jobview"
 	"github.com/strelov1/freehire/internal/platform/db"
@@ -67,14 +68,16 @@ func (h *ojcpHandlers) register(api fiber.Router, mw middleware) {
 	api.Post("/ojcp/v1/search", limit, h.OJCPSearchJobs)
 	api.Get("/ojcp/v1/jobs/:slug", limit, h.OJCPJobDetail)
 	api.Get("/ojcp/v1/employers/:slug", limit, h.OJCPEmployerContext)
+
+	// The MCP transport, mounted through Fiber's own adapter for a net/http handler. It
+	// serves the SAME methods the three routes above call, so the two cannot answer one
+	// question differently. `All` because MCP's streamable transport uses POST to call and
+	// GET to open the server-to-client stream.
+	api.All("/ojcp/mcp", limit, adaptor.HTTPHandler(ojcpmcp.Handler(h)))
 }
 
 // OJCPSearchJobs answers `search_jobs`.
 func (h *ojcpHandlers) OJCPSearchJobs(c *fiber.Ctx) error {
-	if h.search == nil {
-		return ojcpError(c, fiber.StatusServiceUnavailable, "unavailable", "search is not available")
-	}
-
 	var input ojcp.SearchInput
 	// An unrecognised field is IGNORED rather than refused, per the standard's own
 	// extensibility rule: an agent written against a later spec version must still get an
@@ -84,10 +87,37 @@ func (h *ojcpHandlers) OJCPSearchJobs(c *fiber.Ctx) error {
 		return ojcpError(c, fiber.StatusBadRequest, "invalid_input", "request body is not valid JSON")
 	}
 
-	values, unsupported := input.QueryValues()
-	res, err := h.runOJCPSearch(c.Context(), values)
+	resp, err := h.SearchJobs(c.Context(), input)
 	if err != nil {
+		var fe *fiber.Error
+		if errors.As(err, &fe) {
+			return ojcpError(c, fe.Code, "unavailable", fe.Message)
+		}
 		return err
+	}
+	return c.JSON(resp)
+}
+
+// SearchJobs answers `search_jobs` with no transport around it. Both transports call it, so
+// the same question cannot be answered differently over REST and over MCP.
+//
+// It runs the query the public search runs, built from the same values. OJCP has no sort
+// directive and no match vector, so neither is read — the index's own relevance ordering is
+// what an agent gets.
+func (h *ojcpHandlers) SearchJobs(ctx context.Context, input ojcp.SearchInput) (ojcp.SearchJobsResponse, error) {
+	if h.search == nil {
+		return ojcp.SearchJobsResponse{}, fiber.NewError(fiber.StatusServiceUnavailable, "search is not available")
+	}
+
+	values, unsupported := input.QueryValues()
+	res, err := h.search.Search(ctx, search.SearchParams{
+		Query:  values.Get("q"),
+		Filter: search.FilterFromValues(values),
+		Limit:  intOr(values.Get("limit"), 10),
+		Offset: intOr(values.Get("offset"), 0),
+	})
+	if err != nil {
+		return ojcp.SearchJobsResponse{}, err
 	}
 
 	jobs := make([]ojcp.JobPosting, 0, len(res.Hits))
@@ -95,45 +125,46 @@ func (h *ojcpHandlers) OJCPSearchJobs(c *fiber.Ctx) error {
 		jobs = append(jobs, h.projector.JobPosting(hit.Job, nil))
 	}
 
-	return c.JSON(ojcp.SearchJobsResponse{
+	return ojcp.SearchJobsResponse{
 		Query:         values.Get("q"),
 		TotalResults:  int(res.Total),
 		Offset:        intOr(values.Get("offset"), 0),
 		Jobs:          jobs,
 		IgnoredParams: unsupported,
-	}.Finalize())
+	}.Finalize(), nil
 }
 
-// runOJCPSearch runs the same query the public search runs, built from the same values.
-// OJCP has no sort directive and no match vector, so neither is read here — the index's
-// own relevance ordering is what an agent gets.
-func (h *ojcpHandlers) runOJCPSearch(ctx context.Context, values url.Values) (search.SearchResult, error) {
-	return h.search.Search(ctx, search.SearchParams{
-		Query:  values.Get("q"),
-		Filter: search.FilterFromValues(values),
-		Limit:  intOr(values.Get("limit"), 10),
-		Offset: intOr(values.Get("offset"), 0),
-	})
-}
-
-// OJCPJobDetail answers `get_job_detail`.
+// OJCPJobDetail answers `get_job_detail` over REST.
 func (h *ojcpHandlers) OJCPJobDetail(c *fiber.Ctx) error {
-	row, err := h.store.GetJobBySlug(c.Context(), c.Params("slug"))
+	resp, err := h.JobDetail(c.Context(), c.Params("slug"))
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
+		var notFound ojcpmcp.NotFoundError
+		if errors.As(err, &notFound) {
 			return ojcpError(c, fiber.StatusNotFound, "not_found", "no posting with that ojcp_id")
 		}
 		return err
 	}
+	return c.JSON(resp)
+}
+
+// JobDetail answers `get_job_detail` with no transport around it.
+func (h *ojcpHandlers) JobDetail(ctx context.Context, ojcpID string) (ojcp.JobDetailResponse, error) {
+	row, err := h.store.GetJobBySlug(ctx, ojcpID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ojcp.JobDetailResponse{}, ojcpmcp.NotFoundError{What: "posting"}
+		}
+		return ojcp.JobDetailResponse{}, err
+	}
 
 	view, err := jobview.FromRow(row)
 	if err != nil {
-		return err
+		return ojcp.JobDetailResponse{}, err
 	}
 
-	return c.JSON(ojcp.JobDetailResponse{
-		Job: h.projector.JobPosting(view, h.applyFormFor(c.Context(), row.ID)),
-	}.Finalize())
+	return ojcp.JobDetailResponse{
+		Job: h.projector.JobPosting(view, h.applyFormFor(ctx, row.ID)),
+	}.Finalize(), nil
 }
 
 // applyFormFor reads the posting's captured application form, or nil where there is none.
@@ -156,16 +187,29 @@ func (h *ojcpHandlers) applyFormFor(ctx context.Context, jobID int64) *applyform
 	return &form
 }
 
-// OJCPEmployerContext answers `get_employer_context`.
+// OJCPEmployerContext answers `get_employer_context` over REST.
 func (h *ojcpHandlers) OJCPEmployerContext(c *fiber.Ctx) error {
-	company, err := h.store.GetCompany(c.Context(), c.Params("slug"))
+	resp, err := h.EmployerContext(c.Context(), c.Params("slug"))
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
+		var notFound ojcpmcp.NotFoundError
+		if errors.As(err, &notFound) {
 			return ojcpError(c, fiber.StatusNotFound, "not_found", "no employer with that employer_id")
 		}
 		return err
 	}
-	return c.JSON(ojcp.EmployerContextFrom(company))
+	return c.JSON(resp)
+}
+
+// EmployerContext answers `get_employer_context` with no transport around it.
+func (h *ojcpHandlers) EmployerContext(ctx context.Context, employerID string) (ojcp.EmployerContextResponse, error) {
+	company, err := h.store.GetCompany(ctx, employerID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ojcp.EmployerContextResponse{}, ojcpmcp.NotFoundError{What: "employer"}
+		}
+		return ojcp.EmployerContextResponse{}, err
+	}
+	return ojcp.EmployerContextFrom(company), nil
 }
 
 // intOr reads a value this package itself wrote into the query values a moment earlier, so

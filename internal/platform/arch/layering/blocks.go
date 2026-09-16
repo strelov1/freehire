@@ -254,7 +254,7 @@ var blocks = map[string][]string{
 	// api rather than in job beside jobview because it is a foreign schema's rendering of
 	// our catalogue, not a shape the catalogue itself owns — and because it reads job,
 	// ingest (the captured apply form) and search together, which only api may do.
-	"api": {"atsapply", "candidateprofile", "handler", "ogimage", "ojcp", "ratelimit", "realtime"},
+	"api": {"atsapply", "candidateprofile", "handler", "ogimage", "ojcp", "ojcpmcp", "ratelimit", "realtime"},
 }
 
 // Assignment is the flattened package → block view the move script drives from.
