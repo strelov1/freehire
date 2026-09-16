@@ -4377,6 +4377,8 @@ curl "https://freehire.me/api/v1/stats/user-growth"
 
 Jobs saved, applied to and viewed across all users, plus CV and inbox usage.
 
+`viewed` is the only field here that is not a signed-in count: it is bot-filtered job-page opens by every visitor, signed in or not, so it is orders of magnitude larger than the rest. Aggregate-only — no user identifier is exposed.
+
 ```bash
 curl "https://freehire.me/api/v1/stats/engagement"
 ```
