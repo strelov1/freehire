@@ -20,6 +20,7 @@ import {
   Info,
   Layers,
   MessagesSquare,
+  Radar,
   TrendingUp,
   Wand,
 } from '@lucide/svelte';
@@ -37,10 +38,12 @@ export type SiteNavItem = {
 };
 
 export const NAV = {
-  // The catalogue itself — what a visitor came to walk.
+  // The catalogue itself — what a visitor came to walk. Talent is the one that reads
+  // the other way round: the anonymous candidate catalogue, for whoever is hiring.
   jobs: { href: '/jobs', label: 'Jobs', icon: Briefcase },
   companies: { href: '/companies', label: 'Companies', icon: Building2 },
   collections: { href: '/collections', label: 'Collections', icon: Layers },
+  talent: { href: '/talent', label: 'Talent Network', icon: Radar },
 
   // What this is and how it works — what a first-time visitor reads.
   howItWorks: { href: '/how-it-works', label: 'How it works', icon: Compass },

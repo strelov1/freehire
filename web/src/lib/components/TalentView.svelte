@@ -14,6 +14,7 @@
   import Pagination from './Pagination.svelte';
   import States from './States.svelte';
   import TalentCard from './TalentCard.svelte';
+  import TalentJoinButton from './TalentJoinButton.svelte';
   import TalentFilterModal from './filters/TalentFilterModal.svelte';
   import TalentFilterSummary from './filters/TalentFilterSummary.svelte';
 
@@ -122,8 +123,9 @@
   </aside>
 
   <div class="min-w-0 flex-1">
-    <header class="mb-4">
+    <header class="mb-4 flex flex-wrap items-center justify-between gap-3">
       <h1 class="text-2xl font-semibold tracking-tight">Talent Network</h1>
+      <TalentJoinButton />
     </header>
 
     <ListToolbar

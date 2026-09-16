@@ -91,6 +91,7 @@
   // too, but only there and only above 640px — this is where it is always reachable.
   const navLinks = [
     NAV.collections,
+    NAV.talent,
     NAV.howItWorks,
     NAV.cvTailoring,
     NAV.jobNotifications,
