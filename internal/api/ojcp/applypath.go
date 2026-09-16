@@ -1,6 +1,8 @@
 package ojcp
 
 import (
+	"strings"
+
 	"github.com/strelov1/freehire/internal/ingest/applyform"
 	"github.com/strelov1/freehire/internal/job/jobview"
 )
@@ -72,30 +74,68 @@ func (p Projector) applyPaths(j jobview.Job, form *applyform.Form) []ApplyPath {
 		URL:                     j.URL,
 		ATSProvider:             form.Provider,
 		RequiredFields:          requiredFieldNames(form),
-		SupportsAgentSubmission: p.Submittable[form.Provider],
+		SupportsAgentSubmission: p.Submittable[form.Provider] && !demandsAnotherUpload(form),
 	}}
 }
 
-// requiredFieldNames lists the questions the platform refuses the application without.
+// demandsAnotherUpload reports whether the form requires a file that is not the résumé.
 //
-// A DEMOGRAPHIC question is excluded even when the platform marks it required: the
-// platform files those separately from the employer's own questions, OJCP carries them in
-// its own eeo-data schema, and listing one here would tell an agent that answering it is
-// part of what decides the application.
+// Such a field is never resolved — atsapply refuses it and parks the whole attempt before
+// the provider is even consulted — so `supports_agent_submission` must be false however
+// capable the provider otherwise is.
 //
-// A field with no label falls back to its opaque platform identifier. Dropping it instead
-// would have an agent count one fewer question than the form will actually refuse without.
-func requiredFieldNames(form *applyform.Form) []string {
-	var names []string
+// The rule here is deliberately STRICTER than atsapply's own `isResumeField`, which also
+// accepts résumé words appearing anywhere in the label. This one takes only the identifier,
+// so a field atsapply would have resolved may still be counted against us. The asymmetry is
+// the safe direction: reporting false for a form we could actually submit costs an agent a
+// missed opportunity, while reporting true for one we cannot costs a candidate a daily
+// tailoring turn on an attempt that parks.
+func demandsAnotherUpload(form *applyform.Form) bool {
 	for _, field := range form.Fields {
-		if !field.Required || field.Demographic {
+		if field.Type != applyform.TypeFile || !field.Required {
 			continue
 		}
-		if field.Label != "" {
-			names = append(names, field.Label)
-			continue
+		if !isResumeUpload(field) {
+			return true
 		}
-		names = append(names, field.ID)
+	}
+	return false
+}
+
+// isResumeUpload recognises the one file this system can actually supply. Ashby keys its
+// built-ins as `_systemfield_<name>`, so the prefix is stripped before comparing — the same
+// allowance atsapply's own résumé check makes.
+func isResumeUpload(field applyform.Field) bool {
+	id := strings.TrimPrefix(strings.ToLower(strings.TrimSpace(field.ID)), "_systemfield_")
+	return id == "resume" || id == "cv"
+}
+
+// requiredFieldNames lists what a candidate must supply for the application to be accepted:
+// the standard controls every application demands (name, contact details, CV) plus the
+// employer's own questions the platform will not submit without.
+//
+// It goes through Form.ForDisplay rather than filtering Field values itself. That reader
+// already knows which controls a person can answer at all — it drops the platform's hidden
+// fields (a real Greenhouse form requires "Longitude"), the mid-form text blocks, the
+// consent boilerplate and the equal-opportunity survey, flattens labels authored as HTML,
+// and names a question once where the platform spread it over several controls. A second
+// copy of those rules here would be a second thing to keep current, and the first rule
+// forgotten would publish "Longitude" as something to answer.
+//
+// Basics are listed unconditionally: they are what every application demands, so their
+// per-control Required flag is not the question.
+func requiredFieldNames(form *applyform.Form) []string {
+	display := form.ForDisplay()
+
+	names := make([]string, 0, len(display.Basics)+len(display.Questions))
+	names = append(names, display.Basics...)
+	for _, question := range display.Questions {
+		if question.Required {
+			names = append(names, question.Text)
+		}
+	}
+	if len(names) == 0 {
+		return nil
 	}
 	return names
 }

@@ -1,6 +1,7 @@
 package ojcp
 
 import (
+	"slices"
 	"strings"
 	"testing"
 
@@ -136,18 +137,107 @@ func TestPostingWithNoCapturedFormStillOffersAWayToApply(t *testing.T) {
 	}
 }
 
-func TestApplyPathRequiredFieldsFallBackToTheOpaqueIdentifier(t *testing.T) {
-	// A field the platform gave no label to still has to be named, or an agent counts
-	// one fewer question than the form will actually refuse to submit without.
+func TestRequiredFieldsLeaveOutWhatNoCandidateCanAnswer(t *testing.T) {
+	// A real Greenhouse form carries controls the platform fills itself. Telling an agent
+	// to answer "Longitude" is worse than saying nothing.
+	form := &applyform.Form{
+		Provider: "greenhouse",
+		Fields: []applyform.Field{
+			{ID: "longitude", Label: "Longitude", Type: applyform.TypeHidden, Required: true},
+			{ID: "question_1", Label: "Why us?", Required: true},
+			{ID: "info_block", Label: "About the team", Type: applyform.TypeInfo, Required: true},
+			{ID: "consent[gdpr]", Label: "<p>I agree to the <a href=\"/p\">privacy policy</a></p>", Required: true},
+			{ID: "question_blank", Label: "   ", Required: true},
+		},
+	}
+
+	fields := projector().JobPosting(openPosting(), form).ApplyPaths[0].RequiredFields
+
+	for _, unwanted := range []string{"Longitude", "About the team"} {
+		if slices.Contains(fields, unwanted) {
+			t.Errorf("required_fields carries %q, which no candidate answers: %v", unwanted, fields)
+		}
+	}
+	for _, field := range fields {
+		if strings.Contains(field, "<") {
+			t.Errorf("required_fields leaks raw markup: %q", field)
+		}
+		if strings.TrimSpace(field) == "" {
+			t.Errorf("required_fields carries a blank name: %v", fields)
+		}
+	}
+}
+
+func TestRequiredFieldsNameOneQuestionOnce(t *testing.T) {
+	// One question often spans several controls — Greenhouse offers the CV as an upload OR
+	// as pasted text under a single label. An agent counting entries would over-count the
+	// form.
+	form := &applyform.Form{
+		Provider: "greenhouse",
+		Fields: []applyform.Field{
+			{ID: "resume", Label: "Resume/CV", Type: applyform.TypeFile, Required: true},
+			{ID: "resume_text", Label: "Resume/CV", Required: true},
+		},
+	}
+
+	fields := projector().JobPosting(openPosting(), form).ApplyPaths[0].RequiredFields
+
+	if len(fields) != 1 {
+		t.Errorf("required_fields = %v, want one entry for one question", fields)
+	}
+}
+
+func TestSupportsAgentSubmissionIsFalseWhenTheFormDemandsAnotherFile(t *testing.T) {
+	// A required upload that is not the résumé is never resolved — atsapply parks the whole
+	// attempt before the provider is even consulted. Publishing true here sends an agent
+	// down a path that cannot finish, and the candidate spends a daily tailoring turn on it.
+	form := &applyform.Form{
+		Provider: "greenhouse",
+		Fields: []applyform.Field{
+			{ID: "resume", Label: "Resume", Type: applyform.TypeFile, Required: true},
+			{ID: "cover_letter", Label: "Cover Letter", Type: applyform.TypeFile, Required: true},
+		},
+	}
+
+	path := projector().JobPosting(openPosting(), form).ApplyPaths[0]
+
+	if path.SupportsAgentSubmission {
+		t.Error("supports_agent_submission = true for a form demanding a second upload")
+	}
+}
+
+func TestSupportsAgentSubmissionSurvivesTheResumeUploadItself(t *testing.T) {
+	// The résumé IS resolvable — it is the one file this system renders and attaches. A rule
+	// that refused every file field would report false for essentially every ATS form.
+	form := &applyform.Form{
+		Provider: "greenhouse",
+		Fields: []applyform.Field{
+			{ID: "resume", Label: "Resume/CV", Type: applyform.TypeFile, Required: true},
+			{ID: "portfolio", Label: "Portfolio", Type: applyform.TypeFile, Required: false},
+		},
+	}
+
+	path := projector().JobPosting(openPosting(), form).ApplyPaths[0]
+
+	if !path.SupportsAgentSubmission {
+		t.Error("supports_agent_submission = false for a form whose only required upload is the résumé")
+	}
+}
+
+func TestRequiredFieldsSayNothingAboutAQuestionNobodyCanName(t *testing.T) {
+	// An earlier version published the opaque platform identifier so an agent would at
+	// least count the question. That is worse than silence: "question_991" is not something
+	// a candidate can answer, and an agent that relays it produces nonsense while still
+	// believing the form is described. The identifier stays in the store, where a
+	// form-FILLER needs it; it is not a name.
 	form := &applyform.Form{
 		Provider: "greenhouse",
 		Fields:   []applyform.Field{{ID: "question_991", Required: true}},
 	}
 
-	posting := projector().JobPosting(openPosting(), form)
+	fields := projector().JobPosting(openPosting(), form).ApplyPaths[0].RequiredFields
 
-	fields := posting.ApplyPaths[0].RequiredFields
-	if len(fields) != 1 || fields[0] != "question_991" {
-		t.Errorf("required_fields = %v, want the identifier as the fallback name", fields)
+	if len(fields) != 0 {
+		t.Errorf("required_fields = %v, want nothing for an unnamed control", fields)
 	}
 }
