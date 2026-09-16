@@ -77,21 +77,51 @@ func (r EmployerContextResponse) Finalize() EmployerContextResponse {
 	return r
 }
 
+// Error codes, from the CLOSED enum in the standard's own error schema. An agent branches
+// on these, so a code of our own invention is not a smaller answer — it is an unreadable
+// one, and the schema rejects the whole envelope.
+const (
+	ErrorJobNotFound      = "job_not_found"
+	ErrorEmployerNotFound = "employer_not_found"
+	ErrorInvalidRequest   = "invalid_request"
+	ErrorProviderError    = "provider_error"
+	ErrorRateLimited      = "rate_limited"
+)
+
 // ErrorResponse is the envelope both transports render a failure in — as an HTTP body over
 // REST, and inside a JSON-RPC error's `data` over MCP.
+//
+// The fields are FLAT, and `error_code` is the standard's own name for the discriminator.
+// An earlier version nested them under an `error` object with a `code`, which no part of
+// the schema describes — the oracle never saw it because `schemaErrorResponse` was declared
+// and never used, which is what a switched-off check looks like from the inside.
 type ErrorResponse struct {
 	OJCPVersion string `json:"ojcp_version"`
-	Error       Error  `json:"error"`
-}
-
-// Error is one failure, in the standard's own shape.
-type Error struct {
-	Code    string `json:"code"`
-	Message string `json:"message"`
+	ErrorCode   string `json:"error_code"`
+	Message     string `json:"message"`
+	// RetryAfterSeconds is required by the schema alongside a rate-limit refusal and
+	// meaningless otherwise, so it is omitted rather than sent as zero.
+	RetryAfterSeconds int `json:"retry_after_seconds,omitempty"`
 }
 
 // NewError builds the error envelope. Both transports go through it so a failure cannot be
 // described one way over REST and another over MCP.
 func NewError(code, message string) ErrorResponse {
-	return ErrorResponse{OJCPVersion: Version, Error: Error{Code: code, Message: message}}
+	return ErrorResponse{OJCPVersion: Version, ErrorCode: code, Message: message}
+}
+
+// NewRateLimitError is the one refusal with a required companion field: the schema makes
+// `retry_after_seconds` mandatory alongside `rate_limited`, because an agent that is told
+// to slow down and not told for how long can only guess — and a guessing agent retries.
+//
+// It is a separate constructor rather than an argument on NewError so the requirement
+// cannot be forgotten at a call site: there is no way to say `rate_limited` without saying
+// how long.
+func NewRateLimitError(retryAfterSeconds int) ErrorResponse {
+	return ErrorResponse{
+		OJCPVersion:       Version,
+		ErrorCode:         ErrorRateLimited,
+		Message:           "too many requests; see retry_after_seconds",
+		RetryAfterSeconds: retryAfterSeconds,
+	}
 }

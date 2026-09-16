@@ -22,9 +22,13 @@ type Projector struct {
 	// page — a direct ATS or a company careers site. Only those may fill
 	// `official_job_url`, which the schema defines as a domain-verification anchor.
 	//
-	// Nil means "ask the source taxonomy", which is what NewProjector wires up. It is a
-	// field rather than a call inside the projection so this package stays pure and so one
-	// taxonomy build serves a whole page of postings.
+	// NIL MEANS NOTHING IS CANONICAL: a zero-value Projector publishes no official_job_url
+	// at all. That is the safe direction (we never vouch for a link we cannot vouch for) but
+	// it is not a default — NewProjector resolves the set from the source taxonomy, and
+	// anything built by hand must supply it or accept the silence.
+	//
+	// It is a field rather than a call inside the projection so this package stays pure, and
+	// so one taxonomy build serves a whole page of postings.
 	CanonicalURLProviders map[string]bool
 	// Submittable names the ATS providers this deployment can complete an application on
 	// without a person. Today that is Greenhouse alone (fillProviders in

@@ -3,6 +3,8 @@ package ojcp
 import (
 	"slices"
 	"testing"
+
+	"github.com/strelov1/freehire/internal/dict/vocab"
 )
 
 func TestSearchInputBecomesOurOwnQueryVocabulary(t *testing.T) {
@@ -87,6 +89,40 @@ func TestSearchInputReportsAFilterItCannotHonour(t *testing.T) {
 	}
 	if values.Get("seniority") != "" {
 		t.Errorf("seniority = %q, want no filter applied for a level we cannot express", values.Get("seniority"))
+	}
+}
+
+func TestSearchInputReportsAValueItsVocabularyDoesNotHold(t *testing.T) {
+	// The mirror of a dropped filter, and the more confusing failure of the two: an
+	// unrecognised value passed through reaches the index as a filter nothing matches, so the
+	// agent reads "no such jobs" where the truth is "I did not understand you".
+	input := SearchInput{Filters: &SearchFilters{EmploymentType: "gig_economy_hustle"}}
+
+	values, unsupported := input.QueryValues()
+
+	if got := values.Get("employment_type"); got != "" {
+		t.Errorf("employment_type = %q, want no filter applied for a value we do not hold", got)
+	}
+	if !slices.Contains(unsupported, "filters.employment_type") {
+		t.Errorf("unsupported = %v, want it to name the value it could not use", unsupported)
+	}
+}
+
+func TestSearchInputPassesEveryEmploymentTypeItDoesHold(t *testing.T) {
+	// Walks the real vocabulary rather than a list written here: a type added to `vocab` and
+	// not reachable through this surface would otherwise be reported unsupported forever,
+	// with every hand-written case still green.
+	for _, value := range vocab.EmploymentTypeValues {
+		t.Run(value, func(t *testing.T) {
+			values, unsupported := SearchInput{Filters: &SearchFilters{EmploymentType: value}}.QueryValues()
+
+			if values.Get("employment_type") != value {
+				t.Errorf("employment_type = %q, want %q", values.Get("employment_type"), value)
+			}
+			if len(unsupported) != 0 {
+				t.Errorf("unsupported = %v, want none for a type we hold", unsupported)
+			}
+		})
 	}
 }
 

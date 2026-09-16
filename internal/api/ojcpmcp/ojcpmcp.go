@@ -62,7 +62,7 @@ func newServer(r Reader) *mcp.Server {
 	}, nil)
 
 	mcp.AddTool(server, &mcp.Tool{
-		Name: "search_jobs",
+		Name: toolSearchJobs,
 		Description: "Search freehire's job catalogue. Returns OJCP JobPostings, each with " +
 			"the application paths it can be applied through and whether an agent can submit " +
 			"unattended. Filters this provider could not honour are named in ignored_params.",
@@ -72,7 +72,7 @@ func newServer(r Reader) *mcp.Server {
 	})
 
 	mcp.AddTool(server, &mcp.Tool{
-		Name:        "get_job_detail",
+		Name:        toolGetJobDetail,
 		Description: "Read one posting in full, by the ojcp_id a search result carries.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in jobDetailInput) (*mcp.CallToolResult, ojcp.JobDetailResponse, error) {
 		out, err := r.JobDetail(ctx, in.OJCPID)
@@ -80,7 +80,7 @@ func newServer(r Reader) *mcp.Server {
 	})
 
 	mcp.AddTool(server, &mcp.Tool{
-		Name: "get_employer_context",
+		Name: toolGetEmployerContext,
 		Description: "Read what is known about an employer, by the ojcp_employer_id a " +
 			"posting carries — including how many roles they have open right now.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in employerContextInput) (*mcp.CallToolResult, ojcp.EmployerContextResponse, error) {
@@ -91,11 +91,28 @@ func newServer(r Reader) *mcp.Server {
 	return server
 }
 
-// ToolNames is what the manifest may advertise over this transport. The manifest is
-// generated from it rather than from a list written there, so it cannot claim a tool this
-// server does not register.
+// Tool names, declared once and used BOTH to register a tool and to answer ToolNames.
+// A second hand-written list would be the one that goes stale, and the manifest's `tools`
+// is a binding claim: an agent reads it and calls what it names.
+const (
+	toolSearchJobs         = "search_jobs"
+	toolGetJobDetail       = "get_job_detail"
+	toolGetEmployerContext = "get_employer_context"
+)
+
+// ToolNames is what the manifest may advertise over this transport.
+//
+// It returns the SAME constants newServer registers with, so a name cannot be advertised
+// under one spelling and served under another. That is all it guarantees: the SDK exposes
+// no way to read a server's registrations back, so nothing here can prove a constant was
+// actually passed to AddTool.
+//
+// What closes that gap is on the other side — the handler's own test walks this list and
+// requires a method behind every name. An earlier version of this comment claimed the list
+// was derived from the registrations, which it was not, and a comment that overstates a
+// guarantee is worse than one that admits the limit: the next reader stops looking.
 func ToolNames() []string {
-	return []string{"search_jobs", "get_job_detail", "get_employer_context"}
+	return []string{toolSearchJobs, toolGetJobDetail, toolGetEmployerContext}
 }
 
 // toolError renders a failure the way MCP carries one: the SDK turns a returned error into

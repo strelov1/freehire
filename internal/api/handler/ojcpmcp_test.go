@@ -9,7 +9,6 @@ import (
 
 	"github.com/strelov1/freehire/internal/api/ojcp"
 	"github.com/strelov1/freehire/internal/api/ojcpmcp"
-	"github.com/strelov1/freehire/internal/job/jobview"
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/search/search"
 )
@@ -24,7 +23,7 @@ func TestBothTransportsAnswerTheSameQuestionIdentically(t *testing.T) {
 	// the method's own value is what proves the two cannot drift. A second projection on
 	// either side would show up here as a difference in the bytes.
 	fake := &fakeSearcher{res: search.SearchResult{
-		Hits:  []search.JobDocument{{ID: 7, Job: jobview.Job{PublicSlug: "go-dev-x", Title: "Go Dev", Company: "Acme"}}},
+		Hits:  []search.JobDocument{{ID: 7, Job: ojcpJobView(t, db.Job{PublicSlug: "go-dev-x", Title: "Go Dev", Company: "Acme"})}},
 		Total: 3,
 	}}
 	h := newOJCPHandlers(fake, fakeOJCPStore{}, "https://freehire.me", map[string]bool{"greenhouse": true})

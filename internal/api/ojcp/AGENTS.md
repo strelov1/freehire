@@ -97,6 +97,24 @@ for one:
   agent filtering on an arbitrary choice would drop the posting everywhere else the employer
   accepts.
 
+## What the projection cannot do for itself
+
+- **`agent_notes` needs a verdict ATTACHED.** `Ghost` is not intrinsic to a `jobview.Job` —
+  it is time-dependent and never stored, so every surface that wants it attaches its own
+  (`jobs.go`, `search.go`, `me_tracking.go`, and now the OJCP detail handler). A projection
+  that merely READS `j.Ghost` publishes nothing, for every posting, forever. That is exactly
+  what this surface did until a review walked the call graph instead of the tests, which
+  were green because they set the field by hand.
+  The SEARCH tool deliberately carries no verdict: two more queries per page for a field an
+  agent must open the posting to act on, and `get_job_detail` is one call away.
+
+- **Visibility is the handler's job.** `GetJobBySlug` carries NO predicate — it is the read
+  a private job's own creator uses, and the detail page relies on it to serve a closed
+  posting. Neither is right here: an agent enumerates, caches and republishes what it is
+  handed. `publishedToAgents` refuses private, closed and duplicate-suppressed rows, and
+  answers NOT FOUND rather than forbidden — whether a private posting exists under some slug
+  is not an anonymous caller's business.
+
 ## Two traps
 
 - **`addressRegion` is a state or province.** Our `Regions` facet holds macro-regions
@@ -105,6 +123,18 @@ for one:
 - **Country codes are stored lowercase** by `jobview.normalizeSet`, while every country
   field in this standard is ISO 3166-1 alpha-2 — uppercase. This has bitten twice already
   (a posting's `addressCountry` and an employer's `hq_location.country`).
+
+## A declared schema constant that is never used is a switched-off check
+
+The error envelope shipped in a shape the standard does not describe at all — the schema
+wants a FLAT `error_code` from a closed enum, and this package sent a nested
+`error: {code, message}` with codes of its own invention. Nothing caught it because
+`schemaErrorResponse` was declared beside the others and never passed to a single check.
+
+From the inside that looks exactly like a working check. When adding a response shape, add
+the validation in the same commit, and make sure it can FAIL — the rate-limit refusal turned
+out to require `retry_after_seconds`, which only surfaced once the oracle was finally
+pointed at that envelope.
 
 ## Testing
 

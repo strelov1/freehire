@@ -6,10 +6,13 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 
+	"github.com/strelov1/freehire/internal/job/ghost"
 	"github.com/strelov1/freehire/internal/job/jobview"
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/search/search"
@@ -34,6 +37,20 @@ func (f fakeOJCPStore) GetApplyFormByJobID(context.Context, int64) (db.GetApplyF
 
 func (f fakeOJCPStore) GetCompany(context.Context, string) (db.Company, error) {
 	return f.company, f.compErr
+}
+
+// ojcpJobView projects a stored row the way every read path does. Building a jobview.Job by
+// hand skips outboundurl.Tag and the facet normalisation, so a literal carries values no
+// production read can produce — internal/api/ojcp/AGENTS.md forbids it for exactly that
+// reason, and two defects got through that way before a review caught them.
+func ojcpJobView(t *testing.T, row db.Job) jobview.Job {
+	t.Helper()
+
+	view, err := jobview.FromRow(row)
+	if err != nil {
+		t.Fatalf("jobview.FromRow: %v", err)
+	}
+	return view
 }
 
 func ojcpApp(s searcher, store ojcpStore) *fiber.App {
@@ -65,7 +82,7 @@ func doPost(t *testing.T, app *fiber.App, path, body string) (int, map[string]an
 
 func TestOJCPSearchAnswersTheStandardsEnvelope(t *testing.T) {
 	fake := &fakeSearcher{res: search.SearchResult{
-		Hits:  []search.JobDocument{{ID: 7, Job: jobview.Job{PublicSlug: "go-dev-x", Title: "Go Dev", Company: "Acme"}}},
+		Hits:  []search.JobDocument{{ID: 7, Job: ojcpJobView(t, db.Job{PublicSlug: "go-dev-x", Title: "Go Dev", Company: "Acme"})}},
 		Total: 3,
 	}}
 
@@ -134,7 +151,7 @@ func TestOJCPSearchRefusesABodyThatIsNotJSON(t *testing.T) {
 	if status != fiber.StatusBadRequest {
 		t.Errorf("status = %d, want 400", status)
 	}
-	if _, present := body["error"]; !present {
+	if _, present := body["error_code"]; !present {
 		t.Errorf("body = %v, want the OJCP error envelope", body)
 	}
 }
@@ -156,6 +173,82 @@ func TestOJCPJobDetailAnswersWithThePosting(t *testing.T) {
 	}
 }
 
+func TestOJCPJobDetailRefusesAPostingTheCatalogueDoesNotPublish(t *testing.T) {
+	// The requirement: "no OJCP tool returns it, on either transport". GetJobBySlug carries
+	// no predicate at all — it is the read a private job's own creator uses — so the filter
+	// has to be here. Answering not-found rather than a 403 is deliberate: whether a private
+	// posting exists is itself not this caller's business.
+	for name, row := range map[string]db.Job{
+		"private": {ID: 7, PublicSlug: "secret-role", Title: "Secret", IsPrivate: true},
+		"closed": {ID: 7, PublicSlug: "gone-role", Title: "Gone",
+			ClosedAt: pgtype.Timestamptz{Time: time.Now(), Valid: true}},
+		"suppressed duplicate": {ID: 7, PublicSlug: "dupe-role", Title: "Dupe",
+			DuplicateOf: pgtype.Int8{Int64: 3, Valid: true}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			status, body := doGet(t, ojcpApp(&fakeSearcher{}, fakeOJCPStore{job: row}), "/ojcp/v1/jobs/"+row.PublicSlug)
+
+			if status != fiber.StatusNotFound {
+				t.Errorf("status = %d, want 404 — this posting is not published", status)
+			}
+			if _, present := body["job"]; present {
+				t.Errorf("body carries the posting: %v", body)
+			}
+		})
+	}
+}
+
+func TestOJCPJobDetailStatesThePostingRealityVerdict(t *testing.T) {
+	// agent_notes is the whole reason this catalogue has something to say that other OJCP
+	// providers do not. But Ghost is NOT intrinsic to a jobview — every other surface
+	// attaches it explicitly — so a projection that simply reads j.Ghost publishes nothing,
+	// for every posting, forever. The package's own test set it by hand and stayed green.
+	// What was broken was the SEAM, not the classification: nothing attached a verdict, so
+	// the projection read nil for every posting. This drives the seam — the handler must
+	// call the attacher, and the projection must publish what it left behind. What COUNTS as
+	// a verdict is internal/job/ghost's own business and has its own tests.
+	store := fakeOJCPStore{job: db.Job{ID: 7, PublicSlug: "go-dev-x", Title: "Go Dev", Company: "Acme"}}
+
+	h := newOJCPHandlers(&fakeSearcher{}, store, "https://freehire.me", nil)
+	attached := false
+	h.attachReality = func(_ context.Context, _ db.Job, view *jobview.Job) {
+		attached = true
+		view.Ghost = &jobview.Ghost{
+			Level:         ghost.LevelLikely,
+			Criteria:      []string{ghost.CriterionATSAbsent},
+			CriteriaTotal: ghost.CriteriaTotal,
+		}
+	}
+	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
+	app.Get("/ojcp/v1/jobs/:slug", h.OJCPJobDetail)
+
+	_, body := doGet(t, app, "/ojcp/v1/jobs/go-dev-x")
+
+	if !attached {
+		t.Fatal("the handler never asked for a reality verdict")
+	}
+	job, _ := body["job"].(map[string]any)
+	notes, _ := job["agent_notes"].(string)
+	if notes == "" {
+		t.Fatal("agent_notes is empty though the view carries a verdict")
+	}
+	if !strings.Contains(notes, "employer's own ATS") {
+		t.Errorf("agent_notes does not state the criterion that fired: %q", notes)
+	}
+}
+
+func TestOJCPProductionWiringAttachesTheRealityVerdict(t *testing.T) {
+	// The seam above is only worth anything if production fills it. newOJCPHandlers wires the
+	// attacher when the store is the concrete queries — the one path a fake store cannot
+	// exercise, so it is asserted directly.
+	if h := newOJCPHandlers(&fakeSearcher{}, &db.Queries{}, "https://freehire.me", nil); h.attachReality == nil {
+		t.Error("attachReality is nil for a production store; agent_notes would be silent forever")
+	}
+	if h := newOJCPHandlers(&fakeSearcher{}, fakeOJCPStore{}, "https://freehire.me", nil); h.attachReality != nil {
+		t.Error("attachReality is set for a store that cannot answer the lookups")
+	}
+}
+
 func TestOJCPJobDetailAnswersTheErrorEnvelopeForAnUnknownID(t *testing.T) {
 	// Not an empty posting: an agent must be able to tell "no such job" from "a job with
 	// no fields".
@@ -167,7 +260,7 @@ func TestOJCPJobDetailAnswersTheErrorEnvelopeForAnUnknownID(t *testing.T) {
 	if _, present := body["job"]; present {
 		t.Errorf("body = %v, want no job object at all", body)
 	}
-	if _, present := body["error"]; !present {
+	if _, present := body["error_code"]; !present {
 		t.Errorf("body = %v, want the OJCP error envelope", body)
 	}
 }
@@ -217,7 +310,7 @@ func TestOJCPEmployerContextAnswersTheErrorEnvelopeForAnUnknownID(t *testing.T) 
 	if status != fiber.StatusNotFound {
 		t.Errorf("status = %d, want 404", status)
 	}
-	if _, present := body["error"]; !present {
+	if _, present := body["error_code"]; !present {
 		t.Errorf("body = %v, want the OJCP error envelope", body)
 	}
 }
@@ -230,7 +323,7 @@ func TestOJCPSearchReportsSearchBeingUnavailable(t *testing.T) {
 	if status != fiber.StatusServiceUnavailable {
 		t.Errorf("status = %d, want 503", status)
 	}
-	if _, present := body["error"]; !present {
+	if _, present := body["error_code"]; !present {
 		t.Errorf("body = %v, want the OJCP error envelope", body)
 	}
 }

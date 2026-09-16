@@ -2,8 +2,11 @@ package ojcp
 
 import (
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
+
+	"github.com/strelov1/freehire/internal/dict/vocab"
 )
 
 // Page bounds from the standard's own search-jobs input schema. The maximum is binding: a
@@ -147,7 +150,15 @@ func (in SearchInput) applyFilters(values url.Values) []string {
 
 	var unsupported []string
 	if f.EmploymentType != "" {
-		values.Set("employment_type", f.EmploymentType)
+		// Checked against our own vocabulary, not passed through. An unrecognised value
+		// reaches the index as a filter nothing matches, so the answer NARROWS to nothing —
+		// the opposite failure from a dropped filter, and the more confusing one: an agent
+		// reads "no such jobs" where the truth is "I did not understand you".
+		if slices.Contains(vocab.EmploymentTypeValues, f.EmploymentType) {
+			values.Set("employment_type", f.EmploymentType)
+		} else {
+			unsupported = append(unsupported, "filters.employment_type")
+		}
 	}
 	if f.SalaryMin != 0 {
 		values.Set("salary_min", formatNumber(f.SalaryMin))
