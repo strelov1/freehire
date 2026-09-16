@@ -158,9 +158,7 @@
              page it must not appear on: a banner pointing at the page you are reading is
              noise. Dismissal is the card's own business. -->
         {#if !isSectionActive(path, '/my/talent-network')}
-          <div class="mb-4">
-            <TalentNetworkInvite />
-          </div>
+          <TalentNetworkInvite />
         {/if}
 
         {@render children()}

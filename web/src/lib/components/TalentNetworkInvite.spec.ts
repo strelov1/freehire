@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { TalentNetworkSetting } from '$lib/types';
+import { TALENT_INVITE_DISMISSED_KEY } from '$lib/talentInvite';
 import TalentNetworkInvite from './TalentNetworkInvite.svelte';
 
 const { getTalentNetwork } = vi.hoisted(() => ({
@@ -36,17 +37,22 @@ describe('TalentNetworkInvite', () => {
     await fireEvent.click(screen.getByRole('button', { name: 'Hide this' }));
 
     await waitFor(() => expect(screen.queryByText('Get found without applying')).toBeNull());
-    expect(localStorage.getItem('hire.talentInviteDismissed')).toBe('1');
+    expect(localStorage.getItem(TALENT_INVITE_DISMISSED_KEY)).toBe('1');
   });
 
   // Asserted from the other side too: a stored dismissal must keep the card away on the
   // next render, which is the half a click-then-disappear test cannot see.
-  it('stays hidden on a later visit', async () => {
-    localStorage.setItem('hire.talentInviteDismissed', '1');
+  it('stays hidden on a later visit, and asks the server nothing', async () => {
+    localStorage.setItem(TALENT_INVITE_DISMISSED_KEY, '1');
 
     render(TalentNetworkInvite);
 
-    await waitFor(() => expect(getTalentNetwork).toHaveBeenCalled());
+    // The card mounts on every `my/*` page, so a dismissed candidate who still fetched
+    // would pay one request per account page load, for good, for something they will
+    // never be shown. Waiting on a microtask turn first, so this asserts the request did
+    // not happen rather than that it had not happened YET.
+    await Promise.resolve();
+    expect(getTalentNetwork).not.toHaveBeenCalled();
     expect(screen.queryByText('Get found without applying')).toBeNull();
   });
 });

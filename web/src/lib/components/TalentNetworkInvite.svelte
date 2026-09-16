@@ -5,6 +5,7 @@
   import { api } from '$lib/api';
   import type { TalentNetworkVisibility } from '$lib/types';
   import { isTalentNetworkMember } from '$lib/talentMembership';
+  import { dismissTalentInvite, isTalentInviteDismissed } from '$lib/talentInvite';
   import { Button, Card } from '$lib/ui';
 
   // The invitation into the Talent Network, mounted by the ACCOUNT shell (`my/+layout`)
@@ -18,23 +19,18 @@
   // Dismissal is permanent and local to the browser. That is only safe because the
   // account navigation carries a Talent Network section of its own now — closing a
   // banner must never be the same gesture as losing the feature.
-  const DISMISSED_KEY = 'hire.talentInviteDismissed';
 
   let status = $state<'loading' | 'error' | 'ready'>('loading');
   // Starts hidden, so "not yet read from storage" is never mistaken for "not dismissed".
-  // The `status` gate below happens to cover it today — nothing renders until a network
-  // read resolves, and `onMount` is long done by then — but that is the fetch's
-  // behaviour, not this flag's, and it would stop being true the moment the card gained
-  // anything to show before its data arrives.
   let dismissed = $state(true);
 
   onMount(() => {
-    dismissed = localStorage.getItem(DISMISSED_KEY) === '1';
+    dismissed = isTalentInviteDismissed();
   });
 
   function dismiss() {
     dismissed = true;
-    localStorage.setItem(DISMISSED_KEY, '1');
+    dismissTalentInvite();
   }
 
   let visibility = $state<TalentNetworkVisibility>('off');
@@ -45,6 +41,13 @@
   const isMember = $derived(isTalentNetworkMember(visibility));
 
   $effect(() => {
+    // A dismissed candidate is never shown this card, so asking what it would have said
+    // buys nothing — and the card now mounts on EVERY `my/*` page, which would turn that
+    // into one request per account page load, for good, for someone who closed it.
+    // Reading the flag here is what re-runs the effect once `onMount` has answered it,
+    // so the order of the two is not something this has to know.
+    if (dismissed) return;
+
     let cancelled = false;
     void (async () => {
       try {
@@ -69,7 +72,11 @@
 </script>
 
 {#if status === 'ready' && !dismissed}
-  <Card class="flex flex-wrap items-center justify-between gap-4 p-5">
+  <!-- The gap below the card belongs to the card, not to a wrapper the shell renders
+       around it: a wrapper is there whether or not this draws anything, and an empty
+       block with a bottom margin is 16px of dead space above every section heading for
+       everyone who dismissed this — and for everyone else until the fetch resolves. -->
+  <Card class="mb-4 flex flex-wrap items-center justify-between gap-4 p-5">
     <div class="flex min-w-0 items-start gap-3">
       <Radar class="mt-0.5 size-5 shrink-0 text-muted-foreground" aria-hidden="true" />
       <div class="flex min-w-0 flex-col gap-0.5">
