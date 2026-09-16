@@ -25,13 +25,23 @@ func (q *Queries) DeleteAllJobDailyStats(ctx context.Context) error {
 }
 
 const getEngagementStats = `-- name: GetEngagementStats :one
+WITH views AS (
+    -- Both view figures in one pass over the 9.9M-row rollup. ` + "`" + `FILTER` + "`" + ` rather than a
+    -- second subquery with a WHERE: see the note above for what the second pass cost.
+    SELECT COALESCE(sum(page_uniques), 0)::int            AS viewed,
+           min(day) FILTER (WHERE page_uniques > 0)::date AS viewed_since
+    FROM job_daily_views
+)
 SELECT
     count(*) FILTER (WHERE saved_at IS NOT NULL)::int   AS saved,
     -- applications live in their own table now, and counting them there is also the
     -- honest count: one that outlived its posting is still an application somebody made.
     (SELECT count(*) FROM applications WHERE applied_at IS NOT NULL)::int AS applied,
-    (SELECT COALESCE(sum(page_uniques), 0) FROM job_daily_views)::int AS viewed,
-    (SELECT min(day) FROM job_daily_views WHERE page_uniques > 0)::date AS viewed_since,
+    -- Read as two scalar subqueries over the CTE, never joined to user_jobs: a
+    -- CROSS JOIN would need a GROUP BY, and that turns an EMPTY user_jobs from one
+    -- all-zero row into NO rows, which is an error for a ` + "`" + `:one` + "`" + ` query.
+    (SELECT viewed FROM views)       AS viewed,
+    (SELECT viewed_since FROM views) AS viewed_since,
     (SELECT count(*) FROM users WHERE resume_object_key IS NOT NULL)::int AS cvs_uploaded,
     (SELECT count(*) FROM cvs WHERE is_tailored)::int AS cvs_tailored,
     (SELECT count(*) FROM user_job_analysis)::int AS match_analyses,
@@ -59,8 +69,28 @@ type GetEngagementStatsRow struct {
 // "viewed" is the human view total (anonymous + signed-in, every visitor) produced by
 // the nginx-log aggregation worker. It sums the worker's per-day rollup
 // (job_daily_views), NOT jobs.view_count — a SUM over the 6M-row jobs table seqscans
-// for ~90s and times the endpoint out, while the rollup is small and fast. (The
-// per-job "N views" on the job card still reads jobs.view_count directly, no scan.)
+// for ~90s and times the endpoint out. (The per-job "N views" on the job card still
+// reads jobs.view_count directly, no scan.)
+//
+// **The rollup is not small.** This comment used to call it "small and fast", which was
+// wrong and expensive: measured 2026-09-16 it holds 9,944,162 rows in 843 MB, carries
+// exactly one index (the `(day, job_id)` primary key) and grows by a row per job per
+// day forever. Both figures below therefore come out of ONE aggregate pass, in a CTE,
+// and a second pass over this table must not be added. Reading it twice is what made
+// /open unusable the day `viewed_since` landed: as its own scalar subquery,
+// `min(day) WHERE page_uniques > 0` planned an ascending walk of the primary key that
+// heap-fetched every row to test an unindexed column, and since the ~4.7M rows before
+// 2026-09-04 all hold a `page_uniques` of 0 it discarded every one of them before the
+// first match — 3,104 ms and 5,033,538 buffer touches, on top of the sum's own 542 ms.
+// The endpoint went from ~0.5s to 3.9-4.4s, /open's slowest leg by a factor of six,
+// and on a host whose crawl fleet already saturates the disk the cold-cache case
+// reached 16s. Folded into one pass it is 64k buffer touches, 78x fewer.
+//
+// The seam this leaves: one pass is still a full scan of a table that only grows, so
+// these two figures belong in a published snapshot (`cmd/rollup-stats`, the way
+// `/stats/catalog` is fed — "never count on a request path") before the scan grows
+// back into the same problem. Not built yet because one pass restored the endpoint to
+// its peers (~0.6s, the same as /stats/facets), and that is where the need stops today.
 // It sums `page_uniques`, NEVER `uniques` — the same rule social-digest's ranking
 // follows, and for the same reason: `uniques` fuses bot-filtered page opens with
 // UNFILTERED API reads, and crawlers are most of this host's traffic. Measured
