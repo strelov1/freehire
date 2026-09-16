@@ -49,9 +49,12 @@ type JobPosting struct {
 	URL            string `json:"url,omitempty"`
 	OfficialJobURL string `json:"official_job_url,omitempty"`
 
+	Description string `json:"description,omitempty"`
+
 	EmploymentType  string  `json:"employmentType,omitempty"`
 	ExperienceLevel string  `json:"experienceLevel,omitempty"`
 	RemotePolicy    string  `json:"remote_policy,omitempty"`
+	JobLocation     *Place  `json:"jobLocation,omitempty"`
 	BaseSalary      *Salary `json:"baseSalary,omitempty"`
 
 	SkillsRequired []string `json:"skills_required,omitempty"`
@@ -129,9 +132,11 @@ func jobPostingFrom(j jobview.Job, origin string) JobPosting {
 		DatePosted:      datePosted(j),
 		ValidThrough:    validThrough(j),
 		OfficialJobURL:  j.URL,
+		Description:     j.Description,
 		EmploymentType:  j.Enrichment.EmploymentType,
 		ExperienceLevel: seniorityFor(j.Enrichment.Seniority),
 		RemotePolicy:    remotePolicy[j.WorkMode],
+		JobLocation:     jobLocationFor(j),
 		BaseSalary:      salaryFrom(j),
 		SkillsRequired:  j.Skills,
 		AgentNotes:      agentNotesFor(j),

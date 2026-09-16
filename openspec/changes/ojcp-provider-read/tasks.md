@@ -42,9 +42,16 @@
 - [x] 2.5 Project a posting with no captured form into a single `external_redirect` path.
       There is always at least one path: omitting the field would read as "there is no way
       to apply", which is never true.
-- [ ] 2.6 Project the geography facets (countries, regions, cities) into `jobLocation`,
-      which the schema shapes as a single schema.org `Place` — so a posting open in several
-      countries needs a deliberate answer rather than an arbitrary first element.
+- [x] 2.6 Project the geography facets into `jobLocation`, plus the posting's own
+      `description`. The schema shapes `jobLocation` as ONE schema.org `Place`, so a facet
+      naming several values is left out rather than resolved by taking the first — the list
+      order carries no precedence, and an agent filtering on an arbitrary choice would drop
+      the posting everywhere else the employer accepts. The two facets are judged
+      independently, so one country with two cities still states the country. Our `Regions`
+      facet is NEVER written to `addressRegion`: ours are macro-regions ("europe"), that one
+      is a state or province. **Multi-country reach is not expressible in OJCP v0.1** — the
+      clearest schema gap found so far, and a candidate for the same RFC as the
+      posting-reality field.
 
 ## 3. Tool implementations (transport-free)
 
