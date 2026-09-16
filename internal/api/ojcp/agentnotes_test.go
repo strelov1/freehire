@@ -15,7 +15,7 @@ func TestJobPostingFromStatesThePostingRealityVerdict(t *testing.T) {
 		CriteriaTotal: 4,
 	}
 
-	posting := JobPostingFrom(j, testOrigin)
+	posting := jobPostingFrom(j, testOrigin)
 
 	if posting.AgentNotes == "" {
 		t.Fatal("agent_notes is empty; the posting carries a reality verdict")
@@ -41,7 +41,7 @@ func TestJobPostingFromHedgesTheVerdictItStates(t *testing.T) {
 			j := openPosting()
 			j.Ghost = &jobview.Ghost{Level: tc.level, Criteria: []string{"ats_absent"}, CriteriaTotal: 4}
 
-			notes := JobPostingFrom(j, testOrigin).AgentNotes
+			notes := jobPostingFrom(j, testOrigin).AgentNotes
 
 			if !strings.Contains(notes, tc.want) {
 				t.Errorf("agent_notes = %q, want it hedged with %q", notes, tc.want)
@@ -64,7 +64,7 @@ func TestJobPostingFromSaysNothingWhenThereIsNothingToSay(t *testing.T) {
 		"empty level": withGhost(openPosting(), &jobview.Ghost{Level: "", CriteriaTotal: 4}),
 	} {
 		t.Run(name, func(t *testing.T) {
-			if notes := JobPostingFrom(j, testOrigin).AgentNotes; notes != "" {
+			if notes := jobPostingFrom(j, testOrigin).AgentNotes; notes != "" {
 				t.Errorf("agent_notes = %q, want empty", notes)
 			}
 		})

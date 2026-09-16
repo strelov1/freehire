@@ -24,7 +24,7 @@ func openPosting() jobview.Job {
 }
 
 func TestJobPostingFromProducesAConformingPosting(t *testing.T) {
-	posting := JobPostingFrom(openPosting(), testOrigin)
+	posting := jobPostingFrom(openPosting(), testOrigin)
 
 	if err := validateAgainstSchema(t, schemaJobPosting, posting); err != nil {
 		t.Fatalf("projected posting rejected by the OJCP schema: %v", err)
@@ -34,7 +34,7 @@ func TestJobPostingFromProducesAConformingPosting(t *testing.T) {
 func TestJobPostingFromCarriesTheFieldsWeMeanToEmit(t *testing.T) {
 	// The schema does not set additionalProperties:false, so a dropped or misspelt field
 	// validates clean (see testdata/schemas/README.md). Presence is asserted here or nowhere.
-	posting := JobPostingFrom(openPosting(), testOrigin)
+	posting := jobPostingFrom(openPosting(), testOrigin)
 
 	if posting.OJCPID != "senior-go-engineer-at-acme" {
 		t.Errorf("ojcp_id = %q, want the public slug", posting.OJCPID)
@@ -53,7 +53,7 @@ func TestJobPostingFromCarriesTheFieldsWeMeanToEmit(t *testing.T) {
 func TestJobPostingFromSeparatesOurPageFromTheSourcesOwnLink(t *testing.T) {
 	// Conflating the two is how attribution gets lost: `url` is where an agent sends a
 	// reader on our site, `official_job_url` is the employer's own posting.
-	posting := JobPostingFrom(openPosting(), testOrigin)
+	posting := jobPostingFrom(openPosting(), testOrigin)
 
 	wantOurs := testOrigin + "/jobs/senior-go-engineer-at-acme"
 	if posting.URL != wantOurs {
@@ -68,7 +68,7 @@ func TestJobPostingFromEmitsDatesAsCalendarDatesNotTimestamps(t *testing.T) {
 	// `datePosted` and `validThrough` are `format: date` in the schema, while every
 	// timestamp we hold is RFC3339. Handing the timestamp through unchanged is the
 	// obvious mistake and the schema oracle now catches it — this pins the value too.
-	posting := JobPostingFrom(openPosting(), testOrigin)
+	posting := jobPostingFrom(openPosting(), testOrigin)
 
 	if posting.DatePosted != "2026-09-16" {
 		t.Errorf("datePosted = %q, want a calendar date", posting.DatePosted)
@@ -89,7 +89,7 @@ func TestJobPostingFromFallsBackToWhenWeFirstSawThePosting(t *testing.T) {
 	j.PostedAt = nil
 	j.CreatedAt = &createdAt
 
-	posting := JobPostingFrom(j, testOrigin)
+	posting := jobPostingFrom(j, testOrigin)
 
 	if posting.DatePosted != "2026-09-14" {
 		t.Errorf("datePosted = %q, want the creation date as the fallback", posting.DatePosted)
@@ -109,7 +109,7 @@ func TestJobPostingFromLeavesADatelessPostingInvalidRatherThanInventingADate(t *
 		Company:    "Acme Corp",
 	}
 
-	posting := JobPostingFrom(bare, testOrigin)
+	posting := jobPostingFrom(bare, testOrigin)
 
 	if posting.DatePosted != "" {
 		t.Errorf("datePosted = %q, want empty rather than an invented date", posting.DatePosted)
@@ -137,7 +137,7 @@ func TestJobPostingFromTranslatesWorkModeIntoTheStandardsVocabulary(t *testing.T
 			j := openPosting()
 			j.WorkMode = tc.ours
 
-			posting := JobPostingFrom(j, testOrigin)
+			posting := jobPostingFrom(j, testOrigin)
 
 			if posting.RemotePolicy != tc.want {
 				t.Errorf("remote_policy = %q, want %q", posting.RemotePolicy, tc.want)
@@ -169,7 +169,7 @@ func TestJobPostingFromTranslatesOnlyTheExactSeniorityMatches(t *testing.T) {
 			j := openPosting()
 			j.Enrichment.Seniority = tc.ours
 
-			posting := JobPostingFrom(j, testOrigin)
+			posting := jobPostingFrom(j, testOrigin)
 
 			if posting.ExperienceLevel != tc.want {
 				t.Errorf("experienceLevel = %q, want %q", posting.ExperienceLevel, tc.want)
@@ -187,7 +187,7 @@ func TestJobPostingFromCarriesEmploymentTypeAndSalary(t *testing.T) {
 	j.Enrichment.SalaryCurrency = "USD"
 	j.Enrichment.SalaryPeriod = "year"
 
-	posting := JobPostingFrom(j, testOrigin)
+	posting := jobPostingFrom(j, testOrigin)
 
 	if posting.EmploymentType != "full_time" {
 		t.Errorf("employmentType = %q", posting.EmploymentType)
@@ -206,7 +206,7 @@ func TestJobPostingFromCarriesEmploymentTypeAndSalary(t *testing.T) {
 func TestJobPostingFromOmitsSalaryWhenThePostingStatesNone(t *testing.T) {
 	// A zeroed baseSalary block would read as "this job pays nothing", which is a claim
 	// the posting never made.
-	posting := JobPostingFrom(openPosting(), testOrigin)
+	posting := jobPostingFrom(openPosting(), testOrigin)
 
 	if posting.BaseSalary != nil {
 		t.Errorf("baseSalary = %+v, want nil for a posting with no stated pay", posting.BaseSalary)
@@ -220,7 +220,7 @@ func TestJobPostingFromDatesAClosedPostingByWhenItClosed(t *testing.T) {
 	j := openPosting()
 	j.ClosedAt = &closedAt
 
-	posting := JobPostingFrom(j, testOrigin)
+	posting := jobPostingFrom(j, testOrigin)
 
 	if posting.ValidThrough != "2026-09-15" {
 		t.Errorf("validThrough = %q, want the close date unbuffered", posting.ValidThrough)

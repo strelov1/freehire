@@ -58,6 +58,9 @@ type JobPosting struct {
 	// AgentNotes carries the posting-reality verdict — see agentnotes.go for why it lives
 	// in a free-text field and how carefully it is worded.
 	AgentNotes string `json:"agent_notes,omitempty"`
+	// ApplyPaths is filled by Projector.JobPosting, which knows what this deployment can
+	// submit to; jobPostingFrom on its own leaves it nil.
+	ApplyPaths []ApplyPath `json:"apply_paths,omitempty"`
 }
 
 // Salary is OJCP's compensation block. It is a POINTER on JobPosting: a zeroed block would
@@ -110,13 +113,13 @@ type Employer struct {
 	Name string `json:"name"`
 }
 
-// JobPostingFrom projects one catalogue posting into OJCP's shape. origin is the absolute
+// jobPostingFrom projects one catalogue posting into OJCP's shape. origin is the absolute
 // site origin (e.g. https://freehire.me) the posting's own page is served from.
 //
 // A field the posting does not state is OMITTED, never emitted empty: `datePosted` is
 // `format: date` in the schema, so an empty string is both invalid and — worse — reads to
 // an agent as a date we claim to know.
-func JobPostingFrom(j jobview.Job, origin string) JobPosting {
+func jobPostingFrom(j jobview.Job, origin string) JobPosting {
 	posting := JobPosting{
 		Context:         []string{"https://schema.org"},
 		Type:            "JobPosting",

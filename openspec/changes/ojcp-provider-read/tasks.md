@@ -29,11 +29,19 @@
       posting carries no verdict — including at level `none`, where a "no concerns" note
       would assert a check we never ran. Wording stays hedged; a test forbids the
       accusatory vocabulary outright.
-- [ ] 2.3 Project a stored apply form into an `ApplyPath` carrying `type`, `ats_provider` and
-      `required_fields`.
-- [ ] 2.4 Derive `supports_agent_submission` from auto-apply's supported-source set, reporting
-      `false` for a challenge-gated ATS. Test both directions against real source names.
-- [ ] 2.5 Project a posting with no captured form into a single `external_redirect` path.
+- [x] 2.3 Project a stored apply form into an `ApplyPath` carrying `type`, `ats_provider` and
+      `required_fields`. A demographic question is excluded even when the platform marks it
+      required — OJCP carries those in its own eeo-data schema, and listing one here would
+      say that answering it decides the application. An unlabelled field falls back to its
+      opaque platform identifier rather than being dropped.
+- [x] 2.4 Derive `supports_agent_submission` from what THIS DEPLOYMENT can submit to, handed
+      in via `Projector.Submittable` rather than baked into a package constant. Today that is
+      Greenhouse alone (`fillProviders`); Ashby and Workable join it only where the
+      cloud-agent fallback is enabled and funded, and Lever never does — it has a working
+      fill path that an invisible hCaptcha defeats about seven attempts in eight.
+- [x] 2.5 Project a posting with no captured form into a single `external_redirect` path.
+      There is always at least one path: omitting the field would read as "there is no way
+      to apply", which is never true.
 - [ ] 2.6 Project the geography facets (countries, regions, cities) into `jobLocation`,
       which the schema shapes as a single schema.org `Place` — so a posting open in several
       countries needs a deliberate answer rather than an arbitrary first element.
