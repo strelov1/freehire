@@ -163,14 +163,19 @@ func TestJobPostingFromEmitsDatesAsCalendarDatesNotTimestamps(t *testing.T) {
 
 func TestJobPostingFromFallsBackToWhenWeFirstSawThePosting(t *testing.T) {
 	// `datePosted` is REQUIRED by the schema, so a source that states no publication date
-	// cannot simply omit it. The day the catalogue first recorded the posting is the
-	// honest lower bound — never later than the day it actually appeared.
-	createdAt := "2026-09-14T22:15:00Z"
-	j := openPosting()
-	j.PostedAt = nil
-	j.CreatedAt = &createdAt
+	// cannot simply omit it. The day the catalogue first recorded the posting is the honest
+	// lower bound — never later than the day it actually appeared.
+	//
+	// The fallback itself is jobview's (effectivePosted), not this projection's: a stored
+	// row with no posted_at is served with PostedAt already standing in for it. Asserting it
+	// from the ROW is what proves the projection inherits the behaviour — an earlier version
+	// of this test hand-set PostedAt=nil with CreatedAt set, a combination no read path
+	// produces, and so tested a branch that could never run.
+	row := openPostingRow()
+	row.PostedAt = pgtype.Timestamptz{}
+	row.CreatedAt = stamp("2026-09-14T22:15:00Z")
 
-	posting := jobPostingFrom(j, testOrigin)
+	posting := jobPostingFrom(viewOf(row), testOrigin)
 
 	if posting.DatePosted != "2026-09-14" {
 		t.Errorf("datePosted = %q, want the creation date as the fallback", posting.DatePosted)

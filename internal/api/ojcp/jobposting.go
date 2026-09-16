@@ -115,6 +115,11 @@ var salaryUnit = map[string]string{
 	"year":  "YEAR",
 	"month": "MONTH",
 	"hour":  "HOUR",
+	// OJCP's enum has no daily rate. The empty value RECORDS that gap rather than leaving
+	// the key absent, so the vocabulary guard can tell a decided omission from a forgotten
+	// one — and salaryFrom drops the whole block, because a daily rate read as an annual
+	// one is a wrong answer, not a partial one.
+	"day": "",
 }
 
 // Employer is OJCP's employer block. Only `name` is required by the schema, but
@@ -195,8 +200,8 @@ func salaryFrom(j jobview.Job) *Salary {
 	// contract published as a bare 400 reads to an agent as an annual salary — it buries a
 	// six-figure role at the bottom of a ranking, or drops it against a salary_min filter.
 	// A bare number with no currency is uncomparable in the same way.
-	unit, known := salaryUnit[e.SalaryPeriod]
-	if !known || !vocab.IsCurrencyCode(e.SalaryCurrency) {
+	unit := salaryUnit[e.SalaryPeriod]
+	if unit == "" || !vocab.IsCurrencyCode(e.SalaryCurrency) {
 		return nil
 	}
 
@@ -217,16 +222,18 @@ func asFloat(v *int) *float64 {
 	return &f
 }
 
-// datePosted is when the employer published the posting, falling back to when this
-// catalogue first recorded it. The schema REQUIRES the field, and the fallback is the
-// honest lower bound: a source that states no publication date still gives us the day we
-// first saw the posting, which is never later than the day it appeared.
+// datePosted is when the employer published the posting. The schema REQUIRES the field.
 //
-// A posting with neither yields "", which the schema rejects. That is deliberate: no
-// stored row lacks both, so an empty value means something upstream is wrong, and inventing
-// a date to make the validator quiet would hide it.
+// There is no fallback here because there is nothing left to fall back to: jobview already
+// serves PostedAt as `effectivePosted`, which stands the creation date in whenever the
+// source stated no publication date (or stated one in the future). Repeating that decision
+// would be a branch no read path can reach.
+//
+// An empty value therefore means the posting has no timestamp at all, which the schema then
+// rejects. That is deliberate: no stored row lacks both, so it means something upstream is
+// wrong, and inventing a date to quiet the validator would hide it.
 func datePosted(j jobview.Job) string {
-	return calendarDate(firstPresent(j.PostedAt, j.CreatedAt))
+	return calendarDate(j.PostedAt)
 }
 
 // calendarDate renders one of our RFC3339 timestamps as the YYYY-MM-DD the schema's

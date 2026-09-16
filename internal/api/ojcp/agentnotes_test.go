@@ -20,9 +20,16 @@ func TestJobPostingFromStatesThePostingRealityVerdict(t *testing.T) {
 	if posting.AgentNotes == "" {
 		t.Fatal("agent_notes is empty; the posting carries a reality verdict")
 	}
-	for _, want := range []string{"2 of 4", "evergreen_posting", "ats_absent"} {
+	// The criteria are stated as sentences, not as their internal codes: an agent relays
+	// this note to a candidate, and "evergreen_posting" reaches them as jargon.
+	for _, want := range []string{"2 of 4", "open unusually long", "employer's own ATS"} {
 		if !strings.Contains(posting.AgentNotes, want) {
 			t.Errorf("agent_notes does not state %q: %s", want, posting.AgentNotes)
+		}
+	}
+	for _, code := range []string{"evergreen_posting", "ats_absent"} {
+		if strings.Contains(posting.AgentNotes, code) {
+			t.Errorf("agent_notes leaks the internal criterion code %q: %s", code, posting.AgentNotes)
 		}
 	}
 	if err := validateAgainstSchema(t, schemaJobPosting, posting); err != nil {
