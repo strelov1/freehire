@@ -740,9 +740,14 @@
       refusal = null;
     } catch (err) {
       // Refused again means the day's tailoring allowance is gone too, and that IS a wall
-      // until tomorrow — so it becomes an ordinary error rather than another offer.
+      // until tomorrow — so it becomes an ordinary error rather than another offer, with the
+      // same link to the plan the daily-limit refusal in dispatch() shows.
       refusal = null;
-      setError(err instanceof Error ? err.message : 'Could not continue this session.');
+      if (err instanceof TurnRefused) {
+        error = { message: err.message, planLimitReached: true };
+      } else {
+        setError(err instanceof Error ? err.message : 'Could not continue this session.');
+      }
     } finally {
       extending = false;
     }
