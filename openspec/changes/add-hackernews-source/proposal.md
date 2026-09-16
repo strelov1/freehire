@@ -1,72 +1,54 @@
 ## Why
 
-Issue #2869 proposed `hackernews` as a third aggregator source, crawling the monthly "Ask
-HN: Who is hiring?" thread as a plain link-harvest (417 posts listed, 244 ingested by the
-contributor's adapter). A pure link-harvest under-serves this source: a "who is hiring"
-comment is free text, and a large share of comments name a company and a role with no ATS
-link at all ("Acme Corp | Senior Backend | Remote | apply: jobs@acme.com") — a link-only
-adapter simply drops those. The comments that DO carry a recognizable ATS link are better
-served by a permanent board contribution (the company then joins the regular first-party
-crawl and every future posting of theirs is surfaced, not just the one HN mentioned) than by
-a one-off job record, which is exactly the shape the `githublists` fix (PR #2879) already
-established for structured aggregator lists — but HN's comments are not structured, so that
-fix's approach doesn't reach the free-text majority.
+Issue #2869 proposed `hackernews` as one of three aggregator sources. Earlier drafts of this
+change designed a whole new two-stage crawl→LLM-extraction pipeline (modeled on
+`internal/ingest/telegram`), on the assumption that HN "who is hiring" comments are free
+prose needing an LLM to parse. That assumption was wrong: the thread's own posting
+convention is a pipe-delimited header ("Company | Role | Location | ..."), and the
+contributor's own fork (`Manan-Santoki/freehire@us-aggregator-sources`,
+`internal/ingest/sources/hackernews.go`) already parses it deterministically, with no LLM, as
+an ordinary `internal/ingest/sources.Source` adapter — fitting the existing crawl pipeline
+directly, with well-covered edge cases (sibling-thread filtering, role-first-segment
+detection, commitment/salary/URL-aware location extraction). That code is adopted here
+(reviewed, not re-derived from scratch).
 
-This proposes a two-branch pipeline, architecturally close to `internal/ingest/telegram`
-(cheap crawl → queue → extraction stage): a comment with a recognizable ATS link becomes a
-board contribution; a comment with no such link is free text and goes through LLM
-extraction into the job catalogue directly, the same shape `cmd/tg-extract` already uses for
-Telegram. This was the shape committed to in the issue comment already posted
-(https://github.com/strelov1/freehire/issues/2869#issuecomment-5689029816).
+Separately, comments that DO name a company via a recognizable ATS link are better served by
+a permanent board contribution than a one-off job record — but this needs **no new code**:
+`scripts/harvest_boards.py`'s existing `--hn` flag (`harvest_hn()`/`extract_hn_candidates()`)
+already crawls the same threads for ATS links and, since PR #2879 fixed
+`emit_survivors()`/`existing_slugs()` to dedup against the live `boards` table and emit
+`cmd/harvest-boards`-ready seed JSON, already produces exactly the board-contribution
+candidates this issue asked for. That half is a periodic operational task (like
+harvest-githublists-boards' deferred group 3), not new code.
 
 ## What Changes
 
-- New `internal/ingest/hackernews` package: fetches the current "Who is hiring?" thread(s)
-  via the Algolia HN Search API, stores each top-level comment as a durable post (new
-  `hn_posts` table, no channel-list table needed — unlike Telegram, there is exactly one
-  source and it is discovered fresh each run, not configured).
-- New `cmd/hn-ingest` (crawl → enqueue) and `cmd/hn-extract` (dequeue → branch → write),
-  both `worker.Main`/`worker.Bootstrap` run-once-and-exit cron workers, following
-  `cmd/tg-ingest`/`cmd/tg-extract`'s exact shape.
-- The extraction branch: every URL in a comment is checked against
-  `internal/ingest/atsboard.Recognize` (the existing Go-native ATS URL recognizer, already
-  used by the site's own contribution flow — **not** a reimplementation of
-  `scripts/ats_boards.py`'s Python regex table, which is one-off maintainer tooling, not
-  part of the deployed pipeline). A comment with at least one recognized link is submitted
-  as a board contribution via `boardcatalog.Inserter.Insert(..., StatusPending)` — the same
-  entry point `internal/ingest/contribution` already uses, so a hackernews-sourced board is
-  indistinguishable in the catalog from a site-submitted or harvested one. A comment with no
-  recognized link goes through LLM extraction (provider-agnostic `internal/platform/llm`
-  client, the same `Extraction.Validate()` + `job.New(job.Draft{...})` gate `tg-extract`
-  uses) directly into the job catalogue (`source = "hackernews"`).
-- Closed by age, the same accepted limitation `internal/ingest/telegram/AGENTS.md` documents
-  for Telegram jobs (no de-list signal from a static thread).
-- Adds `internal/ingest/hackernews` to the layering table
-  (`internal/platform/arch/layering/blocks.go`), same block (`ingest`) as `telegram`,
-  `atsboard`, `boardcatalog`, `contribution`.
+- Adopt `internal/ingest/sources/hackernews.go` + its test file from the contributor's fork,
+  after review (current `main` has moved since the fork's base — recheck against it, not a
+  blind copy). Register `NewHackerNews(c)` in `registry.go`'s `All()`.
+- Adopt the "Hacker News traps" section the fork's `AGENTS.md` diff already wrote for
+  `internal/ingest/sources/AGENTS.md` (not the hiring.cafe/githublists sections from the same
+  diff — those are already resolved separately).
+- Regenerate `web/src/lib/generated/contracts.ts`'s `SOURCE_VALUES` via `make gen-contracts`.
+- No new package, no new migration, no new worker binary, no LLM integration.
 
 ## Capabilities
 
 ### New Capabilities
-- `hackernews-ingest`: crawls HN's monthly "Who is hiring?" thread, branches each comment
-  into a board contribution (has a recognized ATS link) or an LLM-extracted job posting (does
-  not), closed by age.
+- `hackernews-source`: a boardless, aggregator, `fullCatalog` source reading the two newest
+  "Ask HN: Who is hiring?" threads via the Algolia HN API, yielding one job per top-level
+  comment whose header follows the "Company | Role | ..." convention.
 
 ### Modified Capabilities
 <!-- none -->
 
 ## Impact
 
-- New migration(s): `hn_posts` table (queue/audit of crawled comments — see design.md for
-  exact shape) plus whatever the `jobs` row needs to distinguish a hackernews-sourced posting
-  for the age-based close sweep (mirrors how Telegram jobs are excluded from `cmd/liveness`
-  and closed on `COALESCE(posted_at, created_at)`).
-- New packages/binaries: `internal/ingest/hackernews`, `cmd/hn-ingest`, `cmd/hn-extract`.
-- `internal/platform/arch/layering/blocks.go`: register the new package.
-- No change to `scripts/harvest_boards.py`'s existing `--hn` flag (`harvest_hn()` and
-  friends) — that stays as ad-hoc maintainer tooling; this proposal does not remove or
-  repurpose it, since it answers a different need (exploratory harvesting, hand-run) than a
-  deployed cron pipeline.
-- No change to `cmd/tg-extract`/`internal/ingest/telegram` — extending Telegram's own
-  extraction with the same ATS-link-first branch is a separate, later proposal (mentioned in
-  the issue comment as a possible follow-up, explicitly out of scope here).
+- `internal/ingest/sources/hackernews.go`, `hackernews_test.go` (new files, adopted).
+- `internal/ingest/sources/registry.go`: register the adapter.
+- `internal/ingest/sources/AGENTS.md`: add the "Hacker News traps" section.
+- `web/src/lib/generated/contracts.ts`: regenerated `SOURCE_VALUES`.
+- No change to `cmd/harvest-boards`, `scripts/harvest_boards.py`, `scripts/ats_boards.py` —
+  the board-contribution half already works after PR #2879; running it against the current
+  threads is a follow-up operational step, not part of this diff.
+- No change to `internal/ingest/telegram` or `cmd/tg-extract`.
