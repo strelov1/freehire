@@ -39,12 +39,17 @@ const (
 	maxPerUser = 50
 	// maxQueryLen bounds the stored query string, the same way maxNameLen bounds name.
 	// query is a URL-encoded SPA filter state (facet params, not prose), so real values
-	// run to a few hundred characters even with many facets selected; 2000 leaves
+	// run to a few hundred characters even with many facets selected; 4000 leaves
 	// generous headroom while keeping a stored query far short of the point where
 	// re-parsing it on every internal/engage/notify pass (url.ParseQuery, once per distinct
-	// query per pass) becomes the cost this bound exists to avoid. The migration's
+	// query per pass) becomes the cost this bound exists to avoid. Raised from the
+	// original 2000 (migration 0168) once a real profile-derived query — "notify me
+	// about jobs matching my profile", built from a rich skills list — tripped it; the
+	// frontend (facetModel.ts's skillCharBudget) separately bounds how much of a
+	// profile's own skills it ever feeds into that query, so this ceiling is headroom
+	// for a legitimately large filter, not a substitute for that cap. The migration's
 	// CHECK is the backstop.
-	maxQueryLen = 2000
+	maxQueryLen = 4000
 )
 
 // SavedSearch is a stored named filter snapshot: the package domain type, decoupled from

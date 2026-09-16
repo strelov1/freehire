@@ -148,4 +148,66 @@ describe('filtersFromProfile', () => {
       expect(p.getAll(param)).toEqual([]);
     }
   });
+
+  // A profile may hold up to 200 skills and, independently, up to 200 excluded skills,
+  // each up to 64 characters (userprofile.go's own caps — free text, no dictionary
+  // check), which would blow well past the saved-search query length limit long before
+  // the rest of the filter got a chance to matter (freehire "query is too long" bug: a
+  // rich profile's own "notify me about jobs matching my profile" toggle failing against
+  // its own server-side query bound). filtersFromProfile must cap what it feeds into the
+  // query regardless of how many or how long the stored values are.
+  describe('bounding the skills contribution', () => {
+    // Longer than any real dictionary skill name, to model the free-text worst case
+    // rather than the ~8-character average a real pick from the skill picker produces.
+    const longSkills = (prefix: string, count: number) =>
+      Array.from({ length: count }, (_, i) => `${prefix}-${String(i).padStart(50, '0')}`);
+
+    it('keeps the query well under the server-side length limit for a maximally sized profile', () => {
+      const location: LocationPreferences = {
+        work_modes: ['remote', 'onsite', 'hybrid'],
+        remote: { regions: ['latam', 'eu', 'apac'], countries: Array.from({ length: 20 }, (_, i) => `c${i}`) },
+        base: { country: 'br', city: 'Florianópolis' },
+        relocation: {
+          open: true,
+          regions: ['africa', 'mena'],
+          countries: Array.from({ length: 20 }, (_, i) => `r${i}`),
+          cities: Array.from({ length: 10 }, (_, i) => `City${i}`),
+        },
+      };
+      const profile = mkProfile(
+        ['backend', 'devops'],
+        longSkills('skill', 200),
+        location,
+        longSkills('avoid', 200),
+      );
+      const query = filtersToParams(filtersFromProfile(profile)).toString();
+      // The saved-search service's own bound (internal/search/savedsearch/savedsearch.go);
+      // duplicated as a literal because this module stays free of any Go/API import.
+      expect(query.length).toBeLessThan(4000);
+    });
+
+    it('truncates skills as a prefix of the profile’s own order, not a scattered subset', () => {
+      const skills = longSkills('skill', 200);
+      const p = filtersToParams(filtersFromProfile(mkProfile([], skills)));
+      const kept = p.getAll('skills')[0]?.split(',') ?? [];
+      expect(kept.length).toBeGreaterThan(0);
+      expect(kept.length).toBeLessThan(skills.length);
+      expect(skills.slice(0, kept.length)).toEqual(kept);
+    });
+
+    it('truncates excluded skills independently of included skills', () => {
+      const excluded = longSkills('avoid', 200);
+      const p = filtersToParams(filtersFromProfile(mkProfile([], ['go'], null, excluded)));
+      const kept = p.getAll('skills_exclude')[0]?.split(',') ?? [];
+      expect(kept.length).toBeGreaterThan(0);
+      expect(kept.length).toBeLessThan(excluded.length);
+      expect(p.getAll('skills')).toEqual(['go']);
+    });
+
+    it('leaves an ordinary profile’s skills untouched', () => {
+      const skills = ['go', 'kubernetes', 'terraform', 'postgres'];
+      const p = filtersToParams(filtersFromProfile(mkProfile([], skills)));
+      expect(p.getAll('skills')).toEqual([skills.join(',')]);
+    });
+  });
 });

@@ -453,6 +453,33 @@ export function filtersWithParts(
   return { ...f, q, facets };
 }
 
+/** A profile may hold up to 200 skills and, independently, up to 200 excluded skills
+ *  (userprofile.go's own `maxSkills`), each up to 64 characters — free text, with no
+ *  dictionary check behind it. Fed straight through, that pair could add close to
+ *  25,000 characters to a profile-derived query, blowing well past the saved-search
+ *  service's own length bound (internal/search/savedsearch's `maxQueryLen`) before the
+ *  rest of the filter got a chance to matter — the toggle this seeds (ProfileAlertToggle)
+ *  would then fail outright with a raw "query is too long" error.
+ *
+ *  Bounded by total character count rather than item count: a real pick from the skill
+ *  autocomplete runs ~8 characters, so this budget comfortably covers a rich real-world
+ *  profile while still capping the free-text worst case. Takes values in the profile's
+ *  own order up to the budget, then stops, rather than truncating a value mid-string. */
+function skillCharBudget(values: string[]): string[] {
+  const maxChars = 800;
+  const out: string[] = [];
+  let used = 0;
+  for (const raw of values) {
+    const v = raw.trim();
+    if (!v) continue;
+    const cost = v.length + (out.length > 0 ? 1 : 0); // +1 for the joining comma
+    if (used + cost > maxChars) break;
+    out.push(v);
+    used += cost;
+  }
+  return out;
+}
+
 /** Build a fresh filter set seeded from a user profile — the reset-and-seed behind
  *  "Apply my profile". Specializations become `category` values, skills become included
  *  `skills` values, and excluded skills become EXCLUDED `skills` values (rendering
@@ -463,19 +490,21 @@ export function filtersWithParts(
  *  base ∪ relocation targets; cities from the base ∪ relocation targets; and `relocation`
  *  staged as supported+required when the user is open to relocating. The flatten is lossy
  *  (base vs relocation merge) — the filter is a convenience narrowing of "places relevant to
- *  me". Trimming/dedup come free from facetAdd, so unions of overlapping lists are safe. */
+ *  me". Trimming/dedup come free from facetAdd, so unions of overlapping lists are safe.
+ *  Skills are additionally bounded by `skillCharBudget` (below) before seeding — see its
+ *  own comment. */
 export function filtersFromProfile(profile: UserProfile): JobFilters {
   const seed = (values: string[]) => values.reduce(facetAdd, emptyFacet());
   const f = emptyFilters();
   f.facets.category = seed(profile.specializations);
   // Skills: wanted → include, avoided → exclude. Only stage an exclude for a token not
   // already wanted (signOf === 'off'), so a stray overlap keeps the wanted value.
-  f.facets.skills = (profile.excluded_skills ?? []).reduce(
+  f.facets.skills = skillCharBudget(profile.excluded_skills ?? []).reduce(
     (st, raw) => {
       const v = raw.trim();
       return v && signOf(st, v) === 'off' ? facetSetSign(st, v, 'exclude') : st;
     },
-    seed(profile.skills),
+    seed(skillCharBudget(profile.skills)),
   );
 
   const loc = profile.location_preferences;

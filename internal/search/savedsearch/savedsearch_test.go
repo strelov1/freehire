@@ -155,7 +155,7 @@ func TestCreate_NameLengthCountsRunes(t *testing.T) {
 // length bound anywhere.
 func TestCreate_RejectsOverLongQuery(t *testing.T) {
 	repo := &fakeRepo{}
-	_, err := savedsearch.New(repo).Create(context.Background(), 7, "Huge query", strings.Repeat("q", 2001), false)
+	_, err := savedsearch.New(repo).Create(context.Background(), 7, "Huge query", strings.Repeat("q", 4001), false)
 	if !errors.Is(err, savedsearch.ErrQueryTooLong) {
 		t.Errorf("err = %v, want ErrQueryTooLong", err)
 	}
@@ -166,9 +166,9 @@ func TestCreate_RejectsOverLongQuery(t *testing.T) {
 
 func TestCreate_AcceptsQueryAtTheLengthCap(t *testing.T) {
 	repo := &fakeRepo{createRet: savedsearch.SavedSearch{ID: 1}}
-	_, err := savedsearch.New(repo).Create(context.Background(), 7, "At the cap", strings.Repeat("q", 2000), false)
+	_, err := savedsearch.New(repo).Create(context.Background(), 7, "At the cap", strings.Repeat("q", 4000), false)
 	if err != nil {
-		t.Errorf("query at the 2000-char cap: err = %v, want nil", err)
+		t.Errorf("query at the 4000-char cap: err = %v, want nil", err)
 	}
 	if !repo.createCalled {
 		t.Error("repo.Create should be called for a query at the cap")
@@ -253,7 +253,7 @@ func TestUpdate_RejectsInvalidName(t *testing.T) {
 
 func TestUpdate_RejectsOverLongQuery(t *testing.T) {
 	repo := &fakeRepo{}
-	huge := strings.Repeat("q", 2001)
+	huge := strings.Repeat("q", 4001)
 	_, err := savedsearch.New(repo).Update(context.Background(), 7, 5, nil, &huge)
 	if !errors.Is(err, savedsearch.ErrQueryTooLong) {
 		t.Errorf("err = %v, want ErrQueryTooLong", err)
