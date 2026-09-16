@@ -55,14 +55,21 @@
 
 ## 3. Tool implementations (transport-free)
 
-- [ ] 3.1 `search_jobs`: map OJCP's input (query, location, filters, pagination) onto the
-      existing search core's parameters, and its result onto the OJCP response envelope
-      (`ojcp_version`, `query`, `total_results`, `returned`, `offset`, `jobs`).
-- [ ] 3.2 Carry the existing "parameters we could not read" reporting through into the OJCP
-      response so an unrecognised filter still widens rather than silently narrows.
-- [ ] 3.3 `get_job_detail`: one posting with its full description; a not-found id yields the
-      OJCP error envelope, never an empty posting.
-- [ ] 3.4 `get_employer_context`: the employer projection for a company we hold.
+- [x] 3.1 `search_jobs`: `SearchInput.QueryValues` maps OJCP's input onto this catalogue's
+      OWN query vocabulary (the same `url.Values` the public endpoints build a filter from),
+      so nothing in the search core changes. `SearchJobsResponse.Finalize` derives `returned`
+      and stamps the version; an empty page serialises as `[]`, never null. The page is
+      capped at the schema's own maximum of 50.
+- [x] 3.2 `QueryValues` returns the input fields it could not honour, and the response
+      carries them as an `ignored_params` extension — the standard's response has nowhere
+      for it and its extensibility rule permits the addition. `location.state` and
+      `location.radius_miles` are reported (we hold no province facet and no coordinates),
+      as is an `experience_level` of `director`, which no level of ours means.
+- [x] 3.3 `get_job_detail`: `JobDetailResponse` carries one projected posting. The
+      not-found path is the error envelope, rendered per transport in groups 4 and 5.
+- [x] 3.4 `get_employer_context`: `EmployerContextFrom` projects a company, keyed by the
+      same slug a posting publishes as `ojcp_employer_id`, and carries `open_roles_count` —
+      the one figure an agent cannot derive from a single posting.
 - [ ] 3.5 Assert the visibility predicate is the shared one — a test that a private posting
       and a suppressed duplicate are unreachable through every tool.
 
