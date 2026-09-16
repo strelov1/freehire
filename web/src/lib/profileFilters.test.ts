@@ -8,13 +8,14 @@ function mkProfile(
   skills: string[],
   location: LocationPreferences | null = null,
   excludedSkills: string[] = [],
+  excludedSources: string[] = [],
 ): UserProfile {
   return {
     specializations,
     skills,
     seniorities: [],
     excluded_skills: excludedSkills,
-    excluded_sources: [],
+    excluded_sources: excludedSources,
     excluded_companies: [],
     location_preferences: location,
     derived_location: null,
@@ -156,6 +157,43 @@ describe('filtersFromProfile', () => {
   // rich profile's own "notify me about jobs matching my profile" toggle failing against
   // its own server-side query bound). filtersFromProfile must cap what it feeds into the
   // query regardless of how many or how long the stored values are.
+  describe('excluded sources', () => {
+    it('stages an avoided source as an EXCLUDED source facet value', () => {
+      // The profile has held excluded_sources since migration 0167, and until now nothing
+      // read them: the list was editable in the profile and changed no result anywhere.
+      // Seeding here is what makes both that card and the job page's Avoid button true,
+      // and it reaches the saved-search alert too, since profileAlertSync builds from the
+      // same function.
+      const f = filtersFromProfile(mkProfile([], [], null, [], ['smartrecruiters', 'adzuna']));
+      const p = filtersToParams(f);
+
+      expect(p.getAll('source_exclude')).toEqual(['smartrecruiters,adzuna']);
+      expect(p.getAll('source')).toEqual([]);
+    });
+
+    it('seeds nothing when the profile avoids no source', () => {
+      const p = filtersToParams(filtersFromProfile(mkProfile(['backend'], [])));
+
+      expect([...p.keys()]).not.toContain('source_exclude');
+    });
+
+    it('bounds the contribution so a maxed-out list cannot break the alert query', () => {
+      // Same hazard skillCharBudget exists for, and the same cap behind it: a profile may
+      // hold up to 200 excluded sources (maxExcludedCount == maxSkills). Fed through whole
+      // they would push the profile-derived query past savedsearch's maxQueryLen and the
+      // alert toggle would fail with a raw "query is too long".
+      const many = Array.from({ length: 200 }, (_, i) => `source-number-${i}`);
+
+      const p = filtersToParams(filtersFromProfile(mkProfile([], [], null, [], many)));
+      const kept = p.getAll('source_exclude')[0]?.split(',') ?? [];
+
+      expect(kept.length).toBeGreaterThan(0);
+      expect(kept.length).toBeLessThan(many.length);
+      // Whole values only — a truncated source key would filter on a source that does not exist.
+      expect(kept.every((v) => many.includes(v))).toBe(true);
+    });
+  });
+
   describe('bounding the skills contribution', () => {
     // Longer than any real dictionary skill name, to model the free-text worst case
     // rather than the ~8-character average a real pick from the skill picker produces.

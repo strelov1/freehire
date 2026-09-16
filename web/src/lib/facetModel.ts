@@ -453,20 +453,32 @@ export function filtersWithParts(
   return { ...f, q, facets };
 }
 
-/** A profile may hold up to 200 skills and, independently, up to 200 excluded skills
- *  (userprofile.go's own `maxSkills`), each up to 64 characters — free text, with no
- *  dictionary check behind it. Fed straight through, that pair could add close to
- *  25,000 characters to a profile-derived query, blowing well past the saved-search
- *  service's own length bound (internal/search/savedsearch's `maxQueryLen`) before the
- *  rest of the filter got a chance to matter — the toggle this seeds (ProfileAlertToggle)
- *  would then fail outright with a raw "query is too long" error.
+// How many characters each profile list may contribute to a profile-derived query.
+//
+// Skills are the reason this exists: a profile may hold up to 200 skills and,
+// independently, up to 200 excluded skills (userprofile.go's own `maxSkills`), each up to
+// 64 characters — free text, with no dictionary check behind it. Fed straight through,
+// that pair could add close to 25,000 characters, blowing well past the saved-search
+// service's own length bound (internal/search/savedsearch's `maxQueryLen`, 4000) before
+// the rest of the filter got a chance to matter — the toggle this seeds
+// (ProfileAlertToggle) would then fail outright with a raw "query is too long" error.
+//
+// Excluded sources carry the SAME cap (maxExcludedCount == maxSkills), so they need a
+// budget for the same reason — but a much smaller one. A source key is a crawl adapter's
+// name, ~12 characters, and a person avoids a handful rather than a career's worth; 200
+// characters covers a dozen and keeps the total comfortably clear of maxQueryLen now that
+// three lists share it rather than two.
+const SKILL_CHAR_BUDGET = 800;
+const SOURCE_CHAR_BUDGET = 200;
+
+/** Values from `values`, in the profile's own order, until `maxChars` is spent.
  *
  *  Bounded by total character count rather than item count: a real pick from the skill
- *  autocomplete runs ~8 characters, so this budget comfortably covers a rich real-world
- *  profile while still capping the free-text worst case. Takes values in the profile's
- *  own order up to the budget, then stops, rather than truncating a value mid-string. */
-function skillCharBudget(values: string[]): string[] {
-  const maxChars = 800;
+ *  autocomplete runs ~8 characters, so the budget comfortably covers a rich real-world
+ *  profile while still capping the free-text worst case. Stops at a whole value rather
+ *  than truncating one mid-string — half a source key filters on a source that does not
+ *  exist. */
+function charBudget(values: string[], maxChars: number): string[] {
   const out: string[] = [];
   let used = 0;
   for (const raw of values) {
@@ -491,20 +503,33 @@ function skillCharBudget(values: string[]): string[] {
  *  staged as supported+required when the user is open to relocating. The flatten is lossy
  *  (base vs relocation merge) — the filter is a convenience narrowing of "places relevant to
  *  me". Trimming/dedup come free from facetAdd, so unions of overlapping lists are safe.
- *  Skills are additionally bounded by `skillCharBudget` (below) before seeding — see its
- *  own comment. */
+ *  Avoided SOURCES become excluded `source` values; unlike skills they have no wanted
+ *  counterpart, so there is no overlap rule to apply. Both lists are bounded by
+ *  `charBudget` before seeding — see its own comment. */
 export function filtersFromProfile(profile: UserProfile): JobFilters {
   const seed = (values: string[]) => values.reduce(facetAdd, emptyFacet());
   const f = emptyFilters();
   f.facets.category = seed(profile.specializations);
   // Skills: wanted → include, avoided → exclude. Only stage an exclude for a token not
   // already wanted (signOf === 'off'), so a stray overlap keeps the wanted value.
-  f.facets.skills = skillCharBudget(profile.excluded_skills ?? []).reduce(
+  f.facets.skills = charBudget(profile.excluded_skills ?? [], SKILL_CHAR_BUDGET).reduce(
     (st, raw) => {
       const v = raw.trim();
       return v && signOf(st, v) === 'off' ? facetSetSign(st, v, 'exclude') : st;
     },
-    seed(skillCharBudget(profile.skills)),
+    seed(charBudget(profile.skills, SKILL_CHAR_BUDGET)),
+  );
+
+  // Sources: avoided → excluded. No wanted counterpart exists, so nothing to reconcile —
+  // every value goes in as an exclude. Until this line the profile's excluded_sources were
+  // stored and read by nobody, which made the profile's own "Sources to avoid" card a
+  // control that changed no result anywhere.
+  f.facets.source = charBudget(profile.excluded_sources ?? [], SOURCE_CHAR_BUDGET).reduce(
+    (st, raw) => {
+      const v = raw.trim();
+      return v ? facetSetSign(st, v, 'exclude') : st;
+    },
+    emptyFacet(),
   );
 
   const loc = profile.location_preferences;

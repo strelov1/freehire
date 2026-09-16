@@ -1,12 +1,12 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
-  import { SvelteSet } from 'svelte/reactivity';
   import { timeAgo } from '$lib/utils';
   // A source key is a search-facet code, so it renders through the one label map every
   // other surface uses: a source must not be "WhatJobs" on the filter panel and
   // "Whatjobs" here.
   import { sourceLabel } from '$lib/facets';
   import { sourceLogoUrl } from '$lib/logo';
+  import { EntityLogo } from '$lib/ui';
   import type { ProviderKind, SourceEntry } from '$lib/types';
 
   // The presentational half of the /sources page: given the catalogue read (or null when
@@ -16,11 +16,6 @@
   let { sources }: { sources: SourceEntry[] | null } = $props();
 
   let query = $state('');
-
-  // A logo the proxy could not resolve 404s, and an <img> left in the DOM then draws the
-  // browser's own broken-image icon. Falling back to the monogram is the same rule the
-  // mentor cards follow; without it the page shipped a grid of broken images.
-  const logoFailed = new SvelteSet<string>();
 
   // The order the groups are read in: the platforms most of the catalogue comes through,
   // then the republishers, then single employers, then whatever is not a crawl adapter.
@@ -193,28 +188,21 @@
         <ul class="mt-5 grid gap-3 sm:grid-cols-2">
           {#each group.entries as entry (entry.source)}
             {@const label = sourceLabel(entry.source)}
-            {@const logo = logoFailed.has(entry.source) ? null : sourceLogoUrl(label)}
             {@const jobs = browsable(entry)}
             {@const share = overlap(entry)}
             <li class="rounded-lg border border-border bg-background p-4">
               <div class="flex items-start gap-3">
-                {#if logo}
-                  <img
-                    src={logo}
-                    alt=""
-                    loading="lazy"
-                    decoding="async"
-                    width="32"
-                    height="32"
-                    class="mt-0.5 size-8 shrink-0 rounded bg-muted object-contain"
-                    onerror={() => logoFailed.add(entry.source)}
-                  />
-                {:else}
-                  <span
-                    class="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded bg-muted font-mono text-xs text-muted-foreground"
-                    aria-hidden="true">{label.charAt(0).toUpperCase()}</span
-                  >
-                {/if}
+                <!-- EntityLogo, not a hand-rolled <img>: besides the onerror fallback it
+                     catches a miss that happened BEFORE hydration, which this page needs
+                     precisely because it is server-rendered — the browser fetches the logo
+                     and the 404 fires while no handler exists yet. -->
+                <EntityLogo
+                  name={label}
+                  src={sourceLogoUrl(label) ?? undefined}
+                  shape="square"
+                  size="sm"
+                  class="mt-0.5 shrink-0"
+                />
 
                 <div class="min-w-0 flex-1">
                   <p class="truncate font-medium">{label}</p>

@@ -19,7 +19,7 @@
   import { autoApplyButtonState, jobCtaPlan, type JobCtaPlan } from '$lib/autoApplyButton';
   import { onboardingUrl } from '$lib/onboardingGate.svelte';
   import { promptSignIn } from '$lib/signin';
-  import { filterHref, formatSalary, summaryFacets } from '$lib/enrichment';
+  import { formatSalary, summaryFacets } from '$lib/enrichment';
   import { freshnessBadges } from '$lib/freshness';
   import { markViewed } from '$lib/viewedJobs.svelte';
   import { markSaved, markUnsaved } from '$lib/savedJobs.svelte';
@@ -28,14 +28,15 @@
   import type { Display } from '$lib/generated/contracts';
   import type { Job, PlanState, UserJob } from '$lib/types';
   import { companyLogoUrl } from '$lib/logo';
-  import { Badge, Button, Chip, EntityLogo, TabStrip, tabStripId } from '$lib/ui';
+  import { profileStore } from '$lib/profile.svelte';
+  import { Button, Chip, EntityLogo, TabStrip, tabStripId } from '$lib/ui';
   import { formatDate, formatDateOrAgo, formatDateTime } from '$lib/utils';
   import AddToListButton from './AddToListButton.svelte';
-  import AdzunaAttribution from './AdzunaAttribution.svelte';
   import BackerBadge from './BackerBadge.svelte';
   import CountryFlagStack from './CountryFlagStack.svelte';
   import JobApplyForm, { applyFormWorthShowing } from './JobApplyForm.svelte';
   import JobCompanyPanel from './JobCompanyPanel.svelte';
+  import JobSourceRow from './JobSourceRow.svelte';
   import JobDescription from './JobDescription.svelte';
   import JobMatch from './JobMatch.svelte';
   import { supersedesReality } from '$lib/ghost';
@@ -216,6 +217,9 @@
     justApplied = false;
     showSignInPrompt = false;
     if (!isAuthenticated()) return; // effects run client-only, so no browser guard needed
+    // The Avoid control below reads the profile's excluded_sources; without this its mark
+    // would be wrong on a first load until something else happened to fetch the profile.
+    profileStore.ensureLoaded();
     api.recordJobView(slug)
       .then((rec) => {
         // Mark it locally so its card dims on back-navigation without a reload.
@@ -809,28 +813,9 @@
         </dl>
       {/if}
 
-      <!-- Where the posting came from. One row since the engagement counters left it for
-           the provenance line up beside the title; the `flex-col` wrapper that held the two
-           apart went with them. -->
-      <div
-        class="flex flex-wrap items-center justify-center gap-x-3 gap-y-1.5 border-t border-border pt-4 text-xs text-muted-foreground first:border-t-0 first:pt-0"
-      >
-<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- internal /jobs filter link from filterHref; query-only, no route to resolve -->
-        <a href={filterHref('source', job.source)} class="inline-flex">
-          <Badge variant="outline" class="transition-colors hover:bg-accent hover:text-foreground">
-            {job.source}
-          </Badge>
-        </a>
-        {#if job.source === 'adzuna'}
-          <!-- Required by Adzuna's API terms, not a courtesy credit — see the component. It
-               sits in the provenance row beside the source chip, which is where a reader
-               already looks to find out where a posting came from. -->
-          <AdzunaAttribution jobUrl={job.url} />
-        {/if}
-        {#if job.manually_added}
-          <Badge variant="secondary">Manually added</Badge>
-        {/if}
-      </div>
+      <!-- Where the posting came from, and the control to stop seeing that source. One row
+           since the engagement counters left it for the provenance line up beside the title. -->
+      <JobSourceRow source={job.source} jobUrl={job.url} manuallyAdded={job.manually_added} />
 
       <div class="border-t border-border pt-4 first:border-t-0 first:pt-0">
         <div class="flex justify-center">
