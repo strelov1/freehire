@@ -153,11 +153,10 @@
       </aside>
 
       <div class="min-w-0 flex-1">
-        <!-- Above the section's own heading, in every `my/*` section rather than only in
-             Profile's: being found without applying is not a fact about the page the
-             candidate happens to be on. It hides itself once dismissed, and on the
-             settings page it links to — a banner pointing at the page you are reading is
-             noise. -->
+        <!-- Above the section's own heading, and above every section rather than only
+             Profile's — the card itself argues why. All this layer decides is the one
+             page it must not appear on: a banner pointing at the page you are reading is
+             noise. Dismissal is the card's own business. -->
         {#if !isSectionActive(path, '/my/talent-network')}
           <div class="mb-4">
             <TalentNetworkInvite />

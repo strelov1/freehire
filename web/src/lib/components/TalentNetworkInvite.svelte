@@ -21,8 +21,11 @@
   const DISMISSED_KEY = 'hire.talentInviteDismissed';
 
   let status = $state<'loading' | 'error' | 'ready'>('loading');
-  // Starts dismissed so a candidate who closed it never sees it flash back in before
-  // `onMount` has read their choice; the fetch below is what reveals it.
+  // Starts hidden, so "not yet read from storage" is never mistaken for "not dismissed".
+  // The `status` gate below happens to cover it today — nothing renders until a network
+  // read resolves, and `onMount` is long done by then — but that is the fetch's
+  // behaviour, not this flag's, and it would stop being true the moment the card gained
+  // anything to show before its data arrives.
   let dismissed = $state(true);
 
   onMount(() => {
