@@ -57,7 +57,7 @@
 
 ## 7. Verification
 
-- [x] 7.1 `npm test` (vitest) green for all new pure/unit-testable pieces. 310/310 passing;
+- [x] 7.1 `npm test` (vitest) green for all new pure/unit-testable pieces. 316/316 passing;
       `npm run check` (svelte-check) 0 errors; `npm run build` succeeds and the built
       manifest carries `debugger`/`downloads`.
 - [ ] 7.2 `npm run build` + load unpacked; live-verify against a real Greenhouse posting with
@@ -74,6 +74,23 @@
       neither a running local hire server nor a test account with a tailored CV. The
       button→message→background wiring is typechecked and mirrors the panel's other
       `getToken`-gated effects, but has not been clicked for real.
+
+      **Re-verified after the post-review fix to `uploadInputExpression`** (filtering out a
+      disabled/hidden `input[type="file"]`, so it can't resolve to a decoy sibling of the
+      one `extractUploads` actually detected): re-ran the same live-service-worker drive
+      against the same Greenhouse posting, injecting a hidden decoy file input beside the
+      real one. Checked *within the same CDP session*, immediately after
+      `DOM.setFileInputFiles`, via `Runtime.callFunctionOn` on the resolved `objectId`: it
+      reported `id: "resume"` (the real field, not the decoy) with `files.length === 1` and
+      the correct filename — proving the fix resolves the intended node. A LATER, separate
+      `page.evaluate()` check (both with this fix and, reproduced, with the pre-fix
+      expression too) found the field's files cleared again — reproduced identically by the
+      unmodified pre-fix expression in the same harness, so it is not something this change
+      introduced; likeliest explanation is Greenhouse's own client-side handling reacting to
+      repeated automated file-selection events against the same live posting within one
+      session (rate-limiting/anti-automation or file-content validation), not a defect in
+      the attach mechanism itself. Not chased further to avoid burning more of a production
+      third party's form under repeated automated load.
 - [x] 7.3 Live-verify the two failure modes from §5.2 report a clear message rather than
       hanging or silently doing nothing. DevTools-open collision verified live: a second
       `chrome.debugger.attach` on a tab the first already held failed with

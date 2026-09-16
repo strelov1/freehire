@@ -16,13 +16,28 @@ import type { FramedUpload } from '../protocol';
  * standing outside any `<form>`, as Ashby renders it), so this names "which
  * control" the same way the rest of the wire's `form` addressing does.
  *
- * Evaluates to `null` rather than throwing when the numbered form does not
- * exist on the page any more — the caller reports that as a failure, not this
- * expression.
+ * Filters out a disabled or hidden `input[type="file"]`, mirroring
+ * `extractUploads`'s own filter (`lib/form.ts`) as literal JS source — this string is
+ * evaluated in the PAGE's execution context via CDP, so it cannot import or call that
+ * function directly. Matching it matters: `extractUploads` decided a single reachable
+ * upload exists, and an unfiltered `querySelector` here could instead land on an
+ * earlier hidden/disabled file input a widget keeps in the DOM for its own reasons,
+ * writing the CV into a node nobody detected while the real field stays empty.
+ *
+ * Evaluates to `null` rather than throwing when the numbered form does not exist on
+ * the page any more, or no undisabled/visible file input remains inside it — the
+ * caller reports that as a failure, not this expression.
  */
 export function uploadInputExpression(form: number): string {
   const scope = form >= 0 ? `document.querySelectorAll('form')[${form}]` : 'document';
-  return `(${scope})?.querySelector('input[type="file"]') ?? null`;
+  const isHidden = `(el) => (el.hidden || el.closest('[hidden]')) || ` +
+    `(typeof el.checkVisibility === 'function' && !el.checkVisibility())`;
+  return (
+    `(() => { const s = ${scope}; if (!s) return null; ` +
+    `const isHidden = ${isHidden}; ` +
+    `return Array.from(s.querySelectorAll('input[type="file"]'))` +
+    `.find((el) => !el.disabled && !isHidden(el)) ?? null; })()`
+  );
 }
 
 /** Base64-encodes bytes, chunked so `String.fromCharCode` never spreads a huge array at
