@@ -148,6 +148,17 @@ var labelAnswerKeyFor = []struct {
 	{"desired_salary", []string{"desired", "compensation"}},
 	{"desired_salary", []string{"salary", "expect"}},
 	{"desired_salary", []string{"compensation", "expect"}},
+	// Being of age: ~150 of the 12 352 question labels measured across 4 000 live forms on
+	// 2026-09-16, in four phrasings, and screening_answers.age_18_or_older holds the answer
+	// already. Forms give it an opaque id, so only a label rule can reach it.
+	//
+	// Each rule carries the number 18 with it, which is what keeps an age RANGE ("What is
+	// your age range?") out: that is a demographic question the candidate answers for
+	// themselves, and a yes/no fact is not an answer to it.
+	{"age_18_or_older", []string{"at least 18"}},
+	{"age_18_or_older", []string{"over the age of 18"}},
+	{"age_18_or_older", []string{"18 years of age or older"}},
+	{"age_18_or_older", []string{"18 or older"}},
 }
 
 // matchLabelAnswerKey returns the answer key a field's label matches, if any.

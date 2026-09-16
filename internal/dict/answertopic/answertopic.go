@@ -48,6 +48,28 @@ var dictionary = []struct {
 		{"start", "date"},
 		{"when can you start"},
 	}},
+	// The single most common question on any application form — ~314 of the 12 352
+	// question labels measured across 4 000 live forms on 2026-09-16. Employers write it
+	// a dozen ways AND drop their own name into it ("How did you hear about Appian?"), so
+	// the fold alone gives every company its own topic and an answer stored for one is
+	// never recalled for another. The sets below deliberately do not name what is being
+	// asked about, only the asking.
+	{"how_did_you_hear", [][]string{
+		{"how did you hear"},
+		{"how did you find out"},
+		{"how did you learn about"},
+		{"where did you hear"},
+		{"how you heard"},
+	}},
+	// ~150 of that same sample, in three phrasings — and the candidate has already
+	// answered it (screening_answers.age_18_or_older). A question whose answer is on file
+	// and still parks an application is the worst kind of gap.
+	{"age_18_or_older", [][]string{
+		{"at least 18"},
+		{"over the age of 18"},
+		{"18 years of age or older"},
+		{"18 or older"},
+	}},
 }
 
 // politeWrappers are the openers employers put in front of the actual question. Dropped so
