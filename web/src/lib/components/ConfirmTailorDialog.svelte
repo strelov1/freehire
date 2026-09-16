@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { resolve } from '$app/paths';
   // The one mount point for confirmTailorDialog.svelte.ts's controller — see there
   // for why this needs to exist as a singleton at all. Sibling of CvRefreshDialog in
   // the root layout: fixed, self-gating, owns no layout space of its own.
@@ -13,6 +12,7 @@
   import { partitionBlockers, toneText, haveChipClass, missingChipClass } from '$lib/jobMatch';
   import { ConfirmDialog } from '$lib/ui';
   import SkillIcon from './SkillIcon.svelte';
+  import PlanLimitLink from './PlanLimitLink.svelte';
   import { skillLabel } from '$lib/facets';
 
   const match = $derived(confirmTailorDialog.match);
@@ -119,9 +119,7 @@
     <p class="text-xs text-muted-foreground">
       More at {resetsAtLabel(allowance)}. Sessions you've already started stay open.
     </p>
-    <a href={resolve('/my/plan')} class="mt-1 text-xs font-medium underline underline-offset-4">
-      See your plan
-    </a>
+    <div class="mt-1"><PlanLimitLink /></div>
     <!-- Zero left without a refusal is the shadow run: the count is spent, the session
          still starts. Saying "0 left" beside a button that works would be the one sentence
          on this dialog the candidate could prove wrong, so it says nothing instead. -->

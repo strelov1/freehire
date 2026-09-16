@@ -17,6 +17,7 @@
   import type { Job, MatchAnalysisResponse } from '$lib/types';
   import { renderMarkdown } from '$lib/markdown';
   import { Button } from '$lib/ui';
+  import PlanLimitLink from '$lib/components/PlanLimitLink.svelte';
 
   // The full AI match report + live SSE stream. Caller: `ArtifactPanel`'s Job Match tab, with
   // `autoRun` wired to the tailoring workspace's own `coldStartRunning` — a cold start opens
@@ -378,6 +379,7 @@
         <p class="text-xs text-muted-foreground">
           More at {resetsAtLabel(allowance)}. Analyses you've already run stay available.
         </p>
+        <PlanLimitLink />
       </div>
     {/if}
 

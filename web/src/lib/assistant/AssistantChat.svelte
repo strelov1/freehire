@@ -33,6 +33,7 @@
   import SessionRail from '$lib/assistant/SessionRail.svelte';
   import ToolGroupList from '$lib/assistant/ToolGroupList.svelte';
   import Composer from '$lib/assistant/Composer.svelte';
+  import PlanLimitLink from '$lib/components/PlanLimitLink.svelte';
   import {
     fromSummary,
     upsertSession,
@@ -116,7 +117,16 @@
   } = $props();
 
   let phase = $state<Phase>('loading');
-  let error = $state<string | null>(null);
+  // planLimitReached distinguishes a spent daily allowance (which offers a link to the
+  // plan) from every other failure this component reports through the same banner — one
+  // object so the two facts can never fall out of step with each other the way two
+  // separately-reset variables did (a stale flag surviving past the error it described).
+  let error = $state<{ message: string; planLimitReached: boolean } | null>(null);
+  /** Every ordinary failure goes through here; `planLimitReached` starts false and only the
+   *  plan-refusal branch in dispatch()'s catch sets it directly. */
+  function setError(message: string) {
+    error = { message, planLimitReached: false };
+  }
   // A ceiling refusal is not a dead end: the session can be continued by spending another
   // of the day's tailoring sessions. Held apart from `error` because it needs an action
   // beside it, and because a plain error message would tell the candidate to give up on
@@ -289,7 +299,7 @@
       try {
         summaries = await listSessions();
       } catch {
-        error = 'Could not load your chats — starting a new one.';
+        setError('Could not load your chats — starting a new one.');
       }
       sessions = summaries.map((s) => fromSummary(s, NEW_CHAT_LABEL));
 
@@ -392,7 +402,7 @@
       notFound = true;
       return;
     }
-    error = err instanceof Error ? err.message : fallback;
+    setError(err instanceof Error ? err.message : fallback);
   }
 
   // Open a session and repaint its stored transcript. The replay folds through the
@@ -488,7 +498,7 @@
     try {
       await createAndOpen();
     } catch (err) {
-      error = err instanceof Error ? err.message : 'Could not start a new chat.';
+      setError(err instanceof Error ? err.message : 'Could not start a new chat.');
     } finally {
       creating = false;
     }
@@ -532,7 +542,7 @@
     try {
       await deleteSession(id);
     } catch {
-      error = 'Could not delete the chat.';
+      setError('Could not delete the chat.');
       return;
     }
     const remaining = removeSession(sessions, id);
@@ -547,7 +557,7 @@
         if (next) await openSession(next);
         else await createAndOpen();
       } catch (err) {
-        error = err instanceof Error ? err.message : 'Could not open a chat.';
+        setError(err instanceof Error ? err.message : 'Could not open a chat.');
       }
     }
   }
@@ -680,7 +690,7 @@
         // The turn never ran, so the message was never recorded. Give it back rather than
         // losing it, and say why — the composer is empty and nothing else would explain it.
         draft = draft.trim() === '' ? start.text : draft;
-        error = 'That message was not sent: the chat was still busy. Try again.';
+        setError('That message was not sent: the chat was still busy. Try again.');
       }
     } catch (err) {
       if (err instanceof StreamInterrupted) {
@@ -692,15 +702,25 @@
         endTurn();
         return;
       }
-      if (err instanceof TurnRefused && err.canExtend) {
-        // The turn never started, so the message was never recorded — give it back to the
-        // composer rather than losing it while the candidate decides whether to continue.
+      if (err instanceof TurnRefused) {
+        // Neither remedy below ever started the turn, so the message was never recorded —
+        // give it back to the composer rather than losing it while the candidate decides
+        // what to do next.
         draft = draft.trim() === '' && start.kind === 'message' ? start.text : draft;
-        refusal = err;
+        if (err.canExtend) {
+          // The session can be continued right now by spending another of the day's
+          // tailoring sessions.
+          refusal = err;
+        } else {
+          // A spent daily allowance: Retry would only repeat the same refusal, and there is
+          // no assistant frame to mark errored (the turn never started), so this skips the
+          // generic error result entirely rather than fabricating a dead-end Retry button.
+          error = { message: err.message, planLimitReached: true };
+        }
         endTurn();
         return;
       }
-      error = err instanceof Error ? err.message : 'Could not send the message.';
+      setError(err instanceof Error ? err.message : 'Could not send the message.');
       chat = reduceTurnEvent(chat, { type: 'result', stop_reason: 'error', is_error: true });
       endTurn();
     }
@@ -722,7 +742,7 @@
       // Refused again means the day's tailoring allowance is gone too, and that IS a wall
       // until tomorrow — so it becomes an ordinary error rather than another offer.
       refusal = null;
-      error = err instanceof Error ? err.message : 'Could not continue this session.';
+      setError(err instanceof Error ? err.message : 'Could not continue this session.');
     } finally {
       extending = false;
     }
@@ -785,7 +805,12 @@
     role="alert"
   >
     <AlertTriangle class="mt-0.5 size-4 shrink-0" />
-    <span>{error}</span>
+    <div class="flex min-w-0 flex-1 flex-col gap-1">
+      <span>{error.message}</span>
+      {#if error.planLimitReached}
+        <PlanLimitLink />
+      {/if}
+    </div>
   </div>
 {/if}
 {#if refusal}

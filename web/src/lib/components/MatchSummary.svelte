@@ -7,6 +7,7 @@
   import { isAuthenticated } from '$lib/auth.svelte';
   import { promptSignIn } from '$lib/signin';
   import { askConfirmTailor } from '$lib/confirmTailorDialog.svelte';
+  import PlanLimitLink from '$lib/components/PlanLimitLink.svelte';
   import { verdictTone, type Tone } from '$lib/matchAnalysis';
   import type { MatchAnalysisResponse } from '$lib/types';
   import { Button } from '$lib/ui';
@@ -109,6 +110,7 @@
     <p class="text-sm text-muted-foreground">
       You've used today's {refusedName}. More at {resetsAtLabel(refusedAllowance)}.
     </p>
+    <PlanLimitLink />
   {:else}
     <Button
       variant="primary"
