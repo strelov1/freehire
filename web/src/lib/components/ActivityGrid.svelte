@@ -134,8 +134,15 @@
       </div>
       <p class="mt-1 text-sm text-muted-foreground">{s.caption}</p>
 
-      <div bind:this={scroller} class="mt-4 overflow-x-auto pb-1">
-        <div class="flex w-max gap-1">
+      <!-- `activity-scroller` hides the scrollbar without taking the scrolling away: the grid
+           is a year wide, it opens at today, and an overlay bar appearing over the squares on
+           hover reads as part of the chart. Keyboard and wheel scrolling are untouched.
+           A plain class rather than a utility because Tailwind ships none for this. -->
+      <div bind:this={scroller} class="activity-scroller mt-4 overflow-x-auto pb-1">
+        <!-- pr-1 is not cosmetic: today's square carries a `ring`, which paints OUTSIDE its
+             box, and the view opens scrolled hard to the right — so without a gutter the ring
+             is clipped by the card edge on the one square a reader came to look at. -->
+        <div class="flex w-max gap-1 pr-1">
           <!-- The weekday rail. aria-hidden: every square already announces its own full
                date, so these three labels would only repeat it. -->
           <div class="flex flex-col gap-0.5 pt-4 pr-1" aria-hidden="true">
@@ -151,6 +158,9 @@
               </div>
               {#each week.days as day (day.key)}
                 {#if day.inWindow}
+                  <!-- rounded-none, not the radius token, for the reason TrackingCalendar
+                       states about its own marks: radius-sm is 6px, and 6px on a 12px box is a
+                       circle. These shipped as dots until somebody looked at the screen. -->
                   <button
                     type="button"
                     onclick={() => selectDay(day.key)}
@@ -158,7 +168,7 @@
                     aria-controls={selectedKey === day.key ? 'activity-day-panel' : undefined}
                     aria-label={cellLabel(day)}
                     title={cellLabel(day)}
-                    class="size-3 rounded-sm border border-transparent transition-colors hover:border-foreground
+                    class="size-3 rounded-none border border-transparent transition-colors hover:border-foreground
                            {SHADES[day.level]}
                            {day.isToday ? 'ring-1 ring-foreground' : ''}
                            {selectedKey === day.key ? 'border-foreground' : ''}"
@@ -178,7 +188,7 @@
       <div class="mt-3 flex items-center justify-end gap-1 text-xs text-muted-foreground">
         <span>{s.legendLess}</span>
         {#each Array(LEVELS + 1) as _, level (level)}
-          <span class="size-3 rounded-sm {SHADES[level]}" aria-hidden="true"></span>
+          <span class="size-3 rounded-none {SHADES[level]}" aria-hidden="true"></span>
         {/each}
         <span>{s.legendMore}</span>
       </div>
@@ -228,3 +238,19 @@
     {/if}
   {/if}
 </div>
+
+<style>
+  /* Scrolling without the scrollbar. The grid is a year wide and opens at today, so the bar
+     has nothing to tell a reader they do not already know — while an overlay one, which is
+     what macOS draws on hover, appears ON TOP of the squares and reads as part of the chart.
+     Both vendor spellings, because `scrollbar-width` is unsupported in Safari and
+     `::-webkit-scrollbar` in Firefox; one alone leaves the bar on half the browsers.
+     Deliberately NOT `overflow: hidden` — the wheel, the trackpad, the keyboard and the
+     scroll-to-today effect all still have to work. */
+  .activity-scroller {
+    scrollbar-width: none;
+  }
+  .activity-scroller::-webkit-scrollbar {
+    display: none;
+  }
+</style>
