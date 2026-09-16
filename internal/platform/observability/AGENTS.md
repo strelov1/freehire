@@ -20,12 +20,14 @@ Opt-in Sentry across all three surfaces, env-gated.
 ## Frontend (`web/`)
 
 - `@sentry/sveltekit` in `hooks.client.ts`/`hooks.server.ts`, gated on `PUBLIC_SENTRY_DSN` (+ `PUBLIC_SENTRY_ENVIRONMENT`).
-- `sentrySvelteKit()` Vite plugin uploads source maps only when `SENTRY_AUTH_TOKEN`/`SENTRY_ORG`/`SENTRY_PROJECT` are set (build succeeds without them). **A build that exits 0 is not evidence any of it worked** — the plugin's own `vite/sourceMaps.js` wraps the upload in a bare `catch {}` above `@sentry/vite-plugin`'s `errorHandler`, so a rejected token warns and the build succeeds. It did exactly that for months: 0 of the 100 most recent releases (to 2026-09-16) carried an uploaded file, and every deploy was green. What asks instead is `web/scripts/sentry-credential-check.mjs`, run by `deploy/bin/release.sh` before the build — a rejected or half-written credential refuses the release, an unreachable Sentry does not.
+- `sentrySvelteKit()` Vite plugin uploads source maps only when `SENTRY_AUTH_TOKEN`/`SENTRY_ORG`/`SENTRY_PROJECT` are set (build succeeds without them). **A build that exits 0 is not evidence any of it worked** — two layers swallow a failed upload, so a rejected token warns and the build succeeds. It did exactly that for months: 0 of the 100 most recent releases (to 2026-09-16) carried an uploaded file, every deploy green. What asks instead is `web/scripts/sentry-credential-check.mjs`, run by `deploy/bin/release.sh` before the build: a rejected or half-written credential refuses the release, an unreachable Sentry or a check that cannot run does not. That script's header is the canonical account of the mechanism.
 - No CSP change needed — no `default-src`/`connect-src`, browser delivery to ingest host is unrestricted.
 
 ## Config
 
 `SENTRY_DSN`/`SENTRY_ENVIRONMENT` (backend + workers) and `PUBLIC_SENTRY_DSN`/`PUBLIC_SENTRY_ENVIRONMENT` (frontend), all optional, injected by `freehire-ops` (never committed). Two Sentry projects (frontend + backend); `SENTRY_ENVIRONMENT` tags events for shared project filtering.
+
+Source-map upload is configured separately, at BUILD time only, from `/opt/freehire/env/sentry-build.env` (0600 root, read by `deploy/bin/release.sh` and never exported into a running unit): `SENTRY_ORG`, `SENTRY_PROJECT`, `SENTRY_AUTH_TOKEN`, and optionally `SENTRY_URL` when the organisation is region-pinned — set it there rather than relying on the `https://sentry.io` default, since a cross-region redirect drops the `Authorization` header and surfaces as a 401. All four are passed to the credential check and to the build, so the two cannot disagree about which Sentry they mean. All-or-nothing: a partial set refuses the release rather than reading as an opt-out.
 
 ## HTTP response metrics
 

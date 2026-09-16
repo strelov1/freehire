@@ -135,42 +135,42 @@ if [ -r "$SENTRY_BUILD_ENV" ]; then
 	. "$SENTRY_BUILD_ENV"
 	set +a
 fi
-# This line used to ANNOUNCE the upload, unconditionally, the moment the env file was
-# readable — and was wrong for months. The host's token was answered `Invalid token (http
-# status: 401)` on every release while the announcement printed and the release went green;
-# 0 of the 100 most recent freehire-web releases carried an uploaded file. It reads as a
-# statement, so it has to be one: ask first, then say which of the three states this release
-# is in.
-#
-# The build cannot be the thing that asks. @sentry/sveltekit's vite/sourceMaps.js wraps the
-# upload in a bare `catch {}` ABOVE @sentry/vite-plugin's own errorHandler, so a failed
-# upload is a warning in a log and an exit status of 0 — no plugin option changes that.
+# This spot used to ANNOUNCE the upload, unconditionally, the moment the env file was
+# readable — and was wrong for months, while the token was rejected on every release and the
+# deploy went green. An announcement reads as a statement, so it has to be one: ask first,
+# then say which state this release is in. The build itself cannot be what asks — see the
+# header of web/scripts/sentry-credential-check.mjs, which is where that argument lives.
 #
 # Runs before web's `pnpm install` deliberately: the checker imports nothing, so a dead
 # credential costs seconds here instead of the three minutes the web build takes. (The
 # design-system install above it still runs first — it is the prerequisite for that build, not
 # part of it.)
 #
-# Exit 1 is the checker's VERDICT and the only status that refuses a release. Anything else
-# means the checker did not run, which is not evidence about the credential — the same rule
-# the script applies internally when Sentry is unreachable, and it has to hold out here too or
-# the gate becomes a single point of failure for every deploy. Two ways it can fail to run,
-# both ordinary: `node` missing from the PATH sudo hands it (127), and the script missing from
-# a checkout that has not pulled this commit yet — `release.sh` is hand-copied to
-# /opt/freehire/bin while web/scripts arrives by git pull, so for one release the copy can be
-# newer than both colors. Testing for the file first keeps that case out of the exit-1 leg,
-# where node's own `Cannot find module` would land and be reported as a rejected token.
+# 20 is the checker's VERDICT (SENTRY_CHECK_REFUSE below, and EXIT_REFUSE in the script) and
+# the ONLY status that refuses a release. Anything else means it did not run, which is not
+# evidence about the credential — the same rule the script applies internally when Sentry is
+# unreachable, and it has to hold out here too or the gate becomes a single point of failure
+# for every deploy.
+#
+# Deliberately not 1: node exits 1 for an uncaught throw, an unresolvable module, or a loader
+# error, and sudo exits 1 when it cannot run the command at all. Every one of those would
+# otherwise report a perfectly good token as rejected — and one of them is ORDINARY, not
+# hypothetical: `release.sh` is hand-copied to /opt/freehire/bin while web/scripts arrives by
+# git pull, so for one release this copy can be newer than both colors and the script simply
+# is not there. 20 sits above node's reserved 1-12 and below the 128+ signal range, so only
+# our own `process.exit` can produce it.
 #
 # Runs as freehire, like every other thing this script executes out of the checkout: this file
 # arrived by `git pull` seconds ago and is handed the token.
 SENTRY_CHECK=web/scripts/sentry-credential-check.mjs
+SENTRY_CHECK_REFUSE=20
 if [ ! -f "$SENTRY_CHECK" ]; then
 	echo "[release:$app] WARNING: $SENTRY_CHECK is not in this checkout — Sentry credential unverified; continuing" >&2
 else
 	sentry_rc=0
 	sudo -u freehire --preserve-env=SENTRY_ORG,SENTRY_PROJECT,SENTRY_AUTH_TOKEN,SENTRY_URL \
 		node "$SENTRY_CHECK" || sentry_rc=$?
-	if [ "$sentry_rc" -eq 1 ]; then
+	if [ "$sentry_rc" -eq "$SENTRY_CHECK_REFUSE" ]; then
 		echo "release: source maps would not upload for $new — refusing to release; the live color is untouched" >&2
 		echo "release: fix /opt/freehire/env/sentry-build.env, or remove it to release without source maps" >&2
 		exit 1

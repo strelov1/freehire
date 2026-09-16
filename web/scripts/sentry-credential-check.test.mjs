@@ -1,10 +1,47 @@
 import { describe, expect, it } from 'vitest';
-import { configurationOf, verdict } from './sentry-credential-check.mjs';
+import { EXIT_REFUSE, configurationOf, probeUrls, verdict } from './sentry-credential-check.mjs';
 
 // The whole point of this check is that a release can tell apart states that used to look
 // identical from the outside: uploading, deliberately not uploading, half-configured, and
 // broken. Each case below is one of those, and the assertions are on the DECISION plus enough
 // of the message to prove the release will say which one it is in.
+
+describe('probeUrls', () => {
+  // WHICH endpoint is asked is the single most load-bearing decision here, and it was wrong
+  // once: the first draft probed the project's release list, which Sentry also grants to a
+  // read-only `project:read` token, so an under-scoped credential would have passed the check
+  // and failed the upload. Nothing caught it, because nothing asserted the URL.
+  it('asks chunk-upload first — the call sentry-cli itself makes before uploading', () => {
+    const [first] = probeUrls('https://sentry.io', 'diffray', 'freehire-web');
+    expect(first).toBe('https://sentry.io/api/0/organizations/diffray/chunk-upload/');
+  });
+
+  // chunk-upload is organisation-scoped, so it cannot see a mistyped SENTRY_PROJECT — which
+  // would upload into nothing, just as silently.
+  it('also reads the project, which the organisation-scoped call cannot check', () => {
+    const [, second] = probeUrls('https://sentry.io', 'diffray', 'freehire-web');
+    expect(second).toContain('/api/0/projects/diffray/freehire-web/releases/');
+  });
+
+  // A hand-edited SENTRY_URL is as likely to carry a trailing slash as not.
+  it('does not double the slash when the base URL carries one', () => {
+    for (const url of probeUrls('https://de.sentry.io//', 'o', 'p')) {
+      expect(url).not.toContain('//api/0');
+      expect(url.startsWith('https://de.sentry.io/api/0/')).toBe(true);
+    }
+  });
+});
+
+describe('EXIT_REFUSE', () => {
+  // It must not collide with anything else in the chain: node reserves 1-12 for its own
+  // failures (1 uncaught throw / unresolvable module, 3 parse error, ...), sudo uses 1 when it
+  // cannot run the command, and 128+ is the signal range. A collision would report a working
+  // token as rejected — the confusion this whole check exists to end.
+  it('cannot be produced by node, sudo, or a signal', () => {
+    expect(EXIT_REFUSE).toBeGreaterThan(12);
+    expect(EXIT_REFUSE).toBeLessThan(128);
+  });
+});
 
 describe('configurationOf', () => {
   // This decides WHICH QUESTION gets asked, so a mistake here is invisible to verdict().

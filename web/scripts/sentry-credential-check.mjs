@@ -1,11 +1,25 @@
 // Does this release's Sentry credential actually work?
 //
-// It exists because nothing else can answer that. `@sentry/sveltekit`'s
-// `vite/sourceMaps.js` builds its own copy of the upstream plugin with `writeBundle: void 0`
-// and calls the original inside a bare `catch {}` that warns and returns — so that catch is
-// the ONLY upload path, for both the client and the SSR build, and it sits above
-// `@sentry/vite-plugin`'s `errorHandler` option whose documented default is to throw and stop
-// the bundle. No option set in vite.config.ts can make a bad credential fail the build.
+// THIS COMMENT IS THE CANONICAL EXPLANATION. vite.config.ts, deploy/bin/release.sh,
+// web/AGENTS.md and internal/platform/observability/AGENTS.md all point here rather than
+// restating it: the first draft of this change spelled the argument out in five places and a
+// reviewer found the mechanism misdescribed in two of them before it ever shipped. One
+// measurement wants one home.
+//
+// It exists because nothing else can answer the question. TWO independent layers swallow a
+// failed source-map upload, which is why no option set in vite.config.ts can make a bad
+// credential fail the build:
+//
+//   1. `@sentry/bundler-plugins` calls `handleRecoverableError(e, false)` from the upload
+//      hook (core/build-plugin-manager.js). With no `errorHandler` configured, `false` means
+//      log and return — it does not throw, whatever the option's TypeScript doc comment says
+//      about throwing by default. (That doc comment is what an earlier draft of this file
+//      quoted, and it was wrong about this path.)
+//   2. `@sentry/sveltekit`'s `vite/sourceMaps.js` rebuilds the upstream plugin with
+//      `writeBundle: void 0` and calls the original inside a bare `catch {}` that warns and
+//      returns. There is one upload — of the adapter output, covering client and SSR — and
+//      this is it, so even an `errorHandler` that threw would be caught here.
+//
 // Measured 2026-09-16: the host's token had been answered `Invalid token (http status: 401)`
 // on every release, and 0 of the 100 most recent `freehire-web` releases had any uploaded
 // file, while every one of those deploys reported success.
@@ -29,6 +43,20 @@ const PROBE_TIMEOUT_MS = 10_000;
 /** The three the upload needs. Order is the order they are reported missing in. */
 const REQUIRED_VARS = ['SENTRY_ORG', 'SENTRY_PROJECT', 'SENTRY_AUTH_TOKEN'];
 
+/**
+ * The status that means "I looked, and this credential will not upload" — the ONLY one a
+ * caller may treat as a verdict.
+ *
+ * It is not 1 because 1 is what node itself exits with for an uncaught throw, a module it
+ * cannot resolve, or a loader error — and what `sudo` exits with when it cannot run the
+ * command at all. A caller reading 1 as a refusal would report a perfectly good token as
+ * rejected the first time this file is missing from a checkout, which is exactly the
+ * confusion between "the answer is no" and "there was no answer" that the whole check
+ * exists to end. Above node's reserved 1-12 and below the 128+ signal range, so nothing
+ * else in the chain can produce it.
+ */
+export const EXIT_REFUSE = 20;
+
 function withoutTrailingSlash(url) {
   return url.replace(/\/+$/, '');
 }
@@ -47,7 +75,7 @@ function withoutTrailingSlash(url) {
  * cannot see a mistyped `SENTRY_PROJECT` — which would upload into nothing, silently, in the
  * same way.
  */
-function probeUrls(baseUrl, org, project) {
+export function probeUrls(baseUrl, org, project) {
   const root = withoutTrailingSlash(baseUrl);
   return [
     `${root}/api/0/organizations/${org}/chunk-upload/`,
@@ -166,7 +194,7 @@ async function main() {
 
   const result = verdict(outcome);
   console.log(`[sentry-credential-check] ${result.message}`);
-  process.exit(result.ok ? 0 : 1);
+  process.exit(result.ok ? 0 : EXIT_REFUSE);
 }
 
 // realpath on both sides: `import.meta.url` is resolved by the ESM loader and `process.argv[1]`

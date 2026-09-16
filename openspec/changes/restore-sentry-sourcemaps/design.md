@@ -111,9 +111,16 @@ why `errorHandler` did not help.
 - **A dead token now blocks deploys entirely** → That is the intent, and it is bounded:
   the failure is pre-build and pre-color-switch, the message names the cause, and unsetting
   the variable ships immediately without one.
-- **The check passes a token that is valid but under-scoped** (it can read the org but not
-  write releases) → Verify with a call that needs the same scope the upload needs, not a
-  bare org read.
+- **The check passes a token that is valid but under-scoped** (it can read, but cannot
+  upload) → Probe `GET /organizations/{org}/chunk-upload/`, the call `sentry-cli` itself
+  makes before uploading anything. **This mitigation is not yet measured.** The first draft
+  probed the project's release list, which Sentry also grants to a read-only `project:read`
+  token — review caught it — and review of the replacement notes that chunk-upload's own
+  scope map may likewise admit `org:read` beside the write scope, since the upload is the
+  `POST` and this is the `GET`. Probing the upload's own first call is the best available
+  answer without a positive control; what settles it is task 5.4, a deliberately
+  under-scoped token that the check must REJECT. Until that runs, treat "an under-scoped
+  token is caught" as intended rather than demonstrated.
 - **The residue: a valid token whose upload still yields nothing** → Not covered, named
   above, and revisitable as soon as a positive control exists.
 - **The credential is visible in `journald`** → `release.sh` reads it from a 0600 root file
