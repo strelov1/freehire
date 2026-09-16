@@ -62,10 +62,14 @@ const (
 	// StatusParked means every required question was NOT resolved, so the sidecar
 	// touched nothing on the employer's form.
 	StatusParked SubmitStatus = "parked"
-	// StatusUnconfirmed means the sidecar pressed submit but could not tell whether the
-	// employer accepted it — neither a confirmation nor an explicit refusal appeared.
-	// This is NOT a plain transient failure: the click may well have gone through, so
-	// retrying it through the ordinary attempts budget risks a second real submission —
+	// StatusUnconfirmed means the sidecar could not tell whether the employer accepted the
+	// application — neither a confirmation nor an explicit refusal appeared. Most often
+	// that follows the sidecar's own deliberate submit click, but it can also follow a
+	// field's own interaction (e.g. an accidental Enter-triggered submit) that may have
+	// already sent the form before the sidecar's own click ever fired — see
+	// internal/api/atsapply/fill.go's formStillPresent guard. Either way this is NOT a
+	// plain transient failure: a submission may well have gone through, so retrying it
+	// through the ordinary attempts budget risks a second real submission —
 	// exactly the "never twice" requirement the forced dead-letter in recordApplied
 	// exists to protect on the DB-write side. See runner.go's process/fail handling: an
 	// unconfirmed result is dead-lettered immediately, the same way a lost post-submit

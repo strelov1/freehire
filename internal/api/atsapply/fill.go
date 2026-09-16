@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"strings"
 	"time"
 
@@ -108,17 +109,32 @@ func challengeVisible(ctx context.Context) bool {
 	return visible
 }
 
-// formStillPresentJS asks the page whether the given selector still resolves to an element.
+// formStillPresentJS asks the page whether the given selector still resolves to a control
+// the loop could still usably click later — present, enabled, and not hidden. A same-page
+// async submit can leave the element mounted but disabled (a "Submitting…" state) or hidden
+// behind a confirmation overlay without removing it from the DOM, and a bare
+// querySelector(...) !== null would call that "still present" and let the loop click it a
+// second time — precisely the duplicate submission this check exists to prevent.
 // %q (via fmt.Sprintf) is the submit control's own CSS selector.
-const formStillPresentJS = `(() => document.querySelector(%q) !== null)()`
+const formStillPresentJS = `(() => {
+	const el = document.querySelector(%q);
+	if (!el) return false;
+	if (el.disabled) return false;
+	const style = window.getComputedStyle(el);
+	if (style.display === "none" || style.visibility === "hidden") return false;
+	return true;
+})()`
 
-// formStillPresent reports whether the form's submit control is still on the page. Unlike
-// challengeVisible, an Evaluate failure here defaults to false ("gone") rather than true: the
-// likeliest reason the call itself fails right after a field's trailing Enter keystroke is
-// that the keystroke just navigated the page and destroyed the execution context — which is
-// exactly the condition this asks about, not an absence of evidence either way. Costing an
-// unnecessary trip through verifySubmission (which times out to an unconfirmed, dead-lettered
-// result) is preferred over silently continuing to fill a form that may already be gone.
+// formStillPresent reports whether the form's submit control is still on the page in a
+// state the loop could still usably act on. Both this function and challengeVisible return
+// false on an Evaluate error, but that shared literal value means opposite things to each
+// caller: challengeVisible's false is neutral ("no evidence of a challenge"), while this
+// false is the protective direction ("treat it as gone"). The likeliest reason the call
+// itself fails right after a field's trailing Enter keystroke is that the keystroke just
+// navigated the page and destroyed the execution context — which is exactly the condition
+// this asks about, not an absence of evidence either way. Costing an unnecessary trip
+// through verifySubmission (which times out to an unconfirmed, dead-lettered result) is
+// preferred over silently continuing to fill a form that may already be gone.
 //
 // No unit test exercises this function directly, matching challengeVisible beside it — a real
 // browser session cannot be faked usefully. The decision this feeds (runFillLoop) is what is
@@ -211,7 +227,7 @@ func runFillLoop(kinds []string, fill func(i int) error, presentAfter func(i int
 // This is the least-verified part of the package — see design.md's Testing section and
 // task 7.1: correctness here rests on the 2026-09-02 spike's single live posting and the
 // reference implementation's own measured rules, not on this package's own live testing.
-func fillAndSubmit(ctx context.Context, plan Plan, layout formLayout) (bool, error) {
+func fillAndSubmit(ctx context.Context, jobID int64, plan Plan, layout formLayout) (bool, error) {
 	kinds := make([]string, len(plan.Fields))
 	for i, f := range plan.Fields {
 		kinds[i] = f.Kind
@@ -233,7 +249,11 @@ func fillAndSubmit(ctx context.Context, plan Plan, layout formLayout) (bool, err
 		// A text/textarea field's own trailing Enter may have already triggered the real
 		// submit (see fillOne's doc comment on that branch) — verify what actually
 		// happened rather than filling further fields or clicking submit again on a form
-		// that may already be gone.
+		// that may already be gone. Logged unconditionally, not only when unconfirmed or
+		// refused: even a CONFIRMED result here may be missing every field ordered after
+		// the trigger (an approved résumé included), and that gap is otherwise invisible —
+		// nothing else records how many of the plan's fields actually filled.
+		log.Printf("atsapply: job %d submit control disappeared after field %d of %d — verifying rather than continuing to fill or clicking submit again", jobID, outcome.filledCount, len(kinds))
 		return verifySubmission(ctx)
 	}
 

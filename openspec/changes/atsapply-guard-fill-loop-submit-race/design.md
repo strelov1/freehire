@@ -39,13 +39,20 @@ Relevant existing shape of `fill.go`:
 
 ## Decisions
 
-**Detection signal: submit-control DOM presence, not URL/navigation.** A new
-`formStillPresent(ctx, submitSelector) bool` runs `document.querySelector(sel) !== null` via
-`chromedp.Evaluate`, mirroring `challengeVisible`'s shape exactly (same file, same "ask the
-page, fail closed" structure). Considered watching for a URL change instead: rejected
-because these are SPA application forms — `verifySubmission` already establishes that a real
-submission is detected by page *text*, not navigation, so a URL-based signal would be
-inventing a second, inconsistent detection mechanism for the same underlying event.
+**Detection signal: submit-control DOM presence AND usability, not URL/navigation.** A new
+`formStillPresent(ctx, submitSelector) bool` runs `chromedp.Evaluate`, mirroring
+`challengeVisible`'s shape (same file, same "ask the page, fail closed" structure).
+Considered watching for a URL change instead: rejected because these are SPA application
+forms — `verifySubmission` already establishes that a real submission is detected by page
+*text*, not navigation, so a URL-based signal would be inventing a second, inconsistent
+detection mechanism for the same underlying event. Code review on the first cut (which
+checked only `document.querySelector(sel) !== null`) found a real gap: a same-page async
+(fetch/XHR) submit can leave the control mounted but `disabled`, or hidden behind a
+confirmation overlay, without removing it — a bare presence check would call that "still
+present" and let the loop click it a second time, the exact duplicate submission this check
+exists to prevent. The check now also fails (`false`, "not usable") on `el.disabled` and on
+`display: none` / `visibility: hidden`, the same visibility test `challengeVisible` already
+uses for its own iframe check.
 
 **Error default: treat an `Evaluate` failure as "gone," not "still there."**
 `challengeVisible` defaults to `false` (no challenge) on error, because an error there
@@ -75,6 +82,21 @@ plain values (no chromedp) and returns which fields would be skipped and whether
 own submit click would fire, the same "signal as a parameter" shape `classifyFillFailure`
 already uses. `formStillPresent` itself stays untested, same as `challengeVisible`.
 
+**Log the early stop unconditionally, naming how many fields actually filled.** Code review
+flagged that a CONFIRMED result reached through the early-stop path can still be missing
+every field ordered after the trigger field (an approved résumé included, if the DOM scan
+happened to place it later in the plan) — the runner would record an ordinary
+`StatusApplied` with no signal anywhere that the submission might be incomplete. This design
+does not change that outcome's `Status` (inventing a fourth, "confirmed but possibly
+incomplete" status is a bigger, unapproved scope change, and `outcome.filledCount` alone
+cannot tell a genuinely-optional missing field from a required one skipped by the stop —
+that judgment needs `Plan.Unmapped`/field-required data this loop does not carry). Instead
+`fillAndSubmit` logs (`log.Printf`, this package's existing convention for a degrade-and-
+continue note) `outcome.filledCount` against the plan's total field count whenever the loop
+stops early, regardless of the eventual confirmed/refused/unconfirmed outcome — the
+information was already being computed and discarded; surfacing it costs nothing and gives
+an operator investigating a specific job a concrete signal to grep for.
+
 ## Risks / Trade-offs
 
 - **[Risk]** A transient `Evaluate` failure unrelated to navigation defaults to "gone,"
@@ -89,4 +111,14 @@ already uses. `formStillPresent` itself stays untested, same as `challengeVisibl
 - **[Risk]** This still does not fix the underlying inability to distinguish autocomplete
   fields, so a real early submit can still happen. → **Mitigation**: explicitly a
   Non-Goal; this design only bounds the blast radius (no continued filling past the point
-  of no return, no double submit click) rather than preventing the trigger.
+  of no return, no double submit click) rather than preventing the trigger. Code review
+  proposed a cheaper interaction-time alternative — checking whether an open autocomplete
+  listbox is visible before sending `kb.Enter`, and skipping the keystroke when none is —
+  considered and deferred, not adopted here: the risk this design bounds is a form's own
+  Enter-submits-the-form binding, which (per the existing code comment on `fillOne`'s
+  `text`/`textarea` branch) fires from an ordinary keystroke regardless of field count, not
+  specifically from a listbox interaction, so a listbox-visibility check does not reliably
+  address the trigger it would be added to guard. It is also a change to `fillOne`'s
+  interaction behavior itself, which this design's Non-Goals deliberately excludes pending
+  live verification against a real board — the same bar the existing comment already sets
+  for touching this code path at all.

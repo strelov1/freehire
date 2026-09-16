@@ -266,7 +266,7 @@ func (c *Client) Submit(ctx context.Context, claimed autoapply.Claimed, answers 
 		defer cleanup()
 	}
 
-	confirmed, err := fillAndSubmit(browserCtx, plan, layout)
+	confirmed, err := fillAndSubmit(browserCtx, claimed.JobID, plan, layout)
 	if err != nil {
 		if errors.Is(err, errCaptchaRefused) {
 			// The board said it could not VERIFY the submission, which is it telling us
@@ -276,10 +276,12 @@ func (c *Client) Submit(ctx context.Context, claimed autoapply.Claimed, answers 
 			// each further ask is free of consequence to the employer.
 			return autoapply.SidecarResult{Status: autoapply.StatusCaptchaRefused, Reason: err.Error()}, nil
 		}
-		// A fill action failing, or the board EXPLICITLY refusing the submit click
-		// (SUBMIT_REFUSED_MARKERS in fill.go), both mean no submission happened — safe
-		// to retry normally. This is deliberately distinct from the timeout-with-no-
-		// marker case below, which is NOT known to be safe to retry.
+		// A fill action failing, or the board EXPLICITLY refusing the submission
+		// (SUBMIT_REFUSED_MARKERS in fill.go — matched whether the refused attempt was
+		// the sidecar's own deliberate submit click or one triggered early by a field's
+		// own interaction), both mean no submission happened — safe to retry normally.
+		// This is deliberately distinct from the timeout-with-no-marker case below,
+		// which is NOT known to be safe to retry.
 		return autoapply.SidecarResult{}, fmt.Errorf("fill and submit: %w", err)
 	}
 	if !confirmed {
