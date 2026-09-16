@@ -212,7 +212,14 @@ export type RuntimeMessage =
   // Driving a custom-widget combobox: one step, offered to every frame, since
   // only the frame holding the widget can answer for it.
   | { kind: 'COMBOBOX_STEP'; step: ComboboxStep }
-  | { kind: 'COMBOBOX_REPLY'; reply: ComboboxReply };
+  | { kind: 'COMBOBOX_REPLY'; reply: ComboboxReply }
+  // Attaches the caller's tailored CV for `jobSlug` to the page's upload field via
+  // chrome.debugger — see lib/tools/attachCv.ts. Only background holds the debugger
+  // and downloads permissions' actual calls, so the panel asks for this by message
+  // rather than driving chrome.debugger itself.
+  | { kind: 'ATTACH_TAILORED_CV'; jobSlug: string }
+  | { kind: 'ATTACH_TAILORED_CV_RESULT'; ok: true }
+  | { kind: 'ATTACH_TAILORED_CV_RESULT'; ok: false; error: string };
 
 /** An empty snapshot, used when no active tab can be read. */
 export function emptySnapshot(): PageSnapshot {

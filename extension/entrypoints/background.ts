@@ -11,6 +11,16 @@ import {
 } from '../lib/protocol';
 import { mergeComboboxReplies, mergeFrameOutcomes } from '../lib/tools/executor';
 import { fillsForFrame } from '../lib/form';
+import { getToken } from '../lib/auth';
+import { getTailoredCVForJob, getCVPdfBytes } from '../lib/freehire';
+import {
+  uploadInputExpression,
+  pdfDataUrl,
+  resolveDownloadedPath,
+  assertReachableFrame,
+  classifyAttachError,
+  type DownloadsAPI,
+} from '../lib/tools/attachCv';
 
 /**
  * Service worker. Three jobs, all thin:
@@ -38,6 +48,8 @@ export default defineBackground(() => {
         return revealAcrossFrames(message.request);
       case 'COMBOBOX_STEP':
         return comboboxAcrossFrames(message.step);
+      case 'ATTACH_TAILORED_CV':
+        return attachTailoredCV(message.jobSlug);
       default:
         return undefined;
     }
@@ -179,4 +191,94 @@ async function frameIds(tabId: number): Promise<number[]> {
 async function activeTabId(): Promise<number | null> {
   const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
   return tab?.id ?? null;
+}
+
+/** How long a download may sit unresolved before `resolveDownloadedPath` gives up — bounds
+ *  the "ask where to save each file" case (design.md, Risks), which this code cannot see. */
+const DOWNLOAD_TIMEOUT_MS = 20_000;
+
+/** The real `chrome.downloads` behind `resolveDownloadedPath`'s `DownloadsAPI` seam. */
+const realDownloadsAPI: DownloadsAPI = {
+  download: (options) => browser.downloads.download(options),
+  search: (query) => browser.downloads.search(query),
+  onChanged: {
+    addListener: (cb) => browser.downloads.onChanged.addListener(cb),
+    removeListener: (cb) => browser.downloads.onChanged.removeListener(cb),
+  },
+};
+
+/**
+ * Attaches the caller's tailored CV for `jobSlug` to the current page's upload field.
+ * See lib/tools/attachCv.ts and openspec/changes/extension-attach-tailored-cv/design.md
+ * for why this needs the debugging protocol at all.
+ */
+async function attachTailoredCV(jobSlug: string): Promise<RuntimeMessage> {
+  const fail = (error: string): RuntimeMessage => ({ kind: 'ATTACH_TAILORED_CV_RESULT', ok: false, error });
+
+  const token = await getToken();
+  if (!token) return fail('not signed in');
+
+  const tabId = await activeTabId();
+  if (tabId == null) return fail('no active tab to attach the file to');
+
+  const { uploads } = await readFramedUploadsOnly();
+  const upload = uploads[0];
+  if (!upload) return fail('no file upload field found on this page');
+
+  try {
+    assertReachableFrame(upload.frame);
+  } catch (err) {
+    return fail(err instanceof Error ? err.message : String(err));
+  }
+
+  const cv = await getTailoredCVForJob(jobSlug, token);
+  if (!cv) return fail('no tailored CV found for this job');
+
+  const pdfBytes = await getCVPdfBytes(cv.id, token);
+  const dataUrl = pdfDataUrl(pdfBytes);
+  const filename = `freehire-tailored-cv/${cv.job_slug}.pdf`;
+
+  let filePath: string;
+  try {
+    filePath = await resolveDownloadedPath(realDownloadsAPI, dataUrl, filename, DOWNLOAD_TIMEOUT_MS);
+  } catch (err) {
+    return fail(err instanceof Error ? err.message : String(err));
+  }
+
+  const debuggee = { tabId };
+  try {
+    await browser.debugger.attach(debuggee, '1.3');
+  } catch (err) {
+    return fail(classifyAttachError(err instanceof Error ? err.message : String(err)));
+  }
+  try {
+    const evalResult = (await browser.debugger.sendCommand(debuggee, 'Runtime.evaluate', {
+      expression: uploadInputExpression(upload.form),
+    })) as { result?: { objectId?: string } } | undefined;
+    const objectId = evalResult?.result?.objectId;
+    if (!objectId) return fail('could not find the upload field on the page any more');
+
+    await browser.debugger.sendCommand(debuggee, 'DOM.setFileInputFiles', {
+      objectId,
+      files: [filePath],
+    });
+    return { kind: 'ATTACH_TAILORED_CV_RESULT', ok: true };
+  } catch (err) {
+    return fail(err instanceof Error ? err.message : String(err));
+  } finally {
+    await browser.debugger.detach(debuggee).catch(() => {
+      // Already detached (e.g. the tab closed mid-call) — nothing left to clean up.
+    });
+  }
+}
+
+/** Just the uploads half of `readFramedForm`, for the one caller that has no use for the
+ *  fields — reading them too would cost every frame a round trip this caller never needs. */
+async function readFramedUploadsOnly(): Promise<{ uploads: FramedUpload[] }> {
+  const uploads: FramedUpload[] = [];
+  await eachFrame({ kind: 'GET_FRAMED_FORM' }, (reply, frame) => {
+    if (reply?.kind !== 'FORM') return;
+    for (const upload of reply.uploads) uploads.push({ ...upload, frame });
+  });
+  return { uploads };
 }

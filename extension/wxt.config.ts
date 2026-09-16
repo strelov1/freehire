@@ -29,7 +29,20 @@ export default defineConfig({
       ...(RELEASE ? {} : { key: DEV_KEY }),
       name: 'freehire',
       description: 'Your job-application agent, on any page.',
-      permissions: ['storage', 'tabs', 'sidePanel', 'scripting', 'activeTab', 'identity'],
+      // `debugger`/`downloads` back the "Attach tailored CV" action only: attaching the
+      // debugger is what lets DOM.setFileInputFiles place a file into an
+      // `input[type=file]`, since neither a page's own script nor a content script can
+      // assign HTMLInputElement.files (see extension-attach-tailored-cv's design.md).
+      permissions: [
+        'storage',
+        'tabs',
+        'sidePanel',
+        'scripting',
+        'activeTab',
+        'identity',
+        'debugger',
+        'downloads',
+      ],
       host_permissions: ['<all_urls>'],
       // `icons` is discovered from public/icon/*.png. The variants swap in the
       // inverted mark on a dark toolbar.

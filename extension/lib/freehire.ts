@@ -329,3 +329,46 @@ export async function findJob(url: string, token: string): Promise<string | null
   );
   return found?.public_slug ?? null;
 }
+
+/** A tailored CV as `GET /me/cvs` lists it — mirrors internal/api/handler's
+ *  cvTailoredResponse. That endpoint only ever lists tailored copies, never the base CV. */
+export interface TailoredCV {
+  id: string;
+  title: string;
+  template_id: string;
+  created_at: string;
+  updated_at: string;
+  job_slug: string;
+  job_title: string;
+  job_company: string;
+  agent_session_id: string;
+}
+
+/**
+ * The caller's tailored CV for a job slug, or null when they have none for that job — they
+ * may still have tailored CVs for other jobs. Pure over its input; first match by list order,
+ * since the server refuses a second tailoring session for a job that already has one.
+ */
+export function pickTailoredCVForJob(cvs: TailoredCV[], jobSlug: string): TailoredCV | null {
+  return cvs.find((c) => c.job_slug === jobSlug) ?? null;
+}
+
+/** The caller's tailored CV for a job slug, read fresh from `GET /me/cvs`, or null. */
+export async function getTailoredCVForJob(jobSlug: string, token: string): Promise<TailoredCV | null> {
+  const cvs = await getData<TailoredCV[]>('/api/v1/me/cvs', token);
+  return pickTailoredCVForJob(cvs, jobSlug);
+}
+
+/**
+ * The rendered PDF bytes for a CV, straight off `GET /me/cvs/:id/pdf`. Not `unwrap`-shaped —
+ * the response body IS the file, not a `{"data": ...}` envelope — so a failure is read as
+ * text (the server's ordinary JSON error) while success is read as bytes.
+ */
+export async function getCVPdfBytes(id: string, token: string): Promise<ArrayBuffer> {
+  const path = `/api/v1/me/cvs/${encodeURIComponent(id)}/pdf`;
+  const res = await authedFetch(path, token);
+  if (!res.ok) {
+    throw new Error(apiErrorMessage(path, res.status, await res.text()));
+  }
+  return res.arrayBuffer();
+}

@@ -1,5 +1,13 @@
 import { describe, it, expect } from 'vitest';
-import { freehireSlugFromUrl, resolveNotice, apiErrorMessage, partitionBlockers, type Blocker } from './freehire';
+import {
+  freehireSlugFromUrl,
+  resolveNotice,
+  apiErrorMessage,
+  partitionBlockers,
+  pickTailoredCVForJob,
+  type Blocker,
+  type TailoredCV,
+} from './freehire';
 
 describe('freehireSlugFromUrl', () => {
   it('extracts the slug from a freehire job URL', () => {
@@ -117,5 +125,38 @@ describe('partitionBlockers', () => {
 
   it('is empty when blockers is undefined, as POST /me/match-text sends (no blockers field at all)', () => {
     expect(partitionBlockers(undefined)).toEqual({ unmet: [], met: [] });
+  });
+});
+
+describe('pickTailoredCVForJob', () => {
+  const cv = (id: string, jobSlug: string): TailoredCV => ({
+    id,
+    title: `Tailored for ${jobSlug}`,
+    template_id: 'classic-ats',
+    created_at: '2026-09-01T00:00:00Z',
+    updated_at: '2026-09-01T00:00:00Z',
+    job_slug: jobSlug,
+    job_title: 'Backend Engineer',
+    job_company: 'Acme',
+    agent_session_id: '',
+  });
+
+  it('returns the tailored CV matching the job slug', () => {
+    const cvs = [cv('a', 'frontend-acme'), cv('b', 'backend-acme')];
+    expect(pickTailoredCVForJob(cvs, 'backend-acme')?.id).toBe('b');
+  });
+
+  it('returns null when no tailored CV matches the slug', () => {
+    const cvs = [cv('a', 'frontend-acme'), cv('b', 'devops-acme')];
+    expect(pickTailoredCVForJob(cvs, 'backend-acme')).toBeNull();
+  });
+
+  it('returns null for an empty list', () => {
+    expect(pickTailoredCVForJob([], 'backend-acme')).toBeNull();
+  });
+
+  it('picks the one match out of several unrelated tailored CVs', () => {
+    const cvs = [cv('a', 'frontend-acme'), cv('b', 'backend-acme'), cv('c', 'devops-acme')];
+    expect(pickTailoredCVForJob(cvs, 'backend-acme')?.id).toBe('b');
   });
 });
