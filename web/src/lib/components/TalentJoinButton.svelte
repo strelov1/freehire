@@ -4,6 +4,7 @@
   import { isAuthenticated } from '$lib/auth.svelte';
   import { signinUrl } from '$lib/signin';
   import { NAV } from '$lib/siteNav';
+  import { isTalentNetworkMember } from '$lib/talentMembership';
   import { Button } from '$lib/ui';
 
   // The way into the Talent Network from the catalogue itself.
@@ -52,7 +53,7 @@
       try {
         const setting = await api.getTalentNetwork();
         if (cancelled) return;
-        member = setting.talent_network_visibility !== 'off';
+        member = isTalentNetworkMember(setting.talent_network_visibility);
       } catch {
         // A failed read leaves the button unrendered rather than showing an error: this
         // is an invitation on a page the visitor came to for something else.

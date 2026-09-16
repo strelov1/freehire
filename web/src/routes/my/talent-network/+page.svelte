@@ -2,6 +2,7 @@
   import { resolve } from '$app/paths';
   import { ApiError, api } from '$lib/api';
   import type { TalentNetworkVisibility } from '$lib/types';
+  import { isTalentNetworkMember } from '$lib/talentMembership';
   import { Button } from '$lib/ui';
 
   // Talent Network membership: in, or not. One decision, not three.
@@ -23,7 +24,7 @@
   let saving = $state(false);
   let saveError = $state<string | null>(null);
 
-  const isMember = $derived(visibility !== 'off');
+  const isMember = $derived(isTalentNetworkMember(visibility));
 
   $effect(() => {
     let cancelled = false;

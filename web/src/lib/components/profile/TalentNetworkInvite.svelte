@@ -3,6 +3,7 @@
   import { resolve } from '$app/paths';
   import { api } from '$lib/api';
   import type { TalentNetworkVisibility } from '$lib/types';
+  import { isTalentNetworkMember } from '$lib/talentMembership';
   import { Button, Card } from '$lib/ui';
 
   // The invitation into the Talent Network, on the profile page.
@@ -20,7 +21,7 @@
   // See the settings page: membership does not mean a visitor can see them.
   let listed = $state(false);
 
-  const isMember = $derived(visibility !== 'off');
+  const isMember = $derived(isTalentNetworkMember(visibility));
 
   $effect(() => {
     let cancelled = false;
