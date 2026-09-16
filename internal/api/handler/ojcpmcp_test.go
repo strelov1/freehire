@@ -58,6 +58,47 @@ func TestBothTransportsAgreeOnAPostingsDetail(t *testing.T) {
 	}
 }
 
+func TestManifestCannotAdvertiseAToolNothingServes(t *testing.T) {
+	// `tools` is a binding claim: an agent reads it and calls what it names. The manifest
+	// derives the list from the MCP server's own registrations, and this asserts that every
+	// name in it has a method behind it — a tool added to the manifest by hand, or a method
+	// deleted, fails here rather than at an agent.
+	h := newOJCPHandlers(&fakeSearcher{}, fakeOJCPStore{}, "https://freehire.me", nil)
+
+	served := map[string]func(){
+		"search_jobs":          func() { _, _ = h.SearchJobs(t.Context(), ojcp.SearchInput{}) },
+		"get_job_detail":       func() { _, _ = h.JobDetail(t.Context(), "x") },
+		"get_employer_context": func() { _, _ = h.EmployerContext(t.Context(), "x") },
+	}
+
+	tools := h.manifest().Tools
+	for _, name := range tools {
+		call, ok := served[name]
+		if !ok {
+			t.Errorf("manifest advertises %q, which nothing here answers", name)
+			continue
+		}
+		call()
+	}
+	if len(tools) != len(served) {
+		t.Errorf("tools = %v, want every served tool advertised", tools)
+	}
+}
+
+func TestManifestDeclaresTheLimitTheRoutesEnforce(t *testing.T) {
+	// The spec makes a declared rate limit binding. Declaring one figure and enforcing
+	// another is a conformance failure nothing else in this repo would notice.
+	h := newOJCPHandlers(&fakeSearcher{}, fakeOJCPStore{}, "https://freehire.me", nil)
+
+	limits := h.manifest().RateLimits
+	if limits == nil {
+		t.Fatal("rate_limits is absent; the routes do enforce one")
+	}
+	if want := agentSearchPerMinute / 60; limits.AnonymousRPS != want {
+		t.Errorf("anonymous_rps = %d, want %d — the limiter's own budget", limits.AnonymousRPS, want)
+	}
+}
+
 // sameJSON compares a decoded REST body against a value the MCP side returns, by the bytes
 // each serialises to — which is what an agent actually receives over either transport.
 func sameJSON(t *testing.T, restBody map[string]any, direct any) bool {

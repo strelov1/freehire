@@ -840,6 +840,11 @@ func Register(app *fiber.App, cfg Config) {
 	tracerLimiter := ratelimit.Middleware(cfg.Throttler, ratelimit.KeyByIP("tracer"), 60, time.Minute)
 	app.Get("/cv/:token", tracerLimiter, auth.OptionalCookieAuth(a.issuer, queries), tracerH.Redirect)
 
+	// The OJCP manifest sits at a well-known path on the app root, not under /api/v1: the
+	// path is fixed by the spec and an agent looks for it there and nowhere else. Serving it
+	// is what makes this deployment a provider at all — un-serving it is the rollback.
+	ojcpH.registerManifest(app)
+
 	api := app.Group("/api/v1")
 
 	// optionalAuth attaches the caller when signed in (cookie or key) but never

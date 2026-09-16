@@ -76,6 +76,31 @@ func (h *ojcpHandlers) register(api fiber.Router, mw middleware) {
 	api.All("/ojcp/mcp", limit, adaptor.HTTPHandler(ojcpmcp.Handler(h)))
 }
 
+// registerManifest serves the one document an OJCP provider MUST publish. It is mounted on
+// the app root, not under /api/v1: the well-known path is fixed by RFC 8615 and by the
+// spec, and an agent looks for it there and nowhere else.
+func (h *ojcpHandlers) registerManifest(app *fiber.App) {
+	app.Get("/.well-known/ojcp.json", func(c *fiber.Ctx) error {
+		// The spec requires this content type by name.
+		c.Set(fiber.HeaderContentType, fiber.MIMEApplicationJSON)
+		return c.JSON(h.manifest())
+	})
+}
+
+// manifest describes this deployment. Both binding claims are DERIVED rather than written
+// out: `tools` comes from what the MCP server actually registered, and `rate_limits` from
+// the same constant the limiter on these routes enforces — the spec makes a declared limit
+// a MUST, so the two must not be able to disagree.
+func (h *ojcpHandlers) manifest() ojcp.Manifest {
+	return ojcp.NewManifest(ojcp.ManifestConfig{
+		Origin: h.projector.Origin,
+		Tools:  ojcpmcp.ToolNames(),
+		// Per second, from the per-minute budget the routes above are limited by.
+		AnonymousRPS:   agentSearchPerMinute / 60,
+		ApplyPathTypes: []string{"ats_direct", "external_redirect"},
+	})
+}
+
 // OJCPSearchJobs answers `search_jobs`.
 func (h *ojcpHandlers) OJCPSearchJobs(c *fiber.Ctx) error {
 	var input ojcp.SearchInput
