@@ -2,10 +2,9 @@ package atsapply
 
 import (
 	"errors"
+	"slices"
 	"testing"
 )
-
-var errFillTestSentinel = errors.New("fill test sentinel")
 
 // runFillLoop is the pure loop-control decision `fillAndSubmit` delegates to: fill each
 // field in order, and — only right after a text/textarea field, the one kind whose
@@ -38,7 +37,7 @@ func TestRunFillLoop_SubmitControlGoneAfterTextFieldStopsRemainingFields(t *test
 	if outcome.filledCount != 1 {
 		t.Errorf("filledCount = %d, want 1", outcome.filledCount)
 	}
-	if want := []int{0}; !equalInts(filled, want) {
+	if want := []int{0}; !slices.Equal(filled, want) {
 		t.Errorf("filled = %v, want %v (fields after the disappearance must never fill)", filled, want)
 	}
 }
@@ -65,7 +64,7 @@ func TestRunFillLoop_SubmitControlStillPresentContinuesFilling(t *testing.T) {
 	if outcome.filledCount != len(kinds) {
 		t.Errorf("filledCount = %d, want %d", outcome.filledCount, len(kinds))
 	}
-	if want := []int{0, 1, 2}; !equalInts(filled, want) {
+	if want := []int{0, 1, 2}; !slices.Equal(filled, want) {
 		t.Errorf("filled = %v, want %v", filled, want)
 	}
 }
@@ -116,12 +115,35 @@ func TestRunFillLoop_NonTextKindsAreNeverFollowedByThePresenceCheck(t *testing.T
 	}
 }
 
+// The submit control can disappear right after the LAST field fills, not only a middle
+// one — the loop then has filled every field (filledCount == len(kinds)) AND stopped early
+// (stoppedEarly == true) at once. The caller must key off stoppedEarly, not filledCount,
+// to decide whether it is safe to click submit: this is exactly the combination that would
+// wrongly reach a second submit click if a future change compared filledCount instead.
+func TestRunFillLoop_SubmitControlGoneAfterTheLastFieldStillCountsAsStoppedEarly(t *testing.T) {
+	kinds := []string{"text", "text"}
+
+	outcome, err := runFillLoop(kinds, func(i int) error { return nil }, func(i int) bool {
+		return i != len(kinds)-1 // gone only right after the last field fills
+	})
+
+	if err != nil {
+		t.Fatalf("err = %v, want nil", err)
+	}
+	if !outcome.stoppedEarly {
+		t.Error("stoppedEarly = false, want true — the submit control disappeared after the last field too")
+	}
+	if outcome.filledCount != len(kinds) {
+		t.Errorf("filledCount = %d, want %d (every field did fill, even though the loop stopped early)", outcome.filledCount, len(kinds))
+	}
+}
+
 // A field that fails to fill must abort the loop immediately, exactly as fillAndSubmit
 // does today — the presence check is only ever reached after a field fills successfully.
 func TestRunFillLoop_AFillErrorStopsTheLoopWithoutCheckingPresence(t *testing.T) {
 	kinds := []string{"text", "text"}
 	checkedPresence := false
-	wantErr := errFillTestSentinel
+	wantErr := errors.New("fill test sentinel")
 
 	outcome, err := runFillLoop(kinds, func(i int) error {
 		if i == 0 {
@@ -142,16 +164,4 @@ func TestRunFillLoop_AFillErrorStopsTheLoopWithoutCheckingPresence(t *testing.T)
 	if checkedPresence {
 		t.Error("presentAfter was called after a fill error, want it never called")
 	}
-}
-
-func equalInts(a, b []int) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := range a {
-		if a[i] != b[i] {
-			return false
-		}
-	}
-	return true
 }
