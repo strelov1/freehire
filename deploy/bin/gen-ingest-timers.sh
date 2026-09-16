@@ -29,8 +29,22 @@ if [ -f /opt/freehire/.env ]; then set -a; . /opt/freehire/.env; set +a; fi
 # catalogue — so the floor the old reasoning ruled out now guards exactly the case that
 # reasoning relied on not existing. It lives with the sweep, not here, because a short list
 # is only dangerous to the sweep: generation itself is still create-and-enable only.
+# The LEFT JOIN is the cutover's one-owner rule, enforced here rather than trusted to an
+# operator. A provider handed to cmd/ingest-scheduler (ingest_schedule.managed) must NOT
+# also carry a static timer: the two ceilings cannot see each other, so a doubly-driven
+# provider runs twice at once on a host calibrated for one. The runbook says to disable the
+# timer and flip the flag as ONE step — but this script runs unattended at 04:40 and would
+# have RECREATED the timer of every cut-over provider the same night, silently undoing the
+# operator's half of it. LEFT, not INNER: a provider with no override row is unmanaged and
+# still ours, which is the whole design of that table.
+#
+# The sweep at the bottom finishes the job: a provider that becomes managed drops out of
+# this list, so its timer is retired on the next run without anyone naming it.
 providers=$(psql "$DATABASE_URL" -tAc \
-  "SELECT provider FROM boards WHERE status IN ('pending','active') GROUP BY provider ORDER BY provider")
+  "SELECT b.provider FROM boards b
+     LEFT JOIN ingest_schedule s ON s.provider = b.provider
+    WHERE b.status IN ('pending','active') AND COALESCE(s.managed, false) = false
+    GROUP BY b.provider ORDER BY b.provider")
 if [ -z "$providers" ]; then
   echo "gen-ingest-timers: the catalog lists no live board — nothing to schedule" >&2
   exit 1
