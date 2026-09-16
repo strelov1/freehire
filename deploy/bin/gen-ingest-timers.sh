@@ -50,6 +50,17 @@ if [ -z "$providers" ]; then
   exit 1
 fi
 mapfile -t PROVIDERS <<<"$providers"
+
+# The providers the scheduler owns. Read separately rather than derived from the list above:
+# that list is what this script SHOULD generate, and knowing which names are missing from it
+# BECAUSE they were cut over — rather than because the catalogue read failed — is exactly
+# what the sweep's floor needs to tell apart. An empty result is normal and is not an error;
+# before the cutover began there were none.
+declare -A MANAGED=()
+while read -r m; do
+  [ -n "$m" ] && MANAGED[$m]=1
+done < <(psql "$DATABASE_URL" -tAc \
+  "SELECT provider FROM ingest_schedule WHERE managed ORDER BY provider")
 # Every provider the per-provider loop below actually generated a timer for. The sweep at
 # the bottom retires the enabled timers NOT in here, so it must be appended to at exactly
 # one place: beside the `systemctl enable` that creates the timer, never beside the loop's
@@ -703,23 +714,34 @@ echo "generated + enabled 2 workstream shard timers"
 # disabling them again — the literal disables above own those, and redoing their work here
 # would hide which list a retirement came from.
 enabled=()
+floor_base=0
 for f in /etc/systemd/system/freehire-ingest@*.timer; do
   [ -e "$f" ] || continue
   u=${f##*/}
   [ "$(systemctl is-enabled "$u" 2>/dev/null)" = enabled ] || continue
   p=${u#freehire-ingest@}
-  enabled+=("${p%.timer}")
+  p=${p%.timer}
+  enabled+=("$p")
+  # A provider handed to the scheduler is SWEPT (it is still in `enabled`) but does not
+  # count toward the floor. Retiring its timer is the intended outcome of the cutover, not
+  # evidence that the catalogue read came back short — and counting it made the guard fire
+  # on exactly the operation it was supposed to permit. Measured 2026-09-16: a wave of 60
+  # providers took generation to 169 against 229 enabled, 73.8%, and the sweep refused,
+  # leaving all 60 driven by BOTH the scheduler and their static timer — the one state the
+  # cutover forbids. Excluding them compares what the run generated against what it was
+  # SUPPOSED to generate, which is the question the floor was always asking.
+  [ -n "${MANAGED[$p]:-}" ] || floor_base=$((floor_base+1))
 done
 
 swept=0
 refused=0
-if [ "${#GENERATED[@]}" -lt $(( ${#enabled[@]} * 8 / 10 )) ]; then
+if [ "${#GENERATED[@]}" -lt $(( floor_base * 8 / 10 )) ]; then
   # Counted, not just logged. A refusal means the catalogue query answered with far less
   # than the fleet — which is the shape this guard exists to catch, and a run that only
   # writes it to stderr and exits 0 IS that shape: successful-looking and wrong. The
   # heartbeat below publishes this, so a refusal is visible without reading journald.
   refused=1
-  echo "gen-ingest-timers: generated ${#GENERATED[@]} timers against ${#enabled[@]} enabled — refusing to sweep" >&2
+  echo "gen-ingest-timers: generated ${#GENERATED[@]} timers against $floor_base enabled and unmanaged — refusing to sweep" >&2
 else
   for p in "${enabled[@]}"; do
     [ -n "${GENERATED[$p]:-}" ] && continue
