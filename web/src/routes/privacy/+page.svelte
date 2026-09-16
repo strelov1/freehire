@@ -4,7 +4,9 @@
 
   const repoUrl = 'https://github.com/strelov1/freehire';
   const telegramUrl = 'https://t.me/freehiredev';
-  // TODO(strelov1): confirm the contact address you want published here.
+  // Confirmed monitored. This is the address a data-subject request and the Google OAuth
+  // review team both arrive at, so it has to stay a mailbox somebody actually reads —
+  // the same string is published on /terms, /support and /delete-account.
   const contactEmail = 'hello@freehire.me';
 
   const canonical = $derived(`${page.url.origin}/privacy`);
