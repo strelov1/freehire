@@ -1,5 +1,6 @@
 import { serverApi } from './api';
 import { rangeForMonth } from '$lib/calendarModel';
+import { rangeForWindow } from '$lib/contributionGrid';
 
 /** Fetch the caller's Kanban board rows for the tracking routes' server load, so
  *  the board renders with the page instead of after a client fetch on mount. A
@@ -38,6 +39,29 @@ export async function loadTimeline(fetchImpl: typeof fetch, cookie: string | nul
     const api = serverApi(fetchImpl, cookie);
     const [events, interviews] = await Promise.all([api.myTimeline(from, to), api.myInterviews(from, to)]);
     return { events, interviews, year, month };
+  } catch {
+    return undefined;
+  }
+}
+
+/** Fetch a year of the caller's application events for the activity grid, so the squares
+ *  paint with the page instead of after a client fetch on mount.
+ *
+ *  Unlike loadTimeline this reports no date back, and does not need to: the window is a
+ *  rolling year ending on the reader's today, and `rangeForWindow`'s day of margin at each
+ *  end absorbs the difference between this process's date and theirs — a day boundary, not a
+ *  month boundary. The browser re-derives which square each event lands on anyway.
+ *
+ *  Interviews are deliberately not fetched. `interview_scheduled` is a ledger event and
+ *  arrives with the timeline; application_interviews is the calendar's second layer, about
+ *  meetings that can still move, and nothing on this page draws a future.
+ *
+ *  A transient failure returns undefined, letting the view fall back to its own client fetch
+ *  and a friendly error rather than 500ing the page — the same contract as the two above. */
+export async function loadActivityYear(fetchImpl: typeof fetch, cookie: string | null) {
+  const { from, to } = rangeForWindow();
+  try {
+    return await serverApi(fetchImpl, cookie).myTimeline(from, to);
   } catch {
     return undefined;
   }

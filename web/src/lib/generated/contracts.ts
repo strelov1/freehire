@@ -1484,6 +1484,8 @@ export const STAGE_VALUES = ['preparing', 'applied', 'screening', 'responded', '
 export type Stage = (typeof STAGE_VALUES)[number];
 export const APPLICATION_EVENT_KINDS = ['applied', 'employer_reply', 'follow_up_sent', 'stage_set', 'interview_scheduled'] as const;
 export type ApplicationEventKind = (typeof APPLICATION_EVENT_KINDS)[number];
+export const APPLICATION_EVENT_SOURCES = ['mail_gmail', 'mail_hosted', 'mail_external', 'user', 'assistant', 'calendar_google', 'system', 'auto_apply'] as const;
+export type ApplicationEventSource = (typeof APPLICATION_EVENT_SOURCES)[number];
 export const STAGE_LABELS = {
   'accepted': 'Accepted',
   'applied': 'Applied',
