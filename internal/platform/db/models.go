@@ -1211,6 +1211,15 @@ type SocialToken struct {
 	RefreshedAt      pgtype.Timestamptz `json:"refreshed_at"`
 }
 
+type SourceStat struct {
+	Source         string             `json:"source"`
+	OpenJobs       int64              `json:"open_jobs"`
+	AtsMatchedJobs int64              `json:"ats_matched_jobs"`
+	BrowsableJobs  pgtype.Int8        `json:"browsable_jobs"`
+	SampleUrl      pgtype.Text        `json:"sample_url"`
+	MeasuredAt     pgtype.Timestamptz `json:"measured_at"`
+}
+
 // Hosts refused at the public submission form. Checked only in submission.Service.Submit; never applied to a moderator-authored vacancy create.
 type SubmissionDomainBlocklist struct {
 	ID int64 `json:"id"`

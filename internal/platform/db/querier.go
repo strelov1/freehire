@@ -77,6 +77,38 @@ type Querier interface {
 	// argument unconditionally left rows reading link_source='agent' with a NULL
 	// confidence after a caller merely re-labelled the message.
 	AgentTriageEmail(ctx context.Context, arg AgentTriageEmailParams) (int64, error)
+	// Per-source snapshot (source_stats): the measurement cmd/rollup-stats takes on each run
+	// and the read the public /api/v1/sources endpoint serves from it.
+	//
+	// Rebuilt as an atomic delete-and-reinsert inside one transaction, like the facet
+	// snapshot beside it, so a reader never sees a partially rebuilt table — and so an
+	// adapter removed from the registry leaves the snapshot instead of lingering as a row
+	// nothing can explain.
+	// The whole measurement in one grouped scan over open postings.
+	//
+	// Reads no description column, deliberately: a `description` predicate de-TOASTs every
+	// row it touches, which at this catalogue's size is the difference between a pass that
+	// runs on a schedule and one that never finishes. Everything here is narrow.
+	//
+	// ats_matched counts rows the dedup pass matched to a first-party ATS posting. The
+	// marker is only ever set on an AGGREGATOR row (see the aggregator-suppression pass),
+	// so this is 0 for every other kind of source by construction — which is why the
+	// endpoint omits the figure for them rather than publishing that 0.
+	//
+	// min(url) rather than mode(): a hash aggregate needs no sort, and every posting of a
+	// source shares a host, which is the only part of the URL the logo proxy reads. The
+	// point is that the host is EVIDENCE from our own stored postings rather than an entry
+	// in a hand-kept map of 221 domains that would go stale without saying so.
+	//
+	// NOT is_private excludes the jd-tailor-intake private postings: one user's pasted job
+	// description, visible only to them. They are not part of the catalogue, they are already
+	// excluded from the search index at enqueue, and counting them here would both inflate a
+	// public figure and make it disagree with the de-duplicated count measured beside it.
+	//
+	// No index backs this. It is one sequential scan per rollup-stats run (every 3 hours, on a
+	// worker that already sweeps `jobs` several times per run), and an index on jobs(source)
+	// would be built and maintained on an 11M-row table to serve exactly one query.
+	AggregateOpenJobsBySource(ctx context.Context) ([]AggregateOpenJobsBySourceRow, error)
 	// Fold a follow-on edit into the newest revision: replace what it does, restate its
 	// description and the reason for the change, but LEAVE inverse alone. The inverse still leads
 	// back to the state before the first of the coalesced edits, which is what makes undo mean
@@ -1347,6 +1379,9 @@ type Querier interface {
 	// days (a day that had only closures, now reopened) are dropped rather than left
 	// stale.
 	DeleteAllJobDailyStats(ctx context.Context) error
+	// First half of the atomic rebuild. Run in the same transaction as the
+	// InsertSourceStat loop.
+	DeleteAllSourceStats(ctx context.Context) error
 	// Retire a capture that succeeded. The stored form is the record; the queue entry has
 	// nothing left to say.
 	DeleteApplyFormEntry(ctx context.Context, id int64) error
@@ -2815,6 +2850,22 @@ type Querier interface {
 	// partial unique index on (user_id, ref) WHERE kind='reward' guards against a double
 	// grant for the same ref even under a race.
 	InsertReward(ctx context.Context, arg InsertRewardParams) error
+	// Second half of the atomic rebuild: one row per source in the UNION of the adapter
+	// registry and what the scan above found — see sourcestats.Rows, which is where that
+	// union is decided.
+	//
+	// Not "one per scanned source": a registered adapter whose postings have all closed must
+	// land here carrying 0, because "we read this source and it currently carries nothing" is
+	// a measurement, while a missing row would be read as "we never measured it", and the
+	// page says different things about the two.
+	//
+	// Not "one per registered adapter" either: a source can carry postings without being a
+	// crawl adapter (telegram), and dropping it would quietly falsify a page whose whole
+	// claim is that it lists every source.
+	//
+	// browsable_jobs is NULL when Meilisearch could not be reached. Never 0: see the
+	// migration's comment.
+	InsertSourceStat(ctx context.Context, arg InsertSourceStatParams) error
 	// Crawl write path: store a fetched post once. ON CONFLICT DO NOTHING makes
 	// re-crawling idempotent — a stored post (pending, done, or dead-lettered) is
 	// never reset. extracted_at is non-NULL when the ingest prefilter already
@@ -3962,6 +4013,10 @@ type Querier interface {
 	// reads is written to the PUBLIC companies row (RenameSlugCompany below). A JD one user
 	// pasted in is not a board, and it must not be the source of an employer's public name.
 	ListSlugLikeCompaniesForBackfill(ctx context.Context) ([]ListSlugLikeCompaniesForBackfillRow, error)
+	// The whole snapshot. Aggregate only — per-source counts and one sample URL, no
+	// record-level data. A few hundred rows, so it is read whole and joined in Go against
+	// the adapter registry rather than filtered here.
+	ListSourceStats(ctx context.Context) ([]SourceStat, error)
 	// "My submissions": one user's submissions, newest first, whatever their status.
 	// LEFT JOIN the minted job (present only once approved) to surface its public_slug,
 	// so the UI can link an approved submission straight to its live vacancy page.

@@ -16,7 +16,7 @@ reports the whole graph at once, including imports that exist only in test files
 
 ## Packages
 
-`adzunadesc` `applyform` `atsboard` `atsdetect` `boardresolve` `catalogstats` `contribution` `jdresolve` `linkimport` `linksource` `moderation` `pipeline` `screeninganswers` `sources` `submission` `telegram`
+`adzunadesc` `applyform` `atsboard` `atsdetect` `boardresolve` `catalogstats` `contribution` `jdresolve` `linkimport` `linksource` `moderation` `pipeline` `screeninganswers` `sources` `sourcestats` `submission` `telegram`
 
 ## The service-extraction seam
 

@@ -117,6 +117,7 @@ import type {
   CatalogScale,
   EngagementStats,
   IngestStatus,
+  SourceEntry,
   LocationPreferences,
   NotificationSettings,
   NotificationItem,
@@ -751,6 +752,15 @@ export function createApi(
    *  (no error text or board identifiers), aggregate-only, unauthenticated. */
   async function ingestStatus(): Promise<IngestStatus> {
     return requestData<IngestStatus>(`/api/v1/status`);
+  }
+
+  /** The public source catalogue: every source the catalogue is built from — each
+   *  registered crawl adapter, plus any source carrying postings without one — with what
+   *  it currently holds, how its crawl is doing, and the host a logo resolves from.
+   *  Sanitized (no error text, board identifiers or posting URLs), aggregate-only,
+   *  unauthenticated. One request serves the whole /sources page. */
+  async function listSources(): Promise<SourceEntry[]> {
+    return requestData<SourceEntry[]>(`/api/v1/sources`);
   }
 
   /** List companies, optionally filtered by a name query `q` (a case-insensitive
@@ -2876,6 +2886,7 @@ export function createApi(
     statsFacets,
     catalogScale,
     ingestStatus,
+    listSources,
     listCompanies,
     getCompany,
     listMentors,

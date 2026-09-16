@@ -1145,6 +1145,53 @@ export interface IngestStatus {
   site: SiteHealth;
 }
 
+/** What the catalogue currently holds under one source, as measured by the daily
+ *  snapshot. Two counts on purpose: `open` is every open posting, duplicates and all,
+ *  and is the denominator the overlap figures are arithmetic on; `browsable` is the
+ *  de-duplicated count the search index holds, which is what /jobs?source=… actually
+ *  shows and therefore what the page displays.
+ *
+ *  `browsable` is null when the search index could not be measured — NOT zero. A zero
+ *  meaning "we could not measure this" must never be rendered as "this source has no
+ *  jobs".
+ *
+ *  `ats_matched`/`ats_unmatched` are present for aggregators only. "Unmatched" means the
+ *  dedup pass found no first-party ATS posting to pair a posting with — the absence of
+ *  evidence, not evidence of absence. Do not render it as "exclusive". */
+interface SourceJobs {
+  open: number;
+  browsable: number | null;
+  ats_matched?: number;
+  ats_unmatched?: number;
+  measured_at: string;
+}
+
+/** One source's crawl-fleet health, derived exactly as the /status page derives it.
+ *  Absent on a source with no board_health record at all — the normal state for a source
+ *  that is not a crawl adapter. */
+interface SourceHealth {
+  status: HealthStatus;
+  total_boards: number;
+  healthy_boards: number;
+  cooled_boards: number;
+  last_run: string | null;
+  last_success: string | null;
+  ingested_total: number;
+}
+
+/** One entry on the public source catalogue. `logo_host` is the host of one of the
+ *  source's own postings — a brand mark is resolved from it — and is null when the source
+ *  has no postings to take one from. `jobs` is null when the snapshot has never covered
+ *  this source; `health` is null when it has no crawl-health record. Both absences are
+ *  answers, not missing data. */
+export interface SourceEntry {
+  source: string;
+  kind: ProviderKind;
+  logo_host: string | null;
+  jobs: SourceJobs | null;
+  health: SourceHealth | null;
+}
+
 /** An API key as returned by the management endpoints — metadata only; the
  *  plaintext token is never part of this shape. `token_prefix` is a short,
  *  non-secret leading slice (e.g. "fhk_Ab12cd") shown so the user can tell keys

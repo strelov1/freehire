@@ -63,6 +63,9 @@
         // here is how to help, and here is everyone who did.
         { label: 'Contributors', href: resolve('/contributors') },
         { label: 'Submit a job', href: resolve('/submit') },
+        // Next to Status rather than under Resources: the two answer neighbouring
+        // questions — where the jobs come from, and whether we are still reading them.
+        { label: 'Sources', href: resolve('/sources') },
         { label: 'Status', href: resolve('/status') },
         { label: 'Support', href: resolve('/support') },
         { label: 'Privacy', href: resolve('/privacy') },

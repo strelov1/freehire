@@ -81,6 +81,13 @@ func (h *statsHandlers) register(api fiber.Router) {
 	// A per-provider health rollup over board_health, sanitized (no error text or
 	// board identifiers); the /status page renders it as a status board.
 	api.Get("/status", h.IngestStatus)
+
+	// Public source catalogue, unauthenticated like the other public reads. The same
+	// board_health rollup /status reads, joined with the per-source snapshot
+	// (cmd/rollup-stats) and classified through the adapter registry; the /sources page
+	// renders it as a searchable catalogue. Sanitized the same way /status is — no board
+	// identifier, no error text, no posting URL.
+	api.Get("/sources", h.Sources)
 }
 
 // dateLayout is the wire format for every date the activity endpoint reads and

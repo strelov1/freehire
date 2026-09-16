@@ -12,3 +12,16 @@ export function companyLogoUrl(name: string): string | null {
   if (!name) return null;
   return `${COMPANY_LOGO_BASE}/${encodeURIComponent(name)}`;
 }
+
+/** The proxy logo URL for a SOURCE, resolved from the host its own postings live on —
+ *  `greenhouse.io` for Greenhouse, an employer's own domain for a single-company career
+ *  page. Same proxy, same 404-into-a-placeholder behaviour as `companyLogoUrl`.
+ *
+ *  The host comes from a stored posting rather than a hand-kept map of domains, so a
+ *  source with no postings has no host and gets no logo. Null here is that case, and the
+ *  caller's placeholder is the right answer to it — a map would have gone stale silently
+ *  and the entry it was missing would have been invisible. */
+export function sourceLogoUrl(host: string | null): string | null {
+  if (!host) return null;
+  return `${COMPANY_LOGO_BASE}/${encodeURIComponent(host)}`;
+}

@@ -106,6 +106,10 @@ func run() int {
 	// and they are already done.
 	publish(ctx, cfg.RedisURL, cfg.MeiliURL, cfg.MeiliKey, db.New(pool))
 
+	// So does the per-source snapshot behind the public /sources page, for the same
+	// reason and on the same terms.
+	rebuildSourceStats(ctx, pool, cfg.MeiliURL, cfg.MeiliKey)
+
 	return 0
 }
 

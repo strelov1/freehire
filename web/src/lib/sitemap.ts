@@ -70,6 +70,10 @@ export const STATIC_PATHS = [
   // The market rollups. /analytics was reachable from the header menu and from
   // nowhere a crawler reads, the same gap /talent had.
   '/analytics',
+  // Where the catalogue comes from: every source, what each carries, when it was last
+  // read. Sits with /open rather than with /status because it is a citable statement
+  // about the catalogue, not an operational dashboard.
+  '/sources',
   '/trends',
   '/docs/api',
   '/agents',
