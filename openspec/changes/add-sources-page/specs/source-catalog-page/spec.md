@@ -94,6 +94,10 @@ Each entry SHALL state the source's display name, its logo where one resolves, i
 de-duplicated job count as a link to that source's own filtered search, when it was last
 successfully read, and how many postings that read returned.
 
+A logo SHALL be resolved from the source's DISPLAY NAME, never from a posting host — a
+host serves the employer's mark under the platform's name — and SHALL fall back to a
+monogram when it does not resolve, including when the miss happened before hydration.
+
 #### Scenario: The count matches what the link opens
 
 - **WHEN** a visitor reads a source's job count and follows its link
@@ -152,6 +156,11 @@ than everything else on the page put together.
 
 - **WHEN** the page renders
 - **THEN** logo images below the fold are not fetched until they approach the viewport
+
+#### Scenario: A logo that does not resolve
+
+- **WHEN** the logo service answers 404 for a source, whether before or after hydration
+- **THEN** the card shows a monogram, never a broken-image icon
 
 ### Requirement: The page is reachable
 

@@ -456,8 +456,10 @@ signed-in user who has a saved profile. Activating it SHALL reset the staged fil
 then seed them from the user's profile: each profile specialization SHALL be staged as a
 `category` value and each profile skill SHALL be staged as an included `skills` value.
 Each profile excluded skill SHALL be staged as an **excluded** `skills` value (into the
-`skills` facet's exclude set, so it commits as `?skills_exclude=…`). When the
-profile carries a `location_preferences` block, the action SHALL additionally seed the
+`skills` facet's exclude set, so it commits as `?skills_exclude=…`), and each profile
+excluded SOURCE SHALL be staged as an **excluded** `source` value (committing as
+`?source_exclude=…`). Sources have no "wanted" counterpart, so no overlap rule applies to
+them. When the profile carries a `location_preferences` block, the action SHALL additionally seed the
 location facets by flattening the three blocks: `work_mode` from `work_modes`; `regions`
 from the union of `remote.regions` and `relocation.regions`; `countries` from the union of
 `remote.countries`, `base.country`, and `relocation.countries`; `cities` from the union of
@@ -492,6 +494,12 @@ user has no saved profile, the header SHALL instead present a link to create one
   activates **Apply my profile**
 - **THEN** the `skills` facet is staged with `go` included and `php` excluded, and on
   **Show results** the committed filter carries `?skills=go` and `?skills_exclude=php`
+
+#### Scenario: Applying a profile with avoided sources seeds the source exclude set
+- **WHEN** a signed-in user whose profile avoids the sources `[smartrecruiters]` activates
+  **Apply my profile**
+- **THEN** the `source` facet is staged with `smartrecruiters` excluded, and on **Show
+  results** the committed filter carries `?source_exclude=smartrecruiters`
 
 #### Scenario: Applying a profile with location preferences seeds the location facets
 - **WHEN** a signed-in user whose profile has `work_modes` `[remote, onsite]`,

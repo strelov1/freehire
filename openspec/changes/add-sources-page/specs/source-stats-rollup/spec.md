@@ -5,8 +5,7 @@
 The system SHALL maintain a `source_stats` table holding, per source key, the figures the
 public source catalogue reports: the raw count of that source's open postings, how many of
 those the dedup pass matched to a first-party ATS posting, the de-duplicated count
-Meilisearch holds for that source, one sample posting URL, and the instant the row was
-measured.
+Meilisearch holds for that source, and the instant the row was measured.
 
 The table is a SNAPSHOT, not a ledger: a source's row is replaced on every run. Nothing
 reads the history, so keeping one would only invite a reader to trust a figure nobody
@@ -66,8 +65,8 @@ reading no posting description.
 
 A description predicate de-TOASTs every row it touches, which at this catalogue's size is
 the difference between a pass that keeps its schedule and one that does not finish. The figures
-this rollup needs — the source key, the aggregator duplicate marker, the posting URL — are
-all narrow columns.
+this rollup needs — the source key and the aggregator duplicate marker — are
+narrow columns.
 
 #### Scenario: The pass reads no description
 
@@ -95,22 +94,20 @@ as "this source has no jobs".
 - **WHEN** the rollup measures de-duplicated counts for every source in the fleet
 - **THEN** it issues a single facet-distribution request
 
-### Requirement: The logo host is derived, never hand-listed
+### Requirement: The snapshot carries no posting URL
 
-The sample posting URL SHALL be taken from the source's own stored postings, so the host a
-logo is resolved from is evidence rather than a maintained list.
+The snapshot SHALL NOT sample or store a posting URL.
 
-A source with no open postings therefore has no sample URL and no logo. That is the honest
-outcome: a hand-written map of a few hundred domains would go stale silently, and the entry it was
-missing would be invisible.
+The first version did, to resolve a source's logo from the host. It was wrong twice and
+production said so within an hour of the page going live: an ATS posting's URL usually
+lives on the EMPLOYER's domain, so the sample taken for `greenhouse` was `bankrate.com`
+and for `successfactors` a staffing agency's — and the page served those companies' marks
+under the platforms' names; and where the host really was the platform's it was typically
+a per-tenant subdomain the logo service 404s on. A logo is resolved from the source's
+DISPLAY NAME instead, which is what that service answers, and which needs nothing from
+this table.
 
-#### Scenario: A source with postings yields a host
+#### Scenario: No posting URL is stored
 
-- **WHEN** a source has at least one open posting with a URL
-- **THEN** its row carries a sample posting URL from that source
-
-#### Scenario: A source with no postings yields no host
-
-- **WHEN** a source has no open postings
-- **THEN** its row carries no sample URL, and the page renders a placeholder rather than a
-  broken image
+- **WHEN** the snapshot is written
+- **THEN** no column holds a posting URL, and nothing downstream can publish one
