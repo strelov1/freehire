@@ -74,17 +74,20 @@ func (h *ojcpHandlers) register(api fiber.Router, mw middleware) {
 	// question differently. `All` because MCP's streamable transport uses POST to call and
 	// GET to open the server-to-client stream.
 	api.All("/ojcp/mcp", limit, adaptor.HTTPHandler(ojcpmcp.Handler(h)))
+
+	// The manifest, rendered. It is served to an agent at /.well-known/ojcp.json, which the
+	// SPA proxies to this route — nginx sends /api/ here and everything else to the Node
+	// process, so a route at the well-known path itself would never receive a request. That
+	// was found the only way it could be: deployed, with the API path answering 200 and the
+	// manifest answering 404.
+	api.Get("/ojcp/manifest", limit, h.OJCPManifest)
 }
 
-// registerManifest serves the one document an OJCP provider MUST publish. It is mounted on
-// the app root, not under /api/v1: the well-known path is fixed by RFC 8615 and by the
-// spec, and an agent looks for it there and nowhere else.
-func (h *ojcpHandlers) registerManifest(app *fiber.App) {
-	app.Get("/.well-known/ojcp.json", func(c *fiber.Ctx) error {
-		// The spec requires this content type by name.
-		c.Set(fiber.HeaderContentType, fiber.MIMEApplicationJSON)
-		return c.JSON(h.manifest())
-	})
+// OJCPManifest answers with this deployment's manifest.
+func (h *ojcpHandlers) OJCPManifest(c *fiber.Ctx) error {
+	// The spec requires this content type by name.
+	c.Set(fiber.HeaderContentType, fiber.MIMEApplicationJSON)
+	return c.JSON(h.manifest())
 }
 
 // manifest describes this deployment. Both binding claims are DERIVED rather than written

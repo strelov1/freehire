@@ -6,7 +6,12 @@ import "strings"
 // provider MUST publish, and how an agent discovers everything else.
 //
 // It is RENDERED from this deployment's own configuration rather than kept as a static
-// file. Two of its claims are binding: `tools` says what this server answers, and
+// file. The Go service answers it at /api/v1/ojcp/manifest and the SPA proxies that to
+// /.well-known/ojcp.json, where an agent looks: nginx routes /api/ to the backend and
+// everything else to the Node process, so a Go route at the well-known path itself would
+// never receive a request.
+//
+// Two of its claims are binding: `tools` says what this server answers, and
 // `rate_limits` says what it enforces — the spec makes a declared limit a MUST. A
 // hand-edited file drifts from the router silently; a rendered one can be asserted against
 // the router in a test.

@@ -85,6 +85,28 @@ func TestManifestCannotAdvertiseAToolNothingServes(t *testing.T) {
 	}
 }
 
+func TestManifestIsServedUnderTheAPIPath(t *testing.T) {
+	// It is served to an AGENT at /.well-known/ojcp.json, which the SPA proxies here.
+	// nginx routes /api/ to this service and everything else to the Node process, so a Go
+	// route at the well-known path itself never receives a request — found in production,
+	// with the API path answering 200 and the manifest answering 404.
+	h := newOJCPHandlers(&fakeSearcher{}, fakeOJCPStore{}, "https://freehire.me", nil)
+	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
+	app.Get("/ojcp/manifest", h.OJCPManifest)
+
+	status, body := doGet(t, app, "/ojcp/manifest")
+
+	if status != fiber.StatusOK {
+		t.Fatalf("status = %d, body = %v", status, body)
+	}
+	if body["ojcp_version"] != "0.1" {
+		t.Errorf("ojcp_version = %v", body["ojcp_version"])
+	}
+	if tools, _ := body["tools"].([]any); len(tools) != 3 {
+		t.Errorf("tools = %v, want the three read tools", body["tools"])
+	}
+}
+
 func TestManifestDeclaresTheLimitTheRoutesEnforce(t *testing.T) {
 	// The spec makes a declared rate limit binding. Declaring one figure and enforcing
 	// another is a conformance failure nothing else in this repo would notice.
