@@ -56,17 +56,21 @@ func (f *fakeStore) SetNeedsReconsent(_ context.Context, userID int64) error {
 }
 
 type fakeReader struct {
-	ids       []string
-	byID      map[string]Message
-	threads   map[string][]string // threadID -> message ids
-	listErr   error
-	getErrIDs map[string]error // message ids on which GetMessage fails
+	ids          []string
+	byID         map[string]Message
+	threads      map[string][]string // threadID -> message ids
+	listErr      error
+	getErrIDs    map[string]error // message ids on which GetMessage fails
+	threadErrIDs map[string]error // thread ids on which ListThreadMessageIDs fails
 }
 
 func (f *fakeReader) ListATSMessageIDs(context.Context, string, int64) ([]string, error) {
 	return f.ids, f.listErr
 }
 func (f *fakeReader) ListThreadMessageIDs(_ context.Context, threadID string) ([]string, error) {
+	if err := f.threadErrIDs[threadID]; err != nil {
+		return nil, err
+	}
 	return f.threads[threadID], nil
 }
 func (f *fakeReader) GetMessage(_ context.Context, id string) (Message, error) {
@@ -420,6 +424,75 @@ func TestRunOnceDoesNotDisconnectOverATransientMessageFetchFailure(t *testing.T)
 	}
 	if stats.Failed != 1 || stats.Reconsent != 0 {
 		t.Errorf("stats = %+v, want the connection counted as failed and retried next run", stats)
+	}
+}
+
+// A third Gmail API call — thread expansion's ListThreadMessageIDs — can reveal a revoked
+// grant exactly as the list call and a message fetch can, and was the one call site this
+// PR's own review found still unchecked: its error path only logged and continued,
+// leaving a connection that lost thread-read access mid-run un-flagged and retried by cron
+// forever, the same bug class this whole PR exists to close.
+func TestRunOnceRevokedTokenOnThreadListingMarksReconsent(t *testing.T) {
+	c := testCipher(t)
+	enc, _ := c.Encrypt("refresh-token")
+	store := &fakeStore{conns: []Connection{{UserID: 9, Cursor: 1_700_000_000}}, encToken: enc}
+	reader := &fakeReader{
+		ids: []string{"m1"},
+		byID: map[string]Message{
+			"m1": {ID: "m1", ThreadID: "t1", FromAddr: "no-reply@ashbyhq.com", Subject: "Thanks for applying", ReceivedAt: time.Unix(1_700_000_100, 0)},
+		},
+		threadErrIDs: map[string]error{
+			"t1": &APIError{Op: "gmail: thread t1", StatusCode: 403, Status: "403 Forbidden"},
+		},
+	}
+	w := NewWorker(store, c, func(context.Context, string, []string) GmailReader { return reader })
+
+	stats, err := w.RunOnce(context.Background())
+	if err != nil {
+		t.Fatalf("RunOnce: %v", err)
+	}
+	if len(store.reconsentUsers) != 1 || store.reconsentUsers[0] != 9 {
+		t.Errorf("reconsent = %v, want [9]", store.reconsentUsers)
+	}
+	if store.syncedCalled {
+		t.Error("should not advance the cursor when a thread listing revealed a revoked grant")
+	}
+	if stats.Reconsent != 1 || stats.Synced != 0 || stats.Failed != 0 {
+		t.Errorf("stats = %+v, want one connection flagged for re-consent", stats)
+	}
+}
+
+// A thread listing that fails for any other reason still only skips that one thread's
+// siblings — the anchor message it was expanding already stored fine, so the run is not
+// failed over a single thread's own hiccup. Unchanged by the fix above.
+func TestRunOnceDoesNotDisconnectOverATransientThreadListingFailure(t *testing.T) {
+	c := testCipher(t)
+	enc, _ := c.Encrypt("refresh-token")
+	store := &fakeStore{conns: []Connection{{UserID: 9, Cursor: 0}}, encToken: enc}
+	reader := &fakeReader{
+		ids: []string{"m1"},
+		byID: map[string]Message{
+			"m1": {ID: "m1", ThreadID: "t1", FromAddr: "no-reply@ashbyhq.com", Subject: "Thanks for applying", ReceivedAt: time.Unix(1_700_000_100, 0)},
+		},
+		threadErrIDs: map[string]error{
+			"t1": &APIError{Op: "gmail: thread t1", StatusCode: 503, Status: "503 Service Unavailable"},
+		},
+	}
+	w := NewWorker(store, c, func(context.Context, string, []string) GmailReader { return reader })
+
+	stats, err := w.RunOnce(context.Background())
+	if err != nil {
+		t.Fatalf("RunOnce: %v", err)
+	}
+	if len(store.reconsentUsers) != 0 {
+		t.Errorf("marked %v for re-consent over a transient thread listing failure", store.reconsentUsers)
+	}
+	if len(store.upserted) != 1 || store.upserted[0].Message.ID != "m1" {
+		t.Fatalf("upserted = %v, want only the anchor m1 (thread expansion failed, not the anchor)", store.upserted)
+	}
+	if stats.Failed != 0 || stats.Synced != 1 || stats.Reconsent != 0 {
+		t.Errorf("stats = %+v, want the connection cleanly synced — a thread's own transient "+
+			"failure does not fail the whole run", stats)
 	}
 }
 
