@@ -75,6 +75,10 @@ var seniorityFromStandard = map[string]string{
 // Reporting the second is the house rule, not a nicety: an endpoint whose answer WIDENS
 // because it did not understand a parameter has to say so. An agent that asked for jobs
 // within 20 miles and silently received the whole catalogue has no way to tell.
+//
+// The PAGE is not in here. `FilterFromValues` does not read `limit` or `offset` — they are
+// the endpoint's own parameters, not the filter's — so putting them in these values would
+// only mean parsing them straight back out of a string. See Page.
 func (in SearchInput) QueryValues() (url.Values, []string) {
 	values := url.Values{}
 	var unsupported []string
@@ -84,9 +88,24 @@ func (in SearchInput) QueryValues() (url.Values, []string) {
 	}
 	unsupported = append(unsupported, in.applyLocation(values)...)
 	unsupported = append(unsupported, in.applyFilters(values)...)
-	in.applyPagination(values)
 
 	return values, unsupported
+}
+
+// Page is the window the agent asked for, held within what the standard's own input schema
+// allows: honouring a larger limit would answer with a page that schema rejects.
+func (in SearchInput) Page() (limit, offset int) {
+	limit, offset = defaultSearchLimit, 0
+	if in.Pagination == nil {
+		return limit, offset
+	}
+	if in.Pagination.Limit > 0 {
+		limit = min(in.Pagination.Limit, maxSearchLimit)
+	}
+	if in.Pagination.Offset > 0 {
+		offset = in.Pagination.Offset
+	}
+	return limit, offset
 }
 
 func (in SearchInput) applyLocation(values url.Values) []string {
@@ -147,20 +166,6 @@ func (in SearchInput) applyFilters(values url.Values) []string {
 		}
 	}
 	return unsupported
-}
-
-func (in SearchInput) applyPagination(values url.Values) {
-	limit, offset := defaultSearchLimit, 0
-	if in.Pagination != nil {
-		if in.Pagination.Limit > 0 {
-			limit = min(in.Pagination.Limit, maxSearchLimit)
-		}
-		if in.Pagination.Offset > 0 {
-			offset = in.Pagination.Offset
-		}
-	}
-	values.Set("limit", strconv.Itoa(limit))
-	values.Set("offset", strconv.Itoa(offset))
 }
 
 // formatNumber renders a salary bound the way our own query parser reads it: the schema

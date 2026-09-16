@@ -30,12 +30,16 @@ func TestSearchInputBecomesOurOwnQueryVocabulary(t *testing.T) {
 		"salary_min":         "120000",
 		"seniority":          "senior",
 		"posted_within_days": "7",
-		"limit":              "20",
-		"offset":             "40",
 	} {
 		if got := values.Get(key); got != want {
 			t.Errorf("%s = %q, want %q", key, got, want)
 		}
+	}
+
+	// The page is NOT among the values: the filter does not read `limit` or `offset`, so
+	// putting them there would only mean parsing them straight back out of a string.
+	if limit, offset := input.Page(); limit != 20 || offset != 40 {
+		t.Errorf("page = %d/%d, want 20/40", limit, offset)
 	}
 }
 
@@ -91,20 +95,16 @@ func TestSearchInputHoldsThePageWithinWhatTheStandardAllows(t *testing.T) {
 	// would answer with a page the standard's own schema rejects.
 	input := SearchInput{Pagination: &SearchPagination{Limit: 500}}
 
-	values, _ := input.QueryValues()
-
-	if got := values.Get("limit"); got != "50" {
-		t.Errorf("limit = %q, want it capped at the schema's maximum", got)
+	if limit, _ := input.Page(); limit != maxSearchLimit {
+		t.Errorf("limit = %d, want it capped at the schema's maximum", limit)
 	}
 }
 
 func TestSearchInputAppliesTheStandardsDefaultPage(t *testing.T) {
 	input := SearchInput{Query: "go"}
 
-	values, _ := input.QueryValues()
-
-	if got := values.Get("limit"); got != "10" {
-		t.Errorf("limit = %q, want the schema's default", got)
+	if limit, offset := input.Page(); limit != defaultSearchLimit || offset != 0 {
+		t.Errorf("page = %d/%d, want the schema's default", limit, offset)
 	}
 }
 
