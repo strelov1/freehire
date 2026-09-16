@@ -1033,6 +1033,65 @@ var categoryTable = []aliasEntry{
 	{"drupal developer", "software_engineering"},
 	{"magento developer", "software_engineering"},
 	{"shopify developer", "software_engineering"},
+	// The `engineer` spelling of everything above, and the `developer` spelling of the
+	// software titles that only had an `engineer` one. Which noun an employer reaches for
+	// is a habit — "Python Developer" and "Python Engineer" are the same job — and the
+	// list carried only one side of 38 of them.
+	//
+	// The cost of the omission is not a missing facet. A title this dictionary cannot
+	// read gets no category AND no is_tech; EnqueuePendingJobs gates enrichment on
+	// `is_tech IS TRUE`, so the LLM never sees the posting and never supplies the
+	// category the dictionary missed; and search.CategoryUnresolved then hides it
+	// FOREVER rather than until the next enrichment cycle. Measured on prod 2026-09-16:
+	// "senior java engineer" alone was 233 open postings inside that loop.
+	//
+	// TestBothSpellingsOfACraftResolveTheSame derives the pairs from this table, so a
+	// technology added under one noun from now on fails the build rather than quietly
+	// losing its postings.
+	{"python engineer", "software_engineering"},
+	{"java engineer", "software_engineering"},
+	{"javascript engineer", "software_engineering"},
+	{"typescript engineer", "software_engineering"},
+	{".net engineer", "software_engineering"},
+	{"dotnet engineer", "software_engineering"},
+	{"php engineer", "software_engineering"},
+	{"ruby engineer", "software_engineering"},
+	{"rails engineer", "software_engineering"},
+	{"c# engineer", "software_engineering"},
+	{"c++ engineer", "software_engineering"},
+	{"node engineer", "software_engineering"},
+	{"nodejs engineer", "software_engineering"},
+	{"node.js engineer", "software_engineering"},
+	{"abap engineer", "software_engineering"},
+	{"app engineer", "software_engineering"},
+	{"game engineer", "software_engineering"},
+	{"mainframe engineer", "software_engineering"},
+	{"sharepoint engineer", "software_engineering"},
+	{"rpa engineer", "software_engineering"},
+	{"erp engineer", "software_engineering"},
+	{"sap engineer", "software_engineering"},
+	{"mes engineer", "software_engineering"},
+	{"oracle engineer", "software_engineering"},
+	{"wordpress engineer", "software_engineering"},
+	{"drupal engineer", "software_engineering"},
+	{"magento engineer", "software_engineering"},
+	{"shopify engineer", "software_engineering"},
+	{"integration developer", "software_engineering"},
+	{"it developer", "software_engineering"},
+	{"founding developer", "software_engineering"},
+	{"ai-native developer", "software_engineering"},
+	{"ai native developer", "software_engineering"},
+	// "Software Engineering <anything>" was the same omission in one letter: matching is
+	// whole-word, so `software engineer` never occurs inside "Software Engineering
+	// Intern" and that title resolved to nothing while "Software Engineer Intern"
+	// resolved fine — 192 open postings apart on a gerund. It sits AFTER
+	// `engineering manager` far above, so "Software Engineering Manager" stays
+	// management, which is the craft that title actually names.
+	{"software engineering", "software_engineering"},
+	// The `developer` spelling of the two AI entries below, which had only `engineer`.
+	// "AI Developer" alone was 152 open postings resolving to nothing.
+	{"ai developer", "ai_engineering"},
+	{"ml developer", "ml_ai"},
 	// "Member of Technical Staff" reads as software on the same evidence tech.go
 	// cites (294/300 sampled prod postings software or AI). "Founding Engineer"
 	// is the early-startup twin of the same generalist population.
@@ -1149,11 +1208,22 @@ var categoryTable = []aliasEntry{
 	{"power systems engineer", categoryNone},
 	{"electrical systems engineer", categoryNone},
 	{"quality systems engineer", categoryNone},
+	// The same four under `developer`, and for the same reason: the bare
+	// "systems developer" below would otherwise sweep every one of them into software,
+	// exactly as the bare "systems engineer" would have. They are listed even though no
+	// such title is common, because the blindness has to be declared where the sweep
+	// happens — the twin block above is the only thing that makes this one obvious.
+	{"control systems developer", categoryNone},
+	{"power systems developer", categoryNone},
+	{"electrical systems developer", categoryNone},
+	{"quality systems developer", categoryNone},
 	// Then the qualified IT spellings, each naming its own discipline.
 	{"linux systems engineer", "devops"},
 	{"cyber systems engineer", "security"},
 	{"software systems engineer", "software_engineering"},
 	{"it systems engineer", "software_engineering"},
+	{"software systems developer", "software_engineering"},
+	{"it systems developer", "software_engineering"},
 	// The generic technical analyst titles, ~2.2k live postings between them. They were
 	// reached only through the bare "analyst" fall-through, which called them data
 	// analysts; the software_engineering bucket is the same answer this file gives every
@@ -1176,6 +1246,8 @@ var categoryTable = []aliasEntry{
 	// devops would be a guess.
 	{"systems engineer", "software_engineering"},
 	{"system engineer", "software_engineering"},
+	{"systems developer", "software_engineering"},
+	{"system developer", "software_engineering"},
 
 	// Vendor platforms. Naming an enterprise product states the discipline as surely
 	// as naming a language does. "Salesforce Developer" and "SAP Developer" already
