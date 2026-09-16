@@ -304,7 +304,13 @@ if [ "$app" = freehire ]; then
   # and served 14,783 504s in ten minutes. The pair has to ship together: listing the half
   # that writes a worklist and not the half that drains it is what makes `go run` look like
   # the only option.
-  for w in migrate onboarding broadcast ingest enrich embed similar-backfill search-drain reindex reindex-companies import-collections import-yc import-company-industries queue-metrics tg-ingest tg-extract liveness llm-probe notify remind nudge apple-revoke auth-cleanup capture-apply-form backfill-derive backfill-company-names backfill-descriptions backfill-application-events backfill-slug-folded backfill-duplicate-marker-owner backfill-company-type-hint backfill-requirements billing-sync build-suggestions merge-companies add-board harvest-orphans harvest-boards recount-companies rollup-stats rollup-facets rollup-company rollup-views classify-mail resolve-url gmail-sync cal-sync mail-ingest hydrate-adzuna-description seed-adzuna-description-queue ingest-scheduler schedule-board auto-apply-orchestrate auto-apply social-digest discord-sync mentorship-remind linkedin-auth linkedin-token-refresh search-ping close-apploi-misattributed pro-welcome-mail; do
+  # publish-logo-domains joined 2026-09-16 with its unit, not after it. It writes the
+  # name-to-domain map logo.freehire.me reads, and the consumer of that map lives in a
+  # DIFFERENT repository this script does not carry — so a missing binary here would leave
+  # a half-delivered change whose visible symptom is "the logos are still wrong", which is
+  # also what a not-yet-deployed proxy looks like. Two ways to fail that look identical is
+  # exactly what this list exists to prevent.
+  for w in migrate onboarding broadcast ingest enrich embed similar-backfill search-drain reindex reindex-companies import-collections import-yc import-company-industries queue-metrics tg-ingest tg-extract liveness llm-probe notify remind nudge apple-revoke auth-cleanup capture-apply-form backfill-derive backfill-company-names backfill-descriptions backfill-application-events backfill-slug-folded backfill-duplicate-marker-owner backfill-company-type-hint backfill-requirements billing-sync build-suggestions merge-companies add-board harvest-orphans harvest-boards recount-companies rollup-stats rollup-facets rollup-company rollup-views classify-mail resolve-url gmail-sync cal-sync mail-ingest hydrate-adzuna-description seed-adzuna-description-queue ingest-scheduler schedule-board auto-apply-orchestrate auto-apply social-digest discord-sync mentorship-remind linkedin-auth linkedin-token-refresh search-ping close-apploi-misattributed pro-welcome-mail publish-logo-domains; do
     sudo -u freehire /usr/local/bin/go build -buildvcs=false -o "$w" "./cmd/$w"
   done
   # Every binary a freehire-*.service starts from hire-current has to have just been built,
