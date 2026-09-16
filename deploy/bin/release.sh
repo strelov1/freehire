@@ -1,4 +1,22 @@
 #!/usr/bin/env bash
+#
+# ┌─────────────────────────────────────────────────────────────────────────────────────┐
+# │ THIS FILE DOES NOT DEPLOY ANYTHING. EDITING IT SHIPS NOTHING.                        │
+# │                                                                                     │
+# │ The script host-2 actually runs is `scripts/host2/release.sh` in the private         │
+# │ `freehire-ops` repository, hand-copied to /opt/freehire/bin/release.sh. Make the     │
+# │ change there. This copy is a stale READ-ONLY record and is known to differ: it has   │
+# │ no support for the second app (`recruit`) and is missing workers the live copy       │
+# │ gained during the 2026-09-15 outage.                                                 │
+# │                                                                                     │
+# │ The Sentry credential gate below is the demonstration. It was added here in          │
+# │ freehire#2899, never reached the host, and so never ran — while the credential it    │
+# │ exists to catch went bad on 2026-09-14 and every deploy stayed green for two days.   │
+# │ It now lives in freehire-ops, which is the only copy that can refuse a release.      │
+# │                                                                                     │
+# │ `./deploy/check-drift.sh` reports the difference. See deploy/AGENTS.md.              │
+# └─────────────────────────────────────────────────────────────────────────────────────┘
+#
 # Blue/green release for freehire. Usage: release.sh [freehire]
 # Builds the INACTIVE color from its own checkout, health-checks, flips nginx,
 # rebuilds the worker binaries, and repoints the `hire-current` symlink (workers

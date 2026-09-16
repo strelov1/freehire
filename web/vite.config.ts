@@ -30,17 +30,19 @@ export default defineConfig({
   // enabled in ops, org/project/token come from the environment (freehire-ops),
   // never from code.
   //
-  // That is the ABSENT-token case, and for months it was the only one written down
-  // while production was in the other one. A token Sentry REJECTS behaves the same
-  // from out here — warning printed, build exits 0 — so **this build's exit status is
-  // not evidence that anything was uploaded**, and no option set on the plugin below
-  // changes that. Measured 2026-09-16: 0 of the 100 most recent freehire-web releases
-  // had an uploaded file, every deploy green.
+  // That is the ABSENT-token case, and for a long time it was the only one written
+  // down while production was in the other one. A token Sentry REJECTS behaves the
+  // same from out here — warning printed, build exits 0 — so **this build's exit
+  // status is not evidence that anything was uploaded**, and no option set on the
+  // plugin below changes that. Measured 2026-09-16: uploads stopped landing on
+  // 2026-09-14 and every deploy in between was green.
   //
-  // What asks instead is scripts/sentry-credential-check.mjs, run from
-  // deploy/bin/release.sh before this build. Its header is the canonical explanation
-  // of why the build cannot answer this; read it there rather than trusting a second
-  // copy here to stay true.
+  // What asks instead is scripts/sentry-credential-check.mjs, run before this build
+  // by release.sh (which lives in the private freehire-ops repository). Its header is
+  // the canonical explanation — of the mechanism, of that date, and of the
+  // release-`fileCount` measurement that looked like evidence and was not. Read it
+  // there rather than trusting a second copy here to stay true; a second copy is
+  // exactly what went stale last time.
   plugins: [
     sentrySvelteKit({
       sourceMapsUploadOptions: {

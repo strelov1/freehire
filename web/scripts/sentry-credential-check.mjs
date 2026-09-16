@@ -20,18 +20,36 @@
 //      returns. There is one upload — of the adapter output, covering client and SSR — and
 //      this is it, so even an `errorHandler` that threw would be caught here.
 //
-// Measured 2026-09-16: the host's token had been answered `Invalid token (http status: 401)`
-// on every release, and 0 of the 100 most recent `freehire-web` releases had any uploaded
-// file, while every one of those deploys reported success.
+// Measured 2026-09-16: the host's token was answered `Invalid token (http status: 401)` on
+// every release, while every one of those deploys reported success.
 //
-// It checks the CREDENTIAL, not the artifact. Debug-id uploads create artifact bundles
-// rather than release files, and with no successful upload anywhere in the observable window
-// there is no positive control to calibrate an artifact check against — see design.md
-// ("Verify the credential, not the artifact") for why a guessed field would reintroduce the
-// same silence one layer up.
+// **How long that had been true was misread here, twice, and the second misreading is the
+// instructive one.** An earlier version of this paragraph said "0 of the 100 most recent
+// `freehire-web` releases had any uploaded file" and let that stand for "the upload has never
+// worked". The count is real and it is also worthless: a release's `fileCount` is null
+// whether or not the upload succeeded, because debug-id uploads create ARTIFACT BUNDLES and
+// not release files. The proof arrived the day the credential was replaced — release
+// `8868debd427c` uploaded 1785 files at 18:04:22Z and still reads `fileCount: null`. A
+// measurement that answers the same on both sides of the thing it is measuring is not weak
+// evidence, it is none.
 //
-// Run from `deploy/bin/release.sh` BEFORE the web build, so a bad credential costs seconds
-// rather than the three minutes the build takes.
+// What does answer is `GET /api/0/projects/{org}/{project}/files/artifact-bundles/`. Read
+// that way the real window is narrow and specific: the last bundle that landed was
+// 2026-09-14T01:31:20Z, the next was 2026-09-16T18:04:22Z, and the token file on the host had
+// not been touched since August — so nothing on our side changed and the credential was
+// revoked or expired under us. Two days, not months.
+//
+// It still checks the CREDENTIAL, not the artifact, and that has not changed: an artifact
+// check would have to name the field that says "this release's maps are there", and the field
+// this file's own history guessed at — `fileCount` — is exactly the one that lies. See
+// design.md ("Verify the credential, not the artifact"). The bundles endpoint above is for a
+// HUMAN confirming an incident afterwards; wiring it in here would put a second, subtler
+// guess on the release path.
+//
+// Run from `release.sh` BEFORE the web build, so a bad credential costs seconds rather than
+// the three minutes the build takes. That script lives in the private `freehire-ops`
+// repository (`scripts/host2/release.sh`) and is hand-copied to `/opt/freehire/bin` — which
+// is why the "not in this checkout" branch below is an ordinary case and not a hypothetical.
 
 import { realpathSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';

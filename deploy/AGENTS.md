@@ -1,8 +1,27 @@
 # deploy
 
 The production host's systemd units and operator scripts, as they run on host-2. Not Go,
-not built, not imported by anything — this directory is a **record**, and the only reason
-it exists is that the machine was the sole copy.
+not built, not imported by anything — this directory is a **record**.
+
+**It is a record of something that now has an owner elsewhere, and that changes what an edit
+here means.** The reason this directory was created — the machine being the sole copy — stopped
+being true: the deployed scripts live in the private `freehire-ops` repository, under
+`scripts/host2/` and `provision/host2/`, and that is where a change to them has to be made.
+Editing a copy here ships nothing.
+
+That is not a style point. `deploy/bin/release.sh` in this directory gained a Sentry
+credential gate in freehire#2899 and was still carrying it, alone, three weeks later: the
+host's copy had never heard of it, so the gate had never once run, and the credential it was
+written to catch went bad on 2026-09-14 with every deploy green. Meanwhile the host's copy had
+gained things this one does not have — support for a second app (`recruit`) and three workers
+added during the 2026-09-15 outage — so the two had drifted in BOTH directions and neither
+could simply be copied over the other. `./deploy/check-drift.sh` is what reports this; it said
+`bin: DRIFTED` for weeks and nothing read it.
+
+**Before editing anything under `bin/`, check whether `freehire-ops` owns it.** Deleting this
+directory's duplicate scripts outright is the real fix and is deliberately not done here —
+prose across the repository still points at these paths, including a change that has not been
+archived — but it is the direction, not a hypothetical.
 
 Snapshot taken 2026-09-05 from `/etc/systemd/system/freehire-*`, `/opt/freehire/bin/*.sh` and
 `/etc/nginx/snippets/freehire-app.conf`.
