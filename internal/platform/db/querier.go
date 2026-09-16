@@ -3367,6 +3367,15 @@ type Querier interface {
 	// former-name slug candidates, instead of one CompanyExists round trip per
 	// candidate per entry (the dataset runs several thousand entries deep).
 	ListCompanySlugs(ctx context.Context) ([]string, error)
+	// ListCompanyWebsites returns the companies whose curated record holds a website, which
+	// is the only population cmd/publish-logo-domains can publish a domain for. ~17,900 rows
+	// of ~480,000 companies as of 2026-09-16.
+	//
+	// name is selected beside the website because the company surfaces (/companies, the
+	// company header, the company picker) ask the logo proxy with companies.name rather than
+	// with any posting's spelling of it, and that value is not guaranteed to appear in jobs.
+	//
+	ListCompanyWebsites(ctx context.Context) ([]ListCompanyWebsitesRow, error)
 	// Drives the sync worker: every connection still authorized AND holding a mailbox.
 	//
 	// The address is the test, and it is not decoration. Since the calendar consent exists,
@@ -3871,6 +3880,20 @@ type Querier interface {
 	// "you signed up a few days ago and still have no alert" an hour apart. From two
 	// mails in an hour, a stranger is indistinguishable from a spammer.
 	ListNoAlertCandidates(ctx context.Context, arg ListNoAlertCandidatesParams) ([]ListNoAlertCandidatesRow, error)
+	// ListOpenJobCompanySpellings returns every distinct way an open posting spells its
+	// company's name. 412,648 rows as of 2026-09-16.
+	//
+	// This is a deliberate SEQUENTIAL SCAN of jobs, and the narrower-looking alternative is
+	// four times slower. Measured on production 2026-09-16:
+	//
+	//   this query                                        53s  (seq scan)
+	//   the same joined to the 17,859 companies above    200s  (index nested loop)
+	//
+	// Restricting to the companies we can publish drives 17,859 index searches, each fetching
+	// ~102 heap rows at random: 1.59M blocks of random I/O against the seq scan's sequential
+	// read of the same heap. Fewer rows, more work. The caller filters in Go instead.
+	//
+	ListOpenJobCompanySpellings(ctx context.Context) ([]ListOpenJobCompanySpellingsRow, error)
 	// Everyone greeted and past the wait, whether or not they set up an alert: this
 	// step asks for a star and a Discord visit, which is worth asking of a browser as
 	// much as of a regular.

@@ -159,6 +159,12 @@ var blocks = map[string][]string{
 		"dictgap",
 		"ghost", "ghostreport", "job", "jobdedup",
 		"jobderive", "jobfacts", "jobhash", "jobreality", "jobview", "liveness",
+		// logodomain builds the company-name-to-domain map the logo proxy consults. It
+		// is here and not in dict because it is not a dictionary: it reads the stored
+		// company website and whatever spellings the catalogue happens to hold, which
+		// are facts about companies and postings — the same footing as wikicompany
+		// below.
+		"logodomain",
 		"outboundurl", "privatejob",
 		// recentfeed polls recent_feed_outbox and groups the batch by
 		// jobhash.NormalizedRoleTitle for the homepage's live "recently added"
