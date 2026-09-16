@@ -1,43 +1,46 @@
 ## 1. Adopt and review the adapter
 
-- [ ] 1.1 Fetch `Manan-Santoki/freehire@us-aggregator-sources`, extract
-      `internal/ingest/sources/hackernews.go` and `hackernews_test.go` from commit
-      `1daaa55a` (its base is `09076f3e`; do not take anything else from that commit —
-      `githublists`/`hiringcafe` files stay out).
-- [ ] 1.2 Place both files in `internal/ingest/sources/`, run `go build ./internal/ingest/sources/...`
-      and `go test ./internal/ingest/sources/...` — confirm they compile and pass unmodified
-      against current `main` before changing anything (establishes the RED→"already GREEN"
-      baseline this adoption starts from, and surfaces any drift from `main` moving since
-      `09076f3e`).
-- [ ] 1.3 Full read-through review against design.md's checklist: `Source`/`CompanyEntry`
-      shape, `routedHTTP` fixture shape, reused helper signatures
-      (`sanitizeHTML`/`isRemote`/`NotFuture`/`parseRFC3339`/`textContent`/`walk`/`attr`),
-      and line-by-line correctness (regex correctness, edge cases, error messages) — same
-      bar as any other adapter PR. Fix anything found; add a test first (RED) for any fix
-      that changes behavior, per the normal TDD loop.
+- [x] 1.1 Extracted `internal/ingest/sources/hackernews.go` and `hackernews_test.go` from
+      `Manan-Santoki/freehire@1daaa55a` (base `09076f3e`) — only those two files.
+- [x] 1.2 Compiled and tested unmodified against current `main` first: clean build, all 5
+      tests passed with zero drift from the fork's base.
+- [x] 1.3 Full review done. Found and fixed one real bug: the salary-segment skip
+      (`strings.ContainsAny(seg[:1], "$€£")`) sliced the first BYTE, not rune — € and £ are
+      multi-byte in UTF-8, so a segment starting with either was never recognized as a
+      salary and was mistaken for the location. Added two RED test cases (`€95k-120k`,
+      `£80k-100k` leading a location), then fixed via a new `startsWithCurrencySymbol`
+      helper decoding the first rune (`unicode/utf8`). All other aspects (Source/
+      CompanyEntry shape, routedHTTP fixture, reused helpers, regex correctness, error
+      handling) matched current `main` with no other issues found.
 
 ## 2. Register and document
 
-- [ ] 2.1 Add `NewHackerNews(c)` to `registry.go`'s `All()`, in the unconditional block (it
-      needs only a keyless `JSONGetter`, no fingerprint transport).
-- [ ] 2.2 Add the "Hacker News traps" section from the fork's `AGENTS.md` diff to
-      `internal/ingest/sources/AGENTS.md` (only that section — not the hiring.cafe/GitHub
-      lists sections from the same diff, both already resolved elsewhere). Review its wording
-      against the actually-landed code, not the fork's, in case review (1.3) changed anything.
-- [ ] 2.3 `make gen-contracts`; commit the regenerated `web/src/lib/generated/contracts.ts`
-      diff (never hand-edit — see the `generated_contracts_conflicts` lesson).
+- [x] 2.1 Registered `NewHackerNews(c)` in `registry.go`'s `All()`, same unconditional-block
+      insertion point the fork used (still valid on current `main`).
+- [x] 2.2 Added the "Hacker News traps" section (only that section) to
+      `internal/ingest/sources/AGENTS.md`, plus one extra bullet documenting the
+      currency-symbol fix from 1.3 that the fork's own doc didn't know about.
+- [x] 2.3 `make gen-contracts` — `SOURCE_VALUES` picked up `hackernews` automatically via
+      `FilterableProviders()` reading the registry (boardless+aggregator marker), no manual
+      list edit needed (corrects tasks.md's original assumption). Regenerated diff committed.
 
 ## 3. Verify
 
-- [ ] 3.1 `gofmt -l .` clean.
-- [ ] 3.2 `CGO_ENABLED=0 go build ./... && CGO_ENABLED=0 go vet ./...`.
-- [ ] 3.3 `CGO_ENABLED=0 go test ./...` — full suite green (the one known unrelated
-      pre-existing `cmd/billing-sync` env-dependent failure, if it still reproduces locally,
-      is not caused by this change — see harvest-githublists-boards).
-- [ ] 3.4 `go vet -tags=integration ./...`.
-- [ ] 3.5 Confirm `internal/ingest/sources/registry.go`'s `All()` includes `hackernews` and
-      `cmd/ingest hackernews` runs cleanly against the local dev DB (a real Algolia call —
-      network-dependent, run once by hand, not part of the automated suite).
+- [x] 3.1 `gofmt -l .` clean.
+- [x] 3.2 `CGO_ENABLED=0 go build ./... && CGO_ENABLED=0 go vet ./...` — both clean.
+- [x] 3.3 `CGO_ENABLED=0 go test ./...` — full suite green except the same pre-existing,
+      unrelated `cmd/billing-sync` env-dependent failure documented in
+      harvest-githublists-boards.
+- [x] 3.4 `go vet -tags=integration ./...` — clean.
+- [x] 3.5 Real end-to-end smoke test against the local dev DB (`hire-db-1`, correct port
+      15432 — see the `docker_db_port_collision` memory note this surfaced): `cmd/add-board
+      --provider=hackernews --apply` seeds the boardless row, then `cmd/ingest hackernews`
+      made a real Algolia call against the live September 2026 thread and ingested **414
+      jobs** (2/416 correctly rejected as non-technical). Also had to run every migration
+      against `hire-db-1` first — it was stale (missing `jobs.hydrated_at`,
+      `board_health.last_yield_at`, etc. from recent migrations), unrelated to this change.
+      Spot-checked a random sample of the written jobs: company/title/location/work_mode all
+      parsed correctly.
 
 ## 4. Follow-up (not part of this change's diff)
 

@@ -286,6 +286,9 @@ func All(c HTTPClient) map[string]Source {
 		NewCryptocurrencyJobs(c),
 		NewJobspresso(c),
 		NewStartupAndVC(c),
+		// Hacker News "Ask HN: Who is hiring?": the two newest monthly threads, read whole
+		// through the Algolia HN API — one global feed, company per comment.
+		NewHackerNews(c),
 		browserUASource(c, NewFourDayWeek),
 		NewFunctionalWorks(c),
 		NewTheHub(c),
