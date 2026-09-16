@@ -204,9 +204,10 @@ export interface Job {
    * a discovery signal without corrupting production data.
    * Countries/Regions are a HYBRID facet, like Cities (see geoFacet): the dictionary
    * columns win whenever they pinned a place, but an unpinned geography (no country,
-   * and at most the bare-"Remote" "global" bucket) falls back to the LLM's
-   * enrichment.countries/regions — catching a restriction stated only in the prose
-   * ("Remote (SPAIN only)") that the location string never carried.
+   * and at most the "global" bucket an explicit open-anywhere marker resolves to)
+   * falls back to the LLM's enrichment.countries/regions — catching a restriction
+   * stated only in the prose ("Remote (SPAIN only)") that the location string never
+   * carried.
    * All four are served top-level and once; the same fields are folded out of the
    * nested Enrichment to avoid duplication.
    */
