@@ -108,6 +108,29 @@ func challengeVisible(ctx context.Context) bool {
 	return visible
 }
 
+// formStillPresentJS asks the page whether the given selector still resolves to an element.
+// %q (via fmt.Sprintf) is the submit control's own CSS selector.
+const formStillPresentJS = `(() => document.querySelector(%q) !== null)()`
+
+// formStillPresent reports whether the form's submit control is still on the page. Unlike
+// challengeVisible, an Evaluate failure here defaults to false ("gone") rather than true: the
+// likeliest reason the call itself fails right after a field's trailing Enter keystroke is
+// that the keystroke just navigated the page and destroyed the execution context — which is
+// exactly the condition this asks about, not an absence of evidence either way. Costing an
+// unnecessary trip through verifySubmission (which times out to an unconfirmed, dead-lettered
+// result) is preferred over silently continuing to fill a form that may already be gone.
+//
+// No unit test exercises this function directly, matching challengeVisible beside it — a real
+// browser session cannot be faked usefully. The decision this feeds (runFillLoop) is what is
+// unit tested, with this function's result taken as a plain bool parameter.
+func formStillPresent(ctx context.Context, submitSelector string) bool {
+	var present bool
+	if err := chromedp.Run(ctx, chromedp.Evaluate(fmt.Sprintf(formStillPresentJS, submitSelector), &present)); err != nil {
+		return false
+	}
+	return present
+}
+
 // classifyFillFailure decides whether a failure to fill a field was really the captcha.
 //
 // Lever's own page binds the invisible captcha to the LOCATION field's focus — touching it
@@ -152,6 +175,33 @@ func refusalEvidence(bodyText, marker string) string {
 	return strings.Join(strings.Fields(bodyText[start:end]), " ")
 }
 
+// fillLoopOutcome reports how far runFillLoop got: how many fields it actually filled, and
+// whether it stopped because the submit control disappeared early rather than reaching the
+// end of the plan.
+type fillLoopOutcome struct {
+	filledCount  int
+	stoppedEarly bool
+}
+
+// runFillLoop is fillAndSubmit's field loop, factored out as pure control flow so it is
+// unit-testable without a real browser: fill is called once per field in order, and
+// presentAfter is consulted only immediately after a text/textarea field fills — the one
+// field kind whose interaction (a trailing Enter, see fillOne) can trigger the form's own
+// submit binding. The first time presentAfter reports false, the loop stops: it neither
+// fills any remaining field nor lets its caller reach its own submit click, since the
+// submission may already be underway.
+func runFillLoop(kinds []string, fill func(i int) error, presentAfter func(i int) bool) (fillLoopOutcome, error) {
+	for i, kind := range kinds {
+		if err := fill(i); err != nil {
+			return fillLoopOutcome{filledCount: i}, err
+		}
+		if (kind == "text" || kind == "textarea") && !presentAfter(i) {
+			return fillLoopOutcome{filledCount: i + 1, stoppedEarly: true}, nil
+		}
+	}
+	return fillLoopOutcome{filledCount: len(kinds)}, nil
+}
+
 // fillAndSubmit fills every field the plan resolved, presses submit, and reports whether
 // the submission was confirmed. It runs on an already-navigated page (the same session
 // renderedHTML used to scan the form) — config always wins here in the sense that matters
@@ -162,10 +212,29 @@ func refusalEvidence(bodyText, marker string) string {
 // task 7.1: correctness here rests on the 2026-09-02 spike's single live posting and the
 // reference implementation's own measured rules, not on this package's own live testing.
 func fillAndSubmit(ctx context.Context, plan Plan, layout formLayout) (bool, error) {
-	for _, f := range plan.Fields {
+	kinds := make([]string, len(plan.Fields))
+	for i, f := range plan.Fields {
+		kinds[i] = f.Kind
+	}
+
+	outcome, err := runFillLoop(kinds, func(i int) error {
+		f := plan.Fields[i]
 		if err := fillOne(ctx, f, layout.addressBy); err != nil {
-			return false, classifyFillFailure(fmt.Errorf("fill %q: %w", f.ID, err), challengeVisible(ctx))
+			return classifyFillFailure(fmt.Errorf("fill %q: %w", f.ID, err), challengeVisible(ctx))
 		}
+		return nil
+	}, func(i int) bool {
+		return formStillPresent(ctx, layout.submitSelector)
+	})
+	if err != nil {
+		return false, err
+	}
+	if outcome.stoppedEarly {
+		// A text/textarea field's own trailing Enter may have already triggered the real
+		// submit (see fillOne's doc comment on that branch) — verify what actually
+		// happened rather than filling further fields or clicking submit again on a form
+		// that may already be gone.
+		return verifySubmission(ctx)
 	}
 
 	if err := chromedp.Run(ctx, chromedp.Click(layout.submitSelector, chromedp.ByQuery)); err != nil {
@@ -204,11 +273,15 @@ func fillOne(parent context.Context, f ResolvedField, by addressing) error {
 		// to tell a true autocomplete field apart from a plain one (the field's Options
 		// are empty for both, since Greenhouse never declares country/location as an
 		// enumerated field) — a targeted fix needs live verification against a real
-		// board, not a guess. Named here as a known, accepted risk rather than
-		// worked around blind. A typed value with no matching suggestion, or an
-		// unintended early submit, can still surface as an unconfirmed or malformed
-		// outcome, which is exactly why StatusUnconfirmed exists as a distinct,
-		// non-retried outcome rather than trusting any of this always worked.
+		// board, not a guess. The trigger itself is therefore still a known, accepted
+		// risk rather than worked around blind — but its blast radius is bounded:
+		// runFillLoop checks the submit control's presence right after this field, and
+		// an early submit stops the loop before it fills anything further or clicks
+		// submit a second time (see formStillPresent). A typed value with no matching
+		// suggestion, or an unintended early submit, can still surface as an
+		// unconfirmed or malformed outcome, which is exactly why StatusUnconfirmed
+		// exists as a distinct, non-retried outcome rather than trusting any of this
+		// always worked.
 		return chromedp.Run(ctx,
 			chromedp.Clear(sel, kind),
 			chromedp.SendKeys(sel, f.Value, kind),
