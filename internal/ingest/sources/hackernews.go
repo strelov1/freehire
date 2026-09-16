@@ -3,9 +3,11 @@ package sources
 import (
 	"context"
 	"fmt"
+	"log"
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"unicode/utf8"
 
 	"golang.org/x/net/html"
@@ -34,12 +36,16 @@ import (
 // and most posts follow it, with extra segments for commitment, salary, remote policy and an
 // apply link. The first paragraph (up to the first <p>) is read as that header: the first
 // pipe segment is the employer and the second the role; a post with fewer than two segments
-// names no employer this catalogue could file it under and is dropped, and so is one that
-// opens with the ROLE instead of the employer — there every segment is shifted by one, and
-// filing it would invent an employer out of a job title. The location is the
-// first later segment that is not a commitment word, a URL or a salary. The whole comment,
-// header included, is the body. The apply link is the first anchor in the post, falling back
-// to the comment's own permalink.
+// names no employer this catalogue could file it under and is dropped, and so is one whose
+// first segment opens with a seniority word AND a role noun together ("Senior Software
+// Engineer, Frontend") — there every segment is shifted by one, and filing it would invent
+// an employer out of a job title. That pairing is deliberately conservative and does not
+// catch every role-first header (a plain, unqualified role like "Backend Engineer" still
+// slips through), because a broader trigger risks dropping a real employer whose name
+// happens to contain a role word ("Lead Bank", "Chief Industries") — see hackernewsSeniority.
+// The location is the first later segment that is not a commitment word, a URL or a salary.
+// The whole comment, header included, is the body. The apply link is the first anchor in the
+// post, falling back to the comment's own permalink.
 type hackernews struct {
 	http JSONGetter
 }
@@ -75,7 +81,10 @@ var (
 	// hackernewsParagraph splits a comment's HTML into paragraphs. HN emits an unclosed <p>
 	// between paragraphs and nothing before the first one.
 	hackernewsParagraph = regexp.MustCompile(`(?i)<p\b[^>]*>`)
-	hackernewsURL       = regexp.MustCompile(`https?://\S+`)
+	// Stops before whitespace or closing punctuation, so a URL wrapped in parens or
+	// followed by a comma ("...(https://acme.example/jobs)") does not swallow the
+	// delimiter into the match and leave it dangling in the stripped text.
+	hackernewsURL = regexp.MustCompile(`https?://[^\s)\]}>,]+`)
 	// hackernewsCommitment is a header segment that names a commitment rather than a place.
 	hackernewsCommitment = regexp.MustCompile(`(?i)^(full[ -]?time|part[ -]?time|contract(or)?|intern(ship)?s?|permanent|freelance)$`)
 	// hackernewsSeniority opens a segment that is a ROLE, not an employer: "Senior Software
@@ -128,6 +137,14 @@ func (s hackernews) threads(ctx context.Context) ([]int64, error) {
 	if len(ids) == 0 {
 		return nil, fmt.Errorf("hackernews: no \"Who is hiring?\" thread among the newest %d whoishiring stories", len(resp.Hits))
 	}
+	if len(ids) < hackernewsThreads {
+		// Not an error — a fresh deploy racing the new month's post, or the account simply
+		// not having posted a second thread yet, are both legitimate. But it's a real
+		// coverage reduction on a fullCatalog source (a post from an unread thread closes on
+		// the next sweep as if withdrawn), so it's worth a line distinguishing it from the
+		// intended two-thread read rather than passing silently.
+		log.Printf("hackernews: found only %d of %d hiring threads this run", len(ids), hackernewsThreads)
+	}
 	return ids, nil
 }
 
@@ -136,13 +153,32 @@ func (s hackernews) Fetch(ctx context.Context, _ CompanyEntry) ([]Job, error) {
 	if err != nil {
 		return nil, err
 	}
-	var jobs []Job
-	for _, id := range ids {
-		var thread hackernewsItem
-		if err := s.http.GetJSON(ctx, fmt.Sprintf(hackernewsItemURL, id), &thread); err != nil {
-			// fullCatalog: a thread that could not be read must fail the crawl, never shrink it.
-			return nil, fmt.Errorf("hackernews: thread %d: %w", id, err)
+	// The (up to two) thread fetches are independent ~500KB requests; run them concurrently
+	// rather than doubling the crawl's wall-clock latency for no correctness reason. Any
+	// single failure still fails the whole crawl (fullCatalog), so the result only needs
+	// collecting once every goroutine has finished.
+	threadsData := make([]hackernewsItem, len(ids))
+	errs := make([]error, len(ids))
+	var wg sync.WaitGroup
+	for i, id := range ids {
+		wg.Add(1)
+		go func(i int, id int64) {
+			defer wg.Done()
+			if err := s.http.GetJSON(ctx, fmt.Sprintf(hackernewsItemURL, id), &threadsData[i]); err != nil {
+				// fullCatalog: a thread that could not be read must fail the crawl, never shrink it.
+				errs[i] = fmt.Errorf("hackernews: thread %d: %w", id, err)
+			}
+		}(i, id)
+	}
+	wg.Wait()
+	for _, err := range errs {
+		if err != nil {
+			return nil, err
 		}
+	}
+
+	var jobs []Job
+	for _, thread := range threadsData {
 		for _, c := range thread.Children {
 			if job, ok := c.toJob(); ok {
 				jobs = append(jobs, job)
@@ -165,7 +201,7 @@ func hackernewsParseHeader(text string) (hackernewsHeader, bool) {
 	if loc := hackernewsParagraph.FindStringIndex(text); loc != nil {
 		head = text[:loc[0]]
 	}
-	plain := strings.TrimSpace(hackernewsText(head))
+	plain := strings.TrimSpace(textFromHTML(head))
 	parts := strings.Split(plain, "|")
 	for i := range parts {
 		parts[i] = strings.TrimSpace(parts[i])
@@ -182,12 +218,18 @@ func hackernewsParseHeader(text string) (hackernewsHeader, bool) {
 	if hackernewsSeniority.MatchString(parts[0]) && hackernewsRoleNoun.MatchString(parts[0]) {
 		return hackernewsHeader{}, false
 	}
+	// A bare URL as the employer segment (a malformed/reordered post) names no real employer,
+	// the same as an all-URL title already gets dropped below.
+	company := strings.TrimSpace(hackernewsURL.ReplaceAllString(parts[0], ""))
+	if company == "" {
+		return hackernewsHeader{}, false
+	}
 	title := strings.TrimSpace(hackernewsURL.ReplaceAllString(parts[1], ""))
 	if title == "" {
 		return hackernewsHeader{}, false
 	}
 	h := hackernewsHeader{
-		Company: parts[0],
+		Company: company,
 		Title:   title,
 		Remote:  isRemote(strings.Join(parts[1:], " | ")),
 	}
@@ -208,15 +250,6 @@ func hackernewsParseHeader(text string) (hackernewsHeader, bool) {
 func hackernewsStartsWithCurrency(seg string) bool {
 	r, _ := utf8.DecodeRuneInString(seg)
 	return strings.ContainsRune("$€£", r)
-}
-
-// hackernewsText renders an HTML fragment as plain text, entities decoded.
-func hackernewsText(fragment string) string {
-	root, err := html.Parse(strings.NewReader(fragment))
-	if err != nil {
-		return ""
-	}
-	return textContent(root)
 }
 
 // hackernewsLink is the first absolute http(s) anchor in a post, or "".
@@ -256,10 +289,12 @@ func (c hackernewsItem) toJob() (Job, bool) {
 	if link == "" {
 		link = fmt.Sprintf(hackernewsPermalink, c.ID)
 	}
-	workMode := ""
-	if h.Remote {
-		workMode = "remote"
-	}
+	// WorkMode is left unset on purpose: h.Remote comes from a free-text scan of the whole
+	// header tail (title, commitment, salary — not just Location), which is exactly the
+	// "location heuristic" source.go's Job.WorkMode contract says must never reach this
+	// field. The pipeline gives a set WorkMode precedence over its own location/description
+	// dictionary, so setting it here from this heuristic would override that dictionary's
+	// more careful resolution with a cruder guess — worse than leaving it empty.
 	return Job{
 		ExternalID:  strconv.FormatInt(c.ID, 10),
 		URL:         link,
@@ -268,7 +303,6 @@ func (c hackernewsItem) toJob() (Job, bool) {
 		Location:    h.Location,
 		Description: sanitizeHTML(text),
 		Remote:      h.Remote,
-		WorkMode:    workMode,
-		PostedAt:    NotFuture(parseRFC3339(c.CreatedAt)),
+		PostedAt:    parseRFC3339(c.CreatedAt),
 	}, true
 }

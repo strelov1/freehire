@@ -42,6 +42,57 @@
       Spot-checked a random sample of the written jobs: company/title/location/work_mode all
       parsed correctly.
 
+## 3b. Multi-agent code review (post-adoption)
+
+- [x] Ran `/code-review` against the full diff. 9 findings came back; verified each against
+      the codebase before acting (receiving-code-review discipline). Fixed by severity:
+  - **WorkMode contract violation (most severe, confirmed via source.go's doc comment and
+    jobderive.go's precedence chain)**: `Job.WorkMode` was set from `isRemote()` scanning the
+    entire joined header tail (title/commitment/salary, not just Location) — `source.go`
+    documents WorkMode as carrying only a platform-STRUCTURED signal, never a free-text/
+    location heuristic, and `jobderive.go:169` gives a set `WorkMode` precedence over its own
+    location/description dictionary. Fixed: `WorkMode` is no longer set by this adapter at
+    all; `Job.Remote` (not contract-restricted) is left as-is. Verified live: after the fix,
+    `cmd/ingest hackernews` against the real thread now shows a proper
+    remote/hybrid/onsite/empty split (153/46/54/161) via the pipeline's own dictionary,
+    instead of the adapter's crude remote-or-nothing guess.
+  - **hackernewsURL regex swallowed trailing punctuation** (`https?://\S+` ate a closing
+    paren/bracket right after a URL with no space, corrupting the stripped title). Fixed:
+    stops before `)`, `]`, `}`, `>`, `,`.
+  - **Company (parts[0]) wasn't URL-stripped** unlike Title and Location, so a header
+    leading with a bare link stored that URL as the company. Fixed: same stripping as
+    Title/Location, and an all-URL employer segment is now dropped (empty after stripping),
+    matching the existing all-URL-title drop.
+  - **hackernewsText duplicated `textFromHTML`** (japandev.go, same package, same
+    html.Parse+textContent shape). Fixed: removed the duplicate, reused `textFromHTML`.
+  - **Sequential thread fetches** doubled the crawl's wall-clock latency for two independent
+    requests. Fixed: fetch concurrently (`sync.WaitGroup`, index-addressed results — no
+    shared mutable state, verified race-free with `go test -race`); any single failure still
+    fails the whole crawl per the `fullCatalog` contract.
+  - **Redundant double `NotFuture`** (`parseRFC3339` already applies it internally). Fixed:
+    removed the outer wrap.
+  - **Doc comment overstated the role-first-header guard's coverage** (claimed any role-first
+    header is dropped; the actual guard only fires on a seniority-word+role-noun pair, a
+    deliberate conservative design already explained lower in the same file to avoid
+    false-positive drops of real employers like "Lead Bank"). Fixed: corrected the doc
+    comment to describe the actual, narrower, deliberate scope rather than widening the
+    heuristic under review-fix pressure — broadening it risks new false-positive employer
+    drops and deserves its own considered change, not a rushed one here.
+  - **threads() found-fewer-than-2 case had no signal.** Not treated as an error (finding
+    only 1 is legitimate — e.g. right after a fresh deploy, before the new month's thread has
+    posted), since the code's own stated design already accepts variable thread coverage as
+    normal `fullCatalog` behavior. Fixed: added a log line so reduced coverage is visible to
+    an operator instead of silent.
+  - **Skipped, stated why**: the finding that `toJob()` HTML-parses the same comment text up
+    to three times (header/link/description) is real but efficiency-only, not correctness —
+    fixing it well needs restructuring `hackernewsParseHeader`'s signature (a public,
+    directly-unit-tested function) to share one parsed tree, which is a bigger, riskier
+    change than the bug fixes above for a non-broken outcome. Left as a documented follow-up
+    rather than rushed here.
+- [x] Re-ran the full verification suite (3.1-3.5) after the fixes — all still pass; the live
+      `cmd/ingest hackernews` re-run against `hire-db-1` still shows 414 jobs, now with the
+      corrected remote/hybrid/onsite split described above.
+
 ## 4. Follow-up (not part of this change's diff)
 
 - [ ] 4.1 Note in the PR description: board-catalog promotion for HN-mentioned companies
