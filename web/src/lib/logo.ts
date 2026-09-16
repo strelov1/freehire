@@ -13,15 +13,20 @@ export function companyLogoUrl(name: string): string | null {
   return `${COMPANY_LOGO_BASE}/${encodeURIComponent(name)}`;
 }
 
-/** The proxy logo URL for a SOURCE, resolved from the host its own postings live on —
- *  `greenhouse.io` for Greenhouse, an employer's own domain for a single-company career
- *  page. Same proxy, same 404-into-a-placeholder behaviour as `companyLogoUrl`.
+/** The proxy logo URL for a SOURCE, resolved from its DISPLAY NAME — "Greenhouse",
+ *  "BambooHR", "Telegram" — exactly as `companyLogoUrl` resolves a company.
  *
- *  The host comes from a stored posting rather than a hand-kept map of domains, so a
- *  source with no postings has no host and gets no logo. Null here is that case, and the
- *  caller's placeholder is the right answer to it — a map would have gone stale silently
- *  and the entry it was missing would have been invisible. */
-export function sourceLogoUrl(host: string | null): string | null {
-  if (!host) return null;
-  return `${COMPANY_LOGO_BASE}/${encodeURIComponent(host)}`;
+ *  Not from a host, which is what the first version of this did. The proxy resolves a
+ *  brand from a name; a host is either a 404 (a per-tenant subdomain such as
+ *  `jobs.smartrecruiters.com` or `2020companies.wd1.myworkdayjobs.com`) or, worse, the
+ *  right image for the WRONG company, because an ATS posting's URL is often on the
+ *  employer's own domain — production served Bankrate's mark for Greenhouse and ZEREN
+ *  GROUP's for SuccessFactors. Measured against the live proxy on 2026-09-16: 14 of 15
+ *  source names resolve; hosts were about half 404 and half wrong brand.
+ *
+ *  A miss still 404s, so every caller needs its own fallback — the proxy cannot tell the
+ *  difference between "no such brand" and "not today". */
+export function sourceLogoUrl(displayName: string): string | null {
+  if (!displayName) return null;
+  return `${COMPANY_LOGO_BASE}/${encodeURIComponent(displayName)}`;
 }

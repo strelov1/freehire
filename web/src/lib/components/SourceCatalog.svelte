@@ -1,5 +1,6 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
+  import { SvelteSet } from 'svelte/reactivity';
   import { timeAgo } from '$lib/utils';
   // A source key is a search-facet code, so it renders through the one label map every
   // other surface uses: a source must not be "WhatJobs" on the filter panel and
@@ -15,6 +16,11 @@
   let { sources }: { sources: SourceEntry[] | null } = $props();
 
   let query = $state('');
+
+  // A logo the proxy could not resolve 404s, and an <img> left in the DOM then draws the
+  // browser's own broken-image icon. Falling back to the monogram is the same rule the
+  // mentor cards follow; without it the page shipped a grid of broken images.
+  const logoFailed = new SvelteSet<string>();
 
   // The order the groups are read in: the platforms most of the catalogue comes through,
   // then the republishers, then single employers, then whatever is not a crawl adapter.
@@ -138,9 +144,6 @@
     return `${resolve('/jobs')}?source=${encodeURIComponent(source)}`;
   }
 
-  function monogram(source: string): string {
-    return sourceLabel(source).charAt(0).toUpperCase();
-  }
 </script>
 
 {#if sources === null}
@@ -189,7 +192,8 @@
 
         <ul class="mt-5 grid gap-3 sm:grid-cols-2">
           {#each group.entries as entry (entry.source)}
-            {@const logo = sourceLogoUrl(entry.logo_host)}
+            {@const label = sourceLabel(entry.source)}
+            {@const logo = logoFailed.has(entry.source) ? null : sourceLogoUrl(label)}
             {@const jobs = browsable(entry)}
             {@const share = overlap(entry)}
             <li class="rounded-lg border border-border bg-background p-4">
@@ -203,16 +207,17 @@
                     width="32"
                     height="32"
                     class="mt-0.5 size-8 shrink-0 rounded bg-muted object-contain"
+                    onerror={() => logoFailed.add(entry.source)}
                   />
                 {:else}
                   <span
                     class="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded bg-muted font-mono text-xs text-muted-foreground"
-                    aria-hidden="true">{monogram(entry.source)}</span
+                    aria-hidden="true">{label.charAt(0).toUpperCase()}</span
                   >
                 {/if}
 
                 <div class="min-w-0 flex-1">
-                  <p class="truncate font-medium">{sourceLabel(entry.source)}</p>
+                  <p class="truncate font-medium">{label}</p>
 
                   <p class="mt-0.5 text-sm">
                     {#if jobs === null}

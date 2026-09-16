@@ -6,8 +6,7 @@ import SourceCatalog from './SourceCatalog.svelte';
 function entry(over: Partial<SourceEntry> & { source: string }): SourceEntry {
   return {
     kind: 'ats',
-    logo_host: null,
-    jobs: null,
+      jobs: null,
     health: null,
     ...over,
   };
@@ -16,7 +15,6 @@ function entry(over: Partial<SourceEntry> & { source: string }): SourceEntry {
 const greenhouse = entry({
   source: 'greenhouse',
   kind: 'ats',
-  logo_host: 'job-boards.greenhouse.io',
   jobs: { open: 1200, browsable: 900, measured_at: '2026-09-16T04:00:00Z' },
   health: {
     status: 'operational',
@@ -32,7 +30,6 @@ const greenhouse = entry({
 const adzuna = entry({
   source: 'adzuna',
   kind: 'aggregator',
-  logo_host: 'www.adzuna.com',
   jobs: { open: 100, browsable: 40, ats_matched: 70, ats_unmatched: 30, measured_at: '2026-09-16T04:00:00Z' },
   health: null,
 });
@@ -189,12 +186,40 @@ describe('SourceCatalog', () => {
     expect(img?.getAttribute('loading')).toBe('lazy');
   });
 
-  it('renders a placeholder rather than a broken image when there is no host', () => {
-    const { container } = render(SourceCatalog, {
-      sources: [entry({ source: 'telegram', kind: 'other', logo_host: null })],
-    });
+  it('resolves a logo by the source\'s display name, not by a posting host', async () => {
+    // The logo proxy resolves a BRAND from a name — its own doc comment says so. A host is
+    // either a 404 (a per-tenant subdomain like jobs.smartrecruiters.com) or, worse, the
+    // right image for the wrong company (an employer's own domain: bankrate.com came back
+    // for greenhouse, ZEREN GROUP for successfactors). Measured against the live proxy:
+    // 14 of 15 source names resolve, while hosts are about half 404 and half wrong brand.
+    const { container } = render(SourceCatalog, { sources: [greenhouse] });
+
+    const img = container.querySelector('img');
+    expect(img?.getAttribute('src')).toContain('Greenhouse');
+    expect(img?.getAttribute('src')).not.toContain('greenhouse.io');
+  });
+
+  it('falls back to the monogram when the logo fails to load', async () => {
+    // The proxy 404s cleanly for a brand it cannot resolve. Without this the <img> stays
+    // in the DOM and the browser draws its own broken-image icon — which is what shipped.
+    const { container } = render(SourceCatalog, { sources: [greenhouse] });
+
+    const img = container.querySelector('img');
+    if (!img) throw new Error('no logo rendered to fail');
+    await fireEvent.error(img);
 
     expect(container.querySelector('img')).toBeNull();
+    expect(screen.getByText('G')).toBeTruthy();
+  });
+
+  it('asks the proxy for a source that has no display-label override by its title case', () => {
+    // sourceLabel falls back to title case, so even an adapter nobody has written a label
+    // for gets a name the proxy can resolve rather than nothing at all.
+    const { container } = render(SourceCatalog, {
+      sources: [entry({ source: 'recruitee', kind: 'ats' })],
+    });
+
+    expect(container.querySelector('img')?.getAttribute('src')).toContain('Recruitee');
   });
 
   it('renders an unavailable state rather than an empty page when the read failed', () => {

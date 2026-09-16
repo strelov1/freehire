@@ -21,7 +21,7 @@ func bySource(rows []db.InsertSourceStatParams) map[string]db.InsertSourceStatPa
 func TestRowsCoversEveryRegisteredSource(t *testing.T) {
 	// greenhouse was scanned; adzuna is registered but every posting of it has closed.
 	agg := []db.AggregateOpenJobsBySourceRow{
-		{Source: "greenhouse", OpenJobs: 10, AtsMatchedJobs: 0, SampleUrl: "https://job-boards.greenhouse.io/acme/jobs/1"},
+		{Source: "greenhouse", OpenJobs: 10, AtsMatchedJobs: 0},
 	}
 
 	rows := Rows([]string{"greenhouse", "adzuna"}, agg, nil, Measured(map[string]int64{"greenhouse": 8}), measuredAt)
@@ -39,9 +39,6 @@ func TestRowsCoversEveryRegisteredSource(t *testing.T) {
 	if adzuna.OpenJobs != 0 || adzuna.AtsMatchedJobs != 0 {
 		t.Errorf("empty source = %+v, want zero counts", adzuna)
 	}
-	if adzuna.SampleUrl.Valid {
-		t.Errorf("empty source carries a sample URL %q; no postings means no evidence of a host", adzuna.SampleUrl.String)
-	}
 }
 
 func TestRowsCoversASourceWithPostingsButNoAdapter(t *testing.T) {
@@ -50,8 +47,8 @@ func TestRowsCoversASourceWithPostingsButNoAdapter(t *testing.T) {
 	// A registry-only spine would omit it from a page whose whole claim is completeness,
 	// and the omission would be invisible.
 	agg := []db.AggregateOpenJobsBySourceRow{
-		{Source: "greenhouse", OpenJobs: 10, SampleUrl: "https://job-boards.greenhouse.io/acme/jobs/1"},
-		{Source: "telegram", OpenJobs: 3, SampleUrl: "https://t.me/somechannel/42"},
+		{Source: "greenhouse", OpenJobs: 10},
+		{Source: "telegram", OpenJobs: 3},
 	}
 
 	rows := Rows([]string{"greenhouse"}, agg, nil, Unmeasured(), measuredAt)
@@ -71,7 +68,7 @@ func TestRowsKeepsASourceThatHasGoneQuiet(t *testing.T) {
 	// the registry nor the scan. Without the previous snapshot in the union it disappears
 	// from the page the moment its last posting closes, which is the same silent drop the
 	// union exists to prevent, one closure later.
-	previous := []db.SourceStat{
+	previous := []db.ListSourceStatsRow{
 		{Source: "greenhouse", OpenJobs: 10},
 		{Source: "telegram", OpenJobs: 3},
 	}
@@ -102,7 +99,7 @@ func TestRowsCountsAUnionedSourceOnce(t *testing.T) {
 
 func TestRowsCarriesTheScannedFigures(t *testing.T) {
 	agg := []db.AggregateOpenJobsBySourceRow{
-		{Source: "adzuna", OpenJobs: 100, AtsMatchedJobs: 70, SampleUrl: "https://www.adzuna.com/details/1"},
+		{Source: "adzuna", OpenJobs: 100, AtsMatchedJobs: 70},
 	}
 
 	rows := Rows([]string{"adzuna"}, agg, nil, Measured(map[string]int64{"adzuna": 42}), measuredAt)
@@ -110,9 +107,6 @@ func TestRowsCarriesTheScannedFigures(t *testing.T) {
 	got := bySource(rows)["adzuna"]
 	if got.OpenJobs != 100 || got.AtsMatchedJobs != 70 {
 		t.Errorf("counts = %d/%d, want 100/70", got.OpenJobs, got.AtsMatchedJobs)
-	}
-	if !got.SampleUrl.Valid || got.SampleUrl.String != "https://www.adzuna.com/details/1" {
-		t.Errorf("SampleUrl = %+v, want the scanned URL", got.SampleUrl)
 	}
 	if !got.BrowsableJobs.Valid || got.BrowsableJobs.Int64 != 42 {
 		t.Errorf("BrowsableJobs = %+v, want 42", got.BrowsableJobs)

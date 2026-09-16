@@ -15,8 +15,7 @@ const aggregateOpenJobsBySource = `-- name: AggregateOpenJobsBySource :many
 
 SELECT source,
        count(*)::bigint                                                    AS open_jobs,
-       (count(*) FILTER (WHERE duplicate_of_aggregator IS NOT NULL))::bigint AS ats_matched_jobs,
-       min(url)::text                                                      AS sample_url
+       (count(*) FILTER (WHERE duplicate_of_aggregator IS NOT NULL))::bigint AS ats_matched_jobs
 FROM jobs
 WHERE closed_at IS NULL AND NOT is_private
 GROUP BY source
@@ -26,11 +25,17 @@ type AggregateOpenJobsBySourceRow struct {
 	Source         string `json:"source"`
 	OpenJobs       int64  `json:"open_jobs"`
 	AtsMatchedJobs int64  `json:"ats_matched_jobs"`
-	SampleUrl      string `json:"sample_url"`
 }
 
 // Per-source snapshot (source_stats): the measurement cmd/rollup-stats takes on each run
 // and the read the public /api/v1/sources endpoint serves from it.
+//
+// The table still has a `sample_url` column that nothing here names any more. Dropping it
+// belongs to a LATER release, not this one: release.sh applies migrations BEFORE the new
+// colour starts, so the old binary — whose compiled SELECT still lists the column — serves
+// against the new schema for the length of a build and a health check, and would answer
+// /sources with a 42703 for all of it. That is the exact failure release.sh's own migration
+// block documents. One release to stop reading a column, the next to drop it.
 //
 // Rebuilt as an atomic delete-and-reinsert inside one transaction, like the facet
 // snapshot beside it, so a reader never sees a partially rebuilt table — and so an
@@ -47,10 +52,11 @@ type AggregateOpenJobsBySourceRow struct {
 // so this is 0 for every other kind of source by construction — which is why the
 // endpoint omits the figure for them rather than publishing that 0.
 //
-// min(url) rather than mode(): a hash aggregate needs no sort, and every posting of a
-// source shares a host, which is the only part of the URL the logo proxy reads. The
-// point is that the host is EVIDENCE from our own stored postings rather than an entry
-// in a hand-kept map of 221 domains that would go stale without saying so.
+// It does NOT sample a posting URL. The first version did, to resolve a logo from the
+// host — on the assumption that every posting of a source shares one. Production disproved
+// it: an ATS posting's URL usually lives on the EMPLOYER's domain, so greenhouse sampled
+// bankrate.com and successfactors a staffing agency, and the page served the wrong brand.
+// Logos are resolved from the source's display name client-side instead.
 //
 // NOT is_private excludes the jd-tailor-intake private postings: one user's pasted job
 // description, visible only to them. They are not part of the catalogue, they are already
@@ -69,12 +75,7 @@ func (q *Queries) AggregateOpenJobsBySource(ctx context.Context) ([]AggregateOpe
 	items := []AggregateOpenJobsBySourceRow{}
 	for rows.Next() {
 		var i AggregateOpenJobsBySourceRow
-		if err := rows.Scan(
-			&i.Source,
-			&i.OpenJobs,
-			&i.AtsMatchedJobs,
-			&i.SampleUrl,
-		); err != nil {
+		if err := rows.Scan(&i.Source, &i.OpenJobs, &i.AtsMatchedJobs); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -97,14 +98,13 @@ func (q *Queries) DeleteAllSourceStats(ctx context.Context) error {
 }
 
 const insertSourceStat = `-- name: InsertSourceStat :exec
-INSERT INTO source_stats (source, open_jobs, ats_matched_jobs, browsable_jobs, sample_url, measured_at)
+INSERT INTO source_stats (source, open_jobs, ats_matched_jobs, browsable_jobs, measured_at)
 VALUES (
     $1,
     $2,
     $3,
     $4,
-    $5,
-    $6
+    $5
 )
 `
 
@@ -113,7 +113,6 @@ type InsertSourceStatParams struct {
 	OpenJobs       int64              `json:"open_jobs"`
 	AtsMatchedJobs int64              `json:"ats_matched_jobs"`
 	BrowsableJobs  pgtype.Int8        `json:"browsable_jobs"`
-	SampleUrl      pgtype.Text        `json:"sample_url"`
 	MeasuredAt     pgtype.Timestamptz `json:"measured_at"`
 }
 
@@ -138,36 +137,41 @@ func (q *Queries) InsertSourceStat(ctx context.Context, arg InsertSourceStatPara
 		arg.OpenJobs,
 		arg.AtsMatchedJobs,
 		arg.BrowsableJobs,
-		arg.SampleUrl,
 		arg.MeasuredAt,
 	)
 	return err
 }
 
 const listSourceStats = `-- name: ListSourceStats :many
-SELECT source, open_jobs, ats_matched_jobs, browsable_jobs, sample_url, measured_at
+SELECT source, open_jobs, ats_matched_jobs, browsable_jobs, measured_at
 FROM source_stats
 ORDER BY source
 `
 
-// The whole snapshot. Aggregate only — per-source counts and one sample URL, no
-// record-level data. A few hundred rows, so it is read whole and joined in Go against
+type ListSourceStatsRow struct {
+	Source         string             `json:"source"`
+	OpenJobs       int64              `json:"open_jobs"`
+	AtsMatchedJobs int64              `json:"ats_matched_jobs"`
+	BrowsableJobs  pgtype.Int8        `json:"browsable_jobs"`
+	MeasuredAt     pgtype.Timestamptz `json:"measured_at"`
+}
+
+// The whole snapshot. Aggregate only — per-source counts, no record-level data. A few hundred rows, so it is read whole and joined in Go against
 // the adapter registry rather than filtered here.
-func (q *Queries) ListSourceStats(ctx context.Context) ([]SourceStat, error) {
+func (q *Queries) ListSourceStats(ctx context.Context) ([]ListSourceStatsRow, error) {
 	rows, err := q.db.Query(ctx, listSourceStats)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []SourceStat{}
+	items := []ListSourceStatsRow{}
 	for rows.Next() {
-		var i SourceStat
+		var i ListSourceStatsRow
 		if err := rows.Scan(
 			&i.Source,
 			&i.OpenJobs,
 			&i.AtsMatchedJobs,
 			&i.BrowsableJobs,
-			&i.SampleUrl,
 			&i.MeasuredAt,
 		); err != nil {
 			return nil, err

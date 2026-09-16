@@ -1179,15 +1179,16 @@ interface SourceHealth {
   ingested_total: number;
 }
 
-/** One entry on the public source catalogue. `logo_host` is the host of one of the
- *  source's own postings — a brand mark is resolved from it — and is null when the source
- *  has no postings to take one from. `jobs` is null when the snapshot has never covered
- *  this source; `health` is null when it has no crawl-health record. Both absences are
- *  answers, not missing data. */
+/** One entry on the public source catalogue. `jobs` is null when the snapshot has never
+ *  covered this source; `health` is null when it has no crawl-health record. Both absences
+ *  are answers, not missing data.
+ *
+ *  No logo field: a source's brand mark is resolved from its DISPLAY NAME client-side (see
+ *  sourceLogoUrl). A host was tried and shipped the wrong brand — an ATS posting's URL is
+ *  often on the employer's own domain. */
 export interface SourceEntry {
   source: string;
   kind: ProviderKind;
-  logo_host: string | null;
   jobs: SourceJobs | null;
   health: SourceHealth | null;
 }

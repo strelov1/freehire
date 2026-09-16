@@ -80,6 +80,13 @@ type Querier interface {
 	// Per-source snapshot (source_stats): the measurement cmd/rollup-stats takes on each run
 	// and the read the public /api/v1/sources endpoint serves from it.
 	//
+	// The table still has a `sample_url` column that nothing here names any more. Dropping it
+	// belongs to a LATER release, not this one: release.sh applies migrations BEFORE the new
+	// colour starts, so the old binary — whose compiled SELECT still lists the column — serves
+	// against the new schema for the length of a build and a health check, and would answer
+	// /sources with a 42703 for all of it. That is the exact failure release.sh's own migration
+	// block documents. One release to stop reading a column, the next to drop it.
+	//
 	// Rebuilt as an atomic delete-and-reinsert inside one transaction, like the facet
 	// snapshot beside it, so a reader never sees a partially rebuilt table — and so an
 	// adapter removed from the registry leaves the snapshot instead of lingering as a row
@@ -95,10 +102,11 @@ type Querier interface {
 	// so this is 0 for every other kind of source by construction — which is why the
 	// endpoint omits the figure for them rather than publishing that 0.
 	//
-	// min(url) rather than mode(): a hash aggregate needs no sort, and every posting of a
-	// source shares a host, which is the only part of the URL the logo proxy reads. The
-	// point is that the host is EVIDENCE from our own stored postings rather than an entry
-	// in a hand-kept map of 221 domains that would go stale without saying so.
+	// It does NOT sample a posting URL. The first version did, to resolve a logo from the
+	// host — on the assumption that every posting of a source shares one. Production disproved
+	// it: an ATS posting's URL usually lives on the EMPLOYER's domain, so greenhouse sampled
+	// bankrate.com and successfactors a staffing agency, and the page served the wrong brand.
+	// Logos are resolved from the source's display name client-side instead.
 	//
 	// NOT is_private excludes the jd-tailor-intake private postings: one user's pasted job
 	// description, visible only to them. They are not part of the catalogue, they are already
@@ -4013,10 +4021,9 @@ type Querier interface {
 	// reads is written to the PUBLIC companies row (RenameSlugCompany below). A JD one user
 	// pasted in is not a board, and it must not be the source of an employer's public name.
 	ListSlugLikeCompaniesForBackfill(ctx context.Context) ([]ListSlugLikeCompaniesForBackfillRow, error)
-	// The whole snapshot. Aggregate only — per-source counts and one sample URL, no
-	// record-level data. A few hundred rows, so it is read whole and joined in Go against
+	// The whole snapshot. Aggregate only — per-source counts, no record-level data. A few hundred rows, so it is read whole and joined in Go against
 	// the adapter registry rather than filtered here.
-	ListSourceStats(ctx context.Context) ([]SourceStat, error)
+	ListSourceStats(ctx context.Context) ([]ListSourceStatsRow, error)
 	// "My submissions": one user's submissions, newest first, whatever their status.
 	// LEFT JOIN the minted job (present only once approved) to surface its public_slug,
 	// so the UI can link an approved submission straight to its live vacancy page.

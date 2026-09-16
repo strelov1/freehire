@@ -2,7 +2,6 @@ package handler
 
 import (
 	"maps"
-	"net/url"
 	"slices"
 	"time"
 
@@ -32,12 +31,12 @@ import (
 type sourceEntry struct {
 	Source string `json:"source"`
 	Kind   string `json:"kind"`
-	// LogoHost is the host of one of the source's own postings — what a logo is resolved
-	// from. The host alone, never the posting path: the page needs a brand mark, not a
-	// link to somebody's job.
-	LogoHost *string       `json:"logo_host"`
-	Jobs     *sourceJobs   `json:"jobs"`
-	Health   *sourceHealth `json:"health"`
+	// No logo field. A source's brand mark is resolved client-side from its DISPLAY NAME,
+	// which the SPA already owns. Publishing a host was tried and served the WRONG brand:
+	// an ATS posting's URL is usually on the employer's own domain, so the sample taken for
+	// greenhouse was bankrate.com and the one for successfactors was a staffing agency's.
+	Jobs   *sourceJobs   `json:"jobs"`
+	Health *sourceHealth `json:"health"`
 }
 
 // sourceJobs is what the catalogue currently holds under one source.
@@ -102,12 +101,12 @@ func (h *statsHandlers) Sources(c *fiber.Ctx) error {
 // buildSourceEntries folds the adapter registry, the fleet health rollup and the per-source
 // snapshot into the wire entries, in source order. Which sources exist is decided by
 // sourcestats.Union, which argues the case once for both this endpoint and the rollup.
-func buildSourceEntries(reg map[string]sources.Source, health []db.ProviderHealthRollupRow, snapshot []db.SourceStat, now time.Time) []sourceEntry {
+func buildSourceEntries(reg map[string]sources.Source, health []db.ProviderHealthRollupRow, snapshot []db.ListSourceStatsRow, now time.Time) []sourceEntry {
 	byHealth := make(map[string]db.ProviderHealthRollupRow, len(health))
 	for _, r := range health {
 		byHealth[r.Provider] = r
 	}
-	bySnapshot := make(map[string]db.SourceStat, len(snapshot))
+	bySnapshot := make(map[string]db.ListSourceStatsRow, len(snapshot))
 	for _, r := range snapshot {
 		bySnapshot[r.Source] = r
 	}
@@ -124,7 +123,6 @@ func buildSourceEntries(reg map[string]sources.Source, health []db.ProviderHealt
 		entry := sourceEntry{Source: name, Kind: sources.ProviderKind(reg, name)}
 		if row, ok := bySnapshot[name]; ok {
 			entry.Jobs = jobsBlock(row, entry.Kind)
-			entry.LogoHost = logoHost(row.SampleUrl.String)
 		}
 		if row, ok := byHealth[name]; ok {
 			entry.Health = healthBlock(row, now)
@@ -137,7 +135,7 @@ func buildSourceEntries(reg map[string]sources.Source, health []db.ProviderHealt
 // jobsBlock renders one snapshot row, attaching the overlap figures only where they mean
 // anything. Unmatched is computed here rather than stored, so it cannot drift from the
 // raw count it is a remainder of.
-func jobsBlock(row db.SourceStat, kind string) *sourceJobs {
+func jobsBlock(row db.ListSourceStatsRow, kind string) *sourceJobs {
 	jobs := &sourceJobs{Open: row.OpenJobs, MeasuredAt: row.MeasuredAt.Time.Format(time.RFC3339)}
 	if row.BrowsableJobs.Valid {
 		n := row.BrowsableJobs.Int64
@@ -168,19 +166,4 @@ func healthBlock(row db.ProviderHealthRollupRow, now time.Time) *sourceHealth {
 		LastSuccess:   isoOrNil(row.LastSuccessAt),
 		IngestedTotal: row.IngestedTotal,
 	}
-}
-
-// logoHost reduces a sample posting URL to its host, which is all a logo lookup reads and
-// all this endpoint publishes. An unparseable or hostless URL yields nothing rather than a
-// guess — the page's placeholder is a better answer than a broken image.
-func logoHost(sampleURL string) *string {
-	if sampleURL == "" {
-		return nil
-	}
-	parsed, err := url.Parse(sampleURL)
-	if err != nil || parsed.Hostname() == "" {
-		return nil
-	}
-	host := parsed.Hostname()
-	return &host
 }

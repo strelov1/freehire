@@ -18,8 +18,6 @@ func ts(t time.Time) pgtype.Timestamptz { return pgtype.Timestamptz{Time: t, Val
 
 func i8(n int64) pgtype.Int8 { return pgtype.Int8{Int64: n, Valid: true} }
 
-func txt(s string) pgtype.Text { return pgtype.Text{String: s, Valid: true} }
-
 func entriesBySource(entries []sourceEntry) map[string]sourceEntry {
 	out := make(map[string]sourceEntry, len(entries))
 	for _, e := range entries {
@@ -29,7 +27,7 @@ func entriesBySource(entries []sourceEntry) map[string]sourceEntry {
 }
 
 func TestBuildSourceEntriesClassifiesByTheAdapterRegistry(t *testing.T) {
-	snap := []db.SourceStat{
+	snap := []db.ListSourceStatsRow{
 		{Source: "greenhouse", OpenJobs: 10, MeasuredAt: ts(sourcesNow)},
 		{Source: "adzuna", OpenJobs: 10, MeasuredAt: ts(sourcesNow)},
 	}
@@ -45,7 +43,7 @@ func TestBuildSourceEntriesClassifiesByTheAdapterRegistry(t *testing.T) {
 }
 
 func TestBuildSourceEntriesCarriesOverlapForAggregatorsOnly(t *testing.T) {
-	snap := []db.SourceStat{
+	snap := []db.ListSourceStatsRow{
 		{Source: "adzuna", OpenJobs: 100, AtsMatchedJobs: 70, MeasuredAt: ts(sourcesNow)},
 		{Source: "greenhouse", OpenJobs: 100, AtsMatchedJobs: 0, MeasuredAt: ts(sourcesNow)},
 	}
@@ -72,7 +70,7 @@ func TestBuildSourceEntriesCarriesOverlapForAggregatorsOnly(t *testing.T) {
 }
 
 func TestBuildSourceEntriesKeepsAnUnmeasuredCountAbsent(t *testing.T) {
-	snap := []db.SourceStat{
+	snap := []db.ListSourceStatsRow{
 		{Source: "greenhouse", OpenJobs: 10, MeasuredAt: ts(sourcesNow)}, // BrowsableJobs invalid
 		{Source: "lever", OpenJobs: 10, BrowsableJobs: i8(0), MeasuredAt: ts(sourcesNow)},
 	}
@@ -101,7 +99,7 @@ func TestBuildSourceEntriesHasNoJobsBlockWithoutASnapshot(t *testing.T) {
 func TestBuildSourceEntriesHasNoHealthBlockWithoutAHealthRecord(t *testing.T) {
 	// telegram is an extraction pipeline, not a crawl adapter: no board_health row. A
 	// derived "down" here would be a verdict about a source nothing measured.
-	snap := []db.SourceStat{{Source: "telegram", OpenJobs: 5, MeasuredAt: ts(sourcesNow)}}
+	snap := []db.ListSourceStatsRow{{Source: "telegram", OpenJobs: 5, MeasuredAt: ts(sourcesNow)}}
 
 	got := entriesBySource(buildSourceEntries(sources.Taxonomy(), nil, snap, sourcesNow))
 
@@ -137,23 +135,21 @@ func TestBuildSourceEntriesCarriesHealthWhenThereIsARecord(t *testing.T) {
 	}
 }
 
-func TestBuildSourceEntriesPublishesAHostNotAPostingURL(t *testing.T) {
-	snap := []db.SourceStat{{
-		Source: "greenhouse", OpenJobs: 1, MeasuredAt: ts(sourcesNow),
-		SampleUrl: txt("https://job-boards.greenhouse.io/acme/jobs/12345"),
-	}}
+// A posting URL never reaches the wire at all now. The first version published its host so
+// the page could resolve a logo from it; production served the WRONG brand, because an ATS
+// posting's URL usually lives on the employer's own domain. Logos come from the display
+// name client-side, and this endpoint has no field that could carry a link to somebody's job.
+func TestSourceEntryCarriesNoPostingURL(t *testing.T) {
+	snap := []db.ListSourceStatsRow{{Source: "greenhouse", OpenJobs: 1, MeasuredAt: ts(sourcesNow)}}
 
-	got := entriesBySource(buildSourceEntries(sources.Taxonomy(), nil, snap, sourcesNow))["greenhouse"]
-
-	if got.LogoHost == nil || *got.LogoHost != "job-boards.greenhouse.io" {
-		t.Fatalf("LogoHost = %v, want the host alone", got.LogoHost)
-	}
-	blob, err := json.Marshal(got)
+	blob, err := json.Marshal(buildSourceEntries(sources.Taxonomy(), nil, snap, sourcesNow))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(string(blob), "/acme/jobs/12345") {
-		t.Errorf("a specific posting path reached the wire: %s", blob)
+	for _, banned := range []string{"http", "logo_host", "sample_url"} {
+		if strings.Contains(string(blob), banned) {
+			t.Errorf("wire shape carries %q:\n%s", banned, blob)
+		}
 	}
 }
 
@@ -162,7 +158,7 @@ func TestBuildSourceEntriesPublishesAHostNotAPostingURL(t *testing.T) {
 // somebody forgetting to omit it.
 func TestSourceEntryCarriesNoBoardOrErrorField(t *testing.T) {
 	health := []db.ProviderHealthRollupRow{{Provider: "greenhouse", TotalBoards: 1, LastSuccessAt: ts(sourcesNow)}}
-	snap := []db.SourceStat{{Source: "greenhouse", OpenJobs: 1, MeasuredAt: ts(sourcesNow)}}
+	snap := []db.ListSourceStatsRow{{Source: "greenhouse", OpenJobs: 1, MeasuredAt: ts(sourcesNow)}}
 
 	blob, err := json.Marshal(buildSourceEntries(sources.Taxonomy(), health, snap, sourcesNow))
 	if err != nil {
@@ -180,7 +176,7 @@ func TestSourceEntryCarriesNoBoardOrErrorField(t *testing.T) {
 // `exclusive` would put the claim in every client that ever reads this endpoint — including
 // ones we do not write — and no amount of careful page copy would reach them.
 func TestSourceEntryNeverNamesAFieldExclusive(t *testing.T) {
-	snap := []db.SourceStat{{Source: "adzuna", OpenJobs: 100, AtsMatchedJobs: 70, MeasuredAt: ts(sourcesNow)}}
+	snap := []db.ListSourceStatsRow{{Source: "adzuna", OpenJobs: 100, AtsMatchedJobs: 70, MeasuredAt: ts(sourcesNow)}}
 
 	blob, err := json.Marshal(buildSourceEntries(sources.Taxonomy(), nil, snap, sourcesNow))
 	if err != nil {
