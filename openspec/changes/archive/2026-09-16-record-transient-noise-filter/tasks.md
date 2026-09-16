@@ -29,7 +29,7 @@ way this change can be wrong.
 
 ## 3. Close out
 
-- [ ] 3.1 PR, CI, merge.
-- [ ] 3.2 `/opsx:archive` then `/opsx:sync`, which is what writes these requirements into
+- [x] 3.1 PR, CI, merge. (#2915)
+- [x] 3.2 `/opsx:archive` then `/opsx:sync`, which is what writes these requirements into
       `openspec/specs/error-tracking/spec.md`. Until that runs, the live spec still
       contradicts production — the archive IS the fix, not a formality.

@@ -24,12 +24,12 @@ the door.
 Whatever the filter cannot read, it SHALL report: a thrown value of no recognisable shape
 is not evidence of a condition, and silence is the failure this filter must not introduce.
 
-#### Scenario: Client-side defect is reported
+#### Scenario: Client-side error is reported
 
 - **WHEN** an unhandled error that is not a transient condition is thrown while the app runs in the browser and `PUBLIC_SENTRY_DSN` is set
 - **THEN** the error MUST be captured to Sentry from the client
 
-#### Scenario: SSR defect is reported
+#### Scenario: SSR error is reported
 
 - **WHEN** an unhandled error that is not a transient condition is thrown during server-side rendering and `PUBLIC_SENTRY_DSN` is set
 - **THEN** the error MUST be captured to Sentry from the server
@@ -75,11 +75,11 @@ the single place that applies it does not.
 - **WHEN** a handler returns an error that the central error handler maps to HTTP 500
 - **THEN** the error MUST be captured to Sentry
 
-#### Scenario: An expected state is not reported
+#### Scenario: Routine 4xx is not reported
 
 - **WHEN** a handler returns a failure `classify()` resolves to a non-5xx status — a 4xx `*fiber.Error`, a missing row, a foreign-key violation, a client disconnect, a malformed search query, or an unmet prerequisite the caller can act on
 - **THEN** the error MUST NOT be captured to Sentry
-- **AND** the client MUST receive the mapped status and JSON envelope
+- **AND** the client MUST receive the existing mapped status and JSON envelope
 
 #### Scenario: A streamed refusal is judged the same way
 
