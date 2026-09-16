@@ -16,6 +16,14 @@ type Projector struct {
 	// Origin is the absolute site origin (e.g. https://freehire.me) a posting's own page
 	// is served from.
 	Origin string
+	// CanonicalURLProviders names the sources whose stored URL really is the employer's own
+	// page — a direct ATS or a company careers site. Only those may fill
+	// `official_job_url`, which the schema defines as a domain-verification anchor.
+	//
+	// Nil means "ask the source taxonomy", which is what NewProjector wires up. It is a
+	// field rather than a call inside the projection so this package stays pure and so one
+	// taxonomy build serves a whole page of postings.
+	CanonicalURLProviders map[string]bool
 	// Submittable names the ATS providers this deployment can complete an application on
 	// without a person. Today that is Greenhouse alone (fillProviders in
 	// internal/api/atsapply); Ashby and Workable join it only where the cloud-agent
@@ -40,6 +48,7 @@ type ApplyPath struct {
 // there is one. A nil form is the ordinary case for most of the catalogue, not an error.
 func (p Projector) JobPosting(j jobview.Job, form *applyform.Form) JobPosting {
 	posting := jobPostingFrom(j, p.Origin)
+	posting.OfficialJobURL = p.officialJobURL(j)
 	posting.ApplyPaths = p.applyPaths(j, form)
 	return posting
 }

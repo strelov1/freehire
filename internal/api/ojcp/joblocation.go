@@ -1,6 +1,10 @@
 package ojcp
 
-import "github.com/strelov1/freehire/internal/job/jobview"
+import (
+	"strings"
+
+	"github.com/strelov1/freehire/internal/job/jobview"
+)
 
 // Place is OJCP's location block — one schema.org Place, singular. That shape is the whole
 // difficulty of this projection: a posting open across several countries does not have one
@@ -34,9 +38,12 @@ type Address struct {
 // implementation has found in the schema so far, and a candidate for the same RFC that
 // argues for a posting-reality field.
 func jobLocationFor(j jobview.Job) *Place {
+	// The country facet is served lowercased (jobview.normalizeSet), while addressCountry is
+	// the ISO 3166-1 alpha-2 code, canonically UPPERCASE. An agent comparing against "DE"
+	// or feeding the value to a country library misses every posting otherwise.
 	address := Address{
 		AddressLocality: onlyValue(j.Cities),
-		AddressCountry:  onlyValue(j.Countries),
+		AddressCountry:  strings.ToUpper(onlyValue(j.Countries)),
 	}
 	if address == (Address{}) {
 		return nil

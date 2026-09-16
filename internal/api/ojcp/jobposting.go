@@ -44,8 +44,9 @@ type JobPosting struct {
 	DatePosted string   `json:"datePosted,omitempty"`
 
 	ValidThrough string `json:"validThrough,omitempty"`
-	// URL is our own page for the posting; OfficialJobURL is the employer's own. Keeping
-	// both is what carries source attribution into this channel (OJCP RFC 0002).
+	// URL is our own page for the posting. OfficialJobURL is the employer's own, filled by
+	// Projector.JobPosting only for a source that publishes one — see officialJobURL.
+	// Keeping both is what carries source attribution into this channel (OJCP RFC 0002).
 	URL            string `json:"url,omitempty"`
 	OfficialJobURL string `json:"official_job_url,omitempty"`
 
@@ -131,7 +132,6 @@ func jobPostingFrom(j jobview.Job, origin string) JobPosting {
 		Employer:        Employer{Type: "Organization", Name: j.Company},
 		DatePosted:      datePosted(j),
 		ValidThrough:    validThrough(j),
-		OfficialJobURL:  j.URL,
 		Description:     j.Description,
 		EmploymentType:  j.Enrichment.EmploymentType,
 		ExperienceLevel: seniorityFor(j.Enrichment.Seniority),

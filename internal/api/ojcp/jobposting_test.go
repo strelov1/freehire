@@ -1,26 +1,61 @@
 package ojcp
 
 import (
+	"strings"
 	"testing"
+	"time"
+
+	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/strelov1/freehire/internal/job/jobview"
+	"github.com/strelov1/freehire/internal/platform/db"
 )
 
 const testOrigin = "https://freehire.me"
 
-func openPosting() jobview.Job {
-	postedAt := "2026-09-16T08:30:00Z"
-	lastSeenAt := "2026-09-16T11:00:00Z"
-	return jobview.Job{
-		PublicSlug: "senior-go-engineer-at-acme",
-		Source:     "greenhouse",
-		URL:        "https://boards.greenhouse.io/acme/jobs/4012",
-		Title:      "Senior Go Engineer",
-		Company:    "Acme Corp",
-		Skills:     []string{"go", "postgresql"},
-		PostedAt:   &postedAt,
-		LastSeenAt: &lastSeenAt,
+// sourceJobURL is the posting's URL as the SOURCE published it. What reaches a projection
+// is never this string: jobview.FromDomain runs outboundurl.Tag over it, so the served
+// value always carries utm_source. Tests that hand-built a jobview.Job skipped that and
+// asserted against a value production cannot produce — which is why every fixture here now
+// goes through jobview.FromRow, the same path a handler's data takes.
+const sourceJobURL = "https://boards.greenhouse.io/acme/jobs/4012"
+
+// openPostingRow is the stored row every fixture starts from. Country codes are stored
+// UPPERCASE here because that is how ingest writes them; jobview lowercases the facet on
+// the way out, and the projection has to cope with what jobview actually serves.
+func openPostingRow() db.Job {
+	return db.Job{
+		PublicSlug:  "senior-go-engineer-at-acme",
+		Source:      "greenhouse",
+		URL:         sourceJobURL,
+		Title:       "Senior Go Engineer",
+		Company:     "Acme Corp",
+		CompanySlug: "acme",
+		Skills:      []string{"go", "postgresql"},
+		PostedAt:    stamp("2026-09-16T08:30:00Z"),
+		LastSeenAt:  stamp("2026-09-16T11:00:00Z"),
 	}
+}
+
+func openPosting() jobview.Job { return viewOf(openPostingRow()) }
+
+// viewOf projects a stored row the way every read path does. Building a jobview.Job by
+// hand is what let two production defects pass green: the utm-tagged URL and the
+// lowercased country facet.
+func viewOf(row db.Job) jobview.Job {
+	view, err := jobview.FromRow(row)
+	if err != nil {
+		panic("jobview.FromRow: " + err.Error())
+	}
+	return view
+}
+
+func stamp(rfc3339 string) pgtype.Timestamptz {
+	t, err := time.Parse(time.RFC3339, rfc3339)
+	if err != nil {
+		panic("bad fixture timestamp: " + rfc3339)
+	}
+	return pgtype.Timestamptz{Time: t, Valid: true}
 }
 
 func TestJobPostingFromProducesAConformingPosting(t *testing.T) {
@@ -53,14 +88,61 @@ func TestJobPostingFromCarriesTheFieldsWeMeanToEmit(t *testing.T) {
 func TestJobPostingFromSeparatesOurPageFromTheSourcesOwnLink(t *testing.T) {
 	// Conflating the two is how attribution gets lost: `url` is where an agent sends a
 	// reader on our site, `official_job_url` is the employer's own posting.
-	posting := jobPostingFrom(openPosting(), testOrigin)
+	posting := projector().JobPosting(openPosting(), nil)
 
 	wantOurs := testOrigin + "/jobs/senior-go-engineer-at-acme"
 	if posting.URL != wantOurs {
 		t.Errorf("url = %q, want %q", posting.URL, wantOurs)
 	}
-	if posting.OfficialJobURL != "https://boards.greenhouse.io/acme/jobs/4012" {
-		t.Errorf("official_job_url = %q, want the source's own link", posting.OfficialJobURL)
+	if posting.OfficialJobURL != sourceJobURL {
+		t.Errorf("official_job_url = %q, want the canonical source link", posting.OfficialJobURL)
+	}
+}
+
+func TestOfficialJobURLCarriesNoTrackingParameter(t *testing.T) {
+	// The schema defines this field as the canonical page on the employer's own site, and
+	// tells agents to deduplicate and domain-verify against it. Our own utm_source — which
+	// jobview stamps on every served URL — defeats both.
+	posting := projector().JobPosting(openPosting(), nil)
+
+	if strings.Contains(posting.OfficialJobURL, "utm_source") {
+		t.Errorf("official_job_url carries our tracking parameter: %s", posting.OfficialJobURL)
+	}
+	// Our own page is where a tagged link belongs, and it is a freehire URL, so no tag is
+	// added there either — but the distinction must not be lost.
+	if posting.URL == posting.OfficialJobURL {
+		t.Error("url and official_job_url collapsed into one value")
+	}
+}
+
+func TestOfficialJobURLIsAbsentForAnAggregatorSource(t *testing.T) {
+	// For an aggregator the stored URL is a tracking redirect on the aggregator's own
+	// domain, not the employer's page. Publishing it as `official_job_url` would hand an
+	// agent a domain-verification anchor that fails by construction; `url` is the field
+	// whose own description permits third-party boards, and it still carries the link.
+	for _, provider := range []string{"adzuna", "whatjobs"} {
+		t.Run(provider, func(t *testing.T) {
+			row := openPostingRow()
+			row.Source = provider
+			row.URL = "https://www.adzuna.com/land/ad/5012345678"
+
+			posting := projector().JobPosting(viewOf(row), nil)
+
+			if posting.OfficialJobURL != "" {
+				t.Errorf("official_job_url = %q, want empty for an aggregator", posting.OfficialJobURL)
+			}
+			if posting.URL == "" {
+				t.Error("url is empty; the posting is still reachable through our page")
+			}
+		})
+	}
+}
+
+func TestOfficialJobURLIsPresentForADirectATS(t *testing.T) {
+	posting := projector().JobPosting(openPosting(), nil)
+
+	if posting.OfficialJobURL != sourceJobURL {
+		t.Errorf("official_job_url = %q, want the ATS link for a direct source", posting.OfficialJobURL)
 	}
 }
 

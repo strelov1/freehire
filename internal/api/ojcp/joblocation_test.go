@@ -3,9 +3,10 @@ package ojcp
 import "testing"
 
 func TestJobLocationNamesAnUnambiguousPlace(t *testing.T) {
-	j := openPosting()
-	j.Countries = []string{"DE"}
-	j.Cities = []string{"Berlin"}
+	row := openPostingRow()
+	row.Countries = []string{"DE"}
+	row.Cities = []string{"Berlin"}
+	j := viewOf(row)
 
 	posting := jobPostingFrom(j, testOrigin)
 
@@ -27,9 +28,10 @@ func TestJobLocationStaysSilentWhereThePostingSpansSeveralPlaces(t *testing.T) {
 	// The schema shapes jobLocation as ONE schema.org Place, and a posting open in three
 	// countries does not have one. Picking the first element would state a restriction the
 	// employer never made — an agent filtering on it would drop the posting everywhere else.
-	j := openPosting()
-	j.Countries = []string{"DE", "PL", "ES"}
-	j.Cities = []string{"Berlin", "Warsaw"}
+	row := openPostingRow()
+	row.Countries = []string{"DE", "PL", "ES"}
+	row.Cities = []string{"Berlin", "Warsaw"}
+	j := viewOf(row)
 
 	posting := jobPostingFrom(j, testOrigin)
 
@@ -42,9 +44,10 @@ func TestJobLocationKeepsTheHalfItDoesKnow(t *testing.T) {
 	// One country, several cities within it: the country is still a fact, so it is stated
 	// and the city is not. Withholding both because one is ambiguous serves less than the
 	// posting says.
-	j := openPosting()
-	j.Countries = []string{"DE"}
-	j.Cities = []string{"Berlin", "Munich"}
+	row := openPostingRow()
+	row.Countries = []string{"DE"}
+	row.Cities = []string{"Berlin", "Munich"}
+	j := viewOf(row)
 
 	posting := jobPostingFrom(j, testOrigin)
 
@@ -63,9 +66,10 @@ func TestJobLocationNeverBorrowsOurMacroRegionForAddressRegion(t *testing.T) {
 	// Our Regions are macro-regions — "europe", "global" — while schema.org's addressRegion
 	// is a state or province. They are different kinds of thing, and an agent reading
 	// addressRegion="europe" would file the posting under a province by that name.
-	j := openPosting()
-	j.Countries = []string{"DE"}
-	j.Regions = []string{"europe"}
+	row := openPostingRow()
+	row.Countries = []string{"DE"}
+	row.Regions = []string{"europe"}
+	j := viewOf(row)
 
 	posting := jobPostingFrom(j, testOrigin)
 
