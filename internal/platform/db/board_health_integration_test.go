@@ -167,6 +167,72 @@ func TestListChronicBoards(t *testing.T) {
 	}
 }
 
+// TestListChronicBoardsIgnoresAStaleCaseTwin pins the guard that keeps a renamed board from
+// reporting itself unreachable.
+//
+// A board id used to reach board_health lowercased and now reaches it with the provider's
+// own casing, so one board can hold two records: an abandoned one that ages forever and a
+// live one crawled this morning. Measured on production 2026-09-16, that accounted for 325
+// of the 353 boards the safety-net closer offered to close — arming it would have closed
+// the postings of boards that were working, labelled `board_unreachable`.
+//
+// The freshness comparison is what makes this safe to do in SQL: a row is only ignored when
+// a differently-cased twin has STRICTLY newer evidence, so two genuinely distinct
+// case-sensitive boards both stay.
+func TestListChronicBoardsIgnoresAStaleCaseTwin(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	ctx := context.Background()
+	truncateBoardHealth(t, pool)
+
+	stale := daysAgo(90)
+	fresh := time.Now()
+	// One board, two records: the abandoned lowercase one and the cased one being crawled.
+	seedBoardHealth(t, pool, "smartrecruiters", "atlas4", daysAgo(500), &stale, 3)
+	seedBoardHealth(t, pool, "smartrecruiters", "ATLAS4", daysAgo(500), &fresh, 0)
+	// A genuinely chronic board with no twin must still be reported, or the guard has
+	// simply blinded the report.
+	realChronic := daysAgo(90)
+	seedBoardHealth(t, pool, "smartrecruiters", "gone-for-good", daysAgo(500), &realChronic, 9)
+
+	got, err := q.ListChronicBoards(ctx, ListChronicBoardsParams{
+		AgeWindow: pgtype.Interval{Days: 60, Valid: true},
+		MaxBoards: 100,
+	})
+	if err != nil {
+		t.Fatalf("list chronic boards: %v", err)
+	}
+	if names := chronicBoardNames(got); !sameSet(names, []string{"gone-for-good"}) {
+		t.Fatalf("chronic list = %v, want only [gone-for-good]: a board whose cased twin crawled today is not unreachable", names)
+	}
+}
+
+// TestListChronicBoardsKeepsBothWhenNeitherTwinIsFresher pins the other half: the guard is a
+// freshness comparison, not a case-folding rule. Two case-sensitive boards that are both
+// genuinely chronic must both be reported — dropping one because another resembles it would
+// hide a real failure.
+func TestListChronicBoardsKeepsBothWhenNeitherTwinIsFresher(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	ctx := context.Background()
+	truncateBoardHealth(t, pool)
+
+	same := daysAgo(90)
+	seedBoardHealth(t, pool, "smartrecruiters", "twinned", daysAgo(500), &same, 4)
+	seedBoardHealth(t, pool, "smartrecruiters", "TWINNED", daysAgo(500), &same, 4)
+
+	got, err := q.ListChronicBoards(ctx, ListChronicBoardsParams{
+		AgeWindow: pgtype.Interval{Days: 60, Valid: true},
+		MaxBoards: 100,
+	})
+	if err != nil {
+		t.Fatalf("list chronic boards: %v", err)
+	}
+	if names := chronicBoardNames(got); !sameSet(names, []string{"twinned", "TWINNED"}) {
+		t.Fatalf("chronic list = %v, want both twins: neither is fresher, so neither is explained away", names)
+	}
+}
+
 // TestListChronicBoardsMaxBoardsCapsButReportsFullTotal pins the cap/total split reused from
 // ListUnhealthyBoards: a low cap truncates the returned rows but Total still reports how many
 // boards actually qualify, so the caller can tell "these are the worst 1" from "there is only 1".

@@ -93,9 +93,31 @@ LIMIT sqlc.arg(max_boards);
 -- FULL count before the cap, same convention as ListUnhealthyBoards.Total.
 SELECT provider, board, region, consecutive_failures, cooldown_until, last_error, last_error_at,
        last_success_at, first_seen_at, count(*) OVER () AS total
-FROM board_health
-WHERE (last_success_at IS NOT NULL AND last_success_at < now() - sqlc.arg(age_window)::interval)
-   OR (last_success_at IS NULL AND first_seen_at < now() - sqlc.arg(age_window)::interval)
+FROM board_health h
+WHERE ((last_success_at IS NOT NULL AND last_success_at < now() - sqlc.arg(age_window)::interval)
+    OR (last_success_at IS NULL AND first_seen_at < now() - sqlc.arg(age_window)::interval))
+  -- ... and no differently-cased twin of this board has fresher evidence.
+  --
+  -- A board id used to reach this table lowercased and now reaches it with the provider's
+  -- own casing, so one board can hold two records: an abandoned one that ages forever and
+  -- a live one crawled this morning. Without this clause the abandoned record reports its
+  -- own board unreachable — measured 2026-09-16, that was 325 of the 353 boards the
+  -- safety-net closer offered to close, and arming it would have closed the postings of
+  -- boards that were working, under the label `board_unreachable`.
+  --
+  -- A FRESHNESS comparison, not a case-folding rule: the twin must have STRICTLY newer
+  -- evidence, so two genuinely distinct case-sensitive boards are both still reported and
+  -- nothing real is explained away. Migration 0170 removed the twins that already existed;
+  -- this keeps the next rename from recreating the same blind spot silently.
+  AND NOT EXISTS (
+        SELECT 1 FROM board_health twin
+        WHERE twin.provider = h.provider
+          AND twin.region = h.region
+          AND lower(twin.board) = lower(h.board)
+          AND twin.board <> h.board
+          AND coalesce(twin.last_success_at, twin.last_error_at)
+              > coalesce(h.last_success_at, h.last_error_at)
+      )
 ORDER BY coalesce(last_success_at, first_seen_at), provider, board, region
 LIMIT sqlc.arg(max_boards);
 
