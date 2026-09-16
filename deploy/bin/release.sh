@@ -146,17 +146,42 @@ fi
 # upload in a bare `catch {}` ABOVE @sentry/vite-plugin's own errorHandler, so a failed
 # upload is a warning in a log and an exit status of 0 — no plugin option changes that.
 #
-# Runs before `pnpm install` deliberately: the checker imports nothing, so a dead credential
-# costs seconds here instead of the three minutes the web build takes.
-if ! node web/scripts/sentry-credential-check.mjs; then
-	echo "release: source maps would not upload for $new — refusing to release; the live color is untouched" >&2
-	echo "release: fix /opt/freehire/env/sentry-build.env, or remove it to release without source maps" >&2
-	exit 1
+# Runs before web's `pnpm install` deliberately: the checker imports nothing, so a dead
+# credential costs seconds here instead of the three minutes the web build takes. (The
+# design-system install above it still runs first — it is the prerequisite for that build, not
+# part of it.)
+#
+# Exit 1 is the checker's VERDICT and the only status that refuses a release. Anything else
+# means the checker did not run, which is not evidence about the credential — the same rule
+# the script applies internally when Sentry is unreachable, and it has to hold out here too or
+# the gate becomes a single point of failure for every deploy. Two ways it can fail to run,
+# both ordinary: `node` missing from the PATH sudo hands it (127), and the script missing from
+# a checkout that has not pulled this commit yet — `release.sh` is hand-copied to
+# /opt/freehire/bin while web/scripts arrives by git pull, so for one release the copy can be
+# newer than both colors. Testing for the file first keeps that case out of the exit-1 leg,
+# where node's own `Cannot find module` would land and be reported as a rejected token.
+#
+# Runs as freehire, like every other thing this script executes out of the checkout: this file
+# arrived by `git pull` seconds ago and is handed the token.
+SENTRY_CHECK=web/scripts/sentry-credential-check.mjs
+if [ ! -f "$SENTRY_CHECK" ]; then
+	echo "[release:$app] WARNING: $SENTRY_CHECK is not in this checkout — Sentry credential unverified; continuing" >&2
+else
+	sentry_rc=0
+	sudo -u freehire --preserve-env=SENTRY_ORG,SENTRY_PROJECT,SENTRY_AUTH_TOKEN,SENTRY_URL \
+		node "$SENTRY_CHECK" || sentry_rc=$?
+	if [ "$sentry_rc" -eq 1 ]; then
+		echo "release: source maps would not upload for $new — refusing to release; the live color is untouched" >&2
+		echo "release: fix /opt/freehire/env/sentry-build.env, or remove it to release without source maps" >&2
+		exit 1
+	elif [ "$sentry_rc" -ne 0 ]; then
+		echo "[release:$app] WARNING: the Sentry credential check could not run (exit $sentry_rc) — continuing" >&2
+	fi
 fi
 # web migrated from npm to pnpm (DS Phase 2, freehire#1088): install/build via corepack,
 # which provisions the pnpm version pinned in web/package.json's packageManager field.
 ( cd web && sudo -u freehire corepack pnpm install --frozen-lockfile &&
-	sudo -u freehire --preserve-env=SENTRY_ORG,SENTRY_PROJECT,SENTRY_AUTH_TOKEN corepack pnpm run build )
+	sudo -u freehire --preserve-env=SENTRY_ORG,SENTRY_PROJECT,SENTRY_AUTH_TOKEN,SENTRY_URL corepack pnpm run build )
 # The web build can succeed-with-exit-0 and still leave no client bundle: on 2026-07-27 vite's
 # closeBundle rimraf of build/client/_app raced the precompress step, deleting all 2409 assets
 # and leaving only version.json.{gz,br}. Nothing below catches that — SSR renders fine without

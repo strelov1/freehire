@@ -16,20 +16,22 @@ and it is paid silently.
 > Source-map upload is inert without `SENTRY_AUTH_TOKEN` — the build still succeeds,
 > only readable minified stack traces in Sentry are skipped.
 
-That is true of an **absent** token. An **invalid** token behaves differently: the plugin
-throws mid-build, prints a stack trace, and the build still exits 0 — so a deliberate
-opt-out and a broken credential are indistinguishable from the outside, and the text that
-would have told a reader otherwise is describing the case we are not in. This is the same
-hazard `docs/` already records elsewhere: prose about code is tested by nothing.
+That is true of an **absent** token, and it is also true of an **invalid** one — which is
+the problem. `@sentry/sveltekit` catches the failed upload itself, prints a warning, and
+lets the build exit 0, so a deliberate opt-out and a broken credential are
+indistinguishable from the outside, and the text that would have told a reader otherwise
+is describing the case we are not in. This is the same hazard `docs/` already records
+elsewhere: prose about code is tested by nothing.
 
 ## What Changes
 
-- **An invalid credential fails the build.** When `SENTRY_AUTH_TOKEN` is set and Sentry
-  rejects it, the web build MUST fail rather than emit a stack trace and continue. A
-  token that was typed is a claim that source maps are wanted; a release that silently
-  drops them is not the thing that was asked for. The failure lands in the blue/green
-  build phase, which already refuses to touch the live color — the same posture
-  `migrations FAILED — not touching green or the live color` takes.
+- **An invalid credential fails the release.** When `SENTRY_AUTH_TOKEN` is set and Sentry
+  rejects it, the release MUST stop rather than warn and continue. A token that was typed
+  is a claim that source maps are wanted; a release that silently drops them is not the
+  thing that was asked for. The check cannot live inside the build — the bundler's exit
+  status structurally cannot carry the answer — so it sits in the release path, before the
+  color switch, the same posture `migrations FAILED — not touching green or the live color`
+  takes.
 - **An absent credential stays a clean, stated opt-out.** No token MUST remain inert and
   MUST say so once, in one line, so "off on purpose" and "broken" never read alike.
 - **The claim becomes checkable.** A release that uploaded source maps can be told from

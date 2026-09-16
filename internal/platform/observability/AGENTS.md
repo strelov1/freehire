@@ -20,7 +20,7 @@ Opt-in Sentry across all three surfaces, env-gated.
 ## Frontend (`web/`)
 
 - `@sentry/sveltekit` in `hooks.client.ts`/`hooks.server.ts`, gated on `PUBLIC_SENTRY_DSN` (+ `PUBLIC_SENTRY_ENVIRONMENT`).
-- `sentrySvelteKit()` Vite plugin uploads source maps only when `SENTRY_AUTH_TOKEN`/`SENTRY_ORG`/`SENTRY_PROJECT` are set (build succeeds without them).
+- `sentrySvelteKit()` Vite plugin uploads source maps only when `SENTRY_AUTH_TOKEN`/`SENTRY_ORG`/`SENTRY_PROJECT` are set (build succeeds without them). **A build that exits 0 is not evidence any of it worked** — the plugin's own `vite/sourceMaps.js` wraps the upload in a bare `catch {}` above `@sentry/vite-plugin`'s `errorHandler`, so a rejected token warns and the build succeeds. It did exactly that for months: 0 of the 100 most recent releases (to 2026-09-16) carried an uploaded file, and every deploy was green. What asks instead is `web/scripts/sentry-credential-check.mjs`, run by `deploy/bin/release.sh` before the build — a rejected or half-written credential refuses the release, an unreachable Sentry does not.
 - No CSP change needed — no `default-src`/`connect-src`, browser delivery to ingest host is unrestricted.
 
 ## Config
