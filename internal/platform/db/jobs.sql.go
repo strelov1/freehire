@@ -2295,6 +2295,53 @@ func (q *Queries) JobDescriptionsByIDs(ctx context.Context, ids []int64) ([]JobD
 	return items, nil
 }
 
+const jobsForGeographyRecheckByIDs = `-- name: JobsForGeographyRecheckByIDs :many
+SELECT id, title, location, description, countries, regions FROM jobs
+WHERE id = ANY($1::bigint[])
+`
+
+type JobsForGeographyRecheckByIDsRow struct {
+	ID          int64    `json:"id"`
+	Title       string   `json:"title"`
+	Location    string   `json:"location"`
+	Description string   `json:"description"`
+	Countries   []string `json:"countries"`
+	Regions     []string `json:"regions"`
+}
+
+// Title, location, description and the currently-stored countries/regions for a named set
+// of ids, for cmd/backfill-remote-region-restriction.
+//
+// Ids come from a Meilisearch query for the same reason JobDescriptionsByIDs's do: a WHERE
+// over `description` de-TOASTs the column for every row it examines, and the search index
+// already holds the text.
+func (q *Queries) JobsForGeographyRecheckByIDs(ctx context.Context, ids []int64) ([]JobsForGeographyRecheckByIDsRow, error) {
+	rows, err := q.db.Query(ctx, jobsForGeographyRecheckByIDs, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []JobsForGeographyRecheckByIDsRow{}
+	for rows.Next() {
+		var i JobsForGeographyRecheckByIDsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.Location,
+			&i.Description,
+			&i.Countries,
+			&i.Regions,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const jobsForWorkModeRecheckByIDs = `-- name: JobsForWorkModeRecheckByIDs :many
 SELECT id, location, description, work_mode FROM jobs
 WHERE id = ANY($1::bigint[])
@@ -3971,6 +4018,34 @@ func (q *Queries) SetJobEnrichment(ctx context.Context, arg SetJobEnrichmentPara
 		arg.ID,
 	)
 	return err
+}
+
+const setJobGeography = `-- name: SetJobGeography :execrows
+UPDATE jobs
+SET countries = $1::text[],
+    regions   = $2::text[]
+WHERE id = $3
+  AND (countries IS DISTINCT FROM $1::text[]
+       OR regions IS DISTINCT FROM $2::text[])
+`
+
+type SetJobGeographyParams struct {
+	Countries []string `json:"countries"`
+	Regions   []string `json:"regions"`
+	ID        int64    `json:"id"`
+}
+
+// Write one row's countries and regions, for cmd/backfill-remote-region-restriction.
+//
+// The IS DISTINCT FROM guard makes the pass idempotent, the same way SetJobWorkMode's
+// does: a row already carrying the recomputed values is not rewritten, so a re-run writes
+// nothing and stopping mid-way costs nothing to resume.
+func (q *Queries) SetJobGeography(ctx context.Context, arg SetJobGeographyParams) (int64, error) {
+	result, err := q.db.Exec(ctx, setJobGeography, arg.Countries, arg.Regions, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const setJobRequiresClearance = `-- name: SetJobRequiresClearance :execrows

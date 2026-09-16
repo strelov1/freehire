@@ -40,10 +40,12 @@ var separatorReplacer = strings.NewReplacer(
 // deduplicated and sorted; nil when nothing resolves. WorkMode is set only from
 // an explicit marker, while a plain city/country yields geography with no
 // WorkMode. A remote job that resolves NO geography (a bare "Remote", "WFH", …)
-// is open-anywhere, so it falls into the "global" region — its remoteness stays
-// on WorkMode (the separate work-type facet), which the global region never
-// displaces. A remote marker alongside a real place ("US Remote") keeps that
-// place and is not globalized.
+// states nothing about where it is open to, so it stays in the "region not
+// specified" bucket (empty Regions/Countries) — never guessed into "global".
+// An explicit open-anywhere word ("Anywhere", "Worldwide", "International", …)
+// is a curated dictionary entry in its own right (see nameToRegion) and still
+// resolves to the global region through the ordinary token loop below. A remote
+// marker alongside a real place ("US Remote") keeps that place, as before.
 func Parse(location string) Geo {
 	lower := strings.ToLower(location)
 
@@ -176,14 +178,6 @@ func Parse(location string) Geo {
 	countries := stringset.Sorted(countrySet)
 	regions := stringset.Sorted(regionSet)
 	mode := detectWorkMode(lower)
-
-	// A remote job that resolved no country and no region is open-anywhere: treat it
-	// as the global region so it joins the Global/Worldwide bucket instead of the
-	// "geography not specified" one. Only fires when nothing else resolved, so
-	// "US Remote" stays north_america and "Remote - Germany" stays eu.
-	if mode == "remote" && len(countries) == 0 && len(regions) == 0 {
-		regions = []string{"global"}
-	}
 
 	return Geo{
 		Countries: countries,

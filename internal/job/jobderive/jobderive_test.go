@@ -573,9 +573,97 @@ func TestDerive_USOnlyDoesNotOverrideResolvedPlace(t *testing.T) {
 	}
 }
 
-// A bare-"Remote" job whose description carries no US-only phrase stays global — the
-// override never guesses, so genuinely open-anywhere remote jobs are unaffected.
-func TestDerive_BareRemoteWithoutUSOnlyStaysGlobal(t *testing.T) {
+// A title-embedded restriction suffix resolves a bare-remote posting — the quanata
+// report (freehire job_reports #29): the location string alone ("remote") carries no
+// country, and the ATS-convention restriction lives only in the title.
+func TestDerive_TitleRestrictionPinsBareRemote(t *testing.T) {
+	got := Derive(Input{
+		Title:      "Senior Back End Engineer [Remote-US]",
+		Company:    "Quanata",
+		Source:     "greenhouse",
+		ExternalID: "1",
+		Location:   "remote",
+	})
+	if !reflect.DeepEqual(got.Countries, []string{"us"}) {
+		t.Errorf("Countries = %v, want [us]", got.Countries)
+	}
+	if !reflect.DeepEqual(got.Regions, []string{"north_america"}) {
+		t.Errorf("Regions = %v, want [north_america]", got.Regions)
+	}
+}
+
+// The creative-fabrica report (freehire job_reports #31/#33): a parenthetical title
+// suffix names two countries.
+func TestDerive_TitleRestrictionResolvesMultipleCountries(t *testing.T) {
+	got := Derive(Input{
+		Title:      "Senior Backend Engineer (Go) (Location - Australia or New Zealand)",
+		Company:    "Creative Fabrica",
+		Source:     "greenhouse",
+		ExternalID: "2",
+		Location:   "Remote",
+	})
+	if !reflect.DeepEqual(got.Countries, []string{"au", "nz"}) {
+		t.Errorf("Countries = %v, want [au nz]", got.Countries)
+	}
+	if !reflect.DeepEqual(got.Regions, []string{"apac"}) {
+		t.Errorf("Regions = %v, want [apac]", got.Regions)
+	}
+}
+
+// A location that already resolved a place is never overridden by the title, even
+// when the title carries what looks like a restriction marker.
+func TestDerive_TitleRestrictionNeverOverridesResolvedLocation(t *testing.T) {
+	got := Derive(Input{
+		Title:      "Engineer [Remote-US]",
+		Company:    "Acme",
+		Source:     "greenhouse",
+		ExternalID: "3",
+		Location:   "Remote - Germany",
+	})
+	if !reflect.DeepEqual(got.Countries, []string{"de"}) {
+		t.Errorf("Countries = %v, want [de] (title never consulted)", got.Countries)
+	}
+}
+
+// The title check runs before the description checks: when both carry a signal, the
+// title's (the more literal, ATS-authored one) wins.
+func TestDerive_TitleRestrictionTakesPrecedenceOverDescription(t *testing.T) {
+	got := Derive(Input{
+		Title:       "Engineer [Remote-US]",
+		Company:     "Acme",
+		Source:      "greenhouse",
+		ExternalID:  "4",
+		Location:    "Remote",
+		Description: "This role is based in Canada.",
+	})
+	if !reflect.DeepEqual(got.Countries, []string{"us"}) {
+		t.Errorf("Countries = %v, want [us] (title wins over description)", got.Countries)
+	}
+}
+
+// The kard-financial report (freehire job_reports #30): no title marker, but the
+// description states an explicit multi-country restriction.
+func TestDerive_DescriptionRegionScopePinsBareRemote(t *testing.T) {
+	got := Derive(Input{
+		Title:       "Senior Software Engineer II, Customer Experience",
+		Company:     "Kard Financial",
+		Source:      "greenhouse",
+		ExternalID:  "5",
+		Location:    "Remote",
+		Description: "We are a fully remote company hiring in the US, Canada, Argentina, or Brazil only.",
+	})
+	if !reflect.DeepEqual(got.Countries, []string{"ar", "br", "ca", "us"}) {
+		t.Errorf("Countries = %v, want [ar br ca us]", got.Countries)
+	}
+	if !reflect.DeepEqual(got.Regions, []string{"latam", "north_america"}) {
+		t.Errorf("Regions = %v, want [latam north_america]", got.Regions)
+	}
+}
+
+// A bare-"Remote" job whose title and description carry no restriction stays in the
+// "region not specified" bucket, not global — the override never guesses, so
+// genuinely open-anywhere remote jobs are unaffected.
+func TestDerive_BareRemoteWithoutUSOnlyStaysUnspecified(t *testing.T) {
 	got := Derive(Input{
 		Title:       "Engineer",
 		Company:     "Acme",
@@ -587,8 +675,11 @@ func TestDerive_BareRemoteWithoutUSOnlyStaysGlobal(t *testing.T) {
 	if len(got.Countries) != 0 {
 		t.Errorf("Countries = %v, want [] (no US-only signal)", got.Countries)
 	}
-	if !reflect.DeepEqual(got.Regions, []string{"global"}) {
-		t.Errorf("Regions = %v, want [global] (unchanged)", got.Regions)
+	// "distributed"/"worldwide" here are incidental prose, not the anchored open-anywhere
+	// location marker or a region-scoping restriction statement, so they resolve nothing —
+	// the posting states no geography and stays in the "region not specified" bucket.
+	if len(got.Regions) != 0 {
+		t.Errorf("Regions = %v, want [] (no geography stated)", got.Regions)
 	}
 }
 

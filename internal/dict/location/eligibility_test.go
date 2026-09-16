@@ -51,6 +51,7 @@ func TestEligibilityFromDescription(t *testing.T) {
 
 		// Work-authorization phrasings, the largest gap the catalogue sweep found.
 		{"authorized to work in the us", "Candidates must be authorized to work in the United States without sponsorship.", []string{"us"}, []string{"north_america"}},
+		{"authorized to work for any employer in the us (roadie report)", "This role is not eligible for Visa sponsorship. Applicants must be authorized to work for any employer in the U.S.", []string{"us"}, []string{"north_america"}},
 		{"legally authorized variant", "Applicants must be legally authorized to work in the United States.", []string{"us"}, []string{"north_america"}},
 		{"authorization noun form", "This role requires authorization to work in the United States.", []string{"us"}, []string{"north_america"}},
 

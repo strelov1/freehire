@@ -10,10 +10,29 @@ Curated dictionary deriving ISO 3166-1 alpha-2 country codes, region codes, and 
   sides and a flag can be defaulted wrong at a call site. Candidate text goes through
   `ParseResidence` and never through `Parse`.
 - **A person is never located globally.** `ParseResidence` is `Parse` minus the `global`
-  region and minus the work-mode hint. `global` reaches the result by TWO paths — the
-  bare-remote fallback in `Parse` and the dictionary's own `worldwide`/`anywhere` entries —
-  so the rule is phrased against the value, not against either mechanism. Work mode is a
-  preference and lives on the profile (`location_preferences.work_modes`), not in geography.
+  region and minus the work-mode hint. `global` reaches the result only through the
+  dictionary's own `worldwide`/`anywhere`/`international` entries (`nameToRegion`) — a
+  bare `Remote` with no other signal now yields empty geography (the "region not
+  specified" bucket, `regions=none`), never a guessed `global`; the rule is still phrased
+  against the value rather than the mechanism, since `Residence` should never carry
+  `global` even from the one remaining path. Work mode is a preference and lives on the
+  profile (`location_preferences.work_modes`), not in geography.
+- **A bare `Remote` with no other signal is NOT global.** Removed the old blanket
+  `work_mode=="remote" && no geography` → `global` default: it collapsed "genuinely open
+  anywhere" and "we have no idea" into the same claim, and moderator reports
+  (`/moderation?tab=reports`, freehire job_reports 29-34) showed real region-restricted
+  postings (a title suffix like `[Remote-US]`, or description prose like "hiring in the
+  US, Canada, Argentina, or Brazil only") being served as globally open because of it. Two
+  more sources now rescue a bare-remote posting before it's allowed to fall through to
+  "unspecified": `RestrictionFromTitle` (an anchor-gated bracket/parenthetical suffix scan,
+  `title_restriction.go`) and `RegionScopeFromDescription` (an anchor-gated "candidates
+  based in X" / "hiring in X" / "restricted to X" clause scan, `region_scope.go`), both
+  additive to and consulted after `EligibilityFromDescription`'s existing citizenship-phrase
+  rescue, wired into `jobderive.Derive`'s precedence chain. Both anchor lists are
+  deliberately narrow and role/candidate-qualified, not bare prepositions — a bare
+  `"based in"`/`"located in"` anchor was tried and dropped: it matched a company-HQ "About
+  Us" mention ("Our company is based in Berlin, but this role is remote and open
+  worldwide") as if it were the role's own restriction, found in code review.
 - **Every code that carries a region must also have a NAME** (`TestEveryPlaceableCountryHasAName`).
   The two maps had drifted apart for 25 codes, so "Honduras" and "Rwanda" resolved to
   nothing. The failure is silent — an unresolvable country and an out-of-scope one both

@@ -48,9 +48,10 @@ type Job struct {
 	//
 	// Countries/Regions are a HYBRID facet, like Cities (see geoFacet): the dictionary
 	// columns win whenever they pinned a place, but an unpinned geography (no country,
-	// and at most the bare-"Remote" "global" bucket) falls back to the LLM's
-	// enrichment.countries/regions — catching a restriction stated only in the prose
-	// ("Remote (SPAIN only)") that the location string never carried.
+	// and at most the "global" bucket an explicit open-anywhere marker resolves to)
+	// falls back to the LLM's enrichment.countries/regions — catching a restriction
+	// stated only in the prose ("Remote (SPAIN only)") that the location string never
+	// carried.
 	//
 	// All four are served top-level and once; the same fields are folded out of the
 	// nested Enrichment to avoid duplication.
@@ -303,8 +304,9 @@ var nonCityFallback = map[string]struct{}{
 // geoFacet builds the served country/region facets. The deterministic dictionary
 // columns win whenever they pinned a place — a country, or a region more specific
 // than the open-anywhere "global" bucket. Only when the dictionary left geography
-// unpinned (no country, and at most the bare-"Remote" "global" region) does it fall
-// back wholesale to the LLM's enrichment.countries/regions, which read a restriction
+// unpinned (no country, and at most the "global" region an explicit open-anywhere
+// marker resolves to) does it fall back wholesale to the LLM's
+// enrichment.countries/regions, which read a restriction
 // stated only in the prose ("Remote (SPAIN only)") that the location string never
 // carried. This mirrors cityFacet's dict-then-LLM hybrid; a pinned dictionary place
 // is never overridden, so the LLM can only fill the global/unspecified bucket — never

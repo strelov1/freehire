@@ -2448,6 +2448,29 @@ SET work_mode = sqlc.arg(work_mode)
 WHERE id = sqlc.arg(id)
   AND work_mode IS DISTINCT FROM sqlc.arg(work_mode);
 
+-- name: JobsForGeographyRecheckByIDs :many
+-- Title, location, description and the currently-stored countries/regions for a named set
+-- of ids, for cmd/backfill-remote-region-restriction.
+--
+-- Ids come from a Meilisearch query for the same reason JobDescriptionsByIDs's do: a WHERE
+-- over `description` de-TOASTs the column for every row it examines, and the search index
+-- already holds the text.
+SELECT id, title, location, description, countries, regions FROM jobs
+WHERE id = ANY(sqlc.arg(ids)::bigint[]);
+
+-- name: SetJobGeography :execrows
+-- Write one row's countries and regions, for cmd/backfill-remote-region-restriction.
+--
+-- The IS DISTINCT FROM guard makes the pass idempotent, the same way SetJobWorkMode's
+-- does: a row already carrying the recomputed values is not rewritten, so a re-run writes
+-- nothing and stopping mid-way costs nothing to resume.
+UPDATE jobs
+SET countries = sqlc.arg(countries)::text[],
+    regions   = sqlc.arg(regions)::text[]
+WHERE id = sqlc.arg(id)
+  AND (countries IS DISTINCT FROM sqlc.arg(countries)::text[]
+       OR regions IS DISTINCT FROM sqlc.arg(regions)::text[]);
+
 -- name: RequirementsDerivedBackfillBounds :one
 -- The id span cmd/backfill-requirements walks. MIN/MAX over the primary key are two
 -- index probes, so this stays cheap on an 11M-row table — deliberately unfiltered,

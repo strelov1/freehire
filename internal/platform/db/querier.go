@@ -2826,6 +2826,13 @@ type Querier interface {
 	// a range scan; starts_with()/a default-collation LIKE would seq-scan the whole source (37s
 	// over greenhouse's ~300k rows). board_pattern is "<escaped board>:%", built by the repository.
 	JobsExistForBoard(ctx context.Context, arg JobsExistForBoardParams) (bool, error)
+	// Title, location, description and the currently-stored countries/regions for a named set
+	// of ids, for cmd/backfill-remote-region-restriction.
+	//
+	// Ids come from a Meilisearch query for the same reason JobDescriptionsByIDs's do: a WHERE
+	// over `description` de-TOASTs the column for every row it examines, and the search index
+	// already holds the text.
+	JobsForGeographyRecheckByIDs(ctx context.Context, ids []int64) ([]JobsForGeographyRecheckByIDsRow, error)
 	// Location, description and the currently-stored work_mode for a named set of ids, for
 	// cmd/backfill-remote-perk-false-positive.
 	//
@@ -5634,6 +5641,12 @@ type Querier interface {
 	// (jobview.FromDomain). The column stays the single source; the blob holds only what
 	// the model itself said.
 	SetJobEnrichment(ctx context.Context, arg SetJobEnrichmentParams) error
+	// Write one row's countries and regions, for cmd/backfill-remote-region-restriction.
+	//
+	// The IS DISTINCT FROM guard makes the pass idempotent, the same way SetJobWorkMode's
+	// does: a row already carrying the recomputed values is not rewritten, so a re-run writes
+	// nothing and stopping mid-way costs nothing to resume.
+	SetJobGeography(ctx context.Context, arg SetJobGeographyParams) (int64, error)
 	// Publish a list: set its public slug, owner-scoped, bumping updated_at. The service
 	// decides the slug (keeping an existing one on re-share, minting a fresh one
 	// otherwise), so this sets it verbatim; a collision with another list's slug raises a

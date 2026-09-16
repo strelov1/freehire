@@ -21,11 +21,11 @@ type Residence struct {
 // ParseResidence maps a candidate's location line to where they are: the job geography
 // parser's output minus the work-mode hint and minus the global region.
 //
-// The global exclusion is stated as "a person is never located globally" rather than as
-// "do not inherit the bare-remote fallback", because global reaches the result by TWO
-// independent paths — the fallback in Parse (a remote marker that resolved no place) and
-// the dictionary's own "worldwide"/"anywhere"/"по всему миру" entries. A rule phrased
-// against the fallback alone would let the second one through.
+// The global exclusion is stated as "a person is never located globally", not as a
+// no-op: Parse's own "worldwide"/"anywhere"/"по всему миру" dictionary entries (see
+// nameToRegion) still resolve a location to the global region on their own, and a
+// person's residence line can legitimately contain one ("Remote - Worldwide" on a CV
+// still names no place a person lives).
 //
 // Everything else survives untouched, including a macro-region with no country ("EU /
 // Remote" -> eu), which is a true claim about where someone is. Like Parse, this never

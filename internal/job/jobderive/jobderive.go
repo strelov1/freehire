@@ -130,17 +130,33 @@ type Derived struct {
 // and skills (structured ∪ dictionary).
 func Derive(in Input) Derived {
 	geo := location.Parse(in.Location)
-	// Geography precedence: the location dictionary → an eligibility signal in the
-	// description. When the location left the geography unpinned (no country, and
-	// either no region or only the bare-"Remote" global bucket) but the description
-	// states a hard eligibility requirement — US citizenship, EU work rights, a UK
-	// right to work — the job is restricted to that place, not open-anywhere, so pin
-	// it there and let it leave Global/Worldwide. Like the work-mode fallback below,
-	// prose is the lowest-priority source and only fills what the location dictionary
-	// left blank; a resolved place is never overridden.
+	// Geography precedence: the location dictionary → a title-embedded restriction
+	// marker → an eligibility signal in the description → an explicit region-scoping
+	// statement in the description. When the location left the geography unpinned (no
+	// country, and either no region or only an explicit open-anywhere marker's global
+	// bucket), each lower source is tried in turn and only fills what every higher
+	// source left blank — a resolved place, from the location or from a higher
+	// source in this chain, is never overridden. This is the same shape the
+	// work-mode fallback below uses.
 	countries, regions := geo.Countries, geo.Regions
 	if geoUnpinned(countries, regions) {
+		// A title-embedded restriction marker ("[Remote-US]", "(Location - Australia
+		// or New Zealand)") is a more literal, ATS-authored signal than prose, so it
+		// is tried before the description-based rescues below.
+		if c, r := location.RestrictionFromTitle(in.Title); len(r) > 0 {
+			countries, regions = c, r
+		}
+	}
+	if geoUnpinned(countries, regions) {
 		if c, r := location.EligibilityFromDescription(in.Description); len(r) > 0 {
+			countries, regions = c, r
+		}
+	}
+	if geoUnpinned(countries, regions) {
+		// An explicit "based/located/hiring in <place list>" restriction statement,
+		// additive to (and checked after) the citizenship-phrase rescue above — see
+		// location.RegionScopeFromDescription.
+		if c, r := location.RegionScopeFromDescription(in.Description); len(r) > 0 {
 			countries, regions = c, r
 		}
 	}
@@ -333,10 +349,11 @@ func regionsForCountries(countries []string) []string {
 }
 
 // geoUnpinned reports whether the location dictionary left a job's geography unpinned —
-// no country resolved, and either no region or only the bare-"Remote" global bucket. It
-// is the gate for the eligibility override in Derive: a resolved country or a specific
-// region (e.g. "eu" from "Europe") is left untouched, so the override only rescues the
-// exact case a bare-"Remote" posting with a stated eligibility requirement falls into.
+// no country resolved, and either no region or only the global bucket an explicit
+// open-anywhere marker resolves to. It is the gate for the eligibility override in
+// Derive: a resolved country or a specific region (e.g. "eu" from "Europe") is left
+// untouched, so the override only rescues a bare or "open anywhere" posting that also
+// carries a stated eligibility requirement.
 func geoUnpinned(countries, regions []string) bool {
 	if len(countries) != 0 {
 		return false

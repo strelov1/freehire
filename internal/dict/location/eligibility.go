@@ -27,6 +27,11 @@ var usOnlyPhrases = []string{
 	"u.s. citizenship", "us citizenship", "united states citizenship",
 	"authorized to work in the united states", "authorised to work in the united states",
 	"authorization to work in the united states",
+	// "for any employer in the u.s./us" is Roadie's ATS-standard work-authorization
+	// wording (freehire job_reports #32) — distinct enough from the general "authorized
+	// to work in the United States" form to need its own entry (it names an employer
+	// scope, not just a place), but the same unambiguous work-authorization signal.
+	"authorized to work for any employer in the u.s.", "authorized to work for any employer in the us",
 	"secret clearance", "ts/sci",
 }
 
@@ -108,7 +113,7 @@ var eligibilityRules = []eligibilityRule{
 // EligibilityFromDescription reports the geography a job description's eligibility
 // statements restrict a posting to. It reads prose, so it is a lowest-priority
 // geography hint used only to rescue a job the location dictionary could not pin
-// (see jobderive): a bare-"Remote" posting that resolved to the global bucket but
+// (see jobderive): a bare-"Remote" (or explicitly "Remote - Anywhere") posting that
 // requires US citizenship is US-restricted, not open-anywhere. It never guesses — no
 // asserted phrase yields two empty slices.
 //
