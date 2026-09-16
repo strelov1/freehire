@@ -2,8 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { accountNav, isSectionActive, visibleAccountNav } from './accountNav';
 
 describe('accountNav config', () => {
-  it('lists the nineteen account sections', () => {
-    expect(accountNav).toHaveLength(19);
+  it('lists the twenty account sections', () => {
+    expect(accountNav).toHaveLength(20);
   });
 
   // A section whose page exists and whose nav entry does not is reachable by URL and by
@@ -50,16 +50,17 @@ describe('accountNav config', () => {
 });
 
 describe('visibleAccountNav', () => {
-  // The Talent Network's only entry point is the profile page's invitation card now —
-  // the nav carries no section for it at all, for anybody, beta or not.
-  it('carries no Talent Network entry, for anyone', () => {
+  // The Talent Network was reachable only from the profile layout's invitation card, and
+  // that card is dismissible now — so without a section of its own, closing a banner and
+  // losing the feature would be the same gesture. Open to everyone, beta or not.
+  it('offers the Talent Network to everyone, gate-free', () => {
     for (const [mod, beta] of [
       [false, false],
       [true, false],
       [false, true],
       [true, true],
     ] as const) {
-      expect(visibleAccountNav(mod, beta).map((i) => i.href)).not.toContain('/my/talent-network');
+      expect(visibleAccountNav(mod, beta).map((i) => i.href)).toContain('/my/talent-network');
     }
   });
 

@@ -31,6 +31,11 @@ export const accountNav = [
   // signed-in user (the plan meters the AI spend). Named after what the section is FOR — a CV
   // here is always aimed at one posting, and "CV builder" described the tool it grew out of.
   { href: '/my/cvs', label: 'Tailor' },
+  // Being found instead of applying: the anonymous public catalogue's own settings page.
+  // It used to be reachable ONLY from the profile layout's invitation card, which made it
+  // invisible to anyone who never opened Profile — and that card is dismissible now, so
+  // this entry is what keeps closing a banner from meaning losing the feature.
+  { href: '/my/talent-network', label: 'Talent Network' },
   // Employee referrals: request a referral, offer to refer (moderated), and — for
   // referrers — manage incoming requests. Open to every signed-in user.
   { href: '/my/referrals', label: 'Referrals' },

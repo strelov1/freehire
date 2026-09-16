@@ -23,7 +23,6 @@
   import AccountSetupCard from '$lib/components/AccountSetupCard.svelte';
   import ProfileForm from '$lib/components/ProfileForm.svelte';
   import States from '$lib/components/States.svelte';
-  import TalentNetworkInvite from '$lib/components/profile/TalentNetworkInvite.svelte';
   import { profileStore } from '$lib/profile.svelte';
   import { handleCvDeleted, handleCvUploaded, handleSaved } from './actions';
   import { messages } from './messages';
@@ -140,12 +139,13 @@
     <AccountPreferences class="mt-6" />
   </div>
 {:else}
-  <!-- Above the tab strip: what is left to set up, and the Talent Network invitation,
-       both belong to the account rather than to whichever section happens to be open —
-       a card inside a section would be re-announced on every tab switch. -->
-  <div class="mb-6 flex flex-col gap-4">
+  <!-- Above the tab strip: what is left to set up belongs to the account rather than to
+       whichever section happens to be open — a card inside a section would be
+       re-announced on every tab switch. The Talent Network invitation used to sit beside
+       it and has moved further out still, to the account shell (`my/+layout`), which puts
+       it above every section rather than only above Profile's. -->
+  <div class="mb-6">
     <AccountSetupCard />
-    <TalentNetworkInvite />
   </div>
 
   <TabStrip

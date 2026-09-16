@@ -12,6 +12,7 @@
   import { cn } from '$lib/ui';
   import { visibleAccountNav, isSectionActive } from '$lib/accountNav';
   import { accountNavIcons } from '$lib/accountNavIcons';
+  import TalentNetworkInvite from '$lib/components/TalentNetworkInvite.svelte';
   import { dockOffset } from '$lib/assistantDock.svelte';
 
   // The account shell: one source of truth for the `my/*` chrome — the width
@@ -152,6 +153,17 @@
       </aside>
 
       <div class="min-w-0 flex-1">
+        <!-- Above the section's own heading, in every `my/*` section rather than only in
+             Profile's: being found without applying is not a fact about the page the
+             candidate happens to be on. It hides itself once dismissed, and on the
+             settings page it links to — a banner pointing at the page you are reading is
+             noise. -->
+        {#if !isSectionActive(path, '/my/talent-network')}
+          <div class="mb-4">
+            <TalentNetworkInvite />
+          </div>
+        {/if}
+
         {@render children()}
       </div>
     </div>

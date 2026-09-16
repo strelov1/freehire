@@ -1,20 +1,39 @@
 <script lang="ts">
-  import { Radar } from '@lucide/svelte';
+  import { onMount } from 'svelte';
+  import { Radar, X } from '@lucide/svelte';
   import { resolve } from '$app/paths';
   import { api } from '$lib/api';
   import type { TalentNetworkVisibility } from '$lib/types';
   import { isTalentNetworkMember } from '$lib/talentMembership';
   import { Button, Card } from '$lib/ui';
 
-  // The invitation into the Talent Network, mounted in /my/profile's LAYOUT next to
-  // AccountSetupCard — so it is on screen for all profile sections, not just the one the
-  // candidate happens to have open when they think to look for it. It is the ONLY way
-  // in — the account navigation no longer carries a Talent Network entry of its own.
+  // The invitation into the Talent Network, mounted by the ACCOUNT shell (`my/+layout`)
+  // above whatever section is open — not by Profile's layout, where it used to live.
+  // Being found without applying is not a fact about the page a candidate happens to be
+  // on, and one who never opens Profile never saw the offer at all.
   //
   // Read-only: it states where the candidate stands and links to the control. Joining is
   // a decision, and a decision belongs on the page that explains what it publishes.
+  //
+  // Dismissal is permanent and local to the browser. That is only safe because the
+  // account navigation carries a Talent Network section of its own now — closing a
+  // banner must never be the same gesture as losing the feature.
+  const DISMISSED_KEY = 'hire.talentInviteDismissed';
 
   let status = $state<'loading' | 'error' | 'ready'>('loading');
+  // Starts dismissed so a candidate who closed it never sees it flash back in before
+  // `onMount` has read their choice; the fetch below is what reveals it.
+  let dismissed = $state(true);
+
+  onMount(() => {
+    dismissed = localStorage.getItem(DISMISSED_KEY) === '1';
+  });
+
+  function dismiss() {
+    dismissed = true;
+    localStorage.setItem(DISMISSED_KEY, '1');
+  }
+
   let visibility = $state<TalentNetworkVisibility>('off');
   let handle = $state('');
   // See the settings page: membership does not mean a visitor can see them.
@@ -46,7 +65,7 @@
   });
 </script>
 
-{#if status === 'ready'}
+{#if status === 'ready' && !dismissed}
   <Card class="flex flex-wrap items-center justify-between gap-4 p-5">
     <div class="flex min-w-0 items-start gap-3">
       <Radar class="mt-0.5 size-5 shrink-0 text-muted-foreground" aria-hidden="true" />
@@ -68,7 +87,7 @@
       </div>
     </div>
 
-    <div class="flex shrink-0 gap-2">
+    <div class="flex shrink-0 items-center gap-2">
       {#if isMember && listed && handle}
         <Button
           variant="ghost"
@@ -82,6 +101,15 @@
       <Button variant={isMember ? 'secondary' : 'primary'} href={resolve('/my/talent-network')}>
         {isMember ? 'Manage' : 'Join'}
       </Button>
+      <button
+        type="button"
+        onclick={dismiss}
+        aria-label="Hide this"
+        title="Hide this"
+        class="-mr-1 rounded-md p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+      >
+        <X class="size-4" />
+      </button>
     </div>
   </Card>
 {/if}
