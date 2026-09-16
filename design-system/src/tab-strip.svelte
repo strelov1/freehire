@@ -56,27 +56,32 @@
   let buttons = $state<(HTMLElement | null)[]>([]);
   const activeIndex = $derived(tabs.findIndex((t) => t.id === active));
 
-  // The strip sits in normal document flow, not sticky — so a page scroll carries it (and
-  // its tabs) past a pointer that never moved. Each tab or gap that crosses the pointer as
-  // a result fires a real, browser-native hover enter/leave, and `transition-colors` below
-  // turns every one of those into a visible fade. Over a scroll gesture that's a rapid
+  // Neither scroll that can carry a tab past a pointer that never moved is optional to
+  // cover: the strip sits in normal document flow, not sticky, so an ordinary PAGE scroll
+  // moves it vertically past the pointer; and past its own width the row scrolls
+  // HORIZONTALLY under `overflow-x-auto` below, which a narrow viewport hits every time
+  // this component is built for. Either way, each tab or gap that crosses the pointer as a
+  // result fires a real, browser-native hover enter/leave, and `transition-colors` below
+  // turns every one of those into a visible fade — over a scroll gesture that's a rapid
   // string of fades with no pointer motion behind any of them, which reads as the row
-  // shimmering. The fix is not to drop the hover affordance (still correct once the page is
-  // still) — it's to make the color change land instantly while a scroll is in flight, so a
-  // hover neither of us asked for doesn't animate.
+  // shimmering. The two scrolls need separate listeners because DOM `scroll` events don't
+  // bubble, so the strip's own scroll never reaches a `window` listener. The fix for both
+  // is the same: don't drop the hover affordance (still correct once everything is still),
+  // just make the color change land instantly while a scroll is in flight, so a hover
+  // neither of us asked for doesn't animate.
   let scrolling = $state(false);
   let scrollSettleTimer: ReturnType<typeof setTimeout> | undefined;
+  function markScrolling() {
+    scrolling = true;
+    clearTimeout(scrollSettleTimer);
+    scrollSettleTimer = setTimeout(() => {
+      scrolling = false;
+    }, 150);
+  }
   $effect(() => {
-    function onScroll() {
-      scrolling = true;
-      clearTimeout(scrollSettleTimer);
-      scrollSettleTimer = setTimeout(() => {
-        scrolling = false;
-      }, 150);
-    }
-    window.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('scroll', markScrolling, { passive: true });
     return () => {
-      window.removeEventListener('scroll', onScroll);
+      window.removeEventListener('scroll', markScrolling);
       clearTimeout(scrollSettleTimer);
     };
   });
@@ -85,6 +90,11 @@
   // would paint a phantom edge-shadow on a row that already fits.
   let atStart = $state(true);
   let atEnd = $state(true);
+
+  function onStripScroll() {
+    measure();
+    markScrolling();
+  }
 
   function measure() {
     if (!strip) return;
@@ -187,7 +197,7 @@
 <div class={cn('relative', extra)}>
   <div
     bind:this={strip}
-    onscroll={measure}
+    onscroll={onStripScroll}
     role="tablist"
     aria-label={label}
     style={maskStyle}
