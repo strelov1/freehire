@@ -9,10 +9,12 @@
       over the probe's outcome plus a thin `main()` that performs the probe and exits
       0/1. Name it beside the existing `*-smoke.mjs` scripts and follow their shape.
 - [x] 1.3 Probe `GET /api/0/organizations/<org>/chunk-upload/` — the call `sentry-cli`
-      itself makes first, so "the check needs what the upload needs" is true by
-      construction rather than by reading a permission table. (The first draft probed the
-      project's release list, which Sentry also grants to a read-only `project:read`
-      token; an under-scoped credential would have passed. Found in review.) A second read
+      itself makes first, which is the closest question to the upload's own that a
+      side-effect-free read can ask. **Not proven to reject an under-scoped token**: that
+      is what 5.4 measures, and until it runs this is intent, not property. (The first
+      draft probed the project's release list, which Sentry also grants to a read-only
+      `project:read` token; an under-scoped credential would have passed. Found in
+      review.) A second read
       of the project's own releases catches a mistyped `SENTRY_PROJECT`, which the
       organisation-scoped first call cannot see.
 - [x] 1.4 REFACTOR + `simplify` pass over the new script and test; re-run the tests.

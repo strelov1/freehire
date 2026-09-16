@@ -189,6 +189,17 @@ a scheduled Dependabot run made every deploy stop, silently, at exit 0.
   2026-09-01: 244 email reminders piled up unsent across 43 people while every run exited
   0 with `failed=0`.
   Neither env file is in git and neither should be.
+- **A third env file exists, and no unit reads it.** `/opt/freehire/env/sentry-build.env`
+  (0600 root) holds `SENTRY_ORG`, `SENTRY_PROJECT`, `SENTRY_AUTH_TOKEN` and optionally
+  `SENTRY_URL`. It is sourced by `release.sh` at BUILD time and passed to the build with
+  `--preserve-env`, deliberately never exported into a running unit, so the token cannot
+  reach the app. It is listed here because it is now a **gate**: a rejected or
+  half-configured credential refuses the release (see
+  `web/scripts/sentry-credential-check.mjs`), and the way out is to remove the WHOLE file —
+  clearing only the token leaves the other two set, which is the half-configured case and
+  fails. Its own comment's promise that `--preserve-env` "keeps it out of `ps(1)`" is true
+  and insufficient: sudo logs the preserved environment, token value included, to the
+  journal.
 - **A `.d/` drop-in beside a unit is how the host adds to it**, and both spellings are in
   use here: `mail.conf` adds the env file above, `10-timeout.conf` and
   `10-skip-if-reindexing.conf` adjust one setting. A drop-in's directives apply after the

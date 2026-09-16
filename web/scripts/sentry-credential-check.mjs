@@ -74,11 +74,17 @@ function setting(env, name) {
  * The two reads, in the order they answer distinct questions.
  *
  * `chunk-upload` is what `sentry-cli` itself fetches first, to negotiate chunk options before
- * uploading anything. Probing it is what makes "the check needs what the upload needs" true by
- * construction rather than by reading a permission table: a token the upload cannot use cannot
- * get through here either. The earlier draft probed the project's release LIST, which Sentry
- * also grants to a read-only `project:read` token — so an under-scoped credential would have
- * passed the check and failed the upload, which is the exact case the check exists to catch.
+ * uploading anything — so probing it asks the closest question to the upload's own that a
+ * side-effect-free read can ask. The earlier draft probed the project's release LIST, which
+ * Sentry also grants to a read-only `project:read` token, so an under-scoped credential would
+ * have passed the check and failed the upload — the exact case the check exists to catch.
+ *
+ * **It is not yet proven that this endpoint rejects an under-scoped token.** Sentry's scope
+ * map for it may admit `org:read` beside the write scope, since the upload is the `POST` and
+ * this is the `GET`; nobody has tried one. Until a deliberately `project:read`-only token has
+ * been shown to fail here (task 5.4), "a token the upload cannot use cannot get through" is
+ * the intent of this probe, not a demonstrated property of it. The 403 branch below, and the
+ * `project:releases` it names, rest on the same unproven reading.
  *
  * The project read stays as a second step because `chunk-upload` is organisation-scoped and so
  * cannot see a mistyped `SENTRY_PROJECT` — which would upload into nothing, silently, in the

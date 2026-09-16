@@ -22,6 +22,14 @@ describe('isTransientNoise', () => {
     ['FREEHIRE-WEB-1D: the same, Firefox wording', new TypeError('error loading dynamically imported module: https://freehire.me/_app/immutable/chunks/a.js')],
     ['FREEHIRE-WEB-8: the same, Safari wording', new TypeError('Importing a module script failed.')],
     ['FREEHIRE-WEB-1R: the suggestion box abandoning a query', Object.assign(new Error('signal is aborted without reason'), { name: 'AbortError' })],
+    // The abort and timeout entries below had no test, which is how a filter entry becomes
+    // an assertion nobody can check. Each is a distinct MECHANISM, not a spelling: by class
+    // name, by the DOMException's own default text, and by a class name flattened into the
+    // message — the shape a rejected promise takes when it is re-thrown as
+    // `new Error(String(err))` and loses its name on the way.
+    ['an abort carrying only the DOMException default text', new Error('The operation was aborted.')],
+    ['an abort whose class name survived only in its message', new Error('AbortError: the read was cancelled')],
+    ['a timeout from AbortSignal.timeout(), before any ApiError wraps it', Object.assign(new Error('signal timed out'), { name: 'TimeoutError' })],
   ])('drops %s', (_, err) => {
     expect(isTransientNoise(err)).toBe(true);
   });

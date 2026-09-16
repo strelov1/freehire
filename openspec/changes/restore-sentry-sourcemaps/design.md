@@ -90,7 +90,10 @@ readable traces are wanted; a release that quietly drops them is not the release
 asked for. The blast radius is bounded by the existing blue/green discipline — a release
 that fails before the color switch leaves production exactly where it was, which is what
 `migrations FAILED — not touching green or the live color` already does on the same path.
-The escape hatch is to **unset** the token, which is the explicit opt-out below.
+The escape hatch is to remove the whole `sentry-build.env` file, which is the explicit
+opt-out below. Removing only the TOKEN is not the escape hatch and never was: it leaves
+`SENTRY_ORG` and `SENTRY_PROJECT` behind, which is the half-configured case this same
+design requires to fail. All three go or none do.
 
 ### An absent token stays a stated no-op
 
@@ -109,8 +112,8 @@ why `errorHandler` did not help.
 ## Risks / Trade-offs
 
 - **A dead token now blocks deploys entirely** → That is the intent, and it is bounded:
-  the failure is pre-build and pre-color-switch, the message names the cause, and unsetting
-  the variable ships immediately without one.
+  the failure is pre-build and pre-color-switch, the message names the cause, and removing
+  `sentry-build.env` ships immediately without one.
 - **The check passes a token that is valid but under-scoped** (it can read, but cannot
   upload) → Probe `GET /organizations/{org}/chunk-upload/`, the call `sentry-cli` itself
   makes before uploading anything. **This mitigation is not yet measured.** The first draft
@@ -157,9 +160,17 @@ copy is the arming step, and it is step 3.
 4. Confirm the next release passes the check and that Sentry shows artifacts for it.
 5. Re-read a production issue and confirm the frames name our own files.
 
-**Rollback:** unset `SENTRY_AUTH_TOKEN` on the host. Releases resume immediately, source
-maps go back to being absent, and the release says so on every run — the pre-change
-behaviour, minus the silence.
+**Rollback:** remove `/opt/freehire/env/sentry-build.env` on the host — the whole file, not
+just the token. Releases resume immediately, source maps go back to being absent, and the
+release says so on every run — the pre-change behaviour, minus the silence.
+
+An earlier draft of this paragraph said "unset `SENTRY_AUTH_TOKEN`", which would have done
+the opposite: `SENTRY_ORG` and `SENTRY_PROJECT` would still be set, that is the
+half-configured case, and this design requires the release to FAIL on it. The rollback
+would have tightened the gate it was meant to open — in the document somebody reads while
+the gate is already blocking them. `release.sh`'s own message was right throughout ("fix
+it, or **remove it** to release without source maps"); this paragraph was the copy that
+drifted, which is the hazard this whole change is about.
 
 ## Open Questions
 
