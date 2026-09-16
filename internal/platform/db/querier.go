@@ -6504,6 +6504,15 @@ type Querier interface {
 	// The CHECK on the table still decides whether the result is legal — disabling without a
 	// reason is refused here exactly as it is in psql, which is the point of putting the rule
 	// in the schema.
+	//
+	// The "documented default" arrives as an ARGUMENT, not as a literal. It used to be
+	// `COALESCE(..., 3600)` here, which made this the THIRD place holding one fact -- beside
+	// ingestsched.DefaultCadence and the column's own DEFAULT -- and the three agreed only
+	// because nobody had ever moved one. On 2026-09-16 one moved: DefaultCadence went to 2h for
+	// the reason freehire#2862 measured, and this literal quietly kept handing every newly
+	// written row the hourly ask that had just been shown not to fit. Passing the constants in
+	// leaves the column defaults for hand-written psql only, where the schema test pins them to
+	// the same constants.
 	UpsertIngestSchedule(ctx context.Context, arg UpsertIngestScheduleParams) error
 	// Single atomic write: upsert the company (only when the slug is non-empty,
 	// via the WHERE on the SELECT) and the job together, keeping the "one write =
