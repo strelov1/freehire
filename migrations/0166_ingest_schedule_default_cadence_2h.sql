@@ -1,0 +1,21 @@
+-- ingest_schedule.cadence_sec's column default was 3600, matching ingestsched.DefaultCadence
+-- when both were written. That constant is 7200 now (freehire#2887's settings.go change, for
+-- the reason freehire#2862 measured: ~230 tail providers at ~150s each is ~9.6 slot-hours per
+-- sweep against 5 slots, so an hourly ask is 190% of capacity and 837 of 1482 firings were
+-- being thrown away). This makes the two agree again.
+--
+-- They are two places holding ONE fact, and the cutover is exactly where that hurts. The Go
+-- constant applies to a provider with NO row; the column default applies the moment a row
+-- exists. `schedule-board --manage` creates a row — it must, to store managed = true — so
+-- handing a provider to the scheduler would have silently HALVED its cadence, from the 2h its
+-- static timer actually runs to the 1h this column would have filled in. A rollout-only flag
+-- must be behaviour-neutral, and that one was about to not be.
+--
+-- Found before any ordinary provider was cut over, by reading the column defaults rather than
+-- trusting that changing the Go constant was enough.
+--
+-- Existing rows are untouched on purpose: every one of them is a curated override whose value
+-- is a measurement (see ingest_schedule.notes), and a column default has never applied to them.
+-- `ALTER COLUMN SET DEFAULT` rewrites no rows and takes no lock worth naming.
+ALTER TABLE public.ingest_schedule
+    ALTER COLUMN cadence_sec SET DEFAULT 7200;
