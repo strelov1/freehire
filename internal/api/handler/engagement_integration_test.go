@@ -30,14 +30,15 @@ func TestEngagementStatsEndpoint(t *testing.T) {
 	app.Get("/api/v1/stats/engagement", h.EngagementStats)
 
 	type counts struct {
-		Saved            int `json:"saved"`
-		Applied          int `json:"applied"`
-		Viewed           int `json:"viewed"`
-		CvsUploaded      int `json:"cvs_uploaded"`
-		CvsTailored      int `json:"cvs_tailored"`
-		MatchAnalyses    int `json:"match_analyses"`
-		InboxesConnected int `json:"inboxes_connected"`
-		SavedSearches    int `json:"saved_searches"`
+		Saved            int    `json:"saved"`
+		Applied          int    `json:"applied"`
+		Viewed           int    `json:"viewed"`
+		ViewedSince      string `json:"viewed_since"`
+		CvsUploaded      int    `json:"cvs_uploaded"`
+		CvsTailored      int    `json:"cvs_tailored"`
+		MatchAnalyses    int    `json:"match_analyses"`
+		InboxesConnected int    `json:"inboxes_connected"`
+		SavedSearches    int    `json:"saved_searches"`
 	}
 	type envelope struct {
 		Data counts `json:"data"`
@@ -60,10 +61,13 @@ func TestEngagementStatsEndpoint(t *testing.T) {
 	}
 
 	// --- Empty tables: all zeros -----------------------------------------------
-	if c := get(); c.Saved != 0 || c.Applied != 0 || c.Viewed != 0 ||
+	// `viewed_since` is null here, not a zero date: nothing has been rolled up, so
+	// there is no window to name. Whatever renders it drops the note in that case, so
+	// a placeholder date would put a fabricated day on the page.
+	if c := get(); c.Saved != 0 || c.Applied != 0 || c.Viewed != 0 || c.ViewedSince != "" ||
 		c.CvsUploaded != 0 || c.CvsTailored != 0 || c.MatchAnalyses != 0 ||
 		c.InboxesConnected != 0 || c.SavedSearches != 0 {
-		t.Fatalf("empty tables: got %+v, want all zeros", c)
+		t.Fatalf("empty tables: got %+v, want all zeros and a null viewed_since", c)
 	}
 
 	// --- Seed a user + jobs + interactions -------------------------------------
@@ -84,8 +88,8 @@ func TestEngagementStatsEndpoint(t *testing.T) {
 	j1, j2, j3 := jobID("j1"), jobID("j2"), jobID("j3")
 
 	// j1: viewed only; j2: viewed + saved; j3: viewed + applied.
-	// saved/applied come from user_jobs (→ saved=1, applied=1). "viewed" is now the
-	// all-traffic total SUM(jobs.view_count), independent of user_jobs, seeded below.
+	// saved/applied come from user_jobs (→ saved=1, applied=1). "viewed" is independent
+	// of user_jobs — it comes from the job_daily_views rollup seeded below.
 	seedInteraction := func(jid int64, saved, applied bool) {
 		if _, err := pool.Exec(ctx,
 			`WITH mark AS (
@@ -156,23 +160,31 @@ func TestEngagementStatsEndpoint(t *testing.T) {
 	// SUM over the 6M-row jobs table, which seqscans for ~90s). Seed 5 + 2 + 1 = 8
 	// page views across days/jobs.
 	//
-	// The two columns are seeded to DIFFERENT totals on purpose: `uniques` (100 + 100 +
-	// 100 = 300) fuses bot-filtered page opens with unfiltered API reads, so a query
+	// The two columns are seeded to DIFFERENT totals on purpose: `uniques` (100 each,
+	// 400 in all) fuses bot-filtered page opens with unfiltered API reads, so a query
 	// reading it publishes crawler traffic as engagement. Seeding both to the same value
 	// would let either column satisfy this assertion, which is how the wrong one shipped.
+	//
+	// The 07-18 row stands for the pre-0138 history: `uniques` recorded, `page_uniques`
+	// still at its DEFAULT 0 because the column did not exist when the rollup wrote it.
+	// It is what makes `viewed_since` 07-19 rather than 07-18 — the window has to name
+	// the first day the column carries a COUNT, not the first day the table has a row,
+	// or the note claims coverage of days that are silently zero.
 	if _, err := pool.Exec(ctx,
 		`INSERT INTO job_daily_views (day, job_id, uniques, page_uniques) VALUES
 		   (DATE '2026-07-20', $1, 100, 5),
 		   (DATE '2026-07-20', $2, 100, 2),
-		   (DATE '2026-07-19', $1, 100, 1)`,
+		   (DATE '2026-07-19', $1, 100, 1),
+		   (DATE '2026-07-18', $1, 100, 0)`,
 		j1, j2); err != nil {
 		t.Fatalf("seed job_daily_views: %v", err)
 	}
 
 	if c := get(); c.Saved != 1 || c.Applied != 1 || c.Viewed != 8 ||
+		c.ViewedSince != "2026-07-19" ||
 		c.CvsUploaded != 1 || c.CvsTailored != 1 || c.MatchAnalyses != 1 ||
 		c.InboxesConnected != 2 || c.SavedSearches != 1 {
-		t.Errorf("got %+v, want {Saved:1 Applied:1 Viewed:8 CvsUploaded:1 CvsTailored:1 "+
-			"MatchAnalyses:1 InboxesConnected:2 SavedSearches:1}", c)
+		t.Errorf("got %+v, want {Saved:1 Applied:1 Viewed:8 ViewedSince:2026-07-19 "+
+			"CvsUploaded:1 CvsTailored:1 MatchAnalyses:1 InboxesConnected:2 SavedSearches:1}", c)
 	}
 }

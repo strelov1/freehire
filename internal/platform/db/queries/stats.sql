@@ -72,6 +72,22 @@ ORDER BY d;
 -- 2026-09-16, `uniques` reported 11,027,722 against `page_uniques`' 5,401,347, so
 -- the figure this endpoint published was more than half robots — and it sat on /open
 -- beside the seven signed-in counters as though it described the same people.
+--
+-- `viewed` is therefore NOT an all-time figure, and `viewed_since` is what says so.
+-- Migration 0138 added `page_uniques` with a `DEFAULT 0` and deliberately did not
+-- backfill it, so every row the worker wrote before that day carries a zero: measured
+-- 2026-09-16, July held 203,781 `uniques` and August 5,194,396, both against a
+-- `page_uniques` of 0. Neither is recoverable. `cmd/rollup-views --backfill` reads the
+-- older .gz history, but `processed_view_logs` marks a file applied by its filesystem
+-- identity and skips it forever after — which is the same cursor that stops a re-run
+-- double-counting `uniques` — and the host's logrotate keeps 12 days, so the July and
+-- August logs are gone from disk regardless. Publishing the sum as a cumulative total
+-- would trade "inflated by robots" for "silently the last fortnight", so the window is
+-- published beside the number instead. It is DERIVED (the earliest day the column
+-- actually carries a count), never a constant naming the migration: if the history is
+-- ever recovered the window widens on its own, and a hardcoded date would then lie in
+-- the other direction. NULL means nothing has been rolled up yet.
+--
 -- The remaining five mirror event-total semantics from their own tables:
 -- cvs_uploaded is the count of users holding a stored résumé (one per user, so also a
 -- people count); cvs_tailored counts CVs created as a per-vacancy copy, read off the
@@ -88,6 +104,7 @@ SELECT
     -- honest count: one that outlived its posting is still an application somebody made.
     (SELECT count(*) FROM applications WHERE applied_at IS NOT NULL)::int AS applied,
     (SELECT COALESCE(sum(page_uniques), 0) FROM job_daily_views)::int AS viewed,
+    (SELECT min(day) FROM job_daily_views WHERE page_uniques > 0)::date AS viewed_since,
     (SELECT count(*) FROM users WHERE resume_object_key IS NOT NULL)::int AS cvs_uploaded,
     (SELECT count(*) FROM cvs WHERE is_tailored)::int AS cvs_tailored,
     (SELECT count(*) FROM user_job_analysis)::int AS match_analyses,

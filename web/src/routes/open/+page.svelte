@@ -42,6 +42,26 @@
   const fmt = <F extends string | null>(n: number | null, fallback: F) =>
     n == null ? fallback : compactNf.format(n);
 
+  // "2026-09-04" → "since Sep 4, 2026", for the one figure that is not all-time.
+  //
+  // Formatted in UTC, not the reader's zone: a date-only ISO string parses as UTC
+  // midnight, so rendering it locally shows the day BEFORE for every visitor west of
+  // UTC — and this note exists to be precise about a window, which makes being off by
+  // a day the one error it cannot afford. A null (nothing rolled up yet) or an
+  // unparseable value drops the note rather than printing "Invalid Date".
+  const sinceFmt = new Intl.DateTimeFormat('en', {
+    timeZone: 'UTC',
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  });
+  function sinceNote(day: string | null): string | undefined {
+    if (!day) return undefined;
+    const d = new Date(`${day}T00:00:00Z`);
+    if (Number.isNaN(d.getTime())) return undefined;
+    return `since ${sinceFmt.format(d)}`;
+  }
+
   const regionNames = new Intl.DisplayNames(['en'], { type: 'region' });
   function countryName(code: string): string {
     try {
@@ -127,17 +147,23 @@
   // is what people build on top of it (CV, AI read, mail). Order carries that
   // grouping, so keep the halves intact when adding a counter.
   //
-  // The first cell is the one exception in the grid and its LABEL has to say so: every
-  // other counter here is signed-in members, while `viewed` counts job-page opens by
-  // every visitor, so it is three orders of magnitude larger by construction. The prose
-  // below is not enough — this grid gets screenshotted on its own, and read that way
-  // "jobs viewed 5,401,347" beside "jobs saved 1,448" looks like a broken ratio rather
-  // than two different populations.
+  // The first cell is the one exception in the grid, twice over, and its LABEL has to
+  // carry both: every other counter is signed-in members and all-time, while `viewed`
+  // is job-page opens by every visitor (three orders of magnitude larger by
+  // construction) measured only from the day the rollup began recording the
+  // bot-filtered column. The prose below is not enough for either — this grid gets
+  // screenshotted on its own, and read that way "jobs viewed 5,401,347" beside "jobs
+  // saved 1,448" looks like a broken ratio rather than two different populations, and
+  // reads as the life of the site rather than a fortnight.
+  //
+  // The window comes from the API, never from a date written here: the API derives it
+  // from the data, so if the missing history is ever recovered the note widens on its
+  // own, and a hardcoded date would start lying the moment that happened.
   const engagement = $derived.by(() => {
     const e = data.engagement;
     if (!e) return null;
     return [
-      { value: nf.format(e.viewed), label: 'job views, all visitors' },
+      { value: nf.format(e.viewed), label: 'job views, all visitors', note: sinceNote(e.viewed_since) },
       { value: nf.format(e.saved), label: 'jobs saved' },
       { value: nf.format(e.applied), label: 'applications' },
       { value: nf.format(e.saved_searches), label: 'saved searches' },
@@ -271,15 +297,22 @@
     </div>
     <h2 class="mt-3 text-xl font-semibold tracking-tight">What people do here</h2>
     <p class="mb-6 mt-1 text-sm text-muted-foreground">
-      Job pages opened by every visitor, signed in or not, and bot-filtered — then the signed-in
-      interactions on top: postings tracked, CVs written and tailored to a vacancy, matches analyzed
+      Job pages opened by every visitor, signed in or not, and bot-filtered — counted only from the
+      day we started filtering, which is why that one carries a date. Then the signed-in interactions
+      on top, all-time: postings tracked, CVs written and tailored to a vacancy, matches analyzed
       against a CV, and inboxes wired up for application mail.
     </p>
     {#if engagement}
       <dl class="grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-4">
         {#each engagement as e (e.label)}
           <div class="flex flex-col bg-background p-5 sm:p-6">
-            <dt class="font-mono text-xs uppercase tracking-wide text-balance text-muted-foreground">{e.label}</dt>
+            <!-- The window rides in the LABEL, above the figure, not under it: the
+                 numbers are bottom-aligned across the row by `mt-auto`, so a caption
+                 below one of them would lift that cell's number out of line with its
+                 seven neighbours. -->
+            <dt class="font-mono text-xs uppercase tracking-wide text-balance text-muted-foreground">
+              {e.label}{#if e.note}<span class="block normal-case opacity-70">{e.note}</span>{/if}
+            </dt>
             <!-- Sized for the WIDEST figure this grid can hold, not the typical one: the
                  view count runs seven digits and text-4xl overflowed its 1/4-width cell
                  into the neighbour. Compacting it to "5.4M" like the catalogue strip above

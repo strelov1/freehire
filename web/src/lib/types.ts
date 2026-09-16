@@ -1053,11 +1053,17 @@ export interface UserGrowthPoint {
  *  `viewed` is the ONLY field here that is not a signed-in count: it is bot-filtered
  *  job-page opens by every visitor, signed in or not, so it is orders of magnitude
  *  larger than its neighbours by construction. Whatever renders it must say so —
- *  presenting the eight side by side as one population reads as a broken ratio. */
+ *  presenting the eight side by side as one population reads as a broken ratio.
+ *
+ *  It is also the only one that is not all-time. `viewed_since` is the first day the
+ *  underlying column carries a count (null before the first rollup): the column shipped
+ *  without a backfill and the nginx history to recover is past logrotate's window, so
+ *  render the two together — the number alone reads as the life of the site. */
 export interface EngagementStats {
   saved: number;
   applied: number;
   viewed: number;
+  viewed_since: string | null;
   cvs_uploaded: number;
   cvs_tailored: number;
   match_analyses: number;
