@@ -57,18 +57,23 @@ func WriteFile(path string, s Snapshot) error {
 	if err != nil {
 		return fmt.Errorf("logodomain: create temp: %w", err)
 	}
-	// A no-op once the rename has succeeded, and what stops a failure anywhere below
-	// leaving a temp file next to the map.
-	defer os.Remove(tmp.Name())
+	// What stops a failure anywhere below leaving a temp file next to the map. Its error
+	// is deliberately dropped: on the success path the rename has already consumed the
+	// name and this is EXPECTED to fail, so reporting it would mean reporting every
+	// successful write.
+	defer func() { _ = os.Remove(tmp.Name()) }()
 
 	if err := json.NewEncoder(tmp).Encode(s); err != nil {
-		tmp.Close()
+		// Close's error is dropped on every failure path below: the write has already
+		// failed, the deferred Remove is what actually cleans up, and replacing the real
+		// cause with a close error would lose the only useful half of the report.
+		_ = tmp.Close()
 		return fmt.Errorf("logodomain: encode: %w", err)
 	}
 	// Sync before the rename: the rename is atomic with respect to readers, but a crash
 	// between them would publish a name pointing at unwritten blocks.
 	if err := tmp.Sync(); err != nil {
-		tmp.Close()
+		_ = tmp.Close()
 		return fmt.Errorf("logodomain: sync: %w", err)
 	}
 	if err := tmp.Close(); err != nil {
