@@ -289,7 +289,7 @@ export function reportedCount(n: number): number | undefined {
  *  sourceLogoUrl, the same pair /sources and JobSourceRow render their marks with).
  *  Other dynamic facets (skills, countries, cities) have no logo proxy to ask. */
 function dynamicIcon(param: string, value: string): string | undefined {
-  if (param === 'source') return sourceLogoUrl(sourceLabel(value)) ?? undefined;
+  if (param === 'source') return sourceLogoUrl(sourceLabel(sourceLogoBrand(value))) ?? undefined;
   return undefined;
 }
 
@@ -353,22 +353,38 @@ function options(values: readonly string[], labels: Record<string, string> = {})
 
 // Label overrides for the source facet, where the display name differs from the
 // title-cased fallback (e.g. "smartrecruiters" → "SmartRecruiters"). A new ATS
-// adapter needs no entry unless its casing is special. Used by sourceLabel for the
-// dynamic (distribution-driven) source select, so a source with a real job count
-// renders with its proper name.
+// adapter needs no entry unless its casing is special — EXCEPT a slug that
+// concatenates several English words with no separator (weworkremotely,
+// nofluffjobs), which the fallback cannot split correctly at all and so always
+// needs one. Used by sourceLabel for the dynamic (distribution-driven) source
+// select, so a source with a real job count renders with its proper name.
 const SOURCE_LABELS: Record<string, string> = {
   telegram: 'Telegram', greenhouse: 'Greenhouse', smartrecruiters: 'SmartRecruiters',
   bamboohr: 'BambooHR', successfactors: 'SuccessFactors',
   workatastartup: 'Work at a Startup', remoteok: 'RemoteOK', arc: 'Arc',
   jobstash: 'JobStash', globalpayments: 'Global Payments',
   usajobs: 'USAJobs', whatjobs: 'WhatJobs', ukgready: 'UKG Ready',
-  edjoin: 'EDJOIN',
+  edjoin: 'EDJOIN', weworkremotely: 'We Work Remotely', hackernews: 'Hacker News',
+  cryptocurrencyjobs: 'Cryptocurrency Jobs', landingjobs: 'Landing.Jobs',
+  getonbrd: 'Get on Board', mycareersfuture: 'My Careers Future',
+  nofluffjobs: 'No Fluff Jobs', powertofly: 'PowerToFly',
 };
 
 /** Display label for a source slug (e.g. smartrecruiters → "SmartRecruiters"),
- *  used by the dynamic source select; falls back to the title-cased slug. */
+ *  used by the dynamic source select; falls back to the title-cased slug, with
+ *  hyphens normalised to word breaks first (the same convention companyLabel and
+ *  skillLabel use) so a regional variant like "whatjobs-ae" reads as "Whatjobs Ae"
+ *  rather than one unbroken word. */
 export function sourceLabel(value: string): string {
-  return SOURCE_LABELS[value] ?? titleCase(value);
+  return SOURCE_LABELS[value] ?? titleCase(value.replace(/-/g, '_'));
+}
+
+// The whatjobs-<country> boards (~40 of them) are one crawl adapter's regional
+// splits of a single brand, not distinct companies — WhatJobs itself is the only
+// one with a mark the logo proxy can resolve. Used only for the LOGO lookup, never
+// the label: a picker listing every region needs each one to stay distinguishable.
+function sourceLogoBrand(value: string): string {
+  return value.startsWith('whatjobs-') ? 'whatjobs' : value;
 }
 
 // The backend's `regions` reach vocabulary (vocab.RegionValues): one consistent
