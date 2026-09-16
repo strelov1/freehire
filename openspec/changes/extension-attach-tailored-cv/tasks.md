@@ -57,9 +57,26 @@
 
 ## 7. Verification
 
-- [ ] 7.1 `npm test` (vitest) green for all new pure/unit-testable pieces.
+- [x] 7.1 `npm test` (vitest) green for all new pure/unit-testable pieces. 310/310 passing;
+      `npm run check` (svelte-check) 0 errors; `npm run build` succeeds and the built
+      manifest carries `debugger`/`downloads`.
 - [ ] 7.2 `npm run build` + load unpacked; live-verify against a real Greenhouse posting with
       a tailored CV: action appears, click attaches the file, field shows it, debugger
       detaches (banner disappears) whether the call succeeds or is made to fail.
-- [ ] 7.3 Live-verify the two failure modes from §5.2 report a clear message rather than
-      hanging or silently doing nothing.
+      **Partially done**: the extension's own service worker (not a standalone script) was
+      driven headfully against a live Greenhouse posting (job-boards.greenhouse.io/anthropic)
+      and ran the exact `chrome.debugger.attach` → `Runtime.evaluate` (our
+      `uploadInputExpression` output) → `DOM.setFileInputFiles` → `detach` sequence
+      `attachTailoredCV` runs — the page's own DOM confirmed the file landed
+      (`input.files.length === 1`, correct name) and the debugger detached cleanly after.
+      **Not done**: the full click-through from the panel's "Attach tailored CV" button
+      through a real signed-in account with a real tailored CV — this environment has
+      neither a running local hire server nor a test account with a tailored CV. The
+      button→message→background wiring is typechecked and mirrors the panel's other
+      `getToken`-gated effects, but has not been clicked for real.
+- [x] 7.3 Live-verify the two failure modes from §5.2 report a clear message rather than
+      hanging or silently doing nothing. DevTools-open collision verified live: a second
+      `chrome.debugger.attach` on a tab the first already held failed with
+      `"Another debugger is already attached to the tab with id: N."`, which
+      `classifyAttachError` turns into the DevTools message. The cross-origin-iframe refusal
+      is a pure, already-unit-tested `frame !== 0` check with no live-only behavior to add.
