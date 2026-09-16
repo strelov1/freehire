@@ -83,12 +83,21 @@
 
 - [x] 8.1 Run `pnpm test`, `pnpm lint` and `pnpm check` in `web/`; run `pnpm check:dead` for the
   exports the deleted form no longer uses.
-- [ ] 8.2 Verify by hand against an armed gate: create a key as a password account, create a key
-  as a provider-only account including the full round trip, revoke a key, and open the
-  delete-account dialog through the round trip. Deferred to PRODUCTION rather than a local run:
-  the round trip needs a real Google OAuth client and a real `hire_recent_auth` cookie, which a
-  local backend cannot issue for the provider path — the very leg that was broken. The SSR crash
-  this would otherwise be the only net for is now covered by `recentAuth.test.ts`'s
-  "without usable storage" cases.
+- [x] 8.2 Verify by hand against an armed gate: create a key as a provider-only account
+  including the full round trip. Deferred to PRODUCTION rather than a local run — the trip needs
+  a real OAuth client and a real `hire_recent_auth` cookie, which a local backend cannot issue
+  for the provider path, the very leg that was broken.
+
+  **It found one.** The round trip died at the provider: `ProviderV2` asked for a return to
+  `/api/v2/auth/oauth/<name>/callback` while only `/api/v1/...` was ever registered, and GitHub
+  refused outright ("The redirect_uri is not associated with this application"). Only Google had
+  both listed, and nothing in the repository said the two paths existed or had to be configured
+  twice. Fixed separately (#2884): both flows now build the same registered callback, a test
+  pins them together, and they are told apart at the callback by which state cookie returns.
+  Confirmed working in production afterwards, sign-in included.
+
+  Worth recording as the reason this task existed: every other check in this change passed
+  against a flow that could not complete. A test suite cannot see a URL a third party has never
+  been told about.
 - [x] 8.3 Confirm on the running docs page that `/docs/api` no longer offers a curl for
   `POST /me/api-keys` and that the replacement paragraph's link resolves.

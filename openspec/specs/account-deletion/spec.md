@@ -5,9 +5,7 @@
 Self-serve, irreversible erasure of a member's account: what is erased across
 Postgres, object storage and Google, what deliberately survives, and the surface
 that fronts it.
-
 ## Requirements
-
 ### Requirement: Self-serve irreversible account deletion
 
 The system SHALL expose `DELETE /api/v1/me`, which permanently erases the calling
@@ -157,6 +155,16 @@ be restored, and what is erased.
   the destructive action; the action SHALL be disabled until it matches.
 - After a successful deletion the client SHALL clear its local session state and
   redirect to the public site.
+- Deletion is gated on a proof of recent credential control, so the surface SHALL offer the
+  member a way to produce that proof from within the surface itself: a password input for an
+  account that has a password, and its connected sign-in providers for an account that does
+  not.
+- Confirming through a provider leaves the site and returns by a full-page navigation, which
+  closes the surface. The client SHALL reopen the surface on return and state that identity was
+  confirmed.
+- The typed email confirmation SHALL NOT be restored on return. It exists to slow a member
+  down before an irreversible act, so it SHALL be re-entered rather than carried across the
+  navigation.
 
 #### Scenario: Member sees what deletion means
 
@@ -172,3 +180,21 @@ be restored, and what is erased.
 
 - **WHEN** the deletion request succeeds
 - **THEN** the client drops its session state and lands on a public page as a signed-out visitor
+
+#### Scenario: The surface can produce the proof it needs
+
+- **WHEN** a member opens the delete-account surface
+- **THEN** the surface offers a password input if the account has a password, or a
+  confirmation control per active connected provider if it does not
+
+#### Scenario: The surface reopens after a provider round trip
+
+- **WHEN** a member confirms through a provider from the delete-account surface and is returned
+- **THEN** the surface is open again and states that identity was confirmed
+
+#### Scenario: The typed address is re-entered after the round trip
+
+- **WHEN** the delete-account surface reopens after a provider round trip
+- **THEN** the typed email confirmation is empty and the delete action is disabled until it is
+  typed again
+
