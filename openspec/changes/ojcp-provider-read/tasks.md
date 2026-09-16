@@ -1,0 +1,77 @@
+## 1. Groundwork
+
+- [ ] 1.1 Vendor OJCP's published JSON Schemas (manifest, job-posting, and the three read
+      tool responses) into `internal/api/ojcp/testdata/schemas/`, with a short README noting
+      the upstream commit they were taken from — they are the oracle every projection test
+      validates against, so their provenance must be recorded.
+- [ ] 1.2 Add a schema-validation test helper that loads those schemas offline and asserts a
+      projected value against one. Prove it by feeding it a value that violates a `required`
+      field and watching it fail.
+- [ ] 1.3 Register `internal/api/ojcp` and `internal/api/ojcpmcp` in
+      `internal/platform/arch/layering/blocks.go` (both in the `api` block) and confirm the
+      layering guard passes with the packages still empty.
+
+## 2. JobPosting projection
+
+- [ ] 2.1 Project `jobview.Job` into an OJCP `JobPosting`: `ojcp_id` from the public slug,
+      `url` from our page, `official_job_url` from the source URL, title, employer,
+      `datePosted`, `validThrough`, `jobLocation`, `employmentType`, `skills_required`.
+- [ ] 2.2 Project the ghost verdict into `agent_notes`, omitting the field entirely when the
+      posting carries no verdict.
+- [ ] 2.3 Project a stored apply form into an `ApplyPath` carrying `type`, `ats_provider` and
+      `required_fields`.
+- [ ] 2.4 Derive `supports_agent_submission` from auto-apply's supported-source set, reporting
+      `false` for a challenge-gated ATS. Test both directions against real source names.
+- [ ] 2.5 Project a posting with no captured form into a single `external_redirect` path.
+
+## 3. Tool implementations (transport-free)
+
+- [ ] 3.1 `search_jobs`: map OJCP's input (query, location, filters, pagination) onto the
+      existing search core's parameters, and its result onto the OJCP response envelope
+      (`ojcp_version`, `query`, `total_results`, `returned`, `offset`, `jobs`).
+- [ ] 3.2 Carry the existing "parameters we could not read" reporting through into the OJCP
+      response so an unrecognised filter still widens rather than silently narrows.
+- [ ] 3.3 `get_job_detail`: one posting with its full description; a not-found id yields the
+      OJCP error envelope, never an empty posting.
+- [ ] 3.4 `get_employer_context`: the employer projection for a company we hold.
+- [ ] 3.5 Assert the visibility predicate is the shared one — a test that a private posting
+      and a suppressed duplicate are unreachable through every tool.
+
+## 4. REST transport
+
+- [ ] 4.1 Add `/ojcp/v1/*` routes wiring each tool to its handler, loading data the way the
+      existing handlers do.
+- [ ] 4.2 Render errors as the OJCP error envelope with the matching HTTP status.
+- [ ] 4.3 Ignore unrecognised input fields rather than rejecting the call.
+- [ ] 4.4 Integration test (build tag `integration`) covering all three tools end to end.
+
+## 5. MCP transport
+
+- [ ] 5.1 Add the official Go MCP SDK to `go.mod` and stand up a server in
+      `internal/api/ojcpmcp` registering the three tools against the same implementations.
+- [ ] 5.2 Mount it into Fiber via `adaptor.HTTPHandler` at the path the manifest declares.
+- [ ] 5.3 Render errors as JSON-RPC errors carrying the OJCP envelope in `data`.
+- [ ] 5.4 Test that the same call over both transports yields an identical projected payload.
+
+## 6. Manifest
+
+- [ ] 6.1 Render the manifest from deployment configuration — provider block, `tools`,
+      `feed_endpoints`, `mcp_endpoint`, `auth`, `rate_limits` — and serve it at
+      `/.well-known/ojcp.json` with `Content-Type: application/json`.
+- [ ] 6.2 Test that every name in `tools` resolves to a registered handler on both transports,
+      so the manifest cannot advertise a tool we do not answer.
+- [ ] 6.3 Test that the declared `rate_limits` are read from the same configuration the
+      limiter enforces, so the two cannot disagree.
+- [ ] 6.4 Validate the rendered manifest against the vendored manifest schema.
+
+## 7. Documentation and rollout
+
+- [ ] 7.1 Document the REST tools in `web/static/openapi.yaml` (the `artifacts` CI job
+      validates it).
+- [ ] 7.2 Write `internal/api/ojcp/AGENTS.md`: what the package is, the pure-projection rule,
+      why `supports_agent_submission` is derived, and where the schemas came from.
+- [ ] 7.3 Add the OJCP surface to the root `CLAUDE.md` module table.
+- [ ] 7.4 After deploy: run OJCP's conformance suite against the live origin and record what
+      it reports.
+- [ ] 7.5 After a clean conformance run: open the `ADOPTERS.md` PR (tier: Implementing) and
+      the provider registry entry.
