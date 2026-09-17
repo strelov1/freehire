@@ -2,7 +2,7 @@
   import { onMount, onDestroy } from 'svelte';
   import { resolve } from '$app/paths';
   import { RefreshCw, FileText, Check, Loader, TriangleAlert } from '@lucide/svelte';
-  import { refuses, resetsAtLabel } from '$lib/allowance';
+  import { notInPlan, refuses, resetsAtLabel } from '$lib/allowance';
   import { api } from '$lib/api';
   import { track } from '$lib/analytics';
   import { isAuthenticated } from '$lib/auth.svelte';
@@ -372,13 +372,24 @@
 
     <!-- Today's analyses are spent AND the ceiling is live: a fresh one can't run (a
          recompute of an already-analysed role stays available on those pages). While the
-         ceiling is only being counted this stays hidden and the analysis runs. -->
+         ceiling is only being counted this stays hidden and the analysis runs.
+
+         Two refusals, not one. A plan that includes no analyses at all is not one the reader
+         used up, and naming a reset time under it promises a morning that changes nothing —
+         the link below is the only thing that would. -->
     {#if blockedNew}
       <div class="fit-reveal flex flex-col items-center gap-2 rounded-xl border border-dashed border-border bg-card p-10 text-center" style="--i:1">
-        <p class="text-sm font-medium">You've used today's job analyses.</p>
-        <p class="text-xs text-muted-foreground">
-          More at {resetsAtLabel(allowance)}. Analyses you've already run stay available.
-        </p>
+        {#if notInPlan(allowance)}
+          <p class="text-sm font-medium">Your plan doesn't include job analyses.</p>
+          <p class="text-xs text-muted-foreground">
+            Upgrade to read this role against your CV — the gaps, the verdict and what to fix.
+          </p>
+        {:else}
+          <p class="text-sm font-medium">You've used today's job analyses.</p>
+          <p class="text-xs text-muted-foreground">
+            More at {resetsAtLabel(allowance)}. Analyses you've already run stay available.
+          </p>
+        {/if}
         <PlanLimitLink />
       </div>
     {/if}

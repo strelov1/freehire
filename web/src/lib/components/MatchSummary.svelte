@@ -2,7 +2,7 @@
   import { resolve } from '$app/paths';
   import { goto } from '$app/navigation';
   import { ArrowRight, FileText, SquarePen } from '@lucide/svelte';
-  import { refuses, remaining, resetsAtLabel } from '$lib/allowance';
+  import { notInPlan, refuses, remaining, resetsAtLabel } from '$lib/allowance';
   import { api } from '$lib/api';
   import { isAuthenticated } from '$lib/auth.svelte';
   import { promptSignIn } from '$lib/signin';
@@ -107,8 +107,14 @@
       </span>
     </a>
   {:else if allowanceRefused}
+    <!-- A plan that includes none of the feature is not one the reader spent, and naming a
+         reset time under it promises a morning at which it is still zero. -->
     <p class="text-sm text-muted-foreground">
-      You've used today's {refusedName}. More at {resetsAtLabel(refusedAllowance)}.
+      {#if notInPlan(refusedAllowance)}
+        Your plan doesn't include {refusedName}.
+      {:else}
+        You've used today's {refusedName}. More at {resetsAtLabel(refusedAllowance)}.
+      {/if}
     </p>
     <PlanLimitLink />
   {:else}

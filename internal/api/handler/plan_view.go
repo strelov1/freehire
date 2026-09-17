@@ -56,25 +56,59 @@ func viewDecision(d plan.Decision) allowanceView {
 }
 
 // refusalMessage is what a refused caller is told. It names the feature that ran out rather
-// than the account, because the two refusals mean opposite things to the person reading
-// them: one clears at midnight, the other means they are being throttled.
-func refusalMessage(feature plan.Feature, fairUse bool) string {
+// than the account, because the three refusals mean different things to the person reading
+// them: one clears at midnight, one means they are being throttled, and one means their plan
+// never included this at all.
+//
+// inPlan is that third case, and it is not a nicety. Every metered feature's free allowance
+// is zero (internal/ai/plan.DefaultConfig), so `used >= limit` is satisfied at 0 >= 0 before
+// anybody does anything — a free account that had run no analysis all day was told "You've
+// used today's job analyses", under a reset time at which it would still be zero. Both
+// halves of that sentence were false, and the one action that would have helped — the
+// upgrade link already in the body — was the one it did not mention.
+func refusalMessage(feature plan.Feature, fairUse, inPlan bool) string {
 	if fairUse {
 		return "This account has hit an unusually high volume for today. It will reset tomorrow."
 	}
-	switch feature {
-	case plan.FeatureTailor:
-		return "You've used today's CV edits."
-	case plan.FeatureFit:
-		return "You've used today's job analyses."
-	case plan.FeatureAssistant:
-		return "You've used today's assistant messages."
-	case plan.FeatureDictation:
-		return "You've used today's dictation."
-	default:
+	noun := featureNoun(feature)
+	if !inPlan {
+		if noun == "" {
+			return "Your plan doesn't include this."
+		}
+		return "Your plan doesn't include " + noun + "."
+	}
+	if noun == "" {
 		return "You've used today's allowance for this."
 	}
+	return "You've used today's " + noun + "."
 }
+
+// featureNoun names what a feature gives the candidate, in the plural a sentence can carry:
+// "You've used today's <noun>" and "Your plan doesn't include <noun>".
+//
+// A feature with no noun yet falls through to a sentence that reads without one, rather than
+// to a placeholder: a message naming the wrong thing is worse than one naming nothing, and
+// this function is the single place a new feature's wording is added.
+func featureNoun(feature plan.Feature) string {
+	switch feature {
+	case plan.FeatureTailor:
+		return "CV edits"
+	case plan.FeatureFit:
+		return "job analyses"
+	case plan.FeatureAssistant:
+		return "assistant messages"
+	case plan.FeatureDictation:
+		return "dictation"
+	default:
+		return ""
+	}
+}
+
+// planIncludes reports whether the plan behind an allowance gives the caller any of the
+// feature at all. Read off the allowance rather than off the tier: the free figures move by
+// environment variable without a deploy (PLAN_FREE_DAILY_<FEATURE>), so "free" and "gets
+// none of it" are not the same question and were briefly not the same answer.
+func planIncludes(a allowanceView) bool { return a.Unlimited || a.Limit > 0 }
 
 // isRefusal reports whether an error is the meter saying no, as opposed to the meter
 // itself failing. The two must never be confused: one is an answer to give the caller,
@@ -93,7 +127,8 @@ func isRefusal(err error) bool { return errors.Is(err, plan.ErrRefused) }
 // one person for whom the next plan is worth something, and that refusal is the exact moment
 // it is worth it.
 func refuse(c *fiber.Ctx, d plan.Decision) error {
-	return write402(c, viewDecision(d), refusalMessage(d.Feature, d.FairUse), !d.FairUse && hasSomethingToBuy(d.Tier))
+	a := viewDecision(d)
+	return write402(c, a, refusalMessage(d.Feature, d.FairUse, planIncludes(a)), !d.FairUse && hasSomethingToBuy(d.Tier))
 }
 
 // hasSomethingToBuy reports whether a tier has a bigger one above it.
@@ -109,7 +144,8 @@ func hasSomethingToBuy(tier plan.Tier) bool { return tier != plan.TierUltra }
 // It exists so a caller does not have to assemble a Decision it never made — a fake one
 // filled in field by field is a lie that reads as fact at the next call site.
 func refuseStanding(c *fiber.Ctx, st plan.Standing) error {
-	return write402(c, viewStanding(st), refusalMessage(st.Feature, false), hasSomethingToBuy(st.Tier))
+	a := viewStanding(st)
+	return write402(c, a, refusalMessage(st.Feature, false, planIncludes(a)), hasSomethingToBuy(st.Tier))
 }
 
 // upgradePath is where a refused free caller is sent. It is the plan page rather than a

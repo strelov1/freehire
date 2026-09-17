@@ -40,7 +40,8 @@
     type TailorResult,
   } from '$lib/cv';
   import type { Analysis, AutopilotEntry, Document, RevisionView } from '$lib/generated/contracts';
-  import type { Job } from '$lib/types';
+  import type { Allowance, Job } from '$lib/types';
+  import { notInPlan, resetsAtLabel } from '$lib/allowance';
 
   const slug = $derived(page.params.slug ?? '');
   const cvParam = $derived(page.url.searchParams.get('cv'));
@@ -304,11 +305,12 @@
         // instant comes from the refusal itself rather than being computed here — the
         // server owns when the day rolls, and a second opinion about it would be wrong
         // for anybody whose clock disagrees.
-        const at = e.body?.allowance as { resets_at?: unknown } | undefined;
-        const resetsAt = typeof at?.resets_at === 'string' ? at.resets_at : null;
-        const more = resetsAt
-          ? ` More at ${new Date(resetsAt).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}.`
-          : '';
+        //
+        // A plan that includes none of the feature gets no reset time at all. The server's
+        // own message already says the plan excludes this, and a reset appended under it
+        // would name a moment at which the allowance is still zero.
+        const at = e.body?.allowance as Allowance | undefined;
+        const more = at?.resets_at && !notInPlan(at) ? ` More at ${resetsAtLabel(at)}.` : '';
         errorMsg = `${e.message}${more}`;
       } else {
         errorMsg = e instanceof ApiError ? e.message : 'Could not open the tailoring workspace.';

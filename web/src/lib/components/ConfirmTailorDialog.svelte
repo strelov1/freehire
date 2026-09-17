@@ -7,7 +7,7 @@
   // candidate commits to tailoring their CV against it — always, not just when
   // something looks off, so the check is a habit rather than a surprise.
   import { Check, TriangleAlert } from '@lucide/svelte';
-  import { refuses, remaining, resetsAtLabel } from '$lib/allowance';
+  import { notInPlan, refuses, remaining, resetsAtLabel } from '$lib/allowance';
   import { confirmTailorDialog, settleConfirmTailorDialog } from '$lib/confirmTailorDialog.svelte';
   import { partitionBlockers, toneText, haveChipClass, missingChipClass } from '$lib/jobMatch';
   import { ConfirmDialog } from '$lib/ui';
@@ -114,7 +114,16 @@
     </p>
   {/if}
 
-  {#if refused}
+  {#if refused && notInPlan(allowance)}
+    <!-- A plan that includes no editing sessions is not one the candidate spent: nothing was
+         started today and the reset leaves it at zero, so the reset time is the one fact
+         here that cannot help them. -->
+    <p class="mt-4 text-sm font-medium">Your plan doesn't include CV editing sessions.</p>
+    <p class="text-xs text-muted-foreground">
+      Upgrade to rewrite your CV against this role, line by line.
+    </p>
+    <div class="mt-1"><PlanLimitLink /></div>
+  {:else if refused}
     <p class="mt-4 text-sm font-medium">You've used today's CV editing sessions.</p>
     <p class="text-xs text-muted-foreground">
       More at {resetsAtLabel(allowance)}. Sessions you've already started stay open.

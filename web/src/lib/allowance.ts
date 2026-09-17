@@ -25,6 +25,24 @@ export function refuses(a: Allowance | null | undefined): boolean {
   return isSpent(a) && a?.enforced === true;
 }
 
+/** Whether the reader's plan includes NONE of this feature, as opposed to their having used
+ *  up what it gives them. Both block, and `refuses` still owns the blocking — this only
+ *  decides what the block is allowed to say.
+ *
+ *  They are not the same refusal and they ask for opposite things. A spent allowance asks
+ *  somebody to come back after the reset; a zero one asks them to upgrade, because the reset
+ *  leaves it at zero. `isSpent` cannot tell them apart — every metered feature's free
+ *  allowance is zero, so `used >= limit` is satisfied at 0 >= 0 before anybody does anything,
+ *  and a candidate who had run nothing all day was told they had used today's analyses and to
+ *  come back at a time that would change nothing.
+ *
+ *  Unlimited is excluded before the limit is read: an unlimited allowance sends no limit at
+ *  all (the number behind it is the fair-use guard), so the absent one must not read as a
+ *  plan that excludes the feature. */
+export function notInPlan(a: Allowance | null | undefined): boolean {
+  return !!a && !a.unlimited && (a.limit ?? 0) === 0;
+}
+
 /** How many of today's allowance are left, or null when it is unlimited or unknown. */
 export function remaining(a: Allowance | null | undefined): number | null {
   if (!a || a.unlimited) return null;

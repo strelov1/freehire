@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { refuses, remaining, resetsAtLabel } from './allowance';
+import { notInPlan, refuses, remaining, resetsAtLabel } from './allowance';
 import type { Allowance } from './types';
 
 function allowance(over: Partial<Allowance> = {}): Allowance {
@@ -49,6 +49,33 @@ describe('refuses', () => {
     const older = { ...allowance({ used: 3 }) } as Partial<Allowance>;
     delete older.enforced;
     expect(refuses(older as Allowance)).toBe(false);
+  });
+});
+
+describe('notInPlan', () => {
+  it('is true when the plan allows none of the feature', () => {
+    // The refusal the candidate actually met: nothing run today, nothing ever available,
+    // and a message telling them to come back after a reset that leaves it at zero.
+    expect(notInPlan(allowance({ used: 0, limit: 0 }))).toBe(true);
+  });
+
+  it('stays true once the ceiling is only being counted', () => {
+    // Enforcement is a separate question, and `refuses` already owns it. Whether the plan
+    // INCLUDES the feature does not change with the switch, so the wording must not either
+    // — a shadow run is not a reason to accuse somebody of spending nothing.
+    expect(notInPlan(allowance({ limit: 0, enforced: false }))).toBe(true);
+  });
+
+  it('is false for an allowance that was really spent', () => {
+    expect(notInPlan(allowance({ used: 3, limit: 3 }))).toBe(false);
+  });
+
+  it('is false when unlimited or unknown', () => {
+    // An unlimited allowance sends no limit at all — the number behind it is the fair-use
+    // guard — so a missing limit there must not read as a plan that excludes the feature.
+    expect(notInPlan(allowance({ unlimited: true, limit: undefined }))).toBe(false);
+    expect(notInPlan(null)).toBe(false);
+    expect(notInPlan(undefined)).toBe(false);
   });
 });
 
