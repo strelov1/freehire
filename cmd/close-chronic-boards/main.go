@@ -24,6 +24,7 @@ import (
 	"context"
 	"flag"
 	"log"
+	"os"
 
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/platform/worker"
@@ -109,5 +110,25 @@ func run() int {
 	}
 	log.Printf("close-chronic-boards: %d empty-feed board(s) (%d skipped as region-ambiguous), %s %d job(s) total",
 		empty.boardsProcessed, empty.boardsSkippedAmbiguous, emptyVerb, empty.jobsAffected)
+
+	// Publish the same verdict where it outlives the journal. This worker's whole design asks
+	// a person to read a closure window's reports before arming it, and until now those
+	// reports rotated away inside a day — six days of them were gone before anyone looked.
+	// Best-effort and last: the close (or the refusal to close) is the job, and a metrics
+	// write that fails must not turn a successful run red.
+	publishMetrics(report, empty, *apply, *applyEmptyFeed)
 	return 0
+}
+
+// publishMetrics writes the run's verdict to the node_exporter textfile collector. A no-op
+// that touches nothing when PROM_TEXTFILE_DIR is unset, the same contract queue-metrics and
+// llm-probe keep.
+func publishMetrics(unreachable, emptyFeed closeReport, applyUnreachable, applyEmptyFeed bool) {
+	dir := os.Getenv(worker.PromTextfileDirEnv)
+	if dir == "" {
+		return
+	}
+	if err := worker.WriteTextfile(dir, textfileName, render(unreachable, emptyFeed, applyUnreachable, applyEmptyFeed)); err != nil {
+		log.Printf("close-chronic-boards: metrics not published: %v", err)
+	}
 }

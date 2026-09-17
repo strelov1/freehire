@@ -10,16 +10,27 @@ EnvironmentFile=/opt/freehire/.env
 # fleet's own load.
 CPUWeight=20
 IOWeight=20
-# Deliberately no --apply and no --apply-empty-feed here: this worker ships dry-run-only
-# (reporting what it would close) until a human has read at least one full closure-window's
-# report and confirmed the list is boards that are actually gone, not an adapter that needs
-# a fix (openspec change close-chronically-unreachable-boards, design.md Migration Plan
-# step 3). Add either flag to this line only after that review — a separate, deliberate
-# edit, the same way cmd/prune's own --apply is never the default.
+# --apply ARMS THE UNREACHABLE PASS. That was the review the dry-run default was waiting
+# for, and it is recorded here rather than in a commit message nobody will find:
 #
-# The two passes have SEPARATE flags on purpose, and adding one must not be read as
+#   * The report was read on 2026-09-17. It offered 94 boards and 6,637 postings — down
+#     from 353 and 20,106 the day before, because 325 of those records were stale
+#     case-duplicates of boards crawling normally, which migration 0170 removed and
+#     ListChronicBoards now refuses (freehire#2950). Arming the worker on the earlier
+#     number would have closed live boards' postings under the label board_unreachable.
+#   * The survivors were probed against the live platforms, not taken from last_error,
+#     which is 60+ days old by construction: 12 of 12 sampled ashby boards answer 404
+#     today, and the bamboohr cluster — reported as "decode invalid" rather than gone —
+#     302-redirects a dead tenant to bamboohr.com's marketing page, which is the vendor
+#     saying the account is closed.
+#   * The counts now also reach the node_exporter textfile collector
+#     (freehire_chronic_board_jobs, and _armed beside it), because the journal rotates
+#     inside a day and six days of these reports were already lost unread.
+#
+# --apply-empty-feed is deliberately still ABSENT, and adding one flag must not be read as
 # endorsing the other: --apply arms the unreachable pass, --apply-empty-feed arms the
 # empty-feed pass (migration 0158), and each reports its own boards for its own reasons.
-# Reviewing weeks of "no board could be reached" reports says nothing about whether the
-# boards reported as EMPTY are really empty.
-ExecStart=/opt/freehire/src/hire-current/close-chronic-boards
+# Reviewing "no board could be reached" evidence says nothing about whether the boards
+# reported as EMPTY are really empty — that pass currently offers 1 board and 2 postings,
+# and nobody has checked them.
+ExecStart=/opt/freehire/src/hire-current/close-chronic-boards --apply
