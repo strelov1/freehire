@@ -358,9 +358,9 @@ function options(values: readonly string[], labels: Record<string, string> = {})
 // nofluffjobs), which the fallback cannot split correctly at all and so always
 // needs one. Used by sourceLabel for the dynamic (distribution-driven) source
 // select, so a source with a real job count renders with its proper name.
-const SOURCE_LABELS: Record<string, string> = {
+export const SOURCE_LABELS: Record<string, string> = {
   telegram: 'Telegram', greenhouse: 'Greenhouse', smartrecruiters: 'SmartRecruiters',
-  bamboohr: 'BambooHR', successfactors: 'SuccessFactors',
+  bamboohr: 'BambooHR', successfactors: 'SAP SuccessFactors',
   workatastartup: 'Work at a Startup', remoteok: 'RemoteOK', arc: 'Arc',
   jobstash: 'JobStash', globalpayments: 'Global Payments',
   usajobs: 'USAJobs', whatjobs: 'WhatJobs', ukgready: 'UKG Ready',
@@ -368,6 +368,14 @@ const SOURCE_LABELS: Record<string, string> = {
   cryptocurrencyjobs: 'Cryptocurrency Jobs', landingjobs: 'Landing.Jobs',
   getonbrd: 'Get on Board', mycareersfuture: 'My Careers Future',
   nofluffjobs: 'No Fluff Jobs', powertofly: 'PowerToFly',
+  // Vendor brands, spelled the way the vendor spells them. Title-casing a slug yields
+  // "Jazzhr" and "Adpmyjobs", which are nobody's name — and the same string is what the
+  // logo proxy is asked for, so a wrong name is a missing logo as well as a wrong label.
+  zohorecruit: 'Zoho Recruit', jazzhr: 'JazzHR', adpmyjobs: 'ADP MyJobs',
+  applicantpro: 'ApplicantPro', '4dayweek': '4 Day Week',
+  isolvedhire: 'isolved Hire', hrmdirect: 'HRM Direct', catsone: 'CATS',
+  alfabank: 'Alfa-Bank', aijobs: 'AI Jobs', remotedotcom: 'Remote.com',
+  sber: 'Sber', freshteam: 'Freshteam',
 };
 
 /** Display label for a source slug (e.g. smartrecruiters → "SmartRecruiters"),

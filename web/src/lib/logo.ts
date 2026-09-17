@@ -26,7 +26,41 @@ export function companyLogoUrl(name: string): string | null {
  *
  *  A miss still 404s, so every caller needs its own fallback — the proxy cannot tell the
  *  difference between "no such brand" and "not today". */
-export function sourceLogoUrl(displayName: string): string | null {
+export function sourceLogoUrl(displayName: string, domain?: string): string | null {
   if (!displayName) return null;
-  return `${COMPANY_LOGO_BASE}/${encodeURIComponent(displayName)}`;
+  const url = `${COMPANY_LOGO_BASE}/${encodeURIComponent(displayName)}`;
+  return domain ? `${url}?domain=${encodeURIComponent(domain)}` : url;
 }
+
+/** A source's own domain, for the sources whose logo the proxy cannot find — or could find
+ *  wrongly — from the name alone.
+ *
+ *  An OVERRIDE, not a registry: a source missing from here resolves by name exactly as it
+ *  does today, so the map going stale costs a logo rather than breaking one. That is the
+ *  deliberate difference from the posting-host sampling this replaced, which was wrong for
+ *  every source it covered.
+ *
+ *  Measured against the live proxy 2026-09-17: of the 145 sources carrying 500+ jobs, these
+ *  14 had no logo by name, and all 14 resolve with the domain. `successfactors` settles why
+ *  a nicer name was never the whole fix — its label was already right and the proxy still
+ *  had nothing. The domain also removes a doubt a 200 cannot: a name resolved WRONGLY
+ *  answers 200 with somebody else's mark (see cmd/publish-logo-domains and the `g2i` case).
+ *
+ *  Add an entry when a source's card shows the wrong mark or none; verify it resolves before
+ *  committing, the same way these were. */
+export const SOURCE_LOGO_DOMAINS: Record<string, string> = {
+  successfactors: 'successfactors.com',
+  zohorecruit: 'zoho.com',
+  jazzhr: 'jazzhr.com',
+  adpmyjobs: 'adp.com',
+  applicantpro: 'applicantpro.com',
+  '4dayweek': '4dayweek.io',
+  isolvedhire: 'isolvedhcm.com',
+  hrmdirect: 'hrmdirect.com',
+  freshteam: 'freshworks.com',
+  catsone: 'catsone.com',
+  sber: 'sber.ru',
+  alfabank: 'alfabank.ru',
+  aijobs: 'aijobs.net',
+  remotedotcom: 'remote.com',
+};

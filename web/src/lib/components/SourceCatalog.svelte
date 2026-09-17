@@ -6,7 +6,7 @@
   // other surface uses: a source must not be "WhatJobs" on the filter panel and
   // "Whatjobs" here.
   import { sourceLabel } from '$lib/facets';
-  import { sourceLogoUrl } from '$lib/logo';
+  import { SOURCE_LOGO_DOMAINS, sourceLogoUrl } from '$lib/logo';
   import { EntityLogo } from '$lib/ui';
   import type { ProviderKind, SourceEntry } from '$lib/types';
 
@@ -193,13 +193,15 @@
             {@const share = overlap(entry)}
             <li class="rounded-lg border border-border bg-background p-4">
               <div class="flex items-start gap-3">
-                <!-- EntityLogo, not a hand-rolled <img>: besides the onerror fallback it
-                     catches a miss that happened BEFORE hydration, which this page needs
-                     precisely because it is server-rendered — the browser fetches the logo
-                     and the 404 fires while no handler exists yet. -->
+                <!-- The display name, plus the platform's own domain where one is curated:
+                     a name the proxy resolves wrongly answers 200 with somebody else's mark,
+                     and a domain settles it. EntityLogo, not a hand-rolled <img>: besides the
+                     onerror fallback it catches a miss that happened BEFORE hydration, which
+                     this page needs precisely because it is server-rendered — the browser
+                     fetches the logo and the 404 fires while no handler exists yet. -->
                 <EntityLogo
                   name={label}
-                  src={sourceLogoUrl(label) ?? undefined}
+                  src={sourceLogoUrl(label, SOURCE_LOGO_DOMAINS[entry.source]) ?? undefined}
                   shape="square"
                   size="sm"
                   class="mt-0.5 shrink-0"

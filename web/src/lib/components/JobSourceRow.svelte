@@ -3,7 +3,7 @@
   import { isAuthenticated } from '$lib/auth.svelte';
   import { sourceLabel } from '$lib/facets';
   import { filterHref } from '$lib/enrichment';
-  import { sourceLogoUrl } from '$lib/logo';
+  import { SOURCE_LOGO_DOMAINS, sourceLogoUrl } from '$lib/logo';
   import { profileStore } from '$lib/profile.svelte';
   import { syncProfileAlert } from '$lib/profileAlertSync';
   import { promptSignIn } from '$lib/signin';
@@ -63,12 +63,13 @@
 >
   <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- internal /jobs filter link from filterHref; query-only, no route to resolve -->
   <a href={filterHref('source', source)} class="inline-flex items-center gap-1.5">
-    <!-- The source's own brand mark, resolved from its DISPLAY NAME — never from a posting
-         host, which serves the employer's logo under the platform's name. EntityLogo also
-         catches a 404 that landed before hydration, which a hand-rolled onerror cannot. -->
+    <!-- The source's own brand mark: its DISPLAY NAME, plus the platform's own domain where
+         one is curated — never a posting host, which serves the employer's logo under the
+         platform's name. EntityLogo also catches a 404 that landed before hydration, which a
+         hand-rolled onerror cannot. -->
     <EntityLogo
       name={label}
-      src={sourceLogoUrl(label) ?? undefined}
+      src={sourceLogoUrl(label, SOURCE_LOGO_DOMAINS[source]) ?? undefined}
       shape="square"
       size="xs"
       class="shrink-0"
