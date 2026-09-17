@@ -1,4 +1,5 @@
 import { env } from '$env/dynamic/private';
+import { ssrTimeoutMs } from '$lib/server/api';
 import type { RequestHandler } from './$types';
 
 // The OJCP manifest, at the well-known path the specification fixes. This is the one
@@ -16,16 +17,23 @@ import type { RequestHandler } from './$types';
 // deployed, with the API path answering 200 and the manifest answering 404.
 export const GET: RequestHandler = async ({ fetch }) => {
   const base = env.API_INTERNAL_URL ?? '';
-  const upstream = await fetch(`${base}/api/v1/ojcp/manifest`);
+
+  // Bounded, like every other server-side call here. An unbounded SSR fetch is what the
+  // 2026-08-01 outage was made of: the backend hung, Node held its sockets open
+  // indefinitely, CLOSE-WAIT filled the accept queue and nginx answered 504 for the whole
+  // site. `createApi` sets this deadline on every typed call; this route forwards a raw
+  // document instead, so it sets it itself — from the same figure, not a second one.
+  let upstream: Response;
+  try {
+    upstream = await fetch(`${base}/api/v1/ojcp/manifest`, {
+      signal: AbortSignal.timeout(ssrTimeoutMs()),
+    });
+  } catch {
+    return manifestUnavailable();
+  }
 
   if (!upstream.ok) {
-    // Refusing rather than serving a stale or invented manifest: an agent that cannot
-    // fetch this document simply does not treat us as a provider, which is the correct
-    // outcome when we cannot describe ourselves truthfully.
-    return new Response('{"error":"manifest unavailable"}', {
-      status: 503,
-      headers: { 'content-type': 'application/json; charset=utf-8' },
-    });
+    return manifestUnavailable();
   }
 
   return new Response(await upstream.text(), {
@@ -39,3 +47,13 @@ export const GET: RequestHandler = async ({ fetch }) => {
     },
   });
 };
+
+/** Refusing rather than serving a stale or invented manifest: an agent that cannot fetch
+ *  this document simply does not treat us as a provider, which is the correct outcome when
+ *  we cannot describe ourselves truthfully. */
+function manifestUnavailable(): Response {
+  return new Response('{"error":"manifest unavailable"}', {
+    status: 503,
+    headers: { 'content-type': 'application/json; charset=utf-8' },
+  });
+}

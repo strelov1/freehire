@@ -26,6 +26,13 @@ export function serverApi(fetchImpl: typeof fetch, cookie?: string | null) {
  *  CLOSE-WAIT. `SSR_API_TIMEOUT_MS` overrides it if a slow endpoint ever needs room. */
 const DEFAULT_TIMEOUT_MS = 10_000;
 
+/** The same deadline, for a server-side caller that does not go through `createApi` — the
+ *  OJCP manifest proxy, which forwards one raw JSON document rather than calling a typed
+ *  endpoint. Exported so there is one figure rather than two that drift. */
+export function ssrTimeoutMs(): number {
+  return timeoutMs();
+}
+
 function timeoutMs(): number {
   const configured = Number(env.SSR_API_TIMEOUT_MS);
   return Number.isFinite(configured) && configured > 0 ? configured : DEFAULT_TIMEOUT_MS;
