@@ -839,14 +839,26 @@ func TestPipelineOmitsReplyRateWhenCallerBelowTheGate(t *testing.T) {
 	}
 }
 
-func TestPipelinePropagatesReplyRateRepoError(t *testing.T) {
+// The reply-rate benchmark is a best-effort, optional signal — same convention
+// internal/api/handler/company_response.go already follows ("no row, or a lookup
+// error, yields nil"). A transient failure computing it must not take down the whole
+// pipeline endpoint, which existed and was reliable before this benchmark did.
+func TestPipelineIsUnaffectedByReplyRateRepoError(t *testing.T) {
 	repo := &fakeRepo{
 		pipelineResult: []userjob.StageCount{{Stage: "applied", Count: 1}},
 		replyRateErr:   errors.New("boom"),
 	}
 	svc := jobtracking.New(repo)
-	if _, err := svc.Pipeline(context.Background(), 1); err == nil {
-		t.Fatal("expected error, got nil")
+
+	got, err := svc.Pipeline(context.Background(), 1)
+	if err != nil {
+		t.Fatalf("Pipeline: %v, want no error — a reply-rate lookup failure must degrade to absent, not fail the endpoint", err)
+	}
+	if got.Applications != 1 {
+		t.Errorf("Applications = %d, want 1 — the stage counts must still come through", got.Applications)
+	}
+	if got.ReplyRate != nil {
+		t.Errorf("ReplyRate = %+v, want nil after a lookup error", got.ReplyRate)
 	}
 }
 

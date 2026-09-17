@@ -84,9 +84,37 @@ func TestPipeline_SetReplyRateIsSerialized(t *testing.T) {
 	}
 }
 
+func TestExcludeCallerFromGlobal_SubtractsTheCallersOwnContribution(t *testing.T) {
+	you := ReplyRateSide{Applications: 12, Answered: 4}
+	globalTotal := ReplyRateSide{Applications: 287, Answered: 97}
+
+	got := ExcludeCallerFromGlobal(you, globalTotal)
+
+	want := ReplyRateSide{Applications: 275, Answered: 93}
+	if got != want {
+		t.Errorf("got %+v, want %+v", got, want)
+	}
+}
+
+// The global figure is a periodic rollup (cmd/rollup-company) while `you` is read live,
+// so a caller's very recent application may count on their own live side before the next
+// rollup has folded it into the total it is subtracted from. A negative count is nonsense,
+// not a signal, so each side clamps at zero independently rather than surfacing it.
+func TestExcludeCallerFromGlobal_ClampsAtZeroWhenTheRollupIsStale(t *testing.T) {
+	you := ReplyRateSide{Applications: 5, Answered: 3}
+	globalTotal := ReplyRateSide{Applications: 4, Answered: 1}
+
+	got := ExcludeCallerFromGlobal(you, globalTotal)
+
+	want := ReplyRateSide{Applications: 0, Answered: 0}
+	if got != want {
+		t.Errorf("got %+v, want %+v — neither field may go negative", got, want)
+	}
+}
+
 func TestGateReplyRateBenchmark_ExactlyAtTheGate(t *testing.T) {
-	you := ReplyRateSide{Applications: ReplyRateSampleGate, Answered: 2}
-	global := ReplyRateSide{Applications: ReplyRateSampleGate, Answered: 4}
+	you := ReplyRateSide{Applications: ObservableSampleGate, Answered: 2}
+	global := ReplyRateSide{Applications: ObservableSampleGate, Answered: 4}
 
 	if got := GateReplyRateBenchmark(you, global); got == nil {
 		t.Error("got nil, want a benchmark — the gate is inclusive (\"at least ten\")")

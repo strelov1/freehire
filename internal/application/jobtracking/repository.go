@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -522,21 +523,40 @@ func (r *QueriesRepository) PipelineCounts(ctx context.Context, userID int64) ([
 }
 
 // ReplyRateCounts returns the caller's own observable/answered counts alongside the
-// global figure summed across every company. The personal side is computed live
+// global figure summed across every company, minus the caller's own contribution (see
+// userjob.ExcludeCallerFromGlobal). The personal side is computed live
 // (GetUserResponseRate reads application_events directly, scoped by user_id); the
 // global side reads the periodic per-company rollup's own numbers
-// (GetGlobalCompanyResponse), never a second independent computation.
+// (GetGlobalCompanyResponse), never a second independent computation. The two queries
+// are independent of each other and of Service.Pipeline's own PipelineCounts call, so
+// they run concurrently rather than as two more sequential round trips on top of it.
 func (r *QueriesRepository) ReplyRateCounts(ctx context.Context, userID int64) (you, global userjob.ReplyRateSide, err error) {
-	youRow, err := r.q.GetUserResponseRate(ctx, userID)
-	if err != nil {
-		return userjob.ReplyRateSide{}, userjob.ReplyRateSide{}, err
+	var (
+		youRow            db.GetUserResponseRateRow
+		globalRow         db.GetGlobalCompanyResponseRow
+		youErr, globalErr error
+	)
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		youRow, youErr = r.q.GetUserResponseRate(ctx, userID)
+	}()
+	go func() {
+		defer wg.Done()
+		globalRow, globalErr = r.q.GetGlobalCompanyResponse(ctx)
+	}()
+	wg.Wait()
+	if youErr != nil {
+		return userjob.ReplyRateSide{}, userjob.ReplyRateSide{}, youErr
 	}
-	globalRow, err := r.q.GetGlobalCompanyResponse(ctx)
-	if err != nil {
-		return userjob.ReplyRateSide{}, userjob.ReplyRateSide{}, err
+	if globalErr != nil {
+		return userjob.ReplyRateSide{}, userjob.ReplyRateSide{}, globalErr
 	}
+
 	you = userjob.ReplyRateSide{Applications: int64(youRow.Applications), Answered: int64(youRow.Answered)}
-	global = userjob.ReplyRateSide{Applications: int64(globalRow.Applications), Answered: int64(globalRow.Answered)}
+	globalTotal := userjob.ReplyRateSide{Applications: int64(globalRow.Applications), Answered: int64(globalRow.Answered)}
+	global = userjob.ExcludeCallerFromGlobal(you, globalTotal)
 	return you, global, nil
 }
 

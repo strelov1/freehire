@@ -77,6 +77,13 @@ mailbox; answered = a non-retracted `employer_reply` event exists for it) and in
 alongside the global response rate `company-hiring-signal` publishes, gated by the same
 ten-application sample floor applied to the caller's own count.
 
+The global figure served here SHALL exclude the caller's own contribution to it — the comparison
+means "you against everyone else," and a caller whose own applications are a non-trivial share of
+the platform's observable total must not be partly compared against themselves. Because the
+global figure is a periodic rollup while the caller's own count is read live, a caller's very
+recent application may not yet be reflected in the total it is subtracted from; the excluded
+result SHALL clamp at zero on each side rather than go negative.
+
 The field SHALL be absent — never zero, never an estimate — when any of the following holds: the
 caller has no connected mailbox, the caller's own observable count is under ten, or the global
 response rate itself is not currently available. A personal rate with nothing to compare it
@@ -103,6 +110,19 @@ against is not the benchmark this requirement serves.
 - **WHEN** the caller clears their own sample gate but the global response rate has not yet been
   published (e.g. before the rollup's first run after this feature ships)
 - **THEN** the reply-rate field is absent
+
+#### Scenario: The caller's own contribution is excluded from the global figure
+
+- **WHEN** the platform-wide observable/answered totals include the caller's own twelve
+  observable applications and four answers
+- **THEN** the served global figure is computed over the platform total minus those twelve and
+  four, not the raw platform total
+
+#### Scenario: A stale rollup does not produce a negative global figure
+
+- **WHEN** the caller's own live count includes an application more recent than the last
+  completed rollup, such that subtracting it would make either side negative
+- **THEN** that side of the global figure is zero, never negative
 
 ### Requirement: Pipeline tab in the tracking section
 

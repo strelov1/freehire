@@ -72,8 +72,13 @@ func TestGetGlobalCompanyResponse_IncludesCompaniesBelowTheirOwnGate(t *testing.
 	if err != nil {
 		t.Fatalf("GetGlobalCompanyResponse: %v", err)
 	}
-	if got.Applications < 2 {
-		t.Errorf("applications = %d, want at least 2 — small companies must still contribute to the global sum", got.Applications)
+	// Each test runs against its own freshly cloned database (testdb.Pool), so an exact
+	// match is safe here, not just a floor: neither company clears its own ten-application
+	// gate alone, but the sum must be precisely 2 applications and 0 answered — a query
+	// that fanned out a join, or double-counted either company, would still clear a "< 2"
+	// floor and hide the regression.
+	if got.Applications != 2 || got.Answered != 0 {
+		t.Errorf("got %+v, want 2 applications and 0 answered — small companies must still contribute to the global sum", got)
 	}
 }
 

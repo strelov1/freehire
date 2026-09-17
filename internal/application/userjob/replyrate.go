@@ -15,19 +15,42 @@ type ReplyRateBenchmark struct {
 	Global ReplyRateSide `json:"global"`
 }
 
-// ReplyRateSampleGate is the minimum observable-application count either side of the
-// comparison must clear before it is served — the same sample floor
-// company-hiring-signal already applies to a single named company's response rate.
-// Below it, absence is the honest answer, not a zero or an estimate.
-const ReplyRateSampleGate = 10
+// ObservableSampleGate is the minimum observable-application count a response-rate
+// figure needs before it is served — shared with
+// internal/api/handler.responseSampleGate rather than restated, because both gate the
+// identical quantity (observable applications before a response/reply rate is
+// trustworthy): the per-company figure and this personal-vs-global one. Below it,
+// absence is the honest answer, not a zero or an estimate.
+const ObservableSampleGate = 10
 
 // GateReplyRateBenchmark returns the comparison when both sides clear
-// ReplyRateSampleGate, or nil when either does not — including when the caller has no
+// ObservableSampleGate, or nil when either does not — including when the caller has no
 // connected mailbox, which surfaces here as zero observable applications rather than a
 // separate check.
 func GateReplyRateBenchmark(you, global ReplyRateSide) *ReplyRateBenchmark {
-	if you.Applications < ReplyRateSampleGate || global.Applications < ReplyRateSampleGate {
+	if you.Applications < ObservableSampleGate || global.Applications < ObservableSampleGate {
 		return nil
 	}
 	return &ReplyRateBenchmark{You: you, Global: global}
+}
+
+// ExcludeCallerFromGlobal removes the caller's own observable/answered counts from a
+// platform-wide total, so the "global" side of the comparison means everyone ELSE —
+// without this, a caller with a non-trivial share of the platform's observable
+// applications would be partly comparing themselves to themselves. Each field clamps
+// at zero independently: globalTotal comes from a periodic rollup while you is read
+// live, so a caller's very recent application may not have reached the rollup yet, and
+// a negative count is nonsense to serve rather than a signal worth surfacing.
+func ExcludeCallerFromGlobal(you, globalTotal ReplyRateSide) ReplyRateSide {
+	return ReplyRateSide{
+		Applications: nonNegative(globalTotal.Applications - you.Applications),
+		Answered:     nonNegative(globalTotal.Answered - you.Answered),
+	}
+}
+
+func nonNegative(n int64) int64 {
+	if n < 0 {
+		return 0
+	}
+	return n
 }

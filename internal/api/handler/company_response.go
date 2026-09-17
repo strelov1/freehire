@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 
+	"github.com/strelov1/freehire/internal/application/userjob"
 	"github.com/strelov1/freehire/internal/platform/db"
 )
 
@@ -17,7 +18,12 @@ import (
 // Ten is a judgement, not a measurement, and it should be revisited once the sample
 // exists. It is set where a rate first survives one unlucky applicant changing it by
 // less than ten points.
-const responseSampleGate = 10
+//
+// An alias for userjob.ObservableSampleGate, not an independent literal: the
+// personal-vs-global reply-rate benchmark gates the identical quantity, and two
+// separately-tuned copies of the same judgement call is how they'd silently drift
+// apart the first time either got revisited.
+const responseSampleGate = userjob.ObservableSampleGate
 
 // replySampleGate is how many ANSWERED applications a company needs before its median
 // time to first reply is served.

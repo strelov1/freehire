@@ -52,12 +52,12 @@
           <RateDonut
             percent={replyRate(benchmark.you)}
             label="Your Reply Rate"
-            sublabel="{benchmark.you.applications} tracked application{benchmark.you.applications === 1 ? '' : 's'}"
+            sublabel="{benchmark.you.applications} with a connected mailbox"
           />
           <RateDonut
             percent={replyRate(benchmark.global)}
             label="Average Reply Rate"
-            sublabel="across every candidate"
+            sublabel="every other candidate with a connected mailbox"
           />
         </div>
       </div>

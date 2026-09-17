@@ -384,11 +384,17 @@ func (s *Service) Pipeline(ctx context.Context, userID int64) (userjob.Pipeline,
 	}
 	pipeline := userjob.CountByStage(counts)
 
+	// Best-effort, same convention internal/api/handler/company_response.go already
+	// follows for this exact kind of optional signal: a lookup error yields absence,
+	// not a failed response — the pipeline endpoint existed and was reliable before
+	// this benchmark did, and a transient failure computing an optional comparison
+	// must not take it down.
 	you, global, err := s.repo.ReplyRateCounts(ctx, userID)
 	if err != nil {
-		return userjob.Pipeline{}, err
+		log.Printf("jobtracking: reply-rate counts for user=%d: %v (omitting the benchmark)", userID, err)
+	} else {
+		pipeline.ReplyRate = userjob.GateReplyRateBenchmark(you, global)
 	}
-	pipeline.ReplyRate = userjob.GateReplyRateBenchmark(you, global)
 
 	return pipeline, nil
 }
