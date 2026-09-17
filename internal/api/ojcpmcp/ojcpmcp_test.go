@@ -68,6 +68,34 @@ func TestAnInternalFailureTellsTheAgentNothingAboutItself(t *testing.T) {
 	}
 }
 
+func TestToolInputsUseTheNamesTheStandardRequires(t *testing.T) {
+	// The SDK derives each tool's input schema from these structs, so a field named anything
+	// other than what the standard's own input schema requires makes the tool UNREACHABLE for
+	// a conforming client: it sends `job_id`, the server sees a missing required field and
+	// answers a validation error. Found by OJCP's conformance suite, not by anything here —
+	// the input schemas were vendored in this package and never checked against.
+	for _, tc := range []struct {
+		input any
+		want  string
+	}{
+		{jobDetailInput{}, "job_id"},
+		{employerContextInput{}, "employer_id"},
+	} {
+		raw, err := json.Marshal(tc.input)
+		if err != nil {
+			t.Fatalf("marshalling %T: %v", tc.input, err)
+		}
+		var fields map[string]any
+		if err := json.Unmarshal(raw, &fields); err != nil {
+			t.Fatalf("re-reading %T: %v", tc.input, err)
+		}
+		if _, present := fields[tc.want]; !present {
+			t.Errorf("%T has no %q field; a conforming client cannot call this tool: %v",
+				tc.input, tc.want, fields)
+		}
+	}
+}
+
 func TestSuccessIsNeverReportedAsAFailure(t *testing.T) {
 	if err := toolError(nil); err != nil {
 		t.Errorf("toolError(nil) = %v, want nil", err)

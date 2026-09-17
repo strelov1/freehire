@@ -51,8 +51,17 @@ func (e NotFoundError) Code() string {
 // jobDetailInput and employerContextInput are the tools' inputs. They are declared here
 // rather than in internal/api/ojcp because the SDK derives each tool's JSON Schema from the
 // Go type, so the shape belongs with the transport that publishes it.
+// The field NAMES are the standard's, not ours. `get_job_detail` takes `job_id` —
+// tools/get-job-detail-input.json makes it the one required property — even though the
+// value is what a posting publishes as `ojcp_id`. An earlier version named the field
+// `ojcp_id` to match, which made the tool unreachable for any conforming client: it sends
+// `job_id`, the server sees a missing required field, and answers a validation error.
+//
+// Found by OJCP's own conformance suite. The input schemas were vendored into
+// internal/api/ojcp and never checked against — the same switched-off-check shape that let
+// the error envelope ship wrong.
 type jobDetailInput struct {
-	OJCPID string `json:"ojcp_id" jsonschema:"the posting's OJCP identifier"`
+	JobID string `json:"job_id" jsonschema:"the posting's identifier, as published in ojcp_id"`
 }
 
 type employerContextInput struct {
@@ -87,7 +96,7 @@ func newServer(r Reader) *mcp.Server {
 		Name:        toolGetJobDetail,
 		Description: "Read one posting in full, by the ojcp_id a search result carries.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in jobDetailInput) (*mcp.CallToolResult, ojcp.JobDetailResponse, error) {
-		out, err := r.JobDetail(ctx, in.OJCPID)
+		out, err := r.JobDetail(ctx, in.JobID)
 		return nil, out, toolError(err)
 	})
 
