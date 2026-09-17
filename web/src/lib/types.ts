@@ -1012,6 +1012,22 @@ export interface MyJobCounts {
  *  so a count of nothing is readable without being confused for a missing key. */
 type PipelineStageCounts = Record<Stage, number>;
 
+/** One side of the reply-rate comparison: how many observable applications there
+ *  were and how many received a reply. Raw counts, never a pre-divided percentage —
+ *  see replyRate() in pipeline.ts. */
+export interface ReplyRateSide {
+  applications: number;
+  answered: number;
+}
+
+/** The personal-vs-global employer reply-rate benchmark. Present on PipelineStats
+ *  only when both sides clear the sample gate server-side — absent, never zero or
+ *  an estimate, below it. */
+export interface ReplyRateBenchmark {
+  you: ReplyRateSide;
+  global: ReplyRateSide;
+}
+
 /** The application-pipeline snapshot for the Pipeline tab: the caller's total
  *  application count and the count at each stage. Grouping those stages into the
  *  bands the funnel draws is the renderer's job, from the generated STAGE_GROUPS —
@@ -1019,6 +1035,7 @@ type PipelineStageCounts = Record<Stage, number>;
 export interface PipelineStats {
   applications: number;
   stages: PipelineStageCounts;
+  reply_rate?: ReplyRateBenchmark;
 }
 
 /** The bucketing period for the job-activity time series. */

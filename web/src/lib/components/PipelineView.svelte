@@ -2,7 +2,7 @@
   import { api } from '$lib/api';
   import { AsyncData } from '$lib/asyncData.svelte';
   import { isAuthenticated } from '$lib/auth.svelte';
-  import { interviewRate, offerRate } from '$lib/pipeline';
+  import { interviewRate, offerRate, replyRate } from '$lib/pipeline';
   import type { PipelineStats } from '$lib/types';
   import PipelineFunnel from './PipelineFunnel.svelte';
   import RateDonut from './RateDonut.svelte';
@@ -19,6 +19,10 @@
 
   const iv = $derived(stats ? interviewRate(stats) : 0);
   const offer = $derived(stats ? offerRate(stats) : 0);
+
+  // Absent below the server's ten-application sample gate — never a zero or an
+  // estimate, so there is nothing to derive when it is missing.
+  const benchmark = $derived(stats?.reply_rate);
 </script>
 
 {#if status === 'loading'}
@@ -42,6 +46,22 @@
       </p>
       <PipelineFunnel {stats} />
     </div>
+    {#if benchmark}
+      <div class="rounded-lg border bg-card p-5">
+        <div class="flex flex-wrap items-center justify-center gap-10">
+          <RateDonut
+            percent={replyRate(benchmark.you)}
+            label="Your Reply Rate"
+            sublabel="{benchmark.you.applications} tracked application{benchmark.you.applications === 1 ? '' : 's'}"
+          />
+          <RateDonut
+            percent={replyRate(benchmark.global)}
+            label="Average Reply Rate"
+            sublabel="across every candidate"
+          />
+        </div>
+      </div>
+    {/if}
     <p class="text-xs text-muted-foreground">
       A snapshot of where your applications stand now. Rates are a lower bound — a job rejected after
       an interview counts only as rejected.

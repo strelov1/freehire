@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { STAGE_VALUES } from './generated/contracts';
-import { PIPELINE_BANDS, interviewRate, offerRate } from './pipeline';
+import { PIPELINE_BANDS, interviewRate, offerRate, replyRate } from './pipeline';
 import type { PipelineStats } from './types';
 
 const stats = (stages: Record<string, number>): PipelineStats => ({
@@ -54,5 +54,17 @@ describe('rates', () => {
     const s = stats({});
     expect(interviewRate(s)).toBe(0);
     expect(offerRate(s)).toBe(0);
+  });
+});
+
+// The backend serves raw counts, never a pre-divided percentage — same precedent as
+// interviewRate/offerRate above — so the comparison card computes both sides itself.
+describe('replyRate', () => {
+  it('divides answered by applications', () => {
+    expect(replyRate({ applications: 287, answered: 97 })).toBeCloseTo(0.338);
+  });
+
+  it('yields zero without dividing by zero', () => {
+    expect(replyRate({ applications: 0, answered: 0 })).toBe(0);
   });
 });

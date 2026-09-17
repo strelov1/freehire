@@ -7,7 +7,7 @@
 // `No answer`, `In progress`, `Declined` — words the reader met on no other screen.
 
 import { STAGE_GROUPS } from './generated/contracts';
-import type { PipelineStats } from './types';
+import type { PipelineStats, ReplyRateSide } from './types';
 
 export interface PipelineBand {
   id: (typeof STAGE_GROUPS)[number]['id'];
@@ -66,4 +66,12 @@ export function interviewRate(s: PipelineStats): number {
 export function offerRate(s: PipelineStats): number {
   if (s.applications === 0) return 0;
   return (s.stages.offer + s.stages.accepted) / s.applications;
+}
+
+/** Answered share of one side of the reply-rate benchmark (you or global). The
+ *  backend serves raw counts, never a pre-divided percentage — same precedent as
+ *  interviewRate/offerRate above. */
+export function replyRate(side: ReplyRateSide): number {
+  if (side.applications === 0) return 0;
+  return side.answered / side.applications;
 }

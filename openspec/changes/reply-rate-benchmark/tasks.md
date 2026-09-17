@@ -14,13 +14,13 @@
 
 ## 3. Frontend: Pipeline tab comparison card
 
-- [ ] 3.1 Add the optional `reply_rate` field to the pipeline response TS type consumed by the Pipeline tab.
-- [ ] 3.2 Add a reply-rate comparison card to `PipelineView.svelte` (or a small extracted component), rendered only when `reply_rate` is present, laid out beside the existing Interview Rate / Offer Rate donut cards.
-- [ ] 3.3 Compute the displayed percentages client-side from the raw counts, following the `interviewRate`/`offerRate` precedent in `web/src/lib/pipeline.ts` rather than serving a pre-divided rate from the backend.
+- [x] 3.1 Add the optional `reply_rate` field to the pipeline response TS type consumed by the Pipeline tab.
+- [x] 3.2 Add a reply-rate comparison card to `PipelineView.svelte` (or a small extracted component), rendered only when `reply_rate` is present, laid out beside the existing Interview Rate / Offer Rate donut cards.
+- [x] 3.3 Compute the displayed percentages client-side from the raw counts, following the `interviewRate`/`offerRate` precedent in `web/src/lib/pipeline.ts` rather than serving a pre-divided rate from the backend.
 
 ## 4. Verification
 
 - [x] 4.1 Unit tests in `internal/application/jobtracking/jobtracking_test.go` for the gating helper: both sides clear the gate, caller below gate, global below gate, caller has no connected mailbox (observable count zero).
 - [x] 4.2 Integration test (build-tagged) for `GetGlobalCompanyResponse` and `GetUserResponseRate`, mirroring the existing `RebuildInsightsCompanyResponse` integration test's fixture shape.
-- [ ] 4.3 Frontend test for the comparison card's presence/absence in `PipelineView`.
+- [x] 4.3 Frontend test for the comparison card's presence/absence in `PipelineView`.
 - [ ] 4.4 `gofmt -l .`, `go vet ./...`, `go test ./...`, and the SPA's `pnpm run check` all pass.
