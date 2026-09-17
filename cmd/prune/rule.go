@@ -23,7 +23,21 @@ const (
 	// ruleUnknown: a job no dictionary could place, at a company that has shown no
 	// technical signal of any kind, not even a tagged skill.
 	ruleUnknown = "unknown_at_empty_company"
+	// ruleMisattributed: the source filed this posting under the wrong employer and the
+	// right one was never stored, so the row cannot be repaired — only removed. The
+	// closure already recorded that verdict in closed_reason; this rule acts on it.
+	//
+	// Unlike the three above it asks nothing about the POSTING. Those decide whether a
+	// job belongs on an IT board; this one knows the row is wrong about who is hiring,
+	// whatever the job is.
+	ruleMisattributed = "source_misattributed"
 )
+
+// misattributedReason is the closed_reason cmd/close-apploi-misattributed stamps. It is a
+// label of its own precisely so a row closed because its ATTRIBUTION was wrong can be told
+// apart, later, from one closed for an ordinary reason — which is what makes this rule
+// possible at all.
+const misattributedReason = "source_misattributed"
 
 // candidate is the part of a job the rule reads. Everything here is a stored column;
 // the rule derives its own signals from them rather than trusting a stored is_tech,
@@ -37,6 +51,10 @@ type candidate struct {
 	// (nil) from "a dictionary placed it as non-technical" (false). The positive case
 	// is re-derived, never read from here.
 	IsTech *bool
+	// ClosedReason is why the lifecycle closed this row, empty while it is open. Only
+	// misattributedReason is acted on: every other closure leaves a row that is still
+	// correctly attributed and simply no longer live.
+	ClosedReason string
 }
 
 // evidence is what a company has ever shown, across its entire history.
@@ -72,6 +90,18 @@ func matchRule(c candidate, ev evidence, knownProvider, boardCrawled bool) (stri
 	if !knownProvider {
 		return "", false
 	}
+
+	// Ahead of every gate below, and deliberately so. The technical veto, the board
+	// gates and the company-history rules all exist to decide whether a posting belongs
+	// here; none of them applies to a row we know is filed under the wrong employer.
+	//
+	// The board gate in particular would make this rule dead on arrival: the provider
+	// whose rows carry this label had all 5,833 of its boards retired in the same
+	// campaign, so nothing it produced is crawled any more.
+	if c.ClosedReason == misattributedReason {
+		return ruleMisattributed, true
+	}
+
 	techEvidence := jobderive.TechEvidence(c.Category, c.Title)
 
 	if classify.ConfirmedNonTech(c.Title, techEvidence) {

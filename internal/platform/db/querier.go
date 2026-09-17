@@ -4891,6 +4891,9 @@ type Querier interface {
 	// dictionary covers the recruiting, HR, finance, legal and operations craft a technical
 	// company hires for, so "has any skill" answers a different question than the caller
 	// is asking.
+	// closed_reason comes along because one rule acts on the CLOSURE rather than on the
+	// posting: a row the source filed under the wrong employer carries its own label, and
+	// the right employer was never stored, so nothing about the posting could reveal it.
 	PruneCandidates(ctx context.Context, arg PruneCandidatesParams) ([]PruneCandidatesRow, error)
 	// Removes a token the Expo Push API reported as permanently undeliverable
 	// (DeviceNotRegistered). No owner check: the token is dead regardless of

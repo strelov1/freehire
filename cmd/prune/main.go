@@ -260,7 +260,7 @@ func scan(ctx context.Context, q candidateSource, ev []db.CompanyTechEvidenceRow
 		}
 		for _, row := range rows {
 			after = row.ID
-			c := candidate{CompanySlug: row.CompanySlug, Title: row.Title, Category: row.Category}
+			c := candidate{CompanySlug: row.CompanySlug, Title: row.Title, Category: row.Category, ClosedReason: row.ClosedReason}
 			if row.IsTech.Valid {
 				v := row.IsTech.Bool
 				c.IsTech = &v

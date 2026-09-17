@@ -205,7 +205,10 @@ GROUP BY source, company_slug;
 -- dictionary covers the recruiting, HR, finance, legal and operations craft a technical
 -- company hires for, so "has any skill" answers a different question than the caller
 -- is asking.
-SELECT id, source, external_id, company_slug, title, category, is_tech, skills
+-- closed_reason comes along because one rule acts on the CLOSURE rather than on the
+-- posting: a row the source filed under the wrong employer carries its own label, and
+-- the right employer was never stored, so nothing about the posting could reveal it.
+SELECT id, source, external_id, company_slug, title, category, is_tech, skills, closed_reason
 FROM jobs
 WHERE id > sqlc.arg(after_id)
 ORDER BY id

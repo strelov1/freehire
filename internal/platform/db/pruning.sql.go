@@ -68,7 +68,7 @@ func (q *Queries) CompanyTechEvidence(ctx context.Context) ([]CompanyTechEvidenc
 }
 
 const pruneCandidates = `-- name: PruneCandidates :many
-SELECT id, source, external_id, company_slug, title, category, is_tech, skills
+SELECT id, source, external_id, company_slug, title, category, is_tech, skills, closed_reason
 FROM jobs
 WHERE id > $1
 ORDER BY id
@@ -81,14 +81,15 @@ type PruneCandidatesParams struct {
 }
 
 type PruneCandidatesRow struct {
-	ID          int64       `json:"id"`
-	Source      string      `json:"source"`
-	ExternalID  string      `json:"external_id"`
-	CompanySlug string      `json:"company_slug"`
-	Title       string      `json:"title"`
-	Category    string      `json:"category"`
-	IsTech      pgtype.Bool `json:"is_tech"`
-	Skills      []string    `json:"skills"`
+	ID           int64       `json:"id"`
+	Source       string      `json:"source"`
+	ExternalID   string      `json:"external_id"`
+	CompanySlug  string      `json:"company_slug"`
+	Title        string      `json:"title"`
+	Category     string      `json:"category"`
+	IsTech       pgtype.Bool `json:"is_tech"`
+	Skills       []string    `json:"skills"`
+	ClosedReason string      `json:"closed_reason"`
 }
 
 // One keyset page of rows the prune rule evaluates, ordered by id.
@@ -109,6 +110,9 @@ type PruneCandidatesRow struct {
 // dictionary covers the recruiting, HR, finance, legal and operations craft a technical
 // company hires for, so "has any skill" answers a different question than the caller
 // is asking.
+// closed_reason comes along because one rule acts on the CLOSURE rather than on the
+// posting: a row the source filed under the wrong employer carries its own label, and
+// the right employer was never stored, so nothing about the posting could reveal it.
 func (q *Queries) PruneCandidates(ctx context.Context, arg PruneCandidatesParams) ([]PruneCandidatesRow, error) {
 	rows, err := q.db.Query(ctx, pruneCandidates, arg.AfterID, arg.PageSize)
 	if err != nil {
@@ -127,6 +131,7 @@ func (q *Queries) PruneCandidates(ctx context.Context, arg PruneCandidatesParams
 			&i.Category,
 			&i.IsTech,
 			&i.Skills,
+			&i.ClosedReason,
 		); err != nil {
 			return nil, err
 		}
