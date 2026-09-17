@@ -79,6 +79,9 @@ func (stubTrackingRepo) ExcludedJobIDs(context.Context, int64, int32) ([]int64, 
 func (stubTrackingRepo) PipelineCounts(context.Context, int64) ([]userjob.StageCount, error) {
 	return nil, nil
 }
+func (stubTrackingRepo) ReplyRateCounts(context.Context, int64) (userjob.ReplyRateSide, userjob.ReplyRateSide, error) {
+	return userjob.ReplyRateSide{}, userjob.ReplyRateSide{}, nil
+}
 
 // trackApp mounts the track route on a handler whose tracking service is backed
 // by a stub repository (no DB). The auth gate and the service's body validation

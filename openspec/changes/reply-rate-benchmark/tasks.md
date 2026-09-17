@@ -23,4 +23,4 @@
 - [x] 4.1 Unit tests in `internal/application/jobtracking/jobtracking_test.go` for the gating helper: both sides clear the gate, caller below gate, global below gate, caller has no connected mailbox (observable count zero).
 - [x] 4.2 Integration test (build-tagged) for `GetGlobalCompanyResponse` and `GetUserResponseRate`, mirroring the existing `RebuildInsightsCompanyResponse` integration test's fixture shape.
 - [x] 4.3 Frontend test for the comparison card's presence/absence in `PipelineView`.
-- [ ] 4.4 `gofmt -l .`, `go vet ./...`, `go test ./...`, and the SPA's `pnpm run check` all pass.
+- [x] 4.4 `gofmt -l .`, `go vet ./...`, `go test ./...`, and the SPA's `pnpm run check` all pass. (`cmd/billing-sync`'s `TestTheStoreProviderAloneKeepsTheWorkerRunning` fails on this machine only — a pre-existing, unrelated local port collision on `localhost:5432` with a sibling project's Postgres container, not touched by this change; verified root cause, see session notes.)

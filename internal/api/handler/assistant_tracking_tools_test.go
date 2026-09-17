@@ -117,6 +117,10 @@ func (r *trackingRepo) PipelineCounts(context.Context, int64) ([]userjob.StageCo
 	return nil, nil
 }
 
+func (r *trackingRepo) ReplyRateCounts(context.Context, int64) (userjob.ReplyRateSide, userjob.ReplyRateSide, error) {
+	return userjob.ReplyRateSide{}, userjob.ReplyRateSide{}, nil
+}
+
 func (r *trackingRepo) ViewedSlugs(context.Context, int64) ([]string, error)    { return nil, nil }
 func (r *trackingRepo) SavedSlugs(context.Context, int64) ([]string, error)     { return nil, nil }
 func (r *trackingRepo) DismissedSlugs(context.Context, int64) ([]string, error) { return nil, nil }
