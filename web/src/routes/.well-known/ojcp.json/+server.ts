@@ -40,6 +40,15 @@ export const GET: RequestHandler = async ({ fetch }) => {
     headers: {
       // The spec requires this content type by name.
       'content-type': 'application/json; charset=utf-8',
+      // Readable from any origin. A manifest is a PUBLIC discovery document — the whole
+      // point is that a stranger's agent finds it — and the registry's own submission form
+      // fetches it from a browser on ojcp.dev, where a response with no CORS header is
+      // discarded before the page can read it. curl saw 200 the entire time; the browser
+      // saw nothing, which is exactly how this was missed.
+      //
+      // Nothing here is private or per-caller: the same bytes go to everyone, so `*` costs
+      // nothing. The reference provider serves the same header.
+      'access-control-allow-origin': '*',
       // An agent re-reads the manifest to discover a change, and the figures in it move
       // only with a deploy. An hour is long enough to matter and short enough that a
       // corrected rate limit reaches agents the same day.
@@ -54,6 +63,11 @@ export const GET: RequestHandler = async ({ fetch }) => {
 function manifestUnavailable(): Response {
   return new Response('{"error":"manifest unavailable"}', {
     status: 503,
-    headers: { 'content-type': 'application/json; charset=utf-8' },
+    headers: {
+      'content-type': 'application/json; charset=utf-8',
+      // On the refusal too: a browser that cannot read the error learns only that something
+      // went wrong somewhere, which is the less useful half of the two answers.
+      'access-control-allow-origin': '*',
+    },
   });
 }
