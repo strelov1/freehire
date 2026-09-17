@@ -151,6 +151,19 @@ Two of these shipped in one commit:
 When a comment states what a library does, measure it. Both took under a minute to check and
 both were wrong.
 
+## Check with the client that will actually use it
+
+The manifest was verified by unit tests, two reviews, OJCP's conformance suite and a `curl`
+after every deploy. All of them saw `200 OK`. **None of them was a browser**, and the
+same-origin policy is enforced only by browsers — so the registry's own submission form
+could not read the document at all, for want of an `Access-Control-Allow-Origin` header
+nobody had thought to serve.
+
+The lesson is not "remember CORS". It is that a check is blind to whatever its client does
+not do. When adding a surface, ask who calls it — a browser, an MCP client, a plain HTTP
+client, a crawler — and exercise it as at least one of each. The four checks above were four
+of the same kind of client wearing different hats.
+
 ## Testing
 
 Build fixtures with `jobview.FromRow(db.Job{...})`, never as a `jobview.Job` literal. The
