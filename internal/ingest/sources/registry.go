@@ -133,7 +133,9 @@ func All(c HTTPClient) map[string]Source {
 		NewWorkable(c),
 		NewWorkableMarketplace(c),
 		NewRecruitee(c),
-		NewSmartRecruiters(c),
+		// Rate-paced (pacedSmartRecruitersGetter): all 5,204 boards share one metered API host,
+		// and unpaced the run's own aggregate volume 429s nearly all of them. See pacer.go.
+		NewSmartRecruiters(pacedSmartRecruitersGetter(c)),
 		NewISmartRecruit(c),
 		// Keka: Indian HR/ATS SaaS, board = subdomain; one request to the platform's own
 		// job-listing API returns every open posting, fully detailed.

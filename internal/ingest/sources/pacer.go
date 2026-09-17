@@ -270,6 +270,34 @@ const (
 	adpRequestBurst    = 2
 )
 
+// SmartRecruiters meters its public postings API per caller, and all 5,204 boards reach it
+// through one host — the same shape as ADP below, and the same outcome unpaced: measured on
+// production 2026-09-16, 5,165 of those boards took a 429 within two days while 5,165 also
+// succeeded, so the fleet was spending most of its SmartRecruiters budget on retries and
+// 2,246 boards sat in a failed state at any moment.
+//
+// The rate is measured, not guessed. From a clean egress IP the API served 30 of 30 requests
+// at 10 req/s with zero 429s (2026-09-16), so the ceiling is at least that; this sits at half
+// of it because production shares one egress address with the rest of the crawl fleet, and
+// the measurement cannot see that contention.
+//
+// Tune it the way ADP's is tuned: downward while boards still 429, upward only while none do.
+// Under-shooting leaves boards uncrawled this hour and they keep their last-known state;
+// over-shooting re-triggers the storm this exists to stop.
+const (
+	smartRecruitersRequestInterval = 200 * time.Millisecond // ~5 req/s
+	smartRecruitersRequestBurst    = 2
+)
+
+// pacedSmartRecruitersGetter wraps a getter with a fresh limiter shared across one registry
+// build, so every board of a run competes for the same token bucket.
+func pacedSmartRecruitersGetter(c JSONGetter) JSONGetter {
+	return rateLimitedJSONGetter{
+		inner:   c,
+		limiter: rate.NewLimiter(rate.Every(smartRecruitersRequestInterval), smartRecruitersRequestBurst),
+	}
+}
+
 // pacedADPGetter wraps a getter with a fresh limiter shared across one registry build, so every
 // board's listing pages and detail fan-out in a run compete for the same token bucket.
 func pacedADPGetter(c JSONGetter) JSONGetter {

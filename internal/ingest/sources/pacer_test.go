@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"golang.org/x/net/html"
 )
@@ -166,6 +167,29 @@ func TestLimitedWhatJobsGetter_SharesOneGentleCap(t *testing.T) {
 	}
 	if whatjobsMaxInFlight < 1 || whatjobsMaxInFlight > 4 {
 		t.Errorf("whatjobsMaxInFlight = %d, want a gentle few", whatjobsMaxInFlight)
+	}
+}
+
+// SmartRecruiters meters per caller and all 5,204 boards reach it through one host, so an
+// unpaced run 429s nearly all of them: measured on production 2026-09-16, 5,165 boards took a
+// 429 inside two days. One limiter shared by every board of a run is what bounds it.
+func TestPacedSmartRecruitersGetter_SharesOneMeasuredBucket(t *testing.T) {
+	g, ok := pacedSmartRecruitersGetter(&recordingJSONGetter{}).(rateLimitedJSONGetter)
+	if !ok {
+		t.Fatal("pacedSmartRecruitersGetter should wrap the getter in a rate limiter")
+	}
+	if g.limiter == nil {
+		t.Fatal("no limiter on the wrapped getter")
+	}
+	// A clean egress IP served 10 req/s with zero 429s, so anything at or above that has
+	// stopped pacing and is only pretending to. The floor keeps a well-meaning edit from
+	// slowing a 5,204-board crawl past what one hour can cover.
+	perSec := float64(time.Second) / float64(smartRecruitersRequestInterval)
+	if perSec >= 10 || perSec < 1 {
+		t.Errorf("rate = %.2f req/s, want between 1 and the measured 10 req/s ceiling", perSec)
+	}
+	if smartRecruitersRequestBurst < 1 || smartRecruitersRequestBurst > 4 {
+		t.Errorf("burst = %d, want a small one", smartRecruitersRequestBurst)
 	}
 }
 
