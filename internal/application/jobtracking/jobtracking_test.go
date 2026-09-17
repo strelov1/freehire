@@ -58,6 +58,9 @@ type fakeRepo struct {
 	excludedLimit       int32
 	pipelineResult      []userjob.StageCount
 	pipelineErr         error
+	replyRateYou        userjob.ReplyRateSide
+	replyRateGlobal     userjob.ReplyRateSide
+	replyRateErr        error
 
 	// recorded calls
 	slugCalls  int
@@ -181,6 +184,10 @@ func (f *fakeRepo) ExcludedJobIDs(_ context.Context, _ int64, limit int32) ([]in
 
 func (f *fakeRepo) PipelineCounts(_ context.Context, _ int64) ([]userjob.StageCount, error) {
 	return f.pipelineResult, f.pipelineErr
+}
+
+func (f *fakeRepo) ReplyRateCounts(_ context.Context, _ int64) (userjob.ReplyRateSide, userjob.ReplyRateSide, error) {
+	return f.replyRateYou, f.replyRateGlobal, f.replyRateErr
 }
 
 // helpers
@@ -789,6 +796,54 @@ func TestPipelineAggregates(t *testing.T) {
 
 func TestPipelinePropagatesRepoError(t *testing.T) {
 	repo := &fakeRepo{pipelineErr: errors.New("boom")}
+	svc := jobtracking.New(repo)
+	if _, err := svc.Pipeline(context.Background(), 1); err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}
+
+func TestPipelineIncludesReplyRateWhenBothSidesClearTheGate(t *testing.T) {
+	repo := &fakeRepo{
+		pipelineResult:  []userjob.StageCount{{Stage: "applied", Count: 1}},
+		replyRateYou:    userjob.ReplyRateSide{Applications: 12, Answered: 4},
+		replyRateGlobal: userjob.ReplyRateSide{Applications: 287, Answered: 97},
+	}
+	svc := jobtracking.New(repo)
+
+	got, err := svc.Pipeline(context.Background(), 1)
+	if err != nil {
+		t.Fatalf("Pipeline: %v", err)
+	}
+	if got.ReplyRate == nil {
+		t.Fatal("ReplyRate is nil, want a benchmark — both sides clear the sample gate")
+	}
+	if got.ReplyRate.You != repo.replyRateYou || got.ReplyRate.Global != repo.replyRateGlobal {
+		t.Errorf("ReplyRate = %+v, want You=%+v Global=%+v", got.ReplyRate, repo.replyRateYou, repo.replyRateGlobal)
+	}
+}
+
+func TestPipelineOmitsReplyRateWhenCallerBelowTheGate(t *testing.T) {
+	repo := &fakeRepo{
+		pipelineResult:  []userjob.StageCount{{Stage: "applied", Count: 1}},
+		replyRateYou:    userjob.ReplyRateSide{Applications: 4, Answered: 1},
+		replyRateGlobal: userjob.ReplyRateSide{Applications: 287, Answered: 97},
+	}
+	svc := jobtracking.New(repo)
+
+	got, err := svc.Pipeline(context.Background(), 1)
+	if err != nil {
+		t.Fatalf("Pipeline: %v", err)
+	}
+	if got.ReplyRate != nil {
+		t.Errorf("ReplyRate = %+v, want nil — the caller has fewer than ten observable applications", got.ReplyRate)
+	}
+}
+
+func TestPipelinePropagatesReplyRateRepoError(t *testing.T) {
+	repo := &fakeRepo{
+		pipelineResult: []userjob.StageCount{{Stage: "applied", Count: 1}},
+		replyRateErr:   errors.New("boom"),
+	}
 	svc := jobtracking.New(repo)
 	if _, err := svc.Pipeline(context.Background(), 1); err == nil {
 		t.Fatal("expected error, got nil")

@@ -17,6 +17,10 @@ type StageCount struct {
 type Pipeline struct {
 	Applications int64            `json:"applications"`
 	Stages       map[string]int64 `json:"stages"`
+	// ReplyRate is the personal-vs-global employer reply-rate benchmark, present only
+	// when GateReplyRateBenchmark clears both sides — never a zero or an estimate below
+	// the sample gate, so omitempty is load-bearing here, not cosmetic.
+	ReplyRate *ReplyRateBenchmark `json:"reply_rate,omitempty"`
 }
 
 // CountByStage folds per-stage rows into the pipeline snapshot.

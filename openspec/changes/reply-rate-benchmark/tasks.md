@@ -6,11 +6,11 @@
 
 ## 2. Service layer: personal benchmark computation and gating
 
-- [ ] 2.1 Add a `ReplyRateBenchmark` type to `internal/application/userjob` (you/global application and answered counts).
-- [ ] 2.2 Add `ReplyRate *ReplyRateBenchmark` (`json:"reply_rate,omitempty"`) to `userjob.Pipeline` in `internal/application/userjob/counts.go`.
-- [ ] 2.3 Add a repository method to `internal/application/jobtracking/repository.go` wrapping the two new sqlc queries.
-- [ ] 2.4 Implement the sample-gate helper: both the caller's own observable count and the global observable count must be ≥ 10, else the benchmark is absent (`nil`) — no separate "mailbox connected" branch, since a caller with no mailbox already has an observable count of zero.
-- [ ] 2.5 Wire the new repository calls and the gate into `Service.Pipeline` in `internal/application/jobtracking/jobtracking.go`, alongside the existing `PipelineCounts` call.
+- [x] 2.1 Add a `ReplyRateBenchmark` type to `internal/application/userjob` (you/global application and answered counts).
+- [x] 2.2 Add `ReplyRate *ReplyRateBenchmark` (`json:"reply_rate,omitempty"`) to `userjob.Pipeline` in `internal/application/userjob/counts.go`.
+- [x] 2.3 Add a repository method to `internal/application/jobtracking/repository.go` wrapping the two new sqlc queries.
+- [x] 2.4 Implement the sample-gate helper: both the caller's own observable count and the global observable count must be ≥ 10, else the benchmark is absent (`nil`) — no separate "mailbox connected" branch, since a caller with no mailbox already has an observable count of zero.
+- [x] 2.5 Wire the new repository calls and the gate into `Service.Pipeline` in `internal/application/jobtracking/jobtracking.go`, alongside the existing `PipelineCounts` call.
 
 ## 3. Frontend: Pipeline tab comparison card
 
@@ -20,7 +20,7 @@
 
 ## 4. Verification
 
-- [ ] 4.1 Unit tests in `internal/application/jobtracking/jobtracking_test.go` for the gating helper: both sides clear the gate, caller below gate, global below gate, caller has no connected mailbox (observable count zero).
+- [x] 4.1 Unit tests in `internal/application/jobtracking/jobtracking_test.go` for the gating helper: both sides clear the gate, caller below gate, global below gate, caller has no connected mailbox (observable count zero).
 - [x] 4.2 Integration test (build-tagged) for `GetGlobalCompanyResponse` and `GetUserResponseRate`, mirroring the existing `RebuildInsightsCompanyResponse` integration test's fixture shape.
 - [ ] 4.3 Frontend test for the comparison card's presence/absence in `PipelineView`.
 - [ ] 4.4 `gofmt -l .`, `go vet ./...`, `go test ./...`, and the SPA's `pnpm run check` all pass.

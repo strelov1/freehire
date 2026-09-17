@@ -521,6 +521,25 @@ func (r *QueriesRepository) PipelineCounts(ctx context.Context, userID int64) ([
 	return counts, nil
 }
 
+// ReplyRateCounts returns the caller's own observable/answered counts alongside the
+// global figure summed across every company. The personal side is computed live
+// (GetUserResponseRate reads application_events directly, scoped by user_id); the
+// global side reads the periodic per-company rollup's own numbers
+// (GetGlobalCompanyResponse), never a second independent computation.
+func (r *QueriesRepository) ReplyRateCounts(ctx context.Context, userID int64) (you, global userjob.ReplyRateSide, err error) {
+	youRow, err := r.q.GetUserResponseRate(ctx, userID)
+	if err != nil {
+		return userjob.ReplyRateSide{}, userjob.ReplyRateSide{}, err
+	}
+	globalRow, err := r.q.GetGlobalCompanyResponse(ctx)
+	if err != nil {
+		return userjob.ReplyRateSide{}, userjob.ReplyRateSide{}, err
+	}
+	you = userjob.ReplyRateSide{Applications: int64(youRow.Applications), Answered: int64(youRow.Answered)}
+	global = userjob.ReplyRateSide{Applications: int64(globalRow.Applications), Answered: int64(globalRow.Answered)}
+	return you, global, nil
+}
+
 // assembledRow is the shape every write query in user_jobs.sql returns: the marks from
 // user_jobs and the process from applications, in user_jobs' historical column order.
 // sqlc emits a distinct Row type per query with identical layout, so one conversion

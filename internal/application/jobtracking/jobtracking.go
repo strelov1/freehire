@@ -243,6 +243,13 @@ type Repository interface {
 	// rows excluded; an applied row with no stage carries an empty Stage).
 	PipelineCounts(ctx context.Context, userID int64) ([]userjob.StageCount, error)
 
+	// ReplyRateCounts returns the caller's own observable/answered counts and the
+	// global figure summed across every company, both under the same definitions —
+	// observable requires a connected mailbox, answered requires a non-retracted
+	// employer_reply. The sample gate is applied by the caller (userjob.GateReplyRateBenchmark),
+	// not here.
+	ReplyRateCounts(ctx context.Context, userID int64) (you, global userjob.ReplyRateSide, err error)
+
 	// ViewedSlugs returns every public job slug the caller has interacted with.
 	ViewedSlugs(ctx context.Context, userID int64) ([]string, error)
 
@@ -375,7 +382,15 @@ func (s *Service) Pipeline(ctx context.Context, userID int64) (userjob.Pipeline,
 	if err != nil {
 		return userjob.Pipeline{}, err
 	}
-	return userjob.CountByStage(counts), nil
+	pipeline := userjob.CountByStage(counts)
+
+	you, global, err := s.repo.ReplyRateCounts(ctx, userID)
+	if err != nil {
+		return userjob.Pipeline{}, err
+	}
+	pipeline.ReplyRate = userjob.GateReplyRateBenchmark(you, global)
+
+	return pipeline, nil
 }
 
 // RecordView resolves slug → jobID then delegates to the repository.
