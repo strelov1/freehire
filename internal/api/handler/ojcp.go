@@ -59,8 +59,10 @@ func newOJCPHandlers(s searcher, store ojcpStore, origin string, submittable map
 		store:     store,
 		projector: ojcp.NewProjector(origin, submittable),
 	}
-	// The reality lookups need the concrete queries, which the production store is.
-	if q, ok := store.(*db.Queries); ok {
+	// The reality lookups need the concrete queries, which the production store is. The nil
+	// check is here rather than inside the attacher so it runs once per construction instead
+	// of once per request — and a store that cannot answer simply leaves the signal off.
+	if q, ok := store.(*db.Queries); ok && q != nil {
 		h.attachReality = realityAttacher(q)
 	}
 	return h
@@ -118,14 +120,14 @@ func (h *ojcpHandlers) OJCPSearchJobs(c *fiber.Ctx) error {
 	// answer. encoding/json does this by default; the explicit note is here so nobody
 	// "fixes" it with DisallowUnknownFields later.
 	if err := json.Unmarshal(c.Body(), &input); len(c.Body()) > 0 && err != nil {
-		return ojcpError(c, fiber.StatusBadRequest, ojcp.ErrorInvalidRequest, "request body is not valid JSON")
+		return ojcpError(c, ojcp.ErrorInvalidRequest, "request body is not valid JSON")
 	}
 
 	resp, err := h.SearchJobs(c.Context(), input)
 	if err != nil {
 		var fe *fiber.Error
 		if errors.As(err, &fe) {
-			return ojcpError(c, fe.Code, ojcp.ErrorProviderError, fe.Message)
+			return ojcpError(c, ojcp.ErrorProviderError, fe.Message)
 		}
 		return err
 	}
@@ -176,7 +178,7 @@ func (h *ojcpHandlers) OJCPJobDetail(c *fiber.Ctx) error {
 	if err != nil {
 		var notFound ojcpmcp.NotFoundError
 		if errors.As(err, &notFound) {
-			return ojcpError(c, fiber.StatusNotFound, ojcp.ErrorJobNotFound, "no posting with that ojcp_id")
+			return ojcpError(c, ojcp.ErrorJobNotFound, "no posting with that ojcp_id")
 		}
 		return err
 	}
@@ -209,8 +211,8 @@ func (h *ojcpHandlers) JobDetail(ctx context.Context, ojcpID string) (ojcp.JobDe
 	}.Finalize(), nil
 }
 
-// attachReality computes the posting-reality signal and hangs it on the view, which is what
-// makes the projection's `agent_notes` say anything at all.
+// realityAttacher builds the function that computes the posting-reality signal and hangs it
+// on a view, which is what makes the projection's `agent_notes` say anything at all.
 //
 // It has to be done explicitly: Ghost is NOT intrinsic to a jobview — it is time-dependent
 // and never stored, so every surface that wants it attaches it (jobs.go, search.go,
@@ -227,45 +229,26 @@ func (h *ojcpHandlers) JobDetail(ctx context.Context, ojcpID string) (ojcp.JobDe
 // nothing.
 func realityAttacher(q *db.Queries) func(context.Context, db.Job, *jobview.Job) {
 	return func(ctx context.Context, row db.Job, view *jobview.Job) {
-		attachRealityWith(ctx, q, row, view)
+		repost, mass := int64(1), int64(1)
+		if cnt, err := q.RoleClusterCount(ctx, db.RoleClusterCountParams{
+			CompanySlug:     row.CompanySlug,
+			RoleFingerprint: row.RoleFingerprint,
+		}); err == nil {
+			repost, mass = cnt.RepostCount, cnt.MassCount
+		}
+
+		now := time.Now()
+		reality := jobview.ClassifyReality(row, now, int(repost), int(mass))
+		view.Ghost = jobview.ClassifyGhost(jobview.GhostInput{
+			Now:          now,
+			Closed:       row.ClosedAt.Valid,
+			RealityClass: reality.Class,
+			ATSAbsentAt:  row.AtsAbsentAt.Time,
+			HasATSAbsent: row.AtsAbsentAt.Valid,
+			Evidence:     ghostEvidenceFor(ctx, q, []int64{row.ID})[row.ID],
+		})
 	}
 }
-
-func attachRealityWith(ctx context.Context, q *db.Queries, row db.Job, view *jobview.Job) {
-	// A nil store skips the two lookups and classifies on the row alone — the same
-	// best-effort shape ghostEvidenceFor takes, and what lets the criteria reachable from
-	// the row (a stale ATS absence, a closed posting) still be reported.
-	repost, mass := int64(1), int64(1)
-	if cnt, err := roleClusterCount(ctx, q, db.RoleClusterCountParams{
-		CompanySlug:     row.CompanySlug,
-		RoleFingerprint: row.RoleFingerprint,
-	}); err == nil {
-		repost, mass = cnt.RepostCount, cnt.MassCount
-	}
-
-	now := time.Now()
-	reality := jobview.ClassifyReality(row, now, int(repost), int(mass))
-	view.Ghost = jobview.ClassifyGhost(jobview.GhostInput{
-		Now:          now,
-		Closed:       row.ClosedAt.Valid,
-		RealityClass: reality.Class,
-		ATSAbsentAt:  row.AtsAbsentAt.Time,
-		HasATSAbsent: row.AtsAbsentAt.Valid,
-		Evidence:     ghostEvidenceFor(ctx, q, []int64{row.ID})[row.ID],
-	})
-}
-
-// roleClusterCount is RoleClusterCount with a nil store tolerated, so the caller above
-// reads as one best-effort block rather than two.
-func roleClusterCount(ctx context.Context, q *db.Queries, p db.RoleClusterCountParams) (db.RoleClusterCountRow, error) {
-	if q == nil {
-		return db.RoleClusterCountRow{}, errNoStore
-	}
-	return q.RoleClusterCount(ctx, p)
-}
-
-// errNoStore reports that a best-effort lookup had nothing to ask.
-var errNoStore = errors.New("no store configured")
 
 // publishedToAgents reports whether a stored posting belongs on the OJCP surface: open,
 // canonical, and not private — the set the public search publishes.
@@ -308,7 +291,7 @@ func (h *ojcpHandlers) OJCPEmployerContext(c *fiber.Ctx) error {
 	if err != nil {
 		var notFound ojcpmcp.NotFoundError
 		if errors.As(err, &notFound) {
-			return ojcpError(c, fiber.StatusNotFound, ojcp.ErrorEmployerNotFound, "no employer with that employer_id")
+			return ojcpError(c, ojcp.ErrorEmployerNotFound, "no employer with that employer_id")
 		}
 		return err
 	}
@@ -330,6 +313,20 @@ func (h *ojcpHandlers) EmployerContext(ctx context.Context, employerID string) (
 // ojcpError renders a failure in the standard's envelope with the matching HTTP status.
 // Every failure on this surface goes through it, so an OJCP client never receives this
 // API's own error shape by accident.
-func ojcpError(c *fiber.Ctx, status int, code, message string) error {
-	return c.Status(status).JSON(ojcp.NewError(code, message))
+func ojcpError(c *fiber.Ctx, code, message string) error {
+	return c.Status(ojcpErrorStatus[code]).JSON(ojcp.NewError(code, message))
+}
+
+// ojcpErrorStatus is the HTTP status each error code is served with. One table rather than a
+// status argument at every call site: the two always said the same thing, and two places to
+// say it is one place for them to disagree.
+//
+// A code absent here would serve status 0, which Fiber rejects — so a new code cannot be
+// introduced without deciding what it means over HTTP.
+var ojcpErrorStatus = map[string]int{
+	ojcp.ErrorInvalidRequest:   fiber.StatusBadRequest,
+	ojcp.ErrorJobNotFound:      fiber.StatusNotFound,
+	ojcp.ErrorEmployerNotFound: fiber.StatusNotFound,
+	ojcp.ErrorProviderError:    fiber.StatusServiceUnavailable,
+	ojcp.ErrorRateLimited:      fiber.StatusTooManyRequests,
 }

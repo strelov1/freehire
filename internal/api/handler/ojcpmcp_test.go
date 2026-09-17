@@ -121,6 +121,20 @@ func TestManifestDeclaresTheLimitTheRoutesEnforce(t *testing.T) {
 	}
 }
 
+func TestEveryErrorCodeHasAnHTTPStatus(t *testing.T) {
+	// A code absent from the table serves status 0, which Fiber rejects — so this walks the
+	// standard's codes rather than the table's own keys, where a missing entry would be
+	// invisible. Introducing a code without deciding what it means over HTTP fails here.
+	for _, code := range []string{
+		ojcp.ErrorInvalidRequest, ojcp.ErrorJobNotFound, ojcp.ErrorEmployerNotFound,
+		ojcp.ErrorProviderError, ojcp.ErrorRateLimited,
+	} {
+		if ojcpErrorStatus[code] == 0 {
+			t.Errorf("error code %q has no HTTP status; it would be served as 0", code)
+		}
+	}
+}
+
 // sameJSON compares a decoded REST body against the value the MCP side returns.
 //
 // The MCP value is serialised and read back first so both sides are the same kind of thing:
