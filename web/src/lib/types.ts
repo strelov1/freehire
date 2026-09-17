@@ -1022,8 +1022,8 @@ export interface ReplyRateSide {
 
 /** The personal-vs-global employer reply-rate benchmark. Present on PipelineStats
  *  only when both sides clear the sample gate server-side — absent, never zero or
- *  an estimate, below it. */
-export interface ReplyRateBenchmark {
+ *  an estimate, below it. Not exported: referenced only by PipelineStats below. */
+interface ReplyRateBenchmark {
   you: ReplyRateSide;
   global: ReplyRateSide;
 }
