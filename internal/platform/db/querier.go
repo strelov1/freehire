@@ -2318,6 +2318,16 @@ type Querier interface {
 	// One employment owned by the caller. A foreign or missing id returns no row, which the
 	// handler maps to 404 — so a probe cannot tell the two apart.
 	GetExperienceEmployment(ctx context.Context, arg GetExperienceEmploymentParams) (GetExperienceEmploymentRow, error)
+	// ---------------------------------------------------------------------------
+	// Global and per-user application response rate (the reply-rate benchmark)
+	// ---------------------------------------------------------------------------
+	// The all-companies response rate, summed from the same per-company observable and
+	// answered counts RebuildInsightsCompanyResponse already computed. Every company's row
+	// contributes regardless of whether it individually clears its own ten-application
+	// sample gate (see company-hiring-signal) — that gate protects what is safe to publish
+	// about one NAMED employer, not what may contribute to an aggregate across all of them.
+	// The caller applies its own sample gate to this sum.
+	GetGlobalCompanyResponse(ctx context.Context) (GetGlobalCompanyResponseRow, error)
 	// The grant row as the status endpoint reads it. `scopes` is included because the two
 	// consents are separate: a connected mailbox says nothing about the calendar, and a
 	// calendar grant may have no mailbox behind it, so the row's existence cannot answer
@@ -2672,6 +2682,19 @@ type Querier interface {
 	// The caller's single profile, keyed by user_id. No matching row means the user has not
 	// saved a profile yet (the handler maps that to a null payload / 404 on sub-resources).
 	GetUserProfile(ctx context.Context, userID int64) (UserProfile, error)
+	// One caller's own observable/answered counts, computed live from application_events —
+	// unlike the per-company/global figures, this is not read from a periodic rollup, since
+	// it is scoped to one user and cheap to compute on every request (served by
+	// application_events_user_occurred_idx). Same observable/answered definitions as
+	// RebuildInsightsCompanyResponse: observable requires a connected mailbox, answered
+	// requires a non-retracted employer_reply event. A caller with no connected mailbox has
+	// zero observable applications — not a separate case, just the same predicate producing
+	// zero — which is what lets the serving layer's sample gate double as the "no mailbox"
+	// check.
+	// No applied_at here, unlike the per-company CTE this mirrors: that one needs it for the
+	// median days-to-reply, and the personal side serves no time-based metric (see design.md
+	// - Non-Goals).
+	GetUserResponseRate(ctx context.Context, userID int64) (GetUserResponseRateRow, error)
 	// The authenticated user's résumé pointer (object key + upload time), or NULLs when
 	// no résumé is stored. The blob lives in S3 under the key; this is just the pointer.
 	GetUserResume(ctx context.Context, id int64) (GetUserResumeRow, error)

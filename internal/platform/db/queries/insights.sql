@@ -477,3 +477,54 @@ SELECT company_slug,
 -- observable applications at all, which the caller must treat as "not enough data"
 -- rather than as a zero response rate.
 SELECT applications, answered, median_reply_days FROM insights_company_response WHERE company_slug = $1;
+
+-- ---------------------------------------------------------------------------
+-- Global and per-user application response rate (the reply-rate benchmark)
+-- ---------------------------------------------------------------------------
+
+-- name: GetGlobalCompanyResponse :one
+-- The all-companies response rate, summed from the same per-company observable and
+-- answered counts RebuildInsightsCompanyResponse already computed. Every company's row
+-- contributes regardless of whether it individually clears its own ten-application
+-- sample gate (see company-hiring-signal) — that gate protects what is safe to publish
+-- about one NAMED employer, not what may contribute to an aggregate across all of them.
+-- The caller applies its own sample gate to this sum.
+SELECT
+    coalesce(sum(applications), 0)::int AS applications,
+    coalesce(sum(answered), 0)::int     AS answered
+  FROM insights_company_response;
+
+-- name: GetUserResponseRate :one
+-- One caller's own observable/answered counts, computed live from application_events —
+-- unlike the per-company/global figures, this is not read from a periodic rollup, since
+-- it is scoped to one user and cheap to compute on every request (served by
+-- application_events_user_occurred_idx). Same observable/answered definitions as
+-- RebuildInsightsCompanyResponse: observable requires a connected mailbox, answered
+-- requires a non-retracted employer_reply event. A caller with no connected mailbox has
+-- zero observable applications — not a separate case, just the same predicate producing
+-- zero — which is what lets the serving layer's sample gate double as the "no mailbox"
+-- check.
+-- No applied_at here, unlike the per-company CTE this mirrors: that one needs it for the
+-- median days-to-reply, and the personal side serves no time-based metric (see design.md
+-- - Non-Goals).
+WITH observable AS (
+    SELECT ae.application_id
+      FROM application_events ae
+     WHERE ae.kind = 'applied'
+       AND ae.retracted_at IS NULL
+       AND ae.user_id = $1
+       AND ae.company_slug <> ''
+       AND ae.application_id IS NOT NULL
+       AND (EXISTS (SELECT 1 FROM gmail_connections gc
+                     WHERE gc.user_id = ae.user_id AND gc.status = 'connected' AND gc.email <> '')
+         OR EXISTS (SELECT 1 FROM mailboxes mb WHERE mb.user_id = ae.user_id))
+)
+SELECT
+    count(*)::int AS applications,
+    count(*) FILTER (
+        WHERE EXISTS (SELECT 1 FROM application_events r
+                       WHERE r.application_id = o.application_id
+                         AND r.kind          = 'employer_reply'
+                         AND r.retracted_at IS NULL)
+    )::int AS answered
+  FROM observable o;
