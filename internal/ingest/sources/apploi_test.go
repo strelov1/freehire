@@ -23,7 +23,12 @@ func TestApploiProvider(t *testing.T) {
 }
 
 func TestApploiFetch(t *testing.T) {
-	fake := (&routedHTTP{}).route("/v1/jobs", apploiListJSON)
+	// The sentinel employer answers empty — the API proving it filters. Without this route
+	// the fake would be modelling the September 2026 outage, where every id got the same
+	// global list, and Fetch would (correctly) refuse.
+	fake := (&routedHTTP{}).
+		route("employer="+apploiFilterProbeEmployer, apploiEmptyJSON).
+		route("/v1/jobs", apploiListJSON)
 
 	jobs, err := NewApploi(fake).Fetch(context.Background(),
 		CompanyEntry{Company: "OnTray", Board: "41350"})
@@ -104,7 +109,13 @@ func apploiFullPageJSON(n int) string {
 // succeeding partially. Mirrors taleoEndlessFake / gustoEndlessFake / baytEndlessListingFake.
 type apploiEndlessFake struct{ calls int }
 
-func (f *apploiEndlessFake) GetJSON(_ context.Context, _ string, v any) error {
+func (f *apploiEndlessFake) GetJSON(_ context.Context, url string, v any) error {
+	// The employer-filter probe answers empty, so the API reads as filtering and the walk —
+	// which is what this test measures — actually starts. Probe calls are not counted: the
+	// assertion below is about the page ceiling, not about how the filter is proven.
+	if strings.Contains(url, "employer="+apploiFilterProbeEmployer) {
+		return json.Unmarshal([]byte(apploiEmptyJSON), v)
+	}
 	f.calls++
 	return json.Unmarshal([]byte(apploiFullPageJSON(apploiPageSize)), v)
 }
