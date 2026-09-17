@@ -24,9 +24,10 @@ func TestSearchInputBecomesOurOwnQueryVocabulary(t *testing.T) {
 	values, _ := input.QueryValues()
 
 	for key, want := range map[string]string{
-		"q":                  "go engineer",
-		"cities":             "Berlin",
-		"countries":          "DE",
+		"q":      "go engineer",
+		"cities": "Berlin",
+		// Lowercase: the facet is stored that way, and NormalizeCountry canonicalises to it.
+		"countries":          "de",
 		"work_mode":          "remote",
 		"employment_type":    "full_time",
 		"salary_min":         "120000",
@@ -123,6 +124,36 @@ func TestSearchInputPassesEveryEmploymentTypeItDoesHold(t *testing.T) {
 				t.Errorf("unsupported = %v, want none for a type we hold", unsupported)
 			}
 		})
+	}
+}
+
+func TestSearchInputResolvesHoweverAnAgentSpellsACountry(t *testing.T) {
+	// The agent picks the spelling, not us: an OJCP client may send an alpha-2, an alpha-3 or
+	// the country's name. Resolution doubles as the check.
+	for _, spelling := range []string{"US", "us", "USA", "United States"} {
+		t.Run(spelling, func(t *testing.T) {
+			values, unsupported := SearchInput{Location: &SearchLocation{Country: spelling}}.QueryValues()
+
+			if got := values.Get("countries"); got != "us" {
+				t.Errorf("countries = %q, want the canonical code", got)
+			}
+			if len(unsupported) != 0 {
+				t.Errorf("unsupported = %v, want none for a country we can place", unsupported)
+			}
+		})
+	}
+}
+
+func TestSearchInputReportsACountryItCannotPlace(t *testing.T) {
+	// Passed through, it would reach the index as a filter matching nothing — an answer that
+	// narrowed to zero while reading as an honest empty result.
+	values, unsupported := SearchInput{Location: &SearchLocation{Country: "Atlantis"}}.QueryValues()
+
+	if got := values.Get("countries"); got != "" {
+		t.Errorf("countries = %q, want no filter applied", got)
+	}
+	if !slices.Contains(unsupported, "location.country") {
+		t.Errorf("unsupported = %v, want it to name the country it could not place", unsupported)
 	}
 }
 

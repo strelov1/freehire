@@ -136,6 +136,21 @@ the validation in the same commit, and make sure it can FAIL — the rate-limit 
 out to require `retry_after_seconds`, which only surfaced once the oracle was finally
 pointed at that envelope.
 
+## A guarantee written in a comment is not a guarantee
+
+Two of these shipped in one commit:
+
+- An error-status table argued that a missing entry *"would serve status 0, which Fiber
+  rejects"*. **Measured: Fiber serves status 0 as `200 OK`** with the error body, so an agent
+  reads success. The protection had to become a `switch` with a real `default`.
+- `ojcpmcp.toolError` returned plain Go errors while its own comment said the SDK would turn
+  them into JSON-RPC errors. It does that only for a `*jsonrpc.Error`; anything else becomes a
+  tool result with the message as text, so **no OJCP envelope ever reached an agent over MCP**
+  — and that package had no tests at all.
+
+When a comment states what a library does, measure it. Both took under a minute to check and
+both were wrong.
+
 ## Testing
 
 Build fixtures with `jobview.FromRow(db.Job{...})`, never as a `jobview.Job` literal. The

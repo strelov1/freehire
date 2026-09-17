@@ -122,16 +122,71 @@ func TestManifestDeclaresTheLimitTheRoutesEnforce(t *testing.T) {
 }
 
 func TestEveryErrorCodeHasAnHTTPStatus(t *testing.T) {
-	// A code absent from the table serves status 0, which Fiber rejects — so this walks the
-	// standard's codes rather than the table's own keys, where a missing entry would be
-	// invisible. Introducing a code without deciding what it means over HTTP fails here.
-	for _, code := range []string{
-		ojcp.ErrorInvalidRequest, ojcp.ErrorJobNotFound, ojcp.ErrorEmployerNotFound,
-		ojcp.ErrorProviderError, ojcp.ErrorRateLimited,
-	} {
-		if ojcpErrorStatus[code] == 0 {
-			t.Errorf("error code %q has no HTTP status; it would be served as 0", code)
+	// Walks the codes this package may emit, from ojcp's own list rather than a copy written
+	// here — a hand-written list would only prove somebody typed the same five twice.
+	for _, code := range ojcp.ErrorCodes() {
+		if ojcpHTTPStatus(code) == 0 {
+			t.Errorf("error code %q has no HTTP status", code)
 		}
+	}
+}
+
+func TestAnUnmappedErrorCodeIsNeverServedAsSuccess(t *testing.T) {
+	// An earlier comment claimed a missing entry would serve status 0 "which Fiber rejects".
+	// Measured: Fiber serves it as 200 OK with the error body, so an agent reads success. The
+	// protection has to be in the code, not in a sentence about it.
+	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
+	app.Get("/probe", func(c *fiber.Ctx) error {
+		return ojcpError(c, "a_code_nobody_mapped", "something went wrong")
+	})
+
+	status, body := doGet(t, app, "/probe")
+
+	if status == fiber.StatusOK {
+		t.Fatalf("an unmapped error code was served as 200 OK: %v", body)
+	}
+	if status < 400 {
+		t.Errorf("status = %d, want a failure status", status)
+	}
+}
+
+func TestARateLimitRefusalReachesAnAgentInTheStandardsEnvelope(t *testing.T) {
+	// The one refusal an agent is most likely to meet, and it was answered in this API's own
+	// `{"error": msg}` shape — with no field for the `retry_after_seconds` the schema makes
+	// mandatory alongside `rate_limited`.
+	refuse := func(c *fiber.Ctx) error {
+		c.Set("Retry-After", "30")
+		return fiber.NewError(fiber.StatusTooManyRequests, "too many requests, please try again later")
+	}
+	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
+	app.Get("/probe", ojcpRateLimited(refuse), func(c *fiber.Ctx) error { return c.JSON(fiber.Map{}) })
+
+	status, body := doGet(t, app, "/probe")
+
+	if status != fiber.StatusTooManyRequests {
+		t.Fatalf("status = %d, want 429", status)
+	}
+	if body["error_code"] != "rate_limited" {
+		t.Errorf("error_code = %v, want rate_limited (the standard's own shape)", body["error_code"])
+	}
+	if body["retry_after_seconds"] != float64(30) {
+		t.Errorf("retry_after_seconds = %v, want the seconds the limiter already set", body["retry_after_seconds"])
+	}
+}
+
+func TestARateLimitRefusalNeverTellsAnAgentToRetryImmediately(t *testing.T) {
+	// A missing or unparseable Retry-After must not become zero: "retry now" is the one
+	// answer that turns a refusal into a loop.
+	refuse := func(*fiber.Ctx) error {
+		return fiber.NewError(fiber.StatusTooManyRequests, "too many requests")
+	}
+	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
+	app.Get("/probe", ojcpRateLimited(refuse), func(c *fiber.Ctx) error { return c.JSON(fiber.Map{}) })
+
+	_, body := doGet(t, app, "/probe")
+
+	if seconds, _ := body["retry_after_seconds"].(float64); seconds < 1 {
+		t.Errorf("retry_after_seconds = %v, want at least one second", body["retry_after_seconds"])
 	}
 }
 

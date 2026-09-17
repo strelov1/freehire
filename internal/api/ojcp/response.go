@@ -88,6 +88,16 @@ const (
 	ErrorRateLimited      = "rate_limited"
 )
 
+// ErrorCodes is every code this package may emit. It exists so a caller mapping codes onto
+// something else — an HTTP status, a JSON-RPC code — can be held to covering all of them by
+// a test that walks THIS list rather than a copy of it written beside the mapping.
+func ErrorCodes() []string {
+	return []string{
+		ErrorJobNotFound, ErrorEmployerNotFound, ErrorInvalidRequest,
+		ErrorProviderError, ErrorRateLimited,
+	}
+}
+
 // ErrorResponse is the envelope both transports render a failure in — as an HTTP body over
 // REST, and inside a JSON-RPC error's `data` over MCP.
 //

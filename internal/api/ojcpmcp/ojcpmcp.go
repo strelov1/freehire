@@ -12,9 +12,11 @@ package ojcpmcp
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 
+	"github.com/modelcontextprotocol/go-sdk/jsonrpc"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/strelov1/freehire/internal/api/ojcp"
@@ -35,6 +37,16 @@ type Reader interface {
 type NotFoundError struct{ What string }
 
 func (e NotFoundError) Error() string { return e.What + " not found" }
+
+// Code is the standard's error code for what was not found. The enum keeps the two kinds
+// apart, and an agent branches on them: "no such posting" and "no such employer" lead to
+// different next steps.
+func (e NotFoundError) Code() string {
+	if e.What == "employer" {
+		return ojcp.ErrorEmployerNotFound
+	}
+	return ojcp.ErrorJobNotFound
+}
 
 // jobDetailInput and employerContextInput are the tools' inputs. They are declared here
 // rather than in internal/api/ojcp because the SDK derives each tool's JSON Schema from the
@@ -115,21 +127,39 @@ func ToolNames() []string {
 	return []string{toolSearchJobs, toolGetJobDetail, toolGetEmployerContext}
 }
 
-// toolError renders a failure the way MCP carries one: the SDK turns a returned error into
-// a JSON-RPC error for the caller.
+// toolError renders a failure as a JSON-RPC error carrying the OJCP envelope in `data`,
+// which is what the specification asks of an MCP transport.
+//
+// The SDK forwards an error to the PROTOCOL only when it is a `*jsonrpc.Error`; an ordinary
+// Go error becomes a CallToolResult with IsError set and the message as text (server.go:427).
+// An earlier version returned plain errors while its own comment claimed the opposite, so no
+// OJCP envelope ever reached an agent over this transport.
 //
 // A not-found is stated plainly, because an agent must be able to tell "no such posting"
-// from "this provider is broken" — the same distinction the REST transport draws with a
-// 404 rather than an empty object. Every other failure is reported WITHOUT its detail: what
-// went wrong inside this deployment is ours, not a caller's. It is still an error and never
-// an empty answer, which would read as a catalogue holding nothing.
+// from "this provider is broken" — the same distinction REST draws with a 404 rather than an
+// empty object. Every other failure is reported WITHOUT its detail: what went wrong inside
+// this deployment is ours, not a caller's. It stays an error and never an empty answer,
+// which would read as a catalogue holding nothing.
 func toolError(err error) error {
 	if err == nil {
 		return nil
 	}
+
 	var notFound NotFoundError
 	if errors.As(err, &notFound) {
-		return err
+		return wireError(jsonrpc.CodeInvalidParams, ojcp.NewError(notFound.Code(), err.Error()))
 	}
-	return errors.New("freehire could not answer this request")
+	return wireError(jsonrpc.CodeInternalError,
+		ojcp.NewError(ojcp.ErrorProviderError, "freehire could not answer this request"))
+}
+
+// wireError packages an OJCP envelope as the `data` of a JSON-RPC error. A payload that will
+// not marshal still yields an error rather than a success: the envelope is the detail, never
+// the fact of the failure.
+func wireError(code int64, payload ojcp.ErrorResponse) error {
+	wire := &jsonrpc.Error{Code: code, Message: payload.Message}
+	if data, err := json.Marshal(payload); err == nil {
+		wire.Data = data
+	}
+	return wire
 }

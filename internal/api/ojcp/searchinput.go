@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/strelov1/freehire/internal/dict/location"
 	"github.com/strelov1/freehire/internal/dict/vocab"
 )
 
@@ -118,11 +119,25 @@ func (in SearchInput) applyLocation(values url.Values) []string {
 	loc := in.Location
 
 	var unsupported []string
+	// City is passed through UNCHECKED, unlike the country beside it. The city facet is a
+	// high-cardinality open vocabulary (jobview folds a dictionary beacon list with the
+	// model's own reading), so there is no closed set to check against — and refusing an
+	// unlisted city would drop a real search. An unmatched city therefore narrows the answer,
+	// which is the one case here that stays silent. `getJobFacets` is where an agent resolves
+	// a city before filtering on it.
 	if loc.City != "" {
 		values.Set("cities", loc.City)
 	}
+	// Resolved rather than passed through, and the resolution is also the check: an agent may
+	// send "US", "USA" or "United States", and a value the dictionary cannot place is one the
+	// index will match nothing for — the answer NARROWS to nothing while looking like an
+	// honest empty result.
 	if loc.Country != "" {
-		values.Set("countries", loc.Country)
+		if country := location.NormalizeCountry(loc.Country); country != "" {
+			values.Set("countries", country)
+		} else {
+			unsupported = append(unsupported, "location.country")
+		}
 	}
 	// We hold no state/province facet — the geography dictionary resolves cities and
 	// countries — so a state-scoped search would be answered as if the state were not

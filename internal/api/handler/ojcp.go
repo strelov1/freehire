@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strconv"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -72,7 +73,7 @@ func (h *ojcpHandlers) register(api fiber.Router, mw middleware) {
 	// Public and unauthenticated, like the other job reads. The rate limit is the same
 	// agent-search one: these calls cost what /agent/jobs/search costs, and the manifest
 	// declares that figure — a limit declared and not enforced breaks a MUST in the spec.
-	limit := agentSearchLimiter(mw.throttler)
+	limit := ojcpRateLimited(agentSearchLimiter(mw.throttler))
 	api.Post("/ojcp/v1/search", limit, h.OJCPSearchJobs)
 	api.Get("/ojcp/v1/jobs/:slug", limit, h.OJCPJobDetail)
 	api.Get("/ojcp/v1/employers/:slug", limit, h.OJCPEmployerContext)
@@ -106,7 +107,11 @@ func (h *ojcpHandlers) manifest() ojcp.Manifest {
 	return ojcp.NewManifest(ojcp.ManifestConfig{
 		Origin: h.projector.Origin,
 		Tools:  ojcpmcp.ToolNames(),
-		// Per second, from the per-minute budget the routes above are limited by.
+		// The manifest's only rate field is per SECOND, while the limiter holds a per-MINUTE
+		// bucket — so this is the sustained average, and a burst well above it is allowed
+		// before the bucket empties. The error is deliberately in the safe direction: an agent
+		// pacing at the declared figure never meets a 429, which is what the declaration is
+		// for. Declaring the burst instead would invite a rate we refuse.
 		AnonymousRPS:   agentSearchPerMinute / 60,
 		ApplyPathTypes: []string{"ats_direct", "external_redirect"},
 	})
@@ -310,23 +315,64 @@ func (h *ojcpHandlers) EmployerContext(ctx context.Context, employerID string) (
 	return ojcp.EmployerContextFrom(company), nil
 }
 
+// ojcpRateLimited wraps the shared rate limiter so a refusal reaches an agent in the
+// STANDARD's error envelope rather than this API's own `{"error": msg}`.
+//
+// Without it, `ojcpError`'s promise that an OJCP client never receives this API's shape by
+// accident was false for the one refusal an agent is most likely to meet — and the schema
+// makes `retry_after_seconds` mandatory alongside `rate_limited`, which our own body has no
+// field for. The seconds come from the `Retry-After` header the limiter has already set, so
+// the two cannot disagree.
+func ojcpRateLimited(limiter fiber.Handler) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		err := limiter(c)
+
+		var fe *fiber.Error
+		if errors.As(err, &fe) && fe.Code == fiber.StatusTooManyRequests {
+			return c.Status(fiber.StatusTooManyRequests).
+				JSON(ojcp.NewRateLimitError(retryAfterSeconds(c)))
+		}
+		return err
+	}
+}
+
+// retryAfterSeconds reads back the header the limiter set. A value it did not set, or one
+// that will not parse, falls back to a second rather than to zero: the schema wants a real
+// delay, and "retry immediately" is the one answer that turns a refusal into a loop.
+func retryAfterSeconds(c *fiber.Ctx) int {
+	seconds, err := strconv.Atoi(c.GetRespHeader("Retry-After"))
+	if err != nil || seconds < 1 {
+		return 1
+	}
+	return seconds
+}
+
 // ojcpError renders a failure in the standard's envelope with the matching HTTP status.
 // Every failure on this surface goes through it, so an OJCP client never receives this
 // API's own error shape by accident.
 func ojcpError(c *fiber.Ctx, code, message string) error {
-	return c.Status(ojcpErrorStatus[code]).JSON(ojcp.NewError(code, message))
+	return c.Status(ojcpHTTPStatus(code)).JSON(ojcp.NewError(code, message))
 }
 
-// ojcpErrorStatus is the HTTP status each error code is served with. One table rather than a
+// ojcpHTTPStatus is the HTTP status each error code is served with. One mapping rather than a
 // status argument at every call site: the two always said the same thing, and two places to
 // say it is one place for them to disagree.
 //
-// A code absent here would serve status 0, which Fiber rejects — so a new code cannot be
-// introduced without deciding what it means over HTTP.
-var ojcpErrorStatus = map[string]int{
-	ojcp.ErrorInvalidRequest:   fiber.StatusBadRequest,
-	ojcp.ErrorJobNotFound:      fiber.StatusNotFound,
-	ojcp.ErrorEmployerNotFound: fiber.StatusNotFound,
-	ojcp.ErrorProviderError:    fiber.StatusServiceUnavailable,
-	ojcp.ErrorRateLimited:      fiber.StatusTooManyRequests,
+// An unrecognised code answers 500. An earlier version was a map, and argued in a comment
+// that a missing entry "would serve status 0, which Fiber rejects" — measured, Fiber serves
+// status 0 as **200 OK** with the error body, so an agent would read success. A switch with
+// a real default is the protection; the sentence was not one.
+func ojcpHTTPStatus(code string) int {
+	switch code {
+	case ojcp.ErrorInvalidRequest:
+		return fiber.StatusBadRequest
+	case ojcp.ErrorJobNotFound, ojcp.ErrorEmployerNotFound:
+		return fiber.StatusNotFound
+	case ojcp.ErrorRateLimited:
+		return fiber.StatusTooManyRequests
+	case ojcp.ErrorProviderError:
+		return fiber.StatusServiceUnavailable
+	default:
+		return fiber.StatusInternalServerError
+	}
 }
