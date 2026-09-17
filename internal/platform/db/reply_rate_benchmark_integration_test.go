@@ -184,3 +184,46 @@ func TestGetUserResponseRate_RetractedReplyDoesNotCount(t *testing.T) {
 		t.Errorf("answered = %d, want 0 — a retracted reply must not count", got.Answered)
 	}
 }
+
+// cmd/prune is the only hard-delete path for jobs, and application_events.job_id is ON
+// DELETE SET NULL — so a removal must not change what this query says about the caller.
+// The denominator survives on its own (observable's WHERE clause never joins jobs). The
+// numerator is the half at risk: the reply is matched back to its application through
+// application_id, and a query that instead joined through job_id would see two cleared
+// references and report a silent employer, the exact distortion
+// RebuildInsightsCompanyResponse's own comment (above) documents.
+func TestGetUserResponseRate_SurvivesPrunedPosting(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	ctx := context.Background()
+
+	user := seedResponseUser(t, q, "prune-personal@example.test", true)
+	job := seedResponseJob(t, q, "prune-personal-1", "prunepersonalco")
+	if _, err := q.MarkJobApplied(ctx, MarkJobAppliedParams{UserID: user, JobID: job, EventSource: "user"}); err != nil {
+		t.Fatalf("MarkJobApplied: %v", err)
+	}
+	seedReply(t, q, user, job, "prune-personal-reply-1")
+
+	before, err := q.GetUserResponseRate(ctx, user)
+	if err != nil {
+		t.Fatalf("GetUserResponseRate before prune: %v", err)
+	}
+	if before.Applications != 1 || before.Answered != 1 {
+		t.Fatalf("before the prune: got %+v, want 1 application and 1 answered", before)
+	}
+
+	if _, err := pool.Exec(ctx, `DELETE FROM jobs WHERE id = $1`, job); err != nil {
+		t.Fatalf("prune the posting: %v", err)
+	}
+
+	after, err := q.GetUserResponseRate(ctx, user)
+	if err != nil {
+		t.Fatalf("GetUserResponseRate after prune: %v", err)
+	}
+	if after.Applications != 1 {
+		t.Errorf("applications = %d after the posting was pruned, want 1", after.Applications)
+	}
+	if after.Answered != 1 {
+		t.Errorf("answered = %d after the posting was pruned, want 1 — an employer that replied must not be served as silent", after.Answered)
+	}
+}

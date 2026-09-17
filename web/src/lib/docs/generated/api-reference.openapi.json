@@ -2857,7 +2857,7 @@
       "get": {
         "operationId": "get_me_tracking_pipeline",
         "summary": "Your application-pipeline snapshot (counts per stage).",
-        "description": "The total application count and the count at each stage, aggregated server-side over all of your applications. Every stage of the vocabulary is present, zero included, and the counts always sum to `applications`. An application with `applied_at` set but no explicit stage counts as `applied`.",
+        "description": "The total application count and the count at each stage, aggregated server-side over all of your applications. Every stage of the vocabulary is present, zero included, and the counts always sum to `applications`. An application with `applied_at` set but no explicit stage counts as `applied`. `reply_rate` compares your own employer-reply rate against the rate across every candidate — both sides counted only from applications whose owner has a connected mailbox, so a reply would have been seen. It is present only once both your own count and the global count reach a minimum sample size; absent otherwise, never a zero or an estimate.",
         "responses": {
           "200": {
             "description": "Success",
@@ -2866,7 +2866,7 @@
                 "schema": {
                   "type": "string"
                 },
-                "example": "{\n  \"data\": {\n    \"applications\": 12,\n    \"stages\": {\n      \"applied\": 4,\n      \"screening\": 2,\n      \"responded\": 1,\n      \"interview\": 2,\n      \"offer\": 1,\n      \"accepted\": 1,\n      \"rejected\": 1,\n      \"withdrawn\": 0\n    }\n  }\n}"
+                "example": "{\n  \"data\": {\n    \"applications\": 12,\n    \"stages\": {\n      \"applied\": 4,\n      \"screening\": 2,\n      \"responded\": 1,\n      \"interview\": 2,\n      \"offer\": 1,\n      \"accepted\": 1,\n      \"rejected\": 1,\n      \"withdrawn\": 0\n    },\n    \"reply_rate\": {\n      \"you\": { \"applications\": 12, \"answered\": 4 },\n      \"global\": { \"applications\": 287, \"answered\": 97 }\n    }\n  }\n}"
               }
             }
           }

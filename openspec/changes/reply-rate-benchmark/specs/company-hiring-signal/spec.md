@@ -28,8 +28,9 @@ them.
   total is fifteen
 - **THEN** the global response rate is served, computed over all fifteen
 
-#### Scenario: Rebuilt atomically with the per-company figure
+#### Scenario: Read from the same post-rebuild snapshot as the per-company figure
 
 - **WHEN** `cmd/rollup-company` runs
-- **THEN** the global response rate and the per-company response rates are replaced within the
-  same transaction, or neither is
+- **THEN** the global response rate, read as a live sum over the per-company rows, reflects
+  exactly the snapshot those rows were replaced into within one transaction — never a mix of the
+  old and new rebuild

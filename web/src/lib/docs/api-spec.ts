@@ -1301,7 +1301,11 @@ ${BASE_URL}/auth/extension/connect?redirect_uri=https://<extension-id>.chromiuma
           'The total application count and the count at each stage, aggregated server-side ' +
           'over all of your applications. Every stage of the vocabulary is present, zero ' +
           'included, and the counts always sum to `applications`. An application with ' +
-          '`applied_at` set but no explicit stage counts as `applied`.',
+          '`applied_at` set but no explicit stage counts as `applied`. `reply_rate` compares ' +
+          'your own employer-reply rate against the rate across every candidate — both sides ' +
+          'counted only from applications whose owner has a connected mailbox, so a reply ' +
+          'would have been seen. It is present only once both your own count and the global ' +
+          "count reach a minimum sample size; absent otherwise, never a zero or an estimate.",
         curl: `curl "${BASE_URL}/me/tracking/pipeline" -H "Authorization: Bearer $FREEHIRE_API_KEY"`,
         responseExample: `{
   "data": {
@@ -1315,6 +1319,10 @@ ${BASE_URL}/auth/extension/connect?redirect_uri=https://<extension-id>.chromiuma
       "accepted": 1,
       "rejected": 1,
       "withdrawn": 0
+    },
+    "reply_rate": {
+      "you": { "applications": 12, "answered": 4 },
+      "global": { "applications": 287, "answered": 97 }
     }
   }
 }`,

@@ -47,13 +47,13 @@ weaker metric.
 
 ## Impact
 
-- **Backend:** `internal/platform/db/queries/insights.sql` (global aggregate query),
-  `cmd/rollup-company` (compute and store the global scalar in the same transaction as the
-  per-company rebuild), a new query scoped to one user mirroring
-  `RebuildInsightsCompanyResponse`'s observable/answered CTEs, and the pipeline handler in
-  `internal/api/handler` (name TBD in design.md) for the live per-user computation and gating.
+- **Backend:** `internal/platform/db/queries/insights.sql` gains two queries —
+  `GetGlobalCompanyResponse` (a live `SUM` over the existing `insights_company_response` rollup,
+  no change to `cmd/rollup-company` itself — see design.md's "Decisions" for why a stored scalar
+  was rejected) and `GetUserResponseRate` (scoped to one user, mirroring
+  `RebuildInsightsCompanyResponse`'s observable/answered CTEs) — plus the wiring through
+  `internal/application/jobtracking`'s `Repository`/`Service.Pipeline` into the existing pipeline
+  handler in `internal/api/handler`.
 - **Frontend:** the Pipeline tab component in `web/` gains a comparison card, rendered only when
   the field is present in the response.
-- **Data:** no new migration for per-company data; the global figure needs at most one small
-  scalar store — precompute-vs-read-live is decided in design.md. No change to
-  `application_events` itself.
+- **Data:** no new migration. No change to `application_events` itself.
