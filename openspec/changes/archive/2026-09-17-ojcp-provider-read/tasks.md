@@ -111,7 +111,16 @@
 - [x] 7.2 Write `internal/api/ojcp/AGENTS.md`: what the package is, the pure-projection rule,
       why `supports_agent_submission` is derived, and where the schemas came from.
 - [x] 7.3 Add the OJCP surface to the root `CLAUDE.md` module table.
-- [ ] 7.4 After deploy: run OJCP's conformance suite against the live origin and record what
-      it reports.
-- [ ] 7.5 After a clean conformance run: open the `ADOPTERS.md` PR (tier: Implementing) and
-      the provider registry entry.
+- [x] 7.4 Ran OJCP's conformance suite against the live origin: **9 passed, 0 failed, 0
+      skipped**, from the suite's repository HEAD. It earned its keep — it caught that
+      `get_job_detail` took an `ojcp_id` argument where the standard's input schema requires
+      `job_id`, making the tool unreachable for any conforming client. Neither our tests nor
+      two review rounds had found it, because the vendored INPUT schemas were never checked
+      against.
+      Run it from the repo, not from npm: the published 0.1.0 package carries a pre-rename
+      `apply_paths` vocabulary and no `Mcp-Session-Id` handling, so it reports two failures
+      that are its own.
+- [x] 7.5 Opened both: ojcp-org/registry#1 (the registry's first external entry) and
+      ojcp-org/ojcp#18 (ADOPTERS.md, tier Implementing). `has_agent_apply` is false in the
+      registry entry — agent-initiated application is not implemented, and that flag is what
+      an agent plans around.

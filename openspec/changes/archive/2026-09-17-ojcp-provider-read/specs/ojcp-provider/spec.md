@@ -63,6 +63,17 @@ for a company we hold.
 - **THEN** the system answers with an OJCP error envelope and a not-found status
 - **AND** it does not answer with an empty posting object
 
+### Requirement: Tool inputs use the standard's own argument names
+
+Each tool SHALL accept the argument names its published input schema requires —
+`get_job_detail` takes `job_id`, `get_employer_context` takes `employer_id` — whatever the
+value is called elsewhere in this catalogue.
+
+#### Scenario: A conforming client calls a tool
+
+- **WHEN** a client sends the argument named by the tool's input schema
+- **THEN** the tool answers rather than reporting a missing required field
+
 ### Requirement: JobPosting projection
 
 The system SHALL project a catalogue posting into an OJCP `JobPosting` such that:
@@ -84,9 +95,17 @@ read the database, and it SHALL NOT depend on the HTTP framework.
 
 #### Scenario: Posting-reality verdict reaches the agent
 
-- **WHEN** a posting carries a ghost verdict
+- **WHEN** `get_job_detail` answers for a posting that carries a ghost verdict
 - **THEN** `agent_notes` states that verdict
 - **AND** a posting with no verdict omits the field rather than asserting a neutral one
+
+#### Scenario: The search tool does not carry the verdict
+
+- **WHEN** `search_jobs` answers
+- **THEN** no posting in the page carries `agent_notes`
+- **AND** this is deliberate: the verdict costs two lookups per posting, is time-dependent
+  and never stored, and an agent must open the posting to act on it — `get_job_detail` is
+  one call away
 
 ### Requirement: ApplyPath projection from captured forms
 
@@ -141,8 +160,17 @@ body on REST.
 
 ### Requirement: Visibility matches the public catalogue
 
-The OJCP surface SHALL publish exactly the postings the public job search publishes — open,
-canonical, and not private — using that same predicate rather than a second copy of it.
+The OJCP surface SHALL publish exactly the postings the public job search publishes: open,
+canonical, and not private.
+
+The two tools reach that set by different routes, because they read from different places.
+`search_jobs` goes through the search index, which never contains a private, closed or
+duplicate-suppressed posting. `get_job_detail` reads a row directly through a query that
+carries NO predicate at all — it is the read a private job's own creator uses — so the
+handler SHALL apply the predicate itself.
+
+A refused posting SHALL answer not-found rather than forbidden: whether a private posting
+exists under a given identifier is not an anonymous caller's business.
 
 #### Scenario: A private posting is never projected
 
