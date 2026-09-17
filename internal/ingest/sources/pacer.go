@@ -284,8 +284,22 @@ const (
 // Tune it the way ADP's is tuned: downward while boards still 429, upward only while none do.
 // Under-shooting leaves boards uncrawled this hour and they keep their last-known state;
 // over-shooting re-triggers the storm this exists to stop.
+//
+// RAISED 2026-09-17 from 200ms (~5 req/s) on the evidence the rule asks for: six hours of
+// paced crawling produced ZERO 429s while 231 boards succeeded and the healthy count climbed
+// from 2,958 to 3,355. Coverage was the argument for moving — a 50-minute run reached about
+// 200 of 5,170 boards before TimeoutStartSec killed it, so a full sweep took roughly two
+// days, and the limiter is the wall: the adapter fans out across boards concurrently but
+// every request queues behind one shared bucket, so boards-per-run scales with this number
+// and nothing else.
+//
+// 125ms sits at 80% of the measured ceiling rather than at it. That ceiling — 30 of 30
+// requests served at 10 req/s — was measured from a CLEAN egress IP, and production shares
+// one address with the rest of the fleet, so the last fifth is the margin that measurement
+// cannot see. The next move is not a higher number: it is sharding the provider the way
+// paylocity is sharded, which buys coverage without asking SmartRecruiters for more.
 const (
-	smartRecruitersRequestInterval = 200 * time.Millisecond // ~5 req/s
+	smartRecruitersRequestInterval = 125 * time.Millisecond // ~8 req/s
 	smartRecruitersRequestBurst    = 2
 )
 
