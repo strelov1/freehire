@@ -1,7 +1,13 @@
 import { error } from '@sveltejs/kit';
 import { serverApi } from '$lib/server/api';
 import { loadInsightsGate } from '$lib/server/insights';
-import { coveredCategories, roleQualifies, roleSkillsIntro, seniorityLabel } from '$lib/insights';
+import {
+  coveredCategories,
+  roleAddressExists,
+  roleQualifies,
+  roleSkillsIntro,
+  seniorityLabel,
+} from '$lib/insights';
 import { categoryLabel } from '$lib/labels';
 import type { PageServerLoad } from './$types';
 
@@ -22,6 +28,12 @@ export const load: PageServerLoad = async ({ params, fetch, request, setHeaders 
 
   const globalRoles = await loadInsightsGate(fetch);
 
+  // The ADDRESS is checked before the API is asked anything. An unknown category or an
+  // invented level is a 400 from the endpoint, which a load turns into a 500 — so a
+  // mistyped URL would answer "we broke" instead of "no such page". The demand check has
+  // to wait for the role's own open-count, but this half never did.
+  if (!roleAddressExists(globalRoles, category, seniority)) error(404, NOT_COVERED);
+
   // The cookie is forwarded so the coverage overlay can be resolved during SSR — with
   // an absolute API base, event.fetch does not carry it on its own. The category-wide
   // read goes through the same client: it is a public endpoint that ignores the cookie,
@@ -33,7 +45,8 @@ export const load: PageServerLoad = async ({ params, fetch, request, setHeaders 
   ]);
   if (!role) error(404, NOT_COVERED);
 
-  // The gate is asked of THIS role's own open-count, not of its rank in the gate's list.
+  // The demand half of the gate, asked of THIS role's own open-count rather than of its
+  // rank in the gate's list.
   // The list is capped at 200 by the endpoint, and production carries ~349 roles over the
   // floor — so reading qualification off the ranking 404'd 149 pages that the documented
   // rule says should exist. The category still comes from the ranking, which is what

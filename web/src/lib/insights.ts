@@ -69,19 +69,29 @@ function isSeniority(seniority: string): boolean {
   return (SENIORITY_ORDER as readonly string[]).includes(seniority);
 }
 
-/** Whether a role deserves its own leaf page: a real seniority, inside a covered
- *  category, carrying enough open postings that a distribution over them means
- *  something. Takes the role's OWN open-count, so it can be asked of a single-role read
- *  as readily as of a ranking. */
+/** Whether a (category, seniority) pair is even an ADDRESS: a real seniority inside a
+ *  covered category. Separate from the demand check below because it is answerable
+ *  WITHOUT asking the API, and the API answers an invented level with a 400 — which a
+ *  SvelteKit load turns into a 500. An address that does not exist is a 404, and finding
+ *  that out must not cost a request that can only fail. */
+export function roleAddressExists(
+  roles: InsightRole[],
+  category: string,
+  seniority: string,
+): boolean {
+  return isCovered(roles, category) && isSeniority(seniority);
+}
+
+/** Whether a role deserves its own leaf page: a real address carrying enough open
+ *  postings that a distribution over them means something. Takes the role's OWN
+ *  open-count, so it can be asked of a single-role read as readily as of a ranking. */
 export function roleQualifies(
   roles: InsightRole[],
   category: string,
   seniority: string,
   openCount: number,
 ): boolean {
-  return (
-    isCovered(roles, category) && isSeniority(seniority) && openCount >= MIN_CATEGORY_OPEN
-  );
+  return roleAddressExists(roles, category, seniority) && openCount >= MIN_CATEGORY_OPEN;
 }
 
 /** The qualifying roles WITHIN a ranking — what the sitemap lists.

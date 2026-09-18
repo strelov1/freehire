@@ -11,6 +11,7 @@ import {
   MIN_CATEGORY_OPEN,
   seniorityLabel,
   rankedQualifyingRoles,
+  roleAddressExists,
   roleQualifies,
   roleSkillsIntro,
 } from './insights';
@@ -152,6 +153,19 @@ describe('roleQualifies / rankedQualifyingRoles', () => {
 
     expect(roleQualifies(ranking, 'backend', 'middle', MIN_CATEGORY_OPEN)).toBe(true);
     expect(rankedQualifyingRoles(ranking).map((r) => r.seniority)).toEqual(['senior']);
+  });
+
+  it('answers whether an address exists without needing the role\'s size', () => {
+    // This half must be answerable BEFORE the API is asked, because the endpoint
+    // answers an invented level with a 400 and a load turns that into a 500 — a
+    // mistyped URL would say "we broke" instead of "no such page".
+    const roles = [role('backend', 'senior', MIN_CATEGORY_OPEN)];
+
+    expect(roleAddressExists(roles, 'backend', 'senior')).toBe(true);
+    // A real address that is merely thin still EXISTS — the demand check is separate.
+    expect(roleAddressExists(roles, 'backend', 'junior')).toBe(true);
+    expect(roleAddressExists(roles, 'backend', 'archmage')).toBe(false);
+    expect(roleAddressExists(roles, 'not_a_category', 'senior')).toBe(false);
   });
 
   it('refuses a thin role, an invented level, and an uncovered category', () => {
