@@ -1,0 +1,91 @@
+package mcpapp
+
+import (
+	"testing"
+)
+
+// Every published filter, asserted one by one against the query parameter it must become.
+//
+// A table rather than a few spot checks because the failure this guards against is silent:
+// a filter mapped to a key the search does not read is not an error anywhere — the
+// parameter is simply absent, the answer comes back WIDER than asked, and the only symptom
+// is a result set that looks generous. `country` for `countries` is the exact typo that has
+// already passed for a real filter in this codebase.
+func TestEveryPublishedFilterMapsToTheParameterSearchReads(t *testing.T) {
+	yes := true
+	cases := []struct {
+		name  string
+		input SearchInput
+		param string
+		want  string
+	}{
+		{"free text", SearchInput{Query: "go engineer"}, "q", "go engineer"},
+		{"countries", SearchInput{Countries: []string{"DE", "BR"}}, "countries", "DE,BR"},
+		{"cities", SearchInput{Cities: []string{"berlin"}}, "cities", "berlin"},
+		{"work mode", SearchInput{WorkMode: []string{"remote", "hybrid"}}, "work_mode", "remote,hybrid"},
+		{"seniority", SearchInput{Seniority: []string{"senior"}}, "seniority", "senior"},
+		{"category", SearchInput{Category: []string{"backend"}}, "category", "backend"},
+		{"skills", SearchInput{Skills: []string{"go"}}, "skills", "go"},
+		{"employment type", SearchInput{EmploymentType: []string{"full_time"}}, "employment_type", "full_time"},
+		{"salary floor", SearchInput{SalaryMin: 90000}, "salary_min", "90000"},
+		{"salary currency", SearchInput{SalaryCurrency: "EUR"}, "salary_currency", "EUR"},
+		{"visa sponsorship", SearchInput{VisaSponsorship: &yes}, "visa_sponsorship", "true"},
+		{"english level", SearchInput{EnglishLevel: []string{"B2"}}, "english_level", "B2"},
+		{"company", SearchInput{CompanySlugs: []string{"acme"}}, "company_slug", "acme"},
+		{"source", SearchInput{Sources: []string{"greenhouse"}}, "source", "greenhouse"},
+		{"posted within days", SearchInput{PostedWithinDays: 7}, "posted_within_days", "7"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := tc.input.QueryValues().Get(tc.param); got != tc.want {
+				t.Errorf("%s = %q, want %q", tc.param, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestAnUnsetFilterBecomesNoParameterAtAll(t *testing.T) {
+	// The difference between "they did not say" and "they said none". A zero value written
+	// out as a parameter is an unspoken preference turned into a silent narrowing.
+	values := SearchInput{Query: "go"}.QueryValues()
+
+	for _, param := range []string{"countries", "work_mode", "salary_min", "visa_sponsorship", "posted_within_days"} {
+		if _, present := values[param]; present {
+			t.Errorf("%s was written out although the caller never set it", param)
+		}
+	}
+}
+
+func TestVisaSponsorshipFalseIsAFilterAndAbsentIsNot(t *testing.T) {
+	// The reason the field is a pointer: false means "sponsorship is not needed", which is
+	// a real narrowing, while absent means nothing was said.
+	no := false
+	if got := (SearchInput{VisaSponsorship: &no}).QueryValues().Get("visa_sponsorship"); got != "false" {
+		t.Errorf("visa_sponsorship = %q, want false", got)
+	}
+}
+
+func TestThePageIsBoundedAndDefaulted(t *testing.T) {
+	// A model asking for 500 results would spend the turn's context on a list nobody reads.
+	if limit, _ := (SearchInput{Limit: 500}).Page(); limit != maxPageSize {
+		t.Errorf("limit = %d, want it capped at %d", limit, maxPageSize)
+	}
+	if limit, _ := (SearchInput{}).Page(); limit != defaultPageSize {
+		t.Errorf("limit = %d, want the default %d", limit, defaultPageSize)
+	}
+	if _, offset := (SearchInput{Offset: -3}).Page(); offset != 0 {
+		t.Errorf("offset = %d, want a negative offset floored at 0", offset)
+	}
+}
+
+func TestACompanySearchMapsItsOwnSmallVocabulary(t *testing.T) {
+	values := CompanySearchInput{Query: "acme", Countries: []string{"DE"}}.QueryValues()
+
+	if got := values.Get("q"); got != "acme" {
+		t.Errorf("q = %q, want acme", got)
+	}
+	if got := values.Get("countries"); got != "DE" {
+		t.Errorf("countries = %q, want DE", got)
+	}
+}

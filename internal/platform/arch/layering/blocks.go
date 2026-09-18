@@ -254,7 +254,12 @@ var blocks = map[string][]string{
 	// api rather than in job beside jobview because it is a foreign schema's rendering of
 	// our catalogue, not a shape the catalogue itself owns — and because it reads job,
 	// ingest (the captured apply form) and search together, which only api may do.
-	"api": {"atsapply", "candidateprofile", "handler", "ogimage", "ojcp", "ojcpmcp", "ratelimit", "realtime"},
+	// mcpapp is the OTHER MCP server — the one the ChatGPT app is built on. It is not a
+	// variant of ojcpmcp and does not import it: that one renders OJCP's schema for agents
+	// that branch on error codes, this one renders ours for a language model that reads
+	// prose. Both are adapters over the same Reader the handlers satisfy, which is why they
+	// sit in the same block rather than one reaching for the other.
+	"api": {"atsapply", "candidateprofile", "handler", "mcpapp", "ogimage", "ojcp", "ojcpmcp", "ratelimit", "realtime"},
 }
 
 // Assignment is the flattened package → block view the move script drives from.
