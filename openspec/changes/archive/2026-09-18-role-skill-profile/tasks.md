@@ -159,9 +159,41 @@
       `go vet -tags=integration ./...`. All clean. Web: svelte-check 0 errors, eslint clean,
       knip clean for `web/`, both design-system gates green, 2313 web unit tests pass.
 - [x] 7.2 `pnpm check:links` — 367 relative links, all resolve.
-- [ ] 7.3 Deploy migration + worker. Let one nightly `cmd/rollup-stats` run fill the table.
-- [ ] 7.4 Read that run: rows produced, roles clearing the floor, seniority coverage. SET
-      the floor from these numbers and record them here. Do not guess the floor earlier.
-- [ ] 7.5 Deploy the endpoint (additive — without `seniority` the response is unchanged).
-- [ ] 7.6 Deploy the page and sitemap entries once 7.4's numbers justify publishing.
-- [ ] 7.7 No reindex. Nothing here touches Meilisearch, `content_hash`, or a facet.
+- [x] 7.3 Deploy migration + worker. **Released 2026-09-18 15:23 UTC** (autodeploy, commit
+      `701df44d7`). The first `cmd/rollup-stats` run after the release had to be started by
+      hand: the scheduled 15:20 run was still ACTIVE when the release landed at 15:23, and a
+      `Type=oneshot` unit will not start a second instance while the first is running — so
+      `systemctl start` during that window is a silent no-op and the run that "succeeded" was
+      the OLD binary. Started again once the unit went inactive.
+- [x] 7.4 Read that run and set the floor. **Measured 2026-09-18, first production run
+      (15:38 → 15:57 UTC):**
+
+      | | |
+      |---|---|
+      | `insights_role_skill_stats` rows | 51,081 |
+      | roles with a sample (denominator) | 371 |
+      | roles publishing ≥1 skill at floor 5 | **340 (92%)** |
+      | avg skills per publishing role | 150 |
+      | sample_size range | 1 … 41,938 |
+      | insights section of the run | ~15.7 min, against ~14.9 min before this rollup |
+
+      **The floor STAYS at 5.** The thing it had to be checked against — a floor that
+      empties the list rather than ranking it, as `cmd/social-digest`'s 10 did — did not
+      happen: 92% of roles publish. `ROLE_SKILL_MIN_SAMPLE` is left unset in production, so
+      the default is the value, and the knob remains for a future correction rather than a
+      present one.
+
+      The added cost is ~1 minute on a ~16-minute pass, consistent with task 1.2's plan
+      comparison (0.3% of a scan that dominates).
+- [x] 7.5 Endpoint live. Verified on production:
+      `GET /api/v1/insights/roles?category=backend&seniority=senior` → `open_count` 17,169,
+      `sample_size` 16,197, ranked skills with shares (api 57.5%, cloud 43.2%, java 40.2%).
+- [x] 7.6 Page and sitemap live. `/insights/roles/backend/senior` → 200, `<h1>` reads
+      "What Senior Backend Jobs Ask For", the table says "Mentioned in", the sample is
+      stated, and the category-wide list renders beside it. `/insights/roles/backend` links
+      to five leaves. `sitemap-insights.xml` went 127 → 327 URLs (200 leaves).
+      **Check a deploy with `?cb=$RANDOM`** — the sitemap read as unchanged at first purely
+      because of the CDN cache.
+      Anonymous page serves `public, max-age=0, s-maxage=3600`, so the shared-cacheable
+      half is intact and only a coverage-carrying response opts out.
+- [x] 7.7 No reindex. Nothing here touches Meilisearch, `content_hash`, or a facet.
