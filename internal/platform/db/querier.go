@@ -443,7 +443,7 @@ type Querier interface {
 	// ClaimDueLightRuns for the sibling that claims from the other pool: the scheduler calls
 	// both every tick, each against its own budget (ingestsched.DefaultHeavyCap /
 	// ingestsched.DefaultCap - DefaultHeavyCap), so a burst of long sharded crawls can never
-	// crowd the short tail out of the fleet the way deploy/bin/ingest-slot.sh's own HEAVY_SLOTS
+	// crowd the short tail out of the fleet the way freehire-ops' scripts/host2/ingest-slot.sh's own HEAVY_SLOTS
 	// split exists to prevent for the flock semaphore this scheduler replaces.
 	//
 	// A provider is heavy when it is explicitly flagged (ingest_schedule.heavy) or SHARDED —

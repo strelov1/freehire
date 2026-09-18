@@ -81,10 +81,15 @@ Non-obvious:
   unlike the rest of the JS in this repo. See [extension/AGENTS.md](extension/AGENTS.md).
 - `internal/platform/db/` — **generated**; edit `internal/platform/db/queries/*.sql` and run `make sqlc`. The pre-commit hook and the `sqlc` CI job regenerate and diff, so a query edited without regenerating no longer ships the old Go with every check green. Both use `make sqlc`, which holds the only version pin — a second pin would be a second answer, and the drift between them would look exactly like stale code.
 - `services/pii-filter` — a standalone service, not a Go package.
-- `deploy/` — the production host's systemd units and operator scripts, recorded because the
-  machine was the only copy of them. **Nothing there deploys itself**: `release.sh` flips the
-  app and never touches a unit, so an edit is only half done until it is copied to the host.
-  `./deploy/check-drift.sh` reports what has moved apart. See [deploy/AGENTS.md](deploy/AGENTS.md).
+- `deploy/` — the production host's systemd units and hand-edited nginx snippets, recorded
+  because the machine was the only copy of them. **Nothing there deploys itself**:
+  `release.sh` flips the app and never touches a unit, so an edit is only half done until it
+  is copied to the host. `./deploy/check-drift.sh` reports what has moved apart. **The
+  operator scripts are NOT here** — `release.sh`, `autodeploy.sh`, `gen-ingest-timers.sh` and
+  the rest live in the private `freehire-ops` repository (`scripts/host2/`,
+  `provision/host2/`), which is the only place one is edited; `deploy/bin/` held a third copy
+  of them until 2026-09-18, drifted from the host in both directions, and is gone. See
+  [deploy/AGENTS.md](deploy/AGENTS.md).
 
 ## Commands
 

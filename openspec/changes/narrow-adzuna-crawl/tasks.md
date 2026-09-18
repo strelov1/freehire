@@ -67,7 +67,7 @@
 - [x] 4.3 Confirm with `systemctl list-timers freehire-ingest@adzuna` that the next
   elapse matches the new cadence, and with `./deploy/check-drift.sh` that nothing else in
   `deploy/` has drifted from the host in the meantime.
-  - **Done 2026-09-06 21:15 UTC.** Both the unit and `deploy/bin/gen-ingest-timers.sh` were
+  - **Done 2026-09-06 21:15 UTC.** Both the unit and `freehire-ops' provision/host2/gen-ingest-timers.sh` were
     copied (the generator matters as much: it writes this unit on the host, and without its
     new arm the next run would have restored the hourly default). Host now reports
     `OnCalendar=00/6:22:00`, `Persistent=false`, next elapse `2026-09-07 00:24:22 UTC` —

@@ -40,7 +40,7 @@ production; in dev the Vite proxy (`web/vite.config.ts`) forwards `/api` to the 
   only when `SENTRY_AUTH_TOKEN`/`SENTRY_ORG`/`SENTRY_PROJECT` are set (build succeeds
   without them — and, because an upload failure is swallowed, it succeeds with them and a
   dead token too). `scripts/sentry-credential-check.mjs` is what actually asks, and its
-  header is the canonical account of why the build cannot; `deploy/bin/release.sh` runs it
+  header is the canonical account of why the build cannot; `freehire-ops' scripts/host2/release.sh` runs it
   before the build and refuses the release on a rejected or half-written credential.
 - PostHog is gated on `PUBLIC_POSTHOG_KEY` (inert without it — no init, no events);
   ingestion goes through the same-origin `/ingest` reverse proxy (nginx → `eu.i.posthog.com`),

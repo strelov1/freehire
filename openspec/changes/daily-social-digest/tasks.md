@@ -36,7 +36,7 @@
 
 - [x] 6.1 Add `cmd/social-digest` on `worker.Main`/`worker.Bootstrap` with `-dry-run` and `-day`. Dry run renders every configured channel's payload to the log, sends nothing, and writes no ledger row.
 - [x] 6.2 Implement multi-channel dispatch: every configured channel is attempted, one channel's failure does not skip another, and the run exits non-zero if any attempted channel failed.
-- [x] 6.3 Add `deploy/systemd/freehire-social-digest.service` and `.timer` (`OnCalendar=*-*-* 10:00:00 America/Sao_Paulo`, `Persistent=true`), and add `social-digest` to the binary list in `deploy/bin/release.sh`. Record in the change that the host's own copy of `release.sh` must be updated by hand.
+- [x] 6.3 Add `deploy/systemd/freehire-social-digest.service` and `.timer` (`OnCalendar=*-*-* 10:00:00 America/Sao_Paulo`, `Persistent=true`), and add `social-digest` to the binary list in `freehire-ops' scripts/host2/release.sh`. Record in the change that the host's own copy of `release.sh` must be updated by hand.
 
 ## 7. Verification
 

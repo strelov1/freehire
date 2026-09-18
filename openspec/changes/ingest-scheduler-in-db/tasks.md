@@ -198,7 +198,7 @@ the order matters more than any single command.
 ## 9. Retire the old path
 
 - [ ] 9.1 Delete the generated unit files from the host and from `deploy/systemd`.
-- [ ] 9.2 Delete `deploy/bin/gen-ingest-timers.sh` and `deploy/bin/ingest-slot.sh`.
+- [ ] 9.2 Delete `freehire-ops' provision/host2/gen-ingest-timers.sh` and `freehire-ops' scripts/host2/ingest-slot.sh`.
 - [ ] 9.3 Reconcile `deploy/` against the host and confirm `./deploy/check-drift.sh` exits 0.
 
 ## 10. Review findings, folded back in

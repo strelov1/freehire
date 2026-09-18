@@ -2,7 +2,7 @@
 
 The board catalog moved into Postgres (#2357) and `sources/` was retired (#2406), but the
 SCHEDULE did not move with it. What decides that a provider is crawled — and how often, in
-how many shards, under what timeout — is `deploy/bin/gen-ingest-timers.sh`, a bash script
+how many shards, under what timeout — is `freehire-ops' provision/host2/gen-ingest-timers.sh`, a bash script
 that materialises 279 static systemd unit files.
 
 The script does read `boards` now. The defect is that **nothing runs it.** Verified on prod
@@ -62,8 +62,8 @@ a provider with no boards and a provider that is not scheduled both look like `e
 - **Shadow mode first**: `INGEST_SCHEDULER_APPLY` ships unset, so the first deployment
   computes and logs what it WOULD launch and launches nothing. The static timers keep
   running underneath until the shadow log has been read.
-- **REMOVED once cut over**: the 279 generated unit files, `deploy/bin/gen-ingest-timers.sh`,
-  and `deploy/bin/ingest-slot.sh` — the flock semaphore exists only because 279 independent
+- **REMOVED once cut over**: the 279 generated unit files, `freehire-ops' provision/host2/gen-ingest-timers.sh`,
+  and `freehire-ops' scripts/host2/ingest-slot.sh` — the flock semaphore exists only because 279 independent
   timers cannot see each other, and one scheduler can simply count.
 - Not in scope: the ~50 non-ingest cron workers. Their unit list is static and changes
   monthly, and several carry gates this change does not model (`skip-if-reindexing`, the

@@ -1,5 +1,5 @@
 // Package ingestsched decides when each provider's crawl is due, claims a due run exactly
-// once, and hands it to a launcher. It replaces deploy/bin/gen-ingest-timers.sh, which
+// once, and hands it to a launcher. It replaces freehire-ops' provision/host2/gen-ingest-timers.sh, which
 // materialised one static systemd timer per provider from a script nothing on the host
 // invoked — so between its manual runs the schedule was a photograph of a catalog that had
 // since moved, and every divergence was silent.
@@ -136,7 +136,7 @@ func Effective(provider string, o *Override) Settings {
 func (s Settings) Schedulable() bool { return s.Enabled && s.Managed }
 
 // IsHeavy reports whether a provider belongs in the fleet's reserved heavy pool: the
-// concurrency reservation deploy/bin/ingest-slot.sh's HEAVY_SLOTS split already makes for
+// concurrency reservation freehire-ops' scripts/host2/ingest-slot.sh's HEAVY_SLOTS split already makes for
 // the flock semaphore this package replaces, so a burst of long crawls can never starve the
 // short tail the way the pre-split semaphore measured happening.
 //

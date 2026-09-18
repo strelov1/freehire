@@ -74,7 +74,7 @@ table in `internal/platform/arch/layering/blocks.go`, or both layering guards
 fail. `engage` is layer 7 and may import `job` (5) and `application` (6).
 
 **Deploy** — a new unit and timer under `deploy/systemd/`, and the binary added
-to the build list in `deploy/bin/release.sh`. That script lives on the host and
+to the build list in `freehire-ops' scripts/host2/release.sh`. That script lives on the host and
 is not deployed by anything; the repository edit is only half the work.
 
 **External** — a Discord incoming webhook URL, arriving through the two-file env

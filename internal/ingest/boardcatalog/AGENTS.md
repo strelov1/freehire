@@ -7,7 +7,7 @@ absorbed the recognized half of `internal/ingest/contribution`'s lifecycle.
 
 ## Always true
 - **The catalog is the schedule and the crawl list.** `cmd/ingest <provider>` reads
-  `status IN ('pending','active')` for that provider; `deploy/bin/gen-ingest-timers.sh`
+  `status IN ('pending','active')` for that provider; `freehire-ops' provision/host2/gen-ingest-timers.sh`
   reads the distinct providers of the same set. A board is crawled because it has a live
   row, and a provider is scheduled because it has one — neither depends on a file.
 - **Nothing writes a row directly.** Every insert goes through `Insert`, which validates,

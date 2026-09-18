@@ -1,5 +1,5 @@
 // Command schedule-board is how a curator reads and edits the ingest schedule — the
-// database-backed replacement for editing the constants in deploy/bin/gen-ingest-timers.sh
+// database-backed replacement for editing the constants in freehire-ops' provision/host2/gen-ingest-timers.sh
 // and re-running it over ssh.
 //
 // It reports by default and writes only under --apply, like cmd/add-board.

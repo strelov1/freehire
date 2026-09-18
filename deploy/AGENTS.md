@@ -1,29 +1,30 @@
 # deploy
 
-The production host's systemd units and operator scripts, as they run on host-2. Not Go,
-not built, not imported by anything — this directory is a **record**.
+The production host's systemd units and hand-edited nginx snippets, as they run on host-2.
+Not Go, not built, not imported by anything — this directory is a **record**.
 
-**It is a record of something that now has an owner elsewhere, and that changes what an edit
-here means.** The reason this directory was created — the machine being the sole copy — stopped
-being true: the deployed scripts live in the private `freehire-ops` repository, under
-`scripts/host2/` and `provision/host2/`, and that is where a change to them has to be made.
-Editing a copy here ships nothing.
+**The operator scripts are no longer part of it.** They live in the private `freehire-ops`
+repository, under `scripts/host2/` and `provision/host2/`, and that is the only place one is
+edited. `deploy/bin/` held a third copy of them until 2026-09-18 and is gone.
 
-That is not a style point. `deploy/bin/release.sh` in this directory gained a Sentry
-credential gate in freehire#2899 and was still carrying it, alone, three weeks later: the
-host's copy had never heard of it, so the gate had never once run, and the credential it was
-written to catch went bad on 2026-09-14 with every deploy green. Meanwhile the host's copy had
-gained things this one does not have — support for a second app (`recruit`) and three workers
-added during the 2026-09-15 outage — so the two had drifted in BOTH directions and neither
-could simply be copied over the other. `./deploy/check-drift.sh` is what reports this; it said
-`bin: DRIFTED` for weeks and nothing read it.
+Deleting it was not tidying. That copy gained a Sentry credential gate in freehire#2899 and
+was still carrying it, alone, three weeks later: the host's copy had never heard of it, so
+the gate had never once run, and the credential it was written to catch went bad on
+2026-09-14 with every deploy green. The host's copy had meanwhile gained things this one did
+not — support for a second app (`recruit`) and three workers added during the 2026-09-15
+outage — so the two had drifted in BOTH directions and neither could be copied over the
+other. `./deploy/check-drift.sh` reported `bin: DRIFTED` for weeks and nothing read it.
 
-**Before editing anything under `bin/`, check whether `freehire-ops` owns it.** Deleting this
-directory's duplicate scripts outright is the real fix and is deliberately not done here —
-prose across the repository still points at these paths, including a change that has not been
-archived — but it is the direction, not a hypothetical.
+What decided the direction was a measurement, not a preference. Compared against the host on
+2026-09-18, this directory's copies matched it on **14 of 17** scripts while `freehire-ops`
+matched on **8** — and four scripts existed in NEITHER repository, the host being their only
+copy. So the duplicate nobody deployed from was the better record, which is the argument for
+having exactly one: both were partly right, and nothing could say which half. `freehire-ops`
+was brought up to the host, took the four orphans over, and inherited the `shellcheck` gate
+these scripts had under this repo's `artifacts` CI job — a gate that would otherwise have
+disappeared with the files.
 
-Snapshot taken 2026-09-05 from `/etc/systemd/system/freehire-*`, `/opt/freehire/bin/*.sh` and
+Snapshot taken 2026-09-05 from `/etc/systemd/system/freehire-*` and
 `/etc/nginx/snippets/freehire-app.conf`.
 
 The `freehire-*` glob is why `meilisearch.service` was missing until 2026-09-14: the search
@@ -37,7 +38,6 @@ glob.
 
 ```
 systemd/   386 files — 55 .service, 325 .timer, 6 drop-in directories
-bin/        16 operator scripts (release, autodeploy, backups, alerting, ingest slotting)
 nginx/       1 snippet — snippets/freehire-app.conf, hand-edited, not generated
 ```
 
@@ -52,7 +52,7 @@ teach the reader to ignore the tool.
 files beside it are per-provider schedules, which is why the timer count dwarfs everything
 else.
 
-`bin/gen-ingest-timers.sh` writes them from the board catalog
+`freehire-ops`' `provision/host2/gen-ingest-timers.sh` writes them from the board catalog
 (`SELECT provider FROM boards WHERE status IN ('pending','active')`). It used to be run by
 nothing, so a new provider was scheduled only when somebody remembered to run it — and on
 2026-09-15 that gap held **12 providers with live boards and no timer at all**, including
@@ -98,22 +98,25 @@ that had moved, and two providers died in that gap (see
 [internal/ingest/ingestsched/AGENTS.md](../internal/ingest/ingestsched/AGENTS.md)).
 During the cutover BOTH mechanisms are installed and each provider is driven by exactly one
 of them, decided by `ingest_schedule.managed`; the generated files and
-`bin/gen-ingest-timers.sh` and `bin/ingest-slot.sh` all go once every provider is managed.
+`freehire-ops`' `gen-ingest-timers.sh` and `ingest-slot.sh` all go once every provider is
+managed.
 **The scheduler ships in shadow mode** (`INGEST_SCHEDULER_APPLY` unset), so installing it
 changes nothing until an operator turns launches on.
 
-**`bin/autodeploy.sh` is what actually ships main to production**, on a 10-minute timer:
-it waits for the commit to be green and then calls `release.sh`. What "green" means is the
+**`freehire-ops`' `scripts/host2/autodeploy.sh` is what actually ships main to
+production**, on a 10-minute timer: it waits for the commit to be green and then calls
+`release.sh`. What "green" means is the
 one thing worth knowing about it — see the comment above its check, which records the day
 a scheduled Dependabot run made every deploy stop, silently, at exit 0.
 
 ## Always true
 
 - **Nothing here deploys itself.** `release.sh` builds and flips the app; it does not touch
-  units or the scripts in this directory. Changing a file here is half the job — the other
-  half is copying it to the host and running `systemctl daemon-reload`. Treat git as the
-  truth and the host as the copy, not the other way round, or this snapshot rots into
-  fiction within a month.
+  a unit or an nginx snippet. Changing a file here is half the job — the other half is
+  copying it to the host and running `systemctl daemon-reload`. Treat git as the truth and
+  the host as the copy, not the other way round, or this snapshot rots into fiction within a
+  month. The same is true in `freehire-ops` of the scripts that moved there, which is why it
+  carries its own `scripts/host2/drift-check.sh`.
 - **Billing reads four required variables from `/opt/freehire/.env`, and is inert without
   them.**
   `STRIPE_SECRET_KEY` (`sk_…`), `STRIPE_WEBHOOK_SECRET` (`whsec_…`), `STRIPE_PRICE_IDS`, and
@@ -244,7 +247,7 @@ a scheduled Dependabot run made every deploy stop, silently, at exit 0.
   and `hire-green`, and `~freehire/.ssh/config` (the account's home is `/var/lib/freehire`,
   not `/home`) points `github.com` at the `agent_deploy` key beside it. Neither a remote URL
   nor a private key belongs in this snapshot, so `check-drift.sh` cannot see either — this
-  paragraph is the record. The reason is in `bin/release.sh` beside the `pull`: GitHub
+  paragraph is the record. The reason is in `release.sh` beside the `pull`: GitHub
   throttles ANONYMOUS object fetches from this address, and the repository being public is
   not enough, because the throttle lands on the pack download rather than on the ref list.
   A release that dies with *"could not read Username"* is that, or the key; it is not a

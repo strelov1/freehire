@@ -1,6 +1,6 @@
 // Command ingest-scheduler decides which provider crawls next and starts it.
 //
-// It replaces deploy/bin/gen-ingest-timers.sh and the ~279 static systemd units that
+// It replaces freehire-ops' provision/host2/gen-ingest-timers.sh and the ~279 static systemd units that
 // script materialised. Those units named each provider a SECOND time, in a filename, and
 // nothing reconciled that name against the boards table — so a provider could be crawled
 // under a name no adapter answered to (habr_career, silent for a day) or kept crawling

@@ -225,7 +225,7 @@ and the retraction, in Go, never by a background job. There is one writer.
 
 ## Migration Plan
 
-1. **The migration needs no hand-running.** `deploy/bin/release.sh` builds and runs
+1. **The migration needs no hand-running.** `freehire-ops' scripts/host2/release.sh` builds and runs
    `cmd/migrate` itself — idempotent, one transaction per file, recorded in
    `schema_migrations` under an advisory lock — and it runs BEFORE the new colour
    starts, so that colour never serves a request against an older schema. A failing

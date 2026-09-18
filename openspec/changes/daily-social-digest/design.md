@@ -204,7 +204,7 @@ worker is one query and two HTTP calls regardless.
 **Rollback:** stop the timer. The column and the ledger are inert without the
 worker; nothing else reads them.
 
-**Deployment note that is easy to miss:** `deploy/bin/release.sh` holds the list
+**Deployment note that is easy to miss:** `freehire-ops' scripts/host2/release.sh` holds the list
 of worker binaries to build, and the copy that runs lives on the host. Editing
 the repository copy does not deploy it — the host's copy must be updated by hand
 or the new binary is simply never built.

@@ -83,7 +83,7 @@
       publish (see 3.3) — neither degrades the server's own startup.
 - [x] 4.2 `deploy/`: `freehire-auto-apply-orchestrate.service` (`Restart=always`, mirrors
       `freehire-mail-ingest.service`, built from `hire-current` — added to
-      `deploy/bin/release.sh`'s own build list and long-lived-daemon restart line, the
+      `freehire-ops' scripts/host2/release.sh`'s own build list and long-lived-daemon restart line, the
       same two places `mail-ingest` is, per that script's own comment about what happens
       when a unit is missing from them) and `freehire-inngest.service` (the self-hosted
       Inngest server itself — `inngest start`, not built by this repo, mirrors

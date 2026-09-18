@@ -18,7 +18,7 @@ import (
 // the ten were permanently held by 25-65 minute crawls, and the ~130 short runs an hour,
 // worth 0.4 slot-hours together, could not get in edgewise. 42% of cycles were skipped
 // while average utilisation sat near half, and skipping the cheap ones relieved nothing.
-// ingest-slot.sh answers this with its HEAVY_SLOTS split (deploy/bin/ingest-slot.sh); the
+// ingest-slot.sh answers this with its HEAVY_SLOTS split (freehire-ops' scripts/host2/ingest-slot.sh); the
 // reservation is implemented HERE now too, as HeavyCap/DefaultHeavyCap below, rather than
 // only in the script this scheduler is cutting over from.
 const DefaultCap = 10

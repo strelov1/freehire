@@ -16,9 +16,15 @@ here=$(cd "$(dirname "$0")" && pwd)
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 
-# The same three sets deploy/ holds: units without the host's .bak clutter, the
-# shell scripts without the compiled binaries beside them, and the nginx files that
-# are hand-edited rather than generated.
+# The two sets deploy/ holds: units without the host's .bak clutter, and the nginx
+# files that are hand-edited rather than generated.
+#
+# The operator scripts used to be a third set and are not one any more: they live in
+# the private `freehire-ops` repository now (`scripts/host2/`, `provision/host2/`),
+# which drift-checks them itself. Keeping a `bin` set here after the copies were
+# deleted would report every script as missing on every run, which is the fastest way
+# to teach a reader to ignore a tool. It reported `bin: DRIFTED` for weeks before the
+# copies went, and nothing read it — see AGENTS.md beside this file.
 #
 # That last set used to be one file, described as "the one snippet that is hand-
 # edited". It was not: freehire-api.conf holds every API location, including four
@@ -46,12 +52,10 @@ fetch_set() {
 # service this host runs and this list does not name is the next one of these.
 # shellcheck disable=SC2016  # single quotes on purpose: the $( ) picks the files on the HOST
 fetch_set systemd 'cd /etc/systemd/system && tar cz $(ls -d freehire-* meilisearch* 2>/dev/null | grep -v "\.bak") 2>/dev/null'
-# shellcheck disable=SC2016  # as above
-fetch_set bin     'cd /opt/freehire/bin && tar cz $(ls *.sh | grep -v "\.bak")'
 fetch_set nginx   'cd /etc/nginx && tar cz snippets/freehire-app.conf snippets/freehire-api.conf conf.d/freehire-logformat.conf'
 
 status=0
-for set in systemd bin nginx; do
+for set in systemd nginx; do
   if diff -ru "$here/$set" "$work/$set" > "$work/$set.diff" 2>&1; then
     echo "$set: in sync"
   else

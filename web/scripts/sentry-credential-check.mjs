@@ -1,6 +1,6 @@
 // Does this release's Sentry credential actually work?
 //
-// THIS COMMENT IS THE CANONICAL EXPLANATION. vite.config.ts, deploy/bin/release.sh,
+// THIS COMMENT IS THE CANONICAL EXPLANATION. vite.config.ts, freehire-ops' scripts/host2/release.sh,
 // web/AGENTS.md and internal/platform/observability/AGENTS.md all point here rather than
 // restating it: the first draft of this change spelled the argument out in five places and a
 // reviewer found the mechanism misdescribed in two of them before it ever shipped. One

@@ -27,7 +27,7 @@ Opt-in Sentry across all three surfaces, env-gated.
 
 `SENTRY_DSN`/`SENTRY_ENVIRONMENT` (backend + workers) and `PUBLIC_SENTRY_DSN`/`PUBLIC_SENTRY_ENVIRONMENT` (frontend), all optional, injected by `freehire-ops` (never committed). Two Sentry projects (frontend + backend); `SENTRY_ENVIRONMENT` tags events for shared project filtering.
 
-Source-map upload is configured separately, at BUILD time only, from `/opt/freehire/env/sentry-build.env` (0600 root, read by `deploy/bin/release.sh` and never exported into a running unit): `SENTRY_ORG`, `SENTRY_PROJECT`, `SENTRY_AUTH_TOKEN`, and optionally `SENTRY_URL` when the organisation is region-pinned — set it there rather than relying on the `https://sentry.io` default, since a cross-region redirect drops the `Authorization` header and surfaces as a 401. All four are passed to the credential check and to the build, so the two cannot disagree about which Sentry they mean. All-or-nothing: a partial set refuses the release rather than reading as an opt-out.
+Source-map upload is configured separately, at BUILD time only, from `/opt/freehire/env/sentry-build.env` (0600 root, read by `freehire-ops' scripts/host2/release.sh` and never exported into a running unit): `SENTRY_ORG`, `SENTRY_PROJECT`, `SENTRY_AUTH_TOKEN`, and optionally `SENTRY_URL` when the organisation is region-pinned — set it there rather than relying on the `https://sentry.io` default, since a cross-region redirect drops the `Authorization` header and surfaces as a 401. All four are passed to the credential check and to the build, so the two cannot disagree about which Sentry they mean. All-or-nothing: a partial set refuses the release rather than reading as an opt-out.
 
 ## HTTP response metrics
 

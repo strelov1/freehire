@@ -1,7 +1,7 @@
 ## Context
 
 `cmd/ingest` takes a provider name and reads that provider's boards from Postgres
-(#2357). What INVOKES it is `deploy/bin/gen-ingest-timers.sh`, which materialises 279
+(#2357). What INVOKES it is `freehire-ops' provision/host2/gen-ingest-timers.sh`, which materialises 279
 static systemd units — 238 per-provider timers, 45 shard timers, and the templates behind
 them — from a `SELECT provider FROM boards` plus a set of bash constants.
 
