@@ -7081,6 +7081,16 @@ type Querier interface {
 	// Three columns are NOT YC-owned, because this is no longer their only writer, and
 	// replacing them would erase another source's work on the importer's next run:
 	// tagline fills only a blank, company_info merges key-wise, and industries union.
+	//
+	// subindustry/year_founded/employee_count/hq_country are a FOURTH kind of not-owned:
+	// unlike the three above, this importer WAS their only writer, right up until a verified
+	// employer (internal/ingest/employer, migration 0174) became a second, more authoritative
+	// one — the company speaking about itself outranks an imported directory entry. Since
+	// there was never a second writer before, these four were never protected at all, so the
+	// guard is a plain "leave them alone when an active company_accounts row exists for this
+	// slug" rather than a merge: an employer's own edit is meant to win outright (see
+	// add-employer-company-accounts' company-info spec delta), and this importer's job is
+	// simply to not be the one that undoes it on its next scheduled run.
 	UpsertYCCompany(ctx context.Context, arg UpsertYCCompanyParams) error
 	// Slim email lookup for the delete-account confirmation, which compares the typed
 	// address against the caller's own. A primitive so the handler needs no full user row

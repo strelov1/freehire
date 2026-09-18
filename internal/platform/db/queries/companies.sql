@@ -286,6 +286,16 @@ WHERE slug = sqlc.arg(slug) AND industries IS DISTINCT FROM sqlc.arg(industries)
 -- Three columns are NOT YC-owned, because this is no longer their only writer, and
 -- replacing them would erase another source's work on the importer's next run:
 -- tagline fills only a blank, company_info merges key-wise, and industries union.
+--
+-- subindustry/year_founded/employee_count/hq_country are a FOURTH kind of not-owned:
+-- unlike the three above, this importer WAS their only writer, right up until a verified
+-- employer (internal/ingest/employer, migration 0174) became a second, more authoritative
+-- one — the company speaking about itself outranks an imported directory entry. Since
+-- there was never a second writer before, these four were never protected at all, so the
+-- guard is a plain "leave them alone when an active company_accounts row exists for this
+-- slug" rather than a merge: an employer's own edit is meant to win outright (see
+-- add-employer-company-accounts' company-info spec delta), and this importer's job is
+-- simply to not be the one that undoes it on its next scheduled run.
 INSERT INTO companies (
     slug, name, industries, subindustry, year_founded, employee_count, hq_country,
     tagline, company_info, yc_batch, yc_status, yc_stage, yc_flags,
@@ -306,10 +316,22 @@ ON CONFLICT (slug) DO UPDATE SET
         WHERE x <> ''
         ORDER BY x
     ),
-    subindustry     = EXCLUDED.subindustry,
-    year_founded    = EXCLUDED.year_founded,
-    employee_count  = EXCLUDED.employee_count,
-    hq_country      = EXCLUDED.hq_country,
+    subindustry     = CASE WHEN EXISTS (
+                          SELECT 1 FROM company_accounts ca
+                          WHERE ca.company_slug = companies.slug AND ca.status = 'active'
+                      ) THEN companies.subindustry ELSE EXCLUDED.subindustry END,
+    year_founded    = CASE WHEN EXISTS (
+                          SELECT 1 FROM company_accounts ca
+                          WHERE ca.company_slug = companies.slug AND ca.status = 'active'
+                      ) THEN companies.year_founded ELSE EXCLUDED.year_founded END,
+    employee_count  = CASE WHEN EXISTS (
+                          SELECT 1 FROM company_accounts ca
+                          WHERE ca.company_slug = companies.slug AND ca.status = 'active'
+                      ) THEN companies.employee_count ELSE EXCLUDED.employee_count END,
+    hq_country      = CASE WHEN EXISTS (
+                          SELECT 1 FROM company_accounts ca
+                          WHERE ca.company_slug = companies.slug AND ca.status = 'active'
+                      ) THEN companies.hq_country ELSE EXCLUDED.hq_country END,
     -- NULLIF folds '' into NULL so an empty string counts as absent, not as a value
     -- worth protecting.
     tagline         = COALESCE(NULLIF(companies.tagline, ''), EXCLUDED.tagline),

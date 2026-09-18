@@ -199,6 +199,90 @@ func TestUpsertYCCompanyPreservesValuesFromOtherSources(t *testing.T) {
 	}
 }
 
+// A verified employer's own edit to year_founded/employee_count/hq_country/subindustry
+// (internal/ingest/employer, migration 0174) is more authoritative than an imported
+// directory entry, and must survive this importer's next scheduled run. Before this guard
+// these four columns were the importer's alone to write and always replaced unconditionally
+// — the same trap tagline/company_info/industries were already protected from.
+func TestUpsertYCCompanyProtectsEmployerAssertedFields(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	ctx := context.Background()
+	if _, err := pool.Exec(ctx, "TRUNCATE companies, company_accounts, users RESTART IDENTITY CASCADE"); err != nil {
+		t.Fatalf("truncate: %v", err)
+	}
+
+	if _, err := pool.Exec(ctx,
+		`INSERT INTO companies (slug, name, year_founded, employee_count, hq_country, subindustry)
+		 VALUES ('acme', 'Acme', 1999, 42, 'de', 'fintech-employer-set')`); err != nil {
+		t.Fatalf("seed company: %v", err)
+	}
+	var userID int64
+	if err := pool.QueryRow(ctx, `INSERT INTO users (email) VALUES ('founder@acme.test') RETURNING id`).Scan(&userID); err != nil {
+		t.Fatalf("seed user: %v", err)
+	}
+	if _, err := pool.Exec(ctx,
+		`INSERT INTO company_accounts (user_id, company_slug, company_name, work_email, status, verified_at)
+		 VALUES ($1, 'acme', 'Acme', 'founder@acme.test', 'active', now())`, userID); err != nil {
+		t.Fatalf("seed company_accounts: %v", err)
+	}
+
+	p := ycParams("acme", "Acme", "Winter 2020", "Active")
+	p.YearFounded = pgtype.Int4{Int32: 2015, Valid: true}
+	p.EmployeeCount = pgtype.Int4{Int32: 9000, Valid: true}
+	p.HqCountry = pgtype.Text{String: "us", Valid: true}
+	if err := q.UpsertYCCompany(ctx, p); err != nil {
+		t.Fatalf("upsert: %v", err)
+	}
+
+	c, err := q.GetCompany(ctx, "acme")
+	if err != nil {
+		t.Fatalf("get: %v", err)
+	}
+	if c.YearFounded.Int32 != 1999 || c.EmployeeCount.Int32 != 42 || c.HqCountry.String != "de" || c.Subindustry.String != "fintech-employer-set" {
+		t.Errorf("employer-asserted fields disturbed: year_founded=%d employee_count=%d hq_country=%q subindustry=%q",
+			c.YearFounded.Int32, c.EmployeeCount.Int32, c.HqCountry.String, c.Subindustry.String)
+	}
+	// Every other YC-owned facet still applies normally — the guard is scoped to exactly
+	// the four protected columns, not a blanket refusal to touch this company at all.
+	if len(c.YcBatch) != 1 || c.YcBatch[0] != "Winter 2020" {
+		t.Errorf("yc_batch = %v, want the import to still apply", c.YcBatch)
+	}
+}
+
+// Without an active company_accounts row, the importer behaves exactly as before: the four
+// columns are overwritten unconditionally, same as any other company in the catalogue.
+func TestUpsertYCCompanyOverwritesFieldsWithNoEmployerAccount(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	ctx := context.Background()
+	if _, err := pool.Exec(ctx, "TRUNCATE companies, company_accounts RESTART IDENTITY CASCADE"); err != nil {
+		t.Fatalf("truncate: %v", err)
+	}
+	if _, err := pool.Exec(ctx,
+		`INSERT INTO companies (slug, name, year_founded, employee_count, hq_country)
+		 VALUES ('acme', 'Acme', 1999, 42, 'de')`); err != nil {
+		t.Fatalf("seed company: %v", err)
+	}
+
+	p := ycParams("acme", "Acme", "Winter 2020", "Active")
+	p.YearFounded = pgtype.Int4{Int32: 2015, Valid: true}
+	p.EmployeeCount = pgtype.Int4{Int32: 9000, Valid: true}
+	p.HqCountry = pgtype.Text{String: "us", Valid: true}
+	if err := q.UpsertYCCompany(ctx, p); err != nil {
+		t.Fatalf("upsert: %v", err)
+	}
+
+	c, err := q.GetCompany(ctx, "acme")
+	if err != nil {
+		t.Fatalf("get: %v", err)
+	}
+	if c.YearFounded.Int32 != 2015 || c.EmployeeCount.Int32 != 9000 || c.HqCountry.String != "us" {
+		t.Errorf("year_founded=%d employee_count=%d hq_country=%q, want the import applied as before",
+			c.YearFounded.Int32, c.EmployeeCount.Int32, c.HqCountry.String)
+	}
+}
+
 // An empty stored tagline is absent, not a value worth protecting.
 func TestUpsertYCCompanyFillsAnEmptyTagline(t *testing.T) {
 	pool := startPostgres(t)

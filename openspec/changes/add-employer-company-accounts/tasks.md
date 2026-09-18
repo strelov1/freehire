@@ -81,10 +81,14 @@
 
 ## 5. `cmd/import-yc` guard
 
-- [ ] 5.1 Add a guard so the upsert does not overwrite `year_founded`/`employee_count`/
-      `hq_country`/`subindustry` for a company slug with an active `company_accounts` row
-- [ ] 5.2 Regression test: an employer-asserted `year_founded` survives a YC-directory import
-      run; a company with no employer account is unaffected (still overwritten as before)
+- [x] 5.1 Guard added entirely in SQL (`UpsertYCCompany`'s `ON CONFLICT` clause, CASE-guarded
+      on `EXISTS (... company_accounts ... status='active')`) — **no Go change needed** in
+      `cmd/import-yc` itself, since its call site already just passes the params through
+- [x] 5.2 Regression tests in `internal/platform/db/company_yc_integration_test.go` (the
+      existing home of `UpsertYCCompany`'s own integration tests): an employer-asserted
+      `year_founded`/`employee_count`/`hq_country`/`subindustry` all survive a re-import,
+      every other YC-owned facet (`yc_batch` etc.) still applies normally, and a company
+      with no employer account is unaffected (still overwritten exactly as before)
 
 ## 6. API handlers
 
