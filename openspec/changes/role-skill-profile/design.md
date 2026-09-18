@@ -94,6 +94,17 @@ read-parameter vocabulary in the same commit — an unread param here would be r
 `meta.ignored_params` while silently widening the answer to every seniority, which is the
 exact failure mode `country=it` demonstrated.
 
+### The share divides by skill-bearing postings, not by the role's open count
+
+Surfaced by the measurement, not by the design: 11% of the eligible postings (392,020 →
+348,060) carry no tagged skill at all. Dividing by the whole open count would fold our own
+tagging gap into every published share, and since that gap differs per role it would make
+two roles' shares incomparable — the one comparison the page exists to support. The
+denominator is therefore the role's skill-bearing postings, served as `sample_size` so the
+figure is inspectable rather than implied. `open_count` and `sample_size` stay distinct
+fields for the same reason: they count different things, and one field standing for both
+is how a number starts arguing with the code.
+
 ### Coverage reuses `jobmatch.Compute` unchanged
 
 `jobmatch` takes `(jobSkills, profileSkills)` and is I/O-free; a role's ranked skills are
@@ -125,11 +136,20 @@ handler, because the surrounding pages all set a shared-cache header by default.
   worker knob, read it with the strict `worker.EnvInt` reader (so a typo fails the run
   rather than silently taking a default), and set its value from the first real run's
   numbers instead of guessing now.
-- **`seniority` coverage is unknown.** The rollup's `WHERE seniority <> ''` mirrors the
-  sibling's, but if most of the catalogue carries no seniority the page describes postings
-  whose titles happen to say "Senior", not the market. → Measure the share of open `is_tech`
-  postings with a non-empty seniority before publishing any page, and record the number in
-  the change. This is a gate on shipping the page, not on building the rollup.
+- **`seniority` coverage is 39%, and this risk FIRED.** Measured on production 2026-09-18:
+  of 1,012,085 open `is_tech` postings, 998,688 (98.7%) carry a `category` but only 394,610
+  (39.0%) carry a `seniority`; 392,020 carry both and 348,060 of those carry at least one
+  tagged skill. The missing 61% are not a random sample — they are exactly the postings
+  whose title names no level, so the rollup describes postings that STATE a seniority, not
+  the role's market. → Three mitigations, all cheap, none of which is "measure it later":
+  (a) the spec now makes the sample size a served field and forbids any surface from
+  claiming to describe the role's market; (b) the leaf page shows the category-only
+  distribution beside the role's — that slice has 98.7% coverage and **already exists** in
+  `insights_skill_stats`, so one number backstops the other for zero new work; (c) 392k
+  postings across 216 cells is still a large sample where it matters, and the floor
+  suppresses the cells where it does not. Not a blocker: an honest statistic over a
+  labelled subset is worth more than no statistic, provided it never pretends to be the
+  other thing.
 - **A wide key with a nightly full rebuild.** 216 roles × their skills is more rows than
   either sibling. → The floor bounds it; the delete-and-reinsert stays inside the existing
   transaction so a reader never sees a partial rebuild; and the aggregate's shape is one

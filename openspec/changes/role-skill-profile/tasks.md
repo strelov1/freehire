@@ -1,9 +1,31 @@
 ## 1. Measure before building
 
-- [ ] 1.1 On prod, measure the share of OPEN `is_tech` postings with a non-empty
+- [x] 1.1 On prod, measure the share of OPEN `is_tech` postings with a non-empty
       `seniority`, and the same for a non-empty `category`. Record both numbers in this
       file. If seniority coverage is low, the page is gated on it (design risk 3) even
       though the rollup still ships.
+
+      **Measured 2026-09-18, production `hire`:**
+
+      | | rows | share of open `is_tech` |
+      |---|---|---|
+      | open postings, all | 5,978,300 | |
+      | open, `is_tech` | 1,012,085 | 100% |
+      | …with `category <> ''` | 998,688 | **98.7%** |
+      | …with `seniority <> ''` | 394,610 | **39.0%** |
+      | …with both | 392,020 | 38.7% |
+      | …with both and `cardinality(skills) > 0` | 348,060 | 34.4% |
+
+      **Risk 3 fired.** 61% of open tech postings state no seniority, and they are not a
+      random 61% — they are the postings whose title names no level. Two artifact updates
+      followed (see design.md and specs/market-insights/spec.md): the sample size becomes a
+      served field with a normative wording rule, and the category-only distribution
+      (98.7% coverage, already in `insights_skill_stats`) is rendered beside the role's as a
+      backstop.
+
+      **Second finding, not anticipated:** 11% of eligible postings carry no tagged skill
+      (392,020 → 348,060), so the share's denominator had to be pinned. It is now the
+      skill-bearing subset, served as `sample_size`.
 - [ ] 1.2 `EXPLAIN (ANALYZE, BUFFERS)` the proposed aggregate
       (`FROM jobs, unnest(skills) … GROUP BY category, seniority, skill`) against prod and
       compare its buffers to the existing `RebuildInsightsRoleStatsByCountry`. Narrowing
@@ -15,10 +37,20 @@
       skill, open_count, PRIMARY KEY (category, seniority, skill))`, with an index serving
       the ranked read `(category, seniority, open_count DESC)`. Comment why there is no
       country column, pointing at the sibling table's own rule.
-- [ ] 2.2 `pnpm check:sql` passes on the new migration file.
-- [ ] 2.3 Add `DeleteAllInsightsRoleSkillStats` and `RebuildInsightsRoleSkillStats` to
+- [ ] 2.2 In the same migration, add `insights_role_skill_sample (category, seniority,
+      sample_size, PRIMARY KEY (category, seniority))` — the share's denominator, one row
+      per role, at most 216 rows. A separate table rather than a column on
+      `insights_role_stats` (which is country-keyed, so the figure would be meaningless on
+      every non-'' row) and rather than a value repeated on every skill row (one fact
+      written a dozen times). Comment the 11% measurement that forced it.
+- [ ] 2.3 `pnpm check:sql` passes on the new migration file.
+- [ ] 2.4 Add `DeleteAllInsightsRoleSkillStats` and `RebuildInsightsRoleSkillStats` to
       `internal/platform/db/queries/insights.sql`, taking the sample floor as
       `@min_sample` exactly as the sibling rollups do. Run `make sqlc`.
+- [ ] 2.5 Add the sibling `DeleteAllInsightsRoleSkillSample` /
+      `RebuildInsightsRoleSkillSample` — `count(*) FILTER (WHERE cardinality(skills) > 0)`
+      per role. It takes NO `@min_sample`: the denominator must exist for every role whose
+      skills were counted, and flooring it would make some shares undividable.
 
 ## 3. Worker
 
@@ -42,7 +74,9 @@
       in `meta.ignored_params`. Assert this in a test — a dropped filter here widens the
       answer to every seniority.
 - [ ] 4.4 When a single role is named, attach its `skills` array (`skill`, `open_count`,
-      `share`). `share` is relative to the ROLE's open count, not the catalogue's.
+      `share`) and its `sample_size`. `share` divides by `sample_size` — the role's
+      skill-bearing postings — never by `open_count` and never by the catalogue. Test the
+      worked example from the spec (710/900, not 710/1000).
 - [ ] 4.5 When `country` is supplied alongside a single role, scope `open_count`/`growth`
       to the country, keep the distribution country-agnostic, and say so in `meta`.
 - [ ] 4.6 Handler tests for every scenario in `specs/market-insights/spec.md`, including
@@ -73,14 +107,20 @@
       insights pages' layout rather than inventing one.
 - [ ] 6.4 Label the column "mentioned in", never "required by". This wording is normative
       in the spec.
-- [ ] 6.5 Overlay the coverage for a signed-in visitor: held / adjacent (showing the
+- [ ] 6.5 State the `sample_size` the distribution was measured over, and never word the
+      page as describing the role's market — only 39.0% of open tech postings state a
+      seniority (task 1.1). Normative in the spec.
+- [ ] 6.6 Render the CATEGORY-only distribution beside the role's, read from the existing
+      `/api/v1/insights/skills?category=…` (98.7% coverage). It costs no new rollup and it
+      is what stops the 39%-coverage slice from standing alone.
+- [ ] 6.7 Overlay the coverage for a signed-in visitor: held / adjacent (showing the
       neighbour) / missing, plus the held-out-of-total line. Anonymous visitors see the
       aggregate alone with no empty column.
-- [ ] 6.6 Link each seniority row on `/insights/roles/[category]` to its new leaf page.
-- [ ] 6.7 Extend `insightsPaths` and `sitemap-insights.xml` to list the (category,
+- [ ] 6.8 Link each seniority row on `/insights/roles/[category]` to its new leaf page.
+- [ ] 6.9 Extend `insightsPaths` and `sitemap-insights.xml` to list the (category,
       seniority) leaves that clear the gate — and only those, matching what the route
       serves.
-- [ ] 6.8 `pnpm check:dead` passes (knip gates unused exports, types included).
+- [ ] 6.10 `pnpm check:dead` passes (knip gates unused exports, types included).
 
 ## 7. Verify and ship
 
