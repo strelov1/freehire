@@ -344,18 +344,58 @@ var categoryTable = []aliasEntry{
 	{"vue developer", "frontend"},
 	{"vue.js developer", "frontend"},
 	{"vuejs developer", "frontend"},
-	{"mobile", "mobile"},
+	// NO bare "mobile", and no bare "мобильный"/"мобильная"/"мобильных" — the same trap
+	// the bare "analyst" fall-through sprang, measured on the live catalogue 2026-09-18.
+	// Outside software, "mobile" is the word for work that TRAVELS to the customer, and
+	// that meaning is far the commoner one: of 28 650 open postings the bare alias held,
+	// 18 483 named no mobile platform at all. It was claiming a phone carrier's shop
+	// floor (4 500+ "Mobile Associate - Retail Sales"), a bank's travelling
+	// representative (1 053 "Мобильный банкир"), field service ("Mobile Service
+	// Technician", "Mobile Diesel Technician"), facilities ("Mobile Building Engineer")
+	// and clinicians who drive to the patient ("Mobile Phlebotomist", "Mobile X-Ray
+	// Technologist") — and because `mobile` is a technical category, `is_tech` followed
+	// it, so 1 538 retail-sales postings were enqueued for LLM enrichment as engineering.
+	//
+	// The qualified spellings below are DERIVED from that catalogue rather than imagined,
+	// and they are contiguous phrases on purpose: "Mobile Building Engineer" and "Mobile
+	// Maintenance Engineer" both carry "mobile" and "engineer" without ever carrying
+	// "mobile engineer", so phrase matching declines them for free where a bare word
+	// could not. A title that names the platform ("Android", "iOS", "React Native",
+	// "Flutter") is answered by its own alias below and needs nothing here.
+	//
+	// What this deliberately gives up: "Software Engineer (Mobile)" and its ~60 siblings,
+	// which put the qualifier after the noun, now resolve to `software_engineering`
+	// instead. That is less specific and still true — and still technical — which is the
+	// trade this vocabulary always makes over guessing.
+	{"mobile developer", "mobile"},
+	{"mobile engineer", "mobile"},
+	{"mobile architect", "mobile"},
+	{"mobile app", "mobile"},
+	{"mobile apps", "mobile"},
+	{"mobile application", "mobile"},
+	{"mobile applications", "mobile"},
+	{"mobile software", "mobile"},
+	{"mobile platform", "mobile"},
+	{"mobile automation", "mobile"},
+	{"mobile qa", "mobile"},
 	{"android", "mobile"},
 	{"ios", "mobile"},
-	// React Native is mobile-only, unlike bare "react" above.
+	// React Native is mobile-only, unlike bare "react" above. Xamarin is too, and it
+	// needs its own alias because the titles that carry it write "Mobile/Xamarin
+	// Developer" — a slash where the qualified phrases above want a space.
 	{"react native developer", "mobile"},
+	{"xamarin", "mobile"},
 	// Hungarian: "mobilalkalmazás" is the mobile app. Both spellings are listed
 	// because a hyphen is a word boundary here, so neither form contains the other.
 	{"mobilalkalmazás-fejlesztő", "mobile"},
 	{"mobilalkalmazás fejlesztő", "mobile"},
-	{"мобильный", "mobile"},
-	{"мобильная", "mobile"},
-	{"мобильных", "mobile"},
+	// Russian qualifies the same way: the app, the craft, or the developer — never the
+	// bare adjective, which is what "Мобильный банкир" is built from.
+	{"мобильный разработчик", "mobile"},
+	{"мобильных приложений", "mobile"},
+	{"мобильное приложение", "mobile"},
+	{"мобильная разработка", "mobile"},
+	{"мобильной разработки", "mobile"},
 	// Penetration-testing titles must precede the QA block's bare "tester" fall-through
 	// right below — it would otherwise claim "Penetration Tester" for qa.
 	{"penetration tester", "security"},
@@ -1403,6 +1443,17 @@ var categoryTable = []aliasEntry{
 	{"dental assistant", "healthcare"},
 	{"patient coordinator", "healthcare"},
 	{"phlebotomist", "healthcare"},
+	{"phlebotomy", "healthcare"},
+	// The imaging room. These spellings are already named in nontech.go's craft list, so
+	// the catalogue knew they were not technical; it had nowhere to FILE them, which left
+	// them unfilterable — exactly the gap this consumer block exists to close.
+	{"x-ray technologist", "healthcare"},
+	{"xray technologist", "healthcare"},
+	{"x-ray technician", "healthcare"},
+	{"radiologic technologist", "healthcare"},
+	{"radiology technologist", "healthcare"},
+	{"mri technologist", "healthcare"},
+	{"sonographer", "healthcare"},
 	{"physical therapist", "healthcare"},
 	{"occupational therapist", "healthcare"},
 	{"veterinarian", "healthcare"},

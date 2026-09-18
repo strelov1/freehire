@@ -20,6 +20,40 @@ import (
 // the whole provider had to be retired.
 //
 // Fetch therefore proves the filter before trusting it — see apploiFilterProbeEmployer.
+//
+// # Why this provider stays retired, and why rebuilding it is not the answer
+//
+// The obvious repair is to stop using the broken parameter: the API hands each posting its
+// own `brand_name`, so a BOARDLESS adapter could crawl the one global catalogue once and
+// attribute every posting correctly, with no duplicates and no board list. That was measured
+// on 2026-09-18 and it works — the employer was in the response the whole time, and the
+// original bug was `firstNonEmpty(e.Company, j.BrandName)` preferring the board's claim over
+// the posting's own answer.
+//
+// It is still not worth building, because the question "can we attribute these postings?" is
+// not the question "should we carry them?". Measured the same day against the live API:
+//
+//   - The catalogue runs to roughly 100 000 open postings (offset pagination stops between
+//     90 000 and 150 000), and every one of them is healthcare.
+//   - Of 9 529 titles sampled across the whole offset range, `classify.IsTech` accepted 2.
+//     Reading them by hand found no IT job at all: nursing homes, ABA therapy, caregivers,
+//     dietary cooks. A keyword scan "finds" ~5% technical, and every hit is a medical
+//     technician, a behaviour analyst or a security guard — the trap that also made gupy and
+//     jobtech look promising.
+//   - 61% of them DO resolve a category (healthcare, hospitality, personal services), and a
+//     resolved category alone admits a posting to the search index — search.CategoryUnresolved
+//     returns false the moment `category` is non-empty. So a working adapter would add on the
+//     order of 60 000 nursing and caregiving postings to an IT job board's index and
+//     approximately zero engineering ones.
+//
+// That is the whole case: the cost is real, the yield is not. If apploi is ever reconsidered,
+// re-run the yield measurement FIRST — the attribution problem is solved and is not what makes
+// this a bad trade.
+//
+// One thing that measurement did find is fixed: apploi's titles were the corpus that exposed
+// the bare "mobile" category alias claiming travelling work, which turned out to be
+// mis-categorising 18 483 open postings across the whole catalogue (see
+// internal/dict/classify's TestParse_MobileIsAPlatformNotAnErrand).
 type apploi struct {
 	http JSONGetter
 }

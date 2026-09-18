@@ -1282,6 +1282,15 @@ func TestParse_ConsumerIndustries(t *testing.T) {
 		{"Medication Technician", "healthcare", "declared above the technician family"},
 		{"Patient Coordinator", "healthcare", ""},
 		{"Phlebotomist", "healthcare", ""},
+		// "Mobile" in a healthcare title means the clinician travels to the patient,
+		// not that the work is a phone app. The imaging room was already named in
+		// nontech.go's craft list, so the catalogue knew these were not technical and
+		// simply had nowhere to file them.
+		{"Mobile Phlebotomist", "healthcare", "the clinician travels, the work is not an app"},
+		{"Mobile X-Ray Technologist", "healthcare", "the clinician travels, the work is not an app"},
+		{"Radiology Technologist (Mobile Imaging)", "healthcare", ""},
+		{"MRI Technologist", "healthcare", ""},
+		{"Sonographer", "healthcare", ""},
 		{"Physical Therapist", "healthcare", ""},
 		{"Veterinarian", "healthcare", ""},
 		// The Russian medical family — bare token, since the qualified forms hyphenate
@@ -1372,6 +1381,75 @@ func TestParse_ConsumerIndustries(t *testing.T) {
 // TestParse_ServiceSectors pins the last clusters that have a shape: logistics,
 // education, personal services and office administration — plus the plural gap the
 // consumer wave left behind.
+// TestParse_MobileIsAPlatformNotAnErrand pins both halves of removing the bare "mobile"
+// alias (and its Russian counterparts), the same treatment the bare "analyst" and
+// "security" fall-throughs got before it.
+//
+// Outside software, "mobile" is the word for work that TRAVELS to the customer, and on
+// the live catalogue that was much the commoner reading: of 28 650 open postings filed
+// `mobile` on 2026-09-18, 18 483 named no mobile platform at all — a phone carrier's shop
+// floor, a bank's travelling representative, field mechanics, and clinicians who drive to
+// the patient. Because `mobile` is a technical category, `is_tech` followed it, so 1 538
+// retail-sales postings were being enqueued for LLM enrichment as engineering.
+//
+// The negative half matters more than the positive one: a wrong category is not merely a
+// wrong facet, it is the thing that puts a posting in the index at all
+// (search.CategoryUnresolved returns false the moment a category exists).
+func TestParse_MobileIsAPlatformNotAnErrand(t *testing.T) {
+	// Software. These must keep the category — they are what the alias is FOR.
+	for _, title := range []string{
+		"Mobile Developer",
+		"Senior Mobile Developer",
+		"Mobile Engineer",
+		"Staff Mobile Engineer",
+		"Mobile Application Developer",
+		"Mobile App Developer",
+		"Mobile Apps Developer",
+		"Mobile Software Engineer",
+		"Mobile Architect",
+		"Mobile QA Engineer",
+		"Mobile Automation Engineer",
+		"Principal Software Engineer - Mobile Platform",
+		"Mobile/Xamarin Developer",
+		"Android Developer",
+		"iOS Engineer",
+		"React Native Developer",
+		"Мобильный разработчик",
+		"Разработчик мобильных приложений",
+	} {
+		if got := Parse(title).Category; got != "mobile" {
+			t.Errorf("Parse(%q).Category = %q, want %q", title, got, "mobile")
+		}
+	}
+
+	// Errands. None of these is software, so none may claim the mobile category —
+	// whatever else it resolves to, including nothing.
+	for _, title := range []string{
+		"Mobile Associate - Retail Sales",
+		"Mobile Associate, Store-in-Store, Retail Sales",
+		"Wireless Retail Sales Representative | Alliance Mobile - AT&T Authorized Retailer",
+		"Sr Mobile Expert",
+		"Mobile Service Technician",
+		"Mobile Diesel Technician",
+		"Mobile Building Engineer",
+		"Mobile Maintenance Engineer, Facilities Maintenance",
+		"Mobile Phlebotomist",
+		"Mobile X-Ray Technologist",
+		"Mobile Veterinarian",
+		"Heavy Mobile Equipment Repairer",
+		"Mobile Crane Operator",
+		"Mobile Hair Stylist",
+		"Mobile Commis Chef",
+		"Мобильный банкир",
+		"Мобильный банкир (Юридические лица)",
+		"Мобильный клиентский менеджер",
+	} {
+		if got := Parse(title).Category; got == "mobile" {
+			t.Errorf("Parse(%q).Category = %q — this is travelling work, not a phone app", title, got)
+		}
+	}
+}
+
 // TestCategories_ServiceOverlaps guards the multi-category CV path, which `Parse`
 // cannot speak for: `Categories` returns EVERY matching alias rather than the
 // strongest, so declaration order does nothing for it. An alias that looks harmless
