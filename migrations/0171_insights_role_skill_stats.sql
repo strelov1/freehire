@@ -12,7 +12,7 @@
 
 -- No country column, deliberately. insights_skill_stats' own comment records the
 -- rule for skill demand — category and country are not crossed in one row —
--- and crossing a THIRD axis here would multiply 27 categories x 8 seniorities by
+-- and crossing a THIRD axis here would multiply 52 categories x 8 seniorities by
 -- the country cardinality for a slice nobody has asked for. The endpoint serves a
 -- country-scoped open_count beside this country-agnostic distribution and says so.
 CREATE TABLE public.insights_role_skill_stats (
@@ -29,7 +29,13 @@ CREATE TABLE public.insights_role_skill_stats (
 CREATE INDEX insights_role_skill_stats_role_count_idx
     ON public.insights_role_skill_stats (category, seniority, open_count DESC);
 
--- The share's denominator, one row per role — at most 27 x 8 = 216 rows.
+-- The share's denominator, one row per role — at most 52 categories x 8 seniorities.
+--
+-- (This comment said "27 x 8 = 216" when the migration was applied, which was wrong: 27 is
+-- vocab.TechCategories, and the rollup filters on `category <> ''`, not on that set. The
+-- first production run measured 371 roles, already past the stated ceiling. Corrected in
+-- place because no statement changes and the runner keys on the version name alone — see
+-- schema_migrations, which stores no checksum.)
 --
 -- It is the count of the role's open postings carrying AT LEAST ONE tagged skill,
 -- never the role's whole open count. Measured on production 2026-09-18, 11% of the

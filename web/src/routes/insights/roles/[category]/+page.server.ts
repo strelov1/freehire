@@ -1,7 +1,7 @@
 import { error } from '@sveltejs/kit';
 import { serverApi } from '$lib/server/api';
 import { loadInsightsGate } from '$lib/server/insights';
-import { coveredCategories, coveredRoles, isCovered, rolesIntro } from '$lib/insights';
+import { coveredCategories, isCovered, roleQualifies, rolesIntro } from '$lib/insights';
 import { categoryLabel } from '$lib/labels';
 import type { PageServerLoad } from './$types';
 
@@ -23,8 +23,7 @@ export const load: PageServerLoad = async ({ params, fetch, setHeaders }) => {
   // gate the leaf route and the sitemap read, so a level is linked only where the
   // link resolves — a row linking to a 404 is worse than a row that does not link.
   const leaves = new Set(
-    coveredRoles(globalRoles)
-      .filter((r) => r.category === category)
+    roles.filter((r) => roleQualifies(globalRoles, category, r.seniority, r.open_count))
       .map((r) => r.seniority),
   );
 

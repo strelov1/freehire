@@ -30,6 +30,12 @@ import (
 const (
 	insightsDefaultLimit = 20
 	insightsMaxLimit     = 200
+	// roleSkillTopN caps a single role's skill distribution. Separate from the `limit`
+	// above, which bounds how many ROLES a ranking returns: one knob serving both meant
+	// ?limit=1 silently asked for a one-skill distribution, and meta.limit could not tell
+	// the caller which of the two it had just set. Production roles publish 150-800
+	// skills each (measured 2026-09-18), so a cap is needed whatever the caller asks.
+	roleSkillTopN = 40
 	// companiesDefaultMinOpen floors the leaderboard's current open-count by default,
 	// so a company whose whole board just appeared/vanished (an ingest artifact) does
 	// not dominate the ranking. Callers can override with min_open.
@@ -279,7 +285,7 @@ func (h *statsHandlers) InsightsRoles(c *fiber.Ctx) error {
 		// an assumption about that being one.
 		var carriesCoverage bool
 		for i := range data {
-			if err := h.attachRoleSkills(c, &data[i], limit); err != nil {
+			if err := h.attachRoleSkills(c, &data[i]); err != nil {
 				return err
 			}
 			if h.attachRoleCoverage(c, &data[i]) {
@@ -310,7 +316,7 @@ func (h *statsHandlers) InsightsRoles(c *fiber.Ctx) error {
 // by. A role with no sample row has no skill-bearing postings, which is a real answer —
 // an empty distribution over a sample of zero — not an error, so the missing row is read
 // as zero rather than propagated.
-func (h *statsHandlers) attachRoleSkills(c *fiber.Ctx, role *roleInsight, limit int32) error {
+func (h *statsHandlers) attachRoleSkills(c *fiber.Ctx, role *roleInsight) error {
 	sample, err := h.queries.GetInsightsRoleSkillSample(c.Context(), db.GetInsightsRoleSkillSampleParams{
 		Category: role.Category, Seniority: role.Seniority,
 	})
@@ -321,7 +327,7 @@ func (h *statsHandlers) attachRoleSkills(c *fiber.Ctx, role *roleInsight, limit 
 	}
 
 	rows, err := h.queries.ListInsightsRoleSkills(c.Context(), db.ListInsightsRoleSkillsParams{
-		Category: role.Category, Seniority: role.Seniority, Lim: limit,
+		Category: role.Category, Seniority: role.Seniority, Lim: roleSkillTopN,
 	})
 	if err != nil {
 		return err

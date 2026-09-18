@@ -10,8 +10,8 @@ import {
   rolesIntro,
   MIN_CATEGORY_OPEN,
   seniorityLabel,
-  coveredRoles,
-  isCoveredRole,
+  rankedQualifyingRoles,
+  roleQualifies,
   roleSkillsIntro,
 } from './insights';
 
@@ -127,7 +127,7 @@ describe('seniorityLabel', () => {
   });
 });
 
-describe('coveredRoles', () => {
+describe('roleQualifies / rankedQualifyingRoles', () => {
   it('publishes a leaf only for a real seniority in a covered category with enough demand', () => {
     const roles = [
       role('backend', 'senior', MIN_CATEGORY_OPEN),
@@ -139,18 +139,29 @@ describe('coveredRoles', () => {
       role('qa', 'lead', MIN_CATEGORY_OPEN - 1),
     ];
 
-    expect(coveredRoles(roles).map((r) => [r.category, r.seniority])).toEqual([
+    expect(rankedQualifyingRoles(roles).map((r) => [r.category, r.seniority])).toEqual([
       ['backend', 'senior'],
     ]);
   });
 
-  it('agrees with isCoveredRole, which the leaf route 404s on', () => {
+  it('asks about the role handed to it, not about its rank in the list', () => {
+    // The gate list is capped at 200 by the endpoint while production carries ~349 roles
+    // over the floor. A role absent from the ranking must still qualify on its own
+    // numbers — reading qualification off the list is what 404'd 149 real pages.
+    const ranking = [role('backend', 'senior', 5000)];
+
+    expect(roleQualifies(ranking, 'backend', 'middle', MIN_CATEGORY_OPEN)).toBe(true);
+    expect(rankedQualifyingRoles(ranking).map((r) => r.seniority)).toEqual(['senior']);
+  });
+
+  it('refuses a thin role, an invented level, and an uncovered category', () => {
     const roles = [role('backend', 'senior', MIN_CATEGORY_OPEN)];
 
-    expect(isCoveredRole(roles, 'backend', 'senior')).toBe(true);
-    expect(isCoveredRole(roles, 'backend', 'junior')).toBe(false);
+    expect(roleQualifies(roles, 'backend', 'senior', MIN_CATEGORY_OPEN)).toBe(true);
+    expect(roleQualifies(roles, 'backend', 'junior', MIN_CATEGORY_OPEN - 1)).toBe(false);
     // An invented level is a wrong address, not a thin page.
-    expect(isCoveredRole(roles, 'backend', 'archmage')).toBe(false);
+    expect(roleQualifies(roles, 'backend', 'archmage', 5000)).toBe(false);
+    expect(roleQualifies(roles, 'qa', 'senior', 5000)).toBe(false);
   });
 });
 

@@ -18,6 +18,7 @@ import type {
   Answers,
   CatalogueMember,
   Display,
+  JobMatch,
   Responses as SurveyAnswers,
   RevisionView,
 } from '$lib/generated/contracts';
@@ -201,8 +202,13 @@ export interface InsightRole {
   sample_size?: number;
   skills?: InsightRoleSkill[];
   /** Present only for a signed-in caller. Zeroed rather than absent when they hold no
-   *  skills, so it can be told apart from being signed out. */
-  coverage?: InsightRoleCoverage;
+   *  skills, so it can be told apart from being signed out.
+   *
+   *  The GENERATED JobMatch, not a local copy: the handler serialises
+   *  internal/candidate/jobmatch.JobMatch verbatim, and cmd/gen-contracts already emits
+   *  it. A hand-written twin would drift the moment the Go type gained a field, and
+   *  nothing would report it. */
+  coverage?: JobMatch;
 }
 /** One skill inside a role's distribution. `share` divides by the role's `sample_size`
  *  (its postings carrying any tagged skill), NEVER by `open_count`. Reached through
@@ -211,15 +217,6 @@ interface InsightRoleSkill {
   skill: string;
   open_count: number;
   share: number;
-}
-interface InsightRoleCoverage {
-  total: number;
-  exact_count: number;
-  adjacent_count: number;
-  coverage_percent: number;
-  matched: string[];
-  adjacent: { name: string; via: string }[];
-  missing: string[];
 }
 export interface InsightSkill {
   skill: string;

@@ -1,5 +1,5 @@
 import { loadInsightsGate } from '$lib/server/insights';
-import { coveredCategories, coveredRoles } from '$lib/insights';
+import { coveredCategories, rankedQualifyingRoles } from '$lib/insights';
 import { insightsPaths, urlsetXml, xmlResponse } from '$lib/sitemap';
 import type { RequestHandler } from './$types';
 
@@ -10,7 +10,7 @@ import type { RequestHandler } from './$types';
 export const GET: RequestHandler = async ({ url, fetch }) => {
   const roles = await loadInsightsGate(fetch);
   const categories = coveredCategories(roles).map((c) => c.category);
-  const leaves = coveredRoles(roles).map((r): [string, string] => [r.category, r.seniority]);
+  const leaves = rankedQualifyingRoles(roles).map((r): [string, string] => [r.category, r.seniority]);
   const entries = insightsPaths(categories, leaves).map((path) => ({
     loc: `${url.origin}${path}`,
   }));

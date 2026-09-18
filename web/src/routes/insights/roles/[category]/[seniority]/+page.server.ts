@@ -1,7 +1,7 @@
 import { error } from '@sveltejs/kit';
 import { serverApi } from '$lib/server/api';
 import { loadInsightsGate } from '$lib/server/insights';
-import { coveredCategories, isCoveredRole, roleSkillsIntro, seniorityLabel } from '$lib/insights';
+import { coveredCategories, roleQualifies, roleSkillsIntro, seniorityLabel } from '$lib/insights';
 import { categoryLabel } from '$lib/labels';
 import type { PageServerLoad } from './$types';
 
@@ -21,7 +21,6 @@ export const load: PageServerLoad = async ({ params, fetch, request, setHeaders 
   const { category, seniority } = params;
 
   const globalRoles = await loadInsightsGate(fetch);
-  if (!isCoveredRole(globalRoles, category, seniority)) error(404, NOT_COVERED);
 
   // The cookie is forwarded so the coverage overlay can be resolved during SSR — with
   // an absolute API base, event.fetch does not carry it on its own. The category-wide
@@ -33,6 +32,13 @@ export const load: PageServerLoad = async ({ params, fetch, request, setHeaders 
     api.insightsSkills({ category, limit: 12 }),
   ]);
   if (!role) error(404, NOT_COVERED);
+
+  // The gate is asked of THIS role's own open-count, not of its rank in the gate's list.
+  // The list is capped at 200 by the endpoint, and production carries ~349 roles over the
+  // floor — so reading qualification off the ranking 404'd 149 pages that the documented
+  // rule says should exist. The category still comes from the ranking, which is what
+  // coveredCategories legitimately measures.
+  if (!roleQualifies(globalRoles, category, seniority, role.open_count)) error(404, NOT_COVERED);
 
   // A page carrying one visitor's coverage must never be held by a shared cache. The
   // sibling insights pages all set s-maxage, so the anonymous path keeps that and the

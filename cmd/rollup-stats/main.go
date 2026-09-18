@@ -171,7 +171,7 @@ func publish(ctx context.Context, redisURL, meiliURL, meiliKey string, q *db.Que
 	log.Printf("rollup-stats: published the catalogue-scale snapshot")
 }
 
-// rebuildInsights clears and recomputes the four insights_* rollups inside the
+// rebuildInsights clears and recomputes the insights_* rollups inside the
 // caller's transaction. prevTs (the growth-window start) and minSalarySample are
 // passed to the SQL so the window and sample floor live here, not in the queries.
 func rebuildInsights(ctx context.Context, q *db.Queries) error {

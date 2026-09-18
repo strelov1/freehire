@@ -69,20 +69,35 @@ function isSeniority(seniority: string): boolean {
   return (SENIORITY_ORDER as readonly string[]).includes(seniority);
 }
 
-/** The (category, seniority) roles that get their own leaf page: a real seniority,
- *  inside a covered category, carrying enough open postings that a distribution over
- *  them means something. The route and the sitemap read this same function, so a pair
- *  the route would 404 is never listed. */
-export function coveredRoles(roles: InsightRole[]): InsightRole[] {
-  const covered = new Set(coveredCategories(roles).map((c) => c.category));
-  return roles.filter(
-    (r) => covered.has(r.category) && isSeniority(r.seniority) && r.open_count >= MIN_CATEGORY_OPEN,
+/** Whether a role deserves its own leaf page: a real seniority, inside a covered
+ *  category, carrying enough open postings that a distribution over them means
+ *  something. Takes the role's OWN open-count, so it can be asked of a single-role read
+ *  as readily as of a ranking. */
+export function roleQualifies(
+  roles: InsightRole[],
+  category: string,
+  seniority: string,
+  openCount: number,
+): boolean {
+  return (
+    isCovered(roles, category) && isSeniority(seniority) && openCount >= MIN_CATEGORY_OPEN
   );
 }
 
-/** Whether one (category, seniority) pair clears that gate. */
-export function isCoveredRole(roles: InsightRole[], category: string, seniority: string): boolean {
-  return coveredRoles(roles).some((r) => r.category === category && r.seniority === seniority);
+/** The qualifying roles WITHIN a ranking — what the sitemap lists.
+ *
+ *  This is a SUBSET of what the route serves, and deliberately so. Its input is the
+ *  gate's ranked read, which the endpoint caps at 200 roles, while production carries
+ *  ~349 roles over the floor (measured 2026-09-18). Before this took the ranking's cap
+ *  seriously, the route read the same list and so 404'd every role below rank 200 —
+ *  the documented rule above was not what decided; "top 200 by demand" was.
+ *
+ *  Listing fewer pages than the route serves is the safe direction and the one the
+ *  sitemap convention requires: a listed URL must resolve. Listing MORE would be the
+ *  bug. Widening the list means paging the ranking, not raising insightsMaxLimit, which
+ *  bounds what an unauthenticated caller may ask for and exists for a different reason. */
+export function rankedQualifyingRoles(roles: InsightRole[]): InsightRole[] {
+  return roles.filter((r) => roleQualifies(roles, r.category, r.seniority, r.open_count));
 }
 
 /** The intro line for a role's leaf page. It says what the figures ARE measured over
