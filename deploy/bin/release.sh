@@ -356,13 +356,13 @@ if [ "$app" = freehire ]; then
     echo "$stale" | sed "s/^/[release:$app]   /" >&2
     echo "[release:$app]   their timers are firing whatever an older release left. Add them to the list in $0." >&2
   fi
-  # mail-ingest is a long-lived daemon (not a timer): restart it so it picks up the
-  # freshly built binary from the repointed hire-current. Enabled once via provision.
-  # auto-apply-orchestrate is restarted separately, AFTER the flip below — it calls
-  # hire's own API over loopback at a fixed blue/green port, so restarting it here
-  # (before $new is actually active) would have it come up pointed at whichever color
-  # is about to go warm-standby, not the one about to take traffic.
-  systemctl try-restart freehire-mail-ingest.service 2>/dev/null || true
+  # mail-ingest and auto-apply-orchestrate are long-lived daemons (not timers), and both
+  # are restarted AFTER the flip below, not here. A daemon started here execs whatever
+  # hire-current still points at — the OUTGOING color — and then holds that binary's
+  # inode for the life of the process, so it runs one release behind while the unit
+  # reports green and the checkout on disk shows the new commit. Measured 2026-09-18:
+  # two consecutive releases left freehire-mail-ingest on the previous color, which is
+  # why a fix to the hosted-mail ingest looked deployed and was not.
 fi
 # Schema BEFORE the code that reads it. This exists because on 2026-07-29 a release carried
 # a merged migration nobody had applied: sqlc reads every column of a table, so one missing
@@ -453,6 +453,9 @@ nginx -t && nginx -s reload
 if [ "$app" = freehire ]; then
   ln -sfn "/opt/freehire/src/hire-${new}" /opt/freehire/src/hire-current
   echo "[release:$app] workers now follow hire-${new} (hire-current repointed)"
+  # Now that hire-current names the incoming color, the long-lived daemons can exec it.
+  # mail-ingest is enabled once via provision; a missing unit is not a release failure.
+  systemctl try-restart freehire-mail-ingest.service 2>/dev/null || true
   # auto-apply-orchestrate calls hire's own API over loopback at a fixed blue/green
   # port (internal/platform/config's own PORT default, 8080, matches neither — found
   # 2026-09-05 the hard way: every call failed with connection refused until this

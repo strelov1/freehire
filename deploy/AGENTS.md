@@ -198,6 +198,21 @@ a scheduled Dependabot run made every deploy stop, silently, at exit 0.
   every command in `cmd/`. `billing-sync` and `mentorship-remind` are the additions since
   that was last true; build each where the other worker binaries live before enabling its
   timer, or the unit fails on a missing executable every time it fires.
+- **A long-lived daemon is restarted AFTER the flip, and the order is load-bearing.** A
+  timer's worker re-reads `hire-current` on every firing, so it is on the new color the
+  moment the symlink moves. A `Restart=always` daemon execs the symlink ONCE and then holds
+  that binary's inode for the life of the process — restart it before the flip and it comes
+  up on the OUTGOING color and stays there until something restarts it again. `release.sh`
+  restarted `freehire-mail-ingest` about a hundred lines above the `ln -sfn`, under a
+  comment that said "from the repointed hire-current", and the symlink had not moved yet:
+  measured 2026-09-18, two consecutive releases left the daemon one release behind while
+  the unit reported active and the checkout on disk showed the new commit, so a merged fix
+  to the hosted-mail ingest looked deployed and was not. The check is the process, never
+  the checkout:
+  `ls -l /proc/$(systemctl show freehire-mail-ingest -p MainPID --value)/exe` names the
+  color it is actually running. `auto-apply-orchestrate` was already restarted after the
+  flip for its own reason (it dials the active color's loopback port); the two now sit
+  together.
 - **The environment is split across two files, and the split is a trap.** Every unit reads
   `/opt/freehire/.env`; the mail credentials (`NOTIFY_EMAIL_FROM` plus the SES keys) live
   ONLY in `/opt/freehire/.env.notify`. A worker that sends mail and reads just the first
