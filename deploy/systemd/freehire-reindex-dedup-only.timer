@@ -24,7 +24,33 @@ Description=timer: freehire-reindex-dedup-only
 # freehire-reindex-dedup.timer (see that file's comment on the 2026-08-17 13:17 incident):
 # this unit Conflicts= only with its own daily sibling, never with freehire-reindexw, so a
 # missed firing catching up at an arbitrary hour cannot kill an in-progress rebuild.
-OnCalendar=*-*-* 01,10,13,16,19,22:30:00
+#
+# 2026-09-18: THE SLOTS ABOVE ARE WRONG, and the reasoning that chose them had one gap.
+# It asked whether this unit could KILL a rebuild (it cannot — no Conflicts=) and never
+# asked whether it could STARVE one. It can, and it did. `cmd/reindex`,
+# `cmd/reindex-companies` and `cmd/build-suggestions` share ONE advisory lock, and the
+# loser does not wait — it logs "another catalogue-wide index job is running" and exits 0,
+# which is a green unit. This pass holds that lock for 2h13m-2h38m measured on 2026-09-18
+# (13:30->16:09, 16:30->18:43), not the 2h15m-worst-case above, and the two slots at 01:30
+# and 13:30 land exactly 1h45m before freehire-reindexw's 03:15 and 15:15 — inside the run,
+# every single day. Both daily rebuilds had been skipping: the live jobs index was created
+# 2026-09-15T16:29 and had not been rebuilt in the three days since, while search-drain's
+# incremental pushes kept it looking healthy. A derived column is not in `content_hash`, so
+# a dictionary fix reaches search ONLY through a rebuild; six skipped rebuilds is six
+# dictionary fixes that silently never landed.
+#
+# The slots below keep the whole pass clear of both rebuild windows. A rebuild measured
+# 4h15m at 4.5M documents (see freehire-reindexw.timer), so those windows are 03:15-07:30
+# and 15:15-19:30; 12:30 (reindex-companies, ~10min) is avoided too, since it takes the
+# same lock. Three firings rather than six is the real cost, and it is the right trade: a
+# marker refreshed three times a day still beats the once-a-day floor this timer exists to
+# beat, while six refreshes that cost every rebuild is a bad bargain at any freshness.
+#
+# What is NOT fixed here: freehire-build-suggestions at 06:45 falls inside the 03:15
+# rebuild window and will now lose the lock to it, where before it always won because the
+# rebuild never ran. It rebuilds daily and its own miss is cheap, but the whole heavy
+# schedule wants laying out once against measured durations rather than patched per unit.
+OnCalendar=*-*-* 08,20,23:00:00
 Persistent=true
 RandomizedDelaySec=120
 
