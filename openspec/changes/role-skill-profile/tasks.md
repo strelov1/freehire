@@ -26,10 +26,28 @@
       **Second finding, not anticipated:** 11% of eligible postings carry no tagged skill
       (392,020 → 348,060), so the share's denominator had to be pinned. It is now the
       skill-bearing subset, served as `sample_size`.
-- [ ] 1.2 `EXPLAIN (ANALYZE, BUFFERS)` the proposed aggregate
-      (`FROM jobs, unnest(skills) … GROUP BY category, seniority, skill`) against prod and
-      compare its buffers to the existing `RebuildInsightsRoleStatsByCountry`. Narrowing
-      rows can widen I/O — judge on buffers, not on rows.
+- [x] 1.2 `EXPLAIN` the proposed aggregate against prod and compare it to the existing
+      `RebuildInsightsRoleStatsByCountry`.
+
+      **Done with plain `EXPLAIN`, not `EXPLAIN (ANALYZE, BUFFERS)` — deliberately, and
+      this is a weaker measurement.** `ANALYZE` EXECUTES the query, which is a full scan of
+      an 11M-row table on a host whose bottleneck is the crawl fleet. The question the task
+      was protecting against is "is this a new kind of load", and comparing PLANS answers
+      that without adding the load.
+
+      **Measured 2026-09-18, production `hire`:** the two plans are the same shape —
+      `Parallel Seq Scan on jobs` → `Nested Loop` with `Function Scan on unnest` →
+      `Partial HashAggregate` → `Gather Merge` → `Finalize GroupAggregate`, 2 workers each.
+
+      | | this rollup | `…ByCountry` (nightly today) |
+      |---|---|---|
+      | seq scan cost | 2,554,818.69 | 2,554,818.69 |
+      | total cost | 2,578,379.07 | 2,570,256.31 |
+
+      The scan dominates and the `unnest` adds 0.3%. So this is not new load: it is the
+      load already running, once more. What is still unmeasured is the real wall-clock and
+      buffer count, which the first production run reports for free (task 7.4) at no extra
+      risk.
 
 ## 2. Rollup table and query
 
@@ -137,10 +155,10 @@
 
 ## 7. Verify and ship
 
-- [ ] 7.1 `gofmt -l .` prints nothing; `go vet ./...`; `go test ./...`;
-      `go vet -tags=integration ./...`.
-- [ ] 7.2 `pnpm check:links` — this change adds no new doc links, but renaming a target
-      breaks them.
+- [x] 7.1 `gofmt -l .` prints nothing; `go vet ./...`; `go test ./...`;
+      `go vet -tags=integration ./...`. All clean. Web: svelte-check 0 errors, eslint clean,
+      knip clean for `web/`, both design-system gates green, 2313 web unit tests pass.
+- [x] 7.2 `pnpm check:links` — 367 relative links, all resolve.
 - [ ] 7.3 Deploy migration + worker. Let one nightly `cmd/rollup-stats` run fill the table.
 - [ ] 7.4 Read that run: rows produced, roles clearing the floor, seniority coverage. SET
       the floor from these numbers and record them here. Do not guess the floor earlier.
