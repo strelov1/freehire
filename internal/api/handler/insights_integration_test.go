@@ -14,6 +14,7 @@ import (
 	"encoding/json"
 	"io"
 	"math"
+	"net/http"
 	"net/http/httptest"
 	"strconv"
 	"strings"
@@ -24,6 +25,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/strelov1/freehire/internal/identity/auth"
 	"github.com/strelov1/freehire/internal/platform/db"
 )
 
@@ -418,5 +420,159 @@ func TestInsightsRoleSkillsEndpoint(t *testing.T) {
 	}
 	if _, raw, code := get(t, "/api/v1/insights/roles?category=backend&seniority=archmage"); code != fiber.StatusBadRequest {
 		t.Errorf("unknown seniority: status %d, want 400: %s", code, raw)
+	}
+}
+
+// TestInsightsRoleCoverage covers the signed-in overlay on a single role's skill
+// distribution: which of the role's ranked skills the caller holds, holds a neighbour
+// of, or holds nothing for.
+//
+// The aggregate half of this answer is public, so the anonymous path must still be a
+// 200 — the overlay is added, never gated.
+func TestInsightsRoleCoverage(t *testing.T) {
+	pool := startPostgres(t)
+	q := db.New(pool)
+	ctx := context.Background()
+	if _, err := pool.Exec(ctx, "TRUNCATE jobs, companies, users RESTART IDENTITY CASCADE"); err != nil {
+		t.Fatalf("truncate: %v", err)
+	}
+
+	// backend/senior ranks go (3), then aws and docker (2 each, name breaking the tie).
+	// c4 carries no skill, so sample_size (3) differs from open_count (4).
+	seedInsightsHandlerJob(t, ctx, pool, q, "c1", "backend", "senior", []string{"de"}, []string{"go", "docker", "aws"}, 0)
+	seedInsightsHandlerJob(t, ctx, pool, q, "c2", "backend", "senior", []string{"de"}, []string{"go", "docker", "aws"}, 0)
+	seedInsightsHandlerJob(t, ctx, pool, q, "c3", "backend", "senior", []string{"de"}, []string{"go"}, 0)
+	seedInsightsHandlerJob(t, ctx, pool, q, "c4", "backend", "senior", []string{"de"}, []string{}, 0)
+	rebuildInsightsForTest(t, ctx, q)
+
+	// One account holding go and gcp: an exact hold on go, a NEIGHBOUR of aws, and
+	// nothing for docker — all three outcomes in one profile.
+	var withSkills, withoutProfile int64
+	if err := pool.QueryRow(ctx, `INSERT INTO users (email, email_verified) VALUES ('cov@example.test', true) RETURNING id`).Scan(&withSkills); err != nil {
+		t.Fatalf("seed user: %v", err)
+	}
+	if err := pool.QueryRow(ctx, `INSERT INTO users (email, email_verified) VALUES ('bare@example.test', true) RETURNING id`).Scan(&withoutProfile); err != nil {
+		t.Fatalf("seed bare user: %v", err)
+	}
+	// specializations carries a CHECK constraint: a profile row cannot exist for
+	// somebody who skipped that wizard step, so it cannot be seeded empty here.
+	if _, err := pool.Exec(ctx,
+		`INSERT INTO user_profiles (user_id, specializations, skills, excluded_skills)
+		 VALUES ($1, $2, $3, '{}')`, withSkills, []string{"backend"}, []string{"go", "gcp"}); err != nil {
+		t.Fatalf("seed profile: %v", err)
+	}
+
+	iss := auth.NewIssuer("test-secret", time.Hour)
+	tokenFor := func(t *testing.T, id int64) string {
+		t.Helper()
+		tok, err := iss.Issue(id, testTokenVersion)
+		if err != nil {
+			t.Fatalf("issue token: %v", err)
+		}
+		return tok
+	}
+
+	h := &statsHandlers{queries: q}
+	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
+	app.Get("/api/v1/insights/roles", auth.OptionalAuth(iss, testVersions, apiKeys{q}), h.InsightsRoles)
+
+	const path = "/api/v1/insights/roles?category=backend&seniority=senior"
+	// as issues the request with an optional session cookie; an empty token is the
+	// anonymous caller. It returns the Cache-Control header rather than the response,
+	// so nothing outlives the body it already closed.
+	as := func(t *testing.T, token string) (out map[string]any, raw, cacheControl string) {
+		t.Helper()
+		req := httptest.NewRequestWithContext(ctx, fiber.MethodGet, path, nil)
+		if token != "" {
+			req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: token})
+		}
+		resp, err := app.Test(req)
+		if err != nil {
+			t.Fatalf("request: %v", err)
+		}
+		defer resp.Body.Close()
+		body, _ := io.ReadAll(resp.Body)
+		if resp.StatusCode != fiber.StatusOK {
+			t.Fatalf("status %d, want 200: %s", resp.StatusCode, body)
+		}
+		if err := json.Unmarshal(body, &out); err != nil {
+			t.Fatalf("decode: %v", err)
+		}
+		return out, string(body), resp.Header.Get(fiber.HeaderCacheControl)
+	}
+	roleOf := func(t *testing.T, out map[string]any, raw string) map[string]any {
+		t.Helper()
+		data, _ := out["data"].([]any)
+		if len(data) != 1 {
+			t.Fatalf("data has %d roles, want 1: %s", len(data), raw)
+		}
+		role, _ := data[0].(map[string]any)
+		return role
+	}
+	names := func(v any) []string {
+		items, _ := v.([]any)
+		out := make([]string, len(items))
+		for i, it := range items {
+			out[i], _ = it.(string)
+		}
+		return out
+	}
+
+	// --- anonymous: the aggregate, and no overlay --------------------------------
+	out, raw, cc := as(t, "")
+	role := roleOf(t, out, raw)
+	if _, present := role["coverage"]; present {
+		t.Errorf("anonymous answer carried a coverage section: %s", raw)
+	}
+	if _, present := role["skills"]; !present {
+		t.Errorf("anonymous answer lost the public distribution: %s", raw)
+	}
+	if strings.Contains(cc, "private") {
+		t.Errorf("anonymous answer marked private (%q) — it is shared-cacheable: %s", cc, raw)
+	}
+
+	// --- signed in with skills: all three outcomes -------------------------------
+	out, raw, cc = as(t, tokenFor(t, withSkills))
+	role = roleOf(t, out, raw)
+	cov, ok := role["coverage"].(map[string]any)
+	if !ok {
+		t.Fatalf("signed-in answer carried no coverage: %s", raw)
+	}
+	if got := cov["total"]; got != float64(3) {
+		t.Errorf("coverage total = %v, want 3 (go, aws, docker): %s", got, raw)
+	}
+	if got := names(cov["matched"]); len(got) != 1 || got[0] != "go" {
+		t.Errorf("matched = %v, want [go]: %s", got, raw)
+	}
+	if got := names(cov["missing"]); len(got) != 1 || got[0] != "docker" {
+		t.Errorf("missing = %v, want [docker]: %s", got, raw)
+	}
+	adj, _ := cov["adjacent"].([]any)
+	if len(adj) != 1 {
+		t.Fatalf("adjacent = %v, want one entry: %s", adj, raw)
+	}
+	// The neighbour match names what it matched THROUGH, so the claim is inspectable
+	// rather than asserted.
+	first, _ := adj[0].(map[string]any)
+	if first["name"] != "aws" || first["via"] != "gcp" {
+		t.Errorf("adjacent = %v, want aws via gcp: %s", first, raw)
+	}
+	if !strings.Contains(cc, "private") {
+		t.Errorf("coverage served with Cache-Control %q — a shared cache would hand one caller's coverage to the next: %s", cc, raw)
+	}
+
+	// --- signed in with no profile at all ----------------------------------------
+	out, raw, _ = as(t, tokenFor(t, withoutProfile))
+	role = roleOf(t, out, raw)
+	cov, ok = role["coverage"].(map[string]any)
+	if !ok {
+		t.Fatalf("a signed-in caller with no profile must still get a coverage section, "+
+			"or a client cannot tell it apart from being signed out: %s", raw)
+	}
+	if got := cov["exact_count"]; got != float64(0) {
+		t.Errorf("exact_count = %v, want 0: %s", got, raw)
+	}
+	if got := cov["total"]; got != float64(3) {
+		t.Errorf("total = %v, want 3 — the role's skills, not the caller's: %s", got, raw)
 	}
 }

@@ -37,7 +37,11 @@ func newStatsHandlers(queries *db.Queries, c cache.Cache, pool *pgxpool.Pool) *s
 	return &statsHandlers{queries: queries, cache: c, estimator: queries, pool: pool}
 }
 
-func (h *statsHandlers) register(api fiber.Router) {
+// register mounts the stats and insights reads. optionalAuth attaches the caller when
+// signed in and never rejects — only /insights/roles takes it, and only so a single-role
+// read can overlay that caller's own skill coverage. Every other route here stays
+// strictly anonymous and aggregate-only.
+func (h *statsHandlers) register(api fiber.Router, optionalAuth fiber.Handler) {
 	// Public catalogue-activity time series (added vs. removed vacancies per period),
 	// unauthenticated like the other public reads. Served from the job_daily_stats
 	// rollup (cmd/rollup-stats); the /trends SPA page renders it as a bar chart.
@@ -71,7 +75,7 @@ func (h *statsHandlers) register(api fiber.Router) {
 	// demand, hiring velocity, salary bands) served from the insights_* rollups
 	// (cmd/rollup-stats), unauthenticated like the other public reads. Aggregate-only
 	// — no record-level field is exposed.
-	api.Get("/insights/roles", h.InsightsRoles)
+	api.Get("/insights/roles", optionalAuth, h.InsightsRoles)
 	api.Get("/insights/skills", h.InsightsSkills)
 	api.Get("/insights/velocity", h.InsightsVelocity)
 	api.Get("/insights/salary", h.InsightsSalary)

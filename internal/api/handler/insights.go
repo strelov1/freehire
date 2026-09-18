@@ -13,7 +13,9 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"github.com/strelov1/freehire/internal/candidate/jobmatch"
 	"github.com/strelov1/freehire/internal/dict/vocab"
+	"github.com/strelov1/freehire/internal/identity/auth"
 	"github.com/strelov1/freehire/internal/platform/db"
 )
 
@@ -58,6 +60,10 @@ type roleInsight struct {
 	Growth     int32               `json:"growth"`
 	SampleSize *int32              `json:"sample_size,omitempty"`
 	Skills     *[]roleSkillInsight `json:"skills,omitempty"`
+	// Coverage is the signed-in caller's own standing against those skills. Absent for
+	// an anonymous caller; present and reporting zero held for a signed-in one with no
+	// skills, so the two cases are distinguishable.
+	Coverage *jobmatch.JobMatch `json:"coverage,omitempty"`
 }
 
 // roleSkillInsight is one skill inside a single role's distribution.
@@ -272,6 +278,14 @@ func (h *statsHandlers) InsightsRoles(c *fiber.Ctx) error {
 			if err := h.attachRoleSkills(c, &data[i], limit); err != nil {
 				return err
 			}
+			h.attachRoleCoverage(c, &data[i])
+		}
+		// A coverage overlay is one caller's own answer. The sibling insights routes are
+		// happily shared-cacheable and the SPA sets s-maxage on them, so this must say
+		// otherwise explicitly — a shared cache holding one visitor's coverage would
+		// serve it to the next.
+		if _, signedIn := auth.UserID(c); signedIn {
+			c.Set(fiber.HeaderCacheControl, "private, no-store")
 		}
 		// The distribution is country-agnostic by design (the rollup does not cross a
 		// third axis), while open_count and growth above ARE country-scoped. Saying so
@@ -312,6 +326,38 @@ func (h *statsHandlers) attachRoleSkills(c *fiber.Ctx, role *roleInsight, limit 
 	role.SampleSize = &sample
 	role.Skills = &skills
 	return nil
+}
+
+// attachRoleCoverage overlays the signed-in caller's own coverage of the role's ranked
+// skills. Anonymous callers get nothing here and are never refused — the aggregate half
+// of this answer is public.
+//
+// It reuses internal/candidate/jobmatch unchanged rather than classifying the skills
+// again: a visitor will compare this page's coverage against a job page's, and two
+// matchers would eventually disagree about what counts as an adjacent skill.
+//
+// Best-effort, like the sibling signed-in overlays on the public job and company reads:
+// a profile lookup that fails leaves the coverage absent rather than failing a read that
+// is perfectly serviceable without it.
+func (h *statsHandlers) attachRoleCoverage(c *fiber.Ctx, role *roleInsight) {
+	userID, ok := auth.UserID(c)
+	if !ok || role.Skills == nil {
+		return
+	}
+	profile, err := h.queries.GetUserProfile(c.Context(), userID)
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return
+	}
+	// A caller with no profile row, or one holding no skills, still gets a coverage
+	// section — reporting zero held. An ABSENT section means "not signed in", and a
+	// client cannot tell that apart from "signed in and holding nothing" if the two
+	// share a representation.
+	ranked := make([]string, len(*role.Skills))
+	for i, s := range *role.Skills {
+		ranked[i] = s.Skill
+	}
+	m := jobmatch.Compute(ranked, profile.Skills)
+	role.Coverage = &m
 }
 
 // InsightsCompanies serves GET /api/v1/insights/companies: the hiring-signal

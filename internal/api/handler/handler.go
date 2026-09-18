@@ -903,7 +903,7 @@ func Register(app *fiber.App, cfg Config) {
 
 	// Public catalogue-activity, member-growth, engagement, facet-snapshot, and
 	// ingest-status reads (see statsHandlers).
-	statsH.register(api)
+	statsH.register(api, optionalAuth)
 	// The homepage's live "recently added jobs" SSE feed (see recentFeedHandlers).
 	recentFeedH.register(api)
 	// The /open and /about pages' OG preview cards (see ogHandlers) — reads the

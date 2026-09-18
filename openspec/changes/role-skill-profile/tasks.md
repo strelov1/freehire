@@ -93,16 +93,16 @@
 
 ## 5. Signed-in coverage
 
-- [ ] 5.1 When the request carries a session, read `userprofile.skills` and compute
+- [x] 5.1 When the request carries a session, read `userprofile.skills` and compute
       coverage with `jobmatch.Compute` over the role's ranked skills. Do not write a
       second matcher.
-- [ ] 5.2 Report per skill: held / adjacent (naming the skill matched through, via
+- [x] 5.2 Report per skill: held / adjacent (naming the skill matched through, via
       `skilladjacency`) / missing, plus a held-out-of-total count.
-- [ ] 5.3 A signed-in caller with no profile skills gets a coverage section reporting zero
+- [x] 5.3 A signed-in caller with no profile skills gets a coverage section reporting zero
       held — never an absent section, which a client cannot distinguish from signed-out.
-- [ ] 5.4 Set `Cache-Control: private` whenever a coverage section is present, and assert
+- [x] 5.4 Set `Cache-Control: private` whenever a coverage section is present, and assert
       it in a test. The sibling insights routes set a shared-cache header by default.
-- [ ] 5.5 Handler tests for every scenario in `specs/role-skill-coverage/spec.md`,
+- [x] 5.5 Handler tests for every scenario in `specs/role-skill-coverage/spec.md`,
       including the anonymous path returning 200 with no coverage.
 
 ## 6. Web
