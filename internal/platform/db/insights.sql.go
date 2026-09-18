@@ -356,17 +356,19 @@ SELECT category, seniority, open_count, (open_count - open_count_prev)::int AS g
 FROM insights_role_stats
 WHERE country = $1
   AND ($2::text = '' OR category = $2)
+  AND ($3::text = '' OR seniority = $3)
 ORDER BY
-    (CASE WHEN $3::text = 'growth' THEN (open_count - open_count_prev) ELSE open_count END) DESC,
+    (CASE WHEN $4::text = 'growth' THEN (open_count - open_count_prev) ELSE open_count END) DESC,
     open_count DESC
-LIMIT $4::int
+LIMIT $5::int
 `
 
 type ListInsightsRolesParams struct {
-	Country  string `json:"country"`
-	Category string `json:"category"`
-	Sort     string `json:"sort"`
-	Lim      int32  `json:"lim"`
+	Country   string `json:"country"`
+	Category  string `json:"category"`
+	Seniority string `json:"seniority"`
+	Sort      string `json:"sort"`
+	Lim       int32  `json:"lim"`
 }
 
 type ListInsightsRolesRow struct {
@@ -379,11 +381,16 @@ type ListInsightsRolesRow struct {
 // Ranked roles within one country slice (” = all countries), ordered by raw
 // demand or by growth (open_count - open_count_prev), demand as the tiebreak.
 // An empty @category means all categories (the original behavior); a non-empty
-// @category restricts the ranking to that category's seniorities.
+// @category restricts the ranking to that category's seniorities, and a non-empty
+// @seniority narrows it to ONE role. Until @seniority existed the parameter was not
+// read at all, so a caller who sent it was answered with every seniority — the
+// dropped-filter-widens-the-answer trap in its silent form, and the endpoint has no
+// meta.ignored_params to have reported it.
 func (q *Queries) ListInsightsRoles(ctx context.Context, arg ListInsightsRolesParams) ([]ListInsightsRolesRow, error) {
 	rows, err := q.db.Query(ctx, listInsightsRoles,
 		arg.Country,
 		arg.Category,
+		arg.Seniority,
 		arg.Sort,
 		arg.Lim,
 	)

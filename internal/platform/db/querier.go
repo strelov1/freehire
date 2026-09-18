@@ -3735,7 +3735,11 @@ type Querier interface {
 	// Ranked roles within one country slice ('' = all countries), ordered by raw
 	// demand or by growth (open_count - open_count_prev), demand as the tiebreak.
 	// An empty @category means all categories (the original behavior); a non-empty
-	// @category restricts the ranking to that category's seniorities.
+	// @category restricts the ranking to that category's seniorities, and a non-empty
+	// @seniority narrows it to ONE role. Until @seniority existed the parameter was not
+	// read at all, so a caller who sent it was answered with every seniority — the
+	// dropped-filter-widens-the-answer trap in its silent form, and the endpoint has no
+	// meta.ignored_params to have reported it.
 	ListInsightsRoles(ctx context.Context, arg ListInsightsRolesParams) ([]ListInsightsRolesRow, error)
 	// Salary bands for one role × country scope, one row per (currency, period),
 	// richest samples first. Currencies are never combined.

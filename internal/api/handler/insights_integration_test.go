@@ -13,6 +13,7 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"math"
 	"net/http/httptest"
 	"strconv"
 	"strings"
@@ -72,6 +73,14 @@ func rebuildInsightsForTest(t *testing.T, ctx context.Context, q *db.Queries) {
 	mustExec(err)
 	_, err = q.RebuildInsightsSkillStatsByCountry(ctx, prev)
 	mustExec(err)
+	// Per-role skill demand at a floor of 2, and its denominator — which takes no floor,
+	// or a surviving share would have nothing to divide by.
+	mustExec(q.DeleteAllInsightsRoleSkillStats(ctx))
+	_, err = q.RebuildInsightsRoleSkillStats(ctx, 2)
+	mustExec(err)
+	mustExec(q.DeleteAllInsightsRoleSkillSample(ctx))
+	_, err = q.RebuildInsightsRoleSkillSample(ctx)
+	mustExec(err)
 	mustExec(q.DeleteAllInsightsSalaryStats(ctx))
 	_, err = q.RebuildInsightsSalaryStatsGlobal(ctx, 1) // min sample 1 so a small band survives
 	mustExec(err)
@@ -80,6 +89,26 @@ func rebuildInsightsForTest(t *testing.T, ctx context.Context, q *db.Queries) {
 	mustExec(q.DeleteAllInsightsVelocityDaily(ctx))
 	_, err = q.RebuildInsightsVelocityDaily(ctx)
 	mustExec(err)
+}
+
+// getInsights issues one GET against the test app and returns the decoded body, the raw
+// body (for failure messages, which is why it is returned even on success) and the status.
+// A non-200 is left undecoded: an error envelope is not the shape a caller asserts on.
+func getInsights(t *testing.T, ctx context.Context, app *fiber.App, path string) (map[string]any, string, int) {
+	t.Helper()
+	resp, err := app.Test(httptest.NewRequestWithContext(ctx, fiber.MethodGet, path, nil))
+	if err != nil {
+		t.Fatalf("request %s: %v", path, err)
+	}
+	defer resp.Body.Close()
+	raw, _ := io.ReadAll(resp.Body)
+	var out map[string]any
+	if resp.StatusCode == fiber.StatusOK {
+		if err := json.Unmarshal(raw, &out); err != nil {
+			t.Fatalf("decode %s: %v", path, err)
+		}
+	}
+	return out, string(raw), resp.StatusCode
 }
 
 func TestInsightsEndpoints(t *testing.T) {
@@ -105,19 +134,7 @@ func TestInsightsEndpoints(t *testing.T) {
 
 	get := func(t *testing.T, path string) (map[string]any, string, int) {
 		t.Helper()
-		resp, err := app.Test(httptest.NewRequest(fiber.MethodGet, path, nil))
-		if err != nil {
-			t.Fatalf("request %s: %v", path, err)
-		}
-		defer resp.Body.Close()
-		raw, _ := io.ReadAll(resp.Body)
-		var out map[string]any
-		if resp.StatusCode == fiber.StatusOK {
-			if err := json.Unmarshal(raw, &out); err != nil {
-				t.Fatalf("decode %s: %v", path, err)
-			}
-		}
-		return out, string(raw), resp.StatusCode
+		return getInsights(t, ctx, app, path)
 	}
 
 	bodies := []string{}
@@ -267,4 +284,139 @@ func hasUSDBand(data any) bool {
 		}
 	}
 	return false
+}
+
+// TestInsightsRoleSkillsEndpoint covers the single-role read: naming both category and
+// seniority narrows the ranking to one role and attaches that role's skill distribution.
+//
+// The seeds are chosen so the share's denominator is DISTINGUISHABLE from the role's open
+// count — four open postings, only three of which carry a tagged skill — because those two
+// numbers being equal is exactly the coincidence that would let a wrong denominator pass.
+func TestInsightsRoleSkillsEndpoint(t *testing.T) {
+	pool := startPostgres(t)
+	q := db.New(pool)
+	ctx := context.Background()
+	if _, err := pool.Exec(ctx, "TRUNCATE jobs, companies RESTART IDENTITY CASCADE"); err != nil {
+		t.Fatalf("truncate: %v", err)
+	}
+
+	// backend/senior: 4 open postings, 3 skill-bearing. go on all 3, docker on 2.
+	seedInsightsHandlerJob(t, ctx, pool, q, "k1", "backend", "senior", []string{"de"}, []string{"go", "docker"}, 0)
+	seedInsightsHandlerJob(t, ctx, pool, q, "k2", "backend", "senior", []string{"de"}, []string{"go", "docker"}, 0)
+	seedInsightsHandlerJob(t, ctx, pool, q, "k3", "backend", "senior", []string{"us"}, []string{"go"}, 0)
+	// k4 is the posting with NO tagged skill: open, in the role, and absent from the
+	// denominator. skills is NOT NULL, so an empty array rather than nil.
+	seedInsightsHandlerJob(t, ctx, pool, q, "k4", "backend", "senior", []string{"us"}, []string{}, 0)
+	// qa/lead: one posting, so its only skill falls below the floor of 2.
+	seedInsightsHandlerJob(t, ctx, pool, q, "k5", "qa", "lead", []string{"de"}, []string{"go"}, 0)
+	rebuildInsightsForTest(t, ctx, q)
+
+	h := &statsHandlers{queries: q}
+	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
+	app.Get("/api/v1/insights/roles", h.InsightsRoles)
+
+	get := func(t *testing.T, path string) (map[string]any, string, int) {
+		t.Helper()
+		return getInsights(t, ctx, app, path)
+	}
+	// only returns the single role a body carries, failing if it carries any other count.
+	only := func(t *testing.T, out map[string]any, raw string) map[string]any {
+		t.Helper()
+		data, _ := out["data"].([]any)
+		if len(data) != 1 {
+			t.Fatalf("data has %d roles, want exactly 1: %s", len(data), raw)
+		}
+		role, _ := data[0].(map[string]any)
+		return role
+	}
+
+	// --- the distribution, and the denominator it divides by ---------------------
+	out, raw, code := get(t, "/api/v1/insights/roles?category=backend&seniority=senior")
+	if code != fiber.StatusOK {
+		t.Fatalf("single role: status %d, want 200: %s", code, raw)
+	}
+	role := only(t, out, raw)
+	if got := role["open_count"]; got != float64(4) {
+		t.Errorf("open_count = %v, want 4: %s", got, raw)
+	}
+	if got := role["sample_size"]; got != float64(3) {
+		t.Errorf("sample_size = %v, want 3 (k4 carries no skill): %s", got, raw)
+	}
+	skills, _ := role["skills"].([]any)
+	if len(skills) != 2 {
+		t.Fatalf("skills = %v, want go and docker: %s", skills, raw)
+	}
+	first, _ := skills[0].(map[string]any)
+	if first["skill"] != "go" || first["open_count"] != float64(3) {
+		t.Errorf("first skill = %v, want go/3: %s", first, raw)
+	}
+	// 3/3, not 3/4. If the denominator were open_count this would read 0.75, which is
+	// the whole reason sample_size is a separate number.
+	if got := first["share"]; got != float64(1) {
+		t.Errorf("go share = %v, want 1 (3/3, not 3/4): %s", got, raw)
+	}
+	second, _ := skills[1].(map[string]any)
+	if got, _ := second["share"].(float64); math.Abs(got-2.0/3.0) > 1e-9 {
+		t.Errorf("docker share = %v, want 2/3: %s", got, raw)
+	}
+
+	// --- a role whose every skill fell below the floor ---------------------------
+	out, raw, code = get(t, "/api/v1/insights/roles?category=qa&seniority=lead")
+	if code != fiber.StatusOK {
+		t.Fatalf("floored role: status %d, want 200 (never 404): %s", code, raw)
+	}
+	role = only(t, out, raw)
+	got, ok := role["skills"].([]any)
+	if !ok || len(got) != 0 {
+		t.Errorf("floored role skills = %v, want an EMPTY array that is still present: %s", role["skills"], raw)
+	}
+
+	// --- country scopes the counts, never the distribution -----------------------
+	out, raw, code = get(t, "/api/v1/insights/roles?category=backend&seniority=senior&country=de")
+	if code != fiber.StatusOK {
+		t.Fatalf("country-scoped role: status %d, want 200: %s", code, raw)
+	}
+	role = only(t, out, raw)
+	if got := role["open_count"]; got != float64(2) {
+		t.Errorf("DE open_count = %v, want 2: %s", got, raw)
+	}
+	if got := role["sample_size"]; got != float64(3) {
+		t.Errorf("DE sample_size = %v, want the country-agnostic 3: %s", got, raw)
+	}
+	meta, _ := out["meta"].(map[string]any)
+	if meta["skills_geography_scoped"] != false {
+		t.Errorf("meta must state the distribution is not geography-scoped: %s", raw)
+	}
+
+	// --- the ranked answer carries no distribution at all ------------------------
+	out, raw, code = get(t, "/api/v1/insights/roles")
+	if code != fiber.StatusOK {
+		t.Fatalf("ranked roles: status %d, want 200: %s", code, raw)
+	}
+	for _, e := range out["data"].([]any) {
+		entry, _ := e.(map[string]any)
+		if _, present := entry["skills"]; present {
+			t.Errorf("ranked answer carried a skills array: %s", raw)
+		}
+		if _, present := entry["sample_size"]; present {
+			t.Errorf("ranked answer carried a sample_size: %s", raw)
+		}
+	}
+
+	// --- seniority is READ, so it narrows rather than being silently dropped -----
+	out, raw, code = get(t, "/api/v1/insights/roles?category=backend")
+	if code != fiber.StatusOK {
+		t.Fatalf("category-only: status %d, want 200: %s", code, raw)
+	}
+	if n := len(out["data"].([]any)); n != 1 {
+		t.Fatalf("backend has %d seniorities seeded, expected 1 for this comparison: %s", n, raw)
+	}
+
+	// --- refusals ----------------------------------------------------------------
+	if _, raw, code := get(t, "/api/v1/insights/roles?seniority=senior"); code != fiber.StatusBadRequest {
+		t.Errorf("seniority without category: status %d, want 400: %s", code, raw)
+	}
+	if _, raw, code := get(t, "/api/v1/insights/roles?category=backend&seniority=archmage"); code != fiber.StatusBadRequest {
+		t.Errorf("unknown seniority: status %d, want 400: %s", code, raw)
+	}
 }

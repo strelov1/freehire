@@ -74,19 +74,21 @@
 
 - [x] 4.1 Add `ListInsightsRoleSkills` and `GetInsightsRoleSkillSample` to `internal/platform/db/queries/insights.sql`
       (ranked by `open_count DESC` within one role), regenerate with `make sqlc`.
-- [ ] 4.2 Teach `InsightsRoles` the `seniority` parameter: validate against
+- [x] 4.2 Teach `InsightsRoles` the `seniority` parameter: validate against
       `vocab.SeniorityValues`, `400` on an unknown value, `400` when `seniority` is given
       without `category`.
-- [ ] 4.3 Add `seniority` to this endpoint's read-parameter vocabulary so it never lands
-      in `meta.ignored_params`. Assert this in a test — a dropped filter here widens the
-      answer to every seniority.
-- [ ] 4.4 When a single role is named, attach its `skills` array (`skill`, `open_count`,
+- [x] 4.3 Make `seniority` a READ parameter. Correction to how this task was written:
+      `/insights/*` has no `meta.ignored_params` mechanism at all, so there is no
+      vocabulary to add it to — and that is worse, not better. Until this change the
+      endpoint silently ignored `?seniority=`, answering with EVERY seniority and with no
+      way for the caller to know. The test asserts it now narrows.
+- [x] 4.4 When a single role is named, attach its `skills` array (`skill`, `open_count`,
       `share`) and its `sample_size`. `share` divides by `sample_size` — the role's
       skill-bearing postings — never by `open_count` and never by the catalogue. Test the
       worked example from the spec (710/900, not 710/1000).
-- [ ] 4.5 When `country` is supplied alongside a single role, scope `open_count`/`growth`
+- [x] 4.5 When `country` is supplied alongside a single role, scope `open_count`/`growth`
       to the country, keep the distribution country-agnostic, and say so in `meta`.
-- [ ] 4.6 Handler tests for every scenario in `specs/market-insights/spec.md`, including
+- [x] 4.6 Handler tests for every scenario in `specs/market-insights/spec.md`, including
       the empty-`skills` case for a role below the floor (200, never 404).
 
 ## 5. Signed-in coverage
