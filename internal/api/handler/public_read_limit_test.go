@@ -237,6 +237,11 @@ func publicReadRoutes(t *testing.T, throttler ratelimit.Throttler) (map[string]*
 		// OJCP manifest DECLARES that figure, which the spec makes binding: a limit
 		// advertised and not enforced breaks a MUST.
 		"ojcpHandlers": mount((&ojcpHandlers{}).register),
+		// The ChatGPT app's MCP surface, on the same agent-search budget as the OJCP one
+		// beside it. A second figure here would be a second answer to "how hard may a
+		// machine ask this catalogue", with nothing deciding which is right — and both
+		// surfaces cost what /agent/jobs/search costs, because all three run that query.
+		"mcpappHandlers": mount((&mcpappHandlers{}).register),
 	}, iss
 }
 
