@@ -129,7 +129,7 @@ describe('seniorityLabel', () => {
 });
 
 describe('roleQualifies / rankedQualifyingRoles', () => {
-  it('publishes a leaf only for a real seniority in a covered category with enough demand', () => {
+  it('lists in the SITEMAP only a real seniority in a covered category with enough demand', () => {
     const roles = [
       role('backend', 'senior', MIN_CATEGORY_OPEN),
       // Same covered category, but this level alone is too thin for its own page.
@@ -143,6 +143,10 @@ describe('roleQualifies / rankedQualifyingRoles', () => {
     expect(rankedQualifyingRoles(roles).map((r) => [r.category, r.seniority])).toEqual([
       ['backend', 'senior'],
     ]);
+
+    // But the thin one is still a real ADDRESS, so the route serves it (noindex) rather
+    // than refusing it — the job page links there without knowing the role's size.
+    expect(roleAddressExists(roles, 'backend', 'junior')).toBe(true);
   });
 
   it('asks about the role handed to it, not about its rank in the list', () => {

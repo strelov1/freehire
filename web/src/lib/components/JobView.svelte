@@ -25,6 +25,8 @@
   import { markSaved, markUnsaved } from '$lib/savedJobs.svelte';
   import { track } from '$lib/analytics';
   import { foreignContentLang } from '$lib/seo';
+  import { seniorityLabel } from '$lib/insights';
+  import { categoryLabel } from '$lib/labels';
   import type { Display } from '$lib/generated/contracts';
   import type { Job, PlanState, UserJob } from '$lib/types';
   import { companyLogoUrl } from '$lib/logo';
@@ -56,6 +58,11 @@
   // `applyForm` is the employer's own screening form when its ATS publishes one —
   // null for most postings, which is the ordinary case and simply means one fewer tab.
   let { job, applyForm = null }: { job: Job; applyForm?: Display | null } = $props();
+
+  // Both facets live under `enrichment` on the wire (jobview sets them from the
+  // dictionary columns), and either can be absent.
+  const roleCategory = $derived(job.enrichment?.category ?? '');
+  const roleSeniority = $derived(job.enrichment?.seniority ?? '');
 
   // Set on the two subtrees below that carry the posting's own words; undefined
   // (so unset) when it is English. See foreignContentLang for why the document
@@ -621,6 +628,32 @@
           </li>
         {/each}
       </ul>
+    </section>
+  {/if}
+
+  <!-- The way into the role's skill page, placed here because this is the moment the
+       question arises: the reader has just seen what THIS posting asks for and the next
+       thought is whether that is the role or just this employer. Before this the page
+       existed and nothing in the product linked to it — reachable only from the footer,
+       four clicks deep, from no screen where anybody is thinking about their skills.
+
+       Shown only when the posting carries BOTH facets, which is a minority of them:
+       measured 2026-09-18, 98.7% of open technical postings state a category and just
+       39.0% state a seniority. The link is absent rather than guessed when either is
+       missing. It never 404s — a role below the publication floor is served and marked
+       noindex rather than refused. -->
+  {#if roleCategory && roleSeniority}
+    <section class="border-t border-border pt-4">
+      <a
+        class="text-brand-strong hover:underline"
+        href={resolve('/insights/roles/[category]/[seniority]', {
+          category: roleCategory,
+          seniority: roleSeniority,
+        })}
+      >
+        What {seniorityLabel(roleSeniority)}
+        {categoryLabel(roleCategory)} jobs ask for — and how much of it you have →
+      </a>
     </section>
   {/if}
 {/snippet}

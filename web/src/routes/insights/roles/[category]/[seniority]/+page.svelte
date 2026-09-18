@@ -48,7 +48,15 @@
   }
 </script>
 
-<Seo {title} description={data.intro} {canonical} />
+<!-- A role below the demand floor is served (the job page links here from any posting
+     carrying both facets, and a link into a 404 is the failure the gate exists to avoid)
+     but not indexed — a thin page in the index is the other failure. -->
+<Seo
+  {title}
+  description={data.intro}
+  {canonical}
+  robots={data.thin ? 'noindex, follow' : undefined}
+/>
 <svelte:head>
   <!-- eslint-disable-next-line svelte/no-at-html-tags -- non-executable JSON-LD from jsonLdScript, which escapes `<` -->
   {@html jsonLd}
