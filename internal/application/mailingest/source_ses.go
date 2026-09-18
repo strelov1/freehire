@@ -47,14 +47,24 @@ type snsEnvelope struct {
 }
 
 // sesNotification is the subset of the SES "Received" notification we need: the
-// envelope recipients (mail.destination) and where SES stored the raw MIME
+// envelope recipients (receipt.recipients) and where SES stored the raw MIME
 // (receipt.action).
+//
+// It deliberately does not decode mail.destination, the OTHER recipient list SES
+// publishes. That one is "a complete list of all recipient addresses (including To:
+// and CC: recipients) from the MIME headers", while receipt.recipients is "the
+// envelope RCPT TO addresses that were matched by the active receipt rule" — AWS's
+// own words, and it says outright that the two may differ. They differ for every
+// forwarded message, because a Sieve `redirect` rewrites the envelope and leaves the
+// headers naming the mailbox that forwarded: reading the headers dropped such mail
+// entirely (freehire#3027). The header list is also the SENDER's to write, so
+// resolving a mailbox from it let anyone deliver a message into another user's inbox
+// by naming them in To:. Not decoding the field is the guard — a field that is not
+// there cannot be read back by mistake.
 type sesNotification struct {
-	Mail struct {
-		Destination []string `json:"destination"`
-	} `json:"mail"`
 	Receipt struct {
-		Action struct {
+		Recipients []string `json:"recipients"`
+		Action     struct {
 			Type       string `json:"type"`
 			BucketName string `json:"bucketName"`
 			ObjectKey  string `json:"objectKey"`
@@ -105,7 +115,7 @@ func (s *SESSource) Receive(ctx context.Context) ([]Inbound, error) {
 		}
 		batch = append(batch, Inbound{
 			Raw:        raw,
-			Recipients: note.Mail.Destination,
+			Recipients: note.Receipt.Recipients,
 			S3Key:      note.Receipt.Action.ObjectKey,
 			AckHandle:  *m.ReceiptHandle,
 		})

@@ -2,11 +2,57 @@ package mailingest
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"io"
+	"slices"
 	"strings"
 	"testing"
 )
+
+// SES answers "who was this addressed to" twice, and only one of the two answers is the
+// address the message was DELIVERED to. mail.destination is built from the To/Cc headers;
+// receipt.recipients is the envelope RCPT TO that matched the receipt rule, and AWS says
+// in as many words that the two may differ. Reading the headers dropped every forwarded
+// message — a Sieve `redirect` rewrites the envelope and leaves the headers naming the
+// original mailbox — and, worse, let a sender choose whose inbox a message landed in by
+// writing another user's address into To:, since the header is the sender's to write.
+func TestDecodeNotificationReadsTheEnvelopeRecipientNotTheHeaderOnes(t *testing.T) {
+	note, err := decodeNotification(sesNotificationJSON(t,
+		[]string{"freehire-2@mail.freehire.me"}, // envelope: forwarded here
+		[]string{"test@hiring.klavaro.net"},     // headers: the original mailbox
+	))
+	if err != nil {
+		t.Fatalf("decodeNotification() err = %v", err)
+	}
+	if want := []string{"freehire-2@mail.freehire.me"}; !slices.Equal(note.Receipt.Recipients, want) {
+		t.Errorf("recipients = %v, want the envelope recipients %v", note.Receipt.Recipients, want)
+	}
+}
+
+// sesNotificationJSON builds the SNS-wrapped SES "Received" notification, carrying the two
+// recipient lists separately so a test can make them disagree.
+func sesNotificationJSON(t *testing.T, envelope, headers []string) string {
+	t.Helper()
+	inner, err := json.Marshal(map[string]any{
+		"notificationType": "Received",
+		"mail":             map[string]any{"destination": headers},
+		"receipt": map[string]any{
+			"recipients": envelope,
+			"action": map[string]any{
+				"type": "S3", "bucketName": "raw", "objectKey": "inbound/abc",
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("marshal notification: %v", err)
+	}
+	outer, err := json.Marshal(map[string]any{"Type": "Notification", "Message": string(inner)})
+	if err != nil {
+		t.Fatalf("marshal envelope: %v", err)
+	}
+	return string(outer)
+}
 
 // The daemon holds up to ten of these at once and has no MemoryMax, so the read has to be
 // bounded — but a BARE LimitReader is the trap, not the fix: MIME headers are at the front,

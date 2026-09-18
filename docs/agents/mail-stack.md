@@ -140,6 +140,21 @@ the point: it is the tier that costs us nothing. See the `external` bullets belo
   still separate settings with separate IAM.
 - Recipient lookup in `mailingest` is **case-insensitive**; addresses are allocated
   lowercase.
+- **The hosted recipient is `receipt.recipients`, never `mail.destination`.** SES publishes
+  two recipient lists in the same notification and only one of them says where the message
+  was delivered: `receipt.recipients` is the envelope RCPT TO that matched the receipt rule,
+  while `mail.destination` is assembled from the To/Cc *headers* — AWS's own reference says
+  in as many words that the two may differ. `source_ses.go` read the headers until
+  freehire#3027, and that cost two different things. A **forward never arrived**: a Sieve
+  `redirect :copy "<handle>@mail.freehire.me"` rewrites the envelope and leaves the headers
+  naming the mailbox that forwarded, so the worker found no address on our domain and
+  dropped a message SES had accepted, stored in S3 and marked `spf=pass dkim=pass
+  dmarc=pass` (13 messages in the week it was measured). And the header list is **the
+  sender's to write**, so resolving a mailbox from it let anyone deliver a message into
+  another user's inbox by putting that user's address in `To:` while sending to their own.
+  The guard is that `sesNotification` no longer decodes the field at all: what is not
+  decoded cannot be read back by mistake. An envelope recipient the notification does not
+  carry is dropped rather than guessed from the headers.
 - **`mailbox.reservedHandles` blocks more than RFC 2142 role names.** It also reserves the
   CA/Browser Forum "constructed email addresses" (`admin`, `administrator`, `webmaster`,
   `hostmaster`, `postmaster`): domain validation lets a certificate be issued to whoever
