@@ -1,14 +1,16 @@
 //go:build integration
 
-// Integration tests for the two things a fake repository cannot model: the real
-// unique-constraint conflicts InsertPending must map (company_accounts_pkey vs
-// company_accounts_company_slug_key), and SeedCompanyAccountWebsite's fill-only-if-blank
-// guard, which lives in the SQL's WHERE clause, not in Go.
+// Integration tests for what a fake repository cannot model: the real unique-constraint
+// conflicts InsertPending must map (company_accounts_pkey vs
+// company_accounts_company_slug_key), SeedCompanyAccountWebsite's fill-only-if-blank guard
+// and UpdateCompanyProfile's nil-means-unchanged COALESCE guard, both of which live in the
+// SQL, not in Go.
 // Run with: go test -tags=integration ./internal/ingest/employer/
 package employer_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"testing"
 
@@ -92,6 +94,58 @@ func TestSeedCompanyWebsite_NeverOverwritesAnExistingWebsite(t *testing.T) {
 	}
 	if website != "acme.test" {
 		t.Errorf("website = %q, must never move once set", website)
+	}
+}
+
+func TestUpdateCompanyProfile_AppliesOnlyTheSuppliedFields(t *testing.T) {
+	pool := testdb.Pool(t)
+	repo := employer.NewQueriesRepository(db.New(pool))
+	ctx := context.Background()
+
+	if _, err := pool.Exec(ctx,
+		`INSERT INTO companies (slug, name, hq_country, company_info)
+		 VALUES ('acme', 'Acme', 'de', '{"funding":"Series B"}')`); err != nil {
+		t.Fatalf("seed company: %v", err)
+	}
+
+	tagline := "We build things"
+	website := "acme.test"
+	yearFounded := 2015
+	if err := repo.UpdateCompanyProfile(ctx, "acme", employer.CompanyProfilePatch{
+		Tagline:     &tagline,
+		Website:     &website,
+		YearFounded: &yearFounded,
+		// HqCountry and Description deliberately omitted — must stay unchanged.
+	}); err != nil {
+		t.Fatalf("UpdateCompanyProfile: %v", err)
+	}
+
+	var storedTagline, hqCountry string
+	var yearFoundedGot int
+	var infoJSON []byte
+	if err := pool.QueryRow(ctx,
+		`SELECT tagline, hq_country, year_founded, company_info FROM companies WHERE slug = 'acme'`,
+	).Scan(&storedTagline, &hqCountry, &yearFoundedGot, &infoJSON); err != nil {
+		t.Fatalf("read company: %v", err)
+	}
+	if storedTagline != tagline {
+		t.Errorf("tagline = %q, want %q", storedTagline, tagline)
+	}
+	if hqCountry != "de" {
+		t.Errorf("hq_country = %q, want de (unsupplied field left unchanged)", hqCountry)
+	}
+	if yearFoundedGot != 2015 {
+		t.Errorf("year_founded = %d, want 2015", yearFoundedGot)
+	}
+	var info map[string]string
+	if err := json.Unmarshal(infoJSON, &info); err != nil {
+		t.Fatalf("company_info not valid JSON: %v", err)
+	}
+	if info["website"] != website {
+		t.Errorf("company_info.website = %q, want %q", info["website"], website)
+	}
+	if info["funding"] != "Series B" {
+		t.Errorf("company_info.funding = %q, want the untouched existing key preserved", info["funding"])
 	}
 }
 

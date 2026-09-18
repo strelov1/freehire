@@ -92,15 +92,32 @@
 
 ## 6. API handlers
 
-- [ ] 6.1 `POST /api/v1/employer/claim`, `POST /api/v1/employer/claim/verify`,
-      `POST /api/v1/employer/claim/confirm`
-- [ ] 6.2 `GET`/`PATCH /api/v1/employer/company` (curated profile fields only — never
-      `company_types`/`company_sizes`, which stay job-derived)
-- [ ] 6.3 `POST /api/v1/employer/jobs`, `PATCH /api/v1/employer/jobs/:slug`,
+- [x] 6.1 `POST /api/v1/employer/claim` (company_name + work_email together — see 3.3's
+      merge note), `POST /api/v1/employer/claim/confirm`
+- [x] 6.2 `GET`/`PATCH /api/v1/employer/company` (curated profile fields only — never
+      `company_types`/`company_sizes`, which stay job-derived). New service-layer support
+      added alongside the handler: `employer.CompanyProfilePatch` +
+      `Service.UpdateCompanyProfile`, a new `SetCompanyAccountProfile` sqlc query
+      (nil-means-unchanged via `sqlc.narg`/COALESCE), reusing the existing
+      `SetCompanyIndustries` for the industries field.
+- [x] 6.3 `POST /api/v1/employer/jobs`, `PATCH /api/v1/employer/jobs/:slug`,
       `POST /api/v1/employer/jobs/:slug/close`
-- [ ] 6.4 Moderator endpoints: list pending claims, approve, reject
-- [ ] 6.5 Route registration (`RequireAuth` cookie-only) and response shapes matching the
-      `{"data": ...}`/`{"error": ...}` convention
+- [x] 6.4 Moderator endpoints: list pending claims, approve, reject. Plus an **admin**-only
+      revoke endpoint (`POST /api/v1/employer/claims/:user_id/revoke`, built via
+      `auth.RequireRole(queries, "admin")` locally rather than a new shared `mw.admin` field,
+      since this is the only admin-gated route in the surface) — not in the original
+      breakdown but required by `employer-account`'s spec ("An admin may revoke").
+- [x] 6.5 Route registration (`RequireAuth` cookie-only via `mw.cookie`) and response shapes
+      matching the `{"data": ...}`/`{"error": ...}` convention. `employer.ClaimMailer` (the
+      mail port) exported, not package-private, so `Register`'s wiring can pass a properly
+      nil-typed interface when SES is unconfigured — a nil concrete `*emailnotify.AuthMailer`
+      through an unexported interface parameter would have smuggled in a non-nil interface
+      wrapping a nil pointer, invisible to `Service.Claim`'s own guard (added as part of this
+      task after the failure mode was reasoned through — see `employer.ErrMailUnavailable`).
+      **Found and fixed one more real bug via the end-to-end integration test**:
+      `user_email_codes.purpose`'s CHECK constraint (migration 0041) didn't allow the new
+      `verify_work_email` purpose at all — every `Claim` call failed with a 500 until
+      migration 0176 widened it, the same DROP/ADD pattern as the `closed_reason` migrations.
 
 ## 7. Web (SvelteKit)
 

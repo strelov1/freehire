@@ -72,8 +72,23 @@ func TestAuthMailer_SendsTheResetCode(t *testing.T) {
 	}
 }
 
-func TestAuthMailer_TheTwoMailsAreDistinguishable(t *testing.T) {
-	verify, reset := &recordingSender{}, &recordingSender{}
+func TestAuthMailer_SendsTheEmployerClaimCode(t *testing.T) {
+	sender := &recordingSender{}
+	m := NewAuthMailer(sender, "no-reply@freehire.me", "https://freehire.me")
+
+	if err := m.SendClaimVerificationCode(context.Background(), "hr@acme.test", "789012"); err != nil {
+		t.Fatalf("SendClaimVerificationCode: %v", err)
+	}
+	if sender.to != "hr@acme.test" {
+		t.Errorf("to = %q, want the claimed work email", sender.to)
+	}
+	if !strings.Contains(sender.text, "789012") || !strings.Contains(sender.html, "789012") {
+		t.Error("the claim mail does not carry the code in both bodies")
+	}
+}
+
+func TestAuthMailer_TheThreeMailsAreDistinguishable(t *testing.T) {
+	verify, reset, claim := &recordingSender{}, &recordingSender{}, &recordingSender{}
 	if err := NewAuthMailer(verify, "f@x.test", "https://freehire.me").
 		SendVerificationCode(context.Background(), "u@x.test", "111111"); err != nil {
 		t.Fatalf("SendVerificationCode: %v", err)
@@ -82,8 +97,12 @@ func TestAuthMailer_TheTwoMailsAreDistinguishable(t *testing.T) {
 		SendPasswordResetCode(context.Background(), "u@x.test", "222222"); err != nil {
 		t.Fatalf("SendPasswordResetCode: %v", err)
 	}
-	if verify.subject == reset.subject {
-		t.Errorf("both mails use the subject %q — a user cannot tell a reset from a sign-up", verify.subject)
+	if err := NewAuthMailer(claim, "f@x.test", "https://freehire.me").
+		SendClaimVerificationCode(context.Background(), "hr@acme.test", "333333"); err != nil {
+		t.Fatalf("SendClaimVerificationCode: %v", err)
+	}
+	if verify.subject == reset.subject || verify.subject == claim.subject || reset.subject == claim.subject {
+		t.Errorf("subjects are not all distinct: verify=%q reset=%q claim=%q", verify.subject, reset.subject, claim.subject)
 	}
 }
 

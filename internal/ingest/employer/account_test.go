@@ -10,10 +10,11 @@ import (
 // fakeRepo is an in-memory Repository double: one account per user, one slug reservation
 // per company, and a tiny companies table of its own.
 type fakeRepo struct {
-	accounts  map[int64]Account
-	slugOwner map[string]int64 // company_slug -> user_id, for the unique-constraint stand-in
-	aliases   map[string]string
-	companies map[string]struct{ name, website string }
+	accounts       map[int64]Account
+	slugOwner      map[string]int64 // company_slug -> user_id, for the unique-constraint stand-in
+	aliases        map[string]string
+	companies      map[string]struct{ name, website string }
+	profilePatches []CompanyProfilePatch
 }
 
 func newFakeRepo() *fakeRepo {
@@ -99,6 +100,19 @@ func (r *fakeRepo) ExistingCompany(_ context.Context, slug string) (string, stri
 		return "", "", false, nil
 	}
 	return c.name, c.website, true, nil
+}
+
+// UpdateCompanyProfile records the applied patch (for assertions) and, for the one field
+// this fake's tiny companies map also models, updates it — the real repository's own
+// column-by-column mapping is covered by the sqlc-generated integration path instead.
+func (r *fakeRepo) UpdateCompanyProfile(_ context.Context, slug string, patch CompanyProfilePatch) error {
+	r.profilePatches = append(r.profilePatches, patch)
+	if patch.Website != nil {
+		c := r.companies[slug]
+		c.website = *patch.Website
+		r.companies[slug] = c
+	}
+	return nil
 }
 
 func (r *fakeRepo) SeedCompanyWebsite(_ context.Context, slug, name, website string) error {
@@ -232,6 +246,18 @@ func TestClaim_RejectsAPublicWebmailDomain(t *testing.T) {
 	}
 	if _, err := repo.GetByUserID(context.Background(), 1); !errors.Is(err, ErrNotFound) {
 		t.Error("a refused claim must not reserve a slug")
+	}
+}
+
+func TestClaim_WithNoMailerConfiguredReportsErrMailUnavailable(t *testing.T) {
+	repo := newFakeRepo()
+	s := New(repo, newFakeCodeIssuer(), nil, nil, nil)
+
+	if _, err := s.Claim(context.Background(), 1, "Acme", "hr@acme.test"); !errors.Is(err, ErrMailUnavailable) {
+		t.Fatalf("err = %v, want ErrMailUnavailable", err)
+	}
+	if _, err := repo.GetByUserID(context.Background(), 1); !errors.Is(err, ErrNotFound) {
+		t.Error("a refused claim (no mailer) must not reserve a slug")
 	}
 }
 
@@ -400,6 +426,47 @@ func TestRevokeAccount_KeepsTheSlugReserved(t *testing.T) {
 	}
 	if _, err := s.Claim(context.Background(), 2, "Acme", "founder@acme.test"); !errors.Is(err, ErrCompanyAlreadyClaimed) {
 		t.Errorf("err = %v, want ErrCompanyAlreadyClaimed — a revoked slug must not be self-service claimable", err)
+	}
+}
+
+func TestUpdateCompanyProfile_AppliesThePatchForAnActiveAccount(t *testing.T) {
+	repo := newFakeRepo()
+	repo.companies["acme"] = struct{ name, website string }{name: "Acme", website: "https://acme.test"}
+	s := New(repo, newFakeCodeIssuer(), &fakeClaimMailer{}, nil, nil)
+
+	if _, err := s.Claim(context.Background(), 1, "Acme", "hr@acme.test"); err != nil {
+		t.Fatalf("Claim: %v", err)
+	}
+	if _, err := s.ConfirmClaim(context.Background(), 1, "654321"); err != nil {
+		t.Fatalf("ConfirmClaim: %v", err)
+	}
+
+	tagline := "We build things"
+	if _, err := s.UpdateCompanyProfile(context.Background(), 1, CompanyProfilePatch{Tagline: &tagline}); err != nil {
+		t.Fatalf("UpdateCompanyProfile: %v", err)
+	}
+	if len(repo.profilePatches) != 1 || repo.profilePatches[0].Tagline == nil || *repo.profilePatches[0].Tagline != tagline {
+		t.Errorf("profilePatches = %+v, want one patch carrying the tagline", repo.profilePatches)
+	}
+}
+
+func TestUpdateCompanyProfile_RefusesAPendingAccount(t *testing.T) {
+	repo := newFakeRepo()
+	s := New(repo, newFakeCodeIssuer(), &fakeClaimMailer{}, nil, nil)
+
+	if _, err := s.Claim(context.Background(), 1, "Acme", "hr@notacme.test"); err != nil {
+		t.Fatalf("Claim: %v", err)
+	}
+	if _, err := s.ConfirmClaim(context.Background(), 1, "654321"); err != nil {
+		t.Fatalf("ConfirmClaim: %v", err)
+	}
+
+	tagline := "We build things"
+	if _, err := s.UpdateCompanyProfile(context.Background(), 1, CompanyProfilePatch{Tagline: &tagline}); !errors.Is(err, ErrNotActive) {
+		t.Fatalf("err = %v, want ErrNotActive", err)
+	}
+	if len(repo.profilePatches) != 0 {
+		t.Error("a refused edit must not reach the repository")
 	}
 }
 

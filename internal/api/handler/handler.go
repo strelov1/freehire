@@ -55,6 +55,7 @@ import (
 	"github.com/strelov1/freehire/internal/identity/userprofile"
 	"github.com/strelov1/freehire/internal/ingest/boardresolve"
 	"github.com/strelov1/freehire/internal/ingest/contribution"
+	"github.com/strelov1/freehire/internal/ingest/employer"
 	"github.com/strelov1/freehire/internal/ingest/jdresolve"
 	"github.com/strelov1/freehire/internal/ingest/linkimport"
 	"github.com/strelov1/freehire/internal/ingest/moderation"
@@ -750,19 +751,24 @@ func Register(app *fiber.App, cfg Config) {
 	// here either, which is why this is its own pointer rather than a type assertion
 	// on referralEmail.
 	var mailClient *emailnotify.Client
+	// employerH is constructed unconditionally below (its routes register either way, like
+	// authH's), but the employer.Service inside it needs a claim mailer that is only
+	// buildable once an SES client exists — hence this forward declaration.
+	var employerClaimMailer *emailnotify.AuthMailer
 	if cfg.AWSRegion != "" && cfg.NotifyEmailFrom != "" {
 		if ec, err := emailnotify.NewClient(context.Background(), cfg.AWSRegion); err != nil {
 			log.Printf("referral: email pinger disabled: %v", err)
 		} else {
 			referralEmail = ec
 			mailClient = ec
-			// The same SES client carries the account mails (verification and password
-			// reset). Without it the accounts service keeps registering and
-			// authenticating; only the code-backed flows report 503.
-			authH.accounts.WithCodes(
-				accounts.NewQueriesCodeStore(queries, cfg.Pool),
-				emailnotify.NewAuthMailer(ec, cfg.NotifyEmailFrom, cfg.FrontendOrigin),
-			)
+			// The same AuthMailer instance carries the account mails (verification and
+			// password reset) AND the employer-claim work-email code — one SES client,
+			// one mailer, three mail purposes. Without it the accounts service keeps
+			// registering and authenticating (only the code-backed flows report 503), and
+			// employer.Service.Claim reports employer.ErrMailUnavailable up front, before
+			// reserving a company slug it could never mail a code for.
+			employerClaimMailer = emailnotify.NewAuthMailer(ec, cfg.NotifyEmailFrom, cfg.FrontendOrigin)
+			authH.accounts.WithCodes(accounts.NewQueriesCodeStore(queries, cfg.Pool), employerClaimMailer)
 			// And it tells a reporter what a moderator decided about their report.
 			// Without it the queue still decides reports — each decision simply
 			// reports that nobody was notified.
@@ -771,6 +777,18 @@ func Register(app *fiber.App, cfg Config) {
 	} else {
 		log.Print("accounts: AWS_REGION/NOTIFY_EMAIL_FROM unset — email verification and password reset are unavailable")
 	}
+	// employer.Service reuses authH.accounts as its codeIssuer (the same *accounts.Service
+	// pointer WithCodes configures above, whichever branch ran). employer.ClaimMailer is a
+	// properly NIL INTERFACE when employerClaimMailer is nil, not a non-nil interface
+	// wrapping a nil pointer — assigning the *emailnotify.AuthMailer var directly here
+	// would be the typed-nil footgun ClaimMailer's own doc comment warns about, since
+	// Service.Claim's "is a mailer configured" check tests the interface, not the pointer.
+	var employerMailer employer.ClaimMailer
+	if employerClaimMailer != nil {
+		employerMailer = employerClaimMailer
+	}
+	employerRepo := employer.NewQueriesRepository(queries)
+	employerH := newEmployerHandlers(queries, employer.New(employerRepo, authH.accounts, employerMailer, employerRepo, moderationSvc))
 	var referralTelegram referral.TelegramSender
 	if telegramH.telegramBot != nil {
 		referralTelegram = telegramH.telegramBot
@@ -942,6 +960,10 @@ func Register(app *fiber.App, cfg Config) {
 
 	// Public job submissions + review queue (see submissionHandlers).
 	submissionsH.register(api, mw)
+
+	// Verified-employer accounts: claim, curated profile, own vacancies, and the
+	// moderator/admin review surface (see employerHandlers).
+	employerH.register(api, mw)
 
 	// Link contributions (see contributionHandlers).
 	contributionsH.register(api, mw)

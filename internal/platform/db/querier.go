@@ -6098,6 +6098,25 @@ type Querier interface {
 	// write there becomes a revision with a computed inverse, and a consent to track a third party
 	// must not be something an undo of an unrelated edit can grant or revoke.
 	SetCVTracerLinks(ctx context.Context, arg SetCVTracerLinksParams) (int64, error)
+	// A verified employer's authoritative edit to their own company's curated profile
+	// (internal/ingest/employer, PATCH /employer/company) — see company-info's "verified
+	// employer... authoritative" spec delta. Unlike every other writer of these columns
+	// (cmd/import-yc, the Wikipedia backfill, ingest's adapter-supplied description), this one
+	// REPLACES rather than merges or fills a gap: the employer is the company speaking about
+	// itself, strictly more authoritative than an imported or inferred source.
+	//
+	// A NULL scalar argument means "the request did not touch this field" (COALESCE keeps the
+	// stored value) — the caller passes only what was actually supplied, nil-means-unchanged
+	// like every other patch in this codebase. company_info_patch is a plain JSONB merge with
+	// the new value winning on key collision (the opposite direction from cmd/import-yc's
+	// fill-gap merge): pass '{}' when the request touches neither description nor website, so
+	// the merge is a no-op and every other key already stored (funding, parent_company, …) is
+	// left alone.
+	//
+	// industries is deliberately NOT here — it goes through the existing SetCompanyIndustries,
+	// which replaces the whole array (not a per-employer union), and is called separately by
+	// the service only when the request actually supplies industries.
+	SetCompanyAccountProfile(ctx context.Context, arg SetCompanyAccountProfileParams) error
 	// Replace a company's collection set. The import worker computes the full set in Go
 	// (preserving unmanaged tags) and writes it here; updated_at is bumped for parity
 	// with the other write paths.

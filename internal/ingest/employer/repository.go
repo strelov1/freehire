@@ -6,6 +6,7 @@ import (
 	"errors"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/strelov1/freehire/internal/job/job"
 	"github.com/strelov1/freehire/internal/platform/db"
@@ -139,6 +140,50 @@ func (r *QueriesRepository) SeedCompanyWebsite(ctx context.Context, slug, name, 
 	})
 }
 
+// UpdateCompanyProfile builds the company_info merge object from Description/Website (only
+// the keys the patch actually supplies — an unset field is simply absent from the object,
+// so the SQL's merge leaves that key alone) and applies the rest via COALESCE-guarded
+// params (nil = unchanged). Industries is applied through the existing SetCompanyIndustries
+// separately, only when the patch supplies it — it replaces the whole array, and
+// immediately zeroes industries_derived (SetCompanyIndustries' own documented behavior),
+// which is correct here too: a company just curated by its own employer must not keep
+// matching through a stale derived value.
+func (r *QueriesRepository) UpdateCompanyProfile(ctx context.Context, slug string, patch CompanyProfilePatch) error {
+	infoPatch := map[string]string{}
+	if patch.Description != nil {
+		infoPatch["description"] = *patch.Description
+	}
+	if patch.Website != nil {
+		infoPatch["website"] = *patch.Website
+	}
+	infoJSON, err := json.Marshal(infoPatch)
+	if err != nil {
+		return err
+	}
+
+	if err := r.q.SetCompanyAccountProfile(ctx, db.SetCompanyAccountProfileParams{
+		Slug:             slug,
+		Tagline:          nullableText(patch.Tagline),
+		CompanyInfoPatch: infoJSON,
+		YearFounded:      pgconv.Int4(patch.YearFounded),
+		EmployeeCount:    pgconv.Int4(patch.EmployeeCount),
+		HqCountry:        nullableText(patch.HqCountry),
+		Subindustry:      nullableText(patch.Subindustry),
+	}); err != nil {
+		return err
+	}
+
+	if patch.Industries != nil {
+		if _, err := r.q.SetCompanyIndustries(ctx, db.SetCompanyIndustriesParams{
+			Slug:       slug,
+			Industries: patch.Industries,
+		}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // Owner reports who created the job at (jobSource, externalID) — the URL-collision guard
 // CreateVacancy runs before ever delegating to the Minter.
 func (r *QueriesRepository) Owner(ctx context.Context, externalID string) (int64, bool, error) {
@@ -214,6 +259,19 @@ func fromRow(row db.CompanyAccount) Account {
 		VerifiedAt:  pgconv.TimePtr(row.VerifiedAt),
 		CreatedAt:   row.CreatedAt.Time,
 	}
+}
+
+// nullableText maps a CompanyProfilePatch field's *string ("the request did not supply
+// this" = nil) to the pgtype SetCompanyAccountProfile's COALESCE guard expects: invalid
+// means "leave the stored value alone." The inverse of pgconv.TextPtr, which this package
+// does not otherwise need — internal/platform/pgconv has no *string-typed write-side
+// adapter today, since every existing nullable-text write path has a natural "" zero value
+// (pgconv.Text) rather than a real nil/unset distinction like a PATCH's own fields have.
+func nullableText(s *string) pgtype.Text {
+	if s == nil {
+		return pgtype.Text{}
+	}
+	return pgtype.Text{String: *s, Valid: true}
 }
 
 // websiteOf reads company_info's "website" key, "" when absent, blank, or the JSON is

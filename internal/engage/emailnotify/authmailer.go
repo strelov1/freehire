@@ -9,10 +9,12 @@ import (
 	"github.com/strelov1/freehire/internal/engage/emailprefs"
 )
 
-// AuthMailer renders and sends the two transactional account mails: the sign-up
-// verification code and the password-reset code. It is the sibling of Notifier —
-// same Sender transport, different content — and satisfies accounts.CodeMailer, so the
-// accounts service stays free of the AWS dependency graph.
+// AuthMailer renders and sends the transactional account mails: the sign-up
+// verification code, the password-reset code, and a company-account claim's work-email
+// verification code. It is the sibling of Notifier — same Sender transport, different
+// content — and satisfies both accounts.CodeMailer and internal/ingest/employer's own tiny
+// claim-mailer port structurally (no explicit declaration needed), so neither of those
+// packages needs the AWS dependency graph.
 //
 // The code is never embedded in a link. A mail client, security scanner, or link
 // prefetcher that follows URLs would otherwise consume a single-use credential before
@@ -53,6 +55,12 @@ var resetHTML = template.Must(mailtpl.Partials().New("reset").Parse(`
 {{template "muted" (printf "The code expires in %d minutes." .Minutes)}}
 `))
 
+var employerClaimHTML = template.Must(mailtpl.Partials().New("employer-claim").Parse(`
+{{template "p" "Confirm this work email to manage your company's profile and publish vacancies on freehire:"}}
+{{template "code" .Code}}
+{{template "muted" (printf "The code expires in %d minutes." .Minutes)}}
+`))
+
 // SendVerificationCode mails a sign-up verification code.
 func (m *AuthMailer) SendVerificationCode(ctx context.Context, email, code string) error {
 	return m.send(ctx, email, "Confirm your freehire email", verificationHTML, code, mailtpl.Body{
@@ -73,6 +81,19 @@ func (m *AuthMailer) SendPasswordResetCode(ctx context.Context, email, code stri
 	},
 		"Use this code to set a new password: "+code+
 			"\nIt expires in 15 minutes. If this was not you, ignore this message — your password has not changed.")
+}
+
+// SendClaimVerificationCode mails a company-account claim's work-email verification code —
+// distinct copy from SendVerificationCode's account-signup wording, since the two confirm
+// different things (the account's own email vs. a claimed company's work email).
+func (m *AuthMailer) SendClaimVerificationCode(ctx context.Context, email, code string) error {
+	return m.send(ctx, email, "Confirm your work email for freehire", employerClaimHTML, code, mailtpl.Body{
+		Preheader: "Your freehire employer verification code",
+		Heading:   "Confirm your work email",
+		Footer:    "If you did not request this, ignore this message — no company claim is completed without the code.",
+	},
+		"Confirm this work email to manage your company's profile and publish vacancies on freehire: "+code+
+			"\nIt expires in 15 minutes. If you did not request this, ignore this message.")
 }
 
 // send renders the body, wraps it in the branded shell, and delivers both parts

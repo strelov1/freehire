@@ -43,6 +43,12 @@ var (
 	// ErrClaimNotPending is an approve/reject of a claim that is no longer pending (already
 	// active, revoked, or never existed).
 	ErrClaimNotPending = errors.New("employer: no pending claim for this user")
+	// ErrMailUnavailable reports that no claim-mail transport is configured (see New's
+	// mailer parameter), so no code can be delivered. Checked before Claim ever evaluates
+	// a method value on it — mirrors accounts.ErrMailUnavailable's role, but is this
+	// package's own sentinel since a caller mapping errors should never need to import
+	// identity/accounts just to recognize this one.
+	ErrMailUnavailable = errors.New("employer: claim-mail delivery is not configured")
 )
 
 // Account is one user's claim on one company, decoupled from the generated db row.
@@ -94,4 +100,23 @@ type Repository interface {
 	// yet) or filling company_info's blank "website" key on an existing row. A no-op when
 	// the company already has a non-blank website — this never overwrites.
 	SeedCompanyWebsite(ctx context.Context, slug, name, website string) error
+	// UpdateCompanyProfile applies a verified employer's authoritative edit to their own
+	// company's curated profile (see CompanyProfilePatch).
+	UpdateCompanyProfile(ctx context.Context, slug string, patch CompanyProfilePatch) error
+}
+
+// CompanyProfilePatch is a partial, authoritative edit to the account's own company's
+// curated profile fields — never the job-derived ones (company_types/company_sizes, see
+// design.md's Context). A nil field is left unchanged. Industries replaces the whole
+// curated set when non-nil (SetCompanyIndustries' own replace semantics — an empty,
+// non-nil slice clears it).
+type CompanyProfilePatch struct {
+	Tagline       *string
+	Description   *string
+	Website       *string
+	Industries    []string
+	YearFounded   *int
+	EmployeeCount *int
+	HqCountry     *string
+	Subindustry   *string
 }

@@ -19,10 +19,14 @@ type codeIssuer interface {
 	ConfirmCode(ctx context.Context, userID int64, purpose, code string) error
 }
 
-// claimMailer delivers the work-email verification code. A tiny, package-local port —
+// ClaimMailer delivers the work-email verification code. A tiny, dedicated port —
 // deliberately not an addition to accounts.CodeMailer, which stays free of any purpose this
-// package alone uses.
-type claimMailer interface {
+// package alone uses. Exported (unlike codeIssuer) so a caller wiring Service can declare a
+// properly nil-typed variable when no mail transport is configured: assigning a nil
+// *emailnotify.AuthMailer through an UNEXPORTED interface parameter would still typecheck
+// but smuggle in a non-nil interface holding a nil pointer, which Service.Claim's own nil
+// check cannot see — see its comment.
+type ClaimMailer interface {
 	SendClaimVerificationCode(ctx context.Context, email, code string) error
 }
 
@@ -34,7 +38,7 @@ type claimMailer interface {
 type Service struct {
 	repo   Repository
 	codes  codeIssuer
-	mailer claimMailer
+	mailer ClaimMailer
 
 	jobs   JobRepository
 	minter Minter
@@ -42,7 +46,7 @@ type Service struct {
 
 // New creates a Service backed by the given account Repository, code issuer, claim mailer,
 // job repository, and Minter (moderation.Service satisfies Minter).
-func New(repo Repository, codes codeIssuer, mailer claimMailer, jobs JobRepository, minter Minter) *Service {
+func New(repo Repository, codes codeIssuer, mailer ClaimMailer, jobs JobRepository, minter Minter) *Service {
 	return &Service{repo: repo, codes: codes, mailer: mailer, jobs: jobs, minter: minter}
 }
 
@@ -62,6 +66,12 @@ func (s *Service) Claim(ctx context.Context, userID int64, companyName, workEmai
 	}
 	if isPublicWebmailDomain(workEmail) {
 		return Account{}, ErrPublicWebmailDomain
+	}
+	// s.mailer.SendClaimVerificationCode below is a method VALUE, evaluated eagerly as a
+	// call argument — taking one from a nil interface panics before accounts.Service ever
+	// gets to run its own "is mail configured" check, so this package needs its own guard.
+	if s.mailer == nil {
+		return Account{}, ErrMailUnavailable
 	}
 
 	candidate := normalize.CompanySlug(companyName)
@@ -144,6 +154,20 @@ func (s *Service) RejectClaim(ctx context.Context, userID int64) error {
 // the slug reservation) — see migrations/0174 for why.
 func (s *Service) RevokeAccount(ctx context.Context, userID int64) (Account, error) {
 	return s.repo.Revoke(ctx, userID)
+}
+
+// UpdateCompanyProfile applies a verified employer's authoritative edit to their own
+// company's curated profile. Gated by ActiveAccount like every other employer-facing
+// capability.
+func (s *Service) UpdateCompanyProfile(ctx context.Context, userID int64, patch CompanyProfilePatch) (Account, error) {
+	acc, err := s.ActiveAccount(ctx, userID)
+	if err != nil {
+		return Account{}, err
+	}
+	if err := s.repo.UpdateCompanyProfile(ctx, acc.CompanySlug, patch); err != nil {
+		return Account{}, err
+	}
+	return acc, nil
 }
 
 // ActiveAccount is the ownership guard every employer-facing capability calls: it resolves

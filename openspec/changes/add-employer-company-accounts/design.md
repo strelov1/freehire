@@ -156,11 +156,19 @@ express the same action would be two paths to keep in sync for no benefit.
    pattern (see migrations/0147, 0159, 0165).
 3. `internal/identity/accounts`: add the purpose constant and the two generic methods (no
    `CodeMailer` change needed — see Decisions).
+3a. **Found only once the end-to-end HTTP test ran against real Postgres**: migration to
+    widen `user_email_codes.purpose`'s own CHECK constraint (added in 0041, before this
+    package existed) to admit `'verify_work_email'` — every `Claim` call 500'd without it.
+    Same DROP/ADD pattern as 2, sized for a small, short-lived table (no `NOT VALID` split
+    needed). No fake-repository unit test could have caught this; it lives entirely in a
+    constraint neither `internal/identity/accounts` nor `internal/ingest/employer` declares.
 4. New `internal/ingest/employer` package (service + repository + sqlc queries for the
-   actor-scoped update/close and the public-webmail-domain check).
+   actor-scoped update/close, the public-webmail-domain check, and the authoritative
+   curated-profile write — `SetCompanyAccountProfile`, nil-means-unchanged via `sqlc.narg`).
 5. `cmd/import-yc`: add the `company_accounts`-existence guard on the four columns.
-6. `internal/api/handler`: new `/api/v1/employer/*` routes; moderator-queue addition for
-   pending claims.
+6. `internal/api/handler`: new `/api/v1/employer/*` routes (claim/confirm, curated-profile
+   GET/PATCH, job create/edit/close), the moderator queue (list/approve/reject), and an
+   admin-only revoke route.
 7. `web/`: claim flow pages, company dashboard (job list, profile edit form).
 
 No backfill and no data migration of existing rows is needed — this change only adds new

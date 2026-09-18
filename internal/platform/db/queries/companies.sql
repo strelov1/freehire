@@ -620,6 +620,36 @@ WHERE c.slug = c2.slug
 -- enriching an existing company whose job_count dwarfs a matched YC entry's team.
 SELECT job_count FROM companies WHERE slug = $1;
 
+-- name: SetCompanyAccountProfile :exec
+-- A verified employer's authoritative edit to their own company's curated profile
+-- (internal/ingest/employer, PATCH /employer/company) — see company-info's "verified
+-- employer... authoritative" spec delta. Unlike every other writer of these columns
+-- (cmd/import-yc, the Wikipedia backfill, ingest's adapter-supplied description), this one
+-- REPLACES rather than merges or fills a gap: the employer is the company speaking about
+-- itself, strictly more authoritative than an imported or inferred source.
+--
+-- A NULL scalar argument means "the request did not touch this field" (COALESCE keeps the
+-- stored value) — the caller passes only what was actually supplied, nil-means-unchanged
+-- like every other patch in this codebase. company_info_patch is a plain JSONB merge with
+-- the new value winning on key collision (the opposite direction from cmd/import-yc's
+-- fill-gap merge): pass '{}' when the request touches neither description nor website, so
+-- the merge is a no-op and every other key already stored (funding, parent_company, …) is
+-- left alone.
+--
+-- industries is deliberately NOT here — it goes through the existing SetCompanyIndustries,
+-- which replaces the whole array (not a per-employer union), and is called separately by
+-- the service only when the request actually supplies industries.
+UPDATE companies
+SET tagline         = COALESCE(sqlc.narg(tagline), tagline),
+    company_info    = company_info || sqlc.arg(company_info_patch)::jsonb,
+    year_founded    = COALESCE(sqlc.narg(year_founded), year_founded),
+    employee_count  = COALESCE(sqlc.narg(employee_count), employee_count),
+    hq_country      = COALESCE(sqlc.narg(hq_country), hq_country),
+    subindustry     = COALESCE(sqlc.narg(subindustry), subindustry),
+    company_info_at = now(),
+    updated_at      = now()
+WHERE slug = sqlc.arg(slug);
+
 -- name: SeedCompanyAccountWebsite :exec
 -- internal/ingest/employer's fill-only-if-blank website seed: a moderator approving a
 -- pending employer-account claim whose domain the automatic check could not itself verify
