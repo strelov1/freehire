@@ -93,14 +93,15 @@ func (in SearchInput) QueryValues() url.Values {
 	setNonEmpty(v, "q", in.Query)
 	setList(v, "countries", countryCodes(in.Countries))
 	setList(v, "cities", in.Cities)
-	setChecked(v, "work_mode", in.WorkMode)
-	setChecked(v, "seniority", in.Seniority)
-	setChecked(v, "category", in.Category)
 	setList(v, "skills", in.Skills)
-	setChecked(v, "employment_type", in.EmploymentType)
-	setChecked(v, "english_level", in.EnglishLevel)
 	setList(v, "company_slug", in.CompanySlugs)
 	setList(v, "source", in.Sources)
+	// The closed-vocabulary facets come from the one table that also decides what
+	// Unsupported reports, so what is SENT and what is REPORTED cannot disagree about a
+	// value, and a new facet joins both by being written once.
+	for _, facet := range checkedFacets {
+		setList(v, facet.param, keepKnown(facet.allowed, facet.values(in)))
+	}
 	setNonEmpty(v, "salary_currency", in.SalaryCurrency)
 	setPositive(v, "salary_min", in.SalaryMin)
 	setPositive(v, "posted_within_days", in.PostedWithinDays)
@@ -126,13 +127,7 @@ func (in CompanySearchInput) QueryValues() url.Values {
 // company tool is smaller, so it got less thought, and "answers zero and says nothing" is
 // exactly as wrong on four fields as on fifteen.
 func (in CompanySearchInput) Unsupported() []string {
-	var out []string
-	for _, value := range in.Countries {
-		if !isCountryCode(value) {
-			out = append(out, "countries="+value)
-		}
-	}
-	return out
+	return unsupportedCountries(in.Countries)
 }
 
 // Page is the bounded page the tool will actually serve.

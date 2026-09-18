@@ -111,3 +111,36 @@ func TestACompanySearchAlsoNamesWhatItCouldNotHonour(t *testing.T) {
 		t.Errorf("unsupported = %v, want it to name countries=germany", got)
 	}
 }
+
+func TestEveryCheckedFacetReadsItsOwnField(t *testing.T) {
+	// The one hazard the single table does not remove by construction: a row copied from the
+	// one above it keeps the neighbour's closure, so two facets read one field. The compiler
+	// is happy, and the symptom is a filter that is never checked — silently, which is the
+	// failure the old map-plus-switch had and this table was written to end.
+	//
+	// So each row is given a value only IT should see, and must be the only one to notice.
+	for _, facet := range checkedFacets {
+		t.Run(facet.param, func(t *testing.T) {
+			in := SearchInput{}
+			switch facet.param {
+			case "work_mode":
+				in.WorkMode = []string{"probe"}
+			case "seniority":
+				in.Seniority = []string{"probe"}
+			case "category":
+				in.Category = []string{"probe"}
+			case "employment_type":
+				in.EmploymentType = []string{"probe"}
+			case "english_level":
+				in.EnglishLevel = []string{"probe"}
+			default:
+				t.Fatalf("%s is in the table but this test does not know how to set it", facet.param)
+			}
+
+			if got := in.Unsupported(); len(got) != 1 || got[0] != facet.param+"=probe" {
+				t.Errorf("unsupported = %v, want exactly [%s=probe] — the row reads the wrong field",
+					got, facet.param)
+			}
+		})
+	}
+}

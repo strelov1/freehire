@@ -1,7 +1,6 @@
 package mcpapp
 
 import (
-	"net/url"
 	"slices"
 	"strings"
 
@@ -25,15 +24,27 @@ import (
 // finite list to check against, and writing one here would be a second dictionary drifting
 // from the real ones — the failure this repository has already paid for more than once.
 
-// closedVocabularies maps a query parameter to the values the catalogue can actually filter
-// on. The lists are the dictionaries themselves, never a copy: a value added to vocab joins
-// this check by existing.
-var closedVocabularies = map[string][]string{
-	"work_mode":       vocab.WorkModeValues,
-	"seniority":       vocab.SeniorityValues,
-	"category":        vocab.CategoryValues,
-	"employment_type": vocab.EmploymentTypeValues,
-	"english_level":   vocab.EnglishLevelValues,
+// checkedFacets pairs each query parameter whose values must belong to a closed vocabulary
+// with the dictionary itself and with the field the input carries it in.
+//
+// ONE table, deliberately. It was a map of vocabularies beside a switch resolving the field,
+// and that pair had a silent failure mode: a facet added to the map without its matching
+// case reads NO values, so every value passes and the check is switched off for exactly the
+// facet it was added for. Both readers — the query builder and the reporter — walk this
+// slice, so a new facet joins both by being written once.
+//
+// The vocabularies are the dictionaries themselves, never a copy: a value added to vocab
+// joins this check by existing.
+var checkedFacets = []struct {
+	param   string
+	allowed []string
+	values  func(SearchInput) []string
+}{
+	{"work_mode", vocab.WorkModeValues, func(in SearchInput) []string { return in.WorkMode }},
+	{"seniority", vocab.SeniorityValues, func(in SearchInput) []string { return in.Seniority }},
+	{"category", vocab.CategoryValues, func(in SearchInput) []string { return in.Category }},
+	{"employment_type", vocab.EmploymentTypeValues, func(in SearchInput) []string { return in.EmploymentType }},
+	{"english_level", vocab.EnglishLevelValues, func(in SearchInput) []string { return in.EnglishLevel }},
 }
 
 // Unsupported names the filter values this input carries that the catalogue cannot filter
@@ -45,59 +56,32 @@ var closedVocabularies = map[string][]string{
 // it passed was the wrong one.
 func (in SearchInput) Unsupported() []string {
 	var out []string
-	for param, allowed := range closedVocabularies {
-		for _, value := range in.valuesFor(param) {
-			if !known(allowed, value) {
-				out = append(out, param+"="+value)
+	for _, facet := range checkedFacets {
+		for _, value := range facet.values(in) {
+			if !known(facet.allowed, value) {
+				out = append(out, facet.param+"="+value)
 			}
 		}
 	}
-	for _, value := range in.Countries {
-		if !isCountryCode(value) {
-			out = append(out, "countries="+value)
-		}
-	}
+	out = append(out, unsupportedCountries(in.Countries)...)
+
 	// Sorted so the answer is stable: an unordered list would make two identical requests
 	// produce two different answers, which is a difference a model will try to interpret.
 	slices.Sort(out)
 	return out
 }
 
-// valuesFor is the one place that knows which field a parameter is read from, so Unsupported
-// and QueryValues cannot disagree about what was checked and what was sent.
-func (in SearchInput) valuesFor(param string) []string {
-	switch param {
-	case "work_mode":
-		return in.WorkMode
-	case "seniority":
-		return in.Seniority
-	case "category":
-		return in.Category
-	case "employment_type":
-		return in.EmploymentType
-	case "english_level":
-		return in.EnglishLevel
-	}
-	return nil
-}
-
-// setChecked writes only the values the catalogue can filter on.
-//
-// A facet with one wrong value keeps its right ones: dropping the whole facet would throw
-// away a filter the caller got correct, and answer wider than either reading asked for.
-func setChecked(v url.Values, param string, values []string) {
-	allowed, checked := closedVocabularies[param]
-	if !checked {
-		setList(v, param, values)
-		return
-	}
-	kept := make([]string, 0, len(values))
+// unsupportedCountries names the values that are not shaped like a country code. Both tool
+// inputs report it, so it is written once — the company search went out without any such
+// check at all, which is what a second copy of a rule invites.
+func unsupportedCountries(values []string) []string {
+	var out []string
 	for _, value := range values {
-		if known(allowed, value) {
-			kept = append(kept, value)
+		if !isCountryCode(value) {
+			out = append(out, "countries="+value)
 		}
 	}
-	setList(v, param, kept)
+	return out
 }
 
 // known reports whether the catalogue can filter on this value.
@@ -109,6 +93,20 @@ func setChecked(v url.Values, param string, values []string) {
 func known(allowed []string, value string) bool {
 	value = strings.TrimSpace(value)
 	return slices.ContainsFunc(allowed, func(a string) bool { return strings.EqualFold(a, value) })
+}
+
+// keepKnown drops the values the catalogue cannot filter on.
+//
+// A facet with one wrong value keeps its right ones: dropping the whole facet would throw
+// away a filter the caller got correct, and answer wider than either reading asked for.
+func keepKnown(allowed, values []string) []string {
+	kept := make([]string, 0, len(values))
+	for _, value := range values {
+		if known(allowed, value) {
+			kept = append(kept, value)
+		}
+	}
+	return kept
 }
 
 // countryCodes keeps the values that are shaped like a country code. A country NAME left in
@@ -133,9 +131,13 @@ func isCountryCode(value string) bool {
 		return false
 	}
 	for _, r := range value {
-		if r < 'A' || (r > 'Z' && r < 'a') || r > 'z' {
+		if !isASCIILetter(r) {
 			return false
 		}
 	}
 	return true
+}
+
+func isASCIILetter(r rune) bool {
+	return (r >= 'A' && r <= 'Z') || (r >= 'a' && r <= 'z')
 }
