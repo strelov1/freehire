@@ -1022,6 +1022,39 @@ func (q *Queries) RenameSlugCompany(ctx context.Context, arg RenameSlugCompanyPa
 	return result.RowsAffected(), nil
 }
 
+const seedCompanyAccountWebsite = `-- name: SeedCompanyAccountWebsite :exec
+INSERT INTO companies (slug, name, company_info, is_reference, company_info_at)
+VALUES (
+    $1, $2,
+    jsonb_build_object('website', $3::text),
+    true, now()
+)
+ON CONFLICT (slug) DO UPDATE SET
+    company_info    = companies.company_info || jsonb_build_object('website', $3::text),
+    company_info_at = now(),
+    updated_at      = now()
+WHERE NOT (companies.company_info ? 'website') OR companies.company_info ->> 'website' = ''
+`
+
+type SeedCompanyAccountWebsiteParams struct {
+	Slug    string `json:"slug"`
+	Name    string `json:"name"`
+	Website string `json:"website"`
+}
+
+// internal/ingest/employer's fill-only-if-blank website seed: a moderator approving a
+// pending employer-account claim whose domain the automatic check could not itself verify
+// (see employer-account's spec). A new slug is inserted as an is_reference row (mirroring
+// cmd/import-yc's own pattern for a company with no jobs yet, migration 0174's comment);
+// an existing row's company_info gets the "website" key ONLY when absent or blank — the
+// WHERE clause on the UPDATE branch is the guard, not merely a defensive no-op, since this
+// must never overwrite a value another source (or the employer's own later curated edit)
+// already asserted.
+func (q *Queries) SeedCompanyAccountWebsite(ctx context.Context, arg SeedCompanyAccountWebsiteParams) error {
+	_, err := q.db.Exec(ctx, seedCompanyAccountWebsite, arg.Slug, arg.Name, arg.Website)
+	return err
+}
+
 const setCompanyCollections = `-- name: SetCompanyCollections :exec
 UPDATE companies
 SET collections = $2,

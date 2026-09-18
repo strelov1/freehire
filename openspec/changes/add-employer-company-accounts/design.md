@@ -94,14 +94,21 @@ rather than exporting `derive()` itself.** This keeps `docs/agents/company-ident
 `moderation`'s private convenience wrapper) without adding an export to a package whose
 `derive()` is intentionally private to its own `CreateInput`/`UpdatePatch` shapes.
 
-**`internal/identity/accounts` gains two generic, side-effect-free methods
-(`IssueCode`/`ConfirmCode`) and a purpose constant, factored out of the already
-purpose-parameterized private `issueCode`/`consumeCodeTx`.** `IssueVerificationCode`/
-`ConfirmVerification` become thin wrappers over the same primitives. Alternative considered:
-build a separate, parallel code-issuing mechanism inside `internal/ingest/employer`.
-Rejected — it would duplicate the rate-limiting/hashing/attempt-bounding transaction logic
-that already exists and is already tested, for no benefit; the existing mechanism was
-already purpose-keyed and only needed its side effect decoupled from its transport.
+**`internal/identity/accounts` gains two generic methods (`IssueCode`/`ConfirmCode`) and a
+purpose constant, factored out of the already purpose-parameterized private
+`issueCode`/`consumeCodeTx`.** `IssueCode` takes delivery as an explicit
+`send func(ctx, email, code) error` parameter rather than a `CodeMailer` method, so it needs
+no change to that interface at all; `internal/ingest/employer` defines its own tiny mailer
+port and passes its method straight through. `IssueVerificationCode` becomes a thin wrapper
+over `IssueCode`. `ConfirmCode`, found during implementation to be a real exception, is
+NOT what `ConfirmVerification` calls: `ConfirmVerification` bundles the code-consume and
+`MarkEmailVerified` in one transaction (accounts' own "spend the code + write the value, or
+nothing" invariant), and a `ConfirmCode` that commits on its own would split that atomicity
+if `ConfirmVerification` tried to wrap it. `ConfirmCode` is a standalone sibling instead,
+sharing only the private `consumeCodeTx` both call. Alternative considered: build a separate,
+parallel code-issuing mechanism inside `internal/ingest/employer`. Rejected — it would
+duplicate the rate-limiting/hashing/attempt-bounding transaction logic that already exists
+and is already tested, for no benefit.
 
 **A verified employer's profile writes are authoritative (overwrite), not fill-gap.** Every
 existing company-info writer (`cmd/import-yc`, the Wikipedia backfill, ingest's
@@ -147,8 +154,8 @@ express the same action would be two paths to keep in sync for no benefit.
 2. Migration: add `'employer_closed'` to `jobs_closed_reason_check`, following the existing
    `DROP CONSTRAINT IF EXISTS` → `ADD CONSTRAINT ... NOT VALID` → `VALIDATE CONSTRAINT`
    pattern (see migrations/0147, 0159, 0165).
-3. `internal/identity/accounts`: add the purpose constant and the two generic methods; add
-   one `CodeMailer` method for the claim-verification email copy.
+3. `internal/identity/accounts`: add the purpose constant and the two generic methods (no
+   `CodeMailer` change needed — see Decisions).
 4. New `internal/ingest/employer` package (service + repository + sqlc queries for the
    actor-scoped update/close and the public-webmail-domain check).
 5. `cmd/import-yc`: add the `company_accounts`-existence guard on the four columns.

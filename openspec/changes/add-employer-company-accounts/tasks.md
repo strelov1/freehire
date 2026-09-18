@@ -1,44 +1,61 @@
 ## 1. Database schema
 
-- [ ] 1.1 Migration: create `company_accounts` (`user_id` PK/FK → `users(id)` cascade,
+- [x] 1.1 Migration: create `company_accounts` (`user_id` PK/FK → `users(id)` cascade,
       `company_slug` NOT NULL UNIQUE, `company_name` NOT NULL, `work_email` NOT NULL,
       `status` NOT NULL DEFAULT `'pending'` CHECK IN (`pending`,`active`,`revoked`),
       `verified_at` nullable, `created_at`/`updated_at`)
-- [ ] 1.2 Migration: add `'employer_closed'` to `jobs_closed_reason_check`
+- [x] 1.2 Migration: add `'employer_closed'` to `jobs_closed_reason_check`
       (`DROP CONSTRAINT IF EXISTS` → `ADD CONSTRAINT ... NOT VALID` → `VALIDATE CONSTRAINT`,
       matching migrations/0147, 0159, 0165)
 
 ## 2. `internal/identity/accounts`: generic code primitives
 
-- [ ] 2.1 Add `PurposeVerifyWorkEmail` constant next to `PurposeVerifyEmail`/`PurposeResetPassword`
-- [ ] 2.2 Add `Service.IssueCode(ctx, userID, purpose, email) error` and
+- [x] 2.1 Add `PurposeVerifyWorkEmail` constant next to `PurposeVerifyEmail`/`PurposeResetPassword`
+- [x] 2.2 Add `Service.IssueCode(ctx, userID, purpose, email, send) error` and
       `Service.ConfirmCode(ctx, userID, purpose, code) error`, factored out of the existing
       private `issueCode`/`consumeCodeTx` (no side effect on confirm — caller decides what
-      "verified" means)
-- [ ] 2.3 Re-point `IssueVerificationCode`/`ConfirmVerification` to call the new generic
-      methods (existing tests must stay green, unchanged behavior)
-- [ ] 2.4 Add a `CodeMailer` method for the employer-claim verification email (distinct copy
-      from the account-verification email) and implement it on the SES-backed mailer
+      "verified" means). **Refined during implementation**: `IssueCode` takes the delivery as
+      an explicit `send func(ctx, email, code) error` parameter rather than routing through
+      `CodeMailer` — this needs no change to that interface at all (see 2.4). `ConfirmCode` is
+      a new sibling of `ConfirmVerification`, not something `ConfirmVerification` itself calls:
+      `ConfirmVerification` bundles the code-consume and `MarkEmailVerified` in one transaction
+      (see `docs`/AGENTS.md's "a reset is spend-the-code-plus-write-the-value or nothing"), and
+      routing it through a `ConfirmCode` that commits on its own would split that atomicity.
+- [x] 2.3 Re-point `IssueVerificationCode` to call the new generic `IssueCode` (existing tests
+      stay green, unchanged behavior). `ConfirmVerification` is intentionally left as its own
+      standalone transaction, for the reason above — not "re-pointed."
+- [x] 2.4 ~~Add a `CodeMailer` method for the employer-claim verification email~~ — superseded
+      by the 2.2 refinement: `internal/ingest/employer` defines its own small mailer interface
+      (`claimMailer`) and passes its method straight to `accounts.Service.IssueCode`'s `send`
+      parameter (see 3.4). No change to `accounts.CodeMailer` needed.
 
 ## 3. `company_accounts` domain: claim and verification
 
-- [ ] 3.1 sqlc queries: insert pending `company_accounts` row, get by `user_id`, get by
-      `company_slug`, list `status='pending'`, activate, revoke, delete (reject) — run
-      `make sqlc`
-- [ ] 3.2 Small public-webmail-domain rejection list + a check function (gmail.com,
-      outlook.com, yahoo.com, mail.ru, etc.)
-- [ ] 3.3 Claim-start service: resolve slug via existing company search/`company_slug_aliases`
-      or mint one via `normalize.CompanySlug`; insert pending row; refuse a user who already
-      has an employer account; refuse a slug that already has one (conflict)
-- [ ] 3.4 Claim-verify service: validate work email against the webmail blocklist, issue a
-      code via `accounts.Service.IssueCode`
-- [ ] 3.5 Claim-confirm service: confirm via `accounts.Service.ConfirmCode`; compare the
-      email's domain to `companies.company_info->>'website'` when known; activate on match
-      (seeding `company_info.website` if it was blank) or leave `pending` on mismatch/unknown
-- [ ] 3.6 Moderator review service: list pending claims, approve (activate), reject (delete,
-      freeing the slug)
-- [ ] 3.7 Admin revoke action (sets `status='revoked'`, row and slug stay reserved)
-- [ ] 3.8 Ownership guard helper: resolve the active `company_accounts` row for an actor,
+- [x] 3.1 sqlc queries: insert pending `company_accounts` row, get by `user_id`, list
+      `status='pending'`, activate, revoke, delete (reject), plus `SeedCompanyAccountWebsite`
+      and reuse of the existing `GetCompanySlugAlias`/`GetCompany` — `internal/ingest/employer`'s
+      `Repository`/`QueriesRepository`, unit-tested against fakes and integration-tested
+      against real Postgres (unique-constraint mapping, the seed guard, alias resolution)
+- [x] 3.2 Small public-webmail-domain rejection list + a check function (`webmail.go`)
+- [x] 3.3 `Service.Claim`: resolve slug via `company_slug_aliases`/`normalize.CompanySlug`;
+      reject a public-webmail work email; insert the pending row (its unique-constraint
+      conflicts map to `ErrAlreadyHasAccount`/`ErrCompanyAlreadyClaimed`); issue a code via
+      `accounts.Service.IssueCode`. **Merged 3.3+3.4 from the original breakdown** — one
+      request carrying company name and work email together, not two, which avoids a
+      nullable `work_email` column for no behavioral loss (see design.md).
+- [x] 3.5 `Service.ConfirmClaim`: confirm via `accounts.Service.ConfirmCode`; compare the
+      email's domain to `companies.company_info->>'website'` when known; activate on match,
+      else leave `pending`. **Corrected during implementation**: does NOT seed
+      `company_info.website` — see 3.6, the spec as originally written was self-contradictory
+      (auto-activate-on-match can only fire when the website is already known and matching,
+      so "seed if blank" could never apply there).
+- [x] 3.6 Moderator review service: list pending claims, reject (delete, freeing the slug),
+      and **approve** — which both activates AND seeds `company_info.website` from the
+      claim's confirmed work-email domain when it was blank, since a moderator approving a
+      claim the domain check could not verify is exactly the human vouching that gap needed
+      (see the corrected `employer-account` spec).
+- [x] 3.7 Admin revoke action (sets `status='revoked'`, row and slug stay reserved)
+- [x] 3.8 Ownership guard helper: resolve the active `company_accounts` row for an actor,
       used by every employer-facing capability (profile edit, job create/update/close)
 
 ## 4. `internal/ingest/employer`: job authoring

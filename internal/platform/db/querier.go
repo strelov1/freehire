@@ -15,6 +15,11 @@ type Querier interface {
 	// Flip a board's first successful crawl from pending to active. A no-op (0 rows) when
 	// the board is already active or does not exist, so the caller need not check first.
 	ActivateBoard(ctx context.Context, arg ActivateBoardParams) (int64, error)
+	// Shared by both activation paths — the domain-match auto-activate and a moderator's
+	// approval — since both are the same state transition. Scoped to status='pending' so
+	// activating an already-active or revoked account is a no-op read miss (ErrNoRows) rather
+	// than a silent re-stamp of verified_at.
+	ActivateCompanyAccount(ctx context.Context, userID int64) (CompanyAccount, error)
 	// Add a job to a list. Idempotent: re-adding an already-present job changes nothing.
 	AddJobListItem(ctx context.Context, arg AddJobListItemParams) error
 	// Move an application forward to a new stage (the worker only calls this after
@@ -734,6 +739,12 @@ type Querier interface {
 	CloseChronicProviderJobs(ctx context.Context, arg CloseChronicProviderJobsParams) (int64, error)
 	// Moderator close: the thread leaves the open listing and rejects new replies.
 	CloseCommunityThread(ctx context.Context, id int64) error
+	// Soft-close, the employer-self-service analogue of CloseJobByID: scoped to the actor's own
+	// employer-authored posting (created_by = actor_id AND source = 'employer'), never any other
+	// job. closed_reason = 'employer_closed' (migration 0175) keeps this mechanism distinguishable
+	// from a moderator's 'moderated' close — a different actor and a different trust level.
+	// WHERE closed_at IS NULL keeps it idempotent, matching every other closer.
+	CloseEmployerJob(ctx context.Context, arg CloseEmployerJobParams) (int64, error)
 	// The empty-feed safety net, board-scoped: closes every open job of ONE board that
 	// board_health.ListEmptyFeedBoards has proven reachable-but-empty for the closure window.
 	// Structurally identical to CloseChronicBoardJobs — same board_pattern scoping so a
@@ -1452,6 +1463,10 @@ type Querier interface {
 	// Delete a CV owned by the user. Returns the affected-row count so the handler can 404
 	// when nothing was deleted (foreign or missing id).
 	DeleteCV(ctx context.Context, arg DeleteCVParams) (int64, error)
+	// A moderator's rejection of a pending claim. Scoped to status='pending' so this can never
+	// be used to erase an active or revoked account's record — rejection is a claim-time verdict,
+	// not a way to un-revoke.
+	DeleteCompanyAccount(ctx context.Context, userID int64) (int64, error)
 	// Remove the caller's own feedback in one category on a company (no-op when absent).
 	DeleteCompanyFeedback(ctx context.Context, arg DeleteCompanyFeedbackParams) error
 	// Remove a user's company vote (toggle-clear or the DELETE endpoint). No-op when
@@ -2247,6 +2262,10 @@ type Querier interface {
 	// the table grows columns (e.g. collections); an explicit subset makes sqlc emit a
 	// distinct row type and breaks the company-detail handler on every new column.
 	GetCompany(ctx context.Context, slug string) (Company, error)
+	// The one account a user may hold, in whatever status it is in. Every employer-facing
+	// capability check reads this and then inspects status itself, rather than a second query
+	// per status, since a pending/revoked account needs to be distinguishable in the refusal.
+	GetCompanyAccountByUserID(ctx context.Context, userID int64) (CompanyAccount, error)
 	// The company_slug for a review id, read (unlocked) BEFORE HideCompanyFeedback so
 	// Service.Hide can take LockCompanyForVote before it touches the feedback row —
 	// the same company-then-feedback lock order Upsert/Delete already use, needed to
@@ -2999,6 +3018,12 @@ type Querier interface {
 	// GPU-bound (~19 docs/s against a GPU embedding a wave in ~7s) — see
 	// hire-semantic-vectors-in-pg's "THE REAL BOTTLENECK IS POSTGRES, NOT THE GPU" note.
 	InsertJobSemanticChunks(ctx context.Context, arg InsertJobSemanticChunksParams) error
+	// Reserves a company slug for a claim in progress. The UNIQUE(company_slug) constraint is
+	// the whole race guard: two concurrent claims on the same slug both attempt this insert, one
+	// succeeds, and the loser's caller maps the unique violation to a clean conflict — see
+	// pgerr.IsUniqueViolation. user_id is the table's primary key, so a user who already holds
+	// an account (in any status) also fails here, on the primary-key conflict.
+	InsertPendingCompanyAccount(ctx context.Context, arg InsertPendingCompanyAccountParams) (CompanyAccount, error)
 	// Creates a job visible only to its creator: the jd-tailor-intake private-JD path
 	// (pasted text, or a URL only a generic scrape could read). Always a plain INSERT,
 	// never an upsert — external_id is a synthetic value scoped to this one submission
@@ -4133,6 +4158,9 @@ type Querier interface {
 	// not ask at all when the page is already full. It handed the same window to both until
 	// 2026-09-06, which returned up to 2*limit rows and skipped a window per page.
 	ListOrphanedApplications(ctx context.Context, arg ListOrphanedApplicationsParams) ([]ListOrphanedApplicationsRow, error)
+	// The moderator review queue: every claim that could not auto-activate (unknown or
+	// mismatched work-email domain), oldest first so the queue drains in claim order.
+	ListPendingCompanyAccounts(ctx context.Context) ([]CompanyAccount, error)
 	// The moderation queue, oldest first. Carries whether the account also holds an APPROVED
 	// referral offer for the same company — corroborating evidence for the human deciding,
 	// never a gate: nothing in this change approves a profile automatically.
@@ -5872,6 +5900,10 @@ type Querier interface {
 	// see the row this retracts as live, conflict with it, and silently record nothing — the
 	// correction would appear to succeed while leaving the wrong company credited.
 	RetractSupersededEmailEvent(ctx context.Context, arg RetractSupersededEmailEventParams) (int64, error)
+	// An admin kill switch. Deliberately does not delete the row or free company_slug — see the
+	// migration comment: there is no self-service handoff on this MVP, so freeing the slug on
+	// revoke would let anyone re-claim a company an admin just decided to shut out.
+	RevokeCompanyAccount(ctx context.Context, userID int64) (CompanyAccount, error)
 	// Whether the caller already received a reward for this ref (e.g. an accepted contribution).
 	// True means the reward was already granted and must not be granted again (idempotency).
 	RewardExists(ctx context.Context, arg RewardExistsParams) (bool, error)
@@ -5929,6 +5961,15 @@ type Querier interface {
 	// Every recorded query with its count, busiest first — the demand side of the
 	// suggestion ranking, read once per dictionary build.
 	SearchQueryCounts(ctx context.Context) ([]SearchQueryCountsRow, error)
+	// internal/ingest/employer's fill-only-if-blank website seed: a moderator approving a
+	// pending employer-account claim whose domain the automatic check could not itself verify
+	// (see employer-account's spec). A new slug is inserted as an is_reference row (mirroring
+	// cmd/import-yc's own pattern for a company with no jobs yet, migration 0174's comment);
+	// an existing row's company_info gets the "website" key ONLY when absent or blank — the
+	// WHERE clause on the UPDATE branch is the guard, not merely a defensive no-op, since this
+	// must never overwrite a value another source (or the employer's own later curated edit)
+	// already asserted.
+	SeedCompanyAccountWebsite(ctx context.Context, arg SeedCompanyAccountWebsiteParams) error
 	// Hand an unverified, password-backed account to the proven owner of its address when a
 	// provider-verified OAuth identity arrives for it: the password is destroyed, every
 	// session revoked, and every API key deleted, so a squatter who registered the address
@@ -6667,6 +6708,16 @@ type Querier interface {
 	// Replace a CV's editable fields, stamping updated_at. Owner-scoped: no row is updated
 	// for a foreign or missing id (the handler maps the resulting no-row error to 404).
 	UpdateCV(ctx context.Context, arg UpdateCVParams) (UpdateCVRow, error)
+	// The employer-authored analogue of UpdateManualJob, scoped narrower on purpose: WHERE
+	// created_by = actor_id (not merely IS NOT NULL) AND source = 'employer'. UpdateManualJob's
+	// own scope lets any moderator edit any manually-authored job, which is correct for trusted
+	// staff and wrong for a self-service employer — see openspec/changes/
+	// add-employer-company-accounts/design.md for why this needed its own query rather than a
+	// widened moderation one. company_slug/company are always the caller's locked company
+	// identity (internal/ingest/employer never lets them vary per edit), so company_upsert here
+	// only ever re-affirms the same row UpdateManualJob's would. closed_at is deliberately NOT
+	// touched, matching UpdateManualJob: an edit is a content fix, not a lifecycle change.
+	UpdateEmployerJob(ctx context.Context, arg UpdateEmployerJobParams) (Job, error)
 	// Owner-scoped edit. claim_key moves with the claim, so the uniqueness guarantee holds after
 	// an edit as well as after an insert.
 	UpdateExperienceAtom(ctx context.Context, arg UpdateExperienceAtomParams) (ExperienceAtom, error)

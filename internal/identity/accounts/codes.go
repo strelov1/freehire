@@ -17,6 +17,11 @@ import (
 const (
 	PurposeVerifyEmail   = "verify_email"
 	PurposeResetPassword = "password_reset"
+	// PurposeVerifyWorkEmail is internal/ingest/employer's — a company-account claim's work
+	// email, which is never the account's own `users.email` and carries no MarkEmailVerified
+	// side effect on confirm (see ConfirmCode). Named here, not in that package, so every
+	// purpose sharing this one code store stays enumerated in one place.
+	PurposeVerifyWorkEmail = "verify_work_email"
 )
 
 const (
@@ -177,16 +182,66 @@ func (s *Service) consumeCodeTx(ctx context.Context, store CodeStore, userID int
 
 // IssueVerificationCode mails a fresh email-verification code to the account's address.
 // Reports ErrMailUnavailable when no transport is configured and ErrResendTooSoon inside
-// the cooldown.
+// the cooldown. A thin wrapper over IssueCode, fixing the purpose and the mailer method.
 func (s *Service) IssueVerificationCode(ctx context.Context, userID int64, email string) error {
 	if !s.codesEnabled() {
 		return ErrMailUnavailable
 	}
-	code, err := s.issueCode(ctx, userID, PurposeVerifyEmail)
+	return s.IssueCode(ctx, userID, PurposeVerifyEmail, email, s.mailer.SendVerificationCode)
+}
+
+// IssueCode mints, stores, and delivers a fresh code for an arbitrary purpose, refusing a
+// resend inside the cooldown exactly like IssueVerificationCode/IssuePasswordReset. Delivery
+// goes through the caller-supplied send func rather than a CodeMailer method fixed by this
+// package, which is what lets a caller outside accounts' own three purposes (see
+// internal/ingest/employer, PurposeVerifyWorkEmail) share this rate-limited, attempt-bounded
+// code store without this package knowing anything about that caller's mail copy.
+//
+// Minting and sending are deliberately not one guarded transaction: a send failure (a
+// transport outage) is returned to the caller with the code already stored, so a retry
+// inside the cooldown is a resend of mail, not a second mint — the same shape
+// IssueVerificationCode already had before this method existed.
+func (s *Service) IssueCode(ctx context.Context, userID int64, purpose, email string, send func(ctx context.Context, email, code string) error) error {
+	if s.codes == nil {
+		return ErrMailUnavailable
+	}
+	code, err := s.issueCode(ctx, userID, purpose)
 	if err != nil {
 		return err
 	}
-	return s.mailer.SendVerificationCode(ctx, email, code)
+	return send(ctx, email, code)
+}
+
+// ConfirmCode checks a presented code against the one outstanding for (userID, purpose) and
+// consumes it on success, with the same attempt-bounding and expiry rules ConfirmVerification
+// uses. Unlike ConfirmVerification, it carries no side effect on success — "what verified
+// means" is entirely the caller's to decide, which is why this is a separate method rather
+// than a parameter ConfirmVerification also takes: bundling an arbitrary caller action into
+// ConfirmVerification's own transaction would couple this package to that caller's failure
+// modes, for no benefit over the caller doing its own write after a plain ConfirmCode success.
+func (s *Service) ConfirmCode(ctx context.Context, userID int64, purpose, code string) error {
+	if s.codes == nil {
+		return ErrMailUnavailable
+	}
+	tx, err := s.codes.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	txStore := s.codes.WithTx(tx)
+
+	consumeErr := s.consumeCodeTx(ctx, txStore, userID, purpose, code)
+	if consumeErr != nil {
+		if errors.Is(consumeErr, ErrInvalidCode) {
+			// Same reasoning as ConfirmVerification: the failed guess must be kept, so the
+			// attempt bump is committed even though the confirmation itself is refused.
+			if err := tx.Commit(ctx); err != nil {
+				return fmt.Errorf("commit the failed attempt: %w", err)
+			}
+		}
+		return consumeErr
+	}
+	return tx.Commit(ctx)
 }
 
 // ConfirmVerification marks the account verified when the presented code matches the

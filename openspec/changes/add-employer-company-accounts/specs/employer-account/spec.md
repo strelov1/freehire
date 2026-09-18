@@ -85,19 +85,13 @@ sent.
 
 When a claim's work email is confirmed, the system SHALL compare its domain to the claimed
 company's already-known website domain, when one is recorded. A match SHALL activate the
-employer account immediately, with no further review. When the company's `company_info`
-website was previously empty, activation SHALL also record the confirmed domain there.
+employer account immediately, with no further review.
 
 #### Scenario: A matching domain activates the account at once
 
 - **WHEN** a claim's confirmed work-email domain matches the claimed company's recorded
   website domain
 - **THEN** the employer account becomes active immediately, with no moderator step
-
-#### Scenario: Activation fills a previously unknown company website
-
-- **WHEN** a claim activates for a company with no previously recorded website
-- **THEN** the company's website is set to the confirmed work-email domain
 
 ### Requirement: An unverifiable domain is routed to moderator review, not refused
 
@@ -121,13 +115,24 @@ visible to moderators for manual review.
 ### Requirement: A moderator can approve or reject a pending claim
 
 The system SHALL let a moderator list pending employer-account claims and approve or reject
-each one. Approval SHALL activate the account. Rejection SHALL remove the claim and free
-its company slug for a future claim.
+each one. Approval SHALL activate the account and, when the company's `company_info` website
+was empty, SHALL also record the claim's confirmed work-email domain there — a moderator
+approving a claim the domain check could not itself verify is exactly the human vouching the
+automatic path was missing, so this is where that gap closes, not the automatic path (which
+never activates a claim whose website was unknown or mismatched in the first place — see "An
+unverifiable domain is routed to moderator review, not refused"). Rejection SHALL remove the
+claim and free its company slug for a future claim.
 
 #### Scenario: Moderator approval activates a pending claim
 
 - **WHEN** a moderator approves a pending employer-account claim
 - **THEN** the account becomes active
+
+#### Scenario: Moderator approval fills a previously unknown company website
+
+- **WHEN** a moderator approves a pending claim for a company with no previously recorded
+  website
+- **THEN** the company's website is set to the confirmed work-email domain
 
 #### Scenario: Moderator rejection frees the company slug
 

@@ -370,6 +370,42 @@ func (q *Queries) CloseChronicProviderJobs(ctx context.Context, arg CloseChronic
 	return count, err
 }
 
+const closeEmployerJob = `-- name: CloseEmployerJob :one
+WITH closed AS (
+    UPDATE jobs
+    SET closed_at     = now(),
+        closed_reason = 'employer_closed',
+        updated_at    = now()
+    WHERE jobs.public_slug = $1
+      AND jobs.created_by = $2
+      AND jobs.source = 'employer'
+      AND jobs.closed_at IS NULL
+    RETURNING jobs.id
+), queued AS (
+    INSERT INTO search_delete_outbox (job_id)
+    SELECT id FROM closed
+    ON CONFLICT (job_id) DO NOTHING
+)
+SELECT count(*) FROM closed
+`
+
+type CloseEmployerJobParams struct {
+	PublicSlug string      `json:"public_slug"`
+	ActorID    pgtype.Int8 `json:"actor_id"`
+}
+
+// Soft-close, the employer-self-service analogue of CloseJobByID: scoped to the actor's own
+// employer-authored posting (created_by = actor_id AND source = 'employer'), never any other
+// job. closed_reason = 'employer_closed' (migration 0175) keeps this mechanism distinguishable
+// from a moderator's 'moderated' close — a different actor and a different trust level.
+// WHERE closed_at IS NULL keeps it idempotent, matching every other closer.
+func (q *Queries) CloseEmployerJob(ctx context.Context, arg CloseEmployerJobParams) (int64, error) {
+	row := q.db.QueryRow(ctx, closeEmployerJob, arg.PublicSlug, arg.ActorID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const closeEmptyFeedBoardJobs = `-- name: CloseEmptyFeedBoardJobs :one
 WITH closed AS (
     UPDATE jobs
@@ -4678,6 +4714,194 @@ func (q *Queries) UnseenJobIDsBySource(ctx context.Context, arg UnseenJobIDsBySo
 		return nil, err
 	}
 	return items, nil
+}
+
+const updateEmployerJob = `-- name: UpdateEmployerJob :one
+WITH company_upsert AS (
+    INSERT INTO companies (slug, name)
+    SELECT $3, $2
+    WHERE $3 <> ''
+    ON CONFLICT (slug) DO UPDATE SET
+        name       = EXCLUDED.name,
+        updated_at = now()
+)
+UPDATE jobs
+SET title        = $1,
+    company      = $2,
+    company_slug = $3,
+    company_slug_folded = replace($3, '-', ''),
+    location     = $4,
+    remote       = $5,
+    description  = $6,
+    posted_at    = $7,
+    countries    = COALESCE($8::text[], '{}'),
+    regions      = COALESCE($9::text[], '{}'),
+    cities       = COALESCE($10::text[], '{}'),
+    work_mode    = $11,
+    skills       = COALESCE($12::text[], '{}'),
+    seniority    = $13,
+    category     = $14,
+    is_tech      = $15,
+    requires_clearance = $16,
+    posting_language     = $17,
+    employment_type      = $18,
+    education_level      = $19,
+    english_level        = $20,
+    experience_years_min = $21,
+    content_hash     = $22,
+    role_fingerprint = $23,
+    requirements_derived = COALESCE($24::jsonb, '[]'::jsonb),
+    updated_by   = $25::bigint,
+    similar_computed_at = CASE WHEN jobs.company_slug IS DISTINCT FROM $3
+                               THEN NULL ELSE jobs.similar_computed_at END,
+    updated_at   = now()
+WHERE public_slug = $26
+  AND created_by = $27
+  AND source = 'employer'
+  AND NOT is_private
+RETURNING id, source, external_id, url, title, company, location, remote, description, posted_at, created_at, updated_at, company_slug, enrichment, enriched_at, enrichment_version, public_slug, last_seen_at, closed_at, countries, regions, work_mode, liveness_strikes, skills, seniority, category, created_by, updated_by, posting_language, employment_type, education_level, experience_years_min, collections, content_hash, english_level, cities, view_count, applied_count, role_fingerprint, semantic_embedded_model, semantic_embedded_hash, duplicate_of, is_tech, semantic_embedding, salary_min_manual, salary_max_manual, salary_currency_manual, salary_period_manual, upvote_count, downvote_count, ats_absent_at, closed_reason, is_private, similar_job_ids, similar_computed_at, salary_min_source, salary_max_source, salary_currency_source, salary_period_source, company_slug_folded, duplicate_of_aggregator, duplicate_of_role, duplicate_of_fuzzy, requires_clearance, requirements_derived, hydrated_at, ai_interview_reports
+`
+
+type UpdateEmployerJobParams struct {
+	Title               string             `json:"title"`
+	Company             string             `json:"company"`
+	CompanySlug         string             `json:"company_slug"`
+	Location            string             `json:"location"`
+	Remote              bool               `json:"remote"`
+	Description         string             `json:"description"`
+	PostedAt            pgtype.Timestamptz `json:"posted_at"`
+	Countries           []string           `json:"countries"`
+	Regions             []string           `json:"regions"`
+	Cities              []string           `json:"cities"`
+	WorkMode            string             `json:"work_mode"`
+	Skills              []string           `json:"skills"`
+	Seniority           string             `json:"seniority"`
+	Category            string             `json:"category"`
+	IsTech              pgtype.Bool        `json:"is_tech"`
+	RequiresClearance   pgtype.Bool        `json:"requires_clearance"`
+	PostingLanguage     string             `json:"posting_language"`
+	EmploymentType      string             `json:"employment_type"`
+	EducationLevel      string             `json:"education_level"`
+	EnglishLevel        string             `json:"english_level"`
+	ExperienceYearsMin  pgtype.Int4        `json:"experience_years_min"`
+	ContentHash         pgtype.Text        `json:"content_hash"`
+	RoleFingerprint     pgtype.Text        `json:"role_fingerprint"`
+	RequirementsDerived []byte             `json:"requirements_derived"`
+	UpdatedBy           int64              `json:"updated_by"`
+	PublicSlug          string             `json:"public_slug"`
+	ActorID             pgtype.Int8        `json:"actor_id"`
+}
+
+// The employer-authored analogue of UpdateManualJob, scoped narrower on purpose: WHERE
+// created_by = actor_id (not merely IS NOT NULL) AND source = 'employer'. UpdateManualJob's
+// own scope lets any moderator edit any manually-authored job, which is correct for trusted
+// staff and wrong for a self-service employer — see openspec/changes/
+// add-employer-company-accounts/design.md for why this needed its own query rather than a
+// widened moderation one. company_slug/company are always the caller's locked company
+// identity (internal/ingest/employer never lets them vary per edit), so company_upsert here
+// only ever re-affirms the same row UpdateManualJob's would. closed_at is deliberately NOT
+// touched, matching UpdateManualJob: an edit is a content fix, not a lifecycle change.
+func (q *Queries) UpdateEmployerJob(ctx context.Context, arg UpdateEmployerJobParams) (Job, error) {
+	row := q.db.QueryRow(ctx, updateEmployerJob,
+		arg.Title,
+		arg.Company,
+		arg.CompanySlug,
+		arg.Location,
+		arg.Remote,
+		arg.Description,
+		arg.PostedAt,
+		arg.Countries,
+		arg.Regions,
+		arg.Cities,
+		arg.WorkMode,
+		arg.Skills,
+		arg.Seniority,
+		arg.Category,
+		arg.IsTech,
+		arg.RequiresClearance,
+		arg.PostingLanguage,
+		arg.EmploymentType,
+		arg.EducationLevel,
+		arg.EnglishLevel,
+		arg.ExperienceYearsMin,
+		arg.ContentHash,
+		arg.RoleFingerprint,
+		arg.RequirementsDerived,
+		arg.UpdatedBy,
+		arg.PublicSlug,
+		arg.ActorID,
+	)
+	var i Job
+	err := row.Scan(
+		&i.ID,
+		&i.Source,
+		&i.ExternalID,
+		&i.URL,
+		&i.Title,
+		&i.Company,
+		&i.Location,
+		&i.Remote,
+		&i.Description,
+		&i.PostedAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.CompanySlug,
+		&i.Enrichment,
+		&i.EnrichedAt,
+		&i.EnrichmentVersion,
+		&i.PublicSlug,
+		&i.LastSeenAt,
+		&i.ClosedAt,
+		&i.Countries,
+		&i.Regions,
+		&i.WorkMode,
+		&i.LivenessStrikes,
+		&i.Skills,
+		&i.Seniority,
+		&i.Category,
+		&i.CreatedBy,
+		&i.UpdatedBy,
+		&i.PostingLanguage,
+		&i.EmploymentType,
+		&i.EducationLevel,
+		&i.ExperienceYearsMin,
+		&i.Collections,
+		&i.ContentHash,
+		&i.EnglishLevel,
+		&i.Cities,
+		&i.ViewCount,
+		&i.AppliedCount,
+		&i.RoleFingerprint,
+		&i.SemanticEmbeddedModel,
+		&i.SemanticEmbeddedHash,
+		&i.DuplicateOf,
+		&i.IsTech,
+		&i.SemanticEmbedding,
+		&i.SalaryMinManual,
+		&i.SalaryMaxManual,
+		&i.SalaryCurrencyManual,
+		&i.SalaryPeriodManual,
+		&i.UpvoteCount,
+		&i.DownvoteCount,
+		&i.AtsAbsentAt,
+		&i.ClosedReason,
+		&i.IsPrivate,
+		&i.SimilarJobIds,
+		&i.SimilarComputedAt,
+		&i.SalaryMinSource,
+		&i.SalaryMaxSource,
+		&i.SalaryCurrencySource,
+		&i.SalaryPeriodSource,
+		&i.CompanySlugFolded,
+		&i.DuplicateOfAggregator,
+		&i.DuplicateOfRole,
+		&i.DuplicateOfFuzzy,
+		&i.RequiresClearance,
+		&i.RequirementsDerived,
+		&i.HydratedAt,
+		&i.AiInterviewReports,
+	)
+	return i, err
 }
 
 const updateJobDerived = `-- name: UpdateJobDerived :exec

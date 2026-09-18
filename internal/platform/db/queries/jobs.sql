@@ -1327,6 +1327,83 @@ SET title        = sqlc.arg(title),
 WHERE public_slug = sqlc.arg(public_slug) AND created_by IS NOT NULL AND NOT is_private
 RETURNING *;
 
+-- name: UpdateEmployerJob :one
+-- The employer-authored analogue of UpdateManualJob, scoped narrower on purpose: WHERE
+-- created_by = actor_id (not merely IS NOT NULL) AND source = 'employer'. UpdateManualJob's
+-- own scope lets any moderator edit any manually-authored job, which is correct for trusted
+-- staff and wrong for a self-service employer — see openspec/changes/
+-- add-employer-company-accounts/design.md for why this needed its own query rather than a
+-- widened moderation one. company_slug/company are always the caller's locked company
+-- identity (internal/ingest/employer never lets them vary per edit), so company_upsert here
+-- only ever re-affirms the same row UpdateManualJob's would. closed_at is deliberately NOT
+-- touched, matching UpdateManualJob: an edit is a content fix, not a lifecycle change.
+WITH company_upsert AS (
+    INSERT INTO companies (slug, name)
+    SELECT sqlc.arg(company_slug), sqlc.arg(company)
+    WHERE sqlc.arg(company_slug) <> ''
+    ON CONFLICT (slug) DO UPDATE SET
+        name       = EXCLUDED.name,
+        updated_at = now()
+)
+UPDATE jobs
+SET title        = sqlc.arg(title),
+    company      = sqlc.arg(company),
+    company_slug = sqlc.arg(company_slug),
+    company_slug_folded = replace(sqlc.arg(company_slug), '-', ''),
+    location     = sqlc.arg(location),
+    remote       = sqlc.arg(remote),
+    description  = sqlc.arg(description),
+    posted_at    = sqlc.arg(posted_at),
+    countries    = COALESCE(sqlc.arg(countries)::text[], '{}'),
+    regions      = COALESCE(sqlc.arg(regions)::text[], '{}'),
+    cities       = COALESCE(sqlc.arg(cities)::text[], '{}'),
+    work_mode    = sqlc.arg(work_mode),
+    skills       = COALESCE(sqlc.arg(skills)::text[], '{}'),
+    seniority    = sqlc.arg(seniority),
+    category     = sqlc.arg(category),
+    is_tech      = sqlc.arg(is_tech),
+    requires_clearance = sqlc.arg(requires_clearance),
+    posting_language     = sqlc.arg(posting_language),
+    employment_type      = sqlc.arg(employment_type),
+    education_level      = sqlc.arg(education_level),
+    english_level        = sqlc.arg(english_level),
+    experience_years_min = sqlc.arg(experience_years_min),
+    content_hash     = sqlc.arg(content_hash),
+    role_fingerprint = sqlc.arg(role_fingerprint),
+    requirements_derived = COALESCE(sqlc.arg(requirements_derived)::jsonb, '[]'::jsonb),
+    updated_by   = sqlc.arg(updated_by)::bigint,
+    similar_computed_at = CASE WHEN jobs.company_slug IS DISTINCT FROM sqlc.arg(company_slug)
+                               THEN NULL ELSE jobs.similar_computed_at END,
+    updated_at   = now()
+WHERE public_slug = sqlc.arg(public_slug)
+  AND created_by = sqlc.arg(actor_id)
+  AND source = 'employer'
+  AND NOT is_private
+RETURNING *;
+
+-- name: CloseEmployerJob :one
+-- Soft-close, the employer-self-service analogue of CloseJobByID: scoped to the actor's own
+-- employer-authored posting (created_by = actor_id AND source = 'employer'), never any other
+-- job. closed_reason = 'employer_closed' (migration 0175) keeps this mechanism distinguishable
+-- from a moderator's 'moderated' close — a different actor and a different trust level.
+-- WHERE closed_at IS NULL keeps it idempotent, matching every other closer.
+WITH closed AS (
+    UPDATE jobs
+    SET closed_at     = now(),
+        closed_reason = 'employer_closed',
+        updated_at    = now()
+    WHERE jobs.public_slug = sqlc.arg(public_slug)
+      AND jobs.created_by = sqlc.arg(actor_id)
+      AND jobs.source = 'employer'
+      AND jobs.closed_at IS NULL
+    RETURNING jobs.id
+), queued AS (
+    INSERT INTO search_delete_outbox (job_id)
+    SELECT id FROM closed
+    ON CONFLICT (job_id) DO NOTHING
+)
+SELECT count(*) FROM closed;
+
 -- name: CloseUnseenJobs :one
 -- Post-ingest sweep (see job-lifecycle spec): close every open job of ONE source not
 -- seen since the cutoff, scoped to the company slugs the run actually crawled. Scoped

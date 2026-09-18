@@ -597,3 +597,24 @@ WHERE c.slug = c2.slug
 -- absent). cmd/import-yc uses it to guard against homonym collisions: it skips
 -- enriching an existing company whose job_count dwarfs a matched YC entry's team.
 SELECT job_count FROM companies WHERE slug = $1;
+
+-- name: SeedCompanyAccountWebsite :exec
+-- internal/ingest/employer's fill-only-if-blank website seed: a moderator approving a
+-- pending employer-account claim whose domain the automatic check could not itself verify
+-- (see employer-account's spec). A new slug is inserted as an is_reference row (mirroring
+-- cmd/import-yc's own pattern for a company with no jobs yet, migration 0174's comment);
+-- an existing row's company_info gets the "website" key ONLY when absent or blank — the
+-- WHERE clause on the UPDATE branch is the guard, not merely a defensive no-op, since this
+-- must never overwrite a value another source (or the employer's own later curated edit)
+-- already asserted.
+INSERT INTO companies (slug, name, company_info, is_reference, company_info_at)
+VALUES (
+    sqlc.arg(slug), sqlc.arg(name),
+    jsonb_build_object('website', sqlc.arg(website)::text),
+    true, now()
+)
+ON CONFLICT (slug) DO UPDATE SET
+    company_info    = companies.company_info || jsonb_build_object('website', sqlc.arg(website)::text),
+    company_info_at = now(),
+    updated_at      = now()
+WHERE NOT (companies.company_info ? 'website') OR companies.company_info ->> 'website' = '';

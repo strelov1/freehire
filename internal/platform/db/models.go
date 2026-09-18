@@ -309,6 +309,19 @@ type Company struct {
 	AiInterviewReports            int32              `json:"ai_interview_reports"`
 }
 
+// One user verified to represent one company: claim/verification state and the fixed company identity every vacancy that account publishes carries. Not derived from jobs, like company_slug_aliases — see the file header for why.
+type CompanyAccount struct {
+	UserID      int64  `json:"user_id"`
+	CompanySlug string `json:"company_slug"`
+	// Locked at claim time. Every employer-authored vacancy passes this exact string into derivation, so company_slug never drifts across postings from the same account.
+	CompanyName string             `json:"company_name"`
+	WorkEmail   string             `json:"work_email"`
+	Status      string             `json:"status"`
+	VerifiedAt  pgtype.Timestamptz `json:"verified_at"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+}
+
 type CompanyFeedback struct {
 	ID           int64              `json:"id"`
 	UserID       pgtype.Int8        `json:"user_id"`
