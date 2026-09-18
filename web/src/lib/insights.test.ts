@@ -164,11 +164,10 @@ describe('roleQualifies / rankedQualifyingRoles', () => {
   });
 
   it('answers whether an address exists without needing the role\'s size', () => {
-    // This half must be answerable BEFORE the API is asked, because the endpoint
-    // answers an invented level with a 400 and a load turns that into a 500 — a
-    // mistyped URL would say "we broke" instead of "no such page".
-    const roles = [role('backend', 'senior', MIN_CATEGORY_OPEN)];
-
+    // Takes no ranking on purpose — the job page links here knowing only a posting's two
+    // facets. It must also be answerable BEFORE the API is asked: the endpoint answers an
+    // invented level with a 400 and a load turns that into a 500, so a mistyped URL would
+    // say "we broke" instead of "no such page".
     expect(roleAddressExists('backend', 'senior')).toBe(true);
     // A real address that is merely thin still EXISTS — the demand check is separate.
     expect(roleAddressExists('backend', 'junior')).toBe(true);
