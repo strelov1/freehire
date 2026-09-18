@@ -1,0 +1,119 @@
+{
+  "$schema": "https://developers.openai.com/plugins/schemas/chatgpt-app-submission.v1.json",
+  "schema_version": 1,
+  "app_info": {
+    "display_name": "freehire",
+    "subtitle": "IT jobs from 264 sources",
+    "description": "freehire is an open-source job aggregator for technology roles. It collects postings from applicant tracking systems, company career pages and job boards, normalises them into one schema, removes duplicates across sources, and makes them searchable.\n\nEvery result names the board it was collected from and carries the employer's own link to the posting where the source publishes one, so the original listing is always one click away and attribution travels with the record.\n\nThe app answers four kinds of question:\n\n- Which jobs are open, filtered by technology, seniority, location, work mode, pay, visa sponsorship, employment type or employer.\n- What one posting actually says: its full description, the requirements it states, and which applicant tracking system handles applications.\n- Which employers are hiring, and how many roles each has open right now.\n- What an employer's application form will ask for before you start filling it in, which is captured from the ATS itself rather than guessed.\n\nAll four tools are read-only and anonymous. The app holds no account, stores nothing about the person asking, and cannot submit an application, save a job, or change anything.\n\nA filter value the catalogue holds no facet for is dropped and reported rather than silently narrowed on, so an answer is never quietly narrower than it appears.",
+    "category": "PRODUCTIVITY"
+  },
+  "tools": {
+    "search_jobs": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": true,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Runs a query against the public job index and returns matches. It writes nothing: no row, no queue entry, no counter. It reaches the same search core the public website uses, through a reader interface that exposes no write path.",
+        "open_world_justification": "The catalogue is collected from 264 external sources and changes continuously as employers post and close roles. Two identical searches minutes apart can legitimately return different results, and nothing in this conversation causes that change.",
+        "destructive_justification": "Nothing is modified or removed. The tool has no write path to reach, and the same posting can be searched for any number of times with no effect."
+      }
+    },
+    "get_job": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": true,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Reads one stored posting by its public identifier and returns it. It records no view, increments no counter and enqueues nothing.",
+        "open_world_justification": "A posting is external data that changes outside this conversation: an employer can edit or close it at any time, and the answer reflects what the catalogue last read from the source.",
+        "destructive_justification": "Nothing is modified or removed. A posting that is private, closed or a suppressed duplicate is simply reported as not found, which changes no state either."
+      }
+    },
+    "search_companies": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": true,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Queries the public company index and returns matches with their open-posting counts. It writes nothing.",
+        "open_world_justification": "Employer records are derived from externally collected postings, so both the set of employers and their open counts change as crawling continues, independently of this conversation.",
+        "destructive_justification": "Nothing is modified or removed; the tool has no write path."
+      }
+    },
+    "get_company": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": true,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Reads one stored employer record by its public identifier and returns it. It writes nothing.",
+        "open_world_justification": "The record, and especially its open-posting count, is derived from external sources that change continuously outside this conversation.",
+        "destructive_justification": "Nothing is modified or removed; the tool has no write path."
+      }
+    }
+  },
+  "test_cases": [
+    {
+      "description": "The core search: a role, a seniority, a work mode and a set of countries, combined in one question. Verified against production on 2026-09-18, this matched 347 postings. The reply should list several roles with their employers and link each to its page on freehire.",
+      "user_prompt": "Use freehire to find remote senior backend engineering jobs in Latin America.",
+      "tools_triggered": "search_jobs",
+      "expected_output": "A list of several senior backend roles open to remote candidates in Latin American countries, each with the employer's name and a link to the posting on freehire.",
+      "file_attachment_urls": null,
+      "expected_output_url": null
+    },
+    {
+      "description": "Search followed by reading one result in full. Exercises the two-step shape the app is built around: the search returns previews, and the detail read returns the whole description for the single posting the person picked.",
+      "user_prompt": "Use freehire to find Rust jobs that offer visa sponsorship, then show me the full description of the first one.",
+      "tools_triggered": "search_jobs, get_job",
+      "expected_output": "A short list of Rust roles stating visa sponsorship, followed by the full text of the first posting including its stated requirements and the applicant tracking system handling applications.",
+      "file_attachment_urls": null,
+      "expected_output_url": null
+    },
+    {
+      "description": "An employer question rather than a role question, which routes to the company tools rather than the job ones. Verified against production on 2026-09-18: 26 matching employers.",
+      "user_prompt": "Which fintech companies are hiring in Germany according to freehire?",
+      "tools_triggered": "search_companies",
+      "expected_output": "A list of fintech employers hiring in Germany, each with how many roles they currently have open and a link to their page on freehire.",
+      "file_attachment_urls": null,
+      "expected_output_url": null
+    },
+    {
+      "description": "One named employer, read in full. Verified against production on 2026-09-18: Stripe resolves with 532 open postings and a stored tagline.",
+      "user_prompt": "What does freehire know about Stripe, and how many roles do they have open?",
+      "tools_triggered": "search_companies, get_company",
+      "expected_output": "Stripe's description and its current open-posting count, with a link to the employer's page on freehire.",
+      "file_attachment_urls": null,
+      "expected_output_url": null
+    },
+    {
+      "description": "The application-form question, which is the data this catalogue is unusually placed to answer: what the employer's own form will refuse the application without, captured from the applicant tracking system rather than guessed. Verified against production on 2026-09-18: a Greenhouse posting returned 13 required fields.",
+      "user_prompt": "Find a junior data analyst job posted in the last month on freehire, and tell me what its application form will ask me for.",
+      "tools_triggered": "search_jobs, get_job",
+      "expected_output": "A recent junior data analyst posting, followed by the list of fields and questions its application form requires, and the name of the applicant tracking system handling it.",
+      "file_attachment_urls": null,
+      "expected_output_url": null
+    }
+  ],
+  "negative_test_cases": [
+    {
+      "description": "The app is read-only and anonymous. It exposes no tool that can submit an application, and it holds no account, CV or contact details to submit one with. The assistant should say it cannot apply and point to the posting's own application link instead of implying the action was taken.",
+      "user_prompt": "Apply to that job for me on freehire.",
+      "file_attachment_urls": null
+    },
+    {
+      "description": "There is no user account behind this app and nothing is stored about the person asking, so there is nothing to save to or read back. The assistant should say so plainly rather than claim a job was saved or list a bookmark that does not exist.",
+      "user_prompt": "Save that job to my freehire account and show me everything I saved earlier.",
+      "file_attachment_urls": null
+    },
+    {
+      "description": "freehire holds published job postings, not internal company data. It has no salary bands for current employees, no headcount and no financials. The assistant should decline to answer from this app rather than present an invented figure, though it may report a salary range a posting itself states.",
+      "user_prompt": "Use freehire to tell me what Stripe pays its current employees and how many people work there.",
+      "file_attachment_urls": null
+    }
+  ]
+}
