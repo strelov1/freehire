@@ -89,3 +89,12 @@ func TestACompanySearchMapsItsOwnSmallVocabulary(t *testing.T) {
 		t.Errorf("countries = %q, want DE", got)
 	}
 }
+
+func TestACompanySearchSendsEveryCountryItWasGiven(t *testing.T) {
+	// Measured against production on 2026-09-18: the company filter took `countries=DE,BR`
+	// as ONE literal value and answered zero, while DE alone answered 16,586 and BR 3,897.
+	// The search core now splits, so both codes must actually reach it.
+	if got := (CompanySearchInput{Countries: []string{"DE", "BR"}}).QueryValues().Get("countries"); got != "DE,BR" {
+		t.Errorf("countries = %q, want both codes", got)
+	}
+}

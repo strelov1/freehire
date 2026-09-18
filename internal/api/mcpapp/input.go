@@ -117,8 +117,22 @@ func (in SearchInput) Page() (limit, offset int) { return page(in.Limit, in.Offs
 func (in CompanySearchInput) QueryValues() url.Values {
 	v := url.Values{}
 	setNonEmpty(v, "q", in.Query)
-	setList(v, "countries", in.Countries)
+	setList(v, "countries", countryCodes(in.Countries))
 	return v
+}
+
+// Unsupported names the filter values a company search cannot honour, the same way the job
+// one does. It was missing here at first, which is the shape of gap worth noticing: the
+// company tool is smaller, so it got less thought, and "answers zero and says nothing" is
+// exactly as wrong on four fields as on fifteen.
+func (in CompanySearchInput) Unsupported() []string {
+	var out []string
+	for _, value := range in.Countries {
+		if !isCountryCode(value) {
+			out = append(out, "countries="+value)
+		}
+	}
+	return out
 }
 
 // Page is the bounded page the tool will actually serve.

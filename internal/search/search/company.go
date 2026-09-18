@@ -181,7 +181,15 @@ var companyFacets = []struct{ param, attr string }{
 func CompanyFilterFromValues(v url.Values) any {
 	var g [][]string
 	for _, f := range companyFacets {
-		included := nonEmpty(v[f.param])
+		// splitFacetValues, not nonEmpty: a comma-joined value and a repeated key must mean
+		// the same thing, as they always have on the job-search path. Taken literally,
+		// `countries=DE,BR` became `countries = "DE,BR"` — a value no company carries, so
+		// the request answered ZERO while each code alone answered thousands (measured
+		// against production on 2026-09-18: 16,586 and 3,897). That is the worst shape of
+		// failure available: not an error, but an empty answer that reads as "no such
+		// companies". No facet here holds a value containing a comma — every one is a slug
+		// or a code — so splitting cannot take a legitimate value apart.
+		included := splitFacetValues(v[f.param])
 		if len(included) == 0 {
 			continue
 		}

@@ -97,3 +97,17 @@ func TestAnOpenVocabularyIsNotPolicedAtAll(t *testing.T) {
 		t.Errorf("unsupported = %v, want none — these vocabularies are open", got)
 	}
 }
+
+func TestACompanySearchAlsoNamesWhatItCouldNotHonour(t *testing.T) {
+	// The same hole, in the tool nobody thought to check. A country NAME where a code belongs
+	// filters on a value no company carries and answers zero, which the model reports as "no
+	// such companies" — and a company search had no way to say otherwise until it did.
+	in := CompanySearchInput{Query: "fintech", Countries: []string{"DE", "germany"}}
+
+	if got := in.QueryValues().Get("countries"); got != "DE" {
+		t.Errorf("countries = %q, want only the code kept", got)
+	}
+	if got := in.Unsupported(); !slices.Contains(got, "countries=germany") {
+		t.Errorf("unsupported = %v, want it to name countries=germany", got)
+	}
+}

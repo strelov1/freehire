@@ -155,10 +155,11 @@ func (h *mcpappHandlers) SearchCompanies(ctx context.Context, in mcpapp.CompanyS
 	}
 
 	return mcpapp.SearchCompaniesResult{
-		Query:     values.Get("q"),
-		Total:     int(res.Total),
-		Offset:    offset,
-		Companies: companies,
+		Query:         values.Get("q"),
+		Total:         int(res.Total),
+		Offset:        offset,
+		Companies:     companies,
+		IgnoredParams: in.Unsupported(),
 	}, nil
 }
 

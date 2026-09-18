@@ -1,6 +1,7 @@
 package search
 
 import (
+	"fmt"
 	"net/url"
 	"testing"
 )
@@ -106,5 +107,34 @@ func TestCompanyFilterFromValues_YCFacets(t *testing.T) {
 	}
 	if !hasGroup(gs, `yc_stage = "Growth"`) || !hasGroup(gs, `yc_flags = "top_company"`) {
 		t.Errorf("YC facets should each AND as their own group in %v", gs)
+	}
+}
+
+func TestCompanyFilterFromValues_CommaJoinedValuesAreOneFacetNotOneValue(t *testing.T) {
+	// Measured against production on 2026-09-18: /companies?countries=DE answered 16,586 and
+	// countries=BR answered 3,897, while countries=DE,BR answered ZERO. The comma-joined form
+	// was taken as a single literal value — `countries = "DE,BR"` — which no company carries.
+	//
+	// The job-search path has always split on commas (splitFacetValues), so the two forms mean
+	// the same thing there. A caller reasonably assumes the same here, and the failure is the
+	// worst kind: not an error, but an empty answer that reads as "no such companies".
+	f := CompanyFilterFromValues(url.Values{"countries": {"DE,BR"}})
+
+	gs := groups(t, f)
+	if len(gs) != 1 {
+		t.Fatalf("want 1 AND group, got %d: %v", len(gs), gs)
+	}
+	if !hasGroup(gs, `countries = "DE"`, `countries = "BR"`) {
+		t.Errorf("got %v, want the two codes ORed rather than one literal", gs)
+	}
+}
+
+func TestCompanyFilterFromValues_CommaJoinedAndRepeatedMeanTheSame(t *testing.T) {
+	// The invariant worth holding, rather than the spelling of one of them.
+	joined := groups(t, CompanyFilterFromValues(url.Values{"regions": {"europe,asia"}}))
+	repeated := groups(t, CompanyFilterFromValues(url.Values{"regions": {"europe", "asia"}}))
+
+	if fmt.Sprint(joined) != fmt.Sprint(repeated) {
+		t.Errorf("comma-joined gave %v and repeated gave %v", joined, repeated)
 	}
 }

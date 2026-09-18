@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/url"
 	"path"
+	"strings"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/jackc/pgx/v5"
@@ -323,8 +324,16 @@ func (h *companiesHandlers) CompanySubindustries(c *fiber.Ctx) error {
 func facetValues(vals url.Values, key string) []string {
 	out := make([]string, 0, len(vals[key]))
 	for _, v := range vals[key] {
-		if v != "" {
-			out = append(out, v)
+		// Comma-joined and repeated must mean the same thing, because the Meilisearch path
+		// this backend must agree with splits (search.CompanyFilterFromValues) and the job
+		// search always has. Both paths used to take `countries=DE,BR` as ONE literal value:
+		// measured against production on 2026-09-18, DE alone answered 16,586 companies and
+		// BR alone 3,897, while DE,BR answered zero — an empty answer rather than an error,
+		// which reads as "there are no such companies".
+		for _, part := range strings.Split(v, ",") {
+			if part != "" {
+				out = append(out, part)
+			}
 		}
 	}
 	return out

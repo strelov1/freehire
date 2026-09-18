@@ -103,6 +103,9 @@ type SearchCompaniesResult struct {
 	Total     int              `json:"total"`
 	Offset    int              `json:"offset"`
 	Companies []CompanySummary `json:"companies"`
+	// IgnoredParams, for the same reason the job search carries it: an answer that widens
+	// without saying so leaves the model to read a zero as an empty catalogue.
+	IgnoredParams []string `json:"ignored_params,omitempty" jsonschema:"filters that were not applied; the answer is wider than asked"`
 }
 
 // CompanyResult is one employer in full.

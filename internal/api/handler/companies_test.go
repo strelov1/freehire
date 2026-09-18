@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	neturl "net/url"
 	"reflect"
 	"testing"
 
@@ -199,5 +200,30 @@ func TestCompanyViewKeepsAnEmptyStringDistinctFromNull(t *testing.T) {
 	}
 	if *got.Tagline != "" {
 		t.Errorf("Tagline = %q, want the stored empty string", *got.Tagline)
+	}
+}
+
+func TestFacetValuesSplitsCommaJoinedValuesLikeTheSearchBackendDoes(t *testing.T) {
+	// The Postgres path and the Meilisearch path answer the same /companies request, and a
+	// company matching on one and not the other makes a page's list disagree with its own
+	// meta.total. search.CompanyFilterFromValues splits on commas; this must too.
+	//
+	// Both used to take `countries=DE,BR` as one literal value. Measured against production
+	// on 2026-09-18: DE alone answered 16,586, BR alone 3,897, and DE,BR answered ZERO.
+	got := facetValues(neturl.Values{"countries": {"DE,BR"}}, "countries")
+
+	if len(got) != 2 || got[0] != "DE" || got[1] != "BR" {
+		t.Errorf("facetValues = %v, want the two codes", got)
+	}
+}
+
+func TestFacetValuesStillDropsEmptyValues(t *testing.T) {
+	// A bare `?countries=` must add no constraint, and splitting must not turn `a,,b` into an
+	// empty-string value that matches nothing.
+	if got := facetValues(neturl.Values{"countries": {""}}, "countries"); len(got) != 0 {
+		t.Errorf("facetValues = %v, want nothing", got)
+	}
+	if got := facetValues(neturl.Values{"countries": {"DE,,BR"}}, "countries"); len(got) != 2 {
+		t.Errorf("facetValues = %v, want the empty part dropped", got)
 	}
 }
