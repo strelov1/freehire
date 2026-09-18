@@ -34,18 +34,19 @@ func connect(t *testing.T, r Reader) *mcp.ClientSession {
 }
 
 // readerThatFinds answers every read with one posting and one employer.
-func readerThatFinds() fakeReader {
+func readerThatFinds(t *testing.T) fakeReader {
+	t.Helper()
 	p := NewProjector(testOrigin)
 	return fakeReader{
 		searchJobs: func(_ context.Context, in SearchInput) (SearchJobsResult, error) {
 			return SearchJobsResult{
 				Query: in.Query, Total: 1,
-				Jobs:          []JobSummary{p.JobSummary(aJob())},
+				Jobs:          []JobSummary{p.JobSummary(aJob(t))},
 				IgnoredParams: in.Unsupported(),
 			}, nil
 		},
 		jobDetail: func(_ context.Context, _ string) (JobResult, error) {
-			return p.JobDetail(aJob(), "greenhouse"), nil
+			return p.JobDetail(aJob(t), "greenhouse"), nil
 		},
 		searchCompanies: func(context.Context, CompanySearchInput) (SearchCompaniesResult, error) {
 			return SearchCompaniesResult{Total: 1, Companies: []CompanySummary{{Slug: "acme", Name: "Acme"}}}, nil
@@ -59,7 +60,7 @@ func readerThatFinds() fakeReader {
 func TestEveryAdvertisedToolCanActuallyBeCalled(t *testing.T) {
 	// A name in tools/list with no handler behind it is a tool ChatGPT will try once and
 	// then stop trusting.
-	session := connect(t, readerThatFinds())
+	session := connect(t, readerThatFinds(t))
 	ctx := context.Background()
 
 	listed, err := session.ListTools(ctx, nil)
@@ -102,7 +103,7 @@ func TestEveryToolDeclaresWhatItDoesAndWhatItDoesNotTouch(t *testing.T) {
 	//
 	// The test walks the REGISTERED tools rather than a list written beside it, so a fifth
 	// tool added by copy-paste cannot inherit a read-only claim it does not deserve.
-	session := connect(t, readerThatFinds())
+	session := connect(t, readerThatFinds(t))
 
 	listed, err := session.ListTools(context.Background(), nil)
 	if err != nil {
@@ -150,7 +151,7 @@ func TestAMissingPostingIsRecoverableRatherThanAProtocolError(t *testing.T) {
 	// failure is a JSON-RPC error carrying a code an agent branches on. Here the caller is
 	// a language model: a protocol error surfaces as a generic failure, while an error
 	// RESULT is a sentence it reads and recovers from by searching instead.
-	r := readerThatFinds()
+	r := readerThatFinds(t)
 	r.jobDetail = func(context.Context, string) (JobResult, error) {
 		return JobResult{}, NotFoundError{What: "posting"}
 	}
@@ -172,7 +173,7 @@ func TestAMissingPostingIsRecoverableRatherThanAProtocolError(t *testing.T) {
 func TestAnInternalFailureTellsTheModelNothingAboutItself(t *testing.T) {
 	// What broke inside this deployment is ours, not a caller's — but it stays an error
 	// rather than an empty answer, which would read as a catalogue holding nothing.
-	r := readerThatFinds()
+	r := readerThatFinds(t)
 	r.searchJobs = func(context.Context, SearchInput) (SearchJobsResult, error) {
 		return SearchJobsResult{}, errors.New("pq: connection refused on 10.0.0.4")
 	}
@@ -194,7 +195,7 @@ func TestAnInternalFailureTellsTheModelNothingAboutItself(t *testing.T) {
 func TestAnUnhonouredFilterReachesTheModelByName(t *testing.T) {
 	// The answer is wider than asked, and the caller is told which word was not understood
 	// rather than reading a zero as an empty catalogue.
-	res, err := connect(t, readerThatFinds()).CallTool(context.Background(), &mcp.CallToolParams{
+	res, err := connect(t, readerThatFinds(t)).CallTool(context.Background(), &mcp.CallToolParams{
 		Name: toolSearchJobs, Arguments: map[string]any{"query": "ai", "category": []string{"ai"}},
 	})
 	if err != nil {

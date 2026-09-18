@@ -1,17 +1,27 @@
 package mcpapp
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 
 	"github.com/strelov1/freehire/internal/ai/enrich"
 	"github.com/strelov1/freehire/internal/job/jobview"
+	"github.com/strelov1/freehire/internal/platform/db"
 )
 
 const testOrigin = "https://freehire.me"
 
-func aJob() jobview.Job {
-	return jobview.Job{
+// aJob builds a fixture the way a read path does, through jobview.FromRow.
+//
+// NEVER as a jobview.Job literal. The literal skips outboundurl.Tag and the facet
+// normalisation, so it carries values no production read can produce — which is exactly how
+// a utm-tagged official_job_url passed green on the OJCP surface until a review caught it
+// (internal/api/ojcp/AGENTS.md records the two defects that got through that way).
+func aJob(t *testing.T, mutate ...func(*db.Job)) jobview.Job {
+	t.Helper()
+
+	row := db.Job{
 		PublicSlug:  "senior-go-engineer-acme-abc123",
 		Source:      "greenhouse",
 		URL:         "https://boards.greenhouse.io/acme/jobs/1",
@@ -23,19 +33,41 @@ func aJob() jobview.Job {
 		Countries:   []string{"DE"},
 		WorkMode:    "hybrid",
 		Skills:      []string{"go", "kubernetes"},
-		Enrichment: enrich.Enrichment{
-			Seniority:      "senior",
-			Category:       "backend",
-			EmploymentType: "full_time",
-		},
+		// Seniority, category and employment type are the DICTIONARY columns, not the
+		// enrichment JSON. jobview folds the columns over the model's values and the column
+		// always wins — the dict-only rule this repository holds everywhere — so a fixture
+		// that sets them in the JSON sets nothing at all.
+		Seniority:      "senior",
+		Category:       "backend",
+		EmploymentType: "full_time",
+		Enrichment:     enrichmentJSON(t, enrich.Enrichment{}),
 	}
+	for _, m := range mutate {
+		m(&row)
+	}
+
+	view, err := jobview.FromRow(row)
+	if err != nil {
+		t.Fatalf("jobview.FromRow: %v", err)
+	}
+	return view
+}
+
+func enrichmentJSON(t *testing.T, e enrich.Enrichment) json.RawMessage {
+	t.Helper()
+
+	raw, err := json.Marshal(e)
+	if err != nil {
+		t.Fatalf("marshalling enrichment: %v", err)
+	}
+	return raw
 }
 
 func TestEverySearchResultNamesItsSourceAndBothURLs(t *testing.T) {
 	// This channel renders results as prose, where a link is the easiest thing to drop. A
 	// posting that arrives without its source can be repeated as though freehire were the
 	// employer, and one without the employer's own link sends nobody anywhere.
-	got := NewProjector(testOrigin).JobSummary(aJob())
+	got := NewProjector(testOrigin).JobSummary(aJob(t))
 
 	if got.Source != "greenhouse" {
 		t.Errorf("source = %q, want the board it came from", got.Source)
@@ -43,15 +75,38 @@ func TestEverySearchResultNamesItsSourceAndBothURLs(t *testing.T) {
 	if got.URL != "https://freehire.me/jobs/senior-go-engineer-acme-abc123" {
 		t.Errorf("url = %q, want the posting's page on freehire", got.URL)
 	}
+	// Untagged. jobview stamps utm_source on every URL it serves, and this field is what a
+	// consumer deduplicates and domain-verifies against, so the tag defeats both. Our own
+	// `url` keeps it.
 	if got.OfficialJobURL != "https://boards.greenhouse.io/acme/jobs/1" {
-		t.Errorf("official_job_url = %q, want the employer's own posting", got.OfficialJobURL)
+		t.Errorf("official_job_url = %q, want the employer's own posting untagged", got.OfficialJobURL)
+	}
+}
+
+func TestAnAggregatorsLinkIsNeverCalledTheEmployersOwn(t *testing.T) {
+	// An aggregator's stored URL points at the aggregator, not at the employer. Publishing
+	// it as official_job_url is a claim we cannot vouch for, and a consumer that
+	// domain-verifies on the field would be misled by every one of them. The source name
+	// still travels, so attribution is not lost — only the claim is.
+	j := aJob(t, func(row *db.Job) {
+		row.Source = "adzuna"
+		row.URL = "https://www.adzuna.com/details/123"
+	})
+
+	got := NewProjector(testOrigin).JobSummary(j)
+
+	if got.OfficialJobURL != "" {
+		t.Errorf("official_job_url = %q, want nothing for an aggregator", got.OfficialJobURL)
+	}
+	if got.Source != "adzuna" {
+		t.Errorf("source = %q, want the aggregator still named", got.Source)
 	}
 }
 
 func TestAnUnconfiguredOriginPublishesNoFreehireURLRatherThanARelativeOne(t *testing.T) {
 	// A relative "/jobs/<slug>" is a link the model will render and nobody can follow. The
 	// posting is still reachable through official_job_url, which is the better failure.
-	got := NewProjector("").JobSummary(aJob())
+	got := NewProjector("").JobSummary(aJob(t))
 
 	if got.URL != "" {
 		t.Errorf("url = %q, want empty when no origin is configured", got.URL)
@@ -65,8 +120,7 @@ func TestSeniorityIsPublishedAsOursRatherThanFlattened(t *testing.T) {
 	// The reason this server exists at all. OJCP's experience_level cannot name `staff`,
 	// and 18.1% of open postings carry a level outside its vocabulary — so a surface that
 	// translates into it must drop or distort them. This one does not translate.
-	j := aJob()
-	j.Enrichment.Seniority = "staff"
+	j := aJob(t, func(row *db.Job) { row.Seniority = "staff" })
 
 	if got := NewProjector(testOrigin).JobSummary(j); got.Seniority != "staff" {
 		t.Errorf("seniority = %q, want it passed through unchanged", got.Seniority)
@@ -76,7 +130,7 @@ func TestSeniorityIsPublishedAsOursRatherThanFlattened(t *testing.T) {
 func TestTheSummaryIsPlainTextNotMarkup(t *testing.T) {
 	// The stored description is markup. Handing tags to a model makes it pay tokens to read
 	// past them, ten times over in a search result.
-	got := NewProjector(testOrigin).JobSummary(aJob())
+	got := NewProjector(testOrigin).JobSummary(aJob(t))
 
 	if strings.Contains(got.Summary, "<") {
 		t.Errorf("summary = %q, want markup stripped", got.Summary)
@@ -89,15 +143,16 @@ func TestTheSummaryIsPlainTextNotMarkup(t *testing.T) {
 func TestAStatedSalaryTravelsAndAnAbsentOneIsNotZero(t *testing.T) {
 	// A posting that states no pay must not read as one offering zero, which is what a
 	// non-pointer int would publish.
-	if got := NewProjector(testOrigin).JobSummary(aJob()); got.SalaryMin != nil || got.SalaryMax != nil {
+	if got := NewProjector(testOrigin).JobSummary(aJob(t)); got.SalaryMin != nil || got.SalaryMax != nil {
 		t.Error("an unstated salary was published as a figure")
 	}
 
-	j := aJob()
 	min := 90000
-	j.Enrichment.SalaryMin = &min
-	j.Enrichment.SalaryCurrency = "EUR"
-	j.Enrichment.SalaryPeriod = "year"
+	j := aJob(t, func(row *db.Job) {
+		row.Enrichment = enrichmentJSON(t, enrich.Enrichment{
+			SalaryMin: &min, SalaryCurrency: "EUR", SalaryPeriod: "year",
+		})
+	})
 
 	got := NewProjector(testOrigin).JobSummary(j)
 	if got.SalaryMin == nil || *got.SalaryMin != 90000 {
@@ -111,8 +166,9 @@ func TestAStatedSalaryTravelsAndAnAbsentOneIsNotZero(t *testing.T) {
 func TestDetailCarriesTheFullBodyAndTheSummaryDoesNot(t *testing.T) {
 	// Ten full descriptions in one turn spend the context window on text the model reduces
 	// to a line each. The full body belongs to the one posting a person picked.
-	j := aJob()
-	j.Description = "<p>" + strings.Repeat("word ", 400) + "</p>"
+	j := aJob(t, func(row *db.Job) {
+		row.Description = "<p>" + strings.Repeat("word ", 400) + "</p>"
+	})
 
 	p := NewProjector(testOrigin)
 	summary := p.JobSummary(j)
@@ -129,11 +185,12 @@ func TestDetailCarriesTheFullBodyAndTheSummaryDoesNot(t *testing.T) {
 
 func TestDetailSeparatesRequiredFromPreferred(t *testing.T) {
 	// The distinction the prose usually buries, and the one a candidate decides on.
-	j := aJob()
-	j.Enrichment.Requirements = []enrich.Requirement{
-		{Text: "5 years of Go", Priority: "required"},
-		{Text: "Kubernetes", Priority: "preferred"},
-	}
+	j := aJob(t, func(row *db.Job) {
+		row.Enrichment = enrichmentJSON(t, enrich.Enrichment{Requirements: []enrich.Requirement{
+			{Text: "5 years of Go", Priority: "required"},
+			{Text: "Kubernetes", Priority: "preferred"},
+		}})
+	})
 
 	got := NewProjector(testOrigin).JobDetail(j, "greenhouse")
 
