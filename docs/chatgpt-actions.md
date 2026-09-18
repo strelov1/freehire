@@ -7,8 +7,20 @@ run the local `freehire` CLI; it calls the hosted HTTPS API described by
 ## Files
 
 - `web/static/openapi.yaml` - OpenAPI schema to import into a GPT Action.
-- `web/static/.well-known/ai-plugin.json` - legacy plugin manifest for clients
-  that still discover plugins through `/.well-known/ai-plugin.json`.
+
+There is no `ai-plugin.json`. It was removed in 2026-09: the ChatGPT plugin
+format it belonged to is retired, nothing dialled it, and it actively broke the
+ChatGPT app submission — the portal's tool scan reads every discovery document on
+the domain, and that one declared `auth: bearer` and `is_user_authenticated:
+true` for an API that requires neither. The scan failed as "MCP server/discover
+response was inconsistent", which it was. It also contradicted the instruction
+three lines below to leave authentication set to **None**.
+
+The app's own discovery surfaces are `/.well-known/ojcp.json` (the OJCP manifest,
+served by the SPA from the backend's own configuration) and the MCP server at
+`/api/v1/mcp`. Neither needs a plugin manifest, and the v1 `ai-plugin.json`
+schema could not have described an MCP server truthfully in any case: it is an
+OpenAPI-only format.
 
 After deployment, the main import URL is:
 
