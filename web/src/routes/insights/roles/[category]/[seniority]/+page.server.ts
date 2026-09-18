@@ -32,7 +32,7 @@ export const load: PageServerLoad = async ({ params, fetch, request, setHeaders 
   // invented level is a 400 from the endpoint, which a load turns into a 500 — so a
   // mistyped URL would answer "we broke" instead of "no such page". The demand check has
   // to wait for the role's own open-count, but this half never did.
-  if (!roleAddressExists(globalRoles, category, seniority)) error(404, NOT_COVERED);
+  if (!roleAddressExists(category, seniority)) error(404, NOT_COVERED);
 
   // The cookie is forwarded so the coverage overlay can be resolved during SSR — with
   // an absolute API base, event.fetch does not carry it on its own. The category-wide

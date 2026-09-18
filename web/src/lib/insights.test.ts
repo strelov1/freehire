@@ -146,7 +146,11 @@ describe('roleQualifies / rankedQualifyingRoles', () => {
 
     // But the thin one is still a real ADDRESS, so the route serves it (noindex) rather
     // than refusing it — the job page links there without knowing the role's size.
-    expect(roleAddressExists(roles, 'backend', 'junior')).toBe(true);
+    expect(roleAddressExists('backend', 'junior')).toBe(true);
+    // And so is a role in a category too small to be COVERED. The job page links from a
+    // posting knowing only its two facets, so a coverage requirement here would send a
+    // real posting's real role to a 404.
+    expect(roleAddressExists('qa', 'lead')).toBe(true);
   });
 
   it('asks about the role handed to it, not about its rank in the list', () => {
@@ -165,11 +169,13 @@ describe('roleQualifies / rankedQualifyingRoles', () => {
     // mistyped URL would say "we broke" instead of "no such page".
     const roles = [role('backend', 'senior', MIN_CATEGORY_OPEN)];
 
-    expect(roleAddressExists(roles, 'backend', 'senior')).toBe(true);
+    expect(roleAddressExists('backend', 'senior')).toBe(true);
     // A real address that is merely thin still EXISTS — the demand check is separate.
-    expect(roleAddressExists(roles, 'backend', 'junior')).toBe(true);
-    expect(roleAddressExists(roles, 'backend', 'archmage')).toBe(false);
-    expect(roleAddressExists(roles, 'not_a_category', 'senior')).toBe(false);
+    expect(roleAddressExists('backend', 'junior')).toBe(true);
+    expect(roleAddressExists('backend', 'archmage')).toBe(false);
+    expect(roleAddressExists('not_a_category', 'senior')).toBe(false);
+    // `other` is a real vocabulary value and not a role anybody hires for.
+    expect(roleAddressExists('other', 'senior')).toBe(false);
   });
 
   it('refuses a thin role, an invented level, and an uncovered category', () => {

@@ -9,7 +9,7 @@
 // seniority band, which is an /insights concept rather than a vocabulary value.
 
 import type { InsightRole, InsightSalaryBand, InsightSkill } from './api';
-import { SENIORITY_LABELS, categoryLabel, titleCase } from './labels';
+import { CATEGORY_LABELS, SENIORITY_LABELS, categoryLabel, titleCase } from './labels';
 
 /** A category is published only when its open-job demand clears this floor, so no
  *  thin page ships. Tunable; deliberately conservative. */
@@ -69,17 +69,22 @@ function isSeniority(seniority: string): boolean {
   return (SENIORITY_ORDER as readonly string[]).includes(seniority);
 }
 
-/** Whether a (category, seniority) pair is even an ADDRESS: a real seniority inside a
- *  covered category. Separate from the demand check below because it is answerable
- *  WITHOUT asking the API, and the API answers an invented level with a 400 — which a
- *  SvelteKit load turns into a 500. An address that does not exist is a 404, and finding
- *  that out must not cost a request that can only fail. */
-export function roleAddressExists(
-  roles: InsightRole[],
-  category: string,
-  seniority: string,
-): boolean {
-  return isCovered(roles, category) && isSeniority(seniority);
+/** Whether a (category, seniority) pair is even an ADDRESS: both halves named by the
+ *  vocabulary. Deliberately says nothing about DEMAND — how busy a role is decides
+ *  whether its page is worth indexing, not whether it exists — so this is answerable
+ *  from the two strings alone, with no ranking and no request.
+ *
+ *  That matters twice over. The API answers an invented level with a 400, which a
+ *  SvelteKit load turns into a 500, so a mistyped URL must be refused before it is
+ *  asked about. And the job page links here from any posting carrying both facets,
+ *  knowing nothing about how busy the role is — a coverage requirement here would send
+ *  a real posting's real role to a 404.
+ *
+ *  `other` is excluded: it is a real vocabulary value and not a role anybody hires for,
+ *  so "Other jobs" is a page with nothing to say. `coveredCategories` drops it for the
+ *  same reason. */
+export function roleAddressExists(category: string, seniority: string): boolean {
+  return category !== 'other' && category in CATEGORY_LABELS && isSeniority(seniority);
 }
 
 /** Whether a role deserves its own leaf page: a real address carrying enough open
@@ -91,7 +96,11 @@ export function roleQualifies(
   seniority: string,
   openCount: number,
 ): boolean {
-  return roleAddressExists(roles, category, seniority) && openCount >= MIN_CATEGORY_OPEN;
+  return (
+    roleAddressExists(category, seniority) &&
+    isCovered(roles, category) &&
+    openCount >= MIN_CATEGORY_OPEN
+  );
 }
 
 /** The qualifying roles WITHIN a ranking — what the sitemap lists.

@@ -25,7 +25,7 @@
   import { markSaved, markUnsaved } from '$lib/savedJobs.svelte';
   import { track } from '$lib/analytics';
   import { foreignContentLang } from '$lib/seo';
-  import { seniorityLabel } from '$lib/insights';
+  import { roleAddressExists, seniorityLabel } from '$lib/insights';
   import { categoryLabel } from '$lib/labels';
   import type { Display } from '$lib/generated/contracts';
   import type { Job, PlanState, UserJob } from '$lib/types';
@@ -637,12 +637,17 @@
        existed and nothing in the product linked to it — reachable only from the footer,
        four clicks deep, from no screen where anybody is thinking about their skills.
 
-       Shown only when the posting carries BOTH facets, which is a minority of them:
+       Shown only when both facets name a real role — the same check the route 404s on,
+       so the link cannot point at a page that refuses it. Being BUSY enough to index is
+       a separate question the route answers with noindex, because this page cannot know
+       it without a request of its own on the hottest page on the site.
+
+       That is a minority of postings:
        measured 2026-09-18, 98.7% of open technical postings state a category and just
        39.0% state a seniority. The link is absent rather than guessed when either is
        missing. It never 404s — a role below the publication floor is served and marked
        noindex rather than refused. -->
-  {#if roleCategory && roleSeniority}
+  {#if roleAddressExists(roleCategory, roleSeniority)}
     <section class="border-t border-border pt-4">
       <a
         class="text-brand-strong hover:underline"
