@@ -264,6 +264,7 @@ Each is self-contained and can be read independently.
 | **`internal/api`** — the block itself: what it is, what it may import | [internal/api/AGENTS.md](internal/api/AGENTS.md) |
 | **HTTP handlers** (response shapes, error rendering, routes) | [internal/api/handler/AGENTS.md](internal/api/handler/AGENTS.md) |
 | **Auto-apply browser driver** (headless Chrome: DOM scan, reconcile, resolve, fill/submit) | [internal/api/atsapply/AGENTS.md](internal/api/atsapply/AGENTS.md) |
+| **ChatGPT app** (the SECOND MCP server: why it is not the OJCP one, the annotations, the dropped filter) | [internal/api/mcpapp/AGENTS.md](internal/api/mcpapp/AGENTS.md) |
 | **OJCP provider** (the agent-facing standard: the projection, both transports, the manifest) | [internal/api/ojcp/AGENTS.md](internal/api/ojcp/AGENTS.md) |
 
 ## Conventions

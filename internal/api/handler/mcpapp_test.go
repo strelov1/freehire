@@ -3,9 +3,14 @@ package handler
 import (
 	"context"
 	"errors"
+	"io"
+	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/adaptor"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
@@ -154,4 +159,39 @@ type fakeCompanySearcherForMCP struct {
 func (f *fakeCompanySearcherForMCP) SearchCompanies(_ context.Context, p search.CompanySearchParams) (search.CompanyResult, error) {
 	f.got = p
 	return f.res, f.err
+}
+
+func TestTheMountedRouteSpeaksMCPOverHTTP(t *testing.T) {
+	// The Fiber adaptor mount, which no unit test on the handler methods can reach. A server
+	// that works in memory and 404s or hangs behind the adaptor is the whole feature broken,
+	// and it is exactly the shape of failure the OJCP manifest hit in production.
+	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
+	app.All("/mcp", adaptor.HTTPHandler(mcpapp.Handler(mcpappUnder(&fakeSearcher{}, nil, fakeOJCPStore{}))))
+
+	body := `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"t","version":"1"}}}`
+	req := httptest.NewRequestWithContext(t.Context(), fiber.MethodPost, "/mcp", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json, text/event-stream")
+
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("request: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+	answer, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Our own name, not the OJCP server's. The two are mounted side by side and a caller
+	// must be able to tell which one answered.
+	if !strings.Contains(string(answer), `"name":"freehire"`) {
+		t.Errorf("body = %s, want this server to name itself", answer)
+	}
+	if strings.Contains(string(answer), "freehire-ojcp") {
+		t.Errorf("body = %s, want the OJCP server not to have answered", answer)
+	}
 }
