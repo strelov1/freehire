@@ -46,6 +46,19 @@ Four packages split this surface — keep the split:
 - **Codes are keyed `(user_id, purpose)`**, at most one outstanding per purpose, so a pending
   email verification and a pending password reset never overwrite each other. TTL 15 min,
   5 wrong guesses, 60 s resend cooldown.
+- **A fourth purpose (`internal/ingest/employer`'s `PurposeVerifyWorkEmail`) shares this same
+  store through generic `Service.IssueCode`/`ConfirmCode`**, factored out of the
+  already-purpose-parameterized private `issueCode`/`consumeCodeTx`. `IssueCode` takes
+  delivery as an explicit `send func(ctx, email, code) error` rather than a `CodeMailer`
+  method, so a caller outside this package's own three purposes needs no change to
+  `CodeMailer` to add one. `ConfirmCode` is a standalone sibling of `ConfirmVerification`,
+  not something `ConfirmVerification` itself calls: `ConfirmVerification` bundles the
+  code-consume and `MarkEmailVerified` in one transaction (see the next bullet), and routing
+  it through a `ConfirmCode` that commits on its own would split that atomicity. **A new
+  purpose also needs its own migration**: `user_email_codes.purpose` carries a CHECK
+  constraint (migration 0041) that must be widened (see migration 0176 for the template) —
+  the Go constant alone is not enough, and the failure mode without it is a 500 on every call
+  for the new purpose, not a compile error.
 - `ErrInvalidCode` deliberately covers wrong / consumed / burnt without distinguishing them.
 - **Every code flow runs in a transaction, and the pool that opens it is a REQUIRED
   constructor argument.** The five-attempt limit is enforced by reading the outstanding code

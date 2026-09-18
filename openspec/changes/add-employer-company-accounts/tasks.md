@@ -118,6 +118,13 @@
       `user_email_codes.purpose`'s CHECK constraint (migration 0041) didn't allow the new
       `verify_work_email` purpose at all — every `Claim` call failed with a 500 until
       migration 0176 widened it, the same DROP/ADD pattern as the `closed_reason` migrations.
+- [x] 6.6 **Found while designing the frontend, not in the original breakdown**: there was no
+      way for a caller to read their OWN account before it activates — `GET /employer/company`
+      was gated on `ActiveAccount`, so a pending/revoked claimant got a 403 with no way to
+      even see their own status. Added `Service.MyAccount` (status regardless of
+      pending/active/revoked, `ErrNotFound` only for no account at all) and re-pointed
+      `GetCompany` to it; every WRITE stays `ActiveAccount`-gated exactly as before. New
+      requirement added to `employer-account`'s spec.
 
 ## 7. Web (SvelteKit)
 
@@ -129,10 +136,16 @@
 
 ## 8. Docs
 
-- [ ] 8.1 `internal/ingest/employer/AGENTS.md` (new substantial package), linked from the
-      root `AGENTS.md` module table
-- [ ] 8.2 Update `internal/identity/accounts/AGENTS.md` for the new generic `IssueCode`/
-      `ConfirmCode` methods and purpose constant
+- [x] 8.1 `internal/ingest/employer/AGENTS.md` (new substantial package), linked from the
+      root `AGENTS.md` module table. Also updated `internal/ingest/AGENTS.md` (the block-level
+      doc): added `employer` to the packages list and a 5th line to the "service-extraction
+      seam" table (`employer -> identity/accounts`, the first `identity` import from `ingest`)
+      — not in the original breakdown, but the same honesty-audit the existing 4-edge table
+      already commits to.
+- [x] 8.2 Updated `internal/identity/accounts/AGENTS.md` for the new generic `IssueCode`/
+      `ConfirmCode` methods, the purpose constant, and the `user_email_codes.purpose` CHECK
+      constraint gotcha (6.5's bug) — a future third-party purpose would hit the exact same
+      500 without this note.
 
 ## 9. Verification
 

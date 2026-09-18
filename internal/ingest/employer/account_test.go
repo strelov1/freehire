@@ -470,6 +470,31 @@ func TestUpdateCompanyProfile_RefusesAPendingAccount(t *testing.T) {
 	}
 }
 
+func TestMyAccount_ReturnsAPendingAccountWithoutRefusing(t *testing.T) {
+	repo := newFakeRepo()
+	s := New(repo, newFakeCodeIssuer(), &fakeClaimMailer{}, nil, nil)
+
+	if _, err := s.Claim(context.Background(), 1, "Acme", "hr@notacme.test"); err != nil {
+		t.Fatalf("Claim: %v", err)
+	}
+	acc, err := s.MyAccount(context.Background(), 1)
+	if err != nil {
+		t.Fatalf("MyAccount: %v, want no error for a pending account", err)
+	}
+	if acc.Status != StatusPending {
+		t.Errorf("status = %q, want pending", acc.Status)
+	}
+}
+
+func TestMyAccount_ReportsErrNotFoundForNoAccount(t *testing.T) {
+	repo := newFakeRepo()
+	s := New(repo, newFakeCodeIssuer(), &fakeClaimMailer{}, nil, nil)
+
+	if _, err := s.MyAccount(context.Background(), 1); !errors.Is(err, ErrNotFound) {
+		t.Errorf("err = %v, want ErrNotFound", err)
+	}
+}
+
 func TestActiveAccount_RefusesAPendingAccount(t *testing.T) {
 	repo := newFakeRepo()
 	s := New(repo, newFakeCodeIssuer(), &fakeClaimMailer{}, nil, nil)

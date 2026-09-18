@@ -183,3 +183,13 @@ func (s *Service) ActiveAccount(ctx context.Context, userID int64) (Account, err
 	}
 	return acc, nil
 }
+
+// MyAccount returns the caller's own account in whatever status it is in — pending, active,
+// or revoked — unlike ActiveAccount, which refuses anything but active. It exists for the
+// one read a caller needs BEFORE their account is active: "do I have a claim in flight, and
+// what does it say" (the status page a pending claimant sees, and what the dashboard reads
+// to decide whether to render the claim form or the dashboard at all). ErrNotFound is a
+// caller with no employer account at all.
+func (s *Service) MyAccount(ctx context.Context, userID int64) (Account, error) {
+	return s.repo.GetByUserID(ctx, userID)
+}

@@ -158,6 +158,24 @@ every such action.
   action
 - **THEN** the request is refused
 
+### Requirement: A user may always read their own employer account's status
+
+Unlike every capability in the previous requirement, reading the caller's own account —
+its status and, once active, the company's curated profile — SHALL NOT require the account
+to be active. A user with a pending or revoked account SHALL still be able to see that
+status; a user with no employer account at all SHALL get a not-found response, never a
+refused-but-you-have-one response that would indistinguishably describe both cases.
+
+#### Scenario: A pending account can read its own status
+
+- **WHEN** a user whose employer account is still pending requests their own account
+- **THEN** the system returns it, showing `pending`, rather than refusing the read
+
+#### Scenario: No employer account is a not-found, not a refusal
+
+- **WHEN** a user with no employer account at all requests their own account
+- **THEN** the system reports it as not found
+
 ### Requirement: An admin can revoke an employer account
 
 The system SHALL let an admin revoke an active or pending employer account. A revoked

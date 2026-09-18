@@ -266,6 +266,7 @@ Each is self-contained and can be read independently.
 | **Link resolution** (outbound job URL → destination's own identity) | [internal/ingest/linksource/AGENTS.md](internal/ingest/linksource/AGENTS.md) |
 | **ATS board recognition** (URL → (source, board), shared conventions) | [internal/ingest/atsboard/AGENTS.md](internal/ingest/atsboard/AGENTS.md) |
 | **Board contributions** (crowdsourced URL → (source, board) onboarding) | [internal/ingest/contribution/AGENTS.md](internal/ingest/contribution/AGENTS.md) |
+| **Employer accounts** (company claim, work-email verification, self-service vacancy authoring) | [internal/ingest/employer/AGENTS.md](internal/ingest/employer/AGENTS.md) |
 | **Telegram** (crawl + LLM vacancy extraction) | [internal/ingest/telegram/AGENTS.md](internal/ingest/telegram/AGENTS.md) |
 | **`internal/engage`** — the block itself: what it is, what it may import | [internal/engage/AGENTS.md](internal/engage/AGENTS.md) |
 | **Employee referrals** (offer/request marketplace, moderation, anonymity) | [internal/engage/referral/AGENTS.md](internal/engage/referral/AGENTS.md) |

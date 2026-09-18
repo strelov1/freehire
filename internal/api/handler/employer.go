@@ -226,16 +226,18 @@ func toEmployerCompanyResponse(acc employer.Account, company db.Company, found b
 	return resp
 }
 
-// GetCompany returns the caller's own account plus their company's current curated profile.
-// Reads companies directly (no employer-package round trip needed for a plain read) once
-// ActiveAccount has resolved the caller's slug — an inactive account gets the same refusal
-// every other employer action does.
+// GetCompany returns the caller's own account (whatever status it is in) plus their
+// company's current curated profile. Deliberately NOT gated on ActiveAccount, unlike every
+// write in this file: a caller with a pending or revoked claim still needs to read their own
+// status — it is the one read the claim-status page and the dashboard's own "am I active yet"
+// check both need before there is anything to edit. Reads companies directly (no
+// employer-package round trip needed for a plain read).
 func (h *employerHandlers) GetCompany(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {
 		return err
 	}
-	acc, err := h.employer.ActiveAccount(c.Context(), userID)
+	acc, err := h.employer.MyAccount(c.Context(), userID)
 	if err != nil {
 		return employerError(err)
 	}

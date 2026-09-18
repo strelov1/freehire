@@ -184,10 +184,32 @@ func TestEmployerEndToEnd(t *testing.T) {
 		}
 	})
 
+	t.Run("a pending account can still read its own status (200, not 403)", func(t *testing.T) {
+		resp := do(t, req(fiber.MethodGet, "/api/v1/employer/company", userBCookie, ""))
+		if resp.StatusCode != fiber.StatusOK {
+			b, _ := io.ReadAll(resp.Body)
+			t.Fatalf("status = %d, want 200 (body %s)", resp.StatusCode, b)
+		}
+		var acc struct {
+			Status string `json:"status"`
+		}
+		decodeData(t, resp, &acc)
+		if acc.Status != "pending" {
+			t.Errorf("status = %q, want pending", acc.Status)
+		}
+	})
+
 	t.Run("non-moderator cannot see the pending-claims queue (403)", func(t *testing.T) {
 		resp := do(t, req(fiber.MethodGet, "/api/v1/employer/claims", userACookie, ""))
 		if resp.StatusCode != fiber.StatusForbidden {
 			t.Errorf("status = %d, want 403", resp.StatusCode)
+		}
+	})
+
+	t.Run("a user with no employer account at all gets 404", func(t *testing.T) {
+		resp := do(t, req(fiber.MethodGet, "/api/v1/employer/company", modCookie, ""))
+		if resp.StatusCode != fiber.StatusNotFound {
+			t.Errorf("status = %d, want 404", resp.StatusCode)
 		}
 	})
 
