@@ -174,7 +174,6 @@ func All(c HTTPClient) map[string]Source {
 		NewHireology(c),
 		NewIsolvedHire(c),
 		NewApplicantPro(c),
-		NewApploi(c),
 		NewPaylocity(c),
 		NewJibe(c),
 		// Rate-paced (pacedPhenomGetter): all ~95 boards share Phenom People's platform
