@@ -423,3 +423,132 @@ func velocitySum(t *testing.T, ctx context.Context, q *Queries, kind, value stri
 	}
 	return a, r
 }
+
+// TestInsightsRoleSkillRollup exercises the per-role skill distribution and the
+// separate denominator it is divided by. The two are separate rollups on purpose:
+// measured on production 2026-09-18, 11% of the eligible postings carry no tagged
+// skill at all, so dividing a skill's count by the role's OPEN count would fold our
+// own tagging gap into every published share — and because that gap differs per
+// role, it would make two roles' shares incomparable.
+func TestInsightsRoleSkillRollup(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	ctx := context.Background()
+	truncate(t, pool)
+
+	// backend/senior: four open postings, one of which carries no skill at all, plus
+	// one closed posting whose skills must not count.
+	seedInsightsJob(t, ctx, q, pool, "rs1", insightSeed{category: "backend", seniority: "senior", createdAgo: 5, skills: []string{"go", "docker"}})
+	seedInsightsJob(t, ctx, q, pool, "rs2", insightSeed{category: "backend", seniority: "senior", createdAgo: 5, skills: []string{"go", "docker"}})
+	seedInsightsJob(t, ctx, q, pool, "rs3", insightSeed{category: "backend", seniority: "senior", createdAgo: 5, skills: []string{"go"}})
+	seedInsightsJob(t, ctx, q, pool, "rs4", insightSeed{category: "backend", seniority: "senior", createdAgo: 5})
+	closed := 1
+	seedInsightsJob(t, ctx, q, pool, "rs5", insightSeed{category: "backend", seniority: "senior", createdAgo: 5, closedAgo: &closed, skills: []string{"go", "docker", "kafka"}})
+
+	// A different seniority in the same category must not be folded in. Two postings,
+	// not one, so junior clears the same floor senior does — with one it would be
+	// suppressed and the assertion below could not tell "not mixed in" apart from
+	// "below the floor".
+	seedInsightsJob(t, ctx, q, pool, "rs6", insightSeed{category: "backend", seniority: "junior", createdAgo: 5, skills: []string{"go"}})
+	seedInsightsJob(t, ctx, q, pool, "rs6b", insightSeed{category: "backend", seniority: "junior", createdAgo: 5, skills: []string{"go"}})
+	// A posting with no seniority is out of scope entirely — the rollup describes
+	// postings that STATE a level, which is only 39% of the catalogue.
+	seedInsightsJob(t, ctx, q, pool, "rs7", insightSeed{category: "backend", createdAgo: 5, skills: []string{"go"}})
+
+	rebuildRoleSkills(t, ctx, q, 2)
+
+	// go is on rs1,rs2,rs3; docker on rs1,rs2. rs5 is closed and rs7 has no
+	// seniority, so neither contributes.
+	got := roleSkillCounts(t, ctx, q, "backend", "senior")
+	want := map[string]int32{"go": 3, "docker": 2}
+	if len(got) != len(want) {
+		t.Errorf("backend/senior skills = %v, want %v", got, want)
+	}
+	for skill, n := range want {
+		if got[skill] != n {
+			t.Errorf("backend/senior %s = %d, want %d", skill, got[skill], n)
+		}
+	}
+	if _, ok := got["kafka"]; ok {
+		t.Errorf("closed posting's skill leaked into the rollup: %v", got)
+	}
+
+	// The denominator counts the role's SKILL-BEARING open postings (rs1..rs3), not
+	// its four open ones: rs4 has no tagged skill.
+	if n := roleSkillSample(t, ctx, q, "backend", "senior"); n != 3 {
+		t.Errorf("backend/senior sample_size = %d, want 3 (rs4 carries no skill)", n)
+	}
+
+	// The sibling seniority is its own role, and its denominator is its own: junior's
+	// two go postings must not raise senior's count of 3, nor vice versa.
+	if got := roleSkillCounts(t, ctx, q, "backend", "junior"); got["go"] != 2 {
+		t.Errorf("backend/junior go = %d, want 2", got["go"])
+	}
+	if n := roleSkillSample(t, ctx, q, "backend", "junior"); n != 2 {
+		t.Errorf("backend/junior sample_size = %d, want 2", n)
+	}
+
+	// A raised floor drops docker (2) and keeps go (3). The floor applies to the
+	// distribution only — the denominator must survive it, or a share that did clear
+	// the floor would have nothing to divide by.
+	rebuildRoleSkills(t, ctx, q, 3)
+	got = roleSkillCounts(t, ctx, q, "backend", "senior")
+	if _, ok := got["docker"]; ok {
+		t.Errorf("docker (2) survived a floor of 3: %v", got)
+	}
+	if got["go"] != 3 {
+		t.Errorf("go = %d, want 3 at floor 3", got["go"])
+	}
+	if n := roleSkillSample(t, ctx, q, "backend", "senior"); n != 3 {
+		t.Errorf("sample_size = %d after raising the floor, want 3 — the floor must not reach the denominator", n)
+	}
+
+	// Rerunning writes the same rows: the worker's delete-and-reinsert is the only
+	// thing between two runs, so a second run must not double any count.
+	rebuildRoleSkills(t, ctx, q, 2)
+	if got := roleSkillCounts(t, ctx, q, "backend", "senior"); got["go"] != 3 || got["docker"] != 2 {
+		t.Errorf("rerun = %v, want go 3 / docker 2 (not idempotent)", got)
+	}
+}
+
+func rebuildRoleSkills(t *testing.T, ctx context.Context, q *Queries, minSample int32) {
+	t.Helper()
+	if err := q.DeleteAllInsightsRoleSkillStats(ctx); err != nil {
+		t.Fatalf("delete role skills: %v", err)
+	}
+	if _, err := q.RebuildInsightsRoleSkillStats(ctx, minSample); err != nil {
+		t.Fatalf("rebuild role skills: %v", err)
+	}
+	if err := q.DeleteAllInsightsRoleSkillSample(ctx); err != nil {
+		t.Fatalf("delete role skill sample: %v", err)
+	}
+	if _, err := q.RebuildInsightsRoleSkillSample(ctx); err != nil {
+		t.Fatalf("rebuild role skill sample: %v", err)
+	}
+}
+
+func roleSkillCounts(t *testing.T, ctx context.Context, q *Queries, cat, sen string) map[string]int32 {
+	t.Helper()
+	rows, err := q.ListInsightsRoleSkills(ctx, ListInsightsRoleSkillsParams{
+		Category: cat, Seniority: sen, Lim: 100,
+	})
+	if err != nil {
+		t.Fatalf("list role skills: %v", err)
+	}
+	out := map[string]int32{}
+	for _, r := range rows {
+		out[r.Skill] = r.OpenCount
+	}
+	return out
+}
+
+func roleSkillSample(t *testing.T, ctx context.Context, q *Queries, cat, sen string) int32 {
+	t.Helper()
+	n, err := q.GetInsightsRoleSkillSample(ctx, GetInsightsRoleSkillSampleParams{
+		Category: cat, Seniority: sen,
+	})
+	if err != nil {
+		t.Fatalf("get role skill sample: %v", err)
+	}
+	return n
+}

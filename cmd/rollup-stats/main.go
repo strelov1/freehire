@@ -42,6 +42,15 @@ const (
 	// skillHistoryRetentionWeeks bounds insights_skill_history: snapshots older than
 	// this are pruned every run, so the table stays roughly this many weeks deep.
 	skillHistoryRetentionWeeks = 26
+	// defaultMinRoleSkillSample is the smallest number of a role's postings a skill
+	// must appear in to be published in that role's distribution. Unlike the floors
+	// above it is overridable per run (ROLE_SKILL_MIN_SAMPLE), because its correct
+	// value is not yet known: the rollup is new, and the intended way to set it is to
+	// read the first production run's output. A floor guessed in advance has already
+	// gone wrong once here — cmd/social-digest shipped at 10, which selected exactly
+	// one posting in a day and had to be lowered to 3 — and there it took a deploy to
+	// correct. Fold it back into a constant once a value has proven itself.
+	defaultMinRoleSkillSample = 5
 )
 
 func main() {
@@ -175,6 +184,26 @@ func rebuildInsights(ctx context.Context, q *db.Queries) error {
 		return err
 	}
 	if _, err := q.RebuildInsightsRoleStatsByCountry(ctx, prevTs); err != nil {
+		return err
+	}
+
+	// Per-role skill demand, and separately the denominator its shares divide by.
+	// The floor reaches the distribution only: applied to the sample it would delete
+	// the denominator of a share that did clear it.
+	minRoleSkillSample, err := worker.EnvInt32("ROLE_SKILL_MIN_SAMPLE", defaultMinRoleSkillSample)
+	if err != nil {
+		return err
+	}
+	if err := q.DeleteAllInsightsRoleSkillStats(ctx); err != nil {
+		return err
+	}
+	if _, err := q.RebuildInsightsRoleSkillStats(ctx, minRoleSkillSample); err != nil {
+		return err
+	}
+	if err := q.DeleteAllInsightsRoleSkillSample(ctx); err != nil {
+		return err
+	}
+	if _, err := q.RebuildInsightsRoleSkillSample(ctx); err != nil {
 		return err
 	}
 

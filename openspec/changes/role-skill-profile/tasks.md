@@ -33,39 +33,46 @@
 
 ## 2. Rollup table and query
 
-- [ ] 2.1 Add the migration creating `insights_role_skill_stats (category, seniority,
+- [x] 2.1 Add the migration creating `insights_role_skill_stats (category, seniority,
       skill, open_count, PRIMARY KEY (category, seniority, skill))`, with an index serving
       the ranked read `(category, seniority, open_count DESC)`. Comment why there is no
       country column, pointing at the sibling table's own rule.
-- [ ] 2.2 In the same migration, add `insights_role_skill_sample (category, seniority,
+- [x] 2.2 In the same migration, add `insights_role_skill_sample (category, seniority,
       sample_size, PRIMARY KEY (category, seniority))` — the share's denominator, one row
       per role, at most 216 rows. A separate table rather than a column on
       `insights_role_stats` (which is country-keyed, so the figure would be meaningless on
       every non-'' row) and rather than a value repeated on every skill row (one fact
       written a dozen times). Comment the 11% measurement that forced it.
-- [ ] 2.3 `pnpm check:sql` passes on the new migration file.
-- [ ] 2.4 Add `DeleteAllInsightsRoleSkillStats` and `RebuildInsightsRoleSkillStats` to
+- [x] 2.3 `pnpm check:sql` passes on the new migration file. Both count columns carry a
+      `-- squawk-ignore prefer-bigint-over-int` with the argument beside it: a per-role
+      posting count sits four orders of magnitude below int's ceiling, and `integer` is
+      what the rest of the insights family already serves as int32. Note the suppression
+      syntax — the reason must follow a SECOND `--`, or squawk parses the prose as more
+      rule names and reports each word as an unknown rule.
+- [x] 2.4 Add `DeleteAllInsightsRoleSkillStats` and `RebuildInsightsRoleSkillStats` to
       `internal/platform/db/queries/insights.sql`, taking the sample floor as
       `@min_sample` exactly as the sibling rollups do. Run `make sqlc`.
-- [ ] 2.5 Add the sibling `DeleteAllInsightsRoleSkillSample` /
+- [x] 2.5 Add the sibling `DeleteAllInsightsRoleSkillSample` /
       `RebuildInsightsRoleSkillSample` — `count(*) FILTER (WHERE cardinality(skills) > 0)`
       per role. It takes NO `@min_sample`: the denominator must exist for every role whose
       skills were counted, and flooring it would make some shares undividable.
 
 ## 3. Worker
 
-- [ ] 3.1 In `cmd/rollup-stats`, run the delete + rebuild inside the SAME transaction as
+- [x] 3.1 In `cmd/rollup-stats`, run the delete + rebuild inside the SAME transaction as
       the existing insights rollups, so a reader never sees a partial rebuild.
-- [ ] 3.2 Read the skill sample floor through the strict `worker.EnvInt` reader, so a
+- [x] 3.2 Read the skill sample floor through the strict `worker.EnvInt32` reader
+      (`ROLE_SKILL_MIN_SAMPLE`, default 5 — a knob rather than a constant like its
+      siblings precisely because 7.4 is what sets it), so a
       set-but-unparseable value fails the run with the value named rather than silently
       taking a default.
-- [ ] 3.3 Integration test: seeded jobs across two roles produce per-role distributions,
+- [x] 3.3 Integration test: seeded jobs across two roles produce per-role distributions,
       a skill below the floor is omitted, closed postings do not contribute, and a rerun
       is idempotent.
 
 ## 4. API
 
-- [ ] 4.1 Add `ListInsightsRoleSkills` to `internal/platform/db/queries/insights.sql`
+- [x] 4.1 Add `ListInsightsRoleSkills` and `GetInsightsRoleSkillSample` to `internal/platform/db/queries/insights.sql`
       (ranked by `open_count DESC` within one role), regenerate with `make sqlc`.
 - [ ] 4.2 Teach `InsightsRoles` the `seniority` parameter: validate against
       `vocab.SeniorityValues`, `400` on an unknown value, `400` when `seniority` is given

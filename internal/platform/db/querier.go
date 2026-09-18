@@ -1354,6 +1354,11 @@ type Querier interface {
 	// Per-company hiring signal
 	// ---------------------------------------------------------------------------
 	DeleteAllInsightsCompanyStats(ctx context.Context) error
+	DeleteAllInsightsRoleSkillSample(ctx context.Context) error
+	// ---------------------------------------------------------------------------
+	// Per-role skill demand
+	// ---------------------------------------------------------------------------
+	DeleteAllInsightsRoleSkillStats(ctx context.Context) error
 	// Trends & Insights rollups (insights_*), recomputed by cmd/rollup-stats as an
 	// atomic delete-and-reinsert, and the read queries the public /api/v1/insights/*
 	// endpoints serve from them. All rollups are a pure function of current `jobs`
@@ -2362,6 +2367,10 @@ type Querier interface {
 	// grant actually covers what this caller wants to do with it. `status` is read too so a
 	// row already marked needs_reconsent can be treated as unusable without a second query.
 	GetGoogleGrantForWrite(ctx context.Context, userID int64) (GetGoogleGrantForWriteRow, error)
+	// One role's share denominator. A role with no skill-bearing postings has no row
+	// here, and the caller MUST read that as a sample of zero rather than as an error:
+	// it means the role exists and nothing in it was taggable, which is a real answer.
+	GetInsightsRoleSkillSample(ctx context.Context, arg GetInsightsRoleSkillSampleParams) (int32, error)
 	// The employer's own description of an upcoming interview, for the rehearsal context:
 	// the most recent message classified as an invitation and linked to this application.
 	//
@@ -3720,6 +3729,9 @@ type Querier interface {
 	// tiebreak. @min_open floors the current open-count (blunts ingest-artifact spikes).
 	// company_name falls back to the slug when no companies row exists.
 	ListInsightsCompanies(ctx context.Context, arg ListInsightsCompaniesParams) ([]ListInsightsCompaniesRow, error)
+	// One role's skills, most-demanded first. The caller divides by the role's
+	// sample_size (GetInsightsRoleSkillSample), never by its open_count.
+	ListInsightsRoleSkills(ctx context.Context, arg ListInsightsRoleSkillsParams) ([]ListInsightsRoleSkillsRow, error)
 	// Ranked roles within one country slice ('' = all countries), ordered by raw
 	// demand or by growth (open_count - open_count_prev), demand as the tiebreak.
 	// An empty @category means all categories (the original behavior); a non-empty
@@ -5022,6 +5034,29 @@ type Querier interface {
 	// (a job is created no later than it closes, so this equals the point-in-time open
 	// count). Only a company's activity days get a row.
 	RebuildInsightsCompanyStats(ctx context.Context) (int64, error)
+	// The denominator every share in insights_role_skill_stats divides by: the role's
+	// open postings that carry AT LEAST ONE tagged skill. Measured 2026-09-18, 11% of
+	// the eligible postings carry none, so dividing by the role's open count would fold
+	// our own tagging gap into every published share — and because that gap differs per
+	// role, two roles' shares would stop being comparable.
+	//
+	// Takes NO @min_sample, deliberately. The floor selects which SKILLS are published;
+	// applied here it would delete the denominator of a share that did clear the floor,
+	// leaving a numerator with nothing to divide by.
+	// The NOT is_private clause must stay in step with the distribution's: a numerator
+	// and a denominator counting different populations is a share that is quietly wrong
+	// rather than visibly broken.
+	RebuildInsightsRoleSkillSample(ctx context.Context) (int64, error)
+	// The skill distribution WITHIN one role. Same shape as
+	// RebuildInsightsRoleStatsByCountry's `FROM jobs, unnest(countries)` above — a job
+	// contributes once per skill it carries — so its cost is one already measured in
+	// production, and `skills` is a small text[] rather than the TOASTed description.
+	//
+	// Open postings only: a closed posting's skills describe a vacancy nobody can apply
+	// to. No growth column, unlike the sibling rollups: "docker is up 4% within senior
+	// backend" is a second question, and answering it would need a prior-window pass
+	// over the same unnest.
+	RebuildInsightsRoleSkillStats(ctx context.Context, minSample int32) (int64, error)
 	// Per-country role demand: a job contributes once to each of its countries.
 	RebuildInsightsRoleStatsByCountry(ctx context.Context, prevTs pgtype.Timestamptz) (int64, error)
 	// Country-agnostic ('' bucket) role demand. open_count = jobs open now

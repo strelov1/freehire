@@ -46,6 +46,28 @@ func (q *Queries) DeleteAllInsightsCompanyStats(ctx context.Context) error {
 	return err
 }
 
+const deleteAllInsightsRoleSkillSample = `-- name: DeleteAllInsightsRoleSkillSample :exec
+DELETE FROM insights_role_skill_sample
+`
+
+func (q *Queries) DeleteAllInsightsRoleSkillSample(ctx context.Context) error {
+	_, err := q.db.Exec(ctx, deleteAllInsightsRoleSkillSample)
+	return err
+}
+
+const deleteAllInsightsRoleSkillStats = `-- name: DeleteAllInsightsRoleSkillStats :exec
+
+DELETE FROM insights_role_skill_stats
+`
+
+// ---------------------------------------------------------------------------
+// Per-role skill demand
+// ---------------------------------------------------------------------------
+func (q *Queries) DeleteAllInsightsRoleSkillStats(ctx context.Context) error {
+	_, err := q.db.Exec(ctx, deleteAllInsightsRoleSkillStats)
+	return err
+}
+
 const deleteAllInsightsRoleStats = `-- name: DeleteAllInsightsRoleStats :exec
 
 
@@ -153,6 +175,28 @@ func (q *Queries) GetGlobalCompanyResponse(ctx context.Context) (GetGlobalCompan
 	return i, err
 }
 
+const getInsightsRoleSkillSample = `-- name: GetInsightsRoleSkillSample :one
+SELECT sample_size
+FROM insights_role_skill_sample
+WHERE category = $1::text
+  AND seniority = $2::text
+`
+
+type GetInsightsRoleSkillSampleParams struct {
+	Category  string `json:"category"`
+	Seniority string `json:"seniority"`
+}
+
+// One role's share denominator. A role with no skill-bearing postings has no row
+// here, and the caller MUST read that as a sample of zero rather than as an error:
+// it means the role exists and nothing in it was taggable, which is a real answer.
+func (q *Queries) GetInsightsRoleSkillSample(ctx context.Context, arg GetInsightsRoleSkillSampleParams) (int32, error) {
+	row := q.db.QueryRow(ctx, getInsightsRoleSkillSample, arg.Category, arg.Seniority)
+	var sample_size int32
+	err := row.Scan(&sample_size)
+	return sample_size, err
+}
+
 const getUserResponseRate = `-- name: GetUserResponseRate :one
 WITH observable AS (
     SELECT ae.application_id
@@ -255,6 +299,48 @@ func (q *Queries) ListInsightsCompanies(ctx context.Context, arg ListInsightsCom
 			&i.OpenCountPrev,
 			&i.Growth,
 		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listInsightsRoleSkills = `-- name: ListInsightsRoleSkills :many
+SELECT skill, open_count
+FROM insights_role_skill_stats
+WHERE category = $1::text
+  AND seniority = $2::text
+ORDER BY open_count DESC, skill
+LIMIT $3::int
+`
+
+type ListInsightsRoleSkillsParams struct {
+	Category  string `json:"category"`
+	Seniority string `json:"seniority"`
+	Lim       int32  `json:"lim"`
+}
+
+type ListInsightsRoleSkillsRow struct {
+	Skill     string `json:"skill"`
+	OpenCount int32  `json:"open_count"`
+}
+
+// One role's skills, most-demanded first. The caller divides by the role's
+// sample_size (GetInsightsRoleSkillSample), never by its open_count.
+func (q *Queries) ListInsightsRoleSkills(ctx context.Context, arg ListInsightsRoleSkillsParams) ([]ListInsightsRoleSkillsRow, error) {
+	rows, err := q.db.Query(ctx, listInsightsRoleSkills, arg.Category, arg.Seniority, arg.Lim)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListInsightsRoleSkillsRow{}
+	for rows.Next() {
+		var i ListInsightsRoleSkillsRow
+		if err := rows.Scan(&i.Skill, &i.OpenCount); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -718,6 +804,65 @@ FROM (
 // count). Only a company's activity days get a row.
 func (q *Queries) RebuildInsightsCompanyStats(ctx context.Context) (int64, error) {
 	result, err := q.db.Exec(ctx, rebuildInsightsCompanyStats)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const rebuildInsightsRoleSkillSample = `-- name: RebuildInsightsRoleSkillSample :execrows
+INSERT INTO insights_role_skill_sample (category, seniority, sample_size)
+SELECT category, seniority, count(*)::int
+FROM jobs
+WHERE closed_at IS NULL
+  AND NOT is_private
+  AND category <> '' AND seniority <> ''
+  AND cardinality(skills) > 0
+GROUP BY category, seniority
+`
+
+// The denominator every share in insights_role_skill_stats divides by: the role's
+// open postings that carry AT LEAST ONE tagged skill. Measured 2026-09-18, 11% of
+// the eligible postings carry none, so dividing by the role's open count would fold
+// our own tagging gap into every published share — and because that gap differs per
+// role, two roles' shares would stop being comparable.
+//
+// Takes NO @min_sample, deliberately. The floor selects which SKILLS are published;
+// applied here it would delete the denominator of a share that did clear the floor,
+// leaving a numerator with nothing to divide by.
+// The NOT is_private clause must stay in step with the distribution's: a numerator
+// and a denominator counting different populations is a share that is quietly wrong
+// rather than visibly broken.
+func (q *Queries) RebuildInsightsRoleSkillSample(ctx context.Context) (int64, error) {
+	result, err := q.db.Exec(ctx, rebuildInsightsRoleSkillSample)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const rebuildInsightsRoleSkillStats = `-- name: RebuildInsightsRoleSkillStats :execrows
+INSERT INTO insights_role_skill_stats (category, seniority, skill, open_count)
+SELECT category, seniority, skill, count(*)::int
+FROM jobs, unnest(skills) AS skill
+WHERE closed_at IS NULL
+  AND NOT is_private
+  AND category <> '' AND seniority <> ''
+GROUP BY category, seniority, skill
+HAVING count(*) >= $1::int
+`
+
+// The skill distribution WITHIN one role. Same shape as
+// RebuildInsightsRoleStatsByCountry's `FROM jobs, unnest(countries)` above — a job
+// contributes once per skill it carries — so its cost is one already measured in
+// production, and `skills` is a small text[] rather than the TOASTed description.
+//
+// Open postings only: a closed posting's skills describe a vacancy nobody can apply
+// to. No growth column, unlike the sibling rollups: "docker is up 4% within senior
+// backend" is a second question, and answering it would need a prior-window pass
+// over the same unnest.
+func (q *Queries) RebuildInsightsRoleSkillStats(ctx context.Context, minSample int32) (int64, error) {
+	result, err := q.db.Exec(ctx, rebuildInsightsRoleSkillStats, minSample)
 	if err != nil {
 		return 0, err
 	}
