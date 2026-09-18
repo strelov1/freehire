@@ -10,9 +10,7 @@
   let { data }: { data: PageData } = $props();
 
   const origin = $derived(page.url.origin);
-  const canonical = $derived(
-    `${origin}/insights/roles/${data.category}/${data.seniority}`,
-  );
+  const canonical = $derived(`${origin}/insights/roles/${data.category}/${data.seniority}`);
   const heading = $derived(`What ${data.roleName} Jobs Ask For`);
   const title = $derived(`${heading} · freehire`);
   const updated = $derived(

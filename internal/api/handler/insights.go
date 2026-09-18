@@ -274,17 +274,28 @@ func (h *statsHandlers) InsightsRoles(c *fiber.Ctx) error {
 
 	meta := fiber.Map{"country": country, "category": category, "seniority": seniority, "sort": sort, "limit": limit}
 	if seniority != "" {
+		// insights_role_stats is keyed by (category, seniority, country), so a named role
+		// matches at most one row. The loop is over "however many came back" rather than
+		// an assumption about that being one.
+		var carriesCoverage bool
 		for i := range data {
 			if err := h.attachRoleSkills(c, &data[i], limit); err != nil {
 				return err
 			}
-			h.attachRoleCoverage(c, &data[i])
+			if h.attachRoleCoverage(c, &data[i]) {
+				carriesCoverage = true
+			}
 		}
 		// A coverage overlay is one caller's own answer. The sibling insights routes are
 		// happily shared-cacheable and the SPA sets s-maxage on them, so this must say
 		// otherwise explicitly — a shared cache holding one visitor's coverage would
 		// serve it to the next.
-		if _, signedIn := auth.UserID(c); signedIn {
+		//
+		// The condition is what the BODY carries, not whether the caller is signed in.
+		// Those two agree on the ordinary path and part company when the overlay is
+		// skipped (a failed profile read), where re-deriving from the session would mark
+		// a response private that holds nothing private.
+		if carriesCoverage {
 			c.Set(fiber.HeaderCacheControl, "private, no-store")
 		}
 		// The distribution is country-agnostic by design (the rollup does not cross a
@@ -317,15 +328,27 @@ func (h *statsHandlers) attachRoleSkills(c *fiber.Ctx, role *roleInsight, limit 
 	}
 	skills := make([]roleSkillInsight, len(rows))
 	for i, r := range rows {
-		var share float64
-		if sample > 0 {
-			share = float64(r.OpenCount) / float64(sample)
-		}
-		skills[i] = roleSkillInsight{Skill: r.Skill, OpenCount: r.OpenCount, Share: share}
+		skills[i] = roleSkillInsight{Skill: r.Skill, OpenCount: r.OpenCount, Share: skillShare(r.OpenCount, sample)}
 	}
 	role.SampleSize = &sample
 	role.Skills = &skills
 	return nil
+}
+
+// skillShare is the one place the denominator rule lives: a skill's count over the
+// role's SKILL-BEARING postings, never over its open count. Measured 2026-09-18, 11% of
+// the eligible postings carry no tagged skill, so dividing by the open count would fold
+// our own tagging gap into every published share — and because that gap differs per
+// role, two roles' shares would stop being comparable.
+//
+// A sample of zero yields zero rather than a division by it. That combination cannot
+// arise from real data (a skill counted implies a posting carrying it), so the guard is
+// against the rollups being out of step, not against a case the catalogue produces.
+func skillShare(count, sample int32) float64 {
+	if sample <= 0 {
+		return 0
+	}
+	return float64(count) / float64(sample)
 }
 
 // attachRoleCoverage overlays the signed-in caller's own coverage of the role's ranked
@@ -339,14 +362,18 @@ func (h *statsHandlers) attachRoleSkills(c *fiber.Ctx, role *roleInsight, limit 
 // Best-effort, like the sibling signed-in overlays on the public job and company reads:
 // a profile lookup that fails leaves the coverage absent rather than failing a read that
 // is perfectly serviceable without it.
-func (h *statsHandlers) attachRoleCoverage(c *fiber.Ctx, role *roleInsight) {
+//
+// Returns whether a section was attached, which is what the caller's Cache-Control
+// decision reads — so the header describes the body rather than re-deriving the same
+// answer from the session and disagreeing with it on the skipped path.
+func (h *statsHandlers) attachRoleCoverage(c *fiber.Ctx, role *roleInsight) bool {
 	userID, ok := auth.UserID(c)
 	if !ok || role.Skills == nil {
-		return
+		return false
 	}
 	profile, err := h.queries.GetUserProfile(c.Context(), userID)
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
-		return
+		return false
 	}
 	// A caller with no profile row, or one holding no skills, still gets a coverage
 	// section — reporting zero held. An ABSENT section means "not signed in", and a
@@ -358,6 +385,7 @@ func (h *statsHandlers) attachRoleCoverage(c *fiber.Ctx, role *roleInsight) {
 	}
 	m := jobmatch.Compute(ranked, profile.Skills)
 	role.Coverage = &m
+	return true
 }
 
 // InsightsCompanies serves GET /api/v1/insights/companies: the hiring-signal
