@@ -136,10 +136,16 @@ export function blogPaths(posts: { slug: string; date: string }[]): PathEntry[] 
 /** Sitemap paths for the insights pages: the hub plus salary/skills/roles for each
  *  covered category. Takes the already-gated category tokens (from
  *  `coveredCategories`) so it stays pure — a thin category is never listed. */
-export function insightsPaths(categories: string[]): string[] {
+export function insightsPaths(categories: string[], roleLeaves: [string, string][] = []): string[] {
   const paths = ['/insights'];
   for (const c of categories) {
     paths.push(`/insights/salary/${c}`, `/insights/skills/${c}`, `/insights/roles/${c}`);
+  }
+  // The per-role leaves, passed already gated (from `coveredRoles`) so a pair the
+  // route would 404 is never listed — the same rule read off the same numbers that
+  // `roleLandingPaths` follows for the jobs landings.
+  for (const [category, seniority] of roleLeaves) {
+    paths.push(`/insights/roles/${category}/${seniority}`);
   }
   return paths;
 }

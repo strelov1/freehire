@@ -1,5 +1,6 @@
 <script lang="ts">
   import { page } from '$app/state';
+  import { resolve } from '$app/paths';
   import Seo from '$lib/components/Seo.svelte';
   import InsightsPageShell from '$lib/components/InsightsPageShell.svelte';
   import { breadcrumbJsonLd, datasetJsonLd, jsonLdScript } from '$lib/seo';
@@ -65,7 +66,19 @@
               ? 'text-red-600 dark:text-red-400'
               : 'text-muted-foreground'}
         <tr class="border-b border-border">
-          <td class="py-2 pr-4 font-medium text-foreground">{seniorityLabel(r.seniority)}</td>
+          <td class="py-2 pr-4 font-medium text-foreground">
+            {#if data.leaves.has(r.seniority)}
+              <a
+                class="text-primary hover:underline"
+                href={resolve('/insights/roles/[category]/[seniority]', {
+                  category: data.category,
+                  seniority: r.seniority,
+                })}>{seniorityLabel(r.seniority)}</a
+              >
+            {:else}
+              {seniorityLabel(r.seniority)}
+            {/if}
+          </td>
           <td class="py-2 pr-4 text-right tabular-nums">{r.open_count.toLocaleString('en-US')}</td>
           <td class="py-2 text-right tabular-nums {growthTone}">
             {r.growth > 0 ? '+' : ''}{r.growth.toLocaleString('en-US')}

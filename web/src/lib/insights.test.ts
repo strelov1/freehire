@@ -10,6 +10,9 @@ import {
   rolesIntro,
   MIN_CATEGORY_OPEN,
   seniorityLabel,
+  coveredRoles,
+  isCoveredRole,
+  roleSkillsIntro,
 } from './insights';
 
 const role = (category: string, seniority: string, open_count: number): InsightRole => ({
@@ -121,5 +124,60 @@ describe('seniorityLabel', () => {
   it('resolves a real seniority token through the shared vocabulary', () => {
     expect(seniorityLabel('c_level')).toBe('C-level');
     expect(seniorityLabel('senior')).toBe('Senior');
+  });
+});
+
+describe('coveredRoles', () => {
+  it('publishes a leaf only for a real seniority in a covered category with enough demand', () => {
+    const roles = [
+      role('backend', 'senior', MIN_CATEGORY_OPEN),
+      // Same covered category, but this level alone is too thin for its own page.
+      role('backend', 'junior', MIN_CATEGORY_OPEN - 1),
+      // The category-wide band is not a seniority, so it never gets a leaf.
+      role('backend', '', MIN_CATEGORY_OPEN),
+      // A category that does not clear the gate takes its levels with it.
+      role('qa', 'lead', MIN_CATEGORY_OPEN - 1),
+    ];
+
+    expect(coveredRoles(roles).map((r) => [r.category, r.seniority])).toEqual([
+      ['backend', 'senior'],
+    ]);
+  });
+
+  it('agrees with isCoveredRole, which the leaf route 404s on', () => {
+    const roles = [role('backend', 'senior', MIN_CATEGORY_OPEN)];
+
+    expect(isCoveredRole(roles, 'backend', 'senior')).toBe(true);
+    expect(isCoveredRole(roles, 'backend', 'junior')).toBe(false);
+    // An invented level is a wrong address, not a thin page.
+    expect(isCoveredRole(roles, 'backend', 'archmage')).toBe(false);
+  });
+});
+
+describe('roleSkillsIntro', () => {
+  it('says what the figures are measured over, never that they describe the market', () => {
+    const intro = roleSkillsIntro({
+      ...role('backend', 'senior', 4000),
+      sample_size: 3000,
+      skills: [
+        { skill: 'docker', open_count: 2100, share: 0.7 },
+        { skill: 'kubernetes', open_count: 1800, share: 0.6 },
+        { skill: 'aws', open_count: 1500, share: 0.5 },
+        { skill: 'go', open_count: 900, share: 0.3 },
+      ],
+    });
+
+    // The sample, not the open count: only 39% of open technical postings state a
+    // seniority, so the wider figure would claim a population this does not cover.
+    expect(intro).toContain('3,000');
+    expect(intro).not.toContain('4,000');
+    expect(intro).toContain('docker, kubernetes, aws');
+    expect(intro).not.toContain('go');
+  });
+
+  it('says so plainly when nothing cleared the floor', () => {
+    const intro = roleSkillsIntro({ ...role('backend', 'senior', 40), sample_size: 0, skills: [] });
+
+    expect(intro).toContain('Not enough');
   });
 });

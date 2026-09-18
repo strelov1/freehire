@@ -1,7 +1,7 @@
 import { error } from '@sveltejs/kit';
 import { serverApi } from '$lib/server/api';
 import { loadInsightsGate } from '$lib/server/insights';
-import { coveredCategories, isCovered, rolesIntro } from '$lib/insights';
+import { coveredCategories, coveredRoles, isCovered, rolesIntro } from '$lib/insights';
 import { categoryLabel } from '$lib/labels';
 import type { PageServerLoad } from './$types';
 
@@ -19,11 +19,21 @@ export const load: PageServerLoad = async ({ params, fetch, setHeaders }) => {
   const roles = await api.insightsRoles({ category, sort: 'open', limit: 20 });
   setHeaders({ 'cache-control': 'public, max-age=0, s-maxage=3600' });
 
+  // Which of this category's seniorities have a leaf page. Derived from the SAME
+  // gate the leaf route and the sitemap read, so a level is linked only where the
+  // link resolves — a row linking to a 404 is worse than a row that does not link.
+  const leaves = new Set(
+    coveredRoles(globalRoles)
+      .filter((r) => r.category === category)
+      .map((r) => r.seniority),
+  );
+
   return {
     category,
     label: categoryLabel(category),
     covered: coveredCategories(globalRoles),
     roles,
+    leaves,
     intro: rolesIntro(category, roles),
   };
 };

@@ -107,29 +107,33 @@
 
 ## 6. Web
 
-- [ ] 6.1 Add the client method in `web/src/lib/api.ts` for the single-role read.
-- [ ] 6.2 Add `web/src/routes/insights/roles/[category]/[seniority]/+page.server.ts`,
+- [x] 6.1 Add the client method in `web/src/lib/api.ts` for the single-role read.
+- [x] 6.2 Add `web/src/routes/insights/roles/[category]/[seniority]/+page.server.ts`,
       gated by the same `loadInsightsGate` / `isCovered` read the sibling pages use, and
       404 for a pair that does not clear the gate.
-- [ ] 6.3 Build `+page.svelte`: role header with open count and growth, the ranked skill
+- [x] 6.3 Build `+page.svelte`: role header with open count and growth, the ranked skill
       list, and a link into the filtered jobs search for that role. Follow the existing
       insights pages' layout rather than inventing one.
-- [ ] 6.4 Label the column "mentioned in", never "required by". This wording is normative
+- [x] 6.4 Label the column "mentioned in", never "required by". This wording is normative
       in the spec.
-- [ ] 6.5 State the `sample_size` the distribution was measured over, and never word the
+- [x] 6.5 State the `sample_size` the distribution was measured over, and never word the
       page as describing the role's market — only 39.0% of open tech postings state a
       seniority (task 1.1). Normative in the spec.
-- [ ] 6.6 Render the CATEGORY-only distribution beside the role's, read from the existing
+- [x] 6.6 Render the CATEGORY-only distribution beside the role's, read from the existing
       `/api/v1/insights/skills?category=…` (98.7% coverage). It costs no new rollup and it
       is what stops the 39%-coverage slice from standing alone.
-- [ ] 6.7 Overlay the coverage for a signed-in visitor: held / adjacent (showing the
+- [x] 6.7 Overlay the coverage for a signed-in visitor: held / adjacent (showing the
       neighbour) / missing, plus the held-out-of-total line. Anonymous visitors see the
       aggregate alone with no empty column.
-- [ ] 6.8 Link each seniority row on `/insights/roles/[category]` to its new leaf page.
-- [ ] 6.9 Extend `insightsPaths` and `sitemap-insights.xml` to list the (category,
+- [x] 6.8 Link each seniority row on `/insights/roles/[category]` to its new leaf page.
+- [x] 6.9 Extend `insightsPaths` and `sitemap-insights.xml` to list the (category,
       seniority) leaves that clear the gate — and only those, matching what the route
       serves.
-- [ ] 6.10 `pnpm check:dead` passes (knip gates unused exports, types included).
+- [x] 6.10 `pnpm check:dead` passes (knip gates unused exports, types included). It caught
+      three: `isSeniority` and two wire types nothing imports BY NAME, reached only through
+      `InsightRole`. All three are now file-private. Note the local caveat — knip also
+      reports `extension/` here because that package is npm-managed and not installed in a
+      fresh worktree; CI installs it, which is why this gate is CI-only.
 
 ## 7. Verify and ship
 

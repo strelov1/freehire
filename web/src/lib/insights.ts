@@ -62,6 +62,47 @@ export function isCovered(roles: InsightRole[], category: string): boolean {
   return coveredCategories(roles).some((c) => c.category === category);
 }
 
+/** Whether a path segment names a real seniority. Not exported: the gate below is the
+ *  only thing that should ask, so a caller cannot check the level and forget the rest of
+ *  the gate. An unrecognised level in a URL is a wrong address, not a bad request. */
+function isSeniority(seniority: string): boolean {
+  return (SENIORITY_ORDER as readonly string[]).includes(seniority);
+}
+
+/** The (category, seniority) roles that get their own leaf page: a real seniority,
+ *  inside a covered category, carrying enough open postings that a distribution over
+ *  them means something. The route and the sitemap read this same function, so a pair
+ *  the route would 404 is never listed. */
+export function coveredRoles(roles: InsightRole[]): InsightRole[] {
+  const covered = new Set(coveredCategories(roles).map((c) => c.category));
+  return roles.filter(
+    (r) => covered.has(r.category) && isSeniority(r.seniority) && r.open_count >= MIN_CATEGORY_OPEN,
+  );
+}
+
+/** Whether one (category, seniority) pair clears that gate. */
+export function isCoveredRole(roles: InsightRole[], category: string, seniority: string): boolean {
+  return coveredRoles(roles).some((r) => r.category === category && r.seniority === seniority);
+}
+
+/** The intro line for a role's leaf page. It says what the figures ARE measured over
+ *  — the postings that STATE this level and carry a tagged skill — because only 39%
+ *  of open technical postings name a seniority at all, so wording this as "the market
+ *  for senior backend" would claim a population the data does not cover. */
+export function roleSkillsIntro(role: InsightRole): string {
+  const name = `${seniorityLabel(role.seniority)} ${categoryLabel(role.category)}`;
+  const sample = role.sample_size ?? 0;
+  const skills = role.skills ?? [];
+  if (sample === 0 || skills.length === 0) {
+    return `Open ${name} postings on freehire. Not enough of them list skills yet to rank what they ask for.`;
+  }
+  const top = skills
+    .slice(0, 3)
+    .map((s) => s.skill)
+    .join(', ');
+  return `Across ${sample.toLocaleString('en-US')} open ${name} postings that list skills, the ones mentioned most often are ${top}.`;
+}
+
 /** Sort salary bands into seniority order (category-wide '' band last). */
 export function sortBandsBySeniority(bands: InsightSalaryBand[]): InsightSalaryBand[] {
   const rank = (s: string) => {

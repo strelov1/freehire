@@ -194,6 +194,32 @@ export interface InsightRole {
   seniority: string;
   open_count: number;
   growth: number;
+  /** The three below are present only when a SINGLE role was named (both category
+   *  and seniority). Absent on the ranked list, so `skills === undefined` means "this
+   *  answer carries no distribution" while `skills: []` means "this role's every skill
+   *  fell below the sample floor" — two different facts. */
+  sample_size?: number;
+  skills?: InsightRoleSkill[];
+  /** Present only for a signed-in caller. Zeroed rather than absent when they hold no
+   *  skills, so it can be told apart from being signed out. */
+  coverage?: InsightRoleCoverage;
+}
+/** One skill inside a role's distribution. `share` divides by the role's `sample_size`
+ *  (its postings carrying any tagged skill), NEVER by `open_count`. Reached through
+ *  InsightRole rather than exported by name, so there is one way in. */
+interface InsightRoleSkill {
+  skill: string;
+  open_count: number;
+  share: number;
+}
+interface InsightRoleCoverage {
+  total: number;
+  exact_count: number;
+  adjacent_count: number;
+  coverage_percent: number;
+  matched: string[];
+  adjacent: { name: string; via: string }[];
+  missing: string[];
 }
 export interface InsightSkill {
   skill: string;
@@ -1030,12 +1056,14 @@ export function createApi(
 
   function insightsQuery(opts: {
     category?: string;
+    seniority?: string;
     country?: string;
     sort?: 'open' | 'growth';
     limit?: number;
   }): string {
     const q = new URLSearchParams();
     if (opts.category) q.set('category', opts.category);
+    if (opts.seniority) q.set('seniority', opts.seniority);
     if (opts.country) q.set('country', opts.country);
     if (opts.sort) q.set('sort', opts.sort);
     if (opts.limit != null) q.set('limit', String(opts.limit));
@@ -1048,6 +1076,16 @@ export function createApi(
     opts: { category?: string; country?: string; sort?: 'open' | 'growth'; limit?: number } = {},
   ): Promise<InsightRole[]> {
     return requestData<InsightRole[]>(`/api/v1/insights/roles?${insightsQuery(opts)}`);
+  }
+
+  /** One role's skill distribution, plus the signed-in caller's coverage of it when
+   *  the request carries a session. Returns null when the role has no rollup row —
+   *  the route renders that as a 404 rather than as an empty page. */
+  async function insightsRole(category: string, seniority: string): Promise<InsightRole | null> {
+    const rows = await requestData<InsightRole[]>(
+      `/api/v1/insights/roles?${insightsQuery({ category, seniority })}`,
+    );
+    return rows[0] ?? null;
   }
 
   /** Ranked skills, optionally scoped by category or country (not both). */
@@ -2915,6 +2953,7 @@ export function createApi(
     decideMentorProfile,
     searchCities,
     insightsRoles,
+    insightsRole,
     insightsSkills,
     insightsSalaryByCategory,
     insightsSalaryByCategoryInCountry,
