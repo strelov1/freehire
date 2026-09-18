@@ -28,20 +28,15 @@ const serverInstructions = "freehire aggregates IT job postings from many source
 	"named in ignored_params, so the answer is wider than asked — retry with a named value " +
 	"rather than reporting an empty catalogue."
 
-// Tool names, declared once and used BOTH to register a tool and to answer ToolNames, for
-// the same reason the OJCP transport does it: a second hand-written list is the one that
-// goes stale.
+// Tool names. Unlike the OJCP transport's, they feed no manifest — there is nothing here
+// that ADVERTISES a tool separately from registering it, so they are constants only because
+// the tests name them, not because a second list needs keeping in step.
 const (
 	toolSearchJobs      = "search_jobs"
 	toolGetJob          = "get_job"
 	toolSearchCompanies = "search_companies"
 	toolGetCompany      = "get_company"
 )
-
-// ToolNames is what this server registers.
-func ToolNames() []string {
-	return []string{toolSearchJobs, toolGetJob, toolSearchCompanies, toolGetCompany}
-}
 
 // readOnly is every tool's annotation block, written once.
 //

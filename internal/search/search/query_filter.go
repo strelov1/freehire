@@ -288,17 +288,6 @@ func splitFacetValues(in []string) []string {
 	return out
 }
 
-// nonEmpty drops empty strings so a bare `?seniority=` emits no fragment.
-func nonEmpty(in []string) []string {
-	out := make([]string, 0, len(in))
-	for _, s := range in {
-		if s != "" {
-			out = append(out, s)
-		}
-	}
-	return out
-}
-
 // atoiOK reports whether a query value is a valid integer, so a missing or
 // non-numeric value emits no bogus numeric fragment.
 func atoiOK(s string) (int, bool) {

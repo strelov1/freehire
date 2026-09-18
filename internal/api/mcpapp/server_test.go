@@ -63,6 +63,17 @@ func TestEveryAdvertisedToolCanActuallyBeCalled(t *testing.T) {
 	session := connect(t, readerThatFinds(t))
 	ctx := context.Background()
 
+	// The expected set is written HERE rather than read from the package, so the assertion
+	// is against what this surface promises and not against whatever it happens to register.
+	// A list the production code exports only for its own test to compare with proves
+	// nothing — it agrees with itself by construction.
+	calls := map[string]map[string]any{
+		toolSearchJobs:      {"query": "go"},
+		toolGetJob:          {"slug": "senior-go-engineer-acme-abc123"},
+		toolSearchCompanies: {"query": "acme"},
+		toolGetCompany:      {"slug": "acme"},
+	}
+
 	listed, err := session.ListTools(ctx, nil)
 	if err != nil {
 		t.Fatalf("tools/list: %v", err)
@@ -71,17 +82,11 @@ func TestEveryAdvertisedToolCanActuallyBeCalled(t *testing.T) {
 	for _, tool := range listed.Tools {
 		names = append(names, tool.Name)
 	}
-	if len(names) != len(ToolNames()) {
-		t.Fatalf("tools/list returned %v, want %v", names, ToolNames())
+	if len(names) != len(calls) {
+		t.Fatalf("tools/list returned %v, want the %d tools this surface promises", names, len(calls))
 	}
 
-	calls := map[string]map[string]any{
-		toolSearchJobs:      {"query": "go"},
-		toolGetJob:          {"slug": "senior-go-engineer-acme-abc123"},
-		toolSearchCompanies: {"query": "acme"},
-		toolGetCompany:      {"slug": "acme"},
-	}
-	for _, name := range ToolNames() {
+	for name := range calls {
 		res, err := session.CallTool(ctx, &mcp.CallToolParams{Name: name, Arguments: calls[name]})
 		if err != nil {
 			t.Errorf("%s: %v", name, err)
