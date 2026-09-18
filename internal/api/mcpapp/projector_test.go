@@ -2,10 +2,12 @@ package mcpapp
 
 import (
 	"encoding/json"
+	"slices"
 	"strings"
 	"testing"
 
 	"github.com/strelov1/freehire/internal/ai/enrich"
+	"github.com/strelov1/freehire/internal/ingest/applyform"
 	"github.com/strelov1/freehire/internal/job/jobview"
 	"github.com/strelov1/freehire/internal/platform/db"
 )
@@ -172,7 +174,7 @@ func TestDetailCarriesTheFullBodyAndTheSummaryDoesNot(t *testing.T) {
 
 	p := NewProjector(testOrigin)
 	summary := p.JobSummary(j)
-	detail := p.JobDetail(j, "")
+	detail := p.JobDetail(j, nil)
 
 	if len(summary.Summary) >= len(detail.Description) {
 		t.Errorf("summary is %d chars and the full body is %d; the preview was not truncated",
@@ -192,7 +194,7 @@ func TestDetailSeparatesRequiredFromPreferred(t *testing.T) {
 		}})
 	})
 
-	got := NewProjector(testOrigin).JobDetail(j, "greenhouse")
+	got := NewProjector(testOrigin).JobDetail(j, &applyform.Form{Provider: "greenhouse"})
 
 	if len(got.Requirements) != 2 {
 		t.Fatalf("got %d requirements, want 2", len(got.Requirements))
@@ -203,5 +205,47 @@ func TestDetailSeparatesRequiredFromPreferred(t *testing.T) {
 	}
 	if got.ApplyVia != "greenhouse" {
 		t.Errorf("apply_via = %q, want the ATS handling applications", got.ApplyVia)
+	}
+}
+
+func TestDetailPublishesWhatTheApplicationWillAskFor(t *testing.T) {
+	// The part of this catalogue almost nobody else can answer: what the employer's form
+	// will actually demand. It is captured in apply_forms, and a candidate deciding whether
+	// to start an application wants it BEFORE they open the page — a posting that turns out
+	// to want three essays is a different decision from one that wants a CV.
+	form := &applyform.Form{
+		Provider: "greenhouse",
+		Fields: []applyform.Field{
+			{ID: "q1", Label: "Why do you want to work here?", RawType: "textarea", Required: true},
+			{ID: "q2", Label: "LinkedIn", RawType: "input_text"},
+			// The platform's own diversity survey, which ForDisplay drops: it is on every
+			// application and tells a candidate nothing about THIS employer.
+			{ID: "q3", Label: "Gender", RawType: "select", Required: true, Demographic: true},
+		},
+	}
+
+	got := NewProjector(testOrigin).JobDetail(aJob(t), form)
+
+	if got.ApplyVia != "greenhouse" {
+		t.Errorf("apply_via = %q, want the ATS handling applications", got.ApplyVia)
+	}
+	if !slices.Contains(got.ApplyRequires, "Why do you want to work here?") {
+		t.Errorf("apply_requires = %v, want the required question named", got.ApplyRequires)
+	}
+	if slices.Contains(got.ApplyRequires, "LinkedIn") {
+		t.Errorf("apply_requires = %v, want the OPTIONAL question left out", got.ApplyRequires)
+	}
+	if slices.Contains(got.ApplyRequires, "Gender") {
+		t.Errorf("apply_requires = %v, want the platform's diversity survey left out", got.ApplyRequires)
+	}
+}
+
+func TestAPostingWithNoCapturedFormPromisesNothingAboutItsApplication(t *testing.T) {
+	// Most of the catalogue has no captured form. Saying nothing is the honest answer; an
+	// empty list would read as "this employer asks for nothing".
+	got := NewProjector(testOrigin).JobDetail(aJob(t), nil)
+
+	if got.ApplyVia != "" || got.ApplyRequires != nil {
+		t.Errorf("apply_via = %q, apply_requires = %v; want both absent", got.ApplyVia, got.ApplyRequires)
 	}
 }

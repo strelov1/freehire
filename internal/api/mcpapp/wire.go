@@ -80,6 +80,15 @@ type JobResult struct {
 	// ApplyVia names the ATS behind the application form when one was captured, so the
 	// model can say where the application actually goes.
 	ApplyVia string `json:"apply_via,omitempty" jsonschema:"the applicant tracking system handling applications"`
+	// ApplyRequires is what the employer's own form will REFUSE the application without —
+	// the standard fields plus every required question, as captured in apply_forms.
+	//
+	// It is the part of this catalogue almost nobody else can answer, and it is worth a
+	// chat turn: a candidate deciding whether to start an application wants to know it
+	// wants three essays BEFORE opening the page, not after. Absent where no form was
+	// captured, which is most of the catalogue — an empty list would read as "this
+	// employer asks for nothing".
+	ApplyRequires []string `json:"apply_requires,omitempty" jsonschema:"what the employer's application form requires"`
 }
 
 // Requirement is one stated requirement and whether it is binding.

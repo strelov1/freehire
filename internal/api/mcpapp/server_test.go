@@ -8,6 +8,8 @@ import (
 	"unicode/utf8"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+
+	"github.com/strelov1/freehire/internal/ingest/applyform"
 )
 
 // The whole server, driven through the SDK's in-memory transport — the same thing ChatGPT
@@ -46,7 +48,7 @@ func readerThatFinds(t *testing.T) fakeReader {
 			}, nil
 		},
 		jobDetail: func(_ context.Context, _ string) (JobResult, error) {
-			return p.JobDetail(aJob(t), "greenhouse"), nil
+			return p.JobDetail(aJob(t), &applyform.Form{Provider: "greenhouse"}), nil
 		},
 		searchCompanies: func(context.Context, CompanySearchInput) (SearchCompaniesResult, error) {
 			return SearchCompaniesResult{Total: 1, Companies: []CompanySummary{{Slug: "acme", Name: "Acme"}}}, nil

@@ -35,18 +35,11 @@ func NewProjector(origin string, submittable map[string]bool) Projector {
 // KindOther — a manual import, a Telegram feed — is excluded for the weaker reason that
 // nothing vouches for where its URL points.
 func canonicalURLProviders() map[string]bool {
-	taxonomy := sources.Taxonomy()
-	canonical := make(map[string]bool, len(taxonomy))
-	for provider := range taxonomy {
-		// The rule itself lives in internal/ingest/sources, because it is a fact about
-		// sources and a second surface now asks the same question. It used to be spelled
-		// out here; two copies of "which providers publish the employer's own URL" would
-		// be two answers the day the kinds change.
-		if sources.PublishesEmployerURL(provider) {
-			canonical[provider] = true
-		}
-	}
-	return canonical
+	// The rule itself lives in internal/ingest/sources, because it is a fact about sources
+	// and a second surface now asks the same question. It used to be spelled out here; two
+	// copies of "which providers publish the employer's own URL" would be two answers the
+	// day the kinds change.
+	return sources.EmployerURLProviders()
 }
 
 // officialJobURL is the employer's own page for the posting, or "" where we cannot vouch

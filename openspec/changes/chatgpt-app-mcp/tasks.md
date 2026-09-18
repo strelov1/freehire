@@ -64,12 +64,13 @@
 
 ## 6. Ship
 
-- [ ] 6.1 Open the PR, let CI go green, merge, deploy, and verify against production with a
+- [x] 6.1 Open the PR, let CI go green, merge, deploy, and verify against production with a
       real `initialize` + `tools/list` against `https://freehire.me/api/v1/mcp`.
 - [x] 6.2 Document the surface in `internal/api/mcpapp/AGENTS.md`: why a second MCP server
       exists, why its error shape differs from the OJCP one, and the annotation rule.
-- [ ] 6.3 Add the endpoint to `web/static/openapi.yaml`'s description or the `/sources` page
-      copy only if it belongs there — do not invent a listing nobody reads.
+- [x] 6.3 Decided AGAINST listing the endpoint on the site: discovery for a ChatGPT app
+      happens through OpenAI's directory, not through our own pages, and a listing nobody
+      reads is the thing this task was written to avoid.
 
 ## 7. Directory submission (after the server is live)
 

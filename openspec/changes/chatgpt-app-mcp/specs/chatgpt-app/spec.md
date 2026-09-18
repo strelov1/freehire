@@ -75,14 +75,29 @@ schema, covering free text, country, city, work mode, seniority, category, skill
 employment type, salary floor and currency, visa sponsorship, English level, company,
 source, posted-within-days, and page bounds.
 
-A filter the tool receives but cannot honour SHALL be named in the result rather than
-silently dropped.
+A filter VALUE the tool receives but cannot honour SHALL be dropped from the query and named
+in the result, rather than narrowed on.
 
-#### Scenario: An unreadable filter is named
+This is about values, not parameter names, and the distinction was MEASURED rather than
+chosen: the MCP SDK derives the input schema from the Go type with `additionalProperties:
+false`, so a parameter the schema does not declare is refused by the transport before any
+handler runs. A tool therefore cannot report an unpublished parameter as ignored — it never
+sees one. What it can and must report is a value outside a closed vocabulary, which reaches
+the handler and would otherwise filter on a value no posting carries.
 
-- **WHEN** `search_jobs` receives a parameter it does not read
-- **THEN** the result names that parameter among the ignored ones
-- **AND** the answer is not narrowed on it
+#### Scenario: An unhonourable filter value is named
+
+- **WHEN** `search_jobs` receives a value outside a closed vocabulary, such as a category we
+  hold no facet for
+- **THEN** that value is dropped from the query rather than filtered on
+- **AND** the result names it as `param=value`
+- **AND** the free text still runs, so the answer is wider than asked rather than empty
+
+#### Scenario: An undeclared parameter is refused by the transport
+
+- **WHEN** a caller sends a parameter the tool's input schema does not declare
+- **THEN** the SDK answers a validation error before the handler runs
+- **AND** nothing in this surface has to report it
 
 #### Scenario: Page bounds are enforced
 

@@ -32,21 +32,30 @@ func ProviderKind(reg map[string]Source, provider string) string {
 	return KindATS
 }
 
-// PublishesEmployerURL reports whether a provider's stored job URL really is the employer's
-// own page for the posting.
+// EmployerURLProviders names the providers whose stored job URL really is the employer's own
+// page for the posting.
 //
-// It is true for an ATS and for a company's own careers site, and false for an aggregator —
-// whose URL points at the aggregator, not at the employer. The distinction is what lets a
-// surface publish source attribution honestly: calling an aggregator's link the employer's
-// own is a claim we cannot vouch for, and a consumer that domain-verifies or deduplicates on
-// it would be misled by every one of them.
+// True for an ATS and for a company's own careers site, false for an aggregator — whose URL
+// points at the aggregator, not at the employer. The distinction is what lets a surface
+// publish source attribution honestly: calling an aggregator's link the employer's own is a
+// claim we cannot vouch for, and a consumer that domain-verifies or deduplicates on it would
+// be misled by every one of them.
 //
 // It lives here rather than beside a consumer because it is a fact about SOURCES, and a
 // second surface asking the same question must not answer it from its own copy of the rule.
-func PublishesEmployerURL(provider string) bool {
-	switch ProviderKind(Taxonomy(), provider) {
-	case KindATS, KindCompany:
-		return true
+//
+// It answers for ALL providers at once, and that shape is the point. A per-provider
+// predicate reads better at the call site and costs a full Taxonomy() build every time —
+// measured on this tree, 35µs and 394 allocations to construct 223 adapters, which a
+// ten-result search would pay ten times over. Callers resolve this once and keep the map.
+func EmployerURLProviders() map[string]bool {
+	taxonomy := Taxonomy()
+	publishes := make(map[string]bool, len(taxonomy))
+	for provider := range taxonomy {
+		switch ProviderKind(taxonomy, provider) {
+		case KindATS, KindCompany:
+			publishes[provider] = true
+		}
 	}
-	return false
+	return publishes
 }

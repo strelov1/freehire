@@ -37,8 +37,20 @@ both at risk for the benefit of neither.
 - Add the directory submission material: app icon, name, descriptions, support contact, and
   the test cases OpenAI's review exercises.
 
-No existing endpoint changes shape. `internal/api/ojcp` and `internal/api/ojcpmcp` are not
-touched, and the OJCP manifest continues to declare only what it serves.
+No existing endpoint changes SHAPE, and the OJCP manifest continues to declare only what it
+serves. Three things outside this surface did change, and they are recorded here rather than
+left to a commit message:
+
+- **A live defect in the company facet filter, fixed.** `countries=DE,BR` matched a single
+  literal value and answered zero where each code alone answered thousands — in BOTH company
+  backends, and therefore on the public `/companies` endpoint. The job search has always
+  split on commas. Found by review of this change, because `search_companies` joins its
+  country list the same way and would have inherited it.
+- **`internal/ingest/sources` gains `EmployerURLProviders`.** Which providers publish a URL
+  that really is the employer's own page is a fact about sources, and this change made it a
+  question TWO surfaces ask. One answer, not a copy each.
+- **`internal/api/ojcp/projector.go` calls that shared rule** instead of spelling it out.
+  Behaviour identical; its own tests pass unchanged.
 
 ## Capabilities
 
@@ -56,8 +68,11 @@ None.
 
 - **New code:** `internal/api/mcpapp` (the server and its tools),
   `internal/api/handler/mcpapp.go` (the route and the reader it injects).
-- **Untouched:** `internal/api/ojcp`, `internal/api/ojcpmcp`, every REST handler, the
-  search core, the database. No migration.
+- **Untouched:** `internal/api/ojcpmcp`, the database. No migration.
+- **Touched outside this surface**, as argued above: `internal/api/ojcp/projector.go`
+  (one helper now calls the shared rule), `internal/ingest/sources` (the shared rule),
+  `internal/search/search` and `internal/api/handler/companies.go` (the comma fix, which is
+  a behaviour change to the public `/companies` endpoint — a correction, not a feature).
 - **Not in scope:** authentication of any kind, and therefore `save_job`,
   `track_application` and anything reading a candidate's CV. Those need freehire to become
   an OAuth 2.1 authorization server with dynamic client registration, which it is not; that

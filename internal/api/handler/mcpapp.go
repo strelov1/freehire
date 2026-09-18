@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 
 	"github.com/gofiber/fiber/v2"
@@ -9,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/strelov1/freehire/internal/api/mcpapp"
+	"github.com/strelov1/freehire/internal/ingest/applyform"
 	"github.com/strelov1/freehire/internal/job/jobview"
 	"github.com/strelov1/freehire/internal/search/search"
 )
@@ -114,20 +116,28 @@ func (h *mcpappHandlers) JobDetail(ctx context.Context, slug string) (mcpapp.Job
 	if err != nil {
 		return mcpapp.JobResult{}, err
 	}
-	return h.projector.JobDetail(view, h.applyViaFor(ctx, row.ID)), nil
+	return h.projector.JobDetail(view, h.applyFormFor(ctx, row.ID)), nil
 }
 
-// applyViaFor names the ATS behind the posting's captured application form, or nothing.
+// applyFormFor reads the posting's captured application form, or nil where there is none.
 //
-// Best-effort: most of the catalogue has no captured form, and a store that cannot answer
-// must not turn a job read into a failure — the posting simply says nothing about where an
-// application goes, which is the honest answer when we do not know.
-func (h *mcpappHandlers) applyViaFor(ctx context.Context, jobID int64) string {
+// Best-effort, exactly as on the OJCP surface: most of the catalogue has no captured form,
+// and a store that cannot answer must not turn a job read into a failure — the posting
+// simply says nothing about what applying will ask for, which is the honest answer when we
+// do not know.
+func (h *mcpappHandlers) applyFormFor(ctx context.Context, jobID int64) *applyform.Form {
 	row, err := h.store.GetApplyFormByJobID(ctx, jobID)
 	if err != nil {
-		return ""
+		return nil
 	}
-	return row.Provider
+	var form applyform.Form
+	if err := json.Unmarshal(row.Payload, &form); err != nil {
+		return nil
+	}
+	if form.Provider == "" {
+		form.Provider = row.Provider
+	}
+	return &form
 }
 
 // SearchCompanies answers `search_companies`.

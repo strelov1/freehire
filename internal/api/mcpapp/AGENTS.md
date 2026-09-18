@@ -34,8 +34,11 @@ shows. Neither is a trade worth making.
   text the model reduces to a line each. `summaryMaxChars` bounds the preview here rather
   than trusting the caller, because the bound is a property of this tool and not of whoever
   filled the field.
-- **Publish a link we cannot vouch for.** `official_job_url` is filled only for a provider
-  `sources.PublishesEmployerURL` accepts — an ATS or a company's own careers site. An
+- **Publish a link we cannot vouch for.** `official_job_url` is filled only for a provider in
+  `sources.EmployerURLProviders()` — an ATS or a company's own careers site. That set is
+  resolved ONCE, in `NewProjector`, and the shape of the API is why: the rule used to be a
+  per-provider predicate, and each call rebuilt all 223 adapters (35µs, 394 allocations),
+  which a ten-result page paid ten times over. An
   aggregator's stored URL points at the aggregator, and this channel renders it as a link a
   person clicks expecting the employer. The tag is stripped too (`outboundurl.Untag`):
   `jobview` stamps `utm_source` on everything it serves, and this field is what a consumer
@@ -72,8 +75,12 @@ tool that registers but cannot be called is invisible to a direct call.
 ## Measured, not assumed
 
 - The SDK **rejects an argument the input schema does not declare** before the handler runs
-  (`isError`, handler never reached). An invented parameter is therefore not a case this has
-  to report; a value outside our vocabularies is.
+  (`isError`, handler never reached) — it derives the schema from the Go type with
+  `additionalProperties: false`. An invented parameter is therefore not a case this has to
+  report; a value outside our vocabularies is. The spec's requirement is written around that
+  measurement rather than around the guess that preceded it.
+- Resolving `EmployerURLProviders()` costs **35µs and 394 allocations** — it constructs all
+  223 adapters. Once per projector, never per posting.
 - Meilisearch filter comparison is **case-insensitive**: `countries=de` and `countries=DE`
   both answered 59,942 on 2026-09-18. The vocabulary check folds case to match, because a
   check stricter than the thing it guards would report a working filter as unsupported.
