@@ -1376,7 +1376,7 @@ SET title        = sqlc.arg(title),
                                THEN NULL ELSE jobs.similar_computed_at END,
     updated_at   = now()
 WHERE public_slug = sqlc.arg(public_slug)
-  AND created_by = sqlc.arg(actor_id)
+  AND created_by = sqlc.arg(actor_id)::bigint
   AND source = 'employer'
   AND NOT is_private
 RETURNING *;
@@ -1393,7 +1393,7 @@ WITH closed AS (
         closed_reason = 'employer_closed',
         updated_at    = now()
     WHERE jobs.public_slug = sqlc.arg(public_slug)
-      AND jobs.created_by = sqlc.arg(actor_id)
+      AND jobs.created_by = sqlc.arg(actor_id)::bigint
       AND jobs.source = 'employer'
       AND jobs.closed_at IS NULL
     RETURNING jobs.id

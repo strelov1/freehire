@@ -26,16 +26,24 @@ type claimMailer interface {
 	SendClaimVerificationCode(ctx context.Context, email, code string) error
 }
 
-// Service implements the employer-account use cases: claim, verify, moderate, revoke.
+// Service implements every employer use case: claim/verify/moderate/revoke (account.go) and
+// create/edit/close a vacancy (job.go). One type, not two, because the job-authoring half
+// depends on the account half's own ActiveAccount guard for every action it takes — keeping
+// them in one package avoids a formal interface boundary between two halves nothing outside
+// this package ever calls independently.
 type Service struct {
 	repo   Repository
 	codes  codeIssuer
 	mailer claimMailer
+
+	jobs   JobRepository
+	minter Minter
 }
 
-// New creates a Service backed by the given Repository, code issuer, and claim mailer.
-func New(repo Repository, codes codeIssuer, mailer claimMailer) *Service {
-	return &Service{repo: repo, codes: codes, mailer: mailer}
+// New creates a Service backed by the given account Repository, code issuer, claim mailer,
+// job repository, and Minter (moderation.Service satisfies Minter).
+func New(repo Repository, codes codeIssuer, mailer claimMailer, jobs JobRepository, minter Minter) *Service {
+	return &Service{repo: repo, codes: codes, mailer: mailer, jobs: jobs, minter: minter}
 }
 
 // Claim resolves companyName to a company slug (through the same alias registry and

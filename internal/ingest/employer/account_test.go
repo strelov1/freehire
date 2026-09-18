@@ -160,7 +160,7 @@ func TestClaim_ResolvesThroughAnAlias(t *testing.T) {
 	repo := newFakeRepo()
 	repo.aliases["acme-corp"] = "acme"
 	repo.companies["acme"] = struct{ name, website string }{name: "Acme Inc.", website: ""}
-	s := New(repo, newFakeCodeIssuer(), &fakeClaimMailer{})
+	s := New(repo, newFakeCodeIssuer(), &fakeClaimMailer{}, nil, nil)
 
 	acc, err := s.Claim(context.Background(), 1, "Acme Corp", "hr@acme.test")
 	if err != nil {
@@ -176,7 +176,7 @@ func TestClaim_ResolvesThroughAnAlias(t *testing.T) {
 
 func TestClaim_MintsANewSlugForAnUnknownCompany(t *testing.T) {
 	repo := newFakeRepo()
-	s := New(repo, newFakeCodeIssuer(), &fakeClaimMailer{})
+	s := New(repo, newFakeCodeIssuer(), &fakeClaimMailer{}, nil, nil)
 
 	// "Co" is a legal-form token normalize.CompanySlug strips (see
 	// internal/dict/normalize/company.go, docs/agents/company-identity.md) — "Brand New Co"
@@ -197,7 +197,7 @@ func TestClaim_MintsANewSlugForAnUnknownCompany(t *testing.T) {
 func TestClaim_MailsAVerificationCodeToTheWorkEmail(t *testing.T) {
 	repo := newFakeRepo()
 	mailer := &fakeClaimMailer{}
-	s := New(repo, newFakeCodeIssuer(), mailer)
+	s := New(repo, newFakeCodeIssuer(), mailer, nil, nil)
 
 	if _, err := s.Claim(context.Background(), 1, "Acme", "hr@acme.test"); err != nil {
 		t.Fatalf("Claim: %v", err)
@@ -209,7 +209,7 @@ func TestClaim_MailsAVerificationCodeToTheWorkEmail(t *testing.T) {
 
 func TestClaim_RejectsAnEmptyCompanyNameOrWorkEmail(t *testing.T) {
 	repo := newFakeRepo()
-	s := New(repo, newFakeCodeIssuer(), &fakeClaimMailer{})
+	s := New(repo, newFakeCodeIssuer(), &fakeClaimMailer{}, nil, nil)
 
 	if _, err := s.Claim(context.Background(), 1, "  ", "hr@acme.test"); !errors.Is(err, ErrInvalid) {
 		t.Errorf("err = %v, want ErrInvalid for a blank company name", err)
@@ -222,7 +222,7 @@ func TestClaim_RejectsAnEmptyCompanyNameOrWorkEmail(t *testing.T) {
 func TestClaim_RejectsAPublicWebmailDomain(t *testing.T) {
 	repo := newFakeRepo()
 	mailer := &fakeClaimMailer{}
-	s := New(repo, newFakeCodeIssuer(), mailer)
+	s := New(repo, newFakeCodeIssuer(), mailer, nil, nil)
 
 	if _, err := s.Claim(context.Background(), 1, "Acme", "hr@gmail.com"); !errors.Is(err, ErrPublicWebmailDomain) {
 		t.Fatalf("err = %v, want ErrPublicWebmailDomain", err)
@@ -237,7 +237,7 @@ func TestClaim_RejectsAPublicWebmailDomain(t *testing.T) {
 
 func TestClaim_RefusesASecondClaimByTheSameUser(t *testing.T) {
 	repo := newFakeRepo()
-	s := New(repo, newFakeCodeIssuer(), &fakeClaimMailer{})
+	s := New(repo, newFakeCodeIssuer(), &fakeClaimMailer{}, nil, nil)
 
 	if _, err := s.Claim(context.Background(), 1, "Acme", "hr@acme.test"); err != nil {
 		t.Fatalf("first Claim: %v", err)
@@ -249,7 +249,7 @@ func TestClaim_RefusesASecondClaimByTheSameUser(t *testing.T) {
 
 func TestClaim_RefusesASecondClaimOnAnAlreadyClaimedCompany(t *testing.T) {
 	repo := newFakeRepo()
-	s := New(repo, newFakeCodeIssuer(), &fakeClaimMailer{})
+	s := New(repo, newFakeCodeIssuer(), &fakeClaimMailer{}, nil, nil)
 
 	if _, err := s.Claim(context.Background(), 1, "Acme", "hr@acme.test"); err != nil {
 		t.Fatalf("first Claim: %v", err)
@@ -263,7 +263,7 @@ func TestConfirmClaim_ActivatesOnAMatchingDomain(t *testing.T) {
 	repo := newFakeRepo()
 	repo.companies["acme"] = struct{ name, website string }{name: "Acme", website: "https://acme.test"}
 	codes := newFakeCodeIssuer()
-	s := New(repo, codes, &fakeClaimMailer{})
+	s := New(repo, codes, &fakeClaimMailer{}, nil, nil)
 
 	if _, err := s.Claim(context.Background(), 1, "Acme", "hr@acme.test"); err != nil {
 		t.Fatalf("Claim: %v", err)
@@ -280,7 +280,7 @@ func TestConfirmClaim_ActivatesOnAMatchingDomain(t *testing.T) {
 func TestConfirmClaim_StaysPendingOnAMismatchedDomain(t *testing.T) {
 	repo := newFakeRepo()
 	repo.companies["acme"] = struct{ name, website string }{name: "Acme", website: "https://acme.test"}
-	s := New(repo, newFakeCodeIssuer(), &fakeClaimMailer{})
+	s := New(repo, newFakeCodeIssuer(), &fakeClaimMailer{}, nil, nil)
 
 	if _, err := s.Claim(context.Background(), 1, "Acme", "hr@notacme.test"); err != nil {
 		t.Fatalf("Claim: %v", err)
@@ -296,7 +296,7 @@ func TestConfirmClaim_StaysPendingOnAMismatchedDomain(t *testing.T) {
 
 func TestConfirmClaim_StaysPendingOnAnUnknownWebsite(t *testing.T) {
 	repo := newFakeRepo() // no companies row at all: website unknown
-	s := New(repo, newFakeCodeIssuer(), &fakeClaimMailer{})
+	s := New(repo, newFakeCodeIssuer(), &fakeClaimMailer{}, nil, nil)
 
 	if _, err := s.Claim(context.Background(), 1, "Brand New", "hr@brandnew.test"); err != nil {
 		t.Fatalf("Claim: %v", err)
@@ -312,7 +312,7 @@ func TestConfirmClaim_StaysPendingOnAnUnknownWebsite(t *testing.T) {
 
 func TestConfirmClaim_RejectsAWrongCode(t *testing.T) {
 	repo := newFakeRepo()
-	s := New(repo, newFakeCodeIssuer(), &fakeClaimMailer{})
+	s := New(repo, newFakeCodeIssuer(), &fakeClaimMailer{}, nil, nil)
 
 	if _, err := s.Claim(context.Background(), 1, "Acme", "hr@acme.test"); err != nil {
 		t.Fatalf("Claim: %v", err)
@@ -328,7 +328,7 @@ func TestConfirmClaim_RejectsAWrongCode(t *testing.T) {
 
 func TestApproveClaim_ActivatesAndSeedsABlankWebsite(t *testing.T) {
 	repo := newFakeRepo() // no companies row: website unknown, so ConfirmClaim left it pending
-	s := New(repo, newFakeCodeIssuer(), &fakeClaimMailer{})
+	s := New(repo, newFakeCodeIssuer(), &fakeClaimMailer{}, nil, nil)
 
 	if _, err := s.Claim(context.Background(), 1, "Brand New", "hr@brandnew.test"); err != nil {
 		t.Fatalf("Claim: %v", err)
@@ -353,7 +353,7 @@ func TestApproveClaim_ActivatesAndSeedsABlankWebsite(t *testing.T) {
 func TestApproveClaim_NeverOverwritesAnExistingWebsite(t *testing.T) {
 	repo := newFakeRepo()
 	repo.companies["acme"] = struct{ name, website string }{name: "Acme", website: "https://acme.test"}
-	s := New(repo, newFakeCodeIssuer(), &fakeClaimMailer{})
+	s := New(repo, newFakeCodeIssuer(), &fakeClaimMailer{}, nil, nil)
 
 	if _, err := s.Claim(context.Background(), 1, "Acme", "hr@subsidiary.acme.test"); err != nil {
 		t.Fatalf("Claim: %v", err)
@@ -372,7 +372,7 @@ func TestApproveClaim_NeverOverwritesAnExistingWebsite(t *testing.T) {
 
 func TestRejectClaim_FreesTheSlug(t *testing.T) {
 	repo := newFakeRepo()
-	s := New(repo, newFakeCodeIssuer(), &fakeClaimMailer{})
+	s := New(repo, newFakeCodeIssuer(), &fakeClaimMailer{}, nil, nil)
 
 	if _, err := s.Claim(context.Background(), 1, "Acme", "hr@acme.test"); err != nil {
 		t.Fatalf("Claim: %v", err)
@@ -390,7 +390,7 @@ func TestRejectClaim_FreesTheSlug(t *testing.T) {
 
 func TestRevokeAccount_KeepsTheSlugReserved(t *testing.T) {
 	repo := newFakeRepo()
-	s := New(repo, newFakeCodeIssuer(), &fakeClaimMailer{})
+	s := New(repo, newFakeCodeIssuer(), &fakeClaimMailer{}, nil, nil)
 
 	if _, err := s.Claim(context.Background(), 1, "Acme", "hr@acme.test"); err != nil {
 		t.Fatalf("Claim: %v", err)
@@ -405,7 +405,7 @@ func TestRevokeAccount_KeepsTheSlugReserved(t *testing.T) {
 
 func TestActiveAccount_RefusesAPendingAccount(t *testing.T) {
 	repo := newFakeRepo()
-	s := New(repo, newFakeCodeIssuer(), &fakeClaimMailer{})
+	s := New(repo, newFakeCodeIssuer(), &fakeClaimMailer{}, nil, nil)
 
 	if _, err := s.Claim(context.Background(), 1, "Acme", "hr@acme.test"); err != nil {
 		t.Fatalf("Claim: %v", err)
@@ -417,7 +417,7 @@ func TestActiveAccount_RefusesAPendingAccount(t *testing.T) {
 
 func TestActiveAccount_RefusesARevokedAccount(t *testing.T) {
 	repo := newFakeRepo()
-	s := New(repo, newFakeCodeIssuer(), &fakeClaimMailer{})
+	s := New(repo, newFakeCodeIssuer(), &fakeClaimMailer{}, nil, nil)
 
 	if _, err := s.Claim(context.Background(), 1, "Acme", "hr@acme.test"); err != nil {
 		t.Fatalf("Claim: %v", err)
@@ -433,7 +433,7 @@ func TestActiveAccount_RefusesARevokedAccount(t *testing.T) {
 func TestActiveAccount_ReturnsAnActiveAccount(t *testing.T) {
 	repo := newFakeRepo()
 	repo.companies["acme"] = struct{ name, website string }{name: "Acme", website: "https://acme.test"}
-	s := New(repo, newFakeCodeIssuer(), &fakeClaimMailer{})
+	s := New(repo, newFakeCodeIssuer(), &fakeClaimMailer{}, nil, nil)
 
 	if _, err := s.Claim(context.Background(), 1, "Acme", "hr@acme.test"); err != nil {
 		t.Fatalf("Claim: %v", err)

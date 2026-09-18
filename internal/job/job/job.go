@@ -425,6 +425,51 @@ func (f Fields) UpdateManualParams(slug string, actorID int64) db.UpdateManualJo
 	}
 }
 
+// UpdateEmployerParams is the employer-self-service analogue of UpdateManualParams: same
+// mapping, same content-hash/public-slug reasoning (see UpdateManualParams's own comment),
+// but targeting UpdateEmployerJob's narrower actor-scoped statement (WHERE created_by =
+// actor_id AND source = 'employer', not merely created_by IS NOT NULL) — see
+// openspec/changes/add-employer-company-accounts/design.md for why moderation's own
+// UpdateManualJob is not safe to reuse for this caller.
+func (f Fields) UpdateEmployerParams(slug string, actorID int64) db.UpdateEmployerJobParams {
+	derived := f.UpsertParams()
+	derived.PublicSlug = slug
+	derived = withDerived(derived)
+	return db.UpdateEmployerJobParams{
+		Title:       f.Title,
+		Company:     f.Company,
+		CompanySlug: f.CompanySlug,
+		Location:    f.Location,
+		Remote:      f.Remote,
+		Description: f.Description,
+		PostedAt:    pgconv.Timestamptz(f.PostedAt),
+		Countries:   f.Countries,
+		Regions:     f.Regions,
+		Cities:      f.Cities,
+		WorkMode:    f.WorkMode,
+		Skills:      f.Skills,
+		Seniority:   f.Seniority,
+		Category:    f.Category,
+		IsTech:      pgconv.Bool(f.IsTech),
+
+		RequiresClearance: pgconv.Bool(f.RequiresClearance),
+
+		PostingLanguage:    f.PostingLanguage,
+		EmploymentType:     f.EmploymentType,
+		EducationLevel:     f.EducationLevel,
+		EnglishLevel:       f.EnglishLevel,
+		ExperienceYearsMin: pgconv.Int4(f.ExperienceYearsMin),
+
+		ContentHash:         derived.ContentHash,
+		RoleFingerprint:     derived.RoleFingerprint,
+		RequirementsDerived: derived.RequirementsDerived,
+
+		UpdatedBy:  actorID,
+		PublicSlug: slug,
+		ActorID:    actorID,
+	}
+}
+
 // InsertPrivateParams is the private-JD analogue of UpsertParams/UpsertManualParams: it
 // maps the same Fields columns to the generated InsertPrivateJob params, stamping
 // created_by. Unlike the other two mappings there is no updated_by or salary — a private

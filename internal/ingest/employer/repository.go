@@ -7,13 +7,18 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"github.com/strelov1/freehire/internal/job/job"
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/platform/pgconv"
 	"github.com/strelov1/freehire/internal/platform/pgerr"
 )
 
-// Compile-time proof that QueriesRepository satisfies Repository.
-var _ Repository = (*QueriesRepository)(nil)
+// Compile-time proof that QueriesRepository satisfies both Repository and JobRepository —
+// one adapter for the whole package, matching Service's own single-type shape.
+var (
+	_ Repository    = (*QueriesRepository)(nil)
+	_ JobRepository = (*QueriesRepository)(nil)
+)
 
 // QueriesRepository adapts *db.Queries to Repository. No method here spans more than one
 // statement, so unlike moderation/submission's repositories it needs no pool of its own —
@@ -132,6 +137,70 @@ func (r *QueriesRepository) SeedCompanyWebsite(ctx context.Context, slug, name, 
 		Name:    name,
 		Website: website,
 	})
+}
+
+// Owner reports who created the job at (jobSource, externalID) — the URL-collision guard
+// CreateVacancy runs before ever delegating to the Minter.
+func (r *QueriesRepository) Owner(ctx context.Context, externalID string) (int64, bool, error) {
+	row, err := r.q.GetJobBySourceExternalID(ctx, db.GetJobBySourceExternalIDParams{
+		Source:     jobSource,
+		ExternalID: externalID,
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return 0, false, nil
+	}
+	if err != nil {
+		return 0, false, err
+	}
+	// created_by is NOT NULL for every jobSource row (Create always stamps it), so an
+	// invalid value here would be a bug in the write path, not a case to handle quietly.
+	return row.CreatedBy.Int64, true, nil
+}
+
+// BySlug loads an employer-owned job by its public slug. Scoped in Go, not SQL, matching
+// moderation.QueriesRepository.BySlug's own shape: a missing row, a different owner, a
+// different source, or (defensively — jobSource rows are never private) is_private all
+// collapse to the one ErrJobNotFound the caller cannot distinguish further anyway.
+func (r *QueriesRepository) BySlug(ctx context.Context, actorID int64, slug string) (job.Job, job.Extras, error) {
+	row, err := r.q.GetJobBySlug(ctx, slug)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return job.Job{}, job.Extras{}, ErrJobNotFound
+	}
+	if err != nil {
+		return job.Job{}, job.Extras{}, err
+	}
+	if row.Source != jobSource || !row.CreatedBy.Valid || row.CreatedBy.Int64 != actorID || row.IsPrivate {
+		return job.Job{}, job.Extras{}, ErrJobNotFound
+	}
+	return job.FromRow(row)
+}
+
+// Update writes the full resulting row for an employer-owned job. The query's own
+// created_by/source scope (see UpdateEmployerJob) means a slug that is missing, another
+// owner's, or another source's affects no row (ErrNoRows -> ErrJobNotFound) — the same
+// belt-and-suspenders BySlug already applies on the read side.
+func (r *QueriesRepository) Update(ctx context.Context, actorID int64, slug string, f job.Fields) (job.Job, job.Extras, error) {
+	row, err := r.q.UpdateEmployerJob(ctx, f.UpdateEmployerParams(slug, actorID))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return job.Job{}, job.Extras{}, ErrJobNotFound
+	}
+	if err != nil {
+		return job.Job{}, job.Extras{}, err
+	}
+	return job.FromRow(row)
+}
+
+// Close soft-closes an employer-owned job. closedCount is 0 both when the row does not
+// exist/is not owned by actorID and when it was already closed (CloseEmployerJob's own
+// closed_at IS NULL guard) — Close does not distinguish the two, because BySlug already ran
+// first in every real call path (see Service.CloseVacancy) and settled ownership/existence;
+// by the time this runs, 0 can only mean "already closed", which is success, not an error.
+func (r *QueriesRepository) Close(ctx context.Context, actorID int64, slug string) error {
+	_, err := r.q.CloseEmployerJob(ctx, db.CloseEmployerJobParams{
+		PublicSlug: slug,
+		ActorID:    actorID,
+	})
+	return err
 }
 
 // fromRow maps the generated db row to the package domain type.

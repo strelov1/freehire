@@ -377,7 +377,7 @@ WITH closed AS (
         closed_reason = 'employer_closed',
         updated_at    = now()
     WHERE jobs.public_slug = $1
-      AND jobs.created_by = $2
+      AND jobs.created_by = $2::bigint
       AND jobs.source = 'employer'
       AND jobs.closed_at IS NULL
     RETURNING jobs.id
@@ -390,8 +390,8 @@ SELECT count(*) FROM closed
 `
 
 type CloseEmployerJobParams struct {
-	PublicSlug string      `json:"public_slug"`
-	ActorID    pgtype.Int8 `json:"actor_id"`
+	PublicSlug string `json:"public_slug"`
+	ActorID    int64  `json:"actor_id"`
 }
 
 // Soft-close, the employer-self-service analogue of CloseJobByID: scoped to the actor's own
@@ -4756,7 +4756,7 @@ SET title        = $1,
                                THEN NULL ELSE jobs.similar_computed_at END,
     updated_at   = now()
 WHERE public_slug = $26
-  AND created_by = $27
+  AND created_by = $27::bigint
   AND source = 'employer'
   AND NOT is_private
 RETURNING id, source, external_id, url, title, company, location, remote, description, posted_at, created_at, updated_at, company_slug, enrichment, enriched_at, enrichment_version, public_slug, last_seen_at, closed_at, countries, regions, work_mode, liveness_strikes, skills, seniority, category, created_by, updated_by, posting_language, employment_type, education_level, experience_years_min, collections, content_hash, english_level, cities, view_count, applied_count, role_fingerprint, semantic_embedded_model, semantic_embedded_hash, duplicate_of, is_tech, semantic_embedding, salary_min_manual, salary_max_manual, salary_currency_manual, salary_period_manual, upvote_count, downvote_count, ats_absent_at, closed_reason, is_private, similar_job_ids, similar_computed_at, salary_min_source, salary_max_source, salary_currency_source, salary_period_source, company_slug_folded, duplicate_of_aggregator, duplicate_of_role, duplicate_of_fuzzy, requires_clearance, requirements_derived, hydrated_at, ai_interview_reports
@@ -4789,7 +4789,7 @@ type UpdateEmployerJobParams struct {
 	RequirementsDerived []byte             `json:"requirements_derived"`
 	UpdatedBy           int64              `json:"updated_by"`
 	PublicSlug          string             `json:"public_slug"`
-	ActorID             pgtype.Int8        `json:"actor_id"`
+	ActorID             int64              `json:"actor_id"`
 }
 
 // The employer-authored analogue of UpdateManualJob, scoped narrower on purpose: WHERE

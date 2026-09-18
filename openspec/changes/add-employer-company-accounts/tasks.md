@@ -60,20 +60,24 @@
 
 ## 4. `internal/ingest/employer`: job authoring
 
-- [ ] 4.1 Create: `Minter`-pattern wrapper around `moderation.Service.Create`
+- [x] 4.1 Create: `Minter`-pattern wrapper around `moderation.Service.Create`
       (`source='employer'`, `Company` always the claimed `company_name`); pre-check via
-      `GetJobBySourceExternalID(ctx, "employer", url)` refusing a different owner's URL (409)
-- [ ] 4.2 Regression test: re-`Create` with the same URL by its own owner updates/reopens the
-      existing vacancy rather than duplicating it
-- [ ] 4.3 Regression test: a different employer cannot take over a vacancy via a colliding URL
-- [ ] 4.4 New sqlc query: actor-scoped update (`WHERE public_slug = $slug AND created_by =
-      $actorID AND source = 'employer'`) — run `make sqlc`
-- [ ] 4.5 Update service: re-derive facets via `job.New(job.Draft{Input: jobderive.Input{...}})`
+      `GetJobBySourceExternalID(ctx, "employer", url)` refusing a different owner's URL
+      (`ErrURLTaken`)
+- [x] 4.2 Regression test: re-`Create` with the same URL by its own owner updates/reopens the
+      existing vacancy rather than duplicating it — unit (fakes) and integration (real
+      Postgres, confirms `closed_at` actually clears)
+- [x] 4.3 Regression test: a different employer cannot take over a vacancy via a colliding
+      URL — unit and integration (confirms the real row is untouched)
+- [x] 4.4 New sqlc query `UpdateEmployerJob` (`WHERE public_slug = $slug AND created_by =
+      $actorID AND source = 'employer'`) — `job.Fields.UpdateEmployerParams`, mirroring
+      `UpdateManualParams`, added alongside it in `internal/job/job/job.go`
+- [x] 4.5 Update service: re-derives facets via `job.New(job.Draft{Input: jobderive.Input{...}})`
       directly (not via `moderation`'s private `derive()`); URL/company stay immutable
-- [ ] 4.6 New sqlc query: actor-scoped close (`closed_at`, `closed_reason='employer_closed'`)
-      — run `make sqlc`
-- [ ] 4.7 Regression test: employer B cannot update or close employer A's vacancy (refused as
-      not found)
+- [x] 4.6 New sqlc query `CloseEmployerJob` (`closed_at`, `closed_reason='employer_closed'`,
+      feeds `search_delete_outbox` — mirrors the existing `CloseJobByID`)
+- [x] 4.7 Regression test: employer B cannot update or close employer A's vacancy (refused as
+      `ErrJobNotFound`) — unit and integration
 
 ## 5. `cmd/import-yc` guard
 

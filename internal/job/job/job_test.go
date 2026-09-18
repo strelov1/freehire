@@ -427,6 +427,42 @@ func TestUpdateManualParams_ContentHashUsesThePersistedSlugNotTheRederivedOne(t 
 	}
 }
 
+// UpdateEmployerParams is UpdateManualParams' employer-self-service sibling: same mapping,
+// but it additionally stamps ActorID — the extra WHERE-clause scope UpdateEmployerJob's SQL
+// needs and UpdateManualJob's does not (see internal/ingest/employer/job.go).
+func TestUpdateEmployerParams_CarriesSlugActorAndDerivedColumns(t *testing.T) {
+	j, err := job.New(job.Draft{Input: jobderive.Input{
+		Source:      "employer",
+		ExternalID:  "https://acme.example/jobs/1",
+		Title:       "Senior Go Developer",
+		Company:     "Acme",
+		Description: "We use Golang.",
+	}})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	f := j.Fields()
+
+	params := f.UpdateEmployerParams(f.PublicSlug, 7)
+	automated := f.UpsertParams()
+
+	if params.PublicSlug != f.PublicSlug {
+		t.Errorf("PublicSlug = %q, want %q", params.PublicSlug, f.PublicSlug)
+	}
+	if params.UpdatedBy != 7 {
+		t.Errorf("UpdatedBy = %d, want 7", params.UpdatedBy)
+	}
+	if params.ActorID != 7 {
+		t.Errorf("ActorID = %d, want 7 — this is the extra WHERE-clause scope UpdateManualParams has no need for", params.ActorID)
+	}
+	if params.Title != f.Title || params.Description != f.Description {
+		t.Errorf("content = %q/%q", params.Title, params.Description)
+	}
+	if params.ContentHash != automated.ContentHash || params.RoleFingerprint != automated.RoleFingerprint {
+		t.Errorf("derived = %v/%v, want %v/%v", params.ContentHash, params.RoleFingerprint, automated.ContentHash, automated.RoleFingerprint)
+	}
+}
+
 // TestUpsertParams_CheapWriteMatchKeyCoversEveryColumnItWrites is the soundness condition of
 // the cheap ingest write path (see the cut-ingest-write-amplification change): when a re-seen
 // posting matches the stored row on RefreshUnchangedJob's key, ingest issues a narrow
