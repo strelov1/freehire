@@ -259,18 +259,19 @@ func (n *fakeNotifier) Send(_ context.Context, _, _ string, d Digest) error {
 	return n.err
 }
 
-// failAfterNotifier succeeds for the first failFrom sends and fails after, so a
-// test can put one channel's success and the next channel's failure in the same
-// pass — which is what makes "who may withdraw the shared row" observable.
+// failAfterNotifier lets the first `succeed` sends through and fails every one
+// after, so a test can put one channel's success and the next channel's failure
+// in the same pass — which is what makes "who may withdraw the shared row"
+// observable.
 type failAfterNotifier struct {
-	failFrom int
-	err      error
-	sent     []Digest
+	succeed int
+	err     error
+	sent    []Digest
 }
 
 func (n *failAfterNotifier) Send(_ context.Context, _, _ string, d Digest) error {
 	n.sent = append(n.sent, d)
-	if len(n.sent) > n.failFrom {
+	if len(n.sent) > n.succeed {
 		return n.err
 	}
 	return nil
@@ -1180,7 +1181,7 @@ func TestDeliver_JoiningChannelDoesNotWithdrawAnotherChannelsNotification(t *tes
 		nextNotificationID: 42,
 	}
 	// Telegram (claimed first) succeeds; email then fails.
-	notifier := &failAfterNotifier{failFrom: 1, err: errors.New("ses down")}
+	notifier := &failAfterNotifier{succeed: 1, err: errors.New("ses down")}
 	r := New(store, &fakeSearcher{}, notifier, DefaultConfig())
 
 	stats, err := r.Run(context.Background())

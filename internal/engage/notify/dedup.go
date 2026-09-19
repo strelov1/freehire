@@ -33,13 +33,17 @@ import (
 // The ids are sorted first because the set is what matters and each channel
 // claims its own rows: two claims of the same jobs may come back in different
 // orders, and an order-sensitive key would miss the duplicate it exists to
-// catch. They are then hashed rather than listed, because a digest carries up to
+// catch. Sorted on a COPY — jobIDs is the live claim list the caller goes on to
+// hand MarkMatchesNotified and ReleaseMatchClaim, and reordering it underneath
+// them would be a side effect nobody asked this function for. They are then
+// hashed rather than listed, because a digest carries up to
 // SnapshotCap (200) of them and this value is a text column under a unique
 // index. SHA-256 rather than a short non-cryptographic hash: the column is
 // nowhere near a size worth economising on, while a collision would silently
 // drop somebody's notification into an unrelated event's row.
 func digestDedupKey(savedSearchID int64, jobIDs []int64) string {
-	sorted := slices.Sorted(slices.Values(jobIDs))
+	sorted := slices.Clone(jobIDs)
+	slices.Sort(sorted)
 	h := sha256.New()
 	var buf [8]byte
 	for _, id := range sorted {

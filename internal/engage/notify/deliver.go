@@ -123,10 +123,10 @@ func (r *Runner) deliverOne(ctx context.Context, subID int64, jobIDs []int64, st
 	// failure — the digest goes out with a zero id and the tail falls back to a
 	// generic destination.
 	//
-	// recorded says whether THIS delivery created the row or joined one another
+	// createdRow says whether THIS delivery wrote the row or joined one another
 	// channel of the same saved search had already written; only the creator may
 	// withdraw it below.
-	notificationID, recorded := r.recordNotification(ctx, subID, info, digest, jobIDs)
+	notificationID, createdRow := r.recordNotification(ctx, subID, info, digest, jobIDs)
 	digest.NotificationID = notificationID
 
 	if err := r.notifier.Send(ctx, info.Channel, dest, digest); err != nil {
@@ -142,7 +142,7 @@ func (r *Runner) deliverOne(ctx context.Context, subID int64, jobIDs []int64, st
 		// records the event once, and withdrawing it because the third channel failed
 		// would erase the history of the two digests that did arrive — the matches
 		// that failed stay pending and the retry finds the row still there.
-		if recorded {
+		if createdRow {
 			r.withdrawNotification(ctx, subID, digest.NotificationID)
 		}
 		// A channel with no registered notifier (e.g. email while SES is
