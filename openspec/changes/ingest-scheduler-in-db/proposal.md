@@ -35,7 +35,7 @@ Two further defects of the same class are latent. The start minute is derived fr
 provider's ALPHABETICAL POSITION (`min=$(( (i*41) % 60 ))`), so onboarding one provider
 shifts the schedule of every provider after it — visible in the drift report as a
 one-position cascade across `applitrack`, `apploi`, `arbeitnow`, `ashby`, `avature`. And
-nothing in `deploy/` deploys itself: `./deploy/check-drift.sh` reports 190 differing files
+nothing in `deploy/` deploys itself: ``freehire-ops`' scripts/host2/drift-check.sh` reports 190 differing files
 and 30 host-only units against the current `main`.
 
 The common root is that a provider's identity is written twice — once as a `boards.provider`
@@ -99,6 +99,6 @@ change replaces only what INVOKES it.
 - **Depends on** `board-catalog-in-db`, which is not yet archived. This change stacks on its
   `boards` table and its provider-name `cmd/ingest` contract; its §9 cleanup (`sources/`
   retirement) is already done as of #2406 and is not blocked by this change.
-- **Docs**: `deploy/AGENTS.md` describes the per-provider timer fleet as the scheduling
+- **Docs**: `freehire-ops' provision/host2/AGENTS.md` describes the per-provider timer fleet as the scheduling
   mechanism and must be rewritten; `internal/ingest/sources/AGENTS.md` gains the pointer to
   the new capability.

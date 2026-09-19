@@ -59,7 +59,7 @@ runs** — check it before releasing:
 grep -c ingest-scheduler /opt/freehire/bin/release.sh   # must be 1
 ```
 
-Then install the scheduler's unit and timer from `deploy/systemd/`, `daemon-reload`, and
+Then install the scheduler's unit and timer from `freehire-ops' provision/host2/systemd/`, `daemon-reload`, and
 start the timer. `INGEST_SCHEDULER_APPLY` stays UNSET — shadow is the default, and a
 scheduler that launched on install would double-crawl every provider at once.
 
@@ -217,7 +217,7 @@ systemctl daemon-reload
 Delete the same files from `deploy/systemd` and `deploy/bin` in git, then:
 
 ```
-./deploy/check-drift.sh     # from a checkout; must exit 0
+`freehire-ops`' scripts/host2/drift-check.sh     # from a checkout; must exit 0
 systemctl start freehire-autodeploy.timer
 ```
 

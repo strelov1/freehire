@@ -142,7 +142,7 @@ Telegram, and mobile push), each with its own small `Notifier`/`Router` pair:
   they shipped until 2026-09-01 while every run exited 0 with `failed=0`. 244 of them piled
   up across 43 people. The health signal for these workers is therefore **`soft_skips` in
   the run log, not the exit code**: a steady non-zero count against `delivered=0` is a dead
-  channel, not an absence of recipients. See [deploy/AGENTS.md](../../deploy/AGENTS.md) for
+  channel, not an absence of recipients. See `freehire-ops`' `provision/host2/AGENTS.md` for
   which units must read both files.
 - **A blocked Telegram bot unlinks the chat; it does not fail the delivery.** Every 403 the
   Bot API answers a send with means the chat is permanently closed (blocked, deactivated,

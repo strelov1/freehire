@@ -56,7 +56,7 @@ _None._ This tightens an existing capability rather than introducing one.
 - `web/vite.config.ts` — the `sentrySvelteKit()` source-maps options, and the comment
   that currently describes only the absent-token case.
 - `deploy/` — the release path's verification step, and the host's environment file that
-  holds the credential. Per `deploy/AGENTS.md` nothing in `deploy/` deploys itself, so a
+  holds the credential. Per `freehire-ops' provision/host2/AGENTS.md` nothing in `deploy/` deploys itself, so a
   host copy is part of the work, not a follow-up.
 - No runtime behaviour on the site changes: this is build- and release-time only. The
   error-reporting paths themselves are untouched.

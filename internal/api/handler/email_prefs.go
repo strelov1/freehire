@@ -30,7 +30,7 @@ func newEmailPrefsHandlers(svc *emailprefs.Service) *emailPrefsHandlers {
 // register mounts the three routes behind a shared rate limiter.
 //
 // The token rides in the QUERY only where it has nowhere else to go. nginx logs
-// query strings (deploy/nginx/snippets/freehire-app.conf), so a never-expiring
+// query strings (freehire-ops' provision/host2/nginx/snippets/freehire-app.conf), so a never-expiring
 // credential in a URL lands in a bulk store that outlives the click:
 //
 //   - GET has no body, and the link in the mail has to carry it. The page strips it

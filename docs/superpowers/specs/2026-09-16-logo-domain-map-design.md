@@ -164,7 +164,7 @@ schedule deliberately, not beside another heavy pass.
   how the change ships dark and how it is rolled back.
 - `internal/job/logodomain` — extracting a bare registrable domain from a stored
   `website` value, the name normalization, and the collision rule. Pure, table-tested.
-- A daily systemd unit and timer under `deploy/systemd/`.
+- A daily systemd unit and timer under `freehire-ops' provision/host2/systemd/`.
 
 **`freehire-logo`**
 
@@ -193,7 +193,7 @@ with a path that does not exist yet logs a missing map on every reload. Ship
 `hire`'s worker, let one run produce a file, then deploy the proxy.
 
 `freehire-logo` is **not** carried by `release.sh` — its binary is copied to the host
-by hand (`deploy/AGENTS.md`). The change is only half delivered until that copy
+by hand (`freehire-ops' provision/host2/AGENTS.md`). The change is only half delivered until that copy
 happens, and a half-delivered change looks exactly like a working one.
 
 ## Testing

@@ -110,7 +110,7 @@ The engine takes `SessionParams` as an argument rather than reading them off a m
 which is the seam a per-session-type table would use: the five columns move, the engine's
 signature does not.
 
-`cmd/mentorship-remind` drains the reminders. `deploy/systemd/freehire-mentorship-remind.*`
+`cmd/mentorship-remind` drains the reminders. `freehire-ops' provision/host2/systemd/freehire-mentorship-remind.*`
 is its unit and timer — **not installed by `release.sh`**, which never touches a unit, and
 its binary is not built by it either.
 
@@ -120,7 +120,7 @@ its binary is not built by it either.
 `gmail_connections.mentor_busy_sync_opted_in` flag rather than on the shared
 `calendar.readonly` scope alone, since an unrelated candidate-side grant already requests
 that same scope), and the worker reconciles the table by replacing the whole synced window
-per mentor each run — never a row-by-row diff. `deploy/systemd/freehire-mentor-busy-sync.*`
+per mentor each run — never a row-by-row diff. `freehire-ops' provision/host2/systemd/freehire-mentor-busy-sync.*`
 is its unit and timer, under the same "not installed by `release.sh`" rule as the reminder
 worker above.
 

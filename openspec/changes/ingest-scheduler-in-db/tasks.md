@@ -138,7 +138,7 @@
 
 ## 7. Deploy artifacts
 
-- [x] 7.1 `deploy/systemd/freehire-ingest-scheduler.{service,timer}`. The unit records why
+- [x] 7.1 `freehire-ops' provision/host2/systemd/freehire-ingest-scheduler.{service,timer}`. The unit records why
       it is the one privileged piece (it creates transient units; each carries
       `--uid=freehire`, so the crawl's own privilege is unchanged). The timer sets
       `Persistent=false` — unlike every per-provider timer it replaces — because catch-up
@@ -158,7 +158,7 @@
       paylocity's 10.42 s/board arithmetic, join's 1.5 req/s cumulative-budget finding,
       oracle's 6.82 s/board, eightfold's proxy, workstream's hydrating first pass, the
       twelve 3h providers' measurement, reed's quota, and why bayt/gulftalent are off.
-- [x] 7.4 `AGENTS.md` (the module table), `deploy/AGENTS.md` and
+- [x] 7.4 `AGENTS.md` (the module table), `freehire-ops' provision/host2/AGENTS.md` and
       `internal/ingest/sources/AGENTS.md` updated; `check-doc-links` green at 289 links.
 
 ## 8. Cutover — OPERATOR STEPS, sequenced on prod
@@ -199,7 +199,7 @@ the order matters more than any single command.
 
 - [ ] 9.1 Delete the generated unit files from the host and from `deploy/systemd`.
 - [ ] 9.2 Delete `freehire-ops' provision/host2/gen-ingest-timers.sh` and `freehire-ops' scripts/host2/ingest-slot.sh`.
-- [ ] 9.3 Reconcile `deploy/` against the host and confirm `./deploy/check-drift.sh` exits 0.
+- [ ] 9.3 Reconcile `deploy/` against the host and confirm ``freehire-ops`' scripts/host2/drift-check.sh` exits 0.
 
 ## 10. Review findings, folded back in
 

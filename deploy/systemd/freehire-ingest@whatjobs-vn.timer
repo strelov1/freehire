@@ -1,8 +1,0 @@
-[Unit]
-Description=timer ingest whatjobs-vn
-[Timer]
-OnCalendar=*:37:00
-Persistent=true
-RandomizedDelaySec=180
-[Install]
-WantedBy=timers.target

@@ -43,14 +43,14 @@
   rather than deleting the sentence — the construction argument is still why the list holds
   prefixes rather than names.
 - [x] 3.4 Verify the premise on prod before relying on it: `/opt/freehire/.env` carries
-  `ADZUNA_APP_ID` and `deploy/systemd/freehire-liveness.service` reads that file, so the
+  `ADZUNA_APP_ID` and `freehire-ops' provision/host2/systemd/freehire-liveness.service` reads that file, so the
   guard passes today. Confirmed 2026-09-06; the task is to re-confirm at deploy time, since a
   guard that fires on a healthy host stops the whole liveness run, not just Adzuna's part.
 - [x] 3.5 `go test ./cmd/liveness/`, then `go vet -tags=integration ./...`.
 
 ## 4. Slow the timer
 
-- [x] 4.1 Change `deploy/systemd/freehire-ingest@adzuna.timer` from `OnCalendar=*:22:00`
+- [x] 4.1 Change `freehire-ops' provision/host2/systemd/freehire-ingest@adzuna.timer` from `OnCalendar=*:22:00`
   (hourly) to four runs a day, keeping the off-the-hour minute and the existing
   `RandomizedDelaySec` so it does not land with the rest of the fleet.
   - **Landed as `00/6:22:00`, and the two forms it is not are worth recording.** `*/6:22:00`
@@ -65,7 +65,7 @@
   the change is half-applied until it is done, and the half that is live (a 15-page adapter
   running hourly) is still ~4× the intended budget.
 - [x] 4.3 Confirm with `systemctl list-timers freehire-ingest@adzuna` that the next
-  elapse matches the new cadence, and with `./deploy/check-drift.sh` that nothing else in
+  elapse matches the new cadence, and with ``freehire-ops`' scripts/host2/drift-check.sh` that nothing else in
   `deploy/` has drifted from the host in the meantime.
   - **Done 2026-09-06 21:15 UTC.** Both the unit and `freehire-ops' provision/host2/gen-ingest-timers.sh` were
     copied (the generator matters as much: it writes this unit on the host, and without its

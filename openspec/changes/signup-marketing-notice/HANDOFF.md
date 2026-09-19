@@ -132,7 +132,7 @@ Not blocking this work, but do not lose them:
    expires and nginx logs query strings; RFC 8058 fixes the request body, so the
    URL is the only place Gmail can carry it. **`freehire-api.conf` is not in this
    repo** — it lives only on the host, so this needs the host file first.
-   `./deploy/check-drift.sh` is what reports the gap.
+   ``freehire-ops`' scripts/host2/drift-check.sh` is what reports the gap.
 2. **Archive the `email-preference-center` change** — move it under
    `openspec/changes/archive/` and sync the deltas into `openspec/specs/`, so
    `openspec/specs/` stops disagreeing with what shipped.

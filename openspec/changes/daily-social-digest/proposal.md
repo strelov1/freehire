@@ -73,7 +73,7 @@ and a new `social_digest_posts` ledger.
 table in `internal/platform/arch/layering/blocks.go`, or both layering guards
 fail. `engage` is layer 7 and may import `job` (5) and `application` (6).
 
-**Deploy** — a new unit and timer under `deploy/systemd/`, and the binary added
+**Deploy** — a new unit and timer under `freehire-ops' provision/host2/systemd/`, and the binary added
 to the build list in `freehire-ops' scripts/host2/release.sh`. That script lives on the host and
 is not deployed by anything; the repository edit is only half the work.
 

@@ -23,7 +23,7 @@ a caller hitting the 500 first.
   node_exporter textfile collector, mirroring `cmd/llm-probe`'s and
   `cmd/queue-metrics`' shape (no-op without `PROM_TEXTFILE_DIR`, no-op without
   `MEILI_MASTER_KEY`, never exits non-zero for a gap it only observed). Systemd
-  service/timer added under `deploy/systemd/`, every 5 minutes.
+  service/timer added under `freehire-ops' provision/host2/systemd/`, every 5 minutes.
 - `internal/search/search/AGENTS.md` and the root `AGENTS.md` worker list updated to
   describe the new worker and retire the "no operator script for this" line it closes.
 
@@ -47,8 +47,8 @@ on a schedule instead of by a caller hitting the 500 first.
 - `internal/search/search/settings_drift_test.go`, `settings_drift_integration_test.go`
   (new) — unit coverage for the comparison, integration coverage against a real engine.
 - `cmd/search-settings-drift/` (new) — the worker: `main.go`, `render.go`, tests.
-- `deploy/systemd/freehire-search-settings-drift.{service,timer}` (new) — recorded here
-  per `deploy/AGENTS.md`'s convention; installing them on the host is a separate,
+- `freehire-ops' provision/host2/systemd/freehire-search-settings-drift.{service,timer}` (new) — recorded here
+  per `freehire-ops' provision/host2/AGENTS.md`'s convention; installing them on the host is a separate,
   manual step, same as every other worker addition.
 - `.gitignore` — the new binary target.
 - `internal/search/search/AGENTS.md`, root `AGENTS.md` — documentation.

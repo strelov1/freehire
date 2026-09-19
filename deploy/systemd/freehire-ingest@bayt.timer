@@ -1,8 +1,0 @@
-[Unit]
-Description=timer ingest bayt
-[Timer]
-OnCalendar=*:28:00
-Persistent=true
-RandomizedDelaySec=180
-[Install]
-WantedBy=timers.target

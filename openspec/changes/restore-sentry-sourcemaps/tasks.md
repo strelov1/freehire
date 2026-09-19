@@ -69,7 +69,7 @@ first was safe.
 - [ ] 4.3 **Revoke the old token.** It was read out of `journald`, so this is a rotation,
       not a swap — see design's Risks.
 - [ ] 4.4 Copy the changed `release.sh` to the host: `deploy/` does not deploy itself
-      (`deploy/AGENTS.md`). Confirm with `./deploy/check-drift.sh` exiting 0.
+      (`freehire-ops' provision/host2/AGENTS.md`). Confirm with ``freehire-ops`' scripts/host2/drift-check.sh` exiting 0.
 
 ## 5. Verify it actually worked
 

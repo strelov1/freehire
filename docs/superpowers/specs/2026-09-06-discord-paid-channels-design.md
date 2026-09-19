@@ -130,7 +130,7 @@ the worker is a no-op that never opens the pool.
 
 ### Configured by hand in Discord, not in code
 
-Two steps no code performs, both recorded in `deploy/AGENTS.md`:
+Two steps no code performs, both recorded in `freehire-ops' provision/host2/AGENTS.md`:
 
 1. On each closed channel, deny `View Channel` to `@everyone` and allow it to `Paid`.
 2. **Drag the bot's own role above `Paid` in Server Settings → Roles.** A bot cannot

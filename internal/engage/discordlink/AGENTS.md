@@ -73,5 +73,5 @@ Neither switches the other on.
 ## What is done by hand
 
 The channel permissions and the bot's position in the role list are configured in Discord and
-recorded in [deploy/AGENTS.md](../../../deploy/AGENTS.md). No code performs them, and nothing
+recorded in `freehire-ops`' `provision/host2/AGENTS.md`. No code performs them, and nothing
 here is verifiable on production until somebody with the server's admin rights has.

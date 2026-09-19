@@ -16,7 +16,7 @@
 
 ## 4. Deployment record
 
-- [x] 4.1 `deploy/systemd/freehire-search-settings-drift.service` and `.timer`, mirroring `freehire-llm-probe`'s shape (lowest CPU/IO weight, 5-minute monotonic timer, not persistent).
+- [x] 4.1 `freehire-ops' provision/host2/systemd/freehire-search-settings-drift.service` and `.timer`, mirroring `freehire-llm-probe`'s shape (lowest CPU/IO weight, 5-minute monotonic timer, not persistent).
 - [x] 4.2 Add `/search-settings-drift` to `.gitignore`.
 
 ## 5. Documentation

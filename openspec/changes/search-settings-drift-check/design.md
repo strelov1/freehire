@@ -94,6 +94,6 @@ coarse in practice — noted here rather than built ahead of that need.
 
 No schema change, no change to any existing read or write path. The new worker and its
 systemd unit are purely additive; installing the unit and timer on the host is a manual
-step (per `deploy/AGENTS.md`: "Nothing here deploys itself"), same as every other worker
+step (per `freehire-ops' provision/host2/AGENTS.md`: "Nothing here deploys itself"), same as every other worker
 addition, and is out of scope for this change. Until installed, nothing changes.
 Rollback is deleting the unit files and the binary — no data was written.

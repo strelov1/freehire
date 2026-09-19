@@ -12,7 +12,7 @@ Inngest's `step.WaitForEvent` was verified end to end against this repo's own en
 a real LLM call in this session: a run paused, a signal sent minutes later resumed the SAME
 run, and the decision was recorded in Postgres. It also self-hosts as one process that can
 reuse freehire's existing Postgres, which fits the single-bare-metal-host, no-Kubernetes
-deploy model the rest of the fleet already uses (see `deploy/AGENTS.md`).
+deploy model the rest of the fleet already uses (see `freehire-ops' provision/host2/AGENTS.md`).
 
 This change makes that spike a real, freehire-owned worker: something finally calls the
 tailor endpoint automatically, durably, in production, and durably waits for whichever

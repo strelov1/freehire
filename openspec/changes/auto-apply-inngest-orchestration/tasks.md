@@ -90,7 +90,7 @@
       `freehire-logo.service`'s "third-party binary in /opt/freehire/bin" shape rather
       than a `hire-current` one). No new env FILE — `AUTO_APPLY_ORCHESTRATOR_SECRET` /
       `INNGEST_*` join the one shared `/opt/freehire/.env` every non-mail worker already
-      reads. Per `deploy/AGENTS.md`: this only edits the checked-in unit files — copying
+      reads. Per `freehire-ops' provision/host2/AGENTS.md`: this only edits the checked-in unit files — copying
       them to host-2, provisioning the self-hosted Inngest server's own Postgres database,
       and enabling both units is a separate, manual step, not part of this task.
 

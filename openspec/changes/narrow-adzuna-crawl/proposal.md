@@ -110,7 +110,7 @@ mechanism for it (`expireDespiteRegisteredPrefixes`). Adzuna joins it. No new ma
 
 - **Go:** `internal/ingest/sources/adzuna.go` (request parameters and page budget);
   `cmd/liveness/main.go` (one entry in `expireDespiteRegisteredPrefixes`).
-- **Deploy:** `deploy/systemd/freehire-ingest@adzuna.timer` — hourly to every six hours.
+- **Deploy:** `freehire-ops' provision/host2/systemd/freehire-ingest@adzuna.timer` — hourly to every six hours.
   **The unit must be copied to the host**; `release.sh` flips the app and never touches a
   unit, so this half of the change does not ship itself.
 - **Schema:** none.

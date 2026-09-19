@@ -60,7 +60,7 @@ const (
 	// so raising any one of the three without lowering another puts the catalogue's largest
 	// single source outside the terms it is served under. TestAdzunaPageBudgetStaysWithinThe-
 	// DailyCeiling holds the arithmetic; the timer's cadence is the leg that lives outside
-	// this repository's build, in deploy/systemd/freehire-ingest@adzuna.timer.
+	// this repository's build, in freehire-ops' provision/host2/systemd/freehire-ingest@adzuna.timer.
 	adzunaMaxPages = 15
 	// adzunaSweepGrace widens the unseen sweep for the same reason whatjobs' does: redirect_url
 	// routes through Adzuna's own domain rather than the employer's site, so a posting's liveness

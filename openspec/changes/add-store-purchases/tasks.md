@@ -111,11 +111,11 @@
 
 - [x] 6.1 Record the manual dashboard steps in `deploy/`: the RevenueCat project, the `pro`
       entitlement, the offering, the App Store and Play product mappings, and registering the
-      webhook with HMAC signing enabled. In `deploy/AGENTS.md`, beside Stripe's equivalent.
+      webhook with HMAC signing enabled. In `freehire-ops' provision/host2/AGENTS.md`, beside Stripe's equivalent.
 - [ ] 6.2 NEEDS HOST ACCESS — add the three variables to `/opt/freehire/.env` on the host.
 - [x] 6.3 Update the support runbook: granting Pro by hand is now
       `UPDATE users SET pro_until_granted = …`, and the old statement fails on purpose
-      (428C9). In `deploy/AGENTS.md`, with the reason the other two columns are off limits.
+      (428C9). In `freehire-ops' provision/host2/AGENTS.md`, with the reason the other two columns are off limits.
 - [ ] 6.4 NEEDS HOST ACCESS — run the migration manually on prod, before deploying the code that reads the new
       columns.
 

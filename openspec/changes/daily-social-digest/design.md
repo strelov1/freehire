@@ -16,7 +16,7 @@ crawlers fetched, presented to humans as what humans liked.
 
 The rest is plumbing this repository already has a shape for: a run-once worker
 under `cmd/`, a domain package under `internal/engage`, a systemd oneshot and
-timer under `deploy/systemd/`.
+timer under `freehire-ops' provision/host2/systemd/`.
 
 ## Goals / Non-Goals
 

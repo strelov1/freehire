@@ -183,7 +183,7 @@ func TestAdzunaFetchStopsWhenTheWindowRunsOut(t *testing.T) {
 func TestAdzunaPageBudgetStaysWithinTheDailyCeiling(t *testing.T) {
 	const (
 		boards         = 4    // us, gb, de, au — every active adzuna board is category it-jobs
-		runsPerDay     = 4    // deploy/systemd/freehire-ingest@adzuna.timer, Persistent=false
+		runsPerDay     = 4    // freehire-ops' provision/host2/systemd/freehire-ingest@adzuna.timer, Persistent=false
 		dailyCeiling   = 250  // Adzuna's stated terms
 		weeklyCeiling  = 1000 // ditto
 		monthlyCeiling = 2500 // ditto — the one this crawl knowingly exceeds

@@ -1,8 +1,0 @@
-[Unit]
-Description=timer ingest workstream shard 1/2
-[Timer]
-OnCalendar=*-*-* 00/6:57:00
-Persistent=true
-RandomizedDelaySec=180
-[Install]
-WantedBy=timers.target

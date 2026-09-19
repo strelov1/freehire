@@ -132,8 +132,8 @@ why `errorHandler` did not help.
   line, token value included, which is where this one was read from. Out of scope here, but
   it makes replacing the token a **rotation, not a repair** — the old value must be revoked,
   not merely swapped.
-- **`deploy/` does not deploy itself** (`deploy/AGENTS.md`) → Copying the changed release
-  path to the host is a task in this change, not a follow-up, and `./deploy/check-drift.sh`
+- **`deploy/` does not deploy itself** (`freehire-ops' provision/host2/AGENTS.md`) → Copying the changed release
+  path to the host is a task in this change, not a follow-up, and ``freehire-ops`' scripts/host2/drift-check.sh`
   is the confirmation.
 
 ## Migration Plan
@@ -144,7 +144,7 @@ fail loudly, and call that "the moment the problem becomes visible". That was re
 it was wrong twice over. It would have bought visibility nobody needed (the problem was
 already measured, in this document) at the price of blocking every unrelated deploy until a
 human happened to be free to mint a token. And it misread its own mechanism: merging this
-change does NOT arm the check. `deploy/` does not deploy itself (`deploy/AGENTS.md`), so the
+change does NOT arm the check. `deploy/` does not deploy itself (`freehire-ops' provision/host2/AGENTS.md`), so the
 host keeps running its own copy of `release.sh` until someone copies the new one over. That
 copy is the arming step, and it is step 3.
 
@@ -156,7 +156,7 @@ copy is the arming step, and it is step 3.
    `journald`, so this is a rotation, not a swap.
 3. Copy the new `release.sh` to `/opt/freehire/bin/`. This is what arms the check, and it
    is safe now precisely because step 2 already happened. Confirm with
-   `./deploy/check-drift.sh` exiting 0.
+   ``freehire-ops`' scripts/host2/drift-check.sh` exiting 0.
 4. Confirm the next release passes the check and that Sentry shows artifacts for it.
 5. Re-read a production issue and confirm the frames name our own files.
 

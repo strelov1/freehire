@@ -119,7 +119,7 @@ findings are in the design's "The provider contract, as verified".
 ## 6. Ops
 
 - [x] 6.1 `deploy/`: the `freehire-billing-sync` service and timer (hourly), and the entry
-      in `deploy/AGENTS.md`. **Copy them to the host, and build the binary there** —
+      in `freehire-ops' provision/host2/AGENTS.md`. **Copy them to the host, and build the binary there** —
       `release.sh` builds the API, not every command in `cmd/`. Hourly is
       chosen against the provider's retry ceiling: it gives up after five attempts over
       about two and a half hours, and after that this timer is the only path left
