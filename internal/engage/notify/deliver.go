@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/strelov1/freehire/internal/application/deliverywindow"
@@ -121,7 +122,12 @@ func (r *Runner) deliverOne(ctx context.Context, subID int64, jobIDs []int64, st
 	// that lists the full match set. A recording failure is not a delivery
 	// failure — the digest goes out with a zero id and the tail falls back to a
 	// generic destination.
-	digest.NotificationID = r.recordNotification(ctx, subID, info, digest)
+	//
+	// recorded says whether THIS delivery created the row or joined one another
+	// channel of the same saved search had already written; only the creator may
+	// withdraw it below.
+	notificationID, recorded := r.recordNotification(ctx, subID, info, digest, jobIDs)
+	digest.NotificationID = notificationID
 
 	if err := r.notifier.Send(ctx, info.Channel, dest, digest); err != nil {
 		// Withdraw on EVERY send error, including an ambiguous one (a timeout may
@@ -131,7 +137,14 @@ func (r *Runner) deliverOne(ctx context.Context, subID int64, jobIDs []int64, st
 		// history with up to MaxAttempts rows per digest nobody received, which is
 		// the failure this ordering exists to avoid. The cost of withdrawing is
 		// narrower: a mail that did slip out links to a page that 404s.
-		r.withdrawNotification(ctx, subID, digest.NotificationID)
+		//
+		// Only when THIS delivery created the row. A saved search on three channels
+		// records the event once, and withdrawing it because the third channel failed
+		// would erase the history of the two digests that did arrive — the matches
+		// that failed stay pending and the retry finds the row still there.
+		if recorded {
+			r.withdrawNotification(ctx, subID, digest.NotificationID)
+		}
 		// A channel with no registered notifier (e.g. email while SES is
 		// unconfigured) is not a delivery failure: soft-skip so the matches stay
 		// pending for a pass once the channel is provisioned, without burning an
@@ -207,12 +220,17 @@ func (r *Runner) deliverOne(ctx context.Context, subID int64, jobIDs []int64, st
 // returns its id, or zero if the write failed. A failure is a degraded read-side
 // feature (and a tail that falls back to a generic destination), never a reason
 // to hold back a digest that is otherwise ready to send.
-func (r *Runner) recordNotification(ctx context.Context, subID int64, info db.GetSubscriptionForDeliveryRow, d Digest) int64 {
+//
+// created reports whether this delivery WROTE the row, as opposed to joining one
+// another channel of the same saved search had already written. The notification
+// centre holds one row per EVENT, so only the writer may withdraw it.
+func (r *Runner) recordNotification(ctx context.Context, subID int64, info db.GetSubscriptionForDeliveryRow, d Digest, jobIDs []int64) (id int64, created bool) {
 	title, body, slug := renderDigest(d)
 	var publicSlug pgtype.Text
 	if slug != "" {
 		publicSlug = pgtype.Text{String: slug, Valid: true}
 	}
+	dedupKey := pgtype.Text{String: digestDedupKey(info.SavedSearchID, jobIDs), Valid: true}
 	id, err := r.store.RecordNotification(ctx, db.RecordNotificationParams{
 		UserID:     info.UserID,
 		Kind:       "subscription_digest",
@@ -220,12 +238,32 @@ func (r *Runner) recordNotification(ctx context.Context, subID int64, info db.Ge
 		Body:       body,
 		PublicSlug: publicSlug,
 		Jobs:       digestJobsSnapshot(d),
+		DedupKey:   dedupKey,
+	})
+	if err == nil {
+		return id, true
+	}
+	if !errors.Is(err, pgx.ErrNoRows) {
+		log.Printf("notify: record notification for subscription %d: %v", subID, err)
+		return 0, false
+	}
+	// No row inserted: another channel of this same saved search already
+	// recorded this event. Link this channel's message at that row rather than
+	// adding a second indistinguishable one to the history (freehire#3020).
+	id, err = r.store.GetNotificationIDByDedupKey(ctx, db.GetNotificationIDByDedupKeyParams{
+		UserID:   info.UserID,
+		DedupKey: dedupKey,
 	})
 	if err != nil {
-		log.Printf("notify: record notification for subscription %d: %v", subID, err)
-		return 0
+		// Lost to a concurrent withdrawal (the channel that created the row
+		// failed to send and removed it between the two statements). Degrades
+		// exactly like a failed write: the tail falls back to a generic
+		// destination, and the event keeps no history row, which is honest —
+		// the only delivery that had one did not go out.
+		log.Printf("notify: read deduped notification for subscription %d: %v", subID, err)
+		return 0, false
 	}
-	return id
+	return id, false
 }
 
 // withdrawNotification removes the row recordNotification wrote for a digest

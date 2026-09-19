@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/strelov1/freehire/internal/job/jobview"
@@ -96,6 +97,11 @@ type fakeStore struct {
 	// ids a failed send withdrew.
 	nextNotificationID   int64
 	deletedNotifications []int64
+	// notificationsByDedupKey stands in for the partial unique index on
+	// (user_id, dedup_key). The fake enforces it rather than ignoring it: a
+	// store that accepted every insert would report a key that dedupes nothing
+	// as working, which is the bug these tests exist to catch.
+	notificationsByDedupKey map[string]int64
 }
 
 func (s *fakeStore) ListActiveSubscriptions(context.Context) ([]db.ListActiveSubscriptionsRow, error) {
@@ -181,16 +187,42 @@ func (s *fakeStore) RecordNotification(_ context.Context, a db.RecordNotificatio
 	if s.recordNotificationErr != nil {
 		return 0, s.recordNotificationErr
 	}
+	// ON CONFLICT ... DO NOTHING RETURNING id: a key already recorded inserts
+	// nothing and yields no row.
+	if _, taken := s.notificationsByDedupKey[a.DedupKey.String]; taken && a.DedupKey.Valid {
+		return 0, pgx.ErrNoRows
+	}
 	if s.nextNotificationID == 0 {
 		s.nextNotificationID = 1
 	}
 	id := s.nextNotificationID
 	s.nextNotificationID++
+	if a.DedupKey.Valid {
+		if s.notificationsByDedupKey == nil {
+			s.notificationsByDedupKey = make(map[string]int64)
+		}
+		s.notificationsByDedupKey[a.DedupKey.String] = id
+	}
+	return id, nil
+}
+
+func (s *fakeStore) GetNotificationIDByDedupKey(_ context.Context, a db.GetNotificationIDByDedupKeyParams) (int64, error) {
+	id, ok := s.notificationsByDedupKey[a.DedupKey.String]
+	if !ok {
+		return 0, pgx.ErrNoRows
+	}
 	return id, nil
 }
 
 func (s *fakeStore) DeleteNotification(_ context.Context, id int64) error {
 	s.deletedNotifications = append(s.deletedNotifications, id)
+	// A withdrawn row frees its key, so the retry that follows records afresh
+	// rather than reading back an id that no longer exists.
+	for key, recorded := range s.notificationsByDedupKey {
+		if recorded == id {
+			delete(s.notificationsByDedupKey, key)
+		}
+	}
 	return nil
 }
 
@@ -225,6 +257,23 @@ type fakeNotifier struct {
 func (n *fakeNotifier) Send(_ context.Context, _, _ string, d Digest) error {
 	n.sent = append(n.sent, d)
 	return n.err
+}
+
+// failAfterNotifier succeeds for the first failFrom sends and fails after, so a
+// test can put one channel's success and the next channel's failure in the same
+// pass — which is what makes "who may withdraw the shared row" observable.
+type failAfterNotifier struct {
+	failFrom int
+	err      error
+	sent     []Digest
+}
+
+func (n *failAfterNotifier) Send(_ context.Context, _, _ string, d Digest) error {
+	n.sent = append(n.sent, d)
+	if len(n.sent) > n.failFrom {
+		return n.err
+	}
+	return nil
 }
 
 // --- helpers -------------------------------------------------------------
@@ -1078,6 +1127,72 @@ func TestDeliver_FailedSendWithdrawsItsNotification(t *testing.T) {
 	}
 	if len(store.failures) != 1 {
 		t.Errorf("failures = %d, want 1", len(store.failures))
+	}
+}
+
+// One saved search on two channels is one event: the second channel joins the
+// row the first recorded instead of adding an indistinguishable second one, and
+// both messages link at the same page (freehire#3020).
+func TestDeliver_SecondChannelOfOneSavedSearchJoinsTheSameNotification(t *testing.T) {
+	store := &fakeStore{
+		claimed: []db.ClaimSubscriptionMatchesRow{{SubscriptionID: 1, JobID: 10}, {SubscriptionID: 2, JobID: 10}},
+		delivery: map[int64]db.GetSubscriptionForDeliveryRow{
+			1: {ID: 1, UserID: 42, SavedSearchID: 7, Channel: ChannelTelegram, SavedSearchName: "My profile", TelegramChatID: pgtype.Int8{Int64: 555, Valid: true}},
+			2: {ID: 2, UserID: 42, SavedSearchID: 7, Channel: ChannelEmail, SavedSearchName: "My profile", AccountEmail: "a@example.test"},
+		},
+		digestJobs:         map[int64]db.GetJobsForDigestRow{10: {ID: 10, Title: "A", PublicSlug: "a"}},
+		nextNotificationID: 42,
+	}
+	notifier := &fakeNotifier{}
+	r := New(store, &fakeSearcher{}, notifier, DefaultConfig())
+
+	stats, err := r.Run(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stats.Delivered != 2 {
+		t.Fatalf("Delivered = %d, want 2 — both channels still send", stats.Delivered)
+	}
+	if len(store.notificationsByDedupKey) != 1 {
+		t.Errorf("distinct notification rows = %d, want 1 for one event on two channels", len(store.notificationsByDedupKey))
+	}
+	if len(notifier.sent) != 2 {
+		t.Fatalf("digests sent = %d, want 2", len(notifier.sent))
+	}
+	if notifier.sent[0].NotificationID != 42 || notifier.sent[1].NotificationID != 42 {
+		t.Errorf("NotificationIDs = %d and %d, want both 42 — each channel links at the one recorded event",
+			notifier.sent[0].NotificationID, notifier.sent[1].NotificationID)
+	}
+}
+
+// The channel that JOINED an existing row must not withdraw it when its own
+// send fails: the row belongs to the channel that recorded it, whose digest
+// went out. Withdrawing here is how a third failing channel would erase the
+// history of the two that arrived.
+func TestDeliver_JoiningChannelDoesNotWithdrawAnotherChannelsNotification(t *testing.T) {
+	store := &fakeStore{
+		claimed: []db.ClaimSubscriptionMatchesRow{{SubscriptionID: 1, JobID: 10}, {SubscriptionID: 2, JobID: 10}},
+		delivery: map[int64]db.GetSubscriptionForDeliveryRow{
+			1: {ID: 1, UserID: 42, SavedSearchID: 7, Channel: ChannelTelegram, SavedSearchName: "My profile", TelegramChatID: pgtype.Int8{Int64: 555, Valid: true}},
+			2: {ID: 2, UserID: 42, SavedSearchID: 7, Channel: ChannelEmail, SavedSearchName: "My profile", AccountEmail: "a@example.test"},
+		},
+		digestJobs:         map[int64]db.GetJobsForDigestRow{10: {ID: 10, Title: "A", PublicSlug: "a"}},
+		nextNotificationID: 42,
+	}
+	// Telegram (claimed first) succeeds; email then fails.
+	notifier := &failAfterNotifier{failFrom: 1, err: errors.New("ses down")}
+	r := New(store, &fakeSearcher{}, notifier, DefaultConfig())
+
+	stats, err := r.Run(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stats.Delivered != 1 || stats.Failed != 1 {
+		t.Fatalf("Delivered = %d, Failed = %d, want 1 and 1", stats.Delivered, stats.Failed)
+	}
+	if len(store.deletedNotifications) != 0 {
+		t.Errorf("deleted = %v, want none — the Telegram digest that DID arrive keeps its history row",
+			store.deletedNotifications)
 	}
 }
 

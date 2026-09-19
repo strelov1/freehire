@@ -88,6 +88,31 @@ func (q *Queries) GetNotification(ctx context.Context, arg GetNotificationParams
 	return i, err
 }
 
+const getNotificationIDByDedupKey = `-- name: GetNotificationIDByDedupKey :one
+SELECT id FROM user_notifications
+WHERE user_id = $1 AND dedup_key = $2
+`
+
+type GetNotificationIDByDedupKeyParams struct {
+	UserID   int64       `json:"user_id"`
+	DedupKey pgtype.Text `json:"dedup_key"`
+}
+
+// The id of the row already recorded for an event, for the channel that lost
+// the race to record it and still needs the id to link its "and N more" tail at.
+//
+// Deliberately a second round trip rather than folding it into
+// RecordNotification as an ON CONFLICT DO UPDATE ... RETURNING id: the upsert
+// form always returns an id and so cannot say WHICH caller created the row,
+// and that distinction is what stops a later channel's failed send from
+// withdrawing the history row an earlier channel's successful send earned.
+func (q *Queries) GetNotificationIDByDedupKey(ctx context.Context, arg GetNotificationIDByDedupKeyParams) (int64, error) {
+	row := q.db.QueryRow(ctx, getNotificationIDByDedupKey, arg.UserID, arg.DedupKey)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
+}
+
 const listUserNotifications = `-- name: ListUserNotifications :many
 SELECT id, kind, title, body, public_slug, jobs, created_at, read_at
 FROM user_notifications
@@ -185,8 +210,9 @@ func (q *Queries) MarkNotificationRead(ctx context.Context, arg MarkNotification
 }
 
 const recordNotification = `-- name: RecordNotification :one
-INSERT INTO user_notifications (user_id, kind, title, body, public_slug, jobs)
-VALUES ($1, $2, $3, $4, $5, $6)
+INSERT INTO user_notifications (user_id, kind, title, body, public_slug, jobs, dedup_key)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
+ON CONFLICT (user_id, dedup_key) WHERE dedup_key IS NOT NULL DO NOTHING
 RETURNING id
 `
 
@@ -197,6 +223,7 @@ type RecordNotificationParams struct {
 	Body       string          `json:"body"`
 	PublicSlug pgtype.Text     `json:"public_slug"`
 	Jobs       json.RawMessage `json:"jobs"`
+	DedupKey   pgtype.Text     `json:"dedup_key"`
 }
 
 // Record one delivered notify/reminder/nudge event for the in-app notification
@@ -209,6 +236,16 @@ type RecordNotificationParams struct {
 // Returns the new row's id because a subscription digest is recorded BEFORE it
 // is sent, so the message can link to this row's matched-jobs page. Reminders
 // and nudges record after delivery as before and discard the id.
+//
+// dedup_key names the EVENT this row records, for the callers whose delivery
+// runs once per CHANNEL rather than once per event — today only the
+// subscription digest, whose `subscriptions` row is keyed (saved_search_id,
+// channel). Passing one makes the write claim-or-yield: the first channel to
+// arrive inserts, and every later channel carrying the same event conflicts and
+// inserts nothing, returning NO ROW (sqlc.ErrNoRows) so the caller can tell
+// "I recorded this" from "somebody already had". Every engine that already
+// records once per event passes NULL and behaves exactly as before, since the
+// unique index behind the conflict target is partial on dedup_key IS NOT NULL.
 func (q *Queries) RecordNotification(ctx context.Context, arg RecordNotificationParams) (int64, error) {
 	row := q.db.QueryRow(ctx, recordNotification,
 		arg.UserID,
@@ -217,6 +254,7 @@ func (q *Queries) RecordNotification(ctx context.Context, arg RecordNotification
 		arg.Body,
 		arg.PublicSlug,
 		arg.Jobs,
+		arg.DedupKey,
 	)
 	var id int64
 	err := row.Scan(&id)

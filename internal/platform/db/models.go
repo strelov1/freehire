@@ -1438,6 +1438,7 @@ type UserNotification struct {
 	CreatedAt  pgtype.Timestamptz `json:"created_at"`
 	ReadAt     pgtype.Timestamptz `json:"read_at"`
 	Jobs       json.RawMessage    `json:"jobs"`
+	DedupKey   pgtype.Text        `json:"dedup_key"`
 }
 
 type UserProfile struct {

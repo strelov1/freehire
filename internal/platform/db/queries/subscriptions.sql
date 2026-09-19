@@ -126,6 +126,8 @@ RETURNING m.subscription_id, m.job_id;
 
 -- name: GetSubscriptionForDelivery :one
 -- The delivery context for one subscription: channel + destination, the saved
+-- search id (which subscriptions of the same search share, and the notification
+-- centre's dedup key is built on — see notify.digestDedupKey), the saved
 -- search name (for the digest heading), the user's account email (the email
 -- channel's live recipient), the user's linked Telegram chat (NULL when unlinked
 -- → the worker soft-skips telegram delivery rather than failing it), whether
@@ -136,7 +138,7 @@ RETURNING m.subscription_id, m.job_id;
 -- (live, not snapshotted, same as the channel checks above) — the account's
 -- timezone and its saved-search digest frequency settings, read via
 -- internal/application/deliverywindow before a digest is sent.
-SELECT s.id, s.user_id, s.channel, s.destination, s.last_digest_sent_at,
+SELECT s.id, s.user_id, s.saved_search_id, s.channel, s.destination, s.last_digest_sent_at,
        ss.name AS saved_search_name,
        u.email AS account_email,
        u.timezone AS timezone,

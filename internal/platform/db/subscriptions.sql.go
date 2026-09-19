@@ -236,7 +236,7 @@ func (q *Queries) GetJobsForDigest(ctx context.Context, jobIds []int64) ([]GetJo
 }
 
 const getSubscriptionForDelivery = `-- name: GetSubscriptionForDelivery :one
-SELECT s.id, s.user_id, s.channel, s.destination, s.last_digest_sent_at,
+SELECT s.id, s.user_id, s.saved_search_id, s.channel, s.destination, s.last_digest_sent_at,
        ss.name AS saved_search_name,
        u.email AS account_email,
        u.timezone AS timezone,
@@ -260,6 +260,7 @@ WHERE s.id = $1
 type GetSubscriptionForDeliveryRow struct {
 	ID               int64              `json:"id"`
 	UserID           int64              `json:"user_id"`
+	SavedSearchID    int64              `json:"saved_search_id"`
 	Channel          string             `json:"channel"`
 	Destination      pgtype.Text        `json:"destination"`
 	LastDigestSentAt pgtype.Timestamptz `json:"last_digest_sent_at"`
@@ -277,6 +278,8 @@ type GetSubscriptionForDeliveryRow struct {
 }
 
 // The delivery context for one subscription: channel + destination, the saved
+// search id (which subscriptions of the same search share, and the notification
+// centre's dedup key is built on — see notify.digestDedupKey), the saved
 // search name (for the digest heading), the user's account email (the email
 // channel's live recipient), the user's linked Telegram chat (NULL when unlinked
 // → the worker soft-skips telegram delivery rather than failing it), whether
@@ -293,6 +296,7 @@ func (q *Queries) GetSubscriptionForDelivery(ctx context.Context, id int64) (Get
 	err := row.Scan(
 		&i.ID,
 		&i.UserID,
+		&i.SavedSearchID,
 		&i.Channel,
 		&i.Destination,
 		&i.LastDigestSentAt,

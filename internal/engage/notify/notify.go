@@ -149,8 +149,13 @@ type Store interface {
 	ReleaseMatchClaim(ctx context.Context, arg db.ReleaseMatchClaimParams) error
 	// RecordNotification returns the new row's id. A digest is recorded BEFORE
 	// it is sent so the message can link to that row's matched-jobs page;
-	// DeleteNotification withdraws it when the send then fails.
+	// DeleteNotification withdraws it when the send then fails. With a dedup key
+	// set it returns pgx.ErrNoRows when another channel of the same saved search
+	// already recorded this event — not a failure, see recordNotification.
 	RecordNotification(ctx context.Context, arg db.RecordNotificationParams) (int64, error)
+	// GetNotificationIDByDedupKey reads back the row another channel recorded
+	// for this same event, so every channel's message links to one page.
+	GetNotificationIDByDedupKey(ctx context.Context, arg db.GetNotificationIDByDedupKeyParams) (int64, error)
 	DeleteNotification(ctx context.Context, id int64) error
 	MarkDigestSent(ctx context.Context, id int64) error
 	// DeleteTelegramLink forgets a user's Telegram chat. Called when a send

@@ -58,13 +58,31 @@ func insertNotifySavedSearch(t *testing.T, pool *pgxpool.Pool, userID int64, nam
 
 func insertNotifyPushSubscription(t *testing.T, pool *pgxpool.Pool, userID, savedSearchID int64) int64 {
 	t.Helper()
+	return insertNotifySubscription(t, pool, userID, savedSearchID, ChannelPush)
+}
+
+// insertNotifySubscription subscribes one saved search to one channel. The
+// channel is a parameter because `subscriptions` is keyed (saved_search_id,
+// channel): a person who enables Telegram, email and push on one saved search
+// has three rows, which is the shape the notification-center dedup is about.
+func insertNotifySubscription(t *testing.T, pool *pgxpool.Pool, userID, savedSearchID int64, channel string) int64 {
+	t.Helper()
 	var id int64
 	if err := pool.QueryRow(context.Background(),
-		`INSERT INTO subscriptions (user_id, saved_search_id, channel, active) VALUES ($1, $2, 'push', true) RETURNING id`,
-		userID, savedSearchID).Scan(&id); err != nil {
+		`INSERT INTO subscriptions (user_id, saved_search_id, channel, active) VALUES ($1, $2, $3, true) RETURNING id`,
+		userID, savedSearchID, channel).Scan(&id); err != nil {
 		t.Fatalf("insert subscription: %v", err)
 	}
 	return id
+}
+
+func insertNotifyTelegramLink(t *testing.T, pool *pgxpool.Pool, userID, chatID int64) {
+	t.Helper()
+	if _, err := pool.Exec(context.Background(),
+		`INSERT INTO telegram_links (user_id, chat_id) VALUES ($1, $2)`,
+		userID, chatID); err != nil {
+		t.Fatalf("insert telegram link: %v", err)
+	}
 }
 
 func insertNotifyJob(t *testing.T, pool *pgxpool.Pool, externalID, title, slug string) int64 {

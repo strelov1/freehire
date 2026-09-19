@@ -2503,6 +2503,15 @@ type Querier interface {
 	// visited /my/notifications/[id]/jobs page needs, since ListUserNotifications
 	// alone only serves the caller's own current page of the list.
 	GetNotification(ctx context.Context, arg GetNotificationParams) (GetNotificationRow, error)
+	// The id of the row already recorded for an event, for the channel that lost
+	// the race to record it and still needs the id to link its "and N more" tail at.
+	//
+	// Deliberately a second round trip rather than folding it into
+	// RecordNotification as an ON CONFLICT DO UPDATE ... RETURNING id: the upsert
+	// form always returns an id and so cannot say WHICH caller created the row,
+	// and that distinction is what stops a later channel's failed send from
+	// withdrawing the history row an earlier channel's successful send earned.
+	GetNotificationIDByDedupKey(ctx context.Context, arg GetNotificationIDByDedupKeyParams) (int64, error)
 	// The caller's notification rule, shared by saved-job reminders and both
 	// lifecycle nudges. No row -> pgx.ErrNoRows, which the service reads as the
 	// opt-out-by-default state (never configured; see the
@@ -2615,6 +2624,8 @@ type Querier interface {
 	// defense-in-depth against a concurrent second decision.
 	GetSubmission(ctx context.Context, id int64) (JobSubmission, error)
 	// The delivery context for one subscription: channel + destination, the saved
+	// search id (which subscriptions of the same search share, and the notification
+	// centre's dedup key is built on — see notify.digestDedupKey), the saved
 	// search name (for the digest heading), the user's account email (the email
 	// channel's live recipient), the user's linked Telegram chat (NULL when unlinked
 	// → the worker soft-skips telegram delivery rather than failing it), whether
@@ -5360,6 +5371,16 @@ type Querier interface {
 	// Returns the new row's id because a subscription digest is recorded BEFORE it
 	// is sent, so the message can link to this row's matched-jobs page. Reminders
 	// and nudges record after delivery as before and discard the id.
+	//
+	// dedup_key names the EVENT this row records, for the callers whose delivery
+	// runs once per CHANNEL rather than once per event — today only the
+	// subscription digest, whose `subscriptions` row is keyed (saved_search_id,
+	// channel). Passing one makes the write claim-or-yield: the first channel to
+	// arrive inserts, and every later channel carrying the same event conflicts and
+	// inserts nothing, returning NO ROW (sqlc.ErrNoRows) so the caller can tell
+	// "I recorded this" from "somebody already had". Every engine that already
+	// records once per event passes NULL and behaves exactly as before, since the
+	// unique index behind the conflict target is partial on dedup_key IS NOT NULL.
 	RecordNotification(ctx context.Context, arg RecordNotificationParams) (int64, error)
 	// Record one matched nudge candidate. The unique index on
 	// (user_id, job_id, kind, episode_key) makes this idempotent — re-scanning the
