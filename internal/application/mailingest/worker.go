@@ -120,7 +120,13 @@ func (w *Worker) handle(ctx context.Context, in Inbound) error {
 		return err
 	}
 	if !ok {
-		log.Printf("mailingest: unknown recipient %s, dropped", recipient)
+		// The object key is named for the same reason the two drops above name it: a
+		// dropped message is unrecoverable from the log alone, and the raw MIME stays in
+		// S3, so the key is the only way to answer what was thrown away. This line lacked
+		// it and the sibling lines had it, which made one class of drop diagnosable in a
+		// minute and this one not at all — 178 drops a day for `notifications@` could not
+		// be told apart from bounces, auto-replies and people answering a digest.
+		log.Printf("mailingest: unknown recipient %s (%s), dropped", recipient, in.S3Key)
 		return nil
 	}
 
