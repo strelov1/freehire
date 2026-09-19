@@ -28,6 +28,26 @@ remote work cannot see them.
 Uncovered titles in this segment, live and `category = ''`: `admin assistant`
 (319), `personal assistant` (255), `virtual assistant` (105).
 
+### These postings are not merely unfacetted — they are not in the index
+
+`search.CategoryUnresolved` (`internal/search/search/document.go:175`) excludes
+from Meilisearch any job whose `category` is empty and whose `is_tech` is not
+confidently true. That exclusion is deliberate and correct in intent: it keeps a
+broad ATS crawl's undifferentiated bulk — painters, stockers, drivers — out of an
+index no category filter was meant to surface. Our segment is collateral.
+
+Measured over live postings titled `%admin assistant%`, `%virtual assistant%`,
+`%administrative coordinator%`, `%administrative specialist%`, `%front desk%` or
+`%immigration%`:
+
+| Segment postings, live | 4,440 |
+|---|---|
+| …excluded from the index (`category = ''` and `is_tech` not true) | **3,554 (80%)** |
+
+So an alias added here does not improve a facet on a job a candidate can already
+find. It returns the job to search at all. That is the size of this change, and
+it is why the category work leads and the skills work follows.
+
 ## Scope
 
 Categories, skills, and `work_mode` — the full path a candidate walks. Country
@@ -136,7 +156,9 @@ Delete that AGENTS.md section once the run completes.
 Verification uses the same queries that produced the table above, run before and
 after:
 
-1. Count of live postings with `category = ''` among titles matching the segment.
+1. Count of live segment postings excluded by `search.CategoryUnresolved`
+   (`category = ''` and `is_tech` not true). Baseline 3,554 of 4,440. This is the
+   headline number: it counts postings returned to the index, not facets tidied.
 2. Count of live postings titled `%virtual assistant%`, `%administrative
    assistant%`, `%immigration%` that carry `remote` or `work_mode = 'remote'`.
    Today the second of those is 0.
