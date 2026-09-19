@@ -55,10 +55,28 @@ func readOnly() *mcp.ToolAnnotations {
 
 // Handler builds the HTTP handler serving these tools over MCP's streamable transport.
 // Mount it with Fiber's adaptor at the path the app declares as its MCP endpoint.
+//
+// STATELESS, and that is the whole reason this surface works at all for the caller it was
+// built for. Measured from a packet capture of OpenAI's app scanner (2026-09-18): it sends
+// one request — `server/discover`, declaring protocol version 2026-07-28 — and stops. That
+// is the SEP-2575 lifecycle, where the version and client identity ride in `_meta` on every
+// request instead of being established once.
+//
+// The session-based transport cannot serve that lifecycle, and the SDK says so beside its
+// own code: it filters 2026-07-28 out of the versions it advertises. The result was a
+// `server/discover` answer marked complete that omitted the very version the caller had
+// just declared — reported by the portal as "MCP server/discover response was inconsistent",
+// which it was.
+//
+// Stateless costs this surface nothing it uses. Every tool is a read: a request in, an
+// answer out, no server-to-client call, nothing to remember between requests. What it gives
+// up is the GET event stream and DELETE (405 in this mode), neither of which any tool here
+// has ever needed. The handshake lifecycle still works, so clients that send `initialize`
+// are unaffected — see discovery_test.go, which holds both lifecycles to that promise.
 func Handler(r Reader) http.Handler {
 	return mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server {
 		return newServer(r)
-	}, nil)
+	}, &mcp.StreamableHTTPOptions{Stateless: true})
 }
 
 func newServer(r Reader) *mcp.Server {
