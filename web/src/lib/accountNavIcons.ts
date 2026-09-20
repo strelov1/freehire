@@ -26,6 +26,7 @@ import {
   Plug,
   Radar,
   Webhook,
+  Building2,
 } from '@lucide/svelte';
 import type { LucideIcon } from '@lucide/svelte';
 import type { AccountNavItem } from './accountNav';
@@ -52,6 +53,7 @@ export const accountNavIcons: Record<AccountNavItem['href'], LucideIcon> = {
   '/my/webhook': Webhook,
   '/my/submissions': FileText,
   '/my/contributions': Link2,
+  '/my/employer': Building2,
   '/my/plan': Coins,
   '/my/invite': Gift,
   '/my/security': ShieldCheck,

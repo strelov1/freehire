@@ -1,7 +1,7 @@
 <script lang="ts">
   import { page } from '$app/state';
   import { replaceState } from '$app/navigation';
-  import { FileText, Flag, GraduationCap, Handshake, Star } from '@lucide/svelte';
+  import { Briefcase, FileText, Flag, GraduationCap, Handshake, Star } from '@lucide/svelte';
   import type { LucideIcon } from '@lucide/svelte';
   import { api } from '$lib/api';
   import { AsyncData } from '$lib/asyncData.svelte';
@@ -14,11 +14,12 @@
   import ReportedFeedbackQueue from './ReportedFeedbackQueue.svelte';
   import ReferralReviewView from './ReferralReviewView.svelte';
   import MentorReviewView from './MentorReviewView.svelte';
+  import EmployerClaimsQueue from './EmployerClaimsQueue.svelte';
   import States from './States.svelte';
 
   const isModerator = $derived(currentUser()?.role === 'moderator');
 
-  type View = 'queue' | 'reports' | 'feedback' | 'referrals' | 'mentors';
+  type View = 'queue' | 'reports' | 'feedback' | 'referrals' | 'mentors' | 'employer';
   const sections: { value: View; label: string; icon: LucideIcon }[] = [
     { value: 'queue', label: 'Moderation queue', icon: FileText },
     { value: 'reports', label: 'Reported jobs', icon: Flag },
@@ -27,6 +28,10 @@
     // Beside the referral queue and not folded into it: the same moderator gate, but a
     // different decision. A referrer stays anonymous; a mentor is published by name.
     { value: 'mentors', label: 'Mentor profiles', icon: GraduationCap },
+    // Company claims the domain check could not itself verify — see
+    // internal/ingest/employer/AGENTS.md. Revocation is admin-only and has no UI here on
+    // purpose (rare, one-off; done directly via the API) — this tab is approve/reject only.
+    { value: 'employer', label: 'Employer claims', icon: Briefcase },
   ];
 
   // The active section is mirrored in `?tab=` so moderator deep-links (the
@@ -219,6 +224,14 @@
       <ReportedFeedbackQueue />
     {:else if view === 'mentors'}
       <MentorReviewView />
+    {:else if view === 'employer'}
+      <div class="flex flex-col gap-6">
+        <p class="text-sm text-muted-foreground">
+          Company claims a work-email domain check couldn't auto-verify. Approving activates the
+          account and, if the company's website was unknown, records the confirmed domain.
+        </p>
+        <EmployerClaimsQueue />
+      </div>
     {:else}
       <div class="flex flex-col gap-6">
         <p class="text-sm text-muted-foreground">

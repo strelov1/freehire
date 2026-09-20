@@ -101,7 +101,11 @@
       (nil-means-unchanged via `sqlc.narg`/COALESCE), reusing the existing
       `SetCompanyIndustries` for the industries field.
 - [x] 6.3 `POST /api/v1/employer/jobs`, `PATCH /api/v1/employer/jobs/:slug`,
-      `POST /api/v1/employer/jobs/:slug/close`
+      `POST /api/v1/employer/jobs/:slug/close`, plus **`GET /api/v1/employer/jobs`** — found
+      missing while building the dashboard (7.3): there was no way to list an employer's own
+      vacancies at all. New `Service.ListVacancies`/`JobRepository.ListMine`/`ListEmployerJobs`
+      query (capped at 200, newest first, open and closed both — an MVP dashboard list, not
+      the public catalogue); new requirement added to `employer-job-authoring`'s spec.
 - [x] 6.4 Moderator endpoints: list pending claims, approve, reject. Plus an **admin**-only
       revoke endpoint (`POST /api/v1/employer/claims/:user_id/revoke`, built via
       `auth.RequireRole(queries, "admin")` locally rather than a new shared `mw.admin` field,

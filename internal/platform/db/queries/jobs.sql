@@ -1381,6 +1381,19 @@ WHERE public_slug = sqlc.arg(public_slug)
   AND NOT is_private
 RETURNING *;
 
+-- name: ListEmployerJobs :many
+-- An employer's own dashboard list: every vacancy this actor created through this path,
+-- newest first, open and closed both (the dashboard shows a closed one with its own badge
+-- rather than dropping it — the employer's own re-Create-to-reopen path needs the closed
+-- ones findable). Capped rather than paginated: an MVP dashboard for one employer's own
+-- postings, not the public catalogue.
+SELECT *
+FROM jobs
+WHERE created_by = sqlc.arg(actor_id)::bigint
+  AND source = 'employer'
+ORDER BY created_at DESC
+LIMIT 200;
+
 -- name: CloseEmployerJob :one
 -- Soft-close, the employer-self-service analogue of CloseJobByID: scoped to the actor's own
 -- employer-authored posting (created_by = actor_id AND source = 'employer'), never any other

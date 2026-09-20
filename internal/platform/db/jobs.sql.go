@@ -2512,6 +2512,108 @@ func (q *Queries) LatestOpenJobAddedAt(ctx context.Context) (pgtype.Timestamptz,
 	return last_job_added_at, err
 }
 
+const listEmployerJobs = `-- name: ListEmployerJobs :many
+SELECT id, source, external_id, url, title, company, location, remote, description, posted_at, created_at, updated_at, company_slug, enrichment, enriched_at, enrichment_version, public_slug, last_seen_at, closed_at, countries, regions, work_mode, liveness_strikes, skills, seniority, category, created_by, updated_by, posting_language, employment_type, education_level, experience_years_min, collections, content_hash, english_level, cities, view_count, applied_count, role_fingerprint, semantic_embedded_model, semantic_embedded_hash, duplicate_of, is_tech, semantic_embedding, salary_min_manual, salary_max_manual, salary_currency_manual, salary_period_manual, upvote_count, downvote_count, ats_absent_at, closed_reason, is_private, similar_job_ids, similar_computed_at, salary_min_source, salary_max_source, salary_currency_source, salary_period_source, company_slug_folded, duplicate_of_aggregator, duplicate_of_role, duplicate_of_fuzzy, requires_clearance, requirements_derived, hydrated_at, ai_interview_reports
+FROM jobs
+WHERE created_by = $1::bigint
+  AND source = 'employer'
+ORDER BY created_at DESC
+LIMIT 200
+`
+
+// An employer's own dashboard list: every vacancy this actor created through this path,
+// newest first, open and closed both (the dashboard shows a closed one with its own badge
+// rather than dropping it — the employer's own re-Create-to-reopen path needs the closed
+// ones findable). Capped rather than paginated: an MVP dashboard for one employer's own
+// postings, not the public catalogue.
+func (q *Queries) ListEmployerJobs(ctx context.Context, actorID int64) ([]Job, error) {
+	rows, err := q.db.Query(ctx, listEmployerJobs, actorID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Job{}
+	for rows.Next() {
+		var i Job
+		if err := rows.Scan(
+			&i.ID,
+			&i.Source,
+			&i.ExternalID,
+			&i.URL,
+			&i.Title,
+			&i.Company,
+			&i.Location,
+			&i.Remote,
+			&i.Description,
+			&i.PostedAt,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.CompanySlug,
+			&i.Enrichment,
+			&i.EnrichedAt,
+			&i.EnrichmentVersion,
+			&i.PublicSlug,
+			&i.LastSeenAt,
+			&i.ClosedAt,
+			&i.Countries,
+			&i.Regions,
+			&i.WorkMode,
+			&i.LivenessStrikes,
+			&i.Skills,
+			&i.Seniority,
+			&i.Category,
+			&i.CreatedBy,
+			&i.UpdatedBy,
+			&i.PostingLanguage,
+			&i.EmploymentType,
+			&i.EducationLevel,
+			&i.ExperienceYearsMin,
+			&i.Collections,
+			&i.ContentHash,
+			&i.EnglishLevel,
+			&i.Cities,
+			&i.ViewCount,
+			&i.AppliedCount,
+			&i.RoleFingerprint,
+			&i.SemanticEmbeddedModel,
+			&i.SemanticEmbeddedHash,
+			&i.DuplicateOf,
+			&i.IsTech,
+			&i.SemanticEmbedding,
+			&i.SalaryMinManual,
+			&i.SalaryMaxManual,
+			&i.SalaryCurrencyManual,
+			&i.SalaryPeriodManual,
+			&i.UpvoteCount,
+			&i.DownvoteCount,
+			&i.AtsAbsentAt,
+			&i.ClosedReason,
+			&i.IsPrivate,
+			&i.SimilarJobIds,
+			&i.SimilarComputedAt,
+			&i.SalaryMinSource,
+			&i.SalaryMaxSource,
+			&i.SalaryCurrencySource,
+			&i.SalaryPeriodSource,
+			&i.CompanySlugFolded,
+			&i.DuplicateOfAggregator,
+			&i.DuplicateOfRole,
+			&i.DuplicateOfFuzzy,
+			&i.RequiresClearance,
+			&i.RequirementsDerived,
+			&i.HydratedAt,
+			&i.AiInterviewReports,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listJobCopies = `-- name: ListJobCopies :many
 WITH RECURSIVE up AS (
     SELECT a.id, a.duplicate_of, 0 AS depth

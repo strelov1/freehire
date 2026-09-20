@@ -46,6 +46,26 @@ func (r *fakeJobRepo) BySlug(_ context.Context, actorID int64, slug string) (job
 	return j, job.Extras{}, err
 }
 
+func (r *fakeJobRepo) ListMine(_ context.Context, actorID int64) ([]job.Job, []job.Extras, error) {
+	var jobs []job.Job
+	var extras []job.Extras
+	for slug, f := range r.bySlug {
+		if r.owner[slug] != actorID {
+			continue
+		}
+		j, err := job.New(job.Draft{Input: jobderive.Input{
+			Source: f.Source, ExternalID: f.ExternalID, Title: f.Title, Company: f.Company,
+			Location: f.Location, Description: f.Description,
+		}})
+		if err != nil {
+			return nil, nil, err
+		}
+		jobs = append(jobs, j)
+		extras = append(extras, job.Extras{})
+	}
+	return jobs, extras, nil
+}
+
 func (r *fakeJobRepo) Update(_ context.Context, actorID int64, slug string, f job.Fields) (job.Job, job.Extras, error) {
 	if r.owner[slug] != actorID {
 		return job.Job{}, job.Extras{}, ErrJobNotFound
@@ -113,6 +133,42 @@ func activeService(t *testing.T, userID int64, jobs JobRepository, minter Minter
 		t.Fatalf("ConfirmClaim: %v", err)
 	}
 	return s
+}
+
+func TestListVacancies_ScopedToTheCallersOwn(t *testing.T) {
+	jobs := newFakeJobRepo()
+	sA := activeService(t, 1, jobs, &fakeMinter{repo: jobs})
+	sB := activeService(t, 2, jobs, &fakeMinter{repo: jobs})
+
+	if _, _, err := sA.CreateVacancy(context.Background(), 1, VacancyInput{URL: "https://acme.test/jobs/1", Title: "Go Engineer"}); err != nil {
+		t.Fatalf("A CreateVacancy: %v", err)
+	}
+	if _, _, err := sB.CreateVacancy(context.Background(), 2, VacancyInput{URL: "https://bravo.test/jobs/1", Title: "Rust Engineer"}); err != nil {
+		t.Fatalf("B CreateVacancy: %v", err)
+	}
+
+	listA, _, err := sA.ListVacancies(context.Background(), 1)
+	if err != nil {
+		t.Fatalf("A ListVacancies: %v", err)
+	}
+	if len(listA) != 1 || listA[0].Fields().Title != "Go Engineer" {
+		t.Errorf("A's list = %+v, want exactly their own Go Engineer vacancy", listA)
+	}
+}
+
+func TestListVacancies_RefusesAPendingAccount(t *testing.T) {
+	repo := newFakeRepo()
+	s := New(repo, newFakeCodeIssuer(), &fakeClaimMailer{}, newFakeJobRepo(), &fakeMinter{})
+	if _, err := s.Claim(context.Background(), 1, "Acme", "hr@notacme.test"); err != nil {
+		t.Fatalf("Claim: %v", err)
+	}
+	if _, err := s.ConfirmClaim(context.Background(), 1, "654321"); err != nil {
+		t.Fatalf("ConfirmClaim: %v", err)
+	}
+
+	if _, _, err := s.ListVacancies(context.Background(), 1); !errors.Is(err, ErrNotActive) {
+		t.Fatalf("err = %v, want ErrNotActive", err)
+	}
 }
 
 func TestCreateVacancy_DelegatesToTheMinterWithTheLockedCompanyName(t *testing.T) {

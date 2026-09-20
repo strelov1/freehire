@@ -3700,6 +3700,12 @@ type Querier interface {
 	// inbox and seven assistant tools: one shared statement grown for one reader is how the
 	// two drift.
 	ListEmailsForRecall(ctx context.Context, arg ListEmailsForRecallParams) ([]ListEmailsForRecallRow, error)
+	// An employer's own dashboard list: every vacancy this actor created through this path,
+	// newest first, open and closed both (the dashboard shows a closed one with its own badge
+	// rather than dropping it — the employer's own re-Create-to-reopen path needs the closed
+	// ones findable). Capped rather than paginated: an MVP dashboard for one employer's own
+	// postings, not the public catalogue.
+	ListEmployerJobs(ctx context.Context, actorID int64) ([]Job, error)
 	// The boards whose crawls SUCCEED but whose feed has carried nothing for at least `age_window`
 	// — the exact twin of ListChronicBoards, measuring the failure mode that one structurally
 	// cannot see (migration 0158 records the incident this answers).

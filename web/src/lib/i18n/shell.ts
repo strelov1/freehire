@@ -25,6 +25,7 @@ export const messages = defineMessages(
       '/my/webhook': 'Webhook',
       '/my/submissions': 'My submissions',
       '/my/contributions': 'Contributions',
+      '/my/employer': 'Employer',
       '/my/plan': 'Plan',
       '/my/invite': 'Invite a friend',
       '/my/security': 'Security',
@@ -62,6 +63,7 @@ export const messages = defineMessages(
         // The section is "Contribute a board": paste a job link so we crawl a
         // board we don't have yet. A literal "Вклад" says nothing about that.
         '/my/contributions': 'Добавить борд',
+        '/my/employer': 'Работодатель',
         '/my/plan': 'Тариф',
         // "Пригласить друга" and not "Рефералы": that word is taken by the
         // employee-referral marketplace above, and two sections sharing a name

@@ -2,8 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { accountNav, isSectionActive, visibleAccountNav } from './accountNav';
 
 describe('accountNav config', () => {
-  it('lists the twenty account sections', () => {
-    expect(accountNav).toHaveLength(20);
+  it('lists the twenty-one account sections', () => {
+    expect(accountNav).toHaveLength(21);
   });
 
   // A section whose page exists and whose nav entry does not is reachable by URL and by

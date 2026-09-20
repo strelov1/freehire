@@ -43,6 +43,7 @@ func (h *employerHandlers) register(api fiber.Router, mw middleware) {
 	api.Post("/employer/claim/confirm", mw.cookie, h.ConfirmClaim)
 	api.Get("/employer/company", mw.cookie, h.GetCompany)
 	api.Patch("/employer/company", mw.cookie, h.UpdateCompany)
+	api.Get("/employer/jobs", mw.cookie, h.ListVacancies)
 	api.Post("/employer/jobs", mw.cookie, h.CreateVacancy)
 	api.Patch("/employer/jobs/:slug", mw.cookie, h.UpdateVacancy)
 	api.Post("/employer/jobs/:slug/close", mw.cookie, h.CloseVacancy)
@@ -94,9 +95,13 @@ func employerError(err error) error {
 	}
 }
 
-// employerAccountResponse is the public shape of a company_accounts row. user_id is
-// omitted (ownership, internal) — the caller already knows it is their own.
+// employerAccountResponse is the public shape of a company_accounts row. UserID IS
+// included — unlike most ownership ids, this one is the address the moderator/admin action
+// endpoints (approve/reject/revoke) take (:user_id), so the moderator queue needs it back to
+// act on a row at all. It costs nothing on the self-service reads: the caller already knows
+// it is their own, the same way a job's own internal id costs nothing being in jobview.Job.
 type employerAccountResponse struct {
+	UserID      int64      `json:"user_id"`
 	CompanySlug string     `json:"company_slug"`
 	CompanyName string     `json:"company_name"`
 	WorkEmail   string     `json:"work_email"`
@@ -107,6 +112,7 @@ type employerAccountResponse struct {
 
 func toEmployerAccountResponse(a employer.Account) employerAccountResponse {
 	return employerAccountResponse{
+		UserID:      a.UserID,
 		CompanySlug: a.CompanySlug,
 		CompanyName: a.CompanyName,
 		WorkEmail:   a.WorkEmail,
@@ -330,6 +336,28 @@ func (r employerVacancyRequest) toVacancyInput() employer.VacancyInput {
 		SalaryCurrency: r.SalaryCurrency,
 		SalaryPeriod:   r.SalaryPeriod,
 	}
+}
+
+// ListVacancies returns every vacancy the caller has published through this path, newest
+// first — the dashboard's own list. Active-account-only.
+func (h *employerHandlers) ListVacancies(c *fiber.Ctx) error {
+	userID, err := requireUserID(c)
+	if err != nil {
+		return err
+	}
+	jobs, extras, err := h.employer.ListVacancies(c.Context(), userID)
+	if err != nil {
+		return employerError(err)
+	}
+	out := make([]jobview.Job, len(jobs))
+	for i := range jobs {
+		view, err := jobview.FromDomain(jobs[i], extras[i])
+		if err != nil {
+			return err
+		}
+		out[i] = view
+	}
+	return c.JSON(fiber.Map{"data": out})
 }
 
 // CreateVacancy publishes a new vacancy for the caller's own claimed company, or

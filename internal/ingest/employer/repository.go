@@ -220,6 +220,25 @@ func (r *QueriesRepository) BySlug(ctx context.Context, actorID int64, slug stri
 	return job.FromRow(row)
 }
 
+// ListMine returns every jobSource-authored job actorID created, newest first, mapping each
+// row through the same job.FromRow every other read path uses.
+func (r *QueriesRepository) ListMine(ctx context.Context, actorID int64) ([]job.Job, []job.Extras, error) {
+	rows, err := r.q.ListEmployerJobs(ctx, actorID)
+	if err != nil {
+		return nil, nil, err
+	}
+	jobs := make([]job.Job, len(rows))
+	extras := make([]job.Extras, len(rows))
+	for i, row := range rows {
+		j, x, err := job.FromRow(row)
+		if err != nil {
+			return nil, nil, err
+		}
+		jobs[i], extras[i] = j, x
+	}
+	return jobs, extras, nil
+}
+
 // Update writes the full resulting row for an employer-owned job. The query's own
 // created_by/source scope (see UpdateEmployerJob) means a slug that is missing, another
 // owner's, or another source's affects no row (ErrNoRows -> ErrJobNotFound) — the same

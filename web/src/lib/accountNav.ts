@@ -63,6 +63,9 @@ export const accountNav = [
   { href: '/my/submissions', label: 'My submissions' },
   // Paste a job link we don't have yet; a supported, novel link adds a board we don't crawl.
   { href: '/my/contributions', label: 'Contributions' },
+  // Claim a company, manage its curated profile, and publish its own vacancies directly.
+  // Open to every signed-in user — the claim step is what gates real access, not the nav.
+  { href: '/my/employer', label: 'Employer' },
   // The plan's daily allowances and what they were spent on (analyses, CV editing,
   // contribution rewards).
   { href: '/my/plan', label: 'Plan' },

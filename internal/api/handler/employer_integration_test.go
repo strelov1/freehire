@@ -275,6 +275,32 @@ func TestEmployerEndToEnd(t *testing.T) {
 		acmeSlug = jobResp.PublicSlug
 	})
 
+	t.Run("employer A lists their own vacancies; employer B's list stays empty", func(t *testing.T) {
+		resp := do(t, req(fiber.MethodGet, "/api/v1/employer/jobs", userACookie, ""))
+		if resp.StatusCode != fiber.StatusOK {
+			t.Fatalf("status = %d, want 200", resp.StatusCode)
+		}
+		var listA []struct {
+			PublicSlug string `json:"public_slug"`
+		}
+		decodeData(t, resp, &listA)
+		if len(listA) != 1 || listA[0].PublicSlug != acmeSlug {
+			t.Fatalf("A's list = %+v, want exactly [%s]", listA, acmeSlug)
+		}
+
+		resp = do(t, req(fiber.MethodGet, "/api/v1/employer/jobs", userBCookie, ""))
+		if resp.StatusCode != fiber.StatusOK {
+			t.Fatalf("status = %d, want 200", resp.StatusCode)
+		}
+		var listB []struct {
+			PublicSlug string `json:"public_slug"`
+		}
+		decodeData(t, resp, &listB)
+		if len(listB) != 0 {
+			t.Errorf("B's list = %+v, want empty — B has published nothing", listB)
+		}
+	})
+
 	t.Run("employer B cannot edit or close employer A's vacancy (404)", func(t *testing.T) {
 		resp := do(t, req(fiber.MethodPatch, "/api/v1/employer/jobs/"+acmeSlug, userBCookie, `{"title":"Hijacked"}`))
 		if resp.StatusCode != fiber.StatusNotFound {

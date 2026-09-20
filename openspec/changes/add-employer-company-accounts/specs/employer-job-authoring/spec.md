@@ -117,3 +117,21 @@ without deleting the row, consistent with every other closing mechanism in the c
 - **WHEN** an active employer closes a vacancy they own
 - **THEN** the vacancy's `closed_at` is set, `closed_reason` is `'employer_closed'`, and the
   row still exists and remains reachable at its public slug
+
+### Requirement: A verified employer lists their own vacancies
+
+The system SHALL let a user with an active employer account list every vacancy they have
+published through this capability, newest first, including vacancies they have closed. The
+list SHALL never include a vacancy created by another employer account, a moderator, or an
+automated source.
+
+#### Scenario: An employer's list contains only their own vacancies
+
+- **WHEN** an active employer lists their vacancies
+- **THEN** the response contains every vacancy that employer created through this
+  capability, and none created by any other account or source
+
+#### Scenario: A closed vacancy still appears in the list
+
+- **WHEN** an active employer has closed one of their own vacancies
+- **THEN** it still appears in their vacancy list

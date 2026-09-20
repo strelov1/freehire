@@ -45,6 +45,9 @@ type JobRepository interface {
 	// postings; ErrJobNotFound for anything else (missing, another owner's, another
 	// source's, or private).
 	BySlug(ctx context.Context, actorID int64, slug string) (job.Job, job.Extras, error)
+	// ListMine returns every vacancy actorID has created through this path, newest first —
+	// the dashboard's own list, open and closed both.
+	ListMine(ctx context.Context, actorID int64) ([]job.Job, []job.Extras, error)
 	// Update writes the full resulting row, scoped the same way BySlug reads.
 	Update(ctx context.Context, actorID int64, slug string, f job.Fields) (job.Job, job.Extras, error)
 	// Close soft-closes the vacancy (closed_reason='employer_closed'). Idempotent: closing
@@ -92,6 +95,17 @@ func (p VacancyPatch) validate() error {
 		return fmt.Errorf("%w: title must not be empty", ErrInvalid)
 	}
 	return nil
+}
+
+// ListVacancies returns every vacancy userID has published through this path, newest first
+// — the dashboard's own list. Gated on ActiveAccount like every other employer capability
+// except MyAccount itself (a pending/revoked account has no vacancies to list yet, since
+// CreateVacancy is ActiveAccount-gated too).
+func (s *Service) ListVacancies(ctx context.Context, userID int64) ([]job.Job, []job.Extras, error) {
+	if _, err := s.ActiveAccount(ctx, userID); err != nil {
+		return nil, nil, err
+	}
+	return s.jobs.ListMine(ctx, userID)
 }
 
 // CreateVacancy publishes a new vacancy for userID's own claimed company, or idempotently
