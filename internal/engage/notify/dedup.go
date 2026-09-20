@@ -8,6 +8,13 @@ import (
 	"strconv"
 )
 
+// kindSubscriptionDigest is what a digest's notification-center row is filed
+// under, and the prefix its dedup key carries. One constant rather than two
+// literals: the kind is the row's public vocabulary — /my/notifications renders
+// on it — so the value and the key that namespaces it must not be able to drift
+// apart in the one package that writes both.
+const kindSubscriptionDigest = "subscription_digest"
+
 // digestDedupKey names the job-match EVENT a digest records, so the notification
 // centre holds one row for it however many channels carried it.
 //
@@ -26,9 +33,21 @@ import (
 //
 //   - The job set, because that is what a digest IS. A saved search delivers
 //     many digests over its life and each must get its own row; nothing else
-//     about a delivery distinguishes one from the next. It also cannot repeat by
-//     accident: a delivered match is stamped notified and never re-enters a
-//     digest for that subscription.
+//     about a delivery distinguishes one from the next. It barely repeats by
+//     accident either: a delivered match is stamped notified and does not
+//     re-enter a digest — except on the one path where the send succeeded and
+//     MarkMatchesNotified then failed, where the next pass re-delivers the same
+//     set, meets the same key and JOINS the old row rather than recording the
+//     re-delivery. That is the right outcome of the two available: the person
+//     was told about these jobs once as far as the history is concerned, and the
+//     alternative is a second entry saying the same thing.
+//
+// The key is exact-set equality, which is what makes it honest rather than
+// merely quiet. Channels share a row only while they carry the same jobs, so
+// two channels that fall out of step — one soft-skipped while a later job
+// matched, say — record two rows describing two genuinely different sets, not
+// one row standing for both. Collapsing those (keying on the saved search and a
+// time bucket) would file a job under an event that never carried it.
 //
 // The ids are sorted first because the set is what matters and each channel
 // claims its own rows: two claims of the same jobs may come back in different
@@ -50,5 +69,5 @@ func digestDedupKey(savedSearchID int64, jobIDs []int64) string {
 		binary.BigEndian.PutUint64(buf[:], uint64(id))
 		h.Write(buf[:])
 	}
-	return "subscription_digest:" + strconv.FormatInt(savedSearchID, 10) + ":" + hex.EncodeToString(h.Sum(nil))
+	return kindSubscriptionDigest + ":" + strconv.FormatInt(savedSearchID, 10) + ":" + hex.EncodeToString(h.Sum(nil))
 }

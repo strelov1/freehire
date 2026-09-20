@@ -142,6 +142,15 @@ func (r *Runner) deliverOne(ctx context.Context, subID int64, jobIDs []int64, st
 		// records the event once, and withdrawing it because the third channel failed
 		// would erase the history of the two digests that did arrive — the matches
 		// that failed stay pending and the retry finds the row still there.
+		//
+		// The gate is AUTHORSHIP, not "has anybody delivered this yet", and the two
+		// differ only when a second notify process is running: deliver() is one
+		// sequential goroutine, so within a pass the creator sends before any joiner
+		// records. Across two overlapping passes a joiner can send successfully and
+		// the creator then withdraw underneath it. Closing that needs a per-event
+		// delivery ledger — what "has anybody delivered" would have to read — and
+		// systemd already refuses to stack this unit on itself, so the gap is a
+		// hand-run pass, not the schedule.
 		if createdRow {
 			r.withdrawNotification(ctx, subID, digest.NotificationID)
 		}
@@ -233,7 +242,7 @@ func (r *Runner) recordNotification(ctx context.Context, subID int64, info db.Ge
 	dedupKey := pgtype.Text{String: digestDedupKey(info.SavedSearchID, jobIDs), Valid: true}
 	id, err := r.store.RecordNotification(ctx, db.RecordNotificationParams{
 		UserID:     info.UserID,
-		Kind:       "subscription_digest",
+		Kind:       kindSubscriptionDigest,
 		Title:      title,
 		Body:       body,
 		PublicSlug: publicSlug,
@@ -255,11 +264,20 @@ func (r *Runner) recordNotification(ctx context.Context, subID int64, info db.Ge
 		DedupKey: dedupKey,
 	})
 	if err != nil {
-		// Lost to a concurrent withdrawal (the channel that created the row
-		// failed to send and removed it between the two statements). Degrades
-		// exactly like a failed write: the tail falls back to a generic
-		// destination, and the event keeps no history row, which is honest —
-		// the only delivery that had one did not go out.
+		// The row was withdrawn between the two statements, which takes a SECOND
+		// notify process: deliver() walks its subscriptions sequentially in one
+		// goroutine, so within a pass the creator has finished sending (and
+		// withdrawing) before this channel records at all. systemd will not start
+		// a `Type=oneshot` unit while the first is active, so the way to reach
+		// here is a hand-run pass overlapping the timer's.
+		//
+		// This send then goes out with a zero id — the tail falls back to a
+		// generic destination — and records NOTHING, so a digest that WAS
+		// received keeps no history row. Deliberately left: the alternative is
+		// re-inserting behind a withdrawal, and a worker that resurrects a row
+		// another worker has just decided against needs a delivery ledger to
+		// arbitrate, which this engine does not have and which one hand-run
+		// overlap does not justify building.
 		log.Printf("notify: read deduped notification for subscription %d: %v", subID, err)
 		return 0, false
 	}

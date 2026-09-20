@@ -242,7 +242,7 @@ type RecordNotificationParams struct {
 // subscription digest, whose `subscriptions` row is keyed (saved_search_id,
 // channel). Passing one makes the write claim-or-yield: the first channel to
 // arrive inserts, and every later channel carrying the same event conflicts and
-// inserts nothing, returning NO ROW (sqlc.ErrNoRows) so the caller can tell
+// inserts nothing, returning NO ROW (pgx.ErrNoRows) so the caller can tell
 // "I recorded this" from "somebody already had". Every engine that already
 // records once per event passes NULL and behaves exactly as before, since the
 // unique index behind the conflict target is partial on dedup_key IS NOT NULL.
