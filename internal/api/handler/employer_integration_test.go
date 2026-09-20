@@ -110,7 +110,6 @@ func TestEmployerEndToEnd(t *testing.T) {
 		if err != nil {
 			t.Fatalf("request: %v", err)
 		}
-		t.Cleanup(func() { _ = resp.Body.Close() })
 		return resp
 	}
 	decodeData := func(t *testing.T, resp *http.Response, out any) {
@@ -132,6 +131,7 @@ func TestEmployerEndToEnd(t *testing.T) {
 	t.Run("employer A claims Acme and auto-activates on a matching domain", func(t *testing.T) {
 		resp := do(t, req(fiber.MethodPost, "/api/v1/employer/claim", userACookie,
 			`{"company_name":"Acme","work_email":"founder@acme.test"}`))
+		defer resp.Body.Close()
 		if resp.StatusCode != fiber.StatusCreated {
 			b, _ := io.ReadAll(resp.Body)
 			t.Fatalf("claim status = %d, want 201 (body %s)", resp.StatusCode, b)
@@ -150,6 +150,7 @@ func TestEmployerEndToEnd(t *testing.T) {
 			t.Fatal("no code was mailed to founder@acme.test")
 		}
 		resp = do(t, req(fiber.MethodPost, "/api/v1/employer/claim/confirm", userACookie, `{"code":"`+code+`"}`))
+		defer resp.Body.Close()
 		if resp.StatusCode != fiber.StatusOK {
 			b, _ := io.ReadAll(resp.Body)
 			t.Fatalf("confirm status = %d, want 200 (body %s)", resp.StatusCode, b)
@@ -163,11 +164,13 @@ func TestEmployerEndToEnd(t *testing.T) {
 	t.Run("employer B claims Bravo and stays pending (unknown website)", func(t *testing.T) {
 		resp := do(t, req(fiber.MethodPost, "/api/v1/employer/claim", userBCookie,
 			`{"company_name":"Bravo","work_email":"founder@bravo.test"}`))
+		defer resp.Body.Close()
 		if resp.StatusCode != fiber.StatusCreated {
 			t.Fatalf("claim status = %d, want 201", resp.StatusCode)
 		}
 		code := mailer.codes["founder@bravo.test"]
 		resp = do(t, req(fiber.MethodPost, "/api/v1/employer/claim/confirm", userBCookie, `{"code":"`+code+`"}`))
+		defer resp.Body.Close()
 		var acc struct {
 			Status string `json:"status"`
 		}
@@ -180,6 +183,7 @@ func TestEmployerEndToEnd(t *testing.T) {
 	t.Run("a pending account cannot create a vacancy (403)", func(t *testing.T) {
 		resp := do(t, req(fiber.MethodPost, "/api/v1/employer/jobs", userBCookie,
 			`{"url":"https://bravo.test/jobs/1","title":"Go Engineer"}`))
+		defer resp.Body.Close()
 		if resp.StatusCode != fiber.StatusForbidden {
 			t.Errorf("status = %d, want 403", resp.StatusCode)
 		}
@@ -187,6 +191,7 @@ func TestEmployerEndToEnd(t *testing.T) {
 
 	t.Run("a pending account can still read its own status (200, not 403)", func(t *testing.T) {
 		resp := do(t, req(fiber.MethodGet, "/api/v1/employer/company", userBCookie, ""))
+		defer resp.Body.Close()
 		if resp.StatusCode != fiber.StatusOK {
 			b, _ := io.ReadAll(resp.Body)
 			t.Fatalf("status = %d, want 200 (body %s)", resp.StatusCode, b)
@@ -202,6 +207,7 @@ func TestEmployerEndToEnd(t *testing.T) {
 
 	t.Run("non-moderator cannot see the pending-claims queue (403)", func(t *testing.T) {
 		resp := do(t, req(fiber.MethodGet, "/api/v1/employer/claims", userACookie, ""))
+		defer resp.Body.Close()
 		if resp.StatusCode != fiber.StatusForbidden {
 			t.Errorf("status = %d, want 403", resp.StatusCode)
 		}
@@ -209,6 +215,7 @@ func TestEmployerEndToEnd(t *testing.T) {
 
 	t.Run("a user with no employer account at all gets 404", func(t *testing.T) {
 		resp := do(t, req(fiber.MethodGet, "/api/v1/employer/company", modCookie, ""))
+		defer resp.Body.Close()
 		if resp.StatusCode != fiber.StatusNotFound {
 			t.Errorf("status = %d, want 404", resp.StatusCode)
 		}
@@ -216,6 +223,7 @@ func TestEmployerEndToEnd(t *testing.T) {
 
 	t.Run("moderator approves Bravo's pending claim, seeding its blank website", func(t *testing.T) {
 		resp := do(t, req(fiber.MethodGet, "/api/v1/employer/claims", modCookie, ""))
+		defer resp.Body.Close()
 		if resp.StatusCode != fiber.StatusOK {
 			t.Fatalf("queue status = %d, want 200", resp.StatusCode)
 		}
@@ -235,6 +243,7 @@ func TestEmployerEndToEnd(t *testing.T) {
 		}
 
 		resp = do(t, req(fiber.MethodPost, "/api/v1/employer/claims/"+itoa(userBID)+"/approve", modCookie, ""))
+		defer resp.Body.Close()
 		if resp.StatusCode != fiber.StatusOK {
 			b, _ := io.ReadAll(resp.Body)
 			t.Fatalf("approve status = %d, want 200 (body %s)", resp.StatusCode, b)
@@ -261,6 +270,7 @@ func TestEmployerEndToEnd(t *testing.T) {
 	t.Run("employer A publishes a vacancy for their own company", func(t *testing.T) {
 		resp := do(t, req(fiber.MethodPost, "/api/v1/employer/jobs", userACookie,
 			`{"url":"https://acme.test/jobs/1","title":"Go Engineer","description":"We use Go."}`))
+		defer resp.Body.Close()
 		if resp.StatusCode != fiber.StatusCreated {
 			b, _ := io.ReadAll(resp.Body)
 			t.Fatalf("create status = %d, want 201 (body %s)", resp.StatusCode, b)
@@ -278,6 +288,7 @@ func TestEmployerEndToEnd(t *testing.T) {
 
 	t.Run("employer A lists their own vacancies; employer B's list stays empty", func(t *testing.T) {
 		resp := do(t, req(fiber.MethodGet, "/api/v1/employer/jobs", userACookie, ""))
+		defer resp.Body.Close()
 		if resp.StatusCode != fiber.StatusOK {
 			t.Fatalf("status = %d, want 200", resp.StatusCode)
 		}
@@ -290,6 +301,7 @@ func TestEmployerEndToEnd(t *testing.T) {
 		}
 
 		resp = do(t, req(fiber.MethodGet, "/api/v1/employer/jobs", userBCookie, ""))
+		defer resp.Body.Close()
 		if resp.StatusCode != fiber.StatusOK {
 			t.Fatalf("status = %d, want 200", resp.StatusCode)
 		}
@@ -304,10 +316,12 @@ func TestEmployerEndToEnd(t *testing.T) {
 
 	t.Run("employer B cannot edit or close employer A's vacancy (404)", func(t *testing.T) {
 		resp := do(t, req(fiber.MethodPatch, "/api/v1/employer/jobs/"+acmeSlug, userBCookie, `{"title":"Hijacked"}`))
+		defer resp.Body.Close()
 		if resp.StatusCode != fiber.StatusNotFound {
 			t.Errorf("update status = %d, want 404", resp.StatusCode)
 		}
 		resp = do(t, req(fiber.MethodPost, "/api/v1/employer/jobs/"+acmeSlug+"/close", userBCookie, ""))
+		defer resp.Body.Close()
 		if resp.StatusCode != fiber.StatusNotFound {
 			t.Errorf("close status = %d, want 404", resp.StatusCode)
 		}
@@ -315,6 +329,7 @@ func TestEmployerEndToEnd(t *testing.T) {
 
 	t.Run("employer A edits and closes their own vacancy", func(t *testing.T) {
 		resp := do(t, req(fiber.MethodPatch, "/api/v1/employer/jobs/"+acmeSlug, userACookie, `{"title":"Senior Go Engineer"}`))
+		defer resp.Body.Close()
 		if resp.StatusCode != fiber.StatusOK {
 			b, _ := io.ReadAll(resp.Body)
 			t.Fatalf("update status = %d, want 200 (body %s)", resp.StatusCode, b)
@@ -328,6 +343,7 @@ func TestEmployerEndToEnd(t *testing.T) {
 		}
 
 		resp = do(t, req(fiber.MethodPost, "/api/v1/employer/jobs/"+acmeSlug+"/close", userACookie, ""))
+		defer resp.Body.Close()
 		if resp.StatusCode != fiber.StatusOK {
 			t.Fatalf("close status = %d, want 200", resp.StatusCode)
 		}
@@ -342,6 +358,7 @@ func TestEmployerEndToEnd(t *testing.T) {
 
 	t.Run("employer A edits their own company's curated profile", func(t *testing.T) {
 		resp := do(t, req(fiber.MethodPatch, "/api/v1/employer/company", userACookie, `{"tagline":"We build things"}`))
+		defer resp.Body.Close()
 		if resp.StatusCode != fiber.StatusOK {
 			b, _ := io.ReadAll(resp.Body)
 			t.Fatalf("status = %d, want 200 (body %s)", resp.StatusCode, b)
@@ -357,11 +374,13 @@ func TestEmployerEndToEnd(t *testing.T) {
 
 	t.Run("moderator cannot revoke (403); admin can", func(t *testing.T) {
 		resp := do(t, req(fiber.MethodPost, "/api/v1/employer/claims/"+itoa(userAID)+"/revoke", modCookie, ""))
+		defer resp.Body.Close()
 		if resp.StatusCode != fiber.StatusForbidden {
 			t.Errorf("moderator revoke status = %d, want 403", resp.StatusCode)
 		}
 
 		resp = do(t, req(fiber.MethodPost, "/api/v1/employer/claims/"+itoa(userAID)+"/revoke", adminCookie, ""))
+		defer resp.Body.Close()
 		if resp.StatusCode != fiber.StatusOK {
 			b, _ := io.ReadAll(resp.Body)
 			t.Fatalf("admin revoke status = %d, want 200 (body %s)", resp.StatusCode, b)
@@ -375,6 +394,7 @@ func TestEmployerEndToEnd(t *testing.T) {
 		}
 
 		resp = do(t, req(fiber.MethodPost, "/api/v1/employer/jobs", userACookie, `{"url":"https://acme.test/jobs/2","title":"Another Role"}`))
+		defer resp.Body.Close()
 		if resp.StatusCode != fiber.StatusForbidden {
 			t.Errorf("post-revoke create status = %d, want 403", resp.StatusCode)
 		}
