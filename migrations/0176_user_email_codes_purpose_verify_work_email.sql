@@ -12,7 +12,7 @@
 ALTER TABLE public.user_email_codes
     DROP CONSTRAINT IF EXISTS user_email_codes_purpose_check;
 
--- squawk-ignore constraint-missing-not-valid -- table is small/short-lived (see above), so the table-scan lock this rule warns about is effectively instant here
 ALTER TABLE public.user_email_codes
+    -- squawk-ignore constraint-missing-not-valid -- table is small/short-lived (see above), so the table-scan lock this rule warns about is effectively instant here
     ADD CONSTRAINT user_email_codes_purpose_check
     CHECK (purpose IN ('verify_email', 'password_reset', 'verify_work_email'));
