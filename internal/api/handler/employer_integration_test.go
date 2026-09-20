@@ -94,10 +94,10 @@ func TestEmployerEndToEnd(t *testing.T) {
 	req := func(method, path, cookie, body string) *http.Request {
 		var r *http.Request
 		if body != "" {
-			r = httptest.NewRequest(method, path, bytes.NewReader([]byte(body)))
+			r = httptest.NewRequestWithContext(context.Background(), method, path, bytes.NewReader([]byte(body)))
 			r.Header.Set("Content-Type", "application/json")
 		} else {
-			r = httptest.NewRequest(method, path, nil)
+			r = httptest.NewRequestWithContext(context.Background(), method, path, nil)
 		}
 		if cookie != "" {
 			r.AddCookie(&http.Cookie{Name: auth.CookieName, Value: cookie})
@@ -110,6 +110,7 @@ func TestEmployerEndToEnd(t *testing.T) {
 		if err != nil {
 			t.Fatalf("request: %v", err)
 		}
+		t.Cleanup(func() { _ = resp.Body.Close() })
 		return resp
 	}
 	decodeData := func(t *testing.T, resp *http.Response, out any) {
