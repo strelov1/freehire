@@ -113,6 +113,19 @@ func (s *Service) ListVacancies(ctx context.Context, userID int64) ([]job.Job, [
 // employer-job-authoring's "re-creating reopens" requirement — UpsertManualJob's own
 // ON CONFLICT clears closed_at, so no separate reopen path is needed). A URL already owned
 // by a DIFFERENT employer account is refused as ErrURLTaken, never silently overwritten.
+//
+// The pre-check below and the mint that follows are NOT one atomic step — two employer
+// accounts racing to create the same not-yet-existing URL can both pass it, and
+// UpsertManualJob's ON CONFLICT never reassigns created_by, so the loser's write would
+// silently overwrite the winner's content while still returning 201 as if the loser owned
+// the row. The RE-CHECK after Create closes that: whichever request's write actually landed
+// last reads back its own outcome and the other is told the truth (ErrURLTaken) instead of
+// a false success. This does not stop the fleeting overwrite itself — a genuine fix needs
+// the ownership check baked into the upsert's own WHERE clause, which UpsertManualJob
+// cannot carry (moderation deliberately allows ANY moderator to edit ANY manual job) — but
+// it does stop a caller ever being told they own a row that is actually someone else's,
+// which is the failure that matters: every later PATCH/close from that account is scoped by
+// created_by and would otherwise 404 with no explanation.
 func (s *Service) CreateVacancy(ctx context.Context, userID int64, in VacancyInput) (job.Job, job.Extras, error) {
 	acc, err := s.ActiveAccount(ctx, userID)
 	if err != nil {
@@ -127,7 +140,7 @@ func (s *Service) CreateVacancy(ctx context.Context, userID int64, in VacancyInp
 		return job.Job{}, job.Extras{}, ErrURLTaken
 	}
 
-	return s.minter.Create(ctx, userID, moderation.CreateInput{
+	j, extras, err := s.minter.Create(ctx, userID, moderation.CreateInput{
 		URL:         in.URL,
 		Source:      jobSource,
 		Title:       in.Title,
@@ -148,6 +161,18 @@ func (s *Service) CreateVacancy(ctx context.Context, userID int64, in VacancyInp
 		SalaryCurrency: in.SalaryCurrency,
 		SalaryPeriod:   in.SalaryPeriod,
 	})
+	if err != nil {
+		return job.Job{}, job.Extras{}, err
+	}
+
+	owner, found, err = s.jobs.Owner(ctx, in.URL)
+	if err != nil {
+		return job.Job{}, job.Extras{}, err
+	}
+	if found && owner != userID {
+		return job.Job{}, job.Extras{}, ErrURLTaken
+	}
+	return j, extras, nil
 }
 
 // UpdateVacancy loads userID's own vacancy, overlays the supplied (nil-means-unchanged)

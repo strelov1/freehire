@@ -107,7 +107,7 @@
     workMode = job.work_mode ?? '';
     employmentType = job.enrichment.employment_type ?? '';
     seniority = job.enrichment.seniority ?? '';
-    descriptionMd = '';
+    descriptionMd = job.description;
     skills = job.skills;
     formError = null;
     formOpen = true;
@@ -311,16 +311,16 @@
             </label>
           </div>
           <div class="flex flex-col gap-4 sm:flex-row">
-            <label class="flex flex-1 flex-col gap-1">
-              <span class="text-sm font-medium">{s.fieldWorkMode}</span>
-              <select bind:value={workMode} class={cn(selectClass, 'w-full')}>
-                <option value="">—</option>
-                {#each WORK_MODE_OPTIONS as o (o.value)}
-                  <option value={o.value}>{o.label}</option>
-                {/each}
-              </select>
-            </label>
             {#if !editingSlug}
+              <label class="flex flex-1 flex-col gap-1">
+                <span class="text-sm font-medium">{s.fieldWorkMode}</span>
+                <select bind:value={workMode} class={cn(selectClass, 'w-full')}>
+                  <option value="">—</option>
+                  {#each WORK_MODE_OPTIONS as o (o.value)}
+                    <option value={o.value}>{o.label}</option>
+                  {/each}
+                </select>
+              </label>
               <label class="flex flex-1 flex-col gap-1">
                 <span class="text-sm font-medium">{s.fieldEmploymentType}</span>
                 <select bind:value={employmentType} class={cn(selectClass, 'w-full')}>

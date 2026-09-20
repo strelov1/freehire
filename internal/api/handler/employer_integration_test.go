@@ -80,7 +80,7 @@ func TestEmployerEndToEnd(t *testing.T) {
 	// ConfirmCode this test exercises — only the CodeStore is; see accounts.Service.IssueCode.
 	accountsSvc.WithCodes(accounts.NewQueriesCodeStore(queries, pool), nil)
 	moderationSvc := moderation.New(moderation.NewQueriesRepository(queries, pool, enrich.Version))
-	employerRepo := employer.NewQueriesRepository(queries)
+	employerRepo := employer.NewQueriesRepository(queries, pool)
 	employerSvc := employer.New(employerRepo, accountsSvc, mailer, employerRepo, moderationSvc)
 	h := newEmployerHandlers(queries, employerSvc)
 

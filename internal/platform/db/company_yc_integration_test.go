@@ -250,6 +250,46 @@ func TestUpsertYCCompanyProtectsEmployerAssertedFields(t *testing.T) {
 	}
 }
 
+// industries is a fifth column an active employer's own profile edit can change (removing
+// a tag), and its UNION merge would otherwise re-add anything the employer removed on the
+// importer's next scheduled run — the same trap the four columns above are guarded against.
+func TestUpsertYCCompanyProtectsEmployerAssertedIndustries(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	ctx := context.Background()
+	if _, err := pool.Exec(ctx, "TRUNCATE companies, company_accounts, users RESTART IDENTITY CASCADE"); err != nil {
+		t.Fatalf("truncate: %v", err)
+	}
+
+	if _, err := pool.Exec(ctx,
+		`INSERT INTO companies (slug, name, industries) VALUES ('acme', 'Acme', ARRAY['logistics'])`); err != nil {
+		t.Fatalf("seed company: %v", err)
+	}
+	var userID int64
+	if err := pool.QueryRow(ctx, `INSERT INTO users (email) VALUES ('founder@acme.test') RETURNING id`).Scan(&userID); err != nil {
+		t.Fatalf("seed user: %v", err)
+	}
+	if _, err := pool.Exec(ctx,
+		`INSERT INTO company_accounts (user_id, company_slug, company_name, work_email, status, verified_at)
+		 VALUES ($1, 'acme', 'Acme', 'founder@acme.test', 'active', now())`, userID); err != nil {
+		t.Fatalf("seed company_accounts: %v", err)
+	}
+
+	p := ycParams("acme", "Acme", "Winter 2020", "Active")
+	p.Industries = []string{"fintech"}
+	if err := q.UpsertYCCompany(ctx, p); err != nil {
+		t.Fatalf("upsert: %v", err)
+	}
+
+	c, err := q.GetCompany(ctx, "acme")
+	if err != nil {
+		t.Fatalf("get: %v", err)
+	}
+	if len(c.Industries) != 1 || c.Industries[0] != "logistics" {
+		t.Errorf("industries = %v, want the employer's own stored value preserved, not unioned with fintech", c.Industries)
+	}
+}
+
 // Without an active company_accounts row, the importer behaves exactly as before: the four
 // columns are overwritten unconditionally, same as any other company in the catalogue.
 func TestUpsertYCCompanyOverwritesFieldsWithNoEmployerAccount(t *testing.T) {

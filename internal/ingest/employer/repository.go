@@ -4,9 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/strelov1/freehire/internal/job/job"
 	"github.com/strelov1/freehire/internal/platform/db"
@@ -21,16 +23,17 @@ var (
 	_ JobRepository = (*QueriesRepository)(nil)
 )
 
-// QueriesRepository adapts *db.Queries to Repository. No method here spans more than one
-// statement, so unlike moderation/submission's repositories it needs no pool of its own —
-// every write is a single INSERT/UPDATE/DELETE already atomic on its own.
+// QueriesRepository adapts *db.Queries to Repository. Every write is a single
+// INSERT/UPDATE/DELETE except Update, which needs the pool for its own transaction — see
+// Update's own doc comment for why (the same reason moderation.QueriesRepository carries one).
 type QueriesRepository struct {
-	q *db.Queries
+	q    *db.Queries
+	pool *pgxpool.Pool
 }
 
 // NewQueriesRepository constructs a QueriesRepository.
-func NewQueriesRepository(q *db.Queries) *QueriesRepository {
-	return &QueriesRepository{q: q}
+func NewQueriesRepository(q *db.Queries, pool *pgxpool.Pool) *QueriesRepository {
+	return &QueriesRepository{q: q, pool: pool}
 }
 
 func (r *QueriesRepository) InsertPending(ctx context.Context, userID int64, companySlug, companyName, workEmail string) (Account, error) {
@@ -239,16 +242,34 @@ func (r *QueriesRepository) ListMine(ctx context.Context, actorID int64) ([]job.
 	return jobs, extras, nil
 }
 
-// Update writes the full resulting row for an employer-owned job. The query's own
-// created_by/source scope (see UpdateEmployerJob) means a slug that is missing, another
-// owner's, or another source's affects no row (ErrNoRows -> ErrJobNotFound) — the same
-// belt-and-suspenders BySlug already applies on the read side.
+// Update writes the full resulting row for an employer-owned job and enqueues it to
+// search_outbox in the SAME transaction — mirroring moderation.QueriesRepository.Update
+// exactly (see that method's own comment): an edit changes the title/description/derived
+// facets search shows, and writing the row without queueing it would leave Meilisearch
+// serving the stale content until the next full `make reindex`, which this repo's own ops
+// docs note can be hours away. The query's own created_by/source scope (see
+// UpdateEmployerJob) means a slug that is missing, another owner's, or another source's
+// affects no row (ErrNoRows -> ErrJobNotFound) — the same belt-and-suspenders BySlug already
+// applies on the read side.
 func (r *QueriesRepository) Update(ctx context.Context, actorID int64, slug string, f job.Fields) (job.Job, job.Extras, error) {
-	row, err := r.q.UpdateEmployerJob(ctx, f.UpdateEmployerParams(slug, actorID))
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return job.Job{}, job.Extras{}, err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	qtx := r.q.WithTx(tx)
+	row, err := qtx.UpdateEmployerJob(ctx, f.UpdateEmployerParams(slug, actorID))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return job.Job{}, job.Extras{}, ErrJobNotFound
 	}
 	if err != nil {
+		return job.Job{}, job.Extras{}, err
+	}
+	if err := qtx.EnqueueSearchOutbox(ctx, row.ID); err != nil {
+		return job.Job{}, job.Extras{}, fmt.Errorf("enqueue search outbox: %w", err)
+	}
+	if err := tx.Commit(ctx); err != nil {
 		return job.Job{}, job.Extras{}, err
 	}
 	return job.FromRow(row)

@@ -33,7 +33,7 @@ func liveEmployer(t *testing.T, pool *pgxpool.Pool, companyName, workEmail strin
 		t.Fatalf("insert user: %v", err)
 	}
 
-	repo := employer.NewQueriesRepository(q)
+	repo := employer.NewQueriesRepository(q, pool)
 	minter := moderation.New(moderation.NewQueriesRepository(q, pool, 1))
 	s := employer.New(repo, liveCodes{pool: pool}, liveMailer{}, repo, minter)
 

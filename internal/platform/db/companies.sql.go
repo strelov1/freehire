@@ -1199,14 +1199,19 @@ INSERT INTO companies (
 )
 ON CONFLICT (slug) DO UPDATE SET
     -- Union, sorted and de-duplicated, so two sources accumulate instead of
-    -- overwriting. Sorted because the stored order is compared for equality by the
+    -- overwriting — UNLESS an active employer account exists, in which case the stored
+    -- value (the employer's own, curated list) wins outright, same as the four columns
+    -- below. Sorted because the stored order is compared for equality by the
     -- normalization worker's no-op guard.
-    industries      = ARRAY(
+    industries      = CASE WHEN EXISTS (
+                          SELECT 1 FROM company_accounts ca
+                          WHERE ca.company_slug = companies.slug AND ca.status = 'active'
+                      ) THEN companies.industries ELSE ARRAY(
         SELECT DISTINCT x
         FROM unnest(companies.industries || EXCLUDED.industries) AS x
         WHERE x <> ''
         ORDER BY x
-    ),
+    ) END,
     subindustry     = CASE WHEN EXISTS (
                           SELECT 1 FROM company_accounts ca
                           WHERE ca.company_slug = companies.slug AND ca.status = 'active'
@@ -1262,7 +1267,10 @@ type UpsertYCCompanyParams struct {
 //
 // Three columns are NOT YC-owned, because this is no longer their only writer, and
 // replacing them would erase another source's work on the importer's next run:
-// tagline fills only a blank, company_info merges key-wise, and industries union.
+// tagline fills only a blank, company_info merges key-wise, and industries union —
+// guarded the same way the four below are, once an active employer account exists: an
+// employer who deliberately REMOVES a tag via their profile edit must not see this
+// importer silently re-add it from the YC entry on its next scheduled run.
 //
 // subindustry/year_founded/employee_count/hq_country are a FOURTH kind of not-owned:
 // unlike the three above, this importer WAS their only writer, right up until a verified

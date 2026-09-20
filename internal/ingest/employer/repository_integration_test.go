@@ -33,7 +33,7 @@ func seedUser(t *testing.T, pool *pgxpool.Pool, email string) int64 {
 
 func TestInsertPending_SecondClaimBySameUser_IsAlreadyHasAccount(t *testing.T) {
 	pool := testdb.Pool(t)
-	repo := employer.NewQueriesRepository(db.New(pool))
+	repo := employer.NewQueriesRepository(db.New(pool), pool)
 	ctx := context.Background()
 	userID := seedUser(t, pool, "founder@acme.test")
 
@@ -47,7 +47,7 @@ func TestInsertPending_SecondClaimBySameUser_IsAlreadyHasAccount(t *testing.T) {
 
 func TestInsertPending_SecondClaimOnSameSlug_IsCompanyAlreadyClaimed(t *testing.T) {
 	pool := testdb.Pool(t)
-	repo := employer.NewQueriesRepository(db.New(pool))
+	repo := employer.NewQueriesRepository(db.New(pool), pool)
 	ctx := context.Background()
 	userA := seedUser(t, pool, "founder@acme.test")
 	userB := seedUser(t, pool, "other@acme.test")
@@ -62,7 +62,7 @@ func TestInsertPending_SecondClaimOnSameSlug_IsCompanyAlreadyClaimed(t *testing.
 
 func TestSeedCompanyWebsite_FillsABlankWebsiteOnANewCompany(t *testing.T) {
 	pool := testdb.Pool(t)
-	repo := employer.NewQueriesRepository(db.New(pool))
+	repo := employer.NewQueriesRepository(db.New(pool), pool)
 	ctx := context.Background()
 
 	if err := repo.SeedCompanyWebsite(ctx, "brand-new", "Brand New", "brandnew.test"); err != nil {
@@ -79,7 +79,7 @@ func TestSeedCompanyWebsite_FillsABlankWebsiteOnANewCompany(t *testing.T) {
 
 func TestSeedCompanyWebsite_NeverOverwritesAnExistingWebsite(t *testing.T) {
 	pool := testdb.Pool(t)
-	repo := employer.NewQueriesRepository(db.New(pool))
+	repo := employer.NewQueriesRepository(db.New(pool), pool)
 	ctx := context.Background()
 
 	if err := repo.SeedCompanyWebsite(ctx, "acme", "Acme", "acme.test"); err != nil {
@@ -99,7 +99,7 @@ func TestSeedCompanyWebsite_NeverOverwritesAnExistingWebsite(t *testing.T) {
 
 func TestUpdateCompanyProfile_AppliesOnlyTheSuppliedFields(t *testing.T) {
 	pool := testdb.Pool(t)
-	repo := employer.NewQueriesRepository(db.New(pool))
+	repo := employer.NewQueriesRepository(db.New(pool), pool)
 	ctx := context.Background()
 
 	if _, err := pool.Exec(ctx,
@@ -151,7 +151,7 @@ func TestUpdateCompanyProfile_AppliesOnlyTheSuppliedFields(t *testing.T) {
 
 func TestResolveCanonicalSlug_FollowsARealAlias(t *testing.T) {
 	pool := testdb.Pool(t)
-	repo := employer.NewQueriesRepository(db.New(pool))
+	repo := employer.NewQueriesRepository(db.New(pool), pool)
 	ctx := context.Background()
 
 	if _, err := pool.Exec(ctx,

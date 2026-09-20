@@ -7105,7 +7105,10 @@ type Querier interface {
 	//
 	// Three columns are NOT YC-owned, because this is no longer their only writer, and
 	// replacing them would erase another source's work on the importer's next run:
-	// tagline fills only a blank, company_info merges key-wise, and industries union.
+	// tagline fills only a blank, company_info merges key-wise, and industries union —
+	// guarded the same way the four below are, once an active employer account exists: an
+	// employer who deliberately REMOVES a tag via their profile edit must not see this
+	// importer silently re-add it from the YC entry on its next scheduled run.
 	//
 	// subindustry/year_founded/employee_count/hq_country are a FOURTH kind of not-owned:
 	// unlike the three above, this importer WAS their only writer, right up until a verified

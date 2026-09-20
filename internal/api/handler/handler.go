@@ -787,7 +787,7 @@ func Register(app *fiber.App, cfg Config) {
 	if employerClaimMailer != nil {
 		employerMailer = employerClaimMailer
 	}
-	employerRepo := employer.NewQueriesRepository(queries)
+	employerRepo := employer.NewQueriesRepository(queries, cfg.Pool)
 	employerH := newEmployerHandlers(queries, employer.New(employerRepo, authH.accounts, employerMailer, employerRepo, moderationSvc))
 	var referralTelegram referral.TelegramSender
 	if telegramH.telegramBot != nil {
