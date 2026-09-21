@@ -1,6 +1,9 @@
 package config
 
-import "strconv"
+import (
+	"os"
+	"strconv"
+)
 
 // Enrich holds configuration for the enrichment command. The LLM settings are
 // provider-agnostic: any OpenAI-compatible endpoint (a LiteLLM gateway, a Chinese
@@ -11,6 +14,7 @@ type Enrich struct {
 	// are genuinely its own below — two other workers used to load THIS type purely to reach
 	// the LLM half, and inherited the ENRICH_* validation with it.
 	LLM
+	TypesafeAPIKey string // If set, use Typesafe API instead of LLM
 
 	Concurrency  int // LLM calls in flight; also the claim wave size (keeps each wave's lease window short)
 	LeaseSeconds int // how long a claim is held before it can be reclaimed
@@ -38,6 +42,7 @@ func LoadEnrich() (Enrich, error) {
 		// Two weeks gives a multi-day outage a wide margin while still stopping an
 		// entry the gateway will never accept.
 		UpstreamGraceDays: envInt("ENRICH_UPSTREAM_GRACE_DAYS", 14),
+		TypesafeAPIKey:    os.Getenv("TYPESAFE_API_KEY"),
 	}
 
 	// A non-positive concurrency would make the claim's LIMIT 0 (silently no-op) or
@@ -46,8 +51,10 @@ func LoadEnrich() (Enrich, error) {
 		e.Concurrency = 1
 	}
 
-	if err := e.Require(); err != nil {
-		return Enrich{}, err
+	if e.TypesafeAPIKey == "" {
+		if err := e.Require(); err != nil {
+			return Enrich{}, err
+		}
 	}
 	return e, nil
 }

@@ -13,6 +13,7 @@ import (
 	"github.com/strelov1/freehire/internal/platform/config"
 	"github.com/strelov1/freehire/internal/platform/llm"
 	"github.com/strelov1/freehire/internal/platform/worker"
+	"github.com/wawan93/gojev"
 )
 
 func main() {
@@ -28,16 +29,6 @@ func run() int {
 		return 1
 	}
 
-	// One construction path: llm.NewClient builds the client and, when LANGFUSE_* are
-	// set, wires tracing (source "enrich"). flush drains buffered traces at run end
-	// (no-op when tracing is off). LoadEnrich already required the LLM settings.
-	client, flush, err := llm.NewClient(ecfg.Settings(ecfg.Model), "enrich")
-	if err != nil {
-		log.Printf("llm: %v", err)
-		return 1
-	}
-	defer flush()
-
 	ctx, _, pool, cleanup, err := worker.Bootstrap(context.Background())
 	if err != nil {
 		log.Printf("database: %v", err)
@@ -45,7 +36,27 @@ func run() int {
 	}
 	defer cleanup()
 
-	provider := enrich.NewLangChainProvider(client)
+	var provider enrich.Provider
+
+	if ecfg.TypesafeAPIKey != "" {
+		jevClient, err := gojev.NewClient(ecfg.TypesafeAPIKey)
+		if err != nil {
+			log.Printf("jev: %v", err)
+			return 1
+		}
+		provider = enrich.NewJevProvider(jevClient)
+	} else {
+		// One construction path: llm.NewClient builds the client and, when LANGFUSE_* are
+		// set, wires tracing (source "enrich"). flush drains buffered traces at run end
+		// (no-op when tracing is off). LoadEnrich already required the LLM settings.
+		client, flush, err := llm.NewClient(ecfg.Settings(ecfg.Model), "enrich")
+		if err != nil {
+			log.Printf("llm: %v", err)
+			return 1
+		}
+		defer flush()
+		provider = enrich.NewLangChainProvider(client)
+	}
 
 	runner := enrich.Runner{Provider: provider, Store: newDBStore(pool)}
 
