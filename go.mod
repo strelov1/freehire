@@ -27,7 +27,7 @@ require (
 	github.com/gzuidhof/tygo v0.2.21
 	github.com/inngest/inngestgo v0.16.1
 	github.com/invopop/jsonschema v0.14.0
-	github.com/jackc/pgx/v5 v5.10.0
+	github.com/jackc/pgx/v5 v5.11.0
 	github.com/jaytaylor/html2text v0.0.0-20230321000545-74c2419ad056
 	github.com/jhillyerd/enmime v1.3.0
 	github.com/ledongthuc/pdf v0.0.0-20250511090121-5959a4027728
