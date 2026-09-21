@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/url"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"golang.org/x/net/html"
@@ -26,13 +27,18 @@ func NewPeopleForce(c HTMLGetter) Source { return peopleforce{http: c} }
 
 func (peopleforce) Provider() string { return "peopleforce" }
 
-// fullBoardListing: Fetch proves completeness by paginating to a genuinely empty page, and
-// treats a page failure or reaching peopleforceMaxPages as a hard Fetch failure. See the
-// fullBoardListing interface (source.go) for the bar.
+// fullBoardListing: Fetch proves completeness by paginating until the listing's own nav stops
+// naming a page after this one, and treats a page failure or reaching peopleforceMaxPages as a
+// hard Fetch failure. See the fullBoardListing interface (source.go) for the bar.
 func (peopleforce) fullBoardListing() {}
 
-// peopleforceMaxPages caps the ?page=N walk so a listing that never yields an empty page
-// cannot loop forever (the largest boards seen are a few pages; this is ample headroom).
+// peopleforceMaxPages caps the ?page=N walk so a listing whose nav never stops naming a next
+// page cannot loop forever (the largest boards seen are a few pages; this is ample headroom).
+//
+// It is a backstop, not the end signal, and the difference is what freehire#3046 was about:
+// while the walk waited for an EMPTY page — which this source does not serve, clamping an
+// out-of-range ?page=N to the last real one instead — this cap was reached on every crawl of
+// 85 of the provider's 93 boards, and reaching it discards the whole board.
 const peopleforceMaxPages = 100
 
 // peopleforceDetailWorkers throttles the per-board detail fan-out below the shared
@@ -55,9 +61,9 @@ func (s peopleforce) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 		return nil, fmt.Errorf("peopleforce: board %q: %w", e.Board, err)
 	}
 
-	// Page through the listing, collecting each card's detail URL + title until a page yields
-	// no new links (the tail/empty page) — the only proof of completeness this walk has. Any
-	// page failure, or reaching peopleforceMaxPages without that proof, is now a hard Fetch
+	// Page through the listing, collecting each card's detail URL + title until the page's own
+	// pagination nav stops naming a page after this one — the proof of completeness this walk
+	// has. Any page failure, or reaching peopleforceMaxPages without that proof, is a hard Fetch
 	// failure rather than a partial success. See the fullBoardListing interface (source.go) for
 	// the bar.
 	seen := map[string]struct{}{}
@@ -76,9 +82,22 @@ func (s peopleforce) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 				cards = append(cards, c)
 			}
 		}
-		// The raw card count, not the count of newly-kept ones, proves a page empty: a page whose
-		// cards are all already-listed duplicates is not itself proof the board has no more pages.
-		if len(pageCards) == 0 {
+		// The source's own pagination nav says whether there is another page, and it is the only
+		// thing that can: an out-of-range ?page=N is CLAMPED to the last real page rather than
+		// answered empty, so waiting for an empty page waits forever. Measured 2026-09-21 against
+		// akvelon.peopleforce.io — 30 postings on 3 pages, and pages 4, 5, 20 and 5000 each return
+		// page 3 byte for byte. A board that fits on one page renders no nav at all, which is the
+		// same answer.
+		//
+		// The old rule was "stop on a page with no cards", chosen over "stop on a page that adds
+		// nothing new" because a duplicate-only page is not proof of the end. That reasoning is
+		// still correct, and is why the fix is not to relax it: the nav is a direct statement from
+		// the source, so a duplicate-only page mid-listing is still walked through.
+		//
+		// Kept alongside it: a genuinely empty page also ends the walk. The live site does not
+		// serve one, but a board whose every posting closed between two crawls plausibly would,
+		// and there is nothing left to page through either way.
+		if len(pageCards) == 0 || !peopleforceHasPageAfter(root, page) {
 			done = true
 			break
 		}
@@ -146,6 +165,39 @@ var peopleforceJobIDPattern = regexp.MustCompile(`/careers/v/(\d+)`)
 // is not a job posting.
 func peopleforceJobID(loc string) string {
 	return firstSubmatch(peopleforceJobIDPattern, loc)
+}
+
+// peopleforcePageHref matches the page number in a pagination link, whether it arrives
+// absolute-path ("/careers?page=4") or bare ("?page=4").
+var peopleforcePageHref = regexp.MustCompile(`[?&]page=(\d+)`)
+
+// peopleforceHasPageAfter reports whether the listing's own pagination nav links to any page
+// numbered above current — the source's statement that there is more to walk.
+//
+// This is the ONLY end-of-listing proof the source gives, because it does not serve an empty
+// page: an out-of-range ?page=N is clamped to the last real one. A board with a single page
+// renders no nav at all (pagy draws one only when there is more than one page), so "no link
+// above current" and "no nav" are the same answer and both mean stop.
+//
+// It reads every page link rather than looking for a "next" control: pagy labels that control
+// per-locale and the tenants render several themes, while the numbered links are structural.
+func peopleforceHasPageAfter(root *html.Node, current int) bool {
+	found := false
+	walk(root, func(n *html.Node) bool {
+		if found || n.Type != html.ElementNode || n.Data != "a" {
+			return !found
+		}
+		m := peopleforcePageHref.FindStringSubmatch(Attr(n, "href"))
+		if m == nil {
+			return true
+		}
+		if p, err := strconv.Atoi(m[1]); err == nil && p > current {
+			found = true
+			return false
+		}
+		return true
+	})
+	return found
 }
 
 // peopleforceListings returns each job card's absolute detail URL and title from a listing
