@@ -33,7 +33,7 @@ const emptyPeopleforceListingHTML = `<html><body><div class="row"></div></body><
 // peopleforcePagedListingHTML is a listing page carrying the source's real pagination nav:
 // pagy's Bootstrap markup, which links every page number and omits the ones that do not
 // exist. That nav is the only end-of-listing proof this source gives, so a fixture without it
-// is a fixture of a site that is not PeopleForce -- see peopleforceNextPage.
+// is a fixture of a site that is not PeopleForce -- see peopleforceHasPageAfter.
 //
 // page is the page this HTML IS; total is how many the board has.
 func peopleforcePagedListingHTML(page, total int, cards ...[2]string) string {
@@ -45,17 +45,17 @@ func peopleforcePagedListingHTML(page, total int, cards ...[2]string) string {
 	}
 	b.WriteString(`<nav aria-label="pager" class="pagy-bootstrap-nav pagination" role="navigation"><ul class="pagination pagination-sm">`)
 	if page > 1 {
-		b.WriteString(fmt.Sprintf(`<li><a data-cy="pagination_previous_action" href="/careers?page=%d" class="page-link" aria-label="previous">Prev</a></li>`, page-1))
+		fmt.Fprintf(&b, `<li><a data-cy="pagination_previous_action" href="/careers?page=%d" class="page-link" aria-label="previous">Prev</a></li>`, page-1)
 	}
 	for p := 1; p <= total; p++ {
 		if p == page {
-			b.WriteString(fmt.Sprintf(`<li class="active"><a class="page-link">%d</a></li>`, p))
+			fmt.Fprintf(&b, `<li class="active"><a class="page-link">%d</a></li>`, p)
 			continue
 		}
-		b.WriteString(fmt.Sprintf(`<li><a href="/careers?page=%d" class="page-link">%d</a></li>`, p, p))
+		fmt.Fprintf(&b, `<li><a href="/careers?page=%d" class="page-link">%d</a></li>`, p, p)
 	}
 	if page < total {
-		b.WriteString(fmt.Sprintf(`<li><a data-cy="pagination_next_action" href="/careers?page=%d" class="page-link" aria-label="next">Next</a></li>`, page+1))
+		fmt.Fprintf(&b, `<li><a data-cy="pagination_next_action" href="/careers?page=%d" class="page-link" aria-label="next">Next</a></li>`, page+1)
 	}
 	b.WriteString(`</ul></nav></div></body></html>`)
 	return b.String()
