@@ -972,7 +972,9 @@ var categoryTable = []aliasEntry{
 	{"contract administrator", "legal"},
 	// Immigration practice: must precede the bare "manager" fall-through
 	// ("Immigration Case Manager") and the administration block ("Immigration
-	// Assistant") so neither steals this family.
+	// Assistant") so neither steals this family. "immigration paralegal" is
+	// listed for completeness — the bare "paralegal" entry above already
+	// resolves it to `legal` — but every other entry here is load-bearing.
 	{"immigration paralegal", "legal"},
 	{"immigration specialist", "legal"},
 	{"immigration assistant", "legal"},

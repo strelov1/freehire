@@ -508,9 +508,9 @@ var wordAliases = map[string]string{
 	"tsql":  "sql-server",
 	"ga4":   "google-analytics",
 	// support / scheduling / legal-practice tooling
-	"freshdesk": "freshdesk",
 	"calendly":  "calendly",
 	"clio":      "clio",
+	"freshdesk": "freshdesk",
 	"uscis":     "uscis",
 
 	// LLM-mined batch 2 (jobs.enrichment->skills, freq 500-1500). Distinctive single
@@ -837,6 +837,10 @@ var ambiguousWords = map[string]bool{
 	"amplitude": true,
 	"soap":      true,
 	"s3":        true,
+	// "clio" is a common first name, the Clio Awards (advertising/marketing), and
+	// the Renault Clio, at least as often as it names the legal practice
+	// management platform.
+	"clio": true,
 	// broad concepts (batch 3) — tag only in a concrete tech context
 	"ai":         true,
 	"automation": true,

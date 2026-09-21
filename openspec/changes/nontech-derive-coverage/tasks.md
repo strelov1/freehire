@@ -83,6 +83,23 @@
       required once the six new skilltag canonicals existed;
       `TestRegistryCoversEveryCanonicalSkill` is what caught the gap
 
+## 5a. Code review fixes
+
+- [x] 5a.1 Branch was accidentally based on an in-progress, unrelated local
+      branch (`tier-badge-visibility`) instead of `origin/main` — rebased
+      `worktree-nontech-derive-coverage` onto `origin/main` to drop that
+      commit from the diff
+- [x] 5a.2 `clio` gated in `ambiguousWords` (collides with a common first
+      name, the Clio Awards, and the Renault Clio — the same class of
+      collision `maya`/`lottie`/`houdini` are already gated for); added
+      `TestParse_ClioNeedsCorroboration` and updated
+      `skill-tag-matching/spec.md`'s scenario accordingly
+- [x] 5a.3 Corrected the `immigration paralegal` alias comment — it is
+      reachable only through the pre-existing bare `paralegal` entry, not
+      load-bearing like its four siblings
+- [x] 5a.4 Alphabetized the new `wordAliases` block in
+      `internal/dict/skilltag/dictionaries.go`
+
 ## 6. Rollout & verification (operational — run against prod after merge, not part of this PR)
 
 - [ ] 6.1 Run `cmd/backfill-derive` with `BACKFILL_CONCURRENCY=2` or `3`

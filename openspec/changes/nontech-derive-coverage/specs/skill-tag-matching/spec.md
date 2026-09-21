@@ -18,10 +18,19 @@ exist and are unchanged.
 - **WHEN** a description names Calendly
 - **THEN** `jobs.skills` carries the `calendly` canonical
 
-#### Scenario: Legal practice tooling resolves
+#### Scenario: Legal practice tooling resolves when corroborated
 
-- **WHEN** a description names Clio
+- **WHEN** a description names Clio alongside another named tool (e.g. QuickBooks)
 - **THEN** `jobs.skills` carries the `clio` canonical
+
+#### Scenario: A bare mention of Clio does not resolve
+
+- **WHEN** a description names only "Clio" with no other named tool present —
+  the word is at least as common a first name as other gated canonicals in
+  this dictionary (`maya`, `lottie`), and also names the Clio Awards and the
+  Renault Clio
+- **THEN** `jobs.skills` does not carry the `clio` canonical, the same
+  ambiguous-word corroboration rule `houdini` and `maya` already carry
 
 #### Scenario: Immigration forms resolve
 
