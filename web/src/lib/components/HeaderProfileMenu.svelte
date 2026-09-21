@@ -85,9 +85,12 @@
     >
       <CircleUser class="size-5" />
       {#if tier !== 'free'}
+        <!-- Same height/weight as NotificationBell's unread-count badge (h-4, bold, ring
+             against the background) so the two corner badges read with equal prominence —
+             the 8px/py-px version this replaced was easy to miss next to that one. -->
         <span
           aria-hidden="true"
-          class="absolute -bottom-1 -right-1 rounded-full bg-brand px-1 py-px text-[8px] font-bold uppercase leading-none text-brand-foreground ring-2 ring-background"
+          class="absolute -bottom-1 -right-1 flex h-4 items-center justify-center rounded-full bg-brand px-1.5 text-[10px] font-bold uppercase leading-none text-brand-foreground ring-2 ring-background"
         >
           {tier}
         </span>
