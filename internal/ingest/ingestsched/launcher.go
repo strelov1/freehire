@@ -82,8 +82,30 @@ func (l SystemdLauncher) Launch(ctx context.Context, run Run) error {
 		return fmt.Errorf("refusing to launch: %w", err)
 	}
 
+	unit := l.unitName(run)
+
+	// A FAILED transient unit holds its name until someone resets it, and systemd refuses
+	// to create a second unit under a held name ("was already loaded or has a fragment
+	// file"). Finished resets the units the scheduler is TRACKING, which covers every run
+	// it saw end — but not a unit orphaned by a tick that died between launching and
+	// recording, and not the backlog such ticks already left on the host. Without this the
+	// fleet stops one provider at a time, permanently, and the reason is a name rather than
+	// anything about the crawl. Best-effort on purpose: a unit that does not exist is the
+	// normal case and `systemctl reset-failed` answering non-zero for it means nothing.
+	_ = l.execute(ctx, "systemctl", "reset-failed", unit)
+
 	args := []string{
-		"--unit=" + l.unitName(run),
+		// systemd-run waits for the START JOB to complete, and for Type=oneshot that job
+		// completes only when ExecStart has EXITED — so without this flag one launch
+		// blocks the scheduler for the whole crawl, up to 4500s. Measured on the host
+		// 2026-09-21: 8s for `sleep 8` without it, 0s with it. The scheduler's own unit is
+		// TimeoutStartSec=45, so every tick was killed mid-launch, its claims released, and
+		// the runs it had already started left orphaned — while the transient unit it
+		// created went on crawling, which is why the fleet looked half-alive rather than
+		// dead. A run must outlive the tick that started it; that is the entire reason
+		// these units are transient (see the type's own comment).
+		"--no-block",
+		"--unit=" + unit,
 		"--description=freehire ingest " + run.Provider + " " + shardLabel(run),
 		// Deliberately NOT --collect. systemd already garbage-collects a SUCCESSFUL
 		// transient unit; --collect would collect failed ones too, erasing the exit code

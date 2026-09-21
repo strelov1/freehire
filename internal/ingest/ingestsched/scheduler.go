@@ -209,7 +209,18 @@ func (s Scheduler) Tick(ctx context.Context) (TickResult, error) {
 	// sanity ceiling (1000), not the fleet's real cap, so a misconfigured HeavyCap > Cap
 	// would otherwise let the heavy pool alone claim past Cap while lightCap merely floors
 	// at zero — the split existing to PROTECT the fleet cap must not become a way around it.
-	heavyCap := clamp(s.heavyCap(), 0, s.cap())
+	// The heavy reservation may not take the LAST slot. It is carved out of Cap to protect
+	// the light tail from a burst of long sharded crawls — so a reservation that leaves the
+	// tail zero slots has inverted its own purpose and silently switches half the fleet
+	// off. Clamping to Cap alone is what did exactly that: the host set Cap=4 against
+	// DefaultHeavyCap=5 on 2026-09-18, heavy was clamped to 4, light was budgeted 0, and 78
+	// providers stopped crawling for three days behind saturated=false and launched=0.
+	//
+	// Cap 1 is the one case with no answer — one slot cannot be split — and there the heavy
+	// pool keeps it, because a sharded crawl that never runs never finishes a sweep at all.
+	// report() names a starved pool either way, so the operator is told rather than left to
+	// read two green numbers.
+	heavyCap := clamp(s.heavyCap(), 0, max(s.cap()-1, 1))
 	lightCap := clamp(s.cap()-heavyCap, 0, maxRuns)
 	result.Heavy.Cap = heavyCap
 	result.Light.Cap = lightCap

@@ -2,6 +2,7 @@ package ingestsched
 
 import (
 	"context"
+	"errors"
 	"slices"
 	"strings"
 	"testing"
@@ -22,11 +23,21 @@ type recordedExec struct {
 	name string
 	args []string
 	err  error
+	// calls is every command in order. name/args stay as the LAST one, which is the
+	// systemd-run the older tests assert on; a launch now also tidies up before it, and a
+	// test about that step needs to see a command the last-one fields have overwritten.
+	calls []recordedCall
+}
+
+type recordedCall struct {
+	name string
+	args []string
 }
 
 func (r *recordedExec) run(_ context.Context, name string, args ...string) error {
 	r.name = name
 	r.args = args
+	r.calls = append(r.calls, recordedCall{name: name, args: args})
 	return r.err
 }
 
@@ -60,6 +71,80 @@ func TestLaunchCarriesTheRunsOwnTimeout(t *testing.T) {
 	}
 	if got, ok := argValue(rec.args, "--property=TimeoutStartSec"); !ok || got != "4500" {
 		t.Errorf("TimeoutStartSec = %q (found=%v), want 4500", got, ok)
+	}
+}
+
+// --no-block is what lets a crawl outlive the tick that started it, which is the entire
+// premise of these units being transient.
+//
+// systemd-run waits for the start JOB to finish, and for Type=oneshot that job finishes
+// only when ExecStart has EXITED. Without the flag one launch blocks the scheduler for the
+// whole crawl — measured on the crawl host 2026-09-21: 8s for `sleep 8` without it, 0s
+// with it — and the scheduler's own unit is TimeoutStartSec=45, so systemd killed every
+// tick mid-launch. Its claims were released, the runs it had already started were orphaned,
+// and the transient units went on crawling with nobody tracking them.
+func TestLaunchDoesNotWaitForTheCrawlToFinish(t *testing.T) {
+	rec := &recordedExec{}
+	l := newTestLauncher(rec)
+
+	if err := l.Launch(context.Background(), Run{
+		Provider: "geekjob", Shard: 1, Shards: 1, RunTimeout: 3000 * time.Second,
+	}); err != nil {
+		t.Fatalf("Launch: %v", err)
+	}
+
+	if !slices.Contains(rec.args, "--no-block") {
+		t.Errorf("systemd-run args %v carry no --no-block; a Type=oneshot launch would block the whole tick", rec.args)
+	}
+}
+
+// A failed transient unit holds its name until someone resets it, and systemd refuses to
+// create a second unit under a held name. Finished resets the units the scheduler is
+// TRACKING — but a tick killed between launching and recording orphans one, and that name
+// is then held for ever: the fleet stops one provider at a time, for a reason that is about
+// a name rather than about the crawl.
+func TestLaunchFreesAHeldUnitNameFirst(t *testing.T) {
+	rec := &recordedExec{}
+	l := newTestLauncher(rec)
+
+	if err := l.Launch(context.Background(), Run{
+		Provider: "geekjob", Shard: 1, Shards: 1, RunTimeout: 3000 * time.Second,
+	}); err != nil {
+		t.Fatalf("Launch: %v", err)
+	}
+
+	if len(rec.calls) != 2 {
+		t.Fatalf("ran %d commands, want reset-failed then systemd-run: %v", len(rec.calls), rec.calls)
+	}
+	first := rec.calls[0]
+	if first.name != "systemctl" || !slices.Contains(first.args, "reset-failed") {
+		t.Errorf("first command = %s %v, want systemctl reset-failed", first.name, first.args)
+	}
+	if !slices.Contains(first.args, "freehire-ingest-run-geekjob.service") {
+		t.Errorf("reset-failed args %v do not name the unit about to be launched", first.args)
+	}
+	if rec.calls[1].name != "systemd-run" {
+		t.Errorf("second command = %s, want systemd-run", rec.calls[1].name)
+	}
+}
+
+// Tidying up must never stop a launch: a unit that does not exist is the NORMAL case, and
+// `systemctl reset-failed` answering non-zero for it says nothing about the crawl.
+func TestLaunchProceedsWhenTheNameWasNotHeld(t *testing.T) {
+	rec := &recordedExec{err: errors.New("Unit freehire-ingest-run-geekjob.service not loaded.")}
+	l := newTestLauncher(rec)
+
+	err := l.Launch(context.Background(), Run{
+		Provider: "geekjob", Shard: 1, Shards: 1, RunTimeout: 3000 * time.Second,
+	})
+
+	// The error the fake returns is the systemd-run one too, so the launch still fails —
+	// what this asserts is that it was ATTEMPTED rather than abandoned after reset-failed.
+	if err == nil {
+		t.Fatal("Launch: want the systemd-run failure to surface")
+	}
+	if rec.name != "systemd-run" {
+		t.Errorf("last command = %s, want the launch to have been attempted", rec.name)
 	}
 }
 

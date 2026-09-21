@@ -79,6 +79,7 @@ func run() int {
 		Repo:     ingestsched.NewQueriesRepository(db.New(pool)),
 		Launcher: ingestsched.NewSystemdLauncher(cfg.IngestBinary, cfg.WorkingDir, cfg.EnvFile, cfg.RunAs),
 		Cap:      cfg.Cap,
+		HeavyCap: cfg.HeavyCap,
 		Grace:    cfg.Grace,
 		Apply:    cfg.Apply,
 	}
@@ -107,10 +108,26 @@ func report(r ingestsched.TickResult, apply bool) {
 		mode = "apply"
 	}
 	log.Printf("scheduler tick: mode=%s eligible=%d tracked=%d in_flight=%d reaped=%d launched=%d "+
-		"would_launch=%d disabled=%d unmanaged=%d refused=%d failed=%d saturated=%t",
+		"would_launch=%d disabled=%d unmanaged=%d refused=%d failed=%d saturated=%t "+
+		"heavy_cap=%d light_cap=%d",
 		mode, r.Eligible, r.Tracked, r.InFlight, r.Reaped, len(r.Launched),
 		len(r.WouldLaunch), len(r.Disabled), len(r.Unmanaged), len(r.Refused), len(r.Failed),
-		r.Saturated)
+		r.Saturated, r.Heavy.Cap, r.Light.Cap)
+
+	// A pool budgeted ZERO slots launches nothing, for ever, while every other figure on
+	// the line above reads healthy — launched=0 looks like "nothing was due" and
+	// saturated stays false, because one empty pool is not fleet saturation. That is how
+	// the light pool sat at zero for three days in September 2026. Say it in words: the
+	// two caps are printed above so the arithmetic is checkable, and this line names the
+	// consequence so nobody has to do the arithmetic to notice.
+	if r.Heavy.Cap == 0 {
+		log.Printf("scheduler: HEAVY POOL STARVED — 0 of %d slots reserved for it; no sharded provider can be launched. Raise INGEST_SCHEDULER_HEAVY_CAP or INGEST_SCHEDULER_CAP",
+			r.Heavy.Cap+r.Light.Cap)
+	}
+	if r.Light.Cap == 0 {
+		log.Printf("scheduler: LIGHT POOL STARVED — the heavy reservation holds all %d slots; no unsharded provider can be launched. Raise INGEST_SCHEDULER_CAP or lower INGEST_SCHEDULER_HEAVY_CAP",
+			r.Heavy.Cap+r.Light.Cap)
+	}
 
 	if r.Saturated {
 		log.Printf("scheduler: fleet saturated at %d in flight; every due run stays claimable for the next tick", r.InFlight)

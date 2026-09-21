@@ -60,6 +60,30 @@ stuck run is reclaimed, and how the fleet's concurrency is bounded. Replaces
   bypass it and obey `INGEST_SCHEDULER_CAP`. A half-cut-over fleet can run 20 crawls on a
   host calibrated for 10 — the I/O saturation that produced nginx 504s. The runbook steps
   the scheduler's cap up in proportion to the share of providers it owns.
+- **`--no-block` is not a nicety, it is what makes the units transient.** `systemd-run`
+  waits for the start JOB, and for `Type=oneshot` that job completes only when `ExecStart`
+  has EXITED — so without the flag ONE launch blocks the tick for the whole crawl, up to
+  4500s. The scheduler's own unit is `TimeoutStartSec=45`, so systemd killed every tick
+  mid-launch: claims released, already-started runs orphaned, and the transient units went
+  on crawling with nobody tracking them. It shipped without the flag and the fleet looked
+  half-alive rather than dead, which is why it survived a shadow day. Measured on the host
+  2026-09-21: 8s for `sleep 8` without it, 0s with it. `Launch` also `reset-failed`s the
+  unit name first, best-effort — a failed transient unit holds its name, systemd refuses a
+  second unit under a held name, and `Finished` only resets the runs the scheduler was
+  still TRACKING, so a tick that died between launching and recording held that provider's
+  name for ever.
+- **The heavy reservation may not take the LAST slot.** `HeavyCap` is carved out of `Cap`
+  to protect the light tail from a burst of long sharded crawls, so a reservation that
+  leaves the tail zero slots has inverted its own purpose. Clamping it to `Cap` alone is
+  what did exactly that on 2026-09-18: the host lowered `INGEST_SCHEDULER_CAP` to 4,
+  nothing set `HeavyCap` (there was no environment variable for it at all), it resolved to
+  `DefaultHeavyCap` 5, was clamped to 4, and the light pool was budgeted **zero slots**.
+  The tick reported `saturated=false` — one empty pool is not fleet saturation — and
+  `launched=0`, which is what a quiet fleet with nothing due also reports. 78 providers
+  stopped crawling for three days behind a green unit. `INGEST_SCHEDULER_HEAVY_CAP` now
+  exists so the two numbers are tuned together, the clamp stops one short of `Cap`, and
+  `report` prints both caps and names a starved pool in words. `Cap` 1 is the one case with
+  no answer: one slot cannot be split, and the heavy pool keeps it.
 - **A saturated tick claims NOTHING and says so.** Not "claims and discards" — every due row
   stays claimable for the next tick, because advancing a due time under saturation would
   skip a cycle rather than defer it. `ingest-slot.sh` logged its skips for the same reason: a

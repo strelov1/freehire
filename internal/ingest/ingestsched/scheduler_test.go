@@ -203,10 +203,14 @@ func TestApplyTickClaimsAndLaunches(t *testing.T) {
 // The concurrency cap replaces ingest-slot.sh's flock semaphore. It exists because 279
 // independent timers could not see each other; one scheduler can simply count.
 //
-// The whole cap is reserved for the heavy pool here (HeavyCap == Cap), so this test
-// measures exactly what it always has — free capacity, undisturbed by the heavy/light
-// split. TestHeavyAndLightPoolsAreBudgetedIndependently below is what tests the split
-// itself.
+// All but one slot is reserved for the heavy pool here, so this test measures exactly what
+// it always has — free capacity, undisturbed by the heavy/light split.
+// TestHeavyAndLightPoolsAreBudgetedIndependently below is what tests the split itself.
+//
+// It used to reserve the WHOLE cap (HeavyCap == Cap). That is no longer expressible: a
+// reservation may not take the last slot, because one that leaves the light tail zero
+// slots has inverted the purpose the reservation exists for — see
+// TestLightPoolKeepsASlotWhenHeavyCapExceedsCap.
 func TestTickLaunchesOnlyTheFreeCapacity(t *testing.T) {
 	repo := &fakeRepo{
 		eligible:     []Settings{managed("paylocity")},
@@ -219,7 +223,7 @@ func TestTickLaunchesOnlyTheFreeCapacity(t *testing.T) {
 		},
 	}
 	launcher := &fakeLauncher{}
-	sched := Scheduler{Repo: repo, Launcher: launcher, Cap: 10, HeavyCap: 10, Grace: time.Minute, Apply: true}
+	sched := Scheduler{Repo: repo, Launcher: launcher, Cap: 11, HeavyCap: 10, Grace: time.Minute, Apply: true}
 
 	if _, err := sched.Tick(context.Background()); err != nil {
 		t.Fatalf("Tick: %v", err)
@@ -237,18 +241,24 @@ func TestTickLaunchesOnlyTheFreeCapacity(t *testing.T) {
 // quietly stops crawling looks identical to a healthy one — the reason ingest-slot.sh
 // logged its skips too.
 //
-// The whole cap is reserved for the heavy pool here (HeavyCap == Cap, so the light pool
-// gets none), which is what makes "everything running is heavy" the same thing as "the
-// fleet is saturated" for this test — see TestHeavyAndLightPoolsAreBudgetedIndependently
-// for the case this split exists to fix: a full heavy pool alone must NOT saturate light.
+// BOTH pools must be full for the fleet to be saturated, and this test fills both: nine
+// heavy shards and one light run against a Cap of 10 reserving 9 for heavy. Filling only
+// the heavy pool is NOT saturation — see TestHeavyAndLightPoolsAreBudgetedIndependently
+// for the case this split exists to fix.
+//
+// It used to reserve the whole cap for heavy (HeavyCap == Cap) and fill only that pool,
+// which made "everything running is heavy" stand in for saturation. That shortcut is gone
+// with the reservation that made it possible: a pool budgeted zero slots is the bug this
+// file now guards against, not a way to write a test.
 func TestSaturatedTickLaunchesNothingAndSaysSo(t *testing.T) {
 	repo := &fakeRepo{
-		eligible:     []Settings{managed("greenhouse")},
-		inFlightRuns: stillRunning("paylocity", 10),
-		due:          []Run{{Provider: "greenhouse", Shard: 1, Shards: 1, RunTimeout: DefaultRunTimeout}},
+		eligible: []Settings{managed("greenhouse")},
+		inFlightRuns: append(stillRunning("paylocity", 9),
+			Run{Provider: "workingnomads", Shard: 1, Shards: 1, RunTimeout: DefaultRunTimeout}),
+		due: []Run{{Provider: "greenhouse", Shard: 1, Shards: 1, RunTimeout: DefaultRunTimeout}},
 	}
 	launcher := &fakeLauncher{}
-	sched := Scheduler{Repo: repo, Launcher: launcher, Cap: 10, HeavyCap: 10, Grace: time.Minute, Apply: true}
+	sched := Scheduler{Repo: repo, Launcher: launcher, Cap: 10, HeavyCap: 9, Grace: time.Minute, Apply: true}
 
 	got, err := sched.Tick(context.Background())
 	if err != nil {
@@ -342,11 +352,55 @@ func TestHeavyCapNeverClaimsPastTheFleetCap(t *testing.T) {
 	if got.Heavy.Cap > 10 {
 		t.Errorf("Heavy.Cap = %d, want <= 10", got.Heavy.Cap)
 	}
-	if got.Light.Cap != 0 {
-		t.Errorf("Light.Cap = %d, want 0 (Cap 10 - clamped HeavyCap 10)", got.Light.Cap)
+	// One slot, not zero. A reservation clamped to the whole cap is what starved the light
+	// pool on the crawl host for three days; the clamp now stops one short of Cap, so a
+	// HeavyCap left over from a larger fleet costs the light tail throughput rather than
+	// switching it off. See TestLightPoolKeepsASlotWhenHeavyCapExceedsCap for the
+	// regression this protects.
+	if got.Light.Cap != 1 {
+		t.Errorf("Light.Cap = %d, want 1 (Cap 10 - HeavyCap clamped to Cap-1)", got.Light.Cap)
 	}
 	if len(launcher.launched) > 10 {
 		t.Errorf("launched %d runs, want at most Cap (10)", len(launcher.launched))
+	}
+}
+
+// The production incident of 2026-09-18, in the numbers it actually had.
+//
+// The crawl host lowered INGEST_SCHEDULER_CAP to 4. Nothing set HeavyCap — there was no
+// environment variable for it — so it resolved to DefaultHeavyCap (5), was clamped to the
+// whole cap, and the light pool was budgeted zero slots. The tick then reported
+// saturated=false (one empty pool is not fleet saturation) and launched=0 (nothing could
+// be claimed), which is indistinguishable from a quiet fleet with nothing due. 78
+// providers — every unsharded one handed to the scheduler — stopped crawling for three
+// days behind a green unit.
+//
+// Asserting on Light.Cap alone would pass against a clamp that merely floors the number
+// somewhere; the run must actually be LAUNCHED, which is the thing the fleet lost.
+func TestLightPoolKeepsASlotWhenHeavyCapExceedsCap(t *testing.T) {
+	repo := &fakeRepo{
+		eligible: []Settings{managed("geekjob")},
+		due:      []Run{{Provider: "geekjob", Shard: 1, Shards: 1, RunTimeout: DefaultRunTimeout}},
+	}
+	launcher := &fakeLauncher{}
+	// HeavyCap 0 means "use DefaultHeavyCap", which is larger than this Cap — exactly the
+	// host's configuration on the day.
+	sched := Scheduler{Repo: repo, Launcher: launcher, Cap: 4, Grace: time.Minute, Apply: true}
+
+	got, err := sched.Tick(context.Background())
+	if err != nil {
+		t.Fatalf("Tick: %v", err)
+	}
+
+	if got.Light.Cap < 1 {
+		t.Errorf("Light.Cap = %d, want at least 1: a heavy reservation larger than Cap must not switch the light pool off", got.Light.Cap)
+	}
+	if got.Heavy.Cap+got.Light.Cap > 4 {
+		t.Errorf("Heavy.Cap (%d) + Light.Cap (%d) exceeds Cap (4); the reservation is carved out of the cap, never added beside it",
+			got.Heavy.Cap, got.Light.Cap)
+	}
+	if len(launcher.launched) != 1 {
+		t.Errorf("launched %d runs, want the one due light run", len(launcher.launched))
 	}
 }
 
