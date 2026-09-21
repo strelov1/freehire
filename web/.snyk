@@ -19,3 +19,24 @@ ignore:
           expires.
         expires: 2026-11-13T00:00:00.000Z
         created: 2026-08-13T00:00:00.000Z
+  SNYK-JS-DEEPMERGE-19964053:
+    - '*':
+        reason: >-
+          Prototype Pollution in deepmerge@4.3.1, pulled in transitively by
+          @sveltejs/vite-plugin-svelte, which @sveltejs/kit declares as a PEER
+          dependency and not a dependency — it is a Vite plugin, so it runs at
+          BUILD time only and is in neither the SSR server bundle nor anything
+          the browser loads. Its one call site is mergeConfigs() in
+          utils/options.js, which merges the plugin's own option objects: our
+          svelte.config.js and our vite config, both statically authored in
+          this repository. Polluting a prototype needs attacker-controlled keys
+          in the merged object, and nothing a request carries ever reaches it,
+          so the exploitable path does not exist here.
+          No fix is available: deepmerge 4.3.1 IS the latest published release
+          (there is no 4.3.2 and no 5.x), and @sveltejs/vite-plugin-svelte
+          7.3.0 — also the latest — still declares deepmerge ^4.3.1, so neither
+          upgrading nor a pnpm override reaches a patched version. Revisit when
+          deepmerge publishes a fixed release, or when vite-plugin-svelte drops
+          the dependency; either ends this ignore without a code change here.
+        expires: 2026-12-20T00:00:00.000Z
+        created: 2026-09-20T00:00:00.000Z
