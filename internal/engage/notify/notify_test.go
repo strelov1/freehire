@@ -102,6 +102,15 @@ type fakeStore struct {
 	// store that accepted every insert would report a key that dedupes nothing
 	// as working, which is the bug these tests exist to catch.
 	notificationsByDedupKey map[string]int64
+	// beforeDedupRead fires between the conflicting insert and the read that
+	// follows it, which is the only window a SECOND notify process can act in.
+	// deliver() is one sequential goroutine, so nothing a single pass does can
+	// open that window — a test that wants it has to say so.
+	beforeDedupRead func(*fakeStore)
+	// recordNotificationErrOnce fails only the FIRST record, so a test can
+	// deliver with no row in hand and still observe what the send path does
+	// about it afterwards.
+	recordNotificationErrOnce error
 }
 
 func (s *fakeStore) ListActiveSubscriptions(context.Context) ([]db.ListActiveSubscriptionsRow, error) {
@@ -187,6 +196,11 @@ func (s *fakeStore) RecordNotification(_ context.Context, a db.RecordNotificatio
 	if s.recordNotificationErr != nil {
 		return 0, s.recordNotificationErr
 	}
+	if s.recordNotificationErrOnce != nil {
+		err := s.recordNotificationErrOnce
+		s.recordNotificationErrOnce = nil
+		return 0, err
+	}
 	// ON CONFLICT ... DO NOTHING RETURNING id: a key already recorded inserts
 	// nothing and yields no row.
 	if _, taken := s.notificationsByDedupKey[a.DedupKey.String]; taken && a.DedupKey.Valid {
@@ -207,6 +221,9 @@ func (s *fakeStore) RecordNotification(_ context.Context, a db.RecordNotificatio
 }
 
 func (s *fakeStore) GetNotificationIDByDedupKey(_ context.Context, a db.GetNotificationIDByDedupKeyParams) (int64, error) {
+	if s.beforeDedupRead != nil {
+		s.beforeDedupRead(s)
+	}
 	id, ok := s.notificationsByDedupKey[a.DedupKey.String]
 	if !ok {
 		return 0, pgx.ErrNoRows
@@ -703,8 +720,13 @@ func TestDeliver_RecordNotificationFailureDoesNotBlockDelivery(t *testing.T) {
 	if len(store.notified) != 1 {
 		t.Errorf("notified = %d, want 1 (MarkMatchesNotified must still be called)", len(store.notified))
 	}
-	if len(store.recordedNotifications) != 1 {
-		t.Errorf("recorded notifications = %d, want 1 (the attempt itself still happened)", len(store.recordedNotifications))
+	// Twice: once before the send, and once after it succeeded, because a
+	// delivered digest belongs in the history and the first write did not put it
+	// there. A store that is down for both leaves no row — that is the cost of a
+	// database outage, not of this ordering.
+	if len(store.recordedNotifications) != 2 {
+		t.Errorf("recorded notifications = %d, want 2 (the pre-send attempt, then the retry a successful send earns)",
+			len(store.recordedNotifications))
 	}
 }
 
@@ -1194,6 +1216,70 @@ func TestDeliver_JoiningChannelDoesNotWithdrawAnotherChannelsNotification(t *tes
 	if len(store.deletedNotifications) != 0 {
 		t.Errorf("deleted = %v, want none — the Telegram digest that DID arrive keeps its history row",
 			store.deletedNotifications)
+	}
+}
+
+// A digest that WAS received must leave a history row, even when the record
+// taken before the send came back with nothing. Reaching this needs a second
+// notify process — deliver() is one sequential goroutine, so within a pass the
+// creator has finished sending and withdrawing before any joiner records — and
+// the cost is invisible: the send succeeds, the person gets the message, and
+// the history simply does not mention it.
+func TestDeliver_DeliveredDigestIsRecordedEvenIfItsRowVanishedFirst(t *testing.T) {
+	store := &fakeStore{
+		claimed: []db.ClaimSubscriptionMatchesRow{{SubscriptionID: 1, JobID: 10}, {SubscriptionID: 2, JobID: 10}},
+		delivery: map[int64]db.GetSubscriptionForDeliveryRow{
+			1: {ID: 1, UserID: 42, SavedSearchID: 7, Channel: ChannelTelegram, SavedSearchName: "My profile", TelegramChatID: pgtype.Int8{Int64: 555, Valid: true}},
+			2: {ID: 2, UserID: 42, SavedSearchID: 7, Channel: ChannelEmail, SavedSearchName: "My profile", AccountEmail: "a@example.test"},
+		},
+		digestJobs:         map[int64]db.GetJobsForDigestRow{10: {ID: 10, Title: "A", PublicSlug: "a"}},
+		nextNotificationID: 42,
+	}
+	// Stand in for the other process withdrawing its row in the window between
+	// this channel's conflicting insert and its read.
+	store.beforeDedupRead = func(s *fakeStore) {
+		s.beforeDedupRead = nil
+		clear(s.notificationsByDedupKey)
+	}
+	notifier := &fakeNotifier{}
+	r := New(store, &fakeSearcher{}, notifier, DefaultConfig())
+
+	stats, err := r.Run(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stats.Delivered != 2 {
+		t.Fatalf("Delivered = %d, want 2", stats.Delivered)
+	}
+	if len(store.notificationsByDedupKey) != 1 {
+		t.Errorf("notification rows = %d, want 1 — the second channel's digest was delivered and must be in the history",
+			len(store.notificationsByDedupKey))
+	}
+}
+
+// The same invariant on the plainer path: the pre-send record simply failed.
+// The digest still went out, so the history must still name it.
+func TestDeliver_DeliveredDigestIsRecordedAfterAFailedPreSendWrite(t *testing.T) {
+	store := &fakeStore{
+		claimed:                   []db.ClaimSubscriptionMatchesRow{{SubscriptionID: 1, JobID: 10}},
+		delivery:                  deliverySubscription(),
+		digestJobs:                map[int64]db.GetJobsForDigestRow{10: {ID: 10, Title: "A", PublicSlug: "a"}},
+		nextNotificationID:        42,
+		recordNotificationErrOnce: errors.New("database having a moment"),
+	}
+	notifier := &fakeNotifier{}
+	r := New(store, &fakeSearcher{}, notifier, DefaultConfig())
+
+	if _, err := r.Run(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if len(notifier.sent) != 1 || notifier.sent[0].NotificationID != 0 {
+		t.Fatalf("sent = %d digests, first NotificationID = %d; want 1 sent with a zero id (the write failed before it)",
+			len(notifier.sent), notifier.sent[0].NotificationID)
+	}
+	if len(store.notificationsByDedupKey) != 1 {
+		t.Errorf("notification rows = %d, want 1 — a delivered digest belongs in the history even when the first write failed",
+			len(store.notificationsByDedupKey))
 	}
 }
 

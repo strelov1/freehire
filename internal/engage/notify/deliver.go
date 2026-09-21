@@ -126,7 +126,7 @@ func (r *Runner) deliverOne(ctx context.Context, subID int64, jobIDs []int64, st
 	// createdRow says whether THIS delivery wrote the row or joined one another
 	// channel of the same saved search had already written; only the creator may
 	// withdraw it below.
-	notificationID, createdRow := r.recordNotification(ctx, subID, info, digest, jobIDs)
+	notificationID, createdRow := r.recordNotification(ctx, info, digest, jobIDs)
 	digest.NotificationID = notificationID
 
 	if err := r.notifier.Send(ctx, info.Channel, dest, digest); err != nil {
@@ -147,10 +147,15 @@ func (r *Runner) deliverOne(ctx context.Context, subID int64, jobIDs []int64, st
 		// differ only when a second notify process is running: deliver() is one
 		// sequential goroutine, so within a pass the creator sends before any joiner
 		// records. Across two overlapping passes a joiner can send successfully and
-		// the creator then withdraw underneath it. Closing that needs a per-event
-		// delivery ledger — what "has anybody delivered" would have to read — and
-		// systemd already refuses to stack this unit on itself, so the gap is a
-		// hand-run pass, not the schedule.
+		// the creator then withdraw underneath it, leaving a delivered digest with
+		// no history row.
+		//
+		// That ONE ordering is the remaining gap, and it is not the one the
+		// post-send record below closes: a joiner that read a live id has nothing to
+		// notice, because the row is removed after it has finished. Closing it needs
+		// per-event delivery state for "has anybody delivered" to read, which this
+		// engine does not keep; systemd will not stack this unit on itself, so
+		// reaching it takes a hand-run pass overlapping the timer's.
 		if createdRow {
 			r.withdrawNotification(ctx, subID, digest.NotificationID)
 		}
@@ -197,6 +202,22 @@ func (r *Runner) deliverOne(ctx context.Context, subID int64, jobIDs []int64, st
 		return
 	}
 
+	// The digest went out. If it is carrying a zero id, nothing in the history
+	// names it yet: either the pre-send write failed, or it conflicted with a row
+	// that was then withdrawn before this channel could read it. Record it now.
+	//
+	// This is the ONE place the ordering can be after the send, because the id is
+	// no longer needed for anything — the message is gone, its tail already fell
+	// back to the generic destination. What is left to get right is only whether
+	// the history admits a digest the person actually received, and it must.
+	//
+	// Safe to attempt blindly: the dedup key makes a redundant insert a no-op, so
+	// a first write that in fact succeeded and only lost its answer cannot become
+	// a second row here.
+	if digest.NotificationID == 0 {
+		r.recordNotification(ctx, info, digest, jobIDs)
+	}
+
 	if _, err := r.store.MarkMatchesNotified(ctx, db.MarkMatchesNotifiedParams{
 		SubscriptionID: subID,
 		JobIds:         jobIDs,
@@ -233,7 +254,7 @@ func (r *Runner) deliverOne(ctx context.Context, subID int64, jobIDs []int64, st
 // created reports whether this delivery WROTE the row, as opposed to joining one
 // another channel of the same saved search had already written. The notification
 // centre holds one row per EVENT, so only the writer may withdraw it.
-func (r *Runner) recordNotification(ctx context.Context, subID int64, info db.GetSubscriptionForDeliveryRow, d Digest, jobIDs []int64) (id int64, created bool) {
+func (r *Runner) recordNotification(ctx context.Context, info db.GetSubscriptionForDeliveryRow, d Digest, jobIDs []int64) (id int64, created bool) {
 	title, body, slug := renderDigest(d)
 	var publicSlug pgtype.Text
 	if slug != "" {
@@ -253,7 +274,7 @@ func (r *Runner) recordNotification(ctx context.Context, subID int64, info db.Ge
 		return id, true
 	}
 	if !errors.Is(err, pgx.ErrNoRows) {
-		log.Printf("notify: record notification for subscription %d: %v", subID, err)
+		log.Printf("notify: record notification for subscription %d: %v", info.ID, err)
 		return 0, false
 	}
 	// No row inserted: another channel of this same saved search already
@@ -271,14 +292,15 @@ func (r *Runner) recordNotification(ctx context.Context, subID int64, info db.Ge
 		// a `Type=oneshot` unit while the first is active, so the way to reach
 		// here is a hand-run pass overlapping the timer's.
 		//
-		// This send then goes out with a zero id — the tail falls back to a
-		// generic destination — and records NOTHING, so a digest that WAS
-		// received keeps no history row. Deliberately left: the alternative is
-		// re-inserting behind a withdrawal, and a worker that resurrects a row
-		// another worker has just decided against needs a delivery ledger to
-		// arbitrate, which this engine does not have and which one hand-run
-		// overlap does not justify building.
-		log.Printf("notify: read deduped notification for subscription %d: %v", subID, err)
+		// The send then goes out with a zero id and its tail falls back to a
+		// generic destination — that much is unavoidable, the message has to be
+		// built before it can be sent. What is NOT left to chance is the history:
+		// deliverOne records again after a successful send precisely because of
+		// this branch. Resurrecting a row another worker withdrew is the right
+		// answer here and only here — that worker withdrew it because ITS OWN send
+		// failed, which says nothing about this one, and the person reading the
+		// history did receive this digest.
+		log.Printf("notify: read deduped notification for subscription %d: %v", info.ID, err)
 		return 0, false
 	}
 	return id, false

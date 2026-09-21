@@ -217,6 +217,22 @@ Telegram, and mobile push), each with its own small `Notifier`/`Router` pair:
   `recordNotification` returns that as `created`, and without it a third channel's failed
   send would delete the history of the two digests that did arrive. The engines that already
   record once per event pass a NULL key and are outside the index entirely.
+- **A digest that WAS delivered is recorded even if the pre-send write came back with
+  nothing**, so `deliverOne` writes the row in two places and that is deliberate. The
+  pre-send write is what gives the message its own id to link at; when it fails — an
+  ordinary database hiccup, or (needing a second notify process) a conflict with a row
+  withdrawn before this channel could read it — the digest still goes out, and until
+  freehire#3020's follow-up it went out leaving nothing in the history at all. The
+  post-send write is safe to attempt blindly because the dedup key makes a redundant
+  insert a no-op, so a first write that in fact succeeded and only lost its answer cannot
+  become a second row. It is the one place the ordering may follow the send: the id is
+  no longer needed for anything, the message is gone and its tail already fell back to
+  the generic destination. **One ordering is still open and is written down rather than
+  fixed**: across two overlapping passes a joiner can send successfully and the creator
+  then withdraw the shared row underneath it. The joiner read a live id, so it has
+  nothing to notice; closing it needs per-event delivery state this engine does not keep,
+  and systemd will not stack a `Type=oneshot` unit on itself, so reaching it takes a
+  hand-run pass overlapping the timer's.
 - **`user_notifications.jobs` is one shape owned by one package.** `notify.SnapshotJob`
   (`{title, company, slug}`, migration 0091) is what all three engines write and what the
   single `/my/notifications/:id/jobs` page reads. A group of MORE than one fills `jobs`
