@@ -813,7 +813,9 @@
     <div class="flex min-w-0 flex-1 flex-col gap-1">
       <span>{error.message}</span>
       {#if error.planLimitReached}
-        <PlanLimitLink />
+        <!-- outline, not the default primary: this alert is already destructive-styled, and a
+             filled brand-colored button would fight that treatment (see PlanLimitLink). -->
+        <PlanLimitLink variant="outline" />
       {/if}
     </div>
   </div>
