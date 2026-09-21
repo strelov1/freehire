@@ -1,7 +1,7 @@
 import { error } from '@sveltejs/kit';
 import { serverApi } from '$lib/server/api';
 import { collectionBySlug, skillForCollection } from '$lib/collections';
-import { pageExists, pageOffset, parsePage } from '$lib/pagination';
+import { pageExists, pageOffset, pageWithinWindow, parsePage } from '$lib/pagination';
 import { categoryLandingLink } from '$lib/roleLandings';
 import type { PageServerLoad } from './$types';
 
@@ -33,10 +33,14 @@ export const load: PageServerLoad = async ({ params, url, fetch }) => {
   // Named pageNumber, not page: the component side already binds `page` to
   // SvelteKit's navigation state, and two different `page`s in one file is a trap.
   const pageNumber = parsePage(url.searchParams);
+  // Before the search: a page past the window is the costliest one the URL could
+  // name, so refusing it afterwards would mean paying for it first. See FEED_WINDOW.
+  if (!pageWithinWindow(pageNumber)) error(404, 'Page not found');
   const initial = await serverApi(fetch).searchJobs(facets, LIMIT, pageOffset(pageNumber));
   // Past the last page the matches fill there is no page, only an empty feed under
-  // a self-referencing canonical. parsePage clamps to MAX_PAGE rather than failing,
-  // which is right for the number and wrong for what we then serve.
+  // a self-referencing canonical. The window check above cannot see this one: page 40
+  // of a listing holding thirty rows is well inside the window and still addresses
+  // nothing, and only the total just fetched says so.
   if (!pageExists(pageNumber, initial.total)) error(404, 'Page not found');
   // The country map for this feed's category, where the feed pins exactly one. The
   // reverse of the link /roles/[category] carries: this page answers "show me the

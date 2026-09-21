@@ -1,6 +1,6 @@
 import { error, redirect } from '@sveltejs/kit';
 import { ApiError, MovedError } from '$lib/api';
-import { pageExists, pageOffset, parsePage } from '$lib/pagination';
+import { pageExists, pageOffset, pageWithinWindow, parsePage } from '$lib/pagination';
 import { serverApi } from '$lib/server/api';
 import { rethrowUpstream } from '$lib/server/upstream';
 import type { PageServerLoad } from './$types';
@@ -34,6 +34,11 @@ export const load: PageServerLoad = async ({ params, url, fetch }) => {
   // Serve the page the URL asks for: the <a href> pagination under the feed is
   // what makes a large employer's later postings reachable by link at all.
   const pageNumber = parsePage(url.searchParams);
+  // Before the search: a page past the window is the costliest one the URL could
+  // name, so refusing it afterwards would mean paying for it first. See FEED_WINDOW.
+  // This one has to precede the company lookup too, for the reason handler.go records
+  // about the same endpoint — the refusal is worth nothing if a query runs ahead of it.
+  if (!pageWithinWindow(pageNumber)) error(404, 'Page not found');
   // Start the search first so it overlaps the company fetch below.
   const search = client.searchJobs(facets, LIMIT, pageOffset(pageNumber)).catch(() => null);
 

@@ -1,6 +1,6 @@
 import { error, redirect } from '@sveltejs/kit';
 import { countryFromSlug, countryLabel, countrySlug } from '$lib/facets';
-import { pageExists, pageOffset, parsePage } from '$lib/pagination';
+import { pageExists, pageOffset, pageWithinWindow, parsePage } from '$lib/pagination';
 import {
   categoryFromSlug,
   categorySlug,
@@ -77,6 +77,11 @@ export const load: PageServerLoad = async ({ params, url, fetch, setHeaders }) =
   feedFacets.delete('page');
 
   const pageNumber = parsePage(url.searchParams);
+  // Before the search: a page past the window is the costliest one the URL could
+  // name, so refusing it afterwards would mean paying for it first. See FEED_WINDOW.
+  // The five calls below run together, so this cannot sit between them — a refusal
+  // inside a Promise.all still lets the other four be issued.
+  if (!pageWithinWindow(pageNumber)) error(404, 'Page not found');
 
   const [byCountry, pair, byCategory, salary, initial] = await Promise.all([
     api.facetCounts(new URLSearchParams({ category }), { facets: ['countries'] }),

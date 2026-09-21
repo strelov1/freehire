@@ -1,12 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import {
+  API_WINDOW,
+  FEED_WINDOW,
   MAX_PAGE,
+  PAGE_SIZE,
   canFetchMore,
   pageCount,
   pageExists,
   pageHref,
   pageOffset,
   pageWindow,
+  pageWithinWindow,
   parsePage,
 } from './pagination';
 
@@ -27,9 +31,29 @@ describe('parsePage', () => {
     }
   });
 
-  it('clamps past the deep-pagination ceiling the search API enforces', () => {
-    expect(parsePage(new URLSearchParams(`page=${MAX_PAGE + 1}`))).toBe(MAX_PAGE);
-    expect(parsePage(new URLSearchParams('page=999999'))).toBe(MAX_PAGE);
+  // Reads a too-deep page back as asked rather than clamping it. Clamping answered
+  // 200 with the last reachable page's rows under every deeper address, so one set of
+  // twenty jobs stood at four hundred URLs and a crawler walked them all. The number
+  // survives so the route can refuse it by name — see pageWithinWindow.
+  it('reads a page past the feed window back unchanged', () => {
+    expect(parsePage(new URLSearchParams(`page=${MAX_PAGE + 1}`))).toBe(MAX_PAGE + 1);
+    expect(parsePage(new URLSearchParams('page=999999'))).toBe(999999);
+  });
+});
+
+describe('pageWithinWindow', () => {
+  it('accepts every page the feed window reaches', () => {
+    expect(pageWithinWindow(1)).toBe(true);
+    expect(pageWithinWindow(MAX_PAGE)).toBe(true);
+  });
+
+  // The refusal a listing `load` must make BEFORE it searches. `pageExists` cannot
+  // serve here: it needs a total, and a total costs the very request this avoids —
+  // the deepest ones being the slowest, which is how a crawler walking ?page=486..500
+  // turned an ordinary load spike into 500s (2026-09-20).
+  it('refuses a page past it, so no search is made for one', () => {
+    expect(pageWithinWindow(MAX_PAGE + 1)).toBe(false);
+    expect(pageWithinWindow(999999)).toBe(false);
   });
 });
 
@@ -40,9 +64,23 @@ describe('pageOffset', () => {
     expect(pageOffset(5)).toBe(80);
   });
 
-  // offset+limit must stay within the API's 10000 window, or it answers 400.
+  // offset+limit must stay within the API's window, or it answers 400.
   it('keeps the last page inside the search window', () => {
-    expect(pageOffset(MAX_PAGE) + 20).toBeLessThanOrEqual(10000);
+    expect(pageOffset(MAX_PAGE) + PAGE_SIZE).toBeLessThanOrEqual(API_WINDOW);
+  });
+});
+
+describe('the two windows', () => {
+  // The feed pages within the API's ceiling, never past it. Raising FEED_WINDOW above
+  // API_WINDOW would replace our own 404 with the API's 400 on every deep page — the
+  // failure would surface as a broken listing, not as a number being wrong, so it is
+  // held here rather than in a comment.
+  it('keeps the feed window inside what the API will serve', () => {
+    expect(FEED_WINDOW).toBeLessThanOrEqual(API_WINDOW);
+  });
+
+  it('spends the whole feed window on whole pages', () => {
+    expect(FEED_WINDOW % PAGE_SIZE).toBe(0);
   });
 });
 
@@ -54,8 +92,9 @@ describe('pageCount', () => {
     expect(pageCount(21)).toBe(2);
   });
 
-  it('never advertises more pages than the API will serve', () => {
-    // /collections/python reports ~140k matches; only the first 500 pages are reachable.
+  it('never advertises more pages than a listing will serve', () => {
+    // /collections/python reports ~140k matches — seven thousand pages of them. The
+    // nav must offer MAX_PAGE, since every link past it is one this app answers 404 to.
     expect(pageCount(140_754)).toBe(MAX_PAGE);
   });
 
@@ -102,20 +141,26 @@ describe('canFetchMore', () => {
 });
 
 describe('pageExists', () => {
+  // A listing that runs out of rows BEFORE the window runs out of pages — the only
+  // shape in which this check decides anything, since a longer one is settled by
+  // pageWithinWindow instead. Derived from MAX_PAGE rather than written as a literal
+  // so that narrowing the window again cannot quietly turn these into the other case.
+  const LAST_FILLED_PAGE = MAX_PAGE - 24;
+  const ROWS = (LAST_FILLED_PAGE - 1) * PAGE_SIZE + 2; // last page holds two rows
+
   it('accepts every page the results fill', () => {
-    // 9,402 matches at 20 a page is 471 pages, the last holding two rows.
-    expect(pageExists(1, 9402)).toBe(true);
-    expect(pageExists(470, 9402)).toBe(true);
-    expect(pageExists(471, 9402)).toBe(true);
+    expect(pageExists(1, ROWS)).toBe(true);
+    expect(pageExists(LAST_FILLED_PAGE - 1, ROWS)).toBe(true);
+    expect(pageExists(LAST_FILLED_PAGE, ROWS)).toBe(true);
   });
 
-  // The real bug this guards: parsePage clamps anything up to MAX_PAGE, so
-  // /collections/remote-latam?page=472 through ?page=500 each answered 200 with no
-  // rows, a self-referencing canonical and no noindex — ~29 empty indexable URLs
-  // per collection, and one collection per landing page.
+  // The real bug this guards: /collections/remote-latam answered 200 with no rows, a
+  // self-referencing canonical and no noindex on every page between its last filled
+  // one and the window's end — empty indexable URLs, one set per collection, and one
+  // collection per landing page.
   it('rejects the pages past the last one holding rows', () => {
-    expect(pageExists(472, 9402)).toBe(false);
-    expect(pageExists(MAX_PAGE, 9402)).toBe(false);
+    expect(pageExists(LAST_FILLED_PAGE + 1, ROWS)).toBe(false);
+    expect(pageExists(MAX_PAGE, ROWS)).toBe(false);
   });
 
   // An empty listing is still a page: a collection nobody is hiring for today is a

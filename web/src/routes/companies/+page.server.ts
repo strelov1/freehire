@@ -1,7 +1,7 @@
 import { error } from '@sveltejs/kit';
 import { serverApi } from '$lib/server/api';
 import { companyFiltersFromParams, companyFiltersToParams } from '$lib/companyFilters';
-import { PAGE_SIZE, pageExists, pageOffset, parsePage } from '$lib/pagination';
+import { PAGE_SIZE, pageExists, pageOffset, pageWithinWindow, parsePage } from '$lib/pagination';
 import type { PageServerLoad } from './$types';
 
 // Server-render the requested page of companies for the current filters (the ?q
@@ -16,6 +16,9 @@ import type { PageServerLoad } from './$types';
 export const load: PageServerLoad = async ({ url, fetch }) => {
   const facets = companyFiltersToParams(companyFiltersFromParams(url.searchParams));
   const pageNumber = parsePage(url.searchParams);
+  // Before the search: a page past the window is the costliest one the URL could
+  // name, so refusing it afterwards would mean paying for it first. See FEED_WINDOW.
+  if (!pageWithinWindow(pageNumber)) error(404, 'Page not found');
   const initial = await serverApi(fetch).listCompanies('', PAGE_SIZE, pageOffset(pageNumber), facets);
   // Same rule the job feed and the collections hold: past the last page the matches
   // fill there is no page, only an empty list under a canonical of its own — the

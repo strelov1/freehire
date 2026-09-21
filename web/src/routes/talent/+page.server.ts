@@ -1,7 +1,7 @@
 import { error } from '@sveltejs/kit';
 import { serverApi } from '$lib/server/api';
 import { talentFiltersFromParams, talentFiltersToParams } from '$lib/talentFacetModel';
-import { PAGE_SIZE, pageExists, pageOffset, parsePage } from '$lib/pagination';
+import { PAGE_SIZE, pageExists, pageOffset, pageWithinWindow, parsePage } from '$lib/pagination';
 import type { PageServerLoad } from './$types';
 
 // Server-render the requested page of the Talent Network catalogue for the current
@@ -15,6 +15,9 @@ import type { PageServerLoad } from './$types';
 // Public read: no cookie forwarded.
 export const load: PageServerLoad = async ({ fetch, url }) => {
   const currentPage = parsePage(url.searchParams);
+  // Before the search: a page past the window is the costliest one the URL could
+  // name, so refusing it afterwards would mean paying for it first. See FEED_WINDOW.
+  if (!pageWithinWindow(currentPage)) error(404, 'Page not found');
 
   const params = talentFiltersToParams(talentFiltersFromParams(url.searchParams));
   params.set('limit', String(PAGE_SIZE));

@@ -1,6 +1,6 @@
 import { error } from '@sveltejs/kit';
 import { serverApi } from '$lib/server/api';
-import { pageExists, pageOffset, parsePage } from '$lib/pagination';
+import { pageExists, pageOffset, pageWithinWindow, parsePage } from '$lib/pagination';
 import type { PageServerLoad } from './$types';
 
 const LIMIT = 20;
@@ -24,6 +24,9 @@ export const load: PageServerLoad = async ({ url, fetch }) => {
   // Serve the page the URL asks for, so the <a href> pagination under the feed
   // leads somewhere: each of those links has to render its own rows.
   const pageNumber = parsePage(url.searchParams);
+  // Before the search, not after: a page past the window is the most expensive one
+  // the URL could name, and refusing it afterwards would mean paying for it first.
+  if (!pageWithinWindow(pageNumber)) error(404, 'Page not found');
   const initial = await serverApi(fetch).searchJobs(params, LIMIT, pageOffset(pageNumber));
   // See the collections loader: a page past the last one the matches fill is an
   // empty, self-canonical 200 — a soft 404 dressed as a listing. Page 1 always

@@ -37,4 +37,26 @@ describe('paged listing routes', () => {
       .map(({ file }) => file);
     expect(unguarded, 'routes reading ?page=N without checking the page exists').toEqual([]);
   });
+
+  // The second, earlier refusal. `pageExists` needs a total, so it can only answer
+  // after the search has been paid for — and the pages it would refuse are the
+  // expensive ones (see FEED_WINDOW in pagination.ts). `pageWithinWindow` answers
+  // from the number alone, which is what lets a route refuse ?page=900 without
+  // searching for it at all.
+  it('refuses a page past the feed window before searching for it', () => {
+    const unguarded = paged
+      .filter(({ source }) => !source.includes('pageWithinWindow('))
+      .map(({ file }) => file);
+    expect(unguarded, 'routes reading ?page=N without bounding it to the window').toEqual([]);
+  });
+
+  // Order is the whole point of the check above: placed after the search it still
+  // 404s, but has already spent what it exists to avoid.
+  it('bounds the page before it searches, not after', () => {
+    const lateGuard = paged
+      .filter(({ source }) => source.includes('pageWithinWindow('))
+      .filter(({ source }) => source.indexOf('pageWithinWindow(') > source.indexOf('pageOffset('))
+      .map(({ file }) => file);
+    expect(lateGuard, 'routes bounding the page only after the search').toEqual([]);
+  });
 });
