@@ -8,7 +8,31 @@
 // for a page with no unique content, and it drove a real accept-queue incident
 // (2026-08-05, ClaudeBot alone made ~108k requests to it in 12.5h). Actual thread
 // pages (/discussion, /discussion/[id]) hold real content and stay crawlable.
-export const DISALLOWED = ['/my/', '/jobs/*/discussion/new', '/companies/*/discussion/new'];
+//
+// /signin is the same shape and larger. Every sign-in entry point in the app goes
+// through `signinUrl()`, which carries the page it was clicked from in `returnTo`
+// — so the address space of /signin is the size of the catalogue, and a crawler
+// walking the job list finds a fresh /signin URL on every page. Measured
+// 2026-09-20: 127,799 fetches across 41,180 distinct /signin URLs, 10% of
+// everything the host served that day, 114,864 of them from one crawler.
+//
+// It also ROUTES AROUND the rule above it: many of those `returnTo` values point
+// at /jobs/*/discussion/new, which is disallowed and which a crawler therefore
+// cannot fetch directly — but the sign-in link to it is not, and was not.
+//
+// And the page it lands on is where the four OAuth buttons live, which is how
+// 11,032 bot-initiated authorization redirects reached Google, LinkedIn, Apple
+// and GitHub in that same day. That one is not our CPU; it is four identity
+// providers seeing this application start ~2,700 sign-ins a day that no person
+// asked for. The page carries `noindex, nofollow` for the same reason — see
+// routes/signin/+page.svelte, which is the half of this that reaches a crawler
+// that does not read robots.txt at all.
+export const DISALLOWED = [
+  '/my/',
+  '/signin',
+  '/jobs/*/discussion/new',
+  '/companies/*/discussion/new',
+];
 
 // Search crawlers additionally lose /api/, and only they. The invitation in the
 // comment block is aimed at an agent answering a question now; a search crawler is

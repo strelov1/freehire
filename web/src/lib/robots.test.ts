@@ -43,6 +43,18 @@ describe('robots.txt', () => {
     for (const agent of SEARCH_CRAWLERS) expect(parsed.get(agent)).toContain('/api/');
   });
 
+  // /signin is disallowed for the reason the new-thread form is, only larger: every
+  // job page links to it carrying that page's own URL in `returnTo`, so its address
+  // space is the size of the catalogue. Measured 2026-09-20: 127,799 fetches across
+  // 41,180 distinct /signin URLs in one day, 10% of everything the host served.
+  //
+  // Asserted on the wildcard group specifically, because that is the group the AI
+  // crawlers doing this read. A named group would leave them on the old rules.
+  it('keeps every crawler off /signin', () => {
+    expect(groups(BODY).get('*')).toContain('/signin');
+    for (const agent of SEARCH_CRAWLERS) expect(groups(BODY).get(agent)).toContain('/signin');
+  });
+
   // The API pointer is aimed at agents, which read the wildcard group — a crawler
   // that follows it is the cheap outcome the comment block argues for.
   it('still advertises the API and the sitemap', () => {

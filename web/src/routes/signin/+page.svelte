@@ -200,8 +200,20 @@
   const buttonSizeClass = 'h-12 rounded-lg px-5 text-base';
 </script>
 
+<!-- `noindex, nofollow`, and the second half is the one that matters. This page has
+     nothing to index — but it is reached by a URL carrying `returnTo`, so a crawler
+     walking the catalogue finds a distinct one on every job page, and the four OAuth
+     buttons below are what it follows next. Measured 2026-09-20: 127,799 fetches of
+     this page across 41,180 URLs, and 11,032 bot-initiated redirects into Google,
+     LinkedIn, Apple and GitHub authorization.
+     $lib/robots disallows /signin as well, and this tag is NOT a duplicate of it:
+     the crawler that did most of the above never once fetched robots.txt in five
+     days of 120k-200k requests a day, while it does fetch and parse this HTML.
+     Written into the existing head rather than through <Seo>, which would also emit
+     a canonical and an Open Graph card — the opposite of what this page wants. -->
 <svelte:head>
   <title>{titles[mode]} · freehire</title>
+  <meta name="robots" content="noindex, nofollow" />
 </svelte:head>
 
 <svelte:window onkeydown={onKeydown} />
