@@ -34,7 +34,7 @@
     "@tailwindcss/vite": "^4.3.3",
     "@testing-library/svelte": "^5.4.2",
     "@tsconfig/svelte": "^5.0.4",
-    "@types/node": "^26.4.1",
+    "@types/node": "^26.6.1",
     "@types/three": "^0.186.0",
     "@vite-pwa/sveltekit": "^1.1.0",
     "@vitest/coverage-v8": "^4.1.11",
