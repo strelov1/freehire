@@ -14,6 +14,15 @@ func TestWorkModeFromDescription(t *testing.T) {
 		{"100 percent remote", "The role is 100% remote.", "remote"},
 		{"work from anywhere", "You can work from anywhere in the EU.", "remote"},
 		{"remote position", "Remote position with occasional travel.", "remote"},
+		// The home-working register admin/VA postings actually use, added for
+		// nontech-derive-coverage — see
+		// docs/superpowers/specs/2026-09-19-nontech-derive-coverage-design.md.
+		{"work from home", "This is a work from home position.", "remote"},
+		{"work-from-home", "We are hiring for a work-from-home role.", "remote"},
+		{"home-based", "This is a home-based position covering the East Coast.", "remote"},
+		{"home based", "This is a home based position covering the East Coast.", "remote"},
+		{"telecommute", "Employees may telecommute from anywhere in the US.", "remote"},
+		{"virtual position", "This is a virtual position with flexible hours.", "remote"},
 		{"hybrid role", "This is a hybrid role based in Berlin.", "hybrid"},
 		{"hybrid working", "We offer hybrid working arrangements.", "hybrid"},
 		{"days in the office", "You will spend 3 days in the office each week.", "hybrid"},

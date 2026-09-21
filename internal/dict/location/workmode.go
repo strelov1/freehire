@@ -29,6 +29,10 @@ var descriptionWorkModePhrases = []struct {
 		"remote first", "work from anywhere", "work-from-anywhere", "remote position",
 		"remote role", "remote job", "remote opportunity", "remote vacancy",
 		"this position is remote", "role is remote", "position is remote",
+		// The home-working register administrative and virtual-assistant postings
+		// actually use, alongside the corporate register above (nontech-derive-coverage).
+		"work from home", "work-from-home", "home-based", "home based", "telecommute",
+		"virtual position",
 	}},
 	{"onsite", []string{
 		"on-site only", "onsite only", "on site only", "fully on-site", "fully onsite",

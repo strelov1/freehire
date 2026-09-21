@@ -1641,6 +1641,56 @@ func TestParse_ServiceSectors(t *testing.T) {
 	}
 }
 
+// TestParse_AdminVAAndImmigration covers the nontech-derive-coverage wave: the
+// abbreviated/coordinator/specialist spellings of administrative support work, the
+// virtual-assistant and front-desk titles, and the immigration-practice family. See
+// docs/superpowers/specs/2026-09-19-nontech-derive-coverage-design.md.
+//
+// The bare alias "assistant" is deliberately never added — in live titles the word
+// states a GRADE ("Assistant Controller") or qualifies a non-administrative trade
+// ("Maintenance Assistant") far more often than it names admin work. Only qualified
+// phrases earn an entry, so the grade-word and trade tail stays unresolved rather than
+// gaining a categoryNone sentinel it does not need.
+func TestParse_AdminVAAndImmigration(t *testing.T) {
+	cases := []struct {
+		title        string
+		wantCategory string
+		why          string
+	}{
+		// Administration: abbreviated and coordinator/specialist spellings.
+		{"Admin Assistant", "administration", ""},
+		{"Senior Admin Assistant", "administration", "a grade prefix must not block the match"},
+		{"Administrative Coordinator", "administration", ""},
+		{"Administrative Specialist", "administration", ""},
+		{"Front Desk Agent", "administration", ""},
+		{"Front Desk Coordinator", "administration", ""},
+		{"Virtual Assistant", "administration", ""},
+		{"Executive Virtual Assistant", "administration", ""},
+
+		// The bare-"assistant" exclusion: grade words and non-administrative trades
+		// must stay unresolved, exactly as they are today.
+		{"Assistant Controller", "", "grade word, not a category"},
+		{"Assistant Superintendent", "", "grade word, not a category"},
+		{"Assistant Director", "", "grade word, not a category"},
+		{"Maintenance Assistant", "", "a trade, not admin work"},
+		{"Clinic Assistant", "", "a trade, not admin work"},
+		{"Laboratory Assistant", "", "a trade, not admin work"},
+
+		// Legal: the immigration-practice family.
+		{"Immigration Paralegal", "legal", ""},
+		{"Immigration Specialist", "legal", ""},
+		{"Immigration Assistant", "legal", "must not fall through to administration"},
+		{"Immigration Consultant", "legal", ""},
+		{"Immigration Case Manager", "legal", "must not be stolen by the terminal manager fall-through"},
+	}
+
+	for _, tc := range cases {
+		if got := Parse(tc.title).Category; got != tc.wantCategory {
+			t.Errorf("Parse(%q).Category = %q, want %q %s", tc.title, got, tc.wantCategory, tc.why)
+		}
+	}
+}
+
 // TestParse_AnalystIsQualifiedOrNothing pins the replacement of the bare "analyst"
 // fall-through with the qualified forms the catalogue actually carries.
 //

@@ -888,4 +888,10 @@ var registry = []string{
 	"substance-designer",
 	"s3",
 	"soap",
+	"calendly",
+	"clio",
+	"freshdesk",
+	"i-129",
+	"i-130",
+	"uscis",
 }

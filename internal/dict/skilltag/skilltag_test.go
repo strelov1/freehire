@@ -1261,6 +1261,29 @@ func TestParse_SalesAndSupportDoNotCorroborate(t *testing.T) {
 	})
 }
 
+// TestParse_SupportSchedulingLegalPracticeTooling covers the nontech-derive-coverage
+// wave: the tooling administrative, customer-support and immigration-practice
+// postings actually name. See
+// docs/superpowers/specs/2026-09-19-nontech-derive-coverage-design.md.
+func TestParse_SupportSchedulingLegalPracticeTooling(t *testing.T) {
+	cases := []struct{ name, in, want string }{
+		{"freshdesk", "Support tickets are handled in Freshdesk.", "freshdesk"},
+		{"calendly", "Interviews are booked via Calendly links.", "calendly"},
+		{"clio", "Manage client files and billing in Clio.", "clio"},
+		{"uscis", "Coordinate with USCIS on pending petitions.", "uscis"},
+		{"form i-129", "Prepare and file Form I-129 petitions.", "i-129"},
+		{"form i-130", "Prepare and file Form I-130 petitions.", "i-130"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := Parse(tc.in)
+			if !slices.Contains(got, tc.want) {
+				t.Errorf("Parse(%q) = %v, want %q", tc.in, got, tc.want)
+			}
+		})
+	}
+}
+
 // TestParse_MarketingSeparatorInsensitive checks that the separator rule the
 // matcher already guarantees holds for the new multi-word canonicals too — the
 // dictionary lists only the space form, so the hyphen and underscore spellings

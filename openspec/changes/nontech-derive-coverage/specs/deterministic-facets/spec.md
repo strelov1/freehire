@@ -22,16 +22,12 @@ overwrites either.
   description also states "occasional telecommute days available"
 - **THEN** the derived `work_mode` stays `hybrid`
 
-### Requirement: A bounded travel-perk phrase does not assert remote work
-
-"work from home" SHALL be evaluated as a `travelPerkPhrases` guard candidate,
-the same treatment already applied to "work from anywhere" (freehire#2696):
-when the phrase appears inside a bounded perk/benefit clause rather than as a
-statement of work arrangement, it SHALL NOT resolve `work_mode` to `remote`.
-
-#### Scenario: A benefit-list mention does not assert remote work
-
-- **WHEN** a description states "flexible PTO, occasional work from home days,
-  and a home office stipend" as part of a benefits list, with no other
-  work-arrangement statement
-- **THEN** the phrase does not resolve `work_mode` to `remote`
+<!--
+Deliberately not a requirement yet: whether "work from home" also needs a
+`travelPerkPhrases` guard (the same treatment "work from anywhere" carries
+for freehire#2696, since the phrase also appears in bounded benefit-list
+prose). The design record requires deciding that from a sample of live
+descriptions, not by assumption — see design.md's Migration Plan. Until that
+sample is pulled and the decision made, "work from home" resolves `remote`
+unconditionally like every other phrase in the list above.
+-->

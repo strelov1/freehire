@@ -970,6 +970,14 @@ var categoryTable = []aliasEntry{
 	{"data privacy manager", "legal"},
 	{"contracts administrator", "legal"},
 	{"contract administrator", "legal"},
+	// Immigration practice: must precede the bare "manager" fall-through
+	// ("Immigration Case Manager") and the administration block ("Immigration
+	// Assistant") so neither steals this family.
+	{"immigration paralegal", "legal"},
+	{"immigration specialist", "legal"},
+	{"immigration assistant", "legal"},
+	{"immigration consultant", "legal"},
+	{"immigration case manager", "legal"},
 	{"юрист", "legal"},
 	{"юрисконсульт", "legal"},
 	{"корпоративный юрист", "legal"},
@@ -1582,6 +1590,17 @@ var categoryTable = []aliasEntry{
 	{"medical secretary", "administration"},
 	{"secretary", "administration"},
 	{"data entry", "administration"},
+	// The abbreviated and coordinator/specialist spellings, plus the virtual-assistant
+	// and front-desk titles a broad ATS crawl's admin/VA segment actually carries. The
+	// bare alias "assistant" is deliberately never added: in live titles it states a
+	// GRADE ("Assistant Controller") or qualifies a non-administrative trade
+	// ("Maintenance Assistant", "Clinic Assistant") far more often than it names admin
+	// work, so only these qualified phrases earn an entry.
+	{"admin assistant", "administration"},
+	{"administrative coordinator", "administration"},
+	{"administrative specialist", "administration"},
+	{"front desk", "administration"},
+	{"virtual assistant", "administration"},
 
 	// PERSONAL AND FACILITY SERVICES.
 	{"master stylist", "personal_services"},
