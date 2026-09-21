@@ -29,6 +29,6 @@ describe('PlanLimitLink', () => {
   it('defaults an unresolved reader to the free CTA rather than assuming they already paid', () => {
     user.current = null;
     render(PlanLimitLink);
-    expect(screen.queryByRole('link', { name: 'Upgrade to Pro — $5/mo' })).not.toBeNull();
+    screen.getByRole('link', { name: 'Upgrade to Pro — $5/mo' });
   });
 });

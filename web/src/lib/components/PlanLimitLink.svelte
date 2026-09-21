@@ -13,12 +13,11 @@
   // to Pro" would be a wrong sentence to show somebody who already bought it, so they keep
   // the plain link instead.
   const isFree = $derived((currentUser()?.tier ?? 'free') === 'free');
+  const planHref = resolve('/my/plan');
 </script>
 
 {#if isFree}
-  <Button href={resolve('/my/plan')} variant="primary" size="sm">Upgrade to Pro — $5/mo</Button>
+  <Button href={planHref} variant="primary" size="sm">Upgrade to Pro — $5/mo</Button>
 {:else}
-  <a href={resolve('/my/plan')} class="text-xs font-medium underline underline-offset-4">
-    See your plan
-  </a>
+  <a href={planHref} class="text-xs font-medium underline underline-offset-4">See your plan</a>
 {/if}
