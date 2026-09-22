@@ -4,8 +4,9 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/strelov1/freehire/internal/dict/vocab"
 	"github.com/wawan93/gojev"
+
+	"github.com/strelov1/freehire/internal/dict/vocab"
 )
 
 // JevProvider implements Provider using the Typesafe AI Jev model.

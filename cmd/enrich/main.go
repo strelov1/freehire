@@ -9,11 +9,12 @@ import (
 	"context"
 	"log"
 
+	"github.com/wawan93/gojev"
+
 	"github.com/strelov1/freehire/internal/ai/enrich"
 	"github.com/strelov1/freehire/internal/platform/config"
 	"github.com/strelov1/freehire/internal/platform/llm"
 	"github.com/strelov1/freehire/internal/platform/worker"
-	"github.com/wawan93/gojev"
 )
 
 func main() {
