@@ -46,6 +46,7 @@ require (
 	github.com/testcontainers/testcontainers-go/modules/postgres v0.44.0
 	github.com/tmc/langchaingo v0.1.14
 	github.com/valyala/fasthttp v1.73.0
+	github.com/wawan93/gojev v0.1.0
 	github.com/yuin/goldmark v1.8.6
 	golang.org/x/crypto v0.57.0
 	golang.org/x/image v0.45.0
@@ -175,7 +176,6 @@ require (
 	github.com/tklauser/go-sysconf v0.4.0 // indirect
 	github.com/tklauser/numcpus v0.12.0 // indirect
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
-	github.com/wawan93/gojev v0.1.0 // indirect
 	github.com/xhit/go-str2duration/v2 v2.1.0 // indirect
 	github.com/yosida95/uritemplate/v3 v3.0.2 // indirect
 	github.com/yuin/gopher-lua v1.1.1 // indirect
