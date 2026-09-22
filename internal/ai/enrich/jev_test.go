@@ -10,6 +10,7 @@ import (
 	"github.com/wawan93/gojev"
 )
 
+// TestToChoiceMap tests converting vocabulary slices to choice maps with identity mappings and null fallback.
 func TestToChoiceMap(t *testing.T) {
 	values := []string{"foo", "bar"}
 	m := toChoiceMap(values)
@@ -22,6 +23,7 @@ func TestToChoiceMap(t *testing.T) {
 	}
 }
 
+// TestToChoiceMapWithGloss tests converting vocabulary values with explanatory gloss definitions.
 func TestToChoiceMapWithGloss(t *testing.T) {
 	values := []string{"product", "agency"}
 	gloss := map[string]string{"product": "Builds own product"}
@@ -38,6 +40,7 @@ func TestToChoiceMapWithGloss(t *testing.T) {
 	}
 }
 
+// TestJevProvider_Enrich_Success tests successful job enrichment extraction from Jev SystemOne response.
 func TestJevProvider_Enrich_Success(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		resp := map[string]any{
@@ -115,6 +118,7 @@ func TestJevProvider_Enrich_Success(t *testing.T) {
 	}
 }
 
+// TestJevProvider_Enrich_NegativeVisaAndNullChoices tests handling of null choices and negative noul values.
 func TestJevProvider_Enrich_NegativeVisaAndNullChoices(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		resp := map[string]any{
@@ -171,6 +175,7 @@ func TestJevProvider_Enrich_NegativeVisaAndNullChoices(t *testing.T) {
 	}
 }
 
+// TestJevProvider_Enrich_ServerError tests error propagation when the Jev upstream server returns an error.
 func TestJevProvider_Enrich_ServerError(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "internal server error", http.StatusInternalServerError)

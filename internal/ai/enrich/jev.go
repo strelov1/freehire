@@ -95,6 +95,7 @@ func (p *JevProvider) Enrich(ctx context.Context, job JobInput) (Enrichment, err
 	return e, nil
 }
 
+// toChoiceMap maps each allowed vocabulary string to itself as JSONContent, with a fallback for "null".
 func toChoiceMap(values []string) map[string]gojev.JSONContent {
 	m := make(map[string]gojev.JSONContent)
 	for _, v := range values {
@@ -104,6 +105,7 @@ func toChoiceMap(values []string) map[string]gojev.JSONContent {
 	return m
 }
 
+// toChoiceMapWithGloss maps allowed vocabulary values to descriptive gloss text if available, with a fallback for "null".
 func toChoiceMapWithGloss(values []string, gloss map[string]string) map[string]gojev.JSONContent {
 	m := make(map[string]gojev.JSONContent)
 	for _, v := range values {

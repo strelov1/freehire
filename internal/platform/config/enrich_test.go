@@ -5,6 +5,7 @@ import (
 	"testing"
 )
 
+// TestLoadEnrich_missingRequiredFailsFast verifies that missing all required LLM settings fails fast.
 func TestLoadEnrich_missingRequiredFailsFast(t *testing.T) {
 	t.Setenv("LLM_BASE_URL", "")
 	t.Setenv("LLM_API_KEY", "")
@@ -22,6 +23,7 @@ func TestLoadEnrich_missingRequiredFailsFast(t *testing.T) {
 	}
 }
 
+// TestLoadEnrich_namesOnlyTheMissingOne verifies that error messages name only the missing environment variables.
 func TestLoadEnrich_namesOnlyTheMissingOne(t *testing.T) {
 	t.Setenv("LLM_BASE_URL", "http://gateway:4000/v1")
 	t.Setenv("LLM_API_KEY", "sk-test")
@@ -40,6 +42,7 @@ func TestLoadEnrich_namesOnlyTheMissingOne(t *testing.T) {
 	}
 }
 
+// TestLoadEnrich_typesafeAPIKeySkipsLLMRequirement verifies that TYPESAFE_API_KEY bypasses LLM settings requirement.
 func TestLoadEnrich_typesafeAPIKeySkipsLLMRequirement(t *testing.T) {
 	t.Setenv("LLM_BASE_URL", "")
 	t.Setenv("LLM_API_KEY", "")

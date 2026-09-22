@@ -32,7 +32,8 @@ type Enrich struct {
 }
 
 // LoadEnrich reads enrichment configuration from the environment. It fails fast,
-// naming every missing required LLM setting, so a misconfigured run enriches nothing.
+// naming every missing required LLM setting unless TYPESAFE_API_KEY is provided,
+// so a misconfigured run enriches nothing.
 func LoadEnrich() (Enrich, error) {
 	e := Enrich{
 		LLM:          LoadLLM(),
