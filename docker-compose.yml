@@ -114,6 +114,7 @@ services:
       # Optional: the assistant's own model, chosen for tool calling rather than
       # cheap one-shot extraction. Falls back to LLM_MODEL.
       ASSISTANT_MODEL: "${ASSISTANT_MODEL:-}"
+      TYPESAFE_API_KEY: "${TYPESAFE_API_KEY:-}"
       # Bullets allowed per experience or project. Unset (or below 1) means 20.
       # The agent reads the live value into its cv_edit tool description, so
       # raising this needs no prompt change.

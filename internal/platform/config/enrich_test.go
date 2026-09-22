@@ -9,6 +9,7 @@ func TestLoadEnrich_missingRequiredFailsFast(t *testing.T) {
 	t.Setenv("LLM_BASE_URL", "")
 	t.Setenv("LLM_API_KEY", "")
 	t.Setenv("LLM_MODEL", "")
+	t.Setenv("TYPESAFE_API_KEY", "")
 
 	_, err := LoadEnrich()
 	if err == nil {
@@ -25,6 +26,7 @@ func TestLoadEnrich_namesOnlyTheMissingOne(t *testing.T) {
 	t.Setenv("LLM_BASE_URL", "http://gateway:4000/v1")
 	t.Setenv("LLM_API_KEY", "sk-test")
 	t.Setenv("LLM_MODEL", "")
+	t.Setenv("TYPESAFE_API_KEY", "")
 
 	_, err := LoadEnrich()
 	if err == nil {
@@ -35,6 +37,21 @@ func TestLoadEnrich_namesOnlyTheMissingOne(t *testing.T) {
 	}
 	if strings.Contains(err.Error(), "LLM_BASE_URL") || strings.Contains(err.Error(), "LLM_API_KEY") {
 		t.Errorf("error %q should not name the set vars", err.Error())
+	}
+}
+
+func TestLoadEnrich_typesafeAPIKeySkipsLLMRequirement(t *testing.T) {
+	t.Setenv("LLM_BASE_URL", "")
+	t.Setenv("LLM_API_KEY", "")
+	t.Setenv("LLM_MODEL", "")
+	t.Setenv("TYPESAFE_API_KEY", "jev-test-key")
+
+	got, err := LoadEnrich()
+	if err != nil {
+		t.Fatalf("expected LoadEnrich to succeed with TYPESAFE_API_KEY, got: %v", err)
+	}
+	if got.TypesafeAPIKey != "jev-test-key" {
+		t.Errorf("got TypesafeAPIKey = %q, want %q", got.TypesafeAPIKey, "jev-test-key")
 	}
 }
 
