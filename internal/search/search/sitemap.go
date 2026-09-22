@@ -117,6 +117,13 @@ func (c *Client) sitemapPage(ctx context.Context, idx meilisearch.IndexManager, 
 	if err := resp.Results.DecodeInto(&raw); err != nil {
 		return nil, 0, fmt.Errorf("search: sitemap page: decode: %w", err)
 	}
+	return sitemapDocs(raw, slugField), resp.Total, nil
+}
+
+// sitemapDocs projects decoded index rows onto the sitemap's slim shape. Shared by
+// both readers because they differ only in how they ASK the engine — one pages
+// /documents, the other searches with a sort — and not at all in what a row means.
+func sitemapDocs(raw []map[string]any, slugField string) []SitemapDocument {
 	docs := make([]SitemapDocument, 0, len(raw))
 	for _, r := range raw {
 		slug, _ := r[slugField].(string)
@@ -135,7 +142,7 @@ func (c *Client) sitemapPage(ctx context.Context, idx meilisearch.IndexManager, 
 		}
 		docs = append(docs, doc)
 	}
-	return docs, resp.Total, nil
+	return docs
 }
 
 // ListSitemapPage returns one offset-addressed page of the live jobs index, narrowed
@@ -143,6 +150,58 @@ func (c *Client) sitemapPage(ctx context.Context, idx meilisearch.IndexManager, 
 // sitemapPage.
 func (c *Client) ListSitemapPage(ctx context.Context, offset, limit int) ([]SitemapDocument, int64, error) {
 	return c.sitemapPage(ctx, c.facet, jobSlugField, jobSitemapFilter, offset, limit)
+}
+
+// freshSitemapSort orders the fresh job sub-sitemap. `created_at`, not `posted_at`:
+// the question a crawler is being answered is "what is new HERE", and a posting an
+// employer published months ago but this catalogue first saw an hour ago is new here.
+// Sorting by the source's own date would bury exactly those behind repostings of
+// things already crawled.
+//
+// The attribute is already in facetSettings().SortableAttributes, so this needs no
+// settings patch and no reindex — the "settings must reach the LIVE index before the
+// binary" hazard documented there does not apply, the same way jobSitemapFilter's
+// attributes do not raise it.
+const freshSitemapSort = "created_at:desc"
+
+// ListFreshSitemapPage returns one offset-addressed page of the live jobs index
+// narrowed to jobSitemapFilter and ordered newest first, along with how many
+// documents match.
+//
+// It searches rather than paging documents, and that is the entire point of its
+// existence: Meilisearch's /documents route — which ListSitemapPage uses, and which is
+// what lets the paged sub-sitemaps address any offset in a 700k-document index
+// cheaply — returns documents in internal storage order and accepts no sort. Sorting
+// exists only on /search. So the two readers are not duplicates of each other: one
+// buys full coverage at the price of arbitrary order, the other buys order at the
+// price of a bounded window, and web-ssr-seo asks for both.
+//
+// The window is bounded by its CALLER (see the handler's freshSitemapMaxOffset), not
+// here, because the bound is a statement about crawl budget and response time rather
+// than about the index: measured on prod 2026-09-22, a sorted page costs 2ms at
+// offset 0, 527ms at 10,000 and 2.0s at 30,000 warm, against the SSR route's 10s
+// fetch timeout.
+func (c *Client) ListFreshSitemapPage(ctx context.Context, offset, limit int) ([]SitemapDocument, int64, error) {
+	resp, err := c.facet.SearchWithContext(ctx, "", &meilisearch.SearchRequest{
+		Offset:               int64(offset),
+		Limit:                int64(limit),
+		Filter:               jobSitemapFilter,
+		Sort:                 []string{freshSitemapSort},
+		AttributesToRetrieve: []string{jobSlugField, lastmodField},
+	})
+	if err != nil {
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return nil, 0, fmt.Errorf("search: fresh sitemap page: %w", ctxErr)
+		}
+		return nil, 0, fmt.Errorf("search: fresh sitemap page: %w", err)
+	}
+	// Decoded through a map for the same reason sitemapPage does it: the slug
+	// attribute is named per index, so a struct tag could only ever match one.
+	var raw []map[string]any
+	if err := resp.Hits.DecodeInto(&raw); err != nil {
+		return nil, 0, fmt.Errorf("search: fresh sitemap page: decode: %w", err)
+	}
+	return sitemapDocs(raw, jobSlugField), resp.EstimatedTotalHits, nil
 }
 
 // ListCompanySitemapPage is ListSitemapPage over the companies index, unfiltered: what

@@ -657,14 +657,16 @@ func Register(app *fiber.App, cfg Config) {
 	// Both sitemaps page an index, so they are wired here rather than beside the
 	// Postgres-backed handlers above.
 	var sitemapJobs, sitemapCompanies sitemapLister
+	var sitemapFreshJobs freshSitemapLister
 	if cfg.Search != nil {
 		jobSearch = cfg.Search
 		facets = cfg.Search
 		companySearch = cfg.Search
 		sitemapJobs = cfg.Search
 		sitemapCompanies = companySitemapIndex{c: cfg.Search}
+		sitemapFreshJobs = cfg.Search
 	}
-	sitemapH := newSitemapHandlers(sitemapJobs, sitemapCompanies)
+	sitemapH := newSitemapHandlers(sitemapJobs, sitemapCompanies, sitemapFreshJobs)
 	searchH := newSearchHandlers(jobSearch, facets, queries, cfg.Cache, profileSvc)
 	// The OJCP read surface. It shares the search backend and the store with the handlers
 	// above rather than holding its own: an agent's question and a browser's must reach the

@@ -22,6 +22,15 @@ type sitemapLister interface {
 	CountSitemapDocuments(ctx context.Context) (int64, error)
 }
 
+// freshSitemapLister is the jobs index's OTHER read: one page ordered newest first.
+// Separate from sitemapLister, not a third method on it, because only the jobs index
+// offers it — the companies index has no such ordering and no caller asking for one,
+// so folding it in would oblige companySitemapIndex to implement a method that would
+// be a lie.
+type freshSitemapLister interface {
+	ListFreshSitemapPage(ctx context.Context, offset, limit int) ([]search.SitemapDocument, int64, error)
+}
+
 // companySitemapIndex adapts the client's companies-index methods to sitemapLister.
 type companySitemapIndex struct{ c *search.Client }
 
@@ -44,10 +53,11 @@ func (a companySitemapIndex) CountSitemapDocuments(ctx context.Context) (int64, 
 type sitemapHandlers struct {
 	jobs      sitemapLister
 	companies sitemapLister
+	freshJobs freshSitemapLister
 }
 
-func newSitemapHandlers(jobs, companies sitemapLister) *sitemapHandlers {
-	return &sitemapHandlers{jobs: jobs, companies: companies}
+func newSitemapHandlers(jobs, companies sitemapLister, freshJobs freshSitemapLister) *sitemapHandlers {
+	return &sitemapHandlers{jobs: jobs, companies: companies, freshJobs: freshJobs}
 }
 
 // register mounts the four public sitemap reads behind the shared public-read budget.
@@ -65,6 +75,7 @@ func newSitemapHandlers(jobs, companies sitemapLister) *sitemapHandlers {
 func (h *sitemapHandlers) register(api fiber.Router, mw middleware) {
 	readLimit := publicReadLimiter(mw.throttler)
 	api.Get("/jobs/sitemap", readLimit, h.JobSitemap)
+	api.Get("/jobs/sitemap/fresh", readLimit, h.FreshJobSitemap)
 	api.Get("/jobs/sitemap/boundaries", readLimit, h.JobSitemapBoundaries)
 	api.Get("/companies/sitemap", readLimit, h.CompanySitemap)
 	api.Get("/companies/sitemap/boundaries", readLimit, h.CompanySitemapBoundaries)
@@ -177,6 +188,45 @@ func serveBoundaries(c *fiber.Ctx, idx sitemapLister, fallback int) error {
 // JobSitemap serves one page of job sitemap entries from the jobs index.
 func (h *sitemapHandlers) JobSitemap(c *fiber.Ctx) error {
 	return servePage(c, h.jobs, jobSitemapChunk)
+}
+
+// freshSitemapMaxOffset is the last offset the fresh job sub-sitemap serves — four
+// pages of jobSitemapChunk, so 40,000 URLs, about 3.5 days of this catalogue's intake
+// (the live index held 33,929 eligible postings created in the last 3 days when this
+// was sized). A crawler that skips two days still misses nothing.
+//
+// It is a BOUND, not a page count, and it is enforced here rather than left to the
+// sitemap index, because the sorted read behind it gets more expensive with depth
+// while the paged read does not: measured on prod 2026-09-22, a sorted page costs 2ms
+// at offset 0, 527ms at 10,000 and 2.0s at 30,000 warm (7.1s cold) against the SSR
+// route's 10s fetch timeout. Without a server-side bound a hand-written
+// `?offset=500000` would reach a depth nobody has measured, on a public route.
+const freshSitemapMaxOffset = 3 * jobSitemapChunk
+
+// FreshJobSitemap serves one page of the newest-first job sub-sitemap.
+//
+// Past freshSitemapMaxOffset it answers an empty page WITHOUT asking the index. Both
+// halves matter: empty rather than an error, because a crawler holding a stale sitemap
+// index must not be answered with a failure (the rule servePage already follows); and
+// without asking, because the refusal exists precisely to keep a sorted read off a
+// depth its cost was never measured at.
+func (h *sitemapHandlers) FreshJobSitemap(c *fiber.Ctx) error {
+	if h.freshJobs == nil {
+		return fiber.NewError(fiber.StatusServiceUnavailable, "search is not available")
+	}
+	limit, offset := pageParamsBounded(c, jobSitemapChunk, sitemapMaxURLs)
+	if offset > freshSitemapMaxOffset {
+		return c.JSON(fiber.Map{"data": []sitemapEntry{}})
+	}
+	docs, _, err := h.freshJobs.ListFreshSitemapPage(c.Context(), offset, limit)
+	if err != nil {
+		return err
+	}
+	entries := make([]sitemapEntry, len(docs))
+	for i, d := range docs {
+		entries[i] = sitemapEntry{Slug: d.Slug, UpdatedAt: d.UpdatedAt}
+	}
+	return c.JSON(fiber.Map{"data": entries})
 }
 
 // JobSitemapBoundaries lists the offset opening each page of the jobs index.

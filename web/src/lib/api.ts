@@ -1149,6 +1149,18 @@ export function createApi(
     return requestData<SitemapEntry[]>(`/api/v1/jobs/sitemap?offset=${offset}&limit=${limit}`);
   }
 
+  /** One page of the FRESHEST-first job sub-sitemap, newest first.
+   *
+   *  A separate endpoint from sitemapJobs rather than a flag on it: the two read the
+   *  same index through different engine routes — one pages documents (any offset,
+   *  cheap, no ordering available), the other searches with a sort (ordered, bounded
+   *  to a shallow window) — so they cannot share a cost model or a bound. */
+  async function sitemapJobsFresh(offset: number, limit: number): Promise<SitemapEntry[]> {
+    return requestData<SitemapEntry[]>(
+      `/api/v1/jobs/sitemap/fresh?offset=${offset}&limit=${limit}`,
+    );
+  }
+
   /** The offset opening each `chunk`-sized page of jobs — every sub-sitemap's cursor,
    *  including the first (0). */
   async function sitemapJobBoundaries(chunk: number): Promise<number[]> {
@@ -3039,6 +3051,7 @@ export function createApi(
     insightsCompanies,
     marketPulse,
     sitemapJobs,
+    sitemapJobsFresh,
     sitemapJobBoundaries,
     sitemapCompanies,
     sitemapCompanyBoundaries,

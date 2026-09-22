@@ -30,6 +30,67 @@ export const SITEMAP_CHUNK = 10000;
 // 10s fetch timeout under load — see the backend constant for the trade.
 export const JOB_SITEMAP_CHUNK = 10000;
 
+// How many chunks the FRESHEST-first job sub-sitemap spans. Must not exceed the
+// backend's freshSitemapMaxOffset tiling (`3 * jobSitemapChunk`, i.e. four pages):
+// past that bound the API answers an empty page on purpose, so a fifth entry here
+// would put an empty file in the index rather than extending the window.
+//
+// Four chunks is 40,000 URLs, about 3.5 days of this catalogue's intake, so a crawler
+// that skips two days still misses nothing. The bound exists because this file is
+// SORTED, and unlike the paged chunks a sorted read gets more expensive with depth —
+// see the backend constant for the measurements.
+export const FRESH_SITEMAP_CHUNKS = 4;
+
+/** The offset opening each chunk of the freshest-first job sub-sitemap.
+ *
+ *  Derived from the two constants rather than written out, so the tiling cannot drift
+ *  from the page size the API serves: a hard-coded list would survive a change to
+ *  JOB_SITEMAP_CHUNK and then address offsets that fall between pages. */
+export function freshJobSitemapOffsets(): number[] {
+  return Array.from({ length: FRESH_SITEMAP_CHUNKS }, (_, i) => i * JOB_SITEMAP_CHUNK);
+}
+
+/** Every `<loc>` of the sitemap index, in the order a crawler reads them.
+ *
+ *  A pure function rather than inline in the route because the ORDER is a requirement
+ *  (web-ssr-seo: the freshest-first sub-sitemaps precede the paged ones) and an order
+ *  built inside a route handler has nothing to assert on but a rendered XML string.
+ *  The route still owns the two boundary reads; this owns what to do with them. */
+export function sitemapIndexLocs(params: {
+  origin: string;
+  roleCategorySlugs: string[];
+  jobOffsets: number[];
+  companyOffsets: number[];
+}): string[] {
+  const { origin, roleCategorySlugs, jobOffsets, companyOffsets } = params;
+  const locs = [`${origin}/sitemap-pages.xml`, `${origin}/sitemap-insights.xml`];
+  // The skills glossary is one file rather than a shard per letter: it is under a
+  // thousand URLs and enumerating it reads nothing, so there is nothing to shard away
+  // from — unlike the role landings below, where each shard pays its own facet call.
+  locs.push(`${origin}/sitemap-skills.xml`);
+  // One role sub-sitemap per category. The category list is a compile-time constant,
+  // so naming all of them costs no read here — each shard pays its own single facet
+  // call when a crawler actually follows it.
+  for (const slug of roleCategorySlugs) {
+    locs.push(`${origin}/sitemap-roles.xml?category=${slug}`);
+  }
+  // The freshest-first job chunks come BEFORE the paged ones. Position in a sitemap
+  // index binds no crawler, but it is the only signal the format offers and it costs
+  // nothing — and the paged chunks that follow are in arbitrary order, so without this
+  // a crawler has no way at all to find what is new.
+  for (const offset of freshJobSitemapOffsets()) {
+    locs.push(`${origin}/sitemap-jobs-fresh.xml?offset=${offset}`);
+  }
+  // Both cursor lists already include the opening 0, so they are listed as they come.
+  for (const offset of jobOffsets) {
+    locs.push(`${origin}/sitemap-jobs.xml?offset=${offset}`);
+  }
+  for (const offset of companyOffsets) {
+    locs.push(`${origin}/sitemap-companies.xml?offset=${offset}`);
+  }
+  return locs;
+}
+
 /** The site's static, always-present pages (relative paths). */
 export const STATIC_PATHS = [
   '/',
