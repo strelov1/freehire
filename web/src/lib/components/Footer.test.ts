@@ -40,7 +40,12 @@ describe('Footer compact mode', () => {
 
   it('skips the store buttons when compact — they sit in the same guarded block', () => {
     const guardEndAt = SOURCE.indexOf('{/if}', SOURCE.indexOf('productHunt.href'));
-    expect(SOURCE.indexOf('{#each stores as store')).toBeLessThan(guardEndAt);
+    const eachAt = SOURCE.indexOf('{#each stores as store');
+    // Asserted before the comparison, not folded into it: indexOf answers -1 when the
+    // block is gone, and -1 is less than any offset — so deleting the store buttons
+    // outright would have satisfied "they are inside the guard".
+    expect(eachAt, 'expected the store buttons to be rendered at all').toBeGreaterThan(-1);
+    expect(eachAt).toBeLessThan(guardEndAt);
   });
 
   it("only borders the bottom bar's own top when compact (no divider from a section that isn't rendered)", () => {

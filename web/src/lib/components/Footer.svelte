@@ -101,14 +101,15 @@
   };
 
   // Where the product can be installed, beside the Product Hunt badge rather than in
-  // a link column: these are downloads, not navigation, and a store badge among a
+  // a link column: these are downloads, not navigation, and a store button among a
   // list of page links reads as neither.
   //
   // Drawn from the design system's own marks and tokens instead of each store's
   // official badge artwork — the two vendors' badges disagree about height, corner
   // radius and dark-mode treatment, so side by side they look like two pasted
-  // screenshots; one shape in the site's own colours matches both the Product Hunt
-  // badge's height and the footer around it.
+  // screenshots. One shape in the site's own colours matches the footer around it
+  // and follows the theme without a second asset per mode; ProviderIcon already
+  // ships both marks, so this needs no image at all.
   //
   // The App Store URL carries NO country segment on purpose. The listing's share link
   // is `/br/app/...`, which pins every visitor to the Brazilian storefront; without
@@ -184,11 +185,9 @@
       </nav>
 
       <!-- The badge and the two store buttons share one row, centred rather than
-           stretched: the badge is a fixed 54px image and the buttons sit on the
-           spacing scale (h-14, 56px), which check:tokens holds them to — an arbitrary
-           h-[54px] matching the image exactly is the kind of one-off the token
-           coverage check exists to refuse, and 1px above and below is invisible.
-           Wrapping, so a narrow viewport stacks them rather than shrinking any. -->
+           stretched: the badge is a fixed 54px image, the buttons sit on the spacing
+           scale at h-14 (56px), and 1px above and below is invisible. Wrapping, so a
+           narrow viewport stacks them rather than shrinking any. -->
       <div class="mt-8 flex flex-wrap items-center gap-3">
         <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- external Product Hunt page opened in a new tab; not an internal route -->
         <a href={productHunt.href} target="_blank" rel="noopener noreferrer" class="inline-block">
