@@ -139,7 +139,7 @@ the offered way to apply, and the quiet strip under the title carries the other 
 - **THEN** Discussion, Report, Save and Add-to-list render to the right of the content tabs
 - **AND** they share the single rule drawn under the tab row
 
-#### Scenario: The phone's sticky bar carries two controls
+#### Scenario: The phone's sticky bar carries the primary control
 
 - **WHEN** the page renders narrower than `lg` on a posting whose auto-apply can be started
 - **THEN** the sticky bottom bar carries `Tailor my CV` and the auto-apply button, with its `Pro` marker
@@ -177,12 +177,12 @@ Relabelling changes only the button's word. Its destination, its `nofollow noope
 rel, its new-tab target, and the apply-intent tracking and "Did you apply?" prompt its click
 raises SHALL be unchanged.
 
-#### Scenario: Relabelled beside a clickable auto-apply
+#### Scenario: Demoted beside a clickable auto-apply
 
 - **WHEN** auto-apply is offered and clickable for the posting
 - **THEN** the external button reads `Show origin` with an outline treatment
 
-#### Scenario: Relabelled while an attempt stands
+#### Scenario: Demoted while an attempt stands
 
 - **WHEN** an auto-apply attempt for the posting is queued
 - **THEN** the external button reads `Show origin` with an outline treatment
@@ -192,18 +192,18 @@ raises SHALL be unchanged.
 - **WHEN** the reader scrolls past the title on a posting auto-apply can drive
 - **THEN** the pinned header carries the same buttons, with the same labels and treatments
 
-#### Scenario: Labelled Apply when auto-apply will not act
+#### Scenario: Promoted when auto-apply will not act
 
 - **WHEN** the posting's auto-apply attempt was declined by the reader or failed
 - **THEN** the external button reads `Apply` with an outline treatment
 
-#### Scenario: A primary CTA remains while a submission is in flight
+#### Scenario: No primary CTA while a submission is in flight
 
 - **WHEN** an auto-apply attempt for the posting is queued
 - **THEN** neither the auto-apply button nor the apply link carries the primary (brand fill) treatment
 - **AND** `Tailor my CV` still does
 
-#### Scenario: Applying by hand does not relabel anything
+#### Scenario: Applying by hand does not demote anything
 
 - **WHEN** the reader has already applied to the posting themselves
 - **THEN** the external button reads `Apply` with an outline treatment
@@ -214,7 +214,7 @@ raises SHALL be unchanged.
 - **WHEN** the posting did not come from a source auto-apply can drive
 - **THEN** the external button reads `Apply` with an outline treatment
 
-#### Scenario: Relabelling does not change what the click does
+#### Scenario: Demotion does not change what the click does
 
 - **WHEN** the reader clicks the external button while it reads `Show origin`
 - **THEN** the posting's own URL opens in a new tab with `nofollow noopener noreferrer`

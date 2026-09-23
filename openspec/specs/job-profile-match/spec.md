@@ -152,25 +152,6 @@ A job card SHALL show the blurred profile-match teaser to a viewer in either loc
 - **WHEN** a card showing the blurred teaser also carries a salary
 - **THEN** the salary SHALL render unblurred
 
-### Requirement: The analysis offer is shown to a guest
-
-The sidebar SHALL offer the deep-dive fit analysis to an unauthenticated viewer as well, with the same description and button a signed-in viewer sees, because the offer needs no computed match to make sense. Its button MUST open sign-in in place, and MUST NOT navigate to the analysis page: that page streams an authenticated compute client-side, so a guest reaching it would issue a rejected request per visit. The credit line SHALL be replaced by a statement of what signing in is for. The no-profile state SHALL NOT show the offer, its own "Upload CV" call-to-action already standing directly above.
-
-#### Scenario: Guest presses the analysis button
-
-- **WHEN** an unauthenticated viewer presses "Analyze match" in the sidebar
-- **THEN** the sign-in dialog SHALL open, the viewer SHALL remain on the job page, and no analysis request SHALL be issued
-
-#### Scenario: The offer states what sign-in buys
-
-- **WHEN** the offer renders for an unauthenticated viewer
-- **THEN** it SHALL show the same description and button as for a signed-in viewer, with a line saying the analysis needs a signed-in account and a CV, and no AI-credit count
-
-#### Scenario: No-profile viewer is not offered it twice
-
-- **WHEN** an authenticated viewer with no profile skills opens the block
-- **THEN** the analysis offer SHALL be absent, leaving the block's own "Upload CV" call-to-action as the single next step
-
 ### Requirement: The blurred teaser is not announced as a score
 
 The blurred teaser SHALL be hidden from assistive technology, and a screen reader MUST NOT be given its fabricated percentage as if it were the viewer's match. A card showing the teaser SHALL expose, in place of the hidden figures, a text alternative pointing at the sign-in affordance.
@@ -426,4 +407,52 @@ SHALL leave the profile and the chip as they were and state the failure.
 - **WHEN** the profile write for an avoided skill fails
 - **THEN** the chip SHALL render as it did before, no confirmation SHALL be shown, and an error
   naming the failure SHALL be shown
+
+### Requirement: The sidebar reports the match and offers no tailoring action
+
+The job-detail sidebar's match block SHALL report what it knows and SHALL NOT carry a
+tailoring call-to-action: `Tailor my CV` lives in the page's CTA row, where the reader
+decides, and a second copy of the page's one primary button a screen below the first is what
+this change removes.
+
+The block SHALL keep exactly two things below the deterministic coverage bar:
+
+- an `Upload a CV to analyse` prompt with its link to the profile, when the page has read
+  that the reader has no stored CV;
+- the cached fit-analysis card — the overall percentage, the verdict, the single biggest gap
+  and a link through to the full analysis — when one is cached.
+
+It SHALL NOT render a remaining-tailorings count nor a spent-allowance message. The
+confirmation dialog raised by the CTA row's button already carries both, at the moment the
+reader commits, and stating them in two places lets them disagree.
+
+The block SHALL NOT issue a match-analysis request of its own. The page SHALL read that
+response once and pass it in, so moving the button did not buy a second call to the same
+endpoint.
+
+#### Scenario: No tailoring button in the sidebar
+
+- **WHEN** a signed-in reader with a stored CV opens a posting
+- **THEN** the sidebar match block renders no `Tailor my CV` button
+
+#### Scenario: The upload prompt survives
+
+- **WHEN** the page has read that the signed-in reader has no stored CV
+- **THEN** the sidebar match block shows the `Upload a CV to analyse` prompt with its profile link
+
+#### Scenario: The cached analysis card survives
+
+- **WHEN** a fit analysis is cached for the reader and the posting
+- **THEN** the sidebar match block shows the percentage, the verdict, the top gap and the link to the full analysis
+
+#### Scenario: The allowance is stated once, in the dialog
+
+- **WHEN** the reader has tailoring sessions left today
+- **THEN** the sidebar match block states no count
+- **AND** the confirmation dialog raised from the CTA row states it
+
+#### Scenario: One read of the match analysis per page
+
+- **WHEN** the job detail page renders its CTA row and its sidebar match block
+- **THEN** the match-analysis endpoint is called at most once for that posting
 
