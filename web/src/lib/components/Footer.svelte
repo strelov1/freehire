@@ -112,9 +112,16 @@
   // ships both marks, so this needs no image at all.
   //
   // The App Store URL carries NO country segment on purpose. The listing's share link
-  // is `/br/app/...`, which pins every visitor to the Brazilian storefront; without
-  // one Apple redirects each visitor to their own. The extension's URL is not spelled
-  // here at all — see $lib/extensionLinks, which the extension landing reads too.
+  // is `/br/app/...`, which pins every visitor to the Brazilian storefront; without one
+  // Apple redirects each visitor to their own (measured: the bare form answers 301 to
+  // `/us/app/...`, the `/br/` form answers 200).
+  //
+  // The extension's URL is not spelled here at all — see $lib/extensionLinks, which the
+  // extension landing and its JSON-LD read too. The App Store one IS spelled here, and
+  // the asymmetry is deliberate only while this is its single consumer: a mobile landing
+  // page or a MobileApplication JSON-LD is the second, and that is when it earns an
+  // appLinks.ts beside extensionLinks.ts. Note for whoever does it — Footer.test.ts pins
+  // the literal to THIS file, so the move is two edits, not one.
   const stores = [
     {
       provider: 'apple',
@@ -186,8 +193,10 @@
 
       <!-- The badge and the two store buttons share one row, centred rather than
            stretched: the badge is a fixed 54px image, the buttons sit on the spacing
-           scale at h-14 (56px), and 1px above and below is invisible. Wrapping, so a
-           narrow viewport stacks them rather than shrinking any. -->
+           scale at h-14 (56px), and 1px above and below is invisible. Do NOT "fix" that
+           to h-[54px] — check:tokens refuses an arbitrary value here, which is the whole
+           reason these are 56px. Wrapping, so a narrow viewport stacks them rather than
+           shrinking any. -->
       <div class="mt-8 flex flex-wrap items-center gap-3">
         <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- external Product Hunt page opened in a new tab; not an internal route -->
         <a href={productHunt.href} target="_blank" rel="noopener noreferrer" class="inline-block">
