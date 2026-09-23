@@ -48,7 +48,7 @@ func TestListFreshSitemapPageSortsNewestFirst(t *testing.T) {
 	p := newMeiliSearchProbe(t, nil)
 	c := NewClient(p.srv.URL, "key")
 
-	if _, _, err := c.ListFreshSitemapPage(context.Background(), 0, 10); err != nil {
+	if _, err := c.ListFreshSitemapPage(context.Background(), 0, 10); err != nil {
 		t.Fatalf("ListFreshSitemapPage: %v", err)
 	}
 
@@ -70,7 +70,7 @@ func TestListFreshSitemapPageUsesTheSharedFilter(t *testing.T) {
 	p := newMeiliSearchProbe(t, nil)
 	c := NewClient(p.srv.URL, "key")
 
-	if _, _, err := c.ListFreshSitemapPage(context.Background(), 0, 10); err != nil {
+	if _, err := c.ListFreshSitemapPage(context.Background(), 0, 10); err != nil {
 		t.Fatalf("ListFreshSitemapPage: %v", err)
 	}
 
@@ -86,7 +86,7 @@ func TestListFreshSitemapPagePassesOffsetAndLimit(t *testing.T) {
 	p := newMeiliSearchProbe(t, nil)
 	c := NewClient(p.srv.URL, "key")
 
-	if _, _, err := c.ListFreshSitemapPage(context.Background(), 20000, 10000); err != nil {
+	if _, err := c.ListFreshSitemapPage(context.Background(), 20000, 10000); err != nil {
 		t.Fatalf("ListFreshSitemapPage: %v", err)
 	}
 
@@ -109,12 +109,9 @@ func TestListFreshSitemapPageProjectsSlugAndLastmod(t *testing.T) {
 	})
 	c := NewClient(p.srv.URL, "key")
 
-	docs, total, err := c.ListFreshSitemapPage(context.Background(), 0, 10)
+	docs, err := c.ListFreshSitemapPage(context.Background(), 0, 10)
 	if err != nil {
 		t.Fatalf("ListFreshSitemapPage: %v", err)
-	}
-	if total != 2 {
-		t.Errorf("total = %d, want 2", total)
 	}
 	if len(docs) != 2 {
 		t.Fatalf("len(docs) = %d, want 2", len(docs))
@@ -136,7 +133,7 @@ func TestListFreshSitemapPageSkipsASlugLessHit(t *testing.T) {
 	})
 	c := NewClient(p.srv.URL, "key")
 
-	docs, _, err := c.ListFreshSitemapPage(context.Background(), 0, 10)
+	docs, err := c.ListFreshSitemapPage(context.Background(), 0, 10)
 	if err != nil {
 		t.Fatalf("ListFreshSitemapPage: %v", err)
 	}

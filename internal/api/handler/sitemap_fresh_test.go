@@ -23,14 +23,13 @@ type stubFreshSitemapIndex struct {
 	calls                 int
 }
 
-func (s *stubFreshSitemapIndex) ListFreshSitemapPage(_ context.Context, offset, limit int) ([]search.SitemapDocument, int64, error) {
+func (s *stubFreshSitemapIndex) ListFreshSitemapPage(_ context.Context, offset, limit int) ([]search.SitemapDocument, error) {
 	s.calls++
 	s.lastOffset, s.lastLimit = offset, limit
-	total := int64(len(s.docs))
 	if offset >= len(s.docs) {
-		return nil, total, nil
+		return nil, nil
 	}
-	return s.docs[offset:min(offset+limit, len(s.docs))], total, nil
+	return s.docs[offset:min(offset+limit, len(s.docs))], nil
 }
 
 func newFreshSitemapTestApp(fresh freshSitemapLister, paged sitemapLister) *fiber.App {
@@ -109,6 +108,41 @@ func TestFreshJobSitemapRefusesToPageBeyondTheWindow(t *testing.T) {
 	}
 	if fresh.calls != 0 {
 		t.Errorf("fresh reader called %d times for an out-of-window offset, want 0", fresh.calls)
+	}
+}
+
+// The bound must hold against the LIMIT too, not only the offset. pageParamsBounded
+// clamps ?limit= to sitemapMaxURLs (50,000), so a guard that reads only the offset
+// leaves the depth wide open through the front door: ?offset=30000&limit=50000 asks
+// the engine for hit 80,000 of a sorted read — 2.7x past the depth the bound exists
+// to stop at, on a public route, well inside the shared 600/min budget.
+func TestFreshJobSitemapBoundsTheLimitToo(t *testing.T) {
+	fresh := &stubFreshSitemapIndex{docs: stubDocs(5)}
+	app := newFreshSitemapTestApp(fresh, &stubSitemapIndex{})
+
+	_ = freshSitemapEntries(t, app, "/api/v1/jobs/sitemap/fresh?offset=0&limit=50000")
+	if fresh.lastLimit > jobSitemapChunk {
+		t.Errorf("limit reached the reader as %d, want at most %d", fresh.lastLimit, jobSitemapChunk)
+	}
+}
+
+// The deepest a fresh read may ever reach is the bound plus one page. Asserting the
+// REACH rather than the two parameters separately is what makes the guarantee
+// checkable as one number, which is how the comment beside the constant states it.
+func TestFreshJobSitemapNeverReachesPastTheWindow(t *testing.T) {
+	fresh := &stubFreshSitemapIndex{docs: stubDocs(5)}
+	app := newFreshSitemapTestApp(fresh, &stubSitemapIndex{})
+
+	for _, target := range []string{
+		"/api/v1/jobs/sitemap/fresh?offset=30000&limit=50000",
+		"/api/v1/jobs/sitemap/fresh?offset=30000",
+		"/api/v1/jobs/sitemap/fresh?offset=29999&limit=50000",
+	} {
+		fresh.lastOffset, fresh.lastLimit = 0, 0
+		_ = freshSitemapEntries(t, app, target)
+		if reach := fresh.lastOffset + fresh.lastLimit; reach > freshSitemapMaxOffset+jobSitemapChunk {
+			t.Errorf("%s reached hit %d, want at most %d", target, reach, freshSitemapMaxOffset+jobSitemapChunk)
+		}
 	}
 }
 

@@ -10,17 +10,21 @@ order, while `web-ssr-seo` has required "newest first" all along.
 Measured on the live index on 2026-09-22, sorting by `created_at:desc` under the
 existing `jobSitemapFilter`:
 
-| offset | processing time | newest job at that position |
-|---|---|---|
-| 0 | 2 ms | seconds old |
-| 5,000 | 302 ms | 7 hours old |
-| 10,000 | 527 ms | 14 hours old |
-| 20,000 | 968 ms | 1 day old |
-| 30,000 | 2,006 ms | 2 days old |
+A first pass probed with a tiny `limit`, which measures the sort but not the page —
+and page size dominates a deep read, so those figures could not settle the chunk count.
+Re-measured warm at the page size this route actually serves (`limit=10000`, projected
+to slug and lastmod):
 
-The first reading at offset 30,000 was 7,151 ms on a cold cache; warm it is 2,006 ms.
-The SSR route's fetch timeout is 10s, so the warm figure carries a 5x margin and the
-cold one a 1.4x margin. `created_at` is already in the index's `sortableAttributes`
+| offset | processing time | wall |
+|---|---|---|
+| 0 | 716 ms | 0.74 s |
+| 10,000 | 963 ms | 0.98 s |
+| 20,000 | 1,292 ms | 1.31 s |
+| 30,000 | 1,776 ms | 1.79 s |
+
+The SSR route's fetch timeout is 10s, so the deepest chunk carries a 5.6x margin. A
+cold cache costs materially more (a tiny-limit probe at offset 30,000 measured 7,151 ms
+cold against 2,006 ms warm), which is the case the bound keeps bounded. `created_at` is already in the index's `sortableAttributes`
 (verified live), so no settings patch is needed and the settings-before-binary hazard
 does not arise.
 
@@ -70,11 +74,21 @@ binding on any crawler, but it is the only signal available, and it costs nothin
 
 ## Risks / Trade-offs
 
-- **A cold Meilisearch cache makes the deepest fresh chunk 7.1s against a 10s
-  timeout** → the bound at 30,000 keeps the worst case at the one measured depth
-  rather than deeper; a timed-out chunk is one missing file on one fetch, and the
-  crawler retries. If cold-cache 7.1s proves common in practice, drop to three chunks
-  (offset bound 20,000, measured 968 ms warm) — a one-constant change.
+- **A cold Meilisearch cache costs several times the warm figure** → the bound at
+  30,000 keeps the worst case at the one measured depth rather than deeper; a timed-out
+  chunk is one missing file on one fetch, and the crawler retries. If cold reads prove
+  common in practice, drop to three chunks (offset bound 20,000, 1,292 ms warm).
+- **The caller controls the depth through `limit`, not only `offset`** → the bound is
+  applied to both: `pageParamsBounded` is given `jobSitemapChunk` as its ceiling rather
+  than `sitemapMaxURLs`, so the deepest reachable hit is 40,000. Without that,
+  `?offset=30000&limit=50000` reaches hit 80,000 on a public route — found in review,
+  and it is the failure `pageParamsWindowed` already records from 2026-09-14: a
+  per-minute budget cannot bound an endpoint whose per-request work the caller sets.
+- **Offset paging a sorted, growing list drifts between chunk fetches** → at ~11k new
+  eligible postings a day, an hour between fetching chunk 0 and chunk 1 shifts the
+  window by ~460 documents, so a crawler sees a small overlap or gap. Harmless (the
+  paged files already make this argument) and self-correcting on the next fetch, but
+  the sorted file has it more acutely, so it is written down rather than discovered.
 - **A job appears in both the fresh file and a paged chunk** → permitted by the
   sitemap protocol and already true of any re-tiling; crawlers deduplicate by URL.
 - **The fresh window silently stops being fresh if the flow collapses** → the file
@@ -100,4 +114,8 @@ nothing to undo.
 ## Open Questions
 
 None. The one open number — whether four chunks or three — is settled by the measured
-warm timings and is a single constant if the cold-cache case proves common.
+warm timings. Changing it later means moving TWO constants, in two languages:
+`freshSitemapMaxOffset` (Go) and `FRESH_SITEMAP_CHUNKS` (TypeScript). Moving only the
+Go one leaves a fourth `<loc>` in the index pointing at a file the API deliberately
+answers empty, which looks exactly like a working sitemap. This mirrors the existing
+`jobSitemapChunk`/`JOB_SITEMAP_CHUNK` coupling the repo already lives with.

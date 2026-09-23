@@ -165,8 +165,13 @@ func (c *Client) ListSitemapPage(ctx context.Context, offset, limit int) ([]Site
 const freshSitemapSort = "created_at:desc"
 
 // ListFreshSitemapPage returns one offset-addressed page of the live jobs index
-// narrowed to jobSitemapFilter and ordered newest first, along with how many
-// documents match.
+// narrowed to jobSitemapFilter and ordered newest first.
+//
+// It returns no total, unlike ListSitemapPage. The total exists there because the
+// sitemap index TILES the paged files by it (CountSitemapDocuments); the fresh window
+// is tiled by a constant instead, so a count here would be a number with no reader —
+// and it could only ever be EstimatedTotalHits, which is not the exact figure its
+// sibling returns.
 //
 // It searches rather than paging documents, and that is the entire point of its
 // existence: Meilisearch's /documents route — which ListSitemapPage uses, and which is
@@ -181,7 +186,7 @@ const freshSitemapSort = "created_at:desc"
 // than about the index: measured on prod 2026-09-22, a sorted page costs 2ms at
 // offset 0, 527ms at 10,000 and 2.0s at 30,000 warm, against the SSR route's 10s
 // fetch timeout.
-func (c *Client) ListFreshSitemapPage(ctx context.Context, offset, limit int) ([]SitemapDocument, int64, error) {
+func (c *Client) ListFreshSitemapPage(ctx context.Context, offset, limit int) ([]SitemapDocument, error) {
 	resp, err := c.facet.SearchWithContext(ctx, "", &meilisearch.SearchRequest{
 		Offset:               int64(offset),
 		Limit:                int64(limit),
@@ -191,17 +196,17 @@ func (c *Client) ListFreshSitemapPage(ctx context.Context, offset, limit int) ([
 	})
 	if err != nil {
 		if ctxErr := ctx.Err(); ctxErr != nil {
-			return nil, 0, fmt.Errorf("search: fresh sitemap page: %w", ctxErr)
+			return nil, fmt.Errorf("search: fresh sitemap page: %w", ctxErr)
 		}
-		return nil, 0, fmt.Errorf("search: fresh sitemap page: %w", err)
+		return nil, fmt.Errorf("search: fresh sitemap page: %w", err)
 	}
 	// Decoded through a map for the same reason sitemapPage does it: the slug
 	// attribute is named per index, so a struct tag could only ever match one.
 	var raw []map[string]any
 	if err := resp.Hits.DecodeInto(&raw); err != nil {
-		return nil, 0, fmt.Errorf("search: fresh sitemap page: decode: %w", err)
+		return nil, fmt.Errorf("search: fresh sitemap page: decode: %w", err)
 	}
-	return sitemapDocs(raw, jobSlugField), resp.EstimatedTotalHits, nil
+	return sitemapDocs(raw, jobSlugField), nil
 }
 
 // ListCompanySitemapPage is ListSitemapPage over the companies index, unfiltered: what

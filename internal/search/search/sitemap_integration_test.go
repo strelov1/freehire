@@ -13,6 +13,7 @@ package search
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
 
@@ -168,4 +169,87 @@ func TestIntegration_CompanySitemapUnfiltered(t *testing.T) {
 	if count != 2 {
 		t.Errorf("company count = %d, want 2", count)
 	}
+}
+
+// TestIntegration_FreshJobSitemapOrder is the one test that can prove the ordering
+// guarantee web-ssr-seo states, and the reason it needs a real engine is the defect it
+// guards: the paged reader's endpoint accepts no sort at all, so "is this index
+// actually sortable by created_at, and does the sort yield chronological order" is a
+// question only Meilisearch can answer. The unit tests beside this one assert that the
+// REQUEST carries the sort — a stub can return anything in any order, so they cannot
+// observe a sorted RESULT.
+//
+// The dates are deliberately not in insertion order: indexing oldest-first would let a
+// reader with no sort at all pass by accident, which is exactly the accident that
+// shipped.
+func TestIntegration_FreshJobSitemapOrder(t *testing.T) {
+	ctx := context.Background()
+	c := startMeili(t)
+	if err := c.EnsureIndex(ctx); err != nil {
+		t.Fatalf("EnsureIndex: %v", err)
+	}
+
+	yes := pgtype.Bool{Bool: true, Valid: true}
+	at := func(day int) pgtype.Timestamptz {
+		return pgtype.Timestamptz{Time: time.Date(2026, 9, day, 12, 0, 0, 0, time.UTC), Valid: true}
+	}
+
+	jobs := []db.Job{
+		{ID: 1, Title: "Backend Engineer", Company: "Acme", PublicSlug: "middle", Category: "backend", IsTech: yes, CreatedAt: at(10)},
+		{ID: 2, Title: "Platform Engineer", Company: "Acme", PublicSlug: "oldest", Category: "backend", IsTech: yes, CreatedAt: at(1)},
+		{ID: 3, Title: "Site Reliability Engineer", Company: "Beta", PublicSlug: "newest", Category: "backend", IsTech: yes, CreatedAt: at(20)},
+	}
+	indexJobsForSitemap(t, c, jobs, []string{
+		jobreality.ClassFresh, jobreality.ClassFresh, jobreality.ClassFresh,
+	})
+
+	t.Run("names the newest first", func(t *testing.T) {
+		docs, err := c.ListFreshSitemapPage(ctx, 0, 100)
+		if err != nil {
+			t.Fatalf("ListFreshSitemapPage: %v", err)
+		}
+		got := make([]string, len(docs))
+		for i, d := range docs {
+			got[i] = d.Slug
+		}
+		want := []string{"newest", "middle", "oldest"}
+		if len(got) != len(want) {
+			t.Fatalf("fresh sitemap = %v, want %v", got, want)
+		}
+		for i := range want {
+			if got[i] != want[i] {
+				t.Fatalf("fresh sitemap = %v, want %v", got, want)
+			}
+		}
+	})
+
+	// The fresh reader must narrow to the same population the paged one does. Proving
+	// it against the engine rather than against the filter string is what catches a
+	// filter that parses but selects differently under a sort.
+	t.Run("applies the same scope as the paged reader", func(t *testing.T) {
+		nonTech := db.Job{ID: 4, Title: "Warehouse Cleaner", Company: "Gamma", PublicSlug: "non-tech-fresh", IsTech: pgtype.Bool{Bool: false, Valid: true}, CreatedAt: at(21)}
+		indexJobsForSitemap(t, c, []db.Job{nonTech}, []string{jobreality.ClassFresh})
+
+		docs, err := c.ListFreshSitemapPage(ctx, 0, 100)
+		if err != nil {
+			t.Fatalf("ListFreshSitemapPage: %v", err)
+		}
+		for _, d := range docs {
+			if d.Slug == "non-tech-fresh" {
+				t.Fatalf("fresh sitemap named a non-tech posting, even though it is the newest: %v", docs)
+			}
+		}
+	})
+
+	// A crawler holding a stale sitemap index asks for an offset the window no longer
+	// reaches; that must be an empty page, not an error.
+	t.Run("an offset past the end is an empty page", func(t *testing.T) {
+		docs, err := c.ListFreshSitemapPage(ctx, 1000, 100)
+		if err != nil {
+			t.Fatalf("ListFreshSitemapPage past the end: %v", err)
+		}
+		if len(docs) != 0 {
+			t.Errorf("past the end = %d docs, want 0", len(docs))
+		}
+	})
 }

@@ -20,8 +20,11 @@
 
 - [x] 3.1 Add `web/src/routes/sitemap-jobs-fresh.xml/+server.ts`, mirroring
   `sitemap-jobs.xml`: read `?offset=`, call the new API method, render `urlsetXml`.
-  Test first: the route renders a `<urlset>` whose entries preserve the order the API
-  returned (not sorted or re-grouped by the renderer).
+  NOT covered by a test of its own, deliberately: no SvelteKit sitemap route in this
+  repo has one, the body is a two-line `.map` over what the API returned, and order
+  preservation is asserted one layer down where it can actually be broken
+  (`TestFreshJobSitemapPreservesOrder`). Adding the repo's first route test here would
+  be infrastructure for the cheapest line in the change.
 - [x] 3.2 Add `FRESH_SITEMAP_CHUNKS = 4` to `web/src/lib/sitemap.ts` and emit the
   four fresh sub-sitemap entries **before** the paged job entries in the sitemap
   index. Test first: the index lists four fresh `<loc>`s and every one of them

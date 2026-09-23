@@ -39,6 +39,11 @@ export const JOB_SITEMAP_CHUNK = 10000;
 // that skips two days still misses nothing. The bound exists because this file is
 // SORTED, and unlike the paged chunks a sorted read gets more expensive with depth —
 // see the backend constant for the measurements.
+//
+// Changing the count means moving BOTH this and freshSitemapMaxOffset. Moving only the
+// Go side leaves an entry here pointing at a file the API deliberately answers empty,
+// which looks exactly like a working sitemap — the same two-sided coupling
+// JOB_SITEMAP_CHUNK already has with jobSitemapChunk.
 export const FRESH_SITEMAP_CHUNKS = 4;
 
 /** The offset opening each chunk of the freshest-first job sub-sitemap.

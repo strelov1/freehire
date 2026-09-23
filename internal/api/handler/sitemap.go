@@ -28,7 +28,7 @@ type sitemapLister interface {
 // so folding it in would oblige companySitemapIndex to implement a method that would
 // be a lie.
 type freshSitemapLister interface {
-	ListFreshSitemapPage(ctx context.Context, offset, limit int) ([]search.SitemapDocument, int64, error)
+	ListFreshSitemapPage(ctx context.Context, offset, limit int) ([]search.SitemapDocument, error)
 }
 
 // companySitemapIndex adapts the client's companies-index methods to sitemapLister.
@@ -60,15 +60,24 @@ func newSitemapHandlers(jobs, companies sitemapLister, freshJobs freshSitemapLis
 	return &sitemapHandlers{jobs: jobs, companies: companies, freshJobs: freshJobs}
 }
 
-// register mounts the four public sitemap reads behind the shared public-read budget.
+// register mounts the five public sitemap reads behind the shared public-read budget.
 //
 // They carried no limiter at all until the deep-offset change, which is the same omission
 // GET /companies/:slug/feedback carried and the reason both are now a documented rule:
 // an unauthenticated list registered without a limiter is a defect whatever its query
-// costs. Nothing here is expensive per request — the pages come from Meilisearch, not from
-// a table scan — but "cheap" is not "free", and an unthrottled route is simply the door a
-// throttled caller walks through instead (the argument jobsHandlers.register already makes
-// about /jobs versus /jobs/search).
+// costs. The four /documents-backed reads are cheap per request — the pages come from
+// Meilisearch, not from a table scan, and their cost is flat in the offset — but "cheap"
+// is not "free", and an unthrottled route is simply the door a throttled caller walks
+// through instead (the argument jobsHandlers.register already makes about /jobs versus
+// /jobs/search).
+//
+// The fresh read is the one whose cost is NOT flat: it sorts, so it rises with depth,
+// up to 1.8s at the deepest page this route will serve. It is admitted to the same
+// budget on the strength of its own bound rather than on the paragraph above — a
+// per-minute budget says nothing about an endpoint whose per-request work the caller
+// sets (the lesson pageParamsWindowed records from 2026-09-14), so what makes 600/min
+// safe here is that freshSitemapMaxOffset caps that work at a measured figure. See the
+// constant.
 //
 // A real crawler is unaffected: it fetches a sitemap chunk at a time, minutes apart, and
 // 600/min is three orders of magnitude above that.
@@ -197,10 +206,20 @@ func (h *sitemapHandlers) JobSitemap(c *fiber.Ctx) error {
 //
 // It is a BOUND, not a page count, and it is enforced here rather than left to the
 // sitemap index, because the sorted read behind it gets more expensive with depth
-// while the paged read does not: measured on prod 2026-09-22, a sorted page costs 2ms
-// at offset 0, 527ms at 10,000 and 2.0s at 30,000 warm (7.1s cold) against the SSR
-// route's 10s fetch timeout. Without a server-side bound a hand-written
-// `?offset=500000` would reach a depth nobody has measured, on a public route.
+// while the paged read does not. Measured on prod 2026-09-22 warm, at the page size
+// this route actually serves — limit=10,000, projected to slug and lastmod, which is
+// the measurement that settles the chunk count since page size dominates the cost of
+// a deep read: 716ms at offset 0, 963ms at 10,000, 1,292ms at 20,000, 1,776ms at
+// 30,000. Against the SSR route's 10s fetch timeout that is a 5.6x margin at the
+// deepest chunk, which is what four chunks rather than three is bought with.
+//
+// What the bound has to cover is offset PLUS limit, not the offset alone, and that
+// distinction is the whole guarantee: pageParamsBounded clamps ?limit= to the ceiling
+// it is given, so passing sitemapMaxURLs there would admit
+// `?offset=30000&limit=50000` — a sorted read to hit 80,000, 2.7x past this bound,
+// on a public route inside the shared 600/min budget. The ceiling is therefore
+// jobSitemapChunk, which is all the sitemap index ever asks for, and the deepest
+// reachable hit is freshSitemapMaxOffset+jobSitemapChunk = 40,000.
 const freshSitemapMaxOffset = 3 * jobSitemapChunk
 
 // FreshJobSitemap serves one page of the newest-first job sub-sitemap.
@@ -214,11 +233,13 @@ func (h *sitemapHandlers) FreshJobSitemap(c *fiber.Ctx) error {
 	if h.freshJobs == nil {
 		return fiber.NewError(fiber.StatusServiceUnavailable, "search is not available")
 	}
-	limit, offset := pageParamsBounded(c, jobSitemapChunk, sitemapMaxURLs)
+	// The ceiling is the chunk size, not sitemapMaxURLs: on this route the caller
+	// controls how deep the engine reads through BOTH parameters. See the constant.
+	limit, offset := pageParamsBounded(c, jobSitemapChunk, jobSitemapChunk)
 	if offset > freshSitemapMaxOffset {
 		return c.JSON(fiber.Map{"data": []sitemapEntry{}})
 	}
-	docs, _, err := h.freshJobs.ListFreshSitemapPage(c.Context(), offset, limit)
+	docs, err := h.freshJobs.ListFreshSitemapPage(c.Context(), offset, limit)
 	if err != nil {
 		return err
 	}
