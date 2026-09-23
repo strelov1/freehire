@@ -364,6 +364,7 @@ export const SOURCE_LABELS: Record<string, string> = {
   workatastartup: 'Work at a Startup', remoteok: 'RemoteOK', arc: 'Arc',
   jobstash: 'JobStash', globalpayments: 'Global Payments',
   usajobs: 'USAJobs', whatjobs: 'WhatJobs', ukgready: 'UKG Ready',
+  jettycloud: 'JettyCloud',
   edjoin: 'EDJOIN', weworkremotely: 'We Work Remotely', hackernews: 'Hacker News',
   cryptocurrencyjobs: 'Cryptocurrency Jobs', landingjobs: 'Landing.Jobs',
   getonbrd: 'Get on Board', mycareersfuture: 'My Careers Future',
