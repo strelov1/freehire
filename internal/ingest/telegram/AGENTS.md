@@ -14,10 +14,38 @@ Telegram-channel crawl (web preview → `telegram_posts`) and LLM vacancy extrac
 Public Telegram channels carry vacancies as free-form posts, so unlike the structured ATS adapters they need an extraction step. The work is split into two stages mirroring the ingest/enrich shape: `cmd/tg-ingest` is the cheap crawl that fetches each channel's web preview and enqueues raw posts, and `cmd/tg-extract` is the LLM-driven extraction that drains the queue into normalized jobs. The `kind` field on each channel entry steers which extraction prompt is used, so different channel formats (e.g. a pure-vacancy channel vs a mixed discussion channel) get the right parsing strategy.
 
 ## Limitations
-- The prefilter's marker set is per-language and hand-maintained (RU, EN, UA). Adding a
+- The prefilter's marker set is per-language and hand-maintained (RU, EN, UA, ES). Adding a
   channel that publishes in a language the markers do not cover silently rejects all of its
   vacancies — the failure looks like a weak channel, not a blind filter. Extend
   `internal/ingest/telegram/prefilter.go` before adding the channel.
+- **That blindness is measured, not hypothetical, and a marker list cannot close it.**
+  Of the 15,203 posts the filter had rejected as at 2026-09-23, the Spanish cohort alone was
+  6,340 — 42% — and the `empresa:` marker added that day recovers 6,335 of them. What remains
+  rejected is **not one more language away**:
+
+  | channel | rejected | why the markers miss it |
+  |---|---|---|
+  | `seekingyourjobs` | 606 | Persian/Dari (`اعلان کاریابی`) |
+  | `morejobs` | 594 | **Russian** — a covered language; "приглашает в команду" is not a marker |
+  | `amalw3amal1` | 598 | Arabic (`المنصب الوظيفي`) |
+  | `huntmejob` | 443 | Uzbek (`Lavozim`, `Ish turi`) |
+  | `DeJob_official` | 380 | Chinese (`#招聘`) |
+  | `Remoteit` | 336 | **English, no hiring verb at all** — a title plus tags |
+  | `forproducts` | 321 | **English** — a plain job description |
+
+  The last two are the argument: `QA AUTOMATION C# | REMOTE RUSSIA | SIMBIRSOFT #remote
+  #fulltime` is a real vacancy in a covered language holding no phrase a keyword could
+  select without also selecting every other title-shaped post. Closing this needs a
+  classifier, not a longer list. Not all of the rejected set is loss — `gamedev_dou` (286,
+  Ukrainian gaming news) and `jobnetworkng` (433, interview-advice articles) are refused
+  correctly.
+- **A rejected post is never re-examined, so widening the markers does not reach the ones
+  already stored.** `InsertTelegramPost` stamps `extracted_at` at insert time for a post the
+  prefilter declined, and nothing revisits it. Measured the same day: 96 rejected posts
+  (all `job_it_junior`) already match today's marker set — they were crawled under a
+  narrower one and are stuck. The `empresa:` fix therefore reaches new Spanish posts only;
+  the 6,335 stored ones need a backfill pass that clears `extracted_at` for posts the
+  current filter would now admit.
 - Telegram jobs have no close signal of their own: the ingest sweep does not reach them, there
   is no change feed, and `cmd/liveness` excludes them from the probe because the stored URL is
   the post, which outlives the vacancy. They are closed by age instead — 45 days on
