@@ -42,9 +42,13 @@
 - [x] 5.1 Run the full local gate: `gofmt -l .` silent, `go vet ./...`,
   `go test ./...`, `go vet -tags=integration ./...`, and the web unit tests.
 - [ ] 5.2 Open the PR, get CI green, merge.
-- [ ] 5.3 Deploy to prod (`release.sh`), then verify on the live host: the fresh
-  sub-sitemap returns valid XML with descending dates, `/sitemap.xml` lists the four
-  fresh entries ahead of the paged ones, and the deepest fresh chunk answers inside
-  the SSR timeout.
+- [ ] 5.3 Deploy to prod (`release.sh`), then verify on the live host:
+  `/sitemap.xml` lists the four fresh entries ahead of the paged ones; the fresh
+  sub-sitemap returns valid XML; the deepest fresh chunk (`?offset=30000`) answers
+  inside the SSR timeout. **Check the ORDER against `jobs.created_at` in Postgres for
+  the slugs the file lists, NOT against the `<lastmod>` values in it** — `<lastmod>` is
+  `updated_at`, the file is ordered by `created_at`, and the two disagree routinely, so
+  a descending-`<lastmod>` check would pass against a wrongly-ordered file and fail
+  against a correct one.
 - [ ] 5.4 Record the crawl-coverage baseline (17.9%, 2026-09-09..19) and the exact
   commands to re-measure it in 7 days, so the follow-up is not re-derived.

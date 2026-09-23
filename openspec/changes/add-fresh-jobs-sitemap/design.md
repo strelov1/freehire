@@ -102,9 +102,12 @@ binding on any crawler, but it is the only signal available, and it costs nothin
 
 1. Merge and deploy; the routes go live but nothing links to them yet if the index
    entries are deployed in the same build (they are — one change).
-2. Verify on prod: fetch `/sitemap-jobs-fresh.xml`, confirm valid XML, descending
-   `lastmod`-bearing entries, and that `/sitemap.xml` lists the four fresh entries
-   before the paged ones.
+2. Verify on prod: fetch `/sitemap-jobs-fresh.xml`, confirm valid XML, and that
+   `/sitemap.xml` lists the four fresh entries before the paged ones. Confirm the ORDER
+   by looking the listed slugs up in `jobs.created_at`, not by reading the `<lastmod>`
+   values — those are `updated_at`, the file is ordered by `created_at`, and a posting
+   re-touched by a crawl carries a newer `<lastmod>` than a posting created after it.
+   A descending-`<lastmod>` check would therefore pass against a wrongly-ordered file.
 3. Wait 7 days, then re-run the coverage measurement.
 
 Rollback is removing the four entries from the sitemap index: the routes then serve

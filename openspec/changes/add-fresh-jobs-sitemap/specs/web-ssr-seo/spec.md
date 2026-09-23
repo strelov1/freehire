@@ -39,6 +39,15 @@ only its shape would pass against the defect this requirement exists to prevent.
 An offset past the end of either kind SHALL return an empty `<urlset>`, never an
 error: a crawler holding a stale sitemap index must not be answered with a failure.
 
+`<lastmod>` is the job's last-modified time and SHALL be emitted whenever the index
+holds one. It is NOT the value either job sub-sitemap is ordered by — the freshest-first
+file is ordered by CREATION time, which no `<lastmod>` reports — so the ordering
+guarantee above cannot be checked by reading dates out of the XML, and a check that
+tried would pass against a wrongly-ordered file. A document indexed before the
+attribute joined the shape carries no `<lastmod>` and SHALL still be listed: the tag is
+optional in the protocol, and dropping the URL would cost a crawlable page to save an
+optional field.
+
 #### Scenario: robots.txt is a valid robots file
 
 - **WHEN** `GET /robots.txt` is requested
@@ -56,9 +65,9 @@ error: a crawler holding a stale sitemap index must not be answered with a failu
 #### Scenario: the freshest-first job sub-sitemap is ordered newest first
 
 - **WHEN** the freshest-first job sub-sitemap is requested at its first offset
-- **THEN** the response is a valid `<urlset>` of open-job (`/jobs/:slug`) URLs, each
-  with a `<lastmod>`, whose entries are in non-increasing order of the job's creation
-  time — the newest job in the catalogue first
+- **THEN** the response is a valid `<urlset>` of open-job (`/jobs/:slug`) URLs whose
+  entries are in non-increasing order of the job's CREATION time — the newest job in
+  the catalogue first — each carrying a `<lastmod>` when the index holds one
 
 #### Scenario: the freshest-first sub-sitemap is listed before the paged chunks
 
@@ -76,8 +85,9 @@ error: a crawler holding a stale sitemap index must not be answered with a failu
 
 - **WHEN** the index's paged job sub-sitemaps are followed in sequence by their
   offsets
-- **THEN** every findable open job appears, each entry is a `/jobs/:slug` URL with a
-  `<lastmod>`, no closed job appears, and no sub-sitemap exceeds the per-file limit
+- **THEN** every findable open job appears, each entry is a `/jobs/:slug` URL carrying
+  a `<lastmod>` when the index holds one, no closed job appears, and no sub-sitemap
+  exceeds the per-file limit
 
 #### Scenario: company sub-sitemaps cover every company worth crawling
 
