@@ -263,6 +263,7 @@ Each is self-contained and can be read independently.
 | **Board catalog** (the `boards` table: lifecycle, insert-time validation, `cmd/add-board`) | [internal/ingest/boardcatalog/AGENTS.md](internal/ingest/boardcatalog/AGENTS.md) |
 | **Pipeline** (Runner, dedup, UpsertJob, board health, search indexing) | [internal/ingest/pipeline/AGENTS.md](internal/ingest/pipeline/AGENTS.md) |
 | **Apply-form capture** (ATS application forms, verbatim platform vocabulary, queue drain) | [internal/ingest/applyform/AGENTS.md](internal/ingest/applyform/AGENTS.md) |
+| **Screening answers** (the six repeating ATS questions no CV can supply, measured against captured forms) | [internal/ingest/screeninganswers/AGENTS.md](internal/ingest/screeninganswers/AGENTS.md) |
 | **Link resolution** (outbound job URL → destination's own identity) | [internal/ingest/linksource/AGENTS.md](internal/ingest/linksource/AGENTS.md) |
 | **ATS board recognition** (URL → (source, board), shared conventions) | [internal/ingest/atsboard/AGENTS.md](internal/ingest/atsboard/AGENTS.md) |
 | **Board contributions** (crowdsourced URL → (source, board) onboarding) | [internal/ingest/contribution/AGENTS.md](internal/ingest/contribution/AGENTS.md) |

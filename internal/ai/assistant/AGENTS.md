@@ -364,13 +364,14 @@ text beside its vacancy so a reader judges the rest. See
 asserts it: swapping both would measure two models and attribute the result to one.
 
 ## Limitations
-- **Measured, not bounded.** A turn is now attributed to the account that ran it and its
-  cost is readable (`GET /me/usage`, and per-feature on the gateway), but nothing refuses
-  one. The gateway supports a per-account ceiling and `LLM_USER_MAX_BUDGET` passes one
-  through; it is deliberately unset, because a ceiling chosen before the spend
-  distribution is known is a guess. `internal/ai/credits` remains the seam for a per-turn
-  debit — points price the product, a gateway budget is a fuse, and they are not the same
-  instrument.
+- **Bounded by the allowance, not by spend.** A turn is attributed to the account that ran
+  it and its cost is readable (`GET /me/usage`, and per-feature on the gateway). What
+  refuses one is `internal/ai/plan`: `assistant_meter.go` consumes `plan.FeatureAssistant`
+  per turn against a per-feature, per-UTC-day allowance, and a refusal is HTTP 402 raised
+  before the stream opens. The gateway's own per-account ceiling
+  (`LLM_USER_MAX_BUDGET`) is a different instrument and stays deliberately unset, because a
+  ceiling chosen before the spend distribution is known is a guess — an allowance prices
+  the product, a gateway budget is a fuse.
 - No summarisation: a long session loses its oldest messages to the window rather
   than compacting them.
 - One tool round runs its calls sequentially. Parallel execution would need

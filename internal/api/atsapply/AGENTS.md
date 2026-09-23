@@ -3,9 +3,9 @@
 ## Scope
 Drives a headless Chrome (`chromedp`) against one job's live application-form page: scan the
 rendered DOM, reconcile it against the platform's own declared schema
-(`internal/applyform.Form`, reused — not re-fetched), resolve the merged fields against a
+(`internal/ingest/applyform.Form`, reused — not re-fetched), resolve the merged fields against a
 candidate's known answers, and fill + submit only when every required question is answered.
-Implements `internal/autoapply.SidecarClient` — the one caller is `cmd/auto-apply`.
+Implements `internal/application/autoapply.SidecarClient` — the one caller is `cmd/auto-apply`.
 
 **This package is chromedp, in-process — not a Python/Patchright sidecar.** The OpenSpec
 change this package belongs to originally proposed one; a follow-up spike found chromedp + a
@@ -128,7 +128,7 @@ process, called only via `Client.WithBrowserUse`. Scope is deliberately narrow:
   not parsed against a specific iframe/script element — see `hasRecaptchaMarker`'s doc
   comment for why) maps to `reasonCaptchaProtected`, otherwise `reasonUnrecognizedLayout`. Either maps to
   `autoapply.StatusParked` (`unscannableFormResult`, `client.go`) — never a plain error —
-  so `internal/autoapply`'s runner never spends its transient-failure retry/dead-letter
+  so `internal/application/autoapply`'s runner never spends its transient-failure retry/dead-letter
   budget on a form that will never change shape or stop being challenge-protected. **A live
   finding while verifying this fix, worth remembering**: an earlier cut shortened the
   selector wait itself to make room for classification inside the same overall budget, and
@@ -166,7 +166,7 @@ process, called only via `Client.WithBrowserUse`. Scope is deliberately narrow:
   for why "authorized to work in this country" is deliberately NOT covered the same way,
   even though it is the same shape of gap). `ResolveWithDrafting` (`draft.go`) is the third
   and last resort: for a required, non-sensitive, free-text/single-choice field the first
-  two steps left unmapped, it asks a `Drafter` (`LLMDrafter`, `internal/llm`-backed) for a
+  two steps left unmapped, it asks a `Drafter` (`LLMDrafter`, `internal/platform/llm`-backed) for a
   grounded answer — ported from `freehire-apply/internal/drafting`'s pattern (single-shot
   call, sensitive-keyword gate, never an agentic loop). A drafted answer is still checked
   against the field's own offered options (`matchOption`, shared with the deterministic
@@ -209,13 +209,13 @@ process, called only via `Client.WithBrowserUse`. Scope is deliberately narrow:
   standalone `"authoriz"`, which catches either ordering.
 - **A draft is grounded only in `Provenance.Publishable()` experience-bank atoms — never
   raw CV text, never a system-inferred fact.** `buildGroundingContext` (`grounding.go`)
-  filters `internal/experience.Store.ListAtoms` to `cv_import`/`stated_in_chat`/`manual`
-  provenance, the same gate `internal/cvedit`'s CV-write path already enforces, applied here
+  filters `internal/candidate/experience.Store.ListAtoms` to `cv_import`/`stated_in_chat`/`manual`
+  provenance, the same gate `internal/candidate/cvedit`'s CV-write path already enforces, applied here
   at read time. An `agent_inferred` atom can never reach a draft.
 - **Drafting LLM spend is attributed to the candidate, tagged `auto-apply-drafting`**
   — bound fresh per attempt (`llmkey.Bind`, in `Client.resolve`), never shared across
   attempts. `cmd/auto-apply` is one of exactly two binaries allowed to resolve a per-user
-  LLM credential at all (`internal/llmkey/scope_test.go`'s allowlist, alongside
+  LLM credential at all (`internal/ai/llmkey/scope_test.go`'s allowlist, alongside
   `cmd/server`) — see `openspec/changes/auto-apply-llm-drafting/design.md`'s "cmd/auto-apply
   becomes a second per-user LLM caller" decision for why.
 - **The fill/submit path (`fill.go`, `browser.go`) is the least-verified part of this
@@ -228,11 +228,11 @@ process, called only via `Client.WithBrowserUse`. Scope is deliberately narrow:
 - **An unconfirmed submission is never retried through the ordinary path.** If neither a
   confirmation nor a refusal marker appears after the submit click, `fillAndSubmit` reports
   that honestly rather than guessing either way, and `Client.Submit` returns
-  `autoapply.StatusUnconfirmed` — a distinct outcome from an error. `internal/autoapply`'s
+  `autoapply.StatusUnconfirmed` — a distinct outcome from an error. `internal/application/autoapply`'s
   runner dead-letters it immediately (the same forced path a lost post-submit DB record
   takes), because the click may well have gone through: retrying normally would risk a
   second real submission. A code review caught an earlier version of this that mapped the
-  same situation to a plain retryable error — see `internal/autoapply/runner_test.go`'s
+  same situation to a plain retryable error — see `internal/application/autoapply/runner_test.go`'s
   `TestRunDeadLettersImmediatelyOnAnUnconfirmedSubmission`.
 
 ## How it works

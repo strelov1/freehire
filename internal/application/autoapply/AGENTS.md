@@ -5,7 +5,7 @@ The domain logic behind `cmd/auto-apply`: claim a wave of `auto_apply_queue` row
 each candidate's known answers, ask a browser driver to resolve and maybe submit the
 application, and record the outcome. Pgx/Fiber-free — `Store`, `AnswerSource` and
 `SidecarClient` are ports; `cmd/auto-apply` supplies the real implementations
-(`dbStore`, `assemblerAnswerSource`, `internal/atsapply.Client`).
+(`dbStore`, `assemblerAnswerSource`, `internal/api/atsapply.Client`).
 
 ## Always true
 - **Submits only when every required question is answered.** `SidecarClient.Submit` returns
@@ -26,14 +26,14 @@ application, and record the outcome. Pgx/Fiber-free — `Store`, `AnswerSource` 
   found by code review, not the original design — an earlier version mapped an unconfirmed
   result to a plain `error`, which took the ordinary (retryable) path.
 - **`SidecarClient.Submit` takes the whole `Claimed`, not its individual fields** — mirroring
-  `internal/applyform.Fetcher.Fetch`'s own reasoning: what a submission needs is not the same
+  `internal/ingest/applyform.Fetcher.Fetch`'s own reasoning: what a submission needs is not the same
   for every provider (Greenhouse/Ashby need `ExternalID`, not just `JobURL`), so the seam
   should not grow a parameter every time a provider needs one more piece of the claim.
 - **`AnswerSource` supplies identity/work-authorization facts only (Tier A/B).** A question
-  outside that set parks unless `internal/atsapply`'s own drafting fallback answers it (see
+  outside that set parks unless `internal/api/atsapply`'s own drafting fallback answers it (see
   its AGENTS.md) — `AnswerSource` itself is unaware of drafting either way. The real
   implementation (`cmd/auto-apply`'s `assemblerAnswerSource`) wraps
-  `internal/candidateprofile.Assembler`, the same one the browser extension's autofill path
+  `internal/api/candidateprofile.Assembler`, the same one the browser extension's autofill path
   reads, so a value a person sees in a form and a value this worker resolves against can
   never diverge.
 - **`process` always assembles answers before calling `Submit`, even for a row that
@@ -71,7 +71,7 @@ application, and record the outcome. Pgx/Fiber-free — `Store`, `AnswerSource` 
   like the evaluator it calls, never manufactures a blocker from an absent field.
 
 ## How it works
-`Run` wires `outbox.RunPool` over `Store.Claim`, mirroring `internal/applyform`'s own
+`Run` wires `outbox.RunPool` over `Store.Claim`, mirroring `internal/ingest/applyform`'s own
 `cmd/capture-apply-form` runner shape. `process` per claimed item: assemble answers → call
 `SidecarClient.Submit` → map the result to `Store.Submit` (success; composes
 `LockJobForApply` + `MarkJobApplied` + queue retirement in one transaction, in

@@ -7,10 +7,10 @@ finding a role, applying to it, and tracking what happens next.
 Two markers appear below. **needs `LLM_*`** means the feature calls an
 OpenAI-compatible endpoint and stays disabled in a self-host that has not
 configured one, the same way OAuth sign-in stays disabled without provider
-credentials. **costs AI credits** means it draws on a per-user points balance —
-granted monthly, use-it-or-lose-it, debited per action, and earned back by
-contributing a board; an exhausted balance is refused with HTTP 402 rather than
-degrading into a worse answer. Everything listed is reachable in production
+credentials. **draws on a daily allowance** means it is metered by
+`internal/ai/plan` — there is no currency and no balance, only how much of that
+feature a plan allows in one UTC day; a spent allowance is refused with HTTP 402
+rather than degrading into a worse answer. Everything listed is reachable in production
 today; nothing is behind a rollout flag.
 
 ## Find
@@ -79,7 +79,7 @@ streams its verdict as it goes.
 
 The score itself is free; the analysis on top of it is metered.
 
-**Live:** /match/<slug> · **Code:** `internal/candidate/cvmatch`, `internal/candidate/jobmatch`, `internal/candidate/matchanalysis`, `internal/candidate/hardconstraint` · **Deep dive:** [internal/candidate/cvmatch/AGENTS.md](../internal/candidate/cvmatch/AGENTS.md) — the analysis needs `LLM_*` and costs AI credits
+**Live:** /match/<slug> · **Code:** `internal/candidate/cvmatch`, `internal/candidate/jobmatch`, `internal/candidate/matchanalysis`, `internal/candidate/hardconstraint` · **Deep dive:** [internal/candidate/cvmatch/AGENTS.md](../internal/candidate/cvmatch/AGENTS.md) — the analysis needs `LLM_*` and draws on a daily allowance
 
 ### CV tailoring
 
@@ -89,7 +89,7 @@ check lives in the service path rather than in a prompt. Autopilot walks the
 whole vacancy in a single pass and snapshots the CV first, so the run is
 undoable.
 
-**Live:** /tailor/<slug> · **Code:** `internal/candidate/cvedit`, `internal/ai/assistant`, `internal/ai/credits` · **Deep dive:** [internal/candidate/cvedit/AGENTS.md](../internal/candidate/cvedit/AGENTS.md) — needs `LLM_*` and costs AI credits
+**Live:** /tailor/<slug> · **Code:** `internal/candidate/cvedit`, `internal/ai/assistant`, `internal/ai/plan` · **Deep dive:** [internal/candidate/cvedit/AGENTS.md](../internal/candidate/cvedit/AGENTS.md) — needs `LLM_*` and draws on a daily allowance
 
 ### The experience bank
 
