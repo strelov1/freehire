@@ -10,9 +10,37 @@
 #   jobage:   only postings from the last N days (optional, default 7)
 #   pages:    result pages to walk, 10 postings each (optional, default 1)
 #
-# This starter set is a first probe, not a considered coverage plan: run it, see how many of
-# the companies it surfaces are genuinely new, and let that decide what to add.
+# The starter set that preceded this one asked to be judged by measurement rather than kept on
+# faith, so it was: six queries over 15 pages surfaced 12 companies the catalogue did not have.
+# That yield is what this list widens on, and it widens along two axes the measurement named.
+#
+# The Nordics come first because of WHICH platforms the harvest can actually key. Teamtailor is
+# Swedish and its tenant density follows, and its boards are the ones a guessed candidate can
+# now reach at all — a Teamtailor board is keyed by the careers host, and until the harvest
+# shaped its guesses that way every one of them probed a host that did not exist.
+#
+# The rest widens the role vocabulary rather than the page depth: a seventh page of "golang" is
+# the same employers further down, while a market's QA and mobile postings are different
+# companies entirely. Depth stays at 3 for the markets that yielded and 2 elsewhere.
 queries:
+  # --- Nordics: Teamtailor's home market, where a host-keyed guess has the most to find ---
+  - keywords: software engineer
+    location: Sweden
+    pages: 3
+  - keywords: backend developer
+    location: Sweden
+    pages: 3
+  - keywords: software engineer
+    location: Denmark
+    pages: 3
+  - keywords: developer
+    location: Norway
+    pages: 3
+  - keywords: software developer
+    location: Finland
+    pages: 3
+
+  # --- the markets the first probe measured, kept at the depth that yielded ---
   - keywords: golang
     location: Germany
     pages: 3
@@ -30,4 +58,39 @@ queries:
     pages: 2
   - keywords: product manager
     location: Remote
+    pages: 2
+
+  # --- role vocabulary the first probe never asked for, across the same and nearby markets ---
+  - keywords: qa engineer
+    location: Poland
+    pages: 2
+  - keywords: mobile developer
+    location: Germany
+    pages: 2
+  - keywords: site reliability engineer
+    location: Netherlands
+    pages: 2
+  - keywords: data scientist
+    location: United Kingdom
+    pages: 2
+  - keywords: security engineer
+    location: Germany
+    pages: 2
+  - keywords: fullstack developer
+    location: Portugal
+    pages: 2
+  - keywords: software engineer
+    location: Ireland
+    pages: 2
+  - keywords: backend developer
+    location: Switzerland
+    pages: 2
+  - keywords: software engineer
+    location: Belgium
+    pages: 2
+  - keywords: python developer
+    location: Czechia
+    pages: 2
+  - keywords: java developer
+    location: Romania
     pages: 2
