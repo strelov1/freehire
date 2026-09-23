@@ -55,6 +55,18 @@ var privatePredicateExemptions = map[string]string{
 	"SelectStaleRegisteredCandidates":  "the same probe's registered-source candidate set",
 	"MarkLivenessExpired":              "the strike write for one probed row",
 	"ListJobsForRequirementsBackfill":  "a one-off backfill reading a description to fill that row's own requirements_derived",
+	// cmd/backfill-derive's narrowed scan. The pass re-derives a row's facets,
+	// role_fingerprint and slugs and writes them back to THAT row, so the effect stays
+	// inside it — the same shape as the requirements backfill above.
+	//
+	// Filtering private rows out here would be actively wrong, not merely unnecessary: a
+	// pasted JD is shown to its creator, and skipping it would leave it on whichever
+	// dictionary was current the day it was pasted, with nothing to correct it later. The
+	// unfiltered sibling this narrows (ListJobsByIDAfter) is outside the rule's shape
+	// only because it carries no closed_at predicate; adding one is what brought these two
+	// into the population, and it changed which rows are scanned, not who can see them.
+	"ListLiveJobsByIDAfter": "cmd/backfill-derive's scan narrowed to rows that can still surface; it re-derives each row's own columns and writes them back to that row",
+	"ListLiveJobIDsAfter":   "the id-only projection of the same scan, used when a corrupted TOAST value faults the wide batch",
 	"ResidualTitleGroups": "cmd/mine-titles's operator report: 2-3 word groups mined from live " +
 		"unclassified titles, read by a person and copied into the non-tech dictionary. The " +
 		"predicate is owed here and is a follow-up, not an exemption on the merits — a pasted " +
