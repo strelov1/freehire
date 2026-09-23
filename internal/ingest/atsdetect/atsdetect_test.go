@@ -138,6 +138,43 @@ func TestDetectSelfHosted(t *testing.T) {
 			html:     `<script src="/jibeapply.js"></script>`,
 			provider: "jibe", board: "github.careers", ok: true,
 		},
+		// A career site can be SERVED under the corporate host while the board itself answers on
+		// a dedicated sub-domain. Medius runs its Teamtailor site at career.medius.com and also
+		// renders it at www.medius.com/about/careers; taking the fetched page's host as the board
+		// yields medius.com, whose /jobs is a 404, and a live board carrying 13 postings is lost.
+		// The page names its own home in og:url, and that is the board.
+		{
+			name: "og:url names the dedicated careers sub-domain", host: "www.medius.com",
+			html:     `<meta property="og:url" content="https://career.medius.com/"><link href="https://assets-aws.teamtailor-cdn.com/x.css">`,
+			provider: "teamtailor", board: "career.medius.com", ok: true,
+		},
+		// og:url agreeing with the fetched host changes nothing — the common case.
+		{
+			name: "og:url agreeing with the host leaves the board alone", host: "careers.investengine.com",
+			html:     `<meta property="og:url" content="https://careers.investengine.com/jobs"><meta name="generator" content="Teamtailor">`,
+			provider: "teamtailor", board: "careers.investengine.com", ok: true,
+		},
+		// og:url may only narrow the host DOWNWARD, to a sub-domain of the page's own. A page can
+		// carry an embedded widget's metadata, and following og:url off-domain would attribute a
+		// board to a company that does not own it — the one failure worse than missing a board.
+		{
+			name: "og:url on an unrelated domain is ignored", host: "careers.acme.com",
+			html:     `<meta property="og:url" content="https://someoneelse.example/jobs"><meta name="generator" content="Teamtailor">`,
+			provider: "teamtailor", board: "careers.acme.com", ok: true,
+		},
+		// Upward too: a careers host whose og:url names the bare corporate domain must keep the
+		// host that actually answered, not climb to one that may not serve the board at all.
+		{
+			name: "og:url climbing to the apex is ignored", host: "careers.acme.com",
+			html:     `<meta property="og:url" content="https://acme.com/"><meta name="generator" content="Teamtailor">`,
+			provider: "teamtailor", board: "careers.acme.com", ok: true,
+		},
+		// The vendor's own domain is never a self-hosted board, whichever field names it.
+		{
+			name: "og:url on the vendor domain is ignored", host: "careers.acme.com",
+			html:     `<meta property="og:url" content="https://acme.teamtailor.com/jobs"><meta name="generator" content="Teamtailor">`,
+			provider: "teamtailor", board: "careers.acme.com", ok: true,
+		},
 		// The vendor's own site carries its own marker; it is never an employer board. Nor is a
 		// tenant hosted on the vendor's domain — atsboard resolves that one from the URL alone.
 		{name: "vendor marketing site", host: "www.phenom.com", html: `phenompeople`, ok: false},

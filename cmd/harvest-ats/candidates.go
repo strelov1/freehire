@@ -30,10 +30,30 @@ func guessedCandidates(site companySite) []hit {
 	out := make([]hit, 0, len(slugs)*len(providers))
 	for _, p := range providers {
 		for _, s := range slugs {
-			out = append(out, hit{provider: p, slug: s, company: site.Name, expectID: site.ExternalID})
+			out = append(out, hit{provider: p, slug: boardFor(p, s), company: site.Name, expectID: site.ExternalID})
 		}
 	}
 	return out
+}
+
+// hostKeyedVendorDomain names, for the platforms that key a board by the whole careers HOST
+// rather than by a bare slug (atsboard's modeHost), the vendor domain a tenant sits under. A
+// guess for such a platform must be a host: its prober fetches https://<board>/jobs, so a bare
+// slug names no host at all and the probe can only ever answer no — measured against prod,
+// 3925 of 3926 stored teamtailor boards are hosts.
+//
+// Only the id-prefix platforms need an entry, since only they can be guessed offline at all
+// (see providersForID); Greenhouse, Lever and Ashby key a board by the bare slug and are
+// absent, which is what leaves their guesses untouched. A tenant on its own custom domain
+// stays underivable either way — nothing in a company's name says `career.medius.com`.
+var hostKeyedVendorDomain = map[string]string{"teamtailor": "teamtailor.com"}
+
+// boardFor shapes a guessed slug into the board key its platform actually uses.
+func boardFor(provider, slug string) string {
+	if domain, ok := hostKeyedVendorDomain[provider]; ok {
+		return slug + "." + domain
+	}
+	return slug
 }
 
 // maxCandidateSlugs bounds how many board slugs one company may propose. The slugs are

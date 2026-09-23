@@ -5,6 +5,7 @@
 package atsdetect
 
 import (
+	"net/url"
 	"regexp"
 	"strings"
 )
@@ -71,9 +72,9 @@ var vendorDomains = []string{
 }
 
 // DetectSelfHosted reports the board for a career site served from the employer's own domain:
-// the provider comes from the platform's fingerprint in html, the board is host itself. It is
-// the last resort, after both the URL rules and the page's links have come up empty, and it
-// performs no I/O.
+// the provider comes from the platform's fingerprint in html, the board is the host the site
+// answers on. It is the last resort, after both the URL rules and the page's links have come up
+// empty, and it performs no I/O.
 func DetectSelfHosted(html, host string) (provider, board string, ok bool) {
 	host = strings.TrimPrefix(strings.ToLower(host), "www.")
 	if host == "" {
@@ -86,10 +87,53 @@ func DetectSelfHosted(html, host string) (provider, board string, ok bool) {
 	}
 	for _, s := range selfHosted {
 		if s.marker.MatchString(html) {
-			return s.provider, host, true
+			return s.provider, boardHost(html, host), true
 		}
 	}
 	return "", "", false
+}
+
+// ogURLRe and ogURLReversedRe capture the page's og:url, which a career site renders as its own
+// home. Two patterns because the meta tag's attribute order is a template's choice, and a rule
+// that reads only one order silently stops working on the sites that write the other.
+var (
+	ogURLRe         = regexp.MustCompile(`(?i)<meta[^>]+property=["']og:url["'][^>]+content=["']([^"']+)["']`)
+	ogURLReversedRe = regexp.MustCompile(`(?i)<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:url["']`)
+)
+
+// boardHost narrows the board to the host the career site names as its own home, which is not
+// always the host it was fetched on: the same site is routinely served under the corporate
+// domain as well (www.medius.com/about/careers and career.medius.com are one Teamtailor site),
+// and only the dedicated host answers the adapter's /jobs — the corporate one 404s, so a board
+// keyed on it is recorded dead while a live one carrying postings is lost.
+//
+// og:url may narrow DOWNWARD only, to a sub-domain of the fetched host. An og:url off-domain
+// belongs to an embedded widget rather than to this employer, and attributing a board to a
+// company that does not own it is worse than missing one; an og:url climbing to the apex names
+// a host that need not serve the board at all. Whatever the tag says, the host that actually
+// answered stays the fallback.
+func boardHost(html, host string) string {
+	og := ogHost(html)
+	if og == "" || !strings.HasSuffix(og, "."+host) {
+		return host
+	}
+	return og
+}
+
+// ogHost returns the bare host of the page's og:url, or "" when it names none.
+func ogHost(html string) string {
+	m := ogURLRe.FindStringSubmatch(html)
+	if m == nil {
+		m = ogURLReversedRe.FindStringSubmatch(html)
+	}
+	if m == nil {
+		return ""
+	}
+	u, err := url.Parse(strings.TrimSpace(m[1]))
+	if err != nil {
+		return ""
+	}
+	return strings.TrimPrefix(strings.ToLower(u.Hostname()), "www.")
 }
 
 // AbsURLRe extracts absolute http(s) URLs from arbitrary markup (href/src attributes

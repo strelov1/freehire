@@ -2,6 +2,7 @@ package main
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -109,6 +110,46 @@ func TestGuessedCandidates(t *testing.T) {
 		site := companySite{Name: "Acme", Website: "https://acme.com", ExternalID: "JR37734"}
 		if got := guessedCandidates(site); len(got) != 0 {
 			t.Errorf("got %v, want none for an unrecognised id shape", got)
+		}
+	})
+
+	// Teamtailor keys a board by the whole careers HOST (atsboard's modeHost), not by a bare
+	// slug the way Greenhouse, Lever and Ashby do. A guess shaped like a Greenhouse slug can
+	// therefore never probe live: teamtailorProber fetches https://<board>/jobs?page=1, and
+	// for `acme` that names no host at all. Measured against prod, 3925 of 3926 teamtailor
+	// boards are hosts — so every such candidate was a probe spent on an answer that could
+	// only ever be no.
+	t.Run("a host-keyed platform is proposed hosts, not bare slugs", func(t *testing.T) {
+		site := companySite{
+			Name:       "Acme",
+			Website:    "https://acme.com",
+			LinkedIn:   "https://linkedin.com/company/acme-inc",
+			ExternalID: "teamtailor-7928089",
+		}
+		got := guessedCandidates(site)
+		if len(got) == 0 {
+			t.Fatalf("got no candidates for a teamtailor posting id")
+		}
+		for _, h := range got {
+			if h.provider != "teamtailor" {
+				t.Errorf("candidate proposed to %q, want only teamtailor", h.provider)
+			}
+			if !strings.HasSuffix(h.slug, ".teamtailor.com") {
+				t.Errorf("candidate board %q is a bare slug; a host-keyed platform needs <slug>.teamtailor.com", h.slug)
+			}
+			if h.expectID != site.ExternalID {
+				t.Errorf("candidate %v carries expectID %q, want the posting id", h, h.expectID)
+			}
+		}
+	})
+
+	// The bare-slug platforms must not gain a host tail: their board IS the slug.
+	t.Run("a path-keyed platform keeps the bare slug", func(t *testing.T) {
+		site := companySite{Name: "Acme", Website: "https://acme.com", ExternalID: "4698693006"}
+		for _, h := range guessedCandidates(site) {
+			if strings.Contains(h.slug, ".") {
+				t.Errorf("greenhouse candidate %q carries a host; its board is the bare slug", h.slug)
+			}
 		}
 	})
 }
