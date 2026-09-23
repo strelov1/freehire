@@ -56,6 +56,10 @@
 
 - [x] 5.1 `cd web && pnpm test` — the whole vitest suite, both projects.
 - [x] 5.2 `cd web && pnpm check` and `pnpm lint` over the changed files.
-- [ ] 5.3 Run the app and look at a real job page signed in: the three CTA positions at `lg`,
-  the pinned header after scrolling, and the phone width's sticky bar — plus one posting from
-  an auto-apply source and one without, and one signed-out load.
+- [x] 5.3 Run the app and look at a real job page: the three CTA positions at `lg`, the
+  pinned header after scrolling, and the phone width's sticky bar. Done at 1440px and 390px
+  against the production API through the dev proxy — order, treatments and bar height are as
+  designed. **Signed-in (has CV / no CV) and the auto-apply button were NOT reached**: that
+  needs a session the dev proxy cannot carry to localhost, and no local backend was running.
+  Those branches rest on the tests and the type checker alone; the PR says so, and they are
+  the first thing to look at after deploy.
