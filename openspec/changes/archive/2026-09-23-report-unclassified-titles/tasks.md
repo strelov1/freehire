@@ -26,7 +26,21 @@
 
 - [x] 4.1 Full gate: `gofmt -l .` silent, `go vet ./...`, `go test ./...`,
   `go vet -tags=integration ./...`, `golangci-lint --new-from-rev=origin/main`.
-- [ ] 4.2 Run it against prod read-only and confirm it reproduces the hand measurement
+- [x] 4.2 Run it against prod read-only and confirm it reproduces the hand measurement
   that motivated it: the same shape of list, with the software titles the dictionary
   now places absent from it.
-- [ ] 4.3 PR, CI green, merge.
+  **Result (2026-09-23):** 2,653,315 distinct titles walked, **1,581,391 placed by
+  neither dictionary**. The top of the list reproduces the hand measurement title for
+  title — `Музыкальный руководитель` 1933, the German retail apprenticeships, `Швея`
+  1502 — and **none** of `Senior Developer`, `Lead Developer`, `Power Platform
+  Developer`, `Flutter Developer`, `SQL Developer`, `Mulesoft Developer`, `IT Officer`
+  or `Software Engr` appears anywhere in it, which is the recompute doing its job:
+  those postings still read `is_tech NULL` in the database, because the backfill has
+  not reached them.
+  The run also settled the chunk default — see 4.4.
+- [x] 4.3 PR, CI green, merge.
+- [x] 4.4 Raise `defaultChunkSize` from the drift report's 50,000 to 2,000,000, on the
+  first run's own measurement: the id sequence is far sparser than the row count (12.7M
+  rows over a max id of 1.62 billion), so at 50,000 the walk is 32,414 mostly-empty
+  chunks and projects to ~3.5 hours, nearly all of it the courtesy pause. At 2,000,000
+  the same report finished in 25 minutes with ~15k rows per chunk.

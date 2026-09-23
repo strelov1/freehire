@@ -40,9 +40,18 @@ import (
 
 // defaultChunkSize is how many ids one chunk's id range spans. The query GROUPs BY
 // title with no row LIMIT (see ListTitlesForUnclassifiedReport), so the range width
-// alone bounds one statement's cost — the same reasoning, and the same width, as
-// cmd/report-classify-drift.
-const defaultChunkSize = 50_000
+// alone bounds one statement's cost.
+//
+// NOT the 50,000 cmd/report-classify-drift uses, and the first run of this report is
+// what settled that. The id sequence is far sparser than the row count: measured on
+// prod 2026-09-23, 12.7M rows spread over a max id of 1,620,699,741, i.e. about 8
+// rows per thousand ids. At 50,000 the walk is 32,414 chunks, most of them empty,
+// and the run projected to ~3.5 hours — nearly all of it the 200ms courtesy pause
+// between statements rather than any work. At 2,000,000 the same report finished in
+// 25 minutes, and each chunk still averages only ~15k rows, so the statement stays
+// cheap. The knob a run can move is the chunk; what it cannot move is a default
+// that makes the first run look broken.
+const defaultChunkSize = 2_000_000
 
 // defaultTopN is how many ranked candidates the report prints. The catalogue holds
 // over 1.5M distinct unrecognised titles, so the cap is what makes the output
