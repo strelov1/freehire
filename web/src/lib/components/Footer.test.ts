@@ -38,10 +38,38 @@ describe('Footer compact mode', () => {
     expect(bottomBar).toContain('View source on GitHub');
   });
 
+  it('skips the store buttons when compact — they sit in the same guarded block', () => {
+    const guardEndAt = SOURCE.indexOf('{/if}', SOURCE.indexOf('productHunt.href'));
+    expect(SOURCE.indexOf('{#each stores as store')).toBeLessThan(guardEndAt);
+  });
+
   it("only borders the bottom bar's own top when compact (no divider from a section that isn't rendered)", () => {
     const commentAt = SOURCE.indexOf('Bottom bar:');
     const innerDivAt = SOURCE.indexOf('mx-auto flex max-w-6xl flex-col');
     const wrapperOpenTag = SOURCE.slice(commentAt, innerDivAt);
     expect(wrapperOpenTag).toContain('compact ?');
+  });
+});
+
+describe('Footer store buttons', () => {
+  it('links the App Store listing with NO country segment', () => {
+    // The listing's own share link is `/br/app/...`, which pins every visitor to the
+    // Brazilian storefront — a wrong-country page still loads, so nothing downstream
+    // could catch it. Without a country Apple redirects each visitor to their own.
+    expect(SOURCE).toContain('https://apps.apple.com/app/freehire-open-job-search/id6801885119');
+    expect(SOURCE).not.toMatch(/apps\.apple\.com\/[a-z]{2}\//);
+  });
+
+  it('takes the Chrome Web Store URL from $lib/extensionLinks rather than spelling it again', () => {
+    expect(SOURCE).toContain("import { EXTENSION_STORE_URL } from '$lib/extensionLinks'");
+    expect(SOURCE).toContain('href: EXTENSION_STORE_URL');
+    expect(SOURCE).not.toContain('chromewebstore.google.com');
+  });
+
+  it('opens both in a new tab with a safe rel', () => {
+    const eachAt = SOURCE.indexOf('{#each stores as store');
+    const block = SOURCE.slice(eachAt, SOURCE.indexOf('{/each}', eachAt));
+    expect(block).toContain('target="_blank"');
+    expect(block).toContain('rel="noopener noreferrer"');
   });
 });
