@@ -55,6 +55,21 @@ describe('robots.txt', () => {
     for (const agent of SEARCH_CRAWLERS) expect(groups(BODY).get(agent)).toContain('/signin');
   });
 
+  // The discussion rule covers the SUBTREE, not just the new-thread form under it.
+  // A `Disallow` is a prefix match, so the bare path closes /discussion itself,
+  // /discussion/new and /discussion/[id] in one line — and the bare path is the
+  // point: measured 2026-09-22, the thread pages themselves were empty shells, 16
+  // of 16 sampled. Asserting the prefix rather than the old /new suffix is what
+  // stops a well-meant narrowing from silently reopening ~321k identical pages.
+  it('keeps every crawler off the whole discussion subtree', () => {
+    for (const agent of ['*', ...SEARCH_CRAWLERS]) {
+      const rules = groups(BODY).get(agent);
+      expect(rules).toContain('/jobs/*/discussion');
+      expect(rules).toContain('/companies/*/discussion');
+      expect(rules).not.toContain('/companies/*/discussion/new');
+    }
+  });
+
   // The API pointer is aimed at agents, which read the wildcard group — a crawler
   // that follows it is the cheap outcome the comment block argues for.
   it('still advertises the API and the sitemap', () => {

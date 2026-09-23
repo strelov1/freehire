@@ -2,12 +2,28 @@
 // same reason sitemap.ts is one: the rule it encodes is easy to state and easy to
 // break silently, so it belongs somewhere a test can reach.
 
-// Paths no crawler should take. /my/ is personal. /jobs/*/discussion/new and
-// /companies/*/discussion/new are the empty new-thread form, linked from every
-// single job and company page — crawling it costs a full SSR render per job/company
-// for a page with no unique content, and it drove a real accept-queue incident
-// (2026-08-05, ClaudeBot alone made ~108k requests to it in 12.5h). Actual thread
-// pages (/discussion, /discussion/[id]) hold real content and stay crawlable.
+// Paths no crawler should take. /my/ is personal. /jobs/*/discussion and
+// /companies/*/discussion are the discussion surface, linked from every single job
+// and company page — crawling it costs a full SSR render per job/company, and the
+// new-thread form under it drove a real accept-queue incident (2026-08-05,
+// ClaudeBot alone made ~108k requests to it in 12.5h).
+//
+// The whole subtree, not just /new. This rule used to stop at the empty form on the
+// reasoning that thread pages hold real content — true of what they are for, and not
+// yet true of what they serve. Measured 2026-09-22: 16 of 16 sampled company
+// discussion pages were empty, including google, microsoft, amazon and openai, each
+// rendering the same 440-word shell with no thread on it. That is ~321k identical
+// pages, and Googlebot spent 257 of its ~1,300 daily fetches walking them
+// alphabetically while reaching almost none of the catalogue it came for.
+//
+// Two costs, not one. The budget is the obvious half; the other is that a template
+// repeated across a 321k-page address space is exactly the shape a crawler reads as
+// scaled content, on a site whose measured problem is already that Google crawls its
+// pages and declines to index them.
+//
+// REVISIT WHEN THREADS EXIST. This is a measurement, not a verdict on the feature —
+// re-sample before assuming it still holds, and narrow the rule back to /new once a
+// meaningful share of these pages carry a thread.
 //
 // /signin is the same shape and larger. Every sign-in entry point in the app goes
 // through `signinUrl()`, which carries the page it was clicked from in `returnTo`
@@ -30,8 +46,8 @@
 export const DISALLOWED = [
   '/my/',
   '/signin',
-  '/jobs/*/discussion/new',
-  '/companies/*/discussion/new',
+  '/jobs/*/discussion',
+  '/companies/*/discussion',
 ];
 
 // Search crawlers additionally lose /api/, and only they. The invitation in the
