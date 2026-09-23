@@ -39,8 +39,8 @@
 
 - [x] 4.1 Full local gate: `gofmt -l .` silent, `go vet ./...`, `go test ./...`,
   `go vet -tags=integration ./...`.
-- [ ] 4.2 PR, CI green, merge, deploy.
-- [ ] 4.3 Record in the project memory what the backfill owes: `cmd/backfill-derive`
+- [x] 4.2 PR, CI green, merge, deploy.
+- [x] 4.3 Record in the project memory what the backfill owes: `cmd/backfill-derive`
   at `BACKFILL_CONCURRENCY` 2-3, then a full `make reindex`, then re-count
   `is_tech IS NULL` against today's 2,232,773 / 71,314 baseline. NOT run as part of
   this change — the host is saturated by the crawl fleet and the pass is ~15h.
