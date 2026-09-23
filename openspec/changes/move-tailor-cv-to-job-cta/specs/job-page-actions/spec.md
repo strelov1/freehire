@@ -3,8 +3,15 @@
 ### Requirement: Tailoring the CV is the page's single primary CTA
 
 The job detail page SHALL render a `Tailor my CV` button in its call-to-action row and SHALL
-give it the primary (brand fill) treatment in every state. No other control on the page SHALL
-carry the brand fill.
+give it the primary (brand fill) treatment in every state. No other control in the
+call-to-action row — the external apply link, the auto-apply button — SHALL carry the brand
+fill, at any of the three widths that row is rendered at.
+
+The rule is about the CTA row, not the viewport. Elsewhere on the page a brand-filled button
+still means "the one thing to do HERE": the sidebar's `Upload CV` when there is no CV to
+match against, the `Sign in` in its locked teaser, `Yes, save` in the "Did you apply?"
+prompt. None of those competes with the CTA row — each is the single action of a block that
+is showing the reader something else entirely.
 
 The button SHALL appear in every place the CTA row is rendered — under the title from `lg` up,
 in the pinned header once the title has scrolled away, and in the sticky bottom bar below `lg`
@@ -28,7 +35,7 @@ at the moment the reader commits.
 
 - **WHEN** a signed-in reader with a stored CV opens any posting at `lg` or wider
 - **THEN** the `Tailor my CV` button renders with the primary (brand fill) treatment
-- **AND** it is the only control on the page carrying that treatment
+- **AND** it is the only control in the call-to-action row carrying that treatment
 
 #### Scenario: It survives the scroll and the pinned header
 

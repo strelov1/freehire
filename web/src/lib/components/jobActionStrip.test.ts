@@ -84,6 +84,16 @@ function pinnedHeaderButtons(): string {
   return close === -1 ? '' : JOB_VIEW.slice(open, close);
 }
 
+/** The phone's sticky bottom bar, also not a snippet. Anchored on the glass panel's own
+ *  class — `pointer-events-none sticky bottom-0` appears nowhere else — and cut at the
+ *  panel's closing tag; the `{#if}` inside it opens no element. */
+function stickyBar(): string {
+  const open = JOB_VIEW.indexOf('pointer-events-none sticky bottom-0');
+  if (open === -1) return '';
+  const close = JOB_VIEW.indexOf('</div>', open);
+  return close === -1 ? '' : JOB_VIEW.slice(open, close);
+}
+
 // The same audit, one row up: which controls compose the page's CALL TO ACTION, and how
 // loud each is. This is the rule `autoApplyButton.ts` can no longer hold on its own — it
 // ranks the two apply controls against each other, while the thing that outranks both is a
@@ -104,6 +114,7 @@ describe('the job page call-to-action row', () => {
     expect(tailorCta, 'tailorCta snippet not found in JobView.svelte').not.toBe('');
     expect(ctaGroup, 'ctaGroup snippet not found in JobView.svelte').not.toBe('');
     expect(pinnedHeader, 'pinned header button row not found in JobView.svelte').not.toBe('');
+    expect(stickyBar(), 'phone sticky bar not found in JobView.svelte').not.toBe('');
   });
 
   it.each([
@@ -117,7 +128,33 @@ describe('the job page call-to-action row', () => {
   // — the bar's own glass panel is `pointer-events-none`, so every button in it must
   // re-enable them for itself.
   it('renders tailorCta in the phone sticky bar', () => {
-    expect(JOB_VIEW).toMatch(/@render tailorCta\([^)]*pointer-events-auto/);
+    expect(stickyBar()).toContain('@render tailorCta(');
+  });
+
+  // The bar holds two buttons at `flex-1`. A third would either shrink all three past
+  // legibility or wrap the row and make the bar taller, and it would offer a reader two
+  // ways to apply to one posting — the ambiguity `leads` exists to resolve. The `{:else}`
+  // is what keeps it to one, so it is the branch, not the count, that is worth pinning.
+  it('offers exactly one apply control in the phone sticky bar', () => {
+    const bar = stickyBar();
+    expect(bar.match(/@render autoApplyCta\(/g) ?? []).toHaveLength(1);
+    expect(bar.match(/@render applyCta\(/g) ?? []).toHaveLength(1);
+    expect(bar).toContain('{:else}');
+  });
+
+  // Ascending rank left to right, so the brand fill lands at the row's end rather than in
+  // its middle. Asserted by ORDER rather than by presence: all three could be rendered and
+  // still read wrong.
+  it.each([
+    ['the title row', () => ctaGroup],
+    ['the pinned header', () => pinnedHeader],
+  ])('renders tailorCta last in %s', (_where, region) => {
+    const source = region();
+    const order = ['autoApplyCta', 'applyCta', 'tailorCta'].map((s) =>
+      source.indexOf(`@render ${s}(`),
+    );
+    expect(order.every((i) => i !== -1)).toBe(true);
+    expect(order).toEqual([...order].sort((a, b) => a - b));
   });
 
   it('gives the brand fill to tailorCta alone', () => {

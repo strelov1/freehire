@@ -1,6 +1,6 @@
 // Global controller for the pre-flight "confirm tailor" dialog, the same singleton
 // shape as cvRefreshDialog.svelte.ts: askConfirmTailor() is a plain async function
-// (called from script logic in JobDrawer/MatchSummary, not a template) and needs to
+// (called from script logic in JobView/JobDrawer, not a template) and needs to
 // await a yes/no from a dialog that must be mounted somewhere in the tree exactly
 // once — see ConfirmTailorDialog.svelte, mounted in the root layout beside
 // CvRefreshDialog.

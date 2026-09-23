@@ -42,7 +42,9 @@ from a `grep … | head`, whose truncation is invisible.)
 - `Tailor my CV` renders in all three CTA positions and is the page's only brand-fill button.
 - The auto-apply rank machinery keeps working: the phone's sticky bar and the
   `Apply`/`Show origin` wording are still decided by whether auto-apply can be started.
-- The page makes no more network calls than it does today.
+- The page makes no more network calls **per render** than it does today — one read of the
+  match analysis, not two. It does make that one read on strictly more page loads; see the
+  decision below, which is a cost this change accepts rather than avoids.
 - The behaviours the sidebar button had — confirm-before-navigate, guest sign-in, withheld
   without a CV — survive the move unchanged.
 
@@ -103,6 +105,42 @@ first", per `cv-tailoring`'s own requirement) answer it. Rejected: that 409 surf
 tailoring workspace after a navigation, which is a worse way to learn the same thing than a
 prompt the sidebar is already showing.
 
+### The read now fires on every signed-in page load, and that is a real cost
+
+`MatchSummary` mounted only in `JobMatch`'s `ready` state — signed in, profile loaded,
+profile carrying skills, the job carrying a `skills` facet, and the deterministic match
+already back (`resolveMatchState`). Its own effect then short-circuited for a guest. In
+`JobView` the same effect fires for **every signed-in reader on every posting**: a reader
+with no profile skills, or a non-technical posting with no `skills` facet, used to cost zero
+calls to `GET /jobs/:slug/match-analysis` and now costs one.
+
+That endpoint is not free — `GetJobBySlug`, the CV timestamp, the language read, the cached
+analysis and two allowance computations — and this host's bottleneck is already its crawl
+fleet. It is accepted rather than avoided because the alternative is worse in kind: the CTA
+gate needs `has_cv`, and the conditions that used to suppress the read are all conditions
+about the SIDEBAR's content, none of which say anything about whether the reader has a CV.
+Gating the page's primary CTA on whether the sidebar happened to render would make the
+button appear and disappear for reasons no reader could connect to it.
+
+### The fit-analysis allowance no longer pre-empts the button, deliberately
+
+The old block suppressed the button when **either** allowance would refuse —
+`refuses(allowance) || tailorRefused` — and named whichever did. `ConfirmTailorDialog` reads
+only the tailoring one. So a reader whose *fit-analysis* allowance is spent while their
+tailoring allowance is not now gets the button, the dialog, and the workspace, where the old
+sidebar told them their plan does not include job analyses.
+
+That is the correct outcome, not a gap left behind. The button spends a TAILORING session;
+the fit analysis is a different feature, and the tailoring workspace reads the cached
+analysis best-effort (`api.getMatchAnalysis(slug).catch(() => null)`) and proceeds without
+one. Hiding the page's single primary call to action because an unrelated feature's daily
+count is spent would refuse somebody an action that works. The old conflation made sense
+only while the button lived inside a block whose subject was the fit analysis.
+
+What the reader loses is the explanation: the sidebar used to name the refused feature and
+link the plan page. Tailoring still works, so there is nothing to explain at the moment of
+the click — and `/my/plan` is where a spent allowance is reported in full.
+
 ### The sidebar loses both allowance branches, not just the button
 
 With the button gone, `MatchSummary`'s spent-allowance branch and its
@@ -139,8 +177,14 @@ side, each taking half the width: `Tailor my CV` first, then whichever apply con
   avoids.
 - **The button is now reachable by a reader whose CV read has not landed yet.** → The window
   is one request, and the confirmation dialog stands between the click and any navigation;
-  its no-match branch already says "add a CV to your profile". The alternative — withholding
-  the page's primary CTA until a fetch resolves — makes the row jump.
+  its no-match branch already says "add a CV to your profile".
+  The row still jumps for that reader — the button renders and is then REMOVED when the
+  response says there is no CV. Withholding it until the fetch resolves would move the jump
+  onto everybody instead, which is the wrong trade: almost every signed-in reader has a CV,
+  and a primary CTA that fades in on every page load is worse than one that leaves on the
+  rare page load where it was never going to work. The sidebar has the same shape of gap —
+  its `{#if noCv || analysis}` gate means the block appears after the read rather than
+  showing a skeleton.
 - **Two full-width buttons make the phone's sticky bar taller.** → They share one row at half
   width each, not two stacked rows, so the bar's height is unchanged.
 - **The visual hierarchy change is not A/B tested.** → It is a deliberate product decision

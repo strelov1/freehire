@@ -147,10 +147,16 @@ func (h *matchHandlers) liveStamps(ctx context.Context, userID int64, job db.Job
 // set on reads (GET) so the SPA can show where the caller stands today and pre-block a
 // new-job analysis that would be refused; it is omitted on the compute responses.
 //
-// TailorAllowance rides along on the same reads because the sidebar this feeds offers
-// TAILORING off the fit summary, and the two features carry their own daily ceilings — a
-// page holding only the fit standing can do nothing but print the wrong number beside a
-// "Tailor my CV" button.
+// TailorAllowance rides along on the same reads because a caller deciding what to offer
+// off this response is usually deciding between two features, and the two carry their own
+// daily ceilings — a response holding only the fit standing can do nothing but report the
+// wrong number for a tailoring session.
+//
+// Our own job page no longer reads it: the "Tailor my CV" button moved out of the sidebar
+// this feeds and into the page's CTA row, where the pre-flight dialog states the tailoring
+// allowance from its own /me/plan read at the moment the candidate commits. The field stays
+// because it is part of a documented public API and because the fit standing alone has
+// never been the whole answer for anyone offering both.
 type matchAnalysisResponse struct {
 	HasCV           bool                    `json:"has_cv"`
 	Stale           bool                    `json:"stale"`

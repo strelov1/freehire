@@ -227,9 +227,9 @@ export interface UsageHistoryEntry {
  *  is unconfigured; `stale` marks a cached analysis whose CV or job changed since (the
  *  block then offers a recompute); `allowance` reports where the caller stands today on
  *  reads (omitted on the no-CV read and on compute responses). `tailor_allowance` rides
- *  along on the same reads because the sidebar this feeds offers TAILORING off the fit
- *  summary, and the two features carry their own daily ceilings — reading only the fit one
- *  puts an analysis count under a "Tailor my CV" button. */
+ *  along on the same reads because a caller deciding between the two features needs both
+ *  ceilings; the job page itself no longer reads it, the pre-flight tailoring dialog
+ *  stating that allowance from its own /me/plan read instead. */
 export interface MatchAnalysisResponse {
   has_cv: boolean;
   stale: boolean;

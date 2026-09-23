@@ -388,12 +388,16 @@
     }
     if (tailoring) return;
     tailoring = true;
-    const ok = await askConfirmTailor(job.public_slug, `${job.title} at ${job.company}`);
-    if (!ok) {
+    try {
+      const ok = await askConfirmTailor(job.public_slug, `${job.title} at ${job.company}`);
+      if (ok) await goto(resolve('/tailor/[slug]', { slug: job.public_slug }));
+    } finally {
+      // Released even on the happy path, where the navigation has already left this page:
+      // a rejected `goto` would otherwise leave all THREE copies of the page's primary CTA
+      // permanently disabled with no way back. It mattered less when this was one sidebar
+      // button; it is the whole call to action now.
       tailoring = false;
-      return;
     }
-    await goto(resolve('/tailor/[slug]', { slug: job.public_slug }));
   }
 
   async function onAutoApplyClick() {

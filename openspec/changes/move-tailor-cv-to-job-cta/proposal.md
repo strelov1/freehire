@@ -23,9 +23,12 @@ keeps them here and is the paid feature the plan meters. The CTA row should say 
   still decides the phone's sticky bar and whether the external link reads `Apply` or
   `Show origin`. That question is separated from the brand fill it used to imply.
 - The sidebar loses the button, the `N of today's CV tailorings left` caption and the
-  spent-allowance message. The confirmation dialog already says both, at the moment the
-  reader decides. The sidebar keeps the `Upload a CV to analyse` prompt and the cached
-  analysis card.
+  spent-allowance message. The confirmation dialog already says both **for tailoring**, at
+  the moment the reader decides. The sidebar keeps the `Upload a CV to analyse` prompt and
+  the cached analysis card.
+- **A spent FIT-ANALYSIS allowance no longer hides the button.** The old block suppressed it
+  on either feature's ceiling; the button spends a tailoring session, and the tailoring
+  workspace reads the analysis best-effort, so tailoring still works. See `design.md`.
 - A guest sees the CTA button and gets the sign-in dialog, as they do from the sidebar
   today. The sidebar's separate guest-only rendering of the offer goes away with it.
 - The button is withheld only when the page knows the reader has no CV; the sidebar's own

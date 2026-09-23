@@ -449,7 +449,7 @@ export const GROUPS: Group[] = [
           '`has_cv` is false when you have no stored CV. `allowance` reports how much of ' +
           'today you have used against what the day allows, and when it resets. ' +
           '`tailor_allowance` reports the same for CV tailoring, which carries its own ' +
-          'daily ceiling — the job page offers tailoring from this response.',
+          'daily ceiling, so a caller deciding between the two has both figures here.',
         pathParams: [{ name: 'slug', type: 'string', required: true, description: 'The job `public_slug`.' }],
         curl: `curl "${BASE_URL}/jobs/<slug>/match-analysis" -H "Authorization: Bearer $FREEHIRE_API_KEY"`,
         responseExample: `{

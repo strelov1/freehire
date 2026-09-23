@@ -63,26 +63,43 @@ describe('MatchSummary', () => {
     expect(screen.getByRole('link', { name: /upload cv/i })).toBeTruthy();
   });
 
-  it('offers no tailoring button, in any state', () => {
-    for (const matchAnalysis of [null, analysed, { has_cv: true, stale: false, analysis: null }]) {
-      const { unmount } = render(MatchSummary, { props: { slug: 'rust-job', matchAnalysis } });
-      expect(screen.queryByRole('button', { name: /tailor/i })).toBeNull();
-      unmount();
-    }
+  // Asserted only against the fixtures that RENDER something. A `queryByText` over an empty
+  // component passes whatever the component would have said, so pointing these at the
+  // nothing-to-report states would have proved nothing: re-adding the old button or the old
+  // spent-allowance branch inside the current gate would have left them green.
+  it.each([
+    ['the cached-analysis card', analysed],
+    ['the upload prompt', { has_cv: false, stale: false, analysis: null } as MatchAnalysisResponse],
+  ])('offers no tailoring button beside %s', (_state, matchAnalysis) => {
+    render(MatchSummary, { props: { slug: 'rust-job', matchAnalysis } });
+
+    expect(screen.queryByRole('button', { name: /tailor/i })).toBeNull();
+    expect(screen.queryByRole('link', { name: /tailor my cv/i })).toBeNull();
   });
 
-  // Both of these are said by ConfirmTailorDialog, at the moment the reader commits. A count
-  // stated in two places is a count that can disagree.
-  it('states nothing about the tailoring allowance', () => {
+  // The allowance is said by ConfirmTailorDialog, at the moment the reader commits. A count
+  // stated in two places is a count that can disagree. A spent allowance rides the SAME
+  // response the card is built from, so this asserts over a rendered card rather than over
+  // the empty state where any assertion would hold.
+  it('states nothing about the tailoring allowance beside a rendered card', () => {
     render(MatchSummary, {
-      props: {
-        slug: 'rust-job',
-        matchAnalysis: { has_cv: true, stale: false, analysis: null, tailor_allowance: spent },
-      },
+      props: { slug: 'rust-job', matchAnalysis: { ...analysed, tailor_allowance: spent } },
     });
 
+    expect(screen.getByText('74%')).toBeTruthy();
     expect(screen.queryByText(/tailorings/i)).toBeNull();
     expect(screen.queryByText(/used today/i)).toBeNull();
     expect(screen.queryByText(/doesn't include/i)).toBeNull();
+  });
+
+  // The block draws nothing rather than an empty bordered section above its own rule — for
+  // a guest, for a read still in flight, and for a reader with a CV and no analysis yet.
+  it.each([
+    ['nothing read yet', null],
+    ['a CV but no analysis', { has_cv: true, stale: false, analysis: null } as MatchAnalysisResponse],
+  ])('renders no section at all for %s', (_state, matchAnalysis) => {
+    const { container } = render(MatchSummary, { props: { slug: 'rust-job', matchAnalysis } });
+
+    expect(container.querySelector('section')).toBeNull();
   });
 });
