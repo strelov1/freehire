@@ -230,3 +230,24 @@ func TestRefilterRunnerAdmitsOnStoredLinks(t *testing.T) {
 		t.Errorf("Requeued = %d, want 1 — the stored link admits it", stats.Requeued)
 	}
 }
+
+// A bound that happens to land exactly on the last row is not "there is more". Without a
+// probe past the exhausted page the run reports Stopped and prints a resume cursor, and
+// the operator spends a follow-up run to be told there was nothing — which is the same
+// "inferred from a count" failure the completion report exists to remove.
+func TestRefilterRunnerMaxLandingOnTheLastRowIsStillDone(t *testing.T) {
+	corpus := refilterCorpus()
+	store := &fakeRefilterStore{posts: corpus}
+	r := RefilterRunner{Store: store, Batch: 10, Max: int64(len(corpus))}
+
+	stats, err := r.Run(context.Background())
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if stats.Scanned != len(corpus) {
+		t.Errorf("Scanned = %d, want %d", stats.Scanned, len(corpus))
+	}
+	if stats.Stopped {
+		t.Error("Stopped = true, want false — the bound and the end of the table coincided")
+	}
+}

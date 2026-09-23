@@ -93,8 +93,18 @@ func (r RefilterRunner) Run(ctx context.Context) (RefilterStats, error) {
 		if r.Max > 0 {
 			remaining := r.Max - int64(stats.Scanned)
 			if remaining <= 0 {
-				stats.Stopped = true
-				stats.NextChannel, stats.NextMsgID = afterChannel, afterMsgID
+				// The bound is spent, but spent is not the same as stopped short: a Max
+				// that happens to land on the last row would otherwise report a resume
+				// cursor and cost the operator a follow-up run to be told there was
+				// nothing. One indexed row settles it, and only on a bounded run.
+				more, err := r.Store.ListRejected(ctx, afterChannel, afterMsgID, 1)
+				if err != nil {
+					return stats, fmt.Errorf("telegram refilter: probe after %s/%d: %w", afterChannel, afterMsgID, err)
+				}
+				if len(more) > 0 {
+					stats.Stopped = true
+					stats.NextChannel, stats.NextMsgID = afterChannel, afterMsgID
+				}
 				return stats, nil
 			}
 			if remaining < int64(limit) {
