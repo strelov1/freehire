@@ -220,6 +220,7 @@ extension/*.zip
 /reindex-companies
 /report-classify-drift
 /report-skill-gaps
+/report-unclassified-titles
 /reslug
 /rollup-facets
 /build-suggestions

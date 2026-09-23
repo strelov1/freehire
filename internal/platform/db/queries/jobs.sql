@@ -2730,6 +2730,46 @@ WHERE id >= sqlc.arg(from_id) AND id < sqlc.arg(to_id)
   AND enriched_at IS NOT NULL
 GROUP BY title;
 
+-- name: UnclassifiedTitleReportBounds :one
+-- The id span cmd/report-unclassified-titles walks. Same shape as
+-- ClassifyDriftReportBounds.
+SELECT COALESCE(MIN(id), 0)::bigint AS min_id,
+       COALESCE(MAX(id), 0)::bigint AS max_id
+FROM jobs;
+
+-- name: ListTitlesForUnclassifiedReport :many
+-- One chunk of the unclassified-title report: every distinct title among PUBLISHABLE
+-- postings in an id range, with how many postings in THIS CHUNK carried it.
+--
+-- The scope is the deliberate difference from ListTitlesForClassifyDrift beside it.
+-- That query takes enriched postings whatever their state, because a title's
+-- dictionary answer is a fact about the text. This one asks a different question —
+-- what is the catalogue failing to PUBLISH — so a title carried only by closed,
+-- duplicate or private postings is not a gap: recognising it would publish nothing.
+--
+-- No is_tech predicate, and that is not an omission. The stored column is the OLD
+-- dictionary's answer until cmd/backfill-derive reaches the row (~171 rows/s over
+-- 12.7M rows), so filtering on it would rank gaps already closed and hide gaps the
+-- newest terms opened. dictgap.UnclassifiedTitles recomputes instead; this statement
+-- hands it every publishable title and lets the dictionary decide, the same
+-- over-fetch-and-let-the-dictionary-decide shape cmd/backfill-clearance uses.
+--
+-- Reads no description column, so it never de-TOASTs.
+--
+-- Deliberately NO row LIMIT, for the reason ListTitlesForClassifyDrift states: GROUP
+-- BY already caps the output at the number of DISTINCT titles in the id range, while a
+-- LIMIT on an unordered aggregate would silently drop titles with no id to resume
+-- from. Grouping happens per chunk, so a title spanning more than one range comes back
+-- once per chunk and the caller sums.
+SELECT title,
+       count(*)::bigint AS job_count
+FROM jobs
+WHERE id >= sqlc.arg(from_id) AND id < sqlc.arg(to_id)
+  AND closed_at IS NULL
+  AND duplicate_of IS NULL
+  AND NOT is_private
+GROUP BY title;
+
 -- name: CloseMisattributedSourceJobs :one
 -- Closes one id-range chunk of a source whose stored rows carry an employer we now know is
 -- wrong and cannot repair in place (see migration 0165 for the case that forced the label).

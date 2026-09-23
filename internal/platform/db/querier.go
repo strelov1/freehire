@@ -4399,6 +4399,30 @@ type Querier interface {
 	// exactly the "no opinion" case dictgap.ClassifyDriftCandidates already treats as
 	// empty.
 	ListTitlesForClassifyDrift(ctx context.Context, arg ListTitlesForClassifyDriftParams) ([]ListTitlesForClassifyDriftRow, error)
+	// One chunk of the unclassified-title report: every distinct title among PUBLISHABLE
+	// postings in an id range, with how many postings in THIS CHUNK carried it.
+	//
+	// The scope is the deliberate difference from ListTitlesForClassifyDrift beside it.
+	// That query takes enriched postings whatever their state, because a title's
+	// dictionary answer is a fact about the text. This one asks a different question —
+	// what is the catalogue failing to PUBLISH — so a title carried only by closed,
+	// duplicate or private postings is not a gap: recognising it would publish nothing.
+	//
+	// No is_tech predicate, and that is not an omission. The stored column is the OLD
+	// dictionary's answer until cmd/backfill-derive reaches the row (~171 rows/s over
+	// 12.7M rows), so filtering on it would rank gaps already closed and hide gaps the
+	// newest terms opened. dictgap.UnclassifiedTitles recomputes instead; this statement
+	// hands it every publishable title and lets the dictionary decide, the same
+	// over-fetch-and-let-the-dictionary-decide shape cmd/backfill-clearance uses.
+	//
+	// Reads no description column, so it never de-TOASTs.
+	//
+	// Deliberately NO row LIMIT, for the reason ListTitlesForClassifyDrift states: GROUP
+	// BY already caps the output at the number of DISTINCT titles in the id range, while a
+	// LIMIT on an unordered aggregate would silently drop titles with no id to resume
+	// from. Grouping happens per chunk, so a title spanning more than one range comes back
+	// once per chunk and the caller sums.
+	ListTitlesForUnclassifiedReport(ctx context.Context, arg ListTitlesForUnclassifiedReportParams) ([]ListTitlesForUnclassifiedReportRow, error)
 	// The owner's per-CV panel: every traced link of one CV with what is known about it. Owner-scoped.
 	//
 	// Clicks flagged as automated are counted separately rather than filtered out, so the UI's "include
@@ -6676,6 +6700,9 @@ type Querier interface {
 	// current work, not an archive, and each row carries two operation documents on the table
 	// behind every CV page.
 	TrimCVRevisions(ctx context.Context, arg TrimCVRevisionsParams) (int64, error)
+	// The id span cmd/report-unclassified-titles walks. Same shape as
+	// ClassifyDriftReportBounds.
+	UnclassifiedTitleReportBounds(ctx context.Context) (UnclassifiedTitleReportBoundsRow, error)
 	// The worker's delivery pass: earned, but not yet placed on the referrer's balance.
 	//
 	// Unlike the grant pass this does NOT require the referrer to hold a customer. A referrer

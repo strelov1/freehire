@@ -3536,6 +3536,70 @@ func (q *Queries) ListTitlesForClassifyDrift(ctx context.Context, arg ListTitles
 	return items, nil
 }
 
+const listTitlesForUnclassifiedReport = `-- name: ListTitlesForUnclassifiedReport :many
+SELECT title,
+       count(*)::bigint AS job_count
+FROM jobs
+WHERE id >= $1 AND id < $2
+  AND closed_at IS NULL
+  AND duplicate_of IS NULL
+  AND NOT is_private
+GROUP BY title
+`
+
+type ListTitlesForUnclassifiedReportParams struct {
+	FromID int64 `json:"from_id"`
+	ToID   int64 `json:"to_id"`
+}
+
+type ListTitlesForUnclassifiedReportRow struct {
+	Title    string `json:"title"`
+	JobCount int64  `json:"job_count"`
+}
+
+// One chunk of the unclassified-title report: every distinct title among PUBLISHABLE
+// postings in an id range, with how many postings in THIS CHUNK carried it.
+//
+// The scope is the deliberate difference from ListTitlesForClassifyDrift beside it.
+// That query takes enriched postings whatever their state, because a title's
+// dictionary answer is a fact about the text. This one asks a different question —
+// what is the catalogue failing to PUBLISH — so a title carried only by closed,
+// duplicate or private postings is not a gap: recognising it would publish nothing.
+//
+// No is_tech predicate, and that is not an omission. The stored column is the OLD
+// dictionary's answer until cmd/backfill-derive reaches the row (~171 rows/s over
+// 12.7M rows), so filtering on it would rank gaps already closed and hide gaps the
+// newest terms opened. dictgap.UnclassifiedTitles recomputes instead; this statement
+// hands it every publishable title and lets the dictionary decide, the same
+// over-fetch-and-let-the-dictionary-decide shape cmd/backfill-clearance uses.
+//
+// Reads no description column, so it never de-TOASTs.
+//
+// Deliberately NO row LIMIT, for the reason ListTitlesForClassifyDrift states: GROUP
+// BY already caps the output at the number of DISTINCT titles in the id range, while a
+// LIMIT on an unordered aggregate would silently drop titles with no id to resume
+// from. Grouping happens per chunk, so a title spanning more than one range comes back
+// once per chunk and the caller sums.
+func (q *Queries) ListTitlesForUnclassifiedReport(ctx context.Context, arg ListTitlesForUnclassifiedReportParams) ([]ListTitlesForUnclassifiedReportRow, error) {
+	rows, err := q.db.Query(ctx, listTitlesForUnclassifiedReport, arg.FromID, arg.ToID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListTitlesForUnclassifiedReportRow{}
+	for rows.Next() {
+		var i ListTitlesForUnclassifiedReportRow
+		if err := rows.Scan(&i.Title, &i.JobCount); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const markFuzzyDuplicatesForCompany = `-- name: MarkFuzzyDuplicatesForCompany :one
 WITH candidate AS (
     SELECT unnest($1::bigint[]) AS id
@@ -4743,6 +4807,26 @@ func (q *Queries) TouchJob(ctx context.Context, arg TouchJobParams) (string, err
 	var company_slug string
 	err := row.Scan(&company_slug)
 	return company_slug, err
+}
+
+const unclassifiedTitleReportBounds = `-- name: UnclassifiedTitleReportBounds :one
+SELECT COALESCE(MIN(id), 0)::bigint AS min_id,
+       COALESCE(MAX(id), 0)::bigint AS max_id
+FROM jobs
+`
+
+type UnclassifiedTitleReportBoundsRow struct {
+	MinID int64 `json:"min_id"`
+	MaxID int64 `json:"max_id"`
+}
+
+// The id span cmd/report-unclassified-titles walks. Same shape as
+// ClassifyDriftReportBounds.
+func (q *Queries) UnclassifiedTitleReportBounds(ctx context.Context) (UnclassifiedTitleReportBoundsRow, error) {
+	row := q.db.QueryRow(ctx, unclassifiedTitleReportBounds)
+	var i UnclassifiedTitleReportBoundsRow
+	err := row.Scan(&i.MinID, &i.MaxID)
+	return i, err
 }
 
 const unseenJobIDs = `-- name: UnseenJobIDs :many
