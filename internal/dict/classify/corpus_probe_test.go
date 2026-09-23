@@ -29,14 +29,25 @@ func TestCorpusProbe(t *testing.T) {
 	var claimed []string
 	s := bufio.NewScanner(f)
 	s.Buffer(make([]byte, 1<<20), 1<<20)
-	for s.Scan() {
-		line := s.Text()
-		i := strings.LastIndex(line, "|")
-		if i < 0 {
+	for line := 0; s.Scan(); {
+		line++
+		row := s.Text()
+		if strings.TrimSpace(row) == "" {
 			continue
 		}
-		title := line[:i]
-		n, _ := strconv.Atoi(line[i+1:])
+		// A malformed row fails the probe rather than being skipped. The whole output
+		// is a coverage percentage, and a silently dropped row moves it without
+		// saying so — which would make this measurement exactly the kind of quiet
+		// wrong number the change exists to remove.
+		i := strings.LastIndex(row, "|")
+		if i < 0 {
+			t.Fatalf("%s:%d: no '|' separator in %q", path, line, row)
+		}
+		title := row[:i]
+		n, err := strconv.Atoi(strings.TrimSpace(row[i+1:]))
+		if err != nil {
+			t.Fatalf("%s:%d: count %q: %v", path, line, row[i+1:], err)
+		}
 		totalPostings += n
 		hit := IsTech(title)
 		if hit {

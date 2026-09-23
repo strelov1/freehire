@@ -27,10 +27,12 @@ most common lost titles on prod (2026-09-23):
 | the `Engr` abbreviation | 194 | 7 | `Software Engr II`, `Advanced Software Engr` |
 | plural | 58 | 3 | `Software Engineers`, `Data Engineers` |
 
-Those counts cover only titles appearing 12+ times — 4,366 of the 71,314. The terms
-match as substrings, so each one also collects its long tail (`flutter developer`
-takes `Senior Flutter Developer` and `Flutter Developer (Remote)` with it), and the
-real yield is measured after the backfill rather than predicted here.
+Those counts cover only titles appearing 12+ times — 4,366 of the 71,314. A term is
+matched as a whole-word PHRASE anywhere inside a longer title — never as an arbitrary
+substring — so each one also collects its long tail (`flutter developer` takes
+`Senior Flutter Developer` and `Flutter Developer (Remote)` with it, but nothing where
+those two words are not adjacent), and the real yield is measured after the backfill
+rather than predicted here.
 
 ## What Changes
 

@@ -69,8 +69,9 @@ pronoun. Every IT term is the two-word form.
   term. The cost of a miss is asymmetric and understood: a false positive dilutes the
   catalogue, a false negative hides a real job entirely — which is the state 71,314
   postings are in today.
-- **The yield is predicted, not measured** → deliberately. The terms match substrings
-  and collect a long tail no title-frequency query can size in advance. The honest
+- **The yield is predicted, not measured** → deliberately. A term matches as a
+  whole-word phrase anywhere inside a longer title — never as an arbitrary substring —
+  so it collects a long tail no title-frequency query can size in advance. The honest
   number comes from counting `is_tech IS NULL` before and after the backfill.
 
 ## Migration Plan
