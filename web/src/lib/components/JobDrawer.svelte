@@ -815,7 +815,11 @@
       {:else if tab === 'fit'}
         <div class="flex flex-col gap-6">
           {#if posting}
-            <JobMatch job={posting} />
+            <!-- No match analysis handed in, deliberately: `MatchAnalysisFull` directly
+                 below IS the analysis, so the compact card the block would draw from it
+                 would restate the panel's own content and offer a "View full analysis"
+                 link that closes the drawer to show what is already open. -->
+            <JobMatch job={posting} matchAnalysis={null} />
             <MatchAnalysisFull job={posting} />
           {:else if item.job}
             <p class="text-sm text-muted-foreground">Loading…</p>

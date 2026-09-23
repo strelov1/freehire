@@ -48,62 +48,72 @@ export function autoApplyButtonState(
   return { kind: 'idle' };
 }
 
-/** What the job page's two call-to-action buttons look like, given the auto-apply state.
- *  Never two loud buttons at once, and one wherever the reader still has something to do. */
+/** What the job page's two APPLY controls look like, given the auto-apply state.
+ *
+ *  This plan ranks nothing by colour. The job page's one primary (brand-filled) call to
+ *  action is `Tailor my CV`, in every state — see JobView.svelte's `tailorCta` — so both
+ *  controls here are quiet ones, and what is left to decide is which of them is the offered
+ *  way to APPLY. That question is not cosmetic: it is what puts one of them in the phone's
+ *  sticky bar beside the tailoring button, and what the external link's own word reports. */
 export type JobCtaPlan = {
   /** `null` where auto-apply cannot drive the posting's ATS, or the caller is not Pro: no
    *  button is rendered either way — see autoApplyButtonState's own `hidden` doc comment. */
   autoApply: {
     label: string;
-    /** Carries the brand fill — the page's primary call to action. */
-    primary: boolean;
+    /** Auto-apply is the posting's offered way to apply: it takes the phone's sticky bar,
+     *  and the external link steps aside into the quiet strip under the title. */
+    leads: boolean;
     /** Renders the `Pro` marker naming the plan the action requires. */
     pro: boolean;
     disabled: boolean;
   } | null;
-  /** The link out to the posting's own site. Demoted to an outline `Show origin` while
-   *  auto-apply owns the primary slot. */
-  external: { label: 'Apply' | 'Show origin'; primary: boolean };
+  /** The link out to the posting's own site, an outline button in every state. Reads
+   *  `Show origin` while auto-apply is doing the applying — the word is the demotion. */
+  external: { label: 'Apply' | 'Show origin' };
 };
 
-/** A rendered-but-unpressable auto-apply button: it reports where the attempt stands and
- *  takes neither the brand fill nor the `Pro` marker. */
+/** A rendered-but-unpressable auto-apply button: it reports where the attempt stands, leads
+ *  nothing and takes no `Pro` marker. */
 const quiet = (label: string): NonNullable<JobCtaPlan['autoApply']> => ({
   label,
-  primary: false,
+  leads: false,
   pro: false,
   disabled: true,
 });
 
-const showOrigin = { label: 'Show origin', primary: false } as const;
-const apply = { label: 'Apply', primary: true } as const;
+const showOrigin = { label: 'Show origin' } as const;
+const apply = { label: 'Apply' } as const;
 
-/** Ranks the two CTAs for a posting.
+/** Ranks the two apply controls for a posting.
  *
- *  `declined` and `failed` hand the primary slot BACK to the external button: auto-apply
- *  is not going to act in either state, so applying by hand is the reader's only way
- *  forward and demoting it there would leave the page with nothing loud to press. The rule
- *  is "demote while an attempt stands or can be started", not "demote whenever the
- *  auto-apply button exists" — the two read the same until you reach those two states.
+ *  `declined` and `failed` give the external link its own word BACK: auto-apply is not going
+ *  to act in either state, so applying by hand is the reader's only way forward and calling
+ *  that link `Show origin` would name it as the second-best route to a door that is now the
+ *  only one. The rule is "relabel while an attempt stands or can be started", not "relabel
+ *  whenever the auto-apply button exists" — the two read the same until you reach those two
+ *  states.
  *
- *  `applied` does NOT demote, even though the reader has nothing left to do here. That
+ *  `applied` does NOT relabel, even though the reader has nothing left to do here. That
  *  state comes from `alreadyApplied` — the "Did you apply?" prompt after a manual
  *  click-through — and is true of a posting from any source, while this table only runs on
- *  the ones auto-apply can drive. Demoting on it would make a Greenhouse posting read
+ *  the ones auto-apply can drive. Relabelling on it would make a Greenhouse posting read
  *  differently from an identical Lever one for a reader in the identical situation, which
  *  is an artefact of routing the question through the auto-apply state machine rather than
- *  a decision anybody made. `queued` is the one state that genuinely leaves no primary CTA,
- *  and it is genuinely auto-apply's own.
+ *  a decision anybody made.
  *
- *  `pro` rides only the clickable state for the same reason the brand fill does: a marker
- *  naming what an action requires says nothing on a button nobody can press. */
+ *  `queued` relabels without leading: the attempt is in flight, so the link is genuinely the
+ *  second route, but nothing about it should invite a second submission — which is why the
+ *  phone's bar takes the link rather than a disabled auto-apply button.
+ *
+ *  `pro` rides only the clickable state: a marker naming what an action requires says
+ *  nothing on a button nobody can press. */
 export function jobCtaPlan(state: AutoApplyButtonState): JobCtaPlan {
   switch (state.kind) {
     case 'hidden':
       return { autoApply: null, external: apply };
     case 'idle':
       return {
-        autoApply: { label: 'Auto-apply', primary: true, pro: true, disabled: false },
+        autoApply: { label: 'Auto-apply', leads: true, pro: true, disabled: false },
         external: showOrigin,
       };
     case 'queued':

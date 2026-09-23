@@ -73,3 +73,71 @@ describe('the job page action strip', () => {
     expect(strip).toContain('cta.external.label');
   });
 });
+
+/** The pinned header's button row: the one place the page repeats its CTAs verbatim while
+ *  the title is scrolled away. Anchored on the icon-only Save only it renders, and cut at
+ *  the row's own closing tag — nothing inside it opens a `div`. */
+function pinnedHeaderButtons(): string {
+  const open = JOB_VIEW.indexOf("{@render saveButton('size-9 rounded-md px-0', true)}");
+  if (open === -1) return '';
+  const close = JOB_VIEW.indexOf('</div>', open);
+  return close === -1 ? '' : JOB_VIEW.slice(open, close);
+}
+
+// The same audit, one row up: which controls compose the page's CALL TO ACTION, and how
+// loud each is. This is the rule `autoApplyButton.ts` can no longer hold on its own — it
+// ranks the two apply controls against each other, while the thing that outranks both is a
+// third button it never sees. A `variant` drifting here is exactly the bug jsdom cannot
+// catch: every element still renders, nothing throws, and the page simply grows a second
+// green button or loses its only one.
+//
+// Three positions, because a primary CTA that exists at one width and not another is the
+// same defect as one that does not exist at all.
+describe('the job page call-to-action row', () => {
+  const tailorCta = snippetBody('tailorCta');
+  const applyCta = snippetBody('applyCta');
+  const autoApplyCta = snippetBody('autoApplyCta');
+  const ctaGroup = snippetBody('ctaGroup');
+  const pinnedHeader = pinnedHeaderButtons();
+
+  it('finds every region it audits', () => {
+    expect(tailorCta, 'tailorCta snippet not found in JobView.svelte').not.toBe('');
+    expect(ctaGroup, 'ctaGroup snippet not found in JobView.svelte').not.toBe('');
+    expect(pinnedHeader, 'pinned header button row not found in JobView.svelte').not.toBe('');
+  });
+
+  it.each([
+    ['the title row', () => ctaGroup],
+    ['the pinned header', () => pinnedHeader],
+  ])('renders tailorCta in %s', (_where, region) => {
+    expect(region()).toContain('@render tailorCta(');
+  });
+
+  // The sticky bar is not a snippet, and `pointer-events-auto` is the class only it passes
+  // — the bar's own glass panel is `pointer-events-none`, so every button in it must
+  // re-enable them for itself.
+  it('renders tailorCta in the phone sticky bar', () => {
+    expect(JOB_VIEW).toMatch(/@render tailorCta\([^)]*pointer-events-auto/);
+  });
+
+  it('gives the brand fill to tailorCta alone', () => {
+    expect(tailorCta).toContain('variant="primary"');
+    expect(applyCta).not.toContain('primary');
+    expect(autoApplyCta).not.toContain('primary');
+  });
+
+  it('renders the apply link as an outline button in every state', () => {
+    expect(applyCta).toContain('variant="outline"');
+  });
+
+  // `primary` on the CTA plan is gone: it answered "is this brand-filled" and "is auto-apply
+  // the offered way to apply" at once, and only the second question survives — as `leads`.
+  // A surviving read would be `undefined`, which is falsy, so the phone's bar would quietly
+  // drop auto-apply (it has no other home below `lg`) and the quiet strip would drop the
+  // origin link with it. Nothing would throw.
+  it('reads leads, never primary, off the CTA plan', () => {
+    expect(JOB_VIEW).not.toContain('cta.autoApply?.primary');
+    expect(JOB_VIEW).not.toContain('external.primary');
+    expect(JOB_VIEW).toContain('cta.autoApply?.leads');
+  });
+});

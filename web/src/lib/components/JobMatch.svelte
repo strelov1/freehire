@@ -19,14 +19,21 @@
   } from '$lib/jobMatch';
   import { profileStore } from '$lib/profile.svelte';
   import { syncProfileAlert } from '$lib/profileAlertSync';
-  import type { Job, JobMatchResult } from '$lib/types';
+  import type { Job, JobMatchResult, MatchAnalysisResponse } from '$lib/types';
   import { Button } from '$lib/ui';
   import MatchSummary from './MatchSummary.svelte';
   import SkillIcon from './SkillIcon.svelte';
   import { skillLabel } from '$lib/facets';
 
   // The job is server-rendered; only this personal signal hydrates client-side.
-  let { job }: { job: Job } = $props();
+  //
+  // `matchAnalysis` is read by the PAGE, not here — the CTA row's `Tailor my CV` button
+  // needs the same response to know whether to offer itself, so JobView reads it once and
+  // hands it down through this block to `MatchSummary`. This component does not look at it.
+  let {
+    job,
+    matchAnalysis,
+  }: { job: Job; matchAnalysis: MatchAnalysisResponse | null } = $props();
 
   // The fetched match — set only in the `ready` state. Read by the template/segments
   // but never by `state`, so setting it can't re-trigger the fetch effect below.
@@ -346,15 +353,6 @@
         <Button variant="primary" size="sm" href={profileHref}>Upload CV</Button>
       {/if}
     </div>
-
-    {#if blockState === 'guest'}
-      <!-- The deep-dive offer stands on its own for a guest: it needs no match to make
-           sense, and it is the stronger pitch of the two. Its button opens sign-in rather
-           than the analysis page — MatchSummary handles that. Withheld from the no-profile
-           state, whose own "Upload CV" call-to-action sits directly above and would simply
-           be repeated. -->
-      <MatchSummary slug={job.public_slug} />
-    {/if}
   {:else if blockState === 'ready' && view}
     <!-- Real match: percent + two-colour bar + three skill groups. -->
     <div class="flex items-baseline justify-between gap-2">
@@ -486,9 +484,10 @@
       </div>
     {/if}
 
-    <!-- The deterministic bar above is instant and free; the LLM deep-dive is opt-in
-         below it, computed only on an explicit action and cached per (user, job). -->
-    <MatchSummary slug={job.public_slug} />
+    <!-- The deterministic bar above is instant and free; what the LLM deep-dive found, if
+         anything has run, is reported below it. The action that STARTS one is the page's
+         `Tailor my CV` button, up in the CTA row. -->
+    <MatchSummary slug={job.public_slug} {matchAnalysis} />
   {:else}
     <!-- Skeleton: the profile is still loading, or the match is in flight (ready but
          not yet fetched). A signed-in profiled viewer never sees the locked teaser. -->

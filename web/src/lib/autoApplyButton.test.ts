@@ -60,63 +60,74 @@ describe('jobCtaPlan', () => {
   it('offers only the apply button where auto-apply cannot drive the ATS', () => {
     expect(plan('hidden')).toEqual({
       autoApply: null,
-      external: { label: 'Apply', primary: true },
+      external: { label: 'Apply' },
     });
   });
 
-  it('makes a startable auto-apply the primary CTA and names the plan it needs', () => {
+  it('lets a startable auto-apply lead the applying, and names the plan it needs', () => {
     expect(plan('idle')).toEqual({
-      autoApply: { label: 'Auto-apply', primary: true, pro: true, disabled: false },
-      external: { label: 'Show origin', primary: false },
+      autoApply: { label: 'Auto-apply', leads: true, pro: true, disabled: false },
+      external: { label: 'Show origin' },
     });
   });
 
-  it('keeps a standing attempt quiet and the apply button demoted', () => {
+  it('keeps a standing attempt quiet and the apply link relabelled', () => {
     expect(plan('queued')).toEqual({
-      autoApply: { label: 'Auto-apply queued', primary: false, pro: false, disabled: true },
-      external: { label: 'Show origin', primary: false },
+      autoApply: { label: 'Auto-apply queued', leads: false, pro: false, disabled: true },
+      external: { label: 'Show origin' },
     });
   });
 
-  // Not demoted: `applied` is true of a posting from any source, and demoting on it would
-  // make a Greenhouse posting read differently from an identical Lever one for a reader in
-  // the identical situation.
+  // Not relabelled: `applied` is true of a posting from any source, and relabelling on it
+  // would make a Greenhouse posting read differently from an identical Lever one for a
+  // reader in the identical situation.
   it('leaves the apply button alone for a reader who already applied by hand', () => {
     expect(plan('applied')).toEqual({
-      autoApply: { label: 'Already applied', primary: false, pro: false, disabled: true },
-      external: { label: 'Apply', primary: true },
+      autoApply: { label: 'Already applied', leads: false, pro: false, disabled: true },
+      external: { label: 'Apply' },
     });
   });
 
-  it('promotes the apply button back when auto-apply will not act', () => {
+  it('gives the apply link its word back when auto-apply will not act', () => {
     expect(plan('declined')).toEqual({
-      autoApply: { label: 'Auto-apply declined', primary: false, pro: false, disabled: true },
-      external: { label: 'Apply', primary: true },
+      autoApply: { label: 'Auto-apply declined', leads: false, pro: false, disabled: true },
+      external: { label: 'Apply' },
     });
     expect(plan('failed')).toEqual({
-      autoApply: { label: "Auto-apply couldn't complete", primary: false, pro: false, disabled: true },
-      external: { label: 'Apply', primary: true },
+      autoApply: { label: "Auto-apply couldn't complete", leads: false, pro: false, disabled: true },
+      external: { label: 'Apply' },
     });
   });
 
-  // The rule the table exists to protect: never two loud buttons competing for the same
-  // click.
-  it('never offers two primary CTAs at once', () => {
+  // `leads` answers "is auto-apply the offered way to apply", and nothing else reads it: it
+  // decides which single control joins Tailor my CV in the phone's sticky bar, and whether
+  // the quiet strip has to carry the origin link the bar gave up. Only a startable attempt
+  // qualifies — a queued one is in flight and a declined or failed one will never act.
+  it('leads exactly in the state auto-apply can be started from', () => {
     for (const kind of kinds) {
-      const p = plan(kind);
-      const primaries = [p.autoApply?.primary, p.external.primary].filter(Boolean).length;
-      expect(primaries, `state ${kind}`).toBeLessThanOrEqual(1);
+      expect(Boolean(plan(kind).autoApply?.leads), `state ${kind}`).toBe(kind === 'idle');
     }
   });
 
-  // And the other half of it: a state where the reader still HAS something to do gets a
-  // loud button for it. `queued` is the one state where they do not — a submission is in
-  // flight, and a loud button there would only invite a second one.
-  it('offers a primary CTA in every state that still has an action left', () => {
+  // The apply link keeps its own word wherever auto-apply is not going to do the applying —
+  // `Show origin` reads as a demotion, and a reader whose auto-apply attempt failed is not
+  // being offered anything else.
+  it('relabels the apply link only while an attempt stands or can be started', () => {
+    for (const kind of kinds) {
+      const expected = kind === 'idle' || kind === 'queued' ? 'Show origin' : 'Apply';
+      expect(plan(kind).external.label, `state ${kind}`).toBe(expected);
+    }
+  });
+
+  // The brand fill belongs to Tailor my CV in every state, so this plan ranks nothing by
+  // colour any more. A `primary` key reappearing on either control would be a half-done
+  // rename — and it would read as true where `leads` is, silently restoring the old
+  // hierarchy on the one state that renders three buttons.
+  it('ranks nothing by colour', () => {
     for (const kind of kinds) {
       const p = plan(kind);
-      const hasPrimary = Boolean(p.autoApply?.primary) || p.external.primary;
-      expect(hasPrimary, `state ${kind}`).toBe(kind !== 'queued');
+      expect(p.external, `state ${kind}`).not.toHaveProperty('primary');
+      if (p.autoApply) expect(p.autoApply, `state ${kind}`).not.toHaveProperty('primary');
     }
   });
 

@@ -453,8 +453,12 @@
               {/if}
 
               <!-- Personal profile-match block (reuses the detail-page component). Keyed
-                   by slug via the {#key} above, so a fresh instance fetches per card. -->
-              <JobMatch job={current} />
+                   by slug via the {#key} above, so a fresh instance fetches per card.
+                   No match analysis handed in: the deck is rapid triage with no
+                   call-to-action row of its own, and reading one per card would spend a
+                   request on the cached verdict of a job almost none of which has ever been
+                   analysed. The deterministic coverage bar is what this card is for. -->
+              <JobMatch job={current} matchAnalysis={null} />
 
               {#if current.description}
                 <!-- Description is server-sanitized HTML (see internal/sources), safe to

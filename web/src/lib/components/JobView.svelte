@@ -13,10 +13,12 @@
     Flag,
     MessageSquare,
     RefreshCw,
+    SquarePen,
   } from '@lucide/svelte';
   import { ApiError, api } from '$lib/api';
   import { isAuthenticated } from '$lib/auth.svelte';
   import { autoApplyButtonState, jobCtaPlan, type JobCtaPlan } from '$lib/autoApplyButton';
+  import { askConfirmTailor } from '$lib/confirmTailorDialog.svelte';
   import { onboardingUrl } from '$lib/onboardingGate.svelte';
   import { promptSignIn } from '$lib/signin';
   import { formatSalary, summaryFacets } from '$lib/enrichment';
@@ -28,7 +30,7 @@
   import { roleAddressExists, seniorityLabel } from '$lib/insights';
   import { categoryLabel } from '$lib/labels';
   import type { Display } from '$lib/generated/contracts';
-  import type { Job, PlanState, UserJob } from '$lib/types';
+  import type { Job, MatchAnalysisResponse, PlanState, UserJob } from '$lib/types';
   import { companyLogoUrl } from '$lib/logo';
   import { profileStore } from '$lib/profile.svelte';
   import { Button, Chip, EntityLogo, TabStrip, tabStripId } from '$lib/ui';
@@ -345,6 +347,55 @@
   // where they unit-test without mounting this component.
   const cta = $derived(jobCtaPlan(autoApplyState));
 
+  // The cached fit analysis, read ONCE for the whole page: the CTA row's `Tailor my CV`
+  // button needs it to know whether the reader has a CV at all, and the sidebar's
+  // MatchSummary needs the analysis itself. It used to be MatchSummary's own fetch; moving
+  // the button up must not buy a second call to the same endpoint, so the read moved with
+  // it and the response goes down as a prop.
+  //
+  // Guarded on the slug the way MatchSummary guarded it, so a slow response for a previous
+  // posting cannot overwrite the current one. Never read for a guest: the endpoint is
+  // authenticated, and a rejected request per visit from one address is what got real users
+  // fail2banned once already.
+  let matchAnalysis = $state.raw<MatchAnalysisResponse | null>(null);
+  $effect(() => {
+    const forSlug = job.public_slug;
+    matchAnalysis = null;
+    if (!isAuthenticated()) return;
+    api
+      .getMatchAnalysis(forSlug)
+      .then((d) => {
+        if (forSlug === job.public_slug) matchAnalysis = d;
+      })
+      .catch(() => {});
+  });
+
+  // Withheld only once the page KNOWS there is no CV. Unknown — a guest, or a read still in
+  // flight — still offers the button: the offer is what brings a guest to sign in, and
+  // withholding the page's primary CTA until a fetch resolves makes the row jump.
+  const canTailor = $derived(matchAnalysis?.has_cv !== false);
+
+  // Tailoring navigates away; the confirmation dialog owns its own fetch of the
+  // deterministic skill/requirement check, so this only needs to await the yes/no. The
+  // dialog also states what the session costs and what today has left — which is why
+  // nothing beside the button does.
+  let tailoring = $state(false);
+
+  async function onTailorClick() {
+    if (!isAuthenticated()) {
+      promptSignIn();
+      return;
+    }
+    if (tailoring) return;
+    tailoring = true;
+    const ok = await askConfirmTailor(job.public_slug, `${job.title} at ${job.company}`);
+    if (!ok) {
+      tailoring = false;
+      return;
+    }
+    await goto(resolve('/tailor/[slug]', { slug: job.public_slug }));
+  }
+
   async function onAutoApplyClick() {
     if (!isAuthenticated()) {
       promptSignIn();
@@ -372,16 +423,19 @@
      A fourth copy of the link exists and does NOT come through here: the phone-only anchor
      in `actionStrip`, which is quiet strip furniture rather than a button. It repeats the
      `rel`/`target`/handler below on purpose — see the note there.
-     `external` decides only the word and the loudness — the destination, the target and
-     the click handler are the same button either way, which is what keeps the apply-intent
-     event comparable across postings whether or not auto-apply offered to do it instead.
+     `external` decides only the WORD. The treatment does not vary: the brand fill belongs
+     to `Tailor my CV` in every state, so this link is an outline button whether it reads
+     `Apply` or `Show origin`, and the demotion is carried by the word and by its place in
+     the row. The destination, the target and the click handler are the same button either
+     way, which is what keeps the apply-intent event comparable across postings whether or
+     not auto-apply offered to do it instead.
      nofollow: the destination is the posting's own site, which the catalogue never
      vetted — the same stance the description sanitizer takes on in-body links
      (internal/sources/sanitize.go). Without it a submitted vacancy buys a followed
      link from every job page, which is what the SEO submissions are actually after. -->
 {#snippet applyCta(size: 'md' | 'lg', className: string, external: JobCtaPlan['external'])}
   <Button
-    variant={external.primary ? 'primary' : 'outline'}
+    variant="outline"
     {size}
     href={job.url}
     target="_blank"
@@ -393,23 +447,42 @@
   </Button>
 {/snippet}
 
+<!-- The page's one primary call to action, and the only button on it carrying the brand
+     fill. It is here rather than in the Profile-match sidebar, where it used to sit under a
+     score, a bar and up to thirty skill chips: applying sends the reader to somebody else's
+     site, tailoring is what this page is for, and the CTA row should say so.
+     Rendered in all three CTA positions — the title row, the pinned header, the phone's
+     sticky bar — because a primary CTA that exists at one width and not another is the same
+     defect as one that does not exist at all.
+     Nothing states the allowance beside it. ConfirmTailorDialog, which the click raises,
+     already says what a session costs and what today has left, at the moment of the commit;
+     a count in two places is a count that can disagree. -->
+{#snippet tailorCta(size: 'md' | 'lg', className: string)}
+  {#if canTailor}
+    <Button variant="primary" {size} disabled={tailoring} onclick={onTailorClick} class={className}>
+      Tailor my CV
+      <SquarePen class="size-4" aria-hidden="true" />
+    </Button>
+  {/if}
+{/snippet}
+
 <!-- Auto-apply (openspec/changes/auto-apply-submit-trigger): beside the apply link, not a
      replacement for it — auto-apply still goes through the same ATS in the end, this
-     button only starts the tailor-then-review sequence. What it says and how loud it is
-     both come from the CTA plan; the only thing decided here is that a submission already
-     in flight also disables it, which is a fact about THIS component's request rather than
-     about the posting.
+     button only starts the tailor-then-review sequence. What it SAYS comes from the CTA
+     plan; how loud it is does not vary, the brand fill belonging to `Tailor my CV`. The
+     only thing decided here is that a submission already in flight also disables it, which
+     is a fact about THIS component's request rather than about the posting.
      The `Pro` marker is a span, not the `Badge` primitive: Badge's variants carry their own
-     background and foreground, none of which read as a plan marker on `bg-brand`. It takes
-     the PAGE's `foreground` for its fill and `background` for its text — near-black on
-     white in the light theme, near-white on black in the dark one — so it stays the highest
-     contrast thing on a brand-green button in either. A tint of the button's own foreground
-     was the first try and it dissolved into the fill. -->
+     background and foreground, none of which read as a plan marker. It takes the PAGE's
+     `foreground` for its fill and `background` for its text — near-black on white in the
+     light theme, near-white on black in the dark one — so it stays the highest contrast
+     thing on the button in either. A tint of the button's own foreground was the first try
+     and it dissolved into the fill. -->
 {#snippet autoApplyCta(size: 'md' | 'lg', className: string)}
   {#if cta.autoApply}
     {@const autoApply = cta.autoApply}
     <Button
-      variant={autoApply.primary ? 'primary' : 'secondary'}
+      variant="secondary"
       {size}
       disabled={autoApply.disabled || autoApplySubmitting}
       onclick={onAutoApplyClick}
@@ -564,7 +637,7 @@
          is the posting's own site, which the catalogue never vetted, and without it a
          submitted vacancy buys a followed link from every job page. Change one, change
          both. -->
-    {#if cta.autoApply?.primary}
+    {#if cta.autoApply?.leads}
       <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- the posting's own URL on its employer's site; there is no route to resolve --><a
         href={job.url}
         class="inline-flex shrink-0 items-center gap-1.5 px-2 text-sm font-medium text-muted-foreground hover:text-foreground lg:hidden"
@@ -579,17 +652,20 @@
   </div>
 {/snippet}
 
-<!-- The two call-to-action buttons, auto-apply first: the page's answer to "what do I do
-     with this posting". They ride the title's own row rather than the tab row below it,
-     because the tab row's other half is the content TabStrip and the strip is the half
-     that cannot shrink — every control added here used to come straight out of the tab
-     labels, which had been squeezed to a scrolling sliver by the time there were six.
-     `hidden lg:flex`: below lg the sticky bottom bar carries the apply CTA instead, and
-     auto-apply has no button there at all. -->
+<!-- The call-to-action buttons: the page's answer to "what do I do with this posting".
+     They ride the title's own row rather than the tab row below it, because the tab row's
+     other half is the content TabStrip and the strip is the half that cannot shrink — every
+     control added here used to come straight out of the tab labels, which had been squeezed
+     to a scrolling sliver by the time there were six.
+     Left to right in ascending rank — auto-apply, the way out to the posting, then
+     `Tailor my CV` — so the brand fill lands at the row's end rather than in its middle.
+     `hidden lg:flex`: below lg the sticky bottom bar carries them instead, minus whichever
+     apply control the plan did not pick. -->
 {#snippet ctaGroup()}
   <div class="hidden shrink-0 items-center justify-end gap-2 lg:flex">
     {@render autoApplyCta('md', 'shrink-0')}
     {@render applyCta('md', 'shrink-0', cta.external)}
+    {@render tailorCta('md', 'shrink-0')}
   </div>
 {/snippet}
 
@@ -809,7 +885,7 @@
          the border, the padding, and the top of the match score — behind it. 80px is
          the header's 56 plus the same 24 of air the card was asking for. -->
     <div class="sticky top-20 flex flex-col gap-4 rounded-xl border border-border bg-card p-4">
-      <JobMatch {job} />
+      <JobMatch {job} {matchAnalysis} />
 
       {#if salary}
         <p
@@ -926,13 +1002,16 @@
                mobile the CTA is the sticky bottom bar, and two pinned buttons would
                fight. Save comes along, since this bar is what a reader has in front of
                them for most of a description several screens long.
-               It carries the SAME pair as the header, plan and all — this bar is the header
-               for most of the read, and a brand-filled `Apply` here for the link the title
-               row calls a quiet `Show origin` would be one link at two ranks on one page. -->
+               It carries the SAME buttons as the header, in the same order, plan and all —
+               this bar is the header for most of the read, and an `Apply` here for the link
+               the title row calls a quiet `Show origin` would be one link at two ranks on
+               one page. `Tailor my CV` comes along for the same reason: the page's primary
+               CTA must not be a thing the reader scrolls past and loses. -->
           <div class="hidden shrink-0 items-center gap-2 lg:flex">
             {@render saveButton('size-9 rounded-md px-0', true)}
             {@render autoApplyCta('md', 'shrink-0')}
             {@render applyCta('md', 'shrink-0', cta.external)}
+            {@render tailorCta('md', 'shrink-0')}
           </div>
         </div>
       </div>
@@ -1071,21 +1150,23 @@
        frosted-glass panel (semi-transparent bg + backdrop-blur), full-bleed via
        negative margins that cancel the page gutter. pointer-events-none lets the
        description scroll under the glass, with pointer-events-auto re-enabling the
-       button. Desktop uses the inline header button instead (hidden at lg).
-       It carries whichever of the two controls the plan made primary — auto-apply where
-       that can be started, the apply link everywhere else — because this bar IS the phone's
-       call to action, and naming exactly one is the plan's whole job. The other control
-       does not vanish: the quiet strip under the title picks the apply link up whenever
-       auto-apply has taken this bar. -->
+       buttons. Desktop uses the inline header buttons instead (hidden at lg).
+       Two controls, side by side at half width each rather than stacked, so the bar is no
+       taller than it was with one: `Tailor my CV` — the page's primary CTA, which must not
+       be a thing only a desktop reader can reach — and exactly ONE way to apply. Which one
+       is the plan's whole job: auto-apply where that can be started, the apply link
+       everywhere else. The control that loses does not vanish — the quiet strip under the
+       title picks the apply link up whenever auto-apply has taken this bar. -->
   <div
-    class="pointer-events-none sticky bottom-0 z-30 -mx-5 border-t border-border/40 bg-background/15 px-5 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 backdrop-blur-lg sm:-mx-4 sm:px-4 lg:hidden"
+    class="pointer-events-none sticky bottom-0 z-30 -mx-5 flex gap-2 border-t border-border/40 bg-background/15 px-5 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 backdrop-blur-lg sm:-mx-4 sm:px-4 lg:hidden"
   >
-    {#if cta.autoApply?.primary}
-      {@render autoApplyCta('lg', 'pointer-events-auto w-full rounded-xl font-semibold shadow-lg')}
+    {@render tailorCta('lg', 'pointer-events-auto flex-1 rounded-xl font-semibold shadow-lg')}
+    {#if cta.autoApply?.leads}
+      {@render autoApplyCta('lg', 'pointer-events-auto flex-1 rounded-xl font-semibold shadow-lg')}
     {:else}
       {@render applyCta(
         'lg',
-        'pointer-events-auto w-full rounded-xl font-semibold shadow-lg',
+        'pointer-events-auto flex-1 rounded-xl font-semibold shadow-lg',
         cta.external,
       )}
     {/if}
