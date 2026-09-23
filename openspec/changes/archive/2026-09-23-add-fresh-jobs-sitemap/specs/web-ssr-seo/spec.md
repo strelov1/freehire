@@ -62,7 +62,7 @@ optional field.
   jobs, and every company chunk, and it does not contain job or company page `<url>`
   entries directly
 
-#### Scenario: the freshest-first job sub-sitemap is ordered newest first
+#### Scenario: the job sub-sitemap lists the freshest open jobs
 
 - **WHEN** the freshest-first job sub-sitemap is requested at its first offset
 - **THEN** the response is a valid `<urlset>` of open-job (`/jobs/:slug`) URLs whose
