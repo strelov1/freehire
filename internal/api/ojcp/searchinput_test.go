@@ -47,15 +47,25 @@ func TestSearchInputBecomesOurOwnQueryVocabulary(t *testing.T) {
 }
 
 func TestSearchInputTranslatesTheStandardsSeniorityWords(t *testing.T) {
-	// The standard names six levels to our eight. `entry` covers two of ours, so it becomes
-	// both rather than picking one — an agent asking for entry-level work should see the
-	// internships and the junior roles, not half of them.
+	// Two groups here. The first is the standard's own words. `entry` now stops at `junior`:
+	// it used to sweep in the internships too, which was the right answer only while `intern`
+	// was unsayable — an agent that wants both asks twice, and one that wants junior roles
+	// without internships can finally ask at all.
+	//
+	// The second is the levels the standard has no word for, which we publish under our own
+	// names. Those have to be accepted back or an agent reading one off our own posting is
+	// told we do not understand it.
 	for _, tc := range []struct{ theirs, want string }{
-		{"entry", "intern,junior"},
+		{"entry", "junior"},
 		{"mid", "middle"},
 		{"executive", "c_level"},
 		{"senior", "senior"},
 		{"lead", "lead"},
+
+		{"intern", "intern"},
+		{"junior", "junior"},
+		{"staff", "staff"},
+		{"principal", "principal"},
 	} {
 		t.Run(tc.theirs, func(t *testing.T) {
 			input := SearchInput{Filters: &SearchFilters{ExperienceLevel: tc.theirs}}
