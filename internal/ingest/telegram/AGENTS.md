@@ -43,9 +43,18 @@ Public Telegram channels carry vacancies as free-form posts, so unlike the struc
   already stored.** `InsertTelegramPost` stamps `extracted_at` at insert time for a post the
   prefilter declined, and nothing revisits it. Measured the same day: 96 rejected posts
   (all `job_it_junior`) already match today's marker set — they were crawled under a
-  narrower one and are stuck. The `empresa:` fix therefore reaches new Spanish posts only;
-  the 6,335 stored ones need a backfill pass that clears `extracted_at` for posts the
-  current filter would now admit.
+  narrower one and are stuck. **`cmd/backfill-telegram-prefilter` is the answer, and it is
+  worth running after any marker change**: it pages the declined posts, re-asks
+  `telegram.AdmitsPost`, and clears `extracted_at` on the ones today's rule admits. Reports
+  by default, writes under `--apply`, bounded by `BACKFILL_TG_PREFILTER_MAX`.
+
+## The admission rule has exactly one home
+`telegram.AdmitsPost(text, links, matcher)` — the text carries a marker, OR the post links
+out to a vacancy a destination adapter resolves — is called by BOTH `CrawlRunner` and
+`cmd/backfill-telegram-prefilter`. It was a line inside the crawl until the backfill needed
+it, and the two disagreeing is not cosmetic: the backfill would requeue posts the next
+crawl refuses, or leave behind the ones it now admits. Add a marker and both readers move
+together. A nil matcher (no registry configured) means only the text can admit.
 - Telegram jobs have no close signal of their own: the ingest sweep does not reach them, there
   is no change feed, and `cmd/liveness` excludes them from the probe because the stored URL is
   the post, which outlives the vacancy. They are closed by age instead — 45 days on

@@ -41,9 +41,27 @@ var vacancyMarkers = regexp.MustCompile(`(?i)` +
 	// salary amounts: "250 000 руб", "$120k", "120k-200k", "€80k"
 	`\d[\d\s]{2,}\s*(руб|₽|€|\$)|[$€£]\s?\d+\s?k|\d+\s?k\s*[-–—]\s*\$?\d+\s?k`)
 
-// LooksLikeVacancy reports whether a post should enter the extraction queue.
-// Posts that fail are still stored (so re-crawls skip them) but marked done with
-// zero vacancies and never sent to the LLM.
+// LooksLikeVacancy reports whether a post's TEXT holds a hiring marker. It is half of
+// the admission rule — see AdmitsPost, which is what callers should ask.
 func LooksLikeVacancy(text string) bool {
 	return vacancyMarkers.MatchString(text)
+}
+
+// AdmitsPost reports whether a post should enter the extraction queue: its text carries a
+// marker, or it links out to a vacancy a destination adapter can resolve (so a link-out
+// digest is not dropped before the extractor can follow it). A nil matcher means no
+// registry is configured and only the text can admit.
+//
+// Posts this refuses are still stored — so re-crawls skip them — but recorded as done with
+// zero vacancies and never sent to the LLM.
+//
+// It is a function rather than a line inside CrawlRunner because it now has TWO readers:
+// the crawl, and cmd/backfill-telegram-prefilter, which re-offers already-stored posts
+// after the markers widen. Those two disagreeing is not a cosmetic drift — the backfill
+// would requeue posts the next crawl refuses, or leave behind the ones it now admits.
+func AdmitsPost(text string, links []Link, m LinkMatcher) bool {
+	if LooksLikeVacancy(text) {
+		return true
+	}
+	return m != nil && m.Matches(links)
 }

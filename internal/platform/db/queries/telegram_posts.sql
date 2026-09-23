@@ -36,6 +36,51 @@ UPDATE telegram_posts
 SET extracted_at = now()
 WHERE channel = sqlc.arg(channel) AND msg_id = sqlc.arg(msg_id);
 
+-- name: ListPrefilterRejectedTelegramPosts :many
+-- Re-filter backfill read path (cmd/backfill-telegram-prefilter): page the posts the
+-- CRAWL's prefilter declined, so a later widening of the markers can re-offer them.
+--
+-- The predicate is what identifies such a post, and it rests on how InsertTelegramPost
+-- writes one: extracted_at is stamped at INSERT time, before the post was ever claimed.
+-- A post the extractor processed carries a claimed_at; one the prefilter declined never
+-- does. That discriminator is incidental rather than declared, so it lives here, in one
+-- place, with this comment — not spread across the callers.
+--
+-- attempts = 0 is a second, independent guard on the same distinction: the extractor
+-- bumps it on every failure, so a post that has ever been worked on is excluded even if
+-- some future change clears claimed_at. failed_at IS NULL keeps dead-lettered posts out —
+-- those were refused by the extractor, not by the prefilter.
+--
+-- Keyset over the primary key (channel, msg_id) rather than an offset, so a long walk
+-- does not re-scan what it has already read.
+SELECT channel, msg_id, text, links
+FROM telegram_posts
+WHERE extracted_at IS NOT NULL
+  AND claimed_at IS NULL
+  AND failed_at IS NULL
+  AND attempts = 0
+  AND (channel, msg_id) > (sqlc.arg(after_channel), sqlc.arg(after_msg_id)::bigint)
+ORDER BY channel, msg_id
+LIMIT sqlc.arg(batch_size);
+
+-- name: RequeueTelegramPost :execrows
+-- Re-filter backfill write path: hand a prefilter-declined post back to the extraction
+-- queue by clearing the extracted_at that InsertTelegramPost stamped on it.
+--
+-- The WHERE repeats the read's predicate rather than trusting the id it was handed, which
+-- is what makes the pass idempotent and safe to interrupt: a post already requeued by an
+-- earlier run, or claimed by the extractor since this run read it, no longer matches and
+-- the statement reports zero rows. Nothing here resets attempts or last_error — the post
+-- has neither, by the predicate above.
+UPDATE telegram_posts
+SET extracted_at = NULL
+WHERE channel = sqlc.arg(channel)
+  AND msg_id = sqlc.arg(msg_id)
+  AND extracted_at IS NOT NULL
+  AND claimed_at IS NULL
+  AND failed_at IS NULL
+  AND attempts = 0;
+
 -- name: RecordTelegramPostFailure :one
 -- Count a failed attempt: bump attempts, record the error, and dead-letter (set
 -- failed_at) once attempts reach the max. The lease (claimed_at) is intentionally

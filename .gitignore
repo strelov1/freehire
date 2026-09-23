@@ -43,6 +43,7 @@ hire
 /backfill-resume-geo
 /backfill-resume-structured
 /backfill-slug-folded
+/backfill-telegram-prefilter
 /backfill-username-from-mailbox
 /billing-sync
 /broadcast

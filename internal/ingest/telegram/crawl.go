@@ -64,7 +64,7 @@ func (r CrawlRunner) Run(ctx context.Context, channels []ChannelEntry) (CrawlSta
 
 		failed := false
 		for _, p := range posts {
-			isVacancy := LooksLikeVacancy(p.Text) || r.hasDestinationLink(p.Links)
+			isVacancy := AdmitsPost(p.Text, p.Links, r.Links)
 			inserted, err := r.Store.Insert(ctx, ch.Channel, p, !isVacancy)
 			if err != nil {
 				log.Printf("telegram: store %s/%d failed: %v", ch.Channel, p.MsgID, err)
@@ -85,10 +85,4 @@ func (r CrawlRunner) Run(ctx context.Context, channels []ChannelEntry) (CrawlSta
 		}
 	}
 	return stats, nil
-}
-
-// hasDestinationLink reports whether a post links out to a vacancy a destination adapter
-// can resolve, returning false when no matcher is configured.
-func (r CrawlRunner) hasDestinationLink(links []Link) bool {
-	return r.Links != nil && r.Links.Matches(links)
 }

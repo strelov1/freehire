@@ -4219,6 +4219,23 @@ type Querier interface {
 	// unrelated to it, so the adapter maps it once (fromRow) rather than re-assembling it here
 	// (see mentorship.sql's ListBookingsByMentor for the same shape).
 	ListPendingSubmissions(ctx context.Context) ([]ListPendingSubmissionsRow, error)
+	// Re-filter backfill read path (cmd/backfill-telegram-prefilter): page the posts the
+	// CRAWL's prefilter declined, so a later widening of the markers can re-offer them.
+	//
+	// The predicate is what identifies such a post, and it rests on how InsertTelegramPost
+	// writes one: extracted_at is stamped at INSERT time, before the post was ever claimed.
+	// A post the extractor processed carries a claimed_at; one the prefilter declined never
+	// does. That discriminator is incidental rather than declared, so it lives here, in one
+	// place, with this comment — not spread across the callers.
+	//
+	// attempts = 0 is a second, independent guard on the same distinction: the extractor
+	// bumps it on every failure, so a post that has ever been worked on is excluded even if
+	// some future change clears claimed_at. failed_at IS NULL keeps dead-lettered posts out —
+	// those were refused by the extractor, not by the prefilter.
+	//
+	// Keyset over the primary key (channel, msg_id) rather than an offset, so a long walk
+	// does not re-scan what it has already read.
+	ListPrefilterRejectedTelegramPosts(ctx context.Context, arg ListPrefilterRejectedTelegramPostsParams) ([]ListPrefilterRejectedTelegramPostsRow, error)
 	// The public directory. Every filter is optional and applied as "NULL means unfiltered",
 	// which keeps one query instead of a builder; the endpoint reports any parameter it did
 	// NOT read in meta.ignored_params, so a filter that vanishes from this list must vanish
@@ -5809,6 +5826,15 @@ type Querier interface {
 	// and a report that read the intended number instead would show a healthy 24 while 12 rows
 	// existed.
 	ReportIngestSchedule(ctx context.Context) ([]ReportIngestScheduleRow, error)
+	// Re-filter backfill write path: hand a prefilter-declined post back to the extraction
+	// queue by clearing the extracted_at that InsertTelegramPost stamped on it.
+	//
+	// The WHERE repeats the read's predicate rather than trusting the id it was handed, which
+	// is what makes the pass idempotent and safe to interrupt: a post already requeued by an
+	// earlier run, or claimed by the extractor since this run read it, no longer matches and
+	// the statement reports zero rows. Nothing here resets attempts or last_error — the post
+	// has neither, by the predicate above.
+	RequeueTelegramPost(ctx context.Context, arg RequeueTelegramPostParams) (int64, error)
 	// The id span cmd/backfill-requirements walks. MIN/MAX over the primary key are two
 	// index probes, so this stays cheap on an 11M-row table — deliberately unfiltered,
 	// because counting the open rows would be a scan and the chunk query filters anyway.
