@@ -73,12 +73,6 @@ func run() int {
 		log.Printf("report-unclassified-titles: %v", err)
 		return 1
 	}
-	resume, err := worker.EnvInt64("REPORT_UNCLASSIFIED_FROM_ID", 0)
-	if err != nil {
-		log.Printf("report-unclassified-titles: %v", err)
-		return 1
-	}
-
 	q := db.New(pool)
 	bounds, err := q.UnclassifiedTitleReportBounds(ctx)
 	if err != nil {
@@ -90,11 +84,15 @@ func run() int {
 		return 0
 	}
 
+	// No resume knob, deliberately, and this is the one place where copying
+	// cmd/report-classify-drift would have been wrong. The ranking is over counts
+	// accumulated across the WHOLE span: starting at a later id leaves the
+	// accumulator empty for everything before it, so a title carried by postings on
+	// both sides of the cursor is undercounted and the top-N describes a suffix of
+	// the catalogue while looking exactly like a report on all of it. A read-only
+	// report can simply be run again; a plausible wrong number cannot be spotted.
 	from := bounds.MinID
-	if resume > from {
-		from = resume
-	}
-	log.Printf("report-unclassified-titles: ids %d..%d from %d, chunk=%d", bounds.MinID, bounds.MaxID, from, step)
+	log.Printf("report-unclassified-titles: ids %d..%d, chunk=%d", bounds.MinID, bounds.MaxID, step)
 
 	counts := map[string]int{}
 	var chunkRows int64
@@ -120,8 +118,8 @@ func run() int {
 		}
 		select {
 		case <-ctx.Done():
-			log.Printf("report-unclassified-titles: cancelled at id=%d after %d rows — resume with REPORT_UNCLASSIFIED_FROM_ID=%d",
-				from, chunkRows, from)
+			log.Printf("report-unclassified-titles: cancelled at id=%d after %d rows — no partial report is printed; run it again from the start",
+				from, chunkRows)
 			return 1
 		case <-time.After(pauseBetweenChunks):
 		}

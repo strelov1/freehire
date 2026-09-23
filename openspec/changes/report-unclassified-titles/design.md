@@ -51,6 +51,14 @@ about the text. Here the question is different — "what is the catalogue failin
 publish" — so a title carried only by closed or duplicate postings is not a gap. This
 is a deliberate divergence from the sibling query, and the spec states it.
 
+**No resume knob, unlike the drift report.** Copying it would have been wrong here.
+The ranking is over counts accumulated across the WHOLE id span, so starting at a
+later id leaves the accumulator empty for everything before it: a title carried on
+both sides of the cursor is undercounted, and the top-N describes a suffix of the
+catalogue while looking exactly like a report on all of it. A read-only report can
+simply be run again; a plausible wrong number cannot be spotted. A cancelled run
+prints no partial report and says to start over.
+
 **A new binary, not a flag on an existing one.** `report-classify-drift` reads enriched
 postings and compares two opinions; this reads unenriched ones and compares against
 silence. Sharing a binary would mean one flag deciding which query runs, which set is
