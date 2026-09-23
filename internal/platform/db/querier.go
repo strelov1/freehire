@@ -4050,6 +4050,30 @@ type Querier interface {
 	// to decide whether a posting is re-crawlable. Only (provider, board, region), not the
 	// whole row: the guard asks a set-membership question and nothing else.
 	ListLiveBoards(ctx context.Context) ([]ListLiveBoardsRow, error)
+	// Id-only projection of ListLiveJobsByIDAfter, for the same corruption-degrade path
+	// ListJobIDsAfter serves. The predicate must match its wide sibling exactly: a
+	// degraded re-read that scanned a different window would skip rows silently.
+	ListLiveJobIDsAfter(ctx context.Context, arg ListLiveJobIDsAfterParams) ([]int64, error)
+	// ListJobsByIDAfter narrowed to the rows that can still reach the catalogue, for a
+	// re-derive after a dictionary change (cmd/backfill-derive with
+	// BACKFILL_DERIVE_CLOSED_WITHIN_DAYS).
+	//
+	// Measured 2026-09-23: the table holds ~12.7M rows and 1.9M open ones, so the derive
+	// pass spends ~85% of its time on postings nothing can surface. A pass over the whole
+	// table takes ~30h at the unit's deliberately low CPUWeight.
+	//
+	// NOT simply `closed_at IS NULL`, and this is the load-bearing part. A closed posting
+	// REOPENS: ingest's Toucher refreshes liveness "(last_seen_at, reopen if closed) ...
+	// WITHOUT rewriting its content" (internal/ingest/pipeline/pipeline.go), and a posting
+	// that merely drifts out of a feed for 48h is closed and reopened as it drifts back
+	// (see the notes in sources/seek.go and sources/whatjobs.go). Skipping it on
+	// `closed_at IS NULL` would return it to the catalogue carrying the facets the old
+	// dictionary gave it, with nothing downstream reporting the staleness.
+	//
+	// So the window is "open, or closed recently enough to plausibly come back". The caller
+	// picks the cutoff; the pass degrades to the full table when it passes the zero time,
+	// which keeps the unfiltered behaviour one env var away.
+	ListLiveJobsByIDAfter(ctx context.Context, arg ListLiveJobsByIDAfterParams) ([]Job, error)
 	// Candidates for cmd/backfill-username-from-mailbox: every hosted mailbox whose
 	// owner has not yet been backfilled onto users.username. Small by construction —
 	// mailboxes is an opt-in feature, nowhere near the row counts the repo's chunked

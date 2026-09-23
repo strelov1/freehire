@@ -103,6 +103,9 @@ type deriveStore interface {
 	// projection it falls back to, and the single-row fetch that isolates a damaged row
 	// from its readable neighbours.
 	worker.FullScanQueries
+	// The same three, narrowed to the rows that can still reach the catalogue. Used when
+	// the operator bounds the pass with BACKFILL_DERIVE_CLOSED_WITHIN_DAYS.
+	worker.LiveScanQueries
 	UpdateJobDerived(ctx context.Context, arg db.UpdateJobDerivedParams) error
 	ListCompanySlugAliases(ctx context.Context) ([]db.ListCompanySlugAliasesRow, error)
 }
@@ -142,9 +145,33 @@ func run() int {
 		return 1
 	}
 
+	// Skip the postings nothing can surface any more. Measured 2026-09-23: 1.9M of the
+	// table's ~12.7M rows are open, so the unbounded pass spends ~85% of its ~30h on rows
+	// no search, sitemap or page will read.
+	//
+	// Expressed in DAYS CLOSED rather than as an open-only flag, because a closed posting
+	// is not permanently gone: ingest's Toucher reopens it without rewriting its facets,
+	// and a posting that drifts out of a feed for 48h is routinely closed and reopened as
+	// it drifts back. An open-only pass would hand those rows back to the catalogue with
+	// the old dictionary's facets and nothing would report it. The number is how far back
+	// a posting might still return from; unset keeps the whole table, so the cautious
+	// behaviour stays the default.
+	closedWithinDays, err := worker.EnvInt64("BACKFILL_DERIVE_CLOSED_WITHIN_DAYS", 0)
+	if err != nil {
+		log.Printf("backfill-derive: %v", err)
+		return 1
+	}
+	var closedSince time.Time
+	if closedWithinDays > 0 {
+		closedSince = time.Now().UTC().AddDate(0, 0, -int(closedWithinDays))
+	}
+
 	queries := db.New(pool)
-	log.Printf("backfill-derive starting: concurrency=%d from_id=%d max=%d", concurrency, fromID, maxRows)
-	pass, orphaned, err := derivePass(ctx, queries, concurrency, scanWindow{fromID: fromID, maxRows: maxRows})
+	log.Printf("backfill-derive starting: concurrency=%d from_id=%d max=%d closed_within_days=%d",
+		concurrency, fromID, maxRows, closedWithinDays)
+	pass, orphaned, err := derivePass(ctx, queries, concurrency, scanWindow{
+		fromID: fromID, maxRows: maxRows, closedSince: closedSince,
+	})
 
 	// ONE report, reached by every path. Deciding what to say at each `return` instead is
 	// what made the resume point vanish twice in one evening: the pass's own error is
@@ -298,6 +325,15 @@ type scanWindow struct {
 	// 0 from an operator, since worker.EnvInt64 refuses anything but a positive value,
 	// so "unset" is the only way to ask for the whole table.
 	maxRows int64
+	// closedSince narrows the scan to the rows that can still reach the catalogue: open
+	// postings, plus ones closed at or after it. The zero time means the whole table,
+	// which is the default and the only behaviour this pass had before.
+	//
+	// Why a cutoff and not `closed_at IS NULL`: a closed posting reopens without its
+	// facets being rewritten (ingest's Toucher), so one skipped on "closed" drifts back
+	// into the catalogue carrying whatever the old dictionary gave it. The cutoff is the
+	// operator's statement of how far back a posting might still come from.
+	closedSince time.Time
 }
 
 // pendingRows are the rows handed to the worker pool that have not finished.
@@ -434,7 +470,13 @@ func backfillWindow(ctx context.Context, store deriveStore, concurrency int64, w
 	// re-fail at the same id on every later run, leaving every derived column past it
 	// stale for good. The helper degrades to reading the faulting window row by row and
 	// skips only what is genuinely unreadable.
+	// A bounded window reads only what can still surface; the zero cutoff keeps the
+	// whole-table reader this pass has always used. Both satisfy the same PageReader, so
+	// the corruption-degrade path below is identical either way.
 	reader := worker.NewFullScanReader(store)
+	if !win.closedSince.IsZero() {
+		reader = worker.NewLiveScanReader(store, win.closedSince)
+	}
 	// Where the reader's own cursor was when it gave up, written by the reader goroutine
 	// alone and read only after readerWG.Wait(). Zero means it reached the end of the
 	// table. It is a CEILING on the resume point, not the resume point itself — what the

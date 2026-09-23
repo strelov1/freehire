@@ -4,8 +4,10 @@ import (
 	"context"
 	"errors"
 	"log"
+	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/platform/pgerr"
@@ -15,7 +17,8 @@ import (
 // batch (the fast path), an id-only projection of the same window (the degrade
 // path, which never detoasts so it cannot fault on corruption), and a single-row
 // fetch to isolate the readable rows from the corrupted one. Build one with
-// NewFullScanReader; tests supply a fake.
+// NewFullScanReader (the whole table) or NewLiveScanReader (only the rows that can
+// still reach the catalogue); tests supply a fake.
 type PageReader interface {
 	Batch(ctx context.Context, afterID int64, batchSize int32) ([]db.Job, error)
 	IDs(ctx context.Context, afterID int64, batchSize int32) ([]int64, error)
@@ -42,6 +45,45 @@ func (r fullScanReader) IDs(ctx context.Context, afterID int64, bs int32) ([]int
 	return r.q.ListJobIDsAfter(ctx, db.ListJobIDsAfterParams{AfterID: afterID, BatchSize: bs})
 }
 func (r fullScanReader) Row(ctx context.Context, id int64) (db.Job, error) {
+	return r.q.GetJob(ctx, id)
+}
+
+// LiveScanQueries is the subset a reader over the rows that can still reach the
+// catalogue calls — the same three reads as FullScanQueries, narrowed by a cutoff.
+type LiveScanQueries interface {
+	ListLiveJobsByIDAfter(context.Context, db.ListLiveJobsByIDAfterParams) ([]db.Job, error)
+	ListLiveJobIDsAfter(context.Context, db.ListLiveJobIDsAfterParams) ([]int64, error)
+	GetJob(context.Context, int64) (db.Job, error)
+}
+
+type liveScanReader struct {
+	q           LiveScanQueries
+	closedSince time.Time
+}
+
+// NewLiveScanReader adapts a job store to a PageReader over the rows that can still
+// surface: open postings, plus ones closed at or after closedSince.
+//
+// The cutoff is a parameter rather than a constant because the right value depends on
+// what is being re-derived, and the caller is the one that knows. A closed posting is
+// not permanently out of reach — ingest reopens it without rewriting its facets (see
+// the ListLiveJobsByIDAfter comment) — so a reader that stopped at `closed_at IS NULL`
+// would leave stale rows to drift back into the catalogue unannounced.
+func NewLiveScanReader(q LiveScanQueries, closedSince time.Time) PageReader {
+	return liveScanReader{q: q, closedSince: closedSince}
+}
+
+func (r liveScanReader) Batch(ctx context.Context, afterID int64, bs int32) ([]db.Job, error) {
+	return r.q.ListLiveJobsByIDAfter(ctx, db.ListLiveJobsByIDAfterParams{
+		AfterID: afterID, BatchSize: bs, ClosedSince: pgtype.Timestamptz{Time: r.closedSince, Valid: true},
+	})
+}
+func (r liveScanReader) IDs(ctx context.Context, afterID int64, bs int32) ([]int64, error) {
+	return r.q.ListLiveJobIDsAfter(ctx, db.ListLiveJobIDsAfterParams{
+		AfterID: afterID, BatchSize: bs, ClosedSince: pgtype.Timestamptz{Time: r.closedSince, Valid: true},
+	})
+}
+func (r liveScanReader) Row(ctx context.Context, id int64) (db.Job, error) {
 	return r.q.GetJob(ctx, id)
 }
 

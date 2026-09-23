@@ -74,6 +74,44 @@ WHERE id > sqlc.arg(after_id)
 ORDER BY id
 LIMIT sqlc.arg(batch_size);
 
+-- name: ListLiveJobsByIDAfter :many
+-- ListJobsByIDAfter narrowed to the rows that can still reach the catalogue, for a
+-- re-derive after a dictionary change (cmd/backfill-derive with
+-- BACKFILL_DERIVE_CLOSED_WITHIN_DAYS).
+--
+-- Measured 2026-09-23: the table holds ~12.7M rows and 1.9M open ones, so the derive
+-- pass spends ~85% of its time on postings nothing can surface. A pass over the whole
+-- table takes ~30h at the unit's deliberately low CPUWeight.
+--
+-- NOT simply `closed_at IS NULL`, and this is the load-bearing part. A closed posting
+-- REOPENS: ingest's Toucher refreshes liveness "(last_seen_at, reopen if closed) ...
+-- WITHOUT rewriting its content" (internal/ingest/pipeline/pipeline.go), and a posting
+-- that merely drifts out of a feed for 48h is closed and reopened as it drifts back
+-- (see the notes in sources/seek.go and sources/whatjobs.go). Skipping it on
+-- `closed_at IS NULL` would return it to the catalogue carrying the facets the old
+-- dictionary gave it, with nothing downstream reporting the staleness.
+--
+-- So the window is "open, or closed recently enough to plausibly come back". The caller
+-- picks the cutoff; the pass degrades to the full table when it passes the zero time,
+-- which keeps the unfiltered behaviour one env var away.
+SELECT *
+FROM jobs
+WHERE id > sqlc.arg(after_id)
+  AND (closed_at IS NULL OR closed_at >= sqlc.arg(closed_since))
+ORDER BY id
+LIMIT sqlc.arg(batch_size);
+
+-- name: ListLiveJobIDsAfter :many
+-- Id-only projection of ListLiveJobsByIDAfter, for the same corruption-degrade path
+-- ListJobIDsAfter serves. The predicate must match its wide sibling exactly: a
+-- degraded re-read that scanned a different window would skip rows silently.
+SELECT id
+FROM jobs
+WHERE id > sqlc.arg(after_id)
+  AND (closed_at IS NULL OR closed_at >= sqlc.arg(closed_since))
+ORDER BY id
+LIMIT sqlc.arg(batch_size);
+
 -- name: ListJobIDsUpdatedAfter :many
 -- Id-only projection of ListJobsUpdatedAfter — the corruption-degrade path for the
 -- incremental (`reindex --since`) scan, mirroring ListJobIDsAfter.

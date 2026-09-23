@@ -5,6 +5,7 @@ import (
 	"reflect"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -31,9 +32,21 @@ type fakeStore struct {
 // page is the keyset window the three read methods share, so the degrade path sees
 // exactly the rows the wide batch would have returned.
 func (f *fakeStore) page(afterID int64, batchSize int32) []db.Job {
+	return f.pageLive(afterID, batchSize, time.Time{})
+}
+
+// pageLive is page narrowed the way ListLiveJobsByIDAfter narrows it: a zero cutoff
+// keeps every row, otherwise a closed row survives only if it closed at or after the
+// cutoff. Mirroring the SQL here rather than stubbing it is the point — the filtered
+// reader is what the pass now uses, so a fake that ignored the cutoff would let a
+// broken predicate pass its own test.
+func (f *fakeStore) pageLive(afterID int64, batchSize int32, closedSince time.Time) []db.Job {
 	var out []db.Job
 	for _, j := range f.jobs {
 		if j.ID <= afterID {
+			continue
+		}
+		if !closedSince.IsZero() && j.ClosedAt.Valid && j.ClosedAt.Time.Before(closedSince) {
 			continue
 		}
 		out = append(out, j)
@@ -61,6 +74,25 @@ func (f *fakeStore) ListJobsByIDAfter(_ context.Context, arg db.ListJobsByIDAfte
 
 func (f *fakeStore) ListJobIDsAfter(_ context.Context, arg db.ListJobIDsAfterParams) ([]int64, error) {
 	rows := f.page(arg.AfterID, arg.BatchSize)
+	ids := make([]int64, len(rows))
+	for i, j := range rows {
+		ids[i] = j.ID
+	}
+	return ids, nil
+}
+
+func (f *fakeStore) ListLiveJobsByIDAfter(_ context.Context, arg db.ListLiveJobsByIDAfterParams) ([]db.Job, error) {
+	rows := f.pageLive(arg.AfterID, arg.BatchSize, arg.ClosedSince.Time)
+	for _, j := range rows {
+		if f.corrupt[j.ID] {
+			return nil, corruptedRow()
+		}
+	}
+	return rows, nil
+}
+
+func (f *fakeStore) ListLiveJobIDsAfter(_ context.Context, arg db.ListLiveJobIDsAfterParams) ([]int64, error) {
+	rows := f.pageLive(arg.AfterID, arg.BatchSize, arg.ClosedSince.Time)
 	ids := make([]int64, len(rows))
 	for i, j := range rows {
 		ids[i] = j.ID
@@ -186,6 +218,75 @@ func TestBackfill_RewritesAllDerivedInOnePass(t *testing.T) {
 	if got.RoleFingerprint.String == "" || got.PublicSlug == "" || got.CompanySlug == "" {
 		t.Errorf("fingerprint/slugs not derived: fp=%q public=%q company=%q",
 			got.RoleFingerprint.String, got.PublicSlug, got.CompanySlug)
+	}
+}
+
+// The cutoff exists to skip the ~85% of the table that can no longer surface, and the
+// reason it is a CUTOFF and not `closed_at IS NULL` is the middle row here: ingest
+// reopens a closed posting without rewriting its facets, so one skipped for being
+// closed comes back carrying the old dictionary's values. A recently closed row must
+// stay in the pass; only a long-closed one may be dropped.
+func TestBackfill_ClosedCutoffKeepsWhatCanStillReturn(t *testing.T) {
+	now := time.Now().UTC()
+	closedAt := func(t time.Time) pgtype.Timestamptz {
+		return pgtype.Timestamptz{Time: t, Valid: true}
+	}
+	base := func(id int64) db.Job {
+		return db.Job{
+			ID: id, Title: "Senior Go Developer", Company: "Acme",
+			Source: "manual", ExternalID: "x", Location: "Berlin, Germany",
+			Description: backfillJobDescription,
+		}
+	}
+	open := base(1)
+	recentlyClosed := base(2)
+	recentlyClosed.ClosedAt = closedAt(now.AddDate(0, 0, -3))
+	longClosed := base(3)
+	longClosed.ClosedAt = closedAt(now.AddDate(0, 0, -400))
+
+	store := &fakeStore{jobs: []db.Job{open, recentlyClosed, longClosed}}
+	win := scanWindow{closedSince: now.AddDate(0, 0, -30)}
+
+	pass, err := backfillPass(context.Background(), store, 1, win)
+	if err != nil {
+		t.Fatalf("backfillPass: %v", err)
+	}
+	if pass.Scanned != 2 {
+		t.Fatalf("scanned=%d, want 2 (the open row and the recently closed one)", pass.Scanned)
+	}
+	for _, u := range store.updates {
+		if u.ID == longClosed.ID {
+			t.Errorf("wrote the long-closed row %d, which the cutoff excludes", u.ID)
+		}
+	}
+	var sawReopenable bool
+	for _, u := range store.updates {
+		if u.ID == recentlyClosed.ID {
+			sawReopenable = true
+		}
+	}
+	if !sawReopenable {
+		t.Error("skipped the recently closed row; it can reopen without its facets being rewritten")
+	}
+}
+
+// The cutoff is opt-in: an unset one has to leave the pass exactly as it was, or every
+// operator who does not know about the knob silently gets a narrower pass.
+func TestBackfill_NoCutoffStillScansTheWholeTable(t *testing.T) {
+	longClosed := db.Job{
+		ID: 3, Title: "Senior Go Developer", Company: "Acme",
+		Source: "manual", ExternalID: "x", Location: "Berlin, Germany",
+		Description: backfillJobDescription,
+		ClosedAt:    pgtype.Timestamptz{Time: time.Now().UTC().AddDate(0, 0, -400), Valid: true},
+	}
+	store := &fakeStore{jobs: []db.Job{longClosed}}
+
+	scanned, _, _, err := backfillAll(context.Background(), store, 1)
+	if err != nil {
+		t.Fatalf("backfillAll: %v", err)
+	}
+	if scanned != 1 {
+		t.Fatalf("scanned=%d, want 1 — an unset cutoff must still reach a long-closed row", scanned)
 	}
 }
 
