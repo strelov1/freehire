@@ -71,8 +71,8 @@ func newSitemapHandlers(jobs, companies sitemapLister, freshJobs freshSitemapLis
 // through instead (the argument jobsHandlers.register already makes about /jobs versus
 // /jobs/search).
 //
-// The fresh read is the one whose cost is NOT flat: it sorts, so it rises with depth,
-// up to 1.8s at the deepest page this route will serve. It is admitted to the same
+// The fresh read is the one whose cost is NOT flat: it sorts, so it rises with depth —
+// 1.3s to 2.6-4.9s end to end across its four chunks, and once 8.5s cold. It is admitted to the same
 // budget on the strength of its own bound rather than on the paragraph above — a
 // per-minute budget says nothing about an endpoint whose per-request work the caller
 // sets (the lesson pageParamsWindowed records from 2026-09-14), so what makes 600/min
@@ -206,12 +206,23 @@ func (h *sitemapHandlers) JobSitemap(c *fiber.Ctx) error {
 //
 // It is a BOUND, not a page count, and it is enforced here rather than left to the
 // sitemap index, because the sorted read behind it gets more expensive with depth
-// while the paged read does not. Measured on prod 2026-09-22 warm, at the page size
-// this route actually serves — limit=10,000, projected to slug and lastmod, which is
-// the measurement that settles the chunk count since page size dominates the cost of
-// a deep read: 716ms at offset 0, 963ms at 10,000, 1,292ms at 20,000, 1,776ms at
-// 30,000. Against the SSR route's 10s fetch timeout that is a 5.6x margin at the
-// deepest chunk, which is what four chunks rather than three is bought with.
+// while the paged read does not. Two measurements, and only the second one bounds
+// anything. The engine alone, warm, at the page size this route serves (limit=10,000,
+// projected to slug and lastmod): 716ms at offset 0 rising to 1,776ms at 30,000 —
+// which shows the SHAPE of the cost but not what the 10s fetch timeout is measured
+// against. End to end through the live sub-sitemap after deploy: 1.3s, 1.6s, 1.9s and
+// 2.6-4.9s for the four chunks, with ONE cold reading of 8.5s on the deepest chunk at
+// the first request after a release — a 1.2x margin, not the 5.6x the engine timing
+// alone suggests.
+//
+// Four chunks stands on that number rather than in spite of it: the cold peak was
+// seen once, on a cold route and a cold index at once, and the cost of exceeding the
+// timeout is ONE missing sub-sitemap on ONE fetch, which the crawler retries. The
+// deepest chunk is also the least valuable — the oldest ~day of the window. If cold
+// readings turn out to be common rather than a post-release artefact, drop to three
+// chunks: offset 20,000 measured 1.9-2.0s end to end, and the change is
+// freshSitemapMaxOffset here plus FRESH_SITEMAP_CHUNKS in web/src/lib/sitemap.ts —
+// both, or the index names a file the API deliberately answers empty.
 //
 // What the bound has to cover is offset PLUS limit, not the offset alone, and that
 // distinction is the whole guarantee: pageParamsBounded clamps ?limit= to the ceiling
