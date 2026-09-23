@@ -59,6 +59,19 @@ type RefilterRunner struct {
 
 	Batch int32 // rows per page; <= 0 means defaultRefilterBatch
 	Max   int64 // stop after scanning this many rows; <= 0 means unbounded
+
+	// AfterChannel/AfterMsgID resume a bounded run at the key the previous one printed.
+	// Without them Max is a trap rather than a bound: a REFUSED post never leaves the
+	// predicate, so a second run starting from the top rescans exactly what the first one
+	// rejected, and a dry run — where nothing leaves the predicate at all — repeats its
+	// report forever. That is the failure cmd/backfill-derive carried until freehire#2864.
+	//
+	// They are EXCLUSIVE — the first row done is the one after this key — and named After
+	// rather than From for exactly that reason: the sibling passes' BACKFILL_*_FROM_ID is
+	// inclusive, and two knobs sharing a name and a shape while disagreeing about whether
+	// the key is done or to-do lose one row per hop.
+	AfterChannel string
+	AfterMsgID   int64
 }
 
 const defaultRefilterBatch = 500
@@ -73,8 +86,7 @@ func (r RefilterRunner) Run(ctx context.Context) (RefilterStats, error) {
 	}
 
 	stats := RefilterStats{ByChannel: map[string]int{}}
-	var afterChannel string
-	var afterMsgID int64
+	afterChannel, afterMsgID := r.AfterChannel, r.AfterMsgID
 
 	for {
 		limit := batch

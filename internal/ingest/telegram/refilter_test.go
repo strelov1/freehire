@@ -152,6 +152,43 @@ func TestRefilterRunnerMaxBoundsTheScan(t *testing.T) {
 	}
 }
 
+// The resume point a bounded run prints has to be usable, or it is decoration: refused
+// posts never leave the predicate, so a second bounded run starting from the top rescans
+// exactly what the first one rejected and a dry run repeats its report forever. This is
+// the failure cmd/backfill-derive carried until freehire#2864, where afterID started at 0
+// every time.
+func TestRefilterRunnerResumesFromTheCursorItPrinted(t *testing.T) {
+	store := &fakeRefilterStore{posts: refilterCorpus()}
+
+	first, err := RefilterRunner{Store: store, Batch: 10, Max: 3}.Run(context.Background())
+	if err != nil {
+		t.Fatalf("first run: %v", err)
+	}
+	if !first.Stopped {
+		t.Fatal("first run did not stop on its bound")
+	}
+
+	second, err := RefilterRunner{
+		Store:        store,
+		Batch:        10,
+		AfterChannel: first.NextChannel,
+		AfterMsgID:   first.NextMsgID,
+	}.Run(context.Background())
+	if err != nil {
+		t.Fatalf("second run: %v", err)
+	}
+	if second.Scanned != 1 {
+		t.Errorf("second run scanned %d, want 1 — the 4th row is all that is left", second.Scanned)
+	}
+	if second.Admitted != 1 {
+		t.Errorf("second run admitted %d, want 1", second.Admitted)
+	}
+	if first.Scanned+second.Scanned != 4 {
+		t.Errorf("the two runs together scanned %d rows, want 4 — no row read twice, none skipped",
+			first.Scanned+second.Scanned)
+	}
+}
+
 // A run that reached the end says so, so "there is more" is never inferred from a count.
 func TestRefilterRunnerReportsCompletion(t *testing.T) {
 	store := &fakeRefilterStore{posts: refilterCorpus()}

@@ -46,7 +46,18 @@ Public Telegram channels carry vacancies as free-form posts, so unlike the struc
   narrower one and are stuck. **`cmd/backfill-telegram-prefilter` is the answer, and it is
   worth running after any marker change**: it pages the declined posts, re-asks
   `telegram.AdmitsPost`, and clears `extracted_at` on the ones today's rule admits. Reports
-  by default, writes under `--apply`, bounded by `BACKFILL_TG_PREFILTER_MAX`.
+  by default, writes under `--apply`, bounded by `BACKFILL_TG_PREFILTER_MAX` — and
+  **resumed with `BACKFILL_TG_PREFILTER_AFTER_CHANNEL` / `_AFTER_MSG_ID`, which is what
+  makes that bound a bound**: a refused post never leaves the predicate, so a second run
+  starting from the top rescans exactly what the first one rejected, and a dry run — where
+  nothing leaves the predicate at all — repeats its report forever. The two are ONE cursor
+  and the run refuses half of it; they are EXCLUSIVE, hence `AFTER` and not the sibling
+  passes' inclusive `FROM`.
+- Telegram jobs have no close signal of their own: the ingest sweep does not reach them, there
+  is no change feed, and `cmd/liveness` excludes them from the probe because the stored URL is
+  the post, which outlives the vacancy. They are closed by age instead — 45 days on
+  `COALESCE(posted_at, created_at)`, `closed_reason = 'expired'`. That is a guess, not
+  evidence: a vacancy still open at 46 days is closed anyway.
 
 ## The admission rule has exactly one home
 `telegram.AdmitsPost(text, links, matcher)` — the text carries a marker, OR the post links
@@ -55,8 +66,3 @@ out to a vacancy a destination adapter resolves — is called by BOTH `CrawlRunn
 it, and the two disagreeing is not cosmetic: the backfill would requeue posts the next
 crawl refuses, or leave behind the ones it now admits. Add a marker and both readers move
 together. A nil matcher (no registry configured) means only the text can admit.
-- Telegram jobs have no close signal of their own: the ingest sweep does not reach them, there
-  is no change feed, and `cmd/liveness` excludes them from the probe because the stored URL is
-  the post, which outlives the vacancy. They are closed by age instead — 45 days on
-  `COALESCE(posted_at, created_at)`, `closed_reason = 'expired'`. That is a guess, not
-  evidence: a vacancy still open at 46 days is closed anyway.

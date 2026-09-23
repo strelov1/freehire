@@ -29,10 +29,10 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"log"
-	"sort"
-
 	"flag"
+	"log"
+	"os"
+	"sort"
 
 	"github.com/strelov1/freehire/internal/ingest/linksource"
 	"github.com/strelov1/freehire/internal/ingest/sources"
@@ -57,6 +57,24 @@ func run() int {
 		return 1
 	}
 
+	// Where a previous bounded run stopped, EXCLUSIVE — the pass starts at the row after
+	// this key. Without these the bound is a trap and not a bound: a refused post never
+	// leaves the predicate, so a second run from the top rescans what the first rejected,
+	// and a dry run repeats its report forever.
+	afterChannel := os.Getenv("BACKFILL_TG_PREFILTER_AFTER_CHANNEL")
+	afterMsgID, err := worker.EnvInt64("BACKFILL_TG_PREFILTER_AFTER_MSG_ID", 0)
+	if err != nil {
+		log.Printf("config: %v", err)
+		return 1
+	}
+	// Half a cursor silently starts from the wrong place: a channel with no message id
+	// re-reads that channel whole, and an id with no channel is applied to the first
+	// channel alphabetically. Neither looks like a mistake in the output.
+	if (afterChannel == "") != (afterMsgID == 0) {
+		log.Printf("config: BACKFILL_TG_PREFILTER_AFTER_CHANNEL and _AFTER_MSG_ID are one cursor — set both or neither")
+		return 1
+	}
+
 	ctx, _, pool, cleanup, err := worker.Bootstrap(context.Background())
 	if err != nil {
 		log.Printf("database: %v", err)
@@ -68,9 +86,11 @@ func run() int {
 		Store: &refilterStore{q: db.New(pool)},
 		// The same registry cmd/tg-ingest hands its crawl, so a post admitted by its
 		// stored links here is admitted by the crawl there.
-		Links: linkMatcher{reg: linksource.All(sources.NewClient())},
-		Apply: *apply,
-		Max:   maxScan,
+		Links:        linkMatcher{reg: linksource.All(sources.NewClient())},
+		Apply:        *apply,
+		Max:          maxScan,
+		AfterChannel: afterChannel,
+		AfterMsgID:   afterMsgID,
 	}
 
 	stats, err := runner.Run(ctx)
@@ -103,7 +123,8 @@ func run() int {
 	// One report, on every exit path, saying whether there is more — never inferred from
 	// a row count. cmd/backfill-derive documents why.
 	if stats.Stopped {
-		log.Printf("stopped on BACKFILL_TG_PREFILTER_MAX; continue from channel=%s msg_id=%d",
+		log.Printf("stopped on BACKFILL_TG_PREFILTER_MAX; continue with "+
+			"BACKFILL_TG_PREFILTER_AFTER_CHANNEL=%s BACKFILL_TG_PREFILTER_AFTER_MSG_ID=%d",
 			stats.NextChannel, stats.NextMsgID)
 	} else {
 		log.Printf("done: reached the end of the declined posts")
