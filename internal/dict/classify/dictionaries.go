@@ -1075,20 +1075,65 @@ var categoryTable = []aliasEntry{
 	{"life safety", "skilled_trades"},               // fire alarm and sprinkler trades
 	{"ai safety", "ml_ai"},                          // alignment research, not a safety department
 	// Protective services. This catalogue has no category for them, so these keep the
-	// blind sentinel — and they are narrowed to the role noun the HSE block would
-	// otherwise steal, so "Public Safety Dispatcher" keeps the `logistics` it resolves on
-	// its own.
-	{"public safety officer", categoryNone},
-	{"campus safety officer", categoryNone},
-	{"school safety officer", categoryNone},
+	// blind sentinel — and they are paired with the role noun rather than left bare,
+	// because the bare qualifier blanks titles that answer for themselves: "Public Safety
+	// Dispatcher" (66 live) resolves `logistics` on the strength of `dispatcher`, and
+	// "Public Safety Telecommunicator" and "Public Safety Communications" the same way.
+	//
+	// The pairs are measured, not enumerated from imagination — every combination below
+	// exists in the live catalogue, and the ones that do not are deliberately absent. A
+	// first pass listed only the `officer` form, which left 27 postings of these same
+	// professions filed under HSE.
+	{"public safety officer", categoryNone},     // 383
+	{"campus safety officer", categoryNone},     // 83
+	{"school safety officer", categoryNone},     // 8
+	{"public safety manager", categoryNone},     // 5
+	{"public safety specialist", categoryNone},  // 4
+	{"public safety coordinator", categoryNone}, // 3
+	{"public safety director", categoryNone},    // 3
+	{"public safety technician", categoryNone},  // 1
+	{"public safety trainer", categoryNone},
+	{"public safety representative", categoryNone},
+	{"campus safety specialist", categoryNone}, // 5
+	{"campus safety supervisor", categoryNone},
+	{"campus safety coordinator", categoryNone},
+	{"campus safety manager", categoryNone},
+	{"campus safety representative", categoryNone},
+	{"campus safety intern", categoryNone},
 	{"pool safety officer", categoryNone},
 	// Trust & Safety is platform integrity at a consumer-tech employer — the most likely
-	// "safety" collision on an IT job board, and the one the first draft missed entirely.
-	// It carries the sentinel rather than a route because no category here is true for it:
-	// it is neither `operations` nor `support` nor this craft, and guessing one would be
-	// the same mistake as filing it under HSE.
-	{"trust and safety", categoryNone},
-	{"trust & safety", categoryNone},
+	// "safety" collision on an IT job board.
+	//
+	// It is paired with the role noun for a sharper reason than the protective services
+	// above. A bare `trust & safety` sentinel does not merely fail to improve things, it
+	// BLANKS correctly-resolved technology roles: "Trust & Safety Product Manager" (7
+	// live) resolves `product`, "Software Engineer, Trust & Safety" (4) resolves
+	// `software_engineering`, and neither ever collided with this block, because the
+	// matcher takes contiguous phrases and "safety product manager" does not contain
+	// "safety manager". The first pass shipped that sentinel and blanked both.
+	//
+	// What the phrase names is a DOMAIN, not a craft — the live titles span product
+	// managers, software engineers, analytics engineers, compliance, operations,
+	// associates and directors — which is exactly why no single category is true for it
+	// and why only the colliding pairs are listed. Manager and director resolve
+	// `management`, which is what they resolved before this change and is an honest
+	// statement about them; the rest name no category here.
+	{"trust and safety manager", "management"},
+	{"trust & safety manager", "management"}, // 2 + 2 across the two spellings
+	{"trust and safety director", "management"},
+	{"trust & safety director", "management"}, // 2
+	{"trust and safety specialist", categoryNone},
+	{"trust & safety specialist", categoryNone}, // 14, the most common of these
+	{"trust and safety lead", categoryNone},
+	{"trust & safety lead", categoryNone}, // 4
+	{"trust and safety engineer", categoryNone},
+	{"trust & safety engineer", categoryNone}, // 3 + 1
+	{"trust and safety coordinator", categoryNone},
+	{"trust & safety coordinator", categoryNone},
+	{"trust and safety representative", categoryNone},
+	{"trust & safety representative", categoryNone},
+	{"trust and safety intern", categoryNone},
+	{"trust & safety intern", categoryNone},
 	// Now the profession itself. The acronyms resolve bare: each is a coined initialism
 	// with no English-word collision, unlike the two words below them.
 	{"hse", "occupational_safety"},
@@ -1140,13 +1185,13 @@ var categoryTable = []aliasEntry{
 	{"safety advisor", "occupational_safety"},     // 42
 	{"safety director", "occupational_safety"},    // 34
 	{"safety manager", "occupational_safety"},     // 1,649 once the qualifiers above are excluded
-	{"safety lead", "occupational_safety"},        //
+	{"safety lead", "occupational_safety"},
 	// Added after the corpus probe, which is the only thing that could have found them:
 	// a test written from the list above can only confirm the list. Counts are live.
-	{"safety administrator", "occupational_safety"},  // 24
-	{"safety professional", "occupational_safety"},   // 23
-	{"director of safety", "occupational_safety"},    // 20; the inverted form of "safety director"
-	{"head of safety", "occupational_safety"},        //
+	{"safety administrator", "occupational_safety"}, // 24
+	{"safety professional", "occupational_safety"},  // 23
+	{"director of safety", "occupational_safety"},   // 20; the inverted form of "safety director"
+	{"head of safety", "occupational_safety"},
 	{"safety trainer", "occupational_safety"},        // 20
 	{"safety intern", "occupational_safety"},         // 18
 	{"safety representative", "occupational_safety"}, // 18

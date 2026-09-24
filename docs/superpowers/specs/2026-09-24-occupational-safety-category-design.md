@@ -300,7 +300,9 @@ put skills on it — there is no enrichment pass waiting to fix this later.
 ## Out of scope
 
 - Financial and credit risk roles. They are a different profession that happens to
-  share a word, and they already resolve `finance` and `legal` correctly.
+  share a word, and this change leaves them exactly as it found them — which for a bare
+  "Risk Analyst" means no category at all, not the `finance`/`legal` an earlier draft of
+  this line claimed.
 - Industry tagging (oil & gas as a sector) — a separate facet with its own dictionary.
 - Widening `categoryScopedAcronyms` to hold a canonical per category. See the `PSM`
   decision above; revisit only if a second collision of that shape appears.

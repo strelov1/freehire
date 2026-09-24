@@ -94,7 +94,8 @@ through `is_tech` derivation and the search index with no further code change.
   prod) and a reindex are run, with `freehire-reindexw.timer` stopped first. Same
   pattern as prior dictionary-coverage backfills.
 - Out of scope: financial and credit risk roles (a different profession sharing a word,
-  already resolving `finance`/`legal`); oil & gas as an industry tag (a separate facet);
+  left exactly as found — a bare "Risk Analyst" resolves no category, before and after);
+  oil & gas as an industry tag (a separate facet);
   widening `categoryScopedAcronyms` to hold a canonical per category.
 - Also out of scope, and recorded because it was checked: the `express` (22) and `fiber`
   (21) tags on this population are not the false positives they look like. Both aliases

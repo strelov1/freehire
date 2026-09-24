@@ -44,9 +44,16 @@ generated web contracts.
 
 Two consumers of `vocab.TechCategories` DELETE — the ingest catalogue filter and the
 prune title rule, both through `ConfirmedNonTech`, plus prune's business rule which
-reads `NonTechCategories` directly. A resolved `engineering_design` vetoes all of
-them: this dictionary and the non-tech title list describe the same physical trades,
-so a match between them is not the accidental kind the veto was built for.
+reads `NonTechCategories` directly. A resolved **non-technical CRAFT** category vetoes
+all of them: this dictionary and the non-tech title list describe the same physical
+trades, so a match between them is not the accidental kind the veto was built for.
+
+The veto reads `vocab.NonTechCraftCategories` rather than naming a member, so this
+paragraph does not have to list them and cannot go stale as the set grows — which it
+already did once, when it named only `engineering_design` while `industrial_engineering`
+was also a member. `occupational_safety` joined in 2026-09, and it is the sharpest case:
+the non-tech title list carries "охрана труда" outright, so without the veto every
+Russian occupational-safety title is turned away at ingest and hard-deleted.
 
 ## The one place category and `is_tech` disagree on purpose
 

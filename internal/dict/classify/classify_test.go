@@ -1338,14 +1338,31 @@ func TestParse_OccupationalSafety(t *testing.T) {
 		// profession of its own that happens to carry the word, and each is routed to the
 		// category that is true rather than blanked — blanking is what makes a facet
 		// unreachable, which is the harm this change exists to undo.
-		{"Trust and Safety Specialist", "", "platform integrity at a consumer-tech employer, and the likeliest collision on an IT board"},
-		{"Trust & Safety Manager", "", ""},
+		{"Trust and Safety Specialist", "", "14 live; platform integrity, the likeliest collision on an IT board"},
+		{"Trust & Safety Manager", "management", "restored: a blanket sentinel had taken this away from the answer it already had"},
+		{"Trust & Safety Director", "management", ""},
+		{"Trust & Safety Lead", "", ""},
+		{"Trust and Safety Engineer", "", ""},
+
+		// …and the Trust & Safety titles a blanket sentinel BLANKED, which is what pairing
+		// it with the role noun exists to prevent. Neither ever collided with the HSE
+		// block: the matcher takes contiguous phrases, and "safety product manager" does
+		// not contain "safety manager".
+		{"Trust & Safety Product Manager", "product", "7 live"},
+		{"Software Engineer, Trust & Safety", "software_engineering", "4 live"},
 		{"Functional Safety Engineer", "industrial_engineering", "ISO 26262, automotive and semiconductor"},
 		{"Drug Safety Specialist", "healthcare", "pharmacovigilance"},
 		{"AI Safety Engineer", "ml_ai", "alignment research, not a safety department"},
 		{"Life Safety Technician", "skilled_trades", "fire alarm and sprinkler trades"},
 		{"School Safety Officer", "", "protective services; this catalogue has no category for them"},
 		{"Pool Safety Officer", "", ""},
+		// The same professions in the role nouns a first pass missed — 27 live postings
+		// that were filing under HSE because only the `officer` spelling was excluded.
+		{"Public Safety Manager", "", "5 live"},
+		{"Public Safety Specialist", "", "4"},
+		{"Public Safety Director", "", "3"},
+		{"Campus Safety Specialist", "", "5"},
+		{"Campus Safety Coordinator", "", "1"},
 
 		// …and the titles the exclusions must NOT blank. A blanket qualifier entry took
 		// each of these away from a category it already resolved.

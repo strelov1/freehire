@@ -39,8 +39,11 @@ research is `docs/superpowers/specs/2026-09-24-occupational-safety-category-desi
 
 **Non-Goals:**
 
-- Financial and credit risk roles. A different profession that shares a word; they
-  already resolve `finance` and `legal`.
+- Financial and credit risk roles. A different profession that shares a word. This
+  change leaves them exactly as it found them, which for a bare "Risk Analyst" means
+  resolving NO category — a review caught an earlier draft claiming they "already
+  resolve `finance` and `legal`", which is not what the dictionary does. Their coverage
+  is a separate question from this one.
 - Oil & gas as an industry. That is `industrytag`'s facet and its own change.
 - Widening `categoryScopedAcronyms` to hold one canonical per category. See the `PSM`
   decision below.

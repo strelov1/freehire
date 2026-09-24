@@ -67,8 +67,11 @@ services:
   # `initialBuckets` env var does NOT create the bucket in the current image (checked,
   # both spellings), so the bucket is created with a plain PUT, which is also why the
   # init container no longer needs a vendor CLI.
+  # Pinned, like every other image in this file. The change that introduced this service
+  # exists BECAUSE an unpinned upstream moved out from under the smoke job, and shipping
+  # it on `latest` repeated the shape it was fixing.
   s3:
-    image: adobe/s3mock:latest
+    image: adobe/s3mock:5.2.3
     environment:
       # Path-style addressing, which is what internal/blobstore uses against a custom
       # S3_ENDPOINT. No credentials: s3mock accepts any signature.
@@ -77,7 +80,7 @@ services:
       - "${S3_HOST_PORT:-9000}:9090"
 
   s3-init:
-    image: curlimages/curl:latest
+    image: curlimages/curl:8.22.0
     depends_on:
       - s3
     entrypoint: >

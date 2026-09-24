@@ -28,7 +28,8 @@ through `Parse`.
 
 ### The description dictionary
 
-- A TSV, not a Go map: 863 rows, one per canonical, each value a sentence — one
+- A TSV, not a Go map: one row per canonical (923 after the 2026-09 occupational-safety
+  batch), each value a sentence — one
   unquoted line per skill is what a reviewer can actually read a wave of.
   `internal/dict/location` ships `cities1000.tsv` the same way.
 - **The loader is strict** where location's is tolerant — a malformed row fails the

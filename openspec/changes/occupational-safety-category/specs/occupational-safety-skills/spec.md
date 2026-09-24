@@ -53,9 +53,22 @@ skills.
 ### Requirement: Ambiguous HSE acronyms are category-scoped or excluded
 
 A three-letter acronym that names something else in this catalogue MUST NOT resolve on
-general job text. The system SHALL resolve `CSP`, `CIH`, `CHMM` and `BBS` to their
-occupational-safety meanings only when the caller supplies the `occupational_safety`
-category, through the existing category-scoped acronym mechanism.
+general job text. The system SHALL resolve `BBS` to Behaviour-Based Safety only when the
+caller supplies the `occupational_safety` category, through the existing category-scoped
+acronym mechanism.
+
+`CSP`, `CIH` and `CHMM` SHALL NOT be admitted to that mechanism. An earlier draft of this
+requirement asked for them, and the skill dictionary's own invariant refused: a
+category-scoped acronym must resolve to a canonical that ALREADY EXISTS there, because an
+acronym is another alias and never a new facet value. All three name credentials rather
+than skills, so they belong to `internal/dict/certification` beside PMP and CISSP — where
+the design had already placed them for an unrelated reason, and the two arguments agree.
+
+The consequence is stated rather than glossed: the certification dictionary resolves
+CV-claimed tokens, not description text, and it is not category-scoped. So these three do
+not resolve from a job description at all, under any category. That is the intended
+behaviour and not a gap — a posting that lists "CSP required" is stating a requirement,
+and the facet this vocabulary feeds describes the posting's skills.
 
 `PSM` SHALL keep its existing `professional-scrum-master` meaning scoped to
 `project_management`. The category-scoped acronym table holds one canonical per key, and
@@ -69,16 +82,24 @@ Professional collides with ASP.NET and Department of Transportation collides wit
 English word; a corpus probe attributed 17% of postings to `ASP`, and that was the
 prefix of "aspects" and "aspiring".
 
-#### Scenario: A scoped credential acronym resolves inside the category
+#### Scenario: A scoped acronym resolves inside the category
 
-- **WHEN** a posting already classified `occupational_safety` names CSP in its
+- **WHEN** a posting already classified `occupational_safety` names BBS in its
   description
-- **THEN** it resolves the Certified Safety Professional meaning
+- **THEN** it resolves Behaviour-Based Safety
 
 #### Scenario: The same acronym does not resolve outside the category
 
-- **WHEN** a posting classified `software_engineering` names CSP in its description
-- **THEN** it does not resolve the Certified Safety Professional meaning
+- **WHEN** a posting classified `software_engineering` names BBS in its description
+- **THEN** it does not resolve Behaviour-Based Safety — there it is a Bulletin Board
+  System
+
+#### Scenario: The credential acronyms resolve no skill from a description
+
+- **WHEN** a posting classified `occupational_safety` names CSP, CIH or CHMM in its
+  description
+- **THEN** no skill resolves from them, because they name credentials and live in the
+  certification dictionary instead
 
 #### Scenario: PSM keeps its existing meaning
 
