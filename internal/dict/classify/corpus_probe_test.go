@@ -61,10 +61,10 @@ func TestCategoryCorpusProbe(t *testing.T) {
 	var missed []string
 	scanCorpus(t, path, func(title string, n int) {
 		totalPostings += n
-		switch got := Parse(title).Category; {
-		case got == want:
+		switch got := Parse(title).Category; got {
+		case want:
 			claimedPostings += n
-		case got == "":
+		case "":
 			unresolvedPostings += n
 			missed = append(missed, fmt.Sprintf("%6d  %s", n, title))
 		default:
