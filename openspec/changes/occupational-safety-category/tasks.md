@@ -140,10 +140,10 @@
 
 ## 11. Finish
 
-- [ ] 11.1 Run the `simplify` skill over the whole diff
-- [ ] 11.2 Run `gofmt -l .`, `go vet ./...`, `go test ./...` and the web suite; confirm
+- [x] 11.1 Run the `simplify` skill over the whole diff
+- [x] 11.2 Run `gofmt -l .`, `go vet ./...`, `go test ./...` and the web suite; confirm
       clean, and name any pre-existing unrelated failure explicitly
-- [ ] 11.3 Request and act on one review pass over the whole diff
-- [ ] 11.4 Record the operational follow-up in the change: `cmd/backfill-derive` at
+- [x] 11.3 Request and act on one review pass over the whole diff
+- [x] 11.4 Record the operational follow-up in the change: `cmd/backfill-derive` at
       `BACKFILL_CONCURRENCY` 2–3, then `systemctl stop freehire-reindexw.timer` before
       `cmd/reindex`. Verify by facet count on the live site, not by unit test

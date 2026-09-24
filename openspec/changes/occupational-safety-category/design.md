@@ -208,18 +208,20 @@ an HSE acronym:**
 | outcome | postings | share |
 | --- | ---: | ---: |
 | `occupational_safety` | 6,026 | **96.4%** |
-| another category | 213 | 3.4% |
-| unresolved | 13 | 0.2% |
+| another category | 217 | 3.5% |
+| unresolved | 9 | 0.1% |
 
-The 13 are CJK-fused titles the word-boundary matcher cannot reach (`EHS工程师`,
-`EHSアシスタントマネージャー`, `HSEQリーダー`) plus three where an exclusion qualifier
-legitimately fires first — "EHS Food Safety Specialist" and "Public Safety –
-Environmental Health and Safety (EHS) Officer" are genuinely HSE but lose to `food
-safety` and `public safety`. Three postings is not worth a precedence exception.
+The 9 are CJK-fused titles the word-boundary matcher cannot reach (`EHS工程师`,
+`EHSアシスタントマネージャー`, `HSEQリーダー`). A handful more sit in the 3.5% because an
+exclusion qualifier legitimately fires first — "EHS Food Safety Specialist" is genuinely
+HSE but loses to `food safety`. At that count it is not worth a precedence exception.
 
 **The deliberately wide net — every live title carrying `hse|ehs|…|she|safety|hygiene|
-охран`, 30,347 postings:** 47.3% resolve the category, 36.5% resolve nothing, 16.2%
-resolve elsewhere. The unresolved share is mostly correct: that query was written to
+охран`, 30,347 postings:** 46.4% resolve the category, 31.9% resolve nothing, 21.7%
+resolve elsewhere. The "elsewhere" share grew and the "nothing" share shrank after
+review: the qualifier exclusions now ROUTE rather than blank, so Patient Safety nurses
+go to `healthcare` and Product Safety engineers to `industrial_engineering` instead of
+resolving nothing. The unresolved share is mostly correct: that query was written to
 over-collect, and it pulls in security guards (`младший инспектор отдела охраны`),
 forest rangers (`государственный инспектор по охране леса`), campus and public safety
 officers, deputy sheriffs and dental hygiene assistants — none of which is this
@@ -230,4 +232,53 @@ written from that list could have surfaced: the Russian genitive `охраны �
 postings in one title alone), the inverted `Director of Safety` (20), the Singapore
 `Workplace Safety and Health` family (25 across spellings), and seven more
 `Safety <role>` forms — administrator, professional, trainer, intern, representative,
-inspector. Adding them moved the wide-net figure from 43.9% to 47.3%.
+inspector. Adding them moved the wide-net figure from 43.9% to 47.3%; the review's
+qualifier exclusions then moved it back to 46.4% by handing ~300 postings to the
+professions they actually belong to.
+
+## What the review changed, and why it is recorded here
+
+Two decisions in this document were wrong as written, and the corrections belong beside
+them rather than only in a commit message.
+
+**The qualifier exclusions must route, not blank.** The first implementation gave
+`food safety`, `public safety`, `patient safety`, `campus safety` and `product safety`
+the blind sentinel. That blanked titles which already resolved correctly and had nothing
+to do with HSE — "Patient Safety Registered Nurse" lost `healthcare`, "Product Safety
+Engineer" lost `industrial_engineering`, "Public Safety Dispatcher" lost `logistics`.
+`dictionaries.go` states the rule that forbids this (the sentinel is only for phrases
+with no better category) and cites the last time it was broken. Each qualifier now routes
+to the category that is true; the sentinel survives only for protective services and
+Trust & Safety, and is narrowed to the role noun so it stops taking other people's
+answers.
+
+**The exclusion list was measured on the wrong board.** It covered the five consumer
+collisions and missed every tech-native one. On an IT job board the likeliest "safety"
+collision is **Trust & Safety** — platform integrity at a consumer-tech employer — which
+was being filed under Health & Safety and deriving `is_tech = false` with it. So were
+Functional Safety (ISO 26262), Drug Safety (pharmacovigilance), AI Safety (alignment),
+Life Safety (fire-alarm trades) and school and pool safety officers. All are now excluded
+or routed, each with a test.
+
+**And the skill vocabulary needed the other half of its test.** Every assertion was
+"HSE text contains HSE term"; none asked what these phrases do to a posting that is not
+about safety. They are strong corroborators by default, so one of them released every
+gated `ambiguousWords` token in the same text — a warehouse posting came back carrying
+`react` and `sketch`. All 35 phrase canonicals joined `nonCorroboratingPhrases`, which is
+where this file's own doctrine already put `hipaa`, `nist` and `iso-9001`. The five word
+aliases (`osha`, `epa`, `nfpa`, `rcra`, `hazop`) stay corroborating: a regulator's name
+is not English prose.
+
+## Operational follow-up, owed after merge
+
+The dictionary only touches postings written after it. Existing rows keep their stale
+`category` and `skills` until:
+
+1. `cmd/backfill-derive`, `BACKFILL_CONCURRENCY` at 2–3. Six degraded prod; this is a
+   measured limit, not a guess.
+2. `systemctl stop freehire-reindexw.timer`, then `cmd/reindex`. The reindex stops the
+   search-drain timer itself, so a dead timer plus a growing outbox is expected for the
+   duration.
+3. Verify by facet count on the live site — the `Health & Safety (HSE)` option should
+   appear under Quality & Security with roughly 6,000 postings behind it — not by unit
+   test.
