@@ -1095,21 +1095,47 @@ var categoryTable = []aliasEntry{
 	// Russian. `internal/dict/classify`'s non-tech term list already carries "охрана
 	// труда"/"охране труда", which is why these titles were being turned away at ingest
 	// and hard-deleted rather than merely going uncategorised — see ConfirmedNonTech.
+	// All three cases, because Russian titles inflect the phrase and the matcher does
+	// not: "Специалист в области охраны труда" (112 live) is genitive, "Инженер по
+	// охране труда" is dative, "Охрана труда" is nominative. The corpus probe found the
+	// genitive; the hand-written list had only the other two.
+	//
+	// Note how narrow these are. The same corpus carries hundreds of postings for bare
+	// "охрана" — "младший инспектор отдела охраны", "государственный инспектор по охране
+	// леса" — which are security guards and forest rangers, not this profession. Only
+	// the two-word phrase is admitted.
 	{"охрана труда", "occupational_safety"},
 	{"охране труда", "occupational_safety"},
+	{"охраны труда", "occupational_safety"},
 	// The titles SOC lists as reported for 19-5011, in the spellings prod carries, with
 	// live counts. Bare "safety" is deliberately NOT an alias: it names patient safety
 	// in healthcare, campus and public safety in protective services and food safety in
 	// manufacturing quality, and these qualified forms cover the population without it.
-	{"safety coordinator", "occupational_safety"},   // 283
-	{"safety specialist", "occupational_safety"},    // 278
-	{"safety officer", "occupational_safety"},       // 130
-	{"safety technician", "occupational_safety"},    // 67
-	{"safety supervisor", "occupational_safety"},    // 55
-	{"safety advisor", "occupational_safety"},       // 42
-	{"safety director", "occupational_safety"},      // 34
-	{"safety manager", "occupational_safety"},       //
-	{"safety lead", "occupational_safety"},          //
+	{"safety coordinator", "occupational_safety"}, // 283
+	{"safety specialist", "occupational_safety"},  // 278
+	{"safety officer", "occupational_safety"},     // 130
+	{"safety technician", "occupational_safety"},  // 67
+	{"safety supervisor", "occupational_safety"},  // 55
+	{"safety advisor", "occupational_safety"},     // 42
+	{"safety director", "occupational_safety"},    // 34
+	{"safety manager", "occupational_safety"},     // 1,649 once the qualifiers above are excluded
+	{"safety lead", "occupational_safety"},        //
+	// Added after the corpus probe, which is the only thing that could have found them:
+	// a test written from the list above can only confirm the list. Counts are live.
+	{"safety administrator", "occupational_safety"},  // 24
+	{"safety professional", "occupational_safety"},   // 23
+	{"director of safety", "occupational_safety"},    // 20; the inverted form of "safety director"
+	{"head of safety", "occupational_safety"},        //
+	{"safety trainer", "occupational_safety"},        // 20
+	{"safety intern", "occupational_safety"},         // 18
+	{"safety representative", "occupational_safety"}, // 18
+	{"safety inspector", "occupational_safety"},      // 14
+	// The Singapore and site-officer spellings, which name the whole discipline between
+	// the two words the qualified aliases above expect to be adjacent.
+	{"workplace safety and health", "occupational_safety"}, // 25 across its spellings
+	{"workplace safety & health", "occupational_safety"},
+	{"safety and health officer", "occupational_safety"}, // 10, "Site Safety and Health Officer"
+	{"safety & health officer", "occupational_safety"},
 	{"industrial hygienist", "occupational_safety"}, // named in SOC's reported-title list
 	{"industrial hygiene", "occupational_safety"},
 	{"risk control consultant", "occupational_safety"},

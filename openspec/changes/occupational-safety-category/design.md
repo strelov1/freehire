@@ -34,7 +34,8 @@ research is `docs/superpowers/specs/2026-09-24-occupational-safety-category-desi
   string or `management`.
 - The profession's postings survive ingest and prune rather than being deleted on the
   strength of a Russian non-tech term match.
-- The postings carry skills that describe safety work, not `express` and `fiber`.
+- The postings carry skills that describe safety work. Today most carry none at all:
+  2,535 of 6,254 have any skill, and the dictionary has no HSE vocabulary whatsoever.
 
 **Non-Goals:**
 
@@ -195,3 +196,38 @@ nothing and the postings return to their prior state on the next backfill.
 None blocking. The one structural question — whether `categoryScopedAcronyms` should
 hold a canonical per category — is answered "not for this change" and recorded above;
 revisit only if a second collision of that shape appears.
+
+## Coverage as measured, not as assumed
+
+Run after implementation, against live prod titles rather than against the list that
+produced the dictionary (`TestCategoryCorpusProbe`, added for this purpose).
+
+**The profession's own spellings — 3,869 distinct titles, 6,252 live postings carrying
+an HSE acronym:**
+
+| outcome | postings | share |
+| --- | ---: | ---: |
+| `occupational_safety` | 6,026 | **96.4%** |
+| another category | 213 | 3.4% |
+| unresolved | 13 | 0.2% |
+
+The 13 are CJK-fused titles the word-boundary matcher cannot reach (`EHS工程师`,
+`EHSアシスタントマネージャー`, `HSEQリーダー`) plus three where an exclusion qualifier
+legitimately fires first — "EHS Food Safety Specialist" and "Public Safety –
+Environmental Health and Safety (EHS) Officer" are genuinely HSE but lose to `food
+safety` and `public safety`. Three postings is not worth a precedence exception.
+
+**The deliberately wide net — every live title carrying `hse|ehs|…|she|safety|hygiene|
+охран`, 30,347 postings:** 47.3% resolve the category, 36.5% resolve nothing, 16.2%
+resolve elsewhere. The unresolved share is mostly correct: that query was written to
+over-collect, and it pulls in security guards (`младший инспектор отдела охраны`),
+forest rangers (`государственный инспектор по охране леса`), campus and public safety
+officers, deputy sheriffs and dental hygiene assistants — none of which is this
+profession.
+
+**What the probe found that the hand-written list had missed**, and which no test
+written from that list could have surfaced: the Russian genitive `охраны труда` (112
+postings in one title alone), the inverted `Director of Safety` (20), the Singapore
+`Workplace Safety and Health` family (25 across spellings), and seven more
+`Safety <role>` forms — administrator, professional, trainer, intern, representative,
+inspector. Adding them moved the wide-net figure from 43.9% to 47.3%.

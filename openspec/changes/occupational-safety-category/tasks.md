@@ -132,10 +132,10 @@
 
 ## 10. Coverage measured against live titles, not the list
 
-- [ ] 10.1 Extend the classify corpus probe (`corpus_probe_test.go`) or add an
+- [x] 10.1 Extend the classify corpus probe (`corpus_probe_test.go`) or add an
       equivalent so coverage of this family is measured against real titles rather than
       against the same list that produced the dictionary
-- [ ] 10.2 Record what the probe reports — which live HSE spellings still resolve
+- [x] 10.2 Record what the probe reports — which live HSE spellings still resolve
       nothing — in the change, so the gap is visible rather than assumed closed
 
 ## 11. Finish
