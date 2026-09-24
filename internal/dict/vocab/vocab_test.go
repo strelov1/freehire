@@ -153,6 +153,27 @@ func TestIndustrialEngineeringIsNonTech(t *testing.T) {
 	}
 }
 
+// Occupational safety is craft-protected for the reason engineering_design is, and the
+// test says so separately because the two arguments are not the same one. Craft
+// membership here is what keeps prune's business rule off an oil & gas or construction
+// employer: that rule deletes non-technical categories at a company with no technical
+// history, and an HSE department is the whole non-technical staff such an employer
+// posts. Without the subtraction, retiring one board removes that employer's catalogue.
+func TestOccupationalSafetyIsNonTechCraft(t *testing.T) {
+	if !slices.Contains(CategoryValues, "occupational_safety") {
+		t.Fatal("CategoryValues must contain occupational_safety")
+	}
+	if !slices.Contains(NonTechCategories, "occupational_safety") {
+		t.Error("occupational_safety must be a NonTechCategories member: it is a real craft, but not the IT work this catalogue serves")
+	}
+	if !slices.Contains(NonTechCraftCategories, "occupational_safety") {
+		t.Error("occupational_safety must be craft-protected, or prune's business rule deletes an HSE employer's whole catalogue")
+	}
+	if slices.Contains(TechCategories, "occupational_safety") {
+		t.Error("occupational_safety must not be a TechCategories member")
+	}
+}
+
 func TestDomainGlossCoversVocabulary(t *testing.T) {
 	for _, d := range DomainValues {
 		if strings.TrimSpace(DomainGloss[d]) == "" {

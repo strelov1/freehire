@@ -1,74 +1,74 @@
 ## 1. The category joins the vocabulary
 
-- [ ] 1.1 Add a failing test in `internal/dict/vocab/vocab_test.go` asserting
+- [x] 1.1 Add a failing test in `internal/dict/vocab/vocab_test.go` asserting
       `occupational_safety` is a `CategoryValues` member, a `NonTechCategories` member
       and a `NonTechCraftCategories` member, and NOT a `TechCategories` member
-- [ ] 1.2 Add `occupational_safety` to the three lists in
+- [x] 1.2 Add `occupational_safety` to the three lists in
       `internal/dict/vocab/vocab.go`, with a comment recording what the category means
       (the compliance/controls seat, sibling of `industrial_engineering` not a slice of
       it) and why craft membership is load-bearing (prune's business rule SUBTRACTS that
       set, so without it a retired oil & gas board deletes the employer's catalogue)
-- [ ] 1.3 Run `go test ./internal/dict/vocab/...` and confirm the existing partition and
+- [x] 1.3 Run `go test ./internal/dict/vocab/...` and confirm the existing partition and
       craft-subset assertions stay green alongside the new test
 
 ## 2. HSE titles resolve the category
 
-- [ ] 2.1 Add failing tests in `internal/dict/classify/classify_test.go` for the acronym
+- [x] 2.1 Add failing tests in `internal/dict/classify/classify_test.go` for the acronym
       spellings → `occupational_safety`: `EHS Specialist`, `HSE Officer`,
       `HSEQ Advisor`, `QHSE Coordinator`, `HSSE Manager`, `SHES Coordinator`
-- [ ] 2.2 Add failing tests for the spelled-out and Russian forms:
+- [x] 2.2 Add failing tests for the spelled-out and Russian forms:
       `Environmental Health and Safety Specialist`, `Health & Safety Advisor`,
       `Occupational Health and Safety Manager`, `Инженер по охране труда`
-- [ ] 2.3 Add failing tests for the SOC reported titles: `Safety Coordinator`,
+- [x] 2.3 Add failing tests for the SOC reported titles: `Safety Coordinator`,
       `Safety Specialist`, `Safety Officer`, `Industrial Hygienist`,
       `Risk Control Consultant`, and `Safety Engineer` (which moves off
       `industrial_engineering`)
-- [ ] 2.4 Add the alias block to `internal/dict/classify/dictionaries.go` placed ABOVE
+- [x] 2.4 Add the alias block to `internal/dict/classify/dictionaries.go` placed ABOVE
       the bare `{"manager", "management"}` entry, and remove the now-superseded
       `{"safety engineer", "industrial_engineering"}` line. Comment records the
       precedence reason and the SOC/ISCO placement argument
-- [ ] 2.5 Run `go test ./internal/dict/classify/...` and confirm green with no existing
+- [x] 2.5 Run `go test ./internal/dict/classify/...` and confirm green with no existing
       test regressing
 
 ## 3. The block outranks the bare manager fall-through
 
-- [ ] 3.1 Add failing tests asserting `EHS Manager`, `HSE Manager`,
+- [x] 3.1 Add failing tests asserting `EHS Manager`, `HSE Manager`,
       `Regional EHS Manager` and `Senior EHS Manager` → `occupational_safety`, not
       `management`
-- [ ] 3.2 Add a regression test asserting a manager title with no recognised function
+- [x] 3.2 Add a regression test asserting a manager title with no recognised function
       (e.g. `Business Manager`) still resolves `management`, unchanged
-- [ ] 3.3 Confirm the placement from 2.4 satisfies both; adjust ordering if not
-- [ ] 3.4 Run `go test ./internal/dict/classify/...` and confirm green
+- [x] 3.3 Confirm the placement from 2.4 satisfies both; adjust ordering if not
+- [x] 3.4 Run `go test ./internal/dict/classify/...` and confirm green
 
 ## 4. Lookalike words stay out
 
-- [ ] 4.1 Add failing regression tests asserting NO category resolves
+- [x] 4.1 Add failing regression tests asserting NO category resolves
       `occupational_safety` for `Software Engineer (she/her)`, `Risk Analyst`,
       `Credit Risk Manager`, `Patient Safety Attendant` and `Public Safety Officer`
-- [ ] 4.2 Add failing tests asserting the qualified SHE forms DO resolve:
+- [x] 4.2 Add failing tests asserting the qualified SHE forms DO resolve:
       `SHE Manager`, `SHE Advisor`
-- [ ] 4.3 Confirm the dictionary carries no bare `she`, `risk` or `safety` alias, with a
+- [x] 4.3 Confirm the dictionary carries no bare `she`, `risk` or `safety` alias, with a
       comment beside the qualified forms naming the live-title collisions that keep the
       bare words out
-- [ ] 4.4 Run `go test ./internal/dict/classify/...` and confirm green
+- [x] 4.4 Run `go test ./internal/dict/classify/...` and confirm green
 
 ## 5. The deletion veto
 
-- [ ] 5.1 Add a failing test in `internal/dict/classify/nontech_test.go` asserting
+- [x] 5.1 Add a failing test in `internal/dict/classify/nontech_test.go` asserting
       `ConfirmedNonTech("Инженер по охране труда", false)` is false — the title matches
       the existing `"охране труда"` non-tech term, and the veto must spare it
-- [ ] 5.2 Add a failing test asserting `ConfirmedNonTech("EHS Specialist", false)` is
+- [x] 5.2 Add a failing test asserting `ConfirmedNonTech("EHS Specialist", false)` is
       false
-- [ ] 5.3 Add a regression test asserting the veto does NOT widen: a title that resolves
+- [x] 5.3 Add a regression test asserting the veto does NOT widen: a title that resolves
       no category (e.g. `HVAC Technician`, `Warehouse Janitorial Cleaner`) is still
       confirmed non-technical
-- [ ] 5.4 Widen the `ConfirmedNonTech` veto in `internal/dict/classify/nontech.go` to
+- [x] 5.4 Widen the `ConfirmedNonTech` veto in `internal/dict/classify/nontech.go` to
       the craft categories rather than the single `engineering_design` name, so a third
       craft category cannot be added later and silently miss it
-- [ ] 5.5 Check the prune business rule's own exclusion path reads
+- [x] 5.5 Check the prune business rule's own exclusion path reads
       `NonTechCraftCategories` (not a category named inline) and covers the new member;
       fix it if it does not
-- [ ] 5.6 Run `go test ./internal/dict/classify/... ./cmd/prune/...` and confirm green
+- [x] 5.6 Run `go test ./internal/dict/classify/... ./cmd/prune/...` and confirm green
 
 ## 6. The skill vocabulary
 

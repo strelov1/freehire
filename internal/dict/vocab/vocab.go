@@ -72,6 +72,21 @@ var (
 		// draughtsman. Half the population it names is Russian (`Инженер`,
 		// `Инженер-технолог`, `Инженер ПТО`) and carried no English alias at all.
 		"design", "creative", "engineering_design", "industrial_engineering",
+		// "occupational_safety" is the health, safety and environment seat — the
+		// profession that spells itself HSE, EHS, HSSE, QHSE, HSEQ, SHE, SHEQ and
+		// SHES. It is a sibling of `industrial_engineering`, not a slice of it: that
+		// category is the seat a plant staffs to make and run the thing, this is the
+		// compliance and controls function that audits it, and an HSE Manager is not
+		// a process engineer. Both national occupational classifications place it
+		// this way — SOC minor group 19-5000, under Life/Physical/Social Science, and
+		// ISCO-08 unit group 2263, under Other Health Professionals — and neither
+		// files it under engineering.
+		//
+		// Measured on prod 2026-09-24: the acronyms alone matched 6,254 live
+		// postings, 4,515 of them with no category at all (unreachable from every
+		// facet) and 1,454 sitting in `management` because the bare `manager`
+		// fall-through outranked a block that did not exist.
+		"occupational_safety",
 		"product", "project_management", "management",
 		// The consumer industries a broad multi-industry ATS crawl carries in with the
 		// boards it wants. They are here to be FILTERABLE — a facet excludes as well as
@@ -116,7 +131,7 @@ var (
 	NonTechCategories = []string{
 		"marketing", "sales", "support", "management",
 		"recruiting", "hr", "finance", "legal", "operations", "customer_success",
-		"engineering_design", "industrial_engineering",
+		"engineering_design", "industrial_engineering", "occupational_safety",
 		"healthcare", "skilled_trades", "retail", "hospitality",
 		"logistics", "education", "personal_services", "administration",
 	}
@@ -134,7 +149,11 @@ var (
 	// the vocabulary — by someone with no reason to open cmd/prune — and become
 	// deletable in silence. A test asserts every member is also a NonTechCategories
 	// member, so the two cannot drift.
-	NonTechCraftCategories = []string{"engineering_design", "industrial_engineering"}
+	// `occupational_safety` is a member for the same reason, arrived at from the other
+	// direction: an oil & gas, mining or construction employer's HSE department is the
+	// whole non-technical staff it posts, so the business rule applied to it would take
+	// out that employer's catalogue the moment its board was retired.
+	NonTechCraftCategories = []string{"engineering_design", "industrial_engineering", "occupational_safety"}
 	// TechCategories are the CategoryValues for recognized technical roles: every
 	// category that is neither a NonTechCategories member nor the residual "other".
 	// It is the single source of truth for "is this a technical category?" that the

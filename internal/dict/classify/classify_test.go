@@ -1198,7 +1198,6 @@ func TestParse_IndustrialEngineering(t *testing.T) {
 		{"Site Engineer", "industrial_engineering", ""},
 		{"Facilities Engineer", "industrial_engineering", ""},
 		{"Supplier Quality Engineer", "industrial_engineering", ""},
-		{"Safety Engineer", "industrial_engineering", ""},
 		{"Environmental Engineer", "industrial_engineering", ""},
 		{"Geotechnical Engineer", "industrial_engineering", ""},
 		{"Application Engineer", "industrial_engineering", "the industrial reading; the field form goes to pre-sales"},
@@ -1252,6 +1251,93 @@ func TestParse_IndustrialEngineering(t *testing.T) {
 		{"Design Engineer", "engineering_design", ""},
 		{"Machine Learning Engineer", "ml_ai", ""},
 		{"Программист", "software_engineering", "the IT wave's call, unchanged"},
+	}
+
+	for _, tc := range cases {
+		if got := Parse(tc.title).Category; got != tc.wantCategory {
+			t.Errorf("Parse(%q).Category = %q, want %q %s", tc.title, got, tc.wantCategory, tc.why)
+		}
+	}
+}
+
+// TestParse_OccupationalSafety pins the health-safety-environment profession, which
+// spells itself a dozen ways and which this catalogue could not see at all. Measured on
+// prod 2026-09-24 over live non-duplicate postings, the acronyms alone matched 6,254:
+// 4,515 resolved no category and were unreachable from every facet, and 1,454 resolved
+// `management` off the bare `manager` fall-through, filing an HSE Manager next to a
+// Sales Manager.
+func TestParse_OccupationalSafety(t *testing.T) {
+	cases := []struct {
+		title        string
+		wantCategory string
+		why          string
+	}{
+		// The acronym spellings. Live prod titles, with their counts.
+		{"EHS Specialist", "occupational_safety", "208 live postings"},
+		{"EHS Coordinator", "occupational_safety", "95"},
+		{"HSE Officer", "occupational_safety", "87"},
+		{"HSE Advisor", "occupational_safety", "66"},
+		{"HSE Engineer", "occupational_safety", "54"},
+		{"HSEQ Advisor", "occupational_safety", "14"},
+		{"QHSE Coordinator", "occupational_safety", "12"},
+		{"HSSE Manager", "occupational_safety", "13"},
+		{"SHEQ Coordinator", "occupational_safety", ""},
+		{"SHES Advisor", "occupational_safety", ""},
+		{"Senior EHS Specialist", "occupational_safety", "24; a grade word does not change the craft"},
+
+		// The spelled-out forms, and the Russian one the non-tech list already names.
+		{"Environmental Health and Safety Specialist", "occupational_safety", "30"},
+		{"Environmental Health & Safety Specialist", "occupational_safety", "40"},
+		{"Health & Safety Advisor", "occupational_safety", "30"},
+		{"Health and Safety Coordinator", "occupational_safety", "20"},
+		{"Occupational Health and Safety Manager", "occupational_safety", ""},
+		{"Инженер по охране труда", "occupational_safety", ""},
+
+		// The titles SOC lists as reported for 19-5011.
+		{"Safety Coordinator", "occupational_safety", "283"},
+		{"Safety Specialist", "occupational_safety", "278"},
+		{"Safety Officer", "occupational_safety", "130"},
+		{"Safety Technician", "occupational_safety", "67"},
+		{"Safety Supervisor", "occupational_safety", "55"},
+		{"Safety Advisor", "occupational_safety", "42"},
+		{"Safety Director", "occupational_safety", "34"},
+		{"Industrial Hygienist", "occupational_safety", "named in SOC's own reported-title list"},
+		{"Risk Control Consultant", "occupational_safety", "named in SOC's own reported-title list"},
+
+		// Moved off industrial_engineering, where it was this dictionary's only
+		// relevant line. The plant category is for making and running the thing; this
+		// is the compliance function that audits it.
+		{"Safety Engineer", "occupational_safety", "46 postings change hands"},
+
+		// The block sits ABOVE the bare `manager` fall-through, which is what claimed
+		// 1,454 of these. SOC codes EHS Managers separately from 19-5011; this
+		// catalogue deliberately does not, because `seniority` is its own facet and
+		// splitting one profession across two category values would make a subscriber
+		// tick two boxes to see one job market.
+		{"EHS Manager", "occupational_safety", "255, the single most common spelling"},
+		{"HSE Manager", "occupational_safety", "158"},
+		{"Regional EHS Manager", "occupational_safety", "18"},
+		{"Senior EHS Manager", "occupational_safety", "15"},
+		{"Project HSE Manager", "occupational_safety", "12"},
+
+		// …and a manager title naming no recognised function still falls through.
+		{"Business Manager", "management", "the fall-through is unchanged"},
+
+		// The words this block must NOT claim. Each was measured before exclusion.
+		{"Software Engineer (she/her)", "software_engineering", "SHE is a pronoun in live titles; no bare alias"},
+		{"Risk Analyst", "", "`risk` matched 41,468 live postings, mostly finance"},
+		{"Credit Risk Manager", "management", "finance risk is a different profession sharing a word"},
+		{"Patient Safety Attendant", "", "23; bare `safety` names other crafts, and this one resolves nothing"},
+		{"Public Safety Officer", "", "113; protective services, not HSE"},
+		{"Campus Safety Officer", "", "38; protective services, not HSE"},
+		{"Food Safety Manager", "", "616 live; manufacturing quality, not HSE — the blind sentinel, not a guess"},
+		{"Product Safety Engineer", "", "163; regulatory product compliance, not HSE"},
+		{"Fire Safety Manager", "occupational_safety", "164; fire IS part of the HSE remit on an industrial site"},
+
+		// The qualified SHE spellings DO resolve — the exclusion is of the bare word,
+		// not of the acronym.
+		{"SHE Manager", "occupational_safety", ""},
+		{"SHE Advisor", "occupational_safety", ""},
 	}
 
 	for _, tc := range cases {

@@ -95,11 +95,41 @@ func TestConfirmedNonTech_EngineeringDesignIsVetoed(t *testing.T) {
 		}
 	}
 
-	// The veto is scoped to that one category: a genuinely non-technical title with no
+	// The veto is scoped to the craft categories: a genuinely non-technical title with no
 	// category, and one in another non-tech category, are still confirmed.
 	for _, title := range []string{"HVAC Technician", "Warehouse Janitorial Cleaner", "Registered Nurse"} {
 		if !ConfirmedNonTech(title, false) {
 			t.Errorf("ConfirmedNonTech(%q, false) = false, want true — the veto must not widen", title)
+		}
+	}
+}
+
+// The same veto, reached from the other direction and with a sharper edge. The non-tech
+// term list carries "охрана труда"/"охране труда" — the Russian name of the
+// occupational-safety profession — so before this category existed every Russian HSE
+// title was turned away by the ingest catalogue filter and hard-deleted by the prune
+// title rule, both of which funnel through ConfirmedNonTech. A facet no posting can
+// reach is not a facet, which is why this test guards the category rather than the
+// dictionary entry.
+func TestConfirmedNonTech_OccupationalSafetyIsVetoed(t *testing.T) {
+	for _, title := range []string{
+		"Инженер по охране труда",
+		"Специалист по охране труда",
+	} {
+		if !IsNonTech(title) {
+			t.Fatalf("precondition: %q must match the non-tech dictionary for this test to mean anything", title)
+		}
+		if ConfirmedNonTech(title, false) {
+			t.Errorf("ConfirmedNonTech(%q, false) = true, want false (occupational_safety vetoes deletion)", title)
+		}
+	}
+
+	// English HSE titles do not match the non-tech term list at all, so they were never
+	// at risk from this path. Asserted anyway: the veto must hold for the whole category,
+	// not only for the spellings that happen to collide today.
+	for _, title := range []string{"EHS Specialist", "HSE Manager", "Safety Coordinator"} {
+		if ConfirmedNonTech(title, false) {
+			t.Errorf("ConfirmedNonTech(%q, false) = true, want false", title)
 		}
 	}
 }

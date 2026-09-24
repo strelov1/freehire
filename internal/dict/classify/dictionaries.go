@@ -1041,6 +1041,83 @@ var categoryTable = []aliasEntry{
 	// above the bare "manager" so the unqualified title still resolves.
 	{"community manager", "marketing"},
 	{"комьюнити-менеджер", "marketing"},
+	// Health, safety and environment. The block sits here, above the bare "manager"
+	// fall-through, because that one line is what the profession was losing to: measured
+	// on prod 2026-09-24, 1,454 live postings carrying an HSE acronym resolved
+	// `management` on the strength of the word "Manager" alone, filing an EHS Manager
+	// beside a Sales Manager. Another 4,515 resolved nothing at all.
+	//
+	// SOC codes EHS Managers separately from its 19-5011 specialists. This table
+	// deliberately does not: `seniority` is its own facet here, so splitting one
+	// profession across two category values would make a subscriber tick two boxes to
+	// see one job market.
+	//
+	// First, the qualifiers that put the word "safety" in a title naming a DIFFERENT
+	// profession. Measured live on 2026-09-24, they are not a rounding error: food 616,
+	// public 843, patient 481, campus 157, product 163 — roughly 2,300 postings that the
+	// qualified "safety <role>" aliases below would otherwise claim for HSE. Food safety
+	// is manufacturing quality, product safety is regulatory compliance, and the other
+	// three are protective services and healthcare quality. None has a category here, so
+	// they carry the blind sentinel rather than a guess.
+	//
+	// "fire safety" is deliberately NOT in this list. It is a genuine part of the HSE
+	// remit on an industrial site, and 164 postings is too few to be worth splitting the
+	// building-warden reading out of.
+	{"food safety", categoryNone},
+	{"public safety", categoryNone},
+	{"patient safety", categoryNone},
+	{"campus safety", categoryNone},
+	{"product safety", categoryNone},
+	// The acronyms resolve bare. Each is a coined initialism with no English-word
+	// collision, unlike the two words below them.
+	{"hse", "occupational_safety"},
+	{"ehs", "occupational_safety"},
+	{"hsse", "occupational_safety"},
+	{"qhse", "occupational_safety"},
+	{"hseq", "occupational_safety"},
+	{"sheq", "occupational_safety"},
+	{"shes", "occupational_safety"},
+	// "SHE" is NOT here bare, and that is the one exclusion in this block with a
+	// live-title reason rather than a dictionary one: it is an ordinary English word and
+	// a pronoun that postings carry ("Software Engineer (she/her)"). Only the qualified
+	// spellings, the same treatment bare "security" and bare "mobile" already get.
+	{"she manager", "occupational_safety"},
+	{"she officer", "occupational_safety"},
+	{"she advisor", "occupational_safety"},
+	{"she coordinator", "occupational_safety"},
+	{"she specialist", "occupational_safety"},
+	// The spelled-out forms. "environmental health and safety" and "occupational health
+	// and safety" need no entry of their own — both contain "health and safety", and the
+	// matcher is word-boundary based. The ampersand spelling does need one: it is a
+	// different string, not a different boundary.
+	{"health and safety", "occupational_safety"},
+	{"health & safety", "occupational_safety"},
+	// Russian. `internal/dict/classify`'s non-tech term list already carries "охрана
+	// труда"/"охране труда", which is why these titles were being turned away at ingest
+	// and hard-deleted rather than merely going uncategorised — see ConfirmedNonTech.
+	{"охрана труда", "occupational_safety"},
+	{"охране труда", "occupational_safety"},
+	// The titles SOC lists as reported for 19-5011, in the spellings prod carries, with
+	// live counts. Bare "safety" is deliberately NOT an alias: it names patient safety
+	// in healthcare, campus and public safety in protective services and food safety in
+	// manufacturing quality, and these qualified forms cover the population without it.
+	{"safety coordinator", "occupational_safety"},   // 283
+	{"safety specialist", "occupational_safety"},    // 278
+	{"safety officer", "occupational_safety"},       // 130
+	{"safety technician", "occupational_safety"},    // 67
+	{"safety supervisor", "occupational_safety"},    // 55
+	{"safety advisor", "occupational_safety"},       // 42
+	{"safety director", "occupational_safety"},      // 34
+	{"safety manager", "occupational_safety"},       //
+	{"safety lead", "occupational_safety"},          //
+	{"industrial hygienist", "occupational_safety"}, // named in SOC's reported-title list
+	{"industrial hygiene", "occupational_safety"},
+	{"risk control consultant", "occupational_safety"},
+	// Bare "risk" is NOT an alias. It matched 41,468 live postings and most of them are
+	// finance — "Risk Analyst", "Credit Risk Manager" — which is a different profession
+	// that happens to share a word, and which already resolves correctly elsewhere.
+	{"hse risk", "occupational_safety"},
+	{"safety risk", "occupational_safety"},
 	// Bare "manager" resolves last so a functional prefix wins ("Sales Manager"
 	// → sales, "Operations Manager" → operations, "Finance Manager" → finance); a
 	// manager title with no recognized function falls through to management.
@@ -1665,7 +1742,12 @@ var categoryTable = []aliasEntry{
 	{"plant engineer", "industrial_engineering"},
 	{"facilities engineer", "industrial_engineering"},
 	{"building engineer", "industrial_engineering"},
-	{"safety engineer", "industrial_engineering"},
+	// "Safety Engineer" is the HSE profession, not the plant seat around it — SOC's own
+	// reported-title list for 19-5011 names it. It stays HERE rather than joining the
+	// HSE block above the `manager` fall-through on purpose: `software engineer` is
+	// declared between the two, and moving this line up would take "Software Safety
+	// Engineer" (functional safety, automotive and aerospace) away from it.
+	{"safety engineer", "occupational_safety"},
 	{"environmental engineer", "industrial_engineering"},
 	{"geotechnical engineer", "industrial_engineering"},
 	{"planning engineer", "industrial_engineering"},
