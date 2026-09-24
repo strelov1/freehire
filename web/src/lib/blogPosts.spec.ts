@@ -26,23 +26,17 @@ describe('every post on disk', () => {
     expect(posts.length).toBeGreaterThan(0);
   });
 
-  it.each(posts.map((p) => [p.slug, p] as const))(
-    '%s has the metadata every surface reads',
-    (_slug, post) => {
-      // listPosts would already have thrown on a missing field. These assertions catch
-      // the quieter version: frontmatter that parses into something empty or nonsensical,
-      // which renders as a blank card in the feed rather than an error.
-      expect(post.title.trim()).not.toBe('');
-      expect(post.summary.trim()).not.toBe('');
-      expect(post.date).toMatch(/^\d{4}-\d{2}-\d{2}$/);
-      expect(['changelog', 'article']).toContain(post.type);
-    },
-  );
+  // There are deliberately no per-post assertions on title, summary, date or type.
+  // parseFrontmatter already rejects a blank or malformed value for every one of them, and
+  // allPosts runs it over each file, so the call above returning at all IS that assertion.
+  // Restating them here would test blog.ts's validator a second time and prove nothing
+  // about the posts.
 
   it('serves each listed post by its own slug', () => {
-    // The index and the post page read through the same module, so a slug the feed links
-    // to must resolve. A post present in the listing but unreachable by slug is a 404
-    // from a link we published ourselves.
+    // listPosts and getPost reach the same modules by different routes — selectPosts versus
+    // a slugFromPath scan, each with its own draft gate — and blogPosts.ts exists to keep
+    // index, post page, sitemap and RSS agreeing. A post in the listing but unreachable by
+    // slug is a 404 from a link we published ourselves.
     for (const post of posts) {
       expect(getPost(post.slug), `getPost(${post.slug})`).toBeTruthy();
     }

@@ -47,6 +47,10 @@ func TestEverySalaryPeriodHasADecision(t *testing.T) {
 //
 // Walking vocab.SeniorityValues is the point. A test that enumerated either map would pass
 // while the other half of the pair went missing.
+//
+// It cannot reach `entry`, which is a standard word we never publish and so never round
+// trip. That one is pinned in searchinput_test.go, through QueryValues rather than against
+// the map — asserting it here as well would only be typing it twice.
 func TestEverySenioritySurvivesTheRoundTrip(t *testing.T) {
 	for _, ours := range vocab.SeniorityValues {
 		published := seniorityFor(ours)
@@ -62,20 +66,6 @@ func TestEverySenioritySurvivesTheRoundTrip(t *testing.T) {
 			t.Errorf("seniority %q is published as %q, which filters back to %q: the round trip "+
 				"changes which jobs the agent asked for", ours, published, back)
 		}
-	}
-}
-
-// TestEntryAsksForJuniorAlone pins the one deliberate asymmetry in seniorityFromStandard.
-// `entry` is a standard word we never publish, so the round-trip test cannot reach it, and
-// its meaning is a decision rather than a translation: it stops at `junior` and no longer
-// sweeps in internships, because `intern` is now a level an agent can ask for by name.
-func TestEntryAsksForJuniorAlone(t *testing.T) {
-	if got := seniorityFromStandard["entry"]; got != "junior" {
-		t.Errorf("entry maps to %q, want %q: an agent asking for junior roles without "+
-			"internships has no other way to say so", got, "junior")
-	}
-	if got := seniorityFromStandard["intern"]; got != "intern" {
-		t.Errorf("intern maps to %q, want %q", got, "intern")
 	}
 }
 

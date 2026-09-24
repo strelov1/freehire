@@ -61,14 +61,11 @@ type SearchPagination struct {
 //
 // This map is the INBOUND half of a pair, and the two halves have to name the same set.
 // jobPostingFrom publishes our seniority verbatim wherever the standard has no word for it
-// (see experienceLevel in jobposting.go), so a posting of ours can say `intern`, `staff` or
-// `principal`. An agent that reads one of those off a posting and sends it straight back as
-// a filter must not be told we do not understand it: the filter would be dropped and the
+// (see experienceLevel in jobposting.go), so a posting of ours can say `intern`, `junior`,
+// `staff` or `principal`. An agent that reads one of those off a posting and sends it back
+// as a filter must not be told we do not understand it: the filter would be dropped and the
 // answer would widen to the whole catalogue. Publishing a value we then refuse to filter on
-// is the same defect as a silent widening, one step removed.
-//
-// So every level we can publish is accepted back, including the four the standard has no
-// word for — `intern`, `junior`, `staff`, `principal` — which we emit under our own names.
+// is a silent widening one step removed, so all four are accepted back here, and
 // TestEverySenioritySurvivesTheRoundTrip holds that closed.
 //
 // `entry` is the one asymmetry, and it is deliberate: it is a standard word we never
@@ -90,8 +87,7 @@ var seniorityFromStandard = map[string]string{
 	"senior":    "senior",
 	"lead":      "lead",
 	"executive": "c_level",
-	// Ours, which we publish verbatim where the standard has no word. An agent that read
-	// one of these off a posting of ours must be able to send it straight back.
+	// Ours, published verbatim where the standard has no word.
 	"intern":    "intern",
 	"junior":    "junior",
 	"staff":     "staff",
