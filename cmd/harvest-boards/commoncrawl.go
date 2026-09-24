@@ -24,9 +24,15 @@ const commonCrawlCollInfoURL = "https://index.commoncrawl.org/collinfo.json"
 const commonCrawlSnapshotCount = 3
 
 // commonCrawlMaxPages bounds the CDX pages read per snapshot, mirroring gupyMaxOffset's
-// safety-cap pattern: a spike run found a single host's full result fits in a handful of
-// pages, so this is a backstop against a runaway query, not an expected limit.
-const commonCrawlMaxPages = 20
+// safety-cap pattern: a backstop against a runaway query, not an expected limit.
+//
+// A single host's full result fits in a handful of pages, which is what the first spike
+// measured. A whole-domain wildcard does not: measured live 2026-09-24, Workday's
+// "*.myworkdayjobs.com" spans 22 pages in one snapshot — so at the original 20 this cap
+// would have silently dropped the tail of every Workday sweep while the run still reported
+// success. Raised with headroom rather than tightened to 22, because the figure is the
+// index's and grows with it.
+const commonCrawlMaxPages = 40
 
 // commonCrawlSlug extracts a candidate board id from a Common Crawl-matched URL: the first
 // non-empty path segment, exactly as crawled. Greenhouse and Ashby both key a board by that
@@ -109,26 +115,33 @@ func commonCrawlSnapshots(ctx context.Context, c httpClient) ([]string, error) {
 }
 
 // commonCrawlPageCount asks one snapshot's CDX index how many pages its full result for
-// hostPrefix spans, at the finest page granularity (pageSize=1) so a fetch of any one page
+// urlPattern spans, at the finest page granularity (pageSize=1) so a fetch of any one page
 // stays as small as the index's own block structure allows.
-func commonCrawlPageCount(ctx context.Context, c httpClient, cdxAPI, hostPrefix string) (int, error) {
+func commonCrawlPageCount(ctx context.Context, c httpClient, cdxAPI, urlPattern string) (int, error) {
 	var resp struct {
 		Pages int `json:"pages"`
 	}
-	url := fmt.Sprintf("%s?url=%s/*&output=json&showNumPages=true&pageSize=1", cdxAPI, hostPrefix)
+	url := fmt.Sprintf("%s?url=%s&output=json&showNumPages=true&pageSize=1", cdxAPI, urlPattern)
 	if err := c.GetJSON(ctx, url, &resp); err != nil {
 		return 0, err
 	}
 	return resp.Pages, nil
 }
 
-// commonCrawlCandidates discovers candidate board slugs for hostPrefix (e.g.
-// "boards.greenhouse.io", or a path prefix like "www.workstream.us/j" where the boards do not
-// sit at the host root) from the most recent Common Crawl snapshots, slicing each matched URL
-// to a board id with slugOf. A snapshot whose page count can't be read, or whose every page
-// fails to fetch, is a failed snapshot: it is skipped and logged, and the sweep continues with
-// the remaining snapshots. An error is returned only when every swept snapshot fails.
-func commonCrawlCandidates(ctx context.Context, c httpClient, hostPrefix string,
+// commonCrawlCandidates discovers candidate board slugs matching urlPattern from the most
+// recent Common Crawl snapshots, slicing each matched URL to a board id with slugOf. A
+// snapshot whose page count can't be read, or whose every page fails to fetch, is a failed
+// snapshot: it is skipped and logged, and the sweep continues with the remaining snapshots.
+// An error is returned only when every swept snapshot fails.
+//
+// urlPattern is the CDX query's `url=` value in full, glob and all — callers spell their own
+// rather than have one appended here, because the two shapes are not interchangeable. A
+// platform on one host globs its paths ("boards.greenhouse.io/*", or a path prefix like
+// "www.workstream.us/j/*" where the boards do not sit at the host root). A platform that
+// gives each tenant its own subdomain globs the host instead ("*.myworkdayjobs.com") — and
+// that one must carry NO path glob: measured live 2026-09-24, the index answers
+// "*.myworkdayjobs.com/*" with 502 and the same query without the glob with 200.
+func commonCrawlCandidates(ctx context.Context, c httpClient, urlPattern string,
 	slugOf func(string) (string, bool)) ([]string, error) {
 	apis, err := commonCrawlSnapshots(ctx, c)
 	if err != nil {
@@ -138,7 +151,7 @@ func commonCrawlCandidates(ctx context.Context, c httpClient, hostPrefix string,
 	seen := map[string]struct{}{}
 	failures := 0
 	for _, api := range apis {
-		pages, err := commonCrawlPageCount(ctx, c, api, hostPrefix)
+		pages, err := commonCrawlPageCount(ctx, c, api, urlPattern)
 		if err != nil {
 			log.Printf("commoncrawl: %s: page count: %v", api, err)
 			failures++
@@ -149,7 +162,7 @@ func commonCrawlCandidates(ctx context.Context, c httpClient, hostPrefix string,
 		}
 		fetched := 0
 		for page := 0; page < pages; page++ {
-			pageURL := fmt.Sprintf("%s?url=%s/*&output=json&page=%d&pageSize=1", api, hostPrefix, page)
+			pageURL := fmt.Sprintf("%s?url=%s&output=json&page=%d&pageSize=1", api, urlPattern, page)
 			body, err := c.GetText(ctx, pageURL)
 			if err != nil {
 				if !truncatedButUsable(body, err) {

@@ -50,7 +50,7 @@ const workstreamTitleSuffix = " Careers and"
 // discover enumerates candidate boards from Common Crawl's index of www.workstream.us/j/*,
 // keeping the eight-hex employer ids.
 func (workstreamProber) discover(ctx context.Context, c httpClient) ([]string, error) {
-	return commonCrawlCandidates(ctx, c, workstreamJobHost, workstreamCandidate)
+	return commonCrawlCandidates(ctx, c, workstreamJobHost+"/*", workstreamCandidate)
 }
 
 // workstreamCandidate slices a crawled career-site URL to its board id — the segment after
