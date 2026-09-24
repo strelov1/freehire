@@ -962,7 +962,7 @@ type phraseAlias struct {
 // phraseAliases is every phrase the engine matches — the engineering vocabulary plus
 // the non-engineering professional one. The two are declared separately only so
 // HasEngineering can tell them apart; Parse treats them identically.
-var phraseAliases = slices.Concat(engineeringPhraseAliases, professionalPhraseAliases)
+var phraseAliases = slices.Concat(engineeringPhraseAliases, professionalPhraseAliases, occupationalSafetyPhraseAliases)
 
 // engineeringPhraseAliases covers terms the word pass cannot see because they contain
 // non-alphanumeric characters or spaces. Includes the ONLY routes by which an
@@ -1510,6 +1510,15 @@ var professionalPhraseAliases = []phraseAlias{
 	// vocabulary as engineering. All are non-corroborating — see below.
 	{"hipaa", "hipaa"}, {"gdpr", "gdpr"}, {"ccpa", "ccpa"}, {"lgpd", "lgpd"},
 	{"itar", "itar"}, {"dfars", "dfars"},
+}
+
+// occupationalSafetyPhraseAliases is its own slice rather than more lines in the list
+// above, for one reason: every canonical it emits must also be a nonCorroboratingPhrases
+// member, and that set now DERIVES from this slice instead of repeating its canonicals by
+// hand. The hand-typed copy was exactly the drift `nonEngineeringCanonicals` warns about
+// two definitions down — a thirty-sixth safety phrase added to a literal would silently
+// become a strong corroborator, which is the bug this vocabulary shipped with once.
+var occupationalSafetyPhraseAliases = []phraseAlias{
 	// Occupational safety — health, safety and environment. This vocabulary carries more
 	// weight than its size suggests: an HSE posting derives `is_tech = false` and the
 	// enrichment enqueue gate reads `is_tech IS TRUE`, so the LLM never sees this
@@ -1571,126 +1580,96 @@ var professionalPhraseAliases = []phraseAlias{
 // a named product ("Ahrefs" genuinely evidences an SEO role) and wrong for a
 // discipline. "AI-powered marketing automation" is marketing prose, not an AI
 // requirement, and marketing postings carry that phrasing at scale.
-var nonCorroboratingPhrases = map[string]bool{
-	"technical-seo":                  true,
-	"link-building":                  true,
-	"paid-social":                    true,
-	"ppc":                            true,
-	"demand-generation":              true,
-	"lifecycle-marketing":            true,
-	"marketing-automation":           true,
-	"generative-engine-optimization": true,
-	"content-marketing":              true,
-	"email-marketing":                true,
-	"influencer-marketing":           true,
-	"copywriting":                    true,
-	"go-to-market":                   true,
-	// sales / support — same doctrine as the marketing disciplines above: "manage our
-	// CRM as an account executive" names the gated word "crm" without evidencing any
-	// technical involvement with it, and that phrasing recurs at scale in this category.
-	"account-executive":    true,
-	"business-development": true,
-	"pipeline-management":  true,
-	"cold-outreach":        true,
-	"sales-enablement":     true,
-	"lead-generation":      true,
-	"help-desk":            true,
-	"service-desk":         true,
-	"ticket-resolution":    true,
-	// Occupational safety — every canonical in the block, without exception, and for the
-	// reason this map's doctrine already states about naming a regime. "First aid",
-	// "corrective action", "emergency response" and "risk assessment" are in every
-	// childcare, warehouse, nursing, lifeguard and retail posting on the board, and
-	// "corrective action" in retail is HR disciplinary language, not safety work at all.
-	// Naming a safety practice is evidence the posting is SUBJECT to it, never that
-	// whoever fills it is technical.
+var nonCorroboratingPhrases = func() map[string]bool {
+	out := map[string]bool{
+		"technical-seo":                  true,
+		"link-building":                  true,
+		"paid-social":                    true,
+		"ppc":                            true,
+		"demand-generation":              true,
+		"lifecycle-marketing":            true,
+		"marketing-automation":           true,
+		"generative-engine-optimization": true,
+		"content-marketing":              true,
+		"email-marketing":                true,
+		"influencer-marketing":           true,
+		"copywriting":                    true,
+		"go-to-market":                   true,
+		// sales / support — same doctrine as the marketing disciplines above: "manage our
+		// CRM as an account executive" names the gated word "crm" without evidencing any
+		// technical involvement with it, and that phrasing recurs at scale in this category.
+		"account-executive":    true,
+		"business-development": true,
+		"pipeline-management":  true,
+		"cold-outreach":        true,
+		"sales-enablement":     true,
+		"lead-generation":      true,
+		"help-desk":            true,
+		"service-desk":         true,
+		"ticket-resolution":    true,
+		// batch 4 — shop-floor craft. Same doctrine, opposite direction: the term is real
+		// and specific, but the posting carrying it is a machinist's, not an engineer's,
+		// and the design vocabulary (wireframes, sketch, prototyping) is ordinary prose
+		// there. Tagging the craft is right; letting it lift the gate is how a CNC
+		// operator came back tagged with wireframing.
+		"cnc":          true,
+		"soldering":    true,
+		"oscilloscope": true,
+		// media production — the same doctrine as the marketing disciplines above. Each is
+		// a duty a coordinator, an intern or a product manager lists in passing ("Duties:
+		// video editing…", "build storyboards, sketch out flows"), so tagging the craft is
+		// right and letting it lift the gate is how `spring`, `unity` and `sketch` came
+		// back on a marketing post.
+		"video-editing": true,
+		"color-grading": true,
+		"storyboarding": true,
+		// batch 4 — compliance frameworks and certifications. Naming a regime is evidence
+		// that the posting is SUBJECT to it, never that whoever fills it is technical: a
+		// nurse's posting carries HIPAA, an injection-moulding plant's carries ISO 9001,
+		// and a defence administrator's carries ITAR. As strong matches they lifted the
+		// gate off the words beside them and tagged `slack` on a nursing post.
+		"nist":      true,
+		"fedramp":   true,
+		"cmmc":      true,
+		"cissp":     true,
+		"cism":      true,
+		"ccna":      true,
+		"pci-dss":   true,
+		"soc-2":     true,
+		"iso-9001":  true,
+		"iso-13485": true,
+		"iso-26262": true,
+		"as9100":    true,
+		"hipaa":     true,
+		"gdpr":      true,
+		"ccpa":      true,
+		"lgpd":      true,
+		"itar":      true,
+		"dfars":     true,
+	}
+	// Occupational safety, by construction rather than by hand — the same shape as
+	// nonEngineeringCanonicals below, and for a reason this map's own doctrine already
+	// states about naming a regime. "First aid", "corrective action" and "risk
+	// assessment" are in every childcare, warehouse, nursing, lifeguard and retail
+	// posting on the board, and in retail "corrective action" is HR disciplinary language
+	// rather than safety work at all. Naming a safety practice is evidence the posting is
+	// SUBJECT to it, never that whoever fills it is technical.
 	//
-	// Measured before the fix: a warehouse posting came back carrying `react`, `sketch`,
-	// `assembly` and `agile`; a nursing posting carried `react` and `agile`; a retail
-	// posting carried `crm` and `analytics`. That is the "CNC operator came back tagged
-	// with wireframing" bug, and this block reintroduced it wholesale. They still tag on
-	// their own — a non-corroborating phrase is a match, it just does not rescue its
-	// neighbours.
+	// Measured before it was fixed: a warehouse posting came back carrying `react`,
+	// `sketch`, `assembly` and `agile`, a nursing posting carried `react`, a retail
+	// posting carried `crm` and `analytics` — the "CNC operator came back tagged with
+	// wireframing" bug, reintroduced wholesale. Deriving the set is what stops the next
+	// safety phrase from quietly reopening it.
 	//
-	// Only the PHRASE canonicals are listed, because that is all this map may hold and a
-	// test enforces it. The six word aliases in the same family (osha, epa, nfpa, rcra,
-	// hazop, hazwoper) are regulators and standards rather than English prose, so a
-	// posting that names one is genuinely about the regime — the corroboration a phrase
-	// could not honestly give, these can. HAZWOPER is not among them: it is a 40-hour
-	// training certificate, so it lives in internal/dict/certification with NEBOSH and
-	// IOSH rather than here.
-	"iso-45001":                     true,
-	"iso-14001":                     true,
-	"emergency-response":            true,
-	"personal-protective-equipment": true,
-	"root-cause-analysis":           true,
-	"environmental-compliance":      true,
-	"risk-assessment":               true,
-	"incident-investigation":        true,
-	"safety-management-system":      true,
-	"industrial-hygiene":            true,
-	"corrective-action":             true,
-	"waste-management":              true,
-	"first-aid":                     true,
-	"hazardous-waste":               true,
-	"toolbox-talks":                 true,
-	"safety-audit":                  true,
-	"hazard-identification":         true,
-	"contractor-safety":             true,
-	"lockout-tagout":                true,
-	"confined-space":                true,
-	"fall-protection":               true,
-	"machine-guarding":              true,
-	"hot-work":                      true,
-	"near-miss-reporting":           true,
-	"process-safety-management":     true,
-	"permit-to-work":                true,
-	"job-safety-analysis":           true,
-	"behavior-based-safety":         true,
-	"working-at-height":             true,
-	// The EHS platforms are the exception inside the exception: naming Enablon or Cority
-	// is naming a product you administer, the same shape as "Ahrefs" evidencing an SEO
-	// role, so they are deliberately absent from this map and stay corroborating.
-	// batch 4 — shop-floor craft. Same doctrine, opposite direction: the term is real
-	// and specific, but the posting carrying it is a machinist's, not an engineer's,
-	// and the design vocabulary (wireframes, sketch, prototyping) is ordinary prose
-	// there. Tagging the craft is right; letting it lift the gate is how a CNC
-	// operator came back tagged with wireframing.
-	"cnc":          true,
-	"soldering":    true,
-	"oscilloscope": true,
-	// media production — the same doctrine as the marketing disciplines above. Each is
-	// a duty a coordinator, an intern or a product manager lists in passing ("Duties:
-	// video editing…", "build storyboards, sketch out flows"), so tagging the craft is
-	// right and letting it lift the gate is how `spring`, `unity` and `sketch` came
-	// back on a marketing post.
-	"video-editing": true,
-	"color-grading": true,
-	"storyboarding": true,
-	// batch 4 — compliance frameworks and certifications. Naming a regime is evidence
-	// that the posting is SUBJECT to it, never that whoever fills it is technical: a
-	// nurse's posting carries HIPAA, an injection-moulding plant's carries ISO 9001,
-	// and a defence administrator's carries ITAR. As strong matches they lifted the
-	// gate off the words beside them and tagged `slack` on a nursing post.
-	"nist":      true,
-	"fedramp":   true,
-	"cmmc":      true,
-	"cissp":     true,
-	"cism":      true,
-	"ccna":      true,
-	"pci-dss":   true,
-	"soc-2":     true,
-	"iso-9001":  true,
-	"iso-13485": true,
-	"iso-26262": true,
-	"as9100":    true,
-	"hipaa":     true,
-	"gdpr":      true,
-	"ccpa":      true,
-	"lgpd":      true,
-	"itar":      true,
-	"dfars":     true,
-}
+	// Deliberately NOT covered, because neither is a phrase: the EHS platforms (naming
+	// Enablon or Cority is naming a product you administer, the same shape as "Ahrefs"
+	// evidencing an SEO role) and the word aliases osha/epa/nfpa/rcra/hazop, where a
+	// regulator's name is not English prose. Both stay corroborating.
+	for _, p := range occupationalSafetyPhraseAliases {
+		out[p.canonical] = true
+	}
+	return out
+}()
 
 // nonEngineeringBareCanonicals are non-engineering disciplines whose canonical also has a
 // BARE, single-word alias in wordAliases ("seo", "ecommerce") rather than only a multi-word
@@ -1707,8 +1686,8 @@ var nonEngineeringBareCanonicals = map[string]bool{
 // nonEngineeringBareCanonicals, never written by hand beyond those two sources: a term added
 // to either cannot drift out of sync with this set.
 var nonEngineeringCanonicals = func() map[string]bool {
-	out := make(map[string]bool, len(professionalPhraseAliases)+len(nonEngineeringBareCanonicals))
-	for _, p := range professionalPhraseAliases {
+	out := make(map[string]bool, len(professionalPhraseAliases)+len(occupationalSafetyPhraseAliases)+len(nonEngineeringBareCanonicals))
+	for _, p := range slices.Concat(professionalPhraseAliases, occupationalSafetyPhraseAliases) {
 		out[p.canonical] = true
 	}
 	for c := range nonEngineeringBareCanonicals {

@@ -1056,6 +1056,9 @@ var categoryTable = []aliasEntry{
 	// profession. Without them the qualified "safety <role>" aliases below claim roughly
 	// 2,300 live postings that are not this craft — food 616, public 843, patient 481,
 	// product 163, campus 157 on 2026-09-24 — plus the tech-native families further down.
+	// "fire safety" is deliberately absent: it is a genuine part of the HSE remit on an
+	// industrial site, and 164 postings is too few to be worth splitting the
+	// building-warden reading out of.
 	//
 	// Each ROUTES to the category that is true rather than carrying the blind sentinel,
 	// because the rule at the top of this file says so and a review found the first
@@ -1086,11 +1089,8 @@ var categoryTable = []aliasEntry{
 	// the same mistake as filing it under HSE.
 	{"trust and safety", categoryNone},
 	{"trust & safety", categoryNone},
-	// "fire safety" is deliberately NOT in this list. It is a genuine part of the HSE
-	// remit on an industrial site, and 164 postings is too few to be worth splitting the
-	// building-warden reading out of.
-	// The acronyms resolve bare. Each is a coined initialism with no English-word
-	// collision, unlike the two words below them.
+	// Now the profession itself. The acronyms resolve bare: each is a coined initialism
+	// with no English-word collision, unlike the two words below them.
 	{"hse", "occupational_safety"},
 	{"ehs", "occupational_safety"},
 	{"hsse", "occupational_safety"},
