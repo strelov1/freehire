@@ -52,30 +52,37 @@ services:
   # Local S3-compatible storage for résumé upload (internal/blobstore). Without it
   # `PUT/POST /me/resume` runs with storage disabled (S3_* unset) and callers degrade to
   # the previous per-request extraction — real locally, but no upload persists, so the
-  # fit analysis never sees a structured résumé. minio-init creates the bucket once and
-  # exits; the app waits on that, not on minio itself, since the bucket must exist first.
-  # Pulled from Quay, not Docker Hub: minio/minio and minio/mc no longer exist as Docker
-  # Hub repositories at all (MinIO moved its distribution there), so every pull of the
-  # `minio/*` names 404s — not a rate limit, and not something a retry fixes.
-  minio:
-    image: quay.io/minio/minio:latest
+  # fit analysis never sees a structured résumé. s3-init creates the bucket once and
+  # exits; the app waits on that, not on the server itself, since the bucket must exist
+  # first.
+  #
+  # This was MinIO, pulled from Quay after MinIO deleted the `minio/*` Docker Hub
+  # repositories. On 2026-09-24 Quay started refusing those names too — an anonymous pull
+  # token gets 401 for both `minio/minio` and `minio/mc`, GHCR answers 403 and Bitnami
+  # 404 — so every PR's smoke job failed twelve seconds in, before any code ran. There is
+  # no MinIO image left to pin.
+  #
+  # adobe/s3mock replaces it: an in-memory S3 server, which is all this stack ever wanted
+  # — the smoke job never persists anything across a restart. Its documented
+  # `initialBuckets` env var does NOT create the bucket in the current image (checked,
+  # both spellings), so the bucket is created with a plain PUT, which is also why the
+  # init container no longer needs a vendor CLI.
+  s3:
+    image: adobe/s3mock:latest
     environment:
-      MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD: minioadmin
-    command: server /data
+      # Path-style addressing, which is what internal/blobstore uses against a custom
+      # S3_ENDPOINT. No credentials: s3mock accepts any signature.
+      AWS_REGION: "${AWS_REGION:-us-east-1}"
     ports:
-      - "${MINIO_HOST_PORT:-9000}:9000"
-    volumes:
-      - minio_data:/data
+      - "${S3_HOST_PORT:-9000}:9090"
 
-  minio-init:
-    image: quay.io/minio/mc:latest
+  s3-init:
+    image: curlimages/curl:latest
     depends_on:
-      - minio
+      - s3
     entrypoint: >
       /bin/sh -c "
-      until mc alias set local http://minio:9000 minioadmin minioadmin; do sleep 1; done;
-      mc mb -p local/hire-resumes;
+      until curl -sf -o /dev/null -X PUT http://s3:9090/hire-resumes; do sleep 1; done;
       exit 0;
       "
 
@@ -86,17 +93,17 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-      minio-init:
+      s3-init:
         condition: service_completed_successfully
     environment:
       PORT: "8080"
       DATABASE_URL: "postgres://hire:hire@db:5432/hire?sslmode=disable"
-      # Dev defaults pointing at the local `minio` service above. Prod sets its own
+      # Dev defaults pointing at the local `s3` service above. Prod sets its own
       # S3_* in its .env, pointing at the real bucket — these values never leave Docker.
-      S3_ENDPOINT: "${S3_ENDPOINT:-http://minio:9000}"
+      S3_ENDPOINT: "${S3_ENDPOINT:-http://s3:9090}"
       S3_BUCKET: "${S3_BUCKET:-hire-resumes}"
-      S3_ACCESS_KEY: "${S3_ACCESS_KEY:-minioadmin}"
-      S3_SECRET_KEY: "${S3_SECRET_KEY:-minioadmin}"
+      S3_ACCESS_KEY: "${S3_ACCESS_KEY:-s3mock}"
+      S3_SECRET_KEY: "${S3_SECRET_KEY:-s3mock}"
       AWS_REGION: "${AWS_REGION:-us-east-1}"
       # PII_FILTER_URL intentionally has no local default: it fronts a real span-detection
       # model (services/pii-filter) with no lightweight local stand-in, so unset here is the
@@ -182,4 +189,3 @@ services:
 volumes:
   pgdata:
   meilisearch_data:
-  minio_data:

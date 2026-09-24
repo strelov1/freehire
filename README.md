@@ -99,7 +99,7 @@ which draw on AI credits.
 
 ```bash
 make up        # build + start the whole stack in Docker:
-               # api, web, postgres, meilisearch, redis, minio
+               # api, web, postgres, meilisearch, redis, s3
 curl localhost:8080/health
 curl localhost:8080/api/v1/jobs
 ```
