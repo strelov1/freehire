@@ -34,7 +34,11 @@ type SearchInput struct {
 	// ask for and a boolean cannot express it.
 	WorkMode []string `json:"work_mode,omitempty" jsonschema:"any of remote, hybrid, onsite"`
 
-	Seniority      []string `json:"seniority,omitempty" jsonschema:"any of intern, junior, middle, senior, lead, staff, principal"`
+	// The listed values are the WHOLE of vocab.SeniorityValues, held there by
+	// TestSeniorityDescriptionNamesEveryLevel. It is a description, not an enum, so a level
+	// missing from it is still accepted — and invisible to the agent reading the schema,
+	// which is how `c_level` went unaskable here.
+	Seniority      []string `json:"seniority,omitempty" jsonschema:"any of intern, junior, middle, senior, lead, staff, principal, c_level"`
 	Category       []string `json:"category,omitempty" jsonschema:"role family, e.g. backend, frontend, devops, data"`
 	Skills         []string `json:"skills,omitempty" jsonschema:"technologies, e.g. go, kubernetes, react"`
 	EmploymentType []string `json:"employment_type,omitempty" jsonschema:"any of full_time, part_time, contract, internship"`

@@ -23,13 +23,21 @@ specifically — that's the whole point of a standard.
 
 Three things an agent can do:
 
-- **Search the catalogue** — the same jobs and the same filters you get on the site
+- **Search the catalogue** — the same postings you see on the site, narrowed by
+  location, salary, employment type, seniority and how recently they went up
 - **Pull one posting in full** — description, salary, skills, how to apply
 - **Ask about an employer** — who they are, what they're hiring for
 
+The standard defines fewer filters than the site has, so the finer ones —
+category, skills, hybrid versus on-site, the eligibility gates — are not reachable
+through it yet. Where an agent asks for something OJCP cannot express, the answer
+says which parameter it had to ignore rather than quietly returning more than was
+asked for.
+
 It works over plain HTTP or over [MCP](https://modelcontextprotocol.io), the
 protocol most AI tools already speak. No API key, no signup, nothing to pay —
-same as [our public API](/docs/api). Five requests a second per anonymous caller.
+same as [our public API](/docs/api). The budget is 300 requests a minute per
+anonymous caller.
 
 We're one of the first implementers outside the group that drafted it, and we've
 been sending our findings back. Writing a real provider turned up several things

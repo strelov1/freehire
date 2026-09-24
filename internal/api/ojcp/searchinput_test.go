@@ -48,9 +48,9 @@ func TestSearchInputBecomesOurOwnQueryVocabulary(t *testing.T) {
 
 func TestSearchInputTranslatesTheStandardsSeniorityWords(t *testing.T) {
 	// Two groups here. The first is the standard's own words. `entry` now stops at `junior`:
-	// it used to sweep in the internships too, which was the right answer only while `intern`
-	// was unsayable — an agent that wants both asks twice, and one that wants junior roles
-	// without internships can finally ask at all.
+	// it used to sweep in the internships too, which was the right answer only while this map
+	// gave `intern` no key of its own, so nobody could ask for one — an agent that wants both
+	// asks twice, and one that wants junior roles without internships can finally ask at all.
 	//
 	// The second is the levels the standard has no word for, which we publish under our own
 	// names. Those have to be accepted back or an agent reading one off our own posting is

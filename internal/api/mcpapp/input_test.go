@@ -1,7 +1,11 @@
 package mcpapp
 
 import (
+	"reflect"
+	"strings"
 	"testing"
+
+	"github.com/strelov1/freehire/internal/dict/vocab"
 )
 
 // Every published filter, asserted one by one against the query parameter it must become.
@@ -96,5 +100,37 @@ func TestACompanySearchSendsEveryCountryItWasGiven(t *testing.T) {
 	// The search core now splits, so both codes must actually reach it.
 	if got := (CompanySearchInput{Countries: []string{"DE", "BR"}}).QueryValues().Get("countries"); got != "DE,BR" {
 		t.Errorf("countries = %q, want both codes", got)
+	}
+}
+
+// TestSeniorityDescriptionNamesEveryLevel holds the hand-typed `jsonschema` description on
+// SearchInput.Seniority against the real vocabulary.
+//
+// That tag is a DESCRIPTION, not an enum, so a level missing from it is still accepted by
+// the code and simply invisible to the agent reading the tool schema. There is no error to
+// see: the agent never asks for the level, gets no results it did not ask for, and nothing
+// is logged. `c_level` sat unlisted that way — the app's MCP tool advertised seven of our
+// eight levels, so an agent could not ask for executive roles through it at all.
+//
+// Walking vocab.SeniorityValues is the point, the same as internal/api/ojcp's guards: a
+// test that retyped the list would only agree with the tag that retyped it.
+func TestSeniorityDescriptionNamesEveryLevel(t *testing.T) {
+	field, ok := reflect.TypeOf(SearchInput{}).FieldByName("Seniority")
+	if !ok {
+		t.Fatal("SearchInput has no Seniority field: this guard is pointed at the wrong name")
+	}
+
+	described := map[string]bool{}
+	tag := field.Tag.Get("jsonschema")
+	for _, token := range strings.Split(strings.TrimPrefix(tag, "any of "), ",") {
+		described[strings.TrimSpace(token)] = true
+	}
+
+	for _, level := range vocab.SeniorityValues {
+		if !described[level] {
+			t.Errorf("seniority %q is missing from the jsonschema description %q: the code "+
+				"still accepts it, but an agent reading the tool schema cannot know to ask "+
+				"for it", level, tag)
+		}
 	}
 }

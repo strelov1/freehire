@@ -34,25 +34,35 @@ and the manifest; the two transports that publish it live elsewhere:
   `remote_policy` and `baseSalary.unitText` are closed in the schema, so an untranslatable
   value drops the field (or, for salary, the whole block — a daily rate read as an annual
   one is a wrong answer, not a partial one). `experienceLevel` is an open string whose own
-  description invites additional values, so our `staff` and `principal` go out verbatim
-  rather than collapsing into `senior`, which would make an agent's search for one return
-  the other.
+  description invites additional values, so `experienceLevel` translates only the two levels
+  whose meaning is identical in both vocabularies (`middle`, `c_level`) and the remaining SIX
+  go out verbatim — `intern`, `junior`, `senior`, `lead`, `staff`, `principal`. Collapsing
+  `staff` and `principal` into `senior` would make an agent's search for one return the
+  other; collapsing `intern` into `entry` would answer a junior search with internships.
 
 - **The vocabulary maps are guarded against the vocabularies they mirror.**
-  `vocabulary_test.go` walks `vocab.WorkModeValues`, `vocab.SalaryPeriodValues`,
-  `vocab.SeniorityValues` and `ghost.CriterionCodes` and asserts each value has a DECIDED
-  answer — translated, or deliberately not. A deliberate gap is recorded as an EMPTY VALUE,
-  never as a missing key: the two behave identically at runtime, and only the empty one
-  tells a reader it was decided. A test enumerating the same list the map does would prove
-  only that somebody typed it twice.
+  `vocabulary_test.go` walks `vocab.WorkModeValues`, `vocab.SalaryPeriodValues` and
+  `ghost.CriterionCodes` and asserts each value has a DECIDED answer — translated, or
+  deliberately not. All three are OUTBOUND maps, and in an outbound map a deliberate gap is
+  recorded as an EMPTY VALUE, never as a missing key: the two behave identically at runtime,
+  and only the empty one tells a reader it was decided. A test enumerating the same list the
+  map does would prove only that somebody typed it twice.
 
-  Seniority is guarded as a ROUND TRIP rather than a lookup, because its two halves live in
+- **`seniorityFromStandard` is the exception to the empty-value rule, because it is
+  INBOUND.** An empty value there does NOT behave like a missing key. `QueryValues` branches
+  on the lookup's `known`, so an empty value takes the found path and applies
+  `seniority=""` — an empty filter, silently widening; a missing key reports
+  `filters.experience_level` unsupported, which is the honest answer. `director` is
+  therefore absent rather than empty, and that is deliberate.
+
+  It is also guarded as a ROUND TRIP rather than a lookup, because its two halves live in
   different files: `seniorityFor` (`jobposting.go`) publishes our value verbatim where the
   standard has no word for it, and `seniorityFromStandard` (`searchinput.go`) reads it back
-  as a filter. They drifted — we published `intern`, `junior`, `staff` and
-  `principal` while the filter knew only the standard's five, so an agent that read one off
-  our own posting and sent it back had its filter dropped and its answer widened to the whole
-  catalogue. A lookup test on either map alone would have stayed green.
+  as a filter. They drifted — we published `intern`, `junior`, `staff` and `principal` while
+  the filter knew only the standard's five, so an agent that read one off our own posting and
+  sent it back had its filter dropped and its answer widened to the whole catalogue. A lookup
+  test on either map alone would have stayed green. The round trip also rejects an empty
+  value outright, which is what holds the exception above in place.
 
 - **`skills_required` comes from the posting's stated REQUIREMENTS, never from the skills
   facet.** The facet resolves every skill named anywhere in the description, "nice to have"

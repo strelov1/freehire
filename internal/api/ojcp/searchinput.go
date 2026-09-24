@@ -71,11 +71,17 @@ type SearchPagination struct {
 // `entry` is the one asymmetry, and it is deliberate: it is a standard word we never
 // publish, so it is accepted inbound only, and it narrows to `junior` alone. It used to
 // cover `intern` as well, on the reasoning that an agent asking for entry-level work wants
-// the internships too. That reasoning held only while `intern` was unsayable. Now that it
-// is a standard level of its own (ojcp-org/ojcp#23), an internship and a junior role are
-// two different things a candidate searches for: an agent that wants both asks twice, and
-// one that wants junior roles WITHOUT internships can finally say so — which the old
-// mapping made impossible.
+// the internships too. That reasoning held only while `intern` had no name of its own here.
+// It has one now — an agent can ask for `intern` directly — so an internship and a junior
+// role are two different things a candidate searches for: an agent that wants both asks
+// twice, and one that wants junior roles WITHOUT internships can finally say so, which the
+// old mapping made impossible.
+//
+// `intern` is OUR value, not a standard one. The standard's documented set is still
+// entry/mid/senior/lead/director/executive (see testdata/schemas/tools/search-jobs-input.json);
+// adding intern/staff/principal to it is only PROPOSED, in ojcp-org/ojcp#23. Nothing here
+// waits on that: the field is an open string either way. When that PR lands, re-copy the
+// vendored schemas per testdata/schemas/README.md rather than editing this comment.
 //
 // `director` is absent because we hold no level that means it. Our `lead` is a team lead,
 // not a director, and answering one for the other would be a wrong result rather than a

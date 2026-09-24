@@ -4,8 +4,8 @@ import { listPosts, getPost } from './blogPosts';
 // Every real post, through the real loader.
 //
 // blog.test.ts covers parseFrontmatter on objects written by hand, which proves the
-// validator works on input someone typed into the test. It cannot say whether the ~80
-// posts on disk actually parse, and nothing else did either: mdsvex compiles a post's
+// validator works on input someone typed into the test. It cannot say whether the posts
+// on disk actually parse, and nothing else did either: mdsvex compiles a post's
 // BODY at build time, but its frontmatter is only read when `listPosts` runs — i.e. when
 // a reader opens /blog. So a malformed post built green, deployed green, and 500'd the
 // whole index on the first request.
