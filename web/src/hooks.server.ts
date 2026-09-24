@@ -3,7 +3,7 @@ import { sequence } from '@sveltejs/kit/hooks';
 import type { Handle } from '@sveltejs/kit';
 import * as Sentry from '@sentry/sveltekit';
 import { hasSessionCookie } from '$lib/authCookie';
-import { cachePolicy } from '$lib/httpCache';
+import { cachePolicy, variesOnCookie } from '$lib/httpCache';
 import { isTranslatedLocale, LOCALE_COOKIE } from '$lib/locale';
 import { isTransientNoise } from '$lib/sentryNoise';
 import { CAPTURE_MAX_AGE_SECONDS, REF_COOKIE, captureRef, capturePromo } from '$lib/referral';
@@ -77,18 +77,26 @@ const cacheControl: Handle = async ({ event, resolve }) => {
   // The status is passed because an error page is HTML like any other and was
   // otherwise handed the same shared-cache lifetime as the page it replaced — see
   // NO_CACHE in $lib/httpCache for what that cost in production.
+  const authenticated = hasSessionCookie(event.request.headers.get('cookie'));
   response.headers.set(
     'cache-control',
     cachePolicy({
       pathname: event.url.pathname,
-      authenticated: hasSessionCookie(event.request.headers.get('cookie')),
+      authenticated,
       status: response.status,
     }),
   );
-  // The response body differs by session, so a shared cache must key on it. Without
-  // this a CDN could hand an anonymous copy to a signed-in visitor (and, worse, the
-  // reverse) whenever a rule of its own decides to store the response anyway.
-  response.headers.append('vary', 'Cookie');
+  // Labelled only where the body really does differ by cookie — see variesOnCookie in
+  // $lib/httpCache for why an unconditional Vary emptied the edge cache instead of
+  // making it safer, and for what carries the safety in its place.
+  //
+  // One part of that argument lives HERE rather than there, because it is a property of
+  // this sequence and not of the policy: nothing varies an anonymous page by cookie.
+  // The root layout returns SIGNED_OUT before reading anything when the session cookie
+  // is absent, `locale` above forces `en` outside /my/**, and `attribution` below
+  // relabels any response that sets a cookie as `no-store` — which is the reason it
+  // runs after this hook and not before it.
+  if (variesOnCookie(authenticated)) response.headers.append('vary', 'Cookie');
   return response;
 };
 

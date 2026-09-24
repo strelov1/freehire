@@ -95,3 +95,27 @@ export function cachePolicy({
   if (segments.length === 2 && root && DETAIL_ROOTS.has(root)) return PUBLIC_DETAIL_CACHE;
   return PUBLIC_CACHE;
 }
+
+/** Whether a shared cache must key this response on the `Cookie` header.
+ *
+ *  Only a signed-in response varies by cookie, so only it is labelled. Saying it
+ *  unconditionally reads as the safer claim and is the opposite: Cloudflare will not
+ *  store a response that varies on Cookie at all without a custom cache key, which is
+ *  Enterprise-only on this zone (freehire-ops' infra/cloudflare/README.md). Labelling
+ *  every page with it emptied the edge cache the zone exists for — measured 2026-09-23,
+ *  every public page answered `cf-cache-status: DYNAMIC` while host2 rendered the whole
+ *  anonymous catalogue itself.
+ *
+ *  Dropping it for anonymous pages is safe because the dangerous direction is closed
+ *  elsewhere, and closed by refusing to cache rather than by labelling: a signed-in
+ *  response is PRIVATE_CACHE from cachePolicy, and a response that SETS a cookie is
+ *  relabelled `no-store` by the attribution hook that runs after the cache hook.
+ *
+ *  The residual runs the mild way. If the edge's bypass-on-session rule stopped
+ *  matching, a signed-in visitor could be handed a stored ANONYMOUS page — signed-out
+ *  chrome, none of their data in it. The reverse cannot happen, because a private
+ *  response is never stored to begin with.
+ */
+export function variesOnCookie(authenticated: boolean): boolean {
+  return authenticated;
+}

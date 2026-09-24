@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { NO_CACHE, PRIVATE_CACHE, PUBLIC_CACHE, PUBLIC_DETAIL_CACHE, cachePolicy } from './httpCache';
+import {
+  NO_CACHE,
+  PRIVATE_CACHE,
+  PUBLIC_CACHE,
+  PUBLIC_DETAIL_CACHE,
+  cachePolicy,
+  variesOnCookie,
+} from './httpCache';
 
 describe('cachePolicy', () => {
   it('lets a shared cache hold an anonymous public page', () => {
@@ -151,5 +158,26 @@ describe('cachePolicy never lets a server error be stored', () => {
   it('treats an absent status as a success', () => {
     expect(cachePolicy({ pathname: '/', authenticated: false })).toBe(PUBLIC_CACHE);
     expect(cachePolicy({ pathname: '/', authenticated: false, status: 200 })).toBe(PUBLIC_CACHE);
+  });
+});
+
+describe('variesOnCookie', () => {
+  // The label belongs on the responses that actually differ by cookie. An anonymous
+  // page does not, and saying it does is what kept Cloudflare from storing anything:
+  // it will not vary on Cookie without a custom cache key, which this zone's plan
+  // does not have.
+  it('labels a signed-in response and leaves an anonymous one storable', () => {
+    expect(variesOnCookie(true)).toBe(true);
+    expect(variesOnCookie(false)).toBe(false);
+  });
+
+  // The pairing that makes the above safe: whatever varies by cookie is also refused
+  // a shared cache outright, so the label is belt to a brace that already holds.
+  it('agrees with cachePolicy about what a shared cache may hold', () => {
+    expect(cachePolicy({ pathname: '/', authenticated: true })).toBe(PRIVATE_CACHE);
+    expect(variesOnCookie(true)).toBe(true);
+
+    expect(cachePolicy({ pathname: '/', authenticated: false })).toBe(PUBLIC_CACHE);
+    expect(variesOnCookie(false)).toBe(false);
   });
 });
