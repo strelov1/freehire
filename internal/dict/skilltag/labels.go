@@ -29,6 +29,21 @@ import (
 // Everything else is deliberately absent: "data-engineering" → "Data Engineering" needs
 // no curation, and listing it here would only be one more line to keep true.
 var displayNames = map[string]string{
+	// Occupational safety. Every one of these is an acronym or a vendor's own
+	// stylization, which is what this map is for — titleCase renders them "Osha",
+	// "Nfpa" and "Velocityehs".
+	"osha":                          "OSHA",
+	"epa":                           "EPA",
+	"nfpa":                          "NFPA",
+	"rcra":                          "RCRA",
+	"hazop":                         "HAZOP",
+	"iso-45001":                     "ISO 45001",
+	"iso-14001":                     "ISO 14001",
+	"velocityehs":                   "VelocityEHS",
+	"personal-protective-equipment": "Personal Protective Equipment (PPE)",
+	"lockout-tagout":                "Lockout/Tagout",
+	"job-safety-analysis":           "Job Safety Analysis (JSA)",
+	"process-safety-management":     "Process Safety Management (PSM)",
 	// Numerals and punctuation the slug form cannot carry.
 	"1c":          "1C",
 	"ab-testing":  "A/B Testing",

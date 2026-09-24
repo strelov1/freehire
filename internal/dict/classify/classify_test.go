@@ -1327,12 +1327,30 @@ func TestParse_OccupationalSafety(t *testing.T) {
 		{"Software Engineer (she/her)", "software_engineering", "SHE is a pronoun in live titles; no bare alias"},
 		{"Risk Analyst", "", "`risk` matched 41,468 live postings, mostly finance"},
 		{"Credit Risk Manager", "management", "finance risk is a different profession sharing a word"},
-		{"Patient Safety Attendant", "", "23; bare `safety` names other crafts, and this one resolves nothing"},
+		{"Patient Safety Attendant", "healthcare", "23; bare `safety` names other crafts"},
 		{"Public Safety Officer", "", "113; protective services, not HSE"},
 		{"Campus Safety Officer", "", "38; protective services, not HSE"},
-		{"Food Safety Manager", "", "616 live; manufacturing quality, not HSE — the blind sentinel, not a guess"},
-		{"Product Safety Engineer", "", "163; regulatory product compliance, not HSE"},
+		{"Food Safety Manager", "industrial_engineering", "616 live; plant quality, where `quality engineer` already sits"},
+		{"Product Safety Engineer", "industrial_engineering", "163; regulatory product compliance, and the category it already had"},
 		{"Fire Safety Manager", "occupational_safety", "164; fire IS part of the HSE remit on an industrial site"},
+
+		// The qualifier families a review found the first draft swallowing. Each is a
+		// profession of its own that happens to carry the word, and each is routed to the
+		// category that is true rather than blanked — blanking is what makes a facet
+		// unreachable, which is the harm this change exists to undo.
+		{"Trust and Safety Specialist", "", "platform integrity at a consumer-tech employer, and the likeliest collision on an IT board"},
+		{"Trust & Safety Manager", "", ""},
+		{"Functional Safety Engineer", "industrial_engineering", "ISO 26262, automotive and semiconductor"},
+		{"Drug Safety Specialist", "healthcare", "pharmacovigilance"},
+		{"AI Safety Engineer", "ml_ai", "alignment research, not a safety department"},
+		{"Life Safety Technician", "skilled_trades", "fire alarm and sprinkler trades"},
+		{"School Safety Officer", "", "protective services; this catalogue has no category for them"},
+		{"Pool Safety Officer", "", ""},
+
+		// …and the titles the exclusions must NOT blank. A blanket qualifier entry took
+		// each of these away from a category it already resolved.
+		{"Public Safety Dispatcher", "logistics", "the exclusion is narrowed to the role noun, so this keeps its own answer"},
+		{"Patient Safety Registered Nurse", "healthcare", ""},
 
 		// The qualified SHE spellings DO resolve — the exclusion is of the bare word,
 		// not of the acronym.

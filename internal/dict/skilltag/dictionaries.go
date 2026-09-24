@@ -30,7 +30,6 @@ var wordAliases = map[string]string{
 	"nfpa":        "nfpa", // 5%
 	"rcra":        "rcra", // 2%
 	"hazop":       "hazop",
-	"hazwoper":    "hazwoper",
 	"enablon":     "enablon",
 	"intelex":     "intelex",
 	"velocityehs": "velocityehs",
@@ -1598,6 +1597,60 @@ var nonCorroboratingPhrases = map[string]bool{
 	"help-desk":            true,
 	"service-desk":         true,
 	"ticket-resolution":    true,
+	// Occupational safety — every canonical in the block, without exception, and for the
+	// reason this map's doctrine already states about naming a regime. "First aid",
+	// "corrective action", "emergency response" and "risk assessment" are in every
+	// childcare, warehouse, nursing, lifeguard and retail posting on the board, and
+	// "corrective action" in retail is HR disciplinary language, not safety work at all.
+	// Naming a safety practice is evidence the posting is SUBJECT to it, never that
+	// whoever fills it is technical.
+	//
+	// Measured before the fix: a warehouse posting came back carrying `react`, `sketch`,
+	// `assembly` and `agile`; a nursing posting carried `react` and `agile`; a retail
+	// posting carried `crm` and `analytics`. That is the "CNC operator came back tagged
+	// with wireframing" bug, and this block reintroduced it wholesale. They still tag on
+	// their own — a non-corroborating phrase is a match, it just does not rescue its
+	// neighbours.
+	//
+	// Only the PHRASE canonicals are listed, because that is all this map may hold and a
+	// test enforces it. The six word aliases in the same family (osha, epa, nfpa, rcra,
+	// hazop, hazwoper) are regulators and standards rather than English prose, so a
+	// posting that names one is genuinely about the regime — the corroboration a phrase
+	// could not honestly give, these can. HAZWOPER is not among them: it is a 40-hour
+	// training certificate, so it lives in internal/dict/certification with NEBOSH and
+	// IOSH rather than here.
+	"iso-45001":                     true,
+	"iso-14001":                     true,
+	"emergency-response":            true,
+	"personal-protective-equipment": true,
+	"root-cause-analysis":           true,
+	"environmental-compliance":      true,
+	"risk-assessment":               true,
+	"incident-investigation":        true,
+	"safety-management-system":      true,
+	"industrial-hygiene":            true,
+	"corrective-action":             true,
+	"waste-management":              true,
+	"first-aid":                     true,
+	"hazardous-waste":               true,
+	"toolbox-talks":                 true,
+	"safety-audit":                  true,
+	"hazard-identification":         true,
+	"contractor-safety":             true,
+	"lockout-tagout":                true,
+	"confined-space":                true,
+	"fall-protection":               true,
+	"machine-guarding":              true,
+	"hot-work":                      true,
+	"near-miss-reporting":           true,
+	"process-safety-management":     true,
+	"permit-to-work":                true,
+	"job-safety-analysis":           true,
+	"behavior-based-safety":         true,
+	"working-at-height":             true,
+	// The EHS platforms are the exception inside the exception: naming Enablon or Cority
+	// is naming a product you administer, the same shape as "Ahrefs" evidencing an SEO
+	// role, so they are deliberately absent from this map and stay corroborating.
 	// batch 4 — shop-floor craft. Same doctrine, opposite direction: the term is real
 	// and specific, but the posting carrying it is a machinist's, not an engineer's,
 	// and the design vocabulary (wireframes, sketch, prototyping) is ordinary prose

@@ -163,3 +163,57 @@ func TestParse_RejectedSafetyAcronyms(t *testing.T) {
 		}
 	}
 }
+
+// What these phrases do to a posting that is NOT about occupational safety — the half
+// the first draft of this file was missing entirely, and the half a review found broken.
+//
+// A phrase match is a STRONG match unless the canonical is listed in
+// nonCorroboratingPhrases, and one strong match releases every gated `ambiguousWords`
+// token in the same text. Safety vocabulary is exactly the shape that doctrine was
+// written for: "first aid", "corrective action" and "risk assessment" appear in
+// childcare, warehouse, nursing and retail postings at scale, and naming a safety
+// practice is evidence that the posting is SUBJECT to it, never that the person filling
+// it is technical. Before the fix, a warehouse posting came back carrying `react` and
+// `sketch`.
+func TestParse_SafetyPhrasesDoNotVouchForGatedWords(t *testing.T) {
+	cases := []struct {
+		label string
+		text  string
+	}{
+		{
+			"warehouse associate",
+			"Complete first aid training and follow lockout/tagout on the assembly line. " +
+				"Report near misses. You must react to changing priorities and sketch out " +
+				"improvements in an agile way.",
+		},
+		{
+			"registered nurse",
+			"Maintain first aid and CPR certification. Participate in emergency response " +
+				"and root cause analysis. Must react calmly and work in an agile team.",
+		},
+		{
+			"retail store manager",
+			"Issue corrective action where needed and support safety audits. Review " +
+				"analytics in our CRM and react to store performance.",
+		},
+	}
+	// The gated technical words that have no business on any of these postings.
+	gated := []string{"react", "sketch", "assembly", "crm", "analytics", "agile", "rest", "scrum"}
+	for _, tc := range cases {
+		got := Parse(tc.text)
+		for _, unwanted := range gated {
+			if slices.Contains(got, unwanted) {
+				t.Errorf("%s: Parse(...) = %v, want no %q — a safety phrase must not vouch for a gated word", tc.label, got, unwanted)
+			}
+		}
+	}
+
+	// …while still tagging the safety terms themselves. A non-corroborating phrase is
+	// still a match; it just does not rescue its neighbours.
+	got := Parse(cases[0].text)
+	for _, want := range []string{"first-aid", "lockout-tagout", "near-miss-reporting"} {
+		if !slices.Contains(got, want) {
+			t.Errorf("Parse(warehouse) = %v, want it to still contain %q", got, want)
+		}
+	}
+}

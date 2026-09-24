@@ -1053,21 +1053,42 @@ var categoryTable = []aliasEntry{
 	// see one job market.
 	//
 	// First, the qualifiers that put the word "safety" in a title naming a DIFFERENT
-	// profession. Measured live on 2026-09-24, they are not a rounding error: food 616,
-	// public 843, patient 481, campus 157, product 163 — roughly 2,300 postings that the
-	// qualified "safety <role>" aliases below would otherwise claim for HSE. Food safety
-	// is manufacturing quality, product safety is regulatory compliance, and the other
-	// three are protective services and healthcare quality. None has a category here, so
-	// they carry the blind sentinel rather than a guess.
+	// profession. Without them the qualified "safety <role>" aliases below claim roughly
+	// 2,300 live postings that are not this craft — food 616, public 843, patient 481,
+	// product 163, campus 157 on 2026-09-24 — plus the tech-native families further down.
 	//
+	// Each ROUTES to the category that is true rather than carrying the blind sentinel,
+	// because the rule at the top of this file says so and a review found the first
+	// draft breaking it: a blanket `patient safety` sentinel blanked "Patient Safety
+	// Registered Nurse" from `healthcare`, and `product safety` blanked "Product Safety
+	// Engineer" from `industrial_engineering` — making a facet unreachable, which is the
+	// harm this whole change exists to undo. The sentinel is left only where no category
+	// is true.
+	{"patient safety", "healthcare"},
+	{"drug safety", "healthcare"}, // pharmacovigilance, the sibling of patient safety
+	{"product safety", "industrial_engineering"},
+	{"food safety", "industrial_engineering"},       // plant quality, where `quality engineer` already sits
+	{"functional safety", "industrial_engineering"}, // ISO 26262, automotive and semiconductor
+	{"life safety", "skilled_trades"},               // fire alarm and sprinkler trades
+	{"ai safety", "ml_ai"},                          // alignment research, not a safety department
+	// Protective services. This catalogue has no category for them, so these keep the
+	// blind sentinel — and they are narrowed to the role noun the HSE block would
+	// otherwise steal, so "Public Safety Dispatcher" keeps the `logistics` it resolves on
+	// its own.
+	{"public safety officer", categoryNone},
+	{"campus safety officer", categoryNone},
+	{"school safety officer", categoryNone},
+	{"pool safety officer", categoryNone},
+	// Trust & Safety is platform integrity at a consumer-tech employer — the most likely
+	// "safety" collision on an IT job board, and the one the first draft missed entirely.
+	// It carries the sentinel rather than a route because no category here is true for it:
+	// it is neither `operations` nor `support` nor this craft, and guessing one would be
+	// the same mistake as filing it under HSE.
+	{"trust and safety", categoryNone},
+	{"trust & safety", categoryNone},
 	// "fire safety" is deliberately NOT in this list. It is a genuine part of the HSE
 	// remit on an industrial site, and 164 postings is too few to be worth splitting the
 	// building-warden reading out of.
-	{"food safety", categoryNone},
-	{"public safety", categoryNone},
-	{"patient safety", categoryNone},
-	{"campus safety", categoryNone},
-	{"product safety", categoryNone},
 	// The acronyms resolve bare. Each is a coined initialism with no English-word
 	// collision, unlike the two words below them.
 	{"hse", "occupational_safety"},
@@ -1769,10 +1790,15 @@ var categoryTable = []aliasEntry{
 	{"facilities engineer", "industrial_engineering"},
 	{"building engineer", "industrial_engineering"},
 	// "Safety Engineer" is the HSE profession, not the plant seat around it — SOC's own
-	// reported-title list for 19-5011 names it. It stays HERE rather than joining the
-	// HSE block above the `manager` fall-through on purpose: `software engineer` is
-	// declared between the two, and moving this line up would take "Software Safety
-	// Engineer" (functional safety, automotive and aerospace) away from it.
+	// reported-title list for 19-5011 names it.
+	//
+	// It stays at this position because that is where it already was, not because the
+	// position does anything: an earlier draft of this comment claimed moving it up would
+	// take "Software Safety Engineer" away from `software_engineering`, and that was
+	// simply false. The matcher takes contiguous phrases, so "software safety engineer"
+	// never contained "software engineer" and resolved here either way. Verify a claim
+	// like that against the matcher before writing it down — a reader trusts the comment
+	// over the code.
 	{"safety engineer", "occupational_safety"},
 	{"environmental engineer", "industrial_engineering"},
 	{"geotechnical engineer", "industrial_engineering"},
