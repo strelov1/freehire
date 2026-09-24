@@ -110,6 +110,10 @@ export const CATEGORY_LABELS: Record<string, string> = {
   creative: 'Creative & Media',
   engineering_design: 'Engineering Design',
   industrial_engineering: 'Industrial Engineering',
+  // The label carries the acronym because that is what the profession calls itself and
+  // what a candidate types. "Occupational Safety" alone is the classification's name,
+  // not the market's.
+  occupational_safety: 'Health & Safety (HSE)',
   healthcare: 'Healthcare',
   skilled_trades: 'Skilled Trades',
   retail: 'Retail',

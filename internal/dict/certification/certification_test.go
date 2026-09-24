@@ -47,3 +47,32 @@ func TestCanonicalize(t *testing.T) {
 		})
 	}
 }
+
+// The occupational-safety credentials. They live here rather than in skilltag for two
+// reasons that agree: they name credentials rather than skills, and skilltag's own
+// invariant rejects them outright — a scoped acronym there must resolve to a canonical
+// that already exists, because an acronym is another alias and never a new facet value.
+func TestCanonicalize_OccupationalSafetyCredentials(t *testing.T) {
+	cases := []struct {
+		token string
+		want  string
+	}{
+		{"NEBOSH", "nebosh"},
+		{"NEBOSH General Certificate", "nebosh"},
+		{"IOSH", "iosh"},
+		{"IOSH Managing Safely", "iosh"},
+		{"CSP", "csp"},
+		{"Certified Safety Professional", "csp"},
+		{"CIH", "cih"},
+		{"Certified Industrial Hygienist", "cih"},
+		{"CHMM", "chmm"},
+		{"Certified Hazardous Materials Manager", "chmm"},
+		{"HAZWOPER", "hazwoper"},
+	}
+	for _, tc := range cases {
+		got := Canonicalize([]string{tc.token})
+		if !reflect.DeepEqual(got, []string{tc.want}) {
+			t.Errorf("Canonicalize([%q]) = %v, want [%q]", tc.token, got, tc.want)
+		}
+	}
+}

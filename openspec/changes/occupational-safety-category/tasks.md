@@ -72,61 +72,63 @@
 
 ## 6. The skill vocabulary
 
-- [ ] 6.1 Add failing tests in `internal/dict/skilltag` for the core mined terms:
+- [x] 6.1 Add failing tests in `internal/dict/skilltag` for the core mined terms:
       `osha`, `iso-45001`, `iso-14001`, `emergency-response`, `root-cause-analysis`,
       `risk-assessment`, `incident-investigation`, `industrial-hygiene`, `epa`,
       `environmental-compliance`, `safety-management-system`, `corrective-action`,
       `personal-protective-equipment`
-- [ ] 6.2 Add failing tests for the secondary terms: `waste-management`, `first-aid`,
+- [x] 6.2 Add failing tests for the secondary terms: `waste-management`, `first-aid`,
       `hazardous-waste`, `toolbox-talks`, `safety-audit`, `hazard-identification`,
       `contractor-safety`, `lockout-tagout`, `confined-space`, `nfpa`,
       `fall-protection`, `machine-guarding`, `hot-work`, `near-miss-reporting`,
       `process-safety-management`, `hazop`, `permit-to-work`, `job-safety-analysis`,
       `rcra`, `behavior-based-safety`, `working-at-height`
-- [ ] 6.3 Add failing tests for the EHS platforms: `enablon`, `intelex`, `velocityehs`,
+- [x] 6.3 Add failing tests for the EHS platforms: `enablon`, `intelex`, `velocityehs`,
       `sphera`, `cority`
-- [ ] 6.4 Add the terms and their aliases to `internal/dict/skilltag/dictionaries.go`
+- [x] 6.4 Add the terms and their aliases to `internal/dict/skilltag/dictionaries.go`
       and their display strings to `labels.go`, each comment carrying the measured
       document frequency from the mined corpus
-- [ ] 6.5 Run `go test ./internal/dict/skilltag/...` and confirm green
+- [x] 6.5 Run `go test ./internal/dict/skilltag/...` and confirm green
 
 ## 7. Acronym collisions
 
-- [ ] 7.1 Add a failing test asserting `CSP` resolves Certified Safety Professional ONLY
-      when the caller supplies the `occupational_safety` category, and resolves nothing
-      under `software_engineering`
-- [ ] 7.2 Add the same coverage for `CIH`, `CHMM` and `BBS`
-- [ ] 7.3 Add a regression test asserting `PSM` under `project_management` still resolves
+- [x] 7.1 Add a failing test asserting `BBS` resolves Behaviour-Based Safety ONLY when
+      the caller supplies the `occupational_safety` category, and resolves nothing under
+      `software_engineering`
+- [x] 7.2 CSP/CIH/CHMM do NOT go here: skilltag's own invariant rejects a scoped acronym
+      that would create a new canonical, so they moved to the certification dictionary
+      in group 8 and the skilltag test asserts they resolve nothing here
+- [x] 7.3 Add a regression test asserting `PSM` under `project_management` still resolves
       `professional-scrum-master`, unchanged
-- [ ] 7.4 Add a failing test asserting the spelled-out `process safety management`
+- [x] 7.4 Add a failing test asserting the spelled-out `process safety management`
       resolves, and that no HSE term resolves from text containing only "aspects",
       "aspiring" or the word "dot"
-- [ ] 7.5 Add the four scoped acronyms to `categoryScopedAcronyms` and the spelled-out
+- [x] 7.5 Add the four scoped acronyms to `categoryScopedAcronyms` and the spelled-out
       phrase to the term table, with a comment recording why `PSM` is phrase-only (the
       map holds one canonical per key; acronym and phrase each measured at 2%)
-- [ ] 7.6 Run `go test ./internal/dict/skilltag/...` and confirm green
+- [x] 7.6 Run `go test ./internal/dict/skilltag/...` and confirm green
 
 ## 8. Certifications
 
-- [ ] 8.1 Add failing tests in `internal/dict/certification/certification_test.go` for
+- [x] 8.1 Add failing tests in `internal/dict/certification/certification_test.go` for
       `nebosh`, `iosh`, `csp`, `cih`, `chmm` and `hazwoper`
-- [ ] 8.2 Add the credentials and their aliases to
+- [x] 8.2 Add the credentials and their aliases to
       `internal/dict/certification/certification.go`
-- [ ] 8.3 Run `go test ./internal/dict/certification/...` and confirm green
+- [x] 8.3 Run `go test ./internal/dict/certification/...` and confirm green
 
 ## 9. Serving surfaces
 
-- [ ] 9.1 Run `cmd/gen-contracts` to regenerate `web/src/lib/generated/contracts.ts`
+- [x] 9.1 Run `cmd/gen-contracts` to regenerate `web/src/lib/generated/contracts.ts`
       with the new category
-- [ ] 9.2 Add `occupational_safety: 'Health & Safety (HSE)'` to `CATEGORY_LABELS` in
+- [x] 9.2 Add `occupational_safety: 'Health & Safety (HSE)'` to `CATEGORY_LABELS` in
       `web/src/lib/labels.ts` and to `extension/lib/labels.ts`
-- [ ] 9.3 Add `occupational_safety: 'Quality & Security'` to `CATEGORY_GROUP` in
+- [x] 9.3 Add `occupational_safety: 'Quality & Security'` to `CATEGORY_GROUP` in
       `web/src/lib/filterSections.ts`, with a comment recording why that group (QHSE and
       HSEQ bundle Quality with HSE in the profession's own naming) rather than
       `Engineering`
-- [ ] 9.4 Run the web type-check and `web/src/lib/labels.test.ts`; confirm the
+- [x] 9.4 Run the web type-check and `web/src/lib/labels.test.ts`; confirm the
       exhaustive `Record<Category, …>` types are satisfied and the suite is green
-- [ ] 9.5 Run the extension lint/build and confirm green
+- [x] 9.5 Run the extension lint/build and confirm green
 
 ## 10. Coverage measured against live titles, not the list
 

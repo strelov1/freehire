@@ -19,6 +19,23 @@ func trimLower(s string) string {
 // "please go home" or "plan c" never tags. Seed list; expand toward ~200 from
 // MIND-tech-ontology and github/linguist languages.yml — pure data, no engine change.
 var wordAliases = map[string]string{
+	// Occupational safety: the regulators, the standards and the EHS platforms. Every
+	// one of these is a coined word or an initialism with no English-word collision, so
+	// they resolve bare — unlike CSP/CIH/CHMM/BBS, which are category-scoped below, and
+	// unlike ASP and DOT, which are not admitted in any form. That last exclusion was
+	// measured rather than reasoned: the probe that sized this vocabulary reported ASP in
+	// 17% of postings, and it was matching the prefix of "aspects" and "aspiring".
+	"osha":        "osha", // 27% of the mined corpus
+	"epa":         "epa",  // 11%
+	"nfpa":        "nfpa", // 5%
+	"rcra":        "rcra", // 2%
+	"hazop":       "hazop",
+	"hazwoper":    "hazwoper",
+	"enablon":     "enablon",
+	"intelex":     "intelex",
+	"velocityehs": "velocityehs",
+	"sphera":      "sphera",
+	"cority":      "cority",
 	// languages (unambiguous)
 	"golang":     "go",
 	"python":     "python",
@@ -1494,6 +1511,59 @@ var professionalPhraseAliases = []phraseAlias{
 	// vocabulary as engineering. All are non-corroborating — see below.
 	{"hipaa", "hipaa"}, {"gdpr", "gdpr"}, {"ccpa", "ccpa"}, {"lgpd", "lgpd"},
 	{"itar", "itar"}, {"dfars", "dfars"},
+	// Occupational safety — health, safety and environment. This vocabulary carries more
+	// weight than its size suggests: an HSE posting derives `is_tech = false` and the
+	// enrichment enqueue gate reads `is_tech IS TRUE`, so the LLM never sees this
+	// population and these entries are the only thing that will ever put a skill on it.
+	// Measured on prod 2026-09-24, just 2,535 of 6,254 live HSE postings carried any
+	// skill, and the profession had no representation here at all.
+	//
+	// The terms are mined, not written down: 2,500 live descriptions from this exact
+	// population, HTML-stripped, counted as 1–3-grams by document frequency with the
+	// existing vocabulary subtracted. The percentage on each line is that frequency, and
+	// it is the admission evidence — a list written from what the work sounds like can
+	// only ever be tested against itself.
+	{"iso 45001", "iso-45001"}, {"iso45001", "iso-45001"}, // 19%
+	{"iso 14001", "iso-14001"}, {"iso14001", "iso-14001"}, // 20%
+	{"emergency response", "emergency-response"}, // 20%
+	{"emergency preparedness", "emergency-response"},
+	{"personal protective equipment", "personal-protective-equipment"},              // 14%
+	{"root cause analysis", "root-cause-analysis"},                                  // 14%
+	{"environmental compliance", "environmental-compliance"},                        // 14%
+	{"risk assessment", "risk-assessment"}, {"risk assessments", "risk-assessment"}, // 13%
+	{"incident investigation", "incident-investigation"}, {"incident investigations", "incident-investigation"}, // 13%
+	{"safety management system", "safety-management-system"}, // 13%
+	{"hse management system", "safety-management-system"},
+	{"ehs management system", "safety-management-system"},
+	{"industrial hygiene", "industrial-hygiene"},                                            // 12%
+	{"corrective action", "corrective-action"}, {"corrective actions", "corrective-action"}, // 29%, the single most common of these
+	{"corrective and preventive action", "corrective-action"},
+	{"waste management", "waste-management"},                              // 9%
+	{"first aid", "first-aid"},                                            // 9%
+	{"hazardous waste", "hazardous-waste"},                                // 8%
+	{"toolbox talk", "toolbox-talks"}, {"toolbox talks", "toolbox-talks"}, // 8%
+	{"safety audit", "safety-audit"}, {"safety audits", "safety-audit"}, // 8%; the corpus spells it plural
+	{"hazard identification", "hazard-identification"}, // 7%
+	{"contractor safety", "contractor-safety"},         // 6%
+	{"lockout tagout", "lockout-tagout"},               // 6%
+	{"lockout/tagout", "lockout-tagout"},
+	{"confined space", "confined-space"}, {"confined spaces", "confined-space"}, // 5%
+	{"fall protection", "fall-protection"}, // 3%
+	{"machine guarding", "machine-guarding"},
+	{"hot work", "hot-work"},
+	{"near miss", "near-miss-reporting"}, {"near misses", "near-miss-reporting"}, // the plural is the 11% form
+	// The acronym PSM is NOT admitted: the scoped-acronym table below already maps that
+	// key to professional-scrum-master, and it holds one canonical per key. Measured, the
+	// acronym and this phrase each appear in 2% of the corpus, so the phrase alone loses
+	// almost nothing — and widening the table's shape would touch every existing entry.
+	{"process safety management", "process-safety-management"},
+	{"permit to work", "permit-to-work"},           // 2%
+	{"job safety analysis", "job-safety-analysis"}, // 2%
+	{"job hazard analysis", "job-safety-analysis"},
+	{"behavior based safety", "behavior-based-safety"},
+	{"behaviour based safety", "behavior-based-safety"},
+	{"working at height", "working-at-height"},
+	{"work at height", "working-at-height"},
 }
 
 // nonCorroboratingPhrases are the phrase canonicals that tag on their own but do NOT
@@ -1643,4 +1713,14 @@ var categoryScopedAcronyms = map[string]categoryScopedAcronym{
 	// also listed: ATS feeds that render whole titles in caps would otherwise miss it.
 	"SAFe": {canonical: "safe-agile", allowedCategories: map[string]bool{"project_management": true}},
 	"SAFE": {canonical: "safe-agile", allowedCategories: map[string]bool{"project_management": true}},
+	// BBS is a Bulletin Board System in general job text and Behaviour-Based Safety
+	// inside a posting the title dictionary has already placed in the profession.
+	//
+	// CSP, CIH and CHMM are deliberately NOT here, and the invariant test is what says
+	// so: an acronym in this table must resolve to a canonical that already exists,
+	// because an acronym is another alias and never a new facet value. Those three name
+	// credentials, not skills, so they live in `internal/dict/certification` beside PMP
+	// and CISSP — which is where the design put them for a different reason, and the two
+	// arguments agree.
+	"BBS": {canonical: "behavior-based-safety", allowedCategories: map[string]bool{"occupational_safety": true}},
 }

@@ -69,6 +69,7 @@ const CATEGORY_LABELS: Record<string, string> = {
   creative: 'Creative & Media',
   engineering_design: 'Engineering Design',
   industrial_engineering: 'Industrial Engineering',
+  occupational_safety: 'Health & Safety (HSE)',
   healthcare: 'Healthcare',
   skilled_trades: 'Skilled Trades',
   retail: 'Retail',

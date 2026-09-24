@@ -41,6 +41,25 @@ var aliases = map[string]string{
 	"pmp":                             "pmp",
 	"project management professional": "pmp",
 
+	// Occupational safety. This is the first non-IT family in the vocabulary, and it is
+	// here rather than in skilltag because these name credentials, not skills — a
+	// distinction skilltag enforces itself: a scoped acronym there must resolve to a
+	// canonical that already exists, since an acronym is another alias and never a new
+	// facet value. Measured on 2,500 live HSE descriptions (2026-09-24): NEBOSH 11%,
+	// CSP 11%, IOSH 5%, CIH 5%, CHMM 4%, HAZWOPER 1%.
+	"nebosh":                     "nebosh",
+	"nebosh general certificate": "nebosh",
+	"nebosh international general certificate": "nebosh",
+	"iosh":                                  "iosh",
+	"iosh managing safely":                  "iosh",
+	"csp":                                   "csp",
+	"certified safety professional":         "csp",
+	"cih":                                   "cih",
+	"certified industrial hygienist":        "cih",
+	"chmm":                                  "chmm",
+	"certified hazardous materials manager": "chmm",
+	"hazwoper":                              "hazwoper",
+
 	// Kubernetes / CNCF.
 	"cka":                                "cka",
 	"certified kubernetes administrator": "cka",

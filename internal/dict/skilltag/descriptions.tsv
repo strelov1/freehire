@@ -892,3 +892,46 @@ clio	Clio is cloud-based legal practice management software for case tracking, b
 uscis	USCIS (U.S. Citizenship and Immigration Services) is the federal agency that administers the immigration benefit petitions immigration-practice roles prepare and file.
 i-129	Form I-129 is the USCIS petition employers file to sponsor a nonimmigrant worker, covering visa categories such as H-1B and L-1.
 i-130	Form I-130 is the USCIS petition a sponsor files to establish a family relationship for immigrant visa purposes.
+
+# Occupational safety — health, safety and environment. Mined from 2,500 live HSE
+# descriptions on 2026-09-24; the profession had no vocabulary here before.
+osha	OSHA (Occupational Safety and Health Administration) is the US federal regulator whose workplace standards and inspections an American safety programme is built to satisfy.
+epa	The EPA (Environmental Protection Agency) is the US federal environmental regulator whose air, water and waste permits a site's environmental compliance reports to.
+nfpa	NFPA is the standards body whose fire, electrical and life-safety codes govern how a building or plant is protected against fire.
+rcra	RCRA is the US law governing hazardous waste from generation to disposal, including the generator status and manifest records a site must keep.
+hazop	HAZOP (hazard and operability study) is a structured team walk-through of a process design, examining each deviation from intended conditions for hazards.
+hazwoper	HAZWOPER is the OSHA-mandated training standard for workers handling hazardous waste or responding to uncontrolled releases.
+iso-45001	ISO 45001 is the international standard for occupational health and safety management systems, the safety counterpart to ISO 9001.
+iso-14001	ISO 14001 is the international standard for environmental management systems, covering how a site identifies and controls its environmental impacts.
+emergency-response	Emergency response is the planning, drilling and on-the-day coordination for fires, spills, medical events and evacuations at a site.
+personal-protective-equipment	Personal protective equipment (PPE) is the last line of defence — respirators, harnesses, gloves and eye protection — including selecting, fitting and enforcing its use.
+root-cause-analysis	Root cause analysis is the structured investigation that traces an incident or defect past its symptoms to the condition that allowed it.
+environmental-compliance	Environmental compliance is keeping a site inside its air, water, waste and reporting obligations to the regulators that issued its permits.
+risk-assessment	Risk assessment is the systematic identification of hazards and evaluation of their likelihood and severity, used to decide which controls a task needs.
+incident-investigation	Incident investigation is the fact-finding that follows an injury, near miss or release, ending in corrective actions rather than blame.
+safety-management-system	A safety management system is the documented framework — policy, roles, procedures, audits and review — through which an organisation manages safety rather than reacting to it.
+industrial-hygiene	Industrial hygiene is the measurement and control of workplace exposures to chemical, physical and biological agents, including noise, dust, fumes and ergonomics.
+corrective-action	Corrective and preventive action (CAPA) is the discipline of closing out findings from audits, incidents and inspections with verified fixes rather than promises.
+waste-management	Waste management is the segregation, storage, manifesting and disposal of a site's waste streams under the rules each stream carries.
+first-aid	First aid is the immediate care given at the scene of an injury or illness, usually held as a current certificate alongside CPR.
+hazardous-waste	Hazardous waste handling covers the classification, accumulation limits, labelling and manifested disposal of waste that regulation treats as dangerous.
+toolbox-talks	Toolbox talks are the short, task-specific safety briefings delivered to a crew at the start of a shift or before a particular job.
+safety-audit	Safety auditing is the planned examination of a site or contractor against a standard, producing findings that feed the corrective-action system.
+hazard-identification	Hazard identification is the front half of risk work: systematically finding what on a site or in a task could cause harm before it does.
+contractor-safety	Contractor safety is the pre-qualification, induction, permitting and oversight of third-party crews working on a site you are accountable for.
+lockout-tagout	Lockout/tagout (LOTO) is the procedure that isolates and locks off energy sources so equipment cannot start while someone is working on it.
+confined-space	Confined space entry is the permit-controlled procedure for working inside tanks, vessels and pits, covering atmospheric testing, attendants and rescue.
+fall-protection	Fall protection is the selection, inspection and use of harnesses, anchors and guardrails for work where a fall is the principal hazard.
+machine-guarding	Machine guarding is the design and inspection of physical barriers and interlocks that keep people out of the moving parts of production equipment.
+hot-work	Hot work control is the permit system governing welding, cutting and grinding where ignition sources meet flammable materials.
+near-miss-reporting	Near miss reporting is the practice of capturing incidents that could have caused harm but did not, so the conditions are fixed before they recur.
+process-safety-management	Process safety management (PSM) is the OSHA-regulated discipline for preventing catastrophic releases at facilities handling highly hazardous chemicals.
+permit-to-work	Permit to work is the formal authorisation system that controls high-risk tasks, recording the isolations, checks and sign-offs before work starts.
+job-safety-analysis	Job safety analysis (JSA), also called job hazard analysis, breaks a task into steps and assigns a control to the hazard in each one.
+behavior-based-safety	Behaviour-based safety is the observation and feedback programme that targets how people work, rather than only the conditions they work in.
+working-at-height	Working at height covers the planning, equipment and certification for tasks on scaffolds, ladders, roofs and elevated platforms.
+enablon	Enablon is an enterprise EHS and sustainability management platform used to record incidents, audits and regulatory obligations.
+intelex	Intelex is an EHS and quality management platform used for incident tracking, inspections and compliance reporting.
+velocityehs	VelocityEHS is a cloud EHS platform covering chemical management, incident tracking and industrial ergonomics.
+sphera	Sphera is an enterprise platform for operational risk, product stewardship and environmental performance reporting.
+cority	Cority is an EHS and occupational health platform covering medical surveillance, industrial hygiene and safety records.

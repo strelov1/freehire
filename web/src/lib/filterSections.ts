@@ -62,6 +62,12 @@ const CATEGORY_GROUP: Record<Category, CategoryGroup> = {
   // Not a craft in the design sense — it sits with the engineering disciplines, since
   // that is where a plant or process engineer looks first.
   industrial_engineering: 'Engineering',
+  // Not with the engineering disciplines, though it shares their employers. The group
+  // already holds `qa` and `security`, and the profession bundles itself with quality in
+  // its own acronyms — QHSE, HSEQ, SHEQ — so this is where it says it belongs. Grouping
+  // it under Engineering would repeat the fold this category exists to undo: an HSE
+  // Officer audits the plant, they do not run it.
+  occupational_safety: 'Quality & Security',
   healthcare: 'Consumer & Services',
   skilled_trades: 'Consumer & Services',
   retail: 'Consumer & Services',
