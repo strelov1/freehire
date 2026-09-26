@@ -1,8 +1,15 @@
 import { isCrawler, regionFromCountry } from '$lib/geoScope';
 import type { RequestHandler } from './$types';
 
-// The visitor's macro-region, derived from Cloudflare's `CF-IPCountry`, for the
-// jobs feed's opening scope.
+// What the edge knows about where this visitor is, derived from Cloudflare's
+// `CF-IPCountry`: the macro-region for the jobs feed's opening scope, and the raw
+// country for `/pricing`, which has to warn anyone whose local cards our Stripe
+// account cannot charge.
+//
+// The path still says `region` because that was the first caller and renaming it
+// would touch four call sites in the feed to buy nothing. Two callers, one route,
+// because the two rules below are the easy things to get wrong and must not exist
+// in two copies that can drift apart.
 //
 // It is an endpoint rather than page data on purpose. A server `load` returning the
 // region would serialize it into the document SvelteKit ships, so the HTML would
@@ -28,8 +35,14 @@ export const GET: RequestHandler = ({ request, setHeaders }) => {
   // describes and no human asked for. The check lives here because the client
   // cannot know what it is, and a check the client could skip is not a check.
   if (isCrawler(request.headers.get('user-agent'))) {
-    return Response.json({ region: null });
+    return Response.json({ region: null, country: null });
   }
 
-  return Response.json({ region: regionFromCountry(request.headers.get('cf-ipcountry')) });
+  // The country is handed over raw rather than already judged. The rule about which
+  // cards cannot be charged belongs to billing and changes when the Stripe account
+  // does; teaching this route about it would put a payments fact in a geography
+  // endpoint, where nobody looking for it would think to check.
+  const country = request.headers.get('cf-ipcountry');
+
+  return Response.json({ region: regionFromCountry(country), country });
 };
