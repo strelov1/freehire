@@ -9,23 +9,37 @@ vi.mock('$lib/auth.svelte', () => ({ isAuthenticated: () => false }));
 vi.mock('$lib/signin', () => ({ promptSignIn: vi.fn() }));
 vi.mock('$lib/api', () => ({ api: { promoPreview: vi.fn(), promoRedeem: vi.fn(), billingCheckout: vi.fn() } }));
 
-import Page from './+page.svelte';
+import type { PlansMatrix, PublicPrice } from '$lib/types';
 
-const price = (tier: string, id: string) => ({
+import Page from './+page.svelte';
+import type { PageData } from './$types';
+
+const price = (tier: 'pro' | 'ultra', id: string): PublicPrice => ({
   id,
   tier,
   interval: 'month',
   amount_cents: 500,
   currency: 'usd',
+  default: true,
 });
 
-const data = {
-  plans: {
-    prices: [price('pro', 'price_pro'), price('ultra', 'price_ultra')],
-    features: [],
-  },
-  promo: null,
+// Both tiers on sale, so the assertions can count the warning across two cards rather
+// than assume which one is present. No features and nothing enforced: the allowance rows
+// are another subject entirely, and empty lists render the cards just as well.
+const plans: PlansMatrix = {
+  prices: [price('pro', 'price_pro'), price('ultra', 'price_ultra')],
+  features: [],
+  enforced: [],
 };
+
+// Typed by hand rather than as `PageData`, which declares `plans` as `null`: the loader's
+// success branch does return a matrix, but the two branches collapse in the generated
+// `$types`, and the page only ever reaches it through `plans?.`. A populated matrix is
+// what production renders, so that is what the spec renders, and the mismatch is narrowed
+// to this one boundary instead of being spread across four calls.
+function renderPricing() {
+  return render(Page, { props: { data: { user: null, locale: 'en', plans, promo: '' } as unknown as PageData } });
+}
 
 /** Stands in for the edge, answering `/geo/region` with one country. */
 function edgePlaces(country: string | null) {
@@ -46,7 +60,7 @@ afterEach(() => {
 describe('/pricing — the local-card warning', () => {
   it('warns a visitor the edge places in the account’s own country', async () => {
     edgePlaces('BR');
-    render(Page, { props: { data } });
+    renderPricing();
     // Both paid cards carry it: somebody comparing Pro against Ultra must not have to
     // pick the right column to be told their card cannot pay for either.
     await expect(screen.findAllByText(WARNING)).resolves.toHaveLength(2);
@@ -54,14 +68,14 @@ describe('/pricing — the local-card warning', () => {
 
   it('says nothing to a visitor anywhere else', async () => {
     edgePlaces('PT');
-    render(Page, { props: { data } });
+    renderPricing();
     await screen.findByText('Upgrade to Pro', { exact: false }).catch(() => null);
     expect(screen.queryByText(WARNING)).toBeNull();
   });
 
   it('says nothing when the edge could not place the visitor', async () => {
     edgePlaces(null);
-    render(Page, { props: { data } });
+    renderPricing();
     await screen.findByText('Upgrade to Pro', { exact: false }).catch(() => null);
     expect(screen.queryByText(WARNING)).toBeNull();
   });
@@ -76,7 +90,7 @@ describe('/pricing — the local-card warning', () => {
         throw new Error('offline');
       }),
     );
-    render(Page, { props: { data } });
+    renderPricing();
     await screen.findByText('Upgrade to Pro', { exact: false }).catch(() => null);
     expect(screen.queryByText(WARNING)).toBeNull();
   });
