@@ -1,6 +1,7 @@
 <script lang="ts">
   import { page } from '$app/state';
   import { api } from '$lib/api';
+  import { ACCOUNT_COUNTRY_NAME, cardsUnsupportedFrom } from '$lib/billingGeo';
   import { promptSignIn } from '$lib/signin';
   import { formatMinorUnits } from '$lib/money';
   import { isAuthenticated } from '$lib/auth.svelte';
@@ -75,6 +76,32 @@
 
   let busy = $state(false);
   let error = $state<string | null>(null);
+
+  // Where the edge places this visitor, for the one thing on this page that turns on it:
+  // whether the cards they are likely to hold can be charged at all.
+  //
+  // Fetched rather than read from page data on purpose. A server `load` would serialize
+  // the country into the HTML, and that document is held by a shared cache keyed on the
+  // URL alone — the first visitor from the account's own country would hand the warning
+  // to everybody who came after them.
+  //
+  // One request on arrival, never retried. A failure leaves the country unknown, which
+  // reads as payable: this sentence may only ever be added to the page, so having
+  // nothing to say is a perfectly good outcome.
+  let visitorCountry = $state<string | null>(null);
+  const cardsUnsupported = $derived(cardsUnsupportedFrom(visitorCountry));
+
+  $effect(() => {
+    void (async () => {
+      try {
+        const res = await fetch('/geo/region');
+        if (!res.ok) return;
+        visitorCountry = ((await res.json()) as { country: string | null }).country;
+      } catch {
+        // Unreachable edge and unplaceable visitor are the same answer here.
+      }
+    })();
+  });
 
   // Prefilled from a code that arrived in a link. Nothing is spent by filling the field —
   // the code is only redeemed when the buy button is pressed, because a redemption spends
@@ -227,6 +254,26 @@
   </p>
 {/snippet}
 
+<!-- What a visitor in the account's own country would otherwise learn from Stripe, in
+     Stripe's words, after their card was already refused. Checkout is hosted there, so
+     that page is the one place we cannot write on — this is the last moment we can say
+     anything at all.
+     Phrased as an instruction rather than a refusal: naming the card that does work
+     keeps the sale reachable for the many people here who hold one. The button below is
+     deliberately left alone, because geography reports where somebody is and not what
+     they are carrying, and a guess this soft must not take a decision away.
+     A snippet, so the two paid cards cannot drift apart about it. -->
+{#snippet localCardWarning()}
+  {#if cardsUnsupported}
+    <p
+      class="rounded-md border border-border bg-muted/50 px-3 py-2 text-sm text-muted-foreground"
+    >
+      Cards issued in {ACCOUNT_COUNTRY_NAME} can’t be charged here — payments are taken in
+      USD. Use a card from a bank outside {ACCOUNT_COUNTRY_NAME}.
+    </p>
+  {/if}
+{/snippet}
+
 <!-- Three tracks only when there is a third card to fill one: a grid fixed at
      lg:grid-cols-3 with two children leaves the third an empty gap on wide screens instead
      of the two cards sharing the row the way they already do at the sm breakpoint. -->
@@ -276,6 +323,7 @@
       {@render discordPerk()}
 
       {#if chosen}
+        {@render localCardWarning()}
         {#if isAuthenticated()}
           <div class="mt-auto flex flex-col gap-2">
             <label class="text-sm text-muted-foreground" for="promo-code">
@@ -362,6 +410,7 @@
         </ul>
 
         {@render discordPerk()}
+        {@render localCardWarning()}
 
         {#if isAuthenticated()}
           <button
