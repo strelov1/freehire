@@ -91,10 +91,6 @@ export class FilterStore {
     this.#url.setNow({ ...this.#url.value, q, qFields: null });
   }
 
-  setSalaryMin(n: number | null) {
-    this.#url.setSoon({ ...this.#url.value, salaryMin: n });
-  }
-
   // Dragged like the salary slider (a continuous gesture across snap points), so
   // it debounces the reload via setSoon — the URL still updates immediately.
   setPostedWithinDays(n: number | null) {
@@ -139,6 +135,12 @@ export class FilterStore {
 
   setClearance(v: ClearanceFilter) {
     this.#url.setNow({ ...this.#url.value, clearance: v });
+  }
+
+  /** The summary chip's remove: one chip stands for the whole salary range, so it
+   *  clears both ends. The range itself is dragged in the modal, which stages it. */
+  clearSalary() {
+    this.#url.setNow({ ...this.#url.value, salaryMin: null, salaryMax: null });
   }
 
   /** Switch the feed ordering. setNow, not setSoon: this is a discrete choice from a

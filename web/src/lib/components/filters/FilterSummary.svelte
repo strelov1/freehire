@@ -1,7 +1,7 @@
 <script lang="ts">
   import { dynamicLabel, FACETS } from '$lib/facets';
   import { type FilterStore, savedSearchQuery, displayQuery } from '$lib/filters';
-  import { experienceLabel, freshnessLabel } from '$lib/filterControls';
+  import { experienceLabel, freshnessLabel, salaryLabel } from '$lib/filterControls';
   import FilterSummaryShell, { type SummaryChip, type SummaryGroup } from './FilterSummaryShell.svelte';
   import SaveSearchAlert from './SaveSearchAlert.svelte';
 
@@ -67,9 +67,10 @@
     facetGroup('posting_language', 'Job language');
     facetGroup('relocation', 'Relocation');
 
-    // Salary: currency + minimum.
+    // Salary: currency + one chip for the range, however many ends are set.
     const salary: SummaryChip[] = facetChips('salary_currency');
-    if (f.salaryMin != null) salary.push({ key: 'salary_min', text: `${f.salaryMin.toLocaleString('en-US')}+`, exclude: false, remove: () => store.setSalaryMin(null) });
+    if (f.salaryMin != null || f.salaryMax != null)
+      salary.push({ key: 'salary_range', text: salaryLabel(f.salaryMin, f.salaryMax), exclude: false, remove: () => store.clearSalary() });
     push('Salary', salary);
 
     if (f.visa) push('Visa', [{ key: 'visa', text: 'Sponsorship', exclude: false, remove: () => store.setVisa(false) }]);

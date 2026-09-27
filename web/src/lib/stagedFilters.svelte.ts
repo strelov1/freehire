@@ -81,6 +81,10 @@ export class StagedFilters implements FacetStore {
     this.#f = { ...this.#f, salaryMin: n };
   }
 
+  setSalaryMax(n: number | null): void {
+    this.#f = { ...this.#f, salaryMax: n };
+  }
+
   setVisa(on: boolean): void {
     this.#f = { ...this.#f, visa: on };
   }

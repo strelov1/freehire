@@ -22,9 +22,9 @@ const TRACKING_PREFIXES = ['utm_', 'gclid', 'fbclid', 'mc_'];
  *  be a filter. The obvious predicate — "does it serialise to feed params?" — is the
  *  dangerous one, because the loader this replaced forwarded `url.searchParams`
  *  VERBATIM to the search API, so `/` honoured every parameter that API accepts, and
- *  several of those (`is_tech`, `salary_max`, `experience_years_min`,
- *  `education_level`, `order`) the browser's filter model does not serialise. Under
- *  that predicate `/?is_tech=true` would have rendered the landing page with the
+ *  several of those (`is_tech`, `experience_years_min`, `education_level`, `order`)
+ *  the browser's filter model does not serialise. Under that predicate
+ *  `/?is_tech=true` would have rendered the landing page with the
  *  visitor's filter silently discarded — and silence is the whole problem: they cannot
  *  tell a dropped filter from a catalogue that has nothing.
  *

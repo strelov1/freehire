@@ -5,6 +5,7 @@ import {
   FRESHNESS_PRESETS,
   freshnessLabel,
   freshnessOptions,
+  salaryLabel,
 } from './filterControls';
 
 describe('EXPERIENCE_PRESETS', () => {
@@ -45,6 +46,25 @@ describe('experienceLabel', () => {
   it('describes an off-preset bound instead of calling it Any', () => {
     expect(experienceLabel(6)).not.toBe('Any');
     expect(experienceLabel(6)).toContain('6');
+  });
+});
+
+describe('salaryLabel', () => {
+  it('reads no bound as Any', () => {
+    expect(salaryLabel(null, null)).toBe('Any');
+  });
+
+  it('names a floor, a ceiling, and both', () => {
+    expect(salaryLabel(100000, null)).toBe('100,000+');
+    expect(salaryLabel(null, 150000)).toBe('Up to 150,000');
+    expect(salaryLabel(100000, 150000)).toBe('100,000 – 150,000');
+  });
+
+  // A zero bound from a hand-edited link is still applied by the server, so it must
+  // not read as "Any" — the same rule experienceLabel follows.
+  it('describes a zero bound instead of calling it Any', () => {
+    expect(salaryLabel(0, null)).toBe('0+');
+    expect(salaryLabel(null, 0)).toBe('Up to 0');
   });
 });
 

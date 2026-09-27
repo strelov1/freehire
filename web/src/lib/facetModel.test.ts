@@ -222,6 +222,66 @@ describe('experienceYearsMax', () => {
   });
 });
 
+describe('salary bounds', () => {
+  it('serializes each bound under its own param and reads both back', () => {
+    const f = emptyFilters();
+    f.salaryMin = 100000;
+    f.salaryMax = 150000;
+    const p = filtersToParams(f);
+    expect(p.get('salary_min')).toBe('100000');
+    expect(p.get('salary_max')).toBe('150000');
+    const back = filtersFromParams(p);
+    expect(back.salaryMin).toBe(100000);
+    expect(back.salaryMax).toBe(150000);
+  });
+
+  it('writes nothing for an unset ceiling, and leaves the floor alone without one', () => {
+    expect(filtersToParams(emptyFilters()).has('salary_max')).toBe(false);
+    expect(filtersFromParams(new URLSearchParams('salary_max=150000')).salaryMin).toBeNull();
+    expect(filtersFromParams(new URLSearchParams('salary_min=100000')).salaryMax).toBeNull();
+  });
+
+  // The /jobs loader forwards the address bar to the search API verbatim, so a bound
+  // the server reads and this parser does not is applied to the first page with no
+  // control showing it — then dropped for good by the next filter change, which
+  // re-serializes from this model. Go reads both params with strconv.Atoi.
+  it('rejects the forms strconv.Atoi rejects, so the two ends cannot disagree', () => {
+    for (const raw of ['', ' ', 'abc', '1e5', '1.5', '0x10', ' 150000', '150000 ', 'Infinity']) {
+      const p = new URLSearchParams();
+      p.set('salary_min', raw);
+      p.set('salary_max', raw);
+      const f = filtersFromParams(p);
+      expect(f.salaryMin, `salary_min=${JSON.stringify(raw)}`).toBeNull();
+      expect(f.salaryMax, `salary_max=${JSON.stringify(raw)}`).toBeNull();
+    }
+  });
+
+  // ...and keeps every value it accepts, zero included: the server applies
+  // `salary_max=0`, so reading it as unset here would leave an empty list that no
+  // chip explains.
+  it('keeps the integer forms strconv.Atoi accepts', () => {
+    for (const [raw, want] of [
+      ['150000', 150000],
+      ['+150000', 150000],
+      ['0150000', 150000],
+      ['0', 0],
+    ] as const) {
+      const p = new URLSearchParams();
+      p.set('salary_max', raw);
+      expect(filtersFromParams(p).salaryMax, raw).toBe(want);
+    }
+  });
+
+  it('counts the range as one active filter, however many ends are set', () => {
+    const none = activeFilterCount(emptyFilters());
+    const f = emptyFilters();
+    f.salaryMax = 150000;
+    expect(activeFilterCount(f)).toBe(none + 1);
+    f.salaryMin = 100000;
+    expect(activeFilterCount(f)).toBe(none + 1);
+  });
+});
+
 describe('autoApplyAvailable', () => {
   it('is absent from the URL when unset', () => {
     expect(filtersToParams(emptyFilters()).has('auto_apply_available')).toBe(false);

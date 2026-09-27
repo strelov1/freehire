@@ -4,6 +4,18 @@
 export const SALARY_MAX = 300000;
 export const SALARY_STEP = 5000;
 
+/** Label for the salary range in force, shared by the modal and the summary chip so
+ *  the two cannot describe it differently. Tests for null, never falsiness: a zero
+ *  bound from a hand-edited link is still applied by the server. */
+export function salaryLabel(min: number | null, max: number | null): string {
+  if (min != null && max != null) return `${fmtSalary(min)} – ${fmtSalary(max)}`;
+  if (min != null) return `${fmtSalary(min)}+`;
+  if (max != null) return `Up to ${fmtSalary(max)}`;
+  return 'Any';
+}
+
+const fmtSalary = (n: number) => n.toLocaleString('en-US');
+
 /** Freshness presets, oldest→newest left→right with "Any" as the rightmost stop. */
 export const FRESHNESS_PRESETS: { days: number | null; label: string }[] = [
   { days: 1, label: 'Today' },

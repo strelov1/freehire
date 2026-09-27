@@ -58,6 +58,12 @@ export interface JobFilters {
    *  state it cannot render. */
   clearance: ClearanceFilter;
   salaryMin: number | null;
+  /** Keep only jobs whose stated MAXIMUM salary is at most this (null = no ceiling).
+   *  Serialized as `salary_max`, which bounds a different attribute than `salaryMin`
+   *  does: together they keep the postings whose whole stated range fits inside
+   *  [salaryMin, salaryMax], not those that merely overlap it. A posting that states
+   *  only a floor carries no maximum, so any ceiling drops it. */
+  salaryMax: number | null;
   /** Freshness: keep only jobs posted within the last N days (null = any age).
    *  Serialized as `posted_within_days`; the backend turns it into a posted_ts
    *  range filter relative to request time.
@@ -246,6 +252,7 @@ export function emptyFilters(): JobFilters {
     autoApplyAvailable: false,
     clearance: 'any',
     salaryMin: null,
+    salaryMax: null,
     postedWithinDays: null,
     openWithinDays: null,
     experienceYearsMax: null,
@@ -275,6 +282,7 @@ export function filtersToParams(f: JobFilters): URLSearchParams {
   if (f.clearance === 'hide') p.set('requires_clearance', 'false');
   if (f.clearance === 'only') p.set('requires_clearance', 'true');
   if (f.salaryMin != null) p.set('salary_min', String(f.salaryMin));
+  if (f.salaryMax != null) p.set('salary_max', String(f.salaryMax));
   if (f.postedWithinDays != null) p.set('posted_within_days', String(f.postedWithinDays));
   if (f.openWithinDays != null) p.set('open_within_days', String(f.openWithinDays));
   if (f.experienceYearsMax != null) p.set('experience_years_max', String(f.experienceYearsMax));
@@ -317,6 +325,14 @@ function positiveDays(raw: string | null): number | null {
   return days > 0 && days <= MAX_WITHIN_DAYS ? days : null;
 }
 
+/** A raw salary bound read exactly as the server reads it, or null when the server
+ *  ignores it. No range check, because the backend applies none: `salary_max=0` does
+ *  narrow the list (to nothing), and reading it as unset here would hide the bound
+ *  that emptied it. */
+function salaryBound(raw: string | null): number | null {
+  return raw !== null && ATOI.test(raw) ? Number(raw) : null;
+}
+
 /** Parse filters back from URL query params. Include and exclude are independent
  *  sets; if a value appears in both (a malformed or legacy link), exclude wins and
  *  it is dropped from include so a value carries exactly one sign. */
@@ -341,8 +357,8 @@ export function filtersFromParams(p: URLSearchParams): JobFilters {
   f.autoApplyAvailable = p.get('auto_apply_available') === 'true';
   const clearance = p.get('requires_clearance');
   f.clearance = clearance === 'false' ? 'hide' : clearance === 'true' ? 'only' : 'any';
-  const salary = Number(p.get('salary_min'));
-  f.salaryMin = p.get('salary_min') && !Number.isNaN(salary) ? salary : null;
+  f.salaryMin = salaryBound(p.get('salary_min'));
+  f.salaryMax = salaryBound(p.get('salary_max'));
   // Both date bounds are a positive whole number of days; anything else (absent,
   // zero, negative, non-numeric) reads as "any age", matching the backend's own guard.
   f.postedWithinDays = positiveDays(p.get('posted_within_days'));
@@ -376,7 +392,8 @@ export function activeFilterCount(f: JobFilters): number {
   if (f.hideAIInterview) n += 1;
   if (f.autoApplyAvailable) n += 1;
   if (f.clearance !== 'any') n += 1;
-  if (f.salaryMin != null) n += 1;
+  // One control and one summary chip, so one count whichever ends are set.
+  if (f.salaryMin != null || f.salaryMax != null) n += 1;
   if (f.postedWithinDays != null) n += 1;
   if (f.openWithinDays != null) n += 1;
   if (f.experienceYearsMax != null) n += 1;

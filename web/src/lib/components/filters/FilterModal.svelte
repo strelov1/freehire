@@ -21,9 +21,11 @@
     SALARY_STEP,
     experienceLabel,
     freshnessLabel,
+    salaryLabel,
   } from '$lib/filterControls';
   import FacetSection from '../facets/FacetSection.svelte';
   import ChipFacet from './ChipFacet.svelte';
+  import RangeSlider from './RangeSlider.svelte';
   import CategoryPane from './CategoryPane.svelte';
   import LocationPane from './LocationPane.svelte';
   import FilterModalShell from './FilterModalShell.svelte';
@@ -174,7 +176,8 @@
     if (e.kind === 'experience')
       return selCount(f, 'seniority') + selCount(f, 'role_type') + (f.experienceYearsMax != null ? 1 : 0);
     if (e.kind === 'location') return selCount(f, 'regions') + selCount(f, 'countries') + selCount(f, 'cities');
-    if (e.kind === 'salary') return selCount(f, 'salary_currency') + (f.salaryMin != null ? 1 : 0);
+    if (e.kind === 'salary')
+      return selCount(f, 'salary_currency') + (f.salaryMin != null || f.salaryMax != null ? 1 : 0);
     if (e.kind === 'work') return selCount(f, 'work_mode') + selCount(f, 'employment_type');
     if (e.kind === 'industry')
       return selCount(f, 'domains') + selCount(f, 'company_type') + selCount(f, 'collections', jobCollectionValues);
@@ -399,21 +402,30 @@
   {:else if entry.kind === 'salary'}
     <ChipFacet store={staged} param="salary_currency" label="Currency" counts={c} />
     <div class="mb-2 mt-6 flex items-center justify-between">
-      <h3 class="text-sm font-semibold tracking-tight">Minimum salary</h3>
+      <h3 class="text-sm font-semibold tracking-tight">Salary range</h3>
       <span class="text-xs font-medium text-muted-foreground"
-        >{staged.value.salaryMin ? `${staged.value.salaryMin.toLocaleString('en-US')}+` : 'Any'}</span
+        >{salaryLabel(staged.value.salaryMin, staged.value.salaryMax)}</span
       >
     </div>
-    <input
-      type="range"
-      min="0"
+    <!-- Each end of the track is "no bound", so a thumb parked there writes nothing. -->
+    <RangeSlider
+      min={0}
       max={SALARY_MAX}
       step={SALARY_STEP}
-      value={staged.value.salaryMin ?? 0}
-      oninput={(e) => staged.setSalaryMin(Number(e.currentTarget.value) || null)}
-      aria-label="Minimum salary"
-      class="w-full accent-primary"
+      lo={staged.value.salaryMin ?? 0}
+      hi={staged.value.salaryMax ?? SALARY_MAX}
+      loLabel="Minimum salary"
+      hiLabel="Maximum salary"
+      onLo={(n) => staged.setSalaryMin(n > 0 ? n : null)}
+      onHi={(n) => staged.setSalaryMax(n < SALARY_MAX ? n : null)}
     />
+    <!-- The API bounds each end of a posting's own range (its minimum from below, its
+         maximum from above), so a posting paying 90,000–160,000 is outside a
+         100,000–150,000 search. Said up front, for the same reason as the experience
+         note: a count that drops without explanation reads as a broken filter. -->
+    <p class="mt-2 text-xs text-muted-foreground">
+      Matches postings whose stated salary range falls entirely within these bounds.
+    </p>
   {:else if entry.kind === 'experience'}
     {@const showSeniority = !exclude.includes('seniority')}
     {@const showRoleType = !exclude.includes('role_type')}
