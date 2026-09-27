@@ -256,6 +256,12 @@
     const i = EXPERIENCE_PRESETS.findIndex((p) => p.years === staged.value.experienceYearsMax);
     return i < 0 ? EXPERIENCE_PRESETS.length - 1 : i;
   });
+
+  // "No ceiling" is a stop of its own, one step past the highest real bound — the
+  // shape of the "Any" stop on the experience and freshness sliders. Letting
+  // SALARY_MAX double as it would make SALARY_MAX unreachable as a ceiling, and,
+  // since the thumbs stop a step apart, as a floor too.
+  const SALARY_NO_CEILING = SALARY_MAX + SALARY_STEP;
 </script>
 
 <FilterModalShell
@@ -410,14 +416,14 @@
     <!-- Each end of the track is "no bound", so a thumb parked there writes nothing. -->
     <RangeSlider
       min={0}
-      max={SALARY_MAX}
+      max={SALARY_NO_CEILING}
       step={SALARY_STEP}
       lo={staged.value.salaryMin ?? 0}
-      hi={staged.value.salaryMax ?? SALARY_MAX}
+      hi={staged.value.salaryMax ?? SALARY_NO_CEILING}
       loLabel="Minimum salary"
       hiLabel="Maximum salary"
       onLo={(n) => staged.setSalaryMin(n > 0 ? n : null)}
-      onHi={(n) => staged.setSalaryMax(n < SALARY_MAX ? n : null)}
+      onHi={(n) => staged.setSalaryMax(n < SALARY_NO_CEILING ? n : null)}
     />
     <!-- The API bounds each end of a posting's own range (its minimum from below, its
          maximum from above), so a posting paying 90,000–160,000 is outside a
