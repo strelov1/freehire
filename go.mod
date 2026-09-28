@@ -38,7 +38,7 @@ require (
 	github.com/mozillazg/go-unidecode v0.2.0
 	github.com/pgvector/pgvector-go v0.4.1
 	github.com/prometheus/client_golang v1.24.1
-	github.com/prometheus/client_model v0.6.2
+	github.com/prometheus/client_model v0.6.3
 	github.com/prometheus/common v0.71.0
 	github.com/redis/go-redis/v9 v9.22.0
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.3
