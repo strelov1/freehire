@@ -40,6 +40,6 @@ Full TDD steps (failing test → implementation → passing test, with real code
 
 ## 9. Frontend — Connected devices list
 
-- [ ] 9.1 `OAuthGrant` type (`web/src/lib/types.ts`) and `listOAuthGrants`/`revokeOAuthGrant` (`web/src/lib/api.ts`)
-- [ ] 9.2 `ConnectedDevicesView.svelte` + messages + spec test, following `ApiKeysView.svelte`'s list/`ConfirmDialog`/revoke pattern exactly
-- [ ] 9.3 Mount `ConnectedDevicesView` under `ApiKeysView` on `web/src/routes/my/api-keys/+page.svelte`
+- [x] 9.1 `OAuthGrant` type (`web/src/lib/types.ts`) and `listOAuthGrants`/`revokeOAuthGrant` (`web/src/lib/api.ts`)
+- [x] 9.2 `ConnectedDevicesView.svelte` + messages + spec test, following `ApiKeysView.svelte`'s list/`ConfirmDialog`/revoke pattern exactly
+- [x] 9.3 Mount `ConnectedDevicesView` under `ApiKeysView` on `web/src/routes/my/api-keys/+page.svelte`

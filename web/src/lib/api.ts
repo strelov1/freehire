@@ -69,6 +69,7 @@ import type {
   VoteResult,
   ApiKey,
   CreatedApiKey,
+  OAuthGrant,
   WebhookConfig,
   ConnectedIdentities,
   SavedSearch,
@@ -1688,6 +1689,22 @@ export function createApi(
     await call(`/api/v1/me/api-keys/${id}`, { method: 'DELETE' });
   }
 
+  // --- MCP OAuth grants ("Connected devices") --------------------------------
+  //
+  // Clients (Claude, Cursor, ChatGPT) the user approved via the OAuth consent
+  // screen, rather than a pasted API key. Management is cookie-only, same
+  // reasoning as API keys.
+
+  /** The current user's connected MCP clients (metadata only — no token). */
+  async function listOAuthGrants(): Promise<OAuthGrant[]> {
+    return requestData<OAuthGrant[]>('/api/v1/me/oauth-grants');
+  }
+
+  /** Revoke a connected client by grant id; it stops authenticating immediately. */
+  async function revokeOAuthGrant(id: number): Promise<void> {
+    await call(`/api/v1/me/oauth-grants/${id}`, { method: 'DELETE' });
+  }
+
   // --- Webhook (saved-search alerts) -----------------------------------------
   //
   // The account's single webhook destination for saved-search matches (the
@@ -3119,6 +3136,8 @@ export function createApi(
     listApiKeys,
     createApiKey,
     revokeApiKey,
+    listOAuthGrants,
+    revokeOAuthGrant,
     getWebhook,
     createOrUpdateWebhook,
     setWebhookEnabled,

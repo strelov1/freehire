@@ -1313,6 +1313,16 @@ export interface ApiKey {
   expires_at: string | null;
 }
 
+/** One MCP client (Claude, Cursor, ChatGPT, …) a user approved via OAuth — a
+ *  "connected device". Timestamps are RFC3339 strings or null. */
+export interface OAuthGrant {
+  id: number;
+  client_name: string;
+  created_at: string | null;
+  expires_at: string | null;
+  last_used_at: string | null;
+}
+
 /** The response of creating a key: the metadata plus the plaintext `token`,
  *  returned exactly once and never retrievable again. */
 export interface CreatedApiKey extends ApiKey {
