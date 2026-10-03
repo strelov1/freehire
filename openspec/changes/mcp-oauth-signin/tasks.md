@@ -6,9 +6,9 @@ Full TDD steps (failing test → implementation → passing test, with real code
 
 ## 2. OAuth2 server primitives (`internal/identity/auth/oauth2server`)
 
-- [ ] 2.1 `VerifyPKCE(challenge, verifier string) bool` — S256 only
-- [ ] 2.2 `GenerateAccessToken`/`GenerateAuthorizationCode`/`HashToken` — opaque, prefixed (`fhm_`/`fhc_`), SHA-256 at rest
-- [ ] 2.3 `RedirectURIAllowed(registered []string, candidate string) bool` — exact match, with the loopback-port exception (RFC 8252 §7.3)
+- [x] 2.1 `VerifyPKCE(challenge, verifier string) bool` — S256 only
+- [x] 2.2 `GenerateAccessToken`/`GenerateAuthorizationCode`/`HashToken` — opaque, prefixed (`fhm_`/`fhc_`), SHA-256 at rest
+- [x] 2.3 `RedirectURIAllowed(registered []string, candidate string) bool` — exact match, with the loopback-port exception (RFC 8252 §7.3)
 
 ## 3. Dynamic client registration
 
