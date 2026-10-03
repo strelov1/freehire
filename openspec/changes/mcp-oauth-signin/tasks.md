@@ -30,8 +30,8 @@ Full TDD steps (failing test → implementation → passing test, with real code
 
 ## 7. Connected devices
 
-- [ ] 7.1 `GET /api/v1/me/oauth-grants`: cookie-only, lists the caller's own grants (client name, created/expires/last-used — never the token)
-- [ ] 7.2 `DELETE /api/v1/me/oauth-grants/:id`: cookie-only, recent-auth-gated, owner-scoped delete, 404 for another user's id
+- [x] 7.1 `GET /api/v1/me/oauth-grants`: cookie-only, lists the caller's own grants (client name, created/expires/last-used — never the token)
+- [x] 7.2 `DELETE /api/v1/me/oauth-grants/:id`: cookie-only, recent-auth-gated, owner-scoped delete, 404 for another user's id
 
 ## 8. Signed-in MCP account server
 

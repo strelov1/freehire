@@ -134,6 +134,10 @@ func (h *authHandlers) register(api fiber.Router, mw middleware) {
 	meGroup.Post("/api-keys", mw.cookie, recent, h.CreateAPIKey)
 	meGroup.Get("/api-keys", mw.cookie, h.ListAPIKeys)
 	meGroup.Delete("/api-keys/:id", mw.cookie, recent, h.RevokeAPIKey)
+	// MCP OAuth "Connected devices": list is a plain read (same gating as
+	// ListAPIKeys); revoke is recent-auth-gated, same reasoning as RevokeAPIKey.
+	meGroup.Get("/oauth-grants", mw.cookie, h.ListOAuthGrants)
+	meGroup.Delete("/oauth-grants/:id", mw.cookie, recent, h.RevokeOAuthGrant)
 
 	// Push-token registration is cookie-only for the same reason key management
 	// is: a leaked API key must not be able to redirect another device's push
