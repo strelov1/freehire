@@ -65,6 +65,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"math"
 	"slices"
 	"sync"
 	"sync/atomic"
@@ -163,6 +164,10 @@ func run() int {
 	}
 	var closedSince time.Time
 	if closedWithinDays > 0 {
+		if closedWithinDays > math.MaxInt32 {
+			log.Printf("backfill-derive: BACKFILL_DERIVE_CLOSED_WITHIN_DAYS too large: %d", closedWithinDays)
+			return 1
+		}
 		closedSince = time.Now().UTC().AddDate(0, 0, -int(closedWithinDays))
 	}
 
