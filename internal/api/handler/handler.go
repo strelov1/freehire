@@ -917,6 +917,10 @@ func Register(app *fiber.App, cfg Config) {
 	// not a slug.
 	ojcpH.register(api, mw)
 	mcpappH.register(api, mw)
+	// The signed-in MCP server (freehire#3114): bearer-gated by an MCP OAuth
+	// grant, reusing assistantH's own tool set so this surface and the in-app
+	// assistant can never disagree about what a tool does.
+	mountMCPAccount(api, mw, assistantH)
 	jobsH.register(api, mw)
 	companiesH.register(api, mw)
 	geoH.register(api, mw)

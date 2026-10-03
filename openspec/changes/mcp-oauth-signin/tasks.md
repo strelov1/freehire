@@ -35,8 +35,8 @@ Full TDD steps (failing test → implementation → passing test, with real code
 
 ## 8. Signed-in MCP account server
 
-- [ ] 8.1 `internal/api/mcpapp/account.go`: `NewAccountServer`/`AccountHandler` adapting `assistant.Tool` → `mcp.Tool`/`mcp.ToolHandler`, scoping every call to the resolved `userID`
-- [ ] 8.2 Wire `/api/v1/mcp/account` (bearer-gated via `AuthenticateOAuthGrant`), reusing `assistantDiscoveryTools()` + `assistantTrackingTools()` verbatim — no new tool logic
+- [x] 8.1 `internal/api/mcpapp/account.go`: `NewAccountServer`/`AccountHandler` adapting `assistant.Tool` → `mcp.Tool`/`mcp.ToolHandler`, scoping every call to the resolved `userID`
+- [x] 8.2 Wire `/api/v1/mcp/account` (bearer-gated via `AuthenticateOAuthGrant`), reusing `assistantDiscoveryTools()` + `assistantTrackingTools()` verbatim — no new tool logic
 
 ## 9. Frontend — Connected devices list
 
