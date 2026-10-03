@@ -49,20 +49,18 @@ func accountToolHandler(t assistant.Tool, userID int64) mcp.ToolHandler {
 	return func(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		out, err := t.Run(ctx, userID, req.Params.Arguments)
 		if err != nil {
-			return &mcp.CallToolResult{
-				IsError: true,
-				Content: []mcp.Content{&mcp.TextContent{Text: err.Error()}},
-			}, nil
+			return errorResult(err.Error()), nil
 		}
 		payload, err := json.Marshal(out)
 		if err != nil {
-			return &mcp.CallToolResult{
-				IsError: true,
-				Content: []mcp.Content{&mcp.TextContent{Text: "could not encode the result"}},
-			}, nil
+			return errorResult("could not encode the result"), nil
 		}
 		return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: string(payload)}}}, nil
 	}
+}
+
+func errorResult(text string) *mcp.CallToolResult {
+	return &mcp.CallToolResult{IsError: true, Content: []mcp.Content{&mcp.TextContent{Text: text}}}
 }
 
 // ErrUnauthorized is what AccountHandler's factory reports for a missing,

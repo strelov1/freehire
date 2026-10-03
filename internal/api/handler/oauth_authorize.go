@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"fmt"
 	"html"
 	"net/url"
@@ -44,6 +45,21 @@ func parseAuthorizeParams(responseType, clientID, redirectURI, state, challenge,
 	return authorizeParams{ClientID: clientID, RedirectURI: redirectURI, State: state, CodeChallenge: challenge, CodeChallengeMethod: method}, nil
 }
 
+// resolveAuthorizeClient looks up the named client and checks redirect_uri
+// against its registered list — the one pair of checks both the GET consent
+// screen and the POST decision must make before trusting anything else in the
+// request, so neither duplicates it.
+func (h *authHandlers) resolveAuthorizeClient(ctx context.Context, params authorizeParams) (db.OauthClient, error) {
+	client, err := h.queries.GetOAuthClient(ctx, params.ClientID)
+	if err != nil {
+		return db.OauthClient{}, fiber.NewError(fiber.StatusBadRequest, "unknown client_id")
+	}
+	if !oauth2server.RedirectURIAllowed(client.RedirectUris, params.RedirectURI) {
+		return db.OauthClient{}, fiber.NewError(fiber.StatusBadRequest, "redirect_uri is not registered for this client")
+	}
+	return client, nil
+}
+
 // OAuthAuthorize shows the consent screen, or sends a sessionless visitor to sign
 // in first — the same two-outcome shape as ExtensionConnect. GET only ever reads;
 // it issues nothing.
@@ -55,12 +71,9 @@ func (h *authHandlers) OAuthAuthorize(c *fiber.Ctx) error {
 	if err != nil {
 		return fiber.NewError(fiber.StatusBadRequest, err.Error())
 	}
-	client, err := h.queries.GetOAuthClient(c.Context(), params.ClientID)
+	client, err := h.resolveAuthorizeClient(c.Context(), params)
 	if err != nil {
-		return fiber.NewError(fiber.StatusBadRequest, "unknown client_id")
-	}
-	if !oauth2server.RedirectURIAllowed(client.RedirectUris, params.RedirectURI) {
-		return fiber.NewError(fiber.StatusBadRequest, "redirect_uri is not registered for this client")
+		return err
 	}
 
 	if _, err := requireUserID(c); err != nil {
@@ -84,14 +97,10 @@ func (h *authHandlers) OAuthAuthorizeSubmit(c *fiber.Ctx) error {
 	if err != nil {
 		return fiber.NewError(fiber.StatusBadRequest, err.Error())
 	}
-	client, err := h.queries.GetOAuthClient(c.Context(), params.ClientID)
-	if err != nil {
-		return fiber.NewError(fiber.StatusBadRequest, "unknown client_id")
-	}
-	// Re-validate: never trust that the GET step ran, same reasoning as
-	// ExtensionConnectSubmit re-checking its own redirect allowlist.
-	if !oauth2server.RedirectURIAllowed(client.RedirectUris, params.RedirectURI) {
-		return fiber.NewError(fiber.StatusBadRequest, "redirect_uri is not registered for this client")
+	// Re-validated here too: never trust that the GET step ran, same reasoning
+	// as ExtensionConnectSubmit re-checking its own redirect allowlist.
+	if _, err := h.resolveAuthorizeClient(c.Context(), params); err != nil {
+		return err
 	}
 
 	userID, err := requireUserID(c)
