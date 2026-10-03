@@ -212,17 +212,6 @@ func (h *authHandlers) register(api fiber.Router, mw middleware) {
 	// session. Public; the code is the credential.
 	authGroup.Post("/oauth/exchange", h.OAuthExchange)
 
-	// MCP OAuth 2.1 (freehire#3114): dynamic client registration (RFC 7591).
-	// Public — a client self-registers before it has any user context. See
-	// oauth_register.go.
-	authGroup.Post("/oauth/register", h.RegisterOAuthClient)
-	// Metadata discovery (RFC 8414 / RFC 9728). Public. Mounted here, under
-	// /api/v1, and proxied from /.well-known/* by the SvelteKit app — see
-	// oauth_metadata.go for why a direct Go route at the well-known path
-	// would never be reached.
-	authGroup.Get("/oauth/metadata/authorization-server", h.OAuthAuthorizationServerMetadata)
-	authGroup.Get("/oauth/metadata/protected-resource", h.OAuthProtectedResourceMetadata)
-
 	// Browser-extension sign-in ("Sign in with freehire"): the extension opens
 	// this in the freehire origin via launchWebAuthFlow. Cookie-only — a leaked key
 	// must not mint further keys — but on optionalCookie, like the OAuth callbacks,
@@ -235,15 +224,29 @@ func (h *authHandlers) register(api fiber.Router, mw middleware) {
 	authGroup.Get("/extension/connect", mw.optionalCookie, h.ExtensionConnect)
 	authGroup.Post("/extension/connect", mw.optionalCookie, h.ExtensionConnectSubmit)
 
-	// MCP OAuth 2.1 (freehire#3114) authorize step: GET shows consent
-	// (sessionless visitors are sent to sign in first), POST acts on the
-	// decision. optionalCookie on GET for the same reason the extension flow
-	// uses it on its own GET — see oauth_authorize.go.
-	authGroup.Get("/oauth/authorize", mw.optionalCookie, h.OAuthAuthorize)
-	authGroup.Post("/oauth/authorize", mw.optionalCookie, h.OAuthAuthorizeSubmit)
-	// Token exchange (PKCE code for a bearer access token). Public — the code
+	// MCP OAuth 2.1 (freehire#3114). Mounted on api directly (NOT authGroup —
+	// /api/v1/oauth/*, not /api/v1/auth/oauth/*): every external-facing string
+	// that names these paths (the metadata document, the sign-in returnTo, the
+	// consent form's own action) is written against that shorter path, and the
+	// pre-existing /auth/oauth/* routes above are a different, unrelated
+	// surface (social sign-in) that happens to share the "oauth" word.
+	//
+	// Dynamic client registration (RFC 7591): public, no session involved yet.
+	api.Post("/oauth/register", noCache, h.RegisterOAuthClient)
+	// Metadata discovery (RFC 8414 / RFC 9728): public and cacheable (no
+	// noCache), proxied from /.well-known/* by the SvelteKit app — see
+	// oauth_metadata.go for why a direct Go route at the well-known path
+	// itself would never be reached.
+	api.Get("/oauth/metadata/authorization-server", h.OAuthAuthorizationServerMetadata)
+	api.Get("/oauth/metadata/protected-resource", h.OAuthProtectedResourceMetadata)
+	// Authorize step: GET shows consent (sessionless visitors are sent to sign
+	// in first), POST acts on the decision. optionalCookie on GET for the same
+	// reason the extension flow uses it on its own GET — see oauth_authorize.go.
+	api.Get("/oauth/authorize", noCache, mw.optionalCookie, h.OAuthAuthorize)
+	api.Post("/oauth/authorize", noCache, mw.optionalCookie, h.OAuthAuthorizeSubmit)
+	// Token exchange (PKCE code for a bearer access token): public — the code
 	// and verifier are the credential here, not a session.
-	authGroup.Post("/oauth/token", h.OAuthToken)
+	api.Post("/oauth/token", noCache, h.OAuthToken)
 }
 
 func (h *authHandlers) requireRecentAuth(c *fiber.Ctx) error {
