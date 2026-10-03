@@ -34,7 +34,7 @@
     "@storybook/addon-themes": "10.5.10",
     "@storybook/svelte": "10.5.10",
     "@storybook/svelte-vite": "10.5.10",
-    "@sveltejs/vite-plugin-svelte": "^7.3.0",
+    "@sveltejs/vite-plugin-svelte": "^7.3.1",
     "@tailwindcss/vite": "^4.3.3",
     "@testing-library/svelte": "^5.4.2",
     "eslint": "^10.11.0",
