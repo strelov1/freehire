@@ -2791,6 +2791,47 @@ func (q *Queries) ListJobIDsUpdatedAfter(ctx context.Context, arg ListJobIDsUpda
 	return items, nil
 }
 
+const listJobIDsWithUSSubdivisionCollision = `-- name: ListJobIDsWithUSSubdivisionCollision :many
+SELECT id
+FROM jobs
+WHERE countries && ARRAY['in', 'de', 'id']::text[]
+  AND location ~* ',\s*(in|de|id)\s*(,|$|[0-9])'
+ORDER BY id
+`
+
+// Candidates for cmd/backfill-us-subdivision-collision (freehire#3113): a location whose
+// trailing comma-field is a bare two-letter code that collides between a US/Canada
+// subdivision and a curated country (in/de/id — the exact three freehire#3113 added to
+// subdivisionToCountry; a later addition needs the same codes added here too), where the
+// CURRENTLY STORED countries facet still carries that country reading.
+//
+// Deliberately broad rather than exact: the regex also matches genuine India/Germany/
+// Indonesia postings written the same "City, CC" way, and the countries filter alone
+// would also match every *correctly* tagged India/Germany/Indonesia job. Over-fetching
+// is free here — cmd/backfill-remote-perk-false-positive's same reasoning applies — the
+// recompute in the caller decides, and a row whose derived value is unchanged costs one
+// skipped write. One sequential scan of (location, countries) only, no description
+// detoast, so this is cheap even without a supporting index.
+func (q *Queries) ListJobIDsWithUSSubdivisionCollision(ctx context.Context) ([]int64, error) {
+	rows, err := q.db.Query(ctx, listJobIDsWithUSSubdivisionCollision)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []int64{}
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listJobSkillsForGapReport = `-- name: ListJobSkillsForGapReport :many
 SELECT j.id, s.skill::text AS skill
 FROM jobs j

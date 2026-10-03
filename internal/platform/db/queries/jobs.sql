@@ -2847,3 +2847,23 @@ SELECT count(*) FROM closed;
 -- (source, external_id)'s table, not a count of matching rows, so it is cheap even when the
 -- source holds millions.
 SELECT COALESCE(MAX(id), 0)::bigint FROM jobs WHERE source = sqlc.arg(source);
+
+-- name: ListJobIDsWithUSSubdivisionCollision :many
+-- Candidates for cmd/backfill-us-subdivision-collision (freehire#3113): a location whose
+-- trailing comma-field is a bare two-letter code that collides between a US/Canada
+-- subdivision and a curated country (in/de/id — the exact three freehire#3113 added to
+-- subdivisionToCountry; a later addition needs the same codes added here too), where the
+-- CURRENTLY STORED countries facet still carries that country reading.
+--
+-- Deliberately broad rather than exact: the regex also matches genuine India/Germany/
+-- Indonesia postings written the same "City, CC" way, and the countries filter alone
+-- would also match every *correctly* tagged India/Germany/Indonesia job. Over-fetching
+-- is free here — cmd/backfill-remote-perk-false-positive's same reasoning applies — the
+-- recompute in the caller decides, and a row whose derived value is unchanged costs one
+-- skipped write. One sequential scan of (location, countries) only, no description
+-- detoast, so this is cheap even without a supporting index.
+SELECT id
+FROM jobs
+WHERE countries && ARRAY['in', 'de', 'id']::text[]
+  AND location ~* ',\s*(in|de|id)\s*(,|$|[0-9])'
+ORDER BY id;

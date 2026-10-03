@@ -458,3 +458,53 @@ func TestListJobsExcludesPrivateJobs(t *testing.T) {
 		t.Errorf("EstimateOpenJobs = %d, want < 2 (the private job excluded from the estimate)", est)
 	}
 }
+
+func TestListJobIDsWithUSSubdivisionCollision(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	ctx := context.Background()
+	truncate(t, pool)
+
+	// A real US-state collision (freehire#3113): location trails ", IN" and the
+	// currently stored countries facet (pre-fix) wrongly carries "in".
+	collision := ingestParams("acme:collision", "Collision Job")
+	collision.Location = "Carmel, IN"
+	collision.Countries = []string{"in"}
+	collidingJob, err := ingestUpsert(ctx, q, collision)
+	if err != nil {
+		t.Fatalf("upsert colliding job: %v", err)
+	}
+
+	// A genuine India posting written the same "City, CC" way: the broad regex also
+	// matches it, by design — the candidate list is over-inclusive, and the recompute
+	// in the caller is what decides.
+	genuine := ingestParams("acme:genuine", "Genuine India Job")
+	genuine.Location = "Bangalore, IN"
+	genuine.Countries = []string{"in"}
+	genuineJob, err := ingestUpsert(ctx, q, genuine)
+	if err != nil {
+		t.Fatalf("upsert genuine india job: %v", err)
+	}
+
+	// An unrelated US posting: no colliding code in the location, must not appear.
+	unrelated := ingestParams("acme:unrelated", "Unrelated Job")
+	unrelated.Location = "Austin, TX"
+	unrelated.Countries = []string{"us"}
+	if _, err := ingestUpsert(ctx, q, unrelated); err != nil {
+		t.Fatalf("upsert unrelated job: %v", err)
+	}
+
+	ids, err := q.ListJobIDsWithUSSubdivisionCollision(ctx)
+	if err != nil {
+		t.Fatalf("ListJobIDsWithUSSubdivisionCollision: %v", err)
+	}
+
+	want := map[int64]bool{collidingJob.ID: true, genuineJob.ID: true}
+	got := map[int64]bool{}
+	for _, id := range ids {
+		got[id] = true
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("candidate ids = %v, want exactly %v (the unrelated US job must be excluded)", got, want)
+	}
+}

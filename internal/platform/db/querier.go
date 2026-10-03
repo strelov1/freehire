@@ -3930,6 +3930,20 @@ type Querier interface {
 	// Id-only projection of ListJobsUpdatedAfter — the corruption-degrade path for the
 	// incremental (`reindex --since`) scan, mirroring ListJobIDsAfter.
 	ListJobIDsUpdatedAfter(ctx context.Context, arg ListJobIDsUpdatedAfterParams) ([]int64, error)
+	// Candidates for cmd/backfill-us-subdivision-collision (freehire#3113): a location whose
+	// trailing comma-field is a bare two-letter code that collides between a US/Canada
+	// subdivision and a curated country (in/de/id — the exact three freehire#3113 added to
+	// subdivisionToCountry; a later addition needs the same codes added here too), where the
+	// CURRENTLY STORED countries facet still carries that country reading.
+	//
+	// Deliberately broad rather than exact: the regex also matches genuine India/Germany/
+	// Indonesia postings written the same "City, CC" way, and the countries filter alone
+	// would also match every *correctly* tagged India/Germany/Indonesia job. Over-fetching
+	// is free here — cmd/backfill-remote-perk-false-positive's same reasoning applies — the
+	// recompute in the caller decides, and a row whose derived value is unchanged costs one
+	// skipped write. One sequential scan of (location, countries) only, no description
+	// detoast, so this is cheap even without a supporting index.
+	ListJobIDsWithUSSubdivisionCollision(ctx context.Context) ([]int64, error)
 	// Resolve job ids to display labels for the credit-history page (match debits). Missing ids
 	// simply do not come back; the handler falls back to a generic label for a deleted job.
 	ListJobLabelsByIDs(ctx context.Context, ids []int64) ([]ListJobLabelsByIDsRow, error)
