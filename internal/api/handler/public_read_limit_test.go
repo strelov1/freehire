@@ -242,6 +242,12 @@ func publicReadRoutes(t *testing.T, throttler ratelimit.Throttler) (map[string]*
 		// machine ask this catalogue", with nothing deciding which is right — and both
 		// surfaces cost what /agent/jobs/search costs, because all three run that query.
 		"mcpappHandlers": mount((&mcpappHandlers{}).register),
+		// The signed-in MCP account server (freehire#3114), on the same agent-search
+		// budget as the two anonymous MCP/OJCP surfaces above: every tool call still
+		// costs what a catalogue read costs, whichever credential reached it.
+		"mountMCPAccount": mount(func(r fiber.Router, m middleware) {
+			mountMCPAccount(r, m, &assistantHandlers{})
+		}),
 	}, iss
 }
 

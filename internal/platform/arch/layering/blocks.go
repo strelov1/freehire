@@ -107,7 +107,7 @@ var blocks = map[string][]string{
 	},
 	"identity": {
 		"accountdelete", "accounts", "auth", "auth/apple", "auth/applejobs",
-		"auth/mobileauth", "auth/oauth", "auth/recentauth",
+		"auth/mobileauth", "auth/oauth", "auth/oauth2server", "auth/recentauth",
 		// billing is here and not in ai, where plan lives, because a subscription is an
 		// attribute of the ACCOUNT. The constraint that pushed plan out of this block —
 		// ai and identity share a layer, so ai/assistant could not import it — does not

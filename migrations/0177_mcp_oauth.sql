@@ -21,6 +21,8 @@ CREATE TABLE oauth_authorization_codes (
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+CREATE INDEX oauth_authorization_codes_user_id_idx ON oauth_authorization_codes (user_id);
+
 -- Long-lived grants: one row per approved "connected device". issued_token_version
 -- is the user's users.token_version at the moment of consent — AuthenticateOAuthGrant
 -- requires it still to match, so LogoutAll and password reset/change (which already
