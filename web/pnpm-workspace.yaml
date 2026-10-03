@@ -30,7 +30,9 @@ overrides:
   # GHSA-jjrf-c9pj-88w6: DOMPurify's IN_PLACE hook path leaves a detached DOM
   # subtree with executable content, allowing XSS despite sanitization.
   # isomorphic-dompurify is used directly for XSS sanitization in this app.
-  dompurify@<3.4.13: 3.4.13
+  # 3.4.13 was the prior pin; the advisory got a second patch release and the
+  # real fix only landed in 3.4.16 (GHSA re-opened as Dependabot alert #40).
+  dompurify@<3.4.16: 3.4.16
   # Nine advisories fixed in 8.10.2, two of them critical: BalancedPool drops
   # function-valued connection options, so a custom checkServerIdentity is
   # silently stripped and a malicious certificate passes validation
