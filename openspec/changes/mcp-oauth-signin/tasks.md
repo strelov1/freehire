@@ -16,8 +16,8 @@ Full TDD steps (failing test → implementation → passing test, with real code
 
 ## 4. Metadata discovery
 
-- [ ] 4.1 `GET /.well-known/oauth-authorization-server` (RFC 8414)
-- [ ] 4.2 `GET /.well-known/oauth-protected-resource` (RFC 9728)
+- [x] 4.1 Go: render both documents at internal `/api/v1/oauth/metadata/authorization-server` (RFC 8414) and `/api/v1/oauth/metadata/protected-resource` (RFC 9728) paths
+- [x] 4.2 SvelteKit: `/.well-known/oauth-authorization-server` and `/.well-known/oauth-protected-resource` proxy routes, following `web/src/routes/.well-known/ojcp.json/+server.ts`'s exact pattern — nginx sends `/.well-known/*` to the Node process, not the Go backend
 
 ## 5. Consent authorize flow
 
