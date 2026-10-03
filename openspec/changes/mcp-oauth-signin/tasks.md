@@ -2,7 +2,7 @@ Full TDD steps (failing test → implementation → passing test, with real code
 
 ## 1. Database schema
 
-- [ ] 1.1 Add migration `0177_mcp_oauth.sql` (`oauth_clients`, `oauth_authorization_codes`, `oauth_grants`) and the sqlc queries (`oauth_clients.sql`, `oauth_grants.sql`); generate and verify with an integration test that a grant stops authenticating once `BumpUserTokenVersion` runs
+- [x] 1.1 Add migration `0177_mcp_oauth.sql` (`oauth_clients`, `oauth_authorization_codes`, `oauth_grants`) and the sqlc queries (`oauth_clients.sql`, `oauth_grants.sql`); generate and verify with an integration test that a grant stops authenticating once `BumpUserTokenVersion` runs
 
 ## 2. OAuth2 server primitives (`internal/identity/auth/oauth2server`)
 

@@ -182,6 +182,13 @@ type Querier interface {
 	// means the key is unknown, revoked, or expired; the caller treats pgx.ErrNoRows as 401
 	// and an insufficient scope as 403.
 	AuthenticateAPIKey(ctx context.Context, tokenHash string) (AuthenticateAPIKeyRow, error)
+	// Resolve a presented bearer token to its owning user, touching last_used_at in
+	// the same statement. A grant is live only while BOTH hold: it has not outlived
+	// its own expires_at, AND its issued_token_version still matches the user's
+	// current one (a mismatch means LogoutAll or a password change ran since). No row
+	// covers unknown, expired, and revoked-by-version-bump alike; the caller reads
+	// that as 401, same as AuthenticateAPIKey's contract.
+	AuthenticateOAuthGrant(ctx context.Context, accessTokenHash string) (int64, error)
 	// Same idea as SearchOutboxMetrics, but this queue has THREE terminal-ish states rather
 	// than two, so it cannot be a copy of it.
 	//
@@ -1076,6 +1083,12 @@ type Querier interface {
 	// Promote a suggested link to a confirmed one: the suggestion becomes job_id with
 	// link_source 'manual'. No-op (0 rows) when there is no pending suggestion.
 	ConfirmEmailLink(ctx context.Context, arg ConfirmEmailLinkParams) (int64, error)
+	// Redeem a code for its grant-building fields, deleting it in the same statement
+	// so a second exchange with the same code finds no row — a replayed code is
+	// reported exactly like an unknown one. expires_at is enforced here rather than
+	// left to the caller, for the same reason AuthenticateAPIKey enforces its own
+	// expiry: no call site can forget the check.
+	ConsumeOAuthAuthorizationCode(ctx context.Context, codeHash string) (ConsumeOAuthAuthorizationCodeRow, error)
 	// Whether this (feature, ref) was already charged. True means the caller is retrying,
 	// reconnecting, or recomputing work already paid for, and must not be charged again.
 	ConsumptionExists(ctx context.Context, arg ConsumptionExistsParams) (bool, error)
@@ -1301,6 +1314,14 @@ type Querier interface {
 	// UNIQUE (user_id) rejects a second profile; the FK on company_slug rejects a company
 	// the catalogue does not carry. The repository maps both violations to domain errors.
 	CreateMentorProfile(ctx context.Context, arg CreateMentorProfileParams) (Mentor, error)
+	// Record a freshly minted authorization code after the user approves consent.
+	// code_challenge is stored verbatim (S256 of the client's verifier); the token
+	// exchange recomputes and compares it, never trusting the client's say-so twice.
+	CreateOAuthAuthorizationCode(ctx context.Context, arg CreateOAuthAuthorizationCodeParams) error
+	// Issue the long-lived access token for an approved client. issued_token_version
+	// is the caller's users.token_version at this moment — see the table comment in
+	// the migration for how that makes revocation free.
+	CreateOAuthGrant(ctx context.Context, arg CreateOAuthGrantParams) (CreateOAuthGrantRow, error)
 	// Record a member's offer to refer into a company. The UNIQUE (user_id, company_slug)
 	// constraint rejects a second offer for the same company; the repository maps that unique
 	// violation to a domain "already offered" error. Starts pending, awaiting moderation.
@@ -1639,6 +1660,10 @@ type Querier interface {
 	// history holds a row for a digest if and only if the digest went out. Only the
 	// record-before-send path (subscription digests) can need this.
 	DeleteNotification(ctx context.Context, id int64) error
+	// Revoke one grant, scoped to its owner so a user can only revoke their own.
+	// Returns the affected row count: 0 means the id does not exist or is not the
+	// caller's (the handler maps that to 404) — same contract as DeleteAPIKey.
+	DeleteOAuthGrant(ctx context.Context, arg DeleteOAuthGrantParams) (int64, error)
 	// Drop companies no longer referenced by any job — the stale rows left behind
 	// when a slug-builder change re-keys jobs onto new slugs. Reference rows imported
 	// by the company-info backfill are preserved: they intentionally have no job, so
@@ -2550,6 +2575,9 @@ type Querier interface {
 	// cases, which would otherwise be judged as the active `applied` stage by
 	// silence.ThresholdDays.
 	GetNudgeForDelivery(ctx context.Context, id int64) (GetNudgeForDeliveryRow, error)
+	// Resolve a client_id presented at /authorize or /token. No row means the
+	// authorize request names a client that was never registered.
+	GetOAuthClient(ctx context.Context, clientID string) (OauthClient, error)
 	// The whole of a user's plan: how far each tier reaches. A future ultra_until means ultra,
 	// otherwise a future pro_until means pro, otherwise free.
 	//
@@ -4149,6 +4177,9 @@ type Querier interface {
 	// "you signed up a few days ago and still have no alert" an hour apart. From two
 	// mails in an hour, a stranger is indistinguishable from a spammer.
 	ListNoAlertCandidates(ctx context.Context, arg ListNoAlertCandidatesParams) ([]ListNoAlertCandidatesRow, error)
+	// A user's connected devices, newest first. Metadata only — never the token
+	// hash. Joined to oauth_clients for the display name shown on the page.
+	ListOAuthGrantsByUser(ctx context.Context, userID int64) ([]ListOAuthGrantsByUserRow, error)
 	// ListOpenJobCompanySpellings returns every distinct way an open posting spells its
 	// company's name. 412,648 rows as of 2026-09-16, measured before the NOT is_private
 	// clause below was added — that population is user-pasted JDs and does not move the
@@ -5770,6 +5801,11 @@ type Querier interface {
 	// which is precisely the case a staleness check over updated_at would misread as never-read.
 	// Like last_seen_at it is in no index, so the update stays heap-only.
 	RefreshUnchangedJob(ctx context.Context, arg RefreshUnchangedJobParams) (RefreshUnchangedJobRow, error)
+	// Dynamic client registration (RFC 7591). client_id is server-generated, random,
+	// and not a secret — it identifies the client, it does not authenticate it (PKCE
+	// does that). Open to any caller: the security boundary is the user's own consent
+	// click on the authorize screen, not who may register a client_id.
+	RegisterOAuthClient(ctx context.Context, arg RegisterOAuthClientParams) (OauthClient, error)
 	// Dismiss a suggestion without linking.
 	RejectEmailLink(ctx context.Context, arg RejectEmailLinkParams) (int64, error)
 	// Move one chunk of a retired slug's jobs onto the canonical slug.
