@@ -12,7 +12,7 @@ Full TDD steps (failing test → implementation → passing test, with real code
 
 ## 3. Dynamic client registration
 
-- [ ] 3.1 `POST /api/v1/oauth/register` (RFC 7591): public, validates `client_name`/`redirect_uris`, returns a server-generated `client_id`
+- [x] 3.1 `POST /api/v1/oauth/register` (RFC 7591): public, validates `client_name`/`redirect_uris`, returns a server-generated `client_id`
 
 ## 4. Metadata discovery
 

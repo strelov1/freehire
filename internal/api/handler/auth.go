@@ -208,6 +208,11 @@ func (h *authHandlers) register(api fiber.Router, mw middleware) {
 	// session. Public; the code is the credential.
 	authGroup.Post("/oauth/exchange", h.OAuthExchange)
 
+	// MCP OAuth 2.1 (freehire#3114): dynamic client registration (RFC 7591).
+	// Public — a client self-registers before it has any user context. See
+	// oauth_register.go.
+	authGroup.Post("/oauth/register", h.RegisterOAuthClient)
+
 	// Browser-extension sign-in ("Sign in with freehire"): the extension opens
 	// this in the freehire origin via launchWebAuthFlow. Cookie-only — a leaked key
 	// must not mint further keys — but on optionalCookie, like the OAuth callbacks,
