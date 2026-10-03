@@ -26,7 +26,7 @@ Full TDD steps (failing test → implementation → passing test, with real code
 
 ## 6. Token exchange
 
-- [ ] 6.1 `POST /api/v1/oauth/token`: consumes the code exactly once, checks client_id/redirect_uri match, verifies PKCE, stamps the new grant with the user's current `token_version`, returns a 30-day bearer token (no refresh token)
+- [x] 6.1 `POST /api/v1/oauth/token`: consumes the code exactly once, checks client_id/redirect_uri match, verifies PKCE, stamps the new grant with the user's current `token_version`, returns a 30-day bearer token (no refresh token)
 
 ## 7. Connected devices
 

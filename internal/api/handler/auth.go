@@ -237,6 +237,9 @@ func (h *authHandlers) register(api fiber.Router, mw middleware) {
 	// uses it on its own GET — see oauth_authorize.go.
 	authGroup.Get("/oauth/authorize", mw.optionalCookie, h.OAuthAuthorize)
 	authGroup.Post("/oauth/authorize", mw.optionalCookie, h.OAuthAuthorizeSubmit)
+	// Token exchange (PKCE code for a bearer access token). Public — the code
+	// and verifier are the credential here, not a session.
+	authGroup.Post("/oauth/token", h.OAuthToken)
 }
 
 func (h *authHandlers) requireRecentAuth(c *fiber.Ctx) error {
