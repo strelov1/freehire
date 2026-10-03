@@ -230,6 +230,13 @@ func (h *authHandlers) register(api fiber.Router, mw middleware) {
 	// fragment. Both refuse any redirect outside the configured allowlist.
 	authGroup.Get("/extension/connect", mw.optionalCookie, h.ExtensionConnect)
 	authGroup.Post("/extension/connect", mw.optionalCookie, h.ExtensionConnectSubmit)
+
+	// MCP OAuth 2.1 (freehire#3114) authorize step: GET shows consent
+	// (sessionless visitors are sent to sign in first), POST acts on the
+	// decision. optionalCookie on GET for the same reason the extension flow
+	// uses it on its own GET — see oauth_authorize.go.
+	authGroup.Get("/oauth/authorize", mw.optionalCookie, h.OAuthAuthorize)
+	authGroup.Post("/oauth/authorize", mw.optionalCookie, h.OAuthAuthorizeSubmit)
 }
 
 func (h *authHandlers) requireRecentAuth(c *fiber.Ctx) error {

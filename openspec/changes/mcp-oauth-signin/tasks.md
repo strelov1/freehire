@@ -21,8 +21,8 @@ Full TDD steps (failing test → implementation → passing test, with real code
 
 ## 5. Consent authorize flow
 
-- [ ] 5.1 `GET /api/v1/oauth/authorize`: validates the request, 400s an unregistered redirect_uri, shows consent for a signed-in visitor, redirects a sessionless one to sign in and back
-- [ ] 5.2 `POST /api/v1/oauth/authorize`: re-validates, issues a single-use authorization code (hashed at rest) on `decision=allow`, redirects `access_denied` otherwise — both as a 302 carrying `state`
+- [x] 5.1 `GET /api/v1/oauth/authorize`: validates the request, 400s an unregistered redirect_uri, shows consent for a signed-in visitor, redirects a sessionless one to sign in and back
+- [x] 5.2 `POST /api/v1/oauth/authorize`: re-validates, issues a single-use authorization code (hashed at rest) on `decision=allow`, redirects `access_denied` otherwise — both as a 302 carrying `state`
 
 ## 6. Token exchange
 
