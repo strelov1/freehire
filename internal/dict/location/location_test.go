@@ -367,6 +367,51 @@ func TestParseSubdivisionCountryCodeCollision(t *testing.T) {
 			location: "IL-Cupertino",
 			want:     Geo{Countries: []string{"us"}, Regions: []string{"north_america"}},
 		},
+		{
+			name:     "Carmel, IN stays Indiana, not India",
+			location: "Carmel, IN",
+			want:     Geo{Countries: []string{"us"}, Regions: []string{"north_america"}, Cities: []string{"Carmel"}},
+		},
+		{
+			name:     "Brownsburg, IN stays Indiana, not India",
+			location: "Brownsburg, IN",
+			want:     Geo{Countries: []string{"us"}, Regions: []string{"north_america"}, Cities: []string{"Brownsburg"}},
+		},
+		{
+			name:     "Auburn, IN, US stays Indiana, not India",
+			location: "Auburn, IN, US",
+			want:     Geo{Countries: []string{"us"}, Regions: []string{"north_america"}, Cities: []string{"Auburn"}},
+		},
+		{
+			name:     "Wilmington, DE stays Delaware, not Germany",
+			location: "Wilmington, DE",
+			want:     Geo{Countries: []string{"us"}, Regions: []string{"north_america"}, Cities: []string{"Wilmington"}},
+		},
+		{
+			name:     "Boise, ID stays Idaho, not Indonesia",
+			location: "Boise, ID",
+			want:     Geo{Countries: []string{"us"}, Regions: []string{"north_america"}, Cities: []string{"Boise"}},
+		},
+		{
+			name:     "Bangalore, IN stays India, not Indiana",
+			location: "Bangalore, IN",
+			want:     Geo{Countries: []string{"in"}, Regions: []string{"apac"}, Cities: []string{"Bengaluru"}},
+		},
+		{
+			name:     "Mumbai, MH, IN stays India, not Indiana",
+			location: "Mumbai, MH, IN",
+			want:     Geo{Countries: []string{"in"}, Regions: []string{"apac"}, Cities: []string{"Mumbai"}},
+		},
+		{
+			name:     "Berlin, DE stays Germany, not Delaware",
+			location: "Berlin, DE",
+			want:     Geo{Countries: []string{"de"}, Regions: []string{"eu"}, Cities: []string{"Berlin"}},
+		},
+		{
+			name:     "Jakarta, ID stays Indonesia, not Idaho",
+			location: "Jakarta, ID",
+			want:     Geo{Countries: []string{"id"}, Regions: []string{"apac"}, Cities: []string{"Jakarta"}},
+		},
 	}
 
 	for _, tt := range tests {

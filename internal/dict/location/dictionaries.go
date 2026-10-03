@@ -323,18 +323,23 @@ var nameToCountry = map[string]string{
 // countryToRegion (both us and ca resolve to north_america).
 //
 // Two-letter codes that collide with a country ISO code whose city the parser
-// already keys are deliberately omitted (the country wins, so "Berlin, DE" /
-// "Bangalore, IN" / "Amsterdam, NL" stay Germany / India / Netherlands); those
-// subdivisions resolve via their full name instead. "ca" is the exception: it
-// stays California because "City, CA" is the single most common US location form —
-// the rare "Toronto, CA" mislabel is accepted. The country Georgia is unaffected:
-// the state carries the code "ga", and the name "georgia" is intentionally absent
-// here too (the country resolves via "tbilisi").
+// already keys are listed here anyway (not omitted): computeCollidingSubdivisions
+// picks them up into collidingSubdivisions, and resolveSubdivision's
+// subdivisionAccepted gate lets the US/CA reading win only when the neighbouring
+// city token names a recognized US/CA place ("Carmel, IN" stays Indiana,
+// "Bangalore, IN" stays India). "nl" is the one deliberate omission — Newfoundland
+// resolves via its full name instead, so the Netherlands always wins "Amsterdam,
+// NL". "ca" is the opposite exception: it stays California unconditionally
+// because "City, CA" is the single most common US location form — the rare
+// "Toronto, CA" mislabel is accepted. The country Georgia is unaffected: the state
+// carries the code "ga", and the name "georgia" is intentionally absent here too
+// (the country resolves via "tbilisi").
 var subdivisionToCountry = map[string]string{
-	// US states (postal codes). de/in/id omitted — they collide with Germany /
-	// India / Indonesia; see delaware/indiana/idaho below.
+	// US states (postal codes). de/in/id collide with Germany / India /
+	// Indonesia; collidingSubdivisions gates them behind subdivisionAccepted.
 	"al": "us", "ak": "us", "az": "us", "ar": "us", "ca": "us", "co": "us",
-	"ct": "us", "fl": "us", "ga": "us", "hi": "us", "ia": "us", "il": "us",
+	"ct": "us", "de": "us", "fl": "us", "ga": "us", "hi": "us", "ia": "us",
+	"id": "us", "il": "us", "in": "us",
 	"ks": "us", "ky": "us", "la": "us", "ma": "us", "md": "us", "me": "us",
 	"mi": "us", "mn": "us", "mo": "us", "ms": "us", "mt": "us", "nc": "us",
 	"nd": "us", "ne": "us", "nh": "us", "nj": "us", "nm": "us", "nv": "us",
