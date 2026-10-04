@@ -142,6 +142,12 @@ type Repository interface {
 	// generation.
 	ResetPassword(ctx context.Context, userID int64, passwordHash string) (int32, error)
 
+	// DeleteOAuthGrantsByUser wipes every MCP OAuth grant (connected MCP client)
+	// the account holds. Called on password reset — see ResetPassword's own
+	// comment for why that moment, specifically, deletes rather than merely
+	// relying on the session-generation bump every revoked cookie already does.
+	DeleteOAuthGrantsByUser(ctx context.Context, userID int64) error
+
 	// UserByEmail looks up the user with the given (already-normalised) email.
 	// Returns ErrUserNotFound when absent. hasPassword is true when the account
 	// has a non-null password hash stored.

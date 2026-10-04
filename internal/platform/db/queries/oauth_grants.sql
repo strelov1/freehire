@@ -56,3 +56,14 @@ ORDER BY oauth_grants.created_at DESC;
 -- caller's (the handler maps that to 404) — same contract as DeleteAPIKey.
 DELETE FROM oauth_grants
 WHERE id = $1 AND user_id = $2;
+
+-- name: DeleteOAuthGrantsByUser :exec
+-- Wipe every MCP grant a user holds. A password reset is exactly the moment a
+-- user suspects someone else is signed in — the same reasoning ResetPassword
+-- already applies to every session cookie — so it deletes the rows outright
+-- rather than leaving them to the issued_token_version/users.token_version
+-- mismatch alone: that comparison already stops a stale grant authenticating,
+-- but a deleted row is also what "Connected devices" stops listing, and what a
+-- reset should visibly answer for.
+DELETE FROM oauth_grants
+WHERE user_id = $1;

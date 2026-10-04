@@ -3,6 +3,16 @@
 The MCP server freehire's ChatGPT app is built on. Read-only, anonymous, mounted at
 `/api/v1/mcp`.
 
+A second, authenticated server (`account.go`) lives in this package too, mounted at
+`/api/v1/mcp/account` (freehire#3114): it acts as the signed-in account that approved an
+OAuth grant, reusing the in-app assistant's own tools — including writes (save, mark
+applied, set a stage/note) — rather than reimplementing them. It has no `Reader` of its own
+and shares nothing below the tool registration with the anonymous server beside it; the two
+are grouped in one package because both speak MCP over the same SDK, not because they share
+a catalogue view. Authentication for it is a Fiber middleware in
+`internal/api/handler/mcpapp_account.go`, ahead of this package's own code — see
+`AccountUserIDHeader`'s doc comment in `account.go` for why.
+
 ## Why there are two MCP servers
 
 `internal/api/ojcpmcp` serves the Open Job Context Protocol. This one serves OpenAI's Apps
@@ -56,7 +66,9 @@ Incorrect annotation of these three is a named rejection reason in OpenAI's subm
 guidelines. The block is written once (`readOnly()`) and a test walks the REGISTERED tools
 rather than a list beside them — checked by removing one annotation and watching it fail.
 
-A tool that writes anything belongs behind authentication, which this surface does not have.
+A tool on THIS (anonymous) server that writes anything belongs behind authentication, which
+this surface does not have — that is what `account.go`'s separate, authenticated server is
+for; do not add a write tool here instead of there.
 
 ## Testing
 

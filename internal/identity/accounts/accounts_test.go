@@ -60,6 +60,10 @@ type fakeRepo struct {
 	resetHash          string
 	setPasswordVersion int32
 
+	// deletedOAuthGrantsForUser records every userID DeleteOAuthGrantsByUser was
+	// called with, in call order.
+	deletedOAuthGrantsForUser []int64
+
 	// Username state (for EnsureUsername/ClaimUsername tests): usernameByUser
 	// holds each account's current username row; takenUsernames maps a claimed
 	// name back to its owning user id, across all accounts, to simulate
@@ -253,6 +257,13 @@ func (f *fakeRepo) ResetPassword(_ context.Context, _ int64, passwordHash string
 	defer f.mu.Unlock()
 	f.resetHash = passwordHash
 	return f.setPasswordVersion, nil
+}
+
+func (f *fakeRepo) DeleteOAuthGrantsByUser(_ context.Context, userID int64) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.deletedOAuthGrantsForUser = append(f.deletedOAuthGrantsForUser, userID)
+	return nil
 }
 
 func (f *fakeRepo) UserByID(_ context.Context, id int64) (User, error) {

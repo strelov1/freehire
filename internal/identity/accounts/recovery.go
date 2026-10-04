@@ -101,6 +101,13 @@ func (s *Service) ResetPassword(ctx context.Context, email, code, newPassword st
 		return err
 	}
 
+	// freehire#3114: a reset deletes every MCP OAuth grant outright, not merely
+	// the session-generation bump ResetPassword already causes — the same
+	// moment-of-suspicion reasoning that already revokes every cookie.
+	if err := txRepo.DeleteOAuthGrantsByUser(ctx, user.ID); err != nil {
+		return err
+	}
+
 	return tx.Commit(ctx)
 }
 

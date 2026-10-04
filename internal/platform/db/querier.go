@@ -1664,6 +1664,14 @@ type Querier interface {
 	// Returns the affected row count: 0 means the id does not exist or is not the
 	// caller's (the handler maps that to 404) — same contract as DeleteAPIKey.
 	DeleteOAuthGrant(ctx context.Context, arg DeleteOAuthGrantParams) (int64, error)
+	// Wipe every MCP grant a user holds. A password reset is exactly the moment a
+	// user suspects someone else is signed in — the same reasoning ResetPassword
+	// already applies to every session cookie — so it deletes the rows outright
+	// rather than leaving them to the issued_token_version/users.token_version
+	// mismatch alone: that comparison already stops a stale grant authenticating,
+	// but a deleted row is also what "Connected devices" stops listing, and what a
+	// reset should visibly answer for.
+	DeleteOAuthGrantsByUser(ctx context.Context, userID int64) error
 	// Drop companies no longer referenced by any job — the stale rows left behind
 	// when a slug-builder change re-keys jobs onto new slugs. Reference rows imported
 	// by the company-info backfill are preserved: they intentionally have no job, so

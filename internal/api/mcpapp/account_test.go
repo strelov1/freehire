@@ -83,34 +83,72 @@ func TestNewAccountServer_ToolErrorBecomesAnErrorResult(t *testing.T) {
 	}
 }
 
-func TestAccountHandler_RejectsMissingBearer(t *testing.T) {
-	authenticate := func(context.Context, string) (int64, error) {
-		t.Fatal("authenticate must not be called with no bearer token")
-		return 0, nil
+// AccountHandler no longer authenticates — that moved to a Fiber middleware in
+// mountMCPAccount (internal/api/handler/mcpapp_account.go), which can report an
+// infra failure through the normal Sentry/classify pipeline; a bare
+// net/http.Handler has no such pipeline to report through. These two tests
+// cover AccountHandler's own remaining contract: trust the resolved user id the
+// middleware already validated and stamped onto the request.
+func TestAccountHandler_ReadsUserIDFromTrustedHeader(t *testing.T) {
+	var gotUserID int64
+	tool := assistant.Tool{
+		Name:   "whoami",
+		Schema: map[string]any{"type": "object"},
+		Run: func(_ context.Context, userID int64, _ json.RawMessage) (any, error) {
+			gotUserID = userID
+			return map[string]any{"user_id": userID}, nil
+		},
 	}
-	handler := mcpapp.AccountHandler(nil, authenticate)
+	handler := mcpapp.AccountHandler([]assistant.Tool{tool})
 
-	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/", nil)
-	rec := httptest.NewRecorder()
-	handler.ServeHTTP(rec, req)
+	server := httptest.NewServer(handler)
+	defer server.Close()
 
-	if rec.Code != http.StatusUnauthorized {
-		t.Errorf("status = %d, want 401", rec.Code)
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, server.URL, nil)
+	if err != nil {
+		t.Fatalf("NewRequest: %v", err)
+	}
+	req.Header.Set(mcpapp.AccountUserIDHeader, "42")
+
+	client := mcp.NewClient(&mcp.Implementation{Name: "test", Version: "0"}, nil)
+	session, err := client.Connect(context.Background(), &mcp.StreamableClientTransport{Endpoint: server.URL, HTTPClient: &http.Client{Transport: headerRoundTripper{req.Header}}}, nil)
+	if err != nil {
+		t.Fatalf("Connect: %v", err)
+	}
+	defer func() { _ = session.Close() }()
+
+	res, err := session.CallTool(context.Background(), &mcp.CallToolParams{Name: "whoami", Arguments: map[string]any{}})
+	if err != nil {
+		t.Fatalf("CallTool: %v", err)
+	}
+	if res.IsError {
+		t.Fatalf("tool call failed: %+v", res.Content)
+	}
+	if gotUserID != 42 {
+		t.Errorf("Run saw userID = %d, want 42", gotUserID)
 	}
 }
 
-func TestAccountHandler_RejectsAnUnauthenticatedToken(t *testing.T) {
-	authenticate := func(context.Context, string) (int64, error) {
-		return 0, mcpapp.ErrUnauthorized
-	}
-	handler := mcpapp.AccountHandler(nil, authenticate)
+func TestAccountHandler_MissingTrustedHeaderIsAnInternalError(t *testing.T) {
+	// Reaching AccountHandler with no resolved user id means the auth
+	// middleware was skipped or misconfigured — a wiring bug, not a caller
+	// mistake, so it must read as 500, not as the caller's fault.
+	handler := mcpapp.AccountHandler(nil)
 
 	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/", nil)
-	req.Header.Set("Authorization", "Bearer fhm_invalid")
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusUnauthorized {
-		t.Errorf("status = %d, want 401", rec.Code)
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("status = %d, want 500", rec.Code)
 	}
+}
+
+type headerRoundTripper struct{ header http.Header }
+
+func (rt headerRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
+	for k, v := range rt.header {
+		req.Header[k] = v
+	}
+	return http.DefaultTransport.RoundTrip(req)
 }

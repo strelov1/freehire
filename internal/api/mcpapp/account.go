@@ -3,9 +3,8 @@ package mcpapp
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"net/http"
-	"strings"
+	"strconv"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
@@ -63,38 +62,32 @@ func errorResult(text string) *mcp.CallToolResult {
 	return &mcp.CallToolResult{IsError: true, Content: []mcp.Content{&mcp.TextContent{Text: text}}}
 }
 
-// ErrUnauthorized is what AccountHandler's factory reports for a missing,
-// malformed, or unrecognized bearer token.
-var ErrUnauthorized = errors.New("mcpapp: unauthorized")
+// AccountUserIDHeader is the internal, request-scoped header AccountHandler
+// trusts for the caller's resolved user id. It is set by the Fiber middleware
+// that authenticates the bearer token BEFORE this handler ever runs (see
+// mountMCPAccount in internal/api/handler) — never read from, or trusted from,
+// an external caller.
+//
+// Authentication lives in that middleware rather than here because a bare
+// net/http.Handler (this one, wrapped via adaptor.HTTPHandler) has no route
+// back into Fiber's error pipeline: an infra failure authenticating the token
+// (a DB error, not an unknown token) must reach Sentry as the 500 it is, and
+// only a true Fiber handler returning a Go error gets that for free.
+const AccountUserIDHeader = "X-Freehire-Account-User-Id"
 
-// AccountHandler builds the HTTP handler for the signed-in MCP server. Unlike
-// Handler above, every request must authenticate: authenticate resolves the
-// Authorization: Bearer token to a user id, and a failure answers with no
-// server at all — the stdlib handler 401s before any MCP framing is attempted,
-// the same posture as every other bearer-gated surface.
-func AccountHandler(tools []assistant.Tool, authenticate func(ctx context.Context, bearerToken string) (int64, error)) http.Handler {
+// AccountHandler builds the HTTP handler for the signed-in MCP server. It
+// trusts AccountUserIDHeader entirely — a request reaching it with no valid
+// value there is this package's own wiring bug, not a caller's, so it answers
+// 500 rather than 401.
+func AccountHandler(tools []assistant.Tool) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		token, ok := bearerToken(r)
-		if !ok {
-			http.Error(w, "missing bearer token", http.StatusUnauthorized)
-			return
-		}
-		userID, err := authenticate(r.Context(), token)
+		userID, err := strconv.ParseInt(r.Header.Get(AccountUserIDHeader), 10, 64)
 		if err != nil {
-			http.Error(w, "invalid or expired token", http.StatusUnauthorized)
+			http.Error(w, "internal error: no authenticated user", http.StatusInternalServerError)
 			return
 		}
 		mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server {
 			return NewAccountServer(tools, userID)
 		}, &mcp.StreamableHTTPOptions{Stateless: true}).ServeHTTP(w, r)
 	})
-}
-
-func bearerToken(r *http.Request) (string, bool) {
-	h := r.Header.Get("Authorization")
-	const prefix = "Bearer "
-	if !strings.HasPrefix(h, prefix) {
-		return "", false
-	}
-	return strings.TrimPrefix(h, prefix), true
 }

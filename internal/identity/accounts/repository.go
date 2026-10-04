@@ -234,6 +234,11 @@ func (r *QueriesRepository) ResetPassword(ctx context.Context, userID int64, pas
 	})
 }
 
+// DeleteOAuthGrantsByUser wipes every MCP OAuth grant the account holds.
+func (r *QueriesRepository) DeleteOAuthGrantsByUser(ctx context.Context, userID int64) error {
+	return r.q.DeleteOAuthGrantsByUser(ctx, userID)
+}
+
 // UserByEmail looks up the account with the given (already-normalised) email.
 // Returns ErrUserNotFound when absent. hasPassword is true when a non-null
 // password hash is stored.

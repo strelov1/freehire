@@ -16,4 +16,4 @@ reports the whole graph at once, including imports that exist only in test files
 
 ## Packages
 
-`accountdelete` `accounts` `auth` `auth/apple` `auth/applejobs` `auth/mobileauth` `auth/oauth` `auth/recentauth` `userprofile`
+`accountdelete` `accounts` `auth` `auth/apple` `auth/applejobs` `auth/mobileauth` `auth/oauth` `auth/oauth2server` `auth/recentauth` `userprofile`

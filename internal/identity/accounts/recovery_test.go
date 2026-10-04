@@ -109,6 +109,28 @@ func TestResetPasswordSetsTheHashAndRevokesSessions(t *testing.T) {
 	}
 }
 
+// freehire#3114: "A password reset deletes them" (MCP OAuth grants) — literally,
+// not merely via the token_version mismatch every revoked session already relies
+// on. A reset is exactly the moment a user suspects someone else is signed in.
+func TestResetPasswordDeletesOAuthGrants(t *testing.T) {
+	repo := &fakeRepo{userByEmailResults: []userByEmailResult{
+		{user: User{ID: 7, Email: "user@example.test"}, passwordHash: "hashed:old", hasPassword: true},
+		{user: User{ID: 7, Email: "user@example.test"}, passwordHash: "hashed:old", hasPassword: true},
+	}}
+	codes, mailer := newFakeCodes(), &fakeMailer{}
+	s := recoveryService(repo, codes, mailer)
+
+	if err := s.RequestPasswordReset(context.Background(), "user@example.test"); err != nil {
+		t.Fatalf("RequestPasswordReset: %v", err)
+	}
+	if err := s.ResetPassword(context.Background(), "user@example.test", mailer.reset[0], "brand-new-pw"); err != nil {
+		t.Fatalf("ResetPassword: %v", err)
+	}
+	if len(repo.deletedOAuthGrantsForUser) != 1 || repo.deletedOAuthGrantsForUser[0] != 7 {
+		t.Errorf("DeleteOAuthGrantsByUser calls = %v, want exactly one call with userID 7", repo.deletedOAuthGrantsForUser)
+	}
+}
+
 func TestResetPasswordRejectsAWrongCode(t *testing.T) {
 	repo := &fakeRepo{userByEmailResults: []userByEmailResult{
 		{user: User{ID: 7}, passwordHash: "hashed:old", hasPassword: true},

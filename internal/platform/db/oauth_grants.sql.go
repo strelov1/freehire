@@ -152,6 +152,23 @@ func (q *Queries) DeleteOAuthGrant(ctx context.Context, arg DeleteOAuthGrantPara
 	return result.RowsAffected(), nil
 }
 
+const deleteOAuthGrantsByUser = `-- name: DeleteOAuthGrantsByUser :exec
+DELETE FROM oauth_grants
+WHERE user_id = $1
+`
+
+// Wipe every MCP grant a user holds. A password reset is exactly the moment a
+// user suspects someone else is signed in — the same reasoning ResetPassword
+// already applies to every session cookie — so it deletes the rows outright
+// rather than leaving them to the issued_token_version/users.token_version
+// mismatch alone: that comparison already stops a stale grant authenticating,
+// but a deleted row is also what "Connected devices" stops listing, and what a
+// reset should visibly answer for.
+func (q *Queries) DeleteOAuthGrantsByUser(ctx context.Context, userID int64) error {
+	_, err := q.db.Exec(ctx, deleteOAuthGrantsByUser, userID)
+	return err
+}
+
 const listOAuthGrantsByUser = `-- name: ListOAuthGrantsByUser :many
 SELECT oauth_grants.id, oauth_clients.client_name, oauth_grants.created_at,
        oauth_grants.expires_at, oauth_grants.last_used_at

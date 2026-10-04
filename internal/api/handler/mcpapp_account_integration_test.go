@@ -99,3 +99,37 @@ func TestMCPAccountEndToEnd(t *testing.T) {
 		}
 	})
 }
+
+// TestMCPAccountAuthenticate_InfraFailureIsA500NotA401 is a regression test
+// for a code-review finding: an unexpected failure resolving the bearer token
+// (here, a closed connection pool — standing in for any DB/infra fault) must
+// not be folded into the same "invalid token" answer a real unknown token
+// gets. Those are different failures with different owners: one is the
+// caller's mistake, the other is ours and belongs in the error inbox. Only a
+// real Fiber handler returning a Go error gets reported through classify/
+// Sentry, which is why authentication now runs as middleware ahead of the
+// adapted raw http.Handler rather than inside it.
+func TestMCPAccountAuthenticate_InfraFailureIsA500NotA401(t *testing.T) {
+	pool := startPostgres(t)
+	queries := db.New(pool)
+	assistants := &assistantHandlers{
+		queries:  queries,
+		tracking: &trackingHandlers{tracking: jobtracking.New(jobtracking.NewQueriesRepository(queries, pool))},
+	}
+	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
+	api := app.Group("/api/v1")
+	mountMCPAccount(api, middleware{}, assistants)
+
+	pool.Close() // simulate the database going away, not an unknown token
+
+	req := httptest.NewRequestWithContext(context.Background(), fiber.MethodPost, "/api/v1/mcp/account", nil)
+	req.Header.Set("Authorization", "Bearer fhm_whatever")
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != fiber.StatusInternalServerError {
+		t.Errorf("status = %d, want 500 (an infra failure must not read as an invalid token)", resp.StatusCode)
+	}
+}

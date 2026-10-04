@@ -87,8 +87,14 @@ func (h *authHandlers) OAuthAuthorize(c *fiber.Ctx) error {
 // OAuthAuthorizeSubmit acts on the consent decision. On approval it mints a
 // single-use authorization code and 302s it back to the client's redirect_uri in
 // the query string (not a fragment — a native app's loopback listener reads a
-// 302's query, it cannot run JavaScript against a fragment). Cookie-only
-// (RequireAuth): a leaked API key must not be able to approve a new MCP grant.
+// 302's query, it cannot run JavaScript against a fragment). Mounted on
+// optionalCookie, not RequireAuth — same reasoning as ExtensionConnectSubmit:
+// a session can lapse between the consent screen and this decision, and a bare
+// 401 there would render into the client's browser instead of restarting the
+// sign-in round trip. requireUserID below does the real gating: no session
+// means no approval, same as RequireAuth would enforce, just with a redirect
+// instead of a 401. A leaked API key still cannot approve a grant — a key
+// alone never satisfies requireUserID's cookie check.
 func (h *authHandlers) OAuthAuthorizeSubmit(c *fiber.Ctx) error {
 	params, err := parseAuthorizeParams(
 		"code", c.FormValue("client_id"), c.FormValue("redirect_uri"),

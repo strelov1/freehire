@@ -23,6 +23,7 @@ import (
 	"github.com/strelov1/freehire/internal/identity/accounts"
 	"github.com/strelov1/freehire/internal/identity/auth"
 	"github.com/strelov1/freehire/internal/platform/db"
+	"github.com/strelov1/freehire/internal/platform/pgconv"
 )
 
 // captureMailer records the codes instead of sending them, so a test can read what the
@@ -211,6 +212,71 @@ func TestForgotThenResetPassword(t *testing.T) {
 	defer stale.Body.Close()
 	if stale.StatusCode != fiber.StatusUnauthorized {
 		t.Errorf("login with the old password = %d, want 401", stale.StatusCode)
+	}
+}
+
+// TestResetPasswordDeletesOAuthGrants is a regression/spec test for
+// freehire#3114's own wording ("A password reset deletes them"): a reset must
+// delete the account's MCP OAuth grant rows outright, not merely bump
+// users.token_version and leave the row behind unable to authenticate.
+func TestResetPasswordDeletesOAuthGrants(t *testing.T) {
+	app, mailer, queries, _ := recoveryApp(t)
+
+	reg := postAuthJSON(t, app, "/api/v1/auth/register",
+		`{"email":"grant-holder@example.test","password":"original-pw"}`, "")
+	defer reg.Body.Close()
+	var created struct {
+		Data struct {
+			ID int64 `json:"id"`
+		} `json:"data"`
+	}
+	if err := json.NewDecoder(reg.Body).Decode(&created); err != nil {
+		t.Fatalf("decode register: %v", err)
+	}
+	userID := created.Data.ID
+
+	if _, err := queries.RegisterOAuthClient(context.Background(), db.RegisterOAuthClientParams{
+		ClientID: "client-reset-test", ClientName: "Test Client",
+		RedirectUris: []string{"http://127.0.0.1:9999/cb"},
+	}); err != nil {
+		t.Fatalf("RegisterOAuthClient: %v", err)
+	}
+	version, err := queries.GetUserTokenVersion(context.Background(), userID)
+	if err != nil {
+		t.Fatalf("GetUserTokenVersion: %v", err)
+	}
+	expiresAt := time.Now().Add(30 * 24 * time.Hour)
+	if _, err := queries.CreateOAuthGrant(context.Background(), db.CreateOAuthGrantParams{
+		UserID: userID, ClientID: "client-reset-test", AccessTokenHash: "grant-hash-reset-test",
+		IssuedTokenVersion: version, ExpiresAt: pgconv.Timestamptz(&expiresAt),
+	}); err != nil {
+		t.Fatalf("CreateOAuthGrant: %v", err)
+	}
+
+	forgot := postAuthJSON(t, app, "/api/v1/auth/password/forgot",
+		`{"email":"grant-holder@example.test"}`, "")
+	defer forgot.Body.Close()
+	deadline := time.Now().Add(5 * time.Second)
+	for len(mailer.reset) == 0 && time.Now().Before(deadline) {
+		time.Sleep(50 * time.Millisecond)
+	}
+	if len(mailer.reset) != 1 {
+		t.Fatalf("mailed %d reset codes, want 1", len(mailer.reset))
+	}
+
+	reset := postAuthJSON(t, app, "/api/v1/auth/password/reset",
+		`{"email":"grant-holder@example.test","code":"`+mailer.reset[0]+`","password":"replacement-pw"}`, "")
+	defer reset.Body.Close()
+	if reset.StatusCode != fiber.StatusOK {
+		t.Fatalf("reset status = %d, want 200", reset.StatusCode)
+	}
+
+	rows, err := queries.ListOAuthGrantsByUser(context.Background(), userID)
+	if err != nil {
+		t.Fatalf("ListOAuthGrantsByUser: %v", err)
+	}
+	if len(rows) != 0 {
+		t.Errorf("oauth_grants rows for user = %d, want 0 — a password reset must delete the row, not just revoke it", len(rows))
 	}
 }
 
