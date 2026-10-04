@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/strelov1/freehire/internal/ai/plan"
@@ -573,10 +574,25 @@ func (authHasher) Check(hash, plain string) error    { return auth.CheckPassword
 // free of a database import, which is why it cannot name the sqlc row type directly.
 type apiKeys struct{ q *db.Queries }
 
+// AuthenticateAPIKey resolves a bearer token hash against api_keys first, and —
+// only when no live key matches — against oauth_grants (freehire#3114). The two
+// tables are deliberately separate (a key and a grant are minted, listed, and
+// revoked through different surfaces), but every REST route this authenticator
+// guards must accept either: an MCP client holding an OAuth grant is acting as
+// the same account a pasted API key would, so it gets the same reach. A grant
+// always resolves as ScopeFull — the same reasoning the register endpoint uses
+// for a user-created key: an OAuth grant has no narrower variant to request.
 func (a apiKeys) AuthenticateAPIKey(ctx context.Context, tokenHash string) (auth.APIKeyIdentity, error) {
 	row, err := a.q.AuthenticateAPIKey(ctx, tokenHash)
+	if err == nil {
+		return auth.APIKeyIdentity{UserID: row.UserID, Scope: row.Scope}, nil
+	}
+	if !errors.Is(err, pgx.ErrNoRows) {
+		return auth.APIKeyIdentity{}, err
+	}
+	userID, err := a.q.AuthenticateOAuthGrant(ctx, tokenHash)
 	if err != nil {
 		return auth.APIKeyIdentity{}, err
 	}
-	return auth.APIKeyIdentity{UserID: row.UserID, Scope: row.Scope}, nil
+	return auth.APIKeyIdentity{UserID: userID, Scope: auth.ScopeFull}, nil
 }
