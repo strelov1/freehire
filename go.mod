@@ -25,7 +25,7 @@ require (
 	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/google/uuid v1.6.0
 	github.com/gzuidhof/tygo v0.2.21
-	github.com/inngest/inngestgo v0.16.1
+	github.com/inngest/inngestgo v0.16.5
 	github.com/invopop/jsonschema v0.14.0
 	github.com/jackc/pgx/v5 v5.11.0
 	github.com/jaytaylor/html2text v0.0.0-20230321000545-74c2419ad056
