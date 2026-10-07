@@ -332,6 +332,24 @@ func newBrowserUAClient() *Client {
 	return c
 }
 
+// crawlerUserAgent identifies as Googlebot, for the one provider whose edge does the OPPOSITE
+// of blocking bots: energyjobline.com's job-detail pages server-render their schema.org
+// JobPosting ld+json only for a recognised search-crawler User-Agent. Both the project's own
+// "freehire/0.1 (+https://freehire.me)" and a plain desktop browser string (browserUserAgent)
+// get a client-rendered shell with no ld+json at all — verified live 2026-10-07. The site's own
+// robots.txt does not disallow the /job/ path, and SSR'ing only for crawlers is how it gets
+// Google's job rich snippets in the first place, so this is the intended way to read exactly
+// the content it already publishes for search engines, not a bypass of a restriction.
+const crawlerUserAgent = "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)"
+
+// newCrawlerUAClient is NewClient with crawlerUserAgent — same guarded transport, same retry
+// budget, same everything else.
+func newCrawlerUAClient() *Client {
+	c := NewClient()
+	c.userAgent = crawlerUserAgent
+	return c
+}
+
 // NewCookieClient exposes newCookieClient to host tools (e.g. harvest-boards' Taleo
 // prober, which reuses the session-bound Taleo adapter to validate a board).
 func NewCookieClient() *Client { return newCookieClient() }

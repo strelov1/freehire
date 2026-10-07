@@ -17,21 +17,22 @@ import (
 // value is the agency's own brand (e.g. "Energy Jobline ZR") rather than a confidential
 // end client — verified against the live site's own human-visible company link, not just
 // its ld+json, so it is stored as-is rather than filtered or guessed around.
+//
+// The sitemap and the detail pages need different transports (see crawlerUserAgent and
+// energyjoblineRequestInterval), so, like clinch, the two are separate parameters rather
+// than one combined client.
 type energyjobline struct {
-	http energyjoblineHTTP
-}
-
-// energyjoblineHTTP is the transport energyjobline needs: the XML sitemap (index and
-// per-page urlset) plus HTML detail pages.
-type energyjoblineHTTP interface {
-	XMLGetter
-	HTMLGetter
+	sitemap XMLGetter  // the top-level sitemap index + per-page urlsets (4 requests/run)
+	pages   HTMLGetter // per-posting detail pages: Googlebot UA, rate-paced
 }
 
 const energyjoblineSitemapIndexURL = "https://www.energyjobline.com/sitemap.xml"
 
-// NewEnergyJobline builds the EnergyJobline adapter over the given HTTP client.
-func NewEnergyJobline(c energyjoblineHTTP) Source { return energyjobline{http: c} }
+// NewEnergyJobline builds the EnergyJobline adapter: sitemap fetches the site's sitemap
+// index, pages fetches each job-detail page (see crawlerUserAgent, pacedHTMLGetter).
+func NewEnergyJobline(sitemap XMLGetter, pages HTMLGetter) Source {
+	return energyjobline{sitemap: sitemap, pages: pages}
+}
 
 func (energyjobline) Provider() string { return "energyjobline" }
 
@@ -56,13 +57,13 @@ func (e energyjobline) Fetch(ctx context.Context, ce CompanyEntry) ([]Job, error
 // urlset mixing job postings with the site's other pages, e.g. news articles) and returns
 // every job-detail URL found across all of them.
 func (e energyjobline) jobURLs(ctx context.Context) ([]string, error) {
-	idx, err := getSitemap(ctx, e.http, energyjoblineSitemapIndexURL)
+	idx, err := getSitemap(ctx, e.sitemap, energyjoblineSitemapIndexURL)
 	if err != nil {
 		return nil, err
 	}
 	var urls []string
 	for _, sm := range idx.Sitemaps {
-		locs, err := sitemapJobLocs(ctx, e.http, sm.Loc, energyjoblineJobID)
+		locs, err := sitemapJobLocs(ctx, e.sitemap, sm.Loc, energyjoblineJobID)
 		if err != nil {
 			return nil, err
 		}
@@ -81,7 +82,7 @@ func (e energyjobline) detail(ctx context.Context, ce CompanyEntry, link string)
 	if id == "" {
 		return Job{}, false
 	}
-	root, err := e.http.GetHTML(ctx, link)
+	root, err := e.pages.GetHTML(ctx, link)
 	if err != nil {
 		if detailUnreadable(err) {
 			return unreadableDetail(id, link, ce.Company), true

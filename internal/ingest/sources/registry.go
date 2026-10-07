@@ -354,7 +354,10 @@ func All(c HTTPClient) map[string]Source {
 		// listing and detail pages are fully static server-rendered HTML.
 		NewStaffy(c),
 		NewDataArt(c),
-		NewEnergyJobline(c),
+		// energyjobline's detail pages need the Googlebot UA (see crawlerUserAgent) and are
+		// rate-paced (pacedHTMLGetter, see energyjoblineRequestInterval); the sitemap does
+		// not, so it stays on the shared client.
+		NewEnergyJobline(c, pacedHTMLGetter(newCrawlerUAClient(), energyjoblineRequestInterval, energyjoblineRequestBurst)),
 		// JettyCloud: its postings exist only on its own careers site — the employer runs no
 		// ATS a crawl can reach, so this adapter is the only way the catalogue can carry it.
 		NewJettyCloud(c),

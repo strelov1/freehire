@@ -61,7 +61,7 @@ func TestEnergyjoblineFetchWalksIndexThenDetailAndMaps(t *testing.T) {
 		)).
 		route("/job/controls-engineer-atlanta-31835232", detail)
 
-	jobs, err := NewEnergyJobline(fake).Fetch(context.Background(), CompanyEntry{
+	jobs, err := NewEnergyJobline(fake, fake).Fetch(context.Background(), CompanyEntry{
 		Company: "EnergyJobline", Provider: "energyjobline",
 	})
 	if err != nil {
@@ -93,7 +93,7 @@ func TestEnergyjoblineFetchWalksIndexThenDetailAndMaps(t *testing.T) {
 
 func TestEnergyjoblineBrokenSitemapIndexErrorsTheCrawl(t *testing.T) {
 	fake := (&routedHTTP{}).routeErr("sitemap.xml", errors.New("origin down"))
-	_, err := NewEnergyJobline(fake).Fetch(context.Background(), CompanyEntry{
+	_, err := NewEnergyJobline(fake, fake).Fetch(context.Background(), CompanyEntry{
 		Company: "EnergyJobline", Provider: "energyjobline",
 	})
 	if err == nil {
@@ -114,7 +114,7 @@ func TestEnergyjoblineSubSitemapFailureFailsTheCrawl(t *testing.T) {
 		)).
 		routeErr("sitemap.xml?page=2", errors.New("origin down"))
 
-	_, err := NewEnergyJobline(fake).Fetch(context.Background(), CompanyEntry{
+	_, err := NewEnergyJobline(fake, fake).Fetch(context.Background(), CompanyEntry{
 		Company: "EnergyJobline", Provider: "energyjobline",
 	})
 	if err == nil {
@@ -128,7 +128,7 @@ func TestEnergyjoblineCompanyComesFromThePosting(t *testing.T) {
 		"desc", "2026-10-02", "Kent", "GB")
 	fake := (&routedHTTP{}).route("/job/welder-kent-27543774", detail)
 
-	j, ok := energyjobline{http: fake}.detail(context.Background(),
+	j, ok := energyjobline{sitemap: fake, pages: fake}.detail(context.Background(),
 		CompanyEntry{Company: "EnergyJobline", Provider: "energyjobline"}, jobURL)
 	if !ok {
 		t.Fatal("detail returned ok=false")
@@ -147,7 +147,7 @@ func TestEnergyjoblineUnreadableDetailWhenHiringOrgEmpty(t *testing.T) {
 	detail := energyjoblineDetailHTML("Mystery Role", "", "desc", "2026-10-02", "Kent", "GB")
 	fake := (&routedHTTP{}).route("/job/no-employer-99999999", detail)
 
-	j, ok := energyjobline{http: fake}.detail(context.Background(),
+	j, ok := energyjobline{sitemap: fake, pages: fake}.detail(context.Background(),
 		CompanyEntry{Company: "EnergyJobline", Provider: "energyjobline"}, jobURL)
 	if !ok {
 		t.Fatal("detail returned ok=false, want an unreadableDetail stub")
@@ -164,7 +164,7 @@ func TestEnergyjoblineUnreadableDetailWhenNoJobPosting(t *testing.T) {
 	jobURL := "https://www.energyjobline.com/job/broken-page-11111111"
 	fake := (&routedHTTP{}).route("/job/broken-page-11111111", "<html><body>no ld+json here</body></html>")
 
-	j, ok := energyjobline{http: fake}.detail(context.Background(),
+	j, ok := energyjobline{sitemap: fake, pages: fake}.detail(context.Background(),
 		CompanyEntry{Company: "EnergyJobline", Provider: "energyjobline"}, jobURL)
 	if !ok {
 		t.Fatal("detail returned ok=false, want an unreadableDetail stub")
@@ -186,7 +186,7 @@ func TestEnergyjoblineDetailWithNoJobLocation(t *testing.T) {
 		`</script></head><body></body></html>`
 	fake := (&routedHTTP{}).route("/job/no-location-66666666", html)
 
-	j, ok := energyjobline{http: fake}.detail(context.Background(),
+	j, ok := energyjobline{sitemap: fake, pages: fake}.detail(context.Background(),
 		CompanyEntry{Company: "EnergyJobline", Provider: "energyjobline"}, jobURL)
 	if !ok {
 		t.Fatal("detail returned ok=false")
@@ -226,7 +226,7 @@ func TestEnergyjoblineOneBadDetailDoesNotFailTheCrawl(t *testing.T) {
 		route("/job/good-job-22222222", good).
 		routeErr("/job/bad-job-33333333", errors.New("fetch failed"))
 
-	jobs, err := NewEnergyJobline(fake).Fetch(context.Background(), CompanyEntry{
+	jobs, err := NewEnergyJobline(fake, fake).Fetch(context.Background(), CompanyEntry{
 		Company: "EnergyJobline", Provider: "energyjobline",
 	})
 	if err != nil {
@@ -267,7 +267,7 @@ func TestEnergyjoblineGoneDetailDropsThePosting(t *testing.T) {
 		route("/job/good-job-44444444", good).
 		routeErr("/job/gone-job-55555555", &StatusError{Method: "GET", Code: 404, URL: goneURL})
 
-	jobs, err := NewEnergyJobline(fake).Fetch(context.Background(), CompanyEntry{
+	jobs, err := NewEnergyJobline(fake, fake).Fetch(context.Background(), CompanyEntry{
 		Company: "EnergyJobline", Provider: "energyjobline",
 	})
 	if err != nil {
@@ -279,7 +279,7 @@ func TestEnergyjoblineGoneDetailDropsThePosting(t *testing.T) {
 }
 
 func TestEnergyjoblineProviderAndBoardless(t *testing.T) {
-	s := NewEnergyJobline(nil)
+	s := NewEnergyJobline(nil, nil)
 	if s.Provider() != "energyjobline" {
 		t.Errorf("Provider() = %q, want energyjobline", s.Provider())
 	}

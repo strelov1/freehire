@@ -100,6 +100,20 @@ const (
 	clinchRequestBurst    = 1
 )
 
+// energyjobline.com's own robots.txt declares Crawl-delay: 10 for every user agent, and its
+// sitemap enumerates roughly 171,000 postings (measured 2026-10-07) — honouring the declared
+// rate literally would take a single crawl on the order of weeks. This is a policy choice, not
+// a measured block-avoidance ceiling (contrast clinch's WAF trip point): the actual bug a first
+// unpaced run hit was unrelated to rate — see crawlerUserAgent — and no rate-triggered block has
+// been observed here yet. The pace is a deliberate compromise, faster than the site asks for
+// and slower than an unpaced crawl, chosen because honouring Crawl-delay literally is
+// impractical at this catalogue size. Revisit if energyjobline.com starts refusing requests at
+// this rate.
+const (
+	energyjoblineRequestInterval = 1500 * time.Millisecond // ~0.67 req/s
+	energyjoblineRequestBurst    = 1
+)
+
 // rateLimitedJSONGetter is the JSON-GET counterpart of rateLimitedHTMLGetter: it wraps a
 // JSONGetter with a shared limiter so its aggregate GetJSON rate stays under the endpoint's
 // budget, independent of the caller's worker concurrency. One instance carries one limiter, so
