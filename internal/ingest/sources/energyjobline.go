@@ -83,6 +83,9 @@ func (e energyjobline) detail(ctx context.Context, ce CompanyEntry, link string)
 	}
 	root, err := e.http.GetHTML(ctx, link)
 	if err != nil {
+		if detailUnreadable(err) {
+			return unreadableDetail(id, link, ce.Company), true
+		}
 		return Job{}, false
 	}
 	var p energyjoblinePosting
@@ -98,11 +101,15 @@ func (e energyjobline) detail(ctx context.Context, ce CompanyEntry, link string)
 		strings.TrimSpace(p.jobLocationAddress().Country),
 	)
 	return Job{
-		ExternalID:  id,
-		URL:         link,
-		Title:       strings.TrimSpace(p.Title),
-		Company:     company,
-		Location:    location,
+		ExternalID: id,
+		URL:        link,
+		Title:      strings.TrimSpace(p.Title),
+		Company:    company,
+		Location:   location,
+		// EnergyJobline's description carries HTML-entity-encoded markup (e.g. literal
+		// "&amp;" inside the JSON string, confirmed on a live posting), so it needs
+		// unescaping before sanitizeHTML — unlike bayt.go/gulftalent.go, whose descriptions
+		// arrive already decoded.
 		Description: sanitizeHTML(html.UnescapeString(p.Description)),
 		Remote:      isRemote(location),
 		PostedAt:    parseDate(p.DatePosted),

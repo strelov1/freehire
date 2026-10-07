@@ -101,6 +101,27 @@ func TestEnergyjoblineBrokenSitemapIndexErrorsTheCrawl(t *testing.T) {
 	}
 }
 
+// The index itself can resolve fine while one of its sub-sitemaps fails; that failure
+// propagates as a hard Fetch error too (no fullBoardListing is claimed here, so any shard
+// failure means the enumeration is incomplete and the caller should not trust a partial
+// result as "today's whole catalogue").
+func TestEnergyjoblineSubSitemapFailureFailsTheCrawl(t *testing.T) {
+	fake := (&routedHTTP{}).
+		route("sitemap.xml?page=1", energyjoblineURLSetXML("https://www.energyjobline.com/job/ok-1")).
+		route("sitemap.xml", energyjoblineSitemapIndexXML(
+			"https://www.energyjobline.com/sitemap.xml?page=1",
+			"https://www.energyjobline.com/sitemap.xml?page=2",
+		)).
+		routeErr("sitemap.xml?page=2", errors.New("origin down"))
+
+	_, err := NewEnergyJobline(fake).Fetch(context.Background(), CompanyEntry{
+		Company: "EnergyJobline", Provider: "energyjobline",
+	})
+	if err == nil {
+		t.Fatal("Fetch: want error when one sub-sitemap fails, got nil")
+	}
+}
+
 func TestEnergyjoblineCompanyComesFromThePosting(t *testing.T) {
 	jobURL := "https://www.energyjobline.com/job/welder-kent-27543774"
 	detail := energyjoblineDetailHTML("WELDER in Kent", "Energy Jobline ZR",
@@ -153,6 +174,31 @@ func TestEnergyjoblineUnreadableDetailWhenNoJobPosting(t *testing.T) {
 	}
 }
 
+// A posting can carry a JobPosting block with no jobLocation entries at all (the field is
+// an array in the markup, but nothing guarantees the site always populates it) — this must
+// not panic on an empty-slice index and should simply leave Location blank.
+func TestEnergyjoblineDetailWithNoJobLocation(t *testing.T) {
+	jobURL := "https://www.energyjobline.com/job/no-location-66666666"
+	html := `<html><head><script type="application/ld+json">` +
+		`{"@context":"https://schema.org/","@type":"JobPosting",` +
+		`"title":"Remote Role","hiringOrganization":{"@type":"Organization","name":"Real Co"},` +
+		`"description":"d","datePosted":"2026-10-02","jobLocation":[]}` +
+		`</script></head><body></body></html>`
+	fake := (&routedHTTP{}).route("/job/no-location-66666666", html)
+
+	j, ok := energyjobline{http: fake}.detail(context.Background(),
+		CompanyEntry{Company: "EnergyJobline", Provider: "energyjobline"}, jobURL)
+	if !ok {
+		t.Fatal("detail returned ok=false")
+	}
+	if j.Location != "" {
+		t.Errorf("Location = %q, want empty (no jobLocation entries)", j.Location)
+	}
+	if j.Company != "Real Co" {
+		t.Errorf("Company = %q, want Real Co", j.Company)
+	}
+}
+
 func TestEnergyjoblineJobID(t *testing.T) {
 	cases := map[string]string{
 		"https://www.energyjobline.com/job/controls-engineer-atlanta-31835232": "31835232",
@@ -186,11 +232,49 @@ func TestEnergyjoblineOneBadDetailDoesNotFailTheCrawl(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Fetch: %v", err)
 	}
-	if len(jobs) != 1 {
-		t.Fatalf("got %d jobs, want 1 (the one good posting, bad one dropped silently on fetch error)", len(jobs))
+	// A plain transport error states nothing about the posting (it might be a timeout, a
+	// transient 5xx — anything short of a confirmed-gone answer), so it must not be
+	// mistaken for the posting having been removed: it survives as an Unreadable stub, the
+	// same contract fetchDetails documents and bayt.go/gulftalent.go already honour.
+	if len(jobs) != 2 {
+		t.Fatalf("got %d jobs, want 2 (the good posting plus an Unreadable stub for the one that failed to fetch)", len(jobs))
 	}
-	if jobs[0].Title != "Good Job" {
-		t.Errorf("Title = %q, want Good Job", jobs[0].Title)
+	markers := unreadableMarkers(jobs)
+	if len(markers) != 1 || markers[0].ExternalID != "33333333" {
+		t.Fatalf("unreadable markers = %v, want one for the posting whose detail fetch errored", markers)
+	}
+	if markers[0].Company != "EnergyJobline" {
+		t.Errorf("marker Company = %q, want the entry's configured company", markers[0].Company)
+	}
+	for _, j := range jobs {
+		if j.ExternalID == "22222222" && j.Title != "Good Job" {
+			t.Errorf("good posting Title = %q, want Good Job", j.Title)
+		}
+	}
+}
+
+// The other half of the distinction (see bayt_test.go's TestBaytGoneDetailDropsThePosting):
+// a 404/410 is the platform's own answer that the posting is gone, so the crawl drops it
+// rather than marking it unreadable.
+func TestEnergyjoblineGoneDetailDropsThePosting(t *testing.T) {
+	goodURL := "https://www.energyjobline.com/job/good-job-44444444"
+	goneURL := "https://www.energyjobline.com/job/gone-job-55555555"
+	good := energyjoblineDetailHTML("Good Job", "Real Co", "d", "2026-10-02", "Kent", "GB")
+
+	fake := (&routedHTTP{}).
+		route("sitemap.xml?page=1", energyjoblineURLSetXML(goodURL, goneURL)).
+		route("sitemap.xml", energyjoblineSitemapIndexXML("https://www.energyjobline.com/sitemap.xml?page=1")).
+		route("/job/good-job-44444444", good).
+		routeErr("/job/gone-job-55555555", &StatusError{Method: "GET", Code: 404, URL: goneURL})
+
+	jobs, err := NewEnergyJobline(fake).Fetch(context.Background(), CompanyEntry{
+		Company: "EnergyJobline", Provider: "energyjobline",
+	})
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	if len(jobs) != 1 || jobs[0].ExternalID != "44444444" {
+		t.Fatalf("got %v, want only the posting whose detail answered — the 404'd one dropped, not marked", jobs)
 	}
 }
 
