@@ -354,6 +354,7 @@ func All(c HTTPClient) map[string]Source {
 		// listing and detail pages are fully static server-rendered HTML.
 		NewStaffy(c),
 		NewDataArt(c),
+		NewEnergyJobline(c),
 		// JettyCloud: its postings exist only on its own careers site — the employer runs no
 		// ATS a crawl can reach, so this adapter is the only way the catalogue can carry it.
 		NewJettyCloud(c),
