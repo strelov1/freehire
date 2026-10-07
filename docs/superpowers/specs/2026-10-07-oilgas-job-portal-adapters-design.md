@@ -73,68 +73,56 @@ Confirmed with a plain `curl` (Googlebot UA, no cookies, no JS) — no bot defen
 - The `JobPosting` block carries `title`, `description`, `jobLocation`/`address`,
   `hiringOrganization`, `datePosted`, `employmentType`, `baseSalary`.
 
-This is the same shape as `dataart.go`: `resolveSubSitemap` (or direct `sitemapJobLocs`
-per sub-sitemap, since the index is small) to enumerate job URLs, `fetchDetails` with
-`defaultDetailWorkers` to fetch each page, `ldJobPosting` to decode it.
+This is the same enumeration shape as `dataart.go` — sitemap to enumerate, `fetchDetails`
+with `defaultDetailWorkers` to fetch each page, `ldJobPosting` to decode — combined with the
+same **company resolution** `bayt.go`/`gulftalent.go` already use for exactly this
+situation, rather than a new mechanism:
 
-**It is a hub, not a single-company board.** EnergyJobline carries postings from many real
-employers across energy broadly (oil & gas is one of its categories). The adapter must
-resolve `Company` per posting from the ld+json `hiringOrganization.name`, not from the
-board's configured company name.
-
-## New pattern: hub resolution from `hiringOrganization`
-
-All four existing hub adapters (`huntflow`, `cleverstaff`, `loxo`, `successfactors`)
-resolve the employer from something OTHER than the JobPosting ld+json's own
-`hiringOrganization` field — a URL segment, an API field, a title, or a curated `Tenants`
-map. EnergyJobline offers none of those signals; the only per-posting employer signal is
-`hiringOrganization` itself. This design adds that as a new (but small, additive)
-resolution path:
+- `boardless()` — EnergyJobline has one sitemap, no per-tenant board id.
+- `aggregator()` — the existing marker interface (`internal/ingest/sources/source.go`)
+  that documents "one crawl aggregates postings from many companies" and keeps the source
+  included in the source facet. No `CompanyEntry.Hub`/`Tenants` involvement at all — that
+  mechanism belongs to a different family of adapters (huntflow/cleverstaff/loxo/
+  successfactors) whose platform does NOT hand back a clean per-posting employer name,
+  so they resolve it from a URL/API field/title/curated map instead. EnergyJobline's
+  `JobPosting` ld+json already carries a clean `hiringOrganization.name` per posting — the
+  same situation Bayt and GulfTalent are in — so it follows their pattern exactly:
 
 ```go
-// hiringOrg is the schema.org Organization embedded in a JobPosting's hiringOrganization
-// field. For a hub adapter with no better per-posting signal, its Name is the posting's
-// real employer; the caller falls back to ce.Company when Name is empty, matching the
-// existing hub adapters' fallback philosophy (an unrecognised/missing signal keeps the
-// job visible under the hub's own name rather than guessing).
-type hiringOrg struct {
-    Name string `json:"name"`
+company := strings.TrimSpace(p.HiringOrg.Name)
+if company == "" {
+    return unreadableDetail(id, link, e.Company), true // proves the posting existed; no good employer name to show
 }
 ```
 
-The posting struct embeds a `HiringOrganization hiringOrg
-\`json:"hiringOrganization"\`` field; `detail` sets `Company` from it when `ce.Hub` is
-set and the name is non-empty, else `ce.Company`.
-
-This does not change `CompanyEntry`, `Hub`, or any existing adapter — it is a second way to
-honour the already-generic `Hub` flag, parallel to the three existing ones. With only this
-one call site, no shared helper is extracted yet (see Out of scope).
+This reuses the existing `unreadableDetail` helper (`helpers.go`) rather than inventing a
+fallback — the same one `bayt.go`'s `detail` uses for an empty `hiringOrganization` and for
+an unparseable fetch.
 
 ## Boards
 
 Added via `cmd/add-board` after the code ships and a first manual run looks sane:
 
-- `energyjobline` / board `www.energyjobline.com` / company `EnergyJobline` / `--hub`
+- `energyjobline` / board `www.energyjobline.com` / company `EnergyJobline`
 
 ## Testing
 
 A unit test over a fixture sitemap-index + 2-3 fixture job pages under different
 `hiringOrganization` values, asserting: the resolved employer per posting, the
-`ce.Company` fallback when `hiringOrganization` is absent/empty, and that a non-hub
-`CompanyEntry` (hypothetical) still takes `ce.Company` unchanged — the same shape as
-`successfactors_hub`'s existing test.
+`unreadableDetail` fallback when `hiringOrganization` is absent/empty, and the dedup
+`ExternalID` — the same shape as `bayt_test.go`'s existing coverage of the same pattern.
 
 ## Risks
 
 - **Job volume is unknown.** Recon confirmed the markup shape on one posting, not a count.
   Sanity-check the first run's job count/duration before trusting the board long-term —
   the same caution the SuccessFactors hub design raised for a large, uncounted hub.
-- **`hiringOrganization` has no curation step.** Unlike SuccessFactors' `Tenants` map
-  (hand-verified once), a scraped `hiringOrganization.name` can be messy — the platform's
-  own brand, a recruiter's name instead of the real employer, inconsistent casing — and
-  the fallback only catches *empty* values, not wrong-but-present ones. This is accepted
-  because it is the only per-posting signal the site offers; watch the catalogue after
-  launch for obviously wrong employer names on this hub specifically.
+- **`hiringOrganization` has no curation step.** A scraped `hiringOrganization.name` can be
+  messy — the platform's own brand, a recruiter's name instead of the real employer,
+  inconsistent casing — and the fallback only catches *empty* values, not wrong-but-present
+  ones. Bayt and GulfTalent accept the same risk for the same reason: it is the only
+  per-posting signal the site offers. Watch the catalogue after launch for obviously wrong
+  employer names on this source specifically.
 
 ## Out of scope
 
@@ -145,7 +133,5 @@ A unit test over a fixture sitemap-index + 2-3 fixture job pages under different
 - NaukriGulf, OilAndGasJobSearch — unreachable at the network level from this environment
   and from the prod host; the same paid-capability question as Rigzone would apply, not
   attempted.
-- Any change to `Hub`/`Tenants` semantics for the four existing hub adapters.
-- A generic "resolve hub from `hiringOrganization`" helper shared across adapters — with
-  only one call site, a shared helper is premature; revisit if a second hub needs the same
-  shape.
+- Any change to `bayt.go`/`gulftalent.go` or the `aggregator`/`boardless` marker
+  interfaces — EnergyJobline only consumes them, exactly as they already exist.
