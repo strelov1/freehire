@@ -68,8 +68,12 @@ postings outright keeps the unreadable rate at its true (low, exceptional) level
   energyjobline-shaped "nearly everything is Unreadable" signal, which is already loud
   and already monitored the same way.
 - **[A false-positive expired match on a live posting would silently drop a real job]**
-  → the marker text is specific enough ("no longer accepting applicants") that a
-  collision with live content is not a realistic concern.
+  → independently re-checked post-review (2026-10-08): the literal string
+  `c-jobs-article-expired` is absent (grep count 0) from the raw HTML of two different
+  live postings (`project-manager-1281250`, `hull-structura-lead-1280438`) that each
+  carry a working `JobPosting` ld+json block. The marker is genuinely absent from the
+  DOM on live postings, not merely hidden by CSS — confirmed from the raw response body,
+  not just a rendered view.
 
 ## Migration Plan
 
