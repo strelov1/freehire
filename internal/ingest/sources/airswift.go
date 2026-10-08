@@ -22,14 +22,14 @@ import (
 // outright, the same category as a 404/410, rather than an unreadableDetail stub:
 // marking that large a fraction of every crawl Unreadable would permanently withhold
 // the board's stale-job close (see fetchDetails/Unreadable's documented contract).
+//
+// The sitemap and the detail pages need different transports (see
+// airswiftRequestInterval — the detail path 429s under an unpaced burst), so, like
+// clinch and energyjobline, the two are separate parameters rather than one combined
+// client.
 type airswift struct {
-	http airswiftHTTP
-}
-
-// airswiftHTTP is the transport airswift needs: the XML sitemap plus HTML detail pages.
-type airswiftHTTP interface {
-	XMLGetter
-	HTMLGetter
+	sitemap XMLGetter  // the sitemap.xml (one request per run)
+	pages   HTMLGetter // per-posting detail pages, rate-paced
 }
 
 const (
@@ -41,8 +41,11 @@ const (
 	airswiftCompany = "Airswift"
 )
 
-// NewAirswift builds the Airswift adapter over the given HTTP client.
-func NewAirswift(c airswiftHTTP) Source { return airswift{http: c} }
+// NewAirswift builds the Airswift adapter: sitemap fetches the site's sitemap.xml,
+// pages fetches each job-detail page (see airswiftRequestInterval, pacedHTMLGetter).
+func NewAirswift(sitemap XMLGetter, pages HTMLGetter) Source {
+	return airswift{sitemap: sitemap, pages: pages}
+}
 
 func (airswift) Provider() string { return "airswift" }
 
@@ -50,7 +53,7 @@ func (airswift) Provider() string { return "airswift" }
 func (airswift) boardless() {}
 
 func (a airswift) Fetch(ctx context.Context, ce CompanyEntry) ([]Job, error) {
-	urls, err := sitemapJobLocs(ctx, a.http, airswiftSitemapURL, airswiftJobID)
+	urls, err := sitemapJobLocs(ctx, a.sitemap, airswiftSitemapURL, airswiftJobID)
 	if err != nil {
 		return nil, fmt.Errorf("airswift: sitemap: %w", err)
 	}
@@ -71,7 +74,7 @@ func (a airswift) detail(ctx context.Context, ce CompanyEntry, link string) (Job
 	if id == "" {
 		return Job{}, false
 	}
-	root, err := a.http.GetHTML(ctx, link)
+	root, err := a.pages.GetHTML(ctx, link)
 	if err != nil {
 		if detailUnreadable(err) {
 			return unreadableDetail(id, link, ce.Company), true

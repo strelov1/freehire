@@ -45,7 +45,7 @@ func TestAirswiftFetchSitemapThenDetailAndMaps(t *testing.T) {
 		)).
 		route("/jobs/snr-metering-engineer-1279815", detail)
 
-	jobs, err := NewAirswift(fake).Fetch(context.Background(), CompanyEntry{
+	jobs, err := NewAirswift(fake, fake).Fetch(context.Background(), CompanyEntry{
 		Company: "Airswift", Provider: "airswift",
 	})
 	if err != nil {
@@ -77,7 +77,7 @@ func TestAirswiftFetchSitemapThenDetailAndMaps(t *testing.T) {
 
 func TestAirswiftBrokenSitemapErrorsTheCrawl(t *testing.T) {
 	fake := (&routedHTTP{}).routeErr("sitemap.xml", errors.New("origin down"))
-	_, err := NewAirswift(fake).Fetch(context.Background(), CompanyEntry{
+	_, err := NewAirswift(fake, fake).Fetch(context.Background(), CompanyEntry{
 		Company: "Airswift", Provider: "airswift",
 	})
 	if err == nil {
@@ -89,7 +89,7 @@ func TestAirswiftExpiredPostingIsDroppedNotUnreadable(t *testing.T) {
 	jobURL := "https://www.airswift.com/jobs/qc-inspector-paint-coating-1277274"
 	fake := (&routedHTTP{}).route("/jobs/qc-inspector-paint-coating-1277274", airswiftExpiredHTML())
 
-	j, ok := airswift{http: fake}.detail(context.Background(),
+	j, ok := airswift{sitemap: fake, pages: fake}.detail(context.Background(),
 		CompanyEntry{Company: "Airswift"}, jobURL)
 	if ok {
 		t.Fatalf("detail returned ok=true for an expired posting, want dropped (ok=false); got %+v", j)
@@ -100,7 +100,7 @@ func TestAirswiftUnexpectedMissingJobPostingIsUnreadable(t *testing.T) {
 	jobURL := "https://www.airswift.com/jobs/mystery-role-1234567"
 	fake := (&routedHTTP{}).route("/jobs/mystery-role-1234567", "<html><body>no ld+json here</body></html>")
 
-	j, ok := airswift{http: fake}.detail(context.Background(),
+	j, ok := airswift{sitemap: fake, pages: fake}.detail(context.Background(),
 		CompanyEntry{Company: "Airswift"}, jobURL)
 	if !ok {
 		t.Fatal("detail returned ok=false, want an unreadableDetail stub")
@@ -123,7 +123,7 @@ func TestAirswiftGoneDetailDropsThePosting(t *testing.T) {
 		route("/jobs/good-job-1111111", good).
 		routeErr("/jobs/gone-job-2222222", &StatusError{Method: "GET", Code: 404, URL: goneURL})
 
-	jobs, err := NewAirswift(fake).Fetch(context.Background(), CompanyEntry{
+	jobs, err := NewAirswift(fake, fake).Fetch(context.Background(), CompanyEntry{
 		Company: "Airswift", Provider: "airswift",
 	})
 	if err != nil {
@@ -144,7 +144,7 @@ func TestAirswiftOtherFetchErrorIsUnreadable(t *testing.T) {
 		route("/jobs/good-job-3333333", good).
 		routeErr("/jobs/bad-job-4444444", errors.New("timeout"))
 
-	jobs, err := NewAirswift(fake).Fetch(context.Background(), CompanyEntry{
+	jobs, err := NewAirswift(fake, fake).Fetch(context.Background(), CompanyEntry{
 		Company: "Airswift", Provider: "airswift",
 	})
 	if err != nil {
@@ -172,7 +172,7 @@ func TestAirswiftJobID(t *testing.T) {
 }
 
 func TestAirswiftProviderAndBoardless(t *testing.T) {
-	s := NewAirswift(nil)
+	s := NewAirswift(nil, nil)
 	if s.Provider() != "airswift" {
 		t.Errorf("Provider() = %q, want airswift", s.Provider())
 	}

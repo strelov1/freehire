@@ -114,6 +114,21 @@ const (
 	energyjoblineRequestBurst    = 1
 )
 
+// airswift.com 429'd every detail-page request in its first live crawl (an unpaced
+// 8-worker burst over ~1,646 postings, measured 2026-10-08) despite showing no sign of a
+// rate limit under light manual probing beforehand — the limit only shows up under
+// sustained volume. The penalty also outlives the burst that earned it (still 429 on a
+// 3s-spaced probe ~2 minutes after the burst, the same "penalty outlives the burst"
+// shape workstream's own pacer note describes) — cleared after roughly 15 minutes idle.
+// Once clear, 5 sequential probes spaced 2s apart all came back 200. This is a real
+// confirmed trip point from a live sample, not a policy guess the way energyjobline's
+// is, but the sample is small (5 clean requests, not a sustained run) — tune down
+// further if a full paced crawl still gets 429s.
+const (
+	airswiftRequestInterval = 2 * time.Second // ~0.5 req/s
+	airswiftRequestBurst    = 1
+)
+
 // rateLimitedJSONGetter is the JSON-GET counterpart of rateLimitedHTMLGetter: it wraps a
 // JSONGetter with a shared limiter so its aggregate GetJSON rate stays under the endpoint's
 // budget, independent of the caller's worker concurrency. One instance carries one limiter, so

@@ -354,7 +354,9 @@ func All(c HTTPClient) map[string]Source {
 		// listing and detail pages are fully static server-rendered HTML.
 		NewStaffy(c),
 		NewOrion(c),
-		NewAirswift(c),
+		// airswift's detail pages 429 under an unpaced burst (see airswiftRequestInterval);
+		// the sitemap does not, so it stays on the shared client.
+		NewAirswift(c, pacedHTMLGetter(c, airswiftRequestInterval, airswiftRequestBurst)),
 		NewDataArt(c),
 		// energyjobline's detail pages need the Googlebot UA (see crawlerUserAgent) and are
 		// rate-paced (pacedHTMLGetter, see energyjoblineRequestInterval); the sitemap does
