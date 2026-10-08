@@ -124,12 +124,17 @@ const (
 // paced crawl at that rate (892 requests, ~61 minutes) still 429'd on every request — the
 // same shape workstream's own pacer note describes: a short sample understates a budget
 // that is metered over a longer window, not just a per-request minimum gap. A 15-request
-// sample at 5s/req (75s sustained) came back clean afterward; this is still a short
-// sample relative to a full ~900-1,600-request crawl, so it is a more conservative
-// starting point, not a proven ceiling. Tune down further if a full paced crawl at this
-// rate still 429s.
+// sample at 5s/req (75s sustained) also looked clean, and ALSO still 429'd on every
+// request of a real paced crawl (889 requests, ~2.5 hours including retries, measured
+// 2026-10-08). Two short samples in a row have now understated the real budget, which
+// looks to be metered over a window materially longer than any sample this codebase has
+// patience to run by hand. 15s/req is a larger jump than the previous step, chosen to
+// get meaningfully outside the window that burned the first two guesses rather than
+// edge toward it again — still not a proven ceiling. If a full paced crawl at 15s/req
+// still 429s, treat this provider the way Rigzone was treated: move it to the deferred
+// group rather than guessing a fourth time.
 const (
-	airswiftRequestInterval = 5 * time.Second // ~0.2 req/s
+	airswiftRequestInterval = 15 * time.Second // ~0.067 req/s
 	airswiftRequestBurst    = 1
 )
 
