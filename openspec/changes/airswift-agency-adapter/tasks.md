@@ -34,7 +34,7 @@
 
 - [x] 4.1 Run `simplify` over the new/changed files.
 - [x] 4.2 Re-run `go test ./internal/ingest/sources/...` and confirm green.
-- [ ] 4.3 Request code review; address Critical/Important feedback.
+- [x] 4.3 Request code review; address Critical/Important feedback.
 
 ## 5. Post-merge (manual, not part of the tests)
 
