@@ -68,6 +68,17 @@ type fakeStore struct {
 	// delivery stamped last_success_at for.
 	recordedWebhookSuccesses []int64
 
+	// recordedWebhookFailures records every RecordWebhookDeliveryFailure call a
+	// non-410 webhook send error made, so a test can assert both that it
+	// happened (and with which user/threshold) and that other channels never
+	// trigger it.
+	recordedWebhookFailures []db.RecordWebhookDeliveryFailureParams
+	// webhookFailureResult is what the next RecordWebhookDeliveryFailure call
+	// returns, standing in for the row the real UPDATE ... RETURNING would —
+	// a test sets Enabled: false to simulate this call crossing the threshold.
+	webhookFailureResult db.RecordWebhookDeliveryFailureRow
+	webhookFailureErr    error
+
 	// deliveryErr and digestJobsErr fail the two reads deliverOne makes before it can
 	// send anything. Neither burns a delivery attempt, so the counter is the only trace
 	// they leave.
@@ -262,6 +273,14 @@ func (s *fakeStore) DisableWebhookConfig(_ context.Context, userID int64) (int64
 func (s *fakeStore) RecordWebhookDeliverySuccess(_ context.Context, userID int64) error {
 	s.recordedWebhookSuccesses = append(s.recordedWebhookSuccesses, userID)
 	return nil
+}
+
+func (s *fakeStore) RecordWebhookDeliveryFailure(_ context.Context, a db.RecordWebhookDeliveryFailureParams) (db.RecordWebhookDeliveryFailureRow, error) {
+	s.recordedWebhookFailures = append(s.recordedWebhookFailures, a)
+	if s.webhookFailureErr != nil {
+		return db.RecordWebhookDeliveryFailureRow{}, s.webhookFailureErr
+	}
+	return s.webhookFailureResult, nil
 }
 
 type fakeNotifier struct {
@@ -1080,6 +1099,70 @@ func TestDeliver_SuccessfulWebhookRecordsDeliverySuccess(t *testing.T) {
 	}
 	if len(store.recordedWebhookSuccesses) != 1 || store.recordedWebhookSuccesses[0] != 42 {
 		t.Errorf("recordedWebhookSuccesses = %v, want [42]", store.recordedWebhookSuccesses)
+	}
+}
+
+// A webhook send that fails WITHOUT answering 410 Gone (a 404, a 500, a
+// timeout) must still count toward the destination's auto-disable threshold
+// — otherwise a simply-dead destination (wrong URL, service retired, no 410
+// in sight) fails every pass forever instead of being disabled once, the
+// freehire incident this mechanism exists to prevent.
+func TestDeliver_NonGoneWebhookFailureCountsTowardAutoDisable(t *testing.T) {
+	store := &fakeStore{
+		claimed: []db.ClaimSubscriptionMatchesRow{{SubscriptionID: 1, JobID: 10}},
+		delivery: map[int64]db.GetSubscriptionForDeliveryRow{
+			1: {
+				ID: 1, UserID: 42, Channel: ChannelWebhook, SavedSearchName: "Go",
+				WebhookUrl: pgtype.Text{String: "https://example.com/hook", Valid: true}, WebhookEnabled: true,
+			},
+		},
+		digestJobs:           map[int64]db.GetJobsForDigestRow{10: {ID: 10, Title: "A", PublicSlug: "a"}},
+		nextNotificationID:   42,
+		webhookFailureResult: db.RecordWebhookDeliveryFailureRow{ConsecutiveFailures: 1, Enabled: true},
+	}
+	cfg := DefaultConfig()
+	r := New(store, &fakeSearcher{}, &fakeNotifier{err: errors.New("webhooknotify: destination responded 404")}, cfg)
+
+	stats, err := r.Run(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Unlike a 410 (soft-skip), this attempt genuinely failed and must still
+	// be counted — only FUTURE passes stop trying once the destination is
+	// disabled.
+	if stats.Failed != 1 {
+		t.Errorf("Failed = %d, want 1", stats.Failed)
+	}
+	if len(store.recordedWebhookFailures) != 1 {
+		t.Fatalf("recordedWebhookFailures = %v, want exactly one call", store.recordedWebhookFailures)
+	}
+	if got := store.recordedWebhookFailures[0]; got.UserID != 42 || got.MaxFailures != cfg.WebhookMaxConsecutiveFailures {
+		t.Errorf("recordedWebhookFailures[0] = %+v, want UserID 42, MaxFailures %d", got, cfg.WebhookMaxConsecutiveFailures)
+	}
+	// This is the non-410 path: it must never go through disableWebhook,
+	// which is reserved for a destination that explicitly answered Gone.
+	if len(store.disabledWebhooks) != 0 {
+		t.Errorf("disabledWebhooks = %v, want none — a plain 404 is not a 410", store.disabledWebhooks)
+	}
+}
+
+// A non-webhook channel's failure (Telegram, email, push) must never count
+// toward the webhook auto-disable threshold — it belongs only to the webhook
+// channel, same restriction as RecordWebhookDeliverySuccess.
+func TestDeliver_NonWebhookFailureDoesNotCountTowardAutoDisable(t *testing.T) {
+	store := &fakeStore{
+		claimed:            []db.ClaimSubscriptionMatchesRow{{SubscriptionID: 1, JobID: 10}},
+		delivery:           deliverySubscription(),
+		digestJobs:         map[int64]db.GetJobsForDigestRow{10: {ID: 10, Title: "A", PublicSlug: "a"}},
+		nextNotificationID: 42,
+	}
+	r := New(store, &fakeSearcher{}, &fakeNotifier{err: errors.New("telegram: boom")}, DefaultConfig())
+
+	if _, err := r.Run(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if len(store.recordedWebhookFailures) != 0 {
+		t.Errorf("recordedWebhookFailures = %v, want none for a telegram delivery", store.recordedWebhookFailures)
 	}
 }
 

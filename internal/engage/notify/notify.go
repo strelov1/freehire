@@ -171,6 +171,12 @@ type Store interface {
 	// digest sends successfully — the counterpart to DisableWebhookConfig on
 	// the success side.
 	RecordWebhookDeliverySuccess(ctx context.Context, userID int64) error
+	// RecordWebhookDeliveryFailure counts a non-410 webhook send failure
+	// toward the destination's auto-disable threshold, disabling it once the
+	// returned count reaches Config.WebhookMaxConsecutiveFailures — the
+	// counterpart to DisableWebhookConfig for a destination that fails
+	// without ever answering 410 Gone (see migration 0177).
+	RecordWebhookDeliveryFailure(ctx context.Context, arg db.RecordWebhookDeliveryFailureParams) (db.RecordWebhookDeliveryFailureRow, error)
 }
 
 // Config tunes one pass. Defaults come from DefaultConfig.
@@ -189,6 +195,12 @@ type Config struct {
 	ClaimBatch int32
 	// MaxAttempts dead-letters a match after this many failed deliveries.
 	MaxAttempts int32
+	// WebhookMaxConsecutiveFailures auto-disables a webhook destination once
+	// it has failed this many sends in a row with no success in between (see
+	// RecordWebhookDeliveryFailure) — the webhook channel's own dead-letter,
+	// independent of MaxAttempts since a destination that is simply gone
+	// would otherwise fail a fresh match every pass, forever.
+	WebhookMaxConsecutiveFailures int64
 	// SnapshotCap bounds how many jobs a digest carries — which is how many the
 	// in-app notification records and its matched-jobs page can show. It is NOT
 	// the message listing bound (that is ListLimit): a message is short because a
@@ -209,6 +221,10 @@ func DefaultConfig() Config {
 		// looks like.
 		ClaimBatch:  50000,
 		MaxAttempts: 5,
+		// Matches MaxAttempts: five chances before giving up, whether the
+		// failures are spread across different matches (MaxAttempts) or the
+		// same destination refusing everything in a row (this).
+		WebhookMaxConsecutiveFailures: 5,
 		// One query cannot match more than MatchLimit jobs in a pass, so the two
 		// agree deliberately: the snapshot is complete for every digest except a
 		// `daily` one that accumulated across many deferred passes.

@@ -47,13 +47,16 @@ const enableWebhookConfig = `-- name: EnableWebhookConfig :one
 UPDATE webhook_configs
 SET enabled = true,
     disabled_at = NULL,
+    consecutive_failures = 0,
     updated_at = now()
 WHERE user_id = $1
-RETURNING user_id, url, enabled, created_at, updated_at, last_success_at, disabled_at
+RETURNING user_id, url, enabled, created_at, updated_at, last_success_at, disabled_at, consecutive_failures
 `
 
 // Re-enables a user-disabled (or auto-disabled) webhook destination without
-// changing its URL.
+// changing its URL. Resets consecutive_failures for the same reason
+// UpsertWebhookConfig does: re-enabling is a fresh start, not a standing
+// invitation to immediately re-trip the threshold that just disabled it.
 func (q *Queries) EnableWebhookConfig(ctx context.Context, userID int64) (WebhookConfig, error) {
 	row := q.db.QueryRow(ctx, enableWebhookConfig, userID)
 	var i WebhookConfig
@@ -65,12 +68,13 @@ func (q *Queries) EnableWebhookConfig(ctx context.Context, userID int64) (Webhoo
 		&i.UpdatedAt,
 		&i.LastSuccessAt,
 		&i.DisabledAt,
+		&i.ConsecutiveFailures,
 	)
 	return i, err
 }
 
 const getWebhookConfig = `-- name: GetWebhookConfig :one
-SELECT user_id, url, enabled, created_at, updated_at, last_success_at, disabled_at
+SELECT user_id, url, enabled, created_at, updated_at, last_success_at, disabled_at, consecutive_failures
 FROM webhook_configs
 WHERE user_id = $1
 `
@@ -89,19 +93,57 @@ func (q *Queries) GetWebhookConfig(ctx context.Context, userID int64) (WebhookCo
 		&i.UpdatedAt,
 		&i.LastSuccessAt,
 		&i.DisabledAt,
+		&i.ConsecutiveFailures,
 	)
+	return i, err
+}
+
+const recordWebhookDeliveryFailure = `-- name: RecordWebhookDeliveryFailure :one
+UPDATE webhook_configs
+SET consecutive_failures = consecutive_failures + 1,
+    enabled = CASE WHEN consecutive_failures + 1 >= $1::bigint THEN false ELSE enabled END,
+    disabled_at = CASE WHEN consecutive_failures + 1 >= $1::bigint THEN now() ELSE disabled_at END,
+    updated_at = now()
+WHERE user_id = $2
+RETURNING consecutive_failures, enabled
+`
+
+type RecordWebhookDeliveryFailureParams struct {
+	MaxFailures int64 `json:"max_failures"`
+	UserID      int64 `json:"user_id"`
+}
+
+type RecordWebhookDeliveryFailureRow struct {
+	ConsecutiveFailures int64 `json:"consecutive_failures"`
+	Enabled             bool  `json:"enabled"`
+}
+
+// Counts a non-410 send failure (404, 500, timeout, ...) toward the
+// destination's auto-disable threshold and disables it once the new count
+// reaches max_failures — the counterpart to the 410 path in
+// DisableWebhookConfig, for a destination that fails without ever saying so
+// outright. Unlike subscription_matches.attempts (per match, reset by every
+// new job), this counts consecutively across matches, so a destination that
+// is simply dead gets disabled once instead of failing forever.
+func (q *Queries) RecordWebhookDeliveryFailure(ctx context.Context, arg RecordWebhookDeliveryFailureParams) (RecordWebhookDeliveryFailureRow, error) {
+	row := q.db.QueryRow(ctx, recordWebhookDeliveryFailure, arg.MaxFailures, arg.UserID)
+	var i RecordWebhookDeliveryFailureRow
+	err := row.Scan(&i.ConsecutiveFailures, &i.Enabled)
 	return i, err
 }
 
 const recordWebhookDeliverySuccess = `-- name: RecordWebhookDeliverySuccess :exec
 UPDATE webhook_configs
-SET last_success_at = now()
+SET last_success_at = now(),
+    consecutive_failures = 0
 WHERE user_id = $1
 `
 
-// Stamps last_success_at after a delivery succeeds. Not gated on `enabled` —
-// a disabled destination is never delivered to (soft-skipped upstream), so
-// this only ever runs for an enabled one.
+// Stamps last_success_at after a delivery succeeds and resets
+// consecutive_failures — a success means the destination is not, in fact,
+// dead, so a failure before it must not count toward disabling it after.
+// Not gated on `enabled` — a disabled destination is never delivered to
+// (soft-skipped upstream), so this only ever runs for an enabled one.
 func (q *Queries) RecordWebhookDeliverySuccess(ctx context.Context, userID int64) error {
 	_, err := q.db.Exec(ctx, recordWebhookDeliverySuccess, userID)
 	return err
@@ -114,8 +156,9 @@ ON CONFLICT (user_id) DO UPDATE
 SET url = EXCLUDED.url,
     enabled = true,
     disabled_at = NULL,
+    consecutive_failures = 0,
     updated_at = now()
-RETURNING user_id, url, enabled, created_at, updated_at, last_success_at, disabled_at
+RETURNING user_id, url, enabled, created_at, updated_at, last_success_at, disabled_at, consecutive_failures
 `
 
 type UpsertWebhookConfigParams struct {
@@ -127,7 +170,9 @@ type UpsertWebhookConfigParams struct {
 // already exists — there is exactly one row per user (see migration 0135).
 // Saving re-enables a previously disabled destination and clears
 // disabled_at, since submitting the form is an explicit re-commitment to
-// the endpoint.
+// the endpoint. consecutive_failures resets too: a new URL (or the same one
+// re-saved) gets a fresh run at the auto-disable threshold, not whatever
+// count the old destination left behind.
 func (q *Queries) UpsertWebhookConfig(ctx context.Context, arg UpsertWebhookConfigParams) (WebhookConfig, error) {
 	row := q.db.QueryRow(ctx, upsertWebhookConfig, arg.UserID, arg.URL)
 	var i WebhookConfig
@@ -139,6 +184,7 @@ func (q *Queries) UpsertWebhookConfig(ctx context.Context, arg UpsertWebhookConf
 		&i.UpdatedAt,
 		&i.LastSuccessAt,
 		&i.DisabledAt,
+		&i.ConsecutiveFailures,
 	)
 	return i, err
 }

@@ -190,6 +190,14 @@ func (r *Runner) deliverOne(ctx context.Context, subID int64, jobIDs []int64, st
 			return
 		}
 		log.Printf("notify: deliver subscription %d: %v", subID, err)
+		// A webhook failure that is NOT a 410 (handled above) still counts toward
+		// the destination's own auto-disable threshold — see recordWebhookFailure
+		// — because subscription_matches.attempts resets with every new match,
+		// so a destination that is simply dead would otherwise fail one match
+		// per pass forever instead of being disabled once.
+		if info.Channel == ChannelWebhook {
+			r.recordWebhookFailure(ctx, subID, info.UserID, err)
+		}
 		if ferr := r.store.RecordMatchDeliveryFailure(ctx, db.RecordMatchDeliveryFailureParams{
 			SubscriptionID: subID,
 			JobIds:         jobIDs,
@@ -368,6 +376,26 @@ func (r *Runner) disableWebhook(ctx context.Context, subID, userID int64, cause 
 		return
 	}
 	log.Printf("notify: disabled webhook for user %d after subscription %d: %v", userID, subID, cause)
+}
+
+// recordWebhookFailure counts a non-410 webhook send failure toward the
+// destination's auto-disable threshold and logs when that crosses it — the
+// non-410 counterpart to disableWebhook, reached from the generic failure
+// branch rather than the ErrRecipientGone one since the destination never
+// said it was gone, it just keeps failing.
+func (r *Runner) recordWebhookFailure(ctx context.Context, subID, userID int64, cause error) {
+	row, err := r.store.RecordWebhookDeliveryFailure(ctx, db.RecordWebhookDeliveryFailureParams{
+		UserID:      userID,
+		MaxFailures: r.cfg.WebhookMaxConsecutiveFailures,
+	})
+	if err != nil {
+		log.Printf("notify: record webhook delivery failure for user %d (subscription %d): %v", userID, subID, err)
+		return
+	}
+	if !row.Enabled {
+		log.Printf("notify: disabled webhook for user %d after %d consecutive failures (subscription %d): %v",
+			userID, row.ConsecutiveFailures, subID, cause)
+	}
 }
 
 // release drops the lease on a subscription's claimed matches so they are retried

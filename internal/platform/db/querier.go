@@ -1838,7 +1838,9 @@ type Querier interface {
 	// "0 remaining" would end it early.
 	DuplicateMarkerOwnerBackfillBounds(ctx context.Context) (DuplicateMarkerOwnerBackfillBoundsRow, error)
 	// Re-enables a user-disabled (or auto-disabled) webhook destination without
-	// changing its URL.
+	// changing its URL. Resets consecutive_failures for the same reason
+	// UpsertWebhookConfig does: re-enabling is a fresh start, not a standing
+	// invitation to immediately re-trip the threshold that just disabled it.
 	EnableWebhookConfig(ctx context.Context, userID int64) (WebhookConfig, error)
 	// Transactional-outbox enqueue for the ingest write path: queue this one job for a full-
 	// description fetch, gated on it not having been hydrated already.
@@ -5612,9 +5614,19 @@ type Querier interface {
 	// Write one click. Best-effort by contract: the handler redirects whether or not this succeeds,
 	// because a broken redirect lives in a PDF the candidate can neither see nor fix.
 	RecordTracerClick(ctx context.Context, arg RecordTracerClickParams) error
-	// Stamps last_success_at after a delivery succeeds. Not gated on `enabled` —
-	// a disabled destination is never delivered to (soft-skipped upstream), so
-	// this only ever runs for an enabled one.
+	// Counts a non-410 send failure (404, 500, timeout, ...) toward the
+	// destination's auto-disable threshold and disables it once the new count
+	// reaches max_failures — the counterpart to the 410 path in
+	// DisableWebhookConfig, for a destination that fails without ever saying so
+	// outright. Unlike subscription_matches.attempts (per match, reset by every
+	// new job), this counts consecutively across matches, so a destination that
+	// is simply dead gets disabled once instead of failing forever.
+	RecordWebhookDeliveryFailure(ctx context.Context, arg RecordWebhookDeliveryFailureParams) (RecordWebhookDeliveryFailureRow, error)
+	// Stamps last_success_at after a delivery succeeds and resets
+	// consecutive_failures — a success means the destination is not, in fact,
+	// dead, so a failure before it must not count toward disabling it after.
+	// Not gated on `enabled` — a disabled destination is never delivered to
+	// (soft-skipped upstream), so this only ever runs for an enabled one.
 	RecordWebhookDeliverySuccess(ctx context.Context, userID int64) error
 	// Recompute a single company's materialized feedback_count/feedback_rating_avg
 	// from company_feedback and return them. Run as its own statement AFTER the
@@ -7229,7 +7241,9 @@ type Querier interface {
 	// already exists — there is exactly one row per user (see migration 0135).
 	// Saving re-enables a previously disabled destination and clears
 	// disabled_at, since submitting the form is an explicit re-commitment to
-	// the endpoint.
+	// the endpoint. consecutive_failures resets too: a new URL (or the same one
+	// re-saved) gets a fresh run at the auto-disable threshold, not whatever
+	// count the old destination left behind.
 	UpsertWebhookConfig(ctx context.Context, arg UpsertWebhookConfigParams) (WebhookConfig, error)
 	// Apply one yc-oss directory entry, matched by slug. A new slug is inserted as a
 	// reference row (is_reference = true) with no jobs; an existing slug (job-backed or a
