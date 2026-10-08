@@ -354,6 +354,7 @@ func All(c HTTPClient) map[string]Source {
 		// listing and detail pages are fully static server-rendered HTML.
 		NewStaffy(c),
 		NewOrion(c),
+		NewAirswift(c),
 		NewDataArt(c),
 		// energyjobline's detail pages need the Googlebot UA (see crawlerUserAgent) and are
 		// rate-paced (pacedHTMLGetter, see energyjoblineRequestInterval); the sitemap does
