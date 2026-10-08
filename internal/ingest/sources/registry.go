@@ -353,6 +353,7 @@ func All(c HTTPClient) map[string]Source {
 		// Staffy: a single recruiting agency's own board, boardless like Lumenalta; both the
 		// listing and detail pages are fully static server-rendered HTML.
 		NewStaffy(c),
+		NewOrion(c),
 		NewDataArt(c),
 		// energyjobline's detail pages need the Googlebot UA (see crawlerUserAgent) and are
 		// rate-paced (pacedHTMLGetter, see energyjoblineRequestInterval); the sitemap does

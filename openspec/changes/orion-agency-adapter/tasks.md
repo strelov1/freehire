@@ -1,34 +1,38 @@
 ## 1. Listing + pagination
 
-- [ ] 1.1 Write a failing test: given a fixture first-page response (captured shape:
+- [x] 1.1 Write a failing test: given a fixture first-page response (captured shape:
       `items`/`pagination.total`/`pagination.to`), the adapter maps each item to a `Job`
       with Title/Description/Location/PostedAt/ExternalID populated from the listing
       alone.
-- [ ] 1.2 Implement the response structs (wrapped `.value` fields) and the mapping.
-- [ ] 1.3 Write a failing test: a fixture two-page crawl (page 1 full, page 2 partial)
+- [x] 1.2 Implement the response structs (wrapped `.value` fields) and the mapping.
+- [x] 1.3 Write a failing test: a fixture two-page crawl (page 1 full, page 2 partial)
       returns all items from both pages.
-- [ ] 1.4 Implement the pagination loop (stop on empty `items` or `to >= total`, capped
+- [x] 1.4 Implement the pagination loop (stop on empty `items` or `to >= total`, capped
       by `orionMaxPages`).
-- [ ] 1.5 Write a failing test: a first-page fetch error makes `Fetch` return an error.
-- [ ] 1.6 Implement that error path.
+- [x] 1.5 Write a failing test: a first-page fetch error makes `Fetch` return an error.
+- [x] 1.6 Implement that error path.
 
 ## 2. Field mapping details
 
-- [ ] 2.1 Write a failing test: `Company` is always `"Orion Group"` regardless of
+- [x] 2.1 Write a failing test: `Company` is always `"Orion Group"` regardless of
       posting content.
-- [ ] 2.2 Implement that constant.
-- [ ] 2.3 Write a failing test: `ExternalID` comes from the item's integer `id`, not
+- [x] 2.2 Implement that constant.
+- [x] 2.3 Write a failing test: `ExternalID` comes from the item's integer `id`, not
       `slug`/`url`.
-- [ ] 2.4 Implement that id extraction.
-- [ ] 2.5 Write a failing test: `postdate.value` (`DD/MM/YYYY`) parses to the correct
+- [x] 2.4 Implement that id extraction.
+- [x] 2.5 Write a failing test: `postdate.value` (`DD/MM/YYYY`) parses to the correct
       `PostedAt`.
-- [ ] 2.6 Implement that date parsing (check `parseLayout`/`parseDate` helpers for an
-      existing `DD/MM/YYYY` layout before adding a new one).
+- [x] 2.6 Implement that date parsing (no existing `DD/MM/YYYY` layout found; used
+      `parseLayout("02/01/2006", ...)` directly, one-off, not added to dates.go).
+- [x] 2.7 (added beyond the original plan) `employment_type` maps onto
+      `vocab.EmploymentTypeValues` via `orionEmploymentType`, mirroring
+      `recruiterflowEmploymentType`'s shape — `Job.EmploymentType` was otherwise left
+      unpopulated despite the data being available in the listing.
 
 ## 3. Markers and registration
 
-- [ ] 3.1 Add `boardless()` marker method.
-- [ ] 3.2 Register `orion` in `internal/ingest/sources/registry.go`'s `All()`.
+- [x] 3.1 Add `boardless()` marker method.
+- [x] 3.2 Register `orion` in `internal/ingest/sources/registry.go`'s `All()`.
 
 ## 4. Quality pass and review
 
