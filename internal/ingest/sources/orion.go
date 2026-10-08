@@ -45,7 +45,9 @@ func (o orion) Fetch(ctx context.Context, _ CompanyEntry) ([]Job, error) {
 			break
 		}
 		for _, it := range resp.Items {
-			jobs = append(jobs, it.toJob())
+			if j, ok := it.toJob(); ok {
+				jobs = append(jobs, j)
+			}
 		}
 		if resp.Pagination.To >= resp.Pagination.Total {
 			break
@@ -80,8 +82,13 @@ type orionItem struct {
 }
 
 // toJob maps one listing item directly to a Job — the API's listing already carries the
-// full description, so this is the whole mapping, not a partial pre-detail stub.
-func (it orionItem) toJob() Job {
+// full description, so this is the whole mapping, not a partial pre-detail stub. An item
+// with no id or title is dropped (ok=false): id 0 would collide with every other such
+// item's ExternalID, the same risk emagine.toJob's own guard exists to prevent.
+func (it orionItem) toJob() (Job, bool) {
+	if it.ID == 0 || strings.TrimSpace(it.Title.Value) == "" {
+		return Job{}, false
+	}
 	employmentType := ""
 	if len(it.EmploymentType) > 0 {
 		employmentType = orionEmploymentType(it.EmploymentType[0].Value)
@@ -96,12 +103,15 @@ func (it orionItem) toJob() Job {
 		Remote:         isRemote(it.LocationText.Value),
 		PostedAt:       parseLayout("02/01/2006", it.PostDate.Value),
 		EmploymentType: employmentType,
-	}
+	}, true
 }
 
 // orionEmploymentType maps Orion's employment_type label onto vocab.EmploymentTypeValues.
-// "Contract" is confirmed live; the other cases follow this codebase's usual mapping for
-// a self-evident business-vocabulary field (e.g. recruiterflowEmploymentType).
+// "Contract" is confirmed live; "full time"/"part time"/"internship" follow this
+// codebase's usual mapping for a self-evident business-vocabulary field (e.g.
+// recruiterflowEmploymentType). "permanent" is a UK recruitment-agency synonym for
+// full-time added for Orion specifically — a reasonable reading, not independently
+// confirmed live the way "Contract" was.
 func orionEmploymentType(t string) string {
 	switch strings.ToLower(strings.TrimSpace(t)) {
 	case "full time", "full-time", "fulltime", "permanent":

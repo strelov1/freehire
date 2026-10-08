@@ -36,7 +36,7 @@
 
 ## 4. Quality pass and review
 
-- [ ] 4.1 Run `simplify` over the new/changed files.
+- [x] 4.1 Run `simplify` over the new/changed files.
 - [ ] 4.2 Re-run `go test ./internal/ingest/sources/...` and confirm green.
 - [ ] 4.3 Request code review; address Critical/Important feedback.
 

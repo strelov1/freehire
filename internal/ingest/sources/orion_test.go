@@ -106,6 +106,23 @@ func TestOrionFetchStopsOnEmptyPage(t *testing.T) {
 	}
 }
 
+func TestOrionDropsItemWithNoIDOrTitle(t *testing.T) {
+	good := orionItemJSON(1, "job-one", "Job One", "d1", "UK", "01/10/2026")
+	noID := `{"id":0,"url":"/job/no-id/","slug":{"value":"no-id"},"title":{"value":"No ID"},"postdate":{"value":"01/10/2026"},"description":{"value":"d"},"locationtext":{"value":"UK"},"employment_type":[]}`
+	noTitle := orionItemJSON(2, "no-title", "", "d", "UK", "01/10/2026")
+	page := orionPageJSON(3, 3, 1, good, noID, noTitle)
+
+	fake := (&routedHTTP{}).route("page=1", page)
+
+	jobs, err := NewOrion(fake).Fetch(context.Background(), CompanyEntry{Provider: "orion"})
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	if len(jobs) != 1 || jobs[0].ExternalID != "1" {
+		t.Fatalf("got %v, want only the one valid item (id 0 and blank-title items dropped)", jobs)
+	}
+}
+
 func TestOrionFirstPageErrorFailsTheCrawl(t *testing.T) {
 	fake := (&routedHTTP{}).routeErr("page=1", errors.New("origin down"))
 	_, err := NewOrion(fake).Fetch(context.Background(), CompanyEntry{Provider: "orion"})
@@ -118,6 +135,7 @@ func TestOrionEmploymentTypeMapsToVocab(t *testing.T) {
 	cases := map[string]string{
 		"Contract":   "contract",
 		"Full Time":  "full_time",
+		"Permanent":  "full_time",
 		"Part Time":  "part_time",
 		"Internship": "internship",
 		"Volunteer":  "",

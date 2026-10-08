@@ -9,7 +9,8 @@ defense, ~220 current oil & gas / engineering vacancies.
 
 - Add a new `orion` ingest source adapter (`internal/ingest/sources/orion.go`) that pages
   `GET https://www.orionjobs.com/api/recruitment/job/data/?folder=uk&hasexpired=false&page=N`
-  (10 results/page) until a page returns fewer than 10 results, mapping each entry
+  (10 results/page) until a page returns no items or `pagination.to >= pagination.total`,
+  mapping each entry
   directly to a `Job` — the listing payload already carries the full description, so no
   separate detail fetch is needed.
 - Boardless, single-company: `Company` is the constant `"Orion Group"` — the API never
