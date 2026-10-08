@@ -2,6 +2,7 @@ package sources
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
@@ -13,8 +14,17 @@ import (
 // recruitment-agency anonymization, confirmed live), so every posting is attributed to
 // the agency itself. The listing already carries the full HTML description, so unlike
 // emagine.go there is no separate detail fetch.
+//
+// The listing is fetched as text (TextGetter), not GetJSON: the API's backend
+// double-encodes its response as a JSON string whenever the request carries
+// "Accept: application/json" — GetJSON always sends that header, Fetch's manual decode
+// below does not, and that is the only difference that reproduces the bug (confirmed
+// live 2026-10-08: curl with an explicit Accept: application/json header gets a quoted
+// string; the same request with Accept: text/html, or no Accept header at all, gets the
+// real object). This is the site's own content-negotiation defect, not a workaround for
+// anything the site is trying to prevent.
 type orion struct {
-	list JSONGetter
+	list TextGetter
 }
 
 const (
@@ -26,8 +36,8 @@ const (
 	orionMaxPages = 500
 )
 
-// NewOrion builds the Orion Group adapter over the given JSON client.
-func NewOrion(c JSONGetter) Source { return orion{list: c} }
+// NewOrion builds the Orion Group adapter over the given text client.
+func NewOrion(c TextGetter) Source { return orion{list: c} }
 
 func (orion) Provider() string { return "orion" }
 
@@ -37,9 +47,13 @@ func (o orion) Fetch(ctx context.Context, _ CompanyEntry) ([]Job, error) {
 	var jobs []Job
 	for page := 1; page <= orionMaxPages; page++ {
 		url := fmt.Sprintf("%s?folder=uk&hasexpired=false&page=%d", orionListingURL, page)
-		var resp orionPage
-		if err := o.list.GetJSON(ctx, url, &resp); err != nil {
+		body, err := o.list.GetText(ctx, url)
+		if err != nil {
 			return nil, fmt.Errorf("orion: page %d: %w", page, err)
+		}
+		var resp orionPage
+		if err := json.Unmarshal([]byte(body), &resp); err != nil {
+			return nil, fmt.Errorf("orion: page %d: decode: %w", page, err)
 		}
 		if len(resp.Items) == 0 {
 			break
