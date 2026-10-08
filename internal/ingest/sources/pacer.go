@@ -118,14 +118,18 @@ const (
 // 8-worker burst over ~1,646 postings, measured 2026-10-08) despite showing no sign of a
 // rate limit under light manual probing beforehand — the limit only shows up under
 // sustained volume. The penalty also outlives the burst that earned it (still 429 on a
-// 3s-spaced probe ~2 minutes after the burst, the same "penalty outlives the burst"
-// shape workstream's own pacer note describes) — cleared after roughly 15 minutes idle.
-// Once clear, 5 sequential probes spaced 2s apart all came back 200. This is a real
-// confirmed trip point from a live sample, not a policy guess the way energyjobline's
-// is, but the sample is small (5 clean requests, not a sustained run) — tune down
-// further if a full paced crawl still gets 429s.
+// 3s-spaced probe ~2 minutes after the burst) — cleared after roughly 15 minutes idle.
+//
+// A short sample at 2s/req (5 requests, ~10s) looked clean and shipped first, but a real
+// paced crawl at that rate (892 requests, ~61 minutes) still 429'd on every request — the
+// same shape workstream's own pacer note describes: a short sample understates a budget
+// that is metered over a longer window, not just a per-request minimum gap. A 15-request
+// sample at 5s/req (75s sustained) came back clean afterward; this is still a short
+// sample relative to a full ~900-1,600-request crawl, so it is a more conservative
+// starting point, not a proven ceiling. Tune down further if a full paced crawl at this
+// rate still 429s.
 const (
-	airswiftRequestInterval = 2 * time.Second // ~0.5 req/s
+	airswiftRequestInterval = 5 * time.Second // ~0.2 req/s
 	airswiftRequestBurst    = 1
 )
 
