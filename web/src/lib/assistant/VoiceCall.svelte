@@ -15,6 +15,9 @@
     END_WARNING_MS,
     type RealtimeServerEvent,
   } from '$lib/assistant/voiceCall';
+  import { messages } from './VoiceCall.messages';
+  import { locale } from '$lib/i18n/currentLocale.svelte';
+  import { format, t } from '$lib/i18n/t';
 
   // The voice-mode overlay: mints one call's credential, connects directly to OpenAI
   // over WebRTC, and appends each completed turn to the session as it finishes. Audio
@@ -36,6 +39,8 @@
      *  the feature is absent here, not broken. */
     onUnavailable: () => void;
   } = $props();
+
+  const s = $derived(t(messages, locale()));
 
   type Phase = 'connecting' | 'active' | 'error';
   let phase = $state<Phase>('connecting');
@@ -64,7 +69,7 @@
         onUnavailable();
         return;
       }
-      fail(err instanceof SessionNotFound ? 'This conversation could not be found.' : messageOf(err));
+      fail(err instanceof SessionNotFound ? s.notFound : messageOf(err));
       return;
     }
     if (!live) return;
@@ -72,11 +77,11 @@
     try {
       micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
     } catch {
-      fail('The microphone is unavailable — check this site’s permission for it.');
+      fail(s.micUnavailable);
       return;
     }
     if (!live) {
-      micStream.getTracks().forEach((t) => t.stop());
+      micStream.getTracks().forEach((track) => track.stop());
       return;
     }
 
@@ -91,7 +96,7 @@
       // recorder.onerror guards for on the dictation side.
       pc.onconnectionstatechange = () => {
         if (pc && (pc.connectionState === 'failed' || pc.connectionState === 'closed')) {
-          fail('The call disconnected unexpectedly.');
+          fail(s.disconnected);
         }
       };
       for (const track of micStream.getTracks()) pc.addTrack(track, micStream);
@@ -100,7 +105,7 @@
       dc.addEventListener('open', () => {
         if (live) phase = 'active';
       });
-      dc.addEventListener('close', () => fail('The call disconnected unexpectedly.'));
+      dc.addEventListener('close', () => fail(s.disconnected));
       dc.addEventListener('message', (e) => handleServerEvent(e.data));
 
       const offer = await pc.createOffer();
@@ -114,7 +119,7 @@
         body: offer.sdp,
         headers: { Authorization: `Bearer ${token.value}`, 'Content-Type': 'application/sdp' },
       });
-      if (!sdpResp.ok) throw new Error(`Could not connect the call (${sdpResp.status}).`);
+      if (!sdpResp.ok) throw new Error(format(s.connectFailed, { status: String(sdpResp.status) }));
       const answerSdp = await sdpResp.text();
       if (!live) return;
       await pc.setRemoteDescription({ type: 'answer', sdp: answerSdp });
@@ -167,7 +172,7 @@
   }
 
   function messageOf(err: unknown): string {
-    return err instanceof Error ? err.message : 'Could not start voice mode.';
+    return err instanceof Error ? err.message : s.startFailed;
   }
 
   function fail(message: string) {
@@ -195,7 +200,7 @@
     dc = null;
     pc?.close();
     pc = null;
-    micStream?.getTracks().forEach((t) => t.stop());
+    micStream?.getTracks().forEach((track) => track.stop());
     micStream = null;
   }
 
@@ -214,7 +219,7 @@
   {#if phase === 'connecting'}
     <div class="flex items-center gap-2 text-sm text-muted-foreground">
       <Loader2 class="size-4 animate-spin" />
-      Connecting…
+      {s.connecting}
     </div>
   {:else if phase === 'error'}
     <p class="text-sm text-destructive">{errorMessage}</p>
@@ -223,27 +228,27 @@
       onclick={onClose}
       class="rounded-full border border-border px-4 py-2 text-sm font-medium text-foreground hover:bg-muted"
     >
-      Close
+      {s.close}
     </button>
   {:else}
     {#if endingSoon}
       <p class="text-xs font-medium text-warning-strong">
-        This call ends in about a minute.
+        {s.endingSoon}
       </p>
     {/if}
     <div class="flex min-h-16 w-full flex-col gap-1 text-sm" aria-live="polite">
       {#if agentLine}
-        <p class="text-foreground"><span class="text-muted-foreground">Interviewer: </span>{agentLine}</p>
+        <p class="text-foreground"><span class="text-muted-foreground">{s.interviewer} </span>{agentLine}</p>
       {/if}
       {#if userLine}
-        <p class="text-brand"><span class="text-muted-foreground">You: </span>{userLine}</p>
+        <p class="text-brand"><span class="text-muted-foreground">{s.you} </span>{userLine}</p>
       {/if}
     </div>
     <button
       type="button"
       onclick={end}
-      aria-label="End call"
-      title="End call"
+      aria-label={s.endCall}
+      title={s.endCall}
       class="flex size-12 items-center justify-center rounded-full bg-destructive text-destructive-foreground transition-opacity hover:opacity-90"
     >
       <PhoneOff class="size-5" />

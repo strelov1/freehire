@@ -11,6 +11,9 @@
     CONFIRMATION_DECLINE_TEXT,
     type ToolCall,
   } from '$lib/assistant/tool-formatters';
+  import { messages } from './ToolGroupList.messages';
+  import { locale } from '$lib/i18n/currentLocale.svelte';
+  import { t } from '$lib/i18n/t';
 
   // The tool calls of one assistant message, rendered as collapsed cards. The
   // agent's tools are typed functions rather than shell commands, so there is one
@@ -28,6 +31,8 @@
     onConfirm,
     disabled = false,
   }: { calls: readonly ToolCall[]; onConfirm: (text: string) => void; disabled?: boolean } = $props();
+
+  const s = $derived(t(messages, locale()));
 
   // Fold the flat list into consecutive runs of the same tool, so a burst of
   // searches reads as one card rather than five.
@@ -47,8 +52,8 @@
     'self-start inline-flex items-center gap-2 rounded-lg border border-border/60 bg-muted/40 px-2.5 py-1.5 text-sm text-muted-foreground';
 </script>
 
-{#each groupTools(calls) as g, t (t)}
-  {@const title = groupTitle(g)}
+{#each groupTools(calls) as g, gi (gi)}
+  {@const title = groupTitle(g, locale())}
   {#if g[0]?.name === 'request_confirmation'}
     {#each g as c, ci (ci)}
       {@const confirmation = parseConfirmationRequest(c)}
@@ -65,7 +70,7 @@
               {disabled}
               class="rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
             >
-              Yes
+              {s.yes}
             </button>
             <button
               type="button"
@@ -73,7 +78,7 @@
               {disabled}
               class="rounded-md border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted disabled:opacity-50"
             >
-              No
+              {s.no}
             </button>
           </div>
         </div>
@@ -98,7 +103,7 @@
       <ul class="mt-1.5 ml-5 space-y-1 text-xs text-muted-foreground">
         {#each g as c, ci (ci)}
           <li class="flex flex-wrap items-baseline gap-1.5">
-            <span class={c.isError ? 'text-destructive' : ''}>{callLine(c)}</span>
+            <span class={c.isError ? 'text-destructive' : ''}>{callLine(c, locale())}</span>
             {#if toolErrorMessage(c)}
               <span class="text-destructive">— {toolErrorMessage(c)}</span>
             {:else if nonEmptyInput(c.input)}

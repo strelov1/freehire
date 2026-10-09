@@ -45,6 +45,9 @@
   } from '$lib/assistant/sessions';
   import { eventsFromTranscript, type TurnEvent } from '$lib/assistant/wire';
   import { opensInRail, type ChatPreset, type OpeningAction } from '$lib/assistant/presets';
+  import { messages } from './AssistantChat.messages';
+  import { locale } from '$lib/i18n/currentLocale.svelte';
+  import { format, plural, t } from '$lib/i18n/t';
 
   // The agent chat. The agent runs inside the freehire backend, so this is an
   // ordinary authenticated API surface: the session list, one session's stored
@@ -115,6 +118,8 @@
      *  pass `openingActions`: there is nothing left to offer once the run is already starting. */
     autoRun?: boolean;
   } = $props();
+
+  const s = $derived(t(messages, locale()));
 
   let phase = $state<Phase>('loading');
   // planLimitReached distinguishes a spent daily allowance (which offers a link to the
@@ -195,7 +200,7 @@
     queue = [...queue, { id: `q${++queueCounter}`, text }];
   }
 
-  const NEW_CHAT_LABEL = 'New chat';
+  const NEW_CHAT_LABEL = $derived(s.newChat);
 
   /**
    * What the URL this component mounted on asked for: which conversation to mint, and the
@@ -237,18 +242,18 @@
 
   // --- Streaming spinner / thinking timers ---------------------------------
   const SPINNER_GLYPHS = ['·', '✢', '✳', '✶', '✻', '✽'] as const;
-  const VERBS = ['Thinking', 'Working', 'Crunching', 'Pondering', 'Composing', 'Simmering'] as const;
+  const VERBS = $derived(Object.values(s.verbs));
   let elapsedSec = $state(0);
   let spinnerIdx = $state(0);
   let turnStartedAt = $state<number | null>(null);
-  let currentVerb = $state<string>('Thinking');
+  let currentVerb = $state<string>(s.verbs.thinking);
 
   $effect(() => {
     if (turnActive && turnStartedAt === null) {
       turnStartedAt = Date.now();
       elapsedSec = 0;
       spinnerIdx = 0;
-      currentVerb = VERBS[Math.floor(Math.random() * VERBS.length)] ?? 'Thinking';
+      currentVerb = VERBS[Math.floor(Math.random() * VERBS.length)] ?? s.verbs.thinking;
     } else if (!turnActive) {
       turnStartedAt = null;
       elapsedSec = 0;
@@ -299,9 +304,9 @@
       try {
         summaries = await listSessions();
       } catch {
-        setError('Could not load your chats — starting a new one.');
+        setError(s.loadChatsFailed);
       }
-      sessions = summaries.map((s) => fromSummary(s, NEW_CHAT_LABEL));
+      sessions = summaries.map((summary) => fromSummary(summary, NEW_CHAT_LABEL));
 
       // Open the requested session (the host prop), else the newest, else a fresh
       // chat. A host (the /tailor route) seeds `session` + `sessionLabel`.
@@ -352,7 +357,7 @@
         void dispatch({ kind: 'autopilot' });
       }
     } catch (err) {
-      report(err, 'Could not reach the assistant.');
+      report(err, s.assistantUnreachable);
       phase = 'ready';
     }
   }
@@ -392,7 +397,7 @@
     }
 
     if (requested === activeId) return;
-    openSession(requested, true).catch((err: unknown) => report(err, 'Could not open that chat.'));
+    openSession(requested, true).catch((err: unknown) => report(err, s.openChatFailed));
   }
 
   /** Surface a failure. A conversation the caller cannot open is a dead link, not
@@ -420,7 +425,7 @@
     // whatever the user just typed with no trace and no way back.
     if (
       queue.length > 0 &&
-      !confirm('You have an unsent message waiting in this chat. Switch chats and discard it?')
+      !confirm(s.unsentMessageConfirm)
     ) {
       return;
     }
@@ -440,7 +445,7 @@
       // the moment activeId changes, which is during the await — set it late and the
       // effect has already reopened the conversation we just left.
       navigatingTo = fromAddress ? null : id;
-      const { session: meta, messages } = await getSession(id);
+      const { session: meta, messages: transcriptMessages } = await getSession(id);
       // A tailoring conversation is reachable by id but belongs to a CV and only makes
       // sense beside it. Opening one here would show a conversation the rail cannot list
       // and the user cannot get back to. The unbound presets — chat and the experience
@@ -451,7 +456,7 @@
       }
       activePreset = meta.preset;
       let next = initChat();
-      for (const event of eventsFromTranscript(messages)) next = reduceTurnEvent(next, event);
+      for (const event of eventsFromTranscript(transcriptMessages)) next = reduceTurnEvent(next, event);
       chat = next;
       if (meta.label?.trim()) sessions = setLabel(sessions, id, labelFromMessage(meta.label));
       onSessionChange?.(id);
@@ -498,7 +503,7 @@
     try {
       await createAndOpen();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not start a new chat.');
+      setError(err instanceof Error ? err.message : s.newChatFailed);
     } finally {
       creating = false;
     }
@@ -510,7 +515,7 @@
     try {
       await openSession(id);
     } catch (err) {
-      report(err, 'Could not open that chat.');
+      report(err, s.openChatFailed);
     }
   }
 
@@ -521,7 +526,7 @@
   // still-unnamed one has nothing in it worth confirming.
   function requestRemoveChat(id: string) {
     if (switching) return;
-    const named = sessions.find((s) => s.id === id)?.label !== NEW_CHAT_LABEL;
+    const named = sessions.find((sess) => sess.id === id)?.label !== NEW_CHAT_LABEL;
     if (named) {
       removeTargetId = id;
       confirmRemoveChatOpen = true;
@@ -542,7 +547,7 @@
     try {
       await deleteSession(id);
     } catch {
-      setError('Could not delete the chat.');
+      setError(s.deleteChatFailed);
       return;
     }
     const remaining = removeSession(sessions, id);
@@ -557,7 +562,7 @@
         if (next) await openSession(next);
         else await createAndOpen();
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Could not open a chat.');
+        setError(err instanceof Error ? err.message : s.openAChatFailed);
       }
     }
   }
@@ -690,7 +695,7 @@
         // The turn never ran, so the message was never recorded. Give it back rather than
         // losing it, and say why — the composer is empty and nothing else would explain it.
         draft = draft.trim() === '' ? start.text : draft;
-        setError('That message was not sent: the chat was still busy. Try again.');
+        setError(s.messageNotSent);
       }
     } catch (err) {
       if (err instanceof StreamInterrupted) {
@@ -720,7 +725,7 @@
         endTurn();
         return;
       }
-      setError(err instanceof Error ? err.message : 'Could not send the message.');
+      setError(err instanceof Error ? err.message : s.sendFailed);
       chat = reduceTurnEvent(chat, { type: 'result', stop_reason: 'error', is_error: true });
       endTurn();
     }
@@ -746,7 +751,7 @@
       if (err instanceof TurnRefused) {
         error = { message: err.message, planLimitReached: true };
       } else {
-        setError(err instanceof Error ? err.message : 'Could not continue this session.');
+        setError(err instanceof Error ? err.message : s.continueFailed);
       }
     } finally {
       extending = false;
@@ -763,9 +768,9 @@
   async function reloadTranscript(id: string) {
     if (id !== activeId) return;
     try {
-      const { messages } = await getSession(id);
+      const { messages: transcriptMessages } = await getSession(id);
       let next = initChat();
-      for (const event of eventsFromTranscript(messages)) next = reduceTurnEvent(next, event);
+      for (const event of eventsFromTranscript(transcriptMessages)) next = reduceTurnEvent(next, event);
       if (id === activeId) chat = next;
     } catch {
       /* the transcript stays as it is; the next visit will catch up */
@@ -830,7 +835,7 @@
       <span>{refusal.message}</span>
       {#if refusal.ceiling > 0}
         <span class="text-xs text-muted-foreground">
-          {refusal.turns} of {refusal.ceiling} messages used in this session.
+          {format(plural(locale(), refusal.ceiling, s.turnsUsed), { turns: String(refusal.turns), ceiling: String(refusal.ceiling) })}
         </span>
       {/if}
     </div>
@@ -840,7 +845,7 @@
       onclick={continueSession}
       disabled={extending}
     >
-      {extending ? 'Continuing…' : 'Continue — uses another session'}
+      {extending ? s.continuingEllipsis : s.continueUsesSession}
     </button>
   </div>
 {/if}
@@ -854,7 +859,7 @@
     <button
       type="button"
       class="shrink-0 rounded-md p-0.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-      aria-label="Dismiss"
+      aria-label={s.dismiss}
       onclick={() => (bulletCapAlert = null)}
     >
       <X class="size-4" />
@@ -865,13 +870,13 @@
 {#if notFound}
   <div class="m-3 rounded-xl border border-border bg-card p-8 text-center">
     <p class="text-sm text-muted-foreground">
-      This chat no longer exists, or it belongs to a CV you are tailoring.
+      {s.chatGone}
     </p>
     <a
       href={resolve('/my/assistant/[[id]]', {})}
       class="mt-4 inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm font-medium transition-colors hover:bg-muted"
     >
-      Open your chats
+      {s.openYourChats}
     </a>
   </div>
 {:else}
@@ -899,8 +904,8 @@
             type="button"
             onclick={() => (sidebarOpen = !sidebarOpen)}
             class="rounded p-1 text-muted-foreground transition-colors hover:text-foreground"
-            aria-label={sidebarOpen ? 'Hide chats' : 'Show chats'}
-            title={sidebarOpen ? 'Hide chats' : 'Show chats'}
+            aria-label={sidebarOpen ? s.hideChats : s.showChats}
+            title={sidebarOpen ? s.hideChats : s.showChats}
           >
             <PanelLeft class="size-4" />
           </button>
@@ -910,9 +915,9 @@
               onclick={newChat}
               disabled={creating || switching || phase !== 'ready'}
               class="flex items-center gap-1.5 rounded px-1.5 py-1 text-sm text-muted-foreground transition-colors hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
-              title="New chat"
+              title={s.newChat}
             >
-              <Plus class="size-4" />New chat
+              <Plus class="size-4" />{s.newChat}
             </button>
           {/if}
         </div>
@@ -924,11 +929,11 @@
           value={activeId}
           onchange={(e) => selectSession(e.currentTarget.value)}
           disabled={switching}
-          aria-label="Select chat"
+          aria-label={s.selectChat}
           class="min-w-0 flex-1 rounded-lg border border-border bg-background px-2 py-1.5 text-sm"
         >
-          {#each sessions as s (s.id)}
-            <option value={s.id}>{s.label}</option>
+          {#each sessions as sess (sess.id)}
+            <option value={sess.id}>{sess.label}</option>
           {/each}
         </select>
         <!-- Starting a conversation is the primary action here and it is what people came
@@ -940,18 +945,18 @@
           type="button"
           onclick={newChat}
           disabled={creating || switching || phase !== 'ready'}
-          title="New chat"
+          title={s.newChat}
           class="flex h-11 shrink-0 items-center gap-1.5 rounded-lg bg-brand px-3 text-sm font-medium text-brand-foreground disabled:opacity-50"
         >
           <Plus class="size-4" />
-          New
+          {s.newChatShort}
         </button>
         {#if activeId}
           <button
             type="button"
             onclick={() => requestRemoveChat(activeId as string)}
-            aria-label="Delete chat"
-            title="Delete chat"
+            aria-label={s.deleteChatAria}
+            title={s.deleteChatAria}
             class="ml-1 flex size-11 shrink-0 items-center justify-center rounded-lg border border-border text-muted-foreground hover:bg-muted"
           >
             <Trash2 class="size-4" />
@@ -964,7 +969,7 @@
       <div bind:this={scroller} onscroll={onPaneScroll} class="flex-1 overflow-y-auto p-4">
         <div class="mx-auto flex max-w-3xl flex-col gap-3">
           {#if phase === 'loading'}
-            <p class="text-sm text-muted-foreground">Connecting to the agent…</p>
+            <p class="text-sm text-muted-foreground">{s.connecting}</p>
           {:else if chat.messages.length === 0 && openingActions?.length}
             <div class="rounded-xl border border-border bg-muted/30 p-4">
               <div class="flex flex-wrap gap-2">
@@ -993,7 +998,7 @@
             <!-- Never shown on a cold start (autoRun): the brief hasn't landed as a message
                  yet, but the run has already started — inviting the candidate to type here
                  would contradict the "Crunching…" indicator already on screen. -->
-            <p class="text-sm text-muted-foreground">Ask the agent anything to get started.</p>
+            <p class="text-sm text-muted-foreground">{s.askAnything}</p>
           {/if}
 
           {#each chat.messages as message, i (i)}
@@ -1014,7 +1019,7 @@
                     >
                       {active ? SPINNER_GLYPHS[spinnerIdx] : '✶'}
                     </span>
-                    <span class={['font-medium', active && 'shimmer']}>Thinking</span>
+                    <span class={['font-medium', active && 'shimmer']}>{s.verbs.thinking}</span>
                     {#if active}
                       <span class="font-mono text-[0.7rem] text-muted-foreground/70">({elapsedSec}s)</span>
                     {/if}
@@ -1050,7 +1055,7 @@
 
               {#if message.errored}
                 <div class="self-start flex flex-wrap items-center gap-2 text-xs">
-                  <p class="text-destructive">The agent ended the turn with an error.</p>
+                  <p class="text-destructive">{s.turnErrored}</p>
                   {#if i === chat.messages.length - 1 && !turnActive && !switching}
                     <button
                       type="button"
@@ -1058,7 +1063,7 @@
                       disabled={!canStartTurn()}
                       onclick={retryFailedTurn}
                     >
-                      Retry
+                      {s.retry}
                     </button>
                   {/if}
                 </div>
@@ -1074,7 +1079,7 @@
                 {SPINNER_GLYPHS[spinnerIdx]}
               </span>
               <span class="shimmer font-medium">
-                {chat.queued ? 'Waiting for the current turn to finish' : currentVerb}…
+                {chat.queued ? s.waitingForTurn : currentVerb}…
               </span>
               {#if !chat.queued}
                 <span class="font-mono text-[0.7rem] text-muted-foreground/70">({elapsedSec}s)</span>
@@ -1094,7 +1099,7 @@
               class="pointer-events-auto flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1.5 text-xs font-medium text-muted-foreground shadow-md transition-colors hover:text-foreground"
             >
               <ArrowDown class="size-3.5" />
-              Jump to latest
+              {s.jumpToLatest}
             </button>
           </div>
         {/if}
@@ -1138,7 +1143,7 @@
               class="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Phone class="size-3.5" />
-              Voice mode
+              {s.voiceModeButton}
             </button>
           </div>
         {/if}
@@ -1150,9 +1155,9 @@
 
 <ConfirmDialog
   bind:open={confirmRemoveChatOpen}
-  title="Delete this chat?"
-  description="This cannot be undone."
-  confirmLabel="Delete"
+  title={s.deleteThisChat}
+  description={s.cannotUndo}
+  confirmLabel={s.delete}
   variant="destructive"
   onConfirm={confirmRemoveChat}
 />

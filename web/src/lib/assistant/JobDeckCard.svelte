@@ -6,6 +6,9 @@
   import { Badge } from '$lib/ui';
   import { loadJob } from './jobCache';
   import type { DeckEntry } from './deck';
+  import { messages } from './JobDeckCard.messages';
+  import { locale } from '$lib/i18n/currentLocale.svelte';
+  import { t } from '$lib/i18n/t';
 
   // One card in a recommendation deck: the vacancy's own facts, fetched by slug
   // so they are never model-authored, plus the rationale the model attached to
@@ -17,6 +20,7 @@
   // so a failed fetch here means the network — not an invented slug. The card
   // still shows the rationale in that case: it is the part the user came for.
   let { entry }: { entry: DeckEntry } = $props();
+  const s = $derived(t(messages, locale()));
 
   // Captured once, not re-read in the template. The chat reassigns its state on
   // every streamed token, so a `loadJob(entry.slug)` call inside `{#await}` would
@@ -59,7 +63,7 @@
       rel="noopener"
       class="text-sm font-medium text-brand underline underline-offset-2"
     >
-      View job ↗
+      {s.viewJob} ↗
     </a>
     <div class="mt-2">{@render rationale()}</div>
   </div>

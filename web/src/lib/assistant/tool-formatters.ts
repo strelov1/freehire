@@ -7,6 +7,10 @@
 // ACP terminal call, filtering pending no-command notifications) and replaces it
 // with a label per tool.
 
+import { format, plural, t } from '$lib/i18n/t';
+import type { Locale } from '$lib/locale';
+import { messages } from './tool-formatters.messages';
+
 export interface ToolCall {
   name: string;
   input: unknown;
@@ -21,53 +25,11 @@ function truncate(s: string, n: number): string {
   return s.length <= n ? s : s.slice(0, n - 1) + '…';
 }
 
-// What each tool is doing, in the user's terms. The transcript reads as intent
-// ("Searching jobs") rather than as a function name.
-const LABELS: Record<string, string> = {
-  facets: 'Loading filters',
-  search_jobs: 'Searching jobs',
-  get_job: 'Reading a job posting',
-  get_company: 'Reading a company',
-  present_jobs: 'Showing jobs',
-  market_fit: 'Analysing market fit',
-  job_match: 'Scoring the match',
-  save_job: 'Saving a job',
-  unsave_job: 'Removing a bookmark',
-  apply_job: 'Marking as applied',
-  track_job: 'Updating your board',
-  my_jobs: 'Reading your tracked jobs',
-  get_profile: 'Reading your profile',
-  cv_context: 'Reading the match analysis',
-  cv_get: 'Reading your CV',
-  cv_edit: 'Updating your CV',
-  cv_page_count: 'Measuring your CV',
-  tailor_report: 'Updating the tailoring report',
-  cover_letter_draft: 'Drafting a cover letter',
-  check_evidence_fidelity: 'Checking the evidence',
-  screening_answers_set: 'Saving screening answers',
-  interview_context: 'Reading the interview brief',
-  request_confirmation: 'Asking you to confirm',
-  experience_search: 'Searching your experience',
-  experience_get: 'Reading an achievement',
-  experience_add: 'Banking an achievement',
-  experience_update: 'Updating an achievement',
-  experience_merge: 'Merging achievements',
-  experience_employments: 'Reading your work history',
-  experience_set_require_context: 'Flagging an achievement',
-  inbox_overview: 'Reading your inbox',
-  inbox_search: 'Searching your inbox',
-  inbox_triage: 'Triaging your inbox',
-  inbox_link: 'Linking an email to a job',
-  inbox_unlink: 'Unlinking an email',
-  inbox_record_application: 'Recording an application',
-  inbox_resolve_suggestion: 'Resolving a suggestion',
-};
-
 /** The intent label for one call. A tool the backend added before this map caught
  *  up falls back to its own name made readable — `experience_search` reads as
  *  "Experience search", never as a raw identifier in the middle of a sentence. */
-export function toolLabel(call: ToolCall): string {
-  return LABELS[call.name] ?? humanise(call.name);
+export function toolLabel(call: ToolCall, locale: Locale = 'en'): string {
+  return t(messages, locale).labels[call.name as keyof (typeof messages)['en']['labels']] ?? humanise(call.name);
 }
 
 /** `snake_case` → `Sentence case`. */
@@ -79,8 +41,8 @@ function humanise(name: string): string {
 
 /** Title shown in the collapsed header: the distinct intents in the group, capped
  *  so the header stays short. */
-export function groupTitle(calls: readonly ToolCall[]): string {
-  const distinct = [...new Set(calls.map(toolLabel))];
+export function groupTitle(calls: readonly ToolCall[], locale: Locale = 'en'): string {
+  const distinct = [...new Set(calls.map((c) => toolLabel(c, locale)))];
   if (distinct.length === 0) return '';
   if (distinct.length <= 2) return distinct.join(' · ');
   return `${distinct.slice(0, 2).join(' · ')} · +${distinct.length - 2}`;
@@ -88,14 +50,14 @@ export function groupTitle(calls: readonly ToolCall[]): string {
 
 /** One line in the expanded list: the intent plus the argument that identifies
  *  this particular call. */
-export function callLine(call: ToolCall): string {
-  const label = toolLabel(call);
-  const detail = callDetail(call);
+export function callLine(call: ToolCall, locale: Locale = 'en'): string {
+  const label = toolLabel(call, locale);
+  const detail = callDetail(call, locale);
   return detail ? `${label}: ${detail}` : label;
 }
 
 /** The one argument worth showing beside a call's label. */
-function callDetail(call: ToolCall): string | null {
+function callDetail(call: ToolCall, locale: Locale = 'en'): string | null {
   switch (call.name) {
     case 'search_jobs':
       return readField(call.input, 'query') ?? filterSummary(call.input);
@@ -111,7 +73,7 @@ function callDetail(call: ToolCall): string | null {
     case 'my_jobs':
       return readField(call.input, 'filter');
     case 'cv_edit':
-      return editCount(call.input);
+      return editCount(call.input, locale);
     default:
       return null;
   }
@@ -208,9 +170,9 @@ function readList(input: unknown, key: string): string | null {
 
 
 /** How many edits one cv_edit call carried — the tool takes a batch, not a single patch. */
-function editCount(input: unknown): string | null {
+function editCount(input: unknown, locale: Locale = 'en'): string | null {
   if (!input || typeof input !== 'object') return null;
   const ops = (input as Record<string, unknown>).ops;
   if (!Array.isArray(ops) || ops.length === 0) return null;
-  return ops.length === 1 ? '1 edit' : `${ops.length} edits`;
+  return format(plural(locale, ops.length, t(messages, locale).edits), { count: String(ops.length) });
 }

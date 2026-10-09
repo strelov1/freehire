@@ -3,6 +3,9 @@
   import VoiceInput from '$lib/assistant/VoiceInput.svelte';
   import { AUDIO_ENABLED } from '$lib/assistant/audioAvailability';
   import { appendTranscript } from '$lib/assistant/dictation';
+  import { messages } from './Composer.messages';
+  import { locale } from '$lib/i18n/currentLocale.svelte';
+  import { format, t } from '$lib/i18n/t';
 
   // The composer: the queued-message panel (messages typed mid-turn, sent
   // one-by-one as turns finish) plus the auto-growing textarea form. Queue and
@@ -28,6 +31,7 @@
     onCancel?: () => void;
   } = $props();
 
+  const s = $derived(t(messages, locale()));
   let textareaEl = $state<HTMLTextAreaElement | null>(null);
 
   // Dictation. `dictationOff` latches once the server reports no speech gateway: the
@@ -68,15 +72,15 @@
     {#if queue.length > 0}
       <!-- Queued messages: sent one-by-one as each turn finishes. -->
       <div class="mb-2 overflow-hidden rounded-2xl border border-border/60 bg-card">
-        <div class="px-4 py-2 text-xs font-medium text-brand">{queue.length} queued</div>
+        <div class="px-4 py-2 text-xs font-medium text-brand">{format(s.queuedCount, { count: String(queue.length) })}</div>
         <ul class="divide-y divide-border/40 border-t border-border/40">
           {#each queue as item (item.id)}
             <li class="group flex items-start gap-3 px-4 py-2">
               <span class="min-w-0 flex-1 whitespace-pre-wrap break-words text-sm text-foreground">{item.text}</span>
               <button
                 type="button"
-                aria-label="Remove from queue"
-                title="Remove"
+                aria-label={s.removeFromQueueAria}
+                title={s.removeTitle}
                 onclick={() => onRemoveQueued(item.id)}
                 class="flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground opacity-60 transition-opacity hover:bg-muted hover:text-foreground group-hover:opacity-100"
               >
@@ -102,7 +106,7 @@
         bind:this={textareaEl}
         bind:value={draft}
         rows="1"
-        placeholder="Message the agent — Enter to send, Shift+Enter for newline"
+        placeholder={s.placeholder}
         {disabled}
         onkeydown={(e) => {
           if (e.key === 'Enter' && !e.shiftKey) {
@@ -123,7 +127,7 @@
       {#if turnActive && onCancel && !draft.trim()}
         <button
           type="button"
-          aria-label="Stop the assistant"
+          aria-label={s.stopAria}
           onclick={onCancel}
           class="flex size-9 shrink-0 items-center justify-center rounded-full bg-foreground text-background transition-opacity hover:opacity-90"
         >
@@ -132,7 +136,7 @@
       {:else}
         <button
           type="submit"
-          aria-label={turnActive ? 'Queue message' : 'Send message'}
+          aria-label={turnActive ? s.queueMessageAria : s.sendMessageAria}
           aria-busy={turnActive}
           disabled={disabled || !draft.trim()}
           class="flex size-9 shrink-0 items-center justify-center rounded-full bg-foreground text-background transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"

@@ -1,6 +1,9 @@
 <script lang="ts">
   import { Plus, Trash2 } from '@lucide/svelte';
   import type { SessionItem } from '$lib/assistant/sessions';
+  import { messages } from './SessionRail.messages';
+  import { locale } from '$lib/i18n/currentLocale.svelte';
+  import { t } from '$lib/i18n/t';
 
   // Session rail (desktop): the collapsible chat list. Pure rendering — session
   // orchestration (create/select/delete) stays with the parent and arrives as
@@ -26,6 +29,8 @@
     onSelect: (id: string) => void;
     onDelete: (id: string) => void;
   } = $props();
+
+  const s = $derived(t(messages, locale()));
 </script>
 
 <aside class="hidden w-64 shrink-0 flex-col border-r border-border bg-muted/20 md:flex">
@@ -37,28 +42,28 @@
       class="flex w-full items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm font-medium transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
     >
       <Plus class="size-4" />
-      New chat
+      {s.newChat}
     </button>
   </div>
   <ul class="flex-1 space-y-1 overflow-y-auto px-2 pb-2">
-    {#each sessions as s (s.id)}
+    {#each sessions as sess (sess.id)}
       <li class="group relative">
         <button
           type="button"
-          onclick={() => onSelect(s.id)}
+          onclick={() => onSelect(sess.id)}
           disabled={switching}
           class={[
             'flex w-full items-center rounded-lg py-2 pl-3 pr-9 text-left text-sm transition-colors',
-            s.id === activeId ? 'bg-secondary text-secondary-foreground' : 'hover:bg-muted',
+            sess.id === activeId ? 'bg-secondary text-secondary-foreground' : 'hover:bg-muted',
           ]}
         >
-          <span class="min-w-0 flex-1 truncate">{s.label}</span>
+          <span class="min-w-0 flex-1 truncate">{sess.label}</span>
         </button>
         <button
           type="button"
-          aria-label="Delete chat"
-          title="Delete chat"
-          onclick={() => onDelete(s.id)}
+          aria-label={s.deleteChatAria}
+          title={s.deleteChatAria}
+          onclick={() => onDelete(sess.id)}
           class="absolute right-1 top-1/2 flex size-7 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-opacity hover:bg-muted hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100"
         >
           <Trash2 class="size-4" />
