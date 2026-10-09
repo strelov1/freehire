@@ -7,6 +7,9 @@
   // show an em dash when their two sides differ, and font size shows the template's own default
   // until the candidate overrides it.
   import { Minus, Plus } from '@lucide/svelte';
+  import { messages } from './Stepper.messages';
+  import { locale } from '$lib/i18n/currentLocale.svelte';
+  import { format, t } from '$lib/i18n/t';
 
   let {
     display,
@@ -14,12 +17,14 @@
     muted = false,
     onstep,
   }: { display: string; label: string; muted?: boolean; onstep: (delta: 1 | -1) => void } = $props();
+
+  const s = $derived(t(messages, locale()));
 </script>
 
 <div class="flex w-[7.5rem] items-center rounded-lg border border-input">
   <button
     type="button"
-    aria-label="Decrease {label}"
+    aria-label={format(s.decrease, { label })}
     onclick={() => onstep(-1)}
     class="grid h-8 w-8 shrink-0 place-items-center rounded-l-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
   >
@@ -35,7 +40,7 @@
   </output>
   <button
     type="button"
-    aria-label="Increase {label}"
+    aria-label={format(s.increase, { label })}
     onclick={() => onstep(1)}
     class="grid h-8 w-8 shrink-0 place-items-center rounded-r-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
   >

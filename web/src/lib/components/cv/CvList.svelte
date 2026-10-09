@@ -7,6 +7,9 @@
   import { ConfirmDialog, EntityLogo } from '$lib/ui';
   import { openCvIntake } from '$lib/cvIntakeDialog.svelte';
   import { type CvTailoredItem } from '$lib/cv';
+  import { messages } from './CvList.messages';
+  import { locale } from '$lib/i18n/currentLocale.svelte';
+  import { format, t } from '$lib/i18n/t';
 
   // The tailored-CV landing: one company card per CV the caller built for a vacancy, styled like
   // the saved-jobs cards. The card opens the tailoring workspace (which resumes the same agent
@@ -16,6 +19,8 @@
   let error = $state<string | null>(null);
   let items = $state<CvTailoredItem[]>([]);
 
+  const s = $derived(t(messages, locale()));
+
   onMount(load);
 
   async function load() {
@@ -24,7 +29,7 @@
       items = await api.listCvs();
       status = 'ready';
     } catch (e) {
-      error = e instanceof ApiError ? e.message : 'Could not load your CVs.';
+      error = e instanceof ApiError ? e.message : s.loadFailed;
       status = 'error';
     }
   }
@@ -44,7 +49,7 @@
       await api.deleteCv(cv.id);
       items = items.filter((i) => i.id !== cv.id);
     } catch (e) {
-      error = e instanceof ApiError ? e.message : 'Could not delete this CV.';
+      error = e instanceof ApiError ? e.message : s.deleteFailed;
     }
   }
 
@@ -55,27 +60,27 @@
   {#if error}<p class="text-sm text-destructive">{error}</p>{/if}
 
   {#if status === 'loading'}
-    <p class="text-muted-foreground">Loading…</p>
+    <p class="text-muted-foreground">{s.loading}</p>
   {:else if status === 'ready' && items.length === 0}
     <div class="rounded-lg border border-dashed border-border p-8 sm:p-10">
       <div class="mx-auto max-w-md">
         <FileText class="mx-auto h-8 w-8 text-muted-foreground" />
-        <p class="mt-3 text-center font-medium">No tailored CVs yet</p>
+        <p class="mt-3 text-center font-medium">{s.empty.title}</p>
         <p class="mt-1 text-center text-sm text-muted-foreground">
-          A tailored CV starts from a vacancy’s match analysis. Here’s how:
+          {s.empty.body}
         </p>
         <ol class="mx-auto mt-5 flex max-w-sm flex-col gap-3 text-left text-sm">
           <li class="flex items-start gap-3">
             <span class="flex size-6 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold">1</span>
-            <span>Open a vacancy you want to apply to.</span>
+            <span>{s.empty.step1}</span>
           </li>
           <li class="flex items-start gap-3">
             <span class="flex size-6 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold">2</span>
-            <span>Press <strong class="font-medium text-foreground">Tailor my CV</strong> on the job page.</span>
+            <span>{s.empty.step2Lead} <strong class="font-medium text-foreground">{s.empty.tailorMyCv}</strong> {s.empty.step2Tail}</span>
           </li>
           <li class="flex items-start gap-3">
             <span class="flex size-6 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold">3</span>
-            <span>On the result, choose <strong class="font-medium text-foreground">Tailor my CV</strong> — your tailored copy appears here.</span>
+            <span>{s.empty.step3Lead} <strong class="font-medium text-foreground">{s.empty.tailorMyCv}</strong> {s.empty.step3Tail}</span>
           </li>
         </ol>
         <div class="mt-6 text-center">
@@ -84,7 +89,7 @@
             onclick={openCvIntake}
             class="inline-flex items-center gap-1.5 rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background transition-opacity hover:opacity-90"
           >
-            Tailor for a job <ArrowRight class="size-4" />
+            {s.empty.cta} <ArrowRight class="size-4" />
           </button>
         </div>
       </div>
@@ -97,12 +102,12 @@
         >
           <!-- The whole card opens the workspace; the action buttons stop propagation below. -->
           <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- resolve() applied to the path; the rule can't see through the appended ?cv= query -->
-          <a href={`${resolve('/tailor/[slug]', { slug: cv.job_slug })}?cv=${cv.id}`} class="absolute inset-0" aria-label="Open {cv.job_title}"></a>
+          <a href={`${resolve('/tailor/[slug]', { slug: cv.job_slug })}?cv=${cv.id}`} class="absolute inset-0" aria-label={format(s.openAria, { title: cv.job_title })}></a>
           <EntityLogo name={cv.job_company} src={companyLogoUrl(cv.job_company) ?? undefined} shape="square" size="lg" />
           <div class="min-w-0 flex-1">
             <p class="truncate font-medium">{cv.job_title}</p>
             <p class="truncate text-sm text-muted-foreground">{cv.job_company}</p>
-            <p class="mt-0.5 text-xs text-muted-foreground/80">Updated {fmt(cv.updated_at)}</p>
+            <p class="mt-0.5 text-xs text-muted-foreground/80">{format(s.updated, { date: fmt(cv.updated_at) })}</p>
           </div>
           <div class="relative z-10 flex items-center gap-1">
             <!-- eslint-disable svelte/no-navigation-without-resolve -- external CV PDF API URL, not an internal route -->
@@ -110,8 +115,8 @@
               href={api.cvPdfUrl(cv.id)}
               target="_blank"
               rel="noopener"
-              aria-label="Open PDF"
-              title="Open PDF"
+              aria-label={s.openPdf}
+              title={s.openPdf}
               class="flex size-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
             >
               <!-- eslint-enable svelte/no-navigation-without-resolve -->
@@ -119,8 +124,8 @@
             </a>
             <button
               type="button"
-              aria-label="Delete"
-              title="Delete"
+              aria-label={s.deleteTitle}
+              title={s.deleteTitle}
               onclick={() => requestRemove(cv)}
               class="flex size-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
             >
@@ -135,9 +140,9 @@
 
 <ConfirmDialog
   bind:open={confirmRemoveOpen}
-  title={`Delete your tailored CV for “${removeTarget?.job_title ?? ''}”?`}
-  description="This cannot be undone."
-  confirmLabel="Delete"
+  title={format(s.deleteDialog.title, { title: removeTarget?.job_title ?? '' })}
+  description={s.deleteDialog.description}
+  confirmLabel={s.deleteDialog.confirm}
   variant="destructive"
   onConfirm={remove}
 />

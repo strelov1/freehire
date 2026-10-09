@@ -7,8 +7,12 @@
   import { goto } from '$app/navigation';
   import { page } from '$app/state';
   import { api } from '$lib/api';
+  import { messages } from './messages';
+  import { locale } from '$lib/i18n/currentLocale.svelte';
+  import { t } from '$lib/i18n/t';
 
   const id = $derived(page.params.id);
+  const s = $derived(t(messages, locale()));
 
   onMount(async () => {
     try {
@@ -22,6 +26,6 @@
   });
 </script>
 
-<svelte:head><title>Opening CV… — freehire</title></svelte:head>
+<svelte:head><title>{s.headTitle}</title></svelte:head>
 
-<p class="text-muted-foreground">Opening your tailoring workspace…</p>
+<p class="text-muted-foreground">{s.opening}</p>

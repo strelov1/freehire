@@ -6,10 +6,15 @@
   import { onMount } from 'svelte';
   import { Button } from '$lib/ui';
   import { cvAppearance } from '$lib/cvAppearance.svelte';
+  import { messages } from './CvAppearancePane.messages';
+  import { locale } from '$lib/i18n/currentLocale.svelte';
+  import { t } from '$lib/i18n/t';
 
   // `lead` is the half that differs; the caveat below it is the same on both tabs and
   // so belongs here rather than in two prop strings to keep in step.
   let { lead, children }: { lead: string; children: Snippet } = $props();
+
+  const s = $derived(t(messages, locale()));
 
   onMount(() => {
     // A "Saved." or an error raised on the other tab belongs to that visit, not to this
@@ -21,26 +26,25 @@
 
 <div class="space-y-6">
   <p class="text-sm text-muted-foreground">
-    {lead} Changes here only affect CVs you create from now on — CVs you already have keep their
-    own appearance.
+    {lead} {s.leadSuffix}
   </p>
 
   {#if cvAppearance.loadFailed}
-    <p class="text-sm text-destructive">Could not load your appearance defaults.</p>
+    <p class="text-sm text-destructive">{s.loadFailed}</p>
   {:else if !cvAppearance.loaded}
-    <p class="text-muted-foreground">Loading…</p>
+    <p class="text-muted-foreground">{s.loading}</p>
   {:else}
     {@render children()}
 
     <div class="flex flex-wrap items-center gap-2">
       <Button variant="primary" disabled={cvAppearance.saving} onclick={() => cvAppearance.save()}>
-        Save defaults
+        {s.saveDefaults}
       </Button>
     </div>
     {#if cvAppearance.saveError}
       <p class="text-sm text-destructive">{cvAppearance.saveError}</p>
     {:else if cvAppearance.saved}
-      <p class="text-xs text-muted-foreground">Saved.</p>
+      <p class="text-xs text-muted-foreground">{s.saved}</p>
     {/if}
   {/if}
 </div>

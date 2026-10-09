@@ -1,6 +1,9 @@
 <script lang="ts">
   import { api, ApiError } from '$lib/api';
   import type { CvTemplate } from '$lib/cv';
+  import { messages } from './TemplateGallery.messages';
+  import { locale } from '$lib/i18n/currentLocale.svelte';
+  import { format, t } from '$lib/i18n/t';
 
   // The template gallery: a grid of static preview thumbnails (served from
   // /cv-previews/<id>.svg) with the current template highlighted. Two modes:
@@ -29,6 +32,8 @@
   let saving = $state(false);
   let error = $state<string | null>(null);
 
+  const s = $derived(t(messages, locale()));
+
   $effect(() => {
     let cancelled = false;
     void (async () => {
@@ -48,7 +53,7 @@
         status = 'ready';
       } catch (e) {
         if (cancelled) return;
-        error = e instanceof ApiError ? e.message : 'Could not load templates.';
+        error = e instanceof ApiError ? e.message : s.loadFailed;
         status = 'error';
       }
     })();
@@ -77,7 +82,7 @@
       onSelected?.(id);
     } catch (e) {
       current = previous; // roll back the highlight on failure
-      error = e instanceof ApiError ? e.message : 'Could not switch template.';
+      error = e instanceof ApiError ? e.message : s.switchFailed;
     } finally {
       saving = false;
     }
@@ -85,7 +90,7 @@
 </script>
 
 {#if status === 'loading'}
-  <p class="text-sm text-muted-foreground">Loading templates…</p>
+  <p class="text-sm text-muted-foreground">{s.loadingTemplates}</p>
 {:else if status === 'error'}
   <p class="text-sm text-destructive">{error}</p>
 {:else}
@@ -109,7 +114,7 @@
         >
           <img
             src="/cv-previews/{t.id}.svg"
-            alt="{t.label} template preview"
+            alt={format(s.previewAlt, { label: t.label })}
             loading="lazy"
             class="aspect-[1/1.414] w-full border-b border-border bg-white object-cover object-top"
           />
@@ -118,7 +123,7 @@
             <span class="text-xs text-muted-foreground">{t.style}</span>
             {#if t.photo && hasPhoto === false}
               <span class="mt-0.5 text-[11px] leading-tight text-muted-foreground">
-                Add a photo in your profile — this template shows one
+                {s.photoNudge}
               </span>
             {/if}
           </span>

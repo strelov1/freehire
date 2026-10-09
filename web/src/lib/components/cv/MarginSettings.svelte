@@ -10,21 +10,26 @@
   import { stepMargin, stepAxis, axisValue, MARGIN_STEP, type MarginAxis } from '$lib/tailor/geometry';
   import { SettingRow } from '$lib/ui';
   import Stepper from './Stepper.svelte';
+  import { messages } from './MarginSettings.messages';
+  import { locale } from '$lib/i18n/currentLocale.svelte';
+  import { t } from '$lib/i18n/t';
 
   let { margins = $bindable() }: { margins: Margins } = $props();
 
   let perSide = $state(false);
 
-  const axes: { key: MarginAxis; label: string }[] = [
-    { key: 'sides', label: 'Side margins' },
-    { key: 'ends', label: 'Top & bottom' },
-  ];
-  const sides: { key: keyof Margins; label: string }[] = [
-    { key: 'left', label: 'Left' },
-    { key: 'right', label: 'Right' },
-    { key: 'top', label: 'Top' },
-    { key: 'bottom', label: 'Bottom' },
-  ];
+  const s = $derived(t(messages, locale()));
+
+  const axes = $derived<{ key: MarginAxis; label: string }[]>([
+    { key: 'sides', label: s.axes.sides },
+    { key: 'ends', label: s.axes.ends },
+  ]);
+  const sides = $derived<{ key: keyof Margins; row: string; stepper: string }[]>([
+    { key: 'left', row: s.sides.left.row, stepper: s.sides.left.stepper },
+    { key: 'right', row: s.sides.right.row, stepper: s.sides.right.stepper },
+    { key: 'top', row: s.sides.top.row, stepper: s.sides.top.stepper },
+    { key: 'bottom', row: s.sides.bottom.row, stepper: s.sides.bottom.stepper },
+  ]);
 
   // An axis whose two sides differ has no single value to show. Saying so — rather than
   // displaying one side — is what keeps the linked stepper honest about the asymmetry it is
@@ -37,20 +42,20 @@
 
 <div class="space-y-1">
   {#if perSide}
-    {#each sides as { key, label } (key)}
-      <SettingRow {label}>
+    {#each sides as side (side.key)}
+      <SettingRow label={side.row}>
         {#snippet control()}
           <Stepper
-            display={margins[key].toFixed(2)}
-            label="{label} margin"
-            onstep={(d) => (margins[key] = stepMargin(margins[key], d * MARGIN_STEP))}
+            display={margins[side.key].toFixed(2)}
+            label={side.stepper}
+            onstep={(d) => (margins[side.key] = stepMargin(margins[side.key], d * MARGIN_STEP))}
           />
         {/snippet}
       </SettingRow>
     {/each}
   {:else}
     {#each axes as { key, label } (key)}
-      <SettingRow {label} hint={axisValue(margins, key) === null ? 'Sides differ' : undefined}>
+      <SettingRow {label} hint={axisValue(margins, key) === null ? s.sidesDiffer : undefined}>
         {#snippet control()}
           <Stepper
             display={shown(key)}
@@ -70,6 +75,6 @@
     class="flex items-center gap-1 pt-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
   >
     <ChevronRight class={['size-3.5 transition-transform', perSide && 'rotate-90']} />
-    {perSide ? 'Link the margins' : 'Set each side separately'}
+    {perSide ? s.linkMargins : s.setEachSide}
   </button>
 </div>

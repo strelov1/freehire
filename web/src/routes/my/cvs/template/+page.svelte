@@ -4,12 +4,17 @@
   import { cvAppearance } from '$lib/cvAppearance.svelte';
   import CvAppearancePane from '$lib/components/cv/CvAppearancePane.svelte';
   import TemplateGallery from '$lib/tailor/TemplateGallery.svelte';
+  import { messages } from './messages';
+  import { locale } from '$lib/i18n/currentLocale.svelte';
+  import { t } from '$lib/i18n/t';
+
+  const s = $derived(t(messages, locale()));
 </script>
 
 <svelte:head>
-  <title>CV template default — freehire</title>
+  <title>{s.headTitle}</title>
 </svelte:head>
 
-<CvAppearancePane lead="The template a new CV starts with.">
+<CvAppearancePane lead={s.lead}>
   <TemplateGallery bind:value={cvAppearance.templateId} />
 </CvAppearancePane>

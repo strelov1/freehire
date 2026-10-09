@@ -7,8 +7,13 @@
   import { activeRouteTab } from '$lib/routeTabs';
   import { cvIntakeDialog, closeCvIntake, openCvIntake } from '$lib/cvIntakeDialog.svelte';
   import JdIntakeDialog from '$lib/components/cv/JdIntakeDialog.svelte';
+  import { messages } from './messages';
+  import { locale } from '$lib/i18n/currentLocale.svelte';
+  import { t } from '$lib/i18n/t';
 
   let { children }: { children: Snippet } = $props();
+
+  const s = $derived(t(messages, locale()));
 
   // The account shell (my/+layout) owns the container, auth gate, and noindex; this
   // layout adds the CV section's own navigation — the same underline TabStrip every other
@@ -20,11 +25,11 @@
   // Starting a tailored CV is an action on the section, not one of its views, so it
   // stays a button beside the strip — and stays reachable from every tab, which is why
   // the dialog is mounted here rather than inside the list.
-  const SECTIONS = [
-    { id: 'list', label: 'List', href: '/my/cvs', icon: FileText },
-    { id: 'template', label: 'Template', href: '/my/cvs/template', icon: LayoutTemplate },
-    { id: 'typography', label: 'Typography', href: '/my/cvs/typography', icon: Type },
-  ] as const;
+  const SECTIONS = $derived([
+    { id: 'list', label: s.sections.list, href: '/my/cvs', icon: FileText },
+    { id: 'template', label: s.sections.template, href: '/my/cvs/template', icon: LayoutTemplate },
+    { id: 'typography', label: s.sections.typography, href: '/my/cvs/typography', icon: Type },
+  ] as const);
   const PANEL_ID = 'cvs-panel';
 
   const active = $derived(activeRouteTab(page.url.pathname, SECTIONS, 'list'));
@@ -34,17 +39,17 @@
 <div class="flex max-w-3xl flex-col gap-6">
   <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
     <div class="flex flex-col gap-1">
-      <h1 class="text-2xl font-semibold tracking-tight">Tailored CVs</h1>
+      <h1 class="text-2xl font-semibold tracking-tight">{s.title}</h1>
       <p class="text-sm text-muted-foreground">
-        CVs you tailored for specific roles, and the appearance a new one starts with.
+        {s.description}
       </p>
     </div>
     <div class="shrink-0">
-      <Button variant="outline" onclick={openCvIntake}>Tailor for a job</Button>
+      <Button variant="outline" onclick={openCvIntake}>{s.tailorForJob}</Button>
     </div>
   </div>
 
-  <TabStrip {tabs} {active} label="CV sections" panelId={PANEL_ID} />
+  <TabStrip {tabs} {active} label={s.tabStripLabel} panelId={PANEL_ID} />
 
   <div role="tabpanel" id={PANEL_ID} aria-labelledby={tabStripId(PANEL_ID, active)} tabindex="0">
     {@render children()}

@@ -6,6 +6,9 @@
   import type { Job } from '$lib/types';
   import { companyLogoUrl } from '$lib/logo';
   import { Button, Dialog, EntityLogo } from '$lib/ui';
+  import { messages } from './JdIntakeDialog.messages';
+  import { locale } from '$lib/i18n/currentLocale.svelte';
+  import { t } from '$lib/i18n/t';
 
   // Three ways into tailoring: pick one of our own vacancies (a search/select — no backend
   // call, straight to the workspace), paste an external job posting URL, or paste the JD
@@ -13,6 +16,8 @@
   // same workspace; it doesn't know or care which tab produced its slug.
 
   let { onClose }: { onClose: () => void } = $props();
+
+  const s = $derived(t(messages, locale()));
 
   let open = $state(true);
   $effect(() => {
@@ -63,12 +68,10 @@
 
   function messageFor(e: unknown): string {
     if (e instanceof ApiError) {
-      if (e.status === 422) {
-        return "We couldn't read a vacancy from that link — double-check it, or paste the description as text instead.";
-      }
-      if (e.status === 401) return 'Please sign in first.';
+      if (e.status === 422) return s.errors.unreadableLink;
+      if (e.status === 401) return s.errors.signInFirst;
     }
-    return 'Something went wrong. Please try again.';
+    return s.errors.generic;
   }
 
   async function resolveAndOpen(input: Parameters<typeof api.resolveJd>[0]) {
@@ -105,17 +108,17 @@
     'rounded-md border border-border bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
 </script>
 
-<Dialog bind:open title="Tailor a CV for a job" class="sm:max-w-lg">
+<Dialog bind:open title={s.dialogTitle} class="sm:max-w-lg">
   <div class="flex gap-4 border-b border-border text-sm">
-    {#each [{ id: 'existing', label: 'Our vacancy' }, { id: 'url', label: 'Link' }, { id: 'text', label: 'Paste text' }] as t (t.id)}
+    {#each [{ id: 'existing', label: s.tabs.existing }, { id: 'url', label: s.tabs.url }, { id: 'text', label: s.tabs.text }] as tabOption (tabOption.id)}
       <button
         type="button"
-        onclick={() => (tab = t.id as typeof tab)}
-        class="-mb-px border-b-2 px-1 py-2 transition-colors {tab === t.id
+        onclick={() => (tab = tabOption.id as typeof tab)}
+        class="-mb-px border-b-2 px-1 py-2 transition-colors {tab === tabOption.id
           ? 'border-brand font-medium text-foreground'
           : 'border-transparent text-muted-foreground hover:text-foreground'}"
       >
-        {t.label}
+        {tabOption.label}
       </button>
     {/each}
   </div>
@@ -124,22 +127,22 @@
     {#if tab === 'existing'}
       <div class="flex flex-col gap-3">
         <label class="flex flex-col gap-1.5 text-sm">
-          <span class="font-medium">Search our catalog</span>
+          <span class="font-medium">{s.searchLabel}</span>
           <div class="flex items-center gap-2 {fieldClass}">
             <Search class="size-4 shrink-0 text-muted-foreground" />
             <input
               bind:value={query}
               type="text"
-              placeholder="Job title or company…"
+              placeholder={s.searchPlaceholder}
               autocomplete="off"
               class="min-w-0 flex-1 bg-transparent outline-none placeholder:text-muted-foreground"
             />
           </div>
         </label>
         {#if searching}
-          <p class="text-sm text-muted-foreground">Searching…</p>
+          <p class="text-sm text-muted-foreground">{s.searching}</p>
         {:else if query.trim() && results.length === 0}
-          <p class="text-sm text-muted-foreground">No matches.</p>
+          <p class="text-sm text-muted-foreground">{s.noMatches}</p>
         {:else if results.length > 0}
           <ul class="flex max-h-72 flex-col gap-1 overflow-y-auto">
             {#each results as job (job.public_slug)}
@@ -150,7 +153,7 @@
                   class="flex w-full items-center gap-3 rounded-md px-2 py-2 text-left transition-colors hover:bg-accent"
                 >
                   <EntityLogo
-                    name={job.company || 'Unknown company'}
+                    name={job.company || s.unknownCompany}
                     src={companyLogoUrl(job.company) ?? undefined}
                     shape="square"
                     size="sm"
@@ -168,43 +171,43 @@
     {:else if tab === 'url'}
       <form class="flex flex-col gap-4" onsubmit={submitUrl}>
         <label class="flex flex-col gap-1.5 text-sm">
-          <span class="font-medium">Job posting URL</span>
+          <span class="font-medium">{s.urlLabel}</span>
           <input bind:value={url} type="url" required placeholder="https://…" class={fieldClass} />
         </label>
         {#if error}<p role="alert" class="text-sm text-destructive">{error}</p>{/if}
         <Button type="submit" variant="primary" disabled={submitting}>
-          {submitting ? 'Resolving…' : 'Continue'}
+          {submitting ? s.resolving : s.continue}
         </Button>
       </form>
     {:else}
       <form class="flex flex-col gap-4" onsubmit={submitText}>
         <label class="flex flex-col gap-1.5 text-sm">
-          <span class="font-medium">Job description</span>
+          <span class="font-medium">{s.textLabel}</span>
           <textarea
             bind:value={text}
             required
             rows="8"
-            placeholder="Paste the job description here…"
+            placeholder={s.textPlaceholder}
             class="resize-y {fieldClass}"
           ></textarea>
         </label>
         <div class="grid grid-cols-2 gap-3">
           <label class="flex flex-col gap-1.5 text-sm">
             <span class="font-medium"
-              >Title <span class="font-normal text-muted-foreground">(optional)</span></span
+              >{s.titleLabel} <span class="font-normal text-muted-foreground">{s.optional}</span></span
             >
             <input bind:value={title} type="text" class={fieldClass} />
           </label>
           <label class="flex flex-col gap-1.5 text-sm">
             <span class="font-medium"
-              >Company <span class="font-normal text-muted-foreground">(optional)</span></span
+              >{s.companyLabel} <span class="font-normal text-muted-foreground">{s.optional}</span></span
             >
             <input bind:value={company} type="text" class={fieldClass} />
           </label>
         </div>
         {#if error}<p role="alert" class="text-sm text-destructive">{error}</p>{/if}
         <Button type="submit" variant="primary" disabled={submitting}>
-          {submitting ? 'Resolving…' : 'Continue'}
+          {submitting ? s.resolving : s.continue}
         </Button>
       </form>
     {/if}

@@ -13,19 +13,24 @@
   import { stepFontSize, FONT_SIZE_STEP, TEMPLATE_FONT_SIZE_PT } from '$lib/tailor/geometry';
   import { SettingRow } from '$lib/ui';
   import Stepper from './Stepper.svelte';
+  import { messages } from './StyleSettings.messages';
+  import { locale } from '$lib/i18n/currentLocale.svelte';
+  import { format, t } from '$lib/i18n/t';
 
   let { style = $bindable(), fonts = [] }: { style: Style; fonts?: CvFont[] } = $props();
+
+  const s = $derived(t(messages, locale()));
 
   // Named presets, not a number. The stored value is the Typst leading in em, which means
   // nothing to a candidate, and a ratio would be false precision about something they are
   // choosing by eye against a live preview. 0.5 is what four of the six templates already use.
-  const LINE_HEIGHTS: { value: number; label: string }[] = [
-    { value: 0, label: 'Template default' },
-    { value: 0.4, label: 'Compact' },
-    { value: 0.5, label: 'Standard' },
-    { value: 0.65, label: 'Relaxed' },
-    { value: 0.8, label: 'Loose' },
-  ];
+  const LINE_HEIGHTS = $derived([
+    { value: 0, label: s.templateDefault },
+    { value: 0.4, label: s.lineHeights.compact },
+    { value: 0.5, label: s.lineHeights.standard },
+    { value: 0.65, label: s.lineHeights.relaxed },
+    { value: 0.8, label: s.lineHeights.loose },
+  ]);
 
   const selectClass =
     'w-full min-w-[9rem] rounded-lg border border-input bg-background px-2 py-1.5 text-sm text-foreground';
@@ -42,7 +47,7 @@
   const lineHeightOptions = $derived.by(() => {
     const v = style.line_height ?? 0;
     if (v === 0 || LINE_HEIGHTS.some((lh) => lh.value === v)) return LINE_HEIGHTS;
-    return [...LINE_HEIGHTS, { value: v, label: `Custom (${v.toFixed(2)})` }];
+    return [...LINE_HEIGHTS, { value: v, label: format(s.custom, { value: v.toFixed(2) }) }];
   });
 
   const isPristine = $derived(
@@ -57,10 +62,10 @@
 </script>
 
 <div class="space-y-1">
-  <SettingRow label="Font" grow>
+  <SettingRow label={s.font} grow>
     {#snippet control()}
-      <select bind:value={style.font_family} class={selectClass} aria-label="Font">
-        <option value="">Template default</option>
+      <select bind:value={style.font_family} class={selectClass} aria-label={s.font}>
+        <option value="">{s.templateDefault}</option>
         {#each fonts as f (f.id)}
           <option value={f.id}>{f.label}{f.note ? ` — ${f.note}` : ''}</option>
         {/each}
@@ -68,20 +73,20 @@
     {/snippet}
   </SettingRow>
 
-  <SettingRow label="Font size" hint={sizeIsDefault ? 'From the template' : 'points'}>
+  <SettingRow label={s.fontSize} hint={sizeIsDefault ? s.fontSizeHintDefault : s.fontSizeHintPoints}>
     {#snippet control()}
       <Stepper
         display={sizeShown}
         muted={sizeIsDefault}
-        label="Font size"
+        label={s.fontSize}
         onstep={(d) => (style.font_size = stepFontSize(style.font_size ?? 0, d * FONT_SIZE_STEP))}
       />
     {/snippet}
   </SettingRow>
 
-  <SettingRow label="Line height" grow>
+  <SettingRow label={s.lineHeight} grow>
     {#snippet control()}
-      <select bind:value={style.line_height} class={selectClass} aria-label="Line height">
+      <select bind:value={style.line_height} class={selectClass} aria-label={s.lineHeight}>
         {#each lineHeightOptions as lh (lh.value)}
           <option value={lh.value}>{lh.label}</option>
         {/each}
@@ -96,6 +101,6 @@
     class="flex items-center gap-1 pt-1 text-xs text-muted-foreground transition-colors hover:text-foreground disabled:opacity-40 disabled:hover:text-muted-foreground"
   >
     <RotateCcw class="size-3.5" />
-    Reset to template default
+    {s.resetToDefault}
   </button>
 </div>
