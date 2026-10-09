@@ -1,0 +1,147 @@
+import { defineMessages, plurals } from '$lib/i18n/t';
+
+// `m.from_name`/`m.subject`/`m.snippet`/`m.linked_company` and everything inside the
+// reading pane's own body are mail content, not catalog text. `Gmail` (the brand name)
+// stays as-is in `sources.*` too.
+export const messages = defineMessages(
+  {
+    loading: 'Loading…',
+    tabs: {
+      inbox: 'Inbox',
+      settings: 'Settings',
+    },
+    tabStripLabel: 'Inbox sections',
+    noSource: {
+      lead: 'No mail source yet —',
+      link: 'set one up in Settings',
+    },
+    sources: {
+      mailbox: 'Mailbox',
+      pushed: 'Pushed',
+      all: 'All',
+    },
+    filterByLabelAria: 'Filter by label',
+    allLabels: 'All labels',
+    searchPlaceholder: 'Search subject, sender, or body…',
+    unreadOnly: 'Unread only',
+    markAllRead: 'Mark all read',
+    refresh: 'Refresh',
+    // `{subject}` is substituted via `format()`. Curly quotes match the original
+    // literal exactly; the Russian translation uses «», that language's own
+    // quoting convention, not a copy of the English glyphs (see
+    // JobListsView.messages.ts).
+    deletedToast: 'Deleted “{subject}”',
+    undo: 'Undo',
+    // The count renders inline with the noun (unlike the stat-tile pattern in
+    // PlanView.messages.ts), so the form carries `{count}` itself.
+    hiddenCount: plurals({
+      one: '{count} message not about an application is hidden.',
+      other: '{count} messages not about an application are hidden.',
+    }),
+    show: 'Show',
+    showingHidden: 'Showing mail that is not about an application.',
+    hide: 'Hide',
+    emptyFiltered: 'No mail matches your filters.',
+    emptyNone: 'No mail yet — it appears here as it arrives.',
+    noSubject: '(no subject)',
+    suggestedTag: 'suggested',
+    unreadDotAria: 'unread',
+    selectMessage: 'Select a message to read it.',
+    deleteTitle: 'Delete',
+    deleteMessageAria: 'Delete message',
+    linkedTo: 'Linked to {company}',
+    linkedFallback: 'application',
+    unlink: 'Unlink',
+    looksLike: 'Looks like',
+    suggestedFallback: 'an application',
+    link: 'Link',
+    notThis: 'Not this',
+    unlinked: 'Unlinked',
+    openInGmail: 'Open in Gmail',
+    messageBodyTitle: 'Message body',
+    errors: {
+      loadInbox: 'Failed to load the inbox.',
+      refresh: 'Refresh failed.',
+      loadMore: 'Failed to load more.',
+      markAllRead: 'Failed to mark all read.',
+      deleteMessage: 'Failed to delete.',
+      restore: 'Failed to restore.',
+      loadMessage: 'Failed to load the message.',
+      link: 'Failed to link.',
+      dismiss: 'Failed to dismiss.',
+      unlink: 'Failed to unlink.',
+      loadHidden: 'Could not load the hidden mail.',
+      reload: 'Could not reload the inbox.',
+    },
+  },
+  {
+    ru: {
+      loading: 'Загрузка…',
+      tabs: {
+        inbox: 'Входящие',
+        settings: 'Настройки',
+      },
+      tabStripLabel: 'Разделы почты',
+      noSource: {
+        lead: 'Источник почты не подключён —',
+        link: 'настройте его в Настройках',
+      },
+      sources: {
+        mailbox: 'Почтовый ящик',
+        pushed: 'Добавлено',
+        all: 'Все',
+      },
+      filterByLabelAria: 'Фильтр по метке',
+      allLabels: 'Все метки',
+      searchPlaceholder: 'Поиск по теме, отправителю или тексту…',
+      unreadOnly: 'Только непрочитанные',
+      markAllRead: 'Отметить все как прочитанные',
+      refresh: 'Обновить',
+      deletedToast: 'Удалено «{subject}»',
+      undo: 'Отменить',
+      hiddenCount: plurals({
+        one: '{count} письмо не про отклик скрыто.',
+        few: '{count} письма не про отклик скрыты.',
+        many: '{count} писем не про отклик скрыто.',
+        other: '{count} письма не про отклик скрыты.',
+      }),
+      show: 'Показать',
+      showingHidden: 'Показаны письма, не связанные с откликами.',
+      hide: 'Скрыть',
+      emptyFiltered: 'Ничего не найдено по заданным фильтрам.',
+      emptyNone: 'Писем пока нет — они появятся здесь по мере поступления.',
+      noSubject: '(без темы)',
+      suggestedTag: 'предположительно',
+      unreadDotAria: 'непрочитано',
+      selectMessage: 'Выберите письмо, чтобы прочитать его.',
+      deleteTitle: 'Удалить',
+      deleteMessageAria: 'Удалить письмо',
+      // Dative: "Привязано к {company}" — и падеж фолбэка должен совпасть ("отклику").
+      linkedTo: 'Привязано к {company}',
+      linkedFallback: 'отклику',
+      unlink: 'Отвязать',
+      looksLike: 'Похоже на',
+      // Accusative: "Похоже на {company}" — фолбэк в том же падеже ("отклик").
+      suggestedFallback: 'отклик',
+      link: 'Привязать',
+      notThis: 'Это не то',
+      unlinked: 'Отвязано',
+      openInGmail: 'Открыть в Gmail',
+      messageBodyTitle: 'Текст письма',
+      errors: {
+        loadInbox: 'Не удалось загрузить почту.',
+        refresh: 'Не удалось обновить.',
+        loadMore: 'Не удалось загрузить ещё.',
+        markAllRead: 'Не удалось отметить все как прочитанные.',
+        deleteMessage: 'Не удалось удалить.',
+        restore: 'Не удалось восстановить.',
+        loadMessage: 'Не удалось загрузить письмо.',
+        link: 'Не удалось привязать.',
+        dismiss: 'Не удалось отклонить.',
+        unlink: 'Не удалось отвязать.',
+        loadHidden: 'Не удалось загрузить скрытые письма.',
+        reload: 'Не удалось обновить почту.',
+      },
+    },
+  },
+);

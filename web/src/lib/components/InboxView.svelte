@@ -12,7 +12,7 @@
     EmailBody,
   } from '$lib/api';
   import type { EmailLinking } from '$lib/types';
-  import { statusLabel, STATUS_LABELS } from '$lib/emailStatus';
+  import { statusLabel, statusLabels } from '$lib/emailStatus';
   import StatusChip from '$lib/components/StatusChip.svelte';
   import { inboxLinkState, type LastUnlinked } from '$lib/inboxLink';
   import { Paginator } from '$lib/paginated.svelte';
@@ -33,8 +33,12 @@
   import { locale } from '$lib/i18n/currentLocale.svelte';
   import { timeAgo, errorMessage, must } from '$lib/utils';
   import { avatarInitials, avatarColor } from '$lib/avatar';
+  import { messages } from './InboxView.messages';
+  import { format, plural, t } from '$lib/i18n/t';
 
   const PAGE_SIZE = 7;
+
+  const s = $derived(t(messages, locale()));
 
   let gmail = $state<GmailStatus | null>(null);
   let mailbox = $state<MailboxStatus | null>(null);
@@ -58,7 +62,7 @@
   let includeOther = $state(false);
   let hidden = $state(0);
   // The dropdown offers only signals with a human label (drops 'other' → blank).
-  const LABEL_OPTIONS = Object.entries(STATUS_LABELS).filter(([, l]) => l !== '');
+  const LABEL_OPTIONS = $derived(Object.entries(statusLabels(locale())).filter(([, l]) => l !== ''));
   const filterActive = $derived(unread || label !== '' || search !== '');
 
   // The mail list pages over the inbox endpoint with the shared Paginator; the
@@ -91,10 +95,10 @@
   // local state rather than routes, so the strip's tabs are buttons — see TabStrip.
   let tab = $state<'inbox' | 'settings'>('inbox');
   const PANEL_ID = 'inbox-panel';
-  const TABS = [
-    { id: 'inbox', label: 'Inbox', icon: Inbox },
-    { id: 'settings', label: 'Settings', icon: Settings },
-  ] as const;
+  const TABS = $derived([
+    { id: 'inbox', label: s.tabs.inbox, icon: Inbox },
+    { id: 'settings', label: s.tabs.settings, icon: Settings },
+  ] as const);
 
   // The selected message and its loaded body (reading pane).
   let selectedId = $state<number | null>(null);
@@ -120,11 +124,11 @@
   const presentSources = $derived(
     [
       { value: 'gmail' as InboxSource, label: 'Gmail', present: hasGmail },
-      { value: 'hosted' as InboxSource, label: 'Mailbox', present: hasMailbox },
-      { value: 'external' as InboxSource, label: 'Pushed', present: hasPushedMail },
-    ].filter((s) => s.present),
+      { value: 'hosted' as InboxSource, label: s.sources.mailbox, present: hasMailbox },
+      { value: 'external' as InboxSource, label: s.sources.pushed, present: hasPushedMail },
+    ].filter((opt) => opt.present),
   );
-  const sourceOptions = $derived([{ value: '' as InboxSource, label: 'All' }, ...presentSources]);
+  const sourceOptions = $derived([{ value: '' as InboxSource, label: s.sources.all }, ...presentSources]);
 
   // A message addressed from outside the inbox — the tracking calendar links each
   // mail-derived event to the message behind it. Opening it here marks it read, which is
@@ -160,10 +164,10 @@
       gmail = gmailStatus;
       mailbox = mailboxStatus;
       hasPushedMail = (pushed.total ?? 0) > 0;
-      if (hasAnySource) await fetchFirstPage('Failed to load the inbox.');
+      if (hasAnySource) await fetchFirstPage(s.errors.loadInbox);
       else tab = 'settings'; // nothing to read yet — land on setup
     } catch (e) {
-      error = errorMessage(e, 'Failed to load the inbox.');
+      error = errorMessage(e, s.errors.loadInbox);
     } finally {
       loading = false;
     }
@@ -189,9 +193,9 @@
     selectedId = null;
     selected = null;
     try {
-      await fetchFirstPage('Failed to load the inbox.');
+      await fetchFirstPage(s.errors.loadInbox);
     } catch (e) {
-      error = errorMessage(e, 'Failed to load the inbox.');
+      error = errorMessage(e, s.errors.loadInbox);
     }
   }
 
@@ -201,9 +205,9 @@
     refreshing = true;
     error = null;
     try {
-      await fetchFirstPage('Refresh failed.');
+      await fetchFirstPage(s.errors.refresh);
     } catch (e) {
-      error = errorMessage(e, 'Refresh failed.');
+      error = errorMessage(e, s.errors.refresh);
     } finally {
       refreshing = false;
     }
@@ -215,7 +219,7 @@
   // the list overflows its pane or the mailbox is exhausted.
   async function loadMore() {
     await pager.loadMore();
-    if (pager.loadMoreError) error = 'Failed to load more.';
+    if (pager.loadMoreError) error = s.errors.loadMore;
   }
 
   function onSearchInput() {
@@ -223,9 +227,9 @@
     searchTimer = setTimeout(reloadList, 250);
   }
 
-  async function setSource(s: InboxSource) {
-    if (source === s) return;
-    source = s;
+  async function setSource(src: InboxSource) {
+    if (source === src) return;
+    source = src;
     await reloadList();
   }
 
@@ -250,7 +254,7 @@
         if (selected) selected = { ...selected, read: true };
       }
     } catch (e) {
-      error = errorMessage(e, 'Failed to mark all read.');
+      error = errorMessage(e, s.errors.markAllRead);
       await reloadList();
     } finally {
       markingAll = false;
@@ -274,7 +278,7 @@
     } catch (e) {
       pager.items = prev; // put the row back
       pager.total += 1;
-      error = errorMessage(e, 'Failed to delete.');
+      error = errorMessage(e, s.errors.deleteMessage);
     }
   }
 
@@ -287,7 +291,7 @@
       await api.restoreEmail(id);
       await reloadList();
     } catch (e) {
-      error = errorMessage(e, 'Failed to restore.');
+      error = errorMessage(e, s.errors.restore);
     }
   }
 
@@ -312,7 +316,7 @@
       // the picker has the caller's applications ready.
       if (!selected.linked_slug && !selected.suggested_slug) void ensureTrackedApps();
     } catch (e) {
-      error = errorMessage(e, 'Failed to load the message.');
+      error = errorMessage(e, s.errors.loadMessage);
     } finally {
       bodyLoading = false;
     }
@@ -362,7 +366,7 @@
     try {
       applyLinkUpdate(await api.confirmEmailLink(selected.id));
     } catch (e) {
-      error = errorMessage(e, 'Failed to link.');
+      error = errorMessage(e, s.errors.link);
     }
   }
 
@@ -373,7 +377,7 @@
       // Dismissing the suggestion drops the email into the manual picker — load its data.
       void ensureTrackedApps();
     } catch (e) {
-      error = errorMessage(e, 'Failed to dismiss.');
+      error = errorMessage(e, s.errors.dismiss);
     }
   }
 
@@ -388,7 +392,7 @@
       // The row now also offers the picker (to link elsewhere) — make sure it has data.
       void ensureTrackedApps();
     } catch (e) {
-      error = errorMessage(e, 'Failed to unlink.');
+      error = errorMessage(e, s.errors.unlink);
     }
   }
 
@@ -399,7 +403,7 @@
       applyLinkUpdate(await api.linkEmail(selected.id, slug));
       lastUnlinked = null;
     } catch (e) {
-      error = errorMessage(e, 'Failed to link.');
+      error = errorMessage(e, s.errors.link);
     }
   }
 
@@ -436,7 +440,7 @@
 </script>
 
 {#if loading}
-  <p class="py-12 text-center text-sm text-muted-foreground">Loading…</p>
+  <p class="py-12 text-center text-sm text-muted-foreground">{s.loading}</p>
 {:else if error}
   <p class="text-sm text-destructive">{error}</p>
 {:else}
@@ -445,7 +449,7 @@
       tabs={TABS}
       active={tab}
       onSelect={(id) => (tab = id)}
-      label="Inbox sections"
+      label={s.tabStripLabel}
       panelId={PANEL_ID}
     />
 
@@ -459,8 +463,8 @@
         <InboxSettings {gmail} bind:mailbox onSourceChanged={onSourceChanged} onError={(m) => (error = m)} />
       {:else if !hasAnySource}
         <p class="py-8 text-center text-sm text-muted-foreground">
-          No mail source yet —
-          <button type="button" class="font-medium text-primary hover:underline" onclick={() => (tab = 'settings')}>set one up in Settings</button>.
+          {s.noSource.lead}
+          <button type="button" class="font-medium text-primary hover:underline" onclick={() => (tab = 'settings')}>{s.noSource.link}</button>.
         </p>
       {:else}
         <!-- Toolbar: account switcher + label filter + search on the left; a compact
@@ -485,12 +489,12 @@
           <select
             bind:value={label}
             onchange={reloadList}
-            aria-label="Filter by label"
+            aria-label={s.filterByLabelAria}
             class="rounded-lg border border-border bg-background py-2 pl-3 pr-8 text-sm outline-none transition focus:border-brand focus:ring-2 focus:ring-brand-ring/40 {label
               ? 'font-medium text-foreground'
               : 'text-muted-foreground'}"
           >
-            <option value="">All labels</option>
+            <option value="">{s.allLabels}</option>
             {#each LABEL_OPTIONS as [value, text] (value)}
               <option {value}>{text}</option>
             {/each}
@@ -500,7 +504,7 @@
             <Search class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <input
               type="search"
-              placeholder="Search subject, sender, or body…"
+              placeholder={s.searchPlaceholder}
               bind:value={search}
               oninput={onSearchInput}
               class="w-full rounded-lg border border-border bg-background py-2 pl-9 pr-3 text-sm outline-none transition focus:border-brand focus:ring-2 focus:ring-brand-ring/40"
@@ -513,8 +517,8 @@
               type="button"
               onclick={toggleUnread}
               aria-pressed={unread}
-              title="Unread only"
-              aria-label="Unread only"
+              title={s.unreadOnly}
+              aria-label={s.unreadOnly}
               class="rounded-lg border p-2 transition-colors {unread
                 ? 'border-brand-ring bg-brand-muted/60 text-foreground'
                 : 'border-border text-muted-foreground hover:text-foreground'}"
@@ -525,8 +529,8 @@
               type="button"
               onclick={markAllRead}
               disabled={markingAll}
-              title="Mark all read"
-              aria-label="Mark all read"
+              title={s.markAllRead}
+              aria-label={s.markAllRead}
               class="rounded-lg border border-border p-2 text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
             >
               <CheckCheck class="h-4 w-4" />
@@ -535,8 +539,8 @@
               type="button"
               onclick={refreshInbox}
               disabled={refreshing}
-              title="Refresh"
-              aria-label="Refresh"
+              title={s.refresh}
+              aria-label={s.refresh}
               class="rounded-lg border border-border p-2 text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
             >
               <RefreshCw class="h-4 w-4 {refreshing ? 'animate-spin' : ''}" />
@@ -546,9 +550,9 @@
 
         {#if lastDeleted}
           <div class="flex items-center gap-2 rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
-            Deleted “{lastDeleted.subject || '(no subject)'}”
+            {format(s.deletedToast, { subject: lastDeleted.subject || s.noSubject })}
             <span aria-hidden="true">·</span>
-            <button type="button" onclick={undoDelete} class="font-medium text-brand-strong hover:underline">Undo</button>
+            <button type="button" onclick={undoDelete} class="font-medium text-brand-strong hover:underline">{s.undo}</button>
           </div>
         {/if}
 
@@ -556,37 +560,37 @@
              when something was hidden, so a clean mailbox says nothing at all. -->
         {#if hidden > 0 && !includeOther}
           <p class="pb-3 text-sm text-muted-foreground">
-            {hidden} message{hidden === 1 ? '' : 's'} not about an application {hidden === 1 ? 'is' : 'are'} hidden.
+            {format(plural(locale(), hidden, s.hiddenCount), { count: String(hidden) })}
             <button
               type="button"
               class="font-medium text-brand-strong underline-offset-2 hover:underline"
               onclick={() => {
                 includeOther = true;
-                void fetchFirstPage('Could not load the hidden mail.');
+                void fetchFirstPage(s.errors.loadHidden);
               }}
             >
-              Show
+              {s.show}
             </button>
           </p>
         {:else if includeOther}
           <p class="pb-3 text-sm text-muted-foreground">
-            Showing mail that is not about an application.
+            {s.showingHidden}
             <button
               type="button"
               class="font-medium text-brand-strong underline-offset-2 hover:underline"
               onclick={() => {
                 includeOther = false;
-                void fetchFirstPage('Could not reload the inbox.');
+                void fetchFirstPage(s.errors.reload);
               }}
             >
-              Hide
+              {s.hide}
             </button>
           </p>
         {/if}
 
         {#if pager.items.length === 0}
           <p class="py-12 text-center text-sm text-muted-foreground">
-            {filterActive ? 'No mail matches your filters.' : 'No mail yet — it appears here as it arrives.'}
+            {filterActive ? s.emptyFiltered : s.emptyNone}
           </p>
         {:else}
           <!-- Fixed-height two-pane so the page itself never scrolls: each pane scrolls
@@ -616,7 +620,7 @@
                       <div class="min-w-0 flex-1">
                         <div class="flex items-baseline gap-2">
                           {#if !m.read}
-                            <span class="h-1.5 w-1.5 shrink-0 rounded-full bg-brand" aria-label="unread"></span>
+                            <span class="h-1.5 w-1.5 shrink-0 rounded-full bg-brand" aria-label={s.unreadDotAria}></span>
                           {/if}
                           <span class="min-w-0 flex-1 truncate text-sm {m.read ? 'font-medium text-foreground/90' : 'font-semibold text-foreground'}">
                             {m.from_name || m.from_addr}
@@ -624,18 +628,18 @@
                           <span class="shrink-0 text-[11px] text-muted-foreground">{timeAgo(m.received_at, locale())}</span>
                         </div>
                         <div class="mt-0.5 truncate text-sm {m.read ? 'text-muted-foreground' : 'text-foreground'}">
-                          {m.subject || '(no subject)'}
+                          {m.subject || s.noSubject}
                         </div>
                         {#if m.snippet}
                           <div class="mt-0.5 truncate text-xs text-muted-foreground/80">{m.snippet}</div>
                         {/if}
-                        {#if statusLabel(m.status_signal) || m.linked_slug}
+                        {#if statusLabel(m.status_signal, locale()) || m.linked_slug}
                           <div class="mt-1 flex items-center gap-1">
                             <StatusChip signal={m.status_signal} class="text-[10px] leading-4" />
                             {#if m.linked_slug}
                               <span class="truncate text-[10px] text-muted-foreground/70">· {m.linked_company}</span>
                             {:else if m.suggested_slug}
-                              <span class="text-[10px] text-brand-strong">· suggested</span>
+                              <span class="text-[10px] text-brand-strong">· {s.suggestedTag}</span>
                             {/if}
                           </div>
                         {/if}
@@ -653,7 +657,7 @@
                 />
               {/if}
               {#if pager.loadingMore}
-                <p class="py-3 text-center text-xs text-muted-foreground">Loading…</p>
+                <p class="py-3 text-center text-xs text-muted-foreground">{s.loading}</p>
               {/if}
             </div>
 
@@ -665,102 +669,102 @@
                 onclick={backToList}
                 class="mb-3 -ml-1 flex shrink-0 items-center gap-1 rounded-md px-1 py-1 text-sm text-muted-foreground hover:text-foreground md:hidden"
               >
-                <ChevronLeft class="h-4 w-4" /> Inbox
+                <ChevronLeft class="h-4 w-4" /> {s.tabs.inbox}
               </button>
               {#if bodyLoading}
-                <p class="py-16 text-center text-sm text-muted-foreground">Loading…</p>
+                <p class="py-16 text-center text-sm text-muted-foreground">{s.loading}</p>
               {:else if !selected}
                 <div class="flex h-full flex-col items-center justify-center gap-2 py-16 text-center">
                   <Mail class="h-7 w-7 text-muted-foreground/50" />
-                  <p class="text-sm text-muted-foreground">Select a message to read it.</p>
+                  <p class="text-sm text-muted-foreground">{s.selectMessage}</p>
                 </div>
               {:else}
-                {@const s = selected}
+                {@const msg = selected}
                 <div class="flex shrink-0 items-start gap-3">
                   <div
                     class="flex h-10 w-10 shrink-0 select-none items-center justify-center rounded-full text-sm font-semibold text-white"
-                    style="background-color: {avatarColor(s.from_addr || s.from_name)}"
+                    style="background-color: {avatarColor(msg.from_addr || msg.from_name)}"
                   >
-                    {avatarInitials(s.from_name, s.from_addr)}
+                    {avatarInitials(msg.from_name, msg.from_addr)}
                   </div>
                   <div class="min-w-0 flex-1">
-                    <h2 class="text-base font-semibold leading-snug tracking-tight">{s.subject || '(no subject)'}</h2>
+                    <h2 class="text-base font-semibold leading-snug tracking-tight">{msg.subject || s.noSubject}</h2>
                     <div class="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
-                      <span class="font-medium text-foreground/80">{s.from_name || s.from_addr}</span>
-                      {#if s.from_name}
+                      <span class="font-medium text-foreground/80">{msg.from_name || msg.from_addr}</span>
+                      {#if msg.from_name}
                         <span aria-hidden="true">·</span>
-                        <span class="truncate">{s.from_addr}</span>
+                        <span class="truncate">{msg.from_addr}</span>
                       {/if}
-                      <span class="ml-auto shrink-0">{timeAgo(s.received_at, locale())}</span>
+                      <span class="ml-auto shrink-0">{timeAgo(msg.received_at, locale())}</span>
                     </div>
                   </div>
                   <button
                     type="button"
                     onclick={deleteSelected}
-                    title="Delete"
-                    aria-label="Delete message"
+                    title={s.deleteTitle}
+                    aria-label={s.deleteMessageAria}
                     class="shrink-0 rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
                   >
                     <Trash2 class="h-4 w-4" />
                   </button>
                 </div>
 
-                {@const linkState = inboxLinkState(s, lastUnlinked)}
+                {@const linkState = inboxLinkState(msg, lastUnlinked)}
                 <div class="mt-3 flex shrink-0 flex-wrap items-center gap-2">
-                  <StatusChip signal={s.status_signal} />
-                  {#if linkState === 'linked' && s.linked_slug}
+                  <StatusChip signal={msg.status_signal} />
+                  {#if linkState === 'linked' && msg.linked_slug}
                     <a
-                      href={resolve('/my/tracking/[id]', { id: s.linked_slug })}
+                      href={resolve('/my/tracking/[id]', { id: msg.linked_slug })}
                       class="inline-flex items-center gap-1 rounded-full border border-border px-2.5 py-0.5 text-xs text-muted-foreground transition-colors hover:border-brand-ring hover:text-foreground"
                     >
-                      Linked to {s.linked_company || 'application'} ↗
+                      {format(s.linkedTo, { company: msg.linked_company || s.linkedFallback })} ↗
                     </a>
-                    <button type="button" onclick={unlink} class="text-xs text-muted-foreground hover:text-destructive">Unlink</button>
+                    <button type="button" onclick={unlink} class="text-xs text-muted-foreground hover:text-destructive">{s.unlink}</button>
                   {:else if linkState === 'suggested'}
                     <span class="inline-flex items-center gap-2 rounded-full border border-brand-ring/50 bg-brand-muted/40 px-2.5 py-0.5 text-xs">
-                      Looks like <span class="font-medium">{s.suggested_company || 'an application'}</span>
-                      <button type="button" onclick={confirmLink} class="font-medium text-brand-strong hover:underline">Link</button>
+                      {s.looksLike} <span class="font-medium">{msg.suggested_company || s.suggestedFallback}</span>
+                      <button type="button" onclick={confirmLink} class="font-medium text-brand-strong hover:underline">{s.link}</button>
                       <span aria-hidden="true">·</span>
-                      <button type="button" onclick={rejectLink} class="text-muted-foreground hover:text-foreground">Not this</button>
+                      <button type="button" onclick={rejectLink} class="text-muted-foreground hover:text-foreground">{s.notThis}</button>
                     </span>
                   {:else}
                     {#if linkState === 'undo'}
                       <span class="inline-flex items-center gap-2 text-xs text-muted-foreground">
-                        Unlinked
+                        {s.unlinked}
                         <span aria-hidden="true">·</span>
-                        <button type="button" onclick={undoUnlink} class="font-medium text-brand-strong hover:underline">Undo</button>
+                        <button type="button" onclick={undoUnlink} class="font-medium text-brand-strong hover:underline">{s.undo}</button>
                       </span>
                     {/if}
                     <ApplicationLinkPicker applications={trackedApps} loading={trackedLoading} onpick={linkTo} />
                   {/if}
                 </div>
 
-                {#if s.source === 'gmail'}
+                {#if msg.source === 'gmail'}
                   <div class="mt-2 flex shrink-0 justify-end">
                     <!-- eslint-disable svelte/no-navigation-without-resolve -- external Gmail deep-link, not an internal route -->
                     <a
-                      href={gmailUrl(s.external_id)}
+                      href={gmailUrl(msg.external_id)}
                       target="_blank"
                       rel="noopener noreferrer"
                       class="text-xs font-medium text-brand-strong hover:underline"
                     ><!-- eslint-enable svelte/no-navigation-without-resolve -->
-                      Open in Gmail ↗
+                      {s.openInGmail} ↗
                     </a>
                   </div>
                 {/if}
 
                 <hr class="my-4 shrink-0 border-border" />
 
-                {#if s.body_html}
+                {#if msg.body_html}
                   <!-- Untrusted sender HTML isolated in a sandboxed iframe (no scripts/forms/navigation). -->
                   <iframe
-                    title="Message body"
+                    title={s.messageBodyTitle}
                     sandbox=""
-                    srcdoc={s.body_html}
+                    srcdoc={msg.body_html}
                     class="min-h-0 w-full flex-1 rounded-md border border-border bg-white"
                   ></iframe>
                 {:else}
-                  <pre class="min-h-0 flex-1 overflow-y-auto whitespace-pre-wrap font-sans text-sm leading-relaxed">{s.body_text}</pre>
+                  <pre class="min-h-0 flex-1 overflow-y-auto whitespace-pre-wrap font-sans text-sm leading-relaxed">{msg.body_text}</pre>
                 {/if}
               {/if}
             </div>

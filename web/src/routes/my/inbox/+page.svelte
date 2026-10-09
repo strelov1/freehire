@@ -1,9 +1,14 @@
 <script lang="ts">
   import InboxView from '$lib/components/InboxView.svelte';
+  import { messages } from './messages';
+  import { locale } from '$lib/i18n/currentLocale.svelte';
+  import { t } from '$lib/i18n/t';
+
+  const s = $derived(t(messages, locale()));
 </script>
 
 <svelte:head>
-  <title>Inbox — freehire</title>
+  <title>{s.headTitle}</title>
 </svelte:head>
 
 <!-- The account shell (my/+layout) owns the container, auth gate, and noindex. A
@@ -12,9 +17,9 @@
   <!-- The title sits here rather than inside InboxView so it is present while the view
        is still loading, the way every other /my/* section titles itself. -->
   <div class="mb-6 flex flex-col gap-1">
-    <h1 class="text-2xl font-semibold tracking-tight">Inbox</h1>
+    <h1 class="text-2xl font-semibold tracking-tight">{s.title}</h1>
     <p class="text-sm text-muted-foreground">
-      The mail your applications generate, linked back to the application it belongs to.
+      {s.description}
     </p>
   </div>
 

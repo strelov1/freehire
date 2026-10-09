@@ -16,10 +16,11 @@
 <script lang="ts">
   import { Badge } from '$lib/ui';
   import { statusClass, statusLabel } from '$lib/emailStatus';
+  import { locale } from '$lib/i18n/currentLocale.svelte';
 
   let { signal, class: className = '' }: { signal?: string; class?: string } = $props();
 
-  const label = $derived(statusLabel(signal));
+  const label = $derived(statusLabel(signal, locale()));
 </script>
 
 {#if label}

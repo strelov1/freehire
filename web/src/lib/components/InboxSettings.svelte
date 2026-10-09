@@ -12,6 +12,9 @@
   import { Badge, Button, ConfirmDialog } from '$lib/ui';
   import { Mail, AtSign, Copy } from '@lucide/svelte';
   import { errorMessage } from '$lib/utils';
+  import { messages } from './InboxSettings.messages';
+  import { locale } from '$lib/i18n/currentLocale.svelte';
+  import { t } from '$lib/i18n/t';
 
   interface Props {
     gmail: GmailStatus | null;
@@ -30,6 +33,7 @@
   let confirmReleaseMailboxOpen = $state(false);
 
   const hasMailbox = $derived(!!mailbox?.address);
+  const s = $derived(t(messages, locale()));
 
   async function claimMailbox() {
     if (claiming) return;
@@ -38,7 +42,7 @@
       mailbox = await api.claimMailbox();
       onSourceChanged(null);
     } catch (e) {
-      onError(errorMessage(e, 'Failed to create a mailbox.'));
+      onError(errorMessage(e, s.claimFailed));
     } finally {
       claiming = false;
     }
@@ -49,7 +53,7 @@
       mailbox = await api.releaseMailbox();
       onSourceChanged('hosted');
     } catch (e) {
-      onError(errorMessage(e, 'Failed to release the mailbox.'));
+      onError(errorMessage(e, s.releaseFailed));
     }
   }
 
@@ -66,53 +70,53 @@
     <div class="flex items-center gap-2 text-sm font-medium">
       <Mail class="h-4 w-4 text-muted-foreground" /> Gmail
       {#if gmail?.connected}
-        <Badge variant="outline" class="border-brand-ring/40 text-brand-strong">Connected</Badge>
+        <Badge variant="outline" class="border-brand-ring/40 text-brand-strong">{s.connected}</Badge>
       {/if}
     </div>
     {#if gmail?.connected}
       <p class="mt-1 truncate text-xs text-muted-foreground">{gmail?.email}</p>
     {:else if gmail?.available}
-      <p class="mt-1 text-xs text-muted-foreground">Pull replies from your own Gmail (needs Google sign-in).</p>
+      <p class="mt-1 text-xs text-muted-foreground">{s.gmailHint}</p>
     {:else}
-      <p class="mt-1 text-xs text-muted-foreground">Not available yet.</p>
+      <p class="mt-1 text-xs text-muted-foreground">{s.notAvailable}</p>
     {/if}
     <Button variant="secondary" size="sm" class="mt-3" href={resolve('/my/integrations')}>
-      {gmail?.connected ? 'Manage in Integrations' : 'Connect in Integrations'}
+      {gmail?.connected ? s.manageIntegrations : s.connectIntegrations}
     </Button>
   </div>
 
   <!-- Hosted mailbox -->
   <div class="rounded-xl border border-border bg-card p-4">
     <div class="flex items-center gap-2 text-sm font-medium">
-      <AtSign class="h-4 w-4 text-muted-foreground" /> freehire mailbox
+      <AtSign class="h-4 w-4 text-muted-foreground" /> {s.freehireMailboxLabel}
     </div>
     {#if hasMailbox}
       <div class="mt-1 flex items-center gap-1">
         <code class="truncate rounded bg-muted px-1.5 py-0.5 text-xs">{mailbox?.address}</code>
-        <button type="button" onclick={copyAddress} title="Copy address" class="shrink-0 text-muted-foreground hover:text-foreground">
+        <button type="button" onclick={copyAddress} title={s.copyAddressTitle} class="shrink-0 text-muted-foreground hover:text-foreground">
           <Copy class="h-3.5 w-3.5" />
         </button>
       </div>
-      <p class="mt-2 text-xs text-muted-foreground">Use this address when you apply — replies land here.</p>
+      <p class="mt-2 text-xs text-muted-foreground">{s.mailboxHint}</p>
       <Button variant="outline" size="sm" class="mt-3" onclick={() => (confirmReleaseMailboxOpen = true)}>
-        Release
+        {s.release}
       </Button>
     {:else if mailbox?.available}
-      <p class="mt-1 text-xs text-muted-foreground">Get an address on our domain — no Google needed.</p>
+      <p class="mt-1 text-xs text-muted-foreground">{s.getMailboxHint}</p>
       <Button variant="primary" size="sm" class="mt-3" disabled={claiming} onclick={claimMailbox}>
-        {claiming ? 'Creating…' : 'Get a freehire mailbox'} <AtSign class="h-4 w-4" />
+        {claiming ? s.creating : s.getMailbox} <AtSign class="h-4 w-4" />
       </Button>
     {:else}
-      <p class="mt-1 text-xs text-muted-foreground">Not available yet.</p>
+      <p class="mt-1 text-xs text-muted-foreground">{s.notAvailable}</p>
     {/if}
   </div>
 </div>
 
 <ConfirmDialog
   bind:open={confirmReleaseMailboxOpen}
-  title="Release your freehire mailbox?"
-  description="Its received mail is deleted."
-  confirmLabel="Release"
+  title={s.releaseDialogTitle}
+  description={s.releaseDialogDescription}
+  confirmLabel={s.release}
   variant="destructive"
   onConfirm={releaseMailbox}
 />

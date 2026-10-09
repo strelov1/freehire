@@ -1,5 +1,8 @@
 <script lang="ts">
   import { Search } from '@lucide/svelte';
+  import { messages } from './ApplicationLinkPicker.messages';
+  import { locale } from '$lib/i18n/currentLocale.svelte';
+  import { t } from '$lib/i18n/t';
 
   interface PickerApp {
     slug: string;
@@ -19,6 +22,7 @@
 
   let open = $state(false);
   let q = $state('');
+  const s = $derived(t(messages, locale()));
 
   const filtered = $derived.by(() => {
     const needle = q.trim().toLowerCase();
@@ -39,7 +43,7 @@
     onclick={() => (open = !open)}
     class="inline-flex items-center gap-1 rounded-full border border-dashed border-border px-2.5 py-0.5 text-xs text-muted-foreground transition-colors hover:border-brand-ring hover:text-foreground"
   >
-    Link to application <span aria-hidden="true">▾</span>
+    {s.trigger} <span aria-hidden="true">▾</span>
   </button>
 
   {#if open}
@@ -47,7 +51,7 @@
     <button
       type="button"
       class="fixed inset-0 z-10 cursor-default"
-      aria-label="Close application picker"
+      aria-label={s.closeAria}
       onclick={() => (open = false)}
     ></button>
 
@@ -55,16 +59,16 @@
       class="absolute left-0 z-20 mt-1 w-64 overflow-hidden rounded-md border border-border bg-background shadow-md"
     >
       {#if loading}
-        <p class="p-3 text-xs text-muted-foreground">Loading your applications…</p>
+        <p class="p-3 text-xs text-muted-foreground">{s.loadingApps}</p>
       {:else if applications.length === 0}
-        <p class="p-3 text-xs text-muted-foreground">No applications yet — track a job first.</p>
+        <p class="p-3 text-xs text-muted-foreground">{s.empty}</p>
       {:else}
         <div class="flex items-center gap-1.5 border-b border-border px-2.5 py-1.5 focus-within:ring-2 focus-within:ring-ring">
           <Search class="size-3.5 shrink-0 text-muted-foreground" />
           <input
             bind:value={q}
-            placeholder="Search applications…"
-            aria-label="Search applications"
+            placeholder={s.searchPlaceholder}
+            aria-label={s.searchAria}
             class="w-full bg-transparent text-xs outline-none placeholder:text-muted-foreground"
           />
         </div>
@@ -76,12 +80,12 @@
                 onclick={() => pick(a.slug)}
                 class="flex w-full flex-col items-start px-2.5 py-1.5 text-left text-xs transition-colors hover:bg-muted"
               >
-                <span class="font-medium text-foreground">{a.company || 'Unknown company'}</span>
+                <span class="font-medium text-foreground">{a.company || s.unknownCompany}</span>
                 {#if a.title}<span class="truncate text-muted-foreground">{a.title}</span>{/if}
               </button>
             </li>
           {:else}
-            <li class="px-2.5 py-1.5 text-xs text-muted-foreground">No match.</li>
+            <li class="px-2.5 py-1.5 text-xs text-muted-foreground">{s.noMatch}</li>
           {/each}
         </ul>
       {/if}

@@ -10,7 +10,13 @@
 import { SIGNAL_STAGE } from './generated/contracts';
 import type { EmailStatusSignal } from './generated/contracts';
 import { humanizeStage } from './stages';
+import { defineMessages, t } from './i18n/t';
+import type { Locale } from './locale';
 
+// The English map stays the catalog's source of truth AND a plain export — the
+// structural test (every signal but `other` has a non-empty label, see
+// inboxStatusGuide.test.ts) checks that property against the vocabulary itself,
+// independent of translation, so it keeps reading this map directly.
 export const STATUS_LABELS: Record<EmailStatusSignal, string> = {
   acknowledgement: 'Received',
   screening: 'Screening',
@@ -22,6 +28,25 @@ export const STATUS_LABELS: Record<EmailStatusSignal, string> = {
   incomplete_application: 'Incomplete',
   other: '',
 };
+
+const labelsCatalog = defineMessages(STATUS_LABELS, {
+  ru: {
+    acknowledgement: 'Получено',
+    screening: 'Скрининг',
+    interview_invitation: 'Собеседование',
+    assessment: 'Оценка',
+    offer: 'Оффер',
+    rejection: 'Отказ',
+    info_request: 'Запрошена информация',
+    incomplete_application: 'Неполная',
+    other: '',
+  },
+});
+
+const prose = defineMessages(
+  { doesNotMoveStage: 'does not move the stage' },
+  { ru: { doesNotMoveStage: 'не меняет этап' } },
+);
 
 const STATUS_CLASSES: Record<EmailStatusSignal, string> = {
   acknowledgement: 'border-border text-muted-foreground',
@@ -40,8 +65,14 @@ const STATUS_CLASSES: Record<EmailStatusSignal, string> = {
  * (both render nothing). The argument stays `string`: it arrives from the API, and
  * a server ahead of this build may name a signal this one has never heard of.
  */
-export function statusLabel(signal?: string): string {
-  return signal ? (STATUS_LABELS[signal as EmailStatusSignal] ?? '') : '';
+export function statusLabel(signal?: string, locale: Locale = 'en'): string {
+  return signal ? (t(labelsCatalog, locale)[signal as EmailStatusSignal] ?? '') : '';
+}
+
+/** Every signal's label, resolved for `locale` — the dropdown filter builds its
+ *  options from this rather than from `signal`-by-`signal` lookups. */
+export function statusLabels(locale: Locale = 'en'): Record<EmailStatusSignal, string> {
+  return t(labelsCatalog, locale);
 }
 
 /** The badge colour class for a status signal. */
@@ -63,12 +94,21 @@ export function statusClass(signal?: string): string {
  *
  * `''` also for an unclassified message, for `other`, and for a signal from a server ahead
  * of this build: silence is the honest answer where we have no meaning to report.
+ *
+ * `stage` itself (`humanizeStage`) stays English in every locale — the pipeline-stage
+ * vocabulary is generated from `internal/userjob` and shared with the tracking board and
+ * funnel; translating it is that surface's own change, not this one's. Because of that,
+ * the "chip already says it" check below compares against the ENGLISH label on purpose:
+ * whether `Interview` the signal and `Interview` the stage name are the same concept is a
+ * fact about the vocabulary, not about which language is on screen — comparing a Russian
+ * label to an English stage name would never match, and every translated chip would grow
+ * a redundant-looking `→ Interview` it does not need.
  */
-export function stageImplication(signal?: string): string {
+export function stageImplication(signal?: string, locale: Locale = 'en'): string {
   if (!signal) return '';
   const implication = SIGNAL_STAGE[signal as EmailStatusSignal];
   if (!implication) return '';
-  if (!implication.advances) return 'does not move the stage';
+  if (!implication.advances) return t(prose, locale).doesNotMoveStage;
   const stage = humanizeStage(implication.stage);
   return statusLabel(signal) === stage ? '' : `→ ${stage}`;
 }
