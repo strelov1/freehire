@@ -24,6 +24,9 @@
   import JobDrawer from './JobDrawer.svelte';
   import FollowUpDialog from './FollowUpDialog.svelte';
   import States from './States.svelte';
+  import { messages } from './JobBoard.messages';
+  import { locale } from '$lib/i18n/currentLocale.svelte';
+  import { format, t } from '$lib/i18n/t';
 
   // initialId (from /my/tracking/[id]) opens that application's drawer once the
   // board has loaded, so a deep link / inbox link / refresh reopens the same card.
@@ -41,6 +44,8 @@
     view = 'board',
   }: { initialId?: string; initial?: MyJob[]; view?: 'board' | 'list' } = $props();
   let openedInitial = false;
+
+  const s = $derived(t(messages, locale()));
 
   function emptyColumns(): Record<BoardColumnId, BoardItem[]> {
     return { preparing: [], applied: [], interview: [], offer: [], closed: [] };
@@ -347,9 +352,9 @@
   }
 
   const startRehearsal = (item: MyJob) =>
-    startApplicationSession(item, createRehearsal, 'Could not start the rehearsal.');
+    startApplicationSession(item, createRehearsal, s.rehearsalFailed);
   const startDebrief = (item: MyJob) =>
-    startApplicationSession(item, createDebrief, 'Could not start the debrief.');
+    startApplicationSession(item, createDebrief, s.debriefFailed);
 
   // Stamp the recorded chase onto the card in place. The board holds the only copy
   // of the row, and reloading the whole listing to learn one timestamp is noise —
@@ -370,7 +375,7 @@
 {#if status === 'loading'}
   <States state="loading" />
 {:else if status === 'error'}
-  <States state="error" message="Couldn't load your board." />
+  <States state="error" message={s.loadError} />
 {:else}
   <!-- One field over both views. It narrows what is already loaded: the listing is
        bounded, and a request per keystroke would buy nothing. -->
@@ -384,15 +389,15 @@
         type="search"
         value={query}
         oninput={(e) => filters.setNow({ ...filters.value, q: e.currentTarget.value })}
-        placeholder="Search company or role"
-        aria-label="Search applications by company or role"
+        placeholder={s.searchPlaceholder}
+        aria-label={s.searchAria}
         class="w-full rounded-md border border-input bg-transparent py-1.5 pl-8 pr-8 text-sm"
       />
       {#if searching}
         <button
           type="button"
           onclick={() => filters.setNow({ ...filters.value, q: '' })}
-          aria-label="Clear search"
+          aria-label={s.clearSearchAria}
           class="absolute right-1.5 top-1/2 -translate-y-1/2 rounded p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
         >
           <XIcon class="size-3.5" />
@@ -410,10 +415,10 @@
           : 'border-input text-muted-foreground hover:bg-accent hover:text-foreground',
       )}
     >
-      Needs attention
+      {s.needsAttention}
     </button>
     {#if filtering}
-      <span class="shrink-0 text-xs tabular-nums text-muted-foreground">{matched} of {total}</span>
+      <span class="shrink-0 text-xs tabular-nums text-muted-foreground">{format(s.matchedOfTotal, { matched: String(matched), total: String(total) })}</span>
     {/if}
   </div>
 

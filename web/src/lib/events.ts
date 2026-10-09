@@ -10,6 +10,9 @@
 // which reads plausibly while dropping what the label was for.
 
 import type { TimelineEvent } from './types';
+import { format, t } from './i18n/t';
+import type { Locale } from './locale';
+import { messages } from './events.messages';
 
 /** Sentence-case an unknown kind so a new one reads as words, not as a column name. */
 function humanKind(kind: string): string {
@@ -17,18 +20,25 @@ function humanKind(kind: string): string {
   return words.charAt(0).toUpperCase() + words.slice(1);
 }
 
-export const KIND_LABEL: Record<string, (e: TimelineEvent) => string> = {
-  applied: () => 'Applied',
-  employer_reply: (e) => (e.signal ? `Employer replied — ${e.signal.replace(/_/g, ' ')}` : 'Employer replied'),
-  follow_up_sent: () => 'Followed up',
-  stage_set: (e) => (e.signal ? `Moved to ${e.signal}` : 'Stage changed'),
-  interview_scheduled: () => 'Interview scheduled',
+export const KIND_LABEL: Record<string, (e: TimelineEvent, locale: Locale) => string> = {
+  applied: (_e, locale) => t(messages, locale).applied,
+  employer_reply: (e, locale) => {
+    const s = t(messages, locale);
+    return e.signal ? format(s.employerRepliedWithSignal, { signal: e.signal.replace(/_/g, ' ') }) : s.employerReplied;
+  },
+  follow_up_sent: (_e, locale) => t(messages, locale).followedUp,
+  stage_set: (e, locale) => {
+    const s = t(messages, locale);
+    return e.signal ? format(s.movedTo, { signal: e.signal }) : s.stageChanged;
+  },
+  interview_scheduled: (_e, locale) => t(messages, locale).interviewScheduled,
 };
 
 /** What happened, in a phrase. A kind from a server newer than this build is sentence-cased
  *  rather than left blank. */
-export function eventLabel(e: TimelineEvent): string {
-  return (KIND_LABEL[e.kind] ?? (() => humanKind(e.kind)))(e);
+export function eventLabel(e: TimelineEvent, locale: Locale = 'en'): string {
+  const fn = KIND_LABEL[e.kind];
+  return fn ? fn(e, locale) : humanKind(e.kind);
 }
 
 // Design tokens, not palette utilities: `pnpm check:tokens` counts raw colours per file, and

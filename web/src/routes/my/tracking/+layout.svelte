@@ -5,8 +5,13 @@
   import { resolve } from '$app/paths';
   import { TabStrip, tabStripId } from '$lib/ui';
   import { activeRouteTab } from '$lib/routeTabs';
+  import { messages } from './messages';
+  import { locale } from '$lib/i18n/currentLocale.svelte';
+  import { t } from '$lib/i18n/t';
 
   let { children }: { children: Snippet } = $props();
+
+  const s = $derived(t(messages, locale()));
 
   // The account shell (my/+layout) owns the container, auth gate, and noindex;
   // this layout adds only Tracking's own sub-navigation. Each view is its own URL
@@ -26,13 +31,13 @@
   //
   // The strip is the same underline `TabStrip` every other account section navigates
   // with, icons included.
-  const SECTIONS = [
-    { id: 'board', label: 'Board', href: '/my/tracking', icon: Columns3 },
-    { id: 'list', label: 'List', href: '/my/tracking/list', icon: List },
-    { id: 'pipeline', label: 'Pipeline', href: '/my/tracking/pipeline', icon: Workflow },
-    { id: 'calendar', label: 'Calendar', href: '/my/tracking/calendar', icon: Calendar },
-    { id: 'activity', label: 'Activity', href: '/my/tracking/activity', icon: Flame },
-  ] as const;
+  const SECTIONS = $derived([
+    { id: 'board', label: s.sections.board, href: '/my/tracking', icon: Columns3 },
+    { id: 'list', label: s.sections.list, href: '/my/tracking/list', icon: List },
+    { id: 'pipeline', label: s.sections.pipeline, href: '/my/tracking/pipeline', icon: Workflow },
+    { id: 'calendar', label: s.sections.calendar, href: '/my/tracking/calendar', icon: Calendar },
+    { id: 'activity', label: s.sections.activity, href: '/my/tracking/activity', icon: Flame },
+  ] as const);
   const PANEL_ID = 'tracking-tabpanel';
 
   const active = $derived(activeRouteTab(page.url.pathname, SECTIONS, 'board'));
@@ -41,13 +46,13 @@
 
 <svelte:head>
   <!-- Base title; the child pages override it with their view name. -->
-  <title>Tracking — freehire</title>
+  <title>{s.headTitle}</title>
 </svelte:head>
 
 <div class="flex flex-col gap-4">
-  <h1 class="text-2xl font-semibold tracking-tight">Tracking</h1>
+  <h1 class="text-2xl font-semibold tracking-tight">{s.title}</h1>
 
-  <TabStrip {tabs} {active} label="Tracking view" panelId={PANEL_ID} />
+  <TabStrip {tabs} {active} label={s.tabStripLabel} panelId={PANEL_ID} />
 
   <div role="tabpanel" id={PANEL_ID} aria-labelledby={tabStripId(PANEL_ID, active)} tabindex="0">
     {@render children()}

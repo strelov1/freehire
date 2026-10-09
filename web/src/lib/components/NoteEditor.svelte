@@ -22,6 +22,9 @@
   import { onMount } from 'svelte';
   import 'easymde/dist/easymde.min.css';
   import type EasyMDE from 'easymde';
+  import { messages } from './NoteEditor.messages';
+  import { locale } from '$lib/i18n/currentLocale.svelte';
+  import { t } from '$lib/i18n/t';
 
   // A small markdown editor for notes: EasyMDE (the maintained SimpleMDE fork) over a
   // textarea, markdown in and out. EasyMDE touches `window`, so it is dynamically
@@ -32,8 +35,11 @@
   let {
     value = '',
     onsave,
-    placeholder = 'Notes…',
+    placeholder,
   }: { value?: string; onsave: (v: string) => void; placeholder?: string } = $props();
+
+  const s = $derived(t(messages, locale()));
+  const effectivePlaceholder = $derived(placeholder ?? s.defaultPlaceholder);
 
   let el = $state<HTMLTextAreaElement>();
   // Not $state: nothing needs to re-run when this is reassigned, only to read its
@@ -82,7 +88,7 @@
       editor = new EasyMDECtor({
         element: el,
         initialValue: value,
-        placeholder,
+        placeholder: effectivePlaceholder,
         spellChecker: false,
         status: false,
         minHeight: '120px',
@@ -91,15 +97,15 @@
         // Built-in actions keep their default keyboard shortcuts (Cmd-B/I, bound to the
         // CodeMirror keymap by action name, independent of the toolbar array).
         toolbar: [
-          { name: 'bold', action: EasyMDECtor.toggleBold, className: ICON_CLASS, title: 'Bold', icon: icons.bold },
-          { name: 'italic', action: EasyMDECtor.toggleItalic, className: ICON_CLASS, title: 'Italic', icon: icons.italic },
-          { name: 'heading', action: EasyMDECtor.toggleHeadingSmaller, className: ICON_CLASS, title: 'Heading', icon: icons.heading },
+          { name: 'bold', action: EasyMDECtor.toggleBold, className: ICON_CLASS, title: s.toolbar.bold, icon: icons.bold },
+          { name: 'italic', action: EasyMDECtor.toggleItalic, className: ICON_CLASS, title: s.toolbar.italic, icon: icons.italic },
+          { name: 'heading', action: EasyMDECtor.toggleHeadingSmaller, className: ICON_CLASS, title: s.toolbar.heading, icon: icons.heading },
           '|',
-          { name: 'unordered-list', action: EasyMDECtor.toggleUnorderedList, className: ICON_CLASS, title: 'Bulleted list', icon: icons.unorderedList },
-          { name: 'ordered-list', action: EasyMDECtor.toggleOrderedList, className: ICON_CLASS, title: 'Numbered list', icon: icons.orderedList },
+          { name: 'unordered-list', action: EasyMDECtor.toggleUnorderedList, className: ICON_CLASS, title: s.toolbar.unorderedList, icon: icons.unorderedList },
+          { name: 'ordered-list', action: EasyMDECtor.toggleOrderedList, className: ICON_CLASS, title: s.toolbar.orderedList, icon: icons.orderedList },
           '|',
-          { name: 'link', action: EasyMDECtor.drawLink, className: ICON_CLASS, title: 'Create link', icon: icons.link },
-          { name: 'preview', action: EasyMDECtor.togglePreview, className: ICON_CLASS, title: 'Toggle preview', icon: icons.preview, noDisable: true },
+          { name: 'link', action: EasyMDECtor.drawLink, className: ICON_CLASS, title: s.toolbar.link, icon: icons.link },
+          { name: 'preview', action: EasyMDECtor.togglePreview, className: ICON_CLASS, title: s.toolbar.preview, icon: icons.preview, noDisable: true },
         ],
       });
       editor.codemirror.on('blur', persist);

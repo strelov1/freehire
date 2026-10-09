@@ -1,12 +1,17 @@
 <script lang="ts">
   import JobBoard from '$lib/components/JobBoard.svelte';
   import type { PageData } from './$types';
+  import { messages } from './messages';
+  import { locale } from '$lib/i18n/currentLocale.svelte';
+  import { t } from '$lib/i18n/t';
 
   let { data }: { data: PageData } = $props();
+
+  const s = $derived(t(messages, locale()));
 </script>
 
 <svelte:head>
-  <title>Tracking — freehire</title>
+  <title>{s.headTitle}</title>
 </svelte:head>
 
 <!-- Same board as /my/tracking, but opened on the given application's drawer. -->

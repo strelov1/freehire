@@ -7,6 +7,8 @@
   import { timeAgo } from '$lib/utils';
   import type { BoardItem } from '$lib/board';
   import type { MyJob } from '$lib/types';
+  import { messages } from './BoardList.messages';
+  import { format, plural, t } from '$lib/i18n/t';
 
   // The same applications the board shows, read as a list. It owns no state and no
   // writes: JobBoard holds both, so the two views cannot drift apart.
@@ -24,10 +26,11 @@
 
   const company = (i: BoardItem) => i.job?.company || i.company_slug;
   const title = (i: BoardItem) => i.job?.title || i.role_title;
+  const s = $derived(t(messages, locale()));
 </script>
 
 {#if items.length === 0}
-  <p class="py-8 text-center text-sm text-muted-foreground">No applications yet.</p>
+  <p class="py-8 text-center text-sm text-muted-foreground">{s.empty}</p>
 {:else}
   <ul class="flex flex-col divide-y divide-border rounded-xl border border-border">
     {#each items as item (item.id)}
@@ -42,7 +45,7 @@
           <EntityLogo name={company(item)} src={companyLogoUrl(company(item)) ?? undefined} shape="square" size="xs" />
           <span class="min-w-0 flex-1">
             <span class="block truncate text-sm font-medium">{title(item)}</span>
-            <span class="block truncate text-xs text-muted-foreground">{company(item) || 'Unknown company'}</span>
+            <span class="block truncate text-xs text-muted-foreground">{company(item) || s.unknownCompany}</span>
           </span>
         </button>
 
@@ -50,7 +53,7 @@
           {#if item.silence_state === 'silent'}
             <span
               class="flex items-center gap-0.5 text-xs tabular-nums text-warning-strong"
-              title="No reply for {item.days_silent} days"
+              title={format(plural(locale(), item.days_silent ?? 0, s.noReplyTooltip), { days: String(item.days_silent ?? 0) })}
             >
               <Clock class="size-3 shrink-0" aria-hidden="true" />
               {item.days_silent}d
@@ -59,7 +62,7 @@
           {#if item.email_count > 0}
             <span
               class="flex items-center gap-0.5 text-xs tabular-nums text-muted-foreground"
-              title="{item.email_count} linked email{item.email_count === 1 ? '' : 's'}"
+              title={format(plural(locale(), item.email_count, s.linkedEmails), { count: String(item.email_count) })}
             >
               <Mail class="size-3 shrink-0" aria-hidden="true" />
               {item.email_count}
@@ -71,10 +74,10 @@
           <select
             value={item.stage ?? ''}
             onchange={(e) => onsetstage(item, e.currentTarget.value)}
-            aria-label="Stage for {title(item)} at {company(item) || 'unknown company'}"
+            aria-label={format(s.stageAria, { title: title(item), company: company(item) || s.unknownCompanyLower })}
             class="rounded-md border border-input bg-transparent px-2 py-1 text-xs"
           >
-            <option value="">No stage</option>
+            <option value="">{s.noStage}</option>
             <!-- Grouped exactly as the drawer's selector is: two stage pickers in one
                  section that organise their options differently is the confusion this
                  change is removing, in miniature. -->

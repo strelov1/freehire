@@ -17,6 +17,9 @@
   import { Button } from '$lib/ui';
   import ApplicationEventList from './ApplicationEventList.svelte';
   import States from './States.svelte';
+  import { messages } from './TrackingCalendar.messages';
+  import { locale } from '$lib/i18n/currentLocale.svelte';
+  import { format, plural, t } from '$lib/i18n/t';
 
   // The server load hands over one month, fetched in ITS timezone; everything after that
   // is fetched here, because only the browser knows the reader's. See calendarModel.
@@ -27,6 +30,8 @@
       | { events: TimelineEvent[]; interviews: ScheduledInterview[]; year: number; month: number }
       | undefined;
   } = $props();
+
+  const s = $derived(t(messages, locale()));
 
   const now = new Date();
   let year = $state(now.getFullYear());
@@ -93,9 +98,9 @@
     if (isAuthenticated()) {
       void api
         .gmailStatus()
-        .then((s) => {
-          calendarConnected = s.calendar_connected === true;
-          connectAvailable = s.available === true;
+        .then((gmailStatus) => {
+          calendarConnected = gmailStatus.calendar_connected === true;
+          connectAvailable = gmailStatus.available === true;
         })
         .catch(() => (calendarConnected = undefined));
     }
@@ -103,7 +108,7 @@
 
   const grid = $derived(buildCalendarMonth(year, month, series, meetings));
   const selected = $derived(grid.days.find((d) => d.key === selectedKey) ?? null);
-  const weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  const weekdays = $derived(s.weekdays);
   const CELL_MARKS = 4;
 
   // A month of mostly-empty cells is tall, so on a laptop the panel opens below the fold
@@ -129,7 +134,7 @@
   // the application panel:
   // the same event captioned two ways on two screens is what putting them here caused.
   const tone = (kind: string) => eventTone(kind);
-  const label = (e: TimelineEvent) => eventLabel(e);
+  const label = (e: TimelineEvent) => eventLabel(e, locale());
 
   // Only the meetings are clocked here now; a ledger event's own time is rendered by
   // ApplicationEventList, which both day panels share.
@@ -151,12 +156,12 @@
    *  two cannot disagree, which is how "1 entries" got onto the screen in the first place. */
   function entryCount(d: CalendarDay): string {
     const n = d.events.length + d.interviews.length;
-    return `${n} ${n === 1 ? 'entry' : 'entries'}`;
+    return format(plural(locale(), n, s.entries), { count: String(n) });
   }
 
   function cellLabel(d: CalendarDay): string {
     if (d.events.length + d.interviews.length === 0) return dayHeading(d);
-    const scheduled = d.interviews.length > 0 ? ', interview scheduled' : '';
+    const scheduled = d.interviews.length > 0 ? s.interviewScheduledSuffix : '';
     return `${dayHeading(d)} — ${entryCount(d)}${scheduled}`;
   }
 </script>
@@ -165,17 +170,17 @@
   <div class="flex items-center justify-between gap-3">
     <h2 class="text-lg font-medium">{monthLabel(year, month)}</h2>
     <div class="flex items-center gap-1">
-      <Button variant="outline" size="icon" onclick={() => step(-1)} aria-label="Previous month">
+      <Button variant="outline" size="icon" onclick={() => step(-1)} aria-label={s.previousMonth}>
         <ChevronLeft class="size-4" />
       </Button>
-      <Button variant="outline" size="icon" onclick={() => step(1)} aria-label="Next month">
+      <Button variant="outline" size="icon" onclick={() => step(1)} aria-label={s.nextMonth}>
         <ChevronRight class="size-4" />
       </Button>
     </div>
   </div>
 
   {#if status === 'error'}
-    <States state="error" message="Couldn't load what happened this month." />
+    <States state="error" message={s.loadError} />
   {:else if status === 'loading'}
     <States state="loading" rows={3} />
   {:else}
@@ -216,7 +221,7 @@
                   class="inline-block h-2 w-2 rounded-none border {meetingTone(iv)}"
                   class:bg-current={iv.status !== 'cancelled'}
                   style="border-color: currentColor"
-                  title={iv.status === 'cancelled' ? 'Interview — cancelled' : 'Interview'}
+                  title={iv.status === 'cancelled' ? s.interviewCancelled : s.interview}
                 ></span>
               {/each}
               {#each marks.shown as e (e.id)}
@@ -277,22 +282,22 @@
                     {#if iv.role_title}<span class="text-muted-foreground"> · {iv.role_title}</span>{/if}
                   </p>
                   <p class="text-sm text-muted-foreground">
-                    {iv.title || 'Interview'}
-                    {#if iv.status === 'cancelled'}<span class="font-medium"> — cancelled</span>{/if}
-                    {#if iv.status === 'suggested'}<span> — unconfirmed</span>{/if}
+                    {iv.title || s.interview}
+                    {#if iv.status === 'cancelled'}<span class="font-medium">{s.cancelledSuffix}</span>{/if}
+                    {#if iv.status === 'suggested'}<span>{s.unconfirmedSuffix}</span>{/if}
                   </p>
                   <p class="mt-0.5 text-xs text-muted-foreground">
                     {clockOf(iv.starts_at)}
                     {#if iv.application_id}
                       · <a
                           class="underline hover:no-underline"
-                          href={resolve('/my/tracking/[id]', { id: boardRefFor(iv) ?? '' })}>application</a
+                          href={resolve('/my/tracking/[id]', { id: boardRefFor(iv) ?? '' })}>{s.applicationLink}</a
                         >
                     {/if}
                     {#if iv.join_url && iv.status !== 'cancelled'}
                       ·
                       <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- the organiser's meeting link, an external URL rather than an internal route -->
-                      <a class="underline hover:no-underline" href={iv.join_url} rel="noreferrer">join</a>
+                      <a class="underline hover:no-underline" href={iv.join_url} rel="noreferrer">{s.joinLink}</a>
                     {/if}
                   </p>
                 </div>
@@ -301,7 +306,7 @@
           </ul>
         {/if}
         {#if selected.events.length === 0 && selected.interviews.length === 0}
-          <p class="text-sm text-muted-foreground">Nothing happened on this day.</p>
+          <p class="text-sm text-muted-foreground">{s.nothingThisDay}</p>
         {:else if selected.events.length > 0}
           <ApplicationEventList events={selected.events} />
         {/if}
@@ -316,25 +321,21 @@
            third-party connection, not inline here. -->
       <div class="rounded-lg border bg-card p-4">
         <p class="text-sm">
-          Connect your calendar and the interviews you accept will appear here, on the day they
-          are due.
+          {s.connectBanner.lead}
         </p>
         <p class="mt-1 text-sm text-muted-foreground">
-          Only meetings we can attach to one of your applications are stored — the rest of your
-          calendar is read and discarded. While our Google app is awaiting verification the
-          connection works for approved test accounts only.
+          {s.connectBanner.detail}
         </p>
         <Button variant="outline" size="sm" class="mt-3" href={resolve('/my/integrations')}>
-          Connect in Integrations
+          {s.connectBanner.cta}
         </Button>
       </div>
     {/if}
 
     {#if grid.total === 0}
       <p class="text-sm text-muted-foreground">
-        Nothing recorded in {monthLabel(year, month)}. Applications you track, and the replies they
-        get, appear here — start from the
-        <a class="underline hover:no-underline" href={resolve('/my/tracking')}>board</a>.
+        {format(s.emptyMonthLead, { month: monthLabel(year, month) })}
+        <a class="underline hover:no-underline" href={resolve('/my/tracking')}>{s.boardLink}</a>.
       </p>
     {/if}
   {/if}

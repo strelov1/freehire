@@ -40,6 +40,8 @@
   import { autoApplyProgressSteps, type AutoApplyProgressStepId } from '$lib/autoApplyProgress';
   import { isAutoApplyPaused, setAutoApplyPaused } from '$lib/autoApplyPauseStorage';
   import { hasVisibleRows, pendingRows } from '$lib/answerBank';
+  import { messages } from './JobDrawer.messages';
+  import { format, plural, t } from '$lib/i18n/t';
 
   let {
     item,
@@ -90,6 +92,8 @@
     // parent is the only thing that knows what is stacked, so it says.
     blocked?: boolean;
   } = $props();
+
+  const s = $derived(t(messages, locale()));
 
   // Tailoring navigates away, and /tailor/[slug] owns its own bootstrap — so the wait is
   // this component's to show.
@@ -156,11 +160,11 @@
   // it calls MarkJobApplied. See openspec/changes/auto-apply-progress-tab/design.md.
   const autoApplied = $derived(events.some((e) => e.kind === 'applied' && e.source === 'auto_apply'));
   const progressSteps = $derived(autoApplyProgressSteps(autoApply?.status, autoApplied));
-  const PROGRESS_STEP_LABELS: Record<AutoApplyProgressStepId, string> = {
-    tailoring: 'Tailoring',
-    review: 'Review',
-    submitted: 'Submitted',
-  };
+  const PROGRESS_STEP_LABELS = $derived<Record<AutoApplyProgressStepId, string>>({
+    tailoring: s.progressSteps.tailoring,
+    review: s.progressSteps.review,
+    submitted: s.progressSteps.submitted,
+  });
 
   // The Pause/Continue marker (openspec/changes/auto-apply-progress-tab/design.md) is
   // purely a candidate-side reminder — it never reaches the server and has no effect on
@@ -192,7 +196,7 @@
       // doc comment for why this isn't done directly here.
       onautoapplyreview(decision);
     } catch (e) {
-      autoApplyError = errorMessage(e, 'Could not record your decision.');
+      autoApplyError = errorMessage(e, s.decisionFailed);
     } finally {
       autoApplyDeciding = false;
     }
@@ -237,7 +241,7 @@
       bankDrafts = { ...bankDrafts, [key]: '' };
       bankSaved = { ...bankSaved, [key]: true };
     } catch (e) {
-      bankError = errorMessage(e, 'Could not save your answer.');
+      bankError = errorMessage(e, s.errors.saveAnswer);
     } finally {
       bankSaving = null;
     }
@@ -252,11 +256,13 @@
   let bodyLoading = $state(false);
 
   const TABS = $derived<{ id: Tab; label: string }[]>([
-    { id: 'application', label: 'Application' },
-    ...(autoApply || autoApplied ? [{ id: 'auto_apply' as Tab, label: 'Progress' }] : []),
-    { id: 'fit', label: 'Job Match' },
-    { id: 'description', label: 'Job description' },
-    ...(canSeeMail ? [{ id: 'emails' as Tab, label: emails ? `Emails (${emails.length})` : 'Emails' }] : []),
+    { id: 'application', label: s.tabs.application },
+    ...(autoApply || autoApplied ? [{ id: 'auto_apply' as Tab, label: s.tabs.progress }] : []),
+    { id: 'fit', label: s.tabs.jobMatch },
+    { id: 'description', label: s.tabs.jobDescription },
+    ...(canSeeMail
+      ? [{ id: 'emails' as Tab, label: emails ? format(s.tabs.emailsWithCount, { count: String(emails.length) }) : s.tabs.emails }]
+      : []),
   ]);
   // Local UI state. The parent re-keys this component per job (JobBoard's {#key}),
   // so a fresh mount always opens on Application.
@@ -291,7 +297,7 @@
       posting = app.job;
       events = app.events ?? [];
     } catch (e) {
-      emailsError = errorMessage(e, 'Failed to load emails.');
+      emailsError = errorMessage(e, s.errors.loadEmails);
     } finally {
       emailsLoading = false;
     }
@@ -308,7 +314,7 @@
       // Shown rather than swallowed. An empty result would read as "your mailbox holds
       // nothing", which is the wrong thing to say about a gateway being down.
       recall = null;
-      recallError = errorMessage(e, 'Could not search your mail right now.');
+      recallError = errorMessage(e, s.errors.searchMail);
     } finally {
       recallLoading = false;
     }
@@ -407,7 +413,7 @@
   class="fixed inset-0 z-50 flex flex-col bg-background text-foreground"
   role="dialog"
   aria-modal="true"
-  aria-label="Job details"
+  aria-label={s.dialogAria}
   {@attach focusTrap()}
 >
   <!-- Header: logo · title · company · close, then meta pills and tabs -->
@@ -416,7 +422,7 @@
       <div class="flex items-start gap-4">
         <div class="flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-2xl">
           <EntityLogo
-            name={company || 'Unknown company'}
+            name={company || s.unknownCompany}
             src={companyLogoUrl(company) ?? undefined}
             shape="square"
             size="md"
@@ -424,7 +430,7 @@
         </div>
         <div class="min-w-0 flex-1">
           <h2 class="text-xl font-bold leading-tight tracking-tight">{title}</h2>
-          <p class="text-sm text-muted-foreground">{company || 'Unknown company'}</p>
+          <p class="text-sm text-muted-foreground">{company || s.unknownCompany}</p>
         </div>
         <div class="flex shrink-0 items-center gap-2">
           {#if item.job}
@@ -436,7 +442,7 @@
             rel="noopener noreferrer"
             class="gap-1.5 whitespace-nowrap"
           >
-            View job
+            {s.viewJob}
             <ExternalLink class="size-3.5" />
           </Button>
           {/if}
@@ -444,7 +450,7 @@
             type="button"
             onclick={close}
             class="-mr-1 rounded-full p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-            aria-label="Close"
+            aria-label={s.close}
           >
             <X class="size-5" />
           </button>
@@ -470,14 +476,14 @@
           {#if hasPosting}
             <Button variant="outline" size="sm" onclick={() => onrehearse(item)} disabled={startingSession} class="gap-1.5">
               <Mic class="size-3.5" />
-              {startingSession ? 'Starting…' : 'Rehearse'}
+              {startingSession ? s.starting : s.rehearse}
             </Button>
           {/if}
           {#if offersDebriefAction}
             <!-- Sits next to Rehearse: the pair reads as before and after the interview. -->
             <Button variant="outline" size="sm" onclick={() => ondebrief(item)} disabled={startingSession} class="gap-1.5">
               <NotebookPen class="size-3.5" />
-              {startingSession ? 'Starting…' : 'Debrief'}
+              {startingSession ? s.starting : s.debrief}
             </Button>
           {/if}
           {#if offersFollowUp}
@@ -488,7 +494,7 @@
               class="gap-1.5 border-transparent bg-warning-muted text-warning-strong hover:bg-warning-muted hover:opacity-80"
             >
               <Send class="size-3.5" />
-              {item.followed_up_at ? 'Chase again' : 'Follow up'}
+              {item.followed_up_at ? s.chaseAgain : s.followUp}
             </Button>
           {/if}
           {#if hasPosting}
@@ -496,11 +502,11 @@
                  close the application to show them something it contains. -->
             <Button variant="outline" size="sm" onclick={() => (tab = 'fit')} class="gap-1.5">
               <Target class="size-3.5" />
-              Analyze
+              {s.analyze}
             </Button>
             <Button variant="outline" size="sm" onclick={startTailoring} disabled={tailoring} class="gap-1.5">
               <SquarePen class="size-3.5" />
-              {tailoring ? 'Preparing…' : 'Tailor CV'}
+              {tailoring ? s.preparing : s.tailorCv}
             </Button>
           {/if}
         </div>
@@ -512,7 +518,7 @@
       <div class="no-scrollbar overflow-x-auto">
         <div
           role="tablist"
-          aria-label="Job details view"
+          aria-label={s.tabsAria}
           use:tablist={tab}
           class="flex w-max items-center gap-1 rounded-full bg-muted p-1"
         >
@@ -547,7 +553,7 @@
         <div class="flex flex-col gap-4">
           {#if pendingOutcome}
             <div class="flex flex-col gap-2 rounded-lg border border-border p-3">
-              <p class="text-sm font-medium">How did it close?</p>
+              <p class="text-sm font-medium">{s.howDidItClose}</p>
               <div class="flex flex-wrap gap-2">
                 {#each CLOSED_OUTCOMES as o (o)}
                   <Button variant="outline" onclick={() => onchooseoutcome(o)}>{humanizeStage(o)}</Button>
@@ -561,13 +567,13 @@
                would say otherwise. -->
           {#if events.length}
             <div class="flex flex-col gap-1 text-sm">
-              <span class="font-medium">History</span>
+              <span class="font-medium">{s.history}</span>
               <ol class="flex flex-col gap-1.5">
                 {#each events as e (e.id)}
                   <li class="flex items-baseline gap-2">
                     <span class="shrink-0 text-xs {eventTone(e.kind)}" aria-hidden="true">●</span>
                     <span class="w-24 shrink-0 text-xs text-muted-foreground">{timeAgo(e.occurred_at, locale())}</span>
-                    <span class="min-w-0 text-sm">{eventLabel(e)}</span>
+                    <span class="min-w-0 text-sm">{eventLabel(e, locale())}</span>
                   </li>
                 {/each}
               </ol>
@@ -575,13 +581,13 @@
           {/if}
 
           <label class="flex flex-col gap-1 text-sm">
-            <span class="font-medium">Stage</span>
+            <span class="font-medium">{s.stage}</span>
             <select
               value={item.stage ?? ''}
               onchange={(e) => onsetstage(e.currentTarget.value)}
               class="rounded-md border border-input bg-transparent px-2 py-1.5 text-sm"
             >
-              <option value="">No stage</option>
+              <option value="">{s.noStage}</option>
               <!-- Grouped so `Closed` reads as a heading over its three outcomes rather than
                    as a fifth state competing with them — the same four groups the board's
                    columns use, from the same generated table. -->
@@ -596,14 +602,14 @@
           </label>
 
           <div class="flex flex-col gap-1 text-sm">
-            <span class="font-medium">Notes</span>
+            <span class="font-medium">{s.notes}</span>
             <NoteEditor value={item.notes ?? ''} onsave={onsavenotes} />
           </div>
         </div>
       {:else if tab === 'auto_apply'}
         <div class="flex flex-col gap-4">
           {#if progressSteps}
-            <ol class="flex items-center" aria-label="Auto-apply progress">
+            <ol class="flex items-center" aria-label={s.autoApplyProgressAria}>
               {#each progressSteps as step, i (step.id)}
                 <li class="flex flex-1 items-center last:flex-none">
                   <div class="flex flex-col items-center gap-1">
@@ -638,12 +644,11 @@
           {#if canPauseAutoApply}
             <div class="flex flex-col gap-1">
               <Button variant="outline" size="sm" class="w-fit" onclick={toggleAutoApplyPaused}>
-                {autoApplyPaused ? 'Continue' : 'Pause'}
+                {autoApplyPaused ? s.continue : s.pause}
               </Button>
               {#if autoApplyPaused}
                 <p class="text-xs text-muted-foreground">
-                  Marked as paused — a reminder for you only. Auto-apply keeps working on it in the
-                  background regardless.
+                  {s.pausedNote}
                 </p>
               {/if}
             </div>
@@ -654,23 +659,23 @@
                the one place it lives. -->
           {#if autoApplyBanner?.kind === 'tailoring'}
             <div class="rounded-md border border-border bg-muted/30 px-3 py-2">
-              <p class="text-sm text-muted-foreground">Auto-apply is preparing a tailored CV for this job.</p>
+              <p class="text-sm text-muted-foreground">{s.banners.tailoring}</p>
             </div>
           {:else if autoApplyBanner?.kind === 'approved'}
             <div class="flex flex-col gap-2 rounded-md border border-border bg-muted/30 px-3 py-2">
-              <p class="text-sm font-medium">Auto-apply approved this application — it's queued for automatic submission.</p>
+              <p class="text-sm font-medium">{s.banners.approved}</p>
               {#if hasPosting && item.job}
                 <a
                   href={resolve('/tailor/[slug]', { slug: item.job.public_slug })}
                   class="w-fit text-xs underline-offset-2 hover:underline"
                 >
-                  View tailored CV
+                  {s.viewTailoredCv}
                 </a>
               {/if}
             </div>
           {:else if autoApplyBanner?.kind === 'pending_review'}
             <div class="flex flex-col gap-2 rounded-md border border-warning/50 bg-warning-muted/40 px-3 py-2">
-              <p class="text-sm font-medium">Auto-apply tailored a CV for this job and is ready to send it.</p>
+              <p class="text-sm font-medium">{s.banners.pendingReview}</p>
               {#if autoApply?.resolved_preview?.fields.length}
                 <dl class="flex flex-col gap-1 text-sm">
                   <!-- Keyed on the position, as JobApplyForm keys the questions it renders
@@ -693,7 +698,7 @@
                 <ul class="flex flex-col gap-2 text-xs text-muted-foreground">
                   {#each pendingQuestions as row (row.key)}
                     {#if row.kind === 'draft'}
-                      <li>{row.pending.label} — will be filled in automatically</li>
+                      <li>{format(s.willBeFilledAutomatically, { label: row.pending.label })}</li>
                     {:else if row.kind === 'blocked'}
                       <!-- A work-authorization question: the bank refuses to recall an
                            answer for it (the correct one depends on this posting's own
@@ -703,8 +708,7 @@
                            question's input below, so the candidate sees what is blocking
                            the application instead of nothing at all. -->
                       <li class="text-warning-strong">
-                        {row.pending.label} — we can't answer this one for you; you'll need to
-                        fill it in yourself when you apply
+                        {format(s.cannotAnswerForYou, { label: row.pending.label })}
                       </li>
                     {:else if row.kind === 'answerable'}
                       <li class="flex flex-col gap-1">
@@ -719,7 +723,7 @@
                             maxlength="2000"
                             class="min-w-0 flex-1 resize-y rounded-md border border-border bg-background px-2 py-1"
                             bind:value={bankDrafts[row.key]}
-                            placeholder="Your answer — saved for next time too"
+                            placeholder={s.answerPlaceholder}
                           ></textarea>
                           <Button
                             size="sm"
@@ -727,11 +731,11 @@
                             disabled={bankSaving !== null || !bankDrafts[row.key]?.trim()}
                             onclick={() => saveBankedAnswer(row.key, row.pending.label)}
                           >
-                            Save
+                            {s.save}
                           </Button>
                         </div>
                         {#if bankSaved[row.key]}
-                          <span class="text-brand-strong">Saved — you won’t be asked this again.</span>
+                          <span class="text-brand-strong">{s.savedToBank}</span>
                         {/if}
                       </li>
                     {/if}
@@ -746,15 +750,15 @@
                   href={resolve('/tailor/[slug]', { slug: item.job.public_slug })}
                   class="w-fit text-xs underline-offset-2 hover:underline"
                 >
-                  View tailored CV
+                  {s.viewTailoredCv}
                 </a>
               {/if}
               <div class="flex items-center gap-2">
                 <Button size="sm" disabled={autoApplyDeciding} onclick={() => decideAutoApply('approved')}>
-                  Approve & send
+                  {s.approveAndSend}
                 </Button>
                 <Button size="sm" variant="outline" disabled={autoApplyDeciding} onclick={() => decideAutoApply('declined')}>
-                  Decline
+                  {s.decline}
                 </Button>
               </div>
               {#if autoApplyError}
@@ -763,7 +767,7 @@
             </div>
           {:else if autoApplyBanner?.kind === 'blocked'}
             <div class="flex flex-col gap-1 rounded-md border border-border bg-muted/30 px-3 py-2">
-              <p class="text-sm font-medium">Auto-apply couldn't finish this application.</p>
+              <p class="text-sm font-medium">{s.banners.blocked}</p>
               {#if autoApply?.unmapped?.length}
                 <ul class="flex list-inside list-disc flex-col gap-0.5 text-xs text-muted-foreground">
                   {#each autoApply.unmapped as u (u.id)}
@@ -771,18 +775,18 @@
                   {/each}
                 </ul>
               {/if}
-              <p class="text-xs text-muted-foreground">This attempt is final for this job — it will not be retried.</p>
+              <p class="text-xs text-muted-foreground">{s.banners.finalAttempt}</p>
             </div>
           {:else if autoApplyBanner?.kind === 'declined'}
             <div class="rounded-md border border-border bg-muted/30 px-3 py-2">
               <p class="text-sm text-muted-foreground">
-                You declined the tailored CV auto-apply prepared for this job. This attempt is final.
+                {s.banners.declined}
               </p>
             </div>
           {:else if autoApplyBanner?.kind === 'failed'}
             <div class="rounded-md border border-border bg-muted/30 px-3 py-2">
               <p class="text-sm text-muted-foreground">
-                Auto-apply could not submit this application after retrying. This attempt is final.
+                {s.banners.failed}
               </p>
             </div>
           {:else if autoApplyBanner?.kind === 'tailor_failed'}
@@ -792,23 +796,22 @@
                  state it replaces (an entry that read as 'tailoring' forever) left people
                  believing an application was on its way. -->
             <div class="rounded-md border border-border bg-muted/30 px-3 py-2">
-              <p class="text-sm font-medium">Auto-apply couldn't prepare a CV for this job.</p>
+              <p class="text-sm font-medium">{s.banners.tailorFailed}</p>
               <p class="text-xs text-muted-foreground">
-                Nothing was sent, and the job is still on your board. You can tailor a CV yourself and apply
-                as usual.
+                {s.banners.tailorFailedDetail}
               </p>
               {#if hasPosting && item.job}
                 <a
                   href={resolve('/tailor/[slug]', { slug: item.job.public_slug })}
                   class="w-fit text-xs underline-offset-2 hover:underline"
                 >
-                  Tailor a CV
+                  {s.tailorACv}
                 </a>
               {/if}
             </div>
           {:else if autoApplied}
             <div class="rounded-md border border-border bg-muted/30 px-3 py-2">
-              <p class="text-sm text-muted-foreground">This application was submitted automatically by auto-apply.</p>
+              <p class="text-sm text-muted-foreground">{s.banners.autoApplied}</p>
             </div>
           {/if}
         </div>
@@ -822,7 +825,7 @@
             <JobMatch job={posting} matchAnalysis={null} />
             <MatchAnalysisFull job={posting} />
           {:else if item.job}
-            <p class="text-sm text-muted-foreground">Loading…</p>
+            <p class="text-sm text-muted-foreground">{s.loading}</p>
           {/if}
         </div>
       {:else if tab === 'emails'}
@@ -834,9 +837,10 @@
           {#if stageSuggestion}
             <div class="flex flex-wrap items-center gap-2 rounded-md border border-warning/50 bg-warning-muted/40 px-3 py-2">
               <span class="min-w-0 flex-1 text-sm">
-                This looks like <span class="font-medium">{statusLabel(stageSuggestion.signal).toLowerCase()}</span>,
-                but the stage is
-                <span class="font-medium">{item.stage ? humanizeStage(item.stage) : 'unset'}</span>.
+                {format(s.looksLike, {
+                  signal: statusLabel(stageSuggestion.signal, locale()).toLowerCase(),
+                  stage: item.stage ? humanizeStage(item.stage) : s.stageUnset,
+                })}
               </span>
               <Button
                 size="sm"
@@ -848,14 +852,14 @@
                   if (stage) onsetstage(stage);
                 }}
               >
-                Move to {humanizeStage(stageSuggestion.stage)}
+                {format(s.moveTo, { stage: humanizeStage(stageSuggestion.stage) })}
               </Button>
               <button
                 type="button"
                 class="shrink-0 text-xs text-muted-foreground underline-offset-2 hover:underline"
                 onclick={() => (stageSuggestion = null)}
               >
-                Dismiss
+                {s.dismiss}
               </button>
             </div>
           {/if}
@@ -865,13 +869,13 @@
           {#if canRecall}
             <div class="flex flex-wrap items-center gap-2">
               <Button size="sm" variant="outline" disabled={recallLoading} onclick={runRecall}>
-                {recallLoading ? 'Searching your mail…' : 'Find this application’s mail'}
+                {recallLoading ? s.searchingMail : s.findMail}
               </Button>
               {#if recall && recallPending.length === 0}
                 <span class="text-xs text-muted-foreground">
                   {recall.scanned === 0
-                    ? 'No unattached mail around this application to look at.'
-                    : `Nothing matched among ${recall.scanned} message${recall.scanned === 1 ? '' : 's'}.`}
+                    ? s.noUnattachedMail
+                    : format(plural(locale(), recall.scanned, s.noMatchAmong), { scanned: String(recall.scanned) })}
                 </span>
               {/if}
             </div>
@@ -882,14 +886,15 @@
           {#if recallPending.length > 0}
             <div class="flex flex-col gap-2 rounded-xl border border-dashed border-border p-3">
               <p class="text-sm">
-                <span class="font-medium">{recallPending.length}</span>
-                of {recall?.scanned} message{recall?.scanned === 1 ? '' : 's'} may belong here.
-                Nothing is attached until you say so.
+                {format(plural(locale(), recall?.scanned ?? 0, s.possibleMatches), {
+                  count: String(recallPending.length),
+                  scanned: String(recall?.scanned ?? 0),
+                })}
               </p>
               <!-- Said where the boundary is crossed, not buried in a settings page: the
                    sweep looks through the mailbox and keeps nothing until Link is pressed. -->
               <p class="text-xs text-muted-foreground">
-                This searched your mailbox for {company}. Nothing is saved unless you link it.
+                {format(s.searchedMailboxFor, { company })}
               </p>
               {#each recallPending as e (e.provider_id ?? e.id)}
                 <div class="flex flex-wrap items-center gap-2 rounded-md border border-border px-3 py-2">
@@ -898,22 +903,22 @@
                       <span class="min-w-0 flex-1 truncate text-sm font-medium">{e.from_name || e.from_addr}</span>
                       <span class="shrink-0 text-xs text-muted-foreground">{timeAgo(e.received_at, locale())}</span>
                     </div>
-                    <div class="truncate text-sm text-muted-foreground">{e.subject || '(no subject)'}</div>
+                    <div class="truncate text-sm text-muted-foreground">{e.subject || s.noSubject}</div>
                     <!-- Marked on the row it belongs to, not only counted below it. The
                          count alone made the reader hunt for which message it meant. -->
                     {#if e.invitation}
                       <span class="mt-1 inline-flex text-xs text-muted-foreground">
-                        Carries a calendar invitation
+                        {s.carriesInvitation}
                       </span>
                     {/if}
                   </div>
-                  <Button size="sm" class="shrink-0" onclick={() => resolveRecalled(e, true)}>Link</Button>
+                  <Button size="sm" class="shrink-0" onclick={() => resolveRecalled(e, true)}>{s.link}</Button>
                   <button
                     type="button"
                     class="shrink-0 text-xs text-muted-foreground underline-offset-2 hover:underline"
                     onclick={() => resolveRecalled(e, false)}
                   >
-                    Not this one
+                    {s.notThisOne}
                   </button>
                 </div>
               {/each}
@@ -922,18 +927,17 @@
                    produces its meeting on the next one. -->
               {#if recall && recall.invitations > 0}
                 <p class="text-xs text-muted-foreground">
-                  Linking an invitation brings its meeting onto your calendar view after the next
-                  sync.
+                  {s.invitationSyncNote}
                 </p>
               {/if}
             </div>
           {/if}
           {#if emailsLoading}
-            <p class="text-sm text-muted-foreground">Loading emails…</p>
+            <p class="text-sm text-muted-foreground">{s.loadingEmails}</p>
           {:else if emailsError}
             <p class="text-sm text-destructive">{emailsError}</p>
           {:else if !emails || emails.length === 0}
-            <p class="text-sm text-muted-foreground">No emails linked to this application yet.</p>
+            <p class="text-sm text-muted-foreground">{s.noEmailsLinked}</p>
           {:else}
             {#each emails as e (e.id)}
               <div class="overflow-hidden rounded-xl border border-border">
@@ -954,8 +958,8 @@
                       <span class="min-w-0 flex-1 truncate text-sm font-medium">{e.from_name || e.from_addr}</span>
                       <span class="shrink-0 text-[11px] text-muted-foreground">{timeAgo(e.received_at, locale())}</span>
                     </div>
-                    <div class="mt-0.5 truncate text-sm text-muted-foreground">{e.subject || '(no subject)'}</div>
-                    {#if statusLabel(e.status_signal)}
+                    <div class="mt-0.5 truncate text-sm text-muted-foreground">{e.subject || s.noSubject}</div>
+                    {#if statusLabel(e.status_signal, locale())}
                       <!-- The chip, and what its signal means for the stage. The chip alone left
                            three different situations looking identical: the signal moved the
                            stage, it named one only the candidate may apply, or it was never
@@ -967,8 +971,8 @@
                            list does not. -->
                       <span class="mt-1 inline-flex flex-wrap items-baseline gap-1.5 text-xs leading-4">
                         <StatusChip signal={e.status_signal} />
-                        {#if stageImplication(e.status_signal)}
-                          <span class="text-muted-foreground">{stageImplication(e.status_signal)}</span>
+                        {#if stageImplication(e.status_signal, locale())}
+                          <span class="text-muted-foreground">{stageImplication(e.status_signal, locale())}</span>
                         {/if}
                       </span>
                     {/if}
@@ -977,11 +981,11 @@
                 {#if expandedId === e.id}
                   <div class="border-t border-border p-3">
                     {#if bodyLoading}
-                      <p class="text-sm text-muted-foreground">Loading…</p>
+                      <p class="text-sm text-muted-foreground">{s.loading}</p>
                     {:else if expandedBody?.body_html}
                       <!-- Untrusted sender HTML isolated in a sandboxed iframe (no scripts/forms/navigation). -->
                       <iframe
-                        title="Message body"
+                        title={s.messageBodyTitle}
                         sandbox=""
                         srcdoc={expandedBody.body_html}
                         class="h-96 w-full bg-white"
@@ -989,7 +993,7 @@
                     {:else if expandedBody?.body_text}
                       <pre class="max-h-96 overflow-y-auto whitespace-pre-wrap font-sans text-sm leading-relaxed">{expandedBody.body_text}</pre>
                     {:else}
-                      <p class="text-sm text-muted-foreground">No content.</p>
+                      <p class="text-sm text-muted-foreground">{s.noContent}</p>
                     {/if}
                   </div>
                 {/if}
@@ -1003,19 +1007,19 @@
             <!-- The posting was removed from the catalogue. What it said is genuinely
                  gone; saying so is better than an empty tab that reads as a bug. -->
             <p class="text-sm text-muted-foreground">
-              This posting is no longer listed. Your application, its stage and your notes are kept.
+              {s.postingRemoved}
             </p>
           {:else if posting?.description}
             <JobDescription html={posting.description} />
           {:else if !posting}
-            <p class="text-sm text-muted-foreground">Loading…</p>
+            <p class="text-sm text-muted-foreground">{s.loading}</p>
           {:else}
-            <p class="text-sm text-muted-foreground">No description available.</p>
+            <p class="text-sm text-muted-foreground">{s.noDescription}</p>
           {/if}
 
           {#if posting?.skills?.length}
             <div class="flex flex-col gap-2 border-t border-border pt-5">
-              <p class={sectionLabel}>Skills</p>
+              <p class={sectionLabel}>{s.skills}</p>
               <div class="flex flex-wrap gap-1.5">
                 <!-- Unlinked: the drawer is a reading surface over a posting, and a
                      filter link would navigate out of it. -->
@@ -1040,7 +1044,7 @@
         class="gap-1.5 text-red-600 hover:bg-red-50 hover:text-red-700 dark:text-red-400 dark:hover:bg-red-950/40 dark:hover:text-red-300"
       >
         <Trash2 class="size-4" />
-        Remove from board
+        {s.removeFromBoard}
       </Button>
     </div>
   </div>

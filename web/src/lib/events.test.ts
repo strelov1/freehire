@@ -39,6 +39,13 @@ describe('eventLabel', () => {
   it('sentence-cases a kind from a newer server', () => {
     expect(eventLabel(event('offer_withdrawn'))).toBe('Offer withdrawn');
   });
+
+  it('translates into Russian, keeping the raw signal untouched', () => {
+    expect(eventLabel(event('employer_reply', 'rejection'), 'ru')).toBe('Работодатель ответил — rejection');
+    expect(eventLabel(event('stage_set', 'interview'), 'ru')).toBe('Переход на этап interview');
+    expect(eventLabel(event('applied'), 'ru')).toBe('Отклик отправлен');
+    expect(eventLabel(event('interview_scheduled'), 'ru')).toBe('Собеседование назначено');
+  });
 });
 
 describe('eventTone', () => {

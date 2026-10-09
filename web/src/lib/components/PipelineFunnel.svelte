@@ -2,6 +2,9 @@
   import { PIPELINE_BANDS, bandBreakdown, bandTotal } from '$lib/pipeline';
   import { humanizeStage } from '$lib/stages';
   import type { PipelineStats } from '$lib/types';
+  import { messages } from './PipelineFunnel.messages';
+  import { locale } from '$lib/i18n/currentLocale.svelte';
+  import { t } from '$lib/i18n/t';
 
   // A single-level Sankey snapshot: one Applications source fanning into the pipeline
   // groups (five today: Preparing, Applied, Interview, Offer, Closed — derived from
@@ -15,6 +18,7 @@
   // 28 accepted offers.
   let { stats }: { stats: PipelineStats } = $props();
   const applications = $derived(stats.applications);
+  const s = $derived(t(messages, locale()));
 
   // SVG geometry, in viewBox units (the element scales to its container width).
   // The left source bar fills HH; the right nodes share the same heights but are
@@ -52,7 +56,7 @@
       count: bandTotal(stats, b),
       // Only the stages actually holding something: a breakdown listing three outcomes
       // where one happened is noise dressed as detail.
-      breakdown: bandBreakdown(stats, b).filter((s) => s.count > 0),
+      breakdown: bandBreakdown(stats, b).filter((bd) => bd.count > 0),
     })).filter((b) => b.count > 0);
     if (applications <= 0 || visible.length === 0) {
       return { height: HH + PAD * 2, barY: PAD, ribbons: [] as Ribbon[] };
@@ -81,7 +85,7 @@
         // says nothing the band label has not already said.
         breakdown:
           b.breakdown.length > 1
-            ? b.breakdown.map((s) => `${humanizeStage(s.stage)} ${s.count}`).join(' · ')
+            ? b.breakdown.map((bd) => `${humanizeStage(bd.stage)} ${bd.count}`).join(' · ')
             : '',
         path: `M ${LX + LW} ${ly0} C ${MID} ${ly0}, ${MID} ${ry0}, ${RX} ${ry0} L ${RX} ${ry1} C ${MID} ${ry1}, ${MID} ${ly1}, ${LX + LW} ${ly1} Z`,
         nodeY: ry0,
@@ -98,7 +102,7 @@
   style="aspect-ratio: {W} / {model.height}"
   class="block h-auto w-full"
   role="img"
-  aria-label="Application pipeline by status"
+  aria-label={s.chartAria}
 >
   <!-- Source bar: all applications -->
   <rect x={LX} y={model.barY} width={LW} height={HH} rx="3" class="fill-foreground" />

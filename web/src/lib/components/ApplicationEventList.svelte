@@ -42,7 +42,7 @@
           <span class="font-medium">{e.company_slug}</span>
           {#if e.role_title}<span class="text-muted-foreground"> · {e.role_title}</span>{/if}
         </p>
-        <p class="text-sm text-muted-foreground">{eventLabel(e)}</p>
+        <p class="text-sm text-muted-foreground">{eventLabel(e, locale())}</p>
         {#if e.email_subject}
           <p class="truncate text-sm italic text-muted-foreground">“{e.email_subject}”</p>
         {/if}
