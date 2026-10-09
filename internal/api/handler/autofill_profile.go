@@ -24,13 +24,18 @@ type autofillHandlers struct {
 	// llm plans the agent-driven fill. A nil client is the LLM being unconfigured: the run
 	// reports the feature is off and the deterministic read still works.
 	llm llmBinding
+	// typesafeAPIKey backs the Jev provider for Choose (autofillagent.JevPlanner). Empty
+	// disables it outright: Choose then answers through the LLM exactly as it did before
+	// this setting existed. See TYPESAFE_API_KEY in internal/platform/config.
+	typesafeAPIKey string
 }
 
-func newAutofillHandlers(cvs candidateprofile.CVReader, resumes candidateprofile.ResumeReader, accounts candidateprofile.AccountReader, screeningAnswers candidateprofile.ScreeningAnswersReader, bank candidateprofile.BankReader, tools *browsertools.Hub, llm llmBinding) *autofillHandlers {
+func newAutofillHandlers(cvs candidateprofile.CVReader, resumes candidateprofile.ResumeReader, accounts candidateprofile.AccountReader, screeningAnswers candidateprofile.ScreeningAnswersReader, bank candidateprofile.BankReader, tools *browsertools.Hub, llm llmBinding, typesafeAPIKey string) *autofillHandlers {
 	return &autofillHandlers{
-		profiles:     candidateprofile.NewAssembler(cvs, resumes, accounts, screeningAnswers, bank),
-		browserTools: tools,
-		llm:          llm,
+		profiles:       candidateprofile.NewAssembler(cvs, resumes, accounts, screeningAnswers, bank),
+		browserTools:   tools,
+		llm:            llm,
+		typesafeAPIKey: typesafeAPIKey,
 	}
 }
 

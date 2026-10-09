@@ -45,7 +45,10 @@ func (h *autofillHandlers) RunAgentAutofill(c *fiber.Ctx) error {
 	report, err := autofillagent.Run(
 		c.Context(),
 		caller,
-		autofillagent.LLMPlanner{Client: h.llm.bind(c.Context(), userID, llm.Feature(tagAutofill))},
+		autofillagent.NewJevPlanner(
+			autofillagent.LLMPlanner{Client: h.llm.bind(c.Context(), userID, llm.Feature(tagAutofill))},
+			h.typesafeAPIKey,
+		),
 		autofillagent.Profile(profile.Fields()),
 	)
 	if err != nil {

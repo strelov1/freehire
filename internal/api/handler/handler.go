@@ -360,6 +360,9 @@ type Config struct {
 	// SearchIntentLLM backs the AI filter. Separate for latency, not capability — see
 	// config.SearchIntentModel.
 	SearchIntentLLM *llm.Client
+	// TypesafeAPIKey backs the Jev provider for the autofill agent's Choose call
+	// (autofillagent.JevPlanner). Empty disables it: Choose answers through LLM alone.
+	TypesafeAPIKey string
 	// AssistantMaxSteps bounds the tool-calling rounds of one turn; zero uses the
 	// assistant package's default.
 	AssistantMaxSteps int
@@ -729,7 +732,7 @@ func Register(app *fiber.App, cfg Config) {
 	// The autofill planner is one cheap structured call per run, so it travels on the
 	// shared client's default timeout. The contact block it plans over comes from the base
 	// CV, then the structured résumé — see autofillHandlers.autofillProfile.
-	autofillH := newAutofillHandlers(cvStore, resumeStore, queries, screeningAnswersSvc, answerBank, a.browserTools, llmBinding{client: cfg.LLM, keys: llmKeys})
+	autofillH := newAutofillHandlers(cvStore, resumeStore, queries, screeningAnswersSvc, answerBank, a.browserTools, llmBinding{client: cfg.LLM, keys: llmKeys}, cfg.TypesafeAPIKey)
 	usageH := newUsageHandlers(cfg.LLMKeys, llmKeys)
 	accountDeletion.WithGatewayKeys(llmKeys.Revoke)
 

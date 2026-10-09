@@ -72,6 +72,12 @@ type Settings struct {
 	// identity (notifications, NOTIFY_EMAIL_FROM), a different, non-receiving domain.
 	MailboxDomain string
 
+	// TypesafeAPIKey backs the Jev provider for the autofill agent's Choose call
+	// (internal/ai/autofillagent.JevPlanner). Empty disables it outright: Choose then
+	// answers through the LLM exactly as it did before this setting existed. Unrelated to
+	// LLM_* — it is read fresh here, not shared with any other consumer.
+	TypesafeAPIKey string
+
 	// Meilisearch backs the job search endpoint and the reindex command. Shared
 	// via Load (both cmd/server and cmd/reindex read it). Search is optional:
 	// MeiliKey empty ⇒ search is disabled and the server still starts (see
@@ -407,6 +413,7 @@ func Load() Settings {
 		GmailTokenKey:         decodeKey(os.Getenv("GMAIL_TOKEN_KEY")),
 		MailboxDomain:         os.Getenv("MAILBOX_DOMAIN"),
 		MeiliURL:              env("MEILI_URL", "http://localhost:7700"),
+		TypesafeAPIKey:        os.Getenv("TYPESAFE_API_KEY"),
 		MeiliKey:              os.Getenv("MEILI_MASTER_KEY"),
 		RedisURL:              env("REDIS_URL", "redis://localhost:6379/0"),
 

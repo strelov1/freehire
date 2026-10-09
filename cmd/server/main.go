@@ -338,6 +338,7 @@ func main() {
 		LLM:                         llmClient,
 		AssistantLLM:                assistantLLM,
 		SearchIntentLLM:             intentLLM,
+		TypesafeAPIKey:              cfg.TypesafeAPIKey,
 		AssistantMaxSteps:           cfg.AssistantMaxSteps,
 		AssistantMaxPrompt:          cfg.AssistantMaxPrompt,
 		LLMKeys:                     llmKeys,

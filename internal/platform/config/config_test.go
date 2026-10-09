@@ -372,6 +372,22 @@ func TestLoad_MeiliKeyFromEnv(t *testing.T) {
 	}
 }
 
+func TestLoad_TypesafeAPIKeyFromEnv(t *testing.T) {
+	t.Setenv("TYPESAFE_API_KEY", "jev-key")
+
+	if got := Load().TypesafeAPIKey; got != "jev-key" {
+		t.Errorf("TypesafeAPIKey = %q, want %q", got, "jev-key")
+	}
+}
+
+func TestLoad_TypesafeAPIKeyEmptyWhenUnset(t *testing.T) {
+	t.Setenv("TYPESAFE_API_KEY", "")
+
+	if got := Load().TypesafeAPIKey; got != "" {
+		t.Errorf("TypesafeAPIKey = %q, want empty", got)
+	}
+}
+
 func TestLoad_OAuthCredentialsFromEnv(t *testing.T) {
 	t.Setenv("OAUTH_GOOGLE_CLIENT_ID", "gid")
 	t.Setenv("OAUTH_GOOGLE_CLIENT_SECRET", "gsecret")
