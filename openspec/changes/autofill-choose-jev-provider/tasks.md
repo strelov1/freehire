@@ -23,8 +23,11 @@
 - [x] 3.2 Implement the client against a mock HTTP server (no real network calls in tests);
       reuse the 8 cases from the 2026-10-08 spike as table-driven fixtures
 - [x] 3.3 Write a failing test for `JevPlanner.Choose` falling back to the wrapped
-      `LLMPlanner.Choose` when the Jev call errors (network failure and unparseable
-      response, as two separate cases)
+      `LLMPlanner.Choose` when the Jev call errors. `JevPlanner` itself doesn't
+      discriminate error type, so one generic-error test covers that branch; the
+      network-failure and unparseable-response cases are exercised separately, one
+      layer down, at `jevChooser` (tasks 3.1/3.2 and the review-added
+      malformed-JSON/missing-answer-key tests)
 - [x] 3.4 Implement the fallback in `JevPlanner.Choose`
 - [x] 3.5 Write a failing test confirming `JevPlanner.Plan` delegates to
       `LLMPlanner.Plan` unchanged

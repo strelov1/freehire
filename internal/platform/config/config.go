@@ -412,8 +412,8 @@ func Load() Settings {
 		RecentAuthTTL:         envDuration("RECENT_AUTH_TTL", 10*time.Minute),
 		GmailTokenKey:         decodeKey(os.Getenv("GMAIL_TOKEN_KEY")),
 		MailboxDomain:         os.Getenv("MAILBOX_DOMAIN"),
-		MeiliURL:              env("MEILI_URL", "http://localhost:7700"),
 		TypesafeAPIKey:        os.Getenv("TYPESAFE_API_KEY"),
+		MeiliURL:              env("MEILI_URL", "http://localhost:7700"),
 		MeiliKey:              os.Getenv("MEILI_MASTER_KEY"),
 		RedisURL:              env("REDIS_URL", "redis://localhost:6379/0"),
 
