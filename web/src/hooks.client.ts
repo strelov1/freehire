@@ -12,7 +12,19 @@ if (env.PUBLIC_SENTRY_DSN) {
     dsn: env.PUBLIC_SENTRY_DSN,
     environment: env.PUBLIC_SENTRY_ENVIRONMENT || 'development',
     tracesSampleRate: 0,
-    sendDefaultPii: false,
+    // v11 replaced the single `sendDefaultPii: false` switch with per-category
+    // defaults that collect by default (cookies, headers, query params, user info
+    // all `true` out of the box) — denying each by name is what `sendDefaultPii:
+    // false` used to do in one flag. `stackFrameVariables` is denied too: a local
+    // variable can hold exactly the kind of value (a token, an email) PII-off was
+    // for, and v11 added it as its own always-on category.
+    dataCollection: {
+      userInfo: false,
+      cookies: false,
+      httpHeaders: false,
+      urlQueryParams: false,
+      stackFrameVariables: false,
+    },
     // A Safari extension reads our JSON-LD and throws on a block that carries no
     // "@context" — inline, so the frame points at our own document and neither
     // denyUrls nor the third-party filter sees it as foreign. Nothing on the

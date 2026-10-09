@@ -1,6 +1,6 @@
 import { defineConfig } from 'vite';
 import { sveltekit } from '@sveltejs/kit/vite';
-import { sentrySvelteKit } from '@sentry/sveltekit';
+import { sentrySvelteKit } from '@sentry/sveltekit/vite';
 import tailwindcss from '@tailwindcss/vite';
 import { SvelteKitPWA } from '@vite-pwa/sveltekit';
 
@@ -45,11 +45,11 @@ export default defineConfig({
   // exactly what went stale last time.
   plugins: [
     sentrySvelteKit({
-      sourceMapsUploadOptions: {
-        org: process.env.SENTRY_ORG,
-        project: process.env.SENTRY_PROJECT,
-        authToken: process.env.SENTRY_AUTH_TOKEN,
-      },
+      // v11 flattened these onto the plugin options directly; the nested
+      // `sourceMapsUploadOptions` wrapper from v10 no longer exists.
+      org: process.env.SENTRY_ORG,
+      project: process.env.SENTRY_PROJECT,
+      authToken: process.env.SENTRY_AUTH_TOKEN,
     }),
     tailwindcss(),
     sveltekit(),

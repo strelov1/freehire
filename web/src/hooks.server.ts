@@ -47,7 +47,19 @@ if (env.PUBLIC_SENTRY_DSN) {
     dsn: env.PUBLIC_SENTRY_DSN,
     environment: env.PUBLIC_SENTRY_ENVIRONMENT || 'development',
     tracesSampleRate: 0,
-    sendDefaultPii: false,
+    // v11 replaced the single `sendDefaultPii: false` switch with per-category
+    // defaults that collect by default (cookies, headers, query params, user info
+    // all `true` out of the box) — denying each by name is what `sendDefaultPii:
+    // false` used to do in one flag. `stackFrameVariables` is denied too: a local
+    // variable can hold exactly the kind of value (a token, an email) PII-off was
+    // for, and v11 added it as its own always-on category.
+    dataCollection: {
+      userInfo: false,
+      cookies: false,
+      httpHeaders: false,
+      urlQueryParams: false,
+      stackFrameVariables: false,
+    },
     // The same filter the browser half applies, and it matters MORE here: an SSR `load`
     // that could not read the API in ten seconds reports once per visitor per page, so a
     // slow afternoon arrives as thousands of identical events carrying no stack to act on.
