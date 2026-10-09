@@ -28,6 +28,7 @@ const { avoidSkill, unavoidSkill, avoidSource, unavoidSource, avoidCompany, unav
     loadSkillDistribution: vi.fn(),
   }));
 
+vi.mock('$app/state', () => ({ page: { data: {}, url: new URL('http://localhost/') } }));
 vi.mock('$lib/profile.svelte', () => ({
   profileStore: {
     get profile() {

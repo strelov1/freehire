@@ -4,6 +4,11 @@
   import { BASE_REFRESH_MESSAGE, offerCvRefresh } from '$lib/cvRefreshOffer';
   import { errorMessage } from '$lib/utils';
   import ExperienceBankView from '$lib/components/ExperienceBankView.svelte';
+  import { messages } from './messages';
+  import { locale } from '$lib/i18n/currentLocale.svelte';
+  import { t } from '$lib/i18n/t';
+
+  const s = $derived(t(messages, locale()));
 
   // Scoped to this page rather than shared with sibling sections: a separate route
   // unmounts on navigation, so a stale error from one bank edit cannot keep showing
@@ -21,10 +26,7 @@
         try {
           await api.reseedBaseCv();
         } catch (e) {
-          actionError = errorMessage(
-            e,
-            'Could not update your base CV. Try Reset from résumé in a tailoring workspace.',
-          );
+          actionError = errorMessage(e, s.reseedFailed);
         }
       },
     });

@@ -22,6 +22,7 @@ const { StubApiError } = vi.hoisted(() => ({
   },
 }));
 
+vi.mock('$app/state', () => ({ page: { data: {}, url: new URL('http://localhost/') } }));
 vi.mock('$lib/api', () => ({ api: { reseedBaseCv }, ApiError: StubApiError }));
 vi.mock('$lib/cvRefreshDialog.svelte', () => ({ askCvRefresh }));
 vi.mock('$lib/components/ExperienceBankView.svelte', async () => ({

@@ -2,6 +2,9 @@
   import type { Answers } from '$lib/generated/contracts';
   import { api } from '$lib/api';
   import { Button, Input } from '$lib/ui';
+  import { messages } from './ScreeningAnswersForm.messages';
+  import { locale } from '$lib/i18n/currentLocale.svelte';
+  import { format, t } from '$lib/i18n/t';
 
   // Editable form for the six screening questions that repeat across ATS application
   // forms (work authorization, visa sponsorship, desired salary, notice period,
@@ -10,6 +13,8 @@
   // deliberately separate from ProfileForm (a different lifecycle: these are facts the
   // candidate states directly, not a CV/skills targeting profile).
   let { answers = null, onSaved }: { answers?: Answers | null; onSaved?: () => void } = $props();
+
+  const s = $derived(t(messages, locale()));
 
   // Tri-state: a boolean field can be unset (the candidate has not said), yes, or no. A
   // native select keeps that third state explicit instead of defaulting a checkbox to
@@ -20,9 +25,9 @@
     if (b === false) return 'no';
     return '';
   }
-  function fromTriState(t: TriState): boolean | undefined {
-    if (t === 'yes') return true;
-    if (t === 'no') return false;
+  function fromTriState(tri: TriState): boolean | undefined {
+    if (tri === 'yes') return true;
+    if (tri === 'no') return false;
     return undefined;
   }
 
@@ -35,7 +40,7 @@
   function parseWholeNumber(raw: string, fieldLabel: string): number {
     const n = Number(raw.replace(/,/g, ''));
     if (!Number.isFinite(n)) {
-      throw new Error(`${fieldLabel} must be a number.`);
+      throw new Error(format(s.mustBeNumber, { field: fieldLabel }));
     }
     return n;
   }
@@ -93,20 +98,20 @@
       if (countries.length > 0) patch.authorized_countries = countries;
       const sponsorship = fromTriState(visaSponsorshipNeeded);
       if (sponsorship !== undefined) patch.visa_sponsorship_needed = sponsorship;
-      if (desiredSalaryAmount.trim() !== '') patch.desired_salary_amount = parseWholeNumber(desiredSalaryAmount, 'Desired salary amount');
+      if (desiredSalaryAmount.trim() !== '') patch.desired_salary_amount = parseWholeNumber(desiredSalaryAmount, s.fields.desiredSalaryAmount);
       if (desiredSalaryCurrency.trim() !== '') patch.desired_salary_currency = desiredSalaryCurrency.trim();
       if (desiredSalaryPeriod !== '') patch.desired_salary_period = desiredSalaryPeriod;
-      if (noticePeriodDays.trim() !== '') patch.notice_period_days = parseWholeNumber(noticePeriodDays, 'Notice period');
+      if (noticePeriodDays.trim() !== '') patch.notice_period_days = parseWholeNumber(noticePeriodDays, s.fields.noticePeriod);
       const relocate = fromTriState(willingToRelocate);
       if (relocate !== undefined) patch.willing_to_relocate = relocate;
       const age = fromTriState(age18OrOlder);
       if (age !== undefined) patch.age_18_or_older = age;
 
       await api.updateScreeningAnswers(patch);
-      note = 'Screening answers saved.';
+      note = s.saved;
       onSaved?.();
     } catch (e) {
-      error = e instanceof Error ? e.message : 'Could not save screening answers.';
+      error = e instanceof Error ? e.message : s.saveFailed;
       // The save never landed — these values are still unsaved and must stay protected.
       dirty = true;
     } finally {
@@ -117,60 +122,59 @@
 
 <section class="flex flex-col gap-4">
   <div class="flex flex-col gap-1">
-    <h3 class="text-sm font-semibold">Screening answers</h3>
+    <h3 class="text-sm font-semibold">{s.heading}</h3>
     <p class="text-xs text-muted-foreground">
-      Answer these once and the browser extension can fill them into matching questions on real
-      application forms.
+      {s.description}
     </p>
   </div>
 
   <div class="grid gap-3 sm:grid-cols-2">
     <label class="flex flex-col gap-1 text-sm sm:col-span-2">
-      <span class="text-muted-foreground">Authorized to work in (comma-separated countries)</span>
-      <Input bind:value={authorizedCountriesText} oninput={markDirty} placeholder="United States, Germany" class="w-full" />
+      <span class="text-muted-foreground">{s.fields.authorizedCountries}</span>
+      <Input bind:value={authorizedCountriesText} oninput={markDirty} placeholder={s.fields.authorizedCountriesPlaceholder} class="w-full" />
     </label>
 
     <label class="flex flex-col gap-1 text-sm">
-      <span class="text-muted-foreground">Need visa sponsorship?</span>
+      <span class="text-muted-foreground">{s.fields.visaSponsorship}</span>
       <select
         bind:value={visaSponsorshipNeeded}
         onchange={markDirty}
         class="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
       >
-        <option value="">Not stated</option>
-        <option value="yes">Yes</option>
-        <option value="no">No</option>
+        <option value="">{s.triState.notStated}</option>
+        <option value="yes">{s.triState.yes}</option>
+        <option value="no">{s.triState.no}</option>
       </select>
     </label>
 
     <label class="flex flex-col gap-1 text-sm">
-      <span class="text-muted-foreground">Willing to relocate?</span>
+      <span class="text-muted-foreground">{s.fields.relocate}</span>
       <select
         bind:value={willingToRelocate}
         onchange={markDirty}
         class="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
       >
-        <option value="">Not stated</option>
-        <option value="yes">Yes</option>
-        <option value="no">No</option>
+        <option value="">{s.triState.notStated}</option>
+        <option value="yes">{s.triState.yes}</option>
+        <option value="no">{s.triState.no}</option>
       </select>
     </label>
 
     <label class="flex flex-col gap-1 text-sm">
-      <span class="text-muted-foreground">18 or older?</span>
+      <span class="text-muted-foreground">{s.fields.age18}</span>
       <select
         bind:value={age18OrOlder}
         onchange={markDirty}
         class="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
       >
-        <option value="">Not stated</option>
-        <option value="yes">Yes</option>
-        <option value="no">No</option>
+        <option value="">{s.triState.notStated}</option>
+        <option value="yes">{s.triState.yes}</option>
+        <option value="no">{s.triState.no}</option>
       </select>
     </label>
 
     <label class="flex flex-col gap-1 text-sm">
-      <span class="text-muted-foreground">Notice period (days)</span>
+      <span class="text-muted-foreground">{s.fields.noticePeriod}</span>
       <!-- inputmode, not type="number": the design-system Input's `value` is typed (and
            bound) as a string, but Svelte's bind:value on a native type="number" input
            coerces to a JS number regardless — desiredSalaryAmount.trim() below would
@@ -179,33 +183,33 @@
     </label>
 
     <label class="flex flex-col gap-1 text-sm">
-      <span class="text-muted-foreground">Desired salary amount</span>
+      <span class="text-muted-foreground">{s.fields.desiredSalaryAmount}</span>
       <Input inputmode="numeric" bind:value={desiredSalaryAmount} oninput={markDirty} placeholder="120000" class="w-full" />
     </label>
 
     <label class="flex flex-col gap-1 text-sm">
-      <span class="text-muted-foreground">Currency (ISO 4217)</span>
+      <span class="text-muted-foreground">{s.fields.currency}</span>
       <Input bind:value={desiredSalaryCurrency} oninput={markDirty} placeholder="USD" maxlength={3} class="w-full" />
     </label>
 
     <label class="flex flex-col gap-1 text-sm">
-      <span class="text-muted-foreground">Salary period</span>
+      <span class="text-muted-foreground">{s.fields.salaryPeriod}</span>
       <select
         bind:value={desiredSalaryPeriod}
         onchange={markDirty}
         class="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
       >
-        <option value="">Not stated</option>
-        <option value="year">Year</option>
-        <option value="month">Month</option>
-        <option value="day">Day</option>
-        <option value="hour">Hour</option>
+        <option value="">{s.triState.notStated}</option>
+        <option value="year">{s.periods.year}</option>
+        <option value="month">{s.periods.month}</option>
+        <option value="day">{s.periods.day}</option>
+        <option value="hour">{s.periods.hour}</option>
       </select>
     </label>
   </div>
 
   <div class="flex flex-wrap items-center gap-2">
-    <Button size="sm" variant="primary" disabled={busy} onclick={save}>Save screening answers</Button>
+    <Button size="sm" variant="primary" disabled={busy} onclick={save}>{s.save}</Button>
   </div>
   {#if error}
     <p class="text-sm text-destructive">{error}</p>

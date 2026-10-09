@@ -13,6 +13,9 @@
   import { Button, Chip } from '$lib/ui';
   import PeriodDateInput from '$lib/components/PeriodDateInput.svelte';
   import { formatPeriodDate } from '$lib/periodDate';
+  import { messages } from './EducationCard.messages';
+  import { locale } from '$lib/i18n/currentLocale.svelte';
+  import { t } from '$lib/i18n/t';
 
   let {
     structured,
@@ -27,6 +30,7 @@
   const education = $derived(structured?.education ?? []);
   const languages = $derived(structured?.languages ?? []);
   const certifications = $derived(structured?.certifications ?? []);
+  const s = $derived(t(messages, locale()));
 
   let editingEducation = $state(false);
   let educationDraft = $state<ResumeEducation[]>([]);
@@ -70,7 +74,7 @@
       editingEducation = false;
       onSaved?.();
     } catch (e) {
-      educationError = e instanceof Error ? e.message : 'Could not save.';
+      educationError = e instanceof Error ? e.message : s.saveFailed;
     } finally {
       educationBusy = false;
     }
@@ -108,7 +112,7 @@
       editingLanguages = false;
       onSaved?.();
     } catch (e) {
-      languagesError = e instanceof Error ? e.message : 'Could not save.';
+      languagesError = e instanceof Error ? e.message : s.saveFailed;
     } finally {
       languagesBusy = false;
     }
@@ -146,7 +150,7 @@
       editingCertifications = false;
       onSaved?.();
     } catch (e) {
-      certificationsError = e instanceof Error ? e.message : 'Could not save.';
+      certificationsError = e instanceof Error ? e.message : s.saveFailed;
     } finally {
       certificationsBusy = false;
     }
@@ -157,11 +161,11 @@
   <div class="flex flex-col gap-2">
     <div class="flex items-center justify-between">
       <h2 class="flex items-center gap-2 text-base font-semibold">
-        <GraduationCap class="size-4.5" />Education
+        <GraduationCap class="size-4.5" />{s.education.heading}
       </h2>
       {#if !editingEducation}
         <Button size="sm" variant="ghost" class="text-muted-foreground" onclick={startEditEducation}>
-          <Pencil class="size-3.5" />Edit
+          <Pencil class="size-3.5" />{s.edit}
         </Button>
       {/if}
     </div>
@@ -175,15 +179,15 @@
                 <input
                   class="rounded-md border border-border bg-background px-3 py-2 text-sm"
                   bind:value={row.degree}
-                  placeholder="Degree"
+                  placeholder={s.education.degreePlaceholder}
                 />
                 <input
                   class="rounded-md border border-border bg-background px-3 py-2 text-sm"
                   bind:value={row.institution}
-                  placeholder="Institution"
+                  placeholder={s.education.institutionPlaceholder}
                 />
                 <div class="sm:col-span-2">
-                  <PeriodDateInput bind:value={row.year} placeholder="Year" />
+                  <PeriodDateInput bind:value={row.year} placeholder={s.education.yearPlaceholder} />
                 </div>
               </div>
               <Button
@@ -191,7 +195,7 @@
                 variant="ghost"
                 class="shrink-0 text-muted-foreground"
                 onclick={() => removeEducationRow(i)}
-                aria-label="Remove"
+                aria-label={s.remove}
               >
                 <X class="size-4" />
               </Button>
@@ -199,10 +203,10 @@
           </div>
         {/each}
         <Button size="sm" variant="secondary" class="self-start" onclick={addEducationRow}>
-          <Plus class="size-3.5" />Add education
+          <Plus class="size-3.5" />{s.education.add}
         </Button>
         <div class="flex flex-wrap items-center gap-2">
-          <Button size="sm" variant="primary" disabled={educationBusy} onclick={saveEducation}>Save</Button>
+          <Button size="sm" variant="primary" disabled={educationBusy} onclick={saveEducation}>{s.save}</Button>
           <Button
             size="sm"
             variant="ghost"
@@ -210,7 +214,7 @@
             disabled={educationBusy}
             onclick={cancelEditEducation}
           >
-            Cancel
+            {s.cancel}
           </Button>
         </div>
         {#if educationError}
@@ -234,18 +238,18 @@
         {/each}
       </ul>
     {:else}
-      <p class="text-sm text-muted-foreground">Nothing here yet — add your education.</p>
+      <p class="text-sm text-muted-foreground">{s.education.empty}</p>
     {/if}
   </div>
 
   <div class="flex flex-col gap-2">
     <div class="flex items-center justify-between">
       <h2 class="flex items-center gap-2 text-base font-semibold">
-        <LanguagesIcon class="size-4.5" />Languages
+        <LanguagesIcon class="size-4.5" />{s.languages.heading}
       </h2>
       {#if !editingLanguages}
         <Button size="sm" variant="ghost" class="text-muted-foreground" onclick={startEditLanguages}>
-          <Pencil class="size-3.5" />Edit
+          <Pencil class="size-3.5" />{s.edit}
         </Button>
       {/if}
     </div>
@@ -255,10 +259,10 @@
         bind:value={languagesText}
         rows="4"
         class="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-        placeholder="English&#10;Spanish"
+        placeholder={s.languages.placeholder}
       ></textarea>
       <div class="flex flex-wrap items-center gap-2">
-        <Button size="sm" variant="primary" disabled={languagesBusy} onclick={saveLanguages}>Save</Button>
+        <Button size="sm" variant="primary" disabled={languagesBusy} onclick={saveLanguages}>{s.save}</Button>
         <Button
           size="sm"
           variant="ghost"
@@ -266,7 +270,7 @@
           disabled={languagesBusy}
           onclick={cancelEditLanguages}
         >
-          Cancel
+          {s.cancel}
         </Button>
       </div>
       {#if languagesError}
@@ -279,18 +283,18 @@
         {/each}
       </div>
     {:else}
-      <p class="text-sm text-muted-foreground">Nothing here yet — add a language.</p>
+      <p class="text-sm text-muted-foreground">{s.languages.empty}</p>
     {/if}
   </div>
 
   <div class="flex flex-col gap-2">
     <div class="flex items-center justify-between">
       <h2 class="flex items-center gap-2 text-base font-semibold">
-        <Award class="size-4.5" />Certifications
+        <Award class="size-4.5" />{s.certifications.heading}
       </h2>
       {#if !editingCertifications}
         <Button size="sm" variant="ghost" class="text-muted-foreground" onclick={startEditCertifications}>
-          <Pencil class="size-3.5" />Edit
+          <Pencil class="size-3.5" />{s.edit}
         </Button>
       {/if}
     </div>
@@ -300,11 +304,11 @@
         bind:value={certificationsText}
         rows="4"
         class="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-        placeholder="AWS Certified Solutions Architect"
+        placeholder={s.certifications.placeholder}
       ></textarea>
       <div class="flex flex-wrap items-center gap-2">
         <Button size="sm" variant="primary" disabled={certificationsBusy} onclick={saveCertifications}>
-          Save
+          {s.save}
         </Button>
         <Button
           size="sm"
@@ -313,7 +317,7 @@
           disabled={certificationsBusy}
           onclick={cancelEditCertifications}
         >
-          Cancel
+          {s.cancel}
         </Button>
       </div>
       {#if certificationsError}
@@ -326,7 +330,7 @@
         {/each}
       </div>
     {:else}
-      <p class="text-sm text-muted-foreground">Nothing here yet — add a certification.</p>
+      <p class="text-sm text-muted-foreground">{s.certifications.empty}</p>
     {/if}
   </div>
 </div>

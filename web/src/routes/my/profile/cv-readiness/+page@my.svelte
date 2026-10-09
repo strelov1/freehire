@@ -13,6 +13,9 @@
   import { profileStore } from '$lib/profile.svelte';
   import type { ATSResponse, FacetCounts } from '$lib/types';
   import { Button } from '$lib/ui';
+  import { messages } from './messages';
+  import { locale } from '$lib/i18n/currentLocale.svelte';
+  import { t } from '$lib/i18n/t';
 
   // CV readiness: the ATS-readiness score and the optional AI review, scored against a
   // role the reader picks. Reachable by URL only — not one of the profile's views (see
@@ -23,6 +26,7 @@
   // and its "no profile yet" gate — both wrong here) straight to `my/+layout.svelte`,
   // same mechanism `my/assistant/+layout@.svelte` uses to reset further, past that too.
   const profile = $derived(profileStore.profile);
+  const s = $derived(t(messages, locale()));
 
   // Skills are the measured set (from the profile), never a market filter — hide the
   // skills facet so the sidebar can't turn them into one.
@@ -119,7 +123,7 @@
 </script>
 
 <svelte:head>
-  <title>CV readiness — freehire</title>
+  <title>{s.headTitle}</title>
 </svelte:head>
 
 <!-- Run / Re-run AI review control, rendered inside the report's own section header
@@ -128,12 +132,12 @@
   {#if ats?.report && !ats.report.reviewed && !reviewUnavailable}
     <Button variant="primary" onclick={runReview} disabled={reviewBusy}>
       <ScanSearch class="size-4 {reviewBusy ? 'animate-pulse' : ''}" />
-      {reviewBusy ? 'Reviewing…' : 'Run AI review'}
+      {reviewBusy ? s.reviewing : s.runReview}
     </Button>
   {:else if ats?.report?.reviewed}
     <Button variant="ghost" onclick={runReview} disabled={reviewBusy}>
       <ScanSearch class="size-4 {reviewBusy ? 'animate-pulse' : ''}" />
-      {reviewBusy ? 'Reviewing…' : 'Re-run AI review'}
+      {reviewBusy ? s.reviewing : s.reRunReview}
     </Button>
   {/if}
 {/snippet}
@@ -141,26 +145,26 @@
 <div class="flex gap-6">
   <main class="flex min-w-0 flex-1 flex-col gap-6">
     {#if loadError}
-      <States state="error" message="Couldn't load the report." />
+      <States state="error" message={s.loadError} />
     {:else if ats === null}
       <States state="loading" />
     {:else if ats.has_cv && ats.report}
       <div class="flex flex-col gap-5">
         {#if reviewUnavailable}
-          <p class="text-xs text-muted-foreground">AI review is not available right now.</p>
+          <p class="text-xs text-muted-foreground">{s.reviewUnavailable}</p>
         {/if}
         <ATSReportView report={ats.report} action={reviewAction} />
       </div>
     {:else}
       <!-- No CV yet: uploaded from the profile's Settings section. -->
       <div class="flex flex-col items-start gap-2 rounded-xl border border-dashed border-border p-6">
-        <p class="text-sm font-medium">Add your CV to score its ATS readiness</p>
+        <p class="text-sm font-medium">{s.noCv.title}</p>
         <p class="text-sm text-muted-foreground">
-          Upload your CV in
+          {s.noCv.bodyLead}
           <a class="font-medium text-foreground underline underline-offset-2" href={resolve('/my/profile')}>
-            profile settings
+            {s.noCv.link}
           </a>
-          to check ATS readability and this role's keywords.
+          {s.noCv.bodyTail}
         </p>
       </div>
     {/if}
@@ -176,7 +180,7 @@
             store={filters}
             exclude={excludeFacets}
             onOpen={() => (modalOpen = true)}
-            description="Compare your CV's keyword strength against a role, region or seniority you choose."
+            description={s.filterDescription}
           />
         </div>
       </div>

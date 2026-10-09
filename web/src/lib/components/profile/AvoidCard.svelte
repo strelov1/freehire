@@ -10,6 +10,9 @@
   import { loadSourceDistribution } from '$lib/sourceDictionary';
   import { profileStore } from '$lib/profile.svelte';
   import RemoteSearchSelect from '../facets/RemoteSearchSelect.svelte';
+  import { messages } from './AvoidCard.messages';
+  import { locale } from '$lib/i18n/currentLocale.svelte';
+  import { format, t } from '$lib/i18n/t';
 
   let {
     onProfileChanged,
@@ -104,19 +107,20 @@
 
   const searchSkills = (query: string) => searchDist(skillDist, query, skills);
   const searchSources = (query: string) => searchDist(sourceDist, query);
+  const s = $derived(t(messages, locale()));
 </script>
 
 <div class="flex flex-col gap-6 {pending ? 'pointer-events-none opacity-60' : ''}">
   <div class="flex flex-col gap-2">
     <div class="flex items-baseline justify-between">
-      <span class="text-sm font-medium">Skills to avoid</span>
+      <span class="text-sm font-medium">{s.skillsHeading}</span>
       <span class="text-xs tabular-nums text-muted-foreground">{excludedSkills.length}</span>
     </div>
     <RemoteSearchSelect
       search={searchSkills}
       include={[]}
       exclude={excludedSkills}
-      placeholder="Search skills to exclude"
+      placeholder={s.skillsPlaceholder}
       onToggle={toggleExcludedSkill}
       fallbackLabel={(v) => v}
       clearOnSelect
@@ -127,14 +131,14 @@
 
   <div class="flex flex-col gap-2">
     <div class="flex items-baseline justify-between">
-      <span class="text-sm font-medium">Sources to avoid</span>
+      <span class="text-sm font-medium">{s.sourcesHeading}</span>
       <span class="text-xs tabular-nums text-muted-foreground">{excludedSources.length}</span>
     </div>
     <RemoteSearchSelect
       search={searchSources}
       include={[]}
       exclude={excludedSources}
-      placeholder="Search sources to exclude"
+      placeholder={s.sourcesPlaceholder}
       onToggle={toggleExcludedSource}
       fallbackLabel={(v) => dynamicLabel('source', v)}
       clearOnSelect
@@ -144,14 +148,14 @@
 
   <div class="flex flex-col gap-2">
     <div class="flex items-baseline justify-between">
-      <span class="text-sm font-medium">Companies to avoid</span>
+      <span class="text-sm font-medium">{s.companiesHeading}</span>
       <span class="text-xs tabular-nums text-muted-foreground">{excludedCompanies.length}</span>
     </div>
     <RemoteSearchSelect
       search={companySearch}
       include={[]}
       exclude={excludedCompanies}
-      placeholder="Search companies to exclude"
+      placeholder={s.companiesPlaceholder}
       onToggle={toggleExcludedCompany}
       fallbackLabel={(v) => dynamicLabel('company_slug', v)}
       clearOnSelect
@@ -159,6 +163,6 @@
   </div>
 
   {#if failed}
-    <p class="text-sm text-destructive">Could not update {failed} in your profile. Try again.</p>
+    <p class="text-sm text-destructive">{format(s.updateFailed, { value: failed })}</p>
   {/if}
 </div>
