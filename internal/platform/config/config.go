@@ -72,10 +72,11 @@ type Settings struct {
 	// identity (notifications, NOTIFY_EMAIL_FROM), a different, non-receiving domain.
 	MailboxDomain string
 
-	// TypesafeAPIKey backs the Jev provider for the autofill agent's Choose call
-	// (internal/ai/autofillagent.JevPlanner). Empty disables it outright: Choose then
-	// answers through the LLM exactly as it did before this setting existed. Unrelated to
-	// LLM_* — it is read fresh here, not shared with any other consumer.
+	// TypesafeAPIKey backs the Jev provider for every discrete-choice LLM call that opts
+	// in: the autofill agent's Choose call (internal/ai/autofillagent.JevPlanner) and
+	// select-kind auto-apply drafting (internal/api/atsapply.JevSelectDrafter). Empty
+	// disables it outright for both: each falls back to its own LLM path exactly as it
+	// did before this setting existed. Unrelated to LLM_* — it is read fresh here.
 	TypesafeAPIKey string
 
 	// Meilisearch backs the job search endpoint and the reindex command. Shared

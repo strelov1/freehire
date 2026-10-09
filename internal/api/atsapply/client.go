@@ -100,6 +100,11 @@ type Client struct {
 	// reason RunAgentAutofill binds per request rather than once at startup.
 	llmClient *llm.Client
 	llmKeys   *llmkey.Resolver
+	// typesafeAPIKey backs the Jev provider for select-kind drafted fields
+	// (JevSelectDrafter). Empty disables it outright: those fields draft through the LLM
+	// exactly as they did before this setting existed. See TYPESAFE_API_KEY in
+	// internal/platform/config.
+	typesafeAPIKey string
 	// atoms is nil-checked directly (not nil-safe like llmkey.Resolver): a nil reader
 	// means "no grounding source configured", and drafting is skipped entirely rather
 	// than run against an always-empty GroundingContext.
@@ -168,16 +173,17 @@ type CVReader interface {
 // atoms and letters are not two independent switches — see that guard's own comment.
 // cvs/renderer
 // may also be nil, with the same degrade: a résumé field parks instead of being filled.
-func NewClient(transport applyform.Transport, llmClient *llm.Client, llmKeys *llmkey.Resolver, atoms AtomReader, letters LetterReader, cvs CVReader, renderer cv.Renderer) *Client {
+func NewClient(transport applyform.Transport, llmClient *llm.Client, llmKeys *llmkey.Resolver, typesafeAPIKey string, atoms AtomReader, letters LetterReader, cvs CVReader, renderer cv.Renderer) *Client {
 	return &Client{
-		fetchers:      applyform.Fetchers(transport),
-		allocatorOpts: stealthAllocatorOptions(),
-		llmClient:     llmClient,
-		llmKeys:       llmKeys,
-		atoms:         atoms,
-		letters:       letters,
-		cvs:           cvs,
-		renderer:      renderer,
+		fetchers:       applyform.Fetchers(transport),
+		allocatorOpts:  stealthAllocatorOptions(),
+		llmClient:      llmClient,
+		llmKeys:        llmKeys,
+		typesafeAPIKey: typesafeAPIKey,
+		atoms:          atoms,
+		letters:        letters,
+		cvs:            cvs,
+		renderer:       renderer,
 	}
 }
 
@@ -347,7 +353,8 @@ func (c *Client) resolve(ctx context.Context, claimed autoapply.Claimed, merged 
 	}
 
 	bound := llmkey.Bind(ctx, c.llmKeys, c.llmClient, claimed.UserID, llm.Feature(tagAutoApplyDrafting))
-	return ResolveWithDrafting(ctx, merged, answers, NewLLMDrafter(bound), grounding, hasApprovedCV, c.letters, claimed.UserID, claimed.JobID)
+	drafter := NewJevSelectDrafter(NewLLMDrafter(bound), c.typesafeAPIKey)
+	return ResolveWithDrafting(ctx, merged, answers, drafter, grounding, hasApprovedCV, c.letters, claimed.UserID, claimed.JobID)
 }
 
 // attachApprovedResume renders the claim's approved tailored CV to a temp PDF and sets it
