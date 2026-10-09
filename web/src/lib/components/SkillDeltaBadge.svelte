@@ -1,6 +1,9 @@
 <script lang="ts">
   import { TrendingUp, TrendingDown, Minus } from '@lucide/svelte';
   import { fmtPct } from '$lib/skillPulseFormat';
+  import { messages } from './SkillDeltaBadge.messages';
+  import { locale } from '$lib/i18n/currentLocale.svelte';
+  import { t } from '$lib/i18n/t';
 
   // The percent-change pill for one skill's trend — shared by the compact card
   // grid and the per-skill detail page. `pct` is the raw (unrounded) figure;
@@ -10,13 +13,14 @@
   let { pct }: { pct: number | null } = $props();
 
   const rounded = $derived(pct === null ? null : Math.round(pct));
+  const s = $derived(t(messages, locale()));
 </script>
 
 {#if rounded === null}
   <span
     class="inline-flex items-center gap-1 rounded-md bg-secondary px-1.5 py-0.5 text-xs text-muted-foreground"
   >
-    New
+    {s.new}
   </span>
 {:else if rounded > 0}
   <span

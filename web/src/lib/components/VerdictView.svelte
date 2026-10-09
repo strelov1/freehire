@@ -2,6 +2,9 @@
   import { Check, TrendingUp } from '@lucide/svelte';
   import type { Verdict } from '$lib/types';
   import { Badge } from '$lib/ui';
+  import { messages } from './VerdictView.messages';
+  import { locale } from '$lib/i18n/currentLocale.svelte';
+  import { format, plural, t, tokenLabel } from '$lib/i18n/t';
 
   // The verdict is the backend's market-coverage computation for the selected role:
   // how many of the role's open vacancies the profile's skills reach, which missing
@@ -20,6 +23,7 @@
   const skills = $derived(verdict.skills ?? []);
   const bundles = $derived(verdict.bundles ?? []);
   const uncovered = $derived(Math.max(verdict.total - verdict.covered, 0));
+  const s = $derived(t(messages, locale()));
 
   // The two detail lists (gaps to add vs the role's top skills) are tabbed so only one
   // shows at a time — keeps the coverage view compact under the headline + stats.
@@ -41,19 +45,21 @@
       <div class="flex items-baseline gap-2">
         <span class="text-6xl font-semibold tabular-nums leading-none">{verdict.coverage_percent}%</span>
         <span class="text-sm font-medium text-muted-foreground">
-          {verdict.covered.toLocaleString('en-US')} of {verdict.total.toLocaleString('en-US')} open vacancies
+          {format(plural(locale(), verdict.total, s.coverageLine), {
+            covered: verdict.covered.toLocaleString('en-US'),
+            total: verdict.total.toLocaleString('en-US'),
+          })}
         </span>
       </div>
       <Badge variant="outline" class="uppercase tracking-[0.14em]">
-        {uncovered.toLocaleString('en-US')} out of reach
+        {format(plural(locale(), uncovered, s.outOfReach), { count: uncovered.toLocaleString('en-US') })}
       </Badge>
     </div>
     <div class="h-2 overflow-hidden rounded bg-secondary">
       <div class="h-full rounded bg-brand transition-all" style="width: {verdict.coverage_percent}%"></div>
     </div>
     <p class="text-sm text-muted-foreground">
-      Vacancies for this role that mention at least one of your skills. Add the skills below to
-      reach more.
+      {s.coverageExplanation}
     </p>
   </div>
 
@@ -69,27 +75,27 @@
              covered/total ratio is undefined — show a dash instead of a broken "0/0". -->
         <span
           class="text-3xl font-semibold leading-none text-muted-foreground"
-          title="No single skill appears in the majority of this role's vacancies, so there's no must-have to measure."
+          title={s.mustHaveNone}
         >
           —
         </span>
       {/if}
-      <span class="text-xs font-medium uppercase tracking-wide text-muted-foreground">Must-have skills covered</span>
+      <span class="text-xs font-medium uppercase tracking-wide text-muted-foreground">{s.mustHaveCovered}</span>
     </div>
     <div class="flex flex-col gap-1 rounded-xl border border-border bg-card p-4">
       <span class="text-3xl font-semibold tabular-nums leading-none">{verdict.stack_match_percent}%</span>
-      <span class="text-xs font-medium uppercase tracking-wide text-muted-foreground">Stack match</span>
+      <span class="text-xs font-medium uppercase tracking-wide text-muted-foreground">{s.stackMatch}</span>
     </div>
     <div class="flex flex-col gap-1 rounded-xl border border-border bg-card p-4">
       <span class="text-3xl font-semibold tabular-nums leading-none">{verdict.coherence_percent}%</span>
-      <span class="text-xs font-medium uppercase tracking-wide text-muted-foreground">Coherence</span>
+      <span class="text-xs font-medium uppercase tracking-wide text-muted-foreground">{s.coherence}</span>
     </div>
   </div>
 
   <!-- Skill bundles: the market expects combinations, not isolated skills -->
   {#if bundles.length > 0}
     <div class="flex flex-col gap-2">
-      <h2 class="text-base font-semibold tracking-tight">Skill bundles the market expects</h2>
+      <h2 class="text-base font-semibold tracking-tight">{s.bundlesHeading}</h2>
       <div class="flex flex-wrap gap-2">
         {#each bundles as b (b.name)}
           <span
@@ -117,7 +123,7 @@
           : 'border-transparent text-muted-foreground hover:text-foreground'}"
       >
         <TrendingUp class="size-4" />
-        Add a skill
+        {s.tabs.addSkill}
       </button>
       <button
         type="button"
@@ -126,7 +132,7 @@
           ? 'border-brand text-foreground'
           : 'border-transparent text-muted-foreground hover:text-foreground'}"
       >
-        Top market skills
+        {s.tabs.topSkills}
       </button>
     </div>
 
@@ -152,7 +158,7 @@
                   <TrendingUp class="size-3.5" />
                   +{gap.new_vacancies.toLocaleString('en-US')}
                 </span>
-                <span class="text-xs text-muted-foreground">+{gap.unlock_percent}% of the role</span>
+                <span class="text-xs text-muted-foreground">{format(s.unlockPercent, { pct: String(gap.unlock_percent) })}</span>
               </div>
             </li>
           {/each}
@@ -160,7 +166,7 @@
       {:else}
         <div class="flex items-center gap-2 rounded-lg border border-border bg-card/50 p-4 text-sm text-muted-foreground">
           <Check class="size-4 text-primary" />
-          No in-demand skills left to add for this role — your stack already reaches its open vacancies.
+          {s.noGaps}
         </div>
       {/if}
     {:else if skills.length > 0}
@@ -180,17 +186,17 @@
                   <span
                     class="rounded bg-secondary px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground"
                   >
-                    Must-have
+                    {s.mustHaveBadge}
                   </span>
                 {/if}
-                <span class="text-xs text-muted-foreground">{skill.market_frequency}% of roles</span>
+                <span class="text-xs text-muted-foreground">{format(s.marketFrequency, { pct: String(skill.market_frequency) })}</span>
               </div>
               <span
                 class="shrink-0 rounded px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide {statusStyle[
                   skill.status
                 ]}"
               >
-                {skill.status}
+                {tokenLabel(s.status, skill.status)}
               </span>
             </div>
             {#if skill.advice}

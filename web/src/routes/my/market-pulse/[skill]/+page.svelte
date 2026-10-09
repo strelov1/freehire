@@ -12,6 +12,9 @@
   import States from '$lib/components/States.svelte';
   import SkillDeltaBadge from '$lib/components/SkillDeltaBadge.svelte';
   import { must } from '$lib/utils';
+  import { messages } from './messages';
+  import { locale } from '$lib/i18n/currentLocale.svelte';
+  import { format, plural, t } from '$lib/i18n/t';
 
   // One skill's full retained history, zoomed in from the /my/market-pulse card
   // grid. Reuses the same GET /me/market-pulse call (already returns every
@@ -43,6 +46,7 @@
   // Points are evenly spaced from the first point's x — reused as the left/right
   // plot padding rather than re-deriving the chart module's PAD constant here.
   const padX = $derived(model && model.points.length > 0 ? must(model.points[0]).x : 0);
+  const s = $derived(t(messages, locale()));
 
   let hovered = $state<number | null>(null);
   let tipX = $state(0);
@@ -92,31 +96,31 @@
 </script>
 
 <svelte:head>
-  <title>{label} · Market pulse — freehire</title>
+  <title>{format(s.headTitle, { label })}</title>
 </svelte:head>
 
 {#if !isAuthenticated()}
-  <p class="py-12 text-center text-sm text-muted-foreground">Sign in to view your market pulse.</p>
+  <p class="py-12 text-center text-sm text-muted-foreground">{s.signedOut}</p>
 {:else}
   <div class="flex flex-col gap-4">
     <a
       href={resolve('/my/market-pulse')}
       class="inline-flex w-fit items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
     >
-      <ArrowLeft class="size-4" /> Market pulse
+      <ArrowLeft class="size-4" /> {s.backLink}
     </a>
 
     {#if status === 'loading'}
       <States state="loading" rows={1} />
     {:else if status === 'error'}
-      <States state="error" message="Couldn't load this skill's trend." />
+      <States state="error" message={s.loadError} />
     {:else if !skill || !model}
       <div class="flex flex-col items-center gap-3 py-16 text-center">
-        <p class="text-sm font-medium text-foreground">No trend for "{label}"</p>
+        <p class="text-sm font-medium text-foreground">{format(s.noTrend.title, { label })}</p>
         <p class="max-w-sm text-sm text-muted-foreground">
-          Either it isn't one of your profile skills, or it hasn't shown up in an open role yet.
+          {s.noTrend.body}
         </p>
-        <Button variant="primary" href={resolve('/my/market-pulse')}>Back to market pulse</Button>
+        <Button variant="primary" href={resolve('/my/market-pulse')}>{s.noTrend.button}</Button>
       </div>
     {:else}
       <div class="flex flex-wrap items-end justify-between gap-3">
@@ -124,7 +128,7 @@
           <h1 class="text-2xl font-semibold tracking-tight">{label}</h1>
           <div class="mt-1 flex items-baseline gap-2">
             <span class="text-3xl font-semibold tabular-nums">{skill.open_count}</span>
-            <span class="text-sm text-muted-foreground">open roles</span>
+            <span class="text-sm text-muted-foreground">{plural(locale(), skill.open_count, s.openRoles)}</span>
           </div>
         </div>
         <SkillDeltaBadge pct={skill.change_pct} />
@@ -133,7 +137,7 @@
       <div
         class="relative rounded-lg border border-border p-4"
         role="img"
-        aria-label="{label} demand over the retained history"
+        aria-label={format(s.demandAriaLabel, { label })}
         onpointermove={onMove}
         onpointerleave={() => (hovered = null)}
       >
@@ -199,7 +203,8 @@
           >
             <div class="font-medium text-foreground">{fullDate(hoveredPoint.weekStart)}</div>
             <div class="text-muted-foreground">
-              <span class="font-medium text-foreground">{hoveredPoint.openCount.toLocaleString()}</span> open roles
+              <span class="font-medium text-foreground">{hoveredPoint.openCount.toLocaleString()}</span>
+              {plural(locale(), hoveredPoint.openCount, s.openRoles)}
             </div>
           </div>
         {/if}
@@ -207,7 +212,7 @@
 
       {#if model.points.length === 1}
         <p class="text-center text-xs text-muted-foreground">
-          Only one snapshot so far — check back next week for a trend line.
+          {s.onlyOneSnapshot}
         </p>
       {/if}
     {/if}

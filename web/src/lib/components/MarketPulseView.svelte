@@ -8,6 +8,9 @@
   import { resolve } from '$app/paths';
   import States from './States.svelte';
   import SkillDeltaBadge from './SkillDeltaBadge.svelte';
+  import { messages } from './MarketPulseView.messages';
+  import { locale } from '$lib/i18n/currentLocale.svelte';
+  import { format, plural, t } from '$lib/i18n/t';
 
   // The signed-in caller's own skill-demand trend: one card per profile skill that
   // has at least one retained weekly snapshot (GET /me/market-pulse already omits
@@ -32,6 +35,7 @@
     );
   };
   const filtered = $derived(trimmedQuery ? data.filter(matchesQuery) : data);
+  const s = $derived(t(messages, locale()));
 
   $effect(() => {
     status = 'loading';
@@ -50,15 +54,14 @@
 {#if status === 'loading'}
   <States state="loading" rows={3} />
 {:else if status === 'error'}
-  <States state="error" message="Couldn't load your market pulse." />
+  <States state="error" message={s.loadError} />
 {:else if data.length === 0}
   <div class="flex flex-col items-center gap-3 py-12 text-center">
-    <p class="text-sm font-medium text-foreground">No skill trend yet</p>
+    <p class="text-sm font-medium text-foreground">{s.emptyTitle}</p>
     <p class="max-w-sm text-sm text-muted-foreground">
-      Add skills to your profile, or check back in a week — a trend needs at least one skill
-      that has shown up in an open role.
+      {s.emptyBody}
     </p>
-    <Button variant="primary" href={resolve('/my/profile')}>Go to profile</Button>
+    <Button variant="primary" href={resolve('/my/profile')}>{s.emptyButton}</Button>
   </div>
 {:else}
   <div class="flex flex-col gap-6">
@@ -66,16 +69,16 @@
       <Search class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
       <input
         type="search"
-        placeholder="Find a skill…"
+        placeholder={s.searchPlaceholder}
         bind:value={query}
-        aria-label="Filter skills"
+        aria-label={s.searchAriaLabel}
         class="w-full rounded-lg border border-border bg-background py-2 pl-9 pr-3 text-sm outline-none transition focus:border-brand focus:ring-2 focus:ring-brand-ring/40"
       />
     </div>
 
     {#if filtered.length === 0}
       <p class="py-8 text-center text-sm text-muted-foreground">
-        No skill matches "{trimmedQuery}".
+        {format(s.noMatch, { query: trimmedQuery })}
       </p>
     {:else}
       <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -90,13 +93,13 @@
               </div>
               <div class="flex items-baseline gap-1.5">
                 <span class="text-2xl font-semibold tabular-nums">{skill.open_count}</span>
-                <span class="text-xs text-muted-foreground">open roles</span>
+                <span class="text-xs text-muted-foreground">{plural(locale(), skill.open_count, s.openRoles)}</span>
               </div>
               <svg
                 viewBox="0 0 {model.width} {model.height}"
                 class="h-8 w-full"
                 role="img"
-                aria-label="{skillLabel(skill.skill)} demand over the retained history"
+                aria-label={format(s.demandAriaLabel, { label: skillLabel(skill.skill) })}
               >
                 {#if model.points}
                   <polyline

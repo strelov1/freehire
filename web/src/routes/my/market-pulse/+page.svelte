@@ -16,17 +16,21 @@
   import { profileStore } from '$lib/profile.svelte';
   import type { FacetCounts, Verdict } from '$lib/types';
   import { Button } from '$lib/ui';
+  import { messages } from './messages';
+  import { locale } from '$lib/i18n/currentLocale.svelte';
+  import { t } from '$lib/i18n/t';
 
   const profile = $derived(profileStore.profile);
+  const s = $derived(t(messages, locale()));
 
   // Skills are the measured set (from the profile), never a market filter — hide the
   // skills facet so the sidebar can't turn them into one.
   const excludeFacets = ['skills'];
 
-  const TABS = [
-    { id: 'coverage', label: 'Coverage', icon: Gauge },
-    { id: 'trend', label: 'Skill trend', icon: TrendingUp },
-  ] as const;
+  const TABS = $derived([
+    { id: 'coverage', label: s.tabs.coverage, icon: Gauge },
+    { id: 'trend', label: s.tabs.trend, icon: TrendingUp },
+  ] as const);
   const PANEL_ID = 'market-pulse-panel';
   let tab = $state<'coverage' | 'trend'>('coverage');
 
@@ -107,23 +111,23 @@
 </script>
 
 <svelte:head>
-  <title>Market pulse — freehire</title>
+  <title>{s.headTitle}</title>
 </svelte:head>
 
 <!-- The account shell (my/+layout) owns the container, auth gate, and noindex. -->
 {#if !isAuthenticated()}
-  <p class="py-12 text-center text-sm text-muted-foreground">Sign in to view your market pulse.</p>
+  <p class="py-12 text-center text-sm text-muted-foreground">{s.signedOut}</p>
 {:else}
   <div class="mb-6 flex flex-col gap-1">
-    <h1 class="text-2xl font-semibold tracking-tight">Market pulse</h1>
+    <h1 class="text-2xl font-semibold tracking-tight">{s.title}</h1>
     <p class="text-sm text-muted-foreground">
-      How you compare to the live market — role coverage and your own skill-demand trend.
+      {s.subtitle}
     </p>
   </div>
 
   <div class="flex gap-6">
     <main class="flex min-w-0 flex-1 flex-col gap-6">
-      <TabStrip tabs={TABS} active={tab} onSelect={(id) => (tab = id)} label="Market pulse sections" panelId={PANEL_ID} />
+      <TabStrip tabs={TABS} active={tab} onSelect={(id) => (tab = id)} label={s.tabStripLabel} panelId={PANEL_ID} />
 
       <div id={PANEL_ID} role="tabpanel" aria-labelledby={tabStripId(PANEL_ID, tab)} class="flex flex-col gap-6">
         {#if tab === 'trend'}
@@ -132,15 +136,14 @@
           <States state="loading" />
         {:else if profile === null}
           <div class="flex flex-col items-center gap-3 py-12 text-center">
-            <p class="text-sm font-medium text-foreground">Complete your profile to see market coverage</p>
+            <p class="text-sm font-medium text-foreground">{s.profileCta.title}</p>
             <p class="max-w-sm text-sm text-muted-foreground">
-              Coverage compares your CV's skills against the live market for a role you choose —
-              add a profile first.
+              {s.profileCta.body}
             </p>
-            <Button variant="primary" href={resolve('/my/profile')}>Go to profile</Button>
+            <Button variant="primary" href={resolve('/my/profile')}>{s.profileCta.button}</Button>
           </div>
         {:else if loadError}
-          <States state="error" message="Couldn't load the report." />
+          <States state="error" message={s.loadError} />
         {:else if verdict === null}
           <States state="loading" />
         {:else}
@@ -159,7 +162,7 @@
               store={filters}
               exclude={excludeFacets}
               onOpen={() => (modalOpen = true)}
-              description="Narrow the market to see how it reshapes your CV — pick roles, regions and seniority to compare against."
+              description={s.filterDescription}
             />
           </div>
         </div>
