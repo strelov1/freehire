@@ -1080,6 +1080,14 @@ type OnboardingEmail struct {
 	Error string `json:"error"`
 }
 
+// One row per (user, feature, day) a real plan-ceiling refusal was recorded (any tier). Feeds cmd/limit-nudge-mail's candidate query, which filters to free tier.
+type PlanLimitHit struct {
+	UserID    int64              `json:"user_id"`
+	Feature   string             `json:"feature"`
+	Day       pgtype.Date        `json:"day"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+}
+
 type ProcessedViewLog struct {
 	Signature   int64              `json:"signature"`
 	Filename    string             `json:"filename"`
@@ -1430,6 +1438,8 @@ type User struct {
 	TalentHandle pgtype.Text        `json:"talent_handle"`
 	// When the one-time welcome email for this account's first paying tier was sent. NULL until sent; never cleared once set, so a later renewal or resubscription is not re-welcomed.
 	ProWelcomeSentAt pgtype.Timestamptz `json:"pro_welcome_sent_at"`
+	// When the one-time "you ran into today's limit" nudge was sent. NULL until sent; never cleared once set.
+	LimitNudgeSentAt pgtype.Timestamptz `json:"limit_nudge_sent_at"`
 }
 
 type UserEmailCode struct {

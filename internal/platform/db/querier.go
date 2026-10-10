@@ -4098,6 +4098,17 @@ type Querier interface {
 	// index current without re-pushing the whole table. Returns closed rows too, so
 	// the caller deletes a freshly-closed job from the index.
 	ListJobsUpdatedAfter(ctx context.Context, arg ListJobsUpdatedAfterParams) ([]Job, error)
+	// Free-tier accounts that hit a plan ceiling at least once in the last window_days,
+	// verified, opted in to news mail, and not yet sent the one-time nudge.
+	//
+	// Driven from plan_limit_hits rather than from users: the hits table only ever holds
+	// free-tier refusals, so it is the selective side of the join — reading it first and
+	// joining out to users is a handful of rows, where starting from users and testing
+	// each one against it would be a sequential scan of the whole table.
+	//
+	// The tier check mirrors plan.TierOf's own rule directly rather than calling it: free
+	// is "neither until reaches past now", and a NULL until reads the same as a past one.
+	ListLimitHitUsersMissingNudgeEmail(ctx context.Context, arg ListLimitHitUsersMissingNudgeEmailParams) ([]ListLimitHitUsersMissingNudgeEmailRow, error)
 	// Every board a crawl still visits, across all providers — the identity cmd/prune needs
 	// to decide whether a posting is re-crawlable. Only (provider, board, region), not the
 	// whole row: the guard asks a set-membership question and nothing else.
@@ -5549,6 +5560,13 @@ type Querier interface {
 	// transport failure when it did not. ON CONFLICT DO NOTHING makes a double run
 	// harmless: the first row stands and the send is never repeated.
 	RecordOnboardingEmail(ctx context.Context, arg RecordOnboardingEmailParams) error
+	// Queries for the limit-nudge feature (internal/engage/limitnudge): one personal mail,
+	// sent once per account, to a free-tier user who has run into a plan ceiling.
+	// Records that a free-tier refusal happened for (user, feature, day), deduped by the
+	// primary key — a retried request that hits the same wall again the same day writes
+	// nothing further. Called from plan.Store.Consume on every real refusal (not FairUse,
+	// not Shadowed); see that file for the distinction.
+	RecordPlanLimitHit(ctx context.Context, arg RecordPlanLimitHitParams) error
 	// Count a failed send: bump attempts, record the error, and dead-letter (failed_at)
 	// once attempts reach the max. claimed_at is left in place — its expiry gates the
 	// retry to a later pass and doubles as the crash reaper, mirroring subscription_matches.
@@ -6423,6 +6441,9 @@ type Querier interface {
 	// rewritten, so a re-run writes nothing and produces no dead tuples. It also means the
 	// backfill needs no record of which rows it has visited.
 	SetJobsRequirementsDerived(ctx context.Context, arg SetJobsRequirementsDerivedParams) (int64, error)
+	// Claims the nudge send for one account. Guarded by IS NULL so a concurrent or
+	// repeated run never re-sends; 0 rows affected means somebody already claimed it.
+	SetLimitNudgeSent(ctx context.Context, id int64) (int64, error)
 	// Best-effort patch after CreateMentorBooking: the calendar event is created AFTER the
 	// booking row wins the EXCLUDE-constraint race, never before, so a lost race can never
 	// leave an orphaned Google event. No WHERE beyond the id — this always follows a

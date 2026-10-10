@@ -222,6 +222,11 @@ var blocks = map[string][]string{
 	// billing would import a community integration — and the guard would say so.
 	"engage": {
 		"broadcast", "community", "companyfeedback", "discordlink", "emailnotify", "emailprefs",
+		// limitnudge is outbound engagement like prowelcome below, and needs even less
+		// reach than it: the trigger (a free-tier plan-ceiling refusal) is written by
+		// internal/ai/plan.Store directly into plan_limit_hits, so this package never
+		// imports ai/plan at all — only its own candidate query over that table and users.
+		"limitnudge",
 		"linkedinauth", "mailpreview", "mentorship",
 		// mentorship/busysync is named in full, per the auth/oauth convention: it is a
 		// sub-package of mentorship and takes its parent's block, but the sync worker

@@ -436,6 +436,7 @@
        to is the question people actually hesitate on. -->
   <p class="text-center text-sm text-muted-foreground">
     Cancel any time — you keep Pro until the end of the period you have paid for. Nothing you
-    have created is ever withdrawn when a plan lapses.
+    have created is ever withdrawn when a plan lapses. Not what you expected? Email us within 14
+    days and we'll refund it, no questions asked.
   </p>
 </div>

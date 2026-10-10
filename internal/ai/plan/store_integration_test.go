@@ -67,6 +67,20 @@ func countLedger(t *testing.T, pool *pgxpool.Pool, userID int64, feature Feature
 	return n
 }
 
+// countLimitHits returns how many plan_limit_hits rows exist for a (user, feature) —
+// the signal recordLimitHit writes on a real plan-ceiling refusal, read by
+// internal/engage/limitnudge's candidate query.
+func countLimitHits(t *testing.T, pool *pgxpool.Pool, userID int64, feature Feature) int {
+	t.Helper()
+	var n int
+	if err := pool.QueryRow(context.Background(),
+		`SELECT count(*) FROM plan_limit_hits WHERE user_id=$1 AND feature=$2`,
+		userID, string(feature)).Scan(&n); err != nil {
+		t.Fatalf("count limit hits: %v", err)
+	}
+	return n
+}
+
 func usedOn(t *testing.T, pool *pgxpool.Pool, userID int64, feature Feature, day time.Time) int {
 	t.Helper()
 	var n int
@@ -108,6 +122,19 @@ func TestConsumeSpendsTheDailyAllowanceThenRefuses(t *testing.T) {
 	}
 	if !d.ResetsAt.Equal(time.Date(2026, 9, 16, 0, 0, 0, 0, time.UTC)) {
 		t.Errorf("the refusal reports ResetsAt %v, want the next UTC midnight", d.ResetsAt)
+	}
+	if got := countLimitHits(t, pool, user, FeatureFit); got != 1 {
+		t.Errorf("plan_limit_hits rows after the refusal = %d, want 1 — this is the signal "+
+			"cmd/limit-nudge-mail's candidate query reads", got)
+	}
+
+	// A second refusal the same day must not grow the row count — the dedup key is
+	// (user, feature, day), not one row per refused request.
+	if _, err := s.Consume(ctx, user, FeatureFit, jobRef(limit+1)); !errors.Is(err, ErrRefused) {
+		t.Fatalf("a second over-the-limit consumption returned %v, want ErrRefused", err)
+	}
+	if got := countLimitHits(t, pool, user, FeatureFit); got != 1 {
+		t.Errorf("plan_limit_hits rows after a second same-day refusal = %d, want still 1", got)
 	}
 }
 
@@ -327,6 +354,10 @@ func TestProIsUnlimitedUntilTheFairUseGuard(t *testing.T) {
 	}
 	if !d.FairUse {
 		t.Error("the refusal is not marked as a fair-use one, so the surface would show it as a plan ceiling")
+	}
+	if got := countLimitHits(t, pool, user, FeatureFit); got != 0 {
+		t.Errorf("plan_limit_hits rows after a fair-use refusal = %d, want 0 — the guard is "+
+			"infrastructure defence, not a plan ceiling worth an upgrade nudge", got)
 	}
 }
 

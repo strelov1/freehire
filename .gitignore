@@ -68,6 +68,7 @@ hire
 /linkedin-token-refresh
 /ingest
 /ingest-scheduler
+/limit-nudge-mail
 /liveness
 /llm-probe
 /mail-ingest

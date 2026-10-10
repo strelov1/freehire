@@ -122,10 +122,30 @@ func (s *Store) Consume(ctx context.Context, userID int64, feature Feature, ref 
 			// operators' business. A guard nobody sees fire is a guard that gets blamed
 			// for an outage it did not cause.
 			log.Printf("plan: fair-use guard refused user %d on %s at %d/day", userID, feature, d.Used)
+		} else {
+			// A real plan-ceiling refusal, as opposed to the fair-use guard above: the
+			// one signal cmd/limit-nudge-mail's candidate query reads to find accounts
+			// worth telling that Pro removes it. Best-effort and outside the transaction
+			// just committed — a refusal must reach the caller whether or not this write
+			// lands, and retrying the whole Consume for it would charge a feature nobody
+			// asked to pay for twice.
+			s.recordLimitHit(ctx, userID, feature, day)
 		}
 		return d, ErrRefused
 	}
 	return d, nil
+}
+
+// recordLimitHit best-effort records that a plan ceiling (not the fair-use guard) just
+// refused this user on this feature today. A failure here must not change the refusal
+// the caller already has — it is logged and dropped, same as every other fire-and-forget
+// write in this codebase.
+func (s *Store) recordLimitHit(ctx context.Context, userID int64, feature Feature, day time.Time) {
+	if err := s.q.RecordPlanLimitHit(ctx, db.RecordPlanLimitHitParams{
+		UserID: userID, Feature: string(feature), Day: pgDay(day),
+	}); err != nil {
+		log.Printf("plan: record limit hit for user %d on %s: %v", userID, feature, err)
+	}
 }
 
 // Release gives back a reservation for work that produced nothing the user can use, so
