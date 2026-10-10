@@ -750,6 +750,9 @@ func mapCVError(err error) error {
 			strings.TrimPrefix(err.Error(), cvedit.ErrInvalidOp.Error()+": "))
 	case errors.Is(err, cvedit.ErrForbiddenPath), errors.Is(err, cvedit.ErrEvidenceRequired):
 		return fiber.NewError(fiber.StatusForbidden, err.Error())
+	case errors.Is(err, cvedit.ErrProjectLooksLikeJob):
+		// Model-facing: the error already names the project and the fix (experience[]).
+		return fiber.NewError(fiber.StatusUnprocessableEntity, err.Error())
 	case errors.Is(err, cvedit.ErrListCap):
 		// Candidate-facing: no internal prefixes, clear that nothing was deleted.
 		if msg := cvedit.UserListCapMessage(err); msg != "" {

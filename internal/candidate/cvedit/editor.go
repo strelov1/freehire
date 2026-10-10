@@ -221,6 +221,14 @@ func (e *Editor) commit(ctx context.Context, tx Tx, cvID uuid.UUID, userID int64
 		}
 	}
 
+	// Agent-only: a candidate typing their own project name through the CLI-edit endpoint is
+	// never refused by this — the misfile this guards against is the model's, not theirs.
+	if ch.Actor == ActorAgent {
+		if err := refuseIfProjectLooksLikeJob(ch.Ops, applied); err != nil {
+			return cv.Meta{}, Revision{}, err
+		}
+	}
+
 	// Which inverse to store depends on whether the sanitizer moved anything.
 	//
 	// Apply's inverse is the precise one: it reverses each operation in kind, so undoing a
