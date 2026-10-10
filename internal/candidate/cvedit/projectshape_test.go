@@ -132,3 +132,24 @@ func TestCommitRefusesJobDatedNameEvenWhenALaterInsertShiftsItsIndex(t *testing.
 		t.Fatal("a refused batch must leave the document untouched")
 	}
 }
+
+// Inserting a WHOLE new project (as cv_edit's real callers do — a single value carrying name,
+// link and bullets together, not a separate set on .name) must be checked the same way a
+// .name-only set is.
+func TestCommitRefusesAgentInsertingAWholeJobDatedProject(t *testing.T) {
+	repo := newFakeRepo()
+	repo.state.Projects = []cv.Project{{Name: "freehire"}}
+	e, _ := newEditor(repo, &bank{})
+
+	err := agentEdit(t, e, Op{
+		Kind: OpInsert, Path: mustParse(t, "projects[1]"),
+		Value:      cv.Project{Name: "Senior Engineer, Acme Corp (2020 - 2023)", Bullets: []string{"Led the team"}},
+		EvidenceID: "banked",
+	})
+	if !errors.Is(err, ErrProjectLooksLikeJob) {
+		t.Fatalf("Commit = %v, want ErrProjectLooksLikeJob — a whole-project insert carries the job-dated name too", err)
+	}
+	if len(repo.state.Projects) != 1 {
+		t.Fatal("a refused insert must not add the project")
+	}
+}
