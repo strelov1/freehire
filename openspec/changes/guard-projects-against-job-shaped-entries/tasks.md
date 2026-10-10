@@ -41,3 +41,13 @@
 - [x] 4.2 `go test ./internal/candidate/cvedit/... ./internal/api/handler/...` — both green.
 - [x] 4.3 `go vet ./internal/candidate/cvedit/... ./internal/api/handler/...` — clean.
 - [x] 4.4 Code review requested (subagent) on the diff.
+- [x] 4.5 Review found an Important bug: `refuseIfProjectLooksLikeJob` resolved an op's path
+      index against the FINAL `applied.Projects`, which is wrong whenever a later op in the
+      same batch inserts/removes ahead of it and shifts that index — a job-dated `set` followed
+      by an `insert` at the same path slips through uncaught. RED: added
+      `TestCommitRefusesJobDatedNameEvenWhenALaterInsertShiftsItsIndex`, confirmed it failed
+      against the original implementation. GREEN: rewrote the check to read each op's own
+      `Value` directly (the string for a `.name` path, or the `name` field of a whole-project
+      value) instead of re-deriving position from the final document — this sidesteps index
+      correspondence entirely. Dropped the now-unneeded `applied State` parameter and the
+      `projectPathIndex` regex. Re-ran the full suite: still green, new regression test passes.

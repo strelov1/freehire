@@ -40,3 +40,8 @@ the bullet-cap guard already keep.
 
 - **WHEN** a batch writes two project names and one of them carries a job's date span
 - **THEN** neither is applied
+
+#### Scenario: The refusal holds even when a later operation shifts the entry's index
+
+- **WHEN** a batch sets a job-dated name on `projects[0]` and then inserts a new entry ahead of it, shifting the rewritten entry to `projects[1]` in the final document
+- **THEN** the commit is still refused — the check reads what each operation writes, not where it ends up after the rest of the batch runs

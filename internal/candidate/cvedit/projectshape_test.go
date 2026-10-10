@@ -108,3 +108,27 @@ func TestCommitRefusesWholeBatchWhenOneProjectIsJobDated(t *testing.T) {
 		t.Fatal("a refused batch must leave BOTH projects untouched, not just the offending one")
 	}
 }
+
+// A job-dated name written earlier in a batch must still be caught even when a LATER op in
+// the same batch inserts ahead of it and shifts it to a different final index. Checking each
+// op's literal path against the end state (rather than what that op itself wrote) would miss
+// this: the insert lands at index 0, pushing the job-dated rewrite to index 1, while the path
+// recorded on that rewrite still reads "projects[0]".
+func TestCommitRefusesJobDatedNameEvenWhenALaterInsertShiftsItsIndex(t *testing.T) {
+	repo := newFakeRepo()
+	repo.state.Projects = []cv.Project{{Name: "freehire"}}
+	e, _ := newEditor(repo, &bank{})
+
+	err := agentEdit(t, e,
+		Op{Kind: OpSet, Path: mustParse(t, "projects[0].name"),
+			Value: "Senior Engineer, Acme Corp (2020 - 2023)", EvidenceID: "banked"},
+		Op{Kind: OpInsert, Path: mustParse(t, "projects[0]"),
+			Value: cv.Project{Name: "NewProject"}, EvidenceID: "banked"},
+	)
+	if !errors.Is(err, ErrProjectLooksLikeJob) {
+		t.Fatalf("Commit = %v, want ErrProjectLooksLikeJob — the rewrite's own index shifted to 1 after the insert, but it should still be caught", err)
+	}
+	if len(repo.state.Projects) != 1 || repo.state.Projects[0].Name != "freehire" {
+		t.Fatal("a refused batch must leave the document untouched")
+	}
+}

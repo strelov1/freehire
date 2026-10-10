@@ -1,10 +1,11 @@
 package cvedit
 
 import (
+	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"regexp"
-	"strconv"
 )
 
 // ErrProjectLooksLikeJob is returned when an agent batch writes a projects[] entry whose name
@@ -19,32 +20,62 @@ var ErrProjectLooksLikeJob = errors.New("cvedit: this project's name reads like 
 // "2019 to current".
 var dateRangeInName = regexp.MustCompile(`(?i)(19|20)\d{2}\s*(-|–|—|to)\s*((19|20)\d{2}|present|current)`)
 
-// projectPathIndex extracts the index from a path addressing a projects[] entry or something
-// inside one, e.g. "projects[2]" or "projects[2].name".
-var projectPathIndex = regexp.MustCompile(`^projects\[(\d+)\]`)
+// projectNamePath and projectWholePath address what an op's VALUE means for this check: the
+// op's own path, not its position in the final document — see refuseIfProjectLooksLikeJob.
+var (
+	projectNamePath  = regexp.MustCompile(`^projects\[\d+\]\.name$`)
+	projectWholePath = regexp.MustCompile(`^projects\[\d+\]$`)
+)
 
-// refuseIfProjectLooksLikeJob returns ErrProjectLooksLikeJob when a batch writes a projects[]
-// entry whose resulting name carries a job's date span. Only name is checked — a project's
-// bullets legitimately mention a year without the entry being misfiled — and only operations
-// that assert new content (set, insert) are considered, matching requireEvidence's own
-// distinction between asserting and merely rearranging.
-func refuseIfProjectLooksLikeJob(ops []Op, applied State) error {
+// refuseIfProjectLooksLikeJob returns ErrProjectLooksLikeJob when a batch's operations write a
+// projects[] name carrying a job's date span.
+//
+// It reads each op's OWN Value, not the final document. A path's index is only correct against
+// the state that op was applied against — a later insert or remove on the same list shifts
+// every index after it, so re-deriving "what index 0 ends up holding" from the final state can
+// point at a different entry than the one this op actually wrote. Reading the op's own value
+// sidesteps that correspondence entirely: it is exactly what this op is trying to write,
+// regardless of where the list repositions it afterward.
+func refuseIfProjectLooksLikeJob(ops []Op) error {
 	for _, op := range ops {
 		if op.Kind != OpSet && op.Kind != OpInsert {
 			continue
 		}
-		m := projectPathIndex.FindStringSubmatch(string(op.Path))
-		if m == nil {
+		name, ok := projectNameWritten(op)
+		if !ok || name == "" {
 			continue
 		}
-		i, err := strconv.Atoi(m[1])
-		if err != nil || i >= len(applied.Projects) {
-			continue
-		}
-		if dateRangeInName.MatchString(applied.Projects[i].Name) {
-			return fmt.Errorf("%w: %s. Job roles with a start and end date belong under "+
-				"experience[], not projects[]", ErrProjectLooksLikeJob, projectLabel(applied.Projects[i], i))
+		if dateRangeInName.MatchString(name) {
+			return fmt.Errorf("%w: %q. Job roles with a start and end date belong under "+
+				"experience[], not projects[]", ErrProjectLooksLikeJob, name)
 		}
 	}
 	return nil
+}
+
+// projectNameWritten reads the name an operation sets on a projects[] entry, from the op's own
+// path and value — "projects[i].name" (value is the name itself) or "projects[i]" (value is a
+// whole project; its name, if any, is pulled out via the same json tag cv.Project uses). Any
+// other path under projects[] (bullets, link) is not a name write and returns ok=false.
+func projectNameWritten(op Op) (string, bool) {
+	path := string(op.Path)
+	switch {
+	case projectNamePath.MatchString(path):
+		name, _ := op.Value.(string)
+		return name, true
+	case projectWholePath.MatchString(path):
+		var whole struct {
+			Name string `json:"name"`
+		}
+		blob, err := json.Marshal(op.Value)
+		if err != nil {
+			return "", false
+		}
+		if err := json.NewDecoder(bytes.NewReader(blob)).Decode(&whole); err != nil {
+			return "", false
+		}
+		return whole.Name, true
+	default:
+		return "", false
+	}
 }

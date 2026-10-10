@@ -224,7 +224,7 @@ func (e *Editor) commit(ctx context.Context, tx Tx, cvID uuid.UUID, userID int64
 	// Agent-only: a candidate typing their own project name through the CLI-edit endpoint is
 	// never refused by this — the misfile this guards against is the model's, not theirs.
 	if ch.Actor == ActorAgent {
-		if err := refuseIfProjectLooksLikeJob(ch.Ops, applied); err != nil {
+		if err := refuseIfProjectLooksLikeJob(ch.Ops); err != nil {
 			return cv.Meta{}, Revision{}, err
 		}
 	}

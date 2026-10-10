@@ -58,6 +58,16 @@ heuristic over free text.
 - **Regex, not an LLM call or NLP library.** A second model call to classify "is this a job" would
   cost a round-trip and a prompt budget to decide something a four-character date-range pattern
   already answers with no additional latency or spend.
+- **Read each op's own `Value`, never re-derive a position from the final document.** The first
+  draft resolved an op's literal path index (e.g. `projects[0]`) against `applied.Projects` —
+  the state AFTER every op in the batch ran. That is wrong whenever another op in the same batch
+  inserts or removes ahead of it: a `set` on `projects[0].name` and a later `insert` at
+  `projects[0]` both carry the path `projects[0]`, but after the insert shifts things, index 0 in
+  the final state is the INSERTED entry, not the one the `set` wrote — so the check looked at the
+  wrong entry and let a job-shaped name through. Reading the op's own `Value` directly (the
+  string for a `.name` path, or the `name` field of a whole-project value) sidesteps position
+  entirely: it is exactly what that operation is trying to write, independent of where the list
+  repositions it afterward.
 
 ## Risks / Trade-offs
 
