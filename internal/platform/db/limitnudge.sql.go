@@ -84,10 +84,11 @@ type RecordPlanLimitHitParams struct {
 
 // Queries for the limit-nudge feature (internal/engage/limitnudge): one personal mail,
 // sent once per account, to a free-tier user who has run into a plan ceiling.
-// Records that a free-tier refusal happened for (user, feature, day), deduped by the
-// primary key — a retried request that hits the same wall again the same day writes
-// nothing further. Called from plan.Store.Consume on every real refusal (not FairUse,
-// not Shadowed); see that file for the distinction.
+// Records that a real plan-ceiling refusal happened for (user, feature, day) — any
+// tier, see migration 0178 — deduped by the primary key, so a retried request that
+// hits the same wall again the same day writes nothing further. Called from
+// plan.Store.Consume on every real refusal (not FairUse, not Shadowed); see that
+// file for the distinction.
 func (q *Queries) RecordPlanLimitHit(ctx context.Context, arg RecordPlanLimitHitParams) error {
 	_, err := q.db.Exec(ctx, recordPlanLimitHit, arg.UserID, arg.Feature, arg.Day)
 	return err

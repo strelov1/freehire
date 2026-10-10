@@ -5562,10 +5562,11 @@ type Querier interface {
 	RecordOnboardingEmail(ctx context.Context, arg RecordOnboardingEmailParams) error
 	// Queries for the limit-nudge feature (internal/engage/limitnudge): one personal mail,
 	// sent once per account, to a free-tier user who has run into a plan ceiling.
-	// Records that a free-tier refusal happened for (user, feature, day), deduped by the
-	// primary key — a retried request that hits the same wall again the same day writes
-	// nothing further. Called from plan.Store.Consume on every real refusal (not FairUse,
-	// not Shadowed); see that file for the distinction.
+	// Records that a real plan-ceiling refusal happened for (user, feature, day) — any
+	// tier, see migration 0178 — deduped by the primary key, so a retried request that
+	// hits the same wall again the same day writes nothing further. Called from
+	// plan.Store.Consume on every real refusal (not FairUse, not Shadowed); see that
+	// file for the distinction.
 	RecordPlanLimitHit(ctx context.Context, arg RecordPlanLimitHitParams) error
 	// Count a failed send: bump attempts, record the error, and dead-letter (failed_at)
 	// once attempts reach the max. claimed_at is left in place — its expiry gates the

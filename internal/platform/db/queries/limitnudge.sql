@@ -2,10 +2,11 @@
 -- sent once per account, to a free-tier user who has run into a plan ceiling.
 
 -- name: RecordPlanLimitHit :exec
--- Records that a free-tier refusal happened for (user, feature, day), deduped by the
--- primary key — a retried request that hits the same wall again the same day writes
--- nothing further. Called from plan.Store.Consume on every real refusal (not FairUse,
--- not Shadowed); see that file for the distinction.
+-- Records that a real plan-ceiling refusal happened for (user, feature, day) — any
+-- tier, see migration 0178 — deduped by the primary key, so a retried request that
+-- hits the same wall again the same day writes nothing further. Called from
+-- plan.Store.Consume on every real refusal (not FairUse, not Shadowed); see that
+-- file for the distinction.
 INSERT INTO plan_limit_hits (user_id, feature, day)
 VALUES (sqlc.arg(user_id), sqlc.arg(feature)::text, sqlc.arg(day))
 ON CONFLICT (user_id, feature, day) DO NOTHING;
