@@ -80,6 +80,7 @@ type Repository interface {
 	GetCandidateContacts(ctx context.Context, userID int64) ([]byte, error)
 	SetCandidateContacts(ctx context.Context, userID int64, blob []byte) error
 	SetExtractFailed(ctx context.Context, userID int64, detail string, uploadedAt time.Time) error
+	SetExtractPending(ctx context.Context, userID int64, uploadedAt time.Time) error
 }
 
 // Geography is where the candidate is, as derived from their CV and stored. Countries is
@@ -358,33 +359,47 @@ func (s *Store) UploadedAt(ctx context.Context, userID int64) (*time.Time, error
 // text as-is (the pasted-text path). ErrNotStored when the user has no résumé; the text
 // is never persisted separately (derived on read, no drift).
 func (s *Store) Text(ctx context.Context, userID int64) (string, error) {
+	text, _, err := s.TextAndUploadedAt(ctx, userID)
+	return text, err
+}
+
+// TextAndUploadedAt behaves like Text, but also returns the upload timestamp from the SAME
+// pointer read. A caller that needs both (a retry re-deriving text AND the stamp to write a
+// structured result under) must not call Text and Status as two separate reads: a résumé
+// replaced between them would derive text from the OLD upload under the NEW upload's stamp,
+// silently mismatching the two.
+func (s *Store) TextAndUploadedAt(ctx context.Context, userID int64) (string, time.Time, error) {
 	if !s.Enabled() {
-		return "", ErrStorageDisabled
+		return "", time.Time{}, ErrStorageDisabled
 	}
 	ptr, err := s.repo.Get(ctx, userID)
 	if err != nil {
-		return "", err
+		return "", time.Time{}, err
 	}
-	if !ptr.ResumeObjectKey.Valid {
-		return "", ErrNotStored
+	if !ptr.ResumeObjectKey.Valid || !ptr.ResumeUploadedAt.Valid {
+		return "", time.Time{}, ErrNotStored
 	}
 	rc, err := s.blobs.Get(ctx, ptr.ResumeObjectKey.String)
 	if err != nil {
 		if blobstore.IsNotFound(err) {
-			return "", ErrNotStored
+			return "", time.Time{}, ErrNotStored
 		}
-		return "", err
+		return "", time.Time{}, err
 	}
 	defer rc.Close()
 	data, err := io.ReadAll(rc)
 	if err != nil {
 		// MinIO/S3 GetObject is lazy: a missing key often surfaces only on the first read.
 		if blobstore.IsNotFound(err) {
-			return "", ErrNotStored
+			return "", time.Time{}, ErrNotStored
 		}
-		return "", fmt.Errorf("resume: read object: %w", err)
+		return "", time.Time{}, fmt.Errorf("resume: read object: %w", err)
 	}
-	return extractText(data)
+	text, err := extractText(data)
+	if err != nil {
+		return "", time.Time{}, err
+	}
+	return text, ptr.ResumeUploadedAt.Time, nil
 }
 
 // Delete removes the stored object and clears the pointer.
@@ -589,5 +604,12 @@ func (r *QueriesRepository) SetExtractFailed(ctx context.Context, userID int64, 
 		ID:                  userID,
 		ResumeExtractDetail: pgtype.Text{String: detail, Valid: detail != ""},
 		ResumeExtractFor:    pgtype.Timestamptz{Time: uploadedAt, Valid: true},
+	})
+}
+
+func (r *QueriesRepository) SetExtractPending(ctx context.Context, userID int64, uploadedAt time.Time) error {
+	return r.q.SetUserResumeExtractPending(ctx, db.SetUserResumeExtractPendingParams{
+		ID:               userID,
+		ResumeExtractFor: pgtype.Timestamptz{Time: uploadedAt, Valid: true},
 	})
 }

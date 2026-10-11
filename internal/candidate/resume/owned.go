@@ -484,6 +484,15 @@ func (s *Store) MarkExtractFailed(ctx context.Context, userID int64, detail stri
 	return s.repo.SetExtractFailed(ctx, userID, detail, uploadedAt)
 }
 
+// MarkExtractPending clears a stale status (typically 'failed') for the given upload stamp
+// before a retry's background derivation starts — the same transition a fresh upload makes
+// in Put, done here without re-stamping the upload or touching the object key. Without this,
+// a poll reading GET /me/resume right after a retry starts would see the PREVIOUS attempt's
+// terminal status and mistake it for the retry's own outcome.
+func (s *Store) MarkExtractPending(ctx context.Context, userID int64, uploadedAt time.Time) error {
+	return s.repo.SetExtractPending(ctx, userID, uploadedAt)
+}
+
 // StructuredRow returns the raw GetUserResumeStructured row for status composition.
 func (s *Store) StructuredRow(ctx context.Context, userID int64) (db.GetUserResumeStructuredRow, error) {
 	return s.repo.GetStructured(ctx, userID)

@@ -41,12 +41,17 @@ storage-layer code.
 
 ## Decisions
 
-- **Reuse `Store.Text`/`Store.Status`/`deriveResumeArtifacts`, write no new storage code.** The
-  retry handler is `Status` (for `UploadedAt`) + `Text` (for the re-derived text) +
-  `deriveResumeArtifacts` (the same background call the upload path makes) — three existing
-  calls, zero new `Store` methods. This also means a future fix to text re-derivation (a new
-  format, an encoding edge case) fixes both the upload path and the retry path at once, since
-  there is only one `extractText`.
+- **Reuse `extractText`/`deriveResumeArtifacts`, add the minimum new `Store` surface two review
+  findings required.** The retry handler re-derives text through the SAME `extractText` the
+  upload path already uses (so a future fix to text re-derivation — a new format, an encoding
+  edge case — fixes both paths at once) and launches the SAME `deriveResumeArtifacts`. Two new
+  `Store` methods were still needed, both added after code review caught why the original
+  two-separate-calls design was wrong (see Risks):
+  - `TextAndUploadedAt` replaces calling `Text` and `Status` separately — one pointer read
+    instead of two, closing a TOCTOU window.
+  - `MarkExtractPending` (backed by a new `SetUserResumeExtractPending` query, the same
+    for-stamp-guarded shape as the existing `SetUserResumeExtractFailed`) clears the PREVIOUS
+    attempt's terminal status before the retry's derivation starts.
 - **The banner lives in `ExperienceBankView.svelte`, not a new component.** It already renders
   one dismissable-by-state banner (the unconfirmed-achievements one, lines ~477-488) with an
   established visual idiom (`rounded-lg bg-warning/5`); this is a second instance of the same
@@ -73,6 +78,26 @@ storage-layer code.
 
 ## Risks / Trade-offs
 
+- [Risk, FOUND BY REVIEW, FIXED] The first draft called `Store.Status` and `Store.Text`
+  separately in the handler, and never wrote a transitional status before calling
+  `deriveResumeArtifacts`. Two consequences, both real and both fixed:
+  1. A client polling `GET /me/resume` right after the retry responds would see the PREVIOUS
+     attempt's `failed` status (nothing had cleared it) and treat it as the retry's own
+     outcome — so the banner would flash "Reading your résumé again…" for under a second and
+     then immediately re-show "failed," regardless of whether the retry was actually going to
+     succeed. Fixed by `MarkExtractPending` (see Decisions), called before
+     `deriveResumeArtifacts`.
+  2. `Status` and `Text` each read the pointer row independently; a concurrent re-upload
+     landing between the two calls could derive text from the OLD upload under the NEW
+     upload's timestamp. Fixed by `TextAndUploadedAt`'s single read.
+- [Risk, FOUND BY REVIEW, FIXED] The frontend's poll-budget-exhaustion branch originally set
+  `resumeParse = 'failed'`, contradicting the very module it reuses
+  (`onboardingResumeWait.ts`'s doc comment: "giving up is not the same as failing"). A
+  genuinely slow but eventually-successful retry that outlived the ~68s poll budget would have
+  been shown as a confirmed failure. Fixed to set `'idle'` instead, matching onboarding's own
+  choice on budget exhaustion; the next page load's `loadResumeStatus()` reads whatever the
+  server eventually settled on. Covered by a fake-timer test driving the poll to budget
+  exhaustion with the server still reporting `pending`.
 - [Risk] A candidate whose stored upload was a scanned image PDF (no text layer) retries and
   gets the exact same "ok, no text" or empty result as the original upload, with no clearer
   explanation of why.

@@ -47,8 +47,13 @@ fix it, which is the "architecture limitation" the issue's own comment gestures 
 ## Impact
 
 - Backend: `internal/api/handler/resume.go` (new `POST /me/resume/retry-extract` handler, built
-  entirely from `Store.Status`, `Store.Text`, and the existing `deriveResumeArtifacts`). No
-  change to `internal/candidate/resume/resume.go` itself.
+  from `Store.TextAndUploadedAt`, `Store.MarkExtractPending`, and the existing
+  `deriveResumeArtifacts`). `internal/candidate/resume/resume.go`/`owned.go` gain
+  `TextAndUploadedAt` (one pointer read instead of `Text`+`Status` separately — closes a TOCTOU
+  window a review found) and `MarkExtractPending` (clears the previous attempt's terminal
+  status before the retry starts — without it, a poll right after the retry call would read
+  stale data). `internal/platform/db/queries/users.sql` gains `SetUserResumeExtractPending`,
+  the `sqlc`-generated code following it.
 - Frontend: `web/src/lib/components/ExperienceBankView.svelte` (fetch `GET /me/resume` status,
   render the banner + retry button), `web/src/lib/api.ts` (new `retryResumeExtract()` call).
 - Unaffected: the onboarding wizard's own existing handling of `parse_status` (left as-is, matched

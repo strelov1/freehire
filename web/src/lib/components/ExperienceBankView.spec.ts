@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CompanyListItem, ExperienceBank, ResumeMeta } from '$lib/types';
+import { RESUME_POLL_BUDGET_MS } from '$lib/onboardingResumeWait';
 import ExperienceBankView from './ExperienceBankView.svelte';
 
 // The "New experience" add-job form gains a company-catalogue autocomplete (still
@@ -183,4 +184,84 @@ describe('ExperienceBankView résumé-extraction banner', () => {
 
     await waitFor(() => expect(retryResumeExtract).toHaveBeenCalledTimes(1));
   });
+
+  it('refreshes the bank and clears the banner once the poll sees the retry land', async () => {
+    getResume.mockResolvedValueOnce({
+      enabled: true,
+      present: true,
+      uploaded_at: '2026-10-01T00:00:00Z',
+      structured: null,
+      parse_status: 'failed',
+      parse_detail: 'extract failed',
+    } satisfies ResumeMeta);
+
+    vi.useFakeTimers();
+    try {
+      render(ExperienceBankView, { props: {} });
+      const retry = await screen.findByRole('button', { name: /try again/i });
+
+      // Every read after the retry click reports success — the poll should accept the
+      // very first one it makes, not keep asking.
+      getResume.mockResolvedValue({
+        enabled: true,
+        present: true,
+        uploaded_at: '2026-10-01T00:00:00Z',
+        structured: null,
+        parse_status: 'ok',
+      } satisfies ResumeMeta);
+      getExperience.mockClear();
+
+      await fireEvent.click(retry);
+      expect(screen.getByText(/reading your résumé again/i)).toBeTruthy();
+
+      await vi.advanceTimersByTimeAsync(RESUME_POLL_BUDGET_MS);
+
+      expect(getExperience).toHaveBeenCalled();
+      expect(screen.queryByRole('button', { name: /try again/i })).toBeNull();
+      expect(screen.queryByText(/reading your résumé again/i)).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('stops polling without claiming failure when the retry is still pending at the poll budget', async () => {
+    getResume.mockResolvedValueOnce({
+      enabled: true,
+      present: true,
+      uploaded_at: '2026-10-01T00:00:00Z',
+      structured: null,
+      parse_status: 'failed',
+      parse_detail: 'extract failed',
+    } satisfies ResumeMeta);
+
+    vi.useFakeTimers();
+    try {
+      render(ExperienceBankView, { props: {} });
+      const retry = await screen.findByRole('button', { name: /try again/i });
+
+      // Every read after the retry click still reports pending — a slow extraction, not a
+      // confirmed failure.
+      getResume.mockResolvedValue({
+        enabled: true,
+        present: true,
+        uploaded_at: '2026-10-01T00:00:00Z',
+        structured: null,
+        parse_status: 'pending',
+      } satisfies ResumeMeta);
+
+      await fireEvent.click(retry);
+      await vi.advanceTimersByTimeAsync(RESUME_POLL_BUDGET_MS);
+
+      // Giving up is not the same as failing (onboardingResumeWait.ts's own documented
+      // reasoning): the banner must not come back claiming a failure nothing confirmed.
+      expect(screen.queryByRole('button', { name: /try again/i })).toBeNull();
+      expect(screen.queryByText(/reading your résumé again/i)).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+afterEach(() => {
+  vi.useRealTimers();
 });

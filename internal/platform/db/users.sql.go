@@ -1108,6 +1108,29 @@ func (q *Queries) SetUserResumeExtractFailed(ctx context.Context, arg SetUserRes
 	return err
 }
 
+const setUserResumeExtractPending = `-- name: SetUserResumeExtractPending :exec
+UPDATE users
+SET resume_extract_status = 'pending',
+    resume_extract_detail = NULL,
+    resume_extract_for = $2
+WHERE id = $1 AND resume_uploaded_at = $2
+`
+
+type SetUserResumeExtractPendingParams struct {
+	ID               int64              `json:"id"`
+	ResumeExtractFor pgtype.Timestamptz `json:"resume_extract_for"`
+}
+
+// Mark a retry of structured extract as running, clearing the stale status (typically
+// 'failed') a previous attempt left — the same transition a fresh upload makes in
+// SetUserResume, done here without touching the object key or re-stamping the upload
+// time, since a retry re-reads the SAME stored résumé rather than replacing it. The
+// for-stamp guard drops the write when a newer upload already superseded this retry.
+func (q *Queries) SetUserResumeExtractPending(ctx context.Context, arg SetUserResumeExtractPendingParams) error {
+	_, err := q.db.Exec(ctx, setUserResumeExtractPending, arg.ID, arg.ResumeExtractFor)
+	return err
+}
+
 const setUserResumeGeography = `-- name: SetUserResumeGeography :exec
 UPDATE users
 SET resume_countries = $2, resume_regions = $3, resume_cities = $4

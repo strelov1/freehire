@@ -76,6 +76,10 @@ type fakeResumeRepo struct {
 	extractStatus   string
 	extractDetail   string
 	extractFor      pgtype.Timestamptz
+	// statusHistory records every extractStatus TRANSITION in order — a test that must prove
+	// a status write happened BEFORE another (rather than snapshot one at an arbitrary
+	// instant, racing the background derivation goroutine) reads this instead.
+	statusHistory []string
 }
 
 func (r *fakeResumeRepo) Get(_ context.Context, _ int64) (db.GetUserResumeRow, error) {
@@ -106,6 +110,14 @@ func (r *fakeResumeRepo) Clear(_ context.Context, _ int64) error {
 	r.key, r.set = "", false
 	r.structured, r.structModel, r.structAt = nil, "", pgtype.Timestamptz{}
 	r.extractStatus, r.extractDetail, r.extractFor = "", "", pgtype.Timestamptz{}
+	return nil
+}
+
+func (r *fakeResumeRepo) SetExtractPending(_ context.Context, _ int64, _ time.Time) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.extractStatus, r.extractDetail = resume.ExtractStatusPending, ""
+	r.statusHistory = append(r.statusHistory, resume.ExtractStatusPending)
 	return nil
 }
 
@@ -415,5 +427,6 @@ func (r *fakeResumeRepo) SetExtractFailed(_ context.Context, _ int64, detail str
 	defer r.mu.Unlock()
 	r.extractStatus, r.extractDetail = resume.ExtractStatusFailed, detail
 	r.extractFor = pgtype.Timestamptz{Time: uploadedAt, Valid: true}
+	r.statusHistory = append(r.statusHistory, resume.ExtractStatusFailed)
 	return nil
 }

@@ -516,8 +516,14 @@ func (h *resumeHandlers) DeleteResume(c *fiber.Ctx) error {
 
 // RetryResumeExtract re-derives the structured résumé from the candidate's already-stored
 // upload, without requiring them to submit the file again: it re-reads the stored bytes the
-// same way every other reader of them does (resume.Store.Text) and runs the same background
-// derivation an upload triggers. Cookie-only.
+// same way every other reader of them does (resume.Store.TextAndUploadedAt, one pointer read
+// so the text and the stamp it is derived under can never mismatch) and runs the same
+// background derivation an upload triggers.
+//
+// Marks the extract pending BEFORE kicking off that background derivation — without this, a
+// client polling GET /me/resume right after this call returns would see the PREVIOUS
+// attempt's "failed" status (nothing else clears it) and mistake it for the retry's own
+// outcome, when the retry has barely started. Cookie-only.
 func (h *resumeHandlers) RetryResumeExtract(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {
@@ -526,21 +532,17 @@ func (h *resumeHandlers) RetryResumeExtract(c *fiber.Ctx) error {
 	if !h.resume.Enabled() {
 		return fiber.NewError(fiber.StatusNotImplemented, "résumé storage is not available")
 	}
-	text, err := h.resume.Text(c.Context(), userID)
+	text, uploadedAt, err := h.resume.TextAndUploadedAt(c.Context(), userID)
 	if errors.Is(err, resume.ErrNotStored) {
 		return fiber.NewError(fiber.StatusConflict, "no résumé stored to retry")
 	}
 	if err != nil {
 		return err
 	}
-	meta, err := h.resume.Status(c.Context(), userID)
-	if err != nil {
+	if err := h.resume.MarkExtractPending(c.Context(), userID, uploadedAt); err != nil {
 		return err
 	}
-	if meta.UploadedAt == nil {
-		return fiber.NewError(fiber.StatusConflict, "no résumé stored to retry")
-	}
-	h.deriveResumeArtifacts(userID, text, meta.UploadedAt)
+	h.deriveResumeArtifacts(userID, text, &uploadedAt)
 	return c.SendStatus(fiber.StatusAccepted)
 }
 

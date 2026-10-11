@@ -44,3 +44,27 @@
 - [x] 4.2 `go test ./internal/api/handler/...` — green; `go vet` clean.
 - [x] 4.3 `pnpm check` / `pnpm test` in `web/` — unchanged baseline errors, new tests green.
 - [x] 4.4 Request code review on the diff; fix Critical/Important findings.
+- [x] 4.5 Review found a Critical bug: the original handler called `Store.Text`/`Store.Status`
+      separately and never cleared the PREVIOUS attempt's status before launching the
+      background derivation. A client polling right after the retry call would read the stale
+      `failed` status and mistake it for the retry's own outcome — the headline feature would
+      flash "retrying" for under a second and immediately re-show "failed" regardless of the
+      real outcome. Fixed: added `Store.MarkExtractPending` (new
+      `SetUserResumeExtractPending` query, `sqlc generate`d) called before
+      `deriveResumeArtifacts`, and `Store.TextAndUploadedAt` (one pointer read, replacing the
+      two separate calls — also closes a TOCTOU window the review flagged as a related Minor
+      finding). RED: `TestRetryResumeExtract_MarksPendingBeforeBackgroundDerivationStarts`,
+      asserting on the ORDER of status writes (`statusHistory`) rather than a point-in-time
+      snapshot, since racing the background goroutine's own near-instant write (no
+      `structuredExtractor` configured in the test) would make a snapshot-based assertion
+      flaky. Ran `-race -count=30`: stable.
+- [x] 4.6 Review found an Important bug: the frontend's poll-budget-exhaustion branch set
+      `resumeParse = 'failed'`, contradicting `onboardingResumeWait.ts`'s own documented
+      semantics ("giving up is not the same as failing") — a slow-but-eventually-successful
+      retry outliving the ~68s poll budget would be shown as a confirmed failure. Fixed: set
+      `'idle'` instead, matching onboarding's own choice. RED: two new fake-timer tests in
+      `ExperienceBankView.spec.ts` driving the poll loop to its two terminal shapes (success →
+      bank refreshes, banner clears; budget exhausted while still `pending` → no banner,
+      specifically not the failed one).
+- [x] 4.7 Minor finding (test-comment overclaim) fixed by rewording; both openspec delta specs
+      gained scenarios for the two fixes above.

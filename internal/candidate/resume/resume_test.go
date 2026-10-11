@@ -168,6 +168,16 @@ func (r *fakeRepo) SetExtractFailed(_ context.Context, userID int64, detail stri
 	return nil
 }
 
+func (r *fakeRepo) SetExtractPending(_ context.Context, userID int64, uploadedAt time.Time) error {
+	if cur, ok := r.uploadedAt[userID]; !ok || !cur.Valid || !cur.Time.Equal(uploadedAt) {
+		return nil
+	}
+	r.extractSt[userID] = ExtractStatusPending
+	r.extractDet[userID] = ""
+	r.extractFor[userID] = pgtype.Timestamptz{Time: uploadedAt, Valid: true}
+	return nil
+}
+
 func TestStore_DisabledWhenNoBlobStore(t *testing.T) {
 	s := New(nil, newFakeRepo())
 	if s.Enabled() {
@@ -224,6 +234,35 @@ func TestStore_TextNotStored(t *testing.T) {
 	}
 	if meta.Present {
 		t.Error("Status.Present should be false when nothing is stored")
+	}
+}
+
+func TestStore_TextAndUploadedAtRoundTrip(t *testing.T) {
+	s := New(newFakeBlobs(), newFakeRepo())
+	ctx := context.Background()
+
+	meta, err := s.Put(ctx, 7, "text/plain; charset=utf-8", []byte("Go and PostgreSQL"))
+	if err != nil {
+		t.Fatalf("Put: %v", err)
+	}
+
+	text, uploadedAt, err := s.TextAndUploadedAt(ctx, 7)
+	if err != nil {
+		t.Fatalf("TextAndUploadedAt: %v", err)
+	}
+	if text != "Go and PostgreSQL" {
+		t.Errorf("text = %q, want the stored text", text)
+	}
+	if !uploadedAt.Equal(*meta.UploadedAt) {
+		t.Errorf("uploadedAt = %v, want %v (the SAME pointer read Text/Status would each see separately)",
+			uploadedAt, *meta.UploadedAt)
+	}
+}
+
+func TestStore_TextAndUploadedAtNotStored(t *testing.T) {
+	s := New(newFakeBlobs(), newFakeRepo())
+	if _, _, err := s.TextAndUploadedAt(context.Background(), 42); !errors.Is(err, ErrNotStored) {
+		t.Errorf("TextAndUploadedAt err = %v, want ErrNotStored", err)
 	}
 }
 

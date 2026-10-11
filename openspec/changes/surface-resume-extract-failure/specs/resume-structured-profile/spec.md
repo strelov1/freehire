@@ -12,6 +12,11 @@ This endpoint changes nothing about WHEN extraction succeeds or fails — the sa
 rules (PII detector required, LLM required) from "Structured résumé is extracted best-effort on
 upload" apply unchanged; this only gives the candidate a way to ask for another attempt.
 
+The endpoint MUST clear a previous attempt's terminal status to pending BEFORE the background
+derivation starts, under the same upload-time stamp the derivation itself is keyed to. Without
+this, a caller reading the résumé status immediately after the retry call returns would see the
+PREVIOUS attempt's outcome and mistake it for the retry's own.
+
 #### Scenario: Retry re-derives text from the stored upload
 
 - **WHEN** the candidate calls the retry endpoint and has a résumé stored
@@ -29,3 +34,9 @@ upload" apply unchanged; this only gives the candidate a way to ask for another 
   unavailable
 - **THEN** no CV text is sent to the LLM and no structured résumé is persisted, exactly as an
   ordinary upload's extraction would fail closed
+
+#### Scenario: A read immediately after a retry sees pending, not the previous failure
+
+- **WHEN** a previous attempt's status is `failed` and the candidate calls the retry endpoint
+- **THEN** reading the résumé status right after the retry call returns reports `pending`, not
+  the previous attempt's `failed`

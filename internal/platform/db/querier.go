@@ -6585,6 +6585,12 @@ type Querier interface {
 	// Record that structured extract failed for the current upload. The for-stamp guard
 	// drops the write when a newer upload already superseded this attempt.
 	SetUserResumeExtractFailed(ctx context.Context, arg SetUserResumeExtractFailedParams) error
+	// Mark a retry of structured extract as running, clearing the stale status (typically
+	// 'failed') a previous attempt left — the same transition a fresh upload makes in
+	// SetUserResume, done here without touching the object key or re-stamping the upload
+	// time, since a retry re-reads the SAME stored résumé rather than replacing it. The
+	// for-stamp guard drops the write when a newer upload already superseded this retry.
+	SetUserResumeExtractPending(ctx context.Context, arg SetUserResumeExtractPendingParams) error
 	// Persist only the derived geography for a user, under the same monotonic guard the
 	// structure write uses. This is the reconciler's write path: it re-derives from an
 	// already-stored structure, so it must not touch the structure or its model stamp, and

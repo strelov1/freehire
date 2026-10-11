@@ -171,7 +171,11 @@
       if (token !== resumeWaitToken) return;
       const delay = nextResumePollDelayMs(attempt);
       if (delay === null) {
-        resumeParse = 'failed';
+        // Giving up is not the same as failing (see onboardingResumeWait.ts's own doc
+        // comment): the retry may still land after we stop asking. Showing 'failed' here
+        // would claim an outcome we never actually confirmed; the next time this view loads,
+        // loadResumeStatus() reads whatever the server eventually settled on.
+        resumeParse = 'idle';
         return;
       }
       // oxlint-disable-next-line no-await-in-loop -- the wait between reads is the point

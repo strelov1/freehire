@@ -8,7 +8,10 @@ résumé could not be fully read and offering a retry action. The banner MUST NO
 `parse_status` is `ok` or absent (no résumé uploaded at all).
 
 Activating the retry action SHALL call the retry endpoint and, on success, refresh the bank so
-any newly-derived employments/achievements appear without a page reload.
+any newly-derived employments/achievements appear without a page reload. While waiting for the
+outcome the view SHALL poll rather than claim an outcome it has not confirmed; if the wait is
+abandoned before a terminal outcome is read, the view MUST NOT show the failed-extraction banner
+on the strength of that alone — giving up asking is not the same as a confirmed failure.
 
 #### Scenario: A failed extraction shows the banner
 
@@ -30,3 +33,10 @@ any newly-derived employments/achievements appear without a page reload.
 - **WHEN** the candidate activates the retry action and the retry succeeds
 - **THEN** the bank reloads and shows whatever the retried extraction derived, without a page
   reload
+
+#### Scenario: Abandoning the wait does not claim failure
+
+- **WHEN** the candidate activates the retry action and the extraction is still pending when
+  the view stops polling for it
+- **THEN** the view shows no banner at all — not the failed-extraction banner — since nothing
+  confirmed a failure
