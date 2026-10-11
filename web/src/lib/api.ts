@@ -2073,6 +2073,14 @@ export function createApi(
     await call('/api/v1/me/resume', { method: 'DELETE' });
   }
 
+  /** Re-derive the structured résumé from the already-stored upload, without re-submitting
+   *  the file — for a candidate whose `parse_status` came back `failed`. Fires the same
+   *  background derivation an upload triggers; the caller re-polls `getResume` for the
+   *  outcome. */
+  async function retryResumeExtract(): Promise<void> {
+    await call('/api/v1/me/resume/retry-extract', { method: 'POST' });
+  }
+
   /** Replace candidate-owned contacts without re-uploading a CV. */
   async function putResumeContacts(contacts: CandidateContacts): Promise<CandidateContacts> {
     return requestData<CandidateContacts>('/api/v1/me/resume/contacts', jsonBody('PUT', contacts));
@@ -3179,6 +3187,7 @@ export function createApi(
     extractResumeProfile,
     getResume,
     deleteResume,
+    retryResumeExtract,
     putResumeContacts,
     getProfileVerdict,
     getATSReport,

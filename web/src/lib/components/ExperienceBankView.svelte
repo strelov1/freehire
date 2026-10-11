@@ -12,6 +12,7 @@
    * (`selected`) stays here rather than in a card, so it survives any card's expand/collapse
    * and can span achievements from different employments (see specs/experience-bank).
    */
+  import { onDestroy } from 'svelte';
   import { Briefcase, FolderKanban, Plus, Sparkles } from '@lucide/svelte';
   import type { Component } from 'svelte';
   import { api } from '$lib/api';
@@ -24,6 +25,7 @@
   import PeriodDateInput from '$lib/components/PeriodDateInput.svelte';
   import { profileKickoff } from '$lib/assistant/presets';
   import { findFirstUnconfirmed, isUnconfirmed, sortNeedsAttentionFirst } from '$lib/experienceBank';
+  import { nextResumePollDelayMs, type CvParseState } from '$lib/onboardingResumeWait';
   import type {
     ExperienceAtom,
     ExperienceBank,
@@ -121,7 +123,79 @@
 
   $effect(() => {
     void load();
+    void loadResumeStatus();
   });
+
+  /** Whether the candidate's résumé failed to parse — the bank's own answer to the question
+   *  an empty-looking bank raises, surfaced here (and in Tailor's Experience tab, which
+   *  mounts this same component) rather than only once, during onboarding. */
+  let resumeParse = $state<CvParseState>('idle');
+  // Supersedes an in-flight wait the same way onboarding's own `waitToken` does: a newer
+  // retry, or the component going away, must stop a stale poll from overwriting a fresher
+  // state.
+  let resumeWaitToken = 0;
+
+  onDestroy(() => {
+    resumeWaitToken++;
+  });
+
+  async function loadResumeStatus() {
+    try {
+      const resume = await api.getResume();
+      if (!resume.enabled || !resume.present) {
+        resumeParse = 'idle';
+        return;
+      }
+      resumeParse = resume.parse_status === 'failed' ? 'failed' : 'idle';
+    } catch {
+      // A failed status read is not evidence of a failed parse — leave whatever state was
+      // already shown rather than flashing a banner that was never confirmed.
+    }
+  }
+
+  /** Re-derives the structured résumé from what is already stored (no re-upload), then polls
+   *  the same way onboarding's `waitForResumeStructure` does — the backoff table it uses
+   *  (`nextResumePollDelayMs`) is shared; what happens with each state is not, since this
+   *  reloads the bank instead of filling wizard fields. */
+  async function retryResumeExtraction() {
+    const token = ++resumeWaitToken;
+    resumeParse = 'waiting';
+    try {
+      await api.retryResumeExtract();
+    } catch {
+      if (token !== resumeWaitToken) return;
+      resumeParse = 'failed';
+      return;
+    }
+    for (let attempt = 0; ; attempt++) {
+      if (token !== resumeWaitToken) return;
+      const delay = nextResumePollDelayMs(attempt);
+      if (delay === null) {
+        resumeParse = 'failed';
+        return;
+      }
+      // oxlint-disable-next-line no-await-in-loop -- the wait between reads is the point
+      await new Promise((resolve) => setTimeout(resolve, delay));
+      if (token !== resumeWaitToken) return;
+      let status: string | undefined;
+      try {
+        // oxlint-disable-next-line no-await-in-loop -- a backoff poll is sequential by design
+        const resume = await api.getResume();
+        status = resume.parse_status;
+      } catch {
+        continue; // treated as still pending, same as onboarding's own read failure
+      }
+      if (token !== resumeWaitToken) return;
+      if (status === 'pending') continue;
+      if (status === 'failed') {
+        resumeParse = 'failed';
+        return;
+      }
+      resumeParse = 'idle';
+      await refreshBank();
+      return;
+    }
+  }
 
   const allAtoms = $derived(
     bank ? [...bank.employments.flatMap((e) => e.atoms), ...bank.unplaced] : [],
@@ -435,6 +509,22 @@
 />
 
 <div class="min-w-0">
+    {#if resumeParse === 'failed'}
+      <!-- Same wording the onboarding wizard already uses for this exact state
+           (ProfileLinksFields.svelte) — this is the same signal (parse_status), finally
+           surfaced where a candidate actually manages experience, not only once at
+           sign-up. -->
+      <div class="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg bg-warning/5 px-4 py-3 text-sm">
+        <p>Couldn't read your résumé — that may be why this looks empty.</p>
+        <Button size="sm" variant="outline" onclick={() => void retryResumeExtraction()}>
+          Try again
+        </Button>
+      </div>
+    {:else if resumeParse === 'waiting'}
+      <div class="mb-4 rounded-lg bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
+        Reading your résumé again…
+      </div>
+    {/if}
     {#if loading}
       <States state="loading" />
     {:else if error}

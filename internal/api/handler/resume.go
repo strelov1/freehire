@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"errors"
 	"io"
 	"log"
 	"strings"
@@ -99,6 +100,7 @@ func (h *resumeHandlers) register(api fiber.Router, mw middleware) {
 	api.Put("/me/resume/contacts", mw.cookie, h.PutResumeContacts)
 	api.Post("/me/resume/contacts/replace-from-cv", mw.cookie, h.ReplaceResumeContactsFromCV)
 	api.Delete("/me/resume", mw.cookie, h.DeleteResume)
+	api.Post("/me/resume/retry-extract", mw.cookie, h.RetryResumeExtract)
 
 	// Stateless market-coverage: score a caller-supplied skill list (request body)
 	// against the facet-filtered market. Cookie or API key — the CLI drives it with
@@ -510,6 +512,36 @@ func (h *resumeHandlers) DeleteResume(c *fiber.Ctx) error {
 		return err
 	}
 	return c.SendStatus(fiber.StatusNoContent)
+}
+
+// RetryResumeExtract re-derives the structured résumé from the candidate's already-stored
+// upload, without requiring them to submit the file again: it re-reads the stored bytes the
+// same way every other reader of them does (resume.Store.Text) and runs the same background
+// derivation an upload triggers. Cookie-only.
+func (h *resumeHandlers) RetryResumeExtract(c *fiber.Ctx) error {
+	userID, err := requireUserID(c)
+	if err != nil {
+		return err
+	}
+	if !h.resume.Enabled() {
+		return fiber.NewError(fiber.StatusNotImplemented, "résumé storage is not available")
+	}
+	text, err := h.resume.Text(c.Context(), userID)
+	if errors.Is(err, resume.ErrNotStored) {
+		return fiber.NewError(fiber.StatusConflict, "no résumé stored to retry")
+	}
+	if err != nil {
+		return err
+	}
+	meta, err := h.resume.Status(c.Context(), userID)
+	if err != nil {
+		return err
+	}
+	if meta.UploadedAt == nil {
+		return fiber.NewError(fiber.StatusConflict, "no résumé stored to retry")
+	}
+	h.deriveResumeArtifacts(userID, text, meta.UploadedAt)
+	return c.SendStatus(fiber.StatusAccepted)
 }
 
 // readResumeUpload reads a résumé from the request into its original bytes, content type,

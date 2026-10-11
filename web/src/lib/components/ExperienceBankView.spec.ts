@@ -1,20 +1,23 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { CompanyListItem, ExperienceBank } from '$lib/types';
+import type { CompanyListItem, ExperienceBank, ResumeMeta } from '$lib/types';
 import ExperienceBankView from './ExperienceBankView.svelte';
 
 // The "New experience" add-job form gains a company-catalogue autocomplete (still
 // accepting free text) and an "I currently work here" checkbox — see openspec change
 // experience-company-picker-present-checkbox.
 
-const { getExperience, listCompanies, createExperienceEmployment } = vi.hoisted(() => ({
-  getExperience: vi.fn(),
-  listCompanies: vi.fn(),
-  createExperienceEmployment: vi.fn(),
-}));
+const { getExperience, listCompanies, createExperienceEmployment, getResume, retryResumeExtract } =
+  vi.hoisted(() => ({
+    getExperience: vi.fn(),
+    listCompanies: vi.fn(),
+    createExperienceEmployment: vi.fn(),
+    getResume: vi.fn(),
+    retryResumeExtract: vi.fn(),
+  }));
 
 vi.mock('$lib/api', () => ({
-  api: { getExperience, listCompanies, createExperienceEmployment },
+  api: { getExperience, listCompanies, createExperienceEmployment, getResume, retryResumeExtract },
 }));
 
 // AssistantChat (mounted unconditionally, just hidden, inside ExperienceAssistantPanel)
@@ -46,10 +49,20 @@ const bankWithOneJob: ExperienceBank = {
   unplaced: [],
 };
 
+const resumeOk: ResumeMeta = {
+  enabled: true,
+  present: true,
+  uploaded_at: '2026-10-01T00:00:00Z',
+  structured: null,
+  parse_status: 'ok',
+};
+
 beforeEach(() => {
   getExperience.mockReset().mockResolvedValue(bankWithOneJob);
   listCompanies.mockReset().mockResolvedValue({ items: [ringCentral], hasMore: false });
   createExperienceEmployment.mockReset().mockResolvedValue(undefined);
+  getResume.mockReset().mockResolvedValue(resumeOk);
+  retryResumeExtract.mockReset().mockResolvedValue(undefined);
 });
 
 async function openAddJobForm() {
@@ -112,5 +125,62 @@ describe('ExperienceBankView add-job form', () => {
         expect.objectContaining({ current: false }),
       ),
     );
+  });
+});
+
+describe('ExperienceBankView résumé-extraction banner', () => {
+  it('shows a retry banner when the résumé failed to parse', async () => {
+    getResume.mockResolvedValue({
+      enabled: true,
+      present: true,
+      uploaded_at: '2026-10-01T00:00:00Z',
+      structured: null,
+      parse_status: 'failed',
+      parse_detail: 'extract failed',
+    } satisfies ResumeMeta);
+
+    render(ExperienceBankView, { props: {} });
+
+    expect(await screen.findByRole('button', { name: /try again/i })).toBeTruthy();
+  });
+
+  it('shows no banner when the résumé parsed fine', async () => {
+    render(ExperienceBankView, { props: {} });
+
+    await screen.findByText('Acme');
+    expect(screen.queryByRole('button', { name: /try again/i })).toBeNull();
+  });
+
+  it('shows no banner when no résumé was ever uploaded', async () => {
+    getResume.mockResolvedValue({
+      enabled: true,
+      present: false,
+      uploaded_at: null,
+      structured: null,
+    } satisfies ResumeMeta);
+
+    render(ExperienceBankView, { props: {} });
+
+    await screen.findByText('Acme');
+    expect(screen.queryByRole('button', { name: /try again/i })).toBeNull();
+  });
+
+  it('retrying calls the retry endpoint and reloads the bank', async () => {
+    getResume.mockResolvedValue({
+      enabled: true,
+      present: true,
+      uploaded_at: '2026-10-01T00:00:00Z',
+      structured: null,
+      parse_status: 'failed',
+      parse_detail: 'extract failed',
+    } satisfies ResumeMeta);
+
+    render(ExperienceBankView, { props: {} });
+    const retry = await screen.findByRole('button', { name: /try again/i });
+    getExperience.mockClear();
+
+    await fireEvent.click(retry);
+
+    await waitFor(() => expect(retryResumeExtract).toHaveBeenCalledTimes(1));
   });
 });
