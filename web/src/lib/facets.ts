@@ -405,6 +405,7 @@ export const SOURCE_LABELS: Record<string, string> = {
   tenstreet: 'Tenstreet',
   taleobe: 'Taleo Business Edition',
   occ: 'OCC Mundial',
+  builtin: 'Built In',
 };
 
 /** Display label for a source slug (e.g. smartrecruiters → "SmartRecruiters"),

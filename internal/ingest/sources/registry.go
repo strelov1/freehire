@@ -516,6 +516,10 @@ func All(c HTTPClient) map[string]Source {
 		// HiringRoom: LatAm ATS, one <tenant>.hiringroom.com portal per board, listed through the
 		// portal's own JSON pager and hydrated from each vacancy page. See hiringroom.go.
 		NewHiringRoom(c),
+		// Built In: US-centred tech board over many employers. Each tech category's last-24h
+		// window is walked; posting pages carry a schema.org JobPosting. Coverage-gated and
+		// paced, see builtinRequestInterval.
+		NewBuiltIn(pacedHTMLGetter(c, builtinRequestInterval, builtinRequestBurst)),
 		// EDJOIN: California's K-12 education board, multi-company aggregator enumerated by
 		// job type (board) over one central index, hydrating bodies from each posting page's
 		// schema.org block. The board is a job type and not a district on purpose — see
