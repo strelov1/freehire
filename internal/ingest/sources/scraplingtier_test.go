@@ -22,7 +22,7 @@ func TestScraplingTierCarriesTheMeasuredProviders(t *testing.T) {
 		got = append(got, name)
 	}
 	sort.Strings(got)
-	want := []string{"bayt", "cleverstaff", "echojobs", "gulftalent", "hh", "infojobs", "kontur", "neogov", "startupjobs", "wantapply", "wellfound", "wuzzuf"}
+	want := []string{"bayt", "cleverstaff", "echojobs", "gulftalent", "hh", "infojobs", "kontur", "neogov", "occ", "startupjobs", "wantapply", "wellfound", "wuzzuf"}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("scraplingProviders = %v, want %v", got, want)
 	}
@@ -85,6 +85,7 @@ func TestScraplingRoutesAreTheMeasuredOnes(t *testing.T) {
 		"neogov":      {scraplingfetch.ModeHTTP, true},
 		"echojobs":    {scraplingfetch.ModeBrowser, true},
 		"wuzzuf":      {scraplingfetch.ModeBrowser, false},
+		"occ":         {scraplingfetch.ModeBrowser, false},
 	}
 	for name, p := range scraplingProviders {
 		if p.route != want[name] {
@@ -168,5 +169,26 @@ func TestScraplingClientDoesNotRetryOrDoubleTime(t *testing.T) {
 		if c.httpClient.Timeout != 0 {
 			t.Errorf("%+v: outer timeout = %s, want none (the transport's own client bounds the fetch)", r, c.httpClient.Timeout)
 		}
+	}
+}
+
+// OCC's listing sits behind a Cloudflare challenge and its posting JSON does not, so only the
+// listing goes through the tier; the JSON keeps a plain direct client.
+func TestOCCPostingJSONStaysOffTheTier(t *testing.T) {
+	scraplingEnv(t)
+	registry := map[string]Source{"occ": NewOCC(nil)}
+	if err := ApplyScraplingEgress(registry); err != nil {
+		t.Fatal(err)
+	}
+	o, ok := registry["occ"].(occ)
+	if !ok {
+		t.Fatalf("occ rebuilt as %T", registry["occ"])
+	}
+	split, ok := o.http.(occSplit)
+	if !ok {
+		t.Fatalf("occ transport is %T, want occSplit", o.http)
+	}
+	if any(split.HTMLGetter) == any(split.JSONGetter) {
+		t.Error("the posting JSON goes through the same client as the listing")
 	}
 }

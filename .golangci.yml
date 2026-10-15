@@ -193,6 +193,8 @@ linters:
         - technicien
         - immobilier
         - profesor
+        - informacion
+        - confidencial
 
 formatters:
   enable:

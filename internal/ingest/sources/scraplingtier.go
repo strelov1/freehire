@@ -102,6 +102,13 @@ var scraplingProviders = map[string]scraplingProvider{
 	"wuzzuf": {scraplingRoute{scraplingfetch.ModeBrowser, false}, func(f *Client) Source {
 		return NewWuzzuf(pacedWuzzufSite(f))
 	}},
+	// Cloudflare's challenge on the listing to every datacenter IP since 2026-10: through the
+	// proxy a plain request passed 4 of 10 pages and the impersonating fetcher 7 of 10, while the
+	// browser from the crawl host's own IP read 10 of 10. The posting JSON on oferta.occ.com.mx
+	// is not challenged and stays on a plain client with the browser-compatible User-Agent.
+	"occ": {scraplingRoute{scraplingfetch.ModeBrowser, false}, func(f *Client) Source {
+		return NewOCC(occSplit{HTMLGetter: f, JSONGetter: newCompatibleUAClient()})
+	}},
 }
 
 // A browser fetch that meets a challenge on its first page measured ~110 s, and the service

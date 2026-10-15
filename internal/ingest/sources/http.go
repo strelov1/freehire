@@ -384,6 +384,22 @@ func withUserAgent(c HTTPClient, ua string) HTTPClient {
 	return &cp
 }
 
+// compatibleUserAgent is the project's own identity in the browser-compatible form, for an edge
+// that refuses any string not starting with a browser token yet does not ask for a browser.
+// Measured 2026-10-15 against OCC Mundial's search pages (www.occ.com.mx/empleos/, which
+// robots.txt allows): "freehire/0.1 (+https://freehire.me)", a bare "Mozilla/5.0" and the
+// project string with "Mozilla/5.0" appended were all answered 403, while this string was
+// served. It still names us, so prefer it to browserUserAgent wherever it is enough.
+const compatibleUserAgent = "Mozilla/5.0 (compatible; freehire/0.1; +https://freehire.me)"
+
+// newCompatibleUAClient is NewClient with compatibleUserAgent — same guarded transport, same
+// retry budget, same everything else.
+func newCompatibleUAClient() *Client {
+	c := NewClient()
+	c.userAgent = compatibleUserAgent
+	return c
+}
+
 // crawlerUserAgent identifies as Googlebot, for the one provider whose edge does the OPPOSITE
 // of blocking bots: energyjobline.com's job-detail pages server-render their schema.org
 // JobPosting ld+json only for a recognised search-crawler User-Agent. Both the project's own

@@ -404,6 +404,7 @@ export const SOURCE_LABELS: Record<string, string> = {
   applicantstack: 'ApplicantStack',
   tenstreet: 'Tenstreet',
   taleobe: 'Taleo Business Edition',
+  occ: 'OCC Mundial',
 };
 
 /** Display label for a source slug (e.g. smartrecruiters → "SmartRecruiters"),
