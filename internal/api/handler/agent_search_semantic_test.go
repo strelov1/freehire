@@ -132,3 +132,18 @@ func TestAgentSearchJobs_SemanticWithoutQueryIsReported(t *testing.T) {
 		t.Errorf("ignored_params = %v, want [semantic]", names)
 	}
 }
+
+func TestAgentSearchJobs_SemanticTotalIsMarkedALowerBound(t *testing.T) {
+	e := &fakeQueryEmbedder{vec: []float32{1}}
+
+	_, body := doGet(t, agentSemanticApp(&hybridRecordingSearcher{}, e), "/agent/jobs/search?q=payments&semantic=true")
+	meta := agentMeta(t, body)
+	if meta["total"] != float64(5) || meta["total_is_lower_bound"] != true {
+		t.Errorf("meta = %v, want total 5 marked total_is_lower_bound", meta)
+	}
+
+	_, body = doGet(t, agentSemanticApp(&hybridRecordingSearcher{}, e), "/agent/jobs/search?q=payments")
+	if _, ok := agentMeta(t, body)["total_is_lower_bound"]; ok {
+		t.Errorf("keyword answer carries total_is_lower_bound")
+	}
+}

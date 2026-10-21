@@ -125,12 +125,13 @@ func (h *mcpappHandlers) SearchJobs(ctx context.Context, in mcpapp.SearchInput) 
 	}
 
 	return mcpapp.SearchJobsResult{
-		Query:         values.Get("q"),
-		Total:         int(res.Total),
-		Offset:        offset,
-		Jobs:          jobs,
-		IgnoredParams: ignored,
-		Semantic:      outcome.wire(mcpapp.SemanticApplied, mcpapp.SemanticUnavailable),
+		Query:             values.Get("q"),
+		Total:             int(res.Total),
+		Offset:            offset,
+		Jobs:              jobs,
+		IgnoredParams:     ignored,
+		Semantic:          outcome.wire(mcpapp.SemanticApplied, mcpapp.SemanticUnavailable),
+		TotalIsLowerBound: res.TotalIsLowerBound,
 	}, nil
 }
 

@@ -28,7 +28,8 @@ type jobDescriptions interface {
 //
 // `semantic=true` opts into the same hybrid search OJCP offers (see semanticSearch);
 // meta.semantic then says whether the description vectors answered ("applied") or the
-// request fell back to keywords ("unavailable"). Omitted when not asked.
+// request fell back to keywords ("unavailable"). Omitted when not asked. An applied one
+// also carries meta.total_is_lower_bound: its total is "at least", not a count.
 func (h *searchHandlers) AgentSearchJobs(c *fiber.Ctx) error {
 	out, err := h.runJobSearch(c, c.QueryBool("semantic"))
 	if err != nil {
@@ -53,6 +54,9 @@ func (h *searchHandlers) AgentSearchJobs(c *fiber.Ctx) error {
 	meta := listMeta(res.Total, out.limit, out.offset, ignored, ignoredJobValues(c))
 	if out.semantic != "" {
 		meta["semantic"] = out.semantic
+	}
+	if res.TotalIsLowerBound {
+		meta["total_is_lower_bound"] = true
 	}
 	return c.JSON(fiber.Map{"data": views, "meta": meta})
 }

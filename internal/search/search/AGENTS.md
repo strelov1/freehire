@@ -280,6 +280,12 @@ it, and only when the agent sends `semantic: true`
   carry `desc` vectors, so a non-tech query's nearest vectors are unrelated tech postings.
   0.93 was cleaner but cut a Russian Python query to 5 results. Re-sample after changing
   either number or the embedding model.
+- **A hybrid answer has no total, only a lower bound.** `estimatedTotalHits` under a vector
+  search is the whole index (3.67M for a query 34 postings passed the floor), and no exact
+  count exists to ask for instead — the vector side ranks a candidate pool sized by the
+  request, so one query counted 34 in page mode and 13 with `hitsPerPage: 0`. `Search` asks
+  for `limit+1` and `hybridPage` drops the probe: `Total` is what the pages so far reached,
+  plus one when a next page exists, and `TotalIsLowerBound` says so on every surface.
 - **The query embed needs a TEI nobody else is using.** With the shared TEI that `cmd/embed`
   drains its backlog through, the 400 ms query deadline was missed by every request — the
   query queued 15–20 s behind bulk batches — so every `semantic: true` answered

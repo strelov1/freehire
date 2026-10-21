@@ -217,12 +217,13 @@ func (h *ojcpHandlers) SearchJobs(ctx context.Context, input ojcp.SearchInput) (
 	}
 
 	return ojcp.SearchJobsResponse{
-		Query:         values.Get("q"),
-		TotalResults:  int(res.Total),
-		Offset:        offset,
-		Jobs:          jobs,
-		IgnoredParams: unsupported,
-		Semantic:      semantic,
+		Query:             values.Get("q"),
+		TotalResults:      int(res.Total),
+		TotalIsLowerBound: res.TotalIsLowerBound,
+		Offset:            offset,
+		Jobs:              jobs,
+		IgnoredParams:     unsupported,
+		Semantic:          semantic,
 	}.Finalize(), nil
 }
 

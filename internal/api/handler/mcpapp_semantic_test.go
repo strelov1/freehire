@@ -81,3 +81,16 @@ func TestTheAppSemanticSearchDegradesAndSaysSo(t *testing.T) {
 			e.calls, got.Semantic, got.IgnoredParams)
 	}
 }
+
+func TestTheAppSemanticTotalIsMarkedALowerBound(t *testing.T) {
+	e := &fakeQueryEmbedder{vec: []float32{1}}
+	got, err := mcpappSemantic(&hybridRecordingSearcher{}, e).SearchJobs(context.Background(), mcpapp.SearchInput{
+		Query: "payments", Semantic: boolPtr(true),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Total != 5 || !got.TotalIsLowerBound {
+		t.Errorf("total=%d lowerBound=%v, want 5 marked as a lower bound", got.Total, got.TotalIsLowerBound)
+	}
+}

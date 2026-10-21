@@ -496,6 +496,27 @@ type SearchParams struct {
 type SearchResult struct {
 	Hits  []JobDocument
 	Total int64
+	// TotalIsLowerBound marks a hybrid (SemanticVector) answer, whose Total is "at least
+	// this many" rather than an estimate of the whole match: see hybridPage.
+	TotalIsLowerBound bool
+}
+
+// hybridPage turns a hybrid query's hits into a page and a total that can be trusted.
+//
+// Meilisearch's estimatedTotalHits is no count under a vector search: it reported the
+// whole index (3.67M) for a query 34 postings passed the score floor of, measured
+// 2026-10-21. Nor is there an exact count to ask for instead — the vector side ranks a
+// candidate pool whose size follows the request, so the same query counted 34 in page
+// mode and 13 with hitsPerPage 0. What IS knowable is whether a next page exists, so
+// Search asks for one hit more than the page (limit+1) and this drops it: the total is
+// what the caller has been shown so far, plus one when there is more.
+func hybridPage(docs []JobDocument, limit, offset int) SearchResult {
+	total := int64(offset + len(docs))
+	if len(docs) > limit {
+		docs = docs[:limit]
+		total = int64(offset + limit + 1)
+	}
+	return SearchResult{Hits: docs, Total: total, TotalIsLowerBound: true}
 }
 
 // ErrBadQuery marks a search request Meilisearch rejected as malformed — a 400,
@@ -574,6 +595,13 @@ func (c *Client) Search(ctx context.Context, p SearchParams) (SearchResult, erro
 	if err != nil {
 		return SearchResult{}, err
 	}
+	// The match sort wins over a semantic vector (see buildSearchRequest), so only a
+	// request without one is a hybrid.
+	hybrid := len(p.Vector) == 0 && len(p.SemanticVector) > 0
+	pageLimit := p.Limit
+	if hybrid {
+		p.Limit++ // the probe hit hybridPage drops
+	}
 	var (
 		hits  meilisearch.Hits
 		total int64
@@ -599,6 +627,9 @@ func (c *Client) Search(ctx context.Context, p SearchParams) (SearchResult, erro
 	var docs []JobDocument
 	if err := hits.DecodeInto(&docs); err != nil {
 		return SearchResult{}, fmt.Errorf("search: decode hits: %w", err)
+	}
+	if hybrid {
+		return hybridPage(docs, pageLimit, p.Offset), nil
 	}
 	return SearchResult{Hits: docs, Total: total}, nil
 }

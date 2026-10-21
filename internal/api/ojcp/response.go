@@ -28,6 +28,11 @@ type SearchJobsResponse struct {
 	// not ask. An EXTENSION for the same reason as IgnoredParams — an answer that degraded
 	// to keyword-only has to say so, or an agent reads keyword relevance as meaning.
 	Semantic string `json:"semantic,omitempty"`
+	// TotalIsLowerBound marks a semantic answer's TotalResults as "at least this many": a
+	// vector search has no count to report, only whether a next page exists. An EXTENSION
+	// for the reason Semantic is one — without it an agent reads the bound as the size of
+	// the match.
+	TotalIsLowerBound bool `json:"total_is_lower_bound,omitempty"`
 }
 
 // The two values of SearchJobsResponse.Semantic.

@@ -23,6 +23,10 @@ func (r *hybridRecordingSearcher) Search(_ context.Context, p search.SearchParam
 	if r.refuseHybrid && p.SemanticVector != nil {
 		return search.SearchResult{}, fmt.Errorf("search: query: %w: unknown embedder desc", search.ErrBadQuery)
 	}
+	if p.SemanticVector != nil {
+		// What search.Client answers a hybrid with: a total that is only a lower bound.
+		return search.SearchResult{Total: 5, TotalIsLowerBound: true}, nil
+	}
 	return search.SearchResult{}, nil
 }
 
@@ -169,5 +173,26 @@ func TestOJCPSemanticSearchWithNoQueryReportsTheFlagIgnored(t *testing.T) {
 	}
 	if resp.Semantic != "" {
 		t.Errorf("semantic = %q, want omitted when the flag was not honoured at all", resp.Semantic)
+	}
+}
+
+// A hybrid's total is "at least this many", and the agent is told so; a keyword answer
+// keeps its ordinary total and says nothing.
+func TestOJCPSemanticSearchMarksItsTotalAsALowerBound(t *testing.T) {
+	e := &fakeQueryEmbedder{vec: []float32{1}}
+	resp, err := semanticHandlers(&hybridRecordingSearcher{}, e).SearchJobs(context.Background(), semanticInput("payments", boolPtr(true)))
+	if err != nil {
+		t.Fatalf("SearchJobs: %v", err)
+	}
+	if resp.TotalResults != 5 || !resp.TotalIsLowerBound {
+		t.Errorf("total=%d lowerBound=%v, want 5 marked as a lower bound", resp.TotalResults, resp.TotalIsLowerBound)
+	}
+
+	resp, err = semanticHandlers(&hybridRecordingSearcher{}, e).SearchJobs(context.Background(), semanticInput("payments", nil))
+	if err != nil {
+		t.Fatalf("SearchJobs: %v", err)
+	}
+	if resp.TotalIsLowerBound {
+		t.Errorf("keyword answer marked as a lower bound")
 	}
 }

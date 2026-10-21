@@ -269,7 +269,10 @@ paths:
         Send `semantic=true` to rank by meaning as well as keywords (a hybrid search
         over posting descriptions). `meta.semantic` then says whether that ran
         (`applied`) or the request was answered by keywords alone (`unavailable`);
-        it is omitted when the flag was not sent.
+        it is omitted when the flag was not sent. An `applied` answer also carries
+        `meta.total_is_lower_bound: true`: a vector search has no count, so
+        `meta.total` is "at least this many" — what the pages so far reached, plus
+        one when there is a next page.
       x-openai-isConsequential: false
       parameters:
         - $ref: "#/components/parameters/Q"
@@ -353,7 +356,8 @@ paths:
         Send `semantic: true` to rank by meaning as well as keywords (a hybrid search
         over posting descriptions). The response's `semantic` then says whether that ran
         (`applied`) or fell back to keyword search (`unavailable`); a slow or absent
-        embedding backend never fails the request.
+        embedding backend never fails the request. An `applied` answer marks
+        `total_results` with `total_is_lower_bound: true` — "at least", not a count.
       x-openai-isConsequential: false
       requestBody:
         required: false
@@ -421,6 +425,12 @@ paths:
                     description: |
                       Extension. Which search answered a request that sent
                       `semantic: true`; omitted when it did not.
+                  total_is_lower_bound:
+                    type: boolean
+                    description: |
+                      Extension. True on an `applied` semantic answer:
+                      `total_results` is a minimum (what this page reaches, plus
+                      one when there is a next page), not a count of the match.
         default:
           $ref: "#/components/responses/Error"
   /ojcp/v1/jobs/{slug}:
