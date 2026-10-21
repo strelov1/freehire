@@ -322,3 +322,23 @@ func toJSON(t *testing.T, v any) string {
 	}
 	return string(b)
 }
+
+// A board that has gone unread for days meets more new postings than one run can hydrate at
+// the shared one-request-a-second pace, and a board writes nothing until its crawl returns —
+// so every run hit its timeout with nothing stored (2026-10-09 to 10-21). A board now
+// hydrates at most maxNewPerBoard new postings and defers the rest, unstored and so still
+// unseen, to a later run; a seen posting costs no budget.
+func TestJobleadsFetchNewDefersNewPostingsPastTheBudget(t *testing.T) {
+	fake := &jobleadsFake{
+		pages:   []string{jobleadsSearchPage(jobleadsP1, jobleadsP2)},
+		details: map[string]string{"ecde1148d365affee309f0df8bb2812a8": `{"status":"OK","payload":{"content":{"jobSummary":"<p>x</p>"}}}`},
+	}
+	jobs, err := jobleads{http: fake, maxNewPerBoard: 1}.FetchNew(context.Background(), CompanyEntry{Board: "React Developer"},
+		func(string) bool { return false })
+	if err != nil {
+		t.Fatalf("FetchNew: %v", err)
+	}
+	if len(jobs) != 1 || jobs[0].ExternalID != jobleadsP1ID || fake.detailCalls != 1 {
+		t.Fatalf("jobs = %+v, detail calls %d; want only the first new posting, hydrated", jobs, fake.detailCalls)
+	}
+}

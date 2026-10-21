@@ -35,6 +35,9 @@ type jobleadsHTTP interface {
 // rather than filing it under a period the platform does not state.
 type jobleads struct {
 	http jobleadsHTTP
+	// maxNewPerBoard bounds how many new postings one board hydrates per run; non-positive
+	// takes jobleadsMaxNewPerBoard.
+	maxNewPerBoard int
 }
 
 const (
@@ -51,6 +54,14 @@ const (
 	// keyword's window, and the 14-day sweepGrace absorbs the partial walk. The walk still
 	// ends on an empty page before this when a real window is shallower.
 	jobleadsMaxPages = 50
+	// jobleadsMaxNewPerBoard bounds one board's detail requests per run. Every board's search
+	// pages and details share one ~1 req/s limiter (pacedJobleadsPoster), and a board writes
+	// nothing until its crawl returns: after twelve days unread (2026-10-09 to 10-21) the 19
+	// boards' new postings outlasted the unit's 50 minutes on every run, so none finished and
+	// nothing was stored. 19 boards x 60 details plus up to 50 search pages each is ~35
+	// minutes; the rest are deferred — not yielded, so not stored and still new — to the run
+	// three hours later.
+	jobleadsMaxNewPerBoard = 60
 )
 
 // NewJobleads builds the JobLeads adapter over the given transport.
@@ -164,9 +175,15 @@ func (s jobleads) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 // SeenRefresh touch (no body — a content-less re-upsert would wipe the description and the
 // facets derived from it); a failed detail keeps the posting list-only (the repo's standard
 // rule, re-offered via the HydrationRetryWindow); a posting whose link carries no
-// extractable hash is kept list-only without even the request (see jobleadsDetailID).
+// extractable hash is kept list-only without even the request (see jobleadsDetailID). At most
+// maxNewPerBoard new postings are taken per run; the rest wait for a later one.
 func (s jobleads) FetchNew(ctx context.Context, e CompanyEntry, seen func(externalID string) bool) ([]Job, error) {
+	budget := s.maxNewPerBoard
+	if budget <= 0 {
+		budget = jobleadsMaxNewPerBoard
+	}
 	var jobs []Job
+	hydrated, deferred := 0, 0
 	err := s.walk(ctx, e, func(p jobleadsPosting) bool {
 		base, ok := p.toJob()
 		if !ok {
@@ -177,6 +194,13 @@ func (s jobleads) FetchNew(ctx context.Context, e CompanyEntry, seen func(extern
 			jobs = append(jobs, base)
 			return true
 		}
+		// A deferred posting still counts as found, so the walk goes on to refresh the seen
+		// postings further down the window.
+		if hydrated == budget {
+			deferred++
+			return true
+		}
+		hydrated++
 		if detailID := jobleadsDetailID(p.JobLink); detailID != "" {
 			d, err := s.fetchDetail(ctx, detailID)
 			if err != nil {
@@ -188,6 +212,10 @@ func (s jobleads) FetchNew(ctx context.Context, e CompanyEntry, seen func(extern
 		jobs = append(jobs, base)
 		return true
 	})
+	if deferred > 0 {
+		log.Printf("jobleads: board %q: hydration budget %d reached; %d new postings deferred to a later run",
+			e.Board, budget, deferred)
+	}
 	return jobs, err
 }
 
