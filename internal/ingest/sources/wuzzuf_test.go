@@ -7,27 +7,30 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
 )
 
-// wuzzufFakeHTTP serves the trimmed real responses (2026-10-18): the IT/Software Development
-// search sliced by the request's startIndex/pageSize, and the job documents the ids filter
-// names, the way the API answers both.
+// wuzzufFakeHTTP serves the trimmed real data (2026-10-18) the way wuzzuf.net's search page
+// carries it: each page embeds the store state its front end boots from, holding that page's
+// slice of the IT/Software Development search (by the start parameter, pageSize rows a page)
+// and the job documents of exactly those rows.
 type wuzzufFakeHTTP struct {
 	t *testing.T
+	// pageSize is the site's page size, wuzzufPageSize outside tests.
+	pageSize int
 	// mutateSearch and mutateJobs edit the decoded fixture before it is served.
 	mutateSearch func(body map[string]any)
 	mutateJobs   func(docs []any) []any
-	// failSearchPage and failDetailCall make that page / detail call (0-based) error.
-	failSearchPage, failDetailCall int
-	searches                       []wuzzufSearchBody
-	detailIDs                      [][]string
+	// failSearchPage makes that page (0-based) error.
+	failSearchPage int
+	pages          []url.Values
 }
 
 func newWuzzufFake(t *testing.T) *wuzzufFakeHTTP {
-	return &wuzzufFakeHTTP{t: t, failSearchPage: -1, failDetailCall: -1}
+	return &wuzzufFakeHTTP{t: t, pageSize: 3, failSearchPage: -1}
 }
 
 func (f *wuzzufFakeHTTP) fixture(name string) map[string]any {
@@ -42,65 +45,64 @@ func (f *wuzzufFakeHTTP) fixture(name string) map[string]any {
 	return body
 }
 
-func (f *wuzzufFakeHTTP) PostJSONAPI(_ context.Context, u string, body, v any) error {
-	if u != wuzzufSearchURL {
-		return fmt.Errorf("unexpected PostJSONAPI %s", u)
-	}
-	req := body.(wuzzufSearchBody)
-	page := len(f.searches)
-	f.searches = append(f.searches, req)
-	if page == f.failSearchPage {
-		return errors.New("search page failed")
-	}
-	resp := f.fixture("search_it.json")
-	if f.mutateSearch != nil {
-		f.mutateSearch(resp)
-	}
-	rows := resp["data"].([]any)
-	lo := min(req.StartIndex, len(rows))
-	hi := min(req.StartIndex+req.PageSize, len(rows))
-	resp["data"] = rows[lo:hi]
-	out, _ := json.Marshal(resp)
-	return json.Unmarshal(out, v)
-}
-
-func (f *wuzzufFakeHTTP) GetJSONAPI(_ context.Context, u string, v any) error {
+func (f *wuzzufFakeHTTP) GetText(_ context.Context, u string) (string, error) {
 	parsed, err := url.Parse(u)
-	if err != nil || !strings.HasPrefix(u, wuzzufJobsURL+"?") {
-		return fmt.Errorf("unexpected GetJSONAPI %s", u)
+	if err != nil || !strings.HasPrefix(u, wuzzufSearchPageURL+"?") {
+		return "", fmt.Errorf("unexpected GetText %s", u)
 	}
-	ids := strings.Split(parsed.Query().Get("filter[other][ids]"), ",")
-	call := len(f.detailIDs)
-	f.detailIDs = append(f.detailIDs, ids)
-	if parsed.Query().Get("page[size]") != fmt.Sprint(len(ids)) {
-		f.t.Errorf("page[size] = %q for %d ids", parsed.Query().Get("page[size]"), len(ids))
+	q := parsed.Query()
+	page := len(f.pages)
+	f.pages = append(f.pages, q)
+	if page == f.failSearchPage {
+		return "", errors.New("search page failed")
 	}
-	if call == f.failDetailCall {
-		return errors.New("detail call failed")
+	start, err := strconv.Atoi(q.Get("start"))
+	if err != nil {
+		return "", fmt.Errorf("start %q: %w", q.Get("start"), err)
+	}
+	search := f.fixture("search_it.json")
+	if f.mutateSearch != nil {
+		f.mutateSearch(search)
 	}
 	docs := f.fixture("jobs_it.json")["data"].([]any)
 	if f.mutateJobs != nil {
 		docs = f.mutateJobs(docs)
 	}
-	want := map[string]bool{}
-	for _, id := range ids {
-		want[id] = true
-	}
-	var served []any
+	byID := map[string]any{}
 	for _, d := range docs {
-		if want[d.(map[string]any)["id"].(string)] {
-			served = append(served, d)
+		byID[d.(map[string]any)["id"].(string)] = d
+	}
+	rows := search["data"].([]any)
+	lo := min(start*f.pageSize, len(rows))
+	hi := min(lo+f.pageSize, len(rows))
+	order, set, collection := []any{}, map[string]any{}, map[string]any{}
+	for _, r := range rows[lo:hi] {
+		id := r.(map[string]any)["id"].(string)
+		order = append(order, id)
+		set[id] = r
+		if d, ok := byID[id]; ok {
+			collection[id] = d
 		}
 	}
-	out, _ := json.Marshal(map[string]any{"meta": map[string]any{"totalCount": len(served)}, "data": served})
-	return json.Unmarshal(out, v)
+	state := map[string]any{
+		"jobSearch": map[string]any{"sets": map[string]any{parsed.RequestURI(): map[string]any{
+			"start":             0,
+			"totalResultsCount": search["meta"].(map[string]any)["totalResultsCount"],
+			"resultsOrder":      order,
+			"resultsSet":        set,
+		}}},
+		"entities": map[string]any{"job": map[string]any{"collection": collection}},
+	}
+	raw, _ := json.Marshal(state)
+	return "<html><script>\n\t\t\tWuzzuf.initialStoreState = " + string(raw) +
+		";\n\t\t\tWuzzuf.lang = \"en\";\n</script></html>", nil
 }
 
 const wuzzufITBoard = "IT/Software Development"
 
 func wuzzufFetch(t *testing.T, f *wuzzufFakeHTTP) ([]Job, error) {
 	t.Helper()
-	s := wuzzuf{http: f, pageSize: 3, detailBatch: 2}
+	s := wuzzuf{http: f, pageSize: f.pageSize}
 	return s.Fetch(context.Background(), CompanyEntry{Board: wuzzufITBoard})
 }
 
@@ -123,18 +125,13 @@ func TestWuzzufFetchMapsTheBoard(t *testing.T) {
 		t.Fatalf("got %d jobs, want 6", len(jobs))
 	}
 	// Three search pages of three (the last one short), every one filtered by the board's role.
-	if len(f.searches) != 3 {
-		t.Fatalf("search requests = %d, want 3", len(f.searches))
+	if len(f.pages) != 3 {
+		t.Fatalf("search pages = %d, want 3", len(f.pages))
 	}
-	for i, s := range f.searches {
-		if s.StartIndex != i*3 || s.PageSize != 3 || len(s.SearchFilters["roles"]) != 1 ||
-			s.SearchFilters["roles"][0] != wuzzufITBoard || s.Longitude != "0" || s.Latitude != "0" {
-			t.Errorf("search %d: %+v", i, s)
+	for i, q := range f.pages {
+		if q.Get("start") != strconv.Itoa(i) || q.Get("filters[roles][0]") != wuzzufITBoard || len(q) != 2 {
+			t.Errorf("page %d: %v", i, q)
 		}
-	}
-	// Six named postings in batches of two; the hidden one costs no detail request.
-	if len(f.detailIDs) != 3 {
-		t.Fatalf("detail requests = %d, want 3", len(f.detailIDs))
 	}
 	byID := wuzzufByID(jobs)
 	if _, ok := byID["79aa9412-8b27-4254-ad52-d7bbdae30b97"]; ok {
@@ -220,9 +217,9 @@ func containsString(xs []string, want string) bool {
 
 func TestWuzzufRejectsABoardThatIsNotARoleName(t *testing.T) {
 	f := newWuzzufFake(t)
-	_, err := wuzzuf{http: f, pageSize: 3, detailBatch: 2}.Fetch(context.Background(), CompanyEntry{Board: `IT"}`})
-	if err == nil || len(f.searches) != 0 {
-		t.Fatalf("err=%v searches=%d", err, len(f.searches))
+	_, err := wuzzuf{http: f, pageSize: f.pageSize}.Fetch(context.Background(), CompanyEntry{Board: `IT"}`})
+	if err == nil || len(f.pages) != 0 {
+		t.Fatalf("err=%v pages=%d", err, len(f.pages))
 	}
 }
 
@@ -250,8 +247,8 @@ func TestWuzzufFailsOnARoleOverTheCeiling(t *testing.T) {
 	f.mutateSearch = func(b map[string]any) {
 		b["meta"].(map[string]any)["totalResultsCount"] = wuzzufMaxPages*3 + 1
 	}
-	if _, err := wuzzufFetch(t, f); err == nil || len(f.searches) != 1 {
-		t.Fatalf("err=%v searches=%d", err, len(f.searches))
+	if _, err := wuzzufFetch(t, f); err == nil || len(f.pages) != 1 {
+		t.Fatalf("err=%v pages=%d", err, len(f.pages))
 	}
 }
 
@@ -288,9 +285,11 @@ func TestWuzzufFailsOnAPostingOutsideTheRole(t *testing.T) {
 	}
 }
 
-func TestWuzzufMarksAFailedDetailBatchUnreadable(t *testing.T) {
+// A page that lists a posting without carrying its document has not answered about it, which
+// is not the platform saying it is gone.
+func TestWuzzufMarksAListedPostingWithoutItsDocumentUnreadable(t *testing.T) {
 	f := newWuzzufFake(t)
-	f.failDetailCall = 0
+	f.mutateJobs = func(docs []any) []any { return docs[1:] }
 	jobs, err := wuzzufFetch(t, f)
 	if err != nil {
 		t.Fatal(err)
@@ -298,36 +297,41 @@ func TestWuzzufMarksAFailedDetailBatchUnreadable(t *testing.T) {
 	if len(jobs) != 6 {
 		t.Fatalf("got %d jobs, want 6", len(jobs))
 	}
-	var unreadable []Job
-	for _, j := range jobs {
-		if j.Unreadable {
-			unreadable = append(unreadable, j)
-		}
-	}
-	if len(unreadable) != 2 || unreadable[0].ExternalID != f.detailIDs[0][0] || unreadable[0].Company == "" {
-		t.Fatalf("unreadable: %+v", unreadable)
+	j := wuzzufByID(jobs)["db64539c-1e1d-4c1d-9a37-60d455bbd6e5"]
+	if !j.Unreadable || j.Company != "Our Education" {
+		t.Fatalf("the posting without a document: %+v", j)
 	}
 }
 
-func TestWuzzufDropsAPostingTheAPINoLongerServesActive(t *testing.T) {
+// The page's state is the whole answer; a page without it is not an empty page.
+func TestWuzzufFailsOnAPageWithoutItsState(t *testing.T) {
+	_, err := wuzzuf{http: wuzzufShell{}, pageSize: 3}.Fetch(context.Background(), CompanyEntry{Board: wuzzufITBoard})
+	if err == nil {
+		t.Fatal("a page carrying no store state read as a success")
+	}
+}
+
+type wuzzufShell struct{}
+
+func (wuzzufShell) GetText(context.Context, string) (string, error) {
+	return "<html><title>Just a moment...</title></html>", nil
+}
+
+func TestWuzzufDropsAPostingNoLongerActive(t *testing.T) {
 	f := newWuzzufFake(t)
 	f.mutateJobs = func(docs []any) []any {
 		docs[0].(map[string]any)["attributes"].(map[string]any)["status"] = "expired"
-		return docs[:len(docs)-1] // the last one is gone altogether
+		return docs
 	}
 	jobs, err := wuzzufFetch(t, f)
 	if err != nil {
 		t.Fatal(err)
 	}
-	byID := wuzzufByID(jobs)
-	if len(jobs) != 4 {
-		t.Fatalf("got %d jobs, want 4", len(jobs))
+	if len(jobs) != 5 {
+		t.Fatalf("got %d jobs, want 5", len(jobs))
 	}
-	if _, ok := byID["db64539c-1e1d-4c1d-9a37-60d455bbd6e5"]; ok {
+	if _, ok := wuzzufByID(jobs)["db64539c-1e1d-4c1d-9a37-60d455bbd6e5"]; ok {
 		t.Error("an expired posting was yielded")
-	}
-	if _, ok := byID["c4c57a94-bb76-4f20-9e43-b2d28a7c4cad"]; ok {
-		t.Error("a posting the API did not return was yielded")
 	}
 }
 

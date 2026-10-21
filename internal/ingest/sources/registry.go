@@ -487,8 +487,8 @@ func All(c HTTPClient) map[string]Source {
 		// per board carries every posting with its body. See kalibrr.go.
 		NewKalibrr(c),
 		// WUZZUF: Egypt's general multi-company board, enumerated by the platform's own job
-		// role (board) over the JSON:API at api.wuzzuf.net — wuzzuf.net itself is behind an
-		// interactive Cloudflare challenge. See wuzzuf.go.
+		// role (board) from the site's search pages — behind a Cloudflare challenge, so the
+		// Scrapling tier's browser reads them (scraplingtier.go). See wuzzuf.go.
 		NewWuzzuf(c),
 		// Feishu Jobs: ByteDance's Feishu Hire ATS, one tenant careers host per board
 		// (jobs.bytedance.com, <tenant>.jobs.feishu.cn), read through the tenant's R&D

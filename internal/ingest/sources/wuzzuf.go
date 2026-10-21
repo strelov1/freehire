@@ -2,7 +2,9 @@ package sources
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"maps"
 	"net/url"
 	"regexp"
 	"strconv"
@@ -20,36 +22,32 @@ import (
 // ("IT/Software Development"), which is what keeps a general board on its technical slice —
 // 436 of 5,266 active postings on 2026-10-18.
 //
-// wuzzuf.net itself sits behind an interactive Cloudflare challenge that refuses every client
-// from every IP we have, but the JSON:API the site's own front end calls is served from
-// api.wuzzuf.net, an AWS load balancer with no bot wall. The search names a role's posting ids
-// and employers; the job documents carry everything else, so the crawl is a search walk plus
-// one detail request per wuzzufDetailBatch postings. The search ignores a filter key it does
-// not know and answers the whole catalogue instead, so every document is checked against the
-// board's role before it is believed.
+// The whole site, its API included, sits behind a Cloudflare challenge, so the crawl reads the
+// site's own search pages through the Scrapling tier's browser. Each page embeds the store
+// state its front end boots from (Wuzzuf.initialStoreState): that page's slice of the search,
+// with each row's posting id and employer, and the full JSON:API job document of every row —
+// so one page request per wuzzufPageSize postings carries everything and there is no detail
+// fetch. Every document is still checked against the board's role before it is believed: the
+// search answers the whole catalogue to a filter it does not understand.
 //
-// fullBoardListing: the search walk reads to a short page and fails unless the distinct ids
-// read equal the search's own count, on any failed page, on a count that moves mid-walk and on
+// fullBoardListing: the walk reads to a short page and fails unless the distinct ids read
+// equal the search's own count, on any failed page, on a count that moves mid-walk and on
 // reaching wuzzufMaxPages. See the WUZZUF traps in AGENTS.md.
 type wuzzuf struct {
-	http JSONAPIClient
-	// pageSize and detailBatch are wuzzufPageSize and wuzzufDetailBatch outside tests.
-	pageSize, detailBatch int
+	http TextGetter
+	// pageSize is wuzzufPageSize outside tests.
+	pageSize int
 }
 
 const (
-	wuzzufSearchURL = "https://api.wuzzuf.net/api/search/job"
-	wuzzufJobsURL   = "https://api.wuzzuf.net/api/job"
-	wuzzufSiteURL   = "https://wuzzuf.net/"
-	// wuzzufPageSize is how many search rows one request asks for.
-	wuzzufPageSize = 100
-	// wuzzufMaxPages is a ceiling twenty times above the IT role's size, never the expected
-	// end: a role whose count does not fit it FAILS rather than being read in part.
+	wuzzufSiteURL       = "https://wuzzuf.net/"
+	wuzzufSearchPageURL = wuzzufSiteURL + "search/jobs/"
+	// wuzzufPageSize is how many rows the site's search page shows; it is not ours to choose.
+	wuzzufPageSize = 15
+	// wuzzufMaxPages is a ceiling three times above the IT role's size (437 postings on
+	// 2026-10-21), never the expected end: a role whose count does not fit it FAILS rather than
+	// being read in part.
 	wuzzufMaxPages = 100
-	// wuzzufDetailBatch is how many job documents one request asks for. A document is ~30 KB
-	// and the API spends 0.3-1.2 s on each, so ten keeps a request well inside the client's
-	// 15 s timeout; a batch of 25 took up to 30 s.
-	wuzzufDetailBatch = 10
 )
 
 var (
@@ -74,9 +72,10 @@ func mustLoadLocation(name string) *time.Location {
 	return loc
 }
 
-// NewWuzzuf builds the WUZZUF adapter over the given HTTP client.
-func NewWuzzuf(c JSONAPIClient) Source {
-	return wuzzuf{http: c, pageSize: wuzzufPageSize, detailBatch: wuzzufDetailBatch}
+// NewWuzzuf builds the WUZZUF adapter over the given HTTP client (the Scrapling tier's browser
+// in production).
+func NewWuzzuf(c TextGetter) Source {
+	return wuzzuf{http: c, pageSize: wuzzufPageSize}
 }
 
 func (wuzzuf) Provider() string { return "wuzzuf" }
@@ -90,23 +89,28 @@ func (wuzzuf) aggregator() {}
 // the fullBoardListing interface (source.go) for the bar.
 func (wuzzuf) fullBoardListing() {}
 
-// wuzzufSearchBody is the search request the site's front end sends; the API refuses one
-// without longitude/latitude ("Request is missing some parameters").
-type wuzzufSearchBody struct {
-	StartIndex    int                 `json:"startIndex"`
-	PageSize      int                 `json:"pageSize"`
-	Longitude     string              `json:"longitude"`
-	Latitude      string              `json:"latitude"`
-	Query         string              `json:"query"`
-	SearchFilters map[string][]string `json:"searchFilters"`
+// wuzzufPageState is the slice of a search page's store state the crawl reads: the search
+// result, keyed by the page's own path, and the job documents of its rows.
+type wuzzufPageState struct {
+	JobSearch struct {
+		Sets map[string]wuzzufSearchSet `json:"sets"`
+	} `json:"jobSearch"`
+	Entities struct {
+		Job struct {
+			Collection map[string]wuzzufDoc `json:"collection"`
+		} `json:"job"`
+	} `json:"entities"`
 }
 
-type wuzzufSearchResult struct {
-	Meta struct {
-		TotalResultsCount *int `json:"totalResultsCount"`
-	} `json:"meta"`
-	Data []wuzzufHit `json:"data"`
+// wuzzufSearchSet is one page of the search: the rows in order, the rows by id and the count.
+type wuzzufSearchSet struct {
+	TotalResultsCount *int                 `json:"totalResultsCount"`
+	ResultsOrder      []string             `json:"resultsOrder"`
+	ResultsSet        map[string]wuzzufHit `json:"resultsSet"`
 }
+
+// wuzzufStateRE finds where a page assigns its store state.
+var wuzzufStateRE = regexp.MustCompile(`Wuzzuf\.initialStoreState\s*=\s*`)
 
 // wuzzufHit is one search row: the posting id and, among its computed fields, the employer.
 type wuzzufHit struct {
@@ -132,10 +136,6 @@ func (h wuzzufHit) company() string {
 
 type wuzzufNamed struct {
 	Name string `json:"name"`
-}
-
-type wuzzufJobsResult struct {
-	Data []wuzzufDoc `json:"data"`
 }
 
 // wuzzufDoc is one job document as the API states it. Nullable objects decode to nil.
@@ -184,122 +184,113 @@ func (s wuzzuf) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	if !wuzzufBoardRE.MatchString(e.Board) {
 		return nil, fmt.Errorf("wuzzuf: board %q is not a role name", e.Board)
 	}
-	hits, err := s.list(ctx, e.Board)
+	hits, docs, err := s.list(ctx, e.Board)
 	if err != nil {
 		return nil, err
 	}
-	// A posting whose employer is hidden names no company, so it is not yielded and costs no
-	// detail request.
-	named := hits[:0:0]
+	var jobs []Job
 	for _, h := range hits {
-		if h.company() != "" {
-			named = append(named, h)
+		company := h.company()
+		if company == "" {
+			continue // the employer is hidden, so the posting names no company
 		}
-	}
-	jobs := make([]Job, 0, len(named))
-	for lo := 0; lo < len(named); lo += s.detailBatch {
-		batch := named[lo:min(lo+s.detailBatch, len(named))]
-		docs, err := s.details(ctx, batch)
-		if err != nil {
-			// A failed request is the absence of an answer about these postings, not the
-			// platform saying they are gone.
-			for _, h := range batch {
-				jobs = append(jobs, unreadableDetail(h.ID, "", h.company()))
-			}
+		d, ok := docs[h.ID]
+		if !ok {
+			// The page listed the posting without its document: no answer about it, not the
+			// platform saying it is gone.
+			jobs = append(jobs, unreadableDetail(h.ID, "", company))
 			continue
 		}
-		for _, h := range batch {
-			d, ok := docs[h.ID]
-			if !ok {
-				continue // the API no longer serves it: gone since the search was read
-			}
-			if !d.hasRole(e.Board) {
-				return nil, fmt.Errorf("wuzzuf: board %q: posting %s is not of the role, the search ignored its filter",
-					e.Board, h.ID)
-			}
-			if job, ok := d.toJob(h.company()); ok {
-				jobs = append(jobs, job)
-			}
+		if !d.hasRole(e.Board) {
+			return nil, fmt.Errorf("wuzzuf: board %q: posting %s is not of the role, the search ignored its filter",
+				e.Board, h.ID)
+		}
+		if job, ok := d.toJob(company); ok {
+			jobs = append(jobs, job)
 		}
 	}
 	return jobs, nil
 }
 
-// list walks the role's search to its natural end, failing on any page error, on a count
-// that moves mid-walk, on a repeated id and on a total the walk did not read in full.
-func (s wuzzuf) list(ctx context.Context, role string) ([]wuzzufHit, error) {
+// list walks the role's search pages to their natural end, failing on any page error, on a
+// count that moves mid-walk, on a repeated id and on a total the walk did not read in full. It
+// returns the rows in the search's order and the job documents the pages carried, by id.
+func (s wuzzuf) list(ctx context.Context, role string) ([]wuzzufHit, map[string]wuzzufDoc, error) {
 	var hits []wuzzufHit
+	docs := map[string]wuzzufDoc{}
 	seen := map[string]bool{}
 	total := -1
 	for page := 0; ; page++ {
 		if page == wuzzufMaxPages {
-			return nil, fmt.Errorf("wuzzuf: board %q: reached %d pages without the end", role, wuzzufMaxPages)
+			return nil, nil, fmt.Errorf("wuzzuf: board %q: reached %d pages without the end", role, wuzzufMaxPages)
 		}
-		body := wuzzufSearchBody{
-			StartIndex:    page * s.pageSize,
-			PageSize:      s.pageSize,
-			Longitude:     "0",
-			Latitude:      "0",
-			SearchFilters: map[string][]string{"roles": {role}},
+		set, err := s.page(ctx, role, page, docs)
+		if err != nil {
+			return nil, nil, fmt.Errorf("wuzzuf: board %q: search page %d: %w", role, page, err)
 		}
-		var r wuzzufSearchResult
-		if err := s.http.PostJSONAPI(ctx, wuzzufSearchURL, body, &r); err != nil {
-			return nil, fmt.Errorf("wuzzuf: board %q: search page %d: %w", role, page, err)
-		}
-		if r.Meta.TotalResultsCount == nil {
-			return nil, fmt.Errorf("wuzzuf: board %q: the search states no count", role)
-		}
-		count := *r.Meta.TotalResultsCount
+		count := *set.TotalResultsCount
 		switch {
 		case page > 0 && count != total:
-			return nil, fmt.Errorf("wuzzuf: board %q: the count moved from %d to %d mid-walk", role, total, count)
+			return nil, nil, fmt.Errorf("wuzzuf: board %q: the count moved from %d to %d mid-walk", role, total, count)
 		case count == 0:
 			// The platform's roles always carry postings; nothing at all is a misspelled role
 			// (an unknown value matches nothing), not a board whose postings all closed.
-			return nil, fmt.Errorf("wuzzuf: board %q matches no postings", role)
+			return nil, nil, fmt.Errorf("wuzzuf: board %q matches no postings", role)
 		case count > wuzzufMaxPages*s.pageSize:
-			return nil, fmt.Errorf("wuzzuf: board %q lists %d postings, over the %d the walk reads",
+			return nil, nil, fmt.Errorf("wuzzuf: board %q lists %d postings, over the %d the walk reads",
 				role, count, wuzzufMaxPages*s.pageSize)
 		}
 		total = count
-		for _, h := range r.Data {
-			if !wuzzufIDRE.MatchString(h.ID) {
-				return nil, fmt.Errorf("wuzzuf: board %q: unreadable posting id %q", role, h.ID)
+		for _, id := range set.ResultsOrder {
+			h, ok := set.ResultsSet[id]
+			if !ok || !wuzzufIDRE.MatchString(id) || h.ID != id {
+				return nil, nil, fmt.Errorf("wuzzuf: board %q: unreadable posting id %q", role, id)
 			}
-			if seen[h.ID] {
-				return nil, fmt.Errorf("wuzzuf: board %q: posting %s listed twice", role, h.ID)
+			if seen[id] {
+				return nil, nil, fmt.Errorf("wuzzuf: board %q: posting %s listed twice", role, id)
 			}
-			seen[h.ID] = true
+			seen[id] = true
 			hits = append(hits, h)
 		}
-		if len(r.Data) < s.pageSize {
+		if len(set.ResultsOrder) < s.pageSize {
 			break
 		}
 	}
 	if len(hits) != total {
-		return nil, fmt.Errorf("wuzzuf: board %q: read %d of %d postings", role, len(hits), total)
+		return nil, nil, fmt.Errorf("wuzzuf: board %q: read %d of %d postings", role, len(hits), total)
 	}
-	return hits, nil
+	return hits, docs, nil
 }
 
-// details fetches the job documents of one batch, keyed by id.
-func (s wuzzuf) details(ctx context.Context, batch []wuzzufHit) (map[string]wuzzufDoc, error) {
-	ids := make([]string, len(batch))
-	for i, h := range batch {
-		ids[i] = h.ID
+// page reads one search page's store state, adding the page's job documents to docs. The
+// returned set always states a count.
+func (s wuzzuf) page(ctx context.Context, role string, page int, docs map[string]wuzzufDoc) (wuzzufSearchSet, error) {
+	u := wuzzufSearchPageURL + "?filters%5Broles%5D%5B0%5D=" +
+		strings.ReplaceAll(url.QueryEscape(role), "+", "%20") + "&start=" + strconv.Itoa(page)
+	body, err := s.http.GetText(ctx, u)
+	if err != nil {
+		return wuzzufSearchSet{}, err
 	}
-	q := url.Values{}
-	q.Set("filter[other][ids]", strings.Join(ids, ","))
-	q.Set("page[size]", strconv.Itoa(len(ids)))
-	var r wuzzufJobsResult
-	if err := s.http.GetJSONAPI(ctx, wuzzufJobsURL+"?"+q.Encode(), &r); err != nil {
-		return nil, err
+	loc := wuzzufStateRE.FindStringIndex(body)
+	if loc == nil {
+		return wuzzufSearchSet{}, fmt.Errorf("the page carries no store state")
 	}
-	out := make(map[string]wuzzufDoc, len(r.Data))
-	for _, d := range r.Data {
-		out[d.ID] = d
+	var st wuzzufPageState
+	if err := json.NewDecoder(strings.NewReader(body[loc[1]:])).Decode(&st); err != nil {
+		return wuzzufSearchSet{}, fmt.Errorf("store state: %w", err)
 	}
-	return out, nil
+	if len(st.JobSearch.Sets) != 1 {
+		return wuzzufSearchSet{}, fmt.Errorf("the store state holds %d searches, want 1", len(st.JobSearch.Sets))
+	}
+	var set wuzzufSearchSet
+	for _, only := range st.JobSearch.Sets {
+		set = only
+	}
+	if set.TotalResultsCount == nil {
+		return wuzzufSearchSet{}, fmt.Errorf("the search states no count")
+	}
+	maps.Copy(docs, st.Entities.Job.Collection)
+	return set, nil
 }
 
 func (d wuzzufDoc) hasRole(role string) bool {

@@ -113,14 +113,6 @@ type HeaderJSONPoster interface {
 	PostJSONWithHeaders(ctx context.Context, url string, headers map[string]string, body, v any) error
 }
 
-// JSONAPIClient speaks to a strict JSON:API server (jsonapi.org), which names its own media
-// type on both sides of the exchange: wuzzuf's API answers 406 to Accept: application/json
-// and 415 to a request body sent as application/json. The bodies are ordinary JSON.
-type JSONAPIClient interface {
-	GetJSONAPI(ctx context.Context, url string, v any) error
-	PostJSONAPI(ctx context.Context, url string, body, v any) error
-}
-
 // CookieReader reads back a cookie a prior request established in the client's jar, for
 // the double-submit CSRF pattern (see Client.CookieValue).
 type CookieReader interface {
@@ -158,7 +150,6 @@ type HTTPClient interface {
 	JSONPoster
 	HeaderJSONGetter
 	HeaderJSONPoster
-	JSONAPIClient
 	HeaderFormPoster
 	FormJSONPoster
 	CookieReader
@@ -659,40 +650,6 @@ func (c *Client) PostJSONWithHeaders(ctx context.Context, url string, headers ma
 		body:    payload,
 		accept:  "application/json",
 		headers: headers,
-		decode: func(resp *http.Response) error {
-			return json.NewDecoder(resp.Body).Decode(v)
-		},
-	})
-}
-
-// jsonAPIMediaType is the JSON:API media type, sent as both Accept and Content-Type.
-const jsonAPIMediaType = "application/vnd.api+json"
-
-// GetJSONAPI fetches a JSON:API document and decodes it into v.
-func (c *Client) GetJSONAPI(ctx context.Context, url string, v any) error {
-	return c.do(ctx, request{
-		method: http.MethodGet,
-		url:    url,
-		accept: jsonAPIMediaType,
-		decode: func(resp *http.Response) error {
-			return json.NewDecoder(resp.Body).Decode(v)
-		},
-	})
-}
-
-// PostJSONAPI marshals body to JSON, POSTs it as a JSON:API document and decodes the
-// response into v.
-func (c *Client) PostJSONAPI(ctx context.Context, url string, body, v any) error {
-	payload, err := json.Marshal(body)
-	if err != nil {
-		return fmt.Errorf("sources: marshal request %s: %w", url, err)
-	}
-	return c.do(ctx, request{
-		method:      http.MethodPost,
-		url:         url,
-		body:        payload,
-		contentType: jsonAPIMediaType,
-		accept:      jsonAPIMediaType,
 		decode: func(resp *http.Response) error {
 			return json.NewDecoder(resp.Body).Decode(v)
 		},

@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"net/http/cookiejar"
 	"net/http/httptest"
@@ -88,42 +87,6 @@ func TestClientPostJSONWithHeadersSendsCustomHeader(t *testing.T) {
 	}
 	if gotRSC != "1" {
 		t.Errorf("RSC = %q, want 1", gotRSC)
-	}
-}
-
-// A strict JSON:API server (wuzzuf) answers 406 to Accept: application/json and 415 to a
-// Content-Type of application/json, so both JSON:API calls must name the JSON:API media type.
-func TestClientJSONAPIUsesTheJSONAPIMediaType(t *testing.T) {
-	type seen struct{ method, accept, contentType, body string }
-	var got []seen
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		raw, _ := io.ReadAll(r.Body)
-		got = append(got, seen{r.Method, r.Header.Get("Accept"), r.Header.Get("Content-Type"), string(raw)})
-		w.Header().Set("Content-Type", "application/vnd.api+json")
-		_, _ = w.Write([]byte(`{"ok":true}`))
-	}))
-	defer srv.Close()
-
-	c := &Client{httpClient: srv.Client(), userAgent: "freehire-test"}
-	var out struct {
-		OK bool `json:"ok"`
-	}
-	if err := c.GetJSONAPI(context.Background(), srv.URL, &out); err != nil || !out.OK {
-		t.Fatalf("GetJSONAPI: %v ok=%v", err, out.OK)
-	}
-	out.OK = false
-	if err := c.PostJSONAPI(context.Background(), srv.URL, map[string]int{"n": 1}, &out); err != nil || !out.OK {
-		t.Fatalf("PostJSONAPI: %v ok=%v", err, out.OK)
-	}
-	if len(got) != 2 {
-		t.Fatalf("requests = %d, want 2", len(got))
-	}
-	if got[0].method != http.MethodGet || got[0].accept != jsonAPIMediaType {
-		t.Errorf("GET: %+v", got[0])
-	}
-	if got[1].method != http.MethodPost || got[1].accept != jsonAPIMediaType ||
-		got[1].contentType != jsonAPIMediaType || got[1].body != `{"n":1}` {
-		t.Errorf("POST: %+v", got[1])
 	}
 }
 
