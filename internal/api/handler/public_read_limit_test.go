@@ -196,6 +196,7 @@ func publicReadRoutes(t *testing.T, throttler ratelimit.Throttler) (map[string]*
 		// drives GET routes only. They still need a handler to be registered at all.
 		key:       passthrough,
 		moderator: passthrough,
+		cookie:    passthrough,
 		throttler: throttler,
 		public:    newPublicGate(throttler, nil, publicGateConfig{}),
 	}
@@ -246,6 +247,9 @@ func publicReadRoutes(t *testing.T, throttler ratelimit.Throttler) (map[string]*
 		// The signed-in MCP account server (freehire#3114), on the same agent-search
 		// budget as the two anonymous MCP/OJCP surfaces above: every tool call still
 		// costs what a catalogue read costs, whichever credential reached it.
+		// The on-site application form of an employer vacancy. Zero-valued: with no
+		// service behind it the route answers 501 past its limiter.
+		"directApplyHandlers": mount((&directApplyHandlers{}).register),
 		"mountMCPAccount": mount(func(r fiber.Router, m middleware) {
 			mountMCPAccount(r, m, &assistantHandlers{}, testMCPOrigin)
 		}),
