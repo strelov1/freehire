@@ -85,10 +85,14 @@ Places outside every FUA are omitted.
    (city, country, admin1) in the metro table. This is what tells Roseville CA from
    Roseville MI. Subdivision → admin1 needs a code map beside `subdivisionToCountry`
    (US and Canada, the only subdivisions the parser reads today).
-2. **City without a subdivision**: emit a metro only when the city name is not
-   `Contested` (the existing cityDict flag) AND every place in the metro table under that
-   (name, country) resolves to the same metro. "Folsom" emits Sacramento; a bare
-   "Roseville" emits nothing.
+2. **City without a subdivision**: emit a metro only when the line states exactly one
+   country AND every place in the metro table under that (name, country) resolves to the
+   same metro. "Folsom" emits Sacramento; a bare "Roseville" emits nothing. (Not the
+   cityDict `Contested` flag: it means "the name exists in more than one country", which
+   the one-stated-country requirement already settles — checking it would drop correct
+   answers like "Moscow, Russia".) A line that states ANY subdivision never takes this
+   path: each city is looked up under every stated subdivision and emits only when
+   exactly one metro comes back.
 3. Nothing for an unresolved city. Never guess — the dictionary rule every facet follows.
 
 The result passes through `jobderive.Derive` exactly as `Cities` does, including the
