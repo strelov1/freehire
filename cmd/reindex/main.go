@@ -342,15 +342,15 @@ func batchChunkVectors(ctx context.Context, chunks search.ChunkLister, jobs []db
 // to (1, 1) everywhere (used by tests that do not exercise clustering).
 type realityLookup func(companySlug, fingerprint string) (repost, mass int)
 
-// closureGeoLookup returns the union of countries, regions, and cities across every open row
+// closureGeoLookup returns the union of countries, regions, cities, and metros across every open row
 // a searchable row REPRESENTS — its duplicate closure — so the row's search document can be
 // widened beyond its own geography. Keyed by job id, not by (company_slug, role_fingerprint):
 // the two dedup passes that suppress rows leave them with fingerprints their canon does not
 // share, so a fingerprint key could never reach them (issue #2225).
 //
-// A miss (the row represents nobody) yields nil slices — a no-op widening. A nil lookup skips
+// A miss (the row represents nobody) yields a zero ClosureGeo — a no-op widening. A nil lookup skips
 // widening entirely (tests that do not exercise clustering).
-type closureGeoLookup func(ownerID int64) (countries, regions, cities []string)
+type closureGeoLookup func(ownerID int64) search.ClosureGeo
 
 // companyBatchSize bounds how many companies one RecomputeRoleDuplicatesForCompanies /
 // SuppressAggregatorDuplicatesForCompanies call covers. Measured on prod (2026-08-06):
@@ -521,15 +521,11 @@ func buildClosureGeoLookup(ctx context.Context, q *db.Queries) (closureGeoLookup
 	if err != nil {
 		return nil, err
 	}
-	type geo struct{ countries, regions, cities []string }
-	m := make(map[int64]geo, len(rows))
+	m := make(map[int64]search.ClosureGeo, len(rows))
 	for _, r := range rows {
-		m[r.OwnerID] = geo{r.Countries, r.Regions, r.Cities}
+		m[r.OwnerID] = search.ClosureGeo{Countries: r.Countries, Regions: r.Regions, Cities: r.Cities, Metros: r.Metros}
 	}
-	return func(ownerID int64) ([]string, []string, []string) {
-		g := m[ownerID]
-		return g.countries, g.regions, g.cities
-	}, nil
+	return func(ownerID int64) search.ClosureGeo { return m[ownerID] }, nil
 }
 
 // splitJobs partitions a batch from the (deliberately unfiltered) reindex feed:

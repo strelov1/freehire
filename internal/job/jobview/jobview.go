@@ -67,6 +67,8 @@ type Job struct {
 	// sparse. Values are canonical display names (Title case); the LLM copy is folded
 	// out of the nested Enrichment like the other geography facets.
 	Cities []string `json:"cities"`
+	// Metros is dict-only: the metro areas (GHS-FUA) the location line places the posting in, "Sacramento, US".
+	Metros []string `json:"metros"`
 	// Collections is the set of curated-collection slugs (e.g. yc, bigtech) the
 	// job's company belongs to, denormalized from the company onto the job. It is a
 	// deterministic source fact (no LLM counterpart) served straight from the jobs
@@ -207,6 +209,12 @@ func FromDomain(j job.Job, x job.Extras) (Job, error) {
 	skills := normalizeSet(f.Skills)
 	collections := normalizeSet(x.Collections)
 	cities := cityFacet(f.Cities, e.Cities)
+	// Canonical "City, CC" labels: normalizeSet would lowercase them. Non-nil so the
+	// facet serializes as [] rather than null.
+	metros := f.Metros
+	if metros == nil {
+		metros = []string{}
+	}
 	e.Countries, e.Regions, e.WorkMode = nil, nil, ""
 	e.Skills = nil
 	e.Cities = nil
@@ -227,6 +235,7 @@ func FromDomain(j job.Job, x job.Extras) (Job, error) {
 		WorkMode:           workMode,
 		Skills:             skills,
 		Cities:             cities,
+		Metros:             metros,
 		Collections:        collections,
 		AIInterviewReports: x.AIInterviewReports,
 		IsTech:             isTechFacet(f.IsTech),

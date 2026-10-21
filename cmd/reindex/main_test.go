@@ -132,11 +132,11 @@ func TestSplitJobs_CanonGetsClosureGeoUnion(t *testing.T) {
 		Countries:   []string{"de"}, Regions: []string{"eu"}, Cities: []string{"München"},
 		Category: "backend", Description: "<p>Build things.</p>",
 	}
-	geo := func(ownerID int64) ([]string, []string, []string) {
+	geo := func(ownerID int64) search.ClosureGeo {
 		if ownerID == 1 {
-			return []string{"at", "de", "pl"}, []string{"eu"}, []string{"München", "Wien"}
+			return search.ClosureGeo{Countries: []string{"at", "de", "pl"}, Regions: []string{"eu"}, Cities: []string{"München", "Wien"}}
 		}
-		return nil, nil, nil
+		return search.ClosureGeo{}
 	}
 
 	docs, _, err := splitJobs([]db.Job{canon}, nil, geo, nil, time.Now())
@@ -164,7 +164,7 @@ func TestSplitJobs_ClosureMissLeavesGeographyAlone(t *testing.T) {
 		Countries:   []string{"de"}, Regions: []string{"eu"}, Cities: []string{"München"},
 		Category: "backend", Description: "<p>Build things.</p>",
 	}
-	geo := func(int64) ([]string, []string, []string) { return nil, nil, nil }
+	geo := func(int64) search.ClosureGeo { return search.ClosureGeo{} }
 
 	docs, _, err := splitJobs([]db.Job{solo}, nil, geo, nil, time.Now())
 	if err != nil {

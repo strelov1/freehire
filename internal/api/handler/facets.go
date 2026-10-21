@@ -212,7 +212,7 @@ func requestedFacets(c *fiber.Ctx) ([]string, error) {
 // intersect). Disjunctive counting of any one of them must drop the whole group's
 // contribution, not just that param — otherwise selecting a country would zero
 // every sibling region (the reverse of what disjunctive mode is for).
-var locationFacetParams = []string{"regions", "countries", "cities"}
+var locationFacetParams = []string{"regions", "countries", "cities", "metros"}
 
 // facetReqs builds one disjunctive request per distribution attribute: each
 // counted under the filter with its own facet's params removed, so a facet's

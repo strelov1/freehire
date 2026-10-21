@@ -248,7 +248,7 @@ func DescriptionMissing(j db.Job) bool {
 
 // MergeClosureGeography widens a searchable document's geography facets with the union
 // across every OPEN row it represents — its duplicate closure — so a collapsed
-// multi-city/multi-country role stays findable by every city and country the rows it hides
+// multi-city/multi-country/multi-metro role stays findable by every city and country the rows it hides
 // are open in, not only its own. Each facet becomes the sorted, deduped union of the
 // document's own values and the closure's; an empty slice leaves that facet unchanged.
 //
@@ -258,16 +258,20 @@ func DescriptionMissing(j db.Job) bool {
 // #2225.
 //
 // Every writer of a job document must call this, not only the full reindex. The push is a
-// field-level document update and these three facets are always present in the payload, so
+// field-level document update and these four facets are always present in the payload, so
 // a writer that skips the union does not merely fail to widen the row — it replaces the
 // widened values with the row's own. The reindex reads its closure geography from the
 // whole-catalogue DuplicateClosureGeoAll; the per-wave writers read theirs from
 // DuplicateClosureGeoFor.
-func (d *JobDocument) MergeClosureGeography(countries, regions, cities []string) {
-	d.Countries = unionSorted(d.Countries, countries)
-	d.Regions = unionSorted(d.Regions, regions)
-	d.Cities = unionSorted(d.Cities, cities)
+func (d *JobDocument) MergeClosureGeography(g ClosureGeo) {
+	d.Countries = unionSorted(d.Countries, g.Countries)
+	d.Regions = unionSorted(d.Regions, g.Regions)
+	d.Cities = unionSorted(d.Cities, g.Cities)
+	d.Metros = unionSorted(d.Metros, g.Metros)
 }
+
+// ClosureGeo is the geography union across a document's duplicate closure.
+type ClosureGeo struct{ Countries, Regions, Cities, Metros []string }
 
 // unionSorted returns the sorted, deduped union of two facet slices. A nil result
 // stays nil (no closure addition and no own values) so an untouched facet is omitted.

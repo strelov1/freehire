@@ -131,7 +131,7 @@ func (ix searchIndexer) IndexBatch(ctx context.Context, jobs []db.Job) error {
 		reality := jobview.ClassifyReality(job, time.Now(), int(repost), int(mass))
 		doc.Reality = &reality
 		if g, ok := geo[job.ID]; ok {
-			doc.MergeClosureGeography(g.Countries, g.Regions, g.Cities)
+			doc.MergeClosureGeography(search.ClosureGeo{Countries: g.Countries, Regions: g.Regions, Cities: g.Cities, Metros: g.Metros})
 		}
 		docs = append(docs, doc)
 	}

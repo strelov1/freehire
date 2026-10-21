@@ -681,7 +681,7 @@ func facetSettings() *meilisearch.Settings {
 			// reindex first on deploy, or /jobs 500s on the new attribute.
 			"id",
 			"source", "company_slug",
-			"work_mode", "regions", "countries", "cities", "skills", "collections",
+			"work_mode", "regions", "countries", "cities", "metros", "skills", "collections",
 			// is_tech is the served top-level tech/non-tech facet (jobview), filtered on
 			// the bare attribute; an unknown value is absent so it filters as empty.
 			"is_tech",

@@ -225,6 +225,10 @@ export interface Job {
    */
   cities: string[];
   /**
+   * Metros is dict-only: the metro areas (GHS-FUA) the location line places the posting in, "Sacramento, US".
+   */
+  metros: string[];
+  /**
    * Collections is the set of curated-collection slugs (e.g. yc, bigtech) the
    * job's company belongs to, denormalized from the company onto the job. It is a
    * deterministic source fact (no LLM counterpart) served straight from the jobs

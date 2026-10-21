@@ -28,6 +28,7 @@ var StringFacets = map[string]string{
 	"domains":         "enrichment.domains",
 	"countries":       "countries",
 	"cities":          "cities",
+	"metros":          "metros",
 	"company_type":    "enrichment.company_type",
 	"company_size":    "enrichment.company_size",
 	"salary_currency": "enrichment.salary_currency",
@@ -72,7 +73,7 @@ var StringFacets = map[string]string{
 // and a non-location facet (e.g. work_mode) still ANDs with the whole group, so
 // "remote AND (Europe OR Brazil)" holds. Geographic AND is nonsensical ("in
 // Europe AND in LATAM" is empty), so the `_mode=and` override does not apply here.
-var locationFacets = map[string]bool{"regions": true, "countries": true, "cities": true}
+var locationFacets = map[string]bool{"regions": true, "countries": true, "cities": true, "metros": true}
 
 // RegionUnspecified is the reserved value of the `regions` facet that selects
 // jobs with no resolved geography (an empty regions array) rather than a real
@@ -171,7 +172,7 @@ func retiredCategory(param, attr, val string) (string, string) {
 // Meilisearch filter. Within a facet, included values are ORed by default (or
 // ANDed when `<param>_mode=and`); excluded values (`<param>_exclude=...`) become
 // NOT fragments. Facets are ANDed, except the location facets (regions/countries/
-// cities), whose includes OR into one shared group (see locationFacets). Returns
+// cities/metros), whose includes OR into one shared group (see locationFacets). Returns
 // nil when no facet is set.
 //
 // It is pure (no *fiber.Ctx), so the HTTP handler and the notification matcher
@@ -222,7 +223,7 @@ func filterFromValues(v url.Values, now time.Time) any {
 	var locationGroup []string
 
 	for param, attr := range StringFacets {
-		included := splitFacetValues(v[param])
+		included := facetParamValues(param, v[param])
 		switch {
 		case locationFacets[param]:
 			for _, val := range included {
@@ -241,7 +242,7 @@ func filterFromValues(v url.Values, now time.Time) any {
 			groups = append(groups, group)
 		}
 		// Excluded values: each is its own AND group so all are filtered out.
-		for _, val := range splitFacetValues(v[param+"_exclude"]) {
+		for _, val := range facetParamValues(param, v[param+"_exclude"]) {
 			groups = append(groups, []string{facetNeq(param, attr, val)})
 		}
 	}
@@ -319,6 +320,26 @@ func splitFacetValues(in []string) []string {
 			if part != "" {
 				out = append(out, part)
 			}
+		}
+	}
+	return out
+}
+
+// unsplitFacets are the facets whose canonical values contain a comma ("Sacramento, US"),
+// so splitting on it would shred every value. They take repeated keys only
+// (`metros=A, US&metros=B, DE`).
+var unsplitFacets = map[string]bool{"metros": true}
+
+// facetParamValues reads one facet param's values: comma-split like every other facet,
+// except the ones whose values carry a comma themselves (unsplitFacets).
+func facetParamValues(param string, in []string) []string {
+	if !unsplitFacets[param] {
+		return splitFacetValues(in)
+	}
+	out := make([]string, 0, len(in))
+	for _, s := range in {
+		if s != "" {
+			out = append(out, s)
 		}
 	}
 	return out

@@ -30,7 +30,7 @@ info:
 
     ## Geography is one OR-group
 
-    `regions`, `countries` and `cities` name a single concept — *where* — so
+    `regions`, `countries`, `cities` and `metros` name a single concept — *where* — so
     their values join into **one OR-group** instead of intersecting.
     `?countries=gb&cities=London` therefore returns *United Kingdom **or**
     London*, which is **wider** than `?countries=gb` alone — not narrower. To
@@ -203,6 +203,7 @@ paths:
         - $ref: "#/components/parameters/Regions"
         - $ref: "#/components/parameters/Countries"
         - $ref: "#/components/parameters/Cities"
+        - $ref: "#/components/parameters/Metros"
         - $ref: "#/components/parameters/WorkMode"
         - $ref: "#/components/parameters/Category"
         - $ref: "#/components/parameters/Seniority"
@@ -286,6 +287,7 @@ paths:
         - $ref: "#/components/parameters/Regions"
         - $ref: "#/components/parameters/Countries"
         - $ref: "#/components/parameters/Cities"
+        - $ref: "#/components/parameters/Metros"
         - $ref: "#/components/parameters/WorkMode"
         - $ref: "#/components/parameters/Category"
         - $ref: "#/components/parameters/Seniority"
@@ -538,6 +540,7 @@ paths:
         - $ref: "#/components/parameters/Regions"
         - $ref: "#/components/parameters/Countries"
         - $ref: "#/components/parameters/Cities"
+        - $ref: "#/components/parameters/Metros"
         - $ref: "#/components/parameters/WorkMode"
         - $ref: "#/components/parameters/Category"
         - $ref: "#/components/parameters/Seniority"
@@ -1141,7 +1144,7 @@ components:
       description: |
         Macro-regions. Country codes are NOT regions — use `countries`. `none`
         is the reserved value for postings with no resolved geography. Joins the
-        geography OR-group with `countries` and `cities`.
+        geography OR-group with `countries`, `cities` and `metros`.
     Countries:
       name: countries
       in: query
@@ -1166,6 +1169,21 @@ components:
       description: |
         Canonical city display names ("London", "Berlin") — resolve one with
         `searchCities` first. Joins the geography OR-group.
+    Metros:
+      name: metros
+      in: query
+      style: form
+      explode: true
+      schema:
+        type: array
+        items:
+          type: string
+      description: |
+        Metro areas ("Sacramento, US", "Moscow, RU") — commuting zones from GHS-FUA.
+        A posting is in a metro when its location names a city inside it. Values
+        contain a comma, so unlike other facets they are NOT comma-split: repeat the
+        parameter (`metros=Sacramento, US&metros=Moscow, RU`). Joins the geography
+        OR-group.
     WorkMode:
       name: work_mode
       in: query
@@ -1745,6 +1763,10 @@ components:
           items:
             type: string
         cities:
+          type: array
+          items:
+            type: string
+        metros:
           type: array
           items:
             type: string

@@ -343,6 +343,13 @@ func TestFilterFromValues_LocationFacetsORTogether(t *testing.T) {
 		t.Errorf("regions+countries+cities: got %v, want %v", got, want)
 	}
 
+	// Metros join the same OR group.
+	got = normalizeGroups(t, FilterFromValues(vals("metros=Sacramento, US&cities=Austin")))
+	want = [][]string{{`cities = "Austin"`, `metros = "Sacramento, US"`}}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("metros+cities: got %v, want %v", got, want)
+	}
+
 	// A non-location facet still ANDs with the location group as its own group:
 	// "remote AND (Europe OR Brazil)".
 	got = normalizeGroups(t, FilterFromValues(vals("regions=eu&countries=BR&work_mode=remote")))
@@ -521,5 +528,13 @@ func TestNarrows(t *testing.T) {
 		if got := Narrows(vals(c.query)); got != c.want {
 			t.Errorf("Narrows(%q) = %v, want %v", c.query, got, c.want)
 		}
+	}
+}
+
+func TestFilterFromValues_MetrosExclude(t *testing.T) {
+	got := normalizeGroups(t, FilterFromValues(vals("metros_exclude=Detroit, US")))
+	want := [][]string{{`metros != "Detroit, US"`}}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("metros_exclude: got %v, want %v", got, want)
 	}
 }

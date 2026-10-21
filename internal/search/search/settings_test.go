@@ -148,3 +148,10 @@ func TestViewCountIsSortable(t *testing.T) {
 		}
 	}
 }
+
+func TestMetrosIsFilterable(t *testing.T) {
+	s := facetSettings()
+	if !contains(s.FilterableAttributes, "metros") {
+		t.Errorf("metros must be filterable for the metros facet, got %v", s.FilterableAttributes)
+	}
+}
