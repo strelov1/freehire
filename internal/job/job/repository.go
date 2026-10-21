@@ -70,6 +70,7 @@ func jobFromRow(r db.Job) (Job, error) {
 		Countries: r.Countries,
 		Regions:   r.Regions,
 		Cities:    r.Cities,
+		Metros:    r.Metros,
 		WorkMode:  r.WorkMode,
 		Skills:    r.Skills,
 		Seniority: r.Seniority,

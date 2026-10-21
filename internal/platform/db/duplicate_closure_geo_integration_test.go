@@ -38,8 +38,8 @@ const testCompany = "acme"
 // generated row types convert to it — and to each other — is the point: the wave query is the
 // whole-catalogue one narrowed by a seed, not a second answer.
 type closureGeo struct {
-	OwnerID                    int64
-	Countries, Regions, Cities []string
+	OwnerID                            int64
+	Countries, Regions, Cities, Metros []string
 }
 
 func allClosures(rows []DuplicateClosureGeoAllRow) []closureGeo {

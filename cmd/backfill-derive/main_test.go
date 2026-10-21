@@ -153,7 +153,7 @@ func expectedDerived(j db.Job) db.UpdateJobDerivedParams {
 		CompanySlug: d.CompanySlug, Title: j.Title, Description: j.Description,
 	})
 	return db.UpdateJobDerivedParams{
-		ID: j.ID, Countries: d.Countries, Regions: d.Regions, Cities: d.Cities, WorkMode: d.WorkMode,
+		ID: j.ID, Countries: d.Countries, Regions: d.Regions, Cities: d.Cities, Metros: d.Metros, WorkMode: d.WorkMode,
 		Skills: d.Skills, Seniority: d.Seniority, Category: d.Category,
 		IsTech:             pgconv.Bool(d.IsTech),
 		PostingLanguage:    d.PostingLanguage,
@@ -170,7 +170,7 @@ func expectedDerived(j db.Job) db.UpdateJobDerivedParams {
 // pass over it must rewrite nothing (idempotence precondition).
 func seedDerived(j db.Job) db.Job {
 	d := expectedDerived(j)
-	j.Countries, j.Regions, j.Cities, j.WorkMode = d.Countries, d.Regions, d.Cities, d.WorkMode
+	j.Countries, j.Regions, j.Cities, j.Metros, j.WorkMode = d.Countries, d.Regions, d.Cities, d.Metros, d.WorkMode
 	j.Skills, j.Seniority, j.Category, j.IsTech = d.Skills, d.Seniority, d.Category, d.IsTech
 	j.PostingLanguage, j.EmploymentType = d.PostingLanguage, d.EmploymentType
 	j.EducationLevel, j.EnglishLevel, j.ExperienceYearsMin = d.EducationLevel, d.EnglishLevel, d.ExperienceYearsMin

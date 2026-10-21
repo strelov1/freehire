@@ -787,6 +787,7 @@ type Job struct {
 	RequirementsDerived   []byte             `json:"requirements_derived"`
 	HydratedAt            pgtype.Timestamptz `json:"hydrated_at"`
 	AiInterviewReports    int32              `json:"ai_interview_reports"`
+	Metros                []string           `json:"metros"`
 }
 
 type JobDailyStat struct {

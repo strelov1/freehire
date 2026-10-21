@@ -665,3 +665,28 @@ func movedColumns(a, b db.UpsertJobParams) []string {
 	}
 	return moved
 }
+
+func TestFields_MetrosReachEveryWriteParams(t *testing.T) {
+	j, err := job.New(job.Draft{Input: jobderive.Input{
+		Source:      "manual",
+		ExternalID:  "https://acme.example/jobs/2",
+		Title:       "Backend Engineer",
+		Company:     "Acme",
+		Location:    "Folsom, CA",
+		Description: "We use Golang.",
+	}})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	want := []string{"Sacramento, US"}
+	f := j.Fields()
+	if !slices.Equal(f.Metros, want) {
+		t.Fatalf("Fields.Metros = %v, want %v", f.Metros, want)
+	}
+	if got := f.UpsertParams().Metros; !slices.Equal(got, want) {
+		t.Errorf("UpsertParams.Metros = %v", got)
+	}
+	if got := f.UpsertManualParams(1).Metros; !slices.Equal(got, want) {
+		t.Errorf("UpsertManualParams.Metros = %v", got)
+	}
+}

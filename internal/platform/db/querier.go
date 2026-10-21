@@ -5864,6 +5864,7 @@ type Querier interface {
 	// on every crawl selects the whole catalogue and answers nothing.
 	//
 	// The match key is (content_hash, cities, salary_*_source, english_level, is_tech), not the
+	// metros, like countries/regions, is derived from location, which the hash covers.
 	// hash alone. Those are what the upsert writes that jobhash.Of does not read — a caller's
 	// structured city list overrides the location-derived one, a structured salary
 	// (Lever/Ashby/Recruitee) is a base fact rather than something Of hashes, english_level gained

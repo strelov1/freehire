@@ -160,7 +160,7 @@ func deriveRow(j db.Job, canon map[string]string) (params db.UpdateJobDerivedPar
 	isTech := pgconv.Bool(d.IsTech)
 	requiresClearance := pgconv.Bool(d.RequiresClearance)
 
-	facetsMoved := !slices.Equal(d.Countries, j.Countries) || !slices.Equal(d.Regions, j.Regions) || !slices.Equal(d.Cities, j.Cities) ||
+	facetsMoved := !slices.Equal(d.Countries, j.Countries) || !slices.Equal(d.Regions, j.Regions) || !slices.Equal(d.Cities, j.Cities) || !slices.Equal(d.Metros, j.Metros) ||
 		d.WorkMode != j.WorkMode || !slices.Equal(d.Skills, j.Skills) ||
 		d.Seniority != j.Seniority ||
 		d.Category != j.Category ||
@@ -180,6 +180,7 @@ func deriveRow(j db.Job, canon map[string]string) (params db.UpdateJobDerivedPar
 		Countries:          d.Countries,
 		Regions:            d.Regions,
 		Cities:             d.Cities,
+		Metros:             d.Metros,
 		WorkMode:           d.WorkMode,
 		Skills:             d.Skills,
 		Seniority:          d.Seniority,

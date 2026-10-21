@@ -885,3 +885,10 @@ func TestDerive_DropsImplausibleExperienceYears(t *testing.T) {
 		}
 	})
 }
+
+func TestDeriveCarriesMetros(t *testing.T) {
+	d := Derive(Input{Title: "Backend Engineer", Location: "Folsom, CA"})
+	if !slices.Equal(d.Metros, []string{"Sacramento, US"}) {
+		t.Errorf("Metros = %v", d.Metros)
+	}
+}

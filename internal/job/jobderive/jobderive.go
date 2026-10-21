@@ -89,6 +89,7 @@ type Derived struct {
 	Countries   []string
 	Regions     []string
 	Cities      []string
+	Metros      []string
 	WorkMode    string
 	Skills      []string
 	Seniority   string
@@ -262,6 +263,7 @@ func Derive(in Input) Derived {
 		Countries:   countries,
 		Regions:     regions,
 		Cities:      cities,
+		Metros:      geo.Metros,
 		WorkMode:    workMode,
 		// Skills is a set: the structured source skills are unioned with the
 		// dictionary skills, neither replacing the other. The category-scoped

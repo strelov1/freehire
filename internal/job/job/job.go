@@ -84,6 +84,7 @@ type Fields struct {
 	Countries []string
 	Regions   []string
 	Cities    []string
+	Metros    []string
 	WorkMode  string
 	Skills    []string
 	Seniority string
@@ -190,6 +191,7 @@ func New(d Draft) (Job, error) {
 		Countries: der.Countries,
 		Regions:   der.Regions,
 		Cities:    der.Cities,
+		Metros:    der.Metros,
 		WorkMode:  der.WorkMode,
 		Skills:    der.Skills,
 		Seniority: der.Seniority,
@@ -248,6 +250,7 @@ func (f Fields) UpsertParams() db.UpsertJobParams {
 		Countries:   f.Countries,
 		Regions:     f.Regions,
 		Cities:      f.Cities,
+		Metros:      f.Metros,
 		WorkMode:    f.WorkMode,
 		Skills:      f.Skills,
 		Seniority:   f.Seniority,
@@ -339,6 +342,7 @@ func (f Fields) UpsertManualParams(actorID int64) db.UpsertManualJobParams {
 		Countries:   f.Countries,
 		Regions:     f.Regions,
 		Cities:      f.Cities,
+		Metros:      f.Metros,
 		WorkMode:    f.WorkMode,
 		Skills:      f.Skills,
 		Seniority:   f.Seniority,
@@ -402,6 +406,7 @@ func (f Fields) UpdateManualParams(slug string, actorID int64) db.UpdateManualJo
 		Countries:   f.Countries,
 		Regions:     f.Regions,
 		Cities:      f.Cities,
+		Metros:      f.Metros,
 		WorkMode:    f.WorkMode,
 		Skills:      f.Skills,
 		Seniority:   f.Seniority,
@@ -446,6 +451,7 @@ func (f Fields) UpdateEmployerParams(slug string, actorID int64) db.UpdateEmploy
 		Countries:   f.Countries,
 		Regions:     f.Regions,
 		Cities:      f.Cities,
+		Metros:      f.Metros,
 		WorkMode:    f.WorkMode,
 		Skills:      f.Skills,
 		Seniority:   f.Seniority,
@@ -491,6 +497,7 @@ func (f Fields) InsertPrivateParams(createdBy int64) db.InsertPrivateJobParams {
 		Countries:   f.Countries,
 		Regions:     f.Regions,
 		Cities:      f.Cities,
+		Metros:      f.Metros,
 		WorkMode:    f.WorkMode,
 		Skills:      f.Skills,
 		Seniority:   f.Seniority,
