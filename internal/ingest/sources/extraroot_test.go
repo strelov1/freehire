@@ -89,6 +89,11 @@ func TestTBankUsesTheRussianTrustedRootClient(t *testing.T) {
 	}
 	tr, ok := c.httpClient.Transport.(*http.Transport)
 	if !ok || tr.TLSClientConfig == nil || tr.TLSClientConfig.RootCAs == nil {
-		t.Fatal("tbank's client carries no extra root pool; it must be NewRussianTrustedRootClient")
+		t.Fatal("tbank's client carries no extra root pool; it must be a Russian-root client")
+	}
+	// Its sitemaps are slow to serve: measured 2026-10-21, back_office_0.xml took 33 s for
+	// 188 KB, past the default 15 s.
+	if c.httpClient.Timeout < tbankTimeout {
+		t.Errorf("tbank's client timeout = %s, want at least %s", c.httpClient.Timeout, tbankTimeout)
 	}
 }

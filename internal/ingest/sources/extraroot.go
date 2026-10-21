@@ -47,6 +47,12 @@ var russianTrustedRootCA []byte
 // to a pool holding only this root: those adapters still work, and any other host this
 // client touched would fail closed rather than silently unverified. Nothing else uses it.
 func NewRussianTrustedRootClient() *Client {
+	return newRussianTrustedRootClient(15 * time.Second)
+}
+
+// newRussianTrustedRootClient is NewRussianTrustedRootClient with the buffered-fetch timeout
+// as a parameter, for a host whose responses are slow (tbank's sitemaps).
+func newRussianTrustedRootClient(timeout time.Duration) *Client {
 	pool, err := x509.SystemCertPool()
 	if err != nil {
 		log.Printf("sources: system cert pool unavailable (%v); the Russian-root client trusts only its embedded root", err)
@@ -60,7 +66,7 @@ func NewRussianTrustedRootClient() *Client {
 	}
 
 	c := NewClient()
-	c.httpClient = clientWithRoots(15*time.Second, pool)
+	c.httpClient = clientWithRoots(timeout, pool)
 	c.streamClient = clientWithRoots(streamTimeout, pool)
 	return c
 }
