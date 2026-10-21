@@ -111,7 +111,10 @@ after the employer edits the questions. Flow of `Apply`:
 3. Load the user: verified email, else `ErrUnverified`.
 4. Validate answers against the current form (pure: required, boolean, select options,
    unknown ids, note ≤ 2000).
-5. Render the chosen CV (`CVs.PDF`) — not owned is not found. Rendering before the record
+5. A cheap `State` read refuses an application already sent or in flight before anything
+   is rendered. Then render the chosen CV (`CVs.PDF`) — not owned is not found. It is the
+   same render as the CV page's own download, tracer links included when the candidate
+   turned them on: an employer opening an application is exactly what they exist to report. Rendering before the record
    adds no exposure: a signed-in user can already render their own CV at will through
    `GET /cvs/:id/pdf`.
 6. `UpsertDirectApplication` records the row and CLAIMS it (`sending_at = now()`):
@@ -138,7 +141,8 @@ startup when set but not a positive integer. It is not a `plan` feature: `intern
 meters AI actions, and an application is not one.
 
 ### 6. The read endpoint carries the prefill
-`GET /jobs/:slug/direct-apply` (cookie auth optional): company name, questions with id, type,
+`GET /jobs/:slug/direct-apply` (cookie session optional — `optionalCookie`, never an API
+key, since the response carries the caller's banked answers): company name, questions with id, type,
 options, required; and for a signed-in user, `prefill` (field id → answer) and `applied`
 (sent_at set). Prefill resolves each question's `answertopic.Of(label)` against
 `answerbank.Sendable` — the candidate's own answers only, never an agent's suggestion. A

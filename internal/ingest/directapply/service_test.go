@@ -119,9 +119,12 @@ func (e fakeEmployers) ActiveAccount(_ context.Context, userID int64) (employer.
 	return employer.Account{UserID: userID, CompanyName: "Acme", WorkEmail: "hr@acme.test"}, nil
 }
 
-type fakeCVs struct{}
+type fakeCVs struct{ renders *int }
 
-func (fakeCVs) PDF(_ context.Context, userID int64, id uuid.UUID) ([]byte, error) {
+func (f fakeCVs) PDF(_ context.Context, userID int64, id uuid.UUID) ([]byte, error) {
+	if f.renders != nil {
+		*f.renders++
+	}
 	if userID != candidateID || id != ownCV {
 		return nil, ErrNotFound
 	}
@@ -171,6 +174,7 @@ type harness struct {
 	tracker *fakeTracker
 	bank    *fakeBank
 	emp     fakeEmployers
+	renders int
 }
 
 func newHarness(t *testing.T) *harness {
@@ -178,7 +182,7 @@ func newHarness(t *testing.T) *harness {
 }
 
 func (h *harness) service() *Service {
-	return New(h.repo, h.emp, fakeCVs{}, h.mailer, h.tracker, h.bank, 30)
+	return New(h.repo, h.emp, fakeCVs{renders: &h.renders}, h.mailer, h.tracker, h.bank, 30)
 }
 
 func validApplication() Application {
@@ -303,6 +307,9 @@ func TestApply_ASentApplicationIsNotSentAgain(t *testing.T) {
 	}
 	if len(h.mailer.sent) != 1 {
 		t.Errorf("mails = %d, want the first only", len(h.mailer.sent))
+	}
+	if h.renders != 1 {
+		t.Errorf("CV renders = %d, want 1 — a refused second application must not render the PDF", h.renders)
 	}
 }
 

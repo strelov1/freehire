@@ -115,8 +115,8 @@ func TestDirectApplyEndToEnd(t *testing.T) {
 	unverifiedCookie, _ := iss.Issue(unverifiedID, testTokenVersion)
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	h.register(app.Group("/api/v1"), middleware{
-		optional: auth.OptionalCookieAuth(iss, testVersions),
-		cookie:   auth.RequireAuth(iss, testVersions),
+		optionalCookie: auth.OptionalCookieAuth(iss, testVersions),
+		cookie:         auth.RequireAuth(iss, testVersions),
 	})
 
 	do := func(t *testing.T, method, cookie, body string) (int, []byte) {
@@ -163,6 +163,20 @@ func TestDirectApplyEndToEnd(t *testing.T) {
 		}
 		if f.Prefill["q1"] != "true" {
 			t.Errorf("prefill = %v, want the banked yes for q1", f.Prefill)
+		}
+	})
+
+	t.Run("an API key carries no candidate's prefill", func(t *testing.T) {
+		r := httptest.NewRequestWithContext(ctx, fiber.MethodGet, "/api/v1/jobs/"+slug+"/direct-apply", nil)
+		r.Header.Set("Authorization", "Bearer "+candidateCookie)
+		resp, err := app.Test(r, -1)
+		if err != nil {
+			t.Fatalf("request: %v", err)
+		}
+		defer resp.Body.Close()
+		b, _ := io.ReadAll(resp.Body)
+		if resp.StatusCode != fiber.StatusOK || bytes.Contains(b, []byte(`"q1":"true"`)) {
+			t.Errorf("status = %d, body %s; want the form without the candidate's answers", resp.StatusCode, b)
 		}
 	})
 

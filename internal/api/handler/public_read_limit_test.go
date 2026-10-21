@@ -197,8 +197,10 @@ func publicReadRoutes(t *testing.T, throttler ratelimit.Throttler) (map[string]*
 		key:       passthrough,
 		moderator: passthrough,
 		cookie:    passthrough,
-		throttler: throttler,
-		public:    newPublicGate(throttler, nil, publicGateConfig{}),
+		// directApplyHandlers' form read attaches a cookie session only.
+		optionalCookie: auth.OptionalCookieAuth(iss, testVersions),
+		throttler:      throttler,
+		public:         newPublicGate(throttler, nil, publicGateConfig{}),
 	}
 
 	mount := func(register func(fiber.Router, middleware)) *fiber.App {

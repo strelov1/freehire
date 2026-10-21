@@ -24,7 +24,10 @@ type directApplyHandlers struct {
 }
 
 func (h *directApplyHandlers) register(api fiber.Router, mw middleware) {
-	api.Get("/jobs/:slug/direct-apply", publicReadLimiter(mw.public), mw.optional, h.Form)
+	// optionalCookie, not optional: the read carries the caller's answer-bank prefill (a
+	// salary, a work permit), and optional admits any API key — a narrow `cv` or embed key
+	// included — with no scope gate. The form is a browser surface, so a key loses nothing.
+	api.Get("/jobs/:slug/direct-apply", publicReadLimiter(mw.public), mw.optionalCookie, h.Form)
 	api.Post("/jobs/:slug/direct-apply", mw.cookie, h.Apply)
 }
 

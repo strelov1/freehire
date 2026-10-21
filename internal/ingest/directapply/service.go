@@ -222,6 +222,16 @@ func (s *Service) Apply(ctx context.Context, userID int64, slug string, app Appl
 	if err != nil {
 		return err
 	}
+	// A cheap read before the expensive render: a vacancy this candidate already applied
+	// to, or is applying to right now, is refused without rendering a PDF it would discard.
+	switch state, err := s.repo.State(ctx, v.ID, userID); {
+	case err != nil:
+		return err
+	case state == StateSent:
+		return ErrAlreadyApplied
+	case state == StateSending:
+		return ErrInProgress
+	}
 	pdf, err := s.cvs.PDF(ctx, userID, app.CVID)
 	if err != nil {
 		return err
