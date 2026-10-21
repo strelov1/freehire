@@ -21,7 +21,7 @@ func TestAssignMatchesCountryAndPolygon(t *testing.T) {
 		{name: "Tijuana", country: "mx", lat: 5, lon: 5, pop: 1_900_000},
 		{name: "Nowhere", country: "us", lat: 50, lon: 50, pop: 20_000},
 	}, []fua{us, mx})
-	if len(got) != 2 || got[0].fuaID != 1 || got[1].fuaID != 2 {
+	if len(got) != 3 || got[0].fuaID != 1 || got[1].fuaID != 2 || got[2].fuaID != noFUA {
 		t.Fatalf("assign = %+v", got)
 	}
 }

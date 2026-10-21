@@ -75,7 +75,10 @@ label: "<name> area".
 
 Output: `internal/dict/location/metros.tsv`, one row per place:
 `canonical city name (lowercase) · country · admin1 · metro value`.
-Places outside every FUA are omitted.
+Every place the city dictionary can read (population ≥ 15,000) is written; a place in no
+FUA carries an empty metro value. Omitting those places made rule 2 below guess: GHS-FUA
+has no FUA for some sizeable cities (Jackson MS, Gainesville FL, Wilmington NC), so a
+small namesake inside some FUA looked unique and bare "Jackson" resolved to Philadelphia.
 
 ### Derivation: `location.Parse` emits `Metros`
 
@@ -87,12 +90,15 @@ Places outside every FUA are omitted.
    (US and Canada, the only subdivisions the parser reads today).
 2. **City without a subdivision**: emit a metro only when the line states exactly one
    country AND every place in the metro table under that (name, country) resolves to the
-   same metro. "Folsom" emits Sacramento; a bare "Roseville" emits nothing. (Not the
+   same metro. "No metro" counts as a value of its own: a name shared by a place in a
+   metro and a place in none (Jackson NJ / Jackson MS) emits nothing, and a name whose
+   only value is "no metro" emits nothing. "Folsom" emits Sacramento; a bare "Roseville" emits nothing. (Not the
    cityDict `Contested` flag: it means "the name exists in more than one country", which
    the one-stated-country requirement already settles — checking it would drop correct
    answers like "Moscow, Russia".) A line that states ANY subdivision never takes this
    path: each city is looked up under every stated subdivision and emits only when
-   exactly one metro comes back.
+   every lookup that finds the place agrees on one metro — "no metro" again counting as
+   a disagreeing value. The same rule applies to an exact key repeated in the table.
 3. Nothing for an unresolved city. Never guess — the dictionary rule every facet follows.
 
 The result passes through `jobderive.Derive` exactly as `Cities` does, including the

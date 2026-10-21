@@ -28,12 +28,17 @@ type gnPlace struct {
 
 type assigned struct {
 	place gnPlace
-	fuaID int
+	fuaID int // noFUA when the place lies in no FUA
 }
+
+// noFUA marks a place that lies in no functional urban area. Such places are still
+// written: the loader needs them to see that a bare name is shared with a place in
+// no metro ("Jackson" is Jackson MS, in no FUA, as well as Jackson NJ, in one).
+const noFUA = -1
 
 // assign returns, for each place, the FUA of ITS country containing it (FUAs are
 // already split per country in the source: Tijuana MEX and Tijuana USA are two
-// features). Places in no FUA are dropped.
+// features), or noFUA. Every place is returned.
 func assign(places []gnPlace, fuas []fua) []assigned {
 	byCountry := map[string][]fua{}
 	for _, f := range fuas {
@@ -42,15 +47,17 @@ func assign(places []gnPlace, fuas []fua) []assigned {
 	var out []assigned
 	for _, p := range places {
 		x, y := project(p.lat, p.lon)
+		id := noFUA
 		for _, f := range byCountry[p.country] {
 			if x < f.minX || x > f.maxX || y < f.minY || y > f.maxY {
 				continue
 			}
 			if f.geom.contains(x, y) {
-				out = append(out, assigned{place: p, fuaID: f.id})
+				id = f.id
 				break
 			}
 		}
+		out = append(out, assigned{place: p, fuaID: id})
 	}
 	return out
 }
@@ -69,6 +76,9 @@ var qualifyStats = map[string]int{}
 func metroNames(as []assigned, pops map[int]float64, overrides map[int]string) (map[int]string, error) {
 	best := map[int]gnPlace{}
 	for _, a := range as {
+		if a.fuaID == noFUA {
+			continue
+		}
 		if b, ok := best[a.fuaID]; !ok || a.place.pop > b.pop {
 			best[a.fuaID] = a.place
 		}
