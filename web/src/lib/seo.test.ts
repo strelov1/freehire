@@ -285,6 +285,11 @@ describe('foreignContentLang', () => {
 });
 
 describe('jobPostingJsonLd', () => {
+  it('declares directApply only for a vacancy that takes applications on freehire', () => {
+    expect(jobPostingJsonLd(postingJob({ direct_apply: true, url: '' }), ORIGIN)).toMatchObject({ directApply: true });
+    expect(jobPostingJsonLd(postingJob(), ORIGIN)).not.toHaveProperty('directApply');
+  });
+
   it('states inLanguage whenever the posting language is known, English included', () => {
     const ru = jobPostingJsonLd(postingJob({ enrichment: { posting_language: 'ru' } }), ORIGIN);
     expect(ru.inLanguage).toBe('ru');

@@ -15,6 +15,7 @@ Base URL: `https://freehire.me/api/v1`
 - [External vs internal endpoints](#external-vs-internal-endpoints)
 - [What is not here](#what-is-not-here)
 - [Filtering jobs](#filtering-jobs)
+- [Jobs](#jobs)
 - [Company feedback](#company-feedback)
 - [Authentication](#authentication)
 - [Job interactions](#job-interactions)
@@ -163,6 +164,42 @@ Every facet below supports repeat-OR, `_mode=and`, and `_exclude` as described a
 - **At least $100k, with visa sponsorship** — `salary_currency=USD&salary_min=100000&visa_sponsorship=true`
 - **Excluding jobs that need a security clearance** — `requires_clearance=false`
 - **Only jobs that need a security clearance** — `requires_clearance=true`
+
+## Jobs
+
+Public, unauthenticated reads. Jobs are returned in one wire shape (addressed by `public_slug`, never an internal id) shared by the list, detail, company, and search responses. Closed postings are excluded from lists and search and served only by the detail endpoint.
+
+### `POST /jobs/{slug}/direct-apply`
+
+**Auth:** Session only
+
+Apply on freehire: the employer receives your CV and answers by email.
+
+Needs a verified email. The employer gets the chosen CV as a PDF, the answers, the note and your address as Reply-To. One application per vacancy: `409` once it was sent (or while it is being sent), `400` naming the first unanswered or invalid question, `403` unverified, `410` closed, `429` past the daily limit, `502` when delivery failed — applying again retries it.
+
+**Path parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `slug` | string | yes | The job `public_slug`. (e.g. `platform-engineer-acme-9f3c`) |
+
+**Body**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `cv_id` | string | yes | One of your CVs. (e.g. `6f1c0c3e-8a51-4c1e-9d55-6a4c1f2b0a01`) |
+| `answers` | object | no | Question id → answer; a yes/no answer is `"true"` or `"false"`, a list answer one of its options. (e.g. `{"q1":"true"}`) |
+| `note` | string | no | Up to 2000 characters to the employer. (e.g. `Happy to talk this week.`) |
+
+```bash
+curl -X POST "https://freehire.me/api/v1/jobs/platform-engineer-acme-9f3c/direct-apply" \
+  -b cookies.txt -H 'Content-Type: application/json' \
+  -d '{"cv_id":"6f1c0c3e-8a51-4c1e-9d55-6a4c1f2b0a01","answers":{"q1":"true"}}'
+```
+
+```json
+{ "data": { "sent": true } }
+```
 
 ## Company feedback
 

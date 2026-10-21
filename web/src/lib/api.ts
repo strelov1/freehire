@@ -88,6 +88,8 @@ import type {
   EmployerCompany,
   EmployerCompanyProfileInput,
   EmployerVacancyInput,
+  DirectApplyForm,
+  DirectApplication,
   EmployerVacancyPatch,
   Contribution,
   FoundJob,
@@ -592,6 +594,17 @@ export function createApi(
    *  treat a failure as "not known" rather than as an error worth surfacing. */
   async function getApplyForm(slug: string): Promise<Display> {
     return requestData<Display>(`/api/v1/jobs/${slug}/apply-form`);
+  }
+
+  /** The application form of a vacancy that takes applications on freehire, with the
+   *  caller's prefill and whether they already applied. 404 for any other posting. */
+  async function getDirectApplyForm(slug: string): Promise<DirectApplyForm> {
+    return requestData<DirectApplyForm>(`/api/v1/jobs/${encodeURIComponent(slug)}/direct-apply`);
+  }
+
+  /** Apply on freehire: the employer receives the CV and answers by email. */
+  async function sendDirectApplication(slug: string, input: DirectApplication): Promise<void> {
+    await call(`/api/v1/jobs/${encodeURIComponent(slug)}/direct-apply`, jsonBody('POST', input));
   }
 
   /** The open postings sharing this job's role cluster — the "openings across cities"
@@ -3082,6 +3095,8 @@ export function createApi(
     getJob,
     getSimilarJobs,
     getJobCopies,
+    getDirectApplyForm,
+    sendDirectApplication,
     getApplyForm,
     getJobMatch,
     getMatchAnalysis,

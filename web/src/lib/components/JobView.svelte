@@ -47,6 +47,8 @@
   import { supersedesReality } from '$lib/ghost';
   import GhostChecklist from './GhostChecklist.svelte';
   import AIInterviewBadge from './AIInterviewBadge.svelte';
+  import DirectApplyBadge from './DirectApplyBadge.svelte';
+  import DirectApplyDialog from './DirectApplyDialog.svelte';
   import RealityBadge from './RealityBadge.svelte';
   import ReferralBlock from './ReferralBlock.svelte';
   import MentorBlock from './MentorBlock.svelte';
@@ -100,6 +102,8 @@
   let showSignInPrompt = $state(false);
   // The report dialog (a problem-with-this-job complaint) opens over the page.
   let showReport = $state(false);
+  // The application form of a vacancy its employer publishes here (job.direct_apply).
+  let showDirectApply = $state(false);
   const applied = $derived(interaction?.applied_at != null);
   const saved = $derived(interaction?.saved_at != null);
 
@@ -226,6 +230,7 @@
     showApplyPrompt = false;
     justApplied = false;
     showSignInPrompt = false;
+    showDirectApply = false;
     if (!isAuthenticated()) return; // effects run client-only, so no browser guard needed
     // The Avoid control below reads the profile's excluded_sources; without this its mark
     // would be wrong on a first load until something else happened to fetch the profile.
@@ -263,6 +268,24 @@
     showSignInPrompt = false;
     // eslint-disable-next-line svelte/no-navigation-without-resolve -- onboardingUrl() wraps resolve('/onboarding'); the rule can't see through the appended ?returnTo= query
     void goto(onboardingUrl(page.url.pathname + page.url.search));
+  }
+
+  // A vacancy taking applications here has no outside page: Apply opens the form instead
+  // of a link, and the "did you apply?" prompt has nothing to ask — sending the form IS
+  // the application, and the server records it in the tracker.
+  function onDirectApplyClick() {
+    track('job_apply', { slug: job.public_slug, source: job.source });
+    if (!isAuthenticated()) {
+      showSignInPrompt = true;
+      return;
+    }
+    showDirectApply = true;
+  }
+
+  function onDirectApplied() {
+    if (interaction) interaction = { ...interaction, applied_at: interaction.applied_at ?? new Date().toISOString() };
+    justApplied = true;
+    track('job_track', { slug: job.public_slug, stage: 'applied' });
   }
 
   function viewWithoutSignIn() {
@@ -438,17 +461,24 @@
      (internal/sources/sanitize.go). Without it a submitted vacancy buys a followed
      link from every job page, which is what the SEO submissions are actually after. -->
 {#snippet applyCta(size: 'md' | 'lg', className: string, external: JobCtaPlan['external'])}
-  <Button
-    variant="outline"
-    {size}
-    href={job.url}
-    target="_blank"
-    rel="nofollow noopener noreferrer"
-    onclick={onApplyClick}
-    class={className}
-  >
-    {external.label} <ArrowRight class="size-4" />
-  </Button>
+  {#if job.direct_apply}
+    <Button variant="outline" {size} onclick={onDirectApplyClick} disabled={applied} class={className}>
+      {applied ? 'Application sent' : external.label}
+      {#if !applied}<ArrowRight class="size-4" />{/if}
+    </Button>
+  {:else}
+    <Button
+      variant="outline"
+      {size}
+      href={job.url}
+      target="_blank"
+      rel="nofollow noopener noreferrer"
+      onclick={onApplyClick}
+      class={className}
+    >
+      {external.label} <ArrowRight class="size-4" />
+    </Button>
+  {/if}
 {/snippet}
 
 <!-- The page's one primary call to action, and the only button on it carrying the brand
@@ -798,6 +828,9 @@
       <!-- How the employer screens, beside how the posting reads. Neutral by design:
            the badge names the practice and its report count, and lets the reader
            decide. -->
+      {#if job.direct_apply}
+        <DirectApplyBadge />
+      {/if}
       <AIInterviewBadge count={job.ai_interview_reports} />
 
       <!-- Freshness rides the same provenance line: like the backer and the reality
@@ -1106,14 +1139,29 @@
       <p class="text-sm text-destructive">{autoApplyError}</p>
     {/if}
 
+    {#if showDirectApply}
+      <DirectApplyDialog
+        slug={job.public_slug}
+        title={job.title}
+        onClose={() => (showDirectApply = false)}
+        onSent={onDirectApplied}
+      />
+    {/if}
+
     {#if showSignInPrompt}
       <div
         class="flex flex-wrap items-center justify-between gap-3 rounded-md border border-border bg-secondary px-4 py-3"
       >
-        <span class="text-sm">Sign in to keep track of the jobs you apply to.</span>
+        <span class="text-sm">
+          {job.direct_apply
+            ? 'Sign in to apply — your CV goes straight to the employer.'
+            : 'Sign in to keep track of the jobs you apply to.'}
+        </span>
         <div class="flex items-center gap-2">
           <Button variant="primary" size="sm" onclick={signUpFromGate}>Sign up</Button>
-          <Button variant="ghost" size="sm" onclick={viewWithoutSignIn}>View without signing in</Button>
+          {#if !job.direct_apply}
+            <Button variant="ghost" size="sm" onclick={viewWithoutSignIn}>View without signing in</Button>
+          {/if}
         </div>
       </div>
     {/if}

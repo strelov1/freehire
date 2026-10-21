@@ -21,6 +21,7 @@
   import BackerBadge from './BackerBadge.svelte';
   import { credentialBadges } from '$lib/credentials';
   import AIInterviewBadge from './AIInterviewBadge.svelte';
+  import DirectApplyBadge from './DirectApplyBadge.svelte';
   import GhostBadge from './GhostBadge.svelte';
   import RealityBadge from './RealityBadge.svelte';
   import SkillIcon from './SkillIcon.svelte';
@@ -124,7 +125,12 @@
   // rather than guessing a destination. See freehire#2755: widening Card is a separate,
   // deliberately deferred change (it touches CardInput, both call sites, and the SPA
   // contracts), so this narrows to the shape that already carries the field.
-  const applyJob = $derived('url' in job ? job : null);
+  // An empty url is a posting with nowhere outside to send the candidate — a vacancy
+  // taking applications on freehire, whose own Apply below opens its job page instead.
+  const applyJob = $derived('url' in job && job.url ? job : null);
+  // A vacancy taking applications on freehire has no outside page: its Apply opens the
+  // job page, where the form is. Only `jobview.Job` carries the flag, like `url`.
+  const directApply = $derived('direct_apply' in job && job.direct_apply === true);
   // The two freshness badges, through the card's own gate: a projection that carries no
   // reality signal earns none, because on those surfaces the posting date alone would
   // vouch for a job the signal was written to distrust. Everything else — the
@@ -340,11 +346,14 @@
   <!-- ai_interview_reports belongs in this guard on its own: a card can carry the
        label while having no reality verdict, no freshness, no tags, no countries and no
        credentials, and the row would then be suppressed with the badge inside it. -->
-  {#if reality || freshness.length > 0 || tags.length > 0 || job.countries?.length || credentials.length > 0 || job.ai_interview_reports}
+  {#if reality || freshness.length > 0 || tags.length > 0 || job.countries?.length || credentials.length > 0 || job.ai_interview_reports || directApply}
     <div class="mt-2 flex flex-wrap items-center gap-1.5">
       <!-- evergreen_posting IS the reality verdict, so showing both chips states one
            fact twice, the second time louder. The ghost chip carries it inside its
            checklist; where ghost is silent, reality renders exactly as before. -->
+      {#if directApply}
+        <DirectApplyBadge />
+      {/if}
       {#if supersedesReality(ghost, locale())}
         <GhostBadge {ghost} />
       {:else}
@@ -565,6 +574,15 @@
              `nofollow`: the destination is the poster's own site, which the catalogue never
              vetted (the same stance JobView.svelte's own Apply link takes) — without it a
              submitted vacancy buys a followed link from every card in every list. -->
+        {#if directApply}
+          <Button
+            variant="outline"
+            href={resolve('/jobs/[slug]', { slug: job.public_slug })}
+            class="h-9 shrink-0 bg-transparent opacity-0 focus-visible:opacity-100 group-hover:opacity-100 pointer-coarse:opacity-100"
+          >
+            Apply
+          </Button>
+        {/if}
         {#if applyJob}
           <Button
             variant="outline"

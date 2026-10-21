@@ -421,6 +421,54 @@ export const GROUPS: Group[] = [
   }
 }`,
       },
+      {
+        method: 'GET',
+        path: '/jobs/{slug}/direct-apply',
+        auth: 'none',
+        summary: 'The application form of a vacancy that takes applications on freehire.',
+        description:
+          'Only for a posting whose `direct_apply` is true — its employer published it here ' +
+          'and receives applications by email. Any other posting is a `404`. Signed in with the ' +
+          'browser session, the response also carries `applied` and a `prefill` of your earlier ' +
+          'answers to the same questions; an API key never sees those. `open` is false once the ' +
+          'vacancy closed. `501` when this deployment cannot deliver applications.',
+        pathParams: [{ name: 'slug', type: 'string', required: true, description: 'The job `public_slug`.', example: 'platform-engineer-acme-9f3c' }],
+        curl: `curl "${BASE_URL}/jobs/platform-engineer-acme-9f3c/direct-apply"`,
+        responseExample: `{
+  "data": {
+    "company_name": "Acme",
+    "questions": [
+      { "id": "q1", "label": "Do you hold an EU work permit?", "type": "boolean", "required": true },
+      { "id": "q2", "label": "Preferred stack", "type": "select", "required": false, "options": ["Go", "Rust"] }
+    ],
+    "open": true,
+    "applied": false,
+    "prefill": {}
+  }
+}`,
+      },
+      {
+        method: 'POST',
+        path: '/jobs/{slug}/direct-apply',
+        auth: 'cookie',
+        summary: 'Apply on freehire: the employer receives your CV and answers by email.',
+        description:
+          'Needs a verified email. The employer gets the chosen CV as a PDF, the answers, the ' +
+          'note and your address as Reply-To. One application per vacancy: `409` once it was ' +
+          'sent (or while it is being sent), `400` naming the first unanswered or invalid ' +
+          'question, `403` unverified, `410` closed, `429` past the daily limit, `502` when ' +
+          'delivery failed — applying again retries it.',
+        pathParams: [{ name: 'slug', type: 'string', required: true, description: 'The job `public_slug`.', example: 'platform-engineer-acme-9f3c' }],
+        body: [
+          { name: 'cv_id', type: 'string', required: true, description: 'One of your CVs.', example: '6f1c0c3e-8a51-4c1e-9d55-6a4c1f2b0a01' },
+          { name: 'answers', type: 'object', required: false, description: 'Question id → answer; a yes/no answer is `"true"` or `"false"`, a list answer one of its options.', example: '{"q1":"true"}' },
+          { name: 'note', type: 'string', required: false, description: 'Up to 2000 characters to the employer.', example: 'Happy to talk this week.' },
+        ],
+        curl: `curl -X POST "${BASE_URL}/jobs/platform-engineer-acme-9f3c/direct-apply" \\
+  -b cookies.txt -H 'Content-Type: application/json' \\
+  -d '{"cv_id":"6f1c0c3e-8a51-4c1e-9d55-6a4c1f2b0a01","answers":{"q1":"true"}}'`,
+        responseExample: `{ "data": { "sent": true } }`,
+      },
     ],
   },
   {

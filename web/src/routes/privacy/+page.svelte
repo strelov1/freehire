@@ -13,7 +13,7 @@
 
   // Static effective date — freehire has no Date.now-driven content, and a hard
   // date is what a privacy policy needs. Bump this whenever the policy changes.
-  const lastUpdated = 'October 20, 2026';
+  const lastUpdated = 'October 21, 2026';
 </script>
 
 <Seo
@@ -113,6 +113,19 @@
         The jobs we display are aggregated from public company career boards and other public
         sources. We normalise and deduplicate them; we do not own this content, and a role closes in
         our catalogue once it disappears from its original source.
+      </p>
+    </section>
+
+    <section class="flex flex-col gap-3">
+      <h2 class="text-xl font-semibold tracking-tight">Applying on freehire</h2>
+      <p class="text-sm leading-relaxed text-muted-foreground">
+        Some vacancies are published by their employer directly on freehire and take applications
+        here. When you apply to one, we email that employer the CV you chose, your answers to their
+        questions, your note and your email address, so they can reply to you. Nothing reaches an
+        employer until you press Send, and only the employer of that vacancy receives it. We keep a
+        record of the application so you cannot send it twice and so it shows in your tracking; we
+        also remember your answers to prefill your next application, and delete them on request
+        (see Your rights below).
       </p>
     </section>
 

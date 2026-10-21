@@ -464,6 +464,39 @@ curl "https://freehire.me/api/v1/jobs/senior-go-engineer-acme-1a2b/apply-form"
 }
 ```
 
+### `GET /jobs/{slug}/direct-apply`
+
+**Auth:** Public
+
+The application form of a vacancy that takes applications on freehire.
+
+Only for a posting whose `direct_apply` is true — its employer published it here and receives applications by email. Any other posting is a `404`. Signed in with the browser session, the response also carries `applied` and a `prefill` of your earlier answers to the same questions; an API key never sees those. `open` is false once the vacancy closed. `501` when this deployment cannot deliver applications.
+
+**Path parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `slug` | string | yes | The job `public_slug`. (e.g. `platform-engineer-acme-9f3c`) |
+
+```bash
+curl "https://freehire.me/api/v1/jobs/platform-engineer-acme-9f3c/direct-apply"
+```
+
+```json
+{
+  "data": {
+    "company_name": "Acme",
+    "questions": [
+      { "id": "q1", "label": "Do you hold an EU work permit?", "type": "boolean", "required": true },
+      { "id": "q2", "label": "Preferred stack", "type": "select", "required": false, "options": ["Go", "Rust"] }
+    ],
+    "open": true,
+    "applied": false,
+    "prefill": {}
+  }
+}
+```
+
 ## AI analysis
 
 Personalized signals computed against the caller’s profile or stored CV. All accept the session cookie or an API key. The skill-match endpoint is deterministic (no LLM); the match-analysis endpoints run the LLM chain and draw on your daily allowance. All take the same facet filter params as search where they narrow a market or candidate set.

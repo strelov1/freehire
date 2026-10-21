@@ -389,6 +389,11 @@ export function jobPostingJsonLd(job: Job, origin: string): Record<string, unkno
     };
   }
 
+  // Google's own question: can a candidate apply without leaving this page? True only
+  // for a vacancy its employer publishes here and takes applications for here; every
+  // other posting sends the candidate to the employer's site, so it says nothing.
+  if (job.direct_apply) ld.directApply = true;
+
   const empType = e.employment_type ? EMPLOYMENT_TYPE[e.employment_type] : undefined;
   if (empType) ld.employmentType = empType;
 

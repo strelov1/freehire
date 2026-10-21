@@ -37,8 +37,16 @@ describe('JobRow direct-apply button', () => {
   });
 
   it('is gated on a job that actually carries an outbound url', () => {
-    expect(ROW).toContain("const applyJob = $derived('url' in job ? job : null);");
+    // A non-empty one: a vacancy taking applications on freehire carries `url: ""`.
+    expect(ROW).toContain("const applyJob = $derived('url' in job && job.url ? job : null);");
     expect(applyBlock).not.toBe('');
+  });
+
+  it('sends a vacancy taking applications on freehire to its own page, not outside', () => {
+    const i = actionRow.indexOf('{#if directApply}');
+    const block = i === -1 ? '' : actionRow.slice(i, actionRow.indexOf('{/if}', i));
+    expect(block).toContain("href={resolve('/jobs/[slug]', { slug: job.public_slug })}");
+    expect(block).not.toContain('target="_blank"');
   });
 
   it('never renders on the compact card', () => {

@@ -12,6 +12,10 @@
   ],
   "tags": [
     {
+      "name": "Jobs",
+      "description": "Public, unauthenticated reads. Jobs are returned in one wire shape (addressed by `public_slug`, never an internal id) shared by the list, detail, company, and search responses. Closed postings are excluded from lists and search and served only by the detail endpoint."
+    },
+    {
       "name": "Company feedback",
       "description": "Signed-in users leave a 1–5 star rating plus category and text about a company, shown under their site-wide pseudonymous persona (never a user id). Reads are public; writes are cookie-only. A reader can report a specific review, and a moderator can hide it."
     },
@@ -101,6 +105,76 @@
     }
   ],
   "paths": {
+    "/jobs/{slug}/direct-apply": {
+      "post": {
+        "operationId": "post_jobs_slug_direct_apply",
+        "summary": "Apply on freehire: the employer receives your CV and answers by email.",
+        "description": "Needs a verified email. The employer gets the chosen CV as a PDF, the answers, the note and your address as Reply-To. One application per vacancy: `409` once it was sent (or while it is being sent), `400` naming the first unanswered or invalid question, `403` unverified, `410` closed, `429` past the daily limit, `502` when delivery failed — applying again retries it.",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "description": "The job `public_slug`.",
+            "schema": {
+              "type": "string"
+            },
+            "example": "platform-engineer-acme-9f3c"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "cv_id": {
+                    "type": "string",
+                    "description": "One of your CVs.",
+                    "example": "6f1c0c3e-8a51-4c1e-9d55-6a4c1f2b0a01"
+                  },
+                  "answers": {
+                    "type": "object",
+                    "description": "Question id → answer; a yes/no answer is `\"true\"` or `\"false\"`, a list answer one of its options.",
+                    "example": "{\"q1\":\"true\"}"
+                  },
+                  "note": {
+                    "type": "string",
+                    "description": "Up to 2000 characters to the employer.",
+                    "example": "Happy to talk this week."
+                  }
+                },
+                "required": [
+                  "cv_id"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "{ \"data\": { \"sent\": true } }"
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "tags": [
+          "Jobs"
+        ]
+      }
+    },
     "/companies/{slug}/feedback/mine": {
       "get": {
         "operationId": "get_companies_slug_feedback_mine",

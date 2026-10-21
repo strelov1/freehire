@@ -7,9 +7,17 @@
   import { locale } from '$lib/i18n/currentLocale.svelte';
   import { format, t } from '$lib/i18n/t';
   import { messages } from './EmployerView.messages';
-  import type { EmployerCompany, EmployerCompanyProfileInput, EmployerVacancyInput, Job } from '$lib/types';
+  import type {
+    EmployerApplyMode,
+    EmployerCompany,
+    EmployerCompanyProfileInput,
+    EmployerQuestion,
+    EmployerVacancyInput,
+    Job,
+  } from '$lib/types';
   import { Button, Input, cn } from '$lib/ui';
   import States from './States.svelte';
+  import EmployerQuestionsEditor from './EmployerQuestionsEditor.svelte';
   import TokenInput from './facets/TokenInput.svelte';
 
   let { company, onProfileSaved }: { company: EmployerCompany; onProfileSaved: (updated: EmployerCompany) => void } =
@@ -76,6 +84,10 @@
   // the same shape SubmitView uses for its own single form.
   let formOpen = $state(false);
   let editingSlug = $state<string | null>(null);
+  // On freehire by default: it is what an employer cannot get from their own careers page.
+  let applyMode = $state<EmployerApplyMode>('freehire');
+  let questions = $state<EmployerQuestion[]>([]);
+  let questionsLoaded = $state(true);
   let url = $state('');
   let title = $state('');
   let location = $state('');
@@ -87,8 +99,16 @@
   let saving = $state(false);
   let formError = $state<string | null>(null);
 
+  // A url is the identity of a linked vacancy only, and only when creating one: an edit
+  // never sends it, and a vacancy taking applications on freehire has none to send.
+  const needsUrl = $derived(!editingSlug && applyMode === 'external');
+  const canSubmit = $derived(!!title.trim() && (!needsUrl || !!url.trim()) && questionsLoaded);
+
   function resetForm() {
     editingSlug = null;
+    applyMode = 'freehire';
+    questions = [];
+    questionsLoaded = true;
     url = title = location = workMode = employmentType = seniority = descriptionMd = '';
     skills = [];
     formError = null;
@@ -101,6 +121,8 @@
 
   function openEdit(job: Job) {
     editingSlug = job.public_slug;
+    applyMode = job.direct_apply ? 'freehire' : 'external';
+    questions = [];
     url = job.url;
     title = job.title;
     location = job.location;
@@ -111,6 +133,22 @@
     skills = job.skills;
     formError = null;
     formOpen = true;
+    if (job.direct_apply) void loadQuestions(job.public_slug);
+  }
+
+  // The questions are read back through the same form read candidates use, so the editor
+  // starts from exactly what is published. Saving is held until they arrive: a PATCH
+  // carrying the empty list would erase them.
+  async function loadQuestions(slug: string) {
+    questionsLoaded = false;
+    try {
+      const form = await api.getDirectApplyForm(slug);
+      if (editingSlug !== slug) return;
+      questions = form.questions.map(({ label, type, required, options }) => ({ label, type, required, options }));
+      questionsLoaded = true;
+    } catch {
+      if (editingSlug === slug) formError = s.questionsLoadError;
+    }
   }
 
   function addSkill(value: string) {
@@ -127,12 +165,13 @@
 
   async function submitForm(e: SubmitEvent) {
     e.preventDefault();
-    if (saving || !url.trim() || !title.trim()) return;
+    if (saving || !canSubmit) return;
     saving = true;
     formError = null;
     try {
       if (editingSlug) {
         const updated = await api.updateEmployerVacancy(editingSlug, {
+          questions: applyMode === 'freehire' ? questions : undefined,
           title: title.trim(),
           location: location.trim() || undefined,
           remote: workMode === 'remote',
@@ -141,7 +180,9 @@
         replaceInList(updated);
       } else {
         const input: EmployerVacancyInput = {
-          url: url.trim(),
+          apply_mode: applyMode,
+          questions: applyMode === 'freehire' ? questions : undefined,
+          url: applyMode === 'external' ? url.trim() : undefined,
           title: title.trim(),
           location: location.trim() || undefined,
           remote: workMode === 'remote',
@@ -288,11 +329,25 @@
         <form onsubmit={submitForm} class="flex flex-col gap-4 rounded-lg border border-border p-4">
           <h2 class="text-sm font-semibold">{editingSlug ? s.formTitleEdit : s.formTitleNew}</h2>
           {#if !editingSlug}
-            <label class="flex flex-col gap-1">
-              <span class="text-sm font-medium">{s.fieldUrl}</span>
-              <Input bind:value={url} type="url" placeholder="https://…" class="w-full" />
-              <span class="text-xs text-muted-foreground">{s.fieldUrlHint}</span>
-            </label>
+            <fieldset class="flex flex-col gap-2">
+              <legend class="text-sm font-medium">{s.applyModeLabel}</legend>
+              {#each [['freehire', s.applyModeFreehire, s.applyModeFreehireHint], ['external', s.applyModeExternal, s.applyModeExternalHint]] as [mode, label, hint] (mode)}
+                <label class="flex items-start gap-2 text-sm">
+                  <input type="radio" name="apply-mode" value={mode} bind:group={applyMode} class="mt-1 accent-current" />
+                  <span class="flex flex-col">
+                    <span class="font-medium">{label}</span>
+                    <span class="text-xs text-muted-foreground">{hint}</span>
+                  </span>
+                </label>
+              {/each}
+            </fieldset>
+            {#if applyMode === 'external'}
+              <label class="flex flex-col gap-1">
+                <span class="text-sm font-medium">{s.fieldUrl}</span>
+                <Input bind:value={url} type="url" placeholder="https://…" class="w-full" />
+                <span class="text-xs text-muted-foreground">{s.fieldUrlHint}</span>
+              </label>
+            {/if}
           {/if}
           <div class="flex flex-col gap-4 sm:flex-row">
             <label class="flex flex-1 flex-col gap-1">
@@ -352,11 +407,14 @@
               <TokenInput tokens={skills} onAdd={addSkill} onRemove={removeSkill} />
             </label>
           {/if}
+          {#if applyMode === 'freehire' && questionsLoaded}
+            <EmployerQuestionsEditor bind:questions />
+          {/if}
           {#if formError}
             <p class="text-sm text-destructive">{formError}</p>
           {/if}
           <div class="flex gap-2">
-            <Button type="submit" disabled={saving || !url.trim() || !title.trim()}>
+            <Button type="submit" disabled={saving || !canSubmit}>
               {#if editingSlug}
                 {saving ? s.savingChanges : s.saveChanges}
               {:else}
@@ -383,6 +441,11 @@
               <div class="flex min-w-0 flex-col gap-0.5">
                 <span class="flex items-center gap-2 truncate text-sm font-medium">
                   {job.title}
+                  {#if job.direct_apply}
+                    <span class="rounded-full bg-brand-muted px-2 py-0.5 text-xs font-medium text-brand-strong">
+                      {s.onSiteLabel}
+                    </span>
+                  {/if}
                   {#if job.closed_at}
                     <span class="rounded-full bg-secondary px-2 py-0.5 text-xs font-medium text-secondary-foreground">
                       {s.closedLabel}

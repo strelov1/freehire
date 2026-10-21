@@ -30,18 +30,18 @@
 
 - [x] 5.1 `GET /jobs/:slug/direct-apply`: company, questions, and for a signed-in user `prefill` (answer bank by topic) and `applied`; handler integration test
 - [x] 5.2 `POST /jobs/:slug/direct-apply`: error mapping (400 naming the question, 403 unverified, 404, 409 sent or in flight, 429, 502 with no provider detail); handler integration test
-- [ ] 5.3 API docs: both endpoints in `web/src/lib/docs/api-spec.ts` (regenerate `docs/API*.md` and the OpenAPI references); `direct_apply` on the job in `web/static/openapi.yaml` (that file excludes signed-in routes by design, so only the field)
+- [x] 5.3 API docs: both endpoints in `web/src/lib/docs/api-spec.ts` (regenerate `docs/API*.md` and the OpenAPI references); `direct_apply` on the job in `web/static/openapi.yaml` (that file excludes signed-in routes by design, so only the field)
 
 ## 6. Web
 
-- [ ] 6.1 Types and API client for `direct_apply`, `apply_mode`, questions, the direct-apply endpoints
-- [ ] 6.2 `EmployerDashboard.svelte`: apply-mode choice (URL field only for external, and the url check only on create of an external vacancy — today an edit of a url-less vacancy cannot be saved) and the question editor; submit disabled while in flight
-- [ ] 6.3 `DirectApplyForm.svelte`: CV picker, typed answers with prefill, note, the "sent to <company>" consent line, error states; `JobView` opens it for `direct_apply` (no external link, no "did you apply?" prompt, no sign-in gate opening a blank tab) and shows "Application sent" when applied
-- [ ] 6.4 "Only on freehire" badge on the job page and job cards; `JobRow`'s Apply shortcut links to the job page for `direct_apply`
-- [ ] 6.5 `jobPostingJsonLd`: `directApply: true` only for `job.direct_apply`; unit test for both cases
-- [ ] 6.6 Privacy page paragraph on CVs reaching an employer only when the candidate sends them
+- [x] 6.1 Types and API client for `direct_apply`, `apply_mode`, questions, the direct-apply endpoints
+- [x] 6.2 `EmployerDashboard.svelte`: apply-mode choice (URL field only for external, and the url check only on create of an external vacancy — today an edit of a url-less vacancy cannot be saved) and the question editor; submit disabled while in flight
+- [x] 6.3 `DirectApplyForm.svelte`: CV picker, typed answers with prefill, note, the "sent to <company>" consent line, error states; `JobView` opens it for `direct_apply` (no external link, no "did you apply?" prompt, no sign-in gate opening a blank tab) and shows "Application sent" when applied
+- [x] 6.4 "Only on freehire" badge on the job page and job cards; `JobRow`'s Apply shortcut links to the job page for `direct_apply`
+- [x] 6.5 `jobPostingJsonLd`: `directApply: true` only for `job.direct_apply`; unit test for both cases
+- [x] 6.6 Privacy page paragraph on CVs reaching an employer only when the candidate sends them
 
 ## 7. Verify
 
-- [ ] 7.1 `gofmt -l .`, `go vet ./...`, `go vet -tags=integration ./...`, `go test ./...`, the tagged suites for touched packages, `pnpm check` in `web/`
-- [ ] 7.2 Run the app locally: publish a `freehire` vacancy, apply as another user, see the email payload (log transport) and the tracking entry
+- [x] 7.1 `gofmt -l .`, `go vet ./...`, `go vet -tags=integration ./...`, `go test ./...`, the tagged suites for touched packages, `pnpm check` in `web/`
+- [ ] 7.2 Live check after deploy (a local run cannot deliver: it needs SES and Typst, and the server answers 501 without them): publish a `freehire` vacancy from a test employer account, apply as another user, confirm the email arrives with the CV and Reply-To, the tracking entry, the badge, and `directApply` in the page's JSON-LD. The flow itself is covered by `TestDirectApplyEndToEnd` with a fake mailer
