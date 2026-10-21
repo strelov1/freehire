@@ -43,6 +43,19 @@ func pacedHTMLGetter(c HTMLGetter, interval time.Duration, burst int) HTMLGetter
 	}
 }
 
+// rateLimitedTextGetter is the raw-body counterpart of rateLimitedHTMLGetter.
+type rateLimitedTextGetter struct {
+	inner   TextGetter
+	limiter waiter
+}
+
+func (g rateLimitedTextGetter) GetText(ctx context.Context, url string) (string, error) {
+	if err := g.limiter.Wait(ctx); err != nil {
+		return "", err
+	}
+	return g.inner.GetText(ctx, url)
+}
+
 // careers-page.com rate-limits by a per-IP request budget per time window, so a full run must
 // hold its aggregate request rate under it (proxy egress and a narrow worker pool cap the
 // burst, not the total-per-window — see the careerspage-request-pacer change). The interval is

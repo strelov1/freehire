@@ -12,6 +12,8 @@ import (
 	"time"
 	_ "time/tzdata" // wuzzuf dates are Cairo wall time, and Egypt observes DST
 
+	"golang.org/x/time/rate"
+
 	"github.com/strelov1/freehire/internal/dict/location"
 	"github.com/strelov1/freehire/internal/dict/skilltag"
 )
@@ -60,6 +62,15 @@ var (
 	// saudi/jobs/p/<slug>.
 	wuzzufURIRE = regexp.MustCompile(`^(?:[a-z]+/)+[a-z0-9]+(?:-[a-z0-9]+)*$`)
 )
+
+// wuzzufPageInterval paces the search pages. On 2026-10-21 nine pages ~6 s apart were served
+// and the tenth answered 429; at one per 12 s a run of ~30 pages takes ~6 minutes.
+const wuzzufPageInterval = 12 * time.Second
+
+// pacedWuzzufSite paces the search-page requests of one run.
+func pacedWuzzufSite(c TextGetter) TextGetter {
+	return rateLimitedTextGetter{inner: c, limiter: rate.NewLimiter(rate.Every(wuzzufPageInterval), 1)}
+}
 
 // wuzzufCairo is the zone the API's zone-less posting dates are written in.
 var wuzzufCairo = mustLoadLocation("Africa/Cairo")

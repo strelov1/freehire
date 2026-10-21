@@ -98,9 +98,9 @@ var scraplingProviders = map[string]scraplingProvider{
 	}},
 	// Cloudflare's "Just a moment..." challenge on the site and, since 2026-10-20, on
 	// api.wuzzuf.net too, to every plain request direct or proxied. The browser from the crawl
-	// host's own IP solves it; over the proxy it timed out.
+	// host's own IP solves it; over the proxy it timed out. Paced: see wuzzufPageInterval.
 	"wuzzuf": {scraplingRoute{scraplingfetch.ModeBrowser, false}, func(f *Client) Source {
-		return NewWuzzuf(f)
+		return NewWuzzuf(pacedWuzzufSite(f))
 	}},
 }
 

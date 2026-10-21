@@ -110,6 +110,23 @@ func TestWellfoundStaysConcurrencyLimited(t *testing.T) {
 	}
 }
 
+// wuzzuf's search pages answer 429 after about ten in a minute, so they stay paced through
+// this tier.
+func TestWuzzufStaysPaced(t *testing.T) {
+	scraplingEnv(t)
+	registry := map[string]Source{"wuzzuf": NewWuzzuf(nil)}
+	if err := ApplyScraplingEgress(registry); err != nil {
+		t.Fatal(err)
+	}
+	w, ok := registry["wuzzuf"].(wuzzuf)
+	if !ok {
+		t.Fatalf("wuzzuf rebuilt as %T", registry["wuzzuf"])
+	}
+	if _, paced := w.http.(rateLimitedTextGetter); !paced {
+		t.Error("wuzzuf over the Scrapling tier is not paced")
+	}
+}
+
 // hh hydrates details through the tier and keeps listing on a plain direct client, never the
 // shared proxied one — its listing was never blocked.
 func TestHHListingStaysOnAPlainClient(t *testing.T) {

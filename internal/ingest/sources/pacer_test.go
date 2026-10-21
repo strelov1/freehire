@@ -290,3 +290,28 @@ func TestPacedClinchGetter_PropagatesChallengeError(t *testing.T) {
 		t.Fatalf("GetHTML error = %v, want the inner *ChallengeError to propagate unchanged", err)
 	}
 }
+
+type recordingTextGetter struct{ urls []string }
+
+func (g *recordingTextGetter) GetText(_ context.Context, url string) (string, error) {
+	g.urls = append(g.urls, url)
+	return "body", nil
+}
+
+func TestRateLimitedTextGetter_GatesThenDelegates(t *testing.T) {
+	waiter := &recordingWaiter{}
+	inner := &recordingTextGetter{}
+	got, err := rateLimitedTextGetter{inner: inner, limiter: waiter}.GetText(context.Background(), "https://example.test/")
+	if err != nil || got != "body" || waiter.calls != 1 || len(inner.urls) != 1 {
+		t.Fatalf("GetText = %q, %v; waits %d, fetches %d", got, err, waiter.calls, len(inner.urls))
+	}
+}
+
+func TestRateLimitedTextGetter_WaitErrorShortCircuits(t *testing.T) {
+	sentinel := errors.New("rate wait cancelled")
+	inner := &recordingTextGetter{}
+	_, err := rateLimitedTextGetter{inner: inner, limiter: &recordingWaiter{err: sentinel}}.GetText(context.Background(), "https://example.test/")
+	if !errors.Is(err, sentinel) || len(inner.urls) != 0 {
+		t.Fatalf("err = %v, fetches %d", err, len(inner.urls))
+	}
+}
