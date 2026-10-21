@@ -4,7 +4,7 @@
   import { goto } from '$app/navigation';
   import { resolve } from '$app/paths';
   import { Heart, RotateCcw, SlidersHorizontal, X } from '@lucide/svelte';
-  import { api } from '$lib/api';
+  import { ApiError, api } from '$lib/api';
   import { isAuthenticated } from '$lib/auth.svelte';
   import { cardTags, formatSalary } from '$lib/enrichment';
   import { FilterStore, filtersToParams } from '$lib/filters';
@@ -150,7 +150,15 @@
     const myGen = gen;
 
     const send = kind === 'save' ? api.saveJob(job.public_slug) : api.dismissJob(job.public_slug);
-    send.catch(() => {
+    send.catch((err) => {
+      // A 404 means the job is gone: the source renamed it and the slug was
+      // re-minted, so this card can never be judged. Restoring it would trap
+      // the user on a card they can never get past, so it stays dropped - and
+      // `last` is cleared, because undo must not bring a gone job back either.
+      if (err instanceof ApiError && err.status === 404) {
+        if (last?.job.public_slug === job.public_slug) last = null;
+        return;
+      }
       // Restore the card only if it hasn't since been undone (undo() clears `last`)
       // or superseded by a later judge() — re-queuing unconditionally would put back
       // a card the user already restored, leaving a permanent duplicate in the deck.
