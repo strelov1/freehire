@@ -2338,6 +2338,10 @@ type Querier interface {
 	// language stamp is checked against the VACANCY, not the caller's profile, unlike
 	// GetUserJobAnalysis.
 	GetCoverLetter(ctx context.Context, arg GetCoverLetterParams) (GetCoverLetterRow, error)
+	// One candidate's application to one vacancy, if any — whether it reached the employer is
+	// sent_at. Read by the apply form ("already applied") and by Apply to tell a sent
+	// application from a reached cap after UpsertDirectApplication returned nothing.
+	GetDirectApplication(ctx context.Context, arg GetDirectApplicationParams) (GetDirectApplicationRow, error)
 	// One account's binding, for the integrations surface and for the unlink path. No rows means
 	// not linked, which every caller reports as a state rather than as an error.
 	GetDiscordLink(ctx context.Context, userID int64) (DiscordLink, error)
@@ -4851,6 +4855,8 @@ type Querier interface {
 	// within the same local calendar day. Only called after a successful `daily`-mode
 	// delivery — `instant`-mode subscriptions never touch this column.
 	MarkDigestSent(ctx context.Context, id int64) error
+	// Stamps an application delivered. Only ever after the email succeeded.
+	MarkDirectApplicationSent(ctx context.Context, id int64) error
 	// Stamp read on first open; a no-op once already read.
 	MarkEmailRead(ctx context.Context, arg MarkEmailReadParams) error
 	// Write one company's whole fuzzy verdict in a single statement rather than a round trip per
@@ -7220,6 +7226,17 @@ type Querier interface {
 	// re-ages itself on every redraft would silently break any future rule that did — the same
 	// trap the fit-analysis quota documents on its own upsert.
 	UpsertCoverLetter(ctx context.Context, arg UpsertCoverLetterParams) error
+	// Records a candidate's application to an on-site vacancy, or replaces the content of one
+	// they recorded earlier that never reached the employer (sent_at NULL) — the retry after a
+	// failed delivery. See migration 0186.
+	//
+	// Returns no row in exactly two cases, which GetDirectApplication tells apart afterwards:
+	// the application was already SENT (the conflict's WHERE refuses to touch it), or the
+	// candidate has reached today's cap. The cap counts applications created since midnight UTC
+	// on OTHER vacancies, and a retry on this one always passes, so a failed delivery never
+	// costs a second slot. Two concurrent first applications can both pass the count and land
+	// one over the cap; the cap bounds abuse, it is not a quota anyone is billed against.
+	UpsertDirectApplication(ctx context.Context, arg UpsertDirectApplicationParams) (int64, error)
 	// Store a Gmail message, idempotent by (user_id, source, external_id) with
 	// source fixed to 'gmail'; the hosted path has its own insert (InsertHostedMessage).
 	UpsertEmail(ctx context.Context, arg UpsertEmailParams) error

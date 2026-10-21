@@ -439,6 +439,55 @@ func TestEmployerEndToEnd(t *testing.T) {
 		}
 	})
 
+	t.Run("employer A publishes a vacancy taking applications on freehire", func(t *testing.T) {
+		resp := do(t, req(fiber.MethodPost, "/api/v1/employer/jobs", userACookie,
+			`{"apply_mode":"freehire","title":"Platform Engineer","questions":[`+
+				`{"label":"EU work permit?","type":"boolean","required":true},`+
+				`{"label":"Stack","type":"select","options":["Go","Rust"]}]}`))
+		defer resp.Body.Close()
+		if resp.StatusCode != fiber.StatusCreated {
+			b, _ := io.ReadAll(resp.Body)
+			t.Fatalf("status = %d, want 201 (body %s)", resp.StatusCode, b)
+		}
+		var view struct {
+			PublicSlug  string `json:"public_slug"`
+			URL         string `json:"url"`
+			DirectApply bool   `json:"direct_apply"`
+		}
+		decodeData(t, resp, &view)
+		if !view.DirectApply || view.URL != "" {
+			t.Fatalf("view = %+v, want direct_apply with no url", view)
+		}
+
+		resp = do(t, req(fiber.MethodPatch, "/api/v1/employer/jobs/"+view.PublicSlug, userACookie,
+			`{"questions":[{"label":"Notice period?","type":"text"}]}`))
+		defer resp.Body.Close()
+		if resp.StatusCode != fiber.StatusOK {
+			b, _ := io.ReadAll(resp.Body)
+			t.Fatalf("question edit status = %d, want 200 (body %s)", resp.StatusCode, b)
+		}
+		var label string
+		if err := pool.QueryRow(ctx, `SELECT f.payload->'fields'->0->>'label' FROM apply_forms f JOIN jobs j ON j.id = f.job_id WHERE j.public_slug = $1`,
+			view.PublicSlug).Scan(&label); err != nil {
+			t.Fatalf("read form: %v", err)
+		}
+		if label != "Notice period?" {
+			t.Errorf("stored first question = %q, want the edit", label)
+		}
+
+		resp = do(t, req(fiber.MethodPatch, "/api/v1/employer/jobs/"+view.PublicSlug, userACookie, `{"apply_mode":"external"}`))
+		defer resp.Body.Close()
+		if resp.StatusCode != fiber.StatusBadRequest {
+			t.Errorf("mode change status = %d, want 400", resp.StatusCode)
+		}
+		resp = do(t, req(fiber.MethodPost, "/api/v1/employer/jobs", userACookie,
+			`{"apply_mode":"freehire","title":"T","questions":[{"label":"Q","type":"select","options":["only"]}]}`))
+		defer resp.Body.Close()
+		if resp.StatusCode != fiber.StatusBadRequest {
+			t.Errorf("malformed question status = %d, want 400", resp.StatusCode)
+		}
+	})
+
 	t.Run("moderator cannot revoke (403); admin can", func(t *testing.T) {
 		resp := do(t, req(fiber.MethodPost, "/api/v1/employer/claims/"+itoa(userAID)+"/revoke", modCookie, ""))
 		defer resp.Body.Close()

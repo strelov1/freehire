@@ -8,18 +8,18 @@
 ## 2. Employer questions
 
 - [x] 2.1 `applyform.FreehireForm` (0–10 questions; label ≤ 300, type text/boolean/select, required; select 2–20 distinct non-empty options) with server-minted ids `q1…qN`; unit tests
-- [ ] 2.2 `employer.VacancyInput.ApplyMode` + `Questions`: `freehire` mints `freehire:<uuid>` with no URL (skipping the `Owner(url)` race guard) and writes the `apply_forms` row (provider `freehire`); `external` refuses questions and still requires a URL; integration tests
-- [ ] 2.3 Editing questions on an own vacancy (`VacancyPatch.Questions`), refusing a mode change and another employer's vacancy; integration tests
-- [ ] 2.4 HTTP: `employerVacancyRequest` carries `apply_mode` and `questions`; handler integration tests
+- [x] 2.2 `employer.VacancyInput.ApplyMode` + `Questions`: `freehire` mints `freehire:<uuid>` with no URL (skipping the `Owner(url)` race guard) and writes the `apply_forms` row (provider `freehire`); `external` refuses questions and still requires a URL; integration tests
+- [x] 2.3 Editing questions on an own vacancy (`VacancyPatch.Questions`), refusing a mode change and another employer's vacancy; integration tests
+- [x] 2.4 HTTP: `employerVacancyRequest` carries `apply_mode` and `questions`; handler integration tests
 
 ## 3. The application
 
-- [ ] 3.1 Migration `direct_applications` (squawk clean) + queries `UpsertDirectApplication` (with the daily-cap CTE and the sent-guard), `MarkDirectApplicationSent`, `GetDirectApplication`; `make sqlc`
-- [ ] 3.2 `DIRECT_APPLY_DAILY_LIMIT` in `internal/platform/config` (default 30, strict); unit tests
-- [ ] 3.3 `directapply.ValidateAnswers` (required, boolean, select option, unknown id, note ≤ 2000); unit tests
+- [x] 3.1 Migration `direct_applications` (squawk clean) + queries `UpsertDirectApplication` (with the daily-cap CTE and the sent-guard), `MarkDirectApplicationSent`, `GetDirectApplication`; `make sqlc`
+- [x] 3.2 `DIRECT_APPLY_DAILY_LIMIT` in `internal/platform/config` (default 30, strict); unit tests
+- [x] 3.3 `directapply.ValidateAnswers` (required, boolean, select option, unknown id, note ≤ 2000); unit tests
 - [ ] 3.4 `directapply.Service.Apply`: the flow in design §4 behind `Mailer`, CV renderer and repository ports; unit tests with fakes for every refusal, the failed-send-stays-unsent case, the retry-replaces-content case and the side effects
 - [ ] 3.5 Add `internal/ingest/directapply` to `internal/platform/arch/layering/blocks.go`; package `AGENTS.md`; link it from the root module table
-- [ ] 3.6 Integration tests (`-tags=integration`) against Postgres: one row per (job, user), the conflict on a sent application, the cap, a retry not counting
+- [x] 3.6 Integration tests (`-tags=integration`) against Postgres: one row per (job, user), the conflict on a sent application, the cap, a retry not counting
 
 ## 4. Delivery
 

@@ -8,11 +8,14 @@ package employer_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/strelov1/freehire/internal/ingest/applyform"
 	"github.com/strelov1/freehire/internal/ingest/employer"
 	"github.com/strelov1/freehire/internal/ingest/moderation"
 	"github.com/strelov1/freehire/internal/platform/db"
@@ -181,5 +184,72 @@ func TestUpdateAndCloseVacancy_ScopedToTheOwningEmployer(t *testing.T) {
 	}
 	if closedReason != "employer_closed" {
 		t.Errorf("closed_reason = %q, want employer_closed", closedReason)
+	}
+}
+
+// An on-site vacancy is a real row with no URL, a minted identity and a stored freehire
+// form; only its own employer can replace the questions.
+func TestOnSiteVacancy_StoredWithItsQuestionsAndScopedToItsEmployer(t *testing.T) {
+	pool := testdb.Pool(t)
+	ctx := context.Background()
+
+	if _, err := pool.Exec(ctx,
+		`INSERT INTO companies (slug, name, company_info) VALUES ('acme', 'Acme', '{"website":"acme.test"}'), ('bravo', 'Bravo', '{"website":"other.test"}')`); err != nil {
+		t.Fatalf("seed companies: %v", err)
+	}
+	sA, userA := liveEmployer(t, pool, "Acme", "founder@acme.test")
+	sB, userB := liveEmployer(t, pool, "Bravo", "founder@other.test")
+
+	created, _, err := sA.CreateVacancy(ctx, userA, employer.VacancyInput{
+		ApplyMode: employer.ApplyFreehire,
+		Title:     "Go Engineer",
+		Questions: []applyform.EmployerQuestion{{Label: "EU work permit?", Type: applyform.TypeBoolean, Required: true}},
+	})
+	if err != nil {
+		t.Fatalf("CreateVacancy: %v", err)
+	}
+	slug := created.Fields().PublicSlug
+
+	var url, externalID, provider string
+	var payload []byte
+	if err := pool.QueryRow(ctx, `
+		SELECT j.url, j.external_id, f.provider, f.payload
+		FROM jobs j JOIN apply_forms f ON f.job_id = j.id
+		WHERE j.public_slug = $1`, slug).Scan(&url, &externalID, &provider, &payload); err != nil {
+		t.Fatalf("read vacancy and form: %v", err)
+	}
+	if url != "" || !strings.HasPrefix(externalID, "freehire:") || provider != applyform.ProviderFreehire {
+		t.Fatalf("url/external_id/provider = %q/%q/%q", url, externalID, provider)
+	}
+
+	replaced := []applyform.EmployerQuestion{{Label: "Notice period?", Type: applyform.TypeText}}
+	if _, _, err := sB.UpdateVacancy(ctx, userB, slug, employer.VacancyPatch{Questions: &replaced}); !errors.Is(err, employer.ErrJobNotFound) {
+		t.Fatalf("cross-employer question edit err = %v, want ErrJobNotFound", err)
+	}
+	if _, _, err := sA.UpdateVacancy(ctx, userA, slug, employer.VacancyPatch{Questions: &replaced}); err != nil {
+		t.Fatalf("owner question edit: %v", err)
+	}
+	if err := pool.QueryRow(ctx, `SELECT f.payload FROM apply_forms f JOIN jobs j ON j.id = f.job_id WHERE j.public_slug = $1`, slug).Scan(&payload); err != nil {
+		t.Fatalf("read form: %v", err)
+	}
+	var form applyform.Form
+	if err := json.Unmarshal(payload, &form); err != nil {
+		t.Fatalf("decode form: %v", err)
+	}
+	if len(form.Fields) != 1 || form.Fields[0].Label != "Notice period?" {
+		t.Errorf("stored form = %+v, want the owner's replacement", form)
+	}
+}
+
+func TestCreateVacancy_ExternalStillRequiresAURL(t *testing.T) {
+	pool := testdb.Pool(t)
+	ctx := context.Background()
+	if _, err := pool.Exec(ctx,
+		`INSERT INTO companies (slug, name, company_info) VALUES ('acme', 'Acme', '{"website":"acme.test"}')`); err != nil {
+		t.Fatalf("seed company: %v", err)
+	}
+	s, user := liveEmployer(t, pool, "Acme", "founder@acme.test")
+	if _, _, err := s.CreateVacancy(ctx, user, employer.VacancyInput{ApplyMode: employer.ApplyExternal, Title: "Go Engineer"}); !errors.Is(err, employer.ErrInvalid) {
+		t.Fatalf("err = %v, want ErrInvalid", err)
 	}
 }

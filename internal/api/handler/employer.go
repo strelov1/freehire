@@ -10,6 +10,7 @@ import (
 
 	"github.com/strelov1/freehire/internal/identity/accounts"
 	"github.com/strelov1/freehire/internal/identity/auth"
+	"github.com/strelov1/freehire/internal/ingest/applyform"
 	"github.com/strelov1/freehire/internal/ingest/employer"
 	"github.com/strelov1/freehire/internal/job/jobview"
 	"github.com/strelov1/freehire/internal/platform/db"
@@ -316,16 +317,36 @@ func (h *employerHandlers) UpdateCompany(c *fiber.Ctx) error {
 	return h.GetCompany(c)
 }
 
-// employerVacancyRequest is the create-vacancy body. url and title are required (validated
-// by moderation.CreateInput inside employer.Service.CreateVacancy); company is deliberately
+// employerQuestionRequest is one employer question: type is "text", "boolean" or
+// "select", and options are a select's choices.
+type employerQuestionRequest struct {
+	Label    string   `json:"label"`
+	Type     string   `json:"type"`
+	Required bool     `json:"required"`
+	Options  []string `json:"options"`
+}
+
+func toEmployerQuestions(in []employerQuestionRequest) []applyform.EmployerQuestion {
+	out := make([]applyform.EmployerQuestion, len(in))
+	for i, q := range in {
+		out[i] = applyform.EmployerQuestion{Label: q.Label, Type: applyform.FieldType(q.Type), Required: q.Required, Options: q.Options}
+	}
+	return out
+}
+
+// employerVacancyRequest is the create-vacancy body. title is required, and url too unless
+// apply_mode is "freehire" (absent means "external"); questions belong to a freehire
+// vacancy only. Validated inside employer.Service.CreateVacancy. company is deliberately
 // absent — it is always the account's own locked company name.
 type employerVacancyRequest struct {
-	URL         string     `json:"url"`
-	Title       string     `json:"title"`
-	Location    string     `json:"location"`
-	Remote      bool       `json:"remote"`
-	Description string     `json:"description"`
-	PostedAt    *time.Time `json:"posted_at"`
+	ApplyMode   string                    `json:"apply_mode"`
+	Questions   []employerQuestionRequest `json:"questions"`
+	URL         string                    `json:"url"`
+	Title       string                    `json:"title"`
+	Location    string                    `json:"location"`
+	Remote      bool                      `json:"remote"`
+	Description string                    `json:"description"`
+	PostedAt    *time.Time                `json:"posted_at"`
 
 	Skills         []string `json:"skills"`
 	Regions        []string `json:"regions"`
@@ -341,6 +362,8 @@ type employerVacancyRequest struct {
 
 func (r employerVacancyRequest) toVacancyInput() employer.VacancyInput {
 	return employer.VacancyInput{
+		ApplyMode:      employer.ApplyMode(r.ApplyMode),
+		Questions:      toEmployerQuestions(r.Questions),
 		URL:            r.URL,
 		Title:          r.Title,
 		Location:       r.Location,
@@ -406,13 +429,16 @@ func (h *employerHandlers) CreateVacancy(c *fiber.Ctx) error {
 }
 
 // employerVacancyPatchRequest is the edit body: a nil field is left unchanged. The URL and
-// company identity are not present — neither is editable.
+// company identity are not present — neither is editable. apply_mode may only restate the
+// vacancy's mode; questions replace a freehire vacancy's questions.
 type employerVacancyPatchRequest struct {
-	Title       *string    `json:"title"`
-	Location    *string    `json:"location"`
-	Remote      *bool      `json:"remote"`
-	Description *string    `json:"description"`
-	PostedAt    *time.Time `json:"posted_at"`
+	ApplyMode   *string                    `json:"apply_mode"`
+	Questions   *[]employerQuestionRequest `json:"questions"`
+	Title       *string                    `json:"title"`
+	Location    *string                    `json:"location"`
+	Remote      *bool                      `json:"remote"`
+	Description *string                    `json:"description"`
+	PostedAt    *time.Time                 `json:"posted_at"`
 }
 
 // UpdateVacancy edits a vacancy the caller's own account owns, addressed by public slug.
@@ -426,13 +452,22 @@ func (h *employerHandlers) UpdateVacancy(c *fiber.Ctx) error {
 	if err := c.BodyParser(&in); err != nil {
 		return fiber.NewError(fiber.StatusBadRequest, "invalid request body")
 	}
-	domainJob, extras, err := h.employer.UpdateVacancy(c.Context(), userID, c.Params("slug"), employer.VacancyPatch{
+	patch := employer.VacancyPatch{
 		Title:       in.Title,
 		Location:    in.Location,
 		Remote:      in.Remote,
 		Description: in.Description,
 		PostedAt:    in.PostedAt,
-	})
+	}
+	if in.ApplyMode != nil {
+		mode := employer.ApplyMode(*in.ApplyMode)
+		patch.ApplyMode = &mode
+	}
+	if in.Questions != nil {
+		qs := toEmployerQuestions(*in.Questions)
+		patch.Questions = &qs
+	}
+	domainJob, extras, err := h.employer.UpdateVacancy(c.Context(), userID, c.Params("slug"), patch)
 	if err != nil {
 		return employerError(err)
 	}

@@ -9,6 +9,9 @@
 // field's identifier is not for comparing. `question_67165648` means nothing except to
 // Greenhouse, and it exists to be handed back to Greenhouse. Any mapping of it is loss.
 //
+// One kind of row is not captured at all: provider "freehire", the questions an employer
+// wrote for a vacancy that takes applications here (freehire.go).
+//
 // The store has one reader: display.go projects a captured form into what a candidate
 // sees on the job page, which wants almost none of the above — the question text and one
 // word about the answer. The verbatim identifiers exist for the consumer that has not

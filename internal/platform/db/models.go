@@ -473,6 +473,17 @@ type CvTracerLink struct {
 	CreatedAt       pgtype.Timestamptz `json:"created_at"`
 }
 
+type DirectApplication struct {
+	ID        int64              `json:"id"`
+	JobID     int64              `json:"job_id"`
+	UserID    int64              `json:"user_id"`
+	CvID      pgtype.UUID        `json:"cv_id"`
+	Note      string             `json:"note"`
+	Answers   []byte             `json:"answers"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	SentAt    pgtype.Timestamptz `json:"sent_at"`
+}
+
 // One freehire account bound to one Discord account, so cmd/discord-sync can keep the paid role in step with the subscription. Holds no token: the OAuth access token is used inside the callback request and never stored.
 type DiscordLink struct {
 	UserID        int64              `json:"user_id"`

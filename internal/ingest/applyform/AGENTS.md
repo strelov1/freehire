@@ -8,6 +8,12 @@ on the job page. Providers: greenhouse, ashby, workable, lever, dover. Queue dra
 (`internal/api/handler/apply_form.go:25`); wire shapes go to TypeScript via `cmd/gen-contracts`.
 
 ## Always true
+- **One provider is not captured: `freehire`.** Its rows are the questions a verified
+  employer WROTE for a vacancy that takes applications on freehire (`FreehireForm`,
+  freehire.go; written by `internal/ingest/employer`). Nothing enqueues such a vacancy for
+  capture and nothing re-captures or deletes its row, so it is the one form here whose
+  vocabulary is ours — ids are minted `q1…qN` and an option's value is its label. See
+  [openspec/changes/add-in-app-apply](../../../openspec/changes/add-in-app-apply).
 - **Platform vocabulary is stored VERBATIM** — the opposite of `internal/dict/skilltag` and
   `internal/dict/classify` (form.go:1-22). Field IDs, option values and question text are kept
   exactly as the platform sent them: `question_67165648` is a token to hand back to

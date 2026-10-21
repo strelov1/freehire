@@ -80,9 +80,10 @@ so answers reference ids, never labels. Validation and construction
 a vacancy behind. They live in `applyform`, the package that owns the form shape, and not in
 `directapply`: `directapply` imports `employer` (for the account), and `employer` needs the
 form builder, so placing it in `directapply` would be an import cycle. The form is written after the mint in a separate statement; if that
-write fails the vacancy exists without questions and the request returns 500 — the employer
-re-saves the questions through edit. Accepted because both writes are the employer's own
-idempotent saves, not a cross-party side effect.
+write fails, the vacancy just minted is closed and the request returns 500. Closing matters
+because there is no URL to upsert on: the employer's retry mints a second vacancy, and the
+first would otherwise stay live beside it asking none of the questions. A failed question
+edit returns 500 with the content change already saved; the employer saves again.
 
 ### 3. A new package `internal/ingest/directapply`
 The candidate's application is not an employer capability, so it does not join

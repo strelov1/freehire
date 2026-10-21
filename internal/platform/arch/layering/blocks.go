@@ -205,7 +205,7 @@ var blocks = map[string][]string{
 	// (load.go), so they cannot be handed over in the snapshot.
 	"ingest": {
 		"adzunadesc", "applyform", "atsboard", "atsdetect", "boardcatalog", "boardresolve",
-		"catalogstats", "contribution", "employer", "ingestsched", "jdresolve", "linkimport",
+		"catalogstats", "contribution", "directapply", "employer", "ingestsched", "jdresolve", "linkimport",
 		"linksource", "moderation", "pipeline", "screeninganswers", "sources", "sourcestats",
 		"submission", "telegram",
 	},

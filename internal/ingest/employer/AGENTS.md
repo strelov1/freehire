@@ -44,6 +44,14 @@ for the full design record.
   address on the university's domain, so a match there proves enrolment, not the authority
   to hire. Subdomains are deliberately NOT treated as a match for the same reason —
   `pennmedicine.upenn.edu` is exactly where a student's address lives.
+- **A vacancy's apply mode is its external id, and it never changes.** An `external`
+  vacancy is keyed by its URL, as below. A `freehire` one (it takes applications on
+  freehire, see [openspec/changes/add-in-app-apply](../../../openspec/changes/add-in-app-apply))
+  has no URL: `createOnSite` mints `freehire:<uuid>` through `moderation.CreateInput.ExternalID`
+  and `job.IsDirectApply` recognises it everywhere. Its questions are its `apply_forms` row
+  (provider `freehire`, built by `applyform.FreehireForm`), replaced through
+  `VacancyPatch.Questions`. The `Owner(url)` race guard below is skipped in that mode — it
+  protects a URL two employers could both name, and a UUID is one nobody else can.
 - **`CreateVacancy` guards a real gap in `UpsertManualJob`, not a hypothetical one.** That
   query's `ON CONFLICT` never checks `created_by`, so reusing `moderation.Service.Create`
   unguarded would let employer B silently take over employer A's vacancy by resubmitting the

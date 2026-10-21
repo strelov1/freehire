@@ -48,7 +48,7 @@ own employer SHALL be able to change them.
 A signed-in user with a verified email SHALL be able to apply to an open `freehire`-mode
 vacancy whose employer account is active, by choosing one of their own CVs, answering the
 questions, and optionally adding a note of at most 2000 characters. Every required question
-SHALL be answered; a `boolean` answer SHALL be true or false; a `select` answer SHALL be one
+SHALL be answered; a `text` answer SHALL be at most 2000 characters; a `boolean` answer SHALL be true or false; a `select` answer SHALL be one
 of that question's options; an answer to a question the form does not hold SHALL be refused.
 
 #### Scenario: A complete application is accepted

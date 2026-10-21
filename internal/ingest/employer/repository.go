@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/strelov1/freehire/internal/ingest/applyform"
 	"github.com/strelov1/freehire/internal/job/job"
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/platform/pgconv"
@@ -284,6 +285,20 @@ func (r *QueriesRepository) Update(ctx context.Context, actorID int64, slug stri
 		return job.Job{}, job.Extras{}, err
 	}
 	return job.FromRow(row)
+}
+
+// SaveForm stores the questions of an on-site vacancy, replacing any it had: apply_forms is
+// keyed by job_id, so one vacancy has at most one current form.
+func (r *QueriesRepository) SaveForm(ctx context.Context, j job.Job, form applyform.Form) error {
+	payload, err := json.Marshal(form)
+	if err != nil {
+		return fmt.Errorf("encode questions: %w", err)
+	}
+	return r.q.UpsertApplyForm(ctx, db.UpsertApplyFormParams{
+		JobID:    j.Fields().ID,
+		Provider: form.Provider,
+		Payload:  payload,
+	})
 }
 
 // Close soft-closes an employer-owned job. closedCount is 0 both when the row does not

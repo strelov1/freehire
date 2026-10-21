@@ -77,3 +77,23 @@ func TestFreehireForm_RefusesMalformedQuestions(t *testing.T) {
 		})
 	}
 }
+
+// An employer's questions are all the employer's own: none folds into the standard
+// "basics" line the way a captured form's name/email/CV fields do, and each keeps its
+// required flag on the job page.
+func TestFreehireForm_DisplaysEveryQuestion(t *testing.T) {
+	form, err := FreehireForm([]EmployerQuestion{
+		{Label: "Email", Type: TypeText, Required: true},
+		{Label: "EU work permit?", Type: TypeBoolean},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	d := form.ForDisplay()
+	if len(d.Basics) != 0 {
+		t.Errorf("Basics = %v, want none — an employer question is never a standard field", d.Basics)
+	}
+	if len(d.Questions) != 2 || d.Questions[0].Text != "Email" || !d.Questions[0].Required || d.Questions[1].Required {
+		t.Errorf("Questions = %+v", d.Questions)
+	}
+}
