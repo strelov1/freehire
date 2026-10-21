@@ -10,8 +10,18 @@ import (
 	"github.com/strelov1/freehire/internal/platform/db"
 )
 
-// clearProviders unsets every provider's credentials, so a test says what it configures and
-// a developer's own environment cannot decide the outcome.
+// unreachableDatabase is a database address no connection can be made from: its port does
+// not parse, so Bootstrap fails at once instead of waiting out database.Connect's
+// reachability window (~30s) as an address that merely refuses would. An EMPTY DATABASE_URL
+// is not one — config.Load falls back to postgres://hire:hire@localhost:5432/hire, so on a
+// developer's machine with that local database running, Bootstrap succeeded and the tests
+// below lost their meaning (one failed, the other passed without proving anything). CI has
+// no database there, which is why it stayed green.
+const unreachableDatabase = "postgres://nobody@localhost:not-a-port/none"
+
+// clearProviders unsets every provider's credentials and points the database at an address
+// that cannot be connected to, so a test says what it configures and a developer's own environment
+// cannot decide the outcome.
 func clearProviders(t *testing.T) {
 	t.Helper()
 	for _, k := range []string{
@@ -20,13 +30,13 @@ func clearProviders(t *testing.T) {
 	} {
 		t.Setenv(k, "")
 	}
-	t.Setenv("DATABASE_URL", "")
+	t.Setenv("DATABASE_URL", unreachableDatabase)
 }
 
 // TestRunIsANoOpWithoutCredentials asserts the gate sits BEFORE Bootstrap.
 //
-// DATABASE_URL is deliberately cleared: if run() reached Bootstrap it would fail to open a
-// pool and return 1, so a zero here is proof that it never tried. That is the property the
+// DATABASE_URL points nowhere (unreachableDatabase): if run() reached Bootstrap it would fail
+// to open a pool and return 1, so a zero here is proof that it never tried. That is the property the
 // spec asks for — an unconfigured deployment must run without touching the database — and
 // it is also what makes this binary harmless in a checkout that is not freehire.me.
 func TestRunIsANoOpWithoutCredentials(t *testing.T) {
@@ -90,7 +100,7 @@ func TestMaxPerRun(t *testing.T) {
 // that sells only in the apps is a legitimate one, and a gate written as "no Stripe, nothing
 // to do" would silently stop reconciling its store subscriptions.
 //
-// DATABASE_URL is empty, so reaching Bootstrap fails and returns 1. That failure is the
+// DATABASE_URL points nowhere, so reaching Bootstrap fails and returns 1. That failure is the
 // assertion: it is proof the run did NOT stop at the gate.
 func TestTheStoreProviderAloneKeepsTheWorkerRunning(t *testing.T) {
 	clearProviders(t)
