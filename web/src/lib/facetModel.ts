@@ -551,6 +551,23 @@ function charBudget(values: string[], maxChars: number): string[] {
   return out;
 }
 
+/** The most years of experience an entry-level-only profile should be offered, or null
+ *  when any selected level is past junior — from middle up, years stated on a posting say
+ *  little the level does not, and a bound would only drop real matches. Interns get one
+ *  year rather than zero: "up to a year" is common wording on an internship. */
+const ENTRY_EXPERIENCE_CAP: Partial<Record<string, number>> = { intern: 1, junior: 2 };
+
+function entryExperienceCap(seniorities: string[]): number | null {
+  if (seniorities.length === 0) return null;
+  let cap = 0;
+  for (const level of seniorities) {
+    const levelCap = ENTRY_EXPERIENCE_CAP[level];
+    if (levelCap == null) return null;
+    cap = Math.max(cap, levelCap);
+  }
+  return cap;
+}
+
 /** Build a fresh filter set seeded from a user profile — the reset-and-seed behind
  *  "Apply my profile". Specializations become `category` values, skills become included
  *  `skills` values, and excluded skills become EXCLUDED `skills` values (rendering
@@ -576,6 +593,16 @@ export function filtersFromProfile(profile: UserProfile): JobFilters {
       (st, v) => profile.seniorities.includes(v) ? st : facetSetSign(st, v, 'exclude'),
       emptyFacet(),
     );
+    // The exclusion cannot reach a posting with no level, and for someone after an entry
+    // role that is most of what it lets through — an intern's alerts were 19 of 19
+    // unlabelled, ten of them asking for 2-5 years (freehire#3397). The posting's stated
+    // years are the backstop, and the postings stating none stay in, for the same reason
+    // the unlabelled ones do.
+    const cap = entryExperienceCap(profile.seniorities);
+    if (cap != null) {
+      f.experienceYearsMax = cap;
+      f.experienceIncludeUnspecified = true;
+    }
   }
   // Skills: wanted → include, avoided → exclude. Only stage an exclude for a token not
   // already wanted (signOf === 'off'), so a stray overlap keeps the wanted value.

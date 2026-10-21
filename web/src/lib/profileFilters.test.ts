@@ -40,6 +40,30 @@ describe('filtersFromProfile', () => {
     expect(p.has('seniority')).toBe(false);
   });
 
+  // Excluding levels cannot reach a posting with no level, and for an intern that is
+  // nearly everything they are sent (freehire#3397: 19 of 19 alerts unlabelled, ten
+  // of them asking for 2-5 years). The experience bound is the backstop: it reads the
+  // years a posting states, and keeps the ones that state none.
+  it('bounds experience for an entry-level-only profile, keeping unstated postings', () => {
+    const intern = filtersToParams(filtersFromProfile({ ...mkProfile([], []), seniorities: ['intern'] }));
+    expect(intern.get('experience_years_max')).toBe('1');
+    expect(intern.get('experience_include_unspecified')).toBe('true');
+
+    const junior = filtersToParams(
+      filtersFromProfile({ ...mkProfile([], []), seniorities: ['intern', 'junior'] }),
+    );
+    expect(junior.get('experience_years_max')).toBe('2');
+    expect(junior.get('experience_include_unspecified')).toBe('true');
+  });
+
+  it('does not bound experience once a level past junior is selected', () => {
+    for (const seniorities of [['junior', 'middle'], ['senior'], []]) {
+      const p = filtersToParams(filtersFromProfile({ ...mkProfile([], []), seniorities }));
+      expect(p.has('experience_years_max')).toBe(false);
+      expect(p.has('experience_include_unspecified')).toBe(false);
+    }
+  });
+
   it('does not filter seniority when no preference is selected', () => {
     const p = filtersToParams(filtersFromProfile(mkProfile([], [])));
 
