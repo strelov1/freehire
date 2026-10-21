@@ -123,11 +123,12 @@ func TestParseGPKGSkipsEnvelope(t *testing.T) {
 	}
 }
 
-// Sacramento's coordinates in EPSG:54009, computed independently (PROJ: cs2cs
-// +proj=moll +R=6378137). One metre of tolerance.
+// Sacramento in EPSG:54009. The reference is the same formula evaluated in Python;
+// the end-to-end check that the projection matches the FUA polygons is Task 2 Step 6
+// (Folsom must land in Sacramento).
 func TestMollweide(t *testing.T) {
 	x, y := mollweide(38.5816, -121.4944)
-	if math.Abs(x - -10322955) > 2000 || math.Abs(y-4597050) > 2000 {
+	if math.Abs(x - -10449779) > 1 || math.Abs(y-4630249) > 1 {
 		t.Errorf("mollweide(Sacramento) = (%.0f, %.0f)", x, y)
 	}
 	if x, y := mollweide(0, 0); x != 0 || y != 0 {
@@ -136,9 +137,7 @@ func TestMollweide(t *testing.T) {
 }
 ```
 
-Note to the implementer: the expected Sacramento coordinates are approximate (±2 km);
-verify the projection end-to-end in Task 2 Step 6 against the real file, where
-Folsom must land in Sacramento.
+
 
 - [ ] **Step 2: Run** `go test ./cmd/gen-metros/` — expect FAIL (undefined: parseGPKG).
 
@@ -302,9 +301,7 @@ func (m multiPolygon) bbox() (minX, minY, maxX, maxY float64) {
 }
 ```
 
-- [ ] **Step 4: Run** `go test ./cmd/gen-metros/` — expect PASS. If `TestMollweide` misses by
-more than 2 km, compute the reference with `python3 -c` using the formula above and fix
-the constant in the test only if the projection code matches the formula exactly.
+- [ ] **Step 4: Run** `go test ./cmd/gen-metros/` — expect PASS.
 
 - [ ] **Step 5: Commit** — `git add cmd/gen-metros && git commit -F <msg>` with message
 `gen-metros: read GHS-FUA polygons and test point membership`.
