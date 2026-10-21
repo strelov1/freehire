@@ -95,6 +95,7 @@ var renderers = []func(string) (Sample, error){
 	openSourceSample,
 	verificationSample,
 	passwordResetSample,
+	directApplicationSample,
 	digestSample,
 	savedJobReminderSample,
 	savedJobReminderBatchSample,
@@ -219,6 +220,28 @@ func passwordResetSample(baseURL string) (Sample, error) {
 	return sample("password-reset", "Account / Password reset", func(c *capture) error {
 		return emailnotify.NewAuthMailer(c, "hi@freehire.me", baseURL).
 			SendPasswordResetCode(context.Background(), "someone@example.com", "730914")
+	})
+}
+
+// directApplicationSample shows every part an employer can receive — a yes/no answer, a
+// list answer, a free-text one and a note — so the preview carries the whole layout.
+func directApplicationSample(baseURL string) (Sample, error) {
+	return sample("direct-application", "Employer / New application", func(c *capture) error {
+		return emailnotify.NewApplicationMailer(c, "hi@freehire.me", baseURL).
+			SendApplication(context.Background(), emailnotify.ApplicationMail{
+				To:             "hiring@acme.example",
+				CandidateEmail: "someone@example.com",
+				CompanyName:    "Acme",
+				JobTitle:       "Senior Platform Engineer",
+				JobURL:         baseURL + "/jobs/senior-platform-engineer-acme-9f3c",
+				Answers: []emailnotify.ApplicationAnswer{
+					{Question: "Do you hold an EU work permit?", Answer: "Yes"},
+					{Question: "Preferred stack", Answer: "Go"},
+					{Question: "When could you start?", Answer: "In a month — my notice period is four weeks."},
+				},
+				Note: "I run a Kubernetes platform for 40 teams today and would love to talk about yours.",
+				CV:   []byte("%PDF-1.7"),
+			})
 	})
 }
 
