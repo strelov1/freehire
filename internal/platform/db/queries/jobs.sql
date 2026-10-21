@@ -484,7 +484,6 @@ WHERE source = sqlc.arg(source) AND company = '' AND external_id LIKE sqlc.arg(b
 -- on every crawl selects the whole catalogue and answers nothing.
 --
 -- The match key is (content_hash, cities, salary_*_source, english_level, is_tech), not the
--- metros, like countries/regions, is derived from location, which the hash covers.
 -- hash alone. Those are what the upsert writes that jobhash.Of does not read — a caller's
 -- structured city list overrides the location-derived one, a structured salary
 -- (Lever/Ashby/Recruitee) is a base fact rather than something Of hashes, english_level gained
@@ -500,7 +499,9 @@ WHERE source = sqlc.arg(source) AND company = '' AND external_id LIKE sqlc.arg(b
 -- (unset/unknown) still matches its own kind — a plain = would push every sourceless/unknown job
 -- off the cheap path forever. Whether the key still covers every written column is enforced by
 -- TestUpsertParams_CheapWriteMatchKeyCoversEveryColumnItWrites (internal/job); add a derived
--- column outside the hash and it fails there.
+-- column outside the hash and it fails there. metros is covered the way countries and regions
+-- are: Derive reads it off the location, which the hash covers, or off a caller's structured
+-- cities (in the key) and countries.
 --
 -- A NULL stored content_hash (a legacy row predating the column) compares unequal and so takes
 -- the full path, which is right: nothing is known about what it holds.
