@@ -114,7 +114,7 @@ Every facet below supports repeat-OR, `_mode=and`, and `_exclude` as described a
 
 | Param | Filter | Values |
 | --- | --- | --- |
-| `collections` | Collection | yc, techstars, a16z-portfolio, a16z-speedrun, european, ai, mag7, bigtech, unicorn, fortune500, eastern-roots, indian-roots, ai-native, uk-skilled-worker-sponsor, nl-recognised-sponsor, us-h1b-sponsor, ca-lmia-employer, ie-permit-employer, dk-fast-track-company |
+| `collections` | Collection | yc, techstars, a16z-portfolio, a16z-speedrun, sequoia, accel, greylock, usv, bond, european, ai, mag7, bigtech, unicorn, fortune500, eastern-roots, indian-roots, ai-native, uk-skilled-worker-sponsor, nl-recognised-sponsor, us-h1b-sponsor, ca-lmia-employer, ie-permit-employer, dk-fast-track-company |
 | `regions` | Region | global, north_america, latam, eu, uk, mena, africa, apac, cis, none |
 | `work_mode` | Work format | remote, hybrid, onsite |
 | `category` | Specialization | software_engineering, backend, frontend, fullstack, mobile, devops, sre, network_engineering, data_engineering, data_science, data_analytics, ml_ai, ai_engineering, qa, security, hardware, embedded, blockchain, architecture, design, creative, engineering_design, industrial_engineering, occupational_safety, product, project_management, healthcare, skilled_trades, retail, hospitality, logistics, education, personal_services, administration, social_services, science, manufacturing, public_safety, marketing, sales, support, business_analysis, solutions_engineering, developer_relations, technical_writing, recruiting, hr, finance, legal, operations, customer_success, other. The retired value management is still accepted and answered as role_type=people_manager |

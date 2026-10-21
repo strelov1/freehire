@@ -216,8 +216,12 @@ func acquired(stages []string) bool {
 
 // sequoiaIndex is the search index the Sequoia site (built on Framer) publishes. Its
 // file name carries a content hash that changes on every publish, so it is found on
-// the companies page rather than pinned.
-var sequoiaIndex = regexp.MustCompile(`https://framerusercontent\.com/sites/[A-Za-z0-9]+/searchIndex-[A-Za-z0-9]+\.json`)
+// the companies page rather than pinned. Only the site id and the hash are read from
+// the page; the address is rebuilt on Framer's own host, so nothing the page says can
+// point the fetch anywhere else.
+var sequoiaIndex = regexp.MustCompile(`sites/([A-Za-z0-9]+)/searchIndex-([A-Za-z0-9]+)\.json`)
+
+const sequoiaIndexURL = "https://framerusercontent.com/sites/%s/searchIndex-%s.json"
 
 // resolveSequoiaIndex discovers the current search-index address from the page.
 func resolveSequoiaIndex(ctx context.Context, client *http.Client) (string, error) {
@@ -237,11 +241,11 @@ func resolveSequoiaIndex(ctx context.Context, client *http.Client) (string, erro
 	if err != nil {
 		return "", err
 	}
-	found := sequoiaIndex.Find(body)
+	found := sequoiaIndex.FindSubmatch(body)
 	if found == nil {
 		return "", fmt.Errorf("collections: sequoia companies page names no search index")
 	}
-	return string(found), nil
+	return fmt.Sprintf(sequoiaIndexURL, found[1], found[2]), nil
 }
 
 var (
