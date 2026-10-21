@@ -1,0 +1,141 @@
+## Context
+
+Employer accounts (`internal/ingest/employer`, the unarchived `add-employer-company-accounts`
+change) let a verified employer publish vacancies, but every vacancy is minted through
+`moderation.Service.Create`, whose `CreateInput.Validate` requires an absolute http(s) URL and
+whose `derive` uses that URL as `external_id` — the `(source, external_id)` dedup key. So a
+vacancy that is not hosted elsewhere cannot exist today.
+
+What already exists and is reused:
+
+- `apply_forms` (job_id → `applyform.Form` JSONB) and `GET /jobs/:slug/apply-form`.
+  `applyform.FieldType` already names `text`, `boolean` and `select`.
+- `cv.Store.Get` + `cv.Renderer.Render` (Typst) render a user's CV to PDF on the API server;
+  the handler already builds a shared renderer, nil when `TYPST_BIN` is absent.
+- `emailnotify.Message` carries `ReplyTo` and `Attachments`; `GroupEssential` is the
+  non-silenceable group. `handler.Register` already builds the SES client `ec`.
+- `jobtracking.Service.MarkApplied(ctx, userID, slug, source)`.
+- `answerbank.Store.Sendable` (topic → candidate-provided answer) and `Save`, keyed by
+  `answertopic.Of(question)`; `screeninganswers.Store.Get` for the six typed facts.
+- Email verification gating is done in SQL against `users.email_verified`, mapped to a domain
+  error (`CreateAPIKey`, `CreateGhostReport`).
+
+## Goals / Non-Goals
+
+**Goals:**
+- An employer vacancy in `freehire` apply mode, with up to ten typed questions.
+- A candidate application, validated against the form, delivered once by email to the
+  employer's confirmed address, retried rather than duplicated on failure.
+- Tracking and answer-bank side effects; a per-day cap; the job page and `directApply`.
+
+**Non-Goals:**
+- An applicant inbox or statuses for the employer (seam: `direct_applications` already holds
+  every application; a dashboard reads it later).
+- Payment for posting; auto-apply onto these forms; file-upload questions; staff-authored
+  (`source='manual'`) vacancies in this mode.
+
+## Decisions
+
+### 1. Apply mode is a property of the external id, not a new column
+A `freehire`-mode vacancy is minted with `external_id = 'freehire:' + uuid` and `url = ''`.
+`jobs.apply_mode` would mean an `ALTER` on a 12.7M-row table for a value true of a handful of
+rows, and a separate marker written after the mint (e.g. "has a `freehire` apply_forms row")
+could disagree with the row if the second write failed. The prefix is written in the same
+statement as the row, so the two cannot disagree, and the mode is immutable by construction —
+the external id is never recomputed. One predicate owns it: `job.IsDirectApply(source,
+externalID)` (`source == "employer"` and the prefix), used by jobview, directapply and the SQL
+guard alike (the SQL repeats it as `source = 'employer' AND external_id LIKE 'freehire:%'`).
+
+`moderation.CreateInput` gains `ExternalID string`: when set, `URL` must be empty and
+`Validate` skips the URL check; when unset, behaviour is unchanged. Submissions never set it.
+Alternative considered: a fake URL pointing at our own job page — rejected, because the slug
+depends on the external id (circular) and every reader of `jobs.url` (liveness probe, ghost
+crosscheck, link resolution) would fetch our own site as if it were the employer's.
+
+`url = ''` is the honest value. Task 1.3 audits every reader of `jobs.url` for the empty case;
+`source='employer'` already sits outside the crawl, sweep and liveness paths, so the expected
+finding is "jobview and the web CTA only".
+
+### 2. Questions live in `apply_forms` with provider `freehire`
+The same `applyform.Form` shape, so the existing display path keeps working. Absent row means
+zero questions. A question's `Field.ID` is server-minted (`q1`…`qN` in submitted order,
+stable across edits by position) so answers reference ids, never labels. Validation
+(`directapply.ValidateQuestions`) is pure and runs before the mint, so a malformed form never
+leaves a vacancy behind. The form is written after the mint in a separate statement; if that
+write fails the vacancy exists without questions and the request returns 500 — the employer
+re-saves the questions through edit. Accepted because both writes are the employer's own
+idempotent saves, not a cross-party side effect.
+
+### 3. A new package `internal/ingest/directapply`
+The candidate's application is not an employer capability, so it does not join
+`employer.Service`'s two halves. It sits in `ingest` (layer 7) because it needs the employer
+account (`employer.Service.ActiveAccount` and the confirmed work email), which `application`
+(layer 6) cannot import. It imports `candidate` (cv, answerbank), `application/jobtracking`
+and `ingest/screeninganswers`, all below or beside it. Mail goes through a port,
+`directapply.Mailer`, implemented in `emailnotify` and wired in `handler.Register` exactly as
+`employer.ClaimMailer` is — `ingest` and `engage` share a layer and cannot see each other.
+Added to `internal/platform/arch/layering/blocks.go`.
+
+### 4. `direct_applications`: record first, stamp sent after
+```
+id bigserial PK, job_id → jobs ON DELETE CASCADE, user_id → users ON DELETE CASCADE,
+cv_id uuid NOT NULL, note text NOT NULL DEFAULT '', answers jsonb NOT NULL,
+created_at timestamptz NOT NULL DEFAULT now(), sent_at timestamptz NULL,
+UNIQUE (job_id, user_id)
+```
+`answers` is a snapshot `[{id, label, type, answer}]`, so the record still reads correctly
+after the employer edits the questions. Flow of `Apply`:
+1. Load the vacancy; `IsDirectApply` and open, else not found / closed.
+2. `ActiveAccount` for the vacancy's `created_by`, else refused.
+3. Load the user: verified email, else `ErrUnverified`.
+4. Validate answers against the current form (pure: required, boolean, select options,
+   unknown ids, note ≤ 2000).
+5. `cv.Store.Get(cvID, userID)` — not found is not found.
+6. `UpsertDirectApplication`: `INSERT … ON CONFLICT (job_id, user_id) DO UPDATE SET cv_id,
+   note, answers WHERE direct_applications.sent_at IS NULL RETURNING id`. No row back means
+   already sent → `ErrAlreadyApplied` (409). The daily cap is checked in the same
+   statement's CTE as `count(*) WHERE user_id = $1 AND created_at >= date_trunc('day', now()
+   AT TIME ZONE 'UTC')`, excluding this job's own row so a retry never counts twice.
+7. Render the PDF, send the mail; on error return it (502) with `sent_at` still null.
+8. `MarkDirectApplicationSent` (`… SET sent_at = now() WHERE id = $1 AND sent_at IS NULL`).
+9. `MarkApplied(…, appevent.SourceUser)`; `answerbank.Save` per answer with
+   `AuthorCandidate`, errors logged, never returned.
+
+A crash between 7 and 8 sends twice on the next retry. Accepted: the opposite order (stamp
+then send) loses an application silently, which is worse than a duplicate email.
+
+### 5. The cap is an env knob read once at startup
+`DIRECT_APPLY_DAILY_LIMIT`, default 30, read in `internal/platform/config` and rejected at
+startup when set but not a positive integer. It is not a `plan` feature: `internal/ai/plan`
+meters AI actions, and an application is not one.
+
+### 6. The read endpoint carries the prefill
+`GET /jobs/:slug/direct-apply` (cookie auth optional): company name, questions with id, type,
+options, required; and for a signed-in user, `prefill` (field id → answer) and `applied`
+(sent_at set). Prefill resolves each question's `answertopic.Of(label)` against
+`answerbank.Sendable`, falling back to the screening-answer mapping the autofill path already
+uses. The existing `/apply-form` endpoint stays for captured ATS forms.
+`POST /jobs/:slug/direct-apply` (cookie only) submits.
+
+### 7. Wire and page
+`jobview` gains `apply_mode: "external" | "freehire"`. For `freehire`, `url` is `""` and the
+web CTA opens `DirectApplyForm.svelte` instead of a link; the badge reads "Only on freehire".
+`jobPostingJsonLd` adds `directApply: true` only when `apply_mode === 'freehire'`.
+
+## Risks / Trade-offs
+
+- [A reader of `jobs.url` mishandles `''`] → task 1.3 audits them before anything mints one.
+- [Double-submit of the create form mints two vacancies, since there is no URL to upsert on]
+  → the dashboard disables submit while in flight; the employer can close the extra one.
+- [SES sandbox or a bounce loses an application] → `sent_at` stays null and the candidate sees
+  the failure; the record survives for an operator to inspect.
+- [Spam through the employer's inbox] → verified-email gate plus the daily cap; the employer
+  can close the vacancy.
+- [Typst missing on a host] → `Apply` refuses with 501 before recording anything, the same
+  rule `GetCVPDF` follows.
+
+## Migration Plan
+
+One additive migration (`direct_applications`). `release.sh` migrates before the flip.
+Rollback: no vacancy can be in `freehire` mode until the dashboard offers it, so reverting
+the binary is enough; the table can stay.
