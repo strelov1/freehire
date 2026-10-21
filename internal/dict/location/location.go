@@ -26,6 +26,7 @@ type Geo struct {
 	Regions   []string
 	Cities    []string // canonical city names for resolved beacon cities; empty when none
 	WorkMode  string   // "", "remote", "hybrid", or "onsite" — only on an explicit marker
+	Metros    []string // metro values ("Sacramento, US"); dict-only, see metros.go
 }
 
 // separatorReplacer normalizes every token separator to a comma in one pass so a
@@ -67,6 +68,9 @@ func Parse(location string) Geo {
 	// seen, held back until the whole string has been read and applied only if nothing
 	// else stated one AND they agree. See its use below the loop.
 	cityFallbackCountries := map[string]struct{}{}
+	// Subdivision codes the line states, and the cities it names, are collected over the
+	// whole line: the state usually FOLLOWS the city ("Roseville, CA").
+	statedSubdivisions := map[string]struct{}{}
 	for _, tok := range strings.Split(s, ",") {
 		tok = strings.TrimSpace(tok)
 		if tok == "" {
@@ -84,6 +88,11 @@ func Parse(location string) Geo {
 		// Curated geography first, into the scratch sets (authoritative for country/region).
 		clear(tokCountry)
 		clear(tokRegion)
+		if _, ok := resolveSubdivision(tok, prevTok); ok {
+			if code, ok := statedSubdivisionCode(tok); ok {
+				statedSubdivisions[code] = struct{}{}
+			}
+		}
 		resolved := resolveGeoToken(tok, prevTok, tokCountry, tokRegion)
 		// Recorded now, before any of the branches below (including the early
 		// "continue" on a resolved token) that would otherwise skip past the
@@ -188,6 +197,29 @@ func Parse(location string) Geo {
 		}
 	}
 
+	// A metro needs one stated country: a line naming two cannot place a city in either
+	// without guessing.
+	var metros []string
+	if len(countrySet) == 1 && len(citySet) > 0 {
+		var country string
+		for c := range countrySet {
+			country = c
+		}
+		admin1 := ""
+		if len(statedSubdivisions) == 1 {
+			for s := range statedSubdivisions {
+				admin1 = s
+			}
+		}
+		metroSet := map[string]struct{}{}
+		for name := range citySet {
+			if v, ok := metroFor(name, country, admin1); ok {
+				metroSet[v] = struct{}{}
+			}
+		}
+		metros = stringset.Sorted(metroSet)
+	}
+
 	countries := stringset.Sorted(countrySet)
 	regions := stringset.Sorted(regionSet)
 	mode := detectWorkMode(lower)
@@ -197,6 +229,7 @@ func Parse(location string) Geo {
 		Regions:   regions,
 		Cities:    stringset.Sorted(citySet),
 		WorkMode:  mode,
+		Metros:    metros,
 	}
 }
 
@@ -456,4 +489,22 @@ func detectWorkMode(lower string) string {
 		}
 	}
 	return ""
+}
+
+// statedSubdivisionCode returns the postal code a token that resolveSubdivision accepted
+// states: the token itself ("ca"), its last field ("san francisco ca"), or the field
+// before a trailing ZIP ("tx 76135").
+func statedSubdivisionCode(tok string) (string, bool) {
+	if code, ok := subdivisionCode[tok]; ok {
+		return code, true
+	}
+	fields := strings.Fields(tok)
+	if n := len(fields); n > 0 && isUSZip(fields[n-1]) {
+		fields = fields[:n-1]
+	}
+	if len(fields) == 0 {
+		return "", false
+	}
+	code, ok := subdivisionCode[fields[len(fields)-1]]
+	return code, ok
 }

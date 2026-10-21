@@ -373,6 +373,37 @@ var subdivisionToCountry = map[string]string{
 	"yukon": "ca", "nunavut": "ca",
 }
 
+// subdivisionCode is the postal code of each subdivision subdivisionToCountry places,
+// read by the metro lookup to tell Roseville, CA from Roseville, MI.
+var subdivisionCode = map[string]string{
+	"al": "AL", "ak": "AK", "az": "AZ", "ar": "AR", "ca": "CA", "co": "CO", "ct": "CT",
+	"de": "DE", "fl": "FL", "ga": "GA", "hi": "HI", "ia": "IA", "id": "ID", "il": "IL",
+	"in": "IN", "ks": "KS", "ky": "KY", "la": "LA", "ma": "MA", "md": "MD", "me": "ME",
+	"mi": "MI", "mn": "MN", "mo": "MO", "ms": "MS", "mt": "MT", "nc": "NC", "nd": "ND",
+	"ne": "NE", "nh": "NH", "nj": "NJ", "nm": "NM", "nv": "NV", "ny": "NY", "oh": "OH",
+	"ok": "OK", "or": "OR", "pa": "PA", "ri": "RI", "sc": "SC", "sd": "SD", "tn": "TN",
+	"tx": "TX", "ut": "UT", "va": "VA", "vt": "VT", "wa": "WA", "wi": "WI", "wv": "WV",
+	"wy": "WY", "dc": "DC", "alabama": "AL", "alaska": "AK", "arizona": "AZ",
+	"arkansas": "AR", "california": "CA", "colorado": "CO", "connecticut": "CT",
+	"delaware": "DE", "florida": "FL", "hawaii": "HI", "idaho": "ID", "illinois": "IL",
+	"indiana": "IN", "iowa": "IA", "kansas": "KS", "kentucky": "KY", "louisiana": "LA",
+	"maine": "ME", "maryland": "MD", "massachusetts": "MA", "michigan": "MI",
+	"minnesota": "MN", "mississippi": "MS", "missouri": "MO", "montana": "MT",
+	"nebraska": "NE", "nevada": "NV", "new hampshire": "NH", "new jersey": "NJ",
+	"new mexico": "NM", "new york": "NY", "north carolina": "NC", "north dakota": "ND",
+	"ohio": "OH", "oklahoma": "OK", "oregon": "OR", "pennsylvania": "PA",
+	"rhode island": "RI", "south carolina": "SC", "south dakota": "SD", "tennessee": "TN",
+	"texas": "TX", "utah": "UT", "vermont": "VT", "virginia": "VA", "washington": "WA",
+	"west virginia": "WV", "wisconsin": "WI", "wyoming": "WY",
+	"district of columbia": "DC", "on": "ON", "bc": "BC", "qc": "QC", "ab": "AB",
+	"mb": "MB", "sk": "SK", "ns": "NS", "nb": "NB", "pe": "PE", "nt": "NT", "yt": "YT",
+	"nu": "NU", "ontario": "ON", "quebec": "QC", "british columbia": "BC",
+	"alberta": "AB", "manitoba": "MB", "saskatchewan": "SK", "nova scotia": "NS",
+	"new brunswick": "NB", "newfoundland and labrador": "NL",
+	"prince edward island": "PE", "northwest territories": "NT", "yukon": "YT",
+	"nunavut": "NU",
+}
+
 // collidingSubdivisions is the subset of subdivisionToCountry's two-letter codes
 // that also spell a curated country's ISO 3166-1 alpha-2 code: "il" (Illinois vs
 // Israel), "la" (Louisiana vs Laos), "pa" (Pennsylvania vs Panama), "mn"
