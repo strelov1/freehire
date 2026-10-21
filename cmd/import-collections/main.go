@@ -64,6 +64,11 @@ var (
 	// force overrides the collapse guard, for the rare run where a tag genuinely
 	// should lose most of its holders (retiring a collection, a real register purge).
 	force = flag.Bool("force", false, "write even when a tag would lose most of its holders")
+	// only limits a run to the named collections, leaving every other tag exactly as
+	// stored. Resolution is all-or-nothing by design — a missing source would
+	// reconcile its tag off every company — so without this one upstream that is down
+	// blocks every other collection's import with it.
+	only = flag.String("only", "", "comma-separated collection slugs to import; others are left untouched")
 )
 
 func main() {
@@ -83,7 +88,12 @@ func run() int {
 	// here aborts before any write: proceeding with a collection missing would
 	// reconcile its tag off every company (a transient fetch error must not wipe
 	// membership).
-	resolved, err := resolveAll(ctx)
+	scope, err := scopeOf(*only)
+	if err != nil {
+		log.Printf("import-collections: %v", err)
+		return 1
+	}
+	resolved, err := resolveAll(ctx, scope)
 	if err != nil {
 		log.Printf("import-collections: %v", err)
 		return 1
@@ -96,7 +106,7 @@ func run() int {
 		return 1
 	}
 
-	p := plan(rows, resolved)
+	p := planScoped(rows, resolved, scope)
 
 	// A dry run stops here, before the first write. Every threshold in the credential
 	// gates is a guess until it is measured against the real catalogue — in
@@ -104,7 +114,7 @@ func run() int {
 	// sparse the rule discards exactly the single-word brands worth surfacing. This
 	// is how that gets answered before it can do damage rather than after.
 	if *dryRun {
-		report(p, len(rows))
+		report(p, len(rows), scope)
 		for _, c := range p.collapsed {
 			log.Printf("import-collections: WOULD COLLAPSE %s — %d holders, %d would survive", c.slug, c.had, c.keeps)
 		}
@@ -137,7 +147,7 @@ func run() int {
 		return 1
 	}
 
-	report(p, len(rows))
+	report(p, len(rows), scope)
 	log.Printf("import-collections done: companies updated=%d, jobs updated=%d", len(p.writes), propagated)
 	log.Printf("import-collections: run `make reindex` to surface jobs.collections in the search index")
 	return 0
@@ -147,15 +157,19 @@ func run() int {
 // report what their gate and ambiguity guard rejected — the numbers a dry run is
 // read for — and how densely hq_country is populated, since the single-token rule
 // depends on it.
-func report(p planResult, companies int) {
-	for _, c := range collections.All {
+func report(p planResult, companies int, scope []collections.Collection) {
+	for _, c := range scope {
 		s := p.stats[c.Slug]
 		if c.Kind == collections.KindCredential {
-			log.Printf("import-collections: %s matched=%d gated=%d ambiguous=%d unmatched=%d",
-				c.Slug, s.Matched, s.Gated, s.Ambiguous, s.Unmatched)
+			log.Printf("import-collections: %s matched=%d gated=%d ambiguous=%d site_mismatch=%d unmatched=%d",
+				c.Slug, s.Matched, s.Gated, s.Ambiguous, s.SiteMismatch, s.Unmatched)
 			continue
 		}
-		log.Printf("import-collections: %s matched=%d unmatched=%d", c.Slug, s.Matched, s.Unmatched)
+		log.Printf("import-collections: %s matched=%d site_mismatch=%d unmatched=%d",
+			c.Slug, s.Matched, s.SiteMismatch, s.Unmatched)
+		if len(s.SiteMismatchNames) > 0 {
+			log.Printf("import-collections: %s refused on website: %s", c.Slug, strings.Join(s.SiteMismatchNames, "; "))
+		}
 		// For a hand list the unmatched entries are actionable — an entry we wrote
 		// that matches nothing is a typo or a company that left the catalogue — so
 		// list them. A fetched dataset has thousands; only its count is logged, above.
@@ -171,14 +185,32 @@ func report(p planResult, companies int) {
 // for a hand list). A static-list collection resolves locally; a dataset
 // collection is fetched and parsed. Any resolution failure is returned (the caller
 // aborts rather than write a partial membership).
-func resolveAll(ctx context.Context) (map[string][]collections.Record, error) {
+// scopeOf turns the -only value into the collections a run handles: all of them when
+// it is empty, otherwise exactly the named ones, refusing a slug the registry does
+// not hold rather than silently importing less than asked.
+func scopeOf(only string) ([]collections.Collection, error) {
+	if strings.TrimSpace(only) == "" {
+		return collections.All, nil
+	}
+	var scope []collections.Collection
+	for _, slug := range strings.Split(only, ",") {
+		c, ok := collections.Lookup(strings.TrimSpace(slug))
+		if !ok {
+			return nil, fmt.Errorf("-only: unknown collection %q", slug)
+		}
+		scope = append(scope, c)
+	}
+	return scope, nil
+}
+
+func resolveAll(ctx context.Context, scope []collections.Collection) (map[string][]collections.Record, error) {
 	direct := &http.Client{Timeout: fetchTimeout}
 	proxied, err := proxiedClient(fetchTimeout)
 	if err != nil {
 		return nil, err
 	}
-	resolved := make(map[string][]collections.Record, len(collections.All))
-	for _, c := range collections.All {
+	resolved := make(map[string][]collections.Record, len(scope))
+	for _, c := range scope {
 		records, err := resolveOne(ctx, clientFor(c.Slug, direct, proxied), c)
 		if err != nil {
 			return nil, fmt.Errorf("resolve %q: %w", c.Slug, err)
@@ -322,6 +354,13 @@ type planResult struct {
 // the companies whose set actually changes. It is pure — all I/O lives in run.
 // `resolved` maps a collection slug to its candidate company names/slugs.
 func plan(rows []db.ListCompanyCollectionsRow, resolved map[string][]collections.Record) planResult {
+	return planScoped(rows, resolved, collections.All)
+}
+
+// planScoped is plan over a subset of the registry: only the collections in scope are
+// matched, collapse-checked and reconciled, and every other tag a company holds is
+// left as stored.
+func planScoped(rows []db.ListCompanyCollectionsRow, resolved map[string][]collections.Record, scope []collections.Collection) planResult {
 	companies := make(map[string]collections.Company, len(rows))
 	withHQCountry := 0
 	for _, r := range rows {
@@ -329,6 +368,7 @@ func plan(rows []db.ListCompanyCollectionsRow, resolved map[string][]collections
 			Slug:      r.Slug,
 			Countries: r.Countries,
 			HQCountry: r.HqCountry.String,
+			Website:   r.Website,
 		}
 		if r.HqCountry.String != "" {
 			withHQCountry++
@@ -337,7 +377,7 @@ func plan(rows []db.ListCompanyCollectionsRow, resolved map[string][]collections
 
 	want := make(map[string][]string)
 	stats := make(map[string]collections.MatchStat, len(resolved))
-	for _, c := range collections.All {
+	for _, c := range scope {
 		matched, s := c.Members(resolved[c.Slug], companies)
 		if c.HandList() { // ours to fix: keep the unmatched entries for diagnostics
 			s.UnmatchedNames = s.UnmatchedNames[:min(len(s.UnmatchedNames), collections.MaxLoggedUnmatched)]
@@ -350,12 +390,18 @@ func plan(rows []db.ListCompanyCollectionsRow, resolved map[string][]collections
 		}
 	}
 
-	collapsed := detectCollapse(rows, want)
+	collapsed := detectCollapse(rows, want, scope)
 
-	// Managed = live collection slugs plus retired ones, so Reconcile strips a
-	// renamed/removed collection's stale tags (no wanted members) as well as
-	// reconciling the current set.
-	managed := append(collections.Slugs(), collections.RetiredSlugs...)
+	// Managed = the collections in scope. A full run adds the retired slugs, so
+	// Reconcile strips a renamed/removed collection's stale tags as well; a scoped
+	// run leaves them for the next full one.
+	managed := make([]string, 0, len(scope)+len(collections.RetiredSlugs))
+	for _, c := range scope {
+		managed = append(managed, c.Slug)
+	}
+	if len(scope) == len(collections.All) {
+		managed = append(managed, collections.RetiredSlugs...)
+	}
 	var writes []db.SetCompanyCollectionsParams
 	for _, r := range rows {
 		next := collections.Reconcile(r.Collections, managed, want[r.Slug])
@@ -371,7 +417,7 @@ func plan(rows []db.ListCompanyCollectionsRow, resolved map[string][]collections
 // nobody currently holds cannot collapse — that is a new collection's first run,
 // not a broken source — and RetiredSlugs are skipped because losing every holder is
 // exactly what retiring one is for.
-func detectCollapse(rows []db.ListCompanyCollectionsRow, want map[string][]string) []collapse {
+func detectCollapse(rows []db.ListCompanyCollectionsRow, want map[string][]string, scope []collections.Collection) []collapse {
 	had := map[string]int{}
 	for _, r := range rows {
 		for _, tag := range r.Collections {
@@ -386,7 +432,7 @@ func detectCollapse(rows []db.ListCompanyCollectionsRow, want map[string][]strin
 	}
 
 	var out []collapse
-	for _, c := range collections.All {
+	for _, c := range scope {
 		before := had[c.Slug]
 		if before == 0 {
 			continue

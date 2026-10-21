@@ -143,6 +143,8 @@ type Company struct {
 	Slug      string
 	Countries []string
 	HQCountry string
+	// Website is the company's own site from its company_info, "" when unknown.
+	Website string
 }
 
 // Admits reports whether this collection accepts a name-matched company/record
@@ -170,7 +172,7 @@ var All = []Collection{
 		Title:       "Y Combinator",
 		Description: "Open roles at Y Combinator–backed companies, from current batches to graduated unicorns.",
 		Kind:        KindBacker,
-		Dataset:     &Dataset{URL: ycDatasetURL, Parse: names(ParseYC)},
+		Dataset:     &Dataset{URL: ycDatasetURL, Parse: ParseYC},
 	},
 	{
 		Slug:        "techstars",
@@ -184,7 +186,7 @@ var All = []Collection{
 		Title:       "a16z",
 		Description: "Open roles at companies in the Andreessen Horowitz portfolio.",
 		Kind:        KindBacker,
-		Dataset:     &Dataset{Records: speedrunMembers(speedrunTierPortfolio)},
+		Dataset:     &Dataset{URL: a16zPortfolioURL, Parse: ParseA16zPortfolio},
 	},
 	{
 		Slug:        "a16z-speedrun",
@@ -192,6 +194,41 @@ var All = []Collection{
 		Description: "Open roles at companies from the a16z Speedrun accelerator's cohorts.",
 		Kind:        KindBacker,
 		Dataset:     &Dataset{Records: speedrunMembers(speedrunTierAccelerator)},
+	},
+	{
+		Slug:        "sequoia",
+		Title:       "Sequoia",
+		Description: "Open roles at companies in the Sequoia Capital portfolio.",
+		Kind:        KindBacker,
+		Dataset:     &Dataset{ResolveURL: resolveSequoiaIndex, Parse: ParseSequoia},
+	},
+	{
+		Slug:        "accel",
+		Title:       "Accel",
+		Description: "Open roles at companies in the Accel portfolio.",
+		Kind:        KindBacker,
+		Dataset:     &Dataset{URL: accelDatasetURL, Parse: ParseAccel},
+	},
+	{
+		Slug:        "greylock",
+		Title:       "Greylock",
+		Description: "Open roles at companies in the Greylock portfolio.",
+		Kind:        KindBacker,
+		Dataset:     &Dataset{URL: greylockDatasetURL, Parse: ParseGreylock},
+	},
+	{
+		Slug:        "usv",
+		Title:       "Union Square Ventures",
+		Description: "Open roles at companies in the Union Square Ventures portfolio.",
+		Kind:        KindBacker,
+		Dataset:     &Dataset{URL: usvDatasetURL, Parse: ParseUSV},
+	},
+	{
+		Slug:        "bond",
+		Title:       "BOND",
+		Description: "Open roles at companies in the BOND portfolio.",
+		Kind:        KindBacker,
+		Dataset:     &Dataset{URL: bondDatasetURL, Parse: ParseBond},
 	},
 	{
 		Slug:        "european",
@@ -488,7 +525,13 @@ const MaxLoggedUnmatched = 50
 type MatchStat struct {
 	Matched, Unmatched int
 	Gated, Ambiguous   int
-	UnmatchedNames     []string
+	// SiteMismatch counts companies refused because the source names a different
+	// website for the member than the catalogue holds for the company (see sameSite).
+	SiteMismatch   int
+	UnmatchedNames []string
+	// SiteMismatchNames shows what the site check refused, "Name (theirs ≠ ours)", so
+	// a run's log lets a person judge whether it refused the right companies.
+	SiteMismatchNames []string
 }
 
 // Members resolves this collection's candidate records to the company slugs that
@@ -500,6 +543,9 @@ type MatchStat struct {
 // keyed by the CATALOGUE's company slug, and that is what the catalogue keys by. What
 // still differs by kind is the ambiguity drop: a credential first discards rows whose
 // name identifies more than one organisation.
+//
+// A record naming a website the company's own site disagrees with is refused before
+// the gate (see sameSite): the name matched, the organisation did not.
 //
 // A company is tagged when ANY of its records passes the gate: a register lists an
 // organisation once per route it holds, so a work-route row must win even when a
@@ -520,12 +566,21 @@ func (c Collection) Members(records []Record, companies map[string]Company) ([]s
 
 	admitted := make(map[string]struct{}, len(records))
 	gatedOut := make(map[string]struct{}, len(records))
+	mismatched := make(map[string]struct{}, len(records))
 	for _, r := range records {
 		slug := normalize.CompanySlug(r.Name)
 		company, known := companies[slug]
 		if slug == "" || !known {
 			stat.Unmatched++
 			stat.UnmatchedNames = append(stat.UnmatchedNames, r.Name)
+			continue
+		}
+		if !sameSite(r.Meta[MetaWebsite], company.Website) {
+			if _, seen := mismatched[slug]; !seen && len(stat.SiteMismatchNames) < MaxLoggedUnmatched {
+				stat.SiteMismatchNames = append(stat.SiteMismatchNames,
+					fmt.Sprintf("%s (%s ≠ %s)", r.Name, r.Meta[MetaWebsite], company.Website))
+			}
+			mismatched[slug] = struct{}{}
 			continue
 		}
 		if !c.Admits(company, r) {
@@ -545,6 +600,11 @@ func (c Collection) Members(records []Record, companies map[string]Company) ([]s
 		// A company with both an admitted and a rejected row is not gated out.
 		if _, ok := admitted[slug]; !ok {
 			stat.Gated++
+		}
+	}
+	for slug := range mismatched {
+		if _, ok := admitted[slug]; !ok {
+			stat.SiteMismatch++
 		}
 	}
 	return matched, stat
@@ -588,7 +648,9 @@ func Reconcile(current, managed, want []string) []string {
 // ycCompany is the subset of a yc-oss dataset entry we consume: the company name,
 // which we match by normalized name against our companies.
 type ycCompany struct {
-	Name string `json:"name"`
+	Name    string `json:"name"`
+	Website string `json:"website"`
+	Status  string `json:"status"`
 }
 
 // euStartup is the subset of an icp-radar dataset entry we consume (the company
@@ -613,21 +675,24 @@ func ParseEUStartups(data []byte) ([]string, error) {
 	return names, nil
 }
 
-// ParseYC extracts the company names from a yc-oss dataset payload (a JSON array of
-// company objects). Only the name is read; matching to our catalogue happens via
-// normalize.CompanySlug in Collection.Members.
-func ParseYC(data []byte) ([]string, error) {
+// ParseYC reads a yc-oss dataset payload (a JSON array of company objects) into
+// records carrying each company's website. Companies YC lists as Inactive or Acquired
+// are dropped, for the reason every portfolio drops its exits (see portfolios.go):
+// the directory still names them, so their names matched whatever later company took
+// them — Y Combinator's shut-down "Meta" tagged Meta Platforms.
+func ParseYC(data []byte) ([]Record, error) {
 	var raw []ycCompany
 	if err := json.Unmarshal(data, &raw); err != nil {
 		return nil, fmt.Errorf("collections: parse yc dataset: %w", err)
 	}
-	names := make([]string, 0, len(raw))
+	out := make([]Record, 0, len(raw))
 	for _, c := range raw {
-		if c.Name != "" {
-			names = append(names, c.Name)
+		if c.Name == "" || c.Status == "Inactive" || c.Status == "Acquired" {
+			continue
 		}
+		out = append(out, record(c.Name, c.Website))
 	}
-	return names, nil
+	return out, nil
 }
 
 // ParseCompanyCSV extracts company names from a comma-separated CSV with a

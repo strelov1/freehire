@@ -124,17 +124,20 @@ func TestReconcile(t *testing.T) {
 	}
 }
 
-func TestParseYC_ExtractsNames(t *testing.T) {
+func TestParseYC_ExtractsNamesAndWebsitesAndDropsExits(t *testing.T) {
 	payload := []byte(`[
-		{"id": 1, "name": "Stripe", "slug": "stripe", "website": "https://stripe.com", "batch": "S09"},
-		{"id": 2, "name": "Airbnb", "slug": "airbnb", "website": "https://airbnb.com", "batch": "W09"}
+		{"id": 1, "name": "Stripe", "slug": "stripe", "website": "https://stripe.com", "batch": "S09", "status": "Active"},
+		{"id": 2, "name": "Airbnb", "slug": "airbnb", "website": "https://airbnb.com", "batch": "W09", "status": "Public"},
+		{"id": 3, "name": "Meta", "website": "http://www.metavision.com/", "status": "Inactive"},
+		{"id": 4, "name": "Benchmark", "website": "https://withbenchmark.com/", "status": "Acquired"}
 	]`)
-	names, err := ParseYC(payload)
+	got, err := ParseYC(payload)
 	if err != nil {
 		t.Fatalf("ParseYC: %v", err)
 	}
-	if !reflect.DeepEqual(names, []string{"Stripe", "Airbnb"}) {
-		t.Errorf("names = %#v, want [Stripe Airbnb]", names)
+	want := []Record{record("Stripe", "https://stripe.com"), record("Airbnb", "https://airbnb.com")}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("records = %#v, want %#v", got, want)
 	}
 }
 
@@ -394,7 +397,7 @@ func TestRegistry_BackersNameWhoSelectedTheCompany(t *testing.T) {
 	// An accelerator or fund that picked the company is a different sort of tag from a
 	// theme we curate ourselves: it names an outside selector, so it renders as that
 	// brand's mark rather than as one more filter chip.
-	for _, slug := range []string{"yc", "techstars", "a16z-portfolio", "a16z-speedrun"} {
+	for _, slug := range []string{"yc", "techstars", "a16z-portfolio", "a16z-speedrun", "sequoia", "accel", "greylock", "usv", "bond"} {
 		c, ok := Lookup(slug)
 		if !ok {
 			t.Errorf("registry missing %q", slug)
@@ -421,14 +424,11 @@ func TestRegistry_TheTwoA16zTagsAreSeparateCollections(t *testing.T) {
 	if !ok {
 		t.Fatal("a16z-speedrun missing")
 	}
-	for _, c := range []Collection{portfolio, speedrun} {
-		if c.Dataset == nil || c.Dataset.Records == nil {
-			t.Errorf("%s does not source its membership from the directory: %+v", c.Slug, c.Dataset)
-			continue
-		}
-		if !c.Dataset.Valid() {
-			t.Errorf("%s declares more than one payload source", c.Slug)
-		}
+	if speedrun.Dataset == nil || speedrun.Dataset.Records == nil {
+		t.Errorf("a16z-speedrun does not source its membership from the directory: %+v", speedrun.Dataset)
+	}
+	if portfolio.Dataset == nil || portfolio.Dataset.URL != a16zPortfolioURL {
+		t.Errorf("a16z-portfolio does not read the fund's own portfolio page: %+v", portfolio.Dataset)
 	}
 	if portfolio.Title == speedrun.Title {
 		t.Errorf("both a16z tags share the title %q — a reader cannot tell them apart", portfolio.Title)

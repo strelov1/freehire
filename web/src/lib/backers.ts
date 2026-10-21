@@ -26,6 +26,11 @@ const MARKS: Record<string, string> = {
   techstars: '/brands/techstars.png',
   'a16z-portfolio': '/brands/a16z.png',
   'a16z-speedrun': '/brands/a16z.png',
+  sequoia: '/brands/sequoia.png',
+  accel: '/brands/accel.png',
+  greylock: '/brands/greylock.png',
+  usv: '/brands/usv.png',
+  bond: '/brands/bond.png',
 };
 
 /**

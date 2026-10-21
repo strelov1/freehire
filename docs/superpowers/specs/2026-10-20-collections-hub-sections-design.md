@@ -39,6 +39,10 @@ Two traps found on the way:
 
 ### 1. Investor collections
 
+**Done 2026-10-21 for Sequoia, Accel, Greylock, USV, BOND and the a16z upgrade** (see
+`internal/job/collections/AGENTS.md`). Still open: Lightspeed, Index, SoftBank Vision Fund,
+Founders Fund; Benchmark publishes no portfolio.
+
 Ten firms researched 2026-10-20; full notes in
 [2026-10-20-vc-portfolio-sources.md](2026-10-20-vc-portfolio-sources.md). Each is one `backer` entry in `internal/job/collections/collections.go`;
 `cmd/import-collections` needs no change. The web app needs a brand mark per firm
@@ -65,6 +69,9 @@ Open decisions: drop exited/acquired companies; whether `import-collections` get
 monthly timer (today it runs by hand, so no list ever refreshes).
 
 ### 2. Match by domain, not only by name
+
+**Done 2026-10-21** — `sameSite` in `internal/job/collections/site.go`; YC also drops its
+Inactive/Acquired entries now.
 
 Membership is matched on `normalize.CompanySlug(name)` alone, which already
 produces false members: the YC collection's leading companies on prod include

@@ -3606,6 +3606,9 @@ type Querier interface {
 	// single-token name additionally needs its headquarters there. Both are already
 	// maintained (countries by RefreshCompanyFacets, hq_country by cmd/import-yc), so
 	// this widens the read rather than adding a source of truth.
+	//
+	// website rides along for the same reason: a portfolio that publishes its members'
+	// sites lets a same-named company with a DIFFERENT site be told apart from the member.
 	ListCompanyCollections(ctx context.Context) ([]ListCompanyCollectionsRow, error)
 	// A company's feedback, newest first, offset-paginated — the volume per company
 	// is small (bounded by distinct reviewers), so unlike the discussion threads this

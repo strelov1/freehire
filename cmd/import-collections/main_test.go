@@ -477,3 +477,36 @@ func TestFetchDataset_AcceptsBodyAtTheCap(t *testing.T) {
 		t.Errorf("len(body) = %d, want %d", len(body), maxDatasetBody)
 	}
 }
+
+func TestPlanScoped_LeavesTagsOutsideTheScopeAlone(t *testing.T) {
+	// A scoped run is how one collection is imported while another's upstream is
+	// down: the unresolved collection must keep every holder it has, not be
+	// reconciled off them as if its source had come back empty.
+	rows := []db.ListCompanyCollectionsRow{
+		{Slug: "acme", Collections: []string{"a16z-speedrun"}},
+		{Slug: "stripe", Collections: []string{}},
+	}
+	sequoia, _ := collections.Lookup("sequoia")
+	got := planScoped(rows, map[string][]collections.Record{"sequoia": slugRecords([]string{"Stripe"})}, []collections.Collection{sequoia})
+
+	if len(got.writes) != 1 || got.writes[0].Slug != "stripe" || !reflect.DeepEqual(got.writes[0].Collections, []string{"sequoia"}) {
+		t.Errorf("writes = %#v, want only stripe → [sequoia]", got.writes)
+	}
+	if len(got.collapsed) != 0 {
+		t.Errorf("collapsed = %#v, want none: a16z-speedrun is outside the scope", got.collapsed)
+	}
+}
+
+func TestScopeOf(t *testing.T) {
+	all, err := scopeOf("")
+	if err != nil || len(all) != len(collections.All) {
+		t.Errorf("scopeOf(\"\") = %d collections, %v; want the whole registry", len(all), err)
+	}
+	two, err := scopeOf("sequoia, accel")
+	if err != nil || len(two) != 2 || two[0].Slug != "sequoia" || two[1].Slug != "accel" {
+		t.Errorf("scopeOf(\"sequoia, accel\") = %#v, %v", two, err)
+	}
+	if _, err := scopeOf("sequoia,nope"); err == nil {
+		t.Error("scopeOf accepted an unknown slug")
+	}
+}

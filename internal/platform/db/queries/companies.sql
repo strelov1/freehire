@@ -151,7 +151,11 @@ WHERE slug = $1;
 -- single-token name additionally needs its headquarters there. Both are already
 -- maintained (countries by RefreshCompanyFacets, hq_country by cmd/import-yc), so
 -- this widens the read rather than adding a source of truth.
-SELECT slug, collections, countries, hq_country
+--
+-- website rides along for the same reason: a portfolio that publishes its members'
+-- sites lets a same-named company with a DIFFERENT site be told apart from the member.
+SELECT slug, collections, countries, hq_country,
+       COALESCE(company_info ->> 'website', '')::text AS website
 FROM companies
 ORDER BY slug;
 

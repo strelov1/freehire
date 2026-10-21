@@ -3,12 +3,12 @@
 ## Scope
 The code-owned registry of curated company tags: editorial themes (Big Tech, Unicorn),
 credentials from authoritative public registers (UK/NL/US/CA/IE/DK visa sponsors), and backers (YC,
-Techstars, a16z). This package is the source of truth for which tags exist and how members
+Techstars, a16z, Sequoia, Accel, Greylock, USV, BOND). This package is the source of truth for which tags exist and how members
 are matched; `cmd/import-collections` writes `companies.collections`, and the search facet
 (`jobs.collections`) serves it.
 
 ## Always true
-- **The registry is code.** `All` (collections.go:167-310 — 19 slugs, in display order) is
+- **The registry is code.** `All` (collections.go — 24 slugs, in display order) is
   the fixed set; adding a tag is one entry with exactly one membership source: a static
   `Slugs` hand list or a `Dataset`. `Kind` decides how the tag renders (editorial chip /
   credential with issuing body and snapshot date / backer brand mark) and its zero value is
@@ -24,6 +24,23 @@ are matched; `cmd/import-collections` writes `companies.collections`, and the se
   `Members` looks its output up in a map keyed by the catalogue's own company slug — see
   [docs/agents/company-identity.md](../../../docs/agents/company-identity.md). What still separates
   a credential is `DropAmbiguous` and the gates, not the spelling.
+- **A name match is refused when the two websites disagree** (`sameSite`, site.go). A source
+  that publishes its members' sites puts them in `Record.Meta[MetaWebsite]`; `Members` compares
+  that against the company's `company_info` website and refuses the pair when both are known and
+  name different sites. Name-only matching tagged Y Combinator's shut-down "Meta" onto Meta
+  Platforms; a first dry run of the portfolios refused ~200 such collisions (YC "Apollo" is
+  apollographql.com, not the catalogue's Apollo). Unknown on either side means "trust the name".
+  Two traps it handles: a stored website that is an ATS board or a shortener
+  (`notACompanySite` — Groupon's is its Greenhouse board) counts as unknown, and a corporate
+  suffix ("yahooinc", "redditinc") still agrees. A `get`/`use`/`try`/`join` prefix deliberately
+  does NOT — that is how two unrelated startups sharing a name look ("mesh.ai" vs "usemesh.com"),
+  at the cost of a few real members whose site carries one (Handshake is joinhandshake.com). Each
+  run logs what it refused, so the trade can be judged from the output.
+- **Venture portfolios drop exits** (portfolios.go). An acquired or shut-down company is
+  dropped in the parser — it hires under its acquirer's name, so its old name only ever matched
+  someone else — while a public one stays. a16z reads the fund's own page (876 companies,
+  725 after exits), not the talent-network API's `a16z` tier (280); `a16z-speedrun` still reads
+  that API, which also means its outage blocks a full run — `-only` (below) is the way around.
 - **Hand lists are guarded, because they silently depend on that rule.** Every entry must be a
   fixed point of `CompanySlug`; the test that pins this found three `eastern_roots.txt` entries
   already tagging the wrong company (`epam-systems-pte-ltd`, 19 open jobs, instead of
@@ -79,8 +96,11 @@ are matched; `cmd/import-collections` writes `companies.collections`, and the se
 
 ## How it works
 `cmd/import-collections` resolves each collection's dataset, matches records to the
-catalogue (`Members`), and writes `companies.collections` via `SetCompanyCollections`
-(main.go:128). Dataset fetches egress through `SOURCES_PROXY_URL` when set — always falling
+catalogue (`Members`), and writes `companies.collections` via `SetCompanyCollections`.
+`-only sequoia,accel` limits a run to the named collections and leaves every other tag as
+stored — resolution is all-or-nothing on purpose, so one upstream that is down would
+otherwise block every collection; a scoped run does not reconcile `RetiredSlugs`.
+Dataset fetches egress through `SOURCES_PROXY_URL` when set — always falling
 back to direct (main.go:196-228) — and a per-collection `<SLUG>_DATASET_URL` override
 (e.g. `YC_DATASET_URL`) wins over the pinned URL (main.go:410-425). `cmd/harvest-ats`
 re-reads the same datasets to mine new companies for board discovery

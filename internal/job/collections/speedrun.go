@@ -27,12 +27,11 @@ const speedrunUserAgent = "freehire/0.1 (+https://freehire.me)"
 // size, so this leaves a wide margin while keeping the run finite.
 const speedrunPageLimit = 100
 
-// The directory's own tier values. `market` is deliberately absent: it is the
-// general job market, not an a16z relationship, and nothing here may import it.
-const (
-	speedrunTierPortfolio   = "a16z"
-	speedrunTierAccelerator = "speedrun"
-)
+// The directory's tier value for the accelerator's cohorts. Its `a16z` tier is the
+// subset of the fund's portfolio on the talent network; a16z-portfolio reads the full
+// portfolio from a16z.com instead (see portfolios.go). `market` is the general job
+// market, not an a16z relationship, and nothing here may import it.
+const speedrunTierAccelerator = "speedrun"
 
 // The a16z Speedrun talent network publishes its company directory as a paginated
 // JSON API — the same one internal/ingest/sources/speedrun.go crawls for roles. It is the
