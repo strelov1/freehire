@@ -100,6 +100,40 @@ var proxiedProviders = map[string]func(HTTPClient) Source{
 	},
 }
 
+// rotatingProxyProviders are the proxiedProviders that egress through the ROTATING gateway
+// (SOURCES_ROTATING_PROXY_URL, a fresh exit IP per request) instead of SOURCES_PROXY_URL's one
+// fixed exit, when the gateway is configured.
+//
+// naukri: its posting API answered "406 recaptcha required" to every request from the fixed
+// exit (0 of 1,500 a run on 2026-10-19), while through the rotating gateway 15 of 20 answered
+// 200 and the other five timed out, with no refusal at all (2026-10-21). Its search answers
+// either way. Every other proxied provider keeps the fixed exit: a fresh IP per request would
+// break any flow that leans on a session.
+var rotatingProxyProviders = map[string]bool{"naukri": true}
+
+// proxyFor is the proxy a proxied provider egresses through: the rotating gateway for the
+// rotatingProxyProviders when one is configured, the fixed exit otherwise.
+func proxyFor(provider string, fixed, rotating *url.URL) *url.URL {
+	if rotating != nil && rotatingProxyProviders[provider] {
+		return rotating
+	}
+	return fixed
+}
+
+// rotatingProxy reads SOURCES_ROTATING_PROXY_URL: nil when unset, an error when set but
+// unparseable.
+func rotatingProxy() (*url.URL, error) {
+	raw := strings.TrimSpace(os.Getenv("SOURCES_ROTATING_PROXY_URL"))
+	if raw == "" {
+		return nil, nil
+	}
+	u, err := url.Parse(raw)
+	if err != nil || u.Host == "" {
+		return nil, fmt.Errorf("sources: invalid SOURCES_ROTATING_PROXY_URL %q", redactProxy(raw))
+	}
+	return u, nil
+}
+
 // refusalRetryProviders is the second, weaker opt-in: providers that crawl on the DIRECT IP
 // and reach for the proxy only on a request the platform refused. proxiedProviders above is for
 // an IP that is blocked outright — there the direct path never works, so everything must egress
@@ -156,11 +190,20 @@ func ApplyProxyEgress(registry map[string]Source) error {
 		// Redacted() strips any password so the invalid value can be surfaced safely.
 		return fmt.Errorf("sources: invalid SOURCES_PROXY_URL %q", redactProxy(raw))
 	}
+	rotating, err := rotatingProxy()
+	if err != nil {
+		return err
+	}
 	proxied := NewProxyClient(u)
 	for name, build := range proxiedProviders {
-		if _, ok := registry[name]; ok {
-			registry[name] = build(proxied)
+		if _, ok := registry[name]; !ok {
+			continue
 		}
+		client := proxied
+		if p := proxyFor(name, u, rotating); p != u {
+			client = NewProxyClient(p)
+		}
+		registry[name] = build(client)
 	}
 	// The refusal-retry providers keep the direct IP and get the proxy only for what it turned
 	// away, so they are rewired over a different client than the wholly-proxied ones above.
@@ -223,9 +266,13 @@ func ClientFor(provider string) (*Client, error) {
 	if err != nil || u.Host == "" {
 		return nil, fmt.Errorf("sources: invalid SOURCES_PROXY_URL %q", redactProxy(raw))
 	}
+	rotating, err := rotatingProxy()
+	if err != nil {
+		return nil, err
+	}
 	switch {
 	case proxiedProviders[provider] != nil:
-		return NewProxyClient(u), nil
+		return NewProxyClient(proxyFor(provider, u, rotating)), nil
 	case refusalRetryProviders[provider] != nil:
 		return NewRefusalRetryClient(u), nil
 	default:

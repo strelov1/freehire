@@ -1,6 +1,7 @@
 package sources
 
 import (
+	"net/url"
 	"strings"
 	"testing"
 )
@@ -85,5 +86,31 @@ func TestRedactProxyStripsPassword(t *testing.T) {
 		if got := redactProxy(in); strings.Contains(got, "sup3rsecret") {
 			t.Errorf("redactProxy(%q) = %q, still contains the password", in, got)
 		}
+	}
+}
+
+// naukri's posting API refuses the one fixed proxy exit ("recaptcha required") and serves the
+// rotating gateway, a fresh exit per request; every other proxied provider keeps the fixed
+// exit, and without a rotating gateway naukri keeps it too.
+func TestProxyForSendsOnlyTheRotatingProvidersThroughTheGateway(t *testing.T) {
+	fixed, _ := url.Parse("http://user:pass@203.0.113.7:5987")
+	rotating, _ := url.Parse("http://user-rotate:pass@p.example:80")
+	if got := proxyFor("naukri", fixed, rotating); got != rotating {
+		t.Errorf("naukri proxy = %v, want the rotating gateway", got)
+	}
+	if got := proxyFor("enlizt", fixed, rotating); got != fixed {
+		t.Errorf("enlizt proxy = %v, want the fixed exit", got)
+	}
+	if got := proxyFor("naukri", fixed, nil); got != fixed {
+		t.Errorf("naukri without a gateway = %v, want the fixed exit", got)
+	}
+}
+
+func TestApplyProxyEgressRefusesAnUnparseableRotatingGateway(t *testing.T) {
+	t.Setenv("SOURCES_PROXY_URL", "http://user:pass@proxy.example:8080")
+	t.Setenv("SOURCES_ROTATING_PROXY_URL", "http://user:sup3rsecret@proxy.example:80/\x7f")
+	err := ApplyProxyEgress(All(NewClient()))
+	if err == nil || strings.Contains(err.Error(), "sup3rsecret") {
+		t.Fatalf("err = %v, want a refusal that does not print the password", err)
 	}
 }
