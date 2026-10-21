@@ -50,12 +50,12 @@ func TestParse(t *testing.T) {
 		{
 			name:     "polish spelling of warsaw resolves to PL",
 			location: "Warszawa",
-			want:     Geo{Countries: []string{"pl"}, Regions: []string{"eu"}, Cities: []string{"Warsaw"}, Metros: []string{"Warsaw, PL"}},
+			want:     Geo{Countries: []string{"pl"}, Regions: []string{"eu"}, Cities: []string{"Warsaw"}, Metros: []string{"Warsaw (PL)"}},
 		},
 		{
 			name:     "polish city with diacritics",
 			location: "Łódź, Poland",
-			want:     Geo{Countries: []string{"pl"}, Regions: []string{"eu"}, Cities: []string{"Łódź"}, Metros: []string{"Łódź, PL"}},
+			want:     Geo{Countries: []string{"pl"}, Regions: []string{"eu"}, Cities: []string{"Łódź"}, Metros: []string{"Łódź (PL)"}},
 		},
 		// Countries that carried a region in countryToRegion but no name in nameToCountry:
 		// placeable once identified, yet unable to identify themselves. See
@@ -63,12 +63,12 @@ func TestParse(t *testing.T) {
 		{
 			name:     "honduras named in full resolves to its code and region",
 			location: "San Pedro Sula, Honduras",
-			want:     Geo{Countries: []string{"hn"}, Regions: []string{"latam"}, Cities: []string{"San Pedro Sula"}, Metros: []string{"San Pedro Sula, HN"}},
+			want:     Geo{Countries: []string{"hn"}, Regions: []string{"latam"}, Cities: []string{"San Pedro Sula"}, Metros: []string{"San Pedro Sula (HN)"}},
 		},
 		{
 			name:     "rwanda named in full resolves to its code and region",
 			location: "Kigali, Rwanda",
-			want:     Geo{Countries: []string{"rw"}, Regions: []string{"africa"}, Cities: []string{"Kigali"}, Metros: []string{"Kigali, RW"}},
+			want:     Geo{Countries: []string{"rw"}, Regions: []string{"africa"}, Cities: []string{"Kigali"}, Metros: []string{"Kigali (RW)"}},
 		},
 		{
 			// Before the country name existed, "laos" fell through to the long-tail city
@@ -96,22 +96,22 @@ func TestParse(t *testing.T) {
 		{
 			name:     "LA stays louisiana rather than laos",
 			location: "Baton Rouge, LA",
-			want:     Geo{Countries: []string{"us"}, Regions: []string{"north_america"}, Cities: []string{"Baton Rouge"}, Metros: []string{"Baton Rouge, US"}},
+			want:     Geo{Countries: []string{"us"}, Regions: []string{"north_america"}, Cities: []string{"Baton Rouge"}, Metros: []string{"Baton Rouge (US)"}},
 		},
 		{
 			name:     "MN stays minnesota rather than mongolia",
 			location: "Minneapolis, MN",
-			want:     Geo{Countries: []string{"us"}, Regions: []string{"north_america"}, Cities: []string{"Minneapolis"}, Metros: []string{"Minneapolis, US"}},
+			want:     Geo{Countries: []string{"us"}, Regions: []string{"north_america"}, Cities: []string{"Minneapolis"}, Metros: []string{"Minneapolis (US)"}},
 		},
 		{
 			name:     "MO stays missouri rather than macao",
 			location: "St. Louis, MO",
-			want:     Geo{Countries: []string{"us"}, Regions: []string{"north_america"}, Cities: []string{"St. Louis"}, Metros: []string{"St. Louis, US"}},
+			want:     Geo{Countries: []string{"us"}, Regions: []string{"north_america"}, Cities: []string{"St. Louis"}, Metros: []string{"St. Louis (US)"}},
 		},
 		{
 			name:     "unambiguous UK city",
 			location: "Manchester",
-			want:     Geo{Countries: []string{"gb"}, Regions: []string{"uk"}, Cities: []string{"Manchester"}, Metros: []string{"Manchester, GB"}},
+			want:     Geo{Countries: []string{"gb"}, Regions: []string{"uk"}, Cities: []string{"Manchester"}, Metros: []string{"Manchester (GB)"}},
 		},
 		{
 			name:     "accented montreal resolves to CA",
@@ -121,12 +121,12 @@ func TestParse(t *testing.T) {
 		{
 			name:     "australian beacon city",
 			location: "Brisbane",
-			want:     Geo{Countries: []string{"au"}, Regions: []string{"apac"}, Cities: []string{"Brisbane"}, Metros: []string{"Brisbane, AU"}},
+			want:     Geo{Countries: []string{"au"}, Regions: []string{"apac"}, Cities: []string{"Brisbane"}, Metros: []string{"Brisbane (AU)"}},
 		},
 		{
 			name:     "new zealand beacon city",
 			location: "Auckland",
-			want:     Geo{Countries: []string{"nz"}, Regions: []string{"apac"}, Cities: []string{"Auckland"}, Metros: []string{"Auckland, NZ"}},
+			want:     Geo{Countries: []string{"nz"}, Regions: []string{"apac"}, Cities: []string{"Auckland"}, Metros: []string{"Auckland (NZ)"}},
 		},
 		{
 			// A remote job that resolves no geography at all states nothing about where
@@ -156,27 +156,27 @@ func TestParse(t *testing.T) {
 		{
 			name:     "hybrid marker with city",
 			location: "Hybrid - London",
-			want:     Geo{Countries: []string{"gb"}, Regions: []string{"uk"}, Cities: []string{"London"}, WorkMode: "hybrid", Metros: []string{"London, GB"}},
+			want:     Geo{Countries: []string{"gb"}, Regions: []string{"uk"}, Cities: []string{"London"}, WorkMode: "hybrid", Metros: []string{"London (GB)"}},
 		},
 		{
 			name:     "onsite marker in parentheses keeps the city",
 			location: "Berlin (On-site)",
-			want:     Geo{Countries: []string{"de"}, Regions: []string{"eu"}, Cities: []string{"Berlin"}, WorkMode: "onsite", Metros: []string{"Berlin, DE"}},
+			want:     Geo{Countries: []string{"de"}, Regions: []string{"eu"}, Cities: []string{"Berlin"}, WorkMode: "onsite", Metros: []string{"Berlin (DE)"}},
 		},
 		{
 			name:     "hybrid wins over a remote marker in the same string",
 			location: "Hybrid / Remote - London",
-			want:     Geo{Countries: []string{"gb"}, Regions: []string{"uk"}, Cities: []string{"London"}, WorkMode: "hybrid", Metros: []string{"London, GB"}},
+			want:     Geo{Countries: []string{"gb"}, Regions: []string{"uk"}, Cities: []string{"London"}, WorkMode: "hybrid", Metros: []string{"London (GB)"}},
 		},
 		{
 			name:     "country buried among unknown tokens",
 			location: "Burlington, Massachusetts, United States; Remote",
-			want:     Geo{Countries: []string{"us"}, Regions: []string{"north_america"}, Cities: []string{"Burlington"}, WorkMode: "remote", Metros: []string{"Boston, US"}},
+			want:     Geo{Countries: []string{"us"}, Regions: []string{"north_america"}, Cities: []string{"Burlington"}, WorkMode: "remote", Metros: []string{"Boston (US)"}},
 		},
 		{
 			name:     "Central Asia: Uzbek district, city, country (Uzbek spelling)",
 			location: "Yunusobod, Toshkent, Uzbekistan",
-			want:     Geo{Countries: []string{"uz"}, Regions: []string{"cis"}, Cities: []string{"Tashkent", "Yunusobod"}, Metros: []string{"Tashkent, UZ"}},
+			want:     Geo{Countries: []string{"uz"}, Regions: []string{"cis"}, Cities: []string{"Tashkent", "Yunusobod"}, Metros: []string{"Tashkent (UZ)"}},
 		},
 		{
 			name:     "Central Asia: remote Kazakhstan",
@@ -186,12 +186,12 @@ func TestParse(t *testing.T) {
 		{
 			name:     "CIS: Baku via city and country",
 			location: "Baku, Azerbaijan",
-			want:     Geo{Countries: []string{"az"}, Regions: []string{"cis"}, Cities: []string{"Baku"}, Metros: []string{"Baku, AZ"}},
+			want:     Geo{Countries: []string{"az"}, Regions: []string{"cis"}, Cities: []string{"Baku"}, Metros: []string{"Baku (AZ)"}},
 		},
 		{
 			name:     "country-only Georgia is the US state, not the country (no false ge)",
 			location: "Atlanta, Georgia, United States",
-			want:     Geo{Countries: []string{"us"}, Regions: []string{"north_america"}, Cities: []string{"Atlanta"}, Metros: []string{"Atlanta, US"}},
+			want:     Geo{Countries: []string{"us"}, Regions: []string{"north_america"}, Cities: []string{"Atlanta"}, Metros: []string{"Atlanta (US)"}},
 		},
 		{
 			name:     "empty location",
@@ -239,7 +239,7 @@ func TestParse(t *testing.T) {
 			// country is right, not merely absent.
 			name:     "hyphenated city does not misfire",
 			location: "stoke-on-trent",
-			want:     Geo{Countries: []string{"gb"}, Regions: []string{"uk"}, Cities: []string{"Stoke-on-Trent"}, Metros: []string{"Stoke-on-Trent, GB"}},
+			want:     Geo{Countries: []string{"gb"}, Regions: []string{"uk"}, Cities: []string{"Stoke-on-Trent"}, Metros: []string{"Stoke-on-Trent (GB)"}},
 		},
 	}
 
@@ -272,12 +272,12 @@ func TestParseNorthAmerica(t *testing.T) {
 		{
 			name:     "US City, ST",
 			location: "Austin, TX",
-			want:     Geo{Countries: []string{"us"}, Regions: []string{"north_america"}, Cities: []string{"Austin"}, Metros: []string{"Austin, US"}},
+			want:     Geo{Countries: []string{"us"}, Regions: []string{"north_america"}, Cities: []string{"Austin"}, Metros: []string{"Austin (US)"}},
 		},
 		{
 			name:     "US state code CA is California, not Canada",
 			location: "San Francisco, CA",
-			want:     Geo{Countries: []string{"us"}, Regions: []string{"north_america"}, Cities: []string{"San Francisco"}, Metros: []string{"San Francisco Bay Area, US"}},
+			want:     Geo{Countries: []string{"us"}, Regions: []string{"north_america"}, Cities: []string{"San Francisco"}, Metros: []string{"San Francisco Bay Area (US)"}},
 		},
 		{
 			name:     "US full state name",
@@ -297,22 +297,22 @@ func TestParseNorthAmerica(t *testing.T) {
 		{
 			name:     "Canadian province code maps to north_america",
 			location: "Toronto, ON",
-			want:     Geo{Countries: []string{"ca"}, Regions: []string{"north_america"}, Cities: []string{"Toronto"}, Metros: []string{"Toronto, CA"}},
+			want:     Geo{Countries: []string{"ca"}, Regions: []string{"north_america"}, Cities: []string{"Toronto"}, Metros: []string{"Toronto (CA)"}},
 		},
 		{
 			name:     "Canadian full province name",
 			location: "Vancouver, British Columbia",
-			want:     Geo{Countries: []string{"ca"}, Regions: []string{"north_america"}, Cities: []string{"Vancouver"}, Metros: []string{"Vancouver, CA"}},
+			want:     Geo{Countries: []string{"ca"}, Regions: []string{"north_america"}, Cities: []string{"Vancouver"}, Metros: []string{"Vancouver (CA)"}},
 		},
 		{
 			name:     "Washington DC resolves to us",
 			location: "Washington, DC",
-			want:     Geo{Countries: []string{"us"}, Regions: []string{"north_america"}, Cities: []string{"Washington"}, Metros: []string{"Washington, US"}},
+			want:     Geo{Countries: []string{"us"}, Regions: []string{"north_america"}, Cities: []string{"Washington"}, Metros: []string{"Washington (US)"}},
 		},
 		{
 			name:     "country Georgia is never misread as the US state",
 			location: "Tbilisi, Georgia",
-			want:     Geo{Countries: []string{"ge"}, Regions: []string{"cis"}, Cities: []string{"Tbilisi"}, Metros: []string{"Tbilisi, GE"}},
+			want:     Geo{Countries: []string{"ge"}, Regions: []string{"cis"}, Cities: []string{"Tbilisi"}, Metros: []string{"Tbilisi (GE)"}},
 		},
 	}
 
@@ -341,24 +341,24 @@ func TestParseSubdivisionCountryCodeCollision(t *testing.T) {
 		{
 			name:     "Tel Aviv, IL is Israel, not Illinois",
 			location: "Tel Aviv, IL",
-			want:     Geo{Countries: []string{"il"}, Regions: []string{"mena"}, Cities: []string{"Tel Aviv"}, Metros: []string{"Tel Aviv, IL"}},
+			want:     Geo{Countries: []string{"il"}, Regions: []string{"mena"}, Cities: []string{"Tel Aviv"}, Metros: []string{"Tel Aviv (IL)"}},
 		},
 		{
 			name:     "Vientiane, LA is Laos, not Louisiana",
 			location: "Vientiane, LA",
-			want:     Geo{Countries: []string{"la"}, Regions: []string{"apac"}, Cities: []string{"Vientiane"}, Metros: []string{"Vientiane, LA"}},
+			want:     Geo{Countries: []string{"la"}, Regions: []string{"apac"}, Cities: []string{"Vientiane"}, Metros: []string{"Vientiane (LA)"}},
 		},
 		{
 			name:     "Panama City, PA is Panama, not Pennsylvania",
 			location: "Panama City, PA",
-			want:     Geo{Countries: []string{"pa"}, Regions: []string{"latam"}, Cities: []string{"Panama City"}, Metros: []string{"Panama City, PA"}},
+			want:     Geo{Countries: []string{"pa"}, Regions: []string{"latam"}, Cities: []string{"Panama City"}, Metros: []string{"Panama City (PA)"}},
 		},
 		{
 			// Regression guard: a genuine US city still wins its colliding state code
 			// when the preceding token corroborates it.
 			name:     "Chicago, IL stays Illinois, not Israel",
 			location: "Chicago, IL",
-			want:     Geo{Countries: []string{"us"}, Regions: []string{"north_america"}, Cities: []string{"Chicago"}, Metros: []string{"Chicago, US"}},
+			want:     Geo{Countries: []string{"us"}, Regions: []string{"north_america"}, Cities: []string{"Chicago"}, Metros: []string{"Chicago (US)"}},
 		},
 		{
 			// Same collision, dash-delimited instead of comma-delimited: the lead
@@ -370,12 +370,12 @@ func TestParseSubdivisionCountryCodeCollision(t *testing.T) {
 		{
 			name:     "Carmel, IN stays Indiana, not India",
 			location: "Carmel, IN",
-			want:     Geo{Countries: []string{"us"}, Regions: []string{"north_america"}, Cities: []string{"Carmel"}, Metros: []string{"Indianapolis, US"}},
+			want:     Geo{Countries: []string{"us"}, Regions: []string{"north_america"}, Cities: []string{"Carmel"}, Metros: []string{"Indianapolis (US)"}},
 		},
 		{
 			name:     "Brownsburg, IN stays Indiana, not India",
 			location: "Brownsburg, IN",
-			want:     Geo{Countries: []string{"us"}, Regions: []string{"north_america"}, Cities: []string{"Brownsburg"}, Metros: []string{"Indianapolis, US"}},
+			want:     Geo{Countries: []string{"us"}, Regions: []string{"north_america"}, Cities: []string{"Brownsburg"}, Metros: []string{"Indianapolis (US)"}},
 		},
 		{
 			name:     "Auburn, IN, US stays Indiana, not India",
@@ -385,32 +385,32 @@ func TestParseSubdivisionCountryCodeCollision(t *testing.T) {
 		{
 			name:     "Wilmington, DE stays Delaware, not Germany",
 			location: "Wilmington, DE",
-			want:     Geo{Countries: []string{"us"}, Regions: []string{"north_america"}, Cities: []string{"Wilmington"}, Metros: []string{"Philadelphia, US"}},
+			want:     Geo{Countries: []string{"us"}, Regions: []string{"north_america"}, Cities: []string{"Wilmington"}, Metros: []string{"Philadelphia (US)"}},
 		},
 		{
 			name:     "Boise, ID stays Idaho, not Indonesia",
 			location: "Boise, ID",
-			want:     Geo{Countries: []string{"us"}, Regions: []string{"north_america"}, Cities: []string{"Boise"}, Metros: []string{"Boise, US"}},
+			want:     Geo{Countries: []string{"us"}, Regions: []string{"north_america"}, Cities: []string{"Boise"}, Metros: []string{"Boise (US)"}},
 		},
 		{
 			name:     "Bangalore, IN stays India, not Indiana",
 			location: "Bangalore, IN",
-			want:     Geo{Countries: []string{"in"}, Regions: []string{"apac"}, Cities: []string{"Bengaluru"}, Metros: []string{"Bengaluru, IN"}},
+			want:     Geo{Countries: []string{"in"}, Regions: []string{"apac"}, Cities: []string{"Bengaluru"}, Metros: []string{"Bengaluru (IN)"}},
 		},
 		{
 			name:     "Mumbai, MH, IN stays India, not Indiana",
 			location: "Mumbai, MH, IN",
-			want:     Geo{Countries: []string{"in"}, Regions: []string{"apac"}, Cities: []string{"Mumbai"}, Metros: []string{"Mumbai, IN"}},
+			want:     Geo{Countries: []string{"in"}, Regions: []string{"apac"}, Cities: []string{"Mumbai"}, Metros: []string{"Mumbai (IN)"}},
 		},
 		{
 			name:     "Berlin, DE stays Germany, not Delaware",
 			location: "Berlin, DE",
-			want:     Geo{Countries: []string{"de"}, Regions: []string{"eu"}, Cities: []string{"Berlin"}, Metros: []string{"Berlin, DE"}},
+			want:     Geo{Countries: []string{"de"}, Regions: []string{"eu"}, Cities: []string{"Berlin"}, Metros: []string{"Berlin (DE)"}},
 		},
 		{
 			name:     "Jakarta, ID stays Indonesia, not Idaho",
 			location: "Jakarta, ID",
-			want:     Geo{Countries: []string{"id"}, Regions: []string{"apac"}, Cities: []string{"Jakarta"}, Metros: []string{"Jakarta, ID"}},
+			want:     Geo{Countries: []string{"id"}, Regions: []string{"apac"}, Cities: []string{"Jakarta"}, Metros: []string{"Jakarta (ID)"}},
 		},
 	}
 
@@ -436,22 +436,22 @@ func TestParseCyrillic(t *testing.T) {
 		{
 			name:     "Cyrillic city Moscow",
 			location: "Москва",
-			want:     Geo{Countries: []string{"ru"}, Regions: []string{"cis"}, Cities: []string{"Moscow"}, Metros: []string{"Moscow, RU"}},
+			want:     Geo{Countries: []string{"ru"}, Regions: []string{"cis"}, Cities: []string{"Moscow"}, Metros: []string{"Moscow (RU)"}},
 		},
 		{
 			name:     "city marker prefix is stripped",
 			location: "г Москва",
-			want:     Geo{Countries: []string{"ru"}, Regions: []string{"cis"}, Cities: []string{"Moscow"}, Metros: []string{"Moscow, RU"}},
+			want:     Geo{Countries: []string{"ru"}, Regions: []string{"cis"}, Cities: []string{"Moscow"}, Metros: []string{"Moscow (RU)"}},
 		},
 		{
 			name:     "hyphenated Cyrillic city",
 			location: "Санкт-Петербург",
-			want:     Geo{Countries: []string{"ru"}, Regions: []string{"cis"}, Cities: []string{"Saint Petersburg"}, Metros: []string{"Saint Petersburg, RU"}},
+			want:     Geo{Countries: []string{"ru"}, Regions: []string{"cis"}, Cities: []string{"Saint Petersburg"}, Metros: []string{"Saint Petersburg (RU)"}},
 		},
 		{
 			name:     "multi-word Cyrillic city",
 			location: "Нижний Новгород",
-			want:     Geo{Countries: []string{"ru"}, Regions: []string{"cis"}, Cities: []string{"Nizhniy Novgorod"}, Metros: []string{"Nizhniy Novgorod, RU"}},
+			want:     Geo{Countries: []string{"ru"}, Regions: []string{"cis"}, Cities: []string{"Nizhniy Novgorod"}, Metros: []string{"Nizhniy Novgorod (RU)"}},
 		},
 		{
 			name:     "country token Россия resolves even past an unknown city",
@@ -476,37 +476,37 @@ func TestParseCyrillic(t *testing.T) {
 		{
 			name:     "Cyrillic hybrid marker with city",
 			location: "Москва, гибрид",
-			want:     Geo{Countries: []string{"ru"}, Regions: []string{"cis"}, Cities: []string{"Moscow"}, WorkMode: "hybrid", Metros: []string{"Moscow, RU"}},
+			want:     Geo{Countries: []string{"ru"}, Regions: []string{"cis"}, Cities: []string{"Moscow"}, WorkMode: "hybrid", Metros: []string{"Moscow (RU)"}},
 		},
 		{
 			name:     "CIS: Minsk maps to Belarus / cis",
 			location: "Минск",
-			want:     Geo{Countries: []string{"by"}, Regions: []string{"cis"}, Cities: []string{"Minsk"}, Metros: []string{"Minsk, BY"}},
+			want:     Geo{Countries: []string{"by"}, Regions: []string{"cis"}, Cities: []string{"Minsk"}, Metros: []string{"Minsk (BY)"}},
 		},
 		{
 			name:     "Central Asia: Tashkent maps to Uzbekistan",
 			location: "Ташкент",
-			want:     Geo{Countries: []string{"uz"}, Regions: []string{"cis"}, Cities: []string{"Tashkent"}, Metros: []string{"Tashkent, UZ"}},
+			want:     Geo{Countries: []string{"uz"}, Regions: []string{"cis"}, Cities: []string{"Tashkent"}, Metros: []string{"Tashkent (UZ)"}},
 		},
 		{
 			name:     "Ukrainian spelling Київ maps to Ukraine / eu",
 			location: "Київ",
-			want:     Geo{Countries: []string{"ua"}, Regions: []string{"eu"}, Cities: []string{"Kyiv"}, Metros: []string{"Kyiv, UA"}},
+			want:     Geo{Countries: []string{"ua"}, Regions: []string{"eu"}, Cities: []string{"Kyiv"}, Metros: []string{"Kyiv (UA)"}},
 		},
 		{
 			name:     "Ukrainian spelling Львів maps to Ukraine / eu",
 			location: "Львів",
-			want:     Geo{Countries: []string{"ua"}, Regions: []string{"eu"}, Cities: []string{"Lviv"}, Metros: []string{"Lviv, UA"}},
+			want:     Geo{Countries: []string{"ua"}, Regions: []string{"eu"}, Cities: []string{"Lviv"}, Metros: []string{"Lviv (UA)"}},
 		},
 		{
 			name:     "Russian spelling Харьков maps to Ukraine / eu",
 			location: "Харьков",
-			want:     Geo{Countries: []string{"ua"}, Regions: []string{"eu"}, Cities: []string{"Kharkiv"}, Metros: []string{"Kharkiv, UA"}},
+			want:     Geo{Countries: []string{"ua"}, Regions: []string{"eu"}, Cities: []string{"Kharkiv"}, Metros: []string{"Kharkiv (UA)"}},
 		},
 		{
 			name:     "Latin Lviv maps to Ukraine / eu without a country token",
 			location: "Lviv",
-			want:     Geo{Countries: []string{"ua"}, Regions: []string{"eu"}, Cities: []string{"Lviv"}, Metros: []string{"Lviv, UA"}},
+			want:     Geo{Countries: []string{"ua"}, Regions: []string{"eu"}, Cities: []string{"Lviv"}, Metros: []string{"Lviv (UA)"}},
 		},
 		{
 			name:     "Ukrainian spelling of the country yields the code without a city",
@@ -516,19 +516,19 @@ func TestParseCyrillic(t *testing.T) {
 		{
 			name:     "Ukrainian city marker м. is stripped like the Russian г.",
 			location: "м. Львів",
-			want:     Geo{Countries: []string{"ua"}, Regions: []string{"eu"}, Cities: []string{"Lviv"}, Metros: []string{"Lviv, UA"}},
+			want:     Geo{Countries: []string{"ua"}, Regions: []string{"eu"}, Cities: []string{"Lviv"}, Metros: []string{"Lviv (UA)"}},
 		},
 		{
 			// The leading "г" is part of the city name, not the "г." city marker. The
 			// name resolves whole, so its own geography (ru/cis) is what lands.
 			name:     "city starting with г is not mistaken for the marker",
 			location: "Грозный",
-			want:     Geo{Countries: []string{"ru"}, Regions: []string{"cis"}, Cities: []string{"Grozny"}, Metros: []string{"Grozny, RU"}},
+			want:     Geo{Countries: []string{"ru"}, Regions: []string{"cis"}, Cities: []string{"Grozny"}, Metros: []string{"Grozny (RU)"}},
 		},
 		{
 			name:     "city starting with м is not mistaken for the marker",
 			location: "Мурманск",
-			want:     Geo{Countries: []string{"ru"}, Regions: []string{"cis"}, Cities: []string{"Murmansk"}, Metros: []string{"Murmansk, RU"}},
+			want:     Geo{Countries: []string{"ru"}, Regions: []string{"cis"}, Cities: []string{"Murmansk"}, Metros: []string{"Murmansk (RU)"}},
 		},
 	}
 
@@ -575,14 +575,14 @@ func TestParseExpandedCoverage(t *testing.T) {
 		want     Geo
 	}{
 		// Trailing bare ISO 3166-1 alpha-2 code ("City, Region, code").
-		{"Shanghai, Shanghai, cn", Geo{Countries: []string{"cn"}, Regions: []string{"apac"}, Cities: []string{"Shanghai"}, Metros: []string{"Shanghai, CN"}}},
-		{"Riyadh, sa", Geo{Countries: []string{"sa"}, Regions: []string{"mena"}, Cities: []string{"Riyadh"}, Metros: []string{"Riyadh, SA"}}},
-		{"Lisboa, Lisboa, pt", Geo{Countries: []string{"pt"}, Regions: []string{"eu"}, Cities: []string{"Lisbon"}, Metros: []string{"Lisbon, PT"}}},
-		{"São Paulo, SP, br", Geo{Countries: []string{"br"}, Regions: []string{"latam"}, Cities: []string{"São Paulo"}, Metros: []string{"São Paulo, BR"}}},
+		{"Shanghai, Shanghai, cn", Geo{Countries: []string{"cn"}, Regions: []string{"apac"}, Cities: []string{"Shanghai"}, Metros: []string{"Shanghai (CN)"}}},
+		{"Riyadh, sa", Geo{Countries: []string{"sa"}, Regions: []string{"mena"}, Cities: []string{"Riyadh"}, Metros: []string{"Riyadh (SA)"}}},
+		{"Lisboa, Lisboa, pt", Geo{Countries: []string{"pt"}, Regions: []string{"eu"}, Cities: []string{"Lisbon"}, Metros: []string{"Lisbon (PT)"}}},
+		{"São Paulo, SP, br", Geo{Countries: []string{"br"}, Regions: []string{"latam"}, Cities: []string{"São Paulo"}, Metros: []string{"São Paulo (BR)"}}},
 		// Beacon cities.
-		{"San Francisco", Geo{Countries: []string{"us"}, Regions: []string{"north_america"}, Cities: []string{"San Francisco"}, Metros: []string{"San Francisco Bay Area, US"}}},
-		{"Athens, Attica, Greece", Geo{Countries: []string{"gr"}, Regions: []string{"eu"}, Cities: []string{"Athens"}, Metros: []string{"Athens, GR"}}},
-		{"Seoul, South Korea", Geo{Countries: []string{"kr"}, Regions: []string{"apac"}, Cities: []string{"Seoul"}, Metros: []string{"Seoul, KR"}}},
+		{"San Francisco", Geo{Countries: []string{"us"}, Regions: []string{"north_america"}, Cities: []string{"San Francisco"}, Metros: []string{"San Francisco Bay Area (US)"}}},
+		{"Athens, Attica, Greece", Geo{Countries: []string{"gr"}, Regions: []string{"eu"}, Cities: []string{"Athens"}, Metros: []string{"Athens (GR)"}}},
+		{"Seoul, South Korea", Geo{Countries: []string{"kr"}, Regions: []string{"apac"}, Cities: []string{"Seoul"}, Metros: []string{"Seoul (KR)"}}},
 		// Country names: English + native + ES/PT/DE.
 		{"China", Geo{Countries: []string{"cn"}, Regions: []string{"apac"}}},
 		{"Brasil", Geo{Countries: []string{"br"}, Regions: []string{"latam"}}},
@@ -617,12 +617,12 @@ func TestParseCityFacetExpansion(t *testing.T) {
 			// The motivating case: a city that used to resolve a country but no city.
 			name:     "curated city emits facet + country + region",
 			location: "Florianópolis",
-			want:     Geo{Countries: []string{"br"}, Regions: []string{"latam"}, Cities: []string{"Florianópolis"}, Metros: []string{"Florianópolis, BR"}},
+			want:     Geo{Countries: []string{"br"}, Regions: []string{"latam"}, Cities: []string{"Florianópolis"}, Metros: []string{"Florianópolis (BR)"}},
 		},
 		{
 			name:     "city with embedded country still resolves the facet",
 			location: "Florianópolis, Brazil",
-			want:     Geo{Countries: []string{"br"}, Regions: []string{"latam"}, Cities: []string{"Florianópolis"}, Metros: []string{"Florianópolis, BR"}},
+			want:     Geo{Countries: []string{"br"}, Regions: []string{"latam"}, Cities: []string{"Florianópolis"}, Metros: []string{"Florianópolis (BR)"}},
 		},
 		{
 			// A long-tail city absent from the hand-curated maps. "Recife" is claimed by
@@ -631,13 +631,13 @@ func TestParseCityFacetExpansion(t *testing.T) {
 			// still states nothing (see the contested cases below).
 			name:     "unambiguous long-tail city states its own country",
 			location: "Recife",
-			want:     Geo{Countries: []string{"br"}, Regions: []string{"latam"}, Cities: []string{"Recife"}, Metros: []string{"Recife, BR"}},
+			want:     Geo{Countries: []string{"br"}, Regions: []string{"latam"}, Cities: []string{"Recife"}, Metros: []string{"Recife (BR)"}},
 		},
 		{
 			// With an explicit country token the geography resolves deterministically too.
 			name:     "long-tail city with a country token resolves geography",
 			location: "Recife, Brazil",
-			want:     Geo{Countries: []string{"br"}, Regions: []string{"latam"}, Cities: []string{"Recife"}, Metros: []string{"Recife, BR"}},
+			want:     Geo{Countries: []string{"br"}, Regions: []string{"latam"}, Cities: []string{"Recife"}, Metros: []string{"Recife (BR)"}},
 		},
 		{
 			// A name two countries share states NO country. This is the guard on the
@@ -660,7 +660,7 @@ func TestParseCityFacetExpansion(t *testing.T) {
 			// the city merely agrees with it.
 			name:     "contested city with a country token resolves",
 			location: "Birmingham, UK",
-			want:     Geo{Countries: []string{"gb"}, Regions: []string{"uk"}, Cities: []string{"Birmingham"}, Metros: []string{"Birmingham, GB"}},
+			want:     Geo{Countries: []string{"gb"}, Regions: []string{"uk"}, Cities: []string{"Birmingham"}, Metros: []string{"Birmingham (GB)"}},
 		},
 		{
 			// The city is the LAST word, never a contributing one. "Anna" is a town in
@@ -680,7 +680,7 @@ func TestParseCityFacetExpansion(t *testing.T) {
 			// search while a stray country would misfile the posting entirely.
 			name:     "stated country wins over a long-tail city before it",
 			location: "Crossroads - London",
-			want:     Geo{Countries: []string{"gb"}, Regions: []string{"uk"}, Cities: []string{"London", "Woonsocket"}, Metros: []string{"London, GB"}},
+			want:     Geo{Countries: []string{"gb"}, Regions: []string{"uk"}, Cities: []string{"London", "Woonsocket"}, Metros: []string{"London (GB)"}},
 		},
 		{
 			// With no other signal in the line, the city is all there is — and it speaks.
@@ -688,7 +688,7 @@ func TestParseCityFacetExpansion(t *testing.T) {
 			// unpinned production postings name a real place and nothing else.
 			name:     "lone long-tail city speaks when nothing else does",
 			location: "Colorado Springs",
-			want:     Geo{Countries: []string{"us"}, Regions: []string{"north_america"}, Cities: []string{"Colorado Springs"}, Metros: []string{"Colorado Springs, US"}},
+			want:     Geo{Countries: []string{"us"}, Regions: []string{"north_america"}, Cities: []string{"Colorado Springs"}, Metros: []string{"Colorado Springs (US)"}},
 		},
 		{
 			// Two individually-unambiguous cities in different countries make the LINE
@@ -709,7 +709,7 @@ func TestParseCityFacetExpansion(t *testing.T) {
 			// same country still speak with one voice.
 			name:     "agreeing long-tail cities still state their shared country",
 			location: "Colorado Springs, Eden Prairie",
-			want:     Geo{Countries: []string{"us"}, Regions: []string{"north_america"}, Cities: []string{"Colorado Springs", "Eden Prairie"}, Metros: []string{"Colorado Springs, US", "Minneapolis, US"}},
+			want:     Geo{Countries: []string{"us"}, Regions: []string{"north_america"}, Cities: []string{"Colorado Springs", "Eden Prairie"}, Metros: []string{"Colorado Springs (US)", "Minneapolis (US)"}},
 		},
 		{
 			// "usa" appears among a Japanese city's GeoNames alternate names; the

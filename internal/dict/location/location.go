@@ -26,7 +26,7 @@ type Geo struct {
 	Regions   []string
 	Cities    []string // canonical city names for resolved beacon cities; empty when none
 	WorkMode  string   // "", "remote", "hybrid", or "onsite" — only on an explicit marker
-	Metros    []string // metro values ("Sacramento, US"); dict-only, see metros.go
+	Metros    []string // metro values ("Sacramento (US)"); dict-only, see metros.go
 }
 
 // separatorReplacer normalizes every token separator to a comma in one pass so a

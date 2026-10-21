@@ -37,7 +37,7 @@ func TestMetroNamesByPopulationWithOverride(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got[1255] != "San Francisco Bay Area, US" || got[7] != "Sacramento, US" {
+	if got[1255] != "San Francisco Bay Area (US)" || got[7] != "Sacramento (US)" {
 		t.Errorf("metroNames = %v", got)
 	}
 }
@@ -51,7 +51,7 @@ func TestMetroNamesDominantNamesakeKeepsPlainName(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got[1] != "Springfield, US" || got[2] != "Springfield MO, US" {
+	if got[1] != "Springfield (US)" || got[2] != "Springfield MO (US)" {
 		t.Errorf("metroNames = %v", got)
 	}
 }
@@ -66,7 +66,7 @@ func TestMetroNamesQualifiesNonUSByAdmin1Name(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got[3] != "Planaltina, BR" || got[2] != "Planaltina Goiás, BR" {
+	if got[3] != "Planaltina (BR)" || got[2] != "Planaltina Goiás (BR)" {
 		t.Errorf("metroNames = %v", got)
 	}
 }
@@ -80,7 +80,7 @@ func TestMetroNamesFallsThroughToAdmin2(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got[1] != "Udaipur, IN" || got[2] != "Udaipur Jaipur, IN" {
+	if got[1] != "Udaipur (IN)" || got[2] != "Udaipur Jaipur (IN)" {
 		t.Errorf("metroNames = %v", got)
 	}
 	// A qualifier equal to the name is skipped too.
@@ -89,7 +89,7 @@ func TestMetroNamesFallsThroughToAdmin2(t *testing.T) {
 		{gnPlace{name: "Una", country: "in", region: "Una", district: "Una", pop: 8}, 2},
 	}
 	got, err = metroNames(as, map[int]float64{1: 1, 2: 2}, nil)
-	if err != nil || got[2] != "Una, IN" || got[1] != "Una Hamirpur, IN" {
+	if err != nil || got[2] != "Una (IN)" || got[1] != "Una Hamirpur (IN)" {
 		t.Errorf("metroNames = %v, %v", got, err)
 	}
 }
@@ -114,7 +114,7 @@ func TestMetroNamesQualifiedValueCollidingWithExistingFallsThrough(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got[2] != "Foo Baz, XX" || got[3] != "Foo Bar, XX" {
+	if got[2] != "Foo Baz (XX)" || got[3] != "Foo Bar (XX)" {
 		t.Errorf("metroNames = %v", got)
 	}
 	// With no admin2 to fall to, the same shape must fail rather than emit a duplicate.

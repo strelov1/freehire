@@ -10,20 +10,20 @@ func TestParseMetros(t *testing.T) {
 		in   string
 		want []string
 	}{
-		{"Folsom, CA", []string{"Sacramento, US"}},
-		{"Roseville, California, United States", []string{"Sacramento, US"}},
-		{"Roseville, MI", []string{"Detroit, US"}},
-		{"Roseville", nil},                     // three US Rosevilles, three metros
-		{"Folsom", []string{"Sacramento, US"}}, // one US Folsom in the table
-		{"Khimki, Russia", []string{"Moscow, RU"}},
-		{"San Diego, CA", []string{"San Diego, US"}},
+		{"Folsom (CA)", []string{"Sacramento (US)"}},
+		{"Roseville, California, United States", []string{"Sacramento (US)"}},
+		{"Roseville, MI", []string{"Detroit (US)"}},
+		{"Roseville", nil},                      // three US Rosevilles, three metros
+		{"Folsom", []string{"Sacramento (US)"}}, // one US Folsom in the table
+		{"Khimki, Russia", []string{"Moscow (RU)"}},
+		{"San Diego (CA)", []string{"San Diego (US)"}},
 		{"Remote", nil},
-		{"Unknownville, CA", nil},
-		{"Washington, DC", []string{"Washington, US"}},
+		{"Unknownville (CA)", nil},
+		{"Washington, DC", []string{"Washington (US)"}},
 		// Two stated subdivisions: no bare-name fallback, so Folsom (which is not in PA
 		// or TX) gets no metro while the cities each state does place still do.
-		{"Folsom, PA; Austin, TX", []string{"Austin, US"}},
-		{"Folsom, Pennsylvania, USA / Seattle, WA", []string{"Seattle, US"}},
+		{"Folsom, PA; Austin, TX", []string{"Austin (US)"}},
+		{"Folsom, Pennsylvania, USA / Seattle, WA", []string{"Seattle (US)"}},
 	}
 	for _, c := range cases {
 		if got := Parse(c.in).Metros; !slices.Equal(got, c.want) {
@@ -50,28 +50,28 @@ func TestMetroTableLoads(t *testing.T) {
 
 func TestLoadMetrosBareNameAmbiguity(t *testing.T) {
 	tsv := "# comment\n" +
-		"roseville\tus\tCA\tSacramento, US\n" +
-		"roseville\tus\tMI\tDetroit, US\n" +
-		"folsom\tus\tCA\tSacramento, US\n"
+		"roseville\tus\tCA\tSacramento (US)\n" +
+		"roseville\tus\tMI\tDetroit (US)\n" +
+		"folsom\tus\tCA\tSacramento (US)\n"
 	exact, byName := loadMetros(tsv)
 	if _, ok := byName[[2]string{"roseville", "us"}]; ok {
 		t.Error("ambiguous bare name roseville must not resolve")
 	}
-	if got := byName[[2]string{"folsom", "us"}]; got != "Sacramento, US" {
+	if got := byName[[2]string{"folsom", "us"}]; got != "Sacramento (US)" {
 		t.Errorf("folsom bare = %q", got)
 	}
-	if got := exact[metroKey{"roseville", "us", "MI"}]; got != "Detroit, US" {
+	if got := exact[metroKey{"roseville", "us", "MI"}]; got != "Detroit (US)" {
 		t.Errorf("exact roseville MI = %q", got)
 	}
 }
 
 func TestLoadMetrosDuplicateExactKeyIsDropped(t *testing.T) {
-	tsv := "brentwood\tus\tCA\tSan Francisco, US\n" +
-		"brentwood\tus\tCA\tSacramento, US\n" +
-		"akbarpur\tin\t\tDelhi, IN\n" +
-		"akbarpur\tin\t\tLucknow, IN\n" +
-		"folsom\tus\tCA\tSacramento, US\n" +
-		"folsom\tus\tCA\tSacramento, US\n"
+	tsv := "brentwood\tus\tCA\tSan Francisco (US)\n" +
+		"brentwood\tus\tCA\tSacramento (US)\n" +
+		"akbarpur\tin\t\tDelhi (IN)\n" +
+		"akbarpur\tin\t\tLucknow (IN)\n" +
+		"folsom\tus\tCA\tSacramento (US)\n" +
+		"folsom\tus\tCA\tSacramento (US)\n"
 	exact, byName := loadMetros(tsv)
 	for _, k := range []metroKey{{"brentwood", "us", "CA"}, {"akbarpur", "in", ""}} {
 		if v, ok := exact[k]; ok {
@@ -83,7 +83,7 @@ func TestLoadMetrosDuplicateExactKeyIsDropped(t *testing.T) {
 			t.Errorf("duplicate bare key %v resolved", k)
 		}
 	}
-	if got := exact[metroKey{"folsom", "us", "CA"}]; got != "Sacramento, US" {
+	if got := exact[metroKey{"folsom", "us", "CA"}]; got != "Sacramento (US)" {
 		t.Errorf("repeated identical line must still resolve, got %q", got)
 	}
 }

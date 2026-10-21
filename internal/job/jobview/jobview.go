@@ -67,7 +67,7 @@ type Job struct {
 	// sparse. Values are canonical display names (Title case); the LLM copy is folded
 	// out of the nested Enrichment like the other geography facets.
 	Cities []string `json:"cities"`
-	// Metros is dict-only: the metro areas (GHS-FUA) the location line places the posting in, "Sacramento, US".
+	// Metros is dict-only: the metro areas (GHS-FUA) the location line places the posting in, "Sacramento (US)".
 	Metros []string `json:"metros"`
 	// Collections is the set of curated-collection slugs (e.g. yc, bigtech) the
 	// job's company belongs to, denormalized from the company onto the job. It is a

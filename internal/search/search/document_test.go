@@ -389,9 +389,9 @@ func TestFromJob_CapsIndexedDescription(t *testing.T) {
 
 func TestMergeClosureGeographyWidensMetros(t *testing.T) {
 	d := JobDocument{}
-	d.Metros = []string{"Sacramento, US"}
-	d.MergeClosureGeography(ClosureGeo{Metros: []string{"Detroit, US", "Sacramento, US"}})
-	if !slices.Equal(d.Metros, []string{"Detroit, US", "Sacramento, US"}) {
+	d.Metros = []string{"Sacramento (US)"}
+	d.MergeClosureGeography(ClosureGeo{Metros: []string{"Detroit (US)", "Sacramento (US)"}})
+	if !slices.Equal(d.Metros, []string{"Detroit (US)", "Sacramento (US)"}) {
 		t.Errorf("Metros = %v", d.Metros)
 	}
 }

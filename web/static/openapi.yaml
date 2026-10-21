@@ -1179,10 +1179,8 @@ components:
         items:
           type: string
       description: |
-        Metro areas ("Sacramento, US", "Moscow, RU") — commuting zones from GHS-FUA.
-        A posting is in a metro when its location names a city inside it. Values
-        contain a comma, so unlike other facets they are NOT comma-split: repeat the
-        parameter (`metros=Sacramento, US&metros=Moscow, RU`). Joins the geography
+        Metro areas ("Sacramento (US)", "Moscow (RU)") — commuting zones from GHS-FUA.
+        A posting is in a metro when its location names a city inside it. Joins the geography
         OR-group.
     WorkMode:
       name: work_mode

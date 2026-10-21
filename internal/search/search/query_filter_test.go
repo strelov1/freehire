@@ -344,8 +344,8 @@ func TestFilterFromValues_LocationFacetsORTogether(t *testing.T) {
 	}
 
 	// Metros join the same OR group.
-	got = normalizeGroups(t, FilterFromValues(vals("metros=Sacramento, US&cities=Austin")))
-	want = [][]string{{`cities = "Austin"`, `metros = "Sacramento, US"`}}
+	got = normalizeGroups(t, FilterFromValues(vals("metros=Sacramento (US)&cities=Austin")))
+	want = [][]string{{`cities = "Austin"`, `metros = "Sacramento (US)"`}}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("metros+cities: got %v, want %v", got, want)
 	}
@@ -532,8 +532,8 @@ func TestNarrows(t *testing.T) {
 }
 
 func TestFilterFromValues_MetrosExclude(t *testing.T) {
-	got := normalizeGroups(t, FilterFromValues(vals("metros_exclude=Detroit, US")))
-	want := [][]string{{`metros != "Detroit, US"`}}
+	got := normalizeGroups(t, FilterFromValues(vals("metros_exclude=Detroit (US)")))
+	want := [][]string{{`metros != "Detroit (US)"`}}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("metros_exclude: got %v, want %v", got, want)
 	}

@@ -678,7 +678,7 @@ func TestFields_MetrosReachEveryWriteParams(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
-	want := []string{"Sacramento, US"}
+	want := []string{"Sacramento (US)"}
 	f := j.Fields()
 	if !slices.Equal(f.Metros, want) {
 		t.Fatalf("Fields.Metros = %v, want %v", f.Metros, want)

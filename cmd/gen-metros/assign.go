@@ -59,10 +59,10 @@ func assign(places []gnPlace, fuas []fua) []assigned {
 var qualifyStats = map[string]int{}
 
 // metroNames names each FUA by the most populous place assigned to it, unless
-// overrides names it; returns fuaID → "Name, CC". When several FUAs of one country
+// overrides names it; returns fuaID → "Name (CC)". When several FUAs of one country
 // share a value the one with the largest population (pops) keeps it plain and every
-// other gets a qualifier inserted before the comma: the postal admin1 code for us/ca
-// ("Springfield MO, US"), the admin1 name elsewhere ("Fuyang Anhui, CN"). A qualifier
+// other gets a qualifier inserted before the country suffix: the postal admin1 code for us/ca
+// ("Springfield MO (US)"), the admin1 name elsewhere ("Fuyang Anhui (CN)"). A qualifier
 // that is empty, repeats the name or collides with another value falls through to
 // the admin2 name; a collision that survives that is an error naming the FUA ids,
 // to be settled with an override.
@@ -82,7 +82,7 @@ func metroNames(as []assigned, pops map[int]float64, overrides map[int]string) (
 			name = o
 		}
 		base[id] = name
-		v := name + ", " + strings.ToUpper(b.country)
+		v := name + " (" + strings.ToUpper(b.country) + ")"
 		names[id] = v
 		owners[v] = append(owners[v], id)
 	}
@@ -112,7 +112,7 @@ func metroNames(as []assigned, pops map[int]float64, overrides map[int]string) (
 			if c.q == "" || strings.EqualFold(c.q, base[id]) {
 				continue
 			}
-			v := base[id] + " " + c.q + ", " + cc
+			v := base[id] + " " + c.q + " (" + cc + ")"
 			if taken[v] {
 				continue
 			}

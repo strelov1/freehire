@@ -223,7 +223,7 @@ func filterFromValues(v url.Values, now time.Time) any {
 	var locationGroup []string
 
 	for param, attr := range StringFacets {
-		included := facetParamValues(param, v[param])
+		included := splitFacetValues(v[param])
 		switch {
 		case locationFacets[param]:
 			for _, val := range included {
@@ -242,7 +242,7 @@ func filterFromValues(v url.Values, now time.Time) any {
 			groups = append(groups, group)
 		}
 		// Excluded values: each is its own AND group so all are filtered out.
-		for _, val := range facetParamValues(param, v[param+"_exclude"]) {
+		for _, val := range splitFacetValues(v[param+"_exclude"]) {
 			groups = append(groups, []string{facetNeq(param, attr, val)})
 		}
 	}
@@ -320,26 +320,6 @@ func splitFacetValues(in []string) []string {
 			if part != "" {
 				out = append(out, part)
 			}
-		}
-	}
-	return out
-}
-
-// unsplitFacets are the facets whose canonical values contain a comma ("Sacramento, US"),
-// so splitting on it would shred every value. They take repeated keys only
-// (`metros=A, US&metros=B, DE`).
-var unsplitFacets = map[string]bool{"metros": true}
-
-// facetParamValues reads one facet param's values: comma-split like every other facet,
-// except the ones whose values carry a comma themselves (unsplitFacets).
-func facetParamValues(param string, in []string) []string {
-	if !unsplitFacets[param] {
-		return splitFacetValues(in)
-	}
-	out := make([]string, 0, len(in))
-	for _, s := range in {
-		if s != "" {
-			out = append(out, s)
 		}
 	}
 	return out
