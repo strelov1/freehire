@@ -241,3 +241,46 @@ func TestRequiredFieldsSayNothingAboutAQuestionNobodyCanName(t *testing.T) {
 		t.Errorf("required_fields = %v, want nothing for an unnamed control", fields)
 	}
 }
+
+// An employer vacancy taking applications on freehire has no outside page: the way to
+// apply is this platform's own page, which OJCP names platform_native. Its questions are
+// still published so an agent can prepare the candidate, but only a signed-in person can
+// send it.
+func TestDirectApplyPostingAppliesOnThisPlatform(t *testing.T) {
+	row := openPostingRow()
+	row.Source = "employer"
+	row.ExternalID = "freehire:0b6f"
+	row.URL = ""
+	form := &applyform.Form{Provider: "freehire", Fields: []applyform.Field{
+		{ID: "q1", Label: "Do you hold an EU work permit?", Type: applyform.TypeBoolean, Required: true},
+		{ID: "q2", Label: "Anything else?", Type: applyform.TypeText},
+	}}
+
+	for name, f := range map[string]*applyform.Form{"with questions": form, "no questions": nil} {
+		t.Run(name, func(t *testing.T) {
+			posting := projector().JobPosting(viewOf(row), f)
+			if len(posting.ApplyPaths) != 1 {
+				t.Fatalf("apply_paths = %d entries, want 1", len(posting.ApplyPaths))
+			}
+			path := posting.ApplyPaths[0]
+			if path.Type != "platform_native" {
+				t.Errorf("type = %q, want platform_native", path.Type)
+			}
+			if want := testOrigin + "/jobs/" + row.PublicSlug; path.URL != want {
+				t.Errorf("url = %q, want %q", path.URL, want)
+			}
+			if path.ATSProvider != "" {
+				t.Errorf("ats_provider = %q, want none — freehire is not an ATS", path.ATSProvider)
+			}
+			if f != nil && !slices.Equal(path.RequiredFields, []string{"Do you hold an EU work permit?"}) {
+				t.Errorf("required_fields = %v", path.RequiredFields)
+			}
+			if path.SupportsAgentSubmission {
+				t.Error("supports_agent_submission = true, but only a signed-in candidate can apply")
+			}
+			if err := validateAgainstSchema(t, schemaJobPosting, posting); err != nil {
+				t.Fatalf("platform_native posting rejected: %v", err)
+			}
+		})
+	}
+}

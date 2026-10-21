@@ -16,7 +16,7 @@ import (
 // jobSource is the source identity every vacancy this package writes carries — never
 // editable per-posting, unlike moderation's Source (which defaults to "manual" but accepts
 // the posting's real origin). See employer-job-authoring's spec.
-const jobSource = "employer"
+const jobSource = job.EmployerSource
 
 // ErrJobNotFound is a missing, not-owned, or not-employer-authored edit/close target.
 var ErrJobNotFound = errors.New("employer: vacancy not found")

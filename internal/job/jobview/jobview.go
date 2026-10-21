@@ -41,6 +41,11 @@ type Job struct {
 	CompanySlug   string `json:"company_slug"`
 	Location      string `json:"location"`
 	Description   string `json:"description"`
+	// DirectApply marks an employer vacancy that takes applications on freehire instead
+	// of linking out (job.IsDirectApply); its URL is empty. Omitted for every other
+	// posting rather than served false, so the flag adds nothing to the search index
+	// for the catalogue it does not describe.
+	DirectApply bool `json:"direct_apply,omitempty"`
 	// WorkMode/Skills are served from the jobs dictionary columns ONLY — the
 	// deterministic dictionaries are the sole production source for these facets. The
 	// LLM's enrichment values for them are deliberately excluded from the served object
@@ -225,6 +230,7 @@ func FromDomain(j job.Job, x job.Extras) (Job, error) {
 		ManuallyAdded:      f.ManuallyAdded,
 		ExternalID:         f.ExternalID,
 		URL:                outboundurl.Tag(f.URL),
+		DirectApply:        job.IsDirectApply(f.Source, f.ExternalID),
 		Title:              f.Title,
 		Company:            f.Company,
 		CompanySlug:        f.CompanySlug,

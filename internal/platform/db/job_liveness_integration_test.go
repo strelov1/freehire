@@ -223,3 +223,28 @@ func TestSelectStaleRegisteredCandidatesOnlyPastCutoff(t *testing.T) {
 		t.Fatalf("candidates must be exactly the stale open himalayas job, got %d rows", len(cands))
 	}
 }
+
+// A posting with no outside page (an employer vacancy taking applications on freehire)
+// has nothing to probe: requesting "" fails on every run and the probe would log it
+// forever without learning anything. Its employer closes it.
+func TestSelectOrphanLivenessCandidatesSkipsPostingsWithoutURL(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	ctx := context.Background()
+	truncate(t, pool)
+
+	p := orphanParams("freehire:0b6f", "OnSite")
+	p.Source = "employer"
+	p.URL = ""
+	if _, err := ingestUpsert(ctx, q, p); err != nil {
+		t.Fatalf("upsert on-site vacancy: %v", err)
+	}
+
+	cands, err := q.SelectOrphanLivenessCandidates(ctx, []string{"greenhouse"})
+	if err != nil {
+		t.Fatalf("select candidates: %v", err)
+	}
+	if len(cands) != 0 {
+		t.Fatalf("a posting with no url must not be probed, got %d candidates", len(cands))
+	}
+}

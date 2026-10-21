@@ -2174,6 +2174,9 @@ type Querier interface {
 	// Two open rows may share a URL (an aggregator and an ATS row the dedup passes have not
 	// collapsed), so a canonical row wins over a duplicate, then the most recently confirmed,
 	// with id as the deterministic tiebreak.
+	//
+	// A link that normalizes to nothing matches nothing: a posting with no outside page
+	// stores an empty url, and "https://www." must not answer with one of those.
 	FindOpenJobByURL(ctx context.Context, url string) (string, error)
 	// The (id, title) of one company's open canonical postings — deliberately WITHOUT the
 	// description. The caller groups these into buckets with the same normalized-title function the
@@ -6268,7 +6271,9 @@ type Querier interface {
 	// registered ATS board provider — the sources no ingest run re-crawls and the sweep
 	// therefore never closes (telegram, habr_career, geekjob, …). The caller passes the
 	// ATS provider set from the sources registry; <> ALL excludes them, so a new adapter
-	// never silently becomes a probe target. Closed jobs are skipped (already not open).
+	// never silently becomes a probe target. Closed jobs are skipped (already not open), and
+	// so is a posting with no outside page (an employer vacancy taking applications on
+	// freehire): there is nothing to request, and its employer closes it.
 	SelectOrphanLivenessCandidates(ctx context.Context, atsProviders []string) ([]SelectOrphanLivenessCandidatesRow, error)
 	// Liveness backstop for a registered provider whose ingest sweep cannot reach every open
 	// job — see job-lifecycle: CloseUnseenJobs scopes closes to the company_slugs a run

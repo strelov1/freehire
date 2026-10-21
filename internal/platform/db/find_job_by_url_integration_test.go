@@ -241,3 +241,21 @@ func TestFindOpenJobByURL_UsesTheExpressionIndex(t *testing.T) {
 		t.Errorf("plan does not use jobs_normalized_url_open_idx:\n%s", plan.String())
 	}
 }
+
+// A link that normalizes to nothing must not answer with whichever open posting happens
+// to store no URL (an employer vacancy taking applications on freehire).
+func TestFindOpenJobByURL_EmptyNeverMatches(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	ctx := context.Background()
+	truncate(t, pool)
+
+	if _, err := ingestUpsert(ctx, q, urlJob("freehire:0b6f", "")); err != nil {
+		t.Fatalf("upsert: %v", err)
+	}
+	for _, in := range []string{"", "https://www."} {
+		if _, err := findByURL(t, q, in); !errors.Is(err, pgx.ErrNoRows) {
+			t.Errorf("FindOpenJobByURL(%q) err = %v, want no rows", in, err)
+		}
+	}
+}

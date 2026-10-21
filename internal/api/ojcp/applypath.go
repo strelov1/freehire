@@ -55,14 +55,24 @@ type ApplyPath struct {
 func (p Projector) JobPosting(j jobview.Job, form *applyform.Form) JobPosting {
 	posting := jobPostingFrom(j, p.Origin)
 	posting.OfficialJobURL = p.officialJobURL(j)
-	posting.ApplyPaths = p.applyPaths(j, form)
+	posting.ApplyPaths = p.applyPaths(j, form, posting.URL)
 	return posting
 }
 
 // applyPaths describes how to apply. There is ALWAYS at least one path: the source's own
 // page. Omitting the field for a posting whose form we never captured would read as "there
-// is no way to apply", which is never true.
-func (p Projector) applyPaths(j jobview.Job, form *applyform.Form) []ApplyPath {
+// is no way to apply", which is never true. pageURL is the posting's page on this site.
+func (p Projector) applyPaths(j jobview.Job, form *applyform.Form, pageURL string) []ApplyPath {
+	if j.DirectApply {
+		// An employer vacancy taking applications here has no outside page: the way in is
+		// this platform's own. Its questions are the employer's, not an ATS's, and only a
+		// signed-in candidate can send it, so no agent submits it.
+		path := ApplyPath{Type: "platform_native", URL: pageURL}
+		if form != nil {
+			path.RequiredFields = requiredFieldNames(form)
+		}
+		return []ApplyPath{path}
+	}
 	if form == nil {
 		return []ApplyPath{{
 			Type: "external_redirect",

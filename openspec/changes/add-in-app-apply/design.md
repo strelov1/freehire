@@ -52,16 +52,34 @@ Alternative considered: a fake URL pointing at our own job page — rejected, be
 depends on the external id (circular) and every reader of `jobs.url` (liveness probe, ghost
 crosscheck, link resolution) would fetch our own site as if it were the employer's.
 
-`url = ''` is the honest value. Task 1.3 audits every reader of `jobs.url` for the empty case;
-`source='employer'` already sits outside the crawl, sweep and liveness paths, so the expected
-finding is "jobview and the web CTA only".
+`url = ''` is the honest value. The audit of every reader of `jobs.url` (task 1.3) found no
+crash and no dedup collision — `(source, external_id)` is the key and `url` carries no unique
+index — and these consequences, each handled:
+
+- `cmd/liveness`'s orphan probe DID reach employer rows (`employer` is no ATS provider) and
+  would request `""` on every run: `SelectOrphanLivenessCandidates` now skips `url = ''`.
+- `FindOpenJobByURL` matched a link normalizing to `''` against such a row: it now matches
+  nothing for an empty normalized link.
+- OJCP reported an `external_redirect` with no URL (or, once a `freehire` form exists, an
+  `ats_direct` path naming `freehire` as an ATS): it now reports `platform_native` pointing at
+  the posting's page, and the manifest declares that type.
+- The web apply CTA, the job card's Apply shortcut and the "did you apply?" prompt would
+  render a button going nowhere; the employer edit form refuses to save with an empty url.
+  Both belong to the web tasks (6.2, 6.3, 6.4).
+- `employer.CreateVacancy`'s `Owner(url)` race guard is meaningless for a minted id and is
+  skipped in that mode (task 2.2) — a UUID cannot collide.
+- Left as is: the saved-search webhook payload, `ListJobCopies.apply_url` and the enrichment
+  prompt's `URL:` line already carry an empty value for crawled rows stored without one, and
+  the webhook and copies both carry the slug beside it.
 
 ### 2. Questions live in `apply_forms` with provider `freehire`
 The same `applyform.Form` shape, so the existing display path keeps working. Absent row means
-zero questions. A question's `Field.ID` is server-minted (`q1`…`qN` in submitted order,
-stable across edits by position) so answers reference ids, never labels. Validation
-(`directapply.ValidateQuestions`) is pure and runs before the mint, so a malformed form never
-leaves a vacancy behind. The form is written after the mint in a separate statement; if that
+zero questions. A question's `Field.ID` is server-minted (`q1`…`qN` in submitted order)
+so answers reference ids, never labels. Validation and construction
+(`applyform.FreehireForm`) are pure and run before the mint, so a malformed form never leaves
+a vacancy behind. They live in `applyform`, the package that owns the form shape, and not in
+`directapply`: `directapply` imports `employer` (for the account), and `employer` needs the
+form builder, so placing it in `directapply` would be an import cycle. The form is written after the mint in a separate statement; if that
 write fails the vacancy exists without questions and the request returns 500 — the employer
 re-saves the questions through edit. Accepted because both writes are the employer's own
 idempotent saves, not a cross-party side effect.
@@ -118,9 +136,10 @@ uses. The existing `/apply-form` endpoint stays for captured ATS forms.
 `POST /jobs/:slug/direct-apply` (cookie only) submits.
 
 ### 7. Wire and page
-`jobview` gains `apply_mode: "external" | "freehire"`. For `freehire`, `url` is `""` and the
-web CTA opens `DirectApplyForm.svelte` instead of a link; the badge reads "Only on freehire".
-`jobPostingJsonLd` adds `directApply: true` only when `apply_mode === 'freehire'`.
+`jobview` gains `direct_apply: true`, omitted (not `false`) for every other posting so the
+search index carries nothing new for the rest of the catalogue. For such a vacancy `url` is
+`""` and the web CTA opens `DirectApplyForm.svelte` instead of a link; the badge reads "Only
+on freehire". `jobPostingJsonLd` adds `directApply: true` only when `job.direct_apply`.
 
 ## Risks / Trade-offs
 

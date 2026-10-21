@@ -40,6 +40,12 @@ const defaultSource = "manual"
 // Title, and Company are required; the rest is optional. Source is the posting's real
 // origin (e.g. "workatastartup"); empty defaults to "manual".
 //
+// ExternalID is for a caller that mints the posting's identity itself because the posting
+// lives nowhere else — an employer vacancy taking applications on freehire. When it is set,
+// URL must be empty: the minted id is the dedup key and the url column stays blank, which
+// is the honest value for a posting with no outside page. Every other caller leaves it
+// empty and the URL is the identity, as before.
+//
 // The structured facets are the values a submitter/moderator states explicitly. Regions,
 // Cities, WorkMode, Skills, EmploymentType, and Seniority override the dictionary
 // derivation (see jobderive), and the Salary* fields become an authoritative manual
@@ -48,6 +54,7 @@ const defaultSource = "manual"
 // rather than corrupting the job.
 type CreateInput struct {
 	URL         string
+	ExternalID  string
 	Source      string
 	Title       string
 	Company     string
@@ -73,7 +80,13 @@ type CreateInput struct {
 // submission queue validates contributed content against the same contract a moderator
 // create uses — one source of truth for "what is a valid vacancy".
 func (in CreateInput) Validate() error {
-	if strings.TrimSpace(in.URL) == "" {
+	minted := in.ExternalID != ""
+	switch {
+	case minted && strings.TrimSpace(in.ExternalID) == "":
+		return fmt.Errorf("%w: external id must not be blank", ErrInvalid)
+	case minted && in.URL != "":
+		return fmt.Errorf("%w: a vacancy with its own identity takes no url", ErrInvalid)
+	case !minted && strings.TrimSpace(in.URL) == "":
 		return fmt.Errorf("%w: url is required", ErrInvalid)
 	}
 	if strings.TrimSpace(in.Title) == "" {
@@ -81,6 +94,9 @@ func (in CreateInput) Validate() error {
 	}
 	if strings.TrimSpace(in.Company) == "" {
 		return fmt.Errorf("%w: company is required", ErrInvalid)
+	}
+	if minted {
+		return nil
 	}
 	u, err := url.Parse(in.URL)
 	// err is checked first so u is non-nil before the scheme/host checks (short-circuit).
@@ -137,9 +153,9 @@ func New(repo Repository) *Service {
 }
 
 // Create validates the input, derives the slugs and dictionary facets, and persists the
-// new job (source 'manual', external_id = url). created_by and updated_by are both stamped
-// with the acting moderator: created_by is written on insert, updated_by on a re-create of
-// the same URL.
+// new job (source 'manual', external_id = url, or the caller's minted ExternalID).
+// created_by and updated_by are both stamped with the acting moderator: created_by is
+// written on insert, updated_by on a re-create of the same URL.
 func (s *Service) Create(ctx context.Context, actorID int64, in CreateInput) (job.Job, job.Extras, error) {
 	if err := in.Validate(); err != nil {
 		return job.Job{}, job.Extras{}, err
@@ -148,11 +164,21 @@ func (s *Service) Create(ctx context.Context, actorID int64, in CreateInput) (jo
 	if source == "" {
 		source = defaultSource
 	}
+	// A minted id is only for a posting that takes applications on freehire. Anything else
+	// would store a row with no outside page and no way to apply, which every empty-url
+	// guard downstream would then quietly hide.
+	if in.ExternalID != "" && !job.IsDirectApply(source, in.ExternalID) {
+		return job.Job{}, job.Extras{}, fmt.Errorf("%w: a minted id must be an employer direct-apply id", ErrInvalid)
+	}
 	// Moderator descriptions are bulk-imported from scraped pages and rendered with
 	// {@html}; sanitize to the same allowlist as every other source so no active
 	// markup is ever persisted (stored XSS). Done once and reused for derivation.
 	description := htmltext.Sanitize(in.Description)
-	f, err := derive(source, in.URL, in.Title, in.Company, in.Location, description, in.Remote, in.structured())
+	externalID := in.URL
+	if in.ExternalID != "" {
+		externalID = in.ExternalID
+	}
+	f, err := derive(source, externalID, in.Title, in.Company, in.Location, description, in.Remote, in.structured())
 	if err != nil {
 		return job.Job{}, job.Extras{}, err
 	}

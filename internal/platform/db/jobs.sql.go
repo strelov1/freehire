@@ -1825,6 +1825,7 @@ SELECT COALESCE(canonical.public_slug, j.public_slug)
 FROM jobs j
 LEFT JOIN jobs canonical ON canonical.id = j.duplicate_of AND canonical.closed_at IS NULL
 WHERE normalize_job_url(j.url) = normalize_job_url($1)
+  AND normalize_job_url($1) <> ''
   AND j.closed_at IS NULL
 ORDER BY (j.duplicate_of IS NULL) DESC, j.last_seen_at DESC, j.id DESC
 LIMIT 1
@@ -1850,6 +1851,9 @@ LIMIT 1
 // Two open rows may share a URL (an aggregator and an ATS row the dedup passes have not
 // collapsed), so a canonical row wins over a duplicate, then the most recently confirmed,
 // with id as the deterministic tiebreak.
+//
+// A link that normalizes to nothing matches nothing: a posting with no outside page
+// stores an empty url, and "https://www." must not answer with one of those.
 func (q *Queries) FindOpenJobByURL(ctx context.Context, url string) (string, error) {
 	row := q.db.QueryRow(ctx, findOpenJobByURL, url)
 	var public_slug string
@@ -4929,6 +4933,7 @@ const selectOrphanLivenessCandidates = `-- name: SelectOrphanLivenessCandidates 
 SELECT id, source, url, public_slug, liveness_strikes
 FROM jobs
 WHERE closed_at IS NULL
+  AND url <> ''
   AND source <> ALL($1::text[])
 `
 
@@ -4944,7 +4949,9 @@ type SelectOrphanLivenessCandidatesRow struct {
 // registered ATS board provider — the sources no ingest run re-crawls and the sweep
 // therefore never closes (telegram, habr_career, geekjob, …). The caller passes the
 // ATS provider set from the sources registry; <> ALL excludes them, so a new adapter
-// never silently becomes a probe target. Closed jobs are skipped (already not open).
+// never silently becomes a probe target. Closed jobs are skipped (already not open), and
+// so is a posting with no outside page (an employer vacancy taking applications on
+// freehire): there is nothing to request, and its employer closes it.
 func (q *Queries) SelectOrphanLivenessCandidates(ctx context.Context, atsProviders []string) ([]SelectOrphanLivenessCandidatesRow, error) {
 	rows, err := q.db.Query(ctx, selectOrphanLivenessCandidates, atsProviders)
 	if err != nil {

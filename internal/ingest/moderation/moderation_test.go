@@ -154,6 +154,30 @@ func TestUpdate_SanitizesDescription(t *testing.T) {
 	}
 }
 
+// A caller that mints its own identity (an employer vacancy taking applications on
+// freehire) has no URL: the minted id becomes the dedup key, the url column stays empty,
+// and the public slug derives from the minted id.
+func TestCreate_MintedExternalIDReplacesURL(t *testing.T) {
+	repo := &fakeRepo{}
+	const id = "freehire:0b6f2c1e"
+	_, _, err := moderation.New(repo).Create(context.Background(), 7, moderation.CreateInput{
+		ExternalID: id,
+		Source:     "employer",
+		Title:      "Backend Engineer",
+		Company:    "Acme",
+	})
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	got := repo.created
+	if got.ExternalID != id || got.URL != "" {
+		t.Errorf("external_id/url = %q/%q, want %q/\"\"", got.ExternalID, got.URL, id)
+	}
+	if want := normalize.JobSlug("Backend Engineer", "Acme", "employer", id); got.PublicSlug != want {
+		t.Errorf("PublicSlug = %q, want %q", got.PublicSlug, want)
+	}
+}
+
 func TestCreate_ValidationRejects(t *testing.T) {
 	cases := []struct {
 		name string
@@ -164,6 +188,12 @@ func TestCreate_ValidationRejects(t *testing.T) {
 		{"missing company", moderation.CreateInput{URL: "https://x/1", Title: "T"}},
 		{"non-http url", moderation.CreateInput{URL: "ftp://x/1", Title: "T", Company: "C"}},
 		{"relative url", moderation.CreateInput{URL: "/jobs/1", Title: "T", Company: "C"}},
+		{"minted id beside a url", moderation.CreateInput{ExternalID: "freehire:1", Source: "employer", URL: "https://x/1", Title: "T", Company: "C"}},
+		{"blank minted id", moderation.CreateInput{ExternalID: "   ", Title: "T", Company: "C"}},
+		// A minted id exists only for a posting that takes applications here; anything else
+		// would be a row with no outside page AND no way to apply.
+		{"minted id under the default source", moderation.CreateInput{ExternalID: "freehire:1", Title: "T", Company: "C"}},
+		{"minted id without the prefix", moderation.CreateInput{ExternalID: "abc", Source: "employer", Title: "T", Company: "C"}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

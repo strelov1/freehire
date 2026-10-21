@@ -40,8 +40,8 @@ statuses, payment for posting, auto-apply onto these forms.
   the daily cap, and how the job page and its structured data present it.
 
 ### Modified Capabilities
-(none — the employer job-authoring spec is still an unarchived change,
-`add-employer-company-accounts`; this change only adds behaviour beside it)
+- `ojcp-provider`: an on-site vacancy reports a `platform_native` apply path instead of an
+  `external_redirect` with no URL.
 
 ## Impact
 
