@@ -1,4 +1,4 @@
-.PHONY: help run reindex build tidy sqlc mail-preview gen-contracts gen-cities gen-skill-descriptions cv-previews up down logs migrate psql cover cover-html cover-integration
+.PHONY: help run reindex build tidy sqlc mail-preview gen-contracts gen-cities gen-metros gen-skill-descriptions cv-previews up down logs migrate psql cover cover-html cover-integration
 
 # Prefer Docker; fall back to Podman when `docker` is missing. Override with
 # `make DOCKER=podman up` (or COMPOSE=…) when both are installed.
@@ -45,6 +45,9 @@ gen-contracts: ## Regenerate web/src/lib/generated/contracts.ts from Go contract
 
 gen-cities: ## Regenerate internal/location/cities1000.tsv from the GeoNames dump
 	go run ./cmd/gen-cities
+
+gen-metros: ## Regenerate internal/dict/location/metros.tsv from GeoNames + GHS-FUA
+	go run ./cmd/gen-metros
 
 # Prints to stdout on purpose — the shipped text is reviewed, so a human pipes this into
 # internal/dict/skilltag/descriptions.tsv and edits every line before committing. LIMIT

@@ -141,3 +141,15 @@ func (rg ring) contains(x, y float64) bool {
 	}
 	return in
 }
+
+func (m multiPolygon) bbox() (minX, minY, maxX, maxY float64) {
+	minX, minY = math.Inf(1), math.Inf(1)
+	maxX, maxY = math.Inf(-1), math.Inf(-1)
+	for _, p := range m {
+		for _, pt := range p[0] {
+			minX, maxX = math.Min(minX, pt[0]), math.Max(maxX, pt[0])
+			minY, maxY = math.Min(minY, pt[1]), math.Max(maxY, pt[1])
+		}
+	}
+	return
+}
