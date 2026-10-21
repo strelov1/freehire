@@ -22,7 +22,6 @@ import (
 	"github.com/strelov1/freehire/internal/candidate/resume"
 	"github.com/strelov1/freehire/internal/identity/auth"
 	"github.com/strelov1/freehire/internal/platform/db"
-	"github.com/strelov1/freehire/internal/platform/tracerlink"
 )
 
 // CV-builder HTTP surface: per-user structured CVs (CRUD + seed) and on-demand PDF
@@ -45,8 +44,8 @@ type cvHandlers struct {
 	// tracerSalt keys the visitor hash of a traced click. Empty means the deployment cannot
 	// identify visitors at all, which is why enabling tracing is refused without it.
 	tracerSalt string
-	// tracerMinter issues the tokens a traced render substitutes in; nil disables tracing.
-	tracerMinter *tracerlink.Minter
+	// pdf renders an owned CV the way it is sent — shared with an on-site application.
+	pdf ownedCVPDF
 	// tracerBaseURL is the public origin a traced link points at, e.g. "https://freehire.me".
 	tracerBaseURL string
 	resume        *resume.Store
@@ -129,21 +128,15 @@ func (s trackingBoarder) EnsureOnBoard(ctx context.Context, userID, jobID int64)
 
 // refuseListCap is normally true (Commit refuses over-cap edits). Pass false only when
 // an operator has turned on CV_EDIT_ALLOW_BULLET_TRUNCATION.
-func newCVHandlers(pool *pgxpool.Pool, queries *db.Queries, cvStore *cv.Store, assistantSessions *assistant.Store, cvRenderer cv.Renderer, tracerSalt, baseURL string, servedHosts []string, resumeStore *resume.Store, photoStore *headshot.Store, plans *plan.Store, match *matchHandlers, gate cvedit.EvidenceGate, jobs jobBoarder, letter coverLetterDeps, refuseListCap bool) *cvHandlers {
+func newCVHandlers(pool *pgxpool.Pool, queries *db.Queries, cvStore *cv.Store, assistantSessions *assistant.Store, cvRenderer cv.Renderer, pdf ownedCVPDF, tracerSalt, baseURL string, resumeStore *resume.Store, photoStore *headshot.Store, plans *plan.Store, match *matchHandlers, gate cvedit.EvidenceGate, jobs jobBoarder, letter coverLetterDeps, refuseListCap bool) *cvHandlers {
 	h := &cvHandlers{
 		letter:            letter,
 		cvStore:           cvStore,
 		assistantSessions: assistantSessions,
 		cvRenderer:        cvRenderer,
 		tracerSalt:        tracerSalt,
-		tracerMinter: tracerlink.NewMinter(tracerlink.NewRepository(
-			func(ctx context.Context, cvID uuid.UUID, userID int64, token, sourcePath, destURL, destHash string) (string, error) {
-				return queries.UpsertTracerLink(ctx, db.UpsertTracerLinkParams{
-					CvID: cvID, UserID: userID, Token: token, SourcePath: sourcePath,
-					DestinationUrl: destURL, DestinationHash: destHash,
-				})
-			}), servedHosts),
-		tracerBaseURL: baseURL,
+		pdf:               pdf,
+		tracerBaseURL:     baseURL,
 		// The editor is the only thing that writes a stored CV, and the gate is what
 		// refuses an agent's uncited claim. It is a constructor argument rather than
 		// something attached afterwards: PATCH /me/cvs/:id edits as the agent for any
@@ -520,28 +513,6 @@ func (h *cvHandlers) SetCVTracerLinks(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"data": fiber.Map{"tracer_links_enabled": in.Enabled}})
 }
 
-// tracedHrefs mints a token for each of this CV's traceable links and returns where each should
-// point, or nothing at all when the candidate has not asked for tracing.
-//
-// It runs on every download because the PDF is never stored, so the minting underneath must be
-// idempotent — otherwise three downloads would leave three tokens for one link and scatter the
-// counts across them.
-//
-// A zero value is the ordinary render: the links still resolve absolutely, they just point where
-// the candidate wrote them.
-func (h *cvHandlers) tracedHrefs(ctx context.Context, rec cv.Record, userID int64) cv.LinkHrefs {
-	if !rec.TracerLinksEnabled || h.tracerMinter == nil || h.tracerBaseURL == "" {
-		return cv.LinkHrefs{}
-	}
-	projectLinks := make([]string, len(rec.Document.Projects))
-	for i, p := range rec.Document.Projects {
-		projectLinks[i] = p.Link
-	}
-	minted := h.tracerMinter.Mint(ctx, rec.ID, userID, h.tracerBaseURL,
-		rec.CompanySlug, rec.Document.Header.Links, projectLinks)
-	return cv.LinkHrefs{Header: minted.Header, Projects: minted.Projects}
-}
-
 // tracerLinkResponse is one traced link as the owner reads it.
 type tracerLinkResponse struct {
 	SourcePath     string `json:"source_path"`
@@ -686,26 +657,16 @@ func (h *cvHandlers) RenderCVPDF(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
-	if h.cvRenderer == nil {
+	if h.pdf.renderer == nil {
 		return fiber.NewError(fiber.StatusNotImplemented, "PDF rendering is not available")
 	}
 	id, err := cvPathID(c)
 	if err != nil {
 		return err
 	}
-	rec, err := h.cvStore.Get(c.Context(), id, userID)
+	pdf, err := h.pdf.render(c.Context(), userID, id)
 	if err != nil {
 		return mapCVError(err)
-	}
-	tmpl, err := cv.ResolveTemplate(rec.TemplateID)
-	if err != nil {
-		return mapCVError(err)
-	}
-	pdf, err := h.cvRenderer.Render(c.Context(), rec.Document, tmpl,
-		headshotForTemplate(c.Context(), h.photos, userID, tmpl),
-		h.tracedHrefs(c.Context(), rec, userID))
-	if err != nil {
-		return err
 	}
 	c.Set(fiber.HeaderContentType, "application/pdf")
 	c.Set(fiber.HeaderContentDisposition, `inline; filename="cv.pdf"`)

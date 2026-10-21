@@ -43,6 +43,7 @@ import (
 	"github.com/strelov1/freehire/internal/engage/mentorship"
 	"github.com/strelov1/freehire/internal/engage/processreport"
 	"github.com/strelov1/freehire/internal/engage/referral"
+	"github.com/strelov1/freehire/internal/engage/reminder"
 	"github.com/strelov1/freehire/internal/engage/report"
 	"github.com/strelov1/freehire/internal/engage/webhooknotify"
 	"github.com/strelov1/freehire/internal/identity/accountdelete"
@@ -698,7 +699,10 @@ func Register(app *fiber.App, cfg Config) {
 		chain:   coverletter.NewAnalyzer(cfg.LLM),
 		bank:    bank,
 	}
-	cvH := newCVHandlers(cfg.Pool, queries, cvStore, assistantStore, cvRenderer, cfg.TracerLinkSalt, cfg.FrontendOrigin, servedHostsOrDefault(cfg.ServedHosts, cfg.FrontendOrigin), resumeStore, photoStore, plans, matchH, bankGate{bank: bank}, trackingJobs, letterDeps, !cfg.CVEditAllowBulletTruncation)
+	// How a CV is rendered when its owner sends it somewhere — the CV page's download and an
+	// on-site application share it.
+	cvPDF := newOwnedCVPDF(queries, cvStore, cvRenderer, photoStore, cfg.FrontendOrigin, servedHostsOrDefault(cfg.ServedHosts, cfg.FrontendOrigin))
+	cvH := newCVHandlers(cfg.Pool, queries, cvStore, assistantStore, cvRenderer, cvPDF, cfg.TracerLinkSalt, cfg.FrontendOrigin, resumeStore, photoStore, plans, matchH, bankGate{bank: bank}, trackingJobs, letterDeps, !cfg.CVEditAllowBulletTruncation)
 
 	cvH.llm = llmBinding{client: cfg.LLM, keys: llmKeys}
 	telegramH := newTelegramHandlers(queries, cfg.JWTSecret, cfg.TelegramBotToken, cfg.TelegramBotUsername, cfg.TelegramWebhookSecret, cfg.FrontendOrigin, contributionsH.intake)
@@ -780,7 +784,13 @@ func Register(app *fiber.App, cfg Config) {
 	intentH := newIntentHandlers(llmBinding{client: cmp.Or(cfg.SearchIntentLLM, cfg.LLM), keys: llmKeys})
 	companiesH := newCompaniesHandlers(queries, companySearch)
 	geoH := newGeoHandlers()
-	trackingH := newTrackingHandlers(queries, cfg.Pool, jobSearch)
+	// One reminder service, handed to tracking as its Reminders port and kept by the tracking
+	// handlers for the notification-settings endpoints. Save/unsave/apply schedule and cancel
+	// inside the tracking service, so every caller of it — the tracking routes, the in-app
+	// assistant, the mail reconstruction, an on-site application — gets the same side effect.
+	reminders := reminder.New(reminder.NewQueriesRepository(queries))
+	tracking := jobtracking.New(jobtracking.NewQueriesRepository(queries, cfg.Pool), jobtracking.WithReminders(reminders))
+	trackingH := newTrackingHandlers(queries, tracking, reminders, jobSearch)
 	timelineH := newTimelineHandlers(queries)
 	resumeH := newResumeHandlers(resumeStore, structuredExtractor, facets, profileSvc, atsAnalyzer, queries)
 	photoH := newPhotoHandlers(photoStore)
@@ -889,9 +899,9 @@ func Register(app *fiber.App, cfg Config) {
 		directApplyH.svc = directapply.New(
 			directapply.NewQueriesRepository(queries),
 			employerSvc,
-			directApplyCVs{h: cvH},
+			directApplyCVs{pdf: cvPDF},
 			directApplyMailer{mailer: emailnotify.NewApplicationMailer(mailClient, cfg.NotifyEmailFrom, cfg.FrontendOrigin), origin: cfg.FrontendOrigin},
-			directApplyTracker{tracking: trackingH.tracking},
+			directApplyTracker{tracking: tracking},
 			answerBank,
 			cfg.DirectApplyDailyLimit,
 		)

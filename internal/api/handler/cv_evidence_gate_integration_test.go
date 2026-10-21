@@ -50,8 +50,7 @@ func newCVAPIWithoutAssistant(t *testing.T) (*cvHandlers, *auth.Issuer, *fiber.A
 		assistant.NewStore(queries),
 		// No renderer: this fixture exercises the edit path, and the PDF endpoint's 501
 		// gate is what a nil one means.
-		nil, "test-salt", "https://freehire.test",
-		[]string{"freehire.test"},
+		nil, ownedCVPDF{}, "test-salt", "https://freehire.test",
 		resume.New(nil, resume.NewQueriesRepository(queries)),
 		headshot.New(nil, headshot.NewQueriesRepository(queries)),
 		plans,

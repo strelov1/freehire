@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v2"
-	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/strelov1/freehire/internal/application/appevent"
 	"github.com/strelov1/freehire/internal/application/jobtracking"
@@ -32,14 +31,9 @@ type trackingHandlers struct {
 	queries *db.Queries
 }
 
-func newTrackingHandlers(queries *db.Queries, pool *pgxpool.Pool, search searcher) *trackingHandlers {
-	// One reminder service, handed to tracking as its Reminders port and kept here
-	// for the notification-settings endpoints. Save/unsave/apply schedule and cancel
-	// inside the tracking service, so every caller of it — this handler, the in-app
-	// assistant, the mail reconstruction — gets the same side effect.
-	rem := reminder.New(reminder.NewQueriesRepository(queries))
+func newTrackingHandlers(queries *db.Queries, tracking *jobtracking.Service, rem *reminder.Service, search searcher) *trackingHandlers {
 	return &trackingHandlers{
-		tracking: jobtracking.New(jobtracking.NewQueriesRepository(queries, pool), jobtracking.WithReminders(rem)),
+		tracking: tracking,
 		reminder: rem,
 		search:   search,
 		queries:  queries,

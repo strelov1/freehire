@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"errors"
+	"log"
 	"strings"
 
 	"github.com/gofiber/fiber/v2"
@@ -110,50 +111,50 @@ func (h *directApplyHandlers) Apply(c *fiber.Ctx) error {
 	return c.Status(fiber.StatusCreated).JSON(fiber.Map{"data": fiber.Map{"sent": true}})
 }
 
-// directApplyError maps the use case's refusals onto statuses. A delivery failure is a 502
-// with a fixed message: the mail transport's own error can name the employer's address,
-// which is not the candidate's to read.
+// directApplyStatus is the status of each refusal; the refusal's own text is the body.
+var directApplyStatus = []struct {
+	err    error
+	status int
+}{
+	{directapply.ErrNotFound, fiber.StatusNotFound},
+	{directapply.ErrUnverified, fiber.StatusForbidden},
+	{directapply.ErrClosed, fiber.StatusGone},
+	{directapply.ErrAlreadyApplied, fiber.StatusConflict},
+	{directapply.ErrInProgress, fiber.StatusConflict},
+	{directapply.ErrDailyLimit, fiber.StatusTooManyRequests},
+}
+
+// directApplyError maps the use case's refusals onto statuses. A delivery failure is logged
+// with its cause and answered with ErrDelivery's own text only: the transport's error can
+// name the employer's address, which is not the candidate's to read, and a 502 never
+// reaches Sentry, so the log line is the only trace the cause leaves.
 func directApplyError(err error) error {
 	switch {
 	case errors.Is(err, directapply.ErrInvalid):
 		return fiber.NewError(fiber.StatusBadRequest, strings.TrimPrefix(err.Error(), directapply.ErrInvalid.Error()+": "))
-	case errors.Is(err, directapply.ErrNotFound):
-		return fiber.NewError(fiber.StatusNotFound, "not found")
-	case errors.Is(err, directapply.ErrUnverified):
-		return fiber.NewError(fiber.StatusForbidden, "confirm your email address before applying")
-	case errors.Is(err, directapply.ErrClosed):
-		return fiber.NewError(fiber.StatusGone, "this vacancy no longer takes applications")
-	case errors.Is(err, directapply.ErrAlreadyApplied):
-		return fiber.NewError(fiber.StatusConflict, "you have already applied to this vacancy")
-	case errors.Is(err, directapply.ErrInProgress):
-		return fiber.NewError(fiber.StatusConflict, "your application is being sent")
-	case errors.Is(err, directapply.ErrDailyLimit):
-		return fiber.NewError(fiber.StatusTooManyRequests, "you have reached today's limit of applications")
 	case errors.Is(err, directapply.ErrDelivery):
-		return fiber.NewError(fiber.StatusBadGateway, "the application could not be delivered — try again")
+		log.Printf("directapply: %v", err)
+		return fiber.NewError(fiber.StatusBadGateway, directapply.ErrDelivery.Error())
+	}
+	for _, m := range directApplyStatus {
+		if errors.Is(err, m.err) {
+			return fiber.NewError(m.status, m.err.Error())
+		}
 	}
 	return err
 }
 
-// directApplyCVs renders a CV the candidate owns, the same way the CV page's own PDF
-// download does — template, headshot, and the owner's tracer links, which exist precisely
-// to tell a candidate an employer opened their application.
-type directApplyCVs struct{ h *cvHandlers }
+// directApplyCVs renders the CV a candidate sends with an application — the same render
+// as the CV page's download, tracer links included, which exist precisely to tell a
+// candidate an employer opened their application.
+type directApplyCVs struct{ pdf ownedCVPDF }
 
 func (a directApplyCVs) PDF(ctx context.Context, userID int64, id uuid.UUID) ([]byte, error) {
-	rec, err := a.h.cvStore.Get(ctx, id, userID)
+	b, err := a.pdf.render(ctx, userID, id)
 	if errors.Is(err, cv.ErrNotFound) {
 		return nil, directapply.ErrNotFound
 	}
-	if err != nil {
-		return nil, err
-	}
-	tmpl, err := cv.ResolveTemplate(rec.TemplateID)
-	if err != nil {
-		return nil, err
-	}
-	return a.h.cvRenderer.Render(ctx, rec.Document, tmpl,
-		headshotForTemplate(ctx, a.h.photos, userID, tmpl), a.h.tracedHrefs(ctx, rec, userID))
+	return b, err
 }
 
 // directApplyTracker records the application in the candidate's own tracking.

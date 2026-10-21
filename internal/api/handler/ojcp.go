@@ -142,7 +142,7 @@ func (h *ojcpHandlers) manifest() ojcp.Manifest {
 		// pacing at the declared figure never meets a 429, which is what the declaration is
 		// for. Declaring the burst instead would invite a rate we refuse.
 		AnonymousRPS:   h.declaredAnonymousRPS(),
-		ApplyPathTypes: []string{"ats_direct", "external_redirect", "platform_native"},
+		ApplyPathTypes: ojcp.ApplyPathTypes,
 	})
 }
 

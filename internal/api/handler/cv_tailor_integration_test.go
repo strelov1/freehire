@@ -1222,6 +1222,7 @@ func TestGetCV_SecondHealDoesNotWriteRevision(t *testing.T) {
 func TestListCVsAndPDFDoNotHealHeader(t *testing.T) {
 	h, iss, pool := newTailorAPI(t)
 	h.cvRenderer = &fakeCVRenderer{pdf: []byte("%PDF-1.4 fake")}
+	h.pdf = ownedCVPDF{store: h.cvStore, renderer: h.cvRenderer, photos: h.photos}
 	app := buildTailorApp(h, iss)
 	saved := auth.RequireAuth(iss, testVersions)
 	app.Get("/api/v1/me/cvs", saved, h.ListCVs)

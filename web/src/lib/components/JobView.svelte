@@ -48,7 +48,6 @@
   import GhostChecklist from './GhostChecklist.svelte';
   import AIInterviewBadge from './AIInterviewBadge.svelte';
   import DirectApplyBadge from './DirectApplyBadge.svelte';
-  import DirectApplyDialog from './DirectApplyDialog.svelte';
   import RealityBadge from './RealityBadge.svelte';
   import ReferralBlock from './ReferralBlock.svelte';
   import MentorBlock from './MentorBlock.svelte';
@@ -102,8 +101,17 @@
   let showSignInPrompt = $state(false);
   // The report dialog (a problem-with-this-job complaint) opens over the page.
   let showReport = $state(false);
-  // The application form of a vacancy its employer publishes here (job.direct_apply).
+  // The application form of a vacancy its employer publishes here (job.direct_apply). The
+  // dialog is imported on the click that opens it, like ReferralBlock's modal: only those
+  // few vacancies ever show it, so it stays out of every other job page's module graph.
+  type DirectApplyDialogComponent = typeof import('./DirectApplyDialog.svelte').default;
+  let DirectApplyDialog = $state.raw<DirectApplyDialogComponent | null>(null);
   let showDirectApply = $state(false);
+  let loadingDirectApply = $state(false);
+  // Whether THIS candidate's application reached the employer — read from the application
+  // itself, never from tracking: a vacancy marked applied by hand must still take the
+  // application, and a delivered one must not offer Apply again if tracking lagged.
+  let directApplied = $state(false);
   const applied = $derived(interaction?.applied_at != null);
   const saved = $derived(interaction?.saved_at != null);
 
@@ -231,7 +239,15 @@
     justApplied = false;
     showSignInPrompt = false;
     showDirectApply = false;
+    directApplied = false;
     if (!isAuthenticated()) return; // effects run client-only, so no browser guard needed
+    if (job.direct_apply) {
+      api.getDirectApplyForm(slug)
+        .then((f) => {
+          if (job.public_slug === slug) directApplied = f.applied;
+        })
+        .catch(() => {});
+    }
     // The Avoid control below reads the profile's excluded_sources; without this its mark
     // would be wrong on a first load until something else happened to fetch the profile.
     profileStore.ensureLoaded();
@@ -273,16 +289,29 @@
   // A vacancy taking applications here has no outside page: Apply opens the form instead
   // of a link, and the "did you apply?" prompt has nothing to ask — sending the form IS
   // the application, and the server records it in the tracker.
-  function onDirectApplyClick() {
+  async function onDirectApplyClick() {
     track('job_apply', { slug: job.public_slug, source: job.source });
     if (!isAuthenticated()) {
       showSignInPrompt = true;
       return;
     }
+    if (!DirectApplyDialog) {
+      // Disabled while the chunk loads: a click that looks ignored invites a second one.
+      loadingDirectApply = true;
+      try {
+        DirectApplyDialog = (await import('./DirectApplyDialog.svelte')).default;
+      } catch {
+        // Offline or a deploy swap — leave the button live so a retry works.
+        return;
+      } finally {
+        loadingDirectApply = false;
+      }
+    }
     showDirectApply = true;
   }
 
   function onDirectApplied() {
+    directApplied = true;
     if (interaction) interaction = { ...interaction, applied_at: interaction.applied_at ?? new Date().toISOString() };
     justApplied = true;
     track('job_track', { slug: job.public_slug, stage: 'applied' });
@@ -462,9 +491,9 @@
      link from every job page, which is what the SEO submissions are actually after. -->
 {#snippet applyCta(size: 'md' | 'lg', className: string, external: JobCtaPlan['external'])}
   {#if job.direct_apply}
-    <Button variant="outline" {size} onclick={onDirectApplyClick} disabled={applied} class={className}>
-      {applied ? 'Application sent' : external.label}
-      {#if !applied}<ArrowRight class="size-4" />{/if}
+    <Button variant="outline" {size} onclick={onDirectApplyClick} disabled={directApplied || loadingDirectApply} class={className}>
+      {directApplied ? 'Application sent' : external.label}
+      {#if !directApplied}<ArrowRight class="size-4" />{/if}
     </Button>
   {:else}
     <Button
@@ -1139,7 +1168,7 @@
       <p class="text-sm text-destructive">{autoApplyError}</p>
     {/if}
 
-    {#if showDirectApply}
+    {#if showDirectApply && DirectApplyDialog}
       <DirectApplyDialog
         slug={job.public_slug}
         title={job.title}

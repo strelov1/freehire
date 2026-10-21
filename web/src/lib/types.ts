@@ -690,9 +690,6 @@ export interface EmployerCompanyProfileInput {
   subindustry?: string;
 }
 
-/** POST /employer/jobs body. Deliberately no `company` field — the server always uses the
- *  account's own locked company name, never request content (see
- *  internal/ingest/employer/AGENTS.md). */
 /** How a candidate applies to an employer's vacancy: through its own link, or on freehire.
  *  Chosen when the vacancy is created and fixed after. */
 export type EmployerApplyMode = 'external' | 'freehire';
@@ -724,6 +721,9 @@ export interface DirectApplication {
   note?: string;
 }
 
+/** POST /employer/jobs body. Deliberately no `company` field — the server always uses the
+ *  account's own locked company name, never request content (see
+ *  internal/ingest/employer/AGENTS.md). */
 export interface EmployerVacancyInput {
   /** Absent means `external`. */
   apply_mode?: EmployerApplyMode;

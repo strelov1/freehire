@@ -252,13 +252,13 @@ func TestCVEndpoints_CRUDAndIsolation(t *testing.T) {
 
 	// With a renderer configured, the PDF streams (when typst is installed).
 	if bin, err := exec.LookPath("typst"); err == nil {
-		h.cvRenderer = cv.NewTypstRenderer(bin)
+		h.pdf = ownedCVPDF{store: h.cvStore, renderer: cv.NewTypstRenderer(bin), photos: h.photos}
 		resp := doCV(t, app, fiber.MethodGet, upPath+"/pdf", betaTok, nil)
 		if resp.StatusCode != fiber.StatusOK || resp.Header.Get("Content-Type") != "application/pdf" {
 			t.Fatalf("pdf render = %d ct=%q, want 200 application/pdf", resp.StatusCode, resp.Header.Get("Content-Type"))
 		}
 		resp.Body.Close()
-		h.cvRenderer = nil
+		h.pdf = ownedCVPDF{}
 	}
 
 	// Delete then 404.

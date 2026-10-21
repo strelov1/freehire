@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log/slog"
+	"log"
 	"slices"
 	"strings"
 
@@ -17,25 +17,27 @@ import (
 	"github.com/strelov1/freehire/internal/ingest/employer"
 )
 
-// The refusals Apply can return besides ErrInvalid. The handler maps each to its status.
+// The refusals Apply can return besides ErrInvalid. Like ErrInvalid, their text is
+// user-facing — the handler renders it as is — so it carries no package prefix.
 var (
 	// ErrNotFound is a vacancy that does not take applications here (missing, private, or
 	// an ordinary posting) or a CV the candidate does not own.
-	ErrNotFound = errors.New("directapply: not found")
+	ErrNotFound = errors.New("not found")
 	// ErrClosed is a vacancy that has closed, or whose employer account is no longer active.
-	ErrClosed = errors.New("directapply: this vacancy no longer takes applications")
+	ErrClosed = errors.New("this vacancy no longer takes applications")
 	// ErrUnverified is a candidate whose email address is not verified.
-	ErrUnverified = errors.New("directapply: confirm your email address before applying")
+	ErrUnverified = errors.New("confirm your email address before applying")
 	// ErrAlreadyApplied is a vacancy this candidate's application already reached.
-	ErrAlreadyApplied = errors.New("directapply: you have already applied to this vacancy")
+	ErrAlreadyApplied = errors.New("you have already applied to this vacancy")
 	// ErrInProgress is an application another request of the same candidate is delivering
 	// right now — a double click, or a client retrying a slow response.
-	ErrInProgress = errors.New("directapply: this application is being sent")
+	ErrInProgress = errors.New("your application is being sent")
 	// ErrDailyLimit is a candidate who has sent today's allowance of applications.
-	ErrDailyLimit = errors.New("directapply: you have reached today's limit of applications")
+	ErrDailyLimit = errors.New("you have reached today's limit of applications")
 	// ErrDelivery is an application recorded but not delivered. It stays unsent, and
-	// applying again retries it.
-	ErrDelivery = errors.New("directapply: the application could not be delivered")
+	// applying again retries it. It wraps the transport's own error, which can name the
+	// employer's address: render ErrDelivery's text, never the wrapped one.
+	ErrDelivery = errors.New("the application could not be delivered — try again")
 )
 
 // Vacancy is what Apply needs to know about the posting applied to.
@@ -274,18 +276,18 @@ func (s *Service) Apply(ctx context.Context, userID int64, slug string, app Appl
 		CV:             pdf,
 	}); err != nil {
 		if relErr := s.repo.Release(ctx, id); relErr != nil {
-			slog.WarnContext(ctx, "directapply: delivery claim not released", "application_id", id, "err", relErr)
+			log.Printf("directapply: delivery claim on application %d not released: %v", id, relErr)
 		}
 		return fmt.Errorf("%w: %w", ErrDelivery, err)
 	}
 	if err := s.repo.MarkSent(ctx, id); err != nil {
 		// Delivered but not stamped: a retry would send it a second time. Reported, since
 		// the employer HAS it — telling the candidate it failed would invite exactly that.
-		slog.ErrorContext(ctx, "directapply: delivered application not stamped sent", "application_id", id, "err", err)
+		log.Printf("directapply: application %d was delivered but not stamped sent: %v", id, err)
 	}
 
 	if err := s.tracker.MarkApplied(ctx, userID, v.Slug, appevent.SourceUser); err != nil {
-		slog.WarnContext(ctx, "directapply: tracking not updated", "job_id", v.ID, "err", err)
+		log.Printf("directapply: tracking not updated for job %d: %v", v.ID, err)
 	}
 	s.bankAnswers(ctx, userID, answers)
 	return nil
@@ -336,7 +338,7 @@ func (s *Service) Form(ctx context.Context, userID int64, slug string) (FormView
 	banked, err := s.bank.Sendable(ctx, userID)
 	if err != nil {
 		// A prefill is a convenience; the form is still answerable without it.
-		slog.WarnContext(ctx, "directapply: answer bank unreadable", "err", err)
+		log.Printf("directapply: answer bank unreadable: %v", err)
 		return view, nil
 	}
 	view.Prefill = prefill(form, banked)
@@ -384,7 +386,7 @@ func (s *Service) bankAnswers(ctx context.Context, userID int64, answers []Answe
 	for _, a := range answers {
 		err := s.bank.Save(ctx, userID, a.Label, a.Readable(), answerbank.AuthorCandidate)
 		if err != nil && !errors.Is(err, answerbank.ErrUnkeyable) {
-			slog.WarnContext(ctx, "directapply: answer not banked", "question_id", a.ID, "err", err)
+			log.Printf("directapply: answer to %s not banked: %v", a.ID, err)
 		}
 	}
 }

@@ -73,11 +73,15 @@ of that question's options; an answer to a question the form does not hold SHALL
 
 #### Scenario: A closed vacancy takes no applications
 - **WHEN** a user applies to a `freehire` vacancy that is closed
-- **THEN** the request is refused and nothing is recorded
+- **THEN** the request is refused as gone and nothing is recorded
 
 #### Scenario: A revoked employer takes no applications
 - **WHEN** a user applies to a vacancy whose employer account is no longer active
-- **THEN** the request is refused and nothing is recorded
+- **THEN** the request is refused as gone and nothing is recorded
+
+#### Scenario: An employer does not apply to their own vacancy
+- **WHEN** the employer who published a `freehire` vacancy applies to it
+- **THEN** the request is answered as not found and nothing is recorded
 
 #### Scenario: An external vacancy has no on-site application
 - **WHEN** a user applies on freehire to an `external`-mode or non-employer vacancy
@@ -122,8 +126,11 @@ answer bank as candidate-provided. A failure to save an answer SHALL NOT fail th
 - **THEN** the form offers the earlier answer as the prefilled value
 
 ### Requirement: Applications are capped per candidate per day
-A candidate SHALL be able to send at most `DIRECT_APPLY_DAILY_LIMIT` applications per UTC day
-(default 30). A retry of an unsent application SHALL NOT count as a new one. An unparseable
+A candidate SHALL be able to submit at most `DIRECT_APPLY_DAILY_LIMIT` applications per UTC
+day (default 30). An application counts from the moment it is recorded, whether or not its
+delivery has succeeded yet — counting only delivered ones would let a burst of in-flight or
+failing submissions pass the cap. A retry of an unsent application on the same vacancy SHALL
+NOT count as a new one. An unparseable
 or non-positive value SHALL fail server startup rather than fall back.
 
 #### Scenario: The cap refuses the next application
@@ -145,5 +152,9 @@ which company will receive the CV and answers. Its `JobPosting` structured data 
 - **THEN** its `JobPosting` JSON-LD does not contain `directApply: true`
 
 #### Scenario: An applied candidate sees it
-- **WHEN** a candidate who already applied opens the vacancy
+- **WHEN** a candidate whose application to the vacancy was delivered opens it
 - **THEN** the page shows that the application was sent instead of the Apply action
+
+#### Scenario: A hand-marked application does not block applying
+- **WHEN** a candidate marked the vacancy applied in their tracking but never applied on freehire
+- **THEN** the page still offers the Apply action

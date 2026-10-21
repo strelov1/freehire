@@ -125,11 +125,10 @@
   // rather than guessing a destination. See freehire#2755: widening Card is a separate,
   // deliberately deferred change (it touches CardInput, both call sites, and the SPA
   // contracts), so this narrows to the shape that already carries the field.
-  // An empty url is a posting with nowhere outside to send the candidate — a vacancy
-  // taking applications on freehire, whose own Apply below opens its job page instead.
+  // An empty url is a posting with nowhere outside to send the candidate: a vacancy taking
+  // applications on freehire, whose Apply opens its own job page, where the form is. Only
+  // `jobview.Job` carries that flag, like `url`.
   const applyJob = $derived('url' in job && job.url ? job : null);
-  // A vacancy taking applications on freehire has no outside page: its Apply opens the
-  // job page, where the form is. Only `jobview.Job` carries the flag, like `url`.
   const directApply = $derived('direct_apply' in job && job.direct_apply === true);
   // The two freshness badges, through the card's own gate: a projection that carries no
   // reality signal earns none, because on those surfaces the posting date alone would
