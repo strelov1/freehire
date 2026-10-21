@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"slices"
 	"strings"
 
 	"github.com/google/uuid"
@@ -96,6 +97,17 @@ const (
 	// StateSent: the employer has it.
 	StateSent
 )
+
+// refusal is why an application in this state cannot be sent now, or nil when it can.
+func (st State) refusal() error {
+	switch st {
+	case StateSent:
+		return ErrAlreadyApplied
+	case StateSending:
+		return ErrInProgress
+	}
+	return nil
+}
 
 // Employers answers whether a vacancy's author may still receive applications, and where.
 // employer.Service satisfies it.
@@ -195,12 +207,12 @@ func (s *Service) Apply(ctx context.Context, userID int64, slug string, app Appl
 	if !v.Open {
 		return ErrClosed
 	}
-	acc, err := s.employers.ActiveAccount(ctx, v.EmployerID)
-	if errors.Is(err, employer.ErrNotActive) || errors.Is(err, employer.ErrNotFound) {
-		return ErrClosed
-	}
+	acc, receiving, err := s.receivingEmployer(ctx, v.EmployerID)
 	if err != nil {
 		return err
+	}
+	if !receiving {
+		return ErrClosed
 	}
 	cand, err := s.repo.Candidate(ctx, userID)
 	if err != nil {
@@ -224,13 +236,12 @@ func (s *Service) Apply(ctx context.Context, userID int64, slug string, app Appl
 	}
 	// A cheap read before the expensive render: a vacancy this candidate already applied
 	// to, or is applying to right now, is refused without rendering a PDF it would discard.
-	switch state, err := s.repo.State(ctx, v.ID, userID); {
-	case err != nil:
+	state, err := s.repo.State(ctx, v.ID, userID)
+	if err != nil {
 		return err
-	case state == StateSent:
-		return ErrAlreadyApplied
-	case state == StateSending:
-		return ErrInProgress
+	}
+	if err := state.refusal(); err != nil {
+		return err
 	}
 	pdf, err := s.cvs.PDF(ctx, userID, app.CVID)
 	if err != nil {
@@ -246,11 +257,8 @@ func (s *Service) Apply(ctx context.Context, userID int64, slug string, app Appl
 		if err != nil {
 			return err
 		}
-		switch state {
-		case StateSent:
-			return ErrAlreadyApplied
-		case StateSending:
-			return ErrInProgress
+		if err := state.refusal(); err != nil {
+			return err
 		}
 		return ErrDailyLimit
 	}
@@ -283,6 +291,20 @@ func (s *Service) Apply(ctx context.Context, userID int64, slug string, app Appl
 	return nil
 }
 
+// receivingEmployer loads the account that authored a vacancy and reports whether it may
+// still receive applications. A revoked or deleted account is not an error here: it means
+// the vacancy no longer takes applications.
+func (s *Service) receivingEmployer(ctx context.Context, userID int64) (employer.Account, bool, error) {
+	acc, err := s.employers.ActiveAccount(ctx, userID)
+	if errors.Is(err, employer.ErrNotActive) || errors.Is(err, employer.ErrNotFound) {
+		return employer.Account{}, false, nil
+	}
+	if err != nil {
+		return employer.Account{}, false, err
+	}
+	return acc, true, nil
+}
+
 // Form is the on-site vacancy's application form as userID sees it (0 for a visitor who is
 // not signed in): the questions, whether it still takes applications, and for a candidate
 // whether they already applied and what their answer bank offers for each question.
@@ -297,11 +319,7 @@ func (s *Service) Form(ctx context.Context, userID int64, slug string) (FormView
 	}
 	open := v.Open
 	if open {
-		_, err := s.employers.ActiveAccount(ctx, v.EmployerID)
-		switch {
-		case errors.Is(err, employer.ErrNotActive) || errors.Is(err, employer.ErrNotFound):
-			open = false
-		case err != nil:
+		if _, open, err = s.receivingEmployer(ctx, v.EmployerID); err != nil {
 			return FormView{}, err
 		}
 	}
@@ -344,10 +362,8 @@ func prefill(form applyform.Form, banked map[string]string) map[string]string {
 		case applyform.TypeBoolean:
 			answer = fromYesNo[strings.ToLower(v)]
 		case applyform.TypeSelect:
-			for _, o := range f.Options {
-				if o.Value == v {
-					answer = v
-				}
+			if slices.ContainsFunc(f.Options, func(o applyform.Option) bool { return o.Value == v }) {
+				answer = v
 			}
 		default:
 			answer = v
