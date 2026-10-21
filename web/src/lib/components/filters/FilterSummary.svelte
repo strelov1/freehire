@@ -51,8 +51,8 @@
 
     facetGroup('category', 'Specialization');
     facetGroup('ai_archetype', 'AI Specialization');
-    // Location: regions + countries + cities under one heading.
-    push('Location', [...facetChips('regions'), ...facetChips('countries'), ...facetChips('cities')]);
+    // Location: regions + countries + metros + cities under one heading.
+    push('Location', [...facetChips('regions'), ...facetChips('countries'), ...facetChips('metros'), ...facetChips('cities')]);
 
     facetGroup('seniority', 'Seniority');
     facetGroup('role_type', 'Role type');

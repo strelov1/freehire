@@ -66,7 +66,7 @@
 
   // Facets "Clear all" resets, per mode.
   const CLEAR_PARAMS = {
-    jobs: ['work_mode', 'regions', 'countries', 'cities'],
+    jobs: ['work_mode', 'regions', 'countries', 'metros', 'cities'],
     companies: ['regions', 'remote_regions'],
     launcher: [],
   } as const;

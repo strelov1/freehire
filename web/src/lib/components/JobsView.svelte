@@ -559,6 +559,7 @@
       regions.include.length === ours.length &&
       ours.every((r) => regions.include.includes(r)) &&
       untouched('countries') &&
+      untouched('metros') &&
       untouched('cities')
     );
   });

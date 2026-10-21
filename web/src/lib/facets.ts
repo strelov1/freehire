@@ -13,6 +13,7 @@
 // options come from the live distribution (any detected language), labelled via
 // languageLabel.
 
+import { metroLabel } from './metro';
 import {
   WORK_MODE_VALUES, SENIORITY_VALUES, CATEGORY_VALUES,
   EMPLOYMENT_TYPE_VALUES, RELOCATION_VALUES, ENGLISH_LEVEL_VALUES,
@@ -251,6 +252,7 @@ export function skillLabel(slug: string): string {
  *  title-cased name, else the value. */
 export function dynamicLabel(param: string, value: string): string {
   if (param === 'countries') return countryLabel(value);
+  if (param === 'metros') return metroLabel(value);
   if (param === 'posting_language') return languageLabel(value);
   if (param === 'company_slug') return companyLabel(value);
   if (param === 'source') return sourceLabel(value);
@@ -744,6 +746,7 @@ export const FACETS: FacetDef[] = [
   { param: 'company_type', label: 'Company type', control: 'pills', options: COMPANY_TYPE, excludable: true },
   { param: 'countries', label: 'Countries', control: 'select', dynamic: true, excludable: true, placeholder: 'Search countries' },
   { param: 'cities', label: 'City', control: 'select', dynamic: true, excludable: true, placeholder: 'Search cities' },
+  { param: 'metros', label: 'Metro area', control: 'select', dynamic: true, excludable: true, placeholder: 'Search metro areas' },
   { param: 'relocation', label: 'Relocation', control: 'pills', options: RELOCATION, excludable: true },
   { param: 'employment_type', label: 'Employment', control: 'pills', options: EMPLOYMENT, excludable: true },
   { param: 'english_level', label: 'English', control: 'pills', options: ENGLISH, excludable: true },

@@ -175,7 +175,7 @@
     if (e.kind === 'category') return selCount(f, 'category') + selCount(f, 'ai_archetype');
     if (e.kind === 'experience')
       return selCount(f, 'seniority') + selCount(f, 'role_type') + (f.experienceYearsMax != null ? 1 : 0);
-    if (e.kind === 'location') return selCount(f, 'regions') + selCount(f, 'countries') + selCount(f, 'cities');
+    if (e.kind === 'location') return selCount(f, 'regions') + selCount(f, 'countries') + selCount(f, 'metros') + selCount(f, 'cities');
     if (e.kind === 'salary')
       return selCount(f, 'salary_currency') + (f.salaryMin != null || f.salaryMax != null ? 1 : 0);
     if (e.kind === 'work') return selCount(f, 'work_mode') + selCount(f, 'employment_type');

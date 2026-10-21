@@ -18,6 +18,7 @@ const HOSTED_ELSEWHERE: Record<string, string> = {
   regions: 'location pane (the region → country tree)',
   countries: 'location pane',
   cities: 'location pane',
+  metros: 'location pane',
   work_mode: 'work pane',
   employment_type: 'work pane',
   domains: 'industry pane',

@@ -7,6 +7,7 @@
   import type { FacetCounts } from '$lib/types';
   import { Chip, CountryFlag } from '$lib/ui';
   import { pillClass, pillTitle } from '../facets/pill';
+  import { metroLabel } from '$lib/metro';
   import { isAuthenticated } from '$lib/auth.svelte';
   import { profileStore } from '$lib/profile.svelte';
   import { eligibleForMeValues, isEligibleForMeOn, resolveGeoSource } from '$lib/eligibleForMe';
@@ -25,6 +26,7 @@
   const regionCount = (code: string) => counts?.facets?.regions?.[code] ?? 0;
   const countryCounts = $derived(counts?.facets?.countries ?? {});
   const cityCounts = $derived(counts?.facets?.cities ?? {});
+  const metroCounts = $derived(counts?.facets?.metros ?? {});
 
   // regions/countries/cities are excludable: each pill cycles off → include →
   // exclude → off. The `*Sel` unions drive the "kept visible / has selection" logic;
@@ -35,6 +37,8 @@
   const regionSel = $derived([...regionF.include, ...regionF.exclude]);
   const countrySel = $derived([...countryF.include, ...countryF.exclude]);
   const citySel = $derived([...cityF.include, ...cityF.exclude]);
+  const metroF = $derived(store.facet('metros'));
+  const metroSel = $derived([...metroF.include, ...metroF.exclude]);
 
   // region code → countries to show, busiest first. Built from the live distribution
   // plus any currently-selected country, so a selected country stays visible (and
@@ -71,15 +75,24 @@
   });
   const CITY_LIMIT = 18;
 
+  const allMetros = $derived.by(() => {
+    const set = new Set([...Object.keys(metroCounts), ...metroSel]);
+    return [...set].sort((a, b) => (metroCounts[b] ?? 0) - (metroCounts[a] ?? 0));
+  });
+  const METRO_LIMIT = 12;
+
   const q = $derived(query.trim().toLowerCase());
   const regionLabel = (code: string) => (code === REGION_UNSPECIFIED ? 'Not specified' : (REGION_LABELS[code] ?? code));
   const matchRegion = (code: string) => !q || regionLabel(code).toLowerCase().includes(q);
   const matchCountry = (code: string) => !q || countryLabel(code).toLowerCase().includes(q);
   const matchCity = (city: string) => !q || city.toLowerCase().includes(q);
+  const matchMetro = (m: string) => !q || metroLabel(m).toLowerCase().includes(q);
 
   const fmt = (n: number) => n.toLocaleString('en-US');
 
   const cityMatches = $derived(allCities.filter(matchCity));
+  const metroMatches = $derived(allMetros.filter(matchMetro));
+  const metrosShown = $derived(q ? metroMatches : metroMatches.slice(0, METRO_LIMIT));
   const citiesShown = $derived(q ? cityMatches : cityMatches.slice(0, CITY_LIMIT));
 
   // Regions to render, each with its matching countries. While searching, a region is
@@ -106,17 +119,20 @@
     const cityText = (city: string) => city;
     push('regions', regionF.include, regionLabel, false);
     push('countries', countryF.include, countryLabel, false);
+    push('metros', metroF.include, metroLabel, false);
     push('cities', cityF.include, cityText, false);
     push('regions', regionF.exclude, regionLabel, true);
     push('countries', countryF.exclude, countryLabel, true);
+    push('metros', metroF.exclude, metroLabel, true);
     push('cities', cityF.exclude, cityText, true);
     return out;
   });
 
-  const hasGeo = $derived(regionSel.length + countrySel.length + citySel.length > 0);
+  const hasGeo = $derived(regionSel.length + countrySel.length + metroSel.length + citySel.length > 0);
   function clearGeo() {
     store.clearFacet('regions');
     store.clearFacet('countries');
+    store.clearFacet('metros');
     store.clearFacet('cities');
   }
 
@@ -292,6 +308,26 @@
     {/if}
   </div>
 {/each}
+
+{#if metrosShown.length}
+  <div class="border-t border-border pt-3">
+    <div class="mb-2 text-sm font-semibold tracking-tight">Metro areas</div>
+    <div class="flex flex-wrap gap-2">
+      {#each metrosShown as metro (metro)}
+        {@const mExc = metroF.exclude.includes(metro)}
+        {@const mInc = metroF.include.includes(metro)}
+        <button
+          type="button"
+          onclick={() => store.cycle('metros', metro)}
+          title={pillTitle(mInc, mExc, true)}
+          class={pillClass(mInc || mExc, mExc, 'px-3 py-1.5 text-sm')}
+        >
+          {metroLabel(metro)}
+        </button>
+      {/each}
+    </div>
+  </div>
+{/if}
 
 {#if citiesShown.length}
   <div class="border-t border-border pt-3">
