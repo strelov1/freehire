@@ -58,6 +58,10 @@ func TestDirectApplications(t *testing.T) {
 	}
 
 	t.Run("an unsent application is replaced by a retry, which the cap does not count", func(t *testing.T) {
+		// The first delivery failed and released its claim.
+		if err := q.ReleaseDirectApplication(ctx, id); err != nil {
+			t.Fatalf("release: %v", err)
+		}
 		retryID, err := apply(first, "retried", 1)
 		if err != nil {
 			t.Fatalf("retry: %v", err)
@@ -67,6 +71,33 @@ func TestDirectApplications(t *testing.T) {
 		}
 		if got := note(first); got != "retried" {
 			t.Errorf("note = %q, want the retry's content", got)
+		}
+	})
+
+	t.Run("an application being sent is not claimed twice", func(t *testing.T) {
+		// The retry above claimed the row (sending_at = now()); a second request arriving
+		// while that delivery is in flight must not get it too, or the employer receives
+		// the application twice.
+		if _, err := apply(first, "double click", 10); !errors.Is(err, pgx.ErrNoRows) {
+			t.Fatalf("err = %v, want no row while a delivery holds the claim", err)
+		}
+		row, err := q.GetDirectApplication(ctx, GetDirectApplicationParams{JobID: first, UserID: userID})
+		if err != nil || !row.Sending || row.SentAt.Valid {
+			t.Fatalf("GetDirectApplication = %+v, %v; want an in-flight, unsent row", row, err)
+		}
+		// A delivery that failed releases the claim, so the retry is immediate.
+		if err := q.ReleaseDirectApplication(ctx, id); err != nil {
+			t.Fatalf("release: %v", err)
+		}
+		if _, err := apply(first, "retried", 1); err != nil {
+			t.Fatalf("retry after release: %v", err)
+		}
+		// A claim abandoned by a crashed request expires.
+		if _, err := pool.Exec(ctx, `UPDATE direct_applications SET sending_at = now() - interval '3 minutes' WHERE id = $1`, id); err != nil {
+			t.Fatalf("age claim: %v", err)
+		}
+		if _, err := apply(first, "retried", 1); err != nil {
+			t.Fatalf("retry after an abandoned claim: %v", err)
 		}
 	})
 

@@ -17,7 +17,7 @@ apply-form shape.
   choice from a list, each optionally required — stored as an `apply_forms` row with
   `provider = 'freehire'`, the same `applyform.Form` shape captured ATS forms use.
 - A signed-in candidate with a verified email applies from the job page: picks one of their
-  CVs, answers the questions (prefilled from the answer bank and screening answers), adds an
+  CVs, answers the questions (prefilled from their answer bank), adds an
   optional note, and sends. The application is recorded once per `(job, candidate)`.
 - The application is delivered by email to the employer account's confirmed work address,
   the CV attached as a PDF and `Reply-To` set to the candidate. It is stamped sent only after

@@ -12,7 +12,8 @@ import (
 )
 
 const getDirectApplication = `-- name: GetDirectApplication :one
-SELECT id, sent_at
+SELECT id, sent_at,
+       (sending_at IS NOT NULL AND sending_at >= now() - interval '2 minutes')::boolean AS sending
 FROM direct_applications
 WHERE job_id = $1 AND user_id = $2
 `
@@ -23,23 +24,25 @@ type GetDirectApplicationParams struct {
 }
 
 type GetDirectApplicationRow struct {
-	ID     int64              `json:"id"`
-	SentAt pgtype.Timestamptz `json:"sent_at"`
+	ID      int64              `json:"id"`
+	SentAt  pgtype.Timestamptz `json:"sent_at"`
+	Sending bool               `json:"sending"`
 }
 
 // One candidate's application to one vacancy, if any — whether it reached the employer is
-// sent_at. Read by the apply form ("already applied") and by Apply to tell a sent
-// application from a reached cap after UpsertDirectApplication returned nothing.
+// sent_at, whether a delivery is in flight is a sending_at younger than the claim's two
+// minutes. Read by the apply form ("already applied") and by Apply to tell the three
+// reasons UpsertDirectApplication can return nothing apart.
 func (q *Queries) GetDirectApplication(ctx context.Context, arg GetDirectApplicationParams) (GetDirectApplicationRow, error) {
 	row := q.db.QueryRow(ctx, getDirectApplication, arg.JobID, arg.UserID)
 	var i GetDirectApplicationRow
-	err := row.Scan(&i.ID, &i.SentAt)
+	err := row.Scan(&i.ID, &i.SentAt, &i.Sending)
 	return i, err
 }
 
 const markDirectApplicationSent = `-- name: MarkDirectApplicationSent :exec
 UPDATE direct_applications
-SET sent_at = now()
+SET sent_at = now(), sending_at = NULL
 WHERE id = $1 AND sent_at IS NULL
 `
 
@@ -49,9 +52,22 @@ func (q *Queries) MarkDirectApplicationSent(ctx context.Context, id int64) error
 	return err
 }
 
+const releaseDirectApplication = `-- name: ReleaseDirectApplication :exec
+UPDATE direct_applications
+SET sending_at = NULL
+WHERE id = $1 AND sent_at IS NULL
+`
+
+// Gives up a delivery claim after the email failed, so the candidate's retry is immediate
+// rather than waiting out the claim.
+func (q *Queries) ReleaseDirectApplication(ctx context.Context, id int64) error {
+	_, err := q.db.Exec(ctx, releaseDirectApplication, id)
+	return err
+}
+
 const upsertDirectApplication = `-- name: UpsertDirectApplication :one
-INSERT INTO direct_applications (job_id, user_id, cv_id, note, answers)
-SELECT $1, $2, $3, $4, $5
+INSERT INTO direct_applications (job_id, user_id, cv_id, note, answers, sending_at)
+SELECT $1, $2, $3, $4, $5, now()
 WHERE EXISTS (
         SELECT 1 FROM direct_applications
         WHERE job_id = $1 AND user_id = $2
@@ -63,8 +79,10 @@ WHERE EXISTS (
           AND created_at >= date_trunc('day', now(), 'UTC')
     ) < $6::bigint
 ON CONFLICT (job_id, user_id) DO UPDATE
-SET cv_id = EXCLUDED.cv_id, note = EXCLUDED.note, answers = EXCLUDED.answers
+SET cv_id = EXCLUDED.cv_id, note = EXCLUDED.note, answers = EXCLUDED.answers, sending_at = now()
 WHERE direct_applications.sent_at IS NULL
+  AND (direct_applications.sending_at IS NULL
+       OR direct_applications.sending_at < now() - interval '2 minutes')
 RETURNING id
 `
 
@@ -77,13 +95,14 @@ type UpsertDirectApplicationParams struct {
 	DailyLimit int64       `json:"daily_limit"`
 }
 
-// Records a candidate's application to an on-site vacancy, or replaces the content of one
-// they recorded earlier that never reached the employer (sent_at NULL) — the retry after a
-// failed delivery. See migration 0186.
+// Records a candidate's application to an on-site vacancy and CLAIMS it for delivery
+// (sending_at), or replaces the content of one they recorded earlier that never reached the
+// employer — the retry after a failed delivery. See migration 0186.
 //
-// Returns no row in exactly two cases, which GetDirectApplication tells apart afterwards:
-// the application was already SENT (the conflict's WHERE refuses to touch it), or the
-// candidate has reached today's cap. The cap counts applications created since midnight UTC
+// Returns no row in exactly three cases, which GetDirectApplication tells apart afterwards:
+// the application was already SENT; another request holds a live claim on it (a delivery in
+// flight — claiming it again would email the employer twice); or the candidate has reached
+// today's cap. The cap counts applications created since midnight UTC
 // on OTHER vacancies, and a retry on this one always passes, so a failed delivery never
 // costs a second slot. Two concurrent first applications can both pass the count and land
 // one over the cap; the cap bounds abuse, it is not a quota anyone is billed against.

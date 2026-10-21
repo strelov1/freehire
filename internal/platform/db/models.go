@@ -481,6 +481,7 @@ type DirectApplication struct {
 	Note      string             `json:"note"`
 	Answers   []byte             `json:"answers"`
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	SendingAt pgtype.Timestamptz `json:"sending_at"`
 	SentAt    pgtype.Timestamptz `json:"sent_at"`
 }
 

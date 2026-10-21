@@ -17,19 +17,19 @@
 - [x] 3.1 Migration `direct_applications` (squawk clean) + queries `UpsertDirectApplication` (with the daily-cap CTE and the sent-guard), `MarkDirectApplicationSent`, `GetDirectApplication`; `make sqlc`
 - [x] 3.2 `DIRECT_APPLY_DAILY_LIMIT` in `internal/platform/config` (default 30, strict); unit tests
 - [x] 3.3 `directapply.ValidateAnswers` (required, boolean, select option, unknown id, note ≤ 2000); unit tests
-- [ ] 3.4 `directapply.Service.Apply`: the flow in design §4 behind `Mailer`, CV renderer and repository ports; unit tests with fakes for every refusal, the failed-send-stays-unsent case, the retry-replaces-content case and the side effects
-- [ ] 3.5 Add `internal/ingest/directapply` to `internal/platform/arch/layering/blocks.go`; package `AGENTS.md`; link it from the root module table
+- [x] 3.4 `directapply.Service.Apply`: the flow in design §4 behind `Mailer`, CV renderer and repository ports; unit tests with fakes for every refusal, the failed-send-stays-unsent case, the retry-replaces-content case and the side effects
+- [x] 3.5 Add `internal/ingest/directapply` to `internal/platform/arch/layering/blocks.go`; package `AGENTS.md`; link it from the root module table
 - [x] 3.6 Integration tests (`-tags=integration`) against Postgres: one row per (job, user), the conflict on a sent application, the cap, a retry not counting
 
 ## 4. Delivery
 
-- [ ] 4.1 `emailnotify` application mailer: `GroupEssential`, To = employer confirmed email, Reply-To = candidate, PDF attachment, questions/answers/note in HTML and text; unit test over the built `Message`
+- [x] 4.1 `emailnotify` application mailer: `GroupEssential`, To = employer confirmed email, Reply-To = candidate, PDF attachment, questions/answers/note in HTML and text; unit test over the built `Message`
 - [ ] 4.2 Wire `directapply.Service` and the mailer in `handler.Register` (nil-safe port, 501 when Typst or SES is absent)
 
 ## 5. HTTP
 
-- [ ] 5.1 `GET /jobs/:slug/direct-apply`: company, questions, and for a signed-in user `prefill` (answer bank by topic, screening-answer fallback) and `applied`; handler integration test
-- [ ] 5.2 `POST /jobs/:slug/direct-apply`: error mapping (400 naming the question, 403 unverified, 404, 409, 429, 502); handler integration test
+- [ ] 5.1 `GET /jobs/:slug/direct-apply`: company, questions, and for a signed-in user `prefill` (answer bank by topic) and `applied`; handler integration test
+- [ ] 5.2 `POST /jobs/:slug/direct-apply`: error mapping (400 naming the question, 403 unverified, 404, 409 sent or in flight, 429, 502 with no provider detail); handler integration test
 - [ ] 5.3 `web/static/openapi.yaml`: both endpoints and the employer fields
 
 ## 6. Web

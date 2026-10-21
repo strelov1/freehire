@@ -99,24 +99,33 @@ Added to `internal/platform/arch/layering/blocks.go`.
 ```
 id bigserial PK, job_id → jobs ON DELETE CASCADE, user_id → users ON DELETE CASCADE,
 cv_id uuid NOT NULL, note text NOT NULL DEFAULT '', answers jsonb NOT NULL,
-created_at timestamptz NOT NULL DEFAULT now(), sent_at timestamptz NULL,
+created_at timestamptz NOT NULL DEFAULT now(), sending_at timestamptz NULL,
+sent_at timestamptz NULL,
 UNIQUE (job_id, user_id)
 ```
 `answers` is a snapshot `[{id, label, type, answer}]`, so the record still reads correctly
 after the employer edits the questions. Flow of `Apply`:
-1. Load the vacancy; `IsDirectApply` and open, else not found / closed.
+1. Load the vacancy; `IsDirectApply` and open, else not found / closed. Its own employer
+   applying is answered not found.
 2. `ActiveAccount` for the vacancy's `created_by`, else refused.
 3. Load the user: verified email, else `ErrUnverified`.
 4. Validate answers against the current form (pure: required, boolean, select options,
    unknown ids, note ≤ 2000).
-5. `cv.Store.Get(cvID, userID)` — not found is not found.
-6. `UpsertDirectApplication`: `INSERT … ON CONFLICT (job_id, user_id) DO UPDATE SET cv_id,
-   note, answers WHERE direct_applications.sent_at IS NULL RETURNING id`. No row back means
-   already sent → `ErrAlreadyApplied` (409). The daily cap is checked in the same
+5. Render the chosen CV (`CVs.PDF`) — not owned is not found. Rendering before the record
+   adds no exposure: a signed-in user can already render their own CV at will through
+   `GET /cvs/:id/pdf`.
+6. `UpsertDirectApplication` records the row and CLAIMS it (`sending_at = now()`):
+   `INSERT … ON CONFLICT (job_id, user_id) DO UPDATE SET cv_id, note, answers, sending_at
+   WHERE sent_at IS NULL AND (sending_at IS NULL OR sending_at < now() - 2 minutes)
+   RETURNING id`. No row back is read through `GetDirectApplication`: sent →
+   `ErrAlreadyApplied` (409), a live claim → `ErrInProgress` (409, a double click or a client
+   retrying a slow response, which would otherwise email the employer twice), else the cap. The daily cap is checked in the same
    statement's CTE as `count(*) WHERE user_id = $1 AND created_at >= date_trunc('day', now()
    AT TIME ZONE 'UTC')`, excluding this job's own row so a retry never counts twice.
-7. Render the PDF, send the mail; on error return it (502) with `sent_at` still null.
-8. `MarkDirectApplicationSent` (`… SET sent_at = now() WHERE id = $1 AND sent_at IS NULL`).
+7. Send the mail; on error release the claim and return `ErrDelivery` (502), `sent_at`
+   still null.
+8. `MarkDirectApplicationSent` stamps `sent_at` and drops the claim. A claim abandoned by a
+   request that died mid-send expires after two minutes.
 9. `MarkApplied(…, appevent.SourceUser)`; `answerbank.Save` per answer with
    `AuthorCandidate`, errors logged, never returned.
 
@@ -132,8 +141,12 @@ meters AI actions, and an application is not one.
 `GET /jobs/:slug/direct-apply` (cookie auth optional): company name, questions with id, type,
 options, required; and for a signed-in user, `prefill` (field id → answer) and `applied`
 (sent_at set). Prefill resolves each question's `answertopic.Of(label)` against
-`answerbank.Sendable`, falling back to the screening-answer mapping the autofill path already
-uses. The existing `/apply-form` endpoint stays for captured ATS forms.
+`answerbank.Sendable` — the candidate's own answers only, never an agent's suggestion. A
+banked "Yes"/"No" prefills a yes/no question; a banked value prefills a list question only
+when it is one of its options. The six typed screening answers are not consulted: their
+mapping is keyed by ATS field identifiers our questions do not carry, and the bank already
+holds what the candidate answered on earlier on-site applications. The existing
+`/apply-form` endpoint stays for captured ATS forms.
 `POST /jobs/:slug/direct-apply` (cookie only) submits.
 
 ### 7. Wire and page

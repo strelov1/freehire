@@ -7,6 +7,11 @@
 -- received, and the candidate applying again re-sends it rather than adding a second row —
 -- UNIQUE (job_id, user_id) is what makes "one application per vacancy" structural.
 --
+-- sending_at is the claim a delivery holds while the email is in flight. Without it two
+-- overlapping requests (a double click, a client retrying a slow response) would both find
+-- the row unsent and both email the employer. A claim older than two minutes is treated as
+-- abandoned by a request that died mid-send; a failed delivery releases it at once.
+--
 -- answers is a snapshot of each question's id, label and type beside the answer, so the
 -- record still reads correctly after the employer edits the questions.
 --
@@ -20,6 +25,7 @@ CREATE TABLE IF NOT EXISTS public.direct_applications (
     note       text        NOT NULL DEFAULT '',
     answers    jsonb       NOT NULL DEFAULT '[]'::jsonb,
     created_at timestamptz NOT NULL DEFAULT now(),
+    sending_at timestamptz,
     sent_at    timestamptz,
     CONSTRAINT direct_applications_job_user_key UNIQUE (job_id, user_id)
 );
