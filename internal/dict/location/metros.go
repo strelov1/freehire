@@ -54,14 +54,28 @@ func loadMetros(tsv string) (map[metroKey]string, map[[2]string]string) {
 	return exact, seen
 }
 
-// metroFor resolves one city of a location line. admin1 is the line's single stated
-// US/CA subdivision code, or "" when none (or several) was stated.
-func metroFor(cityName, country, admin1 string) (string, bool) {
+// metroFor resolves one city of a location line. stated is the set of US/CA subdivision
+// codes the line names. With none, the bare-name table answers. With any, it never does:
+// a line that states a subdivision has said where its cities are, and a bare-name guess
+// for a city those subdivisions do not place would invent a metro ("Folsom, PA; Austin,
+// TX" must not yield Folsom's California metro). Each stated code is tried exactly, and
+// the city resolves only when they all agree on one metro.
+func metroFor(cityName, country string, stated map[string]struct{}) (string, bool) {
 	name := strings.ToLower(cityName)
-	if admin1 != "" {
-		v, ok := metroByPlace[metroKey{name, country, admin1}]
+	if len(stated) == 0 {
+		v, ok := metroByName[[2]string{name, country}]
 		return v, ok
 	}
-	v, ok := metroByName[[2]string{name, country}]
-	return v, ok
+	found := ""
+	for code := range stated {
+		v, ok := metroByPlace[metroKey{name, country, code}]
+		if !ok {
+			continue
+		}
+		if found != "" && found != v {
+			return "", false
+		}
+		found = v
+	}
+	return found, found != ""
 }

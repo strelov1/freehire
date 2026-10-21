@@ -19,6 +19,11 @@ func TestParseMetros(t *testing.T) {
 		{"San Diego, CA", []string{"San Diego, US"}},
 		{"Remote", nil},
 		{"Unknownville, CA", nil},
+		{"Washington, DC", []string{"Washington, US"}},
+		// Two stated subdivisions: no bare-name fallback, so Folsom (which is not in PA
+		// or TX) gets no metro while the cities each state does place still do.
+		{"Folsom, PA; Austin, TX", []string{"Austin, US"}},
+		{"Folsom, Pennsylvania, USA / Seattle, WA", []string{"Seattle, US"}},
 	}
 	for _, c := range cases {
 		if got := Parse(c.in).Metros; !slices.Equal(got, c.want) {

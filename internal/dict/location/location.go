@@ -205,15 +205,9 @@ func Parse(location string) Geo {
 		for c := range countrySet {
 			country = c
 		}
-		admin1 := ""
-		if len(statedSubdivisions) == 1 {
-			for s := range statedSubdivisions {
-				admin1 = s
-			}
-		}
 		metroSet := map[string]struct{}{}
 		for name := range citySet {
-			if v, ok := metroFor(name, country, admin1); ok {
+			if v, ok := metroFor(name, country, statedSubdivisions); ok {
 				metroSet[v] = struct{}{}
 			}
 		}

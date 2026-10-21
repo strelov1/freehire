@@ -307,7 +307,7 @@ func TestParseNorthAmerica(t *testing.T) {
 		{
 			name:     "Washington DC resolves to us",
 			location: "Washington, DC",
-			want:     Geo{Countries: []string{"us"}, Regions: []string{"north_america"}, Cities: []string{"Washington"}},
+			want:     Geo{Countries: []string{"us"}, Regions: []string{"north_america"}, Cities: []string{"Washington"}, Metros: []string{"Washington, US"}},
 		},
 		{
 			name:     "country Georgia is never misread as the US state",
