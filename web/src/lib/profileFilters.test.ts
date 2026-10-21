@@ -32,12 +32,15 @@ function mkProfile(
 // Seniority preferences exclude unselected levels without requiring a classified level.
 // StagedFilters.applyProfile is a thin wrapper over it.
 describe('filtersFromProfile', () => {
-  it('excludes unselected seniorities without requiring a seniority on the posting', () => {
-    const profile = { ...mkProfile([], []), seniorities: ['junior', 'middle'] };
+  // Included, not "everything else excluded": the filter UI then shows the levels the
+  // user picked (freehire#3397). The unlabelled postings stay in through the modifier.
+  it('includes the selected seniorities and keeps postings with no level', () => {
+    const profile = { ...mkProfile([], []), seniorities: ['middle', 'junior'] };
     const p = filtersToParams(filtersFromProfile(profile));
 
-    expect(p.get('seniority_exclude')).toBe('intern,senior,lead,staff,principal,c_level');
-    expect(p.has('seniority')).toBe(false);
+    expect(p.get('seniority')).toBe('junior,middle');
+    expect(p.get('seniority_include_unspecified')).toBe('true');
+    expect(p.has('seniority_exclude')).toBe(false);
   });
 
   // Excluding levels cannot reach a posting with no level, and for an intern that is
@@ -79,14 +82,14 @@ describe('filtersFromProfile', () => {
     expect(p.has('seniority_exclude')).toBe(false);
   });
 
-  it('preserves seniority exclusions through the saved-search URL round trip', () => {
+  it('preserves the seniority selection through the saved-search URL round trip', () => {
     const profile = { ...mkProfile(['backend'], ['go']), seniorities: ['junior', 'middle'] };
     const query = filtersToParams(filtersFromProfile(profile)).toString();
     const restored = filtersFromParams(new URLSearchParams(query));
     const p = filtersToParams(restored);
 
-    expect(p.get('seniority_exclude')).toBe('intern,senior,lead,staff,principal,c_level');
-    expect(p.has('seniority')).toBe(false);
+    expect(p.get('seniority')).toBe('junior,middle');
+    expect(p.get('seniority_include_unspecified')).toBe('true');
     expect(p.toString()).toBe(query);
   });
 

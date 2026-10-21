@@ -54,7 +54,12 @@
     // Location: regions + countries + metros + cities under one heading.
     push('Location', [...facetChips('regions'), ...facetChips('countries'), ...facetChips('metros'), ...facetChips('cities')]);
 
-    facetGroup('seniority', 'Seniority');
+    if (!exclude.includes('seniority')) {
+      const seniority = facetChips('seniority');
+      if (f.seniorityIncludeUnspecified && (f.facets.seniority?.include.length ?? 0) > 0)
+        seniority.push({ key: 'seniority_include_unspecified', text: 'No level stated', exclude: false, remove: () => store.setSeniorityIncludeUnspecified(false) });
+      push('Seniority', seniority);
+    }
     facetGroup('role_type', 'Role type');
     facetGroup('work_mode', 'Work format');
     facetGroup('skills', 'Skills', true);

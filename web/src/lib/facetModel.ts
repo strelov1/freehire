@@ -88,6 +88,10 @@ export interface JobFilters {
    *  catalogue, which a bound drops otherwise. A modifier of the bound, not a filter:
    *  written to the URL only beside one, and never counted on its own. */
   experienceIncludeUnspecified: boolean;
+  /** Also keep the jobs that carry no seniority level — most of the catalogue, which
+   *  including a level drops otherwise. A modifier of the included levels: written to
+   *  the URL only beside one, and never counted on its own. */
+  seniorityIncludeUnspecified: boolean;
   /** Feed ordering, or `null` for "the caller has not chosen one".
    *
    *  `relevance` is the engine's own ranking, `newest` is freshest first, `views` is
@@ -262,6 +266,7 @@ export function emptyFilters(): JobFilters {
     openWithinDays: null,
     experienceYearsMax: null,
     experienceIncludeUnspecified: false,
+    seniorityIncludeUnspecified: false,
     sort: null,
     qFields: null,
   };
@@ -294,6 +299,9 @@ export function filtersToParams(f: JobFilters): URLSearchParams {
   if (f.experienceYearsMax != null) {
     p.set('experience_years_max', String(f.experienceYearsMax));
     if (f.experienceIncludeUnspecified) p.set('experience_include_unspecified', 'true');
+  }
+  if (f.seniorityIncludeUnspecified && (f.facets.seniority?.include.length ?? 0) > 0) {
+    p.set('seniority_include_unspecified', 'true');
   }
   // The default is written as the ABSENCE of the param, which is how the endpoint
   // spells both of its own defaults — so a browse feed and a relevance-ranked search
@@ -381,6 +389,7 @@ export function filtersFromParams(p: URLSearchParams): JobFilters {
   const years = Number(rawYears);
   f.experienceYearsMax = rawYears !== '' && Number.isInteger(years) && years >= 0 ? years : null;
   f.experienceIncludeUnspecified = p.get('experience_include_unspecified') === 'true';
+  f.seniorityIncludeUnspecified = p.get('seniority_include_unspecified') === 'true';
   // Anything but a recognized value reads as the contextual default — including the
   // retired `sort=cv` and the endpoint's `created_at`, which the browse UI does not
   // offer. Shared links and saved searches still carry old sort params, and the same
@@ -586,13 +595,15 @@ export function filtersFromProfile(profile: UserProfile): JobFilters {
   const seed = (values: string[]) => values.reduce(facetAdd, emptyFacet());
   const f = emptyFilters();
   f.facets.category = seed(profile.specializations);
-  // Exclude unselected levels rather than including selected ones so postings with
-  // no seniority remain eligible. An empty preference list imposes no restriction.
-  if (profile.seniorities?.length) {
-    f.facets.seniority = SENIORITY_VALUES.reduce(
-      (st, v) => profile.seniorities.includes(v) ? st : facetSetSign(st, v, 'exclude'),
-      emptyFacet(),
-    );
+  // The selected levels are included, together with the postings that carry no level at
+  // all — most of the catalogue, which an include alone would drop. Including rather than
+  // excluding the rest is what makes "Apply my profile" show the levels the user picked
+  // (freehire#3397: an intern saw seven red excludes and an unticked Intern, and read it as
+  // the profile not applying). An empty list, or every level, imposes no restriction.
+  const levels = profile.seniorities ?? [];
+  if (levels.length && !SENIORITY_VALUES.every((v) => levels.includes(v))) {
+    f.facets.seniority = seed(SENIORITY_VALUES.filter((v) => levels.includes(v)));
+    f.seniorityIncludeUnspecified = true;
     // The exclusion cannot reach a posting with no level, and for someone after an entry
     // role that is most of what it lets through — an intern's alerts were 19 of 19
     // unlabelled, ten of them asking for 2-5 years (freehire#3397). The posting's stated

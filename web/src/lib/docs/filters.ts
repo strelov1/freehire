@@ -101,6 +101,12 @@ export const FILTER_EXTRAS: FilterRow[] = [
       'true — with either experience bound, also keep the jobs that state no experience requirement (most of the catalogue). Has no effect without a bound',
   },
   {
+    param: 'seniority_include_unspecified',
+    label: 'Include unstated seniority',
+    values:
+      'true — with seniority, also keep the jobs that carry no seniority level (most of the catalogue). Has no effect without an included seniority',
+  },
+  {
     param: 'posted_within_days',
     label: 'Posted within',
     values:

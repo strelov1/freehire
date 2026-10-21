@@ -436,7 +436,23 @@
     {@const showSeniority = !exclude.includes('seniority')}
     {@const showRoleType = !exclude.includes('role_type')}
     {#if showSeniority}
+      {@const noLevelPicked = (staged.value.facets.seniority?.include.length ?? 0) === 0}
       <ChipFacet store={staged} param="seniority" label="Seniority" counts={c} />
+      <!-- Most postings carry no level, and including one drops every one of them
+           unless this is ticked. Disabled until a level is included: excluding levels
+           already keeps the unlabelled postings, so there is nothing to widen. -->
+      <label
+        class="mt-3 flex items-center gap-2 text-sm {noLevelPicked ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}"
+      >
+        <input
+          type="checkbox"
+          class="size-4 rounded border-border"
+          checked={staged.value.seniorityIncludeUnspecified}
+          disabled={noLevelPicked}
+          onchange={(e) => staged.setSeniorityIncludeUnspecified(e.currentTarget.checked)}
+        />
+        <span>Include postings with no level stated</span>
+      </label>
     {/if}
     <!-- Directly beneath seniority on purpose: the two are the axes users conflate.
          "Lead" reads to many as a management grade, while in this catalogue it names

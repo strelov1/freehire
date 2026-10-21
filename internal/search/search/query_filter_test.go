@@ -206,6 +206,32 @@ func TestFilterFromValues_ExperienceIncludeUnspecifiedAloneIsNoFilter(t *testing
 	}
 }
 
+// seniority_include_unspecified ORs the postings with no level into the included
+// levels' own group. Most of the catalogue carries no level, so "intern" alone is a
+// narrow slice of what an intern can apply to (freehire#3397).
+func TestFilterFromValues_SeniorityIncludeUnspecified(t *testing.T) {
+	got := normalizeGroups(t, FilterFromValues(vals("seniority=intern&seniority=junior&seniority_include_unspecified=true")))
+	want := [][]string{
+		{`enrichment.seniority = "intern"`, `enrichment.seniority = "junior"`, `enrichment.seniority NOT EXISTS`},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("got %v, want %v", got, want)
+	}
+}
+
+// Without an included level there is no group to widen: alone, or beside excludes
+// only (which already keep the unlabelled postings), the modifier adds nothing.
+func TestFilterFromValues_SeniorityIncludeUnspecifiedNeedsAnIncludedLevel(t *testing.T) {
+	if got := FilterFromValues(vals("seniority_include_unspecified=true")); got != nil {
+		t.Errorf("got %v, want no filter", got)
+	}
+	got := normalizeGroups(t, FilterFromValues(vals("seniority_exclude=senior&seniority_include_unspecified=true")))
+	want := [][]string{{`enrichment.seniority != "senior"`}}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("got %v, want %v", got, want)
+	}
+}
+
 // Zero is the entry-level selector, not an absent value: `experience_years_max=0`
 // asks for the postings that state no prior experience is required. A guard that
 // treats the bound as falsy would silently drop the one filter juniors need.

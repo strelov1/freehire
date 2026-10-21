@@ -754,3 +754,23 @@ describe('displayQuery', () => {
     expect(displayQuery('')).toBe('');
   });
 });
+
+describe('seniorityIncludeUnspecified', () => {
+  it('serializes beside an included level and reads it back', () => {
+    const f = emptyFilters();
+    f.facets.seniority = { include: ['intern'], exclude: [], matchAll: false };
+    f.seniorityIncludeUnspecified = true;
+    const p = filtersToParams(f);
+    expect(p.get('seniority_include_unspecified')).toBe('true');
+    expect(filtersFromParams(p).seniorityIncludeUnspecified).toBe(true);
+  });
+
+  // Excluding levels already keeps the unlabelled postings, and with nothing included
+  // there is no group to widen — so the param would only be noise in a shared link.
+  it('is not written without an included level', () => {
+    const f = emptyFilters();
+    f.facets.seniority = { include: [], exclude: ['senior'], matchAll: false };
+    f.seniorityIncludeUnspecified = true;
+    expect(filtersToParams(f).has('seniority_include_unspecified')).toBe(false);
+  });
+});

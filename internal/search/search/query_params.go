@@ -28,9 +28,14 @@ var scalarFilters = []string{
 // that each entry narrows a query by itself).
 const ExperienceIncludeUnspecifiedParam = "experience_include_unspecified"
 
-// scalarModifiers are params filterFromValues reads only to change how a scalar
-// filter applies. Known to UnknownParams, never a filter on their own.
-var scalarModifiers = []string{ExperienceIncludeUnspecifiedParam}
+// SeniorityIncludeUnspecifiedParam widens the included seniority levels to also admit
+// the postings that carry no level — most of the catalogue. Like the experience one,
+// alone it reads nothing.
+const SeniorityIncludeUnspecifiedParam = "seniority_include_unspecified"
+
+// scalarModifiers are params filterFromValues reads only to change how a filter
+// applies. Known to UnknownParams, never a filter on their own.
+var scalarModifiers = []string{ExperienceIncludeUnspecifiedParam, SeniorityIncludeUnspecifiedParam}
 
 // qSearchableFields are the fields `q` matches against, in the same order as the
 // jobs index's SearchableAttributes (see facetSettings in client.go). q_fields

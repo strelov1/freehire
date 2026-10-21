@@ -66,10 +66,12 @@ describe('syncProfileAlert', () => {
     expect(update).toHaveBeenCalledTimes(3);
     expect(update.mock.calls.every(([id]) => id === 42)).toBe(true);
     const queries = update.mock.calls.map(([, payload]) => new URLSearchParams(payload.query));
-    expect(queries[0]?.get('seniority_exclude')).toBe('intern,senior,lead,staff,principal,c_level');
-    expect(queries[1]?.get('seniority_exclude')).toBe('intern,junior,middle,lead,staff,principal,c_level');
-    expect(queries[2]?.has('seniority_exclude')).toBe(false);
-    expect(queries.every((p) => !p.has('seniority'))).toBe(true);
+    expect(queries[0]?.get('seniority')).toBe('junior,middle');
+    expect(queries[1]?.get('seniority')).toBe('senior');
+    expect(queries[2]?.has('seniority')).toBe(false);
+    expect(queries.slice(0, 2).every((p) => p.get('seniority_include_unspecified') === 'true')).toBe(true);
+    expect(queries[2]?.has('seniority_include_unspecified')).toBe(false);
+    expect(queries.every((p) => !p.has('seniority_exclude'))).toBe(true);
   });
 
   it('does not start a second sync while the first is still in flight, and the second reads the profile as it stands when its turn comes', async () => {

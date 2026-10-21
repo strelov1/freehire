@@ -661,3 +661,54 @@ func TestIntegration_ExperienceIncludeUnspecified(t *testing.T) {
 		}
 	}
 }
+
+// The seniority include-unspecified modifier against a real index: a posting with
+// no level is stored with no seniority attribute (the projection's omitempty), and
+// NOT EXISTS has to find exactly those beside the included levels (freehire#3397).
+func TestIntegration_SeniorityIncludeUnspecified(t *testing.T) {
+	ctx := context.Background()
+	c := startMeili(t)
+	if err := c.EnsureIndex(ctx); err != nil {
+		t.Fatalf("EnsureIndex: %v", err)
+	}
+
+	empty := enrichedJSON(t, enrich.Enrichment{})
+	jobs := []db.Job{
+		{ID: 1, Title: "Intern", PublicSlug: "intern", Seniority: "intern", Enrichment: empty},
+		{ID: 2, Title: "Senior", PublicSlug: "senior", Seniority: "senior", Enrichment: empty},
+		{ID: 3, Title: "No level", PublicSlug: "unlabelled", Enrichment: empty},
+	}
+	docs := make([]JobDocument, 0, len(jobs))
+	for _, j := range jobs {
+		d, err := FromJob(j, nil)
+		if err != nil {
+			t.Fatalf("FromJob: %v", err)
+		}
+		docs = append(docs, d)
+	}
+	if err := c.IndexJobs(ctx, docs); err != nil {
+		t.Fatalf("IndexJobs: %v", err)
+	}
+
+	for _, tc := range []struct {
+		query string
+		want  []int64
+	}{
+		{"seniority=intern", []int64{1}},
+		{"seniority=intern&seniority_include_unspecified=true", []int64{1, 3}},
+	} {
+		v, _ := url.ParseQuery(tc.query)
+		res, err := c.Search(ctx, SearchParams{Filter: FilterFromValues(v), Limit: 10})
+		if err != nil {
+			t.Fatalf("%s: Search: %v", tc.query, err)
+		}
+		var got []int64
+		for _, h := range res.Hits {
+			got = append(got, h.ID)
+		}
+		slices.Sort(got)
+		if !slices.Equal(got, tc.want) {
+			t.Errorf("%s: hits = %v, want %v", tc.query, got, tc.want)
+		}
+	}
+}

@@ -137,6 +137,10 @@ export class FilterStore {
     this.#url.setNow({ ...this.#url.value, experienceIncludeUnspecified: on });
   }
 
+  setSeniorityIncludeUnspecified(on: boolean) {
+    this.#url.setNow({ ...this.#url.value, seniorityIncludeUnspecified: on });
+  }
+
   setClearance(v: ClearanceFilter) {
     this.#url.setNow({ ...this.#url.value, clearance: v });
   }

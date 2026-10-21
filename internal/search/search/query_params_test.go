@@ -39,6 +39,7 @@ func TestUnknownParams_AcceptsTheFilterVocabulary(t *testing.T) {
 		"posted_within_days":   {"7"},
 
 		"experience_include_unspecified": {"true"},
+		"seniority_include_unspecified":  {"true"},
 	}
 
 	if got := UnknownParams(v, nil); len(got) != 0 {

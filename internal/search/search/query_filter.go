@@ -239,6 +239,11 @@ func filterFromValues(v url.Values, now time.Time) any {
 			for i, val := range included {
 				group[i] = facetEq(param, attr, val)
 			}
+			// Most postings carry no level, so "intern" alone drops nearly everything an
+			// intern could apply to. The modifier ORs those back into this group only.
+			if param == "seniority" && v.Get(SeniorityIncludeUnspecifiedParam) == "true" {
+				group = append(group, NotExists(attr))
+			}
 			groups = append(groups, group)
 		}
 		// Excluded values: each is its own AND group so all are filtered out.
