@@ -45,6 +45,10 @@ import (
 // JobPosting, simply drops that posting: there is no list-only fallback left to fall back to.
 type echojobs struct {
 	http echojobsHTTP
+	// maxNewPerRun bounds how many unseen postings one run hydrates; non-positive takes
+	// echojobsMaxNewPerRun. The rest are deferred — not yielded, so not stored — and offered
+	// again by a later run.
+	maxNewPerRun int
 }
 
 // echojobsHTTP is the transport echojobs needs: XML sitemap discovery plus HTML detail pages.
@@ -64,6 +68,13 @@ const (
 	// echojobsSweepGrace widens the post-run unseen sweep to match echojobsFreshnessWindow — see
 	// the sweepGrace type doc in source.go.
 	echojobsSweepGrace = echojobsFreshnessWindow
+	// echojobsMaxNewPerRun is the default hydration budget. A posting page is a browser
+	// navigation through the Scrapling tier, measured at ~2 pages/s across the detail workers,
+	// so 2 000 is ~15 minutes against the unit's 50. The window holds ~4k new postings a day
+	// and the timer runs every 2 h, so the budget keeps up with the inflow and drains the ~60k
+	// backlog a run faces after an outage in a few days instead of pushing one run past its
+	// timeout with nothing written.
+	echojobsMaxNewPerRun = 2000
 )
 
 // NewEchoJobs builds the echojobs adapter over the given HTTP client.
@@ -97,6 +108,8 @@ func (s echojobs) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 // logged — there is no list-only Job left to fall back to (contrast the old list+detail split,
 // where a failed detail still yielded a list-only posting). Detail fetches run under the shared
 // bounded worker pool.
+// At most maxNewPerRun unseen postings are hydrated per run, the newest first; the rest wait
+// for a later run.
 //
 // A dropped posting never reaches the pipeline's own stats (Skipped/Failed count saveOne
 // failures, not candidates an adapter discarded before returning them at all), so a systemic
@@ -106,9 +119,29 @@ func (s echojobs) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 // this rewrite. The summary log line below is the cheap mitigation: not an alert, just a number
 // an operator (or a future board-health check) can see.
 func (s echojobs) FetchNew(ctx context.Context, _ CompanyEntry, seen func(externalID string) bool) ([]Job, error) {
-	postings, err := s.crawl(ctx)
+	listed, err := s.crawl(ctx)
 	if err != nil {
 		return nil, err
+	}
+	budget := s.maxNewPerRun
+	if budget <= 0 {
+		budget = echojobsMaxNewPerRun
+	}
+	// The sitemap is newest-first, so the budget goes to the newest unseen postings.
+	postings := make([]echojobsPosting, 0, len(listed))
+	unseen, deferred := 0, 0
+	for _, p := range listed {
+		if !seen(p.Slug) {
+			if unseen == budget {
+				deferred++
+				continue
+			}
+			unseen++
+		}
+		postings = append(postings, p)
+	}
+	if deferred > 0 {
+		log.Printf("echojobs: hydration budget %d reached; %d new postings deferred to a later run", budget, deferred)
 	}
 	var dropped atomic.Int64
 	jobs := fetchDetails(postings, defaultDetailWorkers, func(p echojobsPosting) (Job, bool) {

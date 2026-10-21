@@ -516,3 +516,37 @@ func TestEchojobsFetchNewSucceedsWithNoCandidatesAtAll(t *testing.T) {
 		t.Fatalf("want no jobs, got %+v", jobs)
 	}
 }
+
+// The first run after a long outage meets a whole freshness window of unseen postings (~60k on
+// 2026-10-21) at a browser navigation each, far past one run's timeout, and the crawl writes
+// nothing until it returns. So a run hydrates only the newest maxNewPerRun of them and leaves
+// the rest, unstored and so still unseen, to the next run; a seen posting costs no budget.
+func TestEchojobsFetchNewHydratesOnlyTheBudgetNewestFirst(t *testing.T) {
+	page := func(title string) string {
+		return echojobsJobHTML(`"title":"` + title + `","hiringOrganization":{"@type":"Organization","name":"Acme"}`)
+	}
+	http := &echojobsFakeHTTP{
+		xmlRoutes: echojobsSingleShardRoutes("newest-a1", "seen-b2", "next-c3", "deferred-d4"),
+		htmlRoutes: map[string]string{
+			echojobsJobURL("newest-a1"):   page("A"),
+			echojobsJobURL("next-c3"):     page("C"),
+			echojobsJobURL("deferred-d4"): page("D"),
+		},
+	}
+	jobs, err := echojobs{http: http, maxNewPerRun: 2}.FetchNew(context.Background(), CompanyEntry{},
+		func(id string) bool { return id == "seen-b2" })
+	if err != nil {
+		t.Fatalf("FetchNew: %v", err)
+	}
+	var got []string
+	for _, j := range jobs {
+		got = append(got, j.ExternalID)
+	}
+	slices.Sort(got)
+	if want := []string{"newest-a1", "next-c3", "seen-b2"}; !slices.Equal(got, want) {
+		t.Errorf("jobs = %v, want %v", got, want)
+	}
+	if slices.Contains(http.gotHTML, echojobsJobURL("deferred-d4")) {
+		t.Error("a posting past the budget was fetched")
+	}
+}
