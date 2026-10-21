@@ -84,6 +84,18 @@ var scraplingProviders = map[string]scraplingProvider{
 	"kontur": {scraplingRoute{scraplingfetch.ModeHTTP, true}, func(f *Client) Source {
 		return NewKontur(f)
 	}},
+	// The crawl host's IP times out at TCP connect; through the proxy the impersonating fetcher
+	// reads both the XHR listing fragment and the detail pages.
+	"neogov": {scraplingRoute{scraplingfetch.ModeHTTP, true}, func(f *Client) Source {
+		return NewNeogov(f)
+	}},
+	// Vercel's bot firewall: 403 to the crawl host's IP in any client, and through the proxy a
+	// plain request draws the 429 "Security Checkpoint" about half the time. The browser over the
+	// proxy passes it, 10 of 10 pages measured on 2026-10-21. It replaced the chromedp browser
+	// tier, which the checkpoint had started answering with a 403.
+	"echojobs": {scraplingRoute{scraplingfetch.ModeBrowser, true}, func(f *Client) Source {
+		return NewEchoJobs(f)
+	}},
 }
 
 // A browser fetch that meets a challenge on its first page measured ~110 s, and the service

@@ -708,7 +708,7 @@ Source ingest: the provider registry and its adapters, entry validation, the per
 - **`robots.txt` declares `Crawl-delay: 5`, and the adapter honours it**: one posting page every 5 s across all three boards, at most 120 new pages per board per run (30 minutes), newest first. The ~8.6k first backfill therefore accretes over a couple of dozen runs; a deferred posting is never stored body-less. robots.txt disallows nothing the adapter reads.
 **Naukri traps** (`naukri`; live-verified 2026-10-18 from a residential IP, prod and the crawl host):
 
-- **Reachable only through `SOURCES_PROXY_URL`.** From prod and the crawl host every path — `robots.txt` included — is tarpitted by Akamai: HTTP/1.1 hangs to the timeout, HTTP/2 is reset with `INTERNAL_ERROR`, and a headless Chrome gets `ERR_HTTP2_PROTOCOL_ERROR`, so no transport on those IPs helps. Through the proxy plain HTTP answers in ~1-2 s, so the browser tier is not needed either. Hence `proxiedProviders`; without the proxy the provider fails every run, which is the honest outcome. `robots.txt` disallows nothing under `/jobapi/` for `User-agent: *`.
+- **Reachable only through `SOURCES_PROXY_URL`.** From prod and the crawl host every path — `robots.txt` included — is tarpitted by Akamai: HTTP/1.1 hangs to the timeout, HTTP/2 is reset with `INTERNAL_ERROR`, and a headless Chrome gets `ERR_HTTP2_PROTOCOL_ERROR`, so no transport on those IPs helps. Through the proxy plain HTTP answers in ~1-2 s, so no browser is needed either. Hence `proxiedProviders`; without the proxy the provider fails every run, which is the honest outcome. `robots.txt` disallows nothing under `/jobapi/` for `User-agent: *`.
 - **The listing is the ANDROID APP's search, not the website's.** The site calls the same `GET /jobapi/v3/search` and `GET /jobapi/v4/job/<id>`, but a browser User-Agent gets `406 {"message":"recaptcha required"}` on both, our own User-Agent gets 403 Access Denied, and only the app's HTTP stack (`okhttp/4.9.0`) plus `appid: 105` / `systemid: 105` is served; without those headers the API answers 400 "Please provide the valid App Id and System Id". The client's User-Agent always wins over per-request headers, so the string is set on a copy of the transport (`withUserAgent`) — applied again over the proxied client in `proxiedProviders`, or the rewire would silently restore ours. The listing and every page the SPA renders are client-side shells, and the job sitemaps carry URLs only.
 - **A board is a FUNCTIONAL AREA id** (`functionAreaIdGid`): `5` Engineering - Software & QA, `8` IT & Information Security, `3` Data Science & Analytics, `4` Engineering - Hardware & Networks — the ids the search's own `functionalAreaGid` facet reports. An unknown id answers 0 rows (not the unfiltered catalogue), a non-numeric one an Elasticsearch 400; the adapter refuses anything but digits. The filter was checked against the posting API's own `functionalArea` on a sample. `3`/`5`/`8` set `IsTechHint`: `classify.IsTech` accepted 80 of 300 of their titles and `ConfirmedNonTech` none. `4` mixes in hardware roles and gets no hint.
 - **The search window is 15,000 rows.** `noOfResults` serves up to 100 and page 150 is the deepest: page 151 answers 400 "Invalid value" at any page size. The walk reads `jobAge=7` sorted by freshness (`sort=f`, newest first). On 2026-10-18 the 7-day window held 18,920 postings in area 5 (truncated to its newest 15,000, logged), 5,177 in 8, 2,724 in 3 and 1,815 in 4; the whole catalogue held 102,872 in 7 days, so the technical areas are about a quarter of it. Area 5 held 56,950 over 30 days — no single query can read a month.
@@ -758,39 +758,6 @@ Source ingest: the provider registry and its adapters, entry validation, the per
 - The ingest sweep has a trade-off: a missed run can leave an orphan open until a future reconcile; the change window is sized wide enough to absorb a skipped cron.
 - Self-closing sources: a missed `removed` event from the feed can leave a vacancy open until the next reindex.
 
-## The browser tier
-
-A provider whose pages are served only to a client that ran JavaScript is crawled through a
-headless browser instead of an HTTP client. `browserProviders` (browsertier.go) is the
-per-provider opt-in, the same shape `proxiedProviders` has, and `ApplyBrowserEgress` rewires
-them — one entry today, `echojobs`.
-
-**It requires a proxy and refuses to run without one.** Measured 2026-09-07 against echojobs,
-all four combinations: from the prod datacenter IP a plain GET *and* a headless browser both
-get `403 x-vercel-mitigated: deny`, so no challenge is offered and there is nothing for a
-browser to solve; through `SOURCES_PROXY_URL` a plain GET gets the challenge and the browser
-passes it. Neither half works alone. Without a proxy the provider stays on the plain client
-and fails as it would have anyway, which is the honest outcome.
-
-**Nothing launches at wiring time.** The session is built on the first fetch, so an ingest run
-for any other provider — which is almost every run, since `cmd/ingest` crawls one — never pays
-for a Chrome it will not use.
-
-**The tier must stay disjoint from the proxy tiers**, and a test enforces it: both rewire the
-same registry entry and `cmd/ingest` applies them in sequence, so a provider in both would
-silently get whichever ran last. A browser-tier provider needs no `proxiedProviders` entry —
-its session egresses through `SOURCES_PROXY_URL` itself.
-
-`browserClient` implements exactly `XMLGetter` + `HTMLGetter`, which is `echojobsHTTP`, so the
-adapter reads browser-fetched bytes without knowing it — **not one line of echojobs' parsing
-changed**. Its errors are `*StatusError`, the same type the plain client produces, which is
-load-bearing rather than tidy: `detailUnreadable` and `isRateLimited` match on that type, so a
-browser-fetched 404 still means "this posting is gone".
-
-See [internal/platform/browser/AGENTS.md](../../platform/browser/AGENTS.md) for the traps on
-the browser side — chiefly that the `HeadlessChrome` user agent is refused outright, and that
-retrying a refused request is what holds a rate-limit-flavoured wall UP.
-
 ## A crawl that reads nothing of what it listed must fail
 
 `echojobs` published `ingested=0 failed=0`, exit 0, green unit, every four hours for 19 days
@@ -814,7 +781,15 @@ Chromium navigation that solves Cloudflare challenges, ~5-9 s once the first pag
 paid ~110 s for the challenge) — and whether it egresses through the proxy the service holds.
 Every row is the cheapest route the 2026-10-20 spike measured to pass;
 [the design](../../../docs/superpowers/specs/2026-10-20-scrapling-fetch-design.md) has the
-per-source, per-mode table, including the sources it did NOT rescue (echojobs, neogov, dodo).
+per-source, per-mode table, including the sources that spike did NOT rescue (echojobs, neogov,
+dodo).
+
+Two of those were rescued on 2026-10-21, once the proxy came back from a Webshare outage that
+had poisoned the spike's measurements: `neogov` (the crawl host's IP times out at TCP connect;
+`http` + proxy reads the XHR listing and the detail pages) and `echojobs` (Vercel's checkpoint:
+`http` + proxy drew a 429 about half the time, `browser` + proxy passed 10 of 10). echojobs used
+to have a chromedp browser tier of its own (`browsertier.go`, freehire#2588); the checkpoint
+began answering it with a 403 and it was deleted in favour of this row.
 
 It replaced the hosted Firecrawl tier, which carried bayt, gulftalent, wellfound, wantapply's
 sitemap and hh's detail pages at a credit per page and ran out of credits in 2026-10.
@@ -826,8 +801,7 @@ sitemap and hh's detail pages at a credit per page and ran out of credits in 202
 **`ApplyScraplingEgress` must run LAST**, and `cmd/ingest` does. `gulftalent` is in
 `proxiedFingerprintProviders` and `infojobs` in `proxiedProviders`, so both tiers write the same
 registry entry — the override is *wanted* (those transports are measured as refused, this one as
-served), so it is ordered instead of being the silent last-write-wins the browser tier's
-disjointness test exists to prevent. Without `SCRAPLING_FETCH_URL` the override does not happen
+served), so it is ordered instead of being a silent last-write-wins. Without `SCRAPLING_FETCH_URL` the override does not happen
 and each keeps its earlier transport — which is also the rollback.
 
 No adapter changed: the tier is a `*Client` whose transport forwards to the service, so every

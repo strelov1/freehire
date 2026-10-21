@@ -265,9 +265,9 @@ func ClientFor(provider string) (*Client, error) {
 //
 // echojobs used to be named here for the same reason and no longer is: measured 2026-09-07,
 // its obstacle is a JS challenge rather than an IP classification, and the EXISTING proxy
-// serves that challenge rather than refusing outright. What it needed was something to
-// execute the JavaScript, which is browserProviders — see browsertier.go. A fingerprint does
-// not help there; only a browser does.
+// serves that challenge rather than refusing outright. What it needs is a browser over that
+// proxy, which the Scrapling tier gives it. A fingerprint does not help there; only a browser
+// does.
 var proxiedFingerprintProviders = map[string]func(*fingerprintHTTP) Source{
 	"gulftalent": func(c *fingerprintHTTP) Source { return NewGulfTalent(c) },
 }
