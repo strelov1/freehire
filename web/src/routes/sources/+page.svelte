@@ -35,4 +35,14 @@
   </header>
 
   <SourceCatalog sources={data.sources} />
+
+  <p class="mt-10 max-w-2xl text-xs leading-relaxed text-muted-foreground">
+    Place names and coordinates:
+    <a class="underline underline-offset-4" href="https://www.geonames.org/" rel="noopener">GeoNames</a> (CC BY 4.0).
+    Metro areas:
+    <a
+      class="underline underline-offset-4"
+      href="https://human-settlement.emergency.copernicus.eu/ghs_fua.php"
+      rel="noopener">GHS Functional Urban Areas</a>, European Commission JRC (CC BY 4.0).
+  </p>
 </div>
