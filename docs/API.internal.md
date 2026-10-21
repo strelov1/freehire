@@ -104,7 +104,7 @@ These parameters apply to `GET /jobs/search` and `GET /jobs/facets`. Combine any
 - Add `<param>_mode=and` to require all selected values: `skills=go,rust&skills_mode=and` matches both.
 - Add `<param>_exclude=<value>` to exclude matches: `company_type_exclude=outstaff` drops outstaff jobs.
 - Different facets are ANDed together; numeric and boolean filters are ANDed too. The geography facets are the one exception — see below.
-- Geography is a single OR group: `regions`, `countries` and `cities` widen each other instead of narrowing. `regions=eu&countries=IT` means "in Europe **or** in Italy", so it returns everything `regions=eu` alone would. To search one country, drop the region: `countries=IT`. The three name a single concept — *where* — so picking two places reads as "either", which is what makes `regions=eu&countries=BR` ("Europe or Brazil") useful. There is no AND to switch on: `_mode=and` does not apply to geography.
+- Geography is a single OR group: `regions`, `countries`, `metros` and `cities` widen each other instead of narrowing. `regions=eu&countries=IT` means "in Europe **or** in Italy", so it returns everything `regions=eu` alone would. To search one country, drop the region: `countries=IT`. The four name a single concept — *where* — so picking two places reads as "either", which is what makes `regions=eu&countries=BR` ("Europe or Brazil") useful. There is no AND to switch on: `_mode=and` does not apply to geography.
 - Use `regions=none` to match jobs with no resolved geography (an empty region set); it ORs with real region values and supports `_exclude` like any region.
 - A param no filter reads is ignored rather than refused — so old links and saved searches keep working — and comes back in `meta.ignored_params`, with `did_you_mean` when it is only the singular of a real facet. Check it: a dropped filter otherwise looks like a genuinely broad result. At most 10 are listed per response. The same report rides on `/jobs/facets`, `/market/coverage` and `/companies`, which answer `{"data": ...}` and grow a `meta` block only when there is something to warn about. `/companies` filters on its own vocabulary, so a jobs facet sent there is reported as ignored.
 
@@ -126,6 +126,7 @@ Every facet below supports repeat-OR, `_mode=and`, and `_exclude` as described a
 | `company_type` | Company type | product, startup, outsource, outstaff, agency, inhouse, government |
 | `countries` | Countries | Open vocabulary — call /jobs/facets for live values |
 | `cities` | City | Open vocabulary — call /jobs/facets for live values |
+| `metros` | Metro area | Open vocabulary — call /jobs/facets for live values |
 | `relocation` | Relocation | not_supported, supported, required |
 | `employment_type` | Employment | full_time, part_time, contract, internship, fellowship |
 | `english_level` | English | none, a1, a2, b1, b2, c1, c2, native |
