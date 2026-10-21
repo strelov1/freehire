@@ -123,6 +123,16 @@ func TestMetroForNoMetroTakesPartInAgreement(t *testing.T) {
 	}
 }
 
+func TestMetrosForCities(t *testing.T) {
+	got := MetrosForCities([]string{"Folsom", "Elk Grove", "Jackson", "Unknownville"}, "us")
+	if !slices.Equal(got, []string{"Sacramento (US)"}) {
+		t.Errorf("MetrosForCities = %v", got)
+	}
+	if got := MetrosForCities([]string{"Khimki"}, "us"); got != nil {
+		t.Errorf("Khimki under us = %v, want none", got)
+	}
+}
+
 func TestLoadMetrosDuplicateExactKeyIsDropped(t *testing.T) {
 	tsv := "brentwood\tus\tCA\tSan Francisco (US)\n" +
 		"brentwood\tus\tCA\tSacramento (US)\n" +

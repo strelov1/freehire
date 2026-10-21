@@ -7,6 +7,7 @@ package jobderive
 
 import (
 	"slices"
+	"strings"
 
 	"github.com/strelov1/freehire/internal/dict/classify"
 	"github.com/strelov1/freehire/internal/dict/lang"
@@ -184,6 +185,7 @@ func Derive(in Input) Derived {
 	if len(in.Cities) > 0 {
 		cities = in.Cities
 	}
+	metros := metrosForOverride(geo.Metros, in.Cities, in.Countries, countries)
 	// Work-mode precedence: structured (ATS) → location marker → description phrase.
 	// Each lower source only fills a value the higher ones left empty.
 	workMode := in.WorkMode
@@ -263,7 +265,7 @@ func Derive(in Input) Derived {
 		Countries:   countries,
 		Regions:     regions,
 		Cities:      cities,
-		Metros:      geo.Metros,
+		Metros:      metros,
 		WorkMode:    workMode,
 		// Skills is a set: the structured source skills are unioned with the
 		// dictionary skills, neither replacing the other. The category-scoped
@@ -404,4 +406,32 @@ func believableExperience(n *int) *int {
 		return n
 	}
 	return nil
+}
+
+// metrosForOverride makes the metros follow the structured geography override the way
+// cities and countries do, so a posting never carries a metro of a place it no longer
+// states. Adapter cities are re-resolved by bare name under the final country, and only
+// when there is exactly one (the same one-stated-country rule location.Parse applies);
+// an adapter country alone keeps the line's metros that lie in one of the final
+// countries.
+func metrosForOverride(parsed, inCities, inCountries, countries []string) []string {
+	if len(inCities) > 0 {
+		if len(countries) != 1 {
+			return nil
+		}
+		return location.MetrosForCities(inCities, countries[0])
+	}
+	if len(inCountries) == 0 {
+		return parsed
+	}
+	var out []string
+	for _, m := range parsed {
+		for _, c := range countries {
+			if strings.HasSuffix(m, " ("+strings.ToUpper(c)+")") {
+				out = append(out, m)
+				break
+			}
+		}
+	}
+	return out
 }

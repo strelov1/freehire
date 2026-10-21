@@ -706,6 +706,46 @@ func TestDerive_ExplicitRegionCityOverride(t *testing.T) {
 	}
 }
 
+// Metros follow an adapter's city override: they are re-resolved from the adapter's
+// cities under the final country rather than read off the free-text line.
+func TestDerive_MetrosFollowCityOverride(t *testing.T) {
+	got := Derive(Input{Title: "Engineer", Company: "Acme", Source: "manual", ExternalID: "1",
+		Location: "San Diego, CA", Cities: []string{"Folsom", "Elk Grove"}})
+	if want := []string{"Sacramento (US)"}; !reflect.DeepEqual(got.Metros, want) {
+		t.Errorf("Metros = %v, want %v (from the adapter's cities)", got.Metros, want)
+	}
+
+	// The adapter's cities with an adapter country: resolved under that country.
+	got = Derive(Input{Title: "Engineer", Company: "Acme", Source: "manual", ExternalID: "1",
+		Location: "Office", Cities: []string{"Khimki"}, Countries: []string{"ru"}})
+	if want := []string{"Moscow (RU)"}; !reflect.DeepEqual(got.Metros, want) {
+		t.Errorf("Metros = %v, want %v", got.Metros, want)
+	}
+
+	// Two final countries cannot place a bare city in either.
+	got = Derive(Input{Title: "Engineer", Company: "Acme", Source: "manual", ExternalID: "1",
+		Cities: []string{"Folsom"}, Countries: []string{"us", "ca"}})
+	if len(got.Metros) != 0 {
+		t.Errorf("Metros = %v, want none under two countries", got.Metros)
+	}
+}
+
+// An adapter country alone drops any metro the line resolved in a country the posting
+// no longer states, and keeps one it still does.
+func TestDerive_MetrosFollowCountryOverride(t *testing.T) {
+	got := Derive(Input{Title: "Engineer", Company: "Acme", Source: "lever", ExternalID: "1",
+		Location: "Folsom, CA", Countries: []string{"de"}})
+	if len(got.Metros) != 0 {
+		t.Errorf("Metros = %v, want none (Sacramento is not in de)", got.Metros)
+	}
+
+	got = Derive(Input{Title: "Engineer", Company: "Acme", Source: "lever", ExternalID: "1",
+		Location: "Folsom, CA", Countries: []string{"us"}})
+	if want := []string{"Sacramento (US)"}; !reflect.DeepEqual(got.Metros, want) {
+		t.Errorf("Metros = %v, want %v", got.Metros, want)
+	}
+}
+
 // A structured country signal (Ashby/Lever/Workday's own country field) overrides the
 // location-dictionary derivation AND pulls its region along with it, so a job whose
 // free-text location the dictionary cannot parse ("UAE" as a bare name) still lands

@@ -102,8 +102,10 @@ small namesake inside some FUA looked unique and bare "Jackson" resolved to Phil
 3. Nothing for an unresolved city. Never guess — the dictionary rule every facet follows.
 
 The result passes through `jobderive.Derive` exactly as `Cities` does, including the
-structured-signal override from an adapter (adapter cities carry no subdivision, so they
-fall under rule 2).
+structured-signal override from an adapter: when the adapter supplies cities, metros are
+re-derived from them by rule 2 (`location.MetrosForCities`, adapter cities carry no
+subdivision) under the final country, and only when there is exactly one; when it
+supplies only countries, a metro whose country is not among them is dropped.
 
 ### Storage and search
 
