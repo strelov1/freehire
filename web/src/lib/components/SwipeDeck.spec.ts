@@ -74,13 +74,13 @@ const gone = {
   public_slug: 'gone-job',
   title: 'Gone Job',
   company: 'Acme',
-  skills: [],
+  skills: [] as string[],
 } as Job;
 const next = {
   public_slug: 'next-job',
   title: 'Next Job',
   company: 'Globex',
-  skills: [],
+  skills: [] as string[],
 } as Job;
 
 const goneCard = 'Job: Gone Job at Acme';
