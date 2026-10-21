@@ -7232,7 +7232,7 @@ type Querier interface {
 	UpsertCoverLetter(ctx context.Context, arg UpsertCoverLetterParams) error
 	// Records a candidate's application to an on-site vacancy and CLAIMS it for delivery
 	// (sending_at), or replaces the content of one they recorded earlier that never reached the
-	// employer — the retry after a failed delivery. See migration 0186.
+	// employer — the retry after a failed delivery. See migration 0187.
 	//
 	// Returns no row in exactly three cases, which GetDirectApplication tells apart afterwards:
 	// the application was already SENT; another request holds a live claim on it (a delivery in

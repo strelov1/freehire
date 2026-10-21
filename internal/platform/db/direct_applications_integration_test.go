@@ -1,6 +1,6 @@
 //go:build integration
 
-// Integration tests for the on-site application record (migration 0186): one row per
+// Integration tests for the on-site application record (migration 0187): one row per
 // candidate and vacancy, a retry that replaces an unsent application and never a sent
 // one, and the daily cap that a retry does not consume. All of it is one SQL statement's
 // behaviour, verifiable only against a real Postgres.
