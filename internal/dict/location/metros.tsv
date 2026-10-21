@@ -161,7 +161,7 @@ agadir	ma		Agadir, MA
 agano	jp		Niigata, JP
 agar	in		Agar, IN
 agartala	in		Agartala, IN
-agawam	us	MA	Springfield MA, US
+agawam	us	MA	Springfield, US
 agbor	ng		Agbor, NG
 agboville	ci		Agboville, CI
 agege	ng		Lagos, NG
@@ -203,7 +203,6 @@ ahvaz	ir		Ahvaz, IR
 ahwa	in		Ahwa, IN
 ahwatukee foothills	us	AZ	Phoenix, US
 ahwiaa	gh		Kumasi, GH
-ahwiaa	gh		Kumasi, GH
 aichach	de		Augsburg, DE
 aigáleo	gr		Athens, GR
 aihara	jp		Tokyo, JP
@@ -239,8 +238,8 @@ akasaka	jp		Tokyo, JP
 akashi	jp		Osaka, JP
 akatsi	gh		Akatsi, GH
 akatsuka	jp		Tokyo, JP
-akbarpur	in		Akbarpur Ambedkar Nagar, IN
-akbarpur	in		Akbarpur Kanpur Dehat, IN
+akbarpur	in		Akbarpur Uttar Pradesh, IN
+akbarpur	in		Akbarpur, IN
 aketi	cd		Aketi, CD
 akhisar	tr		Akhisar, TR
 akhisar	tr		İnegol, TR
@@ -405,7 +404,7 @@ alandi	in		Pune, IN
 alandur	in		Chennai, IN
 alangad	in		Kochi, IN
 alanya	tr		Alanya, TR
-alaplı	tr		Ereğli Zonguldak, TR
+alaplı	tr		Ereğli, TR
 alappuzha	in		Alappuzha, IN
 alaquàs	es		Valencia, ES
 alasia	ng		Lagos, NG
@@ -516,7 +515,7 @@ almería	es		Almería, ES
 almirante tamandaré	br		Curitiba, BR
 almora	in		Almora, IN
 almozara	es		Zaragoza, ES
-aloha	us	OR	Portland OR, US
+aloha	us	OR	Portland, US
 alor setar	my		Alor Setar, MY
 alpharetta	us	GA	Atlanta, US
 alphen aan den rijn	nl		Alphen aan den Rijn, NL
@@ -617,10 +616,10 @@ amersfoort	nl		Amersfoort, NL
 amersham	gb		London, GB
 amersham on the hill	gb		London, GB
 ames	us	IA	Ames, US
-amesbury	us	MA	Lawrence MA, US
-amherst	us	MA	Springfield MA, US
+amesbury	us	MA	Lawrence, US
+amherst	us	MA	Springfield, US
 amherst	us	NY	Buffalo, US
-amherst center	us	MA	Springfield MA, US
+amherst center	us	MA	Springfield, US
 ami	jp		Tokyo, JP
 amiens	fr		Amiens, FR
 amin’yevo	ru		Moscow, RU
@@ -729,7 +728,6 @@ annecy-le-vieux	fr		Annecy, FR
 annemasse	fr		Annemasse, FR
 annex	ca	ON	Toronto, CA
 anning	cn		Anning, CN
-annino	ru		Moscow, RU
 annino	ru		Moscow, RU
 anoka	us	MN	Minneapolis, US
 anqing	cn		Anqing, CN
@@ -1539,7 +1537,7 @@ baoding	cn		Baoding, CN
 baoji	cn		Baoji, CN
 baoqing	cn		Baoqing, CN
 baoshan	cn		Baoshan Heilongjiang, CN
-baoshan	cn		Baoshan Yunnan, CN
+baoshan	cn		Baoshan, CN
 baoshan	cn		Shanghai, CN
 baotou	cn		Baotou, CN
 baoying	cn		Baoying, CN
@@ -1681,7 +1679,7 @@ battersea	gb		London, GB
 batticaloa	lk		Batticaloa, LK
 battipaglia	it		Salerno, IT
 battir	ps		East Jerusalem, PS
-battle ground	us	WA	Portland OR, US
+battle ground	us	WA	Portland, US
 batu	id		Surabaya, ID
 batu berendam	my		Malacca, MY
 batu caves	my		Kuala Lumpur, MY
@@ -1754,7 +1752,7 @@ beaumont	us	CA	Hemet, US
 beaumont	us	TX	Beaumont, US
 beauport	ca	QC	Québec, CA
 beavercreek	us	OH	Dayton, US
-beaverton	us	OR	Portland OR, US
+beaverton	us	OR	Portland, US
 bebedouro	br		Bebedouro, BR
 bebington	gb		Liverpool, GB
 beckenham	gb		London, GB
@@ -1968,7 +1966,7 @@ best	nl		Eindhoven, NL
 besuki	id		Besuki, ID
 betamcherla	in		Betamcherla, IN
 bethany	us	OK	Oklahoma City, US
-bethany	us	OR	Portland OR, US
+bethany	us	OR	Portland, US
 bethel park	us	PA	Pittsburgh, US
 bethesda	us	MD	Washington, US
 bethlehem	ps		East Jerusalem, PS
@@ -2053,7 +2051,7 @@ bhudgaon	in		Sāngli, IN
 bhuj	in		Bhuj, IN
 bhundsi	in		Delhi, IN
 bhusawal	in		Bhusawal, IN
-bhuwāna	in		Udaipur Udaipur, IN
+bhuwāna	in		Udaipur, IN
 bhābhar	in		Bhābhar, IN
 bhāgalpur	in		Bhāgalpur, IN
 bhālki	in		Bhālki, IN
@@ -2234,7 +2232,7 @@ bloomfield	us	NJ	New York City, US
 bloomingdale	us	FL	Tampa, US
 bloomingdale	us	IL	Chicago, US
 bloomington	us	CA	Los Angeles, US
-bloomington	us	IL	Bloomington IL, US
+bloomington	us	IL	Bloomington, US
 bloomington	us	IN	Bloomington IN, US
 bloomington	us	MN	Minneapolis, US
 blora	id		Blora, ID
@@ -2521,7 +2519,7 @@ brighton	au		Melbourne, AU
 brighton	gb		Brighton, GB
 brighton	us	CO	Denver, US
 brighton	us	MA	Boston, US
-brighton	us	NY	Rochester NY, US
+brighton	us	NY	Rochester, US
 brighton beach	us	NY	New York City, US
 brighton east	au		Melbourne, AU
 brighton park	us	IL	Chicago, US
@@ -2962,7 +2960,7 @@ camarate	pt		Lisbon, PT
 camargo	es		Santander, ES
 camarillo	us	CA	Los Angeles, US
 camas	es		Sevilla, ES
-camas	us	WA	Portland OR, US
+camas	us	WA	Portland, US
 camayenne	gn		Conakry, GN
 camaçari	br		Camaçari, BR
 camberley	gb		Bracknell, GB
@@ -3010,7 +3008,7 @@ campsie	au		Sydney, AU
 canarsie	us	NY	New York City, US
 canary wharf	gb		London, GB
 canberra	au		Canberra, AU
-canby	us	OR	Portland OR, US
+canby	us	OR	Portland, US
 cancún	mx		Cancún, MX
 candeias	br		Candeias, BR
 candelaria	es		Santa Cruz de Tenerife, ES
@@ -3360,7 +3358,7 @@ changning	cn		Shanghai, CN
 changping	cn		Beijing, CN
 changqing	cn		Jinan, CN
 changsha	cn		Changsha Guangdong, CN
-changsha	cn		Changsha Hunan, CN
+changsha	cn		Changsha, CN
 changshu	cn		Changshu, CN
 changtu	cn		Changtu, CN
 changwon	kr		Changwon, KR
@@ -3560,7 +3558,7 @@ chiclayo	pe		Chiclayo, PE
 chico	us	CA	Chico, US
 chicoloapan	mx		Mexico City, MX
 chiconcuac	mx		Mexico City, MX
-chicopee	us	MA	Springfield MA, US
+chicopee	us	MA	Springfield, US
 chicureo	cl		Santiago, CL
 chidambaram	in		Chidambaram, IN
 chidawa	in		Chidawa, IN
@@ -3965,7 +3963,7 @@ columbia heights	us	DC	Washington, US
 columbia heights	us	MN	Minneapolis, US
 columbine	us	CO	Denver, US
 columbus	us	GA	Columbus GA, US
-columbus	us	OH	Columbus OH, US
+columbus	us	OH	Columbus, US
 colwood	ca	BC	Victoria, CA
 colón	pa		Colón, PA
 colón	ve		Colón, VE
@@ -4191,7 +4189,7 @@ cumaná	ve		Cumaná, VE
 cumberland	us	RI	Providence, US
 cumbernauld	gb		Glasgow, GB
 cumbum	in		Cumbum Andhra Pradesh, IN
-cumbum	in		Cumbum Tamil Nadu, IN
+cumbum	in		Cumbum, IN
 cupang	ph		Manila, PH
 cupertino	us	CA	San Francisco Bay Area, US
 curepipe	mu		Port Louis, MU
@@ -4447,7 +4445,7 @@ del pilar	ph		Angeles City, PH
 del remedio	ph		Manila, PH
 deland	us	FL	Deltona, US
 delanggu	id		Surakarta, ID
-delaware	us	OH	Columbus OH, US
+delaware	us	OH	Columbus, US
 delegación cuajimalpa de morelos	mx		Mexico City, MX
 delft	nl		Rotterdam, NL
 delgado	sv		San Salvador, SV
@@ -4472,8 +4470,8 @@ denai alam	my		Kuala Lumpur, MY
 denain	fr		Valenciennes, FR
 denderleeuw	be		Brussels, BE
 dendermonde	be		Antwerp, BE
-dengzhou	cn		Dengzhou Henan, CN
 dengzhou	cn		Dengzhou Shandong, CN
+dengzhou	cn		Dengzhou, CN
 denizciler	tr		İskenderun, TR
 denizli	tr		Denizli, TR
 denov	uz		Denov, UZ
@@ -4803,7 +4801,7 @@ dubai silicon oasis	ae		Dubai, AE
 dubai sports city	ae		Dubai, AE
 dublin	ie		Dublin, IE
 dublin	us	CA	Concord, US
-dublin	us	OH	Columbus OH, US
+dublin	us	OH	Columbus, US
 dubréka	gn		Conakry, GN
 dubuque	us	IA	Dubuque, US
 ducheng	cn		Ducheng, CN
@@ -4846,7 +4844,7 @@ dunedin	nz		Dunedin, NZ
 dunedin	us	FL	Tampa, US
 dunfermline	gb		Dunfermline, GB
 dungun	my		Dungun, MY
-dunhou	cn		Ji’an Jiangxi, CN
+dunhou	cn		Ji’an, CN
 dunhua	cn		Dunhua, CN
 dunhuang	cn		Dunhuang, CN
 dunkirk	fr		Dunkirk, FR
@@ -4955,7 +4953,7 @@ east lake	us	FL	Tampa, US
 east lake-orient park	us	FL	Tampa, US
 east lansing	us	MI	Lansing, US
 east london	za		East London, ZA
-east longmeadow	us	MA	Springfield MA, US
+east longmeadow	us	MA	Springfield, US
 east los angeles	us	CA	Los Angeles, US
 east massapequa	us	NY	New York City, US
 east meadow	us	NY	New York City, US
@@ -4982,7 +4980,7 @@ east tremont	us	NY	New York City, US
 east village	us	NY	New York City, US
 eastbourne	gb		Eastbourne, GB
 eastchester	us	NY	New York City, US
-easthampton	us	MA	Springfield MA, US
+easthampton	us	MA	Springfield, US
 eastlake	us	OH	Cleveland, US
 eastleigh	gb		Southampton, GB
 eastmont	us	WA	Seattle, US
@@ -5219,7 +5217,7 @@ ende	id		Ende, ID
 endeavour hills	au		Melbourne, AU
 enem	ru		Krasnodar, RU
 enerhodar	ua		Enerhodar, UA
-enfield	us	CT	Springfield MA, US
+enfield	us	CT	Springfield, US
 enfield lock	gb		London, GB
 enfield town	gb		London, GB
 engadine	au		Sydney, AU
@@ -5269,7 +5267,7 @@ erebuni	am		Yerevan, AM
 erechim	br		Erechim, BR
 erenhot	cn		Erenhot, CN
 ereğli	tr		Ereğli Konya, TR
-ereğli	tr		Ereğli Zonguldak, TR
+ereğli	tr		Ereğli, TR
 erftstadt	de		Köln, DE
 erfurt	de		Erfurt, DE
 ergani	tr		Ergani, TR
@@ -5464,12 +5462,12 @@ farīj kulayb	qa		Doha, QA
 fasā	ir		Fasā, IR
 fatehganj west	in		Bareilly, IN
 fatehjang	pk		Fatehjang, PK
-fatehpur	in		Fatehpur Bara Banki, IN
-fatehpur	in		Fatehpur Fatehpur, IN
-fatehpur	in		Fatehpur Sikar, IN
+fatehpur	in		Fatehpur Rajasthan, IN
+fatehpur	in		Fatehpur Uttar Pradesh, IN
+fatehpur	in		Fatehpur, IN
 fatehpur sīkri	in		Fatehpur Sīkri, IN
-fatehābād	in		Fatehābād Haryana, IN
 fatehābād	in		Fatehābād Uttar Pradesh, IN
+fatehābād	in		Fatehābād, IN
 fatick	sn		Fatick, SN
 fatih	tr		Istanbul, TR
 fatsa	tr		Fatsa, TR
@@ -5479,14 +5477,14 @@ favoriten	at		Vienna, AT
 faya-largeau	td		Faya-Largeau, TD
 fayetteville	us	AR	Fayetteville AR, US
 fayetteville	us	GA	Atlanta, US
-fayetteville	us	NC	Fayetteville NC, US
+fayetteville	us	NC	Fayetteville, US
 fayzabad	af		Fayzabad, AF
 fazakerley	gb		Liverpool, GB
 fazenda rio grande	br		Fazenda Rio Grande, BR
 fazilka	in		Fazilka, IN
 federal way	us	WA	Seattle, US
-feicheng	cn		Feicheng Linyi Shi, CN
-feicheng	cn		Feicheng Tai'an Shi, CN
+feicheng	cn		Feicheng Shandong, CN
+feicheng	cn		Feicheng, CN
 feira	pt		Porto, PT
 feira de santana	br		Feira de Santana, BR
 felixstowe	gb		Ipswich, GB
@@ -5495,8 +5493,8 @@ felling	gb		Newcastle upon Tyne, GB
 feltham	gb		London, GB
 fendou	cn		Fendou, CN
 fengcheng	cn		Fengcheng Chongqing, CN
-fengcheng	cn		Fengcheng Jiangsu, CN
 fengcheng	cn		Fengcheng Liaoning, CN
+fengcheng	cn		Fengcheng, CN
 fenggang	cn		Fenggang, CN
 fenggao	cn		Changyuan, CN
 fenghua	cn		Fenghua, CN
@@ -5553,7 +5551,7 @@ fishers	us	IN	Indianapolis, US
 fishtown	us	PA	Philadelphia, US
 fitchburg	us	MA	Leominster, US
 fitchburg	us	WI	Madison, US
-five corners	us	WA	Portland OR, US
+five corners	us	WA	Portland, US
 flagami	us	FL	Miami, US
 flandes	co		Girardot City, CO
 flatbush	us	NY	New York City, US
@@ -5615,7 +5613,7 @@ fordham	us	NY	New York City, US
 fordon	pl		Bydgoszcz, PL
 fords	us	NJ	New York City, US
 forest	be		Brussels, BE
-forest grove	us	OR	Portland OR, US
+forest grove	us	OR	Portland, US
 forest heights	ca	ON	Kitchener, CA
 forest hills	us	MI	Grand Rapids, US
 forest hills	us	NY	New York City, US
@@ -5632,7 +5630,7 @@ formosa	br		Formosa, BR
 fornacelle	it		Florence, IT
 forney	us	TX	Dallas, US
 forquilhinha	br		Criciúma, BR
-fort bragg	us	NC	Fayetteville NC, US
+fort bragg	us	NC	Fayetteville, US
 fort cavazos	us	TX	Killeen, US
 fort collins	us	CO	Fort Collins, US
 fort garry south	ca	MB	Winnipeg, CA
@@ -5809,12 +5807,12 @@ futog	rs		Novi Sad, RS
 futtsu	jp		Tokyo, JP
 fuwwah	eg		Disūq, EG
 fuxin	cn		Fuxin, CN
-fuyang	cn		Fuyang Anhui, CN
 fuyang	cn		Fuyang Zhejiang, CN
+fuyang	cn		Fuyang, CN
 fuyong	cn		Tantou, CN
 fuyu	cn		Fuyu, CN
-fuzhou	cn		Fuzhou Fujian, CN
 fuzhou	cn		Fuzhou Jiangxi, CN
+fuzhou	cn		Fuzhou, CN
 fu’an	cn		Fu’an, CN
 fylde	gb		Blackpool, GB
 fylí	gr		Athens, GR
@@ -5851,7 +5849,7 @@ gafsa	tn		Gafsa, TN
 gage park	us	IL	Chicago, US
 gagnoa	ci		Gagnoa, CI
 gagny	fr		Paris, FR
-gahanna	us	OH	Columbus OH, US
+gahanna	us	OH	Columbus, US
 gainesville	us	GA	Atlanta, US
 gainsborough	gb		Scunthorpe, GB
 gaithersburg	us	MD	Washington, US
@@ -5901,8 +5899,8 @@ gangu chengguanzhen	cn		Gangu Chengguanzhen, CN
 ganguwa	in		Hisar, IN
 gangxia	cn		Shenzhen, CN
 gangākher	in		Gangākher, IN
-gangāpur	in		Gangāpur Bhilwara, IN
-gangāpur	in		Gangāpur Sawai Madhopur, IN
+gangāpur	in		Gangāpur Rajasthan, IN
+gangāpur	in		Gangāpur, IN
 ganj dundwāra	in		Ganj Dundwāra, IN
 ganja	az		Ganja, AZ
 gannavaram	in		Gannavaram, IN
@@ -5964,7 +5962,7 @@ gasteiz / vitoria	es		Gasteiz / Vitoria, ES
 gastonia	us	NC	Charlotte, US
 gatak	id		Surakarta, ID
 gatchina	ru		Saint Petersburg, RU
-gates-north gates	us	NY	Rochester NY, US
+gates-north gates	us	NY	Rochester, US
 gateshead	gb		Newcastle upon Tyne, GB
 gatineau	ca	QC	Ottawa, CA
 gatumba	bi		Gatumba, BI
@@ -6342,7 +6340,7 @@ grefrath	de		Ruhr, DE
 gremda	tn		Sfax, TN
 grenchen	ch		Biel/Bienne, CH
 grenoble	fr		Grenoble, FR
-gresham	us	OR	Portland OR, US
+gresham	us	OR	Portland, US
 gresik	id		Surabaya, ID
 gretna	us	LA	New Orleans, US
 greve	dk		Copenhagen, DK
@@ -6368,7 +6366,7 @@ gropiusstadt	de		Berlin, DE
 grosse pointe woods	us	MI	Detroit, US
 grosseto	it		Grosseto, IT
 grottaferrata	it		Rome, IT
-grove city	us	OH	Columbus OH, US
+grove city	us	OH	Columbus, US
 groves	us	TX	Beaumont, US
 grozny	ru		Grozny, RU
 groß-gerau	de		Frankfurt am Main, DE
@@ -6702,7 +6700,7 @@ hanworth	gb		London, GB
 hanyuan	cn		Hanyuan, CN
 hanyū	jp		Tokyo, JP
 hanzhong	cn		Hanzhong, CN
-happy valley	us	OR	Portland OR, US
+happy valley	us	OR	Portland, US
 haramachi	jp		Matsuyama, JP
 harar	et		Harar, ET
 harare	zw		Harare, ZW
@@ -6775,7 +6773,7 @@ havana	cu		Havana, CU
 havant	gb		Southampton, GB
 haveli lakha	pk		Haveli Lakha, PK
 havelian	pk		Havelian, PK
-haverhill	us	MA	Lawrence MA, US
+haverhill	us	MA	Lawrence, US
 havertown	us	PA	Philadelphia, US
 havířov	cz		Havířov, CZ
 hawai‘i kai	us	HI	Honolulu, US
@@ -6790,12 +6788,11 @@ hayang	kr		Daegu, KR
 hayange	fr		Thionville, FR
 haydock	gb		Liverpool, GB
 hayes	gb		London, GB
-hayes	gb		London, GB
 hayesville	us	OR	Salem, US
 hayling island	gb		Southampton, GB
 hayward	us	CA	San Francisco Bay Area, US
 haywards heath	gb		London, GB
-hazel dell	us	WA	Portland OR, US
+hazel dell	us	WA	Portland, US
 hazel grove	gb		Manchester, GB
 hazel park	us	MI	Detroit, US
 hazelwood	us	MO	St. Louis, US
@@ -6866,7 +6863,7 @@ hengyang	cn		Hengyang, CN
 hennaya	dz		Tlemcen, DZ
 hennef (sieg)	de		Köln, DE
 hennigsdorf	de		Berlin, DE
-henrietta	us	NY	Rochester NY, US
+henrietta	us	NY	Rochester, US
 henry farm	ca	ON	Toronto, CA
 hepo	cn		Hepo, CN
 heppenheim an der bergstrasse	de		Mannheim, DE
@@ -6973,8 +6970,8 @@ hillcrest heights	us	MD	Washington, US
 hillcrest village	ca	ON	Toronto, CA
 hillegom	nl		Rotterdam, NL
 hillerød	dk		Copenhagen, DK
-hilliard	us	OH	Columbus OH, US
-hillsboro	us	OR	Portland OR, US
+hilliard	us	OH	Columbus, US
+hillsboro	us	OR	Portland, US
 hillsborough	us	NJ	New York City, US
 hillside	au		Melbourne, AU
 hillside	us	NJ	New York City, US
@@ -7072,7 +7069,7 @@ holmesburg	us	PA	Philadelphia, US
 holosiyiv	ua		Kyiv, UA
 holt	us	MI	Lansing, US
 holtsville	us	NY	New York City, US
-holyoke	us	MA	Springfield MA, US
+holyoke	us	MA	Springfield, US
 holzkirchen	de		Munich, DE
 holzwickede	de		Ruhr, DE
 homagama	lk		Colombo, LK
@@ -7109,7 +7106,7 @@ hook	gb		London, GB
 hoorn	nl		Hoorn, NL
 hoover	us	AL	Birmingham, US
 hopatcong hills	us	NJ	New York City, US
-hope mills	us	NC	Fayetteville NC, US
+hope mills	us	NC	Fayetteville, US
 hopewell	us	VA	Richmond, US
 hopkins	us	MN	Minneapolis, US
 hoppers crossing	au		Melbourne, AU
@@ -7220,7 +7217,7 @@ huelva	es		Huelva, ES
 hueytown	us	AL	Birmingham, US
 hugli	in		Kolkata, IN
 huicheng	cn		Huicheng Anhui, CN
-huicheng	cn		Huicheng Guangdong, CN
+huicheng	cn		Huicheng, CN
 huilango	mx		Mexico City, MX
 huilong	cn		Huilong, CN
 huinong	cn		Huinong, CN
@@ -7387,7 +7384,6 @@ iguatemi	br		São Paulo, BR
 iguatu	br		Iguatu, BR
 igunga	tz		Igunga, TZ
 igusa	jp		Tokyo, JP
-igusa	jp		Tokyo, JP
 ihiala	ng		Owerri, NG
 ihnāsyā al madīnah	eg		Ihnāsyā al Madīnah, EG
 ihnāsīyah	eg		Banī Suwayf, EG
@@ -7532,7 +7528,7 @@ iringal	in		Tellicherry, IN
 irinjālakuda	in		Kochi, IN
 irkutsk	ru		Irkutsk, RU
 irlam	gb		Manchester, GB
-irondequoit	us	NY	Rochester NY, US
+irondequoit	us	NY	Rochester, US
 iroopara	in		Thiruvananthapuram, IN
 irpin	ua		Kyiv, UA
 irugūr	in		Coimbatore, IN
@@ -7582,8 +7578,8 @@ islington	gb		London, GB
 islington-city centre west	ca	ON	Toronto, CA
 islip	us	NY	New York City, US
 islāmnagar	in		Islāmnagar, IN
-islāmpur	in		Islāmpur Bihar, IN
 islāmpur	in		Islāmpur West Bengal, IN
+islāmpur	in		Islāmpur, IN
 ismailia	eg		Ismailia, EG
 isogo	jp		Tokyo, JP
 isoka	zm		Isoka, ZM
@@ -7647,7 +7643,6 @@ ivory park	za		Johannesburg, ZA
 ivoti	br		Novo Hamburgo, BR
 ivry-sur-seine	fr		Paris, FR
 iwade	jp		Minato, JP
-iwai	jp		Tokyo, JP
 iwai	jp		Tokyo, JP
 iwakuni	jp		Hiroshima, JP
 iwakura	jp		Nagoya, JP
@@ -7745,7 +7740,7 @@ jalālpur	in		Jalālpur, IN
 jalālābad	in		Thāna Bhawan, IN
 jalālābād	af		Jalālābād, AF
 jalālābād	in		Jalālābād Punjab, IN
-jalālābād	in		Jalālābād Uttar Pradesh, IN
+jalālābād	in		Jalālābād, IN
 jalārpet	in		Tirupattur, IN
 jamaica	cu		Havana, CU
 jamaica	us	NY	New York City, US
@@ -7885,7 +7880,7 @@ jiangyou	cn		Jiangyou, CN
 jiangzhuang	cn		Gaomi, CN
 jian’ou	cn		Jian’ou, CN
 jiaohe	cn		Jiaohe, CN
-jiaojiang	cn		Taizhou Zhejiang, CN
+jiaojiang	cn		Taizhou, CN
 jiaozhou	cn		Qingdao, CN
 jiaozuo	cn		Jiaozuo, CN
 jiashan	cn		Jiaxing, CN
@@ -7954,11 +7949,11 @@ jixian	cn		Shuangyashan, CN
 jiyuan	cn		Jiyuan, CN
 jizhou	cn		Jizhou, CN
 jizzax	uz		Jizzax, UZ
-ji’an	cn		Ji’an Jiangxi, CN
 ji’an	cn		Ji’an Jilin, CN
+ji’an	cn		Ji’an, CN
 jocotenango	gt		Antigua Guatemala, GT
 jodhpur	in		Jodhpur Gujarat, IN
-jodhpur	in		Jodhpur Rajasthan, IN
+jodhpur	in		Jodhpur, IN
 jogbani	in		Jogbani, IN
 jogonalan	id		Surakarta, ID
 johannesburg	za		Johannesburg, ZA
@@ -8138,8 +8133,8 @@ kaisarianí	gr		Athens, GR
 kaiserslautern	de		Kaiserslautern, DE
 kaitaichi	jp		Hiroshima, JP
 kaithal	in		Kaithal, IN
-kaiyuan	cn		Kaiyuan Liaoning, CN
 kaiyuan	cn		Kaiyuan Yunnan, CN
+kaiyuan	cn		Kaiyuan, CN
 kaizu	jp		Nagoya, JP
 kaizuka	jp		Osaka, JP
 kajang	my		Kuala Lumpur, MY
@@ -8619,7 +8614,7 @@ kermanshah	ir		Kermanshah, IR
 kernersville	us	NC	Greensboro, US
 kerpen	de		Köln, DE
 kertosono	id		Kediri, ID
-keru	in		Jodhpur Rajasthan, IN
+keru	in		Jodhpur, IN
 keshod	in		Keshod, IN
 keskin	tr		Keskin, TR
 kesklinn	ee		Tallinn, EE
@@ -9223,7 +9218,7 @@ kunnamkulam	in		Ponnāni, IN
 kunnatnād	in		Kochi, IN
 kunnimangalam	in		Taliparamba, IN
 kunri	pk		Kunri, PK
-kunshan	cn		Suzhou Jiangsu, CN
+kunshan	cn		Suzhou, CN
 kuntsevo	ru		Moscow, RU
 kunyang	cn		Wenzhou, CN
 kuopio	fi		Kuopio, FI
@@ -9419,7 +9414,6 @@ la calera	ar		Córdoba, AR
 la calera	cl		La Calera, CL
 la cañada flintridge	us	CA	Los Angeles, US
 la ceiba	hn		La Ceiba, HN
-la ceiba	hn		La Ceiba, HN
 la celle-saint-cloud	fr		Paris, FR
 la chapelle-sur-erdre	fr		Nantes, FR
 la chorrera	pa		Arraiján, PA
@@ -9533,7 +9527,7 @@ laem chabang	th		Si Racha, TH
 lafayette	us	CA	Concord, US
 lafayette	us	CO	Denver, US
 lafayette	us	IN	Lafayette IN, US
-lafayette	us	LA	Lafayette LA, US
+lafayette	us	LA	Lafayette, US
 laferrere	ar		Buenos Aires, AR
 lafia	ng		Lafia, NG
 lafiagi	ng		Lafiagi, NG
@@ -9584,7 +9578,7 @@ lake havasu city	us	AZ	Lake Havasu City, US
 lake in the hills	us	IL	Chicago, US
 lake magdalene	us	FL	Tampa, US
 lake mary	us	FL	Orlando, US
-lake oswego	us	OR	Portland OR, US
+lake oswego	us	OR	Portland, US
 lake ridge	us	VA	Washington, US
 lake ronkonkoma	us	NY	New York City, US
 lake shore	us	MD	Baltimore, US
@@ -9628,8 +9622,8 @@ lampertheim	de		Mannheim, DE
 lanaken	be		Liège, BE
 lancaster	gb		Morecambe, GB
 lancaster	us	CA	Lancaster CA, US
-lancaster	us	OH	Columbus OH, US
-lancaster	us	PA	Lancaster PA, US
+lancaster	us	OH	Columbus, US
+lancaster	us	PA	Lancaster, US
 lancaster	us	TX	Dallas, US
 lancenigo-villorba	it		Treviso, IT
 lancing	gb		Brighton, GB
@@ -9665,7 +9659,7 @@ lansing	us	IL	Chicago, US
 lansing	us	MI	Lansing, US
 lansing-westgate	ca	ON	Toronto, CA
 lanxi	cn		Lanxi Heilongjiang, CN
-lanxi	cn		Lanxi Zhejiang, CN
+lanxi	cn		Lanxi, CN
 lanzhou	cn		Lanzhou, CN
 lanús	ar		Buenos Aires, AR
 laoag	ph		Laoag, PH
@@ -9754,7 +9748,7 @@ lawndale	us	CA	Los Angeles, US
 lawndale	us	PA	Philadelphia, US
 lawrence	us	IN	Indianapolis, US
 lawrence	us	KS	Lawrence KS, US
-lawrence	us	MA	Lawrence MA, US
+lawrence	us	MA	Lawrence, US
 lawrence park south	ca	ON	Toronto, CA
 lawrenceville	us	GA	Atlanta, US
 lawson	ca	SK	Saskatoon, CA
@@ -9839,7 +9833,7 @@ leichlingen	de		Wuppertal, DE
 leiden	nl		Rotterdam, NL
 leiderdorp	nl		Rotterdam, NL
 leidsche rijn	nl		Utrecht, NL
-leifeng	cn		Changsha Hunan, CN
+leifeng	cn		Changsha, CN
 leigh	gb		Manchester, GB
 leighton buzzard	gb		Luton, GB
 leighton hill	hk		Hong Kong, HK
@@ -9867,7 +9861,7 @@ lengshuitan	cn		Yongzhou, CN
 leninskiye gory	ru		Moscow, RU
 lennox	us	CA	Los Angeles, US
 lens	fr		Douai, FR
-lents	us	OR	Portland OR, US
+lents	us	OR	Portland, US
 lençóis paulista	br		Lençóis Paulista, BR
 leominster	us	MA	Leominster, US
 leonberg	de		Stuttgart, DE
@@ -10167,13 +10161,13 @@ longfeng	cn		Beibei, CN
 longfeng	cn		Daqing, CN
 longfield	gb		London, GB
 longgang	cn		Longgang Chongqing, CN
-longgang	cn		Longgang Shandong, CN
+longgang	cn		Longgang, CN
 longgang	cn		Shenzhen, CN
 longjiang	cn		Longjiang, CN
 longjing	cn		Longjing, CN
 longjing	cn		Wushan, CN
 longjumeau	fr		Paris, FR
-longmeadow	us	MA	Springfield MA, US
+longmeadow	us	MA	Springfield, US
 longmont	us	CO	Longmont, US
 longnan	cn		Longnan, CN
 longshan	cn		Longshan, CN
@@ -10271,7 +10265,7 @@ luckeesarai	in		Luckeesarai, IN
 lucknow	in		Lucknow, IN
 lucé	fr		Chartres, FR
 ludhiana	in		Ludhiana, IN
-ludlow	us	MA	Springfield MA, US
+ludlow	us	MA	Springfield, US
 ludwigsburg	de		Stuttgart, DE
 ludwigsfelde	de		Berlin, DE
 ludwigshafen am rhein	de		Mannheim, DE
@@ -10283,7 +10277,7 @@ luhansk	ua		Luhansk, UA
 luhuan	mo		Taipa, MO
 luján	ar		Luján, AR
 lukyanivka	ua		Kyiv, UA
-lulou	cn		Fengcheng Jiangsu, CN
+lulou	cn		Fengcheng, CN
 lumajang	id		Lumajang, ID
 lumamē	et		Lumamē, ET
 lumding railway colony	in		Lumding Railway Colony, IN
@@ -10572,7 +10566,6 @@ malakhovka	ru		Moscow, RU
 malakoff	fr		Paris, FR
 malakpur kohi rangpur	in		Delhi, IN
 malambo	co		Barranquilla, CO
-malanday	ph		Manila, PH
 malanday	ph		Manila, PH
 malang	id		Surabaya, ID
 malanje	ao		Malanje, AO
@@ -10890,7 +10883,7 @@ marvila	pt		Lisbon, PT
 mary	tm		Mary, TM
 maryland city	us	MD	Washington, US
 maryland heights	us	MO	St. Louis, US
-marysville	us	OH	Columbus OH, US
+marysville	us	OH	Columbus, US
 marysville	us	WA	Seattle, US
 maryvale	us	AZ	Phoenix, US
 maryville	us	TN	Knoxville, US
@@ -11195,7 +11188,7 @@ metairie terrace	us	LA	New Orleans, US
 metallostroy	ru		Saint Petersburg, RU
 metamórfosi	gr		Athens, GR
 metepec	mx		Toluca, MX
-methuen	us	MA	Lawrence MA, US
+methuen	us	MA	Lawrence, US
 metro	id		Metro, ID
 metrogorodok	ru		Moscow, RU
 metrotown	ca	BC	Vancouver, CA
@@ -11230,7 +11223,7 @@ miamisburg	us	OH	Dayton, US
 mian channun	pk		Mian Channun, PK
 miano	it		Naples, IT
 mianyang	cn		Mianyang Shaanxi, CN
-mianyang	cn		Mianyang Sichuan, CN
+mianyang	cn		Mianyang, CN
 mianzhu, deyang, sichuan	cn		Mianzhu, Deyang, Sichuan, CN
 miaohang	cn		Shanghai, CN
 miaoli	tw		Miaoli, TW
@@ -11313,7 +11306,7 @@ milton	us	GA	Atlanta, US
 milton	us	MA	Boston, US
 milton keynes	gb		Milton Keynes, GB
 milwaukee	us	WI	Milwaukee, US
-milwaukie	us	OR	Portland OR, US
+milwaukie	us	OR	Portland, US
 mima	jp		Tokushima, JP
 mimarsinan	tr		Istanbul, TR
 mimico	ca	ON	Toronto, CA
@@ -11342,7 +11335,7 @@ minglanilla	ph		Cebu City, PH
 mingora	pk		Mingora, PK
 mingshan	cn		Sanhe Chongqing, CN
 mingshui	cn		Mingshui Heilongjiang, CN
-mingshui	cn		Mingshui Shandong, CN
+mingshui	cn		Mingshui, CN
 minhang	cn		Shanghai, CN
 minna	ng		Minna, NG
 minneapolis	us	MN	Minneapolis, US
@@ -11727,7 +11720,7 @@ mudanjiang	cn		Mudanjiang, CN
 muddebihāl	in		Muddebihāl, IN
 mudhol	in		Mudhol, IN
 mudon	mm		Mudon, MM
-mudu	cn		Suzhou Jiangsu, CN
+mudu	cn		Suzhou, CN
 mueang nonthaburi	th		Bangkok, TH
 mufulira	zm		Mufulira, ZM
 mugala	cn		Mugala, CN
@@ -11735,8 +11728,8 @@ mugalivakkam	in		Chennai, IN
 muggiò	it		Milan, IT
 mugnano di napoli	it		Naples, IT
 muhamma	in		Alappuzha, IN
-muhammadābād	in		Muhammadābād Ghazipur, IN
-muhammadābād	in		Muhammadābād Mau, IN
+muhammadābād	in		Muhammadābād Uttar Pradesh, IN
+muhammadābād	in		Muhammadābād, IN
 muizenberg	za		Cape Town, ZA
 mukachevo	ua		Mukachevo, UA
 mukai-awagasaki	jp		Kanazawa, JP
@@ -11903,14 +11896,14 @@ māler kotla	in		Māler Kotla, IN
 mālpura	in		Mālpura, IN
 mālūr	in		Mālūr, IN
 māmidālapādu	in		Kurnool, IN
-māndvi	in		Māndvi Kutch, IN
-māndvi	in		Māndvi Surat, IN
+māndvi	in		Māndvi Gujarat, IN
+māndvi	in		Māndvi, IN
 mānesar	in		Delhi, IN
 māngrol	in		Māngrol, IN
 mānikganj	bd		Dhaka, BD
 māniyūr	in		Tellicherry, IN
-mānsa	in		Mānsa Gujarat, IN
 mānsa	in		Mānsa Punjab, IN
+mānsa	in		Mānsa, IN
 mānvi	in		Mānvi, IN
 mānāvadar	in		Mānāvadar, IN
 māranchēri	in		Ponnāni, IN
@@ -12050,7 +12043,7 @@ nandajie	cn		Yongchuan, CN
 nanded	in		Nanded, IN
 nandikotkūr	in		Nandikotkūr, IN
 nanding	cn		Zibo, CN
-nandri	in		Jodhpur Rajasthan, IN
+nandri	in		Jodhpur, IN
 nandurbar	in		Nandurbar, IN
 nandyāl	in		Nandyāl, IN
 nangli	in		Amritsar, IN
@@ -12304,7 +12297,7 @@ new halfa	sd		New Halfa, SD
 new haven	us	CT	Bridgeport, US
 new haven	us	IN	Fort Wayne, US
 new hope	us	MN	Minneapolis, US
-new iberia	us	LA	Lafayette LA, US
+new iberia	us	LA	Lafayette, US
 new jeshwang	gm		Serekunda, GM
 new kingston	jm		Kingston, JM
 new lenox	us	IL	Chicago, US
@@ -12330,14 +12323,14 @@ new york city	us	NY	New York City, US
 newark	us	CA	San Francisco Bay Area, US
 newark	us	DE	Philadelphia, US
 newark	us	NJ	New York City, US
-newark	us	OH	Columbus OH, US
+newark	us	OH	Columbus, US
 newark on trent	gb		Lincoln, GB
-newberg	us	OR	Portland OR, US
+newberg	us	OR	Portland, US
 newburg	us	KY	Louisville, US
 newburgh	us	NY	New York City, US
 newburn	gb		Newcastle upon Tyne, GB
 newbury	gb		Reading, GB
-newburyport	us	MA	Lawrence MA, US
+newburyport	us	MA	Lawrence, US
 newcastle	au		Newcastle, AU
 newcastle under lyme	gb		Stoke-on-Trent, GB
 newcastle upon tyne	gb		Newcastle upon Tyne, GB
@@ -12531,13 +12524,13 @@ nordstadt	de		Hannover, DE
 norfolk	us	VA	Virginia Beach, US
 norilsk	ru		Norilsk, RU
 norland	us	FL	Miami, US
-normal	us	IL	Bloomington IL, US
+normal	us	IL	Bloomington, US
 norman	us	OK	Oklahoma City, US
 norris green	gb		Liverpool, GB
 norristown	us	PA	Philadelphia, US
 norrköping	se		Norrköping, SE
 north amityville	us	NY	New York City, US
-north andover	us	MA	Lawrence MA, US
+north andover	us	MA	Lawrence, US
 north arlington	us	NJ	New York City, US
 north attleborough center	us	MA	Providence, US
 north aurora	us	IL	Chicago, US
@@ -12552,7 +12545,7 @@ north canton	us	OH	Canton, US
 north center	us	IL	Chicago, US
 north charleston	us	SC	Charleston, US
 north chicago	us	IL	Waukegan, US
-north chicopee	us	MA	Springfield MA, US
+north chicopee	us	MA	Springfield, US
 north creek	us	WA	Seattle, US
 north decatur	us	GA	Atlanta, US
 north delta	ca	BC	Vancouver, CA
@@ -12597,7 +12590,7 @@ north valley stream	us	NY	New York City, US
 north vancouver	ca	BC	Vancouver, CA
 north watford	gb		London, GB
 northampton	gb		Northampton, GB
-northampton	us	MA	Springfield MA, US
+northampton	us	MA	Springfield, US
 northbrook	us	IL	Chicago, US
 northcote	au		Melbourne, AU
 northdale	us	FL	Tampa, US
@@ -12768,7 +12761,7 @@ nīmbāhera	in		Nīmbāhera, IN
 nōgata	jp		Kitakyushu, JP
 nūrpur	in		Nūrpur, IN
 nūrābād	ir		Nūrābād Fars, IR
-nūrābād	ir		Nūrābād Lorestan, IR
+nūrābād	ir		Nūrābād, IR
 nūzvīd	in		Nūzvīd, IN
 n’diareme limamoulaye	sn		Dakar, SN
 o'connor-parkview	ca	ON	Toronto, CA
@@ -12779,7 +12772,7 @@ oadby	gb		Leicester, GB
 oak bay	ca	BC	Victoria, CA
 oak creek	us	WI	Milwaukee, US
 oak forest	us	IL	Chicago, US
-oak grove	us	OR	Portland OR, US
+oak grove	us	OR	Portland, US
 oak hill	us	VA	Washington, US
 oak lawn	us	IL	Chicago, US
 oak park	us	IL	Chicago, US
@@ -12975,12 +12968,12 @@ orani	ph		Balanga, PH
 oranienburg	de		Berlin, DE
 orbassano	it		Turin, IT
 orcasitas	es		Madrid, ES
-orchards	us	WA	Portland OR, US
+orchards	us	WA	Portland, US
 orcutt	us	CA	Santa Maria, US
 ordos	cn		Ordos, CN
 ordu	tr		Ordu, TR
 oregon	us	OH	Toledo, US
-oregon city	us	OR	Portland OR, US
+oregon city	us	OR	Portland, US
 orekhovo-borisovo	ru		Moscow, RU
 orekhovo-borisovo severnoye	ru		Moscow, RU
 orekhovo-zuyevo	ru		Orekhovo-Zuyevo, RU
@@ -13244,7 +13237,7 @@ palmar de varela	co		Barranquilla, CO
 palmas	br		Palmas, BR
 palmdale	us	CA	Lancaster CA, US
 palmela	pt		Setúbal, PT
-palmer	us	MA	Springfield MA, US
+palmer	us	MA	Springfield, US
 palmers green	gb		London, GB
 palmerston north	nz		Palmerston North, NZ
 palmetto bay	us	FL	Miami, US
@@ -13470,7 +13463,7 @@ pasuruan	id		Surabaya, ID
 pat heung	hk		Hong Kong, HK
 patancheru	in		Hyderabad, IN
 patarrá	cr		San José, CR
-pataskala	us	OH	Columbus OH, US
+pataskala	us	OH	Columbus, US
 paterna	es		Valencia, ES
 paternò	it		Catania, IT
 pateros	ph		Manila, PH
@@ -13724,7 +13717,7 @@ piastów	pl		Warsaw, PL
 piatra neamţ	ro		Piatra Neamţ, RO
 picassent	es		Valencia, ES
 pickering	ca	ON	Toronto, CA
-pickerington	us	OH	Columbus OH, US
+pickerington	us	OH	Columbus, US
 picnic point-north lynnwood	us	WA	Seattle, US
 pico rivera	us	CA	Los Angeles, US
 picpus	fr		Paris, FR
@@ -13850,8 +13843,8 @@ plainview	us	NY	New York City, US
 plainville	us	CT	Hartford, US
 plaisance-du-touch	fr		Toulouse, FR
 plaisir	fr		Paris, FR
-planaltina	br		Planaltina Federal, BR
-planaltina	br		Planaltina Goias, BR
+planaltina	br		Planaltina Goiás, BR
+planaltina	br		Planaltina, BR
 planeta rica	co		Planeta Rica, CO
 plano	us	TX	Dallas, US
 plano piloto	br		Brasília, BR
@@ -14011,7 +14004,7 @@ porthcawl	gb		Tonypandy, GB
 portici	it		Naples, IT
 portishead	gb		Bristol, GB
 portland	us	ME	Portland ME, US
-portland	us	OR	Portland OR, US
+portland	us	OR	Portland, US
 portland	us	TX	Corpus Christi, US
 portmore	jm		Kingston, JM
 porto	pt		Porto, PT
@@ -14248,9 +14241,9 @@ putuo	cn		Shanghai, CN
 puurs	be		Antwerp, BE
 puxi	cn		Shanghai, CN
 puyallup	us	WA	Seattle, US
-puyang	cn		Puyang Henan, CN
 puyang	cn		Puyang Zhejiang, CN
-puyang chengguanzhen	cn		Puyang Henan, CN
+puyang	cn		Puyang, CN
+puyang chengguanzhen	cn		Puyang, CN
 puzhal	in		Chennai, IN
 puzhathi	in		Taliparamba, IN
 puçol	es		Valencia, ES
@@ -14344,7 +14337,7 @@ qazvin	ir		Qazvin, IR
 qaşr bin ghashīr	ly		Tripoli, LY
 qeshm	ir		Qeshm, IR
 qianjiang	cn		Qianjiang Chongqing, CN
-qianjiang	cn		Qianjiang Hubei, CN
+qianjiang	cn		Qianjiang, CN
 qibao	cn		Shanghai, CN
 qibray	uz		Tashkent, UZ
 qifţ	eg		Luxor, EG
@@ -14695,7 +14688,7 @@ rewāri	in		Rewāri, IN
 reyes acozac	mx		Mexico City, MX
 reyhanlı	tr		Reyhanlı, TR
 reykjavík	is		Reykjavík, IS
-reynoldsburg	us	OH	Columbus OH, US
+reynoldsburg	us	OH	Columbus, US
 reynosa	mx		Reynosa, MX
 rezé	fr		Nantes, FR
 reẖovot	il		Tel Aviv, IL
@@ -14827,7 +14820,7 @@ rochdale	gb		Manchester, GB
 rochedale south	au		Brisbane, AU
 rochester	gb		London, GB
 rochester	us	MN	Rochester MN, US
-rochester	us	NY	Rochester NY, US
+rochester	us	NY	Rochester, US
 rochester hills	us	MI	Detroit, US
 rochford	gb		Southend-on-Sea, GB
 rocinha	br		Rio de Janeiro, BR
@@ -15028,9 +15021,9 @@ rāiganj	in		Rāiganj, IN
 rāipur	bd		Rāipur, BD
 rāipur	in		Dehradun, IN
 rāj-nāndgaon	in		Rāj-Nāndgaon, IN
-rājgarh	in		Rājgarh Alwar, IN
-rājgarh	in		Rājgarh Churu, IN
-rājgarh	in		Rājgarh Rajgarh, IN
+rājgarh	in		Rājgarh Madhya Pradesh, IN
+rājgarh	in		Rājgarh Rajasthan, IN
+rājgarh	in		Rājgarh, IN
 rājgīr	in		Rājgīr, IN
 rājkot	in		Rājkot, IN
 rājpīpla	in		Rājpīpla, IN
@@ -15046,8 +15039,8 @@ rāmganj	bd		Comilla, BD
 rāmganj mandi	in		Rāmganj Mandi, IN
 rāmgarh	in		Rāmgarh, IN
 rāmhormoz	ir		Rāmhormoz, IR
-rāmnagar	in		Rāmnagar Bihar, IN
 rāmnagar	in		Rāmnagar Uttarakhand, IN
+rāmnagar	in		Rāmnagar, IN
 rāmnagar	in		Varanasi, IN
 rāmpur	in		Rāmpur, IN
 rāmtek	in		Rāmtek, IN
@@ -15250,7 +15243,6 @@ sakado	jp		Tokyo, JP
 sakai	jp		Fukui-shi, JP
 sakai	jp		Osaka, JP
 sakai	jp		Tokyo, JP
-sakai	jp		Tokyo, JP
 sakai-nakajima	jp		Takasaki, JP
 sakaidechō	jp		Takamatsu, JP
 sakaiminato	jp		Yonago, JP
@@ -15282,7 +15274,7 @@ salcajá	gt		Quetzaltenango, GT
 sale	gb		Manchester, GB
 salem	in		Salem, IN
 salem	us	MA	Boston, US
-salem	us	NH	Lawrence MA, US
+salem	us	NH	Lawrence, US
 salem	us	OR	Salem, US
 salem	us	VA	Roanoke, US
 salerno	it		Salerno, IT
@@ -15292,7 +15284,7 @@ salihli	tr		Salihli, TR
 salina cruz	mx		Salina Cruz, MX
 salinas	ec		La Libertad, EC
 salinas	us	CA	Salinas, US
-salmon creek	us	WA	Portland OR, US
+salmon creek	us	WA	Portland, US
 salmās	ir		Salmās, IR
 salor	uz		Tashkent, UZ
 salou	es		Tarragona, ES
@@ -15566,7 +15558,6 @@ san sebastián el grande	mx		Zapopan, MX
 san severo	it		San Severo, IT
 san tan valley	us	AZ	Phoenix, US
 san tin	hk		Sha Tin, HK
-san tin	hk		Sha Tin, HK
 san tung chung hang	hk		San Tung Chung Hang, HK
 san vicent del raspeig	es		Alicante, ES
 san vicente	ar		Buenos Aires, AR
@@ -15607,7 +15598,7 @@ sangyoung	mm		Yangon, MM
 sangāreddi	in		Sangāreddi, IN
 sanhe	cn		Nanbin, CN
 sanhe	cn		Sanhe Chongqing, CN
-sanhe	cn		Sanhe Hebei, CN
+sanhe	cn		Sanhe, CN
 sanjianzai	cn		Tantou, CN
 sanjiao	cn		Gunan, CN
 sankagiri	in		Sankagiri, IN
@@ -15672,7 +15663,6 @@ santa clara del mar	ar		Mar del Plata, AR
 santa clarita	us	CA	Santa Clarita, US
 santa coloma de gramenet	es		Barcelona, ES
 santa cruz	ph		Angeles City, PH
-santa cruz	ph		Manila, PH
 santa cruz	ph		Manila, PH
 santa cruz	us	CA	Santa Cruz, US
 santa cruz de barahona	do		Santa Cruz de Barahona, DO
@@ -15880,7 +15870,6 @@ saw bwar gyi kone	mm		Yangon, MM
 sawai madhopur	in		Sawai Madhopur, IN
 sawangan	id		Jakarta, ID
 sawtelle	us	CA	Los Angeles, US
-sayama	jp		Osaka, JP
 sayama	jp		Osaka, JP
 sayama	jp		Tokyo, JP
 sayhāt	sa		Dammam, SA
@@ -16145,8 +16134,8 @@ shama junction	gh		Takoradi, GH
 shamakhi	az		Shamakhi, AZ
 shambu	et		Shambu, ET
 shamshabad	in		Hyderabad, IN
-shamsābād	in		Shamsābād Agra, IN
-shamsābād	in		Shamsābād Ferrukhabad, IN
+shamsābād	in		Shamsābād Uttar Pradesh, IN
+shamsābād	in		Shamsābād, IN
 shan chaung	mm		Yangon, MM
 shancheng	cn		Shancheng, CN
 shanghai	cn		Shanghai, CN
@@ -16221,7 +16210,7 @@ sherpur	bd		Jamālpur, BD
 sherrelwood	us	CO	Denver, US
 shertallai	in		Alappuzha, IN
 sherwood	us	AR	Little Rock, US
-sherwood	us	OR	Portland OR, US
+sherwood	us	OR	Portland, US
 sherwood park	ca	AB	Edmonton, CA
 shetou	tw		Taichung, TW
 sheung shui	hk		Sha Tin, HK
@@ -16359,13 +16348,13 @@ shāhedshahr	ir		Tehran, IR
 shāhganj	in		Shāhganj, IN
 shāhjānpur	in		Shāhjānpur, IN
 shāhpur	in		Shāhpur, IN
-shāhpura	in		Shāhpura Bhilwara, IN
-shāhpura	in		Shāhpura Jaipur, IN
+shāhpura	in		Shāhpura Rajasthan, IN
+shāhpura	in		Shāhpura, IN
 shāhzādpur	bd		Sirajganj, BD
-shāhābād	in		Shāhābād Gulbarga, IN
-shāhābād	in		Shāhābād Hardoi, IN
-shāhābād	in		Shāhābād Kurukshetra, IN
-shāhābād	in		Shāhābād Rampur, IN
+shāhābād	in		Shāhābād Haryana, IN
+shāhābād	in		Shāhābād Karnataka, IN
+shāhābād	in		Shāhābād Uttar Pradesh, IN
+shāhābād	in		Shāhābād, IN
 shāhāda	in		Shāhāda, IN
 shāhīn dezh	ir		Shāhīn Dezh, IR
 shāhīn shahr	ir		Shāhīn Shahr, IR
@@ -16519,8 +16508,8 @@ sirjan	ir		Sirjan, IR
 sironj	in		Sironj, IN
 sirs al layyānah	eg		Al Mansurah, EG
 sirsa	in		Sirsa, IN
-sirsi	in		Sirsi Karnataka, IN
 sirsi	in		Sirsi Uttar Pradesh, IN
+sirsi	in		Sirsi, IN
 sirsilla	in		Sirsilla, IN
 sirsāganj	in		Sirsāganj, IN
 sirte	ly		Sirte, LY
@@ -16657,7 +16646,7 @@ songea	tz		Songea, TZ
 songgang	cn		Tantou, CN
 songjiang	cn		Shanghai, CN
 songkhla	th		Ban Mai, TH
-songling	cn		Suzhou Jiangsu, CN
+songling	cn		Suzhou, CN
 songnan	cn		Shanghai, CN
 songnim-ni	kp		Songnim-ni, KP
 songyang	cn		Songyang, CN
@@ -16718,7 +16707,7 @@ south fulton	us	GA	Atlanta, US
 south gate	us	CA	Los Angeles, US
 south gate	us	MD	Baltimore, US
 south granville	ca	BC	Vancouver, CA
-south hadley	us	MA	Springfield MA, US
+south hadley	us	MA	Springfield, US
 south hayling	gb		Southampton, GB
 south hill	us	WA	Seattle, US
 south holland	us	IL	Chicago, US
@@ -16814,7 +16803,7 @@ springboro	us	OH	Dayton, US
 springdale	us	AR	Fayetteville AR, US
 springe	de		Hannover, DE
 springfield	us	IL	Springfield IL, US
-springfield	us	MA	Springfield MA, US
+springfield	us	MA	Springfield, US
 springfield	us	MO	Springfield MO, US
 springfield	us	OH	Dayton, US
 springfield	us	OR	Eugene, US
@@ -17081,7 +17070,7 @@ sungai udang	my		Malacca, MY
 sunggal	id		Medan, ID
 sunland	us	CA	Los Angeles, US
 sunland park	us	NM	El Paso, US
-sunlou	cn		Fengcheng Jiangsu, CN
+sunlou	cn		Fengcheng, CN
 sunny isles beach	us	FL	Miami, US
 sunnybank hills	au		Brisbane, AU
 sunnyside	us	NY	New York City, US
@@ -17135,7 +17124,7 @@ suzak	kg		Manas, KG
 suzaka	jp		Nagano, JP
 suzano	br		São Paulo, BR
 suzhou	cn		Suzhou Anhui, CN
-suzhou	cn		Suzhou Jiangsu, CN
+suzhou	cn		Suzhou, CN
 suzuka	jp		Nagoya, JP
 suār	in		Suār, IN
 svetlanovskiy	ru		Saint Petersburg, RU
@@ -17235,8 +17224,8 @@ sādatpur gujran	in		Delhi, IN
 sādpalli	in		Sādpalli, IN
 sāgar	in		Sāgar, IN
 sāgwāra	in		Sāgwāra, IN
-sāhibganj	in		Sāhibganj Bihar, IN
 sāhibganj	in		Sāhibganj Jharkhand, IN
+sāhibganj	in		Sāhibganj, IN
 sāhibābād daulotpur	in		Delhi, IN
 sālamedu	in		Villupuram, IN
 sālūmbar	in		Sālūmbar, IN
@@ -17249,7 +17238,7 @@ sānand	in		Ahmedabad, IN
 sānchor	in		Sānchor, IN
 sāndi	in		Sāndi, IN
 sānehwāl	in		Ludhiana, IN
-sāngaria	in		Jodhpur Rajasthan, IN
+sāngaria	in		Jodhpur, IN
 sāngli	in		Sāngli, IN
 sāngola	in		Sāngola, IN
 sānkrāil	in		Kolkata, IN
@@ -17350,7 +17339,7 @@ taixing	cn		Taixing, CN
 taiyuan	cn		Taiyuan, CN
 taiz	ye		Taiz, YE
 taizhou	cn		Taizhou Jiangsu, CN
-taizhou	cn		Taizhou Zhejiang, CN
+taizhou	cn		Taizhou, CN
 tai’an	cn		Tai’an, CN
 taj pul	in		Delhi, IN
 tajimi	jp		Nagoya, JP
@@ -17493,7 +17482,7 @@ tanjungbalai	id		Tanjungbalai, ID
 tanout	ne		Tanout, NE
 tanque verde	us	AZ	Tucson, US
 tanta	eg		Tanta, EG
-tantou	cn		Fuzhou Fujian, CN
+tantou	cn		Fuzhou, CN
 tantou	cn		Tantou, CN
 tanuku	in		Tanuku, IN
 tanuma	jp		Takasaki, JP
@@ -17804,7 +17793,7 @@ tierra blanca	mx		Tierra Blanca, MX
 tierralta	co		Tierralta, CO
 tiflet	ma		Tiflet, MA
 tifrā	in		Bilāspur, IN
-tigard	us	OR	Portland OR, US
+tigard	us	OR	Portland, US
 tighri	in		Delhi, IN
 tigre	ar		Buenos Aires, AR
 tigwav	ht		Tigwav, HT
@@ -17946,8 +17935,8 @@ tondano	id		Tondano, ID
 tondi	in		Tondi, IN
 toneri	jp		Tokyo, JP
 tongaat	za		Tongaat, ZA
-tongchuan	cn		Tongchuan Shaanxi, CN
 tongchuan	cn		Tongchuan Sichuan, CN
+tongchuan	cn		Tongchuan, CN
 tongchuanshi	cn		Tongchuanshi, CN
 tongelre	nl		Eindhoven, NL
 tongeren	be		Liège, BE
@@ -18088,7 +18077,7 @@ trondheim	no		Trondheim, NO
 troparëvo	ru		Moscow, RU
 tropicana indah	my		Kuala Lumpur, MY
 trotwood	us	OH	Dayton, US
-troutdale	us	OR	Portland OR, US
+troutdale	us	OR	Portland, US
 trowbridge	gb		Bristol, GB
 troy	us	MI	Detroit, US
 troy	us	NY	Albany, US
@@ -18138,7 +18127,7 @@ tsz ching estate	hk		Hong Kong, HK
 tsz wan shan	hk		Hong Kong, HK
 tsévié	tg		Tsévié, TG
 tual	id		Tual, ID
-tualatin	us	OR	Portland OR, US
+tualatin	us	OR	Portland, US
 tuban	id		Denpasar, ID
 tuban	id		Tuban, ID
 tubarão	br		Tubarão, BR
@@ -18285,11 +18274,11 @@ uc irvine	us	CA	Los Angeles, US
 uccle	be		Brussels, BE
 uckfield	gb		Brighton, GB
 ucu seles	ao		Ucu Seles, AO
-udaipur	in		Udaipur Gomati, IN
-udaipur	in		Udaipur Jhunjhunu, IN
-udaipur	in		Udaipur Udaipur, IN
+udaipur	in		Udaipur Rajasthan, IN
+udaipur	in		Udaipur Tripura, IN
+udaipur	in		Udaipur, IN
 udaipura	in		Udaipura, IN
-udaipurwati	in		Udaipur Jhunjhunu, IN
+udaipurwati	in		Udaipur Rajasthan, IN
 udgīr	in		Udgīr, IN
 udhampur	in		Udhampur, IN
 udine	it		Udine, IT
@@ -18358,8 +18347,8 @@ umuahia	ng		Umuahia, NG
 umuarama	br		Umuarama, BR
 umán	mx		Mérida, MX
 un chau estate	hk		Hong Kong, HK
-una	in		Una Gujarat, IN
 una	in		Una Himachal Pradesh, IN
+una	in		Una, IN
 unaizah	sa		Unaizah, SA
 unamaucheri	in		Chennai, IN
 unaí	br		Unaí, BR
@@ -18404,7 +18393,7 @@ upland	us	CA	Los Angeles, US
 upleta	in		Upleta, IN
 uppal kalan	in		Hyderabad, IN
 upper alton	us	IL	St. Louis, US
-upper arlington	us	OH	Columbus OH, US
+upper arlington	us	OH	Columbus, US
 upper bicutan	ph		Manila, PH
 upper coomera	au		Gold Coast, AU
 upper dir	pk		Upper Dir, PK
@@ -18541,7 +18530,7 @@ vanadzor	am		Vanadzor, AM
 vanchiglia	it		Turin, IT
 vanchiglietta	it		Turin, IT
 vancouver	ca	BC	Vancouver, CA
-vancouver	us	WA	Portland OR, US
+vancouver	us	WA	Portland, US
 vandalia	us	OH	Dayton, US
 vandalūr	in		Chennai, IN
 vandavāsi	in		Vandavāsi, IN
@@ -18583,7 +18572,6 @@ vayalār	in		Alappuzha, IN
 vazhakkala	in		Kochi, IN
 vazhapadi	in		Salem, IN
 vazhayur	in		Kozhikode, IN
-vaḩīdīyeh	ir		Tehran, IR
 vaḩīdīyeh	ir		Tehran, IR
 vechelde	de		Braunschweig, DE
 vecsés	hu		Budapest, HU
@@ -18877,7 +18865,6 @@ voronezh	ru		Voronezh, RU
 voskresenka	ua		Kyiv, UA
 vostochnoe degunino	ru		Moscow, RU
 vostryakovo	ru		Moscow, RU
-vostryakovo	ru		Moscow, RU
 votkinsk	ru		Votkinsk, RU
 votorantim	br		Sorocaba, BR
 votuporanga	br		Votuporanga, BR
@@ -19046,7 +19033,7 @@ washington	us	IL	Peoria, US
 washington	us	UT	Saint George, US
 washington heights	us	NY	New York City, US
 washinomiya	jp		Tokyo, JP
-washougal	us	WA	Portland OR, US
+washougal	us	WA	Portland, US
 washwood heath	gb		Birmingham, GB
 wasquehal	fr		Lille, FR
 wassenaar	nl		Rotterdam, NL
@@ -19081,7 +19068,7 @@ waverly	us	MI	Lansing, US
 wavre	be		Brussels, BE
 wawer	pl		Warsaw, PL
 waxahachie	us	TX	Dallas, US
-wayao	cn		Xinyi Jiangsu, CN
+wayao	cn		Xinyi, CN
 wayaobu	cn		Wayaobu, CN
 wayne	us	MI	Detroit, US
 wayne	us	NJ	New York City, US
@@ -19135,7 +19122,7 @@ wendelstein	de		Nuremberg, DE
 wendlingen am neckar	de		Stuttgart, DE
 wendo	et		Wendo, ET
 wendouree	au		Ballarat, AU
-wenling	cn		Taizhou Zhejiang, CN
+wenling	cn		Taizhou, CN
 wenshan city	cn		Wenshan City, CN
 wenshang	cn		Wenshang, CN
 wentzville	us	MO	St. Louis, US
@@ -19197,7 +19184,7 @@ west lafayette	us	IN	Lafayette IN, US
 west lake sammamish	us	WA	Seattle, US
 west lake stevens	us	WA	Seattle, US
 west lawn	us	IL	Chicago, US
-west linn	us	OR	Portland OR, US
+west linn	us	OR	Portland, US
 west little river	us	FL	Miami, US
 west melbourne	us	FL	Palm Bay, US
 west memphis	us	AR	New South Memphis, US
@@ -19220,7 +19207,7 @@ west sacramento	us	CA	Sacramento, US
 west saint paul	us	MN	Minneapolis, US
 west scarborough	us	ME	Portland ME, US
 west seneca	us	NY	Buffalo, US
-west springfield	us	MA	Springfield MA, US
+west springfield	us	MA	Springfield, US
 west springfield	us	VA	Washington, US
 west town	us	IL	Chicago, US
 west university place	us	TX	Houston, US
@@ -19236,9 +19223,9 @@ westchase	us	FL	Tampa, US
 westchester	us	FL	Miami, US
 westchester	us	IL	Chicago, US
 westend	de		Berlin, DE
-westerville	us	OH	Columbus OH, US
+westerville	us	OH	Columbus, US
 westfield	us	IN	Indianapolis, US
-westfield	us	MA	Springfield MA, US
+westfield	us	MA	Springfield, US
 westfield	us	NJ	New York City, US
 westford	us	MA	Lowell, US
 westhoughton	gb		Manchester, GB
@@ -19288,7 +19275,7 @@ white plains	us	NY	New York City, US
 white rock	ca	BC	South Surrey, CA
 white settlement	us	TX	Dallas, US
 whitefield	gb		Manchester, GB
-whitehall	us	OH	Columbus OH, US
+whitehall	us	OH	Columbus, US
 whitehall township	us	PA	Allentown, US
 whitestone	us	NY	New York City, US
 whitley bay	gb		Newcastle upon Tyne, GB
@@ -19344,7 +19331,7 @@ wilmington island	us	GA	Savannah, US
 wilmslow	gb		Manchester, GB
 wilnsdorf	de		Siegen, DE
 wilrijk	be		Antwerp, BE
-wilsonville	us	OR	Portland OR, US
+wilsonville	us	OR	Portland, US
 wilten	at		Innsbruck, AT
 wilton	us	CT	New York City, US
 wimbledon	gb		London, GB
@@ -19469,7 +19456,7 @@ wushipai	cn		Bao'an, CN
 wusu	cn		Wusu, CN
 wuustwezel	be		Antwerp, BE
 wuwei	cn		Wuwei, CN
-wuxi	cn		Suzhou Jiangsu, CN
+wuxi	cn		Suzhou, CN
 wuxi	cn		Wuxi, CN
 wuxue	cn		Wuxue, CN
 wuyishan	cn		Wuyishan, CN
@@ -19513,7 +19500,7 @@ xiangxiang	cn		Xiangxiang, CN
 xiangyang	cn		Xiangyang, CN
 xianju	cn		Xianju, CN
 xianning	cn		Xianning, CN
-xiannü	cn		Yangzhou Jiangsu, CN
+xiannü	cn		Yangzhou, CN
 xianshuigu	cn		Tianjin, CN
 xiantao	cn		Xiantao, CN
 xianyang	cn		Xianyang, CN
@@ -19563,11 +19550,11 @@ xinxing	cn		Zhu Cheng City, CN
 xinyang	cn		Xinyang, CN
 xinye	cn		Xinye, CN
 xinyi	cn		Xinyi Guangdong, CN
-xinyi	cn		Xinyi Jiangsu, CN
+xinyi	cn		Xinyi, CN
 xinying	tw		Xinying, TW
 xinyu	cn		Xinyu, CN
 xinzhou	cn		Xinzhou Hubei, CN
-xinzhou	cn		Xinzhou Shanxi, CN
+xinzhou	cn		Xinzhou, CN
 xiongjia	cn		Wanzhou, CN
 xiongzhou	cn		Xiongzhou, CN
 xirivella	es		Valencia, ES
@@ -19663,8 +19650,8 @@ yangpu	cn		Shanghai, CN
 yangquan	cn		Yangquan, CN
 yangsan	kr		Busan, KR
 yangtun	cn		Peicheng, CN
-yangzhou	cn		Yangzhou Jiangsu, CN
 yangzhou	cn		Yangzhou Shaanxi, CN
+yangzhou	cn		Yangzhou, CN
 yanji	cn		Yanji, CN
 yanjia	cn		Fengcheng Chongqing, CN
 yanjing	cn		Hechuan, CN
@@ -19974,7 +19961,7 @@ zhenzhou	cn		Zhenzhou, CN
 zhen’an	cn		Hanfeng, CN
 zhetysay	kz		Zhetysay, KZ
 zhicheng	cn		Zhicheng Hubei, CN
-zhicheng	cn		Zhicheng Zhejiang, CN
+zhicheng	cn		Zhicheng, CN
 zhifeng	cn		Longgang Chongqing, CN
 zhigulëvsk	ru		Tolyatti, RU
 zhijiang	cn		Zhijiang, CN

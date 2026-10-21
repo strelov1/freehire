@@ -10,7 +10,8 @@ var project = mollweide
 
 type fua struct {
 	id                     int
-	country                string // lower-case alpha-2
+	pop                    float64 // FUA_p_2015
+	country                string  // lower-case alpha-2
 	geom                   multiPolygon
 	minX, minY, maxX, maxY float64
 }
@@ -21,6 +22,8 @@ type gnPlace struct {
 	admin1   string // postal code for us/ca, "" otherwise
 	lat, lon float64
 	pop      int64
+	region   string // GeoNames admin1 name, any country
+	district string // GeoNames admin2 name
 }
 
 type assigned struct {
@@ -52,18 +55,25 @@ func assign(places []gnPlace, fuas []fua) []assigned {
 	return out
 }
 
+// qualifyStats counts how many metros were qualified by region (admin1) vs district (admin2).
+var qualifyStats = map[string]int{}
+
 // metroNames names each FUA by the most populous place assigned to it, unless
-// overrides names it; returns fuaID → "Name, CC". Two FUAs of one country that
-// end up with the same value get " <admin1>" inserted before the comma when both
-// have one ("Springfield MA, US"); a collision that survives that is an error
-// naming both FUA ids, to be settled with an override.
-func metroNames(as []assigned, overrides map[int]string) (map[int]string, error) {
+// overrides names it; returns fuaID → "Name, CC". When several FUAs of one country
+// share a value the one with the largest population (pops) keeps it plain and every
+// other gets a qualifier inserted before the comma: the postal admin1 code for us/ca
+// ("Springfield MO, US"), the admin1 name elsewhere ("Fuyang Anhui, CN"). A qualifier
+// that is empty, repeats the name or collides with another value falls through to
+// the admin2 name; a collision that survives that is an error naming the FUA ids,
+// to be settled with an override.
+func metroNames(as []assigned, pops map[int]float64, overrides map[int]string) (map[int]string, error) {
 	best := map[int]gnPlace{}
 	for _, a := range as {
 		if b, ok := best[a.fuaID]; !ok || a.place.pop > b.pop {
 			best[a.fuaID] = a.place
 		}
 	}
+	base := map[int]string{}
 	names := map[int]string{}
 	owners := map[string][]int{}
 	for id, b := range best {
@@ -71,35 +81,60 @@ func metroNames(as []assigned, overrides map[int]string) (map[int]string, error)
 		if o, ok := overrides[id]; ok {
 			name = o
 		}
+		base[id] = name
 		v := name + ", " + strings.ToUpper(b.country)
 		names[id] = v
 		owners[v] = append(owners[v], id)
 	}
-	var clashes []string
+	taken := map[string]bool{}
+	var losers []int
 	for v, ids := range owners {
-		if len(ids) < 2 {
-			continue
-		}
-		resolved := true
-		for _, id := range ids {
-			if best[id].admin1 == "" {
-				resolved = false
-				break
+		sort.Slice(ids, func(i, j int) bool {
+			if pops[ids[i]] != pops[ids[j]] {
+				return pops[ids[i]] > pops[ids[j]]
 			}
+			return ids[i] < ids[j]
+		})
+		taken[v] = true
+		losers = append(losers, ids[1:]...)
+	}
+	sort.Ints(losers)
+	var clashes []string
+	for _, id := range losers {
+		p := best[id]
+		cc := strings.ToUpper(p.country)
+		first, kind := p.region, "admin1"
+		if p.admin1 != "" {
+			first = p.admin1
 		}
-		if resolved {
-			name, cc, _ := strings.Cut(v, ", ")
-			for _, id := range ids {
-				names[id] = name + " " + best[id].admin1 + ", " + cc
+		done := false
+		for _, c := range []struct{ q, kind string }{{first, kind}, {p.district, "admin2"}} {
+			if c.q == "" || strings.EqualFold(c.q, base[id]) {
+				continue
 			}
-			continue
+			v := base[id] + " " + c.q + ", " + cc
+			if taken[v] {
+				continue
+			}
+			taken[v] = true
+			names[id] = v
+			qualifyStats[c.kind]++
+			done = true
+			break
 		}
-		sort.Ints(ids)
-		clashes = append(clashes, fmt.Sprintf("%q: FUA ids %v", v, ids))
+		if !done {
+			clashes = append(clashes, fmt.Sprintf("%q: FUA id %d", names[id], id))
+		}
 	}
 	if len(clashes) > 0 {
-		sort.Strings(clashes)
 		return nil, fmt.Errorf("metro names collide, add an override for each: %s", strings.Join(clashes, "; "))
+	}
+	seen := map[string]int{}
+	for id, v := range names {
+		if other, ok := seen[v]; ok {
+			return nil, fmt.Errorf("metro name %q is held by FUA ids %d and %d", v, min(id, other), max(id, other))
+		}
+		seen[v] = id
 	}
 	return names, nil
 }

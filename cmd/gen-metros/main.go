@@ -17,6 +17,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -33,6 +34,9 @@ const (
 	fuaTable     = "GHS_FUA_UCDB2015_GLOBE_R2019A_54009_1K_V1_0"
 	outputPath   = "internal/dict/location/metros.tsv"
 
+	admin1URL = "https://download.geonames.org/export/dump/admin1CodesASCII.txt"
+	admin2URL = "https://download.geonames.org/export/dump/admin2Codes.txt"
+
 	// statingPopulation matches cmd/gen-cities: only places that large reach the city
 	// dictionary, so only they can be looked up. Smaller places still NAME nothing —
 	// naming uses the same set, so a metro is never named after a place the parser
@@ -47,6 +51,7 @@ const (
 	colLon        = 5
 	colCountry    = 8
 	colAdmin1     = 10
+	colAdmin2     = 11
 	colPopulation = 14
 	minColumns    = 15
 )
@@ -65,207 +70,6 @@ var metroOverrides = map[int]string{
 	536: "Ruhr",
 	// Al Ahmadi is a Kuwait City suburb; the metro is known as Kuwait City.
 	429: "Kuwait City",
-
-	// Shares the name "Māndvi" with another IN metro; named by its district.
-	702: "Māndvi Kutch",
-	// Shares the name "Jodhpur" with another IN metro; named by its province.
-	2769: "Jodhpur Gujarat",
-	// Shares the name "Ereğli" with another TR metro; named by its province.
-	3279: "Ereğli Zonguldak",
-	// Shares the name "Nūrābād" with another IR metro; named by its province.
-	3500: "Nūrābād Lorestan",
-	// Shares the name "Ereğli" with another TR metro; named by its province.
-	4071: "Ereğli Konya",
-	// Shares the name "Jalālābād" with another IN metro; named by its province.
-	4296: "Jalālābād Punjab",
-	// Shares the name "Baoshan" with another CN metro; named by its province.
-	5101: "Baoshan Yunnan",
-	// Shares the name "Una" with another IN metro; named by its province.
-	5238: "Una Gujarat",
-	// Shares the name "Jodhpur" with another IN metro; named by its province.
-	5324: "Jodhpur Rajasthan",
-	// Shares the name "Nūrābād" with another IR metro; named by its province.
-	5537: "Nūrābād Fars",
-	// Shares the name "Planaltina" with another BR metro; named by its province.
-	5842: "Planaltina Federal",
-	// Shares the name "Planaltina" with another BR metro; named by its province.
-	5854: "Planaltina Goias",
-	// Shares the name "Mianyang" with another CN metro; named by its province.
-	5963: "Mianyang Sichuan",
-	// Shares the name "Mānsa" with another IN metro; named by its province.
-	6041: "Mānsa Gujarat",
-	// Shares the name "Mānsa" with another IN metro; named by its province.
-	6125: "Mānsa Punjab",
-	// Shares the name "Una" with another IN metro; named by its province.
-	6254: "Una Himachal Pradesh",
-	// Shares the name "Fatehābād" with another IN metro; named by its province.
-	6318: "Fatehābād Haryana",
-	// Shares the name "Tongchuan" with another CN metro; named by its province.
-	6426: "Tongchuan Sichuan",
-	// Shares the name "Fatehpur" with another IN metro; named by its district.
-	6429: "Fatehpur Sikar",
-	// Shares the name "Udaipur" with another IN metro; named by its district.
-	6492: "Udaipur Udaipur",
-	// Shares the name "Mianyang" with another CN metro; named by its province.
-	6507: "Mianyang Shaanxi",
-	// Shares the name "Rājgarh" with another IN metro; named by its district.
-	6563: "Rājgarh Churu",
-	// Shares the name "Gangāpur" with another IN metro; named by its district.
-	6813: "Gangāpur Bhilwara",
-	// Shares the name "Yangzhou" with another CN metro; named by its province.
-	6883: "Yangzhou Shaanxi",
-	// Shares the name "Tongchuan" with another CN metro; named by its province.
-	6919: "Tongchuan Shaanxi",
-	// Shares the name "Udaipur" with another IN metro; named by its district.
-	6939: "Udaipur Jhunjhunu",
-	// Shares the name "Māndvi" with another IN metro; named by its district.
-	7127: "Māndvi Surat",
-	// Shares the name "Shāhābād" with another IN metro; named by its district.
-	7169: "Shāhābād Kurukshetra",
-	// Shares the name "Shāhpura" with another IN metro; named by its district.
-	7199: "Shāhpura Bhilwara",
-	// Shares the name "Xinzhou" with another CN metro; named by its province.
-	7269: "Xinzhou Shanxi",
-	// Shares the name "Longgang" with another CN metro; named by its province.
-	7279: "Longgang Chongqing",
-	// Shares the name "Shāhpura" with another IN metro; named by its district.
-	7355: "Shāhpura Jaipur",
-	// Shares the name "Rājgarh" with another IN metro; named by its district.
-	7591: "Rājgarh Alwar",
-	// Shares the name "Kaiyuan" with another CN metro; named by its province.
-	7610: "Kaiyuan Yunnan",
-	// Shares the name "Fengcheng" with another CN metro; named by its province.
-	7664: "Fengcheng Chongqing",
-	// Shares the name "Gangāpur" with another IN metro; named by its district.
-	7701: "Gangāpur Sawai Madhopur",
-	// Shares the name "Sanhe" with another CN metro; named by its province.
-	7766: "Sanhe Chongqing",
-	// Shares the name "Mingshui" with another CN metro; named by its province.
-	7830: "Mingshui Heilongjiang",
-	// Shares the name "Sanhe" with another CN metro; named by its province.
-	7896: "Sanhe Hebei",
-	// Shares the name "Sirsi" with another IN metro; named by its province.
-	7990: "Sirsi Uttar Pradesh",
-	// Shares the name "Rājgarh" with another IN metro; named by its district.
-	7994: "Rājgarh Rajgarh",
-	// Shares the name "Rāmnagar" with another IN metro; named by its province.
-	8022: "Rāmnagar Uttarakhand",
-	// Shares the name "Qianjiang" with another CN metro; named by its province.
-	8037: "Qianjiang Chongqing",
-	// Shares the name "Shamsābād" with another IN metro; named by its district.
-	8056: "Shamsābād Agra",
-	// Shares the name "Fatehābād" with another IN metro; named by its province.
-	8100: "Fatehābād Uttar Pradesh",
-	// Shares the name "Shāhābād" with another IN metro; named by its district.
-	8108: "Shāhābād Rampur",
-	// Shares the name "Lanxi" with another CN metro; named by its province.
-	8155: "Lanxi Heilongjiang",
-	// Shares the name "Sirsi" with another IN metro; named by its province.
-	8234: "Sirsi Karnataka",
-	// Shares the name "Dengzhou" with another CN metro; named by its province.
-	8245: "Dengzhou Henan",
-	// Shares the name "Puyang" with another CN metro; named by its province.
-	8302: "Puyang Henan",
-	// Shares the name "Shamsābād" with another IN metro; named by its district.
-	8357: "Shamsābād Ferrukhabad",
-	// Shares the name "Jalālābād" with another IN metro; named by its province.
-	8403: "Jalālābād Uttar Pradesh",
-	// Shares the name "Zhicheng" with another CN metro; named by its province.
-	8462: "Zhicheng Hubei",
-	// Shares the name "Shāhābād" with another IN metro; named by its district.
-	8487: "Shāhābād Hardoi",
-	// Shares the name "Feicheng" with another CN metro; named by its district.
-	8524: "Feicheng Tai'an Shi",
-	// Shares the name "Mingshui" with another CN metro; named by its province.
-	8586: "Mingshui Shandong",
-	// Shares the name "Kaiyuan" with another CN metro; named by its province.
-	8614: "Kaiyuan Liaoning",
-	// Shares the name "Akbarpur" with another IN metro; named by its district.
-	8663: "Akbarpur Kanpur Dehat",
-	// Shares the name "Shāhābād" with another IN metro; named by its district.
-	8690: "Shāhābād Gulbarga",
-	// Shares the name "Qianjiang" with another CN metro; named by its province.
-	8733: "Qianjiang Hubei",
-	// Shares the name "Fengcheng" with another CN metro; named by its province.
-	8811: "Fengcheng Jiangsu",
-	// Shares the name "Fatehpur" with another IN metro; named by its district.
-	8918: "Fatehpur Bara Banki",
-	// Shares the name "Fatehpur" with another IN metro; named by its district.
-	8950: "Fatehpur Fatehpur",
-	// Shares the name "Fuyang" with another CN metro; named by its province.
-	8963: "Fuyang Anhui",
-	// Shares the name "Feicheng" with another CN metro; named by its district.
-	9010: "Feicheng Linyi Shi",
-	// Shares the name "Longgang" with another CN metro; named by its province.
-	9018: "Longgang Shandong",
-	// Shares the name "Baoshan" with another CN metro; named by its province.
-	9024: "Baoshan Heilongjiang",
-	// Shares the name "Dengzhou" with another CN metro; named by its province.
-	9076: "Dengzhou Shandong",
-	// Shares the name "Changsha" with another CN metro; named by its province.
-	9100: "Changsha Hunan",
-	// Shares the name "Suzhou" with another CN metro; named by its province.
-	9108: "Suzhou Anhui",
-	// Shares the name "Xinzhou" with another CN metro; named by its province.
-	9118: "Xinzhou Hubei",
-	// Shares the name "Fengcheng" with another CN metro; named by its province.
-	9160: "Fengcheng Liaoning",
-	// Shares the name "Cumbum" with another IN metro; named by its province.
-	9227: "Cumbum Tamil Nadu",
-	// Shares the name "Xinyi" with another CN metro; named by its province.
-	9259: "Xinyi Jiangsu",
-	// Shares the name "Akbarpur" with another IN metro; named by its district.
-	9370: "Akbarpur Ambedkar Nagar",
-	// Shares the name "Xinyi" with another CN metro; named by its province.
-	9425: "Xinyi Guangdong",
-	// Shares the name "Cumbum" with another IN metro; named by its province.
-	9436: "Cumbum Andhra Pradesh",
-	// Shares the name "Ji’an" with another CN metro; named by its province.
-	9443: "Ji’an Jilin",
-	// Shares the name "Muhammadābād" with another IN metro; named by its district.
-	9616: "Muhammadābād Mau",
-	// Shares the name "Ji’an" with another CN metro; named by its province.
-	9667: "Ji’an Jiangxi",
-	// Shares the name "Changsha" with another CN metro; named by its province.
-	9747: "Changsha Guangdong",
-	// Shares the name "Yangzhou" with another CN metro; named by its province.
-	9769: "Yangzhou Jiangsu",
-	// Shares the name "Rāmnagar" with another IN metro; named by its province.
-	9778: "Rāmnagar Bihar",
-	// Shares the name "Muhammadābād" with another IN metro; named by its district.
-	9800: "Muhammadābād Ghazipur",
-	// Shares the name "Fuzhou" with another CN metro; named by its province.
-	9815: "Fuzhou Jiangxi",
-	// Shares the name "Taizhou" with another CN metro; named by its province.
-	9831: "Taizhou Jiangsu",
-	// Shares the name "Huicheng" with another CN metro; named by its province.
-	9925: "Huicheng Anhui",
-	// Shares the name "Suzhou" with another CN metro; named by its province.
-	9963: "Suzhou Jiangsu",
-	// Shares the name "Sāhibganj" with another IN metro; named by its province.
-	9966: "Sāhibganj Bihar",
-	// Shares the name "Zhicheng" with another CN metro; named by its province.
-	9991: "Zhicheng Zhejiang",
-	// Shares the name "Islāmpur" with another IN metro; named by its province.
-	10083: "Islāmpur Bihar",
-	// Shares the name "Fuyang" with another CN metro; named by its province.
-	10090: "Fuyang Zhejiang",
-	// Shares the name "Lanxi" with another CN metro; named by its province.
-	10108: "Lanxi Zhejiang",
-	// Shares the name "Puyang" with another CN metro; named by its province.
-	10145: "Puyang Zhejiang",
-	// Shares the name "Huicheng" with another CN metro; named by its province.
-	10205: "Huicheng Guangdong",
-	// Shares the name "Fuzhou" with another CN metro; named by its province.
-	10328: "Fuzhou Fujian",
-	// Shares the name "Sāhibganj" with another IN metro; named by its province.
-	10344: "Sāhibganj Jharkhand",
-	// Shares the name "Islāmpur" with another IN metro; named by its province.
-	10352: "Islāmpur West Bengal",
-	// Shares the name "Taizhou" with another CN metro; named by its province.
-	10392: "Taizhou Zhejiang",
-	// Shares the name "Udaipur" with another IN metro; named by its district.
-	10511: "Udaipur Gomati",
 }
 
 // caAdmin1 maps GeoNames' numeric Canadian admin1 codes to postal codes, the form
@@ -293,7 +97,15 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	places, err := parsePlaces(gn)
+	admin1Names, err := fetchNames(admin1URL)
+	if err != nil {
+		return err
+	}
+	admin2Names, err := fetchNames(admin2URL)
+	if err != nil {
+		return err
+	}
+	places, err := parsePlaces(gn, admin1Names, admin2Names)
 	if err != nil {
 		return err
 	}
@@ -310,10 +122,15 @@ func run() error {
 		return err
 	}
 	as := assign(places, fuas)
-	names, err := metroNames(as, metroOverrides)
+	pops := map[int]float64{}
+	for _, f := range fuas {
+		pops[f.id] = f.pop
+	}
+	names, err := metroNames(as, pops, metroOverrides)
 	if err != nil {
 		return err
 	}
+	fmt.Fprintf(os.Stderr, "gen-metros: qualified %d by admin1, %d by admin2\n", qualifyStats["admin1"], qualifyStats["admin2"])
 	return writeTSV(outputPath, as, names)
 }
 
@@ -352,7 +169,35 @@ func fetchMember(url, member string) ([]byte, error) {
 	return nil, fmt.Errorf("%s: no member %s", url, member)
 }
 
-func parsePlaces(txt []byte) ([]gnPlace, error) {
+// fetchNames reads a GeoNames admin-code table into code → name (the accented column).
+func fetchNames(url string) (map[string]string, error) {
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, url, nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := (&http.Client{Timeout: 5 * time.Minute}).Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("GET %s: %s", url, resp.Status)
+	}
+	raw, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+	out := map[string]string{}
+	for _, l := range strings.Split(string(raw), "\n") {
+		f := strings.Split(l, "\t")
+		if len(f) >= 2 {
+			out[f[0]] = f[1]
+		}
+	}
+	return out, nil
+}
+
+func parsePlaces(txt []byte, admin1Names, admin2Names map[string]string) ([]gnPlace, error) {
 	var out []gnPlace
 	sc := bufio.NewScanner(bytes.NewReader(txt))
 	sc.Buffer(make([]byte, 1<<20), 1<<20)
@@ -378,7 +223,12 @@ func parsePlaces(txt []byte) ([]gnPlace, error) {
 		case "ca":
 			admin1 = caAdmin1[f[colAdmin1]]
 		}
-		out = append(out, gnPlace{name: f[colName], country: cc, admin1: admin1, lat: lat, lon: lon, pop: pop})
+		a1 := strings.ToUpper(cc) + "." + f[colAdmin1]
+		out = append(out, gnPlace{
+			name: f[colName], country: cc, admin1: admin1, lat: lat, lon: lon, pop: pop,
+			region:   admin1Names[a1],
+			district: admin2Names[a1+"."+f[colAdmin2]],
+		})
 	}
 	return out, sc.Err()
 }
@@ -389,7 +239,7 @@ func readFUAs(path string) ([]fua, error) {
 		return nil, err
 	}
 	defer func() { _ = dbh.Close() }()
-	rows, err := dbh.QueryContext(context.Background(), `SELECT CAST(eFUA_ID AS INTEGER), Cntry_ISO, geom FROM "`+fuaTable+`"`)
+	rows, err := dbh.QueryContext(context.Background(), `SELECT CAST(eFUA_ID AS INTEGER), Cntry_ISO, CAST(FUA_p_2015 AS REAL), geom FROM "`+fuaTable+`"`)
 	if err != nil {
 		return nil, err
 	}
@@ -398,8 +248,9 @@ func readFUAs(path string) ([]fua, error) {
 	for rows.Next() {
 		var id int
 		var iso3 string
+		var pop float64
 		var blob []byte
-		if err := rows.Scan(&id, &iso3, &blob); err != nil {
+		if err := rows.Scan(&id, &iso3, &pop, &blob); err != nil {
 			return nil, err
 		}
 		cc, ok := iso3to2[iso3]
@@ -410,7 +261,7 @@ func readFUAs(path string) ([]fua, error) {
 		if err != nil {
 			return nil, fmt.Errorf("FUA %d: %w", id, err)
 		}
-		f := fua{id: id, country: cc, geom: g}
+		f := fua{id: id, country: cc, pop: pop, geom: g}
 		f.minX, f.minY, f.maxX, f.maxY = g.bbox()
 		out = append(out, f)
 	}
@@ -425,6 +276,7 @@ func writeTSV(path string, as []assigned, names map[int]string) error {
 		}, "\t"))
 	}
 	sort.Strings(lines)
+	lines = slices.Compact(lines)
 	var b strings.Builder
 	b.WriteString("# Code generated by cmd/gen-metros from GeoNames cities1000 and GHS-FUA R2019A (both CC BY 4.0). DO NOT EDIT.\n")
 	b.WriteString("# Regenerate with `make gen-metros`. Columns: city-lowercase<TAB>country<TAB>admin1 (us/ca postal, else empty)<TAB>metro value\n")
