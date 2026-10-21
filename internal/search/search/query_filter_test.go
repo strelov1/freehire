@@ -184,7 +184,7 @@ func TestFilterFromValues_ExperienceYearsClosedRange(t *testing.T) {
 }
 
 // experience_include_unspecified widens each experience bound to also admit the
-// postings that state no requirement at all — roughly half the catalogue, which a
+// postings that state no requirement at all — most of the catalogue, which a
 // bound otherwise drops. It is an OR inside the bound's own group, so it never
 // widens anything else in the query.
 func TestFilterFromValues_ExperienceIncludeUnspecified(t *testing.T) {

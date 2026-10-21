@@ -148,7 +148,7 @@ Every facet below supports repeat-OR, `_mode=and`, and `_exclude` as described a
 | `salary_max` | Maximum salary | integer — jobs whose maximum salary is at most this (pair with salary_currency) |
 | `experience_years_min` | Minimum experience | integer — jobs requiring at least this many years |
 | `experience_years_max` | Maximum experience | integer — jobs requiring at most this many years, the same figure experience_years_min bounds from below. Use 0 for jobs stating no prior experience is required. Either bound excludes jobs that state no requirement at all, unless experience_include_unspecified is set |
-| `experience_include_unspecified` | Include unstated experience | true — with either experience bound, also keep the jobs that state no experience requirement (roughly half the catalogue). Has no effect without a bound |
+| `experience_include_unspecified` | Include unstated experience | true — with either experience bound, also keep the jobs that state no experience requirement (most of the catalogue). Has no effect without a bound |
 | `posted_within_days` | Posted within | integer — jobs whose SOURCE states a posting date in the last N days. Some boards restate that date on every crawl, so a job open for months can satisfy a narrow bound here; open_within_days is the one that cannot be rewritten from outside |
 | `open_within_days` | Open within | integer — jobs first recorded by freehire in the last N days, i.e. how long the posting has been in the catalogue regardless of the date its source states. Independent of posted_within_days; both may be set and they narrow together |
 

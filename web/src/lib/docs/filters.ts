@@ -98,7 +98,7 @@ export const FILTER_EXTRAS: FilterRow[] = [
     param: 'experience_include_unspecified',
     label: 'Include unstated experience',
     values:
-      'true — with either experience bound, also keep the jobs that state no experience requirement (roughly half the catalogue). Has no effect without a bound',
+      'true — with either experience bound, also keep the jobs that state no experience requirement (most of the catalogue). Has no effect without a bound',
   },
   {
     param: 'posted_within_days',

@@ -84,7 +84,7 @@ export interface JobFilters {
    *  `0` is a real bound — the jobs stating no prior experience is required — so
    *  every read of this field must test for null, never for falsiness. */
   experienceYearsMax: number | null;
-  /** Also keep the jobs that state no experience requirement — roughly half the
+  /** Also keep the jobs that state no experience requirement — most of the
    *  catalogue, which a bound drops otherwise. A modifier of the bound, not a filter:
    *  written to the URL only beside one, and never counted on its own. */
   experienceIncludeUnspecified: boolean;

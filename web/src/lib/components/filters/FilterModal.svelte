@@ -464,7 +464,8 @@
         aria-label="Maximum years of experience"
         class="w-full accent-primary"
       />
-      <!-- Roughly half the catalogue states no experience requirement at all, and a
+      <!-- Most of the catalogue states no experience requirement at all (about two
+           thirds, measured on prod 2026-10-21: 2.42M of 3.67M open postings), and a
            bound excludes every one of those postings unless this is ticked. Shown
            permanently rather than only once bounded: a result count that collapses
            without explanation is read as a broken filter, and by then the user has
@@ -484,7 +485,7 @@
         <span>Include postings that don't state experience</span>
       </label>
       <p class="mt-1 text-xs text-muted-foreground">
-        About half of all postings don't state an experience requirement. A limit hides them unless this is ticked.
+        Most postings don't state an experience requirement. A limit hides them unless this is ticked.
       </p>
     </div>
   {:else if entry.kind === 'work'}

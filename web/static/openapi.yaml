@@ -1580,7 +1580,7 @@ components:
         type: boolean
       description: >-
         With either experience bound, also keep the postings that state no
-        experience requirement — roughly half the catalogue, which a bound
+        experience requirement — most of the catalogue, which a bound
         otherwise excludes. Has no effect without a bound.
     PostedWithinDays:
       name: posted_within_days
