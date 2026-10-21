@@ -69,7 +69,7 @@ func TestDodoFetchFlattensGroupsAndAssemblesDetail(t *testing.T) {
 	if j.Company != "Dodo Pizza" {
 		t.Errorf("Company = %q, want brand", j.Company)
 	}
-	if want := "https://dodo.team/vacancy/7805"; j.URL != want {
+	if want := "https://dodoteam.ru/vacancy/7805"; j.URL != want {
 		t.Errorf("URL = %q, want %q", j.URL, want)
 	}
 	if j.Location != "Дубай" {
@@ -145,5 +145,27 @@ func TestDodoEmptyListYieldsNoJobsNoError(t *testing.T) {
 	}
 	if len(jobs) != 0 {
 		t.Fatalf("got %d jobs, want 0", len(jobs))
+	}
+}
+
+// The API names Dodo's own tech unit by its team label, "Engineering"; stored as is it reads as
+// a company called Engineering. Its site calls itself Dodo Engineering.
+func TestDodoEngineeringBrandIsNamedAsTheCompany(t *testing.T) {
+	fake := (&routedHTTP{}).
+		route("/api/v1/vacancies", `{"success":true,"data":[
+			{"speciality":"Engineering","slug":"speciality-engineering","items":[
+				{"id":8068,"position":"Аналитик данных","brand":"Engineering","vacancy_location":"Москва","work_format":["Удалёнка"]}
+			]}
+		]}`).
+		route("/api/v1/pages/vacancy/8068", `{"success":true,"data":{"page":{"content":[
+			{"type":"vacancy_text","data":{"text":"<p>Analyse data.</p>"}}
+		]}}}`)
+
+	jobs, err := NewDodo(fake).Fetch(context.Background(), CompanyEntry{Company: "Dodo", Provider: "dodo"})
+	if err != nil || len(jobs) != 1 {
+		t.Fatalf("Fetch = %v, %v", jobs, err)
+	}
+	if got := jobs[0].Company; got != "Dodo Engineering" {
+		t.Errorf("Company = %q, want Dodo Engineering", got)
 	}
 }

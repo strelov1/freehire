@@ -7,7 +7,7 @@ import (
 	"strings"
 )
 
-// dodo adapts Dodo Brands' public careers API (career-api.dodoteam.ru), a
+// dodo adapts Dodo Brands' public careers API (the backend behind dodoteam.ru), a
 // single-company source with no per-tenant board id (boardless). The list endpoint
 // groups vacancies by speciality and carries no description, so the items are flattened
 // and each body is assembled from its detail page's content blocks, fanned out like
@@ -17,12 +17,17 @@ type dodo struct {
 }
 
 const (
-	dodoListURL   = "https://career-api.dodoteam.ru/api/v1/vacancies"
-	dodoDetailURL = "https://career-api.dodoteam.ru/api/v1/pages/vacancy/%d"
-	// Public host UNCONFIRMED: dodo.team/vacancy/<id> is a best-effort canonical URL —
-	// the careers API does not return a public posting URL.
-	dodoVacancyURL = "https://dodo.team/vacancy/%d"
+	// The careers site moved to dodoteam.ru in 2026; its Nuxt runtime config names this
+	// backend (public.apiURL), which serves the same API the retired career-api.dodoteam.ru did.
+	dodoListURL   = "https://job-site-backend.dodo-ai-platform.io/api/v1/vacancies"
+	dodoDetailURL = "https://job-site-backend.dodo-ai-platform.io/api/v1/pages/vacancy/%d"
+	// The API returns no posting URL; this is the site's own vacancy route.
+	dodoVacancyURL = "https://dodoteam.ru/vacancy/%d"
 )
+
+// dodoBrandCompanies renames the brands the API labels by team rather than by company:
+// "Engineering" is Dodo's tech unit, which its site calls Dodo Engineering.
+var dodoBrandCompanies = map[string]string{"Engineering": "Dodo Engineering"}
 
 // dodoBodyTypes are the content-block types whose text forms the description body; other
 // blocks (vacancy_main, vacancy_image, …) are skipped.
@@ -97,6 +102,9 @@ func (d dodo) detail(ctx context.Context, e CompanyEntry, it dodoItem) (Job, boo
 	}
 
 	company := firstNonEmpty(it.Brand, e.Company)
+	if renamed, ok := dodoBrandCompanies[company]; ok {
+		company = renamed
+	}
 
 	return Job{
 		ExternalID:  strconv.FormatInt(it.ID, 10),
