@@ -66,11 +66,11 @@ metro per country, so a US posting in San Diego is never labelled with a Mexican
 `metroOverrides` names it (e.g. the Bay Area → "San Francisco Bay Area"). The override map
 is the only hand-curated part and argues each entry beside it.
 
-**Metro value** (the facet value, the URL value) = `<name>, <CC>`, e.g. `Sacramento, US`,
-`Moscow, RU`, `Campinas, BR` — readable, like the cities facet, so the UI needs no lookup
-table. The country suffix keeps same-named metros in different countries apart (Valencia
+**Metro value** (the facet value, the URL value) = `<name> (<CC>)`, e.g. `Sacramento (US)`,
+`Moscow (RU)`, `Campinas (BR)` — readable, like the cities facet, so the UI needs no lookup
+table. The value carries no comma on purpose: the web client joins a facet's values with commas in the URL. The country suffix keeps same-named metros in different countries apart (Valencia
 ES/VE). Two metros of one country sharing a name get the admin1 code appended by the
-generator (`Springfield MA, US`), which fails loudly if that still collides. Display
+generator (`Springfield MA (US)`), which fails loudly if that still collides. Display
 label: "<name> area".
 
 Output: `internal/dict/location/metros.tsv`, one row per place:
@@ -115,7 +115,7 @@ fall under rule 2).
 `LocationPane` gets a metro group above cities, fed by the `metros` facet distribution.
 Typing "Sacramento" shows "Sacramento area" first, the city below it. Chips, counts and
 the include/exclude cycle follow the cities group exactly. The label is the facet value
-with its `, CC` suffix replaced by " area".
+with its ` (CC)` suffix replaced by " area".
 
 ### Attribution
 
@@ -138,8 +138,8 @@ UI group shows what the facet distribution holds, so it is never offered empty.
 
 - Generator: a tiny synthetic GeoPackage (two polygons, one cross-border) — membership,
   per-country split, naming by population, override.
-- `Parse`: "Folsom, CA" → Sacramento, US; "Roseville, CA" → Sacramento, US; "Roseville, MI"
-  → Detroit, US; "Roseville" → none; "Khimki" → Moscow, RU; "San Diego, CA" → San Diego, US.
+- `Parse`: "Folsom, CA" → Sacramento (US); "Roseville, CA" → Sacramento (US); "Roseville, MI"
+  → Detroit (US); "Roseville" → none; "Khimki" → Moscow (RU); "San Diego, CA" → San Diego (US).
 - Search filter: `metros` ORs with `cities`; exclusion works; unknown-param report knows it.
 - Closure union includes metros.
 - UI: the metro group renders from the distribution and toggles the `metros` facet.
