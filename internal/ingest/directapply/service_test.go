@@ -8,6 +8,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/strelov1/freehire/internal/candidate/answerbank"
+	"github.com/strelov1/freehire/internal/dict/answertopic"
 	"github.com/strelov1/freehire/internal/ingest/applyform"
 	"github.com/strelov1/freehire/internal/ingest/employer"
 )
@@ -37,7 +38,7 @@ type fakeRepo struct {
 
 func newFakeRepo(t *testing.T) *fakeRepo {
 	return &fakeRepo{
-		vacancy:   Vacancy{ID: 11, Slug: slug, Title: "Platform Engineer", EmployerID: employerID, Open: true},
+		vacancy:   Vacancy{ID: 11, Slug: slug, Title: "Platform Engineer", Company: "Acme", EmployerID: employerID, Open: true},
 		form:      testForm(t),
 		candidate: Candidate{Email: "c@example.test", Verified: true},
 		limit:     30,
@@ -147,7 +148,14 @@ func (t *fakeTracker) MarkApplied(_ context.Context, _ int64, s, _ string) error
 	return nil
 }
 
-type fakeBank struct{ saved map[string]string }
+type fakeBank struct {
+	saved    map[string]string
+	sendable map[string]string // topic -> answer
+}
+
+func (b *fakeBank) Sendable(context.Context, int64) (map[string]string, error) {
+	return b.sendable, nil
+}
 
 func (b *fakeBank) Save(_ context.Context, _ int64, q, a string, by answerbank.Provenance) error {
 	if by != answerbank.AuthorCandidate {
@@ -323,5 +331,65 @@ func TestApply_ADeliveredApplicationSucceedsEvenIfItsStampFails(t *testing.T) {
 	}
 	if len(h.tracker.applied) != 1 {
 		t.Error("a delivered application must still reach the candidate's tracking")
+	}
+}
+
+func TestForm_ShowsTheQuestionsAndPrefillsFromTheBank(t *testing.T) {
+	h := newHarness(t)
+	topic := func(q string) string {
+		k, ok := answertopic.Of(q)
+		if !ok {
+			t.Fatalf("no topic for %q", q)
+		}
+		return k
+	}
+	h.bank.sendable = map[string]string{
+		topic("EU work permit?"): "Yes",
+		topic("Stack"):           "Java", // not one of the options: offered nowhere
+		topic("Anything else?"):  "Remote only",
+	}
+
+	view, err := h.service().Form(context.Background(), candidateID, slug)
+	if err != nil {
+		t.Fatalf("Form: %v", err)
+	}
+	if view.CompanyName != "Acme" || !view.Open || view.Applied || len(view.Questions) != 3 {
+		t.Fatalf("view = %+v", view)
+	}
+	want := map[string]string{"q1": "true", "q3": "Remote only"}
+	if len(view.Prefill) != len(want) {
+		t.Fatalf("prefill = %v, want %v", view.Prefill, want)
+	}
+	for id, v := range want {
+		if view.Prefill[id] != v {
+			t.Errorf("prefill[%s] = %q, want %q", id, view.Prefill[id], v)
+		}
+	}
+}
+
+func TestForm_AnonymousSeesTheQuestionsOnly(t *testing.T) {
+	h := newHarness(t)
+	h.bank.sendable = map[string]string{"anything": "x"}
+	view, err := h.service().Form(context.Background(), 0, slug)
+	if err != nil {
+		t.Fatalf("Form: %v", err)
+	}
+	if len(view.Questions) != 3 || len(view.Prefill) != 0 || view.Applied {
+		t.Errorf("view = %+v, want questions without anyone's answers", view)
+	}
+}
+
+func TestForm_ReportsASentApplicationAndAClosedVacancy(t *testing.T) {
+	h := newHarness(t)
+	h.repo.records[1] = Record{JobID: h.repo.vacancy.ID, UserID: candidateID}
+	h.repo.sent[1] = true
+	h.emp.err = employer.ErrNotActive
+
+	view, err := h.service().Form(context.Background(), candidateID, slug)
+	if err != nil {
+		t.Fatalf("Form: %v", err)
+	}
+	if !view.Applied || view.Open {
+		t.Errorf("view = %+v, want applied and not open", view)
 	}
 }

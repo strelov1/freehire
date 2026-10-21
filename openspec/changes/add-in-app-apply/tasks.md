@@ -24,13 +24,13 @@
 ## 4. Delivery
 
 - [x] 4.1 `emailnotify` application mailer: `GroupEssential`, To = employer confirmed email, Reply-To = candidate, PDF attachment, questions/answers/note in HTML and text; unit test over the built `Message`
-- [ ] 4.2 Wire `directapply.Service` and the mailer in `handler.Register` (nil-safe port, 501 when Typst or SES is absent)
+- [x] 4.2 Wire `directapply.Service` and the mailer in `handler.Register` (nil-safe port, 501 when Typst or SES is absent)
 
 ## 5. HTTP
 
-- [ ] 5.1 `GET /jobs/:slug/direct-apply`: company, questions, and for a signed-in user `prefill` (answer bank by topic) and `applied`; handler integration test
-- [ ] 5.2 `POST /jobs/:slug/direct-apply`: error mapping (400 naming the question, 403 unverified, 404, 409 sent or in flight, 429, 502 with no provider detail); handler integration test
-- [ ] 5.3 `web/static/openapi.yaml`: both endpoints and the employer fields
+- [x] 5.1 `GET /jobs/:slug/direct-apply`: company, questions, and for a signed-in user `prefill` (answer bank by topic) and `applied`; handler integration test
+- [x] 5.2 `POST /jobs/:slug/direct-apply`: error mapping (400 naming the question, 403 unverified, 404, 409 sent or in flight, 429, 502 with no provider detail); handler integration test
+- [ ] 5.3 API docs: both endpoints in `web/src/lib/docs/api-spec.ts` (regenerate `docs/API*.md` and the OpenAPI references); `direct_apply` on the job in `web/static/openapi.yaml` (that file excludes signed-in routes by design, so only the field)
 
 ## 6. Web
 

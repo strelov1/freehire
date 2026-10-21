@@ -39,6 +39,7 @@ func (r *QueriesRepository) Vacancy(ctx context.Context, slug string) (Vacancy, 
 		ID:         row.ID,
 		Slug:       row.PublicSlug,
 		Title:      row.Title,
+		Company:    row.Company,
 		EmployerID: row.CreatedBy.Int64,
 		Open:       !row.ClosedAt.Valid,
 	}, nil

@@ -57,6 +57,7 @@ import (
 	"github.com/strelov1/freehire/internal/identity/userprofile"
 	"github.com/strelov1/freehire/internal/ingest/boardresolve"
 	"github.com/strelov1/freehire/internal/ingest/contribution"
+	"github.com/strelov1/freehire/internal/ingest/directapply"
 	"github.com/strelov1/freehire/internal/ingest/employer"
 	"github.com/strelov1/freehire/internal/ingest/jdresolve"
 	"github.com/strelov1/freehire/internal/ingest/linkimport"
@@ -384,6 +385,9 @@ type Config struct {
 	// Blob backs résumé storage (internal/platform/blobstore). Nil disables storage: résumé
 	// upload only extracts skills in-request (no regression).
 	Blob blobstore.Store
+	// DirectApplyDailyLimit caps how many on-site applications one candidate sends per UTC
+	// day (config.LoadDirectApplyDailyLimit, read and validated in cmd/server).
+	DirectApplyDailyLimit int64
 	// TypstBin is the resolved path to the typst binary for CV PDF rendering. Empty
 	// disables rendering: the /me/cvs/:id/pdf endpoint returns 501, the rest works.
 	TypstBin string
@@ -876,7 +880,24 @@ func Register(app *fiber.App, cfg Config) {
 		employerMailer = employerClaimMailer
 	}
 	employerRepo := employer.NewQueriesRepository(queries, cfg.Pool)
-	employerH := newEmployerHandlers(queries, employer.New(employerRepo, authH.accounts, employerMailer, employerRepo, moderationSvc))
+	employerSvc := employer.New(employerRepo, authH.accounts, employerMailer, employerRepo, moderationSvc)
+	employerH := newEmployerHandlers(queries, employerSvc)
+	// Applying on freehire needs both a CV renderer and a mail transport; without either an
+	// application could be recorded but never delivered, so the routes answer 501 instead.
+	directApplyH := &directApplyHandlers{}
+	if cvRenderer != nil && mailClient != nil {
+		directApplyH.svc = directapply.New(
+			directapply.NewQueriesRepository(queries),
+			employerSvc,
+			directApplyCVs{h: cvH},
+			directApplyMailer{mailer: emailnotify.NewApplicationMailer(mailClient, cfg.NotifyEmailFrom, cfg.FrontendOrigin), origin: cfg.FrontendOrigin},
+			directApplyTracker{tracking: trackingH.tracking},
+			answerBank,
+			cfg.DirectApplyDailyLimit,
+		)
+	} else {
+		log.Print("directapply: no CV renderer or no mail transport — applications on freehire are unavailable")
+	}
 	var referralTelegram referral.TelegramSender
 	if telegramH.telegramBot != nil {
 		referralTelegram = telegramH.telegramBot
@@ -1064,6 +1085,7 @@ func Register(app *fiber.App, cfg Config) {
 	// Verified-employer accounts: claim, curated profile, own vacancies, and the
 	// moderator/admin review surface (see employerHandlers).
 	employerH.register(api, mw)
+	directApplyH.register(api, mw)
 
 	// Link contributions (see contributionHandlers).
 	contributionsH.register(api, mw)

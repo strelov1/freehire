@@ -24,6 +24,18 @@ type Answer struct {
 	Answer string              `json:"answer"`
 }
 
+// Readable is the answer as a person reads it: a boolean as "Yes"/"No", anything else as
+// given. What the employer's email shows, and what the answer bank keeps — the bank also
+// prefills ATS forms that ask in prose.
+func (a Answer) Readable() string {
+	if a.Type == applyform.TypeBoolean {
+		return yesNo[a.Answer]
+	}
+	return a.Answer
+}
+
+var yesNo = map[string]string{"true": "Yes", "false": "No"}
+
 // checkAnswers validates a candidate's answers, keyed by question id, against the vacancy's
 // form and returns them in the form's order, each carrying a snapshot of its question. An
 // unanswered optional question is left out. Every refusal names the question it is about.

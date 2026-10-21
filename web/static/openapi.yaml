@@ -1735,8 +1735,15 @@ components:
           type: string
         url:
           type: string
-          format: uri
-          description: The employer's own application URL. This is where an applicant goes.
+          description: |
+            The employer's own application URL. This is where an applicant goes.
+            Empty when `direct_apply` is true: that vacancy has no page elsewhere.
+        direct_apply:
+          type: boolean
+          description: |
+            True for a vacancy its employer published on freehire that takes
+            applications only on its freehire page (`https://freehire.me/jobs/{slug}`).
+            Absent for every other posting.
         location:
           type: string
           description: The posting's own location string, verbatim and unnormalized. Filter on the geography facets instead.

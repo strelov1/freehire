@@ -199,6 +199,10 @@ func main() {
 	// embedder is nil and every such request is answered keyword-only and told so — which
 	// is also the rollback. A value that is set but unreadable fails the start: a mistyped
 	// threshold would otherwise look exactly like a tuned one.
+	directApplyLimit, err := config.LoadDirectApplyDailyLimit()
+	if err != nil {
+		log.Fatalf("direct apply: %v", err)
+	}
 	semanticCfg, err := config.LoadSemanticSearch()
 	if err != nil {
 		log.Fatalf("semantic search: %v", err)
@@ -379,6 +383,7 @@ func main() {
 		Suggest:                     suggestSvc,
 		Blob:                        blobStore,
 		TypstBin:                    cfg.TypstBin,
+		DirectApplyDailyLimit:       directApplyLimit,
 		CVEditAllowBulletTruncation: cfg.CVEditAllowBulletTruncation,
 		TracerLinkSalt:              cfg.TracerLinkSalt,
 		LLM:                         llmClient,

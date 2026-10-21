@@ -5,11 +5,13 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strings"
 
 	"github.com/google/uuid"
 
 	"github.com/strelov1/freehire/internal/application/appevent"
 	"github.com/strelov1/freehire/internal/candidate/answerbank"
+	"github.com/strelov1/freehire/internal/dict/answertopic"
 	"github.com/strelov1/freehire/internal/ingest/applyform"
 	"github.com/strelov1/freehire/internal/ingest/employer"
 )
@@ -37,9 +39,10 @@ var (
 
 // Vacancy is what Apply needs to know about the posting applied to.
 type Vacancy struct {
-	ID    int64
-	Slug  string
-	Title string
+	ID      int64
+	Slug    string
+	Title   string
+	Company string
 	// EmployerID is the account that authored it (jobs.created_by).
 	EmployerID int64
 	Open       bool
@@ -129,8 +132,22 @@ type Tracker interface {
 }
 
 // AnswerBank remembers what the candidate answered, so the next form is prefilled.
+// answerbank.Store satisfies it.
 type AnswerBank interface {
 	Save(ctx context.Context, userID int64, question, answer string, by answerbank.Provenance) error
+	// Sendable is the candidate's own answers by topic — never an agent's suggestion.
+	Sendable(ctx context.Context, userID int64) (map[string]string, error)
+}
+
+// FormView is what the job page needs to show the application form.
+type FormView struct {
+	CompanyName string
+	Questions   []applyform.Field
+	// Open is false once the vacancy closed or its employer account stopped being active.
+	Open bool
+	// Applied and Prefill are the signed-in candidate's own; empty for anyone else.
+	Applied bool
+	Prefill map[string]string // question id -> answer, in the form Apply accepts
 }
 
 // Application is what the candidate submits.
@@ -231,7 +248,7 @@ func (s *Service) Apply(ctx context.Context, userID int64, slug string, app Appl
 	if err := s.mailer.SendApplication(ctx, Mail{
 		To:             acc.WorkEmail,
 		CandidateEmail: cand.Email,
-		CompanyName:    acc.CompanyName,
+		CompanyName:    v.Company,
 		JobTitle:       v.Title,
 		JobSlug:        v.Slug,
 		Answers:        answers,
@@ -256,21 +273,92 @@ func (s *Service) Apply(ctx context.Context, userID int64, slug string, app Appl
 	return nil
 }
 
-// bankAnswers saves each answer as candidate-provided. A boolean is banked as the words a
-// person would write, since the bank also prefills ATS forms that ask in prose. A question
+// Form is the on-site vacancy's application form as userID sees it (0 for a visitor who is
+// not signed in): the questions, whether it still takes applications, and for a candidate
+// whether they already applied and what their answer bank offers for each question.
+func (s *Service) Form(ctx context.Context, userID int64, slug string) (FormView, error) {
+	v, err := s.repo.Vacancy(ctx, slug)
+	if err != nil {
+		return FormView{}, err
+	}
+	form, err := s.repo.Form(ctx, v.ID)
+	if err != nil {
+		return FormView{}, err
+	}
+	open := v.Open
+	if open {
+		_, err := s.employers.ActiveAccount(ctx, v.EmployerID)
+		switch {
+		case errors.Is(err, employer.ErrNotActive) || errors.Is(err, employer.ErrNotFound):
+			open = false
+		case err != nil:
+			return FormView{}, err
+		}
+	}
+	view := FormView{CompanyName: v.Company, Questions: form.Fields, Open: open}
+	if userID == 0 || userID == v.EmployerID {
+		return view, nil
+	}
+
+	state, err := s.repo.State(ctx, v.ID, userID)
+	if err != nil {
+		return FormView{}, err
+	}
+	view.Applied = state == StateSent
+	banked, err := s.bank.Sendable(ctx, userID)
+	if err != nil {
+		// A prefill is a convenience; the form is still answerable without it.
+		slog.WarnContext(ctx, "directapply: answer bank unreadable", "err", err)
+		return view, nil
+	}
+	view.Prefill = prefill(form, banked)
+	return view, nil
+}
+
+// prefill offers each question the candidate's banked answer to the same topic, in the
+// shape Apply accepts: a yes/no question takes a banked "Yes"/"No", a list question takes a
+// banked value only when it is one of its options, and a text question takes it as is.
+func prefill(form applyform.Form, banked map[string]string) map[string]string {
+	out := map[string]string{}
+	for _, f := range form.Fields {
+		topic, ok := answertopic.Of(f.Label)
+		if !ok {
+			continue
+		}
+		v := strings.TrimSpace(banked[topic])
+		if v == "" {
+			continue
+		}
+		var answer string
+		switch f.Type {
+		case applyform.TypeBoolean:
+			answer = fromYesNo[strings.ToLower(v)]
+		case applyform.TypeSelect:
+			for _, o := range f.Options {
+				if o.Value == v {
+					answer = v
+				}
+			}
+		default:
+			answer = v
+		}
+		if answer != "" {
+			out[f.ID] = answer
+		}
+	}
+	return out
+}
+
+// fromYesNo reads a banked yes/no back into the form's boolean answer.
+var fromYesNo = map[string]string{"yes": "true", "no": "false"}
+
+// bankAnswers saves each answer as candidate-provided, as a person reads it. A question
 // the bank cannot key, or a failed save, is skipped: the bank is a convenience.
 func (s *Service) bankAnswers(ctx context.Context, userID int64, answers []Answer) {
 	for _, a := range answers {
-		value := a.Answer
-		if a.Type == applyform.TypeBoolean {
-			value = yesNo[a.Answer]
-		}
-		err := s.bank.Save(ctx, userID, a.Label, value, answerbank.AuthorCandidate)
+		err := s.bank.Save(ctx, userID, a.Label, a.Readable(), answerbank.AuthorCandidate)
 		if err != nil && !errors.Is(err, answerbank.ErrUnkeyable) {
 			slog.WarnContext(ctx, "directapply: answer not banked", "question_id", a.ID, "err", err)
 		}
 	}
 }
-
-// yesNo is how a boolean answer reads to a person.
-var yesNo = map[string]string{"true": "Yes", "false": "No"}
