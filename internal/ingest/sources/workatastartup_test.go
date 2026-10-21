@@ -40,7 +40,8 @@ func TestWorkAtAStartupRegisteredAndFilterable(t *testing.T) {
 
 func TestWorkAtAStartupMissingKeyErrors(t *testing.T) {
 	t.Setenv(waasKeyEnv, "")
-	_, err := NewWorkAtAStartup(&routedHTTP{}).Fetch(context.Background(), CompanyEntry{})
+	t.Setenv(waasSSOEnv, "")
+	_, err := NewWorkAtAStartup(newWaasIndexFake()).Fetch(context.Background(), CompanyEntry{})
 	if err == nil {
 		t.Fatal("Fetch should error when WAAS_ALGOLIA_KEY is unset")
 	}
@@ -166,6 +167,19 @@ type waasIndexFake struct {
 		raw string
 	}
 	maxPageReturned int
+	// page is the /companies page a signed-in session is served; pageHeaders and keys record
+	// what the adapter sent to the page and to Algolia.
+	page        string
+	pageHeaders map[string]string
+	keys        []string
+}
+
+func (f *waasIndexFake) GetTextWithHeaders(_ context.Context, url string, headers map[string]string) (string, error) {
+	if url != waasSessionPageURL {
+		return "", fmt.Errorf("unexpected GET %s", url)
+	}
+	f.pageHeaders = headers
+	return f.page, nil
 }
 
 func newWaasIndexFake(hitJSONs ...string) *waasIndexFake {
@@ -192,7 +206,8 @@ func newWaasIndexFake(hitJSONs ...string) *waasIndexFake {
 	return f
 }
 
-func (f *waasIndexFake) PostJSONWithHeaders(_ context.Context, _ string, _ map[string]string, body, v any) error {
+func (f *waasIndexFake) PostJSONWithHeaders(_ context.Context, _ string, headers map[string]string, body, v any) error {
+	f.keys = append(f.keys, headers["X-Algolia-API-Key"])
 	m, _ := body.(map[string]any)
 	params, _ := m["params"].(string)
 	q, err := parseWaasParams(params)
@@ -246,4 +261,36 @@ func parseWaasParams(params string) (waasQuery, error) {
 		}
 	}
 	return q, nil
+}
+
+// Since 2026-10 a session's Algolia key expires a day after it is issued, so a pasted key is
+// dead by the next morning. With the YC sign-in cookie configured the adapter asks the
+// signed-in /companies page for the key every run, and that key wins over a static one.
+func TestWorkAtAStartupTakesTheKeyFromTheSignedInPage(t *testing.T) {
+	t.Setenv(waasKeyEnv, "stale-static-key")
+	t.Setenv(waasSSOEnv, "sso-token")
+	fake := newWaasIndexFake(`{"id":7,"title":"Engineer","company_name":"Acme","search_path":"/jobs/7"}`)
+	fake.page = `<script>window.AlgoliaOpts = {"app":"45BWZJ1SGC","key":"fresh-key","valid_until":1792710071}; window.Other = 1;</script>`
+	if _, err := NewWorkAtAStartup(fake).Fetch(context.Background(), CompanyEntry{}); err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	if got := fake.pageHeaders["Cookie"]; got != "_sso.key=sso-token" {
+		t.Errorf("page Cookie = %q", got)
+	}
+	if len(fake.keys) == 0 || slices.ContainsFunc(fake.keys, func(k string) bool { return k != "fresh-key" }) {
+		t.Errorf("Algolia keys = %v, want only the page's fresh key", fake.keys)
+	}
+}
+
+// A sign-in cookie that no longer signs in is redirected to the login page, which carries no
+// key: the run must say so rather than fall back to a static key that is long expired.
+func TestWorkAtAStartupFailsWhenTheSessionNoLongerSignsIn(t *testing.T) {
+	t.Setenv(waasKeyEnv, "stale-static-key")
+	t.Setenv(waasSSOEnv, "sso-token")
+	fake := newWaasIndexFake()
+	fake.page = `<html><title>Sign in</title></html>`
+	_, err := NewWorkAtAStartup(fake).Fetch(context.Background(), CompanyEntry{})
+	if err == nil || !strings.Contains(err.Error(), waasSSOEnv) || len(fake.keys) != 0 {
+		t.Fatalf("err = %v, Algolia calls %d; want a refusal naming %s and no search", err, len(fake.keys), waasSSOEnv)
+	}
 }

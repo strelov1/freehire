@@ -6,6 +6,7 @@ import (
 	"fmt"
 	neturl "net/url"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 )
@@ -15,7 +16,9 @@ import (
 // in the source facet and takes each posting's company from the hit. The board is gated:
 // the public page ships an Algolia key neutered to return nothing, and a working key is only
 // embedded in a logged-in session. So this adapter needs that session's Algolia search key,
-// supplied out-of-band via WAAS_ALGOLIA_KEY (a long-lived secured search key, not a login).
+// read every run from the signed-in /companies page when WAAS_SSO_KEY (the YC sign-in cookie)
+// is set, or else supplied out-of-band via WAAS_ALGOLIA_KEY. Since 2026-10 a session's key
+// carries a validUntil a day ahead, so a pasted static key stops working the next day.
 // With the key, the index is queried directly — every hit carries the full posting (company,
 // title, markdown description, location, remote, date), so there is no per-job detail call.
 //
@@ -28,13 +31,23 @@ import (
 // holds at most one hit, so the recursion always terminates and reaches every posting — the
 // standard workaround for the offset cap, with id (unique, numeric, filterable) as the key.
 type workatastartup struct {
-	http HeaderJSONPoster
+	http waasHTTP
+}
+
+// waasHTTP is what the adapter needs: the signed-in page for the key, and Algolia's search.
+type waasHTTP interface {
+	HeaderJSONPoster
+	HeaderTextGetter
 }
 
 const (
-	waasKeyEnv     = "WAAS_ALGOLIA_KEY"
-	waasAlgoliaApp = "45BWZJ1SGC"
-	waasAlgoliaIdx = "WaaSPublicCompanyJob_production"
+	waasKeyEnv = "WAAS_ALGOLIA_KEY"
+	waasSSOEnv = "WAAS_SSO_KEY"
+	// waasSessionPageURL is a page whose HTML carries the session's Algolia key
+	// (window.AlgoliaOpts); without a signed-in cookie it redirects to the login page.
+	waasSessionPageURL = "https://www.workatastartup.com/companies"
+	waasAlgoliaApp     = "45BWZJ1SGC"
+	waasAlgoliaIdx     = "WaaSPublicCompanyJob_production"
 	// waasHitsPerPage is Algolia's max page size and its offset-pagination cap (paginationLimitedTo):
 	// a window returning a full page is assumed to hold more and gets bisected.
 	waasHitsPerPage = 1000
@@ -43,7 +56,37 @@ const (
 )
 
 // NewWorkAtAStartup builds the Work at a Startup adapter over the given HTTP client.
-func NewWorkAtAStartup(c HeaderJSONPoster) Source { return workatastartup{http: c} }
+func NewWorkAtAStartup(c waasHTTP) Source { return workatastartup{http: c} }
+
+// waasOptsRE finds the key the signed-in page hands its own search.
+var waasOptsRE = regexp.MustCompile(`window\.AlgoliaOpts\s*=\s*`)
+
+// algoliaKey is the search key for this run: the signed-in page's when WAAS_SSO_KEY is set,
+// the static WAAS_ALGOLIA_KEY otherwise.
+func (s workatastartup) algoliaKey(ctx context.Context) (string, error) {
+	sso := strings.TrimSpace(os.Getenv(waasSSOEnv))
+	if sso == "" {
+		if key := os.Getenv(waasKeyEnv); key != "" {
+			return key, nil
+		}
+		return "", fmt.Errorf("workatastartup: neither %s nor %s is set (needs a logged-in session)", waasSSOEnv, waasKeyEnv)
+	}
+	page, err := s.http.GetTextWithHeaders(ctx, waasSessionPageURL, map[string]string{
+		"Cookie": "_sso.key=" + sso,
+		"Accept": "text/html",
+	})
+	if err != nil {
+		return "", fmt.Errorf("workatastartup: signed-in page: %w", err)
+	}
+	loc := waasOptsRE.FindStringIndex(page)
+	var opts struct {
+		Key string `json:"key"`
+	}
+	if loc == nil || json.NewDecoder(strings.NewReader(page[loc[1]:])).Decode(&opts) != nil || opts.Key == "" {
+		return "", fmt.Errorf("workatastartup: the page carries no search key; %s no longer signs in", waasSSOEnv)
+	}
+	return opts.Key, nil
+}
 
 func (workatastartup) Provider() string { return "workatastartup" }
 
@@ -68,9 +111,9 @@ type waasHit struct {
 }
 
 func (s workatastartup) Fetch(ctx context.Context, _ CompanyEntry) ([]Job, error) {
-	key := os.Getenv(waasKeyEnv)
-	if key == "" {
-		return nil, fmt.Errorf("workatastartup: %s is not set (needs a logged-in session's Algolia search key)", waasKeyEnv)
+	key, err := s.algoliaKey(ctx)
+	if err != nil {
+		return nil, err
 	}
 	headers := map[string]string{
 		"X-Algolia-Application-Id": waasAlgoliaApp,
