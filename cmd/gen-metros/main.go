@@ -223,9 +223,17 @@ func parsePlaces(txt []byte, admin1Names, admin2Names map[string]string) ([]gnPl
 		case "ca":
 			admin1 = caAdmin1[f[colAdmin1]]
 		}
+		// A GeoNames name can itself carry commas ("Mianzhu, Deyang, Sichuan"); Parse
+		// splits a location line on them, so such a key could never match, and a comma
+		// in a metro value would shred it in a comma-joined filter. Keep the leading part.
+		name, _, _ := strings.Cut(f[colName], ",")
+		name = strings.TrimSpace(name)
+		if name == "" {
+			continue
+		}
 		a1 := strings.ToUpper(cc) + "." + f[colAdmin1]
 		out = append(out, gnPlace{
-			name: f[colName], country: cc, admin1: admin1, lat: lat, lon: lon, pop: pop,
+			name: name, country: cc, admin1: admin1, lat: lat, lon: lon, pop: pop,
 			region:   admin1Names[a1],
 			district: admin2Names[a1+"."+f[colAdmin2]],
 		})

@@ -131,6 +131,9 @@ func metroNames(as []assigned, pops map[int]float64, overrides map[int]string) (
 	}
 	seen := map[string]int{}
 	for id, v := range names {
+		if strings.Contains(v, ",") {
+			return nil, fmt.Errorf("metro name %q (FUA id %d) contains a comma, add an override", v, id)
+		}
 		if other, ok := seen[v]; ok {
 			return nil, fmt.Errorf("metro name %q is held by FUA ids %d and %d", v, min(id, other), max(id, other))
 		}

@@ -225,7 +225,7 @@ export interface Job {
    */
   cities: string[];
   /**
-   * Metros is dict-only: the metro areas (GHS-FUA) the location line places the posting in, "Sacramento, US".
+   * Metros is dict-only: the metro areas (GHS-FUA) the location line places the posting in, "Sacramento (US)".
    */
   metros: string[];
   /**

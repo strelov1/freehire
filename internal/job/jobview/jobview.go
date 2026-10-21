@@ -209,7 +209,7 @@ func FromDomain(j job.Job, x job.Extras) (Job, error) {
 	skills := normalizeSet(f.Skills)
 	collections := normalizeSet(x.Collections)
 	cities := cityFacet(f.Cities, e.Cities)
-	// Canonical "City, CC" labels: normalizeSet would lowercase them. Non-nil so the
+	// Canonical "Name (CC)" labels: normalizeSet would lowercase them. Non-nil so the
 	// facet serializes as [] rather than null.
 	metros := f.Metros
 	if metros == nil {

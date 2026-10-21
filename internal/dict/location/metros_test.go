@@ -1,7 +1,9 @@
 package location
 
 import (
+	"regexp"
 	"slices"
+	"strings"
 	"testing"
 )
 
@@ -10,15 +12,15 @@ func TestParseMetros(t *testing.T) {
 		in   string
 		want []string
 	}{
-		{"Folsom (CA)", []string{"Sacramento (US)"}},
+		{"Folsom, CA", []string{"Sacramento (US)"}},
 		{"Roseville, California, United States", []string{"Sacramento (US)"}},
 		{"Roseville, MI", []string{"Detroit (US)"}},
 		{"Roseville", nil},                      // three US Rosevilles, three metros
 		{"Folsom", []string{"Sacramento (US)"}}, // one US Folsom in the table
 		{"Khimki, Russia", []string{"Moscow (RU)"}},
-		{"San Diego (CA)", []string{"San Diego (US)"}},
+		{"San Diego, CA", []string{"San Diego (US)"}},
 		{"Remote", nil},
-		{"Unknownville (CA)", nil},
+		{"Unknownville, CA", nil},
 		{"Washington, DC", []string{"Washington (US)"}},
 		// Two stated subdivisions: no bare-name fallback, so Folsom (which is not in PA
 		// or TX) gets no metro while the cities each state does place still do.
@@ -85,5 +87,19 @@ func TestLoadMetrosDuplicateExactKeyIsDropped(t *testing.T) {
 	}
 	if got := exact[metroKey{"folsom", "us", "CA"}]; got != "Sacramento (US)" {
 		t.Errorf("repeated identical line must still resolve, got %q", got)
+	}
+}
+
+// Every metro value must survive a comma-joined filter and carry its country suffix.
+func TestMetroValuesCarryNoComma(t *testing.T) {
+	re := regexp.MustCompile(`^[^,]+ \([A-Z]{2}\)$`)
+	for _, line := range strings.Split(metrosTSV, "\n") {
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		f := strings.Split(line, "\t")
+		if v := f[len(f)-1]; !re.MatchString(v) {
+			t.Errorf("metro value %q does not match Name (CC)", v)
+		}
 	}
 }

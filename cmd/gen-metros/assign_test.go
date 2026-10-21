@@ -123,3 +123,10 @@ func TestMetroNamesQualifiedValueCollidingWithExistingFallsThrough(t *testing.T)
 		t.Error("post-qualification collision must be caught")
 	}
 }
+
+func TestMetroNamesRejectsComma(t *testing.T) {
+	as := []assigned{{gnPlace{name: "A, B", country: "xx", pop: 1}, 1}}
+	if _, err := metroNames(as, map[int]float64{1: 1}, nil); err == nil {
+		t.Error("a value containing a comma must be an error")
+	}
+}

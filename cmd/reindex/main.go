@@ -515,7 +515,7 @@ func buildRealityLookup(ctx context.Context, q *db.Queries) (realityLookup, erro
 // buildClosureGeoLookup precomputes the whole-catalogue duplicate-closure geography union once
 // (DuplicateClosureGeoAll returns only rows that represent at least one other open row), so
 // widening each document during the rebuild is a map read, not N queries. A row representing
-// nobody is absent from the map and resolves to nil slices — a no-op widening.
+// nobody is absent from the map and resolves to a zero ClosureGeo — a no-op widening.
 func buildClosureGeoLookup(ctx context.Context, q *db.Queries) (closureGeoLookup, error) {
 	rows, err := q.DuplicateClosureGeoAll(ctx)
 	if err != nil {
