@@ -34,7 +34,7 @@ type SearchInput struct {
 	// such field and its extensibility rule permits one. A pointer for the same reason as
 	// RemoteOK: absent and false both mean keyword search, but only an explicit true asks.
 	// The response's `semantic` says which search actually ran.
-	Semantic *bool `json:"semantic,omitempty" jsonschema:"Extension: true ranks by meaning as well as keywords (hybrid search over posting descriptions). The response's semantic field reports applied or unavailable."`
+	Semantic *bool `json:"semantic,omitempty" jsonschema:"Extension: true ranks by meaning as well as keywords (hybrid search over posting descriptions). Use it for a need described in words, e.g. 'keep our payment systems secure' or 'help kids learn to read'; leave it off for a job title or a non-technical role, which keywords answer better. Needs query. The response's semantic field reports applied or unavailable."`
 }
 
 // WantsSemantic reports whether the agent asked for semantic search.

@@ -268,7 +268,8 @@ paths:
         small `limit`.
 
         Send `semantic=true` to rank by meaning as well as keywords (a hybrid search
-        over posting descriptions). `meta.semantic` then says whether that ran
+        over posting descriptions) — for a need described in words, not a job title
+        or a non-technical role, where keywords answer better. `meta.semantic` then says whether that ran
         (`applied`) or the request was answered by keywords alone (`unavailable`);
         it is omitted when the flag was not sent. An `applied` answer also carries
         `meta.total_is_lower_bound: true`: a vector search has no count, so
@@ -356,7 +357,8 @@ paths:
         says so.
 
         Send `semantic: true` to rank by meaning as well as keywords (a hybrid search
-        over posting descriptions). The response's `semantic` then says whether that ran
+        over posting descriptions) — for a need described in words, not a job title
+        or a non-technical role, where keywords answer better. The response's `semantic` then says whether that ran
         (`applied`) or fell back to keyword search (`unavailable`); a slow or absent
         embedding backend never fails the request. An `applied` answer marks
         `total_results` with `total_is_lower_bound: true` — "at least", not a count.
@@ -1119,8 +1121,9 @@ components:
         `true` also matches postings that describe `q` in other words, e.g.
         "help kids learn to read" finding a reading interventionist. Needs `q`
         (without it the flag is reported in `meta.ignored_params`) and is not
-        combined with `sort=match`. Description vectors cover technical roles;
-        elsewhere the keyword hits answer.
+        combined with `sort=match`. Use it for a need described in words; leave
+        it off for a job title or a non-technical role — description vectors
+        cover technical roles only, and there plain keywords answer better.
     Regions:
       name: regions
       in: query

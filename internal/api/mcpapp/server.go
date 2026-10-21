@@ -15,21 +15,25 @@ const Version = "1.0"
 
 // serverInstructions is what the model is told before it picks a tool.
 //
-// Three things belong here and nowhere else. The first is that this is an aggregator, so a
+// Four things belong here and nowhere else. The first is that this is an aggregator, so a
 // posting is attributed rather than offered as ours. The second is which tool answers which
 // question: tool descriptions may not point at other tools (Anthropic's directory policy),
 // so this is the one place the model learns that, and TestTheInstructionsIntroduceEveryTool
 // keeps it complete. The third is the OR: geography filters union, so asking for Germany and
 // Lisbon returns both rather than their intersection — a model that assumes AND will
 // describe the results wrongly and confidently, and nothing in a result would reveal it.
+// The fourth is when to send `semantic`: measured 2026-10-21 over 34 queries, it lifted a
+// need described in words from 3.3 to 7.4 relevant hits of 10 and non-English queries from
+// 8.1 to 9.6, but cost a named title a little and a non-tech query a lot (9.2 to 7.0) —
+// description vectors exist only for technical postings.
 //
 // Kept under 512 characters, which the Apps SDK guidance asks for and a test enforces.
 const serverInstructions = "freehire aggregates IT job postings and attributes each to the board it " +
-	"came from: name the source and link the employer's posting. search_jobs finds postings; " +
-	"get_job reads one, including whether it still looks live; check_jobs_open rechecks a " +
-	"shortlist; similar_jobs finds more like one; salary_stats and job_market_stats answer pay " +
-	"and market questions; search_companies and get_company cover employers. Geography filters " +
-	"union. Unknown filter values come back in ignored_params: retry with a listed value."
+	"came from: name the source and link the employer's posting. search_jobs finds postings " +
+	"(semantic: for a need put in words, not a title); get_job reads one and its liveness; " +
+	"check_jobs_open rechecks a shortlist; similar_jobs finds more like one; salary_stats and " +
+	"job_market_stats answer pay and market; search_companies and get_company cover employers. " +
+	"Geography filters union. Unknown filter values return in ignored_params; retry."
 
 // Tool names. Unlike the OJCP transport's, they feed no manifest — there is nothing here
 // that ADVERTISES a tool separately from registering it, so they are constants only because
@@ -106,7 +110,9 @@ func newServer(r Reader, origin string) *mcp.Server {
 		Title: "Search jobs",
 		Description: "Search freehire's catalogue of IT job postings. Use for any question " +
 			"about which jobs are open — by technology, seniority, location, pay or employer. " +
-			"Returns a short preview of each posting.",
+			"Returns a short preview of each posting. Set semantic for a need described in words " +
+			"(\"keep our payment systems secure\"), not for a job title or a non-technical role, " +
+			"where plain keywords answer better.",
 		Annotations: readOnly(),
 		Meta:        rendersInWidget(),
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in SearchInput) (*mcp.CallToolResult, SearchJobsResult, error) {

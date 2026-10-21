@@ -102,8 +102,10 @@ func newServer(r Reader, origin string) *mcp.Server {
 		Description: "Search freehire's job catalogue. Returns OJCP JobPostings, each with " +
 			"the application paths it can be applied through and whether an agent can submit " +
 			"unattended. Filters this provider could not honour are named in ignored_params. " +
-			"Set semantic to true to rank by meaning as well as keywords; the response's " +
-			"semantic field then says whether that ran (applied) or fell back (unavailable).",
+			"Set semantic to true to rank by meaning as well as keywords — for a need described " +
+			"in words, not a job title or a non-technical role, where keywords answer better; " +
+			"the response's semantic field then says whether that ran (applied) or fell back " +
+			"(unavailable).",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in ojcp.SearchInput) (*mcp.CallToolResult, ojcp.SearchJobsResponse, error) {
 		out, err := r.SearchJobs(ctx, in)
 		return nil, out, toolError(err)
