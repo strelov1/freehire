@@ -40,8 +40,8 @@ Two traps found on the way:
 ### 1. Investor collections
 
 **Done 2026-10-21 for Sequoia, Accel, Greylock, USV, BOND and the a16z upgrade** (see
-`internal/job/collections/AGENTS.md`). Still open: Lightspeed, Index, SoftBank Vision Fund,
-Founders Fund; Benchmark publishes no portfolio.
+`internal/job/collections/AGENTS.md`). Lightspeed, Index, SoftBank Vision Fund and Founders
+Fund followed on 2026-10-22. Benchmark publishes no portfolio.
 
 Ten firms researched 2026-10-20; full notes in
 [2026-10-20-vc-portfolio-sources.md](2026-10-20-vc-portfolio-sources.md). Each is one `backer` entry in `internal/job/collections/collections.go`;

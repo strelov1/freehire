@@ -397,7 +397,7 @@ func TestRegistry_BackersNameWhoSelectedTheCompany(t *testing.T) {
 	// An accelerator or fund that picked the company is a different sort of tag from a
 	// theme we curate ourselves: it names an outside selector, so it renders as that
 	// brand's mark rather than as one more filter chip.
-	for _, slug := range []string{"yc", "techstars", "a16z-portfolio", "a16z-speedrun", "sequoia", "accel", "greylock", "usv", "bond"} {
+	for _, slug := range []string{"yc", "techstars", "a16z-portfolio", "a16z-speedrun", "sequoia", "accel", "greylock", "usv", "bond", "lightspeed", "index-ventures", "softbank-vision-fund", "founders-fund"} {
 		c, ok := Lookup(slug)
 		if !ok {
 			t.Errorf("registry missing %q", slug)
@@ -602,4 +602,28 @@ func embeddedSlugList(t *testing.T, data []byte) []string {
 		t.Fatalf("parse embedded membership file: %v", err)
 	}
 	return slugs
+}
+
+func TestRegistry_ExcludeEntriesAreCatalogueSlugs(t *testing.T) {
+	// An entry must be a fixed point of the slug rule, or it can never equal the slug
+	// Members compares it against and silently excludes nothing.
+	for _, c := range All {
+		for _, slug := range c.Exclude {
+			if normalize.CompanySlug(slug) != slug {
+				t.Errorf("%s excludes %q, which CompanySlug would write as %q", c.Slug, slug, normalize.CompanySlug(slug))
+			}
+		}
+	}
+}
+
+func TestMembers_HonoursExclude(t *testing.T) {
+	c := Collection{Slug: "lightspeed", Kind: KindBacker, Exclude: []string{"clark"}}
+	got, stat := c.Members([]Record{record("Clark", ""), record("Affirm", "")},
+		map[string]Company{"clark": {Slug: "clark"}, "affirm": {Slug: "affirm"}})
+	if want := []string{"affirm"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("members = %v, want %v", got, want)
+	}
+	if stat.Mismatch != 1 {
+		t.Errorf("Mismatch = %d, want 1", stat.Mismatch)
+	}
 }

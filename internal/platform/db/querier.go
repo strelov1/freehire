@@ -3620,6 +3620,9 @@ type Querier interface {
 	//
 	// website rides along for the same reason: a portfolio that publishes its members'
 	// sites lets a same-named company with a DIFFERENT site be told apart from the member.
+	//
+	// job_count rides along for a source that publishes its members' headcount: a
+	// two-person startup cannot be the same-named company holding hundreds of postings.
 	ListCompanyCollections(ctx context.Context) ([]ListCompanyCollectionsRow, error)
 	// A company's feedback, newest first, offset-paginated — the volume per company
 	// is small (bounded by distinct reviewers), so unlike the discussion threads this

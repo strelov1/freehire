@@ -3,12 +3,13 @@
 ## Scope
 The code-owned registry of curated company tags: editorial themes (Big Tech, Unicorn),
 credentials from authoritative public registers (UK/NL/US/CA/IE/DK visa sponsors), and backers (YC,
-Techstars, a16z, Sequoia, Accel, Greylock, USV, BOND). This package is the source of truth for which tags exist and how members
+Techstars, a16z, Sequoia, Accel, Greylock, USV, BOND, Lightspeed, Index Ventures, SoftBank Vision
+Fund, Founders Fund). This package is the source of truth for which tags exist and how members
 are matched; `cmd/import-collections` writes `companies.collections`, and the search facet
 (`jobs.collections`) serves it.
 
 ## Always true
-- **The registry is code.** `All` (collections.go — 24 slugs, in display order) is
+- **The registry is code.** `All` (collections.go — 28 slugs, in display order) is
   the fixed set; adding a tag is one entry with exactly one membership source: a static
   `Slugs` hand list or a `Dataset`. `Kind` decides how the tag renders (editorial chip /
   credential with issuing body and snapshot date / backer brand mark) and its zero value is
@@ -36,6 +37,19 @@ are matched; `cmd/import-collections` writes `companies.collections`, and the se
   does NOT — that is how two unrelated startups sharing a name look ("mesh.ai" vs "usemesh.com"),
   at the cost of a few real members whose site carries one (Handshake is joinhandshake.com). Each
   run logs what it refused, so the trade can be judged from the output.
+- **A headcount the company outgrows refuses the match too** (`plausibleSize`, site.go). The
+  YC directory publishes each company's team size; a member is refused when the catalogue
+  company holds more than 50 open postings AND more than three per head. On 2026-10-22 every
+  false match leading the YC tag was a large same-named employer — Pennant (a team of 2) against
+  the Pennant Group's 693 nursing postings, Arrow (18) against Arrow Electronics' 534 — while the
+  busiest real member hired at 2.3x its team. The 50 floor exists because the directory's
+  headcounts go stale (it lists ShipBob as a team of one), and every false match it exists for
+  held hundreds of postings.
+- **`Exclude` is the last resort for a names-only source.** Lightspeed, Index, SoftBank and
+  Founders Fund publish no website and no headcount, so neither check can see a same-named
+  employer; a short per-collection list of catalogue slugs, each with its reason beside it,
+  refuses the ones a person found (`clark` is Clark Construction, `lever` is aggregator postings
+  filed under the ATS's name).
 - **Venture portfolios drop exits** (portfolios.go). An acquired or shut-down company is
   dropped in the parser — it hires under its acquirer's name, so its old name only ever matched
   someone else — while a public one stays. a16z reads the fund's own page (876 companies,

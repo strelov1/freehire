@@ -31,6 +31,10 @@ const MARKS: Record<string, string> = {
   greylock: '/brands/greylock.png',
   usv: '/brands/usv.png',
   bond: '/brands/bond.png',
+  lightspeed: '/brands/lightspeed.png',
+  'index-ventures': '/brands/index-ventures.png',
+  'softbank-vision-fund': '/brands/softbank-vision-fund.png',
+  'founders-fund': '/brands/founders-fund.png',
 };
 
 /**

@@ -147,7 +147,114 @@ func TestMembers_RefusesANameMatchRunningADifferentSite(t *testing.T) {
 	if want := []string{"acme", "stripe"}; !reflect.DeepEqual(got, want) {
 		t.Errorf("members = %v, want %v", got, want)
 	}
-	if stat.SiteMismatch != 1 {
-		t.Errorf("SiteMismatch = %d, want 1", stat.SiteMismatch)
+	if stat.Mismatch != 1 {
+		t.Errorf("Mismatch = %d, want 1", stat.Mismatch)
+	}
+}
+
+func TestPlausibleSize(t *testing.T) {
+	cases := []struct {
+		team     string
+		openJobs int
+		want     bool
+	}{
+		{"2", 693, false},   // YC's Pennant against the Pennant Group's nursing postings
+		{"18", 534, false},  // YC's Arrow against Arrow Electronics
+		{"40", 91, true},    // Finni Health, the busiest real YC member hiring
+		{"7000", 558, true}, // Stripe
+		{"2", 12, true},     // a small startup under the floor
+		{"1", 26, true},     // ShipBob: the directory's headcount is stale, not the company
+		{"4", 53, false},
+		{"", 900, true}, // no published headcount refuses nothing
+		{"n/a", 900, true},
+	}
+	for _, tc := range cases {
+		if got := plausibleSize(tc.team, tc.openJobs); got != tc.want {
+			t.Errorf("plausibleSize(%q, %d) = %v, want %v", tc.team, tc.openJobs, got, tc.want)
+		}
+	}
+}
+
+func TestMembers_RefusesANameMatchFarLargerThanTheMember(t *testing.T) {
+	c := Collection{Slug: "yc", Kind: KindBacker}
+	companies := map[string]Company{
+		"pennant": {Slug: "pennant", OpenJobs: 693},
+		"stripe":  {Slug: "stripe", OpenJobs: 558},
+	}
+	pennant := record("Pennant", "https://www.getpennant.ai")
+	pennant.Meta[MetaTeamSize] = "2"
+	stripe := record("Stripe", "http://stripe.com")
+	stripe.Meta[MetaTeamSize] = "7000"
+	got, stat := c.Members([]Record{pennant, stripe}, companies)
+	if want := []string{"stripe"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("members = %v, want %v", got, want)
+	}
+	if stat.Mismatch != 1 || len(stat.MismatchNames) != 1 {
+		t.Errorf("Mismatch = %d names=%v, want one refusal", stat.Mismatch, stat.MismatchNames)
+	}
+}
+
+func TestHTMLPortfolioParsers(t *testing.T) {
+	cases := []struct {
+		name  string
+		parse func([]byte) ([]Record, error)
+		data  string
+		want  []string
+	}{
+		{
+			name:  "lightspeed",
+			parse: ParseLightspeed,
+			data: `<div data-company-id="wiz" data-spotlight-founders-list><h6>Co-Founder, Wiz</h6></div>
+				<ul><li data-appear-list data-company-id="affirm" data-investor="lsvp"><h5> Affirm </h5>
+				<ul class="company-info-list"><li><strong>Status</strong> <span>IPO</span></li></ul></li>
+				<li data-appear-list data-company-id="gone" data-investor="lsip"><h5>Gone &amp; Co</h5>
+				<ul class="company-info-list"><li><strong>Status</strong> <span>Acquired</span></li></ul></li>
+				<li data-appear-list data-company-id="alloy" data-investor="both"><h5>Alloy <span class="info-icon-wrapper"><img src="i.svg"><span class="disclaimer-text"><p>LSVP and LSIP Investment</p></span></span></h5>
+				<ul class="company-info-list"><li><strong>Status</strong> <span>Private</span></li></ul></li></ul>`,
+			want: []string{"Affirm", "Alloy"},
+		},
+		{
+			name:  "index",
+			parse: ParseIndex,
+			data: `<li class="companies__relationships__list__item js-company"><a href="/companies/1stdibs/" class="companies__relationships__list__item__link"> 1stdibs <span class="ticker-symbol"> NASDAQ: DIBS </span> </a></li>
+				<li class="companies__relationships__list__item js-company"><a href="/companies/abacus/" class="companies__relationships__list__item__link"> Abacus.ai </a></li>`,
+			want: []string{"1stdibs", "Abacus.ai"},
+		},
+		{
+			name:  "vision fund",
+			parse: ParseVisionFund,
+			data: `<script id="__NEXT_DATA__" type="application/json">{"props":{"pageProps":{"entry":{"modules":[{"title":"hero"},
+				{"portfolio_companies":{"data":[{"title":"Guazi","company_status":{"title":"Private"}},
+				{"title":"Sold","company_status":{"title":"Acquired"}},{"title":"IonQ","company_status":{"title":"Public"}}]}}]}}}}</script>`,
+			want: []string{"Guazi", "IonQ"},
+		},
+		{
+			name:  "founders fund",
+			parse: ParseFoundersFund,
+			data:  `[{"title":{"rendered":"SpaceX"}},{"title":{"rendered":"Trade Republic &#038; Co"}}]`,
+			want:  []string{"SpaceX", "Trade Republic & Co"},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := tc.parse([]byte(tc.data))
+			if err != nil {
+				t.Fatalf("parse: %v", err)
+			}
+			names := make([]string, len(got))
+			for i, r := range got {
+				names[i] = r.Name
+			}
+			if !reflect.DeepEqual(names, tc.want) {
+				t.Errorf("names = %v, want %v", names, tc.want)
+			}
+		})
+	}
+	for name, parse := range map[string]func([]byte) ([]Record, error){
+		"lightspeed": ParseLightspeed, "index": ParseIndex, "vision fund": ParseVisionFund, "founders fund": ParseFoundersFund,
+	} {
+		if _, err := parse([]byte("<html>nothing here</html>")); err == nil {
+			t.Errorf("%s accepted a page with no portfolio", name)
+		}
 	}
 }

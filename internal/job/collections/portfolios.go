@@ -302,3 +302,138 @@ func firstNonEmpty(values ...string) string {
 	}
 	return ""
 }
+
+const (
+	lightspeedPortfolioURL   = "https://lsvp.com/portfolio/"
+	indexPortfolioURL        = "https://www.indexventures.com/companies/"
+	visionFundPortfolioURL   = "https://visionfund.com/portfolio"
+	foundersFundPortfolioURL = "https://foundersfund.com/wp-json/wp/v2/company?per_page=100"
+)
+
+var (
+	// One Lightspeed portfolio entry opens with this item; the spotlight founders
+	// carousel above the list reuses data-company-id but never data-investor.
+	lightspeedItem   = regexp.MustCompile(`<li[^>]*\bdata-company-id="[^"]*"[^>]*\bdata-investor="[^"]*"[^>]*>`)
+	lightspeedName   = regexp.MustCompile(`(?s)<h5>\s*(.*?)\s*</h5>`)
+	lightspeedStatus = regexp.MustCompile(`(?s)<strong>Status</strong>\s*<span>\s*(.*?)\s*</span>`)
+)
+
+// ParseLightspeed reads Lightspeed's portfolio page, which lists every company with a
+// Status (Private, IPO, Public, SPAC or Acquired) and no website.
+func ParseLightspeed(data []byte) ([]Record, error) {
+	page := string(data)
+	starts := lightspeedItem.FindAllStringIndex(page, -1)
+	if len(starts) == 0 {
+		return nil, fmt.Errorf("collections: lightspeed portfolio: no company entries")
+	}
+	var out []Record
+	for i, at := range starts {
+		end := len(page)
+		if i+1 < len(starts) {
+			end = starts[i+1][0]
+		}
+		item := page[at[0]:end]
+		name := lightspeedName.FindStringSubmatch(item)
+		if name == nil {
+			continue
+		}
+		if status := lightspeedStatus.FindStringSubmatch(item); status != nil && strings.EqualFold(status[1], "acquired") {
+			continue
+		}
+		// A company backed by both funds carries an info tooltip inside its heading;
+		// the name is the text before it.
+		text, _, _ := strings.Cut(name[1], "<")
+		if text = strings.TrimSpace(html.UnescapeString(text)); text != "" {
+			out = append(out, record(text, ""))
+		}
+	}
+	return out, nil
+}
+
+// indexCompany is one entry of Index Ventures' portfolio list: the company's name,
+// followed by its ticker for a listed one. Index removes acquired companies from the
+// list itself, so there is no exit to drop.
+var indexCompany = regexp.MustCompile(`(?s)<a href="/companies/[^"]+/" class="companies__relationships__list__item__link">\s*(.*?)\s*(?:<span|</a>)`)
+
+// ParseIndex reads Index Ventures' portfolio page.
+func ParseIndex(data []byte) ([]Record, error) {
+	matches := indexCompany.FindAllSubmatch(data, -1)
+	if len(matches) == 0 {
+		return nil, fmt.Errorf("collections: index portfolio: no company entries")
+	}
+	out := make([]Record, 0, len(matches))
+	for _, m := range matches {
+		if name := strings.TrimSpace(html.UnescapeString(string(m[1]))); name != "" {
+			out = append(out, record(name, ""))
+		}
+	}
+	return out, nil
+}
+
+var nextData = regexp.MustCompile(`(?s)<script id="__NEXT_DATA__" type="application/json">(.*?)</script>`)
+
+// ParseVisionFund reads the SoftBank Vision Fund portfolio from the page's embedded
+// Next.js data. A company's status is Private, Public or Acquired.
+func ParseVisionFund(data []byte) ([]Record, error) {
+	m := nextData.FindSubmatch(data)
+	if m == nil {
+		return nil, fmt.Errorf("collections: vision fund portfolio: no __NEXT_DATA__")
+	}
+	var payload struct {
+		Props struct {
+			PageProps struct {
+				Entry struct {
+					Modules []struct {
+						PortfolioCompanies *struct {
+							Data []struct {
+								Title  string `json:"title"`
+								Status struct {
+									Title string `json:"title"`
+								} `json:"company_status"`
+							} `json:"data"`
+						} `json:"portfolio_companies"`
+					} `json:"modules"`
+				} `json:"entry"`
+			} `json:"pageProps"`
+		} `json:"props"`
+	}
+	if err := json.Unmarshal(m[1], &payload); err != nil {
+		return nil, fmt.Errorf("collections: parse vision fund portfolio: %w", err)
+	}
+	var out []Record
+	for _, module := range payload.Props.PageProps.Entry.Modules {
+		if module.PortfolioCompanies == nil {
+			continue
+		}
+		for _, c := range module.PortfolioCompanies.Data {
+			if c.Title == "" || strings.EqualFold(c.Status.Title, "acquired") {
+				continue
+			}
+			out = append(out, record(c.Title, ""))
+		}
+	}
+	if len(out) == 0 {
+		return nil, fmt.Errorf("collections: vision fund portfolio: no companies")
+	}
+	return out, nil
+}
+
+// ParseFoundersFund reads Founders Fund's portfolio from its WordPress API. The firm
+// publishes only its notable companies (64), with no status and no website.
+func ParseFoundersFund(data []byte) ([]Record, error) {
+	var rows []struct {
+		Title struct {
+			Rendered string `json:"rendered"`
+		} `json:"title"`
+	}
+	if err := json.Unmarshal(data, &rows); err != nil {
+		return nil, fmt.Errorf("collections: parse founders fund portfolio: %w", err)
+	}
+	out := make([]Record, 0, len(rows))
+	for _, r := range rows {
+		if name := strings.TrimSpace(html.UnescapeString(r.Title.Rendered)); name != "" {
+			out = append(out, record(name, ""))
+		}
+	}
+	return out, nil
+}

@@ -605,7 +605,8 @@ func (q *Queries) ListCompaniesMissingWikipediaInfo(ctx context.Context, arg Lis
 
 const listCompanyCollections = `-- name: ListCompanyCollections :many
 SELECT slug, collections, countries, hq_country,
-       COALESCE(company_info ->> 'website', '')::text AS website
+       COALESCE(company_info ->> 'website', '')::text AS website,
+       job_count
 FROM companies
 ORDER BY slug
 `
@@ -616,6 +617,7 @@ type ListCompanyCollectionsRow struct {
 	Countries   []string    `json:"countries"`
 	HqCountry   pgtype.Text `json:"hq_country"`
 	Website     string      `json:"website"`
+	JobCount    int32       `json:"job_count"`
 }
 
 // All companies with their current collection membership. cmd/import-collections
@@ -631,6 +633,9 @@ type ListCompanyCollectionsRow struct {
 //
 // website rides along for the same reason: a portfolio that publishes its members'
 // sites lets a same-named company with a DIFFERENT site be told apart from the member.
+//
+// job_count rides along for a source that publishes its members' headcount: a
+// two-person startup cannot be the same-named company holding hundreds of postings.
 func (q *Queries) ListCompanyCollections(ctx context.Context) ([]ListCompanyCollectionsRow, error) {
 	rows, err := q.db.Query(ctx, listCompanyCollections)
 	if err != nil {
@@ -646,6 +651,7 @@ func (q *Queries) ListCompanyCollections(ctx context.Context) ([]ListCompanyColl
 			&i.Countries,
 			&i.HqCountry,
 			&i.Website,
+			&i.JobCount,
 		); err != nil {
 			return nil, err
 		}

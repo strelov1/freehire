@@ -154,8 +154,12 @@ WHERE slug = $1;
 --
 -- website rides along for the same reason: a portfolio that publishes its members'
 -- sites lets a same-named company with a DIFFERENT site be told apart from the member.
+--
+-- job_count rides along for a source that publishes its members' headcount: a
+-- two-person startup cannot be the same-named company holding hundreds of postings.
 SELECT slug, collections, countries, hq_country,
-       COALESCE(company_info ->> 'website', '')::text AS website
+       COALESCE(company_info ->> 'website', '')::text AS website,
+       job_count
 FROM companies
 ORDER BY slug;
 

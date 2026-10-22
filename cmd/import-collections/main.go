@@ -161,14 +161,14 @@ func report(p planResult, companies int, scope []collections.Collection) {
 	for _, c := range scope {
 		s := p.stats[c.Slug]
 		if c.Kind == collections.KindCredential {
-			log.Printf("import-collections: %s matched=%d gated=%d ambiguous=%d site_mismatch=%d unmatched=%d",
-				c.Slug, s.Matched, s.Gated, s.Ambiguous, s.SiteMismatch, s.Unmatched)
+			log.Printf("import-collections: %s matched=%d gated=%d ambiguous=%d mismatch=%d unmatched=%d",
+				c.Slug, s.Matched, s.Gated, s.Ambiguous, s.Mismatch, s.Unmatched)
 			continue
 		}
-		log.Printf("import-collections: %s matched=%d site_mismatch=%d unmatched=%d",
-			c.Slug, s.Matched, s.SiteMismatch, s.Unmatched)
-		if len(s.SiteMismatchNames) > 0 {
-			log.Printf("import-collections: %s refused on website: %s", c.Slug, strings.Join(s.SiteMismatchNames, "; "))
+		log.Printf("import-collections: %s matched=%d mismatch=%d unmatched=%d",
+			c.Slug, s.Matched, s.Mismatch, s.Unmatched)
+		if len(s.MismatchNames) > 0 {
+			log.Printf("import-collections: %s refused as a different organisation: %s", c.Slug, strings.Join(s.MismatchNames, "; "))
 		}
 		// For a hand list the unmatched entries are actionable — an entry we wrote
 		// that matches nothing is a typo or a company that left the catalogue — so
@@ -369,6 +369,7 @@ func planScoped(rows []db.ListCompanyCollectionsRow, resolved map[string][]colle
 			Countries: r.Countries,
 			HQCountry: r.HqCountry.String,
 			Website:   r.Website,
+			OpenJobs:  int(r.JobCount),
 		}
 		if r.HqCountry.String != "" {
 			withHQCountry++

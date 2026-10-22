@@ -14,7 +14,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"slices"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/strelov1/freehire/internal/dict/normalize"
@@ -140,6 +142,11 @@ type Collection struct {
 	// sponsors and more than doubled Ireland's, most of them the large employers the
 	// filter exists for. Empty for editorial collections, which strip nothing.
 	Country string
+	// Exclude lists catalogue company slugs a name match must never tag: a same-named
+	// different employer that the source gives nothing to tell apart — no website, no
+	// headcount (see mismatch). Each entry carries its reason beside it. A last resort
+	// for a source that publishes names only, never a substitute for those checks.
+	Exclude []string
 }
 
 // Company is the subset of a catalogue company a Gate may consult: its canonical
@@ -153,6 +160,8 @@ type Company struct {
 	HQCountry string
 	// Website is the company's own site from its company_info, "" when unknown.
 	Website string
+	// OpenJobs is the company's open posting count (companies.job_count).
+	OpenJobs int
 }
 
 // Admits reports whether this collection accepts a name-matched company/record
@@ -237,6 +246,39 @@ var All = []Collection{
 		Description: "Open roles at companies in the BOND portfolio.",
 		Kind:        KindBacker,
 		Dataset:     &Dataset{URL: bondDatasetURL, Parse: ParseBond},
+	},
+	{
+		Slug:        "lightspeed",
+		Title:       "Lightspeed",
+		Description: "Open roles at companies in the Lightspeed Venture Partners portfolio.",
+		Kind:        KindBacker,
+		Dataset:     &Dataset{URL: lightspeedPortfolioURL, Parse: ParseLightspeed},
+		// clark: the catalogue's is Clark Construction, not Lightspeed's Clark.
+		Exclude: []string{"clark"},
+	},
+	{
+		Slug:        "index-ventures",
+		Title:       "Index Ventures",
+		Description: "Open roles at companies in the Index Ventures portfolio.",
+		Kind:        KindBacker,
+		Dataset:     &Dataset{URL: indexPortfolioURL, Parse: ParseIndex},
+		// lever: the catalogue's "Lever" is aggregator postings filed under the ATS's
+		// name, not the company Index backed.
+		Exclude: []string{"lever"},
+	},
+	{
+		Slug:        "softbank-vision-fund",
+		Title:       "SoftBank Vision Fund",
+		Description: "Open roles at companies in the SoftBank Vision Fund portfolio.",
+		Kind:        KindBacker,
+		Dataset:     &Dataset{URL: visionFundPortfolioURL, Parse: ParseVisionFund},
+	},
+	{
+		Slug:        "founders-fund",
+		Title:       "Founders Fund",
+		Description: "Open roles at the companies Founders Fund names in its portfolio.",
+		Kind:        KindBacker,
+		Dataset:     &Dataset{URL: foundersFundPortfolioURL, Parse: ParseFoundersFund},
 	},
 	{
 		Slug:        "european",
@@ -539,13 +581,14 @@ const MaxLoggedUnmatched = 50
 type MatchStat struct {
 	Matched, Unmatched int
 	Gated, Ambiguous   int
-	// SiteMismatch counts companies refused because the source names a different
-	// website for the member than the catalogue holds for the company (see sameSite).
-	SiteMismatch   int
+	// Mismatch counts companies whose name matched a member the source describes as
+	// a different organisation — another website (see sameSite) or a headcount the
+	// company's own postings outgrow (see plausibleSize).
+	Mismatch       int
 	UnmatchedNames []string
-	// SiteMismatchNames shows what the site check refused, "Name (theirs ≠ ours)", so
-	// a run's log lets a person judge whether it refused the right companies.
-	SiteMismatchNames []string
+	// MismatchNames shows what was refused and why, so a run's log lets a person
+	// judge whether it refused the right companies.
+	MismatchNames []string
 }
 
 // Members resolves this collection's candidate records to the company slugs that
@@ -558,8 +601,9 @@ type MatchStat struct {
 // still differs by kind is the ambiguity drop: a credential first discards rows whose
 // name identifies more than one organisation.
 //
-// A record naming a website the company's own site disagrees with is refused before
-// the gate (see sameSite): the name matched, the organisation did not.
+// A record the source describes as a different organisation — another website, or a
+// headcount the company's postings outgrow — is refused before the gate (see
+// mismatch): the name matched, the organisation did not.
 //
 // A company is tagged when ANY of its records passes the gate: a register lists an
 // organisation once per route it holds, so a work-route row must win even when a
@@ -595,10 +639,13 @@ func (c Collection) Members(records []Record, companies map[string]Company) ([]s
 			stat.UnmatchedNames = append(stat.UnmatchedNames, r.Name)
 			continue
 		}
-		if !sameSite(r.Meta[MetaWebsite], company.Website) {
-			if _, seen := mismatched[slug]; !seen && len(stat.SiteMismatchNames) < MaxLoggedUnmatched {
-				stat.SiteMismatchNames = append(stat.SiteMismatchNames,
-					fmt.Sprintf("%s (%s ≠ %s)", r.Name, r.Meta[MetaWebsite], company.Website))
+		why := mismatch(r, company)
+		if slices.Contains(c.Exclude, slug) {
+			why = "excluded by hand"
+		}
+		if why != "" {
+			if _, seen := mismatched[slug]; !seen && len(stat.MismatchNames) < MaxLoggedUnmatched {
+				stat.MismatchNames = append(stat.MismatchNames, fmt.Sprintf("%s (%s)", r.Name, why))
 			}
 			mismatched[slug] = struct{}{}
 			continue
@@ -624,7 +671,7 @@ func (c Collection) Members(records []Record, companies map[string]Company) ([]s
 	}
 	for slug := range mismatched {
 		if _, ok := admitted[slug]; !ok {
-			stat.SiteMismatch++
+			stat.Mismatch++
 		}
 	}
 	return matched, stat
@@ -668,9 +715,10 @@ func Reconcile(current, managed, want []string) []string {
 // ycCompany is the subset of a yc-oss dataset entry we consume: the company name,
 // which we match by normalized name against our companies.
 type ycCompany struct {
-	Name    string `json:"name"`
-	Website string `json:"website"`
-	Status  string `json:"status"`
+	Name     string `json:"name"`
+	Website  string `json:"website"`
+	Status   string `json:"status"`
+	TeamSize int    `json:"team_size"`
 }
 
 // euStartup is the subset of an icp-radar dataset entry we consume (the company
@@ -710,7 +758,11 @@ func ParseYC(data []byte) ([]Record, error) {
 		if c.Name == "" || c.Status == "Inactive" || c.Status == "Acquired" {
 			continue
 		}
-		out = append(out, record(c.Name, c.Website))
+		r := record(c.Name, c.Website)
+		if c.TeamSize > 0 {
+			r.Meta[MetaTeamSize] = strconv.Itoa(c.TeamSize)
+		}
+		out = append(out, r)
 	}
 	return out, nil
 }
