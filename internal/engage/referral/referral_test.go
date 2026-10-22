@@ -20,7 +20,8 @@ import (
 type fakeRepo struct {
 	eligible     bool
 	approved     bool
-	cvOwned      bool
+	fitting      []CVOption
+	askedJobID   *int64
 	hasResume    bool
 	countSince   int64
 	recipients   []Recipient
@@ -94,8 +95,11 @@ var (
 // testCVID is the attached CV these cases address.
 var testCVID = uuid.MustParse("77777777-7777-4777-8777-777777777777")
 
-func (f *fakeRepo) CVBelongsToUser(context.Context, uuid.UUID, int64) (bool, error) {
-	return f.cvOwned, nil
+// ReferralCVs returns the fixture's fitting CVs; the real query does the fitting (tested
+// against Postgres), so the fake only records what it was asked.
+func (f *fakeRepo) ReferralCVs(_ context.Context, _ int64, _ string, jobID *int64) ([]CVOption, error) {
+	f.askedJobID = jobID
+	return f.fitting, nil
 }
 func (f *fakeRepo) UserHasResume(context.Context, int64) (bool, error) {
 	return f.hasResume, nil
@@ -405,30 +409,47 @@ func TestCreateRequestEligibilityAndCap(t *testing.T) {
 	})
 }
 
-func TestCreateRequestBuiltCVOwnership(t *testing.T) {
+func TestCreateRequestBuiltCVMustFitTheCompany(t *testing.T) {
 	built := RequestInput{SeekerUserID: 1, CompanySlug: "acme", CVKind: CVBuilt, CVID: cvID(testCVID), ContactEmail: "s@x.test", LinkedInURL: linkedInURL}
 
-	t.Run("foreign cv is rejected as an invalid choice", func(t *testing.T) {
-		repo := &fakeRepo{eligible: true, cvOwned: false}
+	t.Run("a CV not tailored for this vacancy or company is an invalid choice", func(t *testing.T) {
+		repo := &fakeRepo{eligible: true, fitting: []CVOption{{ID: uuid.New(), Title: "Other"}}}
 		s := newService(repo, &fakePinger{})
 		if _, err := s.CreateRequest(context.Background(), built); !errors.Is(err, ErrInvalidCVChoice) {
 			t.Fatalf("err = %v, want ErrInvalidCVChoice", err)
 		}
 		if repo.createdReq != nil {
-			t.Error("must not write a request attaching a CV the seeker does not own")
+			t.Error("must not write a request attaching a CV that does not fit")
 		}
 	})
 
-	t.Run("owned cv is accepted", func(t *testing.T) {
-		repo := &fakeRepo{eligible: true, cvOwned: true}
+	t.Run("a fitting CV is accepted, judged against the request's vacancy", func(t *testing.T) {
+		repo := &fakeRepo{eligible: true, fitting: []CVOption{{ID: testCVID, Title: "Tailored"}}}
 		s := newService(repo, &fakePinger{})
-		if _, err := s.CreateRequest(context.Background(), built); err != nil {
-			t.Fatalf("create with owned CV: %v", err)
+		job := int64(9)
+		in := built
+		in.JobID = &job
+		if _, err := s.CreateRequest(context.Background(), in); err != nil {
+			t.Fatalf("create with a fitting CV: %v", err)
 		}
 		if repo.createdReq == nil {
-			t.Error("owned built CV should produce a request")
+			t.Error("a fitting CV should produce a request")
+		}
+		if repo.askedJobID == nil || *repo.askedJobID != 9 {
+			t.Errorf("fit asked for job %v, want 9", repo.askedJobID)
 		}
 	})
+}
+
+func TestCVOptions(t *testing.T) {
+	repo := &fakeRepo{fitting: []CVOption{{ID: testCVID, Title: "Tailored"}}, hasResume: true}
+	got, err := newService(repo, &fakePinger{}).CVOptions(context.Background(), 1, "acme", nil)
+	if err != nil {
+		t.Fatalf("CVOptions: %v", err)
+	}
+	if len(got.Tailored) != 1 || got.Tailored[0].ID != testCVID || !got.HasResume {
+		t.Errorf("options = %+v", got)
+	}
 }
 
 func TestCreateRequestOriginalNeedsResume(t *testing.T) {

@@ -12,26 +12,6 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const cVBelongsToUser = `-- name: CVBelongsToUser :one
-SELECT EXISTS (
-    SELECT 1 FROM cvs WHERE id = $1 AND user_id = $2
-) AS exists
-`
-
-type CVBelongsToUserParams struct {
-	CvID   uuid.UUID `json:"cv_id"`
-	UserID int64     `json:"user_id"`
-}
-
-// Whether a builder CV is owned by a user — the authorization check before attaching a
-// 'built' CV to a request, so a seeker cannot reference someone else's cv_id.
-func (q *Queries) CVBelongsToUser(ctx context.Context, arg CVBelongsToUserParams) (bool, error) {
-	row := q.db.QueryRow(ctx, cVBelongsToUser, arg.CvID, arg.UserID)
-	var exists bool
-	err := row.Scan(&exists)
-	return exists, err
-}
-
 const companiesWithApprovedReferrer = `-- name: CompaniesWithApprovedReferrer :many
 SELECT DISTINCT company_slug FROM referral_offers
 WHERE status = 'approved' AND company_slug = ANY($1::text[])
@@ -440,6 +420,56 @@ func (q *Queries) ListPendingReferralOffers(ctx context.Context) ([]ListPendingR
 			&i.ID,
 			&i.CompanyName,
 		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listReferralCVs = `-- name: ListReferralCVs :many
+SELECT c.id, c.title, c.job_id
+FROM cvs c
+JOIN jobs j ON j.id = c.job_id
+WHERE c.user_id = $1
+  AND CASE
+        WHEN $2::bigint IS NOT NULL THEN c.job_id = $2::bigint
+        ELSE j.company_slug = $3
+      END
+ORDER BY c.updated_at DESC, c.id
+`
+
+type ListReferralCVsParams struct {
+	UserID      int64       `json:"user_id"`
+	JobID       pgtype.Int8 `json:"job_id"`
+	CompanySlug string      `json:"company_slug"`
+}
+
+type ListReferralCVsRow struct {
+	ID    uuid.UUID   `json:"id"`
+	Title string      `json:"title"`
+	JobID pgtype.Int8 `json:"job_id"`
+}
+
+// The builder CVs a seeker may attach to a referral request: CVs they tailored for THE
+// vacancy the request is about, or — with no vacancy (asked from the company page) — for
+// any vacancy at that company. A base CV or one tailored for another company is the wrong
+// document to show an employee of this one. Newest first, so the form's default is the one
+// the seeker worked on last. The same list is the check on submit, so the form cannot offer
+// what the server would refuse.
+func (q *Queries) ListReferralCVs(ctx context.Context, arg ListReferralCVsParams) ([]ListReferralCVsRow, error) {
+	rows, err := q.db.Query(ctx, listReferralCVs, arg.UserID, arg.JobID, arg.CompanySlug)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListReferralCVsRow{}
+	for rows.Next() {
+		var i ListReferralCVsRow
+		if err := rows.Scan(&i.ID, &i.Title, &i.JobID); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

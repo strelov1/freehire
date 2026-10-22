@@ -9,6 +9,11 @@ routes `/me/referrals/*` behind cookie-or-key auth, the moderation queue under
 `/referrals/offers/*` behind the moderator gate (referrals.go:37-53).
 
 ## Always true
+- **A built CV must fit the request.** `ListReferralCVs` is both what the form offers and
+  what `CreateRequest` checks: a CV the seeker tailored for the request's vacancy, or — with
+  no vacancy (asked from the company page) — for any vacancy at the company. A base CV or one
+  tailored for another company is the wrong document to show this company's employee; the
+  form once listed every CV the seeker owned and led with exactly that.
 - **A request is company-scoped, not referrer-addressed.** Every approved referrer of the
   company sees it, and whichever one acts records the outcome — a second actor gets
   `ErrRequestNotOpen` (the status guard in SQL maps to it). This is what keeps the referrer

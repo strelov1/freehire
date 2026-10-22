@@ -2,6 +2,7 @@ package handler
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -9,6 +10,7 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 
 	"github.com/strelov1/freehire/internal/candidate/cv"
 	"github.com/strelov1/freehire/internal/candidate/headshot"
@@ -28,10 +30,34 @@ type referralHandlers struct {
 	// photos serves the OWNER's headshot when their chosen template prints one, so the
 	// proof a referrer opens is the CV the candidate sees, not a silhouette of them.
 	photos *headshot.Store
+	// jobs resolves the vacancy a request is made from, which the page names by its slug.
+	jobs jobIDBySlug
 }
 
-func newReferralHandlers(referral *referral.Service, blob blobstore.Store, cvRenderer cv.Renderer, cvStore *cv.Store, photos *headshot.Store) *referralHandlers {
-	return &referralHandlers{referral: referral, blob: blob, cvRenderer: cvRenderer, cvStore: cvStore, photos: photos}
+// jobIDBySlug resolves a vacancy's public slug to its id. *db.Queries satisfies it.
+type jobIDBySlug interface {
+	GetJobIDBySlug(ctx context.Context, publicSlug string) (int64, error)
+}
+
+func newReferralHandlers(referral *referral.Service, blob blobstore.Store, cvRenderer cv.Renderer, cvStore *cv.Store, photos *headshot.Store, jobs jobIDBySlug) *referralHandlers {
+	return &referralHandlers{referral: referral, blob: blob, cvRenderer: cvRenderer, cvStore: cvStore, photos: photos, jobs: jobs}
+}
+
+// requestJobID is the vacancy a request is about: job_slug when the page names one, else
+// the legacy numeric job_id. An unknown slug is a 404 — the vacancy the seeker was looking
+// at no longer exists — rather than a request silently detached from it.
+func (h *referralHandlers) requestJobID(ctx context.Context, slug string, id *int64) (*int64, error) {
+	if slug == "" {
+		return id, nil
+	}
+	jobID, err := h.jobs.GetJobIDBySlug(ctx, slug)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, fiber.NewError(fiber.StatusNotFound, "vacancy not found")
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &jobID, nil
 }
 
 func (h *referralHandlers) register(api fiber.Router, mw middleware) {
@@ -43,6 +69,7 @@ func (h *referralHandlers) register(api fiber.Router, mw middleware) {
 	api.Get("/me/referrals/offers", mw.key, h.ListMyReferralOffers)
 	api.Delete("/me/referrals/offers/:id", mw.key, h.WithdrawReferralOffer)
 	api.Post("/me/referrals/requests", mw.key, h.CreateReferralRequest)
+	api.Get("/me/referrals/cv-options", mw.key, h.ReferralCVOptions)
 	api.Get("/me/referrals/requests", mw.key, h.ListMyReferralRequests)
 	api.Get("/me/referrals/incoming", mw.key, h.ListIncomingReferralRequests)
 	api.Get("/me/referrals/incoming/:id/cv", mw.key, h.ViewReferralRequestCV)
@@ -176,6 +203,7 @@ func referralError(err error) error {
 // meaningful per cv_kind (validated in the domain); the contact is Telegram and/or email.
 type createReferralRequestBody struct {
 	CompanySlug     string  `json:"company_slug"`
+	JobSlug         string  `json:"job_slug"`
 	JobID           *int64  `json:"job_id"`
 	CVKind          string  `json:"cv_kind"`
 	CVID            *string `json:"cv_id"`
@@ -202,10 +230,14 @@ func (h *referralHandlers) CreateReferralRequest(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
+	jobID, err := h.requestJobID(c.Context(), in.JobSlug, in.JobID)
+	if err != nil {
+		return err
+	}
 	req, err := h.referral.CreateRequest(c.Context(), referral.RequestInput{
 		SeekerUserID:    userID,
 		CompanySlug:     in.CompanySlug,
-		JobID:           in.JobID,
+		JobID:           jobID,
 		CVKind:          in.CVKind,
 		CVID:            cvID,
 		LinkedInURL:     in.LinkedInURL,
@@ -217,6 +249,38 @@ func (h *referralHandlers) CreateReferralRequest(c *fiber.Ctx) error {
 		return referralError(err)
 	}
 	return c.Status(fiber.StatusCreated).JSON(fiber.Map{"data": toSeekerRequestResponse(req)})
+}
+
+type referralCVOption struct {
+	ID    string `json:"id"`
+	Title string `json:"title"`
+}
+
+// ReferralCVOptions lists what the caller can attach to a request into ?company_slug=,
+// about ?job_slug= when asked from a vacancy: the CVs tailored for it (or, with no vacancy,
+// for any vacancy at the company), newest first, and whether they uploaded a CV file.
+func (h *referralHandlers) ReferralCVOptions(c *fiber.Ctx) error {
+	userID, err := requireUserID(c)
+	if err != nil {
+		return err
+	}
+	company := c.Query("company_slug")
+	if company == "" {
+		return fiber.NewError(fiber.StatusBadRequest, "company_slug is required")
+	}
+	jobID, err := h.requestJobID(c.Context(), c.Query("job_slug"), nil)
+	if err != nil {
+		return err
+	}
+	opts, err := h.referral.CVOptions(c.Context(), userID, company, jobID)
+	if err != nil {
+		return err
+	}
+	tailored := make([]referralCVOption, len(opts.Tailored))
+	for i, o := range opts.Tailored {
+		tailored[i] = referralCVOption{ID: o.ID.String(), Title: o.Title}
+	}
+	return c.JSON(fiber.Map{"data": fiber.Map{"tailored": tailored, "has_resume": opts.HasResume}})
 }
 
 // ListMyReferralRequests returns the caller's own referral requests, newest first.

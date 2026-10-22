@@ -151,9 +151,17 @@ func (r *QueriesRepository) ApprovedReferrerRecipients(ctx context.Context, comp
 	return out, nil
 }
 
-// CVBelongsToUser reports whether the builder CV is owned by the user.
-func (r *QueriesRepository) CVBelongsToUser(ctx context.Context, cvID uuid.UUID, userID int64) (bool, error) {
-	return r.q.CVBelongsToUser(ctx, db.CVBelongsToUserParams{CvID: cvID, UserID: userID})
+// ReferralCVs lists the builder CVs a seeker may attach (ListReferralCVs).
+func (r *QueriesRepository) ReferralCVs(ctx context.Context, userID int64, companySlug string, jobID *int64) ([]CVOption, error) {
+	rows, err := r.q.ListReferralCVs(ctx, db.ListReferralCVsParams{UserID: userID, CompanySlug: companySlug, JobID: int8Ptr(jobID)})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]CVOption, len(rows))
+	for i, row := range rows {
+		out[i] = CVOption{ID: row.ID, Title: row.Title, JobID: row.JobID.Int64}
+	}
+	return out, nil
 }
 
 // UserHasResume reports whether the user has a stored original résumé.

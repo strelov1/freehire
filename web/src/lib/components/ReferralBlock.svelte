@@ -5,15 +5,18 @@
   import { Button } from '#lib/ui/index.js';
 
   // Shown on a vacancy and on the company page when the company has an approved referrer.
-  // jobId is the optional source-vacancy context passed through to the request.
+  // jobSlug is the vacancy the request is made from, when there is one; onTailor starts
+  // that vacancy's CV tailoring, which only a vacancy page can offer.
   let {
     companySlug,
     companyName,
-    jobId,
+    jobSlug,
+    onTailor,
   }: {
     companySlug: string;
     companyName: string;
-    jobId?: number;
+    jobSlug?: string;
+    onTailor?: () => void;
   } = $props();
 
   // The request form is imported on the click that opens it, not with the page.
@@ -67,5 +70,16 @@
 </section>
 
 {#if open && Modal}
-  <Modal {companySlug} {companyName} {jobId} onClose={() => (open = false)} />
+  <Modal
+    {companySlug}
+    {companyName}
+    {jobSlug}
+    onClose={() => (open = false)}
+    onTailor={onTailor
+      ? () => {
+          open = false;
+          onTailor();
+        }
+      : undefined}
+  />
 {/if}

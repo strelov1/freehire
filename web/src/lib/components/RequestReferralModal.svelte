@@ -1,26 +1,33 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { Check } from '@lucide/svelte';
-  import { api, ApiError } from '#lib/api.js';
-  import type { CvTailoredItem } from '#lib/cv.js';
-  import type { ReferralRequestInput } from '#lib/types.js';
+  import { Check, FileUp, Paperclip, Sparkles } from '@lucide/svelte';
+  import { api, ApiError, RESUME_MAX_MB } from '#lib/api.js';
+  import type { ReferralCvOptions, ReferralRequestInput } from '#lib/types.js';
   import { Button, Dialog, FormField } from '#lib/ui/index.js';
   import { isLinkedInUrl } from '#lib/utils.js';
 
-  // The parent owns open/close; this component owns the request form. jobId is the
-  // optional source-vacancy context recorded with the request.
+  // The parent owns open/close; this component owns the request form. jobSlug is the
+  // vacancy the request is made from, recorded with it.
+  //
+  // The CV it shares is one of two, never a pick from every CV the seeker owns: a CV
+  // tailored for that vacancy — or, from the company page, for one of the company's
+  // vacancies — attached by itself when there is one, or the CV file uploaded to the
+  // profile. With neither it offers both ways in: upload a file, or (from a vacancy) tailor
+  // one through the page's own flow.
   let {
     companySlug,
     companyName,
-    jobId,
+    jobSlug,
     onClose,
     onSent,
+    onTailor,
   }: {
     companySlug: string;
     companyName: string;
-    jobId?: number;
+    jobSlug?: string;
     onClose: () => void;
     onSent?: () => void;
+    onTailor?: () => void;
   } = $props();
 
   // The parent mounts this component to open it and unmounts on onClose, so the
@@ -32,10 +39,13 @@
     if (!open) onClose();
   });
 
-  let cvKind = $state<'original' | 'built'>('original');
+  let options = $state.raw<ReferralCvOptions | null>(null);
+  // Which CV goes out; null until the seeker has one to share.
+  let cvKind = $state<'original' | 'built' | null>(null);
   let cvId = $state<string | null>(null);
-  let tailored = $state<CvTailoredItem[]>([]);
-  let hasResume = $state(true);
+  let uploading = $state(false);
+  let uploadError = $state<string | null>(null);
+  let fileInput = $state<HTMLInputElement | null>(null);
   let linkedinUrl = $state('');
   let contactTelegram = $state('');
   let contactEmail = $state('');
@@ -48,31 +58,49 @@
   const canSubmit = $derived(
     linkedinValid &&
       (contactTelegram.trim() !== '' || contactEmail.trim() !== '') &&
-      (cvKind === 'original' ? hasResume : cvId !== null),
+      (cvKind === 'original' || (cvKind === 'built' && cvId !== null)),
   );
 
   onMount(async () => {
-    // Load the CV options: the stored-résumé presence and the tailored CVs. A load
-    // failure just leaves the defaults — the backend re-validates on submit.
-    const [resume, cvs] = await Promise.allSettled([api.getResume(), api.listCvs()]);
-    if (resume.status === 'fulfilled') hasResume = resume.value.present;
-    if (cvs.status === 'fulfilled') tailored = cvs.value;
-    // If there is no stored résumé but tailored CVs exist, start on the usable option.
-    if (!hasResume && tailored.length > 0) {
-      cvKind = 'built';
-      cvId = tailored[0]?.id ?? null;
+    try {
+      options = await api.getReferralCvOptions(companySlug, jobSlug);
+      const first = options.tailored[0];
+      if (first) {
+        cvKind = 'built';
+        cvId = first.id;
+      }
+    } catch {
+      // Leave the choice to the two ways in; the backend re-validates on submit.
+      options = { tailored: [], has_resume: false };
     }
   });
 
-  function pickBuilt() {
-    cvKind = 'built';
-    if (cvId === null) cvId = tailored[0]?.id ?? null;
+  // Uploading here is the profile's own upload: the file becomes the seeker's stored CV.
+  async function upload(e: Event) {
+    const file = (e.currentTarget as HTMLInputElement).files?.[0];
+    if (!file) return;
+    uploading = true;
+    uploadError = null;
+    try {
+      await api.extractResumeProfile(file);
+      const fresh = await api.getReferralCvOptions(companySlug, jobSlug);
+      if (!fresh.has_resume) throw new Error('not stored');
+      options = fresh;
+      cvKind = 'original';
+    } catch (err) {
+      uploadError =
+        err instanceof ApiError && err.status === 413 ? err.message : "Couldn't upload your CV. Please try again.";
+    } finally {
+      uploading = false;
+    }
   }
+
+  const tailoredTitle = $derived(options?.tailored.find((o) => o.id === cvId)?.title ?? '');
 
   function messageFor(e: unknown): string {
     if (e instanceof ApiError) {
       if (e.status === 409) return 'You already have an active request for this company.';
-      if (e.status === 422) return 'Upload a CV first, or pick a tailored one.';
+      if (e.status === 422) return 'That CV can no longer be shared. Upload your CV or tailor one again.';
       if (e.status === 429) return "You've reached today's referral request limit.";
       if (e.status === 401) return 'Please sign in to request a referral.';
     }
@@ -86,8 +114,8 @@
     submitting = true;
     const input: ReferralRequestInput = {
       company_slug: companySlug,
-      job_id: jobId,
-      cv_kind: cvKind,
+      job_slug: jobSlug,
+      cv_kind: cvKind ?? 'original',
       cv_id: cvKind === 'built' && cvId !== null ? cvId : undefined,
       linkedin_url: linkedinUrl.trim(),
       contact_telegram: contactTelegram.trim() || undefined,
@@ -120,62 +148,83 @@
       <form class="flex flex-col gap-4" onsubmit={submit}>
         <fieldset class="flex flex-col gap-2">
           <legend class="mb-1 text-sm font-medium">Which CV to share?</legend>
-
-          <label
-            class={[
-              'flex items-center gap-3 rounded-md border px-3 py-2.5 text-sm transition-colors',
-              cvKind === 'original' ? 'border-brand bg-brand-muted' : 'border-border',
-              !hasResume && 'opacity-50',
-            ]}
-          >
-            <input
-              type="radio"
-              name="cvkind"
-              checked={cvKind === 'original'}
-              disabled={!hasResume}
-              onchange={() => (cvKind = 'original')}
-            />
-            <span class="font-medium">My uploaded CV</span>
-            {#if !hasResume}
-              <span class="ml-auto text-xs text-muted-foreground">none uploaded</span>
-            {/if}
-          </label>
-
-          <!-- Column layout: the CV picker sits on its own full-width line below the
-               radio, so a long "title — company" option can't stretch the modal past
-               max-w-md (an inline flex item's min-width:auto lets a wide select do that). -->
-          <label
-            class={[
-              'flex flex-col gap-2 rounded-md border px-3 py-2.5 text-sm transition-colors',
-              cvKind === 'built' ? 'border-brand bg-brand-muted' : 'border-border',
-              tailored.length === 0 && 'opacity-50',
-            ]}
-          >
-            <span class="flex items-center gap-3">
-              <input
-                type="radio"
-                name="cvkind"
-                checked={cvKind === 'built'}
-                disabled={tailored.length === 0}
-                onchange={pickBuilt}
-              />
-              <span class="font-medium">Tailored CV</span>
-              {#if tailored.length === 0}
-                <span class="ml-auto text-xs text-muted-foreground">none yet</span>
-              {/if}
-            </span>
-            {#if tailored.length > 0}
+          {#if !options}
+            <p class="text-sm text-muted-foreground">Loading…</p>
+          {:else if cvKind === 'built' && cvId}
+            <p class="flex items-center gap-2 text-sm">
+              <Paperclip class="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+              <span>Attached: <span class="font-medium">{tailoredTitle}</span></span>
+            </p>
+            {#if options.tailored.length > 1}
+              <!-- Only CVs tailored for this company's vacancies — never another company's. -->
               <select
                 bind:value={cvId}
-                onclick={(e) => e.stopPropagation()}
+                aria-label="CV tailored for {companyName}"
                 class="w-full min-w-0 rounded-md border border-border bg-background px-2 py-1 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
-                {#each tailored as cv (cv.id)}
-                  <option value={cv.id}>{cv.job_company ? `${cv.title} — ${cv.job_company}` : cv.title}</option>
+                {#each options.tailored as cv (cv.id)}
+                  <option value={cv.id}>{cv.title}</option>
                 {/each}
               </select>
             {/if}
-          </label>
+            {#if options.has_resume}
+              <button type="button" class="w-fit text-xs underline" onclick={() => (cvKind = 'original')}>
+                Share my uploaded CV instead
+              </button>
+            {/if}
+          {:else if cvKind === 'original'}
+            <p class="flex items-center gap-2 text-sm">
+              <Paperclip class="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+              <span>Attached: <span class="font-medium">your uploaded CV</span></span>
+            </p>
+            {#if options.tailored[0]}
+              <button
+                type="button"
+                class="w-fit text-xs underline"
+                onclick={() => {
+                  cvKind = 'built';
+                  cvId = options?.tailored[0]?.id ?? null;
+                }}
+              >
+                Share the CV tailored for {companyName} instead
+              </button>
+            {/if}
+          {:else}
+            <div class="flex flex-col gap-2">
+              {#if options.has_resume}
+                <Button type="button" variant="outline" class="gap-1.5" onclick={() => (cvKind = 'original')}>
+                  <Paperclip class="size-4" aria-hidden="true" /> Use my uploaded CV
+                </Button>
+              {:else}
+                <Button
+                  type="button"
+                  variant="outline"
+                  class="gap-1.5"
+                  disabled={uploading}
+                  onclick={() => fileInput?.click()}
+                >
+                  <FileUp class="size-4" aria-hidden="true" />
+                  {uploading ? 'Uploading…' : 'Upload my CV'}
+                </Button>
+                <input
+                  bind:this={fileInput}
+                  type="file"
+                  accept="application/pdf"
+                  class="hidden"
+                  onchange={upload}
+                  aria-label="Upload my CV (PDF, up to {RESUME_MAX_MB} MB)"
+                />
+              {/if}
+              {#if onTailor}
+                <Button type="button" variant="primary" class="gap-1.5" onclick={onTailor}>
+                  <Sparkles class="size-4" aria-hidden="true" /> Tailor my CV for this vacancy
+                </Button>
+              {/if}
+            </div>
+            {#if uploadError}
+              <p class="text-sm text-destructive">{uploadError}</p>
+            {/if}
+          {/if}
         </fieldset>
 
         <FormField

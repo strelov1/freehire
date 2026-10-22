@@ -916,7 +916,7 @@ func Register(app *fiber.App, cfg Config) {
 	referralCabinetURL := strings.TrimRight(cfg.FrontendOrigin, "/") + "/my/referrals?tab=incoming"
 	referralSvc := referral.New(referral.NewQueriesRepository(queries), referralPinger, cfg.Blob,
 		referral.Config{CabinetURL: referralCabinetURL})
-	referralsH := newReferralHandlers(referralSvc, cfg.Blob, cvRenderer, cvStore, photoStore)
+	referralsH := newReferralHandlers(referralSvc, cfg.Blob, cvRenderer, cvStore, photoStore, queries)
 
 	// The mentorship marketplace: referral's opposite number, where the insider is named
 	// and chosen rather than anonymous. A nil notifier is a deployment with no mail

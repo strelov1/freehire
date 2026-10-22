@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"log"
 	"net/url"
+	"slices"
 	"strings"
 	"time"
 
@@ -207,7 +208,9 @@ type Repository interface {
 	CompanyHasApprovedReferrer(ctx context.Context, companySlug string) (bool, error)
 	ReferrerApprovedForCompany(ctx context.Context, userID int64, companySlug string) (bool, error)
 	ApprovedReferrerRecipients(ctx context.Context, companySlug string) ([]Recipient, error)
-	CVBelongsToUser(ctx context.Context, cvID uuid.UUID, userID int64) (bool, error)
+	// ReferralCVs lists the builder CVs userID may attach: tailored for jobID, or with no
+	// jobID for any vacancy at companySlug. Newest first.
+	ReferralCVs(ctx context.Context, userID int64, companySlug string, jobID *int64) ([]CVOption, error)
 	UserHasResume(ctx context.Context, userID int64) (bool, error)
 
 	CreateRequest(ctx context.Context, in RequestInput) (Request, error)
@@ -329,6 +332,36 @@ func (s *Service) ListPendingOffers(ctx context.Context) ([]Offer, error) {
 	return s.repo.ListPendingOffers(ctx)
 }
 
+// CVOption is a builder CV a seeker may attach to a referral request.
+type CVOption struct {
+	ID    uuid.UUID
+	Title string
+	// JobID is the vacancy it was tailored for.
+	JobID int64
+}
+
+// CVOptions is what a seeker can attach to a request into one company: the CVs tailored for
+// the request's vacancy (or, with none, for any vacancy at the company), newest first, and
+// whether they have uploaded a CV file.
+type CVOptions struct {
+	Tailored  []CVOption
+	HasResume bool
+}
+
+// CVOptions lists what userID can attach to a request into companySlug, about jobID when
+// the request is made from a vacancy.
+func (s *Service) CVOptions(ctx context.Context, userID int64, companySlug string, jobID *int64) (CVOptions, error) {
+	tailored, err := s.repo.ReferralCVs(ctx, userID, companySlug, jobID)
+	if err != nil {
+		return CVOptions{}, err
+	}
+	has, err := s.repo.UserHasResume(ctx, userID)
+	if err != nil {
+		return CVOptions{}, err
+	}
+	return CVOptions{Tailored: tailored, HasResume: has}, nil
+}
+
 // CreateRequest validates and records a seeker's referral request, then best-effort pings
 // the company's approved referrers. It enforces contact presence, the CV kind/id invariant,
 // company eligibility, and the rolling-24h cap before writing; a duplicate active request
@@ -346,17 +379,18 @@ func (s *Service) CreateRequest(ctx context.Context, in RequestInput) (Request, 
 	if err := validateCVChoice(in); err != nil {
 		return Request{}, err
 	}
-	// The attached CV must be one the seeker actually has. A built cv_id comes from the
-	// client, so its FK guarantees existence, not ownership — a foreign cv_id is treated as
-	// an invalid choice (not a distinct error) so the response never leaks that it exists.
-	// An original attachment requires a stored résumé, else it would serve nothing.
+	// The attached CV must be one the seeker has AND one that fits the request: tailored for
+	// its vacancy, or for a vacancy at its company. A built cv_id comes from the client, so
+	// its FK guarantees existence, not ownership or fit — anything else is an invalid choice
+	// (not a distinct error) so the response never leaks that a foreign CV exists. An
+	// original attachment requires a stored résumé, else it would serve nothing.
 	switch in.CVKind {
 	case CVBuilt:
-		owned, err := s.repo.CVBelongsToUser(ctx, *in.CVID, in.SeekerUserID)
+		fitting, err := s.repo.ReferralCVs(ctx, in.SeekerUserID, in.CompanySlug, in.JobID)
 		if err != nil {
 			return Request{}, err
 		}
-		if !owned {
+		if !slices.ContainsFunc(fitting, func(o CVOption) bool { return o.ID == *in.CVID }) {
 			return Request{}, ErrInvalidCVChoice
 		}
 	case CVOriginal:

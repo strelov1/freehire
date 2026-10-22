@@ -934,7 +934,12 @@
     {/if}
 
     {#if job.referral_available && job.company_slug}
-      <ReferralBlock companySlug={job.company_slug} companyName={job.company} />
+      <ReferralBlock
+        companySlug={job.company_slug}
+        companyName={job.company}
+        jobSlug={job.public_slug}
+        onTailor={() => void onTailorClick()}
+      />
     {/if}
 
     <!-- Beside the referral block rather than a fourth button of its own: the two are the

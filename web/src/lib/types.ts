@@ -558,13 +558,22 @@ export interface IncomingReferralRequest {
 /** The seeker's referral-request payload. Exactly one CV field is meaningful per cv_kind. */
 export interface ReferralRequestInput {
   company_slug: string;
-  job_id?: number;
+  /** The vacancy the request is made from, when there is one. */
+  job_slug?: string;
   cv_kind: ReferralCvKind;
   cv_id?: string;
   linkedin_url: string;
   contact_telegram?: string;
   contact_email?: string;
   note?: string;
+}
+
+/** What a seeker can attach to a referral request into one company: the CVs tailored for
+ *  the vacancy it is made from (or, from the company page, for any of its vacancies),
+ *  newest first, and whether they uploaded a CV file. */
+export interface ReferralCvOptions {
+  tailored: { id: string; title: string }[];
+  has_resume: boolean;
 }
 
 /** A job submitted for moderation. `status` is the review lifecycle; `review_reason`

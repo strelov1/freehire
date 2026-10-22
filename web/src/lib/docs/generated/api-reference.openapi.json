@@ -4752,18 +4752,18 @@
                     "type": "string",
                     "description": "The company to ask."
                   },
-                  "job_id": {
-                    "type": "integer",
-                    "description": "The specific opening, when there is one."
+                  "job_slug": {
+                    "type": "string",
+                    "description": "The opening the request is made from, when there is one (`job_id` is still read for older clients)."
                   },
                   "cv_kind": {
                     "type": "string",
-                    "description": "Which CV to attach: your stored one, or a built CV."
+                    "description": "Which CV to attach: `original` (your uploaded one) or `built`."
                   },
                   "cv_id": {
                     "type": "string",
                     "format": "uuid",
-                    "description": "The built CV to attach, when `cv_kind` names one."
+                    "description": "The built CV, when `cv_kind` is `built`: one you tailored for that opening, or — with no opening — for any opening at the company (see `cv-options`). Any other CV answers 422."
                   },
                   "linkedin_url": {
                     "type": "string",
@@ -4826,6 +4826,57 @@
                   "type": "string"
                 },
                 "example": "{ \"data\": [ { \"id\": \"c92f…\", \"company_slug\": \"acme\", \"status\": \"contacted\" } ] }"
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          },
+          {
+            "apiKeyAuth": []
+          }
+        ],
+        "tags": [
+          "Employee referrals"
+        ]
+      }
+    },
+    "/me/referrals/cv-options": {
+      "get": {
+        "operationId": "get_me_referrals_cv_options",
+        "summary": "The CVs you can attach to a request into a company.",
+        "description": "The CVs you tailored for `job_slug`, or with no `job_slug` for any opening at the company, newest first, and whether you have uploaded a CV file.",
+        "parameters": [
+          {
+            "name": "company_slug",
+            "in": "query",
+            "required": true,
+            "description": "The company to ask.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "job_slug",
+            "in": "query",
+            "required": false,
+            "description": "The opening the request is made from.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "{ \"data\": { \"tailored\": [ { \"id\": \"6f1c…\", \"title\": \"Tailored — Backend Engineer\" } ], \"has_resume\": true } }"
               }
             }
           }

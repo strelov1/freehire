@@ -96,6 +96,7 @@ import type {
   ResolvedLink,
   ReferralOffer,
   ReferralRequestInput,
+  ReferralCvOptions,
   SeekerReferralRequest,
   IncomingReferralRequest,
   Report,
@@ -2316,6 +2317,14 @@ export function createApi(
     return requestData<SeekerReferralRequest>('/api/v1/me/referrals/requests', jsonBody('POST', input));
   }
 
+  /** The CVs the caller can attach to a referral request into a company, about a vacancy
+   *  when the request is made from one. */
+  async function getReferralCvOptions(companySlug: string, jobSlug?: string): Promise<ReferralCvOptions> {
+    const q = new URLSearchParams({ company_slug: companySlug });
+    if (jobSlug) q.set('job_slug', jobSlug);
+    return requestData<ReferralCvOptions>(`/api/v1/me/referrals/cv-options?${q}`);
+  }
+
   /** The caller's own referral requests, newest first. */
   async function listMyReferralRequests(): Promise<SeekerReferralRequest[]> {
     return requestData<SeekerReferralRequest[]>('/api/v1/me/referrals/requests');
@@ -3309,6 +3318,7 @@ export function createApi(
     resolveJobLink,
     listMyContributions,
     createReferralRequest,
+    getReferralCvOptions,
     listMyReferralRequests,
     submitReferralOffer,
     listMyReferralOffers,

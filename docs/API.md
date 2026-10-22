@@ -2872,9 +2872,9 @@ Validation failures answer 422; a company with no approved referrer answers 409;
 | Name | Type | Required | Description |
 | --- | --- | --- | --- |
 | `company_slug` | string | yes | The company to ask. |
-| `job_id` | integer | no | The specific opening, when there is one. |
-| `cv_kind` | string | no | Which CV to attach: your stored one, or a built CV. |
-| `cv_id` | string (uuid) | no | The built CV to attach, when `cv_kind` names one. |
+| `job_slug` | string | no | The opening the request is made from, when there is one (`job_id` is still read for older clients). |
+| `cv_kind` | string | no | Which CV to attach: `original` (your uploaded one) or `built`. |
+| `cv_id` | string (uuid) | no | The built CV, when `cv_kind` is `built`: one you tailored for that opening, or — with no opening — for any opening at the company (see `cv-options`). Any other CV answers 422. |
 | `linkedin_url` | string | no | Your profile. |
 | `contact_telegram` | string | no | How the referrer reaches you. |
 | `contact_email` | string | no | How the referrer reaches you. |
@@ -2888,6 +2888,29 @@ curl -X POST "https://freehire.me/api/v1/me/referrals/requests" \
 
 ```json
 { "data": { "id": "c92f…", "company_slug": "acme", "status": "open", "created_at": "2026-07-28T20:05:00Z" } }
+```
+
+### `GET /me/referrals/cv-options`
+
+**Auth:** Session or API key
+
+The CVs you can attach to a request into a company.
+
+The CVs you tailored for `job_slug`, or with no `job_slug` for any opening at the company, newest first, and whether you have uploaded a CV file.
+
+**Query parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `company_slug` | string | yes | The company to ask. |
+| `job_slug` | string | no | The opening the request is made from. |
+
+```bash
+curl "https://freehire.me/api/v1/me/referrals/cv-options?company_slug=acme" -H "Authorization: Bearer fhk_…"
+```
+
+```json
+{ "data": { "tailored": [ { "id": "6f1c…", "title": "Tailored — Backend Engineer" } ], "has_resume": true } }
 ```
 
 ### `GET /me/referrals/requests`

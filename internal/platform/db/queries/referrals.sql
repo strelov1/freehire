@@ -85,12 +85,22 @@ SELECT EXISTS (
 -- One offer by id — for the moderator's proof-CV view after role authorization.
 SELECT * FROM referral_offers WHERE id = $1;
 
--- name: CVBelongsToUser :one
--- Whether a builder CV is owned by a user — the authorization check before attaching a
--- 'built' CV to a request, so a seeker cannot reference someone else's cv_id.
-SELECT EXISTS (
-    SELECT 1 FROM cvs WHERE id = sqlc.arg(cv_id) AND user_id = sqlc.arg(user_id)
-) AS exists;
+-- name: ListReferralCVs :many
+-- The builder CVs a seeker may attach to a referral request: CVs they tailored for THE
+-- vacancy the request is about, or — with no vacancy (asked from the company page) — for
+-- any vacancy at that company. A base CV or one tailored for another company is the wrong
+-- document to show an employee of this one. Newest first, so the form's default is the one
+-- the seeker worked on last. The same list is the check on submit, so the form cannot offer
+-- what the server would refuse.
+SELECT c.id, c.title, c.job_id
+FROM cvs c
+JOIN jobs j ON j.id = c.job_id
+WHERE c.user_id = sqlc.arg(user_id)
+  AND CASE
+        WHEN sqlc.narg(job_id)::bigint IS NOT NULL THEN c.job_id = sqlc.narg(job_id)::bigint
+        ELSE j.company_slug = sqlc.arg(company_slug)
+      END
+ORDER BY c.updated_at DESC, c.id;
 
 -- name: CreateReferralRequest :one
 -- Record a seeker's referral request into a company. The partial unique index on

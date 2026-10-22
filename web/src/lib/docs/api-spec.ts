@@ -3429,9 +3429,9 @@ data: {"eligible":1903114,"covered":1897020,"snapshot_covered":1889512,"queued":
           'answers 409; too many open requests answers 429.',
         body: [
           { name: 'company_slug', type: 'string', required: true, description: 'The company to ask.' },
-          { name: 'job_id', type: 'integer', description: 'The specific opening, when there is one.' },
-          { name: 'cv_kind', type: 'string', description: 'Which CV to attach: your stored one, or a built CV.' },
-          { name: 'cv_id', type: 'string (uuid)', description: 'The built CV to attach, when `cv_kind` names one.' },
+          { name: 'job_slug', type: 'string', description: 'The opening the request is made from, when there is one (`job_id` is still read for older clients).' },
+          { name: 'cv_kind', type: 'string', description: 'Which CV to attach: `original` (your uploaded one) or `built`.' },
+          { name: 'cv_id', type: 'string (uuid)', description: 'The built CV, when `cv_kind` is `built`: one you tailored for that opening, or — with no opening — for any opening at the company (see `cv-options`). Any other CV answers 422.' },
           { name: 'linkedin_url', type: 'string', description: 'Your profile.' },
           { name: 'contact_telegram', type: 'string', description: 'How the referrer reaches you.' },
           { name: 'contact_email', type: 'string', description: 'How the referrer reaches you.' },
@@ -3441,6 +3441,21 @@ data: {"eligible":1903114,"covered":1897020,"snapshot_covered":1889512,"queued":
   -H "Authorization: Bearer fhk_…" -H 'Content-Type: application/json' \\
   -d '{"company_slug":"acme","cv_kind":"stored","contact_email":"you@example.com"}'`,
         responseExample: `{ "data": { "id": "c92f…", "company_slug": "acme", "status": "open", "created_at": "2026-07-28T20:05:00Z" } }`,
+      },
+      {
+        method: 'GET',
+        path: '/me/referrals/cv-options',
+        auth: 'cookie-or-key',
+        summary: 'The CVs you can attach to a request into a company.',
+        description:
+          'The CVs you tailored for `job_slug`, or with no `job_slug` for any opening at the ' +
+          'company, newest first, and whether you have uploaded a CV file.',
+        query: [
+          { name: 'company_slug', type: 'string', required: true, description: 'The company to ask.' },
+          { name: 'job_slug', type: 'string', description: 'The opening the request is made from.' },
+        ],
+        curl: `curl "${BASE_URL}/me/referrals/cv-options?company_slug=acme" -H "Authorization: Bearer fhk_…"`,
+        responseExample: `{ "data": { "tailored": [ { "id": "6f1c…", "title": "Tailored — Backend Engineer" } ], "has_resume": true } }`,
       },
       {
         method: 'GET',

@@ -330,9 +330,6 @@ type Querier interface {
 	// the generation, returning the new value so the caller can immediately mint a
 	// replacement session for whoever asked.
 	BumpUserTokenVersion(ctx context.Context, id int64) (int32, error)
-	// Whether a builder CV is owned by a user — the authorization check before attaching a
-	// 'built' CV to a request, so a seeker cannot reference someone else's cv_id.
-	CVBelongsToUser(ctx context.Context, arg CVBelongsToUserParams) (bool, error)
 	// Mark a meeting cancelled. Deliberately not a delete: a candidate who remembers an
 	// interview on Thursday and finds an empty Thursday cannot tell a cancellation from a
 	// calendar that failed to load. The scheduling still happened, and the ledger's
@@ -4440,6 +4437,13 @@ type Querier interface {
 	// hard-deleted, so a thread can outlive its subject. An INNER JOIN would drop it from the feed
 	// instead of showing it with an unresolved subject.
 	ListRecentOpenThreadsFirst(ctx context.Context, limit int32) ([]ListRecentOpenThreadsFirstRow, error)
+	// The builder CVs a seeker may attach to a referral request: CVs they tailored for THE
+	// vacancy the request is about, or — with no vacancy (asked from the company page) — for
+	// any vacancy at that company. A base CV or one tailored for another company is the wrong
+	// document to show an employee of this one. Newest first, so the form's default is the one
+	// the seeker worked on last. The same list is the check on submit, so the form cannot offer
+	// what the server would refuse.
+	ListReferralCVs(ctx context.Context, arg ListReferralCVsParams) ([]ListReferralCVsRow, error)
 	// The "my offers" list: one member's offers with moderation status, newest first.
 	// Joins the catalogue for the company's display name (LEFT so an offer survives a
 	// company the catalogue no longer knows — the UI falls back to the slug).

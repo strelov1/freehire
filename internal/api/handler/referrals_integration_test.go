@@ -57,6 +57,7 @@ func TestReferralEndpoints(t *testing.T) {
 	}
 
 	h := &referralHandlers{
+		jobs: queries,
 		// A nil blob store stands in for a deployment without object storage: withdrawing
 		// then has no proof object to erase, which is the same path these cases exercise.
 		referral: referral.New(referral.NewQueriesRepository(queries),
@@ -65,6 +66,7 @@ func TestReferralEndpoints(t *testing.T) {
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	requireMod := auth.RequireRole(queries, "moderator")
 	app.Post("/api/v1/me/referrals/requests", auth.RequireAuth(iss, testVersions), h.CreateReferralRequest)
+	app.Get("/api/v1/me/referrals/cv-options", auth.RequireAuth(iss, testVersions), h.ReferralCVOptions)
 	app.Get("/api/v1/me/referrals/requests", auth.RequireAuth(iss, testVersions), h.ListMyReferralRequests)
 	app.Get("/api/v1/me/referrals/incoming", auth.RequireAuth(iss, testVersions), h.ListIncomingReferralRequests)
 	app.Get("/api/v1/me/referrals/incoming/:id/cv", auth.RequireAuth(iss, testVersions), h.ViewReferralRequestCV)
@@ -167,6 +169,55 @@ func TestReferralEndpoints(t *testing.T) {
 		}
 		if marked["data"].(map[string]any)["status"] != "contacted" {
 			t.Errorf("resolved status = %v, want contacted", marked["data"])
+		}
+	})
+
+	t.Run("the CVs offered fit the vacancy or the company, and only those are accepted", func(t *testing.T) {
+		job := func(slug, company string) int64 {
+			var id int64
+			if err := pool.QueryRow(ctx, `
+				INSERT INTO jobs (source, external_id, url, title, company, company_slug, public_slug)
+				VALUES ('greenhouse', $1, '', 'Engineer', $2, $2, $1) RETURNING id`, slug, company).Scan(&id); err != nil {
+				t.Fatalf("seed job: %v", err)
+			}
+			return id
+		}
+		cvFor := func(title string, jobID int64) string {
+			var id string
+			if err := pool.QueryRow(ctx, `INSERT INTO cvs (user_id, title, data, job_id) VALUES ($1, $2, '{}', $3) RETURNING id::text`, seeker, title, jobID).Scan(&id); err != nil {
+				t.Fatalf("seed cv: %v", err)
+			}
+			return id
+		}
+		forAcme := cvFor("For acme", job("acme-platform", "acme"))
+		forGlobex := cvFor("For globex", job("globex-platform", "globex"))
+
+		titles := func(path string) []string {
+			code, out := do(http.MethodGet, path, token(seeker), nil)
+			if code != http.StatusOK {
+				t.Fatalf("GET %s: %d", path, code)
+			}
+			var got []string
+			for _, o := range out["data"].(map[string]any)["tailored"].([]any) {
+				got = append(got, o.(map[string]any)["title"].(string))
+			}
+			return got
+		}
+		if got := titles("/api/v1/me/referrals/cv-options?company_slug=acme&job_slug=acme-platform"); len(got) != 1 || got[0] != "For acme" {
+			t.Errorf("from the vacancy = %v, want the CV tailored for it", got)
+		}
+		if got := titles("/api/v1/me/referrals/cv-options?company_slug=acme"); len(got) != 1 || got[0] != "For acme" {
+			t.Errorf("from the company = %v, want only its vacancies' CVs", got)
+		}
+
+		body := map[string]any{"company_slug": "acme", "job_slug": "acme-platform", "cv_kind": "built", "cv_id": forGlobex,
+			"contact_email": "seeker@example.test", "linkedin_url": "https://www.linkedin.com/in/seeker"}
+		if code, _ := do(http.MethodPost, "/api/v1/me/referrals/requests", token(seeker), body); code != http.StatusUnprocessableEntity {
+			t.Errorf("a CV tailored for another company: status %d, want 422", code)
+		}
+		body["cv_id"] = forAcme
+		if code, out := do(http.MethodPost, "/api/v1/me/referrals/requests", token(seeker), body); code != http.StatusCreated {
+			t.Errorf("the CV tailored for this vacancy: status %d (%v), want 201", code, out)
 		}
 	})
 
