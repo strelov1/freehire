@@ -7,7 +7,7 @@ import type { CompanyHiring, CompanyResponse, FacetCounts } from './types';
 
 /** Fewest postings stating a salary before the tab shows a pay range. Below it the range
  *  is whatever two postings happened to say, not how the company pays. */
-export const SALARY_SAMPLE_GATE = 3;
+const SALARY_SAMPLE_GATE = 3;
 
 /** The n most frequent values of one facet distribution, most common first. Ties break
  *  by value so the order is stable between renders. Zero counts are not "values". */
