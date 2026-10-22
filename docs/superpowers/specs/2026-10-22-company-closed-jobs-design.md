@@ -66,8 +66,10 @@ LIMIT $2 OFFSET $3;
   badges for a closed posting; each row also states the close date.
 - `noindex`: millions of closed-posting list pages are not something to offer a
   crawler. The job detail pages remain as they are.
-- The company page links to it ("Closed positions →"). The link is shown always; the
-  closed page states plainly when there are none.
+- It is the company page's fourth tab ("Closed", beside Jobs / Hiring / Discussion in
+  `CompanyTabs.svelte`) — the tabs are already separate routes, so this is the existing
+  shape rather than a new one. The tab is shown always; the page states plainly when
+  there are none.
 
 ### Tests
 
@@ -76,7 +78,8 @@ LIMIT $2 OFFSET $3;
 - Handler integration test: 404 for an unknown slug, `has_more` true/false around the
   page boundary, the pagination-window refusal (added to
   `pagination_window_routes_test.go`).
-- Web: loader test for page parsing and the empty state.
+- Web: the loader only composes existing, tested helpers (`parsePage`, `pageOffset`,
+  `pageWithinWindow`), so it is checked by `svelte-check` plus a run in the browser.
 
 ## Out of scope
 
