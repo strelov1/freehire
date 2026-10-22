@@ -5207,7 +5207,10 @@ type Querier interface {
 	// always equals total_boards. Aggregate-only: it selects no board identifier and no error
 	// text, so the public endpoint built on it cannot leak internal detail. ingested_total is
 	// coalesced/cast to bigint so it reads as a plain int64 (an all-failing provider
-	// yields 0, not NULL).
+	// yields 0, not NULL). A provider with no ACTIVE board is left out: board_health rows
+	// outlive the boards they describe, so a provider whose boards were all retired or rejected
+	// (apploi's 5,833, retired 2026-09-15) would otherwise read "down" forever for a crawl
+	// nobody runs any more.
 	ProviderHealthRollup(ctx context.Context) ([]ProviderHealthRollupRow, error)
 	// Per-provider ingest health: when the provider's most recent board crawl succeeded, and
 	// how its boards split across four mutually exclusive states. It is also the ONLY source of

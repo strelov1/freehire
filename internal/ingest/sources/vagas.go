@@ -3,6 +3,7 @@ package sources
 import (
 	"context"
 	"fmt"
+	"log"
 	"net/url"
 	"regexp"
 
@@ -17,6 +18,9 @@ import (
 // per-job detail fetch (bounded concurrency), like the other JSON-LD detail adapters.
 type vagas struct {
 	http HTMLGetter
+	// maxNewPerRun bounds how many new postings one run hydrates; non-positive takes
+	// vagasMaxNewPerRun. The rest are deferred — not yielded, so not stored — to a later run.
+	maxNewPerRun int
 }
 
 // NewVagas builds the vagas.com.br adapter over the given HTTP client.
@@ -41,6 +45,12 @@ var vagasAreas = []string{
 
 // vagasMaxPages bounds listing pagination so an area that never returns an empty page cannot loop.
 const vagasMaxPages = 60
+
+// vagasMaxNewPerRun is the hydration budget per run. Measured 2026-10-22 a detail page costs
+// about two seconds through the paced proxy, so 600 is ~20 minutes — well inside the 50-minute
+// unit timeout, which matters because the board writes only once the fetch returns: a run that
+// overruns stores nothing and the next one faces the same backlog.
+const vagasMaxNewPerRun = 600
 
 // vagasBase is the scheme+host that relative job hrefs resolve against; parsed once.
 var vagasBase = &url.URL{Scheme: "https", Host: "www.vagas.com.br"}
@@ -83,14 +93,32 @@ func (v vagas) FetchNew(ctx context.Context, _ CompanyEntry, seen func(externalI
 		}
 	}
 
-	return fetchDetails(urls, defaultDetailWorkers, func(u string) (Job, bool) {
-		if id := vagasJobID(u); id != "" && seen(id) {
+	budget := v.maxNewPerRun
+	if budget <= 0 {
+		budget = vagasMaxNewPerRun
+	}
+	var jobs []Job
+	var fresh []string
+	deferred := 0
+	for _, u := range urls {
+		id := vagasJobID(u)
+		switch {
+		case seen(id):
 			// Already ingested: refresh liveness only, no detail request. Just the identity
 			// the pipeline's touch needs; the stored content is left untouched.
-			return Job{ExternalID: id, URL: u, SeenRefresh: true}, true
+			jobs = append(jobs, Job{ExternalID: id, URL: u, SeenRefresh: true})
+		case len(fresh) < budget:
+			fresh = append(fresh, u)
+		default:
+			deferred++
 		}
+	}
+	if deferred > 0 {
+		log.Printf("vagas: hydration budget %d reached; %d new postings deferred to a later run", budget, deferred)
+	}
+	return append(jobs, fetchDetails(fresh, defaultDetailWorkers, func(u string) (Job, bool) {
 		return v.detail(ctx, u)
-	}), nil
+	})...), nil
 }
 
 // listArea enumerates one area's job URLs across its paginated listing, stopping on the first

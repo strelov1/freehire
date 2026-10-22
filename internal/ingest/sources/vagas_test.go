@@ -283,3 +283,53 @@ func TestVagasIsAHydratingSource(t *testing.T) {
 		t.Error("vagas does not satisfy the hydrating shape; the pipeline will keep re-reading every posting")
 	}
 }
+
+// Measured 2026-10-22: only 2 of the 40 postings on the first listing page were stored, so a
+// run faced ~1 200 new postings at about two seconds a detail page through the proxy, overran
+// its 50-minute budget, and — the board writes only after the fetch — stored none of them. The
+// next run faced the same backlog. A per-run budget is what lets the backlog shrink.
+func TestVagasHydratesAtMostTheBudgetOfNewPostings(t *testing.T) {
+	listing := `<html><body>
+<a href="/vagas/v1000001/a">A</a>
+<a href="/vagas/v1000002/b">B</a>
+<a href="/vagas/v1000003/c">C</a>
+<a href="/vagas/v1000004/d">D</a>
+</body></html>`
+	page := `<html><body><script type="application/ld+json">{"@context":"https://schema.org","@type":"JobPosting",
+"title":"Dev","hiringOrganization":{"@type":"Organization","name":"Acme"},"description":"<p>Body.</p>"}</script></body></html>`
+
+	http := &vagasFake{pages: map[string]string{}}
+	for _, area := range vagasAreas {
+		http.pages[fmt.Sprintf("https://www.vagas.com.br/%s?pagina=1", area)] = listing
+	}
+	for _, p := range []string{"v1000001/a", "v1000002/b", "v1000003/c", "v1000004/d"} {
+		http.pages["https://www.vagas.com.br/vagas/"+p] = page
+	}
+
+	// One posting is already stored; of the three new ones the budget admits two.
+	jobs, err := vagas{http: http, maxNewPerRun: 2}.FetchNew(context.Background(), CompanyEntry{},
+		func(id string) bool { return id == "1000001" })
+	if err != nil {
+		t.Fatalf("FetchNew: %v", err)
+	}
+	var refreshed, hydrated int
+	for _, j := range jobs {
+		if j.SeenRefresh {
+			refreshed++
+		} else {
+			hydrated++
+		}
+	}
+	if refreshed != 1 || hydrated != 2 {
+		t.Fatalf("got %d refreshed and %d hydrated, want 1 and 2", refreshed, hydrated)
+	}
+	details := 0
+	for url, n := range http.asked {
+		if strings.Contains(url, "/vagas/v") {
+			details += n
+		}
+	}
+	if details != 2 {
+		t.Errorf("fetched %d detail pages, want exactly the budget of 2", details)
+	}
+}

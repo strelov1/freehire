@@ -290,3 +290,43 @@ func TestEnergyjoblineProviderAndBoardless(t *testing.T) {
 		t.Error("energyjobline must implement aggregator")
 	}
 }
+
+// energyjobline re-read every one of its ~182 000 detail pages on every run at the pacer's
+// 1.5 s a request — some 75 hours of work in a 50-minute budget — so a run never finished and
+// the source stopped updating (last success 2026-10-10, measured 2026-10-22). A stored posting
+// needs no second read, and the new ones are taken a budget at a time.
+func TestEnergyjoblineFetchNewRefreshesSeenAndBudgetsNew(t *testing.T) {
+	seenURL := "https://www.energyjobline.com/job/seen-job-11111111"
+	newA := "https://www.energyjobline.com/job/new-a-22222222"
+	newB := "https://www.energyjobline.com/job/new-b-33333333"
+	detail := energyjoblineDetailHTML("Engineer", "Real Co", "d", "2026-10-02", "Kent", "GB")
+
+	// The seen posting's page is deliberately unrouted: reading it would drop the posting
+	// instead of refreshing it.
+	fake := (&routedHTTP{}).
+		route("sitemap.xml?page=1", energyjoblineURLSetXML(seenURL, newA, newB)).
+		route("sitemap.xml", energyjoblineSitemapIndexXML("https://www.energyjobline.com/sitemap.xml?page=1")).
+		route("/job/new-a-22222222", detail).
+		route("/job/new-b-33333333", detail)
+
+	src := energyjobline{sitemap: fake, pages: fake, maxNewPerRun: 1}
+	jobs, err := src.FetchNew(context.Background(), CompanyEntry{Company: "EnergyJobline", Provider: "energyjobline"},
+		func(id string) bool { return id == "11111111" })
+	if err != nil {
+		t.Fatalf("FetchNew: %v", err)
+	}
+	var refreshed, hydrated int
+	for _, j := range jobs {
+		switch {
+		case j.SeenRefresh && j.ExternalID == "11111111":
+			refreshed++
+		case !j.SeenRefresh && j.Title == "Engineer":
+			hydrated++
+		default:
+			t.Errorf("unexpected job %+v", j)
+		}
+	}
+	if refreshed != 1 || hydrated != 1 {
+		t.Fatalf("got %d refreshed and %d hydrated, want 1 and 1 (the budget)", refreshed, hydrated)
+	}
+}

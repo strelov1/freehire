@@ -205,7 +205,10 @@ WHERE provider = $1 AND cooldown_until IS NOT NULL AND cooldown_until > now();
 -- always equals total_boards. Aggregate-only: it selects no board identifier and no error
 -- text, so the public endpoint built on it cannot leak internal detail. ingested_total is
 -- coalesced/cast to bigint so it reads as a plain int64 (an all-failing provider
--- yields 0, not NULL).
+-- yields 0, not NULL). A provider with no ACTIVE board is left out: board_health rows
+-- outlive the boards they describe, so a provider whose boards were all retired or rejected
+-- (apploi's 5,833, retired 2026-09-15) would otherwise read "down" forever for a crawl
+-- nobody runs any more.
 SELECT
     provider,
     count(*)                                                         AS total_boards,
@@ -215,5 +218,8 @@ SELECT
     max(last_success_at)::timestamptz                                AS last_success_at,
     coalesce(sum(last_ingested_count) FILTER (WHERE consecutive_failures = 0), 0)::bigint AS ingested_total
 FROM board_health
+WHERE EXISTS (
+    SELECT 1 FROM boards b WHERE b.provider = board_health.provider AND b.status = 'active'
+)
 GROUP BY provider
 ORDER BY provider;

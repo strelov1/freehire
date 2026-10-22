@@ -3,6 +3,7 @@ package sources
 import (
 	"context"
 	"fmt"
+	"log"
 	"regexp"
 	"strings"
 
@@ -24,9 +25,19 @@ import (
 type energyjobline struct {
 	sitemap XMLGetter  // the top-level sitemap index + per-page urlsets (4 requests/run)
 	pages   HTMLGetter // per-posting detail pages: Googlebot UA, rate-paced
+	// maxNewPerRun bounds how many new postings one run hydrates; non-positive takes
+	// energyjoblineMaxNewPerRun. The rest are deferred — not yielded, so not stored — to a
+	// later run.
+	maxNewPerRun int
 }
 
 const energyjoblineSitemapIndexURL = "https://www.energyjobline.com/sitemap.xml"
+
+// energyjoblineMaxNewPerRun is the hydration budget per run. At the pacer's 1.5 s a detail
+// page, 1200 is ~30 minutes — inside the 50-minute unit timeout with room for the sitemap
+// walk. Measured 2026-10-22 the sitemap lists ~182 000 postings against ~116 000 stored, so
+// the backlog drains over a few days of runs rather than overrunning every one of them.
+const energyjoblineMaxNewPerRun = 1200
 
 // NewEnergyJobline builds the EnergyJobline adapter: sitemap fetches the site's sitemap
 // index, pages fetches each job-detail page (see crawlerUserAgent, pacedHTMLGetter).
@@ -44,13 +55,42 @@ func (energyjobline) boardless() {}
 func (energyjobline) aggregator() {}
 
 func (e energyjobline) Fetch(ctx context.Context, ce CompanyEntry) ([]Job, error) {
+	return e.FetchNew(ctx, ce, func(string) bool { return false })
+}
+
+// FetchNew fetches detail only for a posting the catalogue does not already have, at most
+// maxNewPerRun of them; a stored posting yields a liveness-refresh job with no detail
+// request. Re-reading every page is what kept the crawl from ever finishing: ~182 000 pages
+// at 1.5 s each is days of work against a 50-minute run.
+func (e energyjobline) FetchNew(ctx context.Context, ce CompanyEntry, seen func(externalID string) bool) ([]Job, error) {
 	urls, err := e.jobURLs(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("energyjobline: sitemap: %w", err)
 	}
-	return fetchDetails(urls, defaultDetailWorkers, func(u string) (Job, bool) {
+	budget := e.maxNewPerRun
+	if budget <= 0 {
+		budget = energyjoblineMaxNewPerRun
+	}
+	var jobs []Job
+	var fresh []string
+	deferred := 0
+	for _, u := range urls {
+		id := energyjoblineJobID(u)
+		switch {
+		case seen(id):
+			jobs = append(jobs, Job{ExternalID: id, URL: u, Company: ce.Company, SeenRefresh: true})
+		case len(fresh) < budget:
+			fresh = append(fresh, u)
+		default:
+			deferred++
+		}
+	}
+	if deferred > 0 {
+		log.Printf("energyjobline: hydration budget %d reached; %d new postings deferred to a later run", budget, deferred)
+	}
+	return append(jobs, fetchDetails(fresh, defaultDetailWorkers, func(u string) (Job, bool) {
 		return e.detail(ctx, ce, u)
-	}), nil
+	})...), nil
 }
 
 // jobURLs resolves the top-level sitemap index to its paginated sub-sitemaps (each a flat

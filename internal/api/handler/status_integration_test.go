@@ -179,6 +179,23 @@ func TestIngestStatusEndpoint(t *testing.T) {
 	// through from the sources registry into the DTO.
 	healthy("jobstash", "", 500)
 
+	// The rollup only reports a provider the catalogue still crawls, i.e. one with an
+	// ACTIVE board; board_health rows outlive the boards they describe.
+	catalogue := func(provider, status string) {
+		if _, err := pool.Exec(ctx, `
+			INSERT INTO boards (provider, board, company, status) VALUES ($1, $1, $1, $2)`,
+			provider, status); err != nil {
+			t.Fatalf("seed %s board for %s: %v", status, provider, err)
+		}
+	}
+	for _, p := range []string{"greenhouse", "recruitee", "lever", "workday", "jobstash"} {
+		catalogue(p, "active")
+	}
+	// apploi: every board retired, its health rows left behind — the provider must be
+	// absent, not read "down" for a crawl nobody runs.
+	healthy("apploi", "52601", 9)
+	catalogue("apploi", "retired")
+
 	// One open, public job with a known created_at, so last_job_added_at has
 	// something to report.
 	latestJobAddedAt := statusNow.Add(-5 * time.Minute)
@@ -208,6 +225,10 @@ func TestIngestStatusEndpoint(t *testing.T) {
 	byProvider := map[string]providerEntry{}
 	for _, p := range env.Data.Providers {
 		byProvider[p.Provider] = p
+	}
+
+	if _, ok := byProvider["apploi"]; ok {
+		t.Error("apploi is listed, want a provider with no active board left out")
 	}
 
 	gh, ok := byProvider["greenhouse"]
