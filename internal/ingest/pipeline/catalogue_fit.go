@@ -101,6 +101,18 @@ func (r *rejections) reject(title string) {
 	}
 }
 
+// merge folds another writer's rejections for the same board into r, keeping the sample bound.
+func (r *rejections) merge(o rejections) {
+	r.rejected += o.rejected
+	r.candidates += o.candidates
+	for _, title := range o.samples {
+		if len(r.samples) >= loggedRejectionSamples {
+			break
+		}
+		r.samples = append(r.samples, title)
+	}
+}
+
 // log reports the board's rejections once, with the share and a sample of the titles.
 // A board rejecting nearly everything is the signature of a dictionary term that is
 // too broad, and since boards are crawled hourly that has to be visible within the

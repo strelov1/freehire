@@ -638,51 +638,9 @@ func (r Runner) fillCompanyDescription(ctx context.Context, e sources.CompanyEnt
 // same fetch into a full ingest (see probeProvider) instead of discarding the result and
 // having the main loop fetch the board a second time.
 func (r Runner) ingestFetched(ctx context.Context, e sources.CompanyEntry, raw []sources.Job, seen map[string]bool) Stats {
-	var (
-		st       Stats
-		rej      rejections
-		firstErr error
-	)
 	canon := r.resolveCompanyAliases(ctx, e, raw)
 	covered := r.aggregatorCoverageForBatch(ctx, e, raw, canon)
-	for _, j := range raw {
-		// A posting the listing named but whose detail could not be read. There is nothing to
-		// write and nothing to refresh — the crawl never saw it — so it is only counted, and
-		// counting it is the point: it is what tells the sweep this board's evidence has holes
-		// in it. Handled ahead of the filter so it never enters the rejection denominator,
-		// exactly like the SeenRefresh branch below.
-		if j.Unreadable {
-			st.Unreadable++
-			continue
-		}
-		// A HydratingSource marks an already-ingested posting it re-listed but did not
-		// re-fetch: refresh its liveness by identity instead of re-upserting content-less
-		// (which would wipe the description/facets hydrated when it was new).
-		if j.SeenRefresh {
-			// A refresh faces the same catalogue filter as a write, so a posting the
-			// dictionary turns away ages out of the catalogue instead of being kept alive
-			// by its own re-listing. Judged on the STORED tech evidence, not on the
-			// content-less listing: the dictionary matches its terms anywhere in a title,
-			// and a title alone would condemn engineering roles whose evidence lives in
-			// the description they were hydrated from.
-			rej.candidate()
-			_, externalID := jobIdentity(e, j)
-			if outOfCatalogueTitle(j.Title, seen[externalID]) {
-				rej.reject(j.Title)
-				continue
-			}
-			if err := r.touch(ctx, e, j); err != nil {
-				st.Skipped++
-				if firstErr == nil {
-					firstErr = err
-				}
-				continue
-			}
-			st.Ingested++
-			continue
-		}
-		r.saveOne(ctx, e, j, covered, canon, &st, &rej, &firstErr)
-	}
+	st, rej, firstErr := r.writeBoard(ctx, e, raw, seen, covered, canon)
 	// One line per board with skips (not one per job), so a systemic failure — e.g.
 	// the DB behind a migration, or a board whose postings won't construct — is visible
 	// without flooding the log.
@@ -716,6 +674,103 @@ func (r Runner) ingestFetched(ctx context.Context, e sources.CompanyEntry, raw [
 			e.Provider, e.Board, e.Company, st.Unreadable, len(raw))
 	}
 	return st
+}
+
+// saveConcurrency bounds how many of one board's postings are written at once. The database
+// sits on another host, ~26 ms away (measured 2026-10-22), and a posting costs a round trip
+// or several, so a board written one posting at a time is bounded by the link rather than by
+// the database: energyjobline's ~54k liveness refreshes needed ~2h against a 50-minute unit,
+// and a run that overruns stores nothing it fetched. Measured from the crawl host, 8
+// connections committed 199 refreshes a second against 25 for one. Each run's pool still
+// caps the total, so a multi-board provider cannot multiply this past it.
+const saveConcurrency = 8
+
+// boardTally is one writer's share of a board's outcome; writeBoard merges them.
+type boardTally struct {
+	st       Stats
+	rej      rejections
+	firstErr error
+}
+
+// writeBoard writes raw through saveConcurrency workers, each tallying into its own
+// boardTally, and merges them. Everything a write touches is safe to share: the Store already
+// serves boards concurrently, and canon and covered are read-only lookups built up front.
+func (r Runner) writeBoard(ctx context.Context, e sources.CompanyEntry, raw []sources.Job, seen map[string]bool, covered aggregatorCoverage, canon companyCanonical) (Stats, rejections, error) {
+	tallies := make([]boardTally, min(saveConcurrency, max(len(raw), 1)))
+	jobs := make(chan sources.Job)
+	var wg sync.WaitGroup
+	for i := range tallies {
+		wg.Add(1)
+		go func(t *boardTally) {
+			defer wg.Done()
+			for j := range jobs {
+				r.ingestOne(ctx, e, j, seen, covered, canon, t)
+			}
+		}(&tallies[i])
+	}
+	for _, j := range raw {
+		jobs <- j
+	}
+	close(jobs)
+	wg.Wait()
+
+	var (
+		st       Stats
+		rej      rejections
+		firstErr error
+	)
+	for _, t := range tallies {
+		st.Ingested += t.st.Ingested
+		st.Skipped += t.st.Skipped
+		st.ATSCovered += t.st.ATSCovered
+		st.Unreadable += t.st.Unreadable
+		rej.merge(t.rej)
+		if firstErr == nil {
+			firstErr = t.firstErr
+		}
+	}
+	return st, rej, firstErr
+}
+
+// ingestOne applies one fetched posting: counts an unreadable one, refreshes a re-listed one,
+// and saves the rest, tallying the outcome into t.
+func (r Runner) ingestOne(ctx context.Context, e sources.CompanyEntry, j sources.Job, seen map[string]bool, covered aggregatorCoverage, canon companyCanonical, t *boardTally) {
+	// A posting the listing named but whose detail could not be read. There is nothing to
+	// write and nothing to refresh — the crawl never saw it — so it is only counted, and
+	// counting it is the point: it is what tells the sweep this board's evidence has holes
+	// in it. Handled ahead of the filter so it never enters the rejection denominator,
+	// exactly like the SeenRefresh branch below.
+	if j.Unreadable {
+		t.st.Unreadable++
+		return
+	}
+	// A HydratingSource marks an already-ingested posting it re-listed but did not
+	// re-fetch: refresh its liveness by identity instead of re-upserting content-less
+	// (which would wipe the description/facets hydrated when it was new).
+	if j.SeenRefresh {
+		// A refresh faces the same catalogue filter as a write, so a posting the
+		// dictionary turns away ages out of the catalogue instead of being kept alive
+		// by its own re-listing. Judged on the STORED tech evidence, not on the
+		// content-less listing: the dictionary matches its terms anywhere in a title,
+		// and a title alone would condemn engineering roles whose evidence lives in
+		// the description they were hydrated from.
+		t.rej.candidate()
+		_, externalID := jobIdentity(e, j)
+		if outOfCatalogueTitle(j.Title, seen[externalID]) {
+			t.rej.reject(j.Title)
+			return
+		}
+		if err := r.touch(ctx, e, j); err != nil {
+			t.st.Skipped++
+			if t.firstErr == nil {
+				t.firstErr = err
+			}
+			return
+		}
+		t.st.Ingested++
+		return
+	}
+	r.saveOne(ctx, e, j, covered, canon, &t.st, &t.rej, &t.firstErr)
 }
 
 // saveOne normalizes one posting, puts it through the catalogue filter, and saves what
