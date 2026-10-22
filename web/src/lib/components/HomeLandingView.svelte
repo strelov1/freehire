@@ -238,8 +238,13 @@
       </p>
     </div>
 
-    <!-- The box's root is `min-w-0 flex-1`, so this wrapper is what sets its width. -->
-    <div class="flex w-full">
+    <!-- The box's root is `min-w-0 flex-1`, so this wrapper is what sets its width.
+         `relative z-30` makes it the layer every panel the box opens (suggestions, the
+         Location popover, the link panel — each `z-50` inside it) is drawn in: above
+         the chips and figures that follow it in the page, and below the sticky header
+         (`z-40`), so a panel left open while the page scrolls slides under the header
+         instead of over it. -->
+    <div class="relative z-30 flex w-full">
       <!-- The visible examples are roles; the accessible name is the broad one, because
            this box does search companies and skills too. An example is a starting point
            rather than a boundary, and a role is what people actually type first. -->
