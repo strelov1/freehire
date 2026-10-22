@@ -170,22 +170,26 @@ WHERE m.subscription_id = s.subscription_id AND m.job_id = s.job_id;
 
 -- name: CountCoveredMatches :one
 -- How many pending matches a digest will COVER without carrying: the subscription's
--- unleased pending matches strictly older than the oldest one the claim took. The claim
--- reads newest first, so these are exactly the ones that did not fit; the digest counts
--- them in its Total and its "and N more" tail, and MarkCoveredMatchesNotified stamps the
--- same set once the digest has gone out. The two statements share this predicate and
--- must keep sharing it, or the digest would announce one number and retire another.
+-- pending matches strictly older than the oldest one the claim took. The claim reads
+-- newest first, so these are exactly the ones that did not fit; the digest counts them in
+-- its Total and its "and N more" tail, and MarkCoveredMatchesNotified stamps the same set
+-- once the digest has gone out. The two statements share this predicate and must keep
+-- sharing it, or the digest would announce one number and retire another.
 --
 -- (matched_at, job_id) as a row comparison because one RecordSubscriptionMatches batch
 -- stamps every row it writes with the same now(): matched_at alone ties constantly.
+--
+-- Deliberately NO lease predicate. A lease is measured against now(), and the send sits
+-- between the count and the mark, so a lease lapsing during a slow send would let the
+-- mark retire a row the count left out. Without it the two read the same set; a row
+-- another (overlapping, hand-run) pass happens to hold is counted here and delivered
+-- there, which is a repeat, not a lie.
 SELECT count(*)
 FROM subscription_matches
 WHERE subscription_id = sqlc.arg(subscription_id)
   AND notified_at IS NULL
   AND failed_at IS NULL
   AND expired_at IS NULL
-  AND (claimed_at IS NULL
-       OR claimed_at < now() - make_interval(secs => sqlc.arg(lease_seconds)::int))
   AND (matched_at, job_id) < (sqlc.arg(before_matched_at)::timestamptz, sqlc.arg(before_job_id)::bigint);
 
 -- name: MarkCoveredMatchesNotified :execrows
@@ -200,8 +204,6 @@ WHERE subscription_id = sqlc.arg(subscription_id)
   AND notified_at IS NULL
   AND failed_at IS NULL
   AND expired_at IS NULL
-  AND (claimed_at IS NULL
-       OR claimed_at < now() - make_interval(secs => sqlc.arg(lease_seconds)::int))
   AND (matched_at, job_id) < (sqlc.arg(before_matched_at)::timestamptz, sqlc.arg(before_job_id)::bigint);
 
 -- name: GetSubscriptionForDelivery :one

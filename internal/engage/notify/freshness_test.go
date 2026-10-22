@@ -60,7 +60,6 @@ func TestDeliver_FullClaimCountsAndRetiresWhatDidNotFit(t *testing.T) {
 	}
 	wantCutoff := db.CountCoveredMatchesParams{
 		SubscriptionID:  1,
-		LeaseSeconds:    cfg.LeaseSeconds,
 		BeforeMatchedAt: ts(base.Add(-2 * time.Minute)),
 		BeforeJobID:     102,
 	}
@@ -183,6 +182,23 @@ func TestDeliver_ExpiryFailureStopsDelivery(t *testing.T) {
 	}
 	if want := []string{"expire"}; !reflect.DeepEqual(store.calls, want) {
 		t.Errorf("calls = %v, want %v — nothing may be claimed", store.calls, want)
+	}
+}
+
+// A window under a second becomes a zero-second interval in SQL, and expiry is
+// terminal: every pending match would go stale before it could be claimed. A
+// misconfigured window fails the delivery stage instead.
+func TestDeliver_SubSecondFreshnessWindowRefusesToExpire(t *testing.T) {
+	store := &fakeStore{}
+	cfg := DefaultConfig()
+	cfg.FreshnessWindow = 0
+	r := New(store, &fakeSearcher{}, &fakeNotifier{}, cfg)
+
+	if _, err := r.Run(context.Background()); err == nil {
+		t.Fatal("Run succeeded, want a refusal")
+	}
+	if len(store.calls) != 0 {
+		t.Errorf("calls = %v, want nothing expired or claimed", store.calls)
 	}
 }
 

@@ -108,34 +108,32 @@ WHERE subscription_id = $1
   AND notified_at IS NULL
   AND failed_at IS NULL
   AND expired_at IS NULL
-  AND (claimed_at IS NULL
-       OR claimed_at < now() - make_interval(secs => $2::int))
-  AND (matched_at, job_id) < ($3::timestamptz, $4::bigint)
+  AND (matched_at, job_id) < ($2::timestamptz, $3::bigint)
 `
 
 type CountCoveredMatchesParams struct {
 	SubscriptionID  int64              `json:"subscription_id"`
-	LeaseSeconds    int32              `json:"lease_seconds"`
 	BeforeMatchedAt pgtype.Timestamptz `json:"before_matched_at"`
 	BeforeJobID     int64              `json:"before_job_id"`
 }
 
 // How many pending matches a digest will COVER without carrying: the subscription's
-// unleased pending matches strictly older than the oldest one the claim took. The claim
-// reads newest first, so these are exactly the ones that did not fit; the digest counts
-// them in its Total and its "and N more" tail, and MarkCoveredMatchesNotified stamps the
-// same set once the digest has gone out. The two statements share this predicate and
-// must keep sharing it, or the digest would announce one number and retire another.
+// pending matches strictly older than the oldest one the claim took. The claim reads
+// newest first, so these are exactly the ones that did not fit; the digest counts them in
+// its Total and its "and N more" tail, and MarkCoveredMatchesNotified stamps the same set
+// once the digest has gone out. The two statements share this predicate and must keep
+// sharing it, or the digest would announce one number and retire another.
 //
 // (matched_at, job_id) as a row comparison because one RecordSubscriptionMatches batch
 // stamps every row it writes with the same now(): matched_at alone ties constantly.
+//
+// Deliberately NO lease predicate. A lease is measured against now(), and the send sits
+// between the count and the mark, so a lease lapsing during a slow send would let the
+// mark retire a row the count left out. Without it the two read the same set; a row
+// another (overlapping, hand-run) pass happens to hold is counted here and delivered
+// there, which is a repeat, not a lie.
 func (q *Queries) CountCoveredMatches(ctx context.Context, arg CountCoveredMatchesParams) (int64, error) {
-	row := q.db.QueryRow(ctx, countCoveredMatches,
-		arg.SubscriptionID,
-		arg.LeaseSeconds,
-		arg.BeforeMatchedAt,
-		arg.BeforeJobID,
-	)
+	row := q.db.QueryRow(ctx, countCoveredMatches, arg.SubscriptionID, arg.BeforeMatchedAt, arg.BeforeJobID)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -582,14 +580,11 @@ WHERE subscription_id = $1
   AND notified_at IS NULL
   AND failed_at IS NULL
   AND expired_at IS NULL
-  AND (claimed_at IS NULL
-       OR claimed_at < now() - make_interval(secs => $2::int))
-  AND (matched_at, job_id) < ($3::timestamptz, $4::bigint)
+  AND (matched_at, job_id) < ($2::timestamptz, $3::bigint)
 `
 
 type MarkCoveredMatchesNotifiedParams struct {
 	SubscriptionID  int64              `json:"subscription_id"`
-	LeaseSeconds    int32              `json:"lease_seconds"`
 	BeforeMatchedAt pgtype.Timestamptz `json:"before_matched_at"`
 	BeforeJobID     int64              `json:"before_job_id"`
 }
@@ -600,12 +595,7 @@ type MarkCoveredMatchesNotifiedParams struct {
 // linked to the saved search that lists them. Re-queuing them instead is what kept a
 // busy `daily` subscription mailing the same backlog, oldest first, day after day.
 func (q *Queries) MarkCoveredMatchesNotified(ctx context.Context, arg MarkCoveredMatchesNotifiedParams) (int64, error) {
-	result, err := q.db.Exec(ctx, markCoveredMatchesNotified,
-		arg.SubscriptionID,
-		arg.LeaseSeconds,
-		arg.BeforeMatchedAt,
-		arg.BeforeJobID,
-	)
+	result, err := q.db.Exec(ctx, markCoveredMatchesNotified, arg.SubscriptionID, arg.BeforeMatchedAt, arg.BeforeJobID)
 	if err != nil {
 		return 0, err
 	}

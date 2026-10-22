@@ -256,7 +256,7 @@ func (r *Runner) deliverOne(ctx context.Context, subID int64, claim *subscriptio
 		log.Printf("notify: mark notified for subscription %d: %v", subID, err)
 	}
 	if covered > 0 {
-		if _, err := r.store.MarkCoveredMatchesNotified(ctx, db.MarkCoveredMatchesNotifiedParams(claim.coveredParams(subID, r.cfg.LeaseSeconds))); err != nil {
+		if _, err := r.store.MarkCoveredMatchesNotified(ctx, db.MarkCoveredMatchesNotifiedParams(claim.coveredParams(subID))); err != nil {
 			// The digest counted them but they stay pending: the next digest carries the
 			// newest of them again or they go stale — a repeat at worst, never a loss.
 			log.Printf("notify: mark covered matches notified for subscription %d: %v", subID, err)
@@ -449,7 +449,14 @@ const expireBatch = 5000
 
 // expireStale takes every stale match out of the pending set, one bounded batch at
 // a time until a batch comes back short, and reports how many it took.
+//
+// A window under a second is refused rather than run: it becomes a zero-second
+// interval in SQL, and expiry is terminal — every pending match would go stale
+// before it could be claimed.
 func (r *Runner) expireStale(ctx context.Context) (int, error) {
+	if r.cfg.FreshnessWindow < time.Second {
+		return 0, fmt.Errorf("FreshnessWindow must be at least one second, got %v", r.cfg.FreshnessWindow)
+	}
 	total := 0
 	for {
 		n, err := r.store.ExpireStaleSubscriptionMatches(ctx, db.ExpireStaleSubscriptionMatchesParams{
@@ -489,10 +496,9 @@ func (c *subscriptionClaim) add(row db.ClaimSubscriptionMatchesRow) {
 // coveredParams names the pending matches behind the claim's stopping point, for
 // CountCoveredMatches and MarkCoveredMatchesNotified alike — one value, so the
 // count a digest announces and the set it retires cannot drift apart.
-func (c *subscriptionClaim) coveredParams(subID int64, leaseSeconds int32) db.CountCoveredMatchesParams {
+func (c *subscriptionClaim) coveredParams(subID int64) db.CountCoveredMatchesParams {
 	return db.CountCoveredMatchesParams{
 		SubscriptionID:  subID,
-		LeaseSeconds:    leaseSeconds,
 		BeforeMatchedAt: c.oldest.MatchedAt,
 		BeforeJobID:     c.oldest.JobID,
 	}
@@ -506,7 +512,7 @@ func (r *Runner) countCovered(ctx context.Context, subID int64, claim *subscript
 	if !claim.full {
 		return 0
 	}
-	n, err := r.store.CountCoveredMatches(ctx, claim.coveredParams(subID, r.cfg.LeaseSeconds))
+	n, err := r.store.CountCoveredMatches(ctx, claim.coveredParams(subID))
 	if err != nil {
 		log.Printf("notify: count covered matches for subscription %d: %v", subID, err)
 		return 0
