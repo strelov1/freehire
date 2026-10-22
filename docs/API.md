@@ -471,7 +471,7 @@ curl "https://freehire.me/api/v1/jobs/senior-go-engineer-acme-1a2b/apply-form"
 
 The application form of a vacancy that takes applications on freehire.
 
-Only for a posting whose `direct_apply` is true — its employer published it here and receives applications by email. Any other posting is a `404`. Signed in with the browser session, the response also carries `applied` and a `prefill` of your earlier answers to the same questions; an API key never sees those. `open` is false once the vacancy closed. `501` when this deployment cannot deliver applications.
+Only for a posting whose `direct_apply` is true — its employer published it here and receives applications by email. Any other posting is a `404`. Signed in with the browser session, the response also carries `applied`, a `prefill` of your earlier answers to the same questions, and `cvs` — the CV you tailored for this vacancy and whether you uploaded one; an API key never sees those. `open` is false once the vacancy closed. `501` when this deployment cannot deliver applications.
 
 **Path parameters**
 
@@ -493,7 +493,8 @@ curl "https://freehire.me/api/v1/jobs/platform-engineer-acme-9f3c/direct-apply"
     ],
     "open": true,
     "applied": false,
-    "prefill": {}
+    "prefill": {},
+    "cvs": { "tailored": null, "has_resume": true }
   }
 }
 ```

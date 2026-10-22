@@ -899,7 +899,7 @@ func Register(app *fiber.App, cfg Config) {
 		directApplyH.svc = directapply.New(
 			directapply.NewQueriesRepository(queries),
 			employerSvc,
-			directApplyCVs{pdf: cvPDF},
+			directApplyCVs{pdf: cvPDF, resumes: resumeStore},
 			directApplyMailer{mailer: emailnotify.NewApplicationMailer(mailClient, cfg.NotifyEmailFrom, cfg.FrontendOrigin), origin: cfg.FrontendOrigin},
 			directApplyTracker{tracking: tracking},
 			answerBank,

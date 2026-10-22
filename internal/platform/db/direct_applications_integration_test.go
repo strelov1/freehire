@@ -38,7 +38,7 @@ func TestDirectApplications(t *testing.T) {
 	}
 	apply := func(jobID int64, note string, limit int64) (int64, error) {
 		return q.UpsertDirectApplication(ctx, UpsertDirectApplicationParams{
-			JobID: jobID, UserID: userID, Note: note, Answers: []byte(`[]`), DailyLimit: limit,
+			JobID: jobID, UserID: userID, CvKind: "resume", Note: note, Answers: []byte(`[]`), DailyLimit: limit,
 		})
 	}
 	note := func(jobID int64) string {

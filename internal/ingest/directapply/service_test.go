@@ -119,16 +119,38 @@ func (e fakeEmployers) ActiveAccount(_ context.Context, userID int64) (employer.
 	return employer.Account{UserID: userID, CompanyName: "Acme", WorkEmail: "hr@acme.test"}, nil
 }
 
-type fakeCVs struct{ renders *int }
+// fakeCVs: the candidate owns ownCV, tailored for the harness vacancy (job 11), and has an
+// uploaded résumé unless noResume is set.
+type fakeCVs struct {
+	renders  *int
+	noResume bool
+}
 
-func (f fakeCVs) PDF(_ context.Context, userID int64, id uuid.UUID) ([]byte, error) {
+func (f fakeCVs) Attachment(_ context.Context, userID, jobID int64, choice CVChoice) (Attachment, error) {
 	if f.renders != nil {
 		*f.renders++
 	}
-	if userID != candidateID || id != ownCV {
-		return nil, ErrNotFound
+	if userID != candidateID {
+		return Attachment{}, ErrNotFound
 	}
-	return []byte("%PDF"), nil
+	if choice.Resume {
+		if f.noResume {
+			return Attachment{}, ErrNotFound
+		}
+		return Attachment{Filename: "cv.txt", ContentType: "text/plain; charset=utf-8", Content: []byte("my cv")}, nil
+	}
+	if choice.CVID != ownCV || jobID != 11 {
+		return Attachment{}, ErrNotFound
+	}
+	return Attachment{Filename: "cv.pdf", ContentType: "application/pdf", Content: []byte("%PDF")}, nil
+}
+
+func (f fakeCVs) Options(_ context.Context, userID, jobID int64) (CVOptions, error) {
+	o := CVOptions{HasResume: !f.noResume}
+	if userID == candidateID && jobID == 11 {
+		o.Tailored = &TailoredCV{ID: ownCV, Title: "Tailored — Platform Engineer"}
+	}
+	return o, nil
 }
 
 type fakeMailer struct {
@@ -186,7 +208,7 @@ func (h *harness) service() *Service {
 }
 
 func validApplication() Application {
-	return Application{CVID: ownCV, Answers: map[string]string{"q1": "true", "q2": "Go"}, Note: " Hi "}
+	return Application{CV: CVChoice{CVID: ownCV}, Answers: map[string]string{"q1": "true", "q2": "Go"}, Note: " Hi "}
 }
 
 func TestApply_DeliversToTheEmployerAndUpdatesTheCandidatesRecords(t *testing.T) {
@@ -198,7 +220,7 @@ func TestApply_DeliversToTheEmployerAndUpdatesTheCandidatesRecords(t *testing.T)
 		t.Fatalf("mails = %d, want 1", len(h.mailer.sent))
 	}
 	m := h.mailer.sent[0]
-	if m.To != "hr@acme.test" || m.CandidateEmail != "c@example.test" || m.CompanyName != "Acme" || string(m.CV) != "%PDF" || m.Note != "Hi" {
+	if m.To != "hr@acme.test" || m.CandidateEmail != "c@example.test" || m.CompanyName != "Acme" || string(m.CV.Content) != "%PDF" || m.Note != "Hi" {
 		t.Errorf("mail = %+v", m)
 	}
 	if len(m.Answers) != 2 {
@@ -230,9 +252,17 @@ func TestApply_Refusals(t *testing.T) {
 			app:  func() Application { a := validApplication(); delete(a.Answers, "q1"); return a },
 			want: ErrInvalid,
 		},
-		"someone else's CV": {
-			app:  func() Application { a := validApplication(); a.CVID = uuid.New(); return a },
+		"someone else's CV, or one tailored for another vacancy": {
+			app:  func() Application { a := validApplication(); a.CV = CVChoice{CVID: uuid.New()}; return a },
 			want: ErrNotFound,
+		},
+		"no CV chosen": {
+			app:  func() Application { a := validApplication(); a.CV = CVChoice{}; return a },
+			want: ErrInvalid,
+		},
+		"both CVs chosen": {
+			app:  func() Application { a := validApplication(); a.CV = CVChoice{Resume: true, CVID: ownCV}; return a },
+			want: ErrInvalid,
 		},
 		"daily cap":                {setup: func(h *harness) { h.repo.limit = 0 }, want: ErrDailyLimit},
 		"deleted employer account": {setup: func(h *harness) { h.emp.err = employer.ErrNotFound }, want: ErrClosed},
@@ -398,5 +428,41 @@ func TestForm_ReportsASentApplicationAndAClosedVacancy(t *testing.T) {
 	}
 	if !view.Applied || view.Open {
 		t.Errorf("view = %+v, want applied and not open", view)
+	}
+}
+
+// The candidate's own uploaded CV goes out as they uploaded it, and the record says so.
+func TestApply_SendsTheUploadedCV(t *testing.T) {
+	h := newHarness(t)
+	app := validApplication()
+	app.CV = CVChoice{Resume: true}
+	if err := h.service().Apply(context.Background(), candidateID, slug, app); err != nil {
+		t.Fatalf("Apply: %v", err)
+	}
+	if got := h.mailer.sent[0].CV; got.Filename != "cv.txt" || string(got.Content) != "my cv" {
+		t.Errorf("attached = %+v, want the uploaded file", got)
+	}
+	for _, r := range h.repo.records {
+		if !r.CV.Resume {
+			t.Errorf("record = %+v, want it to say the uploaded CV was sent", r)
+		}
+	}
+}
+
+func TestForm_OffersTheCandidatesCVs(t *testing.T) {
+	h := newHarness(t)
+	view, err := h.service().Form(context.Background(), candidateID, slug)
+	if err != nil {
+		t.Fatalf("Form: %v", err)
+	}
+	if view.CVs.Tailored == nil || view.CVs.Tailored.ID != ownCV || !view.CVs.HasResume {
+		t.Errorf("CVs = %+v, want the CV tailored for this vacancy and the uploaded one", view.CVs)
+	}
+	anon, err := h.service().Form(context.Background(), 0, slug)
+	if err != nil {
+		t.Fatalf("Form: %v", err)
+	}
+	if anon.CVs.Tailored != nil || anon.CVs.HasResume {
+		t.Errorf("a visitor's CVs = %+v, want none", anon.CVs)
 	}
 }

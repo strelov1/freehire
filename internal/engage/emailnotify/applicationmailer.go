@@ -36,7 +36,11 @@ type ApplicationMail struct {
 	JobURL         string // the vacancy's page on this site
 	Answers        []ApplicationAnswer
 	Note           string
-	CV             []byte // PDF
+	// The CV as the employer receives it: a rendered PDF, or the file the candidate
+	// uploaded to their profile, which may be a PDF or pasted text.
+	CV            []byte
+	CVFilename    string
+	CVContentType string
 }
 
 // ApplicationAnswer is one question with the candidate's answer, both as a person reads
@@ -76,7 +80,7 @@ func (m *ApplicationMailer) SendApplication(ctx context.Context, a ApplicationMa
 		}),
 		Text:        applicationText(a),
 		Group:       emailprefs.GroupEssential,
-		Attachments: []Attachment{{Filename: "cv.pdf", ContentType: "application/pdf", Content: a.CV}},
+		Attachments: []Attachment{{Filename: a.CVFilename, ContentType: a.CVContentType, Content: a.CV}},
 	})
 }
 

@@ -61,9 +61,53 @@ type Candidate struct {
 type Record struct {
 	JobID   int64
 	UserID  int64
-	CVID    uuid.UUID
+	CV      CVChoice
 	Note    string
 	Answers []Answer
+}
+
+// CVChoice is the CV an application sends: exactly one of the candidate's uploaded CV
+// (Resume) or a CV they tailored for THIS vacancy (CVID). Nothing else is offered — a
+// base CV or one tailored for another vacancy is the wrong document to send here.
+type CVChoice struct {
+	Resume bool
+	CVID   uuid.UUID
+}
+
+// kind is the direct_applications.cv_kind this choice records.
+func (c CVChoice) kind() string {
+	if c.Resume {
+		return "resume"
+	}
+	return "tailored"
+}
+
+func (c CVChoice) check() error {
+	if c.Resume == (c.CVID != uuid.Nil) {
+		return fmt.Errorf("%w: choose your uploaded CV or the one tailored for this vacancy", ErrInvalid)
+	}
+	return nil
+}
+
+// Attachment is the CV file an employer receives.
+type Attachment struct {
+	Filename    string
+	ContentType string
+	Content     []byte
+}
+
+// TailoredCV names the CV a candidate tailored for a vacancy.
+type TailoredCV struct {
+	ID    uuid.UUID
+	Title string
+}
+
+// CVOptions is what the candidate can send with an application to one vacancy.
+type CVOptions struct {
+	// Tailored is their CV tailored for this vacancy, nil when they have none.
+	Tailored *TailoredCV
+	// HasResume is whether they have uploaded a CV file to their profile.
+	HasResume bool
 }
 
 // Repository is the persistence this package needs.
@@ -117,9 +161,13 @@ type Employers interface {
 	ActiveAccount(ctx context.Context, userID int64) (employer.Account, error)
 }
 
-// CVs renders a CV the candidate owns to PDF; ErrNotFound when they own no such CV.
+// CVs reads the CVs a candidate may send with an application to jobID.
 type CVs interface {
-	PDF(ctx context.Context, userID int64, cvID uuid.UUID) ([]byte, error)
+	// Attachment produces the chosen CV as a file. ErrNotFound when the candidate has no
+	// uploaded CV, or the chosen CV is not theirs or not tailored for jobID.
+	Attachment(ctx context.Context, userID, jobID int64, choice CVChoice) (Attachment, error)
+	// Options reports what they can send.
+	Options(ctx context.Context, userID, jobID int64) (CVOptions, error)
 }
 
 // Mailer delivers an application to the employer. Implemented in internal/engage
@@ -137,7 +185,7 @@ type Mail struct {
 	JobSlug        string
 	Answers        []Answer
 	Note           string
-	CV             []byte // PDF
+	CV             Attachment
 }
 
 // Tracker records the application in the candidate's own tracking.
@@ -159,14 +207,15 @@ type FormView struct {
 	Questions   []applyform.Field
 	// Open is false once the vacancy closed or its employer account stopped being active.
 	Open bool
-	// Applied and Prefill are the signed-in candidate's own; empty for anyone else.
+	// Applied, Prefill and CVs are the signed-in candidate's own; empty for anyone else.
 	Applied bool
 	Prefill map[string]string // question id -> answer, in the form Apply accepts
+	CVs     CVOptions
 }
 
 // Application is what the candidate submits.
 type Application struct {
-	CVID    uuid.UUID
+	CV      CVChoice
 	Answers map[string]string // question id -> answer
 	Note    string
 }
@@ -236,6 +285,9 @@ func (s *Service) Apply(ctx context.Context, userID int64, slug string, app Appl
 	if err != nil {
 		return err
 	}
+	if err := app.CV.check(); err != nil {
+		return err
+	}
 	// A cheap read before the expensive render: a vacancy this candidate already applied
 	// to, or is applying to right now, is refused without rendering a PDF it would discard.
 	state, err := s.repo.State(ctx, v.ID, userID)
@@ -245,12 +297,12 @@ func (s *Service) Apply(ctx context.Context, userID int64, slug string, app Appl
 	if err := state.refusal(); err != nil {
 		return err
 	}
-	pdf, err := s.cvs.PDF(ctx, userID, app.CVID)
+	cv, err := s.cvs.Attachment(ctx, userID, v.ID, app.CV)
 	if err != nil {
 		return err
 	}
 
-	id, recorded, err := s.repo.Record(ctx, Record{JobID: v.ID, UserID: userID, CVID: app.CVID, Note: note, Answers: answers}, s.dailyLimit)
+	id, recorded, err := s.repo.Record(ctx, Record{JobID: v.ID, UserID: userID, CV: app.CV, Note: note, Answers: answers}, s.dailyLimit)
 	if err != nil {
 		return err
 	}
@@ -273,7 +325,7 @@ func (s *Service) Apply(ctx context.Context, userID int64, slug string, app Appl
 		JobSlug:        v.Slug,
 		Answers:        answers,
 		Note:           note,
-		CV:             pdf,
+		CV:             cv,
 	}); err != nil {
 		if relErr := s.repo.Release(ctx, id); relErr != nil {
 			log.Printf("directapply: delivery claim on application %d not released: %v", id, relErr)
@@ -335,6 +387,9 @@ func (s *Service) Form(ctx context.Context, userID int64, slug string) (FormView
 		return FormView{}, err
 	}
 	view.Applied = state == StateSent
+	if view.CVs, err = s.cvs.Options(ctx, userID, v.ID); err != nil {
+		return FormView{}, err
+	}
 	banked, err := s.bank.Sendable(ctx, userID)
 	if err != nil {
 		// A prefill is a convenience; the form is still answerable without it.

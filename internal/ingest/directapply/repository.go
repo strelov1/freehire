@@ -83,7 +83,8 @@ func (r *QueriesRepository) Record(ctx context.Context, rec Record, dailyLimit i
 	id, err := r.q.UpsertDirectApplication(ctx, db.UpsertDirectApplicationParams{
 		JobID:      rec.JobID,
 		UserID:     rec.UserID,
-		CvID:       pgtype.UUID{Bytes: rec.CVID, Valid: true},
+		CvID:       pgtype.UUID{Bytes: rec.CV.CVID, Valid: !rec.CV.Resume},
+		CvKind:     rec.CV.kind(),
 		Note:       rec.Note,
 		Answers:    answers,
 		DailyLimit: dailyLimit,

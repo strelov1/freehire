@@ -1,8 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { resolve } from '$app/paths';
-  import { api, ApiError } from '#lib/api.js';
-  import type { CvMeta } from '#lib/cv.js';
+  import { FileUp, Paperclip, Sparkles } from '@lucide/svelte';
+  import { api, ApiError, RESUME_MAX_MB } from '#lib/api.js';
   import type { DirectApplyForm } from '#lib/types.js';
   import { Button, Dialog, FormField } from '#lib/ui/index.js';
 
@@ -10,12 +9,18 @@
   // open it and unmounts it on onClose; it owns the form. What it sends reaches the
   // employer by email (internal/ingest/directapply), so the consent line before the
   // button names who receives it.
+  //
+  // It sends one of two CVs and never anything else: the CV the candidate tailored for THIS
+  // vacancy, attached by itself when there is one, or the CV file they uploaded to their
+  // profile. With neither chosen it offers both ways in — upload a file, or tailor one
+  // (onTailor hands back to the page's own tailoring flow).
   let {
     slug,
     title,
     onClose,
     onSent,
-  }: { slug: string; title: string; onClose: () => void; onSent: () => void } = $props();
+    onTailor,
+  }: { slug: string; title: string; onClose: () => void; onSent: () => void; onTailor: () => void } = $props();
 
   let open = $state(true);
   $effect(() => {
@@ -23,9 +28,12 @@
   });
 
   let form = $state.raw<DirectApplyForm | null>(null);
-  let cvs = $state.raw<CvMeta[]>([]);
   let loadError = $state<string | null>(null);
-  let cvId = $state<string | null>(null);
+  // Which CV goes out; null until the candidate has one to send.
+  let cv = $state<'tailored' | 'resume' | null>(null);
+  let uploading = $state(false);
+  let uploadError = $state<string | null>(null);
+  let fileInput = $state<HTMLInputElement | null>(null);
   let answers = $state<Record<string, string>>({});
   let note = $state('');
   let submitting = $state(false);
@@ -37,10 +45,9 @@
 
   onMount(async () => {
     try {
-      const [f, list] = await Promise.all([api.getDirectApplyForm(slug), api.listCvs()]);
+      const f = await api.getDirectApplyForm(slug);
       form = f;
-      cvs = list;
-      cvId = list[0]?.id ?? null;
+      cv = f.cvs.tailored ? 'tailored' : null;
       answers = { ...f.prefill };
       if (f.applied) done = true;
     } catch {
@@ -51,14 +58,35 @@
   const missing = $derived(
     form ? form.questions.filter((q) => q.required && !(answers[q.id] ?? '').trim()).map((q) => q.label) : [],
   );
-  const canSubmit = $derived(!!form?.open && cvId !== null && missing.length === 0 && !submitting);
+  const canSubmit = $derived(!!form?.open && cv !== null && missing.length === 0 && !submitting);
+
+  // Uploading here is the profile's own upload: the file becomes the candidate's stored CV,
+  // the one every later application can send too.
+  async function upload(e: Event) {
+    const file = (e.currentTarget as HTMLInputElement).files?.[0];
+    if (!file) return;
+    uploading = true;
+    uploadError = null;
+    try {
+      await api.extractResumeProfile(file);
+      const fresh = await api.getDirectApplyForm(slug);
+      if (!fresh.cvs.has_resume) throw new Error('not stored');
+      form = fresh;
+      cv = 'resume';
+    } catch (err) {
+      uploadError =
+        err instanceof ApiError && err.status === 413 ? err.message : "Couldn't upload your CV. Please try again.";
+    } finally {
+      uploading = false;
+    }
+  }
 
   function messageFor(e: unknown): string {
     if (e instanceof ApiError) {
       if (e.status === 400) return e.message;
       if (e.status === 401) return 'Please sign in to apply.';
       if (e.status === 403) return 'Confirm your email address before applying.';
-      if (e.status === 404) return 'That CV is no longer available — pick another one.';
+      if (e.status === 404) return 'That CV is no longer available. Upload your CV or tailor one again.';
       if (e.status === 410) return 'This vacancy no longer takes applications.';
       if (e.status === 429) return "You've reached today's limit of applications.";
       if (e.status === 502) return "The application couldn't be delivered. Please try again.";
@@ -68,11 +96,12 @@
 
   async function submit(e: SubmitEvent) {
     e.preventDefault();
-    if (!canSubmit || cvId === null) return;
+    if (!canSubmit || !form || cv === null) return;
     submitting = true;
     error = null;
     try {
-      await api.sendDirectApplication(slug, { cv_id: cvId, answers, note: note.trim() || undefined });
+      const choice = cv === 'tailored' && form.cvs.tailored ? { cv_id: form.cvs.tailored.id } : { resume: true as const };
+      await api.sendDirectApplication(slug, { ...choice, answers, note: note.trim() || undefined });
       done = true;
       onSent();
     } catch (err) {
@@ -106,21 +135,63 @@
     <p class="text-sm text-muted-foreground">This vacancy no longer takes applications.</p>
   {:else}
     <form onsubmit={submit} class="flex flex-col gap-4">
-      {#if cvs.length === 0}
-        <p class="text-sm">
-          You need a CV to apply. <a href={resolve('/my/cvs')} class="underline">Create one</a> and come back.
-        </p>
-      {:else}
-        <FormField label="CV" required>
-          {#snippet children({ id, required })}
-            <select {id} {required} bind:value={cvId} class={fieldClass}>
-              {#each cvs as cv (cv.id)}
-                <option value={cv.id}>{cv.title}</option>
-              {/each}
-            </select>
-          {/snippet}
-        </FormField>
-      {/if}
+      <div class="flex flex-col gap-2">
+        <span class="text-sm font-medium">CV</span>
+        {#if cv === 'tailored' && form.cvs.tailored}
+          <p class="flex items-center gap-2 text-sm">
+            <Paperclip class="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+            <span>Attached: <span class="font-medium">{form.cvs.tailored.title}</span>, tailored for this vacancy</span>
+          </p>
+          {#if form.cvs.has_resume}
+            <button type="button" class="w-fit text-xs underline" onclick={() => (cv = 'resume')}>
+              Send my uploaded CV instead
+            </button>
+          {/if}
+        {:else if cv === 'resume'}
+          <p class="flex items-center gap-2 text-sm">
+            <Paperclip class="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+            <span>Attached: <span class="font-medium">your uploaded CV</span></span>
+          </p>
+          {#if form.cvs.tailored}
+            <button type="button" class="w-fit text-xs underline" onclick={() => (cv = 'tailored')}>
+              Send the CV tailored for this vacancy instead
+            </button>
+          {/if}
+        {:else}
+          <div class="flex flex-col gap-2 sm:flex-row">
+            {#if form.cvs.has_resume}
+              <Button type="button" variant="outline" class="gap-1.5" onclick={() => (cv = 'resume')}>
+                <Paperclip class="size-4" aria-hidden="true" /> Use my uploaded CV
+              </Button>
+            {:else}
+              <Button
+                type="button"
+                variant="outline"
+                class="gap-1.5"
+                disabled={uploading}
+                onclick={() => fileInput?.click()}
+              >
+                <FileUp class="size-4" aria-hidden="true" />
+                {uploading ? 'Uploading…' : 'Upload my CV'}
+              </Button>
+              <input
+                bind:this={fileInput}
+                type="file"
+                accept="application/pdf"
+                class="hidden"
+                onchange={upload}
+                aria-label="Upload my CV (PDF, up to {RESUME_MAX_MB} MB)"
+              />
+            {/if}
+            <Button type="button" variant="primary" class="gap-1.5" onclick={onTailor}>
+              <Sparkles class="size-4" aria-hidden="true" /> Tailor my CV for this vacancy
+            </Button>
+          </div>
+          {#if uploadError}
+            <p class="text-sm text-destructive">{uploadError}</p>
+          {/if}
+        {/if}
+      </div>
 
       {#each form.questions as q (q.id)}
         {#if q.type === 'boolean'}

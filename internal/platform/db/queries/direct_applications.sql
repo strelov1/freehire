@@ -10,8 +10,8 @@
 -- on OTHER vacancies, and a retry on this one always passes, so a failed delivery never
 -- costs a second slot. Two concurrent first applications can both pass the count and land
 -- one over the cap; the cap bounds abuse, it is not a quota anyone is billed against.
-INSERT INTO direct_applications (job_id, user_id, cv_id, note, answers, sending_at)
-SELECT @job_id, @user_id, @cv_id, @note, @answers, now()
+INSERT INTO direct_applications (job_id, user_id, cv_id, cv_kind, note, answers, sending_at)
+SELECT @job_id, @user_id, @cv_id, @cv_kind, @note, @answers, now()
 WHERE EXISTS (
         SELECT 1 FROM direct_applications
         WHERE job_id = @job_id AND user_id = @user_id
@@ -23,7 +23,7 @@ WHERE EXISTS (
           AND created_at >= date_trunc('day', now(), 'UTC')
     ) < sqlc.arg(daily_limit)::bigint
 ON CONFLICT (job_id, user_id) DO UPDATE
-SET cv_id = EXCLUDED.cv_id, note = EXCLUDED.note, answers = EXCLUDED.answers, sending_at = now()
+SET cv_id = EXCLUDED.cv_id, cv_kind = EXCLUDED.cv_kind, note = EXCLUDED.note, answers = EXCLUDED.answers, sending_at = now()
 WHERE direct_applications.sent_at IS NULL
   AND (direct_applications.sending_at IS NULL
        OR direct_applications.sending_at < now() - interval '2 minutes')

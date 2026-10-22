@@ -332,7 +332,7 @@ func (s *Store) Tailor(ctx context.Context, userID, jobID int64, tailoredTitle s
 	// One tailored copy per vacancy. The workspace's address carries no CV reference, so a
 	// reload re-runs this exact request; minting a second copy leaves the candidate's
 	// conversation bound to the first one, which is what "my chat disappeared" looks like.
-	if existing, err := s.tailoredForJob(ctx, userID, jobID); err == nil {
+	if existing, err := s.TailoredForJob(ctx, userID, jobID); err == nil {
 		return base.Meta, existing, false, nil
 	} else if !errors.Is(err, ErrNotFound) {
 		return Meta{}, Meta{}, false, err
@@ -345,7 +345,7 @@ func (s *Store) Tailor(ctx context.Context, userID, jobID int64, tailoredTitle s
 		// and this one: cvs_user_id_job_id_tailored_uniq_idx (0091) turns the loser into a
 		// unique violation instead of a duplicate row. Re-fetch and return the winner's copy.
 		if pgerr.IsUniqueViolation(err) {
-			existing, ferr := s.tailoredForJob(ctx, userID, jobID)
+			existing, ferr := s.TailoredForJob(ctx, userID, jobID)
 			if ferr != nil {
 				return Meta{}, Meta{}, false, ferr
 			}
@@ -356,8 +356,9 @@ func (s *Store) Tailor(ctx context.Context, userID, jobID int64, tailoredTitle s
 	return base.Meta, tailored, true, nil
 }
 
-// tailoredForJob returns the user's existing tailored copy for a vacancy, or ErrNotFound.
-func (s *Store) tailoredForJob(ctx context.Context, userID, jobID int64) (Meta, error) {
+// TailoredForJob returns the user's existing tailored copy for a vacancy, or ErrNotFound.
+// A vacancy has at most one: Tailor returns the existing copy rather than making another.
+func (s *Store) TailoredForJob(ctx context.Context, userID, jobID int64) (Meta, error) {
 	row, err := s.repo.GetTailoredForJob(ctx, userID, jobID)
 	if err != nil {
 		return Meta{}, mapNotFound(err)

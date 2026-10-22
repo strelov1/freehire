@@ -34,13 +34,30 @@ import (
 	"github.com/strelov1/freehire/internal/platform/db"
 )
 
-type fakeApplicationCVs struct{ owner int64 }
+// fakeApplicationCVs stands in for the CV renderer and the résumé store: the owner has an
+// uploaded CV and one CV tailored for the job under test.
+type fakeApplicationCVs struct {
+	owner int64
+	jobID *int64
+	cvID  *string
+}
 
-func (f fakeApplicationCVs) PDF(_ context.Context, userID int64, _ uuid.UUID) ([]byte, error) {
+func (f fakeApplicationCVs) Attachment(_ context.Context, userID, jobID int64, choice directapply.CVChoice) (directapply.Attachment, error) {
 	if userID != f.owner {
-		return nil, directapply.ErrNotFound
+		return directapply.Attachment{}, directapply.ErrNotFound
 	}
-	return []byte("%PDF-1.7"), nil
+	if !choice.Resume && (jobID != *f.jobID || choice.CVID.String() != *f.cvID) {
+		return directapply.Attachment{}, directapply.ErrNotFound
+	}
+	return directapply.Attachment{Filename: "cv.pdf", ContentType: "application/pdf", Content: []byte("%PDF-1.7")}, nil
+}
+
+func (f fakeApplicationCVs) Options(_ context.Context, userID, jobID int64) (directapply.CVOptions, error) {
+	o := directapply.CVOptions{HasResume: userID == f.owner}
+	if userID == f.owner && jobID == *f.jobID {
+		o.Tailored = &directapply.TailoredCV{ID: uuid.MustParse(*f.cvID), Title: "Tailored"}
+	}
+	return o, nil
 }
 
 type recordingApplicationMailer struct {
@@ -104,10 +121,16 @@ func TestDirectApplyEndToEnd(t *testing.T) {
 	if err := bank.Save(ctx, candidateID, "Do you hold an EU work permit?", "Yes", answerbank.AuthorCandidate); err != nil {
 		t.Fatalf("seed bank: %v", err)
 	}
+	// The candidate's CV tailored for this vacancy (cvs.job_id), the one the dialog attaches.
+	jobID := vacancy.Fields().ID
+	var cvID string
+	if err := pool.QueryRow(ctx, `INSERT INTO cvs (user_id, title, data, job_id) VALUES ($1, 'Tailored', '{}', $2) RETURNING id::text`, candidateID, jobID).Scan(&cvID); err != nil {
+		t.Fatalf("seed cv: %v", err)
+	}
 	mailer := &recordingApplicationMailer{}
 	tracking := jobtracking.New(jobtracking.NewQueriesRepository(queries, pool))
 	h := &directApplyHandlers{svc: directapply.New(directapply.NewQueriesRepository(queries), employerSvc,
-		fakeApplicationCVs{owner: candidateID}, mailer, directApplyTracker{tracking: tracking}, bank, 30)}
+		fakeApplicationCVs{owner: candidateID, jobID: &jobID, cvID: &cvID}, mailer, directApplyTracker{tracking: tracking}, bank, 30)}
 
 	iss := auth.NewIssuer("test-secret", time.Hour)
 	candidateCookie, _ := iss.Issue(candidateID, testTokenVersion)
@@ -138,10 +161,6 @@ func TestDirectApplyEndToEnd(t *testing.T) {
 		b, _ := io.ReadAll(resp.Body)
 		return resp.StatusCode, b
 	}
-	var cvID string
-	if err := pool.QueryRow(ctx, `INSERT INTO cvs (user_id, title, data) VALUES ($1, 'CV', '{}') RETURNING id::text`, candidateID).Scan(&cvID); err != nil {
-		t.Fatalf("seed cv: %v", err)
-	}
 	application := `{"cv_id":"` + cvID + `","answers":{"q1":"true"},"note":"Hello"}`
 
 	t.Run("a visitor sees the questions, a candidate also their prefill", func(t *testing.T) {
@@ -163,6 +182,9 @@ func TestDirectApplyEndToEnd(t *testing.T) {
 		if f.Prefill["q1"] != "true" {
 			t.Errorf("prefill = %v, want the banked yes for q1", f.Prefill)
 		}
+		if f.CVs.Tailored == nil || f.CVs.Tailored.ID != cvID || !f.CVs.HasResume {
+			t.Errorf("cvs = %+v, want the CV tailored for this vacancy and the uploaded one", f.CVs)
+		}
 	})
 
 	t.Run("an API key carries no candidate's prefill", func(t *testing.T) {
@@ -182,6 +204,13 @@ func TestDirectApplyEndToEnd(t *testing.T) {
 	t.Run("an unverified user cannot apply", func(t *testing.T) {
 		if status, body := do(t, fiber.MethodPost, unverifiedCookie, application); status != fiber.StatusForbidden {
 			t.Errorf("status = %d (%s), want 403", status, body)
+		}
+	})
+
+	t.Run("an application names exactly one CV", func(t *testing.T) {
+		both := `{"resume":true,"cv_id":"` + cvID + `","answers":{"q1":"true"}}`
+		if status, body := do(t, fiber.MethodPost, candidateCookie, both); status != fiber.StatusBadRequest {
+			t.Errorf("both CVs: status = %d (%s), want 400", status, body)
 		}
 	})
 

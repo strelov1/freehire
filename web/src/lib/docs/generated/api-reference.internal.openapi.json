@@ -123,15 +123,20 @@
           }
         ],
         "requestBody": {
-          "required": true,
+          "required": false,
           "content": {
             "application/json": {
               "schema": {
                 "type": "object",
                 "properties": {
+                  "resume": {
+                    "type": "boolean",
+                    "description": "Send the CV file uploaded to your profile. Exactly one of `resume` and `cv_id`.",
+                    "example": "true"
+                  },
                   "cv_id": {
                     "type": "string",
-                    "description": "One of your CVs.",
+                    "description": "The CV you tailored for THIS vacancy (`cvs.tailored.id` from the form). Any other CV is a `404`.",
                     "example": "6f1c0c3e-8a51-4c1e-9d55-6a4c1f2b0a01"
                   },
                   "answers": {
@@ -144,10 +149,7 @@
                     "description": "Up to 2000 characters to the employer.",
                     "example": "Happy to talk this week."
                   }
-                },
-                "required": [
-                  "cv_id"
-                ]
+                }
               }
             }
           }

@@ -29,3 +29,27 @@ describe('JobView on-site Apply', () => {
     expect(directBranch).not.toContain('href=');
   });
 });
+
+// The dialog sends the CV tailored for THIS vacancy or the uploaded CV — never a pick from
+// every CV the candidate owns, which once led with one tailored for another vacancy.
+describe('DirectApplyDialog CV choice', () => {
+  const DIALOG = readFileSync(join(import.meta.dirname, 'DirectApplyDialog.svelte'), 'utf8');
+
+  it('does not list every CV', () => {
+    expect(DIALOG).not.toContain('listCvs');
+  });
+
+  it('attaches the tailored CV by itself when there is one', () => {
+    expect(DIALOG).toContain("cv = f.cvs.tailored ? 'tailored' : null;");
+  });
+
+  it('sends only the tailored CV or the uploaded one', () => {
+    expect(DIALOG).toContain('{ cv_id: form.cvs.tailored.id }');
+    expect(DIALOG).toContain('{ resume: true as const }');
+  });
+
+  it('offers both ways in when there is neither', () => {
+    expect(DIALOG).toContain('Upload my CV');
+    expect(DIALOG).toContain('onclick={onTailor}');
+  });
+});

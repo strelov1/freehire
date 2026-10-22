@@ -77,7 +77,7 @@ func TestQueriesRepository(t *testing.T) {
 		if err := pool.QueryRow(ctx, `INSERT INTO cvs (user_id, title, data) VALUES ($1, 'CV', '{}') RETURNING id`, candidateID).Scan(&cvID); err != nil {
 			t.Fatalf("seed cv: %v", err)
 		}
-		rec := directapply.Record{JobID: onSite, UserID: candidateID, CVID: cvID, Note: "hi",
+		rec := directapply.Record{JobID: onSite, UserID: candidateID, CV: directapply.CVChoice{CVID: cvID}, Note: "hi",
 			Answers: []directapply.Answer{{ID: "q1", Label: "EU work permit?", Type: "boolean", Answer: "true"}}}
 		id, recorded, err := repo.Record(ctx, rec, 30)
 		if err != nil || !recorded {
@@ -98,6 +98,10 @@ func TestQueriesRepository(t *testing.T) {
 		var label string
 		if err := pool.QueryRow(ctx, `SELECT answers->0->>'label' FROM direct_applications WHERE id = $1`, id).Scan(&label); err != nil || label != "EU work permit?" {
 			t.Errorf("stored answer snapshot label = %q, %v", label, err)
+		}
+		var kind string
+		if err := pool.QueryRow(ctx, `SELECT cv_kind FROM direct_applications WHERE id = $1`, id).Scan(&kind); err != nil || kind != "tailored" {
+			t.Errorf("cv_kind = %q, %v; want tailored", kind, err)
 		}
 	})
 }

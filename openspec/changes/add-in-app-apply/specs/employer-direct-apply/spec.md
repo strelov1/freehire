@@ -46,8 +46,12 @@ own employer SHALL be able to change them.
 
 ### Requirement: A candidate applies to an on-site vacancy
 A signed-in user with a verified email SHALL be able to apply to an open `freehire`-mode
-vacancy whose employer account is active, by choosing one of their own CVs, answering the
-questions, and optionally adding a note of at most 2000 characters. Every required question
+vacancy whose employer account is active, by sending exactly one CV — the CV they tailored
+for THAT vacancy, or the CV file they uploaded to their profile — answering the questions,
+and optionally adding a note of at most 2000 characters. When they have a CV tailored for the
+vacancy, the form SHALL attach it by default; with neither, it SHALL offer to upload a CV or
+to tailor one. No other CV (a base CV, or one tailored for another vacancy) SHALL be offered
+or accepted. Every required question
 SHALL be answered; a `text` answer SHALL be at most 2000 characters; a `boolean` answer SHALL be true or false; a `select` answer SHALL be one
 of that question's options; an answer to a question the form does not hold SHALL be refused.
 
@@ -68,8 +72,16 @@ of that question's options; an answer to a question the form does not hold SHALL
 - **THEN** the request is refused as forbidden
 
 #### Scenario: Someone else's CV cannot be sent
-- **WHEN** a user applies naming a CV that belongs to another user
+- **WHEN** a user applies naming a CV that belongs to another user, or one of their own tailored for another vacancy
 - **THEN** the request is answered as not found and nothing is recorded
+
+#### Scenario: The uploaded CV is sent as uploaded
+- **WHEN** a user applies with the CV file they uploaded to their profile
+- **THEN** the employer receives that file, and the record says the uploaded CV was sent
+
+#### Scenario: The tailored CV is attached by itself
+- **WHEN** a user who tailored a CV for the vacancy opens the application form
+- **THEN** that CV is attached, and they may switch to their uploaded CV instead
 
 #### Scenario: A closed vacancy takes no applications
 - **WHEN** a user applies to a `freehire` vacancy that is closed

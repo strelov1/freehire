@@ -429,8 +429,9 @@ export const GROUPS: Group[] = [
         description:
           'Only for a posting whose `direct_apply` is true — its employer published it here ' +
           'and receives applications by email. Any other posting is a `404`. Signed in with the ' +
-          'browser session, the response also carries `applied` and a `prefill` of your earlier ' +
-          'answers to the same questions; an API key never sees those. `open` is false once the ' +
+          'browser session, the response also carries `applied`, a `prefill` of your earlier ' +
+          'answers to the same questions, and `cvs` — the CV you tailored for this vacancy and ' +
+          'whether you uploaded one; an API key never sees those. `open` is false once the ' +
           'vacancy closed. `501` when this deployment cannot deliver applications.',
         pathParams: [{ name: 'slug', type: 'string', required: true, description: 'The job `public_slug`.', example: 'platform-engineer-acme-9f3c' }],
         curl: `curl "${BASE_URL}/jobs/platform-engineer-acme-9f3c/direct-apply"`,
@@ -443,7 +444,8 @@ export const GROUPS: Group[] = [
     ],
     "open": true,
     "applied": false,
-    "prefill": {}
+    "prefill": {},
+    "cvs": { "tailored": null, "has_resume": true }
   }
 }`,
       },
@@ -460,7 +462,8 @@ export const GROUPS: Group[] = [
           'delivery failed — applying again retries it.',
         pathParams: [{ name: 'slug', type: 'string', required: true, description: 'The job `public_slug`.', example: 'platform-engineer-acme-9f3c' }],
         body: [
-          { name: 'cv_id', type: 'string', required: true, description: 'One of your CVs.', example: '6f1c0c3e-8a51-4c1e-9d55-6a4c1f2b0a01' },
+          { name: 'resume', type: 'boolean', required: false, description: 'Send the CV file uploaded to your profile. Exactly one of `resume` and `cv_id`.', example: 'true' },
+          { name: 'cv_id', type: 'string', required: false, description: 'The CV you tailored for THIS vacancy (`cvs.tailored.id` from the form). Any other CV is a `404`.', example: '6f1c0c3e-8a51-4c1e-9d55-6a4c1f2b0a01' },
           { name: 'answers', type: 'object', required: false, description: 'Question id → answer; a yes/no answer is `"true"` or `"false"`, a list answer one of its options.', example: '{"q1":"true"}' },
           { name: 'note', type: 'string', required: false, description: 'Up to 2000 characters to the employer.', example: 'Happy to talk this week.' },
         ],

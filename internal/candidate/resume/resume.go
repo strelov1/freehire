@@ -369,37 +369,54 @@ func (s *Store) Text(ctx context.Context, userID int64) (string, error) {
 // replaced between them would derive text from the OLD upload under the NEW upload's stamp,
 // silently mismatching the two.
 func (s *Store) TextAndUploadedAt(ctx context.Context, userID int64) (string, time.Time, error) {
-	if !s.Enabled() {
-		return "", time.Time{}, ErrStorageDisabled
-	}
-	ptr, err := s.repo.Get(ctx, userID)
+	data, uploadedAt, err := s.read(ctx, userID)
 	if err != nil {
 		return "", time.Time{}, err
 	}
+	text, err := extractText(data)
+	if err != nil {
+		return "", time.Time{}, err
+	}
+	return text, uploadedAt, nil
+}
+
+// File returns the stored résumé exactly as it was uploaded — a PDF, or the text a
+// candidate pasted. ErrNotStored when there is none.
+func (s *Store) File(ctx context.Context, userID int64) ([]byte, error) {
+	data, _, err := s.read(ctx, userID)
+	return data, err
+}
+
+// read fetches the stored bytes and the upload stamp from the SAME pointer read (see
+// TextAndUploadedAt for why the two must not come from separate reads).
+func (s *Store) read(ctx context.Context, userID int64) ([]byte, time.Time, error) {
+	if !s.Enabled() {
+		return nil, time.Time{}, ErrStorageDisabled
+	}
+	ptr, err := s.repo.Get(ctx, userID)
+	if err != nil {
+		return nil, time.Time{}, err
+	}
 	if !ptr.ResumeObjectKey.Valid || !ptr.ResumeUploadedAt.Valid {
-		return "", time.Time{}, ErrNotStored
+		return nil, time.Time{}, ErrNotStored
 	}
 	rc, err := s.blobs.Get(ctx, ptr.ResumeObjectKey.String)
 	if err != nil {
 		if blobstore.IsNotFound(err) {
-			return "", time.Time{}, ErrNotStored
+			return nil, time.Time{}, ErrNotStored
 		}
-		return "", time.Time{}, err
+		return nil, time.Time{}, err
 	}
 	defer rc.Close()
 	data, err := io.ReadAll(rc)
 	if err != nil {
 		// MinIO/S3 GetObject is lazy: a missing key often surfaces only on the first read.
 		if blobstore.IsNotFound(err) {
-			return "", time.Time{}, ErrNotStored
+			return nil, time.Time{}, ErrNotStored
 		}
-		return "", time.Time{}, fmt.Errorf("resume: read object: %w", err)
+		return nil, time.Time{}, fmt.Errorf("resume: read object: %w", err)
 	}
-	text, err := extractText(data)
-	if err != nil {
-		return "", time.Time{}, err
-	}
-	return text, ptr.ResumeUploadedAt.Time, nil
+	return data, ptr.ResumeUploadedAt.Time, nil
 }
 
 // Delete removes the stored object and clears the pointer.

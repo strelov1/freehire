@@ -550,7 +550,7 @@
       "get": {
         "operationId": "get_jobs_slug_direct_apply",
         "summary": "The application form of a vacancy that takes applications on freehire.",
-        "description": "Only for a posting whose `direct_apply` is true — its employer published it here and receives applications by email. Any other posting is a `404`. Signed in with the browser session, the response also carries `applied` and a `prefill` of your earlier answers to the same questions; an API key never sees those. `open` is false once the vacancy closed. `501` when this deployment cannot deliver applications.",
+        "description": "Only for a posting whose `direct_apply` is true — its employer published it here and receives applications by email. Any other posting is a `404`. Signed in with the browser session, the response also carries `applied`, a `prefill` of your earlier answers to the same questions, and `cvs` — the CV you tailored for this vacancy and whether you uploaded one; an API key never sees those. `open` is false once the vacancy closed. `501` when this deployment cannot deliver applications.",
         "parameters": [
           {
             "name": "slug",
@@ -571,7 +571,7 @@
                 "schema": {
                   "type": "string"
                 },
-                "example": "{\n  \"data\": {\n    \"company_name\": \"Acme\",\n    \"questions\": [\n      { \"id\": \"q1\", \"label\": \"Do you hold an EU work permit?\", \"type\": \"boolean\", \"required\": true },\n      { \"id\": \"q2\", \"label\": \"Preferred stack\", \"type\": \"select\", \"required\": false, \"options\": [\"Go\", \"Rust\"] }\n    ],\n    \"open\": true,\n    \"applied\": false,\n    \"prefill\": {}\n  }\n}"
+                "example": "{\n  \"data\": {\n    \"company_name\": \"Acme\",\n    \"questions\": [\n      { \"id\": \"q1\", \"label\": \"Do you hold an EU work permit?\", \"type\": \"boolean\", \"required\": true },\n      { \"id\": \"q2\", \"label\": \"Preferred stack\", \"type\": \"select\", \"required\": false, \"options\": [\"Go\", \"Rust\"] }\n    ],\n    \"open\": true,\n    \"applied\": false,\n    \"prefill\": {},\n    \"cvs\": { \"tailored\": null, \"has_resume\": true }\n  }\n}"
               }
             }
           }

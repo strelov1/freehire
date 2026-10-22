@@ -28,6 +28,8 @@ func TestApplicationMailer_DeliversTheApplicationToTheEmployer(t *testing.T) {
 		Answers:        []ApplicationAnswer{{Question: "EU work permit?", Answer: "Yes"}},
 		Note:           "Happy to talk.",
 		CV:             []byte("%PDF-1.7"),
+		CVFilename:     "cv.pdf",
+		CVContentType:  "application/pdf",
 	})
 	if err != nil {
 		t.Fatalf("SendApplication: %v", err)
@@ -45,7 +47,7 @@ func TestApplicationMailer_DeliversTheApplicationToTheEmployer(t *testing.T) {
 	if !strings.Contains(msg.Subject, "Platform <Engineer>") {
 		t.Errorf("subject = %q, want the vacancy named", msg.Subject)
 	}
-	if len(msg.Attachments) != 1 || msg.Attachments[0].ContentType != "application/pdf" || string(msg.Attachments[0].Content) != "%PDF-1.7" {
+	if len(msg.Attachments) != 1 || msg.Attachments[0].ContentType != "application/pdf" || msg.Attachments[0].Filename != "cv.pdf" || string(msg.Attachments[0].Content) != "%PDF-1.7" {
 		t.Errorf("attachments = %+v, want the CV as one PDF", msg.Attachments)
 	}
 	for _, part := range []string{msg.HTML, msg.Text} {

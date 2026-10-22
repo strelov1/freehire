@@ -502,6 +502,7 @@ type DirectApplication struct {
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
 	SendingAt pgtype.Timestamptz `json:"sending_at"`
 	SentAt    pgtype.Timestamptz `json:"sent_at"`
+	CvKind    string             `json:"cv_kind"`
 }
 
 // One freehire account bound to one Discord account, so cmd/discord-sync can keep the paid role in step with the subscription. Holds no token: the OAuth access token is used inside the callback request and never stored.

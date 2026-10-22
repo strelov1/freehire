@@ -49,6 +49,11 @@ func (p ownedCVPDF) render(ctx context.Context, userID int64, id uuid.UUID) ([]b
 	if err != nil {
 		return nil, err
 	}
+	return p.renderRecord(ctx, userID, rec)
+}
+
+// renderRecord renders a CV record its caller has already loaded for userID.
+func (p ownedCVPDF) renderRecord(ctx context.Context, userID int64, rec cv.Record) ([]byte, error) {
 	tmpl, err := cv.ResolveTemplate(rec.TemplateID)
 	if err != nil {
 		return nil, err

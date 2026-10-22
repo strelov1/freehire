@@ -35,6 +35,13 @@ record is [openspec/changes/add-in-app-apply](../../../openspec/changes/add-in-a
   the renderer, the headshot store and the tracer-link minter. Both are wired in
   `handler.Register`; without Typst or SES the endpoint answers 501 rather than recording an
   application nobody can deliver.
+- **Two CVs, never a pick-list.** An application sends the CV the candidate tailored for
+  THAT vacancy (`cvs.job_id` must equal the vacancy — checked in the handler's
+  `directApplyCVs`, not just offered by the form) or the file they uploaded to their profile
+  (`resume.Store.File`, attached as uploaded: `cv.pdf`, or `cv.txt` for pasted text).
+  `direct_applications.cv_kind` (migration 0190) records which, because a NULL `cv_id` alone
+  could mean "the uploaded file" or "a tailored CV since deleted". A base CV or one tailored
+  for another vacancy was once the first option offered — the wrong document to send.
 - **An answer is a snapshot.** Each stored answer carries its question's id, label and
   type, so a record still reads correctly after the employer edits the questions. A boolean
   is `"true"`/`"false"` on the wire and banked as `Yes`/`No`, because the bank also prefills

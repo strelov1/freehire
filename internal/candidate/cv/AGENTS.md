@@ -261,7 +261,7 @@ One edge remains, deliberately:
 
 Nothing in this package writes `cvs.data`. `internal/candidate/cvedit` owns the only path, and the seam
 is held by absence rather than by review: `Store` has no method that writes a document at all
-(its one unexported helper, `tailoredForJob`, is a read), and `Repository` declares none either
+(`TailoredForJob` is a read), and `Repository` declares none either
 — one declared here, even unused, would be an invitation to write a document with no revision,
 no policy and no evidence gate behind it. The write itself lives in cvedit's `Tx.Save`, which
 runs the `UpdateCV` query inside the locked commit.

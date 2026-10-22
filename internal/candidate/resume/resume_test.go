@@ -464,3 +464,23 @@ func (r *fakeRepo) GetGeography(_ context.Context, userID int64) (db.GetUserResu
 		ResumeUploadedAt:           r.uploadedAt[userID],
 	}, nil
 }
+
+// File hands back the stored bytes as uploaded — what an application on freehire attaches
+// when the candidate sends their own CV rather than a tailored one.
+func TestStore_FileReturnsTheUploadedBytes(t *testing.T) {
+	s := New(newFakeBlobs(), newFakeRepo())
+	ctx := context.Background()
+	if _, err := s.File(ctx, 7); !errors.Is(err, ErrNotStored) {
+		t.Fatalf("File before an upload: err = %v, want ErrNotStored", err)
+	}
+	if _, err := s.Put(ctx, 7, "application/pdf", []byte("%PDF-1.7 cv")); err != nil {
+		t.Fatalf("Put: %v", err)
+	}
+	got, err := s.File(ctx, 7)
+	if err != nil || string(got) != "%PDF-1.7 cv" {
+		t.Fatalf("File = %q, %v; want the uploaded bytes", got, err)
+	}
+	if _, err := New(nil, newFakeRepo()).File(ctx, 7); !errors.Is(err, ErrStorageDisabled) {
+		t.Errorf("File with no storage: err = %v, want ErrStorageDisabled", err)
+	}
+}

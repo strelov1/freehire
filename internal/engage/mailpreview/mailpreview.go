@@ -239,8 +239,10 @@ func directApplicationSample(baseURL string) (Sample, error) {
 					{Question: "Preferred stack", Answer: "Go"},
 					{Question: "When could you start?", Answer: "In a month — my notice period is four weeks."},
 				},
-				Note: "I run a Kubernetes platform for 40 teams today and would love to talk about yours.",
-				CV:   []byte("%PDF-1.7"),
+				Note:          "I run a Kubernetes platform for 40 teams today and would love to talk about yours.",
+				CV:            []byte("%PDF-1.7"),
+				CVFilename:    "cv.pdf",
+				CVContentType: "application/pdf",
 			})
 	})
 }

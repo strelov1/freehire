@@ -188,7 +188,8 @@ Needs a verified email. The employer gets the chosen CV as a PDF, the answers, t
 
 | Name | Type | Required | Description |
 | --- | --- | --- | --- |
-| `cv_id` | string | yes | One of your CVs. (e.g. `6f1c0c3e-8a51-4c1e-9d55-6a4c1f2b0a01`) |
+| `resume` | boolean | no | Send the CV file uploaded to your profile. Exactly one of `resume` and `cv_id`. (e.g. `true`) |
+| `cv_id` | string | no | The CV you tailored for THIS vacancy (`cvs.tailored.id` from the form). Any other CV is a `404`. (e.g. `6f1c0c3e-8a51-4c1e-9d55-6a4c1f2b0a01`) |
 | `answers` | object | no | Question id → answer; a yes/no answer is `"true"` or `"false"`, a list answer one of its options. (e.g. `{"q1":"true"}`) |
 | `note` | string | no | Up to 2000 characters to the employer. (e.g. `Happy to talk this week.`) |
 

@@ -66,8 +66,8 @@ func (q *Queries) ReleaseDirectApplication(ctx context.Context, id int64) error 
 }
 
 const upsertDirectApplication = `-- name: UpsertDirectApplication :one
-INSERT INTO direct_applications (job_id, user_id, cv_id, note, answers, sending_at)
-SELECT $1, $2, $3, $4, $5, now()
+INSERT INTO direct_applications (job_id, user_id, cv_id, cv_kind, note, answers, sending_at)
+SELECT $1, $2, $3, $4, $5, $6, now()
 WHERE EXISTS (
         SELECT 1 FROM direct_applications
         WHERE job_id = $1 AND user_id = $2
@@ -77,9 +77,9 @@ WHERE EXISTS (
         WHERE user_id = $2
           AND job_id <> $1
           AND created_at >= date_trunc('day', now(), 'UTC')
-    ) < $6::bigint
+    ) < $7::bigint
 ON CONFLICT (job_id, user_id) DO UPDATE
-SET cv_id = EXCLUDED.cv_id, note = EXCLUDED.note, answers = EXCLUDED.answers, sending_at = now()
+SET cv_id = EXCLUDED.cv_id, cv_kind = EXCLUDED.cv_kind, note = EXCLUDED.note, answers = EXCLUDED.answers, sending_at = now()
 WHERE direct_applications.sent_at IS NULL
   AND (direct_applications.sending_at IS NULL
        OR direct_applications.sending_at < now() - interval '2 minutes')
@@ -90,6 +90,7 @@ type UpsertDirectApplicationParams struct {
 	JobID      int64       `json:"job_id"`
 	UserID     int64       `json:"user_id"`
 	CvID       pgtype.UUID `json:"cv_id"`
+	CvKind     string      `json:"cv_kind"`
 	Note       string      `json:"note"`
 	Answers    []byte      `json:"answers"`
 	DailyLimit int64       `json:"daily_limit"`
@@ -111,6 +112,7 @@ func (q *Queries) UpsertDirectApplication(ctx context.Context, arg UpsertDirectA
 		arg.JobID,
 		arg.UserID,
 		arg.CvID,
+		arg.CvKind,
 		arg.Note,
 		arg.Answers,
 		arg.DailyLimit,

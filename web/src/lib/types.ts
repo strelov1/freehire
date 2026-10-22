@@ -713,15 +713,18 @@ export interface DirectApplyForm {
   open: boolean;
   applied: boolean;
   /** Question id → the caller's earlier answer to the same question, in the form `answers` takes. */
-  prefill: Record<string, string>;
+  prefill: Record<string, string>;  /** What the caller can send: the CV they tailored for THIS vacancy, and whether they
+   *  have uploaded a CV file to their profile. */
+  cvs: { tailored: { id: string; title: string } | null; has_resume: boolean };
 }
 
-/** An application to such a vacancy. A yes/no answer is `"true"` or `"false"`. */
-export interface DirectApplication {
-  cv_id: string;
+/** An application to such a vacancy. It sends exactly one CV: the uploaded one
+ *  (`resume: true`) or the one tailored for this vacancy (`cv_id`). A yes/no answer is
+ *  `"true"` or `"false"`. */
+export type DirectApplication = ({ resume: true } | { cv_id: string }) & {
   answers: Record<string, string>;
   note?: string;
-}
+};
 
 /** POST /employer/jobs body. Deliberately no `company` field — the server always uses the
  *  account's own locked company name, never request content (see

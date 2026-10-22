@@ -1174,6 +1174,10 @@
         title={job.title}
         onClose={() => (showDirectApply = false)}
         onSent={onDirectApplied}
+        onTailor={() => {
+          showDirectApply = false;
+          void onTailorClick();
+        }}
       />
     {/if}
 
