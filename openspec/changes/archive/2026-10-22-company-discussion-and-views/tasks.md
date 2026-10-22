@@ -13,4 +13,4 @@
 
 ## 3. Finish
 
-- [ ] 3.1 Checks, PR, CI, merge, deploy, verify on prod after the next rollup; archive the change
+- [x] 3.1 Checks, PR, CI, merge, deploy, verify on prod after the next rollup; archive the change
