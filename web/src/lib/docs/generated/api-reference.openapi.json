@@ -1056,7 +1056,8 @@
     "/companies/{slug}/closed-jobs": {
       "get": {
         "operationId": "get_companies_slug_closed_jobs",
-        "summary": "A page of a company's closed postings, newest posting first. Closed postings are not in search; there is no total, so meta.has_more says whether another page follows.",
+        "summary": "A company’s closed postings — the company page’s Closed tab.",
+        "description": "A page of the postings the company has closed, most recently closed first. Closed postings are not in search, so this is the only list of them. There is no total: `meta.has_more` says whether another page follows. Paging reaches the first 2000 rows (`offset + limit` ≤ 2000); a deeper page is a `400`. An unknown slug is a `404`; a slug retired by a company merge redirects `301` to the canonical one.",
         "parameters": [
           {
             "name": "slug",
@@ -1072,7 +1073,7 @@
             "name": "limit",
             "in": "query",
             "required": false,
-            "description": "Page size.",
+            "description": "Page size (max 100).",
             "schema": {
               "type": "integer"
             },
@@ -1082,7 +1083,7 @@
             "name": "offset",
             "in": "query",
             "required": false,
-            "description": "Rows to skip.",
+            "description": "Rows to skip; `offset + limit` may not exceed 2000.",
             "schema": {
               "type": "integer"
             },

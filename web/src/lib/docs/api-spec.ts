@@ -723,11 +723,17 @@ data: {"kind":"final","analysis":{"overall_score":82,"verdict":"Strong Fit","...
         method: 'GET',
         path: '/companies/{slug}/closed-jobs',
         auth: 'none',
-        summary: "A page of a company's closed postings, newest posting first. Closed postings are not in search; there is no total, so meta.has_more says whether another page follows.",
+        summary: 'A company’s closed postings — the company page’s Closed tab.',
+        description:
+          'A page of the postings the company has closed, most recently closed first. Closed ' +
+          'postings are not in search, so this is the only list of them. There is no total: ' +
+          '`meta.has_more` says whether another page follows. Paging reaches the first 2000 ' +
+          'rows (`offset + limit` ≤ 2000); a deeper page is a `400`. An unknown slug is a ' +
+          '`404`; a slug retired by a company merge redirects `301` to the canonical one.',
         pathParams: [{ name: 'slug', type: 'string', required: true, description: 'The company slug.', example: 'acme' }],
         query: [
-          { name: 'limit', type: 'integer', description: 'Page size.', example: '20' },
-          { name: 'offset', type: 'integer', description: 'Rows to skip.', example: '0' },
+          { name: 'limit', type: 'integer', description: 'Page size (max 100).', example: '20' },
+          { name: 'offset', type: 'integer', description: 'Rows to skip; `offset + limit` may not exceed 2000.', example: '0' },
         ],
         curl: `curl "${BASE_URL}/companies/acme/closed-jobs"`,
         responseExample: `{

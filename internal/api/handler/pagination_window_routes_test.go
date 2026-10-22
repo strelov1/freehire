@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"fmt"
 	"net/http/httptest"
 	"testing"
 
@@ -17,19 +18,23 @@ import (
 // answers 500. So a 400 proves the window refused the page BEFORE any database work, and a
 // 500 on the control request proves the route was reached at all, i.e. that the test is
 // driving something real rather than a 404 from a path typo.
+//
+// window is the route's own offset+limit ceiling: maxPageWindow for all but the Closed tab,
+// whose rows are heap fetches of closed postings and which is held to closedJobsWindow.
 var windowedListRoutes = []struct {
-	name  string
-	mount func() *fiber.App
-	path  string
+	name   string
+	mount  func() *fiber.App
+	path   string
+	window int
 }{
-	{"GET /jobs", func() *fiber.App { return mountWindowed((&jobsHandlers{}).register) }, "/api/v1/jobs"},
-	{"GET /companies", func() *fiber.App { return mountWindowed((&companiesHandlers{}).register) }, "/api/v1/companies"},
-	{"GET /companies/:slug", func() *fiber.App { return mountWindowed((&companiesHandlers{}).register) }, "/api/v1/companies/acme"},
-	{"GET /companies/:slug/closed-jobs", func() *fiber.App { return mountWindowed((&companiesHandlers{}).register) }, "/api/v1/companies/acme/closed-jobs"},
-	{"GET /jobs/:slug/copies", func() *fiber.App { return mountWindowed((&jobsHandlers{}).register) }, "/api/v1/jobs/a-job/copies"},
+	{"GET /jobs", func() *fiber.App { return mountWindowed((&jobsHandlers{}).register) }, "/api/v1/jobs", maxPageWindow},
+	{"GET /companies", func() *fiber.App { return mountWindowed((&companiesHandlers{}).register) }, "/api/v1/companies", maxPageWindow},
+	{"GET /companies/:slug", func() *fiber.App { return mountWindowed((&companiesHandlers{}).register) }, "/api/v1/companies/acme", maxPageWindow},
+	{"GET /companies/:slug/closed-jobs", func() *fiber.App { return mountWindowed((&companiesHandlers{}).register) }, "/api/v1/companies/acme/closed-jobs", closedJobsWindow},
+	{"GET /jobs/:slug/copies", func() *fiber.App { return mountWindowed((&jobsHandlers{}).register) }, "/api/v1/jobs/a-job/copies", maxPageWindow},
 	{"GET /companies/:slug/feedback", func() *fiber.App {
 		return mountWindowed((&companyFeedbackHandlers{}).registerPublic)
-	}, "/api/v1/companies/acme/feedback"},
+	}, "/api/v1/companies/acme/feedback", maxPageWindow},
 }
 
 // mountWindowed builds an app from a real register. The throttler is nil, which
@@ -101,13 +106,27 @@ func TestWindowedListRoutesAreReallyDriven(t *testing.T) {
 }
 
 // TestWindowBoundaryIsServedOnEveryListRoute pins the other edge per route. A window that
-// refused its own last page would be a silent off-by-one on five public endpoints at once.
+// refused its own last page would be a silent off-by-one on every public list endpoint at once.
 func TestWindowBoundaryIsServedOnEveryListRoute(t *testing.T) {
 	for _, route := range windowedListRoutes {
 		t.Run(route.name, func(t *testing.T) {
-			got := windowedGet(t, route.mount(), route.path, "limit=100&offset=9900")
+			got := windowedGet(t, route.mount(), route.path, fmt.Sprintf("limit=100&offset=%d", route.window-100))
 			if got == fiber.StatusBadRequest {
-				t.Fatalf("offset+limit == maxPageWindow (%d) = 400, want the page to be admitted", maxPageWindow)
+				t.Fatalf("offset+limit == window (%d) = 400, want the page to be admitted", route.window)
+			}
+		})
+	}
+}
+
+// TestPageJustPastTheWindowIsRefused pins the edge from the other side, per route: one row
+// past the window must not reach the handler. For the Closed tab this is what holds it to
+// its narrower window rather than the shared one — offset 2000 sits well inside maxPageWindow.
+func TestPageJustPastTheWindowIsRefused(t *testing.T) {
+	for _, route := range windowedListRoutes {
+		t.Run(route.name, func(t *testing.T) {
+			got := windowedGet(t, route.mount(), route.path, fmt.Sprintf("limit=100&offset=%d", route.window-99))
+			if got != fiber.StatusBadRequest {
+				t.Fatalf("offset+limit == window+1 (%d) = %d, want 400 before any database work", route.window+1, got)
 			}
 		})
 	}

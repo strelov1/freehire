@@ -309,12 +309,15 @@ empty profile the model would read as "no preferences".
 ## Pagination (`handler.go`)
 
 - **`offset` is read in exactly one file.** `pageParams` / `pageParamsBounded` /
-  `pageParamsWindowed` live in `handler.go`, and `pagination_rule_test.go` fails the build if
+  `pageParamsWindowed` / `pageParamsWithin` live in `handler.go`, and `pagination_rule_test.go` fails the build if
   any other non-test file in the package reads the raw param. The clamp into int32 range is
   why: without it `?offset=3000000000` binds negative and Postgres answers 500.
 - **Every PUBLIC list calls `pageParams`/`pageParamsWindowed`**, which refuse `offset+limit >
   maxPageWindow` with 400. One constant, one helper, both stores — the Meili-backed search and
   the Postgres-backed lists share it rather than each carrying a number that can drift apart.
+  The one exception is NARROWER, never wider: `CompanyClosedJobs` goes through
+  `pageParamsWithin` with `closedJobsWindow` (2000, the web's `FEED_WINDOW`), because each
+  skipped offset there is a heap fetch of a closed row — a ~10k offset measured 6.4s cold.
 - **Check the window before any query, including a slug lookup.** `GetCompany` and `JobCopies`
   both read the page params before their first read, so a refused request costs no database
   work at all. That ordering is asserted by `pagination_window_routes_test.go`, which drives

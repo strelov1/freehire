@@ -799,7 +799,9 @@ curl "https://freehire.me/api/v1/companies/acme"
 
 **Auth:** Public
 
-A page of a company's closed postings, newest posting first. Closed postings are not in search; there is no total, so meta.has_more says whether another page follows.
+A company’s closed postings — the company page’s Closed tab.
+
+A page of the postings the company has closed, most recently closed first. Closed postings are not in search, so this is the only list of them. There is no total: `meta.has_more` says whether another page follows. Paging reaches the first 2000 rows (`offset + limit` ≤ 2000); a deeper page is a `400`. An unknown slug is a `404`; a slug retired by a company merge redirects `301` to the canonical one.
 
 **Path parameters**
 
@@ -811,8 +813,8 @@ A page of a company's closed postings, newest posting first. Closed postings are
 
 | Name | Type | Required | Description |
 | --- | --- | --- | --- |
-| `limit` | integer | no | Page size. (e.g. `20`) |
-| `offset` | integer | no | Rows to skip. (e.g. `0`) |
+| `limit` | integer | no | Page size (max 100). (e.g. `20`) |
+| `offset` | integer | no | Rows to skip; `offset + limit` may not exceed 2000. (e.g. `0`) |
 
 ```bash
 curl "https://freehire.me/api/v1/companies/acme/closed-jobs"

@@ -420,8 +420,16 @@ func (h *companiesHandlers) GetCompany(c *fiber.Ctx) error {
 	}})
 }
 
+// closedJobsWindow bounds how deep the Closed tab may page (offset+limit), far tighter than
+// the shared maxPageWindow. Even walking jobs_closed_company_closed_at_idx in order, every
+// skipped offset is a random heap fetch of a closed row — cold on prod a ~10k offset took
+// 6.4s — and nobody reads ten thousand closed postings. 2000 is the site's own FEED_WINDOW
+// (web/src/lib/pagination.ts), so the web pager never asks for a page this refuses.
+const closedJobsWindow = 2000
+
 // CompanyClosedJobs serves the company page's Closed tab: a page of the postings this company
-// has closed, newest posting first, from Postgres — closed rows are never in the search index.
+// has closed, most recently closed first, from Postgres — closed rows are never in the search
+// index.
 //
 // It answers has_more instead of a total. A large employer holds hundreds of thousands of
 // closed rows, and an exact count over them is the cost this endpoint exists to avoid; one
@@ -430,7 +438,7 @@ func (h *companiesHandlers) CompanyClosedJobs(c *fiber.Ctx) error {
 	slug := c.Params("slug")
 
 	// Before the lookup, so a refused page costs no database work (see GetCompany).
-	limit, offset, err := pageParams(c)
+	limit, offset, err := pageParamsWithin(c, defaultLimit, maxLimit, closedJobsWindow)
 	if err != nil {
 		return err
 	}

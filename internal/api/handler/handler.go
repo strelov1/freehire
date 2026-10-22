@@ -243,8 +243,14 @@ func pageParamsBounded(c *fiber.Ctx, fallback, ceiling int) (limit, offset int) 
 // reasoning first landed on the Meili-backed lists, under a constant of their own; this
 // is that constant, moved here so one number decides for both stores.
 func pageParamsWindowed(c *fiber.Ctx, fallback, ceiling int) (limit, offset int, err error) {
+	return pageParamsWithin(c, fallback, ceiling, maxPageWindow)
+}
+
+// pageParamsWithin is pageParamsWindowed with the window named by the caller, for an
+// endpoint whose rows cost more per skipped offset than the shared window allows for.
+func pageParamsWithin(c *fiber.Ctx, fallback, ceiling, window int) (limit, offset int, err error) {
 	limit, offset = pageParamsBounded(c, fallback, ceiling)
-	if offset+limit > maxPageWindow {
+	if offset+limit > window {
 		return 0, 0, fiber.NewError(fiber.StatusBadRequest, "pagination too deep")
 	}
 	return limit, offset, nil
