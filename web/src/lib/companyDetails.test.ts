@@ -83,6 +83,12 @@ describe('companyFacts', () => {
     ]);
   });
 
+  test('shows a headquarters that is not a country code as text, without a flag', () => {
+    expect(companyFacts(company({ hq_country: 'Stockholm' }))).toEqual([
+      { term: 'Headquarters', value: 'Stockholm' },
+    ]);
+  });
+
   test('places the CEO between headquarters and organisation type', () => {
     expect(
       companyFacts(company({ hq_country: 'US', organization_type: 'Private' }, { ceo: 'Ada Lovelace' }))

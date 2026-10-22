@@ -27,11 +27,16 @@
       </div>
     {/if}
     {#if facts.length}
-      <dl class="grid grid-cols-[auto_1fr] items-baseline gap-x-3 gap-y-2 text-sm">
+      <!-- minmax(0,1fr) lets the value column shrink below its content; with a plain 1fr a
+           long value (a CEO's full name, a subsidiaries list) widens the grid past the card
+           and every right-aligned value gets clipped. -->
+      <dl class="grid grid-cols-[auto_minmax(0,1fr)] items-baseline gap-x-3 gap-y-2 text-sm">
         {#each facts as fact (fact.term)}
           <dt class="text-muted-foreground">{fact.term}</dt>
           <dd class="flex items-center justify-end gap-1.5 text-right font-medium">
-            {#if fact.flag}<CountryFlag code={fact.flag} label={fact.value} class="text-base" />{/if}{fact.value}
+            {#if fact.flag}<CountryFlag code={fact.flag} label={fact.value} class="shrink-0 text-base" />{/if}<span
+              class="min-w-0 break-words">{fact.value}</span
+            >
           </dd>
         {/each}
       </dl>

@@ -112,14 +112,20 @@ export function companyFacts(company: Company): CompanyFact[] {
     ? [info.stock.exchange, info.stock.symbol].filter(Boolean).join(': ')
     : '';
 
+  // hq_country is an ISO alpha-2 code from every writer but one: employer profile edits
+  // stored free text until the service began normalising it, so a city can still sit
+  // there. Only a real code gets a country name and a flag; anything else shows as typed.
+  const hq = company.hq_country?.trim() ?? '';
+  let headquarters: CompanyFact | null = null;
+  if (/^[a-z]{2}$/i.test(hq)) headquarters = { term: 'Headquarters', value: countryLabel(hq), flag: hq };
+  else if (hq) headquarters = { term: 'Headquarters', value: hq };
+
   return [
     company.year_founded ? { term: 'Founded', value: String(company.year_founded) } : null,
     company.employee_count
       ? { term: 'Employees', value: company.employee_count.toLocaleString() }
       : null,
-    company.hq_country
-      ? { term: 'Headquarters', value: countryLabel(company.hq_country), flag: company.hq_country }
-      : null,
+    headquarters,
     info.ceo ? { term: 'CEO', value: info.ceo } : null,
     company.organization_type ? { term: 'Type', value: company.organization_type } : null,
     stock ? { term: 'Listed', value: stock } : null,

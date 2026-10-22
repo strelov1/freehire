@@ -678,3 +678,48 @@ func TestActiveAccount_ReturnsAnActiveAccount(t *testing.T) {
 		t.Errorf("company_slug = %q, want acme", acc.CompanySlug)
 	}
 }
+
+// The facts card draws a flag from hq_country, so free text typed into the field is stored
+// as the alpha-2 code it names (a capital resolves to its country) or refused outright.
+func TestUpdateCompanyProfile_NormalizesOrRefusesHqCountry(t *testing.T) {
+	for _, tc := range []struct {
+		in, want string
+		invalid  bool
+	}{
+		{in: "SE", want: "se"},
+		{in: " Sweden ", want: "se"},
+		{in: "USA", want: "us"},
+		{in: "Stockholm", want: "se"},
+		{in: "Mars", invalid: true},
+	} {
+		t.Run(tc.in, func(t *testing.T) {
+			repo := newFakeRepo()
+			repo.companies["acme"] = struct{ name, website string }{name: "Acme", website: "https://acme.test"}
+			s := New(repo, newFakeCodeIssuer(), &fakeClaimMailer{}, nil, nil)
+			if _, err := s.Claim(context.Background(), 1, "Acme", "hr@acme.test"); err != nil {
+				t.Fatalf("Claim: %v", err)
+			}
+			if _, err := s.ConfirmClaim(context.Background(), 1, "654321"); err != nil {
+				t.Fatalf("ConfirmClaim: %v", err)
+			}
+
+			in := tc.in
+			_, err := s.UpdateCompanyProfile(context.Background(), 1, CompanyProfilePatch{HqCountry: &in})
+			if tc.invalid {
+				if !errors.Is(err, ErrInvalid) {
+					t.Fatalf("err = %v, want ErrInvalid", err)
+				}
+				if len(repo.profilePatches) != 0 {
+					t.Errorf("a refused patch reached the repository: %+v", repo.profilePatches)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("UpdateCompanyProfile: %v", err)
+			}
+			if got := repo.profilePatches[0].HqCountry; got == nil || *got != tc.want {
+				t.Errorf("stored hq_country = %v, want %q", got, tc.want)
+			}
+		})
+	}
+}

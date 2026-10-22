@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/strelov1/freehire/internal/dict/location"
 	"github.com/strelov1/freehire/internal/dict/normalize"
 	"github.com/strelov1/freehire/internal/identity/accounts"
 	"github.com/strelov1/freehire/internal/job/logodomain"
@@ -197,6 +198,16 @@ func (s *Service) UpdateCompanyProfile(ctx context.Context, userID int64, patch 
 	acc, err := s.ActiveAccount(ctx, userID)
 	if err != nil {
 		return Account{}, err
+	}
+	// hq_country is read as an ISO code (the facts card draws its flag), so it is stored
+	// in the same canonical alpha-2 form every other writer uses. A value no country
+	// resolves from is refused rather than stored and rendered as one.
+	if patch.HqCountry != nil && strings.TrimSpace(*patch.HqCountry) != "" {
+		code := location.NormalizeCountry(*patch.HqCountry)
+		if code == "" {
+			return Account{}, fmt.Errorf("%w: headquarters country %q is not a country code or name", ErrInvalid, *patch.HqCountry)
+		}
+		patch.HqCountry = &code
 	}
 	if err := s.repo.UpdateCompanyProfile(ctx, acc.CompanySlug, patch); err != nil {
 		return Account{}, err
