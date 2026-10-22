@@ -101,6 +101,11 @@ func TestMCPAccountTools_DeclareTheirEffect(t *testing.T) {
 		if tool.Effect != effect {
 			t.Errorf("%s: Effect = %d, want %d", tool.Name, tool.Effect, effect)
 		}
+		// A client lists an untitled tool by its snake_case name, which is what a
+		// directory reviewer sees first.
+		if tool.Title == "" {
+			t.Errorf("%s: served on the MCP account server without a Title", tool.Name)
+		}
 	}
 }
 

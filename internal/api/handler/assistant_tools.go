@@ -86,6 +86,7 @@ func assistantFacetNames() []string {
 func (h *assistantHandlers) facetsTool() assistant.Tool {
 	return assistant.Tool{
 		Name:   "facets",
+		Title:  "List search filter values",
 		Effect: assistant.EffectReads,
 		Description: "List the live filter vocabulary: every filter's valid values with a vacancy count each, " +
 			"plus numeric ranges. Call this BEFORE filtering a search, and take skill slugs from its `skills` " +
@@ -128,6 +129,7 @@ func (h *assistantHandlers) facetsTool() assistant.Tool {
 func (h *assistantHandlers) searchJobsTool() assistant.Tool {
 	return assistant.Tool{
 		Name:   "search_jobs",
+		Title:  "Search jobs",
 		Effect: assistant.EffectReads,
 		Description: "Search open vacancies by keyword and facet filters. Every result carries its full " +
 			"description as markdown and its public_slug — link a vacancy as https://freehire.me/jobs/<public_slug>. " +
@@ -200,6 +202,7 @@ func (h *assistantHandlers) searchJobsTool() assistant.Tool {
 func (h *assistantHandlers) getJobTool() assistant.Tool {
 	return assistant.Tool{
 		Name:        "get_job",
+		Title:       "Read one job posting",
 		Effect:      assistant.EffectReads,
 		Description: "Read one vacancy in full by its public_slug.",
 		Schema: map[string]any{
@@ -235,6 +238,7 @@ func (h *assistantHandlers) getJobTool() assistant.Tool {
 func (h *assistantHandlers) getCompanyTool() assistant.Tool {
 	return assistant.Tool{
 		Name:        "get_company",
+		Title:       "Read one employer",
 		Effect:      assistant.EffectReads,
 		Description: "Read one company and a page of its open vacancies, by company slug.",
 		Schema: map[string]any{
@@ -279,6 +283,7 @@ func (h *assistantHandlers) getCompanyTool() assistant.Tool {
 func (h *assistantHandlers) marketFitTool() assistant.Tool {
 	return assistant.Tool{
 		Name:   "market_fit",
+		Title:  "Check skills against the market",
 		Effect: assistant.EffectReads,
 		Description: "Score a skill list against the live open-vacancy market for a filtered role: what share of " +
 			"vacancies list at least one of the skills, which must-have skills are held, and which missing skills " +

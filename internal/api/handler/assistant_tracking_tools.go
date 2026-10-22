@@ -21,6 +21,7 @@ func (h *assistantHandlers) assistantTrackingTools() []assistant.Tool {
 	return []assistant.Tool{
 		h.slugActionTool(
 			"save_job",
+			"Save a job",
 			"Bookmark a vacancy for the user. Idempotent.",
 			assistant.EffectAdds,
 			func(ctx context.Context, userID int64, slug string) (jobtracking.Interaction, error) {
@@ -28,6 +29,7 @@ func (h *assistantHandlers) assistantTrackingTools() []assistant.Tool {
 			}),
 		h.slugActionTool(
 			"unsave_job",
+			"Remove a saved job",
 			"Remove a vacancy from the user's bookmarks. Idempotent.",
 			assistant.EffectOverwrites,
 			func(ctx context.Context, userID int64, slug string) (jobtracking.Interaction, error) {
@@ -35,6 +37,7 @@ func (h *assistantHandlers) assistantTrackingTools() []assistant.Tool {
 			}),
 		h.slugActionTool(
 			"apply_job",
+			"Mark a job as applied",
 			"Mark a vacancy as applied to. This records the user's own application; it does not submit anything to the employer.",
 			assistant.EffectAdds,
 			func(ctx context.Context, userID int64, slug string) (jobtracking.Interaction, error) {
@@ -50,9 +53,10 @@ func (h *assistantHandlers) assistantTrackingTools() []assistant.Tool {
 
 // slugActionTool builds the tools that take a single vacancy slug and perform one
 // idempotent action on the caller's interaction with it.
-func (h *assistantHandlers) slugActionTool(name, description string, effect assistant.Effect, act func(context.Context, int64, string) (jobtracking.Interaction, error)) assistant.Tool {
+func (h *assistantHandlers) slugActionTool(name, title, description string, effect assistant.Effect, act func(context.Context, int64, string) (jobtracking.Interaction, error)) assistant.Tool {
 	return assistant.Tool{
 		Name:        name,
+		Title:       title,
 		Description: description,
 		Effect:      effect,
 		Schema: map[string]any{
@@ -85,7 +89,8 @@ func (h *assistantHandlers) slugActionTool(name, description string, effect assi
 // trackJobTool sets a vacancy's application stage and/or free-text note.
 func (h *assistantHandlers) trackJobTool() assistant.Tool {
 	return assistant.Tool{
-		Name: "track_job",
+		Name:  "track_job",
+		Title: "Set a stage or note on a job",
 		// Replaces the note it is given: the previous text is gone.
 		Effect: assistant.EffectOverwrites,
 		Description: "Set the application stage and/or a free-text note on a vacancy the user is tracking. " +
@@ -135,6 +140,7 @@ func (h *assistantHandlers) trackJobTool() assistant.Tool {
 func (h *assistantHandlers) myJobsTool() assistant.Tool {
 	return assistant.Tool{
 		Name:        "my_jobs",
+		Title:       "List my tracked jobs",
 		Effect:      assistant.EffectReads,
 		Description: "List the vacancies the user is tracking — saved, applied, viewed or the whole board — with each one's stage and note.",
 		Schema: map[string]any{

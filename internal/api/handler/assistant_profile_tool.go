@@ -36,6 +36,7 @@ type noProfileResult struct {
 func (h *assistantHandlers) getProfileTool() assistant.Tool {
 	return assistant.Tool{
 		Name:   "get_profile",
+		Title:  "Read my job-search profile",
 		Effect: assistant.EffectReads,
 		Description: "Read the user's saved job-search profile: the roles and skills they " +
 			"want, the skills they want to avoid, where and how they will work, and their CV " +

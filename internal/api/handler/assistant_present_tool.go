@@ -76,6 +76,7 @@ const presentJobsToolName = "present_jobs"
 func presentJobsTool(resolver jobSlugResolver) assistant.Tool {
 	return assistant.Tool{
 		Name:   presentJobsToolName,
+		Title:  "Show job cards",
 		Effect: assistant.EffectReads,
 		Description: "Show vacancies to the user. This is the ONLY way a vacancy reaches the " +
 			"user's screen — never write a job link or a job's title into your reply text. " +

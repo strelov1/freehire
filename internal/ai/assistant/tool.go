@@ -21,6 +21,10 @@ type Tool struct {
 	Schema      map[string]any
 	Run         func(ctx context.Context, userID int64, args json.RawMessage) (any, error)
 
+	// Title is the human-facing name an MCP client lists the tool under. The
+	// in-app loop ignores it, as it does Effect.
+	Title string
+
 	// Effect is what the tool does to the account it runs as. The in-app loop
 	// ignores it; a surface that must declare a tool's effects to its client (the
 	// signed-in MCP server's annotations) reads it.

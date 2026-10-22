@@ -29,6 +29,7 @@ func NewAccountServer(tools []assistant.Tool, userID int64, origin string) *mcp.
 	for _, t := range tools {
 		server.AddTool(&mcp.Tool{
 			Name:        t.Name,
+			Title:       t.Title,
 			Description: t.Description,
 			InputSchema: t.Schema,
 			Annotations: accountAnnotations(t.Effect),
