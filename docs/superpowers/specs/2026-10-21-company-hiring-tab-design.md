@@ -57,13 +57,14 @@ redirects the same way `GetCompany` does.
 {"data": {
   "open": 42, "open_prev": 30, "growth": 12,
   "series": [{"period": "2026-10-01", "added": 3, "removed": 1}],
-  "lifetime": {"closed": 37, "median_days": 21.5},
-  "response": { ...existing companyResponse... }
+  "lifetime": {"closed": 37, "median_days": 21.5}
 }}
 ```
 
-`lifetime` and `response` are omitted below their gates (absent, not zero), the
-convention `companyResponse` already follows.
+`lifetime` is omitted below its gate (absent, not zero), the convention
+`companyResponse` already follows. The reply rate is NOT repeated here: the page loads
+`getCompany` for the header anyway, and that payload already carries the gated
+`response`.
 
 ### Series query
 
@@ -99,8 +100,9 @@ with the same "judgement, not a measurement" note.
   only the facets they read.
 - SEO: title "`<Company>` hiring trends — open roles, reply rate · freehire",
   canonical to itself, breadcrumb `Companies › <Company> › Hiring`, `Dataset` JSON-LD
-  pointing at the endpoint (as `/trends` does). `robots` follows the company page's
-  `listingRobots`. Added to `sitemap-companies.xml` beside the company URL.
+  pointing at the endpoint (as `/trends` does). `noindex, follow` when nothing is open and the default series is all zero. NOT added
+to `sitemap-companies.xml`: that would double ~240k entries, most of them thin;
+crawlers reach the tab through the company page's link.
 
 ## Out of scope (seams, not built)
 
