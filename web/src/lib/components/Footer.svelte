@@ -76,6 +76,7 @@
         { label: 'Support', href: resolve('/support') },
         { label: 'Privacy', href: resolve('/privacy') },
         { label: 'Terms', href: resolve('/terms') },
+        { label: 'Job removal', href: resolve('/job-removal') },
       ],
     },
   ];
