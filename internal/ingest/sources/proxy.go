@@ -78,7 +78,8 @@ var proxiedProviders = map[string]func(HTTPClient) Source{
 	// through the proxy like careerspage AND is rate-paced (pacedHTMLGetter) to hold its
 	// aggregate request rate under vagas's window on the single proxy IP — concurrency bounds the
 	// burst, pacing bounds the total-per-window. NewVagas takes an HTMLGetter, which HTTPClient
-	// satisfies, and the pacer wraps it before NewVagas.
+	// satisfies, and the pacer wraps it before NewVagas. This is the FALLBACK: production crawls
+	// it through the Scrapling tier (scraplingtier.go), which overrides this entry.
 	"vagas": func(c HTTPClient) Source {
 		return NewVagas(pacedHTMLGetter(c, vagasRequestInterval, vagasRequestBurst))
 	},

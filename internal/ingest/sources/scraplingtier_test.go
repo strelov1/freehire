@@ -22,7 +22,7 @@ func TestScraplingTierCarriesTheMeasuredProviders(t *testing.T) {
 		got = append(got, name)
 	}
 	sort.Strings(got)
-	want := []string{"bayt", "cleverstaff", "echojobs", "gulftalent", "hh", "infojobs", "kontur", "neogov", "occ", "startupjobs", "wantapply", "wellfound", "wuzzuf"}
+	want := []string{"bayt", "cleverstaff", "echojobs", "gulftalent", "hh", "infojobs", "kontur", "neogov", "occ", "startupjobs", "vagas", "wantapply", "wellfound", "wuzzuf"}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("scraplingProviders = %v, want %v", got, want)
 	}
@@ -86,6 +86,7 @@ func TestScraplingRoutesAreTheMeasuredOnes(t *testing.T) {
 		"echojobs":    {scraplingfetch.ModeBrowser, true},
 		"wuzzuf":      {scraplingfetch.ModeBrowser, false},
 		"occ":         {scraplingfetch.ModeBrowser, false},
+		"vagas":       {scraplingfetch.ModeHTTP, true},
 	}
 	for name, p := range scraplingProviders {
 		if p.route != want[name] {
@@ -125,6 +126,23 @@ func TestWuzzufStaysPaced(t *testing.T) {
 	}
 	if _, paced := w.http.(rateLimitedTextGetter); !paced {
 		t.Error("wuzzuf over the Scrapling tier is not paced")
+	}
+}
+
+// vagas stays paced through this tier: the rotating exit spreads its requests over many IPs,
+// but the site's own budget is unknown and the pacer is what keeps a run polite.
+func TestVagasStaysPaced(t *testing.T) {
+	scraplingEnv(t)
+	registry := map[string]Source{"vagas": NewVagas(nil)}
+	if err := ApplyScraplingEgress(registry); err != nil {
+		t.Fatal(err)
+	}
+	v, ok := registry["vagas"].(vagas)
+	if !ok {
+		t.Fatalf("vagas rebuilt as %T", registry["vagas"])
+	}
+	if _, paced := v.http.(rateLimitedHTMLGetter); !paced {
+		t.Error("vagas over the Scrapling tier is not paced")
 	}
 }
 

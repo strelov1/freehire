@@ -109,6 +109,13 @@ var scraplingProviders = map[string]scraplingProvider{
 	"occ": {scraplingRoute{scraplingfetch.ModeBrowser, false}, func(f *Client) Source {
 		return NewOCC(occSplit{HTMLGetter: f, JSONGetter: newCompatibleUAClient()})
 	}},
+	// The fixed proxy exit is 429'd on every detail page once a run has spent its budget — 15 of
+	// 15 measured on 2026-10-22, so a run hydrating 600 postings timed out with none stored. The
+	// impersonating fetcher over the rotating exit read 18 of 20; the misses are a 403 per bad IP
+	// and are retried next run. Still paced, since the site's own budget is unknown.
+	"vagas": {scraplingRoute{scraplingfetch.ModeHTTP, true}, func(f *Client) Source {
+		return NewVagas(pacedHTMLGetter(f, vagasRequestInterval, vagasRequestBurst))
+	}},
 }
 
 // A browser fetch that meets a challenge on its first page measured ~110 s, and the service
