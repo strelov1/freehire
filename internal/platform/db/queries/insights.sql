@@ -632,6 +632,9 @@ WHERE company_slug <> ''
   AND closed_at IS NOT NULL
   AND closed_at >= now() - interval '180 days'
   AND closed_reason IN ('unseen', 'employer_closed', 'feed_removed', 'expired')
+  -- A closure dated before its posting (a reopened row, clock skew) would add a
+  -- negative duration; the response rollup keeps the same pair out of its median.
+  AND closed_at >= created_at
 GROUP BY company_slug;
 
 -- name: GetCompanyLifetime :one

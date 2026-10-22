@@ -100,6 +100,8 @@ func TestInsightsCompanyLifetimeExcludesOldClosuresAndDuplicates(t *testing.T) {
 	seedClosedCompanyJob(t, pool, "old", "globex", 260, 200, "unseen", nil)
 	// A repost copy closed yesterday: the canonical posting stands for it.
 	seedClosedCompanyJob(t, pool, "dup", "globex", 5, 1, "unseen", &canonical)
+	// Closed before it was created: a data quirk, not a negative lifetime.
+	seedClosedCompanyJob(t, pool, "skew", "globex", 1, 3, "unseen", nil)
 	// One qualifying closure so the company has a row to inspect.
 	seedClosedCompanyJob(t, pool, "ok", "globex", 8, 1, "feed_removed", nil)
 
