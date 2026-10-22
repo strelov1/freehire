@@ -1,8 +1,8 @@
 // Command reindex rebuilds the Meilisearch jobs (facet/keyword) index from
-// Postgres. It ensures the index settings exist, then scans the WHOLE table in
-// batches and upserts their documents into a fresh rebuild index before atomically
-// swapping it in. Run it on a schedule (e.g. cron); it processes the whole table and
-// exits. Indexing is idempotent (upsert by id), so re-runs are safe.
+// Postgres. It ensures the index settings exist, then scans every open, canonical,
+// public posting in batches and upserts their documents into a fresh rebuild index
+// before atomically swapping it in. Run it on a schedule (e.g. cron); it processes the
+// whole catalogue and exits. Indexing is idempotent (upsert by id), so re-runs are safe.
 //
 // The index carries ONE embedder, and it is `userProvided`: the skill vectors backing
 // the match sort are computed here (internal/dict/skillvec) rather than fetched, so a
@@ -128,7 +128,9 @@ func run() int {
 		refreshDuplicateMarkers(ctx, q)
 	}
 
-	reader := worker.NewFullScanReader(q)
+	// Only the open, canonical, public rows: splitJobs would drop every other row anyway,
+	// and reading them was most of the rebuild's cost (see ListIndexableJobsByIDAfter).
+	reader := worker.NewIndexableScanReader(q)
 	lookup, err := buildRealityLookup(ctx, q)
 	if err != nil {
 		log.Printf("reindex: build reality lookup: %v", err)
@@ -323,8 +325,8 @@ func streamOpenDocs(ctx context.Context, reader worker.PageReader, lookup realit
 }
 
 // batchChunkVectors reads one page's description vectors. Every id in the page is asked
-// for, closed ones included: they hold no chunks (the closed-job embed path deletes them),
-// and filtering first would mean deciding indexability twice.
+// for, including the ones splitJobs will still drop (an unresolved category, no visible
+// description): filtering first would mean deciding indexability twice.
 func batchChunkVectors(ctx context.Context, chunks search.ChunkLister, jobs []db.Job) (map[int64][][]float32, error) {
 	if chunks == nil {
 		return nil, nil
@@ -528,7 +530,7 @@ func buildClosureGeoLookup(ctx context.Context, q *db.Queries) (closureGeoLookup
 	return func(ownerID int64) search.ClosureGeo { return m[ownerID] }, nil
 }
 
-// splitJobs partitions a batch from the (deliberately unfiltered) reindex feed:
+// splitJobs partitions a batch from the reindex feed:
 // open, non-private, categorized-or-confirmed-technical jobs become index documents
 // (each carrying its reality signal, classified against `now` and its cluster
 // counts); closed, private, or category-unresolved jobs become deletions so they

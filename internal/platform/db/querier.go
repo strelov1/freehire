@@ -3911,6 +3911,24 @@ type Querier interface {
 	// the catalogue for the company's display name (LEFT so a request survives an unknown
 	// company — the UI falls back to the slug).
 	ListIncomingReferralRequests(ctx context.Context, referrerUserID int64) ([]ListIncomingReferralRequestsRow, error)
+	// Id-only projection of ListIndexableJobsByIDAfter, for the corruption-degrade path
+	// ListJobIDsAfter serves. The predicate must match its wide sibling exactly: a
+	// degraded re-read that scanned a different window would skip rows silently.
+	ListIndexableJobIDsAfter(ctx context.Context, arg ListIndexableJobIDsAfterParams) ([]int64, error)
+	// The full rebuild's keyset scan (cmd/reindex), narrowed in SQL to the rows a search
+	// document can come from: open, canonical, public. That is the cheap half of
+	// cmd/reindex's splitJobs test; the half SQL cannot express (the category and the
+	// visible-description rules) stays in Go.
+	//
+	// The rebuild used to page ListJobsByIDAfter — every row ever stored — and drop what
+	// splitJobs rejected. Nothing deletes closed rows any more, so that scan grew with
+	// history rather than with the catalogue. Measured on prod 2026-10-22: 18.8M rows
+	// read to index 3.78M documents, ~50k rows/min regardless of how many survived, so
+	// the streaming phase took 6.4h (~21% of the oldest id decile is open and canonical,
+	// 64% of the newest — the per-minute document rate tracked exactly that). This
+	// predicate is jobs_sitemap_idx's own, so the scan walks that partial index (~6.2M
+	// entries) instead of the primary key.
+	ListIndexableJobsByIDAfter(ctx context.Context, arg ListIndexableJobsByIDAfterParams) ([]Job, error)
 	// The leaderboard read: companies ranked by growth (open_count - open_count_prev),
 	// '-growth' (freezing) reverses it, 'open' ranks by raw size; open_count is the
 	// tiebreak. @min_open floors the current open-count (blunts ingest-artifact spikes).

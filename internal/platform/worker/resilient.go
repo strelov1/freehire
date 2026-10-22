@@ -17,8 +17,9 @@ import (
 // batch (the fast path), an id-only projection of the same window (the degrade
 // path, which never detoasts so it cannot fault on corruption), and a single-row
 // fetch to isolate the readable rows from the corrupted one. Build one with
-// NewFullScanReader (the whole table) or NewLiveScanReader (only the rows that can
-// still reach the catalogue); tests supply a fake.
+// NewFullScanReader (the whole table), NewLiveScanReader (only the rows that can
+// still reach the catalogue) or NewIndexableScanReader (only the rows a search
+// document can come from); tests supply a fake.
 type PageReader interface {
 	Batch(ctx context.Context, afterID int64, batchSize int32) ([]db.Job, error)
 	IDs(ctx context.Context, afterID int64, batchSize int32) ([]int64, error)
@@ -84,6 +85,34 @@ func (r liveScanReader) IDs(ctx context.Context, afterID int64, bs int32) ([]int
 	})
 }
 func (r liveScanReader) Row(ctx context.Context, id int64) (db.Job, error) {
+	return r.q.GetJob(ctx, id)
+}
+
+// IndexableScanQueries is the subset a reader over the rows a search document can come
+// from calls — the same three reads as FullScanQueries, narrowed to open, canonical,
+// public postings.
+type IndexableScanQueries interface {
+	ListIndexableJobsByIDAfter(context.Context, db.ListIndexableJobsByIDAfterParams) ([]db.Job, error)
+	ListIndexableJobIDsAfter(context.Context, db.ListIndexableJobIDsAfterParams) ([]int64, error)
+	GetJob(context.Context, int64) (db.Job, error)
+}
+
+type indexableScanReader struct{ q IndexableScanQueries }
+
+// NewIndexableScanReader adapts a job store to a PageReader over the open, canonical,
+// public rows only — what a full search rebuild reads (see ListIndexableJobsByIDAfter
+// for why it no longer walks the whole table). Row is the unfiltered GetJob, as in the
+// other readers, so a row that closed between the degrade path's id list and its fetch
+// still arrives; the caller's own indexability test is what drops it.
+func NewIndexableScanReader(q IndexableScanQueries) PageReader { return indexableScanReader{q} }
+
+func (r indexableScanReader) Batch(ctx context.Context, afterID int64, bs int32) ([]db.Job, error) {
+	return r.q.ListIndexableJobsByIDAfter(ctx, db.ListIndexableJobsByIDAfterParams{AfterID: afterID, BatchSize: bs})
+}
+func (r indexableScanReader) IDs(ctx context.Context, afterID int64, bs int32) ([]int64, error) {
+	return r.q.ListIndexableJobIDsAfter(ctx, db.ListIndexableJobIDsAfterParams{AfterID: afterID, BatchSize: bs})
+}
+func (r indexableScanReader) Row(ctx context.Context, id int64) (db.Job, error) {
 	return r.q.GetJob(ctx, id)
 }
 

@@ -229,6 +229,15 @@ HNSW graph construction, so it lands on full rebuilds, not on incremental
 `search_outbox` pushes. Schedule it deliberately; `freehire-reindexw` has outgrown its
 slot before, and the disk floor already refuses rebuilds when free space is tight.
 
+**Before blaming the vectors for a slow rebuild, check what the producer reads.** On
+2026-10-22 a rebuild took 7.7h, and the engine was not the bottleneck: `Promote` waited
+only minutes for the queued batches at the end, and the per-minute document rate rose
+from ~4k to ~25k as the keyset moved from old ids (~21% open and canonical) to new ones
+(~64%). The scan was paging the WHOLE jobs table — 18.8M rows, every closed one
+de-TOASTed and thrown away, a population that only grows now that nothing deletes
+closed rows — to index 3.78M documents. It now reads `ListIndexableJobsByIDAfter`
+(open, canonical, public: ~6.2M rows through `jobs_sitemap_idx`).
+
 ## Query operators
 
 `ParseQuery` (`query_syntax.go`) reads `OR` and a leading `title:` in `q`. A

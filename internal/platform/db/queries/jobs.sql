@@ -112,6 +112,38 @@ WHERE id > sqlc.arg(after_id)
 ORDER BY id
 LIMIT sqlc.arg(batch_size);
 
+-- name: ListIndexableJobsByIDAfter :many
+-- The full rebuild's keyset scan (cmd/reindex), narrowed in SQL to the rows a search
+-- document can come from: open, canonical, public. That is the cheap half of
+-- cmd/reindex's splitJobs test; the half SQL cannot express (the category and the
+-- visible-description rules) stays in Go.
+--
+-- The rebuild used to page ListJobsByIDAfter — every row ever stored — and drop what
+-- splitJobs rejected. Nothing deletes closed rows any more, so that scan grew with
+-- history rather than with the catalogue. Measured on prod 2026-10-22: 18.8M rows
+-- read to index 3.78M documents, ~50k rows/min regardless of how many survived, so
+-- the streaming phase took 6.4h (~21% of the oldest id decile is open and canonical,
+-- 64% of the newest — the per-minute document rate tracked exactly that). This
+-- predicate is jobs_sitemap_idx's own, so the scan walks that partial index (~6.2M
+-- entries) instead of the primary key.
+SELECT *
+FROM jobs
+WHERE id > sqlc.arg(after_id)
+  AND closed_at IS NULL AND duplicate_of IS NULL AND NOT is_private
+ORDER BY id
+LIMIT sqlc.arg(batch_size);
+
+-- name: ListIndexableJobIDsAfter :many
+-- Id-only projection of ListIndexableJobsByIDAfter, for the corruption-degrade path
+-- ListJobIDsAfter serves. The predicate must match its wide sibling exactly: a
+-- degraded re-read that scanned a different window would skip rows silently.
+SELECT id
+FROM jobs
+WHERE id > sqlc.arg(after_id)
+  AND closed_at IS NULL AND duplicate_of IS NULL AND NOT is_private
+ORDER BY id
+LIMIT sqlc.arg(batch_size);
+
 -- name: ListJobIDsUpdatedAfter :many
 -- Id-only projection of ListJobsUpdatedAfter — the corruption-degrade path for the
 -- incremental (`reindex --since`) scan, mirroring ListJobIDsAfter.
