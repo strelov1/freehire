@@ -16,6 +16,8 @@ import (
 	"slices"
 	"strings"
 	"unicode"
+
+	"github.com/strelov1/freehire/internal/dict/answertopic"
 )
 
 // Field is one control as `read_form` reported it.
@@ -78,6 +80,14 @@ type Fill struct {
 // and are kept out of Fields() for both reasons.
 type Profile map[string]string
 
+// Banked is the candidate's answer bank, topic → answer, keyed by internal/dict/answertopic
+// exactly as internal/candidate/answerbank stores it: what they answered on earlier forms.
+//
+// It never meets the model and never meets groundedValue — Profile's doc says why neither
+// may hold it. It is recalled deterministically instead: a question the plan left
+// unanswered whose topic the bank holds is filled with the candidate's own words for it.
+type Banked map[string]string
+
 // Report is what the run tells the user.
 type Report struct {
 	// Filled are the labels that now carry a profile value.
@@ -119,8 +129,8 @@ var (
 	ErrUnavailable = errors.New("agent autofill is unavailable: no language model is configured")
 )
 
-// Run drives one autofill turn: read the form, plan, fill, report.
-func Run(ctx context.Context, tools Tools, planner Planner, profile Profile) (Report, error) {
+// Run drives one autofill turn: read the form, plan, recall from the bank, fill, report.
+func Run(ctx context.Context, tools Tools, planner Planner, profile Profile, banked Banked) (Report, error) {
 	fields, uploads, err := readForm(ctx, tools)
 	if err != nil {
 		return Report{}, err
@@ -135,20 +145,75 @@ func Run(ctx context.Context, tools Tools, planner Planner, profile Profile) (Re
 		return Report{}, err
 	}
 	typed, widgets := splitByKind(fields, planned)
+	typed = groundedIn(profile, typed)
+	recalledTyped, recalledWidgets, recalledChoices := recall(fields, banked, typed, widgets)
 
-	outcomes, err := fillSimple(ctx, tools, groundedIn(profile, typed))
+	outcomes, err := fillSimple(ctx, tools, append(typed, recalledTyped...))
 	if err != nil {
 		return Report{}, err
 	}
-	// driveWidgets returns whatever it drove before a failure, not just on success:
+	// driveWidgets records whatever it drove before a failure, not just on success:
 	// fillSimple's writes above already landed in the browser, and dropping them
 	// from the report on a later widget's failure would tell the user nothing
 	// succeeded when part of the form is, in fact, already filled.
-	driven, err := driveWidgets(ctx, tools, planner, profile, widgets)
-	if err != nil {
+	driven := map[string]string{}
+	if err := driveWidgets(ctx, tools, planChooser(planner, profile), widgets, driven); err != nil {
+		return report(fields, outcomes, driven), err
+	}
+	if err := driveWidgets(ctx, tools, bankChooser(recalledChoices), recalledWidgets, driven); err != nil {
 		return report(fields, outcomes, driven), err
 	}
 	return report(fields, outcomes, driven), nil
+}
+
+// recall answers, from the bank, the questions the plan left alone. It runs AFTER the
+// plan, never before: the profile's fields are typed facts and the bank's copy is free
+// text, so a question both could answer resolves to the profile every time — the order
+// internal/api/atsapply's resolver keeps for the same reason. A planned value the
+// grounding gate refused counts as left alone, so the candidate's own answer replaces a
+// fabricated one.
+//
+// A work-authorization question is never recalled (answertopic.Recallable): its answer
+// depends on this posting's country, which a topic does not carry.
+//
+// Recalled widgets come back with their banked answers keyed by widgetKey, which is how
+// bankChooser finds the answer for the widget it is driving.
+func recall(fields []Field, banked Banked, typed []Fill, widgets []Field) ([]Fill, []Field, map[string]string) {
+	if len(banked) == 0 {
+		return nil, nil, nil
+	}
+	named := make(map[string]bool, len(typed)+len(widgets))
+	for _, fill := range typed {
+		named[widgetKey(fill.Label, fill.Frame)] = true
+	}
+	for _, widget := range widgets {
+		named[widgetKey(widget.Label, widget.Frame)] = true
+	}
+
+	var fills []Fill
+	var recalledWidgets []Field
+	answers := map[string]string{}
+	for _, field := range fields {
+		key := widgetKey(field.Label, field.Frame)
+		if named[key] || !answertopic.Recallable(field.Label) {
+			continue
+		}
+		topic, ok := answertopic.Of(field.Label)
+		if !ok {
+			continue
+		}
+		answer, ok := banked[topic]
+		if !ok {
+			continue
+		}
+		if field.Combo {
+			recalledWidgets = append(recalledWidgets, field)
+			answers[key] = answer
+			continue
+		}
+		fills = append(fills, Fill{Label: field.Label, Value: answer, Frame: field.Frame, Form: field.Form})
+	}
+	return fills, recalledWidgets, answers
 }
 
 // splitByKind separates the plan into values that can simply be written and the
@@ -272,25 +337,67 @@ const (
 	widgetNoOptions = "no_options"
 )
 
-// driveWidgets works each named widget the way a person does — open it, read what
-// it offers, choose, commit, confirm — and reports what became of each. A step
-// that does not do what it should stops that widget rather than pressing on:
-// nothing is written into a widget whose state is not understood.
-//
-// On a widget's failure it returns what it drove so far alongside the error,
-// rather than discarding it: the earlier widgets in questions already committed
-// their choices in the browser, and the caller (Run) reports that real progress
-// instead of losing it behind the error.
-func driveWidgets(ctx context.Context, tools Tools, planner Planner, profile Profile, questions []Field) (map[string]string, error) {
-	driven := make(map[string]string, len(questions))
-	for _, question := range questions {
-		status, err := driveWidget(ctx, tools, planner, profile, question)
+// chooser picks one of a widget's options for its question. It returns the choice, or
+// "" with the widget status that says why there is none (widgetUnanswered, …).
+type chooser func(ctx context.Context, question Field, options []string) (choice, refusal string, err error)
+
+// planChooser asks the planner, then holds its pick to the two rules a model's answer
+// must meet: it is one of the options the widget actually offers, and the profile
+// supports it.
+func planChooser(planner Planner, profile Profile) chooser {
+	return func(ctx context.Context, question Field, options []string) (string, string, error) {
+		choice, err := planner.Choose(ctx, question, options, profile)
 		if err != nil {
-			return driven, err
+			return "", "", err
+		}
+		if choice == "" {
+			return "", widgetUnanswered, nil
+		}
+		// The widget's own list is the authority: a pick that is merely close is not
+		// approximated, because committing the nearest option is how a question
+		// wanting "No" ends up holding "Norfolk Island".
+		if !offers(options, choice) {
+			return "", widgetNotOffered, nil
+		}
+		if !groundedValue(profile, choice) {
+			return "", widgetUngrounded, nil
+		}
+		return choice, "", nil
+	}
+}
+
+// bankChooser picks the option the candidate's banked answer names — in the widget's own
+// spelling, since that is what select and verify compare against — and nothing near it,
+// by the same rule planChooser follows.
+func bankChooser(answers map[string]string) chooser {
+	return func(_ context.Context, question Field, options []string) (string, string, error) {
+		answer := answers[widgetKey(question.Label, question.Frame)]
+		for _, option := range options {
+			if normalize(option) == normalize(answer) {
+				return option, "", nil
+			}
+		}
+		return "", widgetNotOffered, nil
+	}
+}
+
+// driveWidgets works each widget the way a person does — open it, read what it offers,
+// choose, commit, confirm — and records what became of each in driven. A step that does
+// not do what it should stops that widget rather than pressing on: nothing is written
+// into a widget whose state is not understood.
+//
+// On a widget's failure it returns the error with driven already holding what it drove
+// so far: the earlier widgets committed their choices in the browser, and the caller
+// (Run) reports that real progress instead of losing it behind the error.
+func driveWidgets(ctx context.Context, tools Tools, choose chooser, questions []Field, driven map[string]string) error {
+	for _, question := range questions {
+		status, err := driveWidget(ctx, tools, choose, question)
+		if err != nil {
+			return err
 		}
 		driven[widgetKey(question.Label, question.Frame)] = status
 	}
-	return driven, nil
+	return nil
 }
 
 // widgetKey composite-keys a driven widget's outcome by label and frame, so two
@@ -300,7 +407,7 @@ func widgetKey(label string, frame int) string {
 	return fmt.Sprintf("%s\x00%d", label, frame)
 }
 
-func driveWidget(ctx context.Context, tools Tools, planner Planner, profile Profile, question Field) (string, error) {
+func driveWidget(ctx context.Context, tools Tools, choose chooser, question Field) (string, error) {
 	opened, err := comboStep(ctx, tools, "combobox.open", question.Label, "", question.Frame)
 	if err != nil {
 		return "", err
@@ -317,21 +424,12 @@ func driveWidget(ctx context.Context, tools Tools, planner Planner, profile Prof
 		return widgetNoOptions, nil
 	}
 
-	choice, err := planner.Choose(ctx, question, offered.Options, profile)
+	choice, refusal, err := choose(ctx, question, offered.Options)
 	if err != nil {
 		return "", err
 	}
 	if choice == "" {
-		return widgetUnanswered, nil
-	}
-	// The widget's own list is the authority: a pick that is merely close is not
-	// approximated, because committing the nearest option is how a question
-	// wanting "No" ends up holding "Norfolk Island".
-	if !offers(offered.Options, choice) {
-		return widgetNotOffered, nil
-	}
-	if !groundedValue(profile, choice) {
-		return widgetUngrounded, nil
+		return refusal, nil
 	}
 
 	selected, err := comboStep(ctx, tools, "combobox.select", question.Label, choice, question.Frame)

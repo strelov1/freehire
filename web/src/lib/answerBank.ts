@@ -3,7 +3,7 @@ import type { AutoApplyPreviewPending } from '#lib/types.js';
 /** The question stems that mean "may you work in this posting's country".
  *
  *  This list is the TypeScript half of one rule. The Go half is
- *  `internal/api/atsapply/sensitive.go`'s `workAuthorizationTerms`, which refuses to RECALL
+ *  `internal/dict/answertopic/recall.go`'s `workAuthorizationTerms`, which refuses to RECALL
  *  a banked answer to such a question: the answer depends on the job's own location, one
  *  topic covers every posting worded that way, and a "Yes" banked while looking at a US
  *  posting would otherwise fill a Brazilian one at submit time, unseen. Offering an input

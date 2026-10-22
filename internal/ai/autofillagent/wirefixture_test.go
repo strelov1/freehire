@@ -75,7 +75,7 @@ func TestFillSimpleWireFixtureIsCurrent(t *testing.T) {
 	planner := plannerFunc(func(_ []autofillagent.Field, p autofillagent.Profile) ([]autofillagent.Fill, error) {
 		return []autofillagent.Fill{{Label: "Email", Value: p["email"]}}, nil
 	})
-	if _, err := autofillagent.Run(context.Background(), tools, planner, profile()); err != nil {
+	if _, err := autofillagent.Run(context.Background(), tools, planner, profile(), nil); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
 	if tools.args == nil {

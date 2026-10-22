@@ -55,6 +55,9 @@ func (h *autofillHandlers) RunAgentAutofill(c *fiber.Ctx) error {
 			h.typesafeAPIKey,
 		),
 		autofillagent.Profile(profile.Fields()),
+		// The bank travels apart from the profile: it is recalled by topic, never shown
+		// to the model or counted as grounding (see autofillagent.Banked).
+		autofillagent.Banked(profile.BankAnswers),
 	)
 	if err != nil {
 		switch {

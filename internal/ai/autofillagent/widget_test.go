@@ -148,7 +148,7 @@ func TestRunDrivesAWidgetTheProfileAnswers(t *testing.T) {
 		choices: map[string]string{"Country": "Germany"},
 	}
 
-	rep, err := autofillagent.Run(context.Background(), tools, planner, profile())
+	rep, err := autofillagent.Run(context.Background(), tools, planner, profile(), nil)
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -182,7 +182,7 @@ func TestRunDoesNotCountAnUnverifiedWidgetWriteAsFilled(t *testing.T) {
 		choices: map[string]string{"Country": "Germany"},
 	}
 
-	rep, err := autofillagent.Run(context.Background(), tools, planner, profile())
+	rep, err := autofillagent.Run(context.Background(), tools, planner, profile(), nil)
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -205,7 +205,7 @@ func TestRunReportsAWidgetThatWillNotOpen(t *testing.T) {
 		choices: map[string]string{"Country": "Germany"},
 	}
 
-	rep, err := autofillagent.Run(context.Background(), tools, planner, profile())
+	rep, err := autofillagent.Run(context.Background(), tools, planner, profile(), nil)
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -227,7 +227,7 @@ func TestRunLeavesAWidgetTheProfileDoesNotAnswer(t *testing.T) {
 		choices: map[string]string{}, // nothing in the profile answers it
 	}
 
-	rep, err := autofillagent.Run(context.Background(), tools, planner, profile())
+	rep, err := autofillagent.Run(context.Background(), tools, planner, profile(), nil)
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -253,7 +253,7 @@ func TestRunDropsAChosenOptionThatTheProfileDoesNotSupport(t *testing.T) {
 		choices: map[string]string{"Visa status": "Requires sponsorship"},
 	}
 
-	rep, err := autofillagent.Run(context.Background(), tools, planner, profile())
+	rep, err := autofillagent.Run(context.Background(), tools, planner, profile(), nil)
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -280,7 +280,7 @@ func TestRunDoesNotGroundAShortOptionInAnUnrelatedProfileWord(t *testing.T) {
 	}
 	norway := autofillagent.Profile{"full_name": "Ilya Strelov", "location": "Oslo, Norway"}
 
-	rep, err := autofillagent.Run(context.Background(), tools, planner, norway)
+	rep, err := autofillagent.Run(context.Background(), tools, planner, norway, nil)
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -304,7 +304,7 @@ func TestRunNeverSelectsAnOptionTheWidgetDoesNotOffer(t *testing.T) {
 		choices: map[string]string{"Country": "Berlin, Germany"}, // grounded, but not on offer
 	}
 
-	rep, err := autofillagent.Run(context.Background(), tools, planner, profile())
+	rep, err := autofillagent.Run(context.Background(), tools, planner, profile(), nil)
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -329,7 +329,7 @@ func TestRunLeavesWidgetsTheePlanDidNotTargetAlone(t *testing.T) {
 		choices: map[string]string{"Country": "Germany"},
 	}
 
-	rep, err := autofillagent.Run(context.Background(), tools, planner, profile())
+	rep, err := autofillagent.Run(context.Background(), tools, planner, profile(), nil)
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -354,7 +354,7 @@ func TestRunNamesAGroupedQuestionOnceInTheReport(t *testing.T) {
 	}}}
 	planner := &widgetPlanner{}
 
-	rep, err := autofillagent.Run(context.Background(), tools, planner, profile())
+	rep, err := autofillagent.Run(context.Background(), tools, planner, profile(), nil)
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -386,7 +386,7 @@ func TestRunReturnsThePartialReportWhenAWidgetFails(t *testing.T) {
 		choices: map[string]string{"Country": "Germany", "Degree": "BSc"},
 	}
 
-	rep, err := autofillagent.Run(context.Background(), tools, planner, profile())
+	rep, err := autofillagent.Run(context.Background(), tools, planner, profile(), nil)
 	if err == nil {
 		t.Fatal("Run succeeded despite the widget failure")
 	}
@@ -423,7 +423,7 @@ func TestRunRoutesSameLabeledFieldsInDifferentFramesIndependently(t *testing.T) 
 	p := profile()
 	p["location"] = "Berlin, Germany"
 
-	rep, err := autofillagent.Run(context.Background(), tools, planner, p)
+	rep, err := autofillagent.Run(context.Background(), tools, planner, p, nil)
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}

@@ -85,8 +85,9 @@ func (p Profile) Fields() map[string]string {
 
 // FieldsWithBankedAnswers is Fields plus the candidate's banked answers, and is what an
 // application FORM is resolved against — internal/api/atsapply.Resolve, reached through
-// cmd/auto-apply's own autoapply.AnswerSource. Those two are the only consumers the design
-// names, and the split is what keeps the bank off every other path (see Fields).
+// cmd/auto-apply's own autoapply.AnswerSource. The split is what keeps the bank off every
+// other path (see Fields). Agent autofill in the browser reads BankAnswers itself and
+// recalls them by topic, apart from the profile it plans with (autofillagent.Banked).
 //
 // Banked answers ride in the same map under a prefix, so a caller that resolves an answer
 // never has to know which source stated it. The prefix must match internal/api/atsapply's

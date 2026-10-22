@@ -88,7 +88,7 @@ func TestRunFillsThePlannedFieldsAndReportsThem(t *testing.T) {
 		}, nil
 	})
 
-	rep, err := autofillagent.Run(context.Background(), tools, planner, profile())
+	rep, err := autofillagent.Run(context.Background(), tools, planner, profile(), nil)
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -113,7 +113,7 @@ func TestRunDropsAValueThatIsNotGroundedInTheProfile(t *testing.T) {
 		}, nil
 	})
 
-	rep, err := autofillagent.Run(context.Background(), tools, planner, profile())
+	rep, err := autofillagent.Run(context.Background(), tools, planner, profile(), nil)
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -139,7 +139,7 @@ func TestRunDoesNotAnswerAYesNoQuestionTheProfileSaysNothingAbout(t *testing.T) 
 		return []autofillagent.Fill{{Label: "Willing to relocate", Value: "true"}}, nil
 	})
 
-	rep, err := autofillagent.Run(context.Background(), tools, planner, profile())
+	rep, err := autofillagent.Run(context.Background(), tools, planner, profile(), nil)
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -158,7 +158,7 @@ func TestRunAcceptsAValueDerivedFromAProfileValue(t *testing.T) {
 		return []autofillagent.Fill{{Label: "City", Value: "Berlin"}}, nil
 	})
 
-	rep, err := autofillagent.Run(context.Background(), tools, planner, profile())
+	rep, err := autofillagent.Run(context.Background(), tools, planner, profile(), nil)
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -179,7 +179,7 @@ func TestRunFillsAScreeningQuestionFromTheProfile(t *testing.T) {
 	profileWithScreening := profile()
 	profileWithScreening["notice_period"] = "30 days"
 
-	rep, err := autofillagent.Run(context.Background(), tools, planner, profileWithScreening)
+	rep, err := autofillagent.Run(context.Background(), tools, planner, profileWithScreening, nil)
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -204,7 +204,7 @@ func TestRunLeavesAnUntargetedComboboxForTheUser(t *testing.T) {
 		return []autofillagent.Fill{{Label: "Email", Value: p["email"]}}, nil
 	})
 
-	rep, err := autofillagent.Run(context.Background(), tools, planner, profile())
+	rep, err := autofillagent.Run(context.Background(), tools, planner, profile(), nil)
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -222,7 +222,7 @@ func TestRunSkipsTheBrowserEntirelyWhenNothingIsPlanned(t *testing.T) {
 		return nil, nil
 	})
 
-	rep, err := autofillagent.Run(context.Background(), tools, planner, profile())
+	rep, err := autofillagent.Run(context.Background(), tools, planner, profile(), nil)
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -247,7 +247,7 @@ func TestRunLeavesUnlabelledControlsOutOfTheReport(t *testing.T) {
 		return []autofillagent.Fill{{Label: "Email", Value: p["email"]}}, nil
 	})
 
-	rep, err := autofillagent.Run(context.Background(), tools, planner, profile())
+	rep, err := autofillagent.Run(context.Background(), tools, planner, profile(), nil)
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -271,7 +271,7 @@ func TestRunReportsRequiredFieldsBeforeOptionalOnes(t *testing.T) {
 		return nil, nil
 	})
 
-	rep, err := autofillagent.Run(context.Background(), tools, planner, profile())
+	rep, err := autofillagent.Run(context.Background(), tools, planner, profile(), nil)
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -291,7 +291,7 @@ func TestRunFailsWhenThePageHasNoForm(t *testing.T) {
 		return nil, nil
 	})
 
-	if _, err := autofillagent.Run(context.Background(), tools, planner, profile()); err == nil {
+	if _, err := autofillagent.Run(context.Background(), tools, planner, profile(), nil); err == nil {
 		t.Fatal("Run succeeded on a page with no fields")
 	}
 }
@@ -302,7 +302,7 @@ func TestRunSurfacesAToolFailure(t *testing.T) {
 		return nil, nil
 	})
 
-	_, err := autofillagent.Run(context.Background(), tools, planner, profile())
+	_, err := autofillagent.Run(context.Background(), tools, planner, profile(), nil)
 	if err == nil || err.Error() != "the browser extension is not connected" {
 		t.Fatalf("err = %v, want the tool's message", err)
 	}
@@ -323,7 +323,7 @@ func TestRunTagsEachFillWithItsFieldsFrameAndForm(t *testing.T) {
 		return []autofillagent.Fill{{Label: "Email", Value: p["email"]}}, nil
 	})
 
-	if _, err := autofillagent.Run(context.Background(), tools, planner, profile()); err != nil {
+	if _, err := autofillagent.Run(context.Background(), tools, planner, profile(), nil); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
 
@@ -360,7 +360,7 @@ func TestRunDoesNotWriteIntoASignupSharingTheApplicationsLabel(t *testing.T) {
 		return []autofillagent.Fill{{Label: "Email", Value: p["email"]}}, nil
 	})
 
-	if _, err := autofillagent.Run(context.Background(), tools, planner, profile()); err != nil {
+	if _, err := autofillagent.Run(context.Background(), tools, planner, profile(), nil); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
 
@@ -383,7 +383,7 @@ func TestRunKeepsEveryFieldWhenNoUploadNamesTheApplication(t *testing.T) {
 		return []autofillagent.Fill{{Label: "Email", Value: p["email"]}}, nil
 	})
 
-	if _, err := autofillagent.Run(context.Background(), tools, planner, profile()); err != nil {
+	if _, err := autofillagent.Run(context.Background(), tools, planner, profile(), nil); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
 	if len(tools.requested) != 1 {

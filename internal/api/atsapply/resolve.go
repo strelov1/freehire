@@ -119,8 +119,7 @@ func Resolve(fields []MergedField, answers map[string]string, hasApprovedCV bool
 //
 // The invariant is enforced, not merely observed by this list's contents: the answer bank
 // is a second route to a label and would otherwise walk straight around it, so
-// matchBankAnswerKey below refuses the same category through workAuthorizationTerms
-// (sensitive.go). Adding a rule here for an authorization question would still be wrong.
+// matchBankAnswerKey below refuses the same category through answertopic.Recallable. Adding a rule here for an authorization question would still be wrong.
 var labelAnswerKeyFor = []struct {
 	answerKey string
 	keywords  []string // ALL must appear (case-insensitive) for the rule to fire
@@ -205,10 +204,10 @@ const bankAnswerKeyPrefix = "topic:"
 // A work-authorization question is refused outright, whatever the bank holds:
 // labelAnswerKeyFor above says why (the answer depends on THIS posting's country, which
 // nothing here has), and the bank does not relax it — one topic covers every posting worded
-// that way, so a banked "Yes" would travel between countries. See workAuthorizationTerms.
+// that way, so a banked "Yes" would travel between countries. See answertopic.Recallable.
 func matchBankAnswerKey(f MergedField) (string, bool) {
 	question := questionText(f)
-	if isWorkAuthorizationLabel(question) {
+	if !answertopic.Recallable(question) {
 		return "", false
 	}
 	topic, ok := answertopic.Of(question)
