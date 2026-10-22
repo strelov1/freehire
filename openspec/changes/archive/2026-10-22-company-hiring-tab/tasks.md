@@ -19,4 +19,4 @@
 
 ## 4. Finish
 
-- [ ] 4.1 `gofmt`, `go vet ./...`, `go vet -tags=integration ./...`, `go test ./...`, web check/lint/test, then PR → CI → merge → deploy → verify on prod after the next rollup
+- [x] 4.1 `gofmt`, `go vet ./...`, `go vet -tags=integration ./...`, `go test ./...`, web check/lint/test, then PR → CI → merge → deploy → verify on prod after the next rollup
