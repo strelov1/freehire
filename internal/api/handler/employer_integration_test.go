@@ -184,7 +184,7 @@ func TestEmployerEndToEnd(t *testing.T) {
 
 	t.Run("a pending account cannot create a vacancy (403)", func(t *testing.T) {
 		resp := do(t, req(fiber.MethodPost, "/api/v1/employer/jobs", userBCookie,
-			`{"url":"https://bravo.test/jobs/1","title":"Go Engineer"}`))
+			`{"url":"https://bravo.test/jobs/1","title":"Go Engineer","description":"We use Go."}`))
 		defer resp.Body.Close()
 		if resp.StatusCode != fiber.StatusForbidden {
 			t.Errorf("status = %d, want 403", resp.StatusCode)
@@ -441,7 +441,7 @@ func TestEmployerEndToEnd(t *testing.T) {
 
 	t.Run("employer A publishes a vacancy taking applications on freehire", func(t *testing.T) {
 		resp := do(t, req(fiber.MethodPost, "/api/v1/employer/jobs", userACookie,
-			`{"apply_mode":"freehire","title":"Platform Engineer","questions":[`+
+			`{"apply_mode":"freehire","title":"Platform Engineer","description":"We run the platform.","questions":[`+
 				`{"label":"EU work permit?","type":"boolean","required":true},`+
 				`{"label":"Stack","type":"select","options":["Go","Rust"]}]}`))
 		defer resp.Body.Close()
@@ -475,13 +475,39 @@ func TestEmployerEndToEnd(t *testing.T) {
 			t.Errorf("stored first question = %q, want the edit", label)
 		}
 
+		resp = do(t, req(fiber.MethodPost, "/api/v1/employer/jobs/"+view.PublicSlug+"/close", userACookie, ""))
+		defer resp.Body.Close()
+		if resp.StatusCode != fiber.StatusOK {
+			t.Fatalf("close status = %d", resp.StatusCode)
+		}
+		resp = do(t, req(fiber.MethodPost, "/api/v1/employer/jobs/"+view.PublicSlug+"/reopen", userBCookie, ""))
+		defer resp.Body.Close()
+		if resp.StatusCode != fiber.StatusNotFound {
+			t.Errorf("another employer's reopen status = %d, want 404", resp.StatusCode)
+		}
+		resp = do(t, req(fiber.MethodPost, "/api/v1/employer/jobs/"+view.PublicSlug+"/reopen", userACookie, ""))
+		defer resp.Body.Close()
+		if resp.StatusCode != fiber.StatusOK {
+			b, _ := io.ReadAll(resp.Body)
+			t.Fatalf("reopen status = %d (body %s), want 200", resp.StatusCode, b)
+		}
+		var open bool
+		if err := pool.QueryRow(ctx, `SELECT closed_at IS NULL FROM jobs WHERE public_slug = $1`, view.PublicSlug).Scan(&open); err != nil || !open {
+			t.Errorf("reopened vacancy open = %v, %v", open, err)
+		}
+		resp = do(t, req(fiber.MethodPost, "/api/v1/employer/jobs/"+view.PublicSlug+"/reopen", userACookie, ""))
+		defer resp.Body.Close()
+		if resp.StatusCode != fiber.StatusBadRequest {
+			t.Errorf("reopening an open vacancy status = %d, want 400", resp.StatusCode)
+		}
+
 		resp = do(t, req(fiber.MethodPatch, "/api/v1/employer/jobs/"+view.PublicSlug, userACookie, `{"apply_mode":"external"}`))
 		defer resp.Body.Close()
 		if resp.StatusCode != fiber.StatusBadRequest {
 			t.Errorf("mode change status = %d, want 400", resp.StatusCode)
 		}
 		resp = do(t, req(fiber.MethodPost, "/api/v1/employer/jobs", userACookie,
-			`{"apply_mode":"freehire","title":"T","questions":[{"label":"Q","type":"select","options":["only"]}]}`))
+			`{"apply_mode":"freehire","title":"T","description":"D.","questions":[{"label":"Q","type":"select","options":["only"]}]}`))
 		defer resp.Body.Close()
 		if resp.StatusCode != fiber.StatusBadRequest {
 			t.Errorf("malformed question status = %d, want 400", resp.StatusCode)
@@ -509,7 +535,7 @@ func TestEmployerEndToEnd(t *testing.T) {
 			t.Fatalf("status = %q, want revoked", acc.Status)
 		}
 
-		resp = do(t, req(fiber.MethodPost, "/api/v1/employer/jobs", userACookie, `{"url":"https://acme.test/jobs/2","title":"Another Role"}`))
+		resp = do(t, req(fiber.MethodPost, "/api/v1/employer/jobs", userACookie, `{"url":"https://acme.test/jobs/2","title":"Another Role","description":"D."}`))
 		defer resp.Body.Close()
 		if resp.StatusCode != fiber.StatusForbidden {
 			t.Errorf("post-revoke create status = %d, want 403", resp.StatusCode)

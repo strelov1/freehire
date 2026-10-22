@@ -2462,6 +2462,11 @@ export function createApi(
     await call(`/api/v1/employer/jobs/${encodeURIComponent(slug)}/close`, { method: 'POST' });
   }
 
+  /** Undo the caller's own close of their vacancy. A close someone else made is a 400. */
+  async function reopenEmployerVacancy(slug: string): Promise<void> {
+    await call(`/api/v1/employer/jobs/${encodeURIComponent(slug)}/reopen`, { method: 'POST' });
+  }
+
   /** The moderator review queue: employer claims that could not auto-activate. */
   async function listPendingEmployerClaims(): Promise<EmployerAccount[]> {
     return requestData<EmployerAccount[]>('/api/v1/employer/claims');
@@ -3314,6 +3319,7 @@ export function createApi(
     createEmployerVacancy,
     updateEmployerVacancy,
     closeEmployerVacancy,
+    reopenEmployerVacancy,
     listPendingEmployerClaims,
     approveEmployerClaim,
     rejectEmployerClaim,

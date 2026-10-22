@@ -93,6 +93,10 @@ func TestCategoryUnresolved(t *testing.T) {
 		want bool
 	}{
 		{"dict resolved category wins regardless of enrichment", db.Job{Category: "backend"}, false},
+		// A vacancy a verified employer published here is never hidden for an unrecognised
+		// title: the employer pressed Publish, and a silent absence from search is a control
+		// that lies. The filter exists for crawled rows nobody vouched for.
+		{"employer-published, title no dictionary knows", db.Job{Source: "employer", Title: "Wizard of Things"}, false},
 		{"dict empty, no enrichment at all", db.Job{}, true},
 		{"dict empty, enrichment present but no category", db.Job{Enrichment: []byte(`{"summary":"x"}`)}, true},
 		{"dict empty, LLM also says other", db.Job{Enrichment: []byte(`{"category":"other"}`)}, true},

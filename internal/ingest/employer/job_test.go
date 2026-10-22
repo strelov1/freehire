@@ -100,6 +100,16 @@ func (r *fakeJobRepo) Close(_ context.Context, actorID int64, slug string) error
 	return nil
 }
 
+// Reopen undoes only a close the fake recorded, like the real query's
+// closed_reason = 'employer_closed' guard.
+func (r *fakeJobRepo) Reopen(_ context.Context, actorID int64, slug string) (bool, error) {
+	if r.owner[slug] != actorID || !r.closed[slug] {
+		return false, nil
+	}
+	delete(r.closed, slug)
+	return true, nil
+}
+
 // seed installs a job directly, bypassing the Minter — for Update/Close tests that need a
 // pre-existing owned vacancy.
 func (r *fakeJobRepo) seed(slug string, ownerID int64, f job.Fields) {
@@ -158,10 +168,10 @@ func TestListVacancies_ScopedToTheCallersOwn(t *testing.T) {
 	sA := activeService(t, 1, jobs, &fakeMinter{repo: jobs})
 	sB := activeService(t, 2, jobs, &fakeMinter{repo: jobs})
 
-	if _, _, err := sA.CreateVacancy(context.Background(), 1, VacancyInput{URL: "https://acme.test/jobs/1", Title: "Go Engineer"}); err != nil {
+	if _, _, err := sA.CreateVacancy(context.Background(), 1, VacancyInput{Description: "Build things.", URL: "https://acme.test/jobs/1", Title: "Go Engineer"}); err != nil {
 		t.Fatalf("A CreateVacancy: %v", err)
 	}
-	if _, _, err := sB.CreateVacancy(context.Background(), 2, VacancyInput{URL: "https://bravo.test/jobs/1", Title: "Rust Engineer"}); err != nil {
+	if _, _, err := sB.CreateVacancy(context.Background(), 2, VacancyInput{Description: "Build things.", URL: "https://bravo.test/jobs/1", Title: "Rust Engineer"}); err != nil {
 		t.Fatalf("B CreateVacancy: %v", err)
 	}
 
@@ -194,7 +204,7 @@ func TestCreateVacancy_DelegatesToTheMinterWithTheLockedCompanyName(t *testing.T
 	minter := &fakeMinter{repo: jobs}
 	s := activeService(t, 1, jobs, minter)
 
-	_, _, err := s.CreateVacancy(context.Background(), 1, VacancyInput{URL: "https://acme.test/jobs/1", Title: "Go Engineer"})
+	_, _, err := s.CreateVacancy(context.Background(), 1, VacancyInput{Description: "Build things.", URL: "https://acme.test/jobs/1", Title: "Go Engineer"})
 	if err != nil {
 		t.Fatalf("CreateVacancy: %v", err)
 	}
@@ -221,7 +231,7 @@ func TestCreateVacancy_RefusesAPendingAccount(t *testing.T) {
 		t.Fatalf("ConfirmClaim: %v", err)
 	}
 
-	if _, _, err := s.CreateVacancy(context.Background(), 1, VacancyInput{URL: "https://acme.test/jobs/1", Title: "Go Engineer"}); !errors.Is(err, ErrNotActive) {
+	if _, _, err := s.CreateVacancy(context.Background(), 1, VacancyInput{Description: "Build things.", URL: "https://acme.test/jobs/1", Title: "Go Engineer"}); !errors.Is(err, ErrNotActive) {
 		t.Fatalf("err = %v, want ErrNotActive", err)
 	}
 }
@@ -230,13 +240,13 @@ func TestCreateVacancy_RefusesAColludingURLFromADifferentEmployer(t *testing.T) 
 	jobs := newFakeJobRepo()
 	minterA := &fakeMinter{repo: jobs}
 	sA := activeService(t, 1, jobs, minterA)
-	if _, _, err := sA.CreateVacancy(context.Background(), 1, VacancyInput{URL: "https://shared.example/jobs/1", Title: "Go Engineer"}); err != nil {
+	if _, _, err := sA.CreateVacancy(context.Background(), 1, VacancyInput{Description: "Build things.", URL: "https://shared.example/jobs/1", Title: "Go Engineer"}); err != nil {
 		t.Fatalf("employer A CreateVacancy: %v", err)
 	}
 
 	minterB := &fakeMinter{repo: jobs}
 	sB := activeService(t, 2, jobs, minterB)
-	if _, _, err := sB.CreateVacancy(context.Background(), 2, VacancyInput{URL: "https://shared.example/jobs/1", Title: "Different Title"}); !errors.Is(err, ErrURLTaken) {
+	if _, _, err := sB.CreateVacancy(context.Background(), 2, VacancyInput{Description: "Build things.", URL: "https://shared.example/jobs/1", Title: "Different Title"}); !errors.Is(err, ErrURLTaken) {
 		t.Fatalf("err = %v, want ErrURLTaken", err)
 	}
 	if len(minterB.calls) != 0 {
@@ -249,10 +259,10 @@ func TestCreateVacancy_SameOwnerReCreateIsNotRefused(t *testing.T) {
 	minter := &fakeMinter{repo: jobs}
 	s := activeService(t, 1, jobs, minter)
 
-	if _, _, err := s.CreateVacancy(context.Background(), 1, VacancyInput{URL: "https://acme.test/jobs/1", Title: "Go Engineer"}); err != nil {
+	if _, _, err := s.CreateVacancy(context.Background(), 1, VacancyInput{Description: "Build things.", URL: "https://acme.test/jobs/1", Title: "Go Engineer"}); err != nil {
 		t.Fatalf("first CreateVacancy: %v", err)
 	}
-	if _, _, err := s.CreateVacancy(context.Background(), 1, VacancyInput{URL: "https://acme.test/jobs/1", Title: "Senior Go Engineer"}); err != nil {
+	if _, _, err := s.CreateVacancy(context.Background(), 1, VacancyInput{Description: "Build things.", URL: "https://acme.test/jobs/1", Title: "Senior Go Engineer"}); err != nil {
 		t.Fatalf("re-Create by the same owner: %v", err)
 	}
 	if len(minter.calls) != 2 {
@@ -352,9 +362,7 @@ func TestCreateVacancy_OnSiteMintsItsOwnIdentityAndStoresTheQuestions(t *testing
 	minter := &fakeMinter{repo: jobs}
 	s := activeService(t, 1, jobs, minter)
 
-	j, _, err := s.CreateVacancy(context.Background(), 1, VacancyInput{
-		ApplyMode: ApplyFreehire, Title: "Go Engineer", Questions: []applyform.EmployerQuestion{permitQuestion},
-	})
+	j, _, err := s.CreateVacancy(context.Background(), 1, VacancyInput{Description: "Build things.", ApplyMode: ApplyFreehire, Title: "Go Engineer", Questions: []applyform.EmployerQuestion{permitQuestion}})
 	if err != nil {
 		t.Fatalf("CreateVacancy: %v", err)
 	}
@@ -376,7 +384,7 @@ func TestCreateVacancy_TwoOnSiteVacanciesNeverShareAnIdentity(t *testing.T) {
 	minter := &fakeMinter{repo: jobs}
 	s := activeService(t, 1, jobs, minter)
 	for range 2 {
-		if _, _, err := s.CreateVacancy(context.Background(), 1, VacancyInput{ApplyMode: ApplyFreehire, Title: "Go Engineer"}); err != nil {
+		if _, _, err := s.CreateVacancy(context.Background(), 1, VacancyInput{Description: "Build things.", ApplyMode: ApplyFreehire, Title: "Go Engineer"}); err != nil {
 			t.Fatalf("CreateVacancy: %v", err)
 		}
 	}
@@ -386,12 +394,13 @@ func TestCreateVacancy_TwoOnSiteVacanciesNeverShareAnIdentity(t *testing.T) {
 }
 
 func TestCreateVacancy_RefusesAMismatchedApplyMode(t *testing.T) {
+	const d = "Build things."
 	cases := map[string]VacancyInput{
-		"on-site with a url":      {ApplyMode: ApplyFreehire, URL: "https://acme.test/jobs/1", Title: "T"},
-		"on-site, bad questions":  {ApplyMode: ApplyFreehire, Title: "T", Questions: []applyform.EmployerQuestion{{Label: "", Type: applyform.TypeText}}},
-		"external with questions": {ApplyMode: ApplyExternal, URL: "https://acme.test/jobs/1", Title: "T", Questions: []applyform.EmployerQuestion{permitQuestion}},
-		"unknown mode":            {ApplyMode: "email", URL: "https://acme.test/jobs/1", Title: "T"},
-		"default mode, no url":    {Title: "T"},
+		"on-site with a url":      {ApplyMode: ApplyFreehire, URL: "https://acme.test/jobs/1", Title: "T", Description: d},
+		"on-site, bad questions":  {ApplyMode: ApplyFreehire, Title: "T", Description: d, Questions: []applyform.EmployerQuestion{{Label: "", Type: applyform.TypeText}}},
+		"external with questions": {ApplyMode: ApplyExternal, URL: "https://acme.test/jobs/1", Title: "T", Description: d, Questions: []applyform.EmployerQuestion{permitQuestion}},
+		"unknown mode":            {ApplyMode: "email", URL: "https://acme.test/jobs/1", Title: "T", Description: d},
+		"default mode, no url":    {Title: "T", Description: d},
 	}
 	for name, in := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -481,11 +490,77 @@ func TestCreateVacancy_OnSiteClosesTheVacancyWhenItsQuestionsCannotBeStored(t *t
 	minter := &fakeMinter{repo: jobs}
 	s := activeService(t, 1, jobs, minter)
 
-	_, _, err := s.CreateVacancy(context.Background(), 1, VacancyInput{ApplyMode: ApplyFreehire, Title: "Go Engineer"})
+	_, _, err := s.CreateVacancy(context.Background(), 1, VacancyInput{Description: "Build things.", ApplyMode: ApplyFreehire, Title: "Go Engineer"})
 	if err == nil {
 		t.Fatal("CreateVacancy succeeded with no stored questions")
 	}
 	if len(jobs.closed) != 1 {
 		t.Errorf("closed vacancies = %d, want the half-made one closed", len(jobs.closed))
+	}
+}
+
+func TestReopenVacancy_UndoesTheEmployersOwnClose(t *testing.T) {
+	jobs := newFakeJobRepo()
+	s := activeService(t, 1, jobs, &fakeMinter{repo: jobs})
+	jobs.seed("go-engineer", 1, onSiteFields(t, job.DirectApplyPrefix+"a"))
+	if err := s.CloseVacancy(context.Background(), 1, "go-engineer"); err != nil {
+		t.Fatalf("CloseVacancy: %v", err)
+	}
+	if err := s.ReopenVacancy(context.Background(), 1, "go-engineer"); err != nil {
+		t.Fatalf("ReopenVacancy: %v", err)
+	}
+	if jobs.closed["go-engineer"] {
+		t.Error("the vacancy is still closed")
+	}
+}
+
+func TestReopenVacancy_Refusals(t *testing.T) {
+	t.Run("another employer's vacancy", func(t *testing.T) {
+		jobs := newFakeJobRepo()
+		s := activeService(t, 2, jobs, &fakeMinter{repo: jobs})
+		jobs.seed("go-engineer", 1, onSiteFields(t, job.DirectApplyPrefix+"a"))
+		jobs.closed["go-engineer"] = true
+		if err := s.ReopenVacancy(context.Background(), 2, "go-engineer"); !errors.Is(err, ErrJobNotFound) {
+			t.Fatalf("err = %v, want ErrJobNotFound", err)
+		}
+	})
+	t.Run("an open vacancy, or one closed by someone else", func(t *testing.T) {
+		jobs := newFakeJobRepo()
+		s := activeService(t, 1, jobs, &fakeMinter{repo: jobs})
+		jobs.seed("go-engineer", 1, onSiteFields(t, job.DirectApplyPrefix+"a"))
+		if err := s.ReopenVacancy(context.Background(), 1, "go-engineer"); !errors.Is(err, ErrInvalid) {
+			t.Fatalf("err = %v, want ErrInvalid", err)
+		}
+	})
+}
+
+// Search keeps out a posting with no description, so an employer publishing one would see
+// it vanish without a word. The form refuses it instead — on create in either mode, and on
+// an edit that would blank it.
+func TestVacancy_ADescriptionIsRequired(t *testing.T) {
+	for name, in := range map[string]VacancyInput{
+		"external, none":     {URL: "https://acme.test/jobs/1", Title: "Go Engineer"},
+		"on-site, blank":     {ApplyMode: ApplyFreehire, Title: "Go Engineer", Description: "  "},
+		"on-site, tags only": {ApplyMode: ApplyFreehire, Title: "Go Engineer", Description: "<p> </p>"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			jobs := newFakeJobRepo()
+			minter := &fakeMinter{repo: jobs}
+			s := activeService(t, 1, jobs, minter)
+			if _, _, err := s.CreateVacancy(context.Background(), 1, in); !errors.Is(err, ErrInvalid) {
+				t.Errorf("err = %v, want ErrInvalid", err)
+			}
+			if len(minter.calls) != 0 {
+				t.Error("a vacancy with no description must not be minted")
+			}
+		})
+	}
+
+	jobs := newFakeJobRepo()
+	s := activeService(t, 1, jobs, &fakeMinter{repo: jobs})
+	jobs.seed("go-engineer", 1, onSiteFields(t, job.DirectApplyPrefix+"a"))
+	blank := " "
+	if _, _, err := s.UpdateVacancy(context.Background(), 1, "go-engineer", VacancyPatch{Description: &blank}); !errors.Is(err, ErrInvalid) {
+		t.Errorf("blanking the description: err = %v, want ErrInvalid", err)
 	}
 }

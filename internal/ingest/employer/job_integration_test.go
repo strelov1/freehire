@@ -84,15 +84,11 @@ func TestCreateVacancy_URLCollisionAcrossTwoRealEmployerAccounts(t *testing.T) {
 	}
 	sB, userB := liveEmployer(t, pool, "Bravo", "founder@other.test")
 
-	if _, _, err := sA.CreateVacancy(ctx, userA, employer.VacancyInput{
-		URL: "https://shared.example/jobs/1", Title: "Go Engineer",
-	}); err != nil {
+	if _, _, err := sA.CreateVacancy(ctx, userA, employer.VacancyInput{Description: "Build things.", URL: "https://shared.example/jobs/1", Title: "Go Engineer"}); err != nil {
 		t.Fatalf("employer A CreateVacancy: %v", err)
 	}
 
-	_, _, err := sB.CreateVacancy(ctx, userB, employer.VacancyInput{
-		URL: "https://shared.example/jobs/1", Title: "Different Title",
-	})
+	_, _, err := sB.CreateVacancy(ctx, userB, employer.VacancyInput{Description: "Build things.", URL: "https://shared.example/jobs/1", Title: "Different Title"})
 	if !errors.Is(err, employer.ErrURLTaken) {
 		t.Fatalf("err = %v, want ErrURLTaken", err)
 	}
@@ -117,7 +113,7 @@ func TestCreateVacancy_SameOwnerReCreateReopensAClosedVacancy(t *testing.T) {
 	}
 	s, userID := liveEmployer(t, pool, "Acme", "founder@acme.test")
 
-	slug, _, err := s.CreateVacancy(ctx, userID, employer.VacancyInput{URL: "https://acme.test/jobs/1", Title: "Go Engineer"})
+	slug, _, err := s.CreateVacancy(ctx, userID, employer.VacancyInput{Description: "Build things.", URL: "https://acme.test/jobs/1", Title: "Go Engineer"})
 	if err != nil {
 		t.Fatalf("CreateVacancy: %v", err)
 	}
@@ -125,7 +121,7 @@ func TestCreateVacancy_SameOwnerReCreateReopensAClosedVacancy(t *testing.T) {
 		t.Fatalf("CloseVacancy: %v", err)
 	}
 
-	if _, _, err := s.CreateVacancy(ctx, userID, employer.VacancyInput{URL: "https://acme.test/jobs/1", Title: "Go Engineer, take 2"}); err != nil {
+	if _, _, err := s.CreateVacancy(ctx, userID, employer.VacancyInput{Description: "Build things.", URL: "https://acme.test/jobs/1", Title: "Go Engineer, take 2"}); err != nil {
 		t.Fatalf("re-Create: %v", err)
 	}
 
@@ -153,7 +149,7 @@ func TestUpdateAndCloseVacancy_ScopedToTheOwningEmployer(t *testing.T) {
 	}
 	sB, userB := liveEmployer(t, pool, "Bravo", "founder@other.test")
 
-	created, _, err := sA.CreateVacancy(ctx, userA, employer.VacancyInput{URL: "https://acme.test/jobs/1", Title: "Go Engineer"})
+	created, _, err := sA.CreateVacancy(ctx, userA, employer.VacancyInput{Description: "Build things.", URL: "https://acme.test/jobs/1", Title: "Go Engineer"})
 	if err != nil {
 		t.Fatalf("CreateVacancy: %v", err)
 	}
@@ -200,8 +196,7 @@ func TestOnSiteVacancy_StoredWithItsQuestionsAndScopedToItsEmployer(t *testing.T
 	sA, userA := liveEmployer(t, pool, "Acme", "founder@acme.test")
 	sB, userB := liveEmployer(t, pool, "Bravo", "founder@other.test")
 
-	created, _, err := sA.CreateVacancy(ctx, userA, employer.VacancyInput{
-		ApplyMode: employer.ApplyFreehire,
+	created, _, err := sA.CreateVacancy(ctx, userA, employer.VacancyInput{Description: "Build things.", ApplyMode: employer.ApplyFreehire,
 		Title:     "Go Engineer",
 		Questions: []applyform.EmployerQuestion{{Label: "EU work permit?", Type: applyform.TypeBoolean, Required: true}},
 	})
@@ -249,7 +244,54 @@ func TestCreateVacancy_ExternalStillRequiresAURL(t *testing.T) {
 		t.Fatalf("seed company: %v", err)
 	}
 	s, user := liveEmployer(t, pool, "Acme", "founder@acme.test")
-	if _, _, err := s.CreateVacancy(ctx, user, employer.VacancyInput{ApplyMode: employer.ApplyExternal, Title: "Go Engineer"}); !errors.Is(err, employer.ErrInvalid) {
+	if _, _, err := s.CreateVacancy(ctx, user, employer.VacancyInput{Description: "Build things.", ApplyMode: employer.ApplyExternal, Title: "Go Engineer"}); !errors.Is(err, employer.ErrInvalid) {
 		t.Fatalf("err = %v, want ErrInvalid", err)
+	}
+}
+
+// Reopening undoes only the employer's own close, puts the vacancy back in the search queue,
+// and drops the pending removal its close queued — otherwise the drain would delete the
+// reopened row from search after re-adding it.
+func TestReopenVacancy_UndoesOnlyTheEmployersOwnClose(t *testing.T) {
+	pool := testdb.Pool(t)
+	ctx := context.Background()
+	if _, err := pool.Exec(ctx,
+		`INSERT INTO companies (slug, name, company_info) VALUES ('acme', 'Acme', '{"website":"acme.test"}')`); err != nil {
+		t.Fatalf("seed company: %v", err)
+	}
+	s, user := liveEmployer(t, pool, "Acme", "founder@acme.test")
+	created, _, err := s.CreateVacancy(ctx, user, employer.VacancyInput{ApplyMode: employer.ApplyFreehire, Title: "Go Engineer", Description: "Build things."})
+	if err != nil {
+		t.Fatalf("CreateVacancy: %v", err)
+	}
+	slug := created.Fields().PublicSlug
+	if err := s.CloseVacancy(ctx, user, slug); err != nil {
+		t.Fatalf("CloseVacancy: %v", err)
+	}
+	if _, err := pool.Exec(ctx, `DELETE FROM search_outbox`); err != nil {
+		t.Fatalf("clear outbox: %v", err)
+	}
+
+	if err := s.ReopenVacancy(ctx, user, slug); err != nil {
+		t.Fatalf("ReopenVacancy: %v", err)
+	}
+	var open bool
+	var queued, deletes int
+	if err := pool.QueryRow(ctx, `
+		SELECT j.closed_at IS NULL,
+		       (SELECT count(*) FROM search_outbox o WHERE o.job_id = j.id),
+		       (SELECT count(*) FROM search_delete_outbox d WHERE d.job_id = j.id)
+		FROM jobs j WHERE j.public_slug = $1`, slug).Scan(&open, &queued, &deletes); err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	if !open || queued != 1 || deletes != 0 {
+		t.Errorf("open/queued/pending deletes = %v/%d/%d, want true/1/0", open, queued, deletes)
+	}
+
+	if _, err := pool.Exec(ctx, `UPDATE jobs SET closed_at = now(), closed_reason = 'moderated' WHERE public_slug = $1`, slug); err != nil {
+		t.Fatalf("moderator close: %v", err)
+	}
+	if err := s.ReopenVacancy(ctx, user, slug); !errors.Is(err, employer.ErrInvalid) {
+		t.Errorf("reopening a moderator's close: err = %v, want ErrInvalid", err)
 	}
 }

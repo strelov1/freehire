@@ -88,9 +88,8 @@ func TestDirectApplyEndToEnd(t *testing.T) {
 	if _, err := employerSvc.ConfirmClaim(ctx, employerID, claimMailer.codes["founder@acme.test"]); err != nil {
 		t.Fatalf("confirm: %v", err)
 	}
-	vacancy, _, err := employerSvc.CreateVacancy(ctx, employerID, employer.VacancyInput{
-		ApplyMode: employer.ApplyFreehire,
-		Title:     "Platform Engineer",
+	vacancy, _, err := employerSvc.CreateVacancy(ctx, employerID, employer.VacancyInput{Description: "Build things.", ApplyMode: employer.ApplyFreehire,
+		Title: "Platform Engineer",
 		Questions: []applyform.EmployerQuestion{
 			{Label: "Do you hold an EU work permit?", Type: applyform.TypeBoolean, Required: true},
 			{Label: "Anything else?", Type: applyform.TypeText},

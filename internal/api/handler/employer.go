@@ -49,6 +49,7 @@ func (h *employerHandlers) register(api fiber.Router, mw middleware) {
 	api.Post("/employer/jobs", mw.cookie, h.CreateVacancy)
 	api.Patch("/employer/jobs/:slug", mw.cookie, h.UpdateVacancy)
 	api.Post("/employer/jobs/:slug/close", mw.cookie, h.CloseVacancy)
+	api.Post("/employer/jobs/:slug/reopen", mw.cookie, h.ReopenVacancy)
 
 	// Moderator review queue for a claim the domain check could not itself verify.
 	api.Get("/employer/claims", mw.cookie, mw.moderator, h.ListPendingClaims)
@@ -488,6 +489,19 @@ func (h *employerHandlers) CloseVacancy(c *fiber.Ctx) error {
 		return employerError(err)
 	}
 	return c.JSON(fiber.Map{"data": fiber.Map{"closed": true}})
+}
+
+// ReopenVacancy undoes the caller's own close of their vacancy — the only way back for a
+// vacancy taking applications on freehire, which has no URL to re-create under.
+func (h *employerHandlers) ReopenVacancy(c *fiber.Ctx) error {
+	userID, err := requireUserID(c)
+	if err != nil {
+		return err
+	}
+	if err := h.employer.ReopenVacancy(c.Context(), userID, c.Params("slug")); err != nil {
+		return employerError(err)
+	}
+	return c.JSON(fiber.Map{"data": fiber.Map{"closed": false}})
 }
 
 // ListPendingClaims is the moderator review queue: every claim that could not

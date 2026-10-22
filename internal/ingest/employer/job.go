@@ -102,6 +102,9 @@ type JobRepository interface {
 	// an already-closed vacancy is a no-op, not an error — ownership is the caller's job
 	// (via a preceding BySlug), not this method's.
 	Close(ctx context.Context, actorID int64, slug string) error
+	// Reopen undoes a close this account made (closed_reason='employer_closed') and
+	// reports whether there was one to undo; ownership is the caller's job, as for Close.
+	Reopen(ctx context.Context, actorID int64, slug string) (bool, error)
 }
 
 // VacancyInput is the employer-supplied content for a new vacancy. Title is required, and
@@ -149,6 +152,19 @@ func (p VacancyPatch) validate() error {
 	if p.Title != nil && strings.TrimSpace(*p.Title) == "" {
 		return fmt.Errorf("%w: title must not be empty", ErrInvalid)
 	}
+	if p.Description != nil {
+		return requireDescription(*p.Description)
+	}
+	return nil
+}
+
+// requireDescription refuses a vacancy whose description reads as nothing once its markup
+// is stripped. Search keeps such a posting out (search.DescriptionMissing), so an employer
+// would publish it and never find it again; refusing it here is the honest version of that.
+func requireDescription(description string) error {
+	if strings.TrimSpace(htmltext.ToText(description)) == "" {
+		return fmt.Errorf("%w: a description is required", ErrInvalid)
+	}
 	return nil
 }
 
@@ -184,6 +200,9 @@ func (s *Service) ListVacancies(ctx context.Context, userID int64) ([]job.Job, [
 func (s *Service) CreateVacancy(ctx context.Context, userID int64, in VacancyInput) (job.Job, job.Extras, error) {
 	mode, err := in.ApplyMode.resolve()
 	if err != nil {
+		return job.Job{}, job.Extras{}, err
+	}
+	if err := requireDescription(in.Description); err != nil {
 		return job.Job{}, job.Extras{}, err
 	}
 	acc, err := s.ActiveAccount(ctx, userID)
@@ -369,6 +388,28 @@ func (s *Service) CloseVacancy(ctx context.Context, userID int64, slug string) e
 		return err
 	}
 	return s.jobs.Close(ctx, userID, slug)
+}
+
+// ReopenVacancy undoes userID's own close of their vacancy. Only a close the employer made
+// is theirs to undo — one a moderator or the liveness probe made stays closed — and an
+// open vacancy has nothing to undo; both are refused as invalid. It exists because a
+// vacancy taking applications on freehire has no URL, so CreateVacancy's re-create-reopens
+// path cannot reach it.
+func (s *Service) ReopenVacancy(ctx context.Context, userID int64, slug string) error {
+	if _, err := s.ActiveAccount(ctx, userID); err != nil {
+		return err
+	}
+	if _, _, err := s.jobs.BySlug(ctx, userID, slug); err != nil {
+		return err
+	}
+	reopened, err := s.jobs.Reopen(ctx, userID, slug)
+	if err != nil {
+		return err
+	}
+	if !reopened {
+		return fmt.Errorf("%w: only a vacancy you closed can be reopened", ErrInvalid)
+	}
+	return nil
 }
 
 // deriveEmployer builds the Job aggregate through the same shared primitives

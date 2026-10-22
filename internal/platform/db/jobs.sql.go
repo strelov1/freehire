@@ -4752,6 +4752,49 @@ func (q *Queries) RekeyJobExternalIDs(ctx context.Context, arg RekeyJobExternalI
 	return result.RowsAffected(), nil
 }
 
+const reopenEmployerJob = `-- name: ReopenEmployerJob :one
+WITH reopened AS (
+    UPDATE jobs
+    SET closed_at     = NULL,
+        closed_reason = '',
+        updated_at    = now()
+    WHERE jobs.public_slug = $1
+      AND jobs.created_by = $2::bigint
+      AND jobs.source = 'employer'
+      AND jobs.closed_reason = 'employer_closed'
+    RETURNING jobs.id, COALESCE(jobs.posted_at, jobs.created_at) AS posted
+), undeleted AS (
+    DELETE FROM search_delete_outbox d
+    USING reopened
+    WHERE d.job_id = reopened.id
+), queued AS (
+    INSERT INTO search_outbox (job_id, job_posted_at)
+    SELECT id, posted FROM reopened
+    ON CONFLICT (job_id) DO NOTHING
+)
+SELECT count(*) FROM reopened
+`
+
+type ReopenEmployerJobParams struct {
+	PublicSlug string `json:"public_slug"`
+	ActorID    int64  `json:"actor_id"`
+}
+
+// Undoes CloseEmployerJob: the same actor, the same scope (created_by = actor_id AND
+// source = 'employer'), and ONLY a close that actor made — closed_reason =
+// 'employer_closed'. A posting another mechanism closed (a moderator, the liveness probe)
+// stays closed; reopening it is not the employer's call. A vacancy taking applications on
+// freehire has no URL to re-create under, so without this its employer could never undo a
+// close. The search index learns of it twice over: a pending delete is dropped (left in
+// place, the drain would remove the reopened row after re-adding it) and the row is queued
+// for the facet index. Returns the rows reopened, 0 when there was nothing to undo.
+func (q *Queries) ReopenEmployerJob(ctx context.Context, arg ReopenEmployerJobParams) (int64, error) {
+	row := q.db.QueryRow(ctx, reopenEmployerJob, arg.PublicSlug, arg.ActorID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const requirementsDerivedBackfillBounds = `-- name: RequirementsDerivedBackfillBounds :one
 SELECT COALESCE(MIN(id), 0)::bigint AS min_id,
        COALESCE(MAX(id), 0)::bigint AS max_id

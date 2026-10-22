@@ -15,7 +15,8 @@
     EmployerVacancyInput,
     Job,
   } from '$lib/types';
-  import { Button, Input, cn } from '$lib/ui';
+  import { resolve } from '$app/paths';
+  import { Button, ConfirmDialog, Input, cn } from '$lib/ui';
   import States from './States.svelte';
   import EmployerQuestionsEditor from './EmployerQuestionsEditor.svelte';
   import TokenInput from './facets/TokenInput.svelte';
@@ -102,7 +103,11 @@
   // A url is the identity of a linked vacancy only, and only when creating one: an edit
   // never sends it, and a vacancy taking applications on freehire has none to send.
   const needsUrl = $derived(!editingSlug && applyMode === 'external');
-  const canSubmit = $derived(!!title.trim() && (!needsUrl || !!url.trim()) && questionsLoaded);
+  // A description is required: search keeps out a posting without one, and the server
+  // refuses it rather than publish a vacancy nobody can find.
+  const canSubmit = $derived(
+    !!title.trim() && !!descriptionMd.trim() && (!needsUrl || !!url.trim()) && questionsLoaded,
+  );
 
   function resetForm() {
     editingSlug = null;
@@ -212,18 +217,34 @@
     }
   }
 
+  // Closing takes it out of search and stops applications, so it asks first: "Close" beside
+  // a list row reads too easily as "close this panel".
+  let closeTarget = $state<Job | null>(null);
+  let confirmOpen = $state(false);
   let closingSlug = $state<string | null>(null);
   async function closeVacancy(job: Job) {
-    if (closingSlug) return;
     closingSlug = job.public_slug;
     try {
       await api.closeEmployerVacancy(job.public_slug);
       replaceInList({ ...job, closed_at: new Date().toISOString() });
-    } catch {
-      // Best-effort: the list simply keeps showing it as open, and the button is
-      // available to retry.
     } finally {
       closingSlug = null;
+    }
+  }
+
+  let reopeningSlug = $state<string | null>(null);
+  let reopenError = $state<{ slug: string; message: string } | null>(null);
+  async function reopenVacancy(job: Job) {
+    if (reopeningSlug) return;
+    reopeningSlug = job.public_slug;
+    reopenError = null;
+    try {
+      await api.reopenEmployerVacancy(job.public_slug);
+      replaceInList({ ...job, closed_at: undefined });
+    } catch (err) {
+      reopenError = { slug: job.public_slug, message: err instanceof ApiError ? err.message : s.vacancyError };
+    } finally {
+      reopeningSlug = null;
     }
   }
 </script>
@@ -398,6 +419,7 @@
           </div>
           <label class="flex flex-col gap-1">
             <span class="text-sm font-medium">{s.fieldDescription}</span>
+            <span class="text-xs text-muted-foreground">{s.fieldDescriptionHint}</span>
             <textarea bind:value={descriptionMd} rows="6" class="w-full rounded-lg border border-input bg-transparent px-3 py-2 text-sm transition-colors focus-visible:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 dark:bg-input/30"
             ></textarea>
           </label>
@@ -440,7 +462,11 @@
             <li class="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-start sm:justify-between">
               <div class="flex min-w-0 flex-col gap-0.5">
                 <span class="flex items-center gap-2 truncate text-sm font-medium">
-                  {job.title}
+                  <a
+                    href={resolve('/jobs/[slug]', { slug: job.public_slug })}
+                    title={s.viewVacancy}
+                    class="truncate underline-offset-2 hover:underline">{job.title}</a
+                  >
                   {#if job.direct_apply}
                     <span class="rounded-full bg-brand-muted px-2 py-0.5 text-xs font-medium text-brand-strong">
                       {s.onSiteLabel}
@@ -463,12 +489,27 @@
                     variant="ghost"
                     size="sm"
                     disabled={closingSlug === job.public_slug}
-                    onclick={() => closeVacancy(job)}
+                    onclick={() => {
+                      closeTarget = job;
+                      confirmOpen = true;
+                    }}
                   >
                     {closingSlug === job.public_slug ? s.closing : s.closeVacancy}
                   </Button>
+                {:else}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    disabled={reopeningSlug === job.public_slug}
+                    onclick={() => reopenVacancy(job)}
+                  >
+                    {reopeningSlug === job.public_slug ? s.reopening : s.reopenVacancy}
+                  </Button>
                 {/if}
               </div>
+              {#if reopenError?.slug === job.public_slug}
+                <p class="text-sm text-destructive">{reopenError.message}</p>
+              {/if}
             </li>
           {/each}
         </ul>
@@ -476,3 +517,14 @@
     </div>
   {/if}
 </div>
+
+<ConfirmDialog
+  bind:open={confirmOpen}
+  title={s.closeConfirmTitle}
+  description={s.closeConfirmBody}
+  confirmLabel={s.closeVacancy}
+  cancelLabel={s.cancel}
+  onConfirm={async () => {
+    if (closeTarget) await closeVacancy(closeTarget);
+  }}
+/>

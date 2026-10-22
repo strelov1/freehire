@@ -13,6 +13,7 @@ import (
 	"github.com/strelov1/freehire/internal/dict/classify"
 	"github.com/strelov1/freehire/internal/dict/roletype"
 	"github.com/strelov1/freehire/internal/dict/skillvec"
+	"github.com/strelov1/freehire/internal/job/job"
 	"github.com/strelov1/freehire/internal/job/jobview"
 	"github.com/strelov1/freehire/internal/platform/db"
 )
@@ -214,8 +215,13 @@ func FromJob(j db.Job, desc [][]float32) (JobDocument, error) {
 // "Case Manager", "Property Manager", a bare "Manager". No facet reaches them, but the
 // owner chose to keep them findable by keyword search rather than drop the ~2.9% of the
 // catalogue the retired `management` category used to hold.
+//
+// Nor, finally, does it apply to a vacancy a verified employer published here
+// (job.EmployerSource). The gate keeps out crawled rows nobody vouched for; an employer who
+// pressed Publish and then cannot find the vacancy anywhere is a control that lies, and
+// the employer is the one source that has already been checked.
 func CategoryUnresolved(j db.Job) bool {
-	if j.Category != "" {
+	if j.Category != "" || j.Source == job.EmployerSource {
 		return false
 	}
 	if j.IsTech.Valid && j.IsTech.Bool {

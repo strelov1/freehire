@@ -6005,6 +6005,15 @@ type Querier interface {
 	// rather than silently writing over a fresher grant... which it cannot do anyway, the WHERE
 	// naming the access token this renewal was issued against.
 	RenewSocialToken(ctx context.Context, arg RenewSocialTokenParams) (int64, error)
+	// Undoes CloseEmployerJob: the same actor, the same scope (created_by = actor_id AND
+	// source = 'employer'), and ONLY a close that actor made — closed_reason =
+	// 'employer_closed'. A posting another mechanism closed (a moderator, the liveness probe)
+	// stays closed; reopening it is not the employer's call. A vacancy taking applications on
+	// freehire has no URL to re-create under, so without this its employer could never undo a
+	// close. The search index learns of it twice over: a pending delete is dropped (left in
+	// place, the drain would remove the reopened row after re-adding it) and the row is queued
+	// for the facet index. Returns the rows reopened, 0 when there was nothing to undo.
+	ReopenEmployerJob(ctx context.Context, arg ReopenEmployerJobParams) (int64, error)
 	// The whole schedule as an operator reads it: every eligible provider, its override if it
 	// has one, and what its runs have actually been doing. Aggregated per provider rather than
 	// per shard, because the question this answers is "is anything not running?" and 24

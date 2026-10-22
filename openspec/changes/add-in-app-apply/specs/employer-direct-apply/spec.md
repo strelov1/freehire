@@ -158,3 +158,26 @@ which company will receive the CV and answers. Its `JobPosting` structured data 
 #### Scenario: A hand-marked application does not block applying
 - **WHEN** a candidate marked the vacancy applied in their tracking but never applied on freehire
 - **THEN** the page still offers the Apply action
+
+### Requirement: An employer's vacancy is findable and reversible
+An employer vacancy SHALL require a description, on create and on an edit, because search
+keeps out a posting without one. Search SHALL NOT exclude an employer vacancy for a title no
+dictionary resolves. An employer SHALL be able to reopen a vacancy they closed; a vacancy a
+moderator or another mechanism closed SHALL stay closed. Closing SHALL ask for confirmation,
+and the dashboard SHALL link each vacancy to its page.
+
+#### Scenario: A vacancy without a description is refused
+- **WHEN** an employer publishes a vacancy whose description is empty or only markup
+- **THEN** the request is refused as invalid and nothing is published
+
+#### Scenario: An unrecognised title stays searchable
+- **WHEN** an open employer vacancy's title resolves to no category
+- **THEN** it is still indexed for search and shown on its company page
+
+#### Scenario: The employer reopens their own close
+- **WHEN** an employer reopens a vacancy they closed
+- **THEN** it is open again and queued for search, and a pending removal from search is dropped
+
+#### Scenario: Another close is not the employer's to undo
+- **WHEN** an employer reopens a vacancy a moderator closed, or one that is open
+- **THEN** the request is refused as invalid and the vacancy is unchanged

@@ -356,3 +356,9 @@ func websiteOf(companyInfo json.RawMessage) string {
 	}
 	return fields.Website
 }
+
+// Reopen undoes this actor's own close (ReopenEmployerJob) and queues the row for search.
+func (r *QueriesRepository) Reopen(ctx context.Context, actorID int64, slug string) (bool, error) {
+	n, err := r.q.ReopenEmployerJob(ctx, db.ReopenEmployerJobParams{PublicSlug: slug, ActorID: actorID})
+	return n > 0, err
+}

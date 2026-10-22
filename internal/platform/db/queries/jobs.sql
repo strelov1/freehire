@@ -1516,6 +1516,36 @@ WITH closed AS (
 )
 SELECT count(*) FROM closed;
 
+-- name: ReopenEmployerJob :one
+-- Undoes CloseEmployerJob: the same actor, the same scope (created_by = actor_id AND
+-- source = 'employer'), and ONLY a close that actor made — closed_reason =
+-- 'employer_closed'. A posting another mechanism closed (a moderator, the liveness probe)
+-- stays closed; reopening it is not the employer's call. A vacancy taking applications on
+-- freehire has no URL to re-create under, so without this its employer could never undo a
+-- close. The search index learns of it twice over: a pending delete is dropped (left in
+-- place, the drain would remove the reopened row after re-adding it) and the row is queued
+-- for the facet index. Returns the rows reopened, 0 when there was nothing to undo.
+WITH reopened AS (
+    UPDATE jobs
+    SET closed_at     = NULL,
+        closed_reason = '',
+        updated_at    = now()
+    WHERE jobs.public_slug = sqlc.arg(public_slug)
+      AND jobs.created_by = sqlc.arg(actor_id)::bigint
+      AND jobs.source = 'employer'
+      AND jobs.closed_reason = 'employer_closed'
+    RETURNING jobs.id, COALESCE(jobs.posted_at, jobs.created_at) AS posted
+), undeleted AS (
+    DELETE FROM search_delete_outbox d
+    USING reopened
+    WHERE d.job_id = reopened.id
+), queued AS (
+    INSERT INTO search_outbox (job_id, job_posted_at)
+    SELECT id, posted FROM reopened
+    ON CONFLICT (job_id) DO NOTHING
+)
+SELECT count(*) FROM reopened;
+
 -- name: CloseUnseenJobs :one
 -- Post-ingest sweep (see job-lifecycle spec): close every open job of ONE source not
 -- seen since the cutoff, scoped to the company slugs the run actually crawled. Scoped
