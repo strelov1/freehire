@@ -26,16 +26,16 @@
   "adtech": {
     "companies": [
       "Reddit",
-      "Attentive",
-      "Klaviyo",
-      "Roblox"
+      "Movable Ink",
+      "Roblox",
+      "CHEQ"
     ]
   },
   "agencies": {
     "companies": [
       "WITHIN",
       "Current",
-      "CODE FOUR",
+      "Walmart",
       "Extend"
     ]
   },
@@ -52,15 +52,15 @@
       "Microsoft",
       "Corning",
       "UnitedHealth Group",
-      "Amazon"
+      "Tipalti"
     ]
   },
   "ai-engineering": {
     "companies": [
       "Alice",
-      "Celonis",
-      "Amazon",
-      "Stripe"
+      "Apple",
+      "Stripe",
+      "Earnix"
     ]
   },
   "ai-infra-engineer": {
@@ -82,17 +82,17 @@
   "architecture": {
     "companies": [
       "Stripe",
-      "Fivetran",
       "Databricks",
-      "Motorola Solutions"
+      "Coinbase",
+      "Talon.One"
     ]
   },
   "backend": {
     "companies": [
-      "Stripe",
-      "Grafana Labs",
-      "Claroty",
-      "atoms"
+      "Coupang",
+      "Accountable",
+      "Movable Ink",
+      "Claroty"
     ]
   },
   "bigtech": {
@@ -121,65 +121,66 @@
   },
   "climate-tech": {
     "companies": [
-      "atoms",
       "Redwood Materials",
-      "Sila Nanotechnologies"
+      "Sila Nanotechnologies",
+      "enpal",
+      "Formlabs"
     ]
   },
   "contract": {
     "companies": [
-      "Stripe",
-      "Coalition, Inc.",
-      "Olin Corporation",
-      "Redwood Materials"
+      "Redwood Materials",
+      "Roblox",
+      "Celonis",
+      "Isar Aerospace SE"
     ]
   },
   "crypto": {
     "companies": [
       "Stripe",
-      "Accountable",
       "Coinbase",
-      "Gemini"
+      "Accountable",
+      "Robinhood"
     ]
   },
   "cybersecurity": {
     "companies": [
       "Claroty",
       "Alice",
-      "Coalition, Inc.",
-      "Kaseya"
+      "Okta",
+      "Cato Networks"
     ]
   },
   "data-engineering": {
     "companies": [
       "Roblox",
       "Lusha",
-      "Formation Bio",
-      "Redwood Materials"
+      "Coinbase",
+      "Flatpay"
     ]
   },
   "data-science": {
     "companies": [
       "Reddit",
-      "Formation Bio",
       "Roblox",
-      "Earnix"
+      "Earnix",
+      "Alice"
     ]
   },
   "devops": {
     "companies": [
-      "atoms",
-      "Tide",
+      "NexHealth",
+      "Zipline ",
       "Stripe",
-      "Motorola Solutions"
+      "motorway"
     ]
   },
   "devtools": {
     "companies": [
-      "Fivetran",
-      "Grafana Labs",
-      "Kaseya",
-      "Box"
+      "Roblox",
+      "GitLab",
+      "Databricks",
+      "Apple"
     ]
   },
   "dk-fast-track-company": {
@@ -201,9 +202,9 @@
   "ecommerce": {
     "companies": [
       "Coupang",
-      "Amazon",
+      "Stripe",
       "DoorDash",
-      "Attentive"
+      "Talon.One"
     ]
   },
   "edtech": {
@@ -211,23 +212,23 @@
       "Wonderschool",
       "Cresta",
       "Google",
-      "Lingokids"
+      "PhysicsX"
     ]
   },
   "embedded": {
     "companies": [
-      "Google",
+      "Honeywell International Inc.",
+      "Formlabs",
       "Western Digital",
-      "Amazon",
-      "Apple"
+      "Zipline "
     ]
   },
   "engineering-manager": {
     "companies": [
-      "Stripe",
       "Roblox",
-      "Tide",
-      "Google"
+      "Stripe",
+      "Redwood Materials",
+      "Overview"
     ]
   },
   "european": {
@@ -240,18 +241,18 @@
   },
   "fellowship": {
     "companies": [
-      "UnitedHealth Group",
       "Johnson & Johnson",
-      "Pfizer",
-      "Radiology Partners"
+      "AbbVie",
+      "Merck",
+      "UnitedHealth Group"
     ]
   },
   "fintech": {
     "companies": [
-      "Stripe",
       "Earnix",
-      "Coalition, Inc.",
-      "Betterment"
+      "Papaya Global",
+      "Leapwork",
+      "Sunbit"
     ]
   },
   "fortune500": {
@@ -262,41 +263,51 @@
       "Marriott International"
     ]
   },
+  "founders-fund": {
+    "companies": [
+      "SpaceX",
+      "Stripe",
+      "OpenAI",
+      "Rippling"
+    ]
+  },
   "founding-engineer": {
     "companies": [
       "atoms",
-      "mirendil",
-      "Glean",
-      "Alpine Eagle GmbH"
+      "saronic",
+      "Warp",
+      "Isar Aerospace SE"
     ]
   },
   "frontend": {
     "companies": [
       "Roblox",
       "Reddit",
-      "Box",
-      "Grafana Labs"
+      "Stripe",
+      "Neura Robotics"
     ]
   },
   "fullstack": {
     "companies": [
       "Stripe",
       "Roblox",
-      "Box",
-      "Grafana Labs"
+      "Second Nature",
+      "ElevenLabs"
     ]
   },
   "fullstack-ai-engineer": {
     "companies": [
+      "UnitedHealth Group",
       "Doctolib",
       "Cisco",
-      "wrapbook",
-      "Stripe"
+      "wrapbook"
     ]
   },
   "gaming": {
     "companies": [
-      "Roblox"
+      "Roblox",
+      "Overwolf",
+      "Formlabs"
     ]
   },
   "government": {
@@ -310,9 +321,9 @@
   "govtech": {
     "companies": [
       "Motorola Solutions",
-      "AECOM",
       "Dream",
-      "Unison"
+      "Shield AI",
+      "CHAMP"
     ]
   },
   "greylock": {
@@ -325,26 +336,34 @@
   },
   "healthcare": {
     "companies": [
-      "Formation Bio",
-      "sprinter-health",
-      "Cedar",
-      "Nym"
+      "NexHealth",
+      "Leapwork",
+      "Zipline ",
+      "Formation"
     ]
   },
   "hr-tech": {
     "companies": [
+      "justworks",
       "Papaya Global",
       "Gusto",
-      "Globalization Partners",
-      "justworks"
+      "Ashby"
     ]
   },
   "ie-permit-employer": {
     "companies": [
       "Hitachi Energy",
       "EPAM Systems",
-      "abbott",
+      "Abbott",
       "Johnson Controls"
+    ]
+  },
+  "index-ventures": {
+    "companies": [
+      "Anthropic",
+      "Wise",
+      "datadog",
+      "Adyen"
     ]
   },
   "indian-roots": {
@@ -357,42 +376,50 @@
   },
   "internship": {
     "companies": [
-      "Box",
+      "Roblox",
       "Stripe",
-      "atoms",
-      "Nuro"
+      "Northwood Space",
+      "Apple"
     ]
   },
   "junior": {
     "companies": [
       "Stripe",
-      "Avery Dennison",
-      "AbbVie",
-      "Accountable"
+      "carvana",
+      "Accountable",
+      "Raisin"
     ]
   },
   "lead": {
     "companies": [
-      "Stripe",
+      "Roblox",
       "Redwood Materials",
-      "carvana",
-      "Box"
+      "Transmit Security",
+      "enpal"
+    ]
+  },
+  "lightspeed": {
+    "companies": [
+      "Databricks",
+      "Anthropic",
+      "Stripe",
+      "Grab"
     ]
   },
   "logistics": {
     "companies": [
+      "Zipline ",
       "atoms",
-      "DoorDash",
       "Redwood Materials",
       "Amazon"
     ]
   },
   "machine-learning": {
     "companies": [
-      "atoms",
       "Roblox",
-      "Stripe",
-      "Attentive"
+      "Reddit",
+      "Apple",
+      "Pinterest"
     ]
   },
   "mag7": {
@@ -406,16 +433,16 @@
   "media": {
     "companies": [
       "Reddit",
-      "Discord",
-      "Lingokids"
+      "Roblox",
+      "Coupang"
     ]
   },
   "mid-level": {
     "companies": [
-      "AECOM",
       "Reddit",
-      "sonicautomotive",
-      "Movable Ink"
+      "Box",
+      "Block",
+      "carvana"
     ]
   },
   "ml-platform-engineer": {
@@ -428,25 +455,26 @@
   },
   "ml-research": {
     "companies": [
-      "waymo",
+      "Apple",
       "Reddit",
-      "Stripe",
-      "atoms"
+      "Epic Games",
+      "Stripe"
     ]
   },
   "mobile": {
     "companies": [
       "Stripe",
-      "waymo",
-      "Perplexity AI",
-      "Google"
+      "Google",
+      "SumUp",
+      "nord-security"
     ]
   },
   "mobility": {
     "companies": [
       "atoms",
       "waymo",
-      "Cambridge Mobile Telematics"
+      "wayve",
+      "Lyft"
     ]
   },
   "network-engineering": {
@@ -467,74 +495,73 @@
   },
   "outsourcing": {
     "companies": [
-      "International Business Machines Corporation",
       "AECOM",
+      "International Business Machines Corporation",
       "DXC Technology",
-      "Ardent"
+      "ISN Corporation"
     ]
   },
   "outstaffing": {
     "companies": [
-      "Bluelight",
       "Turing",
-      "Empirical Health",
-      "Side"
+      "Magic",
+      "ROBERT HALF INTERNATIONAL PTE. LTD.",
+      "Proxify"
     ]
   },
   "part-time": {
     "companies": [
-      "Aramark",
-      "Nex",
-      "Tenet Healthcare",
-      "Macy's"
+      "Ulta Beauty, Inc.",
+      "Shield AI",
+      "Finni Health",
+      "PepsiCo"
     ]
   },
   "principal": {
     "companies": [
       "Roblox",
-      "Coalition, Inc.",
-      "Alice",
-      "Attentive"
+      "Talon.One",
+      "Alice"
     ]
   },
   "product-companies": {
     "companies": [
       "Redwood Materials",
-      "Box",
-      "Claroty",
-      "Coalition, Inc."
+      "Coupang",
+      "Transmit Security",
+      "Talon.One"
     ]
   },
   "proptech": {
     "companies": [
       "EquipmentShare",
-      "atoms",
       "QuintoAndar",
-      "sizeless Corporation"
+      "Huspy",
+      "Jones Lang LaSalle Incorporated"
     ]
   },
   "qa": {
     "companies": [
+      "Epic Games",
+      "PsiQuantum",
       "atoms",
-      "Redwood Materials",
-      "Nex",
-      "VAST Data"
+      "Redwood Materials"
     ]
   },
   "rag-engineer": {
     "companies": [
       "UnitedHealth Group",
       "Google",
-      "Advanced Micro Devices, Inc",
-      "AMD"
+      "Apple",
+      "Wells Fargo"
     ]
   },
   "relocation": {
     "companies": [
-      "Formation Bio",
-      "Motorola Solutions",
-      "Olin Corporation",
-      "xai"
+      "Roblox",
+      "Redwood Materials",
+      "Helsing",
+      "Isar Aerospace SE"
     ]
   },
   "remote-apac": {
@@ -571,40 +598,40 @@
   },
   "saas": {
     "companies": [
+      "Databricks",
       "Box",
-      "Dialpad",
-      "Dragos, Inc.",
-      "Workato"
+      "Movable Ink",
+      "Leapwork"
     ]
   },
   "security": {
     "companies": [
-      "Stripe",
       "Roblox",
-      "Alice",
-      "Apollo.io"
+      "xai",
+      "motorway",
+      "Aqua Security"
     ]
   },
   "senior": {
     "companies": [
       "Redwood Materials",
-      "Betterment",
-      "Coalition, Inc.",
-      "Stripe"
+      "Coupang",
+      "motorway",
+      "Apple"
     ]
   },
   "senior-backend": {
     "companies": [
       "Grafana Labs",
-      "Stripe",
-      "Pentera",
-      "Grain"
+      "Affirm",
+      "Traveloka",
+      "Coupang"
     ]
   },
   "senior-data-engineering": {
     "companies": [
-      "International Business Machines Corporation",
       "Roblox",
+      "Movable Ink",
       "Redwood Materials",
       "Lusha"
     ]
@@ -612,9 +639,9 @@
   "senior-devops": {
     "companies": [
       "Google",
-      "Hewlett Packard Enterprise",
-      "atoms",
-      "Motorola Solutions"
+      "Oracle",
+      "motorway",
+      "Sunbit"
     ]
   },
   "senior-frontend": {
@@ -622,15 +649,15 @@
       "Grafana Labs",
       "Roblox",
       "Reddit",
-      "justworks"
+      "Sunbit"
     ]
   },
   "senior-fullstack": {
     "companies": [
       "Discord",
       "Roblox",
-      "Smartly.io",
-      "Box"
+      "NexHealth",
+      "Second Nature"
     ]
   },
   "sequoia": {
@@ -641,44 +668,52 @@
       "Cisco"
     ]
   },
+  "softbank-vision-fund": {
+    "companies": [
+      "NVIDIA",
+      "Databricks",
+      "OpenAI",
+      "Grab"
+    ]
+  },
   "software-engineer": {
     "companies": [
+      "Redwood Materials",
+      "Roblox",
       "Stripe",
-      "Coalition, Inc.",
-      "xai",
-      "waymo"
+      "Cato Networks"
     ]
   },
   "sre": {
     "companies": [
       "Apple",
+      "Google",
       "waymo",
-      "Flexport",
-      "Alpaca "
+      "Flexport"
     ]
   },
   "staff": {
     "companies": [
-      "Stripe",
       "Redwood Materials",
-      "Coalition, Inc.",
-      "Sila Nanotechnologies"
+      "Coupang",
+      "checkout.com",
+      "Netskope"
     ]
   },
   "staff-engineer": {
     "companies": [
       "Stripe",
-      "Gusto",
-      "Fivetran",
-      "OneTrust"
+      "ServiceNow",
+      "Pinterest",
+      "Discord"
     ]
   },
   "startups": {
     "companies": [
-      "atoms",
-      "greptile",
-      "sprinter-health",
-      "Tekst"
+      "xai",
+      "TrueBiz",
+      "Isar Aerospace SE",
+      "Leapwork"
     ]
   },
   "techstars": {
@@ -692,16 +727,16 @@
   "travel": {
     "companies": [
       "Airbnb",
-      "GetYourGuide",
+      "Traveloka",
       "Atlys",
-      "Google"
+      "Super"
     ]
   },
   "uk-skilled-worker-sponsor": {
     "companies": [
       "Hitachi Energy",
       "EPAM Systems",
-      "DaVita",
+      "davita",
       "Google"
     ]
   },
@@ -731,10 +766,10 @@
   },
   "yc": {
     "companies": [
-      "pennant",
       "Stripe",
-      "arrow",
-      "Elevate"
+      "Rippling",
+      "GitLab",
+      "DoorDash"
     ]
   }
 }

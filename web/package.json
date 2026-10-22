@@ -19,7 +19,7 @@
     "gen:api-docs:smoke": "node scripts/gen-api-docs-smoke.mjs",
     "gen:openapi": "node scripts/gen-openapi.mjs",
     "gen:openapi:smoke": "node scripts/gen-openapi-smoke.mjs",
-    "gen:collection-stacks": "node scripts/build-collection-stacks.mjs",
+    "gen:collection-stacks": "svelte-kit sync && node scripts/build-collection-stacks.mjs",
     "lint": "oxlint && eslint .",
     "lint:fix": "oxlint --fix && eslint . --fix"
   },
