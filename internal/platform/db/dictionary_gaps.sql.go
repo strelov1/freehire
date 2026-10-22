@@ -25,6 +25,8 @@ type ClaimDictionaryGapWriteParams struct {
 	Day    pgtype.Date `json:"day"`
 }
 
+// The daily cap: claims one of a user's 20 writes for the UTC day, and returns no row
+// once they are spent, which the caller turns into a 429.
 func (q *Queries) ClaimDictionaryGapWrite(ctx context.Context, arg ClaimDictionaryGapWriteParams) (int32, error) {
 	row := q.db.QueryRow(ctx, claimDictionaryGapWrite, arg.UserID, arg.Day)
 	var writes int32
@@ -32,100 +34,40 @@ func (q *Queries) ClaimDictionaryGapWrite(ctx context.Context, arg ClaimDictiona
 	return writes, err
 }
 
-const incrementDictionaryGap = `-- name: IncrementDictionaryGap :one
-UPDATE dictionary_gaps
-SET request_count = request_count + 1,
-    last_requested_at = now()
-WHERE kind = $1 AND normalized_term = $2 AND status = $3
-RETURNING request_count, status
-`
-
-type IncrementDictionaryGapParams struct {
-	Kind           string `json:"kind"`
-	NormalizedTerm string `json:"normalized_term"`
-	Status         string `json:"status"`
-}
-
-type IncrementDictionaryGapRow struct {
-	RequestCount int32  `json:"request_count"`
-	Status       string `json:"status"`
-}
-
-func (q *Queries) IncrementDictionaryGap(ctx context.Context, arg IncrementDictionaryGapParams) (IncrementDictionaryGapRow, error) {
-	row := q.db.QueryRow(ctx, incrementDictionaryGap, arg.Kind, arg.NormalizedTerm, arg.Status)
-	var i IncrementDictionaryGapRow
-	err := row.Scan(&i.RequestCount, &i.Status)
-	return i, err
-}
-
-const insertDictionaryGap = `-- name: InsertDictionaryGap :one
+const recordDictionaryGap = `-- name: RecordDictionaryGap :one
 INSERT INTO dictionary_gaps (kind, raw_term, normalized_term, submitted_by)
 VALUES ($1, $2, $3, $4)
+ON CONFLICT (kind, normalized_term) WHERE status IN ('pending', 'accepted')
+DO UPDATE SET request_count = dictionary_gaps.request_count + 1,
+              last_requested_at = now()
 RETURNING request_count, status
 `
 
-type InsertDictionaryGapParams struct {
+type RecordDictionaryGapParams struct {
 	Kind           string `json:"kind"`
 	RawTerm        string `json:"raw_term"`
 	NormalizedTerm string `json:"normalized_term"`
 	SubmittedBy    int64  `json:"submitted_by"`
 }
 
-type InsertDictionaryGapRow struct {
+type RecordDictionaryGapRow struct {
 	RequestCount int32  `json:"request_count"`
 	Status       string `json:"status"`
 }
 
-func (q *Queries) InsertDictionaryGap(ctx context.Context, arg InsertDictionaryGapParams) (InsertDictionaryGapRow, error) {
-	row := q.db.QueryRow(ctx, insertDictionaryGap,
+// One live (pending or accepted) row per term: the first ask inserts it and keeps its
+// raw_term and submitted_by, every later ask only bumps the count. A rejected row is
+// not live, so asking again opens a new pending one beside it. One upsert rather than
+// read-then-write, so two first asks racing both count instead of the second failing
+// on the partial unique index.
+func (q *Queries) RecordDictionaryGap(ctx context.Context, arg RecordDictionaryGapParams) (RecordDictionaryGapRow, error) {
+	row := q.db.QueryRow(ctx, recordDictionaryGap,
 		arg.Kind,
 		arg.RawTerm,
 		arg.NormalizedTerm,
 		arg.SubmittedBy,
 	)
-	var i InsertDictionaryGapRow
+	var i RecordDictionaryGapRow
 	err := row.Scan(&i.RequestCount, &i.Status)
 	return i, err
-}
-
-const listDictionaryGapsByKey = `-- name: ListDictionaryGapsByKey :many
-SELECT id, kind, raw_term, normalized_term, request_count, first_requested_at, last_requested_at, submitted_by, status, resolution_note
-FROM dictionary_gaps
-WHERE kind = $1 AND normalized_term = $2
-`
-
-type ListDictionaryGapsByKeyParams struct {
-	Kind           string `json:"kind"`
-	NormalizedTerm string `json:"normalized_term"`
-}
-
-func (q *Queries) ListDictionaryGapsByKey(ctx context.Context, arg ListDictionaryGapsByKeyParams) ([]DictionaryGap, error) {
-	rows, err := q.db.Query(ctx, listDictionaryGapsByKey, arg.Kind, arg.NormalizedTerm)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []DictionaryGap{}
-	for rows.Next() {
-		var i DictionaryGap
-		if err := rows.Scan(
-			&i.ID,
-			&i.Kind,
-			&i.RawTerm,
-			&i.NormalizedTerm,
-			&i.RequestCount,
-			&i.FirstRequestedAt,
-			&i.LastRequestedAt,
-			&i.SubmittedBy,
-			&i.Status,
-			&i.ResolutionNote,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
 }

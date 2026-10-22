@@ -25,7 +25,7 @@ Facet dictionaries drop anything they do not already know. They grow only when a
 
 - New tables `dictionary_gaps` and `dictionary_gap_daily`, one migration (`0188`).
 - `POST /api/v1/dictionary/gaps` (cookie auth). No read route for the queue.
-- `FoldTerm` and `PlanGap` beside `internal/dict/classify`, taking no database. The handler calls them, then sqlc.
+- `FoldTerm` and `GapTerm` beside `internal/dict/classify`, taking no database. The handler calls them, then sqlc.
 - `SearchSelect.svelte` and `CategoryPane.svelte` gain a bindable search text and an optional `empty` snippet.
 - Page at `web/src/routes/dictionary/` and one footer link.
 - Maintainers read and update the queue with SQL. No moderation screen.

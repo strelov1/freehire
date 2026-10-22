@@ -47,11 +47,11 @@ A known term is 409, and the page says it is already in the dictionary under ano
 
 `dictionary_gap_daily (user_id, day, writes)` counts successful writes, including increments, in the same transaction. The 21st write of a UTC day returns 429 and rolls back.
 
-The fold is `classify.FoldTerm`: trim, lower, `ё` to `е`, `&` to ` and `, other non-letters to a hyphen, trim hyphens. `classify.PlanGap` decides insert versus increment from the existing rows, and refuses an empty fold or a term over 80 characters.
+The fold is `classify.FoldTerm`: trim, lower, `ё` to `е`, `&` to ` and `, other non-letters to a hyphen, trim hyphens. `classify.GapTerm` refuses an empty fold or a term over 80 characters (runes, so Cyrillic gets the same room). The write is one upsert, `INSERT ... ON CONFLICT` on the partial unique index, so the database decides insert versus increment and two first asks racing both count; a read-then-insert would fail the second on the index.
 
 ### The handler stays in the API
 
-`internal/api/handler/dictionary.go` holds the one route. It calls `PlanGap`, the dictionary check, then sqlc. No new layer package. Cookie auth is the existing session middleware.
+`internal/api/handler/dictionary.go` holds the one route. It calls `GapTerm`, the dictionary check, then sqlc. No new layer package. Cookie auth is the existing session middleware.
 
 An anonymous click gets 401. The page puts the term in the URL (`?specialization=` or `?skill=`) and opens sign-in, so the visitor returns with the term already in the search box.
 

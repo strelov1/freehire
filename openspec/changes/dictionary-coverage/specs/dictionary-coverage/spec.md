@@ -55,7 +55,7 @@ An anonymous add MUST be refused with 401 and MUST NOT write a row. The page MUS
 - **THEN** the request is refused with 400 and no row is written
 
 ### Requirement: One live row per kind and normalized term
-The system MUST keep at most one `pending` or `accepted` row for a `(kind, normalized term)`. The normalized term MUST be the term folded by trimming, lowercasing, mapping `ё` to `е`, spelling `&` as `and`, collapsing every other run of characters that are not letters or digits into a single hyphen, and trimming hyphens. A second write of a `pending` or `accepted` row MUST increment `request_count` and `last_requested_at` and MUST leave `raw_term` and `submitted_by` as the first write set them. When every existing row for that key is `rejected`, the next write MUST insert a new `pending` row and MUST leave the rejected row and its note in place. A term that folds to empty, or that is longer than 80 characters after trim, MUST be refused with 400 and MUST NOT be written. A successful write MUST return that term's `request_count` and `status` only, and the page MUST show it as "Asked N times". No route MUST return the queue.
+The system MUST keep at most one `pending` or `accepted` row for a `(kind, normalized term)`. The normalized term MUST be the term folded by trimming, lowercasing, mapping `ё` to `е`, spelling `&` as `and`, collapsing every other run of characters that are not letters or digits into a single hyphen, and trimming hyphens. A second write of a `pending` or `accepted` row MUST increment `request_count` and `last_requested_at` and MUST leave `raw_term` and `submitted_by` as the first write set them. When every existing row for that key is `rejected`, the next write MUST insert a new `pending` row and MUST leave the rejected row and its note in place. A term that folds to empty, or that is longer than 80 characters (not bytes) after trim, MUST be refused with 400 and MUST NOT be written. A successful write MUST return that term's `request_count` and `status` only, and the page MUST show it as "Asked N times". No route MUST return the queue.
 
 #### Scenario: A repeated pending term increments
 - **WHEN** a signed-in user adds a term whose pending row already exists
@@ -68,6 +68,10 @@ The system MUST keep at most one `pending` or `accepted` row for a `(kind, norma
 #### Scenario: A rejected term can be asked again
 - **WHEN** a signed-in user adds a term whose only rows are `rejected`
 - **THEN** a new `pending` row is inserted and the rejected row remains unchanged
+
+#### Scenario: Two first asks at once both count
+- **WHEN** two signed-in users add the same new term at the same moment
+- **THEN** both succeed, one live row exists, and its `request_count` is 2
 
 #### Scenario: Two spellings share a key
 - **WHEN** `Back-End` and `back end` are added as the same kind
@@ -83,6 +87,13 @@ A signed-in user MUST be allowed at most 20 successful gap writes per UTC day, c
 #### Scenario: The twenty-first write is refused
 - **WHEN** a signed-in user has already recorded 20 gaps during the current UTC day and adds another
 - **THEN** the write is refused with 429, the gap row is unchanged, and the page says the daily limit is reached
+
+### Requirement: The job filter points at the page
+The job filter modal's Role pane and Skills pane MUST each end with a link to `/dictionary` ("Can't find your role? Help us recognize it", "Can't find your skill? Help us recognize it"); the skills link MUST open the Skills tab. When a specialization or skill search in the modal matches nothing, the pane MUST say so and link to `/dictionary` with the term as `?specialization=` or `?skill=`.
+
+#### Scenario: A filter search that finds nothing hands its term over
+- **WHEN** a visitor searches the filter's skills for a term that matches no option and follows the link
+- **THEN** `/dictionary` opens on the Skills tab with that term in the search box
 
 ### Requirement: The page is linked from the footer
 The site footer Product group MUST include a link to `/dictionary` immediately after the Skills glossary link. The page MUST be in English.

@@ -3,8 +3,11 @@ package classify
 import (
 	"strings"
 	"unicode"
+	"unicode/utf8"
 )
 
+// FoldTerm reduces a requested term to its queue key: lowercase, ё as е, & as "and",
+// and every run of other characters as one hyphen.
 func FoldTerm(s string) string {
 	s = strings.ToLower(strings.TrimSpace(s))
 	s = strings.ReplaceAll(s, "ё", "е")
@@ -25,52 +28,21 @@ func FoldTerm(s string) string {
 	return strings.Trim(b.String(), "-")
 }
 
-const (
-	GapInsert    = "insert"
-	GapIncrement = "increment"
+// maxGapTermChars bounds a requested term, in characters rather than bytes so a
+// Cyrillic term gets the same room as a Latin one.
+const maxGapTermChars = 80
 
-	GapRefuseEmpty = "empty"
-	GapRefuseLong  = "long"
-	GapRefuseCap   = "cap"
-
-	gapDailyCap = 20
-)
-
-type GapRow struct {
-	Status      string
-	Raw         string
-	Count       int
-	SubmittedBy int64
-}
-
-type GapPlan struct {
-	Refuse     string
-	Normalized string
-	Op         string
-	Status     string
-}
-
-func PlanGap(raw string, writesToday int, existing []GapRow) GapPlan {
-	trimmed := strings.TrimSpace(raw)
-	if len(trimmed) > 80 {
-		return GapPlan{Refuse: GapRefuseLong}
+// GapTerm validates a term a visitor asks the dictionary to add: it returns the
+// trimmed term and its fold (the key that makes "Back-End" and "back end" one
+// request), and false when the term is too long or folds to nothing.
+func GapTerm(raw string) (trimmed, normalized string, ok bool) {
+	trimmed = strings.TrimSpace(raw)
+	if utf8.RuneCountInString(trimmed) > maxGapTermChars {
+		return "", "", false
 	}
-	normalized := FoldTerm(trimmed)
+	normalized = FoldTerm(trimmed)
 	if normalized == "" {
-		return GapPlan{Refuse: GapRefuseEmpty}
+		return "", "", false
 	}
-	if writesToday >= gapDailyCap {
-		return GapPlan{Refuse: GapRefuseCap}
-	}
-	for _, row := range existing {
-		if row.Status == "pending" {
-			return GapPlan{Normalized: normalized, Op: GapIncrement, Status: "pending"}
-		}
-	}
-	for _, row := range existing {
-		if row.Status == "accepted" {
-			return GapPlan{Normalized: normalized, Op: GapIncrement, Status: "accepted"}
-		}
-	}
-	return GapPlan{Normalized: normalized, Op: GapInsert, Status: "pending"}
+	return trimmed, normalized, true
 }

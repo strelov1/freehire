@@ -3,7 +3,6 @@ package handler
 import (
 	"context"
 	"errors"
-	"strings"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -66,19 +65,18 @@ func (h *dictionaryHandlers) Record(c *fiber.Ctx) error {
 	if err := c.BodyParser(&req); err != nil {
 		return fiber.NewError(fiber.StatusBadRequest, "invalid body")
 	}
-	plan := dictclassify.PlanGap(req.Term, 0, nil)
-	if plan.Refuse == dictclassify.GapRefuseEmpty || plan.Refuse == dictclassify.GapRefuseLong {
+	raw, normalized, ok := dictclassify.GapTerm(req.Term)
+	if !ok {
 		return fiber.NewError(fiber.StatusBadRequest, "invalid term")
 	}
-	known, err := dictionaryKnown(req.Kind, req.Term)
+	known, err := dictionaryKnown(req.Kind, raw)
 	if errors.Is(err, errUnknownDictionaryKind) {
 		return fiber.NewError(fiber.StatusBadRequest, "unknown kind")
 	}
 	if known {
 		return fiber.NewError(fiber.StatusConflict, "term is already in the dictionary")
 	}
-	raw := strings.TrimSpace(req.Term)
-	count, status, err := h.writeGap(c.Context(), userID, req.Kind, raw, plan.Normalized)
+	count, status, err := h.writeGap(c.Context(), userID, req.Kind, raw, normalized)
 	if errors.Is(err, errGapCap) {
 		return fiber.NewError(fiber.StatusTooManyRequests, "daily dictionary gap cap")
 	}
@@ -88,6 +86,8 @@ func (h *dictionaryHandlers) Record(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"data": dictionaryRecordBody{RequestCount: count, Status: status}})
 }
 
+// writeGap spends one of the user's daily writes and records the term in the same
+// transaction, so a refused cap (errGapCap) leaves the queue untouched.
 func (h *dictionaryHandlers) writeGap(ctx context.Context, userID int64, kind, raw, normalized string) (int32, string, error) {
 	if h.write != nil {
 		return h.write(ctx, userID, kind, raw, normalized)
@@ -106,36 +106,14 @@ func (h *dictionaryHandlers) writeGap(ctx context.Context, userID int64, kind, r
 		}
 		return 0, "", err
 	}
-	existing, err := q.ListDictionaryGapsByKey(ctx, db.ListDictionaryGapsByKeyParams{Kind: kind, NormalizedTerm: normalized})
+	row, err := q.RecordDictionaryGap(ctx, db.RecordDictionaryGapParams{
+		Kind: kind, RawTerm: raw, NormalizedTerm: normalized, SubmittedBy: userID,
+	})
 	if err != nil {
 		return 0, "", err
-	}
-	rows := make([]dictclassify.GapRow, len(existing))
-	for i, row := range existing {
-		rows[i] = dictclassify.GapRow{Status: row.Status, Raw: row.RawTerm, Count: int(row.RequestCount), SubmittedBy: row.SubmittedBy}
-	}
-	plan := dictclassify.PlanGap(raw, 0, rows)
-	var count int32
-	var status string
-	if plan.Op == dictclassify.GapIncrement {
-		row, err := q.IncrementDictionaryGap(ctx, db.IncrementDictionaryGapParams{
-			Kind: kind, NormalizedTerm: normalized, Status: plan.Status,
-		})
-		if err != nil {
-			return 0, "", err
-		}
-		count, status = row.RequestCount, row.Status
-	} else {
-		row, err := q.InsertDictionaryGap(ctx, db.InsertDictionaryGapParams{
-			Kind: kind, RawTerm: raw, NormalizedTerm: normalized, SubmittedBy: userID,
-		})
-		if err != nil {
-			return 0, "", err
-		}
-		count, status = row.RequestCount, row.Status
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return 0, "", err
 	}
-	return count, status, nil
+	return row.RequestCount, row.Status, nil
 }

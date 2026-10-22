@@ -23,33 +23,22 @@ func TestFoldTerm(t *testing.T) {
 	}
 }
 
-func TestPlanGap(t *testing.T) {
-	pending := GapRow{Status: "pending", Raw: "Back-End", Count: 2, SubmittedBy: 7}
-	got := PlanGap("back end", 0, []GapRow{pending})
-	if got.Refuse != "" || got.Op != GapIncrement || got.Status != "pending" || got.Normalized != "back-end" {
-		t.Fatalf("pending = %+v", got)
+func TestGapTerm(t *testing.T) {
+	trimmed, normalized, ok := GapTerm("  Back End  ")
+	if !ok || trimmed != "Back End" || normalized != "back-end" {
+		t.Fatalf("GapTerm = %q %q %v", trimmed, normalized, ok)
 	}
-
-	accepted := GapRow{Status: "accepted", Raw: "golang", Count: 1, SubmittedBy: 3}
-	got = PlanGap("golang", 0, []GapRow{accepted})
-	if got.Op != GapIncrement || got.Status != "accepted" {
-		t.Fatalf("accepted = %+v", got)
+	if _, _, ok := GapTerm("   "); ok {
+		t.Fatal("blank term accepted")
 	}
-
-	rejected := GapRow{Status: "rejected", Raw: "sql ninja", Count: 1, SubmittedBy: 3}
-	got = PlanGap("SQL Ninja", 0, []GapRow{rejected})
-	if got.Op != GapInsert || got.Status != "pending" {
-		t.Fatalf("rejected = %+v", got)
+	if _, _, ok := GapTerm("--"); ok {
+		t.Fatal("term that folds to nothing accepted")
 	}
-
-	if got := PlanGap("   ", 0, nil); got.Refuse != GapRefuseEmpty {
-		t.Fatalf("empty = %+v", got)
+	// The limit is in characters, not bytes: 80 Cyrillic letters are 160 bytes.
+	if _, _, ok := GapTerm(strings.Repeat("я", 80)); !ok {
+		t.Fatal("80-character Cyrillic term refused")
 	}
-	long := strings.Repeat("a", 81)
-	if got := PlanGap(long, 0, nil); got.Refuse != GapRefuseLong {
-		t.Fatalf("long = %+v", got)
-	}
-	if got := PlanGap("golang", 20, nil); got.Refuse != GapRefuseCap {
-		t.Fatalf("cap = %+v", got)
+	if _, _, ok := GapTerm(strings.Repeat("a", 81)); ok {
+		t.Fatal("81-character term accepted")
 	}
 }
