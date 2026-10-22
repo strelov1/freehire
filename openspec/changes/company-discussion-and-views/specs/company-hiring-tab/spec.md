@@ -5,12 +5,18 @@ The company page's tab strip SHALL carry three tabs: **Jobs**, **Hiring** and
 **Discussion** (`/companies/<slug>/discussion`). The Discussion tab's label SHALL carry
 the company's open-thread count when it is non-zero (`Discussion · 3`). The discussion
 index page SHALL render the company header and the tab strip above the thread list when
-the company resolves, and the header-less layout it had before when the company is gone
-or unreachable. The company header SHALL no longer carry its own Discussion link.
+the company resolves under the SAME slug, and the header-less layout it had before when
+the company is gone, unreachable, or merged into another (a merged company's discussion
+stays at the retired slug, whose threads the canonical company's Discussion tab would not
+show). The company header SHALL no longer carry its own Discussion link.
 
 #### Scenario: Discussion of a listed company
 - **WHEN** a visitor opens `/companies/acme/discussion` and `acme` resolves
 - **THEN** the page shows Acme's header, the three tabs with Discussion selected, and the threads
+
+#### Scenario: Discussion of a merged company
+- **WHEN** `/companies/acme-inc/discussion` resolves to the canonical company `acme`
+- **THEN** the page keeps the header-less layout naming Acme, without tabs
 
 #### Scenario: Discussion that outlived its company
 - **WHEN** the company behind the slug no longer exists

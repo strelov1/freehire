@@ -87,12 +87,21 @@
       <div class="mt-6 flex flex-col gap-8">
         {#if data.hiring}
           {@const hiring = data.hiring}
-          <section aria-label="Key figures" class="grid gap-4 sm:grid-cols-3">
+          <section aria-label="Key figures" class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <Card class="p-4">
               <p class="text-sm text-muted-foreground">Open roles</p>
               <p class="mt-1 text-2xl font-semibold tabular-nums">{hiring.open}</p>
               <p class="mt-1 text-sm text-muted-foreground">
                 {formatGrowth(hiring.growth)} in the last 30 days
+              </p>
+            </Card>
+
+            <Card class="p-4">
+              <p class="text-sm text-muted-foreground">Posting views</p>
+              <p class="mt-1 text-2xl font-semibold tabular-nums">{hiring.views.toLocaleString('en-US')}</p>
+              <p class="mt-1 text-sm text-muted-foreground">
+                in the last 30 days, {formatGrowth(hiring.views - hiring.views_prev)} vs the 30 before.
+                One visitor counts once per posting per day.
               </p>
             </Card>
 

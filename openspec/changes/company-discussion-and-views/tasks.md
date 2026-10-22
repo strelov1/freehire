@@ -6,10 +6,10 @@
 
 ## 2. Web
 
-- [ ] 2.1 Views card on the Hiring tab
-- [ ] 2.2 `CompanyTabs` gains Discussion with the thread count; `CompanyHeader` drops its Discussion link
-- [ ] 2.3 `loadDiscussionSubject` returns the company; the discussion index renders header + tabs when it resolves, the old layout otherwise
-- [ ] 2.4 Check both in a browser
+- [x] 2.1 Views card on the Hiring tab
+- [x] 2.2 `CompanyTabs` gains Discussion with the thread count; `CompanyHeader` drops its Discussion link
+- [x] 2.3 `loadDiscussionSubject` returns the company; the discussion index renders header + tabs when it resolves, the old layout otherwise
+- [x] 2.4 Check both in a browser
 
 ## 3. Finish
 

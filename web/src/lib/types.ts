@@ -1210,6 +1210,10 @@ export interface CompanyHiring {
   open: number;
   open_prev: number;
   growth: number;
+  /** Page views of the company's postings over the last 30 days and the 30 before —
+   *  one visitor counted once per posting per day, crawlers excluded. */
+  views: number;
+  views_prev: number;
   series: ActivityPoint[];
   lifetime?: { closed: number; median_days: number };
 }

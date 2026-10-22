@@ -5,6 +5,7 @@ import {
   type DiscussionSubject,
   type SubjectAbsence,
 } from '#lib/discussionSubject.js';
+import type { Company } from '#lib/types.js';
 import { serverApi } from './api';
 
 /** The subject a discussion page hangs off, or why it is absent. */
@@ -12,6 +13,11 @@ export interface DiscussionSubjectState {
   subject: DiscussionSubject | null;
   /** Set only when `subject` is null. */
   absence?: SubjectAbsence;
+  /** The whole company behind a company subject — the canonical one for a merged slug —
+   *  so the discussion index can draw the company header and tabs without fetching it
+   *  again. The page compares `company.slug` with its own before using it: a merged
+   *  slug's threads live at the retired slug, not under the canonical company's tabs. */
+  company?: Company;
 }
 
 /** Fetch the subject a discussion page hangs off, for the header that links back to it.
@@ -39,7 +45,8 @@ export async function loadDiscussionSubject(
     if (subjectType === 'job') {
       return { subject: jobSubject(await api.getJob(slug)) };
     }
-    return { subject: companySubject(await fetchCompany(api, slug)) };
+    const company = await fetchCompany(api, slug);
+    return { subject: companySubject(company), company };
   } catch (e) {
     if (e instanceof ApiError && e.status === 404) return { subject: null, absence: 'gone' };
     return { subject: null, absence: 'unreachable' };

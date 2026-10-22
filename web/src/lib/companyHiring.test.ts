@@ -79,13 +79,13 @@ describe('hiringRobots', () => {
   const quiet = [{ period: '2026-10-01', added: 0, removed: 0 }];
 
   it('keeps an empty company out of the index', () => {
-    expect(hiringRobots({ open: 0, open_prev: 0, growth: 0, series: quiet })).toBe('noindex, follow');
+    expect(hiringRobots({ open: 0, open_prev: 0, growth: 0, views: 0, views_prev: 0, series: quiet })).toBe('noindex, follow');
   });
 
   it('indexes a company with anything to read', () => {
-    expect(hiringRobots({ open: 3, open_prev: 0, growth: 3, series: quiet })).toBeUndefined();
+    expect(hiringRobots({ open: 3, open_prev: 0, growth: 3, views: 0, views_prev: 0, series: quiet })).toBeUndefined();
     expect(
-      hiringRobots({ open: 0, open_prev: 2, growth: -2, series: [{ period: '2026-10-01', added: 0, removed: 2 }] }),
+      hiringRobots({ open: 0, open_prev: 2, growth: -2, views: 0, views_prev: 0, series: [{ period: '2026-10-01', added: 0, removed: 2 }] }),
     ).toBeUndefined();
   });
 

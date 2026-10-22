@@ -1,8 +1,6 @@
 <script lang="ts">
   import AIInterviewBadge from './AIInterviewBadge.svelte';
-  import { resolve } from '$app/paths';
-  import { MessageSquare, Star } from '@lucide/svelte';
-  import { api } from '#lib/api.js';
+  import { Star } from '@lucide/svelte';
   import { isAuthenticated } from '#lib/auth.svelte.js';
   import { promptSignIn } from '#lib/signin.js';
   import type { Company, CompanyFeedbackSummary } from '#lib/types.js';
@@ -22,20 +20,6 @@
   // company (just the identity row) — the tagline and the meta divider are present-only.
   let { company, slug }: { company: Company; slug: string } = $props();
 
-  // Open-thread count for the "Discussion · N" badge; loaded client-side so the
-  // header renders immediately and the number fills in. Failures leave it hidden.
-  let threadCount = $state<number | null>(null);
-  $effect(() => {
-    let alive = true;
-    api
-      .countThreads('company', slug)
-      .then((n) => alive && (threadCount = n))
-      .catch(() => {});
-    return () => {
-      alive = false;
-    };
-  });
-
   // The feedback list dialog (star ratings + category + text), opened from the
   // rating badge below. Before any feedback exists there's nothing to list, so the
   // same slot instead opens the write dialog directly — the header always carries
@@ -43,8 +27,7 @@
   // is open, its own "Write feedback" button is the way back into the write dialog.
   //
   // feedbackCount/feedbackRatingAvg are derived from the server-rendered `company`
-  // prop (so a company switch or refreshed data is picked up, the same as
-  // threadCount reacting to `slug`), overridden only after a save: the dialog's
+  // prop (so a company switch or refreshed data is picked up), overridden only after a save: the dialog's
   // `onSaved` already carries the write's freshly recomputed counters (Upsert
   // and Delete both return them), so the badge flips immediately with no
   // follow-up fetch — and so no window where that fetch can itself fail and
@@ -118,18 +101,11 @@
       <CompanyFollowButton {slug} companyName={company.name} />
     </div>
   </div>
-  <!-- Discussion + votes get their own right-aligned row instead of sharing the
-       identity row: together they are ~220px of non-shrinking width, which on a phone
-       would leave the name/tagline column too narrow to hold a word. -->
+  <!-- Feedback + votes get their own right-aligned row instead of sharing the identity
+       row: together they are ~220px of non-shrinking width, which on a phone would leave
+       the name/tagline column too narrow to hold a word. The discussion is a tab now
+       (CompanyTabs), not a link here. -->
   <div class="mt-3 flex flex-wrap items-center justify-end gap-x-4 gap-y-2">
-    <a
-      class="inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline"
-      href={resolve('/companies/[slug]/discussion', { slug })}
-    >
-      <MessageSquare class="size-4" aria-hidden="true" /> Discussion{threadCount
-        ? ` · ${threadCount}`
-        : ''}
-    </a>
     <button
       type="button"
       class="inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline"
