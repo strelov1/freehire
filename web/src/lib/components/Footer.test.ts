@@ -74,6 +74,16 @@ describe('Footer store buttons', () => {
     expect(SOURCE).not.toContain('chromewebstore.google.com');
   });
 
+  it('links Dictionary immediately after Skills glossary', () => {
+    const skills = SOURCE.indexOf("label: 'Skills glossary'");
+    const dictionary = SOURCE.indexOf("label: 'Dictionary'");
+    const recruiters = SOURCE.indexOf("label: 'Recruiters'");
+    expect(skills).toBeGreaterThan(-1);
+    expect(dictionary).toBeGreaterThan(skills);
+    expect(recruiters).toBeGreaterThan(dictionary);
+    expect(SOURCE.slice(dictionary, recruiters)).toContain("resolve('/dictionary')");
+  });
+
   it('opens both in a new tab with a safe rel', () => {
     const eachAt = SOURCE.indexOf('{#each stores as store');
     const block = SOURCE.slice(eachAt, SOURCE.indexOf('{/each}', eachAt));

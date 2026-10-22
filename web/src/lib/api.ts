@@ -701,6 +701,12 @@ export function createApi(
     return requestData<ApiSuggestion[]>(`/api/v1/suggest?${params}`, { signal });
   }
 
+  /** Ask for a specialization or skill the dictionary does not hold yet. Signed-in
+   *  only; 409 when the term already resolves, 429 past the daily cap. */
+  function recordDictionaryGap(kind: 'specialization' | 'skill', term: string): Promise<{ request_count: number; status: string }> {
+    return requestData('/api/v1/dictionary/gaps', jsonBody('POST', { kind, term }));
+  }
+
   /** Turn a written description of a job search into filter values (the AI filter).
    *  Signed-in only. `previous` refines an interpretation already on screen: the
    *  server returns a complete replacement search, not a diff, so the caller always
@@ -3105,6 +3111,7 @@ export function createApi(
     recentJobsFeedUrl,
     searchJobs,
     suggest,
+    recordDictionaryGap,
     interpretSearch,
     swipeDeck,
     facetCounts,

@@ -450,6 +450,7 @@ type Querier interface {
 	// park during preview resolution (a captcha, an unscannable page) predicts the identical
 	// outcome the real submission would hit, so there is nothing a retry here would fix either.
 	ClaimAutoApplyPreviewBatch(ctx context.Context, arg ClaimAutoApplyPreviewBatchParams) ([]ClaimAutoApplyPreviewBatchRow, error)
+	ClaimDictionaryGapWrite(ctx context.Context, arg ClaimDictionaryGapWriteParams) (int32, error)
 	// Take up to max_runs due runs, exactly once each, from the HEAVY pool only. See
 	// ClaimDueLightRuns for the sibling that claims from the other pool: the scheduler calls
 	// both every tick, each against its own budget (ingestsched.DefaultHeavyCap /
@@ -2946,6 +2947,7 @@ type Querier interface {
 	// hidden row is a no-op). Returns the company_slug so the caller can recompute
 	// that company's counters in the same transaction. pgx.ErrNoRows on an unknown id.
 	HideCompanyFeedback(ctx context.Context, id int64) (string, error)
+	IncrementDictionaryGap(ctx context.Context, arg IncrementDictionaryGapParams) (IncrementDictionaryGapRow, error)
 	IncrementThreadReplyCount(ctx context.Context, id int64) error
 	// How many rows each source has just written, and how many DISTINCT postings those rows
 	// stand for. The gap between the two is the signal: one posting stored under many boards.
@@ -3033,6 +3035,7 @@ type Querier interface {
 	// unique index on (user_id, feature, ref) WHERE kind='debit' guards against a double charge
 	// for the same ref even under a race.
 	InsertDebit(ctx context.Context, arg InsertDebitParams) error
+	InsertDictionaryGap(ctx context.Context, arg InsertDictionaryGapParams) (InsertDictionaryGapRow, error)
 	// The only insert. A claim already banked with a stronger provenance than
 	// agent_inferred is never touched — ON CONFLICT DO NOTHING behavior for every case
 	// except one: a claim first recorded as agent_inferred (the model's unconfirmed
@@ -3689,6 +3692,7 @@ type Querier interface {
 	// by a caller-supplied limit and served by the (user_id, created_at DESC) index. The handler
 	// resolves each debit's ref to a human label (the job/CV it named).
 	ListCreditLedger(ctx context.Context, arg ListCreditLedgerParams) ([]ListCreditLedgerRow, error)
+	ListDictionaryGapsByKey(ctx context.Context, arg ListDictionaryGapsByKeyParams) ([]DictionaryGap, error)
 	// The next page of bindings to reconcile, each with the plan that decides its role.
 	//
 	// The plan comes back WITH the link, in one read, because resolving it separately would be

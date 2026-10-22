@@ -23,6 +23,7 @@
         // interaction and the sitemap is for crawlers, so this is the one path a
         // reader browsing the site can follow to it.
         { label: 'Skills glossary', href: resolve('/skills') },
+        { label: 'Dictionary', href: resolve('/dictionary') },
         { label: 'Recruiters', href: resolve('/recruiters') },
       ],
     },

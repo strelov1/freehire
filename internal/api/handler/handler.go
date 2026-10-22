@@ -1031,6 +1031,7 @@ func Register(app *fiber.App, cfg Config) {
 	// /jobs/:slug param route so they are not read as slugs (see searchHandlers).
 	searchH.register(api, mw)
 	suggestH.register(api, mw)
+	(&dictionaryHandlers{pool: cfg.Pool, queries: queries}).register(api, mw)
 	// Beside the search it builds a filter for, though it shares none of its
 	// dependencies: interpretation needs a model and the caller's profile, not the
 	// index.

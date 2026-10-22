@@ -370,18 +370,39 @@
   {/if}
 {/snippet}
 
+<!-- A specialization or skill search that matches nothing hands the term to /dictionary, where
+     a signed-in visitor can ask for it to be added; the link under each pane opens the same
+     page empty. -->
+{#snippet unrecognized(noun: string, param: 'specialization' | 'skill', term: string)}
+  <p class="py-1 text-sm text-muted-foreground">
+    No {noun} matches “{term}”.
+    <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- resolve()d /dictionary plus a query string -->
+    <a href={`${resolve('/dictionary')}?${new URLSearchParams({ [param]: term })}`} class="font-medium text-foreground underline underline-offset-4">Help us recognize it</a>
+  </p>
+{/snippet}
+{#snippet unrecognizedRole(term: string)}{@render unrecognized('specialization', 'specialization', term)}{/snippet}
+{#snippet unrecognizedSkill(term: string)}{@render unrecognized('skill', 'skill', term)}{/snippet}
+
+{#snippet recognizeLink(noun: string, query: string)}
+  <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- resolve()d /dictionary plus a query string -->
+  <a href={`${resolve('/dictionary')}${query}`} class="mt-6 inline-block text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline">
+    Can't find your {noun}? Help us recognize it →
+  </a>
+{/snippet}
+
 {#snippet pane(entry: RailEntry, live: FacetCounts | null)}
   {@const c = live ?? counts}
   {#if entry.kind === 'saved'}
     <SavedSearches store={staged} />
   {:else if entry.kind === 'category'}
-    <CategoryPane store={staged} {plain} counts={c} />
+    <CategoryPane store={staged} {plain} counts={c} empty={unrecognizedRole} />
     {#if !exclude.includes('ai_archetype')}
       {@const aiArchetypeDef = facetDefFor('ai_archetype')}
       {#if aiArchetypeDef}
         <div class="mt-6"><FacetSection def={aiArchetypeDef} store={staged} counts={c} expand /></div>
       {/if}
     {/if}
+    {@render recognizeLink('role', '')}
   {:else if entry.kind === 'location'}
     <LocationPane store={staged} counts={c} />
   {:else if entry.kind === 'facet'}
@@ -404,7 +425,8 @@
         class="mb-6 w-full accent-primary"
       />
     {/if}
-    {#if def}<FacetSection {def} store={staged} counts={c} expand />{/if}
+    {#if def}<FacetSection {def} store={staged} counts={c} expand empty={entry.key === 'skills' ? unrecognizedSkill : undefined} />{/if}
+    {#if entry.key === 'skills'}{@render recognizeLink('skill', '?tab=skill')}{/if}
   {:else if entry.kind === 'salary'}
     <ChipFacet store={staged} param="salary_currency" label="Currency" counts={c} />
     <div class="mb-2 mt-6 flex items-center justify-between">

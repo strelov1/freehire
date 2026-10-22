@@ -1,4 +1,5 @@
 <script lang="ts">
+  import type { Snippet } from 'svelte';
   import { X } from '@lucide/svelte';
   import { dynamicLabel, dynamicOptions, reportedCount, type FacetDef, type FacetOption, type FacetStore } from '$lib/facets';
   import type { FacetCounts } from '$lib/types';
@@ -13,7 +14,14 @@
   // toggles a non-excludable one (off ↔ include). All state lives in the store, keyed
   // by the facet's param. `counts` carries the live facet distribution that drives
   // dynamic (open-vocabulary) selects.
-  let { def, store, counts, expand = false }: { def: FacetDef; store: FacetStore; counts?: FacetCounts | null; expand?: boolean } = $props();
+  // `empty`, when given, replaces a select's "Nothing found" (see SearchSelect).
+  let {
+    def,
+    store,
+    counts,
+    expand = false,
+    empty,
+  }: { def: FacetDef; store: FacetStore; counts?: FacetCounts | null; expand?: boolean; empty?: Snippet<[string]> } = $props();
 
   const st = $derived(store.facet(def.param));
   const total = $derived(st.include.length + st.exclude.length);
@@ -86,6 +94,7 @@
       entityLogos={def.entityLogos}
       {onToggle}
       {expand}
+      {empty}
     />
   {:else if def.control === 'remote' && def.remote}
     <RemoteSearchSelect

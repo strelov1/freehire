@@ -1,4 +1,5 @@
 <script lang="ts">
+  import type { Snippet } from 'svelte';
   import { ChevronDown, Search } from '@lucide/svelte';
   import { SvelteSet } from 'svelte/reactivity';
   import type { FacetStore } from '$lib/facets';
@@ -12,12 +13,25 @@
   // the excludable `category` facet (each chip cycles off → include → exclude → off);
   // `plain` makes it an include-only choice (e.g. a profile category is not a filter
   // to exclude). When `counts` is passed, each chip shows its live match count.
-  let { store, plain = false, counts = null }: { store: FacetStore; plain?: boolean; counts?: FacetCounts | null } = $props();
+  // `query` is bindable so a page can seed the search; `empty`, when given, renders
+  // in place of the groups once the search matches no specialization.
+  let {
+    store,
+    plain = false,
+    counts = null,
+    query = $bindable(''),
+    empty,
+  }: {
+    store: FacetStore;
+    plain?: boolean;
+    counts?: FacetCounts | null;
+    query?: string;
+    empty?: Snippet<[string]>;
+  } = $props();
 
   const dist = $derived(counts?.facets?.category ?? null);
 
   const excludable = $derived(!plain);
-  let query = $state('');
   const collapsed = new SvelteSet<string>();
   const st = $derived(store.facet('category'));
   const onToggle = (v: string) => (excludable ? store.cycle('category', v) : store.pick('category', v));
@@ -42,6 +56,10 @@
     class="h-9 w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
   />
 </div>
+
+{#if empty && query.trim() && groups.length === 0}
+  {@render empty(query.trim())}
+{/if}
 
 {#each groups as g (g.name)}
   {@const isCollapsed = collapsed.has(g.name) && !query}

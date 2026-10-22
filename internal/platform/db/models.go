@@ -473,6 +473,25 @@ type CvTracerLink struct {
 	CreatedAt       pgtype.Timestamptz `json:"created_at"`
 }
 
+type DictionaryGap struct {
+	ID               int64              `json:"id"`
+	Kind             string             `json:"kind"`
+	RawTerm          string             `json:"raw_term"`
+	NormalizedTerm   string             `json:"normalized_term"`
+	RequestCount     int32              `json:"request_count"`
+	FirstRequestedAt pgtype.Timestamptz `json:"first_requested_at"`
+	LastRequestedAt  pgtype.Timestamptz `json:"last_requested_at"`
+	SubmittedBy      int64              `json:"submitted_by"`
+	Status           string             `json:"status"`
+	ResolutionNote   string             `json:"resolution_note"`
+}
+
+type DictionaryGapDaily struct {
+	UserID int64       `json:"user_id"`
+	Day    pgtype.Date `json:"day"`
+	Writes int32       `json:"writes"`
+}
+
 type DirectApplication struct {
 	ID        int64              `json:"id"`
 	JobID     int64              `json:"job_id"`

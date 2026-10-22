@@ -1,4 +1,5 @@
 <script lang="ts">
+  import type { Snippet } from 'svelte';
   import { optionMatches, uniqueByValue, type FacetOption } from '$lib/facets';
   import { CountryFlag, EntityLogo, Input } from '$lib/ui';
   import SkillIcon from '../SkillIcon.svelte';
@@ -24,6 +25,8 @@
     searchAliases,
     techIcons = false,
     entityLogos = false,
+    filter = $bindable(''),
+    empty,
   }: {
     options: FacetOption[];
     include: string[];
@@ -52,9 +55,12 @@
     // Show the option's brand mark via EntityLogo (opt.icon, resolved through the
     // logo proxy) — set only by the source facet (see FacetDef.entityLogos).
     entityLogos?: boolean;
+    // The search field's text, bindable so a page can seed it (e.g. from its URL).
+    filter?: string;
+    // Rendered instead of "Nothing found" when the search matches no option, given
+    // the trimmed search text — e.g. /dictionary's "add this term" action.
+    empty?: Snippet<[string]>;
   } = $props();
-
-  let filter = $state('');
 
   function toggle(value: string) {
     onToggle(value);
@@ -103,7 +109,11 @@
       </button>
     {/each}
     {#if shown.length === 0}
-      <span class="px-1 py-1 text-xs text-muted-foreground">Nothing found</span>
+      {#if empty && filter.trim()}
+        {@render empty(filter.trim())}
+      {:else}
+        <span class="px-1 py-1 text-xs text-muted-foreground">Nothing found</span>
+      {/if}
     {/if}
   </div>
   {#if hiddenCount > 0}
