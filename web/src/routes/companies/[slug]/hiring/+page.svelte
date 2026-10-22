@@ -2,11 +2,11 @@
   import { page } from '$app/state';
   import { invalidateAll } from '$app/navigation';
   import { resolve } from '$app/paths';
-  import ActivityPanel from '$lib/components/ActivityPanel.svelte';
-  import CompanyHeader from '$lib/components/CompanyHeader.svelte';
-  import CompanyTabs from '$lib/components/CompanyTabs.svelte';
-  import Seo from '$lib/components/Seo.svelte';
-  import { api } from '$lib/api';
+  import ActivityPanel from '#lib/components/ActivityPanel.svelte';
+  import CompanyHeader from '#lib/components/CompanyHeader.svelte';
+  import CompanyTabs from '#lib/components/CompanyTabs.svelte';
+  import Seo from '#lib/components/Seo.svelte';
+  import { api } from '#lib/api.js';
   import {
     breakdownLabel,
     formatGrowth,
@@ -14,10 +14,10 @@
     replyRate,
     salaryRange,
     topEntries,
-  } from '$lib/companyHiring';
-  import { formatSalary } from '$lib/insights';
-  import { breadcrumbJsonLd, datasetJsonLd, jsonLdScript } from '$lib/seo';
-  import { Breadcrumbs, Card } from '$lib/ui';
+  } from '#lib/companyHiring.js';
+  import { formatSalary } from '#lib/insights.js';
+  import { breadcrumbJsonLd, datasetJsonLd, jsonLdScript } from '#lib/seo.js';
+  import { Breadcrumbs, Card } from '#lib/ui/index.js';
   import type { PageData } from './$types';
 
   let { data }: { data: PageData } = $props();

@@ -2,7 +2,7 @@
   import type { Snippet } from 'svelte';
   import { untrack } from 'svelte';
   import ActivityBars from './ActivityBars.svelte';
-  import type { ActivityGranularity, ActivityPoint } from '$lib/types';
+  import type { ActivityGranularity, ActivityPoint } from '#lib/types.js';
 
   // The added-vs-removed chart with its Day/Week/Month toggle — the catalogue's on
   // /trends, one company's on its Hiring tab. The server renders the daily series; the

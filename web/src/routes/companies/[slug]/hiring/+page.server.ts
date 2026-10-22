@@ -1,9 +1,9 @@
 import { error, redirect } from '@sveltejs/kit';
-import { ApiError, MovedError } from '$lib/api';
-import { dominantCurrency } from '$lib/companyHiring';
-import { serverApi } from '$lib/server/api';
-import { rethrowUpstream } from '$lib/server/upstream';
-import type { FacetCounts } from '$lib/types';
+import { ApiError, MovedError } from '#lib/api.js';
+import { dominantCurrency } from '#lib/companyHiring.js';
+import { serverApi } from '#lib/server/api.js';
+import { rethrowUpstream } from '#lib/server/upstream.js';
+import type { FacetCounts } from '#lib/types.js';
 import type { PageServerLoad } from './$types';
 
 /** The facets the "Who they hire" block reads. Named, because counting is paid per facet. */

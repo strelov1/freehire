@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
   import { resolve } from '$app/paths';
-  import { TabStrip, tabStripId } from '$lib/ui';
+  import { TabStrip, tabStripId } from '#lib/ui/index.js';
 
   // The company page's two views, each its own URL: the job list and the Hiring tab.
   // Routes rather than client state so the Hiring view is linkable, server-rendered and
