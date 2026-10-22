@@ -118,6 +118,22 @@ type fakeStore struct {
 	// deliver() is one sequential goroutine, so nothing a single pass does can
 	// open that window — a test that wants it has to say so.
 	beforeDedupRead func(*fakeStore)
+	// expireCalls records every ExpireStaleSubscriptionMatches call; expireResults
+	// is what successive calls return (0 once exhausted) and expireErr fails them.
+	// calls logs the order of the expire and claim statements, since expiring
+	// AFTER the claim would hand a stale match to a digest.
+	expireCalls   []db.ExpireStaleSubscriptionMatchesParams
+	expireResults []int64
+	expireErr     error
+	calls         []string
+
+	// coveredCount is what CountCoveredMatches answers and coveredErr fails it;
+	// coveredCounts and coveredMarked record the cutoffs each was asked about.
+	coveredCount  int64
+	coveredErr    error
+	coveredCounts []db.CountCoveredMatchesParams
+	coveredMarked []db.MarkCoveredMatchesNotifiedParams
+
 	// recordNotificationErrOnce fails only the FIRST record, so a test can
 	// deliver with no row in hand and still observe what the send path does
 	// about it afterwards.
@@ -162,7 +178,31 @@ func (s *fakeStore) RecordSubscriptionMatches(_ context.Context, a db.RecordSubs
 }
 
 func (s *fakeStore) ClaimSubscriptionMatches(context.Context, db.ClaimSubscriptionMatchesParams) ([]db.ClaimSubscriptionMatchesRow, error) {
+	s.calls = append(s.calls, "claim")
 	return s.claimed, nil
+}
+
+func (s *fakeStore) ExpireStaleSubscriptionMatches(_ context.Context, a db.ExpireStaleSubscriptionMatchesParams) (int64, error) {
+	s.calls = append(s.calls, "expire")
+	s.expireCalls = append(s.expireCalls, a)
+	if s.expireErr != nil {
+		return 0, s.expireErr
+	}
+	i := len(s.expireCalls) - 1
+	if i < len(s.expireResults) {
+		return s.expireResults[i], nil
+	}
+	return 0, nil
+}
+
+func (s *fakeStore) CountCoveredMatches(_ context.Context, a db.CountCoveredMatchesParams) (int64, error) {
+	s.coveredCounts = append(s.coveredCounts, a)
+	return s.coveredCount, s.coveredErr
+}
+
+func (s *fakeStore) MarkCoveredMatchesNotified(_ context.Context, a db.MarkCoveredMatchesNotifiedParams) (int64, error) {
+	s.coveredMarked = append(s.coveredMarked, a)
+	return s.coveredCount, nil
 }
 
 func (s *fakeStore) GetSubscriptionForDelivery(_ context.Context, id int64) (db.GetSubscriptionForDeliveryRow, error) {
@@ -1442,43 +1482,6 @@ func TestDeliver_DigestRecordsEveryMatchedJob(t *testing.T) {
 	}
 }
 
-// A pass can claim more matches for one subscription than a digest can carry.
-// The overflow must go back to pending — stamping it notified would drop those
-// postings from the alert forever, listed in no message and in no snapshot.
-func TestDeliver_OverflowBeyondSnapshotCapIsDeferredNotDropped(t *testing.T) {
-	claimed := make([]db.ClaimSubscriptionMatchesRow, 0, 5)
-	jobs := make(map[int64]db.GetJobsForDigestRow, 5)
-	for i := range int64(5) {
-		claimed = append(claimed, db.ClaimSubscriptionMatchesRow{SubscriptionID: 1, JobID: i})
-		jobs[i] = db.GetJobsForDigestRow{ID: i, Title: "Job", PublicSlug: "job"}
-	}
-	store := &fakeStore{claimed: claimed, delivery: deliverySubscription(), digestJobs: jobs}
-	notifier := &fakeNotifier{}
-	cfg := DefaultConfig()
-	cfg.SnapshotCap = 3
-	r := New(store, &fakeSearcher{}, notifier, cfg)
-
-	if _, err := r.Run(context.Background()); err != nil {
-		t.Fatal(err)
-	}
-	if got := notifier.sent[0].Total; got != 3 {
-		t.Errorf("digest Total = %d, want 3 — a digest announces only what it carries", got)
-	}
-	if len(store.notified) != 1 || len(store.notified[0].JobIds) != 3 {
-		t.Fatalf("notified = %+v, want exactly the 3 delivered jobs", store.notified)
-	}
-	if len(store.released) != 1 || len(store.released[0].JobIds) != 2 {
-		t.Fatalf("released = %+v, want the 2 undelivered jobs back in the pending queue", store.released)
-	}
-	for _, id := range store.notified[0].JobIds {
-		for _, rel := range store.released[0].JobIds {
-			if id == rel {
-				t.Errorf("job %d was both notified and released", id)
-			}
-		}
-	}
-}
-
 // A claimed id whose job row is gone (pruned) must still be stamped notified,
 // or it is re-claimed on every pass forever.
 func TestDeliver_ClaimedIDWithNoJobRowIsStillNotified(t *testing.T) {
@@ -1487,9 +1490,7 @@ func TestDeliver_ClaimedIDWithNoJobRowIsStillNotified(t *testing.T) {
 		delivery:   deliverySubscription(),
 		digestJobs: map[int64]db.GetJobsForDigestRow{10: {ID: 10, Title: "A", PublicSlug: "a"}},
 	}
-	cfg := DefaultConfig()
-	cfg.SnapshotCap = 1
-	r := New(store, &fakeSearcher{}, &fakeNotifier{}, cfg)
+	r := New(store, &fakeSearcher{}, &fakeNotifier{}, DefaultConfig())
 
 	if _, err := r.Run(context.Background()); err != nil {
 		t.Fatal(err)

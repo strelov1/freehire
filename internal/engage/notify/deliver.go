@@ -3,7 +3,9 @@ package notify
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -18,7 +20,14 @@ import (
 // notified; on failure the delivery bookkeeping retries/dead-letters them; a
 // subscription that is not currently deliverable (e.g. Telegram unlinked) has its
 // claim released so it is retried promptly rather than waiting out the lease.
+// Stale matches are expired first, so nothing stale is ever claimed.
 func (r *Runner) deliver(ctx context.Context, stats *Stats) error {
+	expired, err := r.expireStale(ctx)
+	stats.Expired += expired
+	if err != nil {
+		return fmt.Errorf("expire stale matches: %w", err)
+	}
+
 	// One digest's worth per subscription, so a pass serves every subscription that has
 	// anything pending rather than the lowest ids only. Floored like the batch size it
 	// sits beside: a zero here is LIMIT 0 in the LATERAL, which claims nothing and
@@ -37,13 +46,19 @@ func (r *Runner) deliver(ctx context.Context, stats *Stats) error {
 	}
 
 	// Group the claimed matches by subscription so each becomes one digest.
-	jobsBySub := make(map[int64][]int64)
+	claims := make(map[int64]*subscriptionClaim)
 	order := make([]int64, 0)
 	for _, c := range claimed {
-		if _, seen := jobsBySub[c.SubscriptionID]; !seen {
+		sc, seen := claims[c.SubscriptionID]
+		if !seen {
+			sc = &subscriptionClaim{oldest: c}
+			claims[c.SubscriptionID] = sc
 			order = append(order, c.SubscriptionID)
 		}
-		jobsBySub[c.SubscriptionID] = append(jobsBySub[c.SubscriptionID], c.JobID)
+		sc.add(c)
+	}
+	for _, sc := range claims {
+		sc.full = len(sc.jobIDs) >= int(perSubscription)
 	}
 
 	for _, subID := range order {
@@ -57,13 +72,14 @@ func (r *Runner) deliver(ctx context.Context, stats *Stats) error {
 				stats.Delivered+stats.SoftSkips+stats.Deferred+stats.Failed, len(order), ctx.Err())
 			return nil
 		}
-		r.deliverOne(ctx, subID, jobsBySub[subID], stats)
+		r.deliverOne(ctx, subID, claims[subID], stats)
 	}
 	return nil
 }
 
 // deliverOne sends one subscription's digest and finalizes its claimed matches.
-func (r *Runner) deliverOne(ctx context.Context, subID int64, jobIDs []int64, stats *Stats) {
+func (r *Runner) deliverOne(ctx context.Context, subID int64, claim *subscriptionClaim, stats *Stats) {
+	jobIDs := claim.jobIDs
 	info, err := r.store.GetSubscriptionForDelivery(ctx, subID)
 	if err != nil {
 		// Counted, not merely logged. This digest did not go out and nothing burned an
@@ -113,8 +129,13 @@ func (r *Runner) deliverOne(ctx context.Context, subID int64, jobIDs []int64, st
 		return
 	}
 
-	jobs, jobIDs = r.deferOverflow(ctx, subID, jobs, jobIDs)
-	digest := buildDigest(info.SavedSearchName, jobs)
+	// The claim took the newest SnapshotCap matches. Anything pending behind it is
+	// COUNTED by this digest rather than re-queued for a later one: re-queuing is what
+	// left a busy `daily` subscription mailing the same backlog, oldest first, weeks
+	// behind. The count is read before the send so the message can state it.
+	covered := r.countCovered(ctx, subID, claim)
+	digest := buildDigest(info.SavedSearchName, jobs, covered)
+	digest.SearchQuery = info.SavedSearchQuery
 	digest.UserID = info.UserID
 
 	// Record the in-app notification BEFORE sending, so the digest can carry its
@@ -234,6 +255,13 @@ func (r *Runner) deliverOne(ctx context.Context, subID int64, jobIDs []int64, st
 		// duplicate), which is preferable to losing the notification.
 		log.Printf("notify: mark notified for subscription %d: %v", subID, err)
 	}
+	if covered > 0 {
+		if _, err := r.store.MarkCoveredMatchesNotified(ctx, db.MarkCoveredMatchesNotifiedParams(claim.coveredParams(subID, r.cfg.LeaseSeconds))); err != nil {
+			// The digest counted them but they stay pending: the next digest carries the
+			// newest of them again or they go stale — a repeat at worst, never a loss.
+			log.Printf("notify: mark covered matches notified for subscription %d: %v", subID, err)
+		}
+	}
 
 	if info.Channel == ChannelWebhook {
 		if err := r.store.RecordWebhookDeliverySuccess(ctx, info.UserID); err != nil {
@@ -264,6 +292,11 @@ func (r *Runner) deliverOne(ctx context.Context, subID int64, jobIDs []int64, st
 // centre holds one row per EVENT, so only the writer may withdraw it.
 func (r *Runner) recordNotification(ctx context.Context, info db.GetSubscriptionForDeliveryRow, d Digest, jobIDs []int64) (id int64, created bool) {
 	title, body, slug := renderDigest(d)
+	if d.Overflowed() {
+		// The row's page lists only the snapshot, under this body; say so, or it
+		// reads as a count the list beneath it does not reach.
+		body = fmt.Sprintf("%s — the newest %d are listed", body, len(d.Jobs))
+	}
 	var publicSlug pgtype.Text
 	if slug != "" {
 		publicSlug = pgtype.Text{String: slug, Valid: true}
@@ -409,46 +442,88 @@ func (r *Runner) release(ctx context.Context, subID int64, jobIDs []int64) {
 	}
 }
 
-// deferOverflow trims a claimed set larger than one digest may carry, releasing
-// the excess back to the pending queue so a later pass delivers it.
-//
-// Truncating without releasing would stamp those matches notified while they
-// appeared in no message and in no recorded snapshot — the postings would leave
-// the alert having never been shown. Because GetJobsForDigest orders freshest
-// first, what is held back is the oldest of the claimed set.
-//
-// A claimed id with no job row (pruned between match and delivery) is NOT held
-// back: it stays in jobIDs and is stamped notified, or it would be re-claimed
-// every pass forever.
-func (r *Runner) deferOverflow(ctx context.Context, subID int64, jobs []db.GetJobsForDigestRow, jobIDs []int64) ([]db.GetJobsForDigestRow, []int64) {
-	if len(jobs) <= r.cfg.SnapshotCap {
-		return jobs, jobIDs
-	}
+// expireBatch bounds one ExpireStaleSubscriptionMatches statement. The first pass
+// after deploy meets a backlog of tens of thousands; batching keeps it a run of
+// short statements instead of one long one holding row locks on a busy host.
+const expireBatch = 5000
 
-	held := make(map[int64]bool, len(jobs)-r.cfg.SnapshotCap)
-	for _, j := range jobs[r.cfg.SnapshotCap:] {
-		held[j.ID] = true
-	}
-	deferred := make([]int64, 0, len(held))
-	kept := make([]int64, 0, len(jobIDs)-len(held))
-	for _, id := range jobIDs {
-		if held[id] {
-			deferred = append(deferred, id)
-			continue
+// expireStale takes every stale match out of the pending set, one bounded batch at
+// a time until a batch comes back short, and reports how many it took.
+func (r *Runner) expireStale(ctx context.Context) (int, error) {
+	total := 0
+	for {
+		n, err := r.store.ExpireStaleSubscriptionMatches(ctx, db.ExpireStaleSubscriptionMatchesParams{
+			LeaseSeconds:     r.cfg.LeaseSeconds,
+			FreshnessSeconds: int32(r.cfg.FreshnessWindow / time.Second),
+			BatchSize:        expireBatch,
+		})
+		total += int(n)
+		if err != nil {
+			return total, err
 		}
-		kept = append(kept, id)
+		if n < expireBatch {
+			return total, nil
+		}
 	}
-	log.Printf("notify: subscription %d claimed %d matches, delivering %d and deferring %d", subID, len(jobIDs), len(kept), len(deferred))
-	r.release(ctx, subID, deferred)
-	return jobs[:r.cfg.SnapshotCap], kept
 }
 
-// buildDigest assembles a digest over the jobs this delivery carries. Total is
-// len(jobs) because deferOverflow has already held back anything that would not
-// fit, so a digest never announces a job it cannot show; the "and N more" tail a
-// renderer draws is the difference between Total and Digest.Listed.
-func buildDigest(name string, jobs []db.GetJobsForDigestRow) Digest {
-	d := Digest{SavedSearchName: name, Total: len(jobs)}
+// subscriptionClaim is what one pass claimed for one subscription: the job ids,
+// whether the claim was FULL (it hit the per-subscription cap, so more may be
+// pending behind it), and the oldest row it took, which is where it stopped.
+type subscriptionClaim struct {
+	jobIDs []int64
+	oldest db.ClaimSubscriptionMatchesRow
+	full   bool
+}
+
+// add appends one claimed row. The claim is newest first in SQL, but UPDATE ...
+// RETURNING promises no order, so the stopping point is computed here.
+func (c *subscriptionClaim) add(row db.ClaimSubscriptionMatchesRow) {
+	c.jobIDs = append(c.jobIDs, row.JobID)
+	at, oldest := row.MatchedAt.Time, c.oldest.MatchedAt.Time
+	if at.Before(oldest) || (at.Equal(oldest) && row.JobID < c.oldest.JobID) {
+		c.oldest = row
+	}
+}
+
+// coveredParams names the pending matches behind the claim's stopping point, for
+// CountCoveredMatches and MarkCoveredMatchesNotified alike — one value, so the
+// count a digest announces and the set it retires cannot drift apart.
+func (c *subscriptionClaim) coveredParams(subID int64, leaseSeconds int32) db.CountCoveredMatchesParams {
+	return db.CountCoveredMatchesParams{
+		SubscriptionID:  subID,
+		LeaseSeconds:    leaseSeconds,
+		BeforeMatchedAt: c.oldest.MatchedAt,
+		BeforeJobID:     c.oldest.JobID,
+	}
+}
+
+// countCovered is how many pending matches the digest counts without carrying.
+// Zero for a claim that came back short — nothing can be behind it — and zero
+// when the count fails: the digest then announces only what it carries and
+// retires nothing it did not count.
+func (r *Runner) countCovered(ctx context.Context, subID int64, claim *subscriptionClaim) int {
+	if !claim.full {
+		return 0
+	}
+	n, err := r.store.CountCoveredMatches(ctx, claim.coveredParams(subID, r.cfg.LeaseSeconds))
+	if err != nil {
+		log.Printf("notify: count covered matches for subscription %d: %v", subID, err)
+		return 0
+	}
+	return int(n)
+}
+
+// buildDigest assembles a digest over the jobs this delivery carries plus the
+// covered matches it only counts. The "and N more" tail a renderer draws is the
+// difference between Total and Digest.Listed; with covered above zero the
+// digest is Overflowed and that tail leads to the saved search.
+//
+// A claimed id with no job row (pruned between match and delivery) carries no
+// job here but stays in the claim, so it is stamped notified with the rest
+// rather than re-claimed every pass forever.
+func buildDigest(name string, jobs []db.GetJobsForDigestRow, covered int) Digest {
+	d := Digest{SavedSearchName: name, Total: len(jobs) + covered}
 	for _, j := range jobs {
 		d.Jobs = append(d.Jobs, DigestJob{
 			Title:          j.Title,

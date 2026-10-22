@@ -1365,6 +1365,7 @@ type SubscriptionMatch struct {
 	Attempts       int32              `json:"attempts"`
 	FailedAt       pgtype.Timestamptz `json:"failed_at"`
 	LastError      string             `json:"last_error"`
+	ExpiredAt      pgtype.Timestamptz `json:"expired_at"`
 }
 
 type TelegramChannel struct {

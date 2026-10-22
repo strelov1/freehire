@@ -120,20 +120,38 @@ func (n *Notifier) applyURL(j notify.DigestJob) string {
 // viewAllURL is where the "+ N more" tail leads: the digest's own in-app
 // notification, whose page lists every job this digest matched. A digest whose
 // recording failed carries no id and falls back to the notification section.
+//
+// A digest that counts more than it carries (notify.Digest.Overflowed) links to
+// the saved search's live results instead, since its own page lists only what it
+// carries. The query is the user's own string and may run to thousands of
+// characters, while the tail is reserved out of MaxMessageLen before any job is
+// listed — so a query longer than maxSearchTailLen falls back to the saved
+// searches page, one click from the same results.
 func (n *Notifier) viewAllURL(d notify.Digest) string {
+	if d.Overflowed() {
+		if u := n.jobBaseURL + d.SearchPath("telegram-bot"); UTF16Len(u) <= maxSearchTailLen {
+			return u
+		}
+		return n.jobBaseURL + "/my/notifications/searches"
+	}
 	if d.NotificationID == 0 {
 		return n.jobBaseURL + "/my/notifications"
 	}
 	return n.jobBaseURL + "/my/notifications/" + strconv.FormatInt(d.NotificationID, 10) + "/jobs?utm_source=telegram-bot"
 }
 
+// maxSearchTailLen bounds the saved-search URL a tail may carry, leaving most of
+// MaxMessageLen for the jobs themselves.
+const maxSearchTailLen = 1024
+
 // moreLine is the "+ N more" overflow tail linking to where the omitted jobs are,
-// or "" when nothing is omitted. The URL is our own, so it needs no escaping.
+// or "" when nothing is omitted. The URL is escaped because a saved search's
+// query, which an overflowed digest links to, is the user's own string.
 func moreLine(more int, viewAllURL string) string {
 	if more <= 0 {
 		return ""
 	}
-	return fmt.Sprintf("\n<a href=%q>+ %d more</a>", viewAllURL, more)
+	return fmt.Sprintf("\n<a href=\"%s\">+ %d more</a>", html.EscapeString(viewAllURL), more)
 }
 
 // UTF16Len counts s in UTF-16 code units — the unit Telegram measures a message

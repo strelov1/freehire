@@ -96,6 +96,17 @@ ON CONFLICT (subscription_id, job_id) DO NOTHING;
 --
 -- A LATERAL per subscription, rather than a window function, because FOR UPDATE cannot
 -- be used with window functions — and the row lock is what makes concurrent passes safe.
+--
+-- NEWEST first within the subscription, and matched_at is returned so the caller knows
+-- where the claim stopped. A digest carries what fits and COUNTS the rest (see
+-- CountCoveredMatches / MarkCoveredMatchesNotified), so what fits has to be the freshest.
+-- This used to be oldest first, and a `daily` subscription matching more than one digest
+-- holds a day never caught up: it mailed the oldest 200 every morning, three weeks behind
+-- (subscription 256 on 2026-10-22 was being sent matches from 2026-10-01).
+--
+-- Stale matches are not filtered here: ExpireStaleSubscriptionMatches runs first in every
+-- pass and takes them out of the pending set, so the predicate stays the plain pending one
+-- the partial index subscription_matches_pending_matched_idx is built on.
 WITH claimable AS (
     SELECT m.subscription_id, m.job_id
     FROM subscriptions s
@@ -105,11 +116,10 @@ WITH claimable AS (
         WHERE mm.subscription_id = s.id
           AND mm.notified_at IS NULL
           AND mm.failed_at IS NULL
+          AND mm.expired_at IS NULL
           AND (mm.claimed_at IS NULL
                OR mm.claimed_at < now() - make_interval(secs => sqlc.arg(lease_seconds)::int))
-        -- Oldest first WITHIN the subscription: a digest that splits across passes sends
-        -- the matches in the order they were found.
-        ORDER BY mm.matched_at, mm.job_id
+        ORDER BY mm.matched_at DESC, mm.job_id DESC
         LIMIT sqlc.arg(per_subscription)
         FOR UPDATE SKIP LOCKED
     ) m
@@ -122,13 +132,84 @@ UPDATE subscription_matches m
 SET claimed_at = now()
 FROM claimable c
 WHERE m.subscription_id = c.subscription_id AND m.job_id = c.job_id
-RETURNING m.subscription_id, m.job_id;
+RETURNING m.subscription_id, m.job_id, m.matched_at;
+
+-- name: ExpireStaleSubscriptionMatches :execrows
+-- Take up to batch_size STALE matches out of the pending set by stamping expired_at: a
+-- match older than the freshness window, or one whose job has closed. A stale match is
+-- never delivered — nobody wants a three-week-old posting announced as new, least of all
+-- one that has already closed — and it is neither notified (nobody was told) nor failed
+-- (nothing was attempted), so it gets a terminal state of its own (migration 0192).
+--
+-- This is what bounds the pending set for a subscription that cannot be delivered at all
+-- (push with no device, an unlinked Telegram chat, a disabled webhook): its matches used
+-- to wait forever, and a user who relinked would have been sent the OLDEST 200 of them.
+--
+-- Bounded per statement so the first pass after deploy — a backlog of tens of thousands —
+-- is a series of short statements rather than one long one holding row locks on a busy
+-- host; the caller repeats it until a batch comes back short. A match currently leased by
+-- another pass is left to that pass, and SKIP LOCKED steps over one being claimed now.
+WITH stale AS (
+    SELECT m.subscription_id, m.job_id
+    FROM subscription_matches m
+    JOIN jobs j ON j.id = m.job_id
+    WHERE m.notified_at IS NULL
+      AND m.failed_at IS NULL
+      AND m.expired_at IS NULL
+      AND (m.claimed_at IS NULL
+           OR m.claimed_at < now() - make_interval(secs => sqlc.arg(lease_seconds)::int))
+      AND (m.matched_at < now() - make_interval(secs => sqlc.arg(freshness_seconds)::int)
+           OR j.closed_at IS NOT NULL)
+    LIMIT sqlc.arg(batch_size)
+    FOR UPDATE OF m SKIP LOCKED
+)
+UPDATE subscription_matches m
+SET expired_at = now()
+FROM stale s
+WHERE m.subscription_id = s.subscription_id AND m.job_id = s.job_id;
+
+-- name: CountCoveredMatches :one
+-- How many pending matches a digest will COVER without carrying: the subscription's
+-- unleased pending matches strictly older than the oldest one the claim took. The claim
+-- reads newest first, so these are exactly the ones that did not fit; the digest counts
+-- them in its Total and its "and N more" tail, and MarkCoveredMatchesNotified stamps the
+-- same set once the digest has gone out. The two statements share this predicate and
+-- must keep sharing it, or the digest would announce one number and retire another.
+--
+-- (matched_at, job_id) as a row comparison because one RecordSubscriptionMatches batch
+-- stamps every row it writes with the same now(): matched_at alone ties constantly.
+SELECT count(*)
+FROM subscription_matches
+WHERE subscription_id = sqlc.arg(subscription_id)
+  AND notified_at IS NULL
+  AND failed_at IS NULL
+  AND expired_at IS NULL
+  AND (claimed_at IS NULL
+       OR claimed_at < now() - make_interval(secs => sqlc.arg(lease_seconds)::int))
+  AND (matched_at, job_id) < (sqlc.arg(before_matched_at)::timestamptz, sqlc.arg(before_job_id)::bigint);
+
+-- name: MarkCoveredMatchesNotified :execrows
+-- Stamp notified_at on the matches a delivered digest counted without carrying — the set
+-- CountCoveredMatches measured before the send, under the same predicate. notified_at is
+-- honest here: the digest the person received announced these postings in its count and
+-- linked to the saved search that lists them. Re-queuing them instead is what kept a
+-- busy `daily` subscription mailing the same backlog, oldest first, day after day.
+UPDATE subscription_matches
+SET notified_at = now()
+WHERE subscription_id = sqlc.arg(subscription_id)
+  AND notified_at IS NULL
+  AND failed_at IS NULL
+  AND expired_at IS NULL
+  AND (claimed_at IS NULL
+       OR claimed_at < now() - make_interval(secs => sqlc.arg(lease_seconds)::int))
+  AND (matched_at, job_id) < (sqlc.arg(before_matched_at)::timestamptz, sqlc.arg(before_job_id)::bigint);
 
 -- name: GetSubscriptionForDelivery :one
 -- The delivery context for one subscription: channel + destination, the saved
 -- search id (which subscriptions of the same search share, and the notification
 -- centre's dedup key is built on — see notify.digestDedupKey), the saved
--- search name (for the digest heading), the user's account email (the email
+-- search name (for the digest heading) and query (where a digest too large to carry
+-- whole sends its "and N more" tail), the user's account email (the email
 -- channel's live recipient), the user's linked Telegram chat (NULL when unlinked
 -- → the worker soft-skips telegram delivery rather than failing it), whether
 -- the user has at least one registered push device (the push channel's live
@@ -140,6 +221,7 @@ RETURNING m.subscription_id, m.job_id;
 -- internal/application/deliverywindow before a digest is sent.
 SELECT s.id, s.user_id, s.saved_search_id, s.channel, s.destination, s.last_digest_sent_at,
        ss.name AS saved_search_name,
+       ss.query AS saved_search_query,
        u.email AS account_email,
        u.timezone AS timezone,
        tl.chat_id AS telegram_chat_id,

@@ -186,16 +186,36 @@ Telegram, and mobile push), each with its own small `Notifier`/`Router` pair:
   (10) is what a channel message itemizes; the "and N more" tail is the difference. All
   three engines carry both, and `ListLimit` is a single exported constant shared by all of
   them. They were one knob until 2026-08-21, which meant lowering the email's list length
-  silently truncated the on-site page the email's own "view all" pointed at. Beyond
-  `SnapshotCap` the excess is RELEASED back to the pending queue, never stamped delivered:
-  an item marked delivered while appearing in no message is gone for good.
-- **`Digest.Total` is `len(Jobs)`, and that is load-bearing.** A pass can claim more matches for
-  one subscription than `SnapshotCap` allows; `deliverOne` calls `deferOverflow` to release the
-  excess back to the pending queue BEFORE building the digest, so a later pass delivers it. Do
-  not go back to truncating in `buildDigest` — that stamped the overflow notified while it
-  appeared in no message and in no snapshot, dropping those postings from the alert for good. A
-  claimed id whose job row was pruned is deliberately NOT deferred; it is stamped notified, or
-  it would be re-claimed every pass forever.
+  silently truncated the on-site page the email's own "view all" pointed at.
+- **A subscription digest carries the NEWEST matches and COUNTS the rest — it never
+  re-queues them.** The claim takes `SnapshotCap` per subscription, newest first. When it
+  comes back full, `CountCoveredMatches` measures what is still pending behind its oldest
+  row, the digest's `Total` includes that count, and once the digest is delivered
+  `MarkCoveredMatchesNotified` stamps the same set (same predicate, same `(matched_at,
+  job_id)` cutoff — `matched_at` alone ties across a whole match batch). Such a digest is
+  `Overflowed()`, and its "and N more" tail links to the saved search's live results
+  (`/jobs?<query>`), because the notification's own page lists only the snapshot it
+  carries. The excess used to be RELEASED back to pending and the claim read oldest first,
+  so a `daily` subscription matching 245–1000 jobs a day sent one digest a day of its 200
+  OLDEST matches and never caught up — measured on prod 2026-10-22: 33k pending on daily
+  email subscriptions, 10.5k older than 7 days, subscription 256 being mailed matches
+  from three weeks earlier. A failed send retires nothing it covered; a failed count makes
+  the digest announce only what it carries and retire only that. A claimed id whose job
+  row was pruned stays in the claim and is stamped notified, or it would be re-claimed
+  every pass forever.
+- **A match goes STALE, undelivered, after `Config.FreshnessWindow` (3 days) or once its
+  job closes.** `ExpireStaleSubscriptionMatches` runs first in every delivery stage, in
+  bounded batches until one comes back short, and stamps `expired_at` (migration 0192) —
+  a terminal state of its own, because a stale match was neither shown to anyone
+  (`notified_at`) nor attempted (`failed_at`, the dead-letter queue an operator reads), and
+  deleting it would let the match stage record it again as new. This is what bounds the
+  backlog of a subscription nobody can receive — push with no device, an unlinked
+  Telegram chat, a disabled webhook: on 2026-10-22 those held 27k, 7.6k and 4.6k pending
+  matches reaching back to 2026-09-02, roughly half for closed jobs, all of which a
+  relinked user would have been sent oldest first. It also bounds
+  `NotifyBacklogMetrics`' oldest-pending age at the window: an age sitting AT it is a
+  subscription nobody can reach, one above it means expiry has stopped. A failed expiry
+  fails the delivery stage rather than claiming around it.
 - **A subscription digest is recorded BEFORE it is sent** (`RecordNotification` is `:one`), so
   the message can link to its own `/my/notifications/<id>/jobs`. A failed send withdraws the row
   (`DeleteNotification`) — best-effort: if that delete also fails it is logged, and one history
@@ -262,4 +282,5 @@ Bot API — check which one you're in.
 
 - Delivery is cron-driven and run-once; there is no retry queue. A channel outage means that
   pass's digests are skipped, and the ledger redelivers them on the next pass only if they
-  were never marked notified.
+  were never marked notified — and only while they are fresh: an outage longer than the
+  freshness window loses what it held back, by design.

@@ -159,7 +159,14 @@ func (n *Notifier) manageURL() string { return n.jobBaseURL + "/my/notifications
 // notification, whose page lists every job this digest matched. A digest whose
 // recording failed carries no id, and the tail falls back to the notification
 // section — a weaker destination, but never a broken one.
+//
+// A digest that counts more than it carries (notify.Digest.Overflowed) links to
+// the saved search's live results instead: its own page lists only what it
+// carries, which would be fewer jobs than the mail just announced.
 func (n *Notifier) viewAllURL(d notify.Digest) string {
+	if d.Overflowed() {
+		return n.jobBaseURL + d.SearchPath("email")
+	}
 	if d.NotificationID == 0 {
 		return n.manageURL()
 	}

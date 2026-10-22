@@ -66,7 +66,8 @@ func (n *PushNotifier) Send(ctx context.Context, _ string, dest string, d Digest
 // a body summarizing the match count, and — only when the digest matched
 // exactly one job — that job's slug (empty otherwise). This is the single
 // source of the digest's push copy; the notification-center recording in
-// deliverOne reuses it verbatim rather than re-deriving the same wording.
+// deliverOne reuses it rather than re-deriving the same wording, adding only
+// the note an Overflowed digest's page needs.
 //
 // The title names the saved search that fired: it is what distinguishes one
 // digest from another, and the product name this slot used to carry said

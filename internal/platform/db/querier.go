@@ -645,6 +645,17 @@ type Querier interface {
 	//
 	// A LATERAL per subscription, rather than a window function, because FOR UPDATE cannot
 	// be used with window functions — and the row lock is what makes concurrent passes safe.
+	//
+	// NEWEST first within the subscription, and matched_at is returned so the caller knows
+	// where the claim stopped. A digest carries what fits and COUNTS the rest (see
+	// CountCoveredMatches / MarkCoveredMatchesNotified), so what fits has to be the freshest.
+	// This used to be oldest first, and a `daily` subscription matching more than one digest
+	// holds a day never caught up: it mailed the oldest 200 every morning, three weeks behind
+	// (subscription 256 on 2026-10-22 was being sent matches from 2026-10-01).
+	//
+	// Stale matches are not filtered here: ExpireStaleSubscriptionMatches runs first in every
+	// pass and takes them out of the pending set, so the predicate stays the plain pending one
+	// the partial index subscription_matches_pending_matched_idx is built on.
 	ClaimSubscriptionMatches(ctx context.Context, arg ClaimSubscriptionMatchesParams) ([]ClaimSubscriptionMatchesRow, error)
 	// Claim a batch of pending posts by stamping claimed_at. SKIP LOCKED lets
 	// concurrent workers take disjoint rows; the lease predicate reclaims posts whose
@@ -1160,6 +1171,16 @@ type Querier interface {
 	// from the job ledger and then ADDED by the caller: the budget belongs to the engine,
 	// and a company page costs it exactly what a job page does.
 	CountCompanySearchPingsSince(ctx context.Context, arg CountCompanySearchPingsSinceParams) (int64, error)
+	// How many pending matches a digest will COVER without carrying: the subscription's
+	// unleased pending matches strictly older than the oldest one the claim took. The claim
+	// reads newest first, so these are exactly the ones that did not fit; the digest counts
+	// them in its Total and its "and N more" tail, and MarkCoveredMatchesNotified stamps the
+	// same set once the digest has gone out. The two statements share this predicate and
+	// must keep sharing it, or the digest would announce one number and retire another.
+	//
+	// (matched_at, job_id) as a row comparison because one RecordSubscriptionMatches batch
+	// stamps every row it writes with the same now(): matched_at alone ties constantly.
+	CountCoveredMatches(ctx context.Context, arg CountCoveredMatchesParams) (int64, error)
 	// Total live messages for the caller under the same optional filters as ListEmails, plus
 	// how many of them the `other` default omitted.
 	//
@@ -2104,6 +2125,21 @@ type Querier interface {
 	// and the body_refresh_* arm withholds one whose stored body has gone stale so an employer's
 	// edit is re-read; see ExistingExternalIDs for both.
 	ExistingExternalIDsByBoard(ctx context.Context, arg ExistingExternalIDsByBoardParams) ([]ExistingExternalIDsByBoardRow, error)
+	// Take up to batch_size STALE matches out of the pending set by stamping expired_at: a
+	// match older than the freshness window, or one whose job has closed. A stale match is
+	// never delivered — nobody wants a three-week-old posting announced as new, least of all
+	// one that has already closed — and it is neither notified (nobody was told) nor failed
+	// (nothing was attempted), so it gets a terminal state of its own (migration 0192).
+	//
+	// This is what bounds the pending set for a subscription that cannot be delivered at all
+	// (push with no device, an unlinked Telegram chat, a disabled webhook): its matches used
+	// to wait forever, and a user who relinked would have been sent the OLDEST 200 of them.
+	//
+	// Bounded per statement so the first pass after deploy — a backlog of tens of thousands —
+	// is a series of short statements rather than one long one holding row locks on a busy
+	// host; the caller repeats it until a batch comes back short. A match currently leased by
+	// another pass is left to that pass, and SKIP LOCKED steps over one being claimed now.
+	ExpireStaleSubscriptionMatches(ctx context.Context, arg ExpireStaleSubscriptionMatchesParams) (int64, error)
 	// Record a failed attempt: bump attempts, store the error, and dead-letter (set
 	// failed_at) once the applicable bound is reached. The lease (claimed_at) is
 	// intentionally left in place — its expiry gates the retry to a later run and
@@ -2724,7 +2760,8 @@ type Querier interface {
 	// The delivery context for one subscription: channel + destination, the saved
 	// search id (which subscriptions of the same search share, and the notification
 	// centre's dedup key is built on — see notify.digestDedupKey), the saved
-	// search name (for the digest heading), the user's account email (the email
+	// search name (for the digest heading) and query (where a digest too large to carry
+	// whole sends its "and N more" tail), the user's account email (the email
 	// channel's live recipient), the user's linked Telegram chat (NULL when unlinked
 	// → the worker soft-skips telegram delivery rather than failing it), whether
 	// the user has at least one registered push device (the push channel's live
@@ -4916,6 +4953,12 @@ type Querier interface {
 	// so it is never looked up again. Touches nothing else: an unmatched company's
 	// tagline/company_info stay exactly as another source may have left them.
 	MarkCompanyWikipediaChecked(ctx context.Context, slug string) error
+	// Stamp notified_at on the matches a delivered digest counted without carrying — the set
+	// CountCoveredMatches measured before the send, under the same predicate. notified_at is
+	// honest here: the digest the person received announced these postings in its count and
+	// linked to the saved search that lists them. Re-queuing them instead is what kept a
+	// busy `daily` subscription mailing the same backlog, oldest first, day after day.
+	MarkCoveredMatchesNotified(ctx context.Context, arg MarkCoveredMatchesNotifiedParams) (int64, error)
 	// Stamp the subscription's last daily-digest send instant, so
 	// internal/application/deliverywindow.DigestDue reads "already sent today" on any later pass
 	// within the same local calendar day. Only called after a successful `daily`-mode
@@ -5173,6 +5216,13 @@ type Querier interface {
 	// because a starved subscription produces no failure: `notify` reported
 	// `delivered=1 failed=0` for weeks while 1.14M matches sat undelivered and one
 	// subscription's had never been claimed at all (2026-09-04, see docs/agents/notifications.md).
+	//
+	// Stale matches (expired_at, migration 0192) are not pending, so the age is now bounded by
+	// the notify worker's freshness window (3 days): a subscription that cannot be delivered
+	// at all — push with no device, an unlinked Telegram chat — holds matches up to that age
+	// and then lets them go, where it used to report a 50-day-old match nobody would ever
+	// receive. An age sitting AT the window is therefore a subscription nobody can reach, and
+	// one well above it would mean the expiry pass itself has stopped.
 	//
 	// Both COALESCE to 0 rather than staying NULL: a drained backlog is a real measurement
 	// that must publish an explicit zero, because an absent series is how the consuming alert

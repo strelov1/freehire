@@ -219,6 +219,38 @@ func TestNotifier_RenderTailFallsBackWithoutANotificationID(t *testing.T) {
 	}
 }
 
+// A digest that counts more than it carries links its tail to the saved search's
+// live results, escaped: the query is the user's own string.
+func TestNotifier_OverflowedTailLinksToTheSavedSearch(t *testing.T) {
+	n := NewNotifier(NewClient("t"), "https://freehire.me")
+	d := tgDigest(67, 42)
+	d.Total = 600
+	d.SearchQuery = `seniority=senior&q="go"`
+	got := n.render(d)
+
+	if want := `<a href="https://freehire.me/jobs?seniority=senior&amp;q=&#34;go&#34;&amp;utm_source=telegram-bot">+ 590 more</a>`; !strings.Contains(got, want) {
+		t.Errorf("tail missing %q in: %q", want, got)
+	}
+}
+
+// A saved-search query may run to thousands of characters, and the tail is reserved
+// out of Telegram's 4096 before any job is listed. A query too long to fit sensibly
+// falls back to the saved searches page, which opens the same results.
+func TestNotifier_OverflowedTailWithAHugeQueryFallsBack(t *testing.T) {
+	n := NewNotifier(NewClient("t"), "https://freehire.me")
+	d := tgDigest(67, 42)
+	d.Total = 600
+	d.SearchQuery = "skills=" + strings.Repeat("x", 3900)
+	got := n.render(d)
+
+	if want := `<a href="https://freehire.me/my/notifications/searches">+ 590 more</a>`; !strings.Contains(got, want) {
+		t.Errorf("tail missing %q in: %q", want, got)
+	}
+	if shown := strings.Count(got, "• "); shown != notify.ListLimit {
+		t.Errorf("listed %d jobs, want %d", shown, notify.ListLimit)
+	}
+}
+
 // Every 403 the Bot API answers a send with means the same thing — this chat will
 // not take messages again — and the engines act on it by forgetting the link. The
 // status code is the signal, deliberately not the description: that text is prose

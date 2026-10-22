@@ -323,6 +323,13 @@ ORDER BY b.provider;
 -- `delivered=1 failed=0` for weeks while 1.14M matches sat undelivered and one
 -- subscription's had never been claimed at all (2026-09-04, see docs/agents/notifications.md).
 --
+-- Stale matches (expired_at, migration 0192) are not pending, so the age is now bounded by
+-- the notify worker's freshness window (3 days): a subscription that cannot be delivered
+-- at all — push with no device, an unlinked Telegram chat — holds matches up to that age
+-- and then lets them go, where it used to report a 50-day-old match nobody would ever
+-- receive. An age sitting AT the window is therefore a subscription nobody can reach, and
+-- one well above it would mean the expiry pass itself has stopped.
+--
 -- Both COALESCE to 0 rather than staying NULL: a drained backlog is a real measurement
 -- that must publish an explicit zero, because an absent series is how the consuming alert
 -- rules recognize a dead exporter.
@@ -331,7 +338,7 @@ SELECT
     COALESCE(EXTRACT(EPOCH FROM now() - min(m.matched_at)), 0)::float8 AS oldest_age_seconds
 FROM subscription_matches m
 JOIN subscriptions s ON s.id = m.subscription_id
-WHERE m.notified_at IS NULL AND m.failed_at IS NULL AND s.active;
+WHERE m.notified_at IS NULL AND m.failed_at IS NULL AND m.expired_at IS NULL AND s.active;
 
 -- name: IngestDuplicationMetrics :many
 -- How many rows each source has just written, and how many DISTINCT postings those rows

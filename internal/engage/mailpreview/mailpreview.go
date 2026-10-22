@@ -249,12 +249,14 @@ func directApplicationSample(baseURL string) (Sample, error) {
 
 // digestSample deliberately mixes jobs with and without a salary, and sets Total
 // above the number of jobs listed, so the preview shows both the sparse row and the
-// overflow button rather than only the tidy case.
+// overflow button rather than only the tidy case. A digest counting more than it
+// carries links that button to the saved search's live results.
 func digestSample(baseURL string) (Sample, error) {
 	return sample("subscription-digest", "Alerts / Subscription digest", func(c *capture) error {
 		d := notify.Digest{
 			UserID:          previewUserID,
 			SavedSearchName: "Senior Go, remote in Europe",
+			SearchQuery:     "q=go&seniority=senior&remote=europe",
 			Total:           14,
 			Jobs: []notify.DigestJob{
 				{Title: "Senior Backend Engineer (Go)", Company: "Fingerprint", Slug: "senior-backend-engineer-go-fingerprint",

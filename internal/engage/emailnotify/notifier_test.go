@@ -218,3 +218,25 @@ func TestNotifier_TailFallsBackWithoutANotificationID(t *testing.T) {
 		t.Errorf("the tail must still render without an id: %s", got.text)
 	}
 }
+
+// A digest that counts more than it carries cannot send the reader to its own
+// page — that page lists only the recorded snapshot. The tail leads to the saved
+// search's live results instead.
+func TestNotifier_OverflowedTailLinksToTheSavedSearch(t *testing.T) {
+	n := NewNotifier(&fakeSender{}, "notifications@freehire.me", "https://freehire.me", testLinks())
+	d := bigDigest(67, 42)
+	d.Total = 600
+	d.SearchQuery = "seniority=senior"
+	got := n.render(d, testUnsubscribeURL(t))
+
+	const want = "https://freehire.me/jobs?seniority=senior&utm_source=email"
+	if !strings.Contains(got.text, "+ 590 more at "+want) {
+		t.Errorf("text tail does not link to %q: %s", want, got.text)
+	}
+	if !strings.Contains(got.html, "https://freehire.me/jobs?seniority=senior&amp;utm_source=email") {
+		t.Errorf("HTML tail does not link to the saved search: %s", got.html)
+	}
+	if strings.Contains(got.html, "/my/notifications/42/jobs") {
+		t.Errorf("an overflowed digest must not link to its snapshot page: %s", got.html)
+	}
+}
