@@ -163,12 +163,15 @@ func TestExpireTakesStaleMatchesOutOfThePendingSet(t *testing.T) {
 	}); err != nil || n != 1 {
 		t.Fatalf("second expire = %d, %v; want the released one", n, err)
 	}
-	m, err := queries.NotifyBacklogMetrics(ctx)
+	rows, err := queries.NotifyBacklogMetrics(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if m.OldestAgeSeconds > (72 * time.Hour).Seconds() {
-		t.Errorf("oldest pending age = %.0fs, want within the freshness window", m.OldestAgeSeconds)
+	for _, m := range rows {
+		if m.OldestAgeSeconds > (72 * time.Hour).Seconds() {
+			t.Errorf("oldest pending age (deliverable=%v) = %.0fs, want within the freshness window",
+				m.Deliverable, m.OldestAgeSeconds)
+		}
 	}
 }
 

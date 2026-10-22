@@ -28,7 +28,7 @@ type metricsQueries interface {
 	AppleRevocationJobMetrics(context.Context) (db.AppleRevocationJobMetricsRow, error)
 	NewestOpenJobCreatedAt(context.Context) (pgtype.Timestamptz, error)
 	ProviderIngestHealth(context.Context) ([]db.ProviderIngestHealthRow, error)
-	NotifyBacklogMetrics(context.Context) (db.NotifyBacklogMetricsRow, error)
+	NotifyBacklogMetrics(context.Context) ([]db.NotifyBacklogMetricsRow, error)
 	IngestDuplicationMetrics(context.Context) ([]db.IngestDuplicationMetricsRow, error)
 }
 
@@ -82,9 +82,20 @@ func collect(ctx context.Context, q metricsQueries) (snapshot, error) {
 		return snapshot{}, err
 	}
 
-	notifyBacklog, err := q.NotifyBacklogMetrics(ctx)
+	notifyRows, err := q.NotifyBacklogMetrics(ctx)
 	if err != nil {
 		return snapshot{}, fmt.Errorf("notify backlog metrics: %w", err)
+	}
+	// A state with nothing pending has no row and stays the zero value, which render
+	// still publishes.
+	var notifyDeliverable, notifyUndeliverable notifyBacklog
+	for _, r := range notifyRows {
+		b := notifyBacklog{pendingSubscriptions: r.PendingSubscriptions, oldestAgeSeconds: r.OldestAgeSeconds}
+		if r.Deliverable {
+			notifyDeliverable = b
+		} else {
+			notifyUndeliverable = b
+		}
 	}
 
 	health, err := q.ProviderIngestHealth(ctx)
@@ -157,11 +168,11 @@ func collect(ctx context.Context, q metricsQueries) (snapshot, error) {
 			// identities stranded in revocation_pending.
 			{name: "apple_revocation_jobs", depth: appleRevocations.Depth, deadLetters: &appleRevocations.DeadLetters, oldestAgeSeconds: appleRevocations.OldestAgeSeconds},
 		},
-		notifyPendingSubscriptions: notifyBacklog.PendingSubscriptions,
-		notifyOldestAgeSeconds:     notifyBacklog.OldestAgeSeconds,
-		newestJob:                  newestJob,
-		providers:                  providers,
-		ingest:                     ingest,
+		notifyDeliverable:   notifyDeliverable,
+		notifyUndeliverable: notifyUndeliverable,
+		newestJob:           newestJob,
+		providers:           providers,
+		ingest:              ingest,
 	}, nil
 }
 

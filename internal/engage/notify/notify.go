@@ -354,6 +354,10 @@ func (r *Runner) Run(ctx context.Context) (Stats, error) {
 // soft-skipped, same as an unlinked Telegram chat); webhook resolves the
 // account's configured destination, deliverable only when one exists and is
 // enabled; any other channel uses the stored destination.
+//
+// The deliverability half of this rule has a SQL twin: the `deliverable` CASE in
+// NotifyBacklogMetrics (internal/platform/db/queries/metrics.sql), which splits the
+// backlog metric the same way. Change one and change the other.
 func recipient(info db.GetSubscriptionForDeliveryRow) (string, bool) {
 	switch info.Channel {
 	case ChannelTelegram:

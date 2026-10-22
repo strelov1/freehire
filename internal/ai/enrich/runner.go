@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"sync/atomic"
 	"time"
 
 	"github.com/strelov1/freehire/internal/platform/outbox"
@@ -83,11 +84,24 @@ type Stats struct {
 // its backlog is two orders of magnitude bigger.
 const reapLimit = 20_000
 
+// Progress counts, while a run is still draining, the jobs whose enrichment this
+// process has WRITTEN. Stats only exists once Run returns, and a drain can run for
+// days, so a caller that must say "still working" mid-run (cmd/enrich publishes it
+// as freehire_enrich_completed_total) reads this instead. Safe for concurrent use.
+type Progress struct {
+	completed atomic.Int64
+}
+
+// Completed reports how many enrichments have been written so far.
+func (p *Progress) Completed() int64 { return p.completed.Load() }
+
 // Runner drives the enrichment process: enqueue pending jobs, then drain claimed
 // batches, enriching and writing back each entry.
 type Runner struct {
 	Provider Provider
 	Store    Store
+	// Progress, when set, is advanced once per successfully written enrichment.
+	Progress *Progress
 }
 
 // Run enqueues pending jobs and drains the queue until no claimable entries remain.
@@ -110,7 +124,7 @@ func (r Runner) Run(ctx context.Context, opt RunOptions) (Stats, error) {
 	}
 	log.Printf("enrich: enqueued %d pending, draining (concurrency=%d)", enqueued, opt.Concurrency)
 
-	rn := &run{provider: r.Provider, store: r.Store, opt: opt}
+	rn := &run{provider: r.Provider, store: r.Store, opt: opt, progress: r.Progress}
 	s, err := outbox.RunPool(ctx, r.Store, outbox.RunOptions{
 		// The wave is sized to the concurrency, then drained in parallel: each entry
 		// starts processing at once, so its lease window stays ≈ one LLM call.
@@ -136,6 +150,7 @@ type run struct {
 	provider Provider
 	store    Store
 	opt      RunOptions
+	progress *Progress
 }
 
 // process handles one claimed entry and reports what happened; internal/platform/outbox's
@@ -177,6 +192,9 @@ func (rn *run) process(ctx context.Context, entry Claimed) outbox.Outcome {
 		outcome := rn.fail(ctx, entry, fmt.Errorf("write back: %w", err))
 		log.Printf("enrich: job=%d write-back failed: %v", entry.JobID, err)
 		return outcome
+	}
+	if rn.progress != nil {
+		rn.progress.completed.Add(1)
 	}
 	log.Printf("enrich: job=%d ok in %s", entry.JobID, time.Since(start).Round(time.Millisecond))
 	return outbox.Succeeded

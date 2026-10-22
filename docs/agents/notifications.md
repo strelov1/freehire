@@ -213,9 +213,11 @@ Telegram, and mobile push), each with its own small `Notifier`/`Router` pair:
   Telegram chat, a disabled webhook: on 2026-10-22 those held 27k, 7.6k and 4.6k pending
   matches reaching back to 2026-09-02, roughly half for closed jobs, all of which a
   relinked user would have been sent oldest first. It also bounds
-  `NotifyBacklogMetrics`' oldest-pending age at the window: an age sitting AT it is a
-  subscription nobody can reach, one above it means expiry has stopped. A failed expiry
-  fails the delivery stage rather than claiming around it.
+  `NotifyBacklogMetrics`' oldest-pending age at the window: an age above it means expiry
+  has stopped. The metric is split by a `deliverable` label computed by the SQL twin of
+  `recipient()` — the undeliverable half sits AT the window by construction, so only the
+  deliverable half is worth alerting on. Change the rule in one place and change it in the
+  other. A failed expiry fails the delivery stage rather than claiming around it.
 - **A subscription digest is recorded BEFORE it is sent** (`RecordNotification` is `:one`), so
   the message can link to its own `/my/notifications/<id>/jobs`. A failed send withdraws the row
   (`DeleteNotification`) — best-effort: if that delete also fails it is logged, and one history

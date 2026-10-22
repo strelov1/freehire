@@ -8,6 +8,7 @@ package main
 import (
 	"context"
 	"log"
+	"os"
 
 	"github.com/strelov1/freehire/internal/ai/enrich"
 	"github.com/strelov1/freehire/internal/platform/config"
@@ -47,7 +48,20 @@ func run() int {
 
 	provider := enrich.NewLangChainProvider(client)
 
-	runner := enrich.Runner{Provider: provider, Store: newDBStore(pool)}
+	// The drain runs for days and the per-run metrics only land on exit, so the
+	// throughput counter is republished every minute while it works, and once more
+	// at exit so the final value is not lost.
+	progress := &enrich.Progress{}
+	promDir := os.Getenv(worker.PromTextfileDirEnv)
+	stopHeartbeat := worker.Heartbeat(progressInterval, func() {
+		publishProgress(promDir, progress.Completed())
+	})
+	defer func() {
+		stopHeartbeat()
+		publishProgress(promDir, progress.Completed())
+	}()
+
+	runner := enrich.Runner{Provider: provider, Store: newDBStore(pool), Progress: progress}
 
 	stats, err := runner.Run(ctx, enrich.RunOptions{
 		TargetVersion:     enrich.Version,

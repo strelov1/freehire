@@ -312,33 +312,60 @@ WHERE b.status IN ('pending', 'active')
 GROUP BY b.provider
 ORDER BY b.provider;
 
--- name: NotifyBacklogMetrics :one
--- The subscription-digest backlog: how many active subscriptions have something
--- undelivered, and how old the oldest undelivered match is.
+-- name: NotifyBacklogMetrics :many
+-- The subscription-digest backlog, split by whether the subscription can be delivered at
+-- all: how many active subscriptions have something undelivered, and how old the oldest
+-- undelivered match is, per value of `deliverable`.
 --
 -- The age is the signal that matters. A pass runs every five minutes, so in steady state
--- the oldest pending match is minutes old. An age that climbs without bound means some
--- subscription is never being served — which is not visible in the worker's own log,
--- because a starved subscription produces no failure: `notify` reported
--- `delivered=1 failed=0` for weeks while 1.14M matches sat undelivered and one
--- subscription's had never been claimed at all (2026-09-04, see docs/agents/notifications.md).
+-- the oldest pending match of a deliverable instant subscription is minutes old (a daily
+-- digest's, up to a day). An age that climbs without bound means some subscription is never
+-- being served — which is not visible in the worker's own log, because a starved
+-- subscription produces no failure: `notify` reported `delivered=1 failed=0` for weeks while
+-- 1.14M matches sat undelivered and one subscription's had never been claimed at all
+-- (2026-09-04, see docs/agents/notifications.md).
 --
--- Stale matches (expired_at, migration 0193) are not pending, so the age is now bounded by
--- the notify worker's freshness window (3 days): a subscription that cannot be delivered
--- at all — push with no device, an unlinked Telegram chat — holds matches up to that age
--- and then lets them go, where it used to report a 50-day-old match nobody would ever
--- receive. An age sitting AT the window is therefore a subscription nobody can reach, and
--- one well above it would mean the expiry pass itself has stopped.
+-- Stale matches (expired_at, migration 0193) are not pending, so the age is bounded by the
+-- notify worker's freshness window (3 days). A subscription that cannot be delivered at all
+-- — push with no device, an unlinked Telegram chat, a disabled webhook — holds matches up to
+-- that age and then lets them go, so before the split the one age sat at the window for
+-- good and said nothing. `deliverable = false` is that population; the alertable age is
+-- the `true` one.
 --
--- Both COALESCE to 0 rather than staying NULL: a drained backlog is a real measurement
--- that must publish an explicit zero, because an absent series is how the consuming alert
--- rules recognize a dead exporter.
+-- The CASE is the SQL twin of recipient() in internal/engage/notify/notify.go, over the
+-- same live columns GetSubscriptionForDelivery reads (queries/subscriptions.sql). Change
+-- one and change the other: a metric that disagrees with the sender about who is reachable
+-- would page on a subscription the sender correctly skips, or hide one it fails.
+--
+-- A deliverability state with no pending subscription yields no row; cmd/queue-metrics
+-- publishes it as an explicit zero, because an absent series is how the consuming alert
+-- rules recognize a dead exporter. Aggregating matches per subscription first keeps the
+-- per-match work on subscription_matches_pending_matched_idx; measured on prod 2026-10-22
+-- (~40k pending matches, 64 pending subscriptions): 34ms.
+WITH pending AS (
+    SELECT m.subscription_id, min(m.matched_at) AS oldest_matched_at
+    FROM subscription_matches m
+    WHERE m.notified_at IS NULL AND m.failed_at IS NULL AND m.expired_at IS NULL
+    GROUP BY m.subscription_id
+)
 SELECT
-    COALESCE(count(DISTINCT m.subscription_id), 0)::bigint AS pending_subscriptions,
-    COALESCE(EXTRACT(EPOCH FROM now() - min(m.matched_at)), 0)::float8 AS oldest_age_seconds
-FROM subscription_matches m
-JOIN subscriptions s ON s.id = m.subscription_id
-WHERE m.notified_at IS NULL AND m.failed_at IS NULL AND m.expired_at IS NULL AND s.active;
+    (CASE s.channel
+        WHEN 'telegram' THEN tl.chat_id IS NOT NULL
+        WHEN 'email'    THEN u.email <> ''
+        WHEN 'push'     THEN EXISTS (SELECT 1 FROM user_push_tokens upt WHERE upt.user_id = s.user_id)
+        WHEN 'webhook'  THEN COALESCE(wc.enabled, false) AND COALESCE(wc.url, '') <> ''
+        ELSE COALESCE(s.destination, '') <> ''
+    END)::boolean AS deliverable,
+    count(*)::bigint AS pending_subscriptions,
+    EXTRACT(EPOCH FROM now() - min(p.oldest_matched_at))::float8 AS oldest_age_seconds
+FROM pending p
+JOIN subscriptions s ON s.id = p.subscription_id
+JOIN users u ON u.id = s.user_id
+LEFT JOIN telegram_links tl ON tl.user_id = s.user_id
+LEFT JOIN webhook_configs wc ON wc.user_id = s.user_id
+WHERE s.active
+GROUP BY 1
+ORDER BY 1 DESC;
 
 -- name: IngestDuplicationMetrics :many
 -- How many rows each source has just written, and how many DISTINCT postings those rows

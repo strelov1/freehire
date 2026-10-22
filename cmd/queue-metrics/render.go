@@ -59,17 +59,27 @@ type ingestVolume struct {
 	distinctPostings int64
 }
 
+// notifyBacklog is the subscription-digest backlog of one deliverability state: how many
+// active subscriptions have an undelivered match, and how old the oldest such match is.
+type notifyBacklog struct {
+	pendingSubscriptions int64
+	oldestAgeSeconds     float64
+}
+
 // snapshot is everything one collection pass measured. newestJob is the zero time when
 // the catalogue holds no open job at all, which render treats as "publish nothing"
 // rather than as a 1970 timestamp.
 type snapshot struct {
 	queues []queueMetrics
-	// notifyPendingSubscriptions/notifyOldestAgeSeconds are the subscription-digest
-	// backlog. The AGE is the one that catches a starved subscription: a pass runs every
-	// five minutes, so an age climbing without bound means someone is never served — and
-	// that produces no failure in the worker's own log to notice.
-	notifyPendingSubscriptions int64
-	notifyOldestAgeSeconds     float64
+	// notifyDeliverable/notifyUndeliverable are the subscription-digest backlog, split by
+	// whether the subscription's channel can be delivered at all (NotifyBacklogMetrics,
+	// the SQL twin of notify.recipient). The deliverable AGE is the one that catches a
+	// starved subscription: a pass runs every five minutes, so an age climbing without
+	// bound means someone reachable is never served — and that produces no failure in the
+	// worker's own log to notice. The undeliverable age sits at the 72h freshness window
+	// by construction, which is why it is published apart instead of mixed in.
+	notifyDeliverable   notifyBacklog
+	notifyUndeliverable notifyBacklog
 
 	newestJob time.Time
 	// providers is also the fleet: freehire_boards_total is their sum, so the two board
@@ -113,12 +123,22 @@ func render(s snapshot) string {
 	writeFamily(&b, "freehire_queue_oldest_age_seconds", "Age of the oldest live entry in a pipeline outbox queue.",
 		func(q queueMetrics) (string, bool) { return fmt.Sprintf("%.3f", q.oldestAgeSeconds), true }, s.queues)
 
+	// Both deliverability states are always published, as explicit zeros when empty: an
+	// absent series is how the consuming rules recognize a dead exporter.
+	notify := [2]struct {
+		label string
+		notifyBacklog
+	}{{"true", s.notifyDeliverable}, {"false", s.notifyUndeliverable}}
 	writeHeader(&b, "freehire_notify_pending_subscriptions",
-		"Active subscriptions with at least one undelivered match.")
-	fmt.Fprintf(&b, "freehire_notify_pending_subscriptions %d\n", s.notifyPendingSubscriptions)
+		"Active subscriptions with at least one undelivered match, by whether their channel can be delivered.")
+	for _, n := range notify {
+		fmt.Fprintf(&b, "freehire_notify_pending_subscriptions{deliverable=%q} %d\n", n.label, n.pendingSubscriptions)
+	}
 	writeHeader(&b, "freehire_notify_oldest_pending_age_seconds",
-		"Age of the oldest undelivered subscription match.")
-	fmt.Fprintf(&b, "freehire_notify_oldest_pending_age_seconds %.3f\n", s.notifyOldestAgeSeconds)
+		"Age of the oldest undelivered subscription match, by whether its channel can be delivered.")
+	for _, n := range notify {
+		fmt.Fprintf(&b, "freehire_notify_oldest_pending_age_seconds{deliverable=%q} %.3f\n", n.label, n.oldestAgeSeconds)
+	}
 
 	// An empty fleet still publishes four explicit zeros: an absent series is how the
 	// consuming rules recognize a dead exporter.

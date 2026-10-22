@@ -37,8 +37,10 @@ func fullSnapshot() snapshot {
 			// first-listed one and a full set of board states.
 			{name: "gupy", firstListed: time.Unix(1792436951, 0), failing: 2, cooled: 2, uncrawled: 3324},
 		},
-		notifyPendingSubscriptions: 12,
-		notifyOldestAgeSeconds:     184.25,
+		// Deliverable subscriptions are minutes behind; the undeliverable ones sit at the
+		// 72h freshness window, which is why the two are published apart.
+		notifyDeliverable:   notifyBacklog{pendingSubscriptions: 12, oldestAgeSeconds: 184.25},
+		notifyUndeliverable: notifyBacklog{pendingSubscriptions: 48, oldestAgeSeconds: 259053.5},
 	}
 }
 
@@ -69,12 +71,14 @@ freehire_queue_oldest_age_seconds{queue="enrichment_outbox"} 5529600.000
 freehire_queue_oldest_age_seconds{queue="semantic_outbox"} 0.000
 freehire_queue_oldest_age_seconds{queue="auto_apply_queue"} 300.000
 freehire_queue_oldest_age_seconds{queue="push_ticket_outbox"} 1200.000
-# HELP freehire_notify_pending_subscriptions Active subscriptions with at least one undelivered match.
+# HELP freehire_notify_pending_subscriptions Active subscriptions with at least one undelivered match, by whether their channel can be delivered.
 # TYPE freehire_notify_pending_subscriptions gauge
-freehire_notify_pending_subscriptions 12
-# HELP freehire_notify_oldest_pending_age_seconds Age of the oldest undelivered subscription match.
+freehire_notify_pending_subscriptions{deliverable="true"} 12
+freehire_notify_pending_subscriptions{deliverable="false"} 48
+# HELP freehire_notify_oldest_pending_age_seconds Age of the oldest undelivered subscription match, by whether its channel can be delivered.
 # TYPE freehire_notify_oldest_pending_age_seconds gauge
-freehire_notify_oldest_pending_age_seconds 184.250
+freehire_notify_oldest_pending_age_seconds{deliverable="true"} 184.250
+freehire_notify_oldest_pending_age_seconds{deliverable="false"} 259053.500
 # HELP freehire_boards_total Ingest boards by health state.
 # TYPE freehire_boards_total gauge
 freehire_boards_total{state="healthy"} 74894
@@ -152,6 +156,22 @@ func TestRenderPublishesExplicitZeroesForADrainedQueue(t *testing.T) {
 	}
 }
 
+// A drained notify backlog still publishes both deliverability states: an absent series
+// reads as a dead exporter downstream, not as "nothing is waiting".
+func TestRenderPublishesBothDeliverabilityStatesWhenDrained(t *testing.T) {
+	got := render(snapshot{})
+	for _, want := range []string{
+		`freehire_notify_pending_subscriptions{deliverable="true"} 0`,
+		`freehire_notify_pending_subscriptions{deliverable="false"} 0`,
+		`freehire_notify_oldest_pending_age_seconds{deliverable="true"} 0.000`,
+		`freehire_notify_oldest_pending_age_seconds{deliverable="false"} 0.000`,
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("render() missing %q for a drained notify backlog:\n%s", want, got)
+		}
+	}
+}
+
 func TestRenderIsValidPrometheusTextFormat(t *testing.T) {
 	// Parsed by Prometheus's own text parser, not by inspection: this is the format
 	// node_exporter's textfile collector will hand to Prometheus, and a collector
@@ -173,8 +193,8 @@ func TestRenderIsValidPrometheusTextFormat(t *testing.T) {
 		"freehire_provider_last_success_timestamp_seconds": 1,
 		"freehire_provider_first_listed_timestamp_seconds": 2,
 		"freehire_provider_boards":                         8,
-		"freehire_notify_pending_subscriptions":            1,
-		"freehire_notify_oldest_pending_age_seconds":       1,
+		"freehire_notify_pending_subscriptions":            2,
+		"freehire_notify_oldest_pending_age_seconds":       2,
 	}
 	for name, wantSamples := range want {
 		family, ok := families[name]

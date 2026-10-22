@@ -5213,27 +5213,36 @@ type Querier interface {
 	// description in, not the crawler producing one, so counting it would let one paste hide
 	// an ingest that has stopped — the exact incident this gauge exists to raise.
 	NewestOpenJobCreatedAt(ctx context.Context) (pgtype.Timestamptz, error)
-	// The subscription-digest backlog: how many active subscriptions have something
-	// undelivered, and how old the oldest undelivered match is.
+	// The subscription-digest backlog, split by whether the subscription can be delivered at
+	// all: how many active subscriptions have something undelivered, and how old the oldest
+	// undelivered match is, per value of `deliverable`.
 	//
 	// The age is the signal that matters. A pass runs every five minutes, so in steady state
-	// the oldest pending match is minutes old. An age that climbs without bound means some
-	// subscription is never being served — which is not visible in the worker's own log,
-	// because a starved subscription produces no failure: `notify` reported
-	// `delivered=1 failed=0` for weeks while 1.14M matches sat undelivered and one
-	// subscription's had never been claimed at all (2026-09-04, see docs/agents/notifications.md).
+	// the oldest pending match of a deliverable instant subscription is minutes old (a daily
+	// digest's, up to a day). An age that climbs without bound means some subscription is never
+	// being served — which is not visible in the worker's own log, because a starved
+	// subscription produces no failure: `notify` reported `delivered=1 failed=0` for weeks while
+	// 1.14M matches sat undelivered and one subscription's had never been claimed at all
+	// (2026-09-04, see docs/agents/notifications.md).
 	//
-	// Stale matches (expired_at, migration 0193) are not pending, so the age is now bounded by
-	// the notify worker's freshness window (3 days): a subscription that cannot be delivered
-	// at all — push with no device, an unlinked Telegram chat — holds matches up to that age
-	// and then lets them go, where it used to report a 50-day-old match nobody would ever
-	// receive. An age sitting AT the window is therefore a subscription nobody can reach, and
-	// one well above it would mean the expiry pass itself has stopped.
+	// Stale matches (expired_at, migration 0193) are not pending, so the age is bounded by the
+	// notify worker's freshness window (3 days). A subscription that cannot be delivered at all
+	// — push with no device, an unlinked Telegram chat, a disabled webhook — holds matches up to
+	// that age and then lets them go, so before the split the one age sat at the window for
+	// good and said nothing. `deliverable = false` is that population; the alertable age is
+	// the `true` one.
 	//
-	// Both COALESCE to 0 rather than staying NULL: a drained backlog is a real measurement
-	// that must publish an explicit zero, because an absent series is how the consuming alert
-	// rules recognize a dead exporter.
-	NotifyBacklogMetrics(ctx context.Context) (NotifyBacklogMetricsRow, error)
+	// The CASE is the SQL twin of recipient() in internal/engage/notify/notify.go, over the
+	// same live columns GetSubscriptionForDelivery reads (queries/subscriptions.sql). Change
+	// one and change the other: a metric that disagrees with the sender about who is reachable
+	// would page on a subscription the sender correctly skips, or hide one it fails.
+	//
+	// A deliverability state with no pending subscription yields no row; cmd/queue-metrics
+	// publishes it as an explicit zero, because an absent series is how the consuming alert
+	// rules recognize a dead exporter. Aggregating matches per subscription first keeps the
+	// per-match work on subscription_matches_pending_matched_idx; measured on prod 2026-10-22
+	// (~40k pending matches, 64 pending subscriptions): 34ms.
+	NotifyBacklogMetrics(ctx context.Context) ([]NotifyBacklogMetricsRow, error)
 	// Record one confident job-mail sighting for a sender domain, returning its running
 	// count. The classifier calls this whenever it confidently labels an email as
 	// application mail, so a recurring unknown ATS domain accrues hits toward promotion.

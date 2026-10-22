@@ -43,6 +43,8 @@ type fakeStore struct {
 	jobs     map[int64]JobInput
 	jobErr   map[int64]error
 	deadFor  map[int64]bool
+	// completeErr fails the write-back for an outbox id.
+	completeErr map[int64]error
 
 	mu        sync.Mutex
 	reapCalls int
@@ -71,6 +73,9 @@ func (s *fakeStore) Job(_ context.Context, id int64) (JobInput, error) {
 }
 
 func (s *fakeStore) Complete(_ context.Context, entry Claimed, _ json.RawMessage) error {
+	if err := s.completeErr[entry.OutboxID]; err != nil {
+		return err
+	}
 	s.mu.Lock()
 	s.completed = append(s.completed, entry.OutboxID)
 	s.mu.Unlock()
@@ -303,5 +308,52 @@ func TestRun_jobFetchErrorIsFailed(t *testing.T) {
 	stats, _ := Runner{Provider: prov, Store: store}.Run(context.Background(), opts())
 	if len(store.failed) != 1 || stats.Failed != 1 {
 		t.Errorf("failed=%v stats=%+v, want one failure", store.failed, stats)
+	}
+}
+
+// Progress counts only the enrichments that were WRITTEN: a provider failure and a
+// failed write-back are not throughput, and counting either would let the stall alert
+// built on freehire_enrich_completed_total read a drain that writes nothing as healthy.
+func TestRun_progressCountsOnlyWrittenEnrichments(t *testing.T) {
+	store := &fakeStore{
+		claims: [][]Claimed{{
+			{OutboxID: 1, JobID: 1, TargetVersion: Version},
+			{OutboxID: 2, JobID: 2, TargetVersion: Version},
+			{OutboxID: 3, JobID: 3, TargetVersion: Version},
+			{OutboxID: 4, JobID: 4, TargetVersion: Version},
+		}},
+		jobs: map[int64]JobInput{
+			1: {Title: "ok"}, 2: {Title: "provider fails"},
+			3: {Title: "write fails"}, 4: {Title: "ok"},
+		},
+		completeErr: map[int64]error{3: errors.New("db down")},
+	}
+	prov := &funcProvider{fn: func(j JobInput) (Enrichment, error) {
+		if j.Title == "provider fails" {
+			return Enrichment{}, errUnparseableResponse
+		}
+		return Enrichment{Seniority: "senior", WorkMode: "remote"}, nil
+	}}
+	progress := &Progress{}
+
+	if _, err := (Runner{Provider: prov, Store: store, Progress: progress}).Run(context.Background(), opts()); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if got := progress.Completed(); got != 2 {
+		t.Errorf("Completed() = %d, want 2 (only the written enrichments)", got)
+	}
+}
+
+// A Runner without a Progress still runs: the counter is an optional observer.
+func TestRun_nilProgressIsAllowed(t *testing.T) {
+	store := &fakeStore{
+		claims: [][]Claimed{{{OutboxID: 1, JobID: 1, TargetVersion: Version}}},
+		jobs:   map[int64]JobInput{1: {Title: "ok"}},
+	}
+	prov := &funcProvider{fn: func(JobInput) (Enrichment, error) {
+		return Enrichment{Seniority: "senior", WorkMode: "remote"}, nil
+	}}
+	if _, err := (Runner{Provider: prov, Store: store}).Run(context.Background(), opts()); err != nil {
+		t.Fatalf("Run: %v", err)
 	}
 }

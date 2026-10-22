@@ -32,12 +32,12 @@ type fakeQueries struct {
 	health       []db.ProviderIngestHealthRow
 	ingest       []db.IngestDuplicationMetricsRow
 	ingestErr    error
-	notify       db.NotifyBacklogMetricsRow
+	notify       []db.NotifyBacklogMetricsRow
 	newestErr    error
 	searchErr    error
 }
 
-func (f fakeQueries) NotifyBacklogMetrics(context.Context) (db.NotifyBacklogMetricsRow, error) {
+func (f fakeQueries) NotifyBacklogMetrics(context.Context) ([]db.NotifyBacklogMetricsRow, error) {
 	return f.notify, nil
 }
 
@@ -115,8 +115,11 @@ func populatedQueries() fakeQueries {
 		// No attempts and no failed_at column, so no dead-letter measurement exists.
 		pushTickets: db.PushTicketOutboxMetricsRow{Depth: 48, OldestAgeSeconds: 1200},
 		apple:       db.AppleRevocationJobMetricsRow{Depth: 4, DeadLetters: 9, OldestAgeSeconds: 900},
-		notify:      db.NotifyBacklogMetricsRow{PendingSubscriptions: 12, OldestAgeSeconds: 184.25},
-		newest:      pgtype.Timestamptz{Time: time.Unix(1786821346, 0), Valid: true},
+		notify: []db.NotifyBacklogMetricsRow{
+			{Deliverable: true, PendingSubscriptions: 12, OldestAgeSeconds: 184.25},
+			{Deliverable: false, PendingSubscriptions: 48, OldestAgeSeconds: 259053.5},
+		},
+		newest: pgtype.Timestamptz{Time: time.Unix(1786821346, 0), Valid: true},
 		health: []db.ProviderIngestHealthRow{
 			{
 				Provider:      "greenhouse",
@@ -373,5 +376,36 @@ func TestCollectFailsWhenIngestVolumeFails(t *testing.T) {
 	q := fakeQueries{ingestErr: errors.New("boom")}
 	if _, err := collect(context.Background(), q); err == nil {
 		t.Fatal("collect returned no error when the ingest-volume query failed")
+	}
+}
+
+// Each deliverability row lands in its own slot, keyed by the row's flag.
+func TestCollectSplitsTheNotifyBacklogByDeliverability(t *testing.T) {
+	snap, err := collect(context.Background(), populatedQueries())
+	if err != nil {
+		t.Fatalf("collect: %v", err)
+	}
+	if got, want := snap.notifyDeliverable, (notifyBacklog{pendingSubscriptions: 12, oldestAgeSeconds: 184.25}); got != want {
+		t.Errorf("deliverable = %+v, want %+v", got, want)
+	}
+	if got, want := snap.notifyUndeliverable, (notifyBacklog{pendingSubscriptions: 48, oldestAgeSeconds: 259053.5}); got != want {
+		t.Errorf("undeliverable = %+v, want %+v", got, want)
+	}
+}
+
+// The query yields no row for a state with nothing pending; that state must still
+// collect as a zero rather than be lost, since render publishes it either way.
+func TestCollectTreatsAMissingDeliverabilityStateAsZero(t *testing.T) {
+	q := populatedQueries()
+	q.notify = []db.NotifyBacklogMetricsRow{{Deliverable: false, PendingSubscriptions: 48, OldestAgeSeconds: 259053.5}}
+	snap, err := collect(context.Background(), q)
+	if err != nil {
+		t.Fatalf("collect: %v", err)
+	}
+	if snap.notifyDeliverable != (notifyBacklog{}) {
+		t.Errorf("deliverable = %+v, want zero", snap.notifyDeliverable)
+	}
+	if snap.notifyUndeliverable.pendingSubscriptions != 48 {
+		t.Errorf("undeliverable = %+v, want 48 pending", snap.notifyUndeliverable)
 	}
 }

@@ -97,7 +97,23 @@ labelled by `queue`, `freehire_boards_total` labelled by `state`,
 worker keeping up*. The notify pair exists because a starved subscription produces no
 failure to notice: `notify` reported `delivered=1 failed=0` for weeks while 1.14M matches
 sat undelivered (2026-09-04, see [docs/agents/notifications.md](../../../docs/agents/notifications.md)).
-An oldest-pending age climbing past a few passes is the signal; `failed` never moved.
+An oldest-pending age climbing past a few passes is the signal; `failed` never moved. Both
+are labelled `deliverable="true"|"false"` — whether the subscription's channel can reach
+anyone at all, computed in `NotifyBacklogMetrics` by the SQL twin of `notify.recipient()`
+(change one, change the other). Push with no device, an unlinked Telegram chat or a
+disabled webhook holds its matches until the 72h freshness expiry, so the `false` age sits
+at that ceiling for good; mixed in, it pinned the one age at ~72h and made it useless. Alert
+on the `true` age. Both label values are always published, as explicit zeros when empty.
+
+**Per long drain, by `cmd/enrich`** — `freehire_enrich_completed_total`, an unlabelled
+COUNTER of enrichments this process has written, republished every minute through
+`Heartbeat` into its own file (`freehire-enrich-progress.prom`, never the run file — see
+below) and once more at exit. The drain runs for days, so the per-run family is blind
+while it works: it stamps only on exit, and `last_run_success` is 0 for any run with one
+failure. The counter answers *is it still writing*: alert on
+`increase(freehire_enrich_completed_total[2h])` falling below a floor (prod writes
+~280–340/h at concurrency 4). A restart resets it to 0, which `increase()` treats as a
+counter reset; no rule divides it by anything.
 
 **Per provider, by the same worker** — `freehire_provider_boards` labelled by `provider` and
 `state` (`healthy`/`failing`/`cooled`/`uncrawled`), `freehire_provider_last_success_timestamp_seconds`
