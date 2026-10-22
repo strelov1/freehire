@@ -529,9 +529,10 @@
    *  about whether the page is showing an application: it accepted values. Reset
    *  by a page change, with the plan. */
   let formFilled = $state(false);
-  /** The questions this panel wrote on this page, by normalised label. Those answers
-   *  came from the profile or the bank, so they are never offered back for saving.
-   *  Reset by a page change, with `formFilled`. */
+  /** The questions on this page whose answers freehire already holds, by normalised
+   *  label: the ones this panel wrote (from the profile or the bank) and the ones just
+   *  saved. Neither is offered for saving again. Reset by a page change, with
+   *  `formFilled`. */
   const autofilled = new SvelteSet<string>();
   /** The last read's questions, scoped as the plan is — with their values, which the
    *  plan does not carry. What the "save my answers" offer is computed from. */
