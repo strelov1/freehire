@@ -1190,6 +1190,27 @@ export interface ActivityPoint {
   removed: number;
 }
 
+/** How many of a company's OBSERVABLE applications were answered — the applicant had a
+ *  connected mailbox, so a reply would have been seen. Absent from the company payload
+ *  below its sample gate; `median_reply_days` is absent below its own, smaller one. */
+export interface CompanyResponse {
+  applications: number;
+  answered: number;
+  unanswered: number;
+  median_reply_days?: number;
+}
+
+/** The company page's Hiring tab: the company's added/removed series, its open postings
+ *  now and 30 days ago, and — from 5 employer-side closures up — the median days its
+ *  postings stay open. */
+export interface CompanyHiring {
+  open: number;
+  open_prev: number;
+  growth: number;
+  series: ActivityPoint[];
+  lifetime?: { closed: number; median_days: number };
+}
+
 /** One point on the member-growth series: the ISO date, the cumulative count of
  *  registered members as of that day, and that day's own (non-cumulative)
  *  new-signup count. The backend returns a dense, gap-free series (days with no

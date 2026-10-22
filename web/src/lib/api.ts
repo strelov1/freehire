@@ -123,6 +123,8 @@ import type {
   CandidateContacts,
   ActivityGranularity,
   ActivityPoint,
+  CompanyHiring,
+  CompanyResponse,
   UserGrowthPoint,
   CatalogScale,
   EmbedProgress,
@@ -859,12 +861,21 @@ export function createApi(
     slug: string,
     limit: number,
     offset: number,
-  ): Promise<{ company: Company; jobs: Job[]; referral_available: boolean }> {
+  ): Promise<{ company: Company; jobs: Job[]; referral_available: boolean; response?: CompanyResponse }> {
     // `redirect: 'manual'` so a slug a merge retired surfaces as MovedError rather than
     // silently rendering the canonical company under the old url.
-    return requestData<{ company: Company; jobs: Job[]; referral_available: boolean }>(
+    return requestData<{ company: Company; jobs: Job[]; referral_available: boolean; response?: CompanyResponse }>(
       `/api/v1/companies/${slug}${query(limit, offset)}`,
       { redirect: 'manual' },
+    );
+  }
+
+  /** The company page's Hiring tab payload. The window follows the same rules as
+   *  `jobsActivity`. A retired slug is not special-cased here: the page resolves the
+   *  company through `getCompany` first, which is where the move is surfaced. */
+  async function companyHiring(slug: string, granularity: ActivityGranularity): Promise<CompanyHiring> {
+    return requestData<CompanyHiring>(
+      `/api/v1/companies/${encodeURIComponent(slug)}/hiring?${new URLSearchParams({ granularity })}`,
     );
   }
 
@@ -3131,6 +3142,7 @@ export function createApi(
     listSources,
     listCompanies,
     getCompany,
+    companyHiring,
     listMentors,
     getMentor,
     getMentorSlots,

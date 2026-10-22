@@ -27,8 +27,17 @@ the company page's link; revisit with a threshold once the page has measured val
   `getCompany(slug, 1, 0)` for the header anyway, and that payload already carries the
   gated `response`. One source, one gate.
 - **Breakdowns and salary from the existing `facetCounts` call**, scoped by
-  `company_slug`, naming only the facets read. No new backend; the numbers match what
-  the Jobs tab's filters show, by construction.
+  `company_slug`, naming only the facets read, and loaded SERVER-side in parallel with
+  the company read so a crawler reads them too. No new backend; the numbers match what
+  the Jobs tab's filters show, by construction, and each value links into the Jobs tab
+  filtered by it. Labels resolve through the same `FACETS` options as the filter panel.
+- **Salary is one currency, one period.** Measured on prod, an unfiltered min/max for
+  one employer spanned 60 to 7,000,000 (hourly rupees beside yearly dollars). The page
+  picks the company's most common `salary_currency`, asks a second count narrowed to it
+  and `salary_period=year`, and shows the range only from 3 such postings up.
+- **Tabs reuse the design system's `TabStrip`**, which already renders `href` tabs as
+  anchors; the `/trends` toggle-and-chart logic moves into a shared `ActivityPanel` used
+  by both pages rather than being copied.
 - **Dense series in SQL** (`ListCompanyActivity`), the same shape as `ListJobActivity`:
   `generate_series` over the window, `LEFT JOIN insights_company_stats` on its primary
   key, `date_trunc` rollup. The endpoint reuses `parseActivityQuery` and the

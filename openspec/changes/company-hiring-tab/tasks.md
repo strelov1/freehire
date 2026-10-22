@@ -12,10 +12,10 @@
 
 ## 3. Web
 
-- [ ] 3.1 `api.companyHiring(slug, granularity)` + types in `web/src/lib/api.ts` / `types.ts`
-- [ ] 3.2 `CompanyTabs.svelte` (Jobs / Hiring, `aria-current`), rendered on the company page under the header
-- [ ] 3.3 Route `companies/[slug]/hiring`: `+page.server.ts` (company + hiring in parallel, hiring failure → null) and `+page.svelte` (figures, chart with toggle, breakdowns, salary, gated "not enough data yet", retry, SEO + noindex rule); tests for the empty and failed states
-- [ ] 3.4 Run the app and check the tab on a real company in the browser
+- [x] 3.1 `api.companyHiring(slug, granularity)` + types in `web/src/lib/api.ts` / `types.ts`
+- [x] 3.2 `CompanyTabs.svelte` (Jobs / Hiring over the design system's `TabStrip`), rendered on the company page under the header
+- [x] 3.3 Route `companies/[slug]/hiring`: `+page.server.ts` (company, hiring and facet counts in parallel, each non-company failure → null; salary narrowed to one currency, yearly) and `+page.svelte` (figures, chart with toggle, breakdowns, salary, gated "not enough data yet", retry, SEO + noindex rule); the page logic in `$lib/companyHiring.ts` with unit tests; `/trends` moves onto a shared `ActivityPanel`
+- [x] 3.4 Run the app and check the tab on a real company in the browser
 
 ## 4. Finish
 
