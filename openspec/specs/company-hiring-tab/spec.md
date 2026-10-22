@@ -1,7 +1,10 @@
 # company-hiring-tab Specification
 
 ## Purpose
-TBD - created by archiving change company-hiring-tab. Update Purpose after archive.
+The company page's Hiring tab and the endpoint behind it: how one company hires over
+time — its open roles and their 30-day change, its reply rate, how long its postings
+stay open, its added-vs-removed activity, who it hires and what it pays — so a job
+seeker can judge whether it is worth applying.
 ## Requirements
 ### Requirement: Company hiring endpoint
 The system SHALL serve `GET /api/v1/companies/:slug/hiring` publicly, returning
