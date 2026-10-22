@@ -574,7 +574,6 @@ func All(c HTTPClient) map[string]Source {
 		NewKontur(c),
 		// Magnit Tech: the retail group's IT arm, a keyless JSON API (list → detail).
 		NewMagnit(c),
-		NewLesta(c),
 		NewSelectel(c),
 	)
 	// usajobs, reed, whatjobs and adzuna are the keyed sources: each needs a credential read from
@@ -629,6 +628,9 @@ func All(c HTTPClient) map[string]Source {
 	// peoplesoft's result list grows by a form postback PeopleTools accepts only inside the
 	// session the search page's GET opened. See peoplesoft.go.
 	registry["peoplesoft"] = cookieSessionSource[peoplesoftHTTP](c, NewPeopleSoft)
+	// Lesta's listing answers with a 307 to itself that sets a session cookie; without a jar
+	// the redirect loops until the client gives up.
+	registry["lesta"] = cookieSessionSource[lestaHTTP](c, NewLesta)
 	aijobsMaxNewPerRun := aijobsMaxNewPerRunFromEnv()
 	registry["aijobs"] = cookieSessionSource[aijobsHTTP](c, func(h aijobsHTTP) Source {
 		return NewAijobs(h, aijobsMaxNewPerRun)

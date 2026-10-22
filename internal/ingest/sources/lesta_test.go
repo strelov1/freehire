@@ -162,3 +162,18 @@ func TestLestaFailsWhenNoNewPostingIsRead(t *testing.T) {
 		t.Fatal("want an error when no vacancy page could be read")
 	}
 }
+
+// join.lesta.team answers its listing with a 307 back to the same URL that sets a session
+// cookie on the way; a client without a jar never presents it and follows the redirect until
+// it gives up ("stopped after 10 redirects", every run from 2026-10-20). With a jar it is one
+// redirect and a 200.
+func TestLestaCrawlsWithACookieJar(t *testing.T) {
+	src, ok := All(NewClient())["lesta"].(lesta)
+	if !ok {
+		t.Fatal("lesta is not registered as a lesta adapter")
+	}
+	c, ok := src.http.(*Client)
+	if !ok || c.httpClient.Jar == nil {
+		t.Error("lesta crawls without a cookie jar; its listing redirects to itself forever")
+	}
+}
