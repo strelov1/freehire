@@ -284,6 +284,16 @@ describe('extractForm combo flag', () => {
     expect(must(extractForm(document)[0]).value).toBe('I am not a veteran');
   });
 
+  it('reports a lone checkbox as Yes when ticked and empty when not', () => {
+    // Its value attribute is "on" either way, so reading that made an unticked
+    // consent box look answered.
+    const box = labeledInput('arb', 'Agreement to Arbitrate', { type: 'checkbox' });
+    expect(must(extractForm(document)[0]).value).toBe('');
+
+    (box as HTMLInputElement).checked = true;
+    expect(must(extractForm(document)[0]).value).toBe('Yes');
+  });
+
   it('does not flag a native select as a custom widget', () => {
     const select = document.createElement('select');
     select.setAttribute('aria-label', 'Country');

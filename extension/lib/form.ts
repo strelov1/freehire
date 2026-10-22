@@ -215,6 +215,10 @@ function describeQuestion({ label, controls }: Question, index: number, forms: H
       .filter((c) => c instanceof HTMLInputElement && c.checked)
       .map(extractLabel)
       .join(', ');
+  } else if (el instanceof HTMLInputElement && (el.type === 'checkbox' || el.type === 'radio')) {
+    // A lone box's value attribute is "on" whether or not it is ticked; the answer is
+    // its state, read back the way `fillField` writes it.
+    field.value = el.checked ? 'Yes' : '';
   } else if (el instanceof HTMLSelectElement) {
     field.options = Array.from(el.options).map((o) => (o.textContent ?? '').trim());
     // The answer is the chosen option's text; its value attribute is the ATS's own

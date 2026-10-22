@@ -745,6 +745,9 @@
       // The agent filled the page itself, server-side. Play its report back so
       // the user watches what changed rather than finding it later.
       if (report.filled.length > 0) formFilled = true;
+      // Every label the agent filled is known up front: a walk stopped part-way still
+      // leaves those answers written, and they came from the profile, not the candidate.
+      for (const label of report.filled) autofilled.add(normalizeLabel(label));
       await walkReported(report.filled);
       const filled = report.filled.length;
       track('autofill', { mode: 'agent', filled });
