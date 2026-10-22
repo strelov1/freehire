@@ -3579,6 +3579,15 @@ type Querier interface {
 	// makes the twin this query used to filter out impossible to create, rather than this
 	// query hiding it after the fact.
 	ListChronicBoards(ctx context.Context, arg ListChronicBoardsParams) ([]ListChronicBoardsRow, error)
+	// The company page's Closed tab: the postings this company has closed, newest posting first.
+	// The same exclusions as ListJobsByCompany (reposts, private pasted JDs) with the closed_at
+	// predicate inverted.
+	//
+	// The ORDER BY is jobs_company_slug_idx's own (company_slug, posted_at DESC NULLS LAST,
+	// id DESC — not partial, so it covers closed rows) and must stay so: a large employer holds
+	// hundreds of thousands of closed rows, and any other order is a sort over all of them. That
+	// is also why nothing counts this set — see the handler.
+	ListClosedJobsByCompany(ctx context.Context, arg ListClosedJobsByCompanyParams) ([]Job, error)
 	// Postings that have CLOSED since they were announced, so the engine can re-read a page
 	// whose validThrough has moved into the past.
 	//
