@@ -11,12 +11,14 @@
 // Idempotent: re-running with the same inputs writes the same membership and
 // changes nothing on the second pass.
 //
-// Three things abort the run before it writes, all guarding the same hazard — that
-// a broken source reconciles a tag off every company that holds it: a failed fetch
-// or resolve, a payload that parses to no records, and a tag that would lose most
-// of its current holders. The last covers the case the other two cannot see, where
-// an upstream relabelling leaves the row count intact but matches nobody; override
-// it with -force when the loss is genuinely correct.
+// Three guards stand against the same hazard — that a broken source reconciles a
+// tag off every company that holds it. A failed fetch or resolve, and a payload that
+// parses to no records, drop THAT collection from the run: its tags stay as stored,
+// the others still import, and the run exits non-zero so the skip is seen. A tag that
+// would lose most of its current holders aborts the whole run before it writes; it
+// covers the case the other two cannot see, where an upstream relabelling leaves the
+// row count intact but matches nobody. Override it with -force when the loss is
+// genuinely correct.
 //
 // Run with -dry-run first when a gate or threshold has changed: it resolves,
 // matches, and gates exactly as a real run does, reports the outcome per
@@ -84,19 +86,34 @@ func run() int {
 	}
 	defer cleanup()
 
-	// Resolve every collection's candidate company names/slugs up front. A failure
-	// here aborts before any write: proceeding with a collection missing would
+	// Resolve every collection's candidate company names/slugs up front. A collection
+	// whose source fails is left out of this run entirely — not matched, not
+	// reconciled — so its tags stay exactly as stored: proceeding with it would
 	// reconcile its tag off every company (a transient fetch error must not wipe
-	// membership).
+	// membership). The rest still import, because one register down for maintenance
+	// used to block every other collection's refresh (ind.nl, 2026-10-21). The run
+	// still exits non-zero, so the skipped source is visible as a failed unit.
 	scope, err := scopeOf(*only)
 	if err != nil {
 		log.Printf("import-collections: %v", err)
 		return 1
 	}
-	resolved, err := resolveAll(ctx, scope)
+	resolved, failed, err := resolveAll(ctx, scope)
 	if err != nil {
 		log.Printf("import-collections: %v", err)
 		return 1
+	}
+	for _, f := range failed {
+		log.Printf("import-collections: SKIPPED %s, its tags are left as stored: %v", f.slug, f.err)
+	}
+	scope = withoutFailed(scope, failed)
+	if len(scope) == 0 {
+		log.Printf("import-collections: every collection in scope failed to resolve, nothing to do")
+		return 1
+	}
+	exitCode := 0
+	if len(failed) > 0 {
+		exitCode = 1
 	}
 
 	q := db.New(pool)
@@ -119,7 +136,7 @@ func run() int {
 			log.Printf("import-collections: WOULD COLLAPSE %s — %d holders, %d would survive", c.slug, c.had, c.keeps)
 		}
 		log.Printf("import-collections: dry run — %d companies would be updated, nothing written", len(p.writes))
-		return 0
+		return exitCode
 	}
 
 	// A tag losing most of its holders in one run is a broken source, not a change in
@@ -150,7 +167,10 @@ func run() int {
 	report(p, len(rows), scope)
 	log.Printf("import-collections done: companies updated=%d, jobs updated=%d", len(p.writes), propagated)
 	log.Printf("import-collections: run `make reindex` to surface jobs.collections in the search index")
-	return 0
+	if exitCode != 0 {
+		log.Printf("import-collections: %d collection(s) skipped, see SKIPPED above", len(failed))
+	}
+	return exitCode
 }
 
 // report logs how each collection's candidates fell out. Credentials additionally
@@ -181,10 +201,6 @@ func report(p planResult, companies int, scope []collections.Collection) {
 		p.withHQCountry, companies)
 }
 
-// resolveAll returns, per collection slug, its candidate company names (or slugs
-// for a hand list). A static-list collection resolves locally; a dataset
-// collection is fetched and parsed. Any resolution failure is returned (the caller
-// aborts rather than write a partial membership).
 // scopeOf turns the -only value into the collections a run handles: all of them when
 // it is empty, otherwise exactly the named ones, refusing a slug the registry does
 // not hold rather than silently importing less than asked.
@@ -203,21 +219,61 @@ func scopeOf(only string) ([]collections.Collection, error) {
 	return scope, nil
 }
 
-func resolveAll(ctx context.Context, scope []collections.Collection) (map[string][]collections.Record, error) {
+// resolveAll returns, per collection slug, its candidate company names (or slugs
+// for a hand list), plus the collections whose source failed. A static-list
+// collection resolves locally; a dataset collection is fetched and parsed. Only a
+// misconfigured proxy is an error for the whole run.
+func resolveAll(ctx context.Context, scope []collections.Collection) (map[string][]collections.Record, []resolveFailure, error) {
 	direct := &http.Client{Timeout: fetchTimeout}
 	proxied, err := proxiedClient(fetchTimeout)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
+	resolved, failed := resolveEach(scope, func(c collections.Collection) ([]collections.Record, error) {
+		return resolveOne(ctx, clientFor(c.Slug, direct, proxied), c)
+	})
+	return resolved, failed, nil
+}
+
+// resolveFailure is one collection whose source could not be read this run.
+type resolveFailure struct {
+	slug string
+	err  error
+}
+
+// resolveEach resolves every collection in scope, collecting failures instead of
+// stopping at the first: one register being down says nothing about the others.
+func resolveEach(scope []collections.Collection, resolve func(collections.Collection) ([]collections.Record, error)) (map[string][]collections.Record, []resolveFailure) {
 	resolved := make(map[string][]collections.Record, len(scope))
+	var failed []resolveFailure
 	for _, c := range scope {
-		records, err := resolveOne(ctx, clientFor(c.Slug, direct, proxied), c)
+		records, err := resolve(c)
 		if err != nil {
-			return nil, fmt.Errorf("resolve %q: %w", c.Slug, err)
+			failed = append(failed, resolveFailure{slug: c.Slug, err: err})
+			continue
 		}
 		resolved[c.Slug] = records
 	}
-	return resolved, nil
+	return resolved, failed
+}
+
+// withoutFailed narrows scope to the collections that resolved, so planScoped
+// neither matches nor reconciles a failed one and its stored tags survive.
+func withoutFailed(scope []collections.Collection, failed []resolveFailure) []collections.Collection {
+	if len(failed) == 0 {
+		return scope
+	}
+	skip := make(map[string]bool, len(failed))
+	for _, f := range failed {
+		skip[f.slug] = true
+	}
+	out := make([]collections.Collection, 0, len(scope))
+	for _, c := range scope {
+		if !skip[c.Slug] {
+			out = append(out, c)
+		}
+	}
+	return out
 }
 
 // proxiedCollectionSlugs are collections whose register blocks the prod datacenter

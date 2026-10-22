@@ -510,3 +510,35 @@ func TestScopeOf(t *testing.T) {
 		t.Error("scopeOf accepted an unknown slug")
 	}
 }
+
+func TestResolveEach_SkipsAFailedSourceAndKeepsTheRest(t *testing.T) {
+	scope := []collections.Collection{{Slug: "uk"}, {Slug: "nl"}, {Slug: "dk"}}
+	down := errors.New("status 503")
+	resolved, failed := resolveEach(scope, func(c collections.Collection) ([]collections.Record, error) {
+		if c.Slug == "nl" {
+			return nil, down
+		}
+		return []collections.Record{{Name: "Acme " + c.Slug}}, nil
+	})
+	if len(resolved) != 2 || resolved["uk"] == nil || resolved["dk"] == nil {
+		t.Errorf("resolved = %v, want uk and dk", resolved)
+	}
+	if len(failed) != 1 || failed[0].slug != "nl" || !errors.Is(failed[0].err, down) {
+		t.Errorf("failed = %+v, want nl with its error", failed)
+	}
+}
+
+func TestWithoutFailed_LeavesAFailedCollectionsTagsAlone(t *testing.T) {
+	// The failed collection must leave the scope, not stay with no records: in scope
+	// with nothing resolved, planScoped would reconcile its tag off every holder.
+	scope := []collections.Collection{
+		{Slug: "uk", Kind: collections.KindCredential},
+		{Slug: "nl", Kind: collections.KindCredential},
+	}
+	narrowed := withoutFailed(scope, []resolveFailure{{slug: "nl", err: errors.New("down")}})
+	rows := []db.ListCompanyCollectionsRow{{Slug: "adyen", Collections: []string{"nl"}}}
+	p := planScoped(rows, map[string][]collections.Record{"uk": {{Name: "Monzo"}}}, narrowed)
+	if len(p.writes) != 0 {
+		t.Errorf("writes = %+v, want none — adyen's nl tag must survive the outage", p.writes)
+	}
+}
