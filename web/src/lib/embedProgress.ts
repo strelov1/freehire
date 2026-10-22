@@ -1,4 +1,4 @@
-// Display rules for the public /embeddings page. Every figure the API sends may be
+// Display rules for the public /semantic-search page. Every figure the API sends may be
 // null — not yet measured — and a null must reach the reader as "measuring", never as
 // 0: a zero on a public page is read as a measurement.
 

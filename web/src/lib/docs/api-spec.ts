@@ -3153,7 +3153,7 @@ data: {"type":"result","stop_reason":"completed"}
         auth: 'none',
         summary: 'How much of the catalogue carries a semantic embedding, and how fast the rest is going.',
         description:
-          'Backs the public /embeddings page. `eligible` and `snapshot_covered` come ' +
+          'Backs the public /semantic-search page. `eligible` and `snapshot_covered` come ' +
           'from a snapshot `cmd/rollup-stats` measures every few hours (the count ' +
           'is too slow for a request); `queued` is the embedding queue, sampled ' +
           'every 15 seconds, and `covered` is `eligible − queued`. ' +

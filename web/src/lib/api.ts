@@ -798,7 +798,7 @@ export function createApi(
     return requestData<CatalogScale>(`/api/v1/stats/catalog`);
   }
 
-  /** Semantic-embedding coverage of the catalogue for the public /embeddings page.
+  /** Semantic-embedding coverage of the catalogue for the public /semantic-search page.
    *  Unmeasured figures are `null`. Aggregate-only, unauthenticated. */
   async function embedProgress(): Promise<EmbedProgress> {
     return requestData<EmbedProgress>(`/api/v1/stats/embeddings`);

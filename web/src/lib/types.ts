@@ -1250,7 +1250,7 @@ export interface CatalogScale {
   exact: boolean;
 }
 
-/** Semantic-embedding coverage of the catalogue, behind the public /embeddings
+/** Semantic-embedding coverage of the catalogue, behind the public /semantic-search
  *  page (`GET /api/v1/stats/embeddings` and its stream). Every figure is `null`
  *  until it has been measured — render that as "measuring", never as 0. */
 export interface EmbedProgress {

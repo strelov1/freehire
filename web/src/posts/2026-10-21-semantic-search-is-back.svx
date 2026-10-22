@@ -1,0 +1,50 @@
+---
+title: 'Semantic search is back'
+date: 2026-10-21
+summary: 'Search by meaning, not just keywords, returns for technical postings — after it was switched off for being too slow, too expensive and too big for our disk.'
+type: changelog
+tags:
+  - search
+  - agents
+draft: false
+---
+
+freehire used to have semantic search, and then we took it out. It is back now,
+for technical postings.
+
+Semantic search ranks a posting by what it means rather than by the words it
+uses. Someone who wants to "keep payment systems secure" finds security roles at
+payment companies, even when the posting never says it that way. To do that,
+every posting needs an embedding: a list of numbers that describes its meaning.
+
+## Why it went away
+
+Two problems, one after the other.
+
+First, it was slow and expensive. Computing an embedding for every posting in a
+catalogue this size took a long time and cost more than the feature was worth.
+
+Once we got that under control, the second problem showed up: the index of
+embeddings no longer fit on the server's disk.
+
+## What changed
+
+We moved to a new server with room for the index. And embeddings no longer come
+from our machines alone: the [volunteer client](/semantic-search) lets anyone
+lend their computer for a while, run the embedding model locally, and send the
+results back.
+
+## What it does not cover yet
+
+Only technical postings have embeddings for now. Postings outside IT are still
+found by keywords alone. The [semantic search page](/semantic-search) shows,
+live, how much of the catalogue is covered and how fast the rest is going.
+
+## Where to use it
+
+- On a job page, **Similar jobs** finds postings that describe the same work in
+  different words.
+- AI agents can ask for it directly: set `semantic` to `true` on a search
+  through the MCP server, the `freehire` command-line tool or the agent API. The
+  response says whether the semantic ranking actually ran. See
+  [For AI agents](/agents) to connect one.
