@@ -42,7 +42,7 @@ func (s *QueriesStore) ClaimDuePushTickets(ctx context.Context, minAgeMinutes, b
 	}
 	tickets := make([]Ticket, len(rows))
 	for i, r := range rows {
-		tickets[i] = Ticket{ID: r.ID, Token: r.Token, TicketID: r.TicketID}
+		tickets[i] = Ticket{ID: r.ID, Token: r.Token, TicketID: r.TicketID, CreatedAt: r.CreatedAt.Time}
 	}
 	return tickets, nil
 }

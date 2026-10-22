@@ -62,6 +62,12 @@ const receiptMinAgeMinutes = 15
 // single request at 1000 ids; this stays well under that.
 const receiptBatchSize = 100
 
+// receiptRetention is how long Expo keeps a receipt. A ticket still unanswered past it
+// never will be, and the claim is oldest-first, so keeping it would let such tickets
+// fill every batch and starve the fresh ones queued behind them — which is how the
+// first 66 tickets, queued 2026-08-12 while no worker ran, sat at the head of the queue.
+const receiptRetention = 24 * time.Hour
+
 // Notifier sends one push message to a device token.
 type Notifier interface {
 	Send(ctx context.Context, token, title, body string, data map[string]string) error
@@ -81,9 +87,10 @@ type TicketQueuer interface {
 
 // Ticket is one queued send ticket awaiting a receipt check.
 type Ticket struct {
-	ID       int64
-	Token    string
-	TicketID string
+	ID        int64
+	Token     string
+	TicketID  string
+	CreatedAt time.Time
 }
 
 // TicketStore is the outbox CheckReceipts drains.
@@ -130,6 +137,7 @@ type ExpoNotifier struct {
 	tickets     TicketStore
 	apiURL      string
 	receiptsURL string
+	now         func() time.Time
 }
 
 // NewExpoNotifier returns a Notifier that sends through Expo's push API,
@@ -144,6 +152,7 @@ func NewExpoNotifier(pruner TokenPruner, queuer TicketQueuer, tickets TicketStor
 		tickets:     tickets,
 		apiURL:      defaultExpoPushURL,
 		receiptsURL: defaultExpoReceiptsURL,
+		now:         time.Now,
 	}
 }
 
@@ -237,14 +246,21 @@ func (n *ExpoNotifier) CheckReceipts(ctx context.Context) error {
 
 	processed := make([]int64, 0, len(due))
 	var pruneErrs []error
-	// The five outcomes below must add up to the batch. pruneFailed is the fifth for that
+	// The six outcomes below must add up to the batch. pruneFailed is one of them for that
 	// reason and not only for its own sake: without it a batch whose prune failed reports
 	// checked=2 over counters totalling one, and a reader cannot tell whether a ticket was
 	// dropped or a counter was forgotten. The error is returned as well, but a run that
 	// retries the same failure every pass is a shape only the aggregate shows.
-	var delivered, pruned, pruneFailed, rejected, unanswered int
+	var delivered, pruned, pruneFailed, rejected, unanswered, expired int
 	for _, t := range due {
 		r, ok := receipts[t.TicketID]
+		if !ok && n.now().Sub(t.CreatedAt) > receiptRetention {
+			// Expo no longer holds an answer for it, so there is nothing left to wait for:
+			// remove it, and say so, rather than keep it at the head of the queue forever.
+			expired++
+			processed = append(processed, t.ID)
+			continue
+		}
 		if !ok {
 			// No answer yet (or Expo no longer recognizes the id) — this is
 			// not "checked, resolved", so the ticket stays queued rather
@@ -281,8 +297,8 @@ func (n *ExpoNotifier) CheckReceipts(ctx context.Context) error {
 		}
 		processed = append(processed, t.ID)
 	}
-	log.Printf("pushnotify: receipts checked=%d delivered=%d pruned=%d prune_failed=%d rejected=%d unanswered=%d",
-		len(due), delivered, pruned, pruneFailed, rejected, unanswered)
+	log.Printf("pushnotify: receipts checked=%d delivered=%d pruned=%d prune_failed=%d rejected=%d unanswered=%d expired=%d",
+		len(due), delivered, pruned, pruneFailed, rejected, unanswered, expired)
 
 	if len(processed) > 0 {
 		if err := n.tickets.DeletePushTickets(ctx, processed); err != nil {

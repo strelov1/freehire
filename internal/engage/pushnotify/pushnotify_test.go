@@ -11,6 +11,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 )
 
 // fakePruner records which tokens were pruned, so tests can assert the
@@ -364,7 +365,7 @@ func TestExpoNotifier_CheckReceipts_TicketAbsentFromResponseIsLeftQueued(t *test
 	pruner := &fakePruner{}
 	store := &fakeTicketStore{due: []Ticket{
 		{ID: 1, Token: "ExponentPushToken[answered]", TicketID: "ticket-answered"},
-		{ID: 2, Token: "ExponentPushToken[no-answer]", TicketID: "ticket-no-answer"},
+		{ID: 2, Token: "ExponentPushToken[no-answer]", TicketID: "ticket-no-answer", CreatedAt: time.Now().Add(-30 * time.Minute)},
 	}}
 	n := newTestNotifier(pruner, &fakeQueuer{}, store)
 	n.receiptsURL = srv.URL
@@ -442,5 +443,31 @@ func TestExpoNotifier_CheckReceipts_LogsARefusalItThenDeletes(t *testing.T) {
 			t.Errorf("log does not mention %q; it is the only record this answer ever had:\n%s",
 				want, logged.String())
 		}
+	}
+}
+
+// Expo keeps a receipt for about a day. A ticket it has not answered by then never will
+// be, and since the claim is oldest-first, keeping it would let such tickets fill every
+// batch and starve the fresh ones behind them.
+func TestExpoNotifier_CheckReceipts_DropsUnansweredTicketPastExpoRetention(t *testing.T) {
+	srv := stubExpoReceipts(t, map[string]map[string]any{})
+	now := time.Date(2026, 10, 22, 12, 0, 0, 0, time.UTC)
+	store := &fakeTicketStore{due: []Ticket{
+		{ID: 1, Token: "ExponentPushToken[old]", TicketID: "ticket-old", CreatedAt: now.Add(-25 * time.Hour)},
+		{ID: 2, Token: "ExponentPushToken[fresh]", TicketID: "ticket-fresh", CreatedAt: now.Add(-30 * time.Minute)},
+	}}
+	pruner := &fakePruner{}
+	n := newTestNotifier(pruner, &fakeQueuer{}, store)
+	n.receiptsURL = srv.URL
+	n.now = func() time.Time { return now }
+
+	if err := n.CheckReceipts(context.Background()); err != nil {
+		t.Fatalf("CheckReceipts: %v", err)
+	}
+	if len(store.deleted) != 1 || store.deleted[0] != 1 {
+		t.Errorf("deleted ticket ids = %v, want only the expired [1]; the fresh one may still be answered", store.deleted)
+	}
+	if len(pruner.pruned) != 0 {
+		t.Errorf("pruned = %v, want none: an unanswered receipt says nothing about the token", pruner.pruned)
 	}
 }
