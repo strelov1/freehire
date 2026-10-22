@@ -4,10 +4,10 @@
   import { api } from '#lib/api.js';
   import { TabStrip, tabStripId } from '#lib/ui/index.js';
 
-  // The company page's views, each its own URL: the job list, the Hiring tab and the
-  // discussion. Routes rather than client state so each is linkable, server-rendered and
+  // The company page's views, each its own URL: the job list, the Hiring tab, the
+  // closed list and the discussion. Routes rather than client state so each is linkable, server-rendered and
   // readable by a crawler — TabStrip renders an `href` tab as a real anchor.
-  type CompanyTab = 'jobs' | 'hiring' | 'discussion';
+  type CompanyTab = 'jobs' | 'hiring' | 'closed' | 'discussion';
 
   let { slug, active, children }: { slug: string; active: CompanyTab; children: Snippet } = $props();
 
@@ -29,6 +29,7 @@
   const tabs = $derived([
     { id: 'jobs' as const, label: 'Jobs', href: resolve('/companies/[slug]', { slug }) },
     { id: 'hiring' as const, label: 'Hiring', href: resolve('/companies/[slug]/hiring', { slug }) },
+    { id: 'closed' as const, label: 'Closed', href: resolve('/companies/[slug]/closed', { slug }) },
     {
       id: 'discussion' as const,
       label: threadCount ? `Discussion · ${threadCount}` : 'Discussion',

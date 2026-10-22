@@ -32,7 +32,11 @@ describe('paged listing routes', () => {
   });
 
   it('refuses a page number past the last page with rows', () => {
+    // The closed-jobs endpoint reports `has_more`, never a total, so `pageExists` has
+    // nothing to read; that route 404s an empty page past the first by hand.
+    const noTotal = 'companies/[slug]/closed/+page.server.ts';
     const unguarded = paged
+      .filter(({ file }) => file !== noTotal)
       .filter(({ source }) => !source.includes('pageExists('))
       .map(({ file }) => file);
     expect(unguarded, 'routes reading ?page=N without checking the page exists').toEqual([]);

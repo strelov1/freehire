@@ -871,6 +871,19 @@ export function createApi(
     );
   }
 
+  /** The company page's Closed tab: a page of the company's closed postings. No total —
+   *  the endpoint reports only whether another page follows. */
+  async function companyClosedJobs(
+    slug: string,
+    limit: number,
+    offset: number,
+  ): Promise<{ jobs: Job[]; hasMore: boolean }> {
+    const res = await request<{ data: Job[]; meta: { has_more: boolean } }>(
+      `/api/v1/companies/${encodeURIComponent(slug)}/closed-jobs${query(limit, offset)}`,
+    );
+    return { jobs: res.data, hasMore: res.meta.has_more };
+  }
+
   /** The company page's Hiring tab payload. The window follows the same rules as
    *  `jobsActivity`. A retired slug is not special-cased here: the page resolves the
    *  company through `getCompany` first, which is where the move is surfaced. */
@@ -3151,6 +3164,7 @@ export function createApi(
     listSources,
     listCompanies,
     getCompany,
+    companyClosedJobs,
     companyHiring,
     listMentors,
     getMentor,
