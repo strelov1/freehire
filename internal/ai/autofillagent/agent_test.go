@@ -191,7 +191,11 @@ func TestRunFillsAScreeningQuestionFromTheProfile(t *testing.T) {
 	}
 }
 
-func TestRunReportsComboboxesInsteadOfFillingThem(t *testing.T) {
+// A widget the plan never targeted is one the profile has no answer for — the planner
+// names every widget worth opening. It is the user's question to answer, not a widget the
+// agent cannot drive, so it belongs with the unanswered fields: "not fillable yet" there
+// told a candidate the product was missing a capability when it was missing their answer.
+func TestRunLeavesAnUntargetedComboboxForTheUser(t *testing.T) {
 	tools := &fakeTools{fields: []autofillagent.Field{
 		{Label: "Email", Type: "email"},
 		{Label: "Country", Type: "text", Combo: true},
@@ -204,11 +208,11 @@ func TestRunReportsComboboxesInsteadOfFillingThem(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
-	if !contains(rep.Deferred, "Country") {
-		t.Fatalf("deferred = %v, want the combobox", rep.Deferred)
+	if !contains(rep.Unmapped, "Country") {
+		t.Fatalf("unmapped = %v, want the untargeted combobox", rep.Unmapped)
 	}
-	if contains(rep.Filled, "Country") {
-		t.Fatal("a combobox was reported as filled")
+	if contains(rep.Deferred, "Country") || contains(rep.Filled, "Country") {
+		t.Fatalf("an untargeted combobox was reported as deferred or filled: %+v", rep)
 	}
 }
 

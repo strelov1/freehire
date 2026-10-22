@@ -1,4 +1,5 @@
 import { HIRE_ORIGIN } from './auth';
+import { planRefusedFrom } from './planRefused';
 
 /** Hosts whose /jobs/<slug> pages we recognise as freehire job postings.
  *
@@ -108,6 +109,14 @@ export function apiErrorMessage(path: string, status: number, body: string): str
   return reason ? `${reason} (HTTP ${status})` : `${path} → HTTP ${status}`;
 }
 
+function parseOrNull(body: string): unknown {
+  try {
+    return JSON.parse(body);
+  } catch {
+    return null;
+  }
+}
+
 function serverReason(body: string): string {
   try {
     const { error } = JSON.parse(body) as { error?: unknown };
@@ -117,9 +126,12 @@ function serverReason(body: string): string {
   }
 }
 
-/** Reads the body once: as the payload when the call succeeded, as the reason when it did not. */
+/** Reads the body once: as the payload when the call succeeded, as the reason when it did not.
+ *  A 402 is the plan refusing a model call, and becomes a PlanRefused so the panel can
+ *  offer the upgrade the server named rather than print a status code. */
 async function unwrap<T>(path: string, res: Response): Promise<T> {
   const body = await res.text();
+  if (res.status === 402) throw planRefusedFrom(parseOrNull(body), "Your plan doesn't include this.");
   if (!res.ok) throw new Error(apiErrorMessage(path, res.status, body));
   return (JSON.parse(body) as { data: T }).data;
 }
@@ -146,6 +158,15 @@ async function getData<T>(path: string, token: string): Promise<T> {
 async function postData<T>(path: string, body: unknown, token: string): Promise<T> {
   const res = await authedFetch(path, token, {
     method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  return unwrap<T>(path, res);
+}
+
+async function putData<T>(path: string, body: unknown, token: string): Promise<T> {
+  const res = await authedFetch(path, token, {
+    method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   });
@@ -274,6 +295,15 @@ export interface AutofillReport {
  */
 export function runAgentAutofill(token: string): Promise<AutofillReport> {
   return postData<AutofillReport>('/api/v1/me/autofill/run', {}, token);
+}
+
+/**
+ * Saves the candidate's answer to one screening question into their answer bank, so
+ * the agent fills it on the next form asking the same thing. The bank keys it by what
+ * the question asks, not its wording — see internal/candidate/answerbank.
+ */
+export async function saveBankAnswer(question: string, answer: string, token: string): Promise<void> {
+  await putData<unknown>('/api/v1/me/answer-bank', { question, answer }, token);
 }
 
 /** What the server did with a page we offered it.

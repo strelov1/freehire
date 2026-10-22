@@ -263,6 +263,27 @@ describe('extractForm combo flag', () => {
     ]);
   });
 
+  it("reports a native select's chosen option as its text, not its code", () => {
+    // The option's value attribute is the ATS's internal id; the text is the answer.
+    const select = document.createElement('select');
+    select.setAttribute('aria-label', 'Veteran status');
+    const choices: [string, string][] = [
+      ['', 'Select...'],
+      ['4417', 'I am not a veteran'],
+    ];
+    for (const [value, text] of choices) {
+      const option = document.createElement('option');
+      option.value = value;
+      option.textContent = text;
+      select.append(option);
+    }
+    document.body.append(select);
+    expect(must(extractForm(document)[0]).value).toBe('');
+
+    select.value = '4417';
+    expect(must(extractForm(document)[0]).value).toBe('I am not a veteran');
+  });
+
   it('does not flag a native select as a custom widget', () => {
     const select = document.createElement('select');
     select.setAttribute('aria-label', 'Country');
@@ -301,6 +322,40 @@ describe('extractForm combo flag', () => {
     const field = must(extractForm(document)[0]);
     expect(field.combo).toBe(true);
     expect(field.options).toBeUndefined();
+  });
+
+  it('reports the value a widget displays, since its input stays empty after a commit', () => {
+    // A react-select keeps the chosen answer in its own markup, never in the
+    // input. Reading the input alone made every answered dropdown look unanswered
+    // — the checklist never ticked it and the answers could not be offered for saving.
+    const control = document.createElement('div');
+    const chosen = document.createElement('div');
+    chosen.className = 'css-1dimb5e-singleValue';
+    chosen.textContent = 'No';
+    const label = document.createElement('label');
+    label.setAttribute('for', 'iv');
+    label.textContent = 'Have you interviewed with us before?';
+    const input = document.createElement('input');
+    input.id = 'iv';
+    input.setAttribute('role', 'combobox');
+    control.append(chosen, input);
+    document.body.append(label, control);
+
+    expect(must(extractForm(document)[0])).toMatchObject({ combo: true, value: 'No' });
+  });
+
+  it('reports no value for a widget showing its placeholder', () => {
+    const control = document.createElement('div');
+    const placeholder = document.createElement('div');
+    placeholder.className = 'css-1jqq78o-placeholder';
+    placeholder.textContent = 'Select...';
+    const input = document.createElement('input');
+    input.setAttribute('role', 'combobox');
+    input.setAttribute('aria-label', 'Gender');
+    control.append(placeholder, input);
+    document.body.append(control);
+
+    expect(must(extractForm(document)[0]).value).toBe('');
   });
 
   it("does not lift a neighbouring widget's options onto a closed one", () => {

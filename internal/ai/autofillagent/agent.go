@@ -503,12 +503,15 @@ func place(field Field, written, driven string) placement {
 		switch driven {
 		case "verified":
 			return wasFilled
-		case widgetUnanswered, widgetUngrounded, widgetNotOffered:
-			// The widget works; it is the answer that is missing.
+		case "", widgetUnanswered, widgetUngrounded, widgetNotOffered:
+			// The answer is what is missing, not the ability to drive the widget. ""
+			// is a widget the plan never targeted, which is the planner saying the
+			// profile answers nothing it could offer (splitByKind drives only what the
+			// plan names).
 			return leftForUser
 		default:
-			// Never targeted, would not open, committed something else, or offers
-			// its options only over the network.
+			// Would not open, committed something else, or offers its options only
+			// over the network.
 			return notFillableYet
 		}
 	}

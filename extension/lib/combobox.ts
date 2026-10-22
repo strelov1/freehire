@@ -12,13 +12,14 @@
 
 import type { ComboboxReply, ComboboxStep } from './protocol';
 import {
-  COMBO_WIDGET,
   collectQuestions,
   comboListbox,
   comboOptionNodes,
+  displayedValues,
   isComboWidget,
   isOnScreen,
   normalizeLabel,
+  shownText,
 } from './form';
 import { assertNever } from './utils';
 
@@ -61,7 +62,7 @@ export function options(doc: Document, label: string): { status: OptionsStatus; 
   const { widget, status } = findWidget(doc, label);
   if (!widget) return { status, options: [] };
   if (!isOpen(widget)) return { status: 'not_open', options: [] };
-  return { status: 'open', options: comboOptionNodes(widget).map(text).filter(Boolean) };
+  return { status: 'open', options: comboOptionNodes(widget).map(shownText).filter(Boolean) };
 }
 
 /**
@@ -75,7 +76,7 @@ export async function select(doc: Document, label: string, value: string): Promi
   const widget = found.widget;
   if (!isOpen(widget)) return { status: 'not_open' };
 
-  const option = comboOptionNodes(widget).find((o) => normalizeLabel(text(o)) === normalizeLabel(value));
+  const option = comboOptionNodes(widget).find((o) => normalizeLabel(shownText(o)) === normalizeLabel(value));
   if (!option) return { status: 'no_option' };
 
   press(option);
@@ -182,35 +183,6 @@ function expandedState(widget: Element): string | null {
   return owner?.getAttribute('aria-expanded') ?? null;
 }
 
-// react-select's rendered value and placeholder, by the emotion class names it
-// generates. Only the *reading* path guesses at class names; see displayedValue.
-const VALUE_NODE = '[class*="singleValue"], [class*="single-value"], [class*="multiValue"], [class*="multi-value"]';
-const PLACEHOLDER_NODE = '[class*="placeholder"]';
-
-/**
- * The values the widget displays — one per chip on a multi-select, empty when it
- * displays none.
- *
- * A react-select keeps its committed value in its own markup — the input's
- * `value` is empty even after a successful commit — so this walks up from the
- * widget looking for the rendered value. It stops the moment the subtree holds a
- * second combobox, which is what makes reporting a *neighbour's* value
- * impossible: on a form of 27 widgets that would be a success reported for a
- * write that never happened. The count uses `COMBO_WIDGET`, the same set
- * `isComboWidget` accepts, so a neighbour declaring itself by `aria-haspopup`
- * rather than `role` still stops the walk.
- */
-function displayedValues(widget: Element): string[] {
-  for (let el = widget.parentElement; el; el = el.parentElement) {
-    if (el.querySelectorAll(COMBO_WIDGET).length > 1) return [];
-    const shown = Array.from(el.querySelectorAll(VALUE_NODE));
-    if (shown.length) return shown.map(text).filter(Boolean);
-    // A visible placeholder means the widget is showing "Select…", not an answer.
-    if (el.querySelector(PLACEHOLDER_NODE)) return [];
-  }
-  return [];
-}
-
 /**
  * The pointer sequence a real click produces, dispatched on the element itself:
  * a widget's handler sits on an ancestor and events bubble, so this reaches it
@@ -234,6 +206,3 @@ async function settle(holds: () => boolean): Promise<boolean> {
   return holds();
 }
 
-function text(el: Element): string {
-  return (el.textContent ?? '').replace(/\s+/g, ' ').trim();
-}

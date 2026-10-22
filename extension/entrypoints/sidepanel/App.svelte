@@ -1,15 +1,17 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { SvelteSet } from 'svelte/reactivity';
   import { browser } from 'wxt/browser';
-  import { type RuntimeMessage, type LabelFill, type FramedUpload } from '../../lib/protocol';
+  import { type RuntimeMessage, type LabelFill, type FramedField, type FramedUpload } from '../../lib/protocol';
   import { TOP_FRAME } from '../../lib/tools/attachCv';
   import { createSession, getSession, SessionNotFound } from '../../lib/assistant/api';
-  import { PlanRefused, sendTurn, type Turn } from '../../lib/assistant/client';
+  import { sendTurn, type Turn } from '../../lib/assistant/client';
+  import { PlanRefused } from '../../lib/planRefused';
   import { initChat, reduceTurnEvent, type ChatState } from '../../lib/assistant/chat';
   import { eventsFromTranscript } from '../../lib/assistant/wire';
   import { recallSession, rememberSession, forgetSession } from '../../lib/assistant/session';
   import { track } from '../../lib/analytics';
-  import { HIRE_ORIGIN, signIn, signOut, getToken, fetchMe, type HireUser } from '../../lib/auth';
+  import { signIn, signOut, getToken, fetchMe, type HireUser } from '../../lib/auth';
   import {
     freehireSlugFromUrl,
     findJob,
@@ -17,6 +19,7 @@
     getMatch,
     getAutofillProfile,
     runAgentAutofill,
+    saveBankAnswer,
     resolveJob,
     resolveNotice,
     type FreehireJob,
@@ -29,6 +32,7 @@
     looksLikeApplication,
     scopeToApplication,
     formatAuthorizedCountries,
+    normalizeLabel,
   } from '../../lib/form';
   import { buildPlan, markAnswered, showsApplicationForm, type ApplyPlan, type PlanItem } from '../../lib/applyPlan';
   import { startWalk, nextStep, applyStep, skipStep, stopWalk, type Walk } from '../../lib/walk';
@@ -36,6 +40,9 @@
   import { activeTabPage } from '../../lib/tools/page';
   import MatchCard from './MatchCard.svelte';
   import ApplyPlanCard from './ApplyPlan.svelte';
+  import SaveAnswers from './SaveAnswers.svelte';
+  import PlanRefusalAlert from './PlanRefusalAlert.svelte';
+  import { answersToOffer, type AnswerOffer } from '../../lib/answerOffer';
   import ToolGroupList from './ToolGroupList.svelte';
   import JobDeck from './JobDeck.svelte';
   import { splitPresentingCalls } from '../../lib/assistant/deck';
@@ -51,6 +58,9 @@
   // The plan said no (402): shown as a paywall with the upgrade link instead of an
   // error line, since retrying would only repeat the same refusal.
   let planRefusal = $state<PlanRefused | null>(null);
+  // The same refusal for agent autofill. Kept apart from the chat's: each is cleared by
+  // its own surface's next attempt, and one tab must not show the other's paywall.
+  let autofillRefusal = $state<PlanRefused | null>(null);
   let restoring = $state(false);
 
   // The conversation this panel is holding, and the turn in flight if there is
@@ -189,6 +199,7 @@
   async function handlePageChange() {
     const key = await currentPageKey();
     formFilled = false;
+    autofilled.clear();
     if (chatPageKey !== null && key !== chatPageKey) {
       resetChat();
       const token = await getToken();
@@ -518,6 +529,15 @@
    *  about whether the page is showing an application: it accepted values. Reset
    *  by a page change, with the plan. */
   let formFilled = $state(false);
+  /** The questions this panel wrote on this page, by normalised label. Those answers
+   *  came from the profile or the bank, so they are never offered back for saving.
+   *  Reset by a page change, with `formFilled`. */
+  const autofilled = new SvelteSet<string>();
+  /** The last read's questions, scoped as the plan is — with their values, which the
+   *  plan does not carry. What the "save my answers" offer is computed from. */
+  let formFields = $state<FramedField[]>([]);
+  let savingAnswers = $state(false);
+  let answerOffers = $derived(autofilling ? [] : answersToOffer(formFields, autofilled));
   /** The upload fields the last read found, across every frame — MatchCard's "Attach
    *  tailored CV" action is gated on at least one being in the TOP frame specifically
    *  (see `pickAttachableUpload`), not merely on this list being non-empty: an upload
@@ -557,21 +577,22 @@
       questionsSeen = 0;
       plan = null;
       uploads = [];
+      formFields = [];
       return;
     }
     uploads = reply.uploads;
     questionsSeen = reply.fields.filter((f) => f.label.trim() !== '').length;
     if (!showsApplicationForm(reply.fields, reply.uploads, { filled: formFilled })) {
       plan = null;
+      formFields = [];
       return;
     }
     // Scoped to the one form the upload identifies, where there is one: an
     // application and a job-alert signup each have their own "Email". With no
     // upload to scope by — every step of an ATS form after the first — the page's
     // questions ARE the form.
-    plan = buildPlan(
-      reply.uploads.length > 0 ? scopeToApplication(reply.fields, reply.uploads) : reply.fields,
-    );
+    formFields = reply.uploads.length > 0 ? scopeToApplication(reply.fields, reply.uploads) : reply.fields;
+    plan = buildPlan(formFields);
   }
 
   /** Sends the user to one question: the page scrolls there and takes the cursor. */
@@ -638,6 +659,7 @@
    *  has: a fill knows its frame and form, the agent's report knows the label
    *  alone. An address that matches nothing leaves the plan as it was. */
   function tickOff(label: string, frame?: number, form?: number) {
+    autofilled.add(normalizeLabel(label));
     if (!plan) return;
     const item = plan.items.find(
       (i) =>
@@ -712,6 +734,7 @@
     if (!token || autofilling) return;
     autofilling = true;
     walkStop = false;
+    autofillRefusal = null;
     try {
       // Read the form first: the walk ticks questions off the plan, and a page
       // whose form arrived after the last read (an ATS step change, which fires
@@ -733,11 +756,17 @@
         notices.push(`Not fillable yet (custom dropdowns): ${nameSome(report.deferred)}.`);
       }
     } catch (err) {
-      // The server's own sentence, not just the status: /me/autofill/run answers
-      // 409 for three unrelated states, and only that sentence says which.
-      notices.push(
-        `Agent autofill unavailable: ${err instanceof Error ? err.message : 'error'} — using the basic filler.`,
-      );
+      if (err instanceof PlanRefused) {
+        // The plan said no: a paywall with the upgrade link, not an error line.
+        autofillRefusal = err;
+        notices.push('Using the basic filler instead.');
+      } else {
+        // The server's own sentence, not just the status: /me/autofill/run answers
+        // 409 for three unrelated states, and only that sentence says which.
+        notices.push(
+          `Agent autofill unavailable: ${err instanceof Error ? err.message : 'error'} — using the basic filler.`,
+        );
+      }
       track('autofill', { mode: 'basic' });
       await deterministicAutofill(token);
     } finally {
@@ -759,6 +788,37 @@
    * runs the same pass rather than re-reading a page that may have moved on.
    */
   let overrideFill = $state<(() => Promise<void>) | null>(null);
+
+  /**
+   * Saves the answers the candidate chose into their answer bank, one at a time. One
+   * refused answer (too long, no readable question) does not stop the rest; the
+   * notice names what did not go through.
+   */
+  async function saveAnswers(chosen: AnswerOffer[]) {
+    const token = await getToken();
+    if (!token || savingAnswers) return;
+    savingAnswers = true;
+    const failed: string[] = [];
+    try {
+      for (const offer of chosen) {
+        try {
+          await saveBankAnswer(offer.question, offer.answer, token);
+          // Saved answers leave the offer: the next read must not ask for them again.
+          autofilled.add(normalizeLabel(offer.question));
+        } catch {
+          failed.push(offer.question);
+        }
+      }
+      const saved = chosen.length - failed.length;
+      track('answers_saved', { saved, failed: failed.length });
+      if (saved > 0) {
+        notices.push(`✓ Saved ${saved} answer${saved === 1 ? '' : 's'} — freehire will fill them on the next form.`);
+      }
+      if (failed.length > 0) notices.push(`Could not save: ${nameSome(failed)}.`);
+    } finally {
+      savingAnswers = false;
+    }
+  }
 
   async function runOverrideFill() {
     const run = overrideFill;
@@ -940,8 +1000,14 @@
                 onReveal={revealItem}
                 onCancel={() => (walkStop = true)}
               />
+              {#if answerOffers.length > 0}
+                <SaveAnswers offers={answerOffers} saving={savingAnswers} onSave={saveAnswers} />
+              {/if}
             {/if}
 
+            {#if autofillRefusal}
+              <PlanRefusalAlert refusal={autofillRefusal} />
+            {/if}
             {#each notices as notice, i (i)}
               <div class="message system">{notice}</div>
             {/each}
@@ -1001,20 +1067,7 @@
             <div class="message system err">{chatError}</div>
           {/if}
           {#if planRefusal}
-            <Alert class="flex flex-col items-start gap-2">
-              <span>{planRefusal.message}</span>
-              {#if planRefusal.upgradeUrl}
-                <Button
-                  variant="primary"
-                  size="sm"
-                  href={`${HIRE_ORIGIN}${planRefusal.upgradeUrl}`}
-                  target="_blank"
-                  rel="noreferrer"
-                  onclick={() => track('upgrade_click', { feature: planRefusal?.feature ?? 'unknown' })}
-                  >Upgrade your plan</Button
-                >
-              {/if}
-            </Alert>
+            <PlanRefusalAlert refusal={planRefusal} />
           {/if}
           {#if chat.messages.length === 0}
             <p class="empty">

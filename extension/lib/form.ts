@@ -217,9 +217,15 @@ function describeQuestion({ label, controls }: Question, index: number, forms: H
       .join(', ');
   } else if (el instanceof HTMLSelectElement) {
     field.options = Array.from(el.options).map((o) => (o.textContent ?? '').trim());
+    // The answer is the chosen option's text; its value attribute is the ATS's own
+    // code ("4417"), which means nothing to the person or to anyone reading it back.
+    // An empty value stays empty: that is the "Select..." placeholder, not an answer.
+    if (field.value) field.value = (el.selectedOptions[0]?.textContent ?? '').trim();
   } else if (field.combo) {
     const offered = comboOptions(el);
     if (offered.length) field.options = offered;
+    // The widget's input is empty even after a commit; the answer is what it displays.
+    if (!field.value) field.value = displayedValues(el).join(', ');
   }
   return field;
 }
@@ -308,6 +314,40 @@ export function isComboWidget(el: Fillable): boolean {
  * `aria-haspopup="listbox"` instead, and report that neighbour's value.
  */
 export const COMBO_WIDGET = '[role="combobox"], [aria-autocomplete], [aria-haspopup="listbox"]';
+
+// react-select's rendered value and placeholder, by the emotion class names it
+// generates. Only the *reading* path guesses at class names; see displayedValue.
+const VALUE_NODE = '[class*="singleValue"], [class*="single-value"], [class*="multiValue"], [class*="multi-value"]';
+const PLACEHOLDER_NODE = '[class*="placeholder"]';
+
+/**
+ * The values the widget displays — one per chip on a multi-select, empty when it
+ * displays none.
+ *
+ * A react-select keeps its committed value in its own markup — the input's
+ * `value` is empty even after a successful commit — so this walks up from the
+ * widget looking for the rendered value. It stops the moment the subtree holds a
+ * second combobox, which is what makes reporting a *neighbour's* value
+ * impossible: on a form of 27 widgets that would be a success reported for a
+ * write that never happened. The count uses `COMBO_WIDGET`, the same set
+ * `isComboWidget` accepts, so a neighbour declaring itself by `aria-haspopup`
+ * rather than `role` still stops the walk.
+ */
+export function displayedValues(widget: Element): string[] {
+  for (let el = widget.parentElement; el; el = el.parentElement) {
+    if (el.querySelectorAll(COMBO_WIDGET).length > 1) return [];
+    const shown = Array.from(el.querySelectorAll(VALUE_NODE));
+    if (shown.length) return shown.map(shownText).filter(Boolean);
+    // A visible placeholder means the widget is showing "Select…", not an answer.
+    if (el.querySelector(PLACEHOLDER_NODE)) return [];
+  }
+  return [];
+}
+
+/** An element's text as a person reads it: whitespace collapsed, ends trimmed. */
+export function shownText(el: Element): string {
+  return (el.textContent ?? '').replace(/\s+/g, ' ').trim();
+}
 
 /** Best-effort human label for a control, in decreasing reliability. */
 function extractLabel(el: Fillable): string {

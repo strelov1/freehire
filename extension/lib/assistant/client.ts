@@ -10,30 +10,11 @@
 // extension code cannot see hire's httpOnly cookie across origins.
 
 import { HIRE_ORIGIN } from '../auth';
+import { PlanRefused, planRefusedFrom } from '../planRefused';
 import { readFrames } from './sse';
 import type { TurnEvent } from './wire';
 
 const BASE = `${HIRE_ORIGIN}/api/v1/assistant`;
-
-/**
- * The plan refused the turn (HTTP 402). The server writes the sentence for the
- * candidate — what their plan lacks or what ran out — and, when there is a bigger
- * plan to buy, the path to upgrade at; both are carried so the panel can show a
- * paywall rather than a status code.
- */
-export class PlanRefused extends Error {
-  /** A path on the hire origin (e.g. `/my/plan`), or null when nothing is for sale. */
-  readonly upgradeUrl: string | null;
-  /** The metered feature that refused (e.g. `assistant`), or `unknown`. */
-  readonly feature: string;
-
-  constructor(message: string, upgradeUrl: string | null, feature = 'unknown') {
-    super(message);
-    this.name = 'PlanRefused';
-    this.upgradeUrl = upgradeUrl;
-    this.feature = feature;
-  }
-}
 
 /** A turn in flight: its completion, and the handle that stops it. */
 export interface Turn {
@@ -113,12 +94,7 @@ export function sendTurn(
 async function planRefusal(res: Response): Promise<PlanRefused> {
   const fallback = 'Your plan does not include the assistant.';
   try {
-    const body = await res.json();
-    return new PlanRefused(
-      typeof body?.error === 'string' ? body.error : fallback,
-      typeof body?.upgrade_url === 'string' ? body.upgrade_url : null,
-      typeof body?.allowance?.feature === 'string' ? body.allowance.feature : 'unknown',
-    );
+    return planRefusedFrom(await res.json(), fallback);
   } catch {
     return new PlanRefused(fallback, null);
   }

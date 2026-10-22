@@ -1,13 +1,15 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import {
   freehireSlugFromUrl,
   resolveNotice,
   apiErrorMessage,
   partitionBlockers,
   pickTailoredCVForJob,
+  runAgentAutofill,
   type Blocker,
   type TailoredCV,
 } from './freehire';
+import { PlanRefused } from './planRefused';
 
 describe('freehireSlugFromUrl', () => {
   it('extracts the slug from a freehire job URL', () => {
@@ -158,5 +160,33 @@ describe('pickTailoredCVForJob', () => {
   it('picks the one match out of several unrelated tailored CVs', () => {
     const cvs = [cv('a', 'frontend-acme'), cv('b', 'backend-acme'), cv('c', 'devops-acme')];
     expect(pickTailoredCVForJob(cvs, 'backend-acme')?.id).toBe('b');
+  });
+});
+
+describe('a 402 from a plain call', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  // Agent autofill is a model call like the assistant's turn, and the plan refuses it
+  // the same way. Read as an ordinary error it printed "(HTTP 402)" and dropped the
+  // upgrade link the server sent — the one thing the person could act on.
+  it('rejects with a PlanRefused carrying the message and the upgrade link', async () => {
+    vi.stubGlobal('fetch', async () => ({
+      ok: false,
+      status: 402,
+      text: async () => JSON.stringify({ error: "Your plan doesn't include this.", upgrade_url: '/pricing' }),
+    }));
+
+    const err = await runAgentAutofill('tok').catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(PlanRefused);
+    expect((err as PlanRefused).message).toBe("Your plan doesn't include this.");
+    expect((err as PlanRefused).upgradeUrl).toBe('/pricing');
+  });
+
+  it('still rejects with a PlanRefused when the body is not JSON', async () => {
+    vi.stubGlobal('fetch', async () => ({ ok: false, status: 402, text: async () => '<html>' }));
+
+    const err = await runAgentAutofill('tok').catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(PlanRefused);
+    expect((err as PlanRefused).upgradeUrl).toBeNull();
   });
 });

@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { PlanRefused, sendTurn } from './client';
+import { sendTurn } from './client';
+import { PlanRefused } from '../planRefused';
 import type { TurnEvent } from './wire';
 import { must } from '../test-utils';
 
