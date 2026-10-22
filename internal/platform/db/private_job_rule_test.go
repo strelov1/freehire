@@ -85,14 +85,12 @@ var privatePredicateExemptions = map[string]string{
 	// company and show nothing.
 	//
 	// A private row that lands in a cluster is already invisible, so being marked a
-	// duplicate costs it nothing. The residual is the reverse — a private row elected
-	// CANON would take the public postings of that role out of search with it — and it is
-	// bounded by how the canon is chosen: MIN(id), so the private row would have to
-	// predate every open public posting of the role, when a pasted JD is by construction
-	// copied from one that already exists. Narrowing the passes themselves means editing
-	// statements that run over the whole catalogue, which is not this change. ---
+	// duplicate costs it nothing. The reverse — a private row elected CANON, taking the
+	// public postings of that role out of search with it — is closed in the role pass
+	// itself: RecomputeRoleDuplicatesForCompanies carries the predicate on its canon, since a
+	// JD pasted before the employer's board entered the catalogue predates every public
+	// posting of the role. ---
 	"CompaniesWithRoleClusters":                "names the companies whose role clusters the pass recomputes",
-	"RecomputeRoleDuplicatesForCompanies":      "recomputes duplicate_of_role within one company's clusters",
 	"CompaniesWithAggregatorPostings":          "names the companies holding aggregator postings for the suppression pass",
 	"SuppressAggregatorDuplicatesForCompanies": "marks an aggregator posting a duplicate of the employer's own board row",
 	"CompaniesWithFuzzyDedupCandidates":        "names the companies the fuzzy pass considers",

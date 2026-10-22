@@ -921,11 +921,17 @@ WHERE closed_at IS NULL AND company_slug <> '' AND duplicate_of IS NOT NULL;
 -- (company_slug, role_fingerprint) index makes both scans range scans over the batch.
 -- The IS DISTINCT FROM guard makes re-runs cheap and idempotent, and a closed canon
 -- fails over to the next min(id) on the next run.
+-- A private row is never canon, the rule CanonicalJobForRole states at write time: a JD pasted
+-- before the employer's board entered the catalogue predates every public posting of the role,
+-- and electing it would mark those postings duplicates of a row nothing lists, taking them out
+-- of search. It still joins target below, so it can be marked a duplicate of a public canon,
+-- which costs nothing to a row that is already invisible.
 WITH canon AS (
     SELECT jobs.role_fingerprint, MIN(jobs.id) AS canon_id, COUNT(*) AS n
     FROM jobs
     WHERE jobs.company_slug = ANY(sqlc.arg(companies)::text[])
       AND jobs.closed_at IS NULL AND jobs.role_fingerprint IS NOT NULL AND jobs.role_fingerprint <> ''
+      AND NOT jobs.is_private
     GROUP BY jobs.role_fingerprint
 ),
 target AS (
