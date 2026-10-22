@@ -308,12 +308,13 @@ export function isComboWidget(el: Fillable): boolean {
 }
 
 /**
- * The ways a widget declares itself a combobox. Exported because anything that
- * reads *around* a widget must recognise the same set: a guard counting only
- * `[role=combobox]` would walk straight past a neighbour that says
- * `aria-haspopup="listbox"` instead, and report that neighbour's value.
+ * The ways a widget declares itself a combobox. One constant because anything that
+ * reads *around* a widget (`displayedValues`) must recognise the same set as
+ * `isComboWidget`: a guard counting only `[role=combobox]` would walk straight past
+ * a neighbour that says `aria-haspopup="listbox"` instead, and report that
+ * neighbour's value.
  */
-export const COMBO_WIDGET = '[role="combobox"], [aria-autocomplete], [aria-haspopup="listbox"]';
+const COMBO_WIDGET = '[role="combobox"], [aria-autocomplete], [aria-haspopup="listbox"]';
 
 // react-select's rendered value and placeholder, by the emotion class names it
 // generates. Only the *reading* path guesses at class names; see displayedValue.
