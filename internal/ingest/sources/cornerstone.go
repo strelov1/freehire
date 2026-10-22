@@ -12,7 +12,8 @@ import (
 // subdomain (e.g. "nintendoeurope" → nintendoeurope.csod.com). The careersite home shell
 // embeds a JSON config blob carrying the regional API base and a JWT read token; with the
 // token as a Bearer credential, the rec-job-search/external/jobs endpoint returns every
-// requisition with its description inline, so no per-posting detail fetch is needed.
+// requisition with its description inline, so no per-posting detail fetch is needed. One
+// token reads every career site of the tenant, so the board needs no site id.
 type cornerstoneHTTP interface {
 	TextGetter
 	HeaderJSONPoster
@@ -29,6 +30,12 @@ func (cornerstone) Provider() string { return "cornerstone" }
 
 // cornerstonePageSize is the search page size; the loop paginates until totalCount is reached.
 const cornerstonePageSize = 100
+
+// cornerstoneMaxSites bounds the career sites probed per tenant. A tenant may run several
+// (one per country or audience) and nothing lists them, so the adapter asks each id in turn:
+// an unused id answers an empty search, not an error. Most tenants post on site 1 alone;
+// Krka posts on 13-22 and leaves 1-12 empty (freehire#3446), the highest ids measured.
+const cornerstoneMaxSites = 40
 
 // cornerstoneLocation is one of a requisition's locations.
 type cornerstoneLocation struct {
@@ -74,11 +81,39 @@ func (s cornerstone) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	apiURL := strings.TrimRight(cloud, "/") + "/rec-job-search/external/jobs"
 	headers := map[string]string{"Authorization": "Bearer " + token}
 
+	var jobs []Job
+	seen := map[int]bool{}
+	for site := 1; site <= cornerstoneMaxSites; site++ {
+		reqs, err := s.searchSite(ctx, apiURL, headers, site, cultureID, cultureName)
+		if err != nil {
+			if site == 1 {
+				return nil, fmt.Errorf("cornerstone: search %s: %w", e.Board, err)
+			}
+			continue // a later site failing costs that site, not the board
+		}
+		for _, r := range reqs {
+			if seen[r.RequisitionID] {
+				continue // one posting listed on several sites keeps the first site's link
+			}
+			if j, ok := s.toJob(r, e, site); ok {
+				seen[r.RequisitionID] = true
+				jobs = append(jobs, j)
+			}
+		}
+	}
+	return jobs, nil
+}
+
+// searchSite pages through one career site's requisitions until totalCount is reached. The
+// first page failing is the site's error; a later page failing ends it with what it has.
+func (s cornerstone) searchSite(ctx context.Context, apiURL string, headers map[string]string,
+	site, cultureID int, cultureName string,
+) ([]cornerstoneRequisition, error) {
 	var reqs []cornerstoneRequisition
 	for page := 1; page <= 100; page++ {
 		body := map[string]any{
-			"careerSiteId":            1,
-			"careerSitePageId":        1,
+			"careerSiteId":            site,
+			"careerSitePageId":        site,
 			"pageNumber":              page,
 			"pageSize":                cornerstonePageSize,
 			"cultureId":               cultureID,
@@ -94,9 +129,9 @@ func (s cornerstone) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 		var resp cornerstoneResponse
 		if err := s.http.PostJSONWithHeaders(ctx, apiURL, headers, body, &resp); err != nil {
 			if page == 1 {
-				return nil, fmt.Errorf("cornerstone: search %s: %w", e.Board, err)
+				return nil, err
 			}
-			break // a later page failing ends enumeration with what we have
+			break
 		}
 		if len(resp.Data.Requisitions) == 0 {
 			break
@@ -106,26 +141,20 @@ func (s cornerstone) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 			break
 		}
 	}
-
-	jobs := make([]Job, 0, len(reqs))
-	for _, r := range reqs {
-		if j, ok := s.toJob(r, e); ok {
-			jobs = append(jobs, j)
-		}
-	}
-	return jobs, nil
+	return reqs, nil
 }
 
-// toJob maps a requisition to a Job, returning ok=false when it has no id (which would
-// collide on the dedup key). Company comes from config; the description is served inline.
-func (cornerstone) toJob(r cornerstoneRequisition, e CompanyEntry) (Job, bool) {
+// toJob maps a requisition found on the given career site to a Job, returning ok=false when
+// it has no id (which would collide on the dedup key). Company comes from config; the
+// description is served inline.
+func (cornerstone) toJob(r cornerstoneRequisition, e CompanyEntry, site int) (Job, bool) {
 	if r.RequisitionID == 0 {
 		return Job{}, false
 	}
 	return Job{
 		ExternalID: strconv.Itoa(r.RequisitionID),
-		URL: fmt.Sprintf("https://%s.csod.com/ux/ats/careersite/1/home/requisition/%d?c=%s",
-			e.Board, r.RequisitionID, e.Board),
+		URL: fmt.Sprintf("https://%s.csod.com/ux/ats/careersite/%d/home/requisition/%d?c=%s",
+			e.Board, site, r.RequisitionID, e.Board),
 		Title:       r.DisplayJobTitle,
 		Company:     e.Company,
 		Location:    cornerstonePrimaryLocation(r.Locations),

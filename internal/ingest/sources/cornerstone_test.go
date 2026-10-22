@@ -158,3 +158,74 @@ func TestCornerstoneDropsRequisitionWithNoID(t *testing.T) {
 		t.Fatalf("got %d jobs, want 0 (requisition with no id dropped)", len(got))
 	}
 }
+
+// cornerstoneSitesHTTP serves the home page and answers each search by the careerSiteId in
+// the request body, so a tenant can spread its postings over several career sites.
+type cornerstoneSitesHTTP struct {
+	sites map[int]string // careerSiteId → requisitions JSON array
+	fail  map[int]bool   // careerSiteId → search fails
+}
+
+func (h *cornerstoneSitesHTTP) GetText(context.Context, string) (string, error) {
+	return cornerstoneHomeHTML, nil
+}
+
+func (h *cornerstoneSitesHTTP) PostJSONWithHeaders(_ context.Context, _ string, _ map[string]string, body, v any) error {
+	site := body.(map[string]any)["careerSiteId"].(int)
+	if h.fail[site] {
+		return fmt.Errorf("site %d unavailable", site)
+	}
+	reqs := h.sites[site]
+	n := strings.Count(reqs, "requisitionId")
+	return json.Unmarshal([]byte(fmt.Sprintf(`{"data":{"totalCount":%d,"requisitions":[%s]}}`, n, reqs)), v)
+}
+
+// Krka keeps nothing on career site 1 and one site per country from 13 on; a requisition
+// listed on two sites is one posting, linked from the first site that lists it.
+func TestCornerstoneCollectsEveryCareerSite(t *testing.T) {
+	fake := &cornerstoneSitesHTTP{sites: map[int]string{
+		13: `{"requisitionId":9171,"displayJobTitle":"Slovenia"}`,
+		14: `{"requisitionId":9115,"displayJobTitle":"Poland"},{"requisitionId":9171,"displayJobTitle":"Slovenia"}`,
+	}}
+	jobs, err := NewCornerstone(fake).Fetch(context.Background(), CompanyEntry{Board: "krka"})
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	urls := map[string]string{}
+	for _, j := range jobs {
+		urls[j.ExternalID] = j.URL
+	}
+	want := map[string]string{
+		"9171": "https://krka.csod.com/ux/ats/careersite/13/home/requisition/9171?c=krka",
+		"9115": "https://krka.csod.com/ux/ats/careersite/14/home/requisition/9115?c=krka",
+	}
+	if len(jobs) != len(want) {
+		t.Fatalf("got %d jobs (%v), want %d", len(jobs), urls, len(want))
+	}
+	for id, u := range want {
+		if urls[id] != u {
+			t.Errorf("URL for %s = %q, want %q", id, urls[id], u)
+		}
+	}
+}
+
+func TestCornerstoneSkipsALaterCareerSiteThatFails(t *testing.T) {
+	fake := &cornerstoneSitesHTTP{
+		sites: map[int]string{1: `{"requisitionId":1,"displayJobTitle":"A"}`, 3: `{"requisitionId":3,"displayJobTitle":"C"}`},
+		fail:  map[int]bool{2: true},
+	}
+	jobs, err := NewCornerstone(fake).Fetch(context.Background(), CompanyEntry{Board: "tenant"})
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	if len(jobs) != 2 {
+		t.Fatalf("got %d jobs, want 2 (site 2 skipped)", len(jobs))
+	}
+}
+
+func TestCornerstoneFirstSearchFailingFailsTheBoard(t *testing.T) {
+	fake := &cornerstoneSitesHTTP{fail: map[int]bool{1: true}}
+	if _, err := NewCornerstone(fake).Fetch(context.Background(), CompanyEntry{Board: "tenant"}); err == nil {
+		t.Fatal("expected an error when the very first search fails")
+	}
+}
