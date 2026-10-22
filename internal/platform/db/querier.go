@@ -2135,7 +2135,7 @@ type Querier interface {
 	// match older than the freshness window, or one whose job has closed. A stale match is
 	// never delivered — nobody wants a three-week-old posting announced as new, least of all
 	// one that has already closed — and it is neither notified (nobody was told) nor failed
-	// (nothing was attempted), so it gets a terminal state of its own (migration 0192).
+	// (nothing was attempted), so it gets a terminal state of its own (migration 0193).
 	//
 	// This is what bounds the pending set for a subscription that cannot be delivered at all
 	// (push with no device, an unlinked Telegram chat, a disabled webhook): its matches used
@@ -5223,7 +5223,7 @@ type Querier interface {
 	// `delivered=1 failed=0` for weeks while 1.14M matches sat undelivered and one
 	// subscription's had never been claimed at all (2026-09-04, see docs/agents/notifications.md).
 	//
-	// Stale matches (expired_at, migration 0192) are not pending, so the age is now bounded by
+	// Stale matches (expired_at, migration 0193) are not pending, so the age is now bounded by
 	// the notify worker's freshness window (3 days): a subscription that cannot be delivered
 	// at all — push with no device, an unlinked Telegram chat — holds matches up to that age
 	// and then lets them go, where it used to report a 50-day-old match nobody would ever

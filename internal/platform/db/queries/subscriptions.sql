@@ -139,7 +139,7 @@ RETURNING m.subscription_id, m.job_id, m.matched_at;
 -- match older than the freshness window, or one whose job has closed. A stale match is
 -- never delivered — nobody wants a three-week-old posting announced as new, least of all
 -- one that has already closed — and it is neither notified (nobody was told) nor failed
--- (nothing was attempted), so it gets a terminal state of its own (migration 0192).
+-- (nothing was attempted), so it gets a terminal state of its own (migration 0193).
 --
 -- This is what bounds the pending set for a subscription that cannot be delivered at all
 -- (push with no device, an unlinked Telegram chat, a disabled webhook): its matches used

@@ -251,7 +251,7 @@ type Config struct {
 	SnapshotCap int
 	// FreshnessWindow is how long a match may wait to be delivered. Older than
 	// this — or for a job that has since closed — it goes stale and leaves the
-	// pending set undelivered (expired_at, migration 0192). It is what bounds the
+	// pending set undelivered (expired_at, migration 0193). It is what bounds the
 	// backlog of a subscription nobody can currently receive (push with no device,
 	// an unlinked Telegram chat), so a person who reconnects is sent what is new,
 	// not a month of postings that have mostly closed.

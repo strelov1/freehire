@@ -205,7 +205,7 @@ Telegram, and mobile push), each with its own small `Notifier`/`Router` pair:
   every pass forever.
 - **A match goes STALE, undelivered, after `Config.FreshnessWindow` (3 days) or once its
   job closes.** `ExpireStaleSubscriptionMatches` runs first in every delivery stage, in
-  bounded batches until one comes back short, and stamps `expired_at` (migration 0192) —
+  bounded batches until one comes back short, and stamps `expired_at` (migration 0193) —
   a terminal state of its own, because a stale match was neither shown to anyone
   (`notified_at`) nor attempted (`failed_at`, the dead-letter queue an operator reads), and
   deleting it would let the match stage record it again as new. This is what bounds the

@@ -323,7 +323,7 @@ ORDER BY b.provider;
 -- `delivered=1 failed=0` for weeks while 1.14M matches sat undelivered and one
 -- subscription's had never been claimed at all (2026-09-04, see docs/agents/notifications.md).
 --
--- Stale matches (expired_at, migration 0192) are not pending, so the age is now bounded by
+-- Stale matches (expired_at, migration 0193) are not pending, so the age is now bounded by
 -- the notify worker's freshness window (3 days): a subscription that cannot be delivered
 -- at all — push with no device, an unlinked Telegram chat — holds matches up to that age
 -- and then lets them go, where it used to report a 50-day-old match nobody would ever
