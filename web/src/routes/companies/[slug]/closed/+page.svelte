@@ -5,7 +5,7 @@
   import CompanyTabs from '#lib/components/CompanyTabs.svelte';
   import JobRow from '#lib/components/JobRow.svelte';
   import Seo from '#lib/components/Seo.svelte';
-  import { pageHref } from '#lib/pagination.js';
+  import { pageHref, pageWithinWindow } from '#lib/pagination.js';
   import { Breadcrumbs } from '#lib/ui/index.js';
   import type { PageData } from './$types';
 
@@ -59,14 +59,15 @@
             {/each}
           </ul>
 
-          <nav class="mt-6 flex justify-between text-sm" aria-label="Pages">
+          <nav class="mt-6 flex justify-between text-sm" aria-label="Closed positions pages">
             {#if data.pageNumber > 1}
               <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- pathname comes from page.url, already resolved (see Pagination.svelte) -->
               <a class="underline hover:text-foreground" href={pageHref(pathname, noParams, data.pageNumber - 1)}>← Newer</a>
             {:else}
               <span></span>
             {/if}
-            {#if data.closed.hasMore}
+            <!-- The API stops at the feed window; past MAX_PAGE the next page would 404. -->
+            {#if data.closed.hasMore && pageWithinWindow(data.pageNumber + 1)}
               <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- as above -->
               <a class="underline hover:text-foreground" href={pageHref(pathname, noParams, data.pageNumber + 1)}>Older →</a>
             {/if}

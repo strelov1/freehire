@@ -70,6 +70,12 @@ describe('robots.txt', () => {
     }
   });
 
+  it('keeps every crawler off the company Closed tab', () => {
+    for (const agent of ['*', ...SEARCH_CRAWLERS]) {
+      expect(groups(BODY).get(agent)).toContain('/companies/*/closed');
+    }
+  });
+
   // The API pointer is aimed at agents, which read the wildcard group — a crawler
   // that follows it is the cheap outcome the comment block argues for.
   it('still advertises the API and the sitemap', () => {
