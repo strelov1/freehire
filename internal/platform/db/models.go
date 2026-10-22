@@ -654,6 +654,12 @@ type InsightsCompanyGrowth struct {
 	OpenCountPrev int32  `json:"open_count_prev"`
 }
 
+type InsightsCompanyLifetime struct {
+	CompanySlug string  `json:"company_slug"`
+	Closed      int32   `json:"closed"`
+	MedianDays  float32 `json:"median_days"`
+}
+
 type InsightsCompanyResponse struct {
 	CompanySlug     string        `json:"company_slug"`
 	Applications    int32         `json:"applications"`

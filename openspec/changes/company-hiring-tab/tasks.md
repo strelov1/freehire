@@ -1,6 +1,6 @@
 ## 1. Lifetime rollup
 
-- [ ] 1.1 Migration `0182_insights_company_lifetime.sql`: table `(company_slug text PK, closed int NOT NULL, median_days real NOT NULL)`
+- [ ] 1.1 Migration `0189_insights_company_lifetime.sql`: table `(company_slug text PK, closed int NOT NULL, median_days real NOT NULL)`
 - [ ] 1.2 Queries `DeleteAllInsightsCompanyLifetime`, `RebuildInsightsCompanyLifetime` (allowlisted reasons, 180-day window, canonical rows), `GetCompanyLifetime`; `make sqlc`; integration tests for every scenario in the `company-hiring-signal` delta
 - [ ] 1.3 `cmd/rollup-company` rebuilds it inside the existing transaction and logs the count
 
@@ -8,7 +8,7 @@
 
 - [ ] 2.1 Queries `ListCompanyActivity` (dense, granularity rollup) and `GetCompanyGrowth`; integration tests for dense zeros and week rollup
 - [ ] 2.2 Handler `GET /api/v1/companies/:slug/hiring` on `companiesHandlers`: `parseActivityQuery` window, 404, alias 301, growth zeros when no row, lifetime gate (5); integration tests
-- [ ] 2.3 Document the endpoint in `web/static/openapi.yaml`
+- [ ] 2.3 Document the endpoint in `web/src/lib/docs/api-spec.ts` and regenerate (`gen:api-docs`, `gen:openapi`) — NOT `web/static/openapi.yaml`, the deliberately narrow ChatGPT Actions schema
 
 ## 3. Web
 

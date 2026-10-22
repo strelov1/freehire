@@ -603,3 +603,59 @@ SELECT
                          AND r.retracted_at IS NULL)
     )::int AS answered
   FROM observable o;
+
+-- ---------------------------------------------------------------------------
+-- Per-company posting lifetime (backs the company page's Hiring tab)
+-- ---------------------------------------------------------------------------
+
+-- name: DeleteAllInsightsCompanyLifetime :exec
+DELETE FROM insights_company_lifetime;
+
+-- name: RebuildInsightsCompanyLifetime :execrows
+-- Median days from created_at to closed_at over each company's canonical postings
+-- closed in the last 180 days. Only closures that say something about the EMPLOYER
+-- count: the posting left its source (unseen, feed_removed), the employer closed it,
+-- or its own deadline passed. board_unreachable and feed_empty measure our crawler,
+-- source_misattributed and moderated our own decisions — counting them would publish
+-- our health as a named employer's hiring speed. 180 days so the figure describes how
+-- the company hires now, not over its whole history.
+INSERT INTO insights_company_lifetime (company_slug, closed, median_days)
+SELECT
+    company_slug,
+    count(*)::int,
+    percentile_cont(0.5) WITHIN GROUP (
+        ORDER BY EXTRACT(EPOCH FROM (closed_at - created_at)) / 86400.0
+    )::real
+FROM jobs
+WHERE company_slug <> ''
+  AND duplicate_of IS NULL
+  AND closed_at IS NOT NULL
+  AND closed_at >= now() - interval '180 days'
+  AND closed_reason IN ('unseen', 'employer_closed', 'feed_removed', 'expired')
+GROUP BY company_slug;
+
+-- name: GetCompanyLifetime :one
+-- One company's posting lifetime. No row means no qualifying closure; the caller
+-- applies its own sample gate on `closed`.
+SELECT closed, median_days FROM insights_company_lifetime WHERE company_slug = $1;
+
+-- name: GetCompanyGrowth :one
+-- One company's open count now and as of the growth window ago. No row means nothing
+-- open at either point; the caller serves zeros.
+SELECT open_count, open_count_prev FROM insights_company_growth WHERE company_slug = $1;
+
+-- name: ListCompanyActivity :many
+-- One company's dense added/removed series over [from, to] at the given granularity —
+-- the company-scoped twin of ListJobActivity. insights_company_stats holds rows only on
+-- a company's activity days, so a daily generate_series builds the gap-free calendar,
+-- the LEFT JOIN on the (company_slug, day) primary key fills it (missing days → 0), and
+-- date_trunc rolls days up to the bucket. `unit` is caller-validated (day/week/month).
+SELECT
+    date_trunc(sqlc.arg('unit')::text, d)::date AS period,
+    COALESCE(sum(s.added), 0)::int   AS added,
+    COALESCE(sum(s.removed), 0)::int AS removed
+FROM generate_series(sqlc.arg('from_ts')::timestamp, sqlc.arg('to_ts')::timestamp, interval '1 day') AS d
+LEFT JOIN insights_company_stats s
+       ON s.company_slug = sqlc.arg('company_slug')::text AND s.day = d::date
+GROUP BY date_trunc(sqlc.arg('unit')::text, d)
+ORDER BY date_trunc(sqlc.arg('unit')::text, d);

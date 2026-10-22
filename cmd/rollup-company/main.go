@@ -8,7 +8,9 @@
 // holds one scalar row per company (open_count now + open_count as of the growth window
 // ago) that backs the ranked /api/v1/insights/companies leaderboard. Both are the company-
 // grained siblings of the insights_* rollups and the foundation for a company hiring
-// signal (who is ramping vs. freezing).
+// signal (who is ramping vs. freezing). insights_company_lifetime holds each company's
+// median days from posting to an employer-side closure, shown on the company page's
+// Hiring tab.
 //
 // It is a run-once-and-exit worker (cron-scheduled, ~daily given the company grain):
 // the clear and rebuild run inside one transaction, so a reader never sees a table
@@ -99,11 +101,23 @@ func run() int {
 		return 1
 	}
 
+	// Posting lifetime, same transaction again: the Hiring tab shows it beside the
+	// growth figure, and the two must describe the same rebuild.
+	if err := q.DeleteAllInsightsCompanyLifetime(ctx); err != nil {
+		log.Printf("clear lifetime: %v", err)
+		return 1
+	}
+	measured, err := q.RebuildInsightsCompanyLifetime(ctx)
+	if err != nil {
+		log.Printf("rebuild lifetime: %v", err)
+		return 1
+	}
+
 	if err := tx.Commit(ctx); err != nil {
 		log.Printf("commit: %v", err)
 		return 1
 	}
 
-	log.Printf("rollup-company: rebuilt insights_company_stats (%d company-day rows) + insights_company_growth (%d companies) + insights_company_response (%d companies with an observable application)", rows, companies, responders)
+	log.Printf("rollup-company: rebuilt insights_company_stats (%d company-day rows) + insights_company_growth (%d companies) + insights_company_response (%d companies with an observable application) + insights_company_lifetime (%d companies with an employer-side closure)", rows, companies, responders, measured)
 	return 0
 }

@@ -24,6 +24,19 @@ func (q *Queries) DeleteAllInsightsCompanyGrowth(ctx context.Context) error {
 	return err
 }
 
+const deleteAllInsightsCompanyLifetime = `-- name: DeleteAllInsightsCompanyLifetime :exec
+
+DELETE FROM insights_company_lifetime
+`
+
+// ---------------------------------------------------------------------------
+// Per-company posting lifetime (backs the company page's Hiring tab)
+// ---------------------------------------------------------------------------
+func (q *Queries) DeleteAllInsightsCompanyLifetime(ctx context.Context) error {
+	_, err := q.db.Exec(ctx, deleteAllInsightsCompanyLifetime)
+	return err
+}
+
 const deleteAllInsightsCompanyResponse = `-- name: DeleteAllInsightsCompanyResponse :exec
 DELETE FROM insights_company_response
 `
@@ -124,6 +137,42 @@ DELETE FROM insights_velocity_daily
 func (q *Queries) DeleteAllInsightsVelocityDaily(ctx context.Context) error {
 	_, err := q.db.Exec(ctx, deleteAllInsightsVelocityDaily)
 	return err
+}
+
+const getCompanyGrowth = `-- name: GetCompanyGrowth :one
+SELECT open_count, open_count_prev FROM insights_company_growth WHERE company_slug = $1
+`
+
+type GetCompanyGrowthRow struct {
+	OpenCount     int32 `json:"open_count"`
+	OpenCountPrev int32 `json:"open_count_prev"`
+}
+
+// One company's open count now and as of the growth window ago. No row means nothing
+// open at either point; the caller serves zeros.
+func (q *Queries) GetCompanyGrowth(ctx context.Context, companySlug string) (GetCompanyGrowthRow, error) {
+	row := q.db.QueryRow(ctx, getCompanyGrowth, companySlug)
+	var i GetCompanyGrowthRow
+	err := row.Scan(&i.OpenCount, &i.OpenCountPrev)
+	return i, err
+}
+
+const getCompanyLifetime = `-- name: GetCompanyLifetime :one
+SELECT closed, median_days FROM insights_company_lifetime WHERE company_slug = $1
+`
+
+type GetCompanyLifetimeRow struct {
+	Closed     int32   `json:"closed"`
+	MedianDays float32 `json:"median_days"`
+}
+
+// One company's posting lifetime. No row means no qualifying closure; the caller
+// applies its own sample gate on `closed`.
+func (q *Queries) GetCompanyLifetime(ctx context.Context, companySlug string) (GetCompanyLifetimeRow, error) {
+	row := q.db.QueryRow(ctx, getCompanyLifetime, companySlug)
+	var i GetCompanyLifetimeRow
+	err := row.Scan(&i.Closed, &i.MedianDays)
+	return i, err
 }
 
 const getCompanyResponse = `-- name: GetCompanyResponse :one
@@ -243,6 +292,61 @@ func (q *Queries) GetUserResponseRate(ctx context.Context, userID int64) (GetUse
 	var i GetUserResponseRateRow
 	err := row.Scan(&i.Applications, &i.Answered)
 	return i, err
+}
+
+const listCompanyActivity = `-- name: ListCompanyActivity :many
+SELECT
+    date_trunc($1::text, d)::date AS period,
+    COALESCE(sum(s.added), 0)::int   AS added,
+    COALESCE(sum(s.removed), 0)::int AS removed
+FROM generate_series($2::timestamp, $3::timestamp, interval '1 day') AS d
+LEFT JOIN insights_company_stats s
+       ON s.company_slug = $4::text AND s.day = d::date
+GROUP BY date_trunc($1::text, d)
+ORDER BY date_trunc($1::text, d)
+`
+
+type ListCompanyActivityParams struct {
+	Unit        string           `json:"unit"`
+	FromTs      pgtype.Timestamp `json:"from_ts"`
+	ToTs        pgtype.Timestamp `json:"to_ts"`
+	CompanySlug string           `json:"company_slug"`
+}
+
+type ListCompanyActivityRow struct {
+	Period  pgtype.Date `json:"period"`
+	Added   int32       `json:"added"`
+	Removed int32       `json:"removed"`
+}
+
+// One company's dense added/removed series over [from, to] at the given granularity —
+// the company-scoped twin of ListJobActivity. insights_company_stats holds rows only on
+// a company's activity days, so a daily generate_series builds the gap-free calendar,
+// the LEFT JOIN on the (company_slug, day) primary key fills it (missing days → 0), and
+// date_trunc rolls days up to the bucket. `unit` is caller-validated (day/week/month).
+func (q *Queries) ListCompanyActivity(ctx context.Context, arg ListCompanyActivityParams) ([]ListCompanyActivityRow, error) {
+	rows, err := q.db.Query(ctx, listCompanyActivity,
+		arg.Unit,
+		arg.FromTs,
+		arg.ToTs,
+		arg.CompanySlug,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListCompanyActivityRow{}
+	for rows.Next() {
+		var i ListCompanyActivityRow
+		if err := rows.Scan(&i.Period, &i.Added, &i.Removed); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listInsightsCompanies = `-- name: ListInsightsCompanies :many
@@ -693,6 +797,38 @@ HAVING count(*) FILTER (WHERE closed_at IS NULL) > 0
 // keep the table lean.
 func (q *Queries) RebuildInsightsCompanyGrowth(ctx context.Context, prevTs pgtype.Timestamptz) (int64, error) {
 	result, err := q.db.Exec(ctx, rebuildInsightsCompanyGrowth, prevTs)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const rebuildInsightsCompanyLifetime = `-- name: RebuildInsightsCompanyLifetime :execrows
+INSERT INTO insights_company_lifetime (company_slug, closed, median_days)
+SELECT
+    company_slug,
+    count(*)::int,
+    percentile_cont(0.5) WITHIN GROUP (
+        ORDER BY EXTRACT(EPOCH FROM (closed_at - created_at)) / 86400.0
+    )::real
+FROM jobs
+WHERE company_slug <> ''
+  AND duplicate_of IS NULL
+  AND closed_at IS NOT NULL
+  AND closed_at >= now() - interval '180 days'
+  AND closed_reason IN ('unseen', 'employer_closed', 'feed_removed', 'expired')
+GROUP BY company_slug
+`
+
+// Median days from created_at to closed_at over each company's canonical postings
+// closed in the last 180 days. Only closures that say something about the EMPLOYER
+// count: the posting left its source (unseen, feed_removed), the employer closed it,
+// or its own deadline passed. board_unreachable and feed_empty measure our crawler,
+// source_misattributed and moderated our own decisions — counting them would publish
+// our health as a named employer's hiring speed. 180 days so the figure describes how
+// the company hires now, not over its whole history.
+func (q *Queries) RebuildInsightsCompanyLifetime(ctx context.Context) (int64, error) {
+	result, err := q.db.Exec(ctx, rebuildInsightsCompanyLifetime)
 	if err != nil {
 		return 0, err
 	}

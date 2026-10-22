@@ -6,7 +6,6 @@ import (
 	"errors"
 	"log"
 	"net/url"
-	"path"
 	"strings"
 
 	"github.com/gofiber/fiber/v2"
@@ -40,6 +39,7 @@ func (h *companiesHandlers) register(api fiber.Router, mw middleware) {
 	api.Get("/companies", readLimit, h.ListCompanies)
 	api.Get("/companies/subindustries", readLimit, h.CompanySubindustries)
 	api.Get("/companies/:slug", readLimit, mw.optional, h.GetCompany)
+	api.Get("/companies/:slug/hiring", readLimit, h.CompanyHiring)
 }
 
 // companySearcher is the company-search backend the list handler depends on.
@@ -339,6 +339,30 @@ func facetValues(vals url.Values, key string) []string {
 	return out
 }
 
+// lookupCompany reads the company a :slug route names. A slug a merge retired keeps
+// working, rather than becoming a dead end that also drops whatever the page had earned
+// in search: the response is already written as a 301 to the canonical slug and
+// redirected is true. The alias lookup runs only AFTER the miss, so a live company
+// always wins over a stale alias — a company that came back is never shadowed by the
+// row that once retired it. An unknown slug returns pgx.ErrNoRows, which RenderError
+// maps to 404.
+func (h *companiesHandlers) lookupCompany(c *fiber.Ctx, slug string) (company db.Company, redirected bool, err error) {
+	company, err = h.queries.GetCompany(c.Context(), slug)
+	if !errors.Is(err, pgx.ErrNoRows) {
+		return company, false, err
+	}
+	canonical, aliasErr := h.queries.GetCompanySlugAlias(c.Context(), slug)
+	switch {
+	case aliasErr == nil:
+		return company, true, c.Redirect(companyPath(c, canonical), fiber.StatusMovedPermanently)
+	case !errors.Is(aliasErr, pgx.ErrNoRows):
+		// A database failure is not "no such company". Reporting it as 404 would tell a
+		// crawler to drop a page that exists, and hide the outage from the error rate.
+		return company, false, aliasErr
+	}
+	return company, false, err
+}
+
 // GetCompany returns a single company together with a page of its jobs. The
 // company is read from companies and its jobs from a single-table filter on
 // company_slug — no join between the two tables.
@@ -355,24 +379,8 @@ func (h *companiesHandlers) GetCompany(c *fiber.Ctx) error {
 		return err
 	}
 
-	company, err := h.queries.GetCompany(c.Context(), slug)
-	if errors.Is(err, pgx.ErrNoRows) {
-		// A slug a merge retired keeps working, rather than becoming a dead end that also
-		// drops whatever the page had earned in search. The lookup runs only AFTER the miss,
-		// so a live company always wins over a stale alias — a company that came back is
-		// never shadowed by the row that once retired it.
-		canonical, aliasErr := h.queries.GetCompanySlugAlias(c.Context(), slug)
-		switch {
-		case aliasErr == nil:
-			return c.Redirect(companyPath(c, canonical), fiber.StatusMovedPermanently)
-		case !errors.Is(aliasErr, pgx.ErrNoRows):
-			// A database failure is not "no such company". Reporting it as 404 would tell a
-			// crawler to drop a page that exists, and hide the outage from the error rate.
-			return aliasErr
-		}
-		return err // RenderError maps pgx.ErrNoRows to 404.
-	}
-	if err != nil {
+	company, redirected, err := h.lookupCompany(c, slug)
+	if err != nil || redirected {
 		return err
 	}
 
@@ -537,13 +545,20 @@ func ignoredCompanyParams(c *fiber.Ctx) []search.UnknownParam {
 	return search.UnknownCompanyParams(queryValues(c), companiesParams)
 }
 
-// companyPath is the request's own path with the final segment swapped for the canonical
-// slug, query string preserved. Built from the live path rather than a hardcoded prefix so a
-// mounted-elsewhere API redirects within itself; escaped because the slug reaches the
-// Location header.
+// companyPath is the request's own path with its :slug segment swapped for the canonical
+// slug, everything after it (a sub-resource such as /hiring) and the query string
+// preserved. The segment is located through the matched route's pattern, so it holds
+// whatever the route nests under the slug. Built from the live path rather than a
+// hardcoded prefix so a mounted-elsewhere API redirects within itself; escaped because
+// the slug reaches the Location header.
 func companyPath(c *fiber.Ctx, canonical string) string {
-	base := path.Dir(c.Path())
-	target := path.Join(base, url.PathEscape(canonical))
+	segments := strings.Split(c.Path(), "/")
+	for i, part := range strings.Split(c.Route().Path, "/") {
+		if part == ":slug" && i < len(segments) {
+			segments[i] = url.PathEscape(canonical)
+		}
+	}
+	target := strings.Join(segments, "/")
 	if raw := string(c.Request().URI().QueryString()); raw != "" {
 		return target + "?" + raw
 	}

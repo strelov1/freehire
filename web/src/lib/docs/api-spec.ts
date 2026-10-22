@@ -718,6 +718,38 @@ data: {"kind":"final","analysis":{"overall_score":82,"verdict":"Strong Fit","...
       },
       {
         method: 'GET',
+        path: '/companies/{slug}/hiring',
+        auth: 'none',
+        summary: 'How one company hires over time — the company page’s Hiring tab.',
+        description:
+          'The company’s postings added vs. removed per period (dense, missing periods ' +
+          'are 0, same window rules as `/stats/jobs-activity`), its open postings now and ' +
+          '30 days ago, and the median days its postings stay open before an ' +
+          'employer-side closure over the last 180 days. `lifetime` is omitted below 5 ' +
+          'such closures — absent, never 0. An unknown slug is a `404`; a slug retired ' +
+          'by a company merge redirects `301` to the canonical one.',
+        pathParams: [{ name: 'slug', type: 'string', required: true, description: 'The company slug.', example: 'acme' }],
+        query: [
+          { name: 'granularity', type: 'string', description: 'One of `day`, `week`, `month` (default `day`).', example: 'week' },
+          { name: 'from', type: 'string (YYYY-MM-DD)', description: 'Start date (UTC). Defaults to a per-granularity window before `to`.', example: '2026-01-01' },
+          { name: 'to', type: 'string (YYYY-MM-DD)', description: 'End date (UTC). Defaults to today.', example: '2026-06-30' },
+        ],
+        curl: `curl "${BASE_URL}/companies/acme/hiring?granularity=week"`,
+        responseExample: `{
+  "data": {
+    "open": 42,
+    "open_prev": 30,
+    "growth": 12,
+    "series": [
+      { "period": "2026-06-01", "added": 5, "removed": 2 },
+      { "period": "2026-06-08", "added": 3, "removed": 4 }
+    ],
+    "lifetime": { "closed": 37, "median_days": 21.5 }
+  }
+}`,
+      },
+      {
+        method: 'GET',
         path: '/companies/subindustries',
         auth: 'none',
         summary: 'Distinct company subindustry vocabulary with company counts.',

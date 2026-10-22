@@ -794,6 +794,47 @@ curl "https://freehire.me/api/v1/companies/acme"
 }
 ```
 
+### `GET /companies/{slug}/hiring`
+
+**Auth:** Public
+
+How one company hires over time — the company page’s Hiring tab.
+
+The company’s postings added vs. removed per period (dense, missing periods are 0, same window rules as `/stats/jobs-activity`), its open postings now and 30 days ago, and the median days its postings stay open before an employer-side closure over the last 180 days. `lifetime` is omitted below 5 such closures — absent, never 0. An unknown slug is a `404`; a slug retired by a company merge redirects `301` to the canonical one.
+
+**Path parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `slug` | string | yes | The company slug. (e.g. `acme`) |
+
+**Query parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `granularity` | string | no | One of `day`, `week`, `month` (default `day`). (e.g. `week`) |
+| `from` | string (YYYY-MM-DD) | no | Start date (UTC). Defaults to a per-granularity window before `to`. (e.g. `2026-01-01`) |
+| `to` | string (YYYY-MM-DD) | no | End date (UTC). Defaults to today. (e.g. `2026-06-30`) |
+
+```bash
+curl "https://freehire.me/api/v1/companies/acme/hiring?granularity=week"
+```
+
+```json
+{
+  "data": {
+    "open": 42,
+    "open_prev": 30,
+    "growth": 12,
+    "series": [
+      { "period": "2026-06-01", "added": 5, "removed": 2 },
+      { "period": "2026-06-08", "added": 3, "removed": 4 }
+    ],
+    "lifetime": { "closed": 37, "median_days": 21.5 }
+  }
+}
+```
+
 ### `GET /companies/subindustries`
 
 **Auth:** Public

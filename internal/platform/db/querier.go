@@ -1410,6 +1410,10 @@ type Querier interface {
 	// Per-company open/growth scalar (backs the /insights/companies leaderboard)
 	// ---------------------------------------------------------------------------
 	DeleteAllInsightsCompanyGrowth(ctx context.Context) error
+	// ---------------------------------------------------------------------------
+	// Per-company posting lifetime (backs the company page's Hiring tab)
+	// ---------------------------------------------------------------------------
+	DeleteAllInsightsCompanyLifetime(ctx context.Context) error
 	DeleteAllInsightsCompanyResponse(ctx context.Context) error
 	// ---------------------------------------------------------------------------
 	// Per-company hiring signal
@@ -2314,6 +2318,12 @@ type Querier interface {
 	// the same company-then-feedback lock order Upsert/Delete already use, needed to
 	// avoid a lock-order deadlock with those paths. pgx.ErrNoRows on an unknown id.
 	GetCompanyFeedbackSlug(ctx context.Context, id int64) (string, error)
+	// One company's open count now and as of the growth window ago. No row means nothing
+	// open at either point; the caller serves zeros.
+	GetCompanyGrowth(ctx context.Context, companySlug string) (GetCompanyGrowthRow, error)
+	// One company's posting lifetime. No row means no qualifying closure; the caller
+	// applies its own sample gate on `closed`.
+	GetCompanyLifetime(ctx context.Context, companySlug string) (GetCompanyLifetimeRow, error)
 	// The observable application counts for one company. A company with no row has no
 	// observable applications at all, which the caller must treat as "not enough data"
 	// rather than as a zero response rate.
@@ -3598,6 +3608,12 @@ type Querier interface {
 	// because for a small employer this page may be the only assembled list of its roles,
 	// while a large one's own careers site already owns that query.
 	ListCompaniesToPing(ctx context.Context, arg ListCompaniesToPingParams) ([]string, error)
+	// One company's dense added/removed series over [from, to] at the given granularity —
+	// the company-scoped twin of ListJobActivity. insights_company_stats holds rows only on
+	// a company's activity days, so a daily generate_series builds the gap-free calendar,
+	// the LEFT JOIN on the (company_slug, day) primary key fills it (missing days → 0), and
+	// date_trunc rolls days up to the bucket. `unit` is caller-validated (day/week/month).
+	ListCompanyActivity(ctx context.Context, arg ListCompanyActivityParams) ([]ListCompanyActivityRow, error)
 	// The open titles a company carries on its OWN board — a source of kind `ats` or
 	// `company`, never an aggregator. The worker turns these into role keys and asks
 	// whether an aggregator posting's key is among them.
@@ -5314,6 +5330,14 @@ type Querier interface {
 	// uses open-as-of @prev_ts. Companies open at neither point are dropped (HAVING) to
 	// keep the table lean.
 	RebuildInsightsCompanyGrowth(ctx context.Context, prevTs pgtype.Timestamptz) (int64, error)
+	// Median days from created_at to closed_at over each company's canonical postings
+	// closed in the last 180 days. Only closures that say something about the EMPLOYER
+	// count: the posting left its source (unseen, feed_removed), the employer closed it,
+	// or its own deadline passed. board_unreachable and feed_empty measure our crawler,
+	// source_misattributed and moderated our own decisions — counting them would publish
+	// our health as a named employer's hiring speed. 180 days so the figure describes how
+	// the company hires now, not over its whole history.
+	RebuildInsightsCompanyLifetime(ctx context.Context) (int64, error)
 	// One row per company with an OBSERVABLE application: the applicant has a connected
 	// mailbox, so a reply would have been seen. Applications from people we cannot observe
 	// are excluded from BOTH sides of the ratio — counting them in the denominator would
