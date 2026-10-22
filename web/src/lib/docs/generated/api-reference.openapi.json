@@ -1053,6 +1053,61 @@
         ]
       }
     },
+    "/companies/{slug}/closed-jobs": {
+      "get": {
+        "operationId": "get_companies_slug_closed_jobs",
+        "summary": "A page of a company's closed postings, newest posting first. Closed postings are not in search; there is no total, so meta.has_more says whether another page follows.",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "description": "The company slug.",
+            "schema": {
+              "type": "string"
+            },
+            "example": "acme"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Page size.",
+            "schema": {
+              "type": "integer"
+            },
+            "example": "20"
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "description": "Rows to skip.",
+            "schema": {
+              "type": "integer"
+            },
+            "example": "0"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "{\n  \"data\": [{ \"public_slug\": \"backend-engineer-acme-1a2b3c4d\", \"title\": \"Backend Engineer\", \"closed_at\": \"2026-10-01T09:00:00Z\" }],\n  \"meta\": { \"limit\": 20, \"offset\": 0, \"has_more\": true }\n}"
+              }
+            }
+          }
+        },
+        "security": [],
+        "tags": [
+          "Companies"
+        ]
+      }
+    },
     "/companies/{slug}/hiring": {
       "get": {
         "operationId": "get_companies_slug_hiring",

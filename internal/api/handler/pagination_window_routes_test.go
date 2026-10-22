@@ -25,6 +25,7 @@ var windowedListRoutes = []struct {
 	{"GET /jobs", func() *fiber.App { return mountWindowed((&jobsHandlers{}).register) }, "/api/v1/jobs"},
 	{"GET /companies", func() *fiber.App { return mountWindowed((&companiesHandlers{}).register) }, "/api/v1/companies"},
 	{"GET /companies/:slug", func() *fiber.App { return mountWindowed((&companiesHandlers{}).register) }, "/api/v1/companies/acme"},
+	{"GET /companies/:slug/closed-jobs", func() *fiber.App { return mountWindowed((&companiesHandlers{}).register) }, "/api/v1/companies/acme/closed-jobs"},
 	{"GET /jobs/:slug/copies", func() *fiber.App { return mountWindowed((&jobsHandlers{}).register) }, "/api/v1/jobs/a-job/copies"},
 	{"GET /companies/:slug/feedback", func() *fiber.App {
 		return mountWindowed((&companyFeedbackHandlers{}).registerPublic)

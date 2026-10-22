@@ -795,6 +795,36 @@ curl "https://freehire.me/api/v1/companies/acme"
 }
 ```
 
+### `GET /companies/{slug}/closed-jobs`
+
+**Auth:** Public
+
+A page of a company's closed postings, newest posting first. Closed postings are not in search; there is no total, so meta.has_more says whether another page follows.
+
+**Path parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `slug` | string | yes | The company slug. (e.g. `acme`) |
+
+**Query parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `limit` | integer | no | Page size. (e.g. `20`) |
+| `offset` | integer | no | Rows to skip. (e.g. `0`) |
+
+```bash
+curl "https://freehire.me/api/v1/companies/acme/closed-jobs"
+```
+
+```json
+{
+  "data": [{ "public_slug": "backend-engineer-acme-1a2b3c4d", "title": "Backend Engineer", "closed_at": "2026-10-01T09:00:00Z" }],
+  "meta": { "limit": 20, "offset": 0, "has_more": true }
+}
+```
+
 ### `GET /companies/{slug}/hiring`
 
 **Auth:** Public

@@ -721,6 +721,22 @@ data: {"kind":"final","analysis":{"overall_score":82,"verdict":"Strong Fit","...
       },
       {
         method: 'GET',
+        path: '/companies/{slug}/closed-jobs',
+        auth: 'none',
+        summary: "A page of a company's closed postings, newest posting first. Closed postings are not in search; there is no total, so meta.has_more says whether another page follows.",
+        pathParams: [{ name: 'slug', type: 'string', required: true, description: 'The company slug.', example: 'acme' }],
+        query: [
+          { name: 'limit', type: 'integer', description: 'Page size.', example: '20' },
+          { name: 'offset', type: 'integer', description: 'Rows to skip.', example: '0' },
+        ],
+        curl: `curl "${BASE_URL}/companies/acme/closed-jobs"`,
+        responseExample: `{
+  "data": [{ "public_slug": "backend-engineer-acme-1a2b3c4d", "title": "Backend Engineer", "closed_at": "2026-10-01T09:00:00Z" }],
+  "meta": { "limit": 20, "offset": 0, "has_more": true }
+}`,
+      },
+      {
+        method: 'GET',
         path: '/companies/{slug}/hiring',
         auth: 'none',
         summary: 'How one company hires over time — the company page’s Hiring tab.',
