@@ -97,10 +97,22 @@ WHERE id = ANY(sqlc.arg(ids)::bigint[]);
 -- changes AGAIN (which re-enqueues it). The window is one embed-duration and the drift
 -- self-corrects on the next real change, so this is accepted over threading the exact
 -- embedded hash through a nullable text[] per batch.
-UPDATE jobs
-SET semantic_embedded_model = sqlc.arg(model)::text,
-    semantic_embedded_hash  = content_hash
-WHERE id = ANY(sqlc.arg(ids)::bigint[]);
+--
+-- semantic_embedded_input_hash is the other way round: it is the hash of the text the
+-- worker actually embedded (search.EmbedInputHash over the rows it loaded), paired with
+-- ids positionally, so it never claims a text the vectors were not computed from. It is
+-- what lets the next run tell a content_hash move that changed the embedded text from one
+-- that only moved a derived facet (see migrations/0192). Unnested WITH ORDINALITY and
+-- rejoined, like InsertJobSemanticChunks, because sqlc cannot type a multi-argument unnest.
+-- LEFT, so an id with no hash beside it is still stamped, with a NULL input hash — "not
+-- known", which only ever costs a re-embed — rather than silently not stamped at all.
+UPDATE jobs j
+SET semantic_embedded_model      = sqlc.arg(model)::text,
+    semantic_embedded_hash       = j.content_hash,
+    semantic_embedded_input_hash = h.input_hash
+FROM unnest(sqlc.arg(ids)::bigint[]) WITH ORDINALITY AS ids(id, n)
+LEFT JOIN unnest(sqlc.arg(input_hashes)::text[]) WITH ORDINALITY AS h(input_hash, n) USING (n)
+WHERE j.id = ids.id;
 
 -- name: ClearSemanticEmbeddedBatch :exec
 -- Clear a batch of jobs' embed provenance AND null the legacy jobs.semantic_embedding
@@ -112,9 +124,10 @@ WHERE id = ANY(sqlc.arg(ids)::bigint[]);
 -- that write was removed, without needing a one-off backfill to clean up the column.
 -- The column itself stays (dropping it is a separate, later change).
 UPDATE jobs
-SET semantic_embedded_model = NULL,
-    semantic_embedded_hash  = NULL,
-    semantic_embedding      = NULL
+SET semantic_embedded_model      = NULL,
+    semantic_embedded_hash       = NULL,
+    semantic_embedded_input_hash = NULL,
+    semantic_embedding           = NULL
 WHERE id = ANY(sqlc.arg(ids)::bigint[]);
 
 -- name: DeleteSemanticEntriesBatch :exec
@@ -391,3 +404,34 @@ WHERE closed_at IS NULL AND duplicate_of IS NULL AND is_tech IS TRUE AND NOT is_
 -- every 15s, which SemanticOutboxMetrics (a full scan for dead letters and the
 -- oldest row as well) is not meant for.
 SELECT count(*)::bigint FROM semantic_outbox WHERE failed_at IS NULL;
+
+-- name: SemanticInputHashBackfillBounds :one
+-- The id range cmd/backfill-semantic-input-hash walks. min/max over the primary key, not
+-- a count of what is left: the predicate that would count it reads every embedded row's
+-- description, which is the whole cost of the pass.
+SELECT COALESCE(min(id), 0)::bigint AS min_id,
+       COALESCE(max(id), 0)::bigint AS max_id
+FROM jobs;
+
+-- name: BackfillSemanticInputHashChunk :execrows
+-- Fill semantic_embedded_input_hash (migrations/0192) for one id range, for the jobs whose
+-- embedding is CURRENT — stamped under the target model with the content_hash they still
+-- carry. For those, and only those, the stored text is the text that was embedded, so
+-- hashing it now records what the vectors were computed from. A job whose stamp is
+-- already stale is left NULL: its text may have changed since the embed, and claiming
+-- otherwise would freeze its vectors on the old text. It is re-embedded, and stamped,
+-- the ordinary way.
+--
+-- The expression MUST stay byte-identical to search.EmbedInputHash (sha256 over title,
+-- company and description separated by U+001F, hex-encoded); an integration test holds
+-- the two together. A drift would not fail loudly — it would make every backfilled job
+-- look changed and re-embed it, the waste this column exists to remove.
+--
+-- Guarded on IS NULL, so a re-run writes nothing and stopping mid-way is free.
+UPDATE jobs
+SET semantic_embedded_input_hash = encode(sha256(convert_to(
+        title || chr(31) || company || chr(31) || description, 'UTF8')), 'hex')
+WHERE id >= sqlc.arg(from_id) AND id < sqlc.arg(to_id)
+  AND semantic_embedded_input_hash IS NULL
+  AND semantic_embedded_model = sqlc.arg(target_model)::text
+  AND semantic_embedded_hash IS NOT DISTINCT FROM content_hash;

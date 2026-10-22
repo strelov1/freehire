@@ -28,6 +28,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/strelov1/freehire/internal/ai/embed"
+	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/search/search"
 )
 
@@ -350,6 +351,70 @@ func TestIntegration_EmbedWorkerReplacesChunksOnReembedNotAppend(t *testing.T) {
 		t.Fatalf("chunk indices after shrinking re-embed = %v, want exactly [0] (stale trailing rows not removed)",
 			thirdIndices)
 	}
+}
+
+// A content_hash move that leaves the embedded text alone — a dictionary deploy re-deriving
+// skills or geography — re-enqueues the job (content_hash is the cheap trigger), and the
+// worker must settle it without a TEI call: stamp brought current, chunks and the
+// precomputed similar list kept, outbox drained. The second run's embedder is unreachable,
+// so a call to it would fail the entry.
+func TestIntegration_EmbedWorkerRestampsWhenOnlyFacetsMoved(t *testing.T) {
+	ctx := context.Background()
+	pool := startPostgres(t)
+	opts := embed.RunOptions{TargetModel: search.CurrentEmbedderModel(), BatchSize: 500, LeaseSeconds: 300, MaxAttempts: 3}
+
+	id := seedJob(t, pool, "facets", "Senior Golang Engineer", false, true)
+	if _, err := (embed.Runner{Store: newDBStore(pool), Indexer: searchIndexer{client: newTestClient(t)}}).Run(ctx, opts); err != nil {
+		t.Fatalf("first Run: %v", err)
+	}
+	var stored string
+	if err := pool.QueryRow(ctx, "SELECT semantic_embedded_input_hash FROM jobs WHERE id = $1", id).Scan(&stored); err != nil {
+		t.Fatalf("read input hash: %v", err)
+	}
+	if want := search.EmbedInputHash(loadJob(t, pool, id)); stored != want {
+		t.Fatalf("stamped input hash = %q, want %q (the hash of the embedded text)", stored, want)
+	}
+	chunksBefore := jobChunkCount(t, pool, id)
+
+	if _, err := pool.Exec(ctx,
+		`UPDATE jobs SET content_hash = 'h-facets-v2', skills = '{go,kubernetes}', countries = '{DE}',
+		                 similar_computed_at = now()
+		 WHERE id = $1`, id); err != nil {
+		t.Fatalf("move facets: %v", err)
+	}
+	unreachable := search.NewClient("", "", search.WithEmbedURL("http://127.0.0.1:1/embed"))
+	stats, err := embed.Runner{Store: newDBStore(pool), Indexer: searchIndexer{client: unreachable}}.Run(ctx, opts)
+	if err != nil {
+		t.Fatalf("second Run: %v", err)
+	}
+	if stats.Unchanged != 1 || stats.Indexed != 0 || stats.Failed != 0 {
+		t.Fatalf("stats = %+v, want unchanged=1 and no embed", stats)
+	}
+	if _, hash := jobStamp(t, pool, id); hash == nil || *hash != "h-facets-v2" {
+		t.Errorf("stamp hash = %v, want the new content_hash so the job is not enqueued again", hash)
+	}
+	if got := jobChunkCount(t, pool, id); got != chunksBefore {
+		t.Errorf("chunk rows = %d, want the %d already there", got, chunksBefore)
+	}
+	if jobSimilarComputedAtIsNull(t, pool, id) {
+		t.Error("similar_computed_at was cleared, but the vectors did not change")
+	}
+	var n int
+	if err := pool.QueryRow(ctx, "SELECT count(*) FROM semantic_outbox").Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	if n != 0 {
+		t.Errorf("semantic_outbox has %d rows, want 0", n)
+	}
+}
+
+func loadJob(t *testing.T, pool *pgxpool.Pool, id int64) db.Job {
+	t.Helper()
+	rows, err := db.New(pool).GetJobsByIDs(context.Background(), []int64{id})
+	if err != nil || len(rows) != 1 {
+		t.Fatalf("load job %d: %v (%d rows)", id, err, len(rows))
+	}
+	return rows[0]
 }
 
 // TestIntegration_EmbedWorkerDeletesChunksOnClose proves the closed-job path deletes a

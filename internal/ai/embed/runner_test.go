@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/strelov1/freehire/internal/platform/db"
 )
@@ -28,8 +29,11 @@ type fakeStore struct {
 	closedBatches [][]int64                  // job ids per CompleteClosed call
 	openDone      []int64                    // all job ids CompleteOpen'd
 	closedDone    []int64                    // all job ids CompleteClosed'd
-	failCalls     []failCall
-	attempts      map[int64]int // outbox id -> attempts so far
+	unchangedDone []int64                    // all job ids CompleteUnchanged'd
+	// stampedInputHashes is the input hash each CompleteOpen/CompleteUnchanged stamped.
+	stampedInputHashes map[int64]string
+	failCalls          []failCall
+	attempts           map[int64]int // outbox id -> attempts so far
 	// jobsHook runs before each Jobs call, so a test can change the world between the
 	// batch attempt and the per-item fallback that follows it.
 	jobsHook func()
@@ -44,8 +48,18 @@ type failCall struct {
 func newFakeStore() *fakeStore {
 	return &fakeStore{
 		jobs: map[int64]db.Job{}, jobErr: map[int64]error{}, indexErr: map[int64]error{},
-		attempts: map[int64]int{},
+		attempts: map[int64]int{}, stampedInputHashes: map[int64]string{},
 	}
+}
+
+func (s *fakeStore) CompleteUnchanged(_ context.Context, entries []Claimed, _ string, inputHashes map[int64]string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, e := range entries {
+		s.unchangedDone = append(s.unchangedDone, e.JobID)
+		s.stampedInputHashes[e.JobID] = inputHashes[e.JobID]
+	}
+	return nil
 }
 
 func (s *fakeStore) Enqueue(context.Context, string) (int64, error) {
@@ -86,7 +100,7 @@ func (s *fakeStore) Jobs(_ context.Context, ids []int64) ([]db.Job, error) {
 	return out, nil
 }
 
-func (s *fakeStore) CompleteOpen(_ context.Context, entries []Claimed, _ string, chunks map[int64][]ChunkEmbedding) error {
+func (s *fakeStore) CompleteOpen(_ context.Context, entries []Claimed, _ string, chunks map[int64][]ChunkEmbedding, inputHashes map[int64]string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	var ids []int64
@@ -95,6 +109,9 @@ func (s *fakeStore) CompleteOpen(_ context.Context, entries []Claimed, _ string,
 			return err
 		}
 		ids = append(ids, e.JobID)
+	}
+	for _, id := range ids {
+		s.stampedInputHashes[id] = inputHashes[id]
 	}
 	s.openBatches = append(s.openBatches, ids)
 	s.openDone = append(s.openDone, ids...)
@@ -198,6 +215,12 @@ func (ix *fakeIndexer) IndexOpen(ctx context.Context, jobs []db.Job) (map[int64]
 	ix.indexed = append(ix.indexed, ids...)
 	return chunks, nil
 }
+
+// InputHash stands in for search.EmbedInputHash: it moves with the title and the
+// description, never with a derived facet.
+func (*fakeIndexer) InputHash(j db.Job) string { return fakeInputHash(j) }
+
+func fakeInputHash(j db.Job) string { return "h:" + j.Title + "|" + j.Description }
 
 func opt() RunOptions {
 	return RunOptions{TargetModel: "e5-test", BatchSize: 500, LeaseSeconds: 300, MaxAttempts: 3}
@@ -434,6 +457,146 @@ type emptyChunksIndexer struct{}
 
 func (emptyChunksIndexer) IndexOpen(_ context.Context, jobs []db.Job) (map[int64][]ChunkEmbedding, error) {
 	return nil, nil
+}
+
+func (emptyChunksIndexer) InputHash(j db.Job) string { return fakeInputHash(j) }
+
+// content_hash moves on fields the embedder never reads — skills, geography, posted_at —
+// and on 2026-10-21 three dictionary/geo deploys moved it on ~92k already-embedded jobs,
+// every one queued for a TEI re-embed of an unchanged text. A job whose stored input hash
+// still matches its text, under the target model, is re-stamped without an embed; any
+// other job is embedded exactly as before.
+func TestRunnerRestampsAnUnchangedTextWithoutEmbedding(t *testing.T) {
+	store := newFakeStore()
+	ix := newFakeIndexer()
+	text := db.Job{Title: "Go Engineer", Description: "Build things."}
+	stamped := func(id int64, model, inputHash string) db.Job {
+		j := text
+		j.ID = id
+		j.SemanticEmbeddedModel = pgtype.Text{String: model, Valid: model != ""}
+		j.SemanticEmbeddedInputHash = pgtype.Text{String: inputHash, Valid: inputHash != ""}
+		return j
+	}
+	same := fakeInputHash(text)
+	store.jobs[1] = stamped(1, "e5-test", same)         // facets moved, text did not
+	store.jobs[2] = stamped(2, "e5-test", "h:old|text") // text changed
+	store.jobs[3] = stamped(3, "e5-test", "")           // embedded before the hash existed
+	store.jobs[4] = stamped(4, "e5-previous", same)     // model migration
+	store.jobs[5] = stamped(5, "", "")                  // never embedded
+	for _, id := range []int64{1, 2, 3, 4, 5} {
+		store.pending = append(store.pending, Claimed{OutboxID: id * 10, JobID: id})
+	}
+
+	stats, err := Runner{Store: store, Indexer: ix}.Run(context.Background(), opt())
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if stats.Unchanged != 1 || stats.Indexed != 4 {
+		t.Fatalf("stats = %+v, want unchanged=1 indexed=4", stats)
+	}
+	if len(ix.indexCalls) != 1 || has(ix.indexCalls[0], 1) || len(ix.indexCalls[0]) != 4 {
+		t.Errorf("IndexOpen calls = %v, want one call with jobs 2-5 and never job 1", ix.indexCalls)
+	}
+	if len(store.unchangedDone) != 1 || store.unchangedDone[0] != 1 {
+		t.Errorf("CompleteUnchanged = %v, want job 1 alone", store.unchangedDone)
+	}
+	// Every job leaves stamped with the hash of the text it now carries — the embedded ones
+	// because that is what the vectors were computed from.
+	for id := int64(1); id <= 5; id++ {
+		if got := store.stampedInputHashes[id]; got != same {
+			t.Errorf("job %d stamped input hash %q, want %q", id, got, same)
+		}
+	}
+}
+
+// The per-item fallback must make the same decision, or a wave that fell back would
+// re-embed the unchanged jobs the batch path would have skipped.
+func TestRunnerFallbackAlsoSkipsAnUnchangedText(t *testing.T) {
+	store := newFakeStore()
+	ix := newFakeIndexer()
+	for _, id := range []int64{1, 2} {
+		j := db.Job{ID: id, Title: "Go Engineer", Description: "Build things.",
+			SemanticEmbeddedModel: pgtype.Text{String: "e5-test", Valid: true}}
+		if id == 1 {
+			j.SemanticEmbeddedInputHash = pgtype.Text{String: fakeInputHash(j), Valid: true}
+		}
+		store.jobs[id] = j
+	}
+	// Job 3 is a corrupted row: it aborts the batch load and sends the wave per item.
+	store.jobErr[3] = &pgconn.PgError{Code: "XX001"}
+	for _, id := range []int64{1, 2, 3} {
+		store.pending = append(store.pending, Claimed{OutboxID: id * 10, JobID: id})
+	}
+
+	stats, err := Runner{Store: store, Indexer: ix}.Run(context.Background(), opt())
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if stats.Unchanged != 1 || stats.Indexed != 1 || stats.DeadLettered != 1 {
+		t.Fatalf("stats = %+v, want unchanged=1 indexed=1 dead=1", stats)
+	}
+	for _, call := range ix.indexCalls {
+		if has(call, 1) {
+			t.Errorf("IndexOpen calls = %v, job 1's text is unchanged and must never be embedded", ix.indexCalls)
+		}
+	}
+}
+
+// The hourly unit gives a run 50 minutes and a run killed at that limit leaves a claimed
+// wave behind, its TEI work thrown away, and a red unit every hour (2026-10-22). With
+// MaxRun the runner itself stops claiming once a new wave could outlive the budget — a
+// wave may take up to CallTimeout — and exits cleanly, leaving the rest queued.
+func TestRunnerStopsClaimingBeforeAWaveCouldOutrunMaxRun(t *testing.T) {
+	store := newFakeStore()
+	ix := newFakeIndexer()
+	for _, id := range []int64{1, 2, 3, 4, 5} {
+		store.jobs[id] = db.Job{ID: id}
+		store.pending = append(store.pending, Claimed{OutboxID: id * 10, JobID: id})
+	}
+	clock := time.Date(2026, 10, 22, 16, 0, 0, 0, time.UTC)
+	store.jobsHook = func() { clock = clock.Add(30 * time.Minute) } // each wave takes 30 min
+
+	opts := opt()
+	opts.BatchSize = 1
+	opts.CallTimeout = 10 * time.Minute
+	opts.MaxRun = 50 * time.Minute
+
+	stats, err := Runner{Store: store, Indexer: ix, Now: func() time.Time { return clock }}.Run(context.Background(), opts)
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	// Wave 1 starts at 0 (0+10 <= 50), wave 2 at 30 (30+10 <= 50), and at 60 none may start.
+	if stats.Indexed != 2 {
+		t.Fatalf("stats = %+v, want indexed=2", stats)
+	}
+	if len(store.pending) != 3 {
+		t.Errorf("pending = %d, want 3 left unclaimed for the next run", len(store.pending))
+	}
+	if len(store.failCalls) != 0 {
+		t.Errorf("failCalls = %+v, want none — stopping on the budget is not a failure", store.failCalls)
+	}
+}
+
+// Unset, the run drains everything — the catch-up supervisor relies on that.
+func TestRunnerWithoutMaxRunDrainsTheQueue(t *testing.T) {
+	store := newFakeStore()
+	ix := newFakeIndexer()
+	for _, id := range []int64{1, 2, 3} {
+		store.jobs[id] = db.Job{ID: id}
+		store.pending = append(store.pending, Claimed{OutboxID: id * 10, JobID: id})
+	}
+	clock := time.Date(2026, 10, 22, 16, 0, 0, 0, time.UTC)
+	store.jobsHook = func() { clock = clock.Add(24 * time.Hour) }
+	opts := opt()
+	opts.BatchSize = 1
+
+	stats, err := Runner{Store: store, Indexer: ix, Now: func() time.Time { return clock }}.Run(context.Background(), opts)
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if stats.Indexed != 3 || len(store.pending) != 0 {
+		t.Fatalf("stats = %+v pending=%d, want the whole queue drained", stats, len(store.pending))
+	}
 }
 
 // A redeploy's SIGTERM is not a poison row. Classifying it as one drove the whole wave

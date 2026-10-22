@@ -18,15 +18,21 @@ type Embed struct {
 	LeaseSeconds int           // how long a claim is held before it can be reclaimed
 	MaxAttempts  int           // failed attempts before an entry is dead-lettered
 	CallTimeout  time.Duration // bounds a single batch's embed-and-persist (or per-item fallback) operation
+	// MaxRun bounds a whole run (EMBED_MAX_RUN_SECONDS; 0 = unbounded): the runner claims
+	// no wave that CallTimeout could carry past it, so a scheduled run exits on its own
+	// before its unit's TimeoutStartSec instead of being killed mid-wave.
+	MaxRun time.Duration
 }
 
 // LoadEmbed reads the worker's tuning from the environment, all optional with defaults.
 // EMBED_BATCH_SIZE is the wave/batch size (bigger = fewer TEI call sets and Postgres
 // round trips for a bulk backfill); EMBED_CONCURRENCY (read by LoadEmbedClient) chunks
 // the embed calls inside each batch. There is no required field — unlike cmd/reindex,
-// cmd/embed does not require MEILI_MASTER_KEY at all (it never touches Meilisearch), so
-// this never fails.
-func LoadEmbed() Embed {
+// cmd/embed does not require MEILI_MASTER_KEY at all (it never touches Meilisearch). The
+// one way it fails is an EMBED_MAX_RUN_SECONDS that is set but unusable: read as
+// "unbounded" it would look exactly like the knob working, until the unit timeout kills
+// the run again.
+func LoadEmbed() (Embed, error) {
 	e := Embed{
 		BatchSize:    envInt("EMBED_BATCH_SIZE", 500),
 		LeaseSeconds: envInt("EMBED_LEASE_SECONDS", 300),
@@ -52,7 +58,20 @@ func LoadEmbed() Embed {
 	if floor := int(e.CallTimeout.Seconds()); e.LeaseSeconds < floor {
 		e.LeaseSeconds = floor
 	}
-	return e
+	if raw := strings.TrimSpace(os.Getenv("EMBED_MAX_RUN_SECONDS")); raw != "" {
+		secs, err := strconv.Atoi(raw)
+		if err != nil || secs <= 0 {
+			return Embed{}, fmt.Errorf("EMBED_MAX_RUN_SECONDS=%q: want a positive number of seconds", raw)
+		}
+		e.MaxRun = time.Duration(secs) * time.Second
+		// The runner starts a wave only while elapsed+CallTimeout fits in MaxRun, so a
+		// budget no larger than one CallTimeout would claim nothing and exit green forever.
+		if e.MaxRun <= e.CallTimeout {
+			return Embed{}, fmt.Errorf("EMBED_MAX_RUN_SECONDS=%d must exceed EMBED_CALL_TIMEOUT_SECONDS (%s), or no wave can start",
+				secs, e.CallTimeout)
+		}
+	}
+	return e, nil
 }
 
 // EmbedClient holds the embedding-backend connection settings an embedding search

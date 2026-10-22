@@ -48,13 +48,11 @@ func (s *dbStore) Jobs(ctx context.Context, ids []int64) ([]db.Job, error) {
 	return s.q.GetJobsByIDs(ctx, ids)
 }
 
-func (s *dbStore) CompleteOpen(ctx context.Context, entries []embed.Claimed, model string, chunks map[int64][]embed.ChunkEmbedding) error {
+func (s *dbStore) CompleteOpen(ctx context.Context, entries []embed.Claimed, model string, chunks map[int64][]embed.ChunkEmbedding, inputHashes map[int64]string) error {
 	jobIDs, outboxIDs := splitIDs(entries)
 	return s.tx(ctx, func(qtx *db.Queries) error {
-		if err := qtx.StampSemanticEmbeddedBatch(ctx, db.StampSemanticEmbeddedBatchParams{
-			Model: model, Ids: jobIDs,
-		}); err != nil {
-			return fmt.Errorf("stamp: %w", err)
+		if err := stamp(ctx, qtx, model, jobIDs, inputHashes); err != nil {
+			return err
 		}
 		// Replace each job's pgvector-backed chunk rows in the SAME transaction: a job's
 		// chunk COUNT can change between embeds (its source text was re-chunked), so
@@ -102,6 +100,33 @@ func (s *dbStore) CompleteOpen(ctx context.Context, entries []embed.Claimed, mod
 		}
 		return qtx.DeleteSemanticEntriesBatch(ctx, outboxIDs)
 	})
+}
+
+// CompleteUnchanged brings the stamp current and drains the entries, nothing else: the
+// chunk rows are still the embedding of this text, so neither they nor the precomputed
+// similar-jobs list (similar_computed_at) is touched.
+func (s *dbStore) CompleteUnchanged(ctx context.Context, entries []embed.Claimed, model string, inputHashes map[int64]string) error {
+	jobIDs, outboxIDs := splitIDs(entries)
+	return s.tx(ctx, func(qtx *db.Queries) error {
+		if err := stamp(ctx, qtx, model, jobIDs, inputHashes); err != nil {
+			return err
+		}
+		return qtx.DeleteSemanticEntriesBatch(ctx, outboxIDs)
+	})
+}
+
+// stamp records the embed provenance for jobIDs, each paired with its input hash.
+func stamp(ctx context.Context, qtx *db.Queries, model string, jobIDs []int64, inputHashes map[int64]string) error {
+	hashes := make([]string, len(jobIDs))
+	for i, id := range jobIDs {
+		hashes[i] = inputHashes[id]
+	}
+	if err := qtx.StampSemanticEmbeddedBatch(ctx, db.StampSemanticEmbeddedBatchParams{
+		Model: model, Ids: jobIDs, InputHashes: hashes,
+	}); err != nil {
+		return fmt.Errorf("stamp: %w", err)
+	}
+	return nil
 }
 
 func (s *dbStore) CompleteClosed(ctx context.Context, entries []embed.Claimed) error {

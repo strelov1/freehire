@@ -42,6 +42,7 @@ hire
 /backfill-talent-handle
 /backfill-resume-geo
 /backfill-resume-structured
+/backfill-semantic-input-hash
 /backfill-slug-folded
 /backfill-telegram-prefilter
 /backfill-us-subdivision-collision

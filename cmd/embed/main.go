@@ -34,7 +34,11 @@ func run() int {
 	// see openspec/changes/drop-hybrid-search-pgvector-similar). search.NewClient still
 	// takes cfg.MeiliURL/cfg.MeiliKey positionally, but nothing here exercises the I/O
 	// they would configure.
-	ecfg := config.LoadEmbed()
+	ecfg, err := config.LoadEmbed()
+	if err != nil {
+		log.Printf("embed: %v", err)
+		return 1
+	}
 	ec := config.LoadEmbedClient()
 	client := search.NewClient(cfg.MeiliURL, cfg.MeiliKey,
 		search.WithEmbedURL(ec.URL), search.WithEmbedAPIKey(ec.APIKey), search.WithEmbedConcurrency(ec.Concurrency))
@@ -50,13 +54,14 @@ func run() int {
 		LeaseSeconds: ecfg.LeaseSeconds,
 		MaxAttempts:  ecfg.MaxAttempts,
 		CallTimeout:  ecfg.CallTimeout,
+		MaxRun:       ecfg.MaxRun,
 	})
 	if err != nil {
 		log.Printf("embed: %v", err)
 		return 1
 	}
 
-	log.Printf("embed done: indexed=%d removed=%d failed=%d dead_lettered=%d",
-		stats.Indexed, stats.Removed, stats.Failed, stats.DeadLettered)
+	log.Printf("embed done: indexed=%d unchanged=%d removed=%d failed=%d dead_lettered=%d",
+		stats.Indexed, stats.Unchanged, stats.Removed, stats.Failed, stats.DeadLettered)
 	return worker.ExitCode(stats.Failed, stats.DeadLettered)
 }

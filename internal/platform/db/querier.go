@@ -309,6 +309,21 @@ type Querier interface {
 	// not rewritten — and the affected set is bounded to two boards, so unlike the
 	// multi-million-row backfills this needs no chunking.
 	BackfillProfessionITBoardTech(ctx context.Context, boardPatterns []string) (int64, error)
+	// Fill semantic_embedded_input_hash (migrations/0192) for one id range, for the jobs whose
+	// embedding is CURRENT — stamped under the target model with the content_hash they still
+	// carry. For those, and only those, the stored text is the text that was embedded, so
+	// hashing it now records what the vectors were computed from. A job whose stamp is
+	// already stale is left NULL: its text may have changed since the embed, and claiming
+	// otherwise would freeze its vectors on the old text. It is re-embedded, and stamped,
+	// the ordinary way.
+	//
+	// The expression MUST stay byte-identical to search.EmbedInputHash (sha256 over title,
+	// company and description separated by U+001F, hex-encoded); an integration test holds
+	// the two together. A drift would not fail loudly — it would make every backfilled job
+	// look changed and re-embed it, the waste this column exists to remove.
+	//
+	// Guarded on IS NULL, so a re-run writes nothing and stopping mid-way is free.
+	BackfillSemanticInputHashChunk(ctx context.Context, arg BackfillSemanticInputHashChunkParams) (int64, error)
 	// Add a host to the blocklist, attributed to the blocking moderator. ON CONFLICT DO NOTHING
 	// makes blocking an already-blocked host a no-op rather than an error (submission.Service.Reject
 	// calls this every time block_domain is set, whether or not the host is new).
@@ -6381,6 +6396,10 @@ type Querier interface {
 	// A scan over every open posting: measured on production 2026-10-19 it did not finish
 	// inside 60s on a loaded host. It runs in cmd/rollup-stats, never on a request path.
 	SemanticCoverageCounts(ctx context.Context, targetModel string) (SemanticCoverageCountsRow, error)
+	// The id range cmd/backfill-semantic-input-hash walks. min/max over the primary key, not
+	// a count of what is left: the predicate that would count it reads every embedded row's
+	// description, which is the whole cost of the pass.
+	SemanticInputHashBackfillBounds(ctx context.Context) (SemanticInputHashBackfillBoundsRow, error)
 	// The work left in semantic_outbox: rows a worker can still claim. A dead letter is
 	// not work left, it is work given up on. Reads semantic_outbox_claimable_idx (partial
 	// on failed_at IS NULL), 4.5ms on production — cheap enough for cmd/server to sample
@@ -6863,6 +6882,15 @@ type Querier interface {
 	// changes AGAIN (which re-enqueues it). The window is one embed-duration and the drift
 	// self-corrects on the next real change, so this is accepted over threading the exact
 	// embedded hash through a nullable text[] per batch.
+	//
+	// semantic_embedded_input_hash is the other way round: it is the hash of the text the
+	// worker actually embedded (search.EmbedInputHash over the rows it loaded), paired with
+	// ids positionally, so it never claims a text the vectors were not computed from. It is
+	// what lets the next run tell a content_hash move that changed the embedded text from one
+	// that only moved a derived facet (see migrations/0192). Unnested WITH ORDINALITY and
+	// rejoined, like InsertJobSemanticChunks, because sqlc cannot type a multi-argument unnest.
+	// LEFT, so an id with no hash beside it is still stamped, with a NULL input hash — "not
+	// known", which only ever costs a re-embed — rather than silently not stamped at all.
 	StampSemanticEmbeddedBatch(ctx context.Context, arg StampSemanticEmbeddedBatchParams) error
 	// Record the credential a person has just signed in for.
 	//

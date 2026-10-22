@@ -35,3 +35,5 @@ func (ix searchIndexer) IndexOpen(ctx context.Context, jobs []db.Job) (map[int64
 	}
 	return chunks, nil
 }
+
+func (searchIndexer) InputHash(job db.Job) string { return search.EmbedInputHash(job) }

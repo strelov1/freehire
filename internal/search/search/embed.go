@@ -3,6 +3,8 @@ package search
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -74,6 +76,27 @@ func jobChunkPassages(job db.Job) []string {
 		out[i] = prefix + c
 	}
 	return out
+}
+
+// EmbedInputHash fingerprints the inputs jobChunkPassages reads — the title, the company
+// and the raw description, and nothing else — so cmd/embed can tell a job whose embedded
+// text changed from one whose content_hash moved on a field the embedder never sees
+// (skills, geography, posted_at, every derived facet). Stored as
+// jobs.semantic_embedded_input_hash when the chunks are written (migrations/0192).
+//
+// The raw description rather than the stripped passages, so the hash is reproducible in
+// SQL: BackfillSemanticInputHashChunk computes the same sha256 over the same three
+// fields joined by U+001F, and a test pins the form. The cost is that a markup-only edit
+// still re-embeds, which is rare and errs the safe way. A field jobChunkPassages starts
+// reading must be added here AND to that query, or its changes stop reaching the vectors.
+func EmbedInputHash(job db.Job) string {
+	h := sha256.New()
+	h.Write([]byte(job.Title))
+	h.Write([]byte{0x1f})
+	h.Write([]byte(job.Company))
+	h.Write([]byte{0x1f})
+	h.Write([]byte(job.Description))
+	return hex.EncodeToString(h.Sum(nil))
 }
 
 // EmbedJobChunks computes one embedding vector per chunk of each job's full,

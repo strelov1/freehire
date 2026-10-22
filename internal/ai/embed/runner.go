@@ -62,7 +62,15 @@ type Store interface {
 	// "replace", not "append". This no longer touches jobs.semantic_embedding (the
 	// legacy real[] column) — nothing reads it, so cmd/embed stopped computing and
 	// writing it; the column itself stays, per design.md's deferred-drop decision.
-	CompleteOpen(ctx context.Context, entries []Claimed, model string, chunks map[int64][]ChunkEmbedding) error
+	// inputHashes maps job id to Indexer.InputHash of the row that was embedded, stamped
+	// as jobs.semantic_embedded_input_hash so the next run can tell whether the text moved.
+	CompleteOpen(ctx context.Context, entries []Claimed, model string, chunks map[int64][]ChunkEmbedding, inputHashes map[int64]string) error
+	// CompleteUnchanged settles entries whose embedded text has not changed (see
+	// Indexer.InputHash): it re-stamps the provenance (model, current content_hash,
+	// inputHashes) so the enqueue predicate stops firing, and deletes the outbox entries,
+	// atomically. It leaves the chunk rows and similar_computed_at alone — the vectors
+	// are still the vectors of this text.
+	CompleteUnchanged(ctx context.Context, entries []Claimed, model string, inputHashes map[int64]string) error
 	// CompleteClosed clears each entry's job embed provenance (stamp + the legacy
 	// jobs.semantic_embedding column, still nulled here even though nothing writes it
 	// on the open path anymore — see ClearSemanticEmbeddedBatch) and deletes each
@@ -89,6 +97,11 @@ type Indexer interface {
 	// chunk-worthy description text simply has no entry in the returned map, not an
 	// error.
 	IndexOpen(ctx context.Context, jobs []db.Job) (chunks map[int64][]ChunkEmbedding, err error)
+	// InputHash fingerprints exactly the fields IndexOpen embeds. The runner compares it
+	// with the job's stored semantic_embedded_input_hash before paying for an embed:
+	// content_hash, which enqueues the job, also moves on derived facets the embedder
+	// never reads, so it says "maybe changed", and this says whether it did.
+	InputHash(job db.Job) string
 }
 
 // RunOptions are the per-run knobs.
@@ -106,11 +119,19 @@ type RunOptions struct {
 	// CallTimeout bounds a single batch's (or fallback item's) embed operation; 0 means
 	// no per-call timeout (the embed backend has its own per-attempt timeout).
 	CallTimeout time.Duration
+	// MaxRun bounds the whole run, measured from its start (the enqueue included): no
+	// wave is claimed once elapsed time plus CallTimeout — the most one wave's batch call
+	// may take — would pass it, so the run exits on its own instead of being killed by a
+	// unit timeout mid-wave with the wave's embed work lost. 0 means unbounded.
+	MaxRun time.Duration
 }
 
 // Stats reports what a run did.
 type Stats struct {
-	Indexed      int
+	Indexed int
+	// Unchanged counts open jobs re-stamped without an embed: enqueued because their
+	// content_hash moved, but their embedded text had not.
+	Unchanged    int
 	Removed      int
 	Failed       int
 	DeadLettered int
@@ -120,19 +141,27 @@ type Stats struct {
 type Runner struct {
 	Store   Store
 	Indexer Indexer
+	// Now is the clock MaxRun is measured on; nil means time.Now.
+	Now func() time.Time
 }
 
-// Run enqueues outstanding jobs and drains the queue until no claimable entries remain.
-// A failure on a single entry is recorded and never aborts the run.
+// Run enqueues outstanding jobs and drains the queue until no claimable entries remain,
+// or until opt.MaxRun leaves no room for another wave. A failure on a single entry is
+// recorded and never aborts the run.
 func (r Runner) Run(ctx context.Context, opt RunOptions) (Stats, error) {
+	now := r.Now
+	if now == nil {
+		now = time.Now
+	}
+	start := now()
 	enqueued, err := r.Store.Enqueue(ctx, opt.TargetModel)
 	if err != nil {
 		return Stats{}, fmt.Errorf("enqueue: %w", err)
 	}
-	log.Printf("embed: enqueued %d pending, draining (batch=%d)", enqueued, opt.BatchSize)
+	log.Printf("embed: enqueued %d pending, draining (batch=%d, max run %s)", enqueued, opt.BatchSize, opt.MaxRun)
 
-	rn := &run{store: r.Store, indexer: r.Indexer, opt: opt}
-	_, err = outbox.RunBatch(ctx, r.Store, outbox.RunOptions{
+	rn := &run{store: r.Store, indexer: r.Indexer, opt: opt, now: now, start: start}
+	_, err = outbox.RunBatch(ctx, rn, outbox.RunOptions{
 		BatchSize:    opt.BatchSize,
 		LeaseSeconds: opt.LeaseSeconds,
 		OnWave: func(outbox.Stats) {
@@ -140,8 +169,8 @@ func (r Runner) Run(ctx context.Context, opt RunOptions) (Stats, error) {
 			// going silent for hours. Reads rn.stats directly (not the generic
 			// outbox.Stats parameter) because it distinguishes Indexed from Removed,
 			// which outbox's four generic buckets don't carry.
-			log.Printf("embed: progress indexed=%d removed=%d failed=%d dead=%d",
-				rn.stats.Indexed, rn.stats.Removed, rn.stats.Failed, rn.stats.DeadLettered)
+			log.Printf("embed: progress indexed=%d unchanged=%d removed=%d failed=%d dead=%d",
+				rn.stats.Indexed, rn.stats.Unchanged, rn.stats.Removed, rn.stats.Failed, rn.stats.DeadLettered)
 		},
 	}, rn.processWave, rn.unreachableFallback)
 	if err != nil {
@@ -157,6 +186,32 @@ type run struct {
 	indexer Indexer
 	opt     RunOptions
 	stats   Stats
+	now     func() time.Time
+	start   time.Time
+}
+
+// Claim is the claimer the drain loop sees: the Store's claim behind the MaxRun budget.
+// Returning no entries is outbox.RunBatch's ordinary stop, so a run out of budget ends
+// exactly like a drained one — exit 0, nothing claimed and nothing abandoned.
+func (rn *run) Claim(ctx context.Context, batch, leaseSeconds int) ([]Claimed, error) {
+	if rn.opt.MaxRun > 0 {
+		if elapsed := rn.now().Sub(rn.start); elapsed+rn.opt.CallTimeout > rn.opt.MaxRun {
+			log.Printf("embed: stopping after %s — another wave may take up to %s and the run "+
+				"budget is %s; the rest stays queued for the next run",
+				elapsed.Round(time.Second), rn.opt.CallTimeout, rn.opt.MaxRun)
+			return nil, nil
+		}
+	}
+	return rn.store.Claim(ctx, batch, leaseSeconds)
+}
+
+// unchanged reports whether job's chunks are already the embedding of its current text
+// under the target model, given hash, its current Indexer.InputHash. A job stamped before
+// the input hash existed (NULL) is never unchanged: there is no record of what it was
+// embedded from.
+func (rn *run) unchanged(job db.Job, hash string) bool {
+	return job.SemanticEmbeddedModel.Valid && job.SemanticEmbeddedModel.String == rn.opt.TargetModel &&
+		job.SemanticEmbeddedInputHash.Valid && job.SemanticEmbeddedInputHash.String == hash
 }
 
 // processWave is embed's outbox.BatchProcessor: split the wave into its open and
@@ -180,7 +235,8 @@ func (rn *run) processWave(ctx context.Context, batch []Claimed) (outbox.Stats, 
 	rn.processOpenBatch(ctx, open)
 	rn.processClosedBatch(ctx, closed)
 	return outbox.Stats{
-		Succeeded:    (rn.stats.Indexed - before.Indexed) + (rn.stats.Removed - before.Removed),
+		Succeeded: (rn.stats.Indexed - before.Indexed) + (rn.stats.Unchanged - before.Unchanged) +
+			(rn.stats.Removed - before.Removed),
 		Failed:       rn.stats.Failed - before.Failed,
 		DeadLettered: rn.stats.DeadLettered - before.DeadLettered,
 	}, nil
@@ -217,23 +273,57 @@ func (rn *run) processOpenBatch(ctx context.Context, entries []Claimed) {
 		rn.fallbackOpen(ctx, entries)
 		return
 	}
-	chunks, err := rn.indexer.IndexOpen(callCtx, jobs)
+
+	// Split the wave: a job whose text is what its chunks were embedded from only needs
+	// its stamp brought up to date; the rest are embedded.
+	entryOf := make(map[int64]Claimed, len(entries))
+	for _, e := range entries {
+		entryOf[e.JobID] = e
+	}
+	hashes := make(map[int64]string, len(jobs))
+	var same, changed []Claimed
+	var changedJobs []db.Job
+	for _, j := range jobs {
+		hashes[j.ID] = rn.indexer.InputHash(j)
+		if rn.unchanged(j, hashes[j.ID]) {
+			same = append(same, entryOf[j.ID])
+		} else {
+			changed = append(changed, entryOf[j.ID])
+			changedJobs = append(changedJobs, j)
+		}
+	}
+	if len(same) > 0 {
+		if err := rn.store.CompleteUnchanged(callCtx, same, rn.opt.TargetModel, hashes); err != nil {
+			if rn.skipOnContextEnd(callCtx, entries, "complete unchanged") {
+				return
+			}
+			rn.fallbackOpen(ctx, entries)
+			return
+		}
+		rn.stats.Unchanged += len(same)
+	}
+	if len(changed) == 0 {
+		log.Printf("embed: re-stamped %d unchanged in %s", len(same), since(start))
+		return
+	}
+
+	chunks, err := rn.indexer.IndexOpen(callCtx, changedJobs)
 	if err != nil {
-		if rn.skipOnContextEnd(callCtx, entries, "embed/index") {
+		if rn.skipOnContextEnd(callCtx, changed, "embed/index") {
 			return
 		}
-		rn.fallbackOpen(ctx, entries)
+		rn.fallbackOpen(ctx, changed)
 		return
 	}
-	if err := rn.store.CompleteOpen(callCtx, entries, rn.opt.TargetModel, chunks); err != nil {
-		if rn.skipOnContextEnd(callCtx, entries, "complete open") {
+	if err := rn.store.CompleteOpen(callCtx, changed, rn.opt.TargetModel, chunks, hashes); err != nil {
+		if rn.skipOnContextEnd(callCtx, changed, "complete open") {
 			return
 		}
-		rn.fallbackOpen(ctx, entries)
+		rn.fallbackOpen(ctx, changed)
 		return
 	}
-	rn.stats.Indexed += len(entries)
-	log.Printf("embed: indexed batch of %d in %s", len(entries), since(start))
+	rn.stats.Indexed += len(changed)
+	log.Printf("embed: indexed batch of %d (+%d unchanged, re-stamped) in %s", len(changed), len(same), since(start))
 }
 
 // skipOnContextEnd reports whether callCtx ended before the stage finished — either a
@@ -293,12 +383,21 @@ func (rn *run) processOpenOne(ctx context.Context, entry Claimed) {
 		rn.failN(entry, fmt.Errorf("job %d not found", entry.JobID), 1)
 		return
 	}
+	hashes := map[int64]string{entry.JobID: rn.indexer.InputHash(jobs[0])}
+	if rn.unchanged(jobs[0], hashes[entry.JobID]) {
+		if err := rn.store.CompleteUnchanged(callCtx, []Claimed{entry}, rn.opt.TargetModel, hashes); err != nil {
+			rn.fail(callCtx, entry, fmt.Errorf("complete unchanged: %w", err))
+			return
+		}
+		rn.stats.Unchanged++
+		return
+	}
 	chunks, err := rn.indexer.IndexOpen(callCtx, jobs)
 	if err != nil {
 		rn.fail(callCtx, entry, fmt.Errorf("embed/index: %w", err))
 		return
 	}
-	if err := rn.store.CompleteOpen(callCtx, []Claimed{entry}, rn.opt.TargetModel, chunks); err != nil {
+	if err := rn.store.CompleteOpen(callCtx, []Claimed{entry}, rn.opt.TargetModel, chunks, hashes); err != nil {
 		rn.fail(callCtx, entry, fmt.Errorf("complete open: %w", err))
 		return
 	}

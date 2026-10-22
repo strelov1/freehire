@@ -1,0 +1,21 @@
+-- jobs.semantic_embedded_input_hash: a hash of the exact text cmd/embed fed the embedder
+-- when it last wrote this job's job_semantic_chunks rows (search.EmbedInputHash — the
+-- title, the company and the raw description, the only three fields jobChunkPassages
+-- reads).
+--
+-- Why: semantic staleness was decided by content_hash alone, and content_hash also moves
+-- on fields the embedder never sees — skills, countries, regions, posted_at, every
+-- derived facet. Measured 2026-10-21: three deploys that grew the skill dictionary and
+-- fixed geography moved content_hash on ~92k already-embedded jobs, and every one of them
+-- was queued for a full TEI re-embed of an unchanged text, ~150k rows against a drain
+-- of ~1.5k an hour. content_hash stays the cheap trigger for the enqueue; this column
+-- is what cmd/embed checks before paying for the embed, so a job whose embedded text is
+-- unchanged is re-stamped without a TEI call.
+--
+-- NULL means "not known": the job is re-embedded exactly as before this column existed.
+-- cmd/backfill-semantic-input-hash fills it for jobs whose stamp is current.
+--
+-- A nullable ADD COLUMN with no default is catalogue-only in PostgreSQL 11+, so this does
+-- not rewrite the table.
+ALTER TABLE public.jobs
+    ADD COLUMN IF NOT EXISTS semantic_embedded_input_hash text;

@@ -11,6 +11,44 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const backfillSemanticInputHashChunk = `-- name: BackfillSemanticInputHashChunk :execrows
+UPDATE jobs
+SET semantic_embedded_input_hash = encode(sha256(convert_to(
+        title || chr(31) || company || chr(31) || description, 'UTF8')), 'hex')
+WHERE id >= $1 AND id < $2
+  AND semantic_embedded_input_hash IS NULL
+  AND semantic_embedded_model = $3::text
+  AND semantic_embedded_hash IS NOT DISTINCT FROM content_hash
+`
+
+type BackfillSemanticInputHashChunkParams struct {
+	FromID      int64  `json:"from_id"`
+	ToID        int64  `json:"to_id"`
+	TargetModel string `json:"target_model"`
+}
+
+// Fill semantic_embedded_input_hash (migrations/0192) for one id range, for the jobs whose
+// embedding is CURRENT — stamped under the target model with the content_hash they still
+// carry. For those, and only those, the stored text is the text that was embedded, so
+// hashing it now records what the vectors were computed from. A job whose stamp is
+// already stale is left NULL: its text may have changed since the embed, and claiming
+// otherwise would freeze its vectors on the old text. It is re-embedded, and stamped,
+// the ordinary way.
+//
+// The expression MUST stay byte-identical to search.EmbedInputHash (sha256 over title,
+// company and description separated by U+001F, hex-encoded); an integration test holds
+// the two together. A drift would not fail loudly — it would make every backfilled job
+// look changed and re-embed it, the waste this column exists to remove.
+//
+// Guarded on IS NULL, so a re-run writes nothing and stopping mid-way is free.
+func (q *Queries) BackfillSemanticInputHashChunk(ctx context.Context, arg BackfillSemanticInputHashChunkParams) (int64, error) {
+	result, err := q.db.Exec(ctx, backfillSemanticInputHashChunk, arg.FromID, arg.ToID, arg.TargetModel)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const claimSemanticBatch = `-- name: ClaimSemanticBatch :many
 WITH claimable AS (
     SELECT o.id, o.job_id
@@ -86,9 +124,10 @@ func (q *Queries) ClaimSemanticBatch(ctx context.Context, arg ClaimSemanticBatch
 
 const clearSemanticEmbeddedBatch = `-- name: ClearSemanticEmbeddedBatch :exec
 UPDATE jobs
-SET semantic_embedded_model = NULL,
-    semantic_embedded_hash  = NULL,
-    semantic_embedding      = NULL
+SET semantic_embedded_model      = NULL,
+    semantic_embedded_hash       = NULL,
+    semantic_embedded_input_hash = NULL,
+    semantic_embedding           = NULL
 WHERE id = ANY($1::bigint[])
 `
 
@@ -245,7 +284,7 @@ func (q *Queries) GetJobSemanticGeneration(ctx context.Context, jobID int64) (pg
 }
 
 const getJobsByIDs = `-- name: GetJobsByIDs :many
-SELECT id, source, external_id, url, title, company, location, remote, description, posted_at, created_at, updated_at, company_slug, enrichment, enriched_at, enrichment_version, public_slug, last_seen_at, closed_at, countries, regions, work_mode, liveness_strikes, skills, seniority, category, created_by, updated_by, posting_language, employment_type, education_level, experience_years_min, collections, content_hash, english_level, cities, view_count, applied_count, role_fingerprint, semantic_embedded_model, semantic_embedded_hash, duplicate_of, is_tech, semantic_embedding, salary_min_manual, salary_max_manual, salary_currency_manual, salary_period_manual, upvote_count, downvote_count, ats_absent_at, closed_reason, is_private, similar_job_ids, similar_computed_at, salary_min_source, salary_max_source, salary_currency_source, salary_period_source, company_slug_folded, duplicate_of_aggregator, duplicate_of_role, duplicate_of_fuzzy, requires_clearance, requirements_derived, hydrated_at, ai_interview_reports, metros
+SELECT id, source, external_id, url, title, company, location, remote, description, posted_at, created_at, updated_at, company_slug, enrichment, enriched_at, enrichment_version, public_slug, last_seen_at, closed_at, countries, regions, work_mode, liveness_strikes, skills, seniority, category, created_by, updated_by, posting_language, employment_type, education_level, experience_years_min, collections, content_hash, english_level, cities, view_count, applied_count, role_fingerprint, semantic_embedded_model, semantic_embedded_hash, duplicate_of, is_tech, semantic_embedding, salary_min_manual, salary_max_manual, salary_currency_manual, salary_period_manual, upvote_count, downvote_count, ats_absent_at, closed_reason, is_private, similar_job_ids, similar_computed_at, salary_min_source, salary_max_source, salary_currency_source, salary_period_source, company_slug_folded, duplicate_of_aggregator, duplicate_of_role, duplicate_of_fuzzy, requires_clearance, requirements_derived, hydrated_at, ai_interview_reports, metros, semantic_embedded_input_hash
 FROM jobs
 WHERE id = ANY($1::bigint[])
 `
@@ -332,6 +371,7 @@ func (q *Queries) GetJobsByIDs(ctx context.Context, ids []int64) ([]Job, error) 
 			&i.HydratedAt,
 			&i.AiInterviewReports,
 			&i.Metros,
+			&i.SemanticEmbeddedInputHash,
 		); err != nil {
 			return nil, err
 		}
@@ -636,6 +676,27 @@ func (q *Queries) SemanticCoverageCounts(ctx context.Context, targetModel string
 	return i, err
 }
 
+const semanticInputHashBackfillBounds = `-- name: SemanticInputHashBackfillBounds :one
+SELECT COALESCE(min(id), 0)::bigint AS min_id,
+       COALESCE(max(id), 0)::bigint AS max_id
+FROM jobs
+`
+
+type SemanticInputHashBackfillBoundsRow struct {
+	MinID int64 `json:"min_id"`
+	MaxID int64 `json:"max_id"`
+}
+
+// The id range cmd/backfill-semantic-input-hash walks. min/max over the primary key, not
+// a count of what is left: the predicate that would count it reads every embedded row's
+// description, which is the whole cost of the pass.
+func (q *Queries) SemanticInputHashBackfillBounds(ctx context.Context) (SemanticInputHashBackfillBoundsRow, error) {
+	row := q.db.QueryRow(ctx, semanticInputHashBackfillBounds)
+	var i SemanticInputHashBackfillBoundsRow
+	err := row.Scan(&i.MinID, &i.MaxID)
+	return i, err
+}
+
 const semanticOutboxClaimableDepth = `-- name: SemanticOutboxClaimableDepth :one
 SELECT count(*)::bigint FROM semantic_outbox WHERE failed_at IS NULL
 `
@@ -693,15 +754,19 @@ func (q *Queries) SetSimilarJobIDs(ctx context.Context, arg SetSimilarJobIDsPara
 }
 
 const stampSemanticEmbeddedBatch = `-- name: StampSemanticEmbeddedBatch :exec
-UPDATE jobs
-SET semantic_embedded_model = $1::text,
-    semantic_embedded_hash  = content_hash
-WHERE id = ANY($2::bigint[])
+UPDATE jobs j
+SET semantic_embedded_model      = $1::text,
+    semantic_embedded_hash       = j.content_hash,
+    semantic_embedded_input_hash = h.input_hash
+FROM unnest($2::bigint[]) WITH ORDINALITY AS ids(id, n)
+LEFT JOIN unnest($3::text[]) WITH ORDINALITY AS h(input_hash, n) USING (n)
+WHERE j.id = ids.id
 `
 
 type StampSemanticEmbeddedBatchParams struct {
-	Model string  `json:"model"`
-	Ids   []int64 `json:"ids"`
+	Model       string   `json:"model"`
+	Ids         []int64  `json:"ids"`
+	InputHashes []string `json:"input_hashes"`
 }
 
 // Record that a batch of jobs' content is embedded under the given model. Run in the
@@ -716,7 +781,16 @@ type StampSemanticEmbeddedBatchParams struct {
 // changes AGAIN (which re-enqueues it). The window is one embed-duration and the drift
 // self-corrects on the next real change, so this is accepted over threading the exact
 // embedded hash through a nullable text[] per batch.
+//
+// semantic_embedded_input_hash is the other way round: it is the hash of the text the
+// worker actually embedded (search.EmbedInputHash over the rows it loaded), paired with
+// ids positionally, so it never claims a text the vectors were not computed from. It is
+// what lets the next run tell a content_hash move that changed the embedded text from one
+// that only moved a derived facet (see migrations/0192). Unnested WITH ORDINALITY and
+// rejoined, like InsertJobSemanticChunks, because sqlc cannot type a multi-argument unnest.
+// LEFT, so an id with no hash beside it is still stamped, with a NULL input hash — "not
+// known", which only ever costs a re-embed — rather than silently not stamped at all.
 func (q *Queries) StampSemanticEmbeddedBatch(ctx context.Context, arg StampSemanticEmbeddedBatchParams) error {
-	_, err := q.db.Exec(ctx, stampSemanticEmbeddedBatch, arg.Model, arg.Ids)
+	_, err := q.db.Exec(ctx, stampSemanticEmbeddedBatch, arg.Model, arg.Ids, arg.InputHashes)
 	return err
 }

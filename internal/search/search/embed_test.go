@@ -2,6 +2,8 @@ package search
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -11,8 +13,62 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgtype"
+
 	"github.com/strelov1/freehire/internal/platform/db"
 )
+
+// EmbedInputHash decides whether a re-enqueued job needs a TEI call at all, so it must
+// move exactly when the text jobChunkPassages builds can move — on the title, the company
+// and the description — and stay put on every derived facet. Those facets feed
+// content_hash, and on 2026-10-21 deploys that moved them queued ~92k unchanged texts
+// for a re-embed.
+func TestEmbedInputHashTracksOnlyTheEmbeddedText(t *testing.T) {
+	base := db.Job{
+		Title: "Backend Engineer", Company: "Acme", Description: "<p>Go and Postgres.</p>",
+		Skills: []string{"go"}, Countries: []string{"DE"}, Regions: []string{"europe"},
+		Seniority: "senior",
+		PostedAt:  pgtype.Timestamptz{Time: time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC), Valid: true},
+	}
+	h := EmbedInputHash(base)
+
+	facetsMoved := base
+	facetsMoved.Skills = []string{"go", "postgresql"}
+	facetsMoved.Countries = []string{"DE", "AT"}
+	facetsMoved.Regions = []string{"europe", "global"}
+	facetsMoved.Seniority = "lead"
+	facetsMoved.PostedAt = pgtype.Timestamptz{Time: time.Date(2026, 10, 21, 0, 0, 0, 0, time.UTC), Valid: true}
+	facetsMoved.ContentHash = pgtype.Text{String: "different", Valid: true}
+	if got := EmbedInputHash(facetsMoved); got != h {
+		t.Errorf("hash moved on derived facets alone: %s -> %s", h, got)
+	}
+
+	for name, mutate := range map[string]func(*db.Job){
+		"title":       func(j *db.Job) { j.Title = "Senior Backend Engineer" },
+		"company":     func(j *db.Job) { j.Company = "Acme Inc" },
+		"description": func(j *db.Job) { j.Description = "<p>Go and MySQL.</p>" },
+	} {
+		j := base
+		mutate(&j)
+		if EmbedInputHash(j) == h {
+			t.Errorf("hash did not move when the %s changed", name)
+		}
+	}
+}
+
+// The fields are separated, so text cannot slide across a boundary and collide, and the
+// exact form is pinned: BackfillSemanticInputHashChunk recomputes it in SQL, and the two
+// must agree byte for byte.
+func TestEmbedInputHashForm(t *testing.T) {
+	if EmbedInputHash(db.Job{Title: "ab", Company: "c"}) == EmbedInputHash(db.Job{Title: "a", Company: "bc"}) {
+		t.Fatal("title/company boundary collides")
+	}
+	sum := sha256.Sum256([]byte("Engineer\x1fAcme\x1fBody"))
+	want := hex.EncodeToString(sum[:])
+	if got := EmbedInputHash(db.Job{Title: "Engineer", Company: "Acme", Description: "Body"}); got != want {
+		t.Fatalf("EmbedInputHash = %s, want %s", got, want)
+	}
+}
 
 // jobChunkPassages must chunk the FULL, HTML-stripped description and carry the same
 // "passage: {title} at {company}. " prefix on EVERY chunk, since each chunk becomes an
