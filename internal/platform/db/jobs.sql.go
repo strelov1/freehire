@@ -2638,7 +2638,7 @@ const listClosedJobsByCompany = `-- name: ListClosedJobsByCompany :many
 SELECT id, source, external_id, url, title, company, location, remote, description, posted_at, created_at, updated_at, company_slug, enrichment, enriched_at, enrichment_version, public_slug, last_seen_at, closed_at, countries, regions, work_mode, liveness_strikes, skills, seniority, category, created_by, updated_by, posting_language, employment_type, education_level, experience_years_min, collections, content_hash, english_level, cities, view_count, applied_count, role_fingerprint, semantic_embedded_model, semantic_embedded_hash, duplicate_of, is_tech, semantic_embedding, salary_min_manual, salary_max_manual, salary_currency_manual, salary_period_manual, upvote_count, downvote_count, ats_absent_at, closed_reason, is_private, similar_job_ids, similar_computed_at, salary_min_source, salary_max_source, salary_currency_source, salary_period_source, company_slug_folded, duplicate_of_aggregator, duplicate_of_role, duplicate_of_fuzzy, requires_clearance, requirements_derived, hydrated_at, ai_interview_reports, metros, semantic_embedded_input_hash
 FROM jobs
 WHERE company_slug = $1 AND closed_at IS NOT NULL AND duplicate_of IS NULL AND NOT is_private
-ORDER BY posted_at DESC NULLS LAST, id DESC
+ORDER BY closed_at DESC, id DESC
 LIMIT $2 OFFSET $3
 `
 
@@ -2648,14 +2648,16 @@ type ListClosedJobsByCompanyParams struct {
 	Offset      int32  `json:"offset"`
 }
 
-// The company page's Closed tab: the postings this company has closed, newest posting first.
-// The same exclusions as ListJobsByCompany (reposts, private pasted JDs) with the closed_at
-// predicate inverted.
+// The company page's Closed tab: the postings this company has closed, most recently closed
+// first. The same exclusions as ListJobsByCompany (reposts, private pasted JDs) with the
+// closed_at predicate inverted.
 //
-// The ORDER BY is jobs_company_slug_idx's own (company_slug, posted_at DESC NULLS LAST,
-// id DESC — not partial, so it covers closed rows) and must stay so: a large employer holds
-// hundreds of thousands of closed rows, and any other order is a sort over all of them. That
-// is also why nothing counts this set — see the handler.
+// Served by jobs_closed_company_closed_at_idx (migration 0194): (company_slug, closed_at DESC,
+// id DESC), PARTIAL on exactly this WHERE. Partial because the broader jobs_company_slug_idx
+// leaves closed_at/duplicate_of/is_private as heap filters, so page 1 walked every open
+// posting first (dominos, 14.5k open rows: 5.4s cold). The ORDER BY must match the index
+// exactly: a large employer holds hundreds of thousands of closed rows, and any other order
+// is a sort over all of them. That is also why nothing counts this set — see the handler.
 func (q *Queries) ListClosedJobsByCompany(ctx context.Context, arg ListClosedJobsByCompanyParams) ([]Job, error) {
 	rows, err := q.db.Query(ctx, listClosedJobsByCompany, arg.CompanySlug, arg.Limit, arg.Offset)
 	if err != nil {
