@@ -2536,7 +2536,7 @@ curl "https://freehire.me/api/v1/stats/catalog"
 
 How much of the catalogue carries a semantic embedding, and how fast the rest is going.
 
-Backs the public /embeddings page. `eligible` and `snapshot_covered` come from a snapshot `cmd/rollup-stats` measures every few hours (the count is too slow for a request); `queued` is the embedding queue, sampled every 15 seconds, and `covered` is `eligible − queued`. `rate_per_minute` counts only what left the queue over the last 10 minutes, so a batch of new postings arriving at once does not read as negative progress. Any figure not yet measured is `null`, never `0`.
+Backs the public /semantic-search page. `eligible` and `snapshot_covered` come from a snapshot `cmd/rollup-stats` measures every few hours (the count is too slow for a request); `queued` is the embedding queue, sampled every 15 seconds, and `covered` is `eligible − queued`. `rate_per_minute` counts only what left the queue over the last 10 minutes, so a batch of new postings arriving at once does not read as negative progress. Any figure not yet measured is `null`, never `0`.
 
 ```bash
 curl "https://freehire.me/api/v1/stats/embeddings"
