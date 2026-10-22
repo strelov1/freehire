@@ -2,6 +2,7 @@ package handler
 
 import (
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -9,6 +10,7 @@ import (
 
 	"github.com/strelov1/freehire/internal/ingest/linkimport"
 	"github.com/strelov1/freehire/internal/ingest/moderation"
+	"github.com/strelov1/freehire/internal/ingest/sources"
 	"github.com/strelov1/freehire/internal/ingest/submission"
 	"github.com/strelov1/freehire/internal/platform/db"
 )
@@ -21,14 +23,21 @@ import (
 type submissionHandlers struct {
 	submission *submission.Service
 	importer   *linkimport.Importer
+	// queries and postings answer "is this vacancy already in the catalogue" through the
+	// same catalogSlugForURL every other link-accepting surface uses — see
+	// CreateSubmission. Zero-value postings = the offline rewrite only.
+	queries  *db.Queries
+	postings sources.PostingURLResolver
 }
 
-func newSubmissionHandlers(queries *db.Queries, pool *pgxpool.Pool, moderation *moderation.Service, importer *linkimport.Importer) *submissionHandlers {
+func newSubmissionHandlers(queries *db.Queries, pool *pgxpool.Pool, moderation *moderation.Service, importer *linkimport.Importer, postings sources.PostingURLResolver) *submissionHandlers {
 	// Submission approval mints through the same moderation service, so derivation,
 	// dedup, and the enrichment enqueue are reused rather than duplicated.
 	return &submissionHandlers{
 		submission: submission.New(submission.NewQueriesRepository(queries, pool), moderation),
 		importer:   importer,
+		queries:    queries,
+		postings:   postings,
 	}
 }
 
@@ -181,7 +190,10 @@ func submissionError(err error) error {
 
 // CreateSubmission queues a user-contributed vacancy for moderation. Authenticated by
 // cookie or API key; the content is validated by the service (a bad body is a 400 before
-// any write), and a duplicate pending URL is a 409. Returns the pending submission with 201.
+// any write), and a duplicate pending URL is a 409. So is a URL the catalogue already
+// carries: the moderator could only reject it, and approving it by mistake would mint a
+// second row under source "manual" that the ingest dedup passes do not collapse.
+// Returns the pending submission with 201.
 func (h *submissionHandlers) CreateSubmission(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {
@@ -191,6 +203,14 @@ func (h *submissionHandlers) CreateSubmission(c *fiber.Ctx) error {
 	var in createJobRequest
 	if err := c.BodyParser(&in); err != nil {
 		return fiber.NewError(fiber.StatusBadRequest, "invalid request body")
+	}
+
+	slug, err := catalogSlugForURL(c.Context(), h.queries, h.postings, strings.TrimSpace(in.URL))
+	if err != nil {
+		return err
+	}
+	if slug != "" {
+		return fiber.NewError(fiber.StatusConflict, "this job is already on freehire: /jobs/"+slug)
 	}
 
 	sub, err := h.submission.Submit(c.Context(), userID, in.toCreateInput())
@@ -221,13 +241,18 @@ type prefillResponse struct {
 	Seniority      string   `json:"seniority,omitempty"`
 	Skills         []string `json:"skills,omitempty"`
 	Source         string   `json:"source,omitempty"`
+	// ExistingJobSlug is set, and every other field left empty, when the catalogue
+	// already carries the vacancy: the form says so and links to it instead of letting
+	// the submitter fill in a submission CreateSubmission would refuse.
+	ExistingJobSlug string `json:"existing_job_slug,omitempty"`
 }
 
 // PrefillSubmission parses a job URL through the same destination-recognition registry
 // the paste-a-link contribution flow resolves through (internal/ingest/linksource), but writes
-// nothing — no job, no submission, no dedup check, no credit reward, no enrichment
-// enqueue, no search push. An unrecognized URL, or one that is not a single vacancy page,
-// is not an error: it responds 200 with every field empty, and the submitter keeps typing.
+// nothing — no job, no submission, no credit reward, no enrichment enqueue, no search push.
+// A URL the catalogue already carries answers with ExistingJobSlug and nothing else. An
+// unrecognized URL, or one that is not a single vacancy page, is not an error: it responds
+// 200 with every field empty, and the submitter keeps typing.
 func (h *submissionHandlers) PrefillSubmission(c *fiber.Ctx) error {
 	if _, err := requireUserID(c); err != nil {
 		return err
@@ -236,6 +261,15 @@ func (h *submissionHandlers) PrefillSubmission(c *fiber.Ctx) error {
 	var in prefillRequest
 	if err := c.BodyParser(&in); err != nil {
 		return fiber.NewError(fiber.StatusBadRequest, "invalid request body")
+	}
+
+	// Asked before the outbound fetch, which a known vacancy does not need.
+	slug, err := catalogSlugForURL(c.Context(), h.queries, h.postings, strings.TrimSpace(in.URL))
+	if err != nil {
+		return err
+	}
+	if slug != "" {
+		return c.JSON(fiber.Map{"data": prefillResponse{ExistingJobSlug: slug}})
 	}
 
 	resolved, ok, err := h.importer.Resolve(c.Context(), in.URL, linkimport.Board{})

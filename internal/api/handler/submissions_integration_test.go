@@ -29,6 +29,7 @@ import (
 	"github.com/strelov1/freehire/internal/identity/auth"
 	"github.com/strelov1/freehire/internal/ingest/linkimport"
 	"github.com/strelov1/freehire/internal/ingest/moderation"
+	"github.com/strelov1/freehire/internal/ingest/sources"
 	"github.com/strelov1/freehire/internal/ingest/submission"
 	"github.com/strelov1/freehire/internal/platform/db"
 )
@@ -61,7 +62,7 @@ func TestSubmissionsEndToEnd(t *testing.T) {
 		queries:  queries,
 		accounts: accounts.New(accounts.NewQueriesRepository(queries, pool), authHasher{}),
 	}
-	sh := &submissionHandlers{submission: submission.New(submission.NewQueriesRepository(queries, pool), mod)}
+	sh := &submissionHandlers{submission: submission.New(submission.NewQueriesRepository(queries, pool), mod), queries: queries}
 
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	keyAuth := auth.RequireAuthOrKey(iss, testVersions, apiKeys{queries})
@@ -242,6 +243,40 @@ func TestSubmissionsEndToEnd(t *testing.T) {
 		}
 	})
 
+	t.Run("a URL the catalogue already carries is a 409 naming the job, with no row written", func(t *testing.T) {
+		// url1 is live since the approval above; scheme, www., tracking query and trailing
+		// slash are all normalized away, so this variant is the same posting.
+		variant := `{"url":"http://www.acme.example/jobs/1/?utm_source=x","title":"Senior Go Developer","company":"Acme","description":"We use Golang."}`
+		var before int
+		if err := pool.QueryRow(ctx, "SELECT count(*) FROM job_submissions").Scan(&before); err != nil {
+			t.Fatalf("count submissions: %v", err)
+		}
+		resp, err := app.Test(req(fiber.MethodPost, "/api/v1/submissions", user2Cookie, variant))
+		if err != nil {
+			t.Fatalf("submit: %v", err)
+		}
+		defer resp.Body.Close()
+		b, _ := io.ReadAll(resp.Body)
+		if resp.StatusCode != fiber.StatusConflict {
+			t.Fatalf("status = %d, want 409 (body %s)", resp.StatusCode, b)
+		}
+		var slug string
+		if err := pool.QueryRow(ctx,
+			"SELECT j.public_slug FROM jobs j JOIN job_submissions s ON s.job_id = j.id WHERE s.id = $1", sub1ID).Scan(&slug); err != nil {
+			t.Fatalf("read minted slug: %v", err)
+		}
+		if !strings.Contains(string(b), "/jobs/"+slug) {
+			t.Errorf("body %s does not link the existing job /jobs/%s", b, slug)
+		}
+		var after int
+		if err := pool.QueryRow(ctx, "SELECT count(*) FROM job_submissions").Scan(&after); err != nil {
+			t.Fatalf("count submissions: %v", err)
+		}
+		if after != before {
+			t.Errorf("queue grew from %d to %d, want no row written", before, after)
+		}
+	})
+
 	t.Run("moderator rejects another submission with a reason (no job)", func(t *testing.T) {
 		const url2 = "https://acme.example/jobs/2"
 		resp, err := app.Test(req(fiber.MethodPost, "/api/v1/submissions", user2Cookie,
@@ -357,7 +392,7 @@ func TestSubmissionStructuredFacetsEndToEnd(t *testing.T) {
 	userCookie, _ := iss.Issue(userID, testTokenVersion)
 	queries := db.New(pool)
 	mod := moderation.New(moderation.NewQueriesRepository(queries, pool, enrich.Version))
-	sh := &submissionHandlers{submission: submission.New(submission.NewQueriesRepository(queries, pool), mod)}
+	sh := &submissionHandlers{submission: submission.New(submission.NewQueriesRepository(queries, pool), mod), queries: queries}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	keyAuth := auth.RequireAuthOrKey(iss, testVersions, apiKeys{queries})
 	requireMod := auth.RequireRole(queries, "moderator")
@@ -488,7 +523,7 @@ func TestSubmissionDomainBlocklistEndToEnd(t *testing.T) {
 	userCookie, _ := iss.Issue(userID, testTokenVersion)
 	queries := db.New(pool)
 	mod := moderation.New(moderation.NewQueriesRepository(queries, pool, enrich.Version))
-	sh := &submissionHandlers{submission: submission.New(submission.NewQueriesRepository(queries, pool), mod)}
+	sh := &submissionHandlers{submission: submission.New(submission.NewQueriesRepository(queries, pool), mod), queries: queries}
 
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	keyAuth := auth.RequireAuthOrKey(iss, testVersions, apiKeys{queries})
@@ -707,7 +742,7 @@ func TestSubmissionsPrefillEndToEnd(t *testing.T) {
 
 	importer := linkimport.New(pool, queries, nil, prefillPageClient{}, nil, nil)
 	mod := moderation.New(moderation.NewQueriesRepository(queries, pool, enrich.Version))
-	sh := newSubmissionHandlers(queries, pool, mod, importer)
+	sh := newSubmissionHandlers(queries, pool, mod, importer, sources.PostingURLResolver{})
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	keyAuth := auth.RequireAuthOrKey(iss, testVersions, apiKeys{queries})
 	app.Post("/api/v1/submissions/prefill", keyAuth, sh.PrefillSubmission)
@@ -777,6 +812,37 @@ func TestSubmissionsPrefillEndToEnd(t *testing.T) {
 		}
 		if out.Data.Title != "" {
 			t.Errorf("title = %q, want empty for an unrecognized page", out.Data.Title)
+		}
+	})
+
+	t.Run("a URL the catalogue already carries answers with its slug and nothing else", func(t *testing.T) {
+		const knownURL = "https://acme.example/jobs/known"
+		job, _, err := mod.Create(ctx, userID, moderation.CreateInput{
+			URL: knownURL, Title: "Senior Go Developer", Company: "Acme", Description: "We use Golang.",
+		})
+		if err != nil {
+			t.Fatalf("seed job: %v", err)
+		}
+		resp, err := app.Test(req(userCookie, `{"url":"`+knownURL+`/"}`))
+		if err != nil {
+			t.Fatalf("prefill: %v", err)
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != fiber.StatusOK {
+			b, _ := io.ReadAll(resp.Body)
+			t.Fatalf("prefill status = %d, want 200 (body %s)", resp.StatusCode, b)
+		}
+		var out struct {
+			Data struct {
+				Title           string `json:"title"`
+				ExistingJobSlug string `json:"existing_job_slug"`
+			} `json:"data"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+			t.Fatalf("decode: %v", err)
+		}
+		if out.Data.ExistingJobSlug != job.Fields().PublicSlug || out.Data.Title != "" {
+			t.Errorf("prefill = slug %q title %q, want slug %q and no fields", out.Data.ExistingJobSlug, out.Data.Title, job.Fields().PublicSlug)
 		}
 	})
 

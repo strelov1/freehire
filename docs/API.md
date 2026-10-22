@@ -1894,6 +1894,8 @@ Any signed-in user can submit a vacancy for moderation and read their own queue.
 
 Submit a vacancy for review.
 
+A URL already awaiting review is a `409`, and so is a URL the catalogue already carries — matched the way `/jobs/find` matches it, so a link differing only by scheme, `www.`, tracking query or trailing slash counts as the same posting. That `409` names the existing job (`/jobs/<public_slug>`) in its error.
+
 **Body**
 
 | Name | Type | Required | Description |
@@ -1924,7 +1926,7 @@ curl -X POST "https://freehire.me/api/v1/submissions" \
 
 Parse a job URL into a draft submission for review before posting.
 
-Uses the same ATS-recognition registry as `/jobs/resolve`, but writes nothing — no job, no submission, no allowance spent. An unrecognized URL returns an empty object rather than an error. Rate-limited (shares the outbound-fetch budget).
+Uses the same ATS-recognition registry as `/jobs/resolve`, but writes nothing — no job, no submission, no allowance spent. An unrecognized URL returns an empty object rather than an error. A URL the catalogue already carries returns only `existing_job_slug`, and `POST /submissions` would refuse it. Rate-limited (shares the outbound-fetch budget).
 
 **Body**
 

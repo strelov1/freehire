@@ -1711,6 +1711,11 @@ data: {"type":"result","stop_reason":"completed"}
         path: '/submissions',
         auth: 'cookie-or-key',
         summary: 'Submit a vacancy for review.',
+        description:
+          'A URL already awaiting review is a `409`, and so is a URL the catalogue ' +
+          'already carries — matched the way `/jobs/find` matches it, so a link differing ' +
+          'only by scheme, `www.`, tracking query or trailing slash counts as the same ' +
+          'posting. That `409` names the existing job (`/jobs/<public_slug>`) in its error.',
         body: [
           { name: 'url', type: 'string', required: true, description: 'Link to the original posting.', example: 'https://acme.com/careers/123' },
           { name: 'title', type: 'string', required: true, description: 'Job title.', example: 'Senior Go Engineer' },
@@ -1735,7 +1740,9 @@ data: {"type":"result","stop_reason":"completed"}
         description:
           'Uses the same ATS-recognition registry as `/jobs/resolve`, but ' +
           'writes nothing — no job, no submission, no allowance spent. An unrecognized ' +
-          'URL returns an empty object rather than an error. Rate-limited ' +
+          'URL returns an empty object rather than an error. A URL the catalogue already ' +
+          'carries returns only `existing_job_slug`, and `POST /submissions` would refuse ' +
+          'it. Rate-limited ' +
           '(shares the outbound-fetch budget).',
         body: [{ name: 'url', type: 'string', required: true, description: 'The job posting URL to parse.' }],
         curl: `curl -X POST "${BASE_URL}/submissions/prefill" \\

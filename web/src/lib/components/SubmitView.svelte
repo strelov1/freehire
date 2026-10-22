@@ -91,8 +91,34 @@
   // in their own preview before the submission is ever sanitized server-side.
   const previewDescriptionHtml = $derived(renderMarkdown(descriptionMarkdown.trim()));
 
+  // The catalogue's answer for a URL: the slug of the posting we already carry under it.
+  // Keyed by the URL it was asked for, so editing the field drops the notice at once
+  // instead of waiting for the next answer. Asked as the submitter types (the public
+  // /jobs/find read fetches no page, so it is cheap) rather than only on prefill, which
+  // is optional; the server refuses the same URL with a 409 either way.
+  let known = $state<{ url: string; slug: string } | null>(null);
+  const existingSlug = $derived(known !== null && known.url === url.trim() ? known.slug : null);
+
+  $effect(() => {
+    const target = url.trim();
+    if (!/^https?:\/\/\S+\.\S+/i.test(target)) return;
+    const timer = setTimeout(async () => {
+      try {
+        const found = await api.findJobByUrl(target);
+        if (found) known = { url: target, slug: found.public_slug };
+      } catch {
+        // Best-effort: a failed lookup leaves the server's 409 as the backstop.
+      }
+    }, 400);
+    return () => clearTimeout(timer);
+  });
+
   const canSubmit = $derived(
-    url.trim() !== '' && title.trim() !== '' && company.trim() !== '' && !submitting,
+    url.trim() !== '' &&
+      title.trim() !== '' &&
+      company.trim() !== '' &&
+      existingSlug === null &&
+      !submitting,
   );
 
   // Shared surface for the native selects so they match the Input primitive.
@@ -116,6 +142,10 @@
     prefillMissURL = null;
     try {
       const result = await api.prefillSubmission(target);
+      if (result.existing_job_slug) {
+        known = { url: target, slug: result.existing_job_slug };
+        return;
+      }
       // Object.values(...).some((v) => v) would treat an empty array (skills: [])
       // as a hit — an array is truthy regardless of length.
       const found = Object.values(result).some((v) =>
@@ -188,7 +218,8 @@
       });
       resetForm();
     } catch (err) {
-      // 409 means the URL is already awaiting review; surface the backend message.
+      // 409 means the URL is already awaiting review or already in the catalogue;
+      // surface the backend message.
       formError =
         err instanceof ApiError ? err.message : 'Could not submit the job. Please try again.';
     } finally {
@@ -299,7 +330,16 @@
                 {prefilling ? 'Filling in…' : 'Fill in from this link'}
               </Button>
             </div>
-            {#if prefillMiss}
+            {#if existingSlug}
+              <p class="text-xs text-muted-foreground">
+                This job is already on freehire —
+                <a
+                  href={resolve('/jobs/[slug]', { slug: existingSlug })}
+                  class="font-medium text-foreground underline underline-offset-4 hover:no-underline"
+                  >open it</a
+                >. There is no need to submit it again.
+              </p>
+            {:else if prefillMiss}
               <p class="text-xs text-muted-foreground">
                 Couldn't find anything to fill in from that link — no problem, just fill in the
                 rest below.

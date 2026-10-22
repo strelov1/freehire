@@ -638,6 +638,8 @@ export interface PrefillResult {
   seniority?: string;
   skills?: string[];
   source?: string;
+  /** Set, with every other field empty, when the catalogue already carries the URL. */
+  existing_job_slug?: string;
 }
 
 /** A verified-employer account: the claim on one company. `status` drives which view the
