@@ -101,7 +101,7 @@
               {#if data.response}
                 <p class="mt-1 text-2xl font-semibold tabular-nums">{replyRate(data.response)}%</p>
                 <p class="mt-1 text-sm text-muted-foreground">
-                  of {data.response.applications} tracked applications got a reply{#if data.response.median_reply_days !== undefined},
+                  of {data.response.applications} applications freehire members tracked here got a reply{#if data.response.median_reply_days !== undefined},
                     the first after {Math.round(data.response.median_reply_days)} days (median){/if}
                 </p>
               {:else}
@@ -146,7 +146,7 @@
         {#if breakdowns.length > 0}
           <section>
             <h2 class="text-lg font-semibold tracking-tight">Who they hire</h2>
-            <p class="mt-1 text-sm text-muted-foreground">Across {data.breakdown?.total} open postings.</p>
+            <p class="mt-1 text-sm text-muted-foreground">What the company's open postings ask for.</p>
             <div class="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {#each breakdowns as block (block.param)}
                 <Card class="p-4">

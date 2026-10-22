@@ -6,9 +6,8 @@ import { rethrowUpstream } from '$lib/server/upstream';
 import type { FacetCounts } from '$lib/types';
 import type { PageServerLoad } from './$types';
 
-/** The facets the "Who they hire" block reads, plus the two that choose the salary
- *  currency and period. Named, because counting is paid per facet. */
-const BREAKDOWN_FACETS = ['category', 'seniority', 'countries', 'work_mode', 'skills', 'salary_currency', 'salary_period'];
+/** The facets the "Who they hire" block reads. Named, because counting is paid per facet. */
+const BREAKDOWN_FACETS = ['category', 'seniority', 'countries', 'work_mode', 'skills'];
 
 // The Hiring tab: everything is server-rendered, so the figures, the chart and the
 // breakdowns are in the initial HTML a crawler reads.
@@ -24,6 +23,7 @@ export const load: PageServerLoad = async ({ params, fetch }) => {
   // Started before the company read so the three overlap.
   const hiring = client.companyHiring(params.slug, 'day').catch(() => null);
   const breakdown = client.facetCounts(scope, { facets: BREAKDOWN_FACETS }).catch(() => null);
+  const salary = yearlySalary(client, scope);
 
   let entity;
   try {
@@ -40,26 +40,28 @@ export const load: PageServerLoad = async ({ params, fetch }) => {
     response: entity.response ?? null,
     hiring: await hiring,
     breakdown: await breakdown,
-    salary: await yearlySalary(client, scope, await breakdown),
+    salary: await salary,
   };
 };
 
-/** The company's yearly pay in the currency most of its postings use — a second count
- *  narrowed to that currency and period, because a range across currencies and periods
- *  is meaningless (one employer measured 60 to 7,000,000). Null when nothing is stated
- *  yearly or the read fails. */
+/** The company's yearly pay in the currency most of its YEARLY postings use — counts
+ *  narrowed to one currency and period, because a range across them is meaningless (one
+ *  employer measured 60 to 7,000,000). The currency is chosen among yearly postings only:
+ *  chosen across all periods, ten hourly INR postings would pick INR over eight yearly
+ *  USD ones and leave nothing to show. Null when nothing is stated yearly or a read
+ *  fails. */
 async function yearlySalary(
   client: ReturnType<typeof serverApi>,
   scope: URLSearchParams,
-  breakdown: FacetCounts | null,
 ): Promise<{ currency: string; total: number; stats: FacetCounts['stats'] } | null> {
-  const currency = dominantCurrency(breakdown?.facets.salary_currency);
-  if (!currency || !breakdown?.facets.salary_period?.year) return null;
-  const params = new URLSearchParams(scope);
-  params.set('salary_currency', currency);
-  params.set('salary_period', 'year');
+  const yearly = new URLSearchParams(scope);
+  yearly.set('salary_period', 'year');
   try {
-    const counts = await client.facetCounts(params, { facets: ['salary_min', 'salary_max'] });
+    const currencies = await client.facetCounts(yearly, { facets: ['salary_currency'] });
+    const currency = dominantCurrency(currencies.facets.salary_currency);
+    if (!currency) return null;
+    yearly.set('salary_currency', currency);
+    const counts = await client.facetCounts(yearly, { facets: ['salary_min', 'salary_max'] });
     return { currency, total: counts.total, stats: counts.stats };
   } catch {
     return null;

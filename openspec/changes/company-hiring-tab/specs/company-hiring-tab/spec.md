@@ -41,8 +41,8 @@ closed postings, or no row. It SHALL never serve a zero or an estimate in its pl
 
 ### Requirement: Hiring tab on the company page
 The company page SHALL show two tabs under the company header: **Jobs** linking to
-`/companies/<slug>` and **Hiring** linking to `/companies/<slug>/hiring`, the current
-one marked `aria-current="page"`. The Hiring page SHALL be server-rendered and canonical
+`/companies/<slug>` and **Hiring** linking to `/companies/<slug>/hiring`, rendered as a
+tablist whose tabs are links, the current one `aria-selected`. The Hiring page SHALL be server-rendered and canonical
 to itself. It SHALL carry `noindex, follow` when the company has no open postings and
 no activity in the default window, since such a page has nothing to read.
 
@@ -52,7 +52,7 @@ no activity in the default window, since such a page has nothing to read.
 
 #### Scenario: Navigating between tabs
 - **WHEN** a visitor on `/companies/acme` clicks **Hiring**
-- **THEN** the browser navigates to `/companies/acme/hiring`, the header stays the same, and **Hiring** is marked current
+- **THEN** the browser navigates to `/companies/acme/hiring`, the header stays the same, and **Hiring** is the selected tab
 
 ### Requirement: Hiring tab content
 The Hiring page SHALL show, in order: open postings now with the 30-day change; the

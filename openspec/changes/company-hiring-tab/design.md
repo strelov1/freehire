@@ -33,8 +33,8 @@ the company page's link; revisit with a threshold once the page has measured val
   filtered by it. Labels resolve through the same `FACETS` options as the filter panel.
 - **Salary is one currency, one period.** Measured on prod, an unfiltered min/max for
   one employer spanned 60 to 7,000,000 (hourly rupees beside yearly dollars). The page
-  picks the company's most common `salary_currency`, asks a second count narrowed to it
-  and `salary_period=year`, and shows the range only from 3 such postings up.
+  picks the most common `salary_currency` among the company's YEARLY postings, asks a
+  count narrowed to it and `salary_period=year`, and shows the range only from 3 such postings up.
 - **Tabs reuse the design system's `TabStrip`**, which already renders `href` tabs as
   anchors; the `/trends` toggle-and-chart logic moves into a shared `ActivityPanel` used
   by both pages rather than being copied.
