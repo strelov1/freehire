@@ -59,6 +59,19 @@ func (q *Queries) DeleteAllInsightsCompanyStats(ctx context.Context) error {
 	return err
 }
 
+const deleteAllInsightsCompanyViews = `-- name: DeleteAllInsightsCompanyViews :exec
+
+DELETE FROM insights_company_views
+`
+
+// ---------------------------------------------------------------------------
+// Per-company posting views (backs the company page's Hiring tab)
+// ---------------------------------------------------------------------------
+func (q *Queries) DeleteAllInsightsCompanyViews(ctx context.Context) error {
+	_, err := q.db.Exec(ctx, deleteAllInsightsCompanyViews)
+	return err
+}
+
 const deleteAllInsightsRoleSkillSample = `-- name: DeleteAllInsightsRoleSkillSample :exec
 DELETE FROM insights_role_skill_sample
 `
@@ -192,6 +205,23 @@ func (q *Queries) GetCompanyResponse(ctx context.Context, companySlug string) (G
 	row := q.db.QueryRow(ctx, getCompanyResponse, companySlug)
 	var i GetCompanyResponseRow
 	err := row.Scan(&i.Applications, &i.Answered, &i.MedianReplyDays)
+	return i, err
+}
+
+const getCompanyViews = `-- name: GetCompanyViews :one
+SELECT views, views_prev FROM insights_company_views WHERE company_slug = $1
+`
+
+type GetCompanyViewsRow struct {
+	Views     int64 `json:"views"`
+	ViewsPrev int64 `json:"views_prev"`
+}
+
+// One company's posting views. No row means none in either window; the caller serves zeros.
+func (q *Queries) GetCompanyViews(ctx context.Context, companySlug string) (GetCompanyViewsRow, error) {
+	row := q.db.QueryRow(ctx, getCompanyViews, companySlug)
+	var i GetCompanyViewsRow
+	err := row.Scan(&i.Views, &i.ViewsPrev)
 	return i, err
 }
 
@@ -950,6 +980,33 @@ FROM (
 // count). Only a company's activity days get a row.
 func (q *Queries) RebuildInsightsCompanyStats(ctx context.Context) (int64, error) {
 	result, err := q.db.Exec(ctx, rebuildInsightsCompanyStats)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const rebuildInsightsCompanyViews = `-- name: RebuildInsightsCompanyViews :execrows
+INSERT INTO insights_company_views (company_slug, views, views_prev)
+SELECT
+    j.company_slug,
+    COALESCE(sum(v.page_uniques) FILTER (WHERE v.day > current_date - 30), 0)::bigint,
+    COALESCE(sum(v.page_uniques) FILTER (WHERE v.day <= current_date - 30), 0)::bigint
+FROM job_daily_views v
+JOIN jobs j ON j.id = v.job_id
+WHERE v.day > current_date - 60
+  AND j.company_slug <> ''
+GROUP BY j.company_slug
+HAVING sum(v.page_uniques) > 0
+`
+
+// page_uniques summed over each company's postings for the last 30 days and the 30
+// before. page_uniques, never uniques: uniques fuses unfiltered API reads — mostly
+// crawlers — with page opens. Duplicates are NOT filtered out: a view of a repost is
+// still attention paid to the company. One visitor counts once per posting per day, so
+// the sum is posting-views, not distinct people; the page says so.
+func (q *Queries) RebuildInsightsCompanyViews(ctx context.Context) (int64, error) {
+	result, err := q.db.Exec(ctx, rebuildInsightsCompanyViews)
 	if err != nil {
 		return 0, err
 	}

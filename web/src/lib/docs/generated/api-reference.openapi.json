@@ -1057,7 +1057,7 @@
       "get": {
         "operationId": "get_companies_slug_hiring",
         "summary": "How one company hires over time — the company page’s Hiring tab.",
-        "description": "The company’s postings added vs. removed per period (dense, missing periods are 0, same window rules as `/stats/jobs-activity`), its open postings now and 30 days ago, and the median days its postings stay open before an employer-side closure over the last 180 days. `lifetime` is omitted below 5 such closures — absent, never 0. An unknown slug is a `404`; a slug retired by a company merge redirects `301` to the canonical one.",
+        "description": "The company’s postings added vs. removed per period (dense, missing periods are 0, same window rules as `/stats/jobs-activity`), its open postings now and 30 days ago, and the median days its postings stay open before an employer-side closure over the last 180 days, and the page views its postings drew over the last 30 days and the 30 before (`views`, `views_prev`: one visitor counted once per posting per day, crawlers excluded). `lifetime` is omitted below 5 such closures — absent, never 0. An unknown slug is a `404`; a slug retired by a company merge redirects `301` to the canonical one.",
         "parameters": [
           {
             "name": "slug",
@@ -1110,7 +1110,7 @@
                 "schema": {
                   "type": "string"
                 },
-                "example": "{\n  \"data\": {\n    \"open\": 42,\n    \"open_prev\": 30,\n    \"growth\": 12,\n    \"series\": [\n      { \"period\": \"2026-06-01\", \"added\": 5, \"removed\": 2 },\n      { \"period\": \"2026-06-08\", \"added\": 3, \"removed\": 4 }\n    ],\n    \"lifetime\": { \"closed\": 37, \"median_days\": 21.5 }\n  }\n}"
+                "example": "{\n  \"data\": {\n    \"open\": 42,\n    \"open_prev\": 30,\n    \"growth\": 12,\n    \"views\": 2114,\n    \"views_prev\": 1800,\n    \"series\": [\n      { \"period\": \"2026-06-01\", \"added\": 5, \"removed\": 2 },\n      { \"period\": \"2026-06-08\", \"added\": 3, \"removed\": 4 }\n    ],\n    \"lifetime\": { \"closed\": 37, \"median_days\": 21.5 }\n  }\n}"
               }
             }
           }

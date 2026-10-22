@@ -662,3 +662,32 @@ LEFT JOIN insights_company_stats s
        ON s.company_slug = sqlc.arg('company_slug')::text AND s.day = d::date
 GROUP BY date_trunc(sqlc.arg('unit')::text, d)
 ORDER BY date_trunc(sqlc.arg('unit')::text, d);
+
+-- ---------------------------------------------------------------------------
+-- Per-company posting views (backs the company page's Hiring tab)
+-- ---------------------------------------------------------------------------
+
+-- name: DeleteAllInsightsCompanyViews :exec
+DELETE FROM insights_company_views;
+
+-- name: RebuildInsightsCompanyViews :execrows
+-- page_uniques summed over each company's postings for the last 30 days and the 30
+-- before. page_uniques, never uniques: uniques fuses unfiltered API reads — mostly
+-- crawlers — with page opens. Duplicates are NOT filtered out: a view of a repost is
+-- still attention paid to the company. One visitor counts once per posting per day, so
+-- the sum is posting-views, not distinct people; the page says so.
+INSERT INTO insights_company_views (company_slug, views, views_prev)
+SELECT
+    j.company_slug,
+    COALESCE(sum(v.page_uniques) FILTER (WHERE v.day > current_date - 30), 0)::bigint,
+    COALESCE(sum(v.page_uniques) FILTER (WHERE v.day <= current_date - 30), 0)::bigint
+FROM job_daily_views v
+JOIN jobs j ON j.id = v.job_id
+WHERE v.day > current_date - 60
+  AND j.company_slug <> ''
+GROUP BY j.company_slug
+HAVING sum(v.page_uniques) > 0;
+
+-- name: GetCompanyViews :one
+-- One company's posting views. No row means none in either window; the caller serves zeros.
+SELECT views, views_prev FROM insights_company_views WHERE company_slug = $1;

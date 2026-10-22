@@ -676,6 +676,12 @@ type InsightsCompanyStat struct {
 	Open        int32       `json:"open"`
 }
 
+type InsightsCompanyView struct {
+	CompanySlug string `json:"company_slug"`
+	Views       int64  `json:"views"`
+	ViewsPrev   int64  `json:"views_prev"`
+}
+
 type InsightsFacetStat struct {
 	Facet string `json:"facet"`
 	Value string `json:"value"`

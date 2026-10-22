@@ -1,8 +1,8 @@
 ## 1. Views rollup and endpoint
 
-- [ ] 1.1 Migration `0191_insights_company_views.sql`; queries `DeleteAllInsightsCompanyViews`, `RebuildInsightsCompanyViews`, `GetCompanyViews`; `make sqlc`; integration tests for the rollup scenarios
-- [ ] 1.2 `cmd/rollup-company` rebuilds it in its transaction
-- [ ] 1.3 Hiring endpoint returns `views`/`views_prev`; integration test; `api-spec.ts` + regenerated docs
+- [x] 1.1 Migration `0191_insights_company_views.sql`; queries `DeleteAllInsightsCompanyViews`, `RebuildInsightsCompanyViews`, `GetCompanyViews`; `make sqlc`; integration tests for the rollup scenarios
+- [x] 1.2 `cmd/rollup-company` rebuilds it in its transaction
+- [x] 1.3 Hiring endpoint returns `views`/`views_prev`; integration test; `api-spec.ts` + regenerated docs
 
 ## 2. Web
 

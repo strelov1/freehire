@@ -801,7 +801,7 @@ curl "https://freehire.me/api/v1/companies/acme"
 
 How one company hires over time — the company page’s Hiring tab.
 
-The company’s postings added vs. removed per period (dense, missing periods are 0, same window rules as `/stats/jobs-activity`), its open postings now and 30 days ago, and the median days its postings stay open before an employer-side closure over the last 180 days. `lifetime` is omitted below 5 such closures — absent, never 0. An unknown slug is a `404`; a slug retired by a company merge redirects `301` to the canonical one.
+The company’s postings added vs. removed per period (dense, missing periods are 0, same window rules as `/stats/jobs-activity`), its open postings now and 30 days ago, and the median days its postings stay open before an employer-side closure over the last 180 days, and the page views its postings drew over the last 30 days and the 30 before (`views`, `views_prev`: one visitor counted once per posting per day, crawlers excluded). `lifetime` is omitted below 5 such closures — absent, never 0. An unknown slug is a `404`; a slug retired by a company merge redirects `301` to the canonical one.
 
 **Path parameters**
 
@@ -827,6 +827,8 @@ curl "https://freehire.me/api/v1/companies/acme/hiring?granularity=week"
     "open": 42,
     "open_prev": 30,
     "growth": 12,
+    "views": 2114,
+    "views_prev": 1800,
     "series": [
       { "period": "2026-06-01", "added": 5, "removed": 2 },
       { "period": "2026-06-08", "added": 3, "removed": 4 }

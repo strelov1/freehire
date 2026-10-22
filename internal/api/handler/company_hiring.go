@@ -30,6 +30,11 @@ type companyHiringResponse struct {
 	OpenPrev int32           `json:"open_prev"`
 	Growth   int32           `json:"growth"`
 	Series   []activityPoint `json:"series"`
+	// Views and ViewsPrev are page_uniques summed over the company's postings for the
+	// last 30 days and the 30 before — one visitor counted once per posting per day. A
+	// company with no row drew no views, so zeros are the measurement.
+	Views     int64 `json:"views"`
+	ViewsPrev int64 `json:"views_prev"`
 	// Lifetime is absent below lifetimeSampleGate, never zero: a zero-day median would
 	// read as "fills roles instantly".
 	Lifetime *companyLifetime `json:"lifetime,omitempty"`
@@ -73,6 +78,14 @@ func (h *companiesHandlers) CompanyHiring(c *fiber.Ctx) error {
 	switch {
 	case err == nil:
 		out.Open, out.OpenPrev, out.Growth = growth.OpenCount, growth.OpenCountPrev, growth.OpenCount-growth.OpenCountPrev
+	case !errors.Is(err, pgx.ErrNoRows):
+		return err
+	}
+
+	views, err := h.queries.GetCompanyViews(c.Context(), slug)
+	switch {
+	case err == nil:
+		out.Views, out.ViewsPrev = views.Views, views.ViewsPrev
 	case !errors.Is(err, pgx.ErrNoRows):
 		return err
 	}

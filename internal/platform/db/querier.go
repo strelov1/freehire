@@ -1419,6 +1419,10 @@ type Querier interface {
 	// Per-company hiring signal
 	// ---------------------------------------------------------------------------
 	DeleteAllInsightsCompanyStats(ctx context.Context) error
+	// ---------------------------------------------------------------------------
+	// Per-company posting views (backs the company page's Hiring tab)
+	// ---------------------------------------------------------------------------
+	DeleteAllInsightsCompanyViews(ctx context.Context) error
 	DeleteAllInsightsRoleSkillSample(ctx context.Context) error
 	// ---------------------------------------------------------------------------
 	// Per-role skill demand
@@ -2331,6 +2335,8 @@ type Querier interface {
 	// Where a retired slug should 301 to. GET /companies/:slug consults this only AFTER missing
 	// in `companies`, so a re-created company always wins over a stale alias.
 	GetCompanySlugAlias(ctx context.Context, aliasSlug string) (string, error)
+	// One company's posting views. No row means none in either window; the caller serves zeros.
+	GetCompanyViews(ctx context.Context, companySlug string) (GetCompanyViewsRow, error)
 	// The caller's current vote for a company (0 when none). Always returns one row.
 	GetCompanyVote(ctx context.Context, arg GetCompanyVoteParams) (int16, error)
 	// Which day a consumption was recorded against, read WITHOUT a lock.
@@ -5382,6 +5388,12 @@ type Querier interface {
 	// (a job is created no later than it closes, so this equals the point-in-time open
 	// count). Only a company's activity days get a row.
 	RebuildInsightsCompanyStats(ctx context.Context) (int64, error)
+	// page_uniques summed over each company's postings for the last 30 days and the 30
+	// before. page_uniques, never uniques: uniques fuses unfiltered API reads — mostly
+	// crawlers — with page opens. Duplicates are NOT filtered out: a view of a repost is
+	// still attention paid to the company. One visitor counts once per posting per day, so
+	// the sum is posting-views, not distinct people; the page says so.
+	RebuildInsightsCompanyViews(ctx context.Context) (int64, error)
 	// The denominator every share in insights_role_skill_stats divides by: the role's
 	// open postings that carry AT LEAST ONE tagged skill. Measured 2026-09-18, 11% of
 	// the eligible postings carry none, so dividing by the role's open count would fold

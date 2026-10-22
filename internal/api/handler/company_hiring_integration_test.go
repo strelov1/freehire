@@ -21,11 +21,13 @@ import (
 
 type hiringBody struct {
 	Data struct {
-		Open     int32           `json:"open"`
-		OpenPrev int32           `json:"open_prev"`
-		Growth   int32           `json:"growth"`
-		Series   []activityPoint `json:"series"`
-		Lifetime *struct {
+		Open      int32           `json:"open"`
+		OpenPrev  int32           `json:"open_prev"`
+		Growth    int32           `json:"growth"`
+		Views     int64           `json:"views"`
+		ViewsPrev int64           `json:"views_prev"`
+		Series    []activityPoint `json:"series"`
+		Lifetime  *struct {
 			Closed     int32   `json:"closed"`
 			MedianDays float32 `json:"median_days"`
 		} `json:"lifetime"`
@@ -42,6 +44,7 @@ func TestCompanyHiring(t *testing.T) {
 		INSERT INTO company_slug_aliases (alias_slug, canonical_slug, folded_key, reason)
 		     VALUES ('acme-inc', 'acme', 'acme', 'spelling');
 		INSERT INTO insights_company_growth (company_slug, open_count, open_count_prev) VALUES ('acme', 42, 30);
+		INSERT INTO insights_company_views (company_slug, views, views_prev) VALUES ('acme', 2114, 1800);
 		INSERT INTO insights_company_lifetime (company_slug, closed, median_days) VALUES ('acme', 5, 21.5), ('tiny', 4, 3);
 		INSERT INTO insights_company_stats (company_slug, day, added, removed, open) VALUES ('acme', (now() AT TIME ZONE 'UTC')::date, 3, 1, 42);`); err != nil {
 		t.Fatalf("seed: %v", err)
@@ -84,12 +87,15 @@ func TestCompanyHiring(t *testing.T) {
 		if last := d.Series[len(d.Series)-1]; last.Period != today || last.Added != 3 || last.Removed != 1 {
 			t.Errorf("today = %+v, want {%s 3 1}", last, today)
 		}
+		if d.Views != 2114 || d.ViewsPrev != 1800 {
+			t.Errorf("views = %d/%d, want 2114/1800", d.Views, d.ViewsPrev)
+		}
 		if d.Lifetime == nil || d.Lifetime.Closed != 5 || d.Lifetime.MedianDays != 21.5 {
 			t.Errorf("lifetime = %+v, want closed 5, median 21.5", d.Lifetime)
 		}
 	})
 
-	t.Run("below the gate the lifetime is absent and missing growth reads zero", func(t *testing.T) {
+	t.Run("below the gate the lifetime is absent and missing growth and views read zero", func(t *testing.T) {
 		status, _, body := get(t, "/api/v1/companies/tiny/hiring")
 		if status != fiber.StatusOK {
 			t.Fatalf("status = %d, want 200", status)
@@ -97,8 +103,8 @@ func TestCompanyHiring(t *testing.T) {
 		if body.Data.Lifetime != nil {
 			t.Errorf("lifetime = %+v, want absent below the gate", body.Data.Lifetime)
 		}
-		if body.Data.Open != 0 || body.Data.Growth != 0 {
-			t.Errorf("growth = %d/%d, want zeros", body.Data.Open, body.Data.Growth)
+		if body.Data.Open != 0 || body.Data.Growth != 0 || body.Data.Views != 0 || body.Data.ViewsPrev != 0 {
+			t.Errorf("growth/views = %d/%d/%d/%d, want zeros", body.Data.Open, body.Data.Growth, body.Data.Views, body.Data.ViewsPrev)
 		}
 	})
 
