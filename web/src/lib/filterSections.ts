@@ -8,7 +8,8 @@
 // group is a compile error (svelte-check): a newly added backend category can't
 // silently fall out of the modal.
 
-import { CATEGORY_VALUES, type Category } from './generated/contracts';
+import { CATEGORY_VALUES, FACET_ALIASES, type Category } from './generated/contracts';
+import { optionMatches } from './facets';
 import { categoryLabel } from './labels';
 
 // `SAVED` heads the job modal's "My filters" tab; `FILTERS` heads the (single-section)
@@ -119,6 +120,17 @@ export const CATEGORY_GROUPS: CategorySection[] = CATEGORY_GROUP_ORDER.map((name
     label: categoryLabel(value),
   })),
 })).filter((s) => s.options.length > 0);
+
+/** CATEGORY_GROUPS narrowed to the specializations a search matches — by label with
+ *  typo tolerance, or by any curated alias ("react developer", "фронтенд"), the same
+ *  match the select facets use. Empty groups drop out; an empty search keeps them all. */
+export function searchCategoryGroups(query: string): CategorySection[] {
+  if (!query.trim()) return CATEGORY_GROUPS;
+  return CATEGORY_GROUPS.map((g) => ({
+    ...g,
+    options: g.options.filter((o) => optionMatches(o, query, FACET_ALIASES)),
+  })).filter((g) => g.options.length > 0);
+}
 
 // ---- Rail registry ----------------------------------------------------------
 //

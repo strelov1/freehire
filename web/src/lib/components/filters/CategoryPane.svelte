@@ -4,7 +4,7 @@
   import { SvelteSet } from 'svelte/reactivity';
   import type { FacetStore } from '#lib/facets.js';
   import type { FacetCounts } from '#lib/types.js';
-  import { CATEGORY_GROUPS } from '#lib/filterSections.js';
+  import { searchCategoryGroups } from '#lib/filterSections.js';
   import FacetHeader from './FacetHeader.svelte';
   import { pillClass, pillTitle } from '../facets/pill';
 
@@ -36,13 +36,7 @@
   const st = $derived(store.facet('category'));
   const onToggle = (v: string) => (excludable ? store.cycle('category', v) : store.pick('category', v));
 
-  const groups = $derived.by(() => {
-    const q = query.trim().toLowerCase();
-    return CATEGORY_GROUPS.map((g) => ({
-      ...g,
-      options: q ? g.options.filter((o) => o.label.toLowerCase().includes(q)) : g.options,
-    })).filter((g) => g.options.length > 0);
-  });
+  const groups = $derived(searchCategoryGroups(query));
 </script>
 
 <FacetHeader {store} param="category" label="Specialization" />

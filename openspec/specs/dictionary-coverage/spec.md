@@ -1,4 +1,10 @@
-## ADDED Requirements
+# dictionary-coverage Specification
+
+## Purpose
+
+The public /dictionary page: what the specialization and skill dictionaries recognize,
+and the signed-in, rate-limited queue through which a visitor asks for a missing term.
+## Requirements
 
 ### Requirement: The page lists what the dictionaries hold
 The `/dictionary` page MUST be public and MUST show two sections. The Specialization section MUST list every specialization in the client vocabulary (`CATEGORY_GROUPS`), grouped and collapsible, using the filter modal's `CategoryPane` in include-only mode. The Skills section MUST list every skill in the skills glossary catalog, using the filter modal's `SearchSelect` with tech icons. A term MUST be listed whether or not it has open jobs.
@@ -45,6 +51,10 @@ An anonymous add MUST be refused with 401 and MUST NOT write a row. The page MUS
 
 ### Requirement: The server decides whether a term is known
 `POST /api/v1/dictionary/gaps` MUST check the term against the dictionary for its kind. A `specialization` is known when `classify.Parse(term).Category` is not empty. A `skill` is known when `skilltag.Canonicalize` returns a canonical for it. A known term MUST be refused with 409 and MUST NOT change a row. An unknown kind MUST be refused with 400. The page MUST show a 409 as "already in the dictionary under another name".
+
+#### Scenario: A known synonym is found, not offered as missing
+- **WHEN** a visitor searches specializations for a curated alias such as `react developer` or `фронтенд`
+- **THEN** the matching specialization (Frontend) is shown and no "Add to the list" button appears
 
 #### Scenario: An alias the page filter missed
 - **WHEN** a signed-in user adds a skill the page found no match for but `skilltag` resolves

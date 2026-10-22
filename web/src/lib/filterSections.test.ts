@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { FACETS } from './facets';
-import { RAIL } from './filterSections';
+import { CATEGORY_GROUPS, RAIL, searchCategoryGroups } from './filterSections';
 
 // Which pane hosts a facet that has no rail entry of its own, and why. The rail is the
 // ONLY way into a job facet from the interface: a param with no entry is still parsed
@@ -111,5 +111,29 @@ describe('the reality facet', () => {
   it('has no standalone rail entry — the Posted pane hosts it', () => {
     expect(RAIL.find((e) => e.key === 'reality')).toBeUndefined();
     expect(RAIL.find((e) => e.facetParam === 'reality')).toBeUndefined();
+  });
+});
+
+describe('searchCategoryGroups', () => {
+  const values = (q: string) => searchCategoryGroups(q).flatMap((g) => g.options.map((o) => o.value));
+
+  it('returns every group for an empty search', () => {
+    expect(searchCategoryGroups('  ')).toEqual(CATEGORY_GROUPS);
+  });
+
+  it('finds a specialization by its label', () => {
+    expect(values('Backend')).toContain('backend');
+  });
+
+  // The page offers "Add to the list" only when nothing matches, and the server answers
+  // 409 for a term the dictionary already resolves. Matching the aliases here is what
+  // keeps a known synonym from being offered as missing.
+  it('finds a specialization by an alias, in any language', () => {
+    expect(values('react developer')).toContain('frontend');
+    expect(values('фронтенд')).toContain('frontend');
+  });
+
+  it('matches nothing for an unknown term', () => {
+    expect(searchCategoryGroups('zzqx whisperer')).toEqual([]);
   });
 });
