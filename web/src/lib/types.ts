@@ -66,7 +66,7 @@ export type {
  *
  *  `enforced` says whether the ceiling turns anybody away yet. It is false through the
  *  shadow run, when the server counts a spent allowance and lets the action through anyway,
- *  so nothing here may block on `used >= limit` alone — see `refuses` in $lib/allowance. */
+ *  so nothing here may block on `used >= limit` alone — see `refuses` in #lib/allowance. */
 export interface Allowance {
   feature: string;
   used: number;
@@ -763,7 +763,7 @@ export interface EmployerVacancyPatch {
 }
 
 /** Why a job was reported. A closed vocabulary mirroring the backend's
- *  internal/report reasons; labels live in $lib/reports. */
+ *  internal/report reasons; labels live in #lib/reports. */
 export type ReportReason = 'no_response' | 'not_relevant' | 'spam' | 'fraud' | 'other';
 
 /** What a candidate can report about how a company hires. A closed vocabulary

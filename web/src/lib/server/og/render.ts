@@ -9,7 +9,7 @@
 import satori from 'satori';
 import { html } from 'satori-html';
 import { Resvg } from '@resvg/resvg-js';
-import type { Job } from '$lib/generated/contracts';
+import type { Job } from '#lib/generated/contracts.js';
 import { buildCard } from './card';
 import { OG_HEIGHT, OG_WIDTH } from './shared';
 

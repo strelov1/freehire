@@ -1,9 +1,9 @@
 <script lang="ts">
-  import { api } from '$lib/api';
-  import { errorMessage } from '$lib/utils';
-  import { Badge, Button, Card } from '$lib/ui';
-  import { splitAvailability, weekdayLabel, weekdayOrder } from '$lib/mentorship';
-  import type { MentorAvailabilityRule } from '$lib/types';
+  import { api } from '#lib/api.js';
+  import { errorMessage } from '#lib/utils.js';
+  import { Badge, Button, Card } from '#lib/ui/index.js';
+  import { splitAvailability, weekdayLabel, weekdayOrder } from '#lib/mentorship.js';
+  import type { MentorAvailabilityRule } from '#lib/types.js';
 
   let { rules = $bindable() }: { rules: MentorAvailabilityRule[] } = $props();
 

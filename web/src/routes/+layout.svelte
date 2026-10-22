@@ -1,31 +1,32 @@
 <script lang="ts">
   import { navigating, page, updated } from '$app/state';
   import { afterNavigate, beforeNavigate, goto } from '$app/navigation';
+  import { gotoPath } from '#lib/gotoPath.js';
   import { resolve } from '$app/paths';
   import { onMount, untrack } from 'svelte';
-  import { initTheme } from '$lib/theme.svelte';
-  import { currentUser, isAuthenticated } from '$lib/auth.svelte';
-  import { onboardingGate, onboardingUrl } from '$lib/onboardingGate.svelte';
-  import { isFullBleedRoute } from '$lib/shellLayout';
-  import { safeRedirect } from '$lib/safeRedirect';
-  import { resetUserStores } from '$lib/userResource.svelte';
+  import { initTheme } from '#lib/theme.svelte.js';
+  import { currentUser, isAuthenticated } from '#lib/auth.svelte.js';
+  import { onboardingGate, onboardingUrl } from '#lib/onboardingGate.svelte.js';
+  import { isFullBleedRoute } from '#lib/shellLayout.js';
+  import { safeRedirect } from '#lib/safeRedirect.js';
+  import { resetUserStores } from '#lib/userResource.svelte.js';
   import {
     capturePageview,
     syncReplayForRoute,
     identifyUser,
     resetIdentity,
     trackSignupIfNew,
-  } from '$lib/analytics';
-  import TopBar from '$lib/components/TopBar.svelte';
-  import CliBanner from '$lib/components/CliBanner.svelte';
-  import EmailVerificationBanner from '$lib/components/EmailVerificationBanner.svelte';
-  import Footer from '$lib/components/Footer.svelte';
-  import CookieConsent from '$lib/components/CookieConsent.svelte';
-  import ConfirmTailorDialog from '$lib/components/ConfirmTailorDialog.svelte';
-  import CvRefreshDialog from '$lib/components/CvRefreshDialog.svelte';
-  import SupportToast from '$lib/components/SupportToast.svelte';
+  } from '#lib/analytics.js';
+  import TopBar from '#lib/components/TopBar.svelte';
+  import CliBanner from '#lib/components/CliBanner.svelte';
+  import EmailVerificationBanner from '#lib/components/EmailVerificationBanner.svelte';
+  import Footer from '#lib/components/Footer.svelte';
+  import CookieConsent from '#lib/components/CookieConsent.svelte';
+  import ConfirmTailorDialog from '#lib/components/ConfirmTailorDialog.svelte';
+  import CvRefreshDialog from '#lib/components/CvRefreshDialog.svelte';
+  import SupportToast from '#lib/components/SupportToast.svelte';
   import '../app.css';
-  // Country-flag icon sheet (used by $lib/components/Flag.svelte). References its
+  // Country-flag icon sheet (used by #lib/components/Flag.svelte). References its
   // SVGs by URL, so the browser only fetches flags actually rendered.
   import 'flag-icons/css/flag-icons.min.css';
 
@@ -84,8 +85,7 @@
     if (page.url.pathname !== '/onboarding') return;
     untrack(() => {
       if (isAuthenticated() && currentUser()?.onboarding_completed_at != null) {
-        // eslint-disable-next-line svelte/no-navigation-without-resolve -- the returnTo branch is a validated same-origin path (safeRedirect), not a typed route; the fallback branch already uses resolve()
-        void goto(safeRedirect(page.url.searchParams.get('returnTo')) ?? resolve('/'));
+        void gotoPath(safeRedirect(page.url.searchParams.get('returnTo')) ?? resolve('/'));
       }
     });
   });
@@ -123,18 +123,24 @@
   // _app/immutable chunks the release has deleted. Its next client-side navigation
   // import()s one, gets a 404, and SvelteKit draws the 500 page over an HTTP 200 —
   // 265 of those reached Sentry in a day. `updated.current` flips once the version
-  // poll (see svelte.config.js) sees a new build; leaving through a full page load
+  // poll (see vite.config.ts) sees a new build; leaving through a full page load
   // instead of a client-side one fetches the new manifest and the chunk resolves.
   //
   // It waits until the reader is already leaving, where nothing they were looking at
   // survives the navigation either way — so it needs no prompt, and costs only the
   // round trip. `willUnload` means the browser is handling the navigation itself
   // (external link, reload) and there is nothing to intercept.
-  beforeNavigate(({ willUnload, to }) => {
+  beforeNavigate(({ willUnload, to, shallow }) => {
+    // Shallow routing fires this too in SvelteKit 3; a filter's URL write is not the
+    // reader leaving, and reloading under them mid-keystroke would be.
+    if (shallow) return;
     if (updated.current && !willUnload && to?.url) location.href = to.url.href;
   });
 
-  afterNavigate(() => {
+  afterNavigate(({ shallow }) => {
+    // SvelteKit 3 fires this for shallow routing too; a filter's URL write is not a
+    // pageview.
+    if (shallow) return;
     capturePageview();
     syncReplayForRoute(page.url.pathname);
   });

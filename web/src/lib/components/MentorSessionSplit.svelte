@@ -1,7 +1,7 @@
 <script lang="ts">
   import MentorSessionList from './MentorSessionList.svelte';
-  import { browserTimezone } from '$lib/mentorship';
-  import type { MentorSessions } from '$lib/types';
+  import { browserTimezone } from '#lib/mentorship.js';
+  import type { MentorSessions } from '#lib/types.js';
 
   // One party's sessions, both halves. The two panes that show them — the seeker's own and
   // the mentor's incoming — differ only in the data and in what an empty list should say,

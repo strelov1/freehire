@@ -1,9 +1,9 @@
 <script lang="ts">
   import { Plus, Trash2 } from '@lucide/svelte';
-  import type { SessionItem } from '$lib/assistant/sessions';
+  import type { SessionItem } from '#lib/assistant/sessions.js';
   import { messages } from './SessionRail.messages';
-  import { locale } from '$lib/i18n/currentLocale.svelte';
-  import { t } from '$lib/i18n/t';
+  import { locale } from '#lib/i18n/currentLocale.svelte.js';
+  import { t } from '#lib/i18n/t.js';
 
   // Session rail (desktop): the collapsible chat list. Pure rendering — session
   // orchestration (create/select/delete) stays with the parent and arrives as

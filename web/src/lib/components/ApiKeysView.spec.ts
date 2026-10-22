@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, within } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { ApiKey, User } from '$lib/types';
+import type { ApiKey, User } from '#lib/types.js';
 import ApiKeysView from './ApiKeysView.svelte';
 
 // The bug this whole change started from lives here: the revoke dialog demanded a password
@@ -44,15 +44,15 @@ const { StubApiError } = vi.hoisted(() => ({
 
 vi.mock('$app/state', () => ({ page: { data: {}, url: new URL('http://localhost/') } }));
 vi.mock('$app/paths', () => ({ resolve: (p: string) => p, base: '', assets: '' }));
-vi.mock('$lib/api', () => ({
+vi.mock('#lib/api.js', () => ({
   api: { listApiKeys, revokeApiKey, createApiKey, reauthenticatePassword, connectedIdentities },
   ApiError: StubApiError,
 }));
-vi.mock('$lib/auth.svelte', () => ({
+vi.mock('#lib/auth.svelte.js', () => ({
   currentUser: () => user.current,
   isAuthenticated: () => user.current !== null,
 }));
-vi.mock('$lib/recentAuth', () => ({
+vi.mock('#lib/recentAuth.js', () => ({
   beginProviderReauthentication: begin,
   recentAuthExpiry: expiry,
   forgetRecentAuthExpiry: forget,

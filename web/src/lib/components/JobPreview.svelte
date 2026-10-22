@@ -11,10 +11,10 @@
     WORK_MODE_OPTIONS,
     SENIORITY_OPTIONS,
     EMPLOYMENT_TYPE_OPTIONS,
-  } from '$lib/facets';
-  import { formatSalary } from '$lib/enrichment';
-  import { companyLogoUrl } from '$lib/logo';
-  import { EntityLogo } from '$lib/ui';
+  } from '#lib/facets.js';
+  import { formatSalary } from '#lib/enrichment.js';
+  import { companyLogoUrl } from '#lib/logo.js';
+  import { EntityLogo } from '#lib/ui/index.js';
   import JobDescription from './JobDescription.svelte';
   import SkillChip from './SkillChip.svelte';
 

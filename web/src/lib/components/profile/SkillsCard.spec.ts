@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { UserProfile } from '$lib/types';
+import type { UserProfile } from '#lib/types.js';
 import SkillsCard from './SkillsCard.svelte';
 
 // A mutable ref (the same shape ApiKeysView.spec.ts uses for its `user`) rather than a
@@ -35,7 +35,7 @@ const { addSkill, removeSkill } = vi.hoisted(() => ({
   removeSkill: vi.fn(),
 }));
 
-vi.mock('$lib/profile.svelte', () => ({
+vi.mock('#lib/profile.svelte.js', () => ({
   profileStore: {
     get profile() {
       return baseProfile;
@@ -47,7 +47,7 @@ vi.mock('$lib/profile.svelte', () => ({
 
 // The dictionary fetch is real network (api.facetCounts) in production; stubbed here
 // so the picker's mount effect resolves instantly with no candidates to search.
-vi.mock('$lib/skillDictionary', () => ({
+vi.mock('#lib/skillDictionary.js', () => ({
   loadSkillDistribution: vi.fn().mockResolvedValue([]),
 }));
 

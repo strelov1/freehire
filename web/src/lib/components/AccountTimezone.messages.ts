@@ -1,4 +1,4 @@
-import { defineMessages } from '$lib/i18n/t';
+import { defineMessages } from '#lib/i18n/t.js';
 
 // IANA zone identifiers themselves (e.g. `Europe/Moscow`) are not catalog keys —
 // they're stable wire values Go's time.LoadLocation reads back, not prose.

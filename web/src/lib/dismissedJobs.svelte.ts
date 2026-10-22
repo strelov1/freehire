@@ -11,8 +11,8 @@
 // and the set stays empty for signed-out users. A failed load leaves the set empty —
 // nothing is excluded, the correct degraded state.
 
-import { api } from '$lib/api';
-import { SlugSet } from '$lib/userResource.svelte';
+import { api } from '#lib/api.js';
+import { SlugSet } from '#lib/userResource.svelte.js';
 
 class DismissedJobs extends SlugSet {
   protected load(): Promise<string[]> {

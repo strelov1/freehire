@@ -1,9 +1,9 @@
-import { defineMessages, plurals } from '$lib/i18n/t';
+import { defineMessages, plurals } from '#lib/i18n/t.js';
 
 // `humanizeStage`/`groupedStages()`/`CLOSED_OUTCOMES` labels and `e.signal`/`f.label`/
 // `f.value`/`row.pending.label`/`u.label` are all generated vocabulary or server data —
 // out of scope here, the same boundary `emailStatus.ts` and `JobBoard.messages.ts` draw.
-// `statusLabel`/`stageImplication` (from `$lib/emailStatus`) are called WITH locale here,
+// `statusLabel`/`stageImplication` (from `#lib/emailStatus.js`) are called WITH locale here,
 // unlike the inbox PR's deferral of `JobDrawer` — this change translates the surrounding
 // prose too, so the chip's label must match it.
 export const messages = defineMessages(

@@ -1,8 +1,8 @@
 import { error } from '@sveltejs/kit';
-import { ApiError } from '$lib/api';
-import { requireMentorshipAccess } from '$lib/server/mentorshipGate';
-import { serverApi } from '$lib/server/api';
-import { rethrowUpstream } from '$lib/server/upstream';
+import { ApiError } from '#lib/api.js';
+import { requireMentorshipAccess } from '#lib/server/mentorshipGate.js';
+import { serverApi } from '#lib/server/api.js';
+import { rethrowUpstream } from '#lib/server/upstream.js';
 import type { PageServerLoad } from './$types';
 
 // The PROFILE is server-rendered; the SLOTS are not, and that split is deliberate.

@@ -1,9 +1,9 @@
 <script lang="ts">
-  import { api } from '$lib/api';
-  import type { CandidateContacts } from '$lib/types';
-  import { Button, Input } from '$lib/ui';
-  import { locale } from '$lib/i18n/currentLocale.svelte';
-  import { t } from '$lib/i18n/t';
+  import { api } from '#lib/api.js';
+  import type { CandidateContacts } from '#lib/types.js';
+  import { Button, Input } from '#lib/ui/index.js';
+  import { locale } from '#lib/i18n/currentLocale.svelte.js';
+  import { t } from '#lib/i18n/t.js';
   import { messages } from './CandidateContactsEditor.messages';
 
   const s = $derived(t(messages, locale()));

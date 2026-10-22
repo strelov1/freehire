@@ -1,5 +1,5 @@
 import { redirect } from '@sveltejs/kit';
-import { signinUrl } from '$lib/signin';
+import { signinUrl } from '#lib/signin.js';
 import type { PageServerLoad } from './$types';
 
 // Swipe mode is personal: both actions (save and dismiss) are per-user, and the

@@ -1,10 +1,10 @@
 <script lang="ts">
-  import { isAuthenticated } from '$lib/auth.svelte';
-  import { promptSignIn } from '$lib/signin';
-  import CompanyFeedbackDialog from '$lib/components/CompanyFeedbackDialog.svelte';
-  import DiscussionIndex from '$lib/components/community/DiscussionIndex.svelte';
-  import SubjectHeader from '$lib/components/community/SubjectHeader.svelte';
-  import { Button } from '$lib/ui';
+  import { isAuthenticated } from '#lib/auth.svelte.js';
+  import { promptSignIn } from '#lib/signin.js';
+  import CompanyFeedbackDialog from '#lib/components/CompanyFeedbackDialog.svelte';
+  import DiscussionIndex from '#lib/components/community/DiscussionIndex.svelte';
+  import SubjectHeader from '#lib/components/community/SubjectHeader.svelte';
+  import { Button } from '#lib/ui/index.js';
 
   let { data } = $props();
 

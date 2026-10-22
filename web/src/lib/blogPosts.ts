@@ -1,5 +1,5 @@
 // Blog post discovery. Posts are `.svx` files under web/src/posts/, compiled by
-// mdsvex at build time (see svelte.config.js). This is the single source of truth
+// mdsvex at build time (see svelte.options.ts). This is the single source of truth
 // for which posts exist — the /blog index, the post page, the sitemap, and the RSS
 // feed all read through `listPosts`/`getPost`, so draft-filtering and ordering
 // can't drift. The pure helpers it builds on live in `./blog` (unit-tested there);

@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/svelte';
 import { describe, expect, it, vi } from 'vitest';
-import type { SourceEntry } from '$lib/types';
+import type { SourceEntry } from '#lib/types.js';
 import SourceCatalog from './SourceCatalog.svelte';
 
 vi.mock('$app/state', () => ({ page: { data: {}, url: new URL('http://localhost/') } }));

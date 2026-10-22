@@ -1,15 +1,15 @@
 <script lang="ts">
-  import { api } from '$lib/api';
-  import { AsyncData } from '$lib/asyncData.svelte';
-  import { isAuthenticated } from '$lib/auth.svelte';
-  import { interviewRate, offerRate, replyRate } from '$lib/pipeline';
-  import type { PipelineStats } from '$lib/types';
+  import { api } from '#lib/api.js';
+  import { AsyncData } from '#lib/asyncData.svelte.js';
+  import { isAuthenticated } from '#lib/auth.svelte.js';
+  import { interviewRate, offerRate, replyRate } from '#lib/pipeline.js';
+  import type { PipelineStats } from '#lib/types.js';
   import PipelineFunnel from './PipelineFunnel.svelte';
   import RateDonut from './RateDonut.svelte';
   import States from './States.svelte';
   import { messages } from './PipelineView.messages';
-  import { locale } from '$lib/i18n/currentLocale.svelte';
-  import { format, plural, t } from '$lib/i18n/t';
+  import { locale } from '#lib/i18n/currentLocale.svelte.js';
+  import { format, plural, t } from '#lib/i18n/t.js';
 
   // Single aggregate fetch (not paginated): the snapshot of where the caller's
   // applications stand.

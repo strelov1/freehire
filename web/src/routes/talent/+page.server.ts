@@ -1,7 +1,7 @@
 import { error } from '@sveltejs/kit';
-import { serverApi } from '$lib/server/api';
-import { talentFiltersFromParams, talentFiltersToParams } from '$lib/talentFacetModel';
-import { PAGE_SIZE, pageExists, pageOffset, pageWithinWindow, parsePage } from '$lib/pagination';
+import { serverApi } from '#lib/server/api.js';
+import { talentFiltersFromParams, talentFiltersToParams } from '#lib/talentFacetModel.js';
+import { PAGE_SIZE, pageExists, pageOffset, pageWithinWindow, parsePage } from '#lib/pagination.js';
 import type { PageServerLoad } from './$types';
 
 // Server-render the requested page of the Talent Network catalogue for the current

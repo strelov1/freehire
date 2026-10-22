@@ -1,9 +1,9 @@
 <script lang="ts">
-  import { COMPANY_FACETS } from '$lib/facets';
-  import type { CompanyFilterStore } from '$lib/companyFilters';
-  import { StagedCompanyFilters } from '$lib/stagedCompanyFilters.svelte';
-  import { COMPANY_RAIL_GROUPS, type RailEntry, type RailSection } from '$lib/filterSections';
-  import type { FacetCounts } from '$lib/types';
+  import { COMPANY_FACETS } from '#lib/facets.js';
+  import type { CompanyFilterStore } from '#lib/companyFilters.js';
+  import { StagedCompanyFilters } from '#lib/stagedCompanyFilters.svelte.js';
+  import { COMPANY_RAIL_GROUPS, type RailEntry, type RailSection } from '#lib/filterSections.js';
+  import type { FacetCounts } from '#lib/types.js';
   import FacetSection from '../facets/FacetSection.svelte';
   import FilterModalShell from './FilterModalShell.svelte';
 

@@ -1,7 +1,7 @@
 import { error } from '@sveltejs/kit';
-import { categoryFromSlug, publishedCountries } from '$lib/roleLandings';
-import { serverApi } from '$lib/server/api';
-import { roleLandingPaths, urlsetXml, xmlResponse } from '$lib/sitemap';
+import { categoryFromSlug, publishedCountries } from '#lib/roleLandings.js';
+import { serverApi } from '#lib/server/api.js';
+import { roleLandingPaths, urlsetXml, xmlResponse } from '#lib/sitemap.js';
 import type { RequestHandler } from './$types';
 
 // One category's landings, referenced by the sitemap index once per category. Lists

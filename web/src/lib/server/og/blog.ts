@@ -3,7 +3,7 @@
 // footer. Pure and synchronous (PostMeta → HTML string for satori), mirroring
 // buildCompanyCard. satori constraint: flexbox-only layout, and any element with
 // more than one child declares `display:flex`.
-import type { PostMeta } from '$lib/blog';
+import type { PostMeta } from '#lib/blog.js';
 import { OG_HEIGHT, OG_WIDTH, brandFooter, esc } from './shared';
 
 // UTC so the rendered date matches the ISO frontmatter regardless of server tz.

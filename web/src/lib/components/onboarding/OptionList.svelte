@@ -5,7 +5,7 @@
   // picking one un-picks the rest. The pill groups elsewhere in the wizard are multi-select
   // and correctly use aria-pressed instead.
   import { Check } from '@lucide/svelte';
-  import type { SurveyOption } from '$lib/surveyOptions';
+  import type { SurveyOption } from '#lib/surveyOptions.js';
 
   interface Props {
     options: SurveyOption[];

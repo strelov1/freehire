@@ -1,9 +1,9 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
   import { UserRound } from '@lucide/svelte';
-  import { Button, Chip, NumberedGrid, SectionLabel } from '$lib/ui';
+  import { Button, Chip, NumberedGrid, SectionLabel } from '#lib/ui/index.js';
   import { pillClass, pillTitle } from './facets/pill';
-  import { ADVANCED_SEARCH_FAQ } from '$lib/advancedSearchFaq';
+  import { ADVANCED_SEARCH_FAQ } from '#lib/advancedSearchFaq.js';
 
   // The hero demo is a real, working miniature of the filter panel — the same
   // pillClass/pillTitle helpers PillGroup.svelte uses — not a screenshot. Values

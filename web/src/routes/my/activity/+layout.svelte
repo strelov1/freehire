@@ -3,11 +3,11 @@
   import { Bookmark, EyeOff, History, Sparkles } from '@lucide/svelte';
   import { page } from '$app/state';
   import { resolve } from '$app/paths';
-  import { TabStrip, tabStripId } from '$lib/ui';
-  import { activeRouteTab } from '$lib/routeTabs';
-  import { messages } from '$lib/components/activity.messages';
-  import { locale } from '$lib/i18n/currentLocale.svelte';
-  import { t } from '$lib/i18n/t';
+  import { TabStrip, tabStripId } from '#lib/ui/index.js';
+  import { activeRouteTab } from '#lib/routeTabs.js';
+  import { messages } from '#lib/components/activity.messages.js';
+  import { locale } from '#lib/i18n/currentLocale.svelte.js';
+  import { t } from '#lib/i18n/t.js';
 
   let { children }: { children: Snippet } = $props();
 

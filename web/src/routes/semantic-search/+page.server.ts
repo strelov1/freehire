@@ -1,5 +1,5 @@
-import { serverApi } from '$lib/server/api';
-import type { EmbedProgress } from '$lib/types';
+import { serverApi } from '#lib/server/api.js';
+import type { EmbedProgress } from '#lib/types.js';
 import type { PageServerLoad } from './$types';
 
 // The first paint of /semantic-search, from the same document the page's stream sends.

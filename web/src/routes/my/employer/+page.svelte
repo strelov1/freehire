@@ -1,5 +1,5 @@
 <script lang="ts">
-  import EmployerView from '$lib/components/EmployerView.svelte';
+  import EmployerView from '#lib/components/EmployerView.svelte';
 </script>
 
 <!-- The account shell (my/+layout) owns the container, auth gate, and noindex;

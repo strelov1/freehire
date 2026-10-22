@@ -1,5 +1,5 @@
 import { error, redirect } from '@sveltejs/kit';
-import type { User } from '$lib/types';
+import type { User } from '#lib/types.js';
 
 /** Refuse a mentorship route to somebody outside the beta.
  *

@@ -6,9 +6,9 @@
   // never call anything documented here), but not secret either — noindex only,
   // via Seo's `robots` prop, so it stays reachable by direct link without
   // competing with /docs/api in search results.
-  import ScalarReference from '$lib/components/ScalarReference.svelte';
-  import Seo from '$lib/components/Seo.svelte';
-  import { scalarConfigFromUrl, SCALAR_INTERNAL_SPEC_URL } from '$lib/docs/scalarConfig';
+  import ScalarReference from '#lib/components/ScalarReference.svelte';
+  import Seo from '#lib/components/Seo.svelte';
+  import { scalarConfigFromUrl, SCALAR_INTERNAL_SPEC_URL } from '#lib/docs/scalarConfig.js';
 
   let { data } = $props();
 </script>

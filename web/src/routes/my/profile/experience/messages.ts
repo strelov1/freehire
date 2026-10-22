@@ -1,4 +1,4 @@
-import { defineMessages } from '$lib/i18n/t';
+import { defineMessages } from '#lib/i18n/t.js';
 
 // `ExperienceBankView` itself (the bank editor and its assistant panel) is out of
 // scope here — a 700-line shared surface that deserves its own pass, the way

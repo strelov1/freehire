@@ -1,9 +1,9 @@
-import { robotsBody } from '$lib/robots';
+import { robotsBody } from '#lib/robots.js';
 import type { RequestHandler } from './$types';
 
 // A real robots file (not the SPA shell): allow crawling the public pages, keep
 // personal pages out, point at the sitemap, and take /api/ away from the search
-// crawlers only. The rules and the reasoning behind each live in $lib/robots.ts,
+// crawlers only. The rules and the reasoning behind each live in #lib/robots.ts,
 // where a test can read them.
 //
 // The wildcard already admits every AI crawler (GPTBot, ClaudeBot, PerplexityBot,

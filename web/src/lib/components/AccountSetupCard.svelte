@@ -2,8 +2,8 @@
   import { Check, ArrowRight, X } from '@lucide/svelte';
   import { page } from '$app/state';
   import { resolve } from '$app/paths';
-  import { outstandingOf, stepLeadsSomewhere, type CompletenessStep } from '$lib/accountCompleteness';
-  import { dismissAlertsStep, ensureAccountSetupLoaded, setupSteps } from '$lib/accountSetup.svelte';
+  import { outstandingOf, stepLeadsSomewhere, type CompletenessStep } from '#lib/accountCompleteness.js';
+  import { dismissAlertsStep, ensureAccountSetupLoaded, setupSteps } from '#lib/accountSetup.svelte.js';
 
   // "How complete is my account", mounted in /my/profile's LAYOUT — so it is on screen for
   // all eight profile sections, and four of its five steps are done on one of them (only

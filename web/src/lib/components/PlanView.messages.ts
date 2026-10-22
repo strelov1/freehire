@@ -1,4 +1,4 @@
-import { defineMessages, plurals } from '$lib/i18n/t';
+import { defineMessages, plurals } from '#lib/i18n/t.js';
 
 // `plan.allowances[].feature` and the invoice/subscription statuses are stable API
 // identifiers, so both are MAPPED here rather than printed — an untranslated map

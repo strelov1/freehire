@@ -1,9 +1,9 @@
 <script lang="ts">
   import { page } from '$app/state';
   import { resolve } from '$app/paths';
-  import Seo from '$lib/components/Seo.svelte';
-  import { blogJsonLd, breadcrumbJsonLd, jsonLdScript } from '$lib/seo';
-  import type { PostType } from '$lib/blog';
+  import Seo from '#lib/components/Seo.svelte';
+  import { blogJsonLd, breadcrumbJsonLd, jsonLdScript } from '#lib/seo.js';
+  import type { PostType } from '#lib/blog.js';
   import type { PageData } from './$types';
 
   let { data }: { data: PageData } = $props();

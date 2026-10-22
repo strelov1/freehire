@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/svelte';
 import { describe, expect, it, vi } from 'vitest';
-import type { Allowance, MatchAnalysisResponse } from '$lib/types';
+import type { Allowance, MatchAnalysisResponse } from '#lib/types.js';
 import MatchSummary from './MatchSummary.svelte';
 
 // MatchSummary pulls in SvelteKit runtime modules this test environment doesn't provide
@@ -13,7 +13,7 @@ vi.mock('$app/paths', () => ({ resolve: (path: string) => path }));
 // openspec/changes/move-tailor-cv-to-job-cta. `api` is mocked to a getter that throws
 // rather than to a vi.fn(): a spy would let a surviving call pass this file and fail
 // somewhere else, while this names the component that made it.
-vi.mock('$lib/api', () => ({
+vi.mock('#lib/api.js', () => ({
   get api(): never {
     throw new Error('MatchSummary must not call the API — the page passes the analysis in');
   },

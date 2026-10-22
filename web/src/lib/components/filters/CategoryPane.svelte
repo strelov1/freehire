@@ -2,9 +2,9 @@
   import type { Snippet } from 'svelte';
   import { ChevronDown, Search } from '@lucide/svelte';
   import { SvelteSet } from 'svelte/reactivity';
-  import type { FacetStore } from '$lib/facets';
-  import type { FacetCounts } from '$lib/types';
-  import { CATEGORY_GROUPS } from '$lib/filterSections';
+  import type { FacetStore } from '#lib/facets.js';
+  import type { FacetCounts } from '#lib/types.js';
+  import { CATEGORY_GROUPS } from '#lib/filterSections.js';
   import FacetHeader from './FacetHeader.svelte';
   import { pillClass, pillTitle } from '../facets/pill';
 

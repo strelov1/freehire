@@ -1,4 +1,4 @@
-import { defineMessages } from '$lib/i18n/t';
+import { defineMessages } from '#lib/i18n/t.js';
 
 // `entry.note`/`entry.whyFits`/`entry.concerns` are the agent's own rationale text —
 // not catalog text. `JobRow` itself stays untranslated (the known, documented gap

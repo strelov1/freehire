@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { WebhookConfig } from '$lib/types';
-import { must } from '$lib/utils';
+import type { WebhookConfig } from '#lib/types.js';
+import { must } from '#lib/utils.js';
 import WebhookSettingsView from './WebhookSettingsView.svelte';
 
 vi.mock('$app/state', () => ({
@@ -29,12 +29,12 @@ const { StubApiError } = vi.hoisted(() => ({
   },
 }));
 
-vi.mock('$lib/api', () => ({
+vi.mock('#lib/api.js', () => ({
   api: { getWebhook, createOrUpdateWebhook, setWebhookEnabled, deleteWebhook, testWebhook },
   ApiError: StubApiError,
 }));
 
-vi.mock('$lib/auth.svelte', () => ({ isAuthenticated: () => true }));
+vi.mock('#lib/auth.svelte.js', () => ({ isAuthenticated: () => true }));
 
 const webhook: WebhookConfig = {
   url: 'https://example.com/hook',

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { X, Plus } from '@lucide/svelte';
-  import { Button, Input } from '$lib/ui';
+  import { Button, Input } from '#lib/ui/index.js';
 
   // A small editor for a list of free-text strings (résumé bullets, header links, skill
   // items). Binds the array directly so the parent's Document updates in place.

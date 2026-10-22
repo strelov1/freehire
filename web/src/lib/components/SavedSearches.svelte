@@ -1,14 +1,14 @@
 <script lang="ts">
   import { Bell, Bookmark, Pencil, Trash2 } from '@lucide/svelte';
   import { page } from '$app/state';
-  import { ApiError } from '$lib/api';
-  import { isAuthenticated } from '$lib/auth.svelte';
-  import { signinUrl } from '$lib/signin';
-  import { canonicalQuery, savedSearchQuery } from '$lib/filters';
-  import type { StagedFilters } from '$lib/stagedFilters.svelte';
-  import { savedSearches } from '$lib/savedSearches.svelte';
-  import type { SavedSearch } from '$lib/types';
-  import { Button, ConfirmDialog, Input } from '$lib/ui';
+  import { ApiError } from '#lib/api.js';
+  import { isAuthenticated } from '#lib/auth.svelte.js';
+  import { signinUrl } from '#lib/signin.js';
+  import { canonicalQuery, savedSearchQuery } from '#lib/filters.js';
+  import type { StagedFilters } from '#lib/stagedFilters.svelte.js';
+  import { savedSearches } from '#lib/savedSearches.svelte.js';
+  import type { SavedSearch } from '#lib/types.js';
+  import { Button, ConfirmDialog, Input } from '#lib/ui/index.js';
   import SaveSearchAlert from './filters/SaveSearchAlert.svelte';
 
   // Focus the text input a rename row reveals, so the caret is ready without a second

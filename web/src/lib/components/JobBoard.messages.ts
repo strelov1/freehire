@@ -1,7 +1,7 @@
-import { defineMessages } from '$lib/i18n/t';
+import { defineMessages } from '#lib/i18n/t.js';
 
 // `BOARD_COLUMNS`'s own labels (Preparing/Applied/Interview/Offer/Closed) come from
-// the generated pipeline-stage vocabulary (`$lib/board.ts` → `STAGE_GROUPS`), shared
+// the generated pipeline-stage vocabulary (`#lib/board.ts` → `STAGE_GROUPS`), shared
 // with the funnel and `JobDrawer`'s stage picker — that vocabulary stays English
 // everywhere until it gets its own pass, the same boundary `emailStatus.ts` drew.
 export const messages = defineMessages(

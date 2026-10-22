@@ -10,10 +10,10 @@
     parseConfirmationRequest,
     CONFIRMATION_DECLINE_TEXT,
     type ToolCall,
-  } from '$lib/assistant/tool-formatters';
+  } from '#lib/assistant/tool-formatters.js';
   import { messages } from './ToolGroupList.messages';
-  import { locale } from '$lib/i18n/currentLocale.svelte';
-  import { t } from '$lib/i18n/t';
+  import { locale } from '#lib/i18n/currentLocale.svelte.js';
+  import { t } from '#lib/i18n/t.js';
 
   // The tool calls of one assistant message, rendered as collapsed cards. The
   // agent's tools are typed functions rather than shell commands, so there is one

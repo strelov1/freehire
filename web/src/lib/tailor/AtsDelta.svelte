@@ -12,7 +12,7 @@
   import { TrendingDown, TrendingUp, Minus } from '@lucide/svelte';
   import { viewAtsDelta, toneOf, type AtsDeltaTone } from './atsdelta';
   import ScoreCategoryRow from './ScoreCategoryRow.svelte';
-  import type { CvAtsDelta } from '$lib/cv';
+  import type { CvAtsDelta } from '#lib/cv.js';
 
   let { data }: { data: CvAtsDelta | null | undefined } = $props();
 

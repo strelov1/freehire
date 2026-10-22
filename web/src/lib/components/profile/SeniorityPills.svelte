@@ -8,7 +8,7 @@
   // exclude / off, option groups, result counts) and none of it applies to stating your
   // own level. It looks different too, so this keeps the bordered pill both callers
   // already showed rather than quietly restyling two live surfaces.
-  import { SENIORITY_OPTIONS } from '$lib/facets';
+  import { SENIORITY_OPTIONS } from '#lib/facets.js';
 
   let {
     selected,

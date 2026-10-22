@@ -1,4 +1,4 @@
-import { listPosts } from '$lib/blogPosts';
+import { listPosts } from '#lib/blogPosts.js';
 import {
   STATIC_PATHS,
   blogPaths,
@@ -6,8 +6,8 @@ import {
   contributorPaths,
   urlsetXml,
   xmlResponse,
-} from '$lib/sitemap';
-import type { PathEntry } from '$lib/sitemap';
+} from '#lib/sitemap.js';
+import type { PathEntry } from '#lib/sitemap.js';
 import type { RequestHandler } from './$types';
 
 // Sub-sitemap for the site's static pages plus the curated collection landing

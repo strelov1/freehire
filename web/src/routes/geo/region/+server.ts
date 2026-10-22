@@ -1,4 +1,4 @@
-import { isCrawler, regionFromCountry } from '$lib/geoScope';
+import { isCrawler, regionFromCountry } from '#lib/geoScope.js';
 import type { RequestHandler } from './$types';
 
 // What the edge knows about where this visitor is, derived from Cloudflare's

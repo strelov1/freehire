@@ -1,10 +1,10 @@
 <script lang="ts">
   import { invalidateAll } from '$app/navigation';
   import { resolve } from '$app/paths';
-  import { api } from '$lib/api';
-  import { errorMessage } from '$lib/utils';
-  import { browserTimezone, canReview, formatInstantIn, isCancellable } from '$lib/mentorship';
-  import { Badge, Button, Card, Input } from '$lib/ui';
+  import { api } from '#lib/api.js';
+  import { errorMessage } from '#lib/utils.js';
+  import { browserTimezone, canReview, formatInstantIn, isCancellable } from '#lib/mentorship.js';
+  import { Badge, Button, Card, Input } from '#lib/ui/index.js';
   import type { PageData } from './$types';
 
   let { data }: { data: PageData } = $props();

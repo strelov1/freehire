@@ -1,9 +1,9 @@
 <script lang="ts">
   import { Plus, Trash2 } from '@lucide/svelte';
-  import { locale } from '$lib/i18n/currentLocale.svelte';
-  import { t } from '$lib/i18n/t';
-  import type { EmployerQuestion } from '$lib/types';
-  import { Button, Input, cn } from '$lib/ui';
+  import { locale } from '#lib/i18n/currentLocale.svelte.js';
+  import { t } from '#lib/i18n/t.js';
+  import type { EmployerQuestion } from '#lib/types.js';
+  import { Button, Input, cn } from '#lib/ui/index.js';
   import { messages } from './EmployerView.messages';
   import TokenInput from './facets/TokenInput.svelte';
 

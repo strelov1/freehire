@@ -11,9 +11,9 @@
    */
   import { ExternalLink, X } from '@lucide/svelte';
   import { resolve } from '$app/paths';
-  import AssistantChat from '$lib/assistant/AssistantChat.svelte';
-  import { lockScroll, unlockScroll } from '$lib/scrollLock';
-  import { DOCK_WIDTH, DOCKED_QUERY, setDockOffset } from '$lib/assistantDock.svelte';
+  import AssistantChat from '#lib/assistant/AssistantChat.svelte';
+  import { lockScroll, unlockScroll } from '#lib/scrollLock.js';
+  import { DOCK_WIDTH, DOCKED_QUERY, setDockOffset } from '#lib/assistantDock.svelte.js';
 
   let {
     open = false,

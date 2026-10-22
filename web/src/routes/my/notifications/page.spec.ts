@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { NotificationItem } from '$lib/types';
+import type { NotificationItem } from '#lib/types.js';
 import NotificationsPage from './+page.svelte';
 
 vi.mock('$app/state', () => ({
@@ -13,8 +13,8 @@ const { getNotifications, markAllRead } = vi.hoisted(() => ({
   markAllRead: vi.fn(),
 }));
 
-vi.mock('$lib/api', () => ({ api: { getNotifications } }));
-vi.mock('$lib/notificationCenter.svelte', () => ({
+vi.mock('#lib/api.js', () => ({ api: { getNotifications } }));
+vi.mock('#lib/notificationCenter.svelte.js', () => ({
   notificationCenter: { markAllRead },
 }));
 

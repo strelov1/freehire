@@ -12,7 +12,7 @@ export interface InboxStatusEntry {
   description: string;
 }
 
-import type { EmailStatusSignal } from '$lib/generated/contracts';
+import type { EmailStatusSignal } from '#lib/generated/contracts.js';
 
 export const INBOX_STATUS_GUIDE: InboxStatusEntry[] = [
   { signal: 'acknowledgement', description: 'They got your application.' },

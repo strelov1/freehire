@@ -6,14 +6,14 @@
   // inter-page gap. Page geometry — content width, sheet padding, and the page body height used for
   // pagination — is derived from the document's per-side margins, so preview and PDF agree. The look
   // tracks the selected template (classic / centered / modern-sans / sidebar / portrait / headshot).
-  // `zoom` scales the whole stack. String composition lives in $lib/cv (unit-tested); this file is
+  // `zoom` scales the whole stack. String composition lives in #lib/cv (unit-tested); this file is
   // layout only — `photoSrc` is handed in rather than fetched here, since the headshot belongs to the
   // profile, not to the document being rendered.
-  import type { Document, ExperienceItem, Project } from '$lib/generated/contracts';
-  import { experienceHeader, educationLine, languageLabel, certificationLine, type CvFont } from '$lib/cv';
-  import HeadshotSilhouette from '$lib/components/HeadshotSilhouette.svelte';
+  import type { Document, ExperienceItem, Project } from '#lib/generated/contracts.js';
+  import { experienceHeader, educationLine, languageLabel, certificationLine, type CvFont } from '#lib/cv.js';
+  import HeadshotSilhouette from '#lib/components/HeadshotSilhouette.svelte';
   import { paginateBlocks, previewTypography } from './geometry';
-  import { must } from '$lib/utils';
+  import { must } from '#lib/utils.js';
   import { keepIndex, makeHighlighter, makeContainerHighlighter } from './revisions';
 
   let {

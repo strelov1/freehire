@@ -1,9 +1,9 @@
 <script lang="ts">
   import { Bell, Check, Mail, Smartphone, Webhook } from '@lucide/svelte';
   import { resolve } from '$app/paths';
-  import { ApiError } from '$lib/api';
-  import { notifications } from '$lib/notifications.svelte';
-  import { ProviderIcon } from '$lib/ui';
+  import { ApiError } from '#lib/api.js';
+  import { notifications } from '#lib/notifications.svelte.js';
+  import { ProviderIcon } from '#lib/ui/index.js';
 
   // The unified per-search alert control: one toggle chip per delivery channel
   // (Telegram, Email, Push) for an already-saved search. This is the single home of

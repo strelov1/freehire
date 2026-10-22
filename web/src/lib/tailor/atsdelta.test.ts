@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { viewAtsDelta } from './atsdelta';
-import type { CvAtsDelta } from '$lib/cv';
+import type { CvAtsDelta } from '#lib/cv.js';
 
 function resp(over: Partial<CvAtsDelta> = {}): CvAtsDelta {
   return {

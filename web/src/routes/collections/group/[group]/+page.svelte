@@ -2,9 +2,9 @@
   import { page } from '$app/state';
   import { resolve } from '$app/paths';
   import { ChevronLeft } from '@lucide/svelte';
-  import Seo from '$lib/components/Seo.svelte';
-  import CollectionRowMark from '$lib/components/CollectionRowMark.svelte';
-  import { breadcrumbJsonLd, collectionPageJsonLd, jsonLdScript } from '$lib/seo';
+  import Seo from '#lib/components/Seo.svelte';
+  import CollectionRowMark from '#lib/components/CollectionRowMark.svelte';
+  import { breadcrumbJsonLd, collectionPageJsonLd, jsonLdScript } from '#lib/seo.js';
   import type { PageData } from './$types';
 
   let { data }: { data: PageData } = $props();

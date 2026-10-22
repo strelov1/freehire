@@ -1,7 +1,7 @@
 <script lang="ts">
-  import { dynamicLabel, FACETS } from '$lib/facets';
-  import { type FilterStore, savedSearchQuery, displayQuery } from '$lib/filters';
-  import { experienceLabel, freshnessLabel, salaryLabel } from '$lib/filterControls';
+  import { dynamicLabel, FACETS } from '#lib/facets.js';
+  import { type FilterStore, savedSearchQuery, displayQuery } from '#lib/filters.js';
+  import { experienceLabel, freshnessLabel, salaryLabel } from '#lib/filterControls.js';
   import FilterSummaryShell, { type SummaryChip, type SummaryGroup } from './FilterSummaryShell.svelte';
   import SaveSearchAlert from './SaveSearchAlert.svelte';
 

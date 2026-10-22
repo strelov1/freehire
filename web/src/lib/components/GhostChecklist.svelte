@@ -1,11 +1,11 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
   import { Check, ChevronDown } from '@lucide/svelte';
-  import { ghostBadge, ghostChecklist, ghostGauge, ghostUnobserved } from '$lib/ghost';
-  import type { GhostGaugeTone } from '$lib/ghost';
-  import type { Ghost } from '$lib/generated/contracts';
-  import { locale } from '$lib/i18n/currentLocale.svelte';
-  import { cn } from '$lib/ui';
+  import { ghostBadge, ghostChecklist, ghostGauge, ghostUnobserved } from '#lib/ghost.js';
+  import type { GhostGaugeTone } from '#lib/ghost.js';
+  import type { Ghost } from '#lib/generated/contracts.js';
+  import { locale } from '#lib/i18n/currentLocale.svelte.js';
+  import { cn } from '#lib/ui/index.js';
 
   // One row for the whole signal: a gauge, the hedged wording, the fired/total scale,
   // and the justification behind a disclosure.

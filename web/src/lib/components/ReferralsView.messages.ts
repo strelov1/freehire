@@ -1,4 +1,4 @@
-import { defineMessages } from '$lib/i18n/t';
+import { defineMessages } from '#lib/i18n/t.js';
 
 // `ReferralRequestStatus` and an offer's moderation status are wire tokens the view
 // used to print raw; both are mapped here, with an unknown value falling through to

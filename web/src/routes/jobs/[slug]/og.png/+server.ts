@@ -1,9 +1,9 @@
 import { error } from '@sveltejs/kit';
-import { ApiError } from '$lib/api';
-import { serverApi } from '$lib/server/api';
-import { loadOgFonts } from '$lib/server/og/fonts';
-import { resolveLogo } from '$lib/server/og/logo';
-import { renderCardPng } from '$lib/server/og/render';
+import { ApiError } from '#lib/api.js';
+import { serverApi } from '#lib/server/api.js';
+import { loadOgFonts } from '#lib/server/og/fonts.js';
+import { resolveLogo } from '#lib/server/og/logo.js';
+import { renderCardPng } from '#lib/server/og/render.js';
 import type { RequestHandler } from './$types';
 
 // Renders the per-job 1200×630 Open Graph preview on demand. Resolves the job by

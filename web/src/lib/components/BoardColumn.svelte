@@ -1,8 +1,8 @@
 <script lang="ts">
   import { dndzone } from 'svelte-dnd-action';
   import BoardCard from './BoardCard.svelte';
-  import type { BoardItem, BoardColumnId } from '$lib/board';
-  import type { MyJob } from '$lib/types';
+  import type { BoardItem, BoardColumnId } from '#lib/board.js';
+  import type { MyJob } from '#lib/types.js';
 
   let {
     id,

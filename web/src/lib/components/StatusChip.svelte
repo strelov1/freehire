@@ -14,9 +14,9 @@
   the signal's own border/text win over the outline variant's defaults.
 -->
 <script lang="ts">
-  import { Badge } from '$lib/ui';
-  import { statusClass, statusLabel } from '$lib/emailStatus';
-  import { locale } from '$lib/i18n/currentLocale.svelte';
+  import { Badge } from '#lib/ui/index.js';
+  import { statusClass, statusLabel } from '#lib/emailStatus.js';
+  import { locale } from '#lib/i18n/currentLocale.svelte.js';
 
   let { signal, class: className = '' }: { signal?: string; class?: string } = $props();
 

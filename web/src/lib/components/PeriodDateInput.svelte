@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { Input } from '$lib/ui';
-  import type { PeriodDate } from '$lib/types';
+  import { Input } from '#lib/ui/index.js';
+  import type { PeriodDate } from '#lib/types.js';
 
   // A work-history/CV period boundary: pick from the browser's native month calendar or
   // type the digits directly (both native `type="month"` behaviors), or fall back to a

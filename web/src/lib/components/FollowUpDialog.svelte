@@ -1,14 +1,14 @@
 <script lang="ts">
   import { Check, Copy, Clock, X } from '@lucide/svelte';
-  import { Button } from '$lib/ui';
-  import { api } from '$lib/api';
-  import { clipboardText, gmailHref, mailtoHref } from '$lib/followup';
-  import { errorMessage } from '$lib/utils';
-  import { focusTrap } from '$lib/actions/focusTrap';
-  import type { FollowUpDraft } from '$lib/types';
+  import { Button } from '#lib/ui/index.js';
+  import { api } from '#lib/api.js';
+  import { clipboardText, gmailHref, mailtoHref } from '#lib/followup.js';
+  import { errorMessage } from '#lib/utils.js';
+  import { focusTrap } from '#lib/actions/focusTrap.js';
+  import type { FollowUpDraft } from '#lib/types.js';
   import { messages } from './FollowUpDialog.messages';
-  import { locale } from '$lib/i18n/currentLocale.svelte';
-  import { format, plural, t } from '$lib/i18n/t';
+  import { locale } from '#lib/i18n/currentLocale.svelte.js';
+  import { format, plural, t } from '#lib/i18n/t.js';
 
   // The parent owns open/close. onrecorded reports the chase back so the board can
   // stamp the card without refetching the whole listing.

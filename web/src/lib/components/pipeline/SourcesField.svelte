@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { SectionLabel } from '$lib/ui';
+  import { SectionLabel } from '#lib/ui/index.js';
 
   // The opening thesis of the page: before any of the five stages run, this is what
   // stage one actually faces — not one board, a field of them. `sources` drives how

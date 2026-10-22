@@ -1,4 +1,4 @@
-import { defineMessages } from '$lib/i18n/t';
+import { defineMessages } from '#lib/i18n/t.js';
 
 // One catalogue for the confirmation block itself. The sentence explaining WHY a
 // particular action needs confirming stays with that action — an API key and a deleted

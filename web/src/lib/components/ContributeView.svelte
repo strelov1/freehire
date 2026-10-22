@@ -1,13 +1,13 @@
 <script lang="ts">
   import { page } from '$app/state';
-  import { api, ApiError } from '$lib/api';
-  import { AsyncData } from '$lib/asyncData.svelte';
-  import { isAuthenticated } from '$lib/auth.svelte';
-  import { locale } from '$lib/i18n/currentLocale.svelte';
-  import { t } from '$lib/i18n/t';
-  import type { Contribution, ResolvedLink } from '$lib/types';
-  import { Button, Input } from '$lib/ui';
-  import { timeAgo } from '$lib/utils';
+  import { api, ApiError } from '#lib/api.js';
+  import { AsyncData } from '#lib/asyncData.svelte.js';
+  import { isAuthenticated } from '#lib/auth.svelte.js';
+  import { locale } from '#lib/i18n/currentLocale.svelte.js';
+  import { t } from '#lib/i18n/t.js';
+  import type { Contribution, ResolvedLink } from '#lib/types.js';
+  import { Button, Input } from '#lib/ui/index.js';
+  import { timeAgo } from '#lib/utils.js';
   import { messages } from './ContributeView.messages';
   import IntakeOutcome from './IntakeOutcome.svelte';
   import States from './States.svelte';

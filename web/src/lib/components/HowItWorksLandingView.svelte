@@ -1,11 +1,11 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
-  import { Button, SectionLabel } from '$lib/ui';
-  import Disclosure from '$lib/components/ghost/Disclosure.svelte';
-  import SourcesField from '$lib/components/pipeline/SourcesField.svelte';
-  import StageIllustration from '$lib/components/pipeline/StageIllustration.svelte';
-  import { PIPELINE_STAGES } from '$lib/pipelineStages';
-  import { PIPELINE_FAQ } from '$lib/pipelineFaq';
+  import { Button, SectionLabel } from '#lib/ui/index.js';
+  import Disclosure from '#lib/components/ghost/Disclosure.svelte';
+  import SourcesField from '#lib/components/pipeline/SourcesField.svelte';
+  import StageIllustration from '#lib/components/pipeline/StageIllustration.svelte';
+  import { PIPELINE_STAGES } from '#lib/pipelineStages.js';
+  import { PIPELINE_FAQ } from '#lib/pipelineFaq.js';
 
   // The page a reader reaches wanting to know why they can trust the catalogue: is it
   // current, is it the same ten jobs copied across ten boards, is a filter actually

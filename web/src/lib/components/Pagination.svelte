@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { pageHref, pageWindow } from '$lib/pagination';
+  import { pageHref, pageWindow } from '#lib/pagination.js';
 
   // Real <a href> page links rendered into the SSR markup. This is how BOTH a
   // visitor and a crawler page a listing: link discovery happens when HTML is
@@ -15,7 +15,7 @@
   //
   // Not hidden from visitors: a hidden link a crawler is meant to follow is the
   // shape of cloaking, and this doubles as the keyboard/no-JS way through the
-  // catalogue. `data-sveltekit-noscroll` is deliberately absent — following one
+  // catalogue. `data-sveltekit-reset="false"` is deliberately absent — following one
   // of these IS a navigation to a new page of results, so landing at the top is
   // the right behaviour.
   //

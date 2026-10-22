@@ -28,7 +28,7 @@ describe('primitivesFrom', () => {
 
 describe('readImports', () => {
   it('reads a single-line specifier list', () => {
-    const { door } = readImports(`import { Button } from '$lib/ui';`);
+    const { door } = readImports(`import { Button } from '#lib/ui/index.js';`);
 
     expect(door).toEqual(['Button']);
   });
@@ -38,7 +38,7 @@ describe('readImports', () => {
       import {
         Button,
         Badge,
-      } from '$lib/ui';
+      } from '#lib/ui/index.js';
     `);
 
     expect(door).toEqual(['Button', 'Badge']);
@@ -47,21 +47,21 @@ describe('readImports', () => {
   // The census asks which primitive a file reaches for, and renaming it locally
   // does not change that.
   it('records the imported name, not the local alias', () => {
-    const { door } = readImports(`import { Button as PrimaryButton } from '$lib/ui';`);
+    const { door } = readImports(`import { Button as PrimaryButton } from '#lib/ui/index.js';`);
 
     expect(door).toEqual(['Button']);
   });
 
   it('strips an inline type specifier', () => {
-    const { door } = readImports(`import { type ButtonVariant, Button } from '$lib/ui';`);
+    const { door } = readImports(`import { type ButtonVariant, Button } from '#lib/ui/index.js';`);
 
     expect(door).toEqual(['ButtonVariant', 'Button']);
   });
 
   it('collects every statement in the file', () => {
     const { door } = readImports(`
-      import { Button } from '$lib/ui';
-      import { cn } from '$lib/ui';
+      import { Button } from '#lib/ui/index.js';
+      import { cn } from '#lib/ui/index.js';
     `);
 
     expect(door).toEqual(['Button', 'cn']);
@@ -72,9 +72,9 @@ describe('readImports', () => {
   // as often as they commit them.
   it('does not count a commented-out import', () => {
     const { door } = readImports(`
-      // import { Dialog } from '$lib/ui';
-      /* import { Table } from '$lib/ui'; */
-      import { Button } from '$lib/ui';
+      // import { Dialog } from '#lib/ui/index.js';
+      /* import { Table } from '#lib/ui/index.js'; */
+      import { Button } from '#lib/ui/index.js';
     `);
 
     expect(door).toEqual(['Button']);
@@ -83,13 +83,13 @@ describe('readImports', () => {
   it('ignores imports from anywhere else', () => {
     const { door } = readImports(`
       import { onMount } from 'svelte';
-      import { api } from '$lib/api';
+      import { api } from '#lib/api.js';
     `);
 
     expect(door).toEqual([]);
   });
 
-  // The door rule. $lib/ui exists so that app code never names the package, and
+  // The door rule. #lib/ui exists so that app code never names the package, and
   // there are zero of these today — so this one is not ratcheted, it is a wall.
   it('reports a file that names the package directly', () => {
     const { direct } = readImports(`import { Button } from 'freehire-design-system';`);

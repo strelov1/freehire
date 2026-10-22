@@ -1,4 +1,4 @@
-import { defineMessages } from '$lib/i18n/t';
+import { defineMessages } from '#lib/i18n/t.js';
 
 // `lead` is a prop supplied by each page (template/typography), translated by that
 // page's own catalog — only the part shared by both panes lives here.

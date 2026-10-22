@@ -1,17 +1,17 @@
 <script lang="ts">
   import { MessageSquareText, X } from '@lucide/svelte';
-  import { Button } from '$lib/ui';
-  import { errorMessage } from '$lib/utils';
-  import { focusTrap } from '$lib/actions/focusTrap';
-  import { portal } from '$lib/actions/portal';
-  import { dynamicLabel, FACETS } from '$lib/facets';
-  import { experienceLabel, freshnessLabel } from '$lib/filterControls';
-  import { filtersFromInterpretation } from '$lib/aiFilter';
-  import { api, isPlanRefusal } from '$lib/api';
-  import PlanLimitLink from '$lib/components/PlanLimitLink.svelte';
-  import type { Interpretation } from '$lib/types';
-  import type { FilterStore } from '$lib/filters';
-  import { filtersToParams } from '$lib/facetModel';
+  import { Button } from '#lib/ui/index.js';
+  import { errorMessage } from '#lib/utils.js';
+  import { focusTrap } from '#lib/actions/focusTrap.js';
+  import { portal } from '#lib/actions/portal.js';
+  import { dynamicLabel, FACETS } from '#lib/facets.js';
+  import { experienceLabel, freshnessLabel } from '#lib/filterControls.js';
+  import { filtersFromInterpretation } from '#lib/aiFilter.js';
+  import { api, isPlanRefusal } from '#lib/api.js';
+  import PlanLimitLink from '#lib/components/PlanLimitLink.svelte';
+  import type { Interpretation } from '#lib/types.js';
+  import type { FilterStore } from '#lib/filters.js';
+  import { filtersToParams } from '#lib/facetModel.js';
 
   // Describe a search in words; the server turns it into filter values it has already
   // canonicalised against the real dictionaries. Nothing is applied until the preview

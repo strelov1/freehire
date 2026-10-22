@@ -1,11 +1,11 @@
 <script lang="ts">
   import { Clock, FileCheck, Mail, MessageSquare } from '@lucide/svelte';
-  import { companyLogoUrl } from '$lib/logo';
-  import { Badge, EntityLogo } from '$lib/ui';
-  import { humanizeStage } from '$lib/stages';
-  import { chasedLabel, cvOpenedLabel } from '$lib/followup';
-  import { autoApplyNeedsReviewBadge } from '$lib/autoApplyReview';
-  import type { MyJob } from '$lib/types';
+  import { companyLogoUrl } from '#lib/logo.js';
+  import { Badge, EntityLogo } from '#lib/ui/index.js';
+  import { humanizeStage } from '#lib/stages.js';
+  import { chasedLabel, cvOpenedLabel } from '#lib/followup.js';
+  import { autoApplyNeedsReviewBadge } from '#lib/autoApplyReview.js';
+  import type { MyJob } from '#lib/types.js';
 
   let {
     item,

@@ -6,16 +6,16 @@
 // module on the server (via the header menu) never touches window/localStorage.
 // A no-FOUC inline script in app.html applies the class before paint (see task 4.2).
 //
-// The storage IO lives in $lib/themeStorage rather than here, and the split is not
+// The storage IO lives in #lib/themeStorage rather than here, and the split is not
 // cosmetic: `themeStore` is constructed at module scope, so anything that throws on
 // the way to it takes the whole module down — and the root layout imports this module.
 // That is what an unguarded read of `localStorage` did to visitors browsing with site
 // data blocked. The runes in this file put it beyond the plain-Node vitest env, so the
 // part that can throw now sits in a file that env can reach, with a test for it.
 
-import { browser } from '$app/environment';
+import { browser } from '$app/env';
 
-import { readStoredTheme, writeStoredTheme, type ThemeMode } from '$lib/themeStorage';
+import { readStoredTheme, writeStoredTheme, type ThemeMode } from '#lib/themeStorage.js';
 
 export type { ThemeMode };
 

@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { PipelineStats } from '$lib/types';
+import type { PipelineStats } from '#lib/types.js';
 import PipelineView from './PipelineView.svelte';
 
 const { getMyPipeline, user } = vi.hoisted(() => ({
@@ -11,8 +11,8 @@ const { getMyPipeline, user } = vi.hoisted(() => ({
 
 vi.mock('$app/state', () => ({ page: { data: {}, url: new URL('http://localhost/my/tracking/pipeline') } }));
 vi.mock('$app/paths', () => ({ resolve: (p: string) => p, base: '', assets: '' }));
-vi.mock('$lib/api', () => ({ api: { getMyPipeline } }));
-vi.mock('$lib/auth.svelte', () => ({
+vi.mock('#lib/api.js', () => ({ api: { getMyPipeline } }));
+vi.mock('#lib/auth.svelte.js', () => ({
   currentUser: () => user.current,
   isAuthenticated: () => user.current !== null,
 }));

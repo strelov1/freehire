@@ -1,4 +1,4 @@
-import { serverApi } from '$lib/server/api';
+import { serverApi } from '#lib/server/api.js';
 import type { PageServerLoad } from './$types';
 
 // The one number this page cannot get away with inventing: how many sources actually

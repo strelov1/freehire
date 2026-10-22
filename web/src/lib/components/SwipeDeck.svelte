@@ -4,16 +4,16 @@
   import { goto } from '$app/navigation';
   import { resolve } from '$app/paths';
   import { Heart, RotateCcw, SlidersHorizontal, X } from '@lucide/svelte';
-  import { ApiError, api } from '$lib/api';
-  import { isAuthenticated } from '$lib/auth.svelte';
-  import { cardTags, formatSalary } from '$lib/enrichment';
-  import { FilterStore, filtersToParams } from '$lib/filters';
-  import { toSearchString } from '$lib/urlSearchString';
-  import { latestOnly } from '$lib/latestOnly';
-  import type { Job, FacetCounts } from '$lib/types';
-  import { companyLogoUrl } from '$lib/logo';
-  import { Badge, EntityLogo } from '$lib/ui';
-  import { markViewed } from '$lib/viewedJobs.svelte';
+  import { ApiError, api } from '#lib/api.js';
+  import { isAuthenticated } from '#lib/auth.svelte.js';
+  import { cardTags, formatSalary } from '#lib/enrichment.js';
+  import { FilterStore, filtersToParams } from '#lib/filters.js';
+  import { toSearchString } from '#lib/urlSearchString.js';
+  import { latestOnly } from '#lib/latestOnly.js';
+  import type { Job, FacetCounts } from '#lib/types.js';
+  import { companyLogoUrl } from '#lib/logo.js';
+  import { Badge, EntityLogo } from '#lib/ui/index.js';
+  import { markViewed } from '#lib/viewedJobs.svelte.js';
   import FilterModal from './filters/FilterModal.svelte';
   import JobMatch from './JobMatch.svelte';
   import States from './States.svelte';
@@ -32,7 +32,7 @@
   // snapshot, the filters are now editable in-session: a FilterStore mirrors them
   // to the URL and the deck reloads whenever the (debounced) filters change, so the
   // top-left "Filters" button can refine the deck without leaving the page.
-  const filters = new FilterStore(page.url.searchParams);
+  const filters = new FilterStore(new URLSearchParams(page.url.search));
   const deckParams = () => filtersToParams(filters.applied);
 
   // queue holds only UNJUDGED cards; the active one is queue[0]. seen dedups by

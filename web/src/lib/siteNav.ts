@@ -26,7 +26,7 @@ import {
   Wand,
 } from '@lucide/svelte';
 import type { LucideIcon } from '@lucide/svelte';
-import type { Pathname } from '$app/types';
+import type { Pathname } from '#lib/pathname.js';
 
 export type SiteNavItem = {
   /** SvelteKit's own union of this app's route paths, not a string — so a destination

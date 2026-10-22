@@ -1,5 +1,5 @@
 <script lang="ts">
-  import SavedSearchesView from '$lib/components/SavedSearchesView.svelte';
+  import SavedSearchesView from '#lib/components/SavedSearchesView.svelte';
 </script>
 
 <svelte:head>

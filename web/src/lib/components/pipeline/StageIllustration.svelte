@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { Component } from 'svelte';
-  import type { StageKey } from '$lib/pipelineStages';
+  import type { StageKey } from '#lib/pipelineStages.js';
   import DedupCard from './DedupCard.svelte';
   import DeriveCard from './DeriveCard.svelte';
   import EnrichCard from './EnrichCard.svelte';

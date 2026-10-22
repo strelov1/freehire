@@ -1,10 +1,10 @@
-import { defineMessages } from '$lib/i18n/t';
+import { defineMessages } from '#lib/i18n/t.js';
 
 // The chrome around a ledger event: what dates it, and where it leads.
 //
-// NOT the event's own caption. What KIND of event it was is `eventLabel` in `$lib/events`,
+// NOT the event's own caption. What KIND of event it was is `eventLabel` in `#lib/events.js`,
 // which is English for all three of its consumers (this list, the calendar's cells and the
-// job drawer). Translating that vocabulary is one change to `$lib/events` and its three
+// job drawer). Translating that vocabulary is one change to `#lib/events.js` and its three
 // callers, and doing half of it here — Russian chrome around an English caption, in the one
 // component that happens to have a catalog — would be worse than the gap it patches.
 export const messages = defineMessages(

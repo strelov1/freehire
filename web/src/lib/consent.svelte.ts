@@ -2,7 +2,7 @@
 // start" and "should the banner show". Pure classification and persistence live in
 // consent.ts (unit-tested); this module adds the $state runes on top, so it is
 // verified visually rather than in the plain-node vitest environment.
-import { browser } from '$app/environment';
+import { browser } from '$app/env';
 import { type ConsentChoice, needsBanner, readConsent, regionNeedsConsent, writeConsent } from './consent';
 
 function resolveTimezone(): string {

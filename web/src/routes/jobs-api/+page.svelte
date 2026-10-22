@@ -1,9 +1,9 @@
 <script lang="ts">
   import { page } from '$app/state';
-  import JobsApiLandingView from '$lib/components/JobsApiLandingView.svelte';
-  import Seo from '$lib/components/Seo.svelte';
-  import { JOBS_API_FAQ } from '$lib/jobsApiFaq';
-  import { breadcrumbJsonLd, faqPageJsonLd, jsonLdScript } from '$lib/seo';
+  import JobsApiLandingView from '#lib/components/JobsApiLandingView.svelte';
+  import Seo from '#lib/components/Seo.svelte';
+  import { JOBS_API_FAQ } from '#lib/jobsApiFaq.js';
+  import { breadcrumbJsonLd, faqPageJsonLd, jsonLdScript } from '#lib/seo.js';
   import type { PageData } from './$types';
 
   const { data }: { data: PageData } = $props();

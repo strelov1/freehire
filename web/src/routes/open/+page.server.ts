@@ -1,5 +1,5 @@
-import { serverApi } from '$lib/server/api';
-import { githubStats } from '$lib/server/github';
+import { serverApi } from '#lib/server/api.js';
+import { githubStats } from '#lib/server/github.js';
 import type { PageServerLoad } from './$types';
 
 // The /open transparency page pulls its numbers live at request time from our own
@@ -7,10 +7,10 @@ import type { PageServerLoad } from './$types';
 // a failing upstream yields null/[] and the page drops or falls back that one
 // section, never the whole page.
 //
-// The GitHub leg (memoized, rate-limit-aware) moved to $lib/server/github so the
+// The GitHub leg (memoized, rate-limit-aware) moved to #lib/server/github so the
 // header's star badge reads the same cache instead of spending the same 60/hour
 // budget a second time.
-export type { GithubStats } from '$lib/server/github';
+export type { GithubStats } from '#lib/server/github.js';
 
 // Every figure on the page is a public read (no cookie, identical for all visitors)
 // and moves slowly, so the whole assembled payload is memoized module-side for a

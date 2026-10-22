@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { companyLogoUrl } from '$lib/logo';
-  import { EntityLogo } from '$lib/ui';
+  import { companyLogoUrl } from '#lib/logo.js';
+  import { EntityLogo } from '#lib/ui/index.js';
 
   // An overlapping row of company logos (an avatar stack), the company counterpart of
   // CountryFlagStack: each logo laps over the previous one, earlier ones on top so the

@@ -4,15 +4,15 @@
   import { page } from '$app/state';
   import { SvelteURLSearchParams } from 'svelte/reactivity';
   import { Briefcase, Tags } from '@lucide/svelte';
-  import Seo from '$lib/components/Seo.svelte';
-  import { TabStrip, tabStripId } from '$lib/ui';
-  import CategoryPane from '$lib/components/filters/CategoryPane.svelte';
-  import SearchSelect from '$lib/components/facets/SearchSelect.svelte';
-  import { ApiError, api } from '$lib/api';
-  import { dynamicOptions } from '$lib/facets';
-  import { filtersToParams } from '$lib/filters';
-  import { promptSignIn } from '$lib/signin';
-  import { StagedFilters } from '$lib/stagedFilters.svelte';
+  import Seo from '#lib/components/Seo.svelte';
+  import { TabStrip, tabStripId } from '#lib/ui/index.js';
+  import CategoryPane from '#lib/components/filters/CategoryPane.svelte';
+  import SearchSelect from '#lib/components/facets/SearchSelect.svelte';
+  import { ApiError, api } from '#lib/api.js';
+  import { dynamicOptions } from '#lib/facets.js';
+  import { filtersToParams } from '#lib/filters.js';
+  import { promptSignIn } from '#lib/signin.js';
+  import { StagedFilters } from '#lib/stagedFilters.svelte.js';
 
   type Kind = 'specialization' | 'skill';
 
@@ -52,7 +52,7 @@
     params.set(kind, term);
     const next = `${resolve('/dictionary')}?${params}`;
     // eslint-disable-next-line svelte/no-navigation-without-resolve -- query is appended to resolve('/dictionary')
-    await goto(next, { replaceState: true, keepFocus: true, noScroll: true });
+    await goto(next, { replaceState: true, reset: false });
   }
 
   async function add(kind: Kind, term: string) {

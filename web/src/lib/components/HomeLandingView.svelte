@@ -5,18 +5,18 @@
   import FilterModal from './filters/FilterModal.svelte';
   import HeaderSearch from './HeaderSearch.svelte';
   import RecentJobsFeed from './RecentJobsFeed.svelte';
-  import { ROLE_PLACEHOLDER } from '$lib/placeholderRoles';
-  import { api } from '$lib/api';
-  import { browseQuery, planForSuggestion } from '$lib/browseTarget';
-  import type { ApplyPlan } from '$lib/apiSuggestions';
-  import { countryLabel } from '$lib/facets';
-  import { emptyFilters, filtersToParams } from '$lib/facetModel';
-  import type { StagedFilters } from '$lib/stagedFilters.svelte';
-  import { CLI_INSTALL, CLI_REPO } from '$lib/cliLinks';
-  import { EXTENSION_CLAIMS, EXTENSION_STORE_URL } from '$lib/extensionLinks';
-  import { starterSuggestions } from '$lib/suggestions';
-  import { Button, ProviderIcon, SectionLabel } from '$lib/ui';
-  import type { CatalogScale, FacetCounts } from '$lib/types';
+  import { ROLE_PLACEHOLDER } from '#lib/placeholderRoles.js';
+  import { api } from '#lib/api.js';
+  import { browseQuery, planForSuggestion } from '#lib/browseTarget.js';
+  import type { ApplyPlan } from '#lib/apiSuggestions.js';
+  import { countryLabel } from '#lib/facets.js';
+  import { emptyFilters, filtersToParams } from '#lib/facetModel.js';
+  import type { StagedFilters } from '#lib/stagedFilters.svelte.js';
+  import { CLI_INSTALL, CLI_REPO } from '#lib/cliLinks.js';
+  import { EXTENSION_CLAIMS, EXTENSION_STORE_URL } from '#lib/extensionLinks.js';
+  import { starterSuggestions } from '#lib/suggestions.js';
+  import { Button, ProviderIcon, SectionLabel } from '#lib/ui/index.js';
+  import type { CatalogScale, FacetCounts } from '#lib/types.js';
 
   // The homepage. One search box on an otherwise empty screen, and under it — for the
   // visitor who came to look rather than to search — how big the catalogue is and the
@@ -337,7 +337,7 @@
 
       <div class="mt-auto flex flex-wrap items-center gap-3">
         <Button href={resolve('/cli')} variant="outline" size="md">What it does</Button>
-        <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- absolute GitHub URL from $lib/cliLinks (shared with the CLI page's JSON-LD codeRepository), not a SvelteKit route -->
+        <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- absolute GitHub URL from #lib/cliLinks (shared with the CLI page's JSON-LD codeRepository), not a SvelteKit route -->
         <a href={CLI_REPO}
           target="_blank"
           rel="noopener noreferrer"

@@ -12,18 +12,18 @@
   import { goto } from '$app/navigation';
   import { resolve } from '$app/paths';
   import { page } from '$app/state';
-  import AssistantChat from '$lib/assistant/AssistantChat.svelte';
-  import AccountNavRail from '$lib/components/AccountNavRail.svelte';
-  import { entryFromQuery, historyModeFor } from '$lib/assistant/presets';
+  import AssistantChat from '#lib/assistant/AssistantChat.svelte';
+  import AccountNavRail from '#lib/components/AccountNavRail.svelte';
+  import { entryFromQuery, historyModeFor } from '#lib/assistant/presets.js';
   import { messages } from './messages';
-  import { locale } from '$lib/i18n/currentLocale.svelte';
-  import { t } from '$lib/i18n/t';
+  import { locale } from '#lib/i18n/currentLocale.svelte.js';
+  import { t } from '#lib/i18n/t.js';
 
   const s = $derived(t(messages, locale()));
   const session = $derived(page.params.id);
   // Read once, not reactively: the query says what this ARRIVAL asked for, and the
   // address is rewritten to the session's own URL — dropping the query — moments later.
-  const entry = entryFromQuery(page.url.searchParams);
+  const entry = entryFromQuery(new URLSearchParams(page.url.search));
 
   function onSessionChange(id: string) {
     const mode = historyModeFor(page.params.id, id);

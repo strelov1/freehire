@@ -1,11 +1,11 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { Check } from '@lucide/svelte';
-  import { api, ApiError } from '$lib/api';
-  import type { CvTailoredItem } from '$lib/cv';
-  import type { ReferralRequestInput } from '$lib/types';
-  import { Button, Dialog, FormField } from '$lib/ui';
-  import { isLinkedInUrl } from '$lib/utils';
+  import { api, ApiError } from '#lib/api.js';
+  import type { CvTailoredItem } from '#lib/cv.js';
+  import type { ReferralRequestInput } from '#lib/types.js';
+  import { Button, Dialog, FormField } from '#lib/ui/index.js';
+  import { isLinkedInUrl } from '#lib/utils.js';
 
   // The parent owns open/close; this component owns the request form. jobId is the
   // optional source-vacancy context recorded with the request.

@@ -1,4 +1,4 @@
-import { proxyDiscoveryDocument } from '$lib/server/wellKnown';
+import { proxyDiscoveryDocument } from '#lib/server/wellKnown';
 import type { RequestHandler } from './$types';
 
 // The JWK Set the manifest's signature verifies against (spec § JWK Set Discovery). A

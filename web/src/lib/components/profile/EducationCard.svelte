@@ -8,14 +8,14 @@
   // object first and only overrides this card's own fields — exactly as the other two
   // editors do for theirs.
   import { Award, GraduationCap, Languages as LanguagesIcon, Pencil, Plus, X } from '@lucide/svelte';
-  import { api } from '$lib/api';
-  import type { CandidateContacts, ResumeEducation, ResumeStructured } from '$lib/types';
-  import { Button, Chip } from '$lib/ui';
-  import PeriodDateInput from '$lib/components/PeriodDateInput.svelte';
-  import { formatPeriodDate } from '$lib/periodDate';
+  import { api } from '#lib/api.js';
+  import type { CandidateContacts, ResumeEducation, ResumeStructured } from '#lib/types.js';
+  import { Button, Chip } from '#lib/ui/index.js';
+  import PeriodDateInput from '#lib/components/PeriodDateInput.svelte';
+  import { formatPeriodDate } from '#lib/periodDate.js';
   import { messages } from './EducationCard.messages';
-  import { locale } from '$lib/i18n/currentLocale.svelte';
-  import { t } from '$lib/i18n/t';
+  import { locale } from '#lib/i18n/currentLocale.svelte.js';
+  import { t } from '#lib/i18n/t.js';
 
   let {
     structured,

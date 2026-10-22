@@ -2,10 +2,10 @@
   // "Where & how I want to work" as its own view — work format, base country/city, remote
   // reach, relocation — autosaving on every change straight to profileStore, the same way
   // the Roles card and the Skills view do.
-  import { profileStore } from '$lib/profile.svelte';
-  import type { UserProfile } from '$lib/types';
-  import { locale } from '$lib/i18n/currentLocale.svelte';
-  import { t } from '$lib/i18n/t';
+  import { profileStore } from '#lib/profile.svelte.js';
+  import type { UserProfile } from '#lib/types.js';
+  import { locale } from '#lib/i18n/currentLocale.svelte.js';
+  import { t } from '#lib/i18n/t.js';
   import { messages } from './LocationCard.messages';
   import LocationPreferencesFields from './LocationPreferencesFields.svelte';
 

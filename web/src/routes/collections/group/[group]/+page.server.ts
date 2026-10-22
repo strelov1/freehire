@@ -1,7 +1,7 @@
 import { error } from '@sveltejs/kit';
-import { serverApi } from '$lib/server/api';
-import { sectionBySlug } from '$lib/collectionSections';
-import { loadCollectionSections } from '$lib/server/collectionSections';
+import { serverApi } from '#lib/server/api.js';
+import { sectionBySlug } from '#lib/collectionSections.js';
+import { loadCollectionSections } from '#lib/server/collectionSections.js';
 import type { PageServerLoad } from './$types';
 
 // Server-render one section of the /collections hub in full: every collection in

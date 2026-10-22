@@ -1,7 +1,7 @@
-// Runtime feature flags, read from `$env/dynamic/public` so flipping one is an env
+// Runtime feature flags, read from `$app/env/public` so flipping one is an env
 // change plus a restart — never a rebuild. The predicates take the env map as an
 // argument rather than importing it, which keeps this module free of SvelteKit
-// runtime imports and unit-testable; callers pass `env` from `$env/dynamic/public`.
+// runtime imports and unit-testable; callers pass the value from `$app/env/public`.
 
 // Only the ON spellings are listed. Everything else — unset, empty, "0", "false", a
 // typo — is off, so there is no third state to reason about and no way for an

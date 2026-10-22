@@ -249,7 +249,6 @@ export async function loadDocsModules() {
     configFile: false,
     root: webRoot,
     logLevel: 'error',
-    resolve: { alias: { $lib: resolve(webRoot, 'src/lib') } },
   });
   try {
     const spec = await vite.ssrLoadModule('/src/lib/docs/api-spec.ts');

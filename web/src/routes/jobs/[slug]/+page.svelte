@@ -1,21 +1,21 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
   import { page } from '$app/state';
-  import JobRelated from '$lib/components/JobRelated.svelte';
-  import JobSeeAlso from '$lib/components/JobSeeAlso.svelte';
-  import JobView from '$lib/components/JobView.svelte';
-  import Seo from '$lib/components/Seo.svelte';
-  import { filterHref } from '$lib/enrichment';
-  import { categoryLabel } from '$lib/labels';
-  import { categoryLandingLink } from '$lib/roleLandings';
+  import JobRelated from '#lib/components/JobRelated.svelte';
+  import JobSeeAlso from '#lib/components/JobSeeAlso.svelte';
+  import JobView from '#lib/components/JobView.svelte';
+  import Seo from '#lib/components/Seo.svelte';
+  import { filterHref } from '#lib/enrichment.js';
+  import { categoryLabel } from '#lib/labels.js';
+  import { categoryLandingLink } from '#lib/roleLandings.js';
   import {
     breadcrumbJsonLd,
     jobPageTitle,
     jobPostingJsonLd,
     jsonLdScript,
     metaDescription,
-  } from '$lib/seo';
-  import { Breadcrumbs } from '$lib/ui';
+  } from '#lib/seo.js';
+  import { Breadcrumbs } from '#lib/ui/index.js';
   import type { PageData } from './$types';
 
   let { data }: { data: PageData } = $props();

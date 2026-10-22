@@ -1,9 +1,9 @@
 <script lang="ts">
   import { page } from '$app/state';
-  import Seo from '$lib/components/Seo.svelte';
-  import HowItWorksLandingView from '$lib/components/HowItWorksLandingView.svelte';
-  import { breadcrumbJsonLd, faqPageJsonLd, jsonLdScript } from '$lib/seo';
-  import { PIPELINE_FAQ } from '$lib/pipelineFaq';
+  import Seo from '#lib/components/Seo.svelte';
+  import HowItWorksLandingView from '#lib/components/HowItWorksLandingView.svelte';
+  import { breadcrumbJsonLd, faqPageJsonLd, jsonLdScript } from '#lib/seo.js';
+  import { PIPELINE_FAQ } from '#lib/pipelineFaq.js';
   import type { PageData } from './$types';
 
   const { data }: { data: PageData } = $props();

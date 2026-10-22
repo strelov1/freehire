@@ -1,10 +1,10 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
-  import { api } from '$lib/api';
-  import type { CommunityThread } from '$lib/types';
-  import { Button } from '$lib/ui';
-  import { locale } from '$lib/i18n/currentLocale.svelte';
-  import { timeAgo } from '$lib/utils';
+  import { api } from '#lib/api.js';
+  import type { CommunityThread } from '#lib/types.js';
+  import { Button } from '#lib/ui/index.js';
+  import { locale } from '#lib/i18n/currentLocale.svelte.js';
+  import { timeAgo } from '#lib/utils.js';
 
   let {
     subjectType,

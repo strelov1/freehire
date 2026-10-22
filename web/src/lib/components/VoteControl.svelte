@@ -1,9 +1,9 @@
 <script lang="ts">
   import { ThumbsUp, ThumbsDown } from '@lucide/svelte';
-  import { api, ApiError } from '$lib/api';
-  import { isAuthenticated } from '$lib/auth.svelte';
-  import { promptSignIn } from '$lib/signin';
-  import type { VoteResult } from '$lib/types';
+  import { api, ApiError } from '#lib/api.js';
+  import { isAuthenticated } from '#lib/auth.svelte.js';
+  import { promptSignIn } from '#lib/signin.js';
+  import type { VoteResult } from '#lib/types.js';
 
   // Shared thumbs up/down control for a job or a company. The aggregate counters
   // are public (shown to everyone); casting requires a session, so an anonymous

@@ -1,13 +1,13 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { FileText } from '@lucide/svelte';
-  import { api } from '$lib/api';
-  import { AsyncData } from '$lib/asyncData.svelte';
-  import type { ReferralOffer } from '$lib/types';
-  import { companyLogoUrl } from '$lib/logo';
-  import { Button, EntityLogo } from '$lib/ui';
-  import { locale } from '$lib/i18n/currentLocale.svelte';
-  import { timeAgo } from '$lib/utils';
+  import { api } from '#lib/api.js';
+  import { AsyncData } from '#lib/asyncData.svelte.js';
+  import type { ReferralOffer } from '#lib/types.js';
+  import { companyLogoUrl } from '#lib/logo.js';
+  import { Button, EntityLogo } from '#lib/ui/index.js';
+  import { locale } from '#lib/i18n/currentLocale.svelte.js';
+  import { timeAgo } from '#lib/utils.js';
   import States from './States.svelte';
 
   const pending = new AsyncData<ReferralOffer[]>([]);

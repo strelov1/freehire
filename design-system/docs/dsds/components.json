@@ -942,7 +942,7 @@
           "name": "label",
           "type": "string",
           "required": true,
-          "description": "The country's display name — resolved by the caller (e.g. $lib/facets' countryLabel), not by this primitive."
+          "description": "The country's display name — resolved by the caller (e.g. #lib/facets' countryLabel), not by this primitive."
         },
         {
           "name": "class",

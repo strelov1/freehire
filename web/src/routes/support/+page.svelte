@@ -1,7 +1,7 @@
 <script lang="ts">
   import { page } from '$app/state';
   import { resolve } from '$app/paths';
-  import Seo from '$lib/components/Seo.svelte';
+  import Seo from '#lib/components/Seo.svelte';
 
   const repoUrl = 'https://github.com/strelov1/freehire';
   const issuesUrl = 'https://github.com/strelov1/freehire/issues';

@@ -1,4 +1,4 @@
-import { defineMessages, plurals } from '$lib/i18n/t';
+import { defineMessages, plurals } from '#lib/i18n/t.js';
 
 // The activity view's own catalog. Its vocabulary is deliberately about EFFORT — "actions",
 // "active days" — and never about outcomes, because what the grid counts is what the

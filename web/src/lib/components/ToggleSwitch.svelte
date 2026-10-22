@@ -3,7 +3,7 @@
   // copy — the notification card, the public unsubscribe page, and the email-group
   // card — because three hand-maintained copies of a control is how one of them ends
   // up a few pixels or one aria attribute away from the others.
-  import { cn } from '$lib/ui';
+  import { cn } from '#lib/ui/index.js';
 
   let {
     on,

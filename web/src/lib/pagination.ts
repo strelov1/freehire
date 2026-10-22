@@ -32,7 +32,7 @@ export const API_WINDOW = 10000;
  *  costing three times as much purely for being deep. That is survivable in isolation
  *  and is not what it competes with — the host runs the crawl fleet and Meilisearch on
  *  one disk, and under an ordinary load spike every latency there multiplies by about
- *  five. The SSR read gives up at ten seconds (`$lib/api`'s call()), so the most
+ *  five. The SSR read gives up at ten seconds (`#lib/api`'s call()), so the most
  *  expensive pages are the first to cross it, and they cross it as a 500: on 2026-09-20
  *  every one of the day's 40 server errors on /jobs carried a `page=`, clustered at
  *  486-500 — the deepest pages that existed. Nothing was broken; they were merely the

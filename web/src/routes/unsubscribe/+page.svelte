@@ -10,9 +10,9 @@
   import { onMount } from 'svelte';
   import { resolve } from '$app/paths';
   import { page } from '$app/state';
-  import ToggleSwitch from '$lib/components/ToggleSwitch.svelte';
-  import { cn } from '$lib/ui';
-  import { api, type EmailPrefs } from '$lib/api';
+  import ToggleSwitch from '#lib/components/ToggleSwitch.svelte';
+  import { cn } from '#lib/ui/index.js';
+  import { api, type EmailPrefs } from '#lib/api.js';
 
   // Named Phase, and the variable `phase`, because a variable called `state`
   // shadows the $state rune in a Svelte 5 component and the resulting error names

@@ -1,10 +1,10 @@
 <script lang="ts">
   import { page } from '$app/state';
-  import AboutValues from '$lib/components/AboutValues.svelte';
-  import HomeView from '$lib/components/HomeView.svelte';
-  import Seo from '$lib/components/Seo.svelte';
-  import { HOME_FAQ } from '$lib/homeFaq';
-  import { faqPageJsonLd, jsonLdScript, siteOrganizationJsonLd, websiteJsonLd } from '$lib/seo';
+  import AboutValues from '#lib/components/AboutValues.svelte';
+  import HomeView from '#lib/components/HomeView.svelte';
+  import Seo from '#lib/components/Seo.svelte';
+  import { HOME_FAQ } from '#lib/homeFaq.js';
+  import { faqPageJsonLd, jsonLdScript, siteOrganizationJsonLd, websiteJsonLd } from '#lib/seo.js';
   import type { PageData } from './$types';
 
   const { data }: { data: PageData } = $props();

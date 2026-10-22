@@ -2,17 +2,17 @@
   // Page margins for the CV editor, in inches. The default view links each axis — side margins,
   // top-and-bottom — because uniform margins are the common case and four steppers abreast do not
   // fit the workspace panel at its narrow end; the independent per-side steppers stay one
-  // disclosure away. Clamping and rounding live in the unit-tested helpers in $lib/tailor/geometry,
+  // disclosure away. Clamping and rounding live in the unit-tested helpers in #lib/tailor/geometry,
   // so this file is layout only. Editing flows straight back to the bound margins, so the centre
   // preview re-paginates live and autosave persists the change.
   import { ChevronRight } from '@lucide/svelte';
-  import type { Margins } from '$lib/generated/contracts';
-  import { stepMargin, stepAxis, axisValue, MARGIN_STEP, type MarginAxis } from '$lib/tailor/geometry';
-  import { SettingRow } from '$lib/ui';
+  import type { Margins } from '#lib/generated/contracts.js';
+  import { stepMargin, stepAxis, axisValue, MARGIN_STEP, type MarginAxis } from '#lib/tailor/geometry.js';
+  import { SettingRow } from '#lib/ui/index.js';
   import Stepper from './Stepper.svelte';
   import { messages } from './MarginSettings.messages';
-  import { locale } from '$lib/i18n/currentLocale.svelte';
-  import { t } from '$lib/i18n/t';
+  import { locale } from '#lib/i18n/currentLocale.svelte.js';
+  import { t } from '#lib/i18n/t.js';
 
   let { margins = $bindable() }: { margins: Margins } = $props();
 

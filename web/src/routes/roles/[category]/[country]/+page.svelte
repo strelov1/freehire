@@ -1,13 +1,13 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
   import { page } from '$app/state';
-  import JobsView from '$lib/components/JobsView.svelte';
-  import Seo from '$lib/components/Seo.svelte';
-  import { formatSalary } from '$lib/insights';
-  import { categoryLabel, SENIORITY_LABELS, titleCase } from '$lib/labels';
-  import { breadcrumbJsonLd, collectionPageJsonLd, jobListItems, jsonLdScript } from '$lib/seo';
-  import { MIN_ENGLISH_COVERAGE } from '$lib/roleLandings';
-  import { Card, CountryFlag, Table } from '$lib/ui';
+  import JobsView from '#lib/components/JobsView.svelte';
+  import Seo from '#lib/components/Seo.svelte';
+  import { formatSalary } from '#lib/insights.js';
+  import { categoryLabel, SENIORITY_LABELS, titleCase } from '#lib/labels.js';
+  import { breadcrumbJsonLd, collectionPageJsonLd, jobListItems, jsonLdScript } from '#lib/seo.js';
+  import { MIN_ENGLISH_COVERAGE } from '#lib/roleLandings.js';
+  import { Card, CountryFlag, Table } from '#lib/ui/index.js';
   import type { PageData } from './$types';
 
   let { data }: { data: PageData } = $props();

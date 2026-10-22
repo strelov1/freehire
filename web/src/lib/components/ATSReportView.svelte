@@ -1,7 +1,7 @@
 <script lang="ts">
   import { Check, Copy, TriangleAlert, X } from '@lucide/svelte';
   import type { Snippet } from 'svelte';
-  import type { ATSReport } from '$lib/types';
+  import type { ATSReport } from '#lib/types.js';
 
   // The CV ATS-readiness report from the backend: an overall score out of 100 built
   // from five weighted categories, each with per-item point attribution, plus the

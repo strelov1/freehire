@@ -1,10 +1,10 @@
 <script lang="ts">
   import { page } from '$app/state';
-  import Seo from '$lib/components/Seo.svelte';
-  import ExtensionLandingView from '$lib/components/ExtensionLandingView.svelte';
-  import { EXTENSION_FAQ } from '$lib/extensionFaq';
-  import { EXTENSION_STORE_URL } from '$lib/extensionLinks';
-  import { breadcrumbJsonLd, extensionApplicationJsonLd, faqPageJsonLd, jsonLdScript } from '$lib/seo';
+  import Seo from '#lib/components/Seo.svelte';
+  import ExtensionLandingView from '#lib/components/ExtensionLandingView.svelte';
+  import { EXTENSION_FAQ } from '#lib/extensionFaq.js';
+  import { EXTENSION_STORE_URL } from '#lib/extensionLinks.js';
+  import { breadcrumbJsonLd, extensionApplicationJsonLd, faqPageJsonLd, jsonLdScript } from '#lib/seo.js';
 
   const origin = $derived(page.url.origin);
   const canonical = $derived(`${origin}/features/extension`);

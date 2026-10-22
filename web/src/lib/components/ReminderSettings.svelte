@@ -1,11 +1,11 @@
 <script lang="ts">
   import { Bell, Check, Mail, Moon, Smartphone } from '@lucide/svelte';
   import { resolve } from '$app/paths';
-  import { api, ApiError } from '$lib/api';
-  import { currentUser, isAuthenticated } from '$lib/auth.svelte';
-  import ToggleSwitch from '$lib/components/ToggleSwitch.svelte';
-  import { cn } from '$lib/ui';
-  import { ProviderIcon } from '$lib/ui';
+  import { api, ApiError } from '#lib/api.js';
+  import { currentUser, isAuthenticated } from '#lib/auth.svelte.js';
+  import ToggleSwitch from '#lib/components/ToggleSwitch.svelte';
+  import { cn } from '#lib/ui/index.js';
+  import { ProviderIcon } from '#lib/ui/index.js';
 
   // The single account-level notification rule: turn notifications on and pick
   // the delivery channels. It gates four things at once — the saved-job apply

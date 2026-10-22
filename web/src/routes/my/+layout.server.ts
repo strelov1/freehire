@@ -1,5 +1,5 @@
 import { redirect } from '@sveltejs/kit';
-import { signinUrl } from '$lib/signin';
+import { signinUrl } from '#lib/signin.js';
 import type { LayoutServerLoad } from './$types';
 
 // The auth gate for the whole account section. Every /my/** page needs a session, so

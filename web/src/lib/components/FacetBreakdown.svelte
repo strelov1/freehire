@@ -1,6 +1,6 @@
 <script lang="ts">
-  import type { FacetDef } from '$lib/facets';
-  import type { FilterStore } from '$lib/filters';
+  import type { FacetDef } from '#lib/facets.js';
+  import type { FilterStore } from '#lib/filters.js';
 
   // One facet's distribution as a horizontal bar chart. `dist` is the value→count
   // map for this facet (from the analytics endpoint); clicking a bar toggles that

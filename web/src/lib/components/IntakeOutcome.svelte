@@ -1,17 +1,17 @@
 <script lang="ts">
   // What became of a link somebody handed in, rendered the same way wherever they
   // handed it in — the contribute form and the search box both mount this. The words
-  // are in $lib/intakeOutcome (tested there); this adds the two places the outcome can
+  // are in #lib/intakeOutcome (tested there); this adds the two places the outcome can
   // send you, which only some outcomes have.
   //
   // Presentation is deliberately bare: no border, no padding, no background. The two
   // callers frame an outcome very differently (a panel on a page, a row in a dropdown),
   // and a component that brought its own box would have to be talked out of it twice.
   import { resolve } from '$app/paths';
-  import { locale } from '$lib/i18n/currentLocale.svelte';
-  import { t } from '$lib/i18n/t';
-  import { intakeOutcomeMessage } from '$lib/intakeOutcome';
-  import type { ResolvedLink } from '$lib/types';
+  import { locale } from '#lib/i18n/currentLocale.svelte.js';
+  import { t } from '#lib/i18n/t.js';
+  import { intakeOutcomeMessage } from '#lib/intakeOutcome.js';
+  import type { ResolvedLink } from '#lib/types.js';
   import { messages } from './IntakeOutcome.messages';
 
   let { resolved }: { resolved: ResolvedLink } = $props();

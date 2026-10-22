@@ -2,13 +2,13 @@
   import { onMount } from 'svelte';
   import { resolve } from '$app/paths';
   import { Bell, Bookmark, ChevronRight } from '@lucide/svelte';
-  import { ApiError } from '$lib/api';
-  import { isAuthenticated } from '$lib/auth.svelte';
-  import { promptSignIn } from '$lib/signin';
-  import { savedSearches } from '$lib/savedSearches.svelte';
-  import { notifications } from '$lib/notifications.svelte';
-  import { ensureSaved, matchedSavedSearch, setPendingAlert } from '$lib/saveSearchAlert';
-  import { Button } from '$lib/ui';
+  import { ApiError } from '#lib/api.js';
+  import { isAuthenticated } from '#lib/auth.svelte.js';
+  import { promptSignIn } from '#lib/signin.js';
+  import { savedSearches } from '#lib/savedSearches.svelte.js';
+  import { notifications } from '#lib/notifications.svelte.js';
+  import { ensureSaved, matchedSavedSearch, setPendingAlert } from '#lib/saveSearchAlert.js';
+  import { Button } from '#lib/ui/index.js';
   import AlertChannels from './AlertChannels.svelte';
 
   // The "save this search, then get its new jobs" control, driven by a query string so

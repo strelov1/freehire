@@ -1,23 +1,23 @@
 <script lang="ts">
   import { onMount, untrack, type Snippet } from 'svelte';
   import { ArrowRight, Layers } from '@lucide/svelte';
-  import { browser } from '$app/environment';
+  import { browser } from '$app/env';
   import { afterNavigate, goto, replaceState } from '$app/navigation';
   import { resolve } from '$app/paths';
   import { page } from '$app/state';
-  import { api, type Slice } from '$lib/api';
-  import { isAuthenticated } from '$lib/auth.svelte';
-  import { promptSignIn } from '$lib/signin';
-  import { profileStore } from '$lib/profile.svelte';
-  import { env } from '$env/dynamic/public';
-  import { openWithinEnabled } from '$lib/features';
-  import { computeClientMatch } from '$lib/jobMatch';
-  import { ensureViewedLoaded } from '$lib/viewedJobs.svelte';
-  import { ensureSavedLoaded } from '$lib/savedJobs.svelte';
-  import { ensureDismissedLoaded, isDismissed, markUndismissed } from '$lib/dismissedJobs.svelte';
-  import { latestOnly } from '$lib/latestOnly';
-  import { Paginator } from '$lib/paginated.svelte';
-  import { pageCount, pageOffset } from '$lib/pagination';
+  import { api, type Slice } from '#lib/api.js';
+  import { isAuthenticated } from '#lib/auth.svelte.js';
+  import { promptSignIn } from '#lib/signin.js';
+  import { profileStore } from '#lib/profile.svelte.js';
+  import { PUBLIC_OPEN_WITHIN } from '$app/env/public';
+  import { openWithinEnabled } from '#lib/features.js';
+  import { computeClientMatch } from '#lib/jobMatch.js';
+  import { ensureViewedLoaded } from '#lib/viewedJobs.svelte.js';
+  import { ensureSavedLoaded } from '#lib/savedJobs.svelte.js';
+  import { ensureDismissedLoaded, isDismissed, markUndismissed } from '#lib/dismissedJobs.svelte.js';
+  import { latestOnly } from '#lib/latestOnly.js';
+  import { Paginator } from '#lib/paginated.svelte.js';
+  import { pageCount, pageOffset } from '#lib/pagination.js';
   import Pagination from './Pagination.svelte';
   import {
     FilterStore,
@@ -28,19 +28,19 @@
     type JobSort,
     activeFilterCount,
     displayQuery,
-  } from '$lib/filters';
-  import { freshnessOptions } from '$lib/filterControls';
-  import { geoScopeOffered, loadJobFilters, markGeoScopeOffered } from '$lib/filterStorage';
-  import { geoScopeQuery, shouldOfferGeoScope, WORLDWIDE_REGION } from '$lib/geoScope';
-  import { bannerVisible, loadOnboardingState, markSeen, narrowestFacet, type OnboardingLifecycle } from '$lib/onboarding';
-  import { onboardingUrl } from '$lib/onboardingGate.svelte';
-  import { consumePendingAlert } from '$lib/saveSearchAlert';
+  } from '#lib/filters.js';
+  import { freshnessOptions } from '#lib/filterControls.js';
+  import { geoScopeOffered, loadJobFilters, markGeoScopeOffered } from '#lib/filterStorage.js';
+  import { geoScopeQuery, shouldOfferGeoScope, WORLDWIDE_REGION } from '#lib/geoScope.js';
+  import { bannerVisible, loadOnboardingState, markSeen, narrowestFacet, type OnboardingLifecycle } from '#lib/onboarding.js';
+  import { onboardingUrl } from '#lib/onboardingGate.svelte.js';
+  import { consumePendingAlert } from '#lib/saveSearchAlert.js';
   import OnboardingBanner from './onboarding/OnboardingBanner.svelte';
   import OnboardingAlertBanner from './onboarding/OnboardingAlertBanner.svelte';
-  import { syncOnNavigation } from '$lib/urlSynced.svelte';
-  import { setListSearchTarget } from '$lib/listSearch.svelte';
-  import { track } from '$lib/analytics';
-  import type { Job, FacetCounts } from '$lib/types';
+  import { syncOnNavigation } from '#lib/urlSynced.svelte.js';
+  import { setListSearchTarget } from '#lib/listSearch.svelte.js';
+  import { track } from '#lib/analytics.js';
+  import type { Job, FacetCounts } from '#lib/types.js';
   import FilterSummary from './filters/FilterSummary.svelte';
   import FilterModal from './filters/FilterModal.svelte';
   import ListToolbar from './ListToolbar.svelte';
@@ -99,7 +99,7 @@
   // fixed for the store's life, so the initial `standalone` and `initialParams`
   // are captured once.
   const seedParams = untrack(() =>
-    initialParams != null ? new URLSearchParams(initialParams) : page.url.searchParams,
+    initialParams != null ? new URLSearchParams(initialParams) : new URLSearchParams(page.url.search),
   );
   const filters = new FilterStore(seedParams, untrack(() => standalone));
 
@@ -223,7 +223,7 @@
 
   // Which date the above-list select bounds. Not $derived: the flag is a runtime env
   // value read once at module load, and it cannot change while the page is mounted.
-  const openWithinAvailable = openWithinEnabled(env);
+  const openWithinAvailable = openWithinEnabled({ PUBLIC_OPEN_WITHIN });
 
   let modalOpen = $state(false);
   let started = false;
@@ -648,6 +648,8 @@
   // list (persist off) keeps the plain re-seed — unchanged.
   if (untrack(() => standalone)) {
     afterNavigate((nav) => {
+      // SvelteKit 3 fires this for shallow routing too, i.e. for our own URL writes.
+      if (nav.shallow) return;
       const stored = nav.type !== 'enter' && location.search === '' ? loadJobFilters() : '';
       if (stored) {
         filters.apply(stored);

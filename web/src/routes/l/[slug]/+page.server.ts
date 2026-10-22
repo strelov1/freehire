@@ -1,7 +1,7 @@
 import { error } from '@sveltejs/kit';
-import { ApiError } from '$lib/api';
-import { serverApi } from '$lib/server/api';
-import { rethrowUpstream } from '$lib/server/upstream';
+import { ApiError } from '#lib/api.js';
+import { serverApi } from '#lib/server/api.js';
+import { rethrowUpstream } from '#lib/server/upstream.js';
 import type { PageServerLoad } from './$types';
 
 // A public job list: load it by slug and render its jobs directly — unlike a shared

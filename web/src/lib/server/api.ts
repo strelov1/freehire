@@ -1,5 +1,5 @@
-import { env } from '$env/dynamic/private';
-import { createApi } from '$lib/api';
+import { API_INTERNAL_URL, SSR_API_TIMEOUT_MS } from '$app/env/private';
+import { createApi } from '#lib/api.js';
 
 /** Build an API client for use inside a SvelteKit server `load` or endpoint.
  *  Pass the event's `fetch`, and the incoming request's `cookie` header for any
@@ -14,7 +14,7 @@ import { createApi } from '$lib/api';
  *  cookies, so the session cookie is forwarded explicitly when provided. Public
  *  reads can omit it. */
 export function serverApi(fetchImpl: typeof fetch, cookie?: string | null) {
-  return createApi(fetchImpl, env.API_INTERNAL_URL ?? '', cookie ? { cookie } : {}, timeoutMs());
+  return createApi(fetchImpl, API_INTERNAL_URL ?? '', cookie ? { cookie } : {}, timeoutMs());
 }
 
 /** How long a server-side API call may take before it is aborted. Every SSR call is
@@ -34,6 +34,6 @@ export function ssrTimeoutMs(): number {
 }
 
 function timeoutMs(): number {
-  const configured = Number(env.SSR_API_TIMEOUT_MS);
+  const configured = Number(SSR_API_TIMEOUT_MS);
   return Number.isFinite(configured) && configured > 0 ? configured : DEFAULT_TIMEOUT_MS;
 }

@@ -16,7 +16,7 @@
   // than hotlinked from their CDN: a third-party CDN path is theirs to change without telling
   // us, and hotlinking would hand every reader's IP to it just to render a credit.
 
-  import { adzunaLocalDomain } from '$lib/adzuna';
+  import { adzunaLocalDomain } from '#lib/adzuna.js';
 
   interface Props {
     /** The posting's outbound URL — its host names which local Adzuna domain to link to. */

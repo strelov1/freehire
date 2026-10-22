@@ -1,10 +1,10 @@
 <script lang="ts">
-  import { ApiError, api } from '$lib/api';
-  import { locale } from '$lib/i18n/currentLocale.svelte';
-  import { t } from '$lib/i18n/t';
-  import { consumeReauthDraft } from '$lib/recentAuth';
-  import type { CreatedApiKey } from '$lib/types';
-  import { Button, Dialog, Input } from '$lib/ui';
+  import { ApiError, api } from '#lib/api.js';
+  import { locale } from '#lib/i18n/currentLocale.svelte.js';
+  import { t } from '#lib/i18n/t.js';
+  import { consumeReauthDraft } from '#lib/recentAuth.js';
+  import type { CreatedApiKey } from '#lib/types.js';
+  import { Button, Dialog, Input } from '#lib/ui/index.js';
   import ConfirmIdentity from './ConfirmIdentity.svelte';
   import { messages } from './CreateApiKeyDialog.messages';
 

@@ -28,7 +28,7 @@ ignore:
           BUILD time only and is in neither the SSR server bundle nor anything
           the browser loads. Its one call site is mergeConfigs() in
           utils/options.js, which merges the plugin's own option objects: our
-          svelte.config.js and our vite config, both statically authored in
+          svelte.options.ts and our vite config, both statically authored in
           this repository. Polluting a prototype needs attacker-controlled keys
           in the merged object, and nothing a request carries ever reaches it,
           so the exploitable path does not exist here.

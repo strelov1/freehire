@@ -1,7 +1,7 @@
 // Shared bootstrap for the dependency-free OG render scripts (og-smoke.mjs and
 // gen-og.mjs). Both load the TypeScript render core through Vite's SSR loader
 // (Vite is already a devDependency) so the source stays in the project's normal
-// extensionless / $lib style — no .ts-extension imports, no tsconfig changes, no
+// extensionless / #lib style — no .ts-extension imports, no tsconfig changes, no
 // new framework — and both read the same bundled Inter weights and assert the same
 // PNG validity. Kept here so the font set and loader config live in one place.
 //
@@ -31,7 +31,6 @@ export function createOgVite() {
     configFile: false,
     root: webRoot,
     logLevel: 'error',
-    resolve: { alias: { $lib: resolve(webRoot, 'src/lib') } },
     ssr: { external: ['@resvg/resvg-js'] },
   });
 }

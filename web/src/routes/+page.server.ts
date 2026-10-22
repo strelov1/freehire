@@ -1,6 +1,6 @@
 import { redirect } from '@sveltejs/kit';
-import { serverApi } from '$lib/server/api';
-import { isLegacyFeedUrl } from '$lib/legacyFeedUrl';
+import { serverApi } from '#lib/server/api.js';
+import { isLegacyFeedUrl } from '#lib/legacyFeedUrl.js';
 import type { PageServerLoad } from './$types';
 
 // The homepage is the landing page: one search box, and under it the shortcuts into

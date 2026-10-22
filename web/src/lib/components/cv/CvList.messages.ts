@@ -1,4 +1,4 @@
-import { defineMessages } from '$lib/i18n/t';
+import { defineMessages } from '#lib/i18n/t.js';
 
 // `empty.tailorMyCv` names the button on the job page (`JobView.svelte`'s "Tailor my
 // CV" CTA), which is not translated yet — the onboarding steps keep quoting it in

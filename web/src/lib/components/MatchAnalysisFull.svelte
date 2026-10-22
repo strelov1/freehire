@@ -2,10 +2,10 @@
   import { onMount, onDestroy } from 'svelte';
   import { resolve } from '$app/paths';
   import { RefreshCw, FileText, Check, Loader, TriangleAlert } from '@lucide/svelte';
-  import { notInPlan, refuses, resetsAtLabel } from '$lib/allowance';
-  import { api } from '$lib/api';
-  import { track } from '$lib/analytics';
-  import { isAuthenticated } from '$lib/auth.svelte';
+  import { notInPlan, refuses, resetsAtLabel } from '#lib/allowance.js';
+  import { api } from '#lib/api.js';
+  import { track } from '#lib/analytics.js';
+  import { isAuthenticated } from '#lib/auth.svelte.js';
   import {
     verdictTone,
     requirementStatusMeta,
@@ -13,11 +13,11 @@
     reduceMatchEvent,
     type MatchStreamState,
     type Tone,
-  } from '$lib/matchAnalysis';
-  import type { Job, MatchAnalysisResponse } from '$lib/types';
-  import { renderMarkdown } from '$lib/markdown';
-  import { Button } from '$lib/ui';
-  import PlanLimitLink from '$lib/components/PlanLimitLink.svelte';
+  } from '#lib/matchAnalysis.js';
+  import type { Job, MatchAnalysisResponse } from '#lib/types.js';
+  import { renderMarkdown } from '#lib/markdown.js';
+  import { Button } from '#lib/ui/index.js';
+  import PlanLimitLink from '#lib/components/PlanLimitLink.svelte';
 
   // The full AI match report + live SSE stream. Caller: `ArtifactPanel`'s Job Match tab, with
   // `autoRun` wired to the tailoring workspace's own `coldStartRunning` — a cold start opens

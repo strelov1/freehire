@@ -1,12 +1,12 @@
 <script lang="ts">
   import { goto, invalidateAll } from '$app/navigation';
   import { resolve } from '$app/paths';
-  import { api, ApiError } from '$lib/api';
-  import { currentUser } from '$lib/auth.svelte';
-  import DeleteAccountButton from '$lib/components/DeleteAccountButton.svelte';
-  import { locale } from '$lib/i18n/currentLocale.svelte';
-  import { t } from '$lib/i18n/t';
-  import { Button } from '$lib/ui';
+  import { api, ApiError } from '#lib/api.js';
+  import { currentUser } from '#lib/auth.svelte.js';
+  import DeleteAccountButton from '#lib/components/DeleteAccountButton.svelte';
+  import { locale } from '#lib/i18n/currentLocale.svelte.js';
+  import { t } from '#lib/i18n/t.js';
+  import { Button } from '#lib/ui/index.js';
   import { messages } from './messages';
 
   // Password + sessions. Both actions are cookie-only server-side: an API key can

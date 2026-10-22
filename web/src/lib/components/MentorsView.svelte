@@ -1,7 +1,7 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
   import { resolve } from '$app/paths';
-  import { Badge, Card, EmptyState } from '$lib/ui';
+  import { Badge, Card, EmptyState } from '#lib/ui/index.js';
   import {
     companyLabel,
     emptyMentorFilters,
@@ -9,8 +9,8 @@
     seniorityLabel,
     type MentorFilterOptions,
     type MentorFilters,
-  } from '$lib/mentorship';
-  import type { Mentor } from '$lib/types';
+  } from '#lib/mentorship.js';
+  import type { Mentor } from '#lib/types.js';
 
   let {
     mentors,
@@ -28,8 +28,7 @@
     const query = mentorFiltersToQuery(next);
     // eslint-disable-next-line svelte/no-navigation-without-resolve -- resolve() applied to the /mentors path; the rule can't see through the appended query
     void goto(`${resolve('/mentors')}${query ? `?${query}` : ''}`, {
-      keepFocus: true,
-      noScroll: true,
+      reset: false,
     });
   }
 

@@ -14,25 +14,25 @@
   import { resolve } from '$app/paths';
   import { page } from '$app/state';
   import { ZoomIn, ZoomOut, Download, Menu, PanelLeftClose, PanelLeftOpen, Terminal } from '@lucide/svelte';
-  import { api, ApiError } from '$lib/api';
-  import { offerCvRefresh, TAILOR_REFRESH_MESSAGE } from '$lib/cvRefreshOffer';
-  import { askCvRefresh } from '$lib/cvRefreshDialog.svelte';
-  import { track } from '$lib/analytics';
-  import { must } from '$lib/utils';
-  import AssistantChat from '$lib/assistant/AssistantChat.svelte';
-  import ArtifactPanel from '$lib/tailor/ArtifactPanel.svelte';
-  import CliEditDialog from '$lib/components/cv/CliEditDialog.svelte';
-  import CvHtmlPreview from '$lib/tailor/CvHtmlPreview.svelte';
-  import CvSectionForm from '$lib/components/cv/CvSectionForm.svelte';
-  import ExperienceBankView from '$lib/components/ExperienceBankView.svelte';
-  import MarginSettings from '$lib/components/cv/MarginSettings.svelte';
-  import TracerLinksSettings from '$lib/components/cv/TracerLinksSettings.svelte';
-  import StyleSettings from '$lib/components/cv/StyleSettings.svelte';
-  import TemplateGallery from '$lib/tailor/TemplateGallery.svelte';
-  import AccountNavRail from '$lib/components/AccountNavRail.svelte';
-  import { ConfirmDialog } from '$lib/ui';
-  import { clampWidth } from '$lib/tailor/geometry';
-  import { undoRun, openingActions } from '$lib/tailor/autopilot';
+  import { api, ApiError } from '#lib/api.js';
+  import { offerCvRefresh, TAILOR_REFRESH_MESSAGE } from '#lib/cvRefreshOffer.js';
+  import { askCvRefresh } from '#lib/cvRefreshDialog.svelte.js';
+  import { track } from '#lib/analytics.js';
+  import { must } from '#lib/utils.js';
+  import AssistantChat from '#lib/assistant/AssistantChat.svelte';
+  import ArtifactPanel from '#lib/tailor/ArtifactPanel.svelte';
+  import CliEditDialog from '#lib/components/cv/CliEditDialog.svelte';
+  import CvHtmlPreview from '#lib/tailor/CvHtmlPreview.svelte';
+  import CvSectionForm from '#lib/components/cv/CvSectionForm.svelte';
+  import ExperienceBankView from '#lib/components/ExperienceBankView.svelte';
+  import MarginSettings from '#lib/components/cv/MarginSettings.svelte';
+  import TracerLinksSettings from '#lib/components/cv/TracerLinksSettings.svelte';
+  import StyleSettings from '#lib/components/cv/StyleSettings.svelte';
+  import TemplateGallery from '#lib/tailor/TemplateGallery.svelte';
+  import AccountNavRail from '#lib/components/AccountNavRail.svelte';
+  import { ConfirmDialog } from '#lib/ui/index.js';
+  import { clampWidth } from '#lib/tailor/geometry.js';
+  import { undoRun, openingActions } from '#lib/tailor/autopilot.js';
   import {
     toEditable,
     emptyDocument,
@@ -41,10 +41,10 @@
     type CvFont,
     type CvJobMatch,
     type TailorResult,
-  } from '$lib/cv';
-  import type { Analysis, AutopilotEntry, Document, RevisionView } from '$lib/generated/contracts';
-  import type { Allowance, Job } from '$lib/types';
-  import { notInPlan, resetsAtLabel } from '$lib/allowance';
+  } from '#lib/cv.js';
+  import type { Analysis, AutopilotEntry, Document, RevisionView } from '#lib/generated/contracts.js';
+  import type { Allowance, Job } from '#lib/types.js';
+  import { notInPlan, resetsAtLabel } from '#lib/allowance.js';
 
   const slug = $derived(page.params.slug ?? '');
   const cvParam = $derived(page.url.searchParams.get('cv'));
@@ -255,8 +255,7 @@
     // eslint-disable-next-line svelte/no-navigation-without-resolve -- resolve() supplies the path; the rule can't see through the appended ?cv= query
     void goto(`${resolve('/tailor/[slug]', { slug })}?cv=${cvId}`, {
       replaceState: true,
-      noScroll: true,
-      keepFocus: true,
+      reset: false,
     });
   }
 

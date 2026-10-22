@@ -5,9 +5,9 @@
   // Unlike the two blocks above it in this pane, this does NOT write into the shared document —
   // it is not a presentation choice that autosave carries along. Consent is its own decision with
   // its own endpoint, so the switch writes immediately and reports its own failure.
-  import { api } from '$lib/api';
-  import type { CvTracerLink } from '$lib/cv';
-  import { SettingRow } from '$lib/ui';
+  import { api } from '#lib/api.js';
+  import type { CvTracerLink } from '#lib/cv.js';
+  import { SettingRow } from '#lib/ui/index.js';
 
   let { cvId, enabled = $bindable() }: { cvId: string; enabled: boolean } = $props();
 

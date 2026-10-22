@@ -1,4 +1,4 @@
-import { api } from '$lib/api';
+import { api } from '#lib/api.js';
 
 const verifierKey = 'freehire.reauth.verifier';
 const returnKey = 'freehire.reauth.return';

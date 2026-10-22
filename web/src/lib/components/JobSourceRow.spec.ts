@@ -21,10 +21,10 @@ const profileStoreMock = vi.hoisted(() => ({
 
 const authMock = vi.hoisted(() => ({ signedIn: true }));
 
-vi.mock('$lib/profile.svelte', () => ({ profileStore: profileStoreMock }));
-vi.mock('$lib/auth.svelte', () => ({ isAuthenticated: () => authMock.signedIn }));
-vi.mock('$lib/profileAlertSync', () => ({ syncProfileAlert }));
-vi.mock('$lib/signin', () => ({ promptSignIn }));
+vi.mock('#lib/profile.svelte.js', () => ({ profileStore: profileStoreMock }));
+vi.mock('#lib/auth.svelte.js', () => ({ isAuthenticated: () => authMock.signedIn }));
+vi.mock('#lib/profileAlertSync.js', () => ({ syncProfileAlert }));
+vi.mock('#lib/signin.js', () => ({ promptSignIn }));
 
 beforeEach(() => {
   vi.clearAllMocks();

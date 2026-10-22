@@ -1,4 +1,4 @@
-import { defineMessages, plurals } from '$lib/i18n/t';
+import { defineMessages, plurals } from '#lib/i18n/t.js';
 
 export const messages = defineMessages(
   {
@@ -20,7 +20,7 @@ export const messages = defineMessages(
     // this can't be a plain `n === 1 ? … : …` ternary.
     jobCount: plurals({ one: '{count} job', other: '{count} jobs' }),
     shared: 'Shared',
-    // `{name}` is substituted via `$lib/i18n/t`'s `format()`. Curly quotes match
+    // `{name}` is substituted via `#lib/i18n/t`'s `format()`. Curly quotes match
     // the original literal exactly (`“{name}”`); the Russian translation uses «»,
     // that language's own quoting convention, not a copy of the English glyphs.
     renameAriaLabel: 'Rename “{name}”',

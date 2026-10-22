@@ -1,4 +1,4 @@
-import { defineMessages } from '$lib/i18n/t';
+import { defineMessages } from '#lib/i18n/t.js';
 
 // The `Authorization: Bearer <key>` header and the CLI command in the reveal box
 // are protocol, not prose — they stay English in every locale, and are composed in

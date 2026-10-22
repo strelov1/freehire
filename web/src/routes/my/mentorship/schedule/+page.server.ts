@@ -1,5 +1,5 @@
-import { requireMentorProfile } from '$lib/server/mentorshipGate';
-import { serverApi } from '$lib/server/api';
+import { requireMentorProfile } from '#lib/server/mentorshipGate.js';
+import { serverApi } from '#lib/server/api.js';
 import type { PageServerLoad } from './$types';
 
 // Mentor-only, and gated HERE rather than by hiding the tab. Hiding it is what a visitor

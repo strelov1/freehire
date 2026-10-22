@@ -1,5 +1,5 @@
 import { error, redirect } from '@sveltejs/kit';
-import { signinUrl } from '$lib/signin';
+import { signinUrl } from '#lib/signin.js';
 import type { PageServerLoad } from './$types';
 
 // The sign-in stop on the browser-extension connect flow.

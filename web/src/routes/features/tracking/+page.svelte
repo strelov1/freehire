@@ -1,9 +1,9 @@
 <script lang="ts">
   import { page } from '$app/state';
-  import Seo from '$lib/components/Seo.svelte';
-  import TrackingLandingView from '$lib/components/TrackingLandingView.svelte';
-  import { faqPageJsonLd, jsonLdScript } from '$lib/seo';
-  import { TRACKING_FAQ } from '$lib/trackingFaq';
+  import Seo from '#lib/components/Seo.svelte';
+  import TrackingLandingView from '#lib/components/TrackingLandingView.svelte';
+  import { faqPageJsonLd, jsonLdScript } from '#lib/seo.js';
+  import { TRACKING_FAQ } from '#lib/trackingFaq.js';
 
   const canonical = $derived(`${page.url.origin}/features/tracking`);
   // The FAQ block and this payload render from the same TRACKING_FAQ array, so the

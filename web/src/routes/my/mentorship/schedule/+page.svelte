@@ -1,7 +1,7 @@
 <script lang="ts">
-  import MentorScheduleCalendar from '$lib/components/MentorScheduleCalendar.svelte';
-  import MentorScheduleEditor from '$lib/components/MentorScheduleEditor.svelte';
-  import MentorSessionSettings from '$lib/components/MentorSessionSettings.svelte';
+  import MentorScheduleCalendar from '#lib/components/MentorScheduleCalendar.svelte';
+  import MentorScheduleEditor from '#lib/components/MentorScheduleEditor.svelte';
+  import MentorSessionSettings from '#lib/components/MentorSessionSettings.svelte';
   import type { PageData } from './$types';
 
   let { data }: { data: PageData } = $props();

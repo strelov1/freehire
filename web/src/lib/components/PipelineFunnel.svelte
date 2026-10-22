@@ -1,10 +1,10 @@
 <script lang="ts">
-  import { PIPELINE_BANDS, bandBreakdown, bandTotal } from '$lib/pipeline';
-  import { humanizeStage } from '$lib/stages';
-  import type { PipelineStats } from '$lib/types';
+  import { PIPELINE_BANDS, bandBreakdown, bandTotal } from '#lib/pipeline.js';
+  import { humanizeStage } from '#lib/stages.js';
+  import type { PipelineStats } from '#lib/types.js';
   import { messages } from './PipelineFunnel.messages';
-  import { locale } from '$lib/i18n/currentLocale.svelte';
-  import { t } from '$lib/i18n/t';
+  import { locale } from '#lib/i18n/currentLocale.svelte.js';
+  import { t } from '#lib/i18n/t.js';
 
   // A single-level Sankey snapshot: one Applications source fanning into the pipeline
   // groups (five today: Preparing, Applied, Interview, Offer, Closed — derived from

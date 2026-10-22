@@ -1,7 +1,7 @@
 <script lang="ts">
-  import { filterHref } from '$lib/enrichment';
-  import { countryLabel } from '$lib/facets';
-  import { CountryFlag } from '$lib/ui';
+  import { filterHref } from '#lib/enrichment.js';
+  import { countryLabel } from '#lib/facets.js';
+  import { CountryFlag } from '#lib/ui/index.js';
 
   // An overlapping cluster of round country flags (an avatar-stack). Collapses a
   // long country list into a compact, space-saving row: each flag laps over the

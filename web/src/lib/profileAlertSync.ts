@@ -5,16 +5,16 @@
 // profile write triggered it, it just leaves the alert stale until the next
 // successful save.
 //
-// Lives in `$lib`, not under a route, because every autosaving surface that
+// Lives in `#lib`, not under a route, because every autosaving surface that
 // writes `profileStore` needs to call this — inside `/my/profile` (Role,
 // Location, Skills) and outside it (JobMatch's claim/avoid/undo, ProfileForm's
-// CV-merge) alike. A route file exporting to `$lib` components would invert the
+// CV-merge) alike. A route file exporting to `#lib` components would invert the
 // only import direction this codebase otherwise uses.
 
-import { filtersFromProfile, filtersToParams } from '$lib/filters';
-import { profileStore } from '$lib/profile.svelte';
-import { savedSearches } from '$lib/savedSearches.svelte';
-import { serialQueue } from '$lib/serialQueue';
+import { filtersFromProfile, filtersToParams } from '#lib/filters.js';
+import { profileStore } from '#lib/profile.svelte.js';
+import { savedSearches } from '#lib/savedSearches.svelte.js';
+import { serialQueue } from '#lib/serialQueue.js';
 
 // Module-level, not per-call: the hazard is two DIFFERENT callers (say, a Skills
 // toggle and a JobMatch claim) landing their `savedSearches.update` PUTs out of

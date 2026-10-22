@@ -8,7 +8,7 @@
   // breakdown under each band, which a decorative preview has no use for. What the two
   // share is the vocabulary, which is the part that must not drift.
 
-  import { PIPELINE_BANDS } from '$lib/pipeline';
+  import { PIPELINE_BANDS } from '#lib/pipeline.js';
 
   let { applications, buckets }: { applications: number; buckets: Record<string, number> } =
     $props();

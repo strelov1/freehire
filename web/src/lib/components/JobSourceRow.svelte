@@ -1,13 +1,13 @@
 <script lang="ts">
   import { Ban, RotateCcw } from '@lucide/svelte';
-  import { isAuthenticated } from '$lib/auth.svelte';
-  import { sourceLabel } from '$lib/facets';
-  import { filterHref } from '$lib/enrichment';
-  import { SOURCE_LOGO_DOMAINS, sourceLogoUrl } from '$lib/logo';
-  import { profileStore } from '$lib/profile.svelte';
-  import { syncProfileAlert } from '$lib/profileAlertSync';
-  import { promptSignIn } from '$lib/signin';
-  import { Badge, EntityLogo } from '$lib/ui';
+  import { isAuthenticated } from '#lib/auth.svelte.js';
+  import { sourceLabel } from '#lib/facets.js';
+  import { filterHref } from '#lib/enrichment.js';
+  import { SOURCE_LOGO_DOMAINS, sourceLogoUrl } from '#lib/logo.js';
+  import { profileStore } from '#lib/profile.svelte.js';
+  import { syncProfileAlert } from '#lib/profileAlertSync.js';
+  import { promptSignIn } from '#lib/signin.js';
+  import { Badge, EntityLogo } from '#lib/ui/index.js';
   import AdzunaAttribution from './AdzunaAttribution.svelte';
   import DevGlobalJobsAttribution from './DevGlobalJobsAttribution.svelte';
 

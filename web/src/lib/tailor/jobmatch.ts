@@ -3,8 +3,8 @@
 // the weight the server sent, and the requirement ledger split by what the document
 // actually says. Kept out of the component so the wording and the never-render-an-
 // unavailable-category-as-zero rule are unit-tested rather than eyeballed in a browser.
-import type { CvJobMatch } from '$lib/cv';
-import type { LineItem, RequirementCheck } from '$lib/generated/contracts';
+import type { CvJobMatch } from '#lib/cv.js';
+import type { LineItem, RequirementCheck } from '#lib/generated/contracts.js';
 
 interface JobMatchRow {
   id: string;

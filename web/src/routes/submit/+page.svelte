@@ -1,5 +1,5 @@
 <script lang="ts">
-  import SubmitView from '$lib/components/SubmitView.svelte';
+  import SubmitView from '#lib/components/SubmitView.svelte';
 </script>
 
 <svelte:head>

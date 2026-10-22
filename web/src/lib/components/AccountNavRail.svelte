@@ -1,14 +1,15 @@
 <script lang="ts">
   import { page } from '$app/state';
   import { resolve } from '$app/paths';
+  import { toPath } from '#lib/pathname.js';
   import { X } from '@lucide/svelte';
-  import { isAuthenticated, currentUser } from '$lib/auth.svelte';
-  import { visibleAccountNav, isSectionActive } from '$lib/accountNav';
-  import { accountNavIcons } from '$lib/accountNavIcons';
-  import { locale } from '$lib/i18n/currentLocale.svelte';
-  import { messages, navLabel } from '$lib/i18n/shell';
-  import { t } from '$lib/i18n/t';
-  import { cn } from '$lib/ui';
+  import { isAuthenticated, currentUser } from '#lib/auth.svelte.js';
+  import { visibleAccountNav, isSectionActive } from '#lib/accountNav.js';
+  import { accountNavIcons } from '#lib/accountNavIcons.js';
+  import { locale } from '#lib/i18n/currentLocale.svelte.js';
+  import { messages, navLabel } from '#lib/i18n/shell.js';
+  import { t } from '#lib/i18n/t.js';
+  import { cn } from '#lib/ui/index.js';
 
   // A compact, icon-only mirror of the account-section navigation (see
   // my/+layout.svelte), pinned to the left edge of full-width surfaces that reset
@@ -42,7 +43,7 @@
   {@const Icon = accountNavIcons[item.href]}
   {@const label = navLabel(s, item.href, item.label)}
   <a
-    href={resolve(item.href)}
+    href={resolve(toPath(item.href))}
     aria-current={active ? 'page' : undefined}
     title={withLabel ? undefined : label}
     onclick={withLabel ? close : undefined}

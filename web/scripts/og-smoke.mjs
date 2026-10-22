@@ -6,7 +6,7 @@
 // through the real renderCardPng, and asserts each result is a valid PNG.
 //
 // It loads the TypeScript source through Vite's SSR loader (Vite is already a
-// devDependency) so the source stays in the project's normal extensionless / $lib
+// devDependency) so the source stays in the project's normal #lib import
 // style — no .ts-extension imports, no tsconfig changes, no new framework.
 //
 //   node scripts/og-smoke.mjs        # asserts; exits non-zero on failure

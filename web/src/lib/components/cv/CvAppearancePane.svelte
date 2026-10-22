@@ -4,11 +4,11 @@
   // Typography, so only the controls live in the pages.
   import type { Snippet } from 'svelte';
   import { onMount } from 'svelte';
-  import { Button } from '$lib/ui';
-  import { cvAppearance } from '$lib/cvAppearance.svelte';
+  import { Button } from '#lib/ui/index.js';
+  import { cvAppearance } from '#lib/cvAppearance.svelte.js';
   import { messages } from './CvAppearancePane.messages';
-  import { locale } from '$lib/i18n/currentLocale.svelte';
-  import { t } from '$lib/i18n/t';
+  import { locale } from '#lib/i18n/currentLocale.svelte.js';
+  import { t } from '#lib/i18n/t.js';
 
   // `lead` is the half that differs; the caveat below it is the same on both tabs and
   // so belongs here rather than in two prop strings to keep in step.

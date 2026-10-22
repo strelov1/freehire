@@ -2,12 +2,12 @@
   import { afterNavigate, goto } from '$app/navigation';
   import { resolve } from '$app/paths';
   import { ChevronDown, Globe, House, Blend, Building } from '@lucide/svelte';
-  import { WORK_MODE_OPTIONS, REGION_OPTIONS, type FacetStore, type FacetOption } from '$lib/facets';
-  import type { FacetCounts } from '$lib/types';
-  import { summarizeScope, JOBS_SCOPE, COMPANIES_SCOPE } from '$lib/headerScope';
+  import { WORK_MODE_OPTIONS, REGION_OPTIONS, type FacetStore, type FacetOption } from '#lib/facets.js';
+  import type { FacetCounts } from '#lib/types.js';
+  import { summarizeScope, JOBS_SCOPE, COMPANIES_SCOPE } from '#lib/headerScope.js';
   import { pillClass, pillTitle } from './facets/pill';
   import LocationPane from './filters/LocationPane.svelte';
-  import { must } from '$lib/utils';
+  import { must } from '#lib/utils.js';
 
   // The header's cross-cutting location filter — a scope-prefix trigger inside the
   // search box that opens a popover, in one of three modes:
@@ -86,8 +86,9 @@
   function onWindowClick(e: MouseEvent) {
     if (open && root && !root.contains(e.target as Node)) open = false;
   }
-  afterNavigate(() => {
-    open = false;
+  afterNavigate(({ shallow }) => {
+    // SvelteKit 3 fires this for shallow routing too; a URL write is not a page change.
+    if (!shallow) open = false;
   });
 </script>
 

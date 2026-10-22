@@ -1,8 +1,8 @@
 <script lang="ts">
   import { MessageSquareText } from '@lucide/svelte';
-  import { isAuthenticated } from '$lib/auth.svelte';
-  import { promptSignIn } from '$lib/signin';
-  import type { FilterStore } from '$lib/filters';
+  import { isAuthenticated } from '#lib/auth.svelte.js';
+  import { promptSignIn } from '#lib/signin.js';
+  import type { FilterStore } from '#lib/filters.js';
   import AiFilterDialog from './AiFilterDialog.svelte';
 
   // Rendered for everyone, signed in or not. Hiding it from signed-out visitors would

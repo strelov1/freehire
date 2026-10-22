@@ -1,7 +1,7 @@
 <script lang="ts">
   import { page } from '$app/state';
-  import AnalyticsView from '$lib/components/AnalyticsView.svelte';
-  import Seo from '$lib/components/Seo.svelte';
+  import AnalyticsView from '#lib/components/AnalyticsView.svelte';
+  import Seo from '#lib/components/Seo.svelte';
   import type { PageData } from './$types';
 
   let { data }: { data: PageData } = $props();

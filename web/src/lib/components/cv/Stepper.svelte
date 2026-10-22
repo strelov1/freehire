@@ -1,6 +1,6 @@
 <script lang="ts">
   // A −/value/+ control shared by the margin and font-size settings. Layout only: the caller
-  // owns the clamping and rounding (the pure step* helpers in $lib/tailor/geometry), so the two
+  // owns the clamping and rounding (the pure step* helpers in #lib/tailor/geometry), so the two
   // settings cannot drift into different stepping behaviour.
   //
   // `display` is a string rather than a number because a value can be absent: the margin axes
@@ -8,8 +8,8 @@
   // until the candidate overrides it.
   import { Minus, Plus } from '@lucide/svelte';
   import { messages } from './Stepper.messages';
-  import { locale } from '$lib/i18n/currentLocale.svelte';
-  import { format, t } from '$lib/i18n/t';
+  import { locale } from '#lib/i18n/currentLocale.svelte.js';
+  import { format, t } from '#lib/i18n/t.js';
 
   let {
     display,

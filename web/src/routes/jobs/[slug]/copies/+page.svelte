@@ -1,7 +1,7 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
   import { page } from '$app/state';
-  import Seo from '$lib/components/Seo.svelte';
+  import Seo from '#lib/components/Seo.svelte';
   import type { PageData } from './$types';
 
   let { data }: { data: PageData } = $props();
@@ -50,7 +50,7 @@
     <nav class="mt-5 flex items-center justify-between text-sm">
       {#if hasPrev}
         <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- copiesHref is already resolve()'d; only a query-string offset is appended, which the linter can't trace through the variable -->
-        <a href={prevHref} class="font-medium text-blue-600 hover:text-blue-700" data-sveltekit-noscroll
+        <a href={prevHref} class="font-medium text-blue-600 hover:text-blue-700" data-sveltekit-reset="false"
           >← Previous</a
         >
       {:else}
@@ -59,7 +59,7 @@
       <span class="text-gray-500">{from}–{to} of {data.total}</span>
       {#if hasNext}
         <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- copiesHref is already resolve()'d; only a query-string offset is appended, which the linter can't trace through the variable -->
-        <a href={nextHref} class="font-medium text-blue-600 hover:text-blue-700" data-sveltekit-noscroll
+        <a href={nextHref} class="font-medium text-blue-600 hover:text-blue-700" data-sveltekit-reset="false"
           >Next →</a
         >
       {:else}

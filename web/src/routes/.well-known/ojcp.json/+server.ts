@@ -1,4 +1,4 @@
-import { proxyDiscoveryDocument } from '$lib/server/wellKnown';
+import { proxyDiscoveryDocument } from '#lib/server/wellKnown';
 import type { RequestHandler } from './$types';
 
 // The OJCP manifest — the one document an OJCP provider MUST serve, and how an agent

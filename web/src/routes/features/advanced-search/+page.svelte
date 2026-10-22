@@ -1,9 +1,9 @@
 <script lang="ts">
   import { page } from '$app/state';
-  import Seo from '$lib/components/Seo.svelte';
-  import AdvancedSearchLandingView from '$lib/components/AdvancedSearchLandingView.svelte';
-  import { breadcrumbJsonLd, faqPageJsonLd, jsonLdScript } from '$lib/seo';
-  import { ADVANCED_SEARCH_FAQ } from '$lib/advancedSearchFaq';
+  import Seo from '#lib/components/Seo.svelte';
+  import AdvancedSearchLandingView from '#lib/components/AdvancedSearchLandingView.svelte';
+  import { breadcrumbJsonLd, faqPageJsonLd, jsonLdScript } from '#lib/seo.js';
+  import { ADVANCED_SEARCH_FAQ } from '#lib/advancedSearchFaq.js';
 
   const origin = $derived(page.url.origin);
   const canonical = $derived(`${origin}/features/advanced-search`);

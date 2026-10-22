@@ -1,9 +1,9 @@
 <script lang="ts">
   import { page } from '$app/state';
-  import ReferralsLandingView from '$lib/components/ReferralsLandingView.svelte';
-  import Seo from '$lib/components/Seo.svelte';
-  import { REFERRALS_FAQ } from '$lib/referralsFaq';
-  import { faqPageJsonLd, jsonLdScript } from '$lib/seo';
+  import ReferralsLandingView from '#lib/components/ReferralsLandingView.svelte';
+  import Seo from '#lib/components/Seo.svelte';
+  import { REFERRALS_FAQ } from '#lib/referralsFaq.js';
+  import { faqPageJsonLd, jsonLdScript } from '#lib/seo.js';
 
   const canonical = $derived(`${page.url.origin}/features/referrals`);
   // The FAQ block and this payload render from the same REFERRALS_FAQ array, so the

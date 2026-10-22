@@ -1,9 +1,9 @@
 <script lang="ts">
   import { page } from '$app/state';
-  import ForCompaniesView from '$lib/components/ForCompaniesView.svelte';
-  import Seo from '$lib/components/Seo.svelte';
-  import { FOR_COMPANIES_FAQ } from '$lib/forCompaniesFaq';
-  import { breadcrumbJsonLd, faqPageJsonLd, jsonLdScript } from '$lib/seo';
+  import ForCompaniesView from '#lib/components/ForCompaniesView.svelte';
+  import Seo from '#lib/components/Seo.svelte';
+  import { FOR_COMPANIES_FAQ } from '#lib/forCompaniesFaq.js';
+  import { breadcrumbJsonLd, faqPageJsonLd, jsonLdScript } from '#lib/seo.js';
 
   const origin = $derived(page.url.origin);
   const canonical = $derived(`${origin}/for-companies`);

@@ -1,14 +1,14 @@
 <script lang="ts">
-  import type { Company } from '$lib/types';
-  import { companyBadges, companyFacts } from '$lib/companyDetails';
-  import { CountryFlag } from '$lib/ui';
+  import type { Company } from '#lib/types.js';
+  import { companyBadges, companyFacts } from '#lib/companyDetails.js';
+  import { CountryFlag } from '#lib/ui/index.js';
 
   // The company's scalar facts as a self-contained card, shown in the jobs sidebar
   // (desktop), as a fallback card under the header (mobile, where the sidebar is
   // hidden), and in the job page's Company tab. Present-only: renders nothing when the
   // company has no facts, so the wrapper never leaves an empty box.
   //
-  // The derivations themselves live in $lib/companyDetails, since the Company tab has
+  // The derivations themselves live in #lib/companyDetails, since the Company tab has
   // to ask the same "is there anything here?" question before it draws a heading.
   let { company }: { company: Company } = $props();
 

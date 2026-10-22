@@ -22,7 +22,7 @@ import { ratchet } from './ratchet.mjs';
 import { packageSrc, repoRelative, sourceFiles, stripComments, webSrc } from './source.mjs';
 
 const PACKAGE = 'freehire-design-system';
-const DOOR = '$lib/ui';
+const DOOR = '#lib/ui/index.js';
 
 const indexPath = join(packageSrc, 'index.ts');
 const baselinePath = join(fileURLToPath(new URL('.', import.meta.url)), 'adoption-baseline.json');
@@ -86,7 +86,7 @@ function main() {
     console.log(`  unused: ${unused.join(', ')}`);
   }
 
-  // Not ratcheted. $lib/ui exists precisely so the app never names the package,
+  // Not ratcheted. #lib/ui exists precisely so the app never names the package,
   // there are zero of these, and zero is a number a wall can hold.
   for (const line of trespass) {
     console.error(`✗ ${line} — app code reaches the design system through ${DOOR} only`);

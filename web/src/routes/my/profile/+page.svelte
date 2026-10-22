@@ -1,9 +1,9 @@
 <script lang="ts">
-  import { resumeStore } from '$lib/resume.svelte';
-  import CvSummaryCard from '$lib/components/profile/CvSummaryCard.svelte';
-  import ProfileForm from '$lib/components/ProfileForm.svelte';
-  import RoleCard from '$lib/components/profile/RoleCard.svelte';
-  import { profileStore } from '$lib/profile.svelte';
+  import { resumeStore } from '#lib/resume.svelte.js';
+  import CvSummaryCard from '#lib/components/profile/CvSummaryCard.svelte';
+  import ProfileForm from '#lib/components/ProfileForm.svelte';
+  import RoleCard from '#lib/components/profile/RoleCard.svelte';
+  import { profileStore } from '#lib/profile.svelte.js';
   import { handleCvDeleted, handleCvUploaded, handleSaved } from './actions';
 
   // The default profile section: CV upload/photo, the read-only CV summary, and Role.

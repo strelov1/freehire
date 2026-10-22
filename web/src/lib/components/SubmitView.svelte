@@ -14,20 +14,20 @@
     Sparkles,
   } from '@lucide/svelte';
   import { resolve } from '$app/paths';
-  import { tablist } from '$lib/actions/tablist';
-  import { api, ApiError } from '$lib/api';
-  import { isAuthenticated } from '$lib/auth.svelte';
-  import { htmlToMarkdown } from '$lib/htmlToMarkdown';
-  import { renderMarkdown } from '$lib/markdown';
+  import { tablist } from '#lib/actions/tablist.js';
+  import { api, ApiError } from '#lib/api.js';
+  import { isAuthenticated } from '#lib/auth.svelte.js';
+  import { htmlToMarkdown } from '#lib/htmlToMarkdown.js';
+  import { renderMarkdown } from '#lib/markdown.js';
   import {
     REGION_OPTIONS,
     WORK_MODE_OPTIONS,
     CURRENCY_OPTIONS,
     SENIORITY_OPTIONS,
     EMPLOYMENT_TYPE_OPTIONS,
-  } from '$lib/facets';
-  import type { Submission } from '$lib/types';
-  import { Button, Input, cn } from '$lib/ui';
+  } from '#lib/facets.js';
+  import type { Submission } from '#lib/types.js';
+  import { Button, Input, cn } from '#lib/ui/index.js';
   import JobPreview from './JobPreview.svelte';
   import NoteEditor from './NoteEditor.svelte';
   import TokenInput from './facets/TokenInput.svelte';

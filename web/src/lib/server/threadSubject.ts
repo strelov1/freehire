@@ -1,4 +1,4 @@
-import type { CommunityThread } from '$lib/types';
+import type { CommunityThread } from '#lib/types.js';
 
 /** Whether a resolved thread actually belongs to the subject its detail-page URL
  *  names. `getThread` resolves by id alone, so a syntactically valid id that

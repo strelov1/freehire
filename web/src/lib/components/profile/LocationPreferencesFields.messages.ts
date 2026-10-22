@@ -1,7 +1,7 @@
-import { defineMessages } from '$lib/i18n/t';
+import { defineMessages } from '#lib/i18n/t.js';
 
 // Facet option labels (work mode, region, country) come from the dictionary
-// ($lib/facets) and are NOT catalog keys here — they render in whatever the
+// (#lib/facets) and are NOT catalog keys here — they render in whatever the
 // dictionary itself is written in until a separate change localizes it.
 export const messages = defineMessages(
   {

@@ -1,8 +1,8 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
   import { X } from '@lucide/svelte';
-  import { dynamicLabel, dynamicOptions, reportedCount, type FacetDef, type FacetOption, type FacetStore } from '$lib/facets';
-  import type { FacetCounts } from '$lib/types';
+  import { dynamicLabel, dynamicOptions, reportedCount, type FacetDef, type FacetOption, type FacetStore } from '#lib/facets.js';
+  import type { FacetCounts } from '#lib/types.js';
   import PillGroup from './PillGroup.svelte';
   import RemoteSearchSelect from './RemoteSearchSelect.svelte';
   import SearchSelect from './SearchSelect.svelte';

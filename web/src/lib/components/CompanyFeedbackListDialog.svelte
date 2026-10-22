@@ -1,14 +1,14 @@
 <script lang="ts">
   import { Flag, Star } from '@lucide/svelte';
   import { SvelteSet } from 'svelte/reactivity';
-  import { api } from '$lib/api';
-  import { companyFeedbackReportReasons, companyFeedbackTypeLabel } from '$lib/companyFeedback';
-  import { Paginator } from '$lib/paginated.svelte';
-  import type { CompanyFeedback } from '$lib/types';
-  import { Button, Dialog } from '$lib/ui';
-  import { locale } from '$lib/i18n/currentLocale.svelte';
-  import { formatDate } from '$lib/utils';
-  import { LoadMore } from '$lib/ui';
+  import { api } from '#lib/api.js';
+  import { companyFeedbackReportReasons, companyFeedbackTypeLabel } from '#lib/companyFeedback.js';
+  import { Paginator } from '#lib/paginated.svelte.js';
+  import type { CompanyFeedback } from '#lib/types.js';
+  import { Button, Dialog } from '#lib/ui/index.js';
+  import { locale } from '#lib/i18n/currentLocale.svelte.js';
+  import { formatDate } from '#lib/utils.js';
+  import { LoadMore } from '#lib/ui/index.js';
 
   // Read-only list of a company's feedback, offset-paginated on the shared
   // Paginator (retries a transient network blip instead of dead-ending the

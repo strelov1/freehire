@@ -1,11 +1,11 @@
 <script lang="ts">
   import { Briefcase, Building2, Globe, MapPin, Plus } from '@lucide/svelte';
-  import { tablist } from '$lib/actions/tablist';
-  import { api, ApiError } from '$lib/api';
-  import { AsyncData } from '$lib/asyncData.svelte';
-  import { EMPLOYMENT_TYPE_OPTIONS, SENIORITY_OPTIONS, WORK_MODE_OPTIONS } from '$lib/facets';
-  import { locale } from '$lib/i18n/currentLocale.svelte';
-  import { format, t } from '$lib/i18n/t';
+  import { tablist } from '#lib/actions/tablist.js';
+  import { api, ApiError } from '#lib/api.js';
+  import { AsyncData } from '#lib/asyncData.svelte.js';
+  import { EMPLOYMENT_TYPE_OPTIONS, SENIORITY_OPTIONS, WORK_MODE_OPTIONS } from '#lib/facets.js';
+  import { locale } from '#lib/i18n/currentLocale.svelte.js';
+  import { format, t } from '#lib/i18n/t.js';
   import { messages } from './EmployerView.messages';
   import type {
     EmployerApplyMode,
@@ -14,9 +14,9 @@
     EmployerQuestion,
     EmployerVacancyInput,
     Job,
-  } from '$lib/types';
+  } from '#lib/types.js';
   import { resolve } from '$app/paths';
-  import { Button, ConfirmDialog, Input, cn } from '$lib/ui';
+  import { Button, ConfirmDialog, Input, cn } from '#lib/ui/index.js';
   import States from './States.svelte';
   import EmployerQuestionsEditor from './EmployerQuestionsEditor.svelte';
   import TokenInput from './facets/TokenInput.svelte';

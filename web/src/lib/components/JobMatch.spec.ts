@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/svelte';
 import { fireEvent } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Job, JobMatchResult, MatchAnalysisResponse } from '$lib/types';
+import type { Job, JobMatchResult, MatchAnalysisResponse } from '#lib/types.js';
 import JobMatch from './JobMatch.svelte';
 
 // JobMatch pulls in SvelteKit runtime modules this test environment doesn't provide
@@ -37,10 +37,10 @@ const profileStoreMock = vi.hoisted(() => ({
   unavoidSkill,
 }));
 
-vi.mock('$lib/profile.svelte', () => ({ profileStore: profileStoreMock }));
-vi.mock('$lib/auth.svelte', () => ({ isAuthenticated: () => authState.signedIn }));
-vi.mock('$lib/api', () => ({ api: { getJobMatch, getMatchAnalysis } }));
-vi.mock('$lib/profileAlertSync', () => ({ syncProfileAlert }));
+vi.mock('#lib/profile.svelte.js', () => ({ profileStore: profileStoreMock }));
+vi.mock('#lib/auth.svelte.js', () => ({ isAuthenticated: () => authState.signedIn }));
+vi.mock('#lib/api.js', () => ({ api: { getJobMatch, getMatchAnalysis } }));
+vi.mock('#lib/profileAlertSync.js', () => ({ syncProfileAlert }));
 
 const job = { public_slug: 'rust-job', skills: ['rust'] } as Job;
 // The guest teaser needs two skills to have a have/missing contrast to draw; with one it

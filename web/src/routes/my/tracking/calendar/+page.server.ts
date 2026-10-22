@@ -1,6 +1,6 @@
 import { redirect } from '@sveltejs/kit';
-import { signinUrl } from '$lib/signin';
-import { loadTimeline } from '$lib/server/tracking';
+import { signinUrl } from '#lib/signin.js';
+import { loadTimeline } from '#lib/server/tracking.js';
 import type { PageServerLoad } from './$types';
 
 // /my/tracking/calendar is the application-event ledger laid out in time. Same guard as

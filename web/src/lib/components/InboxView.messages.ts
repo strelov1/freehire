@@ -1,4 +1,4 @@
-import { defineMessages, plurals } from '$lib/i18n/t';
+import { defineMessages, plurals } from '#lib/i18n/t.js';
 
 // `m.from_name`/`m.subject`/`m.snippet`/`m.linked_company` and everything inside the
 // reading pane's own body are mail content, not catalog text. `Gmail` (the brand name)

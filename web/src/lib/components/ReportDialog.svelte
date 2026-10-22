@@ -1,9 +1,9 @@
 <script lang="ts">
   import { ArrowLeft, Ban, BellOff, Bot, Check, ChevronRight, Clock, MoreHorizontal, ShieldAlert } from '@lucide/svelte';
-  import { api, ApiError } from '$lib/api';
-  import { appliedOnError, moderationReasonOf, processKindOf, reportReasons, reportRoute } from '$lib/reports';
-  import type { ProcessReportKind, ReportPickerValue } from '$lib/types';
-  import { Button, Dialog } from '$lib/ui';
+  import { api, ApiError } from '#lib/api.js';
+  import { appliedOnError, moderationReasonOf, processKindOf, reportReasons, reportRoute } from '#lib/reports.js';
+  import type { ProcessReportKind, ReportPickerValue } from '#lib/types.js';
+  import { Button, Dialog } from '#lib/ui/index.js';
 
   // Reports are filed against a single job, addressed by its public slug — except
   // the process facts, which are about the EMPLOYER and go to the company the job
@@ -85,7 +85,7 @@
   const today = new Date().toISOString().slice(0, 10);
 
   // A lucide icon per reason, keyed by the controlled value (the labels/order
-  // themselves live in $lib/reports so they stay one source of truth).
+  // themselves live in #lib/reports so they stay one source of truth).
   const reasonIcon: Record<ReportPickerValue, typeof BellOff> = {
     no_response: BellOff,
     ai_interview: Bot,

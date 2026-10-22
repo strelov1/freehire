@@ -1,10 +1,10 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
-  import { popularCollectionLinks } from '$lib/collections';
-  import { reopen } from '$lib/consent.svelte';
-  import { EXTENSION_STORE_URL } from '$lib/extensionLinks';
-  import { SOCIAL_LINKS } from '$lib/socialLinks';
-  import { ProviderIcon } from '$lib/ui';
+  import { popularCollectionLinks } from '#lib/collections.js';
+  import { reopen } from '#lib/consent.svelte.js';
+  import { EXTENSION_STORE_URL } from '#lib/extensionLinks.js';
+  import { SOCIAL_LINKS } from '#lib/socialLinks.js';
+  import { ProviderIcon } from '#lib/ui/index.js';
 
   // Grouped navigation over existing routes only — kept deliberately small so the
   // footer stays uncluttered. Internal links go through resolve() (base-path safe),
@@ -84,7 +84,7 @@
 
   // External profiles: open in a new tab, each rendered with its ProviderIcon brand
   // mark. All follow the muted text colour (so they match and hover works). Shared
-  // with the /signin brand panel — see $lib/socialLinks.
+  // with the /signin brand panel — see #lib/socialLinks.
 
   // A strip below the four groups rather than a fifth column: the grid is
   // sm:grid-cols-4, and ten links would not fit one anyway. Kept out of `groups`
@@ -123,7 +123,7 @@
   // Apple redirects each visitor to their own (measured: the bare form answers 301 to
   // `/us/app/...`, the `/br/` form answers 200).
   //
-  // The extension's URL is not spelled here at all — see $lib/extensionLinks, which the
+  // The extension's URL is not spelled here at all — see #lib/extensionLinks, which the
   // extension landing and its JSON-LD read too. The App Store one IS spelled here, and
   // the asymmetry is deliberate only while this is its single consumer: a mobile landing
   // page or a MobileApplication JSON-LD is the second, and that is when it earns an

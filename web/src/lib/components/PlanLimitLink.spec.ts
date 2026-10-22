@@ -1,10 +1,10 @@
 import { render, screen } from '@testing-library/svelte';
 import { describe, expect, it, vi } from 'vitest';
 import PlanLimitLink from './PlanLimitLink.svelte';
-import type { PlansMatrix } from '$lib/types';
+import type { PlansMatrix } from '#lib/types.js';
 
 vi.mock('$app/paths', () => ({ resolve: (p: string) => p, base: '', assets: '' }));
-vi.mock('$lib/i18n/currentLocale.svelte', () => ({ locale: () => 'en' }));
+vi.mock('#lib/i18n/currentLocale.svelte', () => ({ locale: () => 'en' }));
 
 // Mutable, like AccountTimezone.spec.ts's `user` — a test flips the tier before
 // rendering rather than reaching for a fixed object that could only prove one branch.
@@ -12,8 +12,8 @@ const { user, plans } = vi.hoisted(() => ({
   user: { current: null as { tier: 'free' | 'pro' | 'ultra' } | null },
   plans: vi.fn(),
 }));
-vi.mock('$lib/auth.svelte', () => ({ currentUser: () => user.current }));
-vi.mock('$lib/api', () => ({ api: { plans } }));
+vi.mock('#lib/auth.svelte.js', () => ({ currentUser: () => user.current }));
+vi.mock('#lib/api.js', () => ({ api: { plans } }));
 
 const proMonthlyPrice = (amount_cents: number): PlansMatrix => ({
   features: [],

@@ -1,14 +1,14 @@
 <script lang="ts">
   import { Clock, Mail } from '@lucide/svelte';
-  import { companyLogoUrl } from '$lib/logo';
-  import { EntityLogo } from '$lib/ui';
-  import { groupedStages } from '$lib/stages';
-  import { locale } from '$lib/i18n/currentLocale.svelte';
-  import { timeAgo } from '$lib/utils';
-  import type { BoardItem } from '$lib/board';
-  import type { MyJob } from '$lib/types';
+  import { companyLogoUrl } from '#lib/logo.js';
+  import { EntityLogo } from '#lib/ui/index.js';
+  import { groupedStages } from '#lib/stages.js';
+  import { locale } from '#lib/i18n/currentLocale.svelte.js';
+  import { timeAgo } from '#lib/utils.js';
+  import type { BoardItem } from '#lib/board.js';
+  import type { MyJob } from '#lib/types.js';
   import { messages } from './BoardList.messages';
-  import { format, plural, t } from '$lib/i18n/t';
+  import { format, plural, t } from '#lib/i18n/t.js';
 
   // The same applications the board shows, read as a list. It owns no state and no
   // writes: JobBoard holds both, so the two views cannot drift apart.

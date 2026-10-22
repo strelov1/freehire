@@ -10,8 +10,8 @@
 // job/company/contributor cards cannot drift. satori constraint: layout is flexbox
 // only, and any element with more than one child declares `display:flex`.
 
-import { contributionSummary } from '$lib/contributors';
-import type { ContributorEntry } from '$lib/contributors';
+import { contributionSummary } from '#lib/contributors.js';
+import type { ContributorEntry } from '#lib/contributors.js';
 import { OG_HEIGHT, OG_WIDTH, brandFooter, esc, logoBox } from './shared';
 
 const AVATAR_SIZE = 160;

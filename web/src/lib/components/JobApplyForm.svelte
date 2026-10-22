@@ -1,5 +1,5 @@
 <script module lang="ts">
-  import type { Display } from '$lib/generated/contracts';
+  import type { Display } from '#lib/generated/contracts.js';
 
   /** Whether a form has anything to show: questions, or a statement of what it wants
    *  uploaded. Exported because the caller owning the tab has to ask the same question
@@ -21,9 +21,9 @@
   // Renders bare, with no card or heading of its own: it sits inside the job page's
   // tab panel, where the tab is the heading and a second one under it would say the
   // same thing twice.
-  import { BrandMark } from '$lib/ui';
-  import { applyFormModel, type GroupKey } from '$lib/applyFormGroups';
-  import { ATS_MARKS } from '$lib/atsmarks';
+  import { BrandMark } from '#lib/ui/index.js';
+  import { applyFormModel, type GroupKey } from '#lib/applyFormGroups.js';
+  import { ATS_MARKS } from '#lib/atsmarks.js';
 
   let { form }: { form: Display | null } = $props();
 

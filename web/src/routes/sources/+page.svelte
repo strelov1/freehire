@@ -1,8 +1,8 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
   import { page } from '$app/state';
-  import Seo from '$lib/components/Seo.svelte';
-  import SourceCatalog from '$lib/components/SourceCatalog.svelte';
+  import Seo from '#lib/components/Seo.svelte';
+  import SourceCatalog from '#lib/components/SourceCatalog.svelte';
   import type { PageData } from './$types';
 
   let { data }: { data: PageData } = $props();

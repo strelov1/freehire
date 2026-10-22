@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { COMPANY_FACETS, type FacetDef } from '$lib/facets';
-  import type { CompanyFilterStore } from '$lib/companyFilters';
+  import { COMPANY_FACETS, type FacetDef } from '#lib/facets.js';
+  import type { CompanyFilterStore } from '#lib/companyFilters.js';
   import FilterSummaryShell, { type SummaryGroup } from './FilterSummaryShell.svelte';
 
   // The companies filters sidebar: a summary of the applied company facets as chips,

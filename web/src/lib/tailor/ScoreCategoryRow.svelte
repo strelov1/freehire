@@ -8,7 +8,7 @@
   // A row with no items is not a button: a disclosure that opens onto nothing trains the
   // candidate that the chevrons are decorative.
   import { ChevronDown, Check, TriangleAlert, X } from '@lucide/svelte';
-  import type { LineItem } from '$lib/generated/contracts';
+  import type { LineItem } from '#lib/generated/contracts.js';
 
   let {
     label,

@@ -1,9 +1,9 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
   import { ArrowUpRight } from '@lucide/svelte';
-  import type { DiscussionSubject, SubjectAbsence } from '$lib/discussionSubject';
-  import { companyLogoUrl } from '$lib/logo';
-  import { Badge, EntityLogo } from '$lib/ui';
+  import type { DiscussionSubject, SubjectAbsence } from '#lib/discussionSubject.js';
+  import { companyLogoUrl } from '#lib/logo.js';
+  import { Badge, EntityLogo } from '#lib/ui/index.js';
 
   let {
     subject,

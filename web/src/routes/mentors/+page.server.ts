@@ -1,6 +1,6 @@
-import { requireMentorshipAccess } from '$lib/server/mentorshipGate';
-import { serverApi } from '$lib/server/api';
-import { mentorFilterOptions, mentorFiltersFromParams, mentorFiltersToParams } from '$lib/mentorship';
+import { requireMentorshipAccess } from '#lib/server/mentorshipGate.js';
+import { serverApi } from '#lib/server/api.js';
+import { mentorFilterOptions, mentorFiltersFromParams, mentorFiltersToParams } from '#lib/mentorship.js';
 import type { PageServerLoad } from './$types';
 
 // Server-render the directory for the current filters, so a shared or deep-linked

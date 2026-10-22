@@ -1,4 +1,4 @@
-import { defineMessages, plurals } from '$lib/i18n/t';
+import { defineMessages, plurals } from '#lib/i18n/t.js';
 
 // `dayHeading`/`clockOf` pass `undefined` to `toLocaleDateString`/`toLocaleTimeString`
 // (the BROWSER's locale, not the account's) — a known, already-documented gap

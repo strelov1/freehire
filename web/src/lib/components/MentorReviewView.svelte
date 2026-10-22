@@ -1,11 +1,11 @@
 <script lang="ts">
-  import { api } from '$lib/api';
-  import { locale } from '$lib/i18n/currentLocale.svelte';
-  import { companyLabel } from '$lib/mentorship';
-  import { errorMessage, formatDate } from '$lib/utils';
-  import { AsyncData } from '$lib/asyncData.svelte';
-  import { Badge, Button, Card } from '$lib/ui';
-  import type { PendingMentorProfile } from '$lib/types';
+  import { api } from '#lib/api.js';
+  import { locale } from '#lib/i18n/currentLocale.svelte.js';
+  import { companyLabel } from '#lib/mentorship.js';
+  import { errorMessage, formatDate } from '#lib/utils.js';
+  import { AsyncData } from '#lib/asyncData.svelte.js';
+  import { Badge, Button, Card } from '#lib/ui/index.js';
+  import type { PendingMentorProfile } from '#lib/types.js';
   import { SvelteSet } from 'svelte/reactivity';
   import States from './States.svelte';
 

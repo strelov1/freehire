@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { CompanyListItem } from '$lib/types';
+import type { CompanyListItem } from '#lib/types.js';
 import CompanyPicker from './CompanyPicker.svelte';
 import CompanyPickerTestHarness from './CompanyPickerTestHarness.svelte';
 
@@ -13,7 +13,7 @@ import CompanyPickerTestHarness from './CompanyPickerTestHarness.svelte';
 
 const { listCompanies } = vi.hoisted(() => ({ listCompanies: vi.fn() }));
 
-vi.mock('$lib/api', () => ({ api: { listCompanies } }));
+vi.mock('#lib/api.js', () => ({ api: { listCompanies } }));
 
 const ringCentral: CompanyListItem = {
   slug: 'ringcentral',

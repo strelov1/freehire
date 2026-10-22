@@ -1,6 +1,6 @@
 import { error } from '@sveltejs/kit';
 
-import { ApiError } from '$lib/api';
+import { ApiError } from '#lib/api.js';
 
 /** Re-throw an API failure a `load` could not handle, mapping the statuses that mean
  *  something to the CLIENT onto the response instead of letting them become a 500.

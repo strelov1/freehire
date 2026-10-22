@@ -4,20 +4,20 @@
   import { page } from '$app/state';
   import { replaceState } from '$app/navigation';
   import { FileText } from '@lucide/svelte';
-  import { api, ApiError } from '$lib/api';
-  import { tablist } from '$lib/actions/tablist';
-  import { AsyncData } from '$lib/asyncData.svelte';
+  import { api, ApiError } from '#lib/api.js';
+  import { tablist } from '#lib/actions/tablist.js';
+  import { AsyncData } from '#lib/asyncData.svelte.js';
   import type {
     IncomingReferralRequest,
     ReferralOffer,
     ReferralRequestStatus,
     SeekerReferralRequest,
-  } from '$lib/types';
-  import { locale } from '$lib/i18n/currentLocale.svelte';
-  import { t, tokenLabel } from '$lib/i18n/t';
-  import { companyLogoUrl } from '$lib/logo';
-  import { Button, ConfirmDialog, EntityLogo, FormField, Table } from '$lib/ui';
-  import { isLinkedInUrl, timeAgo } from '$lib/utils';
+  } from '#lib/types.js';
+  import { locale } from '#lib/i18n/currentLocale.svelte.js';
+  import { t, tokenLabel } from '#lib/i18n/t.js';
+  import { companyLogoUrl } from '#lib/logo.js';
+  import { Button, ConfirmDialog, EntityLogo, FormField, Table } from '#lib/ui/index.js';
+  import { isLinkedInUrl, timeAgo } from '#lib/utils.js';
   import CompanyPicker from './CompanyPicker.svelte';
   import { messages } from './ReferralsView.messages';
   import States from './States.svelte';

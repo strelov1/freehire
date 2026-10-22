@@ -1,8 +1,8 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
-  import { JOBS_API_FAQ } from '$lib/jobsApiFaq';
-  import type { PlansMatrix } from '$lib/types';
-  import { Button, SectionLabel } from '$lib/ui';
+  import { JOBS_API_FAQ } from '#lib/jobsApiFaq.js';
+  import type { PlansMatrix } from '#lib/types.js';
+  import { Button, SectionLabel } from '#lib/ui/index.js';
   import ApiPlans from './ApiPlans.svelte';
 
   // The commercial-use landing for the read API: who it is for, what a posting carries, what

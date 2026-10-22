@@ -1,14 +1,14 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
   import { TriangleAlert } from '@lucide/svelte';
-  import JobRow from '$lib/components/JobRow.svelte';
+  import JobRow from '#lib/components/JobRow.svelte';
   import JobCardSkeleton from './JobCardSkeleton.svelte';
-  import { Badge } from '$lib/ui';
+  import { Badge } from '#lib/ui/index.js';
   import { loadJob } from './jobCache';
   import type { DeckEntry } from './deck';
   import { messages } from './JobDeckCard.messages';
-  import { locale } from '$lib/i18n/currentLocale.svelte';
-  import { t } from '$lib/i18n/t';
+  import { locale } from '#lib/i18n/currentLocale.svelte.js';
+  import { t } from '#lib/i18n/t.js';
 
   // One card in a recommendation deck: the vacancy's own facts, fetched by slug
   // so they are never model-authored, plus the rationale the model attached to

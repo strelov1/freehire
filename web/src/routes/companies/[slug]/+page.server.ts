@@ -1,8 +1,8 @@
 import { error, redirect } from '@sveltejs/kit';
-import { ApiError, MovedError } from '$lib/api';
-import { pageExists, pageOffset, pageWithinWindow, parsePage } from '$lib/pagination';
-import { serverApi } from '$lib/server/api';
-import { rethrowUpstream } from '$lib/server/upstream';
+import { ApiError, MovedError } from '#lib/api.js';
+import { pageExists, pageOffset, pageWithinWindow, parsePage } from '#lib/pagination.js';
+import { serverApi } from '#lib/server/api.js';
+import { rethrowUpstream } from '#lib/server/upstream.js';
 import type { PageServerLoad } from './$types';
 
 const LIMIT = 20;

@@ -1,7 +1,7 @@
 <script lang="ts">
-  import { buildActivityChart, pickTickIndices } from '$lib/activityChart';
-  import { formatCount } from '$lib/utils';
-  import type { ActivityPoint } from '$lib/types';
+  import { buildActivityChart, pickTickIndices } from '#lib/activityChart.js';
+  import { formatCount } from '#lib/utils.js';
+  import type { ActivityPoint } from '#lib/types.js';
 
   // A grouped bar chart of catalogue flow: per period, a green "added" bar and a
   // red "removed" bar. Hand-built SVG scaled to its container width — no charting

@@ -3,14 +3,14 @@
 // imports and unit-testable; this file is client-only and verified via the banner
 // visual pass. Both the boot hook and the banner's Accept action route through here
 // so the PostHog config is assembled in exactly one place.
-import { env } from '$env/dynamic/public';
+import { PUBLIC_POSTHOG_HOST, PUBLIC_POSTHOG_KEY } from '$app/env/public';
 import { type AnalyticsConfig, initTrackers } from './analytics';
 import { trackersAllowed } from './consent.svelte';
 
 function config(): AnalyticsConfig {
   return {
-    key: env.PUBLIC_POSTHOG_KEY ?? '',
-    apiHost: env.PUBLIC_POSTHOG_HOST || '/ingest',
+    key: PUBLIC_POSTHOG_KEY ?? '',
+    apiHost: PUBLIC_POSTHOG_HOST || '/ingest',
   };
 }
 
@@ -36,7 +36,7 @@ const BOOT_IDLE_TIMEOUT_MS = 3000;
  *  consent-required, or has already granted consent.
  *
  *  Deferred to the first idle moment. Calls made in the meantime are not lost —
- *  $lib/analytics queues them and replays them in order once the SDK is up. */
+ *  #lib/analytics queues them and replays them in order once the SDK is up. */
 export function startTrackersIfAllowed(): void {
   if (!trackersAllowed()) return;
   // requestIdleCallback is unsupported on older Safari; a plain timer is the

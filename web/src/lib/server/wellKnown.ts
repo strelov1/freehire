@@ -1,5 +1,5 @@
-import { env } from '$env/dynamic/private';
-import { ssrTimeoutMs } from '$lib/server/api';
+import { API_INTERNAL_URL } from '$app/env/private';
+import { ssrTimeoutMs } from '#lib/server/api.js';
 
 // The OJCP discovery documents live at well-known paths the specification fixes, but the Go
 // service renders them: nginx routes /api/ to the backend and everything else to this Node
@@ -15,7 +15,7 @@ export async function proxyDiscoveryDocument(
   apiPath: string,
   contentType: string,
 ): Promise<Response> {
-  const base = env.API_INTERNAL_URL ?? '';
+  const base = API_INTERNAL_URL ?? '';
 
   // Bounded, like every other server-side call here. An unbounded SSR fetch is what the
   // 2026-08-01 outage was made of: the backend hung, Node held its sockets open

@@ -1,9 +1,9 @@
 <script lang="ts">
   import { Bell, Check, ChevronRight, Mail, SlidersHorizontal, Smartphone } from '@lucide/svelte';
   import { resolve } from '$app/paths';
-  import { Button, EntityLogo, ProviderIcon, SectionLabel } from '$lib/ui';
-  import BrandMark from '$lib/components/BrandMark.svelte';
-  import { NOTIFICATIONS_FAQ } from '$lib/notificationsFaq';
+  import { Button, EntityLogo, ProviderIcon, SectionLabel } from '#lib/ui/index.js';
+  import BrandMark from '#lib/components/BrandMark.svelte';
+  import { NOTIFICATIONS_FAQ } from '#lib/notificationsFaq.js';
 
   // Illustrative jobs for the digest mockup — decorative, not live data, all
   // named for a "Remote Go Backend" saved search so the subject line and the

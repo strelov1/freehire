@@ -1,6 +1,6 @@
 <script lang="ts">
-  import Seo from '$lib/components/Seo.svelte';
-  import TalentView from '$lib/components/TalentView.svelte';
+  import Seo from '#lib/components/Seo.svelte';
+  import TalentView from '#lib/components/TalentView.svelte';
   import type { PageData } from './$types';
 
   // The route is a thin shell, like /jobs and /companies: the SEO block and the view.

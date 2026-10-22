@@ -1,4 +1,4 @@
-import { defineMessages } from '$lib/i18n/t';
+import { defineMessages } from '#lib/i18n/t.js';
 
 // "Gmail" and "freehire" are brand names and stay as-is in every locale.
 export const messages = defineMessages(

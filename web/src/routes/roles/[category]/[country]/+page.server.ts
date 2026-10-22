@@ -1,6 +1,6 @@
 import { error, redirect } from '@sveltejs/kit';
-import { countryFromSlug, countryLabel, countrySlug } from '$lib/facets';
-import { pageExists, pageOffset, pageWithinWindow, parsePage } from '$lib/pagination';
+import { countryFromSlug, countryLabel, countrySlug } from '#lib/facets.js';
+import { pageExists, pageOffset, pageWithinWindow, parsePage } from '#lib/pagination.js';
 import {
   categoryFromSlug,
   categorySlug,
@@ -11,8 +11,8 @@ import {
   neighbourCategories,
   neighbourCountries,
   publishableSalaryBands,
-} from '$lib/roleLandings';
-import { serverApi } from '$lib/server/api';
+} from '#lib/roleLandings.js';
+import { serverApi } from '#lib/server/api.js';
 import type { PageServerLoad } from './$types';
 
 const LIMIT = 20;

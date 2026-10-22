@@ -1,6 +1,6 @@
 import { fireEvent, render } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { UserProfile } from '$lib/types';
+import type { UserProfile } from '#lib/types.js';
 import ProfileForm from './ProfileForm.svelte';
 
 // Today's fixture always passes a non-null `profile`, so the `{#if !editing}` branch
@@ -28,12 +28,12 @@ const { extractResumeProfile, getPhoto, mergeResumeExtraction, profile } = vi.ho
   } as UserProfile,
 }));
 
-vi.mock('$lib/api', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('$lib/api')>();
+vi.mock('#lib/api.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('#lib/api.js')>();
   return { ...actual, api: { ...actual.api, extractResumeProfile, getPhoto } };
 });
 
-vi.mock('$lib/profile.svelte', () => ({
+vi.mock('#lib/profile.svelte.js', () => ({
   profileStore: {
     get profile() {
       return profile;

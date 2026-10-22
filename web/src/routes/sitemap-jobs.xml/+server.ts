@@ -1,5 +1,5 @@
-import { serverApi } from '$lib/server/api';
-import { JOB_SITEMAP_CHUNK, urlsetXml, xmlResponse } from '$lib/sitemap';
+import { serverApi } from '#lib/server/api.js';
+import { JOB_SITEMAP_CHUNK, urlsetXml, xmlResponse } from '#lib/sitemap.js';
 import type { RequestHandler } from './$types';
 
 // One page of job URLs, addressed by ?offset=<n> into the search index. The sitemap

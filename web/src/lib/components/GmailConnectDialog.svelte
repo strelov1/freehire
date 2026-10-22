@@ -1,7 +1,7 @@
 <script lang="ts">
   import { Mail, X, Lock, ExternalLink } from '@lucide/svelte';
-  import { Button } from '$lib/ui';
-  import { focusTrap } from '$lib/actions/focusTrap';
+  import { Button } from '#lib/ui/index.js';
+  import { focusTrap } from '#lib/actions/focusTrap.js';
 
   // The parent owns open/close; onConnect proceeds to the Google OAuth redirect.
   let { onClose, onConnect }: { onClose: () => void; onConnect: () => void } = $props();

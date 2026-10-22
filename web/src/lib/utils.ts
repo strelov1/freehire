@@ -36,7 +36,7 @@ const DATE_PARTS = { year: 'numeric', month: 'short', day: 'numeric' } as const;
 
 /** Format an RFC3339 timestamp as a short local date; '' for null/invalid. `locale` is
  *  required — always the page's own resolved locale (`locale()` from
- *  `$lib/i18n/currentLocale.svelte`), never the visitor's browser default, so a date
+ *  `#lib/i18n/currentLocale.svelte`), never the visitor's browser default, so a date
  *  never disagrees with the text around it. */
 export function formatDate(ts: string | null | undefined, locale: Locale): string {
   const d = parseTs(ts);

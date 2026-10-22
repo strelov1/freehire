@@ -14,7 +14,7 @@ export function isLocale(value: string | null | undefined): value is Locale {
  *
  *  The two differ on purpose. A locale may be offered in the language picker
  *  long before anyone has translated a page into it, and the catalogs
- *  (`$lib/i18n/t`) fall back to English per key, so an untranslated locale
+ *  (`#lib/i18n/t.js`) fall back to English per key, so an untranslated locale
  *  renders English. Resolving it anyway would put a `<html lang>` on that page
  *  naming a language the text is not in — English words announced with Spanish
  *  phonemes by a screen reader — for as long as the copy is missing.

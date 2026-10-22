@@ -1,9 +1,9 @@
 <script lang="ts">
   import { Check } from '@lucide/svelte';
-  import { currentUser, updateTimezone } from '$lib/auth.svelte';
-  import { ApiError } from '$lib/api';
-  import { locale } from '$lib/i18n/currentLocale.svelte';
-  import { t } from '$lib/i18n/t';
+  import { currentUser, updateTimezone } from '#lib/auth.svelte.js';
+  import { ApiError } from '#lib/api.js';
+  import { locale } from '#lib/i18n/currentLocale.svelte.js';
+  import { t } from '#lib/i18n/t.js';
   import { messages } from './AccountTimezone.messages';
 
   const s = $derived(t(messages, locale()));

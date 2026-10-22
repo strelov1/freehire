@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { summarizeRun, statusMeta, undoRun, openingActions } from './autopilot';
-import type { AutopilotEntry } from '$lib/generated/contracts';
+import type { AutopilotEntry } from '#lib/generated/contracts.js';
 
 const report: AutopilotEntry[] = [
   { requirement: 'Kafka in production', status: 'closed_bank', note: 'Reframed the payments bullet.' },

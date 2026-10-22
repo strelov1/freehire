@@ -1,15 +1,15 @@
 <script lang="ts">
   import { page } from '$app/state';
-  import { api } from '$lib/api';
-  import { ACCOUNT_COUNTRY_NAME, cardsUnsupportedFrom } from '$lib/billingGeo';
-  import { promptSignIn } from '$lib/signin';
-  import { formatMinorUnits } from '$lib/money';
-  import { isAuthenticated } from '$lib/auth.svelte';
-  import Seo from '$lib/components/Seo.svelte';
-  import { ProviderIcon } from '$lib/ui';
-  import type { PlanTierAllowance, PublicPrice } from '$lib/types';
+  import { api } from '#lib/api.js';
+  import { ACCOUNT_COUNTRY_NAME, cardsUnsupportedFrom } from '#lib/billingGeo.js';
+  import { promptSignIn } from '#lib/signin.js';
+  import { formatMinorUnits } from '#lib/money.js';
+  import { isAuthenticated } from '#lib/auth.svelte.js';
+  import Seo from '#lib/components/Seo.svelte';
+  import { ProviderIcon } from '#lib/ui/index.js';
+  import type { PlanTierAllowance, PublicPrice } from '#lib/types.js';
   import type { PageData } from './$types';
-  import ApiPlans from '$lib/components/ApiPlans.svelte';
+  import ApiPlans from '#lib/components/ApiPlans.svelte';
 
   const { data }: { data: PageData } = $props();
 

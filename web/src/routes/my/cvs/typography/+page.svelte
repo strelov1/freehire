@@ -2,13 +2,13 @@
   // The other appearance pane. Page margins sit here rather than in a third tab: they are
   // the same question as the type — how the text sits on the page — and a tab holding four
   // number fields would be a tab nobody opens.
-  import { cvAppearance } from '$lib/cvAppearance.svelte';
-  import CvAppearancePane from '$lib/components/cv/CvAppearancePane.svelte';
-  import StyleSettings from '$lib/components/cv/StyleSettings.svelte';
-  import MarginSettings from '$lib/components/cv/MarginSettings.svelte';
+  import { cvAppearance } from '#lib/cvAppearance.svelte.js';
+  import CvAppearancePane from '#lib/components/cv/CvAppearancePane.svelte';
+  import StyleSettings from '#lib/components/cv/StyleSettings.svelte';
+  import MarginSettings from '#lib/components/cv/MarginSettings.svelte';
   import { messages } from './messages';
-  import { locale } from '$lib/i18n/currentLocale.svelte';
-  import { t } from '$lib/i18n/t';
+  import { locale } from '#lib/i18n/currentLocale.svelte.js';
+  import { t } from '#lib/i18n/t.js';
 
   const s = $derived(t(messages, locale()));
 </script>

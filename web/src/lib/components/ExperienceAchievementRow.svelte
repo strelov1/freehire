@@ -6,10 +6,10 @@
    * inherently per-row and were never meant to be shared across achievements.
    */
   import { Trash2, Pencil, Check, X } from '@lucide/svelte';
-  import { Button, Chip, FormField, Input } from '$lib/ui';
-  import SkillIcon from '$lib/components/SkillIcon.svelte';
-  import { isUnconfirmed } from '$lib/experienceBank';
-  import type { ExperienceAtom, ExperienceProvenance } from '$lib/types';
+  import { Button, Chip, FormField, Input } from '#lib/ui/index.js';
+  import SkillIcon from '#lib/components/SkillIcon.svelte';
+  import { isUnconfirmed } from '#lib/experienceBank.js';
+  import type { ExperienceAtom, ExperienceProvenance } from '#lib/types.js';
 
   let {
     atom,

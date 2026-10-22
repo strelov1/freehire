@@ -1,10 +1,10 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
-  import { Button } from '$lib/ui';
-  import { NumberedGrid, SectionLabel } from '$lib/ui';
-  import StatusChip from '$lib/components/StatusChip.svelte';
-  import { INBOX_FAQ } from '$lib/inboxFaq';
-  import { INBOX_STATUS_GUIDE } from '$lib/inboxStatusGuide';
+  import { Button } from '#lib/ui/index.js';
+  import { NumberedGrid, SectionLabel } from '#lib/ui/index.js';
+  import StatusChip from '#lib/components/StatusChip.svelte';
+  import { INBOX_FAQ } from '#lib/inboxFaq.js';
+  import { INBOX_STATUS_GUIDE } from '#lib/inboxStatusGuide.js';
 
   // Illustrative inbox — decorative, not live data. Every sender is an ATS relay
   // of the kind that really writes (the matcher deliberately never trusts those

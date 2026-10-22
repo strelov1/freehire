@@ -1,8 +1,8 @@
 <script lang="ts">
   import { Handshake } from '@lucide/svelte';
-  import { isAuthenticated } from '$lib/auth.svelte';
-  import { promptSignIn } from '$lib/signin';
-  import { Button } from '$lib/ui';
+  import { isAuthenticated } from '#lib/auth.svelte.js';
+  import { promptSignIn } from '#lib/signin.js';
+  import { Button } from '#lib/ui/index.js';
 
   // Shown on a vacancy and on the company page when the company has an approved referrer.
   // jobId is the optional source-vacancy context passed through to the request.

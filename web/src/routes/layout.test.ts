@@ -15,7 +15,7 @@ const SOURCE = readFileSync(join(import.meta.dirname, '+layout.svelte'), 'utf8')
 
 describe('root layout footer state', () => {
   it('derives hideFooter from isFullBleedRoute plus onboarding/signin, not a re-listed /my or /tailor/ prefix', () => {
-    expect(SOURCE).toContain("import { isFullBleedRoute } from '$lib/shellLayout'");
+    expect(SOURCE).toContain("import { isFullBleedRoute } from '#lib/shellLayout.js'");
     const hideFooterAt = SOURCE.indexOf('const hideFooter');
     const compactFooterAt = SOURCE.indexOf('const compactFooter', hideFooterAt);
     expect(compactFooterAt, 'expected compactFooter to be declared after hideFooter').toBeGreaterThan(hideFooterAt);

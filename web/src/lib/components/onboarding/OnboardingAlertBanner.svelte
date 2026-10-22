@@ -1,6 +1,6 @@
 <script lang="ts">
   import { Bookmark, X } from '@lucide/svelte';
-  import { Alert } from '$lib/ui';
+  import { Alert } from '#lib/ui/index.js';
   import SaveSearchAlert from '../filters/SaveSearchAlert.svelte';
 
   // The ephemeral post-onboarding nudge: after the wizard configures a feed, offer to

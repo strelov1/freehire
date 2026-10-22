@@ -12,12 +12,12 @@
   // except the staged facets themselves, which belong to the wizard and come back out
   // through `onExtracted`.
   import { FileUp, LoaderCircle } from '@lucide/svelte';
-  import { api, ApiError, RESUME_MAX_MB } from '$lib/api';
-  import { cvUploadReason, track } from '$lib/analytics';
-  import { isAuthenticated } from '$lib/auth.svelte';
-  import { resumeStore } from '$lib/resume.svelte';
-  import { MAX_SPECIALIZATIONS } from '$lib/profileLimits';
-  import { mergeFacets, type MergedFacets, type StagedFacets } from '$lib/onboardingImport';
+  import { api, ApiError, RESUME_MAX_MB } from '#lib/api.js';
+  import { cvUploadReason, track } from '#lib/analytics.js';
+  import { isAuthenticated } from '#lib/auth.svelte.js';
+  import { resumeStore } from '#lib/resume.svelte.js';
+  import { MAX_SPECIALIZATIONS } from '#lib/profileLimits.js';
+  import { mergeFacets, type MergedFacets, type StagedFacets } from '#lib/onboardingImport.js';
 
   interface Props {
     /** What the wizard has staged so far — the merge folds into this rather than replacing

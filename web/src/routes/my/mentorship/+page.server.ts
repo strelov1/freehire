@@ -1,4 +1,4 @@
-import { serverApi } from '$lib/server/api';
+import { serverApi } from '#lib/server/api.js';
 import type { PageServerLoad } from './$types';
 
 // The sessions the caller BOOKED. The profile belongs to the layout, so this pane asks for

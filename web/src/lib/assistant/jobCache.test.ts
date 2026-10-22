@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Job } from '$lib/types';
+import type { Job } from '#lib/types.js';
 
 const getJob = vi.fn<(slug: string) => Promise<Job>>();
 
-vi.mock('$lib/api', () => ({
+vi.mock('#lib/api.js', () => ({
   api: { getJob: (slug: string) => getJob(slug) },
 }));
 

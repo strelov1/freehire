@@ -1,8 +1,8 @@
 <script lang="ts">
   // Aliased: this component already has a local `resolve(report, …)` action.
   import { resolve as resolveRoute } from '$app/paths';
-  import { api } from '$lib/api';
-  import { AsyncData } from '$lib/asyncData.svelte';
+  import { api } from '#lib/api.js';
+  import { AsyncData } from '#lib/asyncData.svelte.js';
   import {
     decisionLabel,
     decisionNotePlaceholder,
@@ -10,11 +10,11 @@
     decisionOutcome,
     reportReasonLabel,
     type DecisionKind,
-  } from '$lib/reports';
-  import type { Report } from '$lib/types';
-  import { Badge, Button } from '$lib/ui';
-  import { locale } from '$lib/i18n/currentLocale.svelte';
-  import { timeAgo } from '$lib/utils';
+  } from '#lib/reports.js';
+  import type { Report } from '#lib/types.js';
+  import { Badge, Button } from '#lib/ui/index.js';
+  import { locale } from '#lib/i18n/currentLocale.svelte.js';
+  import { timeAgo } from '#lib/utils.js';
   import States from './States.svelte';
 
   // Rendered only inside the moderator-gated ModerationView, so it assumes a

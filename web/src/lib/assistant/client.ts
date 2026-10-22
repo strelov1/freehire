@@ -10,7 +10,7 @@
 // turn is a request of its own — which is what lets a phone background its tab
 // without throwing the work away.
 
-import { trackPlanRefusal } from '$lib/api';
+import { trackPlanRefusal } from '#lib/api.js';
 import { readFrames } from './sse';
 import type { TurnEvent } from './wire';
 

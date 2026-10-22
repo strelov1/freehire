@@ -2,11 +2,11 @@
   import { onMount } from 'svelte';
   import { Radar, X } from '@lucide/svelte';
   import { resolve } from '$app/paths';
-  import { api } from '$lib/api';
-  import type { TalentNetworkVisibility } from '$lib/types';
-  import { isTalentNetworkMember } from '$lib/talentMembership';
-  import { dismissTalentInvite, isTalentInviteDismissed } from '$lib/talentInvite';
-  import { Button, Card } from '$lib/ui';
+  import { api } from '#lib/api.js';
+  import type { TalentNetworkVisibility } from '#lib/types.js';
+  import { isTalentNetworkMember } from '#lib/talentMembership.js';
+  import { dismissTalentInvite, isTalentInviteDismissed } from '#lib/talentInvite.js';
+  import { Button, Card } from '#lib/ui/index.js';
 
   // The invitation into the Talent Network, mounted by the ACCOUNT shell (`my/+layout`)
   // above whatever section is open — not by Profile's layout, where it used to live.

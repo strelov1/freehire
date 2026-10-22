@@ -1,11 +1,11 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
   import { page } from '$app/state';
-  import JobRow from '$lib/components/JobRow.svelte';
-  import Seo from '$lib/components/Seo.svelte';
-  import { collectionForSkill } from '$lib/collections';
-  import { breadcrumbJsonLd, definedTermJsonLd, jsonLdScript } from '$lib/seo';
-  import { Badge } from '$lib/ui';
+  import JobRow from '#lib/components/JobRow.svelte';
+  import Seo from '#lib/components/Seo.svelte';
+  import { collectionForSkill } from '#lib/collections.js';
+  import { breadcrumbJsonLd, definedTermJsonLd, jsonLdScript } from '#lib/seo.js';
+  import { Badge } from '#lib/ui/index.js';
   import type { PageData } from './$types';
 
   let { data }: { data: PageData } = $props();

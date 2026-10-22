@@ -1,9 +1,9 @@
 <script lang="ts">
-  import JobBoard from '$lib/components/JobBoard.svelte';
+  import JobBoard from '#lib/components/JobBoard.svelte';
   import type { PageData } from './$types';
   import { messages } from './messages';
-  import { locale } from '$lib/i18n/currentLocale.svelte';
-  import { t } from '$lib/i18n/t';
+  import { locale } from '#lib/i18n/currentLocale.svelte.js';
+  import { t } from '#lib/i18n/t.js';
 
   let { data }: { data: PageData } = $props();
 

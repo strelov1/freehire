@@ -2,14 +2,14 @@
   import { AlignLeft, Pencil, Share2, Trash2 } from '@lucide/svelte';
   import { resolve } from '$app/paths';
   import { page } from '$app/state';
-  import { ApiError } from '$lib/api';
-  import { isAuthenticated } from '$lib/auth.svelte';
-  import { signinUrl } from '$lib/signin';
-  import { jobLists } from '$lib/jobLists.svelte';
-  import type { JobList } from '$lib/types';
-  import { Button, ConfirmDialog, Input } from '$lib/ui';
-  import { locale } from '$lib/i18n/currentLocale.svelte';
-  import { format, plural, t } from '$lib/i18n/t';
+  import { ApiError } from '#lib/api.js';
+  import { isAuthenticated } from '#lib/auth.svelte.js';
+  import { signinUrl } from '#lib/signin.js';
+  import { jobLists } from '#lib/jobLists.svelte.js';
+  import type { JobList } from '#lib/types.js';
+  import { Button, ConfirmDialog, Input } from '#lib/ui/index.js';
+  import { locale } from '#lib/i18n/currentLocale.svelte.js';
+  import { format, plural, t } from '#lib/i18n/t.js';
   import { messages } from './JobListsView.messages';
   import States from './States.svelte';
 

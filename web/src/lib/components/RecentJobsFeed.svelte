@@ -2,18 +2,18 @@
   import { flip } from 'svelte/animate';
   import { fly } from 'svelte/transition';
   import { resolve } from '$app/paths';
-  import { api } from '$lib/api';
-  import { companyLogoUrl } from '$lib/logo';
+  import { api } from '#lib/api.js';
+  import { companyLogoUrl } from '#lib/logo.js';
   import {
     aggregateLabel,
     companyAggregateLabel,
     pushFeedEntry,
     type RecentFeedEntry,
     type RecentFeedEvent,
-  } from '$lib/recentFeed';
-  import { EntityLogo, SectionLabel } from '$lib/ui';
-  import { locale } from '$lib/i18n/currentLocale.svelte';
-  import { timeAgo } from '$lib/utils';
+  } from '#lib/recentFeed.js';
+  import { EntityLogo, SectionLabel } from '#lib/ui/index.js';
+  import { locale } from '#lib/i18n/currentLocale.svelte.js';
+  import { timeAgo } from '#lib/utils.js';
 
   // The homepage's live "recently added jobs" feed (see
   // openspec/changes/add-homepage-recent-jobs-feed). Renders nothing until the first

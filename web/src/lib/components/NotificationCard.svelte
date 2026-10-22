@@ -12,12 +12,12 @@
     AlertTriangle,
     XCircle,
   } from '@lucide/svelte';
-  import { notificationCenter } from '$lib/notificationCenter.svelte';
-  import { notificationTarget } from '$lib/notificationTarget';
-  import { locale } from '$lib/i18n/currentLocale.svelte';
-  import { timeAgo } from '$lib/utils';
-  import { cn } from '$lib/ui';
-  import type { NotificationItem, NotificationKind } from '$lib/types';
+  import { notificationCenter } from '#lib/notificationCenter.svelte.js';
+  import { notificationTarget } from '#lib/notificationTarget.js';
+  import { locale } from '#lib/i18n/currentLocale.svelte.js';
+  import { timeAgo } from '#lib/utils.js';
+  import { cn } from '#lib/ui/index.js';
+  import type { NotificationItem, NotificationKind } from '#lib/types.js';
 
   // One notification-center row, shared by the header bell's dropdown and the
   // full /my/notifications history list so the two never drift. Renders as a

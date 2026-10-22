@@ -1,6 +1,6 @@
 // The explanation of each ghost criterion, for the /features/ghost-jobs landing.
 //
-// Keyed by the SAME codes internal/ghost emits and $lib/ghost renders, so the page
+// Keyed by the SAME codes internal/ghost emits and #lib/ghost renders, so the page
 // cannot fall behind the product: ghostSignals.test.ts fails if a criterion joins the
 // vocabulary without an explanation here. A marketing page a test keeps honest — the
 // same trick the inbox landing uses for its status list.

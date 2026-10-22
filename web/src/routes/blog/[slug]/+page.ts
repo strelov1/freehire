@@ -1,5 +1,5 @@
 import { error } from '@sveltejs/kit';
-import { getPost } from '$lib/blogPosts';
+import { getPost } from '#lib/blogPosts.js';
 import type { PageLoad } from './$types';
 
 // Universal load so the compiled body component (not JSON-serializable) can pass

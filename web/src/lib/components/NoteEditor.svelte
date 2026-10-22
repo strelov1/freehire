@@ -23,8 +23,8 @@
   import 'easymde/dist/easymde.min.css';
   import type EasyMDE from 'easymde';
   import { messages } from './NoteEditor.messages';
-  import { locale } from '$lib/i18n/currentLocale.svelte';
-  import { t } from '$lib/i18n/t';
+  import { locale } from '#lib/i18n/currentLocale.svelte.js';
+  import { t } from '#lib/i18n/t.js';
 
   // A small markdown editor for notes: EasyMDE (the maintained SimpleMDE fork) over a
   // textarea, markdown in and out. EasyMDE touches `window`, so it is dynamically

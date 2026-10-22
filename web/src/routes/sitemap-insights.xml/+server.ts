@@ -1,6 +1,6 @@
-import { loadInsightsGate } from '$lib/server/insights';
-import { coveredCategories, rankedQualifyingRoles } from '$lib/insights';
-import { insightsPaths, urlsetXml, xmlResponse } from '$lib/sitemap';
+import { loadInsightsGate } from '#lib/server/insights.js';
+import { coveredCategories, rankedQualifyingRoles } from '#lib/insights.js';
+import { insightsPaths, urlsetXml, xmlResponse } from '#lib/sitemap.js';
 import type { RequestHandler } from './$types';
 
 // Sub-sitemap for the insights landing pages, referenced by the sitemap index. It

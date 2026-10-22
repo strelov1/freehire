@@ -2,9 +2,9 @@
   import { GraduationCap } from '@lucide/svelte';
   import { resolve } from '$app/paths';
   import { page } from '$app/state';
-  import { api } from '$lib/api';
-  import { emptyMentorFilters, mentorFiltersToQuery } from '$lib/mentorship';
-  import type { Mentor } from '$lib/types';
+  import { api } from '#lib/api.js';
+  import { emptyMentorFilters, mentorFiltersToQuery } from '#lib/mentorship.js';
+  import type { Mentor } from '#lib/types.js';
 
   // The entry point from a vacancy and from a company page: a route to that employer's
   // mentors, rendered only where there is one.

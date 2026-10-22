@@ -4,11 +4,11 @@
   // once. Saved through the same whole-object PUT the profile form uses:
   // `profileInputFromProfile` reads every other field back from the stored profile so
   // this save can never silently reset something this screen does not show.
-  import { api } from '$lib/api';
-  import { profileInputFromProfile } from '$lib/mentorship';
-  import { errorMessage } from '$lib/utils';
-  import { Button, Card, Input } from '$lib/ui';
-  import type { OwnMentorProfile } from '$lib/types';
+  import { api } from '#lib/api.js';
+  import { profileInputFromProfile } from '#lib/mentorship.js';
+  import { errorMessage } from '#lib/utils.js';
+  import { Button, Card, Input } from '#lib/ui/index.js';
+  import type { OwnMentorProfile } from '#lib/types.js';
 
   let { profile = $bindable() }: { profile: OwnMentorProfile } = $props();
 

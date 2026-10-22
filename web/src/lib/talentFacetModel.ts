@@ -16,7 +16,7 @@
 //
 // Iterating it also fixes the SERIALISATION order, so two filters selecting the same
 // things produce the same string — which is what makes a shared link stable.
-import { TALENT_FACET_PARAMS } from '$lib/generated/contracts';
+import { TALENT_FACET_PARAMS } from '#lib/generated/contracts.js';
 
 /** The catalogue's whole filter vocabulary. Every value is a closed-vocabulary term or a
  *  number; there is no free-text search, because a card carries no free text to search. */

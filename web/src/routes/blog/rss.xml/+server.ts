@@ -1,5 +1,5 @@
-import { listPosts } from '$lib/blogPosts';
-import { blogRssXml } from '$lib/rss';
+import { listPosts } from '#lib/blogPosts.js';
+import { blogRssXml } from '#lib/rss.js';
 import type { RequestHandler } from './$types';
 
 // RSS 2.0 feed of published posts (newest-first, drafts excluded via listPosts).

@@ -8,9 +8,9 @@
 
 import { invalidateAll } from '$app/navigation';
 import { page } from '$app/state';
-import { api } from '$lib/api';
-import { forgetRecentAuthExpiry } from '$lib/recentAuth';
-import type { User } from '$lib/types';
+import { api } from '#lib/api.js';
+import { forgetRecentAuthExpiry } from '#lib/recentAuth.js';
+import type { User } from '#lib/types.js';
 
 /** The current signed-in user, or null. Reactive: reads `page.data.user`. */
 export function currentUser(): User | null {

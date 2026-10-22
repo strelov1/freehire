@@ -1,7 +1,7 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
-  import { backerBadges } from '$lib/backers';
-  import { cn } from '$lib/ui';
+  import { backerBadges } from '#lib/backers.js';
+  import { cn } from '#lib/ui/index.js';
 
   // Renders the accelerators and funds that selected a company — Y Combinator,
   // Techstars, a16z.
@@ -13,7 +13,7 @@
   //
   // No monogram fallback, unlike EntityLogo: a letter tile standing in for the a16z
   // mark reads as a defect, not as graceful degradation. The marks are committed, so
-  // the only way to have none is a backer with no entry in $lib/backers — and that
+  // the only way to have none is a backer with no entry in #lib/backers — and that
   // renders nothing at all.
   let {
     collections,

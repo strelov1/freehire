@@ -5,11 +5,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 // because that is the state a first-time visitor reads the page in. If it were nested
 // under the authenticated branch it would only ever appear to people who had already
 // got past the decision it is meant to inform.
-vi.mock('$lib/auth.svelte', () => ({ isAuthenticated: () => false }));
-vi.mock('$lib/signin', () => ({ promptSignIn: vi.fn() }));
-vi.mock('$lib/api', () => ({ api: { promoPreview: vi.fn(), promoRedeem: vi.fn(), billingCheckout: vi.fn() } }));
+vi.mock('#lib/auth.svelte.js', () => ({ isAuthenticated: () => false }));
+vi.mock('#lib/signin.js', () => ({ promptSignIn: vi.fn() }));
+vi.mock('#lib/api.js', () => ({ api: { promoPreview: vi.fn(), promoRedeem: vi.fn(), billingCheckout: vi.fn() } }));
 
-import type { PlansMatrix, PublicPrice } from '$lib/types';
+import type { PlansMatrix, PublicPrice } from '#lib/types.js';
 
 import Page from './+page.svelte';
 import type { PageData } from './$types';

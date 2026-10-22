@@ -1,6 +1,6 @@
 <script lang="ts">
-  import EmailGroupSettings from '$lib/components/EmailGroupSettings.svelte';
-  import ReminderSettings from '$lib/components/ReminderSettings.svelte';
+  import EmailGroupSettings from '#lib/components/EmailGroupSettings.svelte';
+  import ReminderSettings from '#lib/components/ReminderSettings.svelte';
 </script>
 
 <svelte:head>

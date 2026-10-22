@@ -4,7 +4,7 @@
   // inherits the ordinary public +layout.svelte rather than the signed-in section — no
   // session is read or required anywhere on this page.
   //
-  // Deliberately NOT a $lib/resume.svelte / profileStore consumer: those are session-scoped
+  // Deliberately NOT a #lib/resume.svelte / profileStore consumer: those are session-scoped
   // stores built for the signed-in CV surfaces, and this page's whole point is that no
   // account exists yet. The CV bytes live only in this component's own state and are
   // never sent anywhere but the one POST — see RoastCV's own doc on the backend for why
@@ -12,13 +12,13 @@
   import { goto } from '$app/navigation';
   import { page } from '$app/state';
   import { FileUp, LoaderCircle } from '@lucide/svelte';
-  import { api, ApiError, RESUME_MAX_MB, type RoastResponse } from '$lib/api';
-  import { CATEGORY_OPTIONS } from '$lib/facets';
-  import { categoryLabel } from '$lib/labels';
-  import { signinUrl } from '$lib/signin';
-  import { cn, Button } from '$lib/ui';
-  import Seo from '$lib/components/Seo.svelte';
-  import ATSReportView from '$lib/components/ATSReportView.svelte';
+  import { api, ApiError, RESUME_MAX_MB, type RoastResponse } from '#lib/api.js';
+  import { CATEGORY_OPTIONS } from '#lib/facets.js';
+  import { categoryLabel } from '#lib/labels.js';
+  import { signinUrl } from '#lib/signin.js';
+  import { cn, Button } from '#lib/ui/index.js';
+  import Seo from '#lib/components/Seo.svelte';
+  import ATSReportView from '#lib/components/ATSReportView.svelte';
   import { marketLine, roleDisplay } from './roastView';
 
   const canonical = $derived(`${page.url.origin}/roast`);
@@ -126,7 +126,7 @@
     if (value) void changeRole(value);
   }
 
-  // Deliberately not the shared "sign in to do X" gate helper from $lib/signin.ts: that
+  // Deliberately not the shared "sign in to do X" gate helper from #lib/signin.ts: that
   // one opens the LOGIN form and returns the visitor to the page they came from, which is
   // right for an in-place gate on an existing account (Save, Follow, Vote) but wrong here
   // — this page's audience has never heard of freehire, so there is no account to log

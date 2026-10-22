@@ -2,14 +2,14 @@
   import { onMount } from 'svelte';
   import { resolve } from '$app/paths';
   import { FileText, Download, Trash2, ArrowRight } from '@lucide/svelte';
-  import { api, ApiError } from '$lib/api';
-  import { companyLogoUrl } from '$lib/logo';
-  import { ConfirmDialog, EntityLogo } from '$lib/ui';
-  import { openCvIntake } from '$lib/cvIntakeDialog.svelte';
-  import { type CvTailoredItem } from '$lib/cv';
+  import { api, ApiError } from '#lib/api.js';
+  import { companyLogoUrl } from '#lib/logo.js';
+  import { ConfirmDialog, EntityLogo } from '#lib/ui/index.js';
+  import { openCvIntake } from '#lib/cvIntakeDialog.svelte.js';
+  import { type CvTailoredItem } from '#lib/cv.js';
   import { messages } from './CvList.messages';
-  import { locale } from '$lib/i18n/currentLocale.svelte';
-  import { format, t } from '$lib/i18n/t';
+  import { locale } from '#lib/i18n/currentLocale.svelte.js';
+  import { format, t } from '#lib/i18n/t.js';
 
   // The tailored-CV landing: one company card per CV the caller built for a vacancy, styled like
   // the saved-jobs cards. The card opens the tailoring workspace (which resumes the same agent

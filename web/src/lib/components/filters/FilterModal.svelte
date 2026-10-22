@@ -1,19 +1,19 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
   import { resolve } from '$app/paths';
-  import { env } from '$env/dynamic/public';
-  import { openWithinEnabled } from '$lib/features';
+  import { PUBLIC_OPEN_WITHIN } from '$app/env/public';
+  import { openWithinEnabled } from '#lib/features.js';
   import { Bell, Info, UserRound } from '@lucide/svelte';
-  import { Tooltip } from '$lib/ui';
-  import { EMPLOYER_CREDENTIALS, FACETS, JOB_COLLECTION } from '$lib/facets';
-  import { isAuthenticated } from '$lib/auth.svelte';
-  import { promptSignIn } from '$lib/signin';
-  import { profileStore } from '$lib/profile.svelte';
-  import { notifications } from '$lib/notifications.svelte';
-  import { emptyFilters, type ClearanceFilter, type FilterStore, type JobFilters } from '$lib/filters';
-  import { StagedFilters } from '$lib/stagedFilters.svelte';
-  import { RAIL, RAIL_SECTIONS, type RailEntry, type RailSection } from '$lib/filterSections';
-  import type { FacetCounts } from '$lib/types';
+  import { Tooltip } from '#lib/ui/index.js';
+  import { EMPLOYER_CREDENTIALS, FACETS, JOB_COLLECTION } from '#lib/facets.js';
+  import { isAuthenticated } from '#lib/auth.svelte.js';
+  import { promptSignIn } from '#lib/signin.js';
+  import { profileStore } from '#lib/profile.svelte.js';
+  import { notifications } from '#lib/notifications.svelte.js';
+  import { emptyFilters, type ClearanceFilter, type FilterStore, type JobFilters } from '#lib/filters.js';
+  import { StagedFilters } from '#lib/stagedFilters.svelte.js';
+  import { RAIL, RAIL_SECTIONS, type RailEntry, type RailSection } from '#lib/filterSections.js';
+  import type { FacetCounts } from '#lib/types.js';
   import {
     EXPERIENCE_PRESETS,
     FRESHNESS_PRESETS,
@@ -22,7 +22,7 @@
     experienceLabel,
     freshnessLabel,
     salaryLabel,
-  } from '$lib/filterControls';
+  } from '#lib/filterControls.js';
   import FacetSection from '../facets/FacetSection.svelte';
   import ChipFacet from './ChipFacet.svelte';
   import RangeSlider from './RangeSlider.svelte';
@@ -241,7 +241,7 @@
   // The first-seen bound rides the same stops and the same snap-to-Any rule. Read
   // straight from the runtime env rather than threaded through a prop: five callers
   // mount this modal and none of them has an opinion about the flag.
-  const openWithinAvailable = openWithinEnabled(env);
+  const openWithinAvailable = openWithinEnabled({ PUBLIC_OPEN_WITHIN });
   const openIndex = $derived.by(() => {
     const i = FRESHNESS_PRESETS.findIndex((p) => p.days === staged.value.openWithinDays);
     return i < 0 ? FRESHNESS_PRESETS.length - 1 : i;

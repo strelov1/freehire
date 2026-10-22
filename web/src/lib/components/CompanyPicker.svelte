@@ -1,8 +1,8 @@
 <script lang="ts">
-  import { api } from '$lib/api';
-  import type { CompanyListItem } from '$lib/types';
-  import { companyLogoUrl } from '$lib/logo';
-  import { EntityLogo } from '$lib/ui';
+  import { api } from '#lib/api.js';
+  import type { CompanyListItem } from '#lib/types.js';
+  import { companyLogoUrl } from '#lib/logo.js';
+  import { EntityLogo } from '#lib/ui/index.js';
 
   // A typeahead over the company catalogue: type a name, pick from a logo'd list, and
   // the chosen company's slug flows back through onSelect. Replaces a raw slug input so

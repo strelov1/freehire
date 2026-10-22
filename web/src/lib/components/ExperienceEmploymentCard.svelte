@@ -5,20 +5,20 @@
    * in-place state, never a route change (specs/experience-bank).
    */
   import { ChevronRight, Trash2, Pencil } from '@lucide/svelte';
-  import { Button, Chip, EntityLogo, FormField, Input } from '$lib/ui';
-  import CompanyPicker from '$lib/components/CompanyPicker.svelte';
-  import ExperienceAchievementRow from '$lib/components/ExperienceAchievementRow.svelte';
-  import SkillIcon from '$lib/components/SkillIcon.svelte';
-  import PeriodDateInput from '$lib/components/PeriodDateInput.svelte';
-  import { companyLogoUrl } from '$lib/logo';
-  import { sortNeedsAttentionFirst } from '$lib/experienceBank';
-  import { formatPeriodRange } from '$lib/periodDate';
+  import { Button, Chip, EntityLogo, FormField, Input } from '#lib/ui/index.js';
+  import CompanyPicker from '#lib/components/CompanyPicker.svelte';
+  import ExperienceAchievementRow from '#lib/components/ExperienceAchievementRow.svelte';
+  import SkillIcon from '#lib/components/SkillIcon.svelte';
+  import PeriodDateInput from '#lib/components/PeriodDateInput.svelte';
+  import { companyLogoUrl } from '#lib/logo.js';
+  import { sortNeedsAttentionFirst } from '#lib/experienceBank.js';
+  import { formatPeriodRange } from '#lib/periodDate.js';
   import type {
     ExperienceAtom,
     ExperienceEmployment,
     ExperienceEmploymentWithAtoms,
     PeriodDate,
-  } from '$lib/types';
+  } from '#lib/types.js';
 
   let {
     employment,

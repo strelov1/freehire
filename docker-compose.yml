@@ -182,9 +182,11 @@ services:
     build:
       context: .
       dockerfile: web/Dockerfile
+      args:
+        # Public origin for canonical/sitemap/JSON-LD — match the host-facing URL.
+        # A build arg: SvelteKit 3 bakes it in, so changing it means rebuilding.
+        ORIGIN: "${WEB_ORIGIN:-http://localhost:8090}"
     environment:
-      # Public origin for canonical/sitemap/JSON-LD — match the host-facing URL.
-      ORIGIN: "${WEB_ORIGIN:-http://localhost:8090}"
       # The Node SSR server fetches the Go API server-to-server (never relative).
       API_INTERNAL_URL: "http://app:8080"
     ports:

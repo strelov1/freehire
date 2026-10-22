@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { FACETS, type FacetOption, type FacetStore } from '$lib/facets';
-  import type { FacetCounts } from '$lib/types';
+  import { FACETS, type FacetOption, type FacetStore } from '#lib/facets.js';
+  import type { FacetCounts } from '#lib/types.js';
   import FacetHeader from './FacetHeader.svelte';
   import PillGroup from '../facets/PillGroup.svelte';
 

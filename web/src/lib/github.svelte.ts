@@ -1,4 +1,4 @@
-import { browser } from '$app/environment';
+import { browser } from '$app/env';
 
 // Live GitHub star count for the repo, rendered as a header badge. Fetched once
 // per session on first mount and cached in localStorage for a few hours — a
@@ -11,7 +11,7 @@ import { browser } from '$app/environment';
 // per IP), which holds up from a home connection and fails from anything with a
 // shared address — a datacentre, a corporate proxy, carrier NAT — where the reply
 // is a 403: a console error, and a badge with no number. The server route answers
-// from one process-wide hourly cache (see $lib/server/github).
+// from one process-wide hourly cache (see #lib/server/github).
 
 const REPO = 'strelov1/freehire';
 export const GITHUB_URL = `https://github.com/${REPO}`;

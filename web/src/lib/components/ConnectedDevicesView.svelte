@@ -1,13 +1,13 @@
 <script lang="ts">
-  import { api } from '$lib/api';
-  import { AsyncData } from '$lib/asyncData.svelte';
-  import { isAuthenticated } from '$lib/auth.svelte';
-  import { consumeReauthDraft } from '$lib/recentAuth';
-  import { locale } from '$lib/i18n/currentLocale.svelte';
-  import { t } from '$lib/i18n/t';
-  import type { OAuthGrant } from '$lib/types';
-  import { Button, ConfirmDialog } from '$lib/ui';
-  import { timeAgo } from '$lib/utils';
+  import { api } from '#lib/api.js';
+  import { AsyncData } from '#lib/asyncData.svelte.js';
+  import { isAuthenticated } from '#lib/auth.svelte.js';
+  import { consumeReauthDraft } from '#lib/recentAuth.js';
+  import { locale } from '#lib/i18n/currentLocale.svelte.js';
+  import { t } from '#lib/i18n/t.js';
+  import type { OAuthGrant } from '#lib/types.js';
+  import { Button, ConfirmDialog } from '#lib/ui/index.js';
+  import { timeAgo } from '#lib/utils.js';
   import { messages } from './ConnectedDevicesView.messages';
   import ConfirmIdentity from './ConfirmIdentity.svelte';
   import States from './States.svelte';

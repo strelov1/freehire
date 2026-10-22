@@ -1,12 +1,12 @@
 <script lang="ts">
   import { resolve as resolveRoute } from '$app/paths';
-  import { api } from '$lib/api';
-  import { AsyncData } from '$lib/asyncData.svelte';
-  import { companyFeedbackTypeLabel } from '$lib/companyFeedback';
-  import type { ReportedCompanyFeedback } from '$lib/types';
-  import { Badge, Button } from '$lib/ui';
-  import { locale } from '$lib/i18n/currentLocale.svelte';
-  import { timeAgo } from '$lib/utils';
+  import { api } from '#lib/api.js';
+  import { AsyncData } from '#lib/asyncData.svelte.js';
+  import { companyFeedbackTypeLabel } from '#lib/companyFeedback.js';
+  import type { ReportedCompanyFeedback } from '#lib/types.js';
+  import { Badge, Button } from '#lib/ui/index.js';
+  import { locale } from '#lib/i18n/currentLocale.svelte.js';
+  import { timeAgo } from '#lib/utils.js';
   import States from './States.svelte';
 
   // Rendered only inside the moderator-gated ModerationView, so it assumes a

@@ -2,11 +2,11 @@
   import { goto } from '$app/navigation';
   import { page } from '$app/state';
   import { resolve } from '$app/paths';
-  import { api } from '$lib/api';
-  import { isAuthenticated } from '$lib/auth.svelte';
-  import { signinUrl } from '$lib/signin';
-  import { communityFormError } from '$lib/community';
-  import { Button, Input } from '$lib/ui';
+  import { api } from '#lib/api.js';
+  import { isAuthenticated } from '#lib/auth.svelte.js';
+  import { signinUrl } from '#lib/signin.js';
+  import { communityFormError } from '#lib/community.js';
+  import { Button, Input } from '#lib/ui/index.js';
 
   let {
     subjectType,

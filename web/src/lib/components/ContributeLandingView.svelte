@@ -1,7 +1,7 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
-  import { Button } from '$lib/ui';
-  import { SectionLabel } from '$lib/ui';
+  import { Button } from '#lib/ui/index.js';
+  import { SectionLabel } from '#lib/ui/index.js';
 
   const repoUrl = 'https://github.com/strelov1/freehire';
   const telegramUrl = 'https://t.me/freehiredev';

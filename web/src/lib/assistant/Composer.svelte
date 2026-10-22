@@ -1,11 +1,11 @@
 <script lang="ts">
   import { ArrowUp, Loader2, Trash2, Square } from '@lucide/svelte';
-  import VoiceInput from '$lib/assistant/VoiceInput.svelte';
-  import { AUDIO_ENABLED } from '$lib/assistant/audioAvailability';
-  import { appendTranscript } from '$lib/assistant/dictation';
+  import VoiceInput from '#lib/assistant/VoiceInput.svelte';
+  import { AUDIO_ENABLED } from '#lib/assistant/audioAvailability.js';
+  import { appendTranscript } from '#lib/assistant/dictation.js';
   import { messages } from './Composer.messages';
-  import { locale } from '$lib/i18n/currentLocale.svelte';
-  import { format, t } from '$lib/i18n/t';
+  import { locale } from '#lib/i18n/currentLocale.svelte.js';
+  import { format, t } from '#lib/i18n/t.js';
 
   // The composer: the queued-message panel (messages typed mid-turn, sent
   // one-by-one as turns finish) plus the auto-growing textarea form. Queue and

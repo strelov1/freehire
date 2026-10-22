@@ -4,15 +4,15 @@
   // wanted-skills list. Unlike skills, sources and companies have no "wanted" counterpart
   // list to reconcile against, so toggling one is a plain add/remove (see
   // profileExclusions.ts) rather than the mutual-exclusion dance withAvoidedSkill does.
-  import type { FacetOption } from '$lib/facets';
-  import { companySearch, dynamicLabel } from '$lib/facets';
-  import { loadSkillDistribution } from '$lib/skillDictionary';
-  import { loadSourceDistribution } from '$lib/sourceDictionary';
-  import { profileStore } from '$lib/profile.svelte';
+  import type { FacetOption } from '#lib/facets.js';
+  import { companySearch, dynamicLabel } from '#lib/facets.js';
+  import { loadSkillDistribution } from '#lib/skillDictionary.js';
+  import { loadSourceDistribution } from '#lib/sourceDictionary.js';
+  import { profileStore } from '#lib/profile.svelte.js';
   import RemoteSearchSelect from '../facets/RemoteSearchSelect.svelte';
   import { messages } from './AvoidCard.messages';
-  import { locale } from '$lib/i18n/currentLocale.svelte';
-  import { format, t } from '$lib/i18n/t';
+  import { locale } from '#lib/i18n/currentLocale.svelte.js';
+  import { format, t } from '#lib/i18n/t.js';
 
   let {
     onProfileChanged,

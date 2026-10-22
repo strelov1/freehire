@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { BrandMark } from '$lib/ui';
-  import { TECH_MARKS } from '$lib/techmarks';
+  import { BrandMark } from '#lib/ui/index.js';
+  import { TECH_MARKS } from '#lib/techmarks.js';
 
   // The one place a skill chip turns its slug into a brand logo — every call site
   // that renders a skill value (job cards, the skills facet picker, the profile's

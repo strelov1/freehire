@@ -1,6 +1,6 @@
 <script lang="ts">
-  import type { Slice } from '$lib/api';
-  import type { Company, Job } from '$lib/types';
+  import type { Slice } from '#lib/api.js';
+  import type { Company, Job } from '#lib/types.js';
   import JobsView from './JobsView.svelte';
   import States from './States.svelte';
   import CompanyHeader from './CompanyHeader.svelte';

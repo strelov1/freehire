@@ -1,4 +1,4 @@
-import { defineMessages } from '$lib/i18n/t';
+import { defineMessages } from '#lib/i18n/t.js';
 
 // Nav item labels are keyed by href (not nested per-section) so a lookup can fall
 // back to accountNav.ts's own `item.label` for any href this catalog hasn't

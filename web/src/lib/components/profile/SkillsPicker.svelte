@@ -8,10 +8,10 @@
   // Skills to avoid live on the dedicated Avoid tab (AvoidCard.svelte), not here — they used
   // to render as a second block in this component, but that coupled "what I have" and "what
   // I avoid" into one control that only Skills needed to reach.
-  import { loadSkillDistribution } from '$lib/skillDictionary';
-  import type { FacetOption } from '$lib/facets';
-  import { locale } from '$lib/i18n/currentLocale.svelte';
-  import { t } from '$lib/i18n/t';
+  import { loadSkillDistribution } from '#lib/skillDictionary.js';
+  import type { FacetOption } from '#lib/facets.js';
+  import { locale } from '#lib/i18n/currentLocale.svelte.js';
+  import { t } from '#lib/i18n/t.js';
   import { messages } from './SkillsPicker.messages';
   import RemoteSearchSelect from '../facets/RemoteSearchSelect.svelte';
 

@@ -8,9 +8,9 @@
 // the list stays empty for signed-out users. Mutations surface API errors to the
 // caller (a duplicate name or the per-user cap is a 409) so the UI can show them.
 
-import { api } from '$lib/api';
-import { UserResource } from '$lib/userResource.svelte';
-import type { JobList } from '$lib/types';
+import { api } from '#lib/api.js';
+import { UserResource } from '#lib/userResource.svelte.js';
+import type { JobList } from '#lib/types.js';
 
 class JobLists extends UserResource<JobList[]> {
   // Reassigned (never mutated in place) on every change, so $state.raw is enough

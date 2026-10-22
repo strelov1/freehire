@@ -1,14 +1,14 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { api } from '$lib/api';
-  import { notificationCenter } from '$lib/notificationCenter.svelte';
-  import { Paginator } from '$lib/paginated.svelte';
-  import NotificationCard from '$lib/components/NotificationCard.svelte';
-  import { LoadMore } from '$lib/ui';
-  import States from '$lib/components/States.svelte';
-  import type { NotificationItem } from '$lib/types';
-  import { locale } from '$lib/i18n/currentLocale.svelte';
-  import { t } from '$lib/i18n/t';
+  import { api } from '#lib/api.js';
+  import { notificationCenter } from '#lib/notificationCenter.svelte.js';
+  import { Paginator } from '#lib/paginated.svelte.js';
+  import NotificationCard from '#lib/components/NotificationCard.svelte';
+  import { LoadMore } from '#lib/ui/index.js';
+  import States from '#lib/components/States.svelte';
+  import type { NotificationItem } from '#lib/types.js';
+  import { locale } from '#lib/i18n/currentLocale.svelte.js';
+  import { t } from '#lib/i18n/t.js';
   import { messages } from './messages';
 
   const s = $derived(t(messages, locale()));

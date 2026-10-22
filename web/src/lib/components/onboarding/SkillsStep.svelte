@@ -2,9 +2,9 @@
   // The skills typeahead, dictionary-backed like SkillsPicker — but skills only, with no
   // "avoid" half: excluding a skill is a refinement for someone who already has a feed, not
   // a question to ask before they have seen one.
-  import RemoteSearchSelect from '$lib/components/facets/RemoteSearchSelect.svelte';
-  import { loadSkillDistribution } from '$lib/skillDictionary';
-  import type { FacetOption } from '$lib/facets';
+  import RemoteSearchSelect from '#lib/components/facets/RemoteSearchSelect.svelte';
+  import { loadSkillDistribution } from '#lib/skillDictionary.js';
+  import type { FacetOption } from '#lib/facets.js';
   import { X } from '@lucide/svelte';
 
   interface Props {

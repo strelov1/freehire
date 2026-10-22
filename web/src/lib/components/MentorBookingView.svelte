@@ -3,10 +3,10 @@
   import { goto, replaceState } from '$app/navigation';
   import { page } from '$app/state';
   import { resolve } from '$app/paths';
-  import { api } from '$lib/api';
-  import { errorMessage } from '$lib/utils';
-  import { signinUrl } from '$lib/signin';
-  import { Badge, Button, Card, Skeleton } from '$lib/ui';
+  import { api } from '#lib/api.js';
+  import { errorMessage } from '#lib/utils.js';
+  import { signinUrl } from '#lib/signin.js';
+  import { Badge, Button, Card, Skeleton } from '#lib/ui/index.js';
   import {
     addMonths,
     browserTimezone,
@@ -20,8 +20,8 @@
     weekdayOrder,
     weekdayShortLabel,
     withSearchParams,
-  } from '$lib/mentorship';
-  import type { Mentor, MentorSlot } from '$lib/types';
+  } from '#lib/mentorship.js';
+  import type { Mentor, MentorSlot } from '#lib/types.js';
 
   let { mentor }: { mentor: Mentor } = $props();
 
@@ -79,7 +79,7 @@
       date: next.date === undefined ? selection.date : (next.date ?? ''),
       slot: next.slot === undefined ? selection.slot : (next.slot ?? ''),
     };
-    const query = withSearchParams(page.url.searchParams, selection);
+    const query = withSearchParams(new URLSearchParams(page.url.search), selection);
     // eslint-disable-next-line svelte/no-navigation-without-resolve -- in-place query write to the current pathname; there is no route to resolve
     replaceState(page.url.pathname + (query ? `?${query}` : ''), {});
   }

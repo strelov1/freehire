@@ -2,9 +2,9 @@
   // The Skills view: wraps SkillsPicker with autosave straight to profileStore — the
   // steady-state (profile already exists) counterpart to the local, batched skills fields
   // ProfileForm still uses during first-time set-up.
-  import { profileStore } from '$lib/profile.svelte';
-  import { locale } from '$lib/i18n/currentLocale.svelte';
-  import { format, t } from '$lib/i18n/t';
+  import { profileStore } from '#lib/profile.svelte.js';
+  import { locale } from '#lib/i18n/currentLocale.svelte.js';
+  import { format, t } from '#lib/i18n/t.js';
   import { messages } from './SkillsCard.messages';
   import SkillsPicker from './SkillsPicker.svelte';
 

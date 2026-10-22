@@ -1,5 +1,5 @@
-import { serverApi } from '$lib/server/api';
-import { PROMO_COOKIE } from '$lib/referral';
+import { serverApi } from '#lib/server/api.js';
+import { PROMO_COOKIE } from '#lib/referral.js';
 import type { PageServerLoad } from './$types';
 
 // The plan matrix is loaded on the SERVER so the comparison is in the HTML a crawler sees.

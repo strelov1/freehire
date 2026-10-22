@@ -1,9 +1,9 @@
 <script lang="ts">
   import { page } from '$app/state';
-  import RecruitersView from '$lib/components/RecruitersView.svelte';
-  import Seo from '$lib/components/Seo.svelte';
-  import { RECRUITERS_FAQ } from '$lib/recruitersFaq';
-  import { breadcrumbJsonLd, faqPageJsonLd, jsonLdScript } from '$lib/seo';
+  import RecruitersView from '#lib/components/RecruitersView.svelte';
+  import Seo from '#lib/components/Seo.svelte';
+  import { RECRUITERS_FAQ } from '#lib/recruitersFaq.js';
+  import { breadcrumbJsonLd, faqPageJsonLd, jsonLdScript } from '#lib/seo.js';
 
   const origin = $derived(page.url.origin);
   const canonical = $derived(`${origin}/recruiters`);

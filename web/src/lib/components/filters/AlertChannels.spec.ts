@@ -9,7 +9,7 @@ const state = vi.hoisted(() => ({
   subs: [] as { id: number; saved_search_id: number; channel: string }[],
 }));
 
-vi.mock('$lib/notifications.svelte', () => ({
+vi.mock('#lib/notifications.svelte.js', () => ({
   notifications: {
     get telegram() {
       return { enabled: false, linked: false };

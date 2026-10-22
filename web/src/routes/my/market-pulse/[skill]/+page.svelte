@@ -2,19 +2,19 @@
   import { ArrowLeft } from '@lucide/svelte';
   import { page } from '$app/state';
   import { resolve } from '$app/paths';
-  import { api, type SkillPulse } from '$lib/api';
-  import { isAuthenticated } from '$lib/auth.svelte';
-  import { skillLabel } from '$lib/facets';
-  import { buildSkillDetailChart } from '$lib/skillDetailChart';
-  import { pickTickIndices } from '$lib/activityChart';
-  import { formatCount } from '$lib/utils';
-  import { Button } from '$lib/ui';
-  import States from '$lib/components/States.svelte';
-  import SkillDeltaBadge from '$lib/components/SkillDeltaBadge.svelte';
-  import { must } from '$lib/utils';
+  import { api, type SkillPulse } from '#lib/api.js';
+  import { isAuthenticated } from '#lib/auth.svelte.js';
+  import { skillLabel } from '#lib/facets.js';
+  import { buildSkillDetailChart } from '#lib/skillDetailChart.js';
+  import { pickTickIndices } from '#lib/activityChart.js';
+  import { formatCount } from '#lib/utils.js';
+  import { Button } from '#lib/ui/index.js';
+  import States from '#lib/components/States.svelte';
+  import SkillDeltaBadge from '#lib/components/SkillDeltaBadge.svelte';
+  import { must } from '#lib/utils.js';
   import { messages } from './messages';
-  import { locale } from '$lib/i18n/currentLocale.svelte';
-  import { format, plural, t } from '$lib/i18n/t';
+  import { locale } from '#lib/i18n/currentLocale.svelte.js';
+  import { format, plural, t } from '#lib/i18n/t.js';
 
   // One skill's full retained history, zoomed in from the /my/market-pulse card
   // grid. Reuses the same GET /me/market-pulse call (already returns every

@@ -12,10 +12,10 @@
 // the base registers the instance so the sign-out sweep drops it, which is the only
 // thing standing between user A's template and user B signing in on the same tab.
 
-import { api, ApiError } from '$lib/api';
-import { UserResource } from '$lib/userResource.svelte';
-import type { Margins, Style } from '$lib/generated/contracts';
-import type { CvAppearanceDefaults, CvFont } from '$lib/cv';
+import { api, ApiError } from '#lib/api.js';
+import { UserResource } from '#lib/userResource.svelte.js';
+import type { Margins, Style } from '#lib/generated/contracts.js';
+import type { CvAppearanceDefaults, CvFont } from '#lib/cv.js';
 
 const BLANK_MARGINS: Margins = { top: 0.5, right: 0.5, bottom: 0.5, left: 0.5 };
 

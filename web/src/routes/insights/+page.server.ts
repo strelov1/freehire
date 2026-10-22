@@ -1,5 +1,5 @@
-import { loadInsightsGate } from '$lib/server/insights';
-import { coveredCategories } from '$lib/insights';
+import { loadInsightsGate } from '#lib/server/insights.js';
+import { coveredCategories } from '#lib/insights.js';
 import type { PageServerLoad } from './$types';
 
 // The insights hub: the entry point that links every covered category's three

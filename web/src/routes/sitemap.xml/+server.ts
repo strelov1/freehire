@@ -1,12 +1,12 @@
-import { landingCategories } from '$lib/roleLandings';
-import { serverApi } from '$lib/server/api';
+import { landingCategories } from '#lib/roleLandings.js';
+import { serverApi } from '#lib/server/api.js';
 import {
   JOB_SITEMAP_CHUNK,
   SITEMAP_CHUNK,
   sitemapIndexLocs,
   sitemapIndexXml,
   xmlResponse,
-} from '$lib/sitemap';
+} from '#lib/sitemap.js';
 import type { RequestHandler } from './$types';
 
 // The sitemap index: the static pages, the freshest-first job sub-sitemaps, one paged

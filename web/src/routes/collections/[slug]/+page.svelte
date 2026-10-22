@@ -1,17 +1,17 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
   import { page } from '$app/state';
-  import JobsView from '$lib/components/JobsView.svelte';
-  import Seo from '$lib/components/Seo.svelte';
-  import { skillLabel } from '$lib/facets';
+  import JobsView from '#lib/components/JobsView.svelte';
+  import Seo from '#lib/components/Seo.svelte';
+  import { skillLabel } from '#lib/facets.js';
   import {
     breadcrumbJsonLd,
     collectionHeading,
     collectionPageJsonLd,
     jobListItems,
     jsonLdScript,
-  } from '$lib/seo';
-  import { backerBadges } from '$lib/backers';
+  } from '#lib/seo.js';
+  import { backerBadges } from '#lib/backers.js';
   import type { PageData } from './$types';
 
   let { data }: { data: PageData } = $props();

@@ -8,17 +8,17 @@
   // something looks off, so the check is a habit rather than a surprise.
   import { Check, TriangleAlert } from '@lucide/svelte';
   import { beforeNavigate } from '$app/navigation';
-  import { notInPlan, refuses, remaining, resetsAtLabel } from '$lib/allowance';
+  import { notInPlan, refuses, remaining, resetsAtLabel } from '#lib/allowance.js';
   import {
     confirmTailorDialog,
     refreshConfirmTailorAllowance,
     settleConfirmTailorDialog,
-  } from '$lib/confirmTailorDialog.svelte';
-  import { partitionBlockers, toneText, haveChipClass, missingChipClass } from '$lib/jobMatch';
-  import { ConfirmDialog } from '$lib/ui';
+  } from '#lib/confirmTailorDialog.svelte.js';
+  import { partitionBlockers, toneText, haveChipClass, missingChipClass } from '#lib/jobMatch.js';
+  import { ConfirmDialog } from '#lib/ui/index.js';
   import SkillIcon from './SkillIcon.svelte';
   import PlanLimitLink from './PlanLimitLink.svelte';
-  import { skillLabel } from '$lib/facets';
+  import { skillLabel } from '#lib/facets.js';
 
   const match = $derived(confirmTailorDialog.match);
   const blockers = $derived(partitionBlockers(match?.blockers));
@@ -51,7 +51,8 @@
   // Mounted in the root layout, so a navigation does not unmount it: following the upgrade
   // link would land on /my/plan with this dialog still covering the page. Leaving the page
   // is a cancel — the candidate went somewhere else instead of tailoring.
-  beforeNavigate(() => {
+  beforeNavigate(({ shallow }) => {
+    if (shallow) return; // SvelteKit 3 fires this for shallow routing too — not leaving
     if (confirmTailorDialog.open) settleConfirmTailorDialog(false);
   });
 

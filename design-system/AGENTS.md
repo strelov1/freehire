@@ -2,11 +2,11 @@
 
 `freehire-design-system` — tokens and Svelte primitives, a **pnpm** package sibling to
 `web/`, linked in as `link:../design-system`. `web/src/lib/ui/index.ts` is a thin re-export
-surface, so app code imports from `$lib/ui` and never reaches into the package directly.
+surface, so app code imports from `#lib/ui` and never reaches into the package directly.
 It re-exports with `export *`, not a list: an enumerated list is a second copy of `src/index.ts`
 that nothing reconciles, and it drifted once already — eleven of the fifteen primitives were
 built, tested, storybooked and documented while being unreachable from the app, with every
-check green. `cn` comes from here too; `$lib/utils` no longer carries a copy.
+check green. `cn` comes from here too; `#lib/utils` no longer carries a copy.
 
 Extracted from `web/` over seven phases, all landed. `docs/` holds what outlived them:
 `verification.md` (each guarantee and the command that enforces it), `icons.md`, and the
@@ -96,7 +96,7 @@ rather than here — their census of `web/` was already off by a third.
   primitive against `scripts/adoption-baseline.json`, and names the unused ones every run
   (nine of fifteen today). The primitive list is derived from `src/index.ts`, so a new
   primitive joins the census by itself — **do not list them in the script.**
-- **`$lib/ui` is a wall, not a convention.** A `.svelte` or `.ts` file under `web/src` that
+- **`#lib/ui` is a wall, not a convention.** A `.svelte` or `.ts` file under `web/src` that
   imports `freehire-design-system` by name fails `check:adoption` outright — no baseline, no
   exception, because there are zero today. `web/src/app.css`'s `@import` of `theme.css` is
   exempt and must stay so: it is the CSS contract. The walk reads `from`-clauses only.

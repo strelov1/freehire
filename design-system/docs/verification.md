@@ -110,7 +110,7 @@ Files, not occurrences — the question is whether the app reaches for a primiti
 when it needs one, and a file that reaches once has answered it. The primitive list
 comes from `src/index.ts`, so a new primitive joins the census by itself.
 
-The same walk enforces the door. `$lib/ui` exists so app code never names the
+The same walk enforces the door. `#lib/ui` exists so app code never names the
 package, there are zero violations today, and zero is a number a wall can hold — so
 a `.svelte` or `.ts` file under `web/src` importing `freehire-design-system` fails
 outright, no baseline and no exception. `web/src/app.css`'s `@import` of the

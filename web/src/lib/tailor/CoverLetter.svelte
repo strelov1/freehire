@@ -11,8 +11,8 @@
   // checkable — every sentence about the candidate's experience traces to something they
   // themselves asserted — so it renders even when it is empty, saying so.
   import { Copy, Check, FileText, Loader2 } from '@lucide/svelte';
-  import { api, trackPlanRefusal } from '$lib/api';
-  import type { CoverLetterView } from '$lib/cv';
+  import { api, trackPlanRefusal } from '#lib/api.js';
+  import type { CoverLetterView } from '#lib/cv.js';
 
   let { cvId }: { cvId: string } = $props();
 

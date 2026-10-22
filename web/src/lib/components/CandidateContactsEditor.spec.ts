@@ -8,7 +8,7 @@ vi.mock('$app/state', () => ({
 
 const { putResumeContacts } = vi.hoisted(() => ({ putResumeContacts: vi.fn() }));
 
-vi.mock('$lib/api', () => ({ api: { putResumeContacts } }));
+vi.mock('#lib/api.js', () => ({ api: { putResumeContacts } }));
 
 beforeEach(() => {
   putResumeContacts.mockReset();

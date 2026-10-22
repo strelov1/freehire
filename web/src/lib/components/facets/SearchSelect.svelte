@@ -1,10 +1,10 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
-  import { optionMatches, uniqueByValue, type FacetOption } from '$lib/facets';
-  import { CountryFlag, EntityLogo, Input } from '$lib/ui';
+  import { optionMatches, uniqueByValue, type FacetOption } from '#lib/facets.js';
+  import { CountryFlag, EntityLogo, Input } from '#lib/ui/index.js';
   import SkillIcon from '../SkillIcon.svelte';
   import { pillClass, pillTitle } from './pill';
-  import { must } from '$lib/utils';
+  import { must } from '#lib/utils.js';
 
   // A searchable multi-select: a filter field over the options rendered as a
   // scrollable list of three-state pills (off / include / exclude). Selected options

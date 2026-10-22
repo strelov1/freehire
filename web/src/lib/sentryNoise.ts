@@ -21,14 +21,14 @@
 // if the network were perfect.
 //
 // Self-contained on purpose, for the reason themeStorage.ts records for itself: it
-// duck-types the error rather than importing ApiError from $lib/api, so the unit test runs
+// duck-types the error rather than importing ApiError from #lib/api, so the unit test runs
 // in the plain-Node vitest env and the filter cannot drag the API client into either hook's
 // startup path.
 
 /** Two statuses, reached two different ways — and they are listed apart because saying
  *  "both" about them was wrong in both directions:
  *
- *  - **504** is ours. Nothing answers with it; `$lib/api`'s `call()` MINTS it when its own
+ *  - **504** is ours. Nothing answers with it; `#lib/api`'s `call()` MINTS it when its own
  *    SSR read timeout fires (api.ts, `AbortSignal.timeout`). It is not in the Go handler's
  *    vocabulary at all.
  *  - **499** is the API's. `internal/api/handler/errors.go` names it
@@ -76,7 +76,7 @@ const TRANSIENT_MESSAGES = [
 /** Error class names that are a condition whatever they carry.
  *
  *  `TimeoutError` is not speculative: it is what `AbortSignal.timeout()` rejects with, and
- *  `$lib/api`'s `call()` gives every SSR read one of those. The 504 above is what that
+ *  `#lib/api`'s `call()` gives every SSR read one of those. The 504 above is what that
  *  becomes once `call()` has translated it; this catches the same timeout on any path that
  *  has NOT been through the translation — a `fetch` a component made with its own timeout
  *  signal, which no ApiError ever wraps. */

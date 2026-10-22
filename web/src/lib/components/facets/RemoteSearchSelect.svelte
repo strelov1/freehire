@@ -1,8 +1,8 @@
 <script lang="ts">
   import { X } from '@lucide/svelte';
-  import type { FacetOption } from '$lib/facets';
-  import { dedupeByKey } from '$lib/paginated.svelte';
-  import { Input } from '$lib/ui';
+  import type { FacetOption } from '#lib/facets.js';
+  import { dedupeByKey } from '#lib/paginated.svelte.js';
+  import { Input } from '#lib/ui/index.js';
   import SkillIcon from '../SkillIcon.svelte';
   import { SvelteMap } from 'svelte/reactivity';
   import { pillClass } from './pill';

@@ -1,4 +1,4 @@
-import { defineMessages } from '$lib/i18n/t';
+import { defineMessages } from '#lib/i18n/t.js';
 
 // `status` mirrors the API's `EmployerAccount['status']` enum, rendered verbatim as a
 // status pill's label — the same reason MySubmissionsView keeps its own status map rather

@@ -1,7 +1,7 @@
 <script lang="ts">
-  import Seo from '$lib/components/Seo.svelte';
-  import JobRow from '$lib/components/JobRow.svelte';
-  import States from '$lib/components/States.svelte';
+  import Seo from '#lib/components/Seo.svelte';
+  import JobRow from '#lib/components/JobRow.svelte';
+  import States from '#lib/components/States.svelte';
   import type { PageData } from './$types';
 
   let { data }: { data: PageData } = $props();

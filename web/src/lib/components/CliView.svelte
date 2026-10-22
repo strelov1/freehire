@@ -1,8 +1,8 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
   import { page } from '$app/state';
-  import { CLI_INSTALL, CLI_REPO, MCP_REPO } from '$lib/cliLinks';
-  import { Button, SectionLabel, TabStrip, tabStripId } from '$lib/ui';
+  import { CLI_INSTALL, CLI_REPO, MCP_REPO } from '#lib/cliLinks.js';
+  import { Button, SectionLabel, TabStrip, tabStripId } from '#lib/ui/index.js';
 
   const SKILLS_URL = 'https://github.com/strelov1/freehire-cli/tree/main/skills';
 
@@ -426,7 +426,7 @@
   <section class="border-t border-border py-10">
     <p class="text-sm leading-relaxed text-muted-foreground">
       Free and open source — no tracking, no lock-in. Read every line of the
-      <!-- eslint-disable svelte/no-navigation-without-resolve -- absolute GitHub URLs from $lib/cliLinks (shared with the JSON-LD's codeRepository), not SvelteKit routes -->
+      <!-- eslint-disable svelte/no-navigation-without-resolve -- absolute GitHub URLs from #lib/cliLinks (shared with the JSON-LD's codeRepository), not SvelteKit routes -->
       <a
         href={CLI_REPO}
         target="_blank"

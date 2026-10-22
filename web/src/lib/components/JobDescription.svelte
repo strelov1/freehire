@@ -4,7 +4,7 @@
   // so the description reads the same everywhere.
   //
   // `lang` marks the body as a foreign-language subtree of an English page (see
-  // foreignContentLang in $lib/seo). Optional: callers that don't know the posting's
+  // foreignContentLang in #lib/seo). Optional: callers that don't know the posting's
   // language omit it and the body simply inherits the document's.
   let { html, lang }: { html: string; lang?: string } = $props();
 </script>

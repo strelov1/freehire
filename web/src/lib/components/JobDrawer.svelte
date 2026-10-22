@@ -1,30 +1,30 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
   import { goto } from '$app/navigation';
-  import { Button, cn, EntityLogo } from '$lib/ui';
+  import { Button, cn, EntityLogo } from '#lib/ui/index.js';
   import { Trash2, X, ExternalLink, Mic, NotebookPen, Send, Target, SquarePen, Check } from '@lucide/svelte';
-  import { askConfirmTailor } from '$lib/confirmTailorDialog.svelte';
-  import { groupedStages, humanizeStage, offersDebrief } from '$lib/stages';
-  import { canFollowUp } from '$lib/followup';
-  import { CLOSED_OUTCOMES, type ClosedOutcome } from '$lib/board';
-  import { locale } from '$lib/i18n/currentLocale.svelte';
-  import { timeAgo, errorMessage } from '$lib/utils';
-  import { tablist } from '$lib/actions/tablist';
-  import { cardTagsFromCard } from '$lib/enrichment';
-  import { companyLogoUrl } from '$lib/logo';
+  import { askConfirmTailor } from '#lib/confirmTailorDialog.svelte.js';
+  import { groupedStages, humanizeStage, offersDebrief } from '#lib/stages.js';
+  import { canFollowUp } from '#lib/followup.js';
+  import { CLOSED_OUTCOMES, type ClosedOutcome } from '#lib/board.js';
+  import { locale } from '#lib/i18n/currentLocale.svelte.js';
+  import { timeAgo, errorMessage } from '#lib/utils.js';
+  import { tablist } from '#lib/actions/tablist.js';
+  import { cardTagsFromCard } from '#lib/enrichment.js';
+  import { companyLogoUrl } from '#lib/logo.js';
   import JobDescription from './JobDescription.svelte';
   import MatchAnalysisFull from './MatchAnalysisFull.svelte';
   import JobMatch from './JobMatch.svelte';
   import NoteEditor from './NoteEditor.svelte';
-  import { api, isPlanRefusal } from '$lib/api';
+  import { api, isPlanRefusal } from '#lib/api.js';
   import PlanLimitLink from './PlanLimitLink.svelte';
-  import type { EmailBody } from '$lib/api';
-  import { currentUser } from '$lib/auth.svelte';
-  import { statusLabel, stageImplication } from '$lib/emailStatus';
-  import { eventLabel, eventTone } from '$lib/events';
-  import StatusChip from '$lib/components/StatusChip.svelte';
+  import type { EmailBody } from '#lib/api.js';
+  import { currentUser } from '#lib/auth.svelte.js';
+  import { statusLabel, stageImplication } from '#lib/emailStatus.js';
+  import { eventLabel, eventTone } from '#lib/events.js';
+  import StatusChip from '#lib/components/StatusChip.svelte';
   import SkillChip from './SkillChip.svelte';
-  import { avatarInitials, avatarColor } from '$lib/avatar';
+  import { avatarInitials, avatarColor } from '#lib/avatar.js';
   import type {
     Job,
     MyJob,
@@ -34,15 +34,15 @@
     RecalledEmail,
     StageSuggestion,
     TimelineEvent
-  } from '$lib/types';
-  import { focusTrap } from '$lib/actions/focusTrap';
-  import { lockScroll, unlockScroll } from '$lib/scrollLock';
-  import { autoApplyReviewBanner } from '$lib/autoApplyReview';
-  import { autoApplyProgressSteps, type AutoApplyProgressStepId } from '$lib/autoApplyProgress';
-  import { isAutoApplyPaused, setAutoApplyPaused } from '$lib/autoApplyPauseStorage';
-  import { hasVisibleRows, pendingRows } from '$lib/answerBank';
+  } from '#lib/types.js';
+  import { focusTrap } from '#lib/actions/focusTrap.js';
+  import { lockScroll, unlockScroll } from '#lib/scrollLock.js';
+  import { autoApplyReviewBanner } from '#lib/autoApplyReview.js';
+  import { autoApplyProgressSteps, type AutoApplyProgressStepId } from '#lib/autoApplyProgress.js';
+  import { isAutoApplyPaused, setAutoApplyPaused } from '#lib/autoApplyPauseStorage.js';
+  import { hasVisibleRows, pendingRows } from '#lib/answerBank.js';
   import { messages } from './JobDrawer.messages';
-  import { format, plural, t } from '$lib/i18n/t';
+  import { format, plural, t } from '#lib/i18n/t.js';
 
   let {
     item,

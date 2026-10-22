@@ -1,18 +1,18 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte';
   import { resolve } from '$app/paths';
-  import { api } from '$lib/api';
+  import { api } from '#lib/api.js';
   import {
     buildActivityGrid,
     LEVELS,
     rangeForWindow,
     type ActivityDay,
     type ActivityWeek,
-  } from '$lib/activityGrid';
-  import { locale } from '$lib/i18n/currentLocale.svelte';
-  import { plural, t } from '$lib/i18n/t';
-  import type { TimelineEvent } from '$lib/types';
-  import { Button, Card } from '$lib/ui';
+  } from '#lib/activityGrid.js';
+  import { locale } from '#lib/i18n/currentLocale.svelte.js';
+  import { plural, t } from '#lib/i18n/t.js';
+  import type { TimelineEvent } from '#lib/types.js';
+  import { Button, Card } from '#lib/ui/index.js';
   import { messages } from './ActivityGrid.messages';
   import ApplicationEventList from './ApplicationEventList.svelte';
   import States from './States.svelte';

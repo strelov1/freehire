@@ -2,14 +2,14 @@
   import { onMount } from 'svelte';
   import { page } from '$app/state';
   import { replaceState } from '$app/navigation';
-  import { api, ApiError } from '$lib/api';
-  import type { GmailStatus } from '$lib/api';
-  import type { DiscordStatus } from '$lib/types';
-  import { notifications } from '$lib/notifications.svelte';
-  import { onRouterReady } from '$lib/routerReady';
-  import { Badge, Button, ConfirmDialog, ProviderIcon } from '$lib/ui';
+  import { api, ApiError } from '#lib/api.js';
+  import type { GmailStatus } from '#lib/api.js';
+  import type { DiscordStatus } from '#lib/types.js';
+  import { notifications } from '#lib/notifications.svelte.js';
+  import { onRouterReady } from '#lib/routerReady.js';
+  import { Badge, Button, ConfirmDialog, ProviderIcon } from '#lib/ui/index.js';
   import { Mail, CalendarDays } from '@lucide/svelte';
-  import { errorMessage } from '$lib/utils';
+  import { errorMessage } from '#lib/utils.js';
   import GmailConnectDialog from './GmailConnectDialog.svelte';
 
   // The account-level home for every third-party connection: Google (Gmail +

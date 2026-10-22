@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
-vi.mock('$env/dynamic/private', () => ({ env: { API_INTERNAL_URL: 'http://api' } }));
-vi.mock('$lib/server/api', () => ({ ssrTimeoutMs: () => 1000 }));
+vi.mock('$app/env/private', () => ({ API_INTERNAL_URL: 'http://api', SSR_API_TIMEOUT_MS: undefined }));
+vi.mock('#lib/server/api.js', () => ({ ssrTimeoutMs: () => 1000 }));
 
 const { proxyDiscoveryDocument } = await import('./wellKnown');
 

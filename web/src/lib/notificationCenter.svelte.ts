@@ -11,9 +11,9 @@
 // SSR-safe and auth-agnostic (see UserResource): the load is a browser-only no-op
 // and leaves empty/zero state for signed-out users.
 
-import { api } from '$lib/api';
-import { UserResource } from '$lib/userResource.svelte';
-import type { NotificationItem } from '$lib/types';
+import { api } from '#lib/api.js';
+import { UserResource } from '#lib/userResource.svelte.js';
+import type { NotificationItem } from '#lib/types.js';
 
 const PAGE_LIMIT = 20;
 

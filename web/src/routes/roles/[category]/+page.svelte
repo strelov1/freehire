@@ -1,10 +1,10 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
   import { page } from '$app/state';
-  import Seo from '$lib/components/Seo.svelte';
-  import { MIN_PAIR_OPEN } from '$lib/roleLandings';
-  import { breadcrumbJsonLd, jsonLdScript } from '$lib/seo';
-  import { CountryFlag, Table } from '$lib/ui';
+  import Seo from '#lib/components/Seo.svelte';
+  import { MIN_PAIR_OPEN } from '#lib/roleLandings.js';
+  import { breadcrumbJsonLd, jsonLdScript } from '#lib/seo.js';
+  import { CountryFlag, Table } from '#lib/ui/index.js';
   import type { PageData } from './$types';
 
   let { data }: { data: PageData } = $props();

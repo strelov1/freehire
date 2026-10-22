@@ -1,9 +1,9 @@
 <script lang="ts">
   import { page } from '$app/state';
-  import Seo from '$lib/components/Seo.svelte';
-  import InsightsPageShell from '$lib/components/InsightsPageShell.svelte';
-  import { breadcrumbJsonLd, datasetJsonLd, jsonLdScript } from '$lib/seo';
-  import { Table } from '$lib/ui';
+  import Seo from '#lib/components/Seo.svelte';
+  import InsightsPageShell from '#lib/components/InsightsPageShell.svelte';
+  import { breadcrumbJsonLd, datasetJsonLd, jsonLdScript } from '#lib/seo.js';
+  import { Table } from '#lib/ui/index.js';
   import type { PageData } from './$types';
 
   let { data }: { data: PageData } = $props();

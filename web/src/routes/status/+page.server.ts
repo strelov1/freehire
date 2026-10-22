@@ -1,4 +1,4 @@
-import { serverApi } from '$lib/server/api';
+import { serverApi } from '#lib/server/api.js';
 import type { PageServerLoad } from './$types';
 
 // The public /status page pulls the ingest-fleet health live from our own public

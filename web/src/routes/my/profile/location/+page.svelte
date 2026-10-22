@@ -1,6 +1,6 @@
 <script lang="ts">
-  import LocationCard from '$lib/components/profile/LocationCard.svelte';
-  import { profileStore } from '$lib/profile.svelte';
+  import LocationCard from '#lib/components/profile/LocationCard.svelte';
+  import { profileStore } from '#lib/profile.svelte.js';
   import { handleSaved } from '../actions';
 
   const profile = $derived(profileStore.profile);

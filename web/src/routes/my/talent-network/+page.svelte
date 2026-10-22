@@ -1,9 +1,9 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
-  import { ApiError, api } from '$lib/api';
-  import type { TalentNetworkVisibility } from '$lib/types';
-  import { isTalentNetworkMember } from '$lib/talentMembership';
-  import { Button } from '$lib/ui';
+  import { ApiError, api } from '#lib/api.js';
+  import type { TalentNetworkVisibility } from '#lib/types.js';
+  import { isTalentNetworkMember } from '#lib/talentMembership.js';
+  import { Button } from '#lib/ui/index.js';
 
   // Talent Network membership: in, or not. One decision, not three.
   //

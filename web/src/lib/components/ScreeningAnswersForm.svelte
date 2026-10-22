@@ -1,10 +1,10 @@
 <script lang="ts">
-  import type { Answers } from '$lib/generated/contracts';
-  import { api } from '$lib/api';
-  import { Button, Input } from '$lib/ui';
+  import type { Answers } from '#lib/generated/contracts.js';
+  import { api } from '#lib/api.js';
+  import { Button, Input } from '#lib/ui/index.js';
   import { messages } from './ScreeningAnswersForm.messages';
-  import { locale } from '$lib/i18n/currentLocale.svelte';
-  import { format, t } from '$lib/i18n/t';
+  import { locale } from '#lib/i18n/currentLocale.svelte.js';
+  import { format, t } from '#lib/i18n/t.js';
 
   // Editable form for the six screening questions that repeat across ATS application
   // forms (work authorization, visa sponsorship, desired salary, notice period,

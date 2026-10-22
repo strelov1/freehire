@@ -1,13 +1,13 @@
 <script lang="ts">
-  import { api, ApiError } from '$lib/api';
-  import { AsyncData } from '$lib/asyncData.svelte';
-  import { isAuthenticated } from '$lib/auth.svelte';
-  import type { WebhookConfig } from '$lib/types';
-  import { Button, ConfirmDialog, Input } from '$lib/ui';
-  import { locale } from '$lib/i18n/currentLocale.svelte';
-  import { t } from '$lib/i18n/t';
+  import { api, ApiError } from '#lib/api.js';
+  import { AsyncData } from '#lib/asyncData.svelte.js';
+  import { isAuthenticated } from '#lib/auth.svelte.js';
+  import type { WebhookConfig } from '#lib/types.js';
+  import { Button, ConfirmDialog, Input } from '#lib/ui/index.js';
+  import { locale } from '#lib/i18n/currentLocale.svelte.js';
+  import { t } from '#lib/i18n/t.js';
   import { messages } from './WebhookSettingsView.messages';
-  import { timeAgo } from '$lib/utils';
+  import { timeAgo } from '#lib/utils.js';
   import States from './States.svelte';
 
   const s = $derived(t(messages, locale()));

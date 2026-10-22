@@ -3,13 +3,13 @@
   import { FileText, LayoutTemplate, Type } from '@lucide/svelte';
   import { page } from '$app/state';
   import { resolve } from '$app/paths';
-  import { Button, TabStrip, tabStripId } from '$lib/ui';
-  import { activeRouteTab } from '$lib/routeTabs';
-  import { cvIntakeDialog, closeCvIntake, openCvIntake } from '$lib/cvIntakeDialog.svelte';
-  import JdIntakeDialog from '$lib/components/cv/JdIntakeDialog.svelte';
+  import { Button, TabStrip, tabStripId } from '#lib/ui/index.js';
+  import { activeRouteTab } from '#lib/routeTabs.js';
+  import { cvIntakeDialog, closeCvIntake, openCvIntake } from '#lib/cvIntakeDialog.svelte.js';
+  import JdIntakeDialog from '#lib/components/cv/JdIntakeDialog.svelte';
   import { messages } from './messages';
-  import { locale } from '$lib/i18n/currentLocale.svelte';
-  import { t } from '$lib/i18n/t';
+  import { locale } from '#lib/i18n/currentLocale.svelte.js';
+  import { t } from '#lib/i18n/t.js';
 
   let { children }: { children: Snippet } = $props();
 

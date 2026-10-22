@@ -2,8 +2,8 @@
   // The one mount point for cvRefreshDialog.svelte.ts's controller — see there for why
   // this needs to exist as a singleton at all. Sibling of CookieConsent and SupportToast
   // in the root layout: fixed, self-gating, owns no layout space of its own.
-  import { ConfirmDialog } from '$lib/ui';
-  import { cvRefreshDialog, settleCvRefreshDialog } from '$lib/cvRefreshDialog.svelte';
+  import { ConfirmDialog } from '#lib/ui/index.js';
+  import { cvRefreshDialog, settleCvRefreshDialog } from '#lib/cvRefreshDialog.svelte.js';
 </script>
 
 <ConfirmDialog

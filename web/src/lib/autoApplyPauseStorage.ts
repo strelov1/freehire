@@ -4,7 +4,7 @@
 // see openspec/changes/auto-apply-progress-tab/design.md.
 //
 // Self-contained on purpose, mirroring filterStorage.ts: it feature-detects `localStorage`
-// rather than importing `browser` from `$app/environment`, so the unit test runs in the
+// rather than importing `browser` from `$app/env`, so the unit test runs in the
 // plain-Node vitest env. Every access is wrapped and failures are swallowed — private mode
 // / quota / disabled storage must never break the drawer, which still works without it.
 

@@ -8,10 +8,10 @@
 // the list stays empty for signed-out users. Mutations surface API errors to the
 // caller (a duplicate name or the per-user cap is a 409) so the UI can show them.
 
-import { api } from '$lib/api';
-import { notifications } from '$lib/notifications.svelte';
-import { UserResource } from '$lib/userResource.svelte';
-import type { SavedSearch } from '$lib/types';
+import { api } from '#lib/api.js';
+import { notifications } from '#lib/notifications.svelte.js';
+import { UserResource } from '#lib/userResource.svelte.js';
+import type { SavedSearch } from '#lib/types.js';
 
 class SavedSearches extends UserResource<SavedSearch[]> {
   // Reassigned (never mutated in place) on every change, so $state.raw is enough

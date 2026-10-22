@@ -1,19 +1,19 @@
 <script lang="ts">
   import { onMount, untrack } from 'svelte';
   import { Star } from '@lucide/svelte';
-  import { browser } from '$app/environment';
+  import { browser } from '$app/env';
   import { page } from '$app/state';
   import { resolve } from '$app/paths';
-  import { api, type Slice } from '$lib/api';
-  import { Paginator } from '$lib/paginated.svelte';
-  import { syncOnNavigation } from '$lib/urlSynced.svelte';
-  import { CompanyFilterStore, companyFiltersToParams, type CompanySortField } from '$lib/companyFilters';
-  import { setListSearchTarget } from '$lib/listSearch.svelte';
-  import type { CompanyListItem } from '$lib/types';
-  import { Badge, CountryFlag, EntityLogo } from '$lib/ui';
-  import { countryLabel } from '$lib/facets';
-  import { companyLogoUrl } from '$lib/logo';
-  import { pageCount, pageOffset } from '$lib/pagination';
+  import { api, type Slice } from '#lib/api.js';
+  import { Paginator } from '#lib/paginated.svelte.js';
+  import { syncOnNavigation } from '#lib/urlSynced.svelte.js';
+  import { CompanyFilterStore, companyFiltersToParams, type CompanySortField } from '#lib/companyFilters.js';
+  import { setListSearchTarget } from '#lib/listSearch.svelte.js';
+  import type { CompanyListItem } from '#lib/types.js';
+  import { Badge, CountryFlag, EntityLogo } from '#lib/ui/index.js';
+  import { countryLabel } from '#lib/facets.js';
+  import { companyLogoUrl } from '#lib/logo.js';
+  import { pageCount, pageOffset } from '#lib/pagination.js';
   import States from './States.svelte';
   import Pagination from './Pagination.svelte';
   import BackerBadge from './BackerBadge.svelte';
@@ -31,7 +31,7 @@
   // reload, sharing, and back/forward. The store owns the state<->URL transport and
   // the reload debounce; `value` drives inputs, `applied` (debounced) drives the
   // fetch.
-  const filters = new CompanyFilterStore(page.url.searchParams);
+  const filters = new CompanyFilterStore(new URLSearchParams(page.url.search));
 
   // Fetch against the debounced filters so typing/toggling doesn't issue a request
   // per change. `q` lives inside the serialized params, so it's passed as ''.

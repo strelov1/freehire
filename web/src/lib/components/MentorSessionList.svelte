@@ -1,8 +1,8 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
-  import { Badge, Card, EmptyState } from '$lib/ui';
-  import { formatInstantIn } from '$lib/mentorship';
-  import type { MentorSession } from '$lib/types';
+  import { Badge, Card, EmptyState } from '#lib/ui/index.js';
+  import { formatInstantIn } from '#lib/mentorship.js';
+  import type { MentorSession } from '#lib/types.js';
 
   let {
     sessions,

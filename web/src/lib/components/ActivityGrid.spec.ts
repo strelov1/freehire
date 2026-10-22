@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { TimelineEvent } from '$lib/types';
+import type { TimelineEvent } from '#lib/types.js';
 import ActivityGrid from './ActivityGrid.svelte';
 
 // The model's own arithmetic is covered in activityGrid.test.ts, in two timezones. What
@@ -20,7 +20,7 @@ const { myTimeline } = vi.hoisted(() => ({ myTimeline: vi.fn() }));
 // a message about `locale` rather than about the grid.
 vi.mock('$app/state', () => ({ page: { data: {}, url: new URL('http://localhost/my/tracking/activity') } }));
 vi.mock('$app/paths', () => ({ resolve: (p: string) => p, base: '', assets: '' }));
-vi.mock('$lib/api', () => ({ api: { myTimeline } }));
+vi.mock('#lib/api.js', () => ({ api: { myTimeline } }));
 
 /** An event at local midday on a calendar date, so no assertion here depends on the zone the
  *  suite happens to run in. */

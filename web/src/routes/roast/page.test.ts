@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-import { ApiError, createApi, RESUME_MAX_MB } from '$lib/api';
+import { ApiError, createApi, RESUME_MAX_MB } from '#lib/api.js';
 import { marketLine, roleDisplay } from './roastView';
 
 // This file predates `web/`'s `components` vitest project (real `.svelte` rendering via

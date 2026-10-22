@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { viewJobMatch, impactOf, scoreTone } from './jobmatch';
-import type { CvJobMatch } from '$lib/cv';
+import type { CvJobMatch } from '#lib/cv.js';
 
 function resp(over: Partial<NonNullable<CvJobMatch['score']>> = {}): CvJobMatch {
   return {

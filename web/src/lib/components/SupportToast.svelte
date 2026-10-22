@@ -2,15 +2,15 @@
   import { onMount } from 'svelte';
   import { page } from '$app/state';
   import { Star, X } from '@lucide/svelte';
-  import { githubStars, formatStars, GITHUB_URL } from '$lib/github.svelte';
-  import { bannerVisible } from '$lib/consent.svelte';
-  import { cn } from '$lib/ui';
+  import { githubStars, formatStars, GITHUB_URL } from '#lib/github.svelte.js';
+  import { bannerVisible } from '#lib/consent.svelte.js';
+  import { cn } from '#lib/ui/index.js';
   import {
     ownsMobileStickyCta,
     readDismissed,
     suppressesToast,
     writeDismissed,
-  } from '$lib/supportToast';
+  } from '#lib/supportToast.js';
 
   // A floating ask for a GitHub star, self-gating so the layout mounts it unconditionally.
   //

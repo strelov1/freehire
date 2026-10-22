@@ -6,16 +6,16 @@
   //
   // The font list comes from the API rather than a constant here: the server's registry is what
   // the PDF obeys, and a second copy in TypeScript would drift from it. Clamping and stepping
-  // live in the unit-tested helpers in $lib/tailor/geometry.
+  // live in the unit-tested helpers in #lib/tailor/geometry.
   import { RotateCcw } from '@lucide/svelte';
-  import type { Style } from '$lib/generated/contracts';
-  import type { CvFont } from '$lib/cv';
-  import { stepFontSize, FONT_SIZE_STEP, TEMPLATE_FONT_SIZE_PT } from '$lib/tailor/geometry';
-  import { SettingRow } from '$lib/ui';
+  import type { Style } from '#lib/generated/contracts.js';
+  import type { CvFont } from '#lib/cv.js';
+  import { stepFontSize, FONT_SIZE_STEP, TEMPLATE_FONT_SIZE_PT } from '#lib/tailor/geometry.js';
+  import { SettingRow } from '#lib/ui/index.js';
   import Stepper from './Stepper.svelte';
   import { messages } from './StyleSettings.messages';
-  import { locale } from '$lib/i18n/currentLocale.svelte';
-  import { format, t } from '$lib/i18n/t';
+  import { locale } from '#lib/i18n/currentLocale.svelte.js';
+  import { format, t } from '#lib/i18n/t.js';
 
   let { style = $bindable(), fonts = [] }: { style: Style; fonts?: CvFont[] } = $props();
 

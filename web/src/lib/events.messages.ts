@@ -1,4 +1,4 @@
-import { defineMessages } from '$lib/i18n/t';
+import { defineMessages } from '#lib/i18n/t.js';
 
 // `e.signal` (stage_set/employer_reply) is a raw wire token, not catalog text.
 export const messages = defineMessages(

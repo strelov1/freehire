@@ -1,6 +1,6 @@
 <script lang="ts">
-  import MentorsView from '$lib/components/MentorsView.svelte';
-  import Seo from '$lib/components/Seo.svelte';
+  import MentorsView from '#lib/components/MentorsView.svelte';
+  import Seo from '#lib/components/Seo.svelte';
   import { page } from '$app/state';
   import type { PageData } from './$types';
 

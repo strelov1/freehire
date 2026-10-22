@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { resumeStore } from '$lib/resume.svelte';
-  import EducationCard from '$lib/components/profile/EducationCard.svelte';
+  import { resumeStore } from '#lib/resume.svelte.js';
+  import EducationCard from '#lib/components/profile/EducationCard.svelte';
 
   const resumeMeta = $derived(resumeStore.meta);
 </script>

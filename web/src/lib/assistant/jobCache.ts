@@ -3,8 +3,8 @@
 // Lives in a plain module (not a component) so it's a plain Map, not reactive
 // state.
 
-import { api } from '$lib/api';
-import type { Job } from '$lib/types';
+import { api } from '#lib/api.js';
+import type { Job } from '#lib/types.js';
 
 // A long-running session (many turns, each surfacing its own search results and
 // job decks) can name far more distinct slugs than are worth holding onto at

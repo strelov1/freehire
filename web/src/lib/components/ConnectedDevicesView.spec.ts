@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, within } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { OAuthGrant, User } from '$lib/types';
+import type { OAuthGrant, User } from '#lib/types.js';
 import ConnectedDevicesView from './ConnectedDevicesView.svelte';
 
 const {
@@ -30,15 +30,15 @@ const { StubApiError } = vi.hoisted(() => ({
 
 vi.mock('$app/state', () => ({ page: { data: {}, url: new URL('http://localhost/') } }));
 vi.mock('$app/paths', () => ({ resolve: (p: string) => p, base: '', assets: '' }));
-vi.mock('$lib/api', () => ({
+vi.mock('#lib/api.js', () => ({
   api: { listOAuthGrants, revokeOAuthGrant, reauthenticatePassword, connectedIdentities },
   ApiError: StubApiError,
 }));
-vi.mock('$lib/auth.svelte', () => ({
+vi.mock('#lib/auth.svelte.js', () => ({
   currentUser: () => user.current,
   isAuthenticated: () => user.current !== null,
 }));
-vi.mock('$lib/recentAuth', () => ({
+vi.mock('#lib/recentAuth.js', () => ({
   beginProviderReauthentication: vi.fn(),
   recentAuthExpiry: () => null,
   forgetRecentAuthExpiry: vi.fn(),

@@ -1,11 +1,11 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
-  import { api } from '$lib/api';
-  import { isAuthenticated } from '$lib/auth.svelte';
-  import { signinUrl } from '$lib/signin';
-  import { NAV } from '$lib/siteNav';
-  import { isTalentNetworkMember } from '$lib/talentMembership';
-  import { Button } from '$lib/ui';
+  import { api } from '#lib/api.js';
+  import { isAuthenticated } from '#lib/auth.svelte.js';
+  import { signinUrl } from '#lib/signin.js';
+  import { NAV } from '#lib/siteNav.js';
+  import { isTalentNetworkMember } from '#lib/talentMembership.js';
+  import { Button } from '#lib/ui/index.js';
 
   // The way into the Talent Network from the catalogue itself.
   //

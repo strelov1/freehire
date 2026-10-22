@@ -1,5 +1,5 @@
-import { landingCategories } from '$lib/roleLandings';
-import { serverApi } from '$lib/server/api';
+import { landingCategories } from '#lib/roleLandings.js';
+import { serverApi } from '#lib/server/api.js';
 import type { PageServerLoad } from './$types';
 
 // The hub. Every published category with its open-job count, read off ONE unfiltered

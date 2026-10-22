@@ -8,8 +8,8 @@
   //
   // A link the classifier did not recognise is neither shown nor lost: it rides along in
   // `other` and is written back untouched.
-  import type { CvParseState } from '$lib/onboardingResumeWait';
-  import type { ProfileLinks } from '$lib/profileLinks';
+  import type { CvParseState } from '#lib/onboardingResumeWait.js';
+  import type { ProfileLinks } from '#lib/profileLinks.js';
 
   interface Props {
     value: ProfileLinks;

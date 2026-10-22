@@ -1114,7 +1114,7 @@ export function toQuery(params: Record<string, string | string[]>): string {
 
 // The company-tag registry is generated from the Go source of truth
 // (internal/collections) by cmd/gen-contracts and re-exported here so every import
-// site keeps its `$lib/collections` path. It carries `kind`, which decides whether
+// site keeps its `#lib/collections` path. It carries `kind`, which decides whether
 // a tag renders as an editorial collection or as a credential — a field a hand-kept
 // mirror could get wrong silently, which is why this stopped being hand-kept.
 export { COLLECTIONS } from './generated/contracts';

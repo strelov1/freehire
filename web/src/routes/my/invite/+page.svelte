@@ -1,8 +1,8 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { api } from '$lib/api';
-  import { formatMinorUnits } from '$lib/money';
-  import type { InviteSummary } from '$lib/types';
+  import { api } from '#lib/api.js';
+  import { formatMinorUnits } from '#lib/money.js';
+  import type { InviteSummary } from '#lib/types.js';
 
   let summary = $state<InviteSummary | null>(null);
   let error = $state(false);

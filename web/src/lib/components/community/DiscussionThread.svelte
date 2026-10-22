@@ -1,14 +1,14 @@
 <script lang="ts">
   import { page } from '$app/state';
   import { resolve } from '$app/paths';
-  import { api } from '$lib/api';
-  import { isAuthenticated } from '$lib/auth.svelte';
-  import { signinUrl } from '$lib/signin';
-  import { communityFormError } from '$lib/community';
-  import type { CommunityThread, CommunityReply } from '$lib/types';
-  import { Button } from '$lib/ui';
-  import { locale } from '$lib/i18n/currentLocale.svelte';
-  import { timeAgo } from '$lib/utils';
+  import { api } from '#lib/api.js';
+  import { isAuthenticated } from '#lib/auth.svelte.js';
+  import { signinUrl } from '#lib/signin.js';
+  import { communityFormError } from '#lib/community.js';
+  import type { CommunityThread, CommunityReply } from '#lib/types.js';
+  import { Button } from '#lib/ui/index.js';
+  import { locale } from '#lib/i18n/currentLocale.svelte.js';
+  import { timeAgo } from '#lib/utils.js';
   import ReplyNode from './ReplyNode.svelte';
 
   let {

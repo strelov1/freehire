@@ -4,31 +4,31 @@
   import { page } from '$app/state';
   import { resolve } from '$app/paths';
   import { LayoutGrid, Link2, Search, SlidersHorizontal, Tag, X } from '@lucide/svelte';
-  import { api } from '$lib/api';
-  import { isAuthenticated } from '$lib/auth.svelte';
-  import { browseQuery, planForSuggestion } from '$lib/browseTarget';
-  import { displayQuery } from '$lib/filters';
-  import { dropdownRows, namedCompanies, type DropdownRow } from '$lib/dropdownRows';
-  import { companyLogoUrl } from '$lib/logo';
-  import { EntityLogo } from '$lib/ui';
-  import type { Job, CompanyListItem, ApiSuggestionPart, FacetCounts } from '$lib/types';
-  import { listSearchTarget, type ListSearchTarget } from '$lib/listSearch.svelte';
-  import { headerFilterTrigger } from '$lib/headerFilterTrigger';
-  import { keyboardFit, NO_FIT, type KeyboardFit } from '$lib/keyboardFit';
-  import { openedOverlay, closedOverlay } from '$lib/headerOverlay';
-  import { fromApi, applyParams, type ApplyPlan } from '$lib/apiSuggestions';
-  import { pastedJobLink, type PastedJobLink } from '$lib/jobLink';
-  import { runLinkIntake, type LinkIntakeStep } from '$lib/linkIntake';
-  import { commit, edit, emptyDraft, reconcile, type SearchDraft } from '$lib/searchDraft';
-  import { starterSuggestions, type Suggestion } from '$lib/suggestions';
+  import { api } from '#lib/api.js';
+  import { isAuthenticated } from '#lib/auth.svelte.js';
+  import { browseQuery, planForSuggestion } from '#lib/browseTarget.js';
+  import { displayQuery } from '#lib/filters.js';
+  import { dropdownRows, namedCompanies, type DropdownRow } from '#lib/dropdownRows.js';
+  import { companyLogoUrl } from '#lib/logo.js';
+  import { EntityLogo } from '#lib/ui/index.js';
+  import type { Job, CompanyListItem, ApiSuggestionPart, FacetCounts } from '#lib/types.js';
+  import { listSearchTarget, type ListSearchTarget } from '#lib/listSearch.svelte.js';
+  import { headerFilterTrigger } from '#lib/headerFilterTrigger.js';
+  import { keyboardFit, NO_FIT, type KeyboardFit } from '#lib/keyboardFit.js';
+  import { openedOverlay, closedOverlay } from '#lib/headerOverlay.js';
+  import { fromApi, applyParams, type ApplyPlan } from '#lib/apiSuggestions.js';
+  import { pastedJobLink, type PastedJobLink } from '#lib/jobLink.js';
+  import { runLinkIntake, type LinkIntakeStep } from '#lib/linkIntake.js';
+  import { commit, edit, emptyDraft, reconcile, type SearchDraft } from '#lib/searchDraft.js';
+  import { starterSuggestions, type Suggestion } from '#lib/suggestions.js';
   import {
     completeWord,
     typedTail,
     typewriterStart,
     typewriterStep,
     type TypewriterState,
-  } from '$lib/placeholderRoles';
-  import { cn } from '$lib/ui';
+  } from '#lib/placeholderRoles.js';
+  import { cn } from '#lib/ui/index.js';
   import HeaderLocationFilter from './HeaderLocationFilter.svelte';
   import IntakeOutcome from './IntakeOutcome.svelte';
 
@@ -452,7 +452,7 @@
     return `${resolve('/signin')}?returnTo=${encodeURIComponent(back)}`;
   });
 
-  /** Look this link up, and hand it in if we don't have it. See $lib/linkIntake for the
+  /** Look this link up, and hand it in if we don't have it. See #lib/linkIntake for the
    *  order and why it is that way round. */
   async function activateLink(pasted: PastedJobLink) {
     // One of our own posting pages: the slug is in the path, so asking the API whether
@@ -501,7 +501,7 @@
 
   /** Where this panel may sit with the on-screen keyboard up: a lift for the one that is
    *  pinned to the bottom of the screen, a ceiling for the one that hangs off the box,
-   *  and why one number cannot serve both — see $lib/keyboardFit. */
+   *  and why one number cannot serve both — see #lib/keyboardFit. */
   let fit = $state.raw<KeyboardFit>(NO_FIT);
 
   $effect(() => {

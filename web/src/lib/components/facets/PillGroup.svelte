@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { uniqueByValue, type FacetOption } from '$lib/facets';
+  import { uniqueByValue, type FacetOption } from '#lib/facets.js';
   import { pillClass, pillTitle } from './pill';
 
   // A wrap of three-state pills for one facet. Each pill is off (idle), included

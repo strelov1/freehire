@@ -1,7 +1,7 @@
 <script lang="ts">
   import { Camera, Trash2 } from '@lucide/svelte';
-  import { api, ApiError, PHOTO_ACCEPT, PHOTO_MAX_MB } from '$lib/api';
-  import type { PhotoMeta } from '$lib/types';
+  import { api, ApiError, PHOTO_ACCEPT, PHOTO_MAX_MB } from '#lib/api.js';
+  import type { PhotoMeta } from '#lib/types.js';
   import HeadshotSilhouette from './HeadshotSilhouette.svelte';
 
   // The profile's headshot control: preview, upload/replace, remove. One photo per member,

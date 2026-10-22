@@ -1,6 +1,6 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
-  import type { SeeAlsoCard } from '$lib/collections';
+  import type { SeeAlsoCard } from '#lib/collections.js';
   import CollectionMark from './CollectionMark.svelte';
 
   // A horizontally-scrolling row of links into existing /collections/:slug

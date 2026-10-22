@@ -7,10 +7,10 @@
   // visually reads as a "slide".
   import { onMount } from 'svelte';
   import { resolve } from '$app/paths';
-  import BrandMark from '$lib/components/BrandMark.svelte';
-  import GithubStars from '$lib/components/GithubStars.svelte';
-  import { SOCIAL_LINKS } from '$lib/socialLinks';
-  import { ProviderIcon } from '$lib/ui';
+  import BrandMark from '#lib/components/BrandMark.svelte';
+  import GithubStars from '#lib/components/GithubStars.svelte';
+  import { SOCIAL_LINKS } from '#lib/socialLinks.js';
+  import { ProviderIcon } from '#lib/ui/index.js';
 
   // GithubStars already covers GitHub (icon + live star count); the rest render as
   // plain icon links, same as the Footer's row.

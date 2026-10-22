@@ -1,10 +1,10 @@
 import { error } from '@sveltejs/kit';
-import { ApiError } from '$lib/api';
-import { serverApi } from '$lib/server/api';
-import { buildCompanyCard } from '$lib/server/og/company';
-import { loadOgFonts } from '$lib/server/og/fonts';
-import { resolveLogo } from '$lib/server/og/logo';
-import { renderMarkupPng } from '$lib/server/og/render';
+import { ApiError } from '#lib/api.js';
+import { serverApi } from '#lib/server/api.js';
+import { buildCompanyCard } from '#lib/server/og/company.js';
+import { loadOgFonts } from '#lib/server/og/fonts.js';
+import { resolveLogo } from '#lib/server/og/logo.js';
+import { renderMarkupPng } from '#lib/server/og/render.js';
 import type { RequestHandler } from './$types';
 
 // Renders the per-company 1200×630 Open Graph preview on demand. Resolves the

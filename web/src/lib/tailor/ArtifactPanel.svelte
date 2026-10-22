@@ -17,18 +17,18 @@
   import { resolve } from '$app/paths';
   import { ExternalLink, PanelRightClose, PanelRightOpen } from '@lucide/svelte';
   import { clampWidth } from './geometry';
-  import JobDescription from '$lib/components/JobDescription.svelte';
-  import MatchAnalysisFull from '$lib/components/MatchAnalysisFull.svelte';
-  import { companyLogoUrl } from '$lib/logo';
-  import { EntityLogo } from '$lib/ui';
+  import JobDescription from '#lib/components/JobDescription.svelte';
+  import MatchAnalysisFull from '#lib/components/MatchAnalysisFull.svelte';
+  import { companyLogoUrl } from '#lib/logo.js';
+  import { EntityLogo } from '#lib/ui/index.js';
   import RevisionHistory from './RevisionHistory.svelte';
   import AutopilotReport from './AutopilotReport.svelte';
   import AtsDelta from './AtsDelta.svelte';
   import JobMatch from './JobMatch.svelte';
   import CoverLetter from './CoverLetter.svelte';
-  import type { Analysis, AutopilotEntry, RevisionView } from '$lib/generated/contracts';
-  import type { Job, MatchAnalysisResponse } from '$lib/types';
-  import type { CvAtsDelta, CvJobMatch } from '$lib/cv';
+  import type { Analysis, AutopilotEntry, RevisionView } from '#lib/generated/contracts.js';
+  import type { Job, MatchAnalysisResponse } from '#lib/types.js';
+  import type { CvAtsDelta, CvJobMatch } from '#lib/cv.js';
 
   type Tab = 'jd' | 'jobmatch' | 'score' | 'letter' | 'history';
 

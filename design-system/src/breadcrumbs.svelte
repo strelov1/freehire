@@ -8,7 +8,7 @@
 
   // A visible trail back to the page a detail page sits under — the one navigational
   // pattern the app never had a rendered version of before this: the SEO structured
-  // data (`breadcrumbJsonLd` in web's `$lib/seo`) fed a search engine, never a reader.
+  // data (`breadcrumbJsonLd` in web's `#lib/seo`) fed a search engine, never a reader.
   //
   // An item without an `href` renders as the current page — bold, unlinked, carrying
   // `aria-current="page"`. The component does not enforce that this is the LAST item;

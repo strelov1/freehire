@@ -1,21 +1,21 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { resolve } from '$app/paths';
-  import { api } from '$lib/api';
+  import { api } from '#lib/api.js';
   import {
     browserTimezone,
     companyLabel,
     profileInputFromProfile,
     seedFormFromSuggestions,
     seniorityLabel,
-  } from '$lib/mentorship';
-  import { SENIORITY_VALUES } from '$lib/generated/contracts';
-  import { errorMessage } from '$lib/utils';
-  import { previewMentorSlug, resolveMentorSlugForSubmit } from '$lib/mentorSlugPreview';
-  import { Badge, Button, Card, Input } from '$lib/ui';
+  } from '#lib/mentorship.js';
+  import { SENIORITY_VALUES } from '#lib/generated/contracts.js';
+  import { errorMessage } from '#lib/utils.js';
+  import { previewMentorSlug, resolveMentorSlugForSubmit } from '#lib/mentorSlugPreview.js';
+  import { Badge, Button, Card, Input } from '#lib/ui/index.js';
   import CompanyPicker from './CompanyPicker.svelte';
-  import TokenInput from '$lib/components/facets/TokenInput.svelte';
-  import type { MentorProfileInput, OwnMentorProfile } from '$lib/types';
+  import TokenInput from '#lib/components/facets/TokenInput.svelte';
+  import type { MentorProfileInput, OwnMentorProfile } from '#lib/types.js';
 
   let { profile = $bindable() }: { profile: OwnMentorProfile | null } = $props();
 

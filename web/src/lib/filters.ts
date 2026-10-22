@@ -1,6 +1,6 @@
 // The reactive job-filter store, mirrored into the URL. The pure model (types,
 // URL (de)serialization, and per-value sign transitions) lives in ./facetModel and
-// is re-exported here so existing `$lib/filters` imports keep working; this file
+// is re-exported here so existing `#lib/filters.js` imports keep working; this file
 // owns only the SvelteKit-bound FilterStore.
 
 import { UrlSyncedState } from './urlSynced.svelte';

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import MentorProfileEditor from '$lib/components/MentorProfileEditor.svelte';
+  import MentorProfileEditor from '#lib/components/MentorProfileEditor.svelte';
   import type { PageData } from './$types';
 
   let { data }: { data: PageData } = $props();

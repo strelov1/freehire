@@ -1,12 +1,12 @@
 <script lang="ts">
-  import { api } from '$lib/api';
-  import { TALENT_FACETS } from '$lib/facets';
-  import type { TalentFilterStore } from '$lib/talentFilters';
-  import { YEAR_THRESHOLDS } from '$lib/talentFacetModel';
-  import { StagedTalentFilters } from '$lib/stagedTalentFilters.svelte';
-  import { TALENT_RAIL_GROUPS, type RailEntry, type RailSection } from '$lib/filterSections';
-  import type { FacetCounts } from '$lib/types';
-  import { Chip } from '$lib/ui';
+  import { api } from '#lib/api.js';
+  import { TALENT_FACETS } from '#lib/facets.js';
+  import type { TalentFilterStore } from '#lib/talentFilters.js';
+  import { YEAR_THRESHOLDS } from '#lib/talentFacetModel.js';
+  import { StagedTalentFilters } from '#lib/stagedTalentFilters.svelte.js';
+  import { TALENT_RAIL_GROUPS, type RailEntry, type RailSection } from '#lib/filterSections.js';
+  import type { FacetCounts } from '#lib/types.js';
+  import { Chip } from '#lib/ui/index.js';
   import FacetSection from '../facets/FacetSection.svelte';
   import FilterModalShell from './FilterModalShell.svelte';
 

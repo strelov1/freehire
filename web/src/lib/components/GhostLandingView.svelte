@@ -1,16 +1,16 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
-  import { Button } from '$lib/ui';
-  import Disclosure from '$lib/components/ghost/Disclosure.svelte';
-  import GateMatrix from '$lib/components/ghost/GateMatrix.svelte';
-  import GhostChecklist from '$lib/components/GhostChecklist.svelte';
-  import Prevalence from '$lib/components/ghost/Prevalence.svelte';
-  import SignalDiagram from '$lib/components/ghost/SignalDiagram.svelte';
-  import { NumberedGrid, SectionLabel } from '$lib/ui';
-  import { CRITERIA } from '$lib/ghost';
-  import type { Ghost } from '$lib/generated/contracts';
-  import { GHOST_FAQ } from '$lib/ghostFaq';
-  import { GHOST_SIGNALS } from '$lib/ghostSignals';
+  import { Button } from '#lib/ui/index.js';
+  import Disclosure from '#lib/components/ghost/Disclosure.svelte';
+  import GateMatrix from '#lib/components/ghost/GateMatrix.svelte';
+  import GhostChecklist from '#lib/components/GhostChecklist.svelte';
+  import Prevalence from '#lib/components/ghost/Prevalence.svelte';
+  import SignalDiagram from '#lib/components/ghost/SignalDiagram.svelte';
+  import { NumberedGrid, SectionLabel } from '#lib/ui/index.js';
+  import { CRITERIA } from '#lib/ghost.js';
+  import type { Ghost } from '#lib/generated/contracts.js';
+  import { GHOST_FAQ } from '#lib/ghostFaq.js';
+  import { GHOST_SIGNALS } from '#lib/ghostSignals.js';
 
   // The page a reader reaches from the "How this works" link on a marked job. They arrive
   // mid-question, having just seen a badge they did not understand, and the two things

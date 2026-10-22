@@ -1,16 +1,16 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
-  import { boardRefFor } from '$lib/board';
-  import { eventLabel, eventTone } from '$lib/events';
-  import { locale } from '$lib/i18n/currentLocale.svelte';
-  import { t } from '$lib/i18n/t';
-  import type { TimelineEvent } from '$lib/types';
+  import { boardRefFor } from '#lib/board.js';
+  import { eventLabel, eventTone } from '#lib/events.js';
+  import { locale } from '#lib/i18n/currentLocale.svelte.js';
+  import { t } from '#lib/i18n/t.js';
+  import type { TimelineEvent } from '#lib/types.js';
   import { messages } from './ApplicationEventList.messages';
 
   // One day's ledger events, listed. Shared by the two day panels that show them — the
   // calendar's and the activity grid's.
   //
-  // It exists for the reason `$lib/events` gives one layer down: that module holds the labels
+  // It exists for the reason `#lib/events.js` gives one layer down: that module holds the labels
   // and tones because "copying them would have meant the same event captioned two ways on two
   // screens". The MARKUP around those labels had the same problem and was duplicated anyway —
   // the dot whose fill carries `observed`, the company/role line, the quoted subject, the

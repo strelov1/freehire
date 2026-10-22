@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { CreatedApiKey, User } from '$lib/types';
+import type { CreatedApiKey, User } from '#lib/types.js';
 import CreateApiKeyDialog from './CreateApiKeyDialog.svelte';
 
 // Creating a key is the action the whole change started from: a member reported being
@@ -35,12 +35,12 @@ const { StubApiError } = vi.hoisted(() => ({
 }));
 
 vi.mock('$app/state', () => ({ page: { data: {}, url: new URL('http://localhost/') } }));
-vi.mock('$lib/api', () => ({
+vi.mock('#lib/api.js', () => ({
   api: { createApiKey, reauthenticatePassword, connectedIdentities },
   ApiError: StubApiError,
 }));
-vi.mock('$lib/auth.svelte', () => ({ currentUser: () => user.current }));
-vi.mock('$lib/recentAuth', () => ({
+vi.mock('#lib/auth.svelte.js', () => ({ currentUser: () => user.current }));
+vi.mock('#lib/recentAuth.js', () => ({
   beginProviderReauthentication: begin,
   recentAuthExpiry: expiry,
   forgetRecentAuthExpiry: forget,

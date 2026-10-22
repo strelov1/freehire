@@ -1,7 +1,7 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
-  import { FOR_COMPANIES_FAQ } from '$lib/forCompaniesFaq';
-  import { Button } from '$lib/ui';
+  import { FOR_COMPANIES_FAQ } from '#lib/forCompaniesFaq.js';
+  import { Button } from '#lib/ui/index.js';
 
   const repoUrl = 'https://github.com/strelov1/freehire';
   const telegramUrl = 'https://t.me/freehiredev';

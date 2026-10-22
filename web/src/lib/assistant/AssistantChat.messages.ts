@@ -1,4 +1,4 @@
-import { defineMessages, plurals } from '$lib/i18n/t';
+import { defineMessages, plurals } from '#lib/i18n/t.js';
 
 // `message.text`/`message.thinking` are the agent's own output (already in whatever
 // language the conversation is in) — never catalog text. `action.label`/`action.hint`

@@ -1,4 +1,4 @@
-import { defineMessages, plurals } from '$lib/i18n/t';
+import { defineMessages, plurals } from '#lib/i18n/t.js';
 
 // `draft.subject`/`draft.body`/`draft.recipient*` are server-composed (the actual
 // outreach draft), not catalog text — only the dialog's own chrome is translated.

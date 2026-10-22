@@ -1,6 +1,6 @@
 import { render, screen, waitFor } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { TalentNetworkSetting } from '$lib/types';
+import type { TalentNetworkSetting } from '#lib/types.js';
 import TalentJoinButton from './TalentJoinButton.svelte';
 
 const { getTalentNetwork, isAuthenticated } = vi.hoisted(() => ({
@@ -8,8 +8,8 @@ const { getTalentNetwork, isAuthenticated } = vi.hoisted(() => ({
   isAuthenticated: vi.fn<() => boolean>(),
 }));
 
-vi.mock('$lib/api', () => ({ api: { getTalentNetwork } }));
-vi.mock('$lib/auth.svelte', () => ({ isAuthenticated }));
+vi.mock('#lib/api.js', () => ({ api: { getTalentNetwork } }));
+vi.mock('#lib/auth.svelte.js', () => ({ isAuthenticated }));
 
 const setting = (visibility: TalentNetworkSetting['talent_network_visibility']) => ({
   talent_network_visibility: visibility,

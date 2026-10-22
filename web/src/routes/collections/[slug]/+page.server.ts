@@ -1,8 +1,8 @@
 import { error } from '@sveltejs/kit';
-import { serverApi } from '$lib/server/api';
-import { collectionBySlug, skillForCollection } from '$lib/collections';
-import { pageExists, pageOffset, pageWithinWindow, parsePage } from '$lib/pagination';
-import { categoryLandingLink } from '$lib/roleLandings';
+import { serverApi } from '#lib/server/api.js';
+import { collectionBySlug, skillForCollection } from '#lib/collections.js';
+import { pageExists, pageOffset, pageWithinWindow, parsePage } from '#lib/pagination.js';
+import { categoryLandingLink } from '#lib/roleLandings.js';
 import type { PageServerLoad } from './$types';
 
 const LIMIT = 20;

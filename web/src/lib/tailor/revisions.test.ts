@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { keepIndex, makeHighlighter, makeContainerHighlighter, groupByBatch, actorLabel } from './revisions';
-import type { RevisionView } from '$lib/generated/contracts';
+import type { RevisionView } from '#lib/generated/contracts.js';
 
 describe('keepIndex', () => {
   it('carries the original position through a filter', () => {

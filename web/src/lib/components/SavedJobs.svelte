@@ -1,14 +1,14 @@
 <script lang="ts">
-  import { api } from '$lib/api';
-  import { locale } from '$lib/i18n/currentLocale.svelte';
-  import { t } from '$lib/i18n/t';
-  import { isAuthenticated } from '$lib/auth.svelte';
-  import { Paginator } from '$lib/paginated.svelte';
+  import { api } from '#lib/api.js';
+  import { locale } from '#lib/i18n/currentLocale.svelte.js';
+  import { t } from '#lib/i18n/t.js';
+  import { isAuthenticated } from '#lib/auth.svelte.js';
+  import { Paginator } from '#lib/paginated.svelte.js';
   import JobRow from './JobRow.svelte';
-  import { LoadMore } from '$lib/ui';
+  import { LoadMore } from '#lib/ui/index.js';
   import { messages } from './activity.messages';
   import States from './States.svelte';
-  import { must } from '$lib/utils';
+  import { must } from '#lib/utils.js';
 
   const s = $derived(t(messages, locale()).saved);
   const page = new Paginator(async (limit, offset) => {

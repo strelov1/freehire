@@ -1,4 +1,4 @@
-import { defineMessages } from '$lib/i18n/t';
+import { defineMessages } from '#lib/i18n/t.js';
 
 // `status` mirrors the API's `Submission['status']` enum, which this view renders
 // verbatim as the pill's label. Translating it means mapping it here rather than

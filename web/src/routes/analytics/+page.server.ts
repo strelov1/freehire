@@ -1,4 +1,4 @@
-import { serverApi } from '$lib/server/api';
+import { serverApi } from '#lib/server/api.js';
 import type { PageServerLoad } from './$types';
 
 // Server-render the facet-distribution counts for the current URL filters, so the

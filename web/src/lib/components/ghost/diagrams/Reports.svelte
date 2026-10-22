@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { WITNESS_GATE } from '$lib/ghost';
+  import { WITNESS_GATE } from '#lib/ghost.js';
 
   // Below the gate and above it.
   //

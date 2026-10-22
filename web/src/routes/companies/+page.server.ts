@@ -1,7 +1,7 @@
 import { error } from '@sveltejs/kit';
-import { serverApi } from '$lib/server/api';
-import { companyFiltersFromParams, companyFiltersToParams } from '$lib/companyFilters';
-import { PAGE_SIZE, pageExists, pageOffset, pageWithinWindow, parsePage } from '$lib/pagination';
+import { serverApi } from '#lib/server/api.js';
+import { companyFiltersFromParams, companyFiltersToParams } from '#lib/companyFilters.js';
+import { PAGE_SIZE, pageExists, pageOffset, pageWithinWindow, parsePage } from '#lib/pagination.js';
 import type { PageServerLoad } from './$types';
 
 // Server-render the requested page of companies for the current filters (the ?q

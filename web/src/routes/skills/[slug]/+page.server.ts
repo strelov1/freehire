@@ -1,9 +1,9 @@
 import { error, redirect } from '@sveltejs/kit';
-import { SKILL_ALIASES } from '$lib/generated/skillAliases';
-import { skillLabel } from '$lib/facets';
-import { serverApi } from '$lib/server/api';
-import { MIN_SKILL_OPEN, displayAliases, showsPostings, topNeighbours } from '$lib/skillGlossary';
-import { loadSkillDescriptions } from '$lib/skillDescriptions';
+import { SKILL_ALIASES } from '#lib/generated/skillAliases.js';
+import { skillLabel } from '#lib/facets.js';
+import { serverApi } from '#lib/server/api.js';
+import { MIN_SKILL_OPEN, displayAliases, showsPostings, topNeighbours } from '#lib/skillGlossary.js';
+import { loadSkillDescriptions } from '#lib/skillDescriptions.js';
 import type { PageServerLoad } from './$types';
 
 // One skill's glossary entry: what it is, what else it is called, what it is named

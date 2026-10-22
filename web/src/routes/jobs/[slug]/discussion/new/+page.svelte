@@ -1,6 +1,6 @@
 <script lang="ts">
   import { page } from '$app/state';
-  import DiscussionNewTopic from '$lib/components/community/DiscussionNewTopic.svelte';
+  import DiscussionNewTopic from '#lib/components/community/DiscussionNewTopic.svelte';
   const slug = $derived(page.params.slug ?? "");
 </script>
 

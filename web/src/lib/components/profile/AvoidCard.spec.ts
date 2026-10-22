@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { UserProfile } from '$lib/types';
+import type { UserProfile } from '#lib/types.js';
 import AvoidCard from './AvoidCard.svelte';
 
 const baseProfile: UserProfile = {
@@ -29,7 +29,7 @@ const { avoidSkill, unavoidSkill, avoidSource, unavoidSource, avoidCompany, unav
   }));
 
 vi.mock('$app/state', () => ({ page: { data: {}, url: new URL('http://localhost/') } }));
-vi.mock('$lib/profile.svelte', () => ({
+vi.mock('#lib/profile.svelte.js', () => ({
   profileStore: {
     get profile() {
       return baseProfile;
@@ -45,14 +45,14 @@ vi.mock('$lib/profile.svelte', () => ({
 
 // Both dictionary fetches are real network in production; stubbed here so the pickers'
 // mount effects resolve instantly with no candidates to search.
-vi.mock('$lib/skillDictionary', () => ({ loadSkillDistribution }));
-vi.mock('$lib/sourceDictionary', () => ({
+vi.mock('#lib/skillDictionary.js', () => ({ loadSkillDistribution }));
+vi.mock('#lib/sourceDictionary.js', () => ({
   loadSourceDistribution: vi.fn().mockResolvedValue([]),
 }));
 // Only companySearch is stubbed (real network in production); dynamicLabel is real so
 // the fallback-label behavior (raw slug vs. resolved name) is exercised as written.
-vi.mock('$lib/facets', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('$lib/facets')>()),
+vi.mock('#lib/facets.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('#lib/facets.js')>()),
   companySearch: vi.fn().mockResolvedValue([]),
 }));
 

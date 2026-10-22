@@ -2,22 +2,23 @@
   import { page } from '$app/state';
   import { afterNavigate } from '$app/navigation';
   import { resolve } from '$app/paths';
+  import { toPath } from '#lib/pathname.js';
   import { Menu, X, Sun, Moon, CircleUser, SquarePlus, ShieldCheck, LogOut, LogIn } from '@lucide/svelte';
-  import { isAuthenticated, currentUser, logout as doLogout } from '$lib/auth.svelte';
-  import { promptSignIn } from '$lib/signin';
-  import { themeStore } from '$lib/theme.svelte';
-  import { lockScroll, unlockScroll } from '$lib/scrollLock';
-  import { openedOverlay, closedOverlay } from '$lib/headerOverlay';
-  import { cn } from '$lib/ui';
+  import { isAuthenticated, currentUser, logout as doLogout } from '#lib/auth.svelte.js';
+  import { promptSignIn } from '#lib/signin.js';
+  import { themeStore } from '#lib/theme.svelte.js';
+  import { lockScroll, unlockScroll } from '#lib/scrollLock.js';
+  import { openedOverlay, closedOverlay } from '#lib/headerOverlay.js';
+  import { cn } from '#lib/ui/index.js';
   import BrandMark from './BrandMark.svelte';
   import GithubStars from './GithubStars.svelte';
   import NotificationBell from './NotificationBell.svelte';
   import HeaderProfileMenu from './HeaderProfileMenu.svelte';
-  import { ensureAccountSetupLoaded, setupOutstanding } from '$lib/accountSetup.svelte';
-  import { ProviderIcon } from '$lib/ui';
-  import { NAV } from '$lib/siteNav';
-  import { accountLinks } from '$lib/headerAccountLinks';
-  import { DISCORD_URL } from '$lib/socialLinks';
+  import { ensureAccountSetupLoaded, setupOutstanding } from '#lib/accountSetup.svelte.js';
+  import { ProviderIcon } from '#lib/ui/index.js';
+  import { NAV } from '#lib/siteNav.js';
+  import { accountLinks } from '#lib/headerAccountLinks.js';
+  import { DISCORD_URL } from '#lib/socialLinks.js';
 
   // This menu carries the site nav and the theme toggle on every viewport; on
   // mobile it additionally carries the signed-in account items and the auth
@@ -114,8 +115,9 @@
     return () => closedOverlay(closeSelf);
   });
 
-  afterNavigate(() => {
-    open = false;
+  afterNavigate(({ shallow }) => {
+    // SvelteKit 3 fires this for shallow routing too; a URL write is not a page change.
+    if (!shallow) open = false;
   });
 
   function onWindowClick(e: MouseEvent) {
@@ -275,7 +277,7 @@
              signed-in personal items and the rest of the site nav. -->
         {#each primaryLinks as link (link.href)}
           {@const Icon = link.icon}
-          <a href={resolve(link.href)} role="menuitem" onclick={() => (open = false)} class={linkClass(link.href)}>
+          <a href={resolve(toPath(link.href))} role="menuitem" onclick={() => (open = false)} class={linkClass(link.href)}>
             <Icon class="size-4 shrink-0" />
             {link.label}
           </a>
@@ -289,7 +291,7 @@
              personal items in the same order as the account sidebar (Profile is
              rendered separately just above them, so the full run reads Profile ·
              Activity · Tracking · Inbox · …) — is shared with HeaderProfileMenu's
-             desktop panel via $lib/headerAccountLinks, so the two cannot drift
+             desktop panel via #lib/headerAccountLinks, so the two cannot drift
              apart. "Submit a job" below is a create action, split off from the
              "My submissions" reading item it used to sit next to. -->
         <div class="sm:hidden">
@@ -306,7 +308,7 @@
             </a>
             {#each accountLinks as link (link.href)}
               {@const Icon = link.icon}
-              <a href={resolve(link.href)} role="menuitem" onclick={() => (open = false)} class={linkClass(link.href)}>
+              <a href={resolve(toPath(link.href))} role="menuitem" onclick={() => (open = false)} class={linkClass(link.href)}>
                 <Icon class="size-4 shrink-0" />
                 {link.label}
               </a>
@@ -335,7 +337,7 @@
 
         {#each navLinks as link (link.href)}
           {@const Icon = link.icon}
-          <a href={resolve(link.href)} role="menuitem" onclick={() => (open = false)} class={linkClass(link.href)}>
+          <a href={resolve(toPath(link.href))} role="menuitem" onclick={() => (open = false)} class={linkClass(link.href)}>
             <Icon class="size-4 shrink-0" />
             {link.label}
           </a>

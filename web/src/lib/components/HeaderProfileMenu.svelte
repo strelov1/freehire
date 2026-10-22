@@ -1,12 +1,13 @@
 <script lang="ts">
   import { afterNavigate } from '$app/navigation';
   import { resolve } from '$app/paths';
+  import { toPath } from '#lib/pathname.js';
   import { CircleUser, SquarePlus, ShieldCheck, LogOut, LogIn } from '@lucide/svelte';
-  import { isAuthenticated, currentUser, logout as doLogout } from '$lib/auth.svelte';
-  import { promptSignIn } from '$lib/signin';
-  import { openedOverlay, closedOverlay } from '$lib/headerOverlay';
-  import { cn } from '$lib/ui';
-  import { accountLinks } from '$lib/headerAccountLinks';
+  import { isAuthenticated, currentUser, logout as doLogout } from '#lib/auth.svelte.js';
+  import { promptSignIn } from '#lib/signin.js';
+  import { openedOverlay, closedOverlay } from '#lib/headerOverlay.js';
+  import { cn } from '#lib/ui/index.js';
+  import { accountLinks } from '#lib/headerAccountLinks.js';
 
   // Desktop-only: the profile icon doubles as a second, independent dropdown
   // trigger scoped to the signed-in user's own account, split off HeaderMenu's
@@ -43,8 +44,9 @@
     return () => closedOverlay(closeSelf);
   });
 
-  afterNavigate(() => {
-    open = false;
+  afterNavigate(({ shallow }) => {
+    // SvelteKit 3 fires this for shallow routing too; a URL write is not a page change.
+    if (!shallow) open = false;
   });
 
   function onWindowClick(e: MouseEvent) {
@@ -108,7 +110,7 @@
         </a>
         {#each accountLinks as link (link.href)}
           {@const Icon = link.icon}
-          <a href={resolve(link.href)} role="menuitem" onclick={() => (open = false)} class={rowBase}>
+          <a href={resolve(toPath(link.href))} role="menuitem" onclick={() => (open = false)} class={rowBase}>
             <Icon class="size-4 shrink-0" />
             {link.label}
           </a>

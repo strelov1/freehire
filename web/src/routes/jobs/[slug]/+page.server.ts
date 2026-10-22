@@ -1,18 +1,18 @@
 import { error, redirect } from '@sveltejs/kit';
-import { ApiError } from '$lib/api';
-import { backerBadges } from '$lib/backers';
+import { ApiError } from '#lib/api.js';
+import { backerBadges } from '#lib/backers.js';
 import {
   collectionBySlug,
   jobFacetsFromJob,
   relatedCollectionLinks,
   type SeeAlsoCard,
-} from '$lib/collections';
-import { resolveSeeAlsoMark } from '$lib/seeAlsoMark';
-import { serverApi } from '$lib/server/api';
-import { rethrowUpstream } from '$lib/server/upstream';
-import type { FacetCounts, Job } from '$lib/types';
+} from '#lib/collections.js';
+import { resolveSeeAlsoMark } from '#lib/seeAlsoMark.js';
+import { serverApi } from '#lib/server/api.js';
+import { rethrowUpstream } from '#lib/server/upstream.js';
+import type { FacetCounts, Job } from '#lib/types.js';
 import type { PageServerLoad } from './$types';
-import { must } from '$lib/utils';
+import { must } from '#lib/utils.js';
 
 type Api = ReturnType<typeof serverApi>;
 

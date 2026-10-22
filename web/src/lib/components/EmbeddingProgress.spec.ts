@@ -1,6 +1,6 @@
 import { render, screen, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import type { EmbedProgress } from '$lib/types';
+import type { EmbedProgress } from '#lib/types.js';
 import EmbeddingProgress from './EmbeddingProgress.svelte';
 
 /** A stand-in for the browser's EventSource that the test fires by hand. */

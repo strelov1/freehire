@@ -1,14 +1,14 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { TalentNetworkSetting } from '$lib/types';
-import { TALENT_INVITE_DISMISSED_KEY } from '$lib/talentInvite';
+import type { TalentNetworkSetting } from '#lib/types.js';
+import { TALENT_INVITE_DISMISSED_KEY } from '#lib/talentInvite.js';
 import TalentNetworkInvite from './TalentNetworkInvite.svelte';
 
 const { getTalentNetwork } = vi.hoisted(() => ({
   getTalentNetwork: vi.fn<() => Promise<TalentNetworkSetting>>(),
 }));
 
-vi.mock('$lib/api', () => ({ api: { getTalentNetwork } }));
+vi.mock('#lib/api.js', () => ({ api: { getTalentNetwork } }));
 
 beforeEach(() => {
   localStorage.clear();

@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { credentialBadges } from '$lib/credentials';
-  import { cn } from '$lib/ui';
+  import { credentialBadges } from '#lib/credentials.js';
+  import { cn } from '#lib/ui/index.js';
 
   // Renders an employer's register-backed credentials — currently the UK and Dutch
   // visa-sponsor licences.

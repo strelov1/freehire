@@ -1,7 +1,7 @@
 // The theme's browser-storage IO, split out of theme.svelte.ts so it can be tested.
 //
 // Self-contained on purpose, for the reason filterStorage.ts records for itself: it
-// feature-detects storage rather than importing `browser` from `$app/environment`, so
+// feature-detects storage rather than importing `browser` from `$app/env`, so
 // the unit test runs in the plain-Node vitest env. The store beside it cannot be
 // exercised there at all — its `$state` field needs a Svelte runtime the env does not
 // provide (see paginated.svelte.test.ts) — and a read that no test can reach is how the

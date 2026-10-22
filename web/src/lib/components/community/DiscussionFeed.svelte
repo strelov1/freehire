@@ -1,13 +1,13 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
   import { MessageSquare } from '@lucide/svelte';
-  import { api } from '$lib/api';
-  import { feedSubjectLine } from '$lib/feedSubject';
-  import { companyLogoUrl } from '$lib/logo';
-  import type { CommunityFeedThread } from '$lib/types';
-  import { Badge, EntityLogo, LoadMore } from '$lib/ui';
-  import { locale } from '$lib/i18n/currentLocale.svelte';
-  import { timeAgo } from '$lib/utils';
+  import { api } from '#lib/api.js';
+  import { feedSubjectLine } from '#lib/feedSubject.js';
+  import { companyLogoUrl } from '#lib/logo.js';
+  import type { CommunityFeedThread } from '#lib/types.js';
+  import { Badge, EntityLogo, LoadMore } from '#lib/ui/index.js';
+  import { locale } from '#lib/i18n/currentLocale.svelte.js';
+  import { timeAgo } from '#lib/utils.js';
 
   let {
     initialThreads,

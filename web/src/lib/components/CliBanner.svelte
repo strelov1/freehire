@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { resolve } from '$app/paths';
-  import { dismissCliBanner, loadCliBannerDismissed, cliBannerDismissed } from '$lib/cliBanner.svelte';
+  import { dismissCliBanner, loadCliBannerDismissed, cliBannerDismissed } from '#lib/cliBanner.svelte.js';
 
   // A strip under the header pointing at /cli, dismissible and remembered. Self-gating
   // like EmailVerificationBanner, so the layout mounts it unconditionally.

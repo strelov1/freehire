@@ -15,25 +15,25 @@
   import { onDestroy } from 'svelte';
   import { Briefcase, FolderKanban, Plus, Sparkles } from '@lucide/svelte';
   import type { Component } from 'svelte';
-  import { api } from '$lib/api';
-  import { Button, ConfirmDialog, FormField, Input } from '$lib/ui';
-  import CompanyPicker from '$lib/components/CompanyPicker.svelte';
-  import ExperienceAssistantPanel from '$lib/components/ExperienceAssistantPanel.svelte';
-  import ExperienceEmploymentCard from '$lib/components/ExperienceEmploymentCard.svelte';
-  import ExperienceAchievementRow from '$lib/components/ExperienceAchievementRow.svelte';
-  import States from '$lib/components/States.svelte';
-  import PeriodDateInput from '$lib/components/PeriodDateInput.svelte';
-  import { profileKickoff } from '$lib/assistant/presets';
-  import { findFirstUnconfirmed, isUnconfirmed, sortNeedsAttentionFirst } from '$lib/experienceBank';
-  import { nextResumePollDelayMs, type CvParseState } from '$lib/onboardingResumeWait';
+  import { api } from '#lib/api.js';
+  import { Button, ConfirmDialog, FormField, Input } from '#lib/ui/index.js';
+  import CompanyPicker from '#lib/components/CompanyPicker.svelte';
+  import ExperienceAssistantPanel from '#lib/components/ExperienceAssistantPanel.svelte';
+  import ExperienceEmploymentCard from '#lib/components/ExperienceEmploymentCard.svelte';
+  import ExperienceAchievementRow from '#lib/components/ExperienceAchievementRow.svelte';
+  import States from '#lib/components/States.svelte';
+  import PeriodDateInput from '#lib/components/PeriodDateInput.svelte';
+  import { profileKickoff } from '#lib/assistant/presets.js';
+  import { findFirstUnconfirmed, isUnconfirmed, sortNeedsAttentionFirst } from '#lib/experienceBank.js';
+  import { nextResumePollDelayMs, type CvParseState } from '#lib/onboardingResumeWait.js';
   import type {
     ExperienceAtom,
     ExperienceBank,
     ExperienceEmployment,
     ExperienceEmploymentWithAtoms,
     PeriodDate,
-  } from '$lib/types';
-  import { must } from '$lib/utils';
+  } from '#lib/types.js';
+  import { must } from '#lib/utils.js';
 
   /** Host-supplied: profile reseeds the base CV, tailor resets the open tailored copy.
    *  The bank itself never talks to the CV store. */

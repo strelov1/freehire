@@ -1,4 +1,4 @@
-import { defineMessages, plurals } from '$lib/i18n/t';
+import { defineMessages, plurals } from '#lib/i18n/t.js';
 
 // What each tool is doing, in the user's own terms — never sent back to the agent,
 // purely a display label built from the call's `name`. `CONFIRMATION_DECLINE_TEXT`

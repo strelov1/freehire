@@ -1,13 +1,13 @@
 <script lang="ts">
   import { page } from '$app/state';
   import { resolve } from '$app/paths';
-  import Seo from '$lib/components/Seo.svelte';
-  import ActivityBars from '$lib/components/ActivityBars.svelte';
-  import GrowthArea from '$lib/components/GrowthArea.svelte';
-  import SignupsBars from '$lib/components/SignupsBars.svelte';
-  import { OPEN_FAQ } from '$lib/openFaq';
-  import { breadcrumbJsonLd, datasetJsonLd, faqPageJsonLd, jsonLdScript } from '$lib/seo';
-  import { SENIORITY_LABELS, WORK_MODE_LABELS } from '$lib/labels';
+  import Seo from '#lib/components/Seo.svelte';
+  import ActivityBars from '#lib/components/ActivityBars.svelte';
+  import GrowthArea from '#lib/components/GrowthArea.svelte';
+  import SignupsBars from '#lib/components/SignupsBars.svelte';
+  import { OPEN_FAQ } from '#lib/openFaq.js';
+  import { breadcrumbJsonLd, datasetJsonLd, faqPageJsonLd, jsonLdScript } from '#lib/seo.js';
+  import { SENIORITY_LABELS, WORK_MODE_LABELS } from '#lib/labels.js';
   import type { PageData } from './$types';
 
   let { data }: { data: PageData } = $props();

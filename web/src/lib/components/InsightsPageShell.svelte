@@ -6,8 +6,8 @@
   // sibling-category chips). Purely presentational — the route loads the data.
   import { resolve } from '$app/paths';
   import type { Snippet } from 'svelte';
-  import type { CoveredCategory } from '$lib/insights';
-  import { categoryLandingLink } from '$lib/roleLandings';
+  import type { CoveredCategory } from '#lib/insights.js';
+  import { categoryLandingLink } from '#lib/roleLandings.js';
 
   type Kind = 'salary' | 'skills' | 'roles';
 

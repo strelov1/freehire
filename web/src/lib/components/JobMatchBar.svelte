@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { ClientMatch } from '$lib/jobMatch';
+  import type { ClientMatch } from '#lib/jobMatch.js';
 
   // A card-level profile-match strip: a thin coverage bar + "N% · matched/total skills".
   // Purely presentational — the owning JobRow computes the client-side match (exact

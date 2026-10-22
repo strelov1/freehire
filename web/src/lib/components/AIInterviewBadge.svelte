@@ -1,6 +1,6 @@
 <script lang="ts">
   import { Bot } from '@lucide/svelte';
-  import { cn } from '$lib/ui';
+  import { cn } from '#lib/ui/index.js';
 
   // States that candidates have reported this employer screening with an AI
   // interviewer, and how many said so.

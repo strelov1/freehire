@@ -1,7 +1,7 @@
 <script lang="ts">
-  import { api } from '$lib/api';
-  import ScreeningAnswersForm from '$lib/components/ScreeningAnswersForm.svelte';
-  import type { Answers } from '$lib/generated/contracts';
+  import { api } from '#lib/api.js';
+  import ScreeningAnswersForm from '#lib/components/ScreeningAnswersForm.svelte';
+  import type { Answers } from '#lib/generated/contracts.js';
 
   let screeningAnswers = $state<Answers | null>(null);
 

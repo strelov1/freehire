@@ -1,19 +1,20 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
   import { onMount } from 'svelte';
-  import { browser } from '$app/environment';
+  import { browser } from '$app/env';
   import { page } from '$app/state';
   import { resolve } from '$app/paths';
+  import { toPath } from '#lib/pathname.js';
   import { PanelLeftClose, PanelLeft } from '@lucide/svelte';
-  import { currentUser } from '$lib/auth.svelte';
-  import { locale } from '$lib/i18n/currentLocale.svelte';
-  import { messages, navLabel } from '$lib/i18n/shell';
-  import { t } from '$lib/i18n/t';
-  import { cn } from '$lib/ui';
-  import { visibleAccountNav, isSectionActive } from '$lib/accountNav';
-  import { accountNavIcons } from '$lib/accountNavIcons';
-  import TalentNetworkInvite from '$lib/components/TalentNetworkInvite.svelte';
-  import { dockOffset } from '$lib/assistantDock.svelte';
+  import { currentUser } from '#lib/auth.svelte.js';
+  import { locale } from '#lib/i18n/currentLocale.svelte.js';
+  import { messages, navLabel } from '#lib/i18n/shell.js';
+  import { t } from '#lib/i18n/t.js';
+  import { cn } from '#lib/ui/index.js';
+  import { visibleAccountNav, isSectionActive } from '#lib/accountNav.js';
+  import { accountNavIcons } from '#lib/accountNavIcons.js';
+  import TalentNetworkInvite from '#lib/components/TalentNetworkInvite.svelte';
+  import { dockOffset } from '#lib/assistantDock.svelte.js';
 
   // The account shell: one source of truth for the `my/*` chrome — the width
   // container, the noindex tag, the auth gate, and the section navigation. Child
@@ -99,7 +100,7 @@
         {@const Icon = accountNavIcons[item.href]}
         {@const label = navLabel(s, item.href, item.label)}
         <a
-          href={resolve(item.href)}
+          href={resolve(toPath(item.href))}
           aria-current={active ? 'page' : undefined}
           title={iconOnly ? label : undefined}
           class={cn(itemClass(active), iconOnly && 'justify-center', extra)}

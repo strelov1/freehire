@@ -1,17 +1,17 @@
 <script lang="ts">
-  import { ApiError, api } from '$lib/api';
-  import { AsyncData } from '$lib/asyncData.svelte';
-  import { currentUser } from '$lib/auth.svelte';
-  import { locale } from '$lib/i18n/currentLocale.svelte';
-  import { t } from '$lib/i18n/t';
+  import { ApiError, api } from '#lib/api.js';
+  import { AsyncData } from '#lib/asyncData.svelte.js';
+  import { currentUser } from '#lib/auth.svelte.js';
+  import { locale } from '#lib/i18n/currentLocale.svelte.js';
+  import { t } from '#lib/i18n/t.js';
   import {
     beginProviderReauthentication,
     forgetRecentAuthExpiry,
     recentAuthExpiry,
     type ReauthDraft,
     type ReauthReturnPath,
-  } from '$lib/recentAuth';
-  import { Button, Input } from '$lib/ui';
+  } from '#lib/recentAuth.js';
+  import { Button, Input } from '#lib/ui/index.js';
   import { messages } from './ConfirmIdentity.messages';
 
   // The single confirmation surface for every action gated on recent credential control.

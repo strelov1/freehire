@@ -4,11 +4,11 @@ import {
   collectionBySlug,
   toQuery,
   type SeeAlsoMark,
-} from '$lib/collections';
-import { backerBadges } from '$lib/backers';
-import { COLLECTION_SECTIONS, type CollectionSectionDef } from '$lib/collectionSections';
-import COLLECTION_STACKS from '$lib/data/collectionStacks.json';
-import { resolveSeeAlsoMark } from '$lib/seeAlsoMark';
+} from '#lib/collections.js';
+import { backerBadges } from '#lib/backers.js';
+import { COLLECTION_SECTIONS, type CollectionSectionDef } from '#lib/collectionSections.js';
+import COLLECTION_STACKS from '#lib/data/collectionStacks.json';
+import { resolveSeeAlsoMark } from '#lib/seeAlsoMark.js';
 import type { serverApi } from './api';
 
 // One collection inside a section, normalized across both kinds of collection so

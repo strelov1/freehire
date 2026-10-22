@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { UserGrowthPoint } from '$lib/types';
+  import type { UserGrowthPoint } from '#lib/types.js';
 
   // A minimal single-series cumulative area chart for the member-growth series —
   // one monotonically rising line, unlike ActivityBars' two-series added/removed

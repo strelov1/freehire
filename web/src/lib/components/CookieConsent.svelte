@@ -1,7 +1,7 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
-  import { bannerVisible, deny, grant, trackersAllowed } from '$lib/consent.svelte';
-  import { startTrackers } from '$lib/trackers';
+  import { bannerVisible, deny, grant, trackersAllowed } from '#lib/consent.svelte.js';
+  import { startTrackers } from '#lib/trackers.js';
 
   // Accept records consent and starts the trackers immediately; Reject records the
   // refusal and starts nothing. The two are deliberately equal in prominence — no

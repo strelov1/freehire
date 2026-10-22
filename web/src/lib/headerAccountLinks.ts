@@ -13,7 +13,7 @@
 // the section accountNavIcons maps as a whole).
 import { Activity, BellRing, Bot, FileText, Inbox, KeyRound, ListChecks, ScrollText } from '@lucide/svelte';
 import type { LucideIcon } from '@lucide/svelte';
-import type { Pathname } from '$app/types';
+import type { Pathname } from '#lib/pathname.js';
 
 export type HeaderAccountLink = {
   href: Pathname;

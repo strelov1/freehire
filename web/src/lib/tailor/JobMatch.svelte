@@ -8,9 +8,9 @@
   // teaches the candidate to ignore it; an absence teaches nothing.
   import { viewJobMatch, scoreTone, type JobMatchTone } from './jobmatch';
   import ScoreCategoryRow from './ScoreCategoryRow.svelte';
-  import type { CvJobMatch } from '$lib/cv';
+  import type { CvJobMatch } from '#lib/cv.js';
   import SkillIcon from '../components/SkillIcon.svelte';
-  import { skillLabel } from '$lib/facets';
+  import { skillLabel } from '#lib/facets.js';
 
   let { data }: { data: CvJobMatch | null | undefined } = $props();
 

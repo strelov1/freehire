@@ -4,7 +4,7 @@
 // restored by JobsView when the user lands on /jobs with no filter params.
 //
 // Self-contained on purpose: it feature-detects `localStorage` (typeof) rather
-// than importing `browser` from `$app/environment`, so the unit test runs in the
+// than importing `browser` from `$app/env`, so the unit test runs in the
 // plain-Node vitest env (which has no SvelteKit runtime). Every access is wrapped
 // and failures are swallowed — private mode / quota / disabled storage must never
 // break filtering, which still works from the URL.

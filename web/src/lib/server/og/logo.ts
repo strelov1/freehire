@@ -3,7 +3,7 @@
 // embed. Any failure (404 = no logo, timeout, network) returns null so the card
 // falls back to a monogram — a missing logo must never fail the image render.
 
-import { companyLogoUrl } from '$lib/logo';
+import { companyLogoUrl } from '#lib/logo.js';
 
 const TIMEOUT_MS = 2500;
 

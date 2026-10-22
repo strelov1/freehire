@@ -1,4 +1,4 @@
-import type { InsightRole } from '$lib/api';
+import type { InsightRole } from '#lib/api.js';
 import { serverApi } from './api';
 
 /** The global roles ranking that gates every insights landing page — the hub, the

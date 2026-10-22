@@ -1,14 +1,14 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
   import { ArrowRight } from '@lucide/svelte';
-  import { api } from '$lib/api';
-  import { locale } from '$lib/i18n/currentLocale.svelte';
-  import { t } from '$lib/i18n/t';
-  import { isAuthenticated } from '$lib/auth.svelte';
-  import { verdictTone, type Tone } from '$lib/matchAnalysis';
-  import type { MyAnalysisItem } from '$lib/types';
-  import { companyLogoUrl } from '$lib/logo';
-  import { EntityLogo } from '$lib/ui';
+  import { api } from '#lib/api.js';
+  import { locale } from '#lib/i18n/currentLocale.svelte.js';
+  import { t } from '#lib/i18n/t.js';
+  import { isAuthenticated } from '#lib/auth.svelte.js';
+  import { verdictTone, type Tone } from '#lib/matchAnalysis.js';
+  import type { MyAnalysisItem } from '#lib/types.js';
+  import { companyLogoUrl } from '#lib/logo.js';
+  import { EntityLogo } from '#lib/ui/index.js';
   import { messages } from './activity.messages';
   import States from './States.svelte';
 

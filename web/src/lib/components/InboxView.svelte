@@ -3,19 +3,19 @@
   import { page } from '$app/state';
   import { replaceState } from '$app/navigation';
   import { resolve } from '$app/paths';
-  import { api } from '$lib/api';
+  import { api } from '#lib/api.js';
   import type {
     GmailStatus,
     MailboxStatus,
     InboxSource,
     InboxMessage,
     EmailBody,
-  } from '$lib/api';
-  import type { EmailLinking } from '$lib/types';
-  import { statusLabel, statusLabels } from '$lib/emailStatus';
-  import StatusChip from '$lib/components/StatusChip.svelte';
-  import { inboxLinkState, type LastUnlinked } from '$lib/inboxLink';
-  import { Paginator } from '$lib/paginated.svelte';
+  } from '#lib/api.js';
+  import type { EmailLinking } from '#lib/types.js';
+  import { statusLabel, statusLabels } from '#lib/emailStatus.js';
+  import StatusChip from '#lib/components/StatusChip.svelte';
+  import { inboxLinkState, type LastUnlinked } from '#lib/inboxLink.js';
+  import { Paginator } from '#lib/paginated.svelte.js';
   import InboxSettings from './InboxSettings.svelte';
   import ApplicationLinkPicker from './ApplicationLinkPicker.svelte';
   import InfiniteScroll from './InfiniteScroll.svelte';
@@ -29,12 +29,12 @@
     Inbox,
     Settings,
   } from '@lucide/svelte';
-  import { TabStrip, tabStripId } from '$lib/ui';
-  import { locale } from '$lib/i18n/currentLocale.svelte';
-  import { timeAgo, errorMessage, must } from '$lib/utils';
-  import { avatarInitials, avatarColor } from '$lib/avatar';
+  import { TabStrip, tabStripId } from '#lib/ui/index.js';
+  import { locale } from '#lib/i18n/currentLocale.svelte.js';
+  import { timeAgo, errorMessage, must } from '#lib/utils.js';
+  import { avatarInitials, avatarColor } from '#lib/avatar.js';
   import { messages } from './InboxView.messages';
-  import { format, plural, t } from '$lib/i18n/t';
+  import { format, plural, t } from '#lib/i18n/t.js';
 
   const PAGE_SIZE = 7;
 

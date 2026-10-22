@@ -2,9 +2,9 @@
   import { page } from '$app/state';
   import { resolve } from '$app/paths';
   import { Ban, Check, FileText, Lock, RotateCcw, TriangleAlert } from '@lucide/svelte';
-  import { api } from '$lib/api';
-  import { isAuthenticated } from '$lib/auth.svelte';
-  import { signinUrl } from '$lib/signin';
+  import { api } from '#lib/api.js';
+  import { isAuthenticated } from '#lib/auth.svelte.js';
+  import { signinUrl } from '#lib/signin.js';
   import {
     resolveMatchState,
     matchBarSegments,
@@ -16,14 +16,14 @@
     haveChipClass,
     adjacentChipClass,
     missingChipClass,
-  } from '$lib/jobMatch';
-  import { profileStore } from '$lib/profile.svelte';
-  import { syncProfileAlert } from '$lib/profileAlertSync';
-  import type { Job, JobMatchResult, MatchAnalysisResponse } from '$lib/types';
-  import { Button } from '$lib/ui';
+  } from '#lib/jobMatch.js';
+  import { profileStore } from '#lib/profile.svelte.js';
+  import { syncProfileAlert } from '#lib/profileAlertSync.js';
+  import type { Job, JobMatchResult, MatchAnalysisResponse } from '#lib/types.js';
+  import { Button } from '#lib/ui/index.js';
   import MatchSummary from './MatchSummary.svelte';
   import SkillIcon from './SkillIcon.svelte';
-  import { skillLabel } from '$lib/facets';
+  import { skillLabel } from '#lib/facets.js';
 
   // The job is server-rendered; only this personal signal hydrates client-side.
   //

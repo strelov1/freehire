@@ -7,7 +7,7 @@
   // ONLY alongside that value and rejects any other pairing: a note beside a coded answer
   // could contradict it, and nothing downstream would know which to believe.
   import OptionList from './OptionList.svelte';
-  import { JOB_CHALLENGE_OPTIONS, JOB_CHALLENGE_OTHER } from '$lib/surveyOptions';
+  import { JOB_CHALLENGE_OPTIONS, JOB_CHALLENGE_OTHER } from '#lib/surveyOptions.js';
 
   interface Props {
     value: string | null;

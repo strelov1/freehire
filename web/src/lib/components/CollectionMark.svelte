@@ -1,11 +1,11 @@
 <script lang="ts">
   import { Building2, Code, Globe, Layers, TrendingUp } from '@lucide/svelte';
   import type { LucideIcon } from '@lucide/svelte';
-  import { countryLabel } from '$lib/facets';
-  import type { FamilyIconName } from '$lib/familymarks';
-  import { glyphColorFor } from '$lib/markColor';
-  import type { SeeAlsoMark } from '$lib/collections';
-  import { CountryFlag } from '$lib/ui';
+  import { countryLabel } from '#lib/facets.js';
+  import type { FamilyIconName } from '#lib/familymarks.js';
+  import { glyphColorFor } from '#lib/markColor.js';
+  import type { SeeAlsoMark } from '#lib/collections.js';
+  import { CountryFlag } from '#lib/ui/index.js';
 
   // The one visual mark a collection link carries (see resolveSeeAlsoMark): a
   // backer's brand image, a technology logo, a country flag, or a family icon.

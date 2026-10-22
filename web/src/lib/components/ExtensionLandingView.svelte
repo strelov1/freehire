@@ -1,8 +1,8 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
-  import { Button, NumberedGrid, ProviderIcon, SectionLabel } from '$lib/ui';
-  import { EXTENSION_FAQ } from '$lib/extensionFaq';
-  import { EXTENSION_CLAIMS, EXTENSION_STORE_URL } from '$lib/extensionLinks';
+  import { Button, NumberedGrid, ProviderIcon, SectionLabel } from '#lib/ui/index.js';
+  import { EXTENSION_FAQ } from '#lib/extensionFaq.js';
+  import { EXTENSION_CLAIMS, EXTENSION_STORE_URL } from '#lib/extensionLinks.js';
 
   // The three claims the panel makes, in the order it makes them on a posting:
   // it reads, it scores, it fills.

@@ -1,11 +1,11 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { Star } from '@lucide/svelte';
-  import { api } from '$lib/api';
-  import { communityFormError } from '$lib/community';
-  import { companyFeedbackTypes, maxFeedbackBodyLength } from '$lib/companyFeedback';
-  import type { CompanyFeedback, CompanyFeedbackSummary } from '$lib/types';
-  import { Button, ConfirmDialog, Dialog } from '$lib/ui';
+  import { api } from '#lib/api.js';
+  import { communityFormError } from '#lib/community.js';
+  import { companyFeedbackTypes, maxFeedbackBodyLength } from '#lib/companyFeedback.js';
+  import type { CompanyFeedback, CompanyFeedbackSummary } from '#lib/types.js';
+  import { Button, ConfirmDialog, Dialog } from '#lib/ui/index.js';
 
   // Company feedback: a 1-5 star rating + a category + free text, one per
   // (caller, company, category), editable by resubmitting within that

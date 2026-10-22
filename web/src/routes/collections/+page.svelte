@@ -2,8 +2,8 @@
   import { page } from '$app/state';
   import { resolve } from '$app/paths';
   import { ArrowRight, Search } from '@lucide/svelte';
-  import Seo from '$lib/components/Seo.svelte';
-  import CollectionRowMark from '$lib/components/CollectionRowMark.svelte';
+  import Seo from '#lib/components/Seo.svelte';
+  import CollectionRowMark from '#lib/components/CollectionRowMark.svelte';
   import type { PageData } from './$types';
 
   let { data }: { data: PageData } = $props();

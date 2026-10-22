@@ -1,6 +1,6 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
-  import { api } from '$lib/api';
+  import { api } from '#lib/api.js';
   import { Globe } from '@lucide/svelte';
   import {
     companyBadges,
@@ -9,9 +9,9 @@
     companyLocations,
     companySocials,
     hasCompanyDetails,
-  } from '$lib/companyDetails';
-  import type { Company } from '$lib/types';
-  import { Badge, CountryFlag, EmptyState, ProviderIcon, Skeleton } from '$lib/ui';
+  } from '#lib/companyDetails.js';
+  import type { Company } from '#lib/types.js';
+  import { Badge, CountryFlag, EmptyState, ProviderIcon, Skeleton } from '#lib/ui/index.js';
   import CountryFlagStack from './CountryFlagStack.svelte';
 
   // The employer behind a posting, as the job page's second tab. Deliberately NOT
@@ -23,7 +23,7 @@
   // Renders the same facts as the company page's sidebar cards, but laid out for a wide
   // column instead of a narrow one: no card chrome, the facts as a row of columns rather
   // than a stacked definition list, and the summary given the full width. The shared
-  // derivations live in $lib/companyDetails so the two layouts cannot disagree about
+  // derivations live in #lib/companyDetails so the two layouts cannot disagree about
   // what the company actually has.
   //
   // `active` is the tab's selected state, not its visibility — the panel stays mounted

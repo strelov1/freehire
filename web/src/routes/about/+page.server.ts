@@ -1,4 +1,4 @@
-import { serverApi } from '$lib/server/api';
+import { serverApi } from '#lib/server/api.js';
 import type { PageServerLoad } from './$types';
 
 // Live catalogue scale for the landing stats strip. One call: the backend publishes

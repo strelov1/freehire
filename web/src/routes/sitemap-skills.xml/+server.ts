@@ -1,5 +1,5 @@
-import { skillGlossaryPaths, urlsetXml, xmlResponse } from '$lib/sitemap';
-import { loadSkillDescriptions } from '$lib/skillDescriptions';
+import { skillGlossaryPaths, urlsetXml, xmlResponse } from '#lib/sitemap.js';
+import { loadSkillDescriptions } from '#lib/skillDescriptions.js';
 import type { RequestHandler } from './$types';
 
 // The glossary's crawl path. The chip's reveal only opens on interaction and the index

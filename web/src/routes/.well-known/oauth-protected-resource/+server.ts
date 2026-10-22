@@ -1,4 +1,4 @@
-import { proxyWellKnownJSON } from '$lib/server/wellKnownProxy';
+import { proxyWellKnownJSON } from '#lib/server/wellKnownProxy';
 import type { RequestHandler } from './$types';
 
 // RFC 9728's protected-resource metadata: which authorization server protects

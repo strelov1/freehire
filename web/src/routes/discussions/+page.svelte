@@ -1,8 +1,8 @@
 <script lang="ts">
   import { page } from '$app/state';
-  import DiscussionFeed from '$lib/components/community/DiscussionFeed.svelte';
-  import Seo from '$lib/components/Seo.svelte';
-  import { breadcrumbJsonLd, jsonLdScript } from '$lib/seo';
+  import DiscussionFeed from '#lib/components/community/DiscussionFeed.svelte';
+  import Seo from '#lib/components/Seo.svelte';
+  import { breadcrumbJsonLd, jsonLdScript } from '#lib/seo.js';
 
   let { data } = $props();
 

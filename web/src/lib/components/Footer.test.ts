@@ -68,8 +68,8 @@ describe('Footer store buttons', () => {
     expect(SOURCE).not.toMatch(/apps\.apple\.com\/[a-z]{2}\//);
   });
 
-  it('takes the Chrome Web Store URL from $lib/extensionLinks rather than spelling it again', () => {
-    expect(SOURCE).toContain("import { EXTENSION_STORE_URL } from '$lib/extensionLinks'");
+  it('takes the Chrome Web Store URL from #lib/extensionLinks rather than spelling it again', () => {
+    expect(SOURCE).toContain("import { EXTENSION_STORE_URL } from '#lib/extensionLinks.js'");
     expect(SOURCE).toContain('href: EXTENSION_STORE_URL');
     expect(SOURCE).not.toContain('chromewebstore.google.com');
   });

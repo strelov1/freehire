@@ -1,12 +1,12 @@
 <script lang="ts">
-  import { timeAgo, must } from '$lib/utils';
-  import { locale } from '$lib/i18n/currentLocale.svelte';
+  import { timeAgo, must } from '#lib/utils.js';
+  import { locale } from '#lib/i18n/currentLocale.svelte.js';
   // A provider key is a source facet code, so it renders through the one label map every
   // other surface uses: a provider must not be "WhatJobs" on the filter panel and
   // "Whatjobs" here.
-  import { sourceLabel } from '$lib/facets';
-  import { TabStrip, tabStripId } from '$lib/ui';
-  import type { HealthStatus, IngestStatus, ProviderKind } from '$lib/types';
+  import { sourceLabel } from '#lib/facets.js';
+  import { TabStrip, tabStripId } from '#lib/ui/index.js';
+  import type { HealthStatus, IngestStatus, ProviderKind } from '#lib/types.js';
 
   // The presentational half of the /status page: given the status read (or null
   // when the API read failed), it renders the site/API's own status, the

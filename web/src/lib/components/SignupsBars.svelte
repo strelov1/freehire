@@ -1,8 +1,8 @@
 <script lang="ts">
-  import { buildSignupsChart } from '$lib/signupsChart';
-  import { pickTickIndices } from '$lib/activityChart';
-  import { formatCount } from '$lib/utils';
-  import type { UserGrowthPoint } from '$lib/types';
+  import { buildSignupsChart } from '#lib/signupsChart.js';
+  import { pickTickIndices } from '#lib/activityChart.js';
+  import { formatCount } from '#lib/utils.js';
+  import type { UserGrowthPoint } from '#lib/types.js';
 
   // A single-series bar chart of new members per day — the ActivityBars sibling
   // for signups, one bar per day instead of an added/removed pair. Hand-built SVG

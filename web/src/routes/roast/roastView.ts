@@ -3,8 +3,8 @@
 // page.test.ts's own note). Neither function has a component to mount, and neither needs
 // one: both are total functions over the wire shape.
 
-import type { RoastResponse } from '$lib/api';
-import type { Gap } from '$lib/types';
+import type { RoastResponse } from '#lib/api.js';
+import type { Gap } from '#lib/types.js';
 
 /** Whether the reading is scoped to a named role, and what to show for it. Reads
  *  `market_scoped` rather than testing `role` for emptiness — the two can disagree in

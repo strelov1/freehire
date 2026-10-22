@@ -1,4 +1,4 @@
-import spec from '$lib/docs/generated/api-reference.openapi.json' with { type: 'json' };
+import spec from '#lib/docs/generated/api-reference.openapi.json' with { type: 'json' };
 import type { RequestHandler } from './$types';
 
 // The client half of the Scalar hydration in ../docs/api/+page.svelte fetches this

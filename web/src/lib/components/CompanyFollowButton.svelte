@@ -1,13 +1,13 @@
 <script lang="ts">
   import { Bell } from '@lucide/svelte';
   import { resolve } from '$app/paths';
-  import { ApiError } from '$lib/api';
-  import { isAuthenticated } from '$lib/auth.svelte';
-  import { promptSignIn } from '$lib/signin';
-  import { canonicalQuery } from '$lib/filters';
-  import { savedSearches } from '$lib/savedSearches.svelte';
-  import { notifications } from '$lib/notifications.svelte';
-  import { Button } from '$lib/ui';
+  import { ApiError } from '#lib/api.js';
+  import { isAuthenticated } from '#lib/auth.svelte.js';
+  import { promptSignIn } from '#lib/signin.js';
+  import { canonicalQuery } from '#lib/filters.js';
+  import { savedSearches } from '#lib/savedSearches.svelte.js';
+  import { notifications } from '#lib/notifications.svelte.js';
+  import { Button } from '#lib/ui/index.js';
 
   // "Subscribe to updates" on a company page: follow this company's new postings as
   // Telegram digests, built entirely from the saved-search + filter-subscription

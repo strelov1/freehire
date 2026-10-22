@@ -1,12 +1,12 @@
 <script lang="ts">
   import { onMount, untrack } from 'svelte';
-  import { browser } from '$app/environment';
+  import { browser } from '$app/env';
   import { page } from '$app/state';
-  import { api } from '$lib/api';
-  import { FilterStore, filtersToParams } from '$lib/filters';
-  import { syncOnNavigation } from '$lib/urlSynced.svelte';
-  import { FACETS } from '$lib/facets';
-  import type { FacetCounts } from '$lib/types';
+  import { api } from '#lib/api.js';
+  import { FilterStore, filtersToParams } from '#lib/filters.js';
+  import { syncOnNavigation } from '#lib/urlSynced.svelte.js';
+  import { FACETS } from '#lib/facets.js';
+  import type { FacetCounts } from '#lib/types.js';
   import FilterSummary from './filters/FilterSummary.svelte';
   import FilterModal from './filters/FilterModal.svelte';
   import FilterEdgeTab from './FilterEdgeTab.svelte';
@@ -19,7 +19,7 @@
   let { initial }: { initial: FacetCounts } = $props();
 
   // Seed filters from the URL so server and hydrated client render the same view.
-  const filters = new FilterStore(page.url.searchParams);
+  const filters = new FilterStore(new URLSearchParams(page.url.search));
 
   // Reassigned wholesale on each fetch (an API response), so $state.raw avoids
   // proxying a large object we never mutate in place. Seeded once from the SSR

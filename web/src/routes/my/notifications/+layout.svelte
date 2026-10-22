@@ -4,10 +4,10 @@
   import { Bell, Settings, SearchCheck } from '@lucide/svelte';
   import { resolve } from '$app/paths';
   import { page } from '$app/state';
-  import { TabStrip, tabStripId } from '$lib/ui';
-  import { NOTIFICATION_TABS } from '$lib/notificationCenterTabs';
-  import type { NotificationTabId } from '$lib/notificationCenterTabs';
-  import { activeRouteTab } from '$lib/routeTabs';
+  import { TabStrip, tabStripId } from '#lib/ui/index.js';
+  import { NOTIFICATION_TABS } from '#lib/notificationCenterTabs.js';
+  import type { NotificationTabId } from '#lib/notificationCenterTabs.js';
+  import { activeRouteTab } from '#lib/routeTabs.js';
 
   // The notification center's shared chrome: history, search alerts, and settings
   // are three real routes (not a client-side view switch), so the strip's tabs carry

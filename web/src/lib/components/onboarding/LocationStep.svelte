@@ -6,8 +6,8 @@
   // `derivedLocation` is what we WORKED OUT (from a CV or a LinkedIn address), not what the
   // candidate said. The control seeds an unstated base from it and lets a stated one win,
   // which is exactly the precedence this needs.
-  import LocationPreferencesFields from '$lib/components/profile/LocationPreferencesFields.svelte';
-  import type { DerivedLocation, LocationPreferences } from '$lib/types';
+  import LocationPreferencesFields from '#lib/components/profile/LocationPreferencesFields.svelte';
+  import type { DerivedLocation, LocationPreferences } from '#lib/types.js';
 
   interface Props {
     value: LocationPreferences | null;

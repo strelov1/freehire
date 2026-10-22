@@ -1,8 +1,8 @@
 <script lang="ts">
   import { Search } from '@lucide/svelte';
   import { messages } from './ApplicationLinkPicker.messages';
-  import { locale } from '$lib/i18n/currentLocale.svelte';
-  import { t } from '$lib/i18n/t';
+  import { locale } from '#lib/i18n/currentLocale.svelte.js';
+  import { t } from '#lib/i18n/t.js';
 
   interface PickerApp {
     slug: string;

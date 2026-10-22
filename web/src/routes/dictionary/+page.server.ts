@@ -1,6 +1,6 @@
-import { serverApi } from '$lib/server/api';
-import { loadSkillDescriptions } from '$lib/skillDescriptions';
-import type { FacetCounts } from '$lib/types';
+import { serverApi } from '#lib/server/api.js';
+import { loadSkillDescriptions } from '#lib/skillDescriptions.js';
+import type { FacetCounts } from '#lib/types.js';
 import type { PageServerLoad } from './$types';
 
 // The lists come from the dictionaries themselves — the specialization vocabulary is

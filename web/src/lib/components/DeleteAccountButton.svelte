@@ -1,12 +1,12 @@
 <script lang="ts">
   import { goto, invalidateAll } from '$app/navigation';
   import { resolve } from '$app/paths';
-  import { ApiError, api } from '$lib/api';
-  import { currentUser } from '$lib/auth.svelte';
-  import { locale } from '$lib/i18n/currentLocale.svelte';
-  import { t } from '$lib/i18n/t';
-  import { consumeReauthDraft } from '$lib/recentAuth';
-  import { Button, Dialog, Input } from '$lib/ui';
+  import { ApiError, api } from '#lib/api.js';
+  import { currentUser } from '#lib/auth.svelte.js';
+  import { locale } from '#lib/i18n/currentLocale.svelte.js';
+  import { t } from '#lib/i18n/t.js';
+  import { consumeReauthDraft } from '#lib/recentAuth.js';
+  import { Button, Dialog, Input } from '#lib/ui/index.js';
   import ConfirmIdentity from './ConfirmIdentity.svelte';
   import { messages } from './DeleteAccountButton.messages';
 

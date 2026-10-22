@@ -43,7 +43,7 @@ describe('HeaderProfileMenu', () => {
   });
 
   it('imports the shared account-links data instead of redeclaring it', () => {
-    expect(SOURCE).toContain("import { accountLinks } from '$lib/headerAccountLinks'");
+    expect(SOURCE).toContain("import { accountLinks } from '#lib/headerAccountLinks.js'");
   });
 
   it('closes on outside click, Escape, and navigation', () => {
@@ -53,7 +53,7 @@ describe('HeaderProfileMenu', () => {
   });
 
   it('coordinates with the other header overlays', () => {
-    expect(SOURCE).toContain("import { openedOverlay, closedOverlay } from '$lib/headerOverlay'");
+    expect(SOURCE).toContain("import { openedOverlay, closedOverlay } from '#lib/headerOverlay.js'");
     expect(SOURCE).toContain('openedOverlay(closeSelf)');
     expect(SOURCE).toContain('closedOverlay(closeSelf)');
   });

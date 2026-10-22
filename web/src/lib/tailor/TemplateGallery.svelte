@@ -1,9 +1,9 @@
 <script lang="ts">
-  import { api, ApiError } from '$lib/api';
-  import type { CvTemplate } from '$lib/cv';
+  import { api, ApiError } from '#lib/api.js';
+  import type { CvTemplate } from '#lib/cv.js';
   import { messages } from './TemplateGallery.messages';
-  import { locale } from '$lib/i18n/currentLocale.svelte';
-  import { format, t } from '$lib/i18n/t';
+  import { locale } from '#lib/i18n/currentLocale.svelte.js';
+  import { format, t } from '#lib/i18n/t.js';
 
   // The template gallery: a grid of static preview thumbnails (served from
   // /cv-previews/<id>.svg) with the current template highlighted. Two modes:

@@ -7,17 +7,17 @@
     VoiceModeUnavailable,
     SessionNotFound,
     type VoiceToken,
-  } from '$lib/assistant/api';
+  } from '#lib/assistant/api.js';
   import {
     applyRealtimeEvent,
     initVoiceCallState,
     MAX_CALL_MS,
     END_WARNING_MS,
     type RealtimeServerEvent,
-  } from '$lib/assistant/voiceCall';
+  } from '#lib/assistant/voiceCall.js';
   import { messages } from './VoiceCall.messages';
-  import { locale } from '$lib/i18n/currentLocale.svelte';
-  import { format, t } from '$lib/i18n/t';
+  import { locale } from '#lib/i18n/currentLocale.svelte.js';
+  import { format, t } from '#lib/i18n/t.js';
 
   // The voice-mode overlay: mints one call's credential, connects directly to OpenAI
   // over WebRTC, and appends each completed turn to the session as it finishes. Audio

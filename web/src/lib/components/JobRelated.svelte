@@ -1,9 +1,9 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
-  import type { JobCopy } from '$lib/api';
-  import type { Job } from '$lib/types';
+  import type { JobCopy } from '#lib/api.js';
+  import type { Job } from '#lib/types.js';
   import JobRow from './JobRow.svelte';
-  import { TabStrip, tabStripId } from '$lib/ui';
+  import { TabStrip, tabStripId } from '#lib/ui/index.js';
 
   // The two "more like this" surfaces for a job, tabbed: semantically similar jobs and,
   // for a collapsed mass-posted role, the other cities it is open in. `copies` is a small

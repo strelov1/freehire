@@ -1,10 +1,10 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
-  import { api } from '$lib/api';
-  import { isAuthenticated } from '$lib/auth.svelte';
-  import { formatMinorUnits } from '$lib/money';
-  import { promptSignIn } from '$lib/signin';
-  import type { PlansMatrix, PublicPrice } from '$lib/types';
+  import { api } from '#lib/api.js';
+  import { isAuthenticated } from '#lib/auth.svelte.js';
+  import { formatMinorUnits } from '#lib/money.js';
+  import { promptSignIn } from '#lib/signin.js';
+  import type { PlansMatrix, PublicPrice } from '#lib/types.js';
 
   // The API product: access to the public read API for software, sold apart from the plans
   // above. Its figures come from the same response as theirs, so the page cannot quote a

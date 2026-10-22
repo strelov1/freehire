@@ -1,13 +1,13 @@
 <script lang="ts">
   import { ArrowUp, Check, Trash2 } from '@lucide/svelte';
-  import { api, ApiError, RESUME_MAX_MB } from '$lib/api';
-  import { cvUploadReason, track } from '$lib/analytics';
-  import { CATEGORY_OPTIONS } from '$lib/facets';
-  import { profileStore } from '$lib/profile.svelte';
-  import { MAX_SPECIALIZATIONS, capSpecializations } from '$lib/profileLimits';
-  import { withSkills } from '$lib/profileSkills';
-  import type { LocationPreferences, UserProfile } from '$lib/types';
-  import { Button, ConfirmDialog } from '$lib/ui';
+  import { api, ApiError, RESUME_MAX_MB } from '#lib/api.js';
+  import { cvUploadReason, track } from '#lib/analytics.js';
+  import { CATEGORY_OPTIONS } from '#lib/facets.js';
+  import { profileStore } from '#lib/profile.svelte.js';
+  import { MAX_SPECIALIZATIONS, capSpecializations } from '#lib/profileLimits.js';
+  import { withSkills } from '#lib/profileSkills.js';
+  import type { LocationPreferences, UserProfile } from '#lib/types.js';
+  import { Button, ConfirmDialog } from '#lib/ui/index.js';
   import HeadshotField from './HeadshotField.svelte';
   import SearchSelect from './facets/SearchSelect.svelte';
   import LocationPreferencesFields from './profile/LocationPreferencesFields.svelte';

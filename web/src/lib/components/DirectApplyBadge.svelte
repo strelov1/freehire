@@ -1,6 +1,6 @@
 <script lang="ts">
   import { BadgeCheck } from '@lucide/svelte';
-  import { cn } from '$lib/ui';
+  import { cn } from '#lib/ui/index.js';
 
   // Marks a vacancy its employer published on freehire and takes applications for only
   // here (jobview `direct_apply`). The brand tone is the point: it is the one thing on a

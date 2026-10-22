@@ -8,7 +8,7 @@ vi.mock('$app/state', () => ({
 
 const { updateLanguage } = vi.hoisted(() => ({ updateLanguage: vi.fn() }));
 
-vi.mock('$lib/auth.svelte', () => ({
+vi.mock('#lib/auth.svelte.js', () => ({
   currentUser: () => ({ email: 'a@b.co', language: 'ru' }),
   updateLanguage,
 }));

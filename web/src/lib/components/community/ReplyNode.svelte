@@ -1,12 +1,12 @@
 <script lang="ts">
-  import { api } from '$lib/api';
-  import { isAuthenticated } from '$lib/auth.svelte';
-  import { promptSignIn } from '$lib/signin';
-  import { communityFormError } from '$lib/community';
-  import type { CommunityReply } from '$lib/types';
-  import { Button } from '$lib/ui';
-  import { locale } from '$lib/i18n/currentLocale.svelte';
-  import { timeAgo } from '$lib/utils';
+  import { api } from '#lib/api.js';
+  import { isAuthenticated } from '#lib/auth.svelte.js';
+  import { promptSignIn } from '#lib/signin.js';
+  import { communityFormError } from '#lib/community.js';
+  import type { CommunityReply } from '#lib/types.js';
+  import { Button } from '#lib/ui/index.js';
+  import { locale } from '#lib/i18n/currentLocale.svelte.js';
+  import { timeAgo } from '#lib/utils.js';
   import Self from './ReplyNode.svelte';
 
   let {

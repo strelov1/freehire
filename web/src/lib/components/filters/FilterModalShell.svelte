@@ -1,10 +1,10 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
   import { ArrowRight, LoaderCircle, X } from '@lucide/svelte';
-  import type { RailEntry, RailSection } from '$lib/filterSections';
-  import type { FacetCounts } from '$lib/types';
-  import { focusTrap } from '$lib/actions/focusTrap';
-  import { errorMessage } from '$lib/utils';
+  import type { RailEntry, RailSection } from '#lib/filterSections.js';
+  import type { FacetCounts } from '#lib/types.js';
+  import { focusTrap } from '#lib/actions/focusTrap.js';
+  import { errorMessage } from '#lib/utils.js';
 
   // The reusable two-pane filter-modal chrome: backdrop, header, the sectioned left
   // rail, and the deferred footer (Clear all / Apply / live preview). It knows nothing

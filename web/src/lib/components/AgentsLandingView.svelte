@@ -1,8 +1,8 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
-  import { AGENTS_FAQ } from '$lib/agentsFaq';
-  import { CLI_REPO, MCP_REPO } from '$lib/cliLinks';
-  import { Button, SectionLabel } from '$lib/ui';
+  import { AGENTS_FAQ } from '#lib/agentsFaq.js';
+  import { CLI_REPO, MCP_REPO } from '#lib/cliLinks.js';
+  import { Button, SectionLabel } from '#lib/ui/index.js';
 
   const LLMS_TXT = 'https://freehire.me/llms.txt';
   const OPENAPI = 'https://freehire.me/openapi.yaml';
@@ -474,7 +474,7 @@ freehire search <span class="text-foreground">"golang"</span> --remote --region 
     <p class="text-sm leading-relaxed text-muted-foreground">
       Free and open source — no tracking, no lock-in, and nothing to sign up for before your agent
       can search. Read every line of the
-      <!-- eslint-disable svelte/no-navigation-without-resolve -- absolute GitHub URLs from $lib/cliLinks, not SvelteKit routes -->
+      <!-- eslint-disable svelte/no-navigation-without-resolve -- absolute GitHub URLs from #lib/cliLinks, not SvelteKit routes -->
       <a
         href={CLI_REPO}
         target="_blank"

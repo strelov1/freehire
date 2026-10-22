@@ -1,6 +1,6 @@
 import { redirect } from '@sveltejs/kit';
-import { signinUrl } from '$lib/signin';
-import { loadBoard } from '$lib/server/tracking';
+import { signinUrl } from '#lib/signin.js';
+import { loadBoard } from '#lib/server/tracking.js';
 import type { PageServerLoad } from './$types';
 
 // /my/tracking/list is the board's rows read as a list. Same guard and same server

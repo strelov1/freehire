@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { TALENT_FACETS, cityLabel, skillLabel, type FacetDef } from '$lib/facets';
-  import type { TalentFilterStore } from '$lib/talentFilters';
+  import { TALENT_FACETS, cityLabel, skillLabel, type FacetDef } from '#lib/facets.js';
+  import type { TalentFilterStore } from '#lib/talentFilters.js';
   import FilterSummaryShell, { type SummaryGroup } from './FilterSummaryShell.svelte';
 
   // What is currently narrowing the catalogue, as removable chips — the catalogue

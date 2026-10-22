@@ -18,7 +18,7 @@ not a centred modal — a banner, a drawer, a responsive sheet — SHALL NOT be 
 
 #### Scenario: A primitive loses its last consumer
 
-- **WHEN** the only file importing `Skeleton` from `$lib/ui` stops importing it
+- **WHEN** the only file importing `Skeleton` from `#lib/ui` stops importing it
 - **THEN** the check fails, naming `Skeleton` and the drop from its baseline
 
 #### Scenario: A primitive gains consumers
@@ -50,7 +50,7 @@ not a centred modal — a banner, a drawer, a responsive sheet — SHALL NOT be 
 
 ### Requirement: The app reaches the design system through one door
 
-App code SHALL import primitives, helpers and types only from `$lib/ui`. A `.svelte` or `.ts`
+App code SHALL import primitives, helpers and types only from `#lib/ui`. A `.svelte` or `.ts`
 file under `web/src` that names the `freehire-design-system` package in an import statement
 SHALL fail the check unconditionally, with no baseline and no exception.
 

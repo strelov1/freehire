@@ -2,23 +2,23 @@
   import { untrack } from 'svelte';
   import { page } from '$app/state';
   import { resolve } from '$app/paths';
-  import { api } from '$lib/api';
-  import { isAuthenticated } from '$lib/auth.svelte';
-  import { FilterStore, filtersToParams } from '$lib/filters';
-  import FilterSummary from '$lib/components/filters/FilterSummary.svelte';
-  import FilterModal from '$lib/components/filters/FilterModal.svelte';
-  import FilterEdgeTab from '$lib/components/FilterEdgeTab.svelte';
-  import MarketPulseView from '$lib/components/MarketPulseView.svelte';
-  import States from '$lib/components/States.svelte';
+  import { api } from '#lib/api.js';
+  import { isAuthenticated } from '#lib/auth.svelte.js';
+  import { FilterStore, filtersToParams } from '#lib/filters.js';
+  import FilterSummary from '#lib/components/filters/FilterSummary.svelte';
+  import FilterModal from '#lib/components/filters/FilterModal.svelte';
+  import FilterEdgeTab from '#lib/components/FilterEdgeTab.svelte';
+  import MarketPulseView from '#lib/components/MarketPulseView.svelte';
+  import States from '#lib/components/States.svelte';
   import { Gauge, TrendingUp } from '@lucide/svelte';
-  import { TabStrip, tabStripId } from '$lib/ui';
-  import VerdictView from '$lib/components/VerdictView.svelte';
-  import { profileStore } from '$lib/profile.svelte';
-  import type { FacetCounts, Verdict } from '$lib/types';
-  import { Button } from '$lib/ui';
+  import { TabStrip, tabStripId } from '#lib/ui/index.js';
+  import VerdictView from '#lib/components/VerdictView.svelte';
+  import { profileStore } from '#lib/profile.svelte.js';
+  import type { FacetCounts, Verdict } from '#lib/types.js';
+  import { Button } from '#lib/ui/index.js';
   import { messages } from './messages';
-  import { locale } from '$lib/i18n/currentLocale.svelte';
-  import { t } from '$lib/i18n/t';
+  import { locale } from '#lib/i18n/currentLocale.svelte.js';
+  import { t } from '#lib/i18n/t.js';
 
   const profile = $derived(profileStore.profile);
   const s = $derived(t(messages, locale()));
@@ -48,7 +48,7 @@
   // change to compare against another position without touching the saved profile.
   function buildFilters(specializations: string[]): FilterStore {
     // eslint-disable-next-line svelte/prefer-svelte-reactivity -- transient: seeds a FilterStore once, never stored as reactive state
-    const seed = new URLSearchParams(page.url.searchParams);
+    const seed = new URLSearchParams(page.url.search);
     if (!seed.getAll('category').some((c) => c !== '')) {
       for (const spec of specializations) seed.append('category', spec);
     }

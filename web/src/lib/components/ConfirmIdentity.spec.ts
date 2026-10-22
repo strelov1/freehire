@@ -1,9 +1,9 @@
 import { fireEvent, render, screen } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { User } from '$lib/types';
+import type { User } from '#lib/types.js';
 import ConfirmIdentity from './ConfirmIdentity.svelte';
 
-// `ConnectedIdentity` is deliberately not exported from `$lib/types` — only the envelope
+// `ConnectedIdentity` is deliberately not exported from `#lib/types.js` — only the envelope
 // around it is — so the shape is restated here rather than widening the module's public
 // surface for a test.
 type Identity = { provider: string; linked_at: string; status: string; can_unlink: boolean };
@@ -35,12 +35,12 @@ const { StubApiError } = vi.hoisted(() => ({
   },
 }));
 
-vi.mock('$lib/api', () => ({
+vi.mock('#lib/api.js', () => ({
   api: { connectedIdentities, reauthenticatePassword },
   ApiError: StubApiError,
 }));
-vi.mock('$lib/auth.svelte', () => ({ currentUser: () => user.current }));
-vi.mock('$lib/recentAuth', () => ({
+vi.mock('#lib/auth.svelte.js', () => ({ currentUser: () => user.current }));
+vi.mock('#lib/recentAuth.js', () => ({
   beginProviderReauthentication: begin,
   recentAuthExpiry: expiry,
   forgetRecentAuthExpiry: forget,

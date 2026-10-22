@@ -3,7 +3,7 @@
   // to us rather than filtering what they see, which is why both sit at the end of the
   // wizard: a run abandoned before here has still answered everything the product acts on.
   import OptionList from './OptionList.svelte';
-  import { JOB_SEARCH_STAGE_OPTIONS } from '$lib/surveyOptions';
+  import { JOB_SEARCH_STAGE_OPTIONS } from '#lib/surveyOptions.js';
 
   interface Props {
     value: string | null;

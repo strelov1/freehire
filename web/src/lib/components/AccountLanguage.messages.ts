@@ -1,5 +1,5 @@
-import { defineMessages } from '$lib/i18n/t';
-import type { Locale } from '$lib/locale';
+import { defineMessages } from '#lib/i18n/t.js';
+import type { Locale } from '#lib/locale.js';
 
 export const messages = defineMessages(
   {

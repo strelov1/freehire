@@ -1,8 +1,8 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
-  import { Button } from '$lib/ui';
-  import { NumberedGrid, SectionLabel } from '$lib/ui';
-  import { TAILOR_FAQ } from '$lib/tailorFaq';
+  import { Button } from '#lib/ui/index.js';
+  import { NumberedGrid, SectionLabel } from '#lib/ui/index.js';
+  import { TAILOR_FAQ } from '#lib/tailorFaq.js';
 
   // The requirement split the tailoring context hands the agent. This is the
   // whole honesty argument of the feature, so it leads the page: what your

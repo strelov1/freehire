@@ -1,11 +1,11 @@
 <script lang="ts">
   import { Check, User } from '@lucide/svelte';
-  import { ApiError } from '$lib/api';
-  import { filtersFromProfile, filtersToParams } from '$lib/filters';
-  import { notifications } from '$lib/notifications.svelte';
-  import { savedSearches } from '$lib/savedSearches.svelte';
-  import { cn } from '$lib/ui';
-  import type { SavedSearch, UserProfile } from '$lib/types';
+  import { ApiError } from '#lib/api.js';
+  import { filtersFromProfile, filtersToParams } from '#lib/filters.js';
+  import { notifications } from '#lib/notifications.svelte.js';
+  import { savedSearches } from '#lib/savedSearches.svelte.js';
+  import { cn } from '#lib/ui/index.js';
+  import type { SavedSearch, UserProfile } from '#lib/types.js';
 
   // The built-in "notify me about jobs matching my profile" toggle: flipping it on
   // creates the exact saved search the modal's "Apply my profile" action would stage

@@ -1,7 +1,7 @@
 <script lang="ts">
   import { page } from '$app/state';
-  import ChatGptView from '$lib/components/ChatGptView.svelte';
-  import Seo from '$lib/components/Seo.svelte';
+  import ChatGptView from '#lib/components/ChatGptView.svelte';
+  import Seo from '#lib/components/Seo.svelte';
 
   const canonical = $derived(`${page.url.origin}/chatgpt`);
 </script>

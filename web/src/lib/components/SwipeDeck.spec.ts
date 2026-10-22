@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { ApiError } from '$lib/api';
-import type { Job } from '$lib/types';
+import { ApiError } from '#lib/api.js';
+import type { Job } from '#lib/types.js';
 import SwipeDeck from './SwipeDeck.svelte';
 
 // SwipeDeck pulls in SvelteKit runtime modules this test environment doesn't provide
@@ -24,8 +24,8 @@ const { swipeDeck, dismissJob, saveJob, unsaveJob, undismissJob, facetCounts, re
 // The real ApiError is kept on purpose: the deck tells a job that is gone (404)
 // from a transport failure by the class and the status, so a stand-in error
 // would not prove what the deck reads.
-vi.mock('$lib/api', async () => {
-  const actual = await vi.importActual<typeof import('$lib/api')>('$lib/api');
+vi.mock('#lib/api.js', async () => {
+  const actual = await vi.importActual<typeof import('#lib/api.js')>('#lib/api.js');
   return {
     ...actual,
     api: {
@@ -41,13 +41,13 @@ vi.mock('$lib/api', async () => {
   };
 });
 
-vi.mock('$lib/auth.svelte', () => ({ isAuthenticated: () => true }));
-vi.mock('$lib/viewedJobs.svelte', () => ({ markViewed: vi.fn() }));
+vi.mock('#lib/auth.svelte.js', () => ({ isAuthenticated: () => true }));
+vi.mock('#lib/viewedJobs.svelte.js', () => ({ markViewed: vi.fn() }));
 
 // The filter store mirrors itself into the URL through SvelteKit's navigation
 // hooks, which this environment does not provide. The deck reads the filters
 // as a query string, and nothing else about them is under test.
-vi.mock('$lib/filters', () => ({
+vi.mock('#lib/filters.js', () => ({
   FilterStore: class {
     applied = new URLSearchParams();
     dispose() {}

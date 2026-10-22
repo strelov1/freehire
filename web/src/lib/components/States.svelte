@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { EmptyState, Skeleton } from '$lib/ui';
+  import { EmptyState, Skeleton } from '#lib/ui/index.js';
 
   // Shared rendering for the three async states every data view goes through.
   // `loading` shows placeholder rows; `empty`/`error` show a centered message.

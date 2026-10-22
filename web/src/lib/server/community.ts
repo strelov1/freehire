@@ -1,5 +1,5 @@
 import { error } from '@sveltejs/kit';
-import { ApiError } from '$lib/api';
+import { ApiError } from '#lib/api.js';
 import { serverApi } from './api';
 import { loadDiscussionSubject } from './discussionSubject';
 import { threadMatchesSubject } from './threadSubject';

@@ -1,5 +1,5 @@
-import { serverApi } from '$lib/server/api';
-import { loadCollectionSections } from '$lib/server/collectionSections';
+import { serverApi } from '#lib/server/api.js';
+import { loadCollectionSections } from '#lib/server/collectionSections.js';
 import type { PageServerLoad } from './$types';
 
 // Server-render the collection index: every section, each ranked by open jobs.

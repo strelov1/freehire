@@ -1,11 +1,11 @@
 <script lang="ts">
   import { Clock, MapPin, User } from '@lucide/svelte';
   import { resolve } from '$app/paths';
-  import { countryLabel, skillLabel } from '$lib/facets';
-  import type { CatalogueMember } from '$lib/generated/contracts';
-  import { CATEGORY_LABELS, titleCase } from '$lib/labels';
-  import { talentHeading, talentPlace } from '$lib/talentCard';
-  import { Avatar, Card, Chip, CountryFlag } from '$lib/ui';
+  import { countryLabel, skillLabel } from '#lib/facets.js';
+  import type { CatalogueMember } from '#lib/generated/contracts.js';
+  import { CATEGORY_LABELS, titleCase } from '#lib/labels.js';
+  import { talentHeading, talentPlace } from '#lib/talentCard.js';
+  import { Avatar, Card, Chip, CountryFlag } from '#lib/ui/index.js';
 
   // One member of the public Talent Network catalogue.
   //

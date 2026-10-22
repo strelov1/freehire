@@ -1,8 +1,8 @@
 <script lang="ts">
   import { invalidateAll } from '$app/navigation';
-  import { api, ApiError } from '$lib/api';
-  import { currentUser } from '$lib/auth.svelte';
-  import { Button } from '$lib/ui';
+  import { api, ApiError } from '#lib/api.js';
+  import { currentUser } from '#lib/auth.svelte.js';
+  import { Button } from '#lib/ui/index.js';
 
   // Prompts a signed-in user who has never proven their address to confirm it with the
   // mailed six-digit code. Self-gating: it renders nothing for signed-out visitors and

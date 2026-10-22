@@ -1,11 +1,11 @@
 <script lang="ts">
   import { untrack } from 'svelte';
   import { page } from '$app/state';
-  import Seo from '$lib/components/Seo.svelte';
-  import ActivityBars from '$lib/components/ActivityBars.svelte';
-  import { api } from '$lib/api';
-  import { breadcrumbJsonLd, datasetJsonLd, jsonLdScript } from '$lib/seo';
-  import type { ActivityGranularity, ActivityPoint } from '$lib/types';
+  import Seo from '#lib/components/Seo.svelte';
+  import ActivityBars from '#lib/components/ActivityBars.svelte';
+  import { api } from '#lib/api.js';
+  import { breadcrumbJsonLd, datasetJsonLd, jsonLdScript } from '#lib/seo.js';
+  import type { ActivityGranularity, ActivityPoint } from '#lib/types.js';
   import type { PageData } from './$types';
 
   let { data }: { data: PageData } = $props();

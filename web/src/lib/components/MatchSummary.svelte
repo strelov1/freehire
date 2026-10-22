@@ -1,9 +1,9 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
   import { ArrowRight, FileText } from '@lucide/svelte';
-  import { verdictTone, type Tone } from '$lib/matchAnalysis';
-  import type { MatchAnalysisResponse } from '$lib/types';
-  import { Button } from '$lib/ui';
+  import { verdictTone, type Tone } from '#lib/matchAnalysis.js';
+  import type { MatchAnalysisResponse } from '#lib/types.js';
+  import { Button } from '#lib/ui/index.js';
 
   // What the Profile-match sidebar has to SAY about the LLM fit analysis: the cached
   // verdict when one exists, or the prompt to upload a CV when the page has read that there

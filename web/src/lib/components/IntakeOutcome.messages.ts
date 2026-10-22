@@ -1,6 +1,6 @@
-import { defineMessages } from '$lib/i18n/t';
+import { defineMessages } from '#lib/i18n/t.js';
 
-// Only the two links. The outcome sentence itself lives in `$lib/intakeOutcome`,
+// Only the two links. The outcome sentence itself lives in `#lib/intakeOutcome.js`,
 // which both surfaces share and which is tested on its own.
 export const messages = defineMessages(
   {

@@ -3,10 +3,10 @@
   // into (it's the one piece of the old identity header that doesn't carry enough content
   // to earn its own view, unlike Contacts/Location which do). Autosaves straight to
   // profileStore on every change, the same way the Skills view does.
-  import { CATEGORY_OPTIONS } from '$lib/facets';
-  import { profileStore } from '$lib/profile.svelte';
-  import { MAX_SPECIALIZATIONS } from '$lib/profileLimits';
-  import type { UserProfile } from '$lib/types';
+  import { CATEGORY_OPTIONS } from '#lib/facets.js';
+  import { profileStore } from '#lib/profile.svelte.js';
+  import { MAX_SPECIALIZATIONS } from '#lib/profileLimits.js';
+  import type { UserProfile } from '#lib/types.js';
   import SearchSelect from '../facets/SearchSelect.svelte';
   import SeniorityPills from './SeniorityPills.svelte';
 

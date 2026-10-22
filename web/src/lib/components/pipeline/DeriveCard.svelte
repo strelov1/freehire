@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Chip } from '$lib/ui';
+  import { Chip } from '#lib/ui/index.js';
   // Same raw title as IngestCard, now legible, with the facets a dictionary lookup
   // actually found underneath it — nothing here is a guess, so there are exactly four
   // chips because exactly four terms in this title matched something.

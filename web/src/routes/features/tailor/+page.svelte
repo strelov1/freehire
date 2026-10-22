@@ -1,9 +1,9 @@
 <script lang="ts">
   import { page } from '$app/state';
-  import Seo from '$lib/components/Seo.svelte';
-  import TailorLandingView from '$lib/components/TailorLandingView.svelte';
-  import { faqPageJsonLd, jsonLdScript } from '$lib/seo';
-  import { TAILOR_FAQ } from '$lib/tailorFaq';
+  import Seo from '#lib/components/Seo.svelte';
+  import TailorLandingView from '#lib/components/TailorLandingView.svelte';
+  import { faqPageJsonLd, jsonLdScript } from '#lib/seo.js';
+  import { TAILOR_FAQ } from '#lib/tailorFaq.js';
 
   const canonical = $derived(`${page.url.origin}/features/tailor`);
   // The FAQ block and this payload render from the same TAILOR_FAQ array, so the

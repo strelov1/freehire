@@ -1,7 +1,7 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
-  import { REFERRALS_FAQ } from '$lib/referralsFaq';
-  import { Button } from '$lib/ui';
+  import { REFERRALS_FAQ } from '#lib/referralsFaq.js';
+  import { Button } from '#lib/ui/index.js';
 
   // CTA destinations wired to the real feature (no invite-code program exists):
   //  - The headline "Ask for a referral" points at the referral hub (/my/referrals),

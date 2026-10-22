@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { CommunityThread } from '$lib/types';
+import type { CommunityThread } from '#lib/types.js';
 import { threadMatchesSubject } from './threadSubject';
 
 /** Exactly what the function reads off a thread. Annotated rather than inferred so the

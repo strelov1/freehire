@@ -1,16 +1,16 @@
 <script lang="ts">
   import { ChevronDown, Globe, MapPin, Search, X } from '@lucide/svelte';
   import { SvelteSet } from 'svelte/reactivity';
-  import { countryLabel, REGION_UNSPECIFIED, type FacetStore } from '$lib/facets';
-  import { REGION_LABELS } from '$lib/labels';
-  import { COUNTRY_REGION_MAP } from '$lib/generated/contracts';
-  import type { FacetCounts } from '$lib/types';
-  import { Chip, CountryFlag } from '$lib/ui';
+  import { countryLabel, REGION_UNSPECIFIED, type FacetStore } from '#lib/facets.js';
+  import { REGION_LABELS } from '#lib/labels.js';
+  import { COUNTRY_REGION_MAP } from '#lib/generated/contracts.js';
+  import type { FacetCounts } from '#lib/types.js';
+  import { Chip, CountryFlag } from '#lib/ui/index.js';
   import { pillClass, pillTitle } from '../facets/pill';
-  import { metroLabel } from '$lib/metro';
-  import { isAuthenticated } from '$lib/auth.svelte';
-  import { profileStore } from '$lib/profile.svelte';
-  import { eligibleForMeValues, isEligibleForMeOn, resolveGeoSource } from '$lib/eligibleForMe';
+  import { metroLabel } from '#lib/metro.js';
+  import { isAuthenticated } from '#lib/auth.svelte.js';
+  import { profileStore } from '#lib/profile.svelte.js';
+  import { eligibleForMeValues, isEligibleForMeOn, resolveGeoSource } from '#lib/eligibleForMe.js';
 
   // Location pane: a region → country tree plus a flat, searchable Cities list.
   // The country tree is built from the exported country→region map, scoped to what

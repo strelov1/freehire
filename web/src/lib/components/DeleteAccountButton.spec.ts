@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { User } from '$lib/types';
+import type { User } from '#lib/types.js';
 import DeleteAccountButton from './DeleteAccountButton.svelte';
 
 // The one irreversible action on the site. These cases re-assert its existing guarantees
@@ -47,12 +47,12 @@ const { StubApiError } = vi.hoisted(() => ({
 vi.mock('$app/state', () => ({ page: { data: {}, url: new URL('http://localhost/') } }));
 vi.mock('$app/paths', () => ({ resolve: (p: string) => p, base: '', assets: '' }));
 vi.mock('$app/navigation', () => ({ goto, invalidateAll }));
-vi.mock('$lib/api', () => ({
+vi.mock('#lib/api.js', () => ({
   api: { deleteAccount, reauthenticatePassword, connectedIdentities, billingManageUrl },
   ApiError: StubApiError,
 }));
-vi.mock('$lib/auth.svelte', () => ({ currentUser: () => user.current }));
-vi.mock('$lib/recentAuth', () => ({
+vi.mock('#lib/auth.svelte.js', () => ({ currentUser: () => user.current }));
+vi.mock('#lib/recentAuth.js', () => ({
   beginProviderReauthentication: begin,
   recentAuthExpiry: expiry,
   forgetRecentAuthExpiry: forget,

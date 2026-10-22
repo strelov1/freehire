@@ -1,6 +1,6 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
-  import { Dialog } from '$lib/ui';
+  import { Dialog } from '#lib/ui/index.js';
 
   // Points a candidate's own coding agent at this CV, without teaching the reader
   // the CLI's flags — an agent with the freehire-tailor-cv skill installed (ships

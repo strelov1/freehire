@@ -1,4 +1,4 @@
-import { defineMessages, plurals } from '$lib/i18n/t';
+import { defineMessages, plurals } from '#lib/i18n/t.js';
 
 // `groupedStages()`'s options come from the generated pipeline-stage vocabulary —
 // stays English, same boundary as JobBoard.messages.ts.

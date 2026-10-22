@@ -1,11 +1,11 @@
 <script lang="ts">
   import { page } from '$app/state';
   import { resolve } from '$app/paths';
-  import Seo from '$lib/components/Seo.svelte';
-  import InsightsPageShell from '$lib/components/InsightsPageShell.svelte';
-  import { breadcrumbJsonLd, datasetJsonLd, jsonLdScript } from '$lib/seo';
-  import { seniorityLabel } from '$lib/insights';
-  import { Table } from '$lib/ui';
+  import Seo from '#lib/components/Seo.svelte';
+  import InsightsPageShell from '#lib/components/InsightsPageShell.svelte';
+  import { breadcrumbJsonLd, datasetJsonLd, jsonLdScript } from '#lib/seo.js';
+  import { seniorityLabel } from '#lib/insights.js';
+  import { Table } from '#lib/ui/index.js';
   import type { PageData } from './$types';
 
   let { data }: { data: PageData } = $props();

@@ -2,24 +2,24 @@
   import { ChevronLeft, ChevronRight } from '@lucide/svelte';
   import { onMount, tick } from 'svelte';
   import { resolve } from '$app/paths';
-  import { api } from '$lib/api';
-  import { eventLabel, eventTone } from '$lib/events';
+  import { api } from '#lib/api.js';
+  import { eventLabel, eventTone } from '#lib/events.js';
   import {
     buildCalendarMonth,
     monthLabel,
     rangeForMonth,
     splitDayEvents,
     type CalendarDay,
-  } from '$lib/calendarModel';
-  import { boardRefFor } from '$lib/board';
-  import { isAuthenticated } from '$lib/auth.svelte';
-  import type { ScheduledInterview, TimelineEvent } from '$lib/types';
-  import { Button } from '$lib/ui';
+  } from '#lib/calendarModel.js';
+  import { boardRefFor } from '#lib/board.js';
+  import { isAuthenticated } from '#lib/auth.svelte.js';
+  import type { ScheduledInterview, TimelineEvent } from '#lib/types.js';
+  import { Button } from '#lib/ui/index.js';
   import ApplicationEventList from './ApplicationEventList.svelte';
   import States from './States.svelte';
   import { messages } from './TrackingCalendar.messages';
-  import { locale } from '$lib/i18n/currentLocale.svelte';
-  import { format, plural, t } from '$lib/i18n/t';
+  import { locale } from '#lib/i18n/currentLocale.svelte.js';
+  import { format, plural, t } from '#lib/i18n/t.js';
 
   // The server load hands over one month, fetched in ITS timezone; everything after that
   // is fetched here, because only the browser knows the reader's. See calendarModel.
@@ -130,7 +130,7 @@
   }
 
   // The mark colours carry the kind; filled versus hollow carries whether anybody but the
-  // candidate set the date. Both the label and the tone come from $lib/events, shared with
+  // candidate set the date. Both the label and the tone come from #lib/events, shared with
   // the application panel:
   // the same event captioned two ways on two screens is what putting them here caused.
   const tone = (kind: string) => eventTone(kind);

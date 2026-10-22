@@ -1,10 +1,10 @@
 <script lang="ts">
   import { page } from '$app/state';
   import { resolve } from '$app/paths';
-  import Seo from '$lib/components/Seo.svelte';
-  import { breadcrumbJsonLd, datasetJsonLd, jsonLdScript } from '$lib/seo';
-  import { Table } from '$lib/ui';
-  import type { InsightCompany } from '$lib/api';
+  import Seo from '#lib/components/Seo.svelte';
+  import { breadcrumbJsonLd, datasetJsonLd, jsonLdScript } from '#lib/seo.js';
+  import { Table } from '#lib/ui/index.js';
+  import type { InsightCompany } from '#lib/api.js';
   import type { PageData } from './$types';
 
   let { data }: { data: PageData } = $props();

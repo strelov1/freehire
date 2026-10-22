@@ -1,5 +1,5 @@
 <script lang="ts">
-  import ModerationView from '$lib/components/ModerationView.svelte';
+  import ModerationView from '#lib/components/ModerationView.svelte';
 </script>
 
 <svelte:head>

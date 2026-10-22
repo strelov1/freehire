@@ -1,4 +1,4 @@
-import { defineMessages } from '$lib/i18n/t';
+import { defineMessages } from '#lib/i18n/t.js';
 
 // `t.label` and `t.style` (the template's own name and style description) are
 // server data from `api.listCvTemplates()`, not catalog text.

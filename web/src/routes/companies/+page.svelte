@@ -1,7 +1,7 @@
 <script lang="ts">
   import { page } from '$app/state';
-  import CompaniesView from '$lib/components/CompaniesView.svelte';
-  import Seo from '$lib/components/Seo.svelte';
+  import CompaniesView from '#lib/components/CompaniesView.svelte';
+  import Seo from '#lib/components/Seo.svelte';
   import {
     breadcrumbJsonLd,
     collectionPageJsonLd,
@@ -9,7 +9,7 @@
     companyListItems,
     jsonLdScript,
     listingRobots,
-  } from '$lib/seo';
+  } from '#lib/seo.js';
   import type { PageData } from './$types';
 
   let { data }: { data: PageData } = $props();

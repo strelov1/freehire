@@ -1,10 +1,10 @@
 <script lang="ts">
   import { page } from '$app/state';
-  import Seo from '$lib/components/Seo.svelte';
-  import InsightsPageShell from '$lib/components/InsightsPageShell.svelte';
-  import { breadcrumbJsonLd, datasetJsonLd, jsonLdScript } from '$lib/seo';
-  import { formatSalary, seniorityLabel } from '$lib/insights';
-  import { Table } from '$lib/ui';
+  import Seo from '#lib/components/Seo.svelte';
+  import InsightsPageShell from '#lib/components/InsightsPageShell.svelte';
+  import { breadcrumbJsonLd, datasetJsonLd, jsonLdScript } from '#lib/seo.js';
+  import { formatSalary, seniorityLabel } from '#lib/insights.js';
+  import { Table } from '#lib/ui/index.js';
   import type { PageData } from './$types';
 
   let { data }: { data: PageData } = $props();

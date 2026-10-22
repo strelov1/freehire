@@ -1,14 +1,14 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
-  import { locale } from '$lib/i18n/currentLocale.svelte';
-  import { timeAgo } from '$lib/utils';
+  import { locale } from '#lib/i18n/currentLocale.svelte.js';
+  import { timeAgo } from '#lib/utils.js';
   // A source key is a search-facet code, so it renders through the one label map every
   // other surface uses: a source must not be "WhatJobs" on the filter panel and
   // "Whatjobs" here.
-  import { sourceLabel } from '$lib/facets';
-  import { SOURCE_LOGO_DOMAINS, sourceLogoUrl } from '$lib/logo';
-  import { EntityLogo } from '$lib/ui';
-  import type { ProviderKind, SourceEntry } from '$lib/types';
+  import { sourceLabel } from '#lib/facets.js';
+  import { SOURCE_LOGO_DOMAINS, sourceLogoUrl } from '#lib/logo.js';
+  import { EntityLogo } from '#lib/ui/index.js';
+  import type { ProviderKind, SourceEntry } from '#lib/types.js';
 
   // The presentational half of the /sources page: given the catalogue read (or null when
   // the API read failed), it renders the search box and the kind-grouped list. Kept

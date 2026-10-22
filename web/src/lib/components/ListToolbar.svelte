@@ -1,7 +1,7 @@
 <script lang="ts">
   import { Layers } from '@lucide/svelte';
   import type { Snippet } from 'svelte';
-  import { formatCount } from '$lib/utils';
+  import { formatCount } from '#lib/utils.js';
 
   // The mobile controls for a list page (jobs, companies, …): an inline toolbar at the
   // top of the list — the results total on the left, and (on the jobs list) a Swipe entry

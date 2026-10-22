@@ -13,17 +13,17 @@
   } from '@lucide/svelte';
   import { page } from '$app/state';
   import { resolve } from '$app/paths';
-  import { TabStrip, tabStripId } from '$lib/ui';
-  import { activeRouteTab } from '$lib/routeTabs';
-  import { isAuthenticated } from '$lib/auth.svelte';
-  import { locale } from '$lib/i18n/currentLocale.svelte';
-  import { t } from '$lib/i18n/t';
-  import { resumeStore } from '$lib/resume.svelte';
-  import AccountPreferences from '$lib/components/AccountPreferences.svelte';
-  import AccountSetupCard from '$lib/components/AccountSetupCard.svelte';
-  import ProfileForm from '$lib/components/ProfileForm.svelte';
-  import States from '$lib/components/States.svelte';
-  import { profileStore } from '$lib/profile.svelte';
+  import { TabStrip, tabStripId } from '#lib/ui/index.js';
+  import { activeRouteTab } from '#lib/routeTabs.js';
+  import { isAuthenticated } from '#lib/auth.svelte.js';
+  import { locale } from '#lib/i18n/currentLocale.svelte.js';
+  import { t } from '#lib/i18n/t.js';
+  import { resumeStore } from '#lib/resume.svelte.js';
+  import AccountPreferences from '#lib/components/AccountPreferences.svelte';
+  import AccountSetupCard from '#lib/components/AccountSetupCard.svelte';
+  import ProfileForm from '#lib/components/ProfileForm.svelte';
+  import States from '#lib/components/States.svelte';
+  import { profileStore } from '#lib/profile.svelte.js';
   import { handleCvDeleted, handleCvUploaded, handleSaved } from './actions';
   import { messages } from './messages';
 

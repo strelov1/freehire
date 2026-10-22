@@ -1,9 +1,9 @@
 <script lang="ts">
   import { page } from '$app/state';
-  import Seo from '$lib/components/Seo.svelte';
-  import NotificationsLandingView from '$lib/components/NotificationsLandingView.svelte';
-  import { faqPageJsonLd, jsonLdScript } from '$lib/seo';
-  import { NOTIFICATIONS_FAQ } from '$lib/notificationsFaq';
+  import Seo from '#lib/components/Seo.svelte';
+  import NotificationsLandingView from '#lib/components/NotificationsLandingView.svelte';
+  import { faqPageJsonLd, jsonLdScript } from '#lib/seo.js';
+  import { NOTIFICATIONS_FAQ } from '#lib/notificationsFaq.js';
 
   const canonical = $derived(`${page.url.origin}/features/notifications`);
   // The FAQ block and this payload render from the same NOTIFICATIONS_FAQ array, so the

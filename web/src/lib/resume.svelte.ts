@@ -9,9 +9,9 @@
 // SSR-safe and auth-agnostic (see UserResource): the load is a browser-only no-op and
 // the meta stays null for signed-out users.
 
-import { api } from '$lib/api';
-import { UserResource } from '$lib/userResource.svelte';
-import type { ResumeMeta } from '$lib/types';
+import { api } from '#lib/api.js';
+import { UserResource } from '#lib/userResource.svelte.js';
+import type { ResumeMeta } from '#lib/types.js';
 
 class ResumeStore extends UserResource<ResumeMeta | null> {
   // Reassigned (never mutated in place) on every change, so $state.raw is enough.

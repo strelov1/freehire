@@ -14,7 +14,7 @@ import {
 
 const { exchange } = vi.hoisted(() => ({ exchange: vi.fn() }));
 
-vi.mock('$lib/api', () => ({
+vi.mock('#lib/api.js', () => ({
   api: { exchangeOAuthReauthentication: exchange },
 }));
 

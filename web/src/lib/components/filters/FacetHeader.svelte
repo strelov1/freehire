@@ -1,6 +1,6 @@
 <script lang="ts">
   import { X } from '@lucide/svelte';
-  import type { FacetStore } from '$lib/facets';
+  import type { FacetStore } from '#lib/facets.js';
 
   // A single-param facet header: the label plus a Clear button (shown once the facet
   // has a selection). Shared by the chip facets and the Specialization pane so the

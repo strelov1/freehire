@@ -1,4 +1,4 @@
-import { defineMessages } from '$lib/i18n/t';
+import { defineMessages } from '#lib/i18n/t.js';
 
 // `ATSReportView` (the report body itself, shared with the public `/roast` page) is
 // out of scope here — deferred the same way `JobRow` was in `i18n-my-account-fanout`.

@@ -1,8 +1,8 @@
 <script lang="ts">
-  import { CONVERGENCE, WITNESS_GATE } from '$lib/ghost';
-  import { gateMatrix } from '$lib/ghostDiagrams';
-  import { cn } from '$lib/ui';
-  import { must } from '$lib/utils';
+  import { CONVERGENCE, WITNESS_GATE } from '#lib/ghost.js';
+  import { gateMatrix } from '#lib/ghostDiagrams.js';
+  import { cn } from '#lib/ui/index.js';
+  import { must } from '#lib/utils.js';
 
   // Two gates, four outcomes. The cell wording is asked of the rule rather than typed
   // here, so the diagram cannot caption a level the classifier stopped producing.

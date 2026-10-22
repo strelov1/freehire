@@ -1,4 +1,4 @@
-import { proxyWellKnownJSON } from '$lib/server/wellKnownProxy';
+import { proxyWellKnownJSON } from '#lib/server/wellKnownProxy';
 import type { RequestHandler } from './$types';
 
 // RFC 8414's authorization-server metadata. An MCP client (Claude, Cursor,

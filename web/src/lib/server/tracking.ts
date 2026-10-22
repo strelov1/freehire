@@ -1,6 +1,6 @@
 import { serverApi } from './api';
-import { rangeForMonth } from '$lib/calendarModel';
-import { rangeForWindow } from '$lib/activityGrid';
+import { rangeForMonth } from '#lib/calendarModel.js';
+import { rangeForWindow } from '#lib/activityGrid.js';
 
 /** Fetch the caller's Kanban board rows for the tracking routes' server load, so
  *  the board renders with the page instead of after a client fetch on mount. A

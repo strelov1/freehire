@@ -1,4 +1,4 @@
-import { defineMessages } from '$lib/i18n/t';
+import { defineMessages } from '#lib/i18n/t.js';
 
 // English builds the Stepper's full label by appending " margin" to the bare side
 // name ("Left" -> "Left margin"); Russian bakes the noun into the adjective instead

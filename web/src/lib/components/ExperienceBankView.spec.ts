@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { CompanyListItem, ExperienceBank, ResumeMeta } from '$lib/types';
-import { RESUME_POLL_BUDGET_MS } from '$lib/onboardingResumeWait';
+import type { CompanyListItem, ExperienceBank, ResumeMeta } from '#lib/types.js';
+import { RESUME_POLL_BUDGET_MS } from '#lib/onboardingResumeWait.js';
 import ExperienceBankView from './ExperienceBankView.svelte';
 
 // The "New experience" add-job form gains a company-catalogue autocomplete (still
@@ -17,19 +17,19 @@ const { getExperience, listCompanies, createExperienceEmployment, getResume, ret
     retryResumeExtract: vi.fn(),
   }));
 
-vi.mock('$lib/api', () => ({
+vi.mock('#lib/api.js', () => ({
   api: { getExperience, listCompanies, createExperienceEmployment, getResume, retryResumeExtract },
   isPlanRefusal: () => false,
 }));
 
 // A signed-out store reads as the free tier, which is the account the plan banner is for.
-vi.mock('$lib/auth.svelte', () => ({ currentUser: () => null }));
-vi.mock('$lib/i18n/currentLocale.svelte', () => ({ locale: () => 'en' }));
+vi.mock('#lib/auth.svelte.js', () => ({ currentUser: () => null }));
+vi.mock('#lib/i18n/currentLocale.svelte', () => ({ locale: () => 'en' }));
 
 // AssistantChat (mounted unconditionally, just hidden, inside ExperienceAssistantPanel)
 // boots a real conversation on mount — irrelevant to the add-job form and not worth
 // dragging its own API surface into this test.
-vi.mock('$lib/components/ExperienceAssistantPanel.svelte', async () => {
+vi.mock('#lib/components/ExperienceAssistantPanel.svelte', async () => {
   const stub = await import('../../../vitest-stubs/EmptyComponent.svelte');
   return { default: stub.default };
 });

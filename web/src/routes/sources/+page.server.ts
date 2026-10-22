@@ -1,5 +1,5 @@
-import { serverApi } from '$lib/server/api';
-import type { SourceEntry } from '$lib/types';
+import { serverApi } from '#lib/server/api.js';
+import type { SourceEntry } from '#lib/types.js';
 import type { PageServerLoad } from './$types';
 
 // The public /sources page reads the whole source catalogue in ONE call to our own

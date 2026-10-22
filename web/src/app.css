@@ -127,7 +127,7 @@
    The banner is server-rendered on purpose — it lives in the document flow, so
    mounting it after hydration would shove the page down under someone mid-read. The
    no-flash script in app.html sets this class from localStorage; the component then
-   catches up on mount and drops the node. See $lib/cliPromo.ts. */
+   catches up on mount and drops the node. See #lib/cliPromo.ts. */
 .cli-banner-dismissed [data-cli-banner] {
   display: none;
 }
@@ -138,7 +138,7 @@
    home page, with 31% of visits in "poor", while lab Lighthouse saw only 0.066
    because it never replays a returning visitor's localStorage. Server-rendered
    now; this class hides it before first paint for anyone who already dismissed or
-   completed it, and JobsView drops the node on mount. See $lib/onboarding.ts. */
+   completed it, and JobsView drops the node on mount. See #lib/onboarding.ts. */
 .onboarding-seen [data-onboarding-banner] {
   display: none;
 }

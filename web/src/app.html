@@ -12,12 +12,12 @@
       content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content"
     />
     <!-- Warm the company-logo origin: every job row and company header renders an
-    <img> from it (CompanyLogo → $lib/logo), so a listing opens a connection to it
+    <img> from it (CompanyLogo → #lib/logo), so a listing opens a connection to it
     within the first paint, on every page that matters. Its handshake is otherwise
     paid at the moment the first logo is needed.
 
     Only this one origin gets a preconnect. googletagmanager.com is the other
-    candidate Lighthouse names, but it is loaded from $lib/analytics behind cookie
+    candidate Lighthouse names, but it is loaded from #lib/analytics behind cookie
     consent: outside a consent-required region it starts unprompted, inside one it
     may never start at all, and a preconnect the visitor then never uses spends a
     connection slot against the resources that do. dns-prefetch is the honest
@@ -40,7 +40,7 @@
       })();
       // Same trick for the CLI promo strip: it renders on the server (so it never
       // shoves the page down after hydration), and this hides it before first paint
-      // for a visitor who already closed it. Mirrors $lib/cliPromo.ts.
+      // for a visitor who already closed it. Mirrors #lib/cliPromo.ts.
       (function () {
         try {
           if (localStorage.getItem('hire.cli-banner-dismissed') === '1')
@@ -50,7 +50,7 @@
       // And once more for the onboarding nudge above the job feed, which is the
       // costliest of the three: it sits in the flow directly above the rows, so
       // appearing after hydration moved the whole feed down. Mirrors the lifecycle
-      // in $lib/onboarding.ts — 'seen' and 'done' both retire the banner, anything
+      // in #lib/onboarding.ts — 'seen' and 'done' both retire the banner, anything
       // else (including no entry at all) leaves it visible for a first-time visitor.
       (function () {
         try {
@@ -61,7 +61,7 @@
       })();
     </script>
     <!-- Google Analytics is no longer bootstrapped inline here: it now loads via
-    $lib/analytics (initTrackers), gated on cookie consent alongside PostHog. -->
+    #lib/analytics (initTrackers), gated on cookie consent alongside PostHog. -->
     %sveltekit.head%
   </head>
   <!-- `tap`, not `hover`: preloading on hover made the pointer inflate job view

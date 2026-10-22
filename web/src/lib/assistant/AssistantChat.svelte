@@ -8,11 +8,11 @@
     getSession,
     deleteSession,
     SessionNotFound,
-  } from '$lib/assistant/api';
-  import VoiceCall from '$lib/assistant/VoiceCall.svelte';
-  import { canUseVoiceCall } from '$lib/assistant/voiceCall';
-  import { AUDIO_ENABLED } from '$lib/assistant/audioAvailability';
-  import { track } from '$lib/analytics';
+  } from '#lib/assistant/api.js';
+  import VoiceCall from '#lib/assistant/VoiceCall.svelte';
+  import { canUseVoiceCall } from '#lib/assistant/voiceCall.js';
+  import { AUDIO_ENABLED } from '#lib/assistant/audioAvailability.js';
+  import { track } from '#lib/analytics.js';
   import {
     openRehearsal,
     retryTurn,
@@ -22,18 +22,18 @@
     startAutopilot,
     StreamInterrupted,
     type Turn,
-  } from '$lib/assistant/client';
-  import { initChat, reduceTurnEvent, type ChatState } from '$lib/assistant/chat';
-  import { bulletCapUserMessage } from '$lib/assistant/bulletCapAlert';
-  import { splitPresentingCalls } from '$lib/assistant/deck';
-  import { atBottom } from '$lib/assistant/scrolling';
-  import { renderMarkdown } from '$lib/markdown';
-  import { ConfirmDialog } from '$lib/ui';
-  import JobDeck from '$lib/assistant/JobDeck.svelte';
-  import SessionRail from '$lib/assistant/SessionRail.svelte';
-  import ToolGroupList from '$lib/assistant/ToolGroupList.svelte';
-  import Composer from '$lib/assistant/Composer.svelte';
-  import PlanLimitLink from '$lib/components/PlanLimitLink.svelte';
+  } from '#lib/assistant/client.js';
+  import { initChat, reduceTurnEvent, type ChatState } from '#lib/assistant/chat.js';
+  import { bulletCapUserMessage } from '#lib/assistant/bulletCapAlert.js';
+  import { splitPresentingCalls } from '#lib/assistant/deck.js';
+  import { atBottom } from '#lib/assistant/scrolling.js';
+  import { renderMarkdown } from '#lib/markdown.js';
+  import { ConfirmDialog } from '#lib/ui/index.js';
+  import JobDeck from '#lib/assistant/JobDeck.svelte';
+  import SessionRail from '#lib/assistant/SessionRail.svelte';
+  import ToolGroupList from '#lib/assistant/ToolGroupList.svelte';
+  import Composer from '#lib/assistant/Composer.svelte';
+  import PlanLimitLink from '#lib/components/PlanLimitLink.svelte';
   import {
     fromSummary,
     upsertSession,
@@ -42,12 +42,12 @@
     activeAfterDelete,
     labelFromMessage,
     type SessionItem,
-  } from '$lib/assistant/sessions';
-  import { eventsFromTranscript, type TurnEvent } from '$lib/assistant/wire';
-  import { opensInRail, type ChatPreset, type OpeningAction } from '$lib/assistant/presets';
+  } from '#lib/assistant/sessions.js';
+  import { eventsFromTranscript, type TurnEvent } from '#lib/assistant/wire.js';
+  import { opensInRail, type ChatPreset, type OpeningAction } from '#lib/assistant/presets.js';
   import { messages } from './AssistantChat.messages';
-  import { locale } from '$lib/i18n/currentLocale.svelte';
-  import { format, plural, t } from '$lib/i18n/t';
+  import { locale } from '#lib/i18n/currentLocale.svelte.js';
+  import { format, plural, t } from '#lib/i18n/t.js';
 
   // The agent chat. The agent runs inside the freehire backend, so this is an
   // ordinary authenticated API surface: the session list, one session's stored

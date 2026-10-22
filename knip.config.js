@@ -63,6 +63,9 @@ export default {
       entry: [
         'src/routes/**/+*.{ts,js,svelte}',
         'src/hooks.{client,server}.ts',
+        // SvelteKit 3 reads the declared environment variables from here by convention;
+        // nothing imports it.
+        'src/env.ts',
         // gen-og.mjs reaches this through a runtime string —
         // vite.ssrLoadModule('/src/lib/server/og/brand.ts') — which no static analysis follows.
         'src/lib/server/og/brand.ts',
@@ -75,7 +78,10 @@ export default {
         'scripts/*.mjs',
         'cluster.js',
       ],
-      project: ['src/**', 'scripts/**'],
+      // svelte.options.ts holds the compile options vite.config.ts and vitest.config.ts share
+      // (mdsvex among them) — they used to live in svelte.config.js, which knip's Svelte
+      // plugin read; outside the project, the import that replaced it is never followed.
+      project: ['src/**', 'scripts/**', 'svelte.options.ts'],
       // Emitted by cmd/gen-contracts. It exports the whole domain vocabulary whether or not
       // the SPA has a use for each name yet — that is what a generated contract is for, so
       // its exports are not evidence of anything.

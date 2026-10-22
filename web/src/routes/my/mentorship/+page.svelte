@@ -1,6 +1,6 @@
 <script lang="ts">
-  import MentorSessionSplit from '$lib/components/MentorSessionSplit.svelte';
-  import { Button } from '$lib/ui';
+  import MentorSessionSplit from '#lib/components/MentorSessionSplit.svelte';
+  import { Button } from '#lib/ui/index.js';
   import { resolve } from '$app/paths';
   import type { PageData } from './$types';
 

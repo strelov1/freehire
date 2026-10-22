@@ -1,8 +1,8 @@
 import { error } from '@sveltejs/kit';
-import { getPost } from '$lib/blogPosts';
-import { buildBlogCard } from '$lib/server/og/blog';
-import { loadOgFonts } from '$lib/server/og/fonts';
-import { renderMarkupPng } from '$lib/server/og/render';
+import { getPost } from '#lib/blogPosts.js';
+import { buildBlogCard } from '#lib/server/og/blog.js';
+import { loadOgFonts } from '#lib/server/og/fonts.js';
+import { renderMarkupPng } from '#lib/server/og/render.js';
 import type { RequestHandler } from './$types';
 
 // Renders the per-post 1200×630 Open Graph card on demand. Resolves the post by

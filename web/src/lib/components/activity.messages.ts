@@ -1,4 +1,4 @@
-import { defineMessages } from '$lib/i18n/t';
+import { defineMessages } from '#lib/i18n/t.js';
 
 // One catalog for the whole Activity section rather than five. Its four tab views
 // (`SavedJobs`, `JobHistory`, `AnalysesView`, `Hidden`) carry two or three strings
@@ -6,7 +6,7 @@ import { defineMessages } from '$lib/i18n/t';
 // vocabulary — splitting it per component would spread eight lines over five files
 // and make the four empty states drift apart. The route layout and its child pages
 // read the same catalog, which is why it lives here rather than under the route:
-// a `$lib` component may not import from `routes/`.
+// a `#lib` component may not import from `routes/`.
 export const messages = defineMessages(
   {
     // The layout's base title; each child page overrides it with its own.

@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { RECRUITERS_FAQ } from '$lib/recruitersFaq';
-  import { Button } from '$lib/ui';
+  import { RECRUITERS_FAQ } from '#lib/recruitersFaq.js';
+  import { Button } from '#lib/ui/index.js';
 
   // Why a recruiter should submit. Kept honest — these are properties of the
   // actual flow (free, moderated, developer audience), not marketing promises.

@@ -49,6 +49,10 @@ ARG SENTRY_PROJECT=""
 ENV SENTRY_AUTH_TOKEN=$SENTRY_AUTH_TOKEN
 ENV SENTRY_ORG=$SENTRY_ORG
 ENV SENTRY_PROJECT=$SENTRY_PROJECT
+# The public site URL, baked in at build time (paths.origin in vite.config.ts) — the
+# SvelteKit 3 adapter no longer reads ORIGIN when the server starts. Not a secret.
+ARG ORIGIN=""
+ENV ORIGIN=$ORIGIN
 RUN pnpm run build
 # Keep only production deps for the runtime image (the build tools are no longer
 # needed; adapter-node has already bundled the app).
@@ -70,9 +74,9 @@ COPY web/nginx.conf /etc/nginx/http.d/default.conf
 COPY web/docker-entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
 
-# Node SSR server settings. ORIGIN must be set at deploy to the public site URL
-# (used for canonical/sitemap/JSON-LD); PROTOCOL_HEADER/HOST_HEADER let it derive
-# the origin from nginx's forwarded headers as a fallback. See web/.env.example.
+# Node SSR server settings. The public origin (canonical/sitemap/JSON-LD) comes from
+# the ORIGIN build arg above; without one, PROTOCOL_HEADER/HOST_HEADER let the server
+# derive it from nginx's forwarded headers. See web/.env.example.
 ENV PORT=3000
 ENV API_INTERNAL_URL=http://app:8080
 ENV PROTOCOL_HEADER=x-forwarded-proto

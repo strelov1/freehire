@@ -3,7 +3,7 @@
   import { resolve } from '$app/paths';
   import { page } from '$app/state';
   import { onMount } from 'svelte';
-  import { completeProviderReauthentication } from '$lib/recentAuth';
+  import { completeProviderReauthentication } from '#lib/recentAuth.js';
 
   let error = $state<string | null>(null);
   onMount(async () => {

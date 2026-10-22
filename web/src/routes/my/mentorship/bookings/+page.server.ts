@@ -1,5 +1,5 @@
-import { requireMentorProfile } from '$lib/server/mentorshipGate';
-import { serverApi } from '$lib/server/api';
+import { requireMentorProfile } from '#lib/server/mentorshipGate.js';
+import { serverApi } from '#lib/server/api.js';
 import type { PageServerLoad } from './$types';
 
 // The sessions booked WITH the caller, as a mentor. Carries each seeker's address — the

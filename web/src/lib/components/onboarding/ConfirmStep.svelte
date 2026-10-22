@@ -9,14 +9,14 @@
   // profile's own Roles editor does not reuse it either.
   import { ChevronDown, Search, X } from '@lucide/svelte';
   import { SvelteSet } from 'svelte/reactivity';
-  import { api } from '$lib/api';
-  import { CATEGORY_GROUPS } from '$lib/filterSections';
-  import { pillClass, pillTitle } from '$lib/components/facets/pill';
-  import SeniorityPills from '$lib/components/profile/SeniorityPills.svelte';
-  import { MAX_SPECIALIZATIONS } from '$lib/profileLimits';
+  import { api } from '#lib/api.js';
+  import { CATEGORY_GROUPS } from '#lib/filterSections.js';
+  import { pillClass, pillTitle } from '#lib/components/facets/pill.js';
+  import SeniorityPills from '#lib/components/profile/SeniorityPills.svelte';
+  import { MAX_SPECIALIZATIONS } from '#lib/profileLimits.js';
   import ProfileLinksFields from './ProfileLinksFields.svelte';
-  import type { CvParseState } from '$lib/onboardingResumeWait';
-  import type { ProfileLinks } from '$lib/profileLinks';
+  import type { CvParseState } from '#lib/onboardingResumeWait.js';
+  import type { ProfileLinks } from '#lib/profileLinks.js';
 
   interface Props {
     specializations: string[];

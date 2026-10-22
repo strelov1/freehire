@@ -1,9 +1,9 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
-  import { Button } from '$lib/ui';
-  import HomeFunnel from '$lib/components/HomeFunnel.svelte';
-  import { NumberedGrid, SectionLabel } from '$lib/ui';
-  import { HOME_FAQ } from '$lib/homeFaq';
+  import { Button } from '#lib/ui/index.js';
+  import HomeFunnel from '#lib/components/HomeFunnel.svelte';
+  import { NumberedGrid, SectionLabel } from '#lib/ui/index.js';
+  import { HOME_FAQ } from '#lib/homeFaq.js';
 
   // Live catalogue figures from the page's server load, all from one snapshot. Any may
   // be null when the API is unreachable, so each has a static fallback (see `figures`).

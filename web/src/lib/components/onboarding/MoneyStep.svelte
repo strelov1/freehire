@@ -9,7 +9,7 @@
   //
   // Each slider yields one exact integer, not a range: the screening answer holds one
   // number, the jobs filter's salary floor takes one number, and an ATS form asks for one.
-  import { INCOME_CURRENCIES, INCOME_PERIODS, incomeScale, rescaleIncome } from '$lib/surveyOptions';
+  import { INCOME_CURRENCIES, INCOME_PERIODS, incomeScale, rescaleIncome } from '#lib/surveyOptions.js';
 
   interface Props {
     currentIncome: number | null;

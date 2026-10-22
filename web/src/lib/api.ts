@@ -21,7 +21,7 @@ import type {
   JobMatch,
   Responses as SurveyAnswers,
   RevisionView,
-} from '$lib/generated/contracts';
+} from '#lib/generated/contracts.js';
 import type {
   CvAppearanceDefaults,
   CvAtsDelta,
@@ -492,7 +492,7 @@ export function createApi(
   baseUrl = '',
   defaultHeaders: Record<string, string> = {},
   /** Abort a call that has not answered within this many milliseconds. Set by the
-   *  SERVER client only (see `$lib/server/api`): a `load` that never finishes holds
+   *  SERVER client only (see `#lib/server/api`): a `load` that never finishes holds
    *  its socket open forever, and enough of those fill the accept queue and take the
    *  whole SSR process down. The browser client leaves this unset — it drives the
    *  LLM-backed calls, which legitimately run for minutes. */

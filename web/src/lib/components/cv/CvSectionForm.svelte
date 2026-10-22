@@ -1,7 +1,7 @@
 <script lang="ts">
   import { Plus, Trash2 } from '@lucide/svelte';
-  import { Button, Input } from '$lib/ui';
-  import type { Document } from '$lib/generated/contracts';
+  import { Button, Input } from '#lib/ui/index.js';
+  import type { Document } from '#lib/generated/contracts.js';
   import {
     blankExperience,
     blankEducation,
@@ -9,9 +9,9 @@
     blankLanguage,
     blankProject,
     blankCertification,
-  } from '$lib/cv';
+  } from '#lib/cv.js';
   import StringListEditor from './StringListEditor.svelte';
-  import PeriodDateInput from '$lib/components/PeriodDateInput.svelte';
+  import PeriodDateInput from '#lib/components/PeriodDateInput.svelte';
 
   // The controlled section form for one CV: binds directly to a caller-owned Document (and CV
   // title) and adds/removes rows per section. It does no data-fetching and no saving — the host

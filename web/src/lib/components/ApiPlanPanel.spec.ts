@@ -3,10 +3,10 @@ import { describe, expect, it, vi } from 'vitest';
 import ApiPlanPanel from './ApiPlanPanel.svelte';
 
 vi.mock('$app/paths', () => ({ resolve: (p: string) => p, base: '', assets: '' }));
-vi.mock('$lib/i18n/currentLocale.svelte', () => ({ locale: () => 'en' }));
-vi.mock('$lib/auth.svelte', () => ({ isAuthenticated: () => true }));
+vi.mock('#lib/i18n/currentLocale.svelte', () => ({ locale: () => 'en' }));
+vi.mock('#lib/auth.svelte.js', () => ({ isAuthenticated: () => true }));
 const { getApiPlan } = vi.hoisted(() => ({ getApiPlan: vi.fn() }));
-vi.mock('$lib/api', () => ({ api: { getApiPlan } }));
+vi.mock('#lib/api.js', () => ({ api: { getApiPlan } }));
 
 describe('ApiPlanPanel', () => {
   it('names the tier and its rate for a subscriber', async () => {

@@ -1,14 +1,15 @@
 <script lang="ts">
   import { page } from '$app/state';
   import { resolve } from '$app/paths';
+  import { toPath } from '#lib/pathname.js';
   import { afterNavigate, goto } from '$app/navigation';
-  import { signinUrl } from '$lib/signin';
+  import { signinUrl } from '#lib/signin.js';
   import HeaderSearch from './HeaderSearch.svelte';
-  import { ROLE_PLACEHOLDER } from '$lib/placeholderRoles';
+  import { ROLE_PLACEHOLDER } from '#lib/placeholderRoles.js';
   import HeaderMenu from './HeaderMenu.svelte';
   import BrandMark from './BrandMark.svelte';
-  import { isApiReferenceRoute, isWideHeaderRoute } from '$lib/shellLayout';
-  import { HEADER_LINKS } from '$lib/siteNav';
+  import { isApiReferenceRoute, isWideHeaderRoute } from '#lib/shellLayout.js';
+  import { HEADER_LINKS } from '#lib/siteNav.js';
 
   // The header is three slots — logo | search | menu — identical on every
   // viewport. Nav links, the account items, the theme toggle, and the auth
@@ -89,7 +90,8 @@
   // that lands here via client-side navigation never remounts it, so onMount would
   // fire only on a cold load and miss the in-app bounce. afterNavigate covers both
   // the initial load and every later navigation, and stays off the SSR path.
-  afterNavigate(() => {
+  afterNavigate(({ shallow }) => {
+    if (shallow) return; // SvelteKit 3 fires this for shallow routing too
     if (!page.url.searchParams.has('auth_error')) return;
     const query = [...page.url.searchParams]
       .filter(([key]) => key !== 'auth_error')
@@ -153,7 +155,7 @@
           {#each HEADER_LINKS as link, i (link.href)}
             {@const Icon = link.icon}
             <a
-              href={resolve(link.href)}
+              href={resolve(toPath(link.href))}
               class={[
                 'flex items-center gap-1.5 whitespace-nowrap text-sm text-muted-foreground transition-colors hover:text-foreground',
                 i >= LINKS_BELOW_LG && 'hidden lg:flex',

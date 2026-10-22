@@ -1,6 +1,6 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
-  import { Button } from '$lib/ui';
+  import { Button } from '#lib/ui/index.js';
 
   // The published custom GPT. Public, so it opens for anyone with a ChatGPT
   // account; tracking actions additionally need the visitor's own API key.

@@ -1,8 +1,8 @@
 <script lang="ts">
-  import { ghostBadge } from '$lib/ghost';
-  import type { Ghost } from '$lib/generated/contracts';
-  import { locale } from '$lib/i18n/currentLocale.svelte';
-  import { cn } from '$lib/ui';
+  import { ghostBadge } from '#lib/ghost.js';
+  import type { Ghost } from '#lib/generated/contracts.js';
+  import { locale } from '#lib/i18n/currentLocale.svelte.js';
+  import { cn } from '#lib/ui/index.js';
 
   // Surfaces the ghost signal as a hedged chip plus the fired/total scale. It states
   // that a posting MAY be inactive and shows how many criteria back that, never that

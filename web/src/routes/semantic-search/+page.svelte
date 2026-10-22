@@ -1,10 +1,10 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
   import { page } from '$app/state';
-  import { api } from '$lib/api';
-  import Seo from '$lib/components/Seo.svelte';
-  import EmbeddingProgress from '$lib/components/EmbeddingProgress.svelte';
-  import { SectionLabel } from '$lib/ui';
+  import { api } from '#lib/api.js';
+  import Seo from '#lib/components/Seo.svelte';
+  import EmbeddingProgress from '#lib/components/EmbeddingProgress.svelte';
+  import { SectionLabel } from '#lib/ui/index.js';
   import type { PageData } from './$types';
 
   let { data }: { data: PageData } = $props();

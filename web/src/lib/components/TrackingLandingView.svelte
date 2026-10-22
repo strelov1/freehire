@@ -1,9 +1,9 @@
 <script lang="ts">
   import { Clock, Mail } from '@lucide/svelte';
   import { resolve } from '$app/paths';
-  import { Badge, Button, EntityLogo, SectionLabel } from '$lib/ui';
-  import HomeFunnel from '$lib/components/HomeFunnel.svelte';
-  import { TRACKING_FAQ } from '$lib/trackingFaq';
+  import { Badge, Button, EntityLogo, SectionLabel } from '#lib/ui/index.js';
+  import HomeFunnel from '#lib/components/HomeFunnel.svelte';
+  import { TRACKING_FAQ } from '#lib/trackingFaq.js';
 
   interface PreviewCard {
     company: string;

@@ -4,10 +4,10 @@
   import { CalendarClock, CalendarDays, IdCard, Users } from '@lucide/svelte';
   import { resolve } from '$app/paths';
   import { page } from '$app/state';
-  import { TabStrip, tabStripId } from '$lib/ui';
-  import { MENTORSHIP_TABS, type MentorshipTabId } from '$lib/mentorshipTabs';
-  import { activeRouteTab } from '$lib/routeTabs';
-  import { browserTimezone } from '$lib/mentorship';
+  import { TabStrip, tabStripId } from '#lib/ui/index.js';
+  import { MENTORSHIP_TABS, type MentorshipTabId } from '#lib/mentorshipTabs.js';
+  import { activeRouteTab } from '#lib/routeTabs.js';
+  import { browserTimezone } from '#lib/mentorship.js';
   import type { LayoutData } from './$types';
 
   let { data, children }: { data: LayoutData; children: Snippet } = $props();

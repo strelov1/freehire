@@ -7,14 +7,14 @@
   // not here — this pane only shows a short status line pointing there, so a caller
   // wondering "where did the Gmail card go" finds it in one click.
   import { resolve } from '$app/paths';
-  import { api } from '$lib/api';
-  import type { GmailStatus, MailboxStatus, InboxSource } from '$lib/api';
-  import { Badge, Button, ConfirmDialog } from '$lib/ui';
+  import { api } from '#lib/api.js';
+  import type { GmailStatus, MailboxStatus, InboxSource } from '#lib/api.js';
+  import { Badge, Button, ConfirmDialog } from '#lib/ui/index.js';
   import { Mail, AtSign, Copy } from '@lucide/svelte';
-  import { errorMessage } from '$lib/utils';
+  import { errorMessage } from '#lib/utils.js';
   import { messages } from './InboxSettings.messages';
-  import { locale } from '$lib/i18n/currentLocale.svelte';
-  import { t } from '$lib/i18n/t';
+  import { locale } from '#lib/i18n/currentLocale.svelte.js';
+  import { t } from '#lib/i18n/t.js';
 
   interface Props {
     gmail: GmailStatus | null;

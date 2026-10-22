@@ -1,9 +1,9 @@
 <script lang="ts">
   import { page } from '$app/state';
-  import InboxLandingView from '$lib/components/InboxLandingView.svelte';
-  import Seo from '$lib/components/Seo.svelte';
-  import { INBOX_FAQ } from '$lib/inboxFaq';
-  import { faqPageJsonLd, jsonLdScript } from '$lib/seo';
+  import InboxLandingView from '#lib/components/InboxLandingView.svelte';
+  import Seo from '#lib/components/Seo.svelte';
+  import { INBOX_FAQ } from '#lib/inboxFaq.js';
+  import { faqPageJsonLd, jsonLdScript } from '#lib/seo.js';
 
   const canonical = $derived(`${page.url.origin}/features/inbox`);
   // The FAQ block and this payload render from the same INBOX_FAQ array, so the

@@ -2,7 +2,7 @@
   // The dedicated credential page: register, sign in, and password recovery, all in
   // one place — every "sign in" entry point in the app funnels here rather than
   // opening a dialog over whatever page it was clicked from. Reached via `signinUrl()`
-  // ($lib/signin), which every caller uses so the query params below can't drift:
+  // (#lib/signin), which every caller uses so the query params below can't drift:
   // /onboarding's own gate (an anonymous visitor there is bounced straight here,
   // `returnTo` carrying the onboarding URL); every guarded route's server-side load
   // (`redirect(302, ...)` when signed out); TopBar's global handler for a failed OAuth
@@ -16,18 +16,19 @@
   // URL instead of only reachable by clicking through from #login.
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
+  import { gotoPath } from '#lib/gotoPath.js';
   import { resolve } from '$app/paths';
   import { page } from '$app/state';
   import { X } from '@lucide/svelte';
-  import { api, ApiError } from '$lib/api';
-  import { credentialErrorMessage } from '$lib/credentialErrorMessage';
-  import { login, register } from '$lib/auth.svelte';
-  import { loadOAuthProviders, PROVIDER_LABELS } from '$lib/oauthProviders';
-  import { safeRedirect } from '$lib/safeRedirect';
-  import { focusTrap } from '$lib/actions/focusTrap';
-  import AuthBrandPanel from '$lib/components/AuthBrandPanel.svelte';
-  import BrandMark from '$lib/components/BrandMark.svelte';
-  import { Button, ProviderIcon } from '$lib/ui';
+  import { api, ApiError } from '#lib/api.js';
+  import { credentialErrorMessage } from '#lib/credentialErrorMessage.js';
+  import { login, register } from '#lib/auth.svelte.js';
+  import { loadOAuthProviders, PROVIDER_LABELS } from '#lib/oauthProviders.js';
+  import { safeRedirect } from '#lib/safeRedirect.js';
+  import { focusTrap } from '#lib/actions/focusTrap.js';
+  import AuthBrandPanel from '#lib/components/AuthBrandPanel.svelte';
+  import BrandMark from '#lib/components/BrandMark.svelte';
+  import { Button, ProviderIcon } from '#lib/ui/index.js';
 
   // Validated the same way every other returnTo in the app is (safeRedirect:
   // same-origin relative path only), since it arrives as a query param a visitor's
@@ -69,11 +70,11 @@
   let mode = $state<Mode>(initialMode());
 
   // Keeps the URL's hash pointing at whatever screen is actually showing —
-  // `replaceState` so switching modes doesn't spam browser history, `noScroll`
+  // `replaceState` so switching modes doesn't spam browser history, `reset: false`
   // since the hash names a screen, not an in-page anchor to jump to.
   function syncHash(next: Mode) {
     // eslint-disable-next-line svelte/no-navigation-without-resolve -- a hash-only change on this same page, not a route
-    void goto(`#${next}`, { replaceState: true, noScroll: true, keepFocus: true });
+    void goto(`#${next}`, { replaceState: true, reset: false });
   }
 
   // Canonicalizes the URL on arrival too: a visit with no hash (or a stray one)
@@ -147,8 +148,7 @@
     try {
       await api.resetPassword(email, code.trim(), password);
       await login(email, password);
-      // eslint-disable-next-line svelte/no-navigation-without-resolve -- returnTo is a validated same-origin path (safeRedirect), not a typed route
-      void goto(returnTo);
+      void gotoPath(returnTo);
     } catch (err) {
       error = messageFor(err);
     } finally {
@@ -164,8 +164,7 @@
     submitting = true;
     try {
       await (mode === 'register' ? register : login)(email, password);
-      // eslint-disable-next-line svelte/no-navigation-without-resolve -- returnTo is a validated same-origin path (safeRedirect), not a typed route
-      void goto(returnTo);
+      void gotoPath(returnTo);
     } catch (err) {
       error = messageFor(err);
     } finally {
@@ -183,8 +182,7 @@
   }
 
   function leave() {
-    // eslint-disable-next-line svelte/no-navigation-without-resolve -- cancelTo is a validated same-origin path (safeRedirect), not a typed route
-    void goto(cancelTo);
+    void gotoPath(cancelTo);
   }
 
   function onKeydown(e: KeyboardEvent) {
@@ -206,7 +204,7 @@
      buttons below are what it follows next. Measured 2026-09-20: 127,799 fetches of
      this page across 41,180 URLs, and 11,032 bot-initiated redirects into Google,
      LinkedIn, Apple and GitHub authorization.
-     $lib/robots disallows /signin as well, and this tag is NOT a duplicate of it:
+     #lib/robots disallows /signin as well, and this tag is NOT a duplicate of it:
      the crawler that did most of the above never once fetched robots.txt in five
      days of 120k-200k requests a day, while it does fetch and parse this HTML.
      Written into the existing head rather than through <Seo>, which would also emit

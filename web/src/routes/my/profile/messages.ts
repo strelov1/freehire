@@ -1,4 +1,4 @@
-import { defineMessages } from '$lib/i18n/t';
+import { defineMessages } from '#lib/i18n/t.js';
 
 // The section heading and the tab-strip labels — the views themselves (ProfileForm,
 // ExperienceBankView, etc.) are out of scope for this pass.

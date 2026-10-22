@@ -1,5 +1,5 @@
-import { requireMentorshipAccess } from '$lib/server/mentorshipGate';
-import { serverApi } from '$lib/server/api';
+import { requireMentorshipAccess } from '#lib/server/mentorshipGate.js';
+import { serverApi } from '#lib/server/api.js';
 import type { LayoutServerLoad } from './$types';
 
 // The profile is read ONCE for the whole section, here, because the tab strip's existence
@@ -7,7 +7,7 @@ import type { LayoutServerLoad } from './$types';
 // rather than fetching it again.
 //
 // Authenticated, so the session cookie is forwarded explicitly: with an absolute API base
-// URL `event.fetch` does not carry it (see $lib/server/api). The `/my` layout above this
+// URL `event.fetch` does not carry it (see #lib/server/api). The `/my` layout above this
 // one already refuses an anonymous visitor, so there is no gate to repeat.
 //
 // A caller who is not a mentor gets `profile: null` — the ordinary answer, not a failure,

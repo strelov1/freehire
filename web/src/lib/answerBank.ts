@@ -1,4 +1,4 @@
-import type { AutoApplyPreviewPending } from '$lib/types';
+import type { AutoApplyPreviewPending } from '#lib/types.js';
 
 /** The question stems that mean "may you work in this posting's country".
  *

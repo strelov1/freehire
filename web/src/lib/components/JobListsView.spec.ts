@@ -1,13 +1,13 @@
 import { fireEvent, render, screen } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { JobList } from '$lib/types';
+import type { JobList } from '#lib/types.js';
 import JobListsView from './JobListsView.svelte';
 
 vi.mock('$app/state', () => ({
   page: { data: { locale: 'ru' }, url: new URL('http://localhost/my/lists') },
 }));
 vi.mock('$app/paths', () => ({ resolve: (p: string) => p, base: '', assets: '' }));
-vi.mock('$lib/auth.svelte', () => ({ isAuthenticated: () => true }));
+vi.mock('#lib/auth.svelte.js', () => ({ isAuthenticated: () => true }));
 
 const { ensureLoaded, create, remove } = vi.hoisted(() => ({
   ensureLoaded: vi.fn(),
@@ -17,7 +17,7 @@ const { ensureLoaded, create, remove } = vi.hoisted(() => ({
 
 const itemsRef = { current: [] as JobList[] };
 
-vi.mock('$lib/jobLists.svelte', () => ({
+vi.mock('#lib/jobLists.svelte.js', () => ({
   jobLists: {
     get items() {
       return itemsRef.current;

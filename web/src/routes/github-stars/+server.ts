@@ -1,9 +1,9 @@
 import { json } from '@sveltejs/kit';
-import { githubStats } from '$lib/server/github';
+import { githubStats } from '#lib/server/github.js';
 import type { RequestHandler } from './$types';
 
 // The star count for the header badge, served from our own origin so the browser
-// never talks to api.github.com (see $lib/server/github for why that mattered).
+// never talks to api.github.com (see #lib/server/github for why that mattered).
 //
 // `stars: null` is a real answer, not an error: GitHub being unreachable or rate-
 // limited must leave the badge without a number, never break the header. A 5xx

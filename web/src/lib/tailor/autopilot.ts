@@ -2,8 +2,8 @@
 // and the one ordering rule that undoing a run has to obey. Kept Svelte-free so the panel
 // and the page share one reading of a report and the ordering is unit-testable.
 
-import type { AutopilotEntry, AutopilotStatus } from '$lib/generated/contracts';
-import type { OpeningAction } from '$lib/assistant/presets';
+import type { AutopilotEntry, AutopilotStatus } from '#lib/generated/contracts.js';
+import type { OpeningAction } from '#lib/assistant/presets.js';
 
 /**
  * What a tailoring workspace offers while its conversation is EMPTY.

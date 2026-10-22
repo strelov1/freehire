@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { Component } from 'svelte';
-  import type { GhostCriterionCode } from '$lib/ghost';
+  import type { GhostCriterionCode } from '#lib/ghost.js';
   import AtsAbsent from './diagrams/AtsAbsent.svelte';
   import Evergreen from './diagrams/Evergreen.svelte';
   import Reports from './diagrams/Reports.svelte';
@@ -11,7 +11,7 @@
   // (TS2741) instead of an empty cell on the page.
   //
   // This is what stands in for the test that cannot be written: vitest here cannot import
-  // a `.svelte` component — the `$lib` alias does not resolve under it, and a relative
+  // a `.svelte` component — the `#lib` alias does not resolve under it, and a relative
   // path reaches vite's import analysis untransformed — so asserting the registry's
   // coverage at runtime would mean adding test infrastructure this project does not
   // carry. The type checker already runs in CI and catches it earlier anyway.

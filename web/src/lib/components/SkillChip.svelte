@@ -1,9 +1,9 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
-  import { Tooltip, badgeVariants } from '$lib/ui';
-  import { filterHref } from '$lib/enrichment';
-  import { skillLabel } from '$lib/facets';
-  import { skillDescription } from '$lib/skillDescriptions';
+  import { Tooltip, badgeVariants } from '#lib/ui/index.js';
+  import { filterHref } from '#lib/enrichment.js';
+  import { skillLabel } from '#lib/facets.js';
+  import { skillDescription } from '#lib/skillDescriptions.js';
   import SkillIcon from './SkillIcon.svelte';
 
   // A skill chip that says what the skill IS.

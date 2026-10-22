@@ -1,7 +1,7 @@
 <script lang="ts">
   import { page } from '$app/state';
-  import ContributeLandingView from '$lib/components/ContributeLandingView.svelte';
-  import Seo from '$lib/components/Seo.svelte';
+  import ContributeLandingView from '#lib/components/ContributeLandingView.svelte';
+  import Seo from '#lib/components/Seo.svelte';
 
   const canonical = $derived(`${page.url.origin}/contribute`);
 </script>

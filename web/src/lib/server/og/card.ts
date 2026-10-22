@@ -3,7 +3,7 @@
 // HTML string for satori — no I/O, no framework coupling — so it stays cheap to
 // reason about and is exercised directly by the render smoke test.
 //
-// All display strings are reused from $lib/enrichment (the same labels/salary the
+// All display strings are reused from #lib/enrichment (the same labels/salary the
 // site shows), and every interpolated value is HTML-escaped before it reaches the
 // markup. Shared brand primitives (mark, escaping, logo tile, chips, footer) live
 // in ./shared so the job/company/brand cards cannot drift.
@@ -11,8 +11,8 @@
 // satori constraint: layout is flexbox only (no CSS grid), and any element with
 // more than one child declares `display: flex`.
 
-import type { Job } from '$lib/generated/contracts';
-import { formatSalary, seniorityLabel, workArrangement } from '$lib/enrichment';
+import type { Job } from '#lib/generated/contracts.js';
+import { formatSalary, seniorityLabel, workArrangement } from '#lib/enrichment.js';
 import { OG_HEIGHT, OG_WIDTH, brandFooter, chipMarkup, esc, logoBox, type Chip } from './shared';
 
 const SKILL_LIMIT = 3;

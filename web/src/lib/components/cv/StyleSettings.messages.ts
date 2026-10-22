@@ -1,4 +1,4 @@
-import { defineMessages } from '$lib/i18n/t';
+import { defineMessages } from '#lib/i18n/t.js';
 
 // `f.label`/`f.note` (the font list from the API) are server data, not catalog text.
 export const messages = defineMessages(

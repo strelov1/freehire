@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { Button, Card, SectionLabel } from '$lib/ui';
-  import type { EmbedProgress } from '$lib/types';
+  import { Button, Card, SectionLabel } from '#lib/ui/index.js';
+  import type { EmbedProgress } from '#lib/types.js';
   import {
     MEASURING,
     coveredPercent,
@@ -9,7 +9,7 @@
     formatCount,
     formatEta,
     formatRate,
-  } from '$lib/embedProgress';
+  } from '#lib/embedProgress.js';
 
   const REPO_URL = 'https://github.com/strelov1/freehire-volunteer-embed';
   const GUIDE_URL = `${REPO_URL}/blob/main/HOW_TO_RUN_THE_CLIENT.md`;

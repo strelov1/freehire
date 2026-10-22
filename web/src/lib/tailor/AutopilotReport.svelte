@@ -10,7 +10,7 @@
   // the match analysis underneath, which still measures the BASE CV against the vacancy.
   import { RotateCcw } from '@lucide/svelte';
   import { summarizeRun, statusMeta } from './autopilot';
-  import type { AutopilotEntry } from '$lib/generated/contracts';
+  import type { AutopilotEntry } from '#lib/generated/contracts.js';
 
   let {
     report,

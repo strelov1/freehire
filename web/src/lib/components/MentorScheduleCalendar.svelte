@@ -4,8 +4,8 @@
   // public booking page runs — but editing availability still goes through
   // MentorScheduleEditor's form below it. See the mentorship-schedule-calendar OpenSpec
   // change for why a second, calendar-shaped editor is out of scope here.
-  import { api } from '$lib/api';
-  import { Badge, Card, Skeleton } from '$lib/ui';
+  import { api } from '#lib/api.js';
+  import { Badge, Card, Skeleton } from '#lib/ui/index.js';
   import {
     addMonths,
     dayStatuses,
@@ -15,8 +15,8 @@
     todayIn,
     weekdayOrder,
     weekdayShortLabel,
-  } from '$lib/mentorship';
-  import type { MentorCalendar, MentorCalendarInterval } from '$lib/types';
+  } from '#lib/mentorship.js';
+  import type { MentorCalendar, MentorCalendarInterval } from '#lib/types.js';
 
   let { calendar: initial }: { calendar: MentorCalendar } = $props();
 

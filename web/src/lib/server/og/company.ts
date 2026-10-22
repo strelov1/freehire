@@ -8,8 +8,8 @@
 // ./shared so the job/company/brand cards cannot drift. satori constraint: layout
 // is flexbox only, and any element with more than one child declares `display:flex`.
 
-import type { Company } from '$lib/types';
-import { countryLabel } from '$lib/facets';
+import type { Company } from '#lib/types.js';
+import { countryLabel } from '#lib/facets.js';
 import { OG_HEIGHT, OG_WIDTH, brandFooter, chipMarkup, esc, logoBox, type Chip } from './shared';
 
 const LOGO_SIZE = 140;

@@ -4,11 +4,11 @@
   import { page } from '$app/state';
   import { resolve } from '$app/paths';
   import { Search, X as XIcon } from '@lucide/svelte';
-  import { api } from '$lib/api';
-  import { cn } from '$lib/ui';
-  import { isAuthenticated } from '$lib/auth.svelte';
-  import { UrlSyncedState, syncOnNavigation } from '$lib/urlSynced.svelte';
-  import type { MyJob } from '$lib/types';
+  import { api } from '#lib/api.js';
+  import { cn } from '#lib/ui/index.js';
+  import { isAuthenticated } from '#lib/auth.svelte.js';
+  import { UrlSyncedState, syncOnNavigation } from '#lib/urlSynced.svelte.js';
+  import type { MyJob } from '#lib/types.js';
   import {
     BOARD_COLUMNS,
     columnOf,
@@ -18,17 +18,17 @@
     type BoardColumnId,
     type BoardItem,
     type ClosedOutcome,
-  } from '$lib/board';
-  import { createRehearsal, createDebrief } from '$lib/assistant/api';
-  import { assertNever } from '$lib/utils';
+  } from '#lib/board.js';
+  import { createRehearsal, createDebrief } from '#lib/assistant/api.js';
+  import { assertNever } from '#lib/utils.js';
   import BoardColumn from './BoardColumn.svelte';
   import BoardList from './BoardList.svelte';
   import JobDrawer from './JobDrawer.svelte';
   import FollowUpDialog from './FollowUpDialog.svelte';
   import States from './States.svelte';
   import { messages } from './JobBoard.messages';
-  import { locale } from '$lib/i18n/currentLocale.svelte';
-  import { format, t } from '$lib/i18n/t';
+  import { locale } from '#lib/i18n/currentLocale.svelte.js';
+  import { format, t } from '#lib/i18n/t.js';
 
   // initialId (from /my/tracking/[id]) opens that application's drawer once the
   // board has loaded, so a deep link / inbox link / refresh reopens the same card.
@@ -157,7 +157,7 @@
   // instant, so there is nothing to debounce — setNow writes and applies
   // together, and the view reads `value`.
   const filters = new UrlSyncedState<{ q: string; attention: boolean; stage: string }>(
-    page.url.searchParams,
+    new URLSearchParams(page.url.search),
     {
       parse: (p) => ({
         q: p.get('q') ?? '',

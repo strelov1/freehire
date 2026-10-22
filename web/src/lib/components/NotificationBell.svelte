@@ -2,10 +2,10 @@
   import { afterNavigate } from '$app/navigation';
   import { resolve } from '$app/paths';
   import { Bell } from '@lucide/svelte';
-  import { isAuthenticated } from '$lib/auth.svelte';
-  import { notificationCenter } from '$lib/notificationCenter.svelte';
-  import { lockScroll, unlockScroll } from '$lib/scrollLock';
-  import { openedOverlay, closedOverlay } from '$lib/headerOverlay';
+  import { isAuthenticated } from '#lib/auth.svelte.js';
+  import { notificationCenter } from '#lib/notificationCenter.svelte.js';
+  import { lockScroll, unlockScroll } from '#lib/scrollLock.js';
+  import { openedOverlay, closedOverlay } from '#lib/headerOverlay.js';
   import States from './States.svelte';
   import NotificationCard from './NotificationCard.svelte';
 
@@ -56,8 +56,9 @@
     return () => closedOverlay(closeSelf);
   });
 
-  afterNavigate(() => {
-    open = false;
+  afterNavigate(({ shallow }) => {
+    // SvelteKit 3 fires this for shallow routing too; a URL write is not a page change.
+    if (!shallow) open = false;
   });
 
   function toggle() {

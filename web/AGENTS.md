@@ -36,6 +36,13 @@ production; in dev the Vite proxy (`web/vite.config.ts`) forwards `/api` to the 
   control renders nothing when `enabled` is false (object storage unconfigured).
 - `ResumeStructuredView.svelte` is read-only; the backend serves the structured CV from
   `GET /api/v1/me/resume` (`structured` field, null when absent/stale/unconfigured).
+- Environment variables reach the app only through `src/env.ts`. SvelteKit 3 exposes
+  nothing undeclared — not even through the deprecated `$env/*` modules — so a variable
+  missing there is `undefined` at runtime however the host sets it, and nothing reports it.
+  Declare it there and read it from `$app/env/public` / `$app/env/private`.
+- The public origin (`page.url.origin`, behind every canonical URL) is baked in at BUILD
+  time from `ORIGIN` — `paths.origin` in `vite.config.ts`. adapter-node no longer reads
+  `ORIGIN` at runtime, so setting it only on the running server does nothing.
 - Sentry is gated on `PUBLIC_SENTRY_DSN` (+ `PUBLIC_SENTRY_ENVIRONMENT`); source-map upload
   only when `SENTRY_AUTH_TOKEN`/`SENTRY_ORG`/`SENTRY_PROJECT` are set (build succeeds
   without them — and, because an upload failure is swallowed, it succeeds with them and a
@@ -47,7 +54,7 @@ production; in dev the Vite proxy (`web/vite.config.ts`) forwards `/api` to the 
   overridable via `PUBLIC_POSTHOG_HOST`. Injected by `freehire-ops`, never committed, unset
   in dev. At boot the start is deferred to `requestIdleCallback` (3s timeout) so gtag.js and
   the PostHog SDK stop competing with first paint; **calls made before the SDK resolves are
-  queued in `$lib/analytics` and replayed in order**, which is what keeps the initial
+  queued in `#lib/analytics.js` and replayed in order**, which is what keeps the initial
   `afterNavigate` pageview and — load-bearing — the `/my/**` `stopSessionRecording()` from
   being dropped. Accept-in-the-banner still starts them immediately.
 - **`hooks.server.ts` narrows the `Link` header** to the stylesheet and the two entry modules.
@@ -57,7 +64,7 @@ production; in dev the Vite proxy (`web/vite.config.ts`) forwards `/api` to the 
   same rig). Note `sequence()` semantics: the FIRST `preload` wins, later ones are ignored.
 - The header's GitHub star count comes from **our own `/github-stars`**, not `api.github.com`.
   Called from the browser it spent the visitor's share of GitHub's 60/hour-per-IP cap and
-  returned 403 from any shared address; `$lib/server/github` holds one process-wide hourly
+  returned 403 from any shared address; `#lib/server/github.js` holds one process-wide hourly
   cache, shared with `/open`. `stars: null` is a valid answer — the badge drops the number,
   never errors. Unauthenticated even server-side, so a busy IP still degrades to null.
 - **There is no PWA any more** (removed 2026-10-18). It bought an icon and a window without an
@@ -85,7 +92,7 @@ production; in dev the Vite proxy (`web/vite.config.ts`) forwards `/api` to the 
 - **Mentorship ships behind `users.beta_tester`, WHOLE.** Every route it owns — the public
   directory, a mentor's page, and all four cabinet tabs — answers **404** to anybody
   without the flag, and `MentorBlock` renders nothing. The predicate is
-  `$lib/server/mentorshipGate`. **Ending the beta is three edits**, not one: that file,
+  `#lib/server/mentorshipGate.js`. **Ending the beta is three edits**, not one: that file,
   `inBeta` in `MentorBlock.svelte`, and `betaOnly` on `/my/mentorship` in `accountNav.ts`
   — a door, an offer of the door, and a menu entry, deliberately separate. Grep for
   `beta_tester` and `betaOnly`; those three are all of it. Gating only the
@@ -130,13 +137,13 @@ production; in dev the Vite proxy (`web/vite.config.ts`) forwards `/api` to the 
   live chat does nothing, so aiming it at a new subject means remounting it (the Experience
   panel keys on a launch token). Unmounting cancels a streaming turn, which is why closing
   that panel hides it instead. The opening text for the `profile` interview comes from
-  `profileKickoff` in `$lib/assistant/presets` — shared with the `?preset=profile&atoms=…`
+  `profileKickoff` in `#lib/assistant/presets` — shared with the `?preset=profile&atoms=…`
   URL entry so the two cannot drift. That message names achievements by id and asks the
   agent to read them first; it deliberately does not name the tool, because it is recorded
   as the candidate's own message.
 - **The Experience panel is docked to the VIEWPORT, not laid out in the tab.** It is owned
   by `ExperienceBankView` but positioned `fixed`, and `my/+layout.svelte` yields to it
-  through `dockOffset()` in `$lib/assistantDock.svelte.ts` — a module store, because the
+  through `dockOffset()` in `#lib/assistantDock.svelte.ts` — a module store, because the
   panel opens inside a page and the offset is applied by the layout across a route
   boundary. It was a column inside the content area and spent the bank's width; the shell
   now steps aside instead. The layout also collapses the section nav to its icon rail while
@@ -151,7 +158,7 @@ production; in dev the Vite proxy (`web/vite.config.ts`) forwards `/api` to the 
 
 ## Limitations
 
-- No CSP `connect-src` restriction is set — a comment in `web/svelte.config.js` records the
+- No CSP `connect-src` restriction is set — a comment in `web/vite.config.ts` records the
   ingest host for any future `connect-src`.
 - OAuth identity unlinking/management UI is not implemented (backend seam mirrored on the
   frontend).

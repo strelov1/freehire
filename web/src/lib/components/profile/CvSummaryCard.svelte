@@ -19,12 +19,12 @@
   // indefinitely (no LLM configured, a stuck job) and a permanent-looking stuck message
   // reads as broken rather than as progress.
   import { Pencil } from '@lucide/svelte';
-  import { api } from '$lib/api';
-  import type { CandidateContacts, ResumeStructured } from '$lib/types';
-  import { Button, Input } from '$lib/ui';
+  import { api } from '#lib/api.js';
+  import type { CandidateContacts, ResumeStructured } from '#lib/types.js';
+  import { Button, Input } from '#lib/ui/index.js';
   import { messages } from './CvSummaryCard.messages';
-  import { locale } from '$lib/i18n/currentLocale.svelte';
-  import { format, t } from '$lib/i18n/t';
+  import { locale } from '#lib/i18n/currentLocale.svelte.js';
+  import { format, t } from '#lib/i18n/t.js';
 
   let {
     structured,

@@ -8,10 +8,10 @@
   // internal/+page.svelte and the "External vs internal endpoints" section this
   // page's own spec carries.
   import { page } from '$app/state';
-  import ScalarReference from '$lib/components/ScalarReference.svelte';
-  import Seo from '$lib/components/Seo.svelte';
-  import { scalarConfigFromUrl } from '$lib/docs/scalarConfig';
-  import { breadcrumbJsonLd, jsonLdScript, webApiJsonLd } from '$lib/seo';
+  import ScalarReference from '#lib/components/ScalarReference.svelte';
+  import Seo from '#lib/components/Seo.svelte';
+  import { scalarConfigFromUrl } from '#lib/docs/scalarConfig.js';
+  import { breadcrumbJsonLd, jsonLdScript, webApiJsonLd } from '#lib/seo.js';
 
   let { data } = $props();
 

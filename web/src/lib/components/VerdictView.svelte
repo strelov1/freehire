@@ -1,10 +1,10 @@
 <script lang="ts">
   import { Check, TrendingUp } from '@lucide/svelte';
-  import type { Verdict } from '$lib/types';
-  import { Badge } from '$lib/ui';
+  import type { Verdict } from '#lib/types.js';
+  import { Badge } from '#lib/ui/index.js';
   import { messages } from './VerdictView.messages';
-  import { locale } from '$lib/i18n/currentLocale.svelte';
-  import { format, plural, t, tokenLabel } from '$lib/i18n/t';
+  import { locale } from '#lib/i18n/currentLocale.svelte.js';
+  import { format, plural, t, tokenLabel } from '#lib/i18n/t.js';
 
   // The verdict is the backend's market-coverage computation for the selected role:
   // how many of the role's open vacancies the profile's skills reach, which missing

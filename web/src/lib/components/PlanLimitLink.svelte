@@ -1,12 +1,12 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { resolve } from '$app/paths';
-  import { currentUser } from '$lib/auth.svelte';
-  import { locale } from '$lib/i18n/currentLocale.svelte';
-  import { format, t } from '$lib/i18n/t';
-  import { api } from '$lib/api';
-  import { formatMinorUnits } from '$lib/money';
-  import { Button, type ButtonVariant } from '$lib/ui';
+  import { currentUser } from '#lib/auth.svelte.js';
+  import { locale } from '#lib/i18n/currentLocale.svelte.js';
+  import { format, t } from '#lib/i18n/t.js';
+  import { api } from '#lib/api.js';
+  import { formatMinorUnits } from '#lib/money.js';
+  import { Button, type ButtonVariant } from '#lib/ui/index.js';
   import { messages } from './PlanLimitLink.messages';
 
   // The one link every spent-daily-allowance message points to. `/my/plan` shows the

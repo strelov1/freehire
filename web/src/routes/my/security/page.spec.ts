@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { User } from '$lib/types';
+import type { User } from '#lib/types.js';
 import SecurityPage from './+page.svelte';
 
 // `keyFor` here knew 401 and 400 and nothing else, so a 428 — the one refusal this surface
@@ -28,14 +28,14 @@ const { StubApiError } = vi.hoisted(() => ({
 vi.mock('$app/state', () => ({ page: { data: {}, url: new URL('http://localhost/') } }));
 vi.mock('$app/paths', () => ({ resolve: (p: string) => p, base: '', assets: '' }));
 vi.mock('$app/navigation', () => ({ goto: vi.fn(), invalidateAll: vi.fn() }));
-vi.mock('$lib/api', () => ({
+vi.mock('#lib/api.js', () => ({
   api: { changePassword, reauthenticatePassword, logoutEverywhere },
   ApiError: StubApiError,
 }));
-vi.mock('$lib/auth.svelte', () => ({ currentUser: () => user.current }));
+vi.mock('#lib/auth.svelte.js', () => ({ currentUser: () => user.current }));
 // The delete-account dialog lives on this page too and has its own spec; it is stubbed out
 // so these cases exercise only the password form.
-vi.mock('$lib/components/DeleteAccountButton.svelte', async () => ({
+vi.mock('#lib/components/DeleteAccountButton.svelte', async () => ({
   default: (await import('./DeleteAccountButtonStub.svelte')).default,
 }));
 

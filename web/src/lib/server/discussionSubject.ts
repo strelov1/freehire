@@ -1,10 +1,10 @@
-import { ApiError, MovedError } from '$lib/api';
+import { ApiError, MovedError } from '#lib/api.js';
 import {
   companySubject,
   jobSubject,
   type DiscussionSubject,
   type SubjectAbsence,
-} from '$lib/discussionSubject';
+} from '#lib/discussionSubject.js';
 import { serverApi } from './api';
 
 /** The subject a discussion page hangs off, or why it is absent. */

@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { CompanyListItem, ExperienceEmploymentWithAtoms } from '$lib/types';
+import type { CompanyListItem, ExperienceEmploymentWithAtoms } from '#lib/types.js';
 import ExperienceEmploymentCard from './ExperienceEmploymentCard.svelte';
 
 // The inline edit form gains a company-catalogue autocomplete for job-kind employments
@@ -9,7 +9,7 @@ import ExperienceEmploymentCard from './ExperienceEmploymentCard.svelte';
 
 const { listCompanies } = vi.hoisted(() => ({ listCompanies: vi.fn() }));
 
-vi.mock('$lib/api', () => ({ api: { listCompanies } }));
+vi.mock('#lib/api.js', () => ({ api: { listCompanies } }));
 
 const ringCentral: CompanyListItem = {
   slug: 'ringcentral',

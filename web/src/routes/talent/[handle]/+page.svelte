@@ -1,12 +1,12 @@
 <script lang="ts">
   import { Clock, MapPin, User } from '@lucide/svelte';
   import { page } from '$app/state';
-  import Seo from '$lib/components/Seo.svelte';
-  import { countryLabel, skillLabel } from '$lib/facets';
-  import { CATEGORY_LABELS, CERTIFICATION_LABELS, EDUCATION_LEVEL_LABELS, titleCase } from '$lib/labels';
-  import { breadcrumbJsonLd, jsonLdScript } from '$lib/seo';
-  import { talentHeading, talentPlace } from '$lib/talentCard';
-  import { Avatar, Breadcrumbs, Card, Chip, CountryFlag } from '$lib/ui';
+  import Seo from '#lib/components/Seo.svelte';
+  import { countryLabel, skillLabel } from '#lib/facets.js';
+  import { CATEGORY_LABELS, CERTIFICATION_LABELS, EDUCATION_LEVEL_LABELS, titleCase } from '#lib/labels.js';
+  import { breadcrumbJsonLd, jsonLdScript } from '#lib/seo.js';
+  import { talentHeading, talentPlace } from '#lib/talentCard.js';
+  import { Avatar, Breadcrumbs, Card, Chip, CountryFlag } from '#lib/ui/index.js';
   import type { PageData } from './$types';
 
   // One member's public card. The same anonymised payload the catalogue list carries,

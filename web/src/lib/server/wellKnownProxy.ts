@@ -1,5 +1,5 @@
-import { env } from '$env/dynamic/private';
-import { ssrTimeoutMs } from '$lib/server/api';
+import { API_INTERNAL_URL } from '$app/env/private';
+import { ssrTimeoutMs } from '#lib/server/api.js';
 
 /** Proxy a public, static JSON document from the Go backend to a `/.well-known/*`
  *  path — the shape both OAuth metadata routes need and `/.well-known/ojcp.json`
@@ -13,7 +13,7 @@ import { ssrTimeoutMs } from '$lib/server/api';
  *  metadata simply cannot discover the OAuth endpoints, which is the honest
  *  outcome when the backend cannot be reached. */
 export async function proxyWellKnownJSON(fetch: typeof globalThis.fetch, backendPath: string): Promise<Response> {
-  const base = env.API_INTERNAL_URL ?? '';
+  const base = API_INTERNAL_URL ?? '';
   let upstream: Response;
   try {
     upstream = await fetch(`${base}${backendPath}`, { signal: AbortSignal.timeout(ssrTimeoutMs()) });

@@ -1,12 +1,12 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
-  import { api } from '$lib/api';
-  import { AsyncData } from '$lib/asyncData.svelte';
-  import { isAuthenticated } from '$lib/auth.svelte';
-  import { locale } from '$lib/i18n/currentLocale.svelte';
-  import { t, tokenLabel } from '$lib/i18n/t';
-  import type { Submission } from '$lib/types';
-  import { timeAgo } from '$lib/utils';
+  import { api } from '#lib/api.js';
+  import { AsyncData } from '#lib/asyncData.svelte.js';
+  import { isAuthenticated } from '#lib/auth.svelte.js';
+  import { locale } from '#lib/i18n/currentLocale.svelte.js';
+  import { t, tokenLabel } from '#lib/i18n/t.js';
+  import type { Submission } from '#lib/types.js';
+  import { timeAgo } from '#lib/utils.js';
   import { messages } from './MySubmissionsView.messages';
   import States from './States.svelte';
 

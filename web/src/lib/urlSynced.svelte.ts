@@ -12,7 +12,7 @@
 // structural fix for the dropped-character race the goto+debounce design had.
 
 import { untrack } from 'svelte';
-import { browser } from '$app/environment';
+import { browser } from '$app/env';
 import { page } from '$app/state';
 import { replaceState } from '$app/navigation';
 import { toSearchString } from './urlSearchString';
@@ -126,7 +126,7 @@ export class UrlSyncedState<T> {
     // back/forward, page.url lags to the pre-filter URL while location.search is correct.
     // Reading page.url here would revert the constructor's location-seeded value to empty.
     // eslint-disable-next-line svelte/prefer-svelte-reactivity -- transient: compared/parsed inline, never stored as reactive state
-    const current = browser ? new URLSearchParams(location.search) : page.url.searchParams;
+    const current = browser ? new URLSearchParams(location.search) : new URLSearchParams(page.url.search);
     if (current.toString() === this.#codec.serialize(this.value).toString()) return;
     clearTimeout(this.#timer);
     this.#timer = undefined;

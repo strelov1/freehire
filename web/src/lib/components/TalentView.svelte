@@ -1,15 +1,15 @@
 <script lang="ts">
   import { untrack } from 'svelte';
-  import { browser } from '$app/environment';
+  import { browser } from '$app/env';
   import { page } from '$app/state';
-  import { api } from '$lib/api';
-  import type { CatalogueMember } from '$lib/generated/contracts';
-  import { Paginator } from '$lib/paginated.svelte';
-  import { pageCount, pageOffset } from '$lib/pagination';
-  import { TalentFilterStore } from '$lib/talentFilters';
-  import { syncOnNavigation } from '$lib/urlSynced.svelte';
-  import { talentFiltersToParams } from '$lib/talentFacetModel';
-  import type { Slice } from '$lib/api';
+  import { api } from '#lib/api.js';
+  import type { CatalogueMember } from '#lib/generated/contracts.js';
+  import { Paginator } from '#lib/paginated.svelte.js';
+  import { pageCount, pageOffset } from '#lib/pagination.js';
+  import { TalentFilterStore } from '#lib/talentFilters.js';
+  import { syncOnNavigation } from '#lib/urlSynced.svelte.js';
+  import { talentFiltersToParams } from '#lib/talentFacetModel.js';
+  import type { Slice } from '#lib/api.js';
   import ListToolbar from './ListToolbar.svelte';
   import Pagination from './Pagination.svelte';
   import States from './States.svelte';
@@ -33,7 +33,7 @@
     currentPage,
   }: { initial: Slice<CatalogueMember>; currentPage: number } = $props();
 
-  const filters = new TalentFilterStore(page.url.searchParams);
+  const filters = new TalentFilterStore(new URLSearchParams(page.url.search));
 
   const makePaginator = () =>
     new Paginator<CatalogueMember>((limit, offset) => {

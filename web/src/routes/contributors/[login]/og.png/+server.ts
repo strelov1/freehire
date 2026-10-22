@@ -1,11 +1,11 @@
 import { error } from '@sveltejs/kit';
-import { findContributor } from '$lib/contributors';
-import type { ContributorsSnapshot } from '$lib/contributors';
-import snapshot from '$lib/data/contributors.json';
-import { resolveAvatar } from '$lib/server/og/avatar';
-import { buildContributorCard } from '$lib/server/og/contributor';
-import { loadOgFonts } from '$lib/server/og/fonts';
-import { renderMarkupPng } from '$lib/server/og/render';
+import { findContributor } from '#lib/contributors.js';
+import type { ContributorsSnapshot } from '#lib/contributors.js';
+import snapshot from '#lib/data/contributors.json';
+import { resolveAvatar } from '#lib/server/og/avatar.js';
+import { buildContributorCard } from '#lib/server/og/contributor.js';
+import { loadOgFonts } from '#lib/server/og/fonts.js';
+import { renderMarkupPng } from '#lib/server/og/render.js';
 import type { RequestHandler } from './$types';
 
 // Renders one contributor's 1200×630 Open Graph preview on demand. This is the card a

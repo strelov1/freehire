@@ -2,13 +2,13 @@
   import { goto } from '$app/navigation';
   import { resolve } from '$app/paths';
   import { Search } from '@lucide/svelte';
-  import { api, ApiError } from '$lib/api';
-  import type { Job } from '$lib/types';
-  import { companyLogoUrl } from '$lib/logo';
-  import { Button, Dialog, EntityLogo } from '$lib/ui';
+  import { api, ApiError } from '#lib/api.js';
+  import type { Job } from '#lib/types.js';
+  import { companyLogoUrl } from '#lib/logo.js';
+  import { Button, Dialog, EntityLogo } from '#lib/ui/index.js';
   import { messages } from './JdIntakeDialog.messages';
-  import { locale } from '$lib/i18n/currentLocale.svelte';
-  import { t } from '$lib/i18n/t';
+  import { locale } from '#lib/i18n/currentLocale.svelte.js';
+  import { t } from '#lib/i18n/t.js';
 
   // Three ways into tailoring: pick one of our own vacancies (a search/select — no backend
   // call, straight to the workspace), paste an external job posting URL, or paste the JD

@@ -10,13 +10,13 @@
     REGION_OPTIONS,
     searchCities,
     WORK_MODE_OPTIONS,
-  } from '$lib/facets';
-  import { api } from '$lib/api';
-  import { buildLocationPreferences } from '$lib/profileLocation';
-  import type { DerivedLocation, LocationPreferences } from '$lib/types';
-  import { Input } from '$lib/ui';
-  import { locale } from '$lib/i18n/currentLocale.svelte';
-  import { t } from '$lib/i18n/t';
+  } from '#lib/facets.js';
+  import { api } from '#lib/api.js';
+  import { buildLocationPreferences } from '#lib/profileLocation.js';
+  import type { DerivedLocation, LocationPreferences } from '#lib/types.js';
+  import { Input } from '#lib/ui/index.js';
+  import { locale } from '#lib/i18n/currentLocale.svelte.js';
+  import { t } from '#lib/i18n/t.js';
   import { messages } from './LocationPreferencesFields.messages';
   import RemoteSearchSelect from '../facets/RemoteSearchSelect.svelte';
   import SearchSelect from '../facets/SearchSelect.svelte';

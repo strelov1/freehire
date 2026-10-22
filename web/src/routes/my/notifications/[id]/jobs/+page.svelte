@@ -2,9 +2,9 @@
   import { onMount } from 'svelte';
   import { page } from '$app/state';
   import { resolve } from '$app/paths';
-  import { ApiError, api } from '$lib/api';
-  import States from '$lib/components/States.svelte';
-  import type { NotificationItem } from '$lib/types';
+  import { ApiError, api } from '#lib/api.js';
+  import States from '#lib/components/States.svelte';
+  import type { NotificationItem } from '#lib/types.js';
 
   // The jobs a multi-job subscription digest actually matched, as a snapshot
   // taken at delivery time — not a live re-run of the saved search, which can

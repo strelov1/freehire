@@ -1,7 +1,7 @@
 <script lang="ts">
   import { page } from '$app/state';
-  import Seo from '$lib/components/Seo.svelte';
-  import StatusBoard from '$lib/components/StatusBoard.svelte';
+  import Seo from '#lib/components/Seo.svelte';
+  import StatusBoard from '#lib/components/StatusBoard.svelte';
   import type { PageData } from './$types';
 
   let { data }: { data: PageData } = $props();

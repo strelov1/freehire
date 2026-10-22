@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { PREVALENCE, prevalenceWaffle } from '$lib/ghostDiagrams';
+  import { PREVALENCE, prevalenceWaffle } from '#lib/ghostDiagrams.js';
 
   // A hundred postings, and the share of them nobody is working to fill.
   //

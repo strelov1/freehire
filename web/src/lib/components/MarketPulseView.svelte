@@ -1,16 +1,16 @@
 <script lang="ts">
   import { Search } from '@lucide/svelte';
-  import { api, type SkillPulse } from '$lib/api';
-  import { skillLabel } from '$lib/facets';
-  import { buildSparkline } from '$lib/skillPulseSparkline';
-  import { trendDotClass } from '$lib/skillPulseFormat';
-  import { Card, Button } from '$lib/ui';
+  import { api, type SkillPulse } from '#lib/api.js';
+  import { skillLabel } from '#lib/facets.js';
+  import { buildSparkline } from '#lib/skillPulseSparkline.js';
+  import { trendDotClass } from '#lib/skillPulseFormat.js';
+  import { Card, Button } from '#lib/ui/index.js';
   import { resolve } from '$app/paths';
   import States from './States.svelte';
   import SkillDeltaBadge from './SkillDeltaBadge.svelte';
   import { messages } from './MarketPulseView.messages';
-  import { locale } from '$lib/i18n/currentLocale.svelte';
-  import { format, plural, t } from '$lib/i18n/t';
+  import { locale } from '#lib/i18n/currentLocale.svelte.js';
+  import { format, plural, t } from '#lib/i18n/t.js';
 
   // The signed-in caller's own skill-demand trend: one card per profile skill that
   // has at least one retained weekly snapshot (GET /me/market-pulse already omits

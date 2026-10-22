@@ -1,5 +1,5 @@
-import { skillLabel } from '$lib/facets';
-import { loadSkillDescriptions } from '$lib/skillDescriptions';
+import { skillLabel } from '#lib/facets.js';
+import { loadSkillDescriptions } from '#lib/skillDescriptions.js';
 import type { PageServerLoad } from './$types';
 
 // The glossary index: every skill that has an entry, grouped by the first character of

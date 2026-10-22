@@ -1,6 +1,6 @@
 import { error } from '@sveltejs/kit';
-import { serverApi } from '$lib/server/api';
-import { pageExists, pageOffset, pageWithinWindow, parsePage } from '$lib/pagination';
+import { serverApi } from '#lib/server/api.js';
+import { pageExists, pageOffset, pageWithinWindow, parsePage } from '#lib/pagination.js';
 import type { PageServerLoad } from './$types';
 
 const LIMIT = 20;

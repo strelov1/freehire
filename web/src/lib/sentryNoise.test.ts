@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { isTransientNoise } from './sentryNoise';
 
-/** The shape `$lib/api`'s `call()` throws, without importing it — see the module's own
+/** The shape `#lib/api`'s `call()` throws, without importing it — see the module's own
  *  note on why the filter duck-types instead. */
 const apiError = (status: number, message: string) =>
   Object.assign(new Error(message), { name: 'ApiError', status });

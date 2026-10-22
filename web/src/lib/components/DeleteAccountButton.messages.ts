@@ -1,4 +1,4 @@
-import { defineMessages } from '$lib/i18n/t';
+import { defineMessages } from '#lib/i18n/t.js';
 
 // `erased` is named concretely rather than as a vague "your data" — keep each
 // item specific when translating too.

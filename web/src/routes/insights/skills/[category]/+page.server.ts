@@ -1,8 +1,8 @@
 import { error } from '@sveltejs/kit';
-import { serverApi } from '$lib/server/api';
-import { loadInsightsGate } from '$lib/server/insights';
-import { coveredCategories, isCovered, skillsIntro } from '$lib/insights';
-import { categoryLabel } from '$lib/labels';
+import { serverApi } from '#lib/server/api.js';
+import { loadInsightsGate } from '#lib/server/insights.js';
+import { coveredCategories, isCovered, skillsIntro } from '#lib/insights.js';
+import { categoryLabel } from '#lib/labels.js';
 import type { PageServerLoad } from './$types';
 
 // Per-category skill-demand landing page. Gated like the salary page: an uncovered

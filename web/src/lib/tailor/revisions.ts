@@ -1,7 +1,7 @@
 // The history feed's pure logic: which preview nodes a revision lit up, how a run's edits
 // fold into one entry, and how each hand is named. Kept out of the components so it can be
 // unit-tested — the components themselves have no runner.
-import type { RevisionView } from '$lib/generated/contracts';
+import type { RevisionView } from '#lib/generated/contracts.js';
 
 /** An item that remembers where it sat before anything was filtered out. */
 export type Positioned<T> = { index: number; item: T };

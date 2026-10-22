@@ -1,6 +1,6 @@
 <script lang="ts">
-  import type { Company } from '$lib/types';
-  import { companyDescription } from '$lib/companyDetails';
+  import type { Company } from '#lib/types.js';
+  import { companyDescription } from '#lib/companyDetails.js';
 
   // The company's full description as an "About" card in the jobs sidebar, under
   // Company facts, and in the job page's Company tab. The header only shows the derived

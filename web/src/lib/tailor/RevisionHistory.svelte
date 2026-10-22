@@ -10,8 +10,8 @@
   // An entry's description is the server's own words, generated from the operations. The note
   // is the assistant's, and is rendered as such: attributed, in quotes, never as the entry's
   // description. Text a model wrote must not appear as the application speaking.
-  import { ApiError } from '$lib/api';
-  import type { RevisionView } from '$lib/generated/contracts';
+  import { ApiError } from '#lib/api.js';
+  import type { RevisionView } from '#lib/generated/contracts.js';
   import { groupByBatch, actorLabel } from './revisions';
 
   let {

@@ -1,8 +1,8 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
   import { page } from '$app/state';
-  import Seo from '$lib/components/Seo.svelte';
-  import { breadcrumbJsonLd, jsonLdScript } from '$lib/seo';
+  import Seo from '#lib/components/Seo.svelte';
+  import { breadcrumbJsonLd, jsonLdScript } from '#lib/seo.js';
   import type { PageData } from './$types';
 
   let { data }: { data: PageData } = $props();

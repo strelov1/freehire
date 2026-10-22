@@ -1,8 +1,8 @@
 <script lang="ts">
   import { page } from '$app/state';
-  import JobsView from '$lib/components/JobsView.svelte';
-  import Seo from '$lib/components/Seo.svelte';
-  import { jsonLdScript, siteOrganizationJsonLd } from '$lib/seo';
+  import JobsView from '#lib/components/JobsView.svelte';
+  import Seo from '#lib/components/Seo.svelte';
+  import { jsonLdScript, siteOrganizationJsonLd } from '#lib/seo.js';
   import type { PageData } from './$types';
 
   let { data }: { data: PageData } = $props();

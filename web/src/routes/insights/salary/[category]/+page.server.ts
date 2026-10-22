@@ -1,8 +1,8 @@
 import { error } from '@sveltejs/kit';
-import { serverApi } from '$lib/server/api';
-import { loadInsightsGate } from '$lib/server/insights';
-import { coveredCategories, isCovered, sortBandsBySeniority, salaryIntro } from '$lib/insights';
-import { categoryLabel } from '$lib/labels';
+import { serverApi } from '#lib/server/api.js';
+import { loadInsightsGate } from '#lib/server/insights.js';
+import { coveredCategories, isCovered, sortBandsBySeniority, salaryIntro } from '#lib/insights.js';
+import { categoryLabel } from '#lib/labels.js';
 import type { PageServerLoad } from './$types';
 
 // Per-category salary landing page. The gate (global roles ranking) decides whether

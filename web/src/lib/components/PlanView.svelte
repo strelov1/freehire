@@ -2,13 +2,13 @@
   import { resolve } from '$app/paths';
   import { replaceState } from '$app/navigation';
   import { page } from '$app/state';
-  import { track } from '$lib/analytics';
-  import { api } from '$lib/api';
-  import { currentUser, isAuthenticated } from '$lib/auth.svelte';
-  import { locale } from '$lib/i18n/currentLocale.svelte';
-  import { plural, t, tokenLabel } from '$lib/i18n/t';
-  import { formatMinorUnits } from '$lib/money';
-  import type { AiUsage, BillingOverview, PlanState, UsageHistoryEntry } from '$lib/types';
+  import { track } from '#lib/analytics.js';
+  import { api } from '#lib/api.js';
+  import { currentUser, isAuthenticated } from '#lib/auth.svelte.js';
+  import { locale } from '#lib/i18n/currentLocale.svelte.js';
+  import { plural, t, tokenLabel } from '#lib/i18n/t.js';
+  import { formatMinorUnits } from '#lib/money.js';
+  import type { AiUsage, BillingOverview, PlanState, UsageHistoryEntry } from '#lib/types.js';
   import { messages } from './PlanView.messages';
   import States from './States.svelte';
 

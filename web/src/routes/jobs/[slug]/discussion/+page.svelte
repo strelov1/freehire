@@ -1,6 +1,6 @@
 <script lang="ts">
-  import DiscussionIndex from '$lib/components/community/DiscussionIndex.svelte';
-  import SubjectHeader from '$lib/components/community/SubjectHeader.svelte';
+  import DiscussionIndex from '#lib/components/community/DiscussionIndex.svelte';
+  import SubjectHeader from '#lib/components/community/SubjectHeader.svelte';
   let { data } = $props();
 </script>
 

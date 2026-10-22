@@ -1,5 +1,5 @@
 // The company feedback category vocabulary, mirroring the report-reason picker's
-// shape ($lib/reports.ts). Built off the generated COMPANY_FEEDBACK_TYPE_VALUES
+// shape (#lib/reports.ts). Built off the generated COMPANY_FEEDBACK_TYPE_VALUES
 // (internal/vocab's CompanyFeedbackTypeValues via cmd/gen-contracts) so a category
 // added in Go can't drift from the picker without a type error here.
 import {

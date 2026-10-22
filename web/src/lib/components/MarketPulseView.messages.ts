@@ -1,4 +1,4 @@
-import { defineMessages, plurals } from '$lib/i18n/t';
+import { defineMessages, plurals } from '#lib/i18n/t.js';
 
 // `skillLabel(skill.skill)` names the skill itself (profile/market data), never
 // catalog text — the catalog here covers only the surrounding UI chrome.

@@ -1,7 +1,7 @@
-import { ApiError } from '$lib/api';
-import { hasSessionCookie } from '$lib/authCookie';
-import { isTranslatedLocale, LOCALE_COOKIE } from '$lib/locale';
-import { serverApi } from '$lib/server/api';
+import { ApiError } from '#lib/api.js';
+import { hasSessionCookie } from '#lib/authCookie.js';
+import { isTranslatedLocale, LOCALE_COOKIE } from '#lib/locale.js';
+import { serverApi } from '#lib/server/api.js';
 import type { LayoutServerLoad } from './$types';
 
 // Resolve the current user once per full load, forwarding the request's session
@@ -12,7 +12,7 @@ import type { LayoutServerLoad } from './$types';
 //
 // A request with no session cookie skips the call: it would 401 and render
 // signed-out chrome anyway, and anonymous traffic is most of ours (see
-// $lib/authCookie for why the test is for THIS cookie, not for any cookie).
+// #lib/authCookie for why the test is for THIS cookie, not for any cookie).
 const SIGNED_OUT = { user: null, locale: 'en' as const };
 
 export const load: LayoutServerLoad = async ({ fetch, request, cookies, url, locals }) => {
@@ -25,7 +25,7 @@ export const load: LayoutServerLoad = async ({ fetch, request, cookies, url, loc
     // `locale()` (AccountNavRail, DeleteAccountButton, ...) would need its own
     // path check instead of one shared source of truth. `user.language` is
     // matched against TRANSLATED_LOCALES rather than one literal — see
-    // $lib/locale for why that list is narrower than what `users.language`
+    // #lib/locale for why that list is narrower than what `users.language`
     // accepts. An unrecognised or not-yet-translated value collapses to 'en'.
     const onAccountSection = url.pathname === '/my' || url.pathname.startsWith('/my/');
     const locale =

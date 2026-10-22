@@ -1,8 +1,8 @@
 <script lang="ts">
   import { onDestroy, onMount } from 'svelte';
   import { Check, Loader2, Mic, X } from '@lucide/svelte';
-  import { canRecord, pickContainer, MAX_RECORDING_MS } from '$lib/assistant/dictation';
-  import { transcribe, TranscriptionUnavailable } from '$lib/assistant/speech';
+  import { canRecord, pickContainer, MAX_RECORDING_MS } from '#lib/assistant/dictation.js';
+  import { transcribe, TranscriptionUnavailable } from '#lib/assistant/speech.js';
 
   // Dictation for the composer: record, transcribe, hand the words back. It never
   // sends anything — a transcription is a guess about what was said, and a wrong guess

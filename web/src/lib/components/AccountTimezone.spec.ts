@@ -21,7 +21,7 @@ const { updateTimezone, user } = vi.hoisted(() => ({
   user: { current: { email: 'a@b.co', timezone: 'Europe/Moscow' } as { email: string; timezone?: string } },
 }));
 
-vi.mock('$lib/auth.svelte', () => ({
+vi.mock('#lib/auth.svelte.js', () => ({
   currentUser: () => user.current,
   updateTimezone,
 }));

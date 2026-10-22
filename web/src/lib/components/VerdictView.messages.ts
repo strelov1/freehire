@@ -1,4 +1,4 @@
-import { defineMessages, plurals } from '$lib/i18n/t';
+import { defineMessages, plurals } from '#lib/i18n/t.js';
 
 // `gap.name`, `skill.name` and `b.label` (bundle name) are all market/profile data —
 // skill and bundle names, never catalog text. `skill.advice` is composed server-side

@@ -7,7 +7,7 @@
 // each instance so the sign-out sweep can't forget a new store (the cause of a past
 // viewed-jobs leak: the reset list lived apart from the store definitions).
 
-import { browser } from '$app/environment';
+import { browser } from '$app/env';
 import { SvelteSet } from 'svelte/reactivity';
 
 // Every UserResource registers here on construction; resetUserStores() (called from

@@ -6,7 +6,7 @@
 // the profile stays null for signed-out users. Mutations surface API errors to the
 // caller (a bad specialization or empty skills is a 400) so the UI can show them.
 
-import { api } from '$lib/api';
+import { api } from '#lib/api.js';
 import {
   withSkill,
   withSkills,
@@ -14,11 +14,11 @@ import {
   withAvoidedSkill,
   withoutAvoidedSkill,
   type ProfileSkillSets,
-} from '$lib/profileSkills';
-import { withExcluded, withoutExcluded } from '$lib/profileExclusions';
-import { serialQueue } from '$lib/serialQueue';
-import { UserResource } from '$lib/userResource.svelte';
-import type { LocationPreferences, UserProfile } from '$lib/types';
+} from '#lib/profileSkills.js';
+import { withExcluded, withoutExcluded } from '#lib/profileExclusions.js';
+import { serialQueue } from '#lib/serialQueue.js';
+import { UserResource } from '#lib/userResource.svelte.js';
+import type { LocationPreferences, UserProfile } from '#lib/types.js';
 
 class ProfileStore extends UserResource<UserProfile | null> {
   // Reassigned (never mutated in place) on every change, so $state.raw is enough and

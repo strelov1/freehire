@@ -1,10 +1,10 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { resolve } from '$app/paths';
-  import { api, ApiError } from '$lib/api';
-  import type { CvMeta } from '$lib/cv';
-  import type { DirectApplyForm } from '$lib/types';
-  import { Button, Dialog, FormField } from '$lib/ui';
+  import { api, ApiError } from '#lib/api.js';
+  import type { CvMeta } from '#lib/cv.js';
+  import type { DirectApplyForm } from '#lib/types.js';
+  import { Button, Dialog, FormField } from '#lib/ui/index.js';
 
   // Applying to a vacancy its employer published on freehire. The parent mounts this to
   // open it and unmounts it on onClose; it owns the form. What it sends reaches the

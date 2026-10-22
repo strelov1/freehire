@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { buildContributorCard } from './contributor';
-import type { ContributorEntry } from '$lib/contributors';
+import type { ContributorEntry } from '#lib/contributors.js';
 
 function person(over: Partial<ContributorEntry> = {}): ContributorEntry {
   return {

@@ -1,9 +1,9 @@
 <script lang="ts">
   import { page } from '$app/state';
-  import Seo from '$lib/components/Seo.svelte';
-  import GhostLandingView from '$lib/components/GhostLandingView.svelte';
-  import { faqPageJsonLd, jsonLdScript } from '$lib/seo';
-  import { GHOST_FAQ } from '$lib/ghostFaq';
+  import Seo from '#lib/components/Seo.svelte';
+  import GhostLandingView from '#lib/components/GhostLandingView.svelte';
+  import { faqPageJsonLd, jsonLdScript } from '#lib/seo.js';
+  import { GHOST_FAQ } from '#lib/ghostFaq.js';
 
   const canonical = $derived(`${page.url.origin}/features/ghost-jobs`);
   // The FAQ block and this payload render from the same GHOST_FAQ array, so the

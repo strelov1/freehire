@@ -1,4 +1,4 @@
-import { listPosts } from '$lib/blogPosts';
+import { listPosts } from '#lib/blogPosts.js';
 import type { PageLoad } from './$types';
 
 // Published posts (metadata only), newest-first. Universal load: the post data is

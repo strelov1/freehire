@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { UserProfile } from '$lib/types';
+import type { UserProfile } from '#lib/types.js';
 
 /** A promise the test settles by hand, so a second call can be issued while the
  *  first is still in flight. */
@@ -34,11 +34,11 @@ const { profileStoreMock, ensureLoaded, update } = vi.hoisted(() => ({
   update: vi.fn(),
 }));
 
-vi.mock('$lib/profile.svelte', () => ({
+vi.mock('#lib/profile.svelte.js', () => ({
   profileStore: profileStoreMock,
 }));
 
-vi.mock('$lib/savedSearches.svelte', () => ({
+vi.mock('#lib/savedSearches.svelte.js', () => ({
   savedSearches: {
     ensureLoaded,
     items: [{ id: 42, derived_from_profile: true }],
@@ -47,7 +47,7 @@ vi.mock('$lib/savedSearches.svelte', () => ({
 }));
 
 // Exercise the real query builder without importing the SvelteKit-bound filter store.
-vi.mock('$lib/filters', async () => {
+vi.mock('#lib/filters.js', async () => {
   const { filtersFromProfile, filtersToParams } = await import('./facetModel');
   return { filtersFromProfile, filtersToParams };
 });

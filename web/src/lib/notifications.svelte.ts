@@ -7,10 +7,10 @@
 // SSR-safe and auth-agnostic (see UserResource): the load is a browser-only no-op
 // and leaves empty/disabled state for signed-out users.
 
-import { api } from '$lib/api';
-import { ensureSubscribed } from '$lib/saveSearchAlert';
-import { UserResource } from '$lib/userResource.svelte';
-import type { Subscription, TelegramStatus, WebhookConfig } from '$lib/types';
+import { api } from '#lib/api.js';
+import { ensureSubscribed } from '#lib/saveSearchAlert.js';
+import { UserResource } from '#lib/userResource.svelte.js';
+import type { Subscription, TelegramStatus, WebhookConfig } from '#lib/types.js';
 
 const disabled: TelegramStatus = { enabled: false, linked: false };
 

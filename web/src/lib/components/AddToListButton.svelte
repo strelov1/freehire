@@ -1,11 +1,11 @@
 <script lang="ts">
   import { Check, ListPlus, Plus } from '@lucide/svelte';
-  import { api, ApiError } from '$lib/api';
-  import { isAuthenticated } from '$lib/auth.svelte';
-  import { promptSignIn } from '$lib/signin';
-  import { jobLists } from '$lib/jobLists.svelte';
-  import type { JobListMembership } from '$lib/types';
-  import { cn } from '$lib/ui';
+  import { api, ApiError } from '#lib/api.js';
+  import { isAuthenticated } from '#lib/auth.svelte.js';
+  import { promptSignIn } from '#lib/signin.js';
+  import { jobLists } from '#lib/jobLists.svelte.js';
+  import type { JobListMembership } from '#lib/types.js';
+  import { cn } from '#lib/ui/index.js';
 
   // A self-contained "Add to list" control: an icon button that opens a small
   // hand-rolled popover (no shared Menu/Popover primitive exists in the design

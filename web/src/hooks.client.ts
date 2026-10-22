@@ -1,16 +1,16 @@
-import { env } from '$env/dynamic/public';
+import { PUBLIC_SENTRY_DSN, PUBLIC_SENTRY_ENVIRONMENT } from '$app/env/public';
 import * as Sentry from '@sentry/sveltekit';
-import { isTransientNoise } from '$lib/sentryNoise';
-import { startTrackersIfAllowed } from '$lib/trackers';
+import { isTransientNoise } from '#lib/sentryNoise.js';
+import { startTrackersIfAllowed } from '#lib/trackers.js';
 
 // Error tracking is opt-in and env-gated: without PUBLIC_SENTRY_DSN Sentry stays
 // uninitialized and the app runs unchanged (mirrors the backend integration).
 // Errors-only — no performance tracing, no session replay; sendDefaultPii is off
 // so URLs/inputs/headers are not shipped.
-if (env.PUBLIC_SENTRY_DSN) {
+if (PUBLIC_SENTRY_DSN) {
   Sentry.init({
-    dsn: env.PUBLIC_SENTRY_DSN,
-    environment: env.PUBLIC_SENTRY_ENVIRONMENT || 'development',
+    dsn: PUBLIC_SENTRY_DSN,
+    environment: PUBLIC_SENTRY_ENVIRONMENT || 'development',
     tracesSampleRate: 0,
     // v11 replaced the single `sendDefaultPii: false` switch with per-category
     // defaults that collect by default (cookies, headers, query params, user info
@@ -32,7 +32,7 @@ if (env.PUBLIC_SENTRY_DSN) {
     // key alone identifies the injected script. Errors-only on a 5k/month quota
     // means noise like this is paid for in dropped real errors.
     ignoreErrors: [/\[['"]@context['"]\]\.toLowerCase/],
-    // A condition is not a defect — see $lib/sentryNoise for the rule and what ignoring it
+    // A condition is not a defect — see #lib/sentryNoise for the rule and what ignoring it
     // cost. `ignoreErrors` above cannot serve: it matches the message only, and two of the
     // conditions (an ApiError's status, an AbortError's name) are not in one.
     beforeSend: (event, hint) => (isTransientNoise(hint?.originalException) ? null : event),

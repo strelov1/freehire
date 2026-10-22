@@ -1,7 +1,7 @@
-import type { CatalogueMember } from '$lib/generated/contracts';
-import { cityLabel } from '$lib/facets';
-import { CATEGORY_LABELS, SENIORITY_LABELS, titleCase } from '$lib/labels';
-import { countryOfTimezone } from '$lib/timezoneCountry';
+import type { CatalogueMember } from '#lib/generated/contracts.js';
+import { cityLabel } from '#lib/facets.js';
+import { CATEGORY_LABELS, SENIORITY_LABELS, titleCase } from '#lib/labels.js';
+import { countryOfTimezone } from '#lib/timezoneCountry.js';
 
 // What a Talent Network card SAYS, derived once. The list card and the single-card page
 // render different layouts over the same three derivations, and three copies of a rule

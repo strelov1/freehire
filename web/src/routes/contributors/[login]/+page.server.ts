@@ -1,10 +1,10 @@
 import { error, redirect } from '@sveltejs/kit';
-import { findContributor } from '$lib/contributors';
-import type { ContributorsSnapshot } from '$lib/contributors';
-import snapshot from '$lib/data/contributors.json';
+import { findContributor } from '#lib/contributors.js';
+import type { ContributorsSnapshot } from '#lib/contributors.js';
+import snapshot from '#lib/data/contributors.json';
 import type { PageServerLoad } from './$types';
 
-// One person's page. Resolved through $lib/contributors rather than against the raw
+// One person's page. Resolved through #lib/contributors rather than against the raw
 // snapshot, so a bot — or an entry with nothing to show — 404s here exactly as it is
 // absent from the showcase, instead of getting a page and a shareable card nothing
 // links to.

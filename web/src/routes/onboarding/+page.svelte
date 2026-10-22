@@ -18,30 +18,31 @@
   // another, and no store here exists only to serve this page.
   import { onDestroy } from 'svelte';
   import { goto } from '$app/navigation';
+  import { gotoPath } from '#lib/gotoPath.js';
   import { page } from '$app/state';
   import { ArrowLeft, ArrowRight, LoaderCircle, X } from '@lucide/svelte';
-  import { api, ApiError } from '$lib/api';
-  import { completeOnboarding, isAuthenticated } from '$lib/auth.svelte';
-  import { onboardingGate } from '$lib/onboardingGate.svelte';
-  import { nextResumePollDelayMs, type CvParseState } from '$lib/onboardingResumeWait';
-  import { ORDERED_STEPS, plannedSteps, type OnboardingAnswered, type StepKind } from '$lib/onboardingSteps';
-  import { persistStep, type SaveDeps, type WizardAnswers } from '$lib/onboardingSave';
-  import { splitProfileLinks, type ProfileLinks } from '$lib/profileLinks';
-  import { profileStore } from '$lib/profile.svelte';
-  import { syncProfileAlert } from '$lib/profileAlertSync';
-  import { safeRedirect } from '$lib/safeRedirect';
-  import { signinUrl } from '$lib/signin';
-  import { focusTrap } from '$lib/actions/focusTrap';
-  import type { CandidateContacts, LocationPreferences, ResumeMeta } from '$lib/types';
-  import type { MergedFacets } from '$lib/onboardingImport';
-  import ChallengeStep from '$lib/components/onboarding/ChallengeStep.svelte';
-  import ConfirmStep from '$lib/components/onboarding/ConfirmStep.svelte';
-  import CvStep from '$lib/components/onboarding/CvStep.svelte';
-  import ExperienceStep from '$lib/components/onboarding/ExperienceStep.svelte';
-  import LocationStep from '$lib/components/onboarding/LocationStep.svelte';
-  import MoneyStep from '$lib/components/onboarding/MoneyStep.svelte';
-  import SkillsStep from '$lib/components/onboarding/SkillsStep.svelte';
-  import StageStep from '$lib/components/onboarding/StageStep.svelte';
+  import { api, ApiError } from '#lib/api.js';
+  import { completeOnboarding, isAuthenticated } from '#lib/auth.svelte.js';
+  import { onboardingGate } from '#lib/onboardingGate.svelte.js';
+  import { nextResumePollDelayMs, type CvParseState } from '#lib/onboardingResumeWait.js';
+  import { ORDERED_STEPS, plannedSteps, type OnboardingAnswered, type StepKind } from '#lib/onboardingSteps.js';
+  import { persistStep, type SaveDeps, type WizardAnswers } from '#lib/onboardingSave.js';
+  import { splitProfileLinks, type ProfileLinks } from '#lib/profileLinks.js';
+  import { profileStore } from '#lib/profile.svelte.js';
+  import { syncProfileAlert } from '#lib/profileAlertSync.js';
+  import { safeRedirect } from '#lib/safeRedirect.js';
+  import { signinUrl } from '#lib/signin.js';
+  import { focusTrap } from '#lib/actions/focusTrap.js';
+  import type { CandidateContacts, LocationPreferences, ResumeMeta } from '#lib/types.js';
+  import type { MergedFacets } from '#lib/onboardingImport.js';
+  import ChallengeStep from '#lib/components/onboarding/ChallengeStep.svelte';
+  import ConfirmStep from '#lib/components/onboarding/ConfirmStep.svelte';
+  import CvStep from '#lib/components/onboarding/CvStep.svelte';
+  import ExperienceStep from '#lib/components/onboarding/ExperienceStep.svelte';
+  import LocationStep from '#lib/components/onboarding/LocationStep.svelte';
+  import MoneyStep from '#lib/components/onboarding/MoneyStep.svelte';
+  import SkillsStep from '#lib/components/onboarding/SkillsStep.svelte';
+  import StageStep from '#lib/components/onboarding/StageStep.svelte';
 
   // Where finishing or skipping sends the visitor — the page they were on when they landed
   // here, not always home. Validated the same way every other returnTo in the app is
@@ -369,8 +370,7 @@
     } catch {
       // best-effort — see doc comment above.
     }
-    // eslint-disable-next-line svelte/no-navigation-without-resolve -- returnTo is a validated same-origin path (safeRedirect), not a typed route
-    void goto(returnTo);
+    void gotoPath(returnTo);
   }
 
   function onExtracted(merged: MergedFacets) {
@@ -391,8 +391,7 @@
   function onKeydown(e: KeyboardEvent) {
     if (e.key !== 'Escape') return;
     onboardingGate.dismiss();
-    // eslint-disable-next-line svelte/no-navigation-without-resolve -- returnTo is a validated same-origin path (safeRedirect), not a typed route
-    void goto(returnTo);
+    void gotoPath(returnTo);
   }
 </script>
 

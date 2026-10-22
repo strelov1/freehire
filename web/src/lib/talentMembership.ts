@@ -1,4 +1,4 @@
-import type { TalentNetworkVisibility } from '$lib/types';
+import type { TalentNetworkVisibility } from '#lib/types.js';
 
 // Whether a candidate is IN the Talent Network, asked once.
 //

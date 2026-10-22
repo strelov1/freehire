@@ -1,4 +1,4 @@
-import { defineMessages } from '$lib/i18n/t';
+import { defineMessages } from '#lib/i18n/t.js';
 
 // `confirmation.claim`/`confirmation.question` and everything `tool-formatters.ts`
 // derives from a call (title/callLine) are the agent's own text or data read from its

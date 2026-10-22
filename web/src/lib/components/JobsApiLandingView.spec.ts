@@ -1,12 +1,12 @@
 import { render, screen } from '@testing-library/svelte';
 import { describe, expect, it, vi } from 'vitest';
 import JobsApiLandingView from './JobsApiLandingView.svelte';
-import type { PlansMatrix } from '$lib/types';
+import type { PlansMatrix } from '#lib/types.js';
 
 vi.mock('$app/paths', () => ({ resolve: (p: string) => p, base: '', assets: '' }));
-vi.mock('$lib/auth.svelte', () => ({ isAuthenticated: () => false }));
-vi.mock('$lib/signin', () => ({ promptSignIn: vi.fn() }));
-vi.mock('$lib/api', () => ({ api: { billingCheckout: vi.fn() } }));
+vi.mock('#lib/auth.svelte.js', () => ({ isAuthenticated: () => false }));
+vi.mock('#lib/signin.js', () => ({ promptSignIn: vi.fn() }));
+vi.mock('#lib/api.js', () => ({ api: { billingCheckout: vi.fn() } }));
 
 const plans: PlansMatrix = {
   features: [],

@@ -2,7 +2,7 @@
 // endpoint and not JSON: /api/v1/speech/transcriptions takes one multipart upload,
 // and setting a content type by hand would strip the boundary the browser generates.
 
-import { trackPlanRefusal } from '$lib/api';
+import { trackPlanRefusal } from '#lib/api.js';
 
 /** Thrown when the deployment has no speech gateway (501). Its own type because the
  *  composer's answer is to REMOVE the microphone rather than to report a failure:

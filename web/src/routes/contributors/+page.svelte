@@ -1,11 +1,11 @@
 <script lang="ts">
   import { page } from '$app/state';
   import { resolve } from '$app/paths';
-  import Seo from '$lib/components/Seo.svelte';
-  import { Avatar, SectionLabel } from '$lib/ui';
-  import { contributionSummary } from '$lib/contributors';
-  import type { ContributorEntry } from '$lib/contributors';
-  import { breadcrumbJsonLd, jsonLdScript } from '$lib/seo';
+  import Seo from '#lib/components/Seo.svelte';
+  import { Avatar, SectionLabel } from '#lib/ui/index.js';
+  import { contributionSummary } from '#lib/contributors.js';
+  import type { ContributorEntry } from '#lib/contributors.js';
+  import { breadcrumbJsonLd, jsonLdScript } from '#lib/seo.js';
   import type { PageData } from './$types';
 
   let { data }: { data: PageData } = $props();

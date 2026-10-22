@@ -1,4 +1,4 @@
-import { defineMessages, plurals } from '$lib/i18n/t';
+import { defineMessages, plurals } from '#lib/i18n/t.js';
 
 // `{label}` is the skill's own display name (from `skillLabel()`, a data lookup over
 // the user's profile skills) — it is interpolated via `format()`, never translated.

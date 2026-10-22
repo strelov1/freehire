@@ -1,9 +1,9 @@
 <script lang="ts">
   import { page } from '$app/state';
-  import { AGENTS_FAQ } from '$lib/agentsFaq';
-  import AgentsLandingView from '$lib/components/AgentsLandingView.svelte';
-  import Seo from '$lib/components/Seo.svelte';
-  import { breadcrumbJsonLd, faqPageJsonLd, jsonLdScript } from '$lib/seo';
+  import { AGENTS_FAQ } from '#lib/agentsFaq.js';
+  import AgentsLandingView from '#lib/components/AgentsLandingView.svelte';
+  import Seo from '#lib/components/Seo.svelte';
+  import { breadcrumbJsonLd, faqPageJsonLd, jsonLdScript } from '#lib/seo.js';
 
   const origin = $derived(page.url.origin);
   const canonical = $derived(`${origin}/agents`);

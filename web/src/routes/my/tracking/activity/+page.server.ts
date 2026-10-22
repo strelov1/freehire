@@ -1,6 +1,6 @@
 import { redirect } from '@sveltejs/kit';
-import { signinUrl } from '$lib/signin';
-import { loadActivityYear } from '$lib/server/tracking';
+import { signinUrl } from '#lib/signin.js';
+import { loadActivityYear } from '#lib/server/tracking.js';
 import type { PageServerLoad } from './$types';
 
 // /my/tracking/activity is a year of the caller's own job-search actions, drawn the way a

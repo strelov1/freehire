@@ -1,12 +1,12 @@
-import { env } from '$env/dynamic/public';
+import { PUBLIC_SENTRY_DSN, PUBLIC_SENTRY_ENVIRONMENT } from '$app/env/public';
 import { sequence } from '@sveltejs/kit/hooks';
-import type { Handle } from '@sveltejs/kit';
+import type { Handle, HandleServerError } from '@sveltejs/kit/hooks';
 import * as Sentry from '@sentry/sveltekit';
-import { hasSessionCookie } from '$lib/authCookie';
-import { cachePolicy, variesOnCookie } from '$lib/httpCache';
-import { isTranslatedLocale, LOCALE_COOKIE } from '$lib/locale';
-import { isTransientNoise } from '$lib/sentryNoise';
-import { CAPTURE_MAX_AGE_SECONDS, REF_COOKIE, captureRef, capturePromo } from '$lib/referral';
+import { hasSessionCookie } from '#lib/authCookie.js';
+import { cachePolicy, variesOnCookie } from '#lib/httpCache.js';
+import { isTranslatedLocale, LOCALE_COOKIE } from '#lib/locale.js';
+import { isTransientNoise } from '#lib/sentryNoise.js';
+import { CAPTURE_MAX_AGE_SECONDS, REF_COOKIE, captureRef, capturePromo } from '#lib/referral.js';
 
 // Resolves the account-section locale for `<html lang>` before the response
 // streams. Path-gated: only `/my/**` may render non-English — every other route
@@ -42,10 +42,10 @@ const locale: Handle = async ({ event, resolve }) => {
 // Same opt-in, env-gated init as the client: no PUBLIC_SENTRY_DSN ⇒ no init, and
 // SSR runs unchanged. Errors-only, PII off. The server reports to the same
 // (frontend) Sentry project as the browser.
-if (env.PUBLIC_SENTRY_DSN) {
+if (PUBLIC_SENTRY_DSN) {
   Sentry.init({
-    dsn: env.PUBLIC_SENTRY_DSN,
-    environment: env.PUBLIC_SENTRY_ENVIRONMENT || 'development',
+    dsn: PUBLIC_SENTRY_DSN,
+    environment: PUBLIC_SENTRY_ENVIRONMENT || 'development',
     tracesSampleRate: 0,
     // v11 replaced the single `sendDefaultPii: false` switch with per-category
     // defaults that collect by default (cookies, headers, query params, user info
@@ -63,14 +63,14 @@ if (env.PUBLIC_SENTRY_DSN) {
     // The same filter the browser half applies, and it matters MORE here: an SSR `load`
     // that could not read the API in ten seconds reports once per visitor per page, so a
     // slow afternoon arrives as thousands of identical events carrying no stack to act on.
-    // See $lib/sentryNoise.
+    // See #lib/sentryNoise.
     beforeSend: (event, hint) => (isTransientNoise(hint?.originalException) ? null : event),
   });
 }
 
 // Label server-rendered HTML for shared caches (a CDN, or nginx's own cache):
 // anonymous public pages may be held and replayed, anything tied to a person may
-// not. See $lib/httpCache for why that decision lives in the app rather than only
+// not. See #lib/httpCache for why that decision lives in the app rather than only
 // in a CDN rule.
 //
 // Only GET HTML is labelled. A route that set its own Cache-Control is left alone
@@ -88,7 +88,7 @@ const cacheControl: Handle = async ({ event, resolve }) => {
 
   // The status is passed because an error page is HTML like any other and was
   // otherwise handed the same shared-cache lifetime as the page it replaced — see
-  // NO_CACHE in $lib/httpCache for what that cost in production.
+  // NO_CACHE in #lib/httpCache for what that cost in production.
   const authenticated = hasSessionCookie(event.request.headers.get('cookie'));
   response.headers.set(
     'cache-control',
@@ -99,7 +99,7 @@ const cacheControl: Handle = async ({ event, resolve }) => {
     }),
   );
   // Labelled only where the body really does differ by cookie — see variesOnCookie in
-  // $lib/httpCache for why an unconditional Vary emptied the edge cache instead of
+  // #lib/httpCache for why an unconditional Vary emptied the edge cache instead of
   // making it safer, and for what carries the safety in its place.
   //
   // One part of that argument lives HERE rather than there, because it is a property of
@@ -200,7 +200,12 @@ export const handle = sequence(
 // logged every one's stack — scanners probing for xmlrpc.php and old PWA
 // installs asking for the removed manifest buried the real errors in the
 // journal. A 4xx is the request's fault, not ours, so it is not logged.
-export const handleError = Sentry.handleErrorWithSentry(({ error, status }) => {
-  if (status >= 400 && status < 500) return;
-  console.error((error as Error | undefined)?.stack ?? error);
+//
+// SvelteKit 3 passes `kind` and no `status`: a thrown exception is 'unknown', and every
+// other kind carries its status on `error`. Reading the old `status` field compiles —
+// Sentry's wrapper types the input loosely — and is always undefined, which is how every
+// 404 came back into the journal.
+export const handleError = Sentry.handleErrorWithSentry<HandleServerError>((input) => {
+  if (input.kind !== 'unknown' && input.error.status >= 400 && input.error.status < 500) return;
+  console.error((input.error as Error | undefined)?.stack ?? input.error);
 });

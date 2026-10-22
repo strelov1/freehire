@@ -9,8 +9,8 @@
   // must not find fewer controls than a link in an email gave them.
   import { onMount } from 'svelte';
   import { Mail } from '@lucide/svelte';
-  import ToggleSwitch from '$lib/components/ToggleSwitch.svelte';
-  import { api, type EmailPrefs } from '$lib/api';
+  import ToggleSwitch from '#lib/components/ToggleSwitch.svelte';
+  import { api, type EmailPrefs } from '#lib/api.js';
 
   let prefs = $state<EmailPrefs | null>(null);
   let failedToLoad = $state(false);

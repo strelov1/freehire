@@ -27,8 +27,8 @@
     "@eslint/js": "^10.0.1",
     "@lucide/svelte": "^1.58.0",
     "@playwright/test": "^1.64.1",
-    "@sveltejs/adapter-node": "^5.5.4",
-    "@sveltejs/kit": "^2.70.3",
+    "@sveltejs/adapter-node": "^6.0.0",
+    "@sveltejs/kit": "^3.0.0",
     "@sveltejs/vite-plugin-svelte": "^7.2.0",
     "@tailwindcss/typography": "^0.5.20",
     "@tailwindcss/vite": "^4.3.3",
@@ -39,13 +39,13 @@
     "@vitest/coverage-v8": "^4.1.12",
     "eslint": "^10.8.0",
     "eslint-plugin-oxlint": "^1.77.0",
-    "eslint-plugin-svelte": "^3.22.0",
+    "eslint-plugin-svelte": "^3.23.1",
     "globals": "^17.8.0",
     "jsdom": "^30.0.1",
     "mdsvex": "^0.12.8",
     "oxlint": "^1.77.0",
-    "svelte": "^5.57.0",
-    "svelte-check": "^4.7.2",
+    "svelte": "^5.57.2",
+    "svelte-check": "^4.7.5",
     "svelte-eslint-parser": "^1.8.0",
     "tailwindcss": "^4.3.1",
     "tslib": "^2.6.3",
@@ -72,5 +72,8 @@
     "simple-icons": "^16.30.0",
     "svelte-dnd-action": "^0.9.79",
     "three": "^0.186.1"
+  },
+  "imports": {
+    "#lib/*": "./src/lib/*"
   }
 }
