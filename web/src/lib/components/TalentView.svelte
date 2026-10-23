@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { Mail } from '@lucide/svelte';
   import { untrack } from 'svelte';
   import { browser } from '$app/env';
   import { page } from '$app/state';
@@ -15,6 +16,7 @@
   import States from './States.svelte';
   import TalentCard from './TalentCard.svelte';
   import TalentJoinButton from './TalentJoinButton.svelte';
+  import { Button } from '#lib/ui/index.js';
   import TalentFilterModal from './filters/TalentFilterModal.svelte';
   import TalentFilterSummary from './filters/TalentFilterSummary.svelte';
 
@@ -32,6 +34,12 @@
     initial,
     currentPage,
   }: { initial: Slice<CatalogueMember>; currentPage: number } = $props();
+
+  // The recruiter side of the catalogue — seeing who is behind a card — is not built
+  // yet, so asking for it is a mail to a person rather than a form with nowhere to land.
+  const recruiterAccessHref = `mailto:hello@freehire.me?subject=${encodeURIComponent(
+    'Talent Network: recruiter access request'
+  )}&body=${encodeURIComponent('Company:\nRoles I am hiring for:\n')}`;
 
   const filters = new TalentFilterStore(new URLSearchParams(page.url.search));
 
@@ -125,7 +133,13 @@
   <div class="min-w-0 flex-1">
     <header class="mb-4 flex flex-wrap items-center justify-between gap-3">
       <h1 class="text-2xl font-semibold tracking-tight">Talent Network</h1>
-      <TalentJoinButton />
+      <div class="flex flex-wrap items-center gap-2">
+        <Button variant="outline" href={recruiterAccessHref}>
+          <Mail class="size-4" aria-hidden="true" />
+          Hiring? Request access
+        </Button>
+        <TalentJoinButton />
+      </div>
     </header>
 
     <ListToolbar
