@@ -40,11 +40,15 @@
 // those facets for the dictionary-derived majority. A boardless adapter like
 // getmatch re-supplies the structured facets on its next full crawl.
 //
-// Regions and cities go the same way, and they are the case the sentence above does NOT cover:
-// a moderator- or submission-authored vacancy may STATE them (internal/ingest/moderation passes them as
-// authoritative structured geography), and this command re-derives both from the free-text
-// location — which for such a row usually yields nothing. Unlike getmatch, a manual job is never
-// crawled again, so nothing restores them.
+// Country and region are preserved too, whenever the row carries a country (storedGeography):
+// many adapters state the country as a structured field, and re-deriving it from the free-text
+// location alone moved 736 SEEK "Perth WA" rows to the US and blanked ~16k SEEK/JobStreet rows
+// in one pass. A row with NO stored country is still re-derived in full. Cities are not
+// preserved, and neither is a region on a row with no country — that is the case the
+// paragraph below covers: a moderator- or submission-authored vacancy may STATE them
+// (internal/ingest/moderation passes them as authoritative structured geography), and this
+// command re-derives them from the free-text location — which for such a row usually yields
+// nothing. Unlike getmatch, a manual job is never crawled again, so nothing restores them.
 //
 // That is deliberate rather than an oversight, and it is not this command's decision to make
 // alone: internal/ingest/moderation's own edit path already re-derives every facet from content and
@@ -253,6 +257,7 @@ func runOutcome(pass backfillRun, orphaned int64, err error) (string, int) {
 // the result matches what cmd/ingest/store.go writes for the same raw fields. Pure —
 // safe to call concurrently.
 func deriveRow(j db.Job, canon map[string]string) (params db.UpdateJobDerivedParams, changed, slugMoved bool) {
+	storedCountries, storedRegions := storedGeography(j)
 	d := jobderive.Derive(jobderive.Input{
 		Title:       j.Title,
 		Company:     j.Company,
@@ -261,6 +266,8 @@ func deriveRow(j db.Job, canon map[string]string) (params db.UpdateJobDerivedPar
 		Location:    j.Location,
 		Description: j.Description,
 		WorkMode:    j.WorkMode, // preserves a set work_mode (jobderive precedence)
+		Countries:   storedCountries,
+		Regions:     storedRegions,
 		// Recovers the ingest-time IsTechHint from the stored row, which never re-crawls
 		// to learn it fresh: without this, a Profession itdev/itops row whose title the
 		// dictionary cannot resolve would have is_tech silently rederived back to
@@ -316,6 +323,20 @@ func deriveRow(j db.Job, canon map[string]string) (params db.UpdateJobDerivedPar
 		RoleFingerprint:    pgtype.Text{String: fingerprint, Valid: true},
 		CompanySlug:        d.CompanySlug,
 	}, facetsMoved || fingerprintMoved || slugMoved, slugMoved
+}
+
+// storedGeography is the stored country and region a row carries, fed back in as the
+// structured signal the way work_mode is. A stored country is usually the ADAPTER's (SEEK
+// states countryCode AU beside "Perth WA", whose "WA" the dictionary alone reads as
+// Washington), and the pass cannot tell it from one the dictionary derived — re-deriving
+// dropped it from every such row. So a row with a country keeps its geography; a row
+// without one is re-derived in full, which is how a dictionary fix still fills a gap.
+// Correcting a stored country is a re-crawl's job (INGEST_REFETCH_ALL), never this pass's.
+func storedGeography(j db.Job) (countries, regions []string) {
+	if len(j.Countries) == 0 {
+		return nil, nil
+	}
+	return j.Countries, j.Regions
 }
 
 // scanWindow bounds one run of the pass.

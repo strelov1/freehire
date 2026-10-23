@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"reflect"
+	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -145,9 +146,11 @@ func backfillProgress(ctx context.Context, store deriveStore, concurrency, every
 }
 
 func expectedDerived(j db.Job) db.UpdateJobDerivedParams {
+	countries, regions := storedGeography(j)
 	d := jobderive.Derive(jobderive.Input{
 		Title: j.Title, Company: j.Company, Source: j.Source, ExternalID: j.ExternalID,
 		Location: j.Location, Description: j.Description, WorkMode: j.WorkMode,
+		Countries: countries, Regions: regions,
 	})
 	fingerprint := jobhash.RoleFingerprint(db.UpsertJobParams{
 		CompanySlug: d.CompanySlug, Title: j.Title, Description: j.Description,
@@ -345,6 +348,40 @@ func TestBackfill_PreservesSetWorkMode(t *testing.T) {
 		if u.WorkMode != "hybrid" {
 			t.Errorf("WorkMode = %q, want hybrid (preserved)", u.WorkMode)
 		}
+	}
+}
+
+func TestBackfill_PreservesStoredCountry(t *testing.T) {
+	// SEEK states countryCode AU for "Perth WA", while the location dictionary alone reads
+	// "WA" as Washington. The stored country came from the adapter and must survive the pass.
+	job := db.Job{
+		ID: 8, Title: "Oracle PL/SQL Developer", Company: "REM Consulting", Source: "seek",
+		ExternalID: "6287:95307527", Location: "Perth WA",
+		Countries: []string{"au"}, Regions: []string{"apac"},
+	}
+	store := &fakeStore{jobs: []db.Job{job}}
+	if _, _, _, err := backfillAll(context.Background(), store, 1); err != nil {
+		t.Fatalf("backfillAll: %v", err)
+	}
+	for _, u := range store.updates {
+		if !slices.Equal(u.Countries, []string{"au"}) || !slices.Equal(u.Regions, []string{"apac"}) {
+			t.Errorf("geography = %v / %v, want [au] / [apac] (preserved)", u.Countries, u.Regions)
+		}
+	}
+}
+
+func TestBackfill_FillsGeographyWhenNoCountryStored(t *testing.T) {
+	// No stored country: the pass is still how a dictionary fix reaches the row.
+	job := db.Job{
+		ID: 9, Title: "Developer", Company: "Acme", Source: "manual", ExternalID: "y",
+		Location: "Berlin, Germany",
+	}
+	store := &fakeStore{jobs: []db.Job{job}}
+	if _, _, _, err := backfillAll(context.Background(), store, 1); err != nil {
+		t.Fatalf("backfillAll: %v", err)
+	}
+	if len(store.updates) != 1 || !slices.Equal(store.updates[0].Countries, []string{"de"}) {
+		t.Fatalf("updates = %+v, want one write with countries [de]", store.updates)
 	}
 }
 
