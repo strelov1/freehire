@@ -2,6 +2,9 @@ package sources
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
 	"slices"
 	"strings"
 	"testing"
@@ -79,5 +82,56 @@ func TestPowerToFlyFetchPaginatesAndMaps(t *testing.T) {
 	}
 	if j2.EmploymentType != "contract" {
 		t.Errorf("EmploymentType = %q, want contract", j2.EmploymentType)
+	}
+}
+
+// powertoflyEndlessFeed answers every page with one posting and a next_page: a feed that
+// never ends, or one longer than the cap.
+type powertoflyEndlessFeed struct{ calls int }
+
+func (f *powertoflyEndlessFeed) GetJSON(_ context.Context, _ string, v any) error {
+	f.calls++
+	body := fmt.Sprintf(`{"data":[{"id":%d,"title":"t","company":{"name":"Acme"}}],"meta":{"next_page":%d}}`, f.calls, f.calls+1)
+	return json.Unmarshal([]byte(body), v)
+}
+
+// powertofly is swept by source, so the marker must stay — and it is sound only because every
+// way a walk can end short fails the crawl (the tests below).
+func TestPowerToFlyIsFullCatalog(t *testing.T) {
+	if _, ok := NewPowerToFly(nil).(fullCatalog); !ok {
+		t.Error("powertofly should implement the fullCatalog marker")
+	}
+	if !slices.Contains(FullCatalogProviders(All(nil)), "powertofly") {
+		t.Error("FullCatalogProviders() should include powertofly")
+	}
+}
+
+// Reaching the page cap before the feed's own end is a truncated walk: returned as a success
+// it would let the source-scoped sweep close every posting past the cap.
+func TestPowerToFlyFetchFailsAtThePageCap(t *testing.T) {
+	feed := &powertoflyEndlessFeed{}
+	jobs, err := NewPowerToFly(feed).Fetch(context.Background(), CompanyEntry{})
+	if err == nil {
+		t.Fatalf("got %d jobs and no error; a walk cut short by the cap must fail", len(jobs))
+	}
+	if feed.calls != powertoflyMaxPages {
+		t.Errorf("fetched %d pages, want exactly the cap (%d)", feed.calls, powertoflyMaxPages)
+	}
+}
+
+func TestPowerToFlyFetchFailsOnALaterPage(t *testing.T) {
+	page1 := `{"data":[{"id":1,"title":"t","company":{"name":"Acme"}}],"meta":{"next_page":2}}`
+	fake := (&routedHTTP{}).routeErr("page=2", errors.New("timeout")).route("page=1", page1)
+	if jobs, err := NewPowerToFly(fake).Fetch(context.Background(), CompanyEntry{}); err == nil {
+		t.Fatalf("got %d jobs and no error; a failed later page must fail the crawl", len(jobs))
+	}
+}
+
+func TestPowerToFlyFetchFailsOnAnEmptyPageThatIsNotTheEnd(t *testing.T) {
+	page1 := `{"data":[{"id":1,"title":"t","company":{"name":"Acme"}}],"meta":{"next_page":2}}`
+	page2 := `{"data":[],"meta":{"next_page":3}}`
+	fake := (&routedHTTP{}).route("page=2", page2).route("page=1", page1)
+	if jobs, err := NewPowerToFly(fake).Fetch(context.Background(), CompanyEntry{}); err == nil {
+		t.Fatalf("got %d jobs and no error; an empty page naming a next page is not the end", len(jobs))
 	}
 }

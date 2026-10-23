@@ -19,8 +19,13 @@ type powertofly struct {
 const (
 	powertoflyListURL = "https://powertofly.com/api/v1/jobs/"
 	// powertoflyMaxPages bounds pagination so a feed that never stops handing out a
-	// next_page cannot loop forever (~192 pages at 50/page as of onboarding).
-	powertoflyMaxPages = 400
+	// next_page cannot loop forever. It is a ceiling that FAILS the crawl, never a silent end:
+	// the adapter is fullCatalog, so a walk cut short here would read as a shrunken catalogue
+	// and the source-scoped sweep would close every posting past it. The feed was ~192 pages at
+	// onboarding and 709 (35,405 postings at 50/page) on 2026-10-23, when the old cap of 400
+	// was truncating every run at exactly 20,000 postings. 1000 leaves ~40% headroom while a
+	// full walk (~2 s a page) still fits the scheduler's default 3000 s run timeout.
+	powertoflyMaxPages = 1000
 )
 
 // NewPowerToFly builds the PowerToFly adapter over the given HTTP client.
@@ -33,6 +38,15 @@ func (powertofly) boardless() {}
 
 // powertofly aggregates postings from many companies, so it stays in the source facet.
 func (powertofly) aggregator() {}
+
+// fullCatalog: Fetch pages the one feed to its natural end (meta.next_page null) and fails on
+// any page error, on an empty page that still names a next page, and on reaching
+// powertoflyMaxPages before the end. A run is therefore the whole catalogue or an error, which
+// is what lets the sweep close by source. That matters here more than for most feeds: ~98% of
+// a run's postings are skipped as already covered by the employer's own ATS, so their stored
+// copies are never refreshed, and the company-scoped sweep, which reaches only the companies
+// a run wrote, never closed them. See the fullCatalog interface (source.go).
+func (powertofly) fullCatalog() {}
 
 // powertoflyPlace is a structured country/state/city object; only its title is used.
 type powertoflyPlace struct {
@@ -59,7 +73,11 @@ type powertoflyPosting struct {
 
 func (s powertofly) Fetch(ctx context.Context, _ CompanyEntry) ([]Job, error) {
 	var jobs []Job
-	for page := 1; page <= powertoflyMaxPages; page++ {
+	for page := 1; ; page++ {
+		if page > powertoflyMaxPages {
+			// fullCatalog: a walk the cap cut short must fail, not pass for the whole feed.
+			return nil, fmt.Errorf("powertofly: feed still names a next page after %d pages", powertoflyMaxPages)
+		}
 		var resp struct {
 			Data []powertoflyPosting `json:"data"`
 			Meta struct {
@@ -75,12 +93,16 @@ func (s powertofly) Fetch(ctx context.Context, _ CompanyEntry) ([]Job, error) {
 				jobs = append(jobs, job)
 			}
 		}
-		// next_page is null on the last page; an empty page also terminates defensively.
-		if resp.Meta.NextPage == nil || len(resp.Data) == 0 {
-			break
+		// next_page is null on the last page: the feed's own statement that the walk is done.
+		if resp.Meta.NextPage == nil {
+			return jobs, nil
+		}
+		// An empty page that still names a next page is a broken walk, not an end: ending it
+		// as a success would hand the source-scoped sweep a truncated catalogue.
+		if len(resp.Data) == 0 {
+			return nil, fmt.Errorf("powertofly: page %d is empty but names next page %d", page, *resp.Meta.NextPage)
 		}
 	}
-	return jobs, nil
 }
 
 // toJob maps an inline posting to a Job, returning ok=false for an unusable posting (no

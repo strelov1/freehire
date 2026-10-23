@@ -778,6 +778,11 @@ Source ingest: the provider registry and its adapters, entry validation, the per
 - **Pay**: `lss` is the display ("$45,000 - $50,000 Mensual") and the only place the period is stated; no currency is named anywhere, and on this Mexican board the `$` is the peso. 121 of 162 sampled showed a monthly range; the rest read "Sueldo no mostrado por la empresa" or "Si el reclutador te contacta podrás conocer el sueldo" with zero bounds.
 - **No ATS overlap observed**: `uaext` (an external apply URL) was empty on all 162 sampled postings, so Job.URL is the OCC posting page (the detail's `ur` without its tracking query) and there is no coverage gate.
 
+**PowerToFly traps** (`powertofly`; live-verified 2026-10-23):
+
+- **The feed grew past its page cap and nothing said so.** `/api/v1/jobs/` reported 35,405 postings over 709 pages of 50 (`meta.total`/`meta.pages`; page 709 held 5 with `next_page: null`, page 710 was empty), against ~192 pages at onboarding. The cap was 400 and ended the loop as a success, so every run read exactly 20,000 postings and never reached employers listed past page 400 (Deloitte, Morgan Stanley). The cap is now 1000 and reaching it FAILS the crawl.
+- **`fullCatalog`, and it is the only close this feed's stale rows can get.** A run's listing is ~98% ATS-covered: 19,607 of 20,000 were skipped as "company already covered by a non-aggregator source", and only 393 written. A skipped posting is neither written nor touched, so the copies stored before its employer's own ATS was crawled never refresh, and the company-scoped sweep — which reaches only companies a run wrote — never closed them: 10,946 open rows against 398 seen in two days. The walk ends only on `next_page: null` and fails on any page error, on an empty page that still names a next page, and at the cap, so a run is the whole feed or an error and the source-scoped sweep may close what it did not see.
+
 ## Limitations
 - The ingest sweep has a trade-off: a missed run can leave an orphan open until a future reconcile; the change window is sized wide enough to absorb a skipped cron.
 - Self-closing sources: a missed `removed` event from the feed can leave a vacancy open until the next reindex.
