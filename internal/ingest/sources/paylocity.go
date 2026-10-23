@@ -91,6 +91,7 @@ func (s paylocity) detail(ctx context.Context, e CompanyEntry, b paylocityBrief)
 		description = sanitizeHTML(description)
 	}
 
+	mode := b.workMode()
 	return Job{
 		ExternalID:  strconv.Itoa(b.JobID),
 		URL:         detailURL,
@@ -98,9 +99,12 @@ func (s paylocity) detail(ctx context.Context, e CompanyEntry, b paylocityBrief)
 		Company:     company,
 		Location:    b.LocationName,
 		Description: description,
-		Remote:      b.IsRemote || isRemote(b.LocationName),
-		Countries:   b.countries(),
-		PostedAt:    parseRFC3339(b.PublishedDate),
+		// A tenant label such as "Remote Worker" still reads as remote when the toggle is
+		// off, but never overrides a hybrid the toggle states.
+		Remote:    mode == "remote" || (mode == "" && isRemote(b.LocationName)),
+		WorkMode:  mode,
+		Countries: b.countries(),
+		PostedAt:  parseRFC3339(b.PublishedDate),
 	}, true
 }
 
@@ -135,7 +139,10 @@ type paylocityBrief struct {
 	JobTitle      string `json:"JobTitle"`
 	LocationName  string `json:"LocationName"`
 	PublishedDate string `json:"PublishedDate"`
-	IsRemote      bool   `json:"IsRemote"`
+	// IsRemote is the tenant's remote toggle and IndeedRemoteType says which kind it is;
+	// see workMode for how the pair maps to the page's own label.
+	IsRemote         bool `json:"IsRemote"`
+	IndeedRemoteType int  `json:"IndeedRemoteType"`
 	// JobLocation is the structured location record LocationName labels. LocationName is
 	// the tenant's own name for it ("Remote Worker", "Concord Office") and usually names no
 	// place, so Country here is the only statement of where the work is — "USA" on every one
@@ -143,6 +150,30 @@ type paylocityBrief struct {
 	JobLocation *struct {
 		Country string `json:"Country"`
 	} `json:"JobLocation"`
+}
+
+// paylocityHybridRemoteType is the IndeedRemoteType value the posting page renders as
+// "Hybrid Remote" when IsRemote is set; 2 renders as "Fully Remote".
+const paylocityHybridRemoteType = 1
+
+// workMode maps the brief's structured remote pair to a work mode, matching the label the
+// posting page itself renders (live-verified 2026-10-23): IsRemote with IndeedRemoteType 1
+// is "Hybrid Remote", IsRemote with any other type is "Fully Remote", and IsRemote false
+// renders no arrangement label at all — so it states nothing and stays "" for the location
+// and description to decide. IndeedRemoteType alone means nothing: 2 is the value nearly
+// every NON-remote brief carries (731 of 733 sampled across 290 boards).
+//
+// Reading IsRemote alone filed every hybrid posting as remote (freehire report 108: a
+// "Hybrid Remote • Cincinnati, OH" posting stored as remote).
+func (b paylocityBrief) workMode() string {
+	switch {
+	case !b.IsRemote:
+		return ""
+	case b.IndeedRemoteType == paylocityHybridRemoteType:
+		return "hybrid"
+	default:
+		return "remote"
+	}
 }
 
 // countries is the brief's structured country, nil when the listing carries no location

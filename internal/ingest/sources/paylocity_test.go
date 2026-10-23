@@ -187,3 +187,62 @@ func TestPaylocityNoJobLocationNoCountry(t *testing.T) {
 		}
 	}
 }
+
+// paylocityWorkModeListingHTML carries briefs captured from live listings (2026-10-23),
+// trimmed to the fields the adapter reads, covering every (IsRemote, IndeedRemoteType) shape
+// seen across 290 boards. Each page's label was checked by hand: 4597243 "Hybrid Remote •
+// Cincinnati, OH" (freehire report 108, stored as remote before this fix), 4228296 "Hybrid
+// Remote • Remote Worker - N/A", 4530110 "Fully Remote", 4528354 "Palm Beach" (no arrangement
+// label), 4458200 "Green Valley, AZ" (no arrangement label, no IndeedRemoteType at all).
+const paylocityWorkModeListingHTML = `<html><body>
+<script>window.pageData = {"Jobs":[
+{"JobId":4597243,"JobTitle":"Senior Network Administrator","LocationName":"Cincinnati","PublishedDate":"2026-10-20T09:00:00-04:00","IsRemote":true,"IndeedRemoteType":1},
+{"JobId":4228296,"JobTitle":"Account Manager","LocationName":"Remote Worker - N/A","PublishedDate":"2026-05-01T09:00:00-04:00","IsRemote":true,"IndeedRemoteType":1},
+{"JobId":4530110,"JobTitle":"Telecommunications Technician","LocationName":"","PublishedDate":"2026-09-01T09:00:00-04:00","IsRemote":true,"IndeedRemoteType":2},
+{"JobId":4528354,"JobTitle":"System Administrator (Palm Beach, FL Area)","LocationName":"Palm Beach","PublishedDate":"2026-09-01T09:00:00-04:00","IsRemote":false,"IndeedRemoteType":2},
+{"JobId":4458200,"JobTitle":"Caregiver","LocationName":"Green Valley, AZ","PublishedDate":"2026-08-01T09:00:00-04:00","IsRemote":false}
+]};</script>
+</body></html>`
+
+// The work mode follows the posting page's own label: IsRemote alone filed every "Hybrid
+// Remote" posting as remote. IsRemote false states nothing, so the mode is left for the
+// location and description to decide rather than asserted onsite.
+func TestPaylocityWorkMode(t *testing.T) {
+	fake := (&routedHTTP{}).
+		route("/Recruiting/Jobs/All/", paylocityWorkModeListingHTML).
+		route("/Recruiting/Jobs/Details/", paylocityDetailHTML)
+	jobs, err := NewPaylocity(fake).Fetch(context.Background(), CompanyEntry{Company: "Powernet", Board: "guid"})
+	if err != nil {
+		t.Fatalf("fetch: %v", err)
+	}
+	byID := map[string]Job{}
+	for _, j := range jobs {
+		byID[j.ExternalID] = j
+	}
+
+	cases := []struct {
+		id         string
+		wantMode   string
+		wantRemote bool
+	}{
+		{"4597243", "hybrid", false},
+		{"4228296", "hybrid", false},
+		{"4530110", "remote", true},
+		{"4528354", "", false},
+		{"4458200", "", false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.id, func(t *testing.T) {
+			j, ok := byID[tc.id]
+			if !ok {
+				t.Fatalf("missing job %s", tc.id)
+			}
+			if j.WorkMode != tc.wantMode {
+				t.Errorf("WorkMode = %q, want %q", j.WorkMode, tc.wantMode)
+			}
+			if j.Remote != tc.wantRemote {
+				t.Errorf("Remote = %v, want %v", j.Remote, tc.wantRemote)
+			}
+		})
+	}
+}
