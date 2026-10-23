@@ -174,8 +174,8 @@ func applyInsert(state *State, op Op) (Op, error) {
 	}
 	// One past the end is the append: `experience[2]` on a list of two puts the entry last.
 	if at > list.Len() {
-		return Op{}, fmt.Errorf("%w: %q inserts at position %d of a list holding %d",
-			ErrInvalidOp, op.Path, at, list.Len())
+		return Op{}, fmt.Errorf("%w: %q inserts at position %d of a list holding %d%s",
+			ErrInvalidOp, op.Path, at, list.Len(), holds(list))
 	}
 	value, err := coerce(op.Value, list.Type().Elem(), op.Path)
 	if err != nil {
@@ -192,8 +192,8 @@ func applyRemove(state *State, op Op) (Op, error) {
 		return Op{}, err
 	}
 	if at >= list.Len() {
-		return Op{}, fmt.Errorf("%w: %q removes position %d of a list holding %d",
-			ErrInvalidOp, op.Path, at, list.Len())
+		return Op{}, fmt.Errorf("%w: %q removes position %d of a list holding %d%s",
+			ErrInvalidOp, op.Path, at, list.Len(), holds(list))
 	}
 	removed, err := detach(list.Index(at))
 	if err != nil {

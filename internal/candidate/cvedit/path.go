@@ -159,8 +159,8 @@ func resolveSteps(state *State, steps []step, p Path) (reflect.Value, error) {
 	for _, s := range steps {
 		if s.isIndex() {
 			if s.index >= v.Len() {
-				return reflect.Value{}, fmt.Errorf("cvedit: %q addresses position %d of a list holding %d",
-					p, s.index, v.Len())
+				return reflect.Value{}, fmt.Errorf("cvedit: %q addresses position %d of a list holding %d%s",
+					p, s.index, v.Len(), holds(v))
 			}
 			v = v.Index(s.index)
 			continue
@@ -172,6 +172,54 @@ func resolveSteps(state *State, steps []step, p Path) (reflect.Value, error) {
 		v = v.FieldByIndex(idx)
 	}
 	return v, nil
+}
+
+// holds names what a list does contain, for a message refusing an index past its end. The
+// tailoring agent reads the document as unnumbered JSON and counts the entries itself, and a
+// bare "position 5 of a list holding 5" gave it nothing to recount against: on prod it
+// re-sent the identical call. An entry is labelled by its first two non-empty text fields
+// (role and company, a project's name, a skill group), a text element by its opening words.
+func holds(list reflect.Value) string {
+	const maxEntries = 20
+	if list.Len() == 0 {
+		return ""
+	}
+	labels := make([]string, 0, min(list.Len(), maxEntries))
+	for i := range min(list.Len(), maxEntries) {
+		labels = append(labels, fmt.Sprintf("[%d] %s", i, entryLabel(list.Index(i))))
+	}
+	if list.Len() > maxEntries {
+		labels = append(labels, "…")
+	}
+	return " — it holds " + strings.Join(labels, "; ")
+}
+
+func entryLabel(v reflect.Value) string {
+	switch v.Kind() {
+	case reflect.String:
+		return fmt.Sprintf("%q", clip(v.String()))
+	case reflect.Struct:
+		var parts []string
+		for i := 0; i < v.NumField() && len(parts) < 2; i++ {
+			f := v.Field(i)
+			if f.Kind() == reflect.String && f.String() != "" && v.Type().Field(i).IsExported() {
+				parts = append(parts, clip(f.String()))
+			}
+		}
+		if len(parts) > 0 {
+			return strings.Join(parts, ", ")
+		}
+	}
+	return "(entry)"
+}
+
+func clip(s string) string {
+	const maxRunes = 40
+	r := []rune(s)
+	if len(r) <= maxRunes {
+		return s
+	}
+	return string(r[:maxRunes]) + "…"
 }
 
 // jsonName reads a struct field's wire name, or reports that the field is not addressable

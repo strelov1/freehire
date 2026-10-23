@@ -575,7 +575,9 @@ func (h *assistantHandlers) cvEditTool(cvID uuid.UUID, batchID uuid.UUID) assist
 			"beside its kind, path and value, NOT on the call beside `note` and `requirement`; if the " +
 			"bank holds nothing on the point, ask the candidate and record their answer with " +
 			"experience_add first. " +
-			"Contact details are not editable here. If this batch closes a requirement from cv_context, " +
+			"Contact details are not editable here, and neither is `title` — it is the CV's name in the " +
+			"candidate's list, never printed; aim the CV at the role through the summary and bullets. " +
+			"If this batch closes a requirement from cv_context, " +
 			"pass `requirement` and `requirement_status` — the report updates in this same call, so you " +
 			"do not need a separate tailor_report call for it.",
 		Schema: map[string]any{

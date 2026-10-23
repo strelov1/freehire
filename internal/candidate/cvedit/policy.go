@@ -54,6 +54,14 @@ func (p Policy) Allows(actor Actor, ops []Op) error {
 	for _, op := range ops {
 		for _, place := range denied {
 			if pathTouches(op.Path, place) {
+				// The agent reaches for `title` to aim the CV at the vacancy, writing the
+				// job's own title there; the generic refusal did not stop it, because it
+				// does not say the field is never printed.
+				if place == "title" {
+					return fmt.Errorf("%w: %q is this CV's name in the candidate's list and is not printed "+
+						"on the CV. To aim the CV at the role, rewrite the summary and the experience bullets instead",
+						ErrForbiddenPath, op.Path)
+				}
 				return fmt.Errorf("%w: %q is the candidate's own. Edit the body of the CV instead — "+
 					"experience, summary, skills, projects and education are yours to rewrite", ErrForbiddenPath, op.Path)
 			}

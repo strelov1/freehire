@@ -320,3 +320,19 @@ func TestPresentationNeedsNoEvidence(t *testing.T) {
 		t.Fatalf("the bank was asked %d times about presentation", b.calls)
 	}
 }
+
+// The agent reaches for `title` to aim the CV at the vacancy — measured on prod, every
+// attempt wrote the job's own title there. `title` is the CV's name in the candidate's list
+// and is never printed, so the refusal has to say that and name where the aim belongs;
+// "the candidate's own" alone did not stop it.
+func TestRefusingTheTitleSaysItIsNotPrinted(t *testing.T) {
+	err := DefaultPolicy().Allows(ActorAgent, []Op{{Kind: OpSet, Path: Path("title"), Value: "Senior Data Scientist"}})
+	if !errors.Is(err, ErrForbiddenPath) {
+		t.Fatalf("err = %v, want ErrForbiddenPath", err)
+	}
+	for _, want := range []string{"not printed", "summary"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error %q does not say %q", err, want)
+		}
+	}
+}

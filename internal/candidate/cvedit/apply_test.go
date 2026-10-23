@@ -319,3 +319,35 @@ func TestUndoOfTwoInsertsRestoresTheOriginal(t *testing.T) {
 		t.Fatalf("undo left %q, want %q", undone.Experience[0].Bullets, before.Experience[0].Bullets)
 	}
 }
+
+// A refused address says what the list DOES hold. The tailoring agent reads the document
+// once as unnumbered JSON and counts the entries itself; measured on prod 2026-10-18..23,
+// a quarter of its cv_edit calls were refused for an index one past the end, and with
+// nothing but "position 5 of a list holding 5" to go on it re-sent the identical call.
+func TestARefusedAddressListsWhatTheListHolds(t *testing.T) {
+	_, _, err := Apply(sample(), []Op{
+		{Kind: OpSet, Path: mustParse(t, "experience[2].bullets[0]"), Value: "x"},
+	})
+	if err == nil {
+		t.Fatal("Apply accepted a role the CV does not have")
+	}
+	for _, want := range []string{`[0] Engineer, Acme`, `[1] Junior, Initech`} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error %q does not name %q", err, want)
+		}
+	}
+}
+
+func TestARefusedRemovalListsTheBulletsItCouldHaveMeant(t *testing.T) {
+	_, _, err := Apply(sample(), []Op{
+		{Kind: OpRemove, Path: mustParse(t, "experience[0].bullets[2]")},
+	})
+	if err == nil {
+		t.Fatal("Apply removed a bullet the role does not have")
+	}
+	for _, want := range []string{`[0] "Shipped it"`, `[1] "Twice"`} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error %q does not name %q", err, want)
+		}
+	}
+}
