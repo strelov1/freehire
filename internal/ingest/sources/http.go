@@ -133,6 +133,13 @@ type FormJSONPoster interface {
 	PostFormJSON(ctx context.Context, url string, values url.Values, v any) error
 }
 
+// FormTextPoster POSTs a form-urlencoded body and returns the raw response body — the
+// TextGetter of a form, for a site whose pages are not UTF-8 and so must be transcoded
+// before they are parsed (Civil Service Jobs serves Windows-1252 and declares no charset).
+type FormTextPoster interface {
+	PostFormText(ctx context.Context, url string, values url.Values) (string, error)
+}
+
 // HTTPClient is the full transport surface, composing every capability role. The real
 // Client implements it; sources.All holds one and passes it to each adapter, which then
 // narrows it to the role(s) it actually uses.
@@ -152,6 +159,7 @@ type HTTPClient interface {
 	HeaderJSONPoster
 	HeaderFormPoster
 	FormJSONPoster
+	FormTextPoster
 	CookieReader
 }
 
@@ -766,6 +774,25 @@ func (c *Client) PostFormJSON(ctx context.Context, url string, values url.Values
 			return json.NewDecoder(resp.Body).Decode(v)
 		},
 	})
+}
+
+// PostFormText POSTs values form-urlencoded and returns the raw response body, under the same
+// maxTextBody cap as GetText.
+func (c *Client) PostFormText(ctx context.Context, url string, values url.Values) (string, error) {
+	var body string
+	err := c.do(ctx, request{
+		method:      http.MethodPost,
+		url:         url,
+		body:        []byte(values.Encode()),
+		contentType: "application/x-www-form-urlencoded",
+		accept:      "text/html",
+		decode: func(resp *http.Response) error {
+			b, err := io.ReadAll(newCappedReader(resp.Body, url, maxTextBody))
+			body = string(b)
+			return err
+		},
+	})
+	return body, err
 }
 
 // request is the parameters of a single HTTP exchange issued by do. A non-nil body is

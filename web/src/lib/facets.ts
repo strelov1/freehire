@@ -384,6 +384,7 @@ export const SOURCE_LABELS: Record<string, string> = {
   wttj: 'Welcome to the Jungle',
   lesta: 'Lesta Games',
   techinasia: 'Tech in Asia',
+  civilservicejobs: 'Civil Service Jobs',
   ibm: 'IBM',
   feishujobs: 'Feishu Jobs',
   dassault: 'Dassault Systèmes',

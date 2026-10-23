@@ -639,6 +639,9 @@ func All(c HTTPClient) map[string]Source {
 	registry["aijobs"] = cookieSessionSource[aijobsHTTP](c, func(h aijobsHTTP) Source {
 		return NewAijobs(h, aijobsMaxNewPerRun)
 	})
+	// Civil Service Jobs answers every path with a proof-of-work check whose verdict is a
+	// session cookie. See civilservicejobs.go.
+	registry["civilservicejobs"] = cookieSessionSource[csjHTTP](c, NewCivilServiceJobs)
 	// HumanBit's listing page is a single, unpaginated ~5.6 MB payload that measured ~18s to
 	// fetch — past the standard 15s client timeout, which made every crawl fail
 	// intermittently with "context deadline exceeded" in production. Swap in the
