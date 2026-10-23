@@ -32,7 +32,11 @@ overrides:
   # isomorphic-dompurify is used directly for XSS sanitization in this app.
   # 3.4.13 was the prior pin; the advisory got a second patch release and the
   # real fix only landed in 3.4.16 (GHSA re-opened as Dependabot alert #40).
-  dompurify@<3.4.16: 3.4.16
+  # Raised to 3.4.17 for three more (Dependabot #63-#65): a SAFE_FOR_TEMPLATES
+  # bypass through shadow-root content (critical), another incomplete IN_PLACE
+  # fix leaving a detached subtree's handlers armed (high), and a skipped SMIL
+  # attributeName=href guard under application/xhtml+xml (low).
+  dompurify@<3.4.17: 3.4.17
   # Nine advisories fixed in 8.10.2, two of them critical: BalancedPool drops
   # function-valued connection options, so a custom checkServerIdentity is
   # silently stripped and a malicious certificate passes validation
