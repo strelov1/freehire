@@ -47,6 +47,11 @@ describe('transcribe', () => {
     await expect(transcribe(new Blob(['opus']), 'a.webm')).rejects.toThrow(/try again/i);
   });
 
+  it('names the paid plan rather than showing a free caller a status code', async () => {
+    stubFetch(402, { error: 'plan limit reached', feature: 'dictation' });
+    await expect(transcribe(new Blob(['opus']), 'a.webm')).rejects.toThrow(/paid plan/i);
+  });
+
   it('fails on any other refusal', async () => {
     stubFetch(502, { error: 'transcription failed' });
     await expect(transcribe(new Blob(['opus']), 'a.webm')).rejects.toThrow(/502/);

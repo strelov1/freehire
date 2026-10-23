@@ -1,22 +1,23 @@
-/** Whether the assistant offers anything that needs a microphone.
+/** Which assistant surfaces that need a microphone are offered.
  *
- *  Off since 2026-08-22. Both audio surfaces — dictation into the composer and
- *  hands-free voice mode — reach the model through an OpenAI-compatible gateway,
- *  and the gateway is being replaced (see `provision/bifrost/` in freehire-ops).
- *  The replacement's audio routes exist but have never been exercised: the key
- *  pool behind it carries no OpenAI credential, so `/v1/audio/transcriptions`
- *  and `/v1/realtime/client_secrets` are unproven rather than known-good.
+ *  Both went dark on 2026-08-22, when the OpenAI-compatible gateway they reach the
+ *  model through was replaced and its audio routes were unproven. Shipping the
+ *  affordance before a route works means a microphone button that opens, records and
+ *  then fails — the server answers 501 and `dictationOff` / `voiceModeOff` latch it
+ *  away for the rest of the session. That is a worse first impression than no button.
  *
- *  Shipping the affordance anyway would mean a microphone button that opens,
- *  records, and then fails — the server answers 501 and `dictationOff` /
- *  `voiceModeOff` latch it away for the rest of the session. That is a worse
- *  first impression than no button.
- *
- *  This is deliberately a constant and not configuration. Nothing about it
- *  varies per deployment: either the gateway serves audio or it does not, and
- *  the day it does, this flips to `true` in one edit and the capability checks
+ *  These are deliberately constants and not configuration. Nothing about them varies
+ *  per deployment: either the gateway serves a route or it does not, and the day it
+ *  does, the matching flag flips to `true` in one edit and the capability checks
  *  underneath — `canRecord`, `canUseVoiceCall` — take over again untouched.
  *
- *  To restore: give the gateway an audio-capable credential, verify both routes
- *  against it, then flip this. Nothing else here was removed. */
-export const AUDIO_ENABLED = false;
+ *  Dictation is back since 2026-10-23: `/v1/audio/transcriptions` was exercised
+ *  against the gateway with the production configuration (`STT_MODEL`) and
+ *  transcribed a recording correctly. */
+export const DICTATION_ENABLED = true;
+
+/** Hands-free voice mode stays off: `/v1/realtime/client_secrets` has still never been
+ *  called against the gateway, and that gateway wants `session.model` as
+ *  `provider/model`, which is not the shape sent today. To restore: verify the route,
+ *  fix the shape if needed, then flip this. */
+export const VOICE_CALL_ENABLED = false;

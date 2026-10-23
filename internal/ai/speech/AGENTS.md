@@ -5,27 +5,23 @@
 Its HTTP surface is `internal/api/handler/speech.go`; the microphone that feeds it is
 `web/src/lib/assistant/VoiceInput.svelte`.
 
-## Dark since 2026-08-22 — the gateway moved out from under it
+## Served again since 2026-10-23
 
-Audio is **not served** right now, and the reason is not in this package. The
-OpenAI-compatible gateway both this and voice mode depend on is being replaced
-(`provision/bifrost/` in freehire-ops). The replacement exposes
-`/v1/audio/transcriptions` and `/v1/realtime/client_secrets`, but neither has ever
-been called against it: the key pool behind it carries no OpenAI credential, which
-makes those routes unproven rather than known-good.
+Audio went dark on 2026-08-22, when the OpenAI-compatible gateway this depends on was
+replaced (`provision/bifrost/` in freehire-ops) and its audio routes were unproven. On
+2026-10-23 `/v1/audio/transcriptions` was exercised against that gateway with the
+production `STT_MODEL` and the service credential this package uses, and transcribed
+correctly — so the SPA's `DICTATION_ENABLED`
+(`web/src/lib/assistant/audioAvailability.ts`) is on again.
 
-Nothing here was deleted or edited to achieve that — the off switch was already the
-design. `STT_MODEL` unset means `New` returns nil, the handler answers 501, and the
-same holds for `internal/api/realtime`. What was added is a matching switch in the SPA
-(`web/src/lib/assistant/audioAvailability.ts`, `AUDIO_ENABLED`), because without it the
-microphone renders, records, fails once and only then latches away — a worse first
-impression than no microphone.
+Voice mode is still off (`VOICE_CALL_ENABLED`): `/v1/realtime/client_secrets` has never
+been called against the gateway, and that gateway wants `session.model` as
+`provider/model` on that route, which is not the shape sent today.
 
-**To bring it back:** give the gateway an audio-capable credential, exercise both routes
-against it, then set `STT_MODEL` (and the Realtime config) and flip `AUDIO_ENABLED`. One
-wire-shape difference is already known and will bite: that gateway wants
-`session.model` as `provider/model` on the client-secret route, which is not the shape
-sent today.
+The server-side switch is unchanged: `STT_MODEL` unset means `New` returns nil and the
+handler answers 501. The SPA flag exists because without it the microphone renders,
+records, fails once and only then latches away — a worse first impression than no
+microphone.
 
 ## Always true
 - **It is not part of `internal/platform/llm`.** That package is built on langchaingo, which

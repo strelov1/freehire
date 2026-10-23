@@ -29,8 +29,11 @@ export async function transcribe(audio: Blob, filename: string): Promise<string>
   });
   // Dictation reads its own status ladder, so the central record in toApiError never
   // sees a refusal here — see trackPlanRefusal. Read before the ladder, because every
-  // rung below returns rather than falling through.
-  if (res.status === 402) trackPlanRefusal(res.status, await res.clone().json().catch(() => null));
+  // rung below throws rather than falling through.
+  if (res.status === 402) {
+    trackPlanRefusal(res.status, await res.clone().json().catch(() => null));
+    throw new Error('Dictation is part of a paid plan — see /pricing.');
+  }
   if (res.status === 501) throw new TranscriptionUnavailable();
   if (res.status === 429) throw new Error('Too many recordings just now — try again shortly.');
   if (!res.ok) throw new Error(`Could not transcribe the recording (${res.status}).`);
