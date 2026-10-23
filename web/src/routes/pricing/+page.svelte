@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { resolve } from '$app/paths';
   import { page } from '$app/state';
   import { api } from '#lib/api.js';
   import { ACCOUNT_COUNTRY_NAME, cardsUnsupportedFrom } from '#lib/billingGeo.js';
@@ -7,7 +8,8 @@
   import { isAuthenticated } from '#lib/auth.svelte.js';
   import Seo from '#lib/components/Seo.svelte';
   import { ProviderIcon } from '#lib/ui/index.js';
-  import type { PlanTierAllowance, PublicPrice } from '#lib/types.js';
+  import type { PlanTierAllowance, PlansMatrix, PublicPrice } from '#lib/types.js';
+  import { Check } from '@lucide/svelte';
   import type { PageData } from './$types';
   import ApiPlans from '#lib/components/ApiPlans.svelte';
 
@@ -62,18 +64,42 @@
   // are what a candidate would call the thing they just did.
   const FEATURE_LABELS: Record<string, string> = {
     tailor: 'CV editing sessions',
-    match: 'Job fit analyses',
     assistant: 'Assistant messages',
-    dictation: 'Voice dictation',
     'cover-letter': 'Cover letters',
-    'auto-apply': 'Unattended applications',
+    'auto-apply': 'Background auto-apply',
   };
   const label = (id: string) => FEATURE_LABELS[id] ?? id;
 
-  // Every plan offers every feature; only the daily amount differs. That is the product
-  // decision this page has to communicate, and it is why there are no ticks and crosses:
-  // a cross would say "you cannot", and nothing here is withheld.
-  const rows = $derived(plans?.features ?? []);
+  // Metered features that stay metered but are not worth a line on this page: dictation is
+  // an input method, and the fit analysis is part of tailoring rather than a thing bought.
+  const UNLISTED = new Set(['dictation', 'match']);
+  const rows = $derived((plans?.features ?? []).filter((f) => !UNLISTED.has(f.feature)));
+  // A metered feature reaches the free card only when free actually gets some of it. Today
+  // every free allowance is zero, so the card is the unmetered product alone; reopening one
+  // with `PLAN_FREE_DAILY_<F>` brings its row back without touching this file.
+  const freeRows = $derived(rows.filter((f) => f.free.unlimited || f.free.limit > 0));
+
+  // What costs nothing at all, on any plan. These are not metered, so the plan matrix knows
+  // nothing about them and they are written here. Each links to the page that explains it.
+  type Perk = { text: string; href: string };
+  const FREE_FEATURES: Perk[] = [
+    { text: 'Every job, every filter, and AI search', href: resolve('/features/advanced-search') },
+    { text: 'Alerts by email, Telegram and push', href: resolve('/features/notifications') },
+    { text: 'Application tracking board', href: resolve('/features/tracking') },
+    { text: 'Inbox that sorts employer replies into your applications', href: resolve('/features/inbox') },
+    { text: 'Ghost-job warnings on every posting', href: resolve('/features/ghost-jobs') },
+    { text: 'Search from ChatGPT, Claude or any agent over MCP, and the CLI', href: resolve('/mcp') },
+    { text: 'Anonymous employee referrals', href: resolve('/features/referrals') },
+  ];
+
+  // What a paid plan adds. The daily amounts live in the allowance list under these lines,
+  // read from the backend, so nothing here quotes a number.
+  const PAID_FEATURES: Perk[] = [
+    { text: 'CV tailoring for each vacancy, with cover letters', href: resolve('/features/tailor') },
+    { text: 'AI assistant', href: resolve('/features/tailor') },
+    { text: 'Chrome and Firefox extension that fills applications for you', href: resolve('/features/extension') },
+    { text: 'Auto-apply in the background, within a daily limit', href: resolve('/features/extension') },
+  ];
 
   let busy = $state(false);
   let error = $state<string | null>(null);
@@ -198,7 +224,7 @@
 
 <Seo
   title="Pricing — freehire"
-  description="Every AI feature is on every plan. Free gives you a trial-sized amount each day; Pro removes the ceilings. $5 a month, cancel any time."
+  description="Search, alerts, tracking, the inbox and agent access over MCP are free. Pro adds CV tailoring, the AI assistant, the browser extension that fills applications, and background auto-apply. $5 a month, cancel any time."
   canonical={`${origin}/pricing`}
 />
 
@@ -206,8 +232,8 @@
   <header class="flex flex-col items-center gap-3 text-center">
     <h1 class="text-3xl font-semibold tracking-tight sm:text-4xl">Simple plans</h1>
     <p class="max-w-2xl text-balance text-muted-foreground">
-      Every feature is on every plan. What changes is how much of each you can do in a day —
-      and it starts over every night.
+      Finding and tracking jobs is free, for good. Pro adds the AI that does the applying
+      with you.
     </p>
   </header>
 
@@ -242,6 +268,34 @@
       </div>
     </div>
   {/if}
+
+<!-- What a plan includes, each line linking to the page that explains it. -->
+{#snippet perkList(items: Perk[])}
+  <ul class="flex flex-col gap-2 text-sm">
+    {#each items as item (item.text)}
+      <li class="flex items-baseline gap-2">
+        <Check class="size-4 shrink-0 translate-y-0.5 text-primary" aria-hidden="true" />
+        <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- every href is built with resolve() in FREE_FEATURES / PAID_FEATURES; the linter can't trace it via the variable -->
+        <a href={item.href} class="hover:underline">{item.text}</a>
+      </li>
+    {/each}
+  </ul>
+{/snippet}
+
+<!-- The daily amounts of the metered features, as the backend states them. -->
+{#snippet allowanceList(items: PlansMatrix['features'], tier: 'free' | 'pro' | 'ultra')}
+  <div class="flex flex-col gap-2">
+    <p class="text-xs font-medium uppercase tracking-wide text-muted-foreground">Daily allowance</p>
+    <ul class="flex flex-col gap-2 text-sm">
+      {#each items as f (f.feature)}
+        <li class="flex items-baseline justify-between gap-3 border-b border-border/60 pb-2">
+          <span class="text-muted-foreground">{label(f.feature)}</span>
+          <span class="shrink-0 font-medium tabular-nums">{allowanceText(f[tier])}</span>
+        </li>
+      {/each}
+    </ul>
+  </div>
+{/snippet}
 
   <!-- The one thing on this page that is NOT a daily amount, so it cannot be a row in the
      allowance lists: free does not get a smaller share of it, it gets none. It is rendered on
@@ -284,16 +338,19 @@
       <div class="flex flex-col gap-1">
         <h2 class="text-lg font-semibold">Free</h2>
         <p class="text-3xl font-semibold tracking-tight">$0</p>
-        <p class="text-sm text-muted-foreground">Everything, in trial-sized daily amounts.</p>
+        <p class="text-sm text-muted-foreground">Everything you need to find and track a job.</p>
       </div>
-      <ul class="flex flex-col gap-2 text-sm">
-        {#each rows as f (f.feature)}
-          <li class="flex items-baseline justify-between gap-3 border-b border-border/60 pb-2">
-            <span class="text-muted-foreground">{label(f.feature)}</span>
-            <span class="shrink-0 font-medium tabular-nums">{allowanceText(f.free)}</span>
-          </li>
-        {/each}
-      </ul>
+      {@render perkList(FREE_FEATURES)}
+      {#if freeRows.length > 0}
+        {@render allowanceList(freeRows, 'free')}
+      {/if}
+      {#if !isAuthenticated()}
+        <button
+          type="button"
+          class="mt-auto rounded-md border border-border px-4 py-2.5 text-sm font-medium"
+          onclick={promptSignIn}>Sign up free</button
+        >
+      {/if}
     </section>
 
     <!-- Pro -->
@@ -310,16 +367,10 @@
         {:else}
           <p class="text-3xl font-semibold tracking-tight text-muted-foreground">—</p>
         {/if}
-        <p class="text-sm text-muted-foreground">The same product, without the ceilings.</p>
+        <p class="text-sm text-muted-foreground">Everything in Free, plus:</p>
       </div>
-      <ul class="flex flex-col gap-2 text-sm">
-        {#each rows as f (f.feature)}
-          <li class="flex items-baseline justify-between gap-3 border-b border-border/60 pb-2">
-            <span class="text-muted-foreground">{label(f.feature)}</span>
-            <span class="shrink-0 font-medium tabular-nums">{allowanceText(f.pro)}</span>
-          </li>
-        {/each}
-      </ul>
+      {@render perkList(PAID_FEATURES)}
+      {@render allowanceList(rows, 'pro')}
 
       {@render discordPerk()}
 
@@ -398,17 +449,10 @@
             >
           </p>
           <p class="text-sm text-muted-foreground">
-            Apply to as many jobs as you like, unattended.
+            Everything in Pro, and apply to as many jobs as you like, unattended.
           </p>
         </div>
-        <ul class="flex flex-col gap-2 text-sm">
-          {#each rows as f (f.feature)}
-            <li class="flex items-baseline justify-between gap-3 border-b border-border/60 pb-2">
-              <span class="text-muted-foreground">{label(f.feature)}</span>
-              <span class="shrink-0 font-medium tabular-nums">{allowanceText(f.ultra)}</span>
-            </li>
-          {/each}
-        </ul>
+        {@render allowanceList(rows, 'ultra')}
 
         {@render discordPerk()}
         {@render localCardWarning()}
