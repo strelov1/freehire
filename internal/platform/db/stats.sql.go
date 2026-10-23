@@ -44,7 +44,7 @@ SELECT
     (SELECT viewed_since FROM views) AS viewed_since,
     (SELECT count(*) FROM users WHERE resume_object_key IS NOT NULL)::int AS cvs_uploaded,
     (SELECT count(*) FROM cvs WHERE is_tailored)::int AS cvs_tailored,
-    (SELECT count(*) FROM user_job_analysis)::int AS match_analyses,
+    (SELECT count(DISTINCT user_id) FROM subscriptions WHERE active)::int AS alert_subscribers,
     ((SELECT count(*) FROM gmail_connections WHERE status = 'connected')
         + (SELECT count(*) FROM mailboxes))::int AS inboxes_connected,
     (SELECT count(*) FROM saved_searches)::int AS saved_searches
@@ -58,7 +58,7 @@ type GetEngagementStatsRow struct {
 	ViewedSince      pgtype.Date `json:"viewed_since"`
 	CvsUploaded      int32       `json:"cvs_uploaded"`
 	CvsTailored      int32       `json:"cvs_tailored"`
-	MatchAnalyses    int32       `json:"match_analyses"`
+	AlertSubscribers int32       `json:"alert_subscribers"`
 	InboxesConnected int32       `json:"inboxes_connected"`
 	SavedSearches    int32       `json:"saved_searches"`
 }
@@ -116,9 +116,10 @@ type GetEngagementStatsRow struct {
 // The remaining five mirror event-total semantics from their own tables:
 // cvs_uploaded is the count of users holding a stored résumé (one per user, so also a
 // people count); cvs_tailored counts CVs created as a per-vacancy copy, read off the
-// is_tailored flag rather than job_id — deleting a vacancy nulls the link (0058); match_analyses
-// is every Analyze-match run, and since user_job_analysis is keyed (user_id, job_id)
-// that is a count of distinct candidate×vacancy matches, not of recomputes;
+// is_tailored flag rather than job_id — deleting a vacancy nulls the link (0058);
+// alert_subscribers is a PEOPLE count — the accounts holding at least one active
+// notification subscription, whatever the channel — because one person subscribed to
+// three searches over two channels is still one person who turned alerts on;
 // inboxes_connected adds the live Gmail grants to the claimed hosted mailboxes (both are
 // one-per-user and both are a deliberate connect action, so the sum is a count of
 // inboxes, not of people); and saved_searches is every saved search. All five read tiny
@@ -133,7 +134,7 @@ func (q *Queries) GetEngagementStats(ctx context.Context) (GetEngagementStatsRow
 		&i.ViewedSince,
 		&i.CvsUploaded,
 		&i.CvsTailored,
-		&i.MatchAnalyses,
+		&i.AlertSubscribers,
 		&i.InboxesConnected,
 		&i.SavedSearches,
 	)

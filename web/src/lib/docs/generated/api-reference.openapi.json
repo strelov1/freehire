@@ -4635,7 +4635,7 @@
                 "schema": {
                   "type": "string"
                 },
-                "example": "{ \"data\": { \"saved\": 41200, \"applied\": 18730, \"viewed\": 903400, \"viewed_since\": \"2026-09-04\", \"cvs_uploaded\": 2140, \"cvs_tailored\": 860, \"match_analyses\": 5310, \"inboxes_connected\": 410, \"saved_searches\": 1290 } }"
+                "example": "{ \"data\": { \"saved\": 41200, \"applied\": 18730, \"viewed\": 903400, \"viewed_since\": \"2026-09-04\", \"cvs_uploaded\": 2140, \"cvs_tailored\": 860, \"alert_subscribers\": 970, \"inboxes_connected\": 410, \"saved_searches\": 1290 } }"
               }
             }
           }

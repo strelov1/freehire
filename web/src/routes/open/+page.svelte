@@ -182,7 +182,7 @@
       { value: nf.format(e.saved_searches), label: 'saved searches' },
       { value: nf.format(e.cvs_uploaded), label: 'CVs uploaded' },
       { value: nf.format(e.cvs_tailored), label: 'CVs tailored' },
-      { value: nf.format(e.match_analyses), label: 'matches analyzed' },
+      { value: nf.format(e.alert_subscribers), label: 'people with job alerts on' },
       { value: nf.format(e.inboxes_connected), label: 'inboxes connected' },
     ];
   });
@@ -312,8 +312,8 @@
     <p class="mb-6 mt-1 text-sm text-muted-foreground">
       Job pages opened by every visitor, signed in or not, and bot-filtered — counted only from the
       day we started filtering, which is why that one carries a date. Then the signed-in interactions
-      on top, all-time: postings tracked, CVs written and tailored to a vacancy, matches analyzed
-      against a CV, and inboxes wired up for application mail.
+      on top, all-time: postings tracked, CVs written and tailored to a vacancy, people who turned
+      on job alerts, and inboxes wired up for application mail.
     </p>
     {#if engagement}
       <dl class="grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-4">

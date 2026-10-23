@@ -3352,7 +3352,7 @@ data: {"eligible":1903114,"covered":1897020,"snapshot_covered":1889512,"queued":
         description:
           '`viewed` is the only field here that is not a signed-in count: it is bot-filtered job-page opens by every visitor, signed in or not, so it is orders of magnitude larger than the rest. It is also the only one that is not all-time — `viewed_since` is the first day it covers (null before the first rollup), because the bot-filtered counter shipped without a backfill of the days before it. Every other field is all-time. Aggregate-only — no user identifier is exposed.',
         curl: `curl "${BASE_URL}/stats/engagement"`,
-        responseExample: `{ "data": { "saved": 41200, "applied": 18730, "viewed": 903400, "viewed_since": "2026-09-04", "cvs_uploaded": 2140, "cvs_tailored": 860, "match_analyses": 5310, "inboxes_connected": 410, "saved_searches": 1290 } }`,
+        responseExample: `{ "data": { "saved": 41200, "applied": 18730, "viewed": 903400, "viewed_since": "2026-09-04", "cvs_uploaded": 2140, "cvs_tailored": 860, "alert_subscribers": 970, "inboxes_connected": 410, "saved_searches": 1290 } }`,
       },
       {
         method: 'GET',

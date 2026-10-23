@@ -263,7 +263,7 @@ func (h *statsHandlers) EngagementStats(c *fiber.Ctx) error {
 			"viewed_since":      viewedSince,
 			"cvs_uploaded":      s.CvsUploaded,
 			"cvs_tailored":      s.CvsTailored,
-			"match_analyses":    s.MatchAnalyses,
+			"alert_subscribers": s.AlertSubscribers,
 			"inboxes_connected": s.InboxesConnected,
 			"saved_searches":    s.SavedSearches,
 		},

@@ -1239,8 +1239,8 @@ export interface UserGrowthPoint {
 }
 
 /** Aggregate engagement counts across all users: jobs saved, applications marked,
- *  jobs viewed, and what people build on top — CVs uploaded and tailored, matches
- *  analyzed, inboxes connected, searches saved. `inboxes_connected` sums live Gmail
+ *  jobs viewed, and what people build on top — CVs uploaded and tailored, people with
+ *  job alerts on, inboxes connected, searches saved. `inboxes_connected` sums live Gmail
  *  grants and claimed hosted mailboxes, so a user holding both counts twice.
  *  Aggregate-only — no per-user or row-level field.
  *
@@ -1260,7 +1260,7 @@ export interface EngagementStats {
   viewed_since: string | null;
   cvs_uploaded: number;
   cvs_tailored: number;
-  match_analyses: number;
+  alert_subscribers: number;
   inboxes_connected: number;
   saved_searches: number;
 }

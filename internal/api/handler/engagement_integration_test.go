@@ -36,7 +36,7 @@ func TestEngagementStatsEndpoint(t *testing.T) {
 		ViewedSince      string `json:"viewed_since"`
 		CvsUploaded      int    `json:"cvs_uploaded"`
 		CvsTailored      int    `json:"cvs_tailored"`
-		MatchAnalyses    int    `json:"match_analyses"`
+		AlertSubscribers int    `json:"alert_subscribers"`
 		InboxesConnected int    `json:"inboxes_connected"`
 		SavedSearches    int    `json:"saved_searches"`
 	}
@@ -65,7 +65,7 @@ func TestEngagementStatsEndpoint(t *testing.T) {
 	// there is no window to name. Whatever renders it drops the note in that case, so
 	// a placeholder date would put a fabricated day on the page.
 	if c := get(); c.Saved != 0 || c.Applied != 0 || c.Viewed != 0 || c.ViewedSince != "" ||
-		c.CvsUploaded != 0 || c.CvsTailored != 0 || c.MatchAnalyses != 0 ||
+		c.CvsUploaded != 0 || c.CvsTailored != 0 || c.AlertSubscribers != 0 ||
 		c.InboxesConnected != 0 || c.SavedSearches != 0 {
 		t.Fatalf("empty tables: got %+v, want all zeros and a null viewed_since", c)
 	}
@@ -115,22 +115,28 @@ func TestEngagementStatsEndpoint(t *testing.T) {
 		t.Fatalf("seed second user: %v", err)
 	}
 
-	// A stored résumé (→ cvs_uploaded=1), one Analyze-match run (→ match_analyses=1),
-	// and one saved search (→ saved_searches=1).
+	// A stored résumé (→ cvs_uploaded=1) and one saved search (→ saved_searches=1).
 	if _, err := pool.Exec(ctx,
 		`UPDATE users SET resume_object_key = 'cv/u.pdf', resume_uploaded_at = now() WHERE id = $1`,
 		uid); err != nil {
 		t.Fatalf("seed résumé: %v", err)
 	}
-	if _, err := pool.Exec(ctx,
-		`INSERT INTO user_job_analysis (user_id, job_id, analysis, model)
-		 VALUES ($1, $2, '{}'::jsonb, 'test-model')`, uid, j1); err != nil {
-		t.Fatalf("seed match analysis: %v", err)
-	}
-	if _, err := pool.Exec(ctx,
-		`INSERT INTO saved_searches (user_id, name, query) VALUES ($1, 'my search', 'go')`,
-		uid); err != nil {
+	var ssID int64
+	if err := pool.QueryRow(ctx,
+		`INSERT INTO saved_searches (user_id, name, query) VALUES ($1, 'my search', 'go') RETURNING id`,
+		uid).Scan(&ssID); err != nil {
 		t.Fatalf("seed saved search: %v", err)
+	}
+
+	// Two active subscriptions on the first user and a paused one on the second
+	// (→ alert_subscribers=1). The pair is what makes this a count of PEOPLE rather
+	// than of subscriptions; the paused row is what makes it a count of active ones.
+	if _, err := pool.Exec(ctx,
+		`INSERT INTO subscriptions (user_id, saved_search_id, channel, active) VALUES
+		   ($1, $3, 'telegram', true),
+		   ($1, $3, 'email',    true),
+		   ($2, $3, 'webhook',  false)`, uid, uid2, ssID); err != nil {
+		t.Fatalf("seed subscriptions: %v", err)
 	}
 
 	// Two CVs, one tailored to j2 and one plain (→ cvs_tailored=1). The plain row is
@@ -182,9 +188,9 @@ func TestEngagementStatsEndpoint(t *testing.T) {
 
 	if c := get(); c.Saved != 1 || c.Applied != 1 || c.Viewed != 8 ||
 		c.ViewedSince != "2026-07-19" ||
-		c.CvsUploaded != 1 || c.CvsTailored != 1 || c.MatchAnalyses != 1 ||
+		c.CvsUploaded != 1 || c.CvsTailored != 1 || c.AlertSubscribers != 1 ||
 		c.InboxesConnected != 2 || c.SavedSearches != 1 {
 		t.Errorf("got %+v, want {Saved:1 Applied:1 Viewed:8 ViewedSince:2026-07-19 "+
-			"CvsUploaded:1 CvsTailored:1 MatchAnalyses:1 InboxesConnected:2 SavedSearches:1}", c)
+			"CvsUploaded:1 CvsTailored:1 AlertSubscribers:1 InboxesConnected:2 SavedSearches:1}", c)
 	}
 }
