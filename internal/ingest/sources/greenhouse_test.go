@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -240,5 +242,48 @@ func TestGreenhouseCompanyDescriptionPropagatesAFetchError(t *testing.T) {
 	_, err := NewGreenhouse(fake).(CompanyDescriber).CompanyDescription(context.Background(), CompanyEntry{Board: "gone"})
 	if err == nil {
 		t.Fatal("expected an error for a 404 board, got nil")
+	}
+}
+
+// A bare-"Remote" posting states its country only through the offices it is filed under
+// (live shapes, 2026-10-23). The office is a FallbackCountries signal, read only when the
+// location is a bare remote marker and the offices agree on exactly one country.
+func TestGreenhouseOfficeCountry(t *testing.T) {
+	cases := []struct {
+		name     string
+		location string
+		offices  string // the posting's raw "offices" JSON
+		want     []string
+	}{
+		// kardfinancialinc/4732546005, freehire job_reports #30.
+		{"bare remote, office located in USA", "Remote", `[{"id":1,"name":"Remote","location":"USA"}]`, []string{"us"}},
+		{"geocoded office location", "Remote", `[{"name":"Headquarters","location":"Atlanta, Georgia, United States"}]`, []string{"us"}},
+		{"label read when the office has no location", "Remote", `[{"name":"Remote US","location":null}]`, []string{"us"}},
+		{"a bare Remote office beside a placed one is skipped", "Remote", `[{"name":"Remote","location":null},{"name":"USA","location":null}]`, []string{"us"}},
+		{"offices in one country agree", "Remote", `[{"name":"Remote US-AZ","location":"Arizona, United States"},{"name":"Remote US-CO","location":"Colorado, United States"}]`, []string{"us"}},
+		{"location marker variants", "(Remote) ", `[{"name":"India","location":"Hyderabad, Telangana, India"}]`, []string{"in"}},
+		{"offices in two countries are a footprint", "Remote", `[{"name":"Canada","location":null},{"name":"US","location":null}]`, nil},
+		{"an office the dictionary cannot place", "Remote", `[{"name":"Remote - EMEA","location":"Remote - EMEA"},{"name":"London","location":"London, United Kingdom"}]`, nil},
+		{"an office named only Remote is no place", "Remote", `[{"name":"Remote","location":"Remote"}]`, nil},
+		{"no offices", "Remote", `[]`, nil},
+		{"a scoped location is not bare", "Americas Remote", `[{"name":"USA Remote","location":"Oregon, United States"}]`, nil},
+		{"an open-anywhere location is not bare", "Remote - Worldwide", `[{"name":"London","location":"London, United Kingdom"}]`, nil},
+		{"a non-remote location is not read", "Hybrid", `[{"name":"Dubai","location":"Dubai, United Arab Emirates"}]`, nil},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var p GreenhousePosting
+			raw := `{"id":1,"title":"Engineer","location":{"name":` + strconv.Quote(tc.location) + `},"offices":` + tc.offices + `}`
+			if err := json.Unmarshal([]byte(raw), &p); err != nil {
+				t.Fatalf("decode fixture: %v", err)
+			}
+			got := MapGreenhousePosting(p)
+			if !reflect.DeepEqual(got.FallbackCountries, tc.want) {
+				t.Errorf("FallbackCountries = %v, want %v", got.FallbackCountries, tc.want)
+			}
+			if got.Countries != nil {
+				t.Errorf("Countries = %v, want nil: an office is never the authoritative signal", got.Countries)
+			}
+		})
 	}
 }

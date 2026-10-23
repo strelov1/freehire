@@ -32,7 +32,10 @@ Curated dictionary deriving ISO 3166-1 alpha-2 country codes, region codes, and 
   deliberately narrow and role/candidate-qualified, not bare prepositions — a bare
   `"based in"`/`"located in"` anchor was tried and dropped: it matched a company-HQ "About
   Us" mention ("Our company is based in Berlin, but this role is remote and open
-  worldwide") as if it were the role's own restriction, found in code review.
+  worldwide") as if it were the role's own restriction, found in code review. Last in that
+  chain, below every rescue, is an adapter's `FallbackCountries` (Greenhouse's offices — see
+  `internal/ingest/sources/AGENTS.md`), which fills only a posting that stated no geography
+  at all, never an explicit open-anywhere one.
 - **Every code that carries a region must also have a NAME** (`TestEveryPlaceableCountryHasAName`).
   The two maps had drifted apart for 25 codes, so "Honduras" and "Rwanda" resolved to
   nothing. The failure is silent — an unresolvable country and an out-of-scope one both

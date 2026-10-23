@@ -100,6 +100,13 @@ type Job struct {
 	// pipeline's location dictionary derives it instead — the same fallback WorkMode
 	// and the other structured facets already follow.
 	Countries []string
+	// FallbackCountries is the weaker sibling of Countries: a country the platform
+	// attaches to the posting in a structured field WITHOUT stating that the work is
+	// there — Greenhouse's offices, which on a bare-"Remote" posting are usually the
+	// hiring country but sometimes only the headquarters. It never overrides anything:
+	// jobderive consults it last, only when the location, the title and the description
+	// stated no geography at all. Canonical alpha-2 codes, nil when there is no signal.
+	FallbackCountries []string
 	// SalaryMin/SalaryMax/SalaryCurrency/SalaryPeriod mirror the same structured-only
 	// contract for compensation: an adapter sets them only when the platform states a
 	// salary in its own STRUCTURED field (e.g. Lever's salaryRange, Ashby's

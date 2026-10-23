@@ -39,16 +39,23 @@ import (
 // authoritative, not a hint the dictionary refines — and when empty the dictionary
 // derives as before.
 type Input struct {
-	Title              string
-	Company            string
-	Source             string
-	ExternalID         string
-	Location           string
-	Description        string
-	WorkMode           string
-	Countries          []string
-	Regions            []string
-	Cities             []string
+	Title       string
+	Company     string
+	Source      string
+	ExternalID  string
+	Location    string
+	Description string
+	WorkMode    string
+	Countries   []string
+	Regions     []string
+	Cities      []string
+	// FallbackCountries is a WEAKER structured geography signal: a country the platform
+	// attaches to the posting without saying the work is there (Greenhouse's offices,
+	// which are sometimes the employer's headquarters rather than the hiring scope).
+	// Unlike Countries it never overrides anything — it is the last step of the geography
+	// chain, consulted only when the location, the title marker and both description
+	// rescues all stated nothing at all, and it pulls its region along like Countries.
+	FallbackCountries  []string
 	Seniority          string
 	Category           string
 	EmploymentType     string
@@ -134,7 +141,7 @@ func Derive(in Input) Derived {
 	geo := location.Parse(in.Location)
 	// Geography precedence: the location dictionary → a title-embedded restriction
 	// marker → an eligibility signal in the description → an explicit region-scoping
-	// statement in the description. When the location left the geography unpinned (no
+	// statement in the description → the caller's FallbackCountries. When the location left the geography unpinned (no
 	// country, and either no region or only an explicit open-anywhere marker's global
 	// bucket), each lower source is tried in turn and only fills what every higher
 	// source left blank — a resolved place, from the location or from a higher
@@ -161,6 +168,13 @@ func Derive(in Input) Derived {
 		if c, r := location.RegionScopeFromDescription(in.Description); len(r) > 0 {
 			countries, regions = c, r
 		}
+	}
+	// The fallback country fills only a posting that stated NO geography — not even an
+	// explicit open-anywhere marker, which geoUnpinned counts as unpinned but which a
+	// headquarters office must not narrow to one country.
+	if len(countries) == 0 && len(regions) == 0 && len(in.FallbackCountries) > 0 {
+		countries = in.FallbackCountries
+		regions = regionsForCountries(in.FallbackCountries)
 	}
 	// An explicit country signal is authoritative: it fully replaces the derived/US-override
 	// countries, the same way a stated work mode replaces the hint — and pulls its region

@@ -683,6 +683,53 @@ func TestDerive_BareRemoteWithoutUSOnlyStaysUnspecified(t *testing.T) {
 	}
 }
 
+// FallbackCountries (Greenhouse's office) is the LAST step of the geography chain: it
+// fills a posting that stated nothing, pulling its region along, and loses to every
+// stated place — the location, the title marker, a description restriction, an explicit
+// open-anywhere marker, and the authoritative Countries signal.
+func TestDerive_FallbackCountriesFillOnlyWhatNothingStated(t *testing.T) {
+	cases := []struct {
+		name        string
+		title       string
+		location    string
+		description string
+		countries   []string
+		wantC       []string
+		wantR       []string
+	}{
+		{"fills a bare remote posting", "Engineer", "Remote", "Build things.", nil,
+			[]string{"us"}, []string{"north_america"}},
+		{"the location wins", "Engineer", "Remote - Germany", "", nil,
+			[]string{"de"}, []string{"eu"}},
+		{"the title marker wins", "Engineer [Remote-Canada]", "Remote", "", nil,
+			[]string{"ca"}, []string{"north_america"}},
+		{"a description restriction wins", "Engineer", "Remote",
+			"This is a remote position open to candidates based in Singapore.", nil,
+			[]string{"sg"}, []string{"apac"}},
+		{"an open-anywhere location is never narrowed", "Engineer", "Remote - Worldwide", "", nil,
+			nil, []string{"global"}},
+		{"the authoritative Countries signal wins", "Engineer", "Remote", "", []string{"mx"},
+			[]string{"mx"}, []string{"latam"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := Derive(Input{
+				Title: tc.title, Company: "Acme", Source: "greenhouse", ExternalID: "board:1",
+				Location: tc.location, Description: tc.description,
+				Countries: tc.countries, FallbackCountries: []string{"us"},
+			})
+			if len(tc.wantC) == 0 && len(got.Countries) != 0 {
+				t.Errorf("Countries = %v, want none", got.Countries)
+			} else if len(tc.wantC) != 0 && !reflect.DeepEqual(got.Countries, tc.wantC) {
+				t.Errorf("Countries = %v, want %v", got.Countries, tc.wantC)
+			}
+			if !reflect.DeepEqual(got.Regions, tc.wantR) {
+				t.Errorf("Regions = %v, want %v", got.Regions, tc.wantR)
+			}
+		})
+	}
+}
+
 // Explicit region/city signals supplied on the Input win over the location-dictionary
 // derivation, mirroring the precedence work-mode already has: a recruiter (or moderator)
 // who states the geography by hand overrides what the free-text location would derive,

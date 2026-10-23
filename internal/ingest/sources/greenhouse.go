@@ -7,6 +7,8 @@ import (
 	"html"
 	"strconv"
 	"strings"
+
+	"github.com/strelov1/freehire/internal/dict/location"
 )
 
 // greenhouseBaseURL is the Greenhouse public boards API root. Unlike Lever, Greenhouse
@@ -88,6 +90,17 @@ type GreenhousePosting struct {
 	// boards set none (null), some carry unrelated ones ("Headcount #"), and a minority
 	// configure an "Employment Type" field read by greenhouseMetadataEmploymentType.
 	Metadata []GreenhouseMetadataField `json:"metadata"`
+	// Offices are the employer's offices the posting is filed under. Location is
+	// Greenhouse's own geocoded "City, Region, Country" string (null on many offices);
+	// Name is the employer's label ("Remote US", "Headquarters"). Read only by
+	// greenhouseOfficeCountry.
+	Offices []GreenhouseOffice `json:"offices"`
+}
+
+// GreenhouseOffice is one office a Greenhouse posting is filed under.
+type GreenhouseOffice struct {
+	Name     string `json:"name"`
+	Location string `json:"location"`
 }
 
 // GreenhouseMetadataField is one employer-configured custom field on a posting.
@@ -108,14 +121,76 @@ type GreenhouseMetadataField struct {
 // can point at a board the crawl config does not list).
 func MapGreenhousePosting(j GreenhousePosting) Job {
 	return Job{
-		URL:            j.AbsoluteURL,
-		Title:          j.Title,
-		Location:       j.Location.Name,
-		Description:    sanitizeHTML(html.UnescapeString(j.Content)),
-		Remote:         isRemote(j.Location.Name),
-		PostedAt:       parseRFC3339(j.UpdatedAt),
-		EmploymentType: greenhouseMetadataEmploymentType(j.Metadata),
+		URL:               j.AbsoluteURL,
+		Title:             j.Title,
+		Location:          j.Location.Name,
+		Description:       sanitizeHTML(html.UnescapeString(j.Content)),
+		Remote:            isRemote(j.Location.Name),
+		PostedAt:          parseRFC3339(j.UpdatedAt),
+		EmploymentType:    greenhouseMetadataEmploymentType(j.Metadata),
+		FallbackCountries: greenhouseOfficeCountry(j),
 	}
+}
+
+// greenhouseOfficeCountry reads the country of a bare-"Remote" posting from the offices
+// it is filed under — the only place Greenhouse states it (location.name is the
+// employer's free text, and "Remote" names no place). It is a FallbackCountries signal,
+// not Countries, because an office is sometimes the employer's headquarters rather than
+// the hiring scope; jobderive therefore lets the title and description outrank it.
+//
+// Measured 2026-10-23 over the live listings of the 1,612 boards holding an open
+// bare-remote posting with no geography (62,172 postings, 8,737 of them bare-remote):
+// this rule pins 1,570 postings on 451 boards, 92% of them to us. Where enrichment had
+// pinned a country it agreed on 179 and disagreed on 7 — an HQ office far from the team
+// (a US team under a Greek HQ, a Tunisia role under a Barcelona office) and one office
+// label the dictionary misreads ("ID - Boise" as Indonesia). Where a title or
+// description restriction also fired it agreed 63 times and disagreed 3, all of which
+// that restriction wins.
+//
+// So it is deliberately narrow:
+//   - only a location that is a bare remote marker. "Remote - EMEA", "Americas Remote",
+//     "Europe & Remote" state a scope the dictionary cannot read, and an office there
+//     would narrow a region to one country;
+//   - an office is read by its geocoded location, and by its label only when it has none;
+//     an office labelled just "Remote" is no place and is skipped;
+//   - every other office must resolve to a country (an "EMEA" or "Headquarters" office
+//     the dictionary cannot place makes the set unknown), and together they must name
+//     exactly one: a list of offices in several countries is the employer's footprint,
+//     not this posting's scope.
+func greenhouseOfficeCountry(j GreenhousePosting) []string {
+	if !isBareRemote(j.Location.Name) {
+		return nil
+	}
+	var country string
+	for _, o := range j.Offices {
+		loc := strings.TrimSpace(o.Location)
+		if isBareRemote(o.Name) && (loc == "" || isBareRemote(loc)) {
+			continue
+		}
+		place := loc
+		if place == "" {
+			place = o.Name
+		}
+		cs := location.Parse(place).Countries
+		if len(cs) != 1 || (country != "" && cs[0] != country) {
+			return nil
+		}
+		country = cs[0]
+	}
+	if country == "" {
+		return nil
+	}
+	return []string{country}
+}
+
+// isBareRemote reports whether a location string says "remote" and nothing else — no
+// place, no region, no scope.
+func isBareRemote(s string) bool {
+	switch strings.ToLower(strings.Trim(s, " \t()[]-–—:,.|/")) {
+	case "remote", "fully remote", "100% remote", "remote location":
+		return true
+	}
+	return false
 }
 
 // greenhouseMetadataEmploymentType reads the employer-configured "Employment Type"
