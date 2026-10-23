@@ -55,7 +55,7 @@ Public Telegram channels carry vacancies as free-form posts, so unlike the struc
   passes' inclusive `FROM`.
 - Telegram jobs have no close signal of their own: the ingest sweep does not reach them, there
   is no change feed, and `cmd/liveness` excludes them from the probe because the stored URL is
-  the post, which outlives the vacancy. They are closed by age instead — 45 days on
+  usually the post, which outlives the vacancy. They are closed by age instead — 45 days on
   `COALESCE(posted_at, created_at)`, `closed_reason = 'expired'`. That is a guess, not
   evidence: a vacancy still open at 46 days is closed anyway.
 
@@ -88,3 +88,13 @@ did admit it would have declined one.
   existed get rescued — and makes even its dry run ask Jev once per declined post it scans.
 - No `TYPESAFE_API_KEY` is today's behaviour exactly: `telegram.JudgeFromKey` returns no
   judge and the markers alone decide.
+
+## A job's URL: the apply link, else the post
+An LLM-extracted job's identity is always the post (`<channel>/<msg>/<i>`), but its URL is
+where an applicant goes: `applyURL` picks the post's own apply link when the post yields
+exactly ONE vacancy and a link's TEXT says apply ("Apply Here", "Откликнуться", "ссылке",
+"тут"...). Telegram hosts, hashtag searches and links whose text is a bare URL (the footer
+and ad links channels stamp on every post) never qualify, and a lone link with any other text
+is not guessed at — measured, those are company homepages and adverts as often as vacancies.
+A multi-vacancy post keeps the post as every job's URL: nothing says which link is whose.
+The rule reaches NEW extractions only; a stored row keeps the URL it was written with.

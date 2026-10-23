@@ -173,13 +173,19 @@ func (r ExtractRunner) Run(ctx context.Context) (ExtractStats, error) {
 // layer for the same reason (see pipeline.normalizeJob).
 func (r ExtractRunner) draftJobs(post PendingPost, jobs []ExtractedJob) (built []job.Job, skipped int) {
 	base := post.Channel + "/" + strconv.FormatInt(post.MsgID, 10)
+	// The URL is where an applicant goes: the post's own apply link when it names one, else
+	// the post. Identity stays the post's either way, so dedup is unaffected.
+	jobURL := applyURL(post.Links, len(jobs))
+	if jobURL == "" {
+		jobURL = "https://t.me/" + base
+	}
 	built = make([]job.Job, 0, len(jobs))
 	for i, j := range jobs {
 		externalID := base + "/" + strconv.Itoa(i)
 		// workMode is empty: a post carries no structured signal, so the location parser
 		// decides. The Telegram post's own timestamp is the posting's source posted time.
 		posted := post.PostedAt
-		one, err := newTelegramJob("telegram", externalID, "https://t.me/"+base,
+		one, err := newTelegramJob("telegram", externalID, jobURL,
 			j.Title, j.Company, j.Location, j.Remote, TextToHTML(j.Description), "", &posted)
 		if err != nil {
 			log.Printf("telegram: skipping job %s: %v", externalID, err)

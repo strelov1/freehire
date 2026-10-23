@@ -64,8 +64,11 @@ const (
 // unsignalledSources carry no close signal at all: no re-crawl that could stop seeing
 // them, no change feed, and a stored URL that is a container outliving the vacancy rather
 // than the vacancy's own page — so a liveness probe can never reach a death verdict. Only
-// telegram qualifies today: its URL is the Telegram post (see cmd/tg-extract), which stays
-// live after the job is filled. (habr_career/geekjob are already excluded as registered
+// telegram qualifies today: its URL is usually the Telegram post (see cmd/tg-extract), which
+// stays live after the job is filled. A single-vacancy post that names its apply link stores
+// that link instead (telegram.applyURL), but it is a page on someone else's site — mostly
+// LinkedIn, which answers a bot with a login wall rather than a verdict — so the source as a
+// whole stays age-closed rather than probing a mix. (habr_career/geekjob are already excluded as registered
 // providers — cmd/ingest's sweep owns their closes.)
 //
 // This one list plays both roles, and they are two halves of the same decision: these
