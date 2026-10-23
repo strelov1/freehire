@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"golang.org/x/net/html"
 )
@@ -70,7 +71,7 @@ func (z zoho) toJob(ctx context.Context, base string, e CompanyEntry, o zohoOpen
 		return Job{}, false
 	}
 	url := fmt.Sprintf("%s/jobs/Careers/%s", base, o.ID)
-	desc, ok := z.description(ctx, url)
+	d, ok := z.detail(ctx, url)
 	if !ok {
 		return Job{}, false
 	}
@@ -81,10 +82,10 @@ func (z zoho) toJob(ctx context.Context, base string, e CompanyEntry, o zohoOpen
 		Title:       o.PostingTitle,
 		Company:     e.Company,
 		Location:    location,
-		Description: desc,
+		Description: d.body,
 		Remote:      o.RemoteJob || isRemote(location),
 		WorkMode:    workModeFromRemote(o.RemoteJob),
-		PostedAt:    nil, // the embedded record carries no publish date
+		PostedAt:    d.postedAt,
 	}, true
 }
 
@@ -93,22 +94,41 @@ func (z zoho) toJob(ctx context.Context, base string, e CompanyEntry, o zohoOpen
 // the next field's name). The page escapes quotes as \x22, so the markers are literal \x22.
 var zohoDescPattern = regexp.MustCompile(`\\x22Job_Description\\x22:\\x22(.*?)\\x22,\\x22[A-Za-z_]`)
 
-// description fetches a detail page and returns the posting's sanitized body, or ok=false
-// when the fetch fails or the page carries no Job_Description.
-func (z zoho) description(ctx context.Context, url string) (string, bool) {
+// zohoOpenedPattern captures the same record's Date_Opened, a plain date the blob writes with
+// escaped hyphens ("2024\-11\-11"). The listing's #jobs array carries it too, but only on the
+// tenants that publish the field there (8 of 15 sampled 2026-10-23 did not); the detail record
+// carried it on 9 of the 10 checked, those 8 included, and the detail page is fetched for the
+// body anyway. A tenant that does not use the field at all leaves the posting undated.
+var zohoOpenedPattern = regexp.MustCompile(`\\x22Date_Opened\\x22:\\x22([0-9\\-]+)\\x22`)
+
+// zohoDetail is what a posting's detail page contributes to its Job.
+type zohoDetail struct {
+	body     string
+	postedAt *time.Time
+}
+
+// detail fetches a detail page and returns the posting's sanitized body and its opening date,
+// or ok=false when the fetch fails or the page carries no Job_Description. A missing or
+// unparseable Date_Opened only leaves the posting undated.
+func (z zoho) detail(ctx context.Context, url string) (zohoDetail, bool) {
 	root, err := z.http.GetHTML(ctx, url)
 	if err != nil {
-		return "", false
+		return zohoDetail{}, false
 	}
-	m := zohoDescPattern.FindStringSubmatch(textContent(root))
+	text := textContent(root)
+	m := zohoDescPattern.FindStringSubmatch(text)
 	if m == nil {
-		return "", false
+		return zohoDetail{}, false
 	}
 	body := sanitizeHTML(html.UnescapeString(zohoUnescape(m[1])))
 	if body == "" {
-		return "", false
+		return zohoDetail{}, false
 	}
-	return body, true
+	d := zohoDetail{body: body}
+	if m := zohoOpenedPattern.FindStringSubmatch(text); m != nil {
+		d.postedAt = parseDate(zohoUnescape(m[1]))
+	}
+	return d, true
 }
 
 // zohoUnescape decodes the JS string escaping of an embedded Zoho value into HTML, which the

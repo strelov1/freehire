@@ -46,6 +46,42 @@ func zohoDetailHTML(description string) string {
 		description + `\x22,\x22Country\x22:null}";</script></body></html>`
 }
 
+// zohoDetailHTMLOpened is zohoDetailHTML with a Date_Opened, escaped the way the live record
+// writes it: hyphens as \- (qapot.zohorecruit.com job 774297000000901001, opened 2024-11-11).
+func zohoDetailHTMLOpened(description, opened string) string {
+	return `<html><body><script>var rec = "{\x22id\x22:\x221\x22,\x22Job_Description\x22:\x22` +
+		description + `\x22,\x22Date_Opened\x22:\x22` + opened +
+		`\x22,\x22Keep_on_Career_Site\x22:false}";</script></body></html>`
+}
+
+func TestZohoDetailPostedAtFromDateOpened(t *testing.T) {
+	cases := map[string]struct {
+		page string
+		want string // "" = undated
+	}{
+		"escaped date":            {zohoDetailHTMLOpened(`\x3Cp\x3EBody\x3C/p\x3E`, `2024\-11\-11`), "2024-11-11"},
+		"tenant without field":    {zohoDetailHTML(`\x3Cp\x3EBody\x3C/p\x3E`), ""},
+		"unparseable date":        {zohoDetailHTMLOpened(`\x3Cp\x3EBody\x3C/p\x3E`, `2024\-13\-45`), ""},
+		"future date (not a pub)": {zohoDetailHTMLOpened(`\x3Cp\x3EBody\x3C/p\x3E`, `2999\-01\-01`), ""},
+	}
+	for name, c := range cases {
+		t.Run(name, func(t *testing.T) {
+			http := (&routedHTTP{}).route("/jobs/Careers/1", c.page)
+			d, ok := zoho{http: http}.detail(context.Background(), "https://acme.zohorecruit.com/jobs/Careers/1")
+			if !ok {
+				t.Fatal("detail: description not found")
+			}
+			got := ""
+			if d.postedAt != nil {
+				got = d.postedAt.Format("2006-01-02")
+			}
+			if got != c.want {
+				t.Errorf("postedAt = %q, want %q", got, c.want)
+			}
+		})
+	}
+}
+
 // TestZohoDescriptionDoubleEscaped guards the real-world case where the detail record
 // escapes the richtext value twice: closing tags arrive as <\\\/p> and bullets as \\u2022.
 // Before the fixpoint decode these reached storage as visible &lt;\/p&gt; / • text.
@@ -53,10 +89,11 @@ func TestZohoDescriptionDoubleEscaped(t *testing.T) {
 	desc := `<p style=\\\x22margin\-top:0px\\\x22>Duties\\u2022audit files.<br\/><\\\/p>`
 	http := (&routedHTTP{}).route("/jobs/Careers/1", zohoDetailHTML(desc))
 
-	got, ok := zoho{http: http}.description(context.Background(), "https://acme.zohorecruit.com/jobs/Careers/1")
+	d, ok := zoho{http: http}.detail(context.Background(), "https://acme.zohorecruit.com/jobs/Careers/1")
 	if !ok {
-		t.Fatal("description: not found")
+		t.Fatal("detail: description not found")
 	}
+	got := d.body
 	// A leftover backslash (e.g. •, <\/p>) or an entity-escaped tag (&lt;) means the
 	// nested escaping was not fully peeled.
 	if strings.Contains(got, "&lt;") || strings.Contains(got, `\`) {
@@ -76,7 +113,7 @@ func TestZohoFetch(t *testing.T) {
 		`{"id":"300","Posting_Title":"Draft Role","Publish":false}` +
 		`]'></body></html>`
 	http := (&routedHTTP{}).
-		route("/jobs/Careers/100", zohoDetailHTML(`\x3Cp\x3EBuild things\x3C/p\x3E`)).
+		route("/jobs/Careers/100", zohoDetailHTMLOpened(`\x3Cp\x3EBuild things\x3C/p\x3E`, `2024\-11\-11`)).
 		route("/jobs/Careers/200", zohoDetailHTML(`\x3Cp\x3EDesign things\x3C/p\x3E`)).
 		route("/jobs/Careers", listing)
 
@@ -102,6 +139,12 @@ func TestZohoFetch(t *testing.T) {
 	}
 	if j.URL != "https://acme.zohorecruit.com/jobs/Careers/100" {
 		t.Errorf("job0 url = %q", j.URL)
+	}
+	if j.PostedAt == nil || j.PostedAt.Format("2006-01-02") != "2024-11-11" {
+		t.Errorf("job0 posted_at = %v, want the detail record's Date_Opened 2024-11-11", j.PostedAt)
+	}
+	if jobs[1].PostedAt != nil {
+		t.Errorf("job1 posted_at = %v, want nil (its record carries no Date_Opened)", jobs[1].PostedAt)
 	}
 	// Remote record: structured remote flag → WorkMode remote.
 	if jobs[1].WorkMode != "remote" || !jobs[1].Remote {
