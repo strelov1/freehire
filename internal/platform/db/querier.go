@@ -6428,6 +6428,15 @@ type Querier interface {
 	// ResetUserPassword — the revocation cannot be separated from the seizure.
 	// Returns the new generation for the session the sign-in is about to mint.
 	SeizeUnverifiedAccount(ctx context.Context, id int64) (int32, error)
+	// cmd/adzuna-liveness's candidates: open adzuna postings the crawl has stopped listing.
+	// Adzuna's feed is far deeper than the crawl's request budget (157k US it-jobs postings in
+	// 14 days, 750 read per run), so "unseen" there is not evidence of removal and the sweep
+	// cannot settle these — Adzuna's own page can, and that worker reads it.
+	//
+	// ORDER BY random() rather than by age because most probes end on a challenge page and
+	// leave the row untouched: a fixed order would hand the same unanswered rows to every
+	// bounded run and never reach the rest. Sampling reaches every row with nothing to store.
+	SelectAdzunaLivenessCandidates(ctx context.Context, arg SelectAdzunaLivenessCandidatesParams) ([]SelectAdzunaLivenessCandidatesRow, error)
 	// ---------------------------------------------------------------------------
 	// cmd/similar-backfill: the run-once-and-exit worker that populates
 	// jobs.similar_job_ids/similar_computed_at from NearestJobsToJob above. Finds

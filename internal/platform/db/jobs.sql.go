@@ -5258,6 +5258,62 @@ func (q *Queries) RoleClusterCountsFor(ctx context.Context, arg RoleClusterCount
 	return items, nil
 }
 
+const selectAdzunaLivenessCandidates = `-- name: SelectAdzunaLivenessCandidates :many
+SELECT id, external_id, public_slug, liveness_strikes
+FROM jobs
+WHERE closed_at IS NULL
+  AND NOT is_private
+  AND source = 'adzuna'
+  AND last_seen_at < $1
+ORDER BY random()
+LIMIT $2
+`
+
+type SelectAdzunaLivenessCandidatesParams struct {
+	Cutoff  pgtype.Timestamptz `json:"cutoff"`
+	MaxRows int32              `json:"max_rows"`
+}
+
+type SelectAdzunaLivenessCandidatesRow struct {
+	ID              int64  `json:"id"`
+	ExternalID      string `json:"external_id"`
+	PublicSlug      string `json:"public_slug"`
+	LivenessStrikes int32  `json:"liveness_strikes"`
+}
+
+// cmd/adzuna-liveness's candidates: open adzuna postings the crawl has stopped listing.
+// Adzuna's feed is far deeper than the crawl's request budget (157k US it-jobs postings in
+// 14 days, 750 read per run), so "unseen" there is not evidence of removal and the sweep
+// cannot settle these — Adzuna's own page can, and that worker reads it.
+//
+// ORDER BY random() rather than by age because most probes end on a challenge page and
+// leave the row untouched: a fixed order would hand the same unanswered rows to every
+// bounded run and never reach the rest. Sampling reaches every row with nothing to store.
+func (q *Queries) SelectAdzunaLivenessCandidates(ctx context.Context, arg SelectAdzunaLivenessCandidatesParams) ([]SelectAdzunaLivenessCandidatesRow, error) {
+	rows, err := q.db.Query(ctx, selectAdzunaLivenessCandidates, arg.Cutoff, arg.MaxRows)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []SelectAdzunaLivenessCandidatesRow{}
+	for rows.Next() {
+		var i SelectAdzunaLivenessCandidatesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.ExternalID,
+			&i.PublicSlug,
+			&i.LivenessStrikes,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const selectOrphanLivenessCandidates = `-- name: SelectOrphanLivenessCandidates :many
 SELECT id, source, url, public_slug, liveness_strikes
 FROM jobs

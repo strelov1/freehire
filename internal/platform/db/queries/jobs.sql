@@ -2240,6 +2240,24 @@ WHERE closed_at IS NULL
   AND source = ANY(sqlc.arg(sources)::text[])
   AND last_seen_at < sqlc.arg(cutoff);
 
+-- name: SelectAdzunaLivenessCandidates :many
+-- cmd/adzuna-liveness's candidates: open adzuna postings the crawl has stopped listing.
+-- Adzuna's feed is far deeper than the crawl's request budget (157k US it-jobs postings in
+-- 14 days, 750 read per run), so "unseen" there is not evidence of removal and the sweep
+-- cannot settle these — Adzuna's own page can, and that worker reads it.
+--
+-- ORDER BY random() rather than by age because most probes end on a challenge page and
+-- leave the row untouched: a fixed order would hand the same unanswered rows to every
+-- bounded run and never reach the rest. Sampling reaches every row with nothing to store.
+SELECT id, external_id, public_slug, liveness_strikes
+FROM jobs
+WHERE closed_at IS NULL
+  AND NOT is_private
+  AND source = 'adzuna'
+  AND last_seen_at < sqlc.arg(cutoff)
+ORDER BY random()
+LIMIT sqlc.arg(max_rows);
+
 -- name: MarkLivenessExpired :one
 -- Record one expired probe: increment the strike counter and, in the same write,
 -- close the job (closed_at) once it reaches the threshold the caller owns — the

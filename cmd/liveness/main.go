@@ -136,8 +136,10 @@ const staleCutoff = sources.DefaultSweepGrace
 // bot protection on the `…/land/ad/<id>` tracking redirect we store (it carries the
 // attribution parameters that credit a click to this publisher, so it is not the employer's
 // page and never will be). A 403 classifies uncertain, correctly — it is the platform
-// declining to answer, not a verdict — so a probe can never close an adzuna posting, however
-// long it runs. The leak on the other side is new as of the date-ordered crawl: a bounded
+// declining to answer, not a verdict — so THIS worker's probe can never close an adzuna posting,
+// however long it runs. Adzuna's hosted /details/<id> page does answer, through the Scrapling
+// tier's rotating proxy, and cmd/adzuna-liveness reads it on the crawl host; this age rule stays
+// as the backstop for what that probe never gets past the challenge. The leak on the other side is new as of the date-ordered crawl: a bounded
 // crawl reading newest-first never revisits an ageing posting, so the sweep stops being
 // offered it. Both halves of the membership test therefore hold.
 var expireDespiteRegisteredPrefixes = []string{"whatjobs", "adzuna"}

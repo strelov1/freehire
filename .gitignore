@@ -17,6 +17,7 @@ hire
 # to theirs. 26 package directories were shadowed this way; a new source file in one of them
 # would simply never be committed.
 /add-board
+/adzuna-liveness
 /apple-revoke
 /auth-cleanup
 /auto-apply
