@@ -99,6 +99,7 @@ export default defineConfig({
       //     print('sha256-'+base64.b64encode(hashlib.sha256(b.encode()).digest()).decode())"
       //
       // — and verify in a real browser: a CSP block shows up only in the console.
+      // src/antiFoucCsp.test.ts fails when the two drift apart.
       csp: {
         mode: 'auto',
         directives: {
@@ -106,7 +107,7 @@ export default defineConfig({
             'self',
             // Anti-FOUC script in app.html — theme + CLI promo strip + onboarding
             // nudge (see WARNING above).
-            'sha256-XzpvTj5An+qqyOVKFw/Nx2EXOf7n+4PKeNTsOpg+68g=',
+            'sha256-rBKxNqi22dqRkzLy61OvvLRma7co8OUnpbQ8vSxSJQc=',
             // Google Analytics: the gtag.js host. GA now loads from the same-origin
             // bundle (#lib/analytics, consent-gated), so no inline-script hash is
             // needed — only the external host it injects.
