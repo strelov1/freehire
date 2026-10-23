@@ -14,9 +14,10 @@ production `STT_MODEL` and the service credential this package uses, and transcr
 correctly — so the SPA's `DICTATION_ENABLED`
 (`web/src/lib/assistant/audioAvailability.ts`) is on again.
 
-Voice mode is still off (`VOICE_CALL_ENABLED`): `/v1/realtime/client_secrets` has never
-been called against the gateway, and that gateway wants `session.model` as
-`provider/model` on that route, which is not the shape sent today.
+Voice mode (`VOICE_CALL_ENABLED`) came back the same day, but needed the gateway
+patched first: Bifrost terminates the call's WebRTC media and advertised its Docker
+container's address as the only ICE candidate, so no browser could connect. See
+`provision/bifrost/WEBRTC-PATCH.md` in freehire-ops.
 
 The server-side switch is unchanged: `STT_MODEL` unset means `New` returns nil and the
 handler answers 501. The SPA flag exists because without it the microphone renders,

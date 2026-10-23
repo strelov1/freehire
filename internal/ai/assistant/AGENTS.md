@@ -201,6 +201,13 @@ the ordinary tool-calling turn loop, not inside it:
   moved to Bifrost on 2026-08-31, where the same prefixed string answers 200 and mints an
   ephemeral key, and where nothing named `realtime` is a tier alias at all — audio is
   entitled by model name. Either way the client passes the provider-prefixed string.
+- **Bifrost carries the call's media, not just the credential.** It terminates the
+  browser's WebRTC connection and relays audio to OpenAI, so the gateway host must be
+  reachable over UDP. Upstream advertises its Docker container's private address and
+  no browser ever connects — a 200 from `/realtime/calls` followed by ICE stuck in
+  `checking`. Production runs a patched build on one public UDP port
+  (`provision/bifrost/WEBRTC-PATCH.md` in freehire-ops); going back to the upstream
+  image silently breaks voice mode again.
 
 **Interview debrief** is the rehearsal's mirror: the review of an interview that has
 already happened, minted from `POST /assistant/sessions?preset=debrief&job=<slug>`. It

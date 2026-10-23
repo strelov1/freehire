@@ -185,8 +185,7 @@
   // not keep offering a call that can only fail. `voiceSupported` starts false and is
   // decided after mount, the same reasoning VoiceInput.svelte's `supported` gives:
   // reading navigator during SSR would disagree with the client on the first paint.
-  // It also carries VOICE_CALL_ENABLED, which is false while the gateway leaves
-  // the Realtime route unproven — see audioAvailability.ts.
+  // It also carries VOICE_CALL_ENABLED — see audioAvailability.ts.
   let voiceCallOpen = $state(false);
   let voiceModeOff = $state(false);
   let voiceSupported = $state(false);

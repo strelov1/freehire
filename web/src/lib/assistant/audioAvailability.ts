@@ -16,8 +16,11 @@
  *  transcribed a recording correctly. */
 export const DICTATION_ENABLED = true;
 
-/** Hands-free voice mode stays off: `/v1/realtime/client_secrets` has still never been
- *  called against the gateway, and that gateway wants `session.model` as
- *  `provider/model`, which is not the shape sent today. To restore: verify the route,
- *  fix the shape if needed, then flip this. */
-export const VOICE_CALL_ENABLED = false;
+/** Hands-free voice mode is back since 2026-10-23. Bifrost terminates the call's
+ *  WebRTC media itself and, as shipped, advertised its container's private address
+ *  as the only ICE candidate, so no browser could ever connect. The gateway now runs
+ *  a local build that advertises the host's public address on one UDP port (see
+ *  `provision/bifrost/WEBRTC-PATCH.md` in freehire-ops); a call minted and opened
+ *  through it was verified end to end (data channel open, `session.created`, a full
+ *  response). If the gateway goes back to the upstream image, this must go off too. */
+export const VOICE_CALL_ENABLED = true;
