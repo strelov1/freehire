@@ -11,7 +11,9 @@
 // page (Cloudflare), so its candidates are checked against the site's own sitemap
 // instead (see himalayas.go); echojobs' stored URL is the employer's own ATS link, not
 // echojobs.io's, so its candidates are checked against echojobs.io's own per-posting
-// API instead (see echojobs.go). A source with the same leak but NO evidence a probe
+// API instead (see echojobs.go); hh.ru's pages embed an "archived" phrase even when live, so
+// its candidates are read for the page's own archived flag instead, one page a second (see
+// hh.go). A source with the same leak but NO evidence a probe
 // could ever read — see expireDespiteRegistered — falls back to the same age-based
 // guess as unsignalledSources instead of a verdict.)
 //
@@ -83,15 +85,16 @@ const expiryWindow = 45 * 24 * time.Hour
 
 // probeDespiteRegistered lists registered ATS providers whose ingest sweep still can't
 // close every open job — see job-lifecycle's company_slug-scope leak: each is a
-// boardless, recency-ordered aggregator with a fixed crawl budget (page count, offset
-// cap, or freshness window) smaller than its live catalogue, so a company whose postings
-// age below that budget never re-enters CloseUnseenJobs' crawled-slug scope and its last
+// recency-ordered aggregator with a fixed crawl budget (page count, offset cap, or
+// freshness window) smaller than its live catalogue — boardless, or for hh one board per
+// professional role, each read only as its newest ~2000 postings of the last 7 days — so
+// a company whose postings age below that budget never re-enters CloseUnseenJobs' crawled-slug scope and its last
 // posting stays open forever. These sources are NOT removed from atsProviders — the
 // sweep still owns their normal closes — they are only ADDED BACK as liveness
 // candidates, restricted to jobs already past the sweep's own staleness window (see
 // staleCutoff), so this only ever picks up what the sweep structurally cannot reach
 // rather than racing it.
-var probeDespiteRegistered = []string{"himalayas", "echojobs", "jobicy", "remoteok"}
+var probeDespiteRegistered = []string{"himalayas", "echojobs", "jobicy", "remoteok", "hh"}
 
 // probeDespiteRegisteredGET is the probeDespiteRegistered subset verified by the same
 // plain-GET-then-Classify probe as every orphan candidate — their job pages answer a
@@ -269,7 +272,7 @@ func run() int {
 		log.Printf("select stale registered candidates: %v", err)
 		return 1
 	}
-	var getProbeStale, himalayasStale, echojobsStale []candidate
+	var getProbeStale, himalayasStale, echojobsStale, hhStale []candidate
 	for _, c := range staleCandidates {
 		switch {
 		case slices.Contains(probeDespiteRegisteredGET, c.Source):
@@ -278,18 +281,20 @@ func run() int {
 			himalayasStale = append(himalayasStale, staleCandidate(c))
 		case c.Source == "echojobs":
 			echojobsStale = append(echojobsStale, staleCandidate(c))
+		case c.Source == "hh":
+			hhStale = append(hhStale, staleCandidate(c))
 		default:
 			// Unreachable in practice — every probeDespiteRegistered member is one of
-			// the three branches above — but a candidate silently going unverified
+			// the branches above — but a candidate silently going unverified
 			// (rather than erroring loudly) is exactly the class of bug this worker
 			// exists to avoid, so a future member added to probeDespiteRegistered
 			// without wiring its evidence path here fails visibly instead.
 			log.Printf("liveness: %s has no wired evidence path for probeDespiteRegistered — skipping %s", c.Source, c.PublicSlug)
 		}
 	}
-	log.Printf("liveness: %d orphan candidates (excluding %d ATS providers + %d unsignalled sources) + %d stale candidates from %d registered sources (%d GET, %d himalayas, %d echojobs)",
+	log.Printf("liveness: %d orphan candidates (excluding %d ATS providers + %d unsignalled sources) + %d stale candidates from %d registered sources (%d GET, %d himalayas, %d echojobs, %d hh)",
 		orphanCount, len(atsProviders), len(unsignalledSources), len(staleCandidates), len(probeDespiteRegistered),
-		len(getProbeStale), len(himalayasStale), len(echojobsStale))
+		len(getProbeStale), len(himalayasStale), len(echojobsStale), len(hhStale))
 	if *sourceFilter != "" {
 		log.Printf("liveness: restricted to source %q for this run", *sourceFilter)
 	}
@@ -350,6 +355,8 @@ func run() int {
 	// probeDespiteRegisteredGET for why these two can't share the GET probe above.
 	applyHimalayasVerdicts(ctx, client, queries, himalayasStale, &st)
 	st.applyVerdicts(ctx, queries, echojobsStale, echoJobsJudge(client))
+	// Last, because it is the slow one: hh is probed one page a second (see hh.go).
+	applyHHVerdicts(ctx, client, queries, hhStale, &st, hhVacancyPage, hhProbeInterval)
 
 	probed, closed, struck, failed := st.probed.Load(), st.closed.Load(), st.struck.Load(), st.failed.Load()
 	log.Printf("liveness done: probed=%d closed=%d struck=%d failed=%d", probed, closed, struck, failed)

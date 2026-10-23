@@ -56,6 +56,8 @@ func (hh) aggregator() {}
 // reachable depth at ~2000 results independent of a role's true count — see crawl's own comment
 // for the live 2026-09-08 confirmation against a currently-configured board — so this adapter
 // cannot structurally prove it reached a busy board's real end the way the marker requires.
+// A posting that ages out of the 7-day window is never listed again; cmd/liveness reads its
+// vacancy page instead (see cmd/liveness/hh.go).
 
 const (
 	hhSearchURL  = "https://hh.ru/search/vacancy"
