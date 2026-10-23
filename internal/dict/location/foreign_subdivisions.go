@@ -78,6 +78,10 @@ var foreignSubdivisionNames = map[string]string{
 	"central london": "gb", "greater london": "gb", "greater manchester": "gb",
 	"west midlands": "gb", "merseyside": "gb", "tyne and wear": "gb",
 	"yorkshire": "gb", "west yorkshire": "gb", "south yorkshire": "gb", "north yorkshire": "gb",
+	// England's statistical regions (ITL 1), which UK boards name verbatim — Civil Service
+	// Jobs writes "Durham, North East England, DH1 3HU". "West Midlands" is above.
+	"north east england": "gb", "north west england": "gb", "yorkshire and the humber": "gb",
+	"east midlands": "gb", "east of england": "gb", "south east england": "gb", "south west england": "gb",
 	"cambridgeshire": "gb", "hertfordshire": "gb", "oxfordshire": "gb",
 	"buckinghamshire": "gb", "warwickshire": "gb", "lancashire": "gb",
 

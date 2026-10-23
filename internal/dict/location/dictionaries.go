@@ -250,7 +250,9 @@ var nameToCountry = map[string]string{
 	"houston": "us", "palo alto": "us", "denver": "us", "dallas": "us",
 	"san antonio": "us", "san diego": "us", "menlo park": "us", "san mateo": "us",
 	"indianapolis": "us", "miami": "us", "philadelphia": "us", "phoenix": "us",
-	"raleigh": "us", "durham": "us", "detroit": "us", "minneapolis": "us",
+	// "durham" is withheld: it is as much the English city and county (Civil Service Jobs
+	// files prisons and courts there), and "Durham, NC" still resolves through the state.
+	"raleigh": "us", "detroit": "us", "minneapolis": "us",
 	"nashville": "us", "pittsburgh": "us", "salt lake city": "us", "baltimore": "us",
 	"sacramento": "us", "irvine": "us", "santa clara": "us", "sunnyvale": "us",
 	"mountain view": "us", "redmond": "us", "bellevue": "us", "washington dc": "us",

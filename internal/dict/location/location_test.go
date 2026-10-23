@@ -804,3 +804,31 @@ func TestStateFirstSubdivisionsAreColliding(t *testing.T) {
 		}
 	}
 }
+
+func TestParseUKPostcode(t *testing.T) {
+	for _, tc := range []struct {
+		location string
+		want     []string
+	}{
+		// The postcode states the country; the place it follows still resolves.
+		{"London SW1A 2HB", []string{"gb"}},
+		{"This position is based at HM Prison Frankland, Durham, DH1 5YD.", []string{"gb"}},
+		{"Birmingham, West Midlands (England), B1 2AX", []string{"gb"}},
+		{"NMS Church House, HD1 1SG, NMS LG, The Church View Centre, DN1 1AF", []string{"gb"}},
+		{"Belfast BT1 5GS", []string{"gb"}},
+		// England's statistical regions name the country without a postcode.
+		{"Durham, North East England", []string{"gb"}},
+		{"East of England, Yorkshire and the Humber", []string{"gb"}},
+		// Not postcodes: an outward code alone, an ordinal, a Crown dependency, a US ZIP.
+		{"Unit B2 2nd floor", nil},
+		{"St Helier JE2 3AB", nil},
+		{"Cambridge, MA 02139", []string{"us"}},
+		// Durham has two readings and is not guessed; the state settles it.
+		{"Durham", nil},
+		{"Durham, NC", []string{"us"}},
+	} {
+		if got := Parse(tc.location).Countries; !slices.Equal(got, tc.want) {
+			t.Errorf("Parse(%q).Countries = %v, want %v", tc.location, got, tc.want)
+		}
+	}
+}

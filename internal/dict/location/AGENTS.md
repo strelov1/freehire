@@ -65,6 +65,13 @@ Curated dictionary deriving ISO 3166-1 alpha-2 country codes, region codes, and 
   not place in that country, the code is the state. Without it ~29k US postings sat under
   Morocco, Panama, Moldova and Albania ("Cambridge, MA": GeoNames calls Cambridge British).
   A code joins the set on a `cmd/report-geo-gaps` measurement, never on intuition.
+- **A full UK postcode states `gb`, like a US ZIP states `us`** (`stripUKPostcode`), and is
+  cut from its token so the place before it still resolves ("London SW1A 2HB"). Only the
+  full outward + inward form, under a real postcode area, counts; an inward code that reads
+  as an ordinal ("B2 2nd floor") does not, and GY/JE/IM are Crown dependencies, not `gb`.
+  Found through Civil Service Jobs, whose "Durham, North East England, DH1 3HU" resolved to
+  the US — which is also why `durham` left the curated city map and England's ITL 1 region
+  names joined `foreignSubdivisionNames`.
 - **A country name that is also a US city/state is deliberately withheld.** `georgia` is
   absent (the state); `palestine` is absent (Palestine, Texas) in favour of the unambiguous
   long forms. `Tbilisi, Georgia` still resolves to `ge` — through the city, not the country

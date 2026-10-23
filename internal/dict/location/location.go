@@ -13,6 +13,7 @@
 package location
 
 import (
+	"regexp"
 	"strings"
 
 	"github.com/strelov1/freehire/internal/platform/stringset"
@@ -84,6 +85,15 @@ func Parse(location string) Geo {
 		tok = stripWorkmodeWords(tok)
 		if tok == "" {
 			continue
+		}
+		// A UK postcode states the country on its own, the way a US ZIP does, and is cut
+		// out so the place it follows still resolves ("london sw1a 2hb" -> "london").
+		if rest, ok := stripUKPostcode(tok); ok {
+			countrySet["gb"] = struct{}{}
+			regionSet[countryToRegion["gb"]] = struct{}{}
+			if tok = rest; tok == "" {
+				continue
+			}
 		}
 		// Curated geography first, into the scratch sets (authoritative for country/region).
 		clear(tokCountry)
@@ -434,6 +444,53 @@ func isRecognizedUSCACity(tok string) bool {
 		return ce.Country == "us" || ce.Country == "ca"
 	}
 	return false
+}
+
+// ukPostcodePattern matches a full UK postcode as a whole word: an outward code (area
+// letters, district digit, optional sub-district) and an inward code (a digit and two
+// letters, never C, I, K, M, O or V). Only the FULL form is read — an outward code alone
+// ("sw1", "b2") is indistinguishable from an ordinary token.
+var ukPostcodePattern = regexp.MustCompile(`\b([a-z]{1,2})\d[a-z\d]? \d[abd-hjlnp-uw-z]{2}\b`)
+
+// ukPostcodeAreas are the postcode areas of the United Kingdom. GY, JE and IM (Guernsey,
+// Jersey, the Isle of Man) are left out: they are Crown dependencies with their own ISO
+// codes, not gb. BF (forces mail) names no place.
+var ukPostcodeAreas = map[string]struct{}{
+	"ab": {}, "al": {}, "b": {}, "ba": {}, "bb": {}, "bd": {}, "bh": {}, "bl": {}, "bn": {},
+	"br": {}, "bs": {}, "bt": {}, "ca": {}, "cb": {}, "cf": {}, "ch": {}, "cm": {}, "co": {},
+	"cr": {}, "ct": {}, "cv": {}, "cw": {}, "da": {}, "dd": {}, "de": {}, "dg": {}, "dh": {},
+	"dl": {}, "dn": {}, "dt": {}, "dy": {}, "e": {}, "ec": {}, "eh": {}, "en": {}, "ex": {},
+	"fk": {}, "fy": {}, "g": {}, "gl": {}, "gu": {}, "ha": {}, "hd": {}, "hg": {}, "hp": {},
+	"hr": {}, "hs": {}, "hu": {}, "hx": {}, "ig": {}, "ip": {}, "iv": {}, "ka": {}, "kt": {},
+	"kw": {}, "ky": {}, "l": {}, "la": {}, "ld": {}, "le": {}, "ll": {}, "ln": {}, "ls": {},
+	"lu": {}, "m": {}, "me": {}, "mk": {}, "ml": {}, "n": {}, "ne": {}, "ng": {}, "nn": {},
+	"np": {}, "nr": {}, "nw": {}, "ol": {}, "ox": {}, "pa": {}, "pe": {}, "ph": {}, "pl": {},
+	"po": {}, "pr": {}, "rg": {}, "rh": {}, "rm": {}, "s": {}, "sa": {}, "se": {}, "sg": {},
+	"sk": {}, "sl": {}, "sm": {}, "sn": {}, "so": {}, "sp": {}, "sr": {}, "ss": {}, "st": {},
+	"sw": {}, "sy": {}, "ta": {}, "td": {}, "tf": {}, "tn": {}, "tq": {}, "tr": {}, "ts": {},
+	"tw": {}, "ub": {}, "w": {}, "wa": {}, "wc": {}, "wd": {}, "wf": {}, "wn": {}, "wr": {},
+	"ws": {}, "wv": {}, "yo": {}, "ze": {},
+}
+
+// stripUKPostcode reports whether tok carries a UK postcode and returns tok without it.
+// An inward code that reads as an ordinal ("b2 2nd floor") is not a postcode: the letters
+// are legal, so only the shape tells them apart, and precision wins over the rare real
+// postcode ending in ST, ND, RD or TH.
+func stripUKPostcode(tok string) (string, bool) {
+	if !strings.ContainsAny(tok, "0123456789") {
+		return tok, false
+	}
+	for _, m := range ukPostcodePattern.FindAllStringSubmatchIndex(tok, -1) {
+		if _, ok := ukPostcodeAreas[tok[m[2]:m[3]]]; !ok {
+			continue
+		}
+		switch tok[m[1]-2 : m[1]] {
+		case "st", "nd", "rd", "th":
+			continue
+		}
+		return strings.Trim(strings.Join(strings.Fields(tok[:m[0]]+" "+tok[m[1]:]), " "), "."), true
+	}
+	return tok, false
 }
 
 // isUSZip reports whether s is a US ZIP code: five digits, optionally followed by
