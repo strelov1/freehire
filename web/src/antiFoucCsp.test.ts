@@ -13,8 +13,12 @@ const VITE_CONFIG = readFileSync(join(import.meta.dirname, '..', 'vite.config.ts
 
 describe('anti-FOUC script CSP hash', () => {
   it('is the hash vite.config.ts admits', () => {
-    const body = APP_HTML.match(/<script>([\s\S]*?)<\/script>/)?.[1] ?? '';
-    expect(body, 'app.html carries no inline <script>').not.toBe('');
+    // Plain slicing between the exact tags, the same span the hash recipe in
+    // vite.config.ts reads — app.html is our own file, not HTML to sanitise.
+    const open = APP_HTML.indexOf('<script>');
+    expect(open, 'app.html carries no inline <script>').toBeGreaterThanOrEqual(0);
+    const start = open + '<script>'.length;
+    const body = APP_HTML.slice(start, APP_HTML.indexOf('</script>', start));
     const hash = `sha256-${createHash('sha256').update(body).digest('base64')}`;
     expect(VITE_CONFIG).toContain(`'${hash}'`);
   });
