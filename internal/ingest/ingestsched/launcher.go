@@ -94,6 +94,7 @@ func (l SystemdLauncher) Launch(ctx context.Context, run Run) error {
 	// normal case and `systemctl reset-failed` answering non-zero for it means nothing.
 	_ = l.execute(ctx, "systemctl", "reset-failed", unit)
 
+	timeoutSec := strconv.Itoa(int(run.RunTimeout.Seconds()))
 	args := []string{
 		// systemd-run waits for the START JOB to complete, and for Type=oneshot that job
 		// completes only when ExecStart has EXITED — so without this flag one launch
@@ -112,7 +113,12 @@ func (l SystemdLauncher) Launch(ctx context.Context, run Run) error {
 		// before Finished could read it and making "it succeeded" and "it failed" the same
 		// answer. A failed unit's name is freed by reset-failed in Finished instead.
 		"--property=Type=oneshot",
-		"--property=TimeoutStartSec=" + strconv.Itoa(int(run.RunTimeout.Seconds())),
+		"--property=TimeoutStartSec=" + timeoutSec,
+		// The same number, told to the run itself: a process cannot read its own unit's
+		// TimeoutStartSec, and cmd/ingest stops its crawl a reserve short of it so the stale
+		// sweep after the crawl still runs (cmd/ingest runBudget). One value feeds both, so
+		// the deadline the run plans for is the one systemd enforces.
+		"--setenv=INGEST_RUN_TIMEOUT_SECONDS=" + timeoutSec,
 		// The weights the per-provider units carried: a crawl yields to the API.
 		"--property=CPUWeight=40",
 		"--property=IOWeight=40",

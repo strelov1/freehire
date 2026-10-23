@@ -52,6 +52,10 @@ func main() {
 }
 
 func run() int {
+	// The unit's timeout is measured from when it started, which is as close to here as this
+	// process can observe — so the crawl deadline is measured from here too.
+	started := time.Now()
+
 	// The provider to crawl. Accept it as the first positional argument (cron passes the
 	// provider name) or via INGEST_PROVIDER. An optional --shard=i/n (or the SHARD env)
 	// crawls only a round-robin slice of that provider's boards, so a provider with too
@@ -139,6 +143,11 @@ func run() int {
 			bodies.cutoff.Format(time.DateOnly), bodies.slot, bodies.slices)
 	}
 	seen := seenPolicy{hydrationWindow: hydrationWindow, refetchAll: refetchAll, bodies: bodies}
+	budget, err := runBudgetFor(os.Getenv("INGEST_RUN_TIMEOUT_SECONDS"), os.Getenv("INGEST_SWEEP_RESERVE_SECONDS"))
+	if err != nil {
+		log.Printf("config: %v", err)
+		return 1
+	}
 
 	ctx, _, pool, cleanup, err := worker.Bootstrap(context.Background())
 	if err != nil {
@@ -207,20 +216,26 @@ func run() int {
 		Aliases: store,
 	}
 
-	runStats, err := runner.Run(ctx, sourceCfg.Sources)
-	if err != nil {
-		log.Printf("ingest: %v", err)
-		return 1
+	crawlCtx, cancelCrawl := budget.crawlContext(ctx, started)
+	runStats, crawlErr := runner.Run(crawlCtx, sourceCfg.Sources)
+	cancelCrawl()
+
+	// Everything after the crawl runs on its own context, detached from the crawl's: the crawl
+	// deadline exists precisely so this part still runs, and a context that died with the crawl
+	// would cancel every close the run had already earned (see runBudget).
+	sweepCtx, cancelSweep := budget.sweepContext(ctx, started)
+	defer cancelSweep()
+
+	// A crawl that stopped early — its deadline, or a signal — still persisted everything it
+	// read and still proved the boards it finished; the sweep below narrows itself to those.
+	truncated := crawlErr != nil
+	if truncated {
+		log.Printf("ingest: crawl stopped before every board was reached (%v) — sweeping only the boards it finished", crawlErr)
 	}
 
-	// Surface which boards are failing / cooled without grepping logs — one line
-	// naming them, their failure count, and when they next become eligible.
-	logUnhealthyBoards(ctx, db.New(pool))
-	logChronicBoards(ctx, db.New(pool))
-
 	total := runStats.Total()
-	log.Printf("ingest done: provider=%s providers=%d ingested=%d failed=%d skipped=%d rejected=%d unreadable=%d",
-		provider, len(runStats), total.Ingested, total.Failed, total.Skipped, total.Rejected, total.Unreadable)
+	log.Printf("ingest done: provider=%s providers=%d ingested=%d failed=%d skipped=%d rejected=%d unreadable=%d interrupted=%d truncated=%t",
+		provider, len(runStats), total.Ingested, total.Failed, total.Skipped, total.Rejected, total.Unreadable, total.Interrupted, truncated)
 
 	// A provider at 0% took the cheap write for nothing all run — a hashed field is churning
 	// between crawls, which costs a full row rewrite AND a pointless index push every pass.
@@ -231,6 +246,11 @@ func run() int {
 	// A failed board is counted in total.Failed; surface it (and any sweep failure
 	// below) through the exit code so cron alerts on a degraded run.
 	failed := total.Failed
+	// A truncated run did not crawl what it was asked to, which is a degraded run however
+	// cleanly it stopped; the exit code says so, as it did when the unit's timeout killed it.
+	if truncated {
+		failed++
+	}
 
 	// Post-run sweep (job-lifecycle spec): per provider, close that provider's open jobs
 	// unseen for the whole grace window — but only for the companies this run actually
@@ -247,7 +267,33 @@ func run() int {
 	// or closes them. Board sources have no liveness backstop (the liveness probe skips
 	// registered providers), so this is accepted to avoid the far worse over-close: closing
 	// live jobs of boards a partial/timed-out run never reached.
+	//
+	// A TRUNCATED run skips the company scope (and the source scope) and closes only through
+	// the board scope. A company is not a board: one employer can sit on several boards of one
+	// provider (a workday tenant's several career sites), and a crawl stopped by its deadline
+	// reaches the same leading boards every cycle — so a company written by a board it finished
+	// would close the stale postings of that company's boards it never reaches, run after run,
+	// with nothing re-crawling them to reopen them. The board scope has no such gap: it closes
+	// only within a board the run read to completion (pipeline.boardQualifies, which an
+	// interrupted board fails). Before the crawl deadline existed a timed-out run swept nothing
+	// at all, so this withholds nothing a run used to do.
 	queries := db.New(pool)
+	failed += sweep(sweepCtx, queries, registry, runStats, crawled, crossShardAmbiguousBoards, truncated)
+
+	// Surface which boards are failing / cooled without grepping logs — one line naming them,
+	// their failure count, and when they next become eligible. After the sweep rather than
+	// before it: these are reports, and the closes are what the reserve is for.
+	logUnhealthyBoards(sweepCtx, queries)
+	logChronicBoards(sweepCtx, queries)
+
+	return worker.ExitCode(failed, 0)
+}
+
+// sweep runs the post-crawl stale-job closes for every provider in runStats and returns how many
+// of them failed. ctx must be the sweep's own context (runBudget.sweepContext), never the crawl's.
+// truncated narrows every provider to the board scope — see the comment at its call site.
+func sweep(ctx context.Context, queries *db.Queries, registry map[string]sources.Source, runStats pipeline.RunStats, crawled *crawledSet, crossShardAmbiguousBoards map[string]bool, truncated bool) int {
+	var failed int
 	now := time.Now()
 	// A slice-crawled source (e.g. whatjobs) declares a window wider than staleAfter: its crawl
 	// reaches only a keyword's first pages, so a posting that drifted deeper reads as unseen and
@@ -282,22 +328,23 @@ func run() int {
 		_, hasGrace := grace[provider]
 		window := sweepWindowFor(grace, provider)
 		cutoff := pgtype.Timestamptz{Time: now.Add(-window), Valid: true}
-		bySource := sweepBySource(runStats[provider], fullCatalog[provider])
-		companySlugs := sweepableCompanies(crawled.slugs(provider), runStats[provider])
-
-		closed, skipped, err := sweepProvider(ctx, queries, provider, cutoff, companySlugs, bySource)
-		if err != nil {
-			// Count and continue: one provider's sweep failure must not skip the rest,
-			// but the run still exits non-zero.
-			failed++
-			log.Printf("close stale jobs (%s): %v", provider, err)
-			continue
+		if !truncated {
+			bySource := sweepBySource(runStats[provider], fullCatalog[provider])
+			companySlugs := sweepableCompanies(crawled.slugs(provider), runStats[provider])
+			closed, skipped, err := sweepProvider(ctx, queries, provider, cutoff, companySlugs, bySource)
+			if err != nil {
+				// Count and continue: one provider's sweep failure must not skip the rest,
+				// but the run still exits non-zero.
+				failed++
+				log.Printf("close stale jobs (%s): %v", provider, err)
+				continue
+			}
+			if skipped > 0 {
+				failed++
+				log.Printf("close stale jobs (%s): closed %d, skipped %d unclosable row(s) — see preceding lines for their ids", provider, closed, skipped)
+			}
+			log.Printf("closed %d stale %s jobs (unseen for %s)", closed, provider, window)
 		}
-		if skipped > 0 {
-			failed++
-			log.Printf("close stale jobs (%s): closed %d, skipped %d unclosable row(s) — see preceding lines for their ids", provider, closed, skipped)
-		}
-		log.Printf("closed %d stale %s jobs (unseen for %s)", closed, provider, window)
 
 		// Board-scoped close (job-lifecycle spec, freehire#2328): the company scope above
 		// leaks a company whose LAST posting drops off a board this run still crawled — that
@@ -307,29 +354,137 @@ func run() int {
 		// registered as listing a board to completion — see sweepableBoards for the full gate.
 		// Reuses this provider's own cutoff: a board-scope candidate is by construction never
 		// a sweepGrace provider, so the window is always the default here.
-		var boardFailed int
-		for _, boardID := range sweepableBoards(runStats[provider], hasGrace, fullCatalog[provider], fullBoardListing[provider], crossShardAmbiguousBoards) {
-			boardClosed, err := queries.CloseUnseenJobsForBoard(ctx, db.CloseUnseenJobsForBoardParams{
-				Source:       provider,
-				Cutoff:       cutoff,
-				BoardPattern: externalid.BoardPattern(boardID),
-			})
-			if err != nil {
-				// One board's failure must not skip the rest — see sweepProvider's own
-				// per-provider isolation for the same reasoning, one scope narrower.
-				boardFailed++
-				log.Printf("close stale jobs (%s board %q): %v", provider, boardID, err)
-				continue
+		boards := sweepableBoards(runStats[provider], hasGrace, fullCatalog[provider], fullBoardListing[provider], crossShardAmbiguousBoards)
+		if len(boards) > 0 {
+			boardClosed, boardFailed := sweepBoards(ctx, queries, provider, cutoff, boards)
+			log.Printf("closed %d stale %s jobs across %d finished board(s) (unseen for %s)", boardClosed, provider, len(boards), window)
+			if boardFailed > 0 {
+				failed++
 			}
-			if boardClosed > 0 {
-				log.Printf("closed %d stale %s jobs on board %q (unseen for %s)", boardClosed, provider, boardID, window)
-			}
-		}
-		if boardFailed > 0 {
-			failed++
 		}
 	}
-	return worker.ExitCode(failed, 0)
+	return failed
+}
+
+// defaultSweepReserve is how much of the run's timeout is held back from the crawl for what
+// follows it. Measured on the crawl host over 2026-10-21..23, from each run's "ingest done" line
+// to its last close: the slowest sweeps were workday shards at 570-582s (the company-scope UPDATE
+// alone 377-471s of it) and vagas at 1054s; nearly every other provider finished inside two
+// minutes. Ten minutes covers workday's; a provider whose sweep runs longer (vagas) sets
+// INGEST_SWEEP_RESERVE_SECONDS rather than taxing every crawl for it.
+const defaultSweepReserve = 10 * time.Minute
+
+// runBudget splits a run's timeout between the crawl and the sweep that follows it.
+//
+// The unit's timeout is a hard kill: systemd sends SIGTERM, the signal context cancels, and
+// whatever was in flight dies with it. When the crawl was what ran long, the sweep was what died
+// — from 2026-10-18, when the crawl moved a WireGuard hop away from the database, 0 of 33
+// greenhouse runs, 0 of 31 smartrecruiters and 0 of 29 ukg runs reached it, and ~307k dead
+// workday postings stayed open behind boards board_health called healthy. So the crawl gets a
+// deadline of its own, reserve short of the timeout, and stops there; the sweep then has the
+// reserve to itself.
+//
+// timeout is zero when INGEST_RUN_TIMEOUT_SECONDS is unset — a process cannot read its own
+// unit's TimeoutStartSec — and the crawl then has no deadline of its own, exactly as before. The
+// scheduler passes the value with every launch (ingestsched.SystemdLauncher); a static unit must
+// set it in its environment, net of any time a wrapper may spend waiting for a slot.
+type runBudget struct {
+	timeout time.Duration
+	reserve time.Duration
+}
+
+// runBudgetFor resolves INGEST_RUN_TIMEOUT_SECONDS and INGEST_SWEEP_RESERVE_SECONDS. A set value
+// must be a positive number of seconds, and the reserve must leave the crawl something: a reserve
+// at or past the timeout would end every crawl before its first board, a misconfiguration that
+// reads exactly like a quiet fleet.
+func runBudgetFor(timeoutEnv, reserveEnv string) (runBudget, error) {
+	b := runBudget{reserve: defaultSweepReserve}
+	if reserveEnv != "" {
+		secs, err := strconv.Atoi(reserveEnv)
+		if err != nil || secs <= 0 {
+			return runBudget{}, fmt.Errorf("INGEST_SWEEP_RESERVE_SECONDS must be a positive number of seconds, got %q", reserveEnv)
+		}
+		b.reserve = time.Duration(secs) * time.Second
+	}
+	if timeoutEnv == "" {
+		return b, nil
+	}
+	secs, err := strconv.Atoi(timeoutEnv)
+	if err != nil || secs <= 0 {
+		return runBudget{}, fmt.Errorf("INGEST_RUN_TIMEOUT_SECONDS must be a positive number of seconds, got %q", timeoutEnv)
+	}
+	b.timeout = time.Duration(secs) * time.Second
+	if b.reserve >= b.timeout {
+		return runBudget{}, fmt.Errorf("INGEST_SWEEP_RESERVE_SECONDS (%s) must be shorter than INGEST_RUN_TIMEOUT_SECONDS (%s), or no crawl can start",
+			b.reserve, b.timeout)
+	}
+	return b, nil
+}
+
+// crawlContext bounds the crawl at reserve short of the run's timeout. Without a known timeout
+// it is parent, cancellable.
+func (b runBudget) crawlContext(parent context.Context, started time.Time) (context.Context, context.CancelFunc) {
+	if b.timeout == 0 {
+		return context.WithCancel(parent)
+	}
+	return context.WithDeadline(parent, started.Add(b.timeout-b.reserve))
+}
+
+// sweepContext is what the sweep runs on: detached from parent's cancellation, so neither the
+// crawl's deadline nor a signal that stopped the crawl cancels a close, and bounded by the run's
+// timeout — the moment the unit kills the process anyway. Without a known timeout it is bounded
+// by the reserve from now, which is what the reserve exists to give it.
+//
+// Detaching from the SIGNAL too is deliberate. A close is one atomic statement, so the worst a
+// later kill can do is roll the one in flight back; honouring the signal instead would discard
+// the closes a run already earned in exactly the case — a timed-out run on a unit that does not
+// yet pass its timeout — this exists to fix.
+func (b runBudget) sweepContext(parent context.Context, started time.Time) (context.Context, context.CancelFunc) {
+	detached := context.WithoutCancel(parent)
+	if b.timeout == 0 {
+		return context.WithTimeout(detached, b.reserve)
+	}
+	return context.WithDeadline(detached, started.Add(b.timeout))
+}
+
+// sweepBoards closes every qualifying board's unseen jobs in one statement — one scan of the
+// provider's open rows rather than one round trip per board (see CloseUnseenJobsForBoards for
+// the measurement). If that statement fails it falls back to one statement per board, so a row
+// Postgres cannot write (the 2026-08-11 incident sweepRowByRow exists for) blocks only its own
+// board rather than every board of the run. failed counts the boards whose close failed.
+func sweepBoards(ctx context.Context, queries *db.Queries, provider string, cutoff pgtype.Timestamptz, boards []string) (closed int64, failed int) {
+	patterns := make([]string, len(boards))
+	for i, board := range boards {
+		patterns[i] = externalid.BoardPattern(board)
+	}
+	closed, err := queries.CloseUnseenJobsForBoards(ctx, db.CloseUnseenJobsForBoardsParams{
+		Source:        provider,
+		Cutoff:        cutoff,
+		BoardPatterns: patterns,
+	})
+	if err == nil {
+		return closed, 0
+	}
+	// An ended context would fail every per-board statement the same way; say so once.
+	if ctx.Err() != nil {
+		log.Printf("close stale jobs (%s, %d boards): %v", provider, len(boards), err)
+		return 0, len(boards)
+	}
+	log.Printf("close stale jobs (%s, %d boards): batched close failed (%v), falling back to one board at a time", provider, len(boards), err)
+	for i, board := range boards {
+		n, err := queries.CloseUnseenJobsForBoard(ctx, db.CloseUnseenJobsForBoardParams{
+			Source:       provider,
+			Cutoff:       cutoff,
+			BoardPattern: patterns[i],
+		})
+		if err != nil {
+			failed++
+			log.Printf("close stale jobs (%s board %q): %v", provider, board, err)
+			continue
+		}
+		closed += n
+	}
+	return closed, failed
 }
 
 // sweepableBoards returns, sorted and de-duplicated, the boards of one provider the

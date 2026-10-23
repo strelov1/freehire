@@ -10,6 +10,7 @@ The ingest pipeline runner — fetch → normalize → dedup → upsert — and 
 - Adapters are read-only over public ATS JSON APIs; the per-board crawl is independent, so one failing board is counted (`stats.Failed`) but does not abort the rest.
 - Sources are keyless by default; three (`usajobs`, `reed`, `whatjobs`) need an env credential, which gates the **crawl** registry `sources.All(client)` the pipeline builds — not the taxonomy. See [internal/ingest/sources/AGENTS.md](../sources/AGENTS.md) for the split.
 - After the run, the stale-job sweep runs per provider, and only for providers that ingested at least one job (so a total crawl outage can't mass-close a catalogue).
+- A board still crawling when the run's context ends (cmd/ingest's crawl deadline, or a signal) is counted in `Stats.Interrupted` and never qualifies for the board scope — it is read when the board FINISHES (`markInterrupted`), the one moment a live context proves every fetch and write before it ran in full. See [docs/agents/job-lifecycle.md](../../../docs/agents/job-lifecycle.md) (1c).
 - `board_health` holds ONLY runtime state — the set of boards and their cadence stay in the YAML board files (git owns the catalog); a stale row for a removed board is inert.
 - A board whose `cooldown_until` is in the future is skipped before touching its adapter (counted `Cooled`, not `Failed`).
 - Backoff: no cooldown below 3 consecutive failures, then `6h·2^(f-3)` capped at 24h — never permanent, so a success self-heals.

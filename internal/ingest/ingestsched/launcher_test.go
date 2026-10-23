@@ -72,6 +72,12 @@ func TestLaunchCarriesTheRunsOwnTimeout(t *testing.T) {
 	if got, ok := argValue(rec.args, "--property=TimeoutStartSec"); !ok || got != "4500" {
 		t.Errorf("TimeoutStartSec = %q (found=%v), want 4500", got, ok)
 	}
+	// The run is told the same number, so cmd/ingest can stop its crawl a reserve short of
+	// the kill and still sweep; a missing or different value would plan around a deadline
+	// systemd does not enforce.
+	if !slices.Contains(rec.args, "--setenv=INGEST_RUN_TIMEOUT_SECONDS=4500") {
+		t.Errorf("args %v carry no --setenv=INGEST_RUN_TIMEOUT_SECONDS=4500", rec.args)
+	}
 }
 
 // --no-block is what lets a crawl outlive the tick that started it, which is the entire

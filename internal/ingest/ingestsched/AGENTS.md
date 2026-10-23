@@ -114,6 +114,11 @@ and calls `Scheduler.Tick`:
 6. A failed launch is recorded with exit code 126 and its claim released at once, rather
    than idling that shard for the whole reclaim window over an error already known.
 
+The launch passes the same timeout to the run as `INGEST_RUN_TIMEOUT_SECONDS` (`--setenv`), so
+`cmd/ingest` can stop its crawl a reserve short of the kill and still sweep — a process cannot
+read its own unit's `TimeoutStartSec`, and one value feeding both keeps the deadline it plans for
+the one systemd enforces.
+
 A run becomes a TRANSIENT systemd unit (`systemd-run`), not an instance of a static
 template, because the per-run timeout varies (3000s generally, 4500s for the
 per-posting-detail providers) and a template carries one value. `--collect` is load-bearing:

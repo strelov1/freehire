@@ -214,6 +214,14 @@ func TestEveryClosingQueryQueuesTheRemoval(t *testing.T) {
 			})
 			return err
 		}, nil},
+		{"CloseUnseenJobsForBoards", func(ctx context.Context, q *Queries, _ int64) error {
+			_, err := q.CloseUnseenJobsForBoards(ctx, CloseUnseenJobsForBoardsParams{
+				Source:        "greenhouse",
+				Cutoff:        pgTimestamptz(time.Now().Add(-48 * time.Hour)),
+				BoardPatterns: []string{externalid.BoardPattern("acme")},
+			})
+			return err
+		}, nil},
 		{"CloseUnseenJobByID", func(ctx context.Context, q *Queries, jobID int64) error {
 			_, err := q.CloseUnseenJobByID(ctx, jobID)
 			return err

@@ -299,6 +299,81 @@ func TestCloseUnseenJobsForBoardDoesNotCrossBoards(t *testing.T) {
 	}
 }
 
+// TestCloseUnseenJobsForBoardsClosesExactlyTheListedBoards pins the batched board sweep to the
+// single-board query's semantics: every listed board's stale rows close, a fresh row on a
+// listed board stays, an unlisted sibling stays, a board whose id merely PREFIXES a listed one
+// stays, and an underscore in a board name (a third of workday's) is literal rather than LIKE's
+// any-character — "Capital_One" must not reach "CapitalXOne". An empty list closes nothing.
+func TestCloseUnseenJobsForBoardsClosesExactlyTheListedBoards(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	ctx := context.Background()
+	truncate(t, pool)
+
+	upsertAged := func(board, id string, seenAgo time.Duration) int64 {
+		t.Helper()
+		row, err := ingestUpsert(ctx, q, ingestParams(externalid.Namespace(board, id), board+" "+id))
+		if err != nil {
+			t.Fatalf("upsert %s:%s: %v", board, id, err)
+		}
+		ageJob(t, pool, row.ID, seenAgo)
+		return row.ID
+	}
+	listedStale := upsertAged("it", "1", 49*time.Hour)
+	listedFresh := upsertAged("it", "2", 6*time.Hour)
+	underscoreStale := upsertAged("Capital_One", "1", 49*time.Hour)
+	unlisted := upsertAged("assist-rx", "1", 49*time.Hour)
+	prefixSharing := upsertAged("it2", "1", 49*time.Hour)
+	likeLookalike := upsertAged("CapitalXOne", "1", 49*time.Hour)
+
+	cutoff := pgTimestamptz(time.Now().Add(-48 * time.Hour))
+	none, err := q.CloseUnseenJobsForBoards(ctx, CloseUnseenJobsForBoardsParams{
+		Source: "greenhouse", Cutoff: cutoff, BoardPatterns: nil,
+	})
+	if err != nil {
+		t.Fatalf("empty board sweep: %v", err)
+	}
+	if none != 0 {
+		t.Fatalf("empty board list closed %d jobs, want 0", none)
+	}
+
+	closed, err := q.CloseUnseenJobsForBoards(ctx, CloseUnseenJobsForBoardsParams{
+		Source: "greenhouse",
+		Cutoff: cutoff,
+		BoardPatterns: []string{
+			externalid.BoardPattern("it"),
+			externalid.BoardPattern("Capital_One"),
+		},
+	})
+	if err != nil {
+		t.Fatalf("board sweep: %v", err)
+	}
+	if closed != 2 {
+		t.Fatalf("board sweep closed %d jobs, want 2", closed)
+	}
+
+	for _, c := range []struct {
+		id         int64
+		name       string
+		wantClosed bool
+	}{
+		{listedStale, "stale row on a listed board", true},
+		{underscoreStale, "stale row on a listed board with an underscore", true},
+		{listedFresh, "fresh row on a listed board", false},
+		{unlisted, "stale row on an unlisted board", false},
+		{prefixSharing, "stale row on a board the listed id prefixes", false},
+		{likeLookalike, "stale row on a board an unescaped underscore would match", false},
+	} {
+		got, err := q.GetJob(ctx, c.id)
+		if err != nil {
+			t.Fatalf("get %s: %v", c.name, err)
+		}
+		if got.ClosedAt.Valid != c.wantClosed {
+			t.Errorf("%s: closed = %v, want %v", c.name, got.ClosedAt.Valid, c.wantClosed)
+		}
+	}
+}
+
 // TestCloseUnseenJobsForBoardClosesACompanyTheCompanyScopeCannotReach pins the exact leak
 // freehire#2328 reports and CloseUnseenJobsForBoard exists to close: two companies share one
 // board, and this "run" wrote nothing for the second (its last posting simply stopped being

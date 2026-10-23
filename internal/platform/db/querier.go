@@ -988,6 +988,20 @@ type Querier interface {
 	// :one rather than :execrows because the CTE moves the row count out of the command tag.
 	// count(*) over the closed rows is the same int64 the caller already had.
 	CloseUnseenJobsForBoard(ctx context.Context, arg CloseUnseenJobsForBoardParams) (int64, error)
+	// CloseUnseenJobsForBoard for every qualifying board of one run in ONE statement, so the
+	// board-scoped sweep is one scan of the provider's open rows instead of one statement per
+	// board. Per board was the shape until 2026-10-23, and over the crawl host's ~26 ms link to
+	// the database it cost ~50 ms a board: a recruitee run (~3,900 boards) spent minutes in the
+	// loop, and the unit's timeout cancelled 1,431 of its closes mid-way. Measured on prod the
+	// same day, this statement's candidate scan takes under a second for recruitee and ~110 s
+	// cold for all of workday's 1.5M open rows — the per-board loop over one workday shard costs
+	// about the same, so nothing gets slower and the rest get dramatically faster.
+	//
+	// board_patterns are externalid.BoardPattern values, one per board, exactly as the
+	// single-board query takes them; LIKE ANY keeps the per-board predicate's semantics
+	// (escaping, the ":" terminator) without a second definition of the namespace. The
+	// removal enqueue rides the statement for the same reason it does in every close.
+	CloseUnseenJobsForBoards(ctx context.Context, arg CloseUnseenJobsForBoardsParams) (int64, error)
 	// Company slugs with at least one OPEN aggregator posting — the drive list for the
 	// cross-source aggregator suppression pass. An open aggregator row is a candidate whether
 	// it still needs suppressing OR needs releasing (its ATS twin closed), so one predicate

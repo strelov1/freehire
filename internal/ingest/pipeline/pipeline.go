@@ -231,6 +231,12 @@ type Stats struct {
 	// unreadable posting is missing from the crawl's evidence, and the sweep must not read a
 	// posting it could not see as a posting that is gone. See boardReadWhatItListed.
 	Unreadable int
+	// Interrupted counts boards whose crawl was still under way when the run's context ended —
+	// the crawl deadline cmd/ingest sets ahead of its unit's timeout, or a signal. Such a board
+	// stopped at an arbitrary point: its fetch, or the writes that refresh last_seen_at, reached
+	// only part of it, so it must never prove coverage (boardQualifies). It is not Failed: the
+	// board did nothing wrong, the run simply ran out of time around it.
+	Interrupted int
 	// QualifyingBoards lists, per provider once merged into RunStats, the boards this run
 	// structurally PROVED it covered — see boardQualifies. It is the post-run sweep's board
 	// scope input (freehire#2328): cmd/ingest still gates a board-scoped close on the
@@ -259,6 +265,7 @@ func (s *Stats) add(o Stats) {
 	s.Rejected += o.Rejected
 	s.ATSCovered += o.ATSCovered
 	s.Unreadable += o.Unreadable
+	s.Interrupted += o.Interrupted
 	s.QualifyingBoards = append(s.QualifyingBoards, o.QualifyingBoards...)
 	s.UnprovenCompanies = append(s.UnprovenCompanies, o.UnprovenCompanies...)
 }
@@ -673,7 +680,21 @@ func (r Runner) ingestFetched(ctx context.Context, e sources.CompanyEntry, raw [
 		log.Printf("ingest: %s board %q (%s): %d/%d postings unreadable — withholding this run's stale-job close for it",
 			e.Provider, e.Board, e.Company, st.Unreadable, len(raw))
 	}
+	markInterrupted(ctx, &st)
 	return st
+}
+
+// markInterrupted flags a board whose crawl the run's context ended under. It is read when the
+// board FINISHES, which is the only moment that answers the question: a context that is still
+// live then was live for every fetch and every write before it, while one that has ended may
+// have cut either short — a write refused with a cancelled context leaves that posting's
+// last_seen_at where it was, and the board scope would read it as gone. A board that happened
+// to finish a moment before the deadline is flagged too; that costs one crawl cycle of latency
+// on its removals and nothing else.
+func markInterrupted(ctx context.Context, st *Stats) {
+	if ctx.Err() != nil {
+		st.Interrupted = 1
+	}
 }
 
 // saveConcurrency bounds how many of one board's postings are written at once. The database
@@ -1201,14 +1222,13 @@ func (r Runner) ingestStream(ctx context.Context, e sources.CompanyEntry, ss sou
 		log.Printf("ingest: %s board %q (%s): skipped %d/%d postings — company already covered by a non-aggregator source",
 			e.Provider, e.Board, e.Company, st.ATSCovered, total)
 	}
+	st.Rejected = rej.rejected
+	markInterrupted(ctx, &st)
 	if err != nil {
 		log.Printf("ingest: %s board %q (%s) failed after %d saved: %v",
 			e.Provider, e.Board, e.Company, st.Ingested, err)
 		st.Failed = 1
-		st.Rejected = rej.rejected
-		return st
 	}
-	st.Rejected = rej.rejected
 	return st
 }
 

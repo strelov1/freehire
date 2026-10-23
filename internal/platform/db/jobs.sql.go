@@ -978,6 +978,51 @@ func (q *Queries) CloseUnseenJobsForBoard(ctx context.Context, arg CloseUnseenJo
 	return count, err
 }
 
+const closeUnseenJobsForBoards = `-- name: CloseUnseenJobsForBoards :one
+WITH closed AS (
+    UPDATE jobs
+    SET closed_at     = now(),
+        closed_reason = 'unseen',
+        updated_at    = now()
+    WHERE closed_at IS NULL
+      AND source = $1
+      AND last_seen_at < $2
+      AND external_id LIKE ANY($3::text[])
+    RETURNING id
+), queued AS (
+    INSERT INTO search_delete_outbox (job_id)
+    SELECT id FROM closed
+    ON CONFLICT (job_id) DO NOTHING
+)
+SELECT count(*) FROM closed
+`
+
+type CloseUnseenJobsForBoardsParams struct {
+	Source        string             `json:"source"`
+	Cutoff        pgtype.Timestamptz `json:"cutoff"`
+	BoardPatterns []string           `json:"board_patterns"`
+}
+
+// CloseUnseenJobsForBoard for every qualifying board of one run in ONE statement, so the
+// board-scoped sweep is one scan of the provider's open rows instead of one statement per
+// board. Per board was the shape until 2026-10-23, and over the crawl host's ~26 ms link to
+// the database it cost ~50 ms a board: a recruitee run (~3,900 boards) spent minutes in the
+// loop, and the unit's timeout cancelled 1,431 of its closes mid-way. Measured on prod the
+// same day, this statement's candidate scan takes under a second for recruitee and ~110 s
+// cold for all of workday's 1.5M open rows — the per-board loop over one workday shard costs
+// about the same, so nothing gets slower and the rest get dramatically faster.
+//
+// board_patterns are externalid.BoardPattern values, one per board, exactly as the
+// single-board query takes them; LIKE ANY keeps the per-board predicate's semantics
+// (escaping, the ":" terminator) without a second definition of the namespace. The
+// removal enqueue rides the statement for the same reason it does in every close.
+func (q *Queries) CloseUnseenJobsForBoards(ctx context.Context, arg CloseUnseenJobsForBoardsParams) (int64, error) {
+	row := q.db.QueryRow(ctx, closeUnseenJobsForBoards, arg.Source, arg.Cutoff, arg.BoardPatterns)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const companiesWithAggregatorPostings = `-- name: CompaniesWithAggregatorPostings :many
 SELECT DISTINCT company_slug FROM jobs
 WHERE closed_at IS NULL AND company_slug <> ''

@@ -2,9 +2,11 @@ package pipeline
 
 import (
 	"context"
+	"errors"
 	"slices"
 	"strconv"
 	"testing"
+	"time"
 
 	"github.com/strelov1/freehire/internal/dict/normalize"
 	"github.com/strelov1/freehire/internal/ingest/sources"
@@ -352,5 +354,90 @@ func TestRunReportsNoBoardWhenAStreamDiedMidCrawl(t *testing.T) {
 	}
 	if got := stats["eightfold"].QualifyingBoards; len(got) != 0 {
 		t.Errorf("QualifyingBoards = %v, want none — a board caught mid-crawl must not qualify even though BoardHealth treats it as healthy", got)
+	}
+}
+
+// deadlineSource answers its "fast" board at once and holds every other board until the run's
+// context ends, then returns what it had listed WITHOUT an error — the adapter that swallows a
+// cancellation and hands back a partial listing, which is the hardest shape for the sweep: no
+// Failed, a healthy yield, and the writes after the deadline refused or never attempted.
+type deadlineSource struct{ provider string }
+
+func (s deadlineSource) Provider() string { return s.provider }
+
+func (s deadlineSource) Fetch(ctx context.Context, e sources.CompanyEntry) ([]sources.Job, error) {
+	jobs := []sources.Job{{ExternalID: "1", Title: "Backend Engineer", Company: e.Company}}
+	if e.Board != "fast" {
+		<-ctx.Done()
+	}
+	return jobs, nil
+}
+
+// TestRunReportsOnlyTheBoardsItFinishedBeforeItsDeadline is the crawl deadline's safety
+// contract: cmd/ingest stops the crawl short of its unit's timeout so the sweep still runs, and
+// that sweep may close only within boards the run read to completion. A board finished before
+// the deadline qualifies exactly as it would in an unbounded run; a board still in flight when
+// the deadline hit does not, even though its adapter reported no failure and it yielded
+// postings — it stopped at an arbitrary point, and its unread tail would be read as removed.
+func TestRunReportsOnlyTheBoardsItFinishedBeforeItsDeadline(t *testing.T) {
+	r := Runner{Registry: registry(deadlineSource{provider: "workday"}), Store: &fakeStore{}}
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+
+	stats, err := r.Run(ctx, []sources.CompanyEntry{
+		{Company: "Fast Co", Provider: "workday", Board: "fast"},
+		{Company: "Slow Co", Provider: "workday", Board: "slow"},
+	})
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("Run error = %v, want the deadline", err)
+	}
+	got := stats["workday"]
+	if !slices.Contains(got.QualifyingBoards, "fast") {
+		t.Errorf("QualifyingBoards = %v, want the board finished before the deadline", got.QualifyingBoards)
+	}
+	if slices.Contains(got.QualifyingBoards, "slow") {
+		t.Errorf("QualifyingBoards = %v, must not contain a board the deadline cut short", got.QualifyingBoards)
+	}
+	if got.Interrupted != 1 {
+		t.Errorf("Interrupted = %d, want 1", got.Interrupted)
+	}
+	if got.Failed != 0 {
+		t.Errorf("Failed = %d, want 0 — running out of time is not the board's failure", got.Failed)
+	}
+}
+
+// deadlineStreamingSource emits one posting, then holds the stream open until the run's context
+// ends and returns cleanly — a stream that would have gone on emitting had it been given time.
+type deadlineStreamingSource struct{ provider string }
+
+func (s deadlineStreamingSource) Provider() string { return s.provider }
+
+func (s deadlineStreamingSource) Fetch(context.Context, sources.CompanyEntry) ([]sources.Job, error) {
+	return nil, nil
+}
+
+func (s deadlineStreamingSource) FetchStream(ctx context.Context, e sources.CompanyEntry, emit func(sources.Job)) error {
+	emit(sources.Job{ExternalID: "1", Title: "Backend Engineer", Company: e.Company})
+	<-ctx.Done()
+	return nil
+}
+
+// The streaming path persists as it goes, so a deadline mid-stream leaves a board with real
+// progress and, here, no error at all. It must not qualify either.
+func TestRunReportsNoBoardForAStreamTheDeadlineCutShort(t *testing.T) {
+	r := Runner{Registry: registry(deadlineStreamingSource{provider: "eightfold"}), Store: &fakeStore{}}
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+
+	stats, _ := r.Run(ctx, []sources.CompanyEntry{{Company: "Acme", Provider: "eightfold", Board: "acme"}})
+	got := stats["eightfold"]
+	if got.Ingested == 0 {
+		t.Fatalf("stats = %+v, want the posting emitted before the deadline saved (fixture assumption)", got)
+	}
+	if len(got.QualifyingBoards) != 0 {
+		t.Errorf("QualifyingBoards = %v, want none for a stream the deadline cut short", got.QualifyingBoards)
+	}
+	if got.Interrupted != 1 {
+		t.Errorf("Interrupted = %d, want 1", got.Interrupted)
 	}
 }
