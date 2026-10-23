@@ -3,7 +3,7 @@
   import Seo from '#lib/components/Seo.svelte';
   import ExtensionLandingView from '#lib/components/ExtensionLandingView.svelte';
   import { EXTENSION_FAQ } from '#lib/extensionFaq.js';
-  import { EXTENSION_STORE_URL } from '#lib/extensionLinks.js';
+  import { EXTENSION_FIREFOX_URL, EXTENSION_STORE_URL } from '#lib/extensionLinks.js';
   import { breadcrumbJsonLd, extensionApplicationJsonLd, faqPageJsonLd, jsonLdScript } from '#lib/seo.js';
 
   const origin = $derived(page.url.origin);
@@ -13,7 +13,7 @@
   // cannot disagree with what the page shows.
   const jsonLd = $derived(
     jsonLdScript([
-      extensionApplicationJsonLd(origin, EXTENSION_STORE_URL),
+      extensionApplicationJsonLd(origin, [EXTENSION_STORE_URL, EXTENSION_FIREFOX_URL]),
       faqPageJsonLd(EXTENSION_FAQ),
       breadcrumbJsonLd([
         { name: 'freehire', url: `${origin}/` },
@@ -24,7 +24,7 @@
 </script>
 
 <Seo
-  title="freehire for Chrome — a job-application agent in the side panel"
+  title="freehire for Chrome and Firefox — a job-application agent in the side panel"
   description="Open the freehire side panel on any job posting: it reads the page itself, scores it against your CV, and fills the application form from your profile. Greenhouse, Lever, Workday, Ashby — or a career page nobody has heard of. You press Submit."
   {canonical}
 />

@@ -730,24 +730,22 @@ export function cliApplicationJsonLd(
 /** schema.org SoftwareApplication for the browser-extension landing. `installUrl`
  *  is passed in rather than written here so it comes from the same constant the
  *  page's buttons use (`extensionLinks.ts`) — structured data must not name a
- *  destination the page does not offer. `browserRequirements` is the honest
- *  bound: the panel is built on Chrome's `sidePanel` API, which Firefox and
- *  Safari do not have. */
+ *  destination the page does not offer. One URL per store the page links. */
 export function extensionApplicationJsonLd(
   origin: string,
-  installUrl: string
+  installUrls: string[]
 ): Record<string, unknown> {
   return {
     '@context': 'https://schema.org',
     '@type': 'SoftwareApplication',
     name: 'freehire browser extension',
     description:
-      "A job-application agent in Chrome's side panel: it reads the posting you are on, scores it against your CV, and fills the application form from your profile — you press Submit.",
+      "A job-application agent in your browser's side panel: it reads the posting you are on, scores it against your CV, and fills the application form from your profile — you press Submit.",
     url: `${origin}/features/extension`,
     applicationCategory: 'BrowserApplication',
-    operatingSystem: 'Chrome',
-    browserRequirements: 'Requires Chrome 114 or a Chromium browser with side-panel support',
-    installUrl,
+    operatingSystem: 'Chrome, Firefox',
+    browserRequirements: 'Requires Chrome 114, a Chromium browser with side-panel support, or Firefox',
+    installUrl: installUrls,
     isAccessibleForFree: true,
     offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
     softwareHelp: { '@type': 'CreativeWork', url: `${origin}/features/extension` },

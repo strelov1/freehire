@@ -21,6 +21,10 @@
 [![Contributors](https://img.shields.io/github/contributors-anon/strelov1/freehire)](https://github.com/strelov1/freehire/graphs/contributors)
 [![Discord](https://img.shields.io/badge/Discord-join-5865F2?logo=discord&logoColor=white)](https://discord.gg/79cgB9RRfx)
 
+[![Chrome Web Store](https://img.shields.io/chrome-web-store/v/ijfaechijopdlikalojadpojmpilplnj?label=Chrome%20Web%20Store&logo=googlechrome&logoColor=white&color=4285F4)](https://chromewebstore.google.com/detail/freehire/ijfaechijopdlikalojadpojmpilplnj)
+[![Firefox Add-ons](https://img.shields.io/badge/Firefox%20Add--ons-install-FF7139?logo=firefoxbrowser&logoColor=white)](https://addons.mozilla.org/firefox/addon/freehire/)
+[![App Store](https://img.shields.io/badge/App%20Store-download-0D96F6?logo=appstore&logoColor=white)](https://apps.apple.com/app/freehire-open-job-search/id6801885119)
+
 <br>
 
 <!-- Product Hunt: launching 26 August 2026. The badge is Product Hunt's own embed,

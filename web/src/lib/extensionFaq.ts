@@ -14,7 +14,7 @@ export const EXTENSION_FAQ: FaqItem[] = [
   {
     question: 'Which browsers does it work in?',
     answer:
-      'Chrome, and the Chromium browsers that carry its side panel. It is a Manifest V3 extension built around `chrome.sidePanel`, so Firefox and Safari are not supported today.',
+      'Chrome and the Chromium browsers that carry its side panel, and Firefox, where the panel opens as the sidebar. Firefox has no `chrome.debugger`, so attaching a tailored CV to the upload field is Chrome-only. Safari is not supported today.',
   },
   {
     question: 'Do I need a freehire account?',

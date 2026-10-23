@@ -2,7 +2,7 @@
   import { resolve } from '$app/paths';
   import { Button, NumberedGrid, ProviderIcon, SectionLabel } from '#lib/ui/index.js';
   import { EXTENSION_FAQ } from '#lib/extensionFaq.js';
-  import { EXTENSION_CLAIMS, EXTENSION_STORE_URL } from '#lib/extensionLinks.js';
+  import { EXTENSION_CLAIMS, EXTENSION_FIREFOX_URL, EXTENSION_STORE_URL } from '#lib/extensionLinks.js';
 
   // The three claims the panel makes, in the order it makes them on a posting:
   // it reads, it scores, it fills.
@@ -59,8 +59,8 @@
   const start = [
     {
       n: '01',
-      title: 'Add it to Chrome',
-      body: 'One click from the Chrome Web Store. The panel lives behind the toolbar icon and opens beside whatever tab you are on.',
+      title: 'Add it to your browser',
+      body: 'One click from the Chrome Web Store or Firefox Add-ons. The panel lives behind the toolbar icon and opens beside whatever tab you are on.',
     },
     {
       n: '02',
@@ -84,7 +84,7 @@
         Apply where you already are.
       </h1>
       <p class="mt-7 max-w-xl text-lg leading-relaxed text-muted-foreground">
-        A job-application agent in Chrome's side panel, sitting next to the posting you are reading.
+        A job-application agent in your browser's side panel, sitting next to the posting you are reading.
         It reads that page itself, tells you where you fall short of it, and fills the application
         form from your profile — on any site, not just the ones freehire tracks.
       </p>
@@ -100,9 +100,13 @@
           <ProviderIcon provider="chrome" class="size-4" />
           Add to Chrome
         </Button>
+        <Button href={EXTENSION_FIREFOX_URL} target="_blank" variant="outline" size="lg">
+          <ProviderIcon provider="firefox" class="size-4" />
+          Add to Firefox
+        </Button>
         <Button href={resolve('/jobs')} variant="outline" size="lg">Browse jobs</Button>
       </div>
-      <p class="mt-4 text-sm text-muted-foreground">Free. Chrome and Chromium browsers with a side panel.</p>
+      <p class="mt-4 text-sm text-muted-foreground">Free. Chrome, Chromium browsers with a side panel, and Firefox.</p>
     </div>
 
     <!-- Panel preview: a browser window with the panel docked right. Drawn, not a
@@ -190,6 +194,10 @@
           <Button href={EXTENSION_STORE_URL} target="_blank" variant="primary" size="lg">
             <ProviderIcon provider="chrome" class="size-4" />
             Add to Chrome
+          </Button>
+          <Button href={EXTENSION_FIREFOX_URL} target="_blank" variant="outline" size="lg">
+            <ProviderIcon provider="firefox" class="size-4" />
+            Add to Firefox
           </Button>
           <Button href={resolve('/features/tailor')} variant="ghost" size="lg">
             Then tailor the CV
@@ -430,6 +438,10 @@
         <Button href={EXTENSION_STORE_URL} target="_blank" variant="primary" size="lg">
           <ProviderIcon provider="chrome" class="size-4" />
           Add to Chrome
+        </Button>
+        <Button href={EXTENSION_FIREFOX_URL} target="_blank" variant="outline" size="lg">
+          <ProviderIcon provider="firefox" class="size-4" />
+          Add to Firefox
         </Button>
         <Button href={resolve('/jobs')} variant="outline" size="lg">Browse jobs</Button>
       </div>
