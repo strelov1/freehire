@@ -306,6 +306,15 @@ export async function saveBankAnswer(question: string, answer: string, token: st
   await putData<unknown>('/api/v1/me/answer-bank', { question, answer }, token);
 }
 
+/**
+ * Records that the candidate applied to this catalog job today — the same mark the job
+ * page's "I applied" sets, moving it into their Applied list. It records; it submits
+ * nothing to the employer.
+ */
+export async function markApplied(slug: string, token: string): Promise<void> {
+  await postData<unknown>(`/api/v1/jobs/${encodeURIComponent(slug)}/apply`, {}, token);
+}
+
 /** What the server did with a page we offered it.
  *  - `found`    the catalog already carried the posting
  *  - `tracked`  imported, and freehire already crawls this company's board

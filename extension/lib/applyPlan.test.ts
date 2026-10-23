@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildPlan, markAnswered, showsApplicationForm } from './applyPlan';
+import { buildPlan, leftAnApplication, markAnswered, showsApplicationForm } from './applyPlan';
 import type { FramedField } from './protocol';
 import { must } from './test-utils';
 
@@ -219,5 +219,22 @@ describe('showsApplicationForm', () => {
     const few = ['One', 'Two', 'Three'].map((l) => field(l));
 
     expect(showsApplicationForm(few, [])).toBe(false);
+  });
+});
+
+describe('leftAnApplication', () => {
+  // A form the candidate had started on is the evidence there was an application to send;
+  // leaving it is the moment to ask whether they did.
+  it('is true for a form with an answered question', () => {
+    const plan = buildPlan([field('Email', { value: 'a@b.c' }), field('Why us?')]);
+    expect(leftAnApplication(plan)).toBe(true);
+  });
+
+  it('is false for a form nobody touched — browsing past one is not applying', () => {
+    expect(leftAnApplication(buildPlan([field('Email'), field('Why us?')]))).toBe(false);
+  });
+
+  it('is false where there was no form at all', () => {
+    expect(leftAnApplication(null)).toBe(false);
   });
 });

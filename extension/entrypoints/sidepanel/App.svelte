@@ -20,6 +20,7 @@
     getAutofillProfile,
     runAgentAutofill,
     saveBankAnswer,
+    markApplied,
     resolveJob,
     resolveNotice,
     type FreehireJob,
@@ -34,13 +35,21 @@
     formatAuthorizedCountries,
     normalizeLabel,
   } from '../../lib/form';
-  import { buildPlan, markAnswered, showsApplicationForm, type ApplyPlan, type PlanItem } from '../../lib/applyPlan';
+  import {
+    buildPlan,
+    leftAnApplication,
+    markAnswered,
+    showsApplicationForm,
+    type ApplyPlan,
+    type PlanItem,
+  } from '../../lib/applyPlan';
   import { startWalk, nextStep, applyStep, skipStep, stopWalk, type Walk } from '../../lib/walk';
   import { ToolChannel } from '../../lib/tools/client';
   import { activeTabPage } from '../../lib/tools/page';
   import MatchCard from './MatchCard.svelte';
   import ApplyPlanCard from './ApplyPlan.svelte';
   import SaveAnswers from './SaveAnswers.svelte';
+  import AppliedPrompt from './AppliedPrompt.svelte';
   import PlanRefusalAlert from './PlanRefusalAlert.svelte';
   import { answersToOffer, type AnswerOffer } from '../../lib/answerOffer';
   import ToolGroupList from './ToolGroupList.svelte';
@@ -538,6 +547,15 @@
    *  plan does not carry. What the "save my answers" offer is computed from. */
   let formFields = $state<FramedField[]>([]);
   let savingAnswers = $state(false);
+  /** The catalog job whose application form is in front of the user, started. */
+  let startedJob: FreehireJob | null = null;
+  /** The catalog job whose started application gave way to a page with no form — the one
+   *  the "did you submit?" prompt names. Kept until answered. */
+  let appliedCandidate = $state<FreehireJob | null>(null);
+  let markingApplied = $state(false);
+  /** Asked only once the page in front of the user shows no form: the next step of a
+   *  multi-step application is still the application, not its end. */
+  let asksApplied = $derived(appliedCandidate !== null && !plan && !autofilling);
   let answerOffers = $derived(autofilling ? [] : answersToOffer(formFields, autofilled));
   /** The upload fields the last read found, across every frame — MatchCard's "Attach
    *  tailored CV" action is gated on at least one being in the TOP frame specifically
@@ -561,6 +579,7 @@
           kind: 'GET_FRAMED_FORM',
         } satisfies RuntimeMessage)) as RuntimeMessage | undefined;
         applyRead(reply);
+        noteApplication();
       } while (planStale);
     } catch (err) {
       // A read that could not happen is not a page without a form: say so rather
@@ -568,6 +587,23 @@
       planError = err instanceof Error ? err.message : 'could not read the form';
     } finally {
       planReading = false;
+    }
+  }
+
+  /**
+   * Follows the application through form reads rather than page events: a full navigation
+   * and a single-page ATS replacing its form with a thank-you both end the same way — a
+   * read that finds no form after one that found a started application. Page events
+   * cannot see the second, and race the page's own change notice on the first.
+   */
+  function noteApplication() {
+    if (leftAnApplication(plan)) {
+      if (matchJob?.public_slug) startedJob = matchJob;
+      return;
+    }
+    if (!plan && startedJob) {
+      appliedCandidate = startedJob;
+      startedJob = null;
     }
   }
 
@@ -824,6 +860,23 @@
     }
   }
 
+  async function confirmApplied() {
+    const job = appliedCandidate;
+    const token = await getToken();
+    if (!job || !token || markingApplied) return;
+    markingApplied = true;
+    try {
+      await markApplied(job.public_slug, token);
+      track('mark_applied', { source: 'left_form' });
+      notices.push(`✓ Marked as applied — ${job.title} is in your Applied list.`);
+      appliedCandidate = null;
+    } catch (err) {
+      notices.push(`Could not mark as applied: ${err instanceof Error ? err.message : 'error'}`);
+    } finally {
+      markingApplied = false;
+    }
+  }
+
   async function runOverrideFill() {
     const run = overrideFill;
     if (!run || autofilling) return;
@@ -941,6 +994,14 @@
       <div class="match-panel">
         <div class="match-scroll">
           {#if user}
+            {#if asksApplied && appliedCandidate}
+              <AppliedPrompt
+                job={appliedCandidate}
+                marking={markingApplied}
+                onConfirm={confirmApplied}
+                onDismiss={() => (appliedCandidate = null)}
+              />
+            {/if}
             {#if matchStatus === 'ready' && matchJob && match}
               <MatchCard
                 job={matchJob}

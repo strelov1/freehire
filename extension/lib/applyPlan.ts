@@ -101,6 +101,19 @@ export function showsApplicationForm(
   return fields.filter((f) => f.label.trim() !== '').length >= QUESTIONNAIRE_SIZE;
 }
 
+/**
+ * Whether the plan being left behind was an application the candidate had started on —
+ * the evidence that leaving the page may mean they submitted it.
+ *
+ * Nothing on the page after it says so reliably: every ATS words its thank-you page its
+ * own way, and Greenhouse's `/confirmation` is one of dozens. So the panel ASKS when a
+ * started form gives way to a page with none, rather than recording an application on a
+ * guess. An untouched form is not that evidence: scrolling past one is not applying.
+ */
+export function leftAnApplication(plan: ApplyPlan | null): boolean {
+  return plan?.items.some((i) => i.answered) ?? false;
+}
+
 /** The plan for the questions the page reported, in the order it asks them. */
 export function buildPlan(fields: FramedField[]): ApplyPlan {
   const items: PlanItem[] = fields
