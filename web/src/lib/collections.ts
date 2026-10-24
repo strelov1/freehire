@@ -294,9 +294,11 @@ export const FILTER_COLLECTIONS: FilterCollection[] = [
   // `category` facet value (see vocab.CategoryValues). The param is `category`; the
   // slug is a readable form of the value — usually its kebab case (data_engineering →
   // data-engineering), but chosen for readability where they differ (ml_ai →
-  // machine-learning). Only technical categories are listed — non-tech ones
-  // (sales/support/marketing) are off-audience. Each was confirmed to have
-  // a healthy live count (≥ 300) before shipping.
+  // machine-learning). Engineering categories plus the two that sit beside an
+  // engineering team — data analytics and product management, the second and
+  // eleventh most-typed searches on 2026-10-24 — while sales/support/marketing
+  // stay off-audience. Each was confirmed to have a healthy live count (≥ 300)
+  // before shipping.
   {
     slug: 'backend',
     group: 'field',
@@ -345,6 +347,13 @@ export const FILTER_COLLECTIONS: FilterCollection[] = [
     title: 'Data Science',
     description: 'Data science roles turning data into models, insight and decisions.',
     params: { category: 'data_science' },
+  },
+  {
+    slug: 'data-analytics',
+    group: 'field',
+    title: 'Data Analytics',
+    description: 'Data and analytics roles — analysts, analytics engineers and BI — turning data into reporting and decisions.',
+    params: { category: 'data_analytics' },
   },
   {
     slug: 'machine-learning',
@@ -401,6 +410,13 @@ export const FILTER_COLLECTIONS: FilterCollection[] = [
     title: 'Network Engineering',
     description: 'Network engineering roles designing and operating network infrastructure.',
     params: { category: 'network_engineering' },
+  },
+  {
+    slug: 'product-management',
+    group: 'field',
+    title: 'Product Management',
+    description: 'Product management roles — product managers and product owners shaping what gets built.',
+    params: { category: 'product' },
   },
   // Seniority landings — the "<level> jobs" pattern, one per canonical `seniority`
   // facet value. Copy leans on the level ("Senior-Level"), not a category it cannot
@@ -1294,13 +1310,15 @@ export function jobFacetsFromJob(job: Job): JobFacets {
 // added; slugs are verified to exist in FILTER_COLLECTIONS by a test.
 //
 // Ordered by what visitors actually type into search (the `search_queries`
-// table, read 2026-10-24): roles lead by a wide margin — data engineer, AI
-// engineer, backend, software engineer — while TypeScript, Go and AWS were not
-// in the top sixty. `remote-worldwide` stays although it never appears there:
-// remote is picked with a filter, not typed, and that table records only `q`.
+// table, read 2026-10-24): roles lead by a wide margin — data engineer, data
+// analyst, AI engineer, backend, software engineer — while TypeScript, Go and
+// AWS were not in the top sixty. `remote-worldwide` stays although it never
+// appears there: remote is picked with a filter, not typed, and that table
+// records only `q`.
 export const POPULAR_COLLECTION_FALLBACK = [
   'remote-worldwide',
   'data-engineering',
+  'data-analytics',
   'ai-engineering',
   'software-engineer',
   'backend',
@@ -1308,7 +1326,6 @@ export const POPULAR_COLLECTION_FALLBACK = [
   'data-science',
   'machine-learning',
   'fullstack',
-  'frontend',
 ];
 
 /** The popular collections as footer links, in curated order.

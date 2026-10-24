@@ -51,7 +51,7 @@ export const COLLECTION_SECTIONS: CollectionSectionDef[] = [
     key: 'field',
     slug: 'fields',
     title: 'Fields',
-    description: 'Open roles by engineering field — backend, DevOps, data, security and more.',
+    description: 'Open roles by field — backend, DevOps, data, product, security and more.',
   },
   {
     key: 'ai',

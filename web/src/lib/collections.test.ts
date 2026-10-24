@@ -346,11 +346,11 @@ describe('collectionForSkill', () => {
     expect(collectionForSkill('')).toBeUndefined();
   });
 
-  // The reason this helper reads params instead of matching slugs. Each of these four
+  // The reason this helper reads params instead of matching slugs. Each of these five
   // names both a skill and a collection, and the collection pins a CATEGORY — a
   // different set from the skill facet. A slug match passes every other test in this
-  // file and gets all four of these wrong.
-  it.each(['data-science', 'data-engineering', 'devops', 'machine-learning'])(
+  // file and gets all five of these wrong.
+  it.each(['data-science', 'data-engineering', 'data-analytics', 'devops', 'machine-learning'])(
     'does not match %s, whose same-named collection pins a category',
     (slug) => {
       expect(collectionBySlug(slug)).toBeDefined();
