@@ -20,11 +20,15 @@ type FacetParams struct {
 }
 
 // FacetResult holds the facet distribution and stats for a FacetCounts request,
-// plus Meilisearch's estimated total for the filtered set.
+// plus Meilisearch's estimated total for the filtered set. Companies is the exact
+// number of distinct company_slug values under the same filter — set only when a
+// caller asked for it (see DistinctCount), nil otherwise. It lives here so a
+// cached facet result carries it.
 type FacetResult struct {
-	Total  int64
-	Facets map[string]map[string]int64 // attr → value → count
-	Stats  map[string]FacetStat        // attr → {min,max}
+	Total     int64
+	Facets    map[string]map[string]int64 // attr → value → count
+	Stats     map[string]FacetStat        // attr → {min,max}
+	Companies *int64
 }
 
 // FacetStat is the numeric range of a facet over the matched set, as reported by
@@ -67,6 +71,42 @@ func (c *Client) facetSearch(ctx context.Context, query string, filter any, face
 		return nil, err
 	}
 	return federatedAsSearchResponse(resp)
+}
+
+// DistinctCount returns the exact number of distinct values of attr among the
+// documents matching query and filter — e.g. how many companies a search spans,
+// which the facet distribution cannot answer once it passes the
+// maxValuesPerFacet cap.
+//
+// Two engine behaviours decide the request's shape. It pages (page 1,
+// hitsPerPage 0) and reads totalHits, because with `limit: 0` Meilisearch's
+// estimatedTotalHits ignores `distinct` and reports the document count. And it
+// asks for no facets, because `distinct` beside `facets` collapses every facet
+// count to 1 — the distribution is a separate request.
+//
+// An OR query is refused as ErrBadQuery: it runs as a federated search, where a
+// per-alternative distinct counts a company matched by two alternatives twice,
+// and a count that is not exact is what this exists to avoid.
+func (c *Client) DistinctCount(ctx context.Context, query string, filter any, attr string) (int64, error) {
+	alts, err := ParseQuery(query)
+	if err != nil {
+		return 0, err
+	}
+	if len(alts) != 1 {
+		return 0, fmt.Errorf("search: distinct count: %w: not available for an OR query", ErrBadQuery)
+	}
+	none := int64(0)
+	resp, err := c.facet.SearchWithContext(ctx, alts[0].Text, &meilisearch.SearchRequest{
+		Filter:               filter,
+		Distinct:             attr,
+		Page:                 1,
+		HitsPerPage:          &none,
+		AttributesToSearchOn: alts[0].Fields,
+	})
+	if err != nil {
+		return 0, queryErr(ctx, "search: distinct count", err)
+	}
+	return resp.TotalHits, nil
 }
 
 // FacetReq is one facet's disjunctive request: the attribute to distribute and

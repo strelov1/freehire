@@ -67,6 +67,40 @@ func (q *Queries) CompanyJobCountBySlug(ctx context.Context, slug string) (int32
 	return job_count, err
 }
 
+const companyNamesBySlugs = `-- name: CompanyNamesBySlugs :many
+SELECT slug, name
+FROM companies
+WHERE slug = ANY($1::text[])
+`
+
+type CompanyNamesBySlugsRow struct {
+	Slug string `json:"slug"`
+	Name string `json:"name"`
+}
+
+// Display names for a bounded set of slugs, in one read. GET /jobs/facets names
+// the top companies of its company_slug distribution (at most 50) with it. A slug
+// with no row yet (the companies table trails ingest) is simply absent.
+func (q *Queries) CompanyNamesBySlugs(ctx context.Context, slugs []string) ([]CompanyNamesBySlugsRow, error) {
+	rows, err := q.db.Query(ctx, companyNamesBySlugs, slugs)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []CompanyNamesBySlugsRow{}
+	for rows.Next() {
+		var i CompanyNamesBySlugsRow
+		if err := rows.Scan(&i.Slug, &i.Name); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const companySubindustries = `-- name: CompanySubindustries :many
 SELECT subindustry AS value, count(*) AS count
 FROM companies

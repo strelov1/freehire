@@ -34,6 +34,9 @@ type searchHandlers struct {
 	descriptions jobDescriptions
 	queries      *db.Queries
 	facets       facetCounter
+	// companyNames names the top companies of a company_slug facet request.
+	// *db.Queries in production; nil names each company by its slug.
+	companyNames companyNamer
 	// cache holds facet distributions for facetCacheTTL. Best-effort and optional:
 	// a nil cache (search configured but no Redis) simply recomputes every request,
 	// the shape every facet test but the caching ones runs under.
@@ -54,10 +57,15 @@ type profileReader interface {
 }
 
 func newSearchHandlers(search searcher, facets facetCounter, queries *db.Queries, c cache.Cache, profiles profileReader) *searchHandlers {
-	return &searchHandlers{
+	h := &searchHandlers{
 		search: search, descriptions: queries, queries: queries, facets: facets, cache: c,
 		userProfile: profiles,
 	}
+	// Assign only when set: a nil *db.Queries in the interface would be non-nil.
+	if queries != nil {
+		h.companyNames = queries
+	}
+	return h
 }
 
 // searchRecordTimeout bounds the fire-and-forget demand write. Short: it is one

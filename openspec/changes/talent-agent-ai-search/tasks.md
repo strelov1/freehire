@@ -13,11 +13,11 @@
 
 ## 3. Exact distinct-company count on job facets (backend)
 
-- [ ] 3.1 Test (integration, Meili): `DistinctCount` with `distinct: company_slug`, `page: 1`, `hitsPerPage: 0` equals the true distinct count, including above the 1,200 facet cap; a `limit: 0` request is NOT used
-- [ ] 3.2 Implement `search.Client.DistinctCount(ctx, query, filter, attr)` in `internal/search/search/facets.go`; add `Companies` to `FacetResult` so the one-minute facet cache covers it
-- [ ] 3.3 Test (handler): `facets=company_slug` returns `companies_total` and a top-50, count-ordered `company_slug` distribution with display names; absent → no extra search; `disjunctive=1&facets=company_slug` → 400
-- [ ] 3.4 Accept `company_slug` in `requestedFacets` (not in the default set), run the facet query and the distinct count concurrently (two requests, never `distinct` beside `facets`), trim to 50, resolve display names for those slugs from `companies` in one read
-- [ ] 3.5 Add `companies_total` and the named distribution to `facetPayload`/`facetView` and `openapi.yaml`; extend web `FacetCounts` type and `api.facetCounts`
+- [x] 3.1 Test (integration, Meili): `DistinctCount` with `distinct: company_slug`, `page: 1`, `hitsPerPage: 0` equals the true distinct count, including above the 1,200 facet cap; a `limit: 0` request is NOT used
+- [x] 3.2 Implement `search.Client.DistinctCount(ctx, query, filter, attr)` in `internal/search/search/facets.go`; add `Companies` to `FacetResult` so the one-minute facet cache covers it
+- [x] 3.3 Test (handler): `facets=company_slug` returns `companies_total` and a top-50, count-ordered `company_slug` distribution with display names; absent → no extra search; `disjunctive=1&facets=company_slug` → 400
+- [x] 3.4 Accept `company_slug` in `requestedFacets` (not in the default set), run the facet query and the distinct count concurrently (two requests, never `distinct` beside `facets`), trim to 50, resolve display names for those slugs from `companies` in one read
+- [x] 3.5 Add `companies_total` and the named distribution to `facetPayload`/`facetView` and `openapi.yaml`; extend web `FacetCounts` type and `api.facetCounts`
 
 ## 4. Shared thinking indicator (web)
 

@@ -519,8 +519,11 @@ paths:
 
         A distribution is counted per facet and the wide-valued ones (`cities`,
         `skills`) dominate, so narrow with `facets=` whenever you read only a few.
-        `company_slug` has no distribution — use `searchCompanies` for the company
-        typeahead.
+        `company_slug` is outside the default set: name it in `facets=` to get
+        `companies_total` (the exact number of distinct companies matching) and
+        `top_companies` (the 50 with the most matching postings, named). It cannot
+        be combined with `disjunctive`, nor with an `OR` query (400). For a
+        company typeahead use `searchCompanies`.
       x-openai-isConsequential: false
       parameters:
         - $ref: "#/components/parameters/Q"
@@ -2073,6 +2076,32 @@ components:
                 type: object
                 additionalProperties:
                   type: number
+            companies_total:
+              type: integer
+              description: |
+                Present only when `facets=` names `company_slug`: the exact number
+                of distinct companies among the matching postings.
+            top_companies:
+              type: array
+              maxItems: 50
+              description: |
+                Present only when `facets=` names `company_slug`: the companies
+                with the most matching postings, in descending count. Replaces a
+                `company_slug` entry in `facets`.
+              items:
+                type: object
+                required:
+                  - slug
+                  - name
+                  - count
+                properties:
+                  slug:
+                    type: string
+                  name:
+                    type: string
+                    description: Display name; the slug when the company has none yet.
+                  count:
+                    type: integer
         meta:
           type: object
           additionalProperties: true

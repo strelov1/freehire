@@ -211,6 +211,10 @@ func (f *stubFacets) FacetCounts(_ context.Context, p search.FacetParams) (searc
 	return f.res, nil
 }
 
+func (f *stubFacets) DistinctCount(context.Context, string, any, string) (int64, error) {
+	return 0, nil
+}
+
 func (f *stubFacets) DisjunctiveFacetCounts(context.Context, string, []search.FacetReq, any) (search.FacetResult, error) {
 	return f.res, nil
 }

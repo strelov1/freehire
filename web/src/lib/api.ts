@@ -752,7 +752,13 @@ export function createApi(
     if (opts?.disjunctive) p.set('disjunctive', '1');
     if (opts?.facets?.length) p.set('facets', opts.facets.join(','));
     const res = await request<{ data: FacetCounts }>(`/api/v1/jobs/facets?${p}`);
-    return { total: res.data.total, facets: res.data.facets ?? {}, stats: res.data.stats ?? {} };
+    return {
+      total: res.data.total,
+      facets: res.data.facets ?? {},
+      stats: res.data.stats ?? {},
+      companies_total: res.data.companies_total,
+      top_companies: res.data.top_companies,
+    };
   }
 
   /** The public catalogue-activity time series: vacancies added vs. removed per

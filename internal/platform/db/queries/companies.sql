@@ -256,6 +256,14 @@ DELETE FROM companies c
 WHERE NOT c.is_reference
   AND NOT EXISTS (SELECT 1 FROM jobs j WHERE j.company_slug = c.slug);
 
+-- name: CompanyNamesBySlugs :many
+-- Display names for a bounded set of slugs, in one read. GET /jobs/facets names
+-- the top companies of its company_slug distribution (at most 50) with it. A slug
+-- with no row yet (the companies table trails ingest) is simply absent.
+SELECT slug, name
+FROM companies
+WHERE slug = ANY(sqlc.arg(slugs)::text[]);
+
 -- name: CompanyExists :one
 -- Whether a company row already exists for the slug. The backfill checks this
 -- before upserting to log matched-existing vs inserted-reference counts — the

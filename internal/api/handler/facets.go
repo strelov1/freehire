@@ -12,8 +12,10 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v2"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/strelov1/freehire/internal/platform/cache"
+	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/search/search"
 )
 
@@ -41,7 +43,7 @@ func (h *searchHandlers) cachedFacetCounts(ctx context.Context, p search.FacetPa
 // the same distributions twice. A nil cache reads straight through.
 func cachedFacetCounts(ctx context.Context, f facetCounter, c cache.Cache, p search.FacetParams) (search.FacetResult, error) {
 	if c == nil {
-		return f.FacetCounts(ctx, p)
+		return countFacets(ctx, f, p)
 	}
 
 	key := facetCacheKey(p)
@@ -49,12 +51,43 @@ func cachedFacetCounts(ctx context.Context, f facetCounter, c cache.Cache, p sea
 		return cached, nil
 	}
 
-	res, err := f.FacetCounts(ctx, p)
+	res, err := countFacets(ctx, f, p)
 	if err != nil {
 		return res, err
 	}
 	// Store is best-effort: a failed write just means the next request recomputes.
 	_ = cache.SetJSON(ctx, c, key, res, facetCacheTTL)
+	return res, nil
+}
+
+// companyAttr is the index attribute behind the company_slug facet.
+var companyAttr = search.StringFacets[companyFacetParam]
+
+// countFacets runs the facet query and, when the company distribution is among
+// the requested attributes, the exact distinct-company count beside it. They are
+// two concurrent requests and must stay two: `distinct` in the facet request
+// would collapse every facet count to 1 (see search.Client.DistinctCount).
+func countFacets(ctx context.Context, f facetCounter, p search.FacetParams) (search.FacetResult, error) {
+	if !slices.Contains(p.Facets, companyAttr) {
+		return f.FacetCounts(ctx, p)
+	}
+	var (
+		res       search.FacetResult
+		companies int64
+	)
+	g, gctx := errgroup.WithContext(ctx)
+	g.Go(func() (err error) {
+		res, err = f.FacetCounts(gctx, p)
+		return err
+	})
+	g.Go(func() (err error) {
+		companies, err = f.DistinctCount(gctx, p.Query, p.Filter, companyAttr)
+		return err
+	})
+	if err := g.Wait(); err != nil {
+		return search.FacetResult{}, err
+	}
+	res.Companies = &companies
 	return res, nil
 }
 
@@ -114,6 +147,15 @@ type facetCounter interface {
 	// DisjunctiveFacetCounts counts each facet under its own reduced filter (see
 	// the disjunctive mode of JobFacets) plus the total under the full filter.
 	DisjunctiveFacetCounts(ctx context.Context, query string, reqs []search.FacetReq, totalFilter any) (search.FacetResult, error)
+	// DistinctCount is the exact number of distinct values of attr under the
+	// filter — how many companies a search spans, past the facet value cap.
+	DistinctCount(ctx context.Context, query string, filter any, attr string) (int64, error)
+}
+
+// companyNamer resolves display names for company slugs in one read.
+// *db.Queries satisfies it; a nil one names every company by its slug.
+type companyNamer interface {
+	CompanyNamesBySlugs(ctx context.Context, slugs []string) ([]db.CompanyNamesBySlugsRow, error)
 }
 
 // facetExtra describes a facetable attribute that is not a string-equality facet
@@ -135,13 +177,20 @@ var facetExtraParams = map[string]facetExtra{
 	"experience_years_min": {attr: "enrichment.experience_years_min", statOnly: true},
 }
 
-// facetsNoDistribution are string facets we filter on but never request a value
-// distribution for. company_slug has thousands of values; the sidebar company
-// filter is a server-backed typeahead (GET /api/v1/companies, count-ordered), not
-// a facet distribution — and Meili would only return a capped, alphabetical slice
-// anyway. It stays in search.StringFacets so `?company_slug=` filtering still
-// works; we just stop computing a distribution the UI no longer reads.
-var facetsNoDistribution = map[string]bool{"company_slug": true}
+// companyFacetParam is the one facet outside the default set, counted only when
+// `facets=` names it. It has thousands of values and the sidebar company filter
+// is a server-backed typeahead (GET /api/v1/companies), so the default set does
+// not pay for it; a caller that names it gets the exact distinct-company count
+// and the top topCompaniesLimit companies by job count (see JobFacets).
+const companyFacetParam = "company_slug"
+
+// topCompaniesLimit bounds the named company distribution: the response carries
+// the busiest companies, not the up-to-maxValuesPerFacet tail Meili returns.
+const topCompaniesLimit = 50
+
+// facetsNoDistribution are string facets we filter on but leave out of the
+// DEFAULT distribution set; each is counted only when `facets=` names it.
+var facetsNoDistribution = map[string]bool{companyFacetParam: true}
 
 // facetAttributes is the list of index attributes to request facets for: every
 // string facet (the same attributes search.StringFacets filters on), minus the
@@ -149,7 +198,8 @@ var facetsNoDistribution = map[string]bool{"company_slug": true}
 // request. This is the single source shared with the search filter vocabulary —
 // a new facet added to search.StringFacets is counted here automatically.
 //
-// `only` narrows the set to the named public params. A distribution is counted
+// `only` narrows the set to the named public params, and is the only way to
+// reach a facet in facetsNoDistribution. A distribution is counted
 // per attribute and the wide-valued ones (cities, skills) dominate — on prod the
 // full set costs 284ms against ?work_mode=remote versus 10ms for one attribute —
 // so a caller that reads a single key should not pay for the other twenty-six.
@@ -163,7 +213,7 @@ func facetAttributes(only ...string) []string {
 
 	attrs := make([]string, 0, len(search.StringFacets)+len(facetExtraParams))
 	for param, attr := range search.StringFacets {
-		if facetsNoDistribution[param] || !keep(param) {
+		if !keep(param) || (facetsNoDistribution[param] && !want[param]) {
 			continue
 		}
 		attrs = append(attrs, attr)
@@ -183,8 +233,8 @@ func facetAttributes(only ...string) []string {
 //
 // An unknown name is an error, not a silent no-op. Callers read counts by key and
 // already treat a missing one as "Meili's per-facet cap dropped this value", so a
-// typo would hide indefinitely. company_slug is refused for the reason it is
-// absent from the full set: thousands of values, and the UI uses the typeahead.
+// typo would hide indefinitely. company_slug is accepted here although it is
+// absent from the default set: naming it is how a caller opts in.
 func requestedFacets(c *fiber.Ctx) ([]string, error) {
 	raw := c.Query("facets")
 	if raw == "" {
@@ -199,7 +249,7 @@ func requestedFacets(c *fiber.Ctx) ([]string, error) {
 		}
 		_, isString := search.StringFacets[name]
 		_, isExtra := facetExtraParams[name]
-		if (!isString && !isExtra) || facetsNoDistribution[name] {
+		if !isString && !isExtra {
 			return nil, fiber.NewError(fiber.StatusBadRequest, "unknown facet: "+name)
 		}
 		out = append(out, name)
@@ -311,16 +361,82 @@ func (h *searchHandlers) JobFacets(c *fiber.Ctx) error {
 		return err
 	}
 
-	return dataResponseWithIgnored(c, facetView(res), ignoredParams(c, facetsParams), ignoredJobValues(c))
+	view := facetView(res)
+	if err := h.nameCompanies(c.Context(), view.TopCompanies); err != nil {
+		return err
+	}
+	return dataResponseWithIgnored(c, view, ignoredParams(c, facetsParams), ignoredJobValues(c))
+}
+
+// nameCompanies fills each top company's display name from the companies table
+// in one read. A slug with no row yet (the table trails ingest) keeps its slug as
+// its name, so every entry carries one.
+func (h *searchHandlers) nameCompanies(ctx context.Context, top []companyFacetValue) error {
+	if len(top) == 0 {
+		return nil
+	}
+	names := map[string]string{}
+	if h.companyNames != nil {
+		slugs := make([]string, len(top))
+		for i, t := range top {
+			slugs[i] = t.Slug
+		}
+		rows, err := h.companyNames.CompanyNamesBySlugs(ctx, slugs)
+		if err != nil {
+			return err
+		}
+		for _, r := range rows {
+			names[r.Slug] = r.Name
+		}
+	}
+	for i := range top {
+		if n := names[top[i].Slug]; n != "" {
+			top[i].Name = n
+		} else {
+			top[i].Name = top[i].Slug
+		}
+	}
+	return nil
 }
 
 // facetPayload is the public shape of a facet result: distributions and numeric
 // stats keyed by the query-param names callers filter by, never by the internal
-// Meilisearch attributes.
+// Meilisearch attributes. CompaniesTotal and TopCompanies appear only when the
+// company_slug facet was requested; the company distribution travels as the
+// ordered, named TopCompanies rather than inside Facets.
 type facetPayload struct {
-	Total  int64                       `json:"total"`
-	Facets map[string]map[string]int64 `json:"facets"`
-	Stats  map[string]search.FacetStat `json:"stats"`
+	Total          int64                       `json:"total"`
+	Facets         map[string]map[string]int64 `json:"facets"`
+	Stats          map[string]search.FacetStat `json:"stats"`
+	CompaniesTotal *int64                      `json:"companies_total,omitempty"`
+	TopCompanies   []companyFacetValue         `json:"top_companies,omitempty"`
+}
+
+// companyFacetValue is one company of the trimmed company distribution.
+type companyFacetValue struct {
+	Slug  string `json:"slug"`
+	Name  string `json:"name"`
+	Count int64  `json:"count"`
+}
+
+// topCompanies orders a company distribution by job count (slug breaks ties, so
+// the order is stable) and keeps the first topCompaniesLimit. Names are filled by
+// the caller, which has the database.
+func topCompanies(dist map[string]int64) []companyFacetValue {
+	out := make([]companyFacetValue, 0, len(dist))
+	for slug, n := range dist {
+		out = append(out, companyFacetValue{Slug: slug, Count: n})
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Count != out[j].Count {
+			return out[i].Count > out[j].Count
+		}
+		return out[i].Slug < out[j].Slug
+	})
+	if len(out) > topCompaniesLimit {
+		out = out[:topCompaniesLimit]
+	}
+	return out
 }
 
 // facetView re-keys a raw facet result to the public param names. It is shared by
@@ -332,9 +448,14 @@ func facetView(res search.FacetResult) facetPayload {
 	// Distributions, dropping the noisy per-value distribution of the continuous
 	// numeric facets (kept only as stats below).
 	facets := make(map[string]map[string]int64, len(res.Facets))
+	var top []companyFacetValue
 	for attr, dist := range res.Facets {
 		p, ok := param[attr]
 		if !ok || facetExtraParams[p].statOnly {
+			continue
+		}
+		if p == companyFacetParam {
+			top = topCompanies(dist)
 			continue
 		}
 		facets[p] = dist
@@ -346,5 +467,5 @@ func facetView(res search.FacetResult) facetPayload {
 			stats[p] = st
 		}
 	}
-	return facetPayload{Total: res.Total, Facets: facets, Stats: stats}
+	return facetPayload{Total: res.Total, Facets: facets, Stats: stats, CompaniesTotal: res.Companies, TopCompanies: top}
 }

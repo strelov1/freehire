@@ -28,6 +28,10 @@ func (r *recordingFacetCounter) FacetCounts(_ context.Context, p search.FacetPar
 	return r.res, r.err
 }
 
+func (r *recordingFacetCounter) DistinctCount(context.Context, string, any, string) (int64, error) {
+	return 0, r.err
+}
+
 func (r *recordingFacetCounter) DisjunctiveFacetCounts(_ context.Context, _ string, _ []search.FacetReq, _ any) (search.FacetResult, error) {
 	return r.res, r.err
 }

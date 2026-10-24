@@ -1101,6 +1101,10 @@ type Querier interface {
 	// absent). cmd/import-yc uses it to guard against homonym collisions: it skips
 	// enriching an existing company whose job_count dwarfs a matched YC entry's team.
 	CompanyJobCountBySlug(ctx context.Context, slug string) (int32, error)
+	// Display names for a bounded set of slugs, in one read. GET /jobs/facets names
+	// the top companies of its company_slug distribution (at most 50) with it. A slug
+	// with no row yet (the companies table trails ingest) is simply absent.
+	CompanyNamesBySlugs(ctx context.Context, slugs []string) ([]CompanyNamesBySlugsRow, error)
 	// Whether a company with this slug exists — the cheap existence check the vote
 	// path uses to return 404 before touching company_votes (whose FK would otherwise
 	// surface a bad slug as an opaque error on insert, or a silent no-op on clear).

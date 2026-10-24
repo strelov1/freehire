@@ -261,3 +261,45 @@ func TestDecodeFacetStats(t *testing.T) {
 		}
 	})
 }
+
+// DistinctCount must page (page 1, hitsPerPage 0) and never ask for facets or a
+// limit: Meilisearch's limit-0 estimatedTotalHits ignores `distinct`, and
+// `distinct` beside `facets` collapses every facet count to 1. totalHits is read.
+func TestDistinctCount_PagesWithoutLimitOrFacets(t *testing.T) {
+	var got *meilisearch.SearchRequest
+	var gotQuery string
+	c := &Client{facet: fakeSearchIndex{searchFn: func(_ context.Context, q string, r *meilisearch.SearchRequest) (*meilisearch.SearchResponse, error) {
+		got, gotQuery = r, q
+		return &meilisearch.SearchResponse{TotalHits: 1540, EstimatedTotalHits: 9999}, nil
+	}}}
+
+	n, err := c.DistinctCount(context.Background(), "title:golang", "f", "company_slug")
+	if err != nil {
+		t.Fatalf("DistinctCount: %v", err)
+	}
+	if n != 1540 {
+		t.Errorf("n = %d, want totalHits 1540", n)
+	}
+	if got.Distinct != "company_slug" || got.Page != 1 || got.HitsPerPage == nil || *got.HitsPerPage != 0 {
+		t.Errorf("request = distinct %q page %d hitsPerPage %v, want company_slug/1/0", got.Distinct, got.Page, got.HitsPerPage)
+	}
+	if got.Limit != 0 || got.Offset != 0 || len(got.Facets) != 0 {
+		t.Errorf("request carries limit %d offset %d facets %v, want none", got.Limit, got.Offset, got.Facets)
+	}
+	if got.Filter != "f" || gotQuery != "golang" || len(got.AttributesToSearchOn) != 1 || got.AttributesToSearchOn[0] != "title" {
+		t.Errorf("filter %v query %q fields %v not carried through", got.Filter, gotQuery, got.AttributesToSearchOn)
+	}
+}
+
+// An OR query runs federated, where a per-query distinct would count a company
+// matched by two alternatives twice — refused as a bad query, never over-counted.
+func TestDistinctCount_RefusesORQuery(t *testing.T) {
+	c := &Client{facet: fakeSearchIndex{searchFn: func(context.Context, string, *meilisearch.SearchRequest) (*meilisearch.SearchResponse, error) {
+		t.Fatal("an OR query must not reach the engine")
+		return nil, nil
+	}}}
+	_, err := c.DistinctCount(context.Background(), "go OR rust", nil, "company_slug")
+	if !errors.Is(err, ErrBadQuery) {
+		t.Fatalf("err = %v, want ErrBadQuery", err)
+	}
+}

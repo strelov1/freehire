@@ -430,6 +430,20 @@ export interface FacetCounts {
   total: number;
   facets: Record<string, Record<string, number>>;
   stats: Record<string, { min: number; max: number }>;
+  /** Only when `company_slug` was requested: the exact number of distinct
+   *  companies among the matching postings. */
+  companies_total?: number;
+  /** Only when `company_slug` was requested: the (at most 50) companies with the
+   *  most matching postings, in descending count. */
+  top_companies?: CompanyFacetValue[];
+}
+
+/** One company of the facets endpoint's named company distribution. `name` is
+ *  the display name, or the slug when the company has none yet. */
+interface CompanyFacetValue {
+  slug: string;
+  name: string;
+  count: number;
 }
 
 /** An authenticated account, as returned by the auth endpoints. */

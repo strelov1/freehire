@@ -42,6 +42,11 @@ func (f *twoQueryFacets) DisjunctiveFacetCounts(context.Context, string, []searc
 	return search.FacetResult{}, nil
 }
 
+// Nor the distinct-company count.
+func (f *twoQueryFacets) DistinctCount(context.Context, string, any, string) (int64, error) {
+	return 0, nil
+}
+
 // coverageFacets: role has 1000 open vacancies (query A), 370 uncovered (query B)
 // with kubernetes the biggest gap.
 func coverageFacets() *twoQueryFacets {
