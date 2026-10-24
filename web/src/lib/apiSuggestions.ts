@@ -33,7 +33,7 @@ export interface ApplyPlan {
  *  literal phrase match). A `"` embedded in the text is stripped first: it is
  *  Meilisearch's own quoting delimiter, and left in place it would split the query
  *  into more than one quoted segment instead of one. */
-function quoteForTitleSearch(text: string): string {
+export function quoteForTitleSearch(text: string): string {
   return `"${text.replaceAll('"', '')}"`;
 }
 

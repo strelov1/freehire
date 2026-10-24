@@ -9,6 +9,7 @@
 // Pure by design: no Svelte, no DOM, no network.
 
 import type { PastedJobLink } from './jobLink';
+import type { OperatorOption } from './searchOperators';
 import type { Suggestion } from './suggestions';
 import type { Job, CompanyListItem } from './types';
 
@@ -21,6 +22,7 @@ export type DropdownRow = { key: string; first: boolean } & (
   | { kind: 'company'; company: CompanyListItem }
   | { kind: 'text'; text: string }
   | { kind: 'link'; link: PastedJobLink }
+  | { kind: 'operator'; option: OperatorOption }
 );
 
 /** Keep only the companies the typed text actually NAMES.
@@ -70,6 +72,9 @@ export interface DropdownContent {
   /** The link recognised in `text`, when it is one. Set means the panel offers exactly
    *  one thing — see below. */
   link?: PastedJobLink | null;
+  /** The options for the operator the caret is in (`company:goo`). Set means the
+   *  panel offers only these — see below. */
+  operator?: readonly OperatorOption[] | null;
 }
 
 /** Flatten the sections into the single list the keyboard walks.
@@ -84,6 +89,19 @@ export function dropdownRows(content: DropdownContent): DropdownRow[] {
   // that does the one useful thing is the whole panel here.
   if (content.link) {
     return [{ kind: 'link', link: content.link, key: 'l', first: true }];
+  }
+
+  // Inside an operator's value the visitor is choosing ONE kind of thing, so the
+  // panel is that kind alone. The free-text row goes too: it would search the
+  // half-typed `company:goo` as words. No match is an empty panel, not the ordinary
+  // one — the ordinary rows answer a different question.
+  if (content.operator) {
+    return content.operator.map((option, i) => ({
+      kind: 'operator',
+      option,
+      key: `o:${option.key}:${option.id}`,
+      first: i === 0,
+    }));
   }
 
   const rows: DropdownRow[] = [];

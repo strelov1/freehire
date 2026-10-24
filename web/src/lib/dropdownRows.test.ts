@@ -169,3 +169,28 @@ describe('namedCompanies', () => {
     expect(got).toHaveLength(3);
   });
 });
+
+describe('dropdownRows in operator mode', () => {
+  const option = (value: string) => ({ key: 'company' as const, value, label: value, id: value });
+
+  // Inside `company:` the visitor is choosing a company, so the other sections — and
+  // the free-text row, which would search the half-typed operator as words — are noise.
+  it('shows only the operator options', () => {
+    const rows = dropdownRows({
+      suggestions: [suggestion('a')],
+      jobs: [job('j')],
+      companies: [company('c')],
+      text: 'company:goo',
+      operator: [option('Google'), option('Goodyear')],
+    });
+    expect(rows.map((r) => r.kind)).toEqual(['operator', 'operator']);
+    expect(rows.map((r) => r.key)).toEqual(['o:company:Google', 'o:company:Goodyear']);
+    expect(rows[0]?.first).toBe(true);
+  });
+
+  it('shows nothing rather than the ordinary panel when no option matches', () => {
+    expect(
+      dropdownRows({ suggestions: [suggestion('a')], jobs: [], companies: [], text: 'x', operator: [] }),
+    ).toEqual([]);
+  });
+});

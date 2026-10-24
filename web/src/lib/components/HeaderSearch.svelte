@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { untrack } from 'svelte';
+  import { tick, untrack } from 'svelte';
   import { goto } from '$app/navigation';
   import { page } from '$app/state';
   import { resolve } from '$app/paths';
@@ -9,7 +9,7 @@
   import { browseQuery, planForSuggestion } from '#lib/browseTarget.js';
   import { displayQuery } from '#lib/filters.js';
   import { dropdownRows, namedCompanies, type DropdownRow } from '#lib/dropdownRows.js';
-  import { companyLogoUrl } from '#lib/logo.js';
+  import { companyLogoUrl, sourceLogoUrl, SOURCE_LOGO_DOMAINS } from '#lib/logo.js';
   import { EntityLogo } from '#lib/ui/index.js';
   import type { Job, CompanyListItem, ApiSuggestionPart, FacetCounts } from '#lib/types.js';
   import { listSearchTarget, type ListSearchTarget } from '#lib/listSearch.svelte.js';
@@ -21,6 +21,24 @@
   import { runLinkIntake, type LinkIntakeStep } from '#lib/linkIntake.js';
   import { commit, edit, emptyDraft, reconcile, type SearchDraft } from '#lib/searchDraft.js';
   import { starterSuggestions, type Suggestion } from '#lib/suggestions.js';
+  import { loadSourceDistribution } from '#lib/sourceDictionary.js';
+  import type { FacetOption } from '#lib/facets.js';
+  import {
+    activeOperator,
+    companyOptions,
+    hasOperators,
+    matchCompany,
+    matchSource,
+    operatorPlan,
+    parseOperators,
+    replaceToken,
+    sourceOptions,
+    titleOptions,
+    unresolvedToken,
+    type OperatorOption,
+    type OperatorResolvers,
+    type OperatorToken,
+  } from '#lib/searchOperators.js';
   import {
     completeWord,
     typedTail,
@@ -254,7 +272,11 @@
   // now has rows to offer, so without this the starter list would hang open under the
   // header on every load of the feed, focused or not.
   let dismissed = $state(true);
-  let settledQuery = $state('');
+  // Where the caret sits in the box. It decides whether the visitor is inside an
+  // operator's value (`company:goo|`), which is what switches the panel to that kind.
+  let caret = $state(0);
+  // The draft and caret as of the last pause — what the fetches below answer.
+  let settled = $state.raw({ text: '', caret: 0 });
 
   // The distribution behind the empty box on a page with no list of its own. Fetched
   // once, lazily, the first time somebody focuses the box — a page that nobody searches
@@ -345,10 +367,13 @@
   // Suggestions follow the DRAFT, not the committed query — they are what helps the
   // visitor decide what to commit, so waiting for the commit would be circular.
   $effect(() => {
-    const typed = draft.text;
-    const timer = setTimeout(() => (settledQuery = typed), SUGGEST_DEBOUNCE_MS);
+    const next = { text: draft.text, caret };
+    const timer = setTimeout(() => (settled = next), SUGGEST_DEBOUNCE_MS);
     return () => clearTimeout(timer);
   });
+  // The ordinary sections search the free text only. Sent whole, `company:google java`
+  // would ask every endpoint for the word "company:google".
+  const settledQuery = $derived(parseOperators(settled.text).text);
 
   // A box with nothing to complete offers the catalogue's shape; a typed one offers
   // what matches.
@@ -369,7 +394,7 @@
   const starters = $derived(suggest ? starterSuggestions(suggest.counts()) : []);
   let completions = $state.raw<Suggestion[]>([]);
   const suggestions = $derived(
-    settledQuery.trim().length < SUGGEST_MIN_CHARS ? starters : completions,
+    settled.text.trim().length < SUGGEST_MIN_CHARS ? starters : completions,
   );
   // The parts each completion applies, by row key — kept beside the rows rather than
   // inside them because a Suggestion is what the dropdown RENDERS, and these are what
@@ -426,6 +451,166 @@
     })();
     return () => ac.abort();
   });
+
+  // ── Field operators ───────────────────────────────────────────────────────
+  //
+  // `title:`, `company:` and `source:` are a typing shortcut for filters the feed
+  // already has (see #lib/searchOperators). Inside an operator's value the panel offers
+  // only that kind; on Enter the operators become those filters.
+
+  const OPERATOR_LIMIT = 8;
+
+  // The operator the caret is in, read live so the panel switches mode on the keystroke
+  // rather than after the debounce. The options themselves follow the settled draft.
+  const liveOperator = $derived(suggest ? activeOperator(draft.text, caret) : null);
+  // The last answer, with the token it answers — so an EMPTY answer can be told apart
+  // from one that has not arrived yet.
+  // `options` is null when nothing was asked (a title too short to complete) or the
+  // lookup failed — neither is "nothing matches", and saying so would be a lie.
+  let operatorAnswer = $state.raw<{
+    key: string;
+    value: string;
+    options: OperatorOption[] | null;
+  } | null>(null);
+  const operatorOptions = $derived(operatorAnswer?.options ?? []);
+  // Inside a value that names nothing, say so. An empty panel would vanish, and after an
+  // Enter that stopped on this token that reads as the box ignoring the key.
+  const operatorMiss = $derived(
+    liveOperator !== null &&
+      liveOperator.value !== '' &&
+      operatorAnswer?.key === liveOperator.key &&
+      operatorAnswer.value === liveOperator.value &&
+      operatorAnswer.options?.length === 0,
+  );
+  // The rows for the operator the caret is in — null outside one. Only the answer for
+  // the KIND the caret is in: until the next pause settles, the last answer may be about
+  // a different operator.
+  const liveOptions = $derived.by(() => {
+    if (!liveOperator) return null;
+    return operatorAnswer?.key === liveOperator.key ? operatorOptions : [];
+  });
+
+  // Company names this box has seen resolved to a slug — picked rows and exact matches —
+  // so committing a picked `company:Google` does not ask the endpoint again. Keyed by
+  // the lower-cased name. Not reactive: it is read at commit time only.
+  // eslint-disable-next-line svelte/prefer-svelte-reactivity -- a cache nothing renders from
+  const knownCompanies = new Map<string, string>();
+  // The cache key for a typed company value: what `formatOperator` writes back into the
+  // box drops `"`, so the key must too, or a picked name with a quote never hits it.
+  const companyKey = (value: string) => value.replaceAll('"', '').toLowerCase();
+
+  // The live source distribution, fetched once, the first time a `source:` appears. A
+  // failed fetch is forgotten so the next attempt asks again.
+  let sourceDist: Promise<FacetOption[]> | null = null;
+  function sources(): Promise<FacetOption[]> {
+    sourceDist ??= loadSourceDistribution().catch((err: unknown) => {
+      sourceDist = null;
+      throw err;
+    });
+    return sourceDist;
+  }
+
+  async function companiesNamed(value: string, signal?: AbortSignal): Promise<CompanyListItem[]> {
+    const { items } = await api.listCompanies(value, companiesFetch, 0, undefined, signal);
+    const exact = matchCompany(value, items);
+    if (exact) knownCompanies.set(companyKey(value), exact);
+    return items;
+  }
+
+  async function optionsFor(op: OperatorToken, signal: AbortSignal): Promise<OperatorOption[] | null> {
+    if (op.key === 'company') {
+      return companyOptions(await companiesNamed(op.value, signal), op.value, OPERATOR_LIMIT);
+    }
+    if (op.key === 'source') return sourceOptions(await sources(), op.value, OPERATOR_LIMIT);
+    if (op.value.length < SUGGEST_MIN_CHARS) return null;
+    return titleOptions(await api.suggest(op.value, OPERATOR_LIMIT, signal));
+  }
+
+  // The settled token as a string, so moving the caret WITHIN an unchanged value — an
+  // arrow key inside `company:goo` — does not abort and resend the same lookup.
+  const settledOperator = $derived.by(() => {
+    const op = suggest ? activeOperator(settled.text, settled.caret) : null;
+    return op ? `${op.key}:${op.start}:${op.value}` : '';
+  });
+
+  $effect(() => {
+    if (!settledOperator) {
+      operatorAnswer = null;
+      return;
+    }
+    const op = untrack(() => activeOperator(settled.text, settled.caret));
+    if (!op) {
+      operatorAnswer = null;
+      return;
+    }
+    // Same abandonment rule as the ordinary fetch above: a newer pause aborts this one.
+    const ac = new AbortController();
+    void optionsFor(op, ac.signal)
+      .catch(() => null)
+      .then((opts) => {
+        if (!ac.signal.aborted) operatorAnswer = { key: op.key, value: op.value, options: opts };
+      });
+    return () => ac.abort();
+  });
+
+  /** Put the caret at `at` once the box has rendered the text it points into. */
+  async function placeCaret(at: number) {
+    caret = at;
+    await tick();
+    inputEl?.focus();
+    inputEl?.setSelectionRange(at, at);
+  }
+
+  /** A picked operator row: write its canonical value over the token and keep typing. */
+  function chooseOperator(option: OperatorOption) {
+    const op = activeOperator(draft.text, caret);
+    // The row may belong to the token the caret just LEFT (its answer is a debounce
+    // behind); writing a company over a `source:` token is a wrong filter, not a pick.
+    if (!op || op.key !== option.key) return;
+    if (option.key === 'company') knownCompanies.set(companyKey(option.value), option.id);
+    const next = replaceToken(draft.text, op, option.value);
+    draft = edit(draft, next.text);
+    activeIndex = -1;
+    void placeCaret(next.caret);
+  }
+
+  /** Resolve every operator value in `text`, asking the companies endpoint for the
+   *  names this box has not seen. A failed lookup resolves to nothing, which stops the
+   *  commit on that token rather than guessing. */
+  async function resolversFor(text: string): Promise<OperatorResolvers> {
+    const parsed = parseOperators(text);
+    const unseen = parsed.company.filter((v) => !knownCompanies.has(companyKey(v)));
+    const [dist] = await Promise.all([
+      parsed.source.length ? sources().catch(() => []) : Promise.resolve([]),
+      ...unseen.map((v) => companiesNamed(v).catch(() => [])),
+    ]);
+    return {
+      company: (v) => knownCompanies.get(companyKey(v)) ?? null,
+      source: (v) => matchSource(v, dist),
+    };
+  }
+
+  /** Enter on a draft carrying operators. Everything applies, or — when a value names
+   *  nothing — nothing does, and the caret goes to that value with its options open: a
+   *  feed filtered by half of what was typed is not what was typed. */
+  async function runOperatorSearch(apply: (plan: ApplyPlan) => void) {
+    const text = draft.text;
+    const resolvers = await resolversFor(text);
+    // Typing went on while the lookups were out; this answer is about older text.
+    if (draft.text !== text) return;
+    const bad = unresolvedToken(text, resolvers);
+    if (bad) {
+      dismissed = false;
+      activeIndex = -1;
+      await placeCaret(bad.end);
+      return;
+    }
+    apply(operatorPlan(parseOperators(text), resolvers));
+    // Cleared for the same reason a picked completion clears it: the filters now carry
+    // what was in the box.
+    draft = commit(edit(draft, ''));
+    close();
+  }
 
   // ── A pasted link ─────────────────────────────────────────────────────────
   //
@@ -494,7 +679,14 @@
   }
 
   const rows = $derived(
-    dropdownRows({ suggestions, jobs, companies, text: draft.text, link }),
+    dropdownRows({
+      suggestions,
+      jobs,
+      companies,
+      text: draft.text,
+      link,
+      operator: liveOptions,
+    }),
   );
   const suggestOpen = $derived(rows.length > 0 && !dismissed);
   const rowCount = $derived(suggestOpen ? rows.length : 0);
@@ -571,6 +763,12 @@
       void activateLink(link);
       return;
     }
+    // Operators need a list that takes facets; the companies list publishes none, so
+    // there the text is searched as written.
+    if (suggest && hasOperators(draft.text)) {
+      void runOperatorSearch(suggest.applyParts);
+      return;
+    }
     draft = commit(draft);
     target.commitQuery(draft.committed);
     close();
@@ -592,6 +790,10 @@
     if (row.kind === 'job') {
       close();
       void goto(resolve('/jobs/[slug]', { slug: row.job.public_slug }));
+      return;
+    }
+    if (row.kind === 'operator') {
+      chooseOperator(row.option);
       return;
     }
     if (row.kind === 'company') {
@@ -652,6 +854,8 @@
     }
   }
 
+  const OPERATOR_HEADINGS = { company: 'Companies', source: 'Sources', title: 'Titles' } as const;
+
   /** The label above a section's first row, or null for a section that needs none.
    *
    *  An EMPTY box gets none. Its rows are the only thing in the panel — there is no
@@ -659,7 +863,9 @@
    *  introducing a list nobody could confuse with anything. A typed box does have
    *  neighbours (postings, companies), and there "Filter by" says what picking one of
    *  these rows does rather than what it is. */
-  function sectionHeading(kind: DropdownRow['kind']): string | null {
+  function sectionHeading(row: DropdownRow): string | null {
+    const kind = row.kind;
+    if (kind === 'operator') return OPERATOR_HEADINGS[row.option.key];
     if (kind === 'text' || kind === 'link') return null;
     if (kind === 'job') return 'Jobs';
     if (kind === 'company') return 'Companies';
@@ -778,8 +984,15 @@
         // with it — otherwise a half-corrected URL sits under a verdict on the old one.
         linkStep = null;
         draft = edit(draft, e.currentTarget.value);
+        caret = e.currentTarget.selectionStart ?? draft.text.length;
       }}
-      onfocus={() => {
+      onkeyup={(e) => (caret = e.currentTarget.selectionStart ?? caret)}
+      onpointerup={(e) => (caret = e.currentTarget.selectionStart ?? caret)}
+      onselect={(e) => (caret = e.currentTarget.selectionStart ?? caret)}
+      onfocus={(e) => {
+        // `/`, Cmd+K and Tab focus without a click or a key IN the box, so the caret is
+        // read here too — otherwise the panel decides its mode from a stale position.
+        caret = e.currentTarget.selectionStart ?? caret;
         // Off a list page nothing has measured the catalogue for us, so the empty
         // box's starting points are fetched here — on the first focus, never on load.
         if (!registered) loadBrowseCounts();
@@ -906,6 +1119,12 @@
         </button>
       {/if}
     </div>
+  {:else if operatorMiss && liveOperator && !dismissed}
+    <div class={linkPanelClass} role="status" aria-live="polite">
+      <span class="text-muted-foreground">
+        No {liveOperator.key} matches “{liveOperator.value}”
+      </span>
+    </div>
   {:else if suggestOpen}
     <ul
       id="role-suggestions"
@@ -934,7 +1153,7 @@
       )}
     >
       {#each rows as row, i (row.key)}
-        {@const heading = row.first ? sectionHeading(row.kind) : null}
+        {@const heading = row.first ? sectionHeading(row) : null}
         {#if heading}
           <li
             class="px-3 pb-1 pt-2 text-xs font-medium uppercase tracking-wide text-muted-foreground"
@@ -1000,6 +1219,25 @@
                 {row.company.job_count}
                 {row.company.job_count === 1 ? 'job' : 'jobs'}
               </span>
+            {:else if row.kind === 'operator'}
+              {#if row.option.key === 'title'}
+                <Search class="size-4 shrink-0 text-muted-foreground" />
+              {:else}
+                <EntityLogo
+                  name={row.option.label}
+                  src={(row.option.key === 'company'
+                    ? companyLogoUrl(row.option.label)
+                    : sourceLogoUrl(row.option.label, SOURCE_LOGO_DOMAINS[row.option.id])) ?? undefined}
+                  shape="square"
+                  size="xs"
+                />
+              {/if}
+              <span class="min-w-0 flex-1 truncate">{row.option.label}</span>
+              {#if row.option.count !== undefined}
+                <span class="shrink-0 text-xs text-muted-foreground"
+                  >{row.option.count.toLocaleString()}</span
+                >
+              {/if}
             {:else if row.kind === 'text'}
               <Search class="size-4 shrink-0 text-muted-foreground" />
               <span class="min-w-0 flex-1 truncate text-muted-foreground"
