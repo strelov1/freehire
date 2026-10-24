@@ -104,38 +104,69 @@ func (r oracleResolver) Name(ctx context.Context, board string) (string, error) 
 	return ExtractOracleSiteName(html.UnescapeString(m[1])), nil
 }
 
-// oracleSiteTails are the careers tails an Oracle site name appends to the employer, longest
-// first so "Career Site" is not cut as "Site".
-var oracleSiteTails = []string{" Careers Site", " Career Site", " Careers", " Career"}
+// oracleSiteLeads and oracleSiteMarkers are what an Oracle site name wraps around the
+// employer, measured on the 613 names the first prod dry-run resolved (2026-10-24): a lead-in
+// ("Working at Signature Aviation") or a marker after which nothing names the employer any more
+// ("EXL Talent Acquisition Team", "Crawford Job Listings - Global", "BDO USA Campus"). A marker
+// cuts the name at its FIRST occurrence, so what follows it never survives.
+var (
+	oracleSiteLeads   = []string{"Working at ", "Job Listings at ", "Careers at ", "Jobs at "}
+	oracleSiteMarkers = []string{
+		" Careers Site", " Career Site", "CareerSite", " Careers", " Career",
+		" Talent Acquisition", " Job Openings", " Job Listings", " Staff Positions", " Employment",
+		" Human Resources", " Campus", " Experienced", " Referral", " Minimal", " - Carrière",
+	}
+)
 
 // oracleSiteWords mark a site named for its PURPOSE rather than its employer — "Student
-// Casual", "Career Site - New Applicants", "Dallah Recruitment System". Checked after the tail
-// is cut, so they only ever refuse a name with nothing but the purpose left in it.
+// Casual", "Work with us", "Sitio de carrera Laureate". Checked after the wrapping is cut, so
+// they only ever refuse a name with nothing but the purpose left in it.
 var oracleSiteWords = map[string]bool{
-	"career": true, "careers": true, "site": true, "applicant": true, "applicants": true,
-	"student": true, "casual": true, "recruitment": true, "candidate": true, "experience": true,
-	"external": true, "internal": true, "portal": true, "jobs": true,
+	"career": true, "careers": true, "carrera": true, "sitio": true, "site": true, "page": true,
+	"applicant": true, "applicants": true, "student": true, "casual": true, "graduate": true,
+	"apprenticeship": true, "recruitment": true, "candidate": true, "experience": true,
+	"external": true, "internal": true, "portal": true, "job": true, "jobs": true, "work": true,
+	"talent": true, "talento": true, "search": true, "generic": true,
+}
+
+// oracleSiteLoneWords are names that are a real word but no employer when they stand alone —
+// "Global", "Schools", "Church" — the site's audience, not its owner.
+var oracleSiteLoneWords = map[string]bool{
+	"global": true, "schools": true, "church": true, "executive": true, "clerk": true,
+	"llp": true, "aerospace": true,
 }
 
 // ExtractOracleSiteName turns an Oracle candidate-experience site name into the employer's
-// name: cut a careers tail, then refuse what is left if it still names the site's purpose or
-// is a configuration identifier (an underscore — "POLK_BoCC_Career Site"). Refusing costs the
-// board nothing: it simply keeps the placeholder it already had.
+// name: drop a lead-in, cut at the first marker, then refuse what is left if it still names the
+// site's purpose, stands alone as a generic word, or is a configuration identifier (an
+// underscore — "POLK_BoCC_Career Site"). Refusing costs the board nothing: it simply keeps the
+// placeholder it already had.
 func ExtractOracleSiteName(name string) string {
 	name = strings.Join(strings.Fields(name), " ")
 	if strings.Contains(name, "_") {
 		return ""
 	}
-	for _, tail := range oracleSiteTails {
-		if rest, ok := cutSuffixFold(name, tail); ok {
-			name = rest
+	for _, lead := range oracleSiteLeads {
+		if len(name) > len(lead) && strings.EqualFold(name[:len(lead)], lead) {
+			name = name[len(lead):]
 			break
 		}
 	}
-	for _, w := range words.FindAllString(name, -1) {
+	low := strings.ToLower(name)
+	for _, marker := range oracleSiteMarkers {
+		if i := strings.Index(low, strings.ToLower(marker)); i >= 0 {
+			name, low = name[:i], low[:i]
+		}
+	}
+	name = strings.TrimRight(name, " -–—")
+	tokens := words.FindAllString(name, -1)
+	for _, w := range tokens {
 		if oracleSiteWords[strings.ToLower(w)] {
 			return ""
 		}
 	}
-	return strings.TrimSpace(name)
+	if len(tokens) == 1 && oracleSiteLoneWords[strings.ToLower(tokens[0])] {
+		return ""
+	}
+	return name
 }

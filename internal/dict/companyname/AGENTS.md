@@ -48,7 +48,7 @@ a harvest that never resolved the tenant's name. Measured 2026-10-23: ~2,200 com
 - **`NewPlaceholderRegistry`** — resolvers keyed by provider that take the board id and read
   the name the ATS states for exactly that board: Paylocity's listing title
   (`{Name} - Job Opportunities`), UKG Ready's `format-settings` `company.name`, Oracle's site
-  `og:site_name` through `ExtractOracleSiteName` (cuts a careers tail, refuses a site named for
+  `og:site_name` through `ExtractOracleSiteName` (drops a lead-in, cuts at a careers or recruiting marker, refuses a site named for
   its purpose — "Student Casual"). Taleo, ADP and Workday were tried and are absent on purpose;
   the constructor's comment says why for each.
 - **`AcceptPlaceholder`** — no confidence match: the lookup is by the exact board id, so there
