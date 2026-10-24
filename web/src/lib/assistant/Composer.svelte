@@ -1,5 +1,7 @@
 <script lang="ts">
-  import { ArrowUp, Loader2, Trash2, Square } from '@lucide/svelte';
+  import { ArrowUp, FileText, Loader2, Paperclip, Trash2, Square, X } from '@lucide/svelte';
+  import { Chip } from '#lib/ui/index.js';
+  import { extractAttachment, type Attachment } from '#lib/assistant/client.js';
   import VoiceInput from '#lib/assistant/VoiceInput.svelte';
   import { DICTATION_ENABLED } from '#lib/assistant/audioAvailability.js';
   import { appendTranscript } from '#lib/assistant/dictation.js';
@@ -14,6 +16,7 @@
   // not-ready / connection-lost / switching states into one flag.
   let {
     draft = $bindable(''),
+    attachments = $bindable([]),
     queue,
     turnActive,
     disabled,
@@ -22,10 +25,12 @@
     onCancel = undefined,
   }: {
     draft?: string;
-    queue: { id: string; text: string }[];
+    /** Documents read for the next message, sent with it and then cleared by the parent. */
+    attachments?: Attachment[];
+    queue: { id: string; text: string; attachments: Attachment[] }[];
     turnActive: boolean;
     disabled: boolean;
-    onSubmit: (text: string) => void;
+    onSubmit: (text: string, attachments: Attachment[]) => void;
     onRemoveQueued: (id: string) => void;
     /** Stop the turn in flight. Absent when the host cannot cancel. */
     onCancel?: () => void;
@@ -59,11 +64,45 @@
     el.style.height = `${Math.min(el.scrollHeight, COMPOSER_CAP)}px`;
   });
 
+  // Attachments. A PDF is read by the server the moment it is chosen, not when the message
+  // is sent: a scan with no text layer is then refused while the candidate is still looking
+  // at the file picker, rather than after they have written the message that refers to it.
+  // The server keeps nothing — the extracted text rides along with the message.
+  const MAX_ATTACHMENTS = 3;
+  let fileInput = $state<HTMLInputElement | null>(null);
+  let reading = $state(false);
+  let attachError = $state<string | null>(null);
+  const canAttach = $derived(!disabled && !reading && attachments.length < MAX_ATTACHMENTS);
+  const hasContent = $derived(draft.trim() !== '' || attachments.length > 0);
+
+  async function attachFile(e: Event) {
+    const input = e.currentTarget as HTMLInputElement;
+    const file = input.files?.[0];
+    // Cleared at once so choosing the same file again after removing it still fires `change`.
+    input.value = '';
+    if (!file) return;
+    attachError = null;
+    reading = true;
+    try {
+      const doc = await extractAttachment(file);
+      if (attachments.length < MAX_ATTACHMENTS) attachments = [...attachments, doc];
+    } catch (err) {
+      attachError = err instanceof Error ? err.message : s.attachFailed;
+    } finally {
+      reading = false;
+    }
+  }
+
+  function removeAttachment(index: number) {
+    attachments = attachments.filter((_, i) => i !== index);
+  }
+
   function submit(e: SubmitEvent) {
     e.preventDefault();
     const text = draft.trim();
-    if (!text || disabled) return;
-    onSubmit(text);
+    if (!hasContent || disabled || reading) return;
+    attachError = null;
+    onSubmit(text, attachments);
   }
 </script>
 
@@ -76,7 +115,12 @@
         <ul class="divide-y divide-border/40 border-t border-border/40">
           {#each queue as item (item.id)}
             <li class="group flex items-start gap-3 px-4 py-2">
-              <span class="min-w-0 flex-1 whitespace-pre-wrap break-words text-sm text-foreground">{item.text}</span>
+              <span class="min-w-0 flex-1 whitespace-pre-wrap break-words text-sm text-foreground">
+                {item.text}
+                {#each item.attachments as doc, i (i)}
+                  <Chip class="ml-1 gap-1 align-middle"><FileText class="size-3" />{doc.name}</Chip>
+                {/each}
+              </span>
               <button
                 type="button"
                 aria-label={s.removeFromQueueAria}
@@ -92,6 +136,35 @@
       </div>
     {/if}
 
+    {#if attachments.length > 0 || reading}
+      <ul class="mb-2 flex flex-wrap gap-2" aria-label={s.attachmentsAria}>
+        {#each attachments as doc, i (i)}
+          <li>
+            <Chip class="max-w-full gap-1.5 py-1 pr-1">
+              <FileText class="size-3.5 shrink-0" />
+              <span class="truncate" title={doc.name}>{doc.name}</span>
+              {#if doc.truncated}
+                <span class="shrink-0 text-muted-foreground" title={s.truncatedTitle}>{s.truncated}</span>
+              {/if}
+              <button
+                type="button"
+                aria-label={format(s.removeAttachmentAria, { name: doc.name })}
+                onclick={() => removeAttachment(i)}
+                class="flex size-5 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-background hover:text-foreground"
+              >
+                <X class="size-3" />
+              </button>
+            </Chip>
+          </li>
+        {/each}
+        {#if reading}
+          <li>
+            <Chip class="gap-1.5 py-1"><Loader2 class="size-3.5 animate-spin" />{s.reading}</Chip>
+          </li>
+        {/if}
+      </ul>
+    {/if}
+
     <!-- svelte-ignore a11y_click_events_have_key_events -->
     <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
     <form
@@ -102,6 +175,25 @@
       }}
       class="relative flex w-full cursor-text items-end gap-2 rounded-3xl border border-border/60 bg-card px-4 py-2.5 shadow-sm transition-colors focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/50"
     >
+      <input
+        bind:this={fileInput}
+        type="file"
+        accept="application/pdf,.pdf"
+        class="hidden"
+        tabindex="-1"
+        aria-hidden="true"
+        onchange={attachFile}
+      />
+      <button
+        type="button"
+        aria-label={s.attachAria}
+        title={s.attachTitle}
+        disabled={!canAttach}
+        onclick={() => fileInput?.click()}
+        class="flex size-9 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        <Paperclip class="size-4" />
+      </button>
       <textarea
         bind:this={textareaEl}
         bind:value={draft}
@@ -125,7 +217,7 @@
           onUnavailable={() => (dictationOff = true)}
         />
       {/if}
-      {#if turnActive && onCancel && !draft.trim()}
+      {#if turnActive && onCancel && !hasContent}
         <button
           type="button"
           aria-label={s.stopAria}
@@ -139,7 +231,7 @@
           type="submit"
           aria-label={turnActive ? s.queueMessageAria : s.sendMessageAria}
           aria-busy={turnActive}
-          disabled={disabled || !draft.trim()}
+          disabled={disabled || reading || !hasContent}
           class="flex size-9 shrink-0 items-center justify-center rounded-full bg-foreground text-background transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {#if turnActive}
@@ -153,6 +245,9 @@
 
     {#if voiceError}
       <p class="mt-1.5 px-4 text-xs text-destructive" role="alert">{voiceError}</p>
+    {/if}
+    {#if attachError}
+      <p class="mt-1.5 px-4 text-xs text-destructive" role="alert">{attachError}</p>
     {/if}
   </div>
 </div>

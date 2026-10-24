@@ -59,14 +59,50 @@ async function cancelTurn(sessionId: string): Promise<void> {
  * ends — including when it was cancelled, which is a normal outcome rather than
  * an error the user must act on.
  */
-export function sendTurn(sessionId: string, text: string, onEvent: (e: TurnEvent) => void): Turn {
+export function sendTurn(
+  sessionId: string,
+  text: string,
+  onEvent: (e: TurnEvent) => void,
+  attachments: Attachment[] = [],
+): Turn {
   return streamTurn(
     sessionId,
     `${BASE}/sessions/${encodeURIComponent(sessionId)}/messages`,
-    { text },
+    attachments.length > 0
+      ? { text, attachments: attachments.map(({ name, text: body }) => ({ name, text: body })) }
+      : { text },
     'could not send the message',
     onEvent,
   );
+}
+
+/** A document read for the next message: its name, the text the server extracted, and
+ *  whether that text was cut to fit. Nothing is stored server-side — the text travels back
+ *  with the message it is attached to. */
+export interface Attachment {
+  name: string;
+  text: string;
+  truncated: boolean;
+}
+
+/**
+ * Have the server read a PDF to attach to the next message. Rejects with an Error whose
+ * message is the server's own sentence (a scan with no text layer, a file that is not a PDF),
+ * since those name what the candidate can do about it.
+ */
+export async function extractAttachment(file: File): Promise<Attachment> {
+  const form = new FormData();
+  form.append('file', file);
+  const res = await fetch(`${BASE}/attachments`, {
+    method: 'POST',
+    credentials: 'include',
+    body: form,
+  });
+  const body = (await res.json().catch(() => null)) as { data?: Attachment; error?: string } | null;
+  if (!res.ok || !body?.data) {
+    throw new Error(typeof body?.error === 'string' ? body.error : `could not read the file (${res.status})`);
+  }
+  return body.data;
 }
 
 /**

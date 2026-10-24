@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount, tick, untrack } from 'svelte';
-  import { AlertTriangle, ArrowDown, MessagesSquare, PanelLeft, Phone, Plus, Trash2, WandSparkles, X } from '@lucide/svelte';
+  import { AlertTriangle, ArrowDown, FileText, MessagesSquare, PanelLeft, Phone, Plus, Trash2, WandSparkles, X } from '@lucide/svelte';
   import { resolve } from '$app/paths';
   import {
     createSession,
@@ -21,6 +21,7 @@
     TurnRefused,
     startAutopilot,
     StreamInterrupted,
+    type Attachment,
     type Turn,
   } from '#lib/assistant/client.js';
   import { initChat, reduceTurnEvent, type ChatState } from '#lib/assistant/chat.js';
@@ -28,7 +29,7 @@
   import { splitPresentingCalls } from '#lib/assistant/deck.js';
   import { atBottom } from '#lib/assistant/scrolling.js';
   import { renderMarkdown } from '#lib/markdown.js';
-  import { ConfirmDialog } from '#lib/ui/index.js';
+  import { Chip, ConfirmDialog } from '#lib/ui/index.js';
   import JobDeck from '#lib/assistant/JobDeck.svelte';
   import SessionRail from '#lib/assistant/SessionRail.svelte';
   import ToolGroupList from '#lib/assistant/ToolGroupList.svelte';
@@ -163,6 +164,9 @@
   // Chat (active session).
   let chat = $state<ChatState>(initChat());
   let draft = $state('');
+  // Documents read for the next message. Held here beside the draft, and handed back with it
+  // when a turn never starts, for the same reason: the composer cleared them on send.
+  let attachments = $state<Attachment[]>([]);
   let turnActive = $state(false);
   // The turn in flight, so it can be cancelled. Cancelling asks the server to stop the work;
   // aborting the fetch only stops this client reading it.
@@ -176,7 +180,7 @@
   let stickToBottom = $state(true);
 
   // Messages typed while a turn is in flight, drained one by one when it ends.
-  let queue = $state<{ id: string; text: string }[]>([]);
+  let queue = $state<{ id: string; text: string; attachments: Attachment[] }[]>([]);
   let queueCounter = 0;
 
   // Voice mode: a hands-free call on an `interview` session, replacing the composer
@@ -195,8 +199,8 @@
     if (activeId) void reloadTranscript(activeId);
   }
 
-  function enqueue(text: string) {
-    queue = [...queue, { id: `q${++queueCounter}`, text }];
+  function enqueue(text: string, docs: Attachment[]) {
+    queue = [...queue, { id: `q${++queueCounter}`, text, attachments: docs }];
   }
 
   const NEW_CHAT_LABEL = $derived(s.newChat);
@@ -580,7 +584,7 @@
     if (queue.length > 0) {
       const [next, ...rest] = queue;
       queue = rest;
-      if (next) void dispatch({ kind: 'message', text: next.text });
+      if (next) void dispatch({ kind: 'message', text: next.text, attachments: next.attachments });
     }
   }
 
@@ -598,7 +602,8 @@
     // from the old one must never paint into the new chat.
     if (sessionId !== activeId) return;
     if (event.type === 'user_prompt') {
-      sessions = setLabel(sessions, sessionId, labelFromMessage(event.text));
+      // A message that is only a document is labelled by its name, as the server does.
+      sessions = setLabel(sessions, sessionId, labelFromMessage(event.text || event.attachments?.[0] || ''));
       bulletCapAlert = null;
     }
     if (event.type === 'tool_result' && event.is_error) {
@@ -617,26 +622,27 @@
 
   // Composer submit: while a turn is in flight the message is queued and drained
   // later; otherwise it is sent immediately.
-  function submitText(raw: string) {
+  function submitText(raw: string, docs: Attachment[] = []) {
     const text = raw.trim();
-    if (!text || phase !== 'ready' || switching || !activeId) return;
+    if ((!text && docs.length === 0) || phase !== 'ready' || switching || !activeId) return;
     // Counted once per message the user sends, queued or dispatched — never the text
     // itself. This measures usage only; what a turn costs is recorded server-side.
     track('assistant_message');
     draft = '';
+    attachments = [];
     if (turnActive || queue.length > 0) {
-      enqueue(text);
+      enqueue(text, docs);
       void scrollToBottom(true);
       return;
     }
-    void dispatch({ kind: 'message', text });
+    void dispatch({ kind: 'message', text, attachments: docs });
   }
 
   // The ways a turn begins. Autopilot and opening carry no text (server-owned brief).
   // Retry continues from the existing transcript without appending another user message —
   // re-sending the prompt would duplicate it in the model's context.
   type TurnStart =
-    | { kind: 'message'; text: string }
+    | { kind: 'message'; text: string; attachments?: Attachment[] }
     | { kind: 'autopilot' }
     | { kind: 'opening' }
     | { kind: 'retry' };
@@ -684,7 +690,7 @@
       // tailor workspace, refreshing after a failed run is enough via onTurnComplete.
       started = retryTurn(id, watch);
     } else {
-      started = sendTurn(id, start.text, watch);
+      started = sendTurn(id, start.text, watch, start.attachments);
     }
     turn = started;
     void scrollToBottom(true);
@@ -693,7 +699,7 @@
       if (!began && start.kind === 'message' && id === activeId) {
         // The turn never ran, so the message was never recorded. Give it back rather than
         // losing it, and say why — the composer is empty and nothing else would explain it.
-        draft = draft.trim() === '' ? start.text : draft;
+        giveBack(start);
         setError(s.messageNotSent);
       }
     } catch (err) {
@@ -710,7 +716,7 @@
         // Neither remedy below ever started the turn, so the message was never recorded —
         // give it back to the composer rather than losing it while the candidate decides
         // what to do next.
-        draft = draft.trim() === '' && start.kind === 'message' ? start.text : draft;
+        if (start.kind === 'message') giveBack(start);
         if (err.canExtend) {
           // The session can be continued right now by spending another of the day's
           // tailoring sessions.
@@ -728,6 +734,13 @@
       chat = reduceTurnEvent(chat, { type: 'result', stop_reason: 'error', is_error: true });
       endTurn();
     }
+  }
+
+  /** Return an unsent message to the composer — its text when the draft is empty, and its
+   *  documents when none have been attached since. */
+  function giveBack(start: { text: string; attachments?: Attachment[] }) {
+    if (draft.trim() === '') draft = start.text;
+    if (attachments.length === 0) attachments = start.attachments ?? [];
   }
 
   /** Spend another of today's tailoring sessions so this conversation can carry on.
@@ -1003,7 +1016,16 @@
           {#each chat.messages as message, i (i)}
             {#if message.role === 'user'}
               <article class="self-end max-w-[80%] rounded-2xl rounded-br-md bg-secondary px-4 py-2.5 text-sm leading-relaxed text-secondary-foreground">
-                <pre class="m-0 whitespace-pre-wrap break-words font-sans">{message.text}</pre>
+                {#if message.text}
+                  <pre class="m-0 whitespace-pre-wrap break-words font-sans">{message.text}</pre>
+                {/if}
+                {#if message.attachments.length > 0}
+                  <ul class={['flex flex-wrap gap-1.5', message.text && 'mt-2']} aria-label={s.attachedFiles}>
+                    {#each message.attachments as name, j (j)}
+                      <li><Chip class="max-w-full gap-1 bg-background"><FileText class="size-3 shrink-0" /><span class="truncate">{name}</span></Chip></li>
+                    {/each}
+                  </ul>
+                {/if}
               </article>
             {:else}
               {@const active = i === chat.messages.length - 1 && message.streaming}
@@ -1126,6 +1148,7 @@
       {:else}
         <Composer
           bind:draft
+          bind:attachments
           {queue}
           {turnActive}
           disabled={phase !== 'ready' || switching}

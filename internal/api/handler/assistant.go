@@ -23,6 +23,7 @@ import (
 	"github.com/strelov1/freehire/internal/ai/plan"
 	"github.com/strelov1/freehire/internal/candidate/cv"
 	"github.com/strelov1/freehire/internal/candidate/fitanalysis"
+	"github.com/strelov1/freehire/internal/candidate/resume"
 	"github.com/strelov1/freehire/internal/identity/auth"
 	"github.com/strelov1/freehire/internal/ingest/screeninganswers"
 	"github.com/strelov1/freehire/internal/platform/db"
@@ -111,6 +112,10 @@ type assistantHandlers struct {
 	// Nil is the unconfigured deployment: PostAutoApplyReview then publishes nothing,
 	// exactly as it did before this existed.
 	events autoApplyEventPublisher
+
+	// extractPDFText reads an attached PDF's text — the résumé upload's own extractor,
+	// held as a function so a test need not shell out to pdftotext.
+	extractPDFText func([]byte) (string, error)
 }
 
 // assistantModels names the model client the assistant runs on and the resolver that
@@ -148,6 +153,7 @@ func newAssistantHandlers(queries *db.Queries, models assistantModels, store *as
 		mail:             mail,
 		stages:           queries,
 		plans:            plans,
+		extractPDFText:   resume.ExtractPDFText,
 	}
 	// The fit reads come from the service, not from whichever handler happens to hold it:
 	// a tool that grounds on the cached analysis must not break because the CV surface was
@@ -190,6 +196,10 @@ func (h *assistantHandlers) register(api fiber.Router, mw middleware) {
 	api.Get("/assistant/sessions/:id", mw.key, h.GetAssistantSession)
 	api.Delete("/assistant/sessions/:id", mw.key, h.DeleteAssistantSession)
 	api.Post("/assistant/sessions/:id/messages", mw.key, mw.paidAI(plan.FeatureAssistant), h.PostAssistantMessage)
+	// Read a PDF to attach to the next message. No model call, so no paidAI gate: it only
+	// extracts, and the turn that carries the text is what is metered. The limiter mounts
+	// after the gate so it keys by user (see the handler AGENTS.md).
+	api.Post("/assistant/attachments", mw.key, perCallerLimiter(attachmentExtractionsPerHour), h.PostAssistantAttachment)
 	api.Post("/assistant/sessions/:id/cancel", mw.key, h.CancelAssistantTurn)
 	// Buy this tailoring session another ceiling's worth of turns. Separate from starting
 	// a session because it is a distinct decision the candidate makes with what they know
@@ -497,11 +507,6 @@ func (h *assistantHandlers) CancelAssistantTurn(c *fiber.Ctx) error {
 	return c.SendStatus(fiber.StatusNoContent)
 }
 
-// assistantTurnRequest is the body of a turn: the user's message.
-type assistantTurnRequest struct {
-	Text string `json:"text"`
-}
-
 // PostAssistantMessage runs one turn and streams it as SSE. Every frame the loop
 // produces — the recorded prompt, answer and reasoning deltas, each tool call and
 // its result, the token usage, and exactly one terminal result — is written as a
@@ -519,14 +524,11 @@ func (h *assistantHandlers) PostAssistantMessage(c *fiber.Ctx) error {
 	if err := c.BodyParser(&in); err != nil {
 		return fiber.NewError(fiber.StatusBadRequest, "invalid request body")
 	}
-	prompt := strings.TrimSpace(in.Text)
-	if prompt == "" {
-		return fiber.NewError(fiber.StatusBadRequest, "text is required")
+	prompt, docs, err := parseTurnRequest(in, h.maxPrompt)
+	if err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, err.Error())
 	}
-	if len([]rune(prompt)) > h.maxPrompt {
-		return fiber.NewError(fiber.StatusBadRequest, "message is too long")
-	}
-	return h.streamTurn(c, sess, prompt, turnBounds(sess, ""))
+	return h.streamTurn(c, sess, prompt, docs, turnBounds(sess, ""))
 }
 
 // PostAssistantRetry resumes a session after a model/transport failure without recording
@@ -545,7 +547,9 @@ func (h *assistantHandlers) PostAssistantRetry(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
-	if lastUserText(transcript) == "" {
+	// Asked of the role, not of the text: a message that was only an attached document has
+	// no text and is still something to retry.
+	if !slices.ContainsFunc(transcript, func(m assistant.Message) bool { return m.Role == assistant.RoleUser }) {
 		return fiber.NewError(fiber.StatusConflict, "nothing to retry — send a message first")
 	}
 	turn := turnBounds(sess, lastUserText(transcript))
@@ -576,9 +580,9 @@ func lastUserText(transcript []assistant.Message) string {
 // The prompt and the turn's bounds are the caller's arguments rather than the request's
 // body: an unattended run's brief and its raised ceiling are ours to choose, and a ceiling
 // a client can set is not a bound.
-func (h *assistantHandlers) streamTurn(c *fiber.Ctx, sess assistant.Session, prompt string, turn assistant.TurnConfig) error {
+func (h *assistantHandlers) streamTurn(c *fiber.Ctx, sess assistant.Session, prompt string, docs []assistant.Attachment, turn assistant.TurnConfig) error {
 	return h.streamSSE(c, sess, h.meterTurn, func(ctx context.Context, runner *assistant.Runner, reg *assistant.Registry, system string, emit func(assistant.Event)) error {
-		return runner.Run(ctx, sess, reg, system, prompt, turn, emit)
+		return runner.RunWithAttachments(ctx, sess, reg, system, prompt, docs, turn, emit)
 	})
 }
 
@@ -898,7 +902,7 @@ func (h *assistantHandlers) PostAssistantOpening(c *fiber.Ctx) error {
 			return fiber.NewError(fiber.StatusConflict, "this conversation has already started")
 		}
 	}
-	return h.streamTurn(c, sess, brief, assistant.TurnConfig{})
+	return h.streamTurn(c, sess, brief, nil, assistant.TurnConfig{})
 }
 
 // autopilotMaxSteps bounds an unattended tailoring run. A run reads the fit analysis and

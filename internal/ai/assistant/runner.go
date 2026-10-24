@@ -50,6 +50,10 @@ type Event struct {
 	// Text carries the prompt (user_prompt) or one streamed delta
 	// (assistant_text, assistant_thought).
 	Text string `json:"text,omitempty"`
+	// Attachments names the documents attached to the prompt (user_prompt). Names only:
+	// the extracted text is the model's to read, and echoing it down the stream would
+	// send the client back what it just uploaded.
+	Attachments []string `json:"attachments,omitempty"`
 
 	// Name and Input describe a tool invocation; Result and IsError its outcome.
 	Name    string          `json:"name,omitempty"`
@@ -178,7 +182,13 @@ var ErrNothingToContinue = errors.New("assistant: nothing to continue")
 // Only a model/transport failure returns an error, and even then the terminal
 // event has already been emitted.
 func (r *Runner) Run(ctx context.Context, sess Session, reg *Registry, system, prompt string, turn TurnConfig, emit func(Event)) error {
-	if err := r.recordPrompt(ctx, sess, prompt, emit); err != nil {
+	return r.RunWithAttachments(ctx, sess, reg, system, prompt, nil, turn, emit)
+}
+
+// RunWithAttachments is Run for a prompt that carries attached documents. They are stored
+// in the prompt's own transcript row, so every later turn replays them with it.
+func (r *Runner) RunWithAttachments(ctx context.Context, sess Session, reg *Registry, system, prompt string, docs []Attachment, turn TurnConfig, emit func(Event)) error {
+	if err := r.recordPrompt(ctx, sess, prompt, docs, emit); err != nil {
 		// Through fail, not raw: a turn that dies before the loop owes its client the
 		// same terminal result every other exit emits. Returning here bare closed a
 		// 200 stream that carried nothing but `:open` and heartbeats, and the web
@@ -340,8 +350,8 @@ func (r *Runner) noteEmptyReply(ctx context.Context, sessionID uuid.UUID, note s
 
 // recordPrompt persists the user's message, names the session after it when it is
 // the first, and emits it so a replay and a live turn look identical.
-func (r *Runner) recordPrompt(ctx context.Context, sess Session, prompt string, emit func(Event)) error {
-	msg, err := EncodeUser(prompt)
+func (r *Runner) recordPrompt(ctx context.Context, sess Session, prompt string, docs []Attachment, emit func(Event)) error {
+	msg, err := EncodeUser(prompt, docs...)
 	if err != nil {
 		return err
 	}
@@ -352,13 +362,18 @@ func (r *Runner) recordPrompt(ctx context.Context, sess Session, prompt string, 
 	}
 	// Label and activity stamp are conveniences, not correctness: a failure here
 	// must not cost the user their turn.
-	if err := r.store.LabelSession(writeCtx, sess.ID, sess.UserID, prompt); err != nil {
+	// A message that is only a document labels the session by the document's name.
+	label := prompt
+	if label == "" && len(docs) > 0 {
+		label = docs[0].Name
+	}
+	if err := r.store.LabelSession(writeCtx, sess.ID, sess.UserID, label); err != nil {
 		log.Printf("assistant: label session %s: %v", sess.ID, err)
 	}
 	if err := r.store.Touch(writeCtx, sess.ID, sess.UserID); err != nil {
 		log.Printf("assistant: touch session %s: %v", sess.ID, err)
 	}
-	emit(Event{Kind: EventUserPrompt, Text: prompt})
+	emit(Event{Kind: EventUserPrompt, Text: prompt, Attachments: attachmentNames(docs)})
 	return nil
 }
 

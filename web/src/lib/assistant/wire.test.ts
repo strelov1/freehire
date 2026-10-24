@@ -17,6 +17,16 @@ describe('eventsFromTranscript', () => {
     expect(events.map((e) => e.type)).toEqual(['user_prompt', 'assistant_text', 'result']);
   });
 
+  it('replays the names of attached documents, never their text', () => {
+    const events = eventsFromTranscript([
+      msg(1, 'user', { text: '', attachments: [{ name: 'cv.pdf', text: 'Jane Doe, Go engineer' }] }),
+    ]);
+    expect(events[0]).toEqual({ type: 'user_prompt', text: '', attachments: ['cv.pdf'] });
+    const chat = events.reduce(reduceTurnEvent, initChat());
+    expect(chat.messages[0]?.attachments).toEqual(['cv.pdf']);
+    expect(chat.messages[0]?.text).toBe('');
+  });
+
   it('replays a tool round in order', () => {
     const events = eventsFromTranscript([
       msg(1, 'user', { text: 'find go jobs' }),
