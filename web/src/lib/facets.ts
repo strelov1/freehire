@@ -394,6 +394,8 @@ export const SOURCE_LABELS: Record<string, string> = {
   beesite: 'BeeSite',
   eploy: 'Eploy',
   hiringroom: 'HiringRoom',
+  polymer: 'Polymer',
+  flatchr: 'Flatchr',
   pandape: 'Pandapé',
   pandapelatam: 'Pandapé LatAm',
   pythonorg: 'Python.org',

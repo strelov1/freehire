@@ -187,6 +187,7 @@ var atsBoards = []struct{ host, source, mode string }{
 	{"hrmos.co", "hrmos", modePath},
 	{"jobs.quickin.io", "quickin", modePath},
 	{"jobs.talenthr.io", "talenthr", modePath},
+	{"jobs.polymer.co", "polymer", modePath}, // Polymer: jobs.polymer.co/<board>/<numeric id>
 	{"careers.pageuppeople.com", "pageup", modePathNumeric},
 	{"oportunidades.mindsight.com.br", "mindsight", modePath},
 	{"careers.hireology.com", "hireology", modePath},
@@ -457,6 +458,7 @@ var atsBoards = []struct{ host, source, mode string }{
 	{"schooljobs.com", "neogov", modePathPattern},
 	{"geekhunter.com", "geekhunter", modePathPattern},
 	{"cleverstaff.net", "cleverstaff", modePathPattern},
+	{"careers.flatchr.io", "flatchr", modePathPattern},
 }
 
 // pathPattern is one pathPatternBoards entry; see there.
@@ -514,6 +516,13 @@ var pathPatternBoards = map[string]pathPattern{
 		path:    regexp.MustCompile(`^/i/([a-z0-9-]+?)(?:-vacancies)?(?:/description)?/?$`),
 		reject:  regexp.MustCompile(`^(?:signup|hidden-vacancy|extension-removed|account-not-found|vacancy-.*)$`),
 		listing: "/i/%s",
+	},
+	// Flatchr: a careers site is /<lang>/company/<board>[/vacancy/<slug>/], and the app reads it
+	// from /company/<board>.json (internal/ingest/sources/flatchr.go). The site's other pages
+	// (/fr/, /fr/404-not-found) carry no "company" segment.
+	"careers.flatchr.io": {
+		path:    regexp.MustCompile(`^/(?:[a-z]{2}/)?company/([a-z0-9][a-z0-9-]*?)(?:\.json)?(?:/|$)`),
+		listing: "/fr/company/%s",
 	},
 }
 
