@@ -105,6 +105,9 @@ func TestExtractOracleSiteName(t *testing.T) {
 		"Global":                                  "",
 		"Schools":                                 "",
 		"Generic":                                 "",
+		// A "Career" inside the name is part of it: refused by the purpose word, never cut to
+		// a different employer ("Summit").
+		"Summit Career College": "",
 	}
 	for in, want := range cases {
 		if got := ExtractOracleSiteName(in); got != want {

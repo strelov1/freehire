@@ -106,13 +106,16 @@ func (r oracleResolver) Name(ctx context.Context, board string) (string, error) 
 
 // oracleSiteLeads and oracleSiteMarkers are what an Oracle site name wraps around the
 // employer, measured on the 613 names the first prod dry-run resolved (2026-10-24): a lead-in
-// ("Working at Signature Aviation") or a marker after which nothing names the employer any more
-// ("EXL Talent Acquisition Team", "Crawford Job Listings - Global", "BDO USA Campus"). A marker
-// cuts the name at its FIRST occurrence, so what follows it never survives.
+// ("Working at Signature Aviation"), a marker after which nothing names the employer any more
+// ("EXL Talent Acquisition Team", "Crawford Job Listings - Global", "BDO USA Campus"), or a
+// careers tail ("Akamai Career Site"). A marker cuts the name at its FIRST occurrence, so what
+// follows it never survives. A tail is cut only at the END: "Career" inside a name is part of
+// it ("Summit Career College"), and cutting there would state a different employer — such a
+// name is refused by its purpose word instead.
 var (
 	oracleSiteLeads   = []string{"Working at ", "Job Listings at ", "Careers at ", "Jobs at "}
+	oracleSiteTails   = []string{" Careers Site", " Career Site", "CareerSite", " Careers", " Career"}
 	oracleSiteMarkers = []string{
-		" Careers Site", " Career Site", "CareerSite", " Careers", " Career",
 		" Talent Acquisition", " Job Openings", " Job Listings", " Staff Positions", " Employment",
 		" Human Resources", " Campus", " Experienced", " Referral", " Minimal", " - Carrière",
 	}
@@ -137,7 +140,7 @@ var oracleSiteLoneWords = map[string]bool{
 }
 
 // ExtractOracleSiteName turns an Oracle candidate-experience site name into the employer's
-// name: drop a lead-in, cut at the first marker, then refuse what is left if it still names the
+// name: drop a lead-in, cut at the first marker and a careers tail, then refuse what is left if it still names the
 // site's purpose, stands alone as a generic word, or is a configuration identifier (an
 // underscore — "POLK_BoCC_Career Site"). Refusing costs the board nothing: it simply keeps the
 // placeholder it already had.
@@ -159,6 +162,12 @@ func ExtractOracleSiteName(name string) string {
 		}
 	}
 	name = strings.TrimRight(name, " -–—")
+	for _, tail := range oracleSiteTails {
+		if rest, ok := cutSuffixFold(name, tail); ok {
+			name = strings.TrimRight(rest, " -–—")
+			break
+		}
+	}
 	tokens := words.FindAllString(name, -1)
 	for _, w := range tokens {
 		if oracleSiteWords[strings.ToLower(w)] {
