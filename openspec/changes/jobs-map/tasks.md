@@ -1,7 +1,7 @@
 ## 1. Geometry (pure, tested)
 
-- [ ] 1.1 `worldMap.ts`: `bubbleRadius`, `fitView` (fit to points, ≥60° window, 2:1, world = inhabited band), `placeCities` (case/accent-insensitive within one country) with unit tests
-- [ ] 1.2 `web/static/geo-cities.json` from Natural Earth populated places (generated, committed) and a memoised loader with an error state, tested
+- [x] 1.1 `worldMap.ts`: `bubbleRadius`, `fitView` (fit to points, ≥60° window, 2:1, world = inhabited band), `placeCities` (case/accent-insensitive within one country) with unit tests
+- [x] 1.2 `web/static/geo-cities.json` from Natural Earth populated places (generated, committed) and a memoised loader with an error state, tested
 
 ## 2. Shared bubble map
 
