@@ -200,7 +200,7 @@
                 <textarea
                   {id}
                   aria-describedby={describedBy}
-                  class="w-full resize-y rounded-lg border border-input bg-transparent px-3 py-2 text-sm focus-visible:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+                  class="w-full resize-y rounded-lg border border-input bg-transparent px-3 py-2 text-sm focus-visible:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   rows="2"
                   bind:value={empSummary}
                 ></textarea>

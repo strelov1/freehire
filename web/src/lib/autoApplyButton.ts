@@ -16,7 +16,7 @@
 const autoApplyProviders = new Set(['greenhouse', 'ashby', 'workable', 'lever', 'recruitee']);
 
 export type AutoApplyButtonState =
-  | { kind: 'hidden' } // not Pro, or an ATS auto-apply cannot queue an attempt against at all
+  | { kind: 'hidden' } // not Pro, a closed posting, or an ATS auto-apply cannot queue against
   | { kind: 'idle' } // no attempt yet — the button is clickable
   | { kind: 'queued' } // a live, undecided attempt already exists
   | { kind: 'declined' } // the candidate's own prior decision, permanent
@@ -32,14 +32,19 @@ export type AutoApplyButtonState =
  *  `alreadyApplied` wins over `status`: a completed submission deletes the queue row that
  *  `status` reads (cmd/auto-apply/store.go's Submit), so the two never disagree in
  *  practice, but checking `alreadyApplied` first is what stops a re-click from starting a
- *  genuine second ATS submission if they ever did. */
+ *  genuine second ATS submission if they ever did.
+ *  `closed` (the posting's `closed_at` is set) hides the button outright, second only to
+ *  the plan: the employer has stopped taking applications, so there is nothing to start
+ *  and no standing attempt worth reporting beside a notice saying exactly that. */
 export function autoApplyButtonState(
   source: string,
   status: string | null | undefined,
   alreadyApplied: boolean,
-  isPro: boolean
+  isPro: boolean,
+  closed: boolean
 ): AutoApplyButtonState {
   if (!isPro) return { kind: 'hidden' };
+  if (closed) return { kind: 'hidden' };
   if (!autoApplyProviders.has(source)) return { kind: 'hidden' };
   if (alreadyApplied) return { kind: 'applied' };
   if (status === 'queued') return { kind: 'queued' };
@@ -68,8 +73,10 @@ export type JobCtaPlan = {
     disabled: boolean;
   } | null;
   /** The link out to the posting's own site, an outline button in every state. Reads
-   *  `Show origin` while auto-apply is doing the applying — the word is the demotion. */
-  external: { label: 'Apply' | 'Show origin' };
+   *  `Apply on company site` while auto-apply is doing the applying — the word is the
+   *  demotion, and it still says what the link does. It used to read `Show origin`, which
+   *  named neither the action nor the destination. */
+  external: { label: 'Apply' | 'Apply on company site' };
 };
 
 /** A rendered-but-unpressable auto-apply button: it reports where the attempt stands, leads
@@ -81,14 +88,14 @@ const quiet = (label: string): NonNullable<JobCtaPlan['autoApply']> => ({
   disabled: true,
 });
 
-const showOrigin = { label: 'Show origin' } as const;
+const applyOnSite = { label: 'Apply on company site' } as const;
 const apply = { label: 'Apply' } as const;
 
 /** Ranks the two apply controls for a posting.
  *
  *  `declined` and `failed` give the external link its own word BACK: auto-apply is not going
  *  to act in either state, so applying by hand is the reader's only way forward and calling
- *  that link `Show origin` would name it as the second-best route to a door that is now the
+ *  that link `Apply on company site` would name it as the second-best route to a door that is now the
  *  only one. The rule is "relabel while an attempt stands or can be started", not "relabel
  *  whenever the auto-apply button exists" — the two read the same until you reach those two
  *  states.
@@ -114,10 +121,10 @@ export function jobCtaPlan(state: AutoApplyButtonState): JobCtaPlan {
     case 'idle':
       return {
         autoApply: { label: 'Auto-apply', leads: true, pro: true, disabled: false },
-        external: showOrigin,
+        external: applyOnSite,
       };
     case 'queued':
-      return { autoApply: quiet('Auto-apply queued'), external: showOrigin };
+      return { autoApply: quiet('Auto-apply queued'), external: applyOnSite };
     case 'applied':
       return { autoApply: quiet('Already applied'), external: apply };
     case 'declined':

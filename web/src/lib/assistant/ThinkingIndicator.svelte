@@ -37,7 +37,7 @@
   <span class="star-glow font-mono text-[0.85rem] font-semibold">{GLYPHS[glyph]}</span>
   <span class="shimmer font-medium">{label ?? verb}…</span>
   {#if !label}
-    <span class="font-mono text-[0.7rem] text-muted-foreground/70">({elapsedSec}s)</span>
+    <span class="font-mono text-[0.7rem] text-muted-foreground">({elapsedSec}s)</span>
   {/if}
 </div>
 

@@ -38,6 +38,7 @@
       <button
         type="button"
         class="mt-2 text-sm font-medium text-primary hover:underline"
+        aria-expanded={expanded}
         onclick={() => (expanded = !expanded)}
       >
         {expanded ? 'Show less' : 'Show more'}

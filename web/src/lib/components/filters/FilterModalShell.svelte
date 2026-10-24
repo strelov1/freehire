@@ -35,6 +35,7 @@
     entryCount,
     seed,
     apply,
+    onClear,
     applyDisabled = false,
     applyLabel,
     previewCount,
@@ -57,6 +58,9 @@
     seed: () => void;
     /** Commit the staged copy (or a custom save). A thrown error keeps the modal open. */
     apply: () => void | Promise<void>;
+    /** Run after the footer's Clear all resets `staged` — for a draft the wrapper stages
+     *  outside it (the job modal's minimum skill match), so Clear all clears that too. */
+    onClear?: () => void;
     applyDisabled?: boolean;
     /** Custom footer label (e.g. "Save"); when absent the button shows the live preview. */
     applyLabel?: string;
@@ -113,6 +117,9 @@
   let showCount = $state<number | null>(null);
   let liveCounts = $state<FacetCounts | null>(null);
   let loading = $state(false);
+  // The latest count request failed: the footer then says "Show jobs" rather than a
+  // number that belongs to an earlier selection (or a blank where the number goes).
+  let countFailed = $state(false);
   let countGen = 0;
   $effect(() => {
     if (!open) return;
@@ -128,10 +135,14 @@
             if (gen === countGen) {
               liveCounts = c;
               loading = false;
+              countFailed = false;
             }
           })
           .catch(() => {
-            if (gen === countGen) loading = false;
+            if (gen === countGen) {
+              loading = false;
+              countFailed = true;
+            }
           });
       }, 200);
     } else if (previewCount) {
@@ -139,9 +150,14 @@
       t = setTimeout(() => {
         pc(params)
           .then((n) => {
-            if (gen === countGen) showCount = n;
+            if (gen === countGen) {
+              showCount = n;
+              countFailed = false;
+            }
           })
-          .catch(() => {});
+          .catch(() => {
+            if (gen === countGen) countFailed = true;
+          });
       }, 200);
     }
     return () => clearTimeout(t);
@@ -149,7 +165,20 @@
 
   // The footer total: the live distribution's total when count-fetching, else the
   // legacy preview number.
-  const total = $derived(countsFetch ? liveCounts?.total ?? null : showCount);
+  const total = $derived(countFailed ? null : countsFetch ? (liveCounts?.total ?? null) : showCount);
+  const showLabel = $derived(
+    total != null ? `Show ${total.toLocaleString('en-US')} ${total === 1 ? 'job' : 'jobs'}` : 'Show jobs',
+  );
+  // What the polite live region below says once a count settles. The button text alone
+  // changes silently, so a screen-reader user picking filters would otherwise never hear
+  // the result shrink. Empty while counting, so only the settled figure is announced.
+  const countAnnouncement = $derived(
+    applyLabel || loading || total == null ? '' : `${total.toLocaleString('en-US')} ${total === 1 ? 'job' : 'jobs'} match`,
+  );
+
+  // Ids that tie the pane to the rail entry naming it.
+  const uid = $props.id();
+  const railLabelId = (key: string) => `${uid}-rail-${key}`;
 
   let applyBusy = $state(false);
   let applyError = $state<string | null>(null);
@@ -174,8 +203,23 @@
     return unlockScroll;
   });
 
+  let dialogEl = $state<HTMLElement>();
+
+  // Escape closes the modal unless something inside it claimed the key first. A child
+  // that handles Escape itself (the AI filter dialog) stops it or prevents its default;
+  // the design-system tooltip does neither — it listens on the window too, and both
+  // window listeners fire for one press — so an open tooltip inside the dialog is taken
+  // as the claim: that press dismisses the tooltip, the next one the modal. The tooltip
+  // is still in the DOM here, since its own hide only re-renders after this dispatch.
   function onKeydown(e: KeyboardEvent) {
-    if (e.key === 'Escape') onClose();
+    if (e.key !== 'Escape' || e.defaultPrevented) return;
+    if (dialogEl?.querySelector('[role="tooltip"]')) return;
+    onClose();
+  }
+
+  function clearAll() {
+    staged.clear();
+    onClear?.();
   }
 </script>
 
@@ -184,13 +228,14 @@
 {#if open}
   <div class="fixed inset-0 z-50 flex items-stretch justify-center sm:items-center sm:p-6">
     <!-- backdrop -->
-    <button class="absolute inset-0 bg-foreground/35" aria-label="Close filters" onclick={onClose}></button>
+    <button class="absolute inset-0 animate-modal-fade bg-foreground/35" aria-label="Close filters" onclick={onClose}></button>
 
     <div
-      class="relative flex h-full w-full flex-col overflow-hidden bg-background shadow-2xl sm:h-auto sm:max-h-[calc(100vh-3rem)] sm:max-w-4xl sm:rounded-2xl sm:border sm:border-border"
+      class="relative flex h-full w-full animate-modal-pop flex-col overflow-hidden bg-background shadow-2xl sm:h-auto sm:max-h-[calc(100vh-3rem)] sm:max-w-4xl sm:rounded-2xl sm:border sm:border-border"
       role="dialog"
       aria-modal="true"
       aria-label={title}
+      bind:this={dialogEl}
       {@attach focusTrap()}
     >
       <!-- header -->
@@ -212,30 +257,35 @@
 
       <div class="flex min-h-0 flex-1">
         <!-- rail -->
-        <nav class="w-40 shrink-0 overflow-y-auto overscroll-contain border-r border-border py-2 sm:w-56">
+        <!-- Below sm the rail is w-32 (128px), not the w-40 it was: on a 360px phone that
+             gives the pane 232px instead of 200px, and its search field and pills need it
+             more than the rail does. Labels wrap to a second line rather than truncate,
+             which at that width they would ("Work & employme…"). -->
+        <nav aria-label="Filter sections" class="w-32 shrink-0 overflow-y-auto overscroll-contain border-r border-border py-2 sm:w-56">
           {#each sections as section (section)}
             {@const entries = rail.filter((e) => e.section === section)}
             {#if entries.length}
-              <div class="px-3 pb-1 pt-3 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{section}</div>
+              <div class="px-2.5 pb-1 pt-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground sm:px-3">{section}</div>
               {#each entries as e (e.key)}
                 {@const n = entryCount(e)}
                 <button
                   type="button"
                   onclick={() => (active = e.key)}
+                  aria-current={active === e.key ? 'true' : undefined}
                   class={[
-                    'flex w-full items-center justify-between gap-2 border-l-2 px-3 py-2 text-left text-sm transition-colors',
+                    'flex w-full items-center justify-between gap-1.5 border-l-2 px-2.5 py-2 text-left text-sm transition-colors sm:gap-2 sm:px-3',
                     active === e.key
                       ? 'border-brand bg-accent font-semibold'
                       : 'border-transparent font-medium hover:bg-accent',
                   ]}
                 >
-                  <span class="truncate">{e.label}</span>
+                  <span id={railLabelId(e.key)} class="min-w-0 break-words sm:truncate">{e.label}</span>
                   {#if n > 0}
                     <span
                       class={[
                         'shrink-0 rounded-full px-1.5 text-[11px] font-semibold',
                         active === e.key ? 'bg-brand text-brand-foreground' : 'bg-secondary text-muted-foreground',
-                      ]}>{n}</span
+                      ]}><span aria-hidden="true">{n}</span><span class="sr-only">, {n} selected</span></span
                     >
                   {/if}
                 </button>
@@ -245,21 +295,28 @@
         </nav>
 
         <!-- pane -->
-        <section class="min-w-0 flex-1 overflow-y-auto overscroll-contain p-4 sm:p-6">
+        <!-- Named by the active rail entry, so a screen reader entering the pane hears
+             which section it is in. -->
+        <section
+          aria-labelledby={activeEntry ? railLabelId(activeEntry.key) : undefined}
+          class="min-w-0 flex-1 overflow-y-auto overscroll-contain p-4 sm:p-6"
+        >
           {#if extra}<div class="mb-6">{@render extra()}</div>{/if}
           {#if activeEntry}{@render pane(activeEntry, liveCounts)}{/if}
         </section>
       </div>
 
       <!-- footer -->
-      <div class="flex flex-col gap-2 border-t border-border px-4 py-3">
+      <!-- The bottom padding never drops under the home indicator on a notched phone,
+           where the modal is full-screen and this row sits at the very bottom. -->
+      <div class="flex flex-col gap-2 border-t border-border px-4 pt-3 pb-safe">
         {#if applyError}
           <p class="text-sm text-destructive">{applyError}</p>
         {/if}
         <div class="flex items-center justify-between">
           <button
             type="button"
-            onclick={() => staged.clear()}
+            onclick={clearAll}
             class="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground">Clear all</button
           >
           <button
@@ -272,14 +329,14 @@
               {applyBusy ? 'Saving…' : applyLabel}
               {#if !applyBusy}<ArrowRight class="size-4" aria-hidden="true" />{/if}
             {:else if loading}
-              Show <LoaderCircle class="size-4 animate-spin" /> jobs
+              Show <LoaderCircle class="size-4 animate-spin" aria-hidden="true" /><span class="sr-only">(counting)</span> jobs
             {:else}
-              Show {total != null ? total.toLocaleString('en-US') : ''}
-              {total === 1 ? 'job' : 'jobs'}
+              {showLabel}
               <ArrowRight class="size-4" aria-hidden="true" />
             {/if}
           </button>
         </div>
+        <p class="sr-only" aria-live="polite">{countAnnouncement}</p>
         {#if footerNote}{@render footerNote({ jumpTo: (k) => (active = k), activeKey: active })}{/if}
       </div>
     </div>

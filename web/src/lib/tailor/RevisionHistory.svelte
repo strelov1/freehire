@@ -123,7 +123,7 @@
 
 <div class="p-4">
   {#if error}
-    <p class="mb-3 rounded border border-destructive/40 bg-destructive/10 px-2 py-1.5 text-xs text-destructive">
+    <p class="mb-3 rounded border border-destructive/40 bg-destructive/10 px-2 py-1.5 text-xs text-destructive-strong">
       {error}
     </p>
   {/if}

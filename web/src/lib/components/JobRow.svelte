@@ -250,6 +250,18 @@
     }
   }
 
+  // The card link's accessible name. The whole card is one <a>, so left to itself its name
+  // is every word on the card — the blurb, each chip, each skill — hundreds of characters
+  // read out before a screen-reader user learns which job it is. The name is "Title at
+  // Company" instead, and the few facts worth hearing before opening the posting go in its
+  // description. Browse mode still reads the card's full visible text.
+  const linkName = $derived(`${job.title} at ${job.company || 'Unknown company'}`);
+  const uid = $props.id();
+  const summaryId = `${uid}-summary`;
+  const summary = $derived(
+    [isViewed ? 'Viewed' : '', posted ? `Posted ${posted}` : '', salary ?? ''].filter(Boolean).join(', '),
+  );
+
   // Apply-intent — fired regardless of auth, the same event and shape the job page's own
   // Apply button fires (JobView.svelte), so the funnel stays comparable across surfaces.
   function onApplyClick() {
@@ -269,11 +281,13 @@
   href={resolve('/jobs/[slug]', { slug: job.public_slug })}
   target={newTab ? '_blank' : undefined}
   rel={newTab ? 'noopener' : undefined}
+  aria-label={linkName}
+  aria-describedby={summary ? summaryId : undefined}
   class={[
     'block hover:opacity-100',
     compact ? 'p-3' : 'p-4',
   ]}
-  class:opacity-80={isViewed}
+  class:opacity-90={isViewed}
 >
   <!-- Company + timestamp rail: a quiet eyebrow that yields the stage to the title.
        The name truncates to a single line, so a long company (e.g. "Veterinary
@@ -303,7 +317,9 @@
     <div class="flex shrink-0 items-center gap-1.5 text-muted-foreground">
       {#if isViewed}
         <!-- A quiet "you've seen this" marker, paired with the lighter dim on the card
-             so viewed jobs recede without becoming hard to read.
+             so viewed jobs recede without becoming hard to read. The dim is 90%, not
+             80%: on the hover fill (`accent`) 80% took muted text to 4.15:1 in the light
+             theme, under the 4.5:1 floor; 90% keeps it at 5.2:1 in both themes.
              A check, not an eye: the eye beside it carries the PUBLIC view count, and
              two eyes in one rail meaning different things cannot be told apart. -->
         <Check class="size-3.5" aria-label="You have viewed this" />
@@ -475,6 +491,13 @@
   {/if}
 </a>
 
+<!-- The card link's description (see `summary`). `hidden` keeps it off the page and out
+     of browse mode, where the same facts are read from the card itself; a description
+     reference still reaches hidden content. -->
+{#if summary}
+  <span id={summaryId} hidden>{summary}</span>
+{/if}
+
 {#if teaser}
   <!-- The blurred strip is hidden from assistive technology, so this is what stands in
        for it — the invitation that would actually get this viewer a real match. It sits
@@ -540,7 +563,7 @@
       disabled={saving}
       aria-label={saved ? 'Remove from your board' : undefined}
       class={[
-        'flex h-9 items-center gap-2 rounded-lg px-3 text-sm font-medium transition disabled:pointer-events-none disabled:opacity-50',
+        'flex h-9 shrink-0 items-center gap-2 whitespace-nowrap rounded-lg px-3 text-sm font-medium transition disabled:pointer-events-none disabled:opacity-50',
         saved
           ? 'bg-brand/10 text-brand hover:bg-brand/15'
           : 'border border-border text-foreground hover:bg-accent',
@@ -577,6 +600,7 @@
           <Button
             variant="outline"
             href={resolve('/jobs/[slug]', { slug: job.public_slug })}
+            aria-label="Apply to {job.title}"
             class="h-9 shrink-0 bg-transparent opacity-0 focus-visible:opacity-100 group-hover:opacity-100 pointer-coarse:opacity-100"
           >
             Apply
@@ -589,6 +613,7 @@
             target="_blank"
             rel="nofollow noopener noreferrer"
             onclick={onApplyClick}
+            aria-label="Apply to {job.title} on the employer's site (opens in a new tab)"
             class="h-9 shrink-0 bg-transparent opacity-0 focus-visible:opacity-100 group-hover:opacity-100 pointer-coarse:opacity-100"
           >
             <ExternalLink class="size-4" aria-hidden="true" />

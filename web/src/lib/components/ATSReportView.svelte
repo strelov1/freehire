@@ -131,7 +131,7 @@
           </h3>
           <div class="flex flex-wrap gap-1.5">
             {#each recommended as s (s)}
-              <span class="rounded-full bg-destructive/10 px-2.5 py-1 text-xs font-medium text-destructive">{s}</span>
+              <span class="rounded-full bg-destructive/10 px-2.5 py-1 text-xs font-medium text-destructive-strong">{s}</span>
             {/each}
           </div>
         </div>

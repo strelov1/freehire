@@ -17,7 +17,7 @@
   const s = $derived(t(messages, locale()));
 
   const selectClass =
-    'h-9 rounded-lg border border-input bg-transparent px-3 text-sm transition-colors focus-visible:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 dark:bg-input/30';
+    'h-9 rounded-lg border border-input bg-transparent px-3 text-sm transition-colors focus-visible:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:bg-input/30';
 
   function add() {
     questions = [...questions, { label: '', type: 'text', required: false }];

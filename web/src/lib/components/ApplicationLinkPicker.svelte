@@ -35,11 +35,24 @@
     open = false;
     q = '';
   }
+
+  let trigger = $state<HTMLButtonElement>();
+
+  // Escape closes the popover and hands focus back to its trigger. Stopped here so a
+  // surrounding dialog's own Escape handler doesn't close along with it.
+  function onkeydown(e: KeyboardEvent) {
+    if (!open || e.key !== 'Escape') return;
+    e.stopPropagation();
+    open = false;
+    trigger?.focus();
+  }
 </script>
 
-<div class="relative inline-block">
+<div class="relative inline-block" {onkeydown} role="presentation">
   <button
+    bind:this={trigger}
     type="button"
+    aria-expanded={open}
     onclick={() => (open = !open)}
     class="inline-flex items-center gap-1 rounded-full border border-dashed border-border px-2.5 py-0.5 text-xs text-muted-foreground transition-colors hover:border-brand-ring hover:text-foreground"
   >

@@ -11,7 +11,7 @@
   import { SvelteSet } from 'svelte/reactivity';
   import { api } from '#lib/api.js';
   import { CATEGORY_GROUPS } from '#lib/filterSections.js';
-  import { pillClass, pillTitle } from '#lib/components/facets/pill.js';
+  import { pillClass, pillCountClass, pillTitle } from '#lib/components/facets/pill.js';
   import SeniorityPills from '#lib/components/profile/SeniorityPills.svelte';
   import { MAX_SPECIALIZATIONS } from '#lib/profileLimits.js';
   import ProfileLinksFields from './ProfileLinksFields.svelte';
@@ -167,7 +167,7 @@
             title={pillTitle(included, false, false)}
             class={pillClass(included, false, 'px-3 py-1.5 text-sm')}
           >
-            {o.label}{#if categoryDist}<span class="ml-1 opacity-60 tabular-nums">{(categoryDist[o.value] ?? 0).toLocaleString()}</span>{/if}
+            {o.label}{#if categoryDist}<span class={pillCountClass(included)}>{(categoryDist[o.value] ?? 0).toLocaleString()}</span>{/if}
           </button>
         {/each}
       </div>

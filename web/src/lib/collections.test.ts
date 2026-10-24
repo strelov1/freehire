@@ -1,17 +1,16 @@
 import { describe, it, expect } from 'vitest';
 import {
   FILTER_COLLECTIONS,
-  POPULAR_COLLECTION_FALLBACK,
   collectionBySlug,
   collectionForCategory,
   collectionForSkill,
   collectionSlugs,
   jobFacetsFromJob,
-  popularCollectionLinks,
   relatedCollectionLinks,
   relatedCollectionSlugs,
   skillForCollection,
 } from './collections';
+import { POPULAR_COLLECTIONS, POPULAR_COLLECTION_FALLBACK } from './popularCollections';
 import type { Job } from './types';
 import { FACETS } from './facets';
 
@@ -281,30 +280,26 @@ describe('jobFacetsFromJob', () => {
   });
 });
 
-describe('popularCollectionLinks', () => {
+describe('POPULAR_COLLECTIONS', () => {
   // The gap this closes: the homepage — the site's strongest page — carried 20
   // /jobs/* links, 4 /features/* and zero links to any individual collection, so
   // the 101 collection landing pages got nothing from it. Footer links reach every
   // page, not only the homepage.
-  it('resolves every popular slug to a title', () => {
-    const links = popularCollectionLinks();
-    expect(links.length).toBeGreaterThan(0);
-    for (const link of links) {
-      expect(link.title, `title for "${link.slug}"`).toBeTruthy();
-    }
-  });
-
-  // A link to a page that 404s is worse than no link. collectionBySlug is the same
-  // resolver the landing route and the sitemap use, so this cannot drift from them.
-  it('never emits a slug that has no landing page', () => {
-    for (const link of popularCollectionLinks()) {
-      expect(collectionBySlug(link.slug), `slug "${link.slug}"`).toBeDefined();
+  //
+  // The titles are restated in popularCollections.ts so the footer need not load
+  // the whole collection table; this holds each to what collectionBySlug resolves —
+  // the same resolver the landing route and the sitemap use — so a footer link can
+  // neither 404 nor carry a stale title.
+  it('matches the title collectionBySlug resolves for every slug', () => {
+    expect(POPULAR_COLLECTIONS.length).toBeGreaterThan(0);
+    for (const link of POPULAR_COLLECTIONS) {
+      expect(link.title, `title for "${link.slug}"`).toBe(collectionBySlug(link.slug)?.title);
     }
   });
 
   it('keeps the curated order and holds no duplicates', () => {
-    const slugs = popularCollectionLinks().map((l) => l.slug);
-    expect(slugs).toEqual(POPULAR_COLLECTION_FALLBACK.filter((s) => collectionBySlug(s)));
+    const slugs = POPULAR_COLLECTIONS.map((l) => l.slug);
+    expect(slugs).toEqual(POPULAR_COLLECTION_FALLBACK);
     expect(new Set(slugs).size).toBe(slugs.length);
   });
 });

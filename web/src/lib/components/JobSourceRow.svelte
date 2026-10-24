@@ -115,6 +115,8 @@
   {/if}
 
   {#if failed}
-    <span class="text-destructive">Could not save that — try again.</span>
+    <!-- An alert, so the failure is announced: the button that caused it does not move
+         focus, and a screen reader user would otherwise hear nothing at all. -->
+    <span role="alert" class="text-destructive">Could not save that — try again.</span>
   {/if}
 </div>

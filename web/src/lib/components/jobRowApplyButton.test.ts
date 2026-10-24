@@ -81,4 +81,25 @@ describe('JobRow direct-apply button', () => {
       expect(applyBlock).toContain(cls);
     }
   });
+
+  it('names the job it applies to, and which of the two destinations it is', () => {
+    // A feed holds twenty "Apply" buttons; a name without the job is twenty identical
+    // entries in a screen reader's control list.
+    expect(applyBlock).toContain(`aria-label="Apply to {job.title} on the employer's site (opens in a new tab)"`);
+    const i = actionRow.indexOf('{#if directApply}');
+    const block = i === -1 ? '' : actionRow.slice(i, actionRow.indexOf('{/if}', i));
+    expect(block).toContain('aria-label="Apply to {job.title}"');
+  });
+});
+
+describe('JobRow card link', () => {
+  it('is named by title and company, not by every word on the card', () => {
+    expect(ROW).toContain('aria-label={linkName}');
+    expect(ROW).toContain("const linkName = $derived(`${job.title} at ${job.company || 'Unknown company'}`);");
+  });
+
+  it('dims a viewed card no further than 90%, which keeps muted text above 4.5:1', () => {
+    expect(ROW).toContain('class:opacity-90={isViewed}');
+    expect(ROW).not.toContain('class:opacity-80');
+  });
 });

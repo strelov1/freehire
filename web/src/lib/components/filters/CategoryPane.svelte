@@ -6,7 +6,8 @@
   import type { FacetCounts } from '#lib/types.js';
   import { searchCategoryGroups } from '#lib/filterSections.js';
   import FacetHeader from './FacetHeader.svelte';
-  import { pillClass, pillTitle } from '../facets/pill';
+  import { pillClass, pillPressed, pillTitle } from '../facets/pill';
+  import PillMeta from '../facets/PillMeta.svelte';
 
   // Specialization pane: category chips grouped into collapsible sections, with a
   // facet-local search filtering the visible options. In the job filter it toggles
@@ -58,14 +59,20 @@
 {#each groups as g (g.name)}
   {@const isCollapsed = collapsed.has(g.name) && !query}
   <div class="border-t border-border first:border-t-0">
-    <button
-      type="button"
-      class="flex w-full items-center gap-2 py-3"
-      onclick={() => (collapsed.has(g.name) ? collapsed.delete(g.name) : collapsed.add(g.name))}
-    >
-      <ChevronDown class={['size-4 text-muted-foreground transition-transform', isCollapsed && '-rotate-90']} />
-      <h3 class="text-sm font-semibold tracking-tight">{g.name}</h3>
-    </button>
+    <!-- The button sits inside the heading, not around it: a button's content may not
+         hold a heading, and this way the group is still reachable by heading navigation
+         while the button reports its state through aria-expanded. -->
+    <h3 class="text-sm font-semibold tracking-tight">
+      <button
+        type="button"
+        class="flex w-full items-center gap-2 py-3"
+        aria-expanded={!isCollapsed}
+        onclick={() => (collapsed.has(g.name) ? collapsed.delete(g.name) : collapsed.add(g.name))}
+      >
+        <ChevronDown class={['size-4 text-muted-foreground transition-transform', isCollapsed && '-rotate-90']} aria-hidden="true" />
+        {g.name}
+      </button>
+    </h3>
     {#if !isCollapsed}
       <div class="flex flex-wrap gap-2 pb-3">
         {#each g.options as o (o.value)}
@@ -74,10 +81,11 @@
           <button
             type="button"
             onclick={() => onToggle(o.value)}
+            aria-pressed={pillPressed(included, excluded)}
             title={pillTitle(included, excluded, excludable)}
             class={pillClass(included || excluded, excluded, 'px-3 py-1.5 text-sm')}
           >
-            {o.label}{#if dist}<span class="ml-1 opacity-60 tabular-nums">{(dist[o.value] ?? 0).toLocaleString()}</span>{/if}
+            {o.label}<PillMeta {included} {excluded} count={dist ? (dist[o.value] ?? 0).toLocaleString() : undefined} />
           </button>
         {/each}
       </div>

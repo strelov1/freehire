@@ -22,11 +22,11 @@
 </script>
 
 <script lang="ts">
-  import type { Snippet } from 'svelte';
+  import { tick, type Snippet } from 'svelte';
   import { SlidersHorizontal, X } from '@lucide/svelte';
   import SkillIcon from '../SkillIcon.svelte';
 
-  // The reusable filter-summary sidebar chrome: heading + Reset all, the All-filters
+  // The reusable filter-summary sidebar chrome: heading + Clear all, the All-filters
   // button (with active badge), the empty state, and the applied-filter chip groups.
   // A domain summary (FilterSummary, CompanyFilterSummary) computes `groups` from its
   // store and passes the counts/handlers; removing a chip applies immediately (each
@@ -50,14 +50,43 @@
      *  "Save filter" affordance; the company summary omits it. */
     afterButton?: Snippet;
   } = $props();
+
+  let root = $state<HTMLDivElement>();
+  let heading = $state<HTMLHeadingElement>();
+
+  // Every control here that removes something removes ITSELF: the chip's ×, a group's
+  // clear, Clear all. Left alone, focus falls back to <body> and a keyboard user is sent
+  // to the top of the page after each chip. So focus moves to whatever now stands where
+  // the removed control stood — the next chip slides into its place, else the last one
+  // left — and to the heading once no chip remains.
+  //
+  // `from` is the removed control's position among the chip buttons, read BEFORE the
+  // removal; a group clear passes its first chip's, which the next group's first chip
+  // then takes over.
+  async function removeThenRefocus(remove: () => void, from: number | null) {
+    remove();
+    await tick();
+    const left = root ? [...root.querySelectorAll<HTMLButtonElement>('[data-chip-remove]')] : [];
+    const next = from === null ? undefined : left[Math.min(from, left.length - 1)];
+    if (next) next.focus();
+    else heading?.focus();
+  }
+
+  function chipIndex(el: EventTarget | null): number | null {
+    if (!root || !(el instanceof HTMLElement)) return null;
+    const i = [...root.querySelectorAll('[data-chip-remove]')].indexOf(el);
+    return i === -1 ? null : i;
+  }
 </script>
 
-<div class="flex flex-col gap-4">
+<div class="flex flex-col gap-4" bind:this={root}>
   <div class="flex flex-col gap-1">
     <div class="flex items-center justify-between">
-      <h2 class="text-base font-semibold tracking-tight">Filters</h2>
+      <!-- Focusable from script only: where focus lands once the control holding it has
+           removed itself and no chip is left (see `removeThenRefocus`). -->
+      <h2 bind:this={heading} tabindex="-1" class="text-base font-semibold tracking-tight outline-none">Filters</h2>
       {#if active > 0}
-        <button type="button" class="text-xs text-muted-foreground transition-colors hover:text-foreground" onclick={onReset}>Reset all</button>
+        <button type="button" class="text-xs text-muted-foreground transition-colors hover:text-foreground" onclick={() => removeThenRefocus(onReset, null)}>Clear all</button>
       {/if}
     </div>
     {#if description}
@@ -88,13 +117,18 @@
       <div class="flex flex-col gap-2">
         <div class="flex items-center gap-1">
           <span class="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{g.label}</span>
+          <!-- Same 24px hit area as the chip's own × below: the 12px glyph alone was the
+               whole target. -->
           <button
             type="button"
             aria-label="Clear {g.label}"
-            onclick={() => g.chips.forEach((c) => c.remove())}
-            class="text-muted-foreground transition-colors hover:text-foreground"
+            onclick={(e) => {
+              const first = e.currentTarget.parentElement?.nextElementSibling?.querySelector('[data-chip-remove]') ?? null;
+              removeThenRefocus(() => g.chips.forEach((c) => c.remove()), chipIndex(first));
+            }}
+            class="relative inline-flex text-muted-foreground transition-colors after:absolute after:-inset-1.5 hover:text-foreground"
           >
-            <X class="size-3" />
+            <X class="size-3" aria-hidden="true" />
           </button>
         </div>
         <div class="flex flex-wrap gap-1.5">
@@ -102,13 +136,24 @@
             <span
               class={[
                 'inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium',
-                c.exclude ? 'border-destructive/30 bg-destructive/15 text-destructive line-through' : 'border-transparent bg-brand-muted text-brand-strong',
+                c.exclude ? 'border-destructive/30 bg-destructive/15 text-destructive-strong line-through' : 'border-transparent bg-brand-muted text-brand-strong',
               ]}
             >
               {#if c.slug}<SkillIcon slug={c.slug} />{/if}
+              <!-- The strike-through is the only sign of an excluded value and a screen
+                   reader does not voice it, so the state is said in words as well — in
+                   the chip and in its remove button, which otherwise read the same as an
+                   included value's. -->
+              {#if c.exclude}<span class="sr-only">Excluded:</span>{/if}
               {c.text}
-              <button type="button" aria-label="Remove {c.text}" onclick={c.remove} class="relative inline-flex text-muted-foreground transition-colors after:absolute after:-inset-1.5 hover:text-foreground">
-                <X class="size-3" />
+              <button
+                type="button"
+                data-chip-remove
+                aria-label={c.exclude ? `Remove excluded ${c.text}` : `Remove ${c.text}`}
+                onclick={(e) => removeThenRefocus(c.remove, chipIndex(e.currentTarget))}
+                class="relative inline-flex text-muted-foreground transition-colors after:absolute after:-inset-1.5 hover:text-foreground"
+              >
+                <X class="size-3" aria-hidden="true" />
               </button>
             </span>
           {/each}

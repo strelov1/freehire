@@ -607,7 +607,7 @@
 
           <div class="flex flex-col gap-1 text-sm">
             <span class="font-medium">{s.notes}</span>
-            <NoteEditor value={item.notes ?? ''} onsave={onsavenotes} />
+            <NoteEditor value={item.notes ?? ''} onsave={onsavenotes} label={s.notes} />
           </div>
         </div>
       {:else if tab === 'auto_apply'}
@@ -623,7 +623,7 @@
                         step.state === 'done' && 'bg-brand text-brand-foreground',
                         step.state === 'active' && 'bg-brand-muted text-brand-strong ring-2 ring-brand-ring',
                         step.state === 'queued' && 'bg-muted text-muted-foreground ring-2 ring-border',
-                        step.state === 'error' && 'bg-destructive/15 text-destructive',
+                        step.state === 'error' && 'bg-destructive/15 text-destructive-strong',
                         step.state === 'pending' && 'bg-muted text-muted-foreground'
                       )}
                     >

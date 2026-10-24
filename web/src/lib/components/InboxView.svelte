@@ -490,7 +490,7 @@
             bind:value={label}
             onchange={reloadList}
             aria-label={s.filterByLabelAria}
-            class="rounded-lg border border-border bg-background py-2 pl-3 pr-8 text-sm outline-none transition focus:border-brand focus:ring-2 focus:ring-brand-ring/40 {label
+            class="rounded-lg border border-border bg-background py-2 pl-3 pr-8 text-sm outline-none transition focus:border-brand focus:ring-2 focus:ring-ring {label
               ? 'font-medium text-foreground'
               : 'text-muted-foreground'}"
           >
@@ -508,7 +508,7 @@
               aria-label={s.searchAria}
               bind:value={search}
               oninput={onSearchInput}
-              class="w-full rounded-lg border border-border bg-background py-2 pl-9 pr-3 text-sm outline-none transition focus:border-brand focus:ring-2 focus:ring-brand-ring/40"
+              class="w-full rounded-lg border border-border bg-background py-2 pl-9 pr-3 text-sm outline-none transition focus:border-brand focus:ring-2 focus:ring-ring"
             />
           </div>
 
@@ -638,7 +638,7 @@
                           <div class="mt-1 flex items-center gap-1">
                             <StatusChip signal={m.status_signal} class="text-[10px] leading-4" />
                             {#if m.linked_slug}
-                              <span class="truncate text-[10px] text-muted-foreground/70">· {m.linked_company}</span>
+                              <span class="truncate text-[10px] text-muted-foreground">· {m.linked_company}</span>
                             {:else if m.suggested_slug}
                               <span class="text-[10px] text-brand-strong">· {s.suggestedTag}</span>
                             {/if}

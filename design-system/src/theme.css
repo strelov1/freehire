@@ -26,6 +26,33 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* How a modal arrives: it grows out of the middle of the screen while it fades in, and
+   its backdrop fades in under it. Short and decelerating, so a modal opened from the
+   keyboard is ready to use at once. Under reduced motion only the fade remains — the
+   arrival still reads as a change of state, nothing moves. A keyframe with no `to` ends
+   on the element's own values, so no transform outlives the animation (a lingering one
+   would make the modal the containing block for its fixed children). */
+@keyframes modal-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+}
+@keyframes modal-fade {
+  from {
+    opacity: 0;
+  }
+}
+@utility animate-modal-pop {
+  animation: modal-pop 180ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  @media (prefers-reduced-motion: reduce) {
+    animation-name: modal-fade;
+  }
+}
+@utility animate-modal-fade {
+  animation: modal-fade 180ms ease-out both;
+}
+
 /* A flex column that seats its content at the optical centre rather than the
    geometric one: the free space splits 1:2 above and below, so a short modal on a
    full-screen phone sheet sits in the upper third instead of reading as having

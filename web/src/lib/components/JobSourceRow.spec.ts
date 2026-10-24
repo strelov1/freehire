@@ -111,6 +111,7 @@ describe('JobSourceRow', () => {
     await fireEvent.click(screen.getByRole('button', { name: /Avoid this source/ }));
 
     expect(await screen.findByText(/Could not save that/)).toBeTruthy();
+    expect(screen.getByRole('alert').textContent).toMatch(/Could not save that/);
   });
 
   it('carries the Adzuna attribution only for Adzuna', () => {

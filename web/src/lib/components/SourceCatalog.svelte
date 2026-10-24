@@ -155,7 +155,7 @@
       type="search"
       bind:value={query}
       placeholder="Search {sources.length} sources — greenhouse, adzuna, telegram…"
-      class="w-full rounded-lg border border-border bg-background px-4 py-2.5 text-sm transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+      class="w-full rounded-lg border border-border bg-background px-4 py-2.5 text-sm transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
     />
     <p class="mt-2 text-xs text-muted-foreground">
       {count(sources.length)} sources ·

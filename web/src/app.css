@@ -12,7 +12,7 @@
 
 @layer base {
   * {
-    @apply border-border outline-ring/50;
+    @apply border-border outline-ring;
   }
   html,
   body {
@@ -61,6 +61,14 @@
    covers the bottom of whatever it overlays. This hides the rail only — the element
    still scrolls, so it goes alongside an `overflow-*`, never instead of one. The two
    declarations are the same rule for two engines, not a fallback pair. */
+/* Bottom padding for a bar pinned to the screen's bottom edge: 0.75rem, or more where
+   the phone's home indicator needs it. Needs `viewport-fit=cover` (app.html) for the
+   inset to be non-zero. One name for the rule the job page's apply bar and the filter
+   modal's footer both follow. */
+@utility pb-safe {
+  padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+}
+
 @utility no-scrollbar {
   scrollbar-width: none;
   &::-webkit-scrollbar {

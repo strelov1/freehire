@@ -31,6 +31,6 @@
   >
     <Bot class="size-3.5 shrink-0" aria-hidden="true" />
     AI interview
-    <span class="tabular-nums opacity-70">{shown}</span>
+    <span class="tabular-nums">{shown}</span>
   </span>
 {/if}

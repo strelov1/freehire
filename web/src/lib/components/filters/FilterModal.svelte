@@ -199,7 +199,7 @@
       );
     // The Minimum skill match threshold lives at the top of the Skills pane, so it
     // counts toward that tab's badge alongside the skills facet selections.
-    if (e.key === 'skills') return selCount(f, 'skills') + (minMatch != null ? 1 : 0);
+    if (e.key === 'skills') return selCount(f, 'skills') + (matchAvailable && draftMinMatch != null ? 1 : 0);
     return selCount(f, e.facetParam ?? e.key);
   }
 
@@ -212,16 +212,28 @@
     return d && plain ? { ...d, excludable: false, hasAndOr: false } : d;
   }
 
+  // The minimum skill match is staged like everything else in this modal: dragging the
+  // slider moves this draft, Apply hands it to the caller, closing without Apply drops
+  // it, and Clear all resets it. It lives here rather than in StagedFilters because it
+  // is not a JobFilters field (see the `minMatch` prop).
+  let draftMinMatch = $state<number | null>(null);
+
   function seedStaged() {
     staged.seed(seed ?? store?.value ?? emptyFilters());
+    draftMinMatch = minMatch;
+  }
+
+  function clearDrafts() {
+    draftMinMatch = null;
   }
 
   async function apply() {
     if (onApply) {
       await onApply(staged);
-      return;
+    } else if (store) {
+      staged.commit(store);
     }
-    if (store) staged.commit(store);
+    if (matchAvailable && draftMinMatch !== minMatch) onMinMatchChange?.(draftMinMatch);
   }
 
   const applyDisabled = $derived(canApply ? !canApply(staged.value) : false);
@@ -262,6 +274,14 @@
   // SALARY_MAX double as it would make SALARY_MAX unreachable as a ceiling, and,
   // since the thumbs stop a step apart, as a floor too.
   const SALARY_NO_CEILING = SALARY_MAX + SALARY_STEP;
+
+  // What a salary thumb announces: each end of the track is "no bound", so the raw
+  // 0 / SALARY_NO_CEILING would mislead a screen reader into a real figure.
+  function salaryThumbText(n: number, thumb: 'lo' | 'hi'): string {
+    if (thumb === 'lo' && n <= 0) return 'No minimum';
+    if (thumb === 'hi' && n >= SALARY_NO_CEILING) return 'No ceiling';
+    return n.toLocaleString('en-US');
+  }
 </script>
 
 <FilterModalShell
@@ -275,6 +295,7 @@
   seed={seedStaged}
   initialKey={RAIL[0]?.key}
   {apply}
+  onClear={clearDrafts}
   {applyDisabled}
   {applyLabel}
   {previewCount}
@@ -408,20 +429,22 @@
   {:else if entry.kind === 'facet'}
     {@const def = facetDefFor(entry.facetParam)}
     {#if entry.key === 'skills' && matchAvailable}
-      <!-- Client-only post-filter (see `minMatch`/`onMinMatchChange` props): re-filters
-           the already-fetched page in memory, so it applies immediately, no debounce. -->
+      <!-- Client-only post-filter (see `minMatch`/`onMinMatchChange` props), staged in
+           `draftMinMatch` until Apply like every other control here. It narrows the
+           fetched page in memory, so the footer's server-side count does not move with it. -->
       <div class="mb-2 flex items-center justify-between">
         <h3 class="text-sm font-semibold tracking-tight">Minimum skill match</h3>
-        <span class="text-xs font-medium text-muted-foreground">{minMatch != null ? `${minMatch}%+` : 'Any'}</span>
+        <span class="text-xs font-medium text-muted-foreground">{draftMinMatch != null ? `${draftMinMatch}%+` : 'Any'}</span>
       </div>
       <input
         type="range"
         min="0"
         max="100"
         step="5"
-        value={minMatch ?? 0}
-        oninput={(e) => onMinMatchChange?.(Number(e.currentTarget.value) || null)}
+        value={draftMinMatch ?? 0}
+        oninput={(e) => (draftMinMatch = Number(e.currentTarget.value) || null)}
         aria-label="Minimum skill match"
+        aria-valuetext={draftMinMatch != null ? `${draftMinMatch}% or more` : 'Any'}
         class="mb-6 w-full accent-primary"
       />
     {/if}
@@ -446,6 +469,7 @@
       hiLabel="Maximum salary"
       onLo={(n) => staged.setSalaryMin(n > 0 ? n : null)}
       onHi={(n) => staged.setSalaryMax(n < SALARY_NO_CEILING ? n : null)}
+      valueText={salaryThumbText}
     />
     <!-- The API bounds each end of a posting's own range (its minimum from below, its
          maximum from above), so a posting paying 90,000–160,000 is outside a
@@ -500,6 +524,7 @@
         value={experienceIndex}
         oninput={(e) => staged.setExperienceYearsMax(EXPERIENCE_PRESETS[Number(e.currentTarget.value)]?.years ?? null)}
         aria-label="Maximum years of experience"
+        aria-valuetext={experienceLabel(staged.value.experienceYearsMax)}
         class="w-full accent-primary"
       />
       <!-- Most of the catalogue states no experience requirement at all (about two
@@ -584,7 +609,7 @@
       Best-effort — successful submission isn't guaranteed.
     </p>
     <h3 class="mb-2 mt-6 text-sm font-semibold tracking-tight">Security clearance</h3>
-    <div class="inline-flex overflow-hidden rounded-md border border-border" role="group">
+    <div class="inline-flex overflow-hidden rounded-md border border-border" role="group" aria-label="Security clearance">
       {#each CLEARANCE_OPTIONS as opt (opt.value)}
         <button
           type="button"
@@ -621,6 +646,7 @@
         value={openIndex}
         oninput={(e) => staged.setOpenWithinDays(FRESHNESS_PRESETS[Number(e.currentTarget.value)]?.days ?? null)}
         aria-label="Open within"
+        aria-valuetext={freshnessLabel(staged.value.openWithinDays)}
         class="w-full accent-primary"
       />
       <p class="mt-2 text-xs text-muted-foreground">How long the posting has been here.</p>
@@ -637,6 +663,7 @@
       value={freshnessIndex}
       oninput={(e) => staged.setPostedWithinDays(FRESHNESS_PRESETS[Number(e.currentTarget.value)]?.days ?? null)}
       aria-label="Posted within"
+      aria-valuetext={freshnessLabel(staged.value.postedWithinDays)}
       class="w-full accent-primary"
     />
     {#if openWithinAvailable}

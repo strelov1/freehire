@@ -90,14 +90,19 @@
      raw text with no card wrapper, so 16px reads tight against the edge; sm+ falls
      back to the shared px-4 rhythm. -->
 <div class="mx-auto w-full max-w-6xl px-5 py-6 sm:px-4">
-  <JobView job={data.job} applyForm={data.applyForm} />
+  <JobView job={data.job} applyForm={data.applyForm} hasSimilar={data.similar.length > 0} />
 
-  <JobRelated
-    similar={data.similar}
-    copies={data.copies}
-    copiesTotal={data.copiesTotal}
-    slug={data.job.public_slug}
-  />
+  <!-- `#similar-jobs` is where a closed posting's notice points its reader. JobRelated opens
+       on the Similar tab whenever there are similar postings, which is the only case in
+       which JobView offers the link. -->
+  <div id="similar-jobs">
+    <JobRelated
+      similar={data.similar}
+      copies={data.copies}
+      copiesTotal={data.copiesTotal}
+      slug={data.job.public_slug}
+    />
+  </div>
 
   <!-- Below the related postings and right above "See also" on every width: at the top
        of the page it sat far from the title/apply button on a phone, and it stole space

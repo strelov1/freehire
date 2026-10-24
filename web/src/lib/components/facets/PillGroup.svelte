@@ -1,6 +1,7 @@
 <script lang="ts">
   import { uniqueByValue, type FacetOption } from '#lib/facets.js';
-  import { pillClass, pillTitle } from './pill';
+  import { pillClass, pillPressed, pillTitle } from './pill';
+  import PillMeta from './PillMeta.svelte';
 
   // A wrap of three-state pills for one facet. Each pill is off (idle), included
   // (primary fill), or excluded (muted destructive, struck through). Clicking calls
@@ -50,8 +51,9 @@
     <button
       type="button"
       onclick={() => onToggle(opt.value)}
+      aria-pressed={pillPressed(included, excluded)}
       title={pillTitle(included, excluded, excludable)}
-      class={pillClass(included || excluded, excluded, 'inline-flex items-center gap-1.5 px-3 py-1.5 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50')}
+      class={pillClass(included || excluded, excluded, 'inline-flex items-center gap-1.5 px-3 py-1.5 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring')}
     >
       <!-- A brand mark, where the option has one (the backer collections). Purely
            decorative: the label right beside it says the same thing, so announcing
@@ -59,7 +61,7 @@
       {#if opt.icon}
         <img src={opt.icon} alt="" class="size-4 shrink-0 rounded-sm object-contain" />
       {/if}
-      {opt.label}{#if opt.count !== undefined}<span class="ml-1 opacity-60 tabular-nums">{opt.count.toLocaleString()}</span>{/if}
+      {opt.label}<PillMeta {included} {excluded} count={opt.count?.toLocaleString()} />
     </button>
   {/each}
 </div>

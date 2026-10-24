@@ -103,7 +103,7 @@
       base,
       'thumb',
       mine === -1
-        ? 'border-destructive/40 bg-destructive/10 text-destructive'
+        ? 'border-destructive/40 bg-destructive/10 text-destructive-strong'
         : 'border-border bg-card text-muted-foreground hover:bg-accent hover:text-foreground',
       { popping: popDown },
     ]}

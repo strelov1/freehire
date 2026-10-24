@@ -40,7 +40,7 @@
     <CompanyHeader company={data.company} slug={data.slug} />
 
     <CompanyTabs slug={data.slug} active="closed">
-      <div class="mt-6 max-w-3xl">
+      <div class="mt-6">
         {#if !data.closed}
           <p class="py-16 text-center text-sm text-muted-foreground">Couldn't load closed positions.</p>
         {:else if data.closed.jobs.length === 0}
@@ -48,13 +48,18 @@
             {name} has no closed positions on freehire.
           </p>
         {:else}
-          <ul class="flex flex-col">
+          <!-- Same width and rhythm as the Jobs tab's list; the closing date rides in the
+               card's own actions row rather than dangling under its border. -->
+          <ul class="flex flex-col gap-3">
             {#each data.closed.jobs as job (job.public_slug)}
               <li>
-                <JobRow {job} />
-                {#if job.closed_at}
-                  <p class="px-4 pb-3 text-xs text-muted-foreground">Closed {closedOn(job.closed_at)}</p>
-                {/if}
+                <JobRow {job}>
+                  {#snippet footer()}
+                    {#if job.closed_at}
+                      <span class="whitespace-nowrap text-xs text-muted-foreground">Closed {closedOn(job.closed_at)}</span>
+                    {/if}
+                  {/snippet}
+                </JobRow>
               </li>
             {/each}
           </ul>

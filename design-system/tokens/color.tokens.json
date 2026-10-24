@@ -78,8 +78,8 @@
     "$description": "Input border/fill color."
   },
   "ring": {
-    "$value": "{brand-ring}",
-    "$description": "Focus ring color. Aliases brand-ring so focus follows the brand accent."
+    "$value": "{brand}",
+    "$description": "Focus ring color: the brand fill, which clears 3:1 against every light surface (WCAG 1.4.11). brand-ring is too pale for a focus indicator on the page background (1.9:1)."
   },
   "brand": {
     "$value": "#5b6f00",

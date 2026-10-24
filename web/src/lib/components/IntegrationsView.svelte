@@ -296,7 +296,7 @@
     <p
       class="rounded-md border px-3 py-2 text-sm {googleNotice.ok
         ? 'border-brand/30 bg-brand/10 text-foreground'
-        : 'border-destructive/30 bg-destructive/10 text-destructive'}"
+        : 'border-destructive/30 bg-destructive/10 text-destructive-strong'}"
     >
       {googleNotice.text}
     </p>

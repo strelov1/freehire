@@ -6,7 +6,8 @@
   import { COUNTRY_REGION_MAP } from '#lib/generated/contracts.js';
   import type { FacetCounts } from '#lib/types.js';
   import { Chip, CountryFlag } from '#lib/ui/index.js';
-  import { pillClass, pillTitle } from '../facets/pill';
+  import { pillClass, pillPressed, pillTitle } from '../facets/pill';
+  import PillMeta from '../facets/PillMeta.svelte';
   import { metroLabel } from '#lib/metro.js';
   import { isAuthenticated } from '#lib/auth.svelte.js';
   import { profileStore } from '#lib/profile.svelte.js';
@@ -218,7 +219,7 @@
   <div class="mb-4 flex flex-wrap gap-1.5 border-b border-border pb-3">
     {#each selectedChips as chip (chip.key)}
       <Chip variant={chip.exclude ? 'destructive' : 'brand'} class={`gap-1 py-1 pr-1.5 ${chip.exclude ? 'line-through' : ''}`}>
-        {chip.label}
+        {chip.label}{#if chip.exclude}<span class="sr-only">, excluded</span>{/if}
         <button type="button" aria-label="Remove {chip.label}" onclick={chip.remove} class="relative inline-flex opacity-70 transition-opacity after:absolute after:-inset-1.5 hover:opacity-100">
           <X class="size-3" />
         </button>
@@ -240,7 +241,7 @@
         !geoSource && 'cursor-not-allowed opacity-50',
       ]}
     >
-      <MapPin class="size-4 shrink-0" />
+      <MapPin class="size-4 shrink-0" aria-hidden="true" />
       Eligible for me
     </button>
     {#each visibleFlatRegions as code (code)}
@@ -249,11 +250,12 @@
       <button
         type="button"
         onclick={() => store.cycle('regions', code)}
+        aria-pressed={pillPressed(rInc, rExc)}
         title={pillTitle(rInc, rExc, true)}
         class={pillClass(rInc || rExc, rExc, 'inline-flex items-center gap-1.5 px-3 py-1.5 text-sm')}
       >
-        {#if code === 'global'}<Globe class="size-4 shrink-0" />{/if}
-        {regionLabel(code)}
+        {#if code === 'global'}<Globe class="size-4 shrink-0" aria-hidden="true" />{/if}
+        {regionLabel(code)}<PillMeta included={rInc} excluded={rExc} />
       </button>
     {/each}
   </div>
@@ -267,15 +269,21 @@
        them), so it never matched and its top border doubled up with the pills'
        border-b. Gate on the loop index instead. -->
   <div class={i > 0 ? 'border-t border-border' : ''}>
-    <button
-      type="button"
-      class="flex w-full items-center gap-2 py-3"
-      onclick={() => (expandedRegions.has(region) ? expandedRegions.delete(region) : expandedRegions.add(region))}
-    >
-      <ChevronDown class={['size-4 text-muted-foreground transition-transform', !isOpen && '-rotate-90']} />
-      <h3 class="text-sm font-semibold tracking-tight">{REGION_LABELS[region] ?? region}</h3>
-      {#if regionCount(region)}<span class="text-xs text-muted-foreground">{fmt(regionCount(region))}</span>{/if}
-    </button>
+    <!-- The button sits inside the heading, not around it: a button's content may not
+         hold a heading. The count gets a hidden separator so the name does not read as
+         "Europe1,234". -->
+    <h3 class="text-sm font-semibold tracking-tight">
+      <button
+        type="button"
+        class="flex w-full items-center gap-2 py-3"
+        aria-expanded={isOpen}
+        onclick={() => (expandedRegions.has(region) ? expandedRegions.delete(region) : expandedRegions.add(region))}
+      >
+        <ChevronDown class={['size-4 text-muted-foreground transition-transform', !isOpen && '-rotate-90']} aria-hidden="true" />
+        {REGION_LABELS[region] ?? region}
+        {#if regionCount(region)}<span class="text-xs font-normal text-muted-foreground"><span class="sr-only">, </span>{fmt(regionCount(region))}</span>{/if}
+      </button>
+    </h3>
 
     {#if isOpen}
       {@const rExc = regionF.exclude.includes(region)}
@@ -285,10 +293,11 @@
           <button
             type="button"
             onclick={() => store.cycle('regions', region)}
+            aria-pressed={pillPressed(rInc, rExc)}
             title={pillTitle(rInc, rExc, true)}
             class={pillClass(rInc || rExc, rExc, 'px-3 py-1.5 text-sm')}
           >
-            All {REGION_LABELS[region] ?? region}
+            All {REGION_LABELS[region] ?? region}<PillMeta included={rInc} excluded={rExc} />
           </button>
         {/if}
         {#each countryCodes as code (code)}
@@ -297,11 +306,13 @@
           <button
             type="button"
             onclick={() => store.cycle('countries', code)}
+            aria-pressed={pillPressed(cInc, cExc)}
             title={pillTitle(cInc, cExc, true)}
             class={pillClass(cInc || cExc, cExc, 'inline-flex items-center gap-1.5 px-3 py-1.5 text-sm')}
           >
-            <CountryFlag {code} label={countryLabel(code)} class="text-base" />
-            {countryLabel(code)}
+            <!-- Decorative here: the flag's own label is the country name printed beside it. -->
+            <span aria-hidden="true" class="contents"><CountryFlag {code} label={countryLabel(code)} class="text-base" /></span>
+            {countryLabel(code)}<PillMeta included={cInc} excluded={cExc} />
           </button>
         {/each}
       </div>
@@ -319,10 +330,11 @@
         <button
           type="button"
           onclick={() => store.cycle('metros', metro)}
+          aria-pressed={pillPressed(mInc, mExc)}
           title={pillTitle(mInc, mExc, true)}
           class={pillClass(mInc || mExc, mExc, 'px-3 py-1.5 text-sm')}
         >
-          {metroLabel(metro)}
+          {metroLabel(metro)}<PillMeta included={mInc} excluded={mExc} />
         </button>
       {/each}
     </div>
@@ -339,10 +351,11 @@
         <button
           type="button"
           onclick={() => store.cycle('cities', city)}
+          aria-pressed={pillPressed(ctInc, ctExc)}
           title={pillTitle(ctInc, ctExc, true)}
           class={pillClass(ctInc || ctExc, ctExc, 'px-3 py-1.5 text-sm')}
         >
-          {city}
+          {city}<PillMeta included={ctInc} excluded={ctExc} />
         </button>
       {/each}
     </div>

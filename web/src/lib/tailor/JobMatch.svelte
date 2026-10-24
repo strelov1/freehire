@@ -113,7 +113,7 @@
               <span>
                 {req.text}
                 {#if req.cached_status}
-                  <span class="text-muted-foreground/70">— the earlier match analysis read this as {req.cached_status}</span>
+                  <span class="text-muted-foreground">— the earlier match analysis read this as {req.cached_status}</span>
                 {/if}
               </span>
             </li>

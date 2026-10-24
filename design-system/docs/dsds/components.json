@@ -737,6 +737,12 @@
           "required": true
         },
         {
+          "name": "as",
+          "type": "'p' | 'h2' | 'h3'",
+          "default": "p",
+          "description": "The element. A heading where the label is the section's only title."
+        },
+        {
           "name": "class",
           "type": "string"
         },

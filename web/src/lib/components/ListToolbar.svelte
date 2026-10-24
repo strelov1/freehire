@@ -2,6 +2,7 @@
   import { Layers } from '@lucide/svelte';
   import type { Snippet } from 'svelte';
   import { formatCount } from '#lib/utils.js';
+  import { resultCountMessage } from './listToolbar.js';
 
   // The mobile controls for a list page (jobs, companies, …): an inline toolbar at the
   // top of the list — the results total on the left, and (on the jobs list) a Swipe entry
@@ -18,21 +19,48 @@
   // freshness selects; the company catalog's sort select) — rendered in the mobile toolbar
   // and beside the desktop total. It shows even when `total` is null so the controls stay
   // reachable while the list is empty or standing in a prompt.
+  //
+  // `settled` says whether the list has finished loading successfully. Only a caller that
+  // passes it can be told apart "no results" from "still loading" — `total` is null for
+  // both — so only such a caller gets "No matching …" announced.
   let {
     total,
     unit,
+    settled,
     onSwipe,
     controls,
     leading,
   }: {
     total: number | null;
     unit: string;
+    settled?: boolean;
     onSwipe?: () => void;
     controls?: Snippet;
     /** A control pinned to the LEFT edge, apart from the right-aligned list controls
      *  (the jobs list's Map button). Leads the mobile row and the desktop one alike. */
     leading?: Snippet;
   } = $props();
+
+  // What the result count says to a screen reader. The visible counts below come and go
+  // with `total` (they are removed while the list reloads), and a live region inserted
+  // together with its text is not announced — so the announcement lives in ONE region
+  // that is always mounted, and only its text changes.
+  const message = $derived(resultCountMessage(total, unit, settled));
+
+  // Empty at mount: the count the page was rendered with is not news, and announcing it
+  // on every page load would talk over the page title. Every later change is spoken. The
+  // region is cleared while the list reloads, so the same count after a filter change is
+  // still a change and is announced again.
+  let announcement = $state('');
+  let primed = false;
+  $effect(() => {
+    const next = message;
+    if (!primed) {
+      if (next !== '' || settled !== undefined) primed = true;
+      return;
+    }
+    announcement = next;
+  });
 </script>
 
 <!-- Mobile inline toolbar: total on the left, controls on the right. The Swipe entry is
@@ -42,6 +70,8 @@
      `flex-wrap` is the safety net under that: the controls are sized by their content
      (a long count, a translated label, a fourth control) and a row that runs out of width
      must break onto a second line rather than clip its rightmost control off-screen. -->
+<span class="sr-only" role="status" aria-live="polite" aria-atomic="true">{announcement}</span>
+
 <div class="mb-3 flex flex-wrap items-center gap-2 md:hidden">
   {@render leading?.()}
   {#if total !== null}
@@ -51,7 +81,6 @@
          figure stays in the title. -->
     <span
       class="shrink-0 whitespace-nowrap text-sm text-muted-foreground"
-      aria-live="polite"
       title="{total.toLocaleString()} {unit}"
     >
       <span class="font-semibold tabular-nums text-foreground">{formatCount(total)}</span>
@@ -86,7 +115,7 @@
   <div class="mb-3 hidden items-center justify-end gap-3 md:flex">
     {#if leading}<div class="mr-auto">{@render leading()}</div>{/if}
     {#if total !== null}
-      <span class="text-sm text-muted-foreground" aria-live="polite">
+      <span class="text-sm text-muted-foreground">
         <span class="font-semibold tabular-nums text-foreground">{total.toLocaleString()}</span>
         {unit}
       </span>

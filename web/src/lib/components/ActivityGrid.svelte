@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte';
+  import { prefersReducedMotion } from 'svelte/motion';
   import { resolve } from '$app/paths';
   import { api } from '#lib/api.js';
   import {
@@ -108,7 +109,7 @@
     await tick();
     const panel = document.getElementById('activity-day-panel');
     if (panel && panel.getBoundingClientRect().bottom > window.innerHeight) {
-      panel.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      panel.scrollIntoView({ block: 'nearest', behavior: prefersReducedMotion.current ? 'auto' : 'smooth' });
     }
   }
 

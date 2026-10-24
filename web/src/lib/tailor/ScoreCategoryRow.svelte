@@ -84,7 +84,7 @@
           <TriangleAlert class="mt-0.5 size-3.5 shrink-0 {itemTone.warn}" aria-hidden="true" />
         {/if}
         <span class="min-w-0 flex-1 text-muted-foreground">{item.text}</span>
-        <span class="shrink-0 tabular-nums text-muted-foreground/70">{item.points}</span>
+        <span class="shrink-0 tabular-nums text-muted-foreground">{item.points}</span>
       </li>
     {/each}
   </ul>

@@ -7,6 +7,7 @@
     Bookmark,
     Check,
     CheckCircle2,
+    CircleSlash,
     Clock,
     ExternalLink,
     Eye,
@@ -60,7 +61,19 @@
   // below hydrate client-side.
   // `applyForm` is the employer's own screening form when its ATS publishes one —
   // null for most postings, which is the ordinary case and simply means one fewer tab.
-  let { job, applyForm = null }: { job: Job; applyForm?: Display | null } = $props();
+  // `hasSimilar` says the route renders similar postings under this one (JobRelated, at
+  // `#similar-jobs`), which is where a closed posting points its reader instead of Apply.
+  let {
+    job,
+    applyForm = null,
+    hasSimilar = false,
+  }: { job: Job; applyForm?: Display | null; hasSimilar?: boolean } = $props();
+
+  // A closed posting takes no applications: the closure notice moves up beside the title,
+  // and every control that would start one — Apply, auto-apply, Tailor my CV, the phone's
+  // sticky bar that carries them — is withheld rather than left to lead somewhere dead.
+  // Save stays: keeping a closed posting for reference is still a reasonable thing to do.
+  const closed = $derived(job.closed_at != null);
 
   // Both facets live under `enrichment` on the wire (jobview sets them from the
   // dictionary columns), and either can be absent.
@@ -198,6 +211,21 @@
     );
     io.observe(el);
     return () => io.disconnect();
+  });
+
+  // Keyboard focus must not land under a sticky bar (WCAG 2.4.11). Three of them cover the
+  // page's edges here: the site header (`h-14`, every width), the pinned header (lg, see
+  // PINNED_HEADER_TOP) and the phone's sticky apply bar. `scroll-padding` on the root is
+  // what the browser honours when it scrolls a newly focused element into view, so the
+  // page reserves both edges while it is mounted — on <html>, which is the scroller, and
+  // only for as long as this view is the page. The bottom edge is reserved only while the
+  // apply bar exists, which a closed posting does not render. The sizes are in the
+  // <style> block below, beside the media query that switches them.
+  $effect(() => {
+    const root = document.documentElement;
+    root.classList.add('job-scroll-pad');
+    root.classList.toggle('job-scroll-pad-bar', !closed);
+    return () => root.classList.remove('job-scroll-pad', 'job-scroll-pad-bar');
   });
 
   // Funnel view — captured for everyone (unlike the authed-only server record
@@ -392,7 +420,13 @@
   let autoApplySubmitting = $state(false);
   let autoApplyError = $state<string | null>(null);
   const autoApplyState = $derived(
-    autoApplyButtonState(job.source, autoApplyOverrideStatus ?? job.auto_apply_status, applied, isPro),
+    autoApplyButtonState(
+      job.source,
+      autoApplyOverrideStatus ?? job.auto_apply_status,
+      applied,
+      isPro,
+      closed,
+    ),
   );
   // How loud each of the two CTAs is, and what they say. The table and the rule it keeps
   // ("never two primaries; one wherever an action remains") live in autoApplyButton.ts,
@@ -481,7 +515,7 @@
      `rel`/`target`/handler below on purpose — see the note there.
      `external` decides only the WORD. The treatment does not vary: the brand fill belongs
      to `Tailor my CV` in every state, so this link is an outline button whether it reads
-     `Apply` or `Show origin`, and the demotion is carried by the word and by its place in
+     `Apply` or `Apply on company site`, and the demotion is carried by the word and by its place in
      the row. The destination, the target and the click handler are the same button either
      way, which is what keeps the apply-intent event comparable across postings whether or
      not auto-apply offered to do it instead.
@@ -568,19 +602,24 @@
      with the other quiet ones on the tab row, and beside the apply CTA in the pinned header,
      which has room for one bookmark and not for four. The filled bookmark is the state.
      `iconOnly` is for the pinned header, whose one line already holds the company, the
-     title and the CTA; aria-label and the tooltip name the button either way. -->
+     title and the CTA.
+     The words are JobRow's ("Save to board" / "On your board"), so one action reads the same
+     on the card and on the page, and so is the accessible-name rule: the visible label
+     already flips with the state, so there is no `aria-pressed` announcing the same fact a
+     second time in another vocabulary. Only the saved state overrides the name, because "On
+     your board" is a state and leaves a screen reader with a button whose effect is
+     unstated. The icon-only copy has no visible label, so it names both states itself. -->
 {#snippet saveButton(className = '', iconOnly = false)}
   <Button
     variant="ghost"
     size="sm"
     onclick={onSaveClick}
-    aria-pressed={saved}
-    aria-label={saved ? 'Remove from saved' : 'Save job'}
-    title={saved ? 'Saved' : 'Save'}
+    aria-label={saved ? 'Remove from your board' : iconOnly ? 'Save to board' : undefined}
+    title={saved ? 'On your board' : 'Save to board'}
     class={`shrink-0 gap-1.5 px-2 ${saved ? 'text-brand hover:text-brand' : 'text-muted-foreground'} ${className}`}
   >
     <Bookmark class="size-4 shrink-0 {saved ? 'fill-current' : ''}" aria-hidden="true" />
-    {#if !iconOnly}{saved ? 'Saved' : 'Save'}{/if}
+    {#if !iconOnly}{saved ? 'On your board' : 'Save to board'}{/if}
   </Button>
 {/snippet}
 
@@ -619,8 +658,8 @@
      The exact clock time rides the `title` on both dates, since a reader who has read "2
      hours ago" off a server-rendered page may want to know how old the page is.
      Rendered twice, one visible at a time (the caller passes the display class): to the
-     right of the provenance line from lg, and under the title below it, where that line is
-     a single non-wrapping row whose company name is already truncating to fit. -->
+     right of the provenance line from lg, and under the title below it, where that line
+     already spends a phone's width on the company name and its badges. -->
 {#snippet postingMeta(className: string)}
   {#if posted || views > 0 || applies > 0}
     <div class={`items-center gap-x-3 text-xs text-muted-foreground ${className}`}>
@@ -725,11 +764,13 @@
      `hidden lg:flex`: below lg the sticky bottom bar carries them instead, minus whichever
      apply control the plan did not pick. -->
 {#snippet ctaGroup()}
-  <div class="hidden shrink-0 items-center justify-end gap-2 lg:flex">
-    {@render autoApplyCta('md', 'shrink-0')}
-    {@render applyCta('md', 'shrink-0', cta.external)}
-    {@render tailorCta('md', 'shrink-0')}
-  </div>
+  {#if !closed}
+    <div class="hidden shrink-0 items-center justify-end gap-2 lg:flex">
+      {@render autoApplyCta('md', 'shrink-0')}
+      {@render applyCta('md', 'shrink-0', cta.external)}
+      {@render tailorCta('md', 'shrink-0')}
+    </div>
+  {/if}
 {/snippet}
 
 <!-- The posting itself. A snippet because it is rendered either inside the Description
@@ -749,6 +790,27 @@
        (internal/enrich), so the body is the only part of this snippet that takes
        the posting's language. -->
   <JobDescription html={job.description} lang={contentLang} />
+
+  <!-- Some sources carry no body at all and enrichment had nothing to summarise, which
+       left the Description tab blank — a reader could not tell an empty posting from a
+       page that failed to load. Say so, and offer the posting's own page, which is the
+       only place the rest of it can be. Not for a vacancy published here (`direct_apply`):
+       it has no outside page to send anyone to. -->
+  {#if !e.summary && !job.description?.trim()}
+    <p class="text-sm text-muted-foreground">
+      The posting didn't include a description.
+      {#if job.url && !job.direct_apply}
+        <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- the posting's own URL on its employer's site; there is no route to resolve --><a
+          href={job.url}
+          target="_blank"
+          rel="nofollow noopener noreferrer"
+          class="font-medium text-brand-strong underline underline-offset-4"
+        >
+          Read it on the original site
+        </a>
+      {/if}
+    </p>
+  {/if}
 
   {#if job.skills?.length}
     <!-- Top-level `skills` is the served (deterministic-dictionary) facet; the raw
@@ -813,16 +875,20 @@
 <article
   class="flex flex-col gap-4 lg:grid lg:grid-cols-[20rem_minmax(0,1fr)] lg:grid-rows-[auto_auto_minmax(0,1fr)] lg:gap-x-6 lg:gap-y-4"
 >
-  <!-- One line on a phone, wrapping only from lg: a badge alone on its own row reads as
-       a second heading rather than as a note about the line above it. What gives instead
-       is the company name — it alone carries `min-w-0`, so it ellipses to make room, and
-       the page title, the logo's alt and the pinned bar all still spell it out in full.
-       The badges need their own `shrink-0` group rather than the default `min-width:
-       auto`, whose floor for text is the longest WORD: a squeezed chip does not stay one
-       line, it wraps "Be an early / applicant" inside itself and grows taller than the
-       row. -->
+  <!-- The company line and the badges about the posting. It WRAPS, at every width: the
+       badges are one `shrink-0` group that drops to a line of its own when it does not fit
+       beside the company name. It used to be one non-wrapping row below lg with the
+       company name as the part that gave way, and measured at 360px a reality chip and its
+       "posting date refreshed" note left "Grupo …" of the employer — the one fact on the
+       line a reader needs whole. The name still carries `min-w-0` and truncates, but only
+       when it alone is wider than the column.
+       The badge group keeps `shrink-0` rather than the default `min-width: auto`, whose
+       floor for text is the longest WORD: a squeezed chip does not stay one line, it wraps
+       "Be an early / applicant" inside itself. `max-w-full` plus its own `flex-wrap` let
+       the chips wrap BETWEEN each other instead when even a line of their own is too
+       narrow for all of them. -->
   <div
-    class="flex min-w-0 items-center gap-x-2 gap-y-2 max-lg:overflow-hidden lg:col-start-2 lg:row-start-1 lg:flex-wrap lg:gap-x-3"
+    class="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-2 lg:col-start-2 lg:row-start-1 lg:gap-x-3"
   >
     <EntityLogo
       name={job.company || 'Unknown company'}
@@ -840,7 +906,7 @@
       {/if}
     </p>
 
-    <div class="flex shrink-0 items-center gap-x-2 gap-y-2 lg:flex-wrap lg:gap-x-3">
+    <div class="flex max-w-full shrink-0 flex-wrap items-center gap-x-2 gap-y-2 lg:gap-x-3">
       <!-- Who backed the employer. The page has room the feed card does not, so the
            badge carries the brand name too and links to that collection's roles. -->
       <BackerBadge collections={job.collections} withLabel />
@@ -850,7 +916,9 @@
            and a chip on its own row read as a headline. The ghost checklist stays below
            the title — it is a disclosure with a criteria list inside, not a chip, and it
            supersedes this badge rather than joining it. -->
-      {#if !supersedesReality(job.ghost, locale())}
+      <!-- Nor on a closed posting: "Open 35d · reposted 4×" describes one still taking
+           applications and contradicts the closure notice under the title. -->
+      {#if !closed && !supersedesReality(job.ghost, locale())}
         <RealityBadge reality={job.reality} detailed />
       {/if}
 
@@ -894,6 +962,29 @@
       {/if}
     </div>
 
+    <!-- Directly under the title, before anything that reads as a way in: a closed
+         posting's first fact is that it is closed. It sat below the tab row once, under
+         live Apply buttons that led to a dead page — the controls are withheld now (see
+         `closed`), and the reader is pointed at the open postings the route lists below. -->
+    {#if job.closed_at}
+      {@const closedOn = formatDate(job.closed_at, locale())}
+      <div
+        class="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-lg border border-border bg-secondary px-4 py-3 text-sm"
+      >
+        <p class="inline-flex items-center gap-2 font-medium">
+          <CircleSlash class="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+          <span>
+            This position is no longer accepting applications{closedOn ? ` (closed ${closedOn})` : ''}.
+          </span>
+        </p>
+        {#if hasSimilar}
+          <a href="#similar-jobs" class="font-medium text-brand-strong underline underline-offset-4">
+            See similar open jobs →
+          </a>
+        {/if}
+      </div>
+    {/if}
+
     <!-- The CTAs take a row of their own under the title rather than riding its right
          edge: the title is the longest string on the page and the buttons are the widest
          fixed thing beside it, so sharing a line meant a two-word title left them adrift in
@@ -901,9 +992,9 @@
          they land above the quiet strip's own right edge on the tab row below. -->
     {@render ctaGroup()}
 
-    <!-- Below lg the provenance line is a single non-wrapping row already truncating the
-         company name, so the dates read here instead — a caption under the title rather
-         than right-aligned, which on one phone-width column would only look adrift. -->
+    <!-- Below lg the provenance line already spends its width on the company name and its
+         badges, so the dates read here instead — a caption under the title rather than
+         right-aligned, which on one phone-width column would only look adrift. -->
     {@render postingMeta('flex lg:hidden')}
 
     <!-- Below lg the strip rides here rather than on the tab row: the sidebar stacks
@@ -1075,26 +1166,20 @@
                them for most of a description several screens long.
                It carries the SAME buttons as the header, in the same order, plan and all —
                this bar is the header for most of the read, and an `Apply` here for the link
-               the title row calls a quiet `Show origin` would be one link at two ranks on
+               the title row calls a quiet `Apply on company site` would be one link at two ranks on
                one page. `Tailor my CV` comes along for the same reason: the page's primary
                CTA must not be a thing the reader scrolls past and loses. -->
           <div class="hidden shrink-0 items-center gap-2 lg:flex">
             {@render saveButton('size-9 rounded-md px-0', true)}
-            {@render autoApplyCta('md', 'shrink-0')}
-            {@render applyCta('md', 'shrink-0', cta.external)}
-            {@render tailorCta('md', 'shrink-0')}
+            {#if !closed}
+              {@render autoApplyCta('md', 'shrink-0')}
+              {@render applyCta('md', 'shrink-0', cta.external)}
+              {@render tailorCta('md', 'shrink-0')}
+            {/if}
           </div>
         </div>
       </div>
     </div>
-
-    {#if job.closed_at}
-      {@const closed = formatDate(job.closed_at, locale())}
-      <div class="rounded-md border border-border bg-secondary px-4 py-3 text-sm">
-        This position is no longer accepting applications{#if closed}
-          (closed {closed}){/if}.
-      </div>
-    {/if}
 
     <!-- Tabs left, actions right, one rule under both — and no gap between the halves,
          because each draws its own stretch of that rule and a gap here is a gap in the
@@ -1170,7 +1255,7 @@
       </div>
     {/if}
     {#if autoApplyError}
-      <p class="text-sm text-destructive">{autoApplyError}</p>
+      <p role="alert" class="text-sm text-destructive">{autoApplyError}</p>
     {/if}
 
     {#if showDirectApply && DirectApplyDialog}
@@ -1250,22 +1335,48 @@
        is the plan's whole job: auto-apply where that can be started, the apply link
        everywhere else. The control that loses does not vanish — the quiet strip under the
        title picks the apply link up whenever auto-apply has taken this bar. -->
-  <div
-    class="pointer-events-none sticky bottom-0 z-30 -mx-5 flex gap-2 border-t border-border bg-background/95 px-5 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 sm:-mx-4 sm:px-4 lg:hidden"
-  >
-    {@render tailorCta('lg', 'pointer-events-auto flex-1 rounded-xl font-semibold shadow-lg')}
-    {#if cta.autoApply?.leads}
-      {@render autoApplyCta('lg', 'pointer-events-auto flex-1 rounded-xl font-semibold shadow-lg')}
-    {:else}
-      {@render applyCta(
-        'lg',
-        'pointer-events-auto flex-1 rounded-xl font-semibold shadow-lg',
-        cta.external,
-      )}
-    {/if}
-  </div>
+  {#if !closed}
+    <div
+      class="pointer-events-none sticky bottom-0 z-30 -mx-5 flex gap-2 border-t border-border bg-background/95 px-5 pb-safe pt-3 sm:-mx-4 sm:px-4 lg:hidden"
+    >
+      {@render tailorCta('lg', 'pointer-events-auto flex-1 rounded-xl font-semibold shadow-lg')}
+      {#if cta.autoApply?.leads}
+        {@render autoApplyCta('lg', 'pointer-events-auto flex-1 rounded-xl font-semibold shadow-lg')}
+      {:else}
+        {@render applyCta(
+          'lg',
+          'pointer-events-auto flex-1 rounded-xl font-semibold shadow-lg',
+          cta.external,
+        )}
+      {/if}
+    </div>
+  {/if}
 </article>
 
 {#if showReport}
   <ReportDialog slug={job.public_slug} companySlug={job.company_slug} onClose={() => (showReport = false)} />
 {/if}
+
+<style>
+  /* See the `job-scroll-pad` effect. Below lg: the site header on top (h-14 plus air), and
+     the apply bar at the bottom — its pt-3, an h-11 button, a padding of at least pb-3 that
+     grows with the home indicator, and a rule. From lg: the site header plus the pinned
+     header under it (py-2.5 around an h-9 button, and a rule); no bottom bar. */
+  :global(html.job-scroll-pad) {
+    scroll-padding-top: 4rem;
+  }
+
+  :global(html.job-scroll-pad.job-scroll-pad-bar) {
+    scroll-padding-bottom: calc(4.75rem + env(safe-area-inset-bottom));
+  }
+
+  @media (min-width: 64rem) {
+    :global(html.job-scroll-pad) {
+      scroll-padding-top: 7.75rem;
+    }
+
+    :global(html.job-scroll-pad.job-scroll-pad-bar) {
+      scroll-padding-bottom: 0;
+    }
+  }
+</style>

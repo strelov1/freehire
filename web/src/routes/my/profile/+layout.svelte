@@ -1,5 +1,6 @@
 <script lang="ts">
   import { tick, untrack, type Snippet } from 'svelte';
+  import { prefersReducedMotion } from 'svelte/motion';
   import {
     Ban,
     Briefcase,
@@ -102,7 +103,7 @@
       const target = document.getElementById(hash);
       if (!target) return;
       scrolledToHash = hash;
-      target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      target.scrollIntoView({ behavior: prefersReducedMotion.current ? 'auto' : 'smooth', block: 'start' });
     });
   });
 </script>

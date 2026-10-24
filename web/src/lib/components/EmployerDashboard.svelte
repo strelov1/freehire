@@ -29,7 +29,7 @@
   let activeTab = $state<'profile' | 'vacancies'>('profile');
 
   const selectClass =
-    'h-9 rounded-lg border border-input bg-transparent px-3 text-sm transition-colors focus-visible:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 dark:bg-input/30';
+    'h-9 rounded-lg border border-input bg-transparent px-3 text-sm transition-colors focus-visible:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:bg-input/30';
 
   // ── Profile tab ────────────────────────────────────────────────────────
   let tagline = $state(company.tagline ?? '');
@@ -282,7 +282,7 @@
       </label>
       <label class="flex flex-col gap-1">
         <span class="text-sm font-medium">{s.profileDescriptionLabel}</span>
-        <textarea bind:value={description} rows="4" class="w-full rounded-lg border border-input bg-transparent px-3 py-2 text-sm transition-colors focus-visible:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 dark:bg-input/30"
+        <textarea bind:value={description} rows="4" class="w-full rounded-lg border border-input bg-transparent px-3 py-2 text-sm transition-colors focus-visible:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:bg-input/30"
         ></textarea>
       </label>
       <label class="flex flex-col gap-1">
@@ -420,7 +420,7 @@
           <label class="flex flex-col gap-1">
             <span class="text-sm font-medium">{s.fieldDescription}</span>
             <span class="text-xs text-muted-foreground">{s.fieldDescriptionHint}</span>
-            <textarea bind:value={descriptionMd} rows="6" class="w-full rounded-lg border border-input bg-transparent px-3 py-2 text-sm transition-colors focus-visible:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 dark:bg-input/30"
+            <textarea bind:value={descriptionMd} rows="6" class="w-full rounded-lg border border-input bg-transparent px-3 py-2 text-sm transition-colors focus-visible:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:bg-input/30"
             ></textarea>
           </label>
           {#if !editingSlug}

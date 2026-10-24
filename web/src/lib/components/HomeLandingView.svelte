@@ -186,7 +186,7 @@
       >
         {chip.label}
         {#if chip.count !== undefined}
-          <span class="ml-1 text-xs tabular-nums opacity-60"
+          <span class="ml-1 text-xs tabular-nums"
             >{chip.count.toLocaleString('en-US')}</span
           >
         {/if}
@@ -247,7 +247,14 @@
     <div class="relative z-30 flex w-full">
       <!-- The visible examples are roles; the accessible name is the broad one, because
            this box does search companies and skills too. An example is a starting point
-           rather than a boundary, and a role is what people actually type first. -->
+           rather than a boundary, and a role is what people actually type first.
+
+           `autofocus` stays, deliberately: this box is the page's one task, it takes the
+           caret only at `sm` and up (HeaderSearch's WIDE_QUERY), and it opens no panel
+           when it does. What a screen-reader user loses is the h1 and one sentence, and
+           both precede the box in the DOM, so reading backwards from the field reaches
+           them; the field announces itself by the descriptive name below rather than by
+           an example role. -->
       <HeaderSearch
         placeholder={ROLE_PLACEHOLDER}
         label="Search jobs, companies and skills"
@@ -277,7 +284,7 @@
        and a figure the snapshot could not measure is dropped rather than shown as a
        zero. `tabular-nums` keeps the row from twitching as the counts move. -->
   <section class="border-t border-border py-10">
-    <SectionLabel text="the catalogue, today" />
+    <SectionLabel as="h2" text="the catalogue, today" />
     <dl class="mt-6 grid grid-cols-2 gap-x-6 gap-y-6 sm:grid-cols-4">
       {#each figures as f (f.label)}
         <!-- `flex-col-reverse` so the number reads first and the label sits under it,
@@ -305,7 +312,7 @@
      them would make the second read as an afterthought. Each card carries its own
      evidence: the CLI its install line, the extension what the panel actually does. -->
 <section class="border-t border-border py-12 sm:py-16">
-  <SectionLabel text="take it with you" />
+  <SectionLabel as="h2" text="take it with you" />
   <!-- `grid-cols-1` is load-bearing, not the default written out: with no column template
        the single track below `lg` is `auto`, which sizes to its widest content — the
        install line in the `pre`, which does not wrap. That took the track to 416px on a
@@ -314,9 +321,10 @@
   <div class="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-2">
     <div class="flex flex-col gap-5 rounded-xl border border-border p-6 sm:p-8">
       <div class="flex flex-col gap-3">
-        <h2 class="text-2xl font-semibold tracking-tight">
+        <!-- h3: the section's own label above is its h2. -->
+        <h3 class="text-2xl font-semibold tracking-tight">
           Search and track from the terminal.
-        </h2>
+        </h3>
         <p class="text-sm leading-relaxed text-muted-foreground">
           One binary, no Go needed. Ships agent skills too, so Claude Code and any MCP
           host can run the search, read the facets and move an application along.
@@ -336,6 +344,9 @@
           >
             {copied ? 'copied ✓' : 'copy'}
           </button>
+          <!-- The button's own text change is not reliably voiced, so the result is said
+               through a region that is always mounted and only changes its words. -->
+          <span class="sr-only" role="status">{copied ? 'Install command copied' : ''}</span>
         </figcaption>
         <pre class="overflow-x-auto p-4 leading-relaxed">{CLI_INSTALL}</pre>
       </figure>
@@ -355,7 +366,7 @@
 
     <div class="flex flex-col gap-5 rounded-xl border border-border p-6 sm:p-8">
       <div class="flex flex-col gap-3">
-        <h2 class="text-2xl font-semibold tracking-tight">Apply where you already are.</h2>
+        <h3 class="text-2xl font-semibold tracking-tight">Apply where you already are.</h3>
         <p class="text-sm leading-relaxed text-muted-foreground">
           A job-application agent in Chrome's side panel, next to the posting you are
           reading — on any site, not just the ones freehire tracks.

@@ -124,7 +124,7 @@
         <select
           bind:value={days}
           disabled={creating}
-          class="h-9 rounded-lg border border-input bg-transparent px-3 text-sm transition-colors focus-visible:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 dark:bg-input/30"
+          class="h-9 rounded-lg border border-input bg-transparent px-3 text-sm transition-colors focus-visible:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:bg-input/30"
         >
           {#each expiryOptions as opt (opt.days)}
             <option value={opt.days}>{opt.label}</option>
@@ -138,7 +138,7 @@
           <select
             bind:value={scope}
             disabled={creating}
-            class="h-9 rounded-lg border border-input bg-transparent px-3 text-sm transition-colors focus-visible:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 dark:bg-input/30"
+            class="h-9 rounded-lg border border-input bg-transparent px-3 text-sm transition-colors focus-visible:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:bg-input/30"
           >
             {#each scopeOptions as opt (opt.value)}
               <option value={opt.value}>{opt.label}</option>

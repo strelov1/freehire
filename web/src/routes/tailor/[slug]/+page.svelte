@@ -680,7 +680,7 @@
                  is not looking at that tab, so the failure is said here too. -->
             {#if resetError}
               <p
-                class="mb-3 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+                class="mb-3 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive-strong"
                 role="alert"
               >
                 {resetError}

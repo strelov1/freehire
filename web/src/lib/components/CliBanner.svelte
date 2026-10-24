@@ -1,8 +1,10 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { resolve } from '$app/paths';
-  import { X } from '@lucide/svelte';
+  import { ArrowRight, X } from '@lucide/svelte';
   import { dismissCliBanner, loadCliBannerDismissed, cliBannerDismissed } from '#lib/cliBanner.svelte.js';
+  import { sourceLogoUrl } from '#lib/logo.js';
+  import { EntityLogo } from '#lib/ui/index.js';
 
   // A strip under the header pointing at /mcp (it pointed at /cli until the hosted MCP
   // connectors became the main way in), dismissible and remembered. Self-gating
@@ -22,25 +24,46 @@
   onMount(() => {
     loadCliBannerDismissed();
   });
+
+  // The agents the strip names, shown as an overlapping stack of their marks (the same
+  // avatar-stack CountryFlagStack draws for flags) instead of a sentence that wrapped to
+  // four lines on a phone. Resolved by domain, as on /mcp, because "Cursor" by name
+  // alone is ambiguous to the logo proxy.
+  const agents = [
+    { name: 'Claude', domain: 'claude.ai' },
+    { name: 'ChatGPT', domain: 'chatgpt.com' },
+    { name: 'Cursor', domain: 'cursor.com' },
+  ];
 </script>
 
 {#if !cliBannerDismissed()}
   <div data-cli-banner class="border-b border-border bg-brand/5">
-    <div class="mx-auto flex w-full max-w-6xl items-center gap-3 px-4 py-2.5 text-sm">
-      <p class="min-w-0 flex-1 text-muted-foreground">
-        <span class="font-medium text-foreground">
-          Search jobs right inside Claude, ChatGPT or Cursor.
-        </span>
-        <span class="hidden sm:inline">
-          Connect freehire over MCP — free, no account needed to search.
-        </span>
+    <div class="mx-auto flex w-full max-w-6xl items-center gap-3 px-4 py-2 text-sm">
+      <!-- The names live in the stack's label, so the sentence can stay short. -->
+      <span role="img" aria-label="Claude, ChatGPT and Cursor" class="flex shrink-0 items-center">
+        {#each agents as agent, i (agent.domain)}
+          <span
+            class={['inline-flex rounded-full ring-2 ring-background', i > 0 && '-ml-1']}
+            style:z-index={agents.length - i}
+          >
+            <EntityLogo name={agent.name} src={sourceLogoUrl(agent.name, agent.domain) ?? undefined} size="xs" />
+          </span>
+        {/each}
+      </span>
+
+      <!-- Wraps to a second line on a phone rather than truncating the one sentence that
+           says what the strip is for. -->
+      <p class="line-clamp-2 min-w-0 flex-1 leading-snug text-muted-foreground">
+        <span class="font-medium text-foreground">Search jobs inside your AI agent.</span>
+        <span class="hidden md:inline">Connect over MCP — free, no account needed to search.</span>
       </p>
 
       <a
         href={resolve('/mcp')}
-        class="shrink-0 whitespace-nowrap font-medium text-brand underline-offset-4 hover:underline"
+        class="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full bg-brand px-3 py-1 text-xs font-medium text-brand-foreground transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
       >
-        Connect MCP to your agent →
+        Connect
+        <ArrowRight class="size-3.5" aria-hidden="true" />
       </a>
 
       <button

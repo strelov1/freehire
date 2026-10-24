@@ -109,6 +109,8 @@
     // visual viewport without firing a resize, and a percentage height resolves
     // against the larger, toolbar-collapsed one, reopening the same gap.
     'm-0 h-dvh max-h-none w-full max-w-none overflow-y-auto overscroll-contain rounded-none border-0 bg-card p-0 text-card-foreground shadow-lg backdrop:bg-black/50 backdrop:backdrop-blur-sm',
+    // Grows out of the centre on open; see animate-modal-pop in theme.css.
+    'animate-modal-pop backdrop:animate-modal-fade',
     // h-fit, not h-auto: a top-layer <dialog> with inset:0 from the UA stylesheet
     // stretches to fill when height is the keyword 'auto' — a well-known quirk of
     // the CSS positioned-box sizing algorithm. fit-content bypasses it outright.

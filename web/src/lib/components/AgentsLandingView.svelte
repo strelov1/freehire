@@ -436,7 +436,7 @@ freehire search <span class="text-foreground">"golang"</span> --remote --region 
                   <td class="px-1 py-3 text-center sm:px-3">
                     <span
                       class="font-mono {mark === 'no'
-                        ? 'text-muted-foreground/50'
+                        ? 'text-muted-foreground'
                         : 'text-foreground'}"
                       title={MARK_TITLE[mark]}
                     >

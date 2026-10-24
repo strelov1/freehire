@@ -123,7 +123,7 @@
 
   // Shared surface for the native selects so they match the Input primitive.
   const selectClass =
-    'h-9 rounded-lg border border-input bg-transparent px-3 text-sm transition-colors focus-visible:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 dark:bg-input/30';
+    'h-9 rounded-lg border border-input bg-transparent px-3 text-sm transition-colors focus-visible:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:bg-input/30';
 
   function addToken(list: string[], value: string): string[] {
     const v = value.trim();
@@ -524,6 +524,7 @@
             value={descriptionMarkdown}
             onsave={(v) => (descriptionMarkdown = v)}
             placeholder="Paste or write the job description…"
+            label="Description"
           />
         </fieldset>
 

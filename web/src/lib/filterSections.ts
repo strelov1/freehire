@@ -207,14 +207,15 @@ export const COMPANY_RAIL_GROUPS: RailGroup[] = [
 ];
 
 export const RAIL: RailEntry[] = [
-  // One "Role" pane holds the whole "what job" concept: the specialization chips and
+  // One pane holds the whole "what job" concept: the specialization chips and
   // the AI Specialization facet. It once also held a `role` picker, whose values were
   // specialization × seniority; that facet is retired and its two axes are these.
   //
   // Seniority sits under Experience rather than here: a grade states how much
   // experience a posting wants, which is the question that pane answers, and it sits
   // next to the years ceiling that qualifies it.
-  { key: 'category', label: 'Role', section: 'ROLE', kind: 'category' },
+  // Labelled "Specialization", the word its pane heading and its summary chip already use.
+  { key: 'category', label: 'Specialization', section: 'ROLE', kind: 'category' },
   { key: 'experience', label: 'Experience', section: 'ROLE', kind: 'experience' },
   // How old a posting is, and whether it looks permanently open, both describe the
   // POSTING rather than anything asked of the candidate — so neither belongs under

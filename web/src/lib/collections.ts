@@ -1,4 +1,5 @@
 import type { FamilyIconName } from './familymarks';
+import { POPULAR_COLLECTION_FALLBACK } from './popularCollections';
 import type { Job } from './types';
 
 // A filter collection is the second kind of collection: a curated card that maps
@@ -1303,53 +1304,6 @@ export function jobFacetsFromJob(job: Job): JobFacets {
     regions: job.regions,
     collections: job.collections,
   };
-}
-
-// Popular collections padding a sparse "see also" block so it's never empty
-// or too thin. Each was verified to have a healthy live count before being
-// added; slugs are verified to exist in FILTER_COLLECTIONS by a test.
-//
-// Ordered by what visitors actually type into search (the `search_queries`
-// table, read 2026-10-24): roles lead by a wide margin — data engineer, data
-// analyst, AI engineer, backend, software engineer — while TypeScript, Go and
-// AWS were not in the top sixty. `remote-worldwide` stays although it never
-// appears there: remote is picked with a filter, not typed, and that table
-// records only `q`.
-export const POPULAR_COLLECTION_FALLBACK = [
-  'remote-worldwide',
-  'data-engineering',
-  'data-analytics',
-  'ai-engineering',
-  'software-engineer',
-  'backend',
-  'python',
-  'data-science',
-  'machine-learning',
-  'fullstack',
-];
-
-/** The popular collections as footer links, in curated order.
- *
- *  Collection landing pages are the site's programmatic-SEO surface, and until this
- *  existed the only internal links they had came from the /collections hub and the
- *  job-detail "see also" block. The homepage — the strongest page on the domain —
- *  linked 20 jobs, 4 feature pages and not one collection. A footer strip fixes that
- *  for every page at once.
- *
- *  Returns the slug and title only, not an href: the caller builds the URL with
- *  `resolve('/collections/[slug]', …)` like every other dynamic route in the app, so
- *  the link stays correct under a non-empty `paths.base` and needs no lint exemption.
- *
- *  Resolved through collectionBySlug, the same resolver the landing route and the
- *  sitemap use, and unknown slugs are dropped rather than linked: a footer on every
- *  page is the worst place to advertise a 404. A test also asserts the pool resolves,
- *  so dropping here is belt-and-braces, not the expected path. */
-export function popularCollectionLinks(): { slug: string; title: string }[] {
-  return POPULAR_COLLECTION_FALLBACK.flatMap((slug) => {
-    const collection = collectionBySlug(slug);
-    if (!collection) return [];
-    return [{ slug, title: collection.title }];
-  });
 }
 
 // Whether a single FILTER_COLLECTIONS param entry is satisfied by the job's

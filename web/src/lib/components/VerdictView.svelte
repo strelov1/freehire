@@ -34,13 +34,13 @@
     strong: 'bg-brand/10 text-primary',
     hidden: 'bg-warning/10 text-warning-strong',
     adjacent: 'bg-sky-500/10 text-sky-600 dark:text-sky-400',
-    missing: 'bg-destructive/10 text-destructive',
+    missing: 'bg-destructive/10 text-destructive-strong',
   };
 </script>
 
 <div class="flex flex-col gap-8">
   <!-- Coverage headline -->
-  <div class="flex flex-col gap-4 rounded-xl border border-border bg-card p-6 animate-in fade-in slide-in-from-bottom-2 duration-500">
+  <div class="flex flex-col gap-4 rounded-xl border border-border bg-card p-6 motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-2 duration-500">
     <div class="flex flex-wrap items-end justify-between gap-2">
       <div class="flex items-baseline gap-2">
         <span class="text-6xl font-semibold tabular-nums leading-none">{verdict.coverage_percent}%</span>
@@ -141,7 +141,7 @@
         <ul class="flex flex-col gap-2">
           {#each gaps as gap, i (gap.name)}
             <li
-              class="flex items-center gap-3 rounded-lg border border-border bg-card p-3 sm:p-4 animate-in fade-in slide-in-from-bottom-1 duration-300"
+              class="flex items-center gap-3 rounded-lg border border-border bg-card p-3 sm:p-4 motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-1 duration-300"
               style="animation-delay: {Math.min(i * 30, 400)}ms"
             >
               <span class="w-6 shrink-0 text-sm tabular-nums text-muted-foreground">{i + 1}</span>

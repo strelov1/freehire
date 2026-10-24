@@ -1,6 +1,7 @@
 <script lang="ts">
   import { ChevronLeft, ChevronRight } from '@lucide/svelte';
   import { onMount, tick } from 'svelte';
+  import { prefersReducedMotion } from 'svelte/motion';
   import { resolve } from '$app/paths';
   import { api } from '#lib/api.js';
   import { eventLabel, eventTone } from '#lib/events.js';
@@ -120,7 +121,7 @@
     await tick();
     const panel = document.getElementById('calendar-day-panel');
     if (panel && panel.getBoundingClientRect().bottom > window.innerHeight) {
-      panel.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      panel.scrollIntoView({ block: 'nearest', behavior: prefersReducedMotion.current ? 'auto' : 'smooth' });
     }
   }
 

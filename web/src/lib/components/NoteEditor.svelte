@@ -31,12 +31,15 @@
   // imported on mount (never on the server) and torn down on unmount. `onsave` fires
   // on blur with the current markdown; the parent persists it. `placeholder` lets a
   // reuse (e.g. the submit form's description) relabel the empty state; it defaults
-  // to the tracker's "Notes…".
+  // to the tracker's "Notes…". `label` is the editor's accessible name: CodeMirror
+  // swaps the textarea for its own hidden input, which no <label> can reach, so the
+  // name is set on that input once the editor exists.
   let {
     value = '',
     onsave,
     placeholder,
-  }: { value?: string; onsave: (v: string) => void; placeholder?: string } = $props();
+    label,
+  }: { value?: string; onsave: (v: string) => void; placeholder?: string; label: string } = $props();
 
   const s = $derived(t(messages, locale()));
   const effectivePlaceholder = $derived(placeholder ?? s.defaultPlaceholder);
@@ -109,6 +112,7 @@
         ],
       });
       editor.codemirror.on('blur', persist);
+      editor.codemirror.getInputField().setAttribute('aria-label', label);
     })();
 
     return () => {
@@ -130,7 +134,7 @@
   });
 </script>
 
-<textarea bind:this={el}></textarea>
+<textarea bind:this={el} aria-label={label}></textarea>
 
 <style>
   /* Theme EasyMDE to the app tokens (raw CSS vars adapt to light/dark automatically). */

@@ -821,7 +821,7 @@
 <div class="flex min-w-0 flex-1 flex-col">
 {#if error}
   <div
-    class="m-3 mb-0 flex items-start gap-2 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+    class="m-3 mb-0 flex items-start gap-2 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive-strong"
     role="alert"
   >
     <AlertTriangle class="mt-0.5 size-4 shrink-0" />
@@ -1040,7 +1040,7 @@
                     </span>
                     <span class={['font-medium', active && 'shimmer']}>{s.verbs.thinking}</span>
                     {#if active}
-                      <span class="font-mono text-[0.7rem] text-muted-foreground/70">({elapsedSec}s)</span>
+                      <span class="font-mono text-[0.7rem] text-muted-foreground">({elapsedSec}s)</span>
                     {/if}
                   </summary>
                   <div class="md mt-1 max-h-56 overflow-y-auto border-l-2 border-border pl-3 py-1 text-muted-foreground">

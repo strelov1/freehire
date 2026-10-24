@@ -42,3 +42,42 @@ describe('RangeSlider', () => {
     expect(hiInput.value).toBe('105000');
   });
 });
+
+describe('RangeSlider accessibility and touch', () => {
+  it('announces each thumb through valueText rather than the raw number', () => {
+    render(RangeSlider, {
+      props: {
+        min: 0,
+        max: 300000,
+        step: 5000,
+        lo: 0,
+        hi: 300000,
+        loLabel: 'Minimum salary',
+        hiLabel: 'Maximum salary',
+        onLo: () => {},
+        onHi: () => {},
+        valueText: (n: number, thumb: 'lo' | 'hi') => (thumb === 'lo' && n === 0 ? 'No minimum' : thumb === 'hi' && n === 300000 ? 'No ceiling' : String(n)),
+      },
+    });
+    expect(screen.getByRole('slider', { name: 'Minimum salary' }).getAttribute('aria-valuetext')).toBe('No minimum');
+    expect(screen.getByRole('slider', { name: 'Maximum salary' }).getAttribute('aria-valuetext')).toBe('No ceiling');
+  });
+
+  it('moves the nearer thumb to a press on the bare track', async () => {
+    const { onLo, onHi, loInput } = setup(0, 300000);
+    const box = loInput.parentElement as HTMLElement;
+    // 0..300000 over a 324px box: the thumb centre travels 300px, 12px in from each end.
+    box.getBoundingClientRect = () => ({ left: 0, width: 324, top: 0, height: 24, right: 324, bottom: 24, x: 0, y: 0, toJSON: () => ({}) });
+    await fireEvent.pointerDown(box, { clientX: 12 + 50 });
+    expect(onLo).toHaveBeenCalledWith(50000);
+    await fireEvent.pointerDown(box, { clientX: 12 + 250 });
+    expect(onHi).toHaveBeenCalledWith(250000);
+  });
+
+  it('leaves a press on a thumb to the browser', async () => {
+    const { onLo, onHi, loInput } = setup(0, 300000);
+    await fireEvent.pointerDown(loInput, { clientX: 100 });
+    expect(onLo).not.toHaveBeenCalled();
+    expect(onHi).not.toHaveBeenCalled();
+  });
+});

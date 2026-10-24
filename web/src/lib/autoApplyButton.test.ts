@@ -8,36 +8,36 @@ import {
 
 describe('autoApplyButtonState', () => {
   it('hides the button for an ATS auto-apply cannot queue against at all', () => {
-    expect(autoApplyButtonState('linkedin', null, false, true)).toEqual({ kind: 'hidden' });
-    expect(autoApplyButtonState('smartrecruiters', 'queued', false, true)).toEqual({ kind: 'hidden' });
+    expect(autoApplyButtonState('linkedin', null, false, true, false)).toEqual({ kind: 'hidden' });
+    expect(autoApplyButtonState('smartrecruiters', 'queued', false, true, false)).toEqual({ kind: 'hidden' });
   });
 
   it('is idle for every ATS auto-apply can queue against, not just Greenhouse', () => {
     for (const source of ['greenhouse', 'ashby', 'workable', 'lever', 'recruitee']) {
-      expect(autoApplyButtonState(source, null, false, true)).toEqual({ kind: 'idle' });
+      expect(autoApplyButtonState(source, null, false, true, false)).toEqual({ kind: 'idle' });
     }
   });
 
   it('is idle for a Greenhouse posting with no attempt', () => {
-    expect(autoApplyButtonState('greenhouse', null, false, true)).toEqual({ kind: 'idle' });
-    expect(autoApplyButtonState('greenhouse', undefined, false, true)).toEqual({ kind: 'idle' });
+    expect(autoApplyButtonState('greenhouse', null, false, true, false)).toEqual({ kind: 'idle' });
+    expect(autoApplyButtonState('greenhouse', undefined, false, true, false)).toEqual({ kind: 'idle' });
   });
 
   it('is queued when the caller already has a live attempt', () => {
-    expect(autoApplyButtonState('greenhouse', 'queued', false, true)).toEqual({ kind: 'queued' });
+    expect(autoApplyButtonState('greenhouse', 'queued', false, true, false)).toEqual({ kind: 'queued' });
   });
 
   it('is declined when the caller already declined this attempt', () => {
-    expect(autoApplyButtonState('greenhouse', 'declined', false, true)).toEqual({ kind: 'declined' });
+    expect(autoApplyButtonState('greenhouse', 'declined', false, true, false)).toEqual({ kind: 'declined' });
   });
 
   it('is applied when the caller already applied, regardless of status', () => {
-    expect(autoApplyButtonState('greenhouse', null, true, true)).toEqual({ kind: 'applied' });
-    expect(autoApplyButtonState('greenhouse', 'queued', true, true)).toEqual({ kind: 'applied' });
+    expect(autoApplyButtonState('greenhouse', null, true, true, false)).toEqual({ kind: 'applied' });
+    expect(autoApplyButtonState('greenhouse', 'queued', true, true, false)).toEqual({ kind: 'applied' });
   });
 
   it('is failed when cmd/auto-apply gave up on the attempt', () => {
-    expect(autoApplyButtonState('greenhouse', 'failed', false, true)).toEqual({ kind: 'failed' });
+    expect(autoApplyButtonState('greenhouse', 'failed', false, true, false)).toEqual({ kind: 'failed' });
   });
 
   // The gate this test exists for: a non-Pro caller never sees the button at all, for any
@@ -45,11 +45,22 @@ describe('autoApplyButtonState', () => {
   // attempt from when they WERE Pro sees nothing once they lapse, matching the product
   // decision that this is a Pro feature end to end, not just to start one.
   it('is hidden for a non-Pro caller regardless of source, status, or a standing attempt', () => {
-    expect(autoApplyButtonState('greenhouse', null, false, false)).toEqual({ kind: 'hidden' });
-    expect(autoApplyButtonState('greenhouse', 'queued', false, false)).toEqual({ kind: 'hidden' });
-    expect(autoApplyButtonState('greenhouse', 'failed', false, false)).toEqual({ kind: 'hidden' });
-    expect(autoApplyButtonState('greenhouse', 'declined', false, false)).toEqual({ kind: 'hidden' });
-    expect(autoApplyButtonState('greenhouse', null, true, false)).toEqual({ kind: 'hidden' });
+    expect(autoApplyButtonState('greenhouse', null, false, false, false)).toEqual({ kind: 'hidden' });
+    expect(autoApplyButtonState('greenhouse', 'queued', false, false, false)).toEqual({ kind: 'hidden' });
+    expect(autoApplyButtonState('greenhouse', 'failed', false, false, false)).toEqual({ kind: 'hidden' });
+    expect(autoApplyButtonState('greenhouse', 'declined', false, false, false)).toEqual({ kind: 'hidden' });
+    expect(autoApplyButtonState('greenhouse', null, true, false, false)).toEqual({ kind: 'hidden' });
+  });
+
+  // A closed posting takes no applications, so there is nothing to start — and a standing
+  // attempt or an earlier submission is not worth a badge beside the closure notice.
+  it('is hidden on a closed posting whatever the attempt state', () => {
+    for (const status of [null, 'queued', 'declined', 'failed']) {
+      expect(autoApplyButtonState('greenhouse', status, false, true, true), `status ${status}`).toEqual({
+        kind: 'hidden',
+      });
+    }
+    expect(autoApplyButtonState('greenhouse', null, true, true, true)).toEqual({ kind: 'hidden' });
   });
 });
 
@@ -67,14 +78,14 @@ describe('jobCtaPlan', () => {
   it('lets a startable auto-apply lead the applying, and names the plan it needs', () => {
     expect(plan('idle')).toEqual({
       autoApply: { label: 'Auto-apply', leads: true, pro: true, disabled: false },
-      external: { label: 'Show origin' },
+      external: { label: 'Apply on company site' },
     });
   });
 
   it('keeps a standing attempt quiet and the apply link relabelled', () => {
     expect(plan('queued')).toEqual({
       autoApply: { label: 'Auto-apply queued', leads: false, pro: false, disabled: true },
-      external: { label: 'Show origin' },
+      external: { label: 'Apply on company site' },
     });
   });
 
@@ -110,11 +121,11 @@ describe('jobCtaPlan', () => {
   });
 
   // The apply link keeps its own word wherever auto-apply is not going to do the applying —
-  // `Show origin` reads as a demotion, and a reader whose auto-apply attempt failed is not
+  // `Apply on company site` reads as a demotion, and a reader whose auto-apply attempt failed is not
   // being offered anything else.
   it('relabels the apply link only while an attempt stands or can be started', () => {
     for (const kind of kinds) {
-      const expected = kind === 'idle' || kind === 'queued' ? 'Show origin' : 'Apply';
+      const expected = kind === 'idle' || kind === 'queued' ? 'Apply on company site' : 'Apply';
       expect(plan(kind).external.label, `state ${kind}`).toBe(expected);
     }
   });

@@ -6,7 +6,7 @@
     variants: {
       variant: {
         default: 'border-border bg-card text-foreground',
-        destructive: 'border-destructive/30 bg-destructive/5 text-destructive',
+        destructive: 'border-destructive/30 bg-destructive/5 text-destructive-strong',
         brand: 'border-brand/30 bg-brand-muted text-brand-strong',
       },
     },

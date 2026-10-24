@@ -26,11 +26,16 @@
       'mt-3 flex items-center gap-2 border-t border-dashed border-border pt-2.5',
       blurred && 'pointer-events-none select-none opacity-90 blur-[1.5px]',
     ]}
-    aria-label={blurred
-      ? undefined
-      : `Profile match: ${match.percent}%, ${match.matched} of ${match.total} skills`}
     aria-hidden={blurred ? 'true' : undefined}
   >
+    <!-- The spoken form of the strip. An `aria-label` on this plain div was ignored — a
+         generic element has no name to give — so assistive technology heard the terse
+         "62% · 5/8 skills" below. The visible figure is hidden from it instead, and this
+         says the same thing in words. Not rendered under the blur, where the whole strip
+         is hidden (see above). -->
+    {#if !blurred}
+      <span class="sr-only">Profile match: {match.percent}%, {match.matched} of {match.total} skills</span>
+    {/if}
     <!-- The unfilled remainder is a soft red (the skills you're missing); the fill is the
          brand tone (the skills you have) — a two-tone have/missing bar in one track.
          The fill is full-width and slid left by the missing share, not sized by `width`:
@@ -43,7 +48,7 @@
         style:transform="translateX({match.percent - 100}%)"
       ></div>
     </div>
-    <span class="shrink-0 text-xs font-medium tabular-nums text-muted-foreground">
+    <span class="shrink-0 text-xs font-medium tabular-nums text-muted-foreground" aria-hidden="true">
       {match.percent}% · {match.matched}/{match.total} skills
     </span>
   </div>

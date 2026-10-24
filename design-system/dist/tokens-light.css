@@ -18,7 +18,7 @@
   --destructive-strong: oklch(0.52 0.22 27.325); /** Destructive text on the page background or a destructive tint, where the action color falls short of 4.5:1. */
   --border: oklch(0.92 0 0); /** Default border color. */
   --input: oklch(0.93 0 0); /** Input border/fill color. */
-  --ring: #b2c248; /** Focus ring color. Aliases brand-ring so focus follows the brand accent. */
+  --ring: #5b6f00; /** Focus ring color: the brand fill, which clears 3:1 against every light surface (WCAG 1.4.11). brand-ring is too pale for a focus indicator on the page background (1.9:1). */
   --brand: #5b6f00; /** Brand CTA fill — oats green, dark olive (Granola palette). */
   --brand-foreground: #f3f6e2; /** Text/icon on brand surface. */
   --brand-strong: #4c5c00; /** Darker brand tone for readable text/links. */

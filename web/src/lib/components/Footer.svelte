@@ -1,8 +1,8 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
-  import { popularCollectionLinks } from '#lib/collections.js';
   import { reopen } from '#lib/consent.svelte.js';
   import { EXTENSION_STORE_URL } from '#lib/extensionLinks.js';
+  import { POPULAR_COLLECTIONS } from '#lib/popularCollections.js';
   import { SOCIAL_LINKS } from '#lib/socialLinks.js';
   import { ProviderIcon } from '#lib/ui/index.js';
 
@@ -90,8 +90,8 @@
   // A strip below the four groups rather than a fifth column: the grid is
   // sm:grid-cols-4, and ten links would not fit one anyway. Kept out of `groups`
   // because these are collection landing pages, not site navigation — and because
-  // it is the one place every page links them from (see popularCollectionLinks).
-  const popular = popularCollectionLinks();
+  // it is the one place every page links them from (see #lib/popularCollections).
+  const popular = POPULAR_COLLECTIONS;
 
   const year = new Date().getFullYear();
 

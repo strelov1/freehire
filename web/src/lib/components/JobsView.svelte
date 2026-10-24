@@ -47,6 +47,7 @@
   import States from './States.svelte';
   import JobRow from './JobRow.svelte';
   import { Button } from '#lib/ui/index.js';
+  import JobRowSkeleton from './JobRowSkeleton.svelte';
   import HiddenToast from './HiddenToast.svelte';
 
   // Filters live in the URL; the route `load` searches by them and returns the
@@ -694,7 +695,7 @@
     <span class="relative flex items-center">
       <select
         aria-label="Sort jobs"
-        class="appearance-none rounded-lg border border-input bg-transparent py-2 pl-2 pr-6 text-sm max-sm:max-w-24 text-foreground transition-colors focus-visible:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 md:py-1 dark:bg-input/30"
+        class="appearance-none rounded-lg border border-input bg-transparent py-2 pl-2 pr-6 text-sm max-sm:max-w-24 text-foreground transition-colors focus-visible:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:py-1 dark:bg-input/30"
         value={selectedSort}
         onchange={(e) => filters.setSort(e.currentTarget.value as JobSort)}
       >
@@ -726,7 +727,7 @@
     <span class="relative flex items-center">
       <select
         aria-label={openBound ? 'Open within' : 'Posted within'}
-        class="appearance-none rounded-lg border border-input bg-transparent py-2 pl-2 pr-6 text-sm max-sm:max-w-20 text-foreground transition-colors focus-visible:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 md:py-1 dark:bg-input/30"
+        class="appearance-none rounded-lg border border-input bg-transparent py-2 pl-2 pr-6 text-sm max-sm:max-w-20 text-foreground transition-colors focus-visible:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:py-1 dark:bg-input/30"
         value={String((openBound ? filters.value.openWithinDays : filters.value.postedWithinDays) ?? '')}
         onchange={(e) => {
           const days = Number(e.currentTarget.value) || null;
@@ -792,6 +793,7 @@
     <ListToolbar
       total={displayItems.length > 0 ? listTotal : null}
       unit={listTotal === 1 ? 'job' : 'jobs'}
+      settled={jobs.status === 'ready'}
       onSwipe={standalone ? openSwipe : undefined}
       controls={listControls}
       leading={standalone ? mapButton : undefined}
@@ -865,9 +867,15 @@
     {/if}
 
     {#if jobs.status === 'loading' && !holdingOver}
-      <States state="loading" />
+      <States state="loading">
+        {#snippet row()}
+          <JobRowSkeleton />
+        {/snippet}
+      </States>
     {:else if jobs.status === 'error'}
-      <States state="error" message="Failed to load jobs." />
+      <!-- Retry re-runs the same query on the page being read, the same reload a changed
+           filter would start. -->
+      <States state="error" message="Failed to load jobs." onRetry={() => reloadList(pageOffset(activePage))} />
     {:else if displayItems.length === 0}
       <States state="empty" message="No matching jobs." />
       {#if standalone && relaxTarget}
@@ -897,7 +905,9 @@
             : 'Every job on this page is hidden or below your match threshold.'}
         />
       {:else}
-        <div class="flex flex-col gap-3">
+        <!-- Busy while held-over rows stand in for a reload underneath them (see
+             `holdover`): the rows are real but about to be replaced. -->
+        <div class="flex flex-col gap-3" aria-busy={holdingOver}>
           {#each visibleJobs as job (job.public_slug)}
             <JobRow {job} {onHide} />
           {/each}

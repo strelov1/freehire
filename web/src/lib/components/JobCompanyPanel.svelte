@@ -194,6 +194,7 @@
           <button
             type="button"
             class="self-start text-sm font-medium text-primary hover:underline"
+            aria-expanded={expanded}
             onclick={() => (expanded = !expanded)}
           >
             {expanded ? 'Show less' : 'Show more'}

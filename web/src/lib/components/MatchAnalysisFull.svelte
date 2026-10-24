@@ -249,7 +249,7 @@
     good: 'text-brand-strong',
     moderate: 'text-warning-strong',
     weak: 'text-warning-strong',
-    poor: 'text-destructive',
+    poor: 'text-destructive-strong',
   };
   const toneBar: Record<Tone, string> = {
     strong: 'bg-brand',
@@ -270,7 +270,7 @@
     good: 'border-brand/30 bg-brand-muted text-brand-strong',
     moderate: 'border-warning/30 bg-warning/10 text-warning-strong',
     weak: 'border-warning/30 bg-warning/10 text-warning-strong',
-    poor: 'border-destructive/30 bg-destructive/10 text-destructive',
+    poor: 'border-destructive/30 bg-destructive/10 text-destructive-strong',
   };
   const toneGlow: Record<Tone, string> = {
     strong: 'rgba(120,140,21,0.16)',
@@ -536,7 +536,7 @@
                     <span class="h-4 w-[3px] shrink-0 rounded-full {toneBar[meta.tone]}"></span>
                     <span class="min-w-0 flex-1 text-sm font-medium leading-snug text-foreground">{r.text}</span>
                     {#if r.priority && r.priority.toLowerCase() !== 'required'}
-                      <span class="shrink-0 text-[0.6rem] font-medium lowercase tracking-wide text-muted-foreground/70">{r.priority}</span>
+                      <span class="shrink-0 text-[0.6rem] font-medium lowercase tracking-wide text-muted-foreground">{r.priority}</span>
                     {/if}
                     <span class="shrink-0 text-xs font-semibold {toneText[meta.tone]}">{meta.label}</span>
                   </li>
@@ -562,7 +562,7 @@
                     <span class={['min-w-0 flex-1 text-sm leading-snug', syn && 'border-b border-dotted border-brand-strong/50']}>{r.text}</span>
                     {#if r.evidence_strength}
                       <span
-                        class={['shrink-0 text-[0.6rem] font-medium lowercase tracking-wide', weak ? 'text-warning-strong' : 'text-muted-foreground/60']}
+                        class={['shrink-0 text-[0.6rem] font-medium lowercase tracking-wide', weak ? 'text-warning-strong' : 'text-muted-foreground']}
                         title={weak ? 'Only a bare mention in your CV — back it with a concrete result' : 'Backed by ' + r.evidence_strength + ' evidence in your CV'}
                       >{r.evidence_strength}</span>
                     {/if}
@@ -615,7 +615,7 @@
               <ul class="flex flex-col gap-2.5">
                 {#each analysis.gaps as g, i (i)}
                   <li class="flex gap-2.5 text-sm leading-relaxed">
-                    <span class="mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full bg-destructive/15 text-destructive">−</span>
+                    <span class="mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full bg-destructive/15 text-destructive-strong">−</span>
                     {g}
                   </li>
                 {/each}

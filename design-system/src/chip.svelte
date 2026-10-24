@@ -9,7 +9,7 @@
         primary: 'border-transparent bg-primary text-primary-foreground',
         secondary: 'border-transparent bg-secondary text-secondary-foreground',
         brand: 'border-transparent bg-brand-muted text-brand-strong',
-        destructive: 'border-destructive/20 bg-destructive/10 text-destructive',
+        destructive: 'border-destructive/20 bg-destructive/10 text-destructive-strong',
       },
     },
     defaultVariants: { variant: 'default' },

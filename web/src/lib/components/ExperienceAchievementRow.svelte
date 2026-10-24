@@ -6,6 +6,7 @@
    * inherently per-row and were never meant to be shared across achievements.
    */
   import { Trash2, Pencil, Check, X } from '@lucide/svelte';
+  import { prefersReducedMotion } from 'svelte/motion';
   import { Button, Chip, FormField, Input } from '#lib/ui/index.js';
   import SkillIcon from '#lib/components/SkillIcon.svelte';
   import { isUnconfirmed } from '#lib/experienceBank.js';
@@ -61,7 +62,7 @@
   // reach for instead (see design.md), so this mirrors it by hand for the three fields
   // below rather than drifting across three separately-typed class strings.
   const textareaClass =
-    'w-full resize-y rounded-lg border border-input bg-transparent px-3 py-2 text-sm focus-visible:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50';
+    'w-full resize-y rounded-lg border border-input bg-transparent px-3 py-2 text-sm focus-visible:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
 
   let isEditing = $state(false);
   let draftClaim = $state('');
@@ -105,7 +106,7 @@
 
   $effect(() => {
     if (scrollToAtomId === atom.id && rowEl) {
-      rowEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      rowEl.scrollIntoView({ behavior: prefersReducedMotion.current ? 'auto' : 'smooth', block: 'center' });
       rowEl.focus();
     }
   });

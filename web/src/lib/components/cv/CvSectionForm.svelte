@@ -68,7 +68,7 @@
       aria-labelledby="{uid}-summary-heading"
       rows="3"
       placeholder="One or two lines shown under your name."
-      class="w-full rounded-lg border border-input bg-transparent p-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+      class="w-full rounded-lg border border-input bg-transparent p-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
     ></textarea>
   </section>
 

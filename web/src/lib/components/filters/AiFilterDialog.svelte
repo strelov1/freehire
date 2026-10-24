@@ -275,13 +275,13 @@
   }}
   {@attach portal()}
 >
-  <button type="button" aria-label={s.closeDialog} class="absolute inset-0 bg-black/50" onclick={onclose}></button>
+  <button type="button" aria-label={s.closeDialog} class="absolute inset-0 animate-modal-fade bg-black/50" onclick={onclose}></button>
 
   <div
     role="dialog"
     aria-modal="true"
     aria-label={s.title}
-    class="relative z-10 flex max-h-full w-full flex-col overflow-hidden rounded-2xl border border-border bg-background shadow-xl {stage ===
+    class="relative z-10 flex animate-modal-pop max-h-full w-full flex-col overflow-hidden rounded-2xl border border-border bg-background shadow-xl {stage ===
     'describe'
       ? 'max-w-3xl'
       : 'h-full max-w-7xl'}"
@@ -365,7 +365,7 @@
               <span class="grid size-8 shrink-0 place-items-center rounded-md bg-brand-muted text-brand-strong"><Plus class="size-4" /></span>
               <span class="text-sm">
                 <span class="font-medium">{s.addCv}</span> <span class="text-xs text-muted-foreground">{s.pdf}</span><br />
-                <span class={cvError ? 'text-destructive' : 'text-brand-strong'}>{cvError ?? s.clickToUpload}</span>
+                <span class={cvError ? 'text-destructive-strong' : 'text-brand-strong'}>{cvError ?? s.clickToUpload}</span>
               </span>
             </button>
           {/if}

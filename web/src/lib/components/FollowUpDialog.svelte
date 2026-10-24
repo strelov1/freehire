@@ -80,13 +80,13 @@
 <svelte:window onkeydown={(e) => e.key === 'Escape' && onclose()} />
 
 <div class="fixed inset-0 z-50 flex flex-col items-center p-4 max-sm:optical-center sm:justify-center">
-  <button type="button" aria-label={s.closeDialogAria} class="absolute inset-0 bg-black/50" onclick={onclose}></button>
+  <button type="button" aria-label={s.closeDialogAria} class="absolute inset-0 animate-modal-fade bg-black/50" onclick={onclose}></button>
 
   <div
     role="dialog"
     aria-modal="true"
     aria-label={s.heading}
-    class="relative z-10 flex max-h-[85vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-border bg-background shadow-xl"
+    class="relative z-10 flex animate-modal-pop max-h-[85vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-border bg-background shadow-xl"
     {@attach focusTrap()}
   >
     <div class="flex items-start gap-3 border-b border-border p-5">

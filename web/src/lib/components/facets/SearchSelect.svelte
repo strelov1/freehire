@@ -3,7 +3,8 @@
   import { optionMatches, uniqueByValue, type FacetOption } from '#lib/facets.js';
   import { CountryFlag, EntityLogo, Input } from '#lib/ui/index.js';
   import SkillIcon from '../SkillIcon.svelte';
-  import { pillClass, pillTitle } from './pill';
+  import { pillClass, pillPressed, pillTitle } from './pill';
+  import PillMeta from './PillMeta.svelte';
   import { must } from '#lib/utils.js';
 
   // A searchable multi-select: a filter field over the options rendered as a
@@ -102,14 +103,21 @@
       <button
         type="button"
         onclick={() => toggle(opt.value)}
+        aria-pressed={pillPressed(included, excluded)}
         title={pillTitle(included, excluded, excludable)}
         class={pillClass(included || excluded, excluded, 'inline-flex max-w-full items-center gap-1.5 px-2.5 py-1 text-sm')}
       >
-        {#if opt.flag}<CountryFlag code={opt.flag} label={opt.label} class="text-base" />{:else if techIcons}<SkillIcon slug={opt.value} class="size-3.5 shrink-0" />{:else if entityLogos}<EntityLogo name={opt.label} src={opt.icon} shape="square" size="xs" class="shrink-0" />{/if}
+        <!-- The leading mark is hidden from assistive tech: a flag's label, a brand mark's
+             title and a logo's initials fallback each name the same thing the visible
+             label beside them does, so it would be announced twice. `contents` keeps the
+             wrapper out of the pill's flex layout. -->
+        <span aria-hidden="true" class="contents"
+          >{#if opt.flag}<CountryFlag code={opt.flag} label={opt.label} class="text-base" />{:else if techIcons}<SkillIcon slug={opt.value} class="size-3.5 shrink-0" />{:else if entityLogos}<EntityLogo name={opt.label} src={opt.icon} shape="square" size="xs" class="shrink-0" />{/if}</span
+        >
         <!-- A very long value (roles like "Senior Business Development Representative")
              truncates to one line with an ellipsis instead of wrapping the pill onto
              two rows; the full label surfaces on hover via title. -->
-        <span class="min-w-0 truncate" title={opt.label}>{opt.label}</span>{#if opt.count !== undefined}<span class="ml-1 shrink-0 opacity-60 tabular-nums">{opt.count.toLocaleString()}</span>{/if}
+        <span class="min-w-0 truncate" title={opt.label}>{opt.label}</span><PillMeta {included} {excluded} count={opt.count?.toLocaleString()} class="shrink-0" />
       </button>
     {/each}
     {#if shown.length === 0}

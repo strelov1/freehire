@@ -2,10 +2,12 @@
   import { afterNavigate } from '$app/navigation';
   import { resolve } from '$app/paths';
   import { Bell } from '@lucide/svelte';
+  import { MediaQuery } from 'svelte/reactivity';
   import { isAuthenticated } from '#lib/auth.svelte.js';
   import { notificationCenter } from '#lib/notificationCenter.svelte.js';
   import { lockScroll, unlockScroll } from '#lib/ui/index.js';
   import { openedOverlay, closedOverlay } from '#lib/headerOverlay.js';
+  import { focusTrap } from '#lib/actions/focusTrap.js';
   import States from './States.svelte';
   import NotificationCard from './NotificationCard.svelte';
 
@@ -22,6 +24,15 @@
   let open = $state(false);
   let root = $state<HTMLElement | null>(null);
   const visibleItems = $derived(notificationCenter.items.slice(0, DROPDOWN_LIMIT));
+  // The badge is visual only; the button's name carries the count instead.
+  const buttonLabel = $derived(
+    notificationCenter.unreadCount > 0
+      ? `Notifications, ${notificationCenter.unreadCount} unread`
+      : 'Notifications',
+  );
+  // Below `sm` the panel takes the whole screen, so it is a modal dialog there
+  // (scroll locked, focus trapped); on wider screens it stays a non-modal popover.
+  const fullScreen = new MediaQuery('max-width: 639px', false);
 
   // Load once the session is confirmed (boot-time /me may still be in flight); drop
   // the cached page on sign-out so the next user on this tab loads their own.
@@ -35,8 +46,7 @@
 
   // Lock body scroll only while the dropdown covers the screen on mobile.
   $effect(() => {
-    if (!open) return;
-    if (window.matchMedia('(min-width: 640px)').matches) return;
+    if (!open || !fullScreen.current) return;
     lockScroll();
     return () => unlockScroll();
   });
@@ -85,8 +95,8 @@
   <div class="relative" bind:this={root}>
     <button
       type="button"
-      aria-label="Notifications"
-      aria-haspopup="true"
+      aria-label={buttonLabel}
+      aria-haspopup="dialog"
       aria-expanded={open}
       onclick={toggle}
       class="relative inline-flex size-9 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -94,6 +104,7 @@
       <Bell class="size-5" />
       {#if notificationCenter.unreadCount > 0}
         <span
+          aria-hidden="true"
           class="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-brand px-1 text-[10px] font-semibold leading-none text-brand-foreground"
         >
           {notificationCenter.unreadCount > 99 ? '99+' : notificationCenter.unreadCount}
@@ -110,6 +121,10 @@
            TopBar's header draws no `backdrop-filter` (see its own comment) — that would
            make the header the containing block and pin this panel to it instead. -->
       <div
+        role="dialog"
+        aria-label="Notifications"
+        aria-modal={fullScreen.current ? 'true' : undefined}
+        {@attach fullScreen.current ? focusTrap() : undefined}
         class="z-50 overflow-y-auto overscroll-contain border border-border bg-background shadow-lg max-sm:fixed max-sm:inset-x-0 max-sm:bottom-0 max-sm:top-14 max-sm:border-x-0 max-sm:border-b-0 sm:absolute sm:right-0 sm:top-full sm:mt-2 sm:w-96 sm:max-h-[min(70vh,32rem)] sm:rounded-md"
       >
         <div class="flex items-center justify-between border-b border-border px-3 py-2">

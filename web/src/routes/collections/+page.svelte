@@ -51,7 +51,7 @@
       placeholder="Search collections — Python, Remote Europe, Y Combinator…"
       bind:value={query}
       aria-label="Search collections"
-      class="w-full rounded-lg border border-border bg-background py-2 pr-3 pl-9 text-sm transition outline-none focus:border-brand focus:ring-2 focus:ring-brand-ring/40"
+      class="w-full rounded-lg border border-border bg-background py-2 pr-3 pl-9 text-sm transition outline-none focus:border-brand focus:ring-2 focus:ring-ring"
     />
   </div>
 
