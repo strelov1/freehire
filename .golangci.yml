@@ -197,6 +197,11 @@ linters:
         - confidencial
         - administr
         - instruktor
+        - informatike
+        - infrastrukture
+        - manipulant
+        - omre
+        - proces
 
 formatters:
   enable:

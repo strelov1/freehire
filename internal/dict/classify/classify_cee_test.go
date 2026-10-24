@@ -85,6 +85,9 @@ func TestParse_CentralEasternEuropeTitles(t *testing.T) {
 		{"Адміністратор баз даних (Oracle)", "devops"},
 		// A bank's cashier is the teller.
 		{"Менеджер - касир відділення банку", "finance"},
+		// The CNC programmer is a production occupation (SOC 51-9162).
+		{"Programista CNC", "manufacturing"},
+		{"CNC PROGRAMER/PROGRAMERKA (CAD/CAM)", "manufacturing"},
 	}
 	for _, c := range cases {
 		if got := Parse(c.title).Category; got != c.want {
@@ -97,8 +100,7 @@ func TestParse_CentralEasternEuropeTitles(t *testing.T) {
 // alone: the talent pools and open applications name no role, student work and internships
 // stay as unresolved as their English twins, and the generic "specialist"/"associate" nouns
 // and the bare quality, compliance and tax desks resolve nothing, as they do in English.
-// The machine programmers are pinned ahead of the bare programmer noun, as "CNC
-// Programmer" is.
+// The PLC programmers are pinned ahead of the bare programmer noun.
 func TestParse_CentralEasternEuropeUnresolved(t *testing.T) {
 	for _, title := range []string{
 		"SPLOŠNA BAZA KANDIDATOV ZA ZAPOSLITEV",
@@ -113,10 +115,80 @@ func TestParse_CentralEasternEuropeUnresolved(t *testing.T) {
 		"Specjalista / Specjalistka ds. Zgodności",
 		"SAMOSTOJNI STROKOVNI SODELAVEC v Kakovosti v obratu Ljutomer, Upravljanje kakovosti",
 		"Фахівець з цифрової трансформації, Київ",
-		"Programista CNC",
-		"CNC PROGRAMER/PROGRAMERKA (CAD/CAM)",
 		"PLC programozó",
+		"Programer PLC",
+		"Elektro programer",
+		// No bare engineer noun, as in English ("Engineer" alone resolves nothing).
+		"Inženir",
+		"Inżynier",
+		"Inženjer",
+		"Projektni inženir",
 		"Szivattyú tesztelő",
+	} {
+		if got := Parse(title).Category; got != "" {
+			t.Errorf("Parse(%q).Category = %q, want unresolved", title, got)
+		}
+	}
+}
+
+// TestParse_EngineerAndProgrammerShadowing pins freehire#3518: a bare "inženir" filed every
+// Slovenian engineer with the plant and a bare "programer" every machine programmer with
+// software, because the bare noun was the only word the table knew in those titles. The
+// discipline beside the noun decides, and the bare programmer noun is read last.
+func TestParse_EngineerAndProgrammerShadowing(t *testing.T) {
+	cases := []struct{ title, want string }{
+		{"Java programski inženir", "software_engineering"},
+		{"Inženir za razvoj programske opreme", "software_engineering"},
+		{"Inženir vgrajene programske opreme", "embedded"},
+		{"Inženir za kibernetsko varnost", "security"},
+		{"Inženir varnosti informacijskih sistemov", "security"},
+		{"Sistemski inženir", "software_engineering"},
+		{"SISTEMSKI INŽENIR III - M/Ž", "software_engineering"},
+		{"Radiološki inženir", "healthcare"},
+		{"Prodajni inženir", "solutions_engineering"},
+		{"Terenski prodajni inženir", "solutions_engineering"},
+		{"Varnostni inženir", "occupational_safety"},
+		{"Testni inženir", "qa"},
+		{"Procesni inženir", "industrial_engineering"},
+		{"Višji strojni inženir (m/ž)", "industrial_engineering"},
+		{"INŽENJER/KA ZA RAZVOJ SOFTVERA", "software_engineering"},
+		{"INŽENJER PRODAJE (M/Ž)", "solutions_engineering"},
+		{"Procesni inženjer/ka", "industrial_engineering"},
+		{"Inżynier jakości (K/M)", "industrial_engineering"},
+		{"Procesní inženýr/ka", "industrial_engineering"},
+		{"CNC operater - programer", "manufacturing"},
+		{"CNC operater in programer", "manufacturing"},
+		{"Programer strojev in naprav", "manufacturing"},
+		{"CNC operátor/programátor (m/ž)", "manufacturing"},
+		{"TEHNOLOG/TEHNOLOGINJA - PROGRAMER/PROGRAMERKA U STROJNOJ OBRADI", "industrial_engineering"},
+		// The bare programmer noun is still software once nothing else speaks.
+		{"PROGRAMER/PROGRAMERKA", "software_engineering"},
+		{"Programista Java (k/m)", "software_engineering"},
+		{"Python розробник", "software_engineering"},
+		// From the same contribution: the curated Slovenian vocabulary.
+		{"Vzdrževalec perila", "personal_services"},
+		{"Keramičar (m/ž)", "skilled_trades"},
+		{"Natakarski pomočnik", "hospitality"},
+		{"Diplomirana medicinska sestra", "healthcare"},
+		{"Skladiščni delavec", "logistics"},
+		{"Komercialist", "sales"},
+		{"Receptor", "administration"},
+	}
+	for _, c := range cases {
+		if got := Parse(c.title).Category; got != c.want {
+			t.Errorf("Parse(%q).Category = %q, want %q", c.title, got, c.want)
+		}
+	}
+}
+
+// TestParse_SlovenianCatchAllNounsStayUnresolved pins the curation of the #3518 list: the
+// generic nouns it filed as a catch-all ("vodja" as operations, "delavec" as manufacturing)
+// name no craft, and stay as unresolved as their English twins.
+func TestParse_SlovenianCatchAllNounsStayUnresolved(t *testing.T) {
+	for _, title := range []string{
+		"Vodja", "Specialist", "Sodelavec", "Svetovalec", "Pomočnik", "Delavec", "Operater",
+		"Referent", "Asistent", "Strokovni sodelavec", "Tehnik", "Koordinator",
+		"Vodja oddelka", "Študentsko delo",
 	} {
 		if got := Parse(title).Category; got != "" {
 			t.Errorf("Parse(%q).Category = %q, want unresolved", title, got)

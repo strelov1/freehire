@@ -103,8 +103,25 @@ it only reaches a title nothing above resolves. Two rules shape it:
 
 Each alias is filed where its English twin is, and what English leaves unresolved on
 purpose stays unresolved here too: the generic specialist/associate nouns, the bare
-quality, compliance and tax desks, interns and student work, talent pools. The CNC/PLC/CAM
-programmers are pinned ahead of the bare programmer nouns, as "CNC Programmer" is.
+quality, compliance and tax desks, interns and student work, talent pools.
+
+Two nouns are handled with care, because a bare one shadows every title that names its
+craft in a word the table does not know (freehire#3518):
+
+- **There is no bare engineer noun** (inženir, inżynier, inženjer, inženýr, inžinier,
+  інженер), as there is none in English. Only the discipline-named spellings resolve —
+  "procesni inženir" is the plant, "sistemski inženir" software, "prodajni inženir"
+  solutions engineering, "radiološki inženir" healthcare.
+- **The bare programmer nouns are declared LAST in the block.** They are software, the way
+  "программист" is, but only once nothing else in the title has spoken: "CNC operater -
+  programer" is the machine operator and "Tehnolog - programer" the technologist. The CNC
+  programmer is filed on the floor (SOC 51-9162); the PLC/CAM/CAD/robot programmers are
+  pinned to no category.
+
+The Slovenian vocabulary inside the block was contributed in #3518 from 3,288 Slovenian
+titles and curated: catch-all nouns and civil-service ranks were dropped, entries were
+re-filed to their English twin, and a phrase that its own shorter aliases already resolve
+was pruned.
 
 ## There is no management category
 
