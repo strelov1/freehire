@@ -435,6 +435,7 @@
           {#if busy}<ThinkingIndicator />{/if}
         </div>
         <Composer
+            attachable={false}
           bind:this={composer}
           bind:draft={chatDraft}
           queue={[]}

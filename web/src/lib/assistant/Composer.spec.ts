@@ -86,3 +86,14 @@ describe('Composer focus', () => {
     expect(document.activeElement).toBe(container.querySelector('textarea'));
   });
 });
+
+describe('Composer without attachments', () => {
+  // A host that reads only the text (the AI search modal) must not offer a file it
+  // would silently drop.
+  it('offers no attach control when attachable is false', () => {
+    const { container } = setup({ attachable: false });
+
+    expect(screen.queryByRole('button', { name: /attach/i })).toBeNull();
+    expect(container.querySelector('input[type="file"]')).toBeNull();
+  });
+});

@@ -17,6 +17,7 @@
   let {
     draft = $bindable(''),
     attachments = $bindable([]),
+    attachable = true,
     queue,
     turnActive,
     disabled,
@@ -27,6 +28,9 @@
     draft?: string;
     /** Documents read for the next message, sent with it and then cleared by the parent. */
     attachments?: Attachment[];
+    /** Whether to offer the attach control at all. Off for a host that reads only the
+     *  text, so a chosen file is never silently dropped. */
+    attachable?: boolean;
     queue: { id: string; text: string; attachments: Attachment[] }[];
     turnActive: boolean;
     disabled: boolean;
@@ -181,6 +185,7 @@
       }}
       class="relative flex w-full cursor-text items-end gap-2 rounded-3xl border border-border/60 bg-card px-4 py-2.5 shadow-sm transition-colors focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/50"
     >
+      {#if attachable}
       <input
         bind:this={fileInput}
         type="file"
@@ -200,6 +205,7 @@
       >
         <Paperclip class="size-4" />
       </button>
+      {/if}
       <textarea
         bind:this={textareaEl}
         bind:value={draft}
