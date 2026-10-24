@@ -1145,14 +1145,39 @@ func (r Runner) cooledDown(ctx context.Context, e sources.CompanyEntry) bool {
 	return set && until.After(time.Now())
 }
 
+// boardHealthTimeout bounds one board-health write. The write runs on a context detached from
+// the crawl's (see healthContext), so this is the only thing that stops a hung database from
+// holding the run past its deadline.
+const boardHealthTimeout = 10 * time.Second
+
+// healthContext detaches a board-health write from the crawl's cancellation. The crawl's context
+// is the one that ends at cmd/ingest's crawl deadline, and a board still in flight then — a big
+// board whose fetch finished but whose writes did not — used to lose its health row with the
+// rest: the write was refused with "context deadline exceeded", so a board that had answered
+// looked as if it had never been crawled. The outcome is a fact about the board and is known by
+// then; recording it is not crawl work the deadline exists to stop.
+func healthContext(ctx context.Context) (context.Context, context.CancelFunc) {
+	return context.WithTimeout(context.WithoutCancel(ctx), boardHealthTimeout)
+}
+
 // recordSuccess / recordFailure persist a board's outcome best-effort: a health-store
 // error is logged and never propagated (health must not fail ingest), and both no-op
 // when no BoardHealth port is wired.
+//
+// A board that answered is recorded as a success even when the crawl's context ended while its
+// postings were being written: the board did its part, and a cut-short write is the run's
+// budget, not the board's health. A failure seen AFTER the crawl's context ended is not
+// recorded at all, because it cannot be told apart from the deadline itself cutting the fetch
+// short — and counting it would cool a healthy board (CooldownFor, from the third in a row) and
+// cool every board in flight at once on a provider whose run regularly meets its deadline.
+// Recording nothing leaves the row as it was, which is what the board earned this run.
 func (r Runner) recordSuccess(ctx context.Context, e sources.CompanyEntry, ingested int, reached bool) {
 	if r.BoardHealth == nil {
 		return
 	}
-	if err := r.BoardHealth.RecordSuccess(ctx, e.Provider, e.Board, e.Region, ingested, reached); err != nil {
+	hctx, cancel := healthContext(ctx)
+	defer cancel()
+	if err := r.BoardHealth.RecordSuccess(hctx, e.Provider, e.Board, e.Region, ingested, reached); err != nil {
 		log.Printf("ingest: record board success %s/%s: %v", e.Provider, e.Board, err)
 	}
 }
@@ -1161,7 +1186,13 @@ func (r Runner) recordFailure(ctx context.Context, e sources.CompanyEntry, msg s
 	if r.BoardHealth == nil {
 		return
 	}
-	if err := r.BoardHealth.RecordFailure(ctx, e.Provider, e.Board, e.Region, msg); err != nil {
+	if ctx.Err() != nil {
+		log.Printf("ingest: %s board %q: failure not recorded, the crawl stopped first (%v): %s", e.Provider, e.Board, ctx.Err(), msg)
+		return
+	}
+	hctx, cancel := healthContext(ctx)
+	defer cancel()
+	if err := r.BoardHealth.RecordFailure(hctx, e.Provider, e.Board, e.Region, msg); err != nil {
 		log.Printf("ingest: record board failure %s/%s: %v", e.Provider, e.Board, err)
 	}
 }
