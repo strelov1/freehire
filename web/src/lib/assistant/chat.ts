@@ -14,6 +14,7 @@ import type { ToolCall } from './tool-formatters';
 interface ChatMessage {
   role: 'user' | 'assistant';
   text: string;
+  attachments: string[];
   thinking: string;
   tools: ToolCall[];
   streaming: boolean;
@@ -39,7 +40,7 @@ export function reduceTurnEvent(prev: ChatState, event: TurnEvent): ChatState {
       return { ...prev, queued: true };
     case 'user_prompt':
       // The turn is under way: whatever wait preceded it is over.
-      return { ...prev, messages: [...prev.messages, userMessage(event.text)], queued: false };
+      return { ...prev, messages: [...prev.messages, userMessage(event.text, event.attachments ?? [])], queued: false };
     case 'assistant_text':
       return upsertAssistant(prev, (m) => ({ ...m, text: m.text + event.text }));
     case 'assistant_thought':
@@ -65,7 +66,7 @@ export function reduceTurnEvent(prev: ChatState, event: TurnEvent): ChatState {
             ...next,
             messages: [
               ...next.messages,
-              { role: 'assistant', text: '', thinking: '', tools: [], streaming: false, errored: true },
+              { role: 'assistant', text: '', attachments: [], thinking: '', tools: [], streaming: false, errored: true },
             ],
           };
         }
@@ -103,12 +104,12 @@ function attachResult(
   return tools;
 }
 
-function userMessage(text: string): ChatMessage {
-  return { role: 'user', text, thinking: '', tools: [], streaming: false, errored: false };
+function userMessage(text: string, attachments: string[]): ChatMessage {
+  return { role: 'user', text, attachments, thinking: '', tools: [], streaming: false, errored: false };
 }
 
 function newAssistant(): ChatMessage {
-  return { role: 'assistant', text: '', thinking: '', tools: [], streaming: true, errored: false };
+  return { role: 'assistant', text: '', attachments: [], thinking: '', tools: [], streaming: true, errored: false };
 }
 
 /** Apply `fn` to the open (streaming) assistant message, or start a new one if

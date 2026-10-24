@@ -19,6 +19,7 @@ export const messages = defineMessages(
     deleteChatFailed: 'Could not delete the chat.',
     openAChatFailed: 'Could not open a chat.',
     messageNotSent: 'That message was not sent: the chat was still busy. Try again.',
+    attachedFiles: 'Attached files',
     sendFailed: 'Could not send the message.',
     continueFailed: 'Could not continue this session.',
     verbs: {
@@ -65,6 +66,7 @@ export const messages = defineMessages(
       deleteChatFailed: 'Не удалось удалить чат.',
       openAChatFailed: 'Не удалось открыть чат.',
       messageNotSent: 'Сообщение не отправлено: чат был занят. Попробуйте ещё раз.',
+      attachedFiles: 'Прикреплённые файлы',
       sendFailed: 'Не удалось отправить сообщение.',
       continueFailed: 'Не удалось продолжить эту сессию.',
       verbs: {

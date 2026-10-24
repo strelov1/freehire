@@ -14,7 +14,8 @@ export type TurnEvent =
   // The turn has not started: it is waiting for the one in flight in this session. Sent
   // ahead of the turn's own frames so a wait does not read as a stalled connection.
   | { type: 'queued' }
-  | { type: 'user_prompt'; text: string }
+  // `attachments` names the documents attached to the prompt — names only, never their text.
+  | { type: 'user_prompt'; text: string; attachments?: string[] }
   | { type: 'assistant_text'; text: string }
   | { type: 'assistant_thought'; text: string }
   | { type: 'tool_use'; name: string; input?: unknown }
@@ -41,6 +42,9 @@ export interface StoredMessage {
 
 interface UserContent {
   text?: string;
+  /** Documents attached to the prompt. The stored row carries their extracted text too;
+   *  the chat only ever shows the name. */
+  attachments?: { name?: string }[];
 }
 interface AssistantContent {
   text?: string;
@@ -73,7 +77,13 @@ export function eventsFromTranscript(messages: StoredMessage[]): TurnEvent[] {
   for (const message of messages) {
     if (message.role === 'user') {
       close();
-      out.push({ type: 'user_prompt', text: (message.content as UserContent)?.text ?? '' });
+      const content = (message.content ?? {}) as UserContent;
+      const attachments = (content.attachments ?? []).map((a) => a.name ?? '').filter(Boolean);
+      out.push({
+        type: 'user_prompt',
+        text: content.text ?? '',
+        ...(attachments.length > 0 ? { attachments } : {}),
+      });
       continue;
     }
     if (message.role === 'assistant') {
