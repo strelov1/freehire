@@ -1,8 +1,9 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
   import { page } from '$app/state';
+  import { siClaude, siCursor, type SimpleIcon } from 'simple-icons';
   import { sourceLogoUrl } from '#lib/logo.js';
-  import { Button, EntityLogo, SectionLabel } from '#lib/ui/index.js';
+  import { EntityLogo, SectionLabel } from '#lib/ui/index.js';
 
   // The two hosted MCP servers. They are separate on purpose: a host only offers
   // sign-in when the server answers 401, so the anonymous one can never lead to the
@@ -25,15 +26,16 @@
 
   // One tile per host. `domain` is what the logo proxy resolves the mark from — by
   // name alone "Cursor" or "Grok" is ambiguous.
-  // `directory` is a one-click install from the host's own connector directory. Our
-  // Claude listing is the account connector, so it signs the visitor in.
+  // `directory` is a one-click install from the host's own directory, drawn in that
+  // host's brand colour and mark (from simple-icons, like every other brand mark on the
+  // site) so the button reads as the host's install, not ours.
   type Host = {
     id: string;
     label: string;
     steps: string[];
     snippet?: (url: string) => string;
     file?: string;
-    directory?: string;
+    directory?: { url: string; brand: SimpleIcon; note: string };
     domain: string;
   };
   const hosts: Host[] = [
@@ -41,7 +43,12 @@
       id: 'claude',
       domain: 'claude.ai',
       label: 'Claude',
-      directory: 'https://claude.ai/directory/manage/freehire',
+      // Our Claude listing is the account connector, so it signs the visitor in.
+      directory: {
+        url: 'https://claude.ai/directory/manage/freehire',
+        brand: siClaude,
+        note: 'One click, signs in with freehire',
+      },
       steps: [
         'Open Settings, then Connectors.',
         'Choose Add custom connector.',
@@ -81,6 +88,11 @@
     {
       id: 'cursor',
       domain: 'cursor.com',
+      directory: {
+        url: 'https://cursor.directory/plugins/freehire-mcp',
+        brand: siCursor,
+        note: 'Listed on cursor.directory',
+      },
       label: 'Cursor',
       steps: ['Add this to your MCP config, then ask the agent a job question.'],
       file: '~/.cursor/mcp.json',
@@ -117,6 +129,13 @@
     },
   ];
 
+  // The hero's sample conversation. Illustrative, so no real employer is named.
+  const heroJobs = [
+    { title: 'Senior Go Engineer — payments platform', meta: 'Remote · EU · €85–100k' },
+    { title: 'Senior Backend Engineer (Go, Kafka)', meta: 'Remote · Germany, Netherlands' },
+    { title: 'Staff Go Developer — observability', meta: 'Remote · Europe · posted 2 days ago' },
+  ];
+
   // One copy confirmation at a time, keyed by the text that was copied.
   let copied = $state<string | null>(null);
   let copyTimer: ReturnType<typeof setTimeout> | undefined;
@@ -144,15 +163,43 @@
   </button>
 {/snippet}
 
-<!-- Hero. -->
-<section class="pb-8 pt-12 sm:pt-16">
-  <SectionLabel text="mcp" />
-  <h1 class="mt-6 max-w-3xl text-balance text-4xl font-semibold leading-none tracking-tighter sm:text-6xl">
-    Search jobs right inside your AI assistant.
-  </h1>
-  <p class="mt-7 max-w-xl text-lg leading-relaxed text-muted-foreground">
-    Free. No freehire account needed to search — sign in only if you want the assistant to save and track jobs for you.
-  </p>
+<!-- Hero. Left: the pitch. Right: what a conversation with the connector looks like. -->
+<section class="grid items-center gap-10 pb-10 pt-12 sm:pt-16 lg:grid-cols-2">
+  <div>
+    <SectionLabel text="mcp" />
+    <h1 class="mt-6 max-w-3xl text-balance text-4xl font-semibold leading-none tracking-tighter sm:text-6xl">
+      Search jobs right inside your AI assistant.
+    </h1>
+    <p class="mt-7 max-w-xl text-lg leading-relaxed text-muted-foreground">
+      Free. No freehire account needed to search — sign in only if you want the assistant to save and track jobs for
+      you.
+    </p>
+  </div>
+
+  <figure class="overflow-hidden rounded-xl border border-border bg-secondary/60 text-sm shadow-sm">
+    <figcaption class="flex items-center gap-2 border-b border-border px-4 py-2.5 text-xs text-muted-foreground">
+      <span class="size-2.5 rounded-full bg-muted-foreground/30"></span>
+      Your assistant · freehire connector
+    </figcaption>
+    <div class="flex flex-col gap-3 p-4 leading-relaxed">
+      <div class="max-w-xs self-end rounded-2xl rounded-br-sm bg-foreground px-3.5 py-2 text-background">
+        Remote senior Go jobs in Europe, posted this week
+      </div>
+      <p class="text-xs text-muted-foreground">Used freehire · Search jobs</p>
+      <div class="max-w-md rounded-2xl rounded-bl-sm border border-border bg-background px-3.5 py-2.5">
+        <p class="text-muted-foreground">Here are the strongest matches:</p>
+        {#each heroJobs as job (job.title)}
+          <div class="mt-2.5">
+            <p class="font-medium text-foreground">{job.title}</p>
+            <p class="text-xs text-muted-foreground">{job.meta}</p>
+          </div>
+        {/each}
+      </div>
+      <div class="max-w-xs self-end rounded-2xl rounded-br-sm bg-foreground px-3.5 py-2 text-background">
+        Save the first one to my board
+      </div>
+    </div>
+  </figure>
 </section>
 
 <!-- Setup: which assistant, then which connector. Every host's panel stays in the
@@ -177,20 +224,31 @@
   </div>
 
   {#each hosts as h (h.id)}
-    <div hidden={h.id !== host} class="mt-8 max-w-2xl">
-      <h3 class="text-xl font-semibold tracking-tight">Add it to {h.label}</h3>
-      {#if h.directory}
-        <div class="mt-4">
-          <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- external directory URL, not a SvelteKit route -->
-          <Button href={h.directory} target="_blank" rel="noopener noreferrer" variant="primary" size="md">
-            Add from the {h.label} directory ↗
-          </Button>
-          <p class="mt-3 text-sm leading-relaxed text-muted-foreground">
-            One click, signs in with your freehire account. Or add it by hand:
-          </p>
-        </div>
-      {/if}
+    <div hidden={h.id !== host} class="mt-8">
+      <div class="flex flex-wrap items-start justify-between gap-4">
+        <h3 class="text-xl font-semibold tracking-tight">Add it to {h.label}</h3>
+        {#if h.directory}
+          <div class="flex flex-col items-end gap-1.5">
+            <!-- eslint-disable svelte/no-navigation-without-resolve -- external directory URL, not a SvelteKit route -->
+            <a
+              href={h.directory.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              class="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90"
+              style:background-color="#{h.directory.brand.hex}"
+            >
+              <svg viewBox="0 0 24 24" class="size-4 fill-current" aria-hidden="true"
+                ><path d={h.directory.brand.path} /></svg
+              >
+              Add to {h.label} ↗
+            </a>
+            <!-- eslint-enable svelte/no-navigation-without-resolve -->
+            <span class="text-xs text-muted-foreground">{h.directory.note}</span>
+          </div>
+        {/if}
+      </div>
 
+      <div class="max-w-2xl">
       <div class="mt-4 flex flex-wrap gap-2" role="group" aria-label="Connector">
         {#each Object.entries(servers) as [id, server] (id)}
           <button
@@ -245,6 +303,7 @@
             connection.
           </p>
         {/if}
+      </div>
       </div>
     </div>
   {/each}

@@ -3,7 +3,8 @@
   import { resolve } from '$app/paths';
   import { dismissCliBanner, loadCliBannerDismissed, cliBannerDismissed } from '#lib/cliBanner.svelte.js';
 
-  // A strip under the header pointing at /cli, dismissible and remembered. Self-gating
+  // A strip under the header pointing at /mcp (it pointed at /cli until the hosted MCP
+  // connectors became the main way in), dismissible and remembered. Self-gating
   // like EmailVerificationBanner, so the layout mounts it unconditionally.
   //
   // It took the place of the Product Hunt launch strip and kept its arrangement, which
@@ -27,18 +28,18 @@
     <div class="mx-auto flex w-full max-w-6xl items-center gap-3 px-4 py-2.5 text-sm">
       <p class="min-w-0 flex-1 text-muted-foreground">
         <span class="font-medium text-foreground">
-          Point your AI agent at freehire and let it find you a job.
+          Search jobs right inside Claude, ChatGPT or Cursor.
         </span>
         <span class="hidden sm:inline">
-          A CLI and an MCP server over the whole job API — no browser.
+          Connect freehire over MCP — free, no account needed to search.
         </span>
       </p>
 
       <a
-        href={resolve('/cli')}
+        href={resolve('/mcp')}
         class="shrink-0 whitespace-nowrap font-medium text-brand underline-offset-4 hover:underline"
       >
-        Get the CLI →
+        Connect MCP to your agent →
       </a>
 
       <button
