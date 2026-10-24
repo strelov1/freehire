@@ -58,6 +58,8 @@ a harvest that never resolved the tenant's name. Measured 2026-10-23: ~2,200 com
 `cmd/backfill-company-names` runs this as its second pass, driven by the BOARD
 (`ListPlaceholderCompanyBoards`), and renames the board and its stored jobs in one transaction:
 the pass finds its work by the board, so a board renamed without its jobs is never listed again.
+The same transaction records the retired slug in `company_slug_aliases` under reason
+`board_name` (migration 0195), so the old `/companies/<slug>` page 301s to the new one.
 
 ## Design stance
 

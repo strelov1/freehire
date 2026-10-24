@@ -66,6 +66,7 @@ type placeholderWriter interface {
 	ResolveCompanySlugAliases(context.Context, []string) ([]db.ResolveCompanySlugAliasesRow, error)
 	RenamePlaceholderBoardJobs(context.Context, db.RenamePlaceholderBoardJobsParams) (int64, error)
 	RenameSlugBoardCompany(context.Context, db.RenameSlugBoardCompanyParams) (int64, error)
+	InsertCompanySlugAlias(context.Context, db.InsertCompanySlugAliasParams) (int64, error)
 }
 
 // writePlaceholderRename applies one resolved name to the board's stored jobs and to the board,
@@ -76,7 +77,9 @@ type placeholderWriter interface {
 //
 // The slug is the one the pipeline writes for the same name — CompanySlug, then the merge
 // worker's alias registry — so a posting the next crawl rewrites lands on the company this
-// rename created instead of re-keying it again.
+// rename created instead of re-keying it again. The OLD slug is recorded as an alias of it: its
+// /companies page had been served and announced to search engines, and an alias is what turns
+// that address into a 301 instead of a 404.
 func writePlaceholderRename(ctx context.Context, q placeholderWriter, r placeholderRename) (bool, error) {
 	slug := normalize.CompanySlug(r.name)
 	aliases, err := q.ResolveCompanySlugAliases(ctx, []string{normalize.FoldSlug(slug)})
@@ -109,6 +112,16 @@ func writePlaceholderRename(ctx context.Context, q placeholderWriter, r placehol
 	// jobs half back, which would otherwise carry this name under a board stating another.
 	if boardRows == 0 {
 		return false, fmt.Errorf("board: %s %s no longer carries %q", r.provider, r.board, r.oldName)
+	}
+	if oldSlug := normalize.CompanySlug(r.oldName); oldSlug != "" && oldSlug != slug {
+		if _, err := q.InsertCompanySlugAlias(ctx, db.InsertCompanySlugAliasParams{
+			AliasSlug:     oldSlug,
+			CanonicalSlug: slug,
+			FoldedKey:     normalize.FoldSlug(oldSlug),
+			Reason:        "board_name",
+		}); err != nil {
+			return false, fmt.Errorf("alias: %w", err)
+		}
 	}
 	return n > 0, nil
 }

@@ -102,3 +102,27 @@ func TestRenamePlaceholderBoardJobs(t *testing.T) {
 		}
 	}
 }
+
+// TestCompanySlugAliasAcceptsBoardName pins migration 0195: the placeholder pass records the
+// retired slug under its own reason, and the 301 lookup finds it like any other alias.
+func TestCompanySlugAliasAcceptsBoardName(t *testing.T) {
+	pool := startPostgres(t)
+	ctx := context.Background()
+	q := New(pool)
+
+	if _, err := q.InsertCompanySlugAlias(ctx, InsertCompanySlugAliasParams{
+		AliasSlug: "fa-etjg-saasfaprod1-fa-ocs-oraclecloud-com-maggianos", CanonicalSlug: "maggianos",
+		FoldedKey: "faetjgsaasfaprod1faocsoraclecloudcommaggianos", Reason: "board_name",
+	}); err != nil {
+		t.Fatalf("InsertCompanySlugAlias(board_name): %v", err)
+	}
+	got, err := q.GetCompanySlugAlias(ctx, "fa-etjg-saasfaprod1-fa-ocs-oraclecloud-com-maggianos")
+	if err != nil || got != "maggianos" {
+		t.Fatalf("GetCompanySlugAlias = %q, %v; want maggianos", got, err)
+	}
+	if _, err := q.InsertCompanySlugAlias(ctx, InsertCompanySlugAliasParams{
+		AliasSlug: "a", CanonicalSlug: "b", FoldedKey: "a", Reason: "guess",
+	}); err == nil {
+		t.Fatal("InsertCompanySlugAlias(guess): want the reason check to refuse it, got nil")
+	}
+}

@@ -59,6 +59,11 @@ func (f *fakePlaceholderWriter) RenameSlugBoardCompany(_ context.Context, arg db
 	return f.boardRows, nil
 }
 
+func (f *fakePlaceholderWriter) InsertCompanySlugAlias(_ context.Context, arg db.InsertCompanySlugAliasParams) (int64, error) {
+	f.calls = append(f.calls, "alias "+arg.AliasSlug+"->"+arg.CanonicalSlug+" "+arg.FoldedKey+" "+arg.Reason)
+	return 1, nil
+}
+
 // The slug is the one the next crawl would write — CompanySlug drops the legal form, and an
 // alias the merge worker recorded wins — so the rename does not re-key the company again the
 // first time a posting changes.
@@ -73,8 +78,10 @@ func TestWritePlaceholderRename(t *testing.T) {
 	want := []string{
 		"jobs ukgready secure.saashr.com/1553aps:% secure.saashr.com/1553aps->Copper Moon Cafes LLC (copper-moon)",
 		"board ukgready/secure.saashr.com/1553aps secure.saashr.com/1553aps->Copper Moon Cafes LLC",
+		// The old page 301s to the new one.
+		"alias secure-saashr-com-1553aps->copper-moon securesaashrcom1553aps board_name",
 	}
-	if len(f.calls) != 2 || f.calls[0] != want[0] || f.calls[1] != want[1] {
+	if len(f.calls) != 3 || f.calls[0] != want[0] || f.calls[1] != want[1] || f.calls[2] != want[2] {
 		t.Fatalf("calls = %q, want %q", f.calls, want)
 	}
 }
