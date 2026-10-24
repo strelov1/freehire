@@ -147,6 +147,8 @@ export const STATIC_PATHS = [
   '/jobs-api',
   '/agents',
   '/cli',
+  // How to add the hosted MCP connectors to Claude, ChatGPT and the coding agents.
+  '/mcp',
   '/chatgpt',
   // The public CV roast: an account-free landing page nothing in the feed links to,
   // built to be found by search rather than clicked to from elsewhere on the site.

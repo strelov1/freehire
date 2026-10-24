@@ -25,6 +25,7 @@ describe('sitemap static paths', () => {
       '/jobs-api',
       '/agents',
       '/cli',
+      '/mcp',
       '/chatgpt',
       '/roast',
       '/contribute',
