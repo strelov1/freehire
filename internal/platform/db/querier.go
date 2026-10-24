@@ -4486,6 +4486,12 @@ type Querier interface {
 	// unrelated to it, so the adapter maps it once (fromRow) rather than re-assembling it here
 	// (see mentorship.sql's ListBookingsByMentor for the same shape).
 	ListPendingSubmissions(ctx context.Context) ([]ListPendingSubmissionsRow, error)
+	// Live boards whose company is still the board id itself — what a harvest writes when it
+	// never resolved the tenant's display name, so the id ("<host>/<site>", a GUID) becomes the
+	// employer's public name on every posting. cmd/backfill-company-names resolves the real name
+	// from the ATS by that exact id and writes it back through RenameSlugBoardCompany. Limited to
+	// the providers that have a resolver, since a board no resolver can read is not work.
+	ListPlaceholderCompanyBoards(ctx context.Context, providers []string) ([]ListPlaceholderCompanyBoardsRow, error)
 	// Re-filter backfill read path (cmd/backfill-telegram-prefilter): page the posts the
 	// CRAWL's prefilter declined, so a later widening of the markers can re-offer them.
 	//
@@ -6160,11 +6166,19 @@ type Querier interface {
 	ReleaseReminderClaim(ctx context.Context, id int64) error
 	// Remove a job from a list. Idempotent: removing an absent job is a no-op.
 	RemoveJobListItem(ctx context.Context, arg RemoveJobListItemParams) error
+	// Apply a resolved display name to every stored job of ONE board whose company is still that
+	// board's placeholder (see ListPlaceholderCompanyBoards). board_pattern is
+	// externalid.BoardPattern(board), the board's external_id namespace, so only this board's rows
+	// move. Needed beside the board write because a crawl only REWRITES a posting that changed — an
+	// unchanged one is refreshed for liveness and keeps the placeholder, and a closed one is never
+	// seen again. Guarded on the old name, so a re-run writes nothing.
+	RenamePlaceholderBoardJobs(ctx context.Context, arg RenamePlaceholderBoardJobsParams) (int64, error)
 	// Carry a display name cmd/backfill-company-names resolved back to the board it came
 	// from. An adapter copies boards.company onto every posting and the job upsert writes
 	// `company = EXCLUDED.company`, so a rename applied to jobs alone is undone by the
 	// board's next crawl. Every region and status: a paused board that comes back must not
-	// bring the slug with it. Guarded on the slug it replaces, so a name a curator set
+	// bring the slug with it. Also carries the second pass's names, for a board whose company was
+	// its own board id (ListPlaceholderCompanyBoards). Guarded on the slug it replaces, so a name a curator set
 	// (or a board whose row names a different company than its postings — see
 	// boardcatalog/AGENTS.md) is left alone.
 	RenameSlugBoardCompany(ctx context.Context, arg RenameSlugBoardCompanyParams) (int64, error)

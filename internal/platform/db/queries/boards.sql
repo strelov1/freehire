@@ -47,13 +47,27 @@ WHERE provider = sqlc.arg(provider) AND lower(board) = lower(sqlc.arg(board))
 -- from. An adapter copies boards.company onto every posting and the job upsert writes
 -- `company = EXCLUDED.company`, so a rename applied to jobs alone is undone by the
 -- board's next crawl. Every region and status: a paused board that comes back must not
--- bring the slug with it. Guarded on the slug it replaces, so a name a curator set
+-- bring the slug with it. Also carries the second pass's names, for a board whose company was
+-- its own board id (ListPlaceholderCompanyBoards). Guarded on the slug it replaces, so a name a curator set
 -- (or a board whose row names a different company than its postings — see
 -- boardcatalog/AGENTS.md) is left alone.
 UPDATE boards
 SET company = sqlc.arg(name)
 WHERE provider = sqlc.arg(provider) AND lower(board) = lower(sqlc.arg(board))
   AND company = sqlc.arg(old_name);
+
+-- name: ListPlaceholderCompanyBoards :many
+-- Live boards whose company is still the board id itself — what a harvest writes when it
+-- never resolved the tenant's display name, so the id ("<host>/<site>", a GUID) becomes the
+-- employer's public name on every posting. cmd/backfill-company-names resolves the real name
+-- from the ATS by that exact id and writes it back through RenameSlugBoardCompany. Limited to
+-- the providers that have a resolver, since a board no resolver can read is not work.
+SELECT provider, board, company
+FROM boards
+WHERE provider = ANY(sqlc.arg(providers)::text[])
+  AND status IN ('pending', 'active')
+  AND lower(company) = lower(board)
+ORDER BY provider, id;
 
 -- name: ListBoardsBySubmitter :many
 -- One user's crowdsourced boards, newest first — half of the "my contributions" list

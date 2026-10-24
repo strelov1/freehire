@@ -16,6 +16,13 @@
 // SyncCompaniesFromJobs + DeleteOrphanCompanies. Idempotent — a second run finds
 // nothing slug-like left to fix. Follow with `make reindex` so corrected names reach
 // search.
+//
+// A second pass fixes the boards whose company is not a slug but the board id itself — a
+// "<host>/<site>" path or a GUID a harvest wrote into boards.company verbatim (measured
+// 2026-10-23: ~2,200 companies carrying ~156k open postings under a host path, ~7,400 carrying
+// ~44k under a GUID). It is driven by the board rather than by the jobs, asks the ATS for
+// exactly that board's name (companyname.NewPlaceholderRegistry), and renames the board and its
+// stored jobs in one transaction — see writePlaceholderRename.
 package main
 
 import (
@@ -23,9 +30,12 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"maps"
+	"slices"
 	"sort"
 	"sync"
 
+	"github.com/jackc/pgx/v5"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/strelov1/freehire/internal/dict/companyname"
@@ -65,17 +75,41 @@ func run() int {
 	renames, stats := resolveNames(ctx, rows, registry)
 	sort.Slice(renames, func(i, j int) bool { return renames[i].oldSlug < renames[j].oldSlug })
 
+	placeholders := companyname.NewPlaceholderRegistry(client)
+	boards, err := queries.ListPlaceholderCompanyBoards(ctx, slices.Sorted(maps.Keys(placeholders)))
+	if err != nil {
+		log.Printf("list placeholder boards: %v", err)
+		return 1
+	}
+	boardRenames, unresolved := resolvePlaceholders(ctx, boards, placeholders)
+	sort.Slice(boardRenames, func(i, j int) bool {
+		a, b := boardRenames[i], boardRenames[j]
+		return a.provider < b.provider || (a.provider == b.provider && a.board < b.board)
+	})
+
 	if *dryRun {
 		for _, r := range renames {
 			log.Printf("dry-run: %s -> %q", r.oldSlug, r.name)
 		}
-		log.Printf("backfill-company-names dry-run: candidates=%d would_resolve=%d no_source=%d rejected=%d",
-			len(rows), len(renames), stats.noSource, stats.rejected)
+		for _, r := range boardRenames {
+			log.Printf("dry-run: %s %s -> %q", r.provider, r.board, r.name)
+		}
+		log.Printf("backfill-company-names dry-run: candidates=%d would_resolve=%d no_source=%d rejected=%d placeholder_boards=%d would_resolve_boards=%d unresolved_boards=%d",
+			len(rows), len(renames), stats.noSource, stats.rejected, len(boards), len(boardRenames), unresolved)
 		return 0
 	}
 
 	applied, failed := applyRenames(ctx, renames, func(ctx context.Context, r rename) (bool, error) {
 		return writeRename(ctx, queries, r)
+	})
+	boardsApplied, boardsFailed := applyRenames(ctx, boardRenames, func(ctx context.Context, r placeholderRename) (bool, error) {
+		var changed bool
+		err := pgx.BeginFunc(ctx, pool, func(tx pgx.Tx) error {
+			var err error
+			changed, err = writePlaceholderRename(ctx, queries.WithTx(tx), r)
+			return err
+		})
+		return changed, err
 	})
 
 	// jobs now carry the resolved names/slugs; re-key the derived catalogue and
@@ -90,9 +124,10 @@ func run() int {
 		return 1
 	}
 
-	log.Printf("backfill-company-names done: candidates=%d resolved=%d applied=%d failed=%d no_source=%d rejected=%d companies_orphaned=%d",
-		len(rows), len(renames), applied, failed, stats.noSource, stats.rejected, orphans)
-	return worker.ExitCode(failed, 0)
+	log.Printf("backfill-company-names done: candidates=%d resolved=%d applied=%d failed=%d no_source=%d rejected=%d placeholder_boards=%d resolved_boards=%d boards_applied=%d boards_failed=%d unresolved_boards=%d companies_orphaned=%d",
+		len(rows), len(renames), applied, failed, stats.noSource, stats.rejected,
+		len(boards), len(boardRenames), boardsApplied, boardsFailed, unresolved, orphans)
+	return worker.ExitCode(failed+boardsFailed, 0)
 }
 
 type rename struct {
@@ -144,11 +179,11 @@ func writeRename(ctx context.Context, q renamer, r rename) (bool, error) {
 // write failure (e.g. a unique-constraint collision on the derived slug) must
 // not abort the batch, so the loop always continues; the caller uses failed
 // to decide the process exit code instead.
-func applyRenames(ctx context.Context, renames []rename, write func(context.Context, rename) (bool, error)) (applied, failed int) {
+func applyRenames[T any](ctx context.Context, renames []T, write func(context.Context, T) (bool, error)) (applied, failed int) {
 	for _, r := range renames {
 		ok, err := write(ctx, r)
 		if err != nil {
-			log.Printf("rename %s: %v", r.oldSlug, err)
+			log.Printf("rename %+v: %v", r, err)
 			failed++
 			continue
 		}

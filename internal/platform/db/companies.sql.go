@@ -1064,6 +1064,49 @@ func (q *Queries) RefreshCompanyFacets(ctx context.Context, arg RefreshCompanyFa
 	return result.RowsAffected(), nil
 }
 
+const renamePlaceholderBoardJobs = `-- name: RenamePlaceholderBoardJobs :execrows
+UPDATE jobs
+SET company = $1,
+    company_slug = $2,
+    -- Kept in step with company_slug by hand; see RenameSlugCompany.
+    company_slug_folded = replace($2, '-', ''),
+    -- The same invalidation UpsertJob makes on a company change: the precomputed similar-jobs
+    -- list may have excluded the OLD company.
+    similar_computed_at = NULL,
+    updated_at = now()
+WHERE source = $3
+  AND external_id LIKE $4
+  AND company = $5
+`
+
+type RenamePlaceholderBoardJobsParams struct {
+	Name         string `json:"name"`
+	NewSlug      string `json:"new_slug"`
+	Source       string `json:"source"`
+	BoardPattern string `json:"board_pattern"`
+	OldName      string `json:"old_name"`
+}
+
+// Apply a resolved display name to every stored job of ONE board whose company is still that
+// board's placeholder (see ListPlaceholderCompanyBoards). board_pattern is
+// externalid.BoardPattern(board), the board's external_id namespace, so only this board's rows
+// move. Needed beside the board write because a crawl only REWRITES a posting that changed — an
+// unchanged one is refreshed for liveness and keeps the placeholder, and a closed one is never
+// seen again. Guarded on the old name, so a re-run writes nothing.
+func (q *Queries) RenamePlaceholderBoardJobs(ctx context.Context, arg RenamePlaceholderBoardJobsParams) (int64, error) {
+	result, err := q.db.Exec(ctx, renamePlaceholderBoardJobs,
+		arg.Name,
+		arg.NewSlug,
+		arg.Source,
+		arg.BoardPattern,
+		arg.OldName,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const renameSlugCompany = `-- name: RenameSlugCompany :execrows
 UPDATE jobs
 SET company = $1,

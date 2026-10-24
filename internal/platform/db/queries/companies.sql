@@ -227,6 +227,26 @@ SET company = @name,
 WHERE company_slug = @old_slug
   AND company ~ '^[a-z0-9._-]+$';
 
+-- name: RenamePlaceholderBoardJobs :execrows
+-- Apply a resolved display name to every stored job of ONE board whose company is still that
+-- board's placeholder (see ListPlaceholderCompanyBoards). board_pattern is
+-- externalid.BoardPattern(board), the board's external_id namespace, so only this board's rows
+-- move. Needed beside the board write because a crawl only REWRITES a posting that changed — an
+-- unchanged one is refreshed for liveness and keeps the placeholder, and a closed one is never
+-- seen again. Guarded on the old name, so a re-run writes nothing.
+UPDATE jobs
+SET company = sqlc.arg(name),
+    company_slug = sqlc.arg(new_slug),
+    -- Kept in step with company_slug by hand; see RenameSlugCompany.
+    company_slug_folded = replace(sqlc.arg(new_slug), '-', ''),
+    -- The same invalidation UpsertJob makes on a company change: the precomputed similar-jobs
+    -- list may have excluded the OLD company.
+    similar_computed_at = NULL,
+    updated_at = now()
+WHERE source = sqlc.arg(source)
+  AND external_id LIKE sqlc.arg(board_pattern)
+  AND company = sqlc.arg(old_name);
+
 -- name: DeleteOrphanCompanies :execrows
 -- Drop companies no longer referenced by any job — the stale rows left behind
 -- when a slug-builder change re-keys jobs onto new slugs. Reference rows imported

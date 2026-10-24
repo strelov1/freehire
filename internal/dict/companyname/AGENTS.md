@@ -38,6 +38,27 @@ undone by that board's next crawl.
   match** — the squished candidate contains the slug (or vice versa), or a
   ≥2-letter word-initial acronym lines up. Single-letter acronyms are too weak.
 
+## Placeholder boards
+
+A second, separate case: a board whose `company` is not a slug but **the board id itself** —
+`fa-etjg-saasfaprod1.fa.ocs.oraclecloud.com/Maggianos`, a Paylocity GUID — written verbatim by
+a harvest that never resolved the tenant's name. Measured 2026-10-23: ~2,200 companies carrying
+~156k open postings under a host path, ~7,400 carrying ~44k under a GUID.
+
+- **`NewPlaceholderRegistry`** — resolvers keyed by provider that take the board id and read
+  the name the ATS states for exactly that board: Paylocity's listing title
+  (`{Name} - Job Opportunities`), UKG Ready's `format-settings` `company.name`, Oracle's site
+  `og:site_name` through `ExtractOracleSiteName` (cuts a careers tail, refuses a site named for
+  its purpose — "Student Casual"). Taleo, ADP and Workday were tried and are absent on purpose;
+  the constructor's comment says why for each.
+- **`AcceptPlaceholder`** — no confidence match: the lookup is by the exact board id, so there
+  is no slug to compare against and nothing an unrelated page could slip through (join's
+  argument in `Accept`). It refuses only what is no improvement — empty, junk, the placeholder.
+
+`cmd/backfill-company-names` runs this as its second pass, driven by the BOARD
+(`ListPlaceholderCompanyBoards`), and renames the board and its stored jobs in one transaction:
+the pass finds its work by the board, so a board renamed without its jobs is never listed again.
+
 ## Design stance
 
 Conservative on purpose: a wrong-but-plausible name reads worse than the monogram

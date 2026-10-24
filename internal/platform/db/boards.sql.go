@@ -184,6 +184,46 @@ func (q *Queries) ListBoardsBySubmitter(ctx context.Context, submittedBy pgtype.
 	return items, nil
 }
 
+const listPlaceholderCompanyBoards = `-- name: ListPlaceholderCompanyBoards :many
+SELECT provider, board, company
+FROM boards
+WHERE provider = ANY($1::text[])
+  AND status IN ('pending', 'active')
+  AND lower(company) = lower(board)
+ORDER BY provider, id
+`
+
+type ListPlaceholderCompanyBoardsRow struct {
+	Provider string `json:"provider"`
+	Board    string `json:"board"`
+	Company  string `json:"company"`
+}
+
+// Live boards whose company is still the board id itself — what a harvest writes when it
+// never resolved the tenant's display name, so the id ("<host>/<site>", a GUID) becomes the
+// employer's public name on every posting. cmd/backfill-company-names resolves the real name
+// from the ATS by that exact id and writes it back through RenameSlugBoardCompany. Limited to
+// the providers that have a resolver, since a board no resolver can read is not work.
+func (q *Queries) ListPlaceholderCompanyBoards(ctx context.Context, providers []string) ([]ListPlaceholderCompanyBoardsRow, error) {
+	rows, err := q.db.Query(ctx, listPlaceholderCompanyBoards, providers)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListPlaceholderCompanyBoardsRow{}
+	for rows.Next() {
+		var i ListPlaceholderCompanyBoardsRow
+		if err := rows.Scan(&i.Provider, &i.Board, &i.Company); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const renameSlugBoardCompany = `-- name: RenameSlugBoardCompany :execrows
 UPDATE boards
 SET company = $1
@@ -202,7 +242,8 @@ type RenameSlugBoardCompanyParams struct {
 // from. An adapter copies boards.company onto every posting and the job upsert writes
 // `company = EXCLUDED.company`, so a rename applied to jobs alone is undone by the
 // board's next crawl. Every region and status: a paused board that comes back must not
-// bring the slug with it. Guarded on the slug it replaces, so a name a curator set
+// bring the slug with it. Also carries the second pass's names, for a board whose company was
+// its own board id (ListPlaceholderCompanyBoards). Guarded on the slug it replaces, so a name a curator set
 // (or a board whose row names a different company than its postings — see
 // boardcatalog/AGENTS.md) is left alone.
 func (q *Queries) RenameSlugBoardCompany(ctx context.Context, arg RenameSlugBoardCompanyParams) (int64, error) {
