@@ -1292,17 +1292,23 @@ export function jobFacetsFromJob(job: Job): JobFacets {
 // Popular collections padding a sparse "see also" block so it's never empty
 // or too thin. Each was verified to have a healthy live count before being
 // added; slugs are verified to exist in FILTER_COLLECTIONS by a test.
+//
+// Ordered by what visitors actually type into search (the `search_queries`
+// table, read 2026-10-24): roles lead by a wide margin — data engineer, AI
+// engineer, backend, software engineer — while TypeScript, Go and AWS were not
+// in the top sixty. `remote-worldwide` stays although it never appears there:
+// remote is picked with a filter, not typed, and that table records only `q`.
 export const POPULAR_COLLECTION_FALLBACK = [
   'remote-worldwide',
-  'javascript',
-  'typescript',
-  'python',
-  'react',
-  'go',
-  'senior',
+  'data-engineering',
+  'ai-engineering',
+  'software-engineer',
   'backend',
+  'python',
+  'data-science',
+  'machine-learning',
+  'fullstack',
   'frontend',
-  'aws',
 ];
 
 /** The popular collections as footer links, in curated order.

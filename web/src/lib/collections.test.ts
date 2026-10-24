@@ -150,13 +150,11 @@ describe('relatedCollectionSlugs', () => {
     expect(slugs).toContain('yc');
   });
 
-  it('never matches on role — the job wire object carries no role field', () => {
-    // software-engineer is a `role`-keyed FILTER_COLLECTIONS entry; nothing in
-    // JobFacets can satisfy it, so it must never appear from a facet match.
-    const slugs = relatedCollectionSlugs(
-      jobFacets({ category: 'backend', seniority: 'senior', skills: ['react'] })
-    );
-    expect(slugs).not.toContain('software-engineer');
+  it('never matches on a key the job wire object does not carry', () => {
+    // engineering-manager also asks for `role_type`, which JobFacets has no
+    // field for, so even a job in its category must not match it.
+    const slugs = relatedCollectionSlugs(jobFacets({ category: 'software_engineering' }));
+    expect(slugs).not.toContain('engineering-manager');
   });
 
   it('matches category, seniority, and region facets, not just skills', () => {
@@ -194,10 +192,10 @@ describe('relatedCollectionSlugs', () => {
   });
 
   it('de-duplicates a slug that both matches a facet and sits in the fallback pool', () => {
-    // 'javascript' is in POPULAR_COLLECTION_FALLBACK; a job that also matches
+    // 'python' is in POPULAR_COLLECTION_FALLBACK; a job that also matches
     // it by skill must not render it twice.
-    const slugs = relatedCollectionSlugs(jobFacets({ skills: ['javascript'] }));
-    expect(slugs.filter((s) => s === 'javascript')).toHaveLength(1);
+    const slugs = relatedCollectionSlugs(jobFacets({ skills: ['python'] }));
+    expect(slugs.filter((s) => s === 'python')).toHaveLength(1);
   });
 
   it('pads with the popular fallback when a job matches nothing', () => {
