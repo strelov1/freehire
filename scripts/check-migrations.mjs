@@ -8,7 +8,8 @@
 // to be fixed, because rewriting an applied migration is a worse hazard than any of them.
 //
 // Usage:
-//   node scripts/check-migrations.mjs                  # files added/changed vs origin/main
+//   node scripts/check-migrations.mjs                  # files added vs origin/main, and
+//                                                      # no applied one edited
 //   node scripts/check-migrations.mjs migrations/*.sql # exactly these
 //   node scripts/check-migrations.mjs --all            # the whole history, for an audit
 
@@ -97,20 +98,73 @@ function mergeBase() {
   );
 }
 
-function changedMigrations() {
-  const base = mergeBase();
+function changedMigrations(base) {
   // ADDED ONLY. A modified migration is a rule violation in its own right — "never edit
   // an applied migration" — but linting its CONTENT is the wrong response to it: fixing
   // a typo in the comment on 0012 would dump every historical finding in that file into
   // a change that touched a comment, and the useful signal would be the one line nobody
   // reads by then. What this check owes a new migration is a verdict on what it does to
-  // a live table; what an edited one needs is a reviewer.
+  // a live table; an edited one is refused outright by checkImmutability.
   const out = execFileSync(
     'git',
     ['diff', '--name-only', '--diff-filter=A', base, 'HEAD', '--', `${MIGRATIONS_DIR}/*.sql`],
     { encoding: 'utf8' },
   );
   return out.split('\n').filter(Boolean);
+}
+
+/**
+ * The migrations this change MODIFIES, DELETES or RENAMES that already exist at the merge
+ * base — the "never edit an applied migration" rule, which until now only a reviewer
+ * enforced. A file the branch itself added is new at the base, so editing it as often as
+ * the branch likes is not caught here, which is the point: only what main already holds
+ * can have been applied somewhere.
+ */
+function editedMigrations(base) {
+  const out = execFileSync(
+    'git',
+    ['diff', '--name-status', '--diff-filter=MDR', base, 'HEAD', '--', `${MIGRATIONS_DIR}/*.sql`],
+    { encoding: 'utf8' },
+  );
+  return out.split('\n').filter(Boolean);
+}
+
+/**
+ * The escape hatch: a `Migration-Edit: <reason>` trailer on any commit in the change. A
+ * trailer rather than a pull-request label because it works the same in CI and on a
+ * laptop, and because the reason then lives in the history next to the edit instead of
+ * in a UI field nobody reads again. Some edits are right — a comment that points at the
+ * wrong follow-up, a migration that never ran anywhere because it failed on deploy.
+ */
+function migrationEditReasons(base) {
+  const out = execFileSync(
+    'git',
+    ['log', '--format=%(trailers:key=Migration-Edit,valueonly,separator=%x0A)', `${base}..HEAD`],
+    { encoding: 'utf8' },
+  );
+  return out.split('\n').map((l) => l.trim()).filter(Boolean);
+}
+
+function checkImmutability(base) {
+  const edited = editedMigrations(base);
+  if (edited.length === 0) return true;
+
+  const reasons = migrationEditReasons(base);
+  console.log(`check-migrations: ${edited.length} existing migration(s) changed:`);
+  for (const line of edited) console.log(`  ${line.replace('\t', '  ')}`);
+  if (reasons.length > 0) {
+    console.log('Allowed by a Migration-Edit trailer:');
+    for (const r of reasons) console.log(`  ${r}`);
+    return true;
+  }
+  console.error(
+    '\nA migration that main already holds may have run on production, and editing it\n' +
+      'changes nothing there — the runner records it as applied and never reads it again.\n' +
+      'Add a NEW migration instead. If the edit is genuinely right (a comment, a file that\n' +
+      'never ran anywhere), say why in a commit trailer:\n\n' +
+      '  Migration-Edit: <reason>\n',
+  );
+  return false;
 }
 
 function allMigrations() {
@@ -144,13 +198,19 @@ const argv = process.argv.slice(2);
 const explicit = argv.filter((a) => !a.startsWith('--'));
 
 let files;
+// Immutability is a property of the CHANGE against main, so only the default mode asks
+// it. The hook passes staged paths, and a staged edit to a migration this branch added is
+// indistinguishable there from an edit to an applied one.
+let immutable = true;
 if (argv.includes('--all')) {
   files = allMigrations();
 } else if (explicit.length > 0) {
   // The hook passes staged files, which include everything else in the commit.
   files = explicit.filter((f) => f.startsWith(`${MIGRATIONS_DIR}/`) && f.endsWith('.sql'));
 } else {
-  files = changedMigrations();
+  const base = mergeBase();
+  immutable = checkImmutability(base);
+  files = changedMigrations(base);
 }
 
 // A path that no longer exists is a rename or a delete carried in by the hook's staged
@@ -159,8 +219,8 @@ if (argv.includes('--all')) {
 files = files.filter((f) => existsSync(f));
 
 if (files.length === 0) {
-  console.log('check-migrations: no migrations to check.');
-  process.exit(0);
+  console.log('check-migrations: no new migrations to lint.');
+  process.exit(immutable ? 0 : 1);
 }
 
 const marker = noTxMarker();
@@ -176,6 +236,8 @@ console.log(
 // behind a fix for the first's.
 const failedInTx = squawk(inTx, { inTransaction: true });
 const failedNoTx = squawk(noTx, { inTransaction: false });
+
+if (!immutable) process.exitCode = 1;
 
 if (failedInTx || failedNoTx) {
   console.error(

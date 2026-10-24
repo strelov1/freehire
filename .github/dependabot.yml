@@ -1,30 +1,47 @@
+# Every ecosystem waits a week before proposing a release (`cooldown`). A compromised
+# package is usually caught and yanked within days of being published, and a version
+# bump that arrives on its first day is exactly the window such a release relies on.
+# Security updates ignore the cooldown, so a fix for a known advisory is not delayed.
+#
+# The github-actions entry also maintains the commit-SHA pins in .github/workflows: it
+# moves the SHA and the `# vX.Y.Z` comment beside it together.
 version: 2
 updates:
   - package-ecosystem: gomod
     directory: /
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
     open-pull-requests-limit: 5
 
   - package-ecosystem: npm
     directory: /web
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
     open-pull-requests-limit: 5
 
   - package-ecosystem: npm
     directory: /extension
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
     open-pull-requests-limit: 5
 
   - package-ecosystem: npm
     directory: /design-system
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
     open-pull-requests-limit: 5
 
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7

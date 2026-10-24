@@ -70,7 +70,10 @@ jobs:
 
       - name: Checkout
         if: steps.token.outputs.present == 'true'
-        uses: actions/checkout@v7
+        # zizmor: ignore[artipacked] — the credential is persisted on purpose:
+        # commit-contributors.sh pushes the branch with it, and nothing else in this
+        # job runs code it did not check out itself.
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # The token the later push carries. Without it the push would go out as
           # GITHUB_TOKEN and the pull request would never get its checks.
@@ -87,7 +90,7 @@ jobs:
 
       - name: Set up Node
         if: steps.token.outputs.present == 'true'
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
 

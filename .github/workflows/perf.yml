@@ -34,6 +34,11 @@ on:
     - cron: '0 6 * * *' # daily 06:00 UTC
   workflow_dispatch:
 
+# Read-only by default. The two watchdogs open an issue on a breach, so each asks for
+# that one write itself; pr-smoke runs a pull request's code and gets nothing more.
+permissions:
+  contents: read
+
 concurrency:
   group: perf-${{ github.ref }}
   cancel-in-progress: true
@@ -43,9 +48,10 @@ jobs:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Detect request-path changes
         id: changes
@@ -67,14 +73,14 @@ jobs:
 
       - name: Setup Go
         if: steps.changes.outputs.relevant == 'true'
-        uses: actions/setup-go@v7
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
           cache: true
 
       - name: Install k6
         if: steps.changes.outputs.relevant == 'true'
-        uses: grafana/setup-k6-action@v1
+        uses: grafana/setup-k6-action@43b9fc21641a76002687994433dd586f56e791b1 # v1.2.2
 
       - name: Start the stack
         if: steps.changes.outputs.relevant == 'true'
@@ -158,11 +164,16 @@ jobs:
   prod-watchdog:
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Install k6
-        uses: grafana/setup-k6-action@v1
+        uses: grafana/setup-k6-action@43b9fc21641a76002687994433dd586f56e791b1 # v1.2.2
 
       - name: Run production smoke (tight, headroom-based thresholds)
         # Anonymous by default. To also cover the authed path, add a PROD_AUTH_COOKIE
@@ -197,8 +208,13 @@ jobs:
   lighthouse-watchdog:
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Run Lighthouse against production (headroom-based score floors)
         # URLs + score floors live in perf/lighthouse/lighthouserc.json. Floors
@@ -207,7 +223,7 @@ jobs:
         # above. The same floors apply to all four pages: companies and jobview
         # both scored higher than the homepage when audited, so the shared floor
         # has headroom everywhere, not just on the page it was measured against.
-        uses: treosh/lighthouse-ci-action@v12
+        uses: treosh/lighthouse-ci-action@3e7e23fb74242897f95c0ba9cabad3d0227b9b18 # v12
         with:
           configPath: ./perf/lighthouse/lighthouserc.json
 

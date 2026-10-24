@@ -82,7 +82,7 @@ section ends instead of each guessing.
   page already SHOWS that list, in the description, a few centimetres higher. A
   section built on this output is therefore verbatim duplication on every posting it
   appears for. It shipped, ran on prod for a day, and was removed; see
-  `openspec/changes/surface-job-requirements/tasks.md` §10.
+  `openspec/changes/archive/2026-09-05-surface-job-requirements/tasks.md` §10.
   - The value of this column is structure, not display: a `{text, priority}` list a
     matcher or an API consumer can read, extracted from prose no consumer can.
   - If a surface for it is ever wanted, the honest one shows what the reader cannot

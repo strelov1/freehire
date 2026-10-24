@@ -1,0 +1,30 @@
+# agnix lints the agent instruction files — every AGENTS.md, .cursor/rules — and CI runs it
+# with --strict, so a warning fails the build. What is switched off below was measured on
+# the first run (2026-10-24: 36 warnings, 0 errors) and each part is off for a stated
+# reason, not to make the number go away. A rule that is wrong for ONE line belongs in an
+# inline suppression beside that line instead.
+
+[rules]
+# The Codex rules (CDX-*). Nobody works on this repository with Codex, and what they
+# reported is either about Codex alone or duplicated by a sharper check here:
+#
+#   - The size rules are TRUE: the root AGENTS.md is ~280 KiB and Codex reads 32 KiB of an
+#     instruction chain, so it would see about a tenth of it. Splitting the root file is
+#     its own decision. Whoever starts using Codex here should turn this back on first.
+#   - "References missing file" reads every backticked path-shaped token as a file — Go
+#     identifiers (`internal/search.FromJob`), URLs, the private ops repo's paths: 19 of
+#     its 20 findings. The links an agent FOLLOWS are Markdown links, and
+#     `pnpm check:links` already resolves every one and fails on a miss.
+#   - "Potential secret": all five hits were placeholders (`LLM_API_KEY=…`). gitleaks
+#     scans these files on every commit and the whole history in CI.
+codex = false
+
+disabled_rules = [
+  # "Ambiguous term" — `often`, `usually`, `regularly` in sentences that describe measured
+  # behaviour ("a crawl usually returns"), not instructions. A style opinion, not a defect.
+  "PE-004",
+  # "Conflicting package managers". Deliberate: extension/ is npm-managed while the rest of
+  # the JS is pnpm, and the root AGENTS.md says so. The rule cannot tell a conflict from
+  # two packages that are documented to differ.
+  "XP-004",
+]

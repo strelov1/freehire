@@ -22,13 +22,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # golangci-lint's --new-from-merge-base needs origin/main reachable locally.
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Setup Go
-        uses: actions/setup-go@v7
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
           cache: true
@@ -85,7 +86,7 @@ jobs:
       # Ratchet mode: only fails on issues in lines this PR touches, not the
       # pre-existing backlog. Mirrors the design-system token ratchet.
       - name: Lint
-        uses: golangci/golangci-lint-action@v9
+        uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
         with:
           version: v2.12.2
           args: --new-from-merge-base=origin/main
@@ -102,7 +103,7 @@ jobs:
 
       - name: Upload Go coverage
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: go-coverage
           path: coverage/*.out
@@ -116,7 +117,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # This job runs a downloaded container image and an npx package over the
           # checkout. Neither needs the token, and leaving it in .git/config hands it to
@@ -158,6 +159,35 @@ jobs:
       - name: Validate the OpenAPI description
         run: npx --yes @redocly/cli@2.49.0 lint web/static/openapi.yaml --extends=minimal
 
+  # The public API's contract against main: read scripts/check-openapi-breaking.sh for
+  # what counts as breaking and the `API-Break:` trailer that lets a deliberate break
+  # through. Its own job because it needs the whole history (the merge base) and the
+  # jobs beside it are shallow on purpose.
+  api-breaking:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      # Pinned by a digest written here, the same argument as agnix in `docs`.
+      - name: Install oasdiff
+        env:
+          OASDIFF_VERSION: 1.34.1
+          OASDIFF_SHA256: 75775f65b0adebd26a8e013af51a799342dfdc6262d89efa9e3b7bdf89657d90
+        run: |
+          curl -fsSL -o /tmp/oasdiff.tar.gz \
+            "https://github.com/oasdiff/oasdiff/releases/download/v${OASDIFF_VERSION}/oasdiff_${OASDIFF_VERSION}_linux_amd64.tar.gz"
+          echo "${OASDIFF_SHA256}  /tmp/oasdiff.tar.gz" | sha256sum -c -
+          tar -xzf /tmp/oasdiff.tar.gz -C /tmp oasdiff
+
+      - name: Check for breaking API changes
+        env:
+          OASDIFF: /tmp/oasdiff
+        run: scripts/check-openapi-breaking.sh
+
   # Every relative Markdown link, because this repository navigates by document and a
   # rename breaks one silently. Needs no dependencies — git and node — so it is its own
   # job rather than a step tacked onto one that installs a package tree.
@@ -170,10 +200,12 @@ jobs:
         working-directory: services/scrapling-fetch
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Setup Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
         with:
           python-version: "3.12"
 
@@ -187,15 +219,36 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Setup Node.js
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
 
       - name: Check documentation links
         run: node scripts/check-doc-links.mjs
+
+      # The instruction files as an agent reads them: an unclosed code fence silently turns
+      # the rest of an AGENTS.md into one code block, and a .cursor/rules file whose
+      # frontmatter does not parse is a rule that never applies — neither of which a link
+      # check or a human skim notices. Read .agnix.toml for which rules are off and why.
+      #
+      # A release binary checked against a digest written HERE, not one downloaded beside
+      # it: a checksum fetched from the same release as the binary proves the download
+      # finished, not that it is the file this line was reviewed against.
+      - name: Lint the agent instruction files
+        env:
+          AGNIX_VERSION: v0.59.3
+          AGNIX_SHA256: f2e0549286fb148b2814559222129bd561db69ddc21cd3c6c05b52f3cef09ee4
+        run: |
+          curl -fsSL -o /tmp/agnix.tar.gz \
+            "https://github.com/agent-sh/agnix/releases/download/${AGNIX_VERSION}/agnix-x86_64-unknown-linux-gnu.tar.gz"
+          echo "${AGNIX_SHA256}  /tmp/agnix.tar.gz" | sha256sum -c -
+          tar -xzf /tmp/agnix.tar.gz -C /tmp agnix
+          /tmp/agnix --strict .
 
   # The version of every package whose TYPES cross the design system's `link:` boundary.
   # design-system is symlinked into web and extension rather than copied, so each of the
@@ -212,10 +265,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Setup Node.js
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
 
@@ -236,10 +291,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Setup Go
-        uses: actions/setup-go@v7
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
           cache: true
@@ -251,6 +308,19 @@ jobs:
       # covered the moment it exists rather than when someone remembers to list it.
       - name: Lint the workflows
         run: actionlint
+
+      # actionlint asks whether a workflow is VALID; zizmor asks whether it is SAFE — a
+      # token left in .git/config for every later step, an action pinned to a tag its
+      # owner can move, an expression expanded into a shell, a job holding the default
+      # token's write scopes. It found all four here on its first run.
+      #
+      # --offline keeps the verdict a property of the change: the online audits (known-
+      # vulnerable and impostor commits) consult GitHub, so a new advisory would fail a
+      # pull request that changed nothing — the reason govulncheck runs on a schedule.
+      # A finding that is wrong for one line carries `# zizmor: ignore[<audit>]` with the
+      # argument beside it, as pr-welcome.yml's trigger does.
+      - name: Audit the workflows for security
+        run: pipx run zizmor==1.31.1 --offline .github/workflows
 
   # Dead files, unused dependencies and unresolved binaries across the three JS packages.
   # Read knip.config.js for where the gate's line is drawn and why exports sit outside it.
@@ -265,13 +335,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v6.1.0
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
 
       - name: Setup Node.js
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
           cache: pnpm
@@ -322,10 +394,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Setup Go
-        uses: actions/setup-go@v7
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
           cache: true
@@ -367,7 +441,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Regenerate
         run: make sqlc
@@ -402,10 +478,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Set up Go
-        uses: actions/setup-go@v7
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
           cache: true
@@ -424,7 +502,10 @@ jobs:
           fi
           echo 'Generated contracts match the Go vocabularies.'
 
-  # Lints only the migrations this pull request ADDS. The applied history carries 1322
+  # Fails when this pull request edits, deletes or renames a migration main already holds
+  # (escape: a `Migration-Edit:` commit trailer), and lints the migrations it ADDS.
+  #
+  # The lint covers only the added files. The applied history carries 1322
   # findings and is never going to be fixed — "never edit an applied migration" is the
   # rule this repository runs on, and rewriting one is a worse hazard than any finding.
   # A migration file genuinely never changes after it lands, which makes this a far
@@ -435,19 +516,20 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # The script asks git which migrations are new since the merge base, so the
           # base commit has to be reachable. A shallow clone would make every migration
           # look either new or absent, and neither is a useful answer — which is why the
           # script fails on an unresolvable base rather than reporting an empty list.
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v6.1.0
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
 
       - name: Setup Node.js
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
           cache: pnpm
@@ -469,13 +551,15 @@ jobs:
         working-directory: design-system
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v6.1.0
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
 
       - name: Setup Node.js
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
           cache: pnpm
@@ -554,13 +638,15 @@ jobs:
         working-directory: web
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v6.1.0
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
 
       - name: Setup Node.js
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
           cache: pnpm
@@ -650,7 +736,7 @@ jobs:
 
       - name: Upload web coverage
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: web-coverage
           path: web/coverage
