@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"log"
 	"net/url"
 	"regexp"
 	"strconv"
@@ -599,8 +600,11 @@ func (teamtailorProber) probe(ctx context.Context, c httpClient, host string) (s
 	// serves jobs.tibber.com), and the client follows it silently. Kept, that is the SAME board under
 	// a second id: ingest namespaces postings by board, so every posting would be stored twice — prod
 	// already carries tibber both ways. og:url names the host that actually served the page; a board
-	// is only this host if it says so.
+	// is only this host if it says so. The board it DID find is real, though, and may be one the
+	// catalogue lacks, so its host is logged in a fixed shape: a second run over those hosts probes
+	// them under their own id, and dedup drops the ones already listed.
 	if u, err := url.Parse(metaProperty(root, "og:url")); err == nil && u.Host != "" && !strings.EqualFold(u.Host, host) {
+		log.Printf("harvest-boards: teamtailor %s serves %s", host, strings.ToLower(u.Host))
 		return "", 0, nil
 	}
 	return metaProperty(root, "og:site_name"), n, nil
