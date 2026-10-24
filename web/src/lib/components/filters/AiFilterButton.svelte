@@ -1,13 +1,15 @@
 <script lang="ts">
   import { MessageSquareText } from '@lucide/svelte';
-  import { isAuthenticated } from '#lib/auth.svelte.js';
-  import { promptSignIn } from '#lib/signin.js';
+  import { locale } from '#lib/i18n/currentLocale.svelte.js';
+  import { t } from '#lib/i18n/t.js';
   import type { FilterStore } from '#lib/filters.js';
   import AiFilterDialog from './AiFilterDialog.svelte';
+  import { messages } from './AiFilterButton.messages';
 
-  // Rendered for everyone, signed in or not. Hiding it from signed-out visitors would
-  // hide the feature from exactly the people who have not yet been given a reason to
-  // sign in; the gate is on activation, which sends them to /signin.
+  // Rendered for everyone and opens for everyone, signed in or not. The interpreter and
+  // the CV reader both admit guests (bounded per IP server-side), so a signed-out visitor
+  // gets the whole flow; the sign-in invitation comes only when that guest budget is
+  // spent, from inside the dialog, and as the "Create free account" beside the results.
   //
   // `onApplied` fires once the dialog has written its filters. It exists for the host
   // that DEFERS its own edits — the filter modal — where the dialog's write goes
@@ -16,25 +18,18 @@
   // words replaces the filters, so there is nothing left to stage.
   let { store, onApplied }: { store: FilterStore; onApplied?: () => void } = $props();
 
+  const s = $derived(t(messages, locale()));
   let open = $state(false);
-
-  function activate() {
-    if (!isAuthenticated()) {
-      promptSignIn();
-      return;
-    }
-    open = true;
-  }
 </script>
 
 <button
   type="button"
   class="flex w-full items-center justify-center gap-2 rounded-xl border border-primary/30 bg-primary/5 px-3 py-2 text-sm font-medium text-primary transition-colors hover:bg-primary/10"
-  onclick={activate}
+  onclick={() => (open = true)}
 >
   <MessageSquareText class="size-4" />
-  Describe with AI
-  <span class="rounded bg-primary/15 px-1 text-xs font-semibold uppercase tracking-wide">beta</span>
+  {s.describeWithAi}
+  <span class="rounded bg-primary/15 px-1 text-xs font-semibold uppercase tracking-wide">{s.beta}</span>
 </button>
 
 {#if open}

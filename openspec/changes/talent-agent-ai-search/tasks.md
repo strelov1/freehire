@@ -31,17 +31,17 @@
 
 ## 6. AI search modal (web)
 
-- [ ] 6.1 Rewrite `AiFilterDialog.svelte` as the shell: portal, focus trap, Escape, backdrop, Describe / Search plan / Results stage indicator, conversation state with a `kind`-discriminated message union; keep the `store` / `onclose` / `onApplied` contract
-- [ ] 6.2 Describe step: textarea, example searches, PDF CV attachment through `api.extractResumeProfile` (file chip with seniority + skill count, remove, error); Enter and the send button share one submit path with the "Find jobs that fit my CV" fallback
+- [x] 6.1 Rewrite `AiFilterDialog.svelte` as the shell: portal, focus trap, Escape, backdrop, Describe / Search plan / Results stage indicator, conversation state with a `kind`-discriminated message union; keep the `store` / `onclose` / `onApplied` contract
+- [x] 6.2 Describe step: textarea, example searches, PDF CV attachment through `api.extractResumeProfile` (file chip with seniority + skill count, remove, error); Enter and the send button share one submit path with the "Find jobs that fit my CV" fallback
 - [x] 6.3 `AiSearchPlan.svelte`: summary, preview chips, not-recognised list, Run search / Keep chatting card that stays on the latest plan after Keep chatting; Keep chatting adds the agent's prompt and focuses the composer
-- [ ] 6.4 Honest failures: empty interpretation → explanation + Start over (no plan card); plan refusal → message with `PlanLimitLink`; 429 for a guest → sign-in invitation; any other error → chat message, working state cleared
-- [ ] 6.5 Chat: `Composer` bound to a host-cleared draft, `ThinkingIndicator` while working, refinement sends the previous plan, refinement from Results re-runs the overview
+- [x] 6.4 Honest failures: empty interpretation → explanation + Start over (no plan card); plan refusal → message with `PlanLimitLink`; 429 for a guest → sign-in invitation; any other error → chat message, working state cleared
+- [x] 6.5 Chat: `Composer` bound to a host-cleared draft, `ThinkingIndicator` while working, refinement sends the previous plan, refinement from Results re-runs the overview
 - [x] 6.6 `AiSearchResults.svelte`: jobs searched from `GET /stats/catalog` (`unique_open_jobs`, nothing when not exact), jobs found and `companies_total` from one `facetCounts` call with `facets=countries,company_slug`, top-company logo grid via `EntityLogo` + `companyLogoUrl`, Show N jobs → `store.apply(planParams(plan))`, then close and `onApplied`
 - [x] 6.7 `JobsWorldMap.svelte`: Natural Earth 110m land TopoJSON in `web/static/`, equirectangular SVG, centroid table covering every country code the location dictionary emits, √count bubbles, top countries as chips, limited to the plan's countries when it names any; loaded only on the Results step
 - [x] 6.8 Layout: the Results chat is reachable at every width the Results step renders (side panel on wide screens, a toggleable panel below that); check mobile
-- [ ] 6.9 `AiFilterButton.svelte`: open for everyone, correct its header comment
-- [ ] 6.10 `.messages.ts` for the dialog and each new component; no hardcoded copy
-- [ ] 6.11 Component specs for the dialog: guest opens it; plan shows chips; Keep chatting keeps Run; empty interpretation shows Start over; Show N jobs calls `store.apply` and `onApplied`
+- [x] 6.9 `AiFilterButton.svelte`: open for everyone, correct its header comment
+- [x] 6.10 `.messages.ts` for the dialog and each new component; no hardcoded copy
+- [x] 6.11 Component specs for the dialog: guest opens it; plan shows chips; Keep chatting keeps Run; empty interpretation shows Start over; Show N jobs calls `store.apply` and `onApplied`
 
 ## 7. Verification and rollout
 
