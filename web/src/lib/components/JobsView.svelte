@@ -132,6 +132,10 @@
   untrack(() => seeded.seed(initial, pageOffset(currentPage)));
   let jobs = $state.raw(seeded);
 
+  // The result set on screen, minus the page being read: what ListToolbar keys its
+  // count announcement on, so turning a page does not re-announce the same total.
+  const resultSetKey = $derived(filtersToParams(filters.applied).toString());
+
   // What `shouldOfferGeoScope` decides on, read fresh each call — the address bar and
   // storage both move under us. Client-only: `location` does not exist on the server.
   // Shared with `offerGeoScope`, which asks the same question again after its round
@@ -794,6 +798,7 @@
       total={displayItems.length > 0 ? listTotal : null}
       unit={listTotal === 1 ? 'job' : 'jobs'}
       settled={jobs.status === 'ready'}
+      announceKey={resultSetKey}
       onSwipe={standalone ? openSwipe : undefined}
       controls={listControls}
       leading={standalone ? mapButton : undefined}

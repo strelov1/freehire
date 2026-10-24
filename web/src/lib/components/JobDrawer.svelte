@@ -412,9 +412,10 @@
 <svelte:window onkeydown={(e) => e.key === 'Escape' && !blocked && close()} />
 
 <!-- Fullscreen job panel (like the swipe deck): a centered column with a fixed
-     header + pill tabs, a scrolling tab body, and a pinned View-job footer. -->
+     header + pill tabs, a scrolling tab body, and a pinned View-job footer. It covers
+     the screen edge to edge, so it fades in rather than growing from the centre. -->
 <div
-  class="fixed inset-0 z-50 flex flex-col bg-background text-foreground"
+  class="fixed inset-0 z-50 flex animate-modal-fade flex-col bg-background text-foreground"
   role="dialog"
   aria-modal="true"
   aria-label={s.dialogAria}

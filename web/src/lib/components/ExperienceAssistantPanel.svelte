@@ -98,7 +98,8 @@
       // used to be a column inside the account content area, which meant it spent the
       // bank's width — the conversation and the achievements it is about were both cramped.
       // Below the header, like the selection action bar, and under it in the stack.
-      docked ? 'fixed bottom-0 right-0 top-14 z-30' : 'fixed inset-0 z-50',
+      // Covering, it fades in each time it is shown: un-hiding restarts the animation.
+      docked ? 'fixed bottom-0 right-0 top-14 z-30' : 'fixed inset-0 z-50 animate-modal-fade',
       !open && 'hidden',
     ]}
     style:width={docked ? `${DOCK_WIDTH}px` : undefined}

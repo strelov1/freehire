@@ -128,8 +128,9 @@
   // An empty url is a posting with nowhere outside to send the candidate: a vacancy taking
   // applications on freehire, whose Apply opens its own job page, where the form is. Only
   // `jobview.Job` carries that flag, like `url`.
-  const applyJob = $derived('url' in job && job.url ? job : null);
-  const directApply = $derived('direct_apply' in job && job.direct_apply === true);
+  // A closed posting takes no applications, so it offers no Apply at all.
+  const applyJob = $derived('url' in job && job.url && !job.closed_at ? job : null);
+  const directApply = $derived('direct_apply' in job && job.direct_apply === true && !job.closed_at);
   // The two freshness badges, through the card's own gate: a projection that carries no
   // reality signal earns none, because on those surfaces the posting date alone would
   // vouch for a job the signal was written to distrust. Everything else — the

@@ -445,7 +445,7 @@
         oninput={(e) => (draftMinMatch = Number(e.currentTarget.value) || null)}
         aria-label="Minimum skill match"
         aria-valuetext={draftMinMatch != null ? `${draftMinMatch}% or more` : 'Any'}
-        class="mb-6 w-full accent-primary"
+        class="mb-6 h-6 w-full accent-primary"
       />
     {/if}
     {#if def}<FacetSection {def} store={staged} counts={c} expand empty={entry.key === 'skills' ? unrecognizedSkill : undefined} />{/if}
@@ -525,7 +525,7 @@
         oninput={(e) => staged.setExperienceYearsMax(EXPERIENCE_PRESETS[Number(e.currentTarget.value)]?.years ?? null)}
         aria-label="Maximum years of experience"
         aria-valuetext={experienceLabel(staged.value.experienceYearsMax)}
-        class="w-full accent-primary"
+        class="h-6 w-full accent-primary"
       />
       <!-- Most of the catalogue states no experience requirement at all (about two
            thirds, measured on prod 2026-10-21: 2.42M of 3.67M open postings), and a
@@ -647,7 +647,7 @@
         oninput={(e) => staged.setOpenWithinDays(FRESHNESS_PRESETS[Number(e.currentTarget.value)]?.days ?? null)}
         aria-label="Open within"
         aria-valuetext={freshnessLabel(staged.value.openWithinDays)}
-        class="w-full accent-primary"
+        class="h-6 w-full accent-primary"
       />
       <p class="mt-2 text-xs text-muted-foreground">How long the posting has been here.</p>
     {/if}
@@ -664,7 +664,7 @@
       oninput={(e) => staged.setPostedWithinDays(FRESHNESS_PRESETS[Number(e.currentTarget.value)]?.days ?? null)}
       aria-label="Posted within"
       aria-valuetext={freshnessLabel(staged.value.postedWithinDays)}
-      class="w-full accent-primary"
+      class="h-6 w-full accent-primary"
     />
     {#if openWithinAvailable}
       <p class="mt-2 text-xs text-muted-foreground">

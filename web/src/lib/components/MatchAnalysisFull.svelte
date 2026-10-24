@@ -567,7 +567,7 @@
                       >{r.evidence_strength}</span>
                     {/if}
                     {#if r.priority && r.priority.toLowerCase() !== 'required'}
-                      <span class="shrink-0 text-[0.6rem] font-medium lowercase tracking-wide text-muted-foreground/60">{r.priority}</span>
+                      <span class="shrink-0 text-[0.6rem] font-medium lowercase tracking-wide text-muted-foreground">{r.priority}</span>
                     {/if}
                   </li>
                 {/each}

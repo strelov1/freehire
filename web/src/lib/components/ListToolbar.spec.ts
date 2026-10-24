@@ -44,4 +44,30 @@ describe('ListToolbar result announcement', () => {
     await view.rerender({ total: 12, unit: 'companies' });
     expect(region.textContent).toBe('12 companies');
   });
+
+  it('keeps quiet across a page turn of the same result set, but speaks a new set or count', async () => {
+    const view = render(ListToolbar, { total: 1234, unit: 'jobs', settled: true, announceKey: 'q=go' });
+    const region = screen.getByRole('status');
+
+    // Page 2 of the same query: reloads, lands on the same total, says nothing.
+    await view.rerender({ total: null, unit: 'jobs', settled: false, announceKey: 'q=go' });
+    await view.rerender({ total: 1234, unit: 'jobs', settled: true, announceKey: 'q=go' });
+    expect(region.textContent).toBe('');
+
+    // A changed query with the same total is still news.
+    await view.rerender({ total: null, unit: 'jobs', settled: false, announceKey: 'q=rust' });
+    await view.rerender({ total: 1234, unit: 'jobs', settled: true, announceKey: 'q=rust' });
+    expect(region.textContent).toBe('1,234 jobs');
+
+    // A page turn keeps the spoken text rather than clearing and re-speaking it.
+    await view.rerender({ total: null, unit: 'jobs', settled: false, announceKey: 'q=rust' });
+    expect(region.textContent).toBe('1,234 jobs');
+    await view.rerender({ total: 1234, unit: 'jobs', settled: true, announceKey: 'q=rust' });
+    expect(region.textContent).toBe('1,234 jobs');
+
+    // The same query whose count moved is spoken.
+    await view.rerender({ total: null, unit: 'jobs', settled: false, announceKey: 'q=rust' });
+    await view.rerender({ total: 1240, unit: 'jobs', settled: true, announceKey: 'q=rust' });
+    expect(region.textContent).toBe('1,240 jobs');
+  });
 });

@@ -102,7 +102,7 @@
         type="button"
         aria-label={s.rail.closeMenu}
         onclick={close}
-        class="fixed inset-0 z-40 bg-black/40 lg:hidden"
+        class="fixed inset-0 z-40 animate-modal-fade bg-black/40 lg:hidden"
       ></button>
       <!-- A modal dialog: focusTrap moves focus in, keeps Tab inside, and returns it
            to the host's trigger when the drawer closes. -->
@@ -110,7 +110,7 @@
         role="dialog"
         aria-modal="true"
         aria-labelledby={drawerTitleId}
-        class="fixed left-0 top-0 z-50 flex h-full w-64 flex-col gap-1 overflow-y-auto border-r border-border bg-background p-2 lg:hidden"
+        class="fixed left-0 top-0 z-50 flex h-full w-64 animate-sheet-in-left flex-col gap-1 overflow-y-auto border-r border-border bg-background p-2 lg:hidden"
         {@attach focusTrap()}
       >
         <div class="mb-1 flex items-center justify-between px-2 py-1.5">

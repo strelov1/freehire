@@ -37,6 +37,9 @@
   let focusWithin = $state(false);
   const held = $derived(paused || hovering || focusWithin);
   let pending = $state<RecentFeedEvent[]>([]);
+  // How many arrived during the hold. Counted apart from `pending`, which keeps only the
+  // newest MAX_ENTRIES: the Resume label promises the true number, not the queue's cap.
+  let arrivedWhileHeld = $state(0);
   let listEl = $state<HTMLUListElement>();
 
   async function land(events: RecentFeedEvent[]) {
@@ -56,6 +59,7 @@
     if (held || pending.length === 0) return;
     const queued = pending;
     pending = [];
+    arrivedWhileHeld = 0;
     // Untracked: `land` reads `entries` to extend it, which must not make this effect
     // depend on the list it writes.
     untrack(() => land(queued));
@@ -107,8 +111,10 @@
         return; // a malformed frame is dropped rather than breaking the feed
       }
       // Only the newest MAX_ENTRIES can ever be shown, so the queue keeps no more.
-      if (held) pending = [...pending, data].slice(-MAX_ENTRIES);
-      else land([data]);
+      if (held) {
+        pending = [...pending, data].slice(-MAX_ENTRIES);
+        arrivedWhileHeld += 1;
+      } else land([data]);
     });
     // EventSource retries on its own; a dropped connection needs no handling here.
     return () => source.close();
@@ -138,7 +144,7 @@
       >
         {#if paused}
           <Play class="size-3.5" aria-hidden="true" />
-          Resume{pending.length > 0 ? ` (${pending.length} new)` : ''}
+          Resume{arrivedWhileHeld > 0 ? ` (${arrivedWhileHeld} new)` : ''}
         {:else}
           <Pause class="size-3.5" aria-hidden="true" />
           Pause

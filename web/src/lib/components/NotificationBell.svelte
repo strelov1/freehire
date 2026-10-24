@@ -33,6 +33,11 @@
   // Below `sm` the panel takes the whole screen, so it is a modal dialog there
   // (scroll locked, focus trapped); on wider screens it stays a non-modal popover.
   const fullScreen = new MediaQuery('max-width: 639px', false);
+  // Which of the two it is, decided once when the panel opens and held until it closes.
+  // Read live, a phone rotated (or a window resized) across the breakpoint while the
+  // panel is open would re-run the focus trap and move focus by itself, and release the
+  // scroll lock under a panel still on screen.
+  let modal = $state(false);
 
   // Load once the session is confirmed (boot-time /me may still be in flight); drop
   // the cached page on sign-out so the next user on this tab loads their own.
@@ -46,7 +51,7 @@
 
   // Lock body scroll only while the dropdown covers the screen on mobile.
   $effect(() => {
-    if (!open || !fullScreen.current) return;
+    if (!open || !modal) return;
     lockScroll();
     return () => unlockScroll();
   });
@@ -73,7 +78,10 @@
 
   function toggle() {
     open = !open;
-    if (open) void notificationCenter.refresh();
+    if (open) {
+      modal = fullScreen.current;
+      void notificationCenter.refresh();
+    }
   }
 
   function onWindowClick(e: MouseEvent) {
@@ -123,9 +131,9 @@
       <div
         role="dialog"
         aria-label="Notifications"
-        aria-modal={fullScreen.current ? 'true' : undefined}
-        {@attach fullScreen.current ? focusTrap() : undefined}
-        class="z-50 overflow-y-auto overscroll-contain border border-border bg-background shadow-lg max-sm:fixed max-sm:inset-x-0 max-sm:bottom-0 max-sm:top-14 max-sm:border-x-0 max-sm:border-b-0 sm:absolute sm:right-0 sm:top-full sm:mt-2 sm:w-96 sm:max-h-[min(70vh,32rem)] sm:rounded-md"
+        aria-modal={modal ? 'true' : undefined}
+        {@attach modal ? focusTrap() : undefined}
+        class="z-50 overflow-y-auto overscroll-contain max-sm:animate-modal-fade border border-border bg-background shadow-lg max-sm:fixed max-sm:inset-x-0 max-sm:bottom-0 max-sm:top-14 max-sm:border-x-0 max-sm:border-b-0 sm:absolute sm:right-0 sm:top-full sm:mt-2 sm:w-96 sm:max-h-[min(70vh,32rem)] sm:rounded-md"
       >
         <div class="flex items-center justify-between border-b border-border px-3 py-2">
           <span class="text-sm font-semibold">Notifications</span>

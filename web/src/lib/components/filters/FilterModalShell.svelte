@@ -280,7 +280,7 @@
                       : 'border-transparent font-medium hover:bg-accent',
                   ]}
                 >
-                  <span id={railLabelId(e.key)} class="min-w-0 break-words sm:truncate">{e.label}</span>
+                  <span id={railLabelId(e.key)} class="min-w-0 hyphens-auto break-words sm:truncate">{e.label}</span>
                   {#if n > 0}
                     <span
                       class={[

@@ -23,10 +23,16 @@
   // `settled` says whether the list has finished loading successfully. Only a caller that
   // passes it can be told apart "no results" from "still loading" — `total` is null for
   // both — so only such a caller gets "No matching …" announced.
+  //
+  // `announceKey` names the result set the count belongs to — the query (filters,
+  // search, sort), never the page number. A caller that passes it gets the count spoken
+  // only when the set or its size actually changed: turning a page reloads the list
+  // too, and without the key every page link re-announced the same "1,234 jobs".
   let {
     total,
     unit,
     settled,
+    announceKey,
     onSwipe,
     controls,
     leading,
@@ -34,6 +40,7 @@
     total: number | null;
     unit: string;
     settled?: boolean;
+    announceKey?: string;
     onSwipe?: () => void;
     controls?: Snippet;
     /** A control pinned to the LEFT edge, apart from the right-aligned list controls
@@ -50,16 +57,34 @@
   // Empty at mount: the count the page was rendered with is not news, and announcing it
   // on every page load would talk over the page title. Every later change is spoken. The
   // region is cleared while the list reloads, so the same count after a filter change is
-  // still a change and is announced again.
+  // still a change and is announced again — unless `announceKey` says the reload was the
+  // same result set (a page turn), in which case the region keeps its text and only a
+  // count that moved is spoken.
   let announcement = $state('');
   let primed = false;
+  // The result set and message last spoken (or, at mount, the ones rendered silently).
+  let spokenKey: string | undefined;
+  let spokenMessage = '';
   $effect(() => {
     const next = message;
+    const key = announceKey;
     if (!primed) {
-      if (next !== '' || settled !== undefined) primed = true;
+      if (next !== '' || settled !== undefined) {
+        primed = true;
+        spokenKey = key;
+        spokenMessage = next;
+      }
       return;
     }
+    const sameSet = key !== undefined && key === spokenKey;
+    if (next === '') {
+      if (!sameSet) announcement = '';
+      return;
+    }
+    if (sameSet && next === spokenMessage) return;
     announcement = next;
+    spokenKey = key;
+    spokenMessage = next;
   });
 </script>
 

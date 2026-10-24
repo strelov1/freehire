@@ -26,6 +26,10 @@ beforeEach(() => {
   Element.prototype.animate ??= function animate() {
     return { cancel() {}, finish() {}, play() {}, onfinish: null, currentTime: 0 } as unknown as Animation;
   };
+  // A card pushed out of a full list runs an outro, which asks for running animations.
+  Element.prototype.getAnimations ??= function getAnimations() {
+    return [];
+  };
 });
 
 const titles = () => screen.getAllByRole('link').map((a) => a.textContent?.trim().split(/\s+/)[0]);
@@ -69,5 +73,20 @@ describe('RecentJobsFeed', () => {
     await fireEvent.focusOut(link, { relatedTarget: document.body });
     await tick();
     expect(titles()).toEqual(['two', 'one']);
+  });
+
+  it('counts every arrival during a pause, past the queue it keeps', async () => {
+    render(RecentJobsFeed);
+    emit('one');
+    await tick();
+    await fireEvent.click(screen.getByRole('button', { name: 'Pause' }));
+    for (let i = 0; i < 12; i++) emit(`held${i}`);
+    await tick();
+    const resume = screen.getByRole('button', { name: /Resume \(12 new\)/ });
+    await fireEvent.click(resume);
+    await tick();
+    // Only the newest eight can be shown, and the count resets once they land.
+    expect(titles()[0]).toBe('held11');
+    expect(screen.getByRole('button', { name: 'Pause' })).toBeTruthy();
   });
 });

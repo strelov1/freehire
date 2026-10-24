@@ -53,6 +53,25 @@
   animation: modal-fade 180ms ease-out both;
 }
 
+/* How a drawer anchored to the left edge arrives: it slides in from that edge while it
+   fades, on the modal's easing — growing from the centre would contradict where it is
+   pinned. Its backdrop takes `animate-modal-fade`. Under reduced motion only the fade
+   remains. Like `modal-pop`, no `to`, so no transform outlives the animation. Only the
+   left edge has one because only a left drawer needs it; a right-edge sibling is the
+   same keyframe with the sign flipped. */
+@keyframes sheet-in-left {
+  from {
+    opacity: 0;
+    transform: translateX(-1.5rem);
+  }
+}
+@utility animate-sheet-in-left {
+  animation: sheet-in-left 200ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  @media (prefers-reduced-motion: reduce) {
+    animation-name: modal-fade;
+  }
+}
+
 /* A flex column that seats its content at the optical centre rather than the
    geometric one: the free space splits 1:2 above and below, so a short modal on a
    full-screen phone sheet sits in the upper third instead of reading as having

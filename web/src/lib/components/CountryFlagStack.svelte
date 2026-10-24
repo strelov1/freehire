@@ -74,7 +74,9 @@
   {@const code = codes[0] ?? ''}
   {@const label = countryLabel(code)}
   {#snippet chip()}
-    <CountryFlag {code} {label} />
+    <!-- Decorative here: the country is named right beside it, so the flag's own label
+         would only read the name twice. -->
+    <span aria-hidden="true" class="contents"><CountryFlag {code} {label} /></span>
     <span class={['truncate', labelClass]}>{label}</span>
   {/snippet}
   <div class={['inline-flex items-center gap-1.5', className]}>
@@ -111,7 +113,8 @@
               href={filterHref('countries', code)}
               class="inline-flex min-h-7 items-center gap-1.5 rounded-full border border-border px-2 text-xs font-medium transition-colors hover:bg-accent hover:text-foreground"
             >
-              <CountryFlag {code} {label} class="text-sm" />
+              <!-- Decorative, as in the single-country chip: the name follows. -->
+              <span aria-hidden="true" class="contents"><CountryFlag {code} {label} class="text-sm" /></span>
               {label}
             </a>
           </li>

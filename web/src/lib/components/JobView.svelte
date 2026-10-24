@@ -165,7 +165,8 @@
   const contentTabs: { id: ContentTab; label: string }[] = $derived([
     { id: 'description', label: 'Description' },
     ...(companySlug ? [{ id: 'company' as const, label: 'Company' }] : []),
-    ...(applyFormWorthShowing(applyForm)
+    // The screening form is pointless once the posting stops taking applications.
+    ...(!closed && applyFormWorthShowing(applyForm)
       ? [{ id: 'application' as const, label: 'Application' }]
       : []),
   ]);
