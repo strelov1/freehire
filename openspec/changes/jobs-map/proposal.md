@@ -6,8 +6,8 @@ The job list says how many postings match but not where they are. A visitor sear
 
 - A **Map** button at the left edge of the `/jobs` list toolbar opens a wide dialog showing the current search on a world map. There is no list/map toggle: the list stays where it is, behind the dialog.
 - The map draws one bubble per country, sized by job count, and zooms to fit what it draws. With one country selected it draws that country's **cities** instead.
-- **Clicking narrows the same filters the list reads**, so the list behind the dialog updates: a country click selects that country (replacing any other), a click on the selected country deselects it, a city click selects that city. **World view** clears both the country and city filters.
-- **Remote worldwide** — postings open to anyone anywhere have no place to draw; a button with their count toggles that filter, and turning it on clears the country and city filters (a place AND "anywhere" selects nothing).
+- **Clicking narrows the same filters the list reads**, so the list behind the dialog updates: a country click selects that country (replacing any other), a click on the selected country deselects it, a city click selects only that city (the location filters combine with OR on the server, so a city beside its country would select the whole country). **World view** clears both the country and city filters.
+- **Remote worldwide** — postings open to anyone anywhere have no place to draw; a button with their count toggles that filter, and turning it on clears the country and city filters (the location filters combine with OR, so keeping a place beside it would widen the list instead of switching it).
 - **Show N jobs** — always visible without scrolling — closes the dialog onto the updated list. The dialog never scrolls, on a laptop or a phone.
 - The posted/sort selects in the same toolbar get their own chevron with padding: the native arrow overlapped the selected text.
 - The AI search's read-only map and the new interactive one share one bubble-map component and one tested geometry module instead of two copies.

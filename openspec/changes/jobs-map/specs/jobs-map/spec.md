@@ -25,12 +25,17 @@ When exactly one country is selected, the map SHALL draw that country's cities t
 
 ### Requirement: Clicking the map narrows the list's own filters
 
-A click on a place SHALL change the list's filters, so the list behind the dialog updates. A country click SHALL make that country the only selected country; a click on the selected country SHALL deselect it. A city click SHALL select that city. **World view** SHALL clear the country and city filters together. Places SHALL be operable from the keyboard (Enter and Space) and SHALL show their name and count on hover and on focus.
+A click on a place SHALL change the list's filters, so the list behind the dialog updates. A country click SHALL make that country the only selected country; a click on the selected country SHALL deselect it. A city click SHALL select only that city and clear the country filter, while the map keeps drawing that country's cities — the location filters combine with OR on the server, so a city kept beside its country would select the whole country. **World view** SHALL clear the country and city filters together. Places SHALL be operable from the keyboard (Enter and Space) and SHALL show their name and count on hover and on focus.
 
 #### Scenario: A country click replaces the selection
 
 - **WHEN** Brazil is selected and the visitor clicks Mexico
 - **THEN** only Mexico is selected and the list shows Mexico's jobs
+
+#### Scenario: A city click narrows to the city
+
+- **WHEN** Brazil is selected and the visitor clicks Campinas
+- **THEN** only Campinas is selected, the list shows Campinas's jobs, and the map still shows Brazil's cities
 
 #### Scenario: World view clears cities too
 
