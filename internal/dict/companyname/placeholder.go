@@ -2,6 +2,7 @@ package companyname
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"html"
 	"regexp"
@@ -24,6 +25,13 @@ import (
 //     ("Student Casual"). ExtractOracleSiteName keeps 11/15 and refuses the rest. Oracle's own
 //     recruitingCESites API was tried first and is worse: "Candidate Experience site" or nothing.
 //
+// Measured 2026-10-24 on 15 more each:
+//   - dayforce (486): the careers page's Next.js data names the tenant as
+//     candidateCorrespondenceClientName, the sender of the candidate's mail, 13/15 — the others
+//     named a department ("Human Resources") or nothing; ExtractDayforceClientName refuses those.
+//   - ukg (1,152): the job board's header logo carries the brand as its alt text, 11/15 — the
+//     others had no logo or the unconfigured "Default Brand"; ExtractUKGBrandName refuses those.
+//
 // Deliberately absent, each having been tried against live boards: taleo (every sampled
 // career section titles itself "Job Search", and nothing else on the page names the employer),
 // adp (neither the listing nor the requisition detail names the client), and workday (the
@@ -36,6 +44,8 @@ func NewPlaceholderRegistry(http httpGetter) Registry {
 		}),
 		"ukgready": ukgreadyResolver{http: http},
 		"oracle":   oracleResolver{http: http},
+		"dayforce": dayforceResolver{http: http},
+		"ukg":      ukgResolver{http: http},
 	}
 }
 
@@ -175,6 +185,92 @@ func ExtractOracleSiteName(name string) string {
 		}
 	}
 	if len(tokens) == 1 && oracleSiteLoneWords[strings.ToLower(tokens[0])] {
+		return ""
+	}
+	return name
+}
+
+type dayforceResolver struct{ http textGetter }
+
+// dayforceClientName matches the field as a JSON string, escapes included, so the value can be
+// unquoted exactly rather than guessed at.
+var dayforceClientName = regexp.MustCompile(`"candidateCorrespondenceClientName"\s*:\s*("(?:[^"\\]|\\.)*")`)
+
+func (r dayforceResolver) Name(ctx context.Context, board string) (string, error) {
+	if _, _, ok := splitHostBoard(board); !ok { // "<tenant>/<site>", the same two-part shape
+		return "", nil
+	}
+	body, err := r.http.GetText(ctx, "https://jobs.dayforcehcm.com/en-US/"+board)
+	if err != nil {
+		return "", err
+	}
+	m := dayforceClientName.FindStringSubmatch(body)
+	if m == nil {
+		return "", nil
+	}
+	var name string
+	if err := json.Unmarshal([]byte(m[1]), &name); err != nil {
+		return "", nil
+	}
+	return ExtractDayforceClientName(name), nil
+}
+
+// dayforceDepartments are the sender names that name a department rather than the employer —
+// what a tenant configures when its mail goes out from HR, not from the company.
+var dayforceDepartments = map[string]bool{
+	"human resources": true, "hr": true, "recruiting": true, "recruiting team": true,
+	"recruitment": true, "talent acquisition": true, "talent acquisition team": true,
+	"careers": true, "hiring team": true, "no reply": true, "noreply": true,
+}
+
+// ExtractDayforceClientName cleans a Dayforce correspondence sender name and refuses one that
+// names a department instead of the employer.
+func ExtractDayforceClientName(name string) string {
+	name = strings.Join(strings.Fields(name), " ")
+	if dayforceDepartments[strings.ToLower(name)] {
+		return ""
+	}
+	return name
+}
+
+type ukgResolver struct{ http textGetter }
+
+// ukgLogo is the job board's header logo; its alt text is the brand the board is configured
+// under. The page renders it twice (small and large), identically.
+var (
+	ukgLogo    = regexp.MustCompile(`<img[^>]*class="[^"]*\blogo\b[^"]*"[^>]*>`)
+	ukgLogoAlt = regexp.MustCompile(`alt="([^"]*)"`)
+)
+
+func (r ukgResolver) Name(ctx context.Context, board string) (string, error) {
+	parts := strings.Split(board, "/") // "<host>/<tenant>/<guid>", as the ukg adapter parses it
+	if len(parts) != 3 || parts[0] == "" || parts[1] == "" || parts[2] == "" {
+		return "", nil
+	}
+	body, err := r.http.GetText(ctx, fmt.Sprintf("https://%s/%s/JobBoard/%s/", parts[0], parts[1], parts[2]))
+	if err != nil {
+		return "", err
+	}
+	img := ukgLogo.FindString(body)
+	if img == "" {
+		return "", nil
+	}
+	m := ukgLogoAlt.FindStringSubmatch(img)
+	if m == nil {
+		return "", nil
+	}
+	return ExtractUKGBrandName(m[1]), nil
+}
+
+// ExtractUKGBrandName turns a UKG logo's alt text into the employer's name: the platform names
+// a brand "<Name> Brand" when a tenant leaves the label as configured, and "Default Brand" when
+// it configures nothing at all.
+func ExtractUKGBrandName(alt string) string {
+	name := strings.Join(strings.Fields(html.UnescapeString(alt)), " ")
+	if rest, ok := cutSuffixFold(name, " Brand"); ok {
+		name = rest
+	}
+	if strings.EqualFold(name, "default") || strings.EqualFold(name, "brand") {
 		return ""
 	}
 	return name

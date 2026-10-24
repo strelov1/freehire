@@ -134,3 +134,71 @@ func TestAcceptPlaceholder(t *testing.T) {
 		}
 	}
 }
+
+// Live-verified 2026-10-24: 13 of 15 sampled placeholder boards named the tenant in the
+// careers page's Next.js data as candidateCorrespondenceClientName — the sender name on the
+// mail a candidate receives. One named a department instead ("Human Resources"), one nothing.
+func TestPlaceholderDayforceUsesTheCorrespondenceName(t *testing.T) {
+	getter := fakeHTTP{
+		"https://jobs.dayforcehcm.com/en-US/ymcadetroit/boll": `<script id="__NEXT_DATA__" type="application/json">{"props":{"pageProps":{"dehydratedState":{"queries":[{"state":{"data":{"clientNamespace":"ymcadetroit","candidateCorrespondenceClientName":"YMCA of Metropolitan Detroit"}}}]}}}}</script>`,
+		"https://jobs.dayforcehcm.com/en-US/feg/site":         `{"candidateCorrespondenceClientName":"Foley \"FEG\" Group"}`,
+	}
+	reg := NewPlaceholderRegistry(getter)
+	if got, err := reg["dayforce"].Name(context.Background(), "ymcadetroit/boll"); err != nil || got != "YMCA of Metropolitan Detroit" {
+		t.Errorf("Name = %q, %v; want YMCA of Metropolitan Detroit", got, err)
+	}
+	if got, _ := reg["dayforce"].Name(context.Background(), "feg/site"); got != `Foley "FEG" Group` {
+		t.Errorf("Name = %q; want the JSON string unescaped", got)
+	}
+}
+
+func TestExtractDayforceClientName(t *testing.T) {
+	cases := map[string]string{
+		"YMCA of Metropolitan Detroit": "YMCA of Metropolitan Detroit",
+		"NexTier ":                     "NexTier",
+		"AERO-FLITE, INC.":             "AERO-FLITE, INC.",
+		"Human Resources":              "",
+		"HR":                           "",
+		"Recruiting Team":              "",
+		"Talent Acquisition":           "",
+		"":                             "",
+	}
+	for in, want := range cases {
+		if got := ExtractDayforceClientName(in); got != want {
+			t.Errorf("ExtractDayforceClientName(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+// Live-verified 2026-10-24: 11 of 15 sampled placeholder boards carried the employer's brand
+// as the alt text of the job board's header logo; the rest had no logo, or the platform's
+// unconfigured "Default Brand".
+func TestPlaceholderUKGUsesTheLogoAlt(t *testing.T) {
+	getter := fakeHTTP{
+		"https://recruiting2.ultipro.com/min1006/JobBoard/3ca60bcf-ef8c-d9d3-2f88-ace3de16072d/": `<img class="small-logo logo" src="/x" alt="Novares US Engine Components" data-automation="navbar-small-logo" />`,
+	}
+	reg := NewPlaceholderRegistry(getter)
+	got, err := reg["ukg"].Name(context.Background(), "recruiting2.ultipro.com/min1006/3ca60bcf-ef8c-d9d3-2f88-ace3de16072d")
+	if err != nil || got != "Novares US Engine Components" {
+		t.Errorf("Name = %q, %v; want Novares US Engine Components", got, err)
+	}
+	if got, err := reg["ukg"].Name(context.Background(), "two/parts"); err != nil || got != "" {
+		t.Errorf("Name(two/parts) = %q, %v; want empty, nil", got, err)
+	}
+}
+
+func TestExtractUKGBrandName(t *testing.T) {
+	cases := map[string]string{
+		"Custom Glass &amp; Doors ": "Custom Glass & Doors",
+		"PhyNet Brand":              "PhyNet",
+		"Pure Salt Baytown, LLC":    "Pure Salt Baytown, LLC",
+		"Default Brand":             "",
+		"Brand":                     "",
+		"":                          "",
+	}
+	for in, want := range cases {
+		if got := ExtractUKGBrandName(in); got != want {
+			t.Errorf("ExtractUKGBrandName(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
