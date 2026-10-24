@@ -394,6 +394,7 @@ export const SOURCE_LABELS: Record<string, string> = {
   beesite: 'BeeSite',
   eploy: 'Eploy',
   hiringroom: 'HiringRoom',
+  pandape: 'Pandapé',
   pythonorg: 'Python.org',
   jobboardly: 'Job Boardly',
   work180: 'WORK180',

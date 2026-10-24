@@ -519,6 +519,10 @@ func All(c HTTPClient) map[string]Source {
 		// HiringRoom: LatAm ATS, one <tenant>.hiringroom.com portal per board, listed through the
 		// portal's own JSON pager and hydrated from each vacancy page. See hiringroom.go.
 		NewHiringRoom(c),
+		// Pandapé: InfoJobs Brasil's ATS, one <tenant>.pandape.infojobs.com.br career site per
+		// board, listed through the site's own JSON pager and hydrated from each vacancy page.
+		// One origin serves every tenant, so the adapter paces the whole run. See pandape.go.
+		NewPandape(c),
 		// Built In: US-centred tech board over many employers. Each tech category's last-24h
 		// window is walked; posting pages carry a schema.org JobPosting. Coverage-gated and
 		// paced, see builtinRequestInterval.

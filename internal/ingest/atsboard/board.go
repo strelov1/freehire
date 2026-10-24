@@ -314,6 +314,12 @@ var atsBoards = []struct{ host, source, mode string }{
 	// Gupy: one <subdomain>.gupy.io career page per employer, the subdomain the adapter lists
 	// by (?subdomain=<board>). The vendor's own hosts are in platformLabelsByApex.
 	{"gupy.io", "gupy", modeSubdomain},
+	// Pandapé (InfoJobs Brasil's ATS): one <tenant>.pandape.infojobs.com.br career site per
+	// employer. The same tenant answers on the Catho and pandape.com.br domains with the same
+	// listing, so all three name one board. The vendor's own hosts are in platformLabelsByApex.
+	{"pandape.infojobs.com.br", "pandape", modeSubdomain},
+	{"pandape.catho.com.br", "pandape", modeSubdomain},
+	{"pandape.com.br", "pandape", modeSubdomain},
 
 	// --- subdomainchain: board = every label under the apex (tenant nested under a region) ---
 	{"huntflow.io", "huntflow", modeSubdomainChain},
@@ -1290,6 +1296,12 @@ var platformLabelsByApex = map[string][]string{
 	// job-search portal, the API the adapter reads, support, community, docs and status.
 	"gupy.io":      {"www", "portal", "private-api", "suporte", "comunidade", "developers", "status", "conteudo", "academy"},
 	"eightfold.ai": {"www"}, // the vendor's marketing site
+	// www is the vendor's marketing site; "empregos" is the platform's own bucket for employers
+	// that post under "Empresa com nome confidencial" — many employers, none named, so not a
+	// board any one company owns.
+	"pandape.infojobs.com.br": {"www", "empregos"},
+	"pandape.catho.com.br":    {"www", "empregos"},
+	"pandape.com.br":          {"www", "empregos"},
 }
 
 // platformHost reports whether host is the ATS's own product host rather than a tenant's —

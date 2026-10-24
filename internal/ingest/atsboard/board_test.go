@@ -539,6 +539,12 @@ func TestRecognize(t *testing.T) {
 		{"gupy hyphenated subdomain", "https://confidential-careers.gupy.io/job/eyJqb2JJZCI6MTE0Mzc5NzEsInNvdXJjZSI6Imd1cHlfcG9ydGFsIn0=", "gupy", "confidential-careers", "https://confidential-careers.gupy.io", true},
 		{"gupy job-search portal is not a board", "https://portal.gupy.io/job-search/term=dev", "", "", "", false},
 		{"gupy marketing site is not a board", "https://www.gupy.io/", "", "", "", false},
+		// pandape: the career-site subdomain, on any of the three domains that serve it.
+		{"pandape vacancy", "https://braspress.pandape.infojobs.com.br/Detail/3861560", "pandape", "braspress", "https://braspress.pandape.infojobs.com.br", true},
+		{"pandape on the catho domain", "https://loungerie.pandape.catho.com.br/Detail/3856149", "pandape", "loungerie", "https://loungerie.pandape.catho.com.br", true},
+		{"pandape marketing site is not a board", "https://www.pandape.com.br/", "", "", "", false},
+		{"pandape confidential bucket is not a board", "https://empregos.pandape.infojobs.com.br/Detail/3561691", "", "", "", false},
+		{"pandape sitemap host names no tenant", "https://pandape.infojobs.com.br/pandapeofertas1.xml.gz", "", "", "", false},
 		// jobscore: the company shortcode behind the platform's "careers" or "jobs" word.
 		{"jobscore posting", "https://careers.jobscore.com/careers/ariasystems/jobs/implementation-consultant-a6n7LJEMraPQGI8xheCJ7l?ref=rss&sid=68", "jobscore", "ariasystems", "https://careers.jobscore.com/careers/ariasystems/jobs/implementation-consultant-a6n7LJEMraPQGI8xheCJ7l", true},
 		{"jobscore feed", "https://careers.jobscore.com/jobs/ierustechnologiesinc/feed.json?sort=date", "jobscore", "ierustechnologiesinc", "https://careers.jobscore.com/jobs/ierustechnologiesinc/feed.json", true},

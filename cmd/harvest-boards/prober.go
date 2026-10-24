@@ -849,6 +849,7 @@ var probers = map[string]prober{
 	"workday":         workdayProber{},
 	"icims":           icimsProber{},
 	"gupy":            gupyProber{},
+	"pandape":         pandapeProber{},
 	"workable":        workableProber{},
 	"smartrecruiters": smartRecruitersProber{},
 	"recruitee":       recruiteeProber{},

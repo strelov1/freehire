@@ -1,0 +1,131 @@
+package main
+
+import (
+	"bytes"
+	"compress/gzip"
+	"context"
+	"encoding/xml"
+	"fmt"
+	"io"
+	"log"
+	"regexp"
+	"strconv"
+	"strings"
+
+	"golang.org/x/net/html"
+
+	"github.com/strelov1/freehire/internal/ingest/atsboard"
+	"github.com/strelov1/freehire/internal/ingest/sources"
+)
+
+// A Pandapé board is a career-site tenant label (<tenant>.pandape.infojobs.com.br), the key
+// sources.pandape lists by.
+const (
+	// pandapeSitemapIndex is the sitemap robots.txt names: a gzip index of gzip shards, each
+	// up to 1,000 vacancy URLs (115 shards, ~113.6k URLs, 3,347 tenant labels on 2026-10-23).
+	// It is the only public list that spans tenants. It is NOT the catalogue — a tenant's
+	// own listing carries more than its sitemap entries (braspress: 54 against 20) — so it
+	// serves discovery only.
+	pandapeSitemapIndex = "https://www.pandape.com.br/pandapeindexofertas.xml.gz"
+	// pandapeSiteURL is a tenant's career site, %s = the tenant label.
+	pandapeSiteURL = "https://%s.pandape.infojobs.com.br/"
+)
+
+// pandapeProber probes and discovers Pandapé career sites.
+type pandapeProber struct{}
+
+// pandapeTitle is the career site's title: "<employer> - Trabalhe Conosco | Pandapé".
+var pandapeTitle = regexp.MustCompile(`^(.+?) - Trabalhe Conosco \| Pandap`)
+
+// probe reads the career site's own page: the employer from its title and the open-vacancy
+// count from its "subTotal" counter. An unknown tenant answers 404 ("A Página de Carreiras
+// desta empresa não está mais disponível no Pandapé") and a site with no vacancy counts 0;
+// both are a skip.
+func (pandapeProber) probe(ctx context.Context, c httpClient, tenant string) (string, int, error) {
+	root, err := c.GetHTML(ctx, fmt.Sprintf(pandapeSiteURL, tenant))
+	if err != nil {
+		return "", 0, nil
+	}
+	n := pandapeSubtotal(root)
+	if n == 0 {
+		return "", 0, nil
+	}
+	name := tenant
+	if m := pandapeTitle.FindStringSubmatch(pageTitle(root)); m != nil {
+		name = strings.TrimSpace(m[1])
+	}
+	return name, n, nil
+}
+
+// pandapeSubtotal reads the career site's <span id="subTotal">N</span>, 0 when it has none.
+func pandapeSubtotal(n *html.Node) int {
+	if n.Type == html.ElementNode && sources.Attr(n, "id") == "subTotal" && n.FirstChild != nil {
+		v, _ := strconv.Atoi(strings.TrimSpace(n.FirstChild.Data))
+		return v
+	}
+	for ch := n.FirstChild; ch != nil; ch = ch.NextSibling {
+		if v := pandapeSubtotal(ch); v != 0 {
+			return v
+		}
+	}
+	return 0
+}
+
+type pandapeURLSet struct {
+	Locs []string `xml:"url>loc"`
+}
+
+type pandapeSitemapSet struct {
+	Locs []string `xml:"sitemap>loc"`
+}
+
+// discover reads the sitemap index and every shard, collecting each vacancy URL's tenant in
+// first-seen order. Recognition goes through atsboard, so the platform's own hosts (www, the
+// confidential-employer bucket "empregos") and the host-less entries some shards carry
+// ("<loc>/Detail/3552612</loc>") never become candidates. A shard that fails is logged and
+// skipped: a short candidate list only means fewer probes, never a wrong board.
+func (pandapeProber) discover(ctx context.Context, c httpClient) ([]string, error) {
+	var index pandapeSitemapSet
+	if err := pandapeGzipXML(ctx, c, pandapeSitemapIndex, &index); err != nil {
+		return nil, fmt.Errorf("pandape discover: sitemap index: %w", err)
+	}
+	if len(index.Locs) == 0 {
+		return nil, fmt.Errorf("pandape discover: sitemap index lists no shard")
+	}
+	var tenants []string
+	seen := make(map[string]bool)
+	for _, shard := range index.Locs {
+		var set pandapeURLSet
+		if err := pandapeGzipXML(ctx, c, strings.TrimSpace(shard), &set); err != nil {
+			log.Printf("pandape discover: %s: %v (skipping shard)", shard, err)
+			continue
+		}
+		for _, loc := range set.Locs {
+			src, board, _, ok := atsboard.Recognize(strings.TrimSpace(loc))
+			if !ok || src != "pandape" || seen[board] {
+				continue
+			}
+			seen[board] = true
+			tenants = append(tenants, board)
+		}
+	}
+	return tenants, nil
+}
+
+// pandapeGzipXML fetches a .xml.gz FILE — served as application/x-gzip, not as a gzip
+// Content-Encoding, so the body arrives compressed — and decodes the XML inside it.
+func pandapeGzipXML(ctx context.Context, c httpClient, u string, v any) error {
+	raw, err := c.GetText(ctx, u)
+	if err != nil {
+		return err
+	}
+	zr, err := gzip.NewReader(bytes.NewReader([]byte(raw)))
+	if err != nil {
+		return fmt.Errorf("not gzip: %w", err)
+	}
+	body, err := io.ReadAll(zr)
+	if err != nil {
+		return err
+	}
+	return xml.Unmarshal(body, v)
+}
