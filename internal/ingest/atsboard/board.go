@@ -191,9 +191,6 @@ var atsBoards = []struct{ host, source, mode string }{
 	{"careers.pageuppeople.com", "pageup", modePathNumeric},
 	{"oportunidades.mindsight.com.br", "mindsight", modePath},
 	{"careers.hireology.com", "hireology", modePath},
-	// GoHire's career site is jobs.gohire.io/<slug>-<8-character code>/…; the platform's own
-	// static files share the host under /assets (noBoardFirstSegments).
-	{"jobs.gohire.io", "gohire", modePath},
 	// ADP MyJobs: myjobs.adp.com/<board>/cx/…. A different ADP product from Workforce Now
 	// (modeQueryPair below) — its board is the career site's own slug, which the adpmyjobs
 	// adapter resolves to the orgoid its listing needs; neither id derives from the other.
@@ -462,6 +459,8 @@ var atsBoards = []struct{ host, source, mode string }{
 	{"geekhunter.com", "geekhunter", modePathPattern},
 	{"cleverstaff.net", "cleverstaff", modePathPattern},
 	{"careers.flatchr.io", "flatchr", modePathPattern},
+	{"app.trinethire.com", "trinethire", modePathPattern},
+	{"jobs.gohire.io", "gohire", modePathPattern},
 }
 
 // pathPattern is one pathPatternBoards entry; see there.
@@ -526,6 +525,20 @@ var pathPatternBoards = map[string]pathPattern{
 	"careers.flatchr.io": {
 		path:    regexp.MustCompile(`^/(?:[a-z]{2}/)?company/([a-z0-9][a-z0-9-]*?)(?:\.json)?(?:/|$)`),
 		listing: "/fr/company/%s",
+	},
+	// TriNet Hire: /companies/<numeric id>[-<slug>]/jobs[/<posting>] (internal/ingest/sources/
+	// trinethire.go). The leading id is what proves the segment is a company; the host's own
+	// pages (/privacy) sit outside /companies/.
+	"app.trinethire.com": {
+		path:    regexp.MustCompile(`^/companies/(\d+(?:-[a-z0-9-]+)?)(?:/|$)`),
+		listing: "/companies/%s/jobs",
+	},
+	// GoHire: /<slug>-<8-character site code>/[<posting>/] (internal/ingest/sources/gohire.go).
+	// The code's shape is what separates a site from the platform's /assets and from the
+	// retired numeric form (dexerto-19265), which answers 404.
+	"jobs.gohire.io": {
+		path:    regexp.MustCompile(`^/([a-z0-9][a-z0-9-]*-[a-z0-9]{8})(?:/|$)`),
+		listing: "/%s/",
 	},
 }
 
@@ -725,10 +738,6 @@ var apiBoards = []struct{ host, source, prefix string }{
 	// prefix here and are declined — which is right, since skipping the segment would take the
 	// posting id for a board, the same trap workable's "/j/<id>" shortlink carries.
 	{"recruiting.paylocity.com", "paylocity", "Recruiting/Jobs/All"},
-	// TriNet Hire serves every company from one host under /companies/<id>-<slug>/jobs/…, and the
-	// segment after "companies" is the board the adapter fetches. The host also carries the
-	// product's own pages (/privacy), so only a link under the prefix names a board.
-	{"app.trinethire.com", "trinethire", "companies"},
 	// HR-Manager's job-portal API, which a customer's own careers page calls to list its
 	// postings: /JobPortal.svc/<alias>/PositionList/json/ (embeds spell the path in either
 	// case, hence the case-insensitive prefix). The alias is the board the adapter reads.
@@ -787,8 +796,6 @@ var noBoardFirstSegments = map[string][]string{
 	// ADP MyJobs' own API (/public/staffing/v1/career-site/<board>, which the adapter calls)
 	// shares the host with the career sites; "public" is not a tenant.
 	"myjobs.adp.com": {"public"},
-	// GoHire's career pages load their scripts and styles from jobs.gohire.io/assets/….
-	"jobs.gohire.io": {"assets"},
 	// The AppOne portal SPA loads its own API, bundle assets and uploaded logos from the host its
 	// portals live on; none of them is an employer.
 	"jobs.appone.com": {"api", "assets", "company-images"},
