@@ -19,6 +19,6 @@
 
 ## 4. Verification and rollout
 
-- [ ] 4.1 svelte-check 0 errors, eslint, vitest, token-coverage and adoption hooks, knip
-- [ ] 4.2 Browser: no scroll at 1280×720 and 390×844; Brazil → cities; clicks update the list; World view; worldwide; keyboard
+- [x] 4.1 svelte-check 0 errors, eslint, vitest, token-coverage and adoption hooks, knip
+- [x] 4.2 Browser: no scroll at 1280×720 and 390×844; Brazil → cities; clicks update the list; World view; worldwide; keyboard
 - [ ] 4.3 PR → CI → merge → deploy → check on prod
