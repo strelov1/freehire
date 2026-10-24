@@ -131,7 +131,7 @@ func discover(ctx context.Context, fetch fetcher, queries []query, existing map[
 				continue
 			}
 			seen[c.profileURL] = true
-			if existing[normalize.Slug(c.company)] {
+			if existing[normalize.CompanySlug(c.company)] {
 				continue
 			}
 			if cand, ok := hydrate(ctx, fetch, c); ok {

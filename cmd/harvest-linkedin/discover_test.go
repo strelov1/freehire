@@ -91,8 +91,9 @@ func TestDiscoverCollapsesEmployersAndSkipsKnownOnes(t *testing.T) {
 			// Two postings by the same employer: the second must cost no request.
 			cardMarkup("1", "Doodle", "https://ch.linkedin.com/company/doodle-ag", "https://x/jobs/view/a-1"),
 			cardMarkup("2", "Doodle", "https://ch.linkedin.com/company/doodle-ag", "https://x/jobs/view/b-2"),
-			// An employer the catalogue already has: dropped before any fetch.
-			cardMarkup("3", "Capgemini", "https://linkedin.com/company/capgemini", "https://x/jobs/view/c-3"),
+			// An employer the catalogue already has, written with its legal form: dropped before
+			// any fetch, because the catalogue keys a company without one.
+			cardMarkup("3", "Capgemini SE", "https://linkedin.com/company/capgemini", "https://x/jobs/view/c-3"),
 		),
 		"https://x/jobs/view/a-1":                   ldPosting("teamtailor-8094978"),
 		"https://ch.linkedin.com/company/doodle-ag": ldProfile("https://doodle.com"),

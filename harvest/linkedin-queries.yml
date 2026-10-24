@@ -22,6 +22,14 @@
 # The rest widens the role vocabulary rather than the page depth: a seventh page of "golang" is
 # the same employers further down, while a market's QA and mobile postings are different
 # companies entirely. Depth stays at 3 for the markets that yielded and 2 elsewhere.
+#
+# That list was then measured in turn (2026-10-22): 22 queries surfaced 63 companies the
+# catalogue lacked and 3 live boards. Two things held the yield down. Part of the 63 were not
+# new at all — the catalogue filter keyed names with the generic slug rather than the company
+# slug, so "adesso SE" missed the catalogue's "adesso" — and the markets were the ones the
+# catalogue already covers best. The third section therefore goes where coverage is thin:
+# the Americas, Asia-Pacific, the Middle East, Africa and the smaller European markets. A thin
+# market posts less, so it gets a two-week window rather than one.
 queries:
   # --- Nordics: Teamtailor's home market, where a host-keyed guess has the most to find ---
   - keywords: software engineer
@@ -94,3 +102,198 @@ queries:
   - keywords: java developer
     location: Romania
     pages: 2
+
+  # --- thin markets: where the catalogue covers least, so a hiring employer is likeliest new ---
+  - keywords: software engineer
+    location: United States
+    pages: 3
+  - keywords: backend engineer
+    location: United States
+    pages: 3
+  - keywords: data engineer
+    location: United States
+    pages: 2
+  - keywords: devops engineer
+    location: United States
+    pages: 2
+  - keywords: software developer
+    location: Canada
+    pages: 3
+  - keywords: data engineer
+    location: Canada
+    pages: 2
+  - keywords: software engineer
+    location: Australia
+    pages: 3
+  - keywords: devops
+    location: Australia
+    pages: 2
+  - keywords: software developer
+    location: New Zealand
+    pages: 2
+    jobage: 14
+  - keywords: software engineer
+    location: India
+    pages: 3
+  - keywords: backend developer
+    location: India
+    pages: 2
+  - keywords: software engineer
+    location: Singapore
+    pages: 3
+  - keywords: software engineer
+    location: Japan
+    pages: 2
+    jobage: 14
+  - keywords: software engineer
+    location: South Korea
+    pages: 2
+    jobage: 14
+  - keywords: software engineer
+    location: Taiwan
+    pages: 2
+    jobage: 14
+  - keywords: software engineer
+    location: Hong Kong
+    pages: 2
+    jobage: 14
+  - keywords: software engineer
+    location: Malaysia
+    pages: 2
+    jobage: 14
+  - keywords: software engineer
+    location: Philippines
+    pages: 2
+    jobage: 14
+  - keywords: software engineer
+    location: Vietnam
+    pages: 2
+    jobage: 14
+  - keywords: software engineer
+    location: Indonesia
+    pages: 2
+    jobage: 14
+  - keywords: software engineer
+    location: Israel
+    pages: 3
+  - keywords: software engineer
+    location: United Arab Emirates
+    pages: 2
+    jobage: 14
+  - keywords: software engineer
+    location: Saudi Arabia
+    pages: 2
+    jobage: 14
+  - keywords: software engineer
+    location: Turkey
+    pages: 2
+    jobage: 14
+  - keywords: software engineer
+    location: Egypt
+    pages: 2
+    jobage: 14
+  - keywords: software engineer
+    location: South Africa
+    pages: 2
+    jobage: 14
+  - keywords: software engineer
+    location: Nigeria
+    pages: 2
+    jobage: 14
+  - keywords: software engineer
+    location: Kenya
+    pages: 2
+    jobage: 14
+  - keywords: desenvolvedor
+    location: Brazil
+    pages: 3
+  - keywords: software engineer
+    location: Brazil
+    pages: 2
+  - keywords: desarrollador
+    location: Mexico
+    pages: 3
+  - keywords: desarrollador
+    location: Argentina
+    pages: 2
+    jobage: 14
+  - keywords: desarrollador
+    location: Colombia
+    pages: 2
+    jobage: 14
+  - keywords: desarrollador
+    location: Chile
+    pages: 2
+    jobage: 14
+  - keywords: développeur
+    location: France
+    pages: 3
+  - keywords: data engineer
+    location: France
+    pages: 2
+  - keywords: sviluppatore
+    location: Italy
+    pages: 2
+  - keywords: software engineer
+    location: Austria
+    pages: 2
+  - keywords: software engineer
+    location: Luxembourg
+    pages: 2
+    jobage: 14
+  - keywords: software developer
+    location: Estonia
+    pages: 2
+    jobage: 14
+  - keywords: software developer
+    location: Lithuania
+    pages: 2
+    jobage: 14
+  - keywords: software developer
+    location: Latvia
+    pages: 2
+    jobage: 14
+  - keywords: software engineer
+    location: Ukraine
+    pages: 2
+    jobage: 14
+  - keywords: software engineer
+    location: Greece
+    pages: 2
+    jobage: 14
+  - keywords: software engineer
+    location: Hungary
+    pages: 2
+    jobage: 14
+  - keywords: software engineer
+    location: Bulgaria
+    pages: 2
+    jobage: 14
+  - keywords: software engineer
+    location: Serbia
+    pages: 2
+    jobage: 14
+  - keywords: software engineer
+    location: Croatia
+    pages: 2
+    jobage: 14
+  - keywords: software engineer
+    location: Slovakia
+    pages: 2
+    jobage: 14
+  - keywords: software engineer
+    location: Slovenia
+    pages: 2
+    jobage: 14
+  - keywords: software engineer
+    location: Cyprus
+    pages: 2
+    jobage: 14
+  - keywords: software engineer
+    location: Malta
+    pages: 2
+    jobage: 14
+  - keywords: software engineer
+    location: Iceland
+    pages: 2
+    jobage: 14
