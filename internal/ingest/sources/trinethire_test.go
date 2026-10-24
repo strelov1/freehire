@@ -179,6 +179,7 @@ func TestTrinetHireSalary(t *testing.T) {
 		{line: "$165,000", lo: 165000, hi: 165000, period: "year"},
 		{line: "$45.00 - $50.00 per hour", lo: 45, hi: 50, period: "hour"},
 		{line: "$23 - $25", wantNoSalary: true}, // an hourly figure typed without the hourly pay type
+		{line: "$1,200 - $25", wantNoSalary: true},
 		{line: "", wantNoSalary: true},
 	}
 	for _, c := range cases {

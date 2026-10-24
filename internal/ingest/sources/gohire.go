@@ -103,10 +103,12 @@ func (g gohire) FetchNew(ctx context.Context, e CompanyEntry, seen func(external
 	}), nil
 }
 
-// list walks the listing pages. The first page failing fails the board (an unknown site is a
-// 404); a later page failing ends the walk with the cards gathered so far, the repository-wide
-// rule (see crawlPagedLinks). The walk ends on the page count the listing states, or on a page
-// that adds no new card.
+// list walks the listing pages. ANY page failing fails the board — an exception to the
+// repository-wide "a later page ends the walk with what was gathered" rule (crawlPagedLinks),
+// because here a later page failing is the expected shape of the quota running out mid-board
+// (see gohireRequestInterval): salvaging would leave every posting past that page unseen run
+// after run, and the unseen sweep would close them while they are still live. The walk ends
+// on the page count the listing states, or on a page that adds no new card.
 func (g gohire) list(ctx context.Context, board string) ([]gohireCard, error) {
 	if !gohireBoardPattern.MatchString(board) {
 		return nil, fmt.Errorf("gohire: board %q is not a <slug>-<code> site segment", board)
@@ -116,10 +118,7 @@ func (g gohire) list(ctx context.Context, board string) ([]gohireCard, error) {
 	for page := 1; page <= gohireMaxPages; page++ {
 		root, err := g.get(ctx, fmt.Sprintf("%s%s/?page=%d", gohireBase, board, page))
 		if err != nil {
-			if page == 1 {
-				return nil, fmt.Errorf("gohire: list site %s: %w", board, err)
-			}
-			break
+			return nil, fmt.Errorf("gohire: list site %s page %d: %w", board, page, err)
 		}
 		added := 0
 		for _, c := range gohireCards(root) {

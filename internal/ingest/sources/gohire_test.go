@@ -160,13 +160,13 @@ func TestGoHireListingFailures(t *testing.T) {
 	if _, err := NewGoHire(&routedHTTP{}).Fetch(context.Background(), CompanyEntry{Board: "dexerto-19265/../x"}); err == nil {
 		t.Error("Fetch accepted a board that is not a <slug>-<code> segment")
 	}
-	// A later page failing ends the walk with what was gathered rather than failing the board.
+	// A later page failing fails the board too: a salvaged first page would leave the rest of
+	// the site unseen, and the unseen sweep would close live postings.
 	partial := (&routedHTTP{}).route("?page=1", gohireFixture(t, "list_dexerto_p1.html"))
 	partial.routeErr("?page=2", errors.New("timeout"))
-	jobs, err := NewGoHire(partial).(HydratingSource).FetchNew(context.Background(),
-		CompanyEntry{Board: "dexerto-de5jlhjo"}, func(string) bool { return true })
-	if err != nil || len(jobs) != 10 {
-		t.Errorf("FetchNew = %d jobs, %v; want the first page's 10", len(jobs), err)
+	if _, err := NewGoHire(partial).(HydratingSource).FetchNew(context.Background(),
+		CompanyEntry{Board: "dexerto-de5jlhjo"}, func(string) bool { return true }); err == nil {
+		t.Error("FetchNew succeeded with page 2 unread, want the board to fail")
 	}
 }
 

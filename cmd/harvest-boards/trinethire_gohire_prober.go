@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+
+	"github.com/strelov1/freehire/internal/ingest/sources"
 )
 
 // trinethireProber probes a TriNet Hire company (board = the "<id>-<slug>" path segment). The
@@ -13,6 +15,10 @@ import (
 // <title> is "Careers at <employer>", the platform's own rendering of the company name, so it
 // names the employer for the corroboration gate.
 type trinethireProber struct{}
+
+// dedupKey folds the name slug off, so two spellings of one company id are probed once — the
+// same fold the catalogue applies on insert (sources.BoardDedupeKey).
+func (trinethireProber) dedupKey(board string) string { return foldedBoard("trinethire", board) }
 
 // trinethireJobPattern is a posting link on the listing: /companies/<board>/jobs/<numeric id>-…
 var trinethireJobPattern = regexp.MustCompile(`^/companies/[^/]+/jobs/\d+`)
@@ -35,6 +41,10 @@ func (trinethireProber) probe(ctx context.Context, c httpClient, board string) (
 // harvest it with -pace 0.1 and no more candidates than the quota holds (see sources/gohire.go).
 type gohireProber struct{}
 
+// dedupKey folds onto the site code, so two slugs in front of one site are probed once and the
+// quota is spent on distinct sites only.
+func (gohireProber) dedupKey(board string) string { return foldedBoard("gohire", board) }
+
 // gohireJobPattern is a posting link on the listing: jobs.gohire.io/<board>/<slug>-<id>/.
 var gohireJobPattern = regexp.MustCompile(`^https://jobs\.gohire\.io/[^/]+/[^/]*-\d+/?$`)
 
@@ -48,4 +58,11 @@ func (gohireProber) probe(ctx context.Context, c httpClient, board string) (stri
 		return "", 0, nil
 	}
 	return strings.TrimSpace(strings.TrimPrefix(pageTitle(root), "Jobs at ")), n, nil
+}
+
+// foldedBoard is the catalogue's own identity for a board (sources.BoardDedupeKey), so a prober
+// dedups candidates exactly the way the insert will.
+func foldedBoard(provider, board string) string {
+	key, _ := sources.BoardDedupeKey(sources.CompanyEntry{Provider: provider, Board: board})
+	return key
 }

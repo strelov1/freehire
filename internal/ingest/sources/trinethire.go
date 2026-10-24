@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/url"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -277,7 +278,7 @@ func trinethireSalary(line string) (lo, hi *int, currency, period string) {
 	if strings.Contains(strings.ToLower(line), "per hour") {
 		period = "hour"
 	}
-	if period == "year" && amounts[0] < 1000 {
+	if period == "year" && slices.Min(amounts) < 1000 {
 		return nil, nil, "", ""
 	}
 	lo = roundSalaryPart(amounts[0])
