@@ -5,8 +5,8 @@
 
 ## 2. Shared bubble map
 
-- [ ] 2.1 `map/BubbleMap.svelte`: land, bubbles, tooltip on hover AND focus, Enter/Space activation when `onpick` is given, read-only otherwise; spec
-- [ ] 2.2 Rebuild `filters/JobsWorldMap.svelte` on it; AI search specs stay green
+- [x] 2.1 `map/BubbleMap.svelte`: land, bubbles, tooltip on hover AND focus, Enter/Space activation when `onpick` is given, read-only otherwise; spec
+- [x] 2.2 Rebuild `filters/JobsWorldMap.svelte` on it; AI search specs stay green
 
 ## 3. Jobs map dialog
 

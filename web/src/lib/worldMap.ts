@@ -9,6 +9,10 @@ export function projectToMap(lat: number, lng: number): { x: number; y: number }
   return { x: lng + 180, y: 90 - lat };
 }
 
+/** One place a map draws: a country or a city, where it is and how many jobs it holds.
+ *  `key` identifies it to the host that picks it. */
+export type MapPlace = { key: string; label: string; count: number; lat: number; lng: number };
+
 /** A window onto the 360x180 box, as an SVG viewBox. */
 export type MapView = { x: number; y: number; w: number; h: number };
 
