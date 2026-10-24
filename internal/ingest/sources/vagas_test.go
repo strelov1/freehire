@@ -38,14 +38,20 @@ func (f *vagasHTTP) GetHTML(_ context.Context, url string) (*html.Node, error) {
 	return html.Parse(strings.NewReader(body))
 }
 
-// vagasListingHTML links each given path from a listing page.
-func vagasListingHTML(paths ...string) string {
+// vagasListingHTML renders a one-page listing whose heading states exactly its own cards.
+func vagasListingHTML(paths ...string) string { return vagasListingPage(len(paths), paths...) }
+
+// vagasListingPage renders a listing page in the site's markup (scrubbed): the heading states the
+// catalogue total, each card's link carries the title and its span the employer.
+func vagasListingPage(total int, paths ...string) string {
 	var b strings.Builder
-	b.WriteString(`<html><body><ul>`)
+	fmt.Fprintf(&b, `<html><body><h1>%d vagas de emprego</h1><div id="todasVagas"><ul>`, total)
 	for _, p := range paths {
-		b.WriteString(`<li><a href="` + p + `">vaga</a></li>`)
+		b.WriteString(`<li class="vaga odd "><header><h2 class="cargo">` +
+			`<a class="link-detalhes-vaga" title="Vaga ` + p + `" href="` + p + `"> Vaga </a></h2>` +
+			`<span class="emprVaga"> Employer ` + p + ` </span></header></li>`)
 	}
-	b.WriteString(`</ul></body></html>`)
+	b.WriteString(`</ul></div></body></html>`)
 	return b.String()
 }
 
@@ -65,10 +71,12 @@ func vagasDetailHTML(title, company, locality, region, country, datePosted, desc
 func TestVagasFetch(t *testing.T) {
 	const host = "https://www.vagas.com.br/"
 	pages := map[string]string{
-		"https://www.vagas.com.br/vagas-de-tecnologia?pagina=1": vagasListingHTML(
+		vagasListingURL(1): vagasListingPage(41,
 			"/vagas/v101/analista-de-dados", "/vagas/v102/dev-backend"),
-		"https://www.vagas.com.br/vagas-de-programador?pagina=1": vagasListingHTML(
-			"/vagas/v102/dev-backend", "/vagas/v103/dev-frontend"), // 102 is a cross-area duplicate
+		// The site reshuffles its listing between requests, so page 2 repeats a posting page 1
+		// showed; it is read once.
+		vagasListingURL(2): vagasListingPage(41,
+			"/vagas/v102/dev-backend", "/vagas/v103/dev-frontend"),
 		host + "vagas/v101/analista-de-dados": vagasDetailHTML(
 			"Analista de Dados", "Acme", "São Paulo", "SP", "Brasil", "2026-06-17", "Full description here."),
 		host + "vagas/v102/dev-backend": vagasDetailHTML(
@@ -127,8 +135,8 @@ func TestVagasDetailPrefersStructuredHTMLBlock(t *testing.T) {
 		`<p>Missao do cargo.</p><p><strong>REQUISITOS:</strong></p><ul><li>Item um</li><li>Item dois</li></ul>` +
 		`</div></body></html>`
 	pages := map[string]string{
-		"https://www.vagas.com.br/vagas-de-tecnologia?pagina=1": vagasListingHTML("/vagas/v900/dev"),
-		host + "vagas/v900/dev":                                 page,
+		vagasListingURL(1):      vagasListingHTML("/vagas/v900/dev"),
+		host + "vagas/v900/dev": page,
 	}
 	jobs, err := vagas{http: &vagasHTTP{pages: pages}}.Fetch(context.Background(), CompanyEntry{})
 	if err != nil {
@@ -150,8 +158,8 @@ func TestVagasDetailPrefersStructuredHTMLBlock(t *testing.T) {
 func TestVagasDetailWithoutJobPostingSkipped(t *testing.T) {
 	const host = "https://www.vagas.com.br/"
 	pages := map[string]string{
-		"https://www.vagas.com.br/vagas-de-tecnologia?pagina=1": vagasListingHTML("/vagas/v200/ghost"),
-		host + "vagas/v200/ghost":                               `<html><body>no ld+json</body></html>`,
+		vagasListingURL(1):        vagasListingHTML("/vagas/v200/ghost"),
+		host + "vagas/v200/ghost": `<html><body>no ld+json</body></html>`,
 	}
 	jobs, err := vagas{http: &vagasHTTP{pages: pages}}.Fetch(context.Background(), CompanyEntry{})
 	if err != nil {
@@ -162,13 +170,64 @@ func TestVagasDetailWithoutJobPostingSkipped(t *testing.T) {
 	}
 }
 
-// The first area's listing failing is a board-level error.
-func TestVagasFirstAreaFailure(t *testing.T) {
-	http := &vagasHTTP{failURLs: map[string]bool{
-		"https://www.vagas.com.br/vagas-de-tecnologia?pagina=1": true,
+// The first listing page failing is a board-level error.
+func TestVagasFirstPageFailure(t *testing.T) {
+	http := &vagasHTTP{failURLs: map[string]bool{vagasListingURL(1): true}}
+	if _, err := (vagas{http: http}).Fetch(context.Background(), CompanyEntry{}); err == nil {
+		t.Fatal("want error when the first listing page fails")
+	}
+}
+
+// A later listing page failing costs that page alone: the walk goes on to the pages after it.
+func TestVagasLaterPageFailureCostsOnlyThatPage(t *testing.T) {
+	const host = "https://www.vagas.com.br/"
+	http := &vagasHTTP{
+		pages: map[string]string{
+			vagasListingURL(1):    vagasListingPage(120, "/vagas/v101/a"),
+			vagasListingURL(3):    vagasListingPage(120, "/vagas/v103/c"),
+			host + "vagas/v101/a": vagasDetailHTML("A", "Acme", "Recife", "PE", "Brasil", "2026-10-20", "Body."),
+			host + "vagas/v103/c": vagasDetailHTML("C", "Acme", "Recife", "PE", "Brasil", "2026-10-20", "Body."),
+		},
+		failURLs: map[string]bool{vagasListingURL(2): true},
+	}
+	jobs, err := vagas{http: http}.Fetch(context.Background(), CompanyEntry{})
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	if len(jobs) != 2 {
+		t.Fatalf("want the postings of pages 1 and 3, got %+v", jobs)
+	}
+}
+
+// A page that adds nothing new is not the end of a reshuffling listing: the walk runs to the
+// page count the heading states.
+func TestVagasWalksPastAPageWithNothingNew(t *testing.T) {
+	http := &vagasHTTP{pages: map[string]string{
+		vagasListingURL(1): vagasListingPage(120, "/vagas/v101/a"),
+		vagasListingURL(2): vagasListingPage(120, "/vagas/v101/a"),
+		vagasListingURL(3): vagasListingPage(120, "/vagas/v103/c"),
+	}}
+	jobs, err := vagas{http: http}.FetchNew(context.Background(), CompanyEntry{}, func(string) bool { return true })
+	if err != nil {
+		t.Fatalf("FetchNew: %v", err)
+	}
+	if len(jobs) != 2 {
+		t.Fatalf("want both distinct postings, got %+v", jobs)
+	}
+	for _, u := range http.got {
+		if u == vagasListingURL(4) {
+			t.Error("walked past the page count the heading states")
+		}
+	}
+}
+
+// A first page that states no total is a layout change, not an empty catalogue.
+func TestVagasListingWithoutTotalFails(t *testing.T) {
+	http := &vagasHTTP{pages: map[string]string{
+		vagasListingURL(1): `<html><body><li class="vaga"><a class="link-detalhes-vaga" href="/vagas/v1/a">A</a></li></body></html>`,
 	}}
 	if _, err := (vagas{http: http}).Fetch(context.Background(), CompanyEntry{}); err == nil {
-		t.Fatal("want error when the first area listing fails")
+		t.Fatal("want an error when page 1 states no total")
 	}
 }
 
@@ -237,17 +296,12 @@ func (f *vagasFake) GetHTML(_ context.Context, url string) (*html.Node, error) {
 }
 
 func TestVagasSkipsDetailForAlreadyIngestedPostings(t *testing.T) {
-	listing := `<html><body>
-<a href="/vagas/v1234567/dev-backend">Dev Backend</a>
-<a href="/vagas/v7654321/dev-frontend">Dev Frontend</a>
-</body></html>`
+	listing := vagasListingHTML("/vagas/v1234567/dev-backend", "/vagas/v7654321/dev-frontend")
 	page := `<html><body><script type="application/ld+json">{"@context":"https://schema.org","@type":"JobPosting",
 "title":"Dev","hiringOrganization":{"@type":"Organization","name":"Acme"},"description":"<p>Body.</p>"}</script></body></html>`
 
 	http := &vagasFake{pages: map[string]string{}}
-	for _, area := range vagasAreas {
-		http.pages[fmt.Sprintf("https://www.vagas.com.br/%s?pagina=1", area)] = listing
-	}
+	http.pages[vagasListingURL(1)] = listing
 	http.pages["https://www.vagas.com.br/vagas/v1234567/dev-backend"] = page
 	http.pages["https://www.vagas.com.br/vagas/v7654321/dev-frontend"] = page
 
@@ -289,19 +343,12 @@ func TestVagasIsAHydratingSource(t *testing.T) {
 // its 50-minute budget, and — the board writes only after the fetch — stored none of them. The
 // next run faced the same backlog. A per-run budget is what lets the backlog shrink.
 func TestVagasHydratesAtMostTheBudgetOfNewPostings(t *testing.T) {
-	listing := `<html><body>
-<a href="/vagas/v1000001/a">A</a>
-<a href="/vagas/v1000002/b">B</a>
-<a href="/vagas/v1000003/c">C</a>
-<a href="/vagas/v1000004/d">D</a>
-</body></html>`
+	listing := vagasListingHTML("/vagas/v1000001/a", "/vagas/v1000002/b", "/vagas/v1000003/c", "/vagas/v1000004/d")
 	page := `<html><body><script type="application/ld+json">{"@context":"https://schema.org","@type":"JobPosting",
 "title":"Dev","hiringOrganization":{"@type":"Organization","name":"Acme"},"description":"<p>Body.</p>"}</script></body></html>`
 
 	http := &vagasFake{pages: map[string]string{}}
-	for _, area := range vagasAreas {
-		http.pages[fmt.Sprintf("https://www.vagas.com.br/%s?pagina=1", area)] = listing
-	}
+	http.pages[vagasListingURL(1)] = listing
 	for _, p := range []string{"v1000001/a", "v1000002/b", "v1000003/c", "v1000004/d"} {
 		http.pages["https://www.vagas.com.br/vagas/"+p] = page
 	}
@@ -331,5 +378,45 @@ func TestVagasHydratesAtMostTheBudgetOfNewPostings(t *testing.T) {
 	}
 	if details != 2 {
 		t.Errorf("fetched %d detail pages, want exactly the budget of 2", details)
+	}
+}
+
+// A posting the pipeline will discard is never stored, so never seen: without the gate it would
+// take a hydration slot on every run. The listing card names its employer and title, so it is
+// yielded body-less and costs no detail request.
+func TestVagasGateSkipsDetailForDiscardedPostings(t *testing.T) {
+	const covered, rejected, kept = "/vagas/v1/covered", "/vagas/v2/rejected", "/vagas/v3/kept"
+	page := `<html><body><script type="application/ld+json">{"@context":"https://schema.org","@type":"JobPosting",
+"title":"Dev","hiringOrganization":{"@type":"Organization","name":"Acme"},"description":"<p>Body.</p>"}</script></body></html>`
+	http := &vagasFake{pages: map[string]string{vagasListingURL(1): vagasListingHTML(covered, rejected, kept)}}
+	for _, p := range []string{covered, rejected, kept} {
+		http.pages["https://www.vagas.com.br"+p] = page
+	}
+	gate := DetailGate{
+		Covered: func(companies []string) map[string]bool {
+			return map[string]bool{"Employer " + covered: true}
+		},
+		Rejected: func(j Job) bool { return j.Title == "Vaga "+rejected },
+	}
+	jobs, err := NewVagas(http).(vagas).FetchNewGated(context.Background(), CompanyEntry{},
+		func(string) bool { return false }, gate)
+	if err != nil {
+		t.Fatalf("FetchNewGated: %v", err)
+	}
+	if len(jobs) != 3 {
+		t.Fatalf("want all three postings yielded, got %d", len(jobs))
+	}
+	for _, j := range jobs {
+		if j.ExternalID != "3" && (j.Description != "" || j.Company == "") {
+			t.Errorf("gated posting %s: want body-less with its listing company, got %+v", j.ExternalID, j)
+		}
+	}
+	for _, p := range []string{covered, rejected} {
+		if n := http.asked["https://www.vagas.com.br"+p]; n != 0 {
+			t.Errorf("%s detail fetched %d times, want 0", p, n)
+		}
+	}
+	if http.asked["https://www.vagas.com.br"+kept] != 1 {
+		t.Errorf("the kept posting was not hydrated")
 	}
 }
