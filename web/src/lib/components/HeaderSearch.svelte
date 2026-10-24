@@ -555,10 +555,12 @@
 
   /** Put the caret at `at` once the box has rendered the text it points into. */
   async function placeCaret(at: number) {
-    caret = at;
     await tick();
     inputEl?.focus();
     inputEl?.setSelectionRange(at, at);
+    // Last: focusing runs `onfocus`, which reads the caret from the box BEFORE the range
+    // above moved it.
+    caret = at;
   }
 
   /** A picked operator row: write its canonical value over the token and keep typing. */
