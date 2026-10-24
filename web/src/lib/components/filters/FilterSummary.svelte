@@ -2,6 +2,7 @@
   import { dynamicLabel, FACETS } from '#lib/facets.js';
   import { type FilterStore, savedSearchQuery, displayQuery } from '#lib/filters.js';
   import { experienceLabel, freshnessLabel, salaryLabel } from '#lib/filterControls.js';
+  import { unsummarized } from '#lib/filterSummary.js';
   import FilterSummaryShell, { type SummaryChip, type SummaryGroup } from './FilterSummaryShell.svelte';
   import SaveSearchAlert from './SaveSearchAlert.svelte';
 
@@ -32,7 +33,11 @@
     // Chips for one facet: included values first, then excluded (destructive style).
     // `withIcon` carries the raw value through as `slug` for the skills group, so its
     // chips can show a brand logo — see SummaryChip.slug.
+    // Every facet a group below has shown, so the ones none did still get a chip.
+    // eslint-disable-next-line svelte/prefer-svelte-reactivity -- local to one derivation, never rendered from
+    const shown = new Set<string>();
     const facetChips = (param: string, withIcon = false): SummaryChip[] => {
+      shown.add(param);
       const st = f.facets[param];
       if (!st) return [];
       return [
@@ -109,6 +114,8 @@
       const text = experienceLabel(f.experienceYearsMax) + (f.experienceIncludeUnspecified ? ' or not stated' : '');
       push('Experience', [{ key: 'experience_years_max', text, exclude: false, remove: () => store.setExperienceYearsMax(null) }]);
     }
+
+    for (const def of unsummarized(FACETS, shown, exclude)) facetGroup(def.param, def.label);
 
     return out;
   });
