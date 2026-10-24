@@ -40,7 +40,10 @@ func resolvePlaceholders(ctx context.Context, rows []db.ListPlaceholderCompanyBo
 	for _, row := range rows {
 		resolver, ok := registry[row.Provider]
 		if !ok {
+			// Under the lock: goroutines started earlier in this loop write the same counter.
+			mu.Lock()
 			unresolved++
+			mu.Unlock()
 			continue
 		}
 		g.Go(func() error {
@@ -100,13 +103,19 @@ func writePlaceholderRename(ctx context.Context, q placeholderWriter, r placehol
 	if err != nil {
 		return false, fmt.Errorf("jobs: %w", err)
 	}
-	if _, err := q.RenameSlugBoardCompany(ctx, db.RenameSlugBoardCompanyParams{
+	boardRows, err := q.RenameSlugBoardCompany(ctx, db.RenameSlugBoardCompanyParams{
 		Name:     r.name,
 		Provider: r.provider,
 		Board:    r.board,
 		OldName:  r.oldName,
-	}); err != nil {
+	})
+	if err != nil {
 		return false, fmt.Errorf("board: %w", err)
+	}
+	// The board changed since it was listed — a curator named it meanwhile. Failing rolls the
+	// jobs half back, which would otherwise carry this name under a board stating another.
+	if boardRows == 0 {
+		return false, fmt.Errorf("board: %s %s no longer carries %q", r.provider, r.board, r.oldName)
 	}
 	return n > 0, nil
 }

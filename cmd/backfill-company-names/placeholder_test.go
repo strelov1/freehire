@@ -34,8 +34,9 @@ func TestResolvePlaceholders(t *testing.T) {
 
 // fakePlaceholderWriter records the writes writePlaceholderRename makes, in order.
 type fakePlaceholderWriter struct {
-	calls []string
-	alias map[string]string // folded key -> canonical slug
+	calls     []string
+	alias     map[string]string // folded key -> canonical slug
+	boardRows int64
 }
 
 func (f *fakePlaceholderWriter) ResolveCompanySlugAliases(_ context.Context, keys []string) ([]db.ResolveCompanySlugAliasesRow, error) {
@@ -55,14 +56,14 @@ func (f *fakePlaceholderWriter) RenamePlaceholderBoardJobs(_ context.Context, ar
 
 func (f *fakePlaceholderWriter) RenameSlugBoardCompany(_ context.Context, arg db.RenameSlugBoardCompanyParams) (int64, error) {
 	f.calls = append(f.calls, "board "+arg.Provider+"/"+arg.Board+" "+arg.OldName+"->"+arg.Name)
-	return 1, nil
+	return f.boardRows, nil
 }
 
 // The slug is the one the next crawl would write — CompanySlug drops the legal form, and an
 // alias the merge worker recorded wins — so the rename does not re-key the company again the
 // first time a posting changes.
 func TestWritePlaceholderRename(t *testing.T) {
-	f := &fakePlaceholderWriter{alias: map[string]string{"coppermooncafes": "copper-moon"}}
+	f := &fakePlaceholderWriter{alias: map[string]string{"coppermooncafes": "copper-moon"}, boardRows: 1}
 	r := placeholderRename{provider: "ukgready", board: "secure.saashr.com/1553aps", oldName: "secure.saashr.com/1553aps", name: "Copper Moon Cafes LLC"}
 
 	changed, err := writePlaceholderRename(context.Background(), f, r)
@@ -75,5 +76,16 @@ func TestWritePlaceholderRename(t *testing.T) {
 	}
 	if len(f.calls) != 2 || f.calls[0] != want[0] || f.calls[1] != want[1] {
 		t.Fatalf("calls = %q, want %q", f.calls, want)
+	}
+}
+
+// A board renamed by a curator after it was listed matches no row; the write must fail so the
+// caller's transaction rolls the jobs half back.
+func TestWritePlaceholderRename_BoardChangedMeanwhile(t *testing.T) {
+	f := &fakePlaceholderWriter{boardRows: 0}
+	r := placeholderRename{provider: "oracle", board: "a.oraclecloud.com/CX", oldName: "a.oraclecloud.com/CX", name: "Acme"}
+
+	if _, err := writePlaceholderRename(context.Background(), f, r); err == nil {
+		t.Fatal("writePlaceholderRename: want an error when the board matched no row, got nil")
 	}
 }
