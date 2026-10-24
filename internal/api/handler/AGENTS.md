@@ -144,7 +144,8 @@ its own two bounds:
 | `GET /assistant/sessions` | the caller's conversations, most recently active first |
 | `GET /assistant/sessions/:id` | one conversation with its stored transcript, for replay |
 | `DELETE /assistant/sessions/:id` | remove a conversation and its transcript |
-| `POST /assistant/sessions/:id/messages` | run one turn, streamed as named SSE events |
+| `POST /assistant/sessions/:id/messages` | run one turn, streamed as named SSE events; the body may carry up to three `attachments` (`{name, text}`) beside `text` |
+| `POST /assistant/attachments` | read one PDF (multipart `file`) and return its text for the next message — stores nothing, makes no model call, per-caller limited |
 | `POST /assistant/sessions/:id/retry` | resume after a failed turn without appending another user message (same SSE stream) |
 | `POST /assistant/sessions/:id/cancel` | stop a running turn (owner-scoped — see below) |
 | `POST /assistant/sessions/:id/extend` | buy a tailoring session another ceiling's worth of turns, out of the day's tailoring allowance; 409 on any other preset |

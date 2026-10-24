@@ -279,6 +279,27 @@ only fail teaches the model to stop calling tools. Reaching no browser is a tool
 naming the remedy, never a failed turn; the call carries its own deadline, because it is
 the only tool whose completion depends on a client we do not control.
 
+**Attached documents** (`attachment.go`). A candidate can attach a PDF — a CV, a vacancy,
+an offer — to a message, in every preset (the chat and the tailoring workspace share one
+composer). `POST /assistant/attachments` reads it with the résumé upload's own extractor
+(`resume.ExtractPDFText`; there is one PDF reader in the codebase) and returns the text,
+storing nothing; the client sends that text back with the message. It lives in the user
+message's transcript row (`userContent.Attachments`), so it is replayed with the message
+like anything typed, and `Decode` renders it to the model inside an `<attached_document>`
+block flagged as material rather than instructions. Three rules hold it up:
+
+- **It is not the candidate's own words.** `UserSaid` reads only `Text`, never an
+  attachment, so a quote from an attached vacancy cannot be stamped `stated_in_chat` and
+  reach a CV. Keeping documents out of `Text` is what makes that structural.
+- **It is bounded server-side, twice.** `MaxAttachments` (3) per message and
+  `MaxAttachmentRunes` per document: extraction truncates and says so, and the turn
+  refuses anything larger — a client posting text directly cannot raise either. Because
+  the text is replayed every later turn, the per-document cap is a recurring cost bound.
+- **It is not masked, on purpose.** `internal/candidate/pii` guards the STORED CV on its
+  way into the structured parse; the assistant has never masked what a candidate types or
+  pastes, and an attachment is a paste with a file picker in front of it. Masking it would
+  also strip the very contact details a candidate attached an offer letter to ask about.
+
 **History trimming.** `trim` keeps the most recent N messages and then drops any
 leading tool results whose originating call was trimmed away — providers reject a
 tool result that answers no call in the conversation, so an orphan at the head

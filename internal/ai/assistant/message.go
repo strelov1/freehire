@@ -31,9 +31,10 @@ type Message struct {
 	Content json.RawMessage `json:"content"`
 }
 
-// userContent is a plain prompt.
+// userContent is a prompt: what the candidate typed, plus any documents attached to it.
 type userContent struct {
-	Text string `json:"text"`
+	Text        string       `json:"text"`
+	Attachments []Attachment `json:"attachments,omitempty"`
 }
 
 // assistantContent is one model turn: its prose (possibly empty on a pure
@@ -61,9 +62,9 @@ type toolResultContent struct {
 	Result     string `json:"result"`
 }
 
-// EncodeUser builds the stored message for a user prompt.
-func EncodeUser(text string) (Message, error) {
-	return encode(RoleUser, userContent{Text: text})
+// EncodeUser builds the stored message for a user prompt and the documents attached to it.
+func EncodeUser(text string, docs ...Attachment) (Message, error) {
+	return encode(RoleUser, userContent{Text: text, Attachments: docs})
 }
 
 // EncodeAssistant builds the stored message for one model turn: its text and the
@@ -110,7 +111,7 @@ func (m Message) Decode() (llms.MessageContent, error) {
 		if err := json.Unmarshal(m.Content, &c); err != nil {
 			return llms.MessageContent{}, fmt.Errorf("assistant: decode user message: %w", err)
 		}
-		return llms.TextParts(llms.ChatMessageTypeHuman, c.Text), nil
+		return llms.TextParts(llms.ChatMessageTypeHuman, userTurnText(c)), nil
 
 	case RoleAssistant:
 		var c assistantContent
