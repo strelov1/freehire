@@ -39,6 +39,13 @@
   // scroll lock under a panel still on screen.
   let modal = $state(false);
 
+  // Crossing the breakpoint while open would leave the layout and the behaviour
+  // disagreeing (a full-screen panel without its trap, or a popover holding one), so
+  // the panel closes instead, as most popovers do on rotation.
+  $effect(() => {
+    if (open && fullScreen.current !== modal) open = false;
+  });
+
   // Load once the session is confirmed (boot-time /me may still be in flight); drop
   // the cached page on sign-out so the next user on this tab loads their own.
   $effect(() => {

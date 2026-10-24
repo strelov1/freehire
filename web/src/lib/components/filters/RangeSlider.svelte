@@ -166,8 +166,8 @@
   }
   input::-webkit-slider-thumb {
     appearance: none;
-    width: 1.5rem;
-    height: 1.5rem;
+    width: 24px; /* 2 × THUMB_HALF: the script maps taps in px */
+    height: 24px;
     border: 0;
     border-radius: 9999px;
     background: var(--thumb-dot);
@@ -175,8 +175,8 @@
     pointer-events: auto;
   }
   input::-moz-range-thumb {
-    width: 1.5rem;
-    height: 1.5rem;
+    width: 24px; /* 2 × THUMB_HALF: the script maps taps in px */
+    height: 24px;
     border: 0;
     border-radius: 9999px;
     background: var(--thumb-dot);
