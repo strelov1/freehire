@@ -23,11 +23,15 @@
     unit,
     onSwipe,
     controls,
+    leading,
   }: {
     total: number | null;
     unit: string;
     onSwipe?: () => void;
     controls?: Snippet;
+    /** A control pinned to the LEFT edge, apart from the right-aligned list controls
+     *  (the jobs list's Map button). Leads the mobile row and the desktop one alike. */
+    leading?: Snippet;
   } = $props();
 </script>
 
@@ -39,6 +43,7 @@
      (a long count, a translated label, a fourth control) and a row that runs out of width
      must break onto a second line rather than clip its rightmost control off-screen. -->
 <div class="mb-3 flex flex-wrap items-center gap-2 md:hidden">
+  {@render leading?.()}
   {#if total !== null}
     <!-- Rounded on this row, spelled out on the desktop one below. The row is 358px on a
          390px phone and its contents came to 376: the count at full precision was 103px of
@@ -77,8 +82,9 @@
 <!-- Desktop: the total (and any list controls) sit top-right above the list (filters
      live in the sidebar). The two are gated INDEPENDENTLY — a list standing in a prompt
      has no total but must keep its controls reachable. -->
-{#if total !== null || controls}
+{#if total !== null || controls || leading}
   <div class="mb-3 hidden items-center justify-end gap-3 md:flex">
+    {#if leading}<div class="mr-auto">{@render leading()}</div>{/if}
     {#if total !== null}
       <span class="text-sm text-muted-foreground" aria-live="polite">
         <span class="font-semibold tabular-nums text-foreground">{total.toLocaleString()}</span>

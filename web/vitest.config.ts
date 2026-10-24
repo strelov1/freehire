@@ -25,6 +25,7 @@ const appStubAlias = {
   '$app/state': fileURLToPath(new URL('./vitest-stubs/app-state.ts', import.meta.url)),
   '$app/paths': fileURLToPath(new URL('./vitest-stubs/app-paths.ts', import.meta.url)),
   '$app/navigation': fileURLToPath(new URL('./vitest-stubs/app-navigation.ts', import.meta.url)),
+  '$app/env': fileURLToPath(new URL('./vitest-stubs/app-env.ts', import.meta.url)),
 };
 
 export default defineConfig({

@@ -10,12 +10,12 @@
 
 ## 3. Jobs map dialog
 
-- [ ] 3.1 `JobsMapDialog.svelte`: own facet counts with a request sequence (stale responses dropped), cities when one country is selected, busiest-places row, placed-in-a-city share
-- [ ] 3.2 Click rules: country replaces / deselects, city adds, World view clears countries+cities, Remote worldwide toggles and clears places; specs for each
-- [ ] 3.3 Show N jobs from the dialog's own count, in the header on every width; closes onto the list
-- [ ] 3.4 `.messages.ts` (en + ru) for the dialog and the map; locale number formatting
-- [ ] 3.5 `ListToolbar` `leading` slot; `JobsView` Map button (design-system `Button`) at the left edge opening the dialog (`sm:max-w-6xl`)
-- [ ] 3.6 Posted/sort selects: chevron with padding
+- [x] 3.1 `JobsMapDialog.svelte`: own facet counts with a request sequence (stale responses dropped), cities when one country is selected, busiest-places row, placed-in-a-city share
+- [x] 3.2 Click rules: country replaces / deselects, city adds, World view clears countries+cities, Remote worldwide toggles and clears places; specs for each
+- [x] 3.3 Show N jobs from the dialog's own count, in the header on every width; closes onto the list
+- [x] 3.4 `.messages.ts` (en + ru) for the dialog and the map; locale number formatting
+- [x] 3.5 `ListToolbar` `leading` slot; `JobsView` Map button (design-system `Button`) at the left edge opening the dialog (`sm:max-w-6xl`)
+- [x] 3.6 Posted/sort selects: chevron with padding
 
 ## 4. Verification and rollout
 

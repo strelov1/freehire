@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount, untrack, type Snippet } from 'svelte';
-  import { ArrowRight, Layers } from '@lucide/svelte';
+  import { ArrowRight, ChevronDown, Layers, Map as MapIcon } from '@lucide/svelte';
   import { browser } from '$app/env';
   import { afterNavigate, goto, replaceState } from '$app/navigation';
   import { resolve } from '$app/paths';
@@ -46,6 +46,7 @@
   import ListToolbar from './ListToolbar.svelte';
   import States from './States.svelte';
   import JobRow from './JobRow.svelte';
+  import { Button } from '#lib/ui/index.js';
   import HiddenToast from './HiddenToast.svelte';
 
   // Filters live in the URL; the route `load` searches by them and returns the
@@ -163,6 +164,10 @@
   // counts — the selects degrade to plain (countless) options, never break.
   // latestOnly stops a slow earlier response overwriting a newer one.
   let counts = $state.raw<FacetCounts | null>(null);
+  // The map dialog reads and writes `filters` itself, so a click on the map narrows the
+  // list behind it. Its module (the land outline among it) loads on the first open only.
+  let mapOpen = $state(false);
+  let mapLoaded = $state(false);
 
   // The role distribution the header's suggestions are ranked and filtered by. A scope
   // of its own, deliberately: `counts` above is scoped by the text query, and a
@@ -685,16 +690,20 @@
 {#snippet sortSelect()}
   <label class="flex shrink-0 items-center gap-1.5 text-sm text-muted-foreground">
     <span class="hidden sm:inline">Sort</span>
-    <select
-      aria-label="Sort jobs"
-      class="rounded-lg border border-input bg-transparent py-2 pl-2 pr-1 text-sm text-foreground transition-colors focus-visible:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 md:py-1 dark:bg-input/30"
-      value={selectedSort}
-      onchange={(e) => filters.setSort(e.currentTarget.value as JobSort)}
-    >
-      {#each sortOptions as opt (opt.value)}
-        <option value={opt.value}>{opt.label}</option>
-      {/each}
-    </select>
+    <!-- The native arrow is replaced: it sat over the end of the selected text. -->
+    <span class="relative flex items-center">
+      <select
+        aria-label="Sort jobs"
+        class="appearance-none rounded-lg border border-input bg-transparent py-2 pl-2 pr-8 text-sm text-foreground transition-colors focus-visible:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 md:py-1 dark:bg-input/30"
+        value={selectedSort}
+        onchange={(e) => filters.setSort(e.currentTarget.value as JobSort)}
+      >
+        {#each sortOptions as opt (opt.value)}
+          <option value={opt.value}>{opt.label}</option>
+        {/each}
+      </select>
+      <ChevronDown class="pointer-events-none absolute right-2 size-4 text-muted-foreground" aria-hidden="true" />
+    </span>
   </label>
 {/snippet}
 
@@ -714,21 +723,40 @@
   {@const openBound = openWithinAvailable}
   <label class="flex shrink-0 items-center gap-1.5 text-sm text-muted-foreground">
     <span class="hidden sm:inline">{openBound ? 'Open' : 'Posted'}</span>
-    <select
-      aria-label={openBound ? 'Open within' : 'Posted within'}
-      class="rounded-lg border border-input bg-transparent py-2 pl-2 pr-1 text-sm text-foreground transition-colors focus-visible:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 md:py-1 dark:bg-input/30"
-      value={String((openBound ? filters.value.openWithinDays : filters.value.postedWithinDays) ?? '')}
-      onchange={(e) => {
-        const days = Number(e.currentTarget.value) || null;
-        if (openBound) filters.pickOpenWithinDays(days);
-        else filters.pickPostedWithinDays(days);
-      }}
-    >
-      {#each freshnessOptions(openBound ? filters.value.openWithinDays : filters.value.postedWithinDays) as preset (preset.label)}
-        <option value={String(preset.days ?? '')}>{preset.label}</option>
-      {/each}
-    </select>
+    <span class="relative flex items-center">
+      <select
+        aria-label={openBound ? 'Open within' : 'Posted within'}
+        class="appearance-none rounded-lg border border-input bg-transparent py-2 pl-2 pr-8 text-sm text-foreground transition-colors focus-visible:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 md:py-1 dark:bg-input/30"
+        value={String((openBound ? filters.value.openWithinDays : filters.value.postedWithinDays) ?? '')}
+        onchange={(e) => {
+          const days = Number(e.currentTarget.value) || null;
+          if (openBound) filters.pickOpenWithinDays(days);
+          else filters.pickPostedWithinDays(days);
+        }}
+      >
+        {#each freshnessOptions(openBound ? filters.value.openWithinDays : filters.value.postedWithinDays) as preset (preset.label)}
+          <option value={String(preset.days ?? '')}>{preset.label}</option>
+        {/each}
+      </select>
+      <ChevronDown class="pointer-events-none absolute right-2 size-4 text-muted-foreground" aria-hidden="true" />
+    </span>
   </label>
+{/snippet}
+
+<!-- Opens the current search on a world map, over the list rather than instead of it. -->
+{#snippet mapButton()}
+  <Button
+    variant="outline"
+    size="sm"
+    aria-label="Map"
+    onclick={() => {
+      mapLoaded = true;
+      mapOpen = true;
+    }}
+  >
+    <MapIcon class="size-4" />
+    <span class="hidden sm:inline">Map</span>
+  </Button>
 {/snippet}
 
 <!-- The two above, in one slot. Rendered as a fragment so ListToolbar keeps deciding
@@ -766,6 +794,7 @@
       unit={listTotal === 1 ? 'job' : 'jobs'}
       onSwipe={standalone ? openSwipe : undefined}
       controls={listControls}
+      leading={standalone ? mapButton : undefined}
     />
 
     <!-- Onboarding nudges sit UNDER the toolbar so the feed controls stay at the top;
@@ -904,6 +933,12 @@
   >
     <Layers class="size-4 shrink-0" />
   </button>
+{/if}
+
+{#if standalone && mapLoaded}
+  {#await import('./map/JobsMapDialog.svelte') then { default: JobsMapDialog }}
+    <JobsMapDialog bind:open={mapOpen} store={filters} />
+  {/await}
 {/if}
 
 <!-- Undo affordance for the hide gesture. Keyed by slug so hiding a second job while
