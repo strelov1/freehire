@@ -212,6 +212,10 @@ func TestRecognize(t *testing.T) {
 		{"paylocity listing", "https://recruiting.paylocity.com/Recruiting/Jobs/All/7186761b-1318-47f2-b709-d7e7995cd3f3", "paylocity", "7186761b-1318-47f2-b709-d7e7995cd3f3", "https://recruiting.paylocity.com/Recruiting/Jobs/All/7186761b-1318-47f2-b709-d7e7995cd3f3", true},
 		{"paylocity posting is not a board", "https://recruiting.paylocity.com/Recruiting/Jobs/Details/4037913", "", "", "", false},
 		{"paylocity apply form is not a board", "https://recruiting.paylocity.com/Recruiting/Jobs/Apply/1471799", "", "", "", false},
+		{"trinethire posting", "https://app.trinethire.com/companies/16150-automox-inc/jobs/26497-senior-software-engineer-backend?source=LinkedIn", "trinethire", "16150-automox-inc", "https://app.trinethire.com/companies/16150-automox-inc", true},
+		{"trinethire product page is not a board", "https://app.trinethire.com/privacy", "", "", "", false},
+		{"gohire posting", "https://jobs.gohire.io/dexerto-de5jlhjo/marketing-manager-304991/", "gohire", "dexerto-de5jlhjo", "https://jobs.gohire.io/dexerto-de5jlhjo/marketing-manager-304991", true},
+		{"gohire static asset is not a board", "https://jobs.gohire.io/assets/js/boardScript.js", "", "", "", false},
 		{"paylocity bare listing path is not a board", "https://recruiting.paylocity.com/Recruiting/Jobs/All", "", "", "", false},
 
 		// icims — board IS the host (like subdomain/host modes), so the canonical collapses to

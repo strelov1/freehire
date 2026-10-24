@@ -27,7 +27,12 @@ var boardIdentity = map[string]func(board string) string{
 	"dayforce": dayforceSiteID,
 	"gusto":    gustoBoardIdentity,
 	"ukgready": ukgreadyTenant,
-	"emply":    emplyHost,
+	// TriNet Hire addresses a company by its numeric id alone; the name slug after it is
+	// decoration the platform ignores (see trinethire.go).
+	"trinethire": trinethireCompanyID,
+	// GoHire addresses a site by the 8-character code its segment ends with (see gohire.go).
+	"gohire": gohireSiteCode,
+	"emply":  emplyHost,
 }
 
 // BoardDedupeKey is the identity two catalog rows are the same crawl target under:

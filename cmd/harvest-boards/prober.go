@@ -898,6 +898,8 @@ var probers = map[string]prober{
 	"ukgready":        ukgreadyProber{},
 	"edjoin":          edjoinProber{},
 	"workstream":      workstreamProber{},
+	"trinethire":      trinethireProber{},
+	"gohire":          gohireProber{},
 	"harri":           harriProber{},
 	"hcshiring":       hcshiringProber{},
 	"appone":          apponeProber{},

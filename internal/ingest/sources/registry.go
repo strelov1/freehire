@@ -208,6 +208,10 @@ func All(c HTTPClient) map[string]Source {
 		NewWPYoast(c),
 		NewBreezy(c),
 		NewHerp(c),
+		NewTrinetHire(c),
+		// Rate-paced (gohirePacedGetter): the platform answers 429 to a modest burst and keeps
+		// refusing for minutes. See gohire.go.
+		NewGoHire(gohirePacedGetter(c)),
 		NewHrmos(c),
 		NewJoin(pacedJoinGetter(c)),
 		NewRapyd(c),

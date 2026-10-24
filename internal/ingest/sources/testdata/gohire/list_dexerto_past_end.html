@@ -1,0 +1,353 @@
+<script src="../../assets/js/boardScript.js" crossorigin="anonymous"></script>
+<script src="https://kit.fontawesome.com/8d284fbb4d.js" crossorigin="anonymous"></script>
+
+<link rel="stylesheet" type="text/css" href="../../assets/css/career.css">
+<link rel="stylesheet" type="text/css" href="../../assets/css/jobBoard.css">
+
+<script>
+    let baseDomainName = `https://api.gohire.io`;
+    let assetsDomainVal = `jobs.gohire.io`;
+
+    function syncSearchFields() {
+        var titleInput = document.getElementById('searchJobTitleId');
+        var cityInput = document.getElementById('searchCityCtryId');
+        var hiddenTitle = document.getElementById('jobTitleSearchedId');
+        var hiddenCity = document.getElementById('cityOrCountrySearchedId');
+
+        if (titleInput && hiddenTitle) {
+            hiddenTitle.value = titleInput.value;
+        }
+
+        if (hiddenCity) {
+            hiddenCity.value = cityInput ? cityInput.value : '';
+        }
+    }
+
+    function toggleCombinedDropdown() {
+        var container = document.getElementById('combinedDropDownId');
+        if (!container) {
+            return;
+        }
+        container.classList.toggle('gohire-filter-open');
+    }
+
+    function selectCombinedValue(type, value) {
+        syncSearchFields();
+
+        if (type === 'remote') {
+            document.querySelectorAll('input[name="remoteDdValue"]').forEach(function (el) {
+                el.value = value;
+            });
+
+            document.querySelectorAll('input[name="typeDdValue"]').forEach(function (el) {
+                el.value = '0';
+            });
+        }
+
+        if (type === 'type') {
+            document.querySelectorAll('input[name="typeDdValue"]').forEach(function (el) {
+                el.value = value;
+            });
+
+            document.querySelectorAll('input[name="remoteDdValue"]').forEach(function (el) {
+                el.value = 'all_Id';
+            });
+        }
+
+        document.getElementById('searchFilterForm').submit();
+    }
+
+    function submitSearchForm() {
+        syncSearchFields();
+        document.getElementById('searchFilterForm').submit();
+    }
+
+    document.addEventListener('click', function (event) {
+        var container = document.getElementById('combinedDropDownId');
+        if (!container) {
+            return;
+        }
+
+        if (!container.contains(event.target)) {
+            container.classList.remove('gohire-filter-open');
+        }
+    });
+
+    document.addEventListener('keyup', function (event) {
+        if (event.target && event.target.id === 'searchJobTitleId' && event.key === 'Enter') {
+            submitSearchForm();
+        }
+
+        if (
+            event.target &&
+            event.target.getAttribute &&
+            event.target.getAttribute('role') === 'button' &&
+            (event.key === 'Enter' || event.key === ' ')
+        ) {
+            event.preventDefault();
+            event.target.click();
+        }
+    });
+</script>
+
+<form name="searchFilterForm" id="searchFilterForm" method="post" action="">
+    <input type="hidden" name="remoteDdValue" id="remoteDdValueId" value="all_Id" />
+    <input type="hidden" name="typeDdValue" id="typeDdValueId" value="0" />
+    <input type="hidden" name="jobTitleSearched" id="jobTitleSearchedId" value="" />
+    <input type="hidden" name="cityOrCountrySearched" id="cityOrCountrySearchedId" value="" />
+</form>
+
+<form name="pagingForm" id="pagingFormId" method="post" action="">
+    <input type="hidden" name="page" id="pageId" value="99" />
+    <input type="hidden" name="remoteDdValue" value="all_Id" />
+    <input type="hidden" name="typeDdValue" value="0" />
+    <input type="hidden" name="jobTitleSearched" value="" />
+    <input type="hidden" name="cityOrCountrySearched" value="" />
+</form>
+
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Jobs at Dexerto</title>
+    
+    <meta property="og:title" content="Jobs at Dexerto" />
+    <meta property="og:description" content="" />
+    <meta property="og:image" content="https://api.gohire-partner.com/image/19265/image.png" />
+
+    <style type="text/css">
+        .client-brand-background { background-color:#000000 !important; }
+        .gohire-pagination-active { background-color:#000000 !important; }
+    </style>
+
+    <script>
+        function applyPool(){ gohire("open",0,"generalApplication"); }
+    </script>
+
+    <div id="session-data" data-language="en"></div>
+    <script src="../../assets/js/translate.js" crossorigin="anonymous"></script>
+    <script src="https://widget.gohire.io/widget/de5JlhJo"></script>
+    <script></script>
+
+
+<meta charset="utf-8">
+<meta data-gohire-custom-domain="true" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0" />
+<link rel="stylesheet" type="text/css" href="https://jobs.gohire.io/assets/css/reset.css" />
+<link rel="stylesheet" type="text/css" href="https://jobs.gohire.io/assets/css/jobs.css" />
+
+
+
+<link rel="shortcut icon" href="https://gohire-avatars.s3.amazonaws.com/company/19265.jpg">
+
+
+
+<link rel="apple-touch-icon-precomposed" sizes="57x57" href="https://gohire-website.s3.amazonaws.com/img/favicon/apple-touch-icon-57x57.png" />
+<link rel="apple-touch-icon-precomposed" sizes="114x114" href="https://gohire-website.s3.amazonaws.com/img/favicon/apple-touch-icon-114x114.png" />
+<link rel="apple-touch-icon-precomposed" sizes="72x72" href="https://gohire-website.s3.amazonaws.com/img/favicon/apple-touch-icon-72x72.png" />
+<link rel="apple-touch-icon-precomposed" sizes="144x144" href="https://gohire-website.s3.amazonaws.com/img/favicon/apple-touch-icon-144x144.png" />
+<link rel="apple-touch-icon-precomposed" sizes="60x60" href="https://gohire-website.s3.amazonaws.com/img/favicon/apple-touch-icon-60x60.png" />
+<link rel="apple-touch-icon-precomposed" sizes="120x120" href="https://gohire-website.s3.amazonaws.com/img/favicon/apple-touch-icon-120x120.png" />
+<link rel="apple-touch-icon-precomposed" sizes="76x76" href="https://gohire-website.s3.amazonaws.com/img/favicon/apple-touch-icon-76x76.png" />
+<link rel="apple-touch-icon-precomposed" sizes="152x152" href="https://gohire-website.s3.amazonaws.com/img/favicon/apple-touch-icon-152x152.png" />
+
+<meta name="application-name" content="&nbsp;"/>
+<meta name="msapplication-TileColor" content="#FFFFFF" />
+<meta name="msapplication-TileImage" content="https://gohire-website.s3.amazonaws.com/img/favicon/mstile-144x144.png" />
+<meta name="msapplication-square70x70logo" content="https://gohire-website.s3.amazonaws.com/img/favicon/mstile-70x70.png" />
+<meta name="msapplication-square150x150logo" content="https://gohire-website.s3.amazonaws.com/img/favicon/mstile-150x150.png" />
+<meta name="msapplication-wide310x150logo" content="https://gohire-website.s3.amazonaws.com/img/favicon/mstile-310x150.png" />
+<meta name="msapplication-square310x310logo" content="https://gohire-website.s3.amazonaws.com/img/favicon/mstile-310x310.png" />
+<style type="text/css">
+
+
+  
+  .jp-text a,.client-brand-text { color:#000000 !important; }
+	.job-title,.client-brand-text { color:#000000 !important; }
+	.client-brand-background { background-color:#000000 !important; }
+	
+
+</style>
+
+<meta property="og:locale" content="en_gb" />
+<meta property="fb:app_id" content="222515341511920" />
+<meta property="og:type" content="website" />
+<meta property="og:site_name" content="GoHire" />
+<meta property="og:url" content="https://jobs.gohire.io/dexerto-de5jlhjo/" />
+
+<!-- Global site tag (gtag.js) - Google Analytics -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=UA-82230856-4"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag("js", new Date());
+
+  gtag("config", "UA-82230856-4",{"page_path":"\/dexerto-19265\/"});
+</script>
+
+
+</head>
+
+<body id="mainWrapperAfterBody">
+    <div id="google_translate_element"></div>
+    <div class="page-flex">
+        <nav class="nav">
+            <div class="careers-container-lg">
+                <div class="nav-container">
+
+                    <a href="https://www.dexerto.media/" target="_blank" class="client_logo">
+                        <img src="https://gohire-avatars.s3.amazonaws.com/company/19265_full.png">
+                    </a>
+    
+                </div>
+            </div>
+        </nav>
+
+        <div class="hero">
+            <div class="hero-img client-hero-img client-brand-background" style="background:url('https://gohire-avatars.s3.amazonaws.com/header/19265.jpg?v=1792873442')">
+                <div class="hero-overlay">
+                    <div class="careers-container-lg">
+                        <div class="hero-text">
+                            <h1>Jobs at Dexerto</h1>
+                            <p>Want to join our team? We have <a class="see-jobs-link" href="#jobs">21 open jobs!</a></p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="careers-container custom-sections">
+
+            <div class="custom-section">
+                <div class="custom-section-title notranslate">
+                    <h2>SHAPING THE FUTURE OF MEDIA AND ENTERTAINMENT</h2>
+                </div>
+                <div class="custome-section-content">
+                    <p>The powerhouse of esports and gaming news. Since 2015, we've been fuelling the frenzy with breaking stories, insider interviews, and expert analysis. From League of Legends to Fortnite, we've got our finger on the pulse of competitive gaming. Dexerto.com is the go-to hub for esports junkies, serving up sizzling content that keeps you one step ahead. <br />
+<br />
+Don't just play the game, dominate it with Dexerto's electrifying coverage!</p>
+                </div>
+            </div>
+        
+        </div>
+
+        <div class="careers-container-lg">
+
+            <div class="jobs">
+                <a name="jobs"></a>
+                <div class="job-list-container">
+                    <div class="job-header">
+                        <div class="job-header-left">
+                            <h2>Jobs at Dexerto</h2>
+                        </div>
+                        <div class="job-header-right">
+                            <div class="job-list-count">
+                                  <p>21 Job openings</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="job-list">
+                        <div class="page-container">
+                            <div class="jobs-padding">
+                                <div class="job-container gohire-job-widget-shell career-job-widget-shell">
+                                    <div class="job-header-search gohire-job-search-filter" style ="border-bottom:none;">
+                                        <div class="job-search gohire-job-search-row">
+                                            <input type="text" name="searchJobTitle" id="searchJobTitleId" placeholder="Search by job title or location" value="">
+                                            <span class="gohire-icon-action gohire-search-action client-brand-background" role="button" tabindex="0" aria-label="Search Jobs" onclick="submitSearchForm();">
+                                                <svg class="svg-inline--fa fa-magnifying-glass gohire-icon-svg" aria-hidden="true" focusable="false" data-prefix="far" data-icon="magnifying-glass" role="img" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="14" height="14">
+                                                    <path fill="currentColor" d="M416 208c0 45.9-14.9 88.3-40 122.7L502.6 457.4c12.5 12.5 12.5 32.8 0 45.3s-32.8 12.5-45.3 0L330.7 376C296.3 401.1 253.9 416 208 416C93.1 416 0 322.9 0 208S93.1 0 208 0s208 93.1 208 208zM208 352a144 144 0 1 0 0-288 144 144 0 1 0 0 288z"/>
+                                                </svg>
+                                            </span>
+
+                                            <div class="gohire-filter-dropdown jobs-menu-container combinedDdCl" id="combinedDropDownId">
+                                                <span class="gohire-filter-toggle" role="button" tabindex="0" aria-label="All jobs" onclick="toggleCombinedDropdown();">
+                                                    <svg class="svg-inline--fa fa-filters gohire-icon-svg" aria-hidden="true" focusable="false" data-prefix="far" data-icon="filters" role="img" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+                                                        <path fill="currentColor" d="M3.9 54.9C10.5 40.9 24.5 32 40 32h432c15.5 0 29.5 8.9 36.1 22.9s4.6 30.5-5.2 42.5L320 320.9V448c0 12.1-6.8 23.2-17.7 28.6s-23.8 4.3-33.5-3l-64-48c-8.1-6-12.8-15.5-12.8-25.6v-79.1L9 97.3C-.7 85.4-2.8 68.8 3.9 54.9z"/>
+                                                    </svg>
+                                                </span>
+                                                <span class="gohire-filter-label">All jobs</span>
+
+                                                <div class="gohire-filter-menu jobs-menu jobBoard-n no-text-highlight combinedDdMenuCl" style = "background: #fff !important;">
+                                                    <button type="button" class="gohire-filter-selected" onclick="selectCombinedValue('remote', 'all_Id');">All jobs</button>
+                                                    <button type="button" class="" onclick="selectCombinedValue('remote', 'remoteOnly_Id');">Remote jobs</button>
+                                                    <button type="button" class="" onclick="selectCombinedValue('remote', 'excludeRemote_Id');">Exclude remote jobs</button>
+                                                    <button type="button" class="" onclick="selectCombinedValue('type', '11');">Part time</button>
+                                                    <button type="button" class="" onclick="selectCombinedValue('type', '10');">Full time</button>
+                                                    <button type="button" class="" onclick="selectCombinedValue('type', '9');">Voluntary</button>
+                                                    <button type="button" class="" onclick="selectCombinedValue('type', '8');">Work Experience</button>
+                                                    <button type="button" class="" onclick="selectCombinedValue('type', '7');">Freelance</button>
+                                                    <button type="button" class="" onclick="selectCombinedValue('type', '6');">Contract</button>
+                                                    <button type="button" class="" onclick="selectCombinedValue('type', '5');">Apprenticeship</button>
+                                                    <button type="button" class="" onclick="selectCombinedValue('type', '4');">Internship</button>
+                                                    <button type="button" class="" onclick="selectCombinedValue('type', '3');">Graduate</button>
+                                                    <button type="button" class="" onclick="selectCombinedValue('type', '2');">Temporary</button>
+                                                    <button type="button" class="" onclick="selectCombinedValue('type', '1');">Permanent</button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                <div class="jobs">
+                                    <div class="job-container">
+<div class="job-search-empty jobBoard gohire-job-list-empty-filtered">
+        <p>No jobs match your search.</p>
+        </div>
+        
+                                    </div>
+                                </div>
+<div class="jobs-pagination gohire-job-pagination no-text-highlight jobBoard"><div class="gohire-job-pagination-buttons"><button type="button" onclick="submitPaging('leftArrow', 99);">Prev</button><button type="button" disabled>Next</button></div><p class="gohire-job-pagination-results">Page <strong>99</strong> of <strong>3</strong>, Total <strong>21</strong> jobs</p></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+            </div>
+
+        </div>
+    </div>
+
+
+<footer class="careers-footer">
+
+
+
+		<div class="social-links-wrapper">
+
+	
+      
+      <a class="careers-footer-social-icon" href="https://www.instagram.com/dexerto/?hl=en" target="_blank">
+        <img src="https://jobs.gohire.io/assets/icons/instagram.png">
+      </a>
+
+    
+      
+      <a class="careers-footer-social-icon" href="https://twitter.com/Dexerto?ref_src=twsrc%5Egoogle%7Ctwcamp%5Eserp%7Ctwgr%5Eauthor" target="_blank">
+        <img src="https://jobs.gohire.io/assets/icons/twitter.png">
+      </a>
+
+    
+      
+      <a class="careers-footer-social-icon" href="https://uk.linkedin.com/company/dexerto-ltd" target="_blank">
+        <img src="https://jobs.gohire.io/assets/icons/linkedin.png">
+      </a>
+
+    
+
+		</div>
+
+	
+
+  <div class="careers-footer-client">
+    <p>Jobs at Dexerto</p>
+  </div>
+
+		<a class="gh-powered" href="https://gohire.io" target="_blank">
+			<p>Powered by</p>
+			<img src="https://gohire-website.s3.amazonaws.com/img/logos/gh-logo-silver.png">
+		</a>
+	
+
+</footer>
+
+
+</body>
+</html>
