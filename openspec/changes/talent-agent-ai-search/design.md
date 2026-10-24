@@ -24,7 +24,7 @@ The owner decided: the entry point stays in the filter modal; guests get 10 inte
 ## Decisions
 
 ### D1. The modal is one component family under `filters/`, not one 400-line file
-`AiFilterDialog.svelte` keeps the shell (portal, focus trap, Escape, stage indicator) and the conversation state. The overview moves to `AiSearchResults.svelte`, the map to `JobsWorldMap.svelte`, the plan card and chips to `AiSearchPlan.svelte`. The pure logic — building the CV context line, turning a plan into params, limiting countries to the requested ones, the preview-chip grouping (lifted from the old dialog) — lives in `web/src/lib/aiSearch.ts` with unit tests, the pattern `web/AGENTS.md` sets (`matchAnalysis.ts`). The spike's review flagged the single file as Divergent Change; the split follows the seams it named.
+`AiFilterDialog.svelte` keeps the shell (portal, focus trap, Escape, stage indicator) and the conversation state. The overview moves to `AiSearchResults.svelte`, the map to `JobsWorldMap.svelte`, the plan card and chips to `AiSearchPlan.svelte`. The pure logic — building the CV context line, turning a plan into params, limiting countries to the requested ones, the preview-chip grouping (lifted from the old dialog) — lives in the existing AI-filter module `web/src/lib/aiFilter.ts` with unit tests, the pattern `web/AGENTS.md` sets (`matchAnalysis.ts`). The spike's review flagged the single file as Divergent Change; the split follows the seams it named.
 
 Messages are a discriminated union on `kind` (`you` | `plan` | `found` | `note`) rather than three boolean flags.
 

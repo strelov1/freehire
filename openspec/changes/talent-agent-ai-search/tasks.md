@@ -26,8 +26,8 @@
 
 ## 5. AI search logic module (web)
 
-- [ ] 5.1 Create `web/src/lib/aiSearch.ts` with tested pure helpers: `planParams` (interpretation → job-list params), `cvContext` (CV profile → appended description line), `limitToRequestedCountries`, and the preview-chip grouping lifted from the old dialog (included, excluded struck, query, salary, posted, experience, visa — shared labels)
-- [ ] 5.2 Unit tests for each helper in `aiSearch.test.ts`, including "include wins over exclude" and chips keyed `param:value`
+- [ ] 5.1 Add tested pure helpers to the existing AI-filter module `web/src/lib/aiFilter.ts`: `planParams` (interpretation → job-list params), `cvContext` (CV profile → appended description line), `limitToRequestedCountries`, and the preview-chip grouping lifted from the old dialog (included, excluded struck, query, salary, posted, experience, visa — shared labels)
+- [ ] 5.2 Unit tests for each helper in `aiFilter.test.ts`, including "include wins over exclude" and chips keyed `param:value`
 
 ## 6. AI search modal (web)
 
