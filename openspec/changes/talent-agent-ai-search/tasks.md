@@ -3,13 +3,13 @@
 - [x] 1.1 Test: a signed-out `POST /search/interpret` is answered on the service client tagged with the search-intent feature, and the `llmkey` resolver is never called (no credential read or minted for account 0)
 - [x] 1.2 Test: signed-out callers are limited to 10/hour per IP (11th → 429); signed-in callers keep 40/hour per user, and the two budgets do not share a key
 - [x] 1.3 Mount `/search/interpret` on `mw.optional`; build the guest interpreter from the service client directly (design D3); add the per-IP guest limiter beside the per-user one
-- [x] 1.4 Update the handler's register comment and `internal/api/handler/AGENTS.md` for the guest path; `web/static/openapi.yaml` marks the endpoint as optionally authenticated
+- [x] 1.4 Update the handler's register comment and `internal/api/handler/AGENTS.md` for the guest path (not added to `web/static/openapi.yaml`: that file is the public read-only search API imported as the custom GPT's Action, and listing interpret there would let the GPT spend the service credential)
 
 ## 2. Guest access to CV extraction (backend)
 
 - [x] 2.1 Test: a signed-out multipart PDF to `/me/resume/extract` returns 200 with skills and persists nothing; a signed-in call is unchanged
 - [x] 2.2 Test: signed-out callers are limited to 20/hour per IP (21st → 429)
-- [x] 2.3 Mount `/me/resume/extract` on `mw.optional` with the per-IP guest limiter; update `openapi.yaml`
+- [x] 2.3 Mount `/me/resume/extract` on `mw.optional` with the per-IP guest limiter (likewise kept out of the public `openapi.yaml`)
 
 ## 3. Exact distinct-company count on job facets (backend)
 
@@ -21,13 +21,13 @@
 
 ## 4. Shared thinking indicator (web)
 
-- [ ] 4.1 Add `web/src/lib/assistant/ThinkingIndicator.svelte` (glyph, shimmering verb, elapsed seconds; `label` replaces the verb and hides the counter) and switch `AssistantChat.svelte`'s turn indicator to it; assistant vitest stays green
-- [ ] 4.2 Expose a `focus()` on `Composer.svelte` for hosts that need to focus the field
+- [x] 4.1 Add `web/src/lib/assistant/ThinkingIndicator.svelte` (glyph, shimmering verb, elapsed seconds; `label` replaces the verb and hides the counter) and switch `AssistantChat.svelte`'s turn indicator to it; assistant vitest stays green
+- [x] 4.2 Expose a `focus()` on `Composer.svelte` for hosts that need to focus the field
 
 ## 5. AI search logic module (web)
 
-- [ ] 5.1 Add tested pure helpers to the existing AI-filter module `web/src/lib/aiFilter.ts`: `planParams` (interpretation → job-list params), `cvContext` (CV profile → appended description line), `limitToRequestedCountries`, and the preview-chip grouping lifted from the old dialog (included, excluded struck, query, salary, posted, experience, visa — shared labels)
-- [ ] 5.2 Unit tests for each helper in `aiFilter.test.ts`, including "include wins over exclude" and chips keyed `param:value`
+- [x] 5.1 Add tested pure helpers to the existing AI-filter module `web/src/lib/aiFilter.ts`: `planParams` (interpretation → job-list params), `cvContext` (CV profile → appended description line), `limitToRequestedCountries`, and the preview-chip grouping lifted from the old dialog (included, excluded struck, query, salary, posted, experience, visa — shared labels)
+- [x] 5.2 Unit tests for each helper in `aiFilter.test.ts`, including "include wins over exclude" and chips keyed `param:value`
 
 ## 6. AI search modal (web)
 
@@ -36,8 +36,8 @@
 - [x] 6.3 `AiSearchPlan.svelte`: summary, preview chips, not-recognised list, Run search / Keep chatting card that stays on the latest plan after Keep chatting; Keep chatting adds the agent's prompt and focuses the composer
 - [x] 6.4 Honest failures: empty interpretation → explanation + Start over (no plan card); plan refusal → message with `PlanLimitLink`; 429 for a guest → sign-in invitation; any other error → chat message, working state cleared
 - [x] 6.5 Chat: `Composer` bound to a host-cleared draft, `ThinkingIndicator` while working, refinement sends the previous plan, refinement from Results re-runs the overview
-- [x] 6.6 `AiSearchResults.svelte`: jobs searched from `GET /stats/catalog` (`unique_open_jobs`, nothing when not exact), jobs found and `companies_total` from one `facetCounts` call with `facets=countries,company_slug`, top-company logo grid via `EntityLogo` + `companyLogoUrl`, Show N jobs → `store.apply(planParams(plan))`, then close and `onApplied`
-- [x] 6.7 `JobsWorldMap.svelte`: Natural Earth 110m land TopoJSON in `web/static/`, equirectangular SVG, centroid table covering every country code the location dictionary emits, √count bubbles, top countries as chips, limited to the plan's countries when it names any; loaded only on the Results step
+- [x] 6.6 `AiSearchResults.svelte`: jobs searched from `GET /stats/catalog` (`unique_open_jobs`, nothing when not exact), jobs found, `companies_total` and `top_companies` from one `facetCounts` call with `facets=countries,company_slug`, top-company logo grid via `EntityLogo` + `companyLogoUrl`, Show N jobs → `store.apply(planParams(plan))`, then close and `onApplied`
+- [x] 6.7 `JobsWorldMap.svelte`: land outline and country points precomputed in `web/src/lib/worldMap.ts` (tested against the countries facet vocabulary), equirectangular SVG, √count bubbles, top countries as chips, limited to the plan's countries when it names any; loaded only on the Results step
 - [x] 6.8 Layout: the Results chat is reachable at every width the Results step renders (side panel on wide screens, a toggleable panel below that); check mobile
 - [x] 6.9 `AiFilterButton.svelte`: open for everyone, correct its header comment
 - [x] 6.10 `.messages.ts` for the dialog and each new component; no hardcoded copy

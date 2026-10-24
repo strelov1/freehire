@@ -2,7 +2,7 @@
 
 ### Requirement: The facets endpoint reports distinct companies on request
 
-`GET /api/v1/jobs/facets` SHALL accept `company_slug` in its `facets` parameter. When requested, the response SHALL include `companies_total` — the exact number of distinct `company_slug` values among the open postings matching the filter — and a `company_slug` distribution trimmed to the top 50 by job count, each value carrying the company's display name. `company_slug` SHALL stay out of the default facet set, and SHALL be refused under `disjunctive`. The count SHALL be exact regardless of the facet value cap.
+`GET /api/v1/jobs/facets` SHALL accept `company_slug` in its `facets` parameter. When requested, the response SHALL include `companies_total` — the exact number of distinct `company_slug` values among the open postings matching the filter — and `top_companies` — at most 50 entries `{slug, name, count}` in descending job count (ties by slug), named from the `companies` table or by the slug when the company has no row yet. These are separate fields rather than a `company_slug` entry in `facets`, because a JSON object can carry neither the order nor the names. `company_slug` SHALL stay out of the default facet set, and SHALL be refused under `disjunctive` and for an `OR` query (which runs as a federated search and would count a company matched by two alternatives twice). The count SHALL be exact regardless of the facet value cap.
 
 #### Scenario: Exact count above the facet cap
 
@@ -12,14 +12,19 @@
 #### Scenario: Top companies are ordered by job count
 
 - **WHEN** `facets=company_slug` is requested
-- **THEN** the `company_slug` distribution holds at most 50 entries in descending job count, each with a display name
+- **THEN** `top_companies` holds at most 50 entries in descending job count, each with a display name
 
 #### Scenario: Not requested, not computed
 
 - **WHEN** the request does not name `company_slug` in `facets`
-- **THEN** the response carries no `companies_total` and no extra search runs
+- **THEN** the response carries no `companies_total` or `top_companies` and no extra search runs
 
 #### Scenario: Disjunctive requests refuse it
 
 - **WHEN** `disjunctive=1&facets=company_slug` is requested
+- **THEN** the endpoint responds 400
+
+#### Scenario: An OR query refuses it
+
+- **WHEN** `q=go OR rust&facets=company_slug` is requested
 - **THEN** the endpoint responds 400
