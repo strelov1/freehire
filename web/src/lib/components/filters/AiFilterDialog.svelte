@@ -112,15 +112,24 @@
     void submit(text);
   }
 
+  // Bumped by Start over. A turn still in flight when the visitor starts over belongs to
+  // the conversation they abandoned: its answer is dropped rather than becoming the plan
+  // the next search is merged into.
+  let generation = 0;
+
   async function submit(text: string) {
     if (!text.trim() || busy) return;
-    const first = stage === 'describe';
+    // "First" is "no plan yet", not "still on Describe": a first interpretation that
+    // failed leaves the stage on Search plan, and the retry must carry the CV too.
+    const first = plan === null;
     conversation = [...conversation, { kind: 'you', text, file: first ? cvFile?.name : undefined }];
-    if (first) stage = 'plan';
+    if (stage === 'describe') stage = 'plan';
 
+    const turn = generation;
     busy = true;
     try {
       const next = await api.interpretSearch(first && cv ? text + cvContext(cv) : text, plan ?? undefined);
+      if (turn !== generation) return;
       // Nothing resolved: its own answer, never a plan. Running it would show the whole
       // catalogue and read as "everything matches you".
       if (next.empty) {
@@ -132,11 +141,13 @@
       // A refinement made from Results re-runs the overview rather than asking again.
       if (stage === 'results') await runOverview(next);
     } catch (e) {
+      if (turn !== generation) return;
       if (isPlanRefusal(e)) say(s.planRefused, 'plan-limit');
       else if (e instanceof ApiError && e.status === 429 && !isAuthenticated()) say(s.guestLimit, 'sign-in');
       else say(errorMessage(e, s.interpretFailed));
     } finally {
-      busy = false;
+      // An abandoned turn must not end the working state of the one that replaced it.
+      if (turn === generation) busy = false;
     }
   }
 
@@ -179,6 +190,9 @@
     busy = true;
     try {
       await runOverview(plan);
+      // Nothing to show: go back to the plan, where the error note and Run search are
+      // in reach at every width, rather than leave an empty Results pane.
+      if (!overview) stage = 'plan';
     } finally {
       busy = false;
     }
@@ -198,6 +212,8 @@
   }
 
   function startOver() {
+    generation++;
+    busy = false;
     stage = 'describe';
     conversation = [];
     plan = null;

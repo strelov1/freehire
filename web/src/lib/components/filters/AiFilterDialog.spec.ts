@@ -235,4 +235,56 @@ describe('AiFilterDialog', () => {
     expect(await screen.findByText('boom')).toBeTruthy();
     await waitFor(() => expect(screen.queryByRole('status')).toBeNull());
   });
+
+  it('returns to the plan when the first run fails, so the error and Run search stay in reach', async () => {
+    facetCounts.mockRejectedValueOnce(new Error('boom'));
+    render(AiFilterDialog, { store: store(), onclose: vi.fn() });
+    await describeSearch('Product designer in Brazil');
+    await screen.findByText(BRAZIL.summary);
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Run search' }));
+
+    expect(await screen.findByText('boom')).toBeTruthy();
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Run search' })).toBeTruthy());
+    expect(screen.queryByRole('button', { name: /^Show / })).toBeNull();
+  });
+
+  it('drops an answer that arrives after Start over', async () => {
+    interpretSearch.mockResolvedValueOnce(EMPTY);
+    render(AiFilterDialog, { store: store(), onclose: vi.fn() });
+    await describeSearch('test');
+    await screen.findByText(/couldn't turn that into a search/);
+
+    let answer!: (r: Interpretation) => void;
+    interpretSearch.mockReturnValueOnce(new Promise((r) => (answer = r)));
+    const field = screen.getByRole('textbox', { name: 'Message to the assistant' });
+    await fireEvent.input(field, { target: { value: 'product designer' } });
+    await fireEvent.keyDown(field, { key: 'Enter' });
+    await fireEvent.click(screen.getByRole('button', { name: 'Start over' }));
+    answer(BRAZIL);
+    await new Promise((r) => setTimeout(r));
+
+    interpretSearch.mockResolvedValueOnce(BRAZIL);
+    await describeSearch('Data engineer');
+    await waitFor(() => expect(interpretSearch).toHaveBeenLastCalledWith('Data engineer', undefined));
+  });
+
+  it('sends the CV again when the first interpretation failed', async () => {
+    extractResumeProfile.mockResolvedValue({ skills: ['figma'], categories: [], seniority: 'senior' });
+    interpretSearch.mockRejectedValueOnce(new Error('gateway down'));
+    render(AiFilterDialog, { store: store(), onclose: vi.fn() });
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    Object.defineProperty(input, 'files', { value: [new File(['%PDF'], 'cv.pdf', { type: 'application/pdf' })] });
+    await fireEvent.change(input);
+    await screen.findByText(/1 skill found/);
+    await describeSearch('Product designer');
+    await screen.findByText('gateway down');
+
+    const field = screen.getByRole('textbox', { name: 'Message to the assistant' });
+    await fireEvent.input(field, { target: { value: 'Product designer' } });
+    await fireEvent.keyDown(field, { key: 'Enter' });
+
+    await waitFor(() => expect(interpretSearch).toHaveBeenCalledTimes(2));
+    expect(interpretSearch.mock.calls[1]?.[0]).toMatch(/From my CV: seniority senior; skills figma\.$/);
+  });
 });
