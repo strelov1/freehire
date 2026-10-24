@@ -87,6 +87,25 @@ because the cashier was turned away. Before adding a broad technical alias, run 
 against the titles the filter used to refuse — the ingest log's `rejected N/M postings
 as non-technical, e.g. ...` lines carry two per board.
 
+## Central and Eastern Europe
+
+Polish, Czech, Slovak, Slovenian, Croatian, Serbian, Ukrainian and Bulgarian titles have
+their own block at the end of `categoryTable` (freehire#3513), behind every other block, so
+it only reaches a title nothing above resolves. Two rules shape it:
+
+- **Surface forms, not stems.** The matcher has no morphology, so a role noun is listed in
+  its masculine and feminine forms, and a desk in the CASE titles put it in — Polish names
+  the desk in the genitive ("ds. sprzedaży", "Działu Logistyki"), Slovenian and Croatian in
+  the locative ("v Marketingu", "u proizvodnji"). The nominative would match neither.
+- **Role noun before desk.** The table resolves in declaration order, not title order, so
+  the role nouns are declared first and the desk nouns last: "Magazynier - obsługa
+  produkcji" is a warehouse worker.
+
+Each alias is filed where its English twin is, and what English leaves unresolved on
+purpose stays unresolved here too: the generic specialist/associate nouns, the bare
+quality, compliance and tax desks, interns and student work, talent pools. The CNC/PLC/CAM
+programmers are pinned ahead of the bare programmer nouns, as "CNC Programmer" is.
+
 ## There is no management category
 
 `management` was retired. It held every title whose only resolved word was "manager" —

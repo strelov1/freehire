@@ -148,8 +148,9 @@ func within(span [2]int, claimed [][2]int) bool {
 // rather than only its display label.
 //
 // The vocabulary is not English-only and has not been for some time: the table
-// carries Hungarian, German, Spanish, Portuguese, French and Russian forms where
-// prod titles showed them in use. A caller that matches these terms against
+// carries Hungarian, German, Spanish, Portuguese, French, Russian, Polish, Czech,
+// Slovak, Slovenian, Croatian, Serbian, Ukrainian and Bulgarian forms where prod
+// titles showed them in use. A caller that matches these terms against
 // anything but a title should say so — matching them against a URL slug, say,
 // means transliterating them first (see internal/ingest/sources' Profession
 // prefilter), because a slug is ASCII and "szoftverfejlesztő" is not.

@@ -57,14 +57,18 @@ func (s talentlyft) detail(ctx context.Context, e CompanyEntry, jobURL string) (
 	if !ldJobPosting(root, &p) {
 		return Job{}, false
 	}
+	// The ld+json carries its text HTML-escaped as numeric references ("Skladi&#x161;tar
+	// (m/&#x17E;)"), the description's way too. Stored raw, a title showed the entities on
+	// the page and no title dictionary could read it: 1,479 open postings, nearly every
+	// Croatian and Slovenian one, resolved no category (freehire#3513).
 	location := joinNonEmpty(
-		p.JobLocation.Address.AddressLocality,
-		p.JobLocation.Address.AddressCountry,
+		html.UnescapeString(p.JobLocation.Address.AddressLocality),
+		html.UnescapeString(p.JobLocation.Address.AddressCountry),
 	)
 	return Job{
 		ExternalID:     id,
 		URL:            jobURL,
-		Title:          p.Title,
+		Title:          html.UnescapeString(p.Title),
 		Company:        e.Company,
 		Location:       location,
 		Description:    sanitizeHTML(html.UnescapeString(p.Description)),

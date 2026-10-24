@@ -100,6 +100,24 @@ func TestTalentLyftFetchSitemapThenDetailAndMaps(t *testing.T) {
 	}
 }
 
+// TestTalentLyftUnescapesTitle pins the shape the live ld+json carries: the title's
+// non-ASCII letters as numeric character references, which must reach the catalogue as
+// the letters themselves.
+func TestTalentLyftUnescapesTitle(t *testing.T) {
+	host := "inetec.talentlyft.com"
+	fake := (&routedHTTP{}).
+		route("sitemap.xml", talentlyftSitemapXML(host, "/jobs/skladistar-cjVz")).
+		route("/jobs/skladistar-cjVz", talentlyftDetailHTML("Skladi&#x161;tar (m/&#x17E;)"))
+
+	jobs, err := NewTalentLyft(fake).Fetch(context.Background(), CompanyEntry{Board: "inetec"})
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	if len(jobs) != 1 || jobs[0].Title != "Skladištar (m/ž)" {
+		t.Fatalf("got %+v, want one job titled %q", jobs, "Skladištar (m/ž)")
+	}
+}
+
 func TestTalentLyftSitemapErrorIsBoardError(t *testing.T) {
 	if _, err := NewTalentLyft(&routedHTTP{}).Fetch(context.Background(), CompanyEntry{Board: "inetec"}); err == nil {
 		t.Fatal("want a board-level error when the sitemap fails")
