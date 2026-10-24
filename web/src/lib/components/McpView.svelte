@@ -1,7 +1,8 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
   import { page } from '$app/state';
-  import { Button, SectionLabel, TabStrip, tabStripId } from '#lib/ui/index.js';
+  import { sourceLogoUrl } from '#lib/logo.js';
+  import { Button, EntityLogo, SectionLabel } from '#lib/ui/index.js';
 
   // The two hosted MCP servers. They are separate on purpose: a host only offers
   // sign-in when the server answers 401, so the anonymous one can never lead to the
@@ -22,8 +23,8 @@
   let mode = $state<Mode>('anonymous');
   const url = $derived(servers[mode].url);
 
-  // One tab per host. Every panel stays in the HTML — only the unselected ones are
-  // `hidden` — because agents and crawlers read this page without clicking a tab.
+  // One tile per host. `domain` is what the logo proxy resolves the mark from — by
+  // name alone "Cursor" or "Grok" is ambiguous.
   // `directory` is a one-click install from the host's own connector directory. Our
   // Claude listing is the account connector, so it signs the visitor in.
   type Host = {
@@ -33,10 +34,12 @@
     snippet?: (url: string) => string;
     file?: string;
     directory?: string;
+    domain: string;
   };
   const hosts: Host[] = [
     {
       id: 'claude',
+      domain: 'claude.ai',
       label: 'Claude',
       directory: 'https://claude.ai/directory/manage/freehire',
       steps: [
@@ -48,6 +51,7 @@
     },
     {
       id: 'chatgpt',
+      domain: 'chatgpt.com',
       label: 'ChatGPT',
       steps: [
         'Open Settings, then Apps & Connectors.',
@@ -58,6 +62,7 @@
     },
     {
       id: 'grok',
+      domain: 'grok.com',
       label: 'Grok Bot',
       steps: [
         'Open Connect apps in the sidebar.',
@@ -68,12 +73,14 @@
     },
     {
       id: 'claude-code',
+      domain: 'claude.ai',
       label: 'Claude Code',
       steps: ['Run this once in your terminal, then ask Claude Code a job question.'],
       snippet: (u) => `claude mcp add --transport http freehire ${u}`,
     },
     {
       id: 'cursor',
+      domain: 'cursor.com',
       label: 'Cursor',
       steps: ['Add this to your MCP config, then ask the agent a job question.'],
       file: '~/.cursor/mcp.json',
@@ -85,8 +92,6 @@
     },
   ];
   let host = $state('claude');
-  const hostTabs = hosts.map(({ id, label }) => ({ id, label }));
-  const hostPanelId = 'mcp-host-panel';
 
   // Things to ask, grouped by what the visitor is after. Each one is answerable by
   // the anonymous server's tools alone, except the last group, which needs the account.
@@ -140,7 +145,7 @@
 {/snippet}
 
 <!-- Hero. -->
-<section class="pb-12 pt-12 sm:pt-16">
+<section class="pb-8 pt-12 sm:pt-16">
   <SectionLabel text="mcp" />
   <h1 class="mt-6 max-w-3xl text-balance text-4xl font-semibold leading-none tracking-tighter sm:text-6xl">
     Search jobs right inside your AI assistant.
@@ -150,52 +155,67 @@
   </p>
 </section>
 
-<!-- Setup: which connector, then which assistant. -->
-<section class="border-t border-border py-14 sm:py-16">
-  <h2 class="text-2xl font-semibold tracking-tight">1. Pick a connector</h2>
-  <div class="mt-6 grid gap-4 lg:grid-cols-2" role="group" aria-label="Connector">
-    {#each Object.entries(servers) as [id, server] (id)}
+<!-- Setup: which assistant, then which connector. Every host's panel stays in the
+     HTML, `hidden` when unselected, so crawlers and agents read all of them. -->
+<section class="rounded-2xl border border-border bg-secondary/20 p-5 sm:p-8">
+  <h2 class="text-sm text-muted-foreground">Pick your assistant</h2>
+  <div class="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5" role="group" aria-label="Assistant">
+    {#each hosts as h (h.id)}
       <button
         type="button"
-        aria-pressed={mode === id}
-        onclick={() => (mode = id as Mode)}
+        aria-pressed={host === h.id}
+        onclick={() => (host = h.id)}
         class={[
-          'rounded-xl border p-4 text-left transition-colors',
-          mode === id ? 'border-foreground bg-secondary/60' : 'border-border bg-secondary/20 hover:bg-secondary/40',
+          'flex flex-col items-center gap-3 rounded-xl border-2 px-3 py-5 transition-colors',
+          host === h.id ? 'border-foreground bg-secondary/60' : 'border-border bg-background hover:bg-secondary/40',
         ]}
       >
-        <span class="text-sm font-semibold text-foreground">{server.label}</span>
-        <span class="mt-2 block text-sm leading-relaxed text-muted-foreground">{server.desc}</span>
+        <EntityLogo name={h.label} src={sourceLogoUrl(h.label, h.domain) ?? undefined} size="lg" shape="square" />
+        <span class="text-base font-medium text-foreground">{h.label}</span>
       </button>
     {/each}
   </div>
 
-  <div class="mt-6 flex max-w-2xl items-center gap-3 rounded-lg border border-border bg-secondary/60 px-3 py-2">
-    <code class="min-w-0 flex-1 overflow-x-auto whitespace-nowrap font-mono text-sm">{url}</code>
-    {@render copyButton(url, 'connector address')}
-  </div>
-
-  <h2 class="mt-14 text-2xl font-semibold tracking-tight">2. Add it to your assistant</h2>
-  <TabStrip
-    tabs={hostTabs}
-    active={host}
-    onSelect={(id) => (host = id)}
-    label="Assistant"
-    panelId={hostPanelId}
-    class="mt-6"
-  />
-  <div id={hostPanelId} role="tabpanel" aria-labelledby={tabStripId(hostPanelId, host)} tabindex="-1">
-    {#each hosts as h (h.id)}
-      <div hidden={h.id !== host} class="mt-6 max-w-2xl">
-        {#if h.directory}
+  {#each hosts as h (h.id)}
+    <div hidden={h.id !== host} class="mt-8 max-w-2xl">
+      <h3 class="text-xl font-semibold tracking-tight">Add it to {h.label}</h3>
+      {#if h.directory}
+        <div class="mt-4">
           <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- external directory URL, not a SvelteKit route -->
           <Button href={h.directory} target="_blank" rel="noopener noreferrer" variant="primary" size="md">
             Add from the {h.label} directory ↗
           </Button>
-          <p class="mb-4 mt-3 text-sm leading-relaxed text-muted-foreground">
+          <p class="mt-3 text-sm leading-relaxed text-muted-foreground">
             One click, signs in with your freehire account. Or add it by hand:
           </p>
-        {/if}
+        </div>
+      {/if}
+
+      <div class="mt-4 flex flex-wrap gap-2" role="group" aria-label="Connector">
+        {#each Object.entries(servers) as [id, server] (id)}
+          <button
+            type="button"
+            aria-pressed={mode === id}
+            onclick={() => (mode = id as Mode)}
+            class={[
+              'rounded-full border px-3 py-1 text-sm font-medium transition-colors',
+              mode === id
+                ? 'border-foreground bg-foreground text-background'
+                : 'border-border text-muted-foreground hover:text-foreground',
+            ]}
+          >
+            {server.label}
+          </button>
+        {/each}
+      </div>
+      <p class="mt-2 text-sm leading-relaxed text-muted-foreground">{servers[mode].desc}</p>
+
+      <div class="mt-4 flex items-center gap-3 rounded-lg border border-border bg-background px-3 py-2">
+        <code class="min-w-0 flex-1 overflow-x-auto whitespace-nowrap font-mono text-sm">{url}</code>
+        {@render copyButton(url, 'connector address')}
+      </div>
+
+      <div class="mt-5">
         <ol class="space-y-3">
           {#each h.steps as step, i (i)}
             <li class="flex gap-4">
@@ -226,8 +246,8 @@
           </p>
         {/if}
       </div>
-    {/each}
-  </div>
+    </div>
+  {/each}
 </section>
 
 <!-- Things to ask. -->

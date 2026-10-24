@@ -11,7 +11,7 @@
   "CountryFlag": 12,
   "Dialog": 9,
   "EmptyState": 4,
-  "EntityLogo": 27,
+  "EntityLogo": 28,
   "FormField": 6,
   "Input": 27,
   "LoadMore": 6,
@@ -24,6 +24,6 @@
   "Skeleton": 4,
   "Table": 8,
   "Tabs": 0,
-  "TabStrip": 15,
+  "TabStrip": 14,
   "Tooltip": 2
 }
