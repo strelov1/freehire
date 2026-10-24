@@ -480,6 +480,10 @@ func All(c HTTPClient) map[string]Source {
 		// pages refuse the project's bare User-Agent, hence the browser-compatible form of it.
 		// See occ.go.
 		compatibleUASource(c, NewOCC),
+		// Catho: Brazil's largest general job board, enumerated from its job sitemaps and
+		// hydrating each new posting from its page's ld+json. Posting pages refuse the
+		// project's bare User-Agent, hence the browser-compatible form of it. See catho.go.
+		compatibleUASource(c, NewCatho),
 		// Tech in Asia: Southeast Asian startup board. One public Algolia index holds the whole
 		// catalogue, bodies included; the search key is read from the site's app bundle. The
 		// site's edge refuses any self-identifying User-Agent on paths robots.txt allows, hence

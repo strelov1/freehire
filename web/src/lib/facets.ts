@@ -408,6 +408,7 @@ export const SOURCE_LABELS: Record<string, string> = {
   tenstreet: 'Tenstreet',
   taleobe: 'Taleo Business Edition',
   occ: 'OCC Mundial',
+  catho: 'Catho',
   builtin: 'Built In',
 };
 
