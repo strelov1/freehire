@@ -6,8 +6,6 @@ import (
 	"log"
 	"sync"
 
-	"golang.org/x/sync/errgroup"
-
 	"github.com/strelov1/freehire/internal/dict/companyname"
 	"github.com/strelov1/freehire/internal/dict/normalize"
 	"github.com/strelov1/freehire/internal/platform/db"
@@ -23,64 +21,42 @@ type placeholderRename struct {
 	name     string
 }
 
-// placeholderPerProvider bounds simultaneous fetches against ONE provider. The pass's providers
-// each serve every board from one host or a handful (recruiting.paylocity.com is all of
-// Paylocity), so resolveConcurrency — a bound across many hosts — lands on one: the first prod
-// run, at 24, drew 429s from Paylocity within minutes and crawled at its retry backoff.
-const placeholderPerProvider = 4
-
 // resolvePlaceholders fetches each placeholder board's name and keeps the ones
-// AcceptPlaceholder admits — the providers in parallel, each held to placeholderPerProvider.
-// unresolved counts the boards left as they are — no resolver, a failed fetch, or nothing
-// usable — none of which is an error: the board keeps the placeholder it already had and the
-// next run asks again. Order-independent; the caller sorts.
+// AcceptPlaceholder admits. unresolved counts the boards left as they are — no resolver, a
+// failed fetch, or nothing usable — none of which is an error: the board keeps the
+// placeholder it already had and the next run asks again. Order-independent; the caller sorts.
 func resolvePlaceholders(ctx context.Context, rows []db.ListPlaceholderCompanyBoardsRow, registry companyname.Registry) ([]placeholderRename, int) {
 	var (
-		mu         sync.Mutex
-		renames    []placeholderRename
+		resolvable []db.ListPlaceholderCompanyBoardsRow
 		unresolved int
 	)
-
-	byProvider := map[string][]db.ListPlaceholderCompanyBoardsRow{}
 	for _, row := range rows {
-		byProvider[row.Provider] = append(byProvider[row.Provider], row)
+		if _, ok := registry[row.Provider]; ok {
+			resolvable = append(resolvable, row)
+		} else {
+			unresolved++
+		}
 	}
 
-	var wg sync.WaitGroup
-	for provider, boards := range byProvider {
-		resolver, ok := registry[provider]
-		if !ok {
-			// Under the lock: a provider started earlier in this loop writes the same counter.
-			mu.Lock()
-			unresolved += len(boards)
-			mu.Unlock()
-			continue
+	var (
+		mu      sync.Mutex
+		renames []placeholderRename
+	)
+	eachPerSource(resolvable, func(row db.ListPlaceholderCompanyBoardsRow) string { return row.Provider }, func(row db.ListPlaceholderCompanyBoardsRow) {
+		candidate, err := registry[row.Provider].Name(ctx, row.Board)
+		if err != nil {
+			// A resolver returns "" beside an error, which AcceptPlaceholder refuses.
+			log.Printf("resolve %s %s: %v", row.Provider, row.Board, err)
 		}
-		wg.Go(func() {
-			var g errgroup.Group
-			g.SetLimit(placeholderPerProvider)
-			for _, row := range boards {
-				g.Go(func() error {
-					candidate, err := resolver.Name(ctx, row.Board)
-					if err != nil {
-						// A resolver returns "" beside an error, which AcceptPlaceholder refuses.
-						log.Printf("resolve %s %s: %v", row.Provider, row.Board, err)
-					}
-					name, ok := companyname.AcceptPlaceholder(row.Board, candidate)
-					mu.Lock()
-					defer mu.Unlock()
-					if !ok {
-						unresolved++
-						return nil // a single board failing must not abort the run
-					}
-					renames = append(renames, placeholderRename{provider: row.Provider, board: row.Board, oldName: row.Company, name: name})
-					return nil
-				})
-			}
-			_ = g.Wait()
-		})
-	}
-	wg.Wait()
+		name, ok := companyname.AcceptPlaceholder(row.Board, candidate)
+		mu.Lock()
+		defer mu.Unlock()
+		if !ok {
+			unresolved++ // a single board failing must not abort the run
+			return
+		}
+		renames = append(renames, placeholderRename{provider: row.Provider, board: row.Board, oldName: row.Company, name: name})
+	})
 
 	return renames, unresolved
 }

@@ -3,7 +3,9 @@ package main
 import (
 	"context"
 	"errors"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/strelov1/freehire/internal/dict/companyname"
 	"github.com/strelov1/freehire/internal/platform/db"
@@ -139,5 +141,43 @@ func TestWriteRename_BoardFailureLeavesJobs(t *testing.T) {
 	}
 	if len(f.calls) != 1 {
 		t.Fatalf("calls = %q, want only the board write", f.calls)
+	}
+}
+
+// TestEachPerSource_BoundsEachSource guards the 429s the first prod run drew: no source may
+// see more than perSourceConcurrency fetches at once, whatever the others are doing, and every
+// item is still visited.
+func TestEachPerSource_BoundsEachSource(t *testing.T) {
+	type item struct{ source string }
+	var items []item
+	for range 40 {
+		items = append(items, item{"join"}, item{"lever"})
+	}
+
+	var (
+		mu       sync.Mutex
+		inFlight = map[string]int{}
+		peak     = map[string]int{}
+		visited  int
+	)
+	eachPerSource(items, func(it item) string { return it.source }, func(it item) {
+		mu.Lock()
+		inFlight[it.source]++
+		peak[it.source] = max(peak[it.source], inFlight[it.source])
+		mu.Unlock()
+		time.Sleep(time.Millisecond)
+		mu.Lock()
+		inFlight[it.source]--
+		visited++
+		mu.Unlock()
+	})
+
+	if visited != len(items) {
+		t.Errorf("visited %d items, want %d", visited, len(items))
+	}
+	for src, p := range peak {
+		if p > perSourceConcurrency {
+			t.Errorf("%s peaked at %d concurrent fetches, want at most %d", src, p, perSourceConcurrency)
+		}
 	}
 }

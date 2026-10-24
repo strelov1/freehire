@@ -45,9 +45,33 @@ import (
 	"github.com/strelov1/freehire/internal/platform/worker"
 )
 
-// resolveConcurrency bounds simultaneous careers-page / API fetches so a large
-// ATS completes without hammering a single host.
-const resolveConcurrency = 24
+// perSourceConcurrency bounds simultaneous fetches against ONE source. Every source this
+// worker reads serves its boards from one host or a handful (join.com, jobs.lever.co,
+// recruiting.paylocity.com), so a bound across the whole run lands on one host: at 24, the
+// first prod run of the placeholder pass drew 429s from Paylocity within minutes and 1,382
+// from join.com, and crawled at their retry backoff.
+const perSourceConcurrency = 4
+
+// eachPerSource calls fn for every item — the sources in parallel, each held to
+// perSourceConcurrency — and returns when all are done.
+func eachPerSource[T any](items []T, source func(T) string, fn func(T)) {
+	bySource := map[string][]T{}
+	for _, it := range items {
+		bySource[source(it)] = append(bySource[source(it)], it)
+	}
+	var wg sync.WaitGroup
+	for _, group := range bySource {
+		wg.Go(func() {
+			var g errgroup.Group
+			g.SetLimit(perSourceConcurrency)
+			for _, it := range group {
+				g.Go(func() error { fn(it); return nil })
+			}
+			_ = g.Wait()
+		})
+	}
+	wg.Wait()
+}
 
 func main() { worker.Main(run) }
 
@@ -202,15 +226,15 @@ type resolveStats struct {
 // resolveNames fetches a display-name candidate per eligible company concurrently
 // and keeps those that pass the gate. It is order-independent; the caller sorts.
 func resolveNames(ctx context.Context, rows []db.ListSlugLikeCompaniesForBackfillRow, registry companyname.Registry) ([]rename, resolveStats) {
+	type job struct {
+		row      db.ListSlugLikeCompaniesForBackfillRow
+		resolver companyname.Resolver
+		board    string
+	}
 	var (
-		mu      sync.Mutex
-		renames []rename
-		stats   resolveStats
+		jobs  []job
+		stats resolveStats
 	)
-
-	g, ctx := errgroup.WithContext(ctx)
-	g.SetLimit(resolveConcurrency)
-
 	for _, row := range rows {
 		// Authoritative slug check (the SQL filter is an approximation).
 		if !companyname.SlugLike(row.Name) {
@@ -226,25 +250,28 @@ func resolveNames(ctx context.Context, rows []db.ListSlugLikeCompaniesForBackfil
 			stats.noSource++
 			continue
 		}
-
-		g.Go(func() error {
-			candidate, err := resolver.Name(ctx, board)
-			if err != nil {
-				log.Printf("resolve %s (%s): %v", row.Slug, row.Source, err)
-				return nil // a single board failing must not abort the run
-			}
-			name, ok := companyname.Accept(row.Source, row.Name, candidate)
-			mu.Lock()
-			defer mu.Unlock()
-			if !ok {
-				stats.rejected++
-				return nil
-			}
-			renames = append(renames, rename{oldSlug: row.Slug, oldName: row.Name, name: name, source: row.Source, board: board})
-			return nil
-		})
+		jobs = append(jobs, job{row: row, resolver: resolver, board: board})
 	}
-	_ = g.Wait()
+
+	var (
+		mu      sync.Mutex
+		renames []rename
+	)
+	eachPerSource(jobs, func(j job) string { return j.row.Source }, func(j job) {
+		candidate, err := j.resolver.Name(ctx, j.board)
+		if err != nil {
+			log.Printf("resolve %s (%s): %v", j.row.Slug, j.row.Source, err)
+			return // a single board failing must not abort the run
+		}
+		name, ok := companyname.Accept(j.row.Source, j.row.Name, candidate)
+		mu.Lock()
+		defer mu.Unlock()
+		if !ok {
+			stats.rejected++
+			return
+		}
+		renames = append(renames, rename{oldSlug: j.row.Slug, oldName: j.row.Name, name: name, source: j.row.Source, board: j.board})
+	})
 
 	return renames, stats
 }
