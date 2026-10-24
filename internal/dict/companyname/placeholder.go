@@ -162,33 +162,34 @@ var oracleSiteLoneWords = map[string]bool{
 }
 
 // ExtractOracleSiteName turns an Oracle candidate-experience site name into the employer's
-// name. A name split by "|" is read part by part, and a part that needed no unwrapping wins
-// over one that did: in "Local Truck Driving Jobs | Centerline Drivers" the bare part is the
-// employer and the wrapped one is what the site is for. Otherwise the first part that names an
-// employer wins ("Careers | BXP"). Refusing costs the board nothing: it simply keeps the
+// name. A name split by "|" is read part by part, and the parts that name an employer must
+// agree: "Careers | BXP" has one, "Verisk Careers | Verisk" two that match, while "Local Truck
+// Driving Jobs | Centerline Drivers" has two that differ — and so would "Careers at Acme |
+// North America", where choosing either side by its shape could state a region as the
+// employer. Disagreement is refused. Refusing costs the board nothing: it simply keeps the
 // placeholder it already had.
 func ExtractOracleSiteName(name string) string {
-	first := ""
+	found := ""
 	for _, part := range strings.Split(name, "|") {
-		got, wrapped := extractOracleSitePart(part)
-		if got != "" && !wrapped {
-			return got
-		}
-		if first == "" {
-			first = got
+		got := extractOracleSitePart(part)
+		switch {
+		case got == "":
+		case found == "":
+			found = got
+		case !strings.EqualFold(found, got):
+			return ""
 		}
 	}
-	return first
+	return found
 }
 
 // extractOracleSitePart drops a lead-in, cuts at the first marker and a tail, then refuses what
 // is left if it still names the site's purpose, stands alone as a generic word, or is a
-// configuration identifier (an underscore — "POLK_BoCC_Career Site", "Innergex_EN"). wrapped
-// reports whether anything was cut, which is what ExtractOracleSiteName ranks parts by.
-func extractOracleSitePart(part string) (name string, wrapped bool) {
-	name = strings.Join(strings.Fields(part), " ")
+// configuration identifier (an underscore — "POLK_BoCC_Career Site", "Innergex_EN").
+func extractOracleSitePart(name string) string {
+	name = strings.Join(strings.Fields(name), " ")
 	if strings.Contains(name, "_") {
-		return "", false
+		return ""
 	}
 	for _, lead := range oracleSiteLeads {
 		if len(name) > len(lead) && strings.EqualFold(name[:len(lead)], lead) {
@@ -206,22 +207,26 @@ func extractOracleSitePart(part string) (name string, wrapped bool) {
 		}
 	}
 	name = strings.TrimRight(name, " -–—")
-	for _, tail := range oracleSiteTails {
-		if rest, ok := cutSuffixFold(name, tail); ok {
-			name = strings.TrimRight(rest, " -–—")
-			break
+	// Tails stack ("Chubb External Jobs"), so cut until none is left.
+	for cut := true; cut; {
+		cut = false
+		for _, tail := range oracleSiteTails {
+			if rest, ok := cutSuffixFold(name, tail); ok {
+				name, cut = strings.TrimRight(rest, " -–—"), true
+				break
+			}
 		}
 	}
 	tokens := words.FindAllString(name, -1)
 	for _, w := range tokens {
 		if oracleSiteWords[strings.ToLower(w)] {
-			return "", false
+			return ""
 		}
 	}
 	if len(tokens) == 1 && oracleSiteLoneWords[strings.ToLower(tokens[0])] {
-		return "", false
+		return ""
 	}
-	return name, name != strings.Join(strings.Fields(part), " ")
+	return name
 }
 
 type dayforceResolver struct{ http textGetter }
