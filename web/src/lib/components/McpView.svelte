@@ -25,24 +25,23 @@
   const url = $derived(servers[mode].url);
 
   // One tile per host. `domain` is what the logo proxy resolves the mark from — by
-  // name alone "Cursor" or "Grok" is ambiguous.
-  // `directory` is a one-click install from the host's own directory, drawn in that
+  // name alone "Cursor" or "Grok" is ambiguous. `directory` is a one-click install from the host's own directory, drawn in that
   // host's brand colour and mark (from simple-icons, like every other brand mark on the
   // site) so the button reads as the host's install, not ours.
   type Host = {
     id: string;
     label: string;
-    steps: string[];
-    snippet?: (url: string) => string;
-    file?: string;
-    directory?: { url: string; brand: SimpleIcon; note: string };
     domain: string;
+    directory?: { url: string; brand: SimpleIcon; note: string };
+    steps: string[];
+    file?: string;
+    snippet?: (url: string) => string;
   };
   const hosts: Host[] = [
     {
       id: 'claude',
-      domain: 'claude.ai',
       label: 'Claude',
+      domain: 'claude.ai',
       // Our Claude listing is the account connector, so it signs the visitor in.
       directory: {
         url: 'https://claude.ai/directory/manage/freehire',
@@ -58,8 +57,8 @@
     },
     {
       id: 'chatgpt',
-      domain: 'chatgpt.com',
       label: 'ChatGPT',
+      domain: 'chatgpt.com',
       steps: [
         'Open Settings, then Apps & Connectors.',
         'Under Advanced settings, turn on Developer mode.',
@@ -69,8 +68,8 @@
     },
     {
       id: 'grok',
-      domain: 'grok.com',
       label: 'Grok Bot',
+      domain: 'grok.com',
       steps: [
         'Open Connect apps in the sidebar.',
         'Add a custom app, name it freehire, and paste the address.',
@@ -80,20 +79,20 @@
     },
     {
       id: 'claude-code',
-      domain: 'claude.ai',
       label: 'Claude Code',
+      domain: 'claude.ai',
       steps: ['Run this once in your terminal, then ask Claude Code a job question.'],
       snippet: (u) => `claude mcp add --transport http freehire ${u}`,
     },
     {
       id: 'cursor',
+      label: 'Cursor',
       domain: 'cursor.com',
       directory: {
         url: 'https://cursor.directory/plugins/freehire-mcp',
         brand: siCursor,
         note: 'Listed on cursor.directory',
       },
-      label: 'Cursor',
       steps: ['Add this to your MCP config, then ask the agent a job question.'],
       file: '~/.cursor/mcp.json',
       snippet: (u) => `{
