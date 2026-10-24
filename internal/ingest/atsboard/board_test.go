@@ -545,6 +545,10 @@ func TestRecognize(t *testing.T) {
 		{"pandape marketing site is not a board", "https://www.pandape.com.br/", "", "", "", false},
 		{"pandape confidential bucket is not a board", "https://empregos.pandape.infojobs.com.br/Detail/3561691", "", "", "", false},
 		{"pandape sitemap host names no tenant", "https://pandape.infojobs.com.br/pandapeofertas1.xml.gz", "", "", "", false},
+		// pandapelatam: Computrabajo's deployment, its own tenant namespace and so its own provider.
+		{"pandape latam vacancy", "https://netcall.pandape.computrabajo.com/Detail/13958406?utm_source=Jobgether", "pandapelatam", "netcall", "https://netcall.pandape.computrabajo.com", true},
+		{"pandape latam marketing redirect is not a board", "https://www.pandape.computrabajo.com/", "", "", "", false},
+		{"pandape latam confidential bucket is not a board", "https://empleos.pandape.computrabajo.com/Detail/9842801", "", "", "", false},
 		// jobscore: the company shortcode behind the platform's "careers" or "jobs" word.
 		{"jobscore posting", "https://careers.jobscore.com/careers/ariasystems/jobs/implementation-consultant-a6n7LJEMraPQGI8xheCJ7l?ref=rss&sid=68", "jobscore", "ariasystems", "https://careers.jobscore.com/careers/ariasystems/jobs/implementation-consultant-a6n7LJEMraPQGI8xheCJ7l", true},
 		{"jobscore feed", "https://careers.jobscore.com/jobs/ierustechnologiesinc/feed.json?sort=date", "jobscore", "ierustechnologiesinc", "https://careers.jobscore.com/jobs/ierustechnologiesinc/feed.json", true},

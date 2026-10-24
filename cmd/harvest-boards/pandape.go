@@ -21,21 +21,34 @@ import (
 	"github.com/strelov1/freehire/internal/ingest/sources"
 )
 
-// A Pandapé board is a career-site tenant label (<tenant>.pandape.infojobs.com.br), the key
-// sources.pandape lists by.
+// A Pandapé board is a career-site tenant label (<tenant>.<domain>), the key sources.pandape
+// lists by. Each deployment is its own provider with its own tenant namespace: InfoJobs Brasil's
+// (pandape, <tenant>.pandape.infojobs.com.br) and Computrabajo's Latin-American one
+// (pandapelatam, <tenant>.pandape.computrabajo.com).
 const (
 	// pandapeSitemapIndex is the sitemap robots.txt names: a gzip index of gzip shards, each
 	// up to 1,000 vacancy URLs (115 shards, ~113.6k URLs, 3,347 tenant labels on 2026-10-23).
 	// It is the only public list that spans tenants. It is NOT the catalogue — a tenant's
 	// own listing carries more than its sitemap entries (braspress: 54 against 20) — so it
-	// serves discovery only.
+	// serves discovery only. It names Brazilian tenants only: the Latin-American domain's
+	// robots.txt points at this same file.
 	pandapeSitemapIndex = "https://www.pandape.com.br/pandapeindexofertas.xml.gz"
-	// pandapeSiteURL is a tenant's career site, %s = the tenant label.
-	pandapeSiteURL = "https://%s.pandape.infojobs.com.br/"
+	// pandapeLatamCrawlPattern is the Common Crawl query for the Latin-American domain, which
+	// publishes no sitemap of its own: every tenant subdomain, no path glob.
+	pandapeLatamCrawlPattern = "*.pandape.computrabajo.com"
 )
 
-// pandapeProber probes and discovers Pandapé career sites.
-type pandapeProber struct{}
+// pandapeProber probes and discovers one Pandapé deployment's career sites.
+type pandapeProber struct {
+	provider string // the sources provider, which atsboard names for the domain's URLs
+	host     string // the career-site domain
+	latam    bool   // discover from Common Crawl rather than the Brazilian sitemap
+}
+
+var (
+	pandapeBrazilProber = pandapeProber{provider: "pandape", host: "pandape.infojobs.com.br"}
+	pandapeLatamProber  = pandapeProber{provider: "pandapelatam", host: "pandape.computrabajo.com", latam: true}
+)
 
 // maxRequestsPerSecond holds the harvest to the crawl's own pace: every tenant and the sitemap
 // are one origin, which answers a burst with 403 (see sources.PandapeRequestInterval).
@@ -43,15 +56,19 @@ func (pandapeProber) maxRequestsPerSecond() float64 {
 	return float64(time.Second) / float64(sources.PandapeRequestInterval)
 }
 
-// pandapeTitle is the career site's title: "<employer> - Trabalhe Conosco | Pandapé".
-var pandapeTitle = regexp.MustCompile(`^(.+?) - Trabalhe Conosco \| Pandap`)
+// pandapeTitle is the career site's title: "<employer> - Trabalhe Conosco | Pandapé" in
+// Brazil, "<employer> - Trabaja con nosotros | Pandapé" elsewhere.
+var pandapeTitle = regexp.MustCompile(`^(.+?) - (?:Trabalhe Conosco|Trabaja con nosotros) \| Pandap`)
 
-// probe reads the career site's own page: the employer from its title and the open-vacancy
-// count from its "subTotal" counter. An unknown tenant answers 404 ("A Página de Carreiras
-// desta empresa não está mais disponível no Pandapé") and a site with no vacancy counts 0;
-// both are a skip. Any other failure is returned, so probeAll counts it.
-func (pandapeProber) probe(ctx context.Context, c httpClient, tenant string) (string, int, error) {
-	root, err := c.GetHTML(ctx, fmt.Sprintf(pandapeSiteURL, tenant))
+// probe reads the career site's vacancy list page (/Vacancies): the employer from its title and
+// the open-vacancy count from its "subTotal" counter. The list page, not the home page: a
+// tenant on the platform's richer home template renders its vacancies only behind a link, and
+// its home carries no counter (avos-tech: none on /, 1,241 on /Vacancies). An unknown tenant
+// answers 404 ("A Página de Carreiras desta empresa não está mais disponível no Pandapé") and a
+// site with no vacancy counts 0; both are a skip. Any other failure is returned, so probeAll
+// counts it. A tenant stating more vacancies than the pager can list is logged and skipped.
+func (p pandapeProber) probe(ctx context.Context, c httpClient, tenant string) (string, int, error) {
+	root, err := c.GetHTML(ctx, "https://"+tenant+"."+p.host+"/Vacancies")
 	if err != nil {
 		// Only the platform's 404 says the tenant is gone. Anything else — the burst 403
 		// above all — is a probe that did not happen, and is surfaced as a failure rather
@@ -64,6 +81,11 @@ func (pandapeProber) probe(ctx context.Context, c httpClient, tenant string) (st
 	}
 	n := pandapeSubtotal(root)
 	if n == 0 {
+		return "", 0, nil
+	}
+	if n > sources.PandapeListingWindow {
+		// The crawl could only ever fail on it (see sources.PandapeListingWindow).
+		log.Printf("pandape probe: %s states %d vacancies, past the pager's %d window; skipping", tenant, n, sources.PandapeListingWindow)
 		return "", 0, nil
 	}
 	name := tenant
@@ -95,12 +117,31 @@ type pandapeSitemapSet struct {
 	Locs []string `xml:"sitemap>loc"`
 }
 
-// discover reads the sitemap index and every shard, collecting each vacancy URL's tenant in
-// first-seen order. Recognition goes through atsboard, so the platform's own hosts (www, the
-// confidential-employer bucket "empregos") and the host-less entries some shards carry
-// ("<loc>/Detail/3552612</loc>") never become candidates. A shard that fails is logged and
-// skipped: a short candidate list only means fewer probes, never a wrong board.
-func (pandapeProber) discover(ctx context.Context, c httpClient) ([]string, error) {
+// discover lists candidate tenants. The Brazilian deployment's are read from its sitemap
+// (discoverSitemap); the Latin-American one has none, so its come from Common Crawl's index of
+// the domain. Recognition goes through atsboard either way, so the platform's own hosts (www,
+// the confidential-employer buckets) never become candidates.
+func (p pandapeProber) discover(ctx context.Context, c httpClient) ([]string, error) {
+	if p.latam {
+		return commonCrawlCandidates(ctx, c, pandapeLatamCrawlPattern, p.tenantOf)
+	}
+	return p.discoverSitemap(ctx, c)
+}
+
+// tenantOf is the tenant label a vacancy URL names on this deployment.
+func (p pandapeProber) tenantOf(u string) (string, bool) {
+	src, board, _, ok := atsboard.Recognize(strings.TrimSpace(u))
+	if !ok || src != p.provider {
+		return "", false
+	}
+	return board, true
+}
+
+// discoverSitemap reads the sitemap index and every shard, collecting each vacancy URL's tenant
+// in first-seen order. The host-less entries some shards carry ("<loc>/Detail/3552612</loc>")
+// name no tenant. A shard that fails is logged and skipped: a short candidate list only means
+// fewer probes, never a wrong board.
+func (p pandapeProber) discoverSitemap(ctx context.Context, c httpClient) ([]string, error) {
 	var index pandapeSitemapSet
 	if err := pandapeGzipXML(ctx, c, pandapeSitemapIndex, &index); err != nil {
 		return nil, fmt.Errorf("pandape discover: sitemap index: %w", err)
@@ -117,8 +158,8 @@ func (pandapeProber) discover(ctx context.Context, c httpClient) ([]string, erro
 			continue
 		}
 		for _, loc := range set.Locs {
-			src, board, _, ok := atsboard.Recognize(strings.TrimSpace(loc))
-			if !ok || src != "pandape" || seen[board] {
+			board, ok := p.tenantOf(loc)
+			if !ok || seen[board] {
 				continue
 			}
 			seen[board] = true

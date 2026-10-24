@@ -19,16 +19,20 @@ import (
 	"golang.org/x/time/rate"
 )
 
-// pandape adapts Pandapé (pandape.com.br), the ATS InfoJobs Brasil sells to employers: one
-// <tenant>.pandape.infojobs.com.br career site per employer, and a board is that tenant label.
-// See the "Pandapé traps" section of AGENTS.md for the measurements behind each rule.
+// pandape adapts Pandapé, the ATS InfoJobs sells in Brazil and Computrabajo sells across the
+// rest of Latin America: one <tenant>.<domain> career site per employer, and a board is that
+// tenant label. The two deployments run the same software on separate domains with separate
+// tenant namespaces (a Brazilian tenant 404s on the Latin-American domain and vice versa), so
+// each is its own provider (pandapeDomain). See the "Pandapé traps" section of AGENTS.md for
+// the measurements behind each rule.
 //
 // The career site renders its first 20 vacancies; its own "load more" button POSTs
 // /ListVacancies, which answers JSON carrying the page's vacancy cards as an HTML fragment, the
 // tenant's total ("subtotal") and an isLast flag. The cards carry no body, so this is a
-// HydratingSource over each vacancy's /Detail/<id> page, which server-renders a schema.org
-// JobPosting beside the description.
+// HydratingSource over each vacancy's /Detail/<id> page, which server-renders the description
+// and (usually) a schema.org JobPosting.
 type pandape struct {
+	domain         pandapeDomain
 	http           pandapeHTTP
 	limiter        waiter
 	maxNewPerBoard int
@@ -39,18 +43,45 @@ type pandapeHTTP interface {
 	HTMLGetter
 }
 
-// pandapeHost is the career-site domain the adapter reads every tenant on. The same tenant
-// answers on pandape.catho.com.br too (identical listing), so one host is canonical.
-const pandapeHost = "pandape.infojobs.com.br"
+// pandapeDomain is one Pandapé deployment.
+type pandapeDomain struct {
+	provider string
+	// host is the career-site domain every tenant is a subdomain of.
+	host string
+	// templatedJobPosting marks a deployment whose JobPosting is filled from a Brazilian
+	// template rather than from the vacancy: on the Latin-American domain every JobPosting
+	// sampled said addressCountry BR, currency BRL and employmentType partial-time (a Lima call
+	// centre's full-time job, paid in soles), and cut the last letter off a locality with no
+	// region ("Ayacuch", "Santiago Centr"), while some vacancy pages carry no JobPosting at all.
+	// There only datePosted and the salary bounds are read from it; the place comes from the
+	// card, the country from the page's own analytics props, the currency from that country.
+	templatedJobPosting bool
+}
+
+var (
+	// pandapeBrazil is InfoJobs Brasil's deployment. The same tenant answers on
+	// pandape.catho.com.br too (identical listing), so one host is canonical.
+	pandapeBrazil = pandapeDomain{provider: "pandape", host: "pandape.infojobs.com.br"}
+	// pandapeLatam is Computrabajo's deployment across Spanish-speaking Latin America (Chile,
+	// Peru, Colombia, Mexico, ...); each tenant states its own country.
+	pandapeLatam = pandapeDomain{provider: "pandapelatam", host: "pandape.computrabajo.com", templatedJobPosting: true}
+)
 
 // pandapePageSize is the listing page size. The server ignores anything larger (PageSize=200
 // still answers 20 cards), so asking for more only hides the real page size.
 const pandapePageSize = 20
 
-// pandapeMaxPages is the listing walk's safety ceiling. The largest tenant measured on
-// 2026-10-23 held 8,319 vacancies (rhftalentos, 416 pages); reaching the ceiling before isLast
-// FAILS the crawl, as fullBoardListing requires.
-const pandapeMaxPages = 1000
+// pandapeMaxPages is the pager's own window: it serves 500 pages (10,000 vacancies) and no
+// more — measured 2026-10-24 on activoschile, which states 55,483: page 500 answers 20 cards,
+// page 501 answers {"isLast": true} with no cards and no subtotal. The largest Brazilian tenant
+// (rhftalentos, 8,319 vacancies, 416 pages) fits; a tenant stating more than the window can
+// never be listed whole, so its crawl fails on the first page rather than walk 500 pages to the
+// same answer, and fullBoardListing never sweeps it on a partial list.
+const pandapeMaxPages = 500
+
+// PandapeListingWindow is how many vacancies the pager can list for one tenant. Exported for
+// cmd/harvest-boards, which does not propose a tenant stating more.
+const PandapeListingWindow = pandapeMaxPages * pandapePageSize
 
 // PandapeRequestInterval paces every request of a run — every tenant's listing and detail
 // pages alike, since all ~3.3k tenants are served by one origin, which answers a burst with a
@@ -69,16 +100,22 @@ const PandapeRequestInterval = 500 * time.Millisecond
 // nothing is stored for them, and the next run hydrates the next slice.
 const pandapeMaxNewPerBoard = 300
 
-// NewPandape builds the Pandapé adapter over the shared client.
-func NewPandape(c pandapeHTTP) Source {
+// NewPandape builds the adapter for InfoJobs Brasil's Pandapé over the shared client.
+func NewPandape(c pandapeHTTP) Source { return newPandape(pandapeBrazil, c) }
+
+// NewPandapeLatam builds the adapter for Computrabajo's Latin-American Pandapé.
+func NewPandapeLatam(c pandapeHTTP) Source { return newPandape(pandapeLatam, c) }
+
+func newPandape(d pandapeDomain, c pandapeHTTP) pandape {
 	return pandape{
+		domain:         d,
 		http:           c,
 		limiter:        rate.NewLimiter(rate.Every(PandapeRequestInterval), 1),
 		maxNewPerBoard: pandapeMaxNewPerBoard,
 	}
 }
 
-func (pandape) Provider() string { return "pandape" }
+func (s pandape) Provider() string { return s.domain.provider }
 
 // fullBoardListing: every page states the tenant's total and whether it is the last; the walk
 // ends only on isLast and fails unless the distinct vacancies read reach the stated total. Any
@@ -93,8 +130,10 @@ type pandapePage struct {
 }
 
 // pandapeCard is one vacancy card of the listing: the title and the icon-tagged facts.
+// Schedule and Salary are read only on the Latin-American domain, where the JobPosting's are
+// a template's.
 type pandapeCard struct {
-	ID, Title, Location, WorkMode, Contract string
+	ID, Title, Location, WorkMode, Contract, Schedule, Salary string
 }
 
 var pandapeBoard = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)
@@ -117,9 +156,9 @@ func (s pandape) FetchNew(ctx context.Context, e CompanyEntry, seen func(externa
 	return s.hydrate(ctx, board, e, cards, seen)
 }
 
-func pandapeSite(board string) string { return "https://" + board + "." + pandapeHost }
+func (d pandapeDomain) site(board string) string { return "https://" + board + "." + d.host }
 
-func pandapeVacancyURL(board, id string) string { return pandapeSite(board) + "/Detail/" + id }
+func (d pandapeDomain) vacancyURL(board, id string) string { return d.site(board) + "/Detail/" + id }
 
 func (s pandape) list(ctx context.Context, board string) ([]pandapeCard, error) {
 	var cards []pandapeCard
@@ -134,7 +173,7 @@ func (s pandape) list(ctx context.Context, board string) ([]pandapeCard, error) 
 		}
 		var resp pandapePage
 		form := url.Values{"PageNumber": {strconv.Itoa(page)}, "PageSize": {strconv.Itoa(pandapePageSize)}}
-		if err := s.http.PostFormJSON(ctx, pandapeSite(board)+"/ListVacancies", form, &resp); err != nil {
+		if err := s.http.PostFormJSON(ctx, s.domain.site(board)+"/ListVacancies", form, &resp); err != nil {
 			// An unknown tenant answers 404 with the platform's "A Página de Carreiras desta
 			// empresa não está mais disponível no Pandapé" page; a live one never does.
 			var se *StatusError
@@ -148,6 +187,9 @@ func (s pandape) list(ctx context.Context, board string) ([]pandapeCard, error) 
 		}
 		if total < 0 {
 			total = *resp.Subtotal
+			if total > PandapeListingWindow {
+				return nil, fmt.Errorf("pandape: the career site states %d vacancies, past the pager's %d-page window", total, pandapeMaxPages)
+			}
 		}
 		got, err := parsePandapeCards(resp.View)
 		if err != nil {
@@ -219,6 +261,10 @@ func parsePandapeCards(fragment string) ([]pandapeCard, error) {
 				c.WorkMode = text
 			case HasClass(i, "icon-sheet"):
 				c.Contract = text
+			case HasClass(i, "icon-clock"):
+				c.Schedule = text
+			case HasClass(i, "icon-wallet"):
+				c.Salary = text
 			}
 			return true
 		})
@@ -238,7 +284,7 @@ func (s pandape) hydrate(ctx context.Context, board string, e CompanyEntry, card
 	var unseen []pandapeCard
 	for _, c := range cards {
 		if seen(c.ID) {
-			refreshed = append(refreshed, Job{ExternalID: c.ID, URL: pandapeVacancyURL(board, c.ID), Title: c.Title, Company: e.Company, SeenRefresh: true})
+			refreshed = append(refreshed, Job{ExternalID: c.ID, URL: s.domain.vacancyURL(board, c.ID), Title: c.Title, Company: e.Company, SeenRefresh: true})
 			continue
 		}
 		if len(unseen) < s.maxNewPerBoard {
@@ -247,7 +293,7 @@ func (s pandape) hydrate(ctx context.Context, board string, e CompanyEntry, card
 	}
 	var read atomic.Int64
 	jobs := fetchDetails(unseen, defaultDetailWorkers, func(c pandapeCard) (Job, bool) {
-		link := pandapeVacancyURL(board, c.ID)
+		link := s.domain.vacancyURL(board, c.ID)
 		if err := s.limiter.Wait(ctx); err != nil {
 			return Job{}, false
 		}
@@ -258,9 +304,9 @@ func (s pandape) hydrate(ctx context.Context, board string, e CompanyEntry, card
 			}
 			return Job{}, false
 		}
-		job, ok := pandapeJob(root, c, link, e)
+		job, ok := s.domain.job(root, c, link, e)
 		if !ok {
-			log.Printf("pandape: %s carries no JobPosting; deferring", link)
+			log.Printf("pandape: %s is not a vacancy page; deferring", link)
 			return Job{}, false
 		}
 		read.Add(1)
@@ -289,45 +335,58 @@ type pandapeLD struct {
 	} `json:"baseSalary"`
 }
 
-// pandapeJob maps a vacancy page plus its card. ok is false when the page carries no
-// JobPosting, i.e. it is not a vacancy page.
-func pandapeJob(root *xhtml.Node, c pandapeCard, link string, e CompanyEntry) (Job, bool) {
+// job maps a vacancy page plus its card. ok is false when the page is not a vacancy
+// page: on the Brazilian domain it carries no JobPosting; on the Latin-American one, where the
+// JobPosting is optional (templatedJobPosting), it carries no body either.
+func (d pandapeDomain) job(root *xhtml.Node, c pandapeCard, link string, e CompanyEntry) (Job, bool) {
 	var ld pandapeLD
-	if !ldJobPosting(root, &ld) {
+	if !ldJobPosting(root, &ld) && !d.templatedJobPosting {
 		return Job{}, false
 	}
 	job := Job{
-		ExternalID:     c.ID,
-		URL:            link,
-		Title:          c.Title,
-		Company:        e.Company,
-		Location:       c.Location,
-		Description:    pandapeBody(root, ld.Description),
-		PostedAt:       pandapePostedAt(ld.DatePosted),
-		EmploymentType: pandapeEmploymentType(c.Contract, ld.EmploymentType),
+		ExternalID:  c.ID,
+		URL:         link,
+		Title:       c.Title,
+		Company:     e.Company,
+		Location:    c.Location,
+		Description: pandapeBody(root, ld.Description),
+		PostedAt:    pandapePostedAt(ld.DatePosted),
 	}
 	if job.Title == "" {
 		job.Title = strings.TrimSpace(ld.Title)
 	}
-	if len(ld.JobLocation) > 0 {
-		a := ld.JobLocation[0].Address
-		// "Todo Brasil" (nationwide) postings state the country and no city; the card's own
-		// wording is the better location text there.
-		if a.AddressLocality != "" {
-			job.Location = joinNonEmpty(a.AddressLocality, a.AddressRegion)
-		}
-		job.Countries = countryFromCode(a.AddressCountry)
-	}
-	if job.Countries == nil {
-		job.FallbackCountries = []string{"br"}
-	}
 	switch c.WorkMode {
-	case "Home Office":
+	case "Home Office", "Remoto":
 		job.WorkMode, job.Remote = "remote", true
-	case "Híbrido":
+	case "Híbrido", "Presencial y remoto":
 		job.WorkMode = "hybrid"
 	case "Presencial":
 		job.WorkMode = "onsite"
+	}
+	currency := ""
+	if d.templatedJobPosting {
+		job.Countries = countryFromCode(pandapeAnalyticsCountry(root))
+		job.EmploymentType = pandapeLatamEmploymentType(c.Contract, c.Schedule)
+		if len(job.Countries) == 1 {
+			currency = pandapeLatamCurrency(job.Countries[0], c.Salary)
+		}
+	} else {
+		job.EmploymentType = pandapeEmploymentType(c.Contract, ld.EmploymentType)
+		if len(ld.JobLocation) > 0 {
+			a := ld.JobLocation[0].Address
+			// "Todo Brasil" (nationwide) postings state the country and no city; the card's own
+			// wording is the better location text there.
+			if a.AddressLocality != "" {
+				job.Location = joinNonEmpty(a.AddressLocality, a.AddressRegion)
+			}
+			job.Countries = countryFromCode(a.AddressCountry)
+		}
+		if job.Countries == nil {
+			job.FallbackCountries = []string{"br"}
+		}
+		if ld.BaseSalary != nil {
+			currency = strings.ToUpper(ld.BaseSalary.Currency)
+		}
 	}
 	if b := ld.BaseSalary; b != nil && b.Value.MinValue != nil {
 		lo := int(math.Round(*b.Value.MinValue))
@@ -335,12 +394,35 @@ func pandapeJob(root *xhtml.Node, c pandapeCard, link string, e CompanyEntry) (J
 		if b.Value.MaxValue != nil {
 			hi = int(math.Round(*b.Value.MaxValue))
 		}
-		if period := schemaSalaryPeriod(b.Value.UnitText); lo > 0 && hi >= lo && period != "" && b.Currency != "" {
+		if period := schemaSalaryPeriod(b.Value.UnitText); lo > 0 && hi >= lo && period != "" && currency != "" {
 			job.SalaryMin, job.SalaryMax = &lo, &hi
-			job.SalaryCurrency, job.SalaryPeriod = strings.ToUpper(b.Currency), period
+			job.SalaryCurrency, job.SalaryPeriod = currency, period
 		}
 	}
-	return job, job.Title != ""
+	return job, job.Title != "" && job.Description != ""
+}
+
+// pandapeAnalyticsCountry reads the country the career site tells its own analytics,
+// "window.dataLayerProps.country = 'Peru';" — the only place a Latin-American vacancy page
+// states its country correctly. It is the tenant's country, spelled in English, its non-ASCII
+// letters HTML-escaped inside the script ("Espa&#xF1;a").
+var pandapeAnalyticsCountryRe = regexp.MustCompile(`dataLayerProps\.country\s*=\s*'([^']*)'`)
+
+func pandapeAnalyticsCountry(root *xhtml.Node) string {
+	var country string
+	walk(root, func(n *xhtml.Node) bool {
+		if country != "" {
+			return false
+		}
+		if n.Type == xhtml.ElementNode && n.Data == "script" {
+			if m := pandapeAnalyticsCountryRe.FindStringSubmatch(textContent(n)); m != nil {
+				country = html.UnescapeString(m[1])
+			}
+			return false
+		}
+		return true
+	})
+	return country
 }
 
 // pandapeBody renders the page's description and its structured requirement sections
@@ -395,4 +477,57 @@ func pandapeEmploymentType(contract, schedule string) string {
 		return "part_time"
 	}
 	return ""
+}
+
+// pandapeLatamEmploymentType maps the Latin-American card's contract and schedule picklists
+// (the JobPosting's employmentType is a constant there). The contract wins where it says the
+// vacancy is not employment at all; the many employment contracts — indefinite, fixed-term,
+// per-project ("a plazo fijo", "de obra o labor", Peru's "por Inicio o Incremento de
+// Actividad") — say nothing about the schedule, which the schedule picklist states: a named
+// full or part time, or a weekly hour count (Chile's statutory week is 40-45 hours).
+func pandapeLatamEmploymentType(contract, schedule string) string {
+	if contract == "Contrato civil por prestación de servicios" {
+		return "contract"
+	}
+	switch strings.ToLower(schedule) {
+	case "tiempo completo", "jornada completa":
+		return "full_time"
+	case "tiempo parcial", "jornada part time", "por horas", "jornada reducida":
+		return "part_time"
+	}
+	if m := pandapeWeeklyHours.FindStringSubmatch(schedule); m != nil {
+		if h, _ := strconv.Atoi(m[1]); h >= 40 {
+			return "full_time"
+		}
+	}
+	return ""
+}
+
+var pandapeWeeklyHours = regexp.MustCompile(`^Jornada de (\d+) horas semanales$`)
+
+// pandapeLatamCurrencies is the currency a Latin-American tenant's country pays in and the
+// symbol its cards write it with ("S/ 1,230", "1.000.000 $"). The JobPosting says BRL for
+// every one of them, so the currency is taken from the country — and only when the card's
+// salary carries that country's own symbol, so a posting paying in dollars is never recorded
+// in pesos. The countries are the ones the tenants measured on 2026-10-24 state.
+var pandapeLatamCurrencies = map[string]struct{ code, symbol string }{
+	"ar": {"ARS", "$"},
+	"cl": {"CLP", "$"},
+	"co": {"COP", "$"},
+	"mx": {"MXN", "$"},
+	"pe": {"PEN", "S/"},
+	"uy": {"UYU", "$"},
+}
+
+func pandapeLatamCurrency(country, cardSalary string) string {
+	cur, ok := pandapeLatamCurrencies[country]
+	if !ok || !strings.Contains(cardSalary, cur.symbol) {
+		return ""
+	}
+	for _, foreign := range []string{"US$", "USD", "U$S"} {
+		if strings.Contains(cardSalary, foreign) {
+			return ""
+		}
+	}
+	return cur.code
 }

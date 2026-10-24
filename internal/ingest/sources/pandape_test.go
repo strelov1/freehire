@@ -55,7 +55,7 @@ func (f *pdFake) GetHTML(_ context.Context, u string) (*html.Node, error) {
 }
 
 func pdAdapter(f *pdFake) pandape {
-	return pandape{http: f, limiter: noWait{}, maxNewPerBoard: pandapeMaxNewPerBoard}
+	return pandape{domain: pandapeBrazil, http: f, limiter: noWait{}, maxNewPerBoard: pandapeMaxNewPerBoard}
 }
 
 func braspressFake(t *testing.T) *pdFake {
@@ -79,7 +79,7 @@ func TestPandapeCardsReadTitleAndFacts(t *testing.T) {
 	if len(cards) != 9 {
 		t.Fatalf("cards = %d, want 9", len(cards))
 	}
-	want := pandapeCard{ID: "3518777", Title: "Consultor(a) SAP MM Sênior", Location: "Todo Brasil", WorkMode: "Home Office", Contract: "Prestador de Serviços (PJ)"}
+	want := pandapeCard{ID: "3518777", Title: "Consultor(a) SAP MM Sênior", Location: "Todo Brasil", WorkMode: "Home Office", Contract: "Prestador de Serviços (PJ)", Schedule: "Período Integral"}
 	if cards[2] != want {
 		t.Errorf("card = %+v, want %+v", cards[2], want)
 	}
@@ -151,7 +151,7 @@ func TestPandapeFailsALaterPage(t *testing.T) {
 
 func TestPandapeUnknownTenantIsBoardGone(t *testing.T) {
 	f := &pdFake{pages: map[string]string{}}
-	g := pandape{http: notFoundPoster{f}, limiter: noWait{}, maxNewPerBoard: 1}
+	g := pandape{domain: pandapeBrazil, http: notFoundPoster{f}, limiter: noWait{}, maxNewPerBoard: 1}
 	_, err := g.FetchNew(context.Background(), CompanyEntry{Board: "nosuchtenant"}, func(string) bool { return false })
 	if !errors.Is(err, ErrBoardGone) {
 		t.Fatalf("err = %v, want ErrBoardGone", err)
@@ -197,7 +197,7 @@ func TestPandapeRemoteAndContractFromCard(t *testing.T) {
 		t.Fatal(err)
 	}
 	c := pandapeCard{ID: "3518777", Title: "Consultor(a) SAP MM Sênior", Location: "Todo Brasil", WorkMode: "Home Office", Contract: "Prestador de Serviços (PJ)"}
-	j, ok := pandapeJob(root, c, "https://abacoconsulting.pandape.infojobs.com.br/Detail/3518777", CompanyEntry{Company: "Ábaco Consulting"})
+	j, ok := pandapeBrazil.job(root, c, "https://abacoconsulting.pandape.infojobs.com.br/Detail/3518777", CompanyEntry{Company: "Ábaco Consulting"})
 	if !ok {
 		t.Fatal("not read")
 	}
@@ -215,7 +215,7 @@ func TestPandapeSalaryFromJobPosting(t *testing.T) {
 		t.Fatal(err)
 	}
 	c := pandapeCard{ID: "3721298", Title: "Project Buyer (Comprador de Projeto)", Contract: "Efetivo – CLT", WorkMode: "Presencial"}
-	j, ok := pandapeJob(root, c, "https://randstad-brasil.pandape.infojobs.com.br/Detail/3721298", CompanyEntry{Company: "Randstad"})
+	j, ok := pandapeBrazil.job(root, c, "https://randstad-brasil.pandape.infojobs.com.br/Detail/3721298", CompanyEntry{Company: "Randstad"})
 	if !ok {
 		t.Fatal("not read")
 	}
@@ -224,5 +224,137 @@ func TestPandapeSalaryFromJobPosting(t *testing.T) {
 	}
 	if j.Location != "Campina Grande do Sul, PR" || j.EmploymentType != "full_time" {
 		t.Errorf("job = %+v", j)
+	}
+}
+
+// The Latin-American fixtures are trimmed from live pages fetched on 2026-10-24: avos-tech's
+// first POST /ListVacancies page (four cards verbatim, subtotal and isLast rewritten to match)
+// and three vacancy pages (the analytics props, the JobPosting when there is one, and the
+// description-to-requirements section verbatim) — avos-tech's QA engineer (Chile, hybrid,
+// salary), its .Net developer (a page with no JobPosting at all) and a NetCall call-centre job
+// (Peru, remote, soles).
+
+const pdAvos = "https://avos-tech.pandape.computrabajo.com"
+
+func TestPandapeLatamReadsTheCardsCountryAndCurrency(t *testing.T) {
+	f := &pdFake{pages: map[string]string{
+		pdAvos + "/ListVacancies#1": pdFixture(t, "latam_avostech_page1.json"),
+		pdAvos + "/Detail/13939966": pdFixture(t, "latam_avostech_detail_hybrid.html"),
+		pdAvos + "/Detail/13936438": pdFixture(t, "latam_avostech_detail_noposting.html"),
+	}}
+	g := pandape{domain: pandapeLatam, http: f, limiter: noWait{}, maxNewPerBoard: pandapeMaxNewPerBoard}
+	if g.Provider() != "pandapelatam" {
+		t.Fatalf("provider = %q", g.Provider())
+	}
+	stored := map[string]bool{"13939861": true, "13938181": true}
+	jobs, err := g.FetchNew(context.Background(), CompanyEntry{Board: "avos-tech", Company: "Avos Tech"}, func(id string) bool { return stored[id] })
+	if err != nil {
+		t.Fatal(err)
+	}
+	byID := map[string]Job{}
+	for _, j := range jobs {
+		byID[j.ExternalID] = j
+	}
+	if len(byID) != 4 {
+		t.Fatalf("jobs = %d, want 4", len(byID))
+	}
+	qa := byID["13939966"]
+	// The JobPosting says "Santiago Centr", BR, BRL and partial-time; none of it is read.
+	if qa.Title != "QA engineer" || qa.Location != "Santiago Centro" || qa.WorkMode != "hybrid" || qa.EmploymentType != "full_time" {
+		t.Errorf("qa = %+v", qa)
+	}
+	if len(qa.Countries) != 1 || qa.Countries[0] != "cl" || qa.FallbackCountries != nil {
+		t.Errorf("countries = %v / %v", qa.Countries, qa.FallbackCountries)
+	}
+	if qa.SalaryMin == nil || *qa.SalaryMin != 1000000 || *qa.SalaryMax != 1800000 || qa.SalaryCurrency != "CLP" || qa.SalaryPeriod != "month" {
+		t.Errorf("salary = %v-%v %s/%s", qa.SalaryMin, qa.SalaryMax, qa.SalaryCurrency, qa.SalaryPeriod)
+	}
+	if qa.PostedAt == nil || !strings.Contains(qa.Description, "Postman") || !strings.Contains(qa.Description, "Valorado") {
+		t.Errorf("posted %v, description %q", qa.PostedAt, qa.Description)
+	}
+	// A vacancy page without a JobPosting is still a vacancy page here.
+	net := byID["13936438"]
+	if net.Title != "Desarrollador .Net Semi Senior" || !net.Remote || net.WorkMode != "remote" || net.Description == "" || net.PostedAt != nil {
+		t.Errorf("no-JobPosting vacancy = %+v", net)
+	}
+	if len(net.Countries) != 1 || net.Countries[0] != "cl" {
+		t.Errorf("no-JobPosting countries = %v", net.Countries)
+	}
+	if !byID["13939861"].SeenRefresh || !byID["13938181"].SeenRefresh {
+		t.Errorf("stored vacancies not refreshed: %+v", byID)
+	}
+}
+
+func TestPandapeLatamPeruPaysInSoles(t *testing.T) {
+	root, err := html.Parse(strings.NewReader(pdFixture(t, "latam_netcall_detail_remote.html")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := pandapeCard{ID: "13989554", Title: "Asesores para entel", Location: "Ayacucho", WorkMode: "Remoto",
+		Contract: "Contrato por Inicio o Incremento de Actividad", Schedule: "Tiempo completo", Salary: "S/ 1,230 - S/ 2,000"}
+	j, ok := pandapeLatam.job(root, c, "https://netcall.pandape.computrabajo.com/Detail/13989554", CompanyEntry{Company: "NetCall"})
+	if !ok {
+		t.Fatal("not read")
+	}
+	if len(j.Countries) != 1 || j.Countries[0] != "pe" || j.Location != "Ayacucho" || !j.Remote || j.EmploymentType != "full_time" {
+		t.Errorf("job = %+v", j)
+	}
+	if j.SalaryMin == nil || *j.SalaryMin != 1230 || *j.SalaryMax != 2000 || j.SalaryCurrency != "PEN" {
+		t.Errorf("salary = %v-%v %s", j.SalaryMin, j.SalaryMax, j.SalaryCurrency)
+	}
+	// A card whose salary is not written in the country's own currency states no currency we
+	// can name, so the salary is dropped rather than recorded in soles.
+	c.Salary = "US$ 1,230 - US$ 2,000"
+	if j, _ := pandapeLatam.job(root, c, "x", CompanyEntry{}); j.SalaryMin != nil || j.SalaryCurrency != "" {
+		t.Errorf("a dollar salary in Peru = %v %s, want none", j.SalaryMin, j.SalaryCurrency)
+	}
+}
+
+func TestPandapeLatamEmploymentType(t *testing.T) {
+	cases := []struct{ contract, schedule, want string }{
+		{"Contrato indefinido", "Tiempo Completo", "full_time"},
+		{"Contrato a plazo fijo", "Jornada de 42 horas semanales", "full_time"},
+		{"Contrato a término fijo", "Jornada de 30 horas semanales", ""},
+		{"Contrato de Obra o labor", "Jornada part time", "part_time"},
+		{"Contrato indefinido", "Por Horas", "part_time"},
+		{"Contrato civil por prestación de servicios", "Tiempo completo", "contract"},
+		{"Contrato de aprendizaje", "Trabajo a turnos", ""},
+	}
+	for _, c := range cases {
+		if got := pandapeLatamEmploymentType(c.contract, c.schedule); got != c.want {
+			t.Errorf("(%q, %q) = %q, want %q", c.contract, c.schedule, got, c.want)
+		}
+	}
+}
+
+func TestPandapeBrazilStillRequiresAJobPosting(t *testing.T) {
+	root, err := html.Parse(strings.NewReader(pdFixture(t, "latam_avostech_detail_noposting.html")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := pandapeBrazil.job(root, pandapeCard{ID: "1", Title: "x"}, "x", CompanyEntry{}); ok {
+		t.Error("a Brazilian page with no JobPosting must not be read as a vacancy")
+	}
+}
+
+func TestPandapeFailsATenantPastThePagerWindow(t *testing.T) {
+	f := braspressFake(t)
+	f.pages[pdBraspress+"/ListVacancies#1"] = strings.Replace(f.pages[pdBraspress+"/ListVacancies#1"], `"subtotal": 5`, `"subtotal": 55483`, 1)
+	_, err := pdAdapter(f).FetchNew(context.Background(), CompanyEntry{Board: "braspress"}, func(string) bool { return true })
+	if err == nil || !strings.Contains(err.Error(), "window") {
+		t.Fatalf("err = %v, want the pager-window refusal", err)
+	}
+}
+
+func TestPandapeAnalyticsCountryIsUnescaped(t *testing.T) {
+	root, err := html.Parse(strings.NewReader(`<html><head><script>
+    window.dataLayerProps = {};
+            window.dataLayerProps.country = 'Espa&#xF1;a';
+</script></head></html>`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := pandapeAnalyticsCountry(root); got != "España" {
+		t.Errorf("country = %q, want España", got)
 	}
 }

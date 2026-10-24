@@ -320,6 +320,9 @@ var atsBoards = []struct{ host, source, mode string }{
 	{"pandape.infojobs.com.br", "pandape", modeSubdomain},
 	{"pandape.catho.com.br", "pandape", modeSubdomain},
 	{"pandape.com.br", "pandape", modeSubdomain},
+	// Pandapé LatAm (Computrabajo's deployment of the same ATS): <tenant>.pandape.computrabajo.com,
+	// a tenant namespace of its own — a Brazilian tenant 404s here — hence its own provider.
+	{"pandape.computrabajo.com", "pandapelatam", modeSubdomain},
 
 	// --- subdomainchain: board = every label under the apex (tenant nested under a region) ---
 	{"huntflow.io", "huntflow", modeSubdomainChain},
@@ -1299,9 +1302,10 @@ var platformLabelsByApex = map[string][]string{
 	// www is the vendor's marketing site; "empregos" is the platform's own bucket for employers
 	// that post under "Empresa com nome confidencial" — many employers, none named, so not a
 	// board any one company owns.
-	"pandape.infojobs.com.br": {"www", "empregos"},
-	"pandape.catho.com.br":    {"www", "empregos"},
-	"pandape.com.br":          {"www", "empregos"},
+	"pandape.infojobs.com.br":  {"www", "empregos"},
+	"pandape.catho.com.br":     {"www", "empregos"},
+	"pandape.com.br":           {"www", "empregos"},
+	"pandape.computrabajo.com": {"www", "empleos"},
 }
 
 // platformHost reports whether host is the ATS's own product host rather than a tenant's —

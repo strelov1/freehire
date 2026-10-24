@@ -27,8 +27,10 @@ func gz(t *testing.T, s string) string {
 }
 
 func TestPandapeRegisteredAsDiscoverer(t *testing.T) {
-	if _, ok := probers["pandape"].(discoverer); !ok {
-		t.Fatal(`probers["pandape"] should be a discoverer`)
+	for _, p := range []string{"pandape", "pandapelatam"} {
+		if _, ok := probers[p].(discoverer); !ok {
+			t.Fatalf("probers[%q] should be a discoverer", p)
+		}
 	}
 }
 
@@ -52,7 +54,7 @@ func TestPandapeDiscoverReadsEveryShardAndSkipsPlatformHosts(t *testing.T) {
 <url><loc>https://loungerie.pandape.catho.com.br/Detail/3856149</loc></url>
 <url><loc>https://braspress.pandape.infojobs.com.br/Detail/3838881</loc></url></urlset>`),
 	}
-	got, err := pandapeProber{}.discover(context.Background(), getter)
+	got, err := pandapeBrazilProber.discover(context.Background(), getter)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -63,7 +65,7 @@ func TestPandapeDiscoverReadsEveryShardAndSkipsPlatformHosts(t *testing.T) {
 }
 
 func TestPandapeDiscoverFailsWithoutAnIndex(t *testing.T) {
-	if _, err := (pandapeProber{}).discover(context.Background(), fakeGetter{}); err == nil {
+	if _, err := pandapeBrazilProber.discover(context.Background(), fakeGetter{}); err == nil {
 		t.Fatal("an unreadable sitemap index must fail discovery")
 	}
 }
@@ -83,12 +85,13 @@ func (g pdStatusGetter) GetHTML(ctx context.Context, url string) (*html.Node, er
 
 func TestPandapeProbe(t *testing.T) {
 	getter := pdStatusGetter{fakeGetter: fakeGetter{
-		"https://braspress.pandape.infojobs.com.br/": `<html><head><title>Braspress - Trabalhe Conosco | Pandapé</title></head><body>
+		"https://braspress.pandape.infojobs.com.br/Vacancies": `<html><head><title>Braspress - Trabalhe Conosco | Pandapé</title></head><body>
 <div id="textFiltered"><span id="subTotal">54</span> Vagas encontradas com o filtro aplicado</div></body></html>`,
-		"https://quiet.pandape.infojobs.com.br/": `<html><head><title>Quiet - Trabalhe Conosco | Pandapé</title></head><body><span id="subTotal">0</span></body></html>`,
+		"https://huge.pandape.infojobs.com.br/Vacancies":  `<html><head><title>Huge - Trabalhe Conosco | Pandapé</title></head><body><span id="subTotal">55483</span></body></html>`,
+		"https://quiet.pandape.infojobs.com.br/Vacancies": `<html><head><title>Quiet - Trabalhe Conosco | Pandapé</title></head><body><span id="subTotal">0</span></body></html>`,
 	}, codes: map[string]int{
-		"https://missing.pandape.infojobs.com.br/": 404,
-		"https://refused.pandape.infojobs.com.br/": 403,
+		"https://missing.pandape.infojobs.com.br/Vacancies": 404,
+		"https://refused.pandape.infojobs.com.br/Vacancies": 403,
 	}}
 	cases := []struct {
 		tenant, wantName string
@@ -97,11 +100,12 @@ func TestPandapeProbe(t *testing.T) {
 	}{
 		{"braspress", "Braspress", 54, false},
 		{"quiet", "", 0, false},
+		{"huge", "", 0, false},    // past the pager's window: the crawl could never list it whole
 		{"missing", "", 0, false}, // the platform's 404 "não está mais disponível" page -> skip
 		{"refused", "", 0, true},  // the burst 403 is a probe that did not happen, not an absent board
 	}
 	for _, c := range cases {
-		name, n, err := pandapeProber{}.probe(context.Background(), getter, c.tenant)
+		name, n, err := pandapeBrazilProber.probe(context.Background(), getter, c.tenant)
 		if (err != nil) != c.wantErr || name != c.wantName || n != c.wantN {
 			t.Errorf("probe(%s) = (%q, %d, %v), want (%q, %d, err=%v)", c.tenant, name, n, err, c.wantName, c.wantN, c.wantErr)
 		}
@@ -111,14 +115,50 @@ func TestPandapeProbe(t *testing.T) {
 func TestPandapeHarvestHoldsTheCrawlPace(t *testing.T) {
 	want := float64(time.Second) / float64(sources.PandapeRequestInterval)
 	for _, flagPace := range []float64{0, 35, want} {
-		if got := effectivePace(pandapeProber{}, flagPace); got != want {
+		if got := effectivePace(pandapeBrazilProber, flagPace); got != want {
 			t.Errorf("effectivePace(pandape, %v) = %v, want %v", flagPace, got, want)
 		}
 	}
-	if got := effectivePace(pandapeProber{}, want/2); got != want/2 {
+	if got := effectivePace(pandapeBrazilProber, want/2); got != want/2 {
 		t.Errorf("a slower -pace must be kept, got %v", got)
 	}
 	if got := effectivePace(greenhouseProber{}, 0); got != 0 {
 		t.Errorf("a prober with no ceiling stays unpaced, got %v", got)
+	}
+}
+
+// The Latin-American list page, trimmed from avos-tech's /Vacancies (2026-10-24): a tenant on
+// the richer home template, whose home page carries no counter at all.
+func TestPandapeLatamProbeReadsTheListPage(t *testing.T) {
+	getter := fakeGetter{
+		"https://avos-tech.pandape.computrabajo.com/Vacancies": `<html><head><title>Avos Tech - Trabaja con nosotros | Pandapé</title></head><body>
+<div id="textFiltered"><span id="subTotal">1241</span> Ofertas encontradas</div></body></html>`,
+	}
+	name, n, err := pandapeLatamProber.probe(context.Background(), getter, "avos-tech")
+	if err != nil || name != "Avos Tech" || n != 1241 {
+		t.Errorf("probe = (%q, %d, %v), want (Avos Tech, 1241, nil)", name, n, err)
+	}
+}
+
+// Common Crawl names the Latin-American tenants: the platform's own hosts and the other
+// deployment's URLs are not candidates.
+func TestPandapeLatamDiscoverFromCommonCrawl(t *testing.T) {
+	api := "https://index.commoncrawl.org/CC-MAIN-2026-43-index"
+	q := api + "?url=" + pandapeLatamCrawlPattern + "&output=json"
+	getter := fakeGetter{
+		"https://index.commoncrawl.org/collinfo.json": `[{"id":"CC-MAIN-2026-43","cdx-api":"` + api + `"}]`,
+		q + "&showNumPages=true&pageSize=1":           `{"pages":1}`,
+		q + "&page=0&pageSize=1": `{"url": "https://netcall.pandape.computrabajo.com/Detail/13958406"}
+{"url": "https://avos-tech.pandape.computrabajo.com/robots.txt"}
+{"url": "https://empleos.pandape.computrabajo.com/Detail/9842801"}
+{"url": "https://www.pandape.computrabajo.com/"}
+{"url": "https://netcall.pandape.computrabajo.com/"}`,
+	}
+	got, err := pandapeLatamProber.discover(context.Background(), getter)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{"avos-tech", "netcall"}; !slices.Equal(got, want) {
+		t.Errorf("discover = %v, want %v", got, want)
 	}
 }
