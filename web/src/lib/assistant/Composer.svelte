@@ -54,6 +54,12 @@
     textareaEl?.focus();
   }
 
+  /** Put the cursor in the message field, for a host whose own control means "type here
+   *  next" — so it need not reach into this component's markup to find the field. */
+  export function focus() {
+    textareaEl?.focus();
+  }
+
   // Auto-grow the composer textarea up to a cap (px), like roy-web's `autosize`.
   const COMPOSER_CAP = 200;
   $effect(() => {

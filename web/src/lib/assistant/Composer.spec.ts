@@ -76,3 +76,13 @@ describe('Composer attachments', () => {
     expect(screen.queryByRole('list', { name: 'Attached files' })).toBeNull();
   });
 });
+
+describe('Composer focus', () => {
+  it('focus() puts the cursor in the message field', () => {
+    const { component, container } = setup();
+
+    component.focus();
+
+    expect(document.activeElement).toBe(container.querySelector('textarea'));
+  });
+});

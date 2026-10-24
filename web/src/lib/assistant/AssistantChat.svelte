@@ -47,6 +47,7 @@
   import { eventsFromTranscript, type TurnEvent } from '#lib/assistant/wire.js';
   import { opensInRail, type ChatPreset, type OpeningAction } from '#lib/assistant/presets.js';
   import { messages } from './AssistantChat.messages';
+  import ThinkingIndicator from './ThinkingIndicator.svelte';
   import { locale } from '#lib/i18n/currentLocale.svelte.js';
   import { format, plural, t } from '#lib/i18n/t.js';
 
@@ -245,18 +246,15 @@
 
   // --- Streaming spinner / thinking timers ---------------------------------
   const SPINNER_GLYPHS = ['·', '✢', '✳', '✶', '✻', '✽'] as const;
-  const VERBS = $derived(Object.values(s.verbs));
   let elapsedSec = $state(0);
   let spinnerIdx = $state(0);
   let turnStartedAt = $state<number | null>(null);
-  let currentVerb = $state<string>(s.verbs.thinking);
 
   $effect(() => {
     if (turnActive && turnStartedAt === null) {
       turnStartedAt = Date.now();
       elapsedSec = 0;
       spinnerIdx = 0;
-      currentVerb = VERBS[Math.floor(Math.random() * VERBS.length)] ?? s.verbs.thinking;
     } else if (!turnActive) {
       turnStartedAt = null;
       elapsedSec = 0;
@@ -1095,17 +1093,7 @@
           <!-- One indicator, two states. Queued is not working: nothing is being spent yet, and
                the elapsed counter would be timing somebody else's turn. -->
           {#if chat.queued || turnActive}
-            <div class="self-start inline-flex items-baseline gap-2 px-2 py-1 text-xs text-muted-foreground">
-              <span class="star-glow font-mono text-[0.85rem] font-semibold">
-                {SPINNER_GLYPHS[spinnerIdx]}
-              </span>
-              <span class="shimmer font-medium">
-                {chat.queued ? s.waitingForTurn : currentVerb}…
-              </span>
-              {#if !chat.queued}
-                <span class="font-mono text-[0.7rem] text-muted-foreground/70">({elapsedSec}s)</span>
-              {/if}
-            </div>
+            <ThinkingIndicator label={chat.queued ? s.waitingForTurn : undefined} />
           {/if}
         </div>
 
