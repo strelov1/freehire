@@ -117,7 +117,7 @@ func userTurnText(c userContent) string {
 	if len(c.Attachments) == 0 {
 		return c.Text
 	}
-	parts := make([]string, 0, len(c.Attachments)+1)
+	var parts []string
 	if c.Text != "" {
 		parts = append(parts, c.Text)
 	}
