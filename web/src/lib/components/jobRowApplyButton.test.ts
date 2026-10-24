@@ -36,9 +36,13 @@ describe('JobRow direct-apply button', () => {
     expect(applyBlock, 'applyJob block not found in JobRow.svelte').not.toBe('');
   });
 
-  it('is gated on a job that actually carries an outbound url', () => {
-    // A non-empty one: a vacancy taking applications on freehire carries `url: ""`.
-    expect(ROW).toContain("const applyJob = $derived('url' in job && job.url ? job : null);");
+  it('is gated on an open job that actually carries an outbound url', () => {
+    // A non-empty one: a vacancy taking applications on freehire carries `url: ""`. And an
+    // open one: a closed posting takes no applications, on any surface that lists it.
+    expect(ROW).toContain(
+      "const applyJob = $derived('url' in job && job.url && !job.closed_at ? job : null);",
+    );
+    expect(ROW).toContain("job.direct_apply === true && !job.closed_at");
     expect(applyBlock).not.toBe('');
   });
 
