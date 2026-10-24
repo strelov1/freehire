@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"regexp"
 	"strings"
@@ -26,7 +27,7 @@ func (flatchrProber) probe(ctx context.Context, c httpClient, board string) (str
 		return "", 0, nil
 	}
 	var doc struct {
-		Items []struct {
+		Items *[]struct {
 			Status    string `json:"status"`
 			Published bool   `json:"published"`
 			Vacancy   struct {
@@ -54,8 +55,12 @@ func (flatchrProber) probe(ctx context.Context, c httpClient, board string) (str
 		}
 		return "", 0, err
 	}
+	// A document without the key is a reshaped answer, not an empty board.
+	if doc.Items == nil {
+		return "", 0, fmt.Errorf("flatchr probe: %s: document carries no items", board)
+	}
 	name, open := "", 0
-	for _, it := range doc.Items {
+	for _, it := range *doc.Items {
 		if !it.Published || it.Status != "published" {
 			continue
 		}

@@ -26,8 +26,9 @@ func TestPolymerProbe(t *testing.T) {
 	g := statusGetter{
 		fakeGetter: fakeGetter{
 			// motive's first page as captured 2026-10-24, items trimmed to one.
-			api + "motive/jobs?page=1": `{"items":[{"id":41656,"title":"Performance Manager"}],"meta":{"total":1,"is_last":true,"is_first":true,"page":1,"next_page":null,"count":4,"organization_name":"Motive"}}`,
-			api + "inaza/jobs?page=1":  `{"items":[],"meta":{"total":0,"is_last":true,"count":0,"organization_name":"Inaza"}}`,
+			api + "motive/jobs?page=1":   `{"items":[{"id":41656,"title":"Performance Manager"}],"meta":{"total":1,"is_last":true,"is_first":true,"page":1,"next_page":null,"count":4,"organization_name":"Motive"}}`,
+			api + "inaza/jobs?page=1":    `{"items":[],"meta":{"total":0,"is_last":true,"count":0,"organization_name":"Inaza"}}`,
+			api + "reshaped/jobs?page=1": `{"items":[]}`,
 		},
 		status: map[string]int{
 			api + "alphafund/jobs?page=1": http.StatusUnprocessableEntity,
@@ -43,8 +44,10 @@ func TestPolymerProbe(t *testing.T) {
 			t.Errorf("%s: got n=%d err=%v, want a skip", board, n, err)
 		}
 	}
-	if _, _, err := p.probe(context.Background(), g, "refused"); err == nil {
-		t.Error("a refused probe must be surfaced, not read as an absent board")
+	for _, board := range []string{"refused", "reshaped"} {
+		if _, _, err := p.probe(context.Background(), g, board); err == nil {
+			t.Errorf("%s: must be surfaced, not read as an absent board", board)
+		}
 	}
 }
 
@@ -59,6 +62,7 @@ func TestFlatchrProbe(t *testing.T) {
 			site + "sub.json":       `{"items":[{"status":"published","published":true,"vacancy":{"company":{"name":"Other","slug":"other"}}}]}`,
 			site + "accessite.json": `<section class="notFound"><div>Votre recherche est tombée à l’eau.</div></section>`,
 			site + "broken.json":    `<html>maintenance</html>`,
+			site + "reshaped.json":  `{"statusCode":200}`,
 		},
 		status: map[string]int{site + "nosuch.json": http.StatusNotFound},
 	}
@@ -75,8 +79,10 @@ func TestFlatchrProbe(t *testing.T) {
 			t.Errorf("%s: got n=%d err=%v, want a skip", board, n, err)
 		}
 	}
-	if _, _, err := p.probe(context.Background(), g, "broken"); err == nil {
-		t.Error("a document that is neither JSON nor the not-found page must be surfaced")
+	for _, board := range []string{"broken", "reshaped"} {
+		if _, _, err := p.probe(context.Background(), g, board); err == nil {
+			t.Errorf("%s: a document the board cannot be read from must be surfaced", board)
+		}
 	}
 }
 

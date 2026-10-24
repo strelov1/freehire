@@ -49,12 +49,14 @@ var polymerBoard = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)
 
 // polymerPage is one page of the listing. Count is the board's total number of postings and
 // Total the number of PAGES; IsLast is reliable only on a real page — a page past the end
-// answers an empty list with is_last false.
+// answers an empty list with is_last false. Count and Total are pointers because the walk's
+// completeness check rests on them: decoded as zero when absent, they would let page one
+// pass for the whole board.
 type polymerPage struct {
 	Items *[]polymerPosting `json:"items"`
 	Meta  struct {
-		Count  int  `json:"count"`
-		Total  int  `json:"total"`
+		Count  *int `json:"count"`
+		Total  *int `json:"total"`
 		IsLast bool `json:"is_last"`
 	} `json:"meta"`
 }
@@ -110,25 +112,26 @@ func (s polymer) list(ctx context.Context, board string) ([]polymerPosting, erro
 		}
 		// A page without the key is a reshaped answer, not an empty board: read as empty it
 		// would let the board-scoped sweep close every posting the board still lists.
-		if resp.Items == nil {
-			return nil, fmt.Errorf("polymer: page %d carries no items", page)
+		if resp.Items == nil || resp.Meta.Count == nil || resp.Meta.Total == nil {
+			return nil, fmt.Errorf("polymer: page %d carries no items/count/total", page)
 		}
+		count, pages := *resp.Meta.Count, *resp.Meta.Total
 		for _, p := range *resp.Items {
 			if p.ID != 0 && !ids[p.ID] {
 				ids[p.ID] = true
 				out = append(out, p)
 			}
 		}
-		if resp.Meta.IsLast || page >= resp.Meta.Total {
+		if resp.Meta.IsLast || page >= pages {
 			// More than the count is fine — a posting published mid-walk shifts the pages.
 			// Fewer is a walk that missed some.
-			if len(out) < resp.Meta.Count {
-				return nil, fmt.Errorf("polymer: read %d postings, the board states %d", len(out), resp.Meta.Count)
+			if len(out) < count {
+				return nil, fmt.Errorf("polymer: read %d postings, the board states %d", len(out), count)
 			}
 			return out, nil
 		}
 		if len(*resp.Items) == 0 {
-			return nil, fmt.Errorf("polymer: page %d is empty before the last page (%d of %d)", page, len(out), resp.Meta.Count)
+			return nil, fmt.Errorf("polymer: page %d is empty before the last page (%d of %d)", page, len(out), count)
 		}
 	}
 }

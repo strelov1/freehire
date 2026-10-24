@@ -108,10 +108,16 @@ func TestPolymerListingShortOfItsCountFails(t *testing.T) {
 	}
 }
 
-func TestPolymerListingWithoutItemsFails(t *testing.T) {
-	fake := (&routedHTTP{}).route("/acme/jobs?page=1", `{"meta":{"total":1,"is_last":true,"count":0}}`)
-	if _, err := NewPolymer(fake).Fetch(context.Background(), CompanyEntry{Board: "acme", Company: "Acme"}); err == nil {
-		t.Fatal("a page without items is a reshaped answer, not an empty board")
+func TestPolymerListingWithoutItemsOrMetaFails(t *testing.T) {
+	for name, body := range map[string]string{
+		"no items": `{"meta":{"total":1,"is_last":true,"count":0}}`,
+		"no count": `{"items":[{"id":1,"title":"A"}],"meta":{"total":1,"is_last":true}}`,
+		"no total": `{"items":[{"id":1,"title":"A"}],"meta":{"is_last":false,"count":1}}`,
+	} {
+		fake := (&routedHTTP{}).route("/acme/jobs/1", `{"description":"<p>x</p>"}`).route("/acme/jobs?page=1", body)
+		if _, err := NewPolymer(fake).Fetch(context.Background(), CompanyEntry{Board: "acme", Company: "Acme"}); err == nil {
+			t.Errorf("%s: a reshaped page must fail, not pass for a complete board", name)
+		}
 	}
 }
 

@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"regexp"
 	"strings"
@@ -27,7 +28,7 @@ func (polymerProber) probe(ctx context.Context, c httpClient, board string) (str
 	}
 	var page struct {
 		Meta struct {
-			Count            int    `json:"count"`
+			Count            *int   `json:"count"`
 			OrganizationName string `json:"organization_name"`
 		} `json:"meta"`
 	}
@@ -40,10 +41,14 @@ func (polymerProber) probe(ctx context.Context, c httpClient, board string) (str
 		}
 		return "", 0, err
 	}
-	if page.Meta.Count == 0 {
+	// A page without the count is a reshaped answer, not an empty board.
+	if page.Meta.Count == nil {
+		return "", 0, fmt.Errorf("polymer probe: %s: listing carries no count", board)
+	}
+	if *page.Meta.Count == 0 {
 		return "", 0, nil
 	}
-	return strings.TrimSpace(page.Meta.OrganizationName), page.Meta.Count, nil
+	return strings.TrimSpace(page.Meta.OrganizationName), *page.Meta.Count, nil
 }
 
 // discover enumerates candidate boards from Common Crawl's index of jobs.polymer.co, the host
