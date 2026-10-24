@@ -101,26 +101,27 @@ var proxiedProviders = map[string]func(HTTPClient) Source{
 	},
 }
 
-// rotatingProxyProviders are the proxiedProviders that egress through the ROTATING gateway
+// rotatingProxyProviders are the providers whose PROXY lane uses the ROTATING gateway
 // (SOURCES_ROTATING_PROXY_URL, a fresh exit IP per request) instead of SOURCES_PROXY_URL's one
-// fixed exit, when the gateway is configured.
+// fixed exit, when the gateway is configured. For a proxiedProvider that lane is every request;
+// for a refusalRetryProvider it is only the retry of a request the direct IP was refused.
 //
-// naukri: its posting API answered "406 recaptcha required" to every request from the fixed
-// exit (0 of 1,500 a run on 2026-10-19), while through the rotating gateway 15 of 20 answered
-// 200 and the other five timed out, with no refusal at all (2026-10-21). Its search answers
-// either way.
+// naukri (proxied): its posting API answered "406 recaptcha required" to every request from the
+// fixed exit (0 of 1,500 a run on 2026-10-19), while through the rotating gateway 15 of 20
+// answered 200 and the other five timed out, with no refusal at all (2026-10-21). Its search
+// answers either way.
 //
-// workable: its public widget API is one stateless GET per board, and it rate-limits by exit
-// IP with a ban measured in hours — on 2026-10-24 the fixed exit was answered 429 with
-// retry-after ~65,000 s (18 h) after a board harvest shared it, which stopped the whole
-// workable crawl, while the rotating gateway was served 5 of 5. One shared IP makes every
-// caller of that platform hostage to the busiest one.
+// workable (refusal-retry): it rate-limits by exit IP with a ban measured in hours. On
+// 2026-10-24 a board harvest drove the fixed exit into a 429 with retry-after ~65,000 s (18 h),
+// which left the crawl's retry lane with nowhere to go for the rest of the day; the rotating
+// gateway was served 5 of 5. Its widget API is one stateless GET per board, so a fresh exit per
+// retry costs nothing, and no single caller can exhaust the lane for the others.
 //
-// Every other proxied provider keeps the fixed exit: a fresh IP per request would break any
-// flow that leans on a session.
+// Every other provider keeps the fixed exit: a fresh IP per request would break any flow that
+// leans on a session.
 var rotatingProxyProviders = map[string]bool{"naukri": true, "workable": true}
 
-// proxyFor is the proxy a proxied provider egresses through: the rotating gateway for the
+// proxyFor is the proxy a provider's proxy lane egresses through: the rotating gateway for the
 // rotatingProxyProviders when one is configured, the fixed exit otherwise.
 func proxyFor(provider string, fixed, rotating *url.URL) *url.URL {
 	if rotating != nil && rotatingProxyProviders[provider] {
@@ -218,9 +219,14 @@ func ApplyProxyEgress(registry map[string]Source) error {
 	// away, so they are rewired over a different client than the wholly-proxied ones above.
 	refusalRetry := NewRefusalRetryClient(u)
 	for name, build := range refusalRetryProviders {
-		if _, ok := registry[name]; ok {
-			registry[name] = build(refusalRetry)
+		if _, ok := registry[name]; !ok {
+			continue
 		}
+		client := refusalRetry
+		if p := proxyFor(name, u, rotating); p != u {
+			client = NewRefusalRetryClient(p)
+		}
+		registry[name] = build(client)
 	}
 	// The SEEK network keeps the direct IP and gets a proxy lane for its GraphQL detail only,
 	// taken after SEEK refuses the direct one (seekDetailNetwork). Unlike refusalRetryProviders
@@ -283,7 +289,7 @@ func ClientFor(provider string) (*Client, error) {
 	case proxiedProviders[provider] != nil:
 		return NewProxyClient(proxyFor(provider, u, rotating)), nil
 	case refusalRetryProviders[provider] != nil:
-		return NewRefusalRetryClient(u), nil
+		return NewRefusalRetryClient(proxyFor(provider, u, rotating)), nil
 	default:
 		return NewClient(), nil
 	}

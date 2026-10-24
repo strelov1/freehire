@@ -1,6 +1,8 @@
 package sources
 
 import (
+	"context"
+	"net/http"
 	"net/url"
 	"strings"
 	"testing"
@@ -115,5 +117,29 @@ func TestApplyProxyEgressRefusesAnUnparseableRotatingGateway(t *testing.T) {
 	err := ApplyProxyEgress(All(NewClient()))
 	if err == nil || strings.Contains(err.Error(), "sup3rsecret") {
 		t.Fatalf("err = %v, want a refusal that does not print the password", err)
+	}
+}
+
+// workable crawls on the direct IP and retries a refused request through its proxy lane. That
+// lane used to be the one fixed exit every caller shares, so a harvest that drove it into an
+// 18-hour 429 (2026-10-24) left the crawl's retries nowhere to go. A rotating provider's retry
+// lane is the rotating gateway; every other refusal-retry provider keeps the fixed exit.
+func TestClientForSendsAWorkableRetryThroughTheRotatingGateway(t *testing.T) {
+	t.Setenv("SOURCES_PROXY_URL", "http://user:pass@203.0.113.7:5987")
+	t.Setenv("SOURCES_ROTATING_PROXY_URL", "http://user-rotate:pass@p.example:80")
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "https://apply.workable.com/api/v1/widget/accounts/acme", nil)
+	for provider, wantHost := range map[string]string{"workable": "p.example:80", "teamtailor": "203.0.113.7:5987"} {
+		c, err := ClientFor(provider)
+		if err != nil {
+			t.Fatalf("ClientFor(%q): %v", provider, err)
+		}
+		tr, ok := c.refusalClient.Transport.(*http.Transport)
+		if !ok || tr.Proxy == nil {
+			t.Fatalf("%s: retry lane has no proxy", provider)
+		}
+		got, err := tr.Proxy(req)
+		if err != nil || got == nil || got.Host != wantHost {
+			t.Errorf("%s retry lane proxy = %v (%v), want host %s", provider, got, err, wantHost)
+		}
 	}
 }
