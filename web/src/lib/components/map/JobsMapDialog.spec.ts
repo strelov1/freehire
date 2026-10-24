@@ -126,6 +126,22 @@ describe('JobsMapDialog — clicks narrow the filters', () => {
     expect(screen.getByRole('button', { name: 'World view' })).toBeTruthy();
   });
 
+  it('a second city click replaces the first, since cities OR together', async () => {
+    const store = storeWith(['countries', 'br']);
+    render(JobsMapDialog, { open: true, store });
+    await fireEvent.click(await screen.findByRole('button', { name: 'São Paulo: 500 jobs' }));
+    await fireEvent.click(await screen.findByRole('button', { name: 'Campinas: 60 jobs' }));
+    expect(include(store, 'cities')).toEqual(['Campinas']);
+  });
+
+  it('a country click turns Remote worldwide off, so the list switches rather than widens', async () => {
+    const store = storeWith(['regions', 'global']);
+    render(JobsMapDialog, { open: true, store });
+    await fireEvent.click(await screen.findByRole('button', { name: 'Brazil: 700 jobs' }));
+    expect(include(store, 'countries')).toEqual(['br']);
+    expect(include(store, 'regions')).toEqual([]);
+  });
+
   it('World view clears the country and city filters together', async () => {
     const store = storeWith(['countries', 'br'], ['cities', 'São Paulo']);
     render(JobsMapDialog, { open: true, store });
@@ -165,6 +181,16 @@ describe('JobsMapDialog — Show N jobs', () => {
     const show = await screen.findByRole('button', { name: 'Show 700 jobs' });
     await fireEvent.click(show);
     await waitFor(() => expect(screen.queryByRole('button', { name: /^Show/ })).toBeNull());
+  });
+
+  it('never offers the count from before the last click while the map updates', async () => {
+    const store = storeWith(['countries', 'br'], ['countries', 'mx']);
+    render(JobsMapDialog, { open: true, store });
+    expect(await screen.findByRole('button', { name: 'Show 1,000 jobs' })).toBeTruthy();
+    loadCityTable.mockResolvedValue(null);
+    facetCounts.mockImplementation(() => new Promise(() => {}));
+    await fireEvent.click(screen.getByRole('button', { name: 'Brazil: 700 jobs' }));
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Show 1,000 jobs' })).toBeNull());
   });
 
   it('lets a newer response win over an older one still in flight', async () => {

@@ -82,7 +82,7 @@
           cx={x}
           cy={y}
           r={bubbleRadius(place.count, max, view.w)}
-          class="cursor-pointer fill-brand/40 stroke-brand transition-colors hover:fill-brand/70 focus-visible:fill-brand/70 focus-visible:outline-none"
+          class="cursor-pointer fill-brand/40 stroke-brand transition-colors hover:fill-brand/70 focus-visible:fill-brand/70 focus-visible:stroke-foreground focus-visible:stroke-2 focus-visible:outline-none"
           stroke-width="1"
           vector-effect="non-scaling-stroke"
           role="button"

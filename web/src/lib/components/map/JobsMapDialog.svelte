@@ -42,6 +42,10 @@
   const countries = $derived(store.value.facets.countries?.include ?? []);
   const cities = $derived(store.value.facets.cities?.include ?? []);
   const worldwideOn = $derived((store.value.facets.regions?.include ?? []).includes(WORLDWIDE_REGION));
+  // A city set elsewhere (the filter modal) must not inherit a country drilled long ago.
+  $effect(() => {
+    if (cities.length === 0) drilled = null;
+  });
   const focusCountry = $derived(
     countries.length === 1 ? countries[0] : countries.length === 0 && cities.length > 0 ? drilled : null,
   );
@@ -124,9 +128,13 @@
     // `kind:value`; a city name may itself hold a colon, so split at the first one only.
     const sep = place.key.indexOf(':');
     const value = place.key.slice(sep + 1);
+    // Location filters OR together on the server, so every click REPLACES the places —
+    // worldwide included — rather than adding one beside them, which would widen the list.
+    store.remove('regions', WORLDWIDE_REGION);
     if (place.key.slice(0, sep) === 'city') {
       drilled = focusCountry ?? null;
       store.clearFacet('countries');
+      store.clearFacet('cities');
       store.add('cities', value);
       return;
     }
@@ -164,7 +172,11 @@
           text={focusCountry ? format(s.jobsIn, { country: dynamicLabel('countries', focusCountry) }) : s.whereJobsAre}
         />
         <Button variant="primary" class="shrink-0" onclick={() => (open = false)}>
-          {total === null ? s.showJobsPending : format(plural(loc, total, s.showJobs), { count: fmt(total) })}
+          <!-- No figure while the map catches up with a click: the count from before it
+               would describe a list that is no longer the one behind the dialog. -->
+          {total === null || loading || failed
+            ? s.showJobsPending
+            : format(plural(loc, total, s.showJobs), { count: fmt(total) })}
         </Button>
       </div>
 
