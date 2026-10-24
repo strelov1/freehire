@@ -532,6 +532,10 @@ func All(c HTTPClient) map[string]Source {
 		// board, listed through the site's own JSON pager and hydrated from each vacancy page.
 		// One origin serves every tenant, so the adapter paces the whole run. See pandape.go.
 		NewPandape(c),
+		// Pandapé LatAm: the same ATS sold by Computrabajo across Spanish-speaking Latin America,
+		// one <tenant>.pandape.computrabajo.com career site per board, a separate tenant
+		// namespace from the Brazilian one. See pandape.go.
+		NewPandapeLatam(c),
 		// Built In: US-centred tech board over many employers. Each tech category's last-24h
 		// window is walked; posting pages carry a schema.org JobPosting. Coverage-gated and
 		// paced, see builtinRequestInterval.
