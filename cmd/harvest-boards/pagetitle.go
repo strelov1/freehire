@@ -27,3 +27,35 @@ func pageTitle(root *html.Node) string {
 	walk(root)
 	return title
 }
+
+// metaProperty returns the content of <meta property="..."> (e.g. og:site_name), or "".
+// Teamtailor reads it: the platform names the employer there and nowhere else on the listing.
+func metaProperty(root *html.Node, property string) string {
+	var content string
+	var walk func(*html.Node)
+	walk = func(n *html.Node) {
+		if content != "" {
+			return
+		}
+		if n.Type == html.ElementNode && n.Data == "meta" {
+			var prop, value string
+			for _, a := range n.Attr {
+				switch a.Key {
+				case "property":
+					prop = a.Val
+				case "content":
+					value = a.Val
+				}
+			}
+			if prop == property {
+				content = strings.TrimSpace(value)
+				return
+			}
+		}
+		for ch := n.FirstChild; ch != nil; ch = ch.NextSibling {
+			walk(ch)
+		}
+	}
+	walk(root)
+	return content
+}

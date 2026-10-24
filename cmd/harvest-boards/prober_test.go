@@ -293,19 +293,6 @@ func TestNamelessProbers(t *testing.T) {
 			live: "acme", empty: "empty",
 		},
 		{
-			name: "teamtailor",
-			p:    teamtailorProber{},
-			getter: fakeGetter{
-				// Teamtailor serves its listing as HTML on every board, vendor sub-domain and
-				// employer domain alike — there is no JSON feed to ask. Live: a /jobs/<id>
-				// permalink. Empty: only the nav anchors, which must not be counted.
-				"https://careers.acme.com/jobs?page=1": `<html><body><a href="/jobs/1234-senior-go">Senior Go</a></body></html>`,
-				"https://careers.empty.com/jobs?page=1": `<html><body><a href="/jobs">All jobs</a>` +
-					`<a href="/departments">Departments</a></body></html>`,
-			},
-			live: "careers.acme.com", empty: "careers.empty.com",
-		},
-		{
 			name: "jobvite",
 			p:    jobviteProber{},
 			getter: fakeGetter{
@@ -387,10 +374,21 @@ func TestNamedProbers(t *testing.T) {
 			live: "acme", wantName: "Acme Inc", empty: "empty",
 		},
 		{
-			// Teamtailor used to be listed here, on the strength of a JSON feed that returned a
-			// company name. The platform serves HTML on every board and no such feed exists, so
-			// this case asserted a shape only the fake ever produced. It now lives with the
-			// nameless probers, where it belongs.
+			// Teamtailor serves its listing as HTML on every board, vendor sub-domain and
+			// employer domain alike — there is no JSON feed to ask. Live: a /jobs/<id>
+			// permalink; the employer is the page's og:site_name. Empty: only the nav anchors,
+			// which must not be counted.
+			name: "teamtailor",
+			p:    teamtailorProber{},
+			getter: fakeGetter{
+				"https://careers.acme.com/jobs?page=1": `<html><head><meta property="og:site_name" content="Acme Inc"></head>` +
+					`<body><a href="/jobs/1234-senior-go">Senior Go</a></body></html>`,
+				"https://careers.empty.com/jobs?page=1": `<html><head><meta property="og:site_name" content="Empty"></head>` +
+					`<body><a href="/jobs">All jobs</a><a href="/departments">Departments</a></body></html>`,
+			},
+			live: "careers.acme.com", wantName: "Acme Inc", empty: "careers.empty.com",
+		},
+		{
 			name: "join",
 			p:    joinProber{},
 			getter: fakeGetter{
@@ -491,5 +489,44 @@ func TestApploiProberAcceptsNumericSlug(t *testing.T) {
 	}
 	if _, n, err := (apploiProber{}).probe(context.Background(), getter, "55591"); err != nil || n != 1 {
 		t.Errorf("got (%d,%v), want (1,nil) for a numeric slug", n, err)
+	}
+}
+
+// A name-derived seed carries a bare company name, but a Teamtailor board is a HOST. Probing
+// the bare name asks for https://acme/jobs, which never resolves, and the prober reads that as
+// "no board" — so a whole harvest found nothing and reported answered=0 (2026-10-23, 57k
+// candidates). The vendor sub-domain is where a name-derived board lives; a token that already
+// names a host (an employer's own careers domain) is left alone.
+func TestTeamtailorBoardIDMapsABareNameToTheVendorHost(t *testing.T) {
+	for token, want := range map[string]string{
+		"acme":                "acme.teamtailor.com",
+		"acme.teamtailor.com": "acme.teamtailor.com",
+		"careers.acme.com":    "careers.acme.com",
+	} {
+		if got := (teamtailorProber{}).boardID(token); got != want {
+			t.Errorf("boardID(%q) = %q, want %q", token, got, want)
+		}
+	}
+}
+
+// tibber.teamtailor.com answers with jobs.tibber.com's listing (a redirect the client follows).
+// Keeping the vendor host would register the same board twice and store every posting twice, so
+// a page whose og:url names another host is not a board at the probed host.
+func TestTeamtailorProbeSkipsAHostThatServesAnotherHostsBoard(t *testing.T) {
+	getter := fakeGetter{
+		"https://tibber.teamtailor.com/jobs?page=1": `<html><head>` +
+			`<meta property="og:url" content="https://jobs.tibber.com/jobs?page=1">` +
+			`<meta property="og:site_name" content="Tibber"></head>` +
+			`<body><a href="/jobs/1234-engineer">Engineer</a></body></html>`,
+		"https://acme.teamtailor.com/jobs?page=1": `<html><head>` +
+			`<meta property="og:url" content="https://acme.teamtailor.com/jobs?page=1">` +
+			`<meta property="og:site_name" content="Acme"></head>` +
+			`<body><a href="/jobs/1-engineer">Engineer</a></body></html>`,
+	}
+	if name, n, err := (teamtailorProber{}).probe(context.Background(), getter, "tibber.teamtailor.com"); err != nil || name != "" || n != 0 {
+		t.Errorf("redirected host: got (%q,%d,%v), want (\"\",0,nil)", name, n, err)
+	}
+	if name, n, err := (teamtailorProber{}).probe(context.Background(), getter, "acme.teamtailor.com"); err != nil || name != "Acme" || n != 1 {
+		t.Errorf("own host: got (%q,%d,%v), want (\"Acme\",1,nil)", name, n, err)
 	}
 }

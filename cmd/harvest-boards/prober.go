@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"regexp"
 	"strconv"
 	"strings"
@@ -561,15 +562,24 @@ func (breezyProber) probe(ctx context.Context, c httpClient, slug string) (strin
 	return postings[0].Company.Name, len(postings), nil
 }
 
-// teamtailorProber probes a Teamtailor career site. The board is the site host, and its
-// /jobs listing serves a JSON Feed (title + items) to a JSON Accept header, so a non-empty
-// items array is a live board and the feed title is the company name.
 // teamtailorProber probes a Teamtailor career site, whose board is the host itself (the vendor
 // sub-domain `acme.teamtailor.com` or the employer's own `careers.acme.com`). The platform
 // serves its listing as HTML on both — there is no JSON feed — so liveness is judged the way
 // the ingest adapter reads the same page: a live board links at least one posting permalink.
-// The listing carries no company name worth trusting, so it falls back to the slug.
+// The employer is the page's og:site_name, which every Teamtailor site sets to the company
+// (measured 2026-10-24 on a vendor sub-domain and two employer domains), so a board found from
+// a name-derived seed is gated against the employer it was proposed for.
 type teamtailorProber struct{}
+
+// boardID turns a seed token into the host a board lives on. A name-derived seed carries a bare
+// company name, and the only host such a name can predict is the vendor sub-domain; a token that
+// already contains a dot names a host and is kept as it is.
+func (teamtailorProber) boardID(token string) string {
+	if strings.Contains(token, ".") {
+		return token
+	}
+	return token + ".teamtailor.com"
+}
 
 // teamtailorJobPattern is the posting permalink on a Teamtailor listing: /jobs/<numeric id>.
 // It must not match the bare /jobs nav anchor, which every listing carries whether or not it
@@ -585,7 +595,15 @@ func (teamtailorProber) probe(ctx context.Context, c httpClient, host string) (s
 	if n == 0 {
 		return "", 0, nil
 	}
-	return "", n, nil
+	// A vendor sub-domain often redirects to the employer's own careers domain (tibber.teamtailor.com
+	// serves jobs.tibber.com), and the client follows it silently. Kept, that is the SAME board under
+	// a second id: ingest namespaces postings by board, so every posting would be stored twice — prod
+	// already carries tibber both ways. og:url names the host that actually served the page; a board
+	// is only this host if it says so.
+	if u, err := url.Parse(metaProperty(root, "og:url")); err == nil && u.Host != "" && !strings.EqualFold(u.Host, host) {
+		return "", 0, nil
+	}
+	return metaProperty(root, "og:site_name"), n, nil
 }
 
 // trakstarProber probes the Trakstar Hire per-subdomain RSS feed. A non-empty channel of
