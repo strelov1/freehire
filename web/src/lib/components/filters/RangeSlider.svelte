@@ -74,7 +74,8 @@
     if (box.width <= 2 * THUMB_HALF) return;
     const raw = min + ((e.clientX - box.left - THUMB_HALF) / (box.width - 2 * THUMB_HALF)) * (max - min);
     const v = clamp(min + Math.round((raw - min) / step) * step);
-    const which = v <= lo ? 'lo' : v >= hi ? 'hi' : v - lo <= hi - v ? 'lo' : 'hi';
+    // The nearer thumb; outside the pair that is always the one on that side.
+    const which = v - lo <= hi - v ? 'lo' : 'hi';
     const el = which === 'lo' ? loEl : hiEl;
     // Keeps the press from moving focus to the page, so the focus() below sticks.
     e.preventDefault();
@@ -148,6 +149,16 @@
   input {
     --thumb-ring: var(--border);
     --thumb-ring-end: 9px;
+    /* One value for both engines' thumbs (a selector list mixing -webkit- and -moz-
+       pseudo-elements is dropped whole). It resolves on the input, so it follows the
+       focus-visible ring below. */
+    --thumb-dot: radial-gradient(
+      circle closest-side,
+      var(--primary) 6px,
+      var(--background) 6px 8px,
+      var(--thumb-ring) 8px var(--thumb-ring-end),
+      transparent var(--thumb-ring-end)
+    );
   }
   input:focus-visible {
     --thumb-ring: var(--ring);
@@ -159,13 +170,7 @@
     height: 1.5rem;
     border: 0;
     border-radius: 9999px;
-    background: radial-gradient(
-      circle closest-side,
-      var(--primary) 6px,
-      var(--background) 6px 8px,
-      var(--thumb-ring) 8px var(--thumb-ring-end),
-      transparent var(--thumb-ring-end)
-    );
+    background: var(--thumb-dot);
     cursor: pointer;
     pointer-events: auto;
   }
@@ -174,13 +179,7 @@
     height: 1.5rem;
     border: 0;
     border-radius: 9999px;
-    background: radial-gradient(
-      circle closest-side,
-      var(--primary) 6px,
-      var(--background) 6px 8px,
-      var(--thumb-ring) 8px var(--thumb-ring-end),
-      transparent var(--thumb-ring-end)
-    );
+    background: var(--thumb-dot);
     cursor: pointer;
     pointer-events: auto;
   }

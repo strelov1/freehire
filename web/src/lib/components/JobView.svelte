@@ -376,6 +376,14 @@
     toggleSave();
   }
 
+  // The save button's accessible name, where its visible text does not already state the
+  // effect (see the saveButton snippet).
+  function saveLabel(iconOnly: boolean): string | undefined {
+    if (saved) return 'Remove from your board';
+    if (iconOnly) return 'Save to board';
+    return undefined;
+  }
+
   // Reporting also requires an account (the report is attributed to the user).
   function onReportClick() {
     if (!isAuthenticated()) {
@@ -614,7 +622,7 @@
     variant="ghost"
     size="sm"
     onclick={onSaveClick}
-    aria-label={saved ? 'Remove from your board' : iconOnly ? 'Save to board' : undefined}
+    aria-label={saveLabel(iconOnly)}
     title={saved ? 'On your board' : 'Save to board'}
     class={`shrink-0 gap-1.5 px-2 ${saved ? 'text-brand hover:text-brand' : 'text-muted-foreground'} ${className}`}
   >

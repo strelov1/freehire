@@ -165,16 +165,17 @@
 
   // The footer total: the live distribution's total when count-fetching, else the
   // legacy preview number.
-  const total = $derived(countFailed ? null : countsFetch ? (liveCounts?.total ?? null) : showCount);
-  const showLabel = $derived(
-    total != null ? `Show ${total.toLocaleString('en-US')} ${total === 1 ? 'job' : 'jobs'}` : 'Show jobs',
-  );
+  const total = $derived.by(() => {
+    if (countFailed) return null;
+    if (countsFetch) return liveCounts?.total ?? null;
+    return showCount;
+  });
+  const jobsText = (n: number) => `${n.toLocaleString('en-US')} ${n === 1 ? 'job' : 'jobs'}`;
+  const showLabel = $derived(total != null ? `Show ${jobsText(total)}` : 'Show jobs');
   // What the polite live region below says once a count settles. The button text alone
   // changes silently, so a screen-reader user picking filters would otherwise never hear
   // the result shrink. Empty while counting, so only the settled figure is announced.
-  const countAnnouncement = $derived(
-    applyLabel || loading || total == null ? '' : `${total.toLocaleString('en-US')} ${total === 1 ? 'job' : 'jobs'} match`,
-  );
+  const countAnnouncement = $derived(applyLabel || loading || total == null ? '' : `${jobsText(total)} match`);
 
   // Ids that tie the pane to the rail entry naming it.
   const uid = $props.id();

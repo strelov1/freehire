@@ -66,17 +66,25 @@
   async function removeThenRefocus(remove: () => void, from: number | null) {
     remove();
     await tick();
-    const left = root ? [...root.querySelectorAll<HTMLButtonElement>('[data-chip-remove]')] : [];
+    const left = chipButtons();
     const next = from === null ? undefined : left[Math.min(from, left.length - 1)];
     if (next) next.focus();
     else heading?.focus();
   }
 
+  function chipButtons(): HTMLButtonElement[] {
+    return root ? [...root.querySelectorAll<HTMLButtonElement>('[data-chip-remove]')] : [];
+  }
+
   function chipIndex(el: EventTarget | null): number | null {
-    if (!root || !(el instanceof HTMLElement)) return null;
-    const i = [...root.querySelectorAll('[data-chip-remove]')].indexOf(el);
+    if (!(el instanceof HTMLButtonElement)) return null;
+    const i = chipButtons().indexOf(el);
     return i === -1 ? null : i;
   }
+
+  // The chip's × and a group's clear share one 24px hit area around a 12px glyph.
+  const removeButtonClass =
+    'relative inline-flex text-muted-foreground transition-colors after:absolute after:-inset-1.5 hover:text-foreground';
 </script>
 
 <div class="flex flex-col gap-4" bind:this={root}>
@@ -117,8 +125,6 @@
       <div class="flex flex-col gap-2">
         <div class="flex items-center gap-1">
           <span class="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{g.label}</span>
-          <!-- Same 24px hit area as the chip's own × below: the 12px glyph alone was the
-               whole target. -->
           <button
             type="button"
             aria-label="Clear {g.label}"
@@ -126,7 +132,7 @@
               const first = e.currentTarget.parentElement?.nextElementSibling?.querySelector('[data-chip-remove]') ?? null;
               removeThenRefocus(() => g.chips.forEach((c) => c.remove()), chipIndex(first));
             }}
-            class="relative inline-flex text-muted-foreground transition-colors after:absolute after:-inset-1.5 hover:text-foreground"
+            class={removeButtonClass}
           >
             <X class="size-3" aria-hidden="true" />
           </button>
@@ -151,7 +157,7 @@
                 data-chip-remove
                 aria-label={c.exclude ? `Remove excluded ${c.text}` : `Remove ${c.text}`}
                 onclick={(e) => removeThenRefocus(c.remove, chipIndex(e.currentTarget))}
-                class="relative inline-flex text-muted-foreground transition-colors after:absolute after:-inset-1.5 hover:text-foreground"
+                class={removeButtonClass}
               >
                 <X class="size-3" aria-hidden="true" />
               </button>

@@ -6,7 +6,7 @@
    * inherently per-row and were never meant to be shared across achievements.
    */
   import { Trash2, Pencil, Check, X } from '@lucide/svelte';
-  import { prefersReducedMotion } from 'svelte/motion';
+  import { scrollBehavior } from '#lib/motion.js';
   import { Button, Chip, FormField, Input } from '#lib/ui/index.js';
   import SkillIcon from '#lib/components/SkillIcon.svelte';
   import { isUnconfirmed } from '#lib/experienceBank.js';
@@ -106,7 +106,7 @@
 
   $effect(() => {
     if (scrollToAtomId === atom.id && rowEl) {
-      rowEl.scrollIntoView({ behavior: prefersReducedMotion.current ? 'auto' : 'smooth', block: 'center' });
+      rowEl.scrollIntoView({ behavior: scrollBehavior(), block: 'center' });
       rowEl.focus();
     }
   });
