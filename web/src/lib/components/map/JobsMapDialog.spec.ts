@@ -37,6 +37,8 @@ const BRAZIL = counts(700, {
   regions: { global: 5 },
 });
 
+const SAO_PAULO = counts(500, { countries: { br: 500 }, cities: { 'São Paulo': 500, Campinas: 2 }, regions: { global: 2 } });
+
 // A store seeded through its own writes, the way a visitor's clicks would leave it.
 function storeWith(...writes: [string, string][]) {
   const store = new FilterStore();
@@ -48,9 +50,10 @@ const include = (store: FilterStore, param: string) => store.value.facets[param]
 
 beforeEach(() => {
   page.data = {};
-  facetCounts.mockReset().mockImplementation(async (params) =>
-    params.get('countries') === 'br' ? BRAZIL : WORLD,
-  );
+  facetCounts.mockReset().mockImplementation(async (params) => {
+    if (params.get('cities') === 'São Paulo') return SAO_PAULO;
+    return params.get('countries') === 'br' ? BRAZIL : WORLD;
+  });
   loadCityTable.mockReset().mockResolvedValue(TABLE);
 });
 
@@ -104,12 +107,23 @@ describe('JobsMapDialog — clicks narrow the filters', () => {
     expect(include(store, 'countries')).toEqual([]);
   });
 
-  it('a city click selects that city', async () => {
+  // Location facets OR together on the server: countries=br&cities=X is all of Brazil.
+  // A city click must therefore drop the country, or it would narrow nothing.
+  it('a city click selects that city in place of its country', async () => {
     const store = storeWith(['countries', 'br']);
     render(JobsMapDialog, { open: true, store });
     await fireEvent.click(await screen.findByRole('button', { name: 'São Paulo: 500 jobs' }));
     expect(include(store, 'cities')).toEqual(['São Paulo']);
-    expect(include(store, 'countries')).toEqual(['br']);
+    expect(include(store, 'countries')).toEqual([]);
+  });
+
+  it("keeps drawing the country's cities once a city is selected", async () => {
+    const store = storeWith(['countries', 'br']);
+    render(JobsMapDialog, { open: true, store });
+    await fireEvent.click(await screen.findByRole('button', { name: 'São Paulo: 500 jobs' }));
+    expect(await screen.findByRole('button', { name: 'Show 500 jobs' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Campinas: 60 jobs' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'World view' })).toBeTruthy();
   });
 
   it('World view clears the country and city filters together', async () => {

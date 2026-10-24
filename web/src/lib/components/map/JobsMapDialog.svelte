@@ -20,6 +20,11 @@
   // Counts are the dialog's own (the facets endpoint for the store's live params), not
   // the list's total: the list reloads on its own schedule, and a "Show N jobs" read off
   // it would be one click behind.
+  //
+  // The server ORs the location facets together (countries=br&cities=Campinas is all of
+  // Brazil), so a city click REPLACES the country rather than narrowing within it — and
+  // the dialog remembers which country it drilled into, to keep drawing that country's
+  // cities while only a city is selected.
   let { open = $bindable(false), store }: { open?: boolean; store: FilterStore } = $props();
 
   const FACETS = ['countries', 'cities', 'regions'];
@@ -31,6 +36,19 @@
   const s = $derived(t(messages, loc));
   const fmt = (n: number) => n.toLocaleString(loc);
 
+  // The country a city click drilled into; null once the view is a country view again.
+  let drilled = $state<string | null>(null);
+
+  const countries = $derived(store.value.facets.countries?.include ?? []);
+  const cities = $derived(store.value.facets.cities?.include ?? []);
+  const worldwideOn = $derived((store.value.facets.regions?.include ?? []).includes(WORLDWIDE_REGION));
+  const focusCountry = $derived(
+    countries.length === 1 ? countries[0] : countries.length === 0 && cities.length > 0 ? drilled : null,
+  );
+
+  const byCount = (facet: Record<string, number> | undefined) =>
+    Object.entries(facet ?? {}).sort((a, b) => b[1] - a[1]);
+
   let counts = $state.raw<FacetCounts | null>(null);
   let loading = $state(false);
   let failed = $state(false);
@@ -39,9 +57,16 @@
   // with filters that are no longer selected.
   let seq = 0;
 
+  // The cities of the last single-country answer. Once a city replaces its country the
+  // facet only holds the selected cities (and their co-listed neighbours), so the city
+  // layer is drawn from this instead: each city's count within the country is unchanged
+  // by which city is selected.
+  let cityLayer = $state.raw<{ country: string; cities: [string, number][] } | null>(null);
+
   $effect(() => {
     if (!open) return;
     const params = store.params;
+    const single = countries.length === 1 ? countries[0] : null;
     const mine = ++seq;
     loading = true;
     const timer = setTimeout(async () => {
@@ -50,6 +75,7 @@
         if (mine !== seq) return;
         counts = res;
         failed = false;
+        if (single) cityLayer = { country: single, cities: byCount(res.facets.cities) };
       } catch {
         if (mine !== seq) return;
         failed = true;
@@ -60,11 +86,6 @@
     return () => clearTimeout(timer);
   });
 
-  const countries = $derived(store.value.facets.countries?.include ?? []);
-  const cities = $derived(store.value.facets.cities?.include ?? []);
-  const worldwideOn = $derived((store.value.facets.regions?.include ?? []).includes(WORLDWIDE_REGION));
-  const focusCountry = $derived(countries.length === 1 ? countries[0] : null);
-
   // The city table is ~200 KB: asked for only once a single country is in focus, the one
   // state that draws cities. `null` once it has failed — the map then stays on countries.
   let cityTable = $state.raw<CityTable | null | undefined>(undefined);
@@ -72,9 +93,6 @@
     if (!open || !focusCountry || cityTable !== undefined) return;
     void loadCityTable().then((table) => (cityTable = table));
   });
-
-  const byCount = (facet: Record<string, number> | undefined) =>
-    Object.entries(facet ?? {}).sort((a, b) => b[1] - a[1]);
 
   // A multi-country posting also counts toward countries nobody selected; drawing those
   // beside the selection would put Mexico on a search for Brazil.
@@ -88,8 +106,8 @@
   );
 
   const cityPlaces = $derived(
-    focusCountry && cityTable
-      ? placeCities(focusCountry, byCount(counts?.facets.cities), cityTable).map(
+    focusCountry && cityTable && cityLayer?.country === focusCountry
+      ? placeCities(focusCountry, cityLayer.cities, cityTable).map(
           (c): MapPlace => ({ key: `city:${c.name}`, label: c.name, count: c.count, lat: c.lat, lng: c.lng }),
         )
       : [],
@@ -107,20 +125,24 @@
     const sep = place.key.indexOf(':');
     const value = place.key.slice(sep + 1);
     if (place.key.slice(0, sep) === 'city') {
+      drilled = focusCountry ?? null;
+      store.clearFacet('countries');
       store.add('cities', value);
       return;
     }
     const wasOnlySelection = countries.length === 1 && countries[0] === value;
-    store.clearFacet('countries');
+    worldView();
     if (!wasOnlySelection) store.add('countries', value);
   }
 
   function worldView() {
+    drilled = null;
     store.clearFacet('countries');
     store.clearFacet('cities');
   }
 
-  // A place AND "anywhere" selects nothing, so turning worldwide on drops the places.
+  // "Anywhere" ORs with the places like any location facet, so leaving them set would
+  // widen the list to both; turning worldwide on drops them instead.
   function toggleWorldwide() {
     if (worldwideOn) {
       store.remove('regions', WORLDWIDE_REGION);
@@ -171,7 +193,7 @@
             {s.loadFailed}
           {:else if focusCountry && cityTable === null}
             {s.citiesFailed}
-          {:else if cityPlaces.length}
+          {:else if cityPlaces.length && countries.length === 1}
             {format(s.placedShare, { placed: fmt(placed), total: fmt(countryTotal) })}
           {/if}
         </span>
