@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"log"
 	"net/url"
 	"slices"
 	"sort"
@@ -362,18 +363,19 @@ func (h *searchHandlers) JobFacets(c *fiber.Ctx) error {
 	}
 
 	view := facetView(res)
-	if err := h.nameCompanies(c.Context(), view.TopCompanies); err != nil {
-		return err
-	}
+	h.nameCompanies(c.Context(), view.TopCompanies)
 	return dataResponseWithIgnored(c, view, ignoredParams(c, facetsParams), ignoredJobValues(c))
 }
 
 // nameCompanies fills each top company's display name from the companies table
 // in one read. A slug with no row yet (the table trails ingest) keeps its slug as
 // its name, so every entry carries one.
-func (h *searchHandlers) nameCompanies(ctx context.Context, top []companyFacetValue) error {
+//
+// The names only decorate the counts, so a failed read is logged and every company
+// keeps its slug: the caller still gets the facets and the exact total.
+func (h *searchHandlers) nameCompanies(ctx context.Context, top []companyFacetValue) {
 	if len(top) == 0 {
-		return nil
+		return
 	}
 	names := map[string]string{}
 	if h.companyNames != nil {
@@ -383,7 +385,7 @@ func (h *searchHandlers) nameCompanies(ctx context.Context, top []companyFacetVa
 		}
 		rows, err := h.companyNames.CompanyNamesBySlugs(ctx, slugs)
 		if err != nil {
-			return err
+			log.Printf("facets: company names unavailable, using slugs: %v", err)
 		}
 		for _, r := range rows {
 			names[r.Slug] = r.Name
@@ -396,7 +398,6 @@ func (h *searchHandlers) nameCompanies(ctx context.Context, top []companyFacetVa
 			top[i].Name = top[i].Slug
 		}
 	}
-	return nil
 }
 
 // facetPayload is the public shape of a facet result: distributions and numeric

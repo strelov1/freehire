@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"testing"
 
@@ -455,10 +456,14 @@ func TestJobFacets_NilCacheStillComputes(t *testing.T) {
 type fakeCompanyNames struct {
 	names map[string]string
 	got   [][]string
+	err   error
 }
 
 func (f *fakeCompanyNames) CompanyNamesBySlugs(_ context.Context, slugs []string) ([]db.CompanyNamesBySlugsRow, error) {
 	f.got = append(f.got, slugs)
+	if f.err != nil {
+		return nil, f.err
+	}
 	var out []db.CompanyNamesBySlugsRow
 	for _, s := range slugs {
 		if n, ok := f.names[s]; ok {
@@ -525,6 +530,32 @@ func TestJobFacets_CompanySlugReportsExactTotalAndNamedTop50(t *testing.T) {
 	}
 	if len(names.got) != 1 || len(names.got[0]) != 50 {
 		t.Errorf("name reads = %v, want ONE read of the 50 shown slugs", names.got)
+	}
+}
+
+// The names only decorate the counts: a failed read must not cost the caller the
+// facets and the exact total, so every company falls back to its slug.
+func TestJobFacets_CompanyNameReadFailureFallsBackToSlugs(t *testing.T) {
+	fake := &fakeFacetCounter{distinct: 2, res: search.FacetResult{
+		Total:  3,
+		Facets: map[string]map[string]int64{"company_slug": {"acme": 2, "globex": 1}},
+	}}
+	names := &fakeCompanyNames{err: errors.New("db down")}
+	h := &searchHandlers{facets: fake, companyNames: names}
+	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
+	app.Get("/jobs/facets", h.JobFacets)
+
+	status, body := doGet(t, app, "/jobs/facets?facets=company_slug")
+	if status != fiber.StatusOK {
+		t.Fatalf("status = %d, want 200 (%v)", status, body)
+	}
+	data := body["data"].(map[string]any)
+	if data["companies_total"].(float64) != 2 {
+		t.Errorf("companies_total = %v, want 2", data["companies_total"])
+	}
+	first := data["top_companies"].([]any)[0].(map[string]any)
+	if first["slug"] != "acme" || first["name"] != "acme" {
+		t.Errorf("top_companies[0] = %v, want acme named by its slug", first)
 	}
 }
 
