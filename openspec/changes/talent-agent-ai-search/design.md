@@ -49,10 +49,10 @@ Measured during the spike (Meili 1.49, prod-equivalent settings): a search with 
 ### D6. Jobs searched reads `GET /api/v1/stats/catalog`
 The spike called `/jobs/facets` with no filter to get a catalogue total — a count on the request path, which the catalogue-scale convention forbids. The overview reads the snapshot's `unique_open_jobs` (what `/jobs` itself shows unfiltered) and renders nothing for it when the snapshot is not `exact`.
 
-### D7. The map draws real land shapes from a static asset
-A world land TopoJSON (Natural Earth 110m, public domain, ~100 KB) in `web/static/`, projected equirectangularly into an SVG, with a country centroid table covering every ISO code the `countries` facet can emit (derived from `internal/dict/location`'s vocabulary, so a country is never silently dropped). Bubbles are sized by √count. Rendered client-side, lazily, only when the Results step opens.
+### D7. The map draws real land shapes, precomputed once
+`web/src/lib/worldMap.ts` holds the Natural Earth 110m land outline (public domain, via world-atlas) already projected equirectangularly into one SVG path in a 360x180 box (~56 KB), the label point of every country the `countries` facet can emit (Natural Earth 50m, the few small territories it omits filled in by hand), and `projectToMap`. A test walks the facet vocabulary so a code without a point fails rather than silently dropping off the map. No TopoJSON decoder or map library at runtime; the module is imported only by the map component, which renders only on the Results step. Bubbles are sized by √count.
 
-*Alternative considered:* a map library (MapLibre/Leaflet) — rejected as a tile dependency for a static choropleth.
+*Alternatives considered:* shipping the TopoJSON and decoding it in the browser (a runtime dependency for data that never changes); a map library (MapLibre/Leaflet — a tile dependency for a static picture).
 
 ### D8. All copy goes through `.messages.ts`
 The dialog and its pieces get `AiFilterDialog.messages.ts` etc., matching ~60 sibling components including `Composer`.
