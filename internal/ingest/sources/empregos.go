@@ -50,10 +50,13 @@ const empregosRequestInterval = time.Second
 const empregosLeafMax = 15000
 
 // empregosMaxNewPerRun bounds how many unseen postings one run writes. The crawl itself costs
-// ~100 requests whatever the catalogue holds; what grows with it is the database work, and a
-// first run facing all ~90k postings as new would spend most of the 50-minute run timeout
-// writing them. The newest are taken first and the rest are written by the following runs.
-const empregosMaxNewPerRun = 20000
+// ~100 requests whatever the catalogue holds; what grows with it is the database work, measured
+// from the crawl host on 2026-10-24: a new posting's write ran at ~7 a second (14,119 in the
+// ~36 minutes before the first run's deadline), a stored posting's refresh at ~190 a second.
+// Against the run's 40-minute crawl budget (50 minutes less the sweep reserve), a run at steady
+// state spends ~4 minutes listing and ~8 refreshing ~90k stored postings, and 5,000 new writes
+// add ~12 — about 60% of the budget. The newest are written first; the rest wait for later runs.
+const empregosMaxNewPerRun = 5000
 
 // The search's facet ids, as its own pages send them.
 const (
@@ -177,11 +180,12 @@ func (s empregos) FetchNew(ctx context.Context, _ CompanyEntry, seen func(extern
 		log.Printf("empregos: %d new postings, writing the newest %d; the rest wait for a later run", len(fresh), s.maxNewPerRun)
 		fresh = fresh[:s.maxNewPerRun]
 	}
-	jobs := make([]Job, 0, len(fresh)+len(refreshed))
+	// The refreshes go first: they are cheap and they are what keeps the stored postings open,
+	// so a run cut short by its deadline loses new writes rather than liveness.
 	for _, p := range fresh {
-		jobs = append(jobs, p.job())
+		refreshed = append(refreshed, p.job())
 	}
-	return append(jobs, refreshed...), nil
+	return refreshed, nil
 }
 
 // empregosSlice is one cut of a slice: the filter that selects it and, when the parent's

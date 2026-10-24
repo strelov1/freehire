@@ -256,6 +256,9 @@ func TestEmpregosRefreshesSeenAndBoundsNew(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if len(jobs) == 0 || !jobs[0].SeenRefresh {
+		t.Error("the refreshes must come before the new writes")
+	}
 	var fresh, refreshed []Job
 	for _, j := range jobs {
 		if j.SeenRefresh {
