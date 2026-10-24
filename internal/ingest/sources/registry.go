@@ -534,8 +534,9 @@ func All(c HTTPClient) map[string]Source {
 		NewPandape(c),
 		// Pandapé LatAm: the same ATS sold by Computrabajo across Spanish-speaking Latin America,
 		// one <tenant>.pandape.computrabajo.com career site per board, a separate tenant
-		// namespace from the Brazilian one. See pandape.go.
-		NewPandapeLatam(c),
+		// namespace from the Brazilian one. Its edge answers 403 to "freehire/0.1" and serves
+		// the compatible form of the same identity. See pandape.go.
+		compatibleUASource(c, NewPandapeLatam),
 		// Built In: US-centred tech board over many employers. Each tech category's last-24h
 		// window is walked; posting pages carry a schema.org JobPosting. Coverage-gated and
 		// paced, see builtinRequestInterval.
@@ -849,7 +850,7 @@ func compatibleUASource[T any](c HTTPClient, build func(T) Source) Source {
 		var zero T
 		return build(zero)
 	}
-	return build(any(newCompatibleUAClient()).(T))
+	return build(any(NewCompatibleUAClient()).(T))
 }
 
 // reg indexes sources by provider key. A duplicate key means two adapters claim the

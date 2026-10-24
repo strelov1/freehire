@@ -107,7 +107,7 @@ var scraplingProviders = map[string]scraplingProvider{
 	// browser from the crawl host's own IP read 10 of 10. The posting JSON on oferta.occ.com.mx
 	// is not challenged and stays on a plain client with the browser-compatible User-Agent.
 	"occ": {scraplingRoute{scraplingfetch.ModeBrowser, false}, func(f *Client) Source {
-		return NewOCC(occSplit{HTMLGetter: f, JSONGetter: newCompatibleUAClient()})
+		return NewOCC(occSplit{HTMLGetter: f, JSONGetter: NewCompatibleUAClient()})
 	}},
 	// The fixed proxy exit is 429'd on every detail page once a run has spent its budget — 15 of
 	// 15 measured on 2026-10-22, so a run hydrating 600 postings timed out with none stored. The

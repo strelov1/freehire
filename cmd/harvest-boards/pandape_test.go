@@ -162,3 +162,12 @@ func TestPandapeLatamDiscoverFromCommonCrawl(t *testing.T) {
 		t.Errorf("discover = %v, want %v", got, want)
 	}
 }
+
+func TestPandapeLatamProbesWithTheCompatibleClient(t *testing.T) {
+	if pandapeLatamProber.probeClient() == nil {
+		t.Error("the Latin-American edge refuses the default client; the probe must replace it")
+	}
+	if pandapeBrazilProber.probeClient() != nil {
+		t.Error("the Brazilian probe keeps the default egress")
+	}
+}

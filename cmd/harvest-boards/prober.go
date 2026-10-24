@@ -362,6 +362,13 @@ type discoverer interface {
 	discover(ctx context.Context, c httpClient) ([]string, error)
 }
 
+// probeClienter is the opt-in capability of a prober whose platform refuses the default
+// client the way it refuses the adapter's (an edge that filters on the User-Agent): its
+// non-nil client replaces the provider's default egress for the whole run, pacing included.
+type probeClienter interface {
+	probeClient() *sources.Client
+}
+
 // seedMapper converts a provider's raw seed token into its canonical board id. Providers
 // whose seed token already IS the board id (greenhouse/lever/ashby/bamboohr/icims) do not
 // implement it. Mirrors the optional-marker idiom of sources.boardless.

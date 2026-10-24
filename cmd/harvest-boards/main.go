@@ -102,6 +102,11 @@ func run() int {
 		log.Printf("harvest-boards: %v", err)
 		return 1
 	}
+	if pc, ok := p.(probeClienter); ok {
+		if c := pc.probeClient(); c != nil {
+			egress = c
+		}
+	}
 	probeRate := effectivePace(p, *pace)
 	client := newCountingClient(paced(egress, probeRate))
 	if probeRate != *pace {

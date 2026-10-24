@@ -400,9 +400,10 @@ func withUserAgent(c HTTPClient, ua string) HTTPClient {
 // served. It still names us, so prefer it to browserUserAgent wherever it is enough.
 const compatibleUserAgent = "Mozilla/5.0 (compatible; freehire/0.1; +https://freehire.me)"
 
-// newCompatibleUAClient is NewClient with compatibleUserAgent — same guarded transport, same
-// retry budget, same everything else.
-func newCompatibleUAClient() *Client {
+// NewCompatibleUAClient is NewClient with compatibleUserAgent — same guarded transport, same
+// retry budget, same everything else. Exported for cmd/harvest-boards, whose probes meet the
+// same edges as the adapters.
+func NewCompatibleUAClient() *Client {
 	c := NewClient()
 	c.userAgent = compatibleUserAgent
 	return c

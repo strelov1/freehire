@@ -45,6 +45,16 @@ type pandapeProber struct {
 	latam    bool   // discover from Common Crawl rather than the Brazilian sitemap
 }
 
+// probeClient is the client the Latin-American domain is probed through: its edge answers
+// 403 to the project's plain "freehire/0.1" string and serves the browser-compatible form of
+// the same identity, which is what the adapter crawls with. nil keeps the default egress.
+func (p pandapeProber) probeClient() *sources.Client {
+	if p.latam {
+		return sources.NewCompatibleUAClient()
+	}
+	return nil
+}
+
 var (
 	pandapeBrazilProber = pandapeProber{provider: "pandape", host: "pandape.infojobs.com.br"}
 	pandapeLatamProber  = pandapeProber{provider: "pandapelatam", host: "pandape.computrabajo.com", latam: true}
