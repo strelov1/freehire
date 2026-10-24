@@ -30,3 +30,8 @@ if (typeof ResizeObserver === 'undefined') {
   }
   globalThis.ResizeObserver = ResizeObserverStub;
 }
+
+// jsdom implements `window.scrollTo` only as a "Not implemented" console error. The scroll
+// lock calls it on every release to put the page back where it was; a no-op keeps that
+// noise out of every Dialog test, and scroll-lock.test.ts spies on it where it matters.
+window.scrollTo = () => {};
