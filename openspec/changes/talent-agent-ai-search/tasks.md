@@ -37,7 +37,7 @@
 - [ ] 6.4 Honest failures: empty interpretation → explanation + Start over (no plan card); plan refusal → message with `PlanLimitLink`; 429 for a guest → sign-in invitation; any other error → chat message, working state cleared
 - [ ] 6.5 Chat: `Composer` bound to a host-cleared draft, `ThinkingIndicator` while working, refinement sends the previous plan, refinement from Results re-runs the overview
 - [ ] 6.6 `AiSearchResults.svelte`: jobs searched from `GET /stats/catalog` (`unique_open_jobs`, nothing when not exact), jobs found and `companies_total` from one `facetCounts` call with `facets=countries,company_slug`, top-company logo grid via `EntityLogo` + `companyLogoUrl`, Show N jobs → `store.apply(planParams(plan))`, then close and `onApplied`
-- [ ] 6.7 `JobsWorldMap.svelte`: Natural Earth 110m land TopoJSON in `web/static/`, equirectangular SVG, centroid table covering every country code the location dictionary emits, √count bubbles, top countries as chips, limited to the plan's countries when it names any; loaded only on the Results step
+- [x] 6.7 `JobsWorldMap.svelte`: Natural Earth 110m land TopoJSON in `web/static/`, equirectangular SVG, centroid table covering every country code the location dictionary emits, √count bubbles, top countries as chips, limited to the plan's countries when it names any; loaded only on the Results step
 - [ ] 6.8 Layout: the Results chat is reachable at every width the Results step renders (side panel on wide screens, a toggleable panel below that); check mobile
 - [ ] 6.9 `AiFilterButton.svelte`: open for everyone, correct its header comment
 - [ ] 6.10 `.messages.ts` for the dialog and each new component; no hardcoded copy
