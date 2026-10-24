@@ -11,6 +11,7 @@
   import GithubStars from '#lib/components/GithubStars.svelte';
   import { SOCIAL_LINKS } from '#lib/socialLinks.js';
   import { ProviderIcon } from '#lib/ui/index.js';
+  import { tablist } from '#lib/actions/tablist.js';
 
   // GithubStars already covers GitHub (icon + live star count); the rest render as
   // plain icon links, same as the Footer's row.
@@ -94,18 +95,21 @@
        tall the panel is. `mx-auto` centers it horizontally too, off the left edge
        the logo/footer still hug. -->
   <div class="mx-auto my-auto max-w-sm">
-    <p class="text-2xl font-semibold leading-snug tracking-tight">
-      {slide.headline}
-    </p>
-    <!-- Full-opacity brand-foreground, not a dimmed fraction of it: brand/brand-foreground
-         is a much lower-contrast pair (~5.1:1) than the near-black/near-white one this
-         panel used before, so there is no headroom left to fade text and still clear
-         WCAG AA (4.5:1) for normal-size text. -->
-    <ul class="mt-6 flex flex-col gap-2 text-sm text-brand-foreground">
-      {#each slide.bullets as bullet (bullet)}
-        <li>{bullet}</li>
-      {/each}
-    </ul>
+    <!-- The slide's text is what the dot tabs below select, so it is their tabpanel. -->
+    <div role="tabpanel" id="auth-highlight-panel" aria-labelledby="auth-highlight-tab-{active}">
+      <p class="text-2xl font-semibold leading-snug tracking-tight">
+        {slide.headline}
+      </p>
+      <!-- Full-opacity brand-foreground, not a dimmed fraction of it: brand/brand-foreground
+           is a much lower-contrast pair (~5.1:1) than the near-black/near-white one this
+           panel used before, so there is no headroom left to fade text and still clear
+           WCAG AA (4.5:1) for normal-size text. -->
+      <ul class="mt-6 flex flex-col gap-2 text-sm text-brand-foreground">
+        {#each slide.bullets as bullet (bullet)}
+          <li>{bullet}</li>
+        {/each}
+      </ul>
+    </div>
 
     <!-- Landscape, not square: the tallest slide is three stacked rows (~160px), so a
          square box left the board slide with a third of its height empty. A fixed
@@ -137,12 +141,14 @@
         </div>
       {/if}
 
-      <div class="absolute inset-x-0 bottom-3 flex justify-center gap-1.5" role="tablist" aria-label="Highlights">
+      <div class="absolute inset-x-0 bottom-3 flex justify-center gap-1.5" role="tablist" aria-label="Highlights" use:tablist={active}>
         {#each SLIDES as _, i (i)}
           <button
             type="button"
             role="tab"
+            id="auth-highlight-tab-{i}"
             aria-selected={active === i}
+            aria-controls="auth-highlight-panel"
             aria-label={`Show highlight ${i + 1} of ${SLIDES.length}`}
             onclick={() => select(i)}
             class={[

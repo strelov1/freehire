@@ -78,3 +78,58 @@ describe('AccountLanguage — Russian locale', () => {
     await vi.waitFor(() => expect(screen.getByText('Не удалось сохранить.')).toBeTruthy());
   });
 });
+
+describe('AccountLanguage — keyboard', () => {
+  it('announces the highlighted row through aria-activedescendant and picks it with Enter', async () => {
+    updateLanguage.mockResolvedValue(undefined);
+    render(AccountLanguage);
+
+    const input = screen.getByRole('combobox');
+    await fireEvent.focus(input);
+    const listbox = screen.getByRole('listbox');
+    expect(input.getAttribute('aria-controls')).toBe(listbox.id);
+
+    const options = screen.getAllByRole('option');
+    // Options are the listbox's own children, and stay out of the Tab order.
+    for (const o of options) {
+      expect(o.parentElement).toBe(listbox);
+      expect(o.getAttribute('tabindex')).toBe('-1');
+    }
+    expect(input.getAttribute('aria-activedescendant')).toBe(options[0]?.id);
+
+    // en → ru → es: Spanish, since Russian is already the saved language.
+    await fireEvent.keyDown(input, { key: 'ArrowDown' });
+    await fireEvent.keyDown(input, { key: 'ArrowDown' });
+    const third = options[2] as HTMLElement;
+    expect(input.getAttribute('aria-activedescendant')).toBe(third.id);
+    expect(third.getAttribute('aria-selected')).toBe('true');
+
+    await fireEvent.keyDown(input, { key: 'Enter' });
+    expect(updateLanguage).toHaveBeenCalledWith('es');
+    expect(screen.queryByRole('listbox')).toBeNull();
+  });
+
+  it('closes the list on Escape', async () => {
+    render(AccountLanguage);
+
+    const input = screen.getByRole('combobox');
+    await fireEvent.focus(input);
+    await fireEvent.keyDown(input, { key: 'Escape' });
+
+    expect(screen.queryByRole('listbox')).toBeNull();
+    expect(input.getAttribute('aria-expanded')).toBe('false');
+    expect(input.getAttribute('aria-activedescendant')).toBeNull();
+  });
+
+  it('renders "no matches" as a disabled option', async () => {
+    render(AccountLanguage);
+
+    const input = screen.getByRole('combobox');
+    await fireEvent.focus(input);
+    await fireEvent.input(input, { target: { value: 'zzz' } });
+
+    const status = screen.getByRole('option', { name: 'Совпадений нет' });
+    expect(status.getAttribute('aria-disabled')).toBe('true');
+    expect(input.getAttribute('aria-activedescendant')).toBeNull();
+  });
+});

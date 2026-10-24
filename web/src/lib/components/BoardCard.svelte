@@ -15,6 +15,10 @@
     onopen: (item: MyJob) => void;
   } = $props();
 
+  // The card's aria-label is its name and REPLACES its content, so the indicator row is
+  // wired in as the description — otherwise stage/review/silence are never announced.
+  const indicatorsId = $props.id();
+
   const hasNotes = $derived(!!item.notes && item.notes.trim().length > 0);
   // pending_review (a decision to make) or blocked (a submission attempt stopped) —
   // see autoApplyReview.ts for why the other four statuses show no badge here.
@@ -73,6 +77,7 @@
   onclick={() => onopen(item)}
   onkeydowncapture={openOnKey}
   aria-label="Open {title} at {company || 'unknown company'}"
+  aria-describedby={indicatorsId}
   class="flex w-full cursor-pointer flex-col gap-1.5 rounded-lg border border-border bg-card p-3 text-left shadow-sm transition-colors hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
 >
   <span class="flex items-center gap-1.5 text-sm font-semibold">
@@ -83,7 +88,7 @@
   <!-- Indicators, every one of them. The silence marker used to be the way into the
        follow-up draft; that offer moved into the opened application when the card gave
        up its controls, and the marker went back to reporting. -->
-  <span class="flex flex-wrap items-center gap-x-1.5 gap-y-1">
+  <span id={indicatorsId} class="flex flex-wrap items-center gap-x-1.5 gap-y-1">
     {#if item.stage}
       <Badge variant="secondary">{humanizeStage(item.stage)}</Badge>
     {/if}

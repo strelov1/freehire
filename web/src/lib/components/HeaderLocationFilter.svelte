@@ -83,6 +83,18 @@
     void goto(`${resolve('/jobs')}?${param}=${encodeURIComponent(value)}`);
   }
 
+  let trigger = $state<HTMLButtonElement | null>(null);
+
+  // Escape puts the panel away from anywhere, and hands focus back to the trigger when
+  // it was inside the panel — otherwise the focused pill unmounts and focus falls to
+  // <body>, dropping a keyboard user at the top of the page.
+  function onWindowKeydown(e: KeyboardEvent) {
+    if (e.key !== 'Escape' || !open) return;
+    const inside = !!root && root.contains(document.activeElement);
+    open = false;
+    if (inside) trigger?.focus();
+  }
+
   function onWindowClick(e: MouseEvent) {
     if (open && root && !root.contains(e.target as Node)) open = false;
   }
@@ -92,7 +104,7 @@
   });
 </script>
 
-<svelte:window onclick={onWindowClick} onkeydown={(e) => e.key === 'Escape' && (open = false)} />
+<svelte:window onclick={onWindowClick} onkeydown={onWindowKeydown} />
 
 {#snippet storePills(param: string, options: FacetOption[])}
   {@const f = must(store, 'store').facet(param)}
@@ -126,10 +138,13 @@
   </div>
 {/snippet}
 
-<div class="relative shrink-0" bind:this={root}>
+<!-- `max-sm:static` hands the panel's containing block on a phone to the search box
+     around this trigger (see the panel's classes below). -->
+<div class="relative shrink-0 max-sm:static" bind:this={root}>
   <button
+    bind:this={trigger}
     type="button"
-    aria-haspopup="menu"
+    aria-haspopup="dialog"
     aria-expanded={open}
     aria-label={triggerLabel}
     title={triggerLabel}
@@ -173,9 +188,26 @@
   </button>
 
   {#if open}
+    <!-- A non-modal dialog, not a menu: it holds pill toggles and a location picker,
+         none of them menuitems, and `role="menu"` would put a screen reader into menu
+         navigation where typing in the picker no longer reaches it.
+
+         Desktop hangs it off the trigger at a fixed 20rem. A phone cannot: the trigger
+         sits ~60px in from the edge, so 20rem ran ~20px past a 360px screen and gave the
+         whole page a horizontal scroll. Below `sm` it therefore takes the width it is
+         given instead, in one of two ways:
+           • in the sticky header (`in-[header]`), `fixed` 0.5rem in from both screen
+             edges and 4rem down — the header's `h-14` plus the same 0.5rem gap the
+             desktop panel keeps below the 48px box. The search box itself is too narrow
+             there (the brand and the menu flank it), the reasoning HeaderSearch's own
+             suggestion panel spells out. `fixed` works only because the header draws no
+             `backdrop-filter` (see TopBar).
+           • in the homepage hero, which spans the screen, anchored to the search box
+             (the root above goes `static`) and as wide as it. -->
     <div
-      role="menu"
-      class="absolute left-0 top-[calc(100%+0.75rem)] z-50 max-h-[70vh] w-80 overflow-y-auto rounded-md border border-border bg-background p-4 shadow-lg"
+      role="dialog"
+      aria-label={variant === 'companies' ? 'Location' : 'Location and work format'}
+      class="absolute left-0 top-[calc(100%+0.75rem)] z-50 max-h-[70vh] w-80 overflow-y-auto rounded-md border border-border bg-background p-4 shadow-lg max-sm:inset-x-0 max-sm:w-auto in-[header]:max-sm:fixed in-[header]:max-sm:inset-x-2 in-[header]:max-sm:top-16"
     >
       <div class="mb-3 flex items-center justify-between">
         <span class="text-sm font-semibold tracking-tight">

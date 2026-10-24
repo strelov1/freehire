@@ -136,4 +136,16 @@ describe('the swipe deck', () => {
     expect(screen.getByLabelText(goneCard)).toBeTruthy();
     expect(screen.queryByLabelText(nextCard)).toBeNull();
   });
+
+  // The overlay covers the app chrome, so it must behave as a modal: a named dialog
+  // that takes focus (the TopBar/Footer behind it must not stay in the Tab order),
+  // and the route's one h1.
+  it('is a named modal dialog that takes focus', async () => {
+    render(SwipeDeck, { props: {} });
+
+    const dialog = screen.getByRole('dialog', { name: 'Swipe to triage' });
+    expect(dialog.getAttribute('aria-modal')).toBe('true');
+    expect(document.activeElement).toBe(dialog);
+    expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
+  });
 });

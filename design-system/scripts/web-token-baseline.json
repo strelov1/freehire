@@ -71,7 +71,6 @@
   "web/src/lib/components/ReferralsLandingView.svelte": 14,
   "web/src/lib/components/ReminderSettings.svelte": 1,
   "web/src/lib/components/SavedSearches.svelte": 1,
-  "web/src/lib/components/SavedSearchesView.svelte": 1,
   "web/src/lib/components/SkillDeltaBadge.svelte": 6,
   "web/src/lib/components/StatusBoard.svelte": 12,
   "web/src/lib/components/SwipeDeck.svelte": 8,

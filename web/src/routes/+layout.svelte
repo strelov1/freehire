@@ -27,8 +27,10 @@
   import SupportToast from '#lib/components/SupportToast.svelte';
   import SkipLink from '#lib/components/SkipLink.svelte';
   import '../app.css';
-  // Country-flag icon sheet (used by #lib/components/Flag.svelte). References its
-  // SVGs by URL, so the browser only fetches flags actually rendered.
+  // Country-flag icon sheet for the design system's CountryFlag, which leaves loading it
+  // to the app. References its SVGs by URL, so the browser only fetches flags actually
+  // rendered. Global rather than per route: the job lists on most pages draw flags, and
+  // the sheet ships inside the same stylesheet as app.css, so it costs no extra request.
   import 'flag-icons/css/flag-icons.min.css';
 
   let { children } = $props();

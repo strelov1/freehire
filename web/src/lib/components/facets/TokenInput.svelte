@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { X } from '@lucide/svelte';
+
   // A free-text token (chip) input for open-vocabulary facets like skills and
   // countries. Enter adds the draft; Backspace on an empty field removes the last
   // chip; the × removes a specific one. Stateless except for the in-progress draft.
@@ -38,8 +40,13 @@
   {#each tokens as token (token)}
     <span class="inline-flex items-center gap-1 rounded-full bg-secondary px-2 py-0.5 text-xs font-medium text-secondary-foreground">
       {token}
-      <button type="button" class="text-muted-foreground transition-colors hover:text-foreground" onclick={() => onRemove(token)} aria-label={`Remove ${token}`}>
-        ×
+      <button
+        type="button"
+        class="relative inline-flex text-muted-foreground transition-colors after:absolute after:-inset-1.5 hover:text-foreground"
+        onclick={() => onRemove(token)}
+        aria-label={`Remove ${token}`}
+      >
+        <X class="size-3" aria-hidden="true" />
       </button>
     </span>
   {/each}

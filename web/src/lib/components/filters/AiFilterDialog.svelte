@@ -158,7 +158,7 @@
         <h2 class="text-lg font-semibold leading-tight">Describe your search</h2>
         <p class="mt-0.5 text-sm text-muted-foreground">Say what you want in plain words — we set the filters.</p>
       </div>
-      <button type="button" aria-label="Close" class="text-muted-foreground hover:text-foreground" onclick={onclose}>
+      <button type="button" aria-label="Close" class="relative flex text-muted-foreground after:absolute after:-inset-0.5 hover:text-foreground" onclick={onclose}>
         <X class="size-5" />
       </button>
     </div>

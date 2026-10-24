@@ -1,6 +1,7 @@
 <script lang="ts">
   import { flip } from 'svelte/animate';
   import { fly } from 'svelte/transition';
+  import { prefersReducedMotion } from 'svelte/motion';
   import { resolve } from '$app/paths';
   import { api } from '#lib/api.js';
   import { companyLogoUrl } from '#lib/logo.js';
@@ -84,6 +85,9 @@
     // job to link to, so it points at the catalogue instead.
     return resolve('/jobs');
   }
+
+  // Reduced motion: entries still arrive and reorder, just without the slide.
+  const motionMs = $derived(prefersReducedMotion.current ? 0 : 200);
 </script>
 
 {#if entries.length > 0}
@@ -91,10 +95,10 @@
     <SectionLabel text="just added" />
     <ul class="mt-6 flex flex-col gap-2">
       {#each entries as entry (entry.id)}
-        <li animate:flip={{ duration: 200 }}>
+        <li animate:flip={{ duration: motionMs }}>
           <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- entryHref always returns a resolve() result; the rule cannot see through the function call -->
           <a href={entryHref(entry)}
-            in:fly={{ y: -8, duration: 200 }}
+            in:fly={{ y: -8, duration: motionMs }}
             class="flex items-center gap-3 rounded-lg border border-border p-3 transition-colors hover:border-brand-strong hover:bg-accent"
           >
             <EntityLogo

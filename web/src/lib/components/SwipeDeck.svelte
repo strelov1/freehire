@@ -15,6 +15,7 @@
   import { companyLogoUrl } from '#lib/logo.js';
   import { Badge, EntityLogo } from '#lib/ui/index.js';
   import { markViewed } from '#lib/viewedJobs.svelte.js';
+  import { focusTrap } from '#lib/actions/focusTrap.js';
   import FilterModal from './filters/FilterModal.svelte';
   import JobMatch from './JobMatch.svelte';
   import States from './States.svelte';
@@ -333,9 +334,16 @@
 
 <svelte:window onkeydown={onKeydown} />
 
-<!-- Full-screen overlay: covers the app chrome like a modal. Safe-area padding
-     keeps the top bar clear of the notch and the actions clear of the home bar. -->
-<div class="swipe-overlay fixed inset-0 z-50 flex flex-col bg-background text-foreground">
+<!-- Full-screen overlay: covers the app chrome, so it IS a modal — focusTrap keeps Tab
+     off the TopBar/Footer behind it. Safe-area padding keeps the top bar clear of the
+     notch and the actions clear of the home bar. -->
+<div
+  class="swipe-overlay fixed inset-0 z-50 flex flex-col bg-background text-foreground"
+  role="dialog"
+  aria-modal="true"
+  aria-labelledby="swipe-deck-title"
+  {@attach focusTrap()}
+>
   <!-- Top bar: Filters (left) · Close (right). Safe-area top padding clears the notch. -->
   <header
     class="flex shrink-0 items-center justify-between gap-3 px-4 pb-2 pt-[max(0.75rem,env(safe-area-inset-top))]"
@@ -357,7 +365,10 @@
       {/if}
     </button>
 
-    <span class="text-sm font-medium text-muted-foreground">Swipe to triage</span>
+    <!-- The route's only h1 (the card title below is an h2). -->
+    <h1 id="swipe-deck-title" class="text-sm font-medium text-muted-foreground">
+      Swipe to triage
+    </h1>
 
     <button
       type="button"

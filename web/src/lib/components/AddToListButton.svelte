@@ -6,6 +6,7 @@
   import { jobLists } from '#lib/jobLists.svelte.js';
   import type { JobListMembership } from '#lib/types.js';
   import { cn } from '#lib/ui/index.js';
+  import { menuNav } from '#lib/actions/menuNav.js';
 
   // A self-contained "Add to list" control: an icon button that opens a small
   // hand-rolled popover (no shared Menu/Popover primitive exists in the design
@@ -133,6 +134,8 @@
   {#if open}
     <div
       role="menu"
+      aria-label="Job lists"
+      {@attach menuNav({ onclose: () => (open = false) })}
       class="absolute right-0 top-full z-50 mt-1 w-56 rounded-xl border border-border bg-card p-1.5 text-left shadow-lg"
     >
       {#if error}
@@ -176,7 +179,10 @@
                 void confirmCreate();
               }}
             >
+              <!-- Focused on mount: "New list" replaced the focused menuitem with this form,
+                   and without it a keyboard user's focus would fall to the page. -->
               <input
+                {@attach (el) => el.focus()}
                 bind:value={newName}
                 placeholder="New list name"
                 aria-label="New list name"
@@ -194,6 +200,7 @@
           {:else}
             <button
               type="button"
+              role="menuitem"
               onclick={startCreate}
               class="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm text-muted-foreground hover:bg-accent"
             >

@@ -28,7 +28,7 @@
 </script>
 
 {#if mark.kind === 'image'}
-  <img src={mark.src} alt="" class="size-7 shrink-0 rounded-full object-contain" />
+  <img src={mark.src} alt="" loading="lazy" decoding="async" width="28" height="28" class="size-7 shrink-0 rounded-full object-contain" />
 {:else if mark.kind === 'logo'}
   <span class={badgeClass} style:background-color="#{mark.hex}">
     <svg viewBox="0 0 24 24" class="size-4" role="img" aria-label={mark.title}>

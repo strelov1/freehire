@@ -585,7 +585,7 @@
 
         {#if selected.length > 0}
           <div
-            class="sticky top-14 z-30 flex flex-wrap items-center gap-2 rounded-lg border border-border bg-background/95 px-3 py-2 shadow-sm backdrop-blur"
+            class="sticky top-14 z-30 flex flex-wrap items-center gap-2 rounded-lg border border-border bg-background/95 px-3 py-2 shadow-sm"
             role="toolbar"
             aria-label="Selected achievements"
           >

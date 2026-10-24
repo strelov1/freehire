@@ -32,9 +32,16 @@
     aria-hidden={blurred ? 'true' : undefined}
   >
     <!-- The unfilled remainder is a soft red (the skills you're missing); the fill is the
-         brand tone (the skills you have) — a two-tone have/missing bar in one track. -->
+         brand tone (the skills you have) — a two-tone have/missing bar in one track.
+         The fill is full-width and slid left by the missing share, not sized by `width`:
+         a transform animates on the compositor, where a width change re-lays out every
+         row in the feed on each frame. Sliding rather than `scale-x` keeps the rounded
+         leading edge round; the track's own clip draws the trailing one. -->
     <div class="h-1.5 flex-1 overflow-hidden rounded-full bg-destructive/15">
-      <div class="h-full rounded-full bg-brand transition-all" style="width: {match.percent}%"></div>
+      <div
+        class="h-full rounded-full bg-brand transition-transform"
+        style:transform="translateX({match.percent - 100}%)"
+      ></div>
     </div>
     <span class="shrink-0 text-xs font-medium tabular-nums text-muted-foreground">
       {match.percent}% · {match.matched}/{match.total} skills

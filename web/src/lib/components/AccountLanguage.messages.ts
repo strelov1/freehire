@@ -11,6 +11,8 @@ export const messages = defineMessages(
     saveFailed: 'Could not save.',
     searchPlaceholder: 'Search a language…',
     noMatches: 'No matches',
+    // Spoken after the saved language's name; the check mark beside it is visual only.
+    currentChoice: '(current)',
     // Display names for the picker's entries — a language CODE (`ru`, `es`, …)
     // stays a wire token, but the name a reader sees in the combobox is prose.
     // Typed as `Record<Locale, string>` so adding a locale to `SUPPORTED_LOCALES`
@@ -35,6 +37,7 @@ export const messages = defineMessages(
       saveFailed: 'Не удалось сохранить.',
       searchPlaceholder: 'Поиск языка…',
       noMatches: 'Совпадений нет',
+      currentChoice: '(текущий)',
       languageNames: {
         en: 'Английский',
         ru: 'Русский',

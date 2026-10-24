@@ -1237,10 +1237,13 @@
   <!-- Mobile apply CTA. It sticks to the bottom of the viewport while the job
        scrolls, then releases at the article's end so it never covers the related
        jobs below; the safe-area padding clears the home indicator. The bar is a
-       frosted-glass panel (semi-transparent bg + backdrop-blur), full-bleed via
-       negative margins that cancel the page gutter. pointer-events-none lets the
-       description scroll under the glass, with pointer-events-auto re-enabling the
-       buttons. Desktop uses the inline header buttons instead (hidden at lg).
+       near-opaque panel with a top rule, full-bleed via negative margins that cancel
+       the page gutter. Not frosted glass: a `backdrop-filter` on a sticky bar is
+       re-rasterised on every scroll frame (the cost TopBar avoids for its own
+       reasons), and over a 15% background the description read straight through
+       the buttons. pointer-events-none lets a swipe that starts on the bar's gutter
+       still scroll the page, with pointer-events-auto re-enabling the buttons.
+       Desktop uses the inline header buttons instead (hidden at lg).
        Two controls, side by side at half width each rather than stacked, so the bar is no
        taller than it was with one: `Tailor my CV` — the page's primary CTA, which must not
        be a thing only a desktop reader can reach — and exactly ONE way to apply. Which one
@@ -1248,7 +1251,7 @@
        everywhere else. The control that loses does not vanish — the quiet strip under the
        title picks the apply link up whenever auto-apply has taken this bar. -->
   <div
-    class="pointer-events-none sticky bottom-0 z-30 -mx-5 flex gap-2 border-t border-border/40 bg-background/15 px-5 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 backdrop-blur-lg sm:-mx-4 sm:px-4 lg:hidden"
+    class="pointer-events-none sticky bottom-0 z-30 -mx-5 flex gap-2 border-t border-border bg-background/95 px-5 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 sm:-mx-4 sm:px-4 lg:hidden"
   >
     {@render tailorCta('lg', 'pointer-events-auto flex-1 rounded-xl font-semibold shadow-lg')}
     {#if cta.autoApply?.leads}

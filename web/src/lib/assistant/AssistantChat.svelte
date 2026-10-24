@@ -857,7 +857,7 @@
     <span class="min-w-0 flex-1">{bulletCapAlert}</span>
     <button
       type="button"
-      class="shrink-0 rounded-md p-0.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+      class="relative shrink-0 rounded-md p-0.5 text-muted-foreground transition-colors after:absolute after:-inset-0.5 hover:bg-muted hover:text-foreground"
       aria-label={s.dismiss}
       onclick={() => (bulletCapAlert = null)}
     >

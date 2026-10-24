@@ -43,6 +43,7 @@
     autoRun?: boolean;
     stacked?: boolean;
   } = $props();
+  const thinkingId = $props.id();
 
   let fit = $state<MatchAnalysisResponse | null>(initial);
 
@@ -426,15 +427,15 @@
 
         {#if stream.thinking}
           <div class="mt-6 border-t border-border pt-4">
-            <button type="button" class="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground" onclick={() => (showThinking = !showThinking)}>
-              <span class="relative flex size-2">
-                <span class="absolute inline-flex size-full animate-ping rounded-full bg-brand/60"></span>
+            <button type="button" class="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground" onclick={() => (showThinking = !showThinking)} aria-expanded={showThinking} aria-controls={thinkingId}>
+              <span class="relative flex size-2" aria-hidden="true">
+                <span class="absolute inline-flex size-full motion-safe:animate-ping rounded-full bg-brand/60"></span>
                 <span class="relative inline-flex size-2 rounded-full bg-brand"></span>
               </span>
-              Thinking {showThinking ? '▾' : '▸'}
+              Thinking <span aria-hidden="true">{showThinking ? '▾' : '▸'}</span>
             </button>
             {#if showThinking}
-              <p bind:this={thinkingEl} class="mt-2 max-h-48 overflow-y-auto whitespace-pre-wrap font-mono text-xs leading-relaxed text-muted-foreground">{stream.thinking}</p>
+              <p id={thinkingId} bind:this={thinkingEl} class="mt-2 max-h-48 overflow-y-auto whitespace-pre-wrap font-mono text-xs leading-relaxed text-muted-foreground">{stream.thinking}</p>
             {/if}
           </div>
         {/if}

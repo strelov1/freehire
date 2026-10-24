@@ -131,7 +131,7 @@
           <div class="min-w-0 flex-1">
             <h2 class="text-sm font-semibold tracking-tight">Telegram</h2>
             {#if telegram.linked}
-              <p class="flex items-center gap-1 text-xs font-medium text-green-600">
+              <p class="flex items-center gap-1 text-xs font-medium text-brand-strong">
                 <Check class="size-3.5" aria-hidden="true" /> Connected
               </p>
             {:else}

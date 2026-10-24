@@ -12,6 +12,10 @@
   const s = $derived(t(messages, locale()));
   // Names the combobox after the visible heading — it has no <label> of its own.
   const headingId = $props.id();
+  // Per instance, derived from the same unique id, so the listbox and its rows never
+  // collide with another picker's on the page.
+  const listId = `${headingId}-list`;
+  const optionId = (i: number) => `${listId}-${i}`;
 
   // The account's preferred interface language: read from the resolved session
   // (no extra fetch — it rides GET /me already). Drives both LLM output
@@ -85,6 +89,8 @@
   });
 
   const shown = $derived(LANGUAGES.filter((l) => matches(l, query)));
+  // Focus stays on the input; the highlighted row is announced through this.
+  const activeDescendant = $derived(open && shown[activeIndex] ? optionId(activeIndex) : undefined);
 
   function openList() {
     query = '';
@@ -118,7 +124,13 @@
     }
   }
 
+  function scrollActiveIntoView() {
+    document.getElementById(optionId(activeIndex))?.scrollIntoView?.({ block: 'nearest' });
+  }
+
   function onKeydown(e: KeyboardEvent) {
+    // Mid-composition (CJK/IME) the arrows and Enter belong to the IME.
+    if (e.isComposing) return;
     if (!open) {
       if (e.key === 'ArrowDown' || e.key === 'Enter') {
         e.preventDefault();
@@ -129,9 +141,11 @@
     if (e.key === 'ArrowDown') {
       e.preventDefault();
       activeIndex = Math.min(activeIndex + 1, shown.length - 1);
+      scrollActiveIntoView();
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
       activeIndex = Math.max(activeIndex - 1, 0);
+      scrollActiveIntoView();
     } else if (e.key === 'Enter') {
       e.preventDefault();
       const active = shown[activeIndex];
@@ -187,40 +201,45 @@
         role="combobox"
         aria-labelledby={headingId}
         aria-expanded={open}
-        aria-controls="language-picker-list"
+        aria-controls={listId}
+        aria-autocomplete="list"
+        aria-activedescendant={activeDescendant}
         class="w-full rounded-md border border-border bg-background py-2 pl-9 pr-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       />
     </div>
 
     {#if open}
       <ul
-        id="language-picker-list"
+        id={listId}
         role="listbox"
         class="absolute z-10 mt-1 max-h-64 w-full overflow-auto rounded-md border border-border bg-popover shadow-lg"
       >
         {#each shown as lang, i (lang.code)}
-          <li>
-            <!-- mousedown (not click) so the pick lands before the input's blur closes the list -->
-            <button
-              type="button"
-              role="option"
-              aria-selected={lang.code === selected.code}
-              onmousedown={(e) => {
-                e.preventDefault();
-                void pick(lang);
-              }}
-              onmouseenter={() => (activeIndex = i)}
-              class="flex w-full items-center gap-3 px-3 py-2 text-left hover:bg-accent {i === activeIndex ? 'bg-accent' : ''}"
-            >
-              <CountryFlag code={lang.flag} label={lang.label} class="text-base" />
-              <span class="truncate text-sm font-medium">{lang.label}</span>
-              {#if lang.code === selected.code}
-                <Check class="ml-auto size-4 shrink-0 text-brand-strong" aria-hidden="true" />
-              {/if}
-            </button>
+          <!-- mousedown (not click) so the pick lands before the input's blur closes the list;
+               tabindex -1 keeps the rows out of the Tab order (the input owns the keyboard). -->
+          <li
+            id={optionId(i)}
+            role="option"
+            tabindex="-1"
+            aria-selected={i === activeIndex}
+            onmousedown={(e) => {
+              e.preventDefault();
+              void pick(lang);
+            }}
+            onmouseenter={() => (activeIndex = i)}
+            class="flex w-full cursor-pointer items-center gap-3 px-3 py-2 text-left hover:bg-accent {i === activeIndex ? 'bg-accent' : ''}"
+          >
+            <CountryFlag code={lang.flag} label={lang.label} class="text-base" />
+            <span class="truncate text-sm font-medium">{lang.label}</span>
+            {#if lang.code === selected.code}
+              <Check class="ml-auto size-4 shrink-0 text-brand-strong" aria-hidden="true" />
+              <span class="sr-only">{s.currentChoice}</span>
+            {/if}
           </li>
         {:else}
-          <li class="px-3 py-2 text-sm text-muted-foreground">{s.noMatches}</li>
+          <li role="option" aria-selected="false" aria-disabled="true" class="px-3 py-2 text-sm text-muted-foreground">
+            {s.noMatches}
+          </li>
         {/each}
       </ul>
     {/if}

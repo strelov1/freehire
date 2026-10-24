@@ -93,8 +93,14 @@
 {#if !isAuthenticated() || telegram.enabled}
   <div class="flex flex-col items-end gap-1">
     {#if isAuthenticated() && !telegram.linked}
-      <Button variant="outline" size="sm" href={resolve('/my/integrations')}>
+      <Button
+        variant="outline"
+        size="sm"
+        href={resolve('/my/integrations')}
+        aria-label="Connect Telegram to follow"
+      >
         <Bell class="size-4" aria-hidden="true" />
+        <!-- Icon-only on mobile; aria-label keeps the name the sm+ label shows. -->
         <span class="hidden sm:inline">Connect Telegram to follow</span>
       </Button>
     {:else}

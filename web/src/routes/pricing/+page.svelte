@@ -12,6 +12,7 @@
   import { Check } from '@lucide/svelte';
   import type { PageData } from './$types';
   import ApiPlans from '#lib/components/ApiPlans.svelte';
+  import { tablist } from '#lib/actions/tablist.js';
 
   const { data }: { data: PageData } = $props();
 
@@ -239,11 +240,18 @@
 
   {#if monthly && annual}
     <div class="flex justify-center">
-      <div class="inline-flex rounded-lg border border-border p-1" role="tablist">
+      <div
+        class="inline-flex rounded-lg border border-border p-1"
+        role="tablist"
+        aria-label="Billing interval"
+        use:tablist={interval}
+      >
         <button
           type="button"
           role="tab"
+          id="pricing-tab-month"
           aria-selected={interval === 'month'}
+          aria-controls="pricing-plans"
           class="rounded-md px-4 py-1.5 text-sm font-medium {interval === 'month'
             ? 'bg-primary text-primary-foreground'
             : 'text-muted-foreground'}"
@@ -254,7 +262,9 @@
         <button
           type="button"
           role="tab"
+          id="pricing-tab-year"
           aria-selected={interval === 'year'}
+          aria-controls="pricing-plans"
           class="rounded-md px-4 py-1.5 text-sm font-medium {interval === 'year'
             ? 'bg-primary text-primary-foreground'
             : 'text-muted-foreground'}"
@@ -331,8 +341,15 @@
 
 <!-- Three tracks only when there is a third card to fill one: a grid fixed at
      lg:grid-cols-3 with two children leaves the third an empty gap on wide screens instead
-     of the two cards sharing the row the way they already do at the sm breakpoint. -->
-<div class="grid gap-4 sm:grid-cols-2 {ultraChosen ? 'lg:grid-cols-3' : ''}">
+     of the two cards sharing the row the way they already do at the sm breakpoint.
+     The billing-interval tabs above (rendered only when both intervals are sold) control
+     the prices on these cards, so the grid is their tabpanel. -->
+<div
+  id="pricing-plans"
+  role={monthly && annual ? 'tabpanel' : undefined}
+  aria-labelledby={monthly && annual ? `pricing-tab-${interval}` : undefined}
+  class="grid gap-4 sm:grid-cols-2 {ultraChosen ? 'lg:grid-cols-3' : ''}"
+>
     <!-- Free -->
     <section class="flex flex-col gap-4 rounded-xl border border-border p-6">
       <div class="flex flex-col gap-1">

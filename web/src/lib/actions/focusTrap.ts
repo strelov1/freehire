@@ -19,6 +19,24 @@ export function nextTrapIndex(current: number, count: number, shift: boolean): n
   return null;
 }
 
+/** The element focus should go back to when an overlay closes: the opener, if it is one. A
+ *  mouse click in Safari focuses nothing, which leaves `<body>` — not a place to return to. */
+export function openerOf(active: Element | null): HTMLElement | null {
+  return active instanceof HTMLElement && active !== document.body ? active : null;
+}
+
+/**
+ * Return focus to the overlay's opener — unless the app has already moved it elsewhere.
+ * Runs in an attachment's cleanup, and Svelte detaches an `{#if}` branch's DOM before it
+ * runs that branch's teardowns: focus that was inside the overlay is on `<body>` by now,
+ * so `<body>` counts as "still ours", alongside anything still inside the node.
+ */
+export function restoreFocus(opener: HTMLElement | null, node: HTMLElement): void {
+  const active = document.activeElement;
+  const lost = !active || active === document.body || node.contains(active);
+  if (lost && opener?.isConnected) opener.focus();
+}
+
 const FOCUSABLE =
   'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
 
@@ -32,7 +50,7 @@ const FOCUSABLE =
  */
 export function focusTrap(): Attachment<HTMLElement> {
   return (node) => {
-    const trigger = document.activeElement as HTMLElement | null;
+    const opener = openerOf(document.activeElement);
 
     const focusables = () =>
       Array.from(node.querySelectorAll<HTMLElement>(FOCUSABLE)).filter(
@@ -59,9 +77,8 @@ export function focusTrap(): Attachment<HTMLElement> {
 
     return () => {
       node.removeEventListener('keydown', onKeydown);
-      // Restore focus to the opener, but only if focus is still inside the dialog —
-      // if the app already moved it elsewhere (e.g. a navigation), leave it be.
-      if (node.contains(document.activeElement)) trigger?.focus?.();
+      // Back to the opener, unless the app already moved focus elsewhere (a navigation).
+      restoreFocus(opener, node);
     };
   };
 }

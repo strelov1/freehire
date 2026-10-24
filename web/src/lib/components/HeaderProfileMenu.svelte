@@ -7,6 +7,7 @@
   import { promptSignIn } from '#lib/signin.js';
   import { openedOverlay, closedOverlay } from '#lib/headerOverlay.js';
   import { cn } from '#lib/ui/index.js';
+  import { menuNav } from '#lib/actions/menuNav.js';
   import { accountLinks } from '#lib/headerAccountLinks.js';
 
   // Desktop-only: the profile icon doubles as a second, independent dropdown
@@ -102,6 +103,8 @@
     {#if open}
       <div
         role="menu"
+        aria-label="Profile"
+        {@attach menuNav({ onclose: closeSelf })}
         class="absolute right-0 top-full z-50 mt-2 w-56 rounded-md border border-border bg-background py-1 shadow-lg"
       >
         <a href={resolve('/my/profile')} role="menuitem" onclick={() => (open = false)} class={rowBase} title={email}>

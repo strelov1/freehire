@@ -294,7 +294,7 @@
       </label>
       <label class="flex flex-col gap-1">
         <span class="text-sm font-medium">{s.profileIndustriesLabel}</span>
-        <TokenInput tokens={industries} onAdd={(v) => (industries = [...industries, v])} onRemove={(v) => (industries = industries.filter((x) => x !== v))} />
+        <TokenInput label={s.profileIndustriesLabel} tokens={industries} onAdd={(v) => (industries = [...industries, v])} onRemove={(v) => (industries = industries.filter((x) => x !== v))} />
       </label>
       <div class="flex flex-col gap-4 sm:flex-row">
         <label class="flex flex-1 flex-col gap-1">
@@ -426,7 +426,7 @@
           {#if !editingSlug}
             <label class="flex flex-col gap-1">
               <span class="text-sm font-medium">{s.fieldSkills}</span>
-              <TokenInput tokens={skills} onAdd={addSkill} onRemove={removeSkill} />
+              <TokenInput label={s.fieldSkills} tokens={skills} onAdd={addSkill} onRemove={removeSkill} />
             </label>
           {/if}
           {#if applyMode === 'freehire' && questionsLoaded}

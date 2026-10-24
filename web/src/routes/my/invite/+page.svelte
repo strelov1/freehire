@@ -52,9 +52,10 @@
     </p>
   {:else if summary}
     <section class="flex flex-col gap-2">
-      <span class="text-sm text-muted-foreground">Your link</span>
+      <label for="invite-link" class="text-sm text-muted-foreground">Your link</label>
       <div class="flex gap-2">
         <input
+          id="invite-link"
           type="text"
           readonly
           value={summary.link}

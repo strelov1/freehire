@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { resolve } from '$app/paths';
+  import { X } from '@lucide/svelte';
   import { dismissCliBanner, loadCliBannerDismissed, cliBannerDismissed } from '#lib/cliBanner.svelte.js';
 
   // A strip under the header pointing at /mcp (it pointed at /cli until the hosted MCP
@@ -46,9 +47,9 @@
         type="button"
         onclick={dismissCliBanner}
         aria-label="Dismiss"
-        class="shrink-0 text-muted-foreground transition-colors hover:text-foreground"
+        class="relative flex shrink-0 items-center justify-center text-muted-foreground transition-colors after:absolute after:-inset-1 hover:text-foreground"
       >
-        ✕
+        <X class="size-4" aria-hidden="true" />
       </button>
     </div>
   </div>

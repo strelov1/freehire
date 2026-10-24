@@ -93,8 +93,8 @@
     {#if hasMailbox}
       <div class="mt-1 flex items-center gap-1">
         <code class="truncate rounded bg-muted px-1.5 py-0.5 text-xs">{mailbox?.address}</code>
-        <button type="button" onclick={copyAddress} title={s.copyAddressTitle} class="shrink-0 text-muted-foreground hover:text-foreground">
-          <Copy class="h-3.5 w-3.5" />
+        <button type="button" onclick={copyAddress} title={s.copyAddressTitle} aria-label={s.copyAddressTitle} class="shrink-0 text-muted-foreground hover:text-foreground">
+          <Copy class="h-3.5 w-3.5" aria-hidden="true" />
         </button>
       </div>
       <p class="mt-2 text-xs text-muted-foreground">{s.mailboxHint}</p>

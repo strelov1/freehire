@@ -219,7 +219,7 @@
     {#each selectedChips as chip (chip.key)}
       <Chip variant={chip.exclude ? 'destructive' : 'brand'} class={`gap-1 py-1 pr-1.5 ${chip.exclude ? 'line-through' : ''}`}>
         {chip.label}
-        <button type="button" aria-label="Remove {chip.label}" onclick={chip.remove} class="opacity-70 transition-opacity hover:opacity-100">
+        <button type="button" aria-label="Remove {chip.label}" onclick={chip.remove} class="relative inline-flex opacity-70 transition-opacity after:absolute after:-inset-1.5 hover:opacity-100">
           <X class="size-3" />
         </button>
       </Chip>

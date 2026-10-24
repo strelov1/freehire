@@ -10,6 +10,7 @@
   import { lockScroll, unlockScroll } from '#lib/ui/index.js';
   import { openedOverlay, closedOverlay } from '#lib/headerOverlay.js';
   import { cn } from '#lib/ui/index.js';
+  import { menuNav } from '#lib/actions/menuNav.js';
   import BrandMark from './BrandMark.svelte';
   import GithubStars from './GithubStars.svelte';
   import NotificationBell from './NotificationBell.svelte';
@@ -251,6 +252,8 @@
   {#if open}
     <div
       role="menu"
+      aria-label="Menu"
+      {@attach menuNav({ onclose: closeSelf })}
       class="z-50 bg-background
              max-sm:fixed max-sm:inset-0 max-sm:flex max-sm:flex-col
              sm:absolute sm:right-0 sm:top-full sm:mt-2 sm:max-h-[80vh] sm:w-64 sm:overflow-y-auto sm:rounded-md sm:border sm:border-border sm:py-1 sm:shadow-lg"
@@ -263,6 +266,7 @@
         </span>
         <button
           type="button"
+          role="menuitem"
           aria-label="Close menu"
           onclick={() => (open = false)}
           class="inline-flex size-9 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"

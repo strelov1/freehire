@@ -107,7 +107,7 @@
             >
               {#if c.slug}<SkillIcon slug={c.slug} />{/if}
               {c.text}
-              <button type="button" aria-label="Remove {c.text}" onclick={c.remove} class="text-muted-foreground transition-colors hover:text-foreground">
+              <button type="button" aria-label="Remove {c.text}" onclick={c.remove} class="relative inline-flex text-muted-foreground transition-colors after:absolute after:-inset-1.5 hover:text-foreground">
                 <X class="size-3" />
               </button>
             </span>
