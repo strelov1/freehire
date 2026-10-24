@@ -1,0 +1,1717 @@
+{
+ "searchJobInput": {
+  "keyword": "",
+  "filters": [
+   {
+    "facetItem": 10,
+    "description": "Diretoria",
+    "descriptionUrl": null,
+    "subDescription": null,
+    "rangeStart": null,
+    "rangeEnd": null,
+    "ignoredDistance": null
+   }
+  ],
+  "page": 0,
+  "size": 15000,
+  "order": 0,
+  "distance": 100,
+  "exponentialDecay": null,
+  "dateDecay": null,
+  "facetItems": [],
+  "hasRole": false,
+  "isJobAlert": false,
+  "clusters": null
+ },
+ "jobPostingCollection": [
+  {
+   "salary": {
+    "min": null,
+    "max": null,
+    "format": null
+   },
+   "createdAtFormat": "1 dia",
+   "quantityFormat": "1 vaga",
+   "id": 0,
+   "referenceId": 11946733,
+   "source": "empregoscombr",
+   "title": "Tech Recruiter – Foco em Tecnologia da Informação",
+   "role": {
+    "id": 2089,
+    "name": "Diretor de Tecnologia da Informação",
+    "areaId": 18,
+    "area": "Informática/TI e Internet",
+    "hierarchicalLevelId": 1,
+    "hierarchicalLevel": "Diretoria"
+   },
+   "description": "Responsabilidades TécnicasConduzir processos seletivos completos (end-to-end) para posições de Tecnologia, incluindo: Desenvolvedores Backend/Frontend/Full Stack, Engenheiros de Software, Analistas de Dados, Cientistas de Dados, DevOps, QA, Infra, Segurança e Agilidade.Realizar sourcing avançado utilizando boolean search, X-Ray, GitHub sourcing e outras metodologias de busca ativa.Avaliar competências técnicas e funcionais, alinhando requisitos com stacks específicas (Java, C#, Python, React, Node.js, Cloud, Data, entre outras).Elaborar diagnósticos de mercado e manter pipelines contínuos de talentos.Acompanhar KPIs do funil de recrutamento (Time to Hire, Conversion Rate, SLA de requisição, entre outros).Atuar em parceria direta com Tech Leads, Squad Leaders e área de People Analytics.Contribuir com estratégias de Employer Branding voltadas ao público Tech.",
+   "quantity": 1,
+   "workplaceTypes": "Presencial",
+   "location": [
+    {
+     "address": "Chapecó",
+     "neighborhood": null,
+     "city": "Chapecó",
+     "state": "SC",
+     "stateAbbreviation": "SC",
+     "country": "br",
+     "geolocation": {
+      "postalCode": "-27.08466,-52.58769",
+      "city": null
+     },
+     "region": "Região do Oeste Catarinense"
+    }
+   ],
+   "company": {
+    "id": 180582,
+    "name": "Angellira",
+    "description": "Rastreamento via satélite.",
+    "industry": "Serviços",
+    "status": 50,
+    "group": {
+     "id": 180582,
+     "name": "Angellira"
+    },
+    "isPartner": false,
+    "photo": true
+   },
+   "business": {
+    "promoted": false,
+    "boostname": "BOOST_DEFAULT"
+   },
+   "status": 100,
+   "contractForm": "A Combinar",
+   "requiredQualification": " ",
+   "academicFormation": null,
+   "benefits": null,
+   "workTime": null,
+   "pcd": false,
+   "createdAt": "2026-10-22T10:05:10.347",
+   "lastUpdatedAt": "2026-10-22T10:05:10.347",
+   "score": 2.8381505,
+   "hasApplied": false,
+   "applyUrl": null,
+   "displayName": null,
+   "industries": null,
+   "algorithmType": null
+  },
+  {
+   "salary": {
+    "min": 5500,
+    "max": 7000,
+    "format": "R$ 5,500.00 - R$ 7,000.00"
+   },
+   "createdAtFormat": "7 dias",
+   "quantityFormat": "1 vaga",
+   "id": 0,
+   "referenceId": 11919284,
+   "source": "empregoscombr",
+   "title": "Business Partner de Gente",
+   "role": {
+    "id": 2931,
+    "name": "Business Partner",
+    "areaId": 1,
+    "area": "Administrativo/ Escritório",
+    "hierarchicalLevelId": 1,
+    "hierarchicalLevel": "Diretoria"
+   },
+   "description": "<h3>Sobre a vaga</h3><p><br></p><p>Buscamos um(a) Business Partner de Gente para atuar como parceiro(a) das lideranças, contribuindo para o desenvolvimento das equipes, fortalecimento da gestão de pessoas e alinhamento das práticas de Gente aos objetivos do negócio.</p><p>Esse profissional terá um papel próximo às áreas de atuação, apoiando os gestores na identificação de necessidades, construção de soluções e acompanhamento de indicadores, com foco em pessoas, resultados e desenvolvimento organizacional.</p><h3>Responsabilidades</h3><ul><li>Atuar como parceiro(a) das lideranças, compreendendo os desafios das áreas e propondo soluções de gestão de pessoas alinhadas à estratégia do negócio.</li><li>Conduzir diagnósticos de pessoas e estrutura organizacional, identificando oportunidades de desenvolvimento, dimensionamento e melhoria do ambiente.</li><li>Apoiar os gestores em temas relacionados à estrutura de equipes, movimentações internas, sucessão e desenvolvimento de talentos.</li><li>Conduzir e acompanhar processos de recrutamento e seleção, em parceria com as lideranças, garantindo alinhamento de perfil, competências e necessidades da área.</li><li>Apoiar a construção e o acompanhamento de planos de desenvolvimento individual (PDI) e ações de desenvolvimento de lideranças e equipes.</li><li>Acompanhar indicadores de Gente, como turnover, quadro de pessoal, movimentações e demais indicadores relevantes, propondo ações a partir das análises.</li><li>Atuar em iniciativas relacionadas ao clima organizacional, engajamento, cultura e experiência do colaborador.</li><li>Apoiar os gestores nas discussões sobre remuneração, reconhecimento e movimentações, considerando as políticas e diretrizes da empresa.</li><li>Participar de projetos e iniciativas de desenvolvimento organizacional, contribuindo para a evolução dos processos e práticas de gestão de pessoas.</li></ul><br><ul><li>Ensino superior completo em Psicologia, Administração, Gestão de Recursos Humanos ou áreas correlatas.</li><li>Experiência prévia em Recursos Humanos, preferencialmente em atuação como Business Partner ou Desenvolvimento Organizacional.</li><li>Conhecimento dos subsistemas de RH, especialmente recrutamento e seleção, desenvolvimento de pessoas, gestão de desempenho e clima organizacional.</li><li>Experiência no acompanhamento de indicadores de Gente e elaboração de análises para apoiar decisões.</li><li>Habilidade para atuar de forma consultiva junto a gestores e lideranças.</li><li>Conhecimento de ferramentas do Pacote Office, especialmente Excel e PowerPoint.</li></ul><br><ul><li>Experiência com ferramentas de avaliação comportamental, como PDA ou DISC.</li><li>Vivência com projetos de desenvolvimento organizacional e estruturação de equipes.</li><li>Conhecimento em People Analytics.</li></ul><br><br>",
+   "quantity": 1,
+   "workplaceTypes": "Presencial",
+   "location": [
+    {
+     "address": null,
+     "neighborhood": "Centro",
+     "city": "Ponta Grossa",
+     "state": "PR",
+     "stateAbbreviation": "PR",
+     "country": "br",
+     "geolocation": {
+      "postalCode": "-25.07616,-50.14626",
+      "city": null
+     },
+     "region": "Região do Centro Oriental Paranaense"
+    }
+   ],
+   "company": {
+    "id": 471693,
+    "name": "Empresa confidencial",
+    "description": null,
+    "industry": "Agro-Indústria/ Pecuária/ Pesca",
+    "status": 55,
+    "group": {
+     "id": 0,
+     "name": "Empresa confidencial"
+    },
+    "isPartner": true,
+    "photo": false
+   },
+   "business": {
+    "promoted": false,
+    "boostname": "BOOST_DEFAULT"
+   },
+   "status": 100,
+   "contractForm": "A Combinar",
+   "requiredQualification": null,
+   "academicFormation": null,
+   "benefits": null,
+   "workTime": null,
+   "pcd": false,
+   "createdAt": "2026-10-16T10:27:49.140",
+   "lastUpdatedAt": "2026-10-16T10:27:49.140",
+   "score": 2.2397232,
+   "hasApplied": false,
+   "applyUrl": null,
+   "displayName": "Abbler",
+   "industries": "",
+   "algorithmType": null
+  },
+  {
+   "salary": {
+    "min": null,
+    "max": null,
+    "format": null
+   },
+   "createdAtFormat": "8 dias",
+   "quantityFormat": "1 vaga",
+   "id": 0,
+   "referenceId": 11913939,
+   "source": "empregoscombr",
+   "title": "DIRETOR DE FINANÇAS E OPERAÇÕES",
+   "role": {
+    "id": 808,
+    "name": "Diretor comercial",
+    "areaId": 45,
+    "area": "Comercial e Vendas",
+    "hierarchicalLevelId": 1,
+    "hierarchicalLevel": "Diretoria"
+   },
+   "description": "DIRETOR DE FINANÇAS E OPERAÇÕES EMPRESA MULTINACIONAL Salário R$ 25.000,00 (negociável) + Auxilio Transporte (R$ 470,00) + Vale Refeição (R$ 35,53/dia) + Plano de Saúde + Seguro de Vida. . LOCAL: Jardim Primavera Piraquara . REQUISITOS: Ensino superior completo em Ciências Contábeis, Finanças, Administração ou área relacionada. Experiência nas áreas de contabilidade, controladoria, finanças ou gestão financeira e administrativa. Conhecimentos práticos sobre compras, estoque, atendimento ao cliente ou operações de distribuição. Necessário Inglês profissional (irá trabalhar em contato com a área financeira dos Estados Unidos) Perfil Administrador. Será um DIFERENCIAL experiência em empresas multinacionais ou nos segmentos industrial, de distribuição ou de projetos. Disponibilidade para treinamento de 02 semanas na Florida. Necessário passaporte. . ATIVIDADES: Liderar a gestão financeira, administrativa e operacional da unidade brasileira, atuando como elo entre a equipe local e área financeiro dos EUA e organização comercial LATAM. Manter registros contábeis precisos e atualizados no sistema ERP, fortalecer os controles relacionados a compras, estoque, atendimento ao cliente e atividades administrativas, preparar conciliações contábeis, demonstrativos de apoio e documentos relacionados ao fechamento mensal. Supervisionar contas a pagar, contas a receber, caixa, compras, estoque e atendimento ao cliente. . HORARIO: A combinar. RH CURITIBA RECRUTAMENTO E SELEÇÃO EM CURITIBA Horário A combinar.",
+   "quantity": 1,
+   "workplaceTypes": "Presencial",
+   "location": [
+    {
+     "address": "Piraquara",
+     "neighborhood": null,
+     "city": "Piraquara",
+     "state": "PR",
+     "stateAbbreviation": "PR",
+     "country": "br",
+     "geolocation": {
+      "postalCode": "-25.51903,-49.0611",
+      "city": null
+     },
+     "region": "Região Metropolitana de Curitiba"
+    }
+   ],
+   "company": {
+    "id": 457649,
+    "name": "Rh curitiba",
+    "description": "Seleção e agenciamento de mão-de-obra",
+    "industry": "Recursos Humanos/ Recrutamento e seleção",
+    "status": 50,
+    "group": {
+     "id": 457649,
+     "name": "Rh curitiba"
+    },
+    "isPartner": false,
+    "photo": true
+   },
+   "business": {
+    "promoted": false,
+    "boostname": "BOOST_DEFAULT"
+   },
+   "status": 100,
+   "contractForm": "A Combinar",
+   "requiredQualification": " ",
+   "academicFormation": null,
+   "benefits": null,
+   "workTime": null,
+   "pcd": false,
+   "createdAt": "2026-10-15T12:32:21.057",
+   "lastUpdatedAt": "2026-10-15T12:32:21.057",
+   "score": 2.1483712,
+   "hasApplied": false,
+   "applyUrl": null,
+   "displayName": null,
+   "industries": null,
+   "algorithmType": null
+  },
+  {
+   "salary": {
+    "min": null,
+    "max": null,
+    "format": null
+   },
+   "createdAtFormat": "9 dias",
+   "quantityFormat": "1 vaga",
+   "id": 0,
+   "referenceId": 11911079,
+   "source": "empregoscombr",
+   "title": "Diretor Administrativo Financeiro",
+   "role": {
+    "id": 809,
+    "name": "Diretor administrativo e financeiro",
+    "areaId": 16,
+    "area": "Financeiro/ Contabilidade/ Economia",
+    "hierarchicalLevelId": 1,
+    "hierarchicalLevel": "Diretoria"
+   },
+   "description": "Estamos conduzindo processo seletivo para a posição de Diretor(a) Administrativo-Financeiro, para atuar em um grupo empresarial com operações distribuídas entre diferentes unidades e CNPJs, que busca evoluir sua estrutura de gestão, aprimorar os mecanismos de governança e fortalecer a integração entre as áreas corporativas. Principais responsabilidades: Coordenar a estratégia das áreas Financeira, Contábil, Fiscal, Compras promovendo alinhamento entre as lideranças e integração dos processos corporativos; Assegurar a consistência das informações contábeis e fiscais, bem como a eficiência dos processos de fechamento e consolidação dos resultados; Direcionar o planejamento financeiro do grupo, abrangendo gestão de caixa, tesouraria, capital de giro e projeções financeiras para subsidiar decisões de negócio; Implementar diretrizes e modelos de gestão que promovam uniformidade, eficiência e controle nas rotinas administrativas e financeiras das diferentes unidades; Estruturar mecanismos de acompanhamento de desempenho, com indicadores, análises gerenciais e planos de melhoria alinhados aos objetivos corporativos; Promover a modernização dos processos e a integração de sistemas e informações, incentivando soluções que ampliem a produtividade e a qualidade da gestão; Subsidiar a Presidência com informações financeiras, análises de desempenho, avaliações de riscos e recomendações que apoiem o planejamento e as decisões estratégicas; Consolidar práticas de governança, gestão de riscos e controles internos, desenvolvendo uma estrutura de gestão sustentável, com processos bem definidos e lideranças preparadas para conduzir suas áreas com autonomia. Tem interesse? É só conferir os requisitos da oportunidade e cadastrar o currículo para participar do processo! Não é a sua área? Que tal compartilhar, quem sabe não é a oportunidade que alguém está esperando",
+   "quantity": 1,
+   "workplaceTypes": "Presencial",
+   "location": [
+    {
+     "address": "Manaus",
+     "neighborhood": null,
+     "city": "Manaus",
+     "state": "AM",
+     "stateAbbreviation": "AM",
+     "country": "br",
+     "geolocation": {
+      "postalCode": "-3.06847,-60.0477",
+      "city": null
+     },
+     "region": "Região do Centro Amazonense"
+    }
+   ],
+   "company": {
+    "id": 435714,
+    "name": "M2 Consultoria",
+    "description": "Atua com fornecimento e gestão de recursos humanos para terceiros.",
+    "industry": "Recursos Humanos/ Recrutamento e seleção",
+    "status": 50,
+    "group": {
+     "id": 435714,
+     "name": "M2 Consultoria"
+    },
+    "isPartner": false,
+    "photo": true
+   },
+   "business": {
+    "promoted": false,
+    "boostname": "BOOST_DEFAULT"
+   },
+   "status": 100,
+   "contractForm": "A Combinar",
+   "requiredQualification": " ",
+   "academicFormation": null,
+   "benefits": null,
+   "workTime": null,
+   "pcd": false,
+   "createdAt": "2026-10-14T15:27:48.593",
+   "lastUpdatedAt": "2026-10-14T15:27:48.593",
+   "score": 2.060556,
+   "hasApplied": false,
+   "applyUrl": null,
+   "displayName": null,
+   "industries": null,
+   "algorithmType": null
+  },
+  {
+   "salary": {
+    "min": 0,
+    "max": 6484,
+    "format": "R$ 0.00 - R$ 6,484.00"
+   },
+   "createdAtFormat": "23 dias",
+   "quantityFormat": "1 vaga",
+   "id": 0,
+   "referenceId": 11872625,
+   "source": "empregoscombr",
+   "title": "Business Partner",
+   "role": {
+    "id": 2931,
+    "name": "Business Partner",
+    "areaId": 1,
+    "area": "Administrativo/ Escritório",
+    "hierarchicalLevelId": 1,
+    "hierarchicalLevel": "Diretoria"
+   },
+   "description": "<h3><br></h3><h3>Responsabilidades</h3><p><br></p><ul><li>Atuar como parceiro estratégico das lideranças na gestão de pessoas. </li><li>Acompanhar as demandas das diferentes operações e localidades.</li><li>Apoiar as lideranças na condução de conflitos e situações relacionadas às equipes.</li><li>Atuar na transformação e desenvolvimento das lideranças.</li><li>Orientar gestores quanto às melhores práticas de gestão de pessoas. </li><li>Acompanhar indicadores de RH e apoiar a análise dos resultados. </li><li>Garantir a execução dos processos e rotinas de RH junto à operação. </li><li>Acompanhar e fazer rodar os processos estabelecidos pela área.</li><li>Atuar próximo às equipes e lideranças, entendendo as necessidades da operação. </li><li>Apoiar demandas relacionadas a Departamento Pessoal, especialmente nos aspectos mais burocráticos e operacionais. </li><li>Fazer a interface entre a operação e as demais áreas de Recursos Humanos. </li><li>Acompanhar movimentações e demandas relacionadas às diferentes localidades da operação.</li></ul><br><ul><li class=\"ql-align-justify\">Ensino superior completo em Psicologia, Administração, Gestão de Recursos Humanos ou áreas afins.</li><li class=\"ql-align-justify\">Pós-graduação em Gestão de Pessoas, <em>People Analytics</em> ou áreas correlatas será considerada diferencial.</li><li>Domínio da legislação trabalhista, CLT, eSocial e rotinas de departamento pessoal.</li><li>Conhecimento em acordos e convenções coletivas e relações sindicais.</li><li>Domínio de ferramentas de <em>People Analytics</em>, Excel/planilhas avançadas e sistemas de RH (ERP).</li></ul><br><ul><li>Vivência em operações de filial, indústria, varejo ou distribuição será considerada diferencial.</li><li>Proficiência no pacote Office e Google Workspace. Conhecimento em metodologias ágeis e gestão de projetos serão considerados diferenciais.</li></ul><br><br>",
+   "quantity": 1,
+   "workplaceTypes": "Presencial",
+   "location": [
+    {
+     "address": null,
+     "neighborhood": null,
+     "city": "Caruaru",
+     "state": "PE",
+     "stateAbbreviation": "PE",
+     "country": "br",
+     "geolocation": {
+      "postalCode": "-8.2853,-35.96529",
+      "city": null
+     },
+     "region": "Região do Agreste Pernambucano"
+    }
+   ],
+   "company": {
+    "id": 471693,
+    "name": "Camarmo Recrutamento e Seleção",
+    "description": null,
+    "industry": "Agro-Indústria/ Pecuária/ Pesca",
+    "status": 55,
+    "group": {
+     "id": 0,
+     "name": "Camarmo Recrutamento e Seleção"
+    },
+    "isPartner": true,
+    "photo": false
+   },
+   "business": {
+    "promoted": false,
+    "boostname": "BOOST_DEFAULT"
+   },
+   "status": 100,
+   "contractForm": "A Combinar",
+   "requiredQualification": null,
+   "academicFormation": null,
+   "benefits": null,
+   "workTime": null,
+   "pcd": false,
+   "createdAt": "2026-09-30T22:59:59.833",
+   "lastUpdatedAt": "2026-09-30T22:59:59.833",
+   "score": 2,
+   "hasApplied": false,
+   "applyUrl": null,
+   "displayName": null,
+   "industries": null,
+   "algorithmType": null
+  },
+  {
+   "salary": {
+    "min": 0,
+    "max": 0,
+    "format": "R$ 0.00 - R$ 0.00"
+   },
+   "createdAtFormat": "29 dias",
+   "quantityFormat": "1 vaga",
+   "id": 0,
+   "referenceId": 11859096,
+   "source": "empregoscombr",
+   "title": "Business Partner",
+   "role": {
+    "id": 2931,
+    "name": "Business Partner",
+    "areaId": 1,
+    "area": "Administrativo/ Escritório",
+    "hierarchicalLevelId": 1,
+    "hierarchicalLevel": "Diretoria"
+   },
+   "description": "<p>Responsável pelo Recrutamento e Seleção internacional das filiais, atuando na condução de processos seletivos e suporte às lideranças; atuação nos processos de T&amp;D, Gestão de Desempenho, Sucessão, Clima, Engajamento, Administração de Pessoal e Benefícios; acompanhamento de indicadores e fortalecimento da cultura organizacional; apoio à expansão e estruturação das operações internacionais e à integração entre equipes nacionais e internacionais.</p><p><br><strong>Formação:</strong> Ensino Superior completo em Psicologia, Administração, RH ou áreas correlatas. Pós-graduação em Gestão de Pessoas, DHO, Psicologia Organizacional, Business Partner ou áreas afins.</p><p><br><strong>Requisito obrigatório: </strong>Inglês avançado e disponibilidade para viagens.</p>",
+   "quantity": 1,
+   "workplaceTypes": "Presencial",
+   "location": [
+    {
+     "address": "Avenida São Francisco",
+     "neighborhood": "Chácara Primavera I",
+     "city": "Pouso Alegre",
+     "state": "MG",
+     "stateAbbreviation": "MG",
+     "country": "br",
+     "geolocation": {
+      "postalCode": "-22.2240895,-45.9352995",
+      "city": null
+     },
+     "region": "Região do Sul/sudoeste de Minas"
+    }
+   ],
+   "company": {
+    "id": 464336,
+    "name": "Gohunt rh",
+    "description": "Atua com atividades de RH.",
+    "industry": "Recursos Humanos/ Recrutamento e seleção",
+    "status": 50,
+    "group": {
+     "id": 464336,
+     "name": "Gohunt rh"
+    },
+    "isPartner": false,
+    "photo": true
+   },
+   "business": {
+    "promoted": true,
+    "boostname": "BOOST_CLIENT_VP"
+   },
+   "status": 100,
+   "contractForm": "A Combinar",
+   "requiredQualification": null,
+   "academicFormation": null,
+   "benefits": null,
+   "workTime": null,
+   "pcd": false,
+   "createdAt": "2026-09-24T16:23:17.403",
+   "lastUpdatedAt": "2026-09-24T16:23:17.403",
+   "score": 2,
+   "hasApplied": false,
+   "applyUrl": null,
+   "displayName": null,
+   "industries": null,
+   "algorithmType": null
+  },
+  {
+   "salary": {
+    "min": 10000,
+    "max": 11500,
+    "format": "R$ 10,000.00 - R$ 11,500.00"
+   },
+   "createdAtFormat": "29 dias",
+   "quantityFormat": "1 vaga",
+   "id": 0,
+   "referenceId": 11859225,
+   "source": "empregoscombr",
+   "title": "Especialista de T&D e Business partner",
+   "role": {
+    "id": 2931,
+    "name": "Business Partner",
+    "areaId": 1,
+    "area": "Administrativo/ Escritório",
+    "hierarchicalLevelId": 1,
+    "hierarchicalLevel": "Diretoria"
+   },
+   "description": "<p><strong>Especialista de Desenvolvimento Humano e Organizacional (T&amp;D e BP)</strong></p><p>Estamos em busca de um(a) profissional para atuar de forma estratégica no desenvolvimento de pessoas e no suporte às lideranças, contribuindo para o fortalecimento da cultura organizacional e para os resultados do negócio.</p><p>Será responsável por diagnosticar necessidades de desenvolvimento, estruturar e conduzir programas de capacitação, apoiar a evolução das lideranças e atuar como parceiro(a) das áreas clientes, apoiando decisões relacionadas à gestão de pessoas, desempenho, clima, engajamento e desenvolvimento organizacional.</p><p><strong>Principais Responsabilidades</strong></p><ul><li><p>Atuar como Business Partner das áreas clientes, apoiando líderes na gestão de pessoas, performance, engajamento e desenvolvimento de equipes.</p></li><li><p>Estruturar, implementar e acompanhar programas de desenvolvimento de liderança, contribuindo para a formação de gestores e futuras lideranças.</p></li><li><p>Desenvolver trilhas de aprendizagem e programas de capacitação alinhados às necessidades do negócio.</p></li><li><p>Conduzir ações de avaliação de desempenho, PDI, sucessão e gestão de talentos.</p></li><li><p>Analisar indicadores de pessoas, propondo ações que contribuam para o engajamento, retenção e performance.</p></li><li><p>Apoiar movimentos de transformação cultural e fortalecimento da experiência do colaborador.</p></li><li><p>Atuar em parceria com recrutamento e seleção, apoiando mapeamentos de perfil e posições estratégicas quando necessário.</p></li><li><p>Conduzir programas de Team Building,</p></li><li><p>Liderar projetos de formação e capacitação para equipes comerciais, apoiando o desenvolvimento de competências técnicas e comportamentais.</p></li><li><p>Planejar e coordenar eventos corporativos de desenvolvimento, incluindo Convenções Comerciais, workshops, encontros de liderança e fóruns de gestão.</p></li><li><p>Conduzir projetos de Desenvolvimento Humano e Organizacional alinhados à estratégia e cultura da companhia.</p></li><li><p>Gestão e acompanhamento de metas junto as áreas.</p></li></ul><p>·&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Modelar programas de Desenvolvimento e Treinamentos Obrigatórios</p><p>·&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Matriz de desempenho, avaliação de potencial</p><p>·&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Atuar como BP nos programas de carreira e sucessão de profissionais</p><p>·&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Mapear talento e estruturar planos de sucessão</p><p>·&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Apoiar programas de Sustentabilidade e ESG</p><p>·&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Conduzir programas de clima e propor planos de ação</p><p>&nbsp;</p><p><strong>Requisitos</strong></p><ul><li><p>Experiência consolidada em Treinamento &amp; Desenvolvimento e/ou Desenvolvimento Organizacional.</p></li><li><p>Vivência atuando como Business Partner junto a lideranças.</p></li><li><p>Conhecimento em avaliação de desempenho, gestão de talentos, sucessão e desenvolvimento organizacional.</p></li><li><p>Capacidade de atuar de forma consultiva, influenciando e apoiando diferentes níveis de liderança.</p></li><li><p>Experiência em recrutamento e seleção.</p></li></ul><p><strong>Competências desejadas</strong></p><ul><li><p>Influência e relacionamento interpessoal.</p></li><li><p>Comunicação e facilitação de grupos.</p></li><li><p>Planejamento e gestão de projetos.</p></li></ul><p>&nbsp;</p><p>Local de Trabalho: São Paulo / Zona Norte</p><p>Tipo contrato: CLT</p><p>Home office: 4feria e 6Feira</p><p></p>",
+   "quantity": 1,
+   "workplaceTypes": "Remoto",
+   "location": [
+    {
+     "address": null,
+     "neighborhood": null,
+     "city": "São Paulo",
+     "state": "SP",
+     "stateAbbreviation": "SP",
+     "country": "br",
+     "geolocation": {
+      "postalCode": "-23.550619,-46.6362045",
+      "city": null
+     },
+     "region": "Região Metropolitana de São Paulo"
+    }
+   ],
+   "company": {
+    "id": 471693,
+    "name": "FRANCAL FEIRAS E EMPREENDIMENTOS LTDA",
+    "description": null,
+    "industry": "Agro-Indústria/ Pecuária/ Pesca",
+    "status": 55,
+    "group": {
+     "id": 0,
+     "name": "FRANCAL FEIRAS E EMPREENDIMENTOS LTDA"
+    },
+    "isPartner": true,
+    "photo": false
+   },
+   "business": {
+    "promoted": false,
+    "boostname": "BOOST_DEFAULT"
+   },
+   "status": 100,
+   "contractForm": "A Combinar",
+   "requiredQualification": null,
+   "academicFormation": null,
+   "benefits": null,
+   "workTime": null,
+   "pcd": false,
+   "createdAt": "2026-09-24T19:09:14.810",
+   "lastUpdatedAt": "2026-09-24T19:09:14.810",
+   "score": 2,
+   "hasApplied": false,
+   "applyUrl": null,
+   "displayName": null,
+   "industries": null,
+   "algorithmType": null
+  },
+  {
+   "salary": {
+    "min": 0,
+    "max": 0,
+    "format": "R$ 0.00 - R$ 0.00"
+   },
+   "createdAtFormat": "29 dias",
+   "quantityFormat": "1 vaga",
+   "id": 0,
+   "referenceId": 11858040,
+   "source": "empregoscombr",
+   "title": "Diretor Hospitalar - Camboriú",
+   "role": {
+    "id": 3272,
+    "name": "Diretor Hospitalar",
+    "areaId": 25,
+    "area": "Saúde, Trat.Terapêuticos e Hospitalar",
+    "hierarchicalLevelId": 1,
+    "hierarchicalLevel": "Diretoria"
+   },
+   "description": "<h3>Sobre a vaga</h3><p>Buscamos um <strong>Diretor Hospitalar</strong> para liderar a gestão estratégica, operacional e financeira de um hospital de referência na região de Camboriú. O candidato ideal atuará em estreita colaboração com a alta administração, equipes médicas e de apoio, e órgãos reguladores, assegurando excelência nos serviços de saúde e qualidade de atendimento.</p><h3>Responsabilidades</h3><ul><li>Planejar e conduzir a <strong>gestão estratégica e operacional do hospital</strong>, definindo metas, prioridades e planos de ação alinhados aos objetivos institucionais.</li><li>Liderar e integrar as <strong>áreas assistenciais, administrativas e de apoio</strong>, acompanhando o desempenho das lideranças e promovendo o desenvolvimento das equipes.</li><li>Gerenciar <strong>recursos humanos, financeiros, tecnológicos e de infraestrutura</strong>, buscando eficiência operacional, sustentabilidade e otimização de custos.</li><li>Acompanhar <strong>indicadores de desempenho</strong>, como qualidade assistencial, produtividade, custos, ocupação, satisfação e segurança do paciente, estabelecendo ações de melhoria.</li><li>Garantir o cumprimento das <strong>legislações, normas, políticas, protocolos e contratos</strong>, incluindo requisitos dos órgãos reguladores e fiscalizadores.</li><li>Promover a <strong>qualidade, segurança do paciente e melhoria contínua dos processos</strong>, atuando na gestão de riscos e na resolução de situações críticas.</li><li>Acompanhar contratos, fornecedores e parceiros estratégicos, buscando qualidade, eficiência e oportunidades de inovação e desenvolvimento institucional.</li><li>Representar o hospital perante <strong>órgãos públicos, parceiros, instituições e comunidade</strong>, fortalecendo relações institucionais.</li><li>Fortalecer a <strong>cultura organizacional</strong>, a integração entre as áreas, o desenvolvimento das lideranças e a experiência do paciente.</li></ul><p><br></p><h3><br></h3><br><ul><li><strong>Graduação</strong> em Administração, Gestão Hospitalar ou áreas correlatas</li><li>Experiência consolidada em <strong>gestão hospitalar</strong> ou em serviços de saúde</li><li>Conhecimento profundo das <strong>normas regulatórias</strong> (ANVISA, ISO, SUS)</li><li>Habilidades de <strong>liderança</strong> e gestão de equipes multidisciplinares</li><li>Capacidade de <strong>planejamento estratégico</strong> e tomada de decisão baseada em dados</li><li>Domínio de <strong>gestão financeira</strong> e controle de custos em ambiente hospitalar</li></ul><br><ul><li>Experiência com <strong>prontuário eletrônico (EMR)</strong> e sistemas de gestão hospitalar</li><li>Experiência em hospitais de alta complexidade ou em redes de saúde</li><li>Habilidade em <strong>negociação com órgãos reguladores e parceiros</strong></li></ul><br><br><p>Somos uma unidade de pronto atendimento que oferece cuidados de saúde de alta qualidade na região de Camboriú.</p><p>Somos reconhecidos pela <em>atuação rápida e eficiente</em>, com uma equipe multidisciplinar comprometida com a saúde e bem-estar dos pacientes.</p><p>?? <strong>Ambiente de trabalho colaborativo</strong></p><p>?? <strong>Oportunidades de desenvolvimento profissional</strong></p><p>?? <strong>Valorizamos a saúde e a segurança de nossos colaboradores</strong></p><p>?? Venha fazer parte de uma equipe que faz a diferença na vida das pessoas!</p>",
+   "quantity": 1,
+   "workplaceTypes": "Presencial",
+   "location": [
+    {
+     "address": null,
+     "neighborhood": null,
+     "city": "Camboriú",
+     "state": "SC",
+     "stateAbbreviation": "SC",
+     "country": "br",
+     "geolocation": {
+      "postalCode": "-27.02457,-48.65142",
+      "city": null
+     },
+     "region": "Regiao do Vale do Itajaí"
+    }
+   ],
+   "company": {
+    "id": 471693,
+    "name": "Doc CSC",
+    "description": null,
+    "industry": "Agro-Indústria/ Pecuária/ Pesca",
+    "status": 55,
+    "group": {
+     "id": 0,
+     "name": "Doc CSC"
+    },
+    "isPartner": true,
+    "photo": false
+   },
+   "business": {
+    "promoted": false,
+    "boostname": "BOOST_DEFAULT"
+   },
+   "status": 100,
+   "contractForm": "A Combinar",
+   "requiredQualification": null,
+   "academicFormation": null,
+   "benefits": null,
+   "workTime": null,
+   "pcd": false,
+   "createdAt": "2026-09-24T10:01:51.507",
+   "lastUpdatedAt": "2026-09-24T10:01:51.507",
+   "score": 2,
+   "hasApplied": false,
+   "applyUrl": null,
+   "displayName": null,
+   "industries": null,
+   "algorithmType": null
+  },
+  {
+   "salary": {
+    "min": 0,
+    "max": 0,
+    "format": "R$ 0.00 - R$ 0.00"
+   },
+   "createdAtFormat": "14 dias",
+   "quantityFormat": "1 vaga",
+   "id": 0,
+   "referenceId": 11898820,
+   "source": "empregoscombr",
+   "title": "Diretor de Arte",
+   "role": {
+    "id": 807,
+    "name": "Diretor de arte",
+    "areaId": 23,
+    "area": "Publicidade e Propaganda",
+    "hierarchicalLevelId": 1,
+    "hierarchicalLevel": "Diretoria"
+   },
+   "description": "<p>Buscamos um Diretor de Arte dinâmico, analítico e criativo para liderar nossas estratégias de mercado e comunicação visual. O profissional será responsável por transformar briefings complexos em soluções de negócios de alto impacto, elevando a visibilidade e a atratividade da marca junto ao público-alvo, além de orientar tecnicamente a equipe interna.</p><p> Principais Responsabilidades</p><ul><li><p>Estratégia e Negócios: Atuar com alta capacidade analítica para interpretar briefings complexos, propondo estratégias de mercado, planos de divulgação e ações que aumentem a visibilidade e a atratividade da marca.</p></li><li><p>Gestão e Desenvolvimento: Oferecer apoio técnico, mentoria e direcionamento prático para os membros juniores da equipe, fomentando um ambiente colaborativo.</p></li><li><p>Gestão de Projetos: Garantir a qualidade das entregas, o cumprimento de prazos e a consistência estética/conceitual de todas as campanhas e materiais.</p></li></ul><p>Requisitos Técnicos (Obrigatórios)</p><ul><li><p>Formação superior completa em Marketing, Publicidade e Propaganda, Design Gráfico, Comunicação Social ou áreas correlatas.</p></li><li><p>Domínio avançado das ferramentas do Adobe Pack (Illustrator, Photoshop e InDesign).</p></li><li><p>Forte ênfase na qualidade do portfólio e sólida capacidade de resolução de problemas práticos de design e comunicação.</p></li></ul><p>Diferenciais Desejáveis</p><ul><li><p>Conhecimento em ferramentas audiovisuais (edição de vídeo, modelagem 3D e <em>motion graphics</em>).</p></li></ul><p>Competências Comportamentais (Soft Skills)</p><ul><li><p>Perfil hands-on (mão na massa): Capacidade de transitar entre o pensamento estratégico e a execução técnica.</p></li><li><p>Comunicação assertiva e empatia: Essencial para o alinhamento com <em>stakeholders</em> e desenvolvimento da equipe júnior.</p></li><li><p>Organização e resiliência: Habilidade para gerenciar múltiplos projetos simultâneos em um ambiente presencial de ritmo acelerado.</p></li></ul><p></p>",
+   "quantity": 1,
+   "workplaceTypes": "Presencial",
+   "location": [
+    {
+     "address": null,
+     "neighborhood": null,
+     "city": "Barueri",
+     "state": "SP",
+     "stateAbbreviation": "SP",
+     "country": "br",
+     "geolocation": {
+      "postalCode": "-23.50685,-46.8792",
+      "city": null
+     },
+     "region": "Região Metropolitana de São Paulo"
+    }
+   ],
+   "company": {
+    "id": 471693,
+    "name": "Acelera RH",
+    "description": null,
+    "industry": "Agro-Indústria/ Pecuária/ Pesca",
+    "status": 55,
+    "group": {
+     "id": 0,
+     "name": "Acelera RH"
+    },
+    "isPartner": true,
+    "photo": false
+   },
+   "business": {
+    "promoted": false,
+    "boostname": "BOOST_DEFAULT"
+   },
+   "status": 100,
+   "contractForm": "A Combinar",
+   "requiredQualification": null,
+   "academicFormation": null,
+   "benefits": null,
+   "workTime": null,
+   "pcd": false,
+   "createdAt": "2026-10-09T12:22:15.453",
+   "lastUpdatedAt": "2026-10-09T12:22:15.453",
+   "score": 2,
+   "hasApplied": false,
+   "applyUrl": null,
+   "displayName": null,
+   "industries": null,
+   "algorithmType": null
+  },
+  {
+   "salary": {
+    "min": 0,
+    "max": 0,
+    "format": "R$ 0.00 - R$ 0.00"
+   },
+   "createdAtFormat": "15 dias",
+   "quantityFormat": "1 vaga",
+   "id": 0,
+   "referenceId": 11893195,
+   "source": "empregoscombr",
+   "title": "Business Partner Financeiro",
+   "role": {
+    "id": 2931,
+    "name": "Business Partner",
+    "areaId": 1,
+    "area": "Administrativo/ Escritório",
+    "hierarchicalLevelId": 1,
+    "hierarchicalLevel": "Diretoria"
+   },
+   "description": "<ul><li>* Acompanhar e controlar as contas pessoais e empresariais do cliente;</li><li>* Controlar contas a pagar e a receber, vencimentos e compromissos financeiros;</li><li>* Acompanhar fluxo de caixa, saldos, receitas e despesas;</li><li>* Realizar conciliações bancárias e conferência das movimentações financeiras;</li><li>* Organizar pagamentos, comprovantes, documentos e demais informações financeiras;</li><li>* Elaborar e acompanhar planilhas, controles, relatórios e indicadores financeiros;</li><li>* Analisar despesas, custos, orçamento e suas respectivas variações;</li><li>* Apoiar a elaboração e o acompanhamento do orçamento e do planejamento financeiro;</li><li>* Consolidar informações financeiras dos diferentes negócios, proporcionando uma visão integrada da situação financeira;</li><li>* Fazer interface com contabilidade, bancos, fornecedores e demais parceiros, quando necessário;</li><li>* Apoiar o cliente com informações, análises e dados para tomada de decisões;</li><li>* Identificar oportunidades de melhoria nos controles e processos financeiros;</li><li>* Manter a organização, segurança e confidencialidade das informações pessoais e empresariais.</li></ul><br><ul><li>* Ensino superior completo em Administração, Ciências Contábeis, Economia, Gestão Financeira ou áreas correlatas;</li><li>* Experiência anterior na área financeira, preferencialmente com atuação generalista;</li><li>* Experiência com contas a pagar e receber, fluxo de caixa, conciliação bancária, orçamento e controles financeiros;</li><li>* Excel avançado;</li><li>* Capacidade analítica e facilidade para trabalhar com números, relatórios e indicadores;</li><li>* Excelente organização e atenção aos detalhes;</li><li>* Boa comunicação e facilidade para lidar diretamente com o cliente;</li><li>* Perfil proativo, responsável e resolutivo;</li><li>* Alto grau de discrição e confidencialidade;</li><li>* Flexibilidade de horário, considerando a dinâmica e as necessidades da posição;</li><li>* Disponibilidade para viagens a Sobral/CE, especialmente nos primeiros três meses.</li></ul><br><ul><li>* Conhecimento em Power BI;</li><li>* Experiência acompanhando simultaneamente finanças pessoais e empresariais;</li><li>* Vivência com consolidação de informações financeiras de diferentes negócios;</li><li>* Experiência em planejamento e análise financeira.</li></ul><br><br>",
+   "quantity": 1,
+   "workplaceTypes": "Híbrido",
+   "location": [
+    {
+     "address": null,
+     "neighborhood": null,
+     "city": "Fortaleza",
+     "state": "CE",
+     "stateAbbreviation": "CE",
+     "country": "br",
+     "geolocation": {
+      "postalCode": "-3.84039,-38.52393",
+      "city": null
+     },
+     "region": "Regiao Metropolitana de Fortaleza"
+    }
+   ],
+   "company": {
+    "id": 471693,
+    "name": "Aline Oliveira",
+    "description": null,
+    "industry": "Agro-Indústria/ Pecuária/ Pesca",
+    "status": 55,
+    "group": {
+     "id": 0,
+     "name": "Aline Oliveira"
+    },
+    "isPartner": true,
+    "photo": false
+   },
+   "business": {
+    "promoted": false,
+    "boostname": "BOOST_DEFAULT"
+   },
+   "status": 100,
+   "contractForm": "A Combinar",
+   "requiredQualification": null,
+   "academicFormation": null,
+   "benefits": null,
+   "workTime": null,
+   "pcd": false,
+   "createdAt": "2026-10-08T10:37:48.787",
+   "lastUpdatedAt": "2026-10-08T10:37:48.787",
+   "score": 2,
+   "hasApplied": false,
+   "applyUrl": null,
+   "displayName": null,
+   "industries": null,
+   "algorithmType": null
+  },
+  {
+   "salary": {
+    "min": null,
+    "max": null,
+    "format": null
+   },
+   "createdAtFormat": "10 dias",
+   "quantityFormat": "1 vaga",
+   "id": 0,
+   "referenceId": 11907352,
+   "source": "empregoscombr",
+   "title": "Diretor de arte",
+   "role": {
+    "id": 807,
+    "name": "Diretor de arte",
+    "areaId": 23,
+    "area": "Publicidade e Propaganda",
+    "hierarchicalLevelId": 1,
+    "hierarchicalLevel": "Diretoria"
+   },
+   "description": "Buscamos um Diretor de Arte dinâmico, analítico e criativo para liderar nossas estratégias de mercado e comunicação visual. O profissional será responsável por transformar briefings complexos em soluções de negócios de alto impacto, elevando a visibilidade e a atratividade da marca junto ao público-alvo, além de orientar tecnicamente a equipe interna. Principais Responsabilidades Estratégia e Negócios: Atuar com alta capacidade analítica para interpretar briefings complexos, propondo estratégias de mercado, planos de divulgação e ações que aumentem a visibilidade e a atratividade da marca. Gestão e Desenvolvimento: Oferecer apoio técnico, mentoria e direcionamento prático para os membros juniores da equipe, fomentando um ambiente colaborativo. Gestão de Projetos: Garantir a qualidade das entregas, o cumprimento de prazos e a consistência estética/conceitual de todas as campanhas e materiais. Requisitos Técnicos (Obrigatórios) Formação superior completa em Marketing, Publicidade e Propaganda, Design Gráfico, Comunicação Social ou áreas correlatas. Domínio avançado das ferramentas do Adobe Pack (Illustrator, Photoshop e InDesign). Forte ênfase na qualidade do portfólio e sólida capacidade de resolução de problemas práticos de design e comunicação. Diferenciais Desejáveis Conhecimento em ferramentas audiovisuais (edição de vídeo, modelagem 3D e motion graphics ). Competências Comportamentais (Soft Skills) Perfil hands-on (mão na massa): Capacidade de transitar entre o pensamento estratégico e a execução técnica. Comunicação assertiva e empatia: Essencial para o alinhamento com stakeholders e desenvolvimento da equipe júnior. Organização e resiliência: Habilidade para gerenciar múltiplos projetos simultâneos em um ambiente presencial de ritmo acelerado.",
+   "quantity": 1,
+   "workplaceTypes": "Presencial",
+   "location": [
+    {
+     "address": "Barueri",
+     "neighborhood": null,
+     "city": "Barueri",
+     "state": "SP",
+     "stateAbbreviation": "SP",
+     "country": "br",
+     "geolocation": {
+      "postalCode": "-23.50685,-46.8792",
+      "city": null
+     },
+     "region": "Região Metropolitana de São Paulo"
+    }
+   ],
+   "company": {
+    "id": 445097,
+    "name": "Acelera RH",
+    "description": "Atua com seleção e agenciamento de mão-de-obra.",
+    "industry": "Recursos Humanos/ Recrutamento e seleção",
+    "status": 50,
+    "group": {
+     "id": 445097,
+     "name": "Acelera RH"
+    },
+    "isPartner": false,
+    "photo": true
+   },
+   "business": {
+    "promoted": false,
+    "boostname": "BOOST_DEFAULT"
+   },
+   "status": 100,
+   "contractForm": "A Combinar",
+   "requiredQualification": " ",
+   "academicFormation": null,
+   "benefits": null,
+   "workTime": null,
+   "pcd": false,
+   "createdAt": "2026-10-13T15:34:43.803",
+   "lastUpdatedAt": "2026-10-13T15:34:43.803",
+   "score": 2,
+   "hasApplied": false,
+   "applyUrl": null,
+   "displayName": null,
+   "industries": null,
+   "algorithmType": null
+  },
+  {
+   "salary": {
+    "min": null,
+    "max": null,
+    "format": null
+   },
+   "createdAtFormat": "15 dias",
+   "quantityFormat": "1 vaga",
+   "id": 0,
+   "referenceId": 11893523,
+   "source": "empregoscombr",
+   "title": "Diretor Comercial – SPSP",
+   "role": {
+    "id": 808,
+    "name": "Diretor comercial",
+    "areaId": 45,
+    "area": "Comercial e Vendas",
+    "hierarchicalLevelId": 1,
+    "hierarchicalLevel": "Diretoria"
+   },
+   "description": "Para atuar em uma construtora/incorporadora especializada em empreendimentos residenciais verticais de altíssimo padrão com os melhores terrenos, localizada no Itaim Bibi, em São Paulo/SP, assumindo a gestão estratégica das áreas Comercial e de Marketing. Gestão da operação da Housing , com foco no planejamento e acompanhamento das atividades comerciais. Gerenciamento da equipe de vendas , acompanhando de metas, desempenho, indicadores e resultados. Desenvolvimento e realização de treinamentos e capacitações para corretores. Gestão da apresentação e divulgação dos empreendimentos junto às imobiliárias e corretores parceiros. Prospecção, desenvolvimento e manutenção de parcerias estratégicas com imobiliárias. Planejamento e gerenciamento dos plantões de vendas , garantindo estrutura, escala e performance comercial. Gestão do atendimento e relacionamento com clientes , acompanhando as diferentes etapas da jornada de compra. Condução de negociações e fechamento de contratos. Gestão e acompanhamento do funil de vendas , desde a geração de oportunidades até a conversão. Gestão do setor de Marketing , alinhando estratégias de comunicação, campanhas, geração de leads e ações de apoio às vendas. Integração das áreas de Marketing e Comercial , garantindo alinhamento das estratégias e ações voltadas ao atingimento das metas. Acompanhamento de indicadores comerciais e elaboração de estratégias para incremento das vendas e fortalecimento dos empreendimentos no mercado. O profissional será responsável pela gestão da equipe comercial, atualmente composta por três corretores, bem como pela gestão da área de Marketing, que conta com uma analista interna e o suporte de uma agência de publicidade parceira. A empresa oferece remuneração fixa, a ser negociada de acordo com a experiência e senioridade do profissional, acrescida de comissão sobre resultados. A contratação será realizada na modalidade Pessoa Jurídica (PJ). OBS:NECESSÁRIO SER RESIDENTE EM SP E TER VASTA EXPERIÊNCIA NO MERCADO DE SP.",
+   "quantity": 1,
+   "workplaceTypes": "Presencial",
+   "location": [
+    {
+     "address": "São Paulo",
+     "neighborhood": null,
+     "city": "São Paulo",
+     "state": "SP",
+     "stateAbbreviation": "SP",
+     "country": "br",
+     "geolocation": {
+      "postalCode": "-23.550619,-46.6362045",
+      "city": null
+     },
+     "region": "Região Metropolitana de São Paulo"
+    }
+   ],
+   "company": {
+    "id": 88980,
+    "name": "Simon Rh",
+    "description": "Outras atividades profissionais, científicas e técnicas não especificadas anteriormente.",
+    "industry": "Recursos Humanos/ Recrutamento e seleção",
+    "status": 50,
+    "group": {
+     "id": 88980,
+     "name": "Simon Rh"
+    },
+    "isPartner": false,
+    "photo": true
+   },
+   "business": {
+    "promoted": false,
+    "boostname": "BOOST_DEFAULT"
+   },
+   "status": 100,
+   "contractForm": "A Combinar",
+   "requiredQualification": " ",
+   "academicFormation": null,
+   "benefits": null,
+   "workTime": null,
+   "pcd": false,
+   "createdAt": "2026-10-08T12:15:29.390",
+   "lastUpdatedAt": "2026-10-08T12:15:29.390",
+   "score": 2,
+   "hasApplied": false,
+   "applyUrl": null,
+   "displayName": null,
+   "industries": null,
+   "algorithmType": null
+  },
+  {
+   "salary": {
+    "min": 0,
+    "max": 0,
+    "format": "R$ 0.00 - R$ 0.00"
+   },
+   "createdAtFormat": "45 dias",
+   "quantityFormat": "1 vaga",
+   "id": 0,
+   "referenceId": 11813418,
+   "source": "empregoscombr",
+   "title": "Diretor de Operações",
+   "role": {
+    "id": 3270,
+    "name": "Diretor de Operações",
+    "areaId": 1,
+    "area": "Administrativo/ Escritório",
+    "hierarchicalLevelId": 1,
+    "hierarchicalLevel": "Diretoria"
+   },
+   "description": "<ul><li><span style=\"background-color: oklab(0.939999 0.00981998 0.00690466 / 0.3); color: lab(5.26802 0 0);\">Liderar as áreas de atendimento, comercial, logística, supply e produto;</span></li><li><span style=\"background-color: oklab(0.939999 0.00981998 0.00690466 / 0.3); color: lab(5.26802 0 0);\">Estruturar, acompanhar e melhorar processos operacionais;</span></li><li><span style=\"background-color: oklab(0.939999 0.00981998 0.00690466 / 0.3); color: lab(5.26802 0 0);\">Acompanhar indicadores e relatórios das diferentes áreas;</span></li><li><span style=\"background-color: oklab(0.939999 0.00981998 0.00690466 / 0.3); color: lab(5.26802 0 0);\">Identificar gargalos e oportunidades de melhoria;</span></li><li><span style=\"background-color: oklab(0.939999 0.00981998 0.00690466 / 0.3); color: lab(5.26802 0 0);\">Garantir maior visibilidade sobre a operação e seus resultados;</span></li><li><span style=\"background-color: oklab(0.939999 0.00981998 0.00690466 / 0.3); color: lab(5.26802 0 0);\">Organizar rotinas, prioridades e planos de ação das equipes;</span></li><li><span style=\"background-color: oklab(0.939999 0.00981998 0.00690466 / 0.3); color: lab(5.26802 0 0);\">Atuar em conjunto com a liderança nas decisões estratégicas da operação;</span></li><li><span style=\"background-color: oklab(0.939999 0.00981998 0.00690466 / 0.3); color: lab(5.26802 0 0);\">Trabalhar de forma integrada com Financeiro e Business Operations;</span></li><li><span style=\"background-color: oklab(0.939999 0.00981998 0.00690466 / 0.3); color: lab(5.26802 0 0);\">Liderar, desenvolver e acompanhar as equipes sob sua responsabilidade;</span></li><li><span style=\"background-color: oklab(0.939999 0.00981998 0.00690466 / 0.3); color: lab(5.26802 0 0);\">Estruturar métricas e indicadores para acompanhamento de performance</span></li></ul><br><ul><li><span style=\"background-color: oklab(0.939999 0.00981998 0.00690466 / 0.3); color: lab(5.26802 0 0);\">Experiência sólida em gestão de operações;</span></li><li><span style=\"background-color: oklab(0.939999 0.00981998 0.00690466 / 0.3); color: lab(5.26802 0 0);\">Experiência comprovada com liderança de múltiplos times;</span></li><li><span style=\"background-color: oklab(0.939999 0.00981998 0.00690466 / 0.3); color: lab(5.26802 0 0);\">Vivência anterior com gestão e desenvolvimento de pessoas;</span></li><li><span style=\"background-color: oklab(0.939999 0.00981998 0.00690466 / 0.3); color: lab(5.26802 0 0);\">Perfil estratégico, mas com forte capacidade de execução;</span></li><li><span style=\"background-color: oklab(0.939999 0.00981998 0.00690466 / 0.3); color: lab(5.26802 0 0);\">Organização e capacidade de acompanhar diferentes frentes simultaneamente;</span></li><li><span style=\"background-color: oklab(0.939999 0.00981998 0.00690466 / 0.3); color: lab(5.26802 0 0);\">Perfil analítico e orientado a indicadores e resultados;</span></li><li><span style=\"background-color: oklab(0.939999 0.00981998 0.00690466 / 0.3); color: lab(5.26802 0 0);\">Proatividade, autonomia e capacidade de identificar e resolver problemas;</span></li><li><span style=\"background-color: oklab(0.939999 0.00981998 0.00690466 / 0.3); color: lab(5.26802 0 0);\">Experiência em e-commerce será considerada um importante diferencial.</span></li></ul><br><br><br><p><span style=\"background-color: oklab(0.939999 0.00981998 0.00690466 / 0.3); color: lab(5.26802 0 0);\">A Alto Calçados é uma marca de calçados masculinos com tecnologia de altura, criada em 2024. Nascemos no digital e construímos uma operação de e-commerce com presença em diferentes canais, incluindo loja própria, Mercado Livre e TikTok Shop.</span></p><p><span style=\"background-color: oklab(0.939999 0.00981998 0.00690466 / 0.3); color: lab(5.26802 0 0);\">Estamos em uma fase de expansão e buscamos um(a) Diretor(a) de Operações para assumir a liderança da frente operacional da empresa, integrando atendimento, comercial, logística, supply e produto. Será uma posição estratégica, com alta autonomia e atuação próxima à liderança, com o desafio de estruturar processos, aumentar a visibilidade da operação e transformar informações em decisões e resultados.</span></p>",
+   "quantity": 1,
+   "workplaceTypes": "Presencial",
+   "location": [
+    {
+     "address": null,
+     "neighborhood": "Vila Olímpia",
+     "city": "São Paulo",
+     "state": "SP",
+     "stateAbbreviation": "SP",
+     "country": "br",
+     "geolocation": {
+      "postalCode": "-23.59592,-46.67533",
+      "city": null
+     },
+     "region": "Região Metropolitana de São Paulo"
+    }
+   ],
+   "company": {
+    "id": 471693,
+    "name": "Alto Calçados ",
+    "description": null,
+    "industry": "Agro-Indústria/ Pecuária/ Pesca",
+    "status": 55,
+    "group": {
+     "id": 0,
+     "name": "Alto Calçados "
+    },
+    "isPartner": true,
+    "photo": false
+   },
+   "business": {
+    "promoted": false,
+    "boostname": "BOOST_DEFAULT"
+   },
+   "status": 100,
+   "contractForm": "A Combinar",
+   "requiredQualification": null,
+   "academicFormation": null,
+   "benefits": null,
+   "workTime": null,
+   "pcd": false,
+   "createdAt": "2026-09-08T12:24:38.493",
+   "lastUpdatedAt": "2026-09-08T12:24:38.493",
+   "score": 2,
+   "hasApplied": false,
+   "applyUrl": null,
+   "displayName": null,
+   "industries": null,
+   "algorithmType": null
+  },
+  {
+   "salary": {
+    "min": 0,
+    "max": 0,
+    "format": "R$ 0.00 - R$ 0.00"
+   },
+   "createdAtFormat": "hoje",
+   "quantityFormat": "1 vaga",
+   "id": 0,
+   "referenceId": 11953808,
+   "source": "empregoscombr",
+   "title": "DIRETOR COMERCIAL",
+   "role": {
+    "id": 808,
+    "name": "Diretor comercial",
+    "areaId": 45,
+    "area": "Comercial e Vendas",
+    "hierarchicalLevelId": 1,
+    "hierarchicalLevel": "Diretoria"
+   },
+   "description": "Descrição:<br><p>Buscamos um(a) <strong>Diretor(a) Comercial fortemente orientado(a) a resultados, expansão territorial e governança de vendas para liderar toda a operação comercial da companhia.</strong></p><p>Este profissional será responsável por conectar visão estratégica e rigor na execução diária, reportando-se diretamente aos CEOs. Sob seu guarda-chuva estarão as estruturas de Gerências Regionais de Vendas, Consultores Comerciais, SDR e Trade Marketing, gestão por indicadores e crescimento acelerado de receita com preservação de margem. Se você possui sólido histórico de liderança em vendas de alta complexidade, gestão de canais indiretos/distribuidores e paixão por construir operações comerciais orientadas a dados e alta performance, essa oportunidade é para você.</p><p>Principais Responsabilidades</p><p><ul><li>Planejamento &amp; Forecast: Construir e desdobrar a estratégia comercial (anual/trimestral/mensal), o calendário de campanhas e o forecast de vendas (S&amp;OP).</li><li>Liderança &amp; Governança: Liderar os Gerentes Regionais e Coordenador de Trade, unificando as frentes de Vendas, SDR e Trade com metas, rituais e acompanhamento de indicadores.</li><li>Receita &amp; Margem: Gerenciar vendas e margem por categoria, região e canal, garantindo crescimento com rentabilidade e definindo políticas comerciais e descontos.</li><li>Clientes &amp; Distribuidores: Negociar diretamente com Key Accounts e construir os planos estratégicos de desenvolvimento dos principais distribuidores.</li><li>Expansão &amp; Execução: Desenvolver estratégias de distribuição e presença no PDV, monitorando indicadores de sell-in, sell-out, cobertura, positivação e mix.</li></ul></p><br>Requisitos:<br><p><strong>Requisitos:</strong></p><p><ul><li>Escolaridade: Graduação em Administração, Economia, Engenharia, Marketing ou áreas correlatas.&nbsp;</li><li>Liderança Executiva:&nbsp;Vivência consolidada como Diretor, Head ou Gerente Nacional de Vendas, liderando gestores e equipes regionalizadas.&nbsp;</li><li>Resultados &amp; Negociação: Histórico comprovado com gestão de P&amp;L (receita/margem), construção de planos anuais/forecast e negociação com grandes contas e distribuidores.&nbsp;</li><li>Conhecimentos Técnicos: Gestão de canais indiretos, estratégias de sell-in/sell-out, cobertura territorial, Trade Marketing e políticas comerciais.&nbsp;</li><li>Conhecimento em Revenue Growth Management (RGM), Pricing, CRM/BI e processos de S&amp;OP.  Inglês intermediário a avançado.&nbsp;&nbsp;</li></ul></p><p><strong>Diferenciais:</strong></p><ul><li>Pós-graduação/MBA em Gestão Comercial, Estratégia, Marketing ou Finanças.&nbsp;</li><li>Vivência nos mercados de bens de consumo (FMCG), tabaco, bebidas ou alimentos com distribuição pulverizada.&nbsp;</li></ul><br>Benefícios:<br>Bônus por Atingimento de Metas, Desconto em Rede de Parceiros, Kit Bebê, Licença Maternidade e Paternidade Estendida, Massagem Semanal, Plano de Saúde - Amil S450 Nacional (com Coparticipação), Plano Odontológico - Amil 205 Nacional (sem Coparticipação), Produtos Papelito Free, TotalPass, Vale Alimentação/Refeição Flexível, Vale Transporte (Sem desconto)",
+   "quantity": 1,
+   "workplaceTypes": "Presencial",
+   "location": [
+    {
+     "address": null,
+     "neighborhood": null,
+     "city": "Brasilia",
+     "state": "DF",
+     "stateAbbreviation": "DF",
+     "country": "br",
+     "geolocation": {
+      "postalCode": "-15.77829,-47.92909",
+      "city": null
+     },
+     "region": "Região do Distrito Federal"
+    }
+   ],
+   "company": {
+    "id": 466118,
+    "name": "Papelito",
+    "description": "Atua com construção civil, construções de galpão industriais e comerciais, casas de alto padrão, construções de praças, dentre outras atuações.",
+    "industry": "Construção Civil / Engenharia Civil",
+    "status": 50,
+    "group": {
+     "id": 0,
+     "name": "Papelito"
+    },
+    "isPartner": true,
+    "photo": false
+   },
+   "business": {
+    "promoted": false,
+    "boostname": "BOOST_DEFAULT"
+   },
+   "status": 100,
+   "contractForm": "A Combinar",
+   "requiredQualification": null,
+   "academicFormation": null,
+   "benefits": null,
+   "workTime": null,
+   "pcd": false,
+   "createdAt": "2026-10-23T15:59:42.067",
+   "lastUpdatedAt": "2026-10-23T15:59:42.067",
+   "score": 2.9627707,
+   "hasApplied": false,
+   "applyUrl": "https://www.empregare.com/pt-br/vaga-diretor-comercial_179691?source=empregos",
+   "displayName": "Empregare",
+   "industries": "",
+   "algorithmType": null
+  },
+  {
+   "salary": {
+    "min": 0,
+    "max": 0,
+    "format": "R$ 0.00 - R$ 0.00"
+   },
+   "createdAtFormat": "2 dias",
+   "quantityFormat": "1 vaga",
+   "id": 0,
+   "referenceId": 11939282,
+   "source": "empregoscombr",
+   "title": "Analista de Gestão de Pessoas Pleno - Presidente Prudente/SP",
+   "role": {
+    "id": 786,
+    "name": "Diretor presidente",
+    "areaId": 1,
+    "area": "Administrativo/ Escritório",
+    "hierarchicalLevelId": 1,
+    "hierarchicalLevel": "Diretoria"
+   },
+   "description": "Descrição:<br><ul><li>Atuar em conformidade com a estratégia e as diretrizes da entidade sistêmica Sicoob;</li><li>Identificar oportunidades de melhoria de processos e propor soluções viáveis;</li><li>Monitorar indicadores da área e propor soluções baseadas em dados;</li><li>Orientar e apoiar a aplicação das metodologias, normas e procedimentos da área;</li><li>Garantir conformidade com normas trabalhistas e previdenciárias;</li><li>Mapear as necessidades de qualificação da equipe;</li><li>Planejar, organizar e acompanhar treinamentos internos;</li><li>Acompanhar o desenvolvimento dos colaboradores na Universidade Corporativa;</li><li>Executar processos relacionados ao Plano de Carreira e Plano de Sucessão;</li><li>Organizar ciclos de avaliação de desempenho e pesquisa de clima;</li><li>Atuar na disseminação da cultura organizacional e fortalecer a comunicação interna;</li><li>Acompanhar tendências e boas práticas de mercado, propondo sua aplicação na área.</li></ul><br>Requisitos:<br><ul><li>Ensino Superior completo em Administração, Recursos Humanos, Psicologia ou áreas correlatas;</li><li>Especialização em Recursos Humanos;</li><li>Experiência comprovada em Desenvolvimento Humano Organizacional (DHO);</li><li>Conhecimento dos subsistemas de Recursos Humanos;</li><li>Conhecimento sólido da legislação trabalhista e normas de saúde e segurança ocupacional;</li><li>Pacote Office, com domínio de Excel e conhecimento avançado em PowerPoint;</li><li>Residir em Presidente Prudente/SP;</li><li>Diferencial: Certificação ANBIMA CPA.</li></ul><p><br></p><p><strong>Benefícios:</strong><br>Vale Alimentação R$ R$ 2.321,68;</p><p>?? 13º do Vale Alimentação;</p><p>?? Auxílio creche/Babá: R$ 427,40;</p><p>????? Plano de Saúde;</p><p>?? Plano Odontológico;</p><p>??Seguro de Vida;</p><p>?? Participação nos Resultados;</p><p>?? Previdência Privada;</p><p>??????Wellhub (Gympass);</p><p>?? Escuta Terapêutica(apoio terapêutico com psicóloga);</p><p>?? Presente de Aniversário R$ 200,00;</p><p>?? Programa Tempo de Casa;</p><p>? Programa Fidelização por Tempo de Casa;</p><p>?? Sicoob Universidade, com acesso ilimitado a cursos;</p><p>?? Bolsa de Estudos de até R$ 200,00.</p><br>Benefícios:<br>Nenhum benefício informado",
+   "quantity": 1,
+   "workplaceTypes": "Presencial",
+   "location": [
+    {
+     "address": null,
+     "neighborhood": null,
+     "city": "Presidente Prudente",
+     "state": "SP",
+     "stateAbbreviation": "SP",
+     "country": "br",
+     "geolocation": {
+      "postalCode": "-22.12687,-51.38562",
+      "city": null
+     },
+     "region": "Região de Presidente Prudente"
+    }
+   ],
+   "company": {
+    "id": 466118,
+    "name": "SICOOB PAULISTA",
+    "description": "Atua com construção civil, construções de galpão industriais e comerciais, casas de alto padrão, construções de praças, dentre outras atuações.",
+    "industry": "Construção Civil / Engenharia Civil",
+    "status": 50,
+    "group": {
+     "id": 0,
+     "name": "SICOOB PAULISTA"
+    },
+    "isPartner": true,
+    "photo": false
+   },
+   "business": {
+    "promoted": false,
+    "boostname": "BOOST_DEFAULT"
+   },
+   "status": 100,
+   "contractForm": "A Combinar",
+   "requiredQualification": null,
+   "academicFormation": null,
+   "benefits": null,
+   "workTime": null,
+   "pcd": false,
+   "createdAt": "2026-10-21T18:13:50.950",
+   "lastUpdatedAt": "2026-10-21T18:13:50.950",
+   "score": 2.7720864,
+   "hasApplied": false,
+   "applyUrl": "https://www.empregare.com/pt-br/vaga-analista-de-gestao-de-pessoas-pleno-pres_179773?source=empregos",
+   "displayName": "Empregare",
+   "industries": "",
+   "algorithmType": null
+  },
+  {
+   "salary": {
+    "min": 0,
+    "max": 0,
+    "format": "R$ 0.00 - R$ 0.00"
+   },
+   "createdAtFormat": "2 dias",
+   "quantityFormat": "1 vaga",
+   "id": 0,
+   "referenceId": 11938347,
+   "source": "empregoscombr",
+   "title": "Analista de Gente e Cultura (Business Partner) Pleno",
+   "role": {
+    "id": 2931,
+    "name": "Business Partner",
+    "areaId": 1,
+    "area": "Administrativo/ Escritório",
+    "hierarchicalLevelId": 1,
+    "hierarchicalLevel": "Diretoria"
+   },
+   "description": "Descrição:<br><p>A área de Gente está com uma oportunidade para Analista de Gestão de Pessoas Pleno - HR Business Partner</p><p>Na área, o HR Business Partner atua como parceiro estratégico das lideranças, promovendo o alinhamento entre as práticas de gestão de pessoas e as necessidades das unidades de gestão. Seu papel é fortalecer a cultura organizacional, desenvolver as equipes e contribuir para a performance sustentável, apoiando o alcance dos objetivos do Sicoob.</p><p><strong>Atividades:</strong></p><ul><li>Construir e fortalecer o relacionamento estratégico com as unidades de gestão do Centro Cooperativo Sicoob, garantindo parceria e alinhamento com os objetivos de negócio;</li><li>Atuar como parceiro estratégico na construção e execução de ações que disseminem os valores, expectativas de liderança e comportamentos esperados pelo Centro Cooperativo Sicoob - CCS para os times atendidos;</li><li>Contribuir para o fortalecimento da cultura colaborativa, exercendo influência em todos os níveis hierárquicos e promovendo um ambiente de confiança e engajamento;</li><li>Apoiar os times com todos os temas relacionados a área de Gente, assegurando um suporte generalista dos assuntos;</li><li>Analisar dados e indicadores de gestão de pessoas para fornecer insights e propor soluções estratégicas personalizadas para as áreas atendidas;</li><li>Apoiar a liderança em tomadas de decisão estratégicas, fornecendo suporte em temas como recrutamento, desenvolvimento, sucessão e gestão de desempenho;</li><li>Apoiar a implementação e avaliação dos processos e políticas da área de Gente, assegurando a correta execução, orientando e estando próximo às áreas clientes para contribuir com melhorias constantes;</li><li>Construir relacionamento com as lideranças e principais interessados para fomentar a colaboração, usando insights de negócios, de modo garantir o conhecimento profundo da realidade e contexto específico da atividade da área e assegurar um espaço/contribuição relevante da função de RH junto as áreas;</li><li>Contribuir para a eficaz implementação dos programas/projetos da área de Gente, trabalhando próximo as áreas;</li><li>Conduzir processos da área de Gente, como recrutamento e seleção, promoção, treinamento, gestão de clima, avaliação de perfil comportamental, desenvolvimento de liderança, acompanhamento de funcionários e coaching.</li></ul><br>Requisitos:<br><p><strong>Requisitos Obrigatórios:</strong></p><ul><li>Ensino superior completo em administração, psicologia ou áreas afins;</li><li>Pós-graduação completa;</li><li>Experiência em pelo menos três processos de gestão de pessoas, como gestão de performance, treinamento e desenvolvimento, recrutamento e seleção, planos de cargos e salários, gestão de clima organizacional, entre outros;</li><li>Conhecimento em gestão de conflitos e desenvolvimento de equipes.</li></ul><br>Benefícios:<br>Auxílio-Creche/ Babá, Bolsa de Estudos para Graduação e Pós-Graduação, Cesta Natalina, Day off - fim de ano, Licença maternidade estendida, Licença paternidade estendida, Participação nos Resultados (anual), Plano de Saúde, Plano Odontológico, Previdência Privada Multipatrocinada, Programa de Desenvolvimento de Soft e Hard Skills, Programa de Mobilidade Interna - Match Oportunidades Internas, Programa Viver Bem, Seguro de Vida, Universidade Corporativa Sicoob, Vale-alimentação, Vale-refeição, Vale-transporte (opcional), Wellhub",
+   "quantity": 1,
+   "workplaceTypes": "Presencial",
+   "location": [
+    {
+     "address": null,
+     "neighborhood": null,
+     "city": "Brasilia",
+     "state": "DF",
+     "stateAbbreviation": "DF",
+     "country": "br",
+     "geolocation": {
+      "postalCode": "-15.77829,-47.92909",
+      "city": null
+     },
+     "region": "Região do Distrito Federal"
+    }
+   ],
+   "company": {
+    "id": 466118,
+    "name": "CENTRO COOPERATIVO SICOOB",
+    "description": "Atua com construção civil, construções de galpão industriais e comerciais, casas de alto padrão, construções de praças, dentre outras atuações.",
+    "industry": "Construção Civil / Engenharia Civil",
+    "status": 50,
+    "group": {
+     "id": 0,
+     "name": "CENTRO COOPERATIVO SICOOB"
+    },
+    "isPartner": true,
+    "photo": false
+   },
+   "business": {
+    "promoted": false,
+    "boostname": "BOOST_DEFAULT"
+   },
+   "status": 100,
+   "contractForm": "A Combinar",
+   "requiredQualification": null,
+   "academicFormation": null,
+   "benefits": null,
+   "workTime": null,
+   "pcd": false,
+   "createdAt": "2026-10-21T17:33:02.467",
+   "lastUpdatedAt": "2026-10-21T17:33:02.467",
+   "score": 2.7692525,
+   "hasApplied": false,
+   "applyUrl": "https://www.empregare.com/pt-br/vaga-analista-de-gente-e-cultura-business-par_176772?source=empregos",
+   "displayName": "Empregare",
+   "industries": "",
+   "algorithmType": null
+  }
+ ],
+ "facetCollection": [
+  {
+   "facetItem": 6,
+   "facetName": "SponsoredJob",
+   "itens": [
+    {
+     "value": "0",
+     "caption": "0",
+     "count": 15,
+     "countDescription": "15",
+     "route": null
+    },
+    {
+     "value": "1",
+     "caption": "1",
+     "count": 1,
+     "countDescription": "1",
+     "route": null
+    }
+   ]
+  },
+  {
+   "facetItem": 16,
+   "facetName": "Industry",
+   "itens": [
+    {
+     "value": "Agro-Indústria/ Pecuária/ Pesca",
+     "caption": "Agro-Indústria/ Pecuária/ Pesca",
+     "count": 7,
+     "countDescription": "7",
+     "route": null
+    },
+    {
+     "value": "Recursos Humanos/ Recrutamento e seleção",
+     "caption": "Recursos Humanos/ Recrutamento e seleção",
+     "count": 5,
+     "countDescription": "5",
+     "route": null
+    },
+    {
+     "value": "Construção Civil / Engenharia Civil",
+     "caption": "Construção Civil / Engenharia Civil",
+     "count": 3,
+     "countDescription": "3",
+     "route": null
+    },
+    {
+     "value": "Serviços",
+     "caption": "Serviços",
+     "count": 1,
+     "countDescription": "1",
+     "route": null
+    }
+   ]
+  },
+  {
+   "facetItem": 17,
+   "facetName": "WorkplaceTypes",
+   "itens": [
+    {
+     "value": "Presencial",
+     "caption": "Presencial",
+     "count": 14,
+     "countDescription": "14",
+     "route": null
+    },
+    {
+     "value": "Híbrido",
+     "caption": "Híbrido",
+     "count": 1,
+     "countDescription": "1",
+     "route": null
+    },
+    {
+     "value": "Remoto",
+     "caption": "Remoto",
+     "count": 1,
+     "countDescription": "1",
+     "route": null
+    }
+   ]
+  },
+  {
+   "facetItem": 4,
+   "facetName": "Title",
+   "itens": [
+    {
+     "value": "Business Partner",
+     "caption": "Business Partner",
+     "count": 2,
+     "countDescription": "2",
+     "route": null
+    },
+    {
+     "value": "Analista de Gente e Cultura (Business Partner) Pleno",
+     "caption": "Analista de Gente e Cultura (Business Partner) Pleno",
+     "count": 1,
+     "countDescription": "1",
+     "route": null
+    },
+    {
+     "value": "Analista de Gestão de Pessoas Pleno - Presidente Prudente/SP",
+     "caption": "Analista de Gestão de Pessoas Pleno - Presidente Prudente/SP",
+     "count": 1,
+     "countDescription": "1",
+     "route": null
+    },
+    {
+     "value": "Business Partner Financeiro",
+     "caption": "Business Partner Financeiro",
+     "count": 1,
+     "countDescription": "1",
+     "route": null
+    },
+    {
+     "value": "Business Partner de Gente",
+     "caption": "Business Partner de Gente",
+     "count": 1,
+     "countDescription": "1",
+     "route": null
+    },
+    {
+     "value": "DIRETOR COMERCIAL",
+     "caption": "DIRETOR COMERCIAL",
+     "count": 1,
+     "countDescription": "1",
+     "route": null
+    },
+    {
+     "value": "DIRETOR DE FINANÇAS E OPERAÇÕES",
+     "caption": "DIRETOR DE FINANÇAS E OPERAÇÕES",
+     "count": 1,
+     "countDescription": "1",
+     "route": null
+    },
+    {
+     "value": "Diretor Administrativo Financeiro",
+     "caption": "Diretor Administrativo Financeiro",
+     "count": 1,
+     "countDescription": "1",
+     "route": null
+    },
+    {
+     "value": "Diretor Comercial – SPSP",
+     "caption": "Diretor Comercial – SPSP",
+     "count": 1,
+     "countDescription": "1",
+     "route": null
+    },
+    {
+     "value": "Diretor Hospitalar - Camboriú",
+     "caption": "Diretor Hospitalar - Camboriú",
+     "count": 1,
+     "countDescription": "1",
+     "route": null
+    },
+    {
+     "value": "Diretor de Arte",
+     "caption": "Diretor de Arte",
+     "count": 1,
+     "countDescription": "1",
+     "route": null
+    },
+    {
+     "value": "Diretor de Operações",
+     "caption": "Diretor de Operações",
+     "count": 1,
+     "countDescription": "1",
+     "route": null
+    },
+    {
+     "value": "Diretor de arte",
+     "caption": "Diretor de arte",
+     "count": 1,
+     "countDescription": "1",
+     "route": null
+    },
+    {
+     "value": "Especialista de T&D e Business partner",
+     "caption": "Especialista de T&D e Business partner",
+     "count": 1,
+     "countDescription": "1",
+     "route": null
+    },
+    {
+     "value": "Tech Recruiter – Foco em Tecnologia da Informação",
+     "caption": "Tech Recruiter – Foco em Tecnologia da Informação",
+     "count": 1,
+     "countDescription": "1",
+     "route": null
+    }
+   ]
+  },
+  {
+   "facetItem": 12,
+   "facetName": "Area",
+   "itens": [
+    {
+     "value": "Administrativo/ Escritório",
+     "caption": "Administrativo/ Escritório",
+     "count": 8,
+     "countDescription": "8",
+     "route": null
+    },
+    {
+     "value": "Comercial e Vendas",
+     "caption": "Comercial e Vendas",
+     "count": 3,
+     "countDescription": "3",
+     "route": null
+    },
+    {
+     "value": "Publicidade e Propaganda",
+     "caption": "Publicidade e Propaganda",
+     "count": 2,
+     "countDescription": "2",
+     "route": null
+    },
+    {
+     "value": "Financeiro/ Contabilidade/ Economia",
+     "caption": "Financeiro/ Contabilidade/ Economia",
+     "count": 1,
+     "countDescription": "1",
+     "route": null
+    },
+    {
+     "value": "Informática/TI e Internet",
+     "caption": "Informática/TI e Internet",
+     "count": 1,
+     "countDescription": "1",
+     "route": null
+    },
+    {
+     "value": "Saúde, Trat.Terapêuticos e Hospitalar",
+     "caption": "Saúde, Trat.Terapêuticos e Hospitalar",
+     "count": 1,
+     "countDescription": "1",
+     "route": null
+    }
+   ]
+  },
+  {
+   "facetItem": 18,
+   "facetName": "RoleName",
+   "itens": [
+    {
+     "value": "Business Partner",
+     "caption": "Business Partner",
+     "count": 6,
+     "countDescription": "6",
+     "route": null
+    },
+    {
+     "value": "Diretor comercial",
+     "caption": "Diretor comercial",
+     "count": 3,
+     "countDescription": "3",
+     "route": null
+    },
+    {
+     "value": "Diretor de arte",
+     "caption": "Diretor de arte",
+     "count": 2,
+     "countDescription": "2",
+     "route": null
+    },
+    {
+     "value": "Diretor Hospitalar",
+     "caption": "Diretor Hospitalar",
+     "count": 1,
+     "countDescription": "1",
+     "route": null
+    },
+    {
+     "value": "Diretor administrativo e financeiro",
+     "caption": "Diretor administrativo e financeiro",
+     "count": 1,
+     "countDescription": "1",
+     "route": null
+    },
+    {
+     "value": "Diretor de Operações",
+     "caption": "Diretor de Operações",
+     "count": 1,
+     "countDescription": "1",
+     "route": null
+    },
+    {
+     "value": "Diretor de Tecnologia da Informação",
+     "caption": "Diretor de Tecnologia da Informação",
+     "count": 1,
+     "countDescription": "1",
+     "route": null
+    },
+    {
+     "value": "Diretor presidente",
+     "caption": "Diretor presidente",
+     "count": 1,
+     "countDescription": "1",
+     "route": null
+    }
+   ]
+  },
+  {
+   "facetItem": 13,
+   "facetName": "Location",
+   "itens": [
+    {
+     "value": "São Paulo, SP",
+     "caption": "São Paulo, SP",
+     "count": 3,
+     "countDescription": "3",
+     "route": null
+    },
+    {
+     "value": "Barueri, SP",
+     "caption": "Barueri, SP",
+     "count": 2,
+     "countDescription": "2",
+     "route": null
+    },
+    {
+     "value": "Brasilia, DF",
+     "caption": "Brasilia, DF",
+     "count": 2,
+     "countDescription": "2",
+     "route": null
+    },
+    {
+     "value": "Camboriú, SC",
+     "caption": "Camboriú, SC",
+     "count": 1,
+     "countDescription": "1",
+     "route": null
+    },
+    {
+     "value": "Caruaru, PE",
+     "caption": "Caruaru, PE",
+     "count": 1,
+     "countDescription": "1",
+     "route": null
+    },
+    {
+     "value": "Chapecó, SC",
+     "caption": "Chapecó, SC",
+     "count": 1,
+     "countDescription": "1",
+     "route": null
+    },
+    {
+     "value": "Fortaleza, CE",
+     "caption": "Fortaleza, CE",
+     "count": 1,
+     "countDescription": "1",
+     "route": null
+    },
+    {
+     "value": "Manaus, AM",
+     "caption": "Manaus, AM",
+     "count": 1,
+     "countDescription": "1",
+     "route": null
+    },
+    {
+     "value": "Piraquara, PR",
+     "caption": "Piraquara, PR",
+     "count": 1,
+     "countDescription": "1",
+     "route": null
+    },
+    {
+     "value": "Ponta Grossa, PR",
+     "caption": "Ponta Grossa, PR",
+     "count": 1,
+     "countDescription": "1",
+     "route": null
+    },
+    {
+     "value": "Pouso Alegre, MG",
+     "caption": "Pouso Alegre, MG",
+     "count": 1,
+     "countDescription": "1",
+     "route": null
+    },
+    {
+     "value": "Presidente Prudente, SP",
+     "caption": "Presidente Prudente, SP",
+     "count": 1,
+     "countDescription": "1",
+     "route": null
+    }
+   ]
+  },
+  {
+   "facetItem": 10,
+   "facetName": "HierarchicalLevel",
+   "itens": [
+    {
+     "value": "Auxiliar/ Assistente",
+     "caption": "Auxiliar/ Assistente",
+     "count": 29032,
+     "countDescription": "29,032",
+     "route": null
+    },
+    {
+     "value": "Outros",
+     "caption": "Outros",
+     "count": 20893,
+     "countDescription": "20,893",
+     "route": null
+    },
+    {
+     "value": "Operador/ Produção",
+     "caption": "Operador/ Produção",
+     "count": 17326,
+     "countDescription": "17,326",
+     "route": null
+    },
+    {
+     "value": "Analista / Especialista",
+     "caption": "Analista / Especialista",
+     "count": 7426,
+     "countDescription": "7,426",
+     "route": null
+    },
+    {
+     "value": "Vendas",
+     "caption": "Vendas",
+     "count": 3873,
+     "countDescription": "3,873",
+     "route": null
+    },
+    {
+     "value": "Técnico",
+     "caption": "Técnico",
+     "count": 2728,
+     "countDescription": "2,728",
+     "route": null
+    },
+    {
+     "value": "Supervisão",
+     "caption": "Supervisão",
+     "count": 1912,
+     "countDescription": "1,912",
+     "route": null
+    },
+    {
+     "value": "Administrativo/ Vendas",
+     "caption": "Administrativo/ Vendas",
+     "count": 1742,
+     "countDescription": "1,742",
+     "route": null
+    },
+    {
+     "value": "Gerência",
+     "caption": "Gerência",
+     "count": 1522,
+     "countDescription": "1,522",
+     "route": null
+    },
+    {
+     "value": "Assessor / Consultor",
+     "caption": "Assessor / Consultor",
+     "count": 1432,
+     "countDescription": "1,432",
+     "route": null
+    },
+    {
+     "value": "Administrativo",
+     "caption": "Administrativo",
+     "count": 1259,
+     "countDescription": "1,259",
+     "route": null
+    },
+    {
+     "value": "Aprendiz",
+     "caption": "Aprendiz",
+     "count": 721,
+     "countDescription": "721",
+     "route": null
+    },
+    {
+     "value": "Advogado",
+     "caption": "Advogado",
+     "count": 365,
+     "countDescription": "365",
+     "route": null
+    },
+    {
+     "value": "Analista/ Especialista",
+     "caption": "Analista/ Especialista",
+     "count": 294,
+     "countDescription": "294",
+     "route": null
+    },
+    {
+     "value": "Professor",
+     "caption": "Professor",
+     "count": 81,
+     "countDescription": "81",
+     "route": null
+    },
+    {
+     "value": "Assessor/ Consultor",
+     "caption": "Assessor/ Consultor",
+     "count": 32,
+     "countDescription": "32",
+     "route": null
+    },
+    {
+     "value": "Técnico/ Especialista",
+     "caption": "Técnico/ Especialista",
+     "count": 27,
+     "countDescription": "27",
+     "route": null
+    },
+    {
+     "value": "Trainees",
+     "caption": "Trainees",
+     "count": 17,
+     "countDescription": "17",
+     "route": null
+    },
+    {
+     "value": "Auxiliar / Assistente",
+     "caption": "Auxiliar / Assistente",
+     "count": 16,
+     "countDescription": "16",
+     "route": null
+    },
+    {
+     "value": "Diretoria",
+     "caption": "Diretoria",
+     "count": 16,
+     "countDescription": "16",
+     "route": null
+    },
+    {
+     "value": "Analista",
+     "caption": "Analista",
+     "count": 6,
+     "countDescription": "6",
+     "route": null
+    }
+   ]
+  }
+ ],
+ "total": 16,
+ "sum": 16,
+ "valueCount": 16,
+ "moreLikeThis": [],
+ "hasError": false,
+ "processingTime": 14
+}

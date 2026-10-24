@@ -96,8 +96,10 @@ const expiryWindow = 45 * 24 * time.Hour
 // sweep still owns their normal closes — they are only ADDED BACK as liveness
 // candidates, restricted to jobs already past the sweep's own staleness window (see
 // staleCutoff), so this only ever picks up what the sweep structurally cannot reach
-// rather than racing it.
-var probeDespiteRegistered = []string{"himalayas", "echojobs", "jobicy", "remoteok", "hh"}
+// rather than racing it. empregos leaks the same way for a different reason: its crawl reads
+// every posting that names a state but cannot prove it read the rest (see empregos.go), so it
+// is not fullCatalog and its sweep is company-scoped too.
+var probeDespiteRegistered = []string{"himalayas", "echojobs", "jobicy", "remoteok", "hh", "empregos"}
 
 // probeDespiteRegisteredGET is the probeDespiteRegistered subset verified by the same
 // plain-GET-then-Classify probe as every orphan candidate — their job pages answer a
@@ -106,7 +108,7 @@ var probeDespiteRegistered = []string{"himalayas", "echojobs", "jobicy", "remote
 // site serves; see echojobs.go). Each probeDespiteRegistered member needs its own such
 // evidence path decided on a case-by-case basis — there is no generic per-source plugin
 // here by design, since a GET probe is not guaranteed to work for any given source.
-var probeDespiteRegisteredGET = []string{"jobicy", "remoteok"}
+var probeDespiteRegisteredGET = []string{"jobicy", "remoteok", "empregos"}
 
 // staleCutoff mirrors cmd/ingest's staleAfter (the sweep's own "unseen" window) via the
 // shared sources.DefaultSweepGrace symbol: a probeDespiteRegistered job only becomes a
@@ -351,7 +353,7 @@ func run() int {
 	// switch above logs one), never a default that quietly probes the wrong thing.
 	probe := probeJudge(client)
 	st.applyVerdicts(ctx, queries, orphanCandidates(candidates), probe)
-	// probeDespiteRegisteredGET candidates (jobicy, remoteok today): same plain-GET probe
+	// probeDespiteRegisteredGET candidates (jobicy, remoteok, empregos today): same plain-GET probe
 	// as the orphans, just a different candidate source.
 	st.applyVerdicts(ctx, queries, getProbeStale, probe)
 	// probeDespiteRegistered's own dedicated evidence sources — see the package doc and

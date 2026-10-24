@@ -1,0 +1,1202 @@
+{
+ "searchJobInput": {
+  "keyword": "",
+  "filters": [],
+  "page": 0,
+  "size": 1,
+  "order": 0,
+  "distance": 100,
+  "exponentialDecay": null,
+  "dateDecay": null,
+  "facetItems": [],
+  "hasRole": false,
+  "isJobAlert": false,
+  "clusters": null
+ },
+ "jobPostingCollection": [
+  {
+   "salary": {
+    "min": 4390,
+    "max": 5390,
+    "format": "R$ 4,390.00 - R$ 5,390.00"
+   },
+   "createdAtFormat": "hoje",
+   "quantityFormat": "1 vaga",
+   "id": 0,
+   "referenceId": 11664581,
+   "source": "empregoscombr",
+   "title": "Analista de Comércio Exterior Junior",
+   "role": {
+    "id": 1194,
+    "name": "Analista de comércio exterior",
+    "areaId": 7,
+    "area": "Comércio Exterior",
+    "hierarchicalLevelId": 15,
+    "hierarchicalLevel": "Analista / Especialista"
+   },
+   "description": "<p>Estamos em busca de um(a) <strong>Analista de Importação</strong> Jr para atuar em uma empresa de destaque no segmento de comércio exterior. Se você possui experiência na área, conhecimento em processos de importação e busca uma oportunidade de crescimento profissional, essa vaga pode ser para você!<br><br>?? Localização: Florianópolis/SC.</p><p>?? Horário de Trabalho: Comercial, de Segunda a Sexta.<br></p><p>?? <strong>Requisitos Mínimos:</strong></p><ol><li><p>Graduação concluída em Relações Internacionais, Comércio Exterior ou áreas afins;</p></li><li><p>Experiência em empresas importadoras, exportadoras ou prestadoras de serviços de comércio exterior, atuando em atividades relacionadas à importação;</p></li><li><p>Domínio de Incoterms, Siscomex e Regulamento Aduaneiro;</p></li><li><p>Conhecimento prático em LI/DI;</p></li><li><p>Inglês intermediário (avançado será um diferencial);</p></li><li><p>Excel intermediário (avançado será um diferencial).<br></p></li></ol><p>?? <strong>Principais Atividades:</strong></p><ol><li><p>Prestar assessoria em comércio exterior para importadores;</p></li><li><p>Atender clientes internos e externos;</p></li><li><p>Manter comunicação com fornecedores internacionais durante os processos de importação;</p></li><li><p>Cotar e contratar transporte, seguro e demais serviços da cadeia logística internacional;</p></li><li><p>Estimar custos e realizar a gestão financeira dos processos;</p></li><li><p>Atuar com regimes aduaneiros especiais;</p></li><li><p>Garantir o compliance documental dos processos de importação;</p></li><li><p>Realizar registros no Catálogo de Produtos e nos sistemas governamentais relacionados à DU-Imp;</p></li><li><p>Efetuar classificação fiscal de mercadorias e análise de tratamento administrativo;</p></li><li><p>Registrar importações e regimes aduaneiros nos sistemas do governo;</p></li><li><p>Acompanhar o desembaraço aduaneiro e programar a logística de entrega em diferentes portos e aeroportos do país;</p></li><li><p>Manter comunicação com os intervenientes da cadeia logística e realizar follow-up com clientes;</p></li><li><p>Treinar e acompanhar estagiários e assistentes;</p></li><li><p>Executar demais atividades relacionadas à gestão completa dos processos de importação.<br></p></li></ol><p>?? <strong>Remuneração:<br>Salário: R$ 4.390,00</strong> <strong>+ VR de R$ 1.000,00,</strong> além de outros benefícios atrativos.</p><p><br></p>",
+   "quantity": 1,
+   "workplaceTypes": "Presencial",
+   "location": [
+    {
+     "address": null,
+     "neighborhood": "Centro",
+     "city": "Florianópolis",
+     "state": "SC",
+     "stateAbbreviation": "SC",
+     "country": "br",
+     "geolocation": {
+      "postalCode": "-27.59466,-48.55991",
+      "city": null
+     },
+     "region": "Região da Grande Florianópolis"
+    }
+   ],
+   "company": {
+    "id": 494183,
+    "name": "Neub - Recrutamento e Seleção",
+    "description": "Treinamento em desenvolvimento profissional e gerencial.",
+    "industry": "Recursos Humanos/ Recrutamento e seleção",
+    "status": 50,
+    "group": {
+     "id": 494183,
+     "name": "Neub - Recrutamento e Seleção"
+    },
+    "isPartner": false,
+    "photo": false
+   },
+   "business": {
+    "promoted": false,
+    "boostname": "BOOST_DEFAULT"
+   },
+   "status": 100,
+   "contractForm": "A Combinar",
+   "requiredQualification": null,
+   "academicFormation": null,
+   "benefits": null,
+   "workTime": null,
+   "pcd": false,
+   "createdAt": "2026-10-23T22:34:55.903",
+   "lastUpdatedAt": "2026-10-23T22:34:55.903",
+   "score": 1.9902227,
+   "hasApplied": false,
+   "applyUrl": null,
+   "displayName": null,
+   "industries": null,
+   "algorithmType": null
+  }
+ ],
+ "facetCollection": [
+  {
+   "facetItem": 6,
+   "facetName": "SponsoredJob",
+   "itens": [
+    {
+     "value": "0",
+     "caption": "0",
+     "count": 88479,
+     "countDescription": "88,479",
+     "route": null
+    },
+    {
+     "value": "1",
+     "caption": "1",
+     "count": 2239,
+     "countDescription": "2,239",
+     "route": null
+    }
+   ]
+  },
+  {
+   "facetItem": 10,
+   "facetName": "HierarchicalLevel",
+   "itens": [
+    {
+     "value": "Auxiliar/ Assistente",
+     "caption": "Auxiliar/ Assistente",
+     "count": 29032,
+     "countDescription": "29,032",
+     "route": null
+    },
+    {
+     "value": "Outros",
+     "caption": "Outros",
+     "count": 20892,
+     "countDescription": "20,892",
+     "route": null
+    },
+    {
+     "value": "Operador/ Produção",
+     "caption": "Operador/ Produção",
+     "count": 17325,
+     "countDescription": "17,325",
+     "route": null
+    },
+    {
+     "value": "Analista / Especialista",
+     "caption": "Analista / Especialista",
+     "count": 7426,
+     "countDescription": "7,426",
+     "route": null
+    },
+    {
+     "value": "Vendas",
+     "caption": "Vendas",
+     "count": 3873,
+     "countDescription": "3,873",
+     "route": null
+    },
+    {
+     "value": "Técnico",
+     "caption": "Técnico",
+     "count": 2728,
+     "countDescription": "2,728",
+     "route": null
+    },
+    {
+     "value": "Supervisão",
+     "caption": "Supervisão",
+     "count": 1912,
+     "countDescription": "1,912",
+     "route": null
+    },
+    {
+     "value": "Administrativo/ Vendas",
+     "caption": "Administrativo/ Vendas",
+     "count": 1742,
+     "countDescription": "1,742",
+     "route": null
+    },
+    {
+     "value": "Gerência",
+     "caption": "Gerência",
+     "count": 1522,
+     "countDescription": "1,522",
+     "route": null
+    },
+    {
+     "value": "Assessor / Consultor",
+     "caption": "Assessor / Consultor",
+     "count": 1432,
+     "countDescription": "1,432",
+     "route": null
+    },
+    {
+     "value": "Administrativo",
+     "caption": "Administrativo",
+     "count": 1259,
+     "countDescription": "1,259",
+     "route": null
+    },
+    {
+     "value": "Aprendiz",
+     "caption": "Aprendiz",
+     "count": 721,
+     "countDescription": "721",
+     "route": null
+    },
+    {
+     "value": "Advogado",
+     "caption": "Advogado",
+     "count": 365,
+     "countDescription": "365",
+     "route": null
+    },
+    {
+     "value": "Analista/ Especialista",
+     "caption": "Analista/ Especialista",
+     "count": 294,
+     "countDescription": "294",
+     "route": null
+    },
+    {
+     "value": "Professor",
+     "caption": "Professor",
+     "count": 81,
+     "countDescription": "81",
+     "route": null
+    },
+    {
+     "value": "Assessor/ Consultor",
+     "caption": "Assessor/ Consultor",
+     "count": 32,
+     "countDescription": "32",
+     "route": null
+    },
+    {
+     "value": "Técnico/ Especialista",
+     "caption": "Técnico/ Especialista",
+     "count": 27,
+     "countDescription": "27",
+     "route": null
+    },
+    {
+     "value": "Trainees",
+     "caption": "Trainees",
+     "count": 17,
+     "countDescription": "17",
+     "route": null
+    },
+    {
+     "value": "Auxiliar / Assistente",
+     "caption": "Auxiliar / Assistente",
+     "count": 16,
+     "countDescription": "16",
+     "route": null
+    },
+    {
+     "value": "Diretoria",
+     "caption": "Diretoria",
+     "count": 16,
+     "countDescription": "16",
+     "route": null
+    },
+    {
+     "value": "Analista",
+     "caption": "Analista",
+     "count": 6,
+     "countDescription": "6",
+     "route": null
+    }
+   ]
+  },
+  {
+   "facetItem": 16,
+   "facetName": "Industry",
+   "itens": [
+    {
+     "value": "Agro-Indústria/ Pecuária/ Pesca",
+     "caption": "Agro-Indústria/ Pecuária/ Pesca",
+     "count": 36555,
+     "countDescription": "36,555",
+     "route": null
+    },
+    {
+     "value": "Recursos Humanos/ Recrutamento e seleção",
+     "caption": "Recursos Humanos/ Recrutamento e seleção",
+     "count": 20038,
+     "countDescription": "20,038",
+     "route": null
+    },
+    {
+     "value": "Construção Civil / Engenharia Civil",
+     "caption": "Construção Civil / Engenharia Civil",
+     "count": 6605,
+     "countDescription": "6,605",
+     "route": null
+    },
+    {
+     "value": "Serviços",
+     "caption": "Serviços",
+     "count": 5252,
+     "countDescription": "5,252",
+     "route": null
+    },
+    {
+     "value": "Comércio Atacadista",
+     "caption": "Comércio Atacadista",
+     "count": 4418,
+     "countDescription": "4,418",
+     "route": null
+    },
+    {
+     "value": "Comércio Varejista",
+     "caption": "Comércio Varejista",
+     "count": 1615,
+     "countDescription": "1,615",
+     "route": null
+    },
+    {
+     "value": "Alimentos",
+     "caption": "Alimentos",
+     "count": 1299,
+     "countDescription": "1,299",
+     "route": null
+    },
+    {
+     "value": "Segurança Patrimonial",
+     "caption": "Segurança Patrimonial",
+     "count": 1244,
+     "countDescription": "1,244",
+     "route": null
+    },
+    {
+     "value": "Consultoria/ Auditoria",
+     "caption": "Consultoria/ Auditoria",
+     "count": 1126,
+     "countDescription": "1,126",
+     "route": null
+    },
+    {
+     "value": "Saúde/ Hospitalar",
+     "caption": "Saúde/ Hospitalar",
+     "count": 1089,
+     "countDescription": "1,089",
+     "route": null
+    },
+    {
+     "value": "Informática/ Tecnologia",
+     "caption": "Informática/ Tecnologia",
+     "count": 1046,
+     "countDescription": "1,046",
+     "route": null
+    },
+    {
+     "value": "Higiene/ Limpeza",
+     "caption": "Higiene/ Limpeza",
+     "count": 1014,
+     "countDescription": "1,014",
+     "route": null
+    },
+    {
+     "value": "Supermercado/ Hipermercado",
+     "caption": "Supermercado/ Hipermercado",
+     "count": 869,
+     "countDescription": "869",
+     "route": null
+    },
+    {
+     "value": "Comércio - Outros",
+     "caption": "Comércio - Outros",
+     "count": 861,
+     "countDescription": "861",
+     "route": null
+    },
+    {
+     "value": "Automobilística/ Autopeças",
+     "caption": "Automobilística/ Autopeças",
+     "count": 758,
+     "countDescription": "758",
+     "route": null
+    },
+    {
+     "value": "Transportes",
+     "caption": "Transportes",
+     "count": 654,
+     "countDescription": "654",
+     "route": null
+    },
+    {
+     "value": "Industrial",
+     "caption": "Industrial",
+     "count": 632,
+     "countDescription": "632",
+     "route": null
+    },
+    {
+     "value": "Engenharia",
+     "caption": "Engenharia",
+     "count": 463,
+     "countDescription": "463",
+     "route": null
+    },
+    {
+     "value": "Têxtil/ Vestuário",
+     "caption": "Têxtil/ Vestuário",
+     "count": 389,
+     "countDescription": "389",
+     "route": null
+    },
+    {
+     "value": "Educação/ Treinamento/ Idiomas",
+     "caption": "Educação/ Treinamento/ Idiomas",
+     "count": 365,
+     "countDescription": "365",
+     "route": null
+    },
+    {
+     "value": "Comunicação/ Imprensa",
+     "caption": "Comunicação/ Imprensa",
+     "count": 339,
+     "countDescription": "339",
+     "route": null
+    },
+    {
+     "value": "Telemarketing/ CallCenter",
+     "caption": "Telemarketing/ CallCenter",
+     "count": 330,
+     "countDescription": "330",
+     "route": null
+    },
+    {
+     "value": "Telecomunicação",
+     "caption": "Telecomunicação",
+     "count": 275,
+     "countDescription": "275",
+     "route": null
+    },
+    {
+     "value": "Restaurante/ Fast Food",
+     "caption": "Restaurante/ Fast Food",
+     "count": 265,
+     "countDescription": "265",
+     "route": null
+    },
+    {
+     "value": "Contabilidade",
+     "caption": "Contabilidade",
+     "count": 206,
+     "countDescription": "206",
+     "route": null
+    }
+   ]
+  },
+  {
+   "facetItem": 17,
+   "facetName": "WorkplaceTypes",
+   "itens": [
+    {
+     "value": "Presencial",
+     "caption": "Presencial",
+     "count": 89365,
+     "countDescription": "89,365",
+     "route": null
+    },
+    {
+     "value": "Remoto",
+     "caption": "Remoto",
+     "count": 704,
+     "countDescription": "704",
+     "route": null
+    },
+    {
+     "value": "Híbrido",
+     "caption": "Híbrido",
+     "count": 649,
+     "countDescription": "649",
+     "route": null
+    }
+   ]
+  },
+  {
+   "facetItem": 4,
+   "facetName": "Title",
+   "itens": [
+    {
+     "value": "Auxiliar de Serviços Gerais",
+     "caption": "Auxiliar de Serviços Gerais",
+     "count": 2078,
+     "countDescription": "2,078",
+     "route": null
+    },
+    {
+     "value": "AUXILIAR DE SERVIÇOS GERAIS / SP",
+     "caption": "AUXILIAR DE SERVIÇOS GERAIS / SP",
+     "count": 1838,
+     "countDescription": "1,838",
+     "route": null
+    },
+    {
+     "value": "Estágio em Educação Física - Noite",
+     "caption": "Estágio em Educação Física - Noite",
+     "count": 1167,
+     "countDescription": "1,167",
+     "route": null
+    },
+    {
+     "value": "Estágio em Educação Física - Manhã",
+     "caption": "Estágio em Educação Física - Manhã",
+     "count": 1154,
+     "countDescription": "1,154",
+     "route": null
+    },
+    {
+     "value": "INCRA Sede DF - Instituto Nacional de Colonização e Reforma Agrária - Estágio em Direito",
+     "caption": "INCRA Sede DF - Instituto Nacional de Colonização e Reforma Agrária - Estágio em Direito",
+     "count": 1047,
+     "countDescription": "1,047",
+     "route": null
+    },
+    {
+     "value": "Candidatura rápida",
+     "caption": "Candidatura rápida",
+     "count": 785,
+     "countDescription": "785",
+     "route": null
+    },
+    {
+     "value": "Auxiliar de limpeza",
+     "caption": "Auxiliar de limpeza",
+     "count": 644,
+     "countDescription": "644",
+     "route": null
+    },
+    {
+     "value": "Auxiliar de produção",
+     "caption": "Auxiliar de produção",
+     "count": 568,
+     "countDescription": "568",
+     "route": null
+    },
+    {
+     "value": "INCRA - Instituto Nacional de Colonização e Reforma Agrária - Estágio em Direito",
+     "caption": "INCRA - Instituto Nacional de Colonização e Reforma Agrária - Estágio em Direito",
+     "count": 458,
+     "countDescription": "458",
+     "route": null
+    },
+    {
+     "value": "INCRA Sede DF - Instituto Nacional de Colonização e Reforma Agrária - Estágio em Ciências Contábeis",
+     "caption": "INCRA Sede DF - Instituto Nacional de Colonização e Reforma Agrária - Estágio em Ciências Contábeis",
+     "count": 448,
+     "countDescription": "448",
+     "route": null
+    },
+    {
+     "value": "Engenheiro de Dados-Presencial-Pinhais-PR ",
+     "caption": "Engenheiro de Dados-Presencial-Pinhais-PR ",
+     "count": 447,
+     "countDescription": "447",
+     "route": null
+    },
+    {
+     "value": "Vigilante - intermitente | São João dos Patos - MA ",
+     "caption": "Vigilante - intermitente | São João dos Patos - MA ",
+     "count": 438,
+     "countDescription": "438",
+     "route": null
+    },
+    {
+     "value": "Analista Financeiro - Contas a pagar- Presencial- Pinhais",
+     "caption": "Analista Financeiro - Contas a pagar- Presencial- Pinhais",
+     "count": 336,
+     "countDescription": "336",
+     "route": null
+    },
+    {
+     "value": "Analista Financeiro - Contas a pagar",
+     "caption": "Analista Financeiro - Contas a pagar",
+     "count": 323,
+     "countDescription": "323",
+     "route": null
+    },
+    {
+     "value": "Vendedor",
+     "caption": "Vendedor",
+     "count": 306,
+     "countDescription": "306",
+     "route": null
+    },
+    {
+     "value": "Auxiliar administrativo",
+     "caption": "Auxiliar administrativo",
+     "count": 277,
+     "countDescription": "277",
+     "route": null
+    },
+    {
+     "value": "Recepcionista",
+     "caption": "Recepcionista",
+     "count": 276,
+     "countDescription": "276",
+     "route": null
+    },
+    {
+     "value": "INCRA ES - Procuradoria Federal Especializada da AGU - Estágio em Direito",
+     "caption": "INCRA ES - Procuradoria Federal Especializada da AGU - Estágio em Direito",
+     "count": 271,
+     "countDescription": "271",
+     "route": null
+    },
+    {
+     "value": "INCRA Sede DF - Instituto Nacional de Colonização e Reforma Agrária - Estágio em Relações Internacionais",
+     "caption": "INCRA Sede DF - Instituto Nacional de Colonização e Reforma Agrária - Estágio em Relações Internacionais",
+     "count": 269,
+     "countDescription": "269",
+     "route": null
+    },
+    {
+     "value": "INCRA no Paraná - Unidade Avançada Iguaçu - Estágio em Nível Médio - Cascavel/PR - (Vaga afirmativa para PCDs e Cotistas)",
+     "caption": "INCRA no Paraná - Unidade Avançada Iguaçu - Estágio em Nível Médio - Cascavel/PR - (Vaga afirmativa para PCDs e Cotistas)",
+     "count": 265,
+     "countDescription": "265",
+     "route": null
+    },
+    {
+     "value": "AUXILIAR DE SERVIÇOS GERAIS",
+     "caption": "AUXILIAR DE SERVIÇOS GERAIS",
+     "count": 256,
+     "countDescription": "256",
+     "route": null
+    },
+    {
+     "value": "Ajudante geral",
+     "caption": "Ajudante geral",
+     "count": 233,
+     "countDescription": "233",
+     "route": null
+    },
+    {
+     "value": "Analista Administrativo | 5x2 | Santa Felicidade",
+     "caption": "Analista Administrativo | 5x2 | Santa Felicidade",
+     "count": 232,
+     "countDescription": "232",
+     "route": null
+    },
+    {
+     "value": "INCRA Sede DF - Instituto Nacional de Colonização e Reforma Agrária - Estágio em Museologia",
+     "caption": "INCRA Sede DF - Instituto Nacional de Colonização e Reforma Agrária - Estágio em Museologia",
+     "count": 232,
+     "countDescription": "232",
+     "route": null
+    },
+    {
+     "value": "Oficial de Manutenção | Umuarama | 40h",
+     "caption": "Oficial de Manutenção | Umuarama | 40h",
+     "count": 227,
+     "countDescription": "227",
+     "route": null
+    }
+   ]
+  },
+  {
+   "facetItem": 12,
+   "facetName": "Area",
+   "itens": [
+    {
+     "value": "Administrativo/ Escritório",
+     "caption": "Administrativo/ Escritório",
+     "count": 19025,
+     "countDescription": "19,025",
+     "route": null
+    },
+    {
+     "value": "Serviços Gerais e Domiciliares",
+     "caption": "Serviços Gerais e Domiciliares",
+     "count": 13630,
+     "countDescription": "13,630",
+     "route": null
+    },
+    {
+     "value": "Outras Áreas",
+     "caption": "Outras Áreas",
+     "count": 10800,
+     "countDescription": "10,800",
+     "route": null
+    },
+    {
+     "value": "Indústria, Manufatura e Produção",
+     "caption": "Indústria, Manufatura e Produção",
+     "count": 7650,
+     "countDescription": "7,650",
+     "route": null
+    },
+    {
+     "value": "Comercial e Vendas",
+     "caption": "Comercial e Vendas",
+     "count": 6859,
+     "countDescription": "6,859",
+     "route": null
+    },
+    {
+     "value": "Comércio Varejista/ Atacadista",
+     "caption": "Comércio Varejista/ Atacadista",
+     "count": 4598,
+     "countDescription": "4,598",
+     "route": null
+    },
+    {
+     "value": "Financeiro/ Contabilidade/ Economia",
+     "caption": "Financeiro/ Contabilidade/ Economia",
+     "count": 4224,
+     "countDescription": "4,224",
+     "route": null
+    },
+    {
+     "value": "Técnicos (Manutenção, Instalação e Reparos)",
+     "caption": "Técnicos (Manutenção, Instalação e Reparos)",
+     "count": 2786,
+     "countDescription": "2,786",
+     "route": null
+    },
+    {
+     "value": "Jurídico",
+     "caption": "Jurídico",
+     "count": 2755,
+     "countDescription": "2,755",
+     "route": null
+    },
+    {
+     "value": "Esportes/ Educação Física/ Academias",
+     "caption": "Esportes/ Educação Física/ Academias",
+     "count": 2573,
+     "countDescription": "2,573",
+     "route": null
+    },
+    {
+     "value": "Restaurantes e bares",
+     "caption": "Restaurantes e bares",
+     "count": 2357,
+     "countDescription": "2,357",
+     "route": null
+    },
+    {
+     "value": "Logística/ Distribuição",
+     "caption": "Logística/ Distribuição",
+     "count": 1381,
+     "countDescription": "1,381",
+     "route": null
+    },
+    {
+     "value": "Construção Civil",
+     "caption": "Construção Civil",
+     "count": 1160,
+     "countDescription": "1,160",
+     "route": null
+    },
+    {
+     "value": "Transporte (Terrestre, Marítimo e Aéreo)",
+     "caption": "Transporte (Terrestre, Marítimo e Aéreo)",
+     "count": 1119,
+     "countDescription": "1,119",
+     "route": null
+    },
+    {
+     "value": "Informática/TI e Internet",
+     "caption": "Informática/TI e Internet",
+     "count": 1089,
+     "countDescription": "1,089",
+     "route": null
+    },
+    {
+     "value": "Marketing",
+     "caption": "Marketing",
+     "count": 997,
+     "countDescription": "997",
+     "route": null
+    },
+    {
+     "value": "Saúde, Trat.Terapêuticos e Hospitalar",
+     "caption": "Saúde, Trat.Terapêuticos e Hospitalar",
+     "count": 780,
+     "countDescription": "780",
+     "route": null
+    },
+    {
+     "value": "Veterinária, Zoologia, Zootecnia",
+     "caption": "Veterinária, Zoologia, Zootecnia",
+     "count": 759,
+     "countDescription": "759",
+     "route": null
+    },
+    {
+     "value": "Telemarketing / Atendimento ao Cliente",
+     "caption": "Telemarketing / Atendimento ao Cliente",
+     "count": 753,
+     "countDescription": "753",
+     "route": null
+    },
+    {
+     "value": "Recursos Humanos",
+     "caption": "Recursos Humanos",
+     "count": 737,
+     "countDescription": "737",
+     "route": null
+    },
+    {
+     "value": "Química/ Farmacêutica",
+     "caption": "Química/ Farmacêutica",
+     "count": 560,
+     "countDescription": "560",
+     "route": null
+    },
+    {
+     "value": "Engenharia Civil",
+     "caption": "Engenharia Civil",
+     "count": 534,
+     "countDescription": "534",
+     "route": null
+    },
+    {
+     "value": "Comércio Exterior",
+     "caption": "Comércio Exterior",
+     "count": 511,
+     "countDescription": "511",
+     "route": null
+    },
+    {
+     "value": "Educação, Treinamento e Idiomas",
+     "caption": "Educação, Treinamento e Idiomas",
+     "count": 500,
+     "countDescription": "500",
+     "route": null
+    },
+    {
+     "value": "Segurança do Trabalho",
+     "caption": "Segurança do Trabalho",
+     "count": 483,
+     "countDescription": "483",
+     "route": null
+    }
+   ]
+  },
+  {
+   "facetItem": 18,
+   "facetName": "RoleName",
+   "itens": [
+    {
+     "value": "Outros",
+     "caption": "Outros",
+     "count": 10800,
+     "countDescription": "10,800",
+     "route": null
+    },
+    {
+     "value": "Auxiliar administrativo",
+     "caption": "Auxiliar administrativo",
+     "count": 10024,
+     "countDescription": "10,024",
+     "route": null
+    },
+    {
+     "value": "Auxiliar de Serviços Gerais",
+     "caption": "Auxiliar de Serviços Gerais",
+     "count": 4967,
+     "countDescription": "4,967",
+     "route": null
+    },
+    {
+     "value": "Vigia / vigilante",
+     "caption": "Vigia / vigilante",
+     "count": 3391,
+     "countDescription": "3,391",
+     "route": null
+    },
+    {
+     "value": "Auxiliar de limpeza",
+     "caption": "Auxiliar de limpeza",
+     "count": 2523,
+     "countDescription": "2,523",
+     "route": null
+    },
+    {
+     "value": "Estágio em educação física",
+     "caption": "Estágio em educação física",
+     "count": 2506,
+     "countDescription": "2,506",
+     "route": null
+    },
+    {
+     "value": "Estágio em direito",
+     "caption": "Estágio em direito",
+     "count": 2323,
+     "countDescription": "2,323",
+     "route": null
+    },
+    {
+     "value": "Vendedor",
+     "caption": "Vendedor",
+     "count": 1684,
+     "countDescription": "1,684",
+     "route": null
+    },
+    {
+     "value": "Estagiário",
+     "caption": "Estagiário",
+     "count": 1424,
+     "countDescription": "1,424",
+     "route": null
+    },
+    {
+     "value": "Auxiliar de produção",
+     "caption": "Auxiliar de produção",
+     "count": 1350,
+     "countDescription": "1,350",
+     "route": null
+    },
+    {
+     "value": "Assistente administrativo",
+     "caption": "Assistente administrativo",
+     "count": 1280,
+     "countDescription": "1,280",
+     "route": null
+    },
+    {
+     "value": "Caixa",
+     "caption": "Caixa",
+     "count": 977,
+     "countDescription": "977",
+     "route": null
+    },
+    {
+     "value": "Atendente",
+     "caption": "Atendente",
+     "count": 911,
+     "countDescription": "911",
+     "route": null
+    },
+    {
+     "value": "Assistente de logística",
+     "caption": "Assistente de logística",
+     "count": 904,
+     "countDescription": "904",
+     "route": null
+    },
+    {
+     "value": "Analista financeiro",
+     "caption": "Analista financeiro",
+     "count": 882,
+     "countDescription": "882",
+     "route": null
+    },
+    {
+     "value": "Ajudante geral",
+     "caption": "Ajudante geral",
+     "count": 868,
+     "countDescription": "868",
+     "route": null
+    },
+    {
+     "value": "Repositor",
+     "caption": "Repositor",
+     "count": 851,
+     "countDescription": "851",
+     "route": null
+    },
+    {
+     "value": "Consultor de vendas",
+     "caption": "Consultor de vendas",
+     "count": 838,
+     "countDescription": "838",
+     "route": null
+    },
+    {
+     "value": "Auxiliar de serviços em geral",
+     "caption": "Auxiliar de serviços em geral",
+     "count": 835,
+     "countDescription": "835",
+     "route": null
+    },
+    {
+     "value": "Promotor de vendas",
+     "caption": "Promotor de vendas",
+     "count": 767,
+     "countDescription": "767",
+     "route": null
+    },
+    {
+     "value": "Zootecnista",
+     "caption": "Zootecnista",
+     "count": 737,
+     "countDescription": "737",
+     "route": null
+    },
+    {
+     "value": "Porteiro",
+     "caption": "Porteiro",
+     "count": 717,
+     "countDescription": "717",
+     "route": null
+    },
+    {
+     "value": "Motorista",
+     "caption": "Motorista",
+     "count": 716,
+     "countDescription": "716",
+     "route": null
+    },
+    {
+     "value": "Servente de obras",
+     "caption": "Servente de obras",
+     "count": 716,
+     "countDescription": "716",
+     "route": null
+    },
+    {
+     "value": "Aprendiz",
+     "caption": "Aprendiz",
+     "count": 714,
+     "countDescription": "714",
+     "route": null
+    }
+   ]
+  },
+  {
+   "facetItem": 13,
+   "facetName": "Location",
+   "itens": [
+    {
+     "value": "São Paulo, SP",
+     "caption": "São Paulo, SP",
+     "count": 12677,
+     "countDescription": "12,677",
+     "route": null
+    },
+    {
+     "value": "Curitiba, PR",
+     "caption": "Curitiba, PR",
+     "count": 6221,
+     "countDescription": "6,221",
+     "route": null
+    },
+    {
+     "value": "Brasilia, DF",
+     "caption": "Brasilia, DF",
+     "count": 5000,
+     "countDescription": "5,000",
+     "route": null
+    },
+    {
+     "value": "Fortaleza, CE",
+     "caption": "Fortaleza, CE",
+     "count": 2507,
+     "countDescription": "2,507",
+     "route": null
+    },
+    {
+     "value": "Pinhais, PR",
+     "caption": "Pinhais, PR",
+     "count": 1827,
+     "countDescription": "1,827",
+     "route": null
+    },
+    {
+     "value": "Campinas, SP",
+     "caption": "Campinas, SP",
+     "count": 1783,
+     "countDescription": "1,783",
+     "route": null
+    },
+    {
+     "value": "Belo Horizonte, MG",
+     "caption": "Belo Horizonte, MG",
+     "count": 1730,
+     "countDescription": "1,730",
+     "route": null
+    },
+    {
+     "value": "Rio de Janeiro, RJ",
+     "caption": "Rio de Janeiro, RJ",
+     "count": 1589,
+     "countDescription": "1,589",
+     "route": null
+    },
+    {
+     "value": "Porto Alegre, RS",
+     "caption": "Porto Alegre, RS",
+     "count": 1523,
+     "countDescription": "1,523",
+     "route": null
+    },
+    {
+     "value": "Guarulhos, SP",
+     "caption": "Guarulhos, SP",
+     "count": 1307,
+     "countDescription": "1,307",
+     "route": null
+    },
+    {
+     "value": "Joinville, SC",
+     "caption": "Joinville, SC",
+     "count": 1173,
+     "countDescription": "1,173",
+     "route": null
+    },
+    {
+     "value": "Vila Velha, ES",
+     "caption": "Vila Velha, ES",
+     "count": 1119,
+     "countDescription": "1,119",
+     "route": null
+    },
+    {
+     "value": "Serra, ES",
+     "caption": "Serra, ES",
+     "count": 1002,
+     "countDescription": "1,002",
+     "route": null
+    },
+    {
+     "value": "Barueri, SP",
+     "caption": "Barueri, SP",
+     "count": 854,
+     "countDescription": "854",
+     "route": null
+    },
+    {
+     "value": "Manaus, AM",
+     "caption": "Manaus, AM",
+     "count": 833,
+     "countDescription": "833",
+     "route": null
+    },
+    {
+     "value": "Vitória, ES",
+     "caption": "Vitória, ES",
+     "count": 828,
+     "countDescription": "828",
+     "route": null
+    },
+    {
+     "value": "Cuiabá, MT",
+     "caption": "Cuiabá, MT",
+     "count": 809,
+     "countDescription": "809",
+     "route": null
+    },
+    {
+     "value": "Blumenau, SC",
+     "caption": "Blumenau, SC",
+     "count": 799,
+     "countDescription": "799",
+     "route": null
+    },
+    {
+     "value": "São Bernardo do Campo, SP",
+     "caption": "São Bernardo do Campo, SP",
+     "count": 793,
+     "countDescription": "793",
+     "route": null
+    },
+    {
+     "value": "Jundiaí, SP",
+     "caption": "Jundiaí, SP",
+     "count": 786,
+     "countDescription": "786",
+     "route": null
+    },
+    {
+     "value": "São José dos Campos, SP",
+     "caption": "São José dos Campos, SP",
+     "count": 769,
+     "countDescription": "769",
+     "route": null
+    },
+    {
+     "value": "Cascavel, PR",
+     "caption": "Cascavel, PR",
+     "count": 744,
+     "countDescription": "744",
+     "route": null
+    },
+    {
+     "value": "Santo André, SP",
+     "caption": "Santo André, SP",
+     "count": 691,
+     "countDescription": "691",
+     "route": null
+    },
+    {
+     "value": "Goiânia, GO",
+     "caption": "Goiânia, GO",
+     "count": 677,
+     "countDescription": "677",
+     "route": null
+    },
+    {
+     "value": "Sorocaba, SP",
+     "caption": "Sorocaba, SP",
+     "count": 667,
+     "countDescription": "667",
+     "route": null
+    }
+   ]
+  }
+ ],
+ "total": 90718,
+ "sum": 237836,
+ "valueCount": 90718,
+ "moreLikeThis": [],
+ "hasError": false,
+ "processingTime": 235
+}

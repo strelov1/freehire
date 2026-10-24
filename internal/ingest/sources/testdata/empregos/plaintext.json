@@ -1,0 +1,748 @@
+{
+ "searchJobInput": {
+  "keyword": "",
+  "filters": [
+   {
+    "facetItem": 10,
+    "description": "Analista",
+    "descriptionUrl": null,
+    "subDescription": null,
+    "rangeStart": null,
+    "rangeEnd": null,
+    "ignoredDistance": null
+   }
+  ],
+  "page": 0,
+  "size": 15000,
+  "order": 0,
+  "distance": 100,
+  "exponentialDecay": null,
+  "dateDecay": null,
+  "facetItems": [],
+  "hasRole": false,
+  "isJobAlert": false,
+  "clusters": null
+ },
+ "jobPostingCollection": [
+  {
+   "salary": {
+    "min": null,
+    "max": 600,
+    "format": null
+   },
+   "createdAtFormat": "1 dia",
+   "quantityFormat": "1 vaga",
+   "id": 0,
+   "referenceId": 11946328,
+   "source": "empregoscombr",
+   "title": "Analista de Estoque",
+   "role": {
+    "id": 1181,
+    "name": "Analista de estoques",
+    "areaId": 1,
+    "area": "Administrativo/ Escritório",
+    "hierarchicalLevelId": 4,
+    "hierarchicalLevel": "Analista"
+   },
+   "description": "&nbsp; Estamos em busca de um Analista de Estoque&nbsp; proativo, organizado e com espírito de equipe para integrar nosso time. Se você tem experiência em rotinas administrativas, gosta de lidar com controles e processos, e deseja atuar em um ambiente dinâmico e desafiador, essa oportunidade é para você! Responsabilidades Gerenciar e atualizar controles em planilhas; Elaborar e manter planilhas de desenvolvimento e controle de estoques; Dar suporte nos processos de suprimentos e estoque Apoiar nas rotinas administrativas gerais, garantindo organização e eficiência nos processos internos; Contribuir para a melhoria contínua dos fluxos administrativos. Apoiar nas rotinas administrativas de pessoal, logística, suprimentos entre outros; Realizar atendimento do cliente interno Organização, processamento e arquivo de documentos variados; Realizar eventualmente abastecimento de veículos leves e EMS; Conduzir veículos leves em deslocamento e translado a serviço da empresa para atendimento a demanda operacional e administrativa. Requisitos &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Domínio do Pacote Office, com Excel intermediário a avançado. &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Conhecimento em Power BI. &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Experiencia com gestão de estoque e suprimentos &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Organização, atenção aos detalhes e capacidade analítica. &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Boa comunicação e facilidade para trabalhar em equipe. &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Proatividade, compromisso com prazos e foco em resultados. Diferenciais Experiência prévia na área administrativa. Experiencia com gestão de estoque e suprimentos &nbsp; Valorizamos e promovemos a diversidade em todas as suas formas de gênero, raça, orientação sexual, identidade de gênero, idade, deficiência ou qualquer outra característica.",
+   "quantity": 1,
+   "workplaceTypes": "Presencial",
+   "location": [
+    {
+     "address": "Inocência",
+     "neighborhood": null,
+     "city": "Inocência",
+     "state": "MS",
+     "stateAbbreviation": "MS",
+     "country": "br",
+     "geolocation": {
+      "postalCode": "-19.72771,-51.93189",
+      "city": null
+     },
+     "region": "Região do Leste de Mato Grosso do Sul"
+    }
+   ],
+   "company": {
+    "id": 480540,
+    "name": "ALIATTO SERVICOS LTDA",
+    "description": "Fornecimento e gestão de recursos humanos para terceiros",
+    "industry": "Recursos Humanos/ Recrutamento e seleção",
+    "status": 50,
+    "group": {
+     "id": 480540,
+     "name": "ALIATTO SERVICOS LTDA"
+    },
+    "isPartner": false,
+    "photo": true
+   },
+   "business": {
+    "promoted": false,
+    "boostname": "BOOST_DEFAULT"
+   },
+   "status": 100,
+   "contractForm": "A Combinar",
+   "requiredQualification": " ",
+   "academicFormation": null,
+   "benefits": null,
+   "workTime": null,
+   "pcd": false,
+   "createdAt": "2026-10-22T09:20:01.700",
+   "lastUpdatedAt": "2026-10-22T09:20:01.700",
+   "score": 2.8344114,
+   "hasApplied": false,
+   "applyUrl": null,
+   "displayName": null,
+   "industries": null,
+   "algorithmType": null
+  },
+  {
+   "salary": {
+    "min": null,
+    "max": null,
+    "format": null
+   },
+   "createdAtFormat": "2 dias",
+   "quantityFormat": "1 vaga",
+   "id": 0,
+   "referenceId": 11941010,
+   "source": "empregoscombr",
+   "title": "ANALISTA DE ESTOQUE",
+   "role": {
+    "id": 1181,
+    "name": "Analista de estoques",
+    "areaId": 1,
+    "area": "Administrativo/ Escritório",
+    "hierarchicalLevelId": 4,
+    "hierarchicalLevel": "Analista"
+   },
+   "description": "Assistencia ao paciente em todos os niveis de complexidade nas unidades de internação.",
+   "quantity": 1,
+   "workplaceTypes": "Presencial",
+   "location": [
+    {
+     "address": "Brasília",
+     "neighborhood": null,
+     "city": "Brasília",
+     "state": "DF",
+     "stateAbbreviation": "DF",
+     "country": "br",
+     "geolocation": {
+      "postalCode": "-15.77829,-47.92909",
+      "city": null
+     },
+     "region": "Região do Distrito Federal"
+    }
+   ],
+   "company": {
+    "id": 127451,
+    "name": "SANTA LUCIA",
+    "description": "Atua com atividades de atendimento em pronto-socorro e unidades hospitalares para atendimento a urgências.",
+    "industry": "Saúde/ Hospitalar",
+    "status": 50,
+    "group": {
+     "id": 127451,
+     "name": "SANTA LUCIA"
+    },
+    "isPartner": false,
+    "photo": true
+   },
+   "business": {
+    "promoted": false,
+    "boostname": "BOOST_DEFAULT"
+   },
+   "status": 100,
+   "contractForm": "A Combinar",
+   "requiredQualification": " ",
+   "academicFormation": null,
+   "benefits": null,
+   "workTime": null,
+   "pcd": false,
+   "createdAt": "2026-10-21T18:22:43.240",
+   "lastUpdatedAt": "2026-10-21T18:22:43.240",
+   "score": 2.7720983,
+   "hasApplied": false,
+   "applyUrl": null,
+   "displayName": null,
+   "industries": null,
+   "algorithmType": null
+  },
+  {
+   "salary": {
+    "min": null,
+    "max": null,
+    "format": null
+   },
+   "createdAtFormat": "4 dias",
+   "quantityFormat": "1 vaga",
+   "id": 0,
+   "referenceId": 11927583,
+   "source": "empregoscombr",
+   "title": "ANALISTA DE ESTOQUE",
+   "role": {
+    "id": 1181,
+    "name": "Analista de estoques",
+    "areaId": 1,
+    "area": "Administrativo/ Escritório",
+    "hierarchicalLevelId": 4,
+    "hierarchicalLevel": "Analista"
+   },
+   "description": "O Analista de Almoxarifado será responsável por diversas atividades voltadas à gestão eficiente de materiais e insumos da empresa. Entre suas principais funções, destacam-se o recebimento, conferência e armazenamento de produtos, assegurando que todos os itens sejam registrados corretamente no sistema de controle de estoque. O profissional deverá realizar a inspeção da qualidade dos produtos recebidos, identificando possíveis irregularidades e garantindo que os materiais estejam em conformidade com as especificações solicitadas. Outra atribuição fundamental será a organização do estoque, criando e mantendo uma disposição adequada dos itens, de forma a facilitar o acesso e a manutenção do espaço. O Analista também será encarregado de monitorar os níveis de estoque, realizando inventários periódicos e emitindo relatórios sobre a situação dos materiais, além de prever a necessidade de novas aquisições e solicitar pedidos de compra ao setor responsável, visando evitar faltas ou excessos no estoque. Em seu dia a dia, o profissional trabalhará em conjunto com outras áreas da empresa, como compras e produção, com o intuito de otimizar a logística de materiais, garantindo que todos os setores recebam os insumos necessários para o bom funcionamento das operações. O Analista de Almoxarifado deverá também zelar pela correta utilização dos recursos e pela aplicação das normas de segurança e saúde relacionadas ao manuseio e armazenamento de produtos. Além disso, será sua responsabilidade treinar e orientar os colaboradores envolvidos nas atividades do almoxarifado, promovendo boas práticas de trabalho e promovendo um ambiente seguro. Por fim, o Analista deverá manter-se atualizado em relação a práticas de gestão de almoxarifado, buscando sempre melhorias nos processos e contribuindo para a eficiência organizacional.",
+   "quantity": 1,
+   "workplaceTypes": "Presencial",
+   "location": [
+    {
+     "address": "Brasília",
+     "neighborhood": null,
+     "city": "Brasília",
+     "state": "DF",
+     "stateAbbreviation": "DF",
+     "country": "br",
+     "geolocation": {
+      "postalCode": "-15.77829,-47.92909",
+      "city": null
+     },
+     "region": "Região do Distrito Federal"
+    }
+   ],
+   "company": {
+    "id": 103035,
+    "name": "Hospital Santa Rosa",
+    "description": "Hospital geral",
+    "industry": "Saúde/ Hospitalar",
+    "status": 50,
+    "group": {
+     "id": 103035,
+     "name": "Hospital Santa Rosa"
+    },
+    "isPartner": false,
+    "photo": true
+   },
+   "business": {
+    "promoted": false,
+    "boostname": "BOOST_DEFAULT"
+   },
+   "status": 100,
+   "contractForm": "A Combinar",
+   "requiredQualification": " ",
+   "academicFormation": null,
+   "benefits": null,
+   "workTime": null,
+   "pcd": false,
+   "createdAt": "2026-10-19T14:01:34.627",
+   "lastUpdatedAt": "2026-10-19T14:01:34.627",
+   "score": 2.5539634,
+   "hasApplied": false,
+   "applyUrl": null,
+   "displayName": null,
+   "industries": null,
+   "algorithmType": null
+  },
+  {
+   "salary": {
+    "min": null,
+    "max": null,
+    "format": null
+   },
+   "createdAtFormat": "6 dias",
+   "quantityFormat": "1 vaga",
+   "id": 0,
+   "referenceId": 11923340,
+   "source": "empregoscombr",
+   "title": "ANALISTA DE ESTOQUE",
+   "role": {
+    "id": 1181,
+    "name": "Analista de estoques",
+    "areaId": 1,
+    "area": "Administrativo/ Escritório",
+    "hierarchicalLevelId": 4,
+    "hierarchicalLevel": "Analista"
+   },
+   "description": "O Analista de Almoxarifado será responsável por diversas atividades voltadas à gestão eficiente de materiais e insumos da empresa. Entre suas principais funções, destacam-se o recebimento, conferência e armazenamento de produtos, assegurando que todos os itens sejam registrados corretamente no sistema de controle de estoque. O profissional deverá realizar a inspeção da qualidade dos produtos recebidos, identificando possíveis irregularidades e garantindo que os materiais estejam em conformidade com as especificações solicitadas. Outra atribuição fundamental será a organização do estoque, criando e mantendo uma disposição adequada dos itens, de forma a facilitar o acesso e a manutenção do espaço. O Analista também será encarregado de monitorar os níveis de estoque, realizando inventários periódicos e emitindo relatórios sobre a situação dos materiais, além de prever a necessidade de novas aquisições e solicitar pedidos de compra ao setor responsável, visando evitar faltas ou excessos no estoque. Em seu dia a dia, o profissional trabalhará em conjunto com outras áreas da empresa, como compras e produção, com o intuito de otimizar a logística de materiais, garantindo que todos os setores recebam os insumos necessários para o bom funcionamento das operações. O Analista de Almoxarifado deverá também zelar pela correta utilização dos recursos e pela aplicação das normas de segurança e saúde relacionadas ao manuseio e armazenamento de produtos. Além disso, será sua responsabilidade treinar e orientar os colaboradores envolvidos nas atividades do almoxarifado, promovendo boas práticas de trabalho e promovendo um ambiente seguro. Por fim, o Analista deverá manter-se atualizado em relação a práticas de gestão de almoxarifado, buscando sempre melhorias nos processos e contribuindo para a eficiência organizacional.",
+   "quantity": 1,
+   "workplaceTypes": "Presencial",
+   "location": [
+    {
+     "address": "Brasília",
+     "neighborhood": null,
+     "city": "Brasília",
+     "state": "DF",
+     "stateAbbreviation": "DF",
+     "country": "br",
+     "geolocation": {
+      "postalCode": "-15.77829,-47.92909",
+      "city": null
+     },
+     "region": "Região do Distrito Federal"
+    }
+   ],
+   "company": {
+    "id": 127451,
+    "name": "SANTA LUCIA",
+    "description": "Atua com atividades de atendimento em pronto-socorro e unidades hospitalares para atendimento a urgências.",
+    "industry": "Saúde/ Hospitalar",
+    "status": 50,
+    "group": {
+     "id": 127451,
+     "name": "SANTA LUCIA"
+    },
+    "isPartner": false,
+    "photo": true
+   },
+   "business": {
+    "promoted": false,
+    "boostname": "BOOST_DEFAULT"
+   },
+   "status": 100,
+   "contractForm": "A Combinar",
+   "requiredQualification": " ",
+   "academicFormation": null,
+   "benefits": null,
+   "workTime": null,
+   "pcd": false,
+   "createdAt": "2026-10-17T12:11:09.293",
+   "lastUpdatedAt": "2026-10-17T12:11:09.293",
+   "score": 2.346295,
+   "hasApplied": false,
+   "applyUrl": null,
+   "displayName": null,
+   "industries": null,
+   "algorithmType": null
+  },
+  {
+   "salary": {
+    "min": null,
+    "max": null,
+    "format": null
+   },
+   "createdAtFormat": "7 dias",
+   "quantityFormat": "1 vaga",
+   "id": 0,
+   "referenceId": 11920481,
+   "source": "empregoscombr",
+   "title": "ANALISTA DE ESTOQUE",
+   "role": {
+    "id": 1181,
+    "name": "Analista de estoques",
+    "areaId": 1,
+    "area": "Administrativo/ Escritório",
+    "hierarchicalLevelId": 4,
+    "hierarchicalLevel": "Analista"
+   },
+   "description": "Requisitos da Vaga: Principais atividades: Realizar o controle e a gestão das movimentações de estoque, garantindo a acuracidade das informações; Administrar e controlar códigos de barras, cadastros de produtos e identificação de materiais; Realizar a coleta, análise e atualização de dados relacionados ao estoque; Acompanhar entradas, saídas, transferências e saldos de materiais no sistema; Identificar e corrigir divergências entre o estoque físico e o sistema; Realizar inventários periódicos e conciliações de estoque; Monitorar indicadores e elaborar relatórios para acompanhamento dos processos; Garantir a correta identificação, rastreabilidade e organização dos produtos; Apoiar a melhoria contínua dos processos de controle e gestão de estoque. Requisitos: Experiência comprovada com controle e gestão de estoque; Conhecimento em controle e gerenciamento de códigos de barras; Experiência com cadastro e identificação de produtos e materiais; Conhecimento em sistemas de gestão de estoque e planilhas; Habilidade para coleta, análise e conferência de informações; Perfil organizado, analítico, proativo e atento aos detalhes. Perfil desejado: Profissional com raciocínio analítico, organização e domínio dos processos de controle de estoque, capaz de garantir a confiabilidade dos dados, a rastreabilidade dos produtos e a precisão das informações nos sistemas. Escolaridade: Técnico em Logística Salário: Informar pretensão salarial",
+   "quantity": 1,
+   "workplaceTypes": "Presencial",
+   "location": [
+    {
+     "address": "Novo Hamburgo",
+     "neighborhood": null,
+     "city": "Novo Hamburgo",
+     "state": "RS",
+     "stateAbbreviation": "RS",
+     "country": "br",
+     "geolocation": {
+      "postalCode": "-29.68425,-51.15429",
+      "city": null
+     },
+     "region": "Região Metropolitana de Porto Alegre"
+    }
+   ],
+   "company": {
+    "id": 400025,
+    "name": "Vip desenvolvimento humano",
+    "description": "Seleção e agenciamento de mão-de-obra.",
+    "industry": "Recursos Humanos/ Recrutamento e seleção",
+    "status": 50,
+    "group": {
+     "id": 400025,
+     "name": "Vip desenvolvimento humano"
+    },
+    "isPartner": false,
+    "photo": true
+   },
+   "business": {
+    "promoted": false,
+    "boostname": "BOOST_DEFAULT"
+   },
+   "status": 100,
+   "contractForm": "A Combinar",
+   "requiredQualification": " ",
+   "academicFormation": null,
+   "benefits": null,
+   "workTime": null,
+   "pcd": false,
+   "createdAt": "2026-10-16T13:34:55.607",
+   "lastUpdatedAt": "2026-10-16T13:34:55.607",
+   "score": 2.2521126,
+   "hasApplied": false,
+   "applyUrl": null,
+   "displayName": null,
+   "industries": null,
+   "algorithmType": null
+  },
+  {
+   "salary": {
+    "min": null,
+    "max": null,
+    "format": null
+   },
+   "createdAtFormat": "56 dias",
+   "quantityFormat": "1 vaga",
+   "id": 0,
+   "referenceId": 11794188,
+   "source": "empregoscombr",
+   "title": "Analista de Estoque",
+   "role": {
+    "id": 1181,
+    "name": "Analista de estoques",
+    "areaId": 1,
+    "area": "Administrativo/ Escritório",
+    "hierarchicalLevelId": 4,
+    "hierarchicalLevel": "Analista"
+   },
+   "description": "Com experiência em gestão de negócios desde 1955, a WLM atua nos segmentos automotivo e do agronegócio, consolidando-se como um grupo sólido, diversificado e em constante evolução. O principal foco dos negócios da WLM é a comercialização de produtos e serviços da marca Scania, incluindo caminhões pesados e extrapesados, chassis para ônibus rodoviários e urbanos, venda de peças genuínas, além da prestação de serviços de manutenção corretiva e preventiva e assistência técnica especializada.&nbsp; No segmento de concessionárias Scania, a WLM está presente em mais de 20 pontos no país, atendendo seis estados brasileiros, por meio das operações Equipo (RJ), Itaipu (MG), Itaipu Norte (PA), Quinta Roda (SP) e Supermac&nbsp;(AM e RR).&nbsp; No segmento do agronegócio, por meio de suas controladas Fartura (Sul do Pará) e Itapura (Norte do Mato Grosso, Sul de Minas e região de Campinas/SP), a WLM atua nas atividades de cria, recria e engorda de bovinos, além da produção e comercialização de café, soja e milho. Com forte compromisso com a sustentabilidade, suas atividades produtivas são executadas com foco nas melhores práticas de preservação da fauna e flora nativas, bem como no cuidado com a água e o solo.&nbsp; Em 2025, a WLM anunciou a aquisição de 60% da CHP Brasil, empresa referência em geração distribuída e eficiência energética. Com essa aquisição, o grupo amplia sua presença estratégica, diversifica seu portfólio e dá um passo significativo em direção ao futuro, reforçando seu compromisso com a sustentabilidade e com a criação de novas oportunidades de negócio no setor de energia.&nbsp; Como parte dessa estratégia de inovação, sustentabilidade e diversificação dos negócios, nasce a&nbsp;Ekotruck, uma startup criada dentro do Grupo WLM com o propósito de oferecer sempre a melhor solução em peças e serviços para seus clientes. A empresa expande o foco do grupo por meio da reciclagem de caminhões, da oferta de peças alternativas, componentes remanufaturados e contratos de manutenção, com forte uso de tecnologia. Seu foco principal está na redução do TCO (Custo Total de Propriedade) dos clientes, no fortalecimento da economia circular e na geração de eficiência operacional sustentável.&nbsp; A localização estratégica das unidades da WLM permite uma atuação com ampla cobertura geográfica, garantindo agilidade, qualidade e excelência no atendimento.&nbsp; A holding do grupo está localizada no Rio de Janeiro e conta com uma filial corporativa em Contagem/MG.&nbsp; Confira as atribuições e vantagens da vaga de Analista de Estoque abaixo e venha fazer parte desse time de sucesso!&nbsp; Vem acelerar a sua carreira com o Grupo WLM! Sua missão: Implementar processos para aumentar nível de serviços e diminuir obsolescência. Atualizar sistemas de gestão com dados precisos sobre o estoque. Propor melhorias nos processos de armazenamento e controle de estoques. Identificar oportunidades de melhoria contínua no fluxo de materiais e na organização do almoxarifado. Elaborar relatórios sobre movimentação de estoque, consumo e desempenho do setor. Realizar inventários periódicos e acompanhar indicadores de desempenho, como giro de estoque. &nbsp;Analisar necessidades de reposição e emitir solicitações de compra. Requisitos: Ensino&nbsp;Superior completo em Engenharia, Logística, Administração ou áreas afins. Experiência em gestão de estoque e processos de almoxarifado. Excel Avançado. Vantagens/Benefícios: Ticket Alimentação&nbsp;-&nbsp;pensado para garantir praticidade no cuidado com a sua casa e família. Assistência Médica&nbsp;-&nbsp;cuidando da sua saúde e de quem você ama. Assistência Odontológica&nbsp;-&nbsp;cuidando do seu sorriso e de toda a sua família. Seguro de Vida em Grupo e Assistência Funeral&nbsp;-&nbsp;proteção e segurança para você e sua família em momentos delicados. Wellhub&nbsp;(Gympass)&nbsp;-&nbsp;incentivo à prática de atividades físicas e ao bem-estar. Telemedicina: Dra.&nbsp;AON&nbsp; Conexa Saúde&nbsp;-&nbsp;apoio à sua saúde com praticidade e rapidez, sempre que precisar. Premiação anual&nbsp;– reconhecimento pelo seu desempenho. Programa de Desenvolvimento Educacional&nbsp;(PDE)&nbsp;-&nbsp;apoio financeiro e&nbsp;institucional&nbsp;para formações, cursos ou especializações alinhadas às suas atividades e ao desenvolvimento da empresa. Para sua comodidade a empresa também oferece Vale Transporte e Uniforme. Horário de trabalho: Segunda a sexta-feira, das 08h00 às 17h48. Ficou interessado (a)? Clique abaixo no link: Quero me candidatar!",
+   "quantity": 1,
+   "workplaceTypes": "Presencial",
+   "location": [
+    {
+     "address": "Marituba",
+     "neighborhood": null,
+     "city": "Marituba",
+     "state": "PA",
+     "stateAbbreviation": "PA",
+     "country": "br",
+     "geolocation": {
+      "postalCode": "-1.3915,-48.31373",
+      "city": null
+     },
+     "region": "Região Metropolitana de Belém"
+    }
+   ],
+   "company": {
+    "id": 482475,
+    "name": "WLM ITAIPU NORTE",
+    "description": "Comércio a varejo de automóveis, camionetas e utilitários novos",
+    "industry": "Comércio - Outros",
+    "status": 50,
+    "group": {
+     "id": 482475,
+     "name": "WLM ITAIPU NORTE"
+    },
+    "isPartner": false,
+    "photo": true
+   },
+   "business": {
+    "promoted": false,
+    "boostname": "BOOST_DEFAULT"
+   },
+   "status": 100,
+   "contractForm": "A Combinar",
+   "requiredQualification": " ",
+   "academicFormation": null,
+   "benefits": null,
+   "workTime": null,
+   "pcd": false,
+   "createdAt": "2026-08-28T00:21:35.940",
+   "lastUpdatedAt": "2026-08-28T00:21:35.940",
+   "score": 2,
+   "hasApplied": false,
+   "applyUrl": null,
+   "displayName": null,
+   "industries": null,
+   "algorithmType": null
+  }
+ ],
+ "facetCollection": [
+  {
+   "facetItem": 6,
+   "facetName": "SponsoredJob",
+   "itens": [
+    {
+     "value": "0",
+     "caption": "0",
+     "count": 6,
+     "countDescription": "6",
+     "route": null
+    }
+   ]
+  },
+  {
+   "facetItem": 16,
+   "facetName": "Industry",
+   "itens": [
+    {
+     "value": "Saúde/ Hospitalar",
+     "caption": "Saúde/ Hospitalar",
+     "count": 3,
+     "countDescription": "3",
+     "route": null
+    },
+    {
+     "value": "Recursos Humanos/ Recrutamento e seleção",
+     "caption": "Recursos Humanos/ Recrutamento e seleção",
+     "count": 2,
+     "countDescription": "2",
+     "route": null
+    },
+    {
+     "value": "Comércio - Outros",
+     "caption": "Comércio - Outros",
+     "count": 1,
+     "countDescription": "1",
+     "route": null
+    }
+   ]
+  },
+  {
+   "facetItem": 17,
+   "facetName": "WorkplaceTypes",
+   "itens": [
+    {
+     "value": "Presencial",
+     "caption": "Presencial",
+     "count": 6,
+     "countDescription": "6",
+     "route": null
+    }
+   ]
+  },
+  {
+   "facetItem": 4,
+   "facetName": "Title",
+   "itens": [
+    {
+     "value": "ANALISTA DE ESTOQUE",
+     "caption": "ANALISTA DE ESTOQUE",
+     "count": 4,
+     "countDescription": "4",
+     "route": null
+    },
+    {
+     "value": "Analista de Estoque",
+     "caption": "Analista de Estoque",
+     "count": 2,
+     "countDescription": "2",
+     "route": null
+    }
+   ]
+  },
+  {
+   "facetItem": 12,
+   "facetName": "Area",
+   "itens": [
+    {
+     "value": "Administrativo/ Escritório",
+     "caption": "Administrativo/ Escritório",
+     "count": 6,
+     "countDescription": "6",
+     "route": null
+    }
+   ]
+  },
+  {
+   "facetItem": 18,
+   "facetName": "RoleName",
+   "itens": [
+    {
+     "value": "Analista de estoques",
+     "caption": "Analista de estoques",
+     "count": 6,
+     "countDescription": "6",
+     "route": null
+    }
+   ]
+  },
+  {
+   "facetItem": 13,
+   "facetName": "Location",
+   "itens": [
+    {
+     "value": "Brasília, DF",
+     "caption": "Brasília, DF",
+     "count": 3,
+     "countDescription": "3",
+     "route": null
+    },
+    {
+     "value": "Inocência, MS",
+     "caption": "Inocência, MS",
+     "count": 1,
+     "countDescription": "1",
+     "route": null
+    },
+    {
+     "value": "Marituba, PA",
+     "caption": "Marituba, PA",
+     "count": 1,
+     "countDescription": "1",
+     "route": null
+    },
+    {
+     "value": "Novo Hamburgo, RS",
+     "caption": "Novo Hamburgo, RS",
+     "count": 1,
+     "countDescription": "1",
+     "route": null
+    }
+   ]
+  },
+  {
+   "facetItem": 10,
+   "facetName": "HierarchicalLevel",
+   "itens": [
+    {
+     "value": "Auxiliar/ Assistente",
+     "caption": "Auxiliar/ Assistente",
+     "count": 29036,
+     "countDescription": "29,036",
+     "route": null
+    },
+    {
+     "value": "Outros",
+     "caption": "Outros",
+     "count": 20896,
+     "countDescription": "20,896",
+     "route": null
+    },
+    {
+     "value": "Operador/ Produção",
+     "caption": "Operador/ Produção",
+     "count": 17325,
+     "countDescription": "17,325",
+     "route": null
+    },
+    {
+     "value": "Analista / Especialista",
+     "caption": "Analista / Especialista",
+     "count": 7426,
+     "countDescription": "7,426",
+     "route": null
+    },
+    {
+     "value": "Vendas",
+     "caption": "Vendas",
+     "count": 3873,
+     "countDescription": "3,873",
+     "route": null
+    },
+    {
+     "value": "Técnico",
+     "caption": "Técnico",
+     "count": 2728,
+     "countDescription": "2,728",
+     "route": null
+    },
+    {
+     "value": "Supervisão",
+     "caption": "Supervisão",
+     "count": 1912,
+     "countDescription": "1,912",
+     "route": null
+    },
+    {
+     "value": "Administrativo/ Vendas",
+     "caption": "Administrativo/ Vendas",
+     "count": 1742,
+     "countDescription": "1,742",
+     "route": null
+    },
+    {
+     "value": "Gerência",
+     "caption": "Gerência",
+     "count": 1522,
+     "countDescription": "1,522",
+     "route": null
+    },
+    {
+     "value": "Assessor / Consultor",
+     "caption": "Assessor / Consultor",
+     "count": 1432,
+     "countDescription": "1,432",
+     "route": null
+    },
+    {
+     "value": "Administrativo",
+     "caption": "Administrativo",
+     "count": 1259,
+     "countDescription": "1,259",
+     "route": null
+    },
+    {
+     "value": "Aprendiz",
+     "caption": "Aprendiz",
+     "count": 721,
+     "countDescription": "721",
+     "route": null
+    },
+    {
+     "value": "Advogado",
+     "caption": "Advogado",
+     "count": 365,
+     "countDescription": "365",
+     "route": null
+    },
+    {
+     "value": "Analista/ Especialista",
+     "caption": "Analista/ Especialista",
+     "count": 294,
+     "countDescription": "294",
+     "route": null
+    },
+    {
+     "value": "Professor",
+     "caption": "Professor",
+     "count": 81,
+     "countDescription": "81",
+     "route": null
+    },
+    {
+     "value": "Assessor/ Consultor",
+     "caption": "Assessor/ Consultor",
+     "count": 32,
+     "countDescription": "32",
+     "route": null
+    },
+    {
+     "value": "Técnico/ Especialista",
+     "caption": "Técnico/ Especialista",
+     "count": 27,
+     "countDescription": "27",
+     "route": null
+    },
+    {
+     "value": "Trainees",
+     "caption": "Trainees",
+     "count": 17,
+     "countDescription": "17",
+     "route": null
+    },
+    {
+     "value": "Auxiliar / Assistente",
+     "caption": "Auxiliar / Assistente",
+     "count": 16,
+     "countDescription": "16",
+     "route": null
+    },
+    {
+     "value": "Diretoria",
+     "caption": "Diretoria",
+     "count": 16,
+     "countDescription": "16",
+     "route": null
+    },
+    {
+     "value": "Analista",
+     "caption": "Analista",
+     "count": 6,
+     "countDescription": "6",
+     "route": null
+    }
+   ]
+  }
+ ],
+ "total": 6,
+ "sum": 6,
+ "valueCount": 6,
+ "moreLikeThis": [],
+ "hasError": false,
+ "processingTime": 13
+}
