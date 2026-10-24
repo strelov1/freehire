@@ -404,7 +404,8 @@ func (d pandapeDomain) job(root *xhtml.Node, c pandapeCard, link string, e Compa
 
 // pandapeAnalyticsCountry reads the country the career site tells its own analytics,
 // "window.dataLayerProps.country = 'Peru';" — the only place a Latin-American vacancy page
-// states its country correctly. It is the tenant's country, spelled in English.
+// states its country correctly. It is the tenant's country, spelled in English, its non-ASCII
+// letters HTML-escaped inside the script ("Espa&#xF1;a").
 var pandapeAnalyticsCountryRe = regexp.MustCompile(`dataLayerProps\.country\s*=\s*'([^']*)'`)
 
 func pandapeAnalyticsCountry(root *xhtml.Node) string {
@@ -415,7 +416,7 @@ func pandapeAnalyticsCountry(root *xhtml.Node) string {
 		}
 		if n.Type == xhtml.ElementNode && n.Data == "script" {
 			if m := pandapeAnalyticsCountryRe.FindStringSubmatch(textContent(n)); m != nil {
-				country = m[1]
+				country = html.UnescapeString(m[1])
 			}
 			return false
 		}

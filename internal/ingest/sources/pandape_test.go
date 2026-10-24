@@ -345,3 +345,16 @@ func TestPandapeFailsATenantPastThePagerWindow(t *testing.T) {
 		t.Fatalf("err = %v, want the pager-window refusal", err)
 	}
 }
+
+func TestPandapeAnalyticsCountryIsUnescaped(t *testing.T) {
+	root, err := html.Parse(strings.NewReader(`<html><head><script>
+    window.dataLayerProps = {};
+            window.dataLayerProps.country = 'Espa&#xF1;a';
+</script></head></html>`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := pandapeAnalyticsCountry(root); got != "España" {
+		t.Errorf("country = %q, want España", got)
+	}
+}
