@@ -31,7 +31,7 @@
   import TemplateGallery from '#lib/tailor/TemplateGallery.svelte';
   import AccountNavRail from '#lib/components/AccountNavRail.svelte';
   import { ConfirmDialog } from '#lib/ui/index.js';
-  import { clampWidth } from '#lib/tailor/geometry.js';
+  import { clampWidth, keyResizeWidth, PANEL_MAX_WIDTH, PANEL_MIN_WIDTH } from '#lib/tailor/geometry.js';
   import { undoRun, openingActions } from '#lib/tailor/autopilot.js';
   import {
     toEditable,
@@ -526,11 +526,21 @@
   function doLeftResize(e: PointerEvent) {
     if (!leftResizing || !leftPanelEl) return;
     const left = leftPanelEl.getBoundingClientRect().left;
-    leftWidth = clampWidth(e.clientX - left, 340, 720);
+    leftWidth = clampWidth(e.clientX - left, PANEL_MIN_WIDTH, PANEL_MAX_WIDTH);
   }
+  // Also the pointercancel handler: a touch the browser takes back must end the drag. A
+  // cancelled pointer has already lost its capture, hence the check.
   function stopLeftResize(e: PointerEvent) {
     leftResizing = false;
-    (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+    const el = e.currentTarget as HTMLElement;
+    if (el.hasPointerCapture(e.pointerId)) el.releasePointerCapture(e.pointerId);
+  }
+  // The panel sits on the left, so moving the splitter right (ArrowRight) widens it.
+  function keyLeftResize(e: KeyboardEvent) {
+    const next = keyResizeWidth(leftWidth, e.key, 'ArrowRight');
+    if (next === null) return;
+    e.preventDefault();
+    leftWidth = next;
   }
 </script>
 
@@ -732,18 +742,26 @@
         </div>
       </section>
 
-      <!-- LEFT SPLITTER -->
+      <!-- LEFT SPLITTER: drag, or focus it and use the arrow keys. -->
+      <!-- A focusable separator is the ARIA window-splitter widget; the lint reads every separator as static. -->
+      <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
       <div
         class={[
-          'hidden w-1.5 shrink-0 cursor-col-resize bg-border/50 transition-colors hover:bg-border',
+          'hidden w-1.5 shrink-0 cursor-col-resize touch-none bg-border/50 transition-colors hover:bg-border focus-visible:bg-ring focus-visible:outline-none',
           leftCollapsed ? 'lg:hidden' : 'lg:block',
         ]}
         role="separator"
+        tabindex="0"
         aria-orientation="vertical"
         aria-label="Resize editor panel"
+        aria-valuenow={leftWidth}
+        aria-valuemin={PANEL_MIN_WIDTH}
+        aria-valuemax={PANEL_MAX_WIDTH}
         onpointerdown={startLeftResize}
         onpointermove={doLeftResize}
         onpointerup={stopLeftResize}
+        onpointercancel={stopLeftResize}
+        onkeydown={keyLeftResize}
       ></div>
 
       <!-- CENTRE: live HTML preview + zoom + Download PDF. On mobile it shows only when the Preview

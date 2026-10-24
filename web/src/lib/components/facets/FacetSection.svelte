@@ -66,7 +66,7 @@
         onclick={() => store.clearFacet(def.param)}
         title="Clear {def.label}"
         aria-label="Clear {def.label}"
-        class="flex size-5 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+        class="relative flex size-5 items-center justify-center rounded-full text-muted-foreground transition-colors after:absolute after:-inset-0.5 hover:bg-accent hover:text-foreground"
       >
         <X class="size-3.5" />
       </button>

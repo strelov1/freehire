@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount, untrack } from 'svelte';
+  import { prefersReducedMotion } from 'svelte/motion';
   import { page } from '$app/state';
   import { goto } from '$app/navigation';
   import { resolve } from '$app/paths';
@@ -76,8 +77,8 @@
   // see the `.swipe-card` animation below — so no frame-timing dance is needed.
   const animate = $derived(!dragging);
   // Tilt tracks the drag but is capped so the fly-off doesn't spin wildly; the
-  // card fades out as it leaves.
-  const rotation = $derived(Math.max(-18, Math.min(18, dragX / 24)));
+  // card fades out as it leaves. Under reduced motion the card never tilts.
+  const rotation = $derived(prefersReducedMotion.current ? 0 : Math.max(-18, Math.min(18, dragX / 24)));
   const cardOpacity = $derived(exiting ? 0 : 1);
   // Decision stamps fade in with drag distance, reaching full at the commit point.
   const stampOpacity = $derived(Math.min(1, Math.abs(dragX) / COMMIT_PX));
@@ -138,11 +139,13 @@
     if (!job || exiting) return;
 
     // Fling the card off toward its side. dragging=false lets the transition run;
-    // dragX past the viewport width carries it fully off-screen.
+    // dragX past the viewport width carries it fully off-screen. Under reduced motion
+    // the card stays where it is and only fades (`exiting` drives the opacity), so the
+    // judgement is still visible without anything sweeping across the screen.
     const dir = kind === 'save' ? 1 : -1;
     exiting = true;
     dragging = false;
-    dragX = dir * (window.innerWidth + 200);
+    if (!prefersReducedMotion.current) dragX = dir * (window.innerWidth + 200);
     last = { job, kind };
     // Snapshot the reload generation: a resetDeck() mid-flight bumps `gen` and
     // replaces `queue` wholesale, so the deferred slice below must not touch a
@@ -598,6 +601,23 @@
     to {
       scale: 1;
       opacity: 1;
+    }
+  }
+
+  /* Reduced motion keeps the card change visible as a plain fade: no grow-in here, and
+     judge() drops the fly-off and the tilt, leaving only the opacity transition. */
+  @keyframes card-in-fade {
+    from {
+      opacity: 0.6;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .swipe-card {
+      animation-name: card-in-fade;
     }
   }
 

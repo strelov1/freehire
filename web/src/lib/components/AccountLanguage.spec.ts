@@ -29,6 +29,8 @@ describe('AccountLanguage — Russian locale', () => {
     ).toBeTruthy();
     // The combobox's own input value mirrors the selected language's translated name.
     expect(screen.getByDisplayValue('Русский')).toBeTruthy();
+    // The combobox takes its accessible name from the visible heading.
+    expect(screen.getByRole('combobox', { name: 'Язык' })).toBeTruthy();
   });
 
   it('renders every language name translated, and the search placeholder, once the list opens', async () => {

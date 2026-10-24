@@ -16,7 +16,7 @@
   // they read identically. Splitter width is clamped by the vitest-covered clampWidth.
   import { resolve } from '$app/paths';
   import { ExternalLink, PanelRightClose, PanelRightOpen } from '@lucide/svelte';
-  import { clampWidth } from './geometry';
+  import { clampWidth, keyResizeWidth, PANEL_MAX_WIDTH, PANEL_MIN_WIDTH } from './geometry';
   import JobDescription from '#lib/components/JobDescription.svelte';
   import MatchAnalysisFull from '#lib/components/MatchAnalysisFull.svelte';
   import { companyLogoUrl } from '#lib/logo.js';
@@ -120,11 +120,22 @@
   }
   function doResize(e: PointerEvent) {
     // The panel hugs the right edge, so its width is the distance from the cursor to that edge.
-    if (resizing) width = clampWidth(window.innerWidth - e.clientX, 340, 720);
+    if (resizing) width = clampWidth(window.innerWidth - e.clientX, PANEL_MIN_WIDTH, PANEL_MAX_WIDTH);
   }
+  // Also the pointercancel handler: a touch the browser takes back (a scroll, a system gesture)
+  // must end the drag, or the next unrelated move would keep resizing. A cancelled pointer has
+  // already lost its capture, hence the check.
   function stopResize(e: PointerEvent) {
     resizing = false;
-    (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+    const el = e.currentTarget as HTMLElement;
+    if (el.hasPointerCapture(e.pointerId)) el.releasePointerCapture(e.pointerId);
+  }
+  // The panel sits on the right, so moving the splitter left (ArrowLeft) widens it.
+  function keyResize(e: KeyboardEvent) {
+    const next = keyResizeWidth(width, e.key, 'ArrowLeft');
+    if (next === null) return;
+    e.preventDefault();
+    width = next;
   }
 </script>
 
@@ -144,15 +155,23 @@
     </button>
   </div>
 {:else}
-  <!-- Splitter: drag left/right to resize the panel. -->
+  <!-- Splitter: drag left/right to resize the panel, or focus it and use the arrow keys. -->
+  <!-- A focusable separator is the ARIA window-splitter widget; the lint reads every separator as static. -->
+  <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
   <div
-    class="hidden w-1.5 shrink-0 cursor-col-resize bg-border/50 transition-colors hover:bg-border lg:block"
+    class="hidden w-1.5 shrink-0 cursor-col-resize touch-none bg-border/50 transition-colors hover:bg-border focus-visible:bg-ring focus-visible:outline-none lg:block"
     role="separator"
+    tabindex="0"
     aria-orientation="vertical"
     aria-label="Resize panel"
+    aria-valuenow={width}
+    aria-valuemin={PANEL_MIN_WIDTH}
+    aria-valuemax={PANEL_MAX_WIDTH}
     onpointerdown={startResize}
     onpointermove={doResize}
     onpointerup={stopResize}
+    onpointercancel={stopResize}
+    onkeydown={keyResize}
   ></div>
 {/if}
 

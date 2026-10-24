@@ -1,6 +1,6 @@
 <script lang="ts">
   import { MessageSquareText, X } from '@lucide/svelte';
-  import { Button } from '#lib/ui/index.js';
+  import { Button, lockScroll, unlockScroll } from '#lib/ui/index.js';
   import { errorMessage } from '#lib/utils.js';
   import { focusTrap } from '#lib/actions/focusTrap.js';
   import { portal } from '#lib/actions/portal.js';
@@ -113,6 +113,12 @@
     // undoing them. See AiFilterButton for why closing is the honest response.
     onApplied?.();
   }
+
+  // Mounted only while open, so the lock lives exactly as long as the dialog does.
+  $effect(() => {
+    lockScroll();
+    return unlockScroll;
+  });
 </script>
 
 <!-- Moved to the body: this dialog is opened from the filter modal, and before that from
@@ -127,7 +133,7 @@
      modal behind it. Stopping propagation at this element keeps the key from ever
      reaching the window, and the focus trap below guarantees the press lands in here. -->
 <div
-  class="fixed inset-0 z-50 flex items-center justify-center p-4"
+  class="fixed inset-0 z-50 flex flex-col items-center p-4 max-sm:optical-center sm:justify-center"
   onkeydown={(e) => {
     if (e.key !== 'Escape') return;
     e.stopPropagation();
@@ -157,13 +163,14 @@
       </button>
     </div>
 
-    <div class="flex-1 overflow-y-auto p-5">
+    <div class="flex-1 overflow-y-auto overscroll-contain p-5">
       {#if !result}
         <textarea
           bind:value={text}
           rows="3"
           placeholder="Senior Go backend, remote, somewhere in Europe…"
-          class="w-full rounded-xl border border-border bg-background p-3 text-sm outline-none focus:border-primary"
+          aria-label="Describe the jobs you want"
+          class="w-full rounded-xl border border-border bg-background p-3 text-sm focus-visible:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
           onkeydown={(e) => {
             if (e.key === 'Enter' && !e.shiftKey) {
               e.preventDefault();
@@ -234,7 +241,8 @@
             bind:value={refinement}
             disabled={busy}
             placeholder="Add a constraint — e.g. remote only"
-            class="min-w-0 flex-1 rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary disabled:opacity-50"
+            aria-label="Refine the search"
+            class="min-w-0 flex-1 rounded-xl border border-border bg-background px-3 py-2 text-sm focus-visible:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 disabled:opacity-50"
             onkeydown={(e) => {
               if (e.key === 'Enter') {
                 e.preventDefault();

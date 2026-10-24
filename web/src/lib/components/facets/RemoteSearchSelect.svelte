@@ -33,6 +33,7 @@
     expand = false,
     ready = true,
     techIcons = false,
+    label,
   }: {
     search: (query: string) => Promise<FacetOption[]>;
     include: string[];
@@ -55,7 +56,12 @@
     // off for the other callers (company, location) whose slugs are a different
     // vocabulary that could coincidentally collide with a tech mark's key.
     techIcons?: boolean;
+    // The search field's accessible name. A placeholder is not one, so it is only
+    // the fallback (callers' placeholders read "Search companies", which names it).
+    label?: string;
   } = $props();
+
+  const fieldLabel = $derived(label ?? placeholder ?? 'Search options');
 
   let query = $state('');
   let results = $state<FacetOption[]>([]);
@@ -167,7 +173,7 @@
 
 <div class="flex flex-col gap-2">
   {#if expand}
-    <Input bind:value={query} {placeholder} class="w-full" />
+    <Input bind:value={query} {placeholder} aria-label={fieldLabel} class="w-full" />
     {@render chips()}
     <div class="flex flex-col gap-0.5">
       {@render optionList()}
@@ -177,6 +183,7 @@
       <Input
         bind:value={query}
         {placeholder}
+        aria-label={fieldLabel}
         class="w-full"
         role="combobox"
         aria-expanded={open}

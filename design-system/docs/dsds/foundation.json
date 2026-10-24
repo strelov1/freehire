@@ -28,6 +28,7 @@
         "accent-foreground",
         "destructive",
         "destructive-foreground",
+        "destructive-strong",
         "border",
         "input",
         "ring",

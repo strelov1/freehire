@@ -15,6 +15,7 @@
   --accent-foreground: oklch(0.985 0 0);
   --destructive: oklch(0.704 0.191 22.216);
   --destructive-foreground: oklch(0.16 0 0);
+  --destructive-strong: oklch(0.704 0.191 22.216); /** Same as the action color: on the dark background it already clears 4.5:1. */
   --border: oklch(1 0 0 / 8%);
   --input: oklch(1 0 0 / 12%);
   --ring: oklch(0.6 0.09 118);

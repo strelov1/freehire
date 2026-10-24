@@ -1,5 +1,6 @@
 // Utilities
 export { cn } from './cn.js';
+export { lockScroll, unlockScroll } from './scroll-lock.js';
 
 // Primitives
 export { default as Alert } from './alert.svelte';

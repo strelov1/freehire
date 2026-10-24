@@ -18,6 +18,7 @@
   import type { MentorProfileInput, OwnMentorProfile } from '#lib/types.js';
 
   let { profile = $bindable() }: { profile: OwnMentorProfile | null } = $props();
+  const uid = $props.id();
 
   // Matches internal/engage/mentorship's slugPattern. Used only to hint at an invalid
   // MANUALLY-typed address — the backend is still the one that refuses it on submit.
@@ -242,13 +243,17 @@
         <p class="mt-1">/mentors/{profile.slug}</p>
       </div>
     {:else}
-      <label class="text-sm">
-        <span class="text-muted-foreground">Your company — optional</span>
-        <CompanyPicker onSelect={(c) => (form.company_slug = c?.slug ?? '')} />
-        <p class="text-muted-foreground mt-1 text-xs">
+      <div class="text-sm">
+        <label for="{uid}-company" class="text-muted-foreground">Your company — optional</label>
+        <CompanyPicker
+          id="{uid}-company"
+          aria-describedby="{uid}-company-hint"
+          onSelect={(c) => (form.company_slug = c?.slug ?? '')}
+        />
+        <p id="{uid}-company-hint" class="text-muted-foreground mt-1 text-xs">
           Leave blank if you're independent or your employer isn't listed.
         </p>
-      </label>
+      </div>
 
       <label class="text-sm">
         <span class="text-muted-foreground">Your URL</span>

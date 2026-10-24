@@ -64,4 +64,48 @@ describe('CompanyPicker', () => {
 
     await waitFor(() => expect(onSelect).toHaveBeenCalledWith({ slug: 'ringcentral', name: 'RingCentral' }));
   });
+
+  it('picks with the keyboard: ArrowDown highlights through aria-activedescendant, Enter picks', async () => {
+    const onSelect = vi.fn();
+    render(CompanyPickerTestHarness, { props: { onSelect } });
+
+    const input = screen.getByRole('combobox');
+    await fireEvent.input(input, { target: { value: 'ring' } });
+    const option = await screen.findByRole('option', { name: /RingCentral/ });
+    // Rows stay out of the Tab order; the input owns the keyboard.
+    expect(option.getAttribute('tabindex')).toBe('-1');
+
+    await fireEvent.keyDown(input, { key: 'ArrowDown' });
+    expect(input.getAttribute('aria-activedescendant')).toBe(option.id);
+    expect(option.getAttribute('aria-selected')).toBe('true');
+
+    await fireEvent.keyDown(input, { key: 'Enter' });
+    expect(onSelect).toHaveBeenCalledWith({ slug: 'ringcentral', name: 'RingCentral' });
+    expect(screen.getByTestId('picker-value').textContent).toBe('RingCentral');
+    expect(screen.queryByRole('listbox')).toBeNull();
+  });
+
+  it('closes the list on Escape without picking or clearing the typed text', async () => {
+    const onSelect = vi.fn();
+    render(CompanyPickerTestHarness, { props: { onSelect } });
+
+    const input = screen.getByRole('combobox');
+    await fireEvent.input(input, { target: { value: 'ring' } });
+    await screen.findByRole('option', { name: /RingCentral/ });
+
+    await fireEvent.keyDown(input, { key: 'Escape' });
+    expect(screen.queryByRole('listbox')).toBeNull();
+    expect(input.getAttribute('aria-expanded')).toBe('false');
+    expect(onSelect).not.toHaveBeenCalledWith(expect.objectContaining({ slug: 'ringcentral' }));
+    expect(screen.getByTestId('picker-value').textContent).toBe('ring');
+  });
+
+  it('gives each instance its own listbox id', async () => {
+    render(CompanyPicker, { props: { id: 'a' } });
+    render(CompanyPicker, { props: { id: 'b' } });
+
+    const ids = screen.getAllByRole('combobox').map((el) => el.getAttribute('aria-controls'));
+    expect(ids).toHaveLength(2);
+    expect(ids[0]).not.toBe(ids[1]);
+  });
 });

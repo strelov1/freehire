@@ -27,6 +27,7 @@
     entityLogos = false,
     filter = $bindable(''),
     empty,
+    label,
   }: {
     options: FacetOption[];
     include: string[];
@@ -60,6 +61,9 @@
     // Rendered instead of "Nothing found" when the search matches no option, given
     // the trimmed search text — e.g. /dictionary's "add this term" action.
     empty?: Snippet<[string]>;
+    // The search field's accessible name. A placeholder is not one, so it is only
+    // the fallback (facet placeholders read "Search skills", which names it well).
+    label?: string;
   } = $props();
 
   function toggle(value: string) {
@@ -90,7 +94,7 @@
 </script>
 
 <div class="flex flex-col gap-2">
-  <Input bind:value={filter} {placeholder} class="w-full" />
+  <Input bind:value={filter} {placeholder} aria-label={label ?? placeholder ?? 'Search options'} class="w-full" />
   <div class={expand ? 'flex flex-wrap gap-1.5' : 'flex max-h-44 flex-wrap gap-1.5 overflow-y-auto'}>
     {#each shown as opt (opt.value)}
       {@const excluded = exclude.includes(opt.value)}

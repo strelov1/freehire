@@ -79,6 +79,8 @@ describe('JobListsView — Russian locale', () => {
 
     expect(screen.getByPlaceholderText('Название списка')).toBeTruthy();
     expect(screen.getByPlaceholderText('Описание (необязательно)')).toBeTruthy();
+    expect(screen.getByRole('textbox', { name: 'Название списка' })).toBeTruthy();
+    expect(screen.getByRole('textbox', { name: 'Описание (необязательно)' })).toBeTruthy();
     expect(screen.getByText('Создать список')).toBeTruthy();
     expect(screen.getByText('Отмена')).toBeTruthy();
   });

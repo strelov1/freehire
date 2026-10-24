@@ -21,7 +21,12 @@ export type { ThemeMode };
 
 function apply(mode: ThemeMode) {
   if (!browser) return;
-  document.documentElement.classList.toggle('dark', mode === 'dark');
+  const root = document.documentElement;
+  root.classList.toggle('dark', mode === 'dark');
+  // Keep the browser chrome on the page's own background, read from the token rather than
+  // restated here (check:tokens holds web to that); app.html carries the pre-paint copy.
+  const background = getComputedStyle(root).getPropertyValue('--background').trim();
+  if (background) document.querySelector('meta[name="theme-color"]')?.setAttribute('content', background);
 }
 
 class ThemeStore {

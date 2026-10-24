@@ -12,6 +12,7 @@
     WORK_MODE_OPTIONS,
   } from '#lib/facets.js';
   import { api } from '#lib/api.js';
+  import { ComboboxNav } from '#lib/comboboxNav.svelte.js';
   import { buildLocationPreferences } from '#lib/profileLocation.js';
   import type { DerivedLocation, LocationPreferences } from '#lib/types.js';
   import { Input } from '#lib/ui/index.js';
@@ -72,9 +73,17 @@
   // svelte-ignore state_referenced_locally
   let baseQuery = $state(baseCity && baseCountry ? `${baseCity}, ${countryLabel(baseCountry)}` : baseCity);
   let baseResults = $state.raw<{ value: string; country: string; label: string }[]>([]);
-  let baseOpen = $state(false);
   let baseLoading = $state(false);
   let baseReqToken = 0;
+  // Per instance — ProfileForm and the Location view can both be mounted.
+  const baseId = $props.id();
+  const baseInputId = `${baseId}-base`;
+  const baseNav = new ComboboxNav({
+    id: baseInputId,
+    items: () => baseResults,
+    loading: () => baseLoading,
+    pick: pickBase,
+  });
   let baseTimer: ReturnType<typeof setTimeout> | undefined;
 
   function onBaseInput() {
@@ -85,7 +94,8 @@
       baseCountry = '';
       emit();
     }
-    baseOpen = true;
+    baseNav.open = true;
+    baseNav.active = -1;
     clearTimeout(baseTimer);
     const q = baseQuery.trim();
     if (q.length < 2) {
@@ -105,7 +115,10 @@
         if (mine !== baseReqToken) return;
         baseResults = [];
       } finally {
-        if (mine === baseReqToken) baseLoading = false;
+        if (mine === baseReqToken) {
+          baseLoading = false;
+          baseNav.active = -1;
+        }
       }
     }, 250);
   }
@@ -114,7 +127,7 @@
     baseCity = row.value;
     baseCountry = row.country;
     baseQuery = row.label;
-    baseOpen = false;
+    baseNav.close();
     baseResults = [];
     emit();
   }
@@ -210,43 +223,54 @@
        onsite-country checks compare a job against. One combined field — city and country
        in a single pick — instead of a country dropdown beside a separate city search. -->
   <div class="flex flex-col gap-1.5">
-    <span class="text-xs font-medium text-muted-foreground">{s.whereBased}</span>
+    <label for={baseInputId} class="text-xs font-medium text-muted-foreground">{s.whereBased}</label>
     <div class="relative">
       <Input
+        id={baseInputId}
         bind:value={baseQuery}
         oninput={onBaseInput}
-        onfocus={() => baseQuery.trim().length >= 2 && (baseOpen = true)}
-        onblur={() => setTimeout(() => (baseOpen = false), 120)}
+        onfocus={() => baseQuery.trim().length >= 2 && (baseNav.open = true)}
+        onblur={() => setTimeout(baseNav.close, 120)}
+        onkeydown={baseNav.onKeydown}
         placeholder={s.cityOrCountry}
         autocomplete="off"
         role="combobox"
-        aria-expanded={baseOpen}
-        aria-controls="base-location-list"
+        aria-expanded={baseNav.listOpen}
+        aria-controls={baseNav.listId}
+        aria-autocomplete="list"
+        aria-activedescendant={baseNav.activeDescendant}
         class="w-full"
       />
-      {#if baseOpen && (baseResults.length > 0 || baseLoading)}
+      {#if baseNav.listOpen}
         <ul
-          id="base-location-list"
+          id={baseNav.listId}
           role="listbox"
           class="absolute inset-x-0 top-full z-10 mt-1 max-h-60 overflow-y-auto rounded-md border border-border bg-popover p-1 shadow-lg"
         >
           {#if baseLoading && baseResults.length === 0}
-            <li class="px-2 py-1.5 text-sm text-muted-foreground">{s.searching}</li>
+            <li role="option" aria-selected="false" aria-disabled="true" class="px-2 py-1.5 text-sm text-muted-foreground">
+              {s.searching}
+            </li>
           {/if}
-          {#each baseResults as row (row.value + row.country)}
-            <li>
-              <button
-                type="button"
-                role="option"
-                aria-selected="false"
-                onmousedown={(e) => {
-                  e.preventDefault();
-                  pickBase(row);
-                }}
-                class="flex w-full items-center rounded-md px-2 py-1.5 text-left text-sm hover:bg-accent"
-              >
-                {row.label}
-              </button>
+          {#each baseResults as row, i (row.value + row.country)}
+            <!-- mousedown (not click) so the pick lands before the input's blur closes the
+                 list; tabindex -1 keeps the rows out of the Tab order. -->
+            <li
+              id={baseNav.optionId(i)}
+              role="option"
+              tabindex="-1"
+              aria-selected={baseNav.active === i}
+              onmouseenter={() => (baseNav.active = i)}
+              onmousedown={(e) => {
+                e.preventDefault();
+                pickBase(row);
+              }}
+              class="flex w-full cursor-pointer items-center rounded-md px-2 py-1.5 text-left text-sm hover:bg-accent {baseNav.active ===
+              i
+                ? 'bg-accent'
+                : ''}"
+            >
+              {row.label}
             </li>
           {/each}
         </ul>

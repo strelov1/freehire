@@ -7,7 +7,16 @@
     onAdd,
     onRemove,
     placeholder,
-  }: { tokens: string[]; onAdd: (value: string) => void; onRemove: (value: string) => void; placeholder?: string } = $props();
+    label,
+  }: {
+    tokens: string[];
+    onAdd: (value: string) => void;
+    onRemove: (value: string) => void;
+    placeholder?: string;
+    // The field's accessible name. A placeholder is not one, so it is only the
+    // fallback — pass the visible field label (e.g. "Skills") where there is one.
+    label?: string;
+  } = $props();
 
   let draft = $state('');
 
@@ -38,6 +47,7 @@
     bind:value={draft}
     onkeydown={onKeydown}
     {placeholder}
+    aria-label={label ?? placeholder ?? 'Add a value'}
     class="min-w-[6rem] flex-1 bg-transparent outline-none placeholder:text-muted-foreground"
   />
 </div>

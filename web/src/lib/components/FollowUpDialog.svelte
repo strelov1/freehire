@@ -1,6 +1,6 @@
 <script lang="ts">
   import { Check, Copy, Clock, X } from '@lucide/svelte';
-  import { Button } from '#lib/ui/index.js';
+  import { Button, lockScroll, unlockScroll } from '#lib/ui/index.js';
   import { api } from '#lib/api.js';
   import { clipboardText, gmailHref, mailtoHref } from '#lib/followup.js';
   import { errorMessage } from '#lib/utils.js';
@@ -69,11 +69,17 @@
     copied = true;
     await record();
   }
+
+  // Mounted only while open, so the lock lives exactly as long as the dialog does.
+  $effect(() => {
+    lockScroll();
+    return unlockScroll;
+  });
 </script>
 
 <svelte:window onkeydown={(e) => e.key === 'Escape' && onclose()} />
 
-<div class="fixed inset-0 z-50 flex items-center justify-center p-4">
+<div class="fixed inset-0 z-50 flex flex-col items-center p-4 max-sm:optical-center sm:justify-center">
   <button type="button" aria-label={s.closeDialogAria} class="absolute inset-0 bg-black/50" onclick={onclose}></button>
 
   <div
@@ -103,7 +109,7 @@
       </button>
     </div>
 
-    <div class="flex-1 overflow-y-auto p-5">
+    <div class="flex-1 overflow-y-auto overscroll-contain p-5">
       {#if error && !draft}
         <p class="text-sm text-destructive">{error}</p>
       {:else if !draft}

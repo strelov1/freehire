@@ -4,7 +4,7 @@
   import { Bell } from '@lucide/svelte';
   import { isAuthenticated } from '#lib/auth.svelte.js';
   import { notificationCenter } from '#lib/notificationCenter.svelte.js';
-  import { lockScroll, unlockScroll } from '#lib/scrollLock.js';
+  import { lockScroll, unlockScroll } from '#lib/ui/index.js';
   import { openedOverlay, closedOverlay } from '#lib/headerOverlay.js';
   import States from './States.svelte';
   import NotificationCard from './NotificationCard.svelte';
@@ -110,7 +110,7 @@
            TopBar's header draws no `backdrop-filter` (see its own comment) — that would
            make the header the containing block and pin this panel to it instead. -->
       <div
-        class="z-50 overflow-y-auto border border-border bg-background shadow-lg max-sm:fixed max-sm:inset-x-0 max-sm:bottom-0 max-sm:top-14 max-sm:border-x-0 max-sm:border-b-0 sm:absolute sm:right-0 sm:top-full sm:mt-2 sm:w-96 sm:max-h-[min(70vh,32rem)] sm:rounded-md"
+        class="z-50 overflow-y-auto overscroll-contain border border-border bg-background shadow-lg max-sm:fixed max-sm:inset-x-0 max-sm:bottom-0 max-sm:top-14 max-sm:border-x-0 max-sm:border-b-0 sm:absolute sm:right-0 sm:top-full sm:mt-2 sm:w-96 sm:max-h-[min(70vh,32rem)] sm:rounded-md"
       >
         <div class="flex items-center justify-between border-b border-border px-3 py-2">
           <span class="text-sm font-semibold">Notifications</span>

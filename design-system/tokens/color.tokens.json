@@ -65,6 +65,10 @@
     "$value": "oklch(0.985 0 0)",
     "$description": "Text/icon on a filled destructive surface."
   },
+  "destructive-strong": {
+    "$value": "oklch(0.52 0.22 27.325)",
+    "$description": "Destructive text on the page background or a destructive tint, where the action color falls short of 4.5:1."
+  },
   "border": {
     "$value": "oklch(0.92 0 0)",
     "$description": "Default border color."

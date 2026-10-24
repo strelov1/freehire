@@ -3,6 +3,7 @@
   import type { CompanyListItem } from '#lib/types.js';
   import { companyLogoUrl } from '#lib/logo.js';
   import { EntityLogo } from '#lib/ui/index.js';
+  import { ComboboxNav } from '#lib/comboboxNav.svelte.js';
 
   // A typeahead over the company catalogue: type a name, pick from a logo'd list, and
   // the chosen company's slug flows back through onSelect. Replaces a raw slug input so
@@ -25,7 +26,6 @@
   } = $props();
 
   let results = $state.raw<CompanyListItem[]>([]);
-  let open = $state(false);
   let loading = $state(false);
   let picked = $state<{ slug: string; name: string } | null>(null);
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -34,6 +34,15 @@
   // response for a superseded keystroke can't overwrite a fresher one (mirrors
   // reqToken in HeaderSearch.svelte / gen in facets/RemoteSearchSelect.svelte).
   let reqToken = 0;
+
+  // Per instance, so two pickers on one page don't share a listbox id.
+  const uid = $props.id();
+  const nav = new ComboboxNav<CompanyListItem>({
+    id: uid,
+    items: () => results,
+    loading: () => loading,
+    pick,
+  });
 
   const DEBOUNCE_MS = 200;
   const LIMIT = 8;
@@ -44,7 +53,8 @@
       picked = null;
       onSelect?.(null);
     }
-    open = true;
+    nav.open = true;
+    nav.active = -1;
     clearTimeout(timer);
     const q = value.trim();
     if (q.length < 2) {
@@ -64,6 +74,7 @@
         if (mine !== reqToken) return;
         results = [];
       }
+      nav.active = -1;
       if (mine === reqToken) loading = false;
     }, DEBOUNCE_MS);
   }
@@ -71,7 +82,7 @@
   function pick(c: CompanyListItem) {
     picked = { slug: c.slug, name: c.name };
     value = c.name;
-    open = false;
+    nav.close();
     results = [];
     onSelect?.(picked);
   }
@@ -84,46 +95,54 @@
     type="text"
     bind:value
     oninput={onInput}
-    onfocus={() => value.trim().length >= 2 && (open = true)}
-    onblur={() => setTimeout(() => (open = false), 120)}
+    onfocus={() => value.trim().length >= 2 && (nav.open = true)}
+    onblur={() => setTimeout(nav.close, 120)}
+    onkeydown={nav.onKeydown}
     placeholder="Search your company…"
     autocomplete="off"
     role="combobox"
-    aria-expanded={open}
-    aria-controls="company-picker-list"
+    aria-expanded={nav.listOpen}
+    aria-controls={nav.listId}
+    aria-autocomplete="list"
+    aria-activedescendant={nav.activeDescendant}
     class="w-full rounded-md border bg-background px-3 py-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring {picked
       ? 'border-brand'
       : 'border-border'}"
   />
 
-  {#if open && (results.length > 0 || loading)}
+  {#if nav.listOpen}
     <ul
-      id="company-picker-list"
+      id={nav.listId}
       role="listbox"
       class="absolute z-10 mt-1 max-h-64 w-full overflow-auto rounded-md border border-border bg-popover shadow-lg"
     >
       {#if loading && results.length === 0}
-        <li class="px-3 py-2 text-sm text-muted-foreground">Searching…</li>
+        <li role="option" aria-selected="false" aria-disabled="true" class="px-3 py-2 text-sm text-muted-foreground">
+          Searching…
+        </li>
       {/if}
-      {#each results as c (c.slug)}
-        <li>
-          <!-- mousedown (not click) so the pick lands before the input's blur closes the list -->
-          <button
-            type="button"
-            role="option"
-            aria-selected="false"
-            onmousedown={(e) => {
-              e.preventDefault();
-              pick(c);
-            }}
-            class="flex w-full items-center gap-3 px-3 py-2 text-left hover:bg-accent"
-          >
-            <EntityLogo name={c.name} src={companyLogoUrl(c.name) ?? undefined} shape="square" size="xs" />
-            <span class="flex min-w-0 flex-col">
-              <span class="truncate text-sm font-medium">{c.name}</span>
-              <span class="truncate text-xs text-muted-foreground">/{c.slug} · {c.job_count} open</span>
-            </span>
-          </button>
+      {#each results as c, i (c.slug)}
+        <!-- mousedown (not click) so the pick lands before the input's blur closes the list;
+             tabindex -1 keeps the rows out of the Tab order (the input owns the keyboard). -->
+        <li
+          id={nav.optionId(i)}
+          role="option"
+          tabindex="-1"
+          aria-selected={nav.active === i}
+          onmouseenter={() => (nav.active = i)}
+          onmousedown={(e) => {
+            e.preventDefault();
+            pick(c);
+          }}
+          class="flex w-full cursor-pointer items-center gap-3 px-3 py-2 text-left hover:bg-accent {nav.active === i
+            ? 'bg-accent'
+            : ''}"
+        >
+          <EntityLogo name={c.name} src={companyLogoUrl(c.name) ?? undefined} shape="square" size="xs" />
+          <span class="flex min-w-0 flex-col">
+            <span class="truncate text-sm font-medium">{c.name}</span>
+            <span class="truncate text-xs text-muted-foreground">/{c.slug} · {c.job_count} open</span>
+          </span>
         </li>
       {/each}
     </ul>

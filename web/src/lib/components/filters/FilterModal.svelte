@@ -298,7 +298,7 @@
     <button
       type="button"
       aria-label="How filters work"
-      class="flex size-4 items-center justify-center rounded-full text-muted-foreground transition-colors hover:text-foreground"
+      class="relative flex size-4 items-center justify-center rounded-full text-muted-foreground transition-colors after:absolute after:-inset-1 hover:text-foreground"
     >
       <Info class="size-3.5" aria-hidden="true" />
     </button>

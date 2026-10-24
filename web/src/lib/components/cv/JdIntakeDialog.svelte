@@ -128,7 +128,9 @@
       <div class="flex flex-col gap-3">
         <label class="flex flex-col gap-1.5 text-sm">
           <span class="font-medium">{s.searchLabel}</span>
-          <div class="flex items-center gap-2 {fieldClass}">
+          <div
+            class="flex items-center gap-2 {fieldClass} focus-within:ring-2 focus-within:ring-ring"
+          >
             <Search class="size-4 shrink-0 text-muted-foreground" />
             <input
               bind:value={query}

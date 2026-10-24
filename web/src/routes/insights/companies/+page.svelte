@@ -62,7 +62,7 @@
               <span class="mr-1.5 tabular-nums text-muted-foreground">{i + 1}.</span>
               <a
                 href={resolve('/companies/[slug]', { slug: c.company_slug })}
-                class="font-medium text-foreground hover:text-blue-600 hover:underline"
+                class="font-medium text-foreground hover:text-brand-strong hover:underline"
               >
                 {c.company_name}
               </a>
@@ -91,7 +91,7 @@
   <p class="mt-3 text-lg text-muted-foreground">{description}</p>
   <p class="mt-1 text-sm text-muted-foreground">
     Change is the difference between open jobs now and 30 days ago. Refreshed daily; also on the
-    <a href={resolve('/docs/api')} class="text-blue-600 hover:underline">open API</a>.
+    <a href={resolve('/docs/api')} class="text-brand-strong hover:underline">open API</a>.
     <span class="text-muted-foreground">Updated {updated}.</span>
   </p>
 

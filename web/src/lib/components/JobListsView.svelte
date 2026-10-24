@@ -197,8 +197,8 @@
     {:else}
       {#if creating}
         <div class="flex flex-col gap-2 rounded-xl border border-border p-4">
-          <Input bind:value={newName} placeholder={s.namePlaceholder} maxlength={100} />
-          <Input bind:value={newDescription} placeholder={s.descriptionPlaceholder} maxlength={2000} />
+          <Input bind:value={newName} placeholder={s.namePlaceholder} aria-label={s.namePlaceholder} maxlength={100} />
+          <Input bind:value={newDescription} placeholder={s.descriptionPlaceholder} aria-label={s.descriptionPlaceholder} maxlength={2000} />
           <div class="flex items-center gap-2">
             <Button variant="primary" size="sm" disabled={createBusy || !newName.trim()} onclick={confirmCreate}>
               {createBusy ? s.creating : s.create}

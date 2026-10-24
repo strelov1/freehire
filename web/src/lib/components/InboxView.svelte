@@ -505,6 +505,7 @@
             <input
               type="search"
               placeholder={s.searchPlaceholder}
+              aria-label={s.searchAria}
               bind:value={search}
               oninput={onSearchInput}
               class="w-full rounded-lg border border-border bg-background py-2 pl-9 pr-3 text-sm outline-none transition focus:border-brand focus:ring-2 focus:ring-brand-ring/40"

@@ -42,6 +42,8 @@ describe('AccountTimezone — Russian locale', () => {
         'Используется, чтобы присылать дайджест по поисковым алертам и учитывать тихие часы по вашему местному времени.',
       ),
     ).toBeTruthy();
+    // The select takes its accessible name from the visible heading.
+    expect(screen.getByRole('combobox', { name: 'Часовой пояс' })).toBeTruthy();
   });
 
   it('renders the unset-timezone placeholder in Russian', () => {

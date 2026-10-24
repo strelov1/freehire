@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   clampWidth,
+  keyResizeWidth,
   paginateBlocks,
   stepMargin,
   MARGIN_MIN,
@@ -184,5 +185,23 @@ describe('stepMargin', () => {
 
   it('steps down within range', () => {
     expect(stepMargin(0.75, -0.05)).toBe(0.7);
+  });
+});
+
+describe('keyResizeWidth', () => {
+  it('widens on the arrow pointing away from the panel and narrows on the other', () => {
+    expect(keyResizeWidth(400, 'ArrowLeft', 'ArrowLeft')).toBe(416);
+    expect(keyResizeWidth(400, 'ArrowRight', 'ArrowLeft')).toBe(384);
+    expect(keyResizeWidth(400, 'ArrowRight', 'ArrowRight')).toBe(416);
+  });
+
+  it('stays inside the drag band', () => {
+    expect(keyResizeWidth(345, 'ArrowRight', 'ArrowLeft')).toBe(340);
+    expect(keyResizeWidth(715, 'ArrowLeft', 'ArrowLeft')).toBe(720);
+  });
+
+  it('ignores every other key', () => {
+    expect(keyResizeWidth(400, 'Enter', 'ArrowLeft')).toBeNull();
+    expect(keyResizeWidth(400, 'ArrowUp', 'ArrowLeft')).toBeNull();
   });
 });

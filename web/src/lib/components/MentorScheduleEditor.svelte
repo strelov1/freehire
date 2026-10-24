@@ -102,6 +102,7 @@
             <select
               class="border-input bg-background h-9 rounded-md border px-2 text-sm"
               bind:value={row.weekday}
+              aria-label="Day, row {i + 1}"
             >
               {#each weekdayOrder() as weekday (weekday)}
                 <option value={weekday}>{weekdayLabel(weekday)}</option>
@@ -110,12 +111,14 @@
             <input
               type="time"
               bind:value={row.start}
+              aria-label="Start time, row {i + 1}"
               class="border-input bg-background h-9 rounded-md border px-2 text-sm"
             />
             <span class="text-muted-foreground text-sm">to</span>
             <input
               type="time"
               bind:value={row.end}
+              aria-label="End time, row {i + 1}"
               class="border-input bg-background h-9 rounded-md border px-2 text-sm"
             />
             <button
@@ -194,6 +197,7 @@
       <input
         type="date"
         bind:value={overrideDate}
+        aria-label="Exception date"
         class="border-input bg-background h-9 rounded-md border px-2 text-sm"
       />
       <label class="flex items-center gap-1 text-sm">
@@ -204,12 +208,14 @@
         <input
           type="time"
           bind:value={overrideStart}
+          aria-label="Exception start time"
           class="border-input bg-background h-9 rounded-md border px-2 text-sm"
         />
         <span class="text-muted-foreground text-sm">to</span>
         <input
           type="time"
           bind:value={overrideEnd}
+          aria-label="Exception end time"
           class="border-input bg-background h-9 rounded-md border px-2 text-sm"
         />
       {/if}

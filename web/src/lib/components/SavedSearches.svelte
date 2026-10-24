@@ -172,7 +172,7 @@
         {#each items as set (set.id)}
           {#if renamingId === set.id}
             <li class="flex items-center gap-2 py-0.5" {@attach focusInput}>
-              <Input bind:value={renameValue} maxlength={100} class="min-w-0 flex-1" onkeydown={onRenameKey} />
+              <Input bind:value={renameValue} maxlength={100} aria-label="Saved filter name" class="min-w-0 flex-1" onkeydown={onRenameKey} />
               <Button variant="primary" size="sm" onclick={commitRename} disabled={!renameValue.trim() || busy}>Save</Button>
               <Button variant="ghost" size="sm" onclick={cancelRename}>Cancel</Button>
             </li>

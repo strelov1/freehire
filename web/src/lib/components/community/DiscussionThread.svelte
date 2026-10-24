@@ -105,7 +105,7 @@
     <p class="closed-note">This thread is closed.</p>
   {:else if isAuthenticated()}
     <form class="reply-form" onsubmit={submit}>
-      <textarea bind:value={body} rows="3" placeholder="Add a reply…" class="reply-form__body"></textarea>
+      <textarea bind:value={body} rows="3" placeholder="Add a reply…" aria-label="Your reply" class="reply-form__body"></textarea>
       {#if formError}<p class="reply-form__error">{formError}</p>{/if}
       <div class="reply-form__actions">
         <Button type="submit" disabled={!canSubmit}>{submitting ? 'Posting…' : 'Reply'}</Button>

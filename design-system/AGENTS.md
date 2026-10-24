@@ -61,7 +61,7 @@ rather than here — their census of `web/` was already off by a third.
   (`scripts/build-tokens.mjs`) into `dist/`. Edit the JSON, run `pnpm build` — never hand-edit
   `dist/`.
 - **`.dark` carries only what dark changes.** The dark build reads `color-dark.tokens.json`
-  alone, so `dist/tokens-dark.css` is 28 declarations, not a second copy of the whole scale —
+  alone, so `dist/tokens-dark.css` is 29 declarations, not a second copy of the whole scale —
   the cascade already inherits the rest from `:root`. A dark override of a non-colour token
   would need its file added to `darkSources`; nothing needs one yet.
 - **A token name may not be authored twice.** `build-tokens.mjs` throws and names both files.
@@ -79,7 +79,7 @@ rather than here — their census of `web/` was already off by a third.
   violation). See `docs/verification.md`.
 - **The same check has a second radius over `../web/src`, and it is not the same rule.** The
   package is held at zero (modulo the `ALLOWED` list above); web is held at its current count
-  *per file* in `scripts/web-token-baseline.json` (455 across 109 files), because a rule
+  *per file* in `scripts/web-token-baseline.json` (444 across 116 files), because a rule
   nobody can satisfy
   gets switched off rather than obeyed. Web also gets a third detector the package does not:
   `text-amber-600` is a well-formed utility off Tailwind's own palette — neither a literal nor

@@ -49,6 +49,10 @@
   "destructive-foreground": {
     "$value": "oklch(0.16 0 0)"
   },
+  "destructive-strong": {
+    "$value": "oklch(0.704 0.191 22.216)",
+    "$description": "Same as the action color: on the dark background it already clears 4.5:1."
+  },
   "border": {
     "$value": "oklch(1 0 0 / 8%)"
   },

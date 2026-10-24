@@ -36,7 +36,7 @@
     TimelineEvent
   } from '#lib/types.js';
   import { focusTrap } from '#lib/actions/focusTrap.js';
-  import { lockScroll, unlockScroll } from '#lib/scrollLock.js';
+  import { lockScroll, unlockScroll } from '#lib/ui/index.js';
   import { autoApplyReviewBanner } from '#lib/autoApplyReview.js';
   import { autoApplyProgressSteps, type AutoApplyProgressStepId } from '#lib/autoApplyProgress.js';
   import { isAutoApplyPaused, setAutoApplyPaused } from '#lib/autoApplyPauseStorage.js';
@@ -545,7 +545,7 @@
   </div>
 
   <!-- Scrolling tab body -->
-  <div class="min-h-0 flex-1 overflow-y-auto">
+  <div class="min-h-0 flex-1 overflow-y-auto overscroll-contain">
     <div
       role="tabpanel"
       id="jobdrawer-tabpanel"

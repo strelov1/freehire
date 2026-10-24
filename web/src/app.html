@@ -27,15 +27,20 @@
     <link rel="icon" href="%sveltekit.assets%/favicon.svg" type="image/svg+xml" />
     <link rel="icon" href="%sveltekit.assets%/favicon.png" sizes="32x32" type="image/png" />
     <link rel="apple-touch-icon" href="%sveltekit.assets%/apple-touch-icon.png" />
-    <meta name="theme-color" content="#0a0a0a" />
+    <!-- The browser chrome's colour: the light --background token in sRGB, since light is
+         the default. The script below swaps in the dark one before paint, and
+         theme.svelte.ts re-reads the token on every toggle. -->
+    <meta name="theme-color" content="#fdfefc" />
     <script>
       // No flash of the wrong theme: apply the persisted choice before first
       // paint. Defaults to light (no OS sniffing) — mirrors theme.svelte.ts;
       // the toggle re-syncs on mount.
       (function () {
         try {
-          if (localStorage.getItem('hire.theme') === 'dark')
+          if (localStorage.getItem('hire.theme') === 'dark') {
             document.documentElement.classList.add('dark');
+            document.querySelector('meta[name="theme-color"]').setAttribute('content', '#0d0e0b');
+          }
         } catch (e) {}
       })();
       // Same trick for the CLI promo strip: it renders on the server (so it never

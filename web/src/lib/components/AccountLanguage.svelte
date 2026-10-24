@@ -10,6 +10,8 @@
   import { messages } from './AccountLanguage.messages';
 
   const s = $derived(t(messages, locale()));
+  // Names the combobox after the visible heading — it has no <label> of its own.
+  const headingId = $props.id();
 
   // The account's preferred interface language: read from the resolved session
   // (no extra fetch — it rides GET /me already). Drives both LLM output
@@ -147,7 +149,7 @@
 <div class="flex flex-col gap-3">
   <div class="flex items-center gap-3">
     <div class="min-w-0 flex-1">
-      <h2 class="text-sm font-semibold leading-tight">{s.heading}</h2>
+      <h2 id={headingId} class="text-sm font-semibold leading-tight">{s.heading}</h2>
       <p class="text-xs text-muted-foreground">
         {s.description}
       </p>
@@ -183,6 +185,7 @@
         autocomplete="off"
         disabled={saveState === 'saving'}
         role="combobox"
+        aria-labelledby={headingId}
         aria-expanded={open}
         aria-controls="language-picker-list"
         class="w-full rounded-md border border-border bg-background py-2 pl-9 pr-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"

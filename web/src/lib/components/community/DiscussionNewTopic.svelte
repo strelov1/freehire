@@ -67,8 +67,8 @@
 
 {#if isAuthenticated()}
   <form class="topic-form" onsubmit={submit}>
-    <Input bind:value={title} placeholder="A short title" maxlength={140} />
-    <textarea bind:value={body} rows="6" placeholder="Say more…" class="topic-form__body"></textarea>
+    <Input bind:value={title} placeholder="A short title" aria-label="Topic title" maxlength={140} />
+    <textarea bind:value={body} rows="6" placeholder="Say more…" aria-label="Topic body" class="topic-form__body"></textarea>
     {#if formError}<p class="topic-form__error">{formError}</p>{/if}
     <div class="topic-form__actions">
       <Button variant="ghost" href={listHref}>Cancel</Button>

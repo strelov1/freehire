@@ -32,6 +32,15 @@ describe('CandidateContactsEditor — Russian locale', () => {
     expect(screen.getByText('Сохранить контакты')).toBeTruthy();
   });
 
+  it('gives every contact field an accessible name, not just a placeholder', () => {
+    render(CandidateContactsEditor, { props: {} });
+
+    for (const name of ['Полное имя', 'Email', 'Телефон', 'Местоположение']) {
+      expect(screen.getByRole('textbox', { name })).toBeTruthy();
+    }
+    expect(screen.getByRole('textbox', { name: 'Ссылки (по одной на строку)' })).toBeTruthy();
+  });
+
   it('renders the save-success note in Russian', async () => {
     putResumeContacts.mockResolvedValue({});
     render(CandidateContactsEditor, { props: {} });

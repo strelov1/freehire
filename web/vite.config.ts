@@ -107,7 +107,7 @@ export default defineConfig({
             'self',
             // Anti-FOUC script in app.html — theme + CLI promo strip + onboarding
             // nudge (see WARNING above).
-            'sha256-rBKxNqi22dqRkzLy61OvvLRma7co8OUnpbQ8vSxSJQc=',
+            'sha256-UzXiTTMq0I0asSQ0x3OpGZ4N0YsAOZwjwaAvqk52vAU=',
             // Google Analytics: the gtag.js host. GA now loads from the same-origin
             // bundle (#lib/analytics, consent-gated), so no inline-script hash is
             // needed — only the external host it injects.

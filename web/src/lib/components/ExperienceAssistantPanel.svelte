@@ -12,7 +12,8 @@
   import { ExternalLink, X } from '@lucide/svelte';
   import { resolve } from '$app/paths';
   import AssistantChat from '#lib/assistant/AssistantChat.svelte';
-  import { lockScroll, unlockScroll } from '#lib/scrollLock.js';
+  import { lockScroll, unlockScroll } from '#lib/ui/index.js';
+  import { focusTrap } from '#lib/actions/focusTrap.js';
   import { DOCK_WIDTH, DOCKED_QUERY, setDockOffset } from '#lib/assistantDock.svelte.js';
 
   let {
@@ -104,6 +105,7 @@
     role={docked ? undefined : 'dialog'}
     aria-modal={docked ? undefined : 'true'}
     aria-label="Experience assistant"
+    {@attach open && !docked ? focusTrap() : undefined}
   >
     <div
       class={[

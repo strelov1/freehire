@@ -316,7 +316,7 @@
               <!-- The label wraps only the Input, not the Button beside it — nesting
                    both inside one label would make the implicit label target ambiguous. -->
               <label class="w-full">
-                <Input bind:value={url} type="url" placeholder="https://…" class="w-full" />
+                <Input bind:value={url} type="url" placeholder="https://…" aria-label="Job URL" class="w-full" />
               </label>
               <Button
                 type="button"
@@ -391,7 +391,9 @@
             </label>
           </div>
 
-          <label class="flex flex-col gap-1">
+          <!-- A div, not a <label>: the chips' remove buttons come before the field, so a
+               wrapping label would forward a click on its text to the first chip's ×. -->
+          <div class="flex flex-col gap-1">
             <span class="flex items-center gap-1.5 text-sm font-medium">
               <Building class="size-3.5 text-muted-foreground" />
               City
@@ -401,8 +403,9 @@
               onAdd={(v) => (cities = addToken(cities, v))}
               onRemove={(v) => (cities = cities.filter((c) => c !== v))}
               placeholder="Add a city and press Enter"
+              label="City"
             />
-          </label>
+          </div>
 
           <div class="flex flex-col gap-1">
             <span class="text-sm font-medium">Work format</span>
@@ -445,7 +448,9 @@
             </label>
           </div>
 
-          <label class="flex flex-col gap-1">
+          <!-- A div, not a <label>: the chips' remove buttons come before the field, so a
+               wrapping label would forward a click on its text to the first chip's ×. -->
+          <div class="flex flex-col gap-1">
             <span class="flex items-center gap-1.5 text-sm font-medium">
               <Tags class="size-3.5 text-muted-foreground" />
               Skills
@@ -455,8 +460,9 @@
               onAdd={(v) => (skills = addToken(skills, v))}
               onRemove={(v) => (skills = skills.filter((s) => s !== v))}
               placeholder="e.g. Go, Kubernetes — Enter to add"
+              label="Skills"
             />
-          </label>
+          </div>
 
           <div class="flex flex-col gap-1">
             <span class="flex items-center gap-1.5 text-sm font-medium">
@@ -468,6 +474,7 @@
                 type="number"
                 min="0"
                 placeholder="Min"
+                aria-label="Minimum salary"
                 value={salaryMin != null ? String(salaryMin) : ''}
                 oninput={(e) =>
                   (salaryMin = e.currentTarget.value ? Number(e.currentTarget.value) : null)}
@@ -478,6 +485,7 @@
                 type="number"
                 min="0"
                 placeholder="Max"
+                aria-label="Maximum salary"
                 value={salaryMax != null ? String(salaryMax) : ''}
                 oninput={(e) =>
                   (salaryMax = e.currentTarget.value ? Number(e.currentTarget.value) : null)}

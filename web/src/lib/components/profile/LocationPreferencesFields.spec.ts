@@ -1,6 +1,10 @@
-import { render, screen } from '@testing-library/svelte';
+import { fireEvent, render, screen } from '@testing-library/svelte';
 import { describe, expect, it, vi } from 'vitest';
 import LocationPreferencesFields from './LocationPreferencesFields.svelte';
+
+const { searchCities } = vi.hoisted(() => ({ searchCities: vi.fn() }));
+
+vi.mock('#lib/api.js', () => ({ api: { searchCities } }));
 
 vi.mock('$app/state', () => ({
   page: { data: { locale: 'ru' }, url: new URL('http://localhost/') },
@@ -46,5 +50,41 @@ describe('LocationPreferencesFields', () => {
     expect(screen.getByText('Готов(а) к переезду')).toBeTruthy();
     expect(screen.getByText('Куда вы готовы переехать (пусто = куда угодно)')).toBeTruthy();
     expect(screen.getByPlaceholderText('Добавить город')).toBeTruthy();
+  });
+
+  it('labels the where-based combobox and picks a place with ArrowDown + Enter', async () => {
+    searchCities.mockReset().mockResolvedValue([{ value: 'Berlin', country: 'de' }]);
+    const onChange = vi.fn();
+    render(LocationPreferencesFields, {
+      props: { value: null, derivedLocation: null, onChange },
+    });
+
+    const input = screen.getByRole('combobox', { name: 'Где вы базируетесь' });
+    await fireEvent.input(input, { target: { value: 'Ber' } });
+    const option = await screen.findByRole('option', { name: /Berlin/ });
+
+    await fireEvent.keyDown(input, { key: 'ArrowDown' });
+    expect(input.getAttribute('aria-activedescendant')).toBe(option.id);
+
+    await fireEvent.keyDown(input, { key: 'Enter' });
+    expect(screen.queryByRole('listbox')).toBeNull();
+    expect(onChange).toHaveBeenLastCalledWith(
+      expect.objectContaining({ base: expect.objectContaining({ city: 'Berlin', country: 'de' }) }),
+    );
+  });
+
+  it('closes the where-based list on Escape', async () => {
+    searchCities.mockReset().mockResolvedValue([{ value: 'Berlin', country: 'de' }]);
+    render(LocationPreferencesFields, {
+      props: { value: null, derivedLocation: null, onChange: vi.fn() },
+    });
+
+    const input = screen.getByRole('combobox', { name: 'Где вы базируетесь' });
+    await fireEvent.input(input, { target: { value: 'Ber' } });
+    await screen.findByRole('option', { name: /Berlin/ });
+
+    await fireEvent.keyDown(input, { key: 'Escape' });
+    expect(screen.queryByRole('listbox')).toBeNull();
+    expect((input as HTMLInputElement).value).toBe('Ber');
   });
 });

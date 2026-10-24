@@ -30,6 +30,9 @@
     onTailor?: () => void;
   } = $props();
 
+  // Names the contact pair after its visible question.
+  const contactHeadingId = $props.id();
+
   // The parent mounts this component to open it and unmounts on onClose, so the
   // dialog is open for its whole life. Dialog owns the closing — Escape, the
   // backdrop and its own button all land on `open`, and this reports it upward
@@ -247,8 +250,8 @@
           {/snippet}
         </FormField>
 
-        <div class="flex flex-col gap-1.5 text-sm">
-          <span class="font-medium">
+        <div class="flex flex-col gap-1.5 text-sm" role="group" aria-labelledby={contactHeadingId}>
+          <span id={contactHeadingId} class="font-medium">
             How should the referrer reach you?
             <span class="text-xs font-normal text-muted-foreground">(at least one)</span>
           </span>
@@ -257,12 +260,14 @@
               type="text"
               bind:value={contactTelegram}
               placeholder="Telegram @handle"
+              aria-label="Telegram handle"
               class="rounded-md border border-border bg-background px-3 py-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             />
             <input
               type="email"
               bind:value={contactEmail}
               placeholder="you@example.com"
+              aria-label="Email"
               class="rounded-md border border-border bg-background px-3 py-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             />
           </div>

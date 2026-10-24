@@ -31,6 +31,10 @@
   const languages = $derived(structured?.languages ?? []);
   const certifications = $derived(structured?.certifications ?? []);
   const s = $derived(t(messages, locale()));
+  // The languages/certifications textareas take their names from the visible headings.
+  const uid = $props.id();
+  const languagesHeadingId = `${uid}-languages`;
+  const certificationsHeadingId = `${uid}-certifications`;
 
   let editingEducation = $state(false);
   let educationDraft = $state<ResumeEducation[]>([]);
@@ -180,14 +184,20 @@
                   class="rounded-md border border-border bg-background px-3 py-2 text-sm"
                   bind:value={row.degree}
                   placeholder={s.education.degreePlaceholder}
+                  aria-label="{s.education.degreePlaceholder} {i + 1}"
                 />
                 <input
                   class="rounded-md border border-border bg-background px-3 py-2 text-sm"
                   bind:value={row.institution}
                   placeholder={s.education.institutionPlaceholder}
+                  aria-label="{s.education.institutionPlaceholder} {i + 1}"
                 />
                 <div class="sm:col-span-2">
-                  <PeriodDateInput bind:value={row.year} placeholder={s.education.yearPlaceholder} />
+                  <PeriodDateInput
+                    bind:value={row.year}
+                    placeholder={s.education.yearPlaceholder}
+                    label="{s.education.yearPlaceholder} {i + 1}"
+                  />
                 </div>
               </div>
               <Button
@@ -244,7 +254,7 @@
 
   <div class="flex flex-col gap-2">
     <div class="flex items-center justify-between">
-      <h2 class="flex items-center gap-2 text-base font-semibold">
+      <h2 id={languagesHeadingId} class="flex items-center gap-2 text-base font-semibold">
         <LanguagesIcon class="size-4.5" />{s.languages.heading}
       </h2>
       {#if !editingLanguages}
@@ -257,6 +267,7 @@
     {#if editingLanguages}
       <textarea
         bind:value={languagesText}
+        aria-labelledby={languagesHeadingId}
         rows="4"
         class="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
         placeholder={s.languages.placeholder}
@@ -289,7 +300,7 @@
 
   <div class="flex flex-col gap-2">
     <div class="flex items-center justify-between">
-      <h2 class="flex items-center gap-2 text-base font-semibold">
+      <h2 id={certificationsHeadingId} class="flex items-center gap-2 text-base font-semibold">
         <Award class="size-4.5" />{s.certifications.heading}
       </h2>
       {#if !editingCertifications}
@@ -302,6 +313,7 @@
     {#if editingCertifications}
       <textarea
         bind:value={certificationsText}
+        aria-labelledby={certificationsHeadingId}
         rows="4"
         class="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
         placeholder={s.certifications.placeholder}

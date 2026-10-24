@@ -1,6 +1,6 @@
 <script lang="ts">
   import { Mail, X, Lock, ExternalLink } from '@lucide/svelte';
-  import { Button } from '#lib/ui/index.js';
+  import { Button, lockScroll, unlockScroll } from '#lib/ui/index.js';
   import { focusTrap } from '#lib/actions/focusTrap.js';
 
   // The parent owns open/close; onConnect proceeds to the Google OAuth redirect.
@@ -31,11 +31,17 @@
       href: `${REPO}/cmd/classify-mail`,
     },
   ];
+
+  // Mounted only while open, so the lock lives exactly as long as the dialog does.
+  $effect(() => {
+    lockScroll();
+    return unlockScroll;
+  });
 </script>
 
 <svelte:window onkeydown={(e) => e.key === 'Escape' && onClose()} />
 
-<div class="fixed inset-0 z-50 flex items-center justify-center p-4">
+<div class="fixed inset-0 z-50 flex flex-col items-center p-4 max-sm:optical-center sm:justify-center">
   <button type="button" aria-label="Close dialog" class="absolute inset-0 bg-black/50" onclick={onClose}></button>
 
   <div
@@ -65,7 +71,7 @@
       </button>
     </div>
 
-    <div class="flex-1 overflow-y-auto p-5">
+    <div class="flex-1 overflow-y-auto overscroll-contain p-5">
       <ol class="flex flex-col gap-4">
         {#each steps as step, i (step.title)}
           <li class="flex gap-3">

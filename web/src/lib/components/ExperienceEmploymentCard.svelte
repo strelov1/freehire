@@ -184,9 +184,9 @@
               </FormField>
             {/if}
             <div class="flex gap-2">
-              <PeriodDateInput bind:value={empStart} placeholder="Start" />
+              <PeriodDateInput bind:value={empStart} placeholder="Start" label="Employment start" />
               {#if !(employment.kind === 'job' && empCurrent)}
-                <PeriodDateInput bind:value={empEnd} placeholder="End" />
+                <PeriodDateInput bind:value={empEnd} placeholder="End" label="Employment end" />
               {/if}
             </div>
             {#if employment.kind === 'job'}

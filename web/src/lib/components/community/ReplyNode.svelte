@@ -81,7 +81,7 @@
 
   {#if replying}
     <form class="node__form" onsubmit={submit}>
-      <textarea bind:value={body} rows="2" placeholder="Reply…" class="node__form-body"></textarea>
+      <textarea bind:value={body} rows="2" placeholder="Reply…" aria-label="Reply to {reply.author}" class="node__form-body"></textarea>
       {#if formError}<p class="node__error">{formError}</p>{/if}
       <div class="node__form-actions">
         <Button type="submit" disabled={!canSubmit}>{submitting ? 'Posting…' : 'Reply'}</Button>

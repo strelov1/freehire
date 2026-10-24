@@ -646,9 +646,9 @@
                 </FormField>
               </div>
               <div class="flex gap-2">
-                <PeriodDateInput bind:value={jobStart} placeholder="Start" />
+                <PeriodDateInput bind:value={jobStart} placeholder="Start" label="Job start" />
                 {#if !jobCurrent}
-                  <PeriodDateInput bind:value={jobEnd} placeholder="End" />
+                  <PeriodDateInput bind:value={jobEnd} placeholder="End" label="Job end" />
                 {/if}
               </div>
               <label class="flex items-center gap-2 text-sm">
@@ -695,8 +695,8 @@
                 {/snippet}
               </FormField>
               <div class="flex gap-2">
-                <PeriodDateInput bind:value={projStart} placeholder="Start" />
-                <PeriodDateInput bind:value={projEnd} placeholder="End" />
+                <PeriodDateInput bind:value={projStart} placeholder="Start" label="Project start" />
+                <PeriodDateInput bind:value={projEnd} placeholder="End" label="Project end" />
               </div>
               <div class="flex gap-2">
                 <Button size="sm" disabled={busy || !projName.trim()} onclick={createProject}>Save</Button>

@@ -7,7 +7,7 @@
   import { isAuthenticated, currentUser, logout as doLogout } from '#lib/auth.svelte.js';
   import { promptSignIn } from '#lib/signin.js';
   import { themeStore } from '#lib/theme.svelte.js';
-  import { lockScroll, unlockScroll } from '#lib/scrollLock.js';
+  import { lockScroll, unlockScroll } from '#lib/ui/index.js';
   import { openedOverlay, closedOverlay } from '#lib/headerOverlay.js';
   import { cn } from '#lib/ui/index.js';
   import BrandMark from './BrandMark.svelte';
@@ -272,7 +272,7 @@
       </div>
 
       <!-- Middle: scrollable, sectioned links. -->
-      <div class="max-sm:flex-1 max-sm:overflow-y-auto max-sm:px-2 max-sm:pb-3">
+      <div class="max-sm:flex-1 max-sm:overflow-y-auto max-sm:overscroll-contain max-sm:px-2 max-sm:pb-3">
         <!-- Primary destinations pinned to the top, then a divider before the
              signed-in personal items and the rest of the site nav. -->
         {#each primaryLinks as link (link.href)}

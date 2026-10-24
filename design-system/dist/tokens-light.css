@@ -15,6 +15,7 @@
   --accent-foreground: oklch(0.13 0 0); /** Text on accent surface. */
   --destructive: oklch(0.577 0.245 27.325); /** Destructive action color (delete, remove, error). */
   --destructive-foreground: oklch(0.985 0 0); /** Text/icon on a filled destructive surface. */
+  --destructive-strong: oklch(0.52 0.22 27.325); /** Destructive text on the page background or a destructive tint, where the action color falls short of 4.5:1. */
   --border: oklch(0.92 0 0); /** Default border color. */
   --input: oklch(0.93 0 0); /** Input border/fill color. */
   --ring: #b2c248; /** Focus ring color. Aliases brand-ring so focus follows the brand accent. */

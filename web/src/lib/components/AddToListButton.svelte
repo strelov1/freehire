@@ -179,6 +179,7 @@
               <input
                 bind:value={newName}
                 placeholder="New list name"
+                aria-label="New list name"
                 maxlength={100}
                 class="min-w-0 flex-1 rounded-md border border-border bg-background px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-brand"
               />

@@ -525,7 +525,7 @@
                status, replacing the repeated pills. -->
           {#if attentionReqs.length}
             <div class="rounded-xl border border-destructive/25 bg-destructive/5 p-4">
-              <h3 class="mb-2 text-[0.7rem] font-semibold uppercase tracking-wider text-destructive/90">
+              <h3 class="mb-2 text-[0.7rem] font-semibold uppercase tracking-wider text-destructive-strong">
                 Needs attention · {attentionReqs.length}
               </h3>
               <ul class={['grid gap-x-10 gap-y-0.5', !stacked && 'sm:grid-cols-2']}>

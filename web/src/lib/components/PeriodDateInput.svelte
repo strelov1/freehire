@@ -9,7 +9,12 @@
   let {
     value = $bindable(),
     placeholder = '',
-  }: { value?: PeriodDate; placeholder?: string } = $props();
+    label,
+  }: { value?: PeriodDate; placeholder?: string; label?: string } = $props();
+
+  // A month control renders no placeholder at all, so the placeholder alone never names
+  // the field on screen; the accessible name falls back to it only when no label is given.
+  const accessibleName = $derived(label ?? (placeholder || undefined));
 
   let yearOnly = $state(value?.month === undefined && value?.year !== undefined);
 
@@ -60,6 +65,7 @@
       max="2100"
       class="w-full text-sm"
       {placeholder}
+      aria-label={accessibleName}
       value={value?.year !== undefined ? String(value.year) : ''}
       oninput={onYearInput}
     />
@@ -68,6 +74,7 @@
       type="month"
       class="w-full text-sm"
       {placeholder}
+      aria-label={accessibleName}
       value={monthInputValue}
       oninput={onMonthInput}
     />

@@ -6,6 +6,7 @@
   import { onMount, untrack } from 'svelte';
   import { initTheme } from '#lib/theme.svelte.js';
   import { currentUser, isAuthenticated } from '#lib/auth.svelte.js';
+  import { confirmTailorDialog, settleConfirmTailorDialog } from '#lib/confirmTailorDialog.svelte.js';
   import { onboardingGate, onboardingUrl } from '#lib/onboardingGate.svelte.js';
   import { isFullBleedRoute } from '#lib/shellLayout.js';
   import { safeRedirect } from '#lib/safeRedirect.js';
@@ -22,15 +23,36 @@
   import EmailVerificationBanner from '#lib/components/EmailVerificationBanner.svelte';
   import Footer from '#lib/components/Footer.svelte';
   import CookieConsent from '#lib/components/CookieConsent.svelte';
-  import ConfirmTailorDialog from '#lib/components/ConfirmTailorDialog.svelte';
   import CvRefreshDialog from '#lib/components/CvRefreshDialog.svelte';
   import SupportToast from '#lib/components/SupportToast.svelte';
+  import SkipLink from '#lib/components/SkipLink.svelte';
   import '../app.css';
   // Country-flag icon sheet (used by #lib/components/Flag.svelte). References its
   // SVGs by URL, so the browser only fetches flags actually rendered.
   import 'flag-icons/css/flag-icons.min.css';
 
   let { children } = $props();
+
+  // The tailor pre-flight dialog renders skill icons, which pull the whole techmark sheet
+  // (~115KB brotli) into whatever chunk imports it. Statically imported here, that was
+  // every page's cost for a dialog most visits never open. It is fetched on the first ask
+  // instead and stays mounted afterwards.
+  // No race with the ask's promise: the controller holds the open state and the resolver
+  // at module level, so the component mounting late reads `open` as already true and
+  // settling goes through the same controller. A chunk that fails to load must still
+  // answer the ask, or the caller would await forever; the next ask retries the import.
+  let confirmTailorModule = $state<Promise<typeof import('#lib/components/ConfirmTailorDialog.svelte')> | null>(
+    null,
+  );
+  $effect(() => {
+    if (!confirmTailorDialog.open || confirmTailorModule) return;
+    const load = import('#lib/components/ConfirmTailorDialog.svelte');
+    confirmTailorModule = load;
+    load.catch(() => {
+      confirmTailorModule = null;
+      settleConfirmTailorDialog(false);
+    });
+  });
 
   // The account area (/my/*) is an app-like surface with its own sidebar nav — the
   // marketing footer's link columns don't belong there, but a compact one (just
@@ -137,6 +159,16 @@
     if (updated.current && !willUnload && to?.url) location.href = to.url.href;
   });
 
+  // The tailor pre-flight dialog lives in this layout, so a navigation does not unmount it:
+  // following its upgrade link would land on /my/plan with the dialog still covering the
+  // page. Leaving the page is a cancel — the candidate went somewhere else instead of
+  // tailoring. Registered here rather than in the dialog because the dialog loads lazily,
+  // and a navigation during that load must still cancel the ask.
+  beforeNavigate(({ shallow }) => {
+    if (shallow) return; // SvelteKit 3 fires this for shallow routing too — not leaving
+    if (confirmTailorDialog.open) settleConfirmTailorDialog(false);
+  });
+
   afterNavigate(({ shallow }) => {
     // SvelteKit 3 fires this for shallow routing too; a filter's URL write is not a
     // pageview.
@@ -183,6 +215,8 @@
   </div>
 {/if}
 
+<SkipLink target="main-content" />
+
 <div class="flex min-h-svh flex-col">
   <TopBar />
 
@@ -193,7 +227,7 @@
        — a promo strip must not push a security notice further from the header. -->
   <CliBanner />
 
-  <main class="flex-1">
+  <main id="main-content" tabindex="-1" class="flex-1 focus:outline-none">
     {@render children()}
   </main>
 
@@ -213,7 +247,13 @@
 
 <CvRefreshDialog />
 
-<ConfirmTailorDialog />
+{#if confirmTailorModule}
+  {#await confirmTailorModule then { default: ConfirmTailorDialog }}
+    <ConfirmTailorDialog />
+  {:catch}
+    <!-- The effect above already answered the ask; nothing to render. -->
+  {/await}
+{/if}
 
 <style>
   /* Indeterminate sweep: the segment slides across the track on repeat while a

@@ -67,6 +67,8 @@
   // ── Offer to refer ──────────────────────────────────────────────────────
   let offerOpen = $state(false);
   let offerSlug = $state('');
+  const uid = $props.id();
+  const offerCompanyId = `${uid}-offer-company`;
   let offerLinkedin = $state('');
   let offerFile = $state<FileList | null>(null);
   let offerBusy = $state(false);
@@ -231,9 +233,13 @@
   {#if offerOpen}
     <form onsubmit={submitOffer} class="mt-3 flex flex-col gap-3 rounded-lg border border-border p-4">
       <div class="flex flex-col gap-1.5 text-sm">
-        <span class="font-medium">{s.offers.companyLabel}</span>
-        <CompanyPicker onSelect={(c) => (offerSlug = c?.slug ?? '')} />
-        <span class="text-xs text-muted-foreground">{s.offers.companyHint}</span>
+        <label for={offerCompanyId} class="font-medium">{s.offers.companyLabel}</label>
+        <CompanyPicker
+          id={offerCompanyId}
+          aria-describedby="{offerCompanyId}-hint"
+          onSelect={(c) => (offerSlug = c?.slug ?? '')}
+        />
+        <span id="{offerCompanyId}-hint" class="text-xs text-muted-foreground">{s.offers.companyHint}</span>
       </div>
       <FormField
         label={s.offers.linkedinLabel}

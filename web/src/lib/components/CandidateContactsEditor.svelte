@@ -91,10 +91,10 @@
   </div>
 
   <div class="grid gap-3 sm:grid-cols-2">
-    <Input bind:value={fullName} oninput={markDirty} placeholder={s.fullNamePlaceholder} class="w-full" />
-    <Input bind:value={email} oninput={markDirty} placeholder={s.emailPlaceholder} class="w-full" />
-    <Input bind:value={phone} oninput={markDirty} placeholder={s.phonePlaceholder} class="w-full" />
-    <Input bind:value={location} oninput={markDirty} placeholder={s.locationPlaceholder} class="w-full" />
+    <Input bind:value={fullName} oninput={markDirty} placeholder={s.fullNamePlaceholder} aria-label={s.fullNamePlaceholder} class="w-full" />
+    <Input bind:value={email} oninput={markDirty} placeholder={s.emailPlaceholder} aria-label={s.emailPlaceholder} class="w-full" />
+    <Input bind:value={phone} oninput={markDirty} placeholder={s.phonePlaceholder} aria-label={s.phonePlaceholder} class="w-full" />
+    <Input bind:value={location} oninput={markDirty} placeholder={s.locationPlaceholder} aria-label={s.locationPlaceholder} class="w-full" />
   </div>
   <label class="flex flex-col gap-1 text-sm">
     <span class="text-muted-foreground">{s.linksLabel}</span>

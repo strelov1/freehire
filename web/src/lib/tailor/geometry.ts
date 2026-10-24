@@ -7,6 +7,20 @@ export function clampWidth(px: number, min: number, max: number): number {
   return Math.round(Math.max(min, Math.min(max, px)));
 }
 
+/** The width band both tailor side panels resize within, by drag or by keyboard. */
+export const PANEL_MIN_WIDTH = 340;
+export const PANEL_MAX_WIDTH = 720;
+/** One arrow press on a focused splitter: the keyboard path to the widths a drag reaches. */
+const PANEL_KEY_STEP = 16;
+
+/** The panel width after an arrow press on its splitter, or null for any other key. `widenKey`
+ *  is the arrow pointing away from the panel — ArrowLeft for a panel on the right edge. */
+export function keyResizeWidth(width: number, key: string, widenKey: 'ArrowLeft' | 'ArrowRight'): number | null {
+  if (key !== 'ArrowLeft' && key !== 'ArrowRight') return null;
+  const delta = key === widenKey ? PANEL_KEY_STEP : -PANEL_KEY_STEP;
+  return clampWidth(width + delta, PANEL_MIN_WIDTH, PANEL_MAX_WIDTH);
+}
+
 /** Page-margin stepper bounds and increment, in inches — mirrors the backend's clamp band. */
 export const MARGIN_MIN = 0.25;
 export const MARGIN_MAX = 1.5;

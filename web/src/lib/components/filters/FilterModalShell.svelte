@@ -4,6 +4,7 @@
   import type { RailEntry, RailSection } from '#lib/filterSections.js';
   import type { FacetCounts } from '#lib/types.js';
   import { focusTrap } from '#lib/actions/focusTrap.js';
+  import { lockScroll, unlockScroll } from '#lib/ui/index.js';
   import { errorMessage } from '#lib/utils.js';
 
   // The reusable two-pane filter-modal chrome: backdrop, header, the sectioned left
@@ -167,6 +168,12 @@
     }
   }
 
+  $effect(() => {
+    if (!open) return;
+    lockScroll();
+    return unlockScroll;
+  });
+
   function onKeydown(e: KeyboardEvent) {
     if (e.key === 'Escape') onClose();
   }
@@ -205,7 +212,7 @@
 
       <div class="flex min-h-0 flex-1">
         <!-- rail -->
-        <nav class="w-40 shrink-0 overflow-y-auto border-r border-border py-2 sm:w-56">
+        <nav class="w-40 shrink-0 overflow-y-auto overscroll-contain border-r border-border py-2 sm:w-56">
           {#each sections as section (section)}
             {@const entries = rail.filter((e) => e.section === section)}
             {#if entries.length}
@@ -238,7 +245,7 @@
         </nav>
 
         <!-- pane -->
-        <section class="min-w-0 flex-1 overflow-y-auto p-4 sm:p-6">
+        <section class="min-w-0 flex-1 overflow-y-auto overscroll-contain p-4 sm:p-6">
           {#if extra}<div class="mb-6">{@render extra()}</div>{/if}
           {#if activeEntry}{@render pane(activeEntry, liveCounts)}{/if}
         </section>

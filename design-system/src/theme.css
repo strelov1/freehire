@@ -26,6 +26,25 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* A flex column that seats its content at the optical centre rather than the
+   geometric one: the free space splits 1:2 above and below, so a short modal on a
+   full-screen phone sheet sits in the upper third instead of reading as having
+   slid down. Content taller than the box takes all of it — both spacers shrink to
+   nothing — so it can never push content above the top edge. Pair with
+   `flex flex-col`; scope it to a breakpoint with a variant (`max-sm:optical-center`). */
+@utility optical-center {
+  &::before,
+  &::after {
+    content: "";
+  }
+  &::before {
+    flex: 1 1 0;
+  }
+  &::after {
+    flex: 2 1 0;
+  }
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -43,6 +62,9 @@
   --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);
   --color-destructive-foreground: var(--destructive-foreground);
+  /* Readable destructive text. --destructive is an action fill and measures ~4.3:1
+     as text on its own 5% tint in light mode; dark mode needs no darker tone. */
+  --color-destructive-strong: var(--destructive-strong);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
