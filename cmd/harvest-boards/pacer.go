@@ -92,3 +92,26 @@ func paced(c httpClient, ratePerSec float64) httpClient {
 	// fire its whole allowance at once — which is the shape that drew the challenge.
 	return pacedClient{inner: c, limiter: rate.NewLimiter(rate.Limit(ratePerSec), 1)}
 }
+
+// rateCappedProber is the optional half of the prober contract for a platform whose origin
+// refuses a fast client in a way the refusal counter cannot see. Pandapé answers a burst with
+// 403, not 429, so the counter reads every refused probe as an answered, absent board and the
+// harvest comes back short with every check green. Such a prober names its own ceiling, and
+// the run never exceeds it whatever -pace says.
+type rateCappedProber interface {
+	maxRequestsPerSecond() float64
+}
+
+// effectivePace is the run's probe rate: the -pace flag, lowered to the prober's own ceiling
+// when it declares one. An unpaced flag (0) takes the ceiling outright.
+func effectivePace(p prober, flagPace float64) float64 {
+	c, ok := p.(rateCappedProber)
+	if !ok {
+		return flagPace
+	}
+	ceiling := c.maxRequestsPerSecond()
+	if flagPace <= 0 || flagPace > ceiling {
+		return ceiling
+	}
+	return flagPace
+}

@@ -5,12 +5,15 @@ import (
 	"compress/gzip"
 	"context"
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"io"
 	"log"
+	"net/http"
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"golang.org/x/net/html"
 
@@ -34,17 +37,30 @@ const (
 // pandapeProber probes and discovers Pandapé career sites.
 type pandapeProber struct{}
 
+// maxRequestsPerSecond holds the harvest to the crawl's own pace: every tenant and the sitemap
+// are one origin, which answers a burst with 403 (see sources.PandapeRequestInterval).
+func (pandapeProber) maxRequestsPerSecond() float64 {
+	return float64(time.Second) / float64(sources.PandapeRequestInterval)
+}
+
 // pandapeTitle is the career site's title: "<employer> - Trabalhe Conosco | Pandapé".
 var pandapeTitle = regexp.MustCompile(`^(.+?) - Trabalhe Conosco \| Pandap`)
 
 // probe reads the career site's own page: the employer from its title and the open-vacancy
 // count from its "subTotal" counter. An unknown tenant answers 404 ("A Página de Carreiras
 // desta empresa não está mais disponível no Pandapé") and a site with no vacancy counts 0;
-// both are a skip.
+// both are a skip. Any other failure is returned, so probeAll counts it.
 func (pandapeProber) probe(ctx context.Context, c httpClient, tenant string) (string, int, error) {
 	root, err := c.GetHTML(ctx, fmt.Sprintf(pandapeSiteURL, tenant))
 	if err != nil {
-		return "", 0, nil
+		// Only the platform's 404 says the tenant is gone. Anything else — the burst 403
+		// above all — is a probe that did not happen, and is surfaced as a failure rather
+		// than counted as an absent board.
+		var se *sources.StatusError
+		if errors.As(err, &se) && se.Code == http.StatusNotFound {
+			return "", 0, nil
+		}
+		return "", 0, err
 	}
 	n := pandapeSubtotal(root)
 	if n == 0 {

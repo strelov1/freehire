@@ -102,9 +102,13 @@ func run() int {
 		log.Printf("harvest-boards: %v", err)
 		return 1
 	}
-	client := newCountingClient(paced(egress, *pace))
-	if *pace > 0 {
-		log.Printf("harvest-boards: pacing probes at %.2f req/s with %d workers", *pace, *workers)
+	probeRate := effectivePace(p, *pace)
+	client := newCountingClient(paced(egress, probeRate))
+	if probeRate != *pace {
+		log.Printf("harvest-boards: %s caps its own probe rate at %.2f req/s", provider, probeRate)
+	}
+	if probeRate > 0 {
+		log.Printf("harvest-boards: pacing probes at %.2f req/s with %d workers", probeRate, *workers)
 	}
 
 	raw, expected, err := resolveCandidates(ctx, p, client, seedPath)

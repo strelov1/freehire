@@ -6,6 +6,11 @@ import (
 	"context"
 	"slices"
 	"testing"
+	"time"
+
+	"golang.org/x/net/html"
+
+	"github.com/strelov1/freehire/internal/ingest/sources"
 )
 
 func gz(t *testing.T, s string) string {
@@ -63,24 +68,57 @@ func TestPandapeDiscoverFailsWithoutAnIndex(t *testing.T) {
 	}
 }
 
+// pdStatusGetter answers listed URLs with a status error, the rest from the canned bodies.
+type pdStatusGetter struct {
+	fakeGetter
+	codes map[string]int
+}
+
+func (g pdStatusGetter) GetHTML(ctx context.Context, url string) (*html.Node, error) {
+	if code, ok := g.codes[url]; ok {
+		return nil, &sources.StatusError{Method: "GET", Code: code, URL: url}
+	}
+	return g.fakeGetter.GetHTML(ctx, url)
+}
+
 func TestPandapeProbe(t *testing.T) {
-	getter := fakeGetter{
+	getter := pdStatusGetter{fakeGetter: fakeGetter{
 		"https://braspress.pandape.infojobs.com.br/": `<html><head><title>Braspress - Trabalhe Conosco | Pandapé</title></head><body>
 <div id="textFiltered"><span id="subTotal">54</span> Vagas encontradas com o filtro aplicado</div></body></html>`,
 		"https://quiet.pandape.infojobs.com.br/": `<html><head><title>Quiet - Trabalhe Conosco | Pandapé</title></head><body><span id="subTotal">0</span></body></html>`,
-	}
+	}, codes: map[string]int{
+		"https://missing.pandape.infojobs.com.br/": 404,
+		"https://refused.pandape.infojobs.com.br/": 403,
+	}}
 	cases := []struct {
 		tenant, wantName string
 		wantN            int
+		wantErr          bool
 	}{
-		{"braspress", "Braspress", 54},
-		{"quiet", "", 0},
-		{"missing", "", 0}, // the platform's 404 "não está mais disponível" page -> skip
+		{"braspress", "Braspress", 54, false},
+		{"quiet", "", 0, false},
+		{"missing", "", 0, false}, // the platform's 404 "não está mais disponível" page -> skip
+		{"refused", "", 0, true},  // the burst 403 is a probe that did not happen, not an absent board
 	}
 	for _, c := range cases {
 		name, n, err := pandapeProber{}.probe(context.Background(), getter, c.tenant)
-		if err != nil || name != c.wantName || n != c.wantN {
-			t.Errorf("probe(%s) = (%q, %d, %v), want (%q, %d)", c.tenant, name, n, err, c.wantName, c.wantN)
+		if (err != nil) != c.wantErr || name != c.wantName || n != c.wantN {
+			t.Errorf("probe(%s) = (%q, %d, %v), want (%q, %d, err=%v)", c.tenant, name, n, err, c.wantName, c.wantN, c.wantErr)
 		}
+	}
+}
+
+func TestPandapeHarvestHoldsTheCrawlPace(t *testing.T) {
+	want := float64(time.Second) / float64(sources.PandapeRequestInterval)
+	for _, flagPace := range []float64{0, 35, want} {
+		if got := effectivePace(pandapeProber{}, flagPace); got != want {
+			t.Errorf("effectivePace(pandape, %v) = %v, want %v", flagPace, got, want)
+		}
+	}
+	if got := effectivePace(pandapeProber{}, want/2); got != want/2 {
+		t.Errorf("a slower -pace must be kept, got %v", got)
+	}
+	if got := effectivePace(greenhouseProber{}, 0); got != 0 {
+		t.Errorf("a prober with no ceiling stays unpaced, got %v", got)
 	}
 }

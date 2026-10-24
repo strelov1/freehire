@@ -52,14 +52,15 @@ const pandapePageSize = 20
 // FAILS the crawl, as fullBoardListing requires.
 const pandapeMaxPages = 1000
 
-// pandapeRequestInterval paces every request of a run — every tenant's listing and detail
+// PandapeRequestInterval paces every request of a run — every tenant's listing and detail
 // pages alike, since all ~3.3k tenants are served by one origin, which answers a burst with a
 // 403 (not a 429, so the client's per-host backoff never sees it). Measured 2026-10-23 from the
 // prod address: ~2 requests a second sustained for ~40 minutes (~2.3k tenant pages) drew no
 // refusal; ~6-7 a second for one minute drew a run of 403s on detail and listing pages alike,
 // which cleared within seconds of the burst ending. Two a second is the rate that was observed
-// to pass, not a limit we know.
-const pandapeRequestInterval = 500 * time.Millisecond
+// to pass, not a limit we know. Exported because cmd/harvest-boards probes the same origin and
+// must hold the same pace: unpaced, its 16 workers reached ~35 req/s and drew the 403.
+const PandapeRequestInterval = 500 * time.Millisecond
 
 // pandapeMaxNewPerBoard bounds how many unseen vacancies one board's crawl hydrates. The first
 // crawl of the largest tenants faces thousands of bodies (randstad-brasil lists 3,827); at two
@@ -72,7 +73,7 @@ const pandapeMaxNewPerBoard = 300
 func NewPandape(c pandapeHTTP) Source {
 	return pandape{
 		http:           c,
-		limiter:        rate.NewLimiter(rate.Every(pandapeRequestInterval), 1),
+		limiter:        rate.NewLimiter(rate.Every(PandapeRequestInterval), 1),
 		maxNewPerBoard: pandapeMaxNewPerBoard,
 	}
 }
