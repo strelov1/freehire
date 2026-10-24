@@ -3506,6 +3506,11 @@ type Querier interface {
 	// companyId-keyed board lives on. Rides jobs_source_extid_pattern_idx through the same
 	// escaped LIKE prefix as ExistingExternalIDsByBoard (externalid.BoardPattern).
 	ListBoardJobURLs(ctx context.Context, arg ListBoardJobURLsParams) ([]ListBoardJobURLsRow, error)
+	// When each of a provider's boards was last crawled, for cmd/ingest to start the boards it has
+	// waited longest on (see orderOldestRunFirst). A board absent here has never been crawled at all.
+	// Only the three columns the ordering reads: this runs once per ingest run over a provider that
+	// can hold tens of thousands of boards.
+	ListBoardLastRuns(ctx context.Context, provider string) ([]ListBoardLastRunsRow, error)
 	// One user's still-unclassified submissions, newest first — the other half of the "my
 	// contributions" list (boards holds the recognized half).
 	ListBoardSubmissionsBySubmitter(ctx context.Context, submittedBy int64) ([]BoardSubmission, error)

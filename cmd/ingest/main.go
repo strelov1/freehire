@@ -195,6 +195,15 @@ func run() int {
 		log.Printf("ingest: shard %d/%d — crawling %d of %d boards for %s", i, n, len(sourceCfg.Sources), full, provider)
 	}
 
+	// Start the boards waited on longest, so a run cut short by its deadline rotates through
+	// the catalog instead of starving the same tail every time (see orderOldestRunFirst).
+	// Best-effort: without the read the catalog order stands, which is only less fair.
+	if lastRun, err := loadLastRuns(ctx, db.New(pool), provider); err != nil {
+		log.Printf("ingest: read last crawl times for %s, keeping catalog order: %v", provider, err)
+	} else {
+		orderOldestRunFirst(sourceCfg.Sources, lastRun)
+	}
+
 	// crawled records the company slugs each provider actually wrote this run, so the
 	// post-run sweep scopes its closes to them (see the sweep below and crawledSet).
 	crawled := newCrawledSet()

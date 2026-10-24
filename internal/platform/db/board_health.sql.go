@@ -102,6 +102,42 @@ func (q *Queries) GetBoardCooldown(ctx context.Context, arg GetBoardCooldownPara
 	return cooldown_until, err
 }
 
+const listBoardLastRuns = `-- name: ListBoardLastRuns :many
+SELECT board, region, last_run_at
+FROM board_health
+WHERE provider = $1
+`
+
+type ListBoardLastRunsRow struct {
+	Board     string             `json:"board"`
+	Region    string             `json:"region"`
+	LastRunAt pgtype.Timestamptz `json:"last_run_at"`
+}
+
+// When each of a provider's boards was last crawled, for cmd/ingest to start the boards it has
+// waited longest on (see orderOldestRunFirst). A board absent here has never been crawled at all.
+// Only the three columns the ordering reads: this runs once per ingest run over a provider that
+// can hold tens of thousands of boards.
+func (q *Queries) ListBoardLastRuns(ctx context.Context, provider string) ([]ListBoardLastRunsRow, error) {
+	rows, err := q.db.Query(ctx, listBoardLastRuns, provider)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListBoardLastRunsRow{}
+	for rows.Next() {
+		var i ListBoardLastRunsRow
+		if err := rows.Scan(&i.Board, &i.Region, &i.LastRunAt); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listChronicBoards = `-- name: ListChronicBoards :many
 SELECT provider, board, region, consecutive_failures, cooldown_until, last_error, last_error_at,
        last_success_at, first_seen_at, count(*) OVER () AS total

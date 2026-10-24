@@ -223,3 +223,12 @@ WHERE EXISTS (
 )
 GROUP BY provider
 ORDER BY provider;
+
+-- name: ListBoardLastRuns :many
+-- When each of a provider's boards was last crawled, for cmd/ingest to start the boards it has
+-- waited longest on (see orderOldestRunFirst). A board absent here has never been crawled at all.
+-- Only the three columns the ordering reads: this runs once per ingest run over a provider that
+-- can hold tens of thousands of boards.
+SELECT board, region, last_run_at
+FROM board_health
+WHERE provider = $1;
