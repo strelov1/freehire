@@ -49,7 +49,7 @@ a harvest that never resolved the tenant's name. Measured 2026-10-23: ~2,200 com
   the name the ATS states for exactly that board: Paylocity's listing title
   (`{Name} - Job Opportunities`), UKG Ready's `format-settings` `company.name`, Oracle's site
   `og:site_name` through `ExtractOracleSiteName` (drops a lead-in, cuts at a careers or recruiting marker, refuses a site named for
-  its purpose — "Student Casual"), Dayforce's `candidateCorrespondenceClientName` in the
+  its purpose — "Student Casual"; a name split by "|" is read part by part), Dayforce's `candidateCorrespondenceClientName` in the
   careers page's Next.js data (a department such as "Human Resources" is refused), UKG's
   header-logo alt text ("Default Brand" refused, a " Brand" tail cut). Taleo, ADP and Workday
   were tried and are absent on purpose;

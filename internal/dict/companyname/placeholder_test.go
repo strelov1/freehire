@@ -108,6 +108,27 @@ func TestExtractOracleSiteName(t *testing.T) {
 		// A "Career" inside the name is part of it: refused by the purpose word, never cut to
 		// a different employer ("Summit").
 		"Summit Career College": "",
+		// The second prod pass (2026-10-24): 245 sites the first rule refused or never met.
+		"Dollar General External Career Site":           "Dollar General",
+		"Mayo Career Site US":                           "Mayo",
+		"FMOL Health Career Portal":                     "FMOL Health",
+		"JPMC Candidate Experience page":                "JPMC",
+		"St. Croix County Career Section":               "St. Croix County",
+		"Calderys Career Opportunities":                 "Calderys",
+		"Jobs @ Carmeuse":                               "Carmeuse",
+		"Chubb External":                                "Chubb",
+		"Mountaire Jobs":                                "Mountaire",
+		"Careers | BXP":                                 "BXP",
+		"Verisk Careers | Verisk":                       "Verisk",
+		"Local Truck Driving Jobs | Centerline Drivers": "Centerline Drivers",
+		"Corporate Careers | Trueblue":                  "Trueblue",
+		"Work with us | Copa Airlines - NEW":            "Copa Airlines",
+		"the Myriad Genetics Candidate site":            "Myriad Genetics",
+		"The Kroger Co.":                                "The Kroger Co.",
+		"Search Jobs - INL Interns":                     "INL",
+		"Testing Site - JPMC":                           "",
+		"All Jobs":                                      "",
+		"Candidate Experience site - Asia":              "",
 	}
 	for in, want := range cases {
 		if got := ExtractOracleSiteName(in); got != want {
