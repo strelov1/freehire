@@ -108,9 +108,17 @@ var proxiedProviders = map[string]func(HTTPClient) Source{
 // naukri: its posting API answered "406 recaptcha required" to every request from the fixed
 // exit (0 of 1,500 a run on 2026-10-19), while through the rotating gateway 15 of 20 answered
 // 200 and the other five timed out, with no refusal at all (2026-10-21). Its search answers
-// either way. Every other proxied provider keeps the fixed exit: a fresh IP per request would
-// break any flow that leans on a session.
-var rotatingProxyProviders = map[string]bool{"naukri": true}
+// either way.
+//
+// workable: its public widget API is one stateless GET per board, and it rate-limits by exit
+// IP with a ban measured in hours — on 2026-10-24 the fixed exit was answered 429 with
+// retry-after ~65,000 s (18 h) after a board harvest shared it, which stopped the whole
+// workable crawl, while the rotating gateway was served 5 of 5. One shared IP makes every
+// caller of that platform hostage to the busiest one.
+//
+// Every other proxied provider keeps the fixed exit: a fresh IP per request would break any
+// flow that leans on a session.
+var rotatingProxyProviders = map[string]bool{"naukri": true, "workable": true}
 
 // proxyFor is the proxy a proxied provider egresses through: the rotating gateway for the
 // rotatingProxyProviders when one is configured, the fixed exit otherwise.

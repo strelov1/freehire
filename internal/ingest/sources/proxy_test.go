@@ -98,6 +98,9 @@ func TestProxyForSendsOnlyTheRotatingProvidersThroughTheGateway(t *testing.T) {
 	if got := proxyFor("naukri", fixed, rotating); got != rotating {
 		t.Errorf("naukri proxy = %v, want the rotating gateway", got)
 	}
+	if got := proxyFor("workable", fixed, rotating); got != rotating {
+		t.Errorf("workable proxy = %v, want the rotating gateway", got)
+	}
 	if got := proxyFor("enlizt", fixed, rotating); got != fixed {
 		t.Errorf("enlizt proxy = %v, want the fixed exit", got)
 	}
