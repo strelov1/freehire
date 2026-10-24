@@ -310,3 +310,23 @@ func TestInfojobsBRSalaryAndEmploymentType(t *testing.T) {
 		}
 	}
 }
+
+func TestInfojobsBRDoesNotStoreAPostingClosedSinceTheListing(t *testing.T) {
+	f := acreFake(t)
+	closed := ijbrFixture(t, "closed.html")
+	for _, p := range []string{
+		"/vaga-de-representante-vendas-rio-branco-em-acre__12151206.aspx",
+		"/vaga-de-artifice-rio-branco-acre-em-acre__12149475.aspx",
+	} {
+		f.pages[infojobsBRBase+p] = closed
+	}
+	g := ijbrAdapter(f)
+	g.maxNewPerBoard = 2
+	jobs, err := g.FetchNew(context.Background(), CompanyEntry{Board: "ac"}, func(string) bool { return false })
+	if err != nil {
+		t.Fatalf("every new posting answering \"gone\" is an answer, not a failed crawl: %v", err)
+	}
+	for _, j := range jobs {
+		t.Errorf("a closed posting was yielded: %+v", j)
+	}
+}

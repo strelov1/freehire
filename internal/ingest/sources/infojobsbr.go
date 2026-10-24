@@ -185,7 +185,7 @@ func (s infojobsBR) FetchNewGated(ctx context.Context, e CompanyEntry, seen func
 			unseen = append(unseen, c)
 		}
 	}
-	var read atomic.Int64
+	var read, gone atomic.Int64
 	jobs := fetchDetails(unseen, defaultDetailWorkers, func(c infojobsBRCard) (Job, bool) {
 		link := infojobsBRBase + c.Path
 		if err := s.limiter.Wait(ctx); err != nil {
@@ -196,16 +196,23 @@ func (s infojobsBR) FetchNewGated(ctx context.Context, e CompanyEntry, seen func
 			log.Printf("infojobsbr: %s: %v; deferring", link, err)
 			return Job{}, false
 		}
+		// A posting closed since the listing was read answers 200 with "Esta vaga não está mais
+		// disponível" — the site's own answer that it is gone, so it is not stored. It was never
+		// stored before either (it is unseen), so there is nothing for a close to reach.
+		if firstByClass(root, "js_VacancyNotFound") != nil {
+			gone.Add(1)
+			return Job{}, false
+		}
 		job, ok := infojobsBRJob(root, c, link)
 		if !ok {
-			// A closed posting answers 200 with "Esta vaga não está mais disponível".
-			log.Printf("infojobsbr: %s is not a live posting; deferring", link)
+			log.Printf("infojobsbr: %s is not a posting page; deferring", link)
 			return Job{}, false
 		}
 		read.Add(1)
 		return job, true
 	})
-	if len(unseen) > 0 && read.Load() == 0 {
+	// A page that answered "gone" is an answer, so only a crawl that got NO answer fails.
+	if len(unseen) > 0 && read.Load() == 0 && gone.Load() == 0 {
 		return nil, fmt.Errorf("infojobsbr: listed %d new postings and read none of their pages", len(unseen))
 	}
 	return append(append(jobs, refreshed...), skipped...), nil
