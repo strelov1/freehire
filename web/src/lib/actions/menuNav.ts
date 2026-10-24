@@ -34,8 +34,8 @@ const ITEM = '[role="menuitem"],[role="menuitemcheckbox"],[role="menuitemradio"]
  *   that loads its contents — focus parks on the container and moves to the first
  *   item as soon as one appears);
  * - Down/Up move between items (wrapping), Home/End jump to the ends;
- * - Tab/Shift+Tab close the menu and return focus to the trigger rather than
- *   tabbing through the items;
+ * - Tab/Shift+Tab close the menu and carry on through the page from the trigger, rather
+ *   than walking the items one by one;
  * - on close (the element leaving the DOM — Escape is the host's own handler) focus
  *   returns to whatever was focused when the menu opened, usually the trigger, unless
  *   the app already moved it elsewhere (see `restoreFocus`).
@@ -76,11 +76,10 @@ export function menuNav({ onclose }: { onclose: () => void }): Attachment<HTMLEl
       // move the caret and Tab walks from the field to its submit button.
       if (target?.closest('input, textarea, form')) return;
       if (e.key === 'Tab') {
-        // With no opener to go back to (a Safari mouse open), let Tab move on naturally.
-        if (opener) {
-          e.preventDefault();
-          opener.focus();
-        }
+        // Close, and let the browser's own Tab move on. Focus goes back to the opener
+        // first, so the next stop is the one after (or before) the trigger, not the
+        // next item of a menu that is about to disappear.
+        opener?.focus();
         onclose();
         return;
       }

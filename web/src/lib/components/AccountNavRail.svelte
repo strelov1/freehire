@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { MediaQuery } from 'svelte/reactivity';
   import { page } from '$app/state';
   import { resolve } from '$app/paths';
   import { toPath } from '#lib/pathname.js';
@@ -39,6 +40,13 @@
   const onKey = (e: KeyboardEvent) => {
     if (open && e.key === 'Escape') close();
   };
+
+  // The drawer exists only below lg. Widening the window past it hides the drawer
+  // without closing it, which would leave the page locked behind nothing; close it.
+  const wide = new MediaQuery('min-width: 1024px', false);
+  $effect(() => {
+    if (wide.current) open = false;
+  });
 
   // The mobile drawer is modal: hold the shared scroll lock while it is open.
   $effect(() => {

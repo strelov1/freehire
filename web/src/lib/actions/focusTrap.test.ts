@@ -2,9 +2,9 @@ import { describe, it, expect } from 'vitest';
 import { nextTrapIndex } from './focusTrap';
 
 describe('nextTrapIndex', () => {
-  it('pulls escaped focus (current -1) back to the first item', () => {
+  it('enters from outside the items at the first on Tab and the last on Shift+Tab', () => {
     expect(nextTrapIndex(-1, 3, false)).toBe(0);
-    expect(nextTrapIndex(-1, 3, true)).toBe(0);
+    expect(nextTrapIndex(-1, 3, true)).toBe(2);
   });
 
   it('wraps forward Tab from the last item to the first', () => {

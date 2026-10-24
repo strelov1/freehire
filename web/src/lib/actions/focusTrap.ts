@@ -6,14 +6,15 @@ import type { Attachment } from 'svelte/attachments';
  * logic is unit-testable in Node (the DOM glue in `focusTrap` is verified via
  * svelte-check + visually).
  *
- * - focus escaped the trap (`current === -1`) → pull it to the first item
+ * - focus is outside the items (`current === -1`: on the container right after open, or
+ *   escaped) → Tab enters at the first item, Shift+Tab at the last
  * - forward Tab on the last item → wrap to the first
  * - backward Shift+Tab on the first item → wrap to the last
  * - anything else → `null`, let the browser move focus normally
  */
 export function nextTrapIndex(current: number, count: number, shift: boolean): number | null {
   if (count <= 0) return null;
-  if (current === -1) return 0;
+  if (current === -1) return shift ? count - 1 : 0;
   if (!shift && current === count - 1) return 0;
   if (shift && current === 0) return count - 1;
   return null;
