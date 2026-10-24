@@ -12,12 +12,14 @@ import (
 	"github.com/gofiber/fiber/v2"
 
 	"github.com/strelov1/freehire/internal/ai/plan"
+	"github.com/strelov1/freehire/internal/api/ratelimit"
 	"github.com/strelov1/freehire/internal/candidate/atscheck"
 	"github.com/strelov1/freehire/internal/candidate/experience"
 	"github.com/strelov1/freehire/internal/candidate/resume"
 	"github.com/strelov1/freehire/internal/candidate/resumeextract"
 	classifydict "github.com/strelov1/freehire/internal/dict/classify"
 	"github.com/strelov1/freehire/internal/dict/skilltag"
+	"github.com/strelov1/freehire/internal/identity/auth"
 	"github.com/strelov1/freehire/internal/identity/userprofile"
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/platform/llm"
@@ -86,16 +88,21 @@ func (h *resumeHandlers) register(api fiber.Router, mw middleware) {
 	api.Get("/me/profile/ats-report", mw.cookie, h.GetATSReport)
 	api.Post("/me/profile/ats-report", mw.cookie, mw.paidAI(unmeteredAI), h.PostATSReport)
 
-	// Resume skill extraction is cookie-only (RequireAuth): it feeds the profile edit
-	// modal (extracted skills merge into the profile). When S3 storage is configured it
-	// also stores the résumé once (the single upload point); when not, it stays stateless
-	// (parsed and discarded, only canonical slugs returned).
+	// Resume skill extraction takes an optional session. Signed in, it feeds the profile
+	// edit modal and the onboarding wizard (extracted skills merge into the profile), and
+	// when S3 storage is configured it also stores the résumé once (the single upload
+	// point); when not, it stays stateless (parsed and discarded, only canonical slugs
+	// returned). Signed out — the AI search lets a visitor attach a CV — it is always
+	// stateless and calls no model, so a guest costs PDF parsing and nothing else, bounded
+	// per address. The /me/ path stays: renaming it would break the profile and onboarding
+	// callers for no behavioural gain.
 	//
 	// Open to free, like PUT /me/resume below, and deliberately NOT behind mw.paidAI. The
-	// structured extraction it kicks off in the background is a model call, and the one
-	// every account gets (plan.WithFreeAI): without it the experience bank stays empty, and
-	// somebody who uploads before paying finds every paid feature with nothing to read.
-	api.Post("/me/resume/extract", mw.cookie, h.ExtractResumeProfile)
+	// structured extraction it kicks off in the background for a signed-in caller is a
+	// model call, and the one every account gets (plan.WithFreeAI): without it the
+	// experience bank stays empty, and somebody who uploads before paying finds every paid
+	// feature with nothing to read.
+	api.Post("/me/resume/extract", mw.optional, resumeExtractGuestLimiter(mw.throttler), h.ExtractResumeProfile)
 
 	// Résumé storage (cookie-only): store the résumé once so the verdict's coherence can
 	// reuse it without a second upload. PUT stores/replaces, GET reports status (enabled +
@@ -120,6 +127,18 @@ func (h *resumeHandlers) register(api fiber.Router, mw middleware) {
 	// and calls no model; the model review and tailoring are what the account is for.
 	// IP-limited, since there is no caller to key by.
 	api.Post("/cv/roast", cvRoastLimiter(mw.throttler), h.RoastCV)
+}
+
+// guestResumeExtractsPerHour bounds how many CVs one signed-out address may have parsed
+// per hour. The call is no model, only a pdftotext fork, so the budget is looser than the
+// AI search's own guest interpretations it serves beside. A first guess.
+const guestResumeExtractsPerHour = 20
+
+// resumeExtractGuestLimiter budgets signed-out extraction per address and leaves a
+// signed-in caller unbudgeted, as they always were. Mounted after mw.optional.
+func resumeExtractGuestLimiter(throttler ratelimit.Throttler) fiber.Handler {
+	return memberOrGuestLimiter(nil,
+		ratelimit.Middleware(throttler, ratelimit.KeyByIP("resumeextract-guest"), guestResumeExtractsPerHour, time.Hour))
 }
 
 // resumeTextRequest is the JSON body for the pasted-text path.
@@ -230,12 +249,15 @@ func resumeProfile(text string) cvProfile {
 // verdict's coherence can reuse it without a second upload; storing is best-effort here
 // (a hiccup must not fail extraction, this endpoint's contract). When storage is
 // unconfigured the résumé is parsed and discarded (only the derived fields are returned).
-// Behind RequireAuth (cookie-only). Oversize bodies are rejected by the server's global
+// A signed-out caller is served too, and for them nothing is stored or derived: the
+// bytes die with the request. Oversize bodies are rejected by the server's global
 // BodyLimit (413) before this handler runs; the web client also guards the size up front.
 func (h *resumeHandlers) ExtractResumeProfile(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
-	if err != nil {
-		return err
+	userID, signedIn := auth.UserID(c)
+	if !signedIn {
+		if err := refuseEncodedBody(c); err != nil {
+			return err
+		}
 	}
 
 	up, err := readResumeUpload(c)
@@ -248,7 +270,7 @@ func (h *resumeHandlers) ExtractResumeProfile(c *fiber.Ctx) error {
 
 	prof := resumeProfile(up.Text)
 
-	if h.resume.Enabled() {
+	if signedIn && h.resume.Enabled() {
 		if meta, err := h.resume.Put(c.Context(), userID, up.ContentType, up.Data); err != nil {
 			// Best-effort: log (never the résumé bytes) and still return the profile.
 			log.Printf("resume: store on extract failed for user %d: %v", userID, err)

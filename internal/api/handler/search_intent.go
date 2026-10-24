@@ -8,6 +8,7 @@ import (
 
 	"github.com/strelov1/freehire/internal/ai/plan"
 	"github.com/strelov1/freehire/internal/api/ratelimit"
+	"github.com/strelov1/freehire/internal/identity/auth"
 	"github.com/strelov1/freehire/internal/platform/llm"
 	"github.com/strelov1/freehire/internal/search/searchintent"
 )
@@ -21,12 +22,23 @@ import (
 // the endpoint. It is not a credit budget: this spends tokens, not AI credits.
 const searchIntentsPerHour = 40
 
-// searchIntentLimiter throttles the interpretation endpoint per authenticated caller.
-// Keyed on the user, not the address, for the reason matchAnalysisLimiter gives: the
-// caller is already authenticated, and an IP key is lifted by any rotating proxy pool.
-// Mounted after the auth middleware so the id is resolved.
+// guestSearchIntentsPerHour bounds how many interpretations one signed-out address may
+// run per hour. Lower than the member budget: a guest spends the SERVICE credential, an
+// address is a weaker identity than an account, and ten is still a describe, two
+// refinements and a couple of fresh starts. A first guess; revisit against the
+// search-intent spend once guests have used it for a week.
+const guestSearchIntentsPerHour = 10
+
+// searchIntentLimiter throttles the interpretation endpoint with two separate budgets: a
+// signed-in caller per user (an IP key is lifted by any rotating proxy pool, the reason
+// matchAnalysisLimiter gives), a guest per address, since there is no one else to key
+// by. Mounted after mw.optional so the id is resolved. The member key is the one this
+// limiter has always used, so a deploy resets nobody's count.
 func searchIntentLimiter(throttler ratelimit.Throttler) fiber.Handler {
-	return ratelimit.Middleware(throttler, ratelimit.KeyByUserOrIP("searchintent"), searchIntentsPerHour, time.Hour)
+	return memberOrGuestLimiter(
+		ratelimit.Middleware(throttler, ratelimit.KeyByUserOrIP("searchintent"), searchIntentsPerHour, time.Hour),
+		ratelimit.Middleware(throttler, ratelimit.KeyByIP("searchintent-guest"), guestSearchIntentsPerHour, time.Hour),
+	)
 }
 
 // intentHandlers serves the search-interpretation endpoint. It is transport only: it
@@ -41,10 +53,11 @@ func searchIntentLimiter(throttler ratelimit.Throttler) fiber.Handler {
 // place already gets right (the base-location gate, the include-wins overlap rule), and
 // would spend a model call to do worse.
 //
-// The model client arrives ONLY through llm: the interpreter is built per request from
-// the caller's own bound client. Holding a second, service-credential interpreter
-// beside it would be two sources of one dependency, free to disagree about whether the
-// feature is configured at all.
+// The model client arrives ONLY through llm: the interpreter is built per request — from
+// the caller's own bound client when signed in, from that same field's service client
+// when not. Holding a second, service-credential interpreter beside it would be two
+// sources of one dependency, free to disagree about whether the feature is configured at
+// all.
 type intentHandlers struct {
 	llm llmBinding
 }
@@ -54,17 +67,17 @@ func newIntentHandlers(llm llmBinding) *intentHandlers {
 }
 
 func (h *intentHandlers) register(api fiber.Router, mw middleware) {
-	// Cookie only. This is a browser surface, and keeping it there means the model
-	// spend is attached to an interactive session, where a per-user limiter means
-	// something. An integration that wants filters has the documented facet vocabulary
-	// and /agent/jobs/search; widening this later is additive.
+	// Optional session: open to signed-out visitors as well. The AI search is how a
+	// visitor first finds the catalogue, and asking them to sign in before they have seen
+	// it hid the feature from exactly the people it is for. A signed-in caller is unchanged
+	// — their own credential, their own per-user budget; a guest is answered on the service
+	// credential under a per-address budget (searchIntentLimiter). An integration that
+	// wants filters still has the documented facet vocabulary and /agent/jobs/search.
 	//
-	// Open to free, deliberately NOT behind mw.paidAI: the interpretation is one of the
-	// model calls every account gets (plan.WithFreeAI, marked in the handler). It is a
-	// short call on a cheap model, bounded per user by the limiter above, and it is how a
-	// visitor first finds the catalogue — a paywall there hid the feature from exactly
-	// the people it is for. Every call answered 402 to free on 2026-10-19.
-	api.Post("/search/interpret", mw.cookie, searchIntentLimiter(mw.throttler), h.InterpretSearch)
+	// Deliberately NOT behind mw.paidAI: the interpretation is one of the model calls every
+	// account gets (plan.WithFreeAI, marked in the handler). It is a short call on a cheap
+	// model, bounded by the limiter. Every call answered 402 to free on 2026-10-19.
+	api.Post("/search/interpret", mw.optional, searchIntentLimiter(mw.throttler), h.InterpretSearch)
 }
 
 // interpretRequest is what the dialog posts: a description, optionally refining a
@@ -127,16 +140,17 @@ func (v interpretResult) result() searchintent.Result {
 	}
 }
 
-// InterpretSearch turns a written description of a job search into filter values.
-// Cookie-authenticated: this is a browser surface, and an integration that wants
-// filters has the documented facet vocabulary and /agent/jobs/search.
+// InterpretSearch turns a written description of a job search into filter values. Open
+// to signed-in and signed-out callers alike (see register).
 //
 // Response: {"data": {...}}. A result that resolved nothing is a 200 carrying
 // empty:true, not an error — the request was fine, the description was not usable.
 func (h *intentHandlers) InterpretSearch(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
-	if err != nil {
-		return err
+	userID, signedIn := auth.UserID(c)
+	if !signedIn {
+		if err := refuseEncodedBody(c); err != nil {
+			return err
+		}
 	}
 	var in interpretRequest
 	if err := c.BodyParser(&in); err != nil {
@@ -152,7 +166,7 @@ func (h *intentHandlers) InterpretSearch(c *fiber.Ctx) error {
 		req.Previous = &previous
 	}
 
-	model, err := h.llm.bind(plan.WithFreeAI(c.UserContext()), userID, llm.Feature(tagSearchIntent))
+	model, err := h.model(c, userID, signedIn)
 	if err != nil {
 		return err
 	}
@@ -167,4 +181,17 @@ func (h *intentHandlers) InterpretSearch(c *fiber.Ctx) error {
 		return err
 	}
 	return c.JSON(fiber.Map{"data": resultView(res)})
+}
+
+// model is the client one interpretation runs on.
+//
+// A signed-in caller spends as themselves, through the binding. A guest spends the
+// service client, tagged with the feature, and NEVER goes through the binding: there is
+// no account to attribute to, and llmkey's resolver asked about account 0 would read and
+// then MINT a gateway credential for it — a key nobody owns, created on every guest call.
+func (h *intentHandlers) model(c *fiber.Ctx, userID int64, signedIn bool) (*llm.Client, error) {
+	if signedIn {
+		return h.llm.bind(plan.WithFreeAI(c.UserContext()), userID, llm.Feature(tagSearchIntent))
+	}
+	return h.llm.client.As("", nil, llm.Feature(tagSearchIntent)), nil
 }

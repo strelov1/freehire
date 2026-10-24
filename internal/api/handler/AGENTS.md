@@ -50,6 +50,21 @@ Fiber HTTP handlers: feature handler structs, route registration, auth surface, 
   lookup — which answers 503 on failure — ahead of the throttle on the hottest endpoints
   in the product. Every `KeyByUserOrIP` limiter that remains (photo, promo, jd-resolve,
   match analysis, mail recall, …) mounts its gate first.
+- **A route open to guests AND members budgets them separately** (`guest.go`'s
+  `memberOrGuestLimiter`, mounted after `mw.optional`): a per-user limiter for the signed-in,
+  a `KeyByIP` limiter under its own prefix for the signed-out. `KeyByUserOrIP` is the wrong
+  tool there — one limiter, one number, so a guest-sized budget would cap members too.
+  `POST /search/interpret` (40/h per user, 10/h per guest address) and
+  `POST /me/resume/extract` (unbudgeted members, 20/h per guest address) are the two.
+- **A guest model call spends the service client directly, never through the binding.**
+  `llmBinding.bind`/`caller` with user id 0 would ask `llmkey.Resolver.For` about account 0,
+  which reads and then MINTS a gateway credential for it. The guest interpretation takes
+  `h.llm.client.As("", nil, llm.Feature(tagSearchIntent))` — still tagged, so its spend is
+  visible under the feature — and a test asserts the resolver is never read.
+- **A guest path refuses `Content-Encoding` before reading the body** (`refuseEncodedBody`).
+  Fiber decompresses an encoded body with no ceiling; behind an account that is tolerable,
+  without one a single request is enough. Signed-in callers of the same route are not
+  refused, so a client that gzips today keeps working.
 - **The one caller a public read tells apart is a paid API key, and `public_gate.go` does it
   itself.** `publicReadLimiter`/`agentSearchLimiter`/`chatAgentLimiter` all go through one
   gate: trusted peer or the Cloudflare verified-bot secret passes; a full-scope key of an
@@ -273,9 +288,9 @@ empty profile the model would read as "no preferences".
 
 ## Résumé / CV (`resume.go`, `cv_roast.go`)
 
-- `POST /cv/roast` is public — no cookie, no key — and is the only unauthenticated route
-  that accepts a CV. It stores nothing (unlike `/me/resume/extract`, which stores because
-  its signed-in caller's later steps need the file) and never calls the LLM analyzer, so
+- `POST /cv/roast` is public — no cookie, no key. It stores nothing (unlike
+  `/me/resume/extract`, which stores for a signed-in caller because their later steps
+  need the file) and never calls the LLM analyzer, so
   `internal/candidate/pii` is not on its path: that layer protects a CV from a model, and
   no model runs. Its limiter is built inline from `mw.throttler` rather than in
   `public_read_limit.go` — that file holds the public READ budgets, and this is a POST
@@ -291,8 +306,13 @@ empty profile the model would read as "no preferences".
   either. The check is a bare "is this header non-empty", not an allow-list or a parse of
   its value: this route has exactly one job and nobody legitimately gzips a CV upload, so
   a second place to get that logic wrong is not worth having. `readResumeUpload` itself is
-  deliberately untouched — `/me/resume/extract` still sits behind `mw.cookie`, and
-  widening the shared reader would silently break any signed-in client that gzips today.
+  deliberately untouched — `/me/resume/extract` applies the same refusal to its guests
+  only, and widening the shared reader would silently break any signed-in client that
+  gzips today.
+- `POST /me/resume/extract` takes an optional session: the AI search lets a guest attach a
+  CV. For a guest it stores nothing and derives nothing (no structured extraction, so no
+  model call); for a signed-in caller it is unchanged, storing the file when S3 is
+  configured.
 
 ## Application forms (`apply_form.go`)
 

@@ -1,15 +1,15 @@
 ## 1. Guest access to search interpretation (backend)
 
-- [ ] 1.1 Test: a signed-out `POST /search/interpret` is answered on the service client tagged with the search-intent feature, and the `llmkey` resolver is never called (no credential read or minted for account 0)
-- [ ] 1.2 Test: signed-out callers are limited to 10/hour per IP (11th → 429); signed-in callers keep 40/hour per user, and the two budgets do not share a key
-- [ ] 1.3 Mount `/search/interpret` on `mw.optional`; build the guest interpreter from the service client directly (design D3); add the per-IP guest limiter beside the per-user one
-- [ ] 1.4 Update the handler's register comment and `internal/api/handler/AGENTS.md` for the guest path; `web/static/openapi.yaml` marks the endpoint as optionally authenticated
+- [x] 1.1 Test: a signed-out `POST /search/interpret` is answered on the service client tagged with the search-intent feature, and the `llmkey` resolver is never called (no credential read or minted for account 0)
+- [x] 1.2 Test: signed-out callers are limited to 10/hour per IP (11th → 429); signed-in callers keep 40/hour per user, and the two budgets do not share a key
+- [x] 1.3 Mount `/search/interpret` on `mw.optional`; build the guest interpreter from the service client directly (design D3); add the per-IP guest limiter beside the per-user one
+- [x] 1.4 Update the handler's register comment and `internal/api/handler/AGENTS.md` for the guest path; `web/static/openapi.yaml` marks the endpoint as optionally authenticated
 
 ## 2. Guest access to CV extraction (backend)
 
-- [ ] 2.1 Test: a signed-out multipart PDF to `/me/resume/extract` returns 200 with skills and persists nothing; a signed-in call is unchanged
-- [ ] 2.2 Test: signed-out callers are limited to 20/hour per IP (21st → 429)
-- [ ] 2.3 Mount `/me/resume/extract` on `mw.optional` with the per-IP guest limiter; update `openapi.yaml`
+- [x] 2.1 Test: a signed-out multipart PDF to `/me/resume/extract` returns 200 with skills and persists nothing; a signed-in call is unchanged
+- [x] 2.2 Test: signed-out callers are limited to 20/hour per IP (21st → 429)
+- [x] 2.3 Mount `/me/resume/extract` on `mw.optional` with the per-IP guest limiter; update `openapi.yaml`
 
 ## 3. Exact distinct-company count on job facets (backend)
 
