@@ -151,7 +151,7 @@ function checkImmutability(base) {
 
   const reasons = migrationEditReasons(base);
   console.log(`check-migrations: ${edited.length} existing migration(s) changed:`);
-  for (const line of edited) console.log(`  ${line.replace('\t', '  ')}`);
+  for (const line of edited) console.log(`  ${line.replaceAll('\t', '  ')}`);
   if (reasons.length > 0) {
     console.log('Allowed by a Migration-Edit trailer:');
     for (const r of reasons) console.log(`  ${r}`);
