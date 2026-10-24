@@ -409,6 +409,7 @@ export const SOURCE_LABELS: Record<string, string> = {
   taleobe: 'Taleo Business Edition',
   occ: 'OCC Mundial',
   catho: 'Catho',
+  infojobsbr: 'InfoJobs Brasil',
   builtin: 'Built In',
 };
 

@@ -484,6 +484,11 @@ func All(c HTTPClient) map[string]Source {
 		// hydrating each new posting from its page's ld+json. Posting pages refuse the
 		// project's bare User-Agent, hence the browser-compatible form of it. See catho.go.
 		compatibleUASource(c, NewCatho),
+		// InfoJobs Brasil: a general Brazilian board, one board per federative unit plus
+		// "todo-brasil". There is no sitemap: each state listing is walked through the site's own
+		// pager, which needs a session cookie, and each new posting hydrated from its page. See
+		// infojobsbr.go.
+		cookieSessionSource(c, NewInfoJobsBR),
 		// Tech in Asia: Southeast Asian startup board. One public Algolia index holds the whole
 		// catalogue, bodies included; the search key is read from the site's app bundle. The
 		// site's edge refuses any self-identifying User-Agent on paths robots.txt allows, hence
