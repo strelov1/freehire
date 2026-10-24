@@ -90,7 +90,7 @@ export function limitToRequestedCountries(
 /** One previewed value. `exclude` draws it struck through, as the sidebar does; `key` is
  *  its identity in a keyed `{#each}` — `param:value`, never the label, which two values
  *  of one facet can share. */
-export type PreviewChip = { key: string; text: string; exclude: boolean };
+type PreviewChip = { key: string; text: string; exclude: boolean };
 export type PreviewGroup = { label: string; chips: PreviewChip[] };
 
 /** What a plan will apply, grouped and labelled exactly as the filter controls label it,
