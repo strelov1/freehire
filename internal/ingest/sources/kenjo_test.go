@@ -97,6 +97,31 @@ func TestKenjoMapsADetail(t *testing.T) {
 	}
 }
 
+// A position published without a body is stored body-less: the detail answered, and a marker
+// would recur every run. An answer that is not the position at all is still a marker.
+func TestKenjoBodylessPositionIsStoredAndReshapedDetailIsMarked(t *testing.T) {
+	fake := (&routedHTTP{}).
+		route(kenjoICTAPI+"/devops", `{"_id":"657ace136fa6b97681458bea","jobTitle":"DevOps Engineer (m/w/d)","positionType":"Full-time"}`).
+		route(kenjoICTAPI+"/fullstack", `{"position":{}}`).
+		route(kenjoICTAPI, kenjoFixture(t, "list_ict-ds.json"))
+	jobs, err := NewKenjo(fake).(HydratingSource).FetchNew(context.Background(),
+		CompanyEntry{Provider: "kenjo", Board: "ict-ds"},
+		func(id string) bool { return id != "657ace136fa6b97681458bea" && id != "67fd15a53f6455d7b72f04b1" })
+	if err != nil {
+		t.Fatalf("FetchNew: %v", err)
+	}
+	byID := map[string]Job{}
+	for _, j := range jobs {
+		byID[j.ExternalID] = j
+	}
+	if b := byID["657ace136fa6b97681458bea"]; b.Unreadable || b.Title != "DevOps Engineer (m/w/d)" || b.Description != "" {
+		t.Errorf("body-less position = %+v, want it stored without a body", b)
+	}
+	if !byID["67fd15a53f6455d7b72f04b1"].Unreadable {
+		t.Error("a detail that is not the position must be an unreadable marker")
+	}
+}
+
 func TestKenjoUnknownSiteIsGone(t *testing.T) {
 	fake := (&routedHTTP{}).routeErr("ampolon.kenjo.io", &StatusError{Method: http.MethodGet, Code: http.StatusNotFound})
 	_, err := NewKenjo(fake).Fetch(context.Background(), CompanyEntry{Provider: "kenjo", Board: "ampolon"})

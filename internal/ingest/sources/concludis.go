@@ -29,15 +29,17 @@ import (
 // A tenant that publishes its jobs on its own site instead REDIRECTS the list address there
 // (edeka → verbund.edeka/karriere): leaving <board>.concludis.de is read as ErrBoardGone, the
 // destination named in the error, because nothing this adapter can read is served any more.
+// A tenant can also do that for single postings: the list stays on concludis while a posting's
+// address redirects to the tenant's site, which mostly states no JobPosting (smurfitkappa: 239
+// of 251; transdev routes some to its subsidiaries' sites). Such a posting is dropped.
 type concludis struct {
 	http concludisGetter
 }
 
-// concludisGetter is the transport the adapter needs: the list pages with their final URL (to
-// see a tenant redirecting away), and each posting's page.
+// concludisGetter is the transport the adapter needs: pages with their final URL, to see a
+// tenant redirecting its list or a posting away to its own site.
 type concludisGetter interface {
 	HTMLResolvedGetter
-	HTMLGetter
 }
 
 // NewConcludis builds the concludis adapter over the given HTTP client.
@@ -120,7 +122,7 @@ func (s concludis) list(ctx context.Context, board string) ([]concludisLine, err
 		if err != nil {
 			return nil, fmt.Errorf("concludis: board %s page %d: %w", board, page, err)
 		}
-		if u, perr := url.Parse(final); perr == nil && final != "" && !strings.EqualFold(u.Hostname(), host) {
+		if concludisLeftTenant(final, "https://"+host+"/") {
 			return nil, fmt.Errorf("concludis: board %s now publishes at %s: %w", board, final, ErrBoardGone)
 		}
 		if want < 0 {
@@ -216,7 +218,7 @@ type concludisJobPosting struct {
 // is the platform's own "no such posting" and drops it; any other failure, or a page carrying
 // no JobPosting body, is an unreadableDetail marker — the page is the only source of the body.
 func (s concludis) detail(ctx context.Context, e CompanyEntry, l concludisLine) (Job, bool) {
-	root, err := s.http.GetHTML(ctx, l.URL)
+	root, final, err := s.http.GetHTMLResolved(ctx, l.URL)
 	if err != nil {
 		if detailUnreadable(err) {
 			return unreadableDetail(l.ID, l.URL, e.Company), true
@@ -225,6 +227,15 @@ func (s concludis) detail(ctx context.Context, e CompanyEntry, l concludisLine) 
 	}
 	var jp concludisJobPosting
 	if !ldJobPosting(root, &jp) || strings.TrimSpace(jp.Description) == "" {
+		// A tenant can publish a posting on its own site, and then its concludis address
+		// redirects there (smurfitkappa → www.smurfitkappa.com/de/people/jobad#job=…). Where
+		// that page states no JobPosting, the posting is not on any page this adapter reads,
+		// and it never will be: the redirect is the tenant's configuration, so a marker would
+		// recur every run and hold the board's unseen sweep shut. It is dropped instead — it
+		// was never stored, so there is nothing for a sweep to close.
+		if concludisLeftTenant(final, l.URL) {
+			return Job{}, false
+		}
 		return unreadableDetail(l.ID, l.URL, e.Company), true
 	}
 	// No sampled posting (90, across every live tenant) states jobLocationType; TELECOMMUTE is
@@ -245,6 +256,13 @@ func (s concludis) detail(ctx context.Context, e CompanyEntry, l concludisLine) 
 		PostedAt:       parseRFC3339OrDate(strings.TrimSpace(jp.DatePosted)),
 		Countries:      countries,
 	}, true
+}
+
+// concludisLeftTenant reports whether a posting request landed off the tenant's own host.
+func concludisLeftTenant(final, requested string) bool {
+	f, ferr := url.Parse(final)
+	r, rerr := url.Parse(requested)
+	return final != "" && ferr == nil && rerr == nil && !strings.EqualFold(f.Hostname(), r.Hostname())
 }
 
 // concludisPlaces renders the workplace addresses as "City, Region" (several joined by "; ")

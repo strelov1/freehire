@@ -128,7 +128,7 @@ func kenjoPageURL(board, customURL string) string {
 }
 
 // detail fetches one position and maps it to a Job. A 404 is the platform's own "Position was
-// not found." and drops it; any other failure, or a detail without a body, is an
+// not found." and drops it; any other failure, or an answer that is not this position, is an
 // unreadableDetail marker — the detail is the only source of the body.
 func (s kenjo) detail(ctx context.Context, e CompanyEntry, board string, p kenjoPosition) (Job, bool) {
 	pageURL := kenjoPageURL(board, p.CustomURL)
@@ -139,7 +139,11 @@ func (s kenjo) detail(ctx context.Context, e CompanyEntry, board string, p kenjo
 		}
 		return Job{}, false
 	}
-	if strings.TrimSpace(d.JobDescription.HTML) == "" {
+	// A detail that is not this position is a reshaped answer. One that is, but carries no
+	// jobDescription, is a position its employer published without a body (five1's three,
+	// measured 2026-10-25): that is the answer, and it is the same every run, so it is stored
+	// body-less rather than marked unreadable for good.
+	if strings.TrimSpace(d.ID) != strings.TrimSpace(p.ID) {
 		return unreadableDetail(p.ID, pageURL, e.Company), true
 	}
 	j := Job{

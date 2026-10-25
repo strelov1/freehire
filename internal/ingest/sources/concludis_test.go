@@ -107,6 +107,37 @@ func TestConcludisMapsAPostingPage(t *testing.T) {
 	}
 }
 
+// A posting the tenant publishes on its own site redirects there; with no JobPosting on that
+// page it is unreadable by configuration, not by accident, so it is dropped rather than marked
+// (a marker would recur every run and hold the board's sweep shut). A page on the tenant's own
+// host missing its JobPosting is still a marker.
+func TestConcludisPostingRedirectedAwayIsDropped(t *testing.T) {
+	fake := concludisHHLA(t).
+		routeRedirect("/6635/", "https://www.hhla.de/karriere/jobs#job=6635").
+		route("/prj/shw/", "<html><body>no posting here</body></html>")
+	jobs, err := NewConcludis(fake).(HydratingSource).FetchNew(context.Background(),
+		CompanyEntry{Company: "HHLA", Provider: "concludis", Board: "hhla"},
+		func(id string) bool { return id != "6635" && id != "7339" })
+	if err != nil {
+		t.Fatalf("FetchNew: %v", err)
+	}
+	var redirected, onHost *Job
+	for i := range jobs {
+		switch jobs[i].ExternalID {
+		case "6635":
+			redirected = &jobs[i]
+		case "7339":
+			onHost = &jobs[i]
+		}
+	}
+	if redirected != nil {
+		t.Errorf("redirected posting = %+v, want it dropped", *redirected)
+	}
+	if onHost == nil || !onHost.Unreadable {
+		t.Errorf("on-host posting without a JobPosting = %+v, want an unreadable marker", onHost)
+	}
+}
+
 func TestConcludisNoOpeningsIsAnEmptyBoard(t *testing.T) {
 	fake := (&routedHTTP{}).route("dlr.concludis.de", concludisFixture(t, "list_empty.html"))
 	jobs, err := NewConcludis(fake).Fetch(context.Background(), CompanyEntry{Provider: "concludis", Board: "dlr"})
