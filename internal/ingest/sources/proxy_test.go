@@ -141,5 +141,10 @@ func TestClientForSendsAWorkableRetryThroughTheRotatingGateway(t *testing.T) {
 		if err != nil || got == nil || got.Host != wantHost {
 			t.Errorf("%s retry lane proxy = %v (%v), want host %s", provider, got, err, wantHost)
 		}
+		// The rotating lane must open a fresh tunnel per request or the gateway never rotates;
+		// the fixed exit keeps its pool.
+		if wantRotating := provider == "workable"; tr.DisableKeepAlives != wantRotating {
+			t.Errorf("%s retry lane DisableKeepAlives = %v, want %v", provider, tr.DisableKeepAlives, wantRotating)
+		}
 	}
 }

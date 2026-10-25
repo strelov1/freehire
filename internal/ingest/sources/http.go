@@ -284,6 +284,34 @@ func NewRefusalRetryClient(proxy *url.URL) *Client {
 	return c
 }
 
+// NewRotatingProxyClient is NewProxyClient for a ROTATING gateway, one that hands out a fresh
+// exit IP per connection. Go's transport keeps a proxy tunnel open and reuses it, and a reused
+// tunnel keeps its exit: measured 2026-10-25 through the Webshare gateway, four requests over one
+// connection all left from 145.223.45.39 while three separate connections left from three
+// addresses. So a pooled client turns "a fresh IP per request" into one IP for the whole run, and
+// a platform that rate-limits by IP refuses it exactly as it refused the fixed exit. Closing the
+// connection after every request is what makes the gateway rotate.
+func NewRotatingProxyClient(proxy *url.URL) *Client {
+	c := newClientWithProxy(proxy)
+	freshConnectionPerRequest(c.httpClient)
+	freshConnectionPerRequest(c.streamClient)
+	return c
+}
+
+// NewRotatingRefusalRetryClient is NewRefusalRetryClient whose retry lane is a rotating gateway;
+// see NewRotatingProxyClient for why its connections must not be reused.
+func NewRotatingRefusalRetryClient(proxy *url.URL) *Client {
+	c := NewRefusalRetryClient(proxy)
+	freshConnectionPerRequest(c.refusalClient)
+	return c
+}
+
+func freshConnectionPerRequest(c *http.Client) {
+	if t, ok := c.Transport.(*http.Transport); ok {
+		t.DisableKeepAlives = true
+	}
+}
+
 // newClientWithProxy builds a Client with an optional egress proxy (nil = direct).
 func newClientWithProxy(proxy *url.URL) *Client {
 	return &Client{

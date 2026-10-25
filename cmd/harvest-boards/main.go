@@ -56,6 +56,7 @@ func run() int {
 	pace := flag.Float64("pace", 0, "cap the probe rate at this many requests per second (0 = unpaced)")
 	workers := flag.Int("workers", defaultProbeWorkers, "concurrent probes in flight")
 	apply := flag.Bool("apply", false, "actually add the boards it kept; without it the run only reports")
+	rotating := flag.Bool("rotating", false, "probe every request through SOURCES_ROTATING_PROXY_URL instead of the provider's usual egress")
 	flag.Parse()
 	args := flag.Args()
 	if len(args) != 1 && len(args) != 2 {
@@ -97,7 +98,7 @@ func run() int {
 	// The probe talks to the platform's API directly rather than through the provider's
 	// adapter, so it needs the same proxy policy cmd/ingest gets from ApplyProxyEgress —
 	// see sources.ClientFor for what a bare direct client cost workable here.
-	egress, err := sources.ClientFor(provider)
+	egress, err := egressFor(provider, *rotating)
 	if err != nil {
 		log.Printf("harvest-boards: %v", err)
 		return 1

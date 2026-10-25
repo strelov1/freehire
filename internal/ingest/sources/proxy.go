@@ -211,7 +211,7 @@ func ApplyProxyEgress(registry map[string]Source) error {
 		}
 		client := proxied
 		if p := proxyFor(name, u, rotating); p != u {
-			client = NewProxyClient(p)
+			client = NewRotatingProxyClient(p)
 		}
 		registry[name] = build(client)
 	}
@@ -224,7 +224,7 @@ func ApplyProxyEgress(registry map[string]Source) error {
 		}
 		client := refusalRetry
 		if p := proxyFor(name, u, rotating); p != u {
-			client = NewRefusalRetryClient(p)
+			client = NewRotatingRefusalRetryClient(p)
 		}
 		registry[name] = build(client)
 	}
@@ -285,11 +285,16 @@ func ClientFor(provider string) (*Client, error) {
 	if err != nil {
 		return nil, err
 	}
+	p := proxyFor(provider, u, rotating)
 	switch {
+	case proxiedProviders[provider] != nil && p != u:
+		return NewRotatingProxyClient(p), nil
 	case proxiedProviders[provider] != nil:
-		return NewProxyClient(proxyFor(provider, u, rotating)), nil
+		return NewProxyClient(u), nil
+	case refusalRetryProviders[provider] != nil && p != u:
+		return NewRotatingRefusalRetryClient(p), nil
 	case refusalRetryProviders[provider] != nil:
-		return NewRefusalRetryClient(proxyFor(provider, u, rotating)), nil
+		return NewRefusalRetryClient(u), nil
 	default:
 		return NewClient(), nil
 	}
