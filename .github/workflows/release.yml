@@ -1,0 +1,70 @@
+name: release
+
+# Changelog releases for the backend and the web app. A git tag (backend-v*, web-v*)
+# and a GitHub Release whose body is the commit subjects since the previous tag.
+# No files are attached. Nothing in this workflow deploys, and it does not replace
+# freehire-ops' release.sh — a tag here is a summary, not a ship.
+#
+# Weekly, plus a manual run when a summary is wanted sooner. A push to main does
+# not cut one: this repository merges many times a day, and a release per merge is
+# a log, not a summary. A component with no new commits is skipped.
+#
+# Web is published with --latest=false and the backend with --latest. GitHub marks
+# whichever release was created last as Latest, and career-ops lost that flag to
+# its web component on every cut until the workflow set it back by hand.
+on:
+  schedule:
+    - cron: '0 8 * * 1'
+  workflow_dispatch:
+    inputs:
+      component:
+        description: Which component to summarize
+        type: choice
+        options:
+          - both
+          - backend
+          - web
+        default: both
+      bump:
+        description: Version bump (the first release is 0.1.0 unless this is major)
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+        default: patch
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  cut:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Cut the web release
+        if: github.event_name != 'workflow_dispatch' || inputs.component == 'both' || inputs.component == 'web'
+        env:
+          COMPONENT: web
+          BUMP: ${{ inputs.bump || 'patch' }}
+          LATEST: 'false'
+          GH_TOKEN: ${{ github.token }}
+        run: .github/scripts/cut-component-release.sh
+
+      - name: Cut the backend release
+        if: github.event_name != 'workflow_dispatch' || inputs.component == 'both' || inputs.component == 'backend'
+        env:
+          COMPONENT: backend
+          BUMP: ${{ inputs.bump || 'patch' }}
+          LATEST: 'true'
+          GH_TOKEN: ${{ github.token }}
+        run: .github/scripts/cut-component-release.sh
