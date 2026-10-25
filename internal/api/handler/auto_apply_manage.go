@@ -87,8 +87,12 @@ func (h *assistantHandlers) cancelAutoApply(ctx context.Context, userID int64, s
 	if err != nil {
 		return err
 	}
+	lease := config.LoadAutoApply().LeaseSeconds
+	if lease > math.MaxInt32 {
+		lease = math.MaxInt32
+	}
 	_, err = h.queries.CancelAutoApplyEntry(ctx, db.CancelAutoApplyEntryParams{
-		ID: entry.ID, UserID: userID, LeaseSeconds: int32(min(config.LoadAutoApply().LeaseSeconds, math.MaxInt32)),
+		ID: entry.ID, UserID: userID, LeaseSeconds: int32(lease),
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
 		if entry.SubmitUncertainAt.Valid {
