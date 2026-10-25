@@ -7,7 +7,7 @@
   import { dismissCliBanner, loadCliBannerDismissed, cliBannerDismissed } from '#lib/cliBanner.svelte.js';
   import { sourceLogoUrl } from '#lib/logo.js';
   import { isAccountArea } from '#lib/shellLayout.js';
-  import { EntityLogo } from '#lib/ui/index.js';
+  import { EntityLogo, buttonVariants, cn } from '#lib/ui/index.js';
 
   // A strip under the header pointing at /mcp (it pointed at /cli until the hosted MCP
   // connectors became the main way in). It asks until the account connects an agent;
@@ -87,7 +87,7 @@
 
       <a
         href={resolve('/mcp')}
-        class="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full bg-brand px-3 py-1 text-xs font-medium text-brand-foreground transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+        class={cn(buttonVariants({ variant: 'cta', size: 'sm' }), 'h-7 shrink-0 gap-1 rounded-full px-3 text-xs')}
       >
         Connect
         <ArrowRight class="size-3.5" aria-hidden="true" />
