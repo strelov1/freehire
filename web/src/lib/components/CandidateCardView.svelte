@@ -21,6 +21,8 @@
     country,
     specializations = [],
     emptyMessage = 'This candidate has joined the network but has not published anything yet.',
+    title,
+    skillsSide = 'left',
     actions,
     children,
   }: {
@@ -31,6 +33,11 @@
     country?: string;
     specializations?: string[];
     emptyMessage?: string;
+    /** Replaces the dictionary heading as the h1 (a buddy's handle); the heading then
+     *  leads the line beneath it instead of disappearing. */
+    title?: string;
+    /** The catalogue keeps skills in a left rail; a buddy's page reads its main column first. */
+    skillsSide?: 'left' | 'right';
     actions?: Snippet;
     children?: Snippet;
   } = $props();
@@ -83,8 +90,11 @@ right. The panel follows the card in the DOM so a narrow screen reads the card f
         <User class="size-6" aria-hidden="true" />
       {/snippet}
       <div class="flex min-w-0 flex-1 flex-col gap-1">
-        <h1 class="text-2xl font-semibold tracking-tight">{heading}</h1>
+        <h1 class="text-2xl font-semibold tracking-tight">{title ?? heading}</h1>
         <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
+          {#if title}
+            <span class="font-medium text-foreground">{heading}</span>
+          {/if}
           {#if card.total_years}
             <span>{card.total_years} {card.total_years === 1 ? 'year' : 'years'} of experience</span>
           {/if}
@@ -182,7 +192,7 @@ right. The panel follows the card in the DOM so a narrow screen reads the card f
   </div>
 
   {#if card.skills.length}
-    <aside class="order-last w-full shrink-0 lg:order-first lg:w-80">
+    <aside class="order-last w-full shrink-0 lg:w-80 {skillsSide === 'left' ? 'lg:order-first' : ''}">
       <div class="sticky top-20 flex flex-col gap-3 rounded-xl border border-border bg-card p-4">
         <p class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Skills</p>
         <div class="flex flex-wrap gap-1.5">

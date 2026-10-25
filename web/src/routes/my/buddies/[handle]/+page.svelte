@@ -85,8 +85,7 @@
     </section>
   {:else if view === 'error'}<States state="error" />
   {:else if profile}
-    <p class="text-sm text-muted-foreground">{profile.handle}</p>
-    <CandidateCardView card={profile.card} emptyMessage="This member has not added a profile card yet.">
+    <CandidateCardView card={profile.card} title={profile.handle} skillsSide="right" emptyMessage="This member has not added a profile card yet.">
       {#snippet actions()}
         <BuddyMessageButton
           handle={profile?.handle ?? ''}
