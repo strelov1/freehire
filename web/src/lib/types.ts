@@ -1139,8 +1139,8 @@ export interface TrackedApplication {
   auto_apply?: AutoApplyReviewInfo;
 }
 
-export interface BuddySummary { category: string; seniority: string; country: string }
-export interface BuddyCompany { slug: string; name: string }
+interface BuddySummary { category: string; seniority: string; country: string }
+interface BuddyCompany { slug: string; name: string }
 export interface BuddyStatus { member: boolean; handle?: string; card_empty: boolean }
 export interface BuddySimilar { handle: string; card_summary: BuddySummary; score: number; shared_companies: BuddyCompany[] }
 export interface BuddyFeedItem { id: number; handle: string; card_summary: BuddySummary; company: BuddyCompany; job_title: string | null; type: 'applied' | 'interview' | 'offer'; day: string }

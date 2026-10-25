@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount, untrack } from 'svelte';
+  import { page } from '$app/state';
   import { ApiError, api } from '#lib/api.js';
   import { AsyncData } from '#lib/asyncData.svelte.js';
   import type { BuddyFeedItem, BuddySimilar, BuddyStatus } from '#lib/types.js';
@@ -9,7 +10,10 @@
   import States from './States.svelte';
 
   type Tab = 'similar' | 'feed' | 'chats';
-  let tab = $state<Tab>('similar');
+  // The notification link /my/buddies?c=<id> names a conversation to open on the Chats tab.
+  const linkedParam = Number(page.url.searchParams.get('c'));
+  const linkedConversation = Number.isInteger(linkedParam) && linkedParam > 0 ? linkedParam : null;
+  let tab = $state<Tab>(linkedConversation ? 'chats' : 'similar');
   let mode = $state<'similar' | 'all'>('similar');
   const status = new AsyncData<BuddyStatus | null>(null);
   const similar = new AsyncData<BuddySimilar[]>([]);
@@ -84,7 +88,7 @@
   <section class="rounded-lg border border-border p-6">
     <h1 class="text-2xl font-semibold">Interview buddies</h1>
     <p class="mt-3 text-sm">Join an anonymous peer network to find people with similar job searches and talk after they accept your invitation.</p>
-    <p class="mt-3 text-sm">Other members will see your anonymous card (role, seniority, skills, country) and the companies you apply to, never your name or employer. You can hide any application, and you can leave any time.</p>
+    <p class="mt-3 text-sm">Other members will see your anonymous card (role, seniority, skills, country), the companies and job titles you apply to, and when you move to the interview or offer stage, including applications you made before joining. They never see your name or employer. You can hide any application, and you can leave any time.</p>
     <Button class="mt-5" variant="primary" onclick={join}>Join interview buddies</Button>
   </section>
 {:else}
@@ -101,14 +105,14 @@
       {#if similar.status === 'loading'}<States state="loading" />{:else if similar.value.length === 0}<States state="empty" message="No similar members yet." />{:else}
         <ul class="flex flex-col gap-3">{#each similar.value as person (person.handle)}<li class="rounded-lg border border-border p-4">
           <div class="flex items-center justify-between gap-3"><button class="font-semibold hover:underline" onclick={() => showProfile(person.handle)}>{person.handle}</button><Button size="sm" variant="primary" onclick={() => openInvite(person)}>Invite</Button></div>
-          <p class="mt-1 text-sm text-muted-foreground">{person.card_summary.category} · {person.card_summary.seniority} · {person.card_summary.country}</p>
+          <p class="mt-1 text-sm text-muted-foreground">{[person.card_summary.category, person.card_summary.seniority, person.card_summary.country].filter(Boolean).join(' · ')}</p>
           {#if person.shared_companies.length}<div class="mt-3 flex flex-wrap gap-3">{#each person.shared_companies as company (company.slug)}<span class="flex items-center gap-1.5 text-xs"><EntityLogo name={company.name} src={companyLogoUrl(company.name) ?? undefined} shape="square" size="xs" />{company.name}</span>{/each}</div>{/if}
         </li>{/each}</ul>
       {/if}
     {:else if tab === 'feed'}
       <div class="flex gap-2"><Button variant={mode === 'similar' ? 'primary' : 'outline'} size="sm" onclick={() => mode = 'similar'}>Similar</Button><Button variant={mode === 'all' ? 'primary' : 'outline'} size="sm" onclick={() => mode = 'all'}>All</Button></div>
       {#if feed.length === 0 && !feedBusy}<States state="empty" message="No application updates yet." />{:else}<ul>{#each feed as item (item.id)}<li class="flex items-center gap-3 border-b border-border py-3 text-sm"><button onclick={() => showProfile(item.handle)} class="font-medium hover:underline">{item.handle}</button><span>{item.type} at</span><EntityLogo name={item.company.name} src={companyLogoUrl(item.company.name) ?? undefined} shape="square" size="xs"/><span class="font-medium">{item.company.name}</span>{#if item.job_title}<span class="text-muted-foreground">· {item.job_title}</span>{/if}<time class="ml-auto text-xs text-muted-foreground">{item.day}</time></li>{/each}</ul>{#if cursor}<Button variant="outline" onclick={() => loadFeed(true)} disabled={feedBusy}>Load more</Button>{/if}{/if}
-    {:else}<BuddyChatView />{/if}
+    {:else}<BuddyChatView initialId={linkedConversation} />{/if}
   </section>
 {/if}
 

@@ -6,6 +6,13 @@
   import { buddyConversationName, buddyOutgoingLabel, mergeBuddyMessages } from '#lib/buddies.js';
   import States from './States.svelte';
 
+  // A conversation is read page by page until a page comes back short, bounded so a runaway
+  // history cannot spin the loop.
+  const PAGE_SIZE = 100;
+  const MAX_PAGES = 20;
+  let { initialId = null }: { initialId?: number | null } = $props();
+  let deepLinkPending = true;
+
   let conversations = $state<BuddyConversation[]>([]);
   let messages = $state<BuddyMessage[]>([]);
   let selected = $state<BuddyConversation | null>(null);
@@ -34,6 +41,11 @@
     try {
       conversations = await api.listBuddyConversations();
       if (selected) selected = conversations.find((c) => c.id === selected?.id) ?? null;
+      if (deepLinkPending) {
+        deepLinkPending = false;
+        const linked = initialId === null ? undefined : conversations.find((c) => c.id === initialId);
+        if (linked) choose(linked);
+      }
       if (!selected && messageTimer) { stopMessagePolling(); reportOpen = false; }
       status = 'ready';
     }
@@ -43,32 +55,33 @@
     const conv = selected;
     if (!conv || document.visibilityState === 'hidden' || messagePollInFlight) return;
     messagePollInFlight = true;
-    const after = messages.at(-1)?.id;
     try {
-      const newer = await api.listBuddyMessages(conv.id, after);
-      if (selected?.id !== conv.id) return;
-      if (newer.length) {
-        messages = mergeBuddyMessages(messages, newer);
-        const lastMessage = messages.at(-1);
-        if (lastMessage) await api.markBuddyRead(conv.id, lastMessage.id);
+      let fetched = 0;
+      for (let i = 0; i < MAX_PAGES; i++) {
+        const page = await api.listBuddyMessages(conv.id, messages.at(-1)?.id, PAGE_SIZE);
+        if (selected?.id !== conv.id) return;
+        messages = mergeBuddyMessages(messages, page);
+        fetched += page.length;
+        if (page.length < PAGE_SIZE) break;
+      }
+      const lastMessage = messages.at(-1);
+      if (fetched && lastMessage) {
+        await api.markBuddyRead(conv.id, lastMessage.id);
         if (selected?.id !== conv.id) return;
         await refreshList();
-        if (selected?.id !== conv.id) return;
       }
     } catch { /* A transient poll failure is recovered by the next poll. */ }
     finally {
       messagePollInFlight = false;
-      if (selected && selected.id !== conv.id && (selected.status_for_me === 'open' || selected.former_member)) void refreshMessages();
+      if (selected && selected.id !== conv.id) void refreshMessages();
     }
   }
   function choose(c: BuddyConversation) {
     selected = c; messages = [];
     reportOpen = false;
     stopMessagePolling();
-    if (c.status_for_me === 'open' || c.former_member) {
-      void refreshMessages();
-      if (c.status_for_me === 'open' && document.visibilityState === 'visible') messageTimer = setInterval(() => void refreshMessages(), 5000);
-    }
+    void refreshMessages();
+    if (c.status_for_me === 'open' && document.visibilityState === 'visible') messageTimer = setInterval(() => void refreshMessages(), 5000);
   }
   function onVisibility() {
     if (document.visibilityState === 'hidden') {
@@ -146,10 +159,9 @@
       </button>{/each}
     </section>
     <section class="flex min-h-80 flex-col rounded-lg border border-border p-4 md:col-span-2" aria-label="Chat">
-      {#if !selected}<p class="m-auto text-sm text-muted-foreground">Choose an accepted conversation to chat.</p>
-      {:else if selected.status_for_me !== 'open' && !selected.former_member}<p class="text-sm">{buddyConversationName(selected.former_member, selected.other.handle)}: {buddyOutgoingLabel(selected.status_for_me)}</p>
+      {#if !selected}<p class="m-auto text-sm text-muted-foreground">Choose a conversation to read.</p>
       {:else}
-        <header class="flex items-center justify-between border-b border-border pb-3"><strong>{buddyConversationName(selected.former_member, selected.other.handle)}</strong>{#if !selected.former_member}<div class="flex gap-2"><Button variant="outline" size="sm" onclick={() => { reportOpen = !reportOpen; reportSuccess = false; }}>Report</Button><Button variant="outline" size="sm" onclick={block}>Block</Button></div>{/if}</header>
+        <header class="flex items-center justify-between border-b border-border pb-3"><strong>{buddyConversationName(selected.former_member, selected.other.handle)}</strong>{#if !selected.former_member && (selected.status_for_me === 'open' || selected.status_for_me === 'incoming')}<div class="flex gap-2"><Button variant="outline" size="sm" onclick={() => { reportOpen = !reportOpen; reportSuccess = false; }}>Report</Button><Button variant="outline" size="sm" onclick={block}>Block</Button></div>{/if}</header>
         {#if error}<p role="alert" class="py-2 text-sm text-destructive">{error}</p>{/if}
         {#if reportSuccess}<p role="status" class="py-2 text-sm text-muted-foreground">Report sent.</p>{/if}
         {#if reportOpen && !selected.former_member}<form class="flex flex-col gap-2 rounded-md border border-border p-3" onsubmit={(e) => { e.preventDefault(); void report(); }}>
@@ -159,7 +171,8 @@
           <div class="flex justify-end gap-2"><Button variant="outline" type="button" onclick={() => reportOpen = false}>Cancel</Button><Button variant="primary" type="submit" disabled={actionBusy || reportNote.length > 1000}>Send report</Button></div>
         </form>{/if}
         <ol class="flex flex-1 flex-col gap-3 overflow-y-auto py-4">{#each messages as message (message.id)}<li class="max-w-prose rounded-lg bg-muted p-3 text-sm {message.mine ? 'self-end' : 'self-start'}">{message.body}<time class="mt-1 block text-right text-xs text-muted-foreground">{new Date(message.created_at).toLocaleString()}</time></li>{/each}</ol>
-        {#if !selected.former_member}<form class="flex flex-col gap-2 border-t border-border pt-3" onsubmit={(e) => { e.preventDefault(); void send(); }}><textarea bind:value={body} maxlength="4000" rows="3" class="w-full rounded-md border border-border bg-background p-3 text-sm" aria-label="Message"></textarea><div class="flex items-center justify-between"><span class="text-xs text-muted-foreground">{body.length}/4000</span><Button variant="primary" type="submit" disabled={actionBusy || !body.trim()}>Send</Button></div></form>{/if}
+        {#if selected.status_for_me === 'incoming' && !selected.former_member}{@const pendingId = selected.id}<div class="flex gap-2 border-t border-border pt-3"><Button variant="primary" disabled={actionBusy} onclick={() => void invitation(pendingId, 'accept')}>Accept</Button><Button variant="outline" disabled={actionBusy} onclick={() => void invitation(pendingId, 'decline')}>Decline</Button></div>
+        {:else if selected.status_for_me === 'open' && !selected.former_member}<form class="flex flex-col gap-2 border-t border-border pt-3" onsubmit={(e) => { e.preventDefault(); void send(); }}><textarea bind:value={body} maxlength="4000" rows="3" class="w-full rounded-md border border-border bg-background p-3 text-sm" aria-label="Message"></textarea><div class="flex items-center justify-between"><span class="text-xs text-muted-foreground">{body.length}/4000</span><Button variant="primary" type="submit" disabled={actionBusy || !body.trim()}>Send</Button></div></form>{/if}
       {/if}
     </section>
   </div>

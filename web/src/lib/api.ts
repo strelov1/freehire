@@ -2437,8 +2437,11 @@ export function createApi(
   async function reportBuddyConversation(id: number, reason: BuddyReport['reason'], note: string): Promise<void> {
     await call(`/api/v1/me/buddies/conversations/${id}/report`, jsonBody('POST', { reason, note }));
   }
-  async function listBuddyMessages(id: number, after?: number): Promise<BuddyMessage[]> {
-    const q = after ? `?after=${after}` : '';
+  async function listBuddyMessages(id: number, after?: number, limit?: number): Promise<BuddyMessage[]> {
+    const params = new URLSearchParams();
+    if (after) params.set('after', String(after));
+    if (limit) params.set('limit', String(limit));
+    const q = params.size ? `?${params}` : '';
     return requestData(`/api/v1/me/buddies/conversations/${id}/messages${q}`);
   }
   async function sendBuddyMessage(id: number, body: string): Promise<BuddyMessage> {
