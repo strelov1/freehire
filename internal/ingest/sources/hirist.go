@@ -167,6 +167,13 @@ func (s hirist) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 }
 
 func (s hirist) FetchNew(ctx context.Context, e CompanyEntry, seen func(externalID string) bool) ([]Job, error) {
+	return s.FetchNewGated(ctx, e, seen, DetailGate{})
+}
+
+// FetchNewGated is FetchNew that buys no body for a posting the pipeline will discard anyway.
+// About half of hirist is copied from employers' own careers sites (see the type doc), and a
+// discarded posting is never stored, so without the gate every run would buy those bodies again.
+func (s hirist) FetchNewGated(ctx context.Context, e CompanyEntry, seen func(externalID string) bool, gate DetailGate) ([]Job, error) {
 	if !hiristBoardRE.MatchString(e.Board) {
 		return nil, fmt.Errorf("%s: board %q is not a category id", s.site.provider, e.Board)
 	}
@@ -174,7 +181,7 @@ func (s hirist) FetchNew(ctx context.Context, e CompanyEntry, seen func(external
 	if err != nil {
 		return nil, err
 	}
-	return s.hydrate(ctx, rows, s.site.tech[e.Board], seen)
+	return s.hydrate(ctx, rows, s.site.tech[e.Board], seen, gate)
 }
 
 // list walks the category to its end. The first page failing fails the board; a later page
@@ -214,13 +221,21 @@ func (s hirist) list(ctx context.Context, category string) ([]hiristListing, err
 	return out, nil
 }
 
-// hydrate maps the listed rows to Jobs. A seen posting is a liveness refresh with no request;
-// every other posting costs one detail request, up to the board's share of the run's budget.
+// hydrate maps the listed rows to Jobs. A seen posting is a liveness refresh with no request, and
+// so is a posting the gate condemns; every other posting costs one detail request, up to the board's share of the run's budget.
 // The budget is claimed in a sequential pass over the newest-first rows BEFORE any request
 // goes out, so it buys exactly the newest postings whatever order the workers run in. A detail
 // that could not be read, or that the budget did not reach, defers its posting to a later run
 // rather than storing it body-less, which would never be hydrated again.
-func (s hirist) hydrate(ctx context.Context, rows []hiristListing, tech bool, seen func(string) bool) ([]Job, error) {
+func (s hirist) hydrate(ctx context.Context, rows []hiristListing, tech bool, seen func(string) bool, gate DetailGate) ([]Job, error) {
+	var covered map[string]bool
+	if gate.Covered != nil {
+		companies := make([]string, 0, len(rows))
+		for _, r := range rows {
+			companies = append(companies, strings.TrimSpace(r.CompanyData.CompanyName))
+		}
+		covered = gate.Covered(companies)
+	}
 	var jobs, claimed []Job
 	board, deferred := 0, 0
 	for _, r := range rows {
@@ -230,6 +245,11 @@ func (s hirist) hydrate(ctx context.Context, rows []hiristListing, tech bool, se
 		}
 		if seen(base.ExternalID) {
 			base.SeenRefresh = true
+			jobs = append(jobs, base)
+			continue
+		}
+		// A posting the pipeline will discard is yielded body-less, for it to count.
+		if covered[base.Company] || (gate.Rejected != nil && gate.Rejected(base)) {
 			jobs = append(jobs, base)
 			continue
 		}

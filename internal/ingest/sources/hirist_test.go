@@ -298,3 +298,30 @@ func TestHiristWalksUntilHasMoreEnds(t *testing.T) {
 		t.Errorf("asked %d details, want all 103 listed postings", got)
 	}
 }
+
+// A posting whose employer is already covered, or whose title the catalogue filter rejects, is
+// yielded body-less without a detail request, so the budget goes to postings that will be kept.
+func TestHiristGateSkipsTheDetailOfADiscardedPosting(t *testing.T) {
+	fake := &hiristFake{pages: map[int]string{0: hiristCategoryFixture(t)}}
+	src := NewHirist(fake).(CoverageGated)
+	gate := DetailGate{
+		Covered:  func(cs []string) map[string]bool { return map[string]bool{"The Hartford": true} },
+		Rejected: func(j Job) bool { return j.ExternalID == "1678906" },
+	}
+	jobs, err := src.FetchNewGated(context.Background(), CompanyEntry{Board: "16"}, func(string) bool { return false }, gate)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := fake.detailCalls(); !slices.Equal(got, []string{"1679150"}) {
+		t.Fatalf("detail calls = %v, want only the posting neither answer condemns", got)
+	}
+	bodyless := 0
+	for _, j := range jobs {
+		if j.Description == "" && !j.SeenRefresh {
+			bodyless++
+		}
+	}
+	if len(jobs) != 3 || bodyless != 2 {
+		t.Errorf("got %d jobs, %d body-less; want 3 with the 2 condemned ones body-less", len(jobs), bodyless)
+	}
+}
