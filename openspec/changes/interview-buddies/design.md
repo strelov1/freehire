@@ -120,8 +120,8 @@ A member can message from anywhere, not only from the Chats tab: a dock in the b
 
 ## Migration Plan
 
-1. Migration `0197_buddies.sql`: the six tables, CHECKs and indexes on the new tables (empty, so no lock risk).
-2. Migration `0198_application_events_feed_idx.sql` with the `migrate: no-transaction` marker: `CREATE INDEX CONCURRENTLY IF NOT EXISTS ...`. Build it on prod by hand before the merge, as the lock-timeout note requires for large tables. The migration is then a no-op on deploy.
+1. Migration `0199_buddies.sql`: the six tables, CHECKs and indexes on the new tables (empty, so no lock risk).
+2. Migration `0200_application_events_feed_idx.sql` with the `migrate: no-transaction` marker: `CREATE INDEX CONCURRENTLY IF NOT EXISTS ...`. Build it on prod by hand before the merge, as the lock-timeout note requires for large tables. The migration is then a no-op on deploy.
 3. Deploy the server and web. The feature is reachable from the account navigation.
 4. Add the `freehire-buddy-notify.{service,timer}` units in `freehire-ops` (every 5 minutes, reading `.env` and `.env.notify`), copy them to the host and run `daemon-reload`.
 5. Rollback: remove the nav entry or revert. The tables are additive and can stay. Stopping the timer stops notifications.

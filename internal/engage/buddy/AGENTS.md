@@ -3,7 +3,7 @@
 ## Scope
 The opt-in peer network (openspec/changes/interview-buddies): membership under a generated
 handle, similar members, a feed of other members' search progress, and one-to-one chat with
-an invitation step. Layer 7 (`engage`); tables are `buddy_*` (migration 0197), queries in
+an invitation step. Layer 7 (`engage`); tables are `buddy_*` (migration 0199), queries in
 `internal/platform/db/queries/buddies.sql`. HTTP lives in `internal/api/handler`, not here.
 
 ## Always true

@@ -7,7 +7,7 @@ Source of truth: `openspec/changes/interview-buddies/` — `specs/interview-budd
 - Repo rules: `AGENTS.md` at the repo root (English only, surgical changes, no overengineering, no MVP hacks). Read `internal/engage/AGENTS.md` and `internal/platform/db/AGENTS.md` before touching those areas.
 - Package `internal/engage/buddy` (layer 7). It may import `platform`, `dict`, `ai`, `identity`, `candidate`, `job`, `application`, `search`, and nothing from `ingest` or `api`.
 - `internal/platform/db/` is generated. Edit `internal/platform/db/queries/buddies.sql`, then run `make sqlc`.
-- Migrations: `0197_buddies.sql` and `0198_application_events_feed_idx.sql` (the second has a no-transaction marker on its own comment line and uses `CREATE INDEX CONCURRENTLY IF NOT EXISTS`). Never edit an applied migration.
+- Migrations: `0199_buddies.sql` and `0200_application_events_feed_idx.sql` (the second has a no-transaction marker on its own comment line and uses `CREATE INDEX CONCURRENTLY IF NOT EXISTS`). Never edit an applied migration.
 - Before every commit with Go: `gofmt -l .` prints nothing, `go vet ./...`, `go vet -tags=integration ./...`, `go test ./...`. Run the tagged tests of the packages you touched: `go test -tags=integration ./internal/engage/buddy/... ./internal/api/handler/ -run Buddy`. These need Docker.
 - Invoke the `simplify` skill on your diff before committing.
 - Response shapes: `{"data": ...}` and `{"data": [...], "meta": {...}}`; errors `{"error": msg}`.
