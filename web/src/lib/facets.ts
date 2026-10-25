@@ -421,6 +421,8 @@ export const SOURCE_LABELS: Record<string, string> = {
   infojobsbr: 'InfoJobs Brasil',
   builtin: 'Built In',
   xing: 'XING',
+  onapply: 'onapply',
+  workwise: 'Workwise',
 };
 
 /** Display label for a source slug (e.g. smartrecruiters → "SmartRecruiters"),

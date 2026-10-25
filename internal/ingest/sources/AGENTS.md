@@ -858,6 +858,20 @@ Source ingest: the provider registry and its adapters, entry validation, the per
 - **`positionType` is localised in the listing ("Vollzeit") and canonical in the detail ("Full-time")**; measured values: Full-time, Flexible, Freelance, Apprentice, Intern, Student, none. Kenjo records no work arrangement at all, so `WorkMode` is the parser's.
 - **`officeName` is free text** (a city, "Deutschlandweit", or a company name); `officeAddress.city` is preferred as the location and the office name only fills in.
 
+**onapply traps** (`onapply`, a German ATS at `<tenant>.onapply.de`; live-verified 2026-10-25 — 4,131 postings from 553 employers, DE 92% / CH 4% / AT 3%, ~5% technical by title):
+
+- **It is boardless although the ATS has tenants**, because the vendor's own job board (`jobboard.onapply.de`) searches one keyless index over every tenant: `https://api-jobboard.onapply.de/jobboard/production/listing/search/<from>/<size>?jobtitle=&location=`. 1,130 of the 1,191 posting ids harvested from tenant links were in it (the rest had closed). Each hit carries the whole posting, so the crawl is a walk of the index and nothing needs a detail request.
+- **The first path segment is an OFFSET, not a page number.** The board's own JS sends `<page>/5`, which reads as a page, but `1/10` starts at the second row. `size=500` answers in ~1 s; `size=5000` is a 502 from the gateway.
+- **The search sends no sort, so one walk is not the index.** Elasticsearch orders tied scores per shard and a page boundary repeats one posting and skips another: one walk yielded 4,037 and another 4,082 distinct ids of the 4,131 stated, and their union was exactly 4,131. A run therefore walks again while it holds fewer distinct ids than `total`, at most four times.
+- **The contact section is left out of the body**: it names the recruiter and their address. `employmentTypes` is a list; a posting whose types disagree ("Vollzeit" + "Teilzeit") states no employment type, and the training types (Ausbildung, Duales Studium, Werkstudententätigkeit) have no counterpart.
+
+**Workwise traps** (`workwise`, www.workwise.io; live-verified 2026-10-25 — 4,015 postings, ~10–14% technical by title, DE only):
+
+- **The listing is ONE sitemap, `enquiryFocusPagesSitemap.xml`**, reached through `/sitemap.xml`. It is complete: 25 of 25 job-board short links (`/s/<code>`, which 302 to `/bewerben?id=<id>`) sampled from the harvest named an id it lists. The search API (`api.workwise.io/v2/…`) answers 405 to a plain GET and is not needed.
+- **A closed posting answers 200** with "Dieser Job ist nicht mehr aktiv" and no JobPosting; a posting whose page carries none is dropped. Ids outside the sitemap resolve the same way — the sitemap is the open set.
+- **The work mode is read from the line the platform renders from its own form field** at the top of the description: "N - M Tage pro Woche Homeoffice" and "Remote möglich" are hybrid, `jobLocationType: TELECOMMUTE` with "Remote Job" is remote. "Kein Homeoffice" (70% of sampled postings) is NOT read as onsite — the form cannot tell a choice from an untouched field, the same reason XING's `NON_REMOTE` maps to nothing.
+- `addressRegion` is a German state abbreviation ("NRW", "BY") and is not used; `baseSalary` states one `value` or a `minValue`/`maxValue` pair with `unitText` YEAR, MONTH or HOUR.
+
 **rexx traps** (`rexx`, rexx systems' recruiting portals; live-verified 2026-10-25 across the 152 portal hosts Common Crawl names — 119 answer a listing, 101 with postings, 3,126 postings, largely healthcare, retail and public sector):
 
 - **The board is the portal BASE: a host, optionally with a path** (`zieglersche-portal.rexx-recruitment.com`, or `jobs.newyorker.de/karriere` for a portal on the employer's own domain). The adapter lists `<base>/stellenangebote.html?start=<offset>`, 100 postings a page; the walk ends on a page with no new posting and fails the board if any page fails or the 100-page bound is reached (`crawlAllPagedLinks`). The largest portal measured (newyorker) has 918 postings.

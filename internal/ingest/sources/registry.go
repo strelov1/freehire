@@ -502,6 +502,12 @@ func All(c HTTPClient) map[string]Source {
 		// sitemaps and hydrating each new posting from the Apollo cache its page server-renders.
 		// See xing.go.
 		NewXing(c),
+		// onapply: a German ATS whose vendor-wide job board exposes one keyless search index
+		// over every tenant, each hit carrying the whole posting. See onapply.go.
+		NewOnapply(c),
+		// Workwise: a German recruiting platform whose one posting sitemap names the whole
+		// catalogue; each new posting is hydrated from its page's ld+json. See workwise.go.
+		NewWorkwise(c),
 		// InfoJobs Brasil: a general Brazilian board, one board per federative unit plus
 		// "todo-brasil". There is no sitemap: each state listing is walked through the site's own
 		// pager, which needs a session cookie, and each new posting hydrated from its page. See
