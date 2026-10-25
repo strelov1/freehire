@@ -415,6 +415,7 @@ export const SOURCE_LABELS: Record<string, string> = {
   catho: 'Catho',
   infojobsbr: 'InfoJobs Brasil',
   builtin: 'Built In',
+  xing: 'XING',
 };
 
 /** Display label for a source slug (e.g. smartrecruiters → "SmartRecruiters"),

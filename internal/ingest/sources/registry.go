@@ -491,6 +491,10 @@ func All(c HTTPClient) map[string]Source {
 		// hydrating each new posting from its page's ld+json. Posting pages refuse the
 		// project's bare User-Agent, hence the browser-compatible form of it. See catho.go.
 		compatibleUASource(c, NewCatho),
+		// XING Jobs: the DACH professional network's job board, enumerated from its gzip job
+		// sitemaps and hydrating each new posting from the Apollo cache its page server-renders.
+		// See xing.go.
+		NewXing(c),
 		// InfoJobs Brasil: a general Brazilian board, one board per federative unit plus
 		// "todo-brasil". There is no sitemap: each state listing is walked through the site's own
 		// pager, which needs a session cookie, and each new posting hydrated from its page. See
