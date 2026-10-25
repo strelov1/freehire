@@ -63,7 +63,9 @@ var fillProviders = map[string]bool{}
 
 // SubmittableProviders is the set other packages may read as "an application can be
 // COMPLETED here without a person": the providers this package's own browser submits on
-// (fillProviders) and the ones the browser-use executor does.
+// (fillProviders) and the ones the browser-use executor does — the latter only while this
+// deployment has it enforcing, since in shadow mode it sends nothing and an agent planning
+// around the flag would wait on an application that is never made.
 //
 // It is exported because the OJCP surface publishes exactly this fact as
 // `supports_agent_submission`, the flag an external agent plans around, and a hand-written
@@ -77,8 +79,10 @@ func SubmittableProviders() map[string]bool {
 	for provider, ok := range fillProviders {
 		out[provider] = ok
 	}
-	for provider, ok := range browserUseProviders {
-		out[provider] = out[provider] || ok
+	if browserUseEnforce() {
+		for provider, ok := range browserUseProviders {
+			out[provider] = out[provider] || ok
+		}
 	}
 	return out
 }

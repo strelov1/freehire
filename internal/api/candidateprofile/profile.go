@@ -187,6 +187,12 @@ func (a *Assembler) Assemble(ctx context.Context, userID int64) (Profile, error)
 	}
 
 	profile := BuildProfile(firstStatedHeader(fromCV, fromResume), account.Email)
+	// The header answers for the whole block (firstStatedHeader), so a CV that states a name
+	// and no location would hide the résumé's location; the résumé is asked for that one
+	// field before the search profile is.
+	if profile.Location == "" {
+		profile.Location = fromResume.Location
+	}
 	if profile.Location == "" {
 		base, err := a.baseLocation(ctx, userID)
 		if err != nil {
