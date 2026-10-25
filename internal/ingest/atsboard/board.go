@@ -312,6 +312,12 @@ var atsBoards = []struct{ host, source, mode string }{
 	{"concludis.de", "concludis", modeSubdomain},
 	{"kenjo.io", "kenjo", modeSubdomain},
 	{"talentstorm.de", "talentstorm", modeSubdomain},
+	// Homerun (Dutch) and Visma EasyCruit (Dutch and Nordic): the tenant is a label on the vendor's
+	// domain (douglas.homerun.co, lentis.easycruit.com). A Homerun site often lives on the
+	// employer's own domain instead, which no URL rule can name. Vendor hosts are in
+	// platformLabelsByApex.
+	{"homerun.co", "homerun", modeSubdomain},
+	{"easycruit.com", "easycruit", modeSubdomain},
 	// helixjobs: the concludis portal, keyed by instance id (see queryBoards).
 	{"helixjobs.com", "helixjobs", modeQuery},
 	// Emply: <tenant>.career.emply.com. A site on the customer's own domain (midtjob.dk) is a
@@ -1406,6 +1412,10 @@ var platformLabelsByApex = map[string][]string{
 	"kenjo.io": {"www", "hr", "files"},
 	// talentstorm's marketing site, its API, and the host its tutorial videos are served from.
 	"talentstorm.de": {"www", "api", "videos"},
+	// Homerun's marketing site and sign-up funnel, the host a gone tenant's pages redirect to, the
+	// one feed host every tenant's feed is served from, and its asset hosts.
+	"homerun.co":    {"www", "try", "404", "feed", "static", "cdn"},
+	"easycruit.com": {"www"}, // Visma's EasyCruit product site
 }
 
 // platformHost reports whether host is the ATS's own product host rather than a tenant's —

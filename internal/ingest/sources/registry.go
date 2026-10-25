@@ -450,6 +450,9 @@ func All(c HTTPClient) map[string]Source {
 		NewCoveto(limitedCovetoGetter(c)),
 		NewConcludis(c),
 		NewKenjo(c),
+		NewEasyCruit(c),
+		// Concurrency-limited: one origin serves every Homerun vacancy page (see homerunMaxInFlight).
+		NewHomerun(limitedHomerunGetter(c)),
 		// Concurrency-limited: one origin serves every helixjobs iid (see helixjobsMaxInFlight).
 		NewHelixjobs(limitedHelixjobsGetter(c)),
 		NewTalentstorm(c),

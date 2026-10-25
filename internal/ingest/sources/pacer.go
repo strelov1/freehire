@@ -754,6 +754,31 @@ func limitedCovetoGetter(c covetoGetter) covetoGetter {
 	return limitedCoveto{covetoGetter: c, pages: concurrencyLimitedHTMLGetter{inner: c, sem: make(chan struct{}, covetoMaxInFlight)}}
 }
 
+// Homerun serves every tenant's vacancy pages from one origin, its own *.homerun.co hosts and
+// the employer domains that point at it alike. Measured 2026-10-25, a sweep of 2,499 pages at 4
+// in flight drew 392 refusals (429) once it had run for a few minutes, while short bursts of 24
+// at 4 all answered — so it is the sustained provider-wide rate that is refused, and the whole
+// provider's page requests share 2 slots. A refused page costs only the vacancy's address (the
+// feed carries the body), but it is never asked again once the vacancy is stored. The feed
+// requests, one per board, are not capped.
+const homerunMaxInFlight = 2
+
+// limitedHomerun routes Homerun's vacancy-page requests through one shared semaphore and passes
+// its feed requests through untouched.
+type limitedHomerun struct {
+	homerunGetter
+	pages HTMLGetter
+}
+
+func (g limitedHomerun) GetHTML(ctx context.Context, url string) (*html.Node, error) {
+	return g.pages.GetHTML(ctx, url)
+}
+
+// limitedHomerunGetter wraps a getter with a fresh semaphore shared across one registry build.
+func limitedHomerunGetter(c homerunGetter) homerunGetter {
+	return limitedHomerun{homerunGetter: c, pages: concurrencyLimitedHTMLGetter{inner: c, sem: make(chan struct{}, homerunMaxInFlight)}}
+}
+
 // helixjobs.com serves every iid's list and posting pages from one origin — 590 iids and 25,021
 // postings measured 2026-10-25 — so a first crawl is tens of thousands of page requests to it.
 // A walk of all 1,001 portal list pages and 120 posting pages at 4 in flight all answered (one
