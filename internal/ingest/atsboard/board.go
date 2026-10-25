@@ -338,6 +338,13 @@ var atsBoards = []struct{ host, source, mode string }{
 	// Eploy: <tenant>.eploy.net is every tenant's own host and the board the adapter fetches
 	// /live-jobs.xml from. A branded careers domain is not derivable, like every other vanity host.
 	{"eploy", "eploy", modeHost},
+	// d.vinci: <tenant>.dvinci-hr.com (the full product) and <tenant>.dvinci-easy.com (the
+	// small-business one) are one application, and the adapter fetches
+	// https://<board>/jobPublication/list.json, so the board is the whole host — tenant labels
+	// nest (karriere.hahngruppe.dvinci-hr.com). An employer's own domain serves the same path
+	// but is not derivable from a URL.
+	{"dvinci-hr", "dvinci", modeHost},
+	{"dvinci-easy", "dvinci", modeHost},
 	// CatsOne's adapter fetches https://<board>/careers, so the board is the whole host, exactly
 	// as catsone.yml stores it. It was listed as a subdomain, which yields the bare label — a
 	// board no crawl can resolve. (Its custom-domain tenants, e.g. jobs.evoplay.com.ua, stay
@@ -1309,6 +1316,8 @@ var platformLabelsByApex = map[string][]string{
 	"hrmdirect.com":  {"apply"},
 	"potok.io":       {"www", "stages", "qa", "sentry"},
 	"eploy":          {"www"}, // www.eploy.com is the vendor's marketing site
+	"dvinci-hr":      {"www"},
+	"dvinci-easy":    {"www"},
 	"hiringroom.com": {"www", "ve", "api-ve", "contacto-comercial"},
 	"easyapply.co":   {"www"}, // www.easyapply.co 404s; every tenant is a bare label
 	// www is the vendor's marketing site; demo is its sample board for a fictional "Acme".

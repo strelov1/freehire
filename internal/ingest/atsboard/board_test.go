@@ -339,6 +339,10 @@ func TestRecognize(t *testing.T) {
 		{"gethired www is not a tenant", "https://www.easyapply.co/", "", "", "", false},
 		{"trakstar nested apex", "https://acme.hire.trakstar.com/x", "trakstar", "acme", "https://acme.hire.trakstar.com", true},
 		{"teamtailor host", "https://bryter.teamtailor.com/jobs/12345-senior-go", "teamtailor", "bryter.teamtailor.com", "https://bryter.teamtailor.com", true},
+		{"dvinci posting", "https://cadenas.dvinci-hr.com/de/jobs/20291/junior-genai-engineer-mwd-cadenas-augsburg", "dvinci", "cadenas.dvinci-hr.com", "https://cadenas.dvinci-hr.com", true},
+		{"dvinci nested tenant", "https://karriere.hahngruppe.dvinci-hr.com/en/jobs/iframe", "dvinci", "karriere.hahngruppe.dvinci-hr.com", "https://karriere.hahngruppe.dvinci-hr.com", true},
+		{"dvinci easy", "https://weig.dvinci-easy.com/jobPublication/list.json", "dvinci", "weig.dvinci-easy.com", "https://weig.dvinci-easy.com", true},
+		{"dvinci vendor site not a tenant", "https://www.dvinci-hr.com/", "", "", "", false},
 		{"factorial host it", "https://muffin.factorial.it/job/1", "factorial", "muffin.factorial.it", "https://muffin.factorial.it", true},
 		{"factorialhr base-domain variant", "https://9net.factorialhr.com.br/job/2", "factorial", "9net.factorialhr.com.br", "https://9net.factorialhr.com.br", true},
 		// gr8people: one vendor served under two marketing domains, confirmed live (identical

@@ -396,6 +396,7 @@ export const SOURCE_LABELS: Record<string, string> = {
   hiringroom: 'HiringRoom',
   polymer: 'Polymer',
   flatchr: 'Flatchr',
+  dvinci: 'd.vinci',
   pandape: 'Pandapé',
   pandapelatam: 'Pandapé LatAm',
   pythonorg: 'Python.org',
